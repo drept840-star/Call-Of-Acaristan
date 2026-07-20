@@ -1226,9 +1226,8 @@ def _movement_locked():
     # Relay tuning is an interact/hold moment at the terminal.
     if getattr(STATE, "m3_relay_active", False):
         return True
-    # Maru dead-drop contact locks movement while the message plays.
-    if getattr(STATE, "m3_maru_contact_active", False):
-        return True
+    # Maru handshake is live gameplay: movement remains available, but the
+    # connection only advances while Biribel stays near the terminal.
     return False
 
 
@@ -1526,6 +1525,7 @@ _ARCHIVE_EXIT_COL, _ARCHIVE_EXIT_ROW = 46, 24     # Comms Wing archive access ma
 # Archives Wing interactables (Phase 4).
 _MARU_TERMINAL_COL, _MARU_TERMINAL_ROW = 11, 12   # dead-drop terminal in NW clerk office
 _VOSTRAL_FILE_COL, _VOSTRAL_FILE_ROW = 42, 9      # classified file pedestal (NE vault)
+_DECREE_FILE_COL, _DECREE_FILE_ROW = 34, 33       # optional National Stability Decree (research wing)
 _ARCHIVES_SPAWN_COL, _ARCHIVES_SPAWN_ROW = 24, 42 # south elevator lobby
 _ARCHIVES_EXIT_COL, _ARCHIVES_EXIT_ROW = 24, 4    # north stairwell → Kill Order
 _VOSTRAL_DOOR_COLS = (36,)                        # vault door column (rows 8-9)
@@ -1999,6 +1999,10 @@ def _build_archives_world():
     STATE.m3_vostral_acquired = False
     STATE.m3_archives_ambience_timer = 0
     STATE.m3_archives_alarm = False
+    STATE.m3_clerk_identity_found = False
+    STATE.m3_decree_acquired = False
+    STATE.m3_security_response_started = False
+    STATE.m3_handshake_alerted = False
 
     # Furniture / shelf collision — placed to match the new vertical layout.
     for _cx, _cy, _w, _h in [
@@ -3009,6 +3013,10 @@ def start_mission3(preserve_timer=False):
     STATE.m3_vostral_acquired = False
     STATE.m3_archives_ambience_timer = 0
     STATE.m3_archives_alarm = False
+    STATE.m3_clerk_identity_found = False
+    STATE.m3_decree_acquired = False
+    STATE.m3_security_response_started = False
+    STATE.m3_handshake_alerted = False
     STATE.request_archives_transition_cutscene = False
 
     # ── Black Ledger easter egg ──
@@ -3947,10 +3955,9 @@ def _archives_nav_target():
         return None
     if getattr(STATE, "m3_maru_contact_active", False):
         return None
-    # Only guide once the wing is clear of fightable hostiles.
-    if len(_archives_reachable_hostiles()) > 0:
-        return None
-
+    # The Archives supports stealth routes, so navigation guidance must not
+    # disappear merely because guards are still alive. Combat is optional until
+    # the player chooses to make noise.
     if getattr(STATE, "m3_vostral_acquired", False):
         return _archives_exit_pos()
     if not getattr(STATE, "m3_maru_contacted", False):
@@ -4033,23 +4040,43 @@ def _archives_reachable_hostiles():
 
 
 def _start_maru_contact():
-    """Begin the Maru dead-drop contact sequence (locks movement briefly)."""
+    """Find Clerk 07 first, then start an interactive Maru handshake.
+
+    The first interaction is the discovery beat. The second starts a live
+    connection: Biribel can move and fight, but the handshake only advances
+    while he remains close enough to the terminal.
+    """
     if getattr(STATE, "m3_maru_contacted", False):
         return
     if getattr(STATE, "m3_maru_contact_active", False):
         return
-    hostiles = _archives_reachable_hostiles()
-    if len(hostiles) > 0:
-        mx, my = _maru_terminal_pos()
+
+    if not getattr(STATE, "m3_clerk_identity_found", False):
+        STATE.m3_clerk_identity_found = True
+        _set_objective("Clerk 07 identified. [E] use Maru's dead-drop terminal.")
         STATE.floating_texts.append([
-            mx, my - 34, "CLEAR HOSTILES FIRST", (220, 150, 90), 90])
-        _set_objective(
-            f"Clear Archives hostiles ({len(hostiles)}) before contacting Maru.")
+            *_maru_terminal_pos(), "CLERK 07 // DEAD-DROP FOUND",
+            (220, 190, 120), 140,
+        ])
+        _radio(
+            "VASILE: Clerk 07. That was Maru's number before they disappeared. Use the terminal.",
+            color=C_VASILE, duration=300, mark="maru_identity_found",
+        )
+        try:
+            audio.play("terminal_glitch", volume=0.35)
+        except Exception:
+            pass
         return
 
     STATE.m3_maru_contact_active = True
     STATE.m3_maru_contact_timer = 0
-    _set_objective("Hold position — receiving Maru's ghost-channel...")
+    STATE.m3_maru_contact_duration = 360  # six seconds of live defense
+    STATE.m3_handshake_alerted = False
+    _set_objective("Defend the terminal — stay near Clerk 07 while Maru authenticates.")
+    _radio(
+        "MARU: Keep the channel alive. I can open the vault, but I cannot hold this room.",
+        color=C_MARU, duration=280, mark="maru_handshake_started",
+    )
     try:
         audio.play("terminal_glitch", volume=0.50)
         audio.play("radio_static", volume=0.40)
@@ -4059,14 +4086,32 @@ def _start_maru_contact():
 
 
 def _update_maru_contact():
-    """Advance the Maru contact cinematic timer; unlock vault on completion."""
+    """Advance Maru's live handshake while the player defends the terminal."""
     if not getattr(STATE, "m3_maru_contact_active", False):
         return
+
+    mx, my = _maru_terminal_pos()
+    near_terminal = bool(STATE.player and _near((mx, my), radius=155))
+    if not near_terminal:
+        _set_objective("Return to Clerk 07 — handshake paused while you are out of range.")
+        return
+
     STATE.m3_maru_contact_timer = getattr(STATE, "m3_maru_contact_timer", 0) + 1
     t = STATE.m3_maru_contact_timer
-    duration = int(getattr(STATE, "m3_maru_contact_duration", 960) or 960)
+    duration = int(getattr(STATE, "m3_maru_contact_duration", 360) or 360)
 
-    if t in (50, 120, 200, 300, 420, 540, 680, 820):
+    # The handshake exposes the room to the security network halfway through.
+    if t >= 120 and not getattr(STATE, "m3_handshake_alerted", False):
+        STATE.m3_handshake_alerted = True
+        STATE.m3_archives_alarm = True
+        _start_m3_alarm()
+        _radio(
+            "SYSTEM: Unauthorized archive handshake detected. Clerk Office 07 is compromised.",
+            color=(240, 110, 100), duration=260, mark="maru_handshake_alarm",
+        )
+        _set_objective("Defend Clerk 07 — security is converging on the terminal.")
+
+    if t in (40, 90, 160, 230, 300):
         try:
             audio.play("type_tick", volume=0.12)
         except Exception:
@@ -4076,7 +4121,6 @@ def _update_maru_contact():
         STATE.m3_maru_contact_active = False
         STATE.m3_maru_contacted = True
         STATE.m3_maru_contact_timer = duration
-        # Unlock the Vostral vault doors.
         for door in getattr(STATE, "doors", []):
             if getattr(door, "m3_vostral_vault", False):
                 door.locked = False
@@ -4084,77 +4128,109 @@ def _update_maru_contact():
                 door.anim_progress = 1.0
                 door.collision_rect = None
                 door.manual_timer = 400
-        _set_objective("Vault unlocked (NE). Walk in and [E] Take the Vostral file.")
-        # Waypoint ping on the vault doors.
+        _set_objective("Vault authorization received. Reach the cold vault in the northeast.")
         for door in getattr(STATE, "doors", []):
             if getattr(door, "m3_vostral_vault", False):
                 STATE.floating_texts.append([
                     door.rect.centerx, door.rect.centery - 36,
                     "VAULT OPEN", (180, 140, 220), 140])
                 break
+        _radio(
+            "MARU: Clerk 07 confirmed. The cold vault is open. The original is under glass — take it.",
+            color=C_MARU, duration=420, mark="maru_contact_done",
+        )
         try:
             audio.play("terminal_glitch", volume=0.55)
             audio.play("door_break", volume=0.30)
         except Exception:
             pass
-        _radio(
-            "MARU: The only unforged copy is under glass in the cold vault. Take it. "
-            "Then the north stairwell — Balaceanu's sweep is already moving.",
-            color=C_MARU, duration=480, mark="maru_contact_done",
-        )
-        mx, my = _maru_terminal_pos()
-        STATE.floating_texts.append([
-            mx, my - 40, "VAULT AUTHORIZATION GRANTED", (180, 140, 220), 140])
+
+
+def _acquire_decree_file():
+    """Collect the optional original National Stability Decree."""
+    if getattr(STATE, "m3_decree_acquired", False):
+        return
+    if not getattr(STATE, "m3_vostral_acquired", False):
+        return
+    STATE.m3_decree_acquired = True
+    STATE.floating_texts.append([
+        _DECREE_FILE_COL * TILE_SIZE + TILE_SIZE // 2,
+        _DECREE_FILE_ROW * TILE_SIZE + TILE_SIZE // 2 - 42,
+        "ORIGINAL DECREE ACQUIRED", (220, 190, 120), 150])
+    _set_objective("Evidence secured. North stairwell — escape the Archives.")
+    _radio(
+        "VASILE: You found the original decree too? Good. That makes the case harder to erase.",
+        color=C_VASILE, duration=320, mark="decree_acquired",
+    )
+    try:
+        audio.play("pickup", volume=0.45)
+    except Exception:
+        pass
 
 
 def _acquire_vostral_file():
-    """Player takes the Vostral dossier from the vault pedestal."""
+    """Take the primary Vostral record and trigger a controlled response."""
     if getattr(STATE, "m3_vostral_acquired", False):
         return
     if not getattr(STATE, "m3_maru_contacted", False):
-        vx, vy = _vostral_file_pos()
-        STATE.floating_texts.append([
-            vx, vy - 34, "VAULT SEALED — CONTACT MARU", (220, 165, 80), 100])
-        _set_objective("Vault sealed. NW clerk office — contact Maru first.")
-        return
-    hostiles = _archives_reachable_hostiles()
-    if len(hostiles) > 0:
-        vx, vy = _vostral_file_pos()
-        STATE.floating_texts.append([
-            vx, vy - 34, "CLEAR HOSTILES FIRST", (220, 150, 90), 90])
-        _set_objective(f"Clear {len(hostiles)} hostile(s), then take the Vostral.")
+        _set_objective("Vault sealed. Find Clerk 07 and contact Maru first.")
         return
 
     STATE.m3_vostral_acquired = True
-    STATE.mission3_evidence_uploaded = False  # file held, not yet broadcast
-    # Open the east Kill Order exit.
+    STATE.mission3_evidence_uploaded = False
+    # Unlock the north stairwell immediately. The player may take the optional
+    # decree, but it is never required to finish the Archives.
     for door in getattr(STATE, "doors", []):
         if getattr(door, "m3_kill_order_exit", False):
             door.locked = False
             door.target_open = True
-            door.manual_timer = 200
-    vx, vy = _vostral_file_pos()
+            door.anim_progress = 1.0
+            door.collision_rect = None
+            door.manual_timer = 240
     STATE.floating_texts.append([
-        vx, vy - 42, "VOSTRAL FILE ACQUIRED", (200, 230, 160), 150])
+        *_vostral_file_pos(), "VOSTRAL FILE ACQUIRED", (200, 230, 160), 150])
+    _set_objective(
+        "Vostral secured. Optional: recover the original decree in Research, or escape north.")
+    _radio(
+        "VASILE: Confirmed — the Vostral is real. North stairwell is your extraction route.",
+        color=C_VASILE, duration=360, mark="vostral_acquired",
+    )
+    _radio(
+        "VOLKOV: They heard the vault open. Move — I will draw them toward the atrium.",
+        color=C_VOLKOV, duration=300, mark="vostral_acquired_volkov",
+    )
+    _radio(
+        "MARU: Take the decree if you can. It explains why the whole country is built on stolen ground.",
+        color=C_MARU, duration=360, mark="decree_hint",
+    )
+
+    # The response is controlled: one atrium guard and one research guard,
+    # rather than an instant full-map wave. Existing enemies remain valid
+    # threats, while the alarm communicates that the heist has changed state.
+    if not getattr(STATE, "m3_security_response_started", False):
+        STATE.m3_security_response_started = True
+        STATE.m3_archives_alarm = True
+        _start_m3_alarm()
+        _spawn_m3_guard(
+            24, 18, hp=165, speed=1.55,
+            patrol=[(24 * TILE_SIZE + 32, 14 * TILE_SIZE + 32),
+                    (24 * TILE_SIZE + 32, 30 * TILE_SIZE + 32)],
+            facing=math.pi / 2, label="vault_response_atrium", enemy_type="guard")
+        _spawn_m3_guard(
+            35, 30, hp=150, speed=1.45,
+            patrol=[(30 * TILE_SIZE + 32, 30 * TILE_SIZE + 32),
+                    (41 * TILE_SIZE + 32, 30 * TILE_SIZE + 32)],
+            facing=math.pi, label="vault_response_research", enemy_type="breacher")
+        _radio(
+            "SYSTEM: Cold Vault breach confirmed. Security response authorized.",
+            color=(240, 110, 100), duration=300, mark="vault_security_response",
+        )
+
     try:
         audio.play("pickup", volume=0.55)
         audio.play("terminal_glitch", volume=0.35)
     except Exception:
         pass
-    _set_objective("Vostral secured. North stairwell — exit before the sweep.")
-    _radio(
-        "VASILE: Confirmed — Vostral is in your hands. North stairwell. Move.",
-        color=C_VASILE, duration=360, mark="vostral_acquired",
-    )
-    _radio(
-        "VOLKOV: I've got your back to the door. Go.",
-        color=C_VOLKOV, duration=260, mark="vostral_acquired_volkov",
-    )
-    _radio(
-        "MARU: They will burn the wing when they realize. Don't look back.",
-        color=C_MARU, duration=320, mark="maru_exit_warning",
-    )
-
 
 def _update_archives_stage():
     """Phase 4 runtime: objectives, Maru contact, file pickup, north exit."""
@@ -4176,23 +4252,23 @@ def _update_archives_stage():
     if getattr(STATE, "m3_maru_contact_active", False):
         _set_objective("Hold position — receiving Maru's ghost-channel...")
     elif getattr(STATE, "m3_vostral_acquired", False):
-        _set_objective(f"Vostral secured ({tag}). North stairwell — exit before the sweep.")
+        if getattr(STATE, "m3_decree_acquired", False):
+            _set_objective("Evidence secured. North stairwell — escape the Archives.")
+        else:
+            _set_objective("Vostral secured. Optional: recover the original decree in Research, or escape north.")
         if STATE.player is not None and _near(_archives_exit_pos(), radius=TILE_SIZE * 0.85):
             _start_kill_order_phase()
     elif not getattr(STATE, "m3_maru_contacted", False):
-        if guards_left > 0:
-            _set_objective(
-                f"Clear Archives hostiles ({guards_left}) — then NW clerk office ({tag}).")
+        if getattr(STATE, "m3_maru_contact_active", False):
+            _set_objective("Defend Clerk 07 — stay near the terminal while Maru authenticates.")
+        elif not getattr(STATE, "m3_clerk_identity_found", False):
+            _set_objective("Find Maru's dead-drop in Clerk Office 07 (northwest).")
         else:
-            _set_objective(
-                "Vault is sealed. NW clerk office — [E] contact Maru to unlock it.")
+            _set_objective("Clerk 07 identified. [E] use Maru's dead-drop terminal.")
     else:
-        # Vault unlocked after Maru contact.
-        if guards_left > 0:
-            _set_objective(
-                f"Vault unlocked (NE). Clear {guards_left} hostile(s), then [E] Vostral.")
-        else:
-            _set_objective("Vault unlocked (NE). Walk in and [E] Take the Vostral file.")
+        # The player can reach the vault without clearing every room. Enemies
+        # remain a navigation/combat threat rather than a mandatory kill gate.
+        _set_objective("Vault unlocked (NE). Reach the cold vault and [E] take the Vostral file.")
 
 
 def _start_kill_order_phase():
@@ -9967,8 +10043,10 @@ def _draw_archives_system_prompts(cam_x, cam_y):
         sx, sy = mx - cam_x, my - cam_y
         if getattr(STATE, "m3_maru_contacted", False):
             _draw_prompt_tag(sx, sy, "CHANNEL CLOSED", (120, 220, 160), y_off=-62)
+        elif getattr(STATE, "m3_clerk_identity_found", False):
+            _draw_prompt_tag(sx, sy, "[E] USE DEAD-DROP", (255, 210, 110), y_off=-62)
         else:
-            _draw_prompt_tag(sx, sy, "[E] CONTACT MARU", (255, 210, 110), y_off=-62)
+            _draw_prompt_tag(sx, sy, "[E] SEARCH CLERK 07", (255, 210, 110), y_off=-62)
 
     # Vostral file — near pedestal only.
     if not getattr(STATE, "m3_vostral_acquired", False):
@@ -9979,6 +10057,14 @@ def _draw_archives_system_prompts(cam_x, cam_y):
                 _draw_prompt_tag(sx, sy, "VAULT SEALED — CONTACT MARU", (220, 130, 90), y_off=-74)
             else:
                 _draw_prompt_tag(sx, sy, "[E] TAKE VOSTRAL FILE", (255, 210, 110), y_off=-74)
+
+    # Optional original decree in the research wing.
+    if getattr(STATE, "m3_vostral_acquired", False) and not getattr(STATE, "m3_decree_acquired", False):
+        dx, dy = (_DECREE_FILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                  _DECREE_FILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if math.hypot(px - dx, py - dy) <= 96:
+            _draw_prompt_tag(dx - cam_x, dy - cam_y,
+                             "[E] TAKE ORIGINAL DECREE", (230, 190, 110), y_off=-68)
 
     # North exit — near only.
     ex, ey = _archives_exit_pos()
@@ -10005,8 +10091,10 @@ def _draw_maru_contact_overlay():
     duration = int(getattr(STATE, "m3_maru_contact_duration", 960) or 960)
     progress = max(0.0, min(1.0, t / float(duration)))
 
+    # Keep the map readable: this is a live defense objective, not a full
+    # screen cutscene. The player can move and fight while the handshake runs.
     dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    dim.fill((0, 0, 0, 200))
+    dim.fill((0, 0, 0, 92))
     screen.blit(dim, (0, 0))
 
     panel_w, panel_h = min(860, WIDTH - 36), min(430, HEIGHT - 50)
@@ -10068,7 +10156,7 @@ def _draw_maru_contact_overlay():
     pygame.draw.rect(panel, (220, 200, 255), bar, 2, border_radius=3)
     pct = font_prompt.render(f"HANDSHAKE  {int(progress * 100):02d}%", True, (235, 225, 255))
     panel.blit(pct, (bar.centerx - pct.get_width() // 2, bar.y - 24))
-    hint = font_terminal_small.render("Stand by — channel locked until handshake completes", True, (160, 150, 180))
+    hint = font_terminal_small.render("Stay near Clerk 07 — movement and combat remain active", True, (160, 150, 180))
     panel.blit(hint, (bar.centerx - hint.get_width() // 2, bar.bottom + 4))
 
     scan = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
@@ -13212,7 +13300,7 @@ def handle_interact():
 
     if getattr(STATE, "mission3_stage", None) == STAGE_ARCHIVES:
         if getattr(STATE, "m3_maru_contact_active", False):
-            return  # locked during transmission
+            return  # handshake is live, but E does not interrupt it
         mx, my = _maru_terminal_pos()
         if _near((mx, my), radius=78):
             _start_maru_contact()
@@ -13221,6 +13309,12 @@ def handle_interact():
         if _near((vx, vy), radius=78):
             _acquire_vostral_file()
             return
+        if getattr(STATE, "m3_vostral_acquired", False) and not getattr(STATE, "m3_decree_acquired", False):
+            dx, dy = (_DECREE_FILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                      _DECREE_FILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+            if _near((dx, dy), radius=82):
+                _acquire_decree_file()
+                return
         if getattr(STATE, "m3_vostral_acquired", False):
             if _near(_archives_exit_pos(), radius=TILE_SIZE * 0.9):
                 _start_kill_order_phase()
