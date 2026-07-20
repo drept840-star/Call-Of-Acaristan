@@ -1978,7 +1978,12 @@ class _GameState_(GameState):
             STATE.request_vent_cutscene = False
             start_cutscene(gc.vent_escape_shots, "GAME", use_fades=True)
             trigger_transition("CUTSCENE")
-            pygame.mouse.set_visible(True) 
+            pygame.mouse.set_visible(True)
+        elif getattr(STATE, "request_vostral_steal_cutscene", False):
+            STATE.request_vostral_steal_cutscene = False
+            start_cutscene(gc.vostral_steal_shots, "GAME", use_fades=True)
+            trigger_transition("CUTSCENE")
+            pygame.mouse.set_visible(True)
         elif gc.request_mission_complete:
             gc.request_mission_complete = False
             if not gc.mission_end_time:

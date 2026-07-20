@@ -5269,6 +5269,184 @@ def _draw_vent_exit(surface, t):
         surface.blit(dust, (mx, my), special_flags=pygame.BLEND_RGBA_ADD)
 
 
+def _draw_vostral_glass_case(surface, t):
+    """Cold Vault Pedestal — First Person View as glass dome lifts."""
+    surface.fill((8, 12, 18))
+    cx = WIDTH // 2
+    cy = HEIGHT // 2 + 15
+    scene_h = SCENE_BOT - SCENE_TOP
+
+    # Atmospheric Vault background walls with cyan cold spotlight
+    for y in range(SCENE_TOP, SCENE_BOT):
+        p = (y - SCENE_TOP) / max(1, scene_h)
+        pygame.draw.line(surface, (int(10 + p * 15), int(16 + p * 25), int(24 + p * 35)), (0, y), (WIDTH, y))
+
+    # Vertical archive columns in background
+    for col_x in (120, 260, WIDTH - 260, WIDTH - 120):
+        pygame.draw.rect(surface, (18, 26, 36), (col_x - 18, SCENE_TOP, 36, scene_h))
+        pygame.draw.rect(surface, (30, 42, 56), (col_x - 18, SCENE_TOP, 36, scene_h), 1)
+
+    # Cold vault spotlight cone down center
+    spot = pygame.Surface((WIDTH, scene_h), pygame.SRCALPHA)
+    pygame.draw.polygon(spot, (80, 180, 220, 35), [(cx - 40, 0), (cx + 40, 0), (cx + 280, scene_h), (cx - 280, scene_h)])
+    surface.blit(spot, (0, SCENE_TOP), special_flags=pygame.BLEND_ADD)
+
+    # Heavy Metal Pedestal
+    ped_w, ped_h = 240, 160
+    ped_rect = pygame.Rect(cx - ped_w // 2, cy - 20, ped_w, ped_h)
+    pygame.draw.rect(surface, (25, 32, 42), ped_rect, border_radius=6)
+    pygame.draw.rect(surface, (60, 82, 105), ped_rect, 2, border_radius=6)
+
+    # Crimson velvet top pad on pedestal
+    velvet = pygame.Rect(cx - 100, cy - 26, 200, 18)
+    pygame.draw.rect(surface, (120, 20, 30), velvet, border_radius=3)
+    pygame.draw.rect(surface, (180, 35, 45), velvet, 1, border_radius=3)
+
+    # The Vostral File resting on velvet
+    file_rect = pygame.Rect(cx - 75, cy - 42, 150, 22)
+    pygame.draw.rect(surface, (130, 105, 55), file_rect, border_radius=2)
+    pygame.draw.rect(surface, (70, 55, 25), file_rect, 1, border_radius=2)
+    pygame.draw.circle(surface, (190, 30, 30), (cx + 40, cy - 31), 7)
+    pygame.draw.circle(surface, (230, 50, 50), (cx + 40, cy - 31), 7, 1)
+    lbl = font_terminal_small.render("Y-1 VOSTRAL", True, (40, 30, 10))
+    surface.blit(lbl, (cx - 65, cy - 40))
+
+    # Glass Case Dome lift animation
+    lift_p = min(1.0, max(0.0, t / 2000.0))
+    glass_lift_y = int(85 * lift_p)
+
+    glass_w, glass_h = 220, 110
+    glass_rect = pygame.Rect(cx - glass_w // 2, cy - 105 - glass_lift_y, glass_w, glass_h)
+
+    # Frost particles / cold vapor venting as dome opens
+    if lift_p > 0.1:
+        vapor_alpha = int(min(120, (1.0 - lift_p * 0.7) * 120))
+        vapor = pygame.Surface((260, 40), pygame.SRCALPHA)
+        for i in range(12):
+            vx = (i * 22 + int(t * 0.05)) % 260
+            vy = (i * 7) % 35
+            pygame.draw.circle(vapor, (200, 235, 255, vapor_alpha), (vx, vy), 14 + (i % 8))
+        surface.blit(vapor, (cx - 130, cy - 35))
+
+    # Render glass dome
+    glass_surf = pygame.Surface((glass_w, glass_h), pygame.SRCALPHA)
+    pygame.draw.rect(glass_surf, (140, 210, 255, 45), (0, 0, glass_w, glass_h), border_radius=8)
+    pygame.draw.rect(glass_surf, (200, 240, 255, 140), (0, 0, glass_w, glass_h), 2, border_radius=8)
+    pygame.draw.line(glass_surf, (255, 255, 255, 180), (15, 12), (glass_w - 60, glass_h - 15), 3)
+    surface.blit(glass_surf, glass_rect)
+
+    # Status light on pedestal
+    lock_green = (lift_p >= 0.5)
+    led_col = (40, 220, 100) if lock_green else (240, 50, 40)
+    pygame.draw.circle(surface, led_col, (cx - 90, cy + 20), 4)
+    status_str = "UNLOCKED // SYSTEM OVERRIDE" if lock_green else "SECURITY LOCK ACTIVE"
+    txt = font_terminal_small.render(status_str, True, led_col)
+    surface.blit(txt, (cx - 78, cy + 14))
+
+
+def _draw_vostral_file_grab(surface, t):
+    """Close-up FP angle: Biribel grips and retrieves the Vostral dossier."""
+    surface.fill((8, 12, 18))
+    cx = WIDTH // 2
+    cy = HEIGHT // 2 + 10
+
+    ped = pygame.Rect(cx - 160, cy + 40, 320, 120)
+    pygame.draw.rect(surface, (20, 26, 34), ped, border_radius=8)
+    pygame.draw.rect(surface, (120, 20, 30), (cx - 140, cy + 30, 280, 20), border_radius=4)
+
+    p = min(1.0, max(0.0, t / 2400.0))
+    lift = p * p * (3 - 2 * p)
+
+    file_cx = cx
+    file_cy = cy + 20 - int(45 * lift)
+
+    folder_w, folder_h = 220, 140
+    f_rect = pygame.Rect(file_cx - folder_w // 2, file_cy - folder_h // 2, folder_w, folder_h)
+
+    shad = pygame.Surface((folder_w + 20, 30), pygame.SRCALPHA)
+    shadow_a = max(0, int(100 * (1.0 - lift * 0.8)))
+    pygame.draw.ellipse(shad, (0, 0, 0, shadow_a), shad.get_rect())
+    surface.blit(shad, (file_cx - folder_w // 2 - 10, cy + 32))
+
+    pygame.draw.rect(surface, (140, 115, 60), f_rect, border_radius=4)
+    pygame.draw.rect(surface, (200, 175, 100), f_rect, 2, border_radius=4)
+
+    pygame.draw.circle(surface, (180, 25, 25), (file_cx + 50, file_cy), 12)
+    pygame.draw.circle(surface, (230, 60, 60), (file_cx + 50, file_cy), 12, 2)
+    pygame.draw.line(surface, (80, 60, 30), (file_cx - 80, file_cy - 20), (file_cx + 80, file_cy - 20), 2)
+
+    head = font_speaker.render("ACARISTAN STATE ARCHIVES", True, (60, 45, 15))
+    sub = font_terminal_small.render("TOP SECRET // Y-1 VOSTRAL", True, (160, 40, 30))
+    surface.blit(head, (file_cx - head.get_width() // 2, file_cy - 45))
+    surface.blit(sub, (file_cx - sub.get_width() // 2, file_cy - 10))
+
+    hand_x = cx - 30 + int(30 * lift)
+    hand_y = cy + 70 - int(50 * lift)
+
+    sleeve_col = (35, 42, 38)
+    glove_col = (22, 25, 26)
+
+    pygame.draw.line(surface, sleeve_col, (hand_x + 120, HEIGHT + 20), (hand_x + 30, hand_y + 35), 32)
+    pygame.draw.circle(surface, glove_col, (hand_x + 20, hand_y + 20), 22)
+    for fi in range(4):
+        fx = hand_x - 30 + fi * 14
+        fy = hand_y - 12
+        pygame.draw.ellipse(surface, glove_col, (fx, fy, 13, 26))
+        pygame.draw.ellipse(surface, (50, 55, 56), (fx, fy, 13, 26), 1)
+
+
+def _draw_vostral_document_reveal(surface, t):
+    """First person reading the unsealed Vostral document page inside."""
+    surface.fill((12, 10, 14))
+    cx = WIDTH // 2
+    cy = HEIGHT // 2 - 10
+    scene_h = SCENE_BOT - SCENE_TOP
+
+    for y in range(SCENE_TOP, SCENE_BOT):
+        p = (y - SCENE_TOP) / max(1, scene_h)
+        pygame.draw.line(surface, (int(15 + p * 10), int(12 + p * 8), int(18 + p * 12)), (0, y), (WIDTH, y))
+
+    doc_w, doc_h = min(680, WIDTH - 80), min(420, scene_h - 40)
+    doc_rect = pygame.Rect(cx - doc_w // 2, cy - doc_h // 2, doc_w, doc_h)
+
+    pygame.draw.rect(surface, (230, 222, 200), doc_rect, border_radius=4)
+    pygame.draw.rect(surface, (160, 150, 130), doc_rect, 2, border_radius=4)
+
+    pygame.draw.line(surface, (120, 30, 30), (doc_rect.x + 30, doc_rect.y + 40), (doc_rect.right - 30, doc_rect.y + 40), 3)
+    header_txt = font_speaker.render("ACARISTAN MINISTRY OF DEFENSE — OFFICIAL SERVICE RECORD", True, (40, 30, 25))
+    surface.blit(header_txt, (cx - header_txt.get_width() // 2, doc_rect.y + 12))
+
+    name_txt = font_dialogue.render("SUBJECT: BALACEANU, CORNEL  |  RANK: COMMANDER (DEFUNCT)", True, (20, 20, 20))
+    surface.blit(name_txt, (doc_rect.x + 35, doc_rect.y + 52))
+
+    body_lines = [
+        "1998-2004: ENLISTMENT RECORD // SECTOR 4 OUTPOST",
+        "CITATIONS: ORDER OF ACARISTAN, MEDAL OF VALOR (FABRICATED)",
+        "DISPASSIONATE AUDIT REPORT #882: NO RECORD OF COMBAT SERVICE.",
+        "UNIT POSITION WAS 450KM FROM THE FRONT LINE DURING Y-1.",
+        "ALL MEDALS AWARDED VIA SELF-SIGNED EMERGENCY EXECUTIVE DECREE.",
+    ]
+
+    for li, bl in enumerate(body_lines):
+        txt = font_terminal_small.render(bl, True, (60, 55, 50))
+        surface.blit(txt, (doc_rect.x + 35, doc_rect.y + 90 + li * 24))
+
+    stamp_p = min(1.0, max(0.0, (t - 400) / 600.0))
+    if stamp_p > 0:
+        stamp_surf = pygame.Surface((480, 90), pygame.SRCALPHA)
+        pygame.draw.rect(stamp_surf, (210, 30, 30, int(220 * stamp_p)), (0, 0, 480, 90), 4, border_radius=6)
+        s1 = font_speaker.render("FABRICATED RECORD", True, (210, 30, 30))
+        s2 = font_terminal_small.render("VOSTRAL LEAK CONFIRMED — DATED 2020-04-12", True, (190, 20, 20))
+        stamp_surf.blit(s1, (240 - s1.get_width() // 2, 10))
+        stamp_surf.blit(s2, (240 - s2.get_width() // 2, 54))
+
+        rot_stamp = pygame.transform.rotate(stamp_surf, -8)
+        rot_stamp.set_alpha(int(230 * stamp_p))
+        surface.blit(rot_stamp, (cx - rot_stamp.get_width() // 2, cy - 10))
+
+    draw_vignette(surface, strength=140)
+
+
 def draw_cutscene_scene(surface, shot, t):
     scene = shot["scene"]
     surface.fill(shot.get("lighting", (20, 24, 30)))
@@ -5629,6 +5807,12 @@ def draw_cutscene_scene(surface, shot, t):
         _draw_vent_shaft(surface, t)
     elif scene == "vent_exit":
         _draw_vent_exit(surface, t)
+    elif scene == "vostral_glass_case":
+        _draw_vostral_glass_case(surface, t)
+    elif scene == "vostral_file_grab":
+        _draw_vostral_file_grab(surface, t)
+    elif scene == "vostral_document_reveal":
+        _draw_vostral_document_reveal(surface, t)
 def draw_typewriter_title(surface, lines, char_idx_total):
     """Title card with proper sizing & spacing."""
     title_font = pygame.font.SysFont("Impact", 56)
