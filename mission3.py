@@ -240,6 +240,33 @@ volkov_mags_shots = [
     {"scene": "m3_volkov_gives_mags", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1500, "lighting": (6, 7, 8)},
 ]
 
+# Stealing the Vostral file from the Archives cold vault.
+vostral_steal_shots = [
+    {
+        "scene": "vostral_glass_case",
+        "speaker": None,
+        "text": None,
+        "hide_caption": True,
+        "min_ms": 2600,
+        "lighting": (5, 8, 12),
+    },
+    {
+        "scene": "vostral_file_grab",
+        "speaker": None,
+        "text": None,
+        "hide_caption": True,
+        "min_ms": 2400,
+        "lighting": (6, 9, 14),
+    },
+    {
+        "scene": "vostral_document_reveal",
+        "speaker": "BIRIBEL",
+        "text": "Six years of lies. Here's the truth.",
+        "min_ms": 3400,
+        "lighting": (8, 10, 15),
+    },
+]
+
 # ─────────────────────────────────────
 # Phase 1 — Interrogation dialogue tree
 # ─────────────────────────────────────
@@ -1231,24 +1258,56 @@ def _movement_locked():
     return False
 
 
-def _radio(text, color=C_SYSTEM, duration=320, mark=None):
-    """Pinned-radio helper, mirroring mission2._radio's signature.
+_m3_radio_queue = []
 
-    The interrogation cold open does NOT use this (its dialogue is a
-    bespoke full-screen panel). It's here so Phase 3 (KRAP re-contact)
-    and onward can drop radio beats in without re-deriving the helper.
+
+def _clear_m3_radio_queue():
+    global _m3_radio_queue
+    _m3_radio_queue = []
+
+
+def _radio(text, color=C_SYSTEM, duration=320, mark=None):
+    """Pinned-radio helper with automatic duration scaling and sequential queueing.
+
+    Multiple radio messages (e.g. when stealing the Vostral) are queued up
+    so they play sequentially one by one instead of popping up all at once.
+    Reading duration is scaled based on text length (minimum 480 frames = 8 seconds)
+    so radio chatter doesn't go by too fast.
     """
-    global _radio_marks
+    global _radio_marks, _m3_radio_queue
     if mark and mark in _radio_marks:
         return
     if mark:
         _radio_marks.add(mark)
-    try:
-        from interactions import trigger_radio_chatter
-        trigger_radio_chatter(text, color=color, duration=duration)
-    except Exception:
-        # Audio/interactions are optional in headless test harnesses.
-        pass
+
+    scaled_duration = max(duration, 480 + len(text) * 5)
+    _m3_radio_queue.append({
+        "text": text,
+        "color": color,
+        "duration": scaled_duration,
+        "mark": mark,
+    })
+
+
+def _update_m3_radio_queue():
+    """Process radio queue: fire next radio message only when previous is done."""
+    global _m3_radio_queue
+    if not _m3_radio_queue:
+        return
+
+    has_active_pin = False
+    for ft in getattr(STATE, "floating_texts", []):
+        if len(ft) >= 6 and ft[5] == "pin" and ft[4] > 15:
+            has_active_pin = True
+            break
+
+    if not has_active_pin:
+        msg = _m3_radio_queue.pop(0)
+        try:
+            from interactions import trigger_radio_chatter
+            trigger_radio_chatter(msg["text"], color=msg["color"], duration=msg["duration"])
+        except Exception:
+            pass
 
 
 def _start_m3_alarm():
@@ -2941,9 +3000,11 @@ def start_mission3(preserve_timer=False):
     STATE.request_mission_complete = False
     STATE.request_mission3_ending = False
     STATE.request_chair_break_cutscene = False
+    STATE.request_vostral_steal_cutscene = False
     STATE.request_death_screen = False
     STATE.player_dead = False
     STATE.death_timer = 0
+    _clear_m3_radio_queue()
 
     # ── Mission 3 stage / phase ──
     STATE.mission3_stage = STAGE_INTERROGATION
@@ -3549,19 +3610,19 @@ def _update_stage(keys):
             STATE, "m3_comms_ambience_timer", 0) + 1
         _m3_check_volkov_ammo_resupply()
         _update_volkov_mags()
+        comms_left = len(getattr(STATE, "enemies", []))
         if getattr(STATE, "m3_relay_active", False):
             _set_objective("Tuning relay...")
+        elif comms_left > 0:
+            _set_objective(f"Clear hostiles in Comms Wing: {comms_left} guard(s) left.")
+        elif not getattr(STATE, "m3_comms_power_restored", False):
+            _set_objective("Restore auxiliary power in Battery Backup.")
+        elif not getattr(STATE, "m3_comms_auth_acquired", False):
+            _set_objective("Copy relay authorization from the Security booth.")
         elif not getattr(STATE, "m3_relay_tuned", False):
-            if len(getattr(STATE, "enemies", [])) > 0:
-                _set_objective(f"Clear Comms Wing: {len(STATE.enemies)} guard(s) left.")
-            elif not getattr(STATE, "m3_comms_power_restored", False):
-                _set_objective("Restore auxiliary power in Battery Backup.")
-            elif not getattr(STATE, "m3_comms_auth_acquired", False):
-                _set_objective("Copy relay authorization from the Security booth.")
-            else:
-                _set_objective("Return to the relay and establish KRAP contact.")
+            _set_objective("Return to the relay and establish KRAP contact.")
         else:
-            _set_objective("Signal restored. Reach Archives.")
+            _set_objective("Signal restored & Comms cleared. Reach Archives.")
             _maybe_trigger_archives_handoff()
     elif stage == STAGE_ARCHIVES:
         _m3_check_volkov_ammo_resupply()
@@ -3883,7 +3944,7 @@ def _start_comms_phase():
 
 def _maybe_trigger_archives_handoff():
     """If the player reaches the Comms Wing east archive E-tile after the
-    relay is live, flip into STAGE_ARCHIVES."""
+    relay is live and all hostiles are eliminated, flip into STAGE_ARCHIVES."""
     if getattr(STATE, "mission3_stage", None) != STAGE_COMMS:
         return
     if not getattr(STATE, "m3_relay_tuned", False):
@@ -3895,6 +3956,18 @@ def _maybe_trigger_archives_handoff():
         _ARCHIVE_EXIT_ROW * TILE_SIZE + TILE_SIZE // 2,
     )
     if _near(exit_pos, radius=TILE_SIZE * 0.85):
+        enemies_left = len(getattr(STATE, "enemies", []))
+        if enemies_left > 0:
+            _set_objective(f"Clear hostiles in Comms Wing: {enemies_left} guard(s) left.")
+            warn_t = getattr(STATE, "m3_comms_exit_warn_timer", 0)
+            if warn_t <= 0:
+                STATE.m3_comms_exit_warn_timer = 75
+                STATE.floating_texts.append([
+                    exit_pos[0], exit_pos[1] - 36,
+                    f"CLEAR ALL HOSTILES FIRST ({enemies_left} LEFT)",
+                    (220, 170, 90), 70,
+                ])
+            return
         _start_archives_phase()
 
 
@@ -3955,11 +4028,17 @@ def _archives_nav_target():
         return None
     if getattr(STATE, "m3_maru_contact_active", False):
         return None
-    # The Archives supports stealth routes, so navigation guidance must not
-    # disappear merely because guards are still alive. Combat is optional until
-    # the player chooses to make noise.
+
+    enemies = getattr(STATE, "enemies", [])
+    total_left = len(enemies)
+
     if getattr(STATE, "m3_vostral_acquired", False):
+        if total_left > 0 and STATE.player:
+            px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+            closest = min(enemies, key=lambda e: math.hypot(e.rect.centerx - px, e.rect.centery - py))
+            return (closest.rect.centerx, closest.rect.centery)
         return _archives_exit_pos()
+
     if not getattr(STATE, "m3_maru_contacted", False):
         return _maru_terminal_pos()
     # Vault unlocked — guide to the file pedestal.
@@ -4070,12 +4149,12 @@ def _start_maru_contact():
 
     STATE.m3_maru_contact_active = True
     STATE.m3_maru_contact_timer = 0
-    STATE.m3_maru_contact_duration = 360  # six seconds of live defense
+    STATE.m3_maru_contact_duration = 1080  # 18 seconds of CRT transmission & live defense
     STATE.m3_handshake_alerted = False
     _set_objective("Defend the terminal — stay near Clerk 07 while Maru authenticates.")
     _radio(
         "MARU: Keep the channel alive. I can open the vault, but I cannot hold this room.",
-        color=C_MARU, duration=280, mark="maru_handshake_started",
+        color=C_MARU, duration=380, mark="maru_handshake_started",
     )
     try:
         audio.play("terminal_glitch", volume=0.50)
@@ -4098,20 +4177,20 @@ def _update_maru_contact():
 
     STATE.m3_maru_contact_timer = getattr(STATE, "m3_maru_contact_timer", 0) + 1
     t = STATE.m3_maru_contact_timer
-    duration = int(getattr(STATE, "m3_maru_contact_duration", 360) or 360)
+    duration = int(getattr(STATE, "m3_maru_contact_duration", 1080) or 1080)
 
-    # The handshake exposes the room to the security network halfway through.
-    if t >= 120 and not getattr(STATE, "m3_handshake_alerted", False):
+    # The handshake exposes the room to the security network at t >= 360.
+    if t >= 360 and not getattr(STATE, "m3_handshake_alerted", False):
         STATE.m3_handshake_alerted = True
         STATE.m3_archives_alarm = True
         _start_m3_alarm()
         _radio(
             "SYSTEM: Unauthorized archive handshake detected. Clerk Office 07 is compromised.",
-            color=(240, 110, 100), duration=260, mark="maru_handshake_alarm",
+            color=(240, 110, 100), duration=320, mark="maru_handshake_alarm",
         )
         _set_objective("Defend Clerk 07 — security is converging on the terminal.")
 
-    if t in (40, 90, 160, 230, 300):
+    if t in (40, 180, 320, 470, 630, 800, 940):
         try:
             audio.play("type_tick", volume=0.12)
         except Exception:
@@ -4169,7 +4248,7 @@ def _acquire_decree_file():
 
 
 def _acquire_vostral_file():
-    """Take the primary Vostral record and trigger a controlled response."""
+    """Take the primary Vostral record, play cutscene, and trigger controlled response."""
     if getattr(STATE, "m3_vostral_acquired", False):
         return
     if not getattr(STATE, "m3_maru_contacted", False):
@@ -4178,8 +4257,9 @@ def _acquire_vostral_file():
 
     STATE.m3_vostral_acquired = True
     STATE.mission3_evidence_uploaded = False
-    # Unlock the north stairwell immediately. The player may take the optional
-    # decree, but it is never required to finish the Archives.
+    STATE.request_vostral_steal_cutscene = True
+
+    # Unlock the north stairwell immediately.
     for door in getattr(STATE, "doors", []):
         if getattr(door, "m3_kill_order_exit", False):
             door.locked = False
@@ -4189,8 +4269,15 @@ def _acquire_vostral_file():
             door.manual_timer = 240
     STATE.floating_texts.append([
         *_vostral_file_pos(), "VOSTRAL FILE ACQUIRED", (200, 230, 160), 150])
-    _set_objective(
-        "Vostral secured. Optional: recover the original decree in Research, or escape north.")
+
+    total_left = len(getattr(STATE, "enemies", []))
+    if total_left > 0:
+        _set_objective(
+            f"Vostral secured. Clear remaining hostiles: {total_left} guard(s) left.")
+    else:
+        _set_objective(
+            "Vostral secured. Optional: recover original decree in Research, or escape north.")
+
     _radio(
         "VASILE: Confirmed — the Vostral is real. North stairwell is your extraction route.",
         color=C_VASILE, duration=360, mark="vostral_acquired",
@@ -4204,9 +4291,7 @@ def _acquire_vostral_file():
         color=C_MARU, duration=360, mark="decree_hint",
     )
 
-    # The response is controlled: one atrium guard and one research guard,
-    # rather than an instant full-map wave. Existing enemies remain valid
-    # threats, while the alarm communicates that the heist has changed state.
+    # Controlled security response: atrium and research guards.
     if not getattr(STATE, "m3_security_response_started", False):
         STATE.m3_security_response_started = True
         STATE.m3_archives_alarm = True
@@ -4232,13 +4317,13 @@ def _acquire_vostral_file():
     except Exception:
         pass
 
+
 def _update_archives_stage():
     """Phase 4 runtime: objectives, Maru contact, file pickup, north exit."""
     STATE.m3_archives_ambience_timer = getattr(
         STATE, "m3_archives_ambience_timer", 0) + 1
     _update_maru_contact()
 
-    guards_left = len(_archives_reachable_hostiles())
     total_left = len(getattr(STATE, "enemies", []))
     if total_left == 0:
         STATE.m3_archives_cleared = True
@@ -4247,15 +4332,16 @@ def _update_archives_stage():
         getattr(STATE, "m3_volkov_ally_active", False)
         and getattr(STATE, "m3_volkov_ally_hp", 0) > 0
     )
-    tag = "with Volkov" if volkov_up else "solo"
 
     if getattr(STATE, "m3_maru_contact_active", False):
         _set_objective("Hold position — receiving Maru's ghost-channel...")
     elif getattr(STATE, "m3_vostral_acquired", False):
-        if getattr(STATE, "m3_decree_acquired", False):
-            _set_objective("Evidence secured. North stairwell — escape the Archives.")
+        if total_left > 0:
+            _set_objective(f"Vostral secured. Clear remaining hostiles: {total_left} guard(s) left.")
+        elif getattr(STATE, "m3_decree_acquired", False):
+            _set_objective("Evidence secured & Archives cleared. North stairwell — escape north.")
         else:
-            _set_objective("Vostral secured. Optional: recover the original decree in Research, or escape north.")
+            _set_objective("Vostral secured & Archives cleared. North stairwell — escape north.")
         if STATE.player is not None and _near(_archives_exit_pos(), radius=TILE_SIZE * 0.85):
             _start_kill_order_phase()
     elif not getattr(STATE, "m3_maru_contacted", False):
@@ -4266,21 +4352,30 @@ def _update_archives_stage():
         else:
             _set_objective("Clerk 07 identified. [E] use Maru's dead-drop terminal.")
     else:
-        # The player can reach the vault without clearing every room. Enemies
-        # remain a navigation/combat threat rather than a mandatory kill gate.
         _set_objective("Vault unlocked (NE). Reach the cold vault and [E] take the Vostral file.")
 
 
 def _start_kill_order_phase():
-    """Archives → Kill Order handoff (Phase 5 stub entry).
-
-    Does not build a new map yet — marks stage and objective so the campaign
-    spine continues. Full Phase 5 combat comes in a later slice.
-    """
+    """Archives → Kill Order handoff (Phase 5 entry). Require clearing all hostiles."""
     if getattr(STATE, "mission3_stage", None) == STAGE_KILL_ORDER:
         return
     if not getattr(STATE, "m3_vostral_acquired", False):
         return
+
+    total_left = len(getattr(STATE, "enemies", []))
+    if total_left > 0:
+        _set_objective(f"Clear hostiles in Archives: {total_left} guard(s) left.")
+        ex, ey = _archives_exit_pos()
+        warn_t = getattr(STATE, "m3_archives_exit_warn_timer", 0)
+        if warn_t <= 0:
+            STATE.m3_archives_exit_warn_timer = 75
+            STATE.floating_texts.append([
+                ex, ey - 36,
+                f"CLEAR ALL HOSTILES FIRST ({total_left} LEFT)",
+                (220, 170, 90), 70,
+            ])
+        return
+
     STATE.mission3_stage = STAGE_KILL_ORDER
     STATE.mission_phase = "m3_kill_order"
     _set_objective("Survive Balaceanu's security sweep. (Phase 5 — pending)")
@@ -4292,8 +4387,6 @@ def _start_kill_order_phase():
         "VASILE: Sweep teams inbound. Hold the file — Phase 5 is not scripted yet.",
         color=C_VASILE, duration=400, mark="kill_order_stub",
     )
-    # Soft landing: keep the player in Archives geometry so they aren't soft-locked.
-    # A floating notice makes the stub explicit.
     if STATE.player is not None:
         px, py = STATE.player.rect.center
         STATE.floating_texts.append([
@@ -6071,6 +6164,7 @@ def game_update(keys):
     _update_m3_detainees()
     effects.update_particles()
     effects.update_floating_texts()
+    _update_m3_radio_queue()
     _update_stage(keys)
     _update_crafting()
     return _update_camera()
@@ -10070,8 +10164,12 @@ def _draw_archives_system_prompts(cam_x, cam_y):
     ex, ey = _archives_exit_pos()
     if math.hypot(px - ex, py - ey) <= 110:
         sx, sy = ex - cam_x, ey - cam_y
+        total_left = len(getattr(STATE, "enemies", []))
         if getattr(STATE, "m3_vostral_acquired", False):
-            _draw_prompt_tag(sx, sy, "[E] EXIT — KILL ORDER", (120, 230, 160), y_off=-48)
+            if total_left > 0:
+                _draw_prompt_tag(sx, sy, f"EXIT LOCKED — CLEAR HOSTILES ({total_left} LEFT)", (230, 130, 70), y_off=-48)
+            else:
+                _draw_prompt_tag(sx, sy, "[E] EXIT — KILL ORDER", (120, 230, 160), y_off=-48)
         else:
             _draw_prompt_tag(sx, sy, "EXIT SEALED", (230, 90, 70), y_off=-48)
 
@@ -10084,11 +10182,11 @@ def _draw_archives_atmosphere(cam_x, cam_y):
 
 
 def _draw_maru_contact_overlay():
-    """Fullscreen Maru transmission — slow, readable, high-contrast."""
+    """Fullscreen Maru transmission — slow, readable, high-contrast CRT transmission."""
     if not getattr(STATE, "m3_maru_contact_active", False):
         return
     t = getattr(STATE, "m3_maru_contact_timer", 0)
-    duration = int(getattr(STATE, "m3_maru_contact_duration", 960) or 960)
+    duration = int(getattr(STATE, "m3_maru_contact_duration", 1080) or 1080)
     progress = max(0.0, min(1.0, t / float(duration)))
 
     # Keep the map readable: this is a live defense objective, not a full
@@ -10112,16 +10210,16 @@ def _draw_maru_contact_overlay():
     sub = font_prompt.render("FORMER IPA ARCHIVIST  —  DEAD DROP", True, (200, 185, 230))
     panel.blit(sub, (panel_w - sub.get_width() - 22, 24))
 
-    # Staggered over ~16s so players can read each line fully.
+    # Staggered over ~18s so players can read each line fully.
     # thresh = when line starts; type_frames = how long it types out.
     lines = [
-        (40,  70,  "MARU",   "You shouldn't be alive, Biribel."),
-        (150, 70,  "MARU",   "Neither should this file."),
-        (280, 90,  "MARU",   "Balaceanu forged every medal."),
-        (420, 100, "MARU",   "The real record is in the cold vault."),
-        (560, 100, "MARU",   "I unlock it. You steal it. Then run north."),
-        (720, 120, "SYSTEM", "Vault authorization — granting access..."),
-        (860, 80,  "SYSTEM", "Access granted. East vault door is open."),
+        (40,   80,  "MARU",   "You shouldn't be alive, Biribel."),
+        (180,  80,  "MARU",   "Neither should this file."),
+        (320,  90,  "MARU",   "Balaceanu forged every single medal."),
+        (470, 100,  "MARU",   "The real service record is in the cold vault."),
+        (630, 100,  "MARU",   "I'm unlocking it now. Steal it, then escape north."),
+        (800,  90,  "SYSTEM", "Vault authorization — granting access..."),
+        (940,  80,  "SYSTEM", "Access granted. East vault door is unlocked."),
     ]
 
     body_y = 84
