@@ -1,0 +1,3309 @@
+# ------------------------------------------------------------
+# walking_sim.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# walking_sim.py
+# ------------------------------------------------------------
+
+
+"""Walking sim section: slum exploration, NPCs, firefight overlook panorama."""
+import math
+import random
+import pygame
+from config import *
+from state import STATE
+from player import Player
+from ui_hud import MiniMap
+from cutscenes import draw_dialogue_box, draw_oil_rig
+_walk_footstep_timer = 0
+rain_drops = [
+    (
+        random.randint(0, WIDTH),
+        random.randint(SCENE_TOP, SCENE_BOT),
+        random.randint(10, 20),
+    )
+    for _ in range(200)
+]
+def _play_walk_type_tick(ch, idx, volume=0.095):
+    if not ch or ch.isspace():
+        return
+    if idx % 2 != 0 and ch not in ".!?":
+        return
+    try:
+        audio.play("type_tick", volume=volume)
+    except Exception:
+        pass
+def clear_walk_dialogue():
+    global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
+    global walk_dialogue_char_idx, walk_dialogue_timer
+    walk_dialogue_active = False
+    walk_dialogue_speaker = ""
+    walk_dialogue_text = ""
+    walk_dialogue_char_idx = 0
+    walk_dialogue_timer = 0
+    STATE.walk_dialogue_active = False
+    STATE.walk_dialogue_speaker = ""
+    STATE.walk_dialogue_text = ""
+    STATE.walk_dialogue_char_idx = 0
+    STATE.walk_dialogue_timer = 0
+walk_map = [
+    "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    "C................CCCC..............C.........C",
+    "C..P.............C..C...CC.........C.........C",
+    "C........K..K....C..C...CC......CCCC.........C",
+    "C..CCC..................C.......C..C.........C",
+    "C..C.C.....CCCC.................C..C.........T",
+    "C..C.C.....C..C........CCCC.....C..C.........V",
+    "C..CCC.....C..C........C..C..................C",
+    "C......................C..C..................C",
+    "C......C...C.................................C",
+    "C......C...C...........C.CC..................C",
+    "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+]
+player_rations = 2
+warehouse_hp_bonus = 0
+warehouse_mag_bonus = 0
+warehouse_intel_given = False
+walk_npcs = []
+walk_stashes = []
+walk_story_points = [
+    (
+        5 * TILE_SIZE,
+        1 * TILE_SIZE + 32,
+        "poster",
+        "POSTER",
+        "Half-torn IPA poster. The Commander's face\nis covered in MAG spray paint.",
+    ),
+    (
+        12 * TILE_SIZE + 32,
+        8 * TILE_SIZE + 32,
+        "laundry",
+        "LAUNDRY",
+        "A woman hangs laundry between containers.\nShe does not make eye contact.",
+    ),
+    (
+        18 * TILE_SIZE + 16,
+        3 * TILE_SIZE + 32,
+        "checkpoint",
+        "CHECKPOINT",
+        "Two KRAP soldiers play cards on an oil drum.\nThey wave you through without asking.",
+    ),
+    (
+        28 * TILE_SIZE,
+        4 * TILE_SIZE + 16,
+        "fish",
+        "FISH MARKET",
+        "Crates of rotting fish. The smell of sulfur\nand stale diesel hits you.",
+    ),
+    (
+        40 * TILE_SIZE,
+        5 * TILE_SIZE + 16,
+        "overlook",
+        "OVERLOOK",
+        "The Kilemeno Ocean stretches to the horizon.\nA fisherman stands at the railing.",
+    ),
+    (
+        25 * TILE_SIZE + 32,
+        8 * TILE_SIZE + 32,
+        "old_woman",
+        "OLD WOMAN",
+        "An elderly woman sits beside a rusted container.\nShe watches the street carefully.",
+    ),
+]
+walk_player = None
+walk_camera_x = 0
+walk_camera_y = 0
+walk_walls = []
+walk_firefight_triggered = False
+walk_firefight_timer = 0
+walk_dialogue_active = False
+walk_dialogue_speaker = ""
+walk_dialogue_text = ""
+walk_dialogue_char_idx = 0
+walk_dialogue_timer = 0
+walk_van_trigger_x = 0
+walk_van_trigger_y = 0
+walk_fisherman_pos = (0, 0)
+walk_complete = False
+walk_active_hover = None
+walk_after_firefight = False
+# Cosmetic overlay after the oil-rig feed ends, so returning to top-down play is not abrupt.
+walk_return_timer = 0
+WALK_PROPS = None
+walk_fp_cutscene = None
+_walk_player_moving = False
+def start_walking_sim():
+    global walk_player, walk_camera_x, walk_camera_y, walk_walls
+    global walk_firefight_triggered, walk_firefight_timer, walk_dialogue_active
+    global \
+        walk_dialogue_speaker, \
+        walk_dialogue_text, \
+        walk_dialogue_char_idx, \
+        walk_dialogue_timer
+    global walk_van_trigger_x, walk_van_trigger_y, walk_fisherman_pos, walk_complete
+    global walk_active_hover, walk_after_firefight, walk_return_timer
+    global WALK_PROPS, minimap, walk_fp_cutscene
+    global \
+        player_rations, \
+        warehouse_hp_bonus, \
+        warehouse_mag_bonus, \
+        walk_npcs, \
+        walk_stashes
+    # ── Reset STATE leftovers from attack cutscene ──
+    STATE.walk_dialogue_active = False
+    STATE.walk_dialogue_speaker = ""
+    STATE.walk_dialogue_text = ""
+    STATE.walk_dialogue_char_idx = 0
+    STATE.walk_dialogue_timer = 0
+    STATE.walk_attack_active = False
+    STATE.walk_attack_timer = 0
+    STATE.walk_attack_events_done = set()
+    STATE.walk_boat_active = False
+    STATE.walk_missiles = []
+    STATE.walk_explosions = []
+    STATE.walk_terminal_active = False
+    STATE.walk_terminal_status = ""
+    STATE.rig_status = ["ONLINE", "ONLINE", "ONLINE"]
+    STATE.walk_after_firefight = False
+    STATE.screen_shake = 0
+    WALK_PROPS = None
+    walk_fp_cutscene = None
+    walk_player = None
+    walk_walls = []
+    walk_firefight_triggered = False
+    walk_firefight_timer = 0
+    walk_dialogue_active = False
+    walk_dialogue_speaker = ""
+    walk_dialogue_text = ""
+    walk_dialogue_char_idx = 0
+    walk_dialogue_timer = 0
+    walk_complete = False
+    walk_active_hover = None
+    walk_after_firefight = False
+    walk_return_timer = 0
+    player_rations = 2
+    warehouse_hp_bonus = 0
+    warehouse_mag_bonus = 0
+    walk_npcs = [
+        {
+            "x": 18 * TILE_SIZE + 32,
+            "y": 2 * TILE_SIZE + 32,
+            "name": "HUNGRY KID",
+            "dialogue": [
+                "cough... I haven't eaten in two days.",
+                "Do you have any food, sir?",
+            ],
+            "thanks": [
+                "Wow, thank you! Here, I found this metal vest in the dumpster.",
+                "It looks like Kevlar. You should wear it.",
+            ],
+            "done_dialogue": "Thanks for the food, sir! Be careful, the guards are on high alert.",
+            "color": (160, 150, 130),
+            "has_given": False,
+            "reward": "kevlar",
+        },
+        {
+            "x": 25 * TILE_SIZE + 32,
+            "y": 8 * TILE_SIZE + 32,
+            "name": "OLD WOMAN",
+            "dialogue": [
+                "They took everything... even the well water is contaminated.",
+                "A dry throat and an empty stomach, that's our reward.",
+            ],
+            "thanks": [
+                "Bless you, soldier. Listen closely...",
+                "The guards at the warehouse safe use a security passcode.",
+                "I saw them write it down on notes: 7 - 4 - 2.",
+                "Remember it well.",
+            ],
+            "done_dialogue": "Remember, the code to the notebook safe is 742.",
+            "color": (165, 145, 125),
+            "has_given": False,
+            "reward": "intel",
+            "sprite": "old_woman",
+        },
+    ]
+    walk_stashes = [
+        {
+            "x": 24 * TILE_SIZE + 32,
+            "y": 10 * TILE_SIZE + 32,
+            "type": "ammo",
+            "label": "AMMO BOX",
+            "desc": "A KRAP ammo crate left behind. Press [E] to search.",
+            "searched": False,
+            "reward_text": "Found extra 9mm magazine! (+1 starting mag)",
+        },
+        {
+            "x": 3 * TILE_SIZE + 32,
+            "y": 5 * TILE_SIZE + 32,
+            "type": "kevlar",
+            "label": "DISCARDED FLAK JACKET",
+            "desc": "A damaged body armor plate. Press [E] to search.",
+            "searched": False,
+            "reward_text": "Salvaged Kevlar plate! (+10 Max HP)",
+        },
+    ]
+    minimap = MiniMap(walk_map)
+    for row_idx, row in enumerate(walk_map):
+        for col_idx, tile in enumerate(row):
+            x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
+            if tile in ("C", "W"):
+                walk_walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+            elif tile == "P":
+                walk_player = Player(x + 16, y + 16)
+            elif tile == "V":
+                walk_van_trigger_x = x
+                walk_van_trigger_y = y
+    walk_fisherman_pos = (42 * TILE_SIZE, 4 * TILE_SIZE + 56)
+    walk_camera_x = walk_player.rect.centerx - WIDTH // 2 if walk_player else 0
+    walk_camera_y = walk_player.rect.centery - HEIGHT // 2 if walk_player else 0
+def update_walking_sim(keys):
+    global walk_camera_x, walk_camera_y, walk_firefight_triggered, walk_firefight_timer
+    global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
+    global walk_dialogue_char_idx, walk_dialogue_timer, walk_complete
+    global walk_active_hover, walk_after_firefight, walk_fp_cutscene, _walk_player_moving, walk_return_timer
+    if walk_player is None:
+        return walk_camera_x, walk_camera_y, False
+    if walk_return_timer > 0:
+        walk_return_timer -= 1
+    if walk_fp_cutscene:
+        _update_walk_fp_cutscene()
+        return walk_camera_x, walk_camera_y, False
+    movement_locked = (walk_firefight_triggered and not walk_after_firefight) or walk_return_timer > 0
+    if not movement_locked:
+        dx, dy = 0, 0
+        spd = 3
+        # Delta-time aware: spd is in px/frame, multiply by (60*dt).
+        _dt_mul = 60.0 * STATE.dt
+        if keys[pygame.K_w]:
+            dy -= spd * _dt_mul
+        if keys[pygame.K_s]:
+            dy += spd * _dt_mul
+        if keys[pygame.K_a]:
+            dx -= spd * _dt_mul
+        if keys[pygame.K_d]:
+            dx += spd * _dt_mul
+        if dx != 0 and dy != 0:
+            dx *= 0.707
+            dy *= 0.707
+        is_moving = dx != 0 or dy != 0
+        _walk_player_moving = is_moving
+        walk_player.move(dx, dy, walk_walls)
+        global _walk_footstep_timer
+        if is_moving:
+            _walk_footstep_timer -= 1
+            if _walk_footstep_timer <= 0:
+                audio.play("footstep_walk", volume=0.2)
+                _walk_footstep_timer = 35 + random.randint(0, 10)
+        else:
+            _walk_footstep_timer = 0
+        walk_camera_x += (walk_player.rect.centerx - WIDTH // 2 - walk_camera_x) * 0.1
+        walk_camera_y += (walk_player.rect.centery - HEIGHT // 2 - walk_camera_y) * 0.1
+    if walk_firefight_triggered and not walk_after_firefight:
+        target_angle = 0.0
+        cur = walk_player.angle
+        diff = (target_angle - cur + math.pi) % (2 * math.pi) - math.pi
+        walk_player.angle += diff * 0.08
+    else:
+        # Use get_scaled_mouse() so the player faces toward the cursor
+        # correctly at non-default resolutions. Raw pygame.mouse.get_pos()
+        # returns window pixels which don't match render-space coords
+        # after a resolution change.
+        mx, my = get_scaled_mouse()
+        world_mx = mx + walk_camera_x
+        world_my = my + walk_camera_y
+        walk_player.angle = math.atan2(
+            world_my - walk_player.rect.centery, world_mx - walk_player.rect.centerx
+        )
+    walk_active_hover = None
+    for sx, sy, key, label, text in walk_story_points:
+        if (
+            math.hypot(walk_player.rect.centerx - sx, walk_player.rect.centery - sy)
+            < 80
+        ):
+            walk_active_hover = (label, text)
+            break
+    if not walk_firefight_triggered:
+        overlook_x = 38 * TILE_SIZE
+        if walk_player.rect.centerx > overlook_x:
+            walk_firefight_triggered = True
+            STATE.walk_attack_active = True
+            STATE.walk_attack_timer = -90        # pre-roll before anything happens
+            STATE.walk_attack_events_done.clear()
+            STATE.walk_boat_active = False
+            STATE.walk_boat_x = -60.0
+            STATE.walk_boat_y = SCENE_TOP + 165
+            STATE.rig_status = ["ONLINE", "ONLINE", "ONLINE"]
+            STATE.walk_missiles = []
+            STATE.walk_explosions = []
+            STATE.walk_terminal_active = False
+            STATE.walk_terminal_status = ""
+            walk_dialogue_active = False
+            audio.play("radio_static", volume=0.25)
+            audio.play("wind", volume=0.4, loops=-1)
+    if STATE.walk_attack_active:
+        STATE.walk_attack_timer += 1
+        if STATE.walk_attack_timer >= 0:
+            _update_walk_attack_timeline()
+    if walk_dialogue_active and walk_dialogue_char_idx < len(walk_dialogue_text):
+        walk_dialogue_timer += 1
+        # First few characters type fast so it doesn't sit on "Thi"
+        if walk_dialogue_char_idx < 8:
+            threshold = 1
+        else:
+            threshold = 2
+        if walk_dialogue_timer >= threshold:
+            walk_dialogue_timer = 0
+            next_ch = walk_dialogue_text[walk_dialogue_char_idx] if walk_dialogue_char_idx < len(walk_dialogue_text) else ""
+            _play_walk_type_tick(next_ch, walk_dialogue_char_idx, volume=0.09)
+            walk_dialogue_char_idx += 1
+    if STATE.walk_dialogue_active and STATE.walk_dialogue_char_idx < len(STATE.walk_dialogue_text):
+        STATE.walk_dialogue_timer += 1
+        # Attack-cutscene dialogue should not crawl one letter at a time.
+        state_dialogue_speed = 2 if STATE.walk_attack_active else 5
+        if STATE.walk_dialogue_timer >= state_dialogue_speed:
+            STATE.walk_dialogue_timer = 0
+            next_ch = STATE.walk_dialogue_text[STATE.walk_dialogue_char_idx] if STATE.walk_dialogue_char_idx < len(STATE.walk_dialogue_text) else ""
+            _play_walk_type_tick(next_ch, STATE.walk_dialogue_char_idx, volume=0.10 if STATE.walk_attack_active else 0.09)
+            STATE.walk_dialogue_char_idx += 1
+    if walk_after_firefight or STATE.walk_after_firefight:
+        if walk_player.rect.centerx > walk_van_trigger_x:
+            clear_walk_dialogue()
+            walk_complete = True
+    return walk_camera_x, walk_camera_y, walk_complete
+def _ease_out_cubic(t):
+    t = max(0.0, min(1.0, t))
+    return 1 - (1 - t) ** 3
+def _lerp(a, b, t):
+    return a + (b - a) * t
+def _start_walk_fp_cutscene(scene, reward, npc=None, stash=None):
+    global walk_fp_cutscene, walk_dialogue_active
+    durations = {
+        "kid_kevlar": 520,
+        "crate_ammo": 190,
+        "crate_kevlar": 200,
+    }
+    _slow = {"kid_kevlar": 1.7}
+    walk_dialogue_active = False
+    speed = _slow.get(scene, 1.0)
+    walk_fp_cutscene = {
+        "scene": scene,
+        "reward": reward,
+        "npc": npc,
+        "stash": stash,
+        "timer": 0,
+        "duration": durations.get(scene, 180),
+        "speed": speed,
+    }
+    if scene.startswith("crate"):
+        audio.play("door_creak", volume=0.45)
+    else:
+        audio.play("pickup", volume=0.25)
+def _finish_walk_fp_cutscene():
+    global walk_fp_cutscene
+    global warehouse_hp_bonus, warehouse_mag_bonus, warehouse_intel_given
+    global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
+    global walk_dialogue_char_idx, walk_player
+    if not walk_fp_cutscene:
+        return
+    scene = walk_fp_cutscene["scene"]
+    reward = walk_fp_cutscene["reward"]
+    npc = walk_fp_cutscene.get("npc")
+    stash = walk_fp_cutscene.get("stash")
+    walk_dialogue_active = True
+    walk_dialogue_char_idx = 0
+    if reward in ("kid_kevlar", "stash_kevlar"):
+        warehouse_hp_bonus += 10
+        if walk_player:
+            walk_player.max_hp = 100 + warehouse_hp_bonus
+            walk_player.hp = walk_player.max_hp
+        walk_dialogue_speaker = npc["name"] if npc else "SYSTEM"
+        if npc:
+            walk_dialogue_text = (
+                "The kid watches you strap the plate on.\n"
+                "He gives a small nod, then disappears into the alley.\n"
+                "Kevlar equipped. (+10 Max HP)"
+            )
+        else:
+            walk_dialogue_text = (
+                "You pry open the damaged container.\n"
+                "Inside: a cracked but usable Kevlar plate.\n"
+                "Kevlar salvaged. (+10 Max HP)"
+            )
+    elif reward == "stash_ammo":
+        warehouse_mag_bonus += 1
+        walk_dialogue_speaker = "SYSTEM"
+        walk_dialogue_text = (
+            "You open the KRAP ammo crate.\n"
+            "Loose 9mm magazines sit under a torn supply manifest.\n"
+            "Extra magazine acquired. (+1 starting mag)"
+        )
+    audio.play("pickup", volume=0.55)
+    walk_fp_cutscene = None
+def _update_walk_fp_cutscene():
+    global walk_fp_cutscene
+    if not walk_fp_cutscene:
+        return
+    walk_fp_cutscene["timer"] += 1.0 / walk_fp_cutscene.get("speed", 1.0)
+    if walk_fp_cutscene["timer"] >= walk_fp_cutscene["duration"]:
+        _finish_walk_fp_cutscene()
+def _draw_fp_hands(surface, reach=0.0):
+    cx = WIDTH // 2
+    base_y = HEIGHT - LETTER_H - 55
+    sleeve_col = (58, 68, 52)
+    glove_col = (52, 42, 34)
+    skin_col = (185, 150, 120)
+    # Left hand
+    lx = cx - 105 + int(reach * 25)
+    ly = base_y + int(reach * -35)
+    pygame.draw.rect(surface, sleeve_col, (lx - 18, ly + 22, 42, 72), border_radius=8)
+    pygame.draw.ellipse(surface, glove_col, (lx - 20, ly, 46, 42))
+    pygame.draw.circle(surface, skin_col, (lx + 10, ly + 15), 7)
+    # Right hand
+    rx = cx + 80 - int(reach * 35)
+    ry = base_y + int(reach * -45)
+    pygame.draw.rect(surface, sleeve_col, (rx - 18, ry + 22, 42, 72), border_radius=8)
+    pygame.draw.ellipse(surface, glove_col, (rx - 20, ry, 46, 42))
+    pygame.draw.circle(surface, skin_col, (rx - 10, ry + 15), 7)
+def _draw_fp_kevlar(surface, x, y, scale=1.0):
+    s = scale
+    w = int(118 * s)
+    h = int(92 * s)
+    vest = pygame.Surface((w, h), pygame.SRCALPHA)
+    pts = [
+        (int(w * 0.18), 0),
+        (int(w * 0.82), 0),
+        (w - 4, int(h * 0.28)),
+        (w - 8, h - 6),
+        (int(w * 0.68), h),
+        (int(w * 0.32), h),
+        (8, h - 6),
+        (4, int(h * 0.28)),
+    ]
+    pygame.draw.polygon(vest, (64, 76, 58), pts)
+    pygame.draw.polygon(vest, (35, 45, 34), pts, 2)
+    # Collar
+    pygame.draw.rect(vest, (42, 50, 38), (int(w * 0.32), 2, int(w * 0.36), int(h * 0.18)), border_radius=3)
+    # Center seam
+    pygame.draw.line(vest, (34, 42, 30), (w // 2, 8), (w // 2, h - 8), 2)
+    # Pouches
+    for px in (int(w * 0.18), int(w * 0.52)):
+        pygame.draw.rect(vest, (48, 58, 42), (px, int(h * 0.38), int(w * 0.28), int(h * 0.34)), border_radius=3)
+        pygame.draw.rect(vest, (30, 38, 28), (px, int(h * 0.38), int(w * 0.28), int(h * 0.34)), 1, border_radius=3)
+        pygame.draw.line(vest, (72, 84, 60), (px + 4, int(h * 0.48)), (px + int(w * 0.28) - 4, int(h * 0.48)), 1)
+    # Scratches / wear
+    pygame.draw.line(vest, (105, 110, 85), (int(w * 0.18), int(h * 0.2)), (int(w * 0.38), int(h * 0.28)), 1)
+    pygame.draw.line(vest, (25, 30, 22), (int(w * 0.62), int(h * 0.74)), (int(w * 0.78), int(h * 0.7)), 1)
+    surface.blit(vest, (int(x - w // 2), int(y - h // 2)))
+def _draw_fp_mag(surface, x, y, rot=0):
+    mag = pygame.Surface((26, 58), pygame.SRCALPHA)
+    pts = [
+        (4, 2),
+        (22, 2),
+        (24, 54),
+        (7, 56),
+    ]
+    pygame.draw.polygon(mag, (68, 66, 60), pts)
+    pygame.draw.polygon(mag, (35, 35, 34), pts, 1)
+    for i in range(6):
+        pygame.draw.line(mag, (100, 95, 82), (7, 10 + i * 7), (20, 10 + i * 7), 1)
+    pygame.draw.rect(mag, (170, 125, 45), (7, 46, 15, 7), border_radius=2)
+    rotated = pygame.transform.rotate(mag, rot)
+    rect = rotated.get_rect(center=(int(x), int(y)))
+    surface.blit(rotated, rect)
+def _draw_fp_crate(surface, cx, cy, open_t, contents="ammo"):
+    cw, ch = 260, 130
+    # Crate shadow
+    shadow = pygame.Surface((cw + 40, ch + 40), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 80), (0, 16, cw + 40, ch + 18))
+    surface.blit(shadow, (cx - cw // 2 - 20, cy - ch // 2 + 45))
+    # Crate body
+    pygame.draw.rect(surface, (92, 62, 35), (cx - cw // 2, cy - ch // 2, cw, ch), border_radius=5)
+    pygame.draw.rect(surface, (52, 34, 20), (cx - cw // 2, cy - ch // 2, cw, ch), 3, border_radius=5)
+    # Wood planks
+    for i in range(4):
+        py = cy - ch // 2 + 20 + i * 26
+        pygame.draw.line(surface, (67, 43, 24), (cx - cw // 2 + 8, py), (cx + cw // 2 - 8, py), 2)
+    # Metal bands
+    pygame.draw.rect(surface, (56, 58, 58), (cx - cw // 2 + 28, cy - ch // 2, 12, ch))
+    pygame.draw.rect(surface, (56, 58, 58), (cx + cw // 2 - 40, cy - ch // 2, 12, ch))
+    # Interior glow once opening
+    if open_t > 0.25:
+        glow_alpha = int(120 * open_t)
+        glow = pygame.Surface((cw - 30, ch - 20), pygame.SRCALPHA)
+        pygame.draw.ellipse(glow, (255, 175, 50, glow_alpha), glow.get_rect())
+        surface.blit(glow, (cx - cw // 2 + 15, cy - ch // 2 + 12))
+        pygame.draw.rect(surface, (25, 20, 14), (cx - cw // 2 + 18, cy - ch // 2 + 18, cw - 36, ch - 30), border_radius=3)
+        if contents == "ammo":
+            _draw_fp_mag(surface, cx - 35, cy + 5, rot=-8)
+            _draw_fp_mag(surface, cx + 5, cy + 3, rot=5)
+            _draw_fp_mag(surface, cx + 42, cy + 8, rot=-3)
+        else:
+            _draw_fp_kevlar(surface, cx, cy + 10, scale=0.75)
+    # Lid opening upward
+    lid_h = 42
+    lid_y = cy - ch // 2 - int(open_t * 95)
+    lid_squash = max(10, int(lid_h * (1.0 - open_t * 0.65)))
+    pygame.draw.rect(surface, (110, 75, 42), (cx - cw // 2, lid_y, cw, lid_squash), border_radius=4)
+    pygame.draw.rect(surface, (55, 36, 22), (cx - cw // 2, lid_y, cw, lid_squash), 2, border_radius=4)
+    pygame.draw.line(surface, (70, 45, 25), (cx - cw // 2 + 10, lid_y + lid_squash // 2), (cx + cw // 2 - 10, lid_y + lid_squash // 2), 2)
+def _draw_walk_fp_cutscene(surface):
+    if not walk_fp_cutscene:
+        return
+    scene = walk_fp_cutscene["scene"]
+    timer = walk_fp_cutscene["timer"]
+    duration = walk_fp_cutscene["duration"]
+    p = timer / duration
+    # Dark cinematic focus overlay
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((5, 7, 10, 145))
+    surface.blit(overlay, (0, 0))
+    # Subtle first-person vignette
+    draw_vignette(surface, strength=180)
+    # Fade in/out
+    fade = 0
+    if timer < 22:
+        fade = int(255 * (1 - timer / 22))
+    elif timer > duration - 28:
+        fade = int(255 * ((timer - (duration - 28)) / 28))
+    if scene == "kid_kevlar":
+        ground_y = HEIGHT - LETTER_H - 100
+        center_x = WIDTH // 2
+        # ── ENVIRONMENT ──
+        container_tiles = [
+            CONTAINER_TILE_RUST, CONTAINER_TILE_RED,
+            CONTAINER_TILE_GREY, CONTAINER_TILE_BLUE,
+        ]
+        for col_i, tx in enumerate(range(0, WIDTH + TILE_SIZE, TILE_SIZE)):
+            for row_i, ty in enumerate(range(LETTER_H, ground_y, TILE_SIZE)):
+                tile = container_tiles[(col_i + row_i) % 4]
+                surface.blit(tile, (tx, ty))
+        wall_shade = pygame.Surface((WIDTH, ground_y - LETTER_H), pygame.SRCALPHA)
+        wall_shade.fill((5, 8, 12, 120))
+        surface.blit(wall_shade, (0, LETTER_H))
+        pygame.draw.rect(surface, (12, 12, 14), (0, ground_y - 8, WIDTH, 8))
+        pygame.draw.rect(surface, (28, 26, 22), (0, ground_y, WIDTH, HEIGHT - ground_y - LETTER_H))
+        # Debris on ground
+        rng_debris = random.Random(42)
+        for _ in range(35):
+            dx = rng_debris.randint(20, WIDTH - 20)
+            dy = ground_y + rng_debris.randint(5, HEIGHT - ground_y - LETTER_H - 15)
+            dw = rng_debris.randint(8, 28)
+            dh = rng_debris.randint(4, 10)
+            shade = rng_debris.randint(-8, 8)
+            pygame.draw.rect(surface, (42 + shade, 38 + shade, 32 + shade), (dx, dy, dw, dh))
+        puddle = pygame.Surface((160, 35), pygame.SRCALPHA)
+        pygame.draw.ellipse(puddle, (18, 22, 30, 100), puddle.get_rect())
+        surface.blit(puddle, (WIDTH // 2 + 60, ground_y + 30))
+        # ── Flickering overhead light ──
+        light_on = ((pygame.time.get_ticks() + timer * 37) // 180) % 5 != 0
+        if light_on:
+            light = pygame.Surface((280, 200), pygame.SRCALPHA)
+            for r in range(100, 0, -4):
+                a = int(18 * (1 - r / 100))
+                pygame.draw.ellipse(light, (200, 170, 100, a),
+                    (140 - r, 100 - r // 2, r * 2, r))
+            surface.blit(light, (center_x - 140, LETTER_H + 20))
+        # ── Dripping water detail ──
+        drip_phase = (timer * 0.04) % (math.pi * 2)
+        if math.sin(drip_phase) > 0.95:
+            drip_x = center_x + 180
+            drip_y = LETTER_H + 40 + int((timer * 3) % 60)
+            pygame.draw.circle(surface, (30, 40, 55, 180), (drip_x, drip_y), 2)
+        # ── RUBBLE PILE (always visible, dim until camera "notices" it) ──
+        rubble_x = center_x + 130
+        rubble_y = ground_y - 5
+        rubble_alpha_t = _ease_out_cubic(min(1.0, max(0, (timer - 140) / 60)))
+        rubble_brightness = 0.35 + 0.65 * rubble_alpha_t  # starts dim, brightens
+        rng_r = random.Random(99)
+        for _ in range(12):
+            rx = rubble_x + rng_r.randint(-55, 55)
+            ry = rubble_y + rng_r.randint(-30, 20)
+            rw = rng_r.randint(12, 40)
+            rh = rng_r.randint(8, 18)
+            shade = rng_r.randint(-10, 10)
+            base = int((55 + shade) * rubble_brightness)
+            pygame.draw.rect(surface, (base, base - 7, base - 15), (rx, ry, rw, rh))
+        # Bent rebar
+        rebar_col = tuple(int(c * rubble_brightness) for c in (85, 70, 55))
+        pygame.draw.line(surface, rebar_col, (rubble_x - 30, rubble_y - 25),
+            (rubble_x - 22, rubble_y + 5), 3)
+        pygame.draw.line(surface, rebar_col, (rubble_x + 20, rubble_y - 20),
+            (rubble_x + 15, rubble_y + 10), 2)
+        # Kevlar peeking out (becomes visible after 180)
+        vest_peek_t = _ease_out_cubic(min(1.0, max(0, (timer - 180) / 40)))
+        if vest_peek_t > 0.05:
+            vest_vis = int(vest_peek_t * 60)
+            vest_clip = pygame.Surface((100, vest_vis), pygame.SRCALPHA)
+            vest_mini = pygame.Surface((100, 70), pygame.SRCALPHA)
+            v_pts = [(8, 0), (92, 0), (98, 18), (96, 65), (72, 70), (28, 70), (4, 65), (2, 18)]
+            pygame.draw.polygon(vest_mini, (64, 76, 58), v_pts)
+            pygame.draw.polygon(vest_mini, (35, 45, 34), v_pts, 2)
+            vest_clip.blit(vest_mini, (0, 0))
+            surface.blit(vest_clip, (rubble_x - 50, rubble_y - vest_vis + 15))
+            glow = pygame.Surface((120, 80), pygame.SRCALPHA)
+            glow_a = int(30 * vest_peek_t * abs(math.sin(timer * 0.05)))
+            pygame.draw.ellipse(glow, (255, 200, 80, glow_a), glow.get_rect())
+            surface.blit(glow, (rubble_x - 60, rubble_y - vest_vis - 5))
+        # ══════════════════════════════════════════════
+        # KID — with breathing, blinking, weight shift
+        # ══════════════════════════════════════════════
+        kid_visible = timer > 35
+        kid_entered = min(1.0, max(0, (timer - 35) / 55))
+        kid_enter_t = _ease_out_cubic(kid_entered)
+        if kid_visible:
+            kid_x = _lerp(-120, center_x - 140, kid_enter_t)
+            kid_base_y = ground_y - 8
+            # ── Breathing ──
+            breath = math.sin(timer * 0.06) * 1.5
+            # ── Weight shift (subtle sway) ──
+            sway = math.sin(timer * 0.025) * 2.0
+            # ── Blinking ──
+            blink_cycle = (timer * 7 + 43) % 300  # offset so it doesn't sync with anything
+            is_blinking = 0 < blink_cycle < 12
+            kid_draw_x = kid_x + sway
+            kid_draw_y = kid_base_y + breath
+            kid_scale = 0.7
+            # Shadow
+            shadow = pygame.Surface((50, 14), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 55), shadow.get_rect())
+            surface.blit(shadow, (int(kid_draw_x - 25), int(kid_base_y - 6)))
+            # Legs
+            leg_w = int(9 * kid_scale)
+            leg_h = int(42 * kid_scale)
+            for lx_off in (-8, 8):
+                pygame.draw.rect(surface, (32, 30, 28),
+                    (int(kid_draw_x + lx_off - leg_w // 2), int(kid_draw_y - leg_h), leg_w, leg_h))
+            # Shoes
+            for lx_off in (-8, 8):
+                pygame.draw.ellipse(surface, (22, 18, 16),
+                    (int(kid_draw_x + lx_off - 7), int(kid_draw_y - 5), 14, 8))
+            # Torso
+            torso_y = int(kid_draw_y - leg_h - 52)
+            torso_pts = [
+                (int(kid_draw_x - 22), torso_y + 8),
+                (int(kid_draw_x + 22), torso_y + 8),
+                (int(kid_draw_x + 26), torso_y + 55),
+                (int(kid_draw_x - 26), torso_y + 55),
+            ]
+            pygame.draw.polygon(surface, (105, 95, 78), torso_pts)
+            pygame.draw.polygon(surface, (80, 72, 58), torso_pts, 1)
+            # Wrinkles
+            pygame.draw.line(surface, (82, 74, 60),
+                (int(kid_draw_x - 10), torso_y + 15),
+                (int(kid_draw_x - 15), torso_y + 45), 1)
+            pygame.draw.line(surface, (82, 74, 60),
+                (int(kid_draw_x + 8), torso_y + 20),
+                (int(kid_draw_x + 12), torso_y + 48), 1)
+            # Collar
+            pygame.draw.arc(surface, (85, 78, 62),
+                (int(kid_draw_x - 16), torso_y + 2, 32, 16), 0, math.pi, 2)
+            # Arms
+            arm_col = (105, 95, 78)
+            skin_col = (175, 145, 115)
+            # Left arm (hangs, slight swing with breathing)
+            arm_swing = math.sin(timer * 0.04) * 3
+            pygame.draw.line(surface, arm_col,
+                (int(kid_draw_x - 22), torso_y + 14),
+                (int(kid_draw_x - 30 + arm_swing), torso_y + 52), 6)
+            pygame.draw.circle(surface, skin_col,
+                (int(kid_draw_x - 31 + arm_swing), torso_y + 54), 5)
+            # Right arm — points after frame 175
+            if timer > 175:
+                point_prog = _ease_out_cubic(min(1.0, (timer - 175) / 40))
+                arm_end_x = _lerp(kid_draw_x + 22, kid_draw_x + 95, point_prog)
+                arm_end_y = _lerp(torso_y + 50, torso_y + 30, point_prog)
+                pygame.draw.line(surface, arm_col,
+                    (int(kid_draw_x + 22), torso_y + 14),
+                    (int(_lerp(kid_draw_x + 30, kid_draw_x + 55, point_prog)),
+                     int(_lerp(torso_y + 32, torso_y + 22, point_prog))), 6)
+                pygame.draw.line(surface, arm_col,
+                    (int(_lerp(kid_draw_x + 30, kid_draw_x + 55, point_prog)),
+                     int(_lerp(torso_y + 32, torso_y + 22, point_prog))),
+                    (int(arm_end_x), int(arm_end_y)), 5)
+                pygame.draw.circle(surface, skin_col, (int(arm_end_x), int(arm_end_y)), 5)
+                pygame.draw.line(surface, skin_col,
+                    (int(arm_end_x), int(arm_end_y)),
+                    (int(arm_end_x + 18), int(arm_end_y + 8)), 3)
+            else:
+                pygame.draw.line(surface, arm_col,
+                    (int(kid_draw_x + 22), torso_y + 14),
+                    (int(kid_draw_x + 28), torso_y + 52), 6)
+                pygame.draw.circle(surface, skin_col,
+                    (int(kid_draw_x + 29), torso_y + 54), 5)
+            # Head
+            head_y = torso_y - 8
+            head_r = 14
+            pygame.draw.circle(surface, skin_col, (int(kid_draw_x), head_y), head_r)
+            # Hair
+            hair_pts = [
+                (int(kid_draw_x - 14), head_y - 2),
+                (int(kid_draw_x - 12), head_y - 16),
+                (int(kid_draw_x - 5), head_y - 18),
+                (int(kid_draw_x + 3), head_y - 19),
+                (int(kid_draw_x + 10), head_y - 16),
+                (int(kid_draw_x + 14), head_y - 8),
+                (int(kid_draw_x + 14), head_y - 2),
+            ]
+            pygame.draw.polygon(surface, (28, 22, 18), hair_pts)
+            pygame.draw.line(surface, (22, 18, 14),
+                (int(kid_draw_x - 8), head_y - 18),
+                (int(kid_draw_x - 14), head_y - 22), 1)
+            # Eyes — blink, and track toward rubble after pointing
+            eye_y = head_y - 2
+            if is_blinking:
+                # Closed eyes — just lines
+                for ex_off in (-5, 5):
+                    pygame.draw.line(surface, (45, 30, 20),
+                        (int(kid_draw_x + ex_off - 3), eye_y),
+                        (int(kid_draw_x + ex_off + 3), eye_y), 1)
+            else:
+                # Eye gaze direction shifts after pointing
+                if timer > 200:
+                    gaze_x = 1.5  # looking toward rubble (right)
+                else:
+                    gaze_x = 0    # looking at player (center)
+                for ex_off in (-5, 5):
+                    pygame.draw.ellipse(surface, (220, 215, 205),
+                        (int(kid_draw_x + ex_off - 4), eye_y - 3, 8, 6))
+                    pygame.draw.circle(surface, (45, 30, 20),
+                        (int(kid_draw_x + ex_off + gaze_x), eye_y - 1), 3)
+                    pygame.draw.circle(surface, (10, 8, 6),
+                        (int(kid_draw_x + ex_off + gaze_x), eye_y - 1), 1)
+                    pygame.draw.circle(surface, (255, 255, 250),
+                        (int(kid_draw_x + ex_off + gaze_x + 1), eye_y - 2), 1)
+                # Dark circles
+                for ex_off in (-5, 5):
+                    pygame.draw.arc(surface, (120, 95, 80),
+                        (int(kid_draw_x + ex_off - 5), eye_y, 10, 6),
+                        0, math.pi, 1)
+            # Nose
+            pygame.draw.line(surface, (155, 125, 100),
+                (int(kid_draw_x), head_y + 2),
+                (int(kid_draw_x + 2), head_y + 6), 1)
+            # Mouth — changes with dialogue phase
+            mouth_y = head_y + 8
+            speaking_now = (50 < timer < 120) or (145 < timer < 210) or (380 < timer < 460)
+            if speaking_now:
+                # Open mouth, oscillating
+                mouth_open = 2 + int(abs(math.sin(timer * 0.3)) * 3)
+                pygame.draw.ellipse(surface, (80, 40, 35),
+                    (int(kid_draw_x - 4), mouth_y - 1, 8, mouth_open))
+            else:
+                pygame.draw.line(surface, (130, 100, 80),
+                    (int(kid_draw_x - 4), mouth_y),
+                    (int(kid_draw_x + 4), mouth_y + 1), 1)
+            # Dirt smudges
+            smudge = pygame.Surface((10, 6), pygame.SRCALPHA)
+            pygame.draw.ellipse(smudge, (90, 70, 50, 80), smudge.get_rect())
+            surface.blit(smudge, (int(kid_draw_x + 7), head_y + 3))
+        # ══════════════════════════════════════
+        # DIALOGUE — clean phases, NO OVERLAP
+        # ══════════════════════════════════════
+        def _speech_bubble(text, x, y, alpha):
+            if alpha <= 0:
+                return
+            txt = font_dialogue.render(text, True, (230, 220, 195))
+            txt.set_alpha(alpha)
+            tw = txt.get_width() + 24
+            bg = pygame.Surface((tw, 34), pygame.SRCALPHA)
+            pygame.draw.rect(bg, (0, 0, 0, min(180, alpha)), bg.get_rect(), border_radius=4)
+            surface.blit(bg, (int(x - tw // 2), int(y)))
+            surface.blit(txt, (int(x - txt.get_width() // 2), int(y + 6)))
+        # Phase A: Cough + greeting (50–130)
+        if 50 < timer < 130:
+            a = min(255, int((timer - 50) * 6))
+            if timer > 110:
+                a = max(0, int(255 - (timer - 110) * 12))
+            _speech_bubble("*cough* ...hey. Hey, mister.", kid_x + 40, ground_y - 180, a)
+        # Phase B: "I haven't eaten" (140–220)
+        elif 140 < timer < 220:
+            a = min(255, int((timer - 140) * 5))
+            if timer > 195:
+                a = max(0, int(255 - (timer - 195) * 10))
+            _speech_bubble("I haven't eaten in two days.", kid_x + 40, ground_y - 180, a)
+        # Phase C: "Over there" (225–310) — after he starts pointing
+        elif 225 < timer < 310:
+            a = min(255, int((timer - 225) * 5))
+            if timer > 285:
+                a = max(0, int(255 - (timer - 285) * 10))
+            _speech_bubble("Over there. Behind those crates.", kid_x + 60, ground_y - 185, a)
+        # Phase D: "Be careful" — AFTER vest is picked up (390–480)
+        elif 390 < timer < 480:
+            a = min(255, int((timer - 390) * 4))
+            if timer > 450:
+                a = max(0, int(255 - (timer - 450) * 8))
+            _speech_bubble("Be careful, mister. The guards are angry tonight.",
+                max(30, int(kid_x - 20)), ground_y - 185, a)
+        # ── Hands reach in (310–360) ──
+        if timer > 305:
+            reach_t = _ease_out_cubic(min(1.0, (timer - 305) / 45))
+            _draw_fp_hands(surface, reach=reach_t)
+        # ── Lift and inspect vest (350–400) ──
+        if timer > 345:
+            lift_t = _ease_out_cubic(min(1.0, (timer - 345) / 45))
+            vest_end_x = center_x
+            vest_end_y = HEIGHT // 2 - 20
+            vx = _lerp(rubble_x, vest_end_x, lift_t)
+            vy = _lerp(ground_y - 10, vest_end_y, lift_t)
+            vs = _lerp(0.6, 1.3, lift_t)
+            inspect_wobble = 0
+            if timer > 370:
+                inspect_wobble = math.sin((timer - 370) * 0.08) * 3
+            _draw_fp_kevlar(surface, vx + inspect_wobble, vy, scale=vs)
+            # Quality assessment
+            if 375 < timer < 400:
+                assess_alpha = min(255, int((timer - 375) * 10))
+                assess = font_terminal_small.render(
+                    "Cracked but functional. Better than nothing.", True, (180, 175, 160))
+                assess.set_alpha(assess_alpha)
+                surface.blit(assess, (center_x - assess.get_width() // 2, vy + 75))
+        # ── Acquisition banner (380–500) ──
+        if timer > 375:
+            acq_alpha = min(255, int((timer - 375) * 5))
+            if timer > 480:
+                acq_alpha = max(0, int(255 - (timer - 480) * 8))
+            label = font_speaker.render("KEVLAR PLATE ACQUIRED", True, (255, 220, 120))
+            label.set_alpha(acq_alpha)
+            surface.blit(label, (WIDTH // 2 - label.get_width() // 2, LETTER_H + 22))
+            sub = font_terminal_small.render("+10 MAX HP", True, (100, 220, 100))
+            sub.set_alpha(acq_alpha)
+            surface.blit(sub, (WIDTH // 2 - sub.get_width() // 2, LETTER_H + 55))
+    elif scene in ("crate_ammo", "crate_kevlar"):
+        open_t = _ease_out_cubic((timer - 35) / 70)
+        grab_t = _ease_out_cubic((timer - 115) / 45)
+        contents = "ammo" if scene == "crate_ammo" else "kevlar"
+        # Hands first, then crate
+        _draw_fp_hands(surface, reach=min(1.0, open_t * 0.8))
+        _draw_fp_crate(surface, WIDTH // 2, HEIGHT // 2 + 80, open_t, contents=contents)
+        if scene == "crate_ammo" and timer > 115:
+            # Mags float toward player
+            for i, ox in enumerate((-38, 0, 38)):
+                x = _lerp(WIDTH // 2 + ox, WIDTH // 2 - 35 + i * 35, grab_t)
+                y = _lerp(HEIGHT // 2 + 90, HEIGHT - LETTER_H - 145, grab_t)
+                _draw_fp_mag(surface, x, y, rot=int(math.sin(timer * 0.08 + i) * 8))
+            if timer > 145:
+                label = font_speaker.render("MAGAZINE ACQUIRED", True, (255, 220, 120))
+                surface.blit(label, (WIDTH // 2 - label.get_width() // 2, LETTER_H + 25))
+        elif scene == "crate_kevlar" and timer > 115:
+            x = WIDTH // 2
+            y = _lerp(HEIGHT // 2 + 90, HEIGHT // 2 - 10, grab_t)
+            s = _lerp(0.75, 1.15, grab_t)
+            _draw_fp_kevlar(surface, x, y, scale=s)
+            if timer > 145:
+                label = font_speaker.render("KEVLAR SALVAGED", True, (255, 220, 120))
+                surface.blit(label, (WIDTH // 2 - label.get_width() // 2, LETTER_H + 25))
+    # Instruction / cinematic footer
+    footer = font_terminal_small.render("FIRST PERSON INTERACTION", True, (110, 120, 130))
+    surface.blit(footer, (WIDTH // 2 - footer.get_width() // 2, HEIGHT - LETTER_H + 20))
+    if fade > 0:
+        fade_surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        fade_surf.fill((0, 0, 0, fade))
+        surface.blit(fade_surf, (0, 0))
+    draw_letterbox(surface)
+def handle_walk_interact():
+    global \
+        walk_dialogue_active, \
+        walk_dialogue_speaker, \
+        walk_dialogue_text, \
+        walk_dialogue_char_idx
+    global \
+        player_rations, \
+        warehouse_hp_bonus, \
+        warehouse_mag_bonus, \
+        walk_npcs, \
+        walk_stashes, \
+        walk_fp_cutscene
+    if walk_fp_cutscene:
+        return
+    if walk_dialogue_active:
+        return
+    for npc in walk_npcs:
+        dist = math.hypot(
+            walk_player.rect.centerx - npc["x"], walk_player.rect.centery - npc["y"]
+        )
+        if dist < 80:
+            walk_dialogue_active = True
+            walk_dialogue_speaker = npc["name"]
+            walk_dialogue_char_idx = 0
+            if npc["has_given"]:
+                walk_dialogue_text = npc["done_dialogue"]
+            else:
+                if player_rations > 0:
+                    npc["has_given"] = True
+                    player_rations -= 1
+                    if npc["reward"] == "kevlar":
+                        _start_walk_fp_cutscene("kid_kevlar", "kid_kevlar", npc=npc)
+                        return
+                    else:
+                        warehouse_intel_given = True
+                        audio.play("pickup", volume=0.5)
+                        walk_dialogue_text = (
+                            npc["thanks"][0]
+                            + "\n"
+                            + npc["thanks"][1]
+                            + "\n"
+                            + npc["thanks"][2]
+                            + "\n"
+                            + npc["thanks"][3]
+                        )
+                else:
+                    walk_dialogue_text = npc["dialogue"][0] + "\n" + npc["dialogue"][1]
+            return
+    for stash in walk_stashes:
+        dist = math.hypot(
+            walk_player.rect.centerx - stash["x"], walk_player.rect.centery - stash["y"]
+        )
+        if dist < 80:
+            if stash["searched"]:
+                walk_dialogue_active = True
+                walk_dialogue_speaker = "SYSTEM"
+                walk_dialogue_text = "Already searched."
+                walk_dialogue_char_idx = 0
+            else:
+                stash["searched"] = True
+                if stash["type"] == "ammo":
+                    _start_walk_fp_cutscene("crate_ammo", "stash_ammo", stash=stash)
+                    return
+                elif stash["type"] == "kevlar":
+                    _start_walk_fp_cutscene("crate_kevlar", "stash_kevlar", stash=stash)
+                    return
+            return
+def _draw_walk_poster(surface, x, y):
+    w, h = 18, 26
+    pygame.draw.rect(surface, (200, 180, 140), (x - w // 2, y - h // 2, w, h))
+    pygame.draw.rect(surface, (60, 50, 40), (x - w // 2, y - h // 2, w, h), 1)
+    pygame.draw.rect(surface, (160, 30, 30), (x - w // 2, y - h // 2, w, 4))
+    pygame.draw.circle(surface, (40, 30, 25), (x, y - 4), 3)
+    pygame.draw.line(
+        surface,
+        (15, 15, 15),
+        (x - w // 2 + 2, y - h // 2 + 2),
+        (x + w // 2 - 2, y + h // 2 - 2),
+        2,
+    )
+    pygame.draw.circle(surface, (15, 15, 15), (x - 1, y - 4), 5, 1)
+def _draw_walk_laundry(surface, x, y):
+    pygame.draw.line(surface, (110, 90, 70), (x - 36, y - 8), (x + 36, y - 8), 1)
+    pygame.draw.line(surface, (110, 90, 70), (x - 36, y - 6), (x + 36, y - 6), 1)
+    clothes = [
+        (-28, (140, 60, 50)),
+        (-12, (200, 200, 190)),
+        (4, (60, 80, 110)),
+        (22, (180, 160, 90)),
+    ]
+    for ox, col in clothes:
+        cw = 10
+        ch = 14
+        pygame.draw.rect(surface, col, (x + ox - cw // 2, y - 6, cw, ch))
+        pygame.draw.circle(surface, (50, 40, 30), (x + ox, y - 6), 1)
+def _draw_walk_checkpoint(surface, x, y):
+    pygame.draw.circle(surface, (45, 50, 55), (x, y), 12)
+    pygame.draw.circle(surface, (25, 30, 35), (x, y), 12, 1)
+    pygame.draw.circle(surface, (60, 65, 70), (x, y), 8, 1)
+    pygame.draw.rect(surface, (220, 220, 220), (x - 6, y - 2, 5, 7))
+    pygame.draw.rect(surface, (220, 220, 220), (x + 1, y - 1, 5, 7))
+    pygame.draw.rect(surface, (40, 40, 40), (x - 6, y - 2, 5, 7), 1)
+    pygame.draw.rect(surface, (40, 40, 40), (x + 1, y - 1, 5, 7), 1)
+    s1x, s1y = x - 24, y - 4
+    pygame.draw.circle(surface, C_KRAP_UNIFORM, (s1x, s1y), 8)
+    pygame.draw.circle(surface, (180, 150, 125), (s1x, s1y), 4)
+    pygame.draw.rect(surface, C_KRAP_BLUE, (s1x - 7, s1y + 2, 4, 3))
+    s2x, s2y = x + 24, y + 4
+    pygame.draw.circle(surface, C_KRAP_UNIFORM, (s2x, s2y), 8)
+    pygame.draw.circle(surface, (180, 150, 125), (s2x, s2y), 4)
+    pygame.draw.rect(surface, C_KRAP_BLUE, (s2x + 3, s2y + 2, 4, 3))
+def _draw_walk_fish(surface, x, y):
+    crates = [(-18, -8), (-2, -10), (12, -4), (-10, 6), (4, 8)]
+    for ox, oy in crates:
+        cw, ch = 14, 12
+        pygame.draw.rect(
+            surface, (90, 75, 55), (x + ox - cw // 2, y + oy - ch // 2, cw, ch)
+        )
+        pygame.draw.rect(
+            surface, (50, 40, 30), (x + ox - cw // 2, y + oy - ch // 2, cw, ch), 1
+        )
+        pygame.draw.line(
+            surface,
+            (50, 40, 30),
+            (x + ox - cw // 2 + 4, y + oy - ch // 2),
+            (x + ox - cw // 2 + 4, y + oy + ch // 2),
+            1,
+        )
+        pygame.draw.line(
+            surface,
+            (50, 40, 30),
+            (x + ox - cw // 2 + 9, y + oy - ch // 2),
+            (x + ox - cw // 2 + 9, y + oy + ch // 2),
+            1,
+        )
+        pygame.draw.ellipse(surface, (160, 170, 180), (x + ox - 4, y + oy - 2, 8, 3))
+    for fx_o, fy_o in [(-22, -14), (8, -16), (16, 10), (-18, 14)]:
+        if (pygame.time.get_ticks() // 100 + fx_o) % 4 < 2:
+            pygame.draw.circle(surface, (10, 10, 10), (x + fx_o, y + fy_o), 1)
+def _draw_walk_old_woman_marker(surface, x, y):
+    pygame.draw.polygon(
+        surface,
+        (78, 64, 52),
+        [(x, y - 6), (x - 8, y + 8), (x + 8, y + 8)],
+    )
+    pygame.draw.circle(surface, (185, 155, 128), (x, y - 10), 4)
+    pygame.draw.arc(
+        surface,
+        (60, 55, 50),
+        (x - 5, y - 16, 10, 10),
+        0,
+        math.pi,
+        2,
+    )
+def _draw_walk_overlook(surface, x, y):
+    pygame.draw.rect(surface, (80, 70, 60), (x - 40, y - 20, 80, 4))
+    pygame.draw.rect(surface, (80, 70, 60), (x - 40, y - 10, 80, 3))
+    for px in (-36, -12, 12, 36):
+        pygame.draw.rect(surface, (60, 50, 40), (x + px - 2, y - 22, 4, 14))
+    pygame.draw.circle(surface, (90, 80, 50), (x - 4, y + 4), 10)
+    pygame.draw.circle(surface, (60, 55, 45), (x - 4, y + 4), 5)
+WALK_SPRITE_DRAWERS = {
+    "poster": _draw_walk_poster,
+    "laundry": _draw_walk_laundry,
+    "checkpoint": _draw_walk_checkpoint,
+    "fish": _draw_walk_fish,
+    "overlook": _draw_walk_overlook,
+    "old_woman": _draw_walk_old_woman_marker,
+}
+def _gen_walk_props():
+    rng = random.Random(31)
+    props = []
+    map_w = len(walk_map[0]) * TILE_SIZE
+    map_h = len(walk_map) * TILE_SIZE
+    def is_walkable(wx, wy):
+        col = wx // TILE_SIZE
+        row = wy // TILE_SIZE
+        if 0 <= row < len(walk_map) and 0 <= col < len(walk_map[row]):
+            return walk_map[row][col] not in ("C", "W")
+        return False
+    lamps = [
+        (3 * TILE_SIZE + 32, 4 * TILE_SIZE + 32),
+        (9 * TILE_SIZE + 32, 7 * TILE_SIZE + 16),
+        (16 * TILE_SIZE, 4 * TILE_SIZE + 48),
+        (22 * TILE_SIZE + 16, 8 * TILE_SIZE + 16),
+        (30 * TILE_SIZE + 16, 4 * TILE_SIZE + 32),
+        (36 * TILE_SIZE, 7 * TILE_SIZE + 16),
+    ]
+    for lx, ly in lamps:
+        props.append(("lamp", lx, ly))
+    for _ in range(50):
+        for _try in range(10):
+            wx = rng.randint(2 * TILE_SIZE, map_w - 3 * TILE_SIZE)
+            wy = rng.randint(2 * TILE_SIZE, map_h - 2 * TILE_SIZE)
+            if is_walkable(wx, wy):
+                kind = rng.choice(
+                    [
+                        "drum",
+                        "drum",
+                        "trash",
+                        "trash",
+                        "pallet",
+                        "puddle",
+                        "puddle",
+                        "puddle",
+                        "pipe",
+                        "cable",
+                        "debris",
+                        "debris",
+                    ]
+                )
+                props.append((kind, wx, wy))
+                break
+    for _ in range(25):
+        for _try in range(10):
+            col = rng.randint(2, len(walk_map[0]) - 3)
+            row = rng.randint(2, len(walk_map) - 3)
+            tile = walk_map[row][col]
+            if tile == ".":
+                if row > 0 and walk_map[row - 1][col] == "C":
+                    wx = col * TILE_SIZE + rng.randint(8, TILE_SIZE - 8)
+                    wy = row * TILE_SIZE + 4
+                    kind = rng.choice(
+                        ["wall_graffiti", "wall_poster", "wall_pipe", "wall_stain"]
+                    )
+                    props.append((kind, wx, wy))
+                    break
+    return props
+def _draw_prop_lamp_pole(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.ellipse(surface, (0, 0, 0, 80), (sx - 6, sy - 2, 12, 5))
+    pygame.draw.rect(surface, (28, 26, 28), (sx - 2, sy - 28, 4, 28))
+    pygame.draw.rect(surface, (40, 38, 40), (sx - 8, sy - 32, 16, 6))
+    pygame.draw.circle(surface, (255, 200, 120), (sx, sy - 28), 3)
+    glow = pygame.Surface((20, 20), pygame.SRCALPHA)
+    pygame.draw.circle(glow, (255, 200, 120, 90), (10, 10), 8)
+    surface.blit(glow, (sx - 10, sy - 38))
+def _draw_prop_drum(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.ellipse(surface, (0, 0, 0, 80), (sx - 11, sy - 3, 22, 8))
+    pygame.draw.circle(surface, (38, 35, 32), (sx, sy), 11)
+    pygame.draw.circle(surface, (22, 20, 18), (sx, sy), 11, 1)
+    pygame.draw.circle(surface, (52, 48, 44), (sx, sy), 8, 1)
+    pygame.draw.circle(surface, (28, 26, 24), (sx, sy), 3)
+    pygame.draw.line(surface, (75, 45, 25), (sx + 5, sy - 8), (sx + 6, sy + 6), 2)
+def _draw_prop_trash(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.ellipse(surface, (0, 0, 0, 70), (sx - 14, sy + 2, 28, 8))
+    pygame.draw.circle(surface, (22, 22, 24), (sx - 5, sy), 8)
+    pygame.draw.circle(surface, (35, 35, 38), (sx - 7, sy - 2), 3)
+    pygame.draw.circle(surface, (28, 28, 30), (sx + 4, sy + 2), 7)
+    pygame.draw.circle(surface, (40, 40, 42), (sx + 2, sy), 2)
+    pygame.draw.circle(surface, (60, 50, 35), (sx - 10, sy + 6), 2)
+    pygame.draw.circle(surface, (80, 65, 45), (sx + 8, sy + 5), 1)
+    pygame.draw.line(surface, (90, 80, 60), (sx - 12, sy + 8), (sx - 8, sy + 7), 1)
+def _draw_prop_pallet(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.ellipse(surface, (0, 0, 0, 60), (sx - 12, sy + 4, 24, 5))
+    pygame.draw.rect(surface, (62, 48, 32), (sx - 14, sy - 7, 28, 14))
+    pygame.draw.rect(surface, (40, 30, 20), (sx - 14, sy - 7, 28, 14), 1)
+    for sl in range(-10, 12, 5):
+        pygame.draw.line(surface, (38, 28, 18), (sx + sl, sy - 7), (sx + sl, sy + 7), 1)
+    pygame.draw.polygon(
+        surface, (32, 30, 35), [(sx + 10, sy - 7), (sx + 14, sy - 7), (sx + 14, sy - 2)]
+    )
+def _draw_prop_puddle(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    puddle = pygame.Surface((40, 18), pygame.SRCALPHA)
+    pygame.draw.ellipse(puddle, (20, 25, 35, 140), (0, 0, 40, 18))
+    pygame.draw.ellipse(puddle, (45, 55, 70, 80), (3, 3, 30, 10), 1)
+    pygame.draw.ellipse(puddle, (140, 130, 100, 50), (12, 4, 14, 4))
+    surface.blit(puddle, (sx - 20, sy - 9))
+def _draw_prop_pipe(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.ellipse(surface, (0, 0, 0, 60), (sx - 10, sy + 3, 20, 5))
+    pygame.draw.rect(surface, (48, 45, 42), (sx - 12, sy - 4, 24, 6))
+    pygame.draw.rect(surface, (28, 26, 24), (sx - 12, sy - 4, 24, 6), 1)
+    pygame.draw.circle(surface, (32, 30, 28), (sx + 12, sy - 1), 3)
+    pygame.draw.ellipse(surface, (30, 35, 45, 160), (sx - 5, sy + 4, 12, 5))
+def _draw_prop_cable(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pts = [(sx - 18, sy + 4), (sx - 6, sy), (sx + 6, sy + 3), (sx + 18, sy - 2)]
+    for i in range(len(pts) - 1):
+        pygame.draw.line(surface, (15, 15, 18), pts[i], pts[i + 1], 3)
+        pygame.draw.line(surface, (35, 30, 28), pts[i], pts[i + 1], 1)
+def _draw_prop_debris(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    rng_d = random.Random(x * 7 + y)
+    for _ in range(5):
+        ox = rng_d.randint(-12, 12)
+        oy = rng_d.randint(-6, 6)
+        sz = rng_d.randint(2, 4)
+        col = rng_d.choice([(50, 48, 45), (60, 56, 52), (40, 38, 36)])
+        pygame.draw.rect(surface, col, (sx + ox, sy + oy, sz, sz))
+def _draw_prop_wall_graffiti(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pts = [
+        (sx, sy - 3),
+        (sx - 3, sy - 5),
+        (sx - 5, sy + 1),
+        (sx - 4, sy + 4),
+        (sx, sy + 5),
+        (sx + 4, sy + 4),
+        (sx + 5, sy + 1),
+        (sx + 3, sy - 5),
+    ]
+    pygame.draw.polygon(surface, (12, 12, 12), pts)
+    pygame.draw.line(surface, (12, 12, 12), (sx, sy + 5), (sx + 1, sy + 12), 1)
+def _draw_prop_wall_poster(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.polygon(
+        surface,
+        (180, 165, 130),
+        [(sx - 6, sy), (sx + 6, sy - 2), (sx + 5, sy + 10), (sx - 4, sy + 9)],
+    )
+    pygame.draw.rect(surface, (140, 30, 30), (sx - 5, sy + 1, 10, 2))
+    pygame.draw.line(surface, (60, 50, 40), (sx - 4, sy + 5), (sx + 4, sy + 5), 1)
+def _draw_prop_wall_pipe(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    pygame.draw.rect(surface, (45, 42, 38), (sx - 2, sy, 4, 18))
+    pygame.draw.rect(surface, (25, 22, 20), (sx - 2, sy, 4, 18), 1)
+    pygame.draw.rect(surface, (32, 30, 28), (sx - 4, sy + 8, 8, 2))
+def _draw_prop_wall_stain(surface, x, y, fcx, fcy):
+    sx = x - fcx
+    sy = y - fcy
+    stain = pygame.Surface((10, 16), pygame.SRCALPHA)
+    pygame.draw.polygon(stain, (40, 30, 20, 100), [(3, 0), (6, 0), (8, 16), (2, 16)])
+    surface.blit(stain, (sx - 5, sy))
+PROP_DRAWERS = {
+    "drum": _draw_prop_drum,
+    "trash": _draw_prop_trash,
+    "pallet": _draw_prop_pallet,
+    "puddle": _draw_prop_puddle,
+    "pipe": _draw_prop_pipe,
+    "cable": _draw_prop_cable,
+    "debris": _draw_prop_debris,
+    "wall_graffiti": _draw_prop_wall_graffiti,
+    "wall_poster": _draw_prop_wall_poster,
+    "wall_pipe": _draw_prop_wall_pipe,
+    "wall_stain": _draw_prop_wall_stain,
+}
+def _draw_walk_props_pools(fcx, fcy):
+    global WALK_PROPS
+    if WALK_PROPS is None:
+        WALK_PROPS = _gen_walk_props()
+    for kind, x, y in WALK_PROPS:
+        if kind == "lamp":
+            sx = x - fcx
+            sy = y - fcy
+            if -200 < sx < WIDTH + 200 and -200 < sy < HEIGHT + 200:
+                pool = pygame.Surface((180, 180), pygame.SRCALPHA)
+                for r in range(80, 0, -4):
+                    a = int(28 * (1 - r / 80))
+                    pygame.draw.ellipse(
+                        pool, (220, 160, 80, a), (90 - r, 90 - r // 2, r * 2, r)
+                    )
+                screen.blit(pool, (sx - 90, sy - 90))
+def _draw_walk_props(fcx, fcy):
+    global WALK_PROPS
+    if WALK_PROPS is None:
+        WALK_PROPS = _gen_walk_props()
+    for kind, x, y in WALK_PROPS:
+        sx = x - fcx
+        sy = y - fcy
+        if not (-100 < sx < WIDTH + 100 and -100 < sy < HEIGHT + 100):
+            continue
+        if kind == "lamp":
+            _draw_prop_lamp_pole(screen, x, y, fcx, fcy)
+        else:
+            drawer = PROP_DRAWERS.get(kind)
+            if drawer:
+                drawer(screen, x, y, fcx, fcy)
+# ─── Attack sequence timing (frames @ 60fps) ─────────────────────────
+# Three-act cinematic:
+#   ACT 1 — Setup     ( 0 – 360 / ~6 s)
+#   ACT 2 — The Strike (400 – 980 / ~10 s)
+#   ACT 3 — Aftermath (1100 – 1700 / ~10 s)
+ATK_BOAT_APPEAR      = 90    # Boat enters frame from the left
+ATK_FISHERMAN_1     = 135   # early warning before the terminal feed boots
+ATK_TERMINAL_ON      = 260   # KRAP observation feed boots up
+ATK_FISHERMAN_2     = 360   # warning just before the first missile run
+ATK_TARGET_CENTER    = 400
+ATK_MISSILE_1_LAUNCH = 460
+ATK_IMPACT_CENTER    = 540
+ATK_TARGET_LEFT      = 620
+ATK_MISSILE_2_LAUNCH = 680
+ATK_IMPACT_LEFT      = 760
+ATK_TARGET_RIGHT     = 840
+ATK_MISSILE_3_LAUNCH = 900
+ATK_IMPACT_RIGHT     = 980
+ATK_FISHERMAN_3     = 1220  # aftermath line after the last rig has burned for a beat
+ATK_FISHERMAN_4     = 1600  # final fisherman line
+ATK_END             = 2180  # extra breath before handoff to avoid an abrupt return
+# ── Canonical world positions (used by BOTH update and draw) ──
+HORIZON_Y_OVERLOOK  = SCENE_TOP + 180
+BOAT_BASE_Y         = SCENE_TOP + 165
+RIG_X_POSITIONS     = (225, 505, 760)   # LEFT, CENTER, RIGHT
+RIG_NAMES           = ("LEFT RIG", "CENTER RIG", "RIGHT RIG")
+RIG_IMPACT_FRAMES   = (ATK_IMPACT_LEFT, ATK_IMPACT_CENTER, ATK_IMPACT_RIGHT)
+def _update_walk_attack_timeline():
+    """Drives the attack cutscene: boat, missiles, rig destruction, dialogue.
+    All side-effects (sounds, screen shake, dialogue, STATE mutations) happen
+    here. The draw function only reads STATE — so the HUD and the visuals
+    can never disagree with what actually happened.
+    """
+    if not STATE.walk_attack_active:
+        return
+    t = STATE.walk_attack_timer
+    done = STATE.walk_attack_events_done
+    # ── ACT 1: Setup ─────────────────────────────────────────────
+    if t >= ATK_BOAT_APPEAR and "boat" not in done:
+        done.add("boat")
+        STATE.walk_boat_active = True
+        STATE.walk_boat_x = 0.0
+        STATE.walk_boat_y = BOAT_BASE_Y
+        STATE.walk_terminal_status = ""
+    if t >= ATK_FISHERMAN_1 and "fish1" not in done:
+        done.add("fish1")
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "Hear that engine?\nToo fast for a fishing boat.",
+        )
+    if t >= ATK_TERMINAL_ON and "terminal" not in done:
+        done.add("terminal")
+        STATE.walk_terminal_active = True
+        STATE.walk_terminal_status = "CONTACT: UNKNOWN VESSEL — TRACKING"
+        audio.play("menu_click", volume=0.5)
+        audio.play("radio_static", volume=0.3)
+    if t >= ATK_FISHERMAN_2 and "fish2" not in done:
+        done.add("fish2")
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "They come in low during the rain.\n"
+            "The rigs never see them until the first rocket.",
+        )
+    # ── ACT 2: The strike (CENTER → LEFT → RIGHT) ───────────────
+    _process_rig_strike(t, done, "center", 1,
+        ATK_TARGET_CENTER, ATK_MISSILE_1_LAUNCH, ATK_IMPACT_CENTER)
+    _process_rig_strike(t, done, "left", 0,
+        ATK_TARGET_LEFT,   ATK_MISSILE_2_LAUNCH, ATK_IMPACT_LEFT)
+    _process_rig_strike(t, done, "right", 2,
+        ATK_TARGET_RIGHT,  ATK_MISSILE_3_LAUNCH, ATK_IMPACT_RIGHT)
+    # ── ACT 3: Aftermath ────────────────────────────────────────
+    if t >= ATK_FISHERMAN_3 and "fish3" not in done:
+        done.add("fish3")
+        STATE.walk_terminal_status = "ALL RIGS OFFLINE — OIL FIELD LOST"
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "Third time this month.\n"
+            "KRAP watches until the oil stops moving.",
+        )
+    if t >= ATK_FISHERMAN_4 and "fish4" not in done:
+        done.add("fish4")
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "You're new.\nYou'll learn.",
+        )
+    # Extra human reactions; timed right after visible events, not before them.
+    if t >= ATK_IMPACT_CENTER + 34 and "react_center" not in done:
+        done.add("react_center")
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "There. Center rig's folding.",
+        )
+    if t >= ATK_IMPACT_LEFT + 35 and "react_left" not in done:
+        done.add("react_left")
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "Left rig's falling into the sea.",
+        )
+    if t >= ATK_IMPACT_RIGHT + 50 and "react_right" not in done:
+        done.add("react_right")
+        _trigger_walk_dialogue(
+            "OLD FISHERMAN",
+            "Now the last one burns.\nThree fires on the horizon.",
+        )
+    # Delayed sound layers: launch -> impact -> collapse -> steam/fire spread.
+    for _idx, _impact in enumerate(RIG_IMPACT_FRAMES):
+        if t >= _impact + 36 and f"collapse_sound_{_idx}" not in done:
+            done.add(f"collapse_sound_{_idx}")
+            STATE.walk_terminal_status = f"STRUCTURAL COLLAPSE — {RIG_NAMES[_idx]}"
+            audio.play("rig_metal_collapse", volume=0.24)
+            audio.schedule(10, "terminal_glitch", volume=0.14)
+            STATE.screen_shake = max(STATE.screen_shake, 22 - _idx * 2)
+        if t >= _impact + 68 and f"water_sound_{_idx}" not in done:
+            done.add(f"water_sound_{_idx}")
+            STATE.walk_terminal_status = f"FIRE SPREAD / STEAM PLUME — {RIG_NAMES[_idx]}"
+            audio.play("rig_water_splash", volume=0.22)
+            audio.schedule(8, "rig_fire_burst", volume=0.16)
+            audio.schedule(4, "terminal_glitch", volume=0.12)
+    # ── Boat runs left-to-right, then accelerates out of frame ──
+    if STATE.walk_boat_active:
+        if t < ATK_TARGET_CENTER:
+            boat_speed = 0.32
+        elif t < ATK_IMPACT_RIGHT + 120:
+            boat_speed = 0.60
+        elif t < ATK_FISHERMAN_4:
+            boat_speed = 0.78
+        else:
+            boat_speed = 1.55
+        STATE.walk_boat_x += boat_speed
+    # ── Advance missile and explosion lifetimes ─────────────────
+    for m in STATE.walk_missiles[:]:
+        m["t"] = min(1.0, m["t"] + m["speed"])
+        if m["t"] >= 1.0:
+            STATE.walk_missiles.remove(m)
+    for ex in STATE.walk_explosions[:]:
+        ex["life"] -= 1
+        if ex["life"] <= 0:
+            STATE.walk_explosions.remove(ex)
+    # ── End cutscene ────────────────────────────────────────────
+    if t >= ATK_END and "end" not in done:
+        done.add("end")
+        STATE.walk_terminal_status = "SIGNAL LOST — RETURNING TO HARBOR"
+        clear_walk_dialogue()
+        STATE.walk_attack_active = False
+        STATE.walk_terminal_active = False
+        global walk_after_firefight, walk_return_timer
+        walk_after_firefight = True
+        walk_return_timer = 240
+        STATE.walk_after_firefight = True
+def _process_rig_strike(t, done, prefix, rig_index,
+                        target_frame, launch_frame, impact_frame):
+    """One full TARGETED → LAUNCH → DESTROYED sequence for a single rig.
+    Uses RIG_X_POSITIONS as the single source of truth so the missile
+    physically aims at the rig you can actually see.
+    """
+    rig_x    = RIG_X_POSITIONS[rig_index]
+    rig_name = RIG_NAMES[rig_index]
+    # TARGETED
+    if t >= target_frame and f"{prefix}_target" not in done:
+        done.add(f"{prefix}_target")
+        STATE.rig_status[rig_index] = "TARGETED"
+        STATE.walk_terminal_status = f"TARGET LOCK: {rig_name}"
+        audio.play("menu_hover", volume=0.45)
+    # LAUNCH — missile fires from current boat position
+    if t >= launch_frame and f"{prefix}_launch" not in done:
+        done.add(f"{prefix}_launch")
+        STATE.walk_missiles.append({
+            "start_x": float(STATE.walk_boat_x + 50),
+            "start_y": float(STATE.walk_boat_y - 2),
+            "tx":      float(rig_x),
+            "ty":      float(HORIZON_Y_OVERLOOK - 70),
+            "t":       0.0,
+            "speed":   1.0 / max(1, impact_frame - launch_frame),
+            "rig_index": rig_index,
+        })
+        STATE.walk_terminal_status = f"MISSILE INBOUND — {rig_name}"
+        audio.play("missile_launch", volume=0.42)
+        audio.schedule(8, "missile_flyby", volume=0.30)
+        audio.schedule(2, "terminal_glitch", volume=0.16)
+    # IMPACT
+    if t >= impact_frame and f"{prefix}_impact" not in done:
+        done.add(f"{prefix}_impact")
+        STATE.rig_status[rig_index] = "DESTROYED"
+        _life = 190 if rig_index == 2 else 155
+        STATE.walk_explosions.append({
+            "x":        float(rig_x),
+            "y":        float(HORIZON_Y_OVERLOOK - 60),
+            "life":     _life,
+            "max_life": _life,
+            "rig_index": rig_index,
+        })
+        STATE.walk_terminal_status = f"*** IMPACT — {rig_name} DESTROYED ***"
+        audio.duck_ambience(frames=150, factor=0.25)
+        audio.play("rig_impact_crack", volume=0.62)
+        audio.schedule(4, "rig_low_boom", volume=0.82)
+        audio.schedule(13, "rig_secondary_explosion", volume=0.42)
+        audio.schedule(34, "rig_metal_collapse", volume=0.35)
+        audio.schedule(56, "rig_water_splash", volume=0.28)
+        audio.schedule(72, "rig_fire_burst", volume=0.20)
+        audio.schedule(2, "terminal_glitch", volume=0.24)
+        audio.schedule(26, "terminal_glitch", volume=0.14)
+        STATE.screen_shake = 34 + rig_index * 3
+def _trigger_walk_dialogue(speaker, text):
+    """Show a dialogue line during the cutscene."""
+    STATE.walk_dialogue_active = True
+    STATE.walk_dialogue_speaker = speaker
+    STATE.walk_dialogue_text = text
+    STATE.walk_dialogue_char_idx = 0
+    STATE.walk_dialogue_timer = 0
+# ─── Attack overlook panorama helpers ────────────────────────────────
+ATTACK_VANISH_X = WIDTH // 2 + 22
+ATTACK_VANISH_Y = HORIZON_Y_OVERLOOK - 6
+ATTACK_RIG_LAYOUT = (
+    {"world_x": -250.0, "depth": 0.76, "tilt": -1.0},
+    {"world_x":    0.0, "depth": 0.46, "tilt":  0.0},
+    {"world_x":  250.0, "depth": 0.72, "tilt":  1.0},
+)
+def _attack_depth_scale(depth):
+    near = 1.0 - depth
+    return 0.82 + near * 1.28
+def _attack_rig_pose(index, elapsed):
+    layout = ATTACK_RIG_LAYOUT[index]
+    depth = layout["depth"]
+    near = 1.0 - depth
+    scale = _attack_depth_scale(depth)
+    x = ATTACK_VANISH_X + layout["world_x"] * (0.56 + depth * 0.34)
+    water_y = (
+        HORIZON_Y_OVERLOOK
+        + 12
+        + near * 76
+        + math.sin(elapsed * 0.014 + index * 0.65) * (1.5 + near * 1.5)
+    )
+    deck_y = water_y - int(105 * scale)
+    return {
+        "x": x,
+        "water_y": water_y,
+        "deck_y": deck_y,
+        "scale": scale,
+        "depth": depth,
+        "tilt": layout["tilt"],
+    }
+def _attack_boat_pose_from_world_x(world_x, elapsed=0):
+    x = -170 + world_x * 1.65
+    travel = max(0.0, min(1.25, (x + 170.0) / (WIDTH + 380.0)))
+    depth = max(0.50, 0.90 - min(1.0, travel) * 0.26)
+    near = 1.0 - depth
+    scale = 0.76 + near * 1.08
+    y = (
+        HORIZON_Y_OVERLOOK
+        + 18
+        + near * 84
+        + math.sin(elapsed * 0.035 + travel * 4.0) * (2 + near * 2)
+    )
+    heading = -0.12 + min(1.0, travel) * 0.14
+    return {"x": x, "y": y, "scale": scale, "depth": depth, "heading": heading}
+def _draw_attack_explosion(surface, cx, cy, t, scale=1.0):
+    """Big cinematic oil-rig impact: flash, shockwave, fireball, smoke, debris and spray."""
+    if t < 0:
+        return
+    s = max(0.35, float(scale))
+    t = float(t)
+    early = max(0.0, 1.0 - t / 22.0)
+    burn = max(0.0, 1.0 - t / 135.0)
+    grow = min(1.0, t / 50.0)
+    # Sudden hot impact flash and expanding blast ring.
+    if t < 30:
+        flash_w = int(300 * s)
+        flash_h = int(190 * s)
+        flash = pygame.Surface((flash_w, flash_h), pygame.SRCALPHA)
+        fw, fh = flash.get_size()
+        center = (fw // 2, int(fh * 0.58))
+        for rad, alpha, col in [
+            (int((28 + t * 2.2) * s), int(235 * early), (255, 248, 212)),
+            (int((58 + t * 3.0) * s), int(150 * early), (255, 178, 72)),
+            (int((96 + t * 4.5) * s), int(70 * early), (255, 70, 24)),
+        ]:
+            if rad > 2 and alpha > 0:
+                pygame.draw.circle(flash, (*col, alpha), center, rad)
+        ring_rect = pygame.Rect(0, 0, int((78 + t * 7.0) * s), int((18 + t * 1.8) * s))
+        ring_rect.center = (center[0], center[1] + int(22 * s))
+        ring_alpha = int(170 * max(0.0, 1.0 - t / 30.0))
+        pygame.draw.ellipse(flash, (255, 214, 135, ring_alpha), ring_rect, max(1, int(2 * s)))
+        surface.blit(flash, (int(cx - fw // 2), int(cy - fh * 0.70)))
+    # Main fireball / black smoke column.
+    plume_w = max(80, int((190 + grow * 90) * s))
+    plume_h = max(120, int((210 + grow * 110) * s))
+    plume = pygame.Surface((plume_w, plume_h), pygame.SRCALPHA)
+    pw, ph = plume.get_size()
+    base_x = pw // 2
+    base_y = ph - int(48 * s)
+    # Core roiling fireballs. Deterministic per frame so it flickers without teleporting wildly.
+    for i in range(24):
+        frac = i / 23.0
+        phase = t * (0.052 + frac * 0.018) + i * 1.73
+        column_spread = (13 + frac * 44 + grow * 18) * s
+        ox = math.sin(phase) * column_spread + math.sin(phase * 0.41) * 8 * s
+        oy = (frac * (118 + grow * 85) + math.sin(phase * 0.8) * 8) * s
+        rr = max(4, int((21 - frac * 8 + early * 9 + math.sin(phase) * 2.0) * s))
+        heat = max(0.0, 1.0 - frac * 0.88)
+        alpha = int((215 * burn + 55 * early) * (1.0 - frac * 0.35))
+        if alpha <= 0:
+            continue
+        col = (
+            255,
+            int(92 + 140 * heat),
+            int(24 + 94 * heat),
+            max(0, min(255, alpha)),
+        )
+        pos = (int(base_x + ox), int(base_y - oy))
+        pygame.draw.circle(plume, col, pos, rr)
+        if i < 9 and t < 58:
+            pygame.draw.circle(plume, (255, 245, 198, int(125 * max(0.0, 1.0 - t / 70.0))), pos, max(2, rr // 2))
+    # Secondary fuel pops, offset from the main blast.
+    for pop_i, pop_t in enumerate((13, 27, 44, 67)):
+        dt = t - pop_t
+        if 0 <= dt < 20:
+            pop_alpha = int(180 * (1.0 - dt / 20.0))
+            off = (-42, 36, -18, 50)[pop_i] * s
+            py = base_y - (26 + pop_i * 18 + dt * 1.8) * s
+            for r, col in [(22 + dt * 1.5, (255, 230, 175)), (38 + dt * 2.2, (255, 105, 36))]:
+                pygame.draw.circle(plume, (*col, max(0, pop_alpha // (1 if r < 30 else 2))), (int(base_x + off), int(py)), max(3, int(r * s)))
+    # Thick rolling smoke, rising above the fire.
+    if t > 8:
+        smoke_age = min(1.0, (t - 8) / 100.0)
+        for i in range(22):
+            frac = i / 21.0
+            phase = i * 1.21 + t * 0.027
+            sx = base_x + int(math.sin(phase) * (18 + frac * 62) * s + math.sin(phase * 0.33) * 18 * s)
+            sy = base_y - int((58 + frac * (110 + smoke_age * 125) + smoke_age * 38) * s)
+            sr = max(8, int((18 + frac * 24 + smoke_age * 15) * s))
+            shade = int(36 + frac * 22)
+            sa = max(0, int((120 - frac * 42) * burn + 28 * smoke_age))
+            pygame.draw.circle(plume, (shade, shade - 4, shade - 2, min(150, sa)), (sx, sy), sr)
+    # Sparks and debris arcing out from the impact.
+    # Upgraded: more particles (34 → 50), longer ember trails, flicker
+    # modulation on hot debris, and lingering spark clusters after the
+    # main blast fades.
+    rng = random.Random(int(cx * 13 + cy * 7))
+    for i in range(50):  # was 34 — more debris for richer blast
+        seed_ang = -math.pi * 0.94 + (math.pi * 1.88) * (i / 49.0)
+        ang = seed_ang + math.sin(i * 2.31) * 0.24
+        speed = (2.8 + rng.random() * 5.2) * s
+        age = t - rng.randint(0, 10)
+        if age < 0 or age > 90:  # was 78 — debris lives longer
+            continue
+        dx = math.cos(ang) * speed * age
+        dy = math.sin(ang) * speed * age + 0.055 * age * age * s
+        px = base_x + dx
+        py = base_y + dy - 20 * s
+        if 0 <= px < pw and 0 <= py < ph:
+            hot = max(0, 1.0 - age / 60.0)  # was /55 — hot longer
+            # ── Flicker modulation: brightness varies per frame ──
+            # Each particle flickers independently based on its index + time,
+            # so the fireball reads as alive/flame-like, not static.
+            flicker = 0.75 + 0.25 * math.sin(t * 0.8 + i * 1.7)
+            if i % 3:
+                col = (255, int((118 + 82 * hot) * flicker), 48, int(190 * hot * flicker))
+            else:
+                col = (78, 80, 84, int(170 * max(0, 1 - age / 90)))
+            pygame.draw.circle(plume, col, (int(px), int(py)), max(1, int((2.6 if i % 3 else 3.6) * s * max(0.55, hot))))
+            if hot > 0.25:
+                # ── Longer ember trail (was 7px, now 12px) ──
+                trail_len = 12 * s
+                tx = int(px - math.cos(ang) * trail_len)
+                ty = int(py - math.sin(ang) * trail_len)
+                pygame.draw.line(plume, (255, 150, 56, int(110 * hot)), (int(px), int(py)), (tx, ty), max(1, int(1.5 * s)))
+                # ── Bright spark tip (hottest point of the trail) ──
+                pygame.draw.circle(plume, (255, 230, 150, int(160 * hot * flicker)), (int(px), int(py)), max(1, int(1.2 * s)))
+    # ── Lingering spark clusters (upgraded) ──
+    # After the main fireball fades, small ember clusters linger and
+    # flicker around the blast site — reads as residual heat / burning
+    # debris that hasn't gone out yet.
+    if t > 30:
+        spark_fade = max(0, 1.0 - (t - 30) / 120.0)
+        rng_sparks = random.Random(int(cx * 17 + cy * 11 + int(t / 8)))
+        for i in range(15):
+            sa = rng_sparks.uniform(0, math.tau)
+            sr = rng_sparks.uniform(15, 50) * s
+            sx = base_x + math.cos(sa) * sr
+            sy = base_y - math.sin(sa) * sr * 0.6 - 10 * s
+            if 0 <= sx < pw and 0 <= sy < ph:
+                flicker = 0.5 + 0.5 * math.sin(t * 1.2 + i * 2.1)
+                alpha = int(120 * spark_fade * flicker)
+                if alpha > 0:
+                    pygame.draw.circle(plume, (255, 180, 60, alpha), (int(sx), int(sy)), max(1, int(1.5 * s)))
+    surface.blit(plume, (int(cx - pw // 2), int(cy - ph + 44 * s)))
+    # Water impact: white-hot steam, vertical spray, oily orange reflection.
+    if t < 70:
+        splash_w = int(260 * s)
+        splash_h = int(88 * s)
+        splash = pygame.Surface((splash_w, splash_h), pygame.SRCALPHA)
+        sw, sh = splash.get_size()
+        fade = max(0.0, 1.0 - t / 70.0)
+        for i in range(5):
+            rect = pygame.Rect(0, 0, int((70 + t * (4.2 + i * 0.8)) * s), int((12 + t * 0.45 + i * 2) * s))
+            rect.center = (sw // 2, sh - int((22 - i * 2) * s))
+            pygame.draw.ellipse(splash, (190, 220, 240, int((120 - i * 16) * fade)), rect, 1)
+        for i in range(20):
+            frac = i / 19.0
+            side = -1 if i < 10 else 1
+            local = frac if side > 0 else 1.0 - frac
+            px = sw // 2 + side * int((14 + local * 88 + t * 0.55) * s)
+            py = sh - int((22 + math.sin(local * math.pi) * (28 + t * 0.28)) * s)
+            pygame.draw.circle(splash, (205, 226, 238, int(145 * fade)), (px, py), max(1, int((3 - local * 1.4) * s)))
+        for i in range(8):
+            alpha = int((80 - i * 7) * fade)
+            pygame.draw.line(splash, (255, 122, 42, alpha), (sw // 2 - int((34 - i * 2) * s), sh - int((18 - i) * s)), (sw // 2 + int((34 - i * 2) * s), sh - int((18 - i) * s)), 1)
+        surface.blit(splash, (int(cx - sw // 2), int(cy + 4 * s)))
+def _draw_attack_tracer(surface, x1, y1, x2, y2, alpha):
+    """Draw a soft tracer line with a dim halo."""
+    pygame.draw.line(surface, (200, 180, 120, alpha), (x1, y1), (x2, y2), 2)
+    pygame.draw.line(surface, (255, 240, 180, alpha // 2), (x1, y1), (x2, y2), 4)
+def _draw_attack_rocket(surface, x, y, angle, scale, glow_phase=0.0):
+    """A tiny anti-ship rocket with exhaust and a hot nose cone."""
+    body_len = max(8, int(11 * scale))
+    tail_len = max(5, int(7 * scale))
+    for i in range(8):
+        dist = i * (3.2 + scale)
+        ex = x - math.cos(angle) * dist
+        ey = y - math.sin(angle) * dist
+        ex += math.sin(glow_phase + i * 0.6) * 0.8
+        alpha = max(0, 185 - i * 22)
+        r = max(1, int(4 * scale) - i // 3)
+        trail = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
+        pygame.draw.circle(trail, (255, 165, 65, alpha), (r * 2, r * 2), r)
+        surface.blit(trail, (int(ex - r * 2), int(ey - r * 2)))
+    tip = (int(x + math.cos(angle) * body_len), int(y + math.sin(angle) * body_len))
+    tail = (int(x - math.cos(angle) * tail_len), int(y - math.sin(angle) * tail_len))
+    pygame.draw.line(surface, (205, 208, 216), tip, tail, max(2, int(3 * scale)))
+    pygame.draw.circle(surface, (255, 235, 190), tip, max(1, int(2 * scale)))
+def _draw_attack_boat(surface, bx, by, scale, heading, elapsed):
+    """Small fast-attack craft in a 3/4 view so it feels less flat."""
+    s = scale
+    hull_dark = (28, 33, 42)
+    hull_mid = (45, 52, 64)
+    hull_hi = (74, 84, 96)
+    wake_alpha = int(55 + (1.0 - min(1.0, s / 1.6)) * 25)
+    hull = [
+        (bx - 38 * s, by + 10 * s),
+        (bx + 8 * s, by + 4 * s),
+        (bx + 42 * s, by + 10 * s),
+        (bx + 28 * s, by + 20 * s),
+        (bx - 28 * s, by + 20 * s),
+    ]
+    pygame.draw.polygon(surface, hull_dark, hull)
+    pygame.draw.polygon(surface, (18, 22, 28), hull, 1)
+    deck = [
+        (bx - 18 * s, by + 4 * s),
+        (bx + 14 * s, by - 1 * s),
+        (bx + 27 * s, by + 7 * s),
+        (bx - 8 * s, by + 11 * s),
+    ]
+    pygame.draw.polygon(surface, hull_mid, deck)
+    cabin = pygame.Rect(int(bx - 6 * s), int(by - 10 * s), int(24 * s), int(13 * s))
+    pygame.draw.rect(surface, hull_mid, cabin, border_radius=max(1, int(2 * s)))
+    pygame.draw.rect(surface, hull_hi, cabin, 1, border_radius=max(1, int(2 * s)))
+    win = pygame.Rect(int(bx + 3 * s), int(by - 7 * s), int(10 * s), int(5 * s))
+    pygame.draw.rect(surface, (28, 42, 58), win, border_radius=1)
+    mast_x = int(bx + 8 * s)
+    mast_y = int(by - 10 * s)
+    pygame.draw.line(surface, (45, 50, 60), (mast_x, mast_y), (mast_x + int(2 * s), mast_y - int(13 * s)), 1)
+    if elapsed // 14 % 2 == 0:
+        pygame.draw.circle(surface, (255, 95, 70), (mast_x + int(2 * s), mast_y - int(13 * s)), max(1, int(2 * s)))
+    nose_flash = False
+    for launch in (ATK_MISSILE_1_LAUNCH, ATK_MISSILE_2_LAUNCH, ATK_MISSILE_3_LAUNCH):
+        if launch <= elapsed < launch + 9:
+            nose_flash = True
+            break
+    if nose_flash:
+        flash_pos = (int(bx + 36 * s), int(by + 8 * s))
+        for r in (int(10 * s), int(6 * s), int(3 * s)):
+            pygame.draw.circle(surface, (255, 220, 150, 180), flash_pos, max(2, r))
+    for i in range(6):
+        ww = int((30 - i * 4) * s)
+        wake = pygame.Surface((max(8, ww), max(2, int(4 * s))), pygame.SRCALPHA)
+        pygame.draw.ellipse(wake, (115, 150, 190, max(10, wake_alpha - i * 8)), wake.get_rect())
+        wx = int(bx - (55 + i * 12) * s)
+        wy = int(by + (10 + math.sin(elapsed * 0.05 + i * 0.7) * 2) * s)
+        surface.blit(wake, (wx, wy))
+def _draw_attack_helicopter(surface, elapsed):
+    """A very distant helicopter silhouette crossing the horizon."""
+    if elapsed < ATK_FISHERMAN_2:
+        return
+    heli_t = (elapsed - ATK_FISHERMAN_2) / 140.0
+    if heli_t > 1.0:
+        return
+    hx = int(WIDTH * 0.68 + heli_t * 210)
+    hy = int(SCENE_TOP + 24 - heli_t * 34)
+    alpha = int(96 * (1.0 - heli_t * 0.55))
+    body = pygame.Surface((46, 12), pygame.SRCALPHA)
+    pygame.draw.ellipse(body, (80, 86, 98, alpha), body.get_rect())
+    surface.blit(body, (hx, hy))
+    rotor_angle = elapsed * 0.32
+    rotor_len = 32
+    rx = hx + 23
+    ry = hy + 2
+    pygame.draw.line(
+        surface,
+        (60, 66, 78, alpha),
+        (rx + math.cos(rotor_angle) * rotor_len, ry + math.sin(rotor_angle) * rotor_len),
+        (rx - math.cos(rotor_angle) * rotor_len, ry - math.sin(rotor_angle) * rotor_len),
+        2,
+    )
+    pygame.draw.line(surface, (66, 72, 84, alpha), (hx + 34, hy + 6), (hx + 42, hy + 6), 2)
+def _draw_attack_soft_rain(surface, elapsed):
+    """Multi-layer rain with depth variation instead of one flat scratch layer."""
+    rain = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    scene_h = SCENE_BOT - SCENE_TOP
+    layer_specs = [
+        (36, 1.2, 14, (120, 135, 165)),
+        (56, 1.8, 18, (130, 150, 182)),
+        (42, 2.5, 26, (145, 165, 198)),
+    ]
+    for layer_idx, (count, drift, length, base_col) in enumerate(layer_specs):
+        rng_r = random.Random(47 + layer_idx)
+        for _ in range(count):
+            base_x = rng_r.randint(0, WIDTH)
+            base_y = rng_r.randint(0, scene_h)
+            rx = (base_x + int(elapsed * drift)) % WIDTH
+            ry = SCENE_TOP + ((base_y + int(elapsed * (4.0 + layer_idx * 1.3))) % scene_h)
+            alpha = 22 + layer_idx * 14 + rng_r.randint(0, 18)
+            slant = 4 + layer_idx * 2
+            pygame.draw.line(
+                rain,
+                (*base_col, alpha),
+                (rx, ry),
+                (rx - slant, ry + length + rng_r.randint(-3, 3)),
+                1,
+            )
+    surface.blit(rain, (0, 0))
+def _draw_attack_water(surface, elapsed, horizon_y):
+    """Perspective-biased ocean with converging guide-lines, layered chop,
+    animated ripples, and foam highlights.
+
+    Upgraded (Task: ocean improvement):
+      - Animated concentric ripple rings that expand from random points
+        (reads as raindrops / wavelets on the surface).
+      - Foam highlight specks on wave crests (white-tipped waves).
+      - Deeper color gradient (more depth variation).
+      - More wave bands for richer texture.
+    """
+    w, h = surface.get_size()
+    # ── Depth gradient (darker near horizon, lighter near foreground) ──
+    for y in range(horizon_y, h):
+        p = (y - horizon_y) / max(1, h - horizon_y)
+        r = int(8 + p * 14)
+        g = int(18 + p * 20)
+        b = int(30 + p * 28)
+        pygame.draw.line(surface, (r, g, b), (0, y), (w, y))
+    # ── Perspective grid lines (converging toward vanishing point) ──
+    grid = pygame.Surface((w, h), pygame.SRCALPHA)
+    for lane in range(-8, 9):
+        x0 = ATTACK_VANISH_X + lane * 30
+        x1 = ATTACK_VANISH_X + lane * 112
+        pygame.draw.line(grid, (28, 46, 72, 22), (x0, horizon_y + 6), (x1, h - 34), 1)
+    for band in range(15):
+        frac = band / 14.0
+        y = horizon_y + int((frac ** 1.86) * (h - horizon_y - 34))
+        alpha = int(58 * (1.0 - frac * 0.55))
+        pygame.draw.line(grid, (56, 84, 122, alpha), (0, y), (w, y), 1)
+    surface.blit(grid, (0, 0))
+    # ── Wave bands (animated horizontal chop) ──
+    wave_layer = pygame.Surface((w, h), pygame.SRCALPHA)
+    for band in range(16):  # was 12 — more bands for richer texture
+        frac = band / 15.0
+        y = horizon_y + 12 + int((frac ** 1.75) * (h - horizon_y - 90))
+        seg_w = 14 + int(frac * 28)
+        alpha = int(60 - frac * 22)
+        step = 34 + int(frac * 28)
+        for wx in range(-50, w + 50, step):
+            wave_y = y + math.sin(elapsed * 0.028 + wx * 0.03 + band) * (1.2 + frac * 3.2)
+            pygame.draw.line(
+                wave_layer,
+                (64, 98, 136, alpha),
+                (wx, int(wave_y)),
+                (wx + seg_w, int(wave_y + 1)),
+                1,
+            )
+            # ── Foam highlight on wave crests (white-tipped waves) ──
+            # Every 3rd wave segment gets a small white speck on the crest
+            # for a "whitecap" read. Only in the foreground (frac > 0.3).
+            if frac > 0.3 and (wx + band) % 3 == 0:
+                foam_alpha = int(40 * frac)
+                pygame.draw.circle(
+                    wave_layer,
+                    (180, 200, 215, foam_alpha),
+                    (wx + seg_w // 2, int(wave_y - 1)),
+                    max(1, int(frac * 1.5)),
+                )
+    surface.blit(wave_layer, (0, 0))
+    # ── Animated ripple rings (raindrops / wavelets spreading outward) ──
+    # Deterministic positions that shift slowly over time so the ripples
+    # appear at new locations periodically. Each ripple expands and fades.
+    ripple_layer = pygame.Surface((w, h), pygame.SRCALPHA)
+    rng_ripples = random.Random(99)
+    for i in range(6):
+        # Base position for this ripple source (drifts slightly over time)
+        base_x = rng_ripples.randint(50, w - 50)
+        base_y = horizon_y + rng_ripples.randint(40, h - horizon_y - 60)
+        # Each ripple source emits a new ring every ~60 frames
+        for ring in range(3):
+            phase = (elapsed + i * 23 + ring * 20) % 60
+            radius = int(phase * 1.2)
+            alpha = max(0, int(50 * (1.0 - phase / 60.0)))
+            if alpha > 0 and radius > 2:
+                pygame.draw.circle(
+                    ripple_layer,
+                    (90, 130, 170, alpha),
+                    (base_x, base_y),
+                    radius,
+                    1,
+                )
+    surface.blit(ripple_layer, (0, 0))
+
+
+def _draw_attack_water_fire_reflection(surface, rig_x, water_y, scale, elapsed, heat=1.0):
+    """Draw a fire-glow reflection on the water under a burning/destroyed rig.
+
+    Upgraded ocean feature: when a rig is destroyed, its fire casts a warm
+    orange reflection on the water below that shimmers and wobbles like
+    light on waves. This is the "stronger fire-reflection glow" the VLM
+    asked for — it ties the explosion to the ocean visually.
+
+    Args:
+      rig_x: center x of the rig
+      water_y: y of the waterline at the rig
+      scale: rig scale (reflection scales with it)
+      elapsed: animation timer (for shimmer)
+      heat: 0.0..1.0 — how hot the fire still is (fades over time)
+    """
+    if heat <= 0:
+        return
+    s = scale
+    refl_w = int(180 * s)
+    refl_h = int(90 * s)
+    refl = pygame.Surface((refl_w, refl_h), pygame.SRCALPHA)
+    rw, rh = refl.get_size()
+    # Layered horizontal streaks that narrow and fade toward the bottom,
+    # with a wobble that simulates light dancing on waves.
+    for i in range(12):
+        frac = i / 11.0
+        ry = int(frac * (rh - 4))
+        half = int((rw * 0.40 * (1.0 - frac * 0.55)) * heat)
+        if half < 1:
+            continue
+        # Wobble: each line sways differently based on elapsed time + row
+        wobble = int(math.sin(elapsed * 0.06 + i * 0.7 + rig_x * 0.01) * (3 + frac * 6))
+        alpha = int(85 * heat * (1.0 - frac * 0.4))
+        if alpha <= 0:
+            continue
+        # Color: hot orange near the top (closest to fire), fading to dark red
+        r = int(255 * heat)
+        g = int(100 + 40 * (1.0 - frac))
+        b = int(30 * (1.0 - frac))
+        pygame.draw.line(
+            refl,
+            (r, g, b, alpha),
+            (rw // 2 - half + wobble, ry),
+            (rw // 2 + half + wobble, ry),
+            1,
+        )
+    # Bright core glow at the base of the reflection (hottest point)
+    core_r = int(40 * s * heat)
+    if core_r > 2:
+        core_glow = pygame.Surface((core_r * 2, core_r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(
+            core_glow,
+            (255, 140, 40, int(60 * heat)),
+            (core_r, core_r),
+            core_r,
+        )
+        refl.blit(
+            core_glow,
+            (rw // 2 - core_r, 0),
+            special_flags=pygame.BLEND_RGBA_ADD,
+        )
+    surface.blit(refl, (int(rig_x - rw // 2), int(water_y + 6)))
+def _draw_attack_perspective_rig(surface, cx, water_y, scale, elapsed, state="ONLINE", tilt=0.0):
+    """Pseudo-3D rig with visible top/front faces and converging support legs."""
+    s = scale
+    cx = float(cx)
+    water_y = float(water_y)
+    deck_w = 150 * s
+    deck_h = max(8, int(18 * s))
+    deck_d = 28 * s
+    deck_y = water_y - 104 * s
+    x_skew = tilt * 6 * s
+    top_back_left = (cx - deck_w * 0.48 - x_skew, deck_y - deck_d * 0.08)
+    top_back_right = (cx + deck_w * 0.18 - x_skew, deck_y - deck_d * 0.46)
+    top_front_right = (cx + deck_w * 0.54 + x_skew, deck_y - deck_d * 0.10)
+    top_front_left = (cx - deck_w * 0.14 + x_skew, deck_y + deck_d * 0.24)
+    front_drop = deck_h
+    leg_col = (44, 48, 58)
+    side_col = (38, 42, 50)
+    top_col = (68, 75, 88)
+    underside_col = (24, 28, 36)
+    refl = pygame.Surface((int(deck_w * 1.55), int(120 * s)), pygame.SRCALPHA)
+    refl_w = refl.get_width()
+    refl_h = refl.get_height()
+    for i in range(9):
+        frac = i / 8.0
+        ry = int(8 + frac * (refl_h - 20))
+        rw = int(deck_w * (0.44 - frac * 0.18))
+        alpha = int(30 * (1.0 - frac))
+        wobble = int(math.sin(elapsed * 0.035 + i + cx * 0.01) * (4 + frac * 7))
+        pygame.draw.line(
+            refl,
+            (46, 70, 102, alpha),
+            (refl_w // 2 - rw // 2 + wobble, ry),
+            (refl_w // 2 + rw // 2 + wobble, ry),
+            1,
+        )
+    surface.blit(refl, (int(cx - refl_w // 2), int(water_y + 4)))
+    pygame.draw.polygon(surface, underside_col, [
+        top_front_left,
+        top_front_right,
+        (top_front_right[0], top_front_right[1] + front_drop),
+        (top_front_left[0], top_front_left[1] + front_drop),
+    ])
+    pygame.draw.polygon(surface, side_col, [
+        top_back_right,
+        top_front_right,
+        (top_front_right[0], top_front_right[1] + front_drop),
+        (top_back_right[0], top_back_right[1] + front_drop),
+    ])
+    pygame.draw.polygon(surface, top_col, [
+        top_back_left, top_back_right, top_front_right, top_front_left
+    ])
+    pygame.draw.polygon(surface, (28, 34, 40), [
+        top_back_left, top_back_right, top_front_right, top_front_left
+    ], 1)
+    leg_top_xs = [
+        cx - deck_w * 0.30,
+        cx - deck_w * 0.08,
+        cx + deck_w * 0.17,
+        cx + deck_w * 0.39,
+    ]
+    leg_bottom_xs = [
+        cx - deck_w * 0.41,
+        cx - deck_w * 0.15,
+        cx + deck_w * 0.18,
+        cx + deck_w * 0.46,
+    ]
+    leg_tops = [
+        top_front_left[1] + front_drop - 2,
+        top_front_left[1] + front_drop - 8,
+        top_front_right[1] + front_drop - 10,
+        top_front_right[1] + front_drop - 2,
+    ]
+    for tx, bx, ty in zip(leg_top_xs, leg_bottom_xs, leg_tops):
+        leg_w = 5 * s
+        leg_poly = [
+            (tx - leg_w * 0.55, ty),
+            (tx + leg_w * 0.55, ty),
+            (bx + leg_w * 0.85, water_y + 28 * s),
+            (bx - leg_w * 0.85, water_y + 28 * s),
+        ]
+        pygame.draw.polygon(surface, leg_col, leg_poly)
+        pygame.draw.polygon(surface, (28, 30, 36), leg_poly, 1)
+    mast_base_x = cx + x_skew * 0.35
+    mast_base_y = deck_y - 5 * s
+    mast_top_y = mast_base_y - 72 * s
+    mast_left = mast_base_x - 18 * s
+    mast_right = mast_base_x + 18 * s
+    pygame.draw.line(surface, (66, 74, 88), (mast_left, mast_base_y), (mast_base_x - 3 * s, mast_top_y), max(2, int(3 * s)))
+    pygame.draw.line(surface, (66, 74, 88), (mast_right, mast_base_y), (mast_base_x + 3 * s, mast_top_y), max(2, int(3 * s)))
+    for i in range(4):
+        frac = i / 3.0
+        ly = mast_base_y - frac * 62 * s
+        half_w = (14 - i * 3) * s
+        pygame.draw.line(surface, (72, 82, 98), (mast_base_x - half_w, ly), (mast_base_x + half_w, ly), max(1, int(2 * s)))
+    pipe_bottom = water_y + 12 * s
+    pygame.draw.line(surface, (44, 58, 74), (mast_base_x, mast_base_y + 4 * s), (mast_base_x, pipe_bottom), max(1, int(2 * s)))
+    ring_y = mast_top_y + 8 * s
+    pygame.draw.ellipse(
+        surface,
+        (82, 150, 210),
+        pygame.Rect(int(mast_base_x - 17 * s), int(ring_y - 12 * s), int(34 * s), int(26 * s)),
+        1,
+    )
+    pygame.draw.line(surface, (82, 150, 210), (mast_base_x - 22 * s, ring_y), (mast_base_x + 22 * s, ring_y), 1)
+    pygame.draw.line(surface, (82, 150, 210), (mast_base_x, ring_y - 18 * s), (mast_base_x, ring_y + 18 * s), 1)
+    beacon_phase = elapsed // 18 % 2 == 0
+    if beacon_phase:
+        glow = pygame.Surface((int(34 * s), int(34 * s)), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (255, 78, 62, 85), (glow.get_width() // 2, glow.get_height() // 2), max(5, int(15 * s)))
+        surface.blit(glow, (int(mast_base_x - glow.get_width() // 2), int(mast_top_y - glow.get_height() // 2)))
+        pygame.draw.circle(surface, (255, 92, 74), (int(mast_base_x), int(mast_top_y)), max(2, int(3 * s)))
+    deck_light_y = top_front_left[1] + front_drop * 0.45
+    for li in range(4):
+        lx = cx - deck_w * 0.22 + li * deck_w * 0.16
+        pygame.draw.circle(surface, (255, 208, 118), (int(lx), int(deck_light_y)), max(1, int(2 * s)))
+    # ══════════════════════════════════════════════════════════════════
+    # INDUSTRIAL DETAIL (upgraded): crane, flare stack, pipes, equipment
+    # ══════════════════════════════════════════════════════════════════
+    # These additions make the rig read as an actual offshore platform
+    # with industrial equipment, not just a generic tower.
+
+    # ── Crane (left side of deck) ──
+    # A box-shaped crane house with a horizontal jib arm extending
+    # toward the right side of the deck.
+    crane_base_x = cx - deck_w * 0.32
+    crane_base_y = deck_y + 2 * s
+    crane_w, crane_h = 16 * s, 14 * s
+    # Crane house (small box on the deck)
+    pygame.draw.rect(surface, (55, 60, 68),
+                     (int(crane_base_x - crane_w / 2), int(crane_base_y - crane_h),
+                      int(crane_w), int(crane_h)))
+    pygame.draw.rect(surface, (28, 32, 38),
+                     (int(crane_base_x - crane_w / 2), int(crane_base_y - crane_h),
+                      int(crane_w), int(crane_h)), 1)
+    # Crane cab window (small light square)
+    pygame.draw.rect(surface, (120, 140, 160),
+                     (int(crane_base_x - 3 * s), int(crane_base_y - crane_h + 3 * s),
+                      int(5 * s), int(4 * s)))
+    # Jib arm (horizontal beam extending right from the crane house)
+    jib_len = 40 * s
+    jib_y = crane_base_y - crane_h + 4 * s
+    pygame.draw.line(surface, (60, 65, 74),
+                     (crane_base_x, jib_y),
+                     (crane_base_x + jib_len, jib_y - 4 * s),
+                     max(2, int(2 * s)))
+    # Jib cable (thin line hanging down from the end)
+    pygame.draw.line(surface, (45, 48, 54),
+                     (crane_base_x + jib_len, jib_y - 4 * s),
+                     (crane_base_x + jib_len, jib_y + 8 * s),
+                     1)
+    # Hook (small circle at the end of the cable)
+    pygame.draw.circle(surface, (70, 72, 78),
+                       (int(crane_base_x + jib_len), int(jib_y + 8 * s)),
+                       max(1, int(2 * s)))
+
+    # ── Flare stack (right side of deck) ──
+    # A vertical pipe with a small flame at the top — the gas flare
+    # that offshore rigs burn off excess gas. Adds a live fire element
+    # even before the missile hits.
+    flare_x = cx + deck_w * 0.36
+    flare_base_y = deck_y + 2 * s
+    flare_top_y = deck_y - 30 * s
+    # Stack pipe (vertical)
+    pygame.draw.line(surface, (50, 54, 62),
+                     (flare_x, flare_base_y),
+                     (flare_x, flare_top_y),
+                     max(2, int(3 * s)))
+    # Stack tip (small wider cap)
+    pygame.draw.rect(surface, (40, 44, 50),
+                     (int(flare_x - 3 * s), int(flare_top_y - 2 * s),
+                      int(6 * s), int(3 * s)))
+    # Flame at the top (only when the rig is ONLINE, not destroyed)
+    if state == "ONLINE":
+        flame_flicker = 0.7 + 0.3 * math.sin(elapsed * 0.3)
+        flame_h = int(8 * s * flame_flicker)
+        flame_w = int(4 * s * flame_flicker)
+        # Flame glow
+        flame_glow = pygame.Surface((int(20 * s), int(20 * s)), pygame.SRCALPHA)
+        pygame.draw.circle(flame_glow, (255, 120, 40, 60),
+                           (int(10 * s), int(10 * s)), int(8 * s))
+        surface.blit(flame_glow, (int(flare_x - 10 * s), int(flare_top_y - 18 * s)))
+        # Flame shape (small triangle/oval)
+        pygame.draw.ellipse(surface, (255, 140, 50),
+                            (int(flare_x - flame_w / 2), int(flare_top_y - flame_h),
+                             int(flame_w), int(flame_h)))
+        pygame.draw.ellipse(surface, (255, 200, 80),
+                            (int(flare_x - flame_w / 3), int(flare_top_y - flame_h * 0.7),
+                             int(flame_w * 0.6), int(flame_h * 0.6)))
+
+    # ── Horizontal pipes along the deck edge ──
+    # Two parallel pipes running along the front of the deck — reads
+    # as the processing infrastructure.
+    pipe_y1 = top_front_left[1] + front_drop * 0.7
+    pipe_y2 = top_front_left[1] + front_drop * 0.85
+    pipe_x_start = top_front_left[0] + 6 * s
+    pipe_x_end = top_front_right[0] - 6 * s
+    pygame.draw.line(surface, (48, 52, 60),
+                     (pipe_x_start, pipe_y1), (pipe_x_end, pipe_y1), max(1, int(2 * s)))
+    pygame.draw.line(surface, (42, 46, 54),
+                     (pipe_x_start, pipe_y2), (pipe_x_end, pipe_y2), max(1, int(2 * s)))
+    # Pipe joints (small vertical connectors every ~20px)
+    for jx in range(int(pipe_x_start) + 10, int(pipe_x_end), 20):
+        pygame.draw.line(surface, (38, 42, 50),
+                         (jx, pipe_y1), (jx, pipe_y2), 1)
+
+    # ── Equipment boxes (scattered on the deck) ──
+    # Small rectangular modules that read as processing equipment /
+    # generator housings. Adds visual clutter = industrial authenticity.
+    for box_x_off, box_w, box_h in [
+        (-0.15 * deck_w, 12 * s, 8 * s),   # left-center box
+        (0.05 * deck_w, 10 * s, 7 * s),    # center box (smaller)
+    ]:
+        box_x = cx + box_x_off
+        box_y = deck_y + 3 * s
+        pygame.draw.rect(surface, (52, 56, 64),
+                         (int(box_x - box_w / 2), int(box_y - box_h),
+                          int(box_w), int(box_h)))
+        pygame.draw.rect(surface, (28, 32, 38),
+                         (int(box_x - box_w / 2), int(box_y - box_h),
+                          int(box_w), int(box_h)), 1)
+        # Small light/vent on top of each box
+        pygame.draw.circle(surface, (180, 160, 80),
+                           (int(box_x), int(box_y - box_h + 2 * s)),
+                           max(1, int(1.5 * s)))
+
+    if state == "TARGETED":
+        lock = pygame.Surface((int(88 * s), int(88 * s)), pygame.SRCALPHA)
+        lc = (255, 205, 70, 70)
+        pygame.draw.ellipse(lock, lc, lock.get_rect(), 1)
+        pygame.draw.line(lock, lc, (lock.get_width() // 2, 0), (lock.get_width() // 2, lock.get_height()), 1)
+        pygame.draw.line(lock, lc, (0, lock.get_height() // 2), (lock.get_width(), lock.get_height() // 2), 1)
+        surface.blit(lock, (int(mast_base_x - lock.get_width() // 2), int(deck_y - 26 * s)))
+def _draw_destroyed_rig(surface, cx, water_y, scale, elapsed_since_impact, tilt=0.0, rig_index=None):
+    """Three different rig deaths.
+    LEFT   rig: side-slam collapse, it folds hard into the sea.
+    CENTER rig: vertical implosion, legs fold inward and the deck pancakes down.
+    RIGHT  rig: twisting break-up, the upper deck tears in two and corkscrews down.
+    """
+    if elapsed_since_impact < 0:
+        return False
+    s = max(0.35, float(scale))
+    ix = float(cx)
+    waterline = float(water_y)
+    t = float(max(0, elapsed_since_impact))
+    if rig_index is None:
+        if tilt < -0.15:
+            style = 0      # left / side-slam
+        elif tilt > 0.15:
+            style = 2      # right / twist-break
+        else:
+            style = 1      # center / implosion
+    else:
+        style = int(rig_index) % 3
+    # Style tuning. These few values make the three silhouettes behave differently.
+    if style == 0:          # LEFT: slow heavy fall to the left
+        fall_sign = -1.0
+        collapse_delay = 3.0
+        collapse_len = 78.0
+        sink_start = 92.0
+        twist_mult = 1.05
+        smoke_drift = -1.0
+        deck_mode = "side"
+    elif style == 1:        # CENTER: fast straight-down implosion
+        fall_sign = 0.0
+        collapse_delay = 0.0
+        collapse_len = 48.0
+        sink_start = 64.0
+        twist_mult = 0.22
+        smoke_drift = 0.0
+        deck_mode = "implode"
+    else:                   # RIGHT: delayed twisting break-up to the right
+        fall_sign = 1.0
+        collapse_delay = 10.0
+        collapse_len = 92.0
+        sink_start = 105.0
+        twist_mult = 1.45
+        smoke_drift = 1.0
+        deck_mode = "twist"
+    buckle = min(1.0, t / 34.0)
+    collapse = min(1.0, max(0.0, (t - collapse_delay) / collapse_len))
+    sink = min(1.0, max(0.0, (t - sink_start) / 165.0))
+    burn = max(0.34, 1.0 - t / 520.0)
+    pulse = 0.72 + 0.28 * math.sin(t * 0.105 + ix * 0.01 + style)
+    # ── Oil slick and fiery reflections ───────────────────────────────
+    slick_w = int((105 + min(210, t * (1.15 + 0.22 * style))) * s)
+    slick_h = int((34 + min(46, t * (0.24 + 0.03 * style))) * s)
+    oil = pygame.Surface((slick_w, slick_h), pygame.SRCALPHA)
+    pygame.draw.ellipse(oil, (4, 6, 9, min(180, int(95 + t * 0.42))), oil.get_rect())
+    if style == 1:
+        inner = pygame.Rect(int(slick_w * 0.22), int(slick_h * 0.18), int(slick_w * 0.56), int(slick_h * 0.50))
+    elif style == 0:
+        inner = pygame.Rect(int(slick_w * 0.08), int(slick_h * 0.26), int(slick_w * 0.68), int(slick_h * 0.34))
+    else:
+        inner = pygame.Rect(int(slick_w * 0.25), int(slick_h * 0.23), int(slick_w * 0.67), int(slick_h * 0.36))
+    pygame.draw.ellipse(oil, (44, 25, 15, int(54 * burn)), inner)
+    for i in range(6):
+        y = int(slick_h * (0.35 + i * 0.075))
+        wob = int(math.sin(t * 0.04 + i + style) * 7 * s)
+        side_pull = int(smoke_drift * i * 4 * s)
+        pygame.draw.line(
+            oil,
+            (255, 102, 30, int(24 * burn)),
+            (slick_w // 2 - int(42 * s) + wob + side_pull, y),
+            (slick_w // 2 + int(42 * s) + wob + side_pull, y),
+            1,
+        )
+    surface.blit(oil, (int(ix - slick_w // 2), int(waterline - 4 * s)))
+    # ── Different water hits/ripples ──────────────────────────────────
+    if t < 155:
+        ripple = pygame.Surface((int(280 * s), int(96 * s)), pygame.SRCALPHA)
+        rw, rh = ripple.get_size()
+        for i in range(4):
+            age = max(0.0, t - i * (12.0 if style == 1 else 16.0))
+            if age <= 0:
+                continue
+            alpha = int(100 * max(0.0, 1.0 - age / 155.0))
+            if style == 1:
+                wmul, hmul, offx = 2.5, 0.42, 0
+            elif style == 0:
+                wmul, hmul, offx = 2.25, 0.34, -i * 12 * s
+            else:
+                wmul, hmul, offx = 2.8, 0.48, i * 13 * s
+            rect = pygame.Rect(0, 0, int((58 + age * wmul) * s), int((10 + age * hmul) * s))
+            rect.center = (rw // 2 + int(offx), rh // 2 + int(10 * s))
+            pygame.draw.ellipse(ripple, (126, 170, 205, alpha), rect, 1)
+        surface.blit(ripple, (int(ix - rw // 2), int(waterline - rh // 2 + 16 * s)))
+    deck_start_y = waterline - 104 * s
+    # ── Collapsing legs and deck ──────────────────────────────────────
+    if collapse < 0.985:
+        if deck_mode == "implode":
+            # Center rig: legs fold inward and deck drops almost vertically.
+            deck_y = deck_start_y + (waterline - 16 * s - deck_start_y) * (collapse ** 0.78)
+            deck_w = (150 - 74 * collapse) * s
+            deck_d = (30 + 14 * collapse) * s
+            twist = math.sin(t * 0.16) * 7 * s
+            leg_roots = [ix - 62 * s, ix - 24 * s, ix + 22 * s, ix + 62 * s]
+            for li, root_x in enumerate(leg_roots):
+                side = -1 if root_x < ix else 1
+                top_x = ix + (-56 + li * 37) * s * (1.0 - 0.42 * collapse)
+                top_y = deck_y + (12 + li * 1.4) * s
+                knee_x = ix + side * (18 + li % 2 * 10) * s * (1.0 - 0.55 * buckle)
+                knee_y = waterline - (50 - li * 5) * s + collapse * 62 * s
+                pygame.draw.line(surface, (31, 34, 41), (int(top_x), int(top_y)), (int(knee_x), int(knee_y)), max(1, int(4 * s)))
+                pygame.draw.line(surface, (25, 28, 35), (int(knee_x), int(knee_y)), (int(root_x), int(waterline + 20 * s)), max(1, int(3 * s)))
+            # Two deck halves collapsing toward the middle, with a visible crack.
+            for half, side in enumerate((-1, 1)):
+                half_w = deck_w * 0.52
+                center_x = ix + side * deck_w * 0.20 * (1.0 - collapse)
+                dip = (12 + 28 * collapse) * s
+                pts = [
+                    (center_x - side * half_w * 0.78, deck_y - deck_d * 0.22),
+                    (ix + side * 6 * s + twist, deck_y - deck_d * 0.48 + dip),
+                    (ix + side * 12 * s + twist, deck_y + deck_d * 0.35 + dip),
+                    (center_x - side * half_w * 0.25, deck_y + deck_d * 0.48),
+                ]
+                pygame.draw.polygon(surface, (27, 30, 37), pts)
+                pygame.draw.polygon(surface, (78, 80, 86), pts, 1)
+            pygame.draw.line(surface, (255, 126, 40, int(120 * burn)), (int(ix), int(deck_y - 20 * s)), (int(ix), int(deck_y + 36 * s)), max(1, int(2 * s)))
+            # Mast crumples downward into the hole.
+            mast_base = (ix + twist, deck_y - 8 * s)
+            mast_tip = (ix + math.sin(t * 0.08) * 18 * s, deck_y - (82 - 72 * collapse) * s)
+            pygame.draw.line(surface, (44, 48, 56), (int(mast_base[0]), int(mast_base[1])), (int(mast_tip[0]), int(mast_tip[1])), max(1, int(5 * s)))
+        else:
+            # Left/right rigs: side topples, but right twists harder and tears apart.
+            deck_y = deck_start_y + (waterline - 18 * s - deck_start_y) * (collapse ** (1.22 if style == 0 else 1.04))
+            deck_w = (148 - (24 if style == 0 else 42) * collapse) * s
+            deck_d = (30 - 4 * collapse) * s
+            twist = fall_sign * (10 + (72 if style == 0 else 108) * collapse + math.sin(t * 0.09) * 12) * s * twist_mult
+            split_gap = (0 if style == 0 else 28 * collapse * s)
+            leg_roots = [ix - 62 * s, ix - 25 * s, ix + 18 * s, ix + 58 * s]
+            for li, root_x in enumerate(leg_roots):
+                top_x = ix + (-56 + li * 35) * s + twist * (0.16 + li * 0.09)
+                top_y = deck_y + (12 + li * 1.4) * s
+                knee_x = (top_x + root_x) * 0.5 + fall_sign * (12 + li * 6) * buckle * s
+                knee_y = waterline - (42 - li * 4) * s + collapse * (52 if style == 0 else 44) * s
+                col = (32, 35, 42) if li % 2 else (25, 28, 35)
+                pygame.draw.line(surface, col, (int(top_x), int(top_y)), (int(knee_x), int(knee_y)), max(1, int(4 * s)))
+                pygame.draw.line(surface, col, (int(knee_x), int(knee_y)), (int(root_x), int(waterline + 20 * s)), max(1, int(3 * s)))
+                if 12 < t < 50 and li in (1, 2):
+                    pygame.draw.circle(surface, (255, 166, 58), (int(knee_x), int(knee_y)), max(2, int(3 * s)))
+            if style == 2:
+                # Right rig: two separate slabs rip apart.
+                for chunk, ch_side in enumerate((-1, 1)):
+                    cx2 = ix + ch_side * split_gap + twist * (0.20 + 0.18 * chunk)
+                    pts = [
+                        (cx2 - deck_w * (0.42 if ch_side < 0 else 0.08), deck_y - deck_d * 0.20 + chunk * 5 * s),
+                        (cx2 + deck_w * (0.06 if ch_side < 0 else 0.44), deck_y - deck_d * 0.56 - chunk * 3 * s),
+                        (cx2 + deck_w * (0.16 if ch_side < 0 else 0.54), deck_y + deck_d * 0.20 + collapse * 18 * s),
+                        (cx2 - deck_w * (0.36 if ch_side < 0 else 0.02), deck_y + deck_d * 0.46 + collapse * 10 * s),
+                    ]
+                    pygame.draw.polygon(surface, (27, 30, 37), pts)
+                    pygame.draw.polygon(surface, (80, 82, 88), pts, 1)
+            else:
+                # Left rig: one heavy deck slab slams sideways.
+                top_pts = [
+                    (ix - deck_w * 0.55, deck_y - deck_d * 0.15),
+                    (ix + deck_w * 0.18 - twist * 0.30, deck_y - deck_d * 0.55),
+                    (ix + deck_w * 0.55 + twist, deck_y - deck_d * 0.05 + collapse * 12 * s),
+                    (ix - deck_w * 0.10 + twist * 0.35, deck_y + deck_d * 0.42 + collapse * 8 * s),
+                ]
+                side_pts = [top_pts[3], top_pts[2], (top_pts[2][0], top_pts[2][1] + (14 + 10 * collapse) * s), (top_pts[3][0], top_pts[3][1] + (14 + 10 * collapse) * s)]
+                pygame.draw.polygon(surface, (17, 19, 24), side_pts)
+                pygame.draw.polygon(surface, (29, 33, 40), top_pts)
+                pygame.draw.polygon(surface, (80, 82, 88), top_pts, 1)
+            # Mast: left rig falls like a lever; right rig whips and snaps.
+            mast_base = (ix + twist * 0.42, deck_y - 10 * s)
+            mast_angle = -math.pi / 2 + fall_sign * ((0.35 if style == 0 else 0.10) + collapse * (1.28 if style == 0 else 1.78))
+            mast_len = (90 - 18 * collapse) * s
+            mast_tip = (mast_base[0] + math.cos(mast_angle) * mast_len, mast_base[1] + math.sin(mast_angle) * mast_len)
+            pygame.draw.line(surface, (42, 47, 56), (int(mast_base[0]), int(mast_base[1])), (int(mast_tip[0]), int(mast_tip[1])), max(1, int(5 * s)))
+            if style == 2 and collapse > 0.34:
+                snap_base = (mast_base[0] + (mast_tip[0] - mast_base[0]) * 0.52, mast_base[1] + (mast_tip[1] - mast_base[1]) * 0.52)
+                snap_tip = (snap_base[0] + fall_sign * (44 + collapse * 28) * s, snap_base[1] + (12 + collapse * 42) * s)
+                pygame.draw.line(surface, (37, 41, 49), (int(snap_base[0]), int(snap_base[1])), (int(snap_tip[0]), int(snap_tip[1])), max(1, int(4 * s)))
+            for bi in range(4):
+                k = bi / 3.0
+                bx = mast_base[0] + (mast_tip[0] - mast_base[0]) * k
+                byy = mast_base[1] + (mast_tip[1] - mast_base[1]) * k
+                off = (10 - bi * 1.8) * s
+                pygame.draw.line(surface, (56, 61, 72), (int(bx - off), int(byy + off * 0.35)), (int(bx + off), int(byy - off * 0.35)), max(1, int(2 * s)))
+    # ── Settled wreck. Each style leaves a different silhouette. ─────────
+    wreck_y = waterline - (8 - 2 * min(1.0, t / 90.0) + 18 * sink) * s
+    if style == 1:
+        hull_pts = [
+            (ix - 42 * s, wreck_y + 12 * s), (ix - 22 * s, wreck_y - 4 * s),
+            (ix, wreck_y + 4 * s), (ix + 22 * s, wreck_y - 4 * s),
+            (ix + 42 * s, wreck_y + 12 * s), (ix + 16 * s, wreck_y + 20 * s),
+            (ix - 18 * s, wreck_y + 20 * s),
+        ]
+    elif style == 0:
+        hull_pts = [
+            (ix - 68 * s, wreck_y + 6 * s), (ix - 46 * s, wreck_y - 9 * s),
+            (ix - 12 * s, wreck_y - 2 * s), (ix + 30 * s, wreck_y + 8 * s),
+            (ix + 38 * s, wreck_y + 17 * s), (ix - 45 * s, wreck_y + 19 * s),
+        ]
+    else:
+        hull_pts = [
+            (ix - 42 * s, wreck_y + 9 * s), (ix - 10 * s, wreck_y - 2 * s),
+            (ix + 26 * s, wreck_y - 12 * s), (ix + 70 * s, wreck_y + 5 * s),
+            (ix + 58 * s, wreck_y + 18 * s), (ix - 26 * s, wreck_y + 17 * s),
+        ]
+    pygame.draw.polygon(surface, (10, 12, 16), hull_pts)
+    pygame.draw.polygon(surface, (36, 40, 46), hull_pts, 1)
+    # Fallen slabs: center pile, left long slab, right two torn chunks.
+    if style == 1:
+        slabs = [
+            [(ix - 36 * s, wreck_y + 0), (ix - 5 * s, wreck_y - 12 * s), (ix + 6 * s, wreck_y + 2 * s), (ix - 28 * s, wreck_y + 13 * s)],
+            [(ix + 5 * s, wreck_y + 1 * s), (ix + 36 * s, wreck_y - 10 * s), (ix + 44 * s, wreck_y + 7 * s), (ix + 10 * s, wreck_y + 13 * s)],
+        ]
+    elif style == 0:
+        slabs = [[
+            (ix - 72 * s, wreck_y - 10 * s), (ix - 8 * s, wreck_y - 22 * s),
+            (ix + 10 * s, wreck_y - 5 * s), (ix - 54 * s, wreck_y + 9 * s),
+        ]]
+    else:
+        slabs = [
+            [(ix + 6 * s, wreck_y + 0), (ix + 55 * s, wreck_y - 22 * s), (ix + 74 * s, wreck_y - 6 * s), (ix + 20 * s, wreck_y + 11 * s)],
+            [(ix - 26 * s, wreck_y + 4 * s), (ix + 18 * s, wreck_y - 7 * s), (ix + 32 * s, wreck_y + 5 * s), (ix - 12 * s, wreck_y + 15 * s)],
+        ]
+    for slab in slabs:
+        pygame.draw.polygon(surface, (18, 21, 27), slab)
+        pygame.draw.polygon(surface, (62, 66, 72), slab, 1)
+    # Low beams sticking out of the water.
+    for off in (-38, -15, 12, 38):
+        side = 0 if style == 1 else fall_sign
+        x0 = ix + off * s
+        x1 = x0 + (side * (18 + abs(off) * 0.18) + (off * -0.15 if style == 1 else 0)) * s
+        y0 = wreck_y + (4 + (off % 3) * 3) * s
+        y1 = wreck_y - (18 + abs(off) * 0.16) * s
+        pygame.draw.line(surface, (24, 27, 33), (int(x0), int(y0)), (int(x1), int(y1)), max(1, int(3 * s)))
+    # ── Debris trajectories differ by rig style. ───────────────────────
+    rng = random.Random(int(ix * 9 + style * 997 + scale * 100))
+    for di in range(34):
+        delay = rng.randint(0, 48)
+        age = t - delay
+        if age < 0 or age > 125:
+            continue
+        if style == 1:
+            vx = (rng.random() - 0.5) * 1.25 * s
+            vy = (-3.4 - rng.random() * 2.8) * s
+        elif style == 0:
+            vx = (-0.75 - rng.random() * 2.2) * s
+            vy = (-2.5 - rng.random() * 2.0) * s
+        else:
+            spin = math.sin(age * 0.08 + di) * 1.3
+            vx = (0.65 + rng.random() * 2.35 + spin) * s
+            vy = (-2.8 - rng.random() * 2.3) * s
+        px = ix + (rng.random() - 0.5) * 54 * s + vx * age
+        py = deck_start_y + rng.random() * 42 * s + vy * age + 0.062 * age * age * s
+        if py > waterline + 28 * s:
+            continue
+        hot = max(0.0, 1.0 - age / 80.0)
+        if di % 3:
+            col = (255, int(120 + 80 * hot), 45, int(190 * hot))
+            pygame.draw.circle(surface, col, (int(px), int(py)), max(1, int(2.1 * s * max(0.45, hot))))
+        else:
+            rect = pygame.Rect(int(px), int(py), max(2, int((4 + rng.random() * 4) * s)), max(2, int((3 + rng.random() * 3) * s)))
+            pygame.draw.rect(surface, (64, 64, 68, int(180 * max(0.25, hot))), rect)
+    # ── Fire pockets: layout differs per wreck. ────────────────────────
+    fire = pygame.Surface((int(205 * s), int(180 * s)), pygame.SRCALPHA)
+    fw, fh = fire.get_size()
+    if style == 1:
+        pockets = (-24, 0, 24)
+    elif style == 0:
+        pockets = (-58, -33, -8, 20)
+    else:
+        pockets = (-20, 12, 44, 68)
+    for pocket, offx in enumerate(pockets):
+        pocket_phase = t * (0.12 + pocket * 0.013) + pocket * 1.7 + style
+        for i in range(8):
+            frac = i / 7.0
+            ox = offx * s + math.sin(pocket_phase + i * 0.8) * (5 + frac * 7) * s
+            oy = (frac * (34 + 14 * pulse) + math.sin(pocket_phase * 0.7 + i) * 3) * s
+            rr = max(2, int((8 - frac * 3 + pulse * 2) * s))
+            alpha = int((178 - frac * 70) * burn)
+            pygame.draw.circle(fire, (255, int(198 - frac * 105), int(66 - frac * 35), alpha), (int(fw // 2 + ox), int(fh - 28 * s - oy)), rr)
+            if frac < 0.35:
+                pygame.draw.circle(fire, (255, 240, 190, int(92 * burn)), (int(fw // 2 + ox), int(fh - 28 * s - oy)), max(1, rr // 2))
+    surface.blit(fire, (int(ix - fw // 2), int(wreck_y - fh + 44 * s)))
+    # ── Smoke: left leans left, center towers straight up, right spirals right. ──
+    smoke = pygame.Surface((int(330 * s), int(350 * s)), pygame.SRCALPHA)
+    sw, sh = smoke.get_size()
+    for i in range(30):
+        frac = i / 29.0
+        rise = (t * (0.38 + frac * 0.18) + i * 19) % max(85, int(310 * s))
+        if style == 1:
+            sway = math.sin(t * 0.018 + i * 0.6) * (7 + i * 1.0) * s
+        elif style == 0:
+            sway = -frac * 54 * s + math.sin(t * 0.021 + i * 0.54) * (10 + i * 1.4) * s
+        else:
+            sway = frac * 58 * s + math.sin(t * 0.027 + i * 0.72) * (12 + i * 1.8) * s
+        sr = max(8, int((16 + frac * 31 + min(1.0, t / 180.0) * 9) * s))
+        shade = int(28 + frac * 24)
+        sa = max(0, int((100 - frac * 54) * (0.72 + 0.28 * burn)))
+        pygame.draw.circle(smoke, (shade, shade, shade + 2, sa), (int(sw * 0.50 + sway), int(sh - 24 * s - rise)), sr)
+    surface.blit(smoke, (int(ix - sw // 2), int(wreck_y - sh + 34 * s)))
+    return True
+def _draw_attack_terminal_glitches(surface, elapsed, hud_rect):
+    """Terminal interference bursts around targeting and impact moments."""
+    hx, hy, hw, hh = hud_rect
+    burst = 0
+    for frame in (ATK_TARGET_CENTER, ATK_MISSILE_1_LAUNCH, ATK_IMPACT_CENTER,
+                  ATK_TARGET_LEFT, ATK_MISSILE_2_LAUNCH, ATK_IMPACT_LEFT,
+                  ATK_TARGET_RIGHT, ATK_MISSILE_3_LAUNCH, ATK_IMPACT_RIGHT):
+        dt = elapsed - frame
+        if 0 <= dt < 24:
+            burst = max(burst, 24 - dt)
+    if burst <= 0:
+        return
+    rng_g = random.Random(9000 + elapsed // 2)
+    for _ in range(14 + burst // 2):
+        gy = hy + rng_g.randint(-8, hh + 10)
+        gh = rng_g.randint(1, 5)
+        gx = hx + rng_g.randint(-18, 18)
+        gw = hw + rng_g.randint(-25, 45)
+        strip = pygame.Surface((max(20, gw), gh), pygame.SRCALPHA)
+        col = rng_g.choice([(80, 180, 240), (255, 130, 45), (210, 60, 45)])
+        strip.fill((*col, rng_g.randint(70, 150)))
+        surface.blit(strip, (gx, gy))
+    if burst > 8:
+        warn = font_terminal_small.render("SIGNAL BREAKUP", True, (255, 120, 60))
+        warn_bg = pygame.Surface((warn.get_width() + 12, warn.get_height() + 4), pygame.SRCALPHA)
+        warn_bg.fill((0, 0, 0, 145))
+        surface.blit(warn_bg, (hx + hw - warn_bg.get_width() - 8, hy + hh + 6))
+        surface.blit(warn, (hx + hw - warn_bg.get_width() - 2, hy + hh + 8))
+def _draw_attack_impact_overlays(surface, elapsed):
+    """Very visible impact/collapse labels and signal tearing."""
+    events = [
+        (ATK_MISSILE_1_LAUNCH, "MISSILE LAUNCH", (255, 170, 60)),
+        (ATK_IMPACT_CENTER, "CENTER RIG IMPACT", (255, 95, 45)),
+        (ATK_IMPACT_CENTER + 48, "METAL COLLAPSE DETECTED", (255, 150, 70)),
+        (ATK_MISSILE_2_LAUNCH, "MISSILE LAUNCH", (255, 170, 60)),
+        (ATK_IMPACT_LEFT, "LEFT RIG IMPACT", (255, 95, 45)),
+        (ATK_IMPACT_LEFT + 48, "METAL COLLAPSE DETECTED", (255, 150, 70)),
+        (ATK_MISSILE_3_LAUNCH, "MISSILE LAUNCH", (255, 170, 60)),
+        (ATK_IMPACT_RIGHT, "RIGHT RIG IMPACT", (255, 95, 45)),
+        (ATK_IMPACT_RIGHT + 48, "METAL COLLAPSE DETECTED", (255, 150, 70)),
+    ]
+    active = None
+    for frame, text, col in events:
+        dt = elapsed - frame
+        if 0 <= dt < 34:
+            active = (dt, text, col)
+    if not active:
+        return
+    dt, text, col = active
+    a = int(235 * (1.0 - dt / 34.0))
+    # Wide signal tear lines, impossible to miss.
+    rng_g = random.Random(44000 + elapsed)
+    for _ in range(10):
+        gy = rng_g.randint(LETTER_H + 12, HEIGHT - LETTER_H - 20)
+        gh = rng_g.randint(2, 9)
+        tear = pygame.Surface((WIDTH, gh), pygame.SRCALPHA)
+        tear.fill((*col, rng_g.randint(20, 70)))
+        surface.blit(tear, (rng_g.randint(-28, 28), gy))
+    # Big event label.
+    label_font = pygame.font.SysFont("Consolas", 26, bold=True)
+    label = label_font.render(text, True, col)
+    label.set_alpha(a)
+    bg = pygame.Surface((label.get_width() + 44, label.get_height() + 18), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, min(190, a)))
+    pygame.draw.rect(bg, (*col, min(160, a)), bg.get_rect(), 1)
+    pygame.draw.rect(bg, (*col, min(210, a)), (0, 0, 5, bg.get_height()))
+    bx = WIDTH // 2 - bg.get_width() // 2
+    by = LETTER_H + 18
+    surface.blit(bg, (bx, by))
+    surface.blit(label, (WIDTH // 2 - label.get_width() // 2, by + 8))
+def _draw_walk_return_overlay(surface):
+    """Soft signal-loss overlay after the oil-rig feed ends, easing back into gameplay."""
+    if walk_return_timer <= 0:
+        return
+    progress = 1.0 - (walk_return_timer / 240.0)
+    alpha = int(210 * (1.0 - progress))
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, max(0, min(230, alpha + 25))))
+    surface.blit(overlay, (0, 0))
+    if walk_return_timer > 95:
+        msg_a = min(255, alpha + 35)
+        panel = pygame.Surface((560, 104), pygame.SRCALPHA)
+        panel.fill((4, 9, 14, min(240, msg_a + 25)))
+        pygame.draw.rect(panel, (45, 88, 126, min(170, msg_a)), panel.get_rect(), 1)
+        pygame.draw.rect(panel, C_KRAP_BLUE, (0, 0, 4, panel.get_height()))
+        surface.blit(panel, (WIDTH // 2 - 280, HEIGHT // 2 - 62))
+        title = font_terminal.render("KRAP OBSERVATION FEED LOST", True, (145, 186, 216))
+        sub = font_terminal_small.render("holding last frame / reacquiring local view...", True, (185, 145, 95))
+        title.set_alpha(msg_a)
+        sub.set_alpha(msg_a)
+        surface.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 38))
+        surface.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT // 2 + 2))
+    elif walk_return_timer > 0:
+        msg_a = min(220, int(220 * (walk_return_timer / 95.0)))
+        restore = font_terminal_small.render("LOCAL CONTROL RETURNING", True, (110, 175, 210))
+        restore.set_alpha(msg_a)
+        bg = pygame.Surface((restore.get_width() + 26, restore.get_height() + 10), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, min(145, msg_a)))
+        pygame.draw.rect(bg, (45, 88, 126, min(150, msg_a)), bg.get_rect(), 1)
+        bx = WIDTH // 2 - bg.get_width() // 2
+        by = LETTER_H + 18
+        surface.blit(bg, (bx, by))
+        surface.blit(restore, (WIDTH // 2 - restore.get_width() // 2, by + 5))
+def _draw_walk_attack_overlook(surface, force=False):
+    """Pseudo-3D overlook panorama for the rig strike sequence.
+    force=True keeps drawing the final observation feed during the return
+    transition, preventing an abrupt snap back to top-down gameplay.
+    """
+    if not force and not (STATE.walk_attack_active or STATE.walk_terminal_active):
+        return
+    elapsed = STATE.walk_attack_timer
+    w, h = surface.get_size()
+    horizon_y = HORIZON_Y_OVERLOOK
+    # Hard-clear the destination first so nothing from the walking-sim scene can
+    # ever bleed through this cinematic layer.
+    surface.fill((0, 0, 0))
+    intro_alpha = 0
+    if elapsed < 60:
+        intro_alpha = int(255 * (1 - max(0, elapsed) / 60))
+    shake_mag = max(0, int(STATE.screen_shake))
+    if STATE.screen_shake > 0:
+        STATE.screen_shake -= 1
+    # Do not offset the entire rendered frame; that was causing visible bands.
+    shake_x = 0
+    shake_y = 0
+    # Pre-fill an alpha scene with opaque black so nothing from the walking-sim
+    # map can bleed through, while still letting us use per-pixel alpha effects.
+    scene = pygame.Surface((w, h), pygame.SRCALPHA)
+    scene.fill((0, 0, 0, 255))
+    sky_top = (12, 10, 24)
+    sky_bot = (56, 38, 72)
+    for y in range(0, horizon_y):
+        p = y / max(1, horizon_y)
+        r = int(sky_top[0] + (sky_bot[0] - sky_top[0]) * p)
+        g = int(sky_top[1] + (sky_bot[1] - sky_top[1]) * p)
+        b = int(sky_top[2] + (sky_bot[2] - sky_top[2]) * p)
+        pygame.draw.line(scene, (r, g, b), (0, y), (w, y))
+    rng_stars = random.Random(42)
+    for _ in range(38):
+        sx = rng_stars.randint(0, w)
+        sy = rng_stars.randint(0, horizon_y // 2)
+        sa = rng_stars.randint(70, 170)
+        sr = rng_stars.randint(1, 2)
+        pygame.draw.circle(scene, (190, 205, 235, sa), (sx, sy), sr)
+    # Very subtle upper-sky haze only; avoid any strong horizontal banding.
+    haze = pygame.Surface((w, 70), pygame.SRCALPHA)
+    for i, (cx, cy, rx, ry, alpha) in enumerate([
+        (w * 0.28, 8, 120, 34, 8),
+        (w * 0.62, 4, 145, 40, 7),
+        (w * 0.84, 10, 110, 30, 6),
+    ]):
+        drift = math.sin(elapsed * 0.006 + i * 1.4) * 6
+        pygame.draw.ellipse(
+            haze,
+            (18, 20, 34, alpha),
+            pygame.Rect(int(cx - rx + drift), cy, rx * 2, ry * 2),
+        )
+    scene.blit(haze, (0, 0))
+    _draw_attack_water(scene, elapsed, horizon_y)
+    rng_sheen = random.Random(37)
+    for _ in range(8):
+        sx = (rng_sheen.randint(0, w) + int(elapsed * 0.35)) % w
+        sy = horizon_y + rng_sheen.randint(42, 240)
+        sw = rng_sheen.randint(24, 54)
+        sheen = pygame.Surface((sw, 8), pygame.SRCALPHA)
+        sc = rng_sheen.choice([(180, 80, 60), (170, 120, 90), (135, 95, 165)])
+        pygame.draw.ellipse(sheen, (*sc, rng_sheen.randint(10, 28)), sheen.get_rect())
+        scene.blit(sheen, (int(sx), int(sy)))
+    rig_draw_data = [_attack_rig_pose(i, elapsed) for i in range(3)]
+    destroyed_count = sum(1 for s in STATE.rig_status if s == "DESTROYED")
+    if destroyed_count > 0:
+        glow_layer = pygame.Surface((w, 120), pygame.SRCALPHA)
+        glow_intensity = min(1.0, destroyed_count / 3.0)
+        pulse = 0.78 + 0.22 * math.sin(elapsed * 0.06)
+        for gy in range(120):
+            alpha = int(40 * glow_intensity * pulse * (1 - gy / 120))
+            pygame.draw.line(glow_layer, (255, 105, 30, alpha), (0, gy), (w, gy), 1)
+        scene.blit(glow_layer, (0, horizon_y - 46))
+        # Long oil-fire reflections under destroyed rigs. These persist even after the blast sprite fades.
+        for idx, rig in enumerate(rig_draw_data):
+            if STATE.rig_status[idx] != "DESTROYED":
+                continue
+            since = max(0, elapsed - RIG_IMPACT_FRAMES[idx])
+            refl = pygame.Surface((int(190 * rig["scale"]), int(150 * rig["scale"])), pygame.SRCALPHA)
+            rw, rh = refl.get_size()
+            heat = max(0.25, 1.0 - since / 760.0)
+            for ry in range(0, rh, 3):
+                frac = ry / max(1, rh)
+                alpha = int(72 * heat * (1.0 - frac) * (0.72 + 0.28 * math.sin(elapsed * 0.06 + ry)))
+                if alpha <= 0:
+                    continue
+                half = int((58 * rig["scale"]) * (1.0 - frac * 0.72))
+                wob = int(math.sin(elapsed * 0.045 + ry * 0.15 + idx) * (7 + frac * 10))
+                pygame.draw.line(refl, (255, 104, 32, alpha), (rw // 2 - half + wob, ry), (rw // 2 + half + wob, ry), 1)
+            scene.blit(refl, (int(rig["x"] - rw // 2), int(rig["water_y"] + 10)))
+    draw_order = sorted(range(3), key=lambda idx: rig_draw_data[idx]["depth"], reverse=True)
+    for idx in draw_order:
+        rig = rig_draw_data[idx]
+        if STATE.rig_status[idx] == "DESTROYED":
+            # ── Fire-reflection glow on the water under burning rigs ──
+            # Drawn BEFORE the destroyed rig so the rig sits on top of its
+            # own reflection. Heat fades over time (760 frames = ~12.7s).
+            since_impact = elapsed - RIG_IMPACT_FRAMES[idx]
+            heat = max(0.0, 1.0 - since_impact / 760.0)
+            if heat > 0.05:
+                _draw_attack_water_fire_reflection(
+                    scene, rig["x"], rig["water_y"], rig["scale"], elapsed, heat=heat
+                )
+            _draw_destroyed_rig(
+                scene,
+                rig["x"],
+                rig["water_y"],
+                rig["scale"],
+                since_impact,
+                tilt=rig["tilt"],
+                rig_index=idx,
+            )
+        else:
+            _draw_attack_perspective_rig(
+                scene,
+                rig["x"],
+                rig["water_y"],
+                rig["scale"],
+                elapsed,
+                state=STATE.rig_status[idx],
+                tilt=rig["tilt"],
+            )
+    # Waterline occlusion to seat the structures into the ocean a bit better.
+    for rig in rig_draw_data:
+        occ = pygame.Surface((int(150 * rig["scale"]), int(28 * rig["scale"])), pygame.SRCALPHA)
+        pygame.draw.ellipse(occ, (12, 22, 36, 95), occ.get_rect())
+        pygame.draw.line(
+            occ,
+            (76, 108, 142, 55),
+            (8, int(occ.get_height() * 0.38)),
+            (occ.get_width() - 8, int(occ.get_height() * 0.38)),
+            1,
+        )
+        scene.blit(occ, (int(rig["x"] - occ.get_width() // 2), int(rig["water_y"] + 2)))
+    if STATE.walk_boat_active:
+        boat_pose = _attack_boat_pose_from_world_x(STATE.walk_boat_x + 38, elapsed)
+        _draw_attack_boat(
+            scene,
+            boat_pose["x"],
+            boat_pose["y"],
+            boat_pose["scale"],
+            boat_pose["heading"],
+            elapsed,
+        )
+    current_target = None
+    for idx, rig_state in enumerate(STATE.rig_status):
+        if rig_state == "TARGETED":
+            current_target = idx
+            break
+    if current_target is not None and STATE.walk_boat_active:
+        boat_pose = _attack_boat_pose_from_world_x(STATE.walk_boat_x + 44, elapsed)
+        rig = rig_draw_data[current_target]
+        _draw_attack_tracer(
+            scene,
+            int(boat_pose["x"] + 32 * boat_pose["scale"]),
+            int(boat_pose["y"] + 4 * boat_pose["scale"]),
+            int(rig["x"]),
+            int(rig["deck_y"] - 8 * rig["scale"]),
+            105,
+        )
+    for m in STATE.walk_missiles:
+        rig = rig_draw_data[m["rig_index"]]
+        start_pose = _attack_boat_pose_from_world_x(m["start_x"], elapsed)
+        sx = start_pose["x"] + 34 * start_pose["scale"]
+        sy = start_pose["y"] + 6 * start_pose["scale"]
+        tx = rig["x"] + rig["tilt"] * 10 * rig["scale"]
+        ty = rig["deck_y"] - 6 * rig["scale"]
+        cx = (sx + tx) * 0.5 - 42
+        cy = min(sy, ty) - (78 + abs(tx - sx) * 0.10)
+        u = m["t"]
+        inv = 1.0 - u
+        cur_x = inv * inv * sx + 2 * inv * u * cx + u * u * tx
+        cur_y = inv * inv * sy + 2 * inv * u * cy + u * u * ty
+        prev_u = max(0.0, u - 0.07)
+        prev_inv = 1.0 - prev_u
+        prev_x = prev_inv * prev_inv * sx + 2 * prev_inv * prev_u * cx + prev_u * prev_u * tx
+        prev_y = prev_inv * prev_inv * sy + 2 * prev_inv * prev_u * cy + prev_u * prev_u * ty
+        dx = 2 * inv * (cx - sx) + 2 * u * (tx - cx)
+        dy = 2 * inv * (cy - sy) + 2 * u * (ty - cy)
+        angle = math.atan2(dy, dx)
+        trail = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.line(
+            trail,
+            (255, 150, 60, 55),
+            (int(prev_x), int(prev_y)),
+            (int(cur_x), int(cur_y)),
+            2,
+        )
+        scene.blit(trail, (0, 0))
+        _draw_attack_rocket(
+            scene,
+            cur_x,
+            cur_y,
+            angle,
+            0.90 + (1.0 - rig["depth"]) * 0.35,
+            glow_phase=elapsed * 0.06,
+        )
+    for ex in STATE.walk_explosions:
+        rig = rig_draw_data[ex["rig_index"]]
+        t_since = ex["max_life"] - ex["life"]
+        blast_drop = min(22 * rig["scale"], t_since * 0.70 * rig["scale"])
+        base_scale = 0.90 + (1.0 - rig["depth"]) * 0.34
+        _draw_attack_explosion(
+            scene,
+            rig["x"],
+            rig["deck_y"] - 4 * rig["scale"] + blast_drop,
+            t_since,
+            scale=base_scale,
+        )
+        if t_since < 16:
+            side_alpha_t = max(0, t_since - 3)
+            _draw_attack_explosion(
+                scene,
+                rig["x"] - 16 * rig["scale"],
+                rig["deck_y"] + 6 * rig["scale"] + side_alpha_t * 0.45,
+                side_alpha_t,
+                scale=base_scale * 0.62,
+            )
+            _draw_attack_explosion(
+                scene,
+                rig["x"] + 22 * rig["scale"],
+                rig["deck_y"] + 2 * rig["scale"] + side_alpha_t * 0.52,
+                max(0, t_since - 5),
+                scale=base_scale * 0.54,
+            )
+        # Burning debris rain for the first moments after impact
+        if t_since < 28:
+            for di in range(10):
+                frac = di / 9.0
+                dx = (-28 + di * 7) * rig["scale"]
+                dy = (6 + t_since * (0.9 + frac * 0.35) + frac * frac * 14) * rig["scale"]
+                ember_col = (255, 170 - int(frac * 50), 70, max(0, 180 - t_since * 5 - di * 8))
+                pygame.draw.circle(
+                    scene,
+                    ember_col,
+                    (int(rig["x"] + dx), int(rig["deck_y"] - 10 * rig["scale"] + dy)),
+                    max(1, int((2.8 - frac) * rig["scale"])),
+                )
+        refl = pygame.Surface((120, 78), pygame.SRCALPHA)
+        for ry in range(44):
+            alpha = int(34 * max(0.0, 1.0 - ry / 44.0))
+            wobble = int(math.sin(elapsed * 0.05 + ry * 0.11 + ex["rig_index"]) * 5)
+            half_w = max(4, 22 - ry // 3)
+            pygame.draw.line(
+                refl,
+                (255, 98, 26, alpha),
+                (60 - half_w + wobble, ry),
+                (60 + half_w + wobble, ry),
+                1,
+            )
+        scene.blit(refl, (int(rig["x"] - 60), int(rig["water_y"] + 6)))
+    _draw_attack_helicopter(scene, elapsed)
+    rail_y = h - 36
+    pygame.draw.rect(scene, (9, 12, 18), (0, rail_y, w, h - rail_y))
+    pygame.draw.line(scene, (18, 22, 28), (0, rail_y + 7), (w, rail_y + 7), 2)
+    for px in range(-30, w + 30, 46):
+        top_x = px + int((px - ATTACK_VANISH_X) * -0.12)
+        pygame.draw.line(scene, (14, 18, 22), (top_x, rail_y), (px + 10, rail_y + 24), 3)
+        pygame.draw.circle(scene, (20, 24, 30), (top_x, rail_y + 4), 3)
+    for i in range(62):
+        alpha = int(144 * (1.0 - i / 62.0))
+        pygame.draw.line(scene, (8, 12, 20, alpha), (0, rail_y - i), (w, rail_y - i), 1)
+    _draw_attack_soft_rain(scene, elapsed)
+    # Removed the heavy dark fade that used to start at SCENE_TOP.
+    # That overlay created the ugly black horizontal band directly under the
+    # KRAP OBSERVATION FEED terminal during the rig strike cutscene.
+    surface.blit(scene, (shake_x, shake_y))
+    # Brief screen-wide heat flash/concussion for each rig impact.
+    for _impact_frame in RIG_IMPACT_FRAMES:
+        _dt = elapsed - _impact_frame
+        if 0 <= _dt < 18:
+            _flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            _a = int(120 * (1.0 - _dt / 18.0))
+            _flash.fill((255, 176, 86, _a))
+            surface.blit(_flash, (0, 0))
+            break
+    _draw_attack_impact_overlays(surface, elapsed)
+    active_attack = force or not (walk_after_firefight or STATE.walk_after_firefight)
+    if not active_attack:
+        return
+    all_destroyed = all(s == "DESTROYED" for s in STATE.rig_status)
+    hud_w, hud_h = 470, 62
+    hud = pygame.Surface((hud_w, hud_h), pygame.SRCALPHA)
+    hud.fill((0, 0, 0, 118 if all_destroyed else 172))
+    pygame.draw.rect(hud, (42, 72, 104, 150), hud.get_rect(), 1)
+    pygame.draw.rect(hud, C_KRAP_BLUE, (0, 0, 3, hud_h))
+    status = STATE.walk_terminal_status or "STANDBY"
+    title = font_terminal.render("KRAP OBSERVATION FEED", True, (145, 186, 216))
+    time_txt = font_terminal_small.render(
+        f"T+{elapsed // 60:02d}.{elapsed % 60:02d}", True, (120, 140, 160)
+    )
+    body_color = (184, 86, 54) if all_destroyed and elapsed > ATK_IMPACT_RIGHT + 60 else C_ORANGE
+    body = font_prompt.render(status, True, body_color)
+    state_short = {"ONLINE": "ON", "TARGETED": "TGT", "DESTROYED": "DOWN"}
+    parts = []
+    colors = []
+    for i, short_name in enumerate(("L", "C", "R")):
+        rs = STATE.rig_status[i]
+        parts.append(f"{short_name}:{state_short.get(rs, rs[:2])}")
+        if rs == "ONLINE":
+            colors.append((80, 150, 190))
+        elif rs == "TARGETED":
+            colors.append((255, 200, 60))
+        else:
+            colors.append((180, 55, 45))
+    hud.blit(title, (14, 7))
+    hud.blit(time_txt, (hud_w - time_txt.get_width() - 14, 11))
+    body_y = 35
+    hud.blit(body, (14, body_y))
+    summary_surfs = [font_terminal_small.render(part, True, color) for part, color in zip(parts, colors)]
+    summary_width = sum(s.get_width() for s in summary_surfs) + max(0, (len(summary_surfs) - 1) * 12)
+    body_right = 14 + body.get_width()
+    can_show_summary = (not all_destroyed) and (body_right < hud_w - summary_width - 20)
+    if can_show_summary:
+        sx = hud_w - 14
+        for surf in reversed(summary_surfs):
+            sx -= surf.get_width()
+            hud.blit(surf, (sx, body_y + 1))
+            sx -= 12
+    hud_alpha = min(255, max(0, (elapsed - 30) * 8)) if elapsed > 30 else 0
+    hud.set_alpha(hud_alpha)
+    surface.blit(hud, (18, 18))
+    if hud_alpha > 0:
+        _draw_attack_terminal_glitches(surface, elapsed, (18, 18, hud_w, hud_h))
+    # Minimal per-rig overlays: only show the active target, plus a brief HIT marker after impact.
+    for i, rig in enumerate(rig_draw_data):
+        rig_state = STATE.rig_status[i]
+        label_y = rig["deck_y"] - 24 * rig["scale"]
+        if rig_state == "TARGETED":
+            color = (255, 200, 60)
+            radius = max(12, int(14 * rig["scale"]))
+            pygame.draw.circle(surface, (*color, 74), (int(rig["x"]), int(label_y)), radius, 1)
+            for dx1, dy1, dx2, dy2 in [
+                (-radius - 7, 0, -radius + 1, 0),
+                (radius - 1, 0, radius + 7, 0),
+                (0, -radius - 7, 0, -radius + 1),
+                (0, radius - 1, 0, radius + 7),
+            ]:
+                pygame.draw.line(
+                    surface,
+                    (*color, 70),
+                    (rig["x"] + dx1, label_y + dy1),
+                    (rig["x"] + dx2, label_y + dy2),
+                    1,
+                )
+            txt = font_terminal_small.render(f"{RIG_NAMES[i]} LOCK", True, color)
+            bg = pygame.Surface((txt.get_width() + 8, txt.get_height() + 3), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 110))
+            surface.blit(bg, (int(rig["x"] - bg.get_width() // 2), int(label_y - 30)))
+            surface.blit(txt, (int(rig["x"] - txt.get_width() // 2), int(label_y - 29)))
+        elif rig_state == "DESTROYED":
+            since = elapsed - RIG_IMPACT_FRAMES[i]
+            if 0 <= since < 34:
+                alpha = max(0, 150 - since * 4)
+                txt = font_terminal_small.render("HIT", True, (190, 70, 52))
+                bg = pygame.Surface((txt.get_width() + 8, txt.get_height() + 3), pygame.SRCALPHA)
+                bg.fill((0, 0, 0, min(110, alpha)))
+                bg.set_alpha(alpha)
+                txt.set_alpha(alpha)
+                surface.blit(bg, (int(rig["x"] - bg.get_width() // 2), int(label_y - 24)))
+                surface.blit(txt, (int(rig["x"] - txt.get_width() // 2), int(label_y - 23)))
+    alive_indices = [i for i, state in enumerate(STATE.rig_status) if state != "DESTROYED"]
+    if alive_indices:
+        focus_idx = current_target if current_target is not None else alive_indices[min(1, len(alive_indices) - 1)]
+        focus_rig = rig_draw_data[focus_idx]
+        scope_col = (88, 120, 145, 52)
+        pygame.draw.line(
+            surface,
+            scope_col,
+            (int(focus_rig["x"] - 60), int(focus_rig["water_y"] + 8)),
+            (int(focus_rig["x"] + 60), int(focus_rig["water_y"] + 8)),
+            1,
+        )
+        pygame.draw.line(
+            surface,
+            scope_col,
+            (int(focus_rig["x"]), int(focus_rig["water_y"] - 42)),
+            (int(focus_rig["x"]), int(focus_rig["water_y"] + 50)),
+            1,
+        )
+        pygame.draw.circle(surface, scope_col, (int(focus_rig["x"]), int(focus_rig["water_y"] + 8)), 44, 1)
+    if intro_alpha > 0:
+        fade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        fade.fill((0, 0, 0, intro_alpha))
+        surface.blit(fade, (0, 0))
+def _draw_walk_krap_van(surface, x, y, t):
+    """Top-down van, still simple/pixel-art, but readable."""
+    x = int(x)
+    y = int(y)
+    # Ground shadow
+    shadow = pygame.Surface((142, 72), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 90), (0, 10, 142, 48))
+    surface.blit(shadow, (x - 12, y + 8))
+    # Main body
+    body = pygame.Rect(x, y, 120, 54)
+    pygame.draw.rect(surface, (14, 16, 19), body, border_radius=4)
+    pygame.draw.rect(surface, (34, 39, 45), body, 2, border_radius=4)
+    # Rear cargo box
+    pygame.draw.rect(surface, (18, 21, 25), (x + 8, y + 8, 70, 38), border_radius=2)
+    pygame.draw.rect(surface, (38, 43, 50), (x + 8, y + 8, 70, 38), 1, border_radius=2)
+    # Cab
+    pygame.draw.rect(surface, (20, 24, 30), (x + 76, y + 5, 36, 44), border_radius=3)
+    pygame.draw.rect(surface, (48, 56, 66), (x + 76, y + 5, 36, 44), 1, border_radius=3)
+    # Windshield / side windows
+    pygame.draw.rect(surface, (22, 34, 46), (x + 88, y + 10, 17, 15), border_radius=2)
+    pygame.draw.rect(surface, (16, 26, 36), (x + 88, y + 29, 17, 15), border_radius=2)
+    pygame.draw.line(surface, (70, 90, 110), (x + 90, y + 12), (x + 102, y + 12), 1)
+    # KRAP blue stripe
+    pygame.draw.rect(surface, C_KRAP_BLUE, (x + 12, y + 13, 58, 5))
+    pygame.draw.rect(surface, (210, 210, 215), (x + 12, y + 18, 58, 1))
+    # Rear door seam
+    pygame.draw.line(surface, (45, 50, 55), (x + 8, y + 27), (x + 78, y + 27), 1)
+    pygame.draw.line(surface, (8, 10, 12), (x + 43, y + 8), (x + 43, y + 46), 1)
+    # Tail light / headlight
+    pygame.draw.rect(surface, (170, 35, 30), (x - 3, y + 17, 5, 8))
+    pygame.draw.rect(surface, (170, 35, 30), (x - 3, y + 31, 5, 8))
+    pygame.draw.rect(surface, (210, 200, 130), (x + 116, y + 12, 5, 7))
+    pygame.draw.rect(surface, (210, 200, 130), (x + 116, y + 35, 5, 7))
+    # Wheels
+    for wx in (x + 20, x + 86):
+        pygame.draw.ellipse(surface, (5, 6, 8), (wx - 8, y - 5, 18, 10))
+        pygame.draw.ellipse(surface, (5, 6, 8), (wx - 8, y + 49, 18, 10))
+        pygame.draw.ellipse(surface, (35, 38, 42), (wx - 4, y - 2, 10, 5))
+        pygame.draw.ellipse(surface, (35, 38, 42), (wx - 4, y + 52, 10, 5))
+    # Rain highlight on roof
+    if (t // 180) % 2 == 0:
+        pygame.draw.line(surface, (75, 85, 95), (x + 18, y + 9), (x + 65, y + 9), 1)
+    # Exhaust puff
+    puff_phase = (t // 80) % 4
+    if puff_phase < 3:
+        puff = pygame.Surface((28, 18), pygame.SRCALPHA)
+        pygame.draw.ellipse(puff, (65, 70, 75, 45 - puff_phase * 10), (0, 0, 24, 12))
+        surface.blit(puff, (x - 26 - puff_phase * 4, y + 24 - puff_phase))
+def draw_walking_sim():
+    if walk_player is None:
+        return
+    # Nuclear option: while the overlook attack is active, render ONLY the
+    # cinematic scene and its dialogue. Do not draw the walking-sim map at all.
+    if STATE.walk_attack_active or STATE.walk_terminal_active:
+        _draw_walk_attack_overlook(screen)
+        if STATE.walk_dialogue_active and STATE.walk_dialogue_text:
+            draw_dialogue_box(
+                screen,
+                STATE.walk_dialogue_speaker,
+                STATE.walk_dialogue_text,
+                STATE.walk_dialogue_char_idx,
+                len(STATE.walk_dialogue_text),
+            )
+        elif walk_dialogue_active and walk_dialogue_text:
+            draw_dialogue_box(
+                screen,
+                walk_dialogue_speaker,
+                walk_dialogue_text,
+                walk_dialogue_char_idx,
+                len(walk_dialogue_text),
+            )
+        return
+    if walk_return_timer > 120:
+        # Hold the final burning-rigs feed under the signal-lost overlay before
+        # fading into the playable harbor view. This makes the handoff breathe.
+        _draw_walk_attack_overlook(screen, force=True)
+        _draw_walk_return_overlay(screen)
+        return
+    screen.fill((16, 18, 22))
+    fcx, fcy = int(walk_camera_x), int(walk_camera_y)
+    start_tx = (fcx // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
+    start_ty = (fcy // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
+    for tx in range(
+        start_tx - FLOOR_TILE_SIZE, fcx + WIDTH + FLOOR_TILE_SIZE * 2, FLOOR_TILE_SIZE
+    ):
+        for ty in range(
+            start_ty - FLOOR_TILE_SIZE,
+            fcy + HEIGHT + FLOOR_TILE_SIZE * 2,
+            FLOOR_TILE_SIZE,
+        ):
+            screen.blit(SLUM_FLOOR, (tx - fcx, ty - fcy))
+    _draw_walk_props_pools(fcx, fcy)
+    container_tiles = [
+        CONTAINER_TILE_RED,
+        CONTAINER_TILE_BLUE,
+        CONTAINER_TILE_RUST,
+        CONTAINER_TILE_GREY,
+    ]
+    for wall in walk_walls:
+        dr = pygame.Rect(wall.x - fcx, wall.y - fcy, TILE_SIZE, TILE_SIZE)
+        if -TILE_SIZE < dr.x < WIDTH and -TILE_SIZE < dr.y < HEIGHT:
+            screen.blit(wall_shadow, (dr.x - 4, dr.y - 4))
+            tile_idx = (wall.x // TILE_SIZE + wall.y // TILE_SIZE) % 4
+            screen.blit(container_tiles[tile_idx], (dr.x, dr.y))
+    _draw_walk_props(fcx, fcy)
+    for sx, sy, key, label, text in walk_story_points:
+        if -100 < sx - fcx < WIDTH + 100 and -100 < sy - fcy < HEIGHT + 100:
+            drawer = WALK_SPRITE_DRAWERS.get(key)
+            if drawer:
+                drawer(screen, int(sx - fcx), int(sy - fcy))
+            if walk_active_hover and walk_active_hover[0] == label:
+                pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.005)
+                glow = pygame.Surface((80, 80), pygame.SRCALPHA)
+                pygame.draw.circle(glow, (255, 220, 100, int(35 * pulse)), (40, 40), 30)
+                screen.blit(glow, (int(sx - fcx) - 40, int(sy - fcy) - 40))
+    if walk_after_firefight:
+        van_screen_x = walk_van_trigger_x - fcx + 100
+        van_screen_y = walk_van_trigger_y - fcy + 30
+        if -200 < van_screen_x < WIDTH + 200:
+            _draw_walk_krap_van(screen, van_screen_x, van_screen_y, pygame.time.get_ticks())
+    if walk_player:
+        walk_player.draw(screen, fcx, fcy, walls=(), no_gun=True, is_moving=_walk_player_moving)
+    if walk_active_hover and walk_player and not walk_dialogue_active:
+        label, desc = walk_active_hover
+        px = walk_player.rect.centerx - fcx
+        py = walk_player.rect.centery - fcy
+        label_surf = font_btn.render(label, True, C_ORANGE)
+        bg_w = label_surf.get_width() + 16
+        bg_h = label_surf.get_height() + 6
+        bg = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
+        pygame.draw.rect(bg, (0, 0, 0, 170), (0, 0, bg_w, bg_h))
+        screen.blit(bg, (px - bg_w // 2, py - 56))
+        screen.blit(label_surf, (px - label_surf.get_width() // 2, py - 54))
+    for stash in walk_stashes:
+        sx = stash["x"] - fcx
+        sy = stash["y"] - fcy
+        if -100 < sx < WIDTH + 100 and -100 < sy < HEIGHT + 100:
+            pygame.draw.rect(screen, (75, 55, 35), (sx - 16, sy - 12, 32, 24))
+            pygame.draw.rect(screen, (45, 30, 15), (sx - 16, sy - 12, 32, 24), 2)
+            pygame.draw.line(screen, (50, 35, 20), (sx - 16, sy), (sx + 16, sy), 2)
+            pygame.draw.circle(screen, (180, 150, 80), (sx, sy), 3)
+            dist = math.hypot(
+                walk_player.rect.centerx - stash["x"],
+                walk_player.rect.centery - stash["y"],
+            )
+            if dist < 80 and not walk_dialogue_active:
+                prompt = font_terminal_small.render(
+                    f"[E] Search {stash['label']}", True, C_ORANGE
+                )
+                screen.blit(prompt, (sx - prompt.get_width() // 2, sy - 36))
+    for npc in walk_npcs:
+        nx = npc["x"] - fcx
+        ny = npc["y"] - fcy
+        if -100 < nx < WIDTH + 100 and -100 < ny < HEIGHT + 100:
+            shadow = pygame.Surface((38, 16), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 80), (0, 0, 38, 16))
+            screen.blit(shadow, (nx - 19, ny + 8))
+            if npc.get("sprite") == "old_woman":
+                # ── Dress / robe ──
+                pygame.draw.polygon(
+                    screen,
+                    (78, 64, 52),
+                    [
+                        (nx, ny - 8),
+                        (nx - 18, ny + 18),
+                        (nx + 18, ny + 18),
+                    ],
+                )
+                pygame.draw.polygon(
+                    screen,
+                    (50, 42, 34),
+                    [
+                        (nx, ny - 8),
+                        (nx - 18, ny + 18),
+                        (nx + 18, ny + 18),
+                    ],
+                    1,
+                )
+                # Subtle dress folds
+                pygame.draw.line(screen, (60, 50, 40), (nx - 6, ny - 2), (nx - 10, ny + 16), 1)
+                pygame.draw.line(screen, (60, 50, 40), (nx + 6, ny - 2), (nx + 10, ny + 16), 1)
+                # Apron
+                pygame.draw.rect(screen, (110, 100, 88), (nx - 7, ny + 2, 14, 12))
+                pygame.draw.rect(screen, (75, 65, 55), (nx - 7, ny + 2, 14, 12), 1)
+                # ── Head ──
+                pygame.draw.circle(screen, (185, 155, 128), (nx, ny - 14), 8)
+                # ── Headscarf ──
+                pygame.draw.arc(
+                    screen,
+                    (60, 55, 50),
+                    (nx - 10, ny - 24, 20, 18),
+                    0,
+                    math.pi,
+                    3,
+                )
+                pygame.draw.line(screen, (60, 55, 50), (nx - 8, ny - 14), (nx - 11, ny - 8), 2)
+                pygame.draw.line(screen, (60, 55, 50), (nx + 8, ny - 14), (nx + 11, ny - 8), 2)
+                # ── Face details ──
+                pygame.draw.circle(screen, (40, 30, 25), (nx - 2, ny - 14), 1)
+                pygame.draw.circle(screen, (40, 30, 25), (nx + 2, ny - 14), 1)
+                # Wrinkle / frown line
+                pygame.draw.line(screen, (130, 105, 85), (nx - 2, ny - 11), (nx + 2, ny - 11), 1)
+                # ── Walking cane ──
+                pygame.draw.line(
+                    screen,
+                    (70, 55, 35),
+                    (nx + 14, ny - 6),
+                    (nx + 18, ny + 18),
+                    2,
+                )
+                pygame.draw.circle(screen, (90, 70, 45), (nx + 14, ny - 6), 2)
+            else:
+                pygame.draw.circle(screen, npc["color"], (nx, ny), 12)
+                pygame.draw.circle(screen, C_PLAYER_SKIN, (nx, ny), 7)
+            dist = math.hypot(
+                walk_player.rect.centerx - npc["x"], walk_player.rect.centery - npc["y"]
+            )
+            if dist < 80 and not walk_dialogue_active:
+                prompt = font_terminal_small.render(
+                    f"[E] Speak to {npc['name']}", True, C_ORANGE
+                )
+                screen.blit(prompt, (nx - prompt.get_width() // 2, ny - 36))
+    walk_progress = min(
+        1.0, max(0.0, walk_player.rect.centerx / (len(walk_map[0]) * TILE_SIZE))
+    )
+    fog_r = int(18 - walk_progress * 8)
+    fog_g = int(22 - walk_progress * 14)
+    fog_b = int(30 - walk_progress * 16)
+    fog_a = int(55 + walk_progress * 85)
+    fog = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    fog.fill((fog_r, fog_g, fog_b, fog_a))
+    screen.blit(fog, (0, 0))
+    top_fog = pygame.Surface((WIDTH, HEIGHT // 2), pygame.SRCALPHA)
+    for i in range(HEIGHT // 2):
+        a = int(70 * (1 - i / (HEIGHT // 2)))
+        pygame.draw.line(top_fog, (20, 25, 35, a), (0, i), (WIDTH, i))
+    screen.blit(top_fog, (0, LETTER_H))
+    observing_attack = walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight)
+    if not observing_attack:
+        draw_rain(screen, rain_drops, speed_mul=1.0)
+    draw_vignette(screen, strength=180)
+    draw_scanlines(screen)
+    draw_letterbox(screen)
+    _draw_walk_return_overlay(screen)
+    if walk_fp_cutscene:
+        _draw_walk_fp_cutscene(screen)
+        return
+    # Dialogue — attack cutscene or NPC
+    if STATE.walk_dialogue_active and STATE.walk_dialogue_text:
+        draw_dialogue_box(
+            screen,
+            STATE.walk_dialogue_speaker,
+            STATE.walk_dialogue_text,
+            STATE.walk_dialogue_char_idx,
+            len(STATE.walk_dialogue_text),
+        )
+    elif walk_dialogue_active and walk_dialogue_text:
+        draw_dialogue_box(
+            screen,
+            walk_dialogue_speaker,
+            walk_dialogue_text,
+            walk_dialogue_char_idx,
+            len(walk_dialogue_text),
+        )
+    if STATE.show_minimap and minimap and not observing_attack:
+        minimap.draw(screen, walk_player, [], walk_camera_x, walk_camera_y)
+    if not observing_attack:
+        obj_text = "OBJECTIVE: Walk east toward the harbor."
+        if walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight):
+            obj_text = "OBJECTIVE: Observe..."
+        elif walk_after_firefight or STATE.walk_after_firefight:
+            obj_text = "OBJECTIVE: Approach the van."
+        obj_bg = pygame.Surface((400, 30), pygame.SRCALPHA)
+        pygame.draw.rect(obj_bg, (0, 0, 0, 150), (0, 0, 400, 30))
+        pygame.draw.line(obj_bg, C_KRAP_BLUE, (0, 0), (0, 30), 3)
+        screen.blit(obj_bg, (20, LETTER_H + 10))
+        obj_surf = font_prompt.render(obj_text, True, C_WHITE)
+        screen.blit(obj_surf, (30, LETTER_H + 18))
+        rat_surf = font_terminal_small.render(
+            f"RATIONS [E]: {player_rations}   Kevlar Plate: +{warehouse_hp_bonus} HP   Extra Mags: +{warehouse_mag_bonus}",
+            True,
+            (200, 180, 140),
+        )
+        screen.blit(rat_surf, (30, LETTER_H + 48))
+        ctrl_surf = font_terminal_small.render(
+            "WASD — walk    MOUSE — look", True, (130, 130, 140)
+        )
+        screen.blit(ctrl_surf, (WIDTH - ctrl_surf.get_width() - 20, HEIGHT - LETTER_H + 10))
+        
+    # Draw standard tactical crosshair in Walking Simulator (respects HUD settings)
+    from user_settings import SETTINGS
+    if SETTINGS.show_crosshair:
+        ch_x, ch_y = get_scaled_mouse()
+        # Colorblind-aware color picker — same logic as ui_hud.draw_gameplay_crosshair()
+        # and mission.py/mission2.py reticles, so all crosshairs match.
+        cb = SETTINGS.colorblind_mode
+        if cb == "protanopia":
+            col = (90, 180, 255)
+        elif cb == "deuteranopia":
+            col = (255, 220, 80)
+        elif cb == "tritanopia":
+            col = (255, 120, 120)
+        else:
+            col = C_ORANGE
+        size = max(3, int(SETTINGS.crosshair_size))
+        ring_r = size + 8
+        arm = size + 6
+        gap = max(2, size // 2)
+        pygame.draw.circle(screen, col, (ch_x, ch_y), ring_r, 1)
+        pygame.draw.circle(screen, col, (ch_x, ch_y), max(1, size // 3))
+        for x1, y1, x2, y2 in [
+            (ch_x - arm, ch_y, ch_x - gap, ch_y),
+            (ch_x + gap, ch_y, ch_x + arm, ch_y),
+            (ch_x, ch_y - arm, ch_x, ch_y - gap),
+            (ch_x, ch_y + gap, ch_x, ch_y + arm),
+        ]:
+            pygame.draw.line(screen, col, (x1, y1), (x2, y2), 1)

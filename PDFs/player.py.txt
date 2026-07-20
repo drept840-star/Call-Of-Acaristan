@@ -1,0 +1,376 @@
+# ------------------------------------------------------------
+# player.py
+# ------------------------------------------------------------
+
+"""Player character: movement, drawing, weapon rig."""
+import math
+import time
+import pygame
+from config import (
+    TILE_SIZE, C_PLAYER_UNIFORM, C_PLAYER_SKIN,
+)
+
+_player_shadow = pygame.Surface((36, 18), pygame.SRCALPHA)
+pygame.draw.ellipse(_player_shadow, (0, 0, 0, 55), (0, 0, 36, 18))
+
+
+class Player:
+    def __init__(self, x, y, max_hp=100):
+        self.rect = pygame.Rect(x, y, 32, 32)
+        self.speed = 5
+        self.angle = 0
+        self.hp = max_hp
+        self.max_hp = max_hp
+        self.breathing = 0
+        self.blink_timer = 0
+        self.weapon_raised = False
+        self.walk_cycle = 0.0
+        self.was_moving = False
+        self._recoil_timer = 0
+        self._recoil_offset = 0.0
+        self._slide_timer = 0
+
+    def move(self, dx, dy, walls):
+        self.rect.x += dx
+        for wall in walls:
+            if self.rect.colliderect(wall):
+                if dx > 0:
+                    self.rect.right = wall.left
+                if dx < 0:
+                    self.rect.left = wall.right
+        self.rect.y += dy
+        for wall in walls:
+            if self.rect.colliderect(wall):
+                if dy > 0:
+                    self.rect.bottom = wall.top
+                if dy < 0:
+                    self.rect.top = wall.bottom
+
+    def barrel_tip(self):
+        """World-space pistol muzzle position.
+
+        Must match the pistol drawing proportions in draw().
+        """
+        a = self.angle
+
+        arm_len = 16
+        grip_offset = 4
+        gun_len = 17
+        muzzle_extra = 2
+
+        reach = arm_len + grip_offset + gun_len + muzzle_extra
+
+        return (
+            self.rect.centerx + math.cos(a) * reach,
+            self.rect.centery + math.sin(a) * reach,
+        )
+
+    def draw(
+        self,
+        surface,
+        offset_x,
+        offset_y,
+        walls=(),
+        reload_active=False,
+        reload_progress=0.0,
+        melee_active=False,
+        melee_progress=0.0,
+        no_gun=False,
+        is_moving=False,
+    ):
+        draw_x = self.rect.centerx - offset_x
+        draw_y = self.rect.centery - offset_y
+
+        if is_moving and not self.was_moving:
+            self.walk_cycle = 0.0
+        self.was_moving = is_moving
+
+        self.breathing = math.sin(time.time() * 0.5) * 1.0
+        draw_y += self.breathing
+
+        # ── Walk bob ──
+        if is_moving:
+            self.walk_cycle += 0.12
+        else:
+            self.walk_cycle *= 0.85
+        sway_offset = 0.0
+
+        # ── Recoil ──
+        if self._recoil_timer > 0:
+            self._recoil_timer -= 1
+            self._recoil_offset = -3.0 * (self._recoil_timer / 8.0)
+        else:
+            self._recoil_offset *= 0.8
+
+        if self._slide_timer > 0:
+            self._slide_timer -= 1
+        self.blink_timer += 1
+        blinking = 2 if (120 < self.blink_timer < 140) else 0
+        if self.blink_timer > 140:
+            self.blink_timer = 0
+        a = self.angle
+        d_x = math.cos(a)
+        d_y = math.sin(a)
+        perp_x = math.cos(a + math.pi / 2)
+        perp_y = math.sin(a + math.pi / 2)
+
+        arm_angle = a
+        if is_moving:
+            # Weapon hand lags behind direction changes
+            arm_angle += sway_offset * 0.06
+        if reload_active:
+            p = reload_progress
+            if p < 0.25:
+                arm_factor = 1.0 - (p / 0.25) * 0.5
+            elif p < 0.75:
+                arm_factor = 0.5
+                wobble = math.sin(p * math.pi * 4) * 0.08
+                arm_angle = a + wobble
+            else:
+                t = (p - 0.75) / 0.25
+                arm_factor = 0.5 + t * 0.5
+                wobble = math.sin(p * math.pi * 4) * 0.08 * (1.0 - t)
+                arm_angle = a + wobble
+        elif melee_active:
+            p = melee_progress
+            if p < 0.25:
+                t = p / 0.25
+                arm_factor = 1.0 - t * 0.6
+                arm_angle = a - t * math.pi / 4
+            elif p < 0.75:
+                t = (p - 0.25) / 0.5
+                arm_factor = 0.4 + t * 0.8
+                arm_angle = a - math.pi / 4 + t * (math.pi / 4 + math.pi / 3)
+            else:
+                t = (p - 0.75) / 0.25
+                arm_factor = 1.2 - t * 0.2
+                arm_angle = a + math.pi / 3 - t * math.pi / 3
+        else:
+            arm_factor = 1.0
+
+        surface.blit(_player_shadow, (int(draw_x - 18), int(draw_y - 6)))
+        body_w, body_h = 22, 14
+        cos_b, sin_b = math.cos(a), math.sin(a)
+        torso_pts = []
+        for bx, by in [
+            (-body_w // 2, -body_h // 2),
+            (body_w // 2, -body_h // 2),
+            (body_w // 2, body_h // 2),
+            (-body_w // 2, body_h // 2),
+        ]:
+            rx = bx * cos_b - by * sin_b
+            ry = bx * sin_b + by * cos_b
+            torso_pts.append((draw_x + rx, draw_y + ry))
+        pygame.draw.polygon(surface, C_PLAYER_UNIFORM, torso_pts)
+        if self.max_hp > 100:
+            kevlar_w, kevlar_h = 16, 12
+            kevlar_pts = []
+            for bx, by in [
+                (-kevlar_w // 2, -kevlar_h // 2),
+                (kevlar_w // 2, -kevlar_h // 2),
+                (kevlar_w // 2, kevlar_h // 2),
+                (-kevlar_w // 2, kevlar_h // 2),
+            ]:
+                rx = bx * cos_b - by * sin_b
+                ry = bx * sin_b + by * cos_b
+                kevlar_pts.append((draw_x + rx, draw_y + ry))
+            pygame.draw.polygon(surface, (50, 52, 56), kevlar_pts)
+            pygame.draw.polygon(surface, (28, 30, 32), kevlar_pts, 1)
+            for off in (-5, 5):
+                sx1 = draw_x + perp_x * off - d_x * 5
+                sy1 = draw_y + perp_y * off - d_y * 5
+                sx2 = draw_x + perp_x * off + d_x * 5
+                sy2 = draw_y + perp_y * off + d_y * 5
+                pygame.draw.line(surface, (25, 27, 30), (sx1, sy1), (sx2, sy2), 2)
+            ridge_w, ridge_h = 8, 8
+            ridge_pts = []
+            for bx, by in [
+                (-ridge_w // 2, -ridge_h // 2),
+                (ridge_w // 2, -ridge_h // 2),
+                (ridge_w // 2, ridge_h // 2),
+                (-ridge_w // 2, ridge_h // 2),
+            ]:
+                rx = bx * cos_b - by * sin_b
+                ry = bx * sin_b + by * cos_b
+                ridge_pts.append((draw_x + rx, draw_y + ry))
+            pygame.draw.polygon(surface, (38, 40, 44), ridge_pts)
+        pygame.draw.line(
+            surface,
+            (
+                C_PLAYER_UNIFORM[0] + 12,
+                C_PLAYER_UNIFORM[1] + 12,
+                C_PLAYER_UNIFORM[2] + 8,
+            ),
+            (draw_x - d_x * 5, draw_y - d_y * 5),
+            (draw_x + d_x * 5, draw_y + d_y * 5),
+            2,
+        )
+        for off in (-6, 6):
+            vx1 = draw_x + perp_x * off - d_x * 3
+            vy1 = draw_y + perp_y * off - d_y * 3
+            vx2 = draw_x + perp_x * off + d_x * 3
+            vy2 = draw_y + perp_y * off + d_y * 3
+            pygame.draw.line(
+                surface,
+                (
+                    C_PLAYER_UNIFORM[0] - 8,
+                    C_PLAYER_UNIFORM[1] - 5,
+                    C_PLAYER_UNIFORM[2] - 3,
+                ),
+                (vx1, vy1),
+                (vx2, vy2),
+                2,
+            )
+
+        test_arm_len = int(16 * arm_factor)
+        test_arm_dx = math.cos(arm_angle)
+        test_arm_dy = math.sin(arm_angle)
+        test_grip_x = draw_x + test_arm_dx * (test_arm_len + 4)
+        test_grip_y = draw_y + test_arm_dy * (test_arm_len + 4)
+
+        test_gun_end_x = test_grip_x + test_arm_dx * 16
+        test_gun_end_y = test_grip_y + test_arm_dy * 16
+
+        min_t = float("inf")
+        if not no_gun and walls:
+            for wall in walls:
+                wr = pygame.Rect(
+                    wall.x - offset_x, wall.y - offset_y, TILE_SIZE, TILE_SIZE
+                )
+                clipped = wr.clipline(
+                    (test_grip_x, test_grip_y), (test_gun_end_x, test_gun_end_y)
+                )
+                if clipped:
+                    ex, ey = clipped[0]
+                    t = (ex - test_grip_x) * test_arm_dx + (
+                        ey - test_grip_y
+                    ) * test_arm_dy
+                    if t < min_t:
+                        min_t = t
+
+        raise_factor = 0.0
+        if not no_gun and min_t < 16:
+            raise_factor = max(0.0, min(1.0, (16.0 - min_t) / 16.0))
+
+        self.weapon_raised = raise_factor > 0.15
+
+        arm_angle = arm_angle - raise_factor * (math.pi * 0.35)
+        arm_factor = arm_factor * (1.0 - raise_factor * 0.4)
+
+        arm_len = int(16 * arm_factor)
+        arm_dx = math.cos(arm_angle)
+        arm_dy = math.sin(arm_angle)
+        arm_perp_x = math.cos(arm_angle + math.pi / 2)
+        arm_perp_y = math.sin(arm_angle + math.pi / 2)
+
+        ls_x = draw_x + perp_x * 12
+        ls_y = draw_y + perp_y * 12
+        rs_x = draw_x - perp_x * 12
+        rs_y = draw_y - perp_y * 12
+        hand_x = draw_x + arm_dx * arm_len
+        hand_y = draw_y + arm_dy * arm_len
+        pygame.draw.line(
+            surface,
+            C_PLAYER_UNIFORM,
+            (ls_x, ls_y),
+            (hand_x - arm_perp_x * 3, hand_y - arm_perp_y * 3),
+            5,
+        )
+        pygame.draw.line(
+            surface,
+            C_PLAYER_UNIFORM,
+            (rs_x, rs_y),
+            (hand_x + arm_perp_x * 3, hand_y + arm_perp_y * 3),
+            5,
+        )
+        grip_x = draw_x + arm_dx * (arm_len + 4)
+        grip_y = draw_y + arm_dy * (arm_len + 4)
+        pygame.draw.circle(surface, C_PLAYER_SKIN, (int(grip_x), int(grip_y)), 4)
+
+        if not no_gun:
+            # Compact service pistol — intentionally small/chunky.
+            draw_gun_len = int(18.0 * (1.0 - raise_factor * 0.35))
+
+            gun_start_x = grip_x + arm_dx * 2
+            gun_start_y = grip_y + arm_dy * 2
+            gun_end_x = grip_x + arm_dx * draw_gun_len
+            gun_end_y = grip_y + arm_dy * draw_gun_len
+
+            perp_dx = -arm_dy
+            perp_dy = arm_dx
+
+            def quad(ax, ay, bx, by, rear_w, front_w):
+                return [
+                    (ax - perp_dx * rear_w, ay - perp_dy * rear_w),
+                    (ax + perp_dx * rear_w, ay + perp_dy * rear_w),
+                    (bx + perp_dx * front_w, by + perp_dy * front_w),
+                    (bx - perp_dx * front_w, by - perp_dy * front_w),
+                ]
+
+            # Main pistol frame
+            frame = quad(gun_start_x, gun_start_y, gun_end_x, gun_end_y, 3.2, 2.3)
+            pygame.draw.polygon(surface, (24, 25, 27), frame)
+
+            # Slide, slightly offset upward
+            slide_start_x = gun_start_x + arm_dx * 1.5 - perp_dx * 1.5
+            slide_start_y = gun_start_y + arm_dy * 1.5 - perp_dy * 1.5
+            slide_end_x = gun_end_x - arm_dx * 2 - perp_dx * 1.2
+            slide_end_y = gun_end_y - arm_dy * 2 - perp_dy * 1.2
+            slide = quad(slide_start_x, slide_start_y, slide_end_x, slide_end_y, 2.2, 1.7)
+            pygame.draw.polygon(surface, (52, 55, 58), slide)
+            pygame.draw.polygon(surface, (12, 13, 15), slide, 1)
+
+            # Short barrel / muzzle
+            muzzle_x = gun_end_x + arm_dx * 2
+            muzzle_y = gun_end_y + arm_dy * 2
+            pygame.draw.line(
+                surface,
+                (70, 74, 78),
+                (gun_end_x, gun_end_y),
+                (muzzle_x, muzzle_y),
+                3,
+            )
+            pygame.draw.circle(surface, (8, 8, 10), (int(muzzle_x), int(muzzle_y)), 2)
+
+            # Grip angled downward/back
+            grip_base_x = gun_start_x - arm_dx * 2 + perp_dx * 3
+            grip_base_y = gun_start_y - arm_dy * 2 + perp_dy * 3
+            grip_end_x = grip_base_x - arm_dx * 4 + perp_dx * 5
+            grip_end_y = grip_base_y - arm_dy * 4 + perp_dy * 5
+            pygame.draw.line(
+                surface,
+                (18, 19, 20),
+                (grip_base_x, grip_base_y),
+                (grip_end_x, grip_end_y),
+                5,
+            )
+
+            # Tiny trigger guard
+            tg_x = gun_start_x + arm_dx * 4 + perp_dx * 2.5
+            tg_y = gun_start_y + arm_dy * 4 + perp_dy * 2.5
+            pygame.draw.circle(surface, (18, 19, 20), (int(tg_x), int(tg_y)), 3, 1)
+
+            # Small red optic dot, much less bulky than the old laser module
+            dot_x = gun_start_x + arm_dx * 9 - perp_dx * 3
+            dot_y = gun_start_y + arm_dy * 9 - perp_dy * 3
+            pygame.draw.circle(surface, (180, 35, 35), (int(dot_x), int(dot_y)), 1)
+
+        head_x = draw_x + d_x * 2
+        head_y = draw_y + d_y * 2
+        head_r = 9
+        pygame.draw.circle(surface, (30, 35, 28), (int(head_x), int(head_y)), head_r)
+        pygame.draw.arc(
+            surface,
+            (50, 58, 42),
+            (int(head_x - head_r), int(head_y - head_r), head_r * 2, head_r * 2),
+            a - 0.8,
+            a + 0.8,
+            2,
+        )
+        face_x = head_x + d_x * 3
+        face_y = head_y + d_y * 3
+        pygame.draw.circle(surface, C_PLAYER_SKIN, (int(face_x), int(face_y)), 5)
+        for ang_off in (-0.25, 0.25):
+            ex = face_x + math.cos(a + ang_off) * 3
+            ey = face_y + math.sin(a + ang_off) * 3
+            pygame.draw.circle(surface, (30, 20, 10), (int(ex), int(ey)), 1 + blinking)

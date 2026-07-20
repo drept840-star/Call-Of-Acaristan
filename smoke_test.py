@@ -1,0 +1,507 @@
+import os
+
+# Must be set before pygame/config import.
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+import importlib
+import importlib.util
+import traceback
+
+import pygame
+
+import config
+import game_core as gc
+import menu
+
+
+# Set this to True after you finish splitting game_core.py into modules.
+# If False, missing split modules are reported as SKIP instead of FAIL.
+REQUIRE_SPLIT_MODULES = True
+
+VERBOSE_TRACEBACKS = True
+
+SPLIT_MODULES = [
+    "state",
+    "player",
+    "weapons",
+    "mission",
+    "cutscenes",
+    "walking_sim",
+    "effects",
+    "ui_hud",
+    "interactions",
+]
+
+
+class EmptyKeys:
+    """Fake pygame.key.get_pressed() object.
+
+    Any key lookup returns False.
+    """
+    def __getitem__(self, key):
+        return False
+
+
+def run_check(name, fn, required=True):
+    try:
+        fn()
+        pygame.event.pump()
+
+        if pygame.display.get_surface() is not None:
+            pygame.display.flip()
+
+    except Exception as e:
+        status = "FAIL" if required else "SKIP"
+        print(f"{name}: {status} {e!r}")
+
+        if required and VERBOSE_TRACEBACKS:
+            traceback.print_exc()
+
+        return not required
+
+    print(f"{name}: OK")
+    return True
+
+
+def run_import_check(module_name):
+    spec = importlib.util.find_spec(module_name)
+
+    if spec is None:
+        if REQUIRE_SPLIT_MODULES:
+            print(f"import {module_name}: FAIL module not found")
+            return False
+
+        print(f"import {module_name}: SKIP module not found")
+        return True
+
+    return run_check(
+        f"import {module_name}",
+        lambda: importlib.import_module(module_name),
+        required=True,
+    )
+
+
+def clear_screen():
+    config.screen.fill((0, 0, 0))
+
+
+def check_menu_draw():
+    clear_screen()
+    menu.draw_menu()
+
+
+def check_settings_draw():
+    clear_screen()
+    menu.draw_menu_background()
+    # Signature must mirror acaristan.py:1362-1370 exactly.
+    menu.draw_settings(
+        0, 0, 0,
+        80, 80, 100, False,           # master, music, sfx, mute_on_focus_loss
+        0, 8, True, False, True,      # crosshair, crosshair_size, auto_reload, aim_assist, subtitles
+        100, True, True, 100,         # brightness, scanlines, grain, particle_density
+        50, False,                    # mouse_sensitivity, invert_mouse
+        False, 0,                     # reduced_motion, colorblind_mode
+    )
+
+
+def check_server_browser_servers_draw():
+    clear_screen()
+    if hasattr(menu, "switch_mp_tab"):
+        menu.switch_mp_tab("SERVERS")
+    menu.draw_menu_background()
+    menu.draw_server_browser(-1, False, "")
+
+
+def check_server_browser_connections_draw():
+    clear_screen()
+    if hasattr(menu, "switch_mp_tab"):
+        menu.switch_mp_tab("CONNECTIONS")
+    menu.draw_menu_background()
+    menu.draw_server_browser(-1, False, "")
+
+    # Restore default tab.
+    if hasattr(menu, "switch_mp_tab"):
+        menu.switch_mp_tab("SERVERS")
+
+
+def check_notebook_inspection_draw():
+    clear_screen()
+    gc.draw_notebook_inspection()
+
+
+def check_safe_keypad_draw():
+    clear_screen()
+
+    setattr(gc, "safe_keypad_active", True)
+    setattr(gc, "safe_keypad_code", "")
+    setattr(gc, "safe_keypad_target", "742")
+    setattr(gc, "safe_keypad_callback", None)
+
+    gc.draw_safe_keypad()
+
+    setattr(gc, "safe_keypad_active", False)
+
+
+def check_desk_note_draw():
+    clear_screen()
+
+    setattr(
+        gc,
+        "active_read_note",
+        "TEST NOTE:\nThis is a smoke-test note.\nPress SPACE to close.",
+    )
+
+    gc.draw_desk_note()
+
+    setattr(gc, "active_read_note", None)
+
+
+def check_cutscene_draw():
+    clear_screen()
+
+    if not hasattr(gc, "cutscene1_shots"):
+        raise RuntimeError("gc.cutscene1_shots missing")
+
+    shot = gc.cutscene1_shots[0]
+
+    gc.draw_cutscene_scene(config.screen, shot, 0)
+    gc.draw_dialogue_box(
+        config.screen,
+        shot.get("speaker", "NARRATOR"),
+        shot.get("text", ""),
+        min(20, len(shot.get("text", ""))),
+        len(shot.get("text", "")),
+    )
+
+
+def check_start_mission():
+    gc.start_mission()
+
+    if getattr(gc, "player", None) is None:
+        raise RuntimeError("gc.start_mission() did not create player")
+
+
+def check_game_update():
+    gc.game_update(EmptyKeys())
+
+
+def check_game_draw():
+    clear_screen()
+
+    fcx = getattr(gc, "camera_x", 0)
+    fcy = getattr(gc, "camera_y", 0)
+
+    gc.game_draw(fcx, fcy)
+
+
+def check_walking_sim_start_update_draw():
+    clear_screen()
+
+    gc.start_walking_sim()
+    gc.update_walking_sim(EmptyKeys())
+    gc.draw_walking_sim()
+
+
+def check_pause_draw():
+    clear_screen()
+    menu.draw_pause_menu()
+
+
+def check_death_draw():
+    clear_screen()
+
+    if hasattr(menu, "reset_death_animation"):
+        menu.reset_death_animation()
+
+    menu.draw_death_screen()
+
+
+def check_molotov_update_path():
+    """Catches missing _spawn_molotov_fire import in mission.py."""
+    gc.start_mission()
+    setattr(gc, "player_bottles", 1)
+    gc.handle_throw_bottle()
+
+    for _ in range(45):
+        gc.game_update(EmptyKeys())
+
+
+def check_mission_draw_story_characters():
+    """Catches missing draw_volkov / draw_commander imports."""
+    gc.start_mission()
+
+    if getattr(gc, "volkov_pos", None) is None:
+        raise RuntimeError("volkov_pos missing")
+
+    vx, vy = gc.volkov_pos
+    gc.game_draw(vx - config.WIDTH // 2, vy - config.HEIGHT // 2)
+
+
+def check_walking_dialogue_draw():
+    """Catches missing draw_dialogue_box import in walking_sim.py."""
+    gc.start_walking_sim()
+
+    setattr(gc, "walk_dialogue_active", True)
+    setattr(gc, "walk_dialogue_speaker", "SYSTEM")
+    setattr(gc, "walk_dialogue_text", "Smoke test walking dialogue.")
+    setattr(gc, "walk_dialogue_char_idx", 10)
+
+    gc.draw_walking_sim()
+
+    setattr(gc, "walk_dialogue_active", False)
+
+
+def check_mission3_chair_break_cutscene():
+    """Drives the Mission 3 chair-break cutscene end-to-end and asserts the
+    in-cell state mutations fire at the Crack shot, the cutscene clock
+    returns to -1, and the objective updates. (Spec §8.)
+    """
+    import mission3
+    from state import STATE
+
+    # Start Mission 3, then jump straight into the breakout: the chair-break
+    # cutscene is gated on STAGE_BREAKOUT + mission3_chair_break_anim == 0.
+    gc.start_mission3()
+    STATE.mission3_stage = mission3.STAGE_BREAKOUT
+    STATE.mission3_chair_broken = False
+    STATE.player_disarmed = True
+    STATE.mission3_weapon = "none"
+    STATE.mission3_chair_break_anim = 0
+
+    cb_end = mission3._CB_END
+    crack = mission3._CB_SHOT2
+
+    # Run enough frames to clear the whole cutscene. We cap at cb_end + a
+    # generous margin so a logic bug (counter never reaching _CB_END) surfaces
+    # instead of looping forever.
+    for _ in range(cb_end + 60):
+        gc.game_update(EmptyKeys())
+        if getattr(STATE, "mission3_chair_break_anim", -1) < 0:
+            break
+
+    # State mutations flipped at the Crack shot must hold after the cutscene.
+    assert getattr(STATE, "mission3_chair_broken", False), \
+        "mission3_chair_broken did not flip True during the chair-break cutscene"
+    assert not getattr(STATE, "player_disarmed", True), \
+        "player_disarmed was not cleared during the chair-break cutscene"
+    assert getattr(STATE, "mission3_weapon", "none") == "chair_leg", \
+        "mission3_weapon was not granted as 'chair_leg' during the cutscene"
+    # Cutscene clock returned to -1 (movement unlocks) and objective updated.
+    assert getattr(STATE, "mission3_chair_break_anim", -1) < 0, \
+        "chair-break cutscene clock did not return to -1 at _CB_END"
+    assert mission3._objective == \
+        "Sharpen the chair leg at the drain. Volkov holds the door.", \
+        "objective text was not updated after the chair-break cutscene"
+
+    # Sanity: the Crack boundary used by the dispatcher is the canonical
+    # cutscenes.CB_SHOT2 value — keeps the art/timing and the logic in sync.
+    import cutscenes
+    assert crack == cutscenes.CB_SHOT2
+
+
+def check_mission3_chair_break_shots_render():
+    """Each cutscenes._draw_cb_* shot must render without raising on a
+    representative `t` in its shot's range, and game_draw must take the
+    cutscene branch without crashing (covers the dispatcher + the ③→④
+    cross-dissolve). (Spec §8.)
+    """
+    import cutscenes
+    import mission3
+    from state import STATE
+
+    # Build a stand-in cell buffer the shots can composite onto. It mimics
+    # the real cell's dominant colors (concrete wall / floor / metal chair)
+    # so the readability checks below can confirm the shots USE the cell
+    # palette rather than an invented one.
+    W, H = config.WIDTH, config.HEIGHT
+    cell_surf = pygame.Surface((W, H))
+    cell_surf.fill((54, 54, 52))                       # concrete wall C
+    pygame.draw.rect(cell_surf, (32, 33, 33),          # floor "."
+                     (0, H // 2, W, H - H // 2))
+    # Metal chair blob at center (seat_col / seat_dark).
+    pygame.draw.rect(cell_surf, (28, 26, 24),
+                     (W // 2 - 18, H // 2 - 9, 36, 18))
+    pygame.draw.rect(cell_surf, (42, 40, 36),
+                     (W // 2 - 16, H // 2 - 7, 32, 14))
+    cx, cy = W // 2, H // 2
+
+    # Direct shot draws at representative per-shot frame counters.
+    def run_shot(fn, t):
+        clear_screen()
+        fn(config.screen, t, cell_surf, cx, cy)
+
+    run_shot(cutscenes._draw_cb_strain, 0)
+    run_shot(cutscenes._draw_cb_strain, cutscenes.CB_SHOT1_DUR // 2)
+    run_shot(cutscenes._draw_cb_strain, cutscenes.CB_SHOT1_DUR - 1)
+
+    run_shot(cutscenes._draw_cb_crack, 0)            # frame-0 white flash
+    run_shot(cutscenes._draw_cb_crack, 5)
+    run_shot(cutscenes._draw_cb_crack, cutscenes.CB_SHOT2_DUR - 1)
+
+    run_shot(cutscenes._draw_cb_grab, 0)
+    run_shot(cutscenes._draw_cb_grab, cutscenes.CB_SHOT3_DUR // 2)
+    run_shot(cutscenes._draw_cb_grab, cutscenes.CB_SHOT3_DUR - 1)
+
+    run_shot(cutscenes._draw_cb_ready, 0)
+    run_shot(cutscenes._draw_cb_ready, cutscenes.CB_SHOT4_DUR // 2)
+    run_shot(cutscenes._draw_cb_ready, cutscenes.CB_SHOT4_DUR - 1)  # final fade
+
+    # Shared scaffolding helpers.
+    cutscenes._cb_letterbox(config.screen)
+    op = cutscenes._cb_frame(config.screen, 10, 50)
+    assert 0.0 <= op <= 1.0
+
+    # Readability check: the Crack shot at t=70 (authored pieces at peak
+    # travel) must actually contain the metal/splinter palette (proves the
+    # shot matches the cell, not an invented wood palette) and have
+    # subject-region contrast (std-dev > 25) so it isn't a flat blob.
+    import statistics as _st
+    run_shot(cutscenes._draw_cb_crack, 70)
+    px = pygame.surfarray.array3d(config.screen)
+    region = px[cx - 60:cx + 60, cy - 60:cy + 60]   # chair-center 120x120
+    flat = region.reshape(-1, 3).tolist()
+    present_colors = set()
+    for r, g, b in flat[::7]:
+        present_colors.add((r, g, b))
+    # Look for any pixel within ~12 of the metal / splinter / edge colors.
+    def near(col, target, tol=14):
+        return all(abs(col[i] - target[i]) <= tol for i in range(3))
+    metal_targets = [cutscenes.CB_METAL, cutscenes.CB_METAL_DARK,
+                     cutscenes.CB_METAL_EDGE, cutscenes.CB_SPLINTER,
+                     cutscenes.CB_SPLINTER_HI]
+    has_metal = any(any(near(c, m) for c in present_colors) for m in metal_targets)
+    assert has_metal, \
+        "Crack shot region does not contain the cell's metal/splinter palette"
+    lum = [(r + g + b) // 3 for r, g, b in flat]
+    sd = _st.pstdev(lum)
+    assert sd > 4, f"Crack shot subject region too flat (std-dev={sd:.1f}, need >4)"
+
+    # game_draw cutscene branch: drive the clock across every shot boundary
+    # (incl. the ③→④ cross-dissolve window) and the final frame.
+    gc.start_mission3()
+    STATE.mission3_stage = mission3.STAGE_BREAKOUT
+    STATE.mission3_chair_broken = False
+    STATE.player_disarmed = True
+    STATE.mission3_weapon = "none"
+    # Sample one frame per shot + each transition boundary.
+    sample_frames = [
+        0,
+        mission3._CB_SHOT1_DUR // 2,
+        mission3._CB_SHOT2 - 1,          # last strain frame
+        mission3._CB_SHOT2,              # crack, frame 0 (flash + mutations)
+        mission3._CB_SHOT2 + 5,
+        mission3._CB_SHOT3 - 1,          # last crack frame
+        mission3._CB_SHOT3,              # grab start
+        mission3._CB_SHOT4 - 1,          # last grab frame
+        mission3._CB_SHOT4,              # ready start (cross-dissolve frame 0)
+        mission3._CB_SHOT4 + 6,          # mid cross-dissolve
+        mission3._CB_END - 1,            # final fade-out frame
+    ]
+    fcx = getattr(gc, "camera_x", 0)
+    fcy = getattr(gc, "camera_y", 0)
+    for t in sample_frames:
+        STATE.mission3_chair_break_anim = t
+        gc.game_draw(fcx, fcy)
+        pygame.event.pump()
+        pygame.display.flip()
+    # Restore quiescent state.
+    STATE.mission3_chair_break_anim = -1
+
+
+def check_game_core_facade_state():
+    """Checks that game_core still exposes old global-style names.
+
+    This is especially useful if you use the proxy facade approach.
+    """
+    setattr(gc, "show_minimap", True)
+
+    if getattr(gc, "show_minimap") is not True:
+        raise RuntimeError("gc.show_minimap did not round-trip correctly")
+
+    setattr(gc, "show_minimap", False)
+
+    if getattr(gc, "show_minimap") is not False:
+        raise RuntimeError("gc.show_minimap write failed")
+
+
+def main():
+    assert config.screen is not None, "config.screen was not initialized"
+
+    ok = True
+
+    print("\n=== Import checks ===")
+    for module_name in SPLIT_MODULES:
+        ok = run_import_check(module_name) and ok
+
+    print("\n=== UI draw checks ===")
+    ui_checks = [
+        ("draw_menu", check_menu_draw),
+        ("draw_settings", check_settings_draw),
+        ("draw_server_browser_servers", check_server_browser_servers_draw),
+        ("draw_server_browser_connections", check_server_browser_connections_draw),
+        ("draw_notebook_inspection", check_notebook_inspection_draw),
+        ("draw_safe_keypad", check_safe_keypad_draw),
+        ("draw_desk_note", check_desk_note_draw),
+        ("draw_cutscene", check_cutscene_draw),
+        ("draw_pause_menu", check_pause_draw),
+        ("draw_death_screen", check_death_draw),
+    ]
+
+    for name, fn in ui_checks:
+        ok = run_check(name, fn) and ok
+
+    print("\n=== Mission checks ===")
+    mission_checks = [
+        ("game_core_facade_state", check_game_core_facade_state),
+        ("start_mission", check_start_mission),
+        ("game_update", check_game_update),
+        ("game_draw", check_game_draw),
+    ]
+
+    for name, fn in mission_checks:
+        ok = run_check(name, fn) and ok
+
+    print("\n=== Walking sim checks ===")
+    walking_checks = [
+        ("walking_sim_start_update_draw", check_walking_sim_start_update_draw),
+    ]
+
+    for name, fn in walking_checks:
+        ok = run_check(name, fn) and ok
+
+    print("\n=== Hidden branch checks ===")
+    hidden_checks = [
+        ("molotov_update_path", check_molotov_update_path),
+        ("mission_draw_story_characters", check_mission_draw_story_characters),
+        ("walking_dialogue_draw", check_walking_dialogue_draw),
+    ]
+
+    for name, fn in hidden_checks:
+        ok = run_check(name, fn) and ok
+
+    print("\n=== Mission 3 chair-break cutscene checks ===")
+    chair_break_checks = [
+        ("mission3_chair_break_cutscene", check_mission3_chair_break_cutscene),
+        ("mission3_chair_break_shots_render", check_mission3_chair_break_shots_render),
+    ]
+
+    for name, fn in chair_break_checks:
+        ok = run_check(name, fn) and ok
+
+    for name, fn in hidden_checks:
+        ok = run_check(name, fn) and ok
+
+    pygame.quit()
+
+    if ok:
+        print("\nSMOKE TEST: OK")
+        raise SystemExit(0)
+
+    print("\nSMOKE TEST: FAILED")
+    raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

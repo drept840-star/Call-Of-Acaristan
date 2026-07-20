@@ -1,0 +1,916 @@
+# ------------------------------------------------------------
+# player.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# player.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# player.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+
+"""Player character: movement, drawing, weapon rig."""
+import math
+import time
+import pygame
+from config import (
+    TILE_SIZE, C_PLAYER_UNIFORM, C_PLAYER_SKIN,
+)
+# Module-level STATE import. Required by resolve_melee() below (it reads
+# STATE.melee_damage via getattr). Previously this import was missing — the
+# original code relied on a lazy `from state import STATE` inside Player
+# methods (e.g. barrel_tip), but resolve_melee() is a module-level function
+# that references STATE directly, causing a NameError on the first melee
+# attack. No circular-import risk: state.py only imports pygame.
+from state import STATE
+
+_player_shadow = pygame.Surface((36, 18), pygame.SRCALPHA)
+pygame.draw.ellipse(_player_shadow, (0, 0, 0, 55), (0, 0, 36, 18))
+
+
+class Player:
+    def __init__(self, x, y, max_hp=100):
+        self.rect = pygame.Rect(x, y, 32, 32)
+        self.speed = 5
+        self.angle = 0
+        self.hp = max_hp
+        self.max_hp = max_hp
+        self.breathing = 0
+        self.blink_timer = 0
+        self.weapon_raised = False
+        self.walk_cycle = 0.0
+        self.was_moving = False
+        self._recoil_timer = 0
+        self._recoil_offset = 0.0
+        self._slide_timer = 0
+        # ── AEGIS i-frames (Pass E) ─────────────────────────────────
+        # Per references/game-design.md "Invincibility Frames". After taking
+        # any damage, the player is invincible for IFRAME_DURATION seconds
+        # and the sprite blinks on/off at ~60ms windows so the player can
+        # SEE that they were hit and that they are currently safe.
+        # update_iframes(dt) must be called every frame from each mission's
+        # game_update() to advance the timer + blink.
+        self.invincible_timer = 0.0
+        self.visible = True
+        # IFRAME_DURATION is the total invincibility window in seconds.
+        # 0.75s matches the AEGIS reference value and feels right for a
+        # tactical shooter where the player needs time to reposition after
+        # a hit. Tune via the constant below — never inline a magic number.
+        self.IFRAME_DURATION = 0.75
+        # BLINK_PERIOD_MS drives the sprite-flash cadence. 60ms ≈ 4 frames
+        # at 60 FPS, so the sprite blinks ~8 times during the 0.75s window.
+        self.BLINK_PERIOD_MS = 60
+
+    def take_damage(self, amount, force=False):
+        """Apply damage to the player, respecting the i-frame window.
+
+        Per AEGIS references/game-design.md. Returns True if damage was
+        applied, False if blocked by i-frames. Callers may use the return
+        value to decide whether to spawn blood particles / floating text
+        / trigger hit-stop (a hit absorbed by i-frames should NOT produce
+        a feedback burst, otherwise the player thinks they were hit).
+
+        ``force=True`` bypasses i-frames — use ONLY for set-piece damage
+        that the player cannot dodge and that the narrative requires to
+        land (e.g. the Mission 2 sniper intro shot, the tanker blast
+        during a scripted trigger). Tactical combat damage must always
+        go through the default path so i-frames can do their job.
+        """
+        if not force and self.invincible_timer > 0:
+            return False
+        self.hp -= amount
+        self.invincible_timer = self.IFRAME_DURATION
+        # Force the first blink frame to be invisible so the hit is
+        # immediately readable (otherwise the first 60ms shows the sprite
+        # normally and the player doesn't realize i-frames started).
+        self.visible = False
+        return True
+
+    def update_iframes(self, dt):
+        """Advance the i-frame timer + sprite blink. Call every frame.
+
+        Per AEGIS spec: visible = (int(timer_ms) // BLINK_PERIOD_MS) % 2 == 0.
+        When the timer expires, visibility is restored to True.
+        """
+        if self.invincible_timer > 0:
+            self.invincible_timer -= dt
+            if self.invincible_timer <= 0:
+                self.invincible_timer = 0.0
+                self.visible = True
+            else:
+                # Blink: visible only on alternating ~BLINK_PERIOD_MS windows.
+                timer_ms = int(self.invincible_timer * 1000)
+                self.visible = (timer_ms // self.BLINK_PERIOD_MS) % 2 == 0
+        else:
+            self.visible = True
+
+    def move(self, dx, dy, walls):
+        self.rect.x += dx
+        for wall in walls:
+            if self.rect.colliderect(wall):
+                if dx > 0:
+                    self.rect.right = wall.left
+                if dx < 0:
+                    self.rect.left = wall.right
+        self.rect.y += dy
+        for wall in walls:
+            if self.rect.colliderect(wall):
+                if dy > 0:
+                    self.rect.bottom = wall.top
+                if dy < 0:
+                    self.rect.top = wall.bottom
+
+    def barrel_tip(self):
+        """World-space muzzle position — matches the gun drawing proportions."""
+        from state import STATE
+        a = self.angle
+
+        current_weapon = getattr(STATE, "current_weapon", "pistol")
+        if current_weapon == "os12":
+            arm_len = 16
+            grip_offset = 4
+            gun_len = 26
+            muzzle_extra = 3
+        elif current_weapon == "k9_smg":
+            arm_len = 16
+            grip_offset = 4
+            gun_len = 18
+            muzzle_extra = 5  # compact suppressor
+        else:
+            arm_len = 16
+            grip_offset = 4
+            gun_len = 17
+            muzzle_extra = 2
+
+        reach = arm_len + grip_offset + gun_len + muzzle_extra
+        return (
+            self.rect.centerx + math.cos(a) * reach,
+            self.rect.centery + math.sin(a) * reach,
+        )
+
+    def draw(
+        self,
+        surface,
+        offset_x,
+        offset_y,
+        walls=(),
+        reload_active=False,
+        reload_progress=0.0,
+        melee_active=False,
+        melee_progress=0.0,
+        no_gun=False,
+        is_moving=False,
+    ):
+        global STATE
+        draw_x = self.rect.centerx - offset_x
+        draw_y = self.rect.centery - offset_y
+
+        if is_moving and not self.was_moving:
+            self.walk_cycle = 0.0
+        self.was_moving = is_moving
+
+        self.breathing = math.sin(time.time() * 0.5) * 1.0
+        draw_y += self.breathing
+
+        # ── Walk bob ──
+        if is_moving:
+            self.walk_cycle += 0.12
+        else:
+            self.walk_cycle *= 0.85
+        sway_offset = 0.0
+
+        # ── Recoil ──
+        if self._recoil_timer > 0:
+            self._recoil_timer -= 1
+            self._recoil_offset = -3.0 * (self._recoil_timer / 8.0)
+        else:
+            self._recoil_offset *= 0.8
+
+        if self._slide_timer > 0:
+            self._slide_timer -= 1
+        self.blink_timer += 1
+        blinking = 2 if (120 < self.blink_timer < 140) else 0
+        if self.blink_timer > 140:
+            self.blink_timer = 0
+        a = self.angle
+        d_x = math.cos(a)
+        d_y = math.sin(a)
+        perp_x = math.cos(a + math.pi / 2)
+        perp_y = math.sin(a + math.pi / 2)
+
+        arm_angle = a
+        if is_moving:
+            # Weapon hand lags behind direction changes
+            arm_angle += sway_offset * 0.06
+        if reload_active:
+            from state import STATE
+            p = reload_progress
+            _cw_reload = getattr(STATE, "current_weapon", "pistol")
+            _is_os12_reload = _cw_reload == "os12"
+            _is_k9_reload = _cw_reload == "k9_smg"
+
+            if _is_os12_reload:
+                # OS 12 mag-swap reload
+                # 0.00–0.30: rifle tilts, mag drops
+                # 0.30–0.60: held empty
+                # 0.60–1.00: new mag rocks in, rifle returns
+                if p < 0.30:
+                    t = p / 0.30
+                    arm_factor = 1.0 - t * 0.25
+                    arm_angle = a + t * 0.45
+                elif p < 0.60:
+                    t = (p - 0.30) / 0.30
+                    arm_factor = 0.75
+                    tremor = math.sin(p * math.pi * 8) * 0.03
+                    arm_angle = a + 0.45 + tremor
+                else:
+                    t = (p - 0.60) / 0.40
+                    ease = 1.0 - (1.0 - t) * (1.0 - t)
+                    arm_factor = 0.75 + ease * 0.25
+                    arm_angle = a + (0.45 * (1.0 - ease))
+            elif _is_k9_reload:
+                # K-9 suppressed SMG reload — compact PDW tilts inward,
+                # stick mag strips out, palm-slap seats the fresh mag, then
+                # the muzzle snaps back up. More mechanical than the pistol,
+                # less heavy than the OS-12.
+                if p < 0.22:
+                    t = p / 0.22
+                    arm_factor = 1.0 - t * 0.38
+                    arm_angle = a + t * 0.62
+                elif p < 0.58:
+                    t = (p - 0.22) / 0.36
+                    arm_factor = 0.62
+                    arm_angle = a + 0.62 + math.sin(t * math.pi * 2) * 0.035
+                elif p < 0.78:
+                    t = (p - 0.58) / 0.20
+                    arm_factor = 0.62 + t * 0.20
+                    arm_angle = a + 0.62 - t * 0.22
+                else:
+                    t = (p - 0.78) / 0.22
+                    ease = 1.0 - (1.0 - t) * (1.0 - t)
+                    arm_factor = 0.82 + ease * 0.18
+                    arm_angle = a + 0.40 * (1.0 - ease)
+            else:
+                # Pistol reload (unchanged)
+                if p < 0.25:
+                    arm_factor = 1.0 - (p / 0.25) * 0.5
+                elif p < 0.75:
+                    arm_factor = 0.5
+                    wobble = math.sin(p * math.pi * 4) * 0.08
+                    arm_angle = a + wobble
+                else:
+                    t = (p - 0.75) / 0.25
+                    arm_factor = 0.5 + t * 0.5
+                    wobble = math.sin(p * math.pi * 4) * 0.08 * (1.0 - t)
+                    arm_angle = a + wobble
+        elif melee_active:
+            p = melee_progress
+            current_weapon_for_melee = getattr(STATE, "current_weapon", "pistol")
+            if current_weapon_for_melee == "k9_smg":
+                # K-9 melee: a compact buttstroke / muzzle shove. It should
+                # feel different from the pistol slap and from improvised melee:
+                # pull the gun across the body, snap forward, then settle.
+                if p < 0.22:
+                    t = p / 0.22
+                    arm_factor = 0.88
+                    arm_angle = a + 0.58 * t
+                elif p < 0.58:
+                    t = (p - 0.22) / 0.36
+                    punch = 1.0 - (1.0 - t) * (1.0 - t)
+                    arm_factor = 0.88 + punch * 0.55
+                    arm_angle = a + 0.58 - punch * 0.92
+                else:
+                    t = (p - 0.58) / 0.42
+                    arm_factor = 1.43 - t * 0.43
+                    arm_angle = a - 0.34 * (1.0 - t)
+            else:
+                if p < 0.25:
+                    t = p / 0.25
+                    arm_factor = 1.0 - t * 0.6
+                    arm_angle = a - t * math.pi / 4
+                elif p < 0.75:
+                    t = (p - 0.25) / 0.5
+                    arm_factor = 0.4 + t * 0.8
+                    arm_angle = a - math.pi / 4 + t * (math.pi / 4 + math.pi / 3)
+                else:
+                    t = (p - 0.75) / 0.25
+                    arm_factor = 1.2 - t * 0.2
+                    arm_angle = a + math.pi / 3 - t * math.pi / 3
+        else:
+            arm_factor = 1.0
+
+        surface.blit(_player_shadow, (int(draw_x - 18), int(draw_y - 6)))
+        # ── AEGIS i-frame blink (Pass E) ─────────────────────────────
+        # Per references/game-design.md. While invincible_timer > 0, the
+        # sprite blinks on/off at ~60ms windows. The shadow is ALWAYS drawn
+        # so the player can still read their position; only the body blinks.
+        # All per-frame state above (breathing, walk_cycle, recoil, blink)
+        # has already advanced by this point, so timing stays correct.
+        if not self.visible:
+            return
+        body_w, body_h = 22, 14
+        cos_b, sin_b = math.cos(a), math.sin(a)
+        torso_pts = []
+        for bx, by in [
+            (-body_w // 2, -body_h // 2),
+            (body_w // 2, -body_h // 2),
+            (body_w // 2, body_h // 2),
+            (-body_w // 2, body_h // 2),
+        ]:
+            rx = bx * cos_b - by * sin_b
+            ry = bx * sin_b + by * cos_b
+            torso_pts.append((draw_x + rx, draw_y + ry))
+        pygame.draw.polygon(surface, C_PLAYER_UNIFORM, torso_pts)
+        if self.max_hp > 100:
+            kevlar_w, kevlar_h = 16, 12
+            kevlar_pts = []
+            for bx, by in [
+                (-kevlar_w // 2, -kevlar_h // 2),
+                (kevlar_w // 2, -kevlar_h // 2),
+                (kevlar_w // 2, kevlar_h // 2),
+                (-kevlar_w // 2, kevlar_h // 2),
+            ]:
+                rx = bx * cos_b - by * sin_b
+                ry = bx * sin_b + by * cos_b
+                kevlar_pts.append((draw_x + rx, draw_y + ry))
+            pygame.draw.polygon(surface, (50, 52, 56), kevlar_pts)
+            pygame.draw.polygon(surface, (28, 30, 32), kevlar_pts, 1)
+            for off in (-5, 5):
+                sx1 = draw_x + perp_x * off - d_x * 5
+                sy1 = draw_y + perp_y * off - d_y * 5
+                sx2 = draw_x + perp_x * off + d_x * 5
+                sy2 = draw_y + perp_y * off + d_y * 5
+                pygame.draw.line(surface, (25, 27, 30), (sx1, sy1), (sx2, sy2), 2)
+            ridge_w, ridge_h = 8, 8
+            ridge_pts = []
+            for bx, by in [
+                (-ridge_w // 2, -ridge_h // 2),
+                (ridge_w // 2, -ridge_h // 2),
+                (ridge_w // 2, ridge_h // 2),
+                (-ridge_w // 2, ridge_h // 2),
+            ]:
+                rx = bx * cos_b - by * sin_b
+                ry = bx * sin_b + by * cos_b
+                ridge_pts.append((draw_x + rx, draw_y + ry))
+            pygame.draw.polygon(surface, (38, 40, 44), ridge_pts)
+        pygame.draw.line(
+            surface,
+            (
+                C_PLAYER_UNIFORM[0] + 12,
+                C_PLAYER_UNIFORM[1] + 12,
+                C_PLAYER_UNIFORM[2] + 8,
+            ),
+            (draw_x - d_x * 5, draw_y - d_y * 5),
+            (draw_x + d_x * 5, draw_y + d_y * 5),
+            2,
+        )
+        for off in (-6, 6):
+            vx1 = draw_x + perp_x * off - d_x * 3
+            vy1 = draw_y + perp_y * off - d_y * 3
+            vx2 = draw_x + perp_x * off + d_x * 3
+            vy2 = draw_y + perp_y * off + d_y * 3
+            pygame.draw.line(
+                surface,
+                (
+                    C_PLAYER_UNIFORM[0] - 8,
+                    C_PLAYER_UNIFORM[1] - 5,
+                    C_PLAYER_UNIFORM[2] - 3,
+                ),
+                (vx1, vy1),
+                (vx2, vy2),
+                2,
+            )
+
+        test_arm_len = int(16 * arm_factor)
+        test_arm_dx = math.cos(arm_angle)
+        test_arm_dy = math.sin(arm_angle)
+        test_grip_x = draw_x + test_arm_dx * (test_arm_len + 4)
+        test_grip_y = draw_y + test_arm_dy * (test_arm_len + 4)
+
+        test_gun_end_x = test_grip_x + test_arm_dx * 16
+        test_gun_end_y = test_grip_y + test_arm_dy * 16
+
+        min_t = float("inf")
+        if not no_gun and walls:
+            for wall in walls:
+                wr = pygame.Rect(
+                    wall.x - offset_x, wall.y - offset_y, TILE_SIZE, TILE_SIZE
+                )
+                clipped = wr.clipline(
+                    (test_grip_x, test_grip_y), (test_gun_end_x, test_gun_end_y)
+                )
+                if clipped:
+                    ex, ey = clipped[0]
+                    t = (ex - test_grip_x) * test_arm_dx + (
+                        ey - test_grip_y
+                    ) * test_arm_dy
+                    if t < min_t:
+                        min_t = t
+
+        raise_factor = 0.0
+        if not no_gun and min_t < 16:
+            raise_factor = max(0.0, min(1.0, (16.0 - min_t) / 16.0))
+
+        # ── Weapon swap animation: lower the gun fully at midpoint, raise back up ──
+        from state import STATE
+        swap_timer = getattr(STATE, "weapon_swap_timer", 0)
+        swap_duration = getattr(STATE, "weapon_swap_duration", 24)
+        if swap_timer > 0 and swap_duration > 0:
+            # Progress: 0.0 -> 1.0 across the full swap
+            progress = 1.0 - (swap_timer / swap_duration)
+            # Triangle wave: 0 at start, 1 at midpoint, 0 at end
+            if progress < 0.5:
+                swap_factor = progress * 2.0          # lowering (0 -> 1)
+            else:
+                swap_factor = (1.0 - progress) * 2.0  # raising (1 -> 0)
+            # Use the larger of the two so wall-lower still wins if both apply
+            raise_factor = max(raise_factor, swap_factor)
+
+        self.weapon_raised = raise_factor > 0.15
+
+        arm_angle = arm_angle - raise_factor * (math.pi * 0.35)
+        arm_factor = arm_factor * (1.0 - raise_factor * 0.4)
+
+        arm_len = int(16 * arm_factor)
+        arm_dx = math.cos(arm_angle)
+        arm_dy = math.sin(arm_angle)
+        arm_perp_x = math.cos(arm_angle + math.pi / 2)
+        arm_perp_y = math.sin(arm_angle + math.pi / 2)
+
+        ls_x = draw_x + perp_x * 12
+        ls_y = draw_y + perp_y * 12
+        rs_x = draw_x - perp_x * 12
+        rs_y = draw_y - perp_y * 12
+        hand_x = draw_x + arm_dx * arm_len
+        hand_y = draw_y + arm_dy * arm_len
+        pygame.draw.line(
+            surface,
+            C_PLAYER_UNIFORM,
+            (ls_x, ls_y),
+            (hand_x - arm_perp_x * 3, hand_y - arm_perp_y * 3),
+            5,
+        )
+        pygame.draw.line(
+            surface,
+            C_PLAYER_UNIFORM,
+            (rs_x, rs_y),
+            (hand_x + arm_perp_x * 3, hand_y + arm_perp_y * 3),
+            5,
+        )
+        grip_x = draw_x + arm_dx * (arm_len + 4)
+        grip_y = draw_y + arm_dy * (arm_len + 4)
+        pygame.draw.circle(surface, C_PLAYER_SKIN, (int(grip_x), int(grip_y)), 4)
+
+        if not no_gun:
+            from state import STATE
+            current_weapon = getattr(STATE, "current_weapon", "pistol")
+            is_os12 = current_weapon == "os12"
+            is_k9 = current_weapon == "k9_smg"
+
+            if is_os12:
+                # ── OS 12 assault rifle — AK-47 offspring ──
+                draw_gun_len = int(26.0 * (1.0 - raise_factor * 0.35))
+
+                gun_start_x = grip_x + arm_dx * 2
+                gun_start_y = grip_y + arm_dy * 2
+                gun_end_x = grip_x + arm_dx * draw_gun_len
+                gun_end_y = grip_y + arm_dy * draw_gun_len
+
+                perp_dx = -arm_dy
+                perp_dy = arm_dx
+
+                def quad(ax, ay, bx, by, rear_w, front_w):
+                    return [
+                        (ax - perp_dx * rear_w, ay - perp_dy * rear_w),
+                        (ax + perp_dx * rear_w, ay + perp_dy * rear_w),
+                        (bx + perp_dx * front_w, by + perp_dy * front_w),
+                        (bx - perp_dx * front_w, by - perp_dy * front_w),
+                    ]
+
+                # Receiver body — longer and chunkier than the pistol
+                receiver = quad(gun_start_x, gun_start_y, gun_end_x, gun_end_y, 3.8, 2.8)
+                pygame.draw.polygon(surface, (38, 36, 32), receiver)
+
+                # Top cover / dust cover — slightly raised, metal grey
+                cover_sx = gun_start_x + arm_dx * 3 - perp_dx * 2.0
+                cover_sy = gun_start_y + arm_dy * 3 - perp_dy * 2.0
+                cover_ex = gun_end_x - arm_dx * 4 - perp_dx * 1.6
+                cover_ey = gun_end_y - arm_dy * 4 - perp_dy * 1.6
+                cover = quad(cover_sx, cover_sy, cover_ex, cover_ey, 2.4, 1.8)
+                pygame.draw.polygon(surface, (58, 56, 52), cover)
+                pygame.draw.polygon(surface, (22, 20, 18), cover, 1)
+
+                # Wooden handguard — warm brown, distinct from the metal
+                hg_sx = gun_start_x + arm_dx * 8
+                hg_sy = gun_start_y + arm_dy * 8
+                hg_ex = gun_start_x + arm_dx * 18
+                hg_ey = gun_start_y + arm_dy * 18
+                handguard = quad(hg_sx, hg_sy, hg_ex, hg_ey, 3.6, 3.0)
+                pygame.draw.polygon(surface, (110, 70, 40), handguard)
+                pygame.draw.polygon(surface, (75, 48, 28), handguard, 1)
+
+                # Barrel — extends past the handguard
+                barrel_start_x = gun_end_x - arm_dx * 5
+                barrel_start_y = gun_end_y - arm_dy * 5
+                muzzle_x = gun_end_x + arm_dx * 3
+                muzzle_y = gun_end_y + arm_dy * 3
+                pygame.draw.line(
+                    surface, (70, 68, 64),
+                    (barrel_start_x, barrel_start_y), (muzzle_x, muzzle_y), 3,
+                )
+                # Muzzle brake — wider end
+                mb_x = muzzle_x + arm_dx * 2
+                mb_y = muzzle_y + arm_dy * 2
+                pygame.draw.line(
+                    surface, (50, 48, 44),
+                    (muzzle_x, muzzle_y), (mb_x, mb_y), 5,
+                )
+                pygame.draw.line(
+                    surface, (35, 33, 30),
+                    (muzzle_x + perp_dx * 2.5, muzzle_y + perp_dy * 2.5),
+                    (mb_x + perp_dx * 2.5, mb_y + perp_dy * 2.5), 1,
+                )
+                pygame.draw.line(
+                    surface, (35, 33, 30),
+                    (muzzle_x - perp_dx * 2.5, muzzle_y - perp_dy * 2.5),
+                    (mb_x - perp_dx * 2.5, mb_y - perp_dy * 2.5), 1,
+                )
+                # Bore
+                pygame.draw.circle(surface, (8, 8, 10), (int(mb_x), int(mb_y)), 2)
+
+                # Front sight post
+                fs_x = gun_end_x - arm_dx * 2
+                fs_y = gun_end_y - arm_dy * 2
+                pygame.draw.line(
+                    surface, (45, 43, 40),
+                    (fs_x - perp_dx * 3.5, fs_y - perp_dy * 3.5),
+                    (fs_x + perp_dx * 1.0, fs_y + perp_dy * 1.0), 2,
+                )
+
+                # Magazine — curved banana mag, the iconic AK silhouette
+                # During reload: mag drops out (0.00–0.30), is absent (0.30–0.60),
+                # then rocks into the magwell (0.60–1.00).
+                _mag_visible = True
+                _mag_drop_off = 0.0
+                _mag_along_off = 0.0
+                if reload_active:
+                    rp = reload_progress
+                    if rp < 0.30:
+                        t = rp / 0.30
+                        _mag_drop_off = t * 10.0
+                        _mag_along_off = -t * 2.0
+                        if t > 0.85:
+                            _mag_visible = False
+                    elif rp < 0.60:
+                        _mag_visible = False
+                    else:
+                        t = (rp - 0.60) / 0.40
+                        ease = 1.0 - (1.0 - t) * (1.0 - t)
+                        _mag_drop_off = (1.0 - ease) * 8.0
+                        _mag_along_off = (1.0 - ease) * 3.0
+
+                if _mag_visible:
+                    mag_attach_x = gun_start_x + arm_dx * 6 + arm_dx * _mag_along_off
+                    mag_attach_y = gun_start_y + arm_dy * 6 + arm_dy * _mag_along_off
+                    mag_mid_x = (mag_attach_x
+                                 + perp_dx * (6 + _mag_drop_off) - arm_dx * 2)
+                    mag_mid_y = (mag_attach_y
+                                 + perp_dy * (6 + _mag_drop_off) - arm_dy * 2)
+                    mag_tip_x = (mag_attach_x
+                                 + perp_dx * (12 + _mag_drop_off) - arm_dx * 5)
+                    mag_tip_y = (mag_attach_y
+                                 + perp_dy * (12 + _mag_drop_off) - arm_dy * 5)
+                    # Left edge
+                    mag_left = [
+                        (mag_attach_x - perp_dx * 2.2, mag_attach_y - perp_dy * 2.2),
+                        (mag_mid_x - perp_dx * 1.8, mag_mid_y - perp_dy * 1.8),
+                        (mag_tip_x - perp_dx * 2.0, mag_tip_y - perp_dy * 2.0),
+                    ]
+                    # Right edge
+                    mag_right = [
+                        (mag_attach_x + perp_dx * 2.2, mag_attach_y + perp_dy * 2.2),
+                        (mag_mid_x + perp_dx * 1.8, mag_mid_y + perp_dy * 1.8),
+                        (mag_tip_x + perp_dx * 2.0, mag_tip_y + perp_dy * 2.0),
+                    ]
+                    mag_poly = mag_left + list(reversed(mag_right))
+                    pygame.draw.polygon(surface, (28, 27, 24), mag_poly)
+                    pygame.draw.polygon(surface, (16, 15, 13), mag_poly, 1)
+                    # Magazine ridges (two subtle lines)
+                    for ridge_t in (0.35, 0.65):
+                        r1x = mag_attach_x + (mag_tip_x - mag_attach_x) * ridge_t - perp_dx * 2.1
+                        r1y = mag_attach_y + (mag_tip_y - mag_attach_y) * ridge_t - perp_dy * 2.1
+                        r2x = mag_attach_x + (mag_tip_x - mag_attach_x) * ridge_t + perp_dx * 2.1
+                        r2y = mag_attach_y + (mag_tip_y - mag_attach_y) * ridge_t + perp_dy * 2.1
+                        pygame.draw.line(surface, (20, 19, 17), (r1x, r1y), (r2x, r2y), 1)
+
+                # Grip / pistol grip — angled more steeply than the pistol's
+                grip_base_x = gun_start_x - arm_dx * 1 + perp_dx * 3
+                grip_base_y = gun_start_y - arm_dy * 1 + perp_dy * 3
+                grip_end_x = grip_base_x - arm_dx * 5 + perp_dx * 6
+                grip_end_y = grip_base_y - arm_dy * 5 + perp_dy * 6
+                pygame.draw.line(
+                    surface, (110, 70, 40),  # wooden grip
+                    (grip_base_x, grip_base_y), (grip_end_x, grip_end_y), 5,
+                )
+                pygame.draw.line(
+                    surface, (75, 48, 28),
+                    (grip_base_x, grip_base_y), (grip_end_x, grip_end_y), 1,
+                )
+
+                # Rear sight notch (simple)
+                rs_x = gun_start_x + arm_dx * 5 - perp_dx * 3.0
+                rs_y = gun_start_y + arm_dy * 5 - perp_dy * 3.0
+                pygame.draw.line(
+                    surface, (50, 48, 44),
+                    (rs_x - arm_dx * 1.5, rs_y - arm_dy * 1.5),
+                    (rs_x + arm_dx * 1.5, rs_y + arm_dy * 1.5), 2,
+                )
+
+                # Stock stub — short, wooden, visible behind the grip
+                stock_sx = gun_start_x - arm_dx * 3
+                stock_sy = gun_start_y - arm_dy * 3
+                stock_ex = gun_start_x - arm_dx * 10
+                stock_ey = gun_start_y - arm_dy * 10
+                pygame.draw.line(
+                    surface, (110, 70, 40),
+                    (stock_sx + perp_dx * 2, stock_sy + perp_dy * 2),
+                    (stock_ex + perp_dx * 3.5, stock_ey + perp_dy * 3.5), 5,
+                )
+                pygame.draw.line(
+                    surface, (75, 48, 28),
+                    (stock_sx + perp_dx * 2, stock_sy + perp_dy * 2),
+                    (stock_ex + perp_dx * 3.5, stock_ey + perp_dy * 3.5), 1,
+                )
+
+            elif is_k9:
+                # ── K-9 suppressed SMG / compact PDW ──
+                # Keep this intentionally compact. The first pass was longer
+                # than the rifle silhouette, so it read like an LMG. The K-9 is
+                # a short black-site PDW: stubby receiver, compact suppressor,
+                # collapsed wire stock, straight stick mag.
+                draw_gun_len = int(18.0 * (1.0 - raise_factor * 0.30))
+                gun_start_x = grip_x + arm_dx * 1
+                gun_start_y = grip_y + arm_dy * 1
+                gun_end_x = grip_x + arm_dx * draw_gun_len
+                gun_end_y = grip_y + arm_dy * draw_gun_len
+                perp_dx = -arm_dy
+                perp_dy = arm_dx
+
+                def quad(ax, ay, bx, by, rear_w, front_w):
+                    return [
+                        (ax - perp_dx * rear_w, ay - perp_dy * rear_w),
+                        (ax + perp_dx * rear_w, ay + perp_dy * rear_w),
+                        (bx + perp_dx * front_w, by + perp_dy * front_w),
+                        (bx - perp_dx * front_w, by - perp_dy * front_w),
+                    ]
+
+                # Compact receiver/body.
+                rec_end_x = gun_end_x - arm_dx * 3
+                rec_end_y = gun_end_y - arm_dy * 3
+                receiver = quad(gun_start_x, gun_start_y, rec_end_x, rec_end_y, 3.0, 2.4)
+                pygame.draw.polygon(surface, (22, 25, 25), receiver)
+                pygame.draw.polygon(surface, (72, 88, 82), receiver, 1)
+                pygame.draw.line(surface, (105, 126, 116),
+                                 (gun_start_x + arm_dx * 3 - perp_dx * 1.8,
+                                  gun_start_y + arm_dy * 3 - perp_dy * 1.8),
+                                 (rec_end_x - arm_dx * 2 - perp_dx * 1.3,
+                                  rec_end_y - arm_dy * 2 - perp_dy * 1.3), 1)
+
+                # Short integral suppressor — visible, but not rifle-length.
+                sup_start_x = gun_end_x - arm_dx * 4
+                sup_start_y = gun_end_y - arm_dy * 4
+                sup_end_x = gun_end_x + arm_dx * 5
+                sup_end_y = gun_end_y + arm_dy * 5
+                pygame.draw.line(surface, (36, 40, 40), (sup_start_x, sup_start_y), (sup_end_x, sup_end_y), 4)
+                pygame.draw.line(surface, (96, 112, 104),
+                                 (sup_start_x - perp_dx * 1.4, sup_start_y - perp_dy * 1.4),
+                                 (sup_end_x - perp_dx * 1.4, sup_end_y - perp_dy * 1.4), 1)
+                pygame.draw.circle(surface, (6, 8, 8), (int(sup_end_x), int(sup_end_y)), 2)
+
+                # Collapsed wire stock: reads as folded, not a long shoulder stock.
+                stock_root = (gun_start_x - arm_dx * 1 + perp_dx * 1.5,
+                              gun_start_y - arm_dy * 1 + perp_dy * 1.5)
+                stock_tip = (gun_start_x - arm_dx * 7 + perp_dx * 2.2,
+                             gun_start_y - arm_dy * 7 + perp_dy * 2.2)
+                pygame.draw.line(surface, (62, 70, 66), stock_root, stock_tip, 2)
+                pygame.draw.circle(surface, (38, 44, 42), (int(stock_tip[0]), int(stock_tip[1])), 2)
+
+                # Pistol grip, short and close to the receiver.
+                grip_base_x = gun_start_x + perp_dx * 2.8
+                grip_base_y = gun_start_y + perp_dy * 2.8
+                grip_end_x = grip_base_x - arm_dx * 2 + perp_dx * 5.4
+                grip_end_y = grip_base_y - arm_dy * 2 + perp_dy * 5.4
+                pygame.draw.line(surface, (28, 30, 30), (grip_base_x, grip_base_y), (grip_end_x, grip_end_y), 4)
+                pygame.draw.line(surface, (92, 100, 96), (grip_base_x, grip_base_y), (grip_end_x, grip_end_y), 1)
+
+                # Straight stick magazine. Shorter than before so it doesn't read
+                # as an LMG box/drum dangling under a long gun.
+                mag_visible = True
+                mag_drop = 0.0
+                mag_along = 0.0
+                slap_offset = 0.0
+                if reload_active:
+                    rp = reload_progress
+                    if rp < 0.22:
+                        t = rp / 0.22
+                        mag_drop = t * 12.0
+                        mag_along = -t * 1.5
+                    elif rp < 0.58:
+                        mag_visible = False
+                    elif rp < 0.78:
+                        t = (rp - 0.58) / 0.20
+                        mag_drop = (1.0 - t) * 11.0
+                        mag_along = (1.0 - t) * 3.0
+                        slap_offset = math.sin(t * math.pi) * 2.0
+                    else:
+                        t = (rp - 0.78) / 0.22
+                        mag_drop = (1.0 - t) * 2.5
+                if mag_visible:
+                    mag_attach_x = gun_start_x + arm_dx * 6 + arm_dx * mag_along
+                    mag_attach_y = gun_start_y + arm_dy * 6 + arm_dy * mag_along
+                    mag_tip_x = mag_attach_x + perp_dx * (10 + mag_drop + slap_offset)
+                    mag_tip_y = mag_attach_y + perp_dy * (10 + mag_drop + slap_offset)
+                    mag_poly = [
+                        (mag_attach_x - perp_dx * 1.7, mag_attach_y - perp_dy * 1.7),
+                        (mag_attach_x + perp_dx * 1.7, mag_attach_y + perp_dy * 1.7),
+                        (mag_tip_x + perp_dx * 2.1, mag_tip_y + perp_dy * 2.1),
+                        (mag_tip_x - perp_dx * 2.1, mag_tip_y - perp_dy * 2.1),
+                    ]
+                    pygame.draw.polygon(surface, (20, 22, 22), mag_poly)
+                    pygame.draw.polygon(surface, (76, 88, 82), mag_poly, 1)
+                    pygame.draw.line(surface, (36, 40, 38),
+                                     (mag_attach_x, mag_attach_y), (mag_tip_x, mag_tip_y), 1)
+
+            else:
+                # ── Original pistol drawing (unchanged) ──
+                draw_gun_len = int(18.0 * (1.0 - raise_factor * 0.35))
+
+                gun_start_x = grip_x + arm_dx * 2
+                gun_start_y = grip_y + arm_dy * 2
+                gun_end_x = grip_x + arm_dx * draw_gun_len
+                gun_end_y = grip_y + arm_dy * draw_gun_len
+
+                perp_dx = -arm_dy
+                perp_dy = arm_dx
+
+                def quad(ax, ay, bx, by, rear_w, front_w):
+                    return [
+                        (ax - perp_dx * rear_w, ay - perp_dy * rear_w),
+                        (ax + perp_dx * rear_w, ay + perp_dy * rear_w),
+                        (bx + perp_dx * front_w, by + perp_dy * front_w),
+                        (bx - perp_dx * front_w, by - perp_dy * front_w),
+                    ]
+
+                # Main pistol frame
+                frame = quad(gun_start_x, gun_start_y, gun_end_x, gun_end_y, 3.2, 2.3)
+                pygame.draw.polygon(surface, (24, 25, 27), frame)
+
+                # Slide, slightly offset upward
+                slide_start_x = gun_start_x + arm_dx * 1.5 - perp_dx * 1.5
+                slide_start_y = gun_start_y + arm_dy * 1.5 - perp_dy * 1.5
+                slide_end_x = gun_end_x - arm_dx * 2 - perp_dx * 1.2
+                slide_end_y = gun_end_y - arm_dy * 2 - perp_dy * 1.2
+                slide = quad(slide_start_x, slide_start_y, slide_end_x, slide_end_y, 2.2, 1.7)
+                pygame.draw.polygon(surface, (52, 55, 58), slide)
+                pygame.draw.polygon(surface, (12, 13, 15), slide, 1)
+
+                # Short barrel / muzzle
+                muzzle_x = gun_end_x + arm_dx * 2
+                muzzle_y = gun_end_y + arm_dy * 2
+                pygame.draw.line(
+                    surface, (70, 74, 78),
+                    (gun_end_x, gun_end_y), (muzzle_x, muzzle_y), 3,
+                )
+                pygame.draw.circle(surface, (8, 8, 10), (int(muzzle_x), int(muzzle_y)), 2)
+
+                # Grip angled downward/back
+                grip_base_x = gun_start_x - arm_dx * 2 + perp_dx * 3
+                grip_base_y = gun_start_y - arm_dy * 2 + perp_dy * 3
+                grip_end_x = grip_base_x - arm_dx * 4 + perp_dx * 5
+                grip_end_y = grip_base_y - arm_dy * 4 + perp_dy * 5
+                pygame.draw.line(
+                    surface, (18, 19, 20),
+                    (grip_base_x, grip_base_y), (grip_end_x, grip_end_y), 5,
+                )
+
+                # Tiny trigger guard
+                tg_x = gun_start_x + arm_dx * 4 + perp_dx * 2.5
+                tg_y = gun_start_y + arm_dy * 4 + perp_dy * 2.5
+                pygame.draw.circle(surface, (18, 19, 20), (int(tg_x), int(tg_y)), 3, 1)
+
+                # Small red optic dot
+                dot_x = gun_start_x + arm_dx * 9 - perp_dx * 3
+                dot_y = gun_start_y + arm_dy * 9 - perp_dy * 3
+                pygame.draw.circle(surface, (180, 35, 35), (int(dot_x), int(dot_y)), 1)
+
+        head_x = draw_x + d_x * 2
+        head_y = draw_y + d_y * 2
+        head_r = 9
+        pygame.draw.circle(surface, (30, 35, 28), (int(head_x), int(head_y)), head_r)
+        pygame.draw.arc(
+            surface,
+            (50, 58, 42),
+            (int(head_x - head_r), int(head_y - head_r), head_r * 2, head_r * 2),
+            a - 0.8,
+            a + 0.8,
+            2,
+        )
+        face_x = head_x + d_x * 3
+        face_y = head_y + d_y * 3
+        pygame.draw.circle(surface, C_PLAYER_SKIN, (int(face_x), int(face_y)), 5)
+        for ang_off in (-0.25, 0.25):
+            ex = face_x + math.cos(a + ang_off) * 3
+            ey = face_y + math.sin(a + ang_off) * 3
+            pygame.draw.circle(surface, (30, 20, 10), (int(ex), int(ey)), 1 + blinking)
+
+
+# ─────────────────────────────────────────────────────────────
+# Melee resolver — shared between both missions.
+# ─────────────────────────────────────────────────────────────
+# Mission 1 originally rolled its own melee block (range 48, ±60° cone
+# required, wall-LOS check, damage 80, shake 8, 8 particles).
+# Mission 2 had its own (range 55, no cone, no LOS, damage 75, no shake,
+# 12 particles). The two had drifted on every axis. This function is the
+# single source of truth.
+
+MELEE_RANGE = 52          # split the difference: 48 (M1) vs 55 (M2)
+MELEE_DAMAGE = 78         # split: 80 (M1) vs 75 (M2)
+MELEE_CONE_HALF_ANGLE = math.pi / 3   # ±60° — must face the enemy
+MELEE_PARTICLE_COUNT = 10  # split: 8 (M1) vs 12 (M2)
+MELEE_SHAKE = 8            # M1 had this; M2 lacked it. Always shake on hit.
+# AEGIS Pass F: hit-stop duration (seconds) on a melee KILL. Per the AEGIS
+# spec, 50ms is the canonical "heavy strike" freeze; a kill deserves the full
+# 50ms because the player just ended a threat and the freeze gives them a
+# beat to register the kill before the simulation resumes. Non-kill melee
+# hits do NOT trigger hit-stop — that would make every melee swing feel
+# sluggish. Only the killing blow gets the weight.
+MELEE_KILL_HIT_STOP = 0.05
+
+
+def resolve_melee(player, enemies, solid_walls, blood_color):
+    """Resolve a melee swing on the closest enemy in range, in cone, in LOS.
+
+    Returns the hit enemy (so the caller can do per-mission cleanup like
+    keycard drops) or None.
+
+    Caller is responsible for:
+      - decrementing ``STATE.melee_timer`` and clearing ``STATE.melee_active``
+      - setting ``STATE.melee_hit_done = True`` after a hit (and resetting
+        it to False when the swing ends)
+      - any per-mission flags (e.g. ``is_commander`` keycard drop)
+
+    The caller invokes this only when ``not STATE.melee_hit_done`` and the
+    swing has reached its hit frame (timer <= 10).
+    """
+    if player is None:
+        return None
+    px, py = player.rect.centerx, player.rect.centery
+    nearest = None
+    nearest_dist = float("inf")
+    for e in enemies:
+        dx = e.rect.centerx - px
+        dy = e.rect.centery - py
+        dist = math.hypot(dx, dy)
+        if dist >= MELEE_RANGE:
+            continue
+        # Must be facing the enemy (±60° cone around player.angle).
+        angle_to_enemy = math.atan2(dy, dx)
+        diff = abs(angle_to_enemy - player.angle)
+        if diff > math.pi:
+            diff = 2 * math.pi - diff
+        if diff > MELEE_CONE_HALF_ANGLE:
+            continue
+        # No wall between player and enemy.
+        hit_wall = False
+        for wall in solid_walls:
+            if wall.clipline((px, py), (e.rect.centerx, e.rect.centery)):
+                hit_wall = True
+                break
+        if hit_wall:
+            continue
+        if dist < nearest_dist:
+            nearest = e
+            nearest_dist = dist
+    if nearest is None:
+        return None
+
+    # Capture HP before the hit so we can detect a kill below.
+    hp_before = nearest.hp
+    nearest.hp -= getattr(STATE, "melee_damage", MELEE_DAMAGE)
+    # on_hit signature in Enemy: alerts and turns to face the attacker.
+    nearest.on_hit(px, py)
+
+    # Shared particle burst + shake (deferred import to avoid circular).
+    import effects
+    effects.burst(nearest.rect.centerx, nearest.rect.centery,
+                  blood_color, MELEE_PARTICLE_COUNT)
+    effects.shake(MELEE_SHAKE)
+    # AEGIS Pass F: 50ms hit-stop ONLY on a melee kill (hp was >0 before,
+    # <=0 after). Non-kill hits don't freeze — keeps the swing snappy.
+    if hp_before > 0 and nearest.hp <= 0:
+        effects.hit_stop(MELEE_KILL_HIT_STOP)
+
+    return nearest

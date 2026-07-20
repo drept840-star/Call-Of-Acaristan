@@ -1,0 +1,14001 @@
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission3.py
+# ------------------------------------------------------------
+
+"""Mission 3: The Vostral — dialogue-driven cold open into action.
+
+This is the third campaign mission, picking up 3 days after Mission 2's
+Route 12 frame-up. Biribel wakes in an IPA black-site cell (the
+"Stabilization Center") facing Prime Minister Balaceanu's long-promised
+vendetta. The mission's spine is the Vostral — the buried rumor that
+Balaceanu's decorated military career is fabricated. The only copy of
+the service record that can prove it is held in the regime's own
+Archives, so the engine of the mission is: break out of the cell, reach
+the Archives, steal the file, and get it onto a live state broadcast
+before Balaceanu finishes his 22:00 address pinning Route 12 on Biribel
+personally.
+
+Story posture (per the project bible): KRAP is STILL an organization —
+disavowed, under siege, fighting for its survival and credibility. So
+this is not Vasile-as-lone-wolf feeding floor plans out of guilt; KRAP
+mobilizes as a resistance. Vasile brings real assets (an off-book
+extraction element, a stolen IPA comms relay). The trust tension is
+organizational, not personal.
+
+This module keeps the existing game integration intact:
+    - game_core.start_mission3()
+    - game_core.game_update()/game_draw() routing (MISSION3 is checked
+      BEFORE MISSION2 — see game_core.game_update)
+    - acaristan.py Mission 3 intro and ending cutscenes (shot-lists
+      exposed as module-level names below)
+    - save as MISSION_3
+    - dev command: python acaristan.py --dev-mission3
+
+Scaffolding note: acaristan.py already routes ALL Mission 3 input
+through mission3.handle_event(event) (arrow keys to pick choices,
+ENTER to confirm) — this was purpose-built for the dialogue-driven
+interrogation cold open that is Phase 1. Action phases (STAGE_BREAKOUT
+onward) later relax that gate in acaristan.py so normal mouse-shoot
+input falls through.
+"""
+
+import math
+import random
+import time
+
+import pygame
+
+from config import *
+from art_cache import get_blood_decal, get_fullscreen_overlay, get_panel_bg
+from state import STATE
+from player import Player, resolve_melee
+from enemy_ai import Enemy, enemy_hear_shot, _astar
+from ui_hud import MiniMap, draw_objective_panel, draw_pinned_radio
+from mission import _draw_molotov_icon
+import effects
+import cutscenes
+from camera import update_camera, reset_camera_state, draw_bullets, collide_bullet_walls
+from weapons import _wall_blocks_line
+import config as _config
+audio = _config.audio
+# from m3_struggle import ChairStruggle
+
+# ─────────────────────────────────────────────
+# Public mission metadata / cutscene lists
+# ─────────────────────────────────────────────
+MISSION3_ID = "MISSION_3"
+MISSION3_KEY = "MISSION3"
+MISSION3_TITLE = "The Vostral"
+MISSION3_LOCATION = "The Stabilization Center / IPA Black-Site"
+MISSION3_PRIMARY_STYLE = "Cold-open interrogation into prison-break thriller"
+
+MISSION3_STORY_FLAGS = {
+    "vendetta": "Balaceanu's six-year vendetta against Biribel for the Y-1 Vostral leak.",
+    "krap_status": "KRAP is still an organization — disavowed, under siege, fighting for survival and credibility.",
+    "vostral": "The buried rumor that Balaceanu's decorated military career is fabricated. Only the regime holds the proof.",
+    "maru_reveal": "Maru (MAG) is a former IPA archivist who faked their own death after refusing to forge seizure documents — the root of the trilogy's conflict.",
+    "vasile_role": "Vasile re-establishes contact mid-mission under fire, bringing real KRAP assets (off-book extraction, stolen IPA comms relay).",
+    "broadcast_clock": "Balaceanu's 22:00 live address pinning Route 12 on Biribel personally is the ticking clock.",
+}
+
+# ─────────────────────────────────────────────
+# Cutscene shot-lists
+# ─────────────────────────────────────────────
+# Slice 0 stubs: a minimal title-card intro/ending so --dev-mission3 boots
+# without requiring new scene art. Slice C ("cinematic art") expands these
+# into the full cold-open: draw_cell_interior, draw_interrogation_room,
+# draw_balaceanu, draw_maru, draw_archive_vault, draw_broadcast_studio —
+# then wires the new scene strings into cutscenes.draw_cutscene_scene.
+#
+# "Keep these names: acaristan.py uses them." (mirrors the M2 convention.)
+mission3_intro_shots = [
+    {
+        "scene": "cell_ceiling",
+        "speaker": "BIRIBEL",
+        "text": "Three days. Maybe four.\nHard to count with the lights.",
+        "lighting": (4, 4, 6),
+        "min_ms": 2600,
+    },
+    {
+        "scene": "cell_restraints",
+        "speaker": "BIRIBEL",
+        "text": "Wrists raw. Chair bolted down.\nThey were ready for me before I woke up.",
+        "lighting": (5, 5, 7),
+        "min_ms": 3000,
+    },
+    {
+        "scene": "interrogation_room",
+        "speaker": "BALACEANU",
+        "text": "You told them I was a coward, Biribel.\nA fake.\nTonight I tell the nation what you are.",
+        "lighting": (5, 3, 5),
+        "min_ms": 3200,
+    },
+    {
+        "scene": "monitor_broadcast",
+        "speaker": "SYSTEM",
+        "text": "STATE ADDRESS — LIVE TONIGHT — 22:00\nSUBJECT: ROUTE 12 PERPETRATOR",
+        "lighting": (3, 2, 3),
+        "min_ms": 3200,
+    },
+    {
+        "scene": "interrogation_room",
+        "speaker": "BALACEANU",
+        "text": "When the address ends, so do you.\nThat is not a threat.\nThat is a schedule.",
+        "lighting": (5, 3, 5),
+        "min_ms": 3200,
+    },
+    {
+        "scene": "title_card",
+        "speaker": "",
+        "text": "MISSION 3\nTHE VOSTRAL",
+        "lighting": (5, 5, 8),
+        "min_ms": 1800,
+    },
+]
+
+mission3_ending_shots = [
+    {
+        "scene": "title_card",
+        "speaker": "BIRIBEL",
+        "text": "He spent six years trying to kill a rumor. Now it's a record.",
+        "lighting": (5, 5, 8),
+    },
+]
+
+OPENING_CINEMATIC = [
+    {"speaker": s["speaker"], "text": s["text"]}
+    for s in mission3_intro_shots
+    if s.get("speaker")
+]
+
+# Descriptive phase table (surfaced via get_mission_phases() to menus,
+# like M2's MISSION_PHASES). Not the runtime driver — STATE.mission3_stage is.
+MISSION_PHASES = [
+    {"phase": 1, "name": "Interrogation", "objective": "Survive the room. Learn the broadcast is tonight."},
+    {"phase": 2, "name": "Breakout", "objective": "Escape the cell block."},
+    {"phase": 3, "name": "KRAP Re-Contact", "objective": "Reach comms. Vasile comes back under fire."},
+    {"phase": 4, "name": "The Archives", "objective": "With Volkov: clear the wing, contact Maru, steal the Vostral."},
+    {"phase": 5, "name": "Kill Order", "objective": "Survive Balaceanu's personal security sweep."},
+    {"phase": 6, "name": "Live Broadcast", "objective": "Get the file onto the uplink before the address ends."},
+]
+
+# ─────────────────────────────────────────────
+# Runtime stage enum
+# ─────────────────────────────────────────────
+STAGE_INTERROGATION = "interrogation"
+STAGE_BREAKOUT = "breakout"
+STAGE_COMMS = "comms"
+STAGE_ARCHIVES = "archives"
+STAGE_KILL_ORDER = "kill_order"
+STAGE_BROADCAST = "broadcast"
+STAGE_VENT_CUTSCENE = "vent_cutscene"
+STAGE_DONE = "done"
+
+# Vent escape cutscene — triggered when the player reaches the cell-block exit.
+vent_escape_shots = [
+    {
+        "scene": "vent_shaft",
+        "speaker": None,
+        "text": None,
+        "lighting": (2, 2, 3),
+        "hide_caption": True,
+        "min_ms": 3000,
+    },
+    {
+        "scene": "vent_exit",
+        "speaker": "BIRIBEL",
+        "text": "The kitchen... bypass the corridor guards. Time to move.",
+        "lighting": (15, 12, 18),
+        "min_ms": 2000,
+    },
+]
+
+# First-person armory pickup for the K-9 suppressed SMG.
+k9_pickup_shots = [
+    {"scene": "k9_wall_stand", "speaker": None, "text": None, "hide_caption": True, "min_ms": 900, "lighting": (8, 10, 10)},
+    {"scene": "k9_firstperson_grab", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1100, "lighting": (8, 10, 10)},
+    {"scene": "k9_ready_check", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1200, "lighting": (8, 10, 10)},
+]
+
+# Transition from the cell-block service exit to the separate Comms Wing map.
+service_transition_shots = [
+    {"scene": "m3_service_door_transition", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1500, "lighting": (5, 6, 7)},
+    {"scene": "m3_volkov_radio_call", "speaker": "VOLKOV", "text": "Biribel! Take the radio. I draw them off — you get the relay alive.", "min_ms": 2400, "lighting": (5, 6, 7)},
+    {"scene": "m3_radio_recovered", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1600, "lighting": (5, 7, 8)},
+    {"scene": "m3_comms_wing_reveal", "speaker": "VASILE", "text": "Biribel? If you hear me, get to the relay. I can see your signal now.", "min_ms": 2200, "lighting": (6, 9, 10)},
+]
+
+# Volkov tops Biribel up when he runs dry in the Comms Wing: two spare mags
+# arcing from Volkov's doorway into Biribel's hands.
+volkov_mags_shots = [
+    {"scene": "m3_volkov_gives_mags", "speaker": "VOLKOV", "text": "Out? Here. Two more. Make them count.", "min_ms": 2200, "lighting": (6, 7, 8)},
+    {"scene": "m3_volkov_gives_mags", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1500, "lighting": (6, 7, 8)},
+]
+
+# ─────────────────────────────────────
+# Phase 1 — Interrogation dialogue tree
+# ─────────────────────────────────────
+# Speaker colors (mirrors mission2's C_* radio palette intent).
+C_BIRIBEL = (220, 222, 226)      # the player — neutral white
+C_BALACEANU = (170, 60, 60)      # the antagonist — regime red
+C_VOLKOV = (200, 160, 90)        # returning opportunist — amber
+C_SYSTEM = (120, 200, 220)       # diegetic broadcast / system captions
+C_PROMPT = (240, 210, 120)       # UI choice prompts — yellow
+C_MARU = (180, 140, 220)         # former IPA archivist — violet
+
+# The cold-open script. A flat list of "beats" advanced sequentially by
+# handle_event / _update_interrogation. Each beat is one of:
+#
+#   {"type": "line", "speaker", "text", "color"}
+#       A spoken line. ENTER / SPACE advances immediately; otherwise it
+#       auto-advances after a reading-time timeout.
+#
+#   {"type": "choice", "speaker", "prompt", "color", "options": [(label, line), ...]}
+#       Blocks until the player picks (up/down or left/right to move the
+#       highlight, ENTER to confirm). The chosen option's ``line`` is then
+#       injected as a fresh BIRIBEL "line" beat right after this beat, so
+#       the player's voice actually plays in the scene. Choices are flavor —
+#       they all converge on the Volkov breach — but the player's tone is
+#       remembered in STATE.mission3_tone for later slices to read.
+#
+#   {"type": "action", "action": "<name>"}
+#       A diegetic beat with no dialogue: a system caption + sound + screen
+#       shake. Used for the broadcast monitor cutting in and Volkov's breach.
+#       ENTER / SPACE skips the caption early, otherwise it auto-advances.
+#
+# The tree is intentionally linear: Phase 1 is a held beat, not a maze. The
+# choice points exist to let the player *voice* Biribel, not to branch the
+# outcome. Branching is reserved for Phase 6 (the live broadcast).
+INTERROGATION_SCRIPT = [
+    # Cold open picks up AFTER the intro cutscene (mission3_intro_shots)
+    # already delivered: Biribel's "Three days" beat, Balaceanu's "coward /
+    # fake / tonight I tell the nation" taunt, the SYSTEM broadcast caption,
+    # and Volkov's "You owe me one. Get up." arrival line. The beats below
+    # are the EXPANDED interrogation — new material, not a replay.
+    #
+    # Biribel's interior monologue — processing the deadline Balaceanu
+    # just gave him on the monitor.
+    {"type": "line", "speaker": "BIRIBEL", "color": C_BIRIBEL,
+     "text": "He wants me on camera. The Vostral, by my face, tonight. Fine. He'll get his close-up."},
+
+    # The monitor snaps on AGAIN — Balaceanu's looped tape continues with
+    # new material. (The cutscene already showed the opening taunt; this is
+    # the next segment of the same pre-recorded address.)
+    {"type": "action", "action": "monitor_on"},
+    {"type": "line", "speaker": "BALACEANU", "color": C_BALACEANU,
+     "text": "Six years I have waited to show the nation what a KRAP lie looks like. Up close. On camera."},
+    {"type": "line", "speaker": "BALACEANU", "color": C_BALACEANU,
+     "text": "They'll see your face, Biribel. They'll hear Route 12. And then they'll see what happens to people who leak rumors about their Prime Minister."},
+
+    # The reveal that drives the whole mission: the broadcast is TONIGHT.
+    # (The cutscene's SYSTEM caption already announced "22:00 — LIVE
+    # TONIGHT"; Balaceanu's line below is the personal addendum.)
+    {"type": "action", "action": "broadcast_caption"},
+    {"type": "line", "speaker": "BALACEANU", "color": C_BALACEANU,
+     "text": "At twenty-two hundred, the President names you. Route 12. By face. I made sure the file is... thorough."},
+
+    # First choice: how does Biribel meet the threat?
+    {"type": "choice", "speaker": "BIRIBEL", "color": C_PROMPT,
+     "prompt": "[The monitor stares back. Choose:]",
+     "options": [
+         ("Spit defiance.",
+          "Then say it to my face, coward. Not through a screen."),
+         ("Probe for the file.",
+          "The Vostral's a rumor because you burned the only copy. So where is it?"),
+         ("Stay silent. Watch.",
+          "(Biribel says nothing. He memorizes the timestamp on the monitor.)"),
+     ]},
+
+    # Balaceanu reads the silence / defiance the same way — he's pre-recorded,
+    # he can't actually hear Biribel. That's the point, and the joke.
+    {"type": "line", "speaker": "BALACEANU", "color": C_BALACEANU,
+     "text": "Oh, save it. This tape is one-way. I'm told the acoustics in here are... unkind."},
+    {"type": "line", "speaker": "BALACEANU", "color": C_BALACEANU,
+     "text": "When the address ends, so do you. That is not a threat. That is a schedule."},
+
+    # The monitor cuts to static. Lights flicker.
+    {"type": "action", "action": "monitor_off"},
+
+    # Second choice: what does Biribel do with his last hour?
+    {"type": "choice", "speaker": "BIRIBEL", "color": C_PROMPT,
+     "prompt": "[Twenty-two hundred. The file. The broadcast. Choose:]",
+     "options": [
+         ("Plan the impossible.",
+          "If the file exists, it's in this building. I've broken out of better."),
+         ("Bargain for time.",
+          "Vasile's dead air. Gabi, Seby, Darius — all dead. No one is coming."),
+         ("Accept it. Almost.",
+          "(He closes his eyes. Then he hears boots in the corridor, and they're wrong.)"),
+     ]},
+
+    # Pre-breach establishing beat. Someone is walking down the corridor
+    # outside the cell. The player hears it (footstep SFX) and sees it (a
+    # faint shadow sweeping under the cell door) BEFORE the C4 appears — so
+    # Volkov's arrival reads as a build-up rather than teleportation. The
+    # caption cues the player that this isn't a normal patrol round.
+    {"type": "action", "action": "boots_approach"},
+
+    # Volkov's breach. He got himself arrested on purpose to reach Biribel.
+    # The cutscene already delivered his "You owe me one. Get up." arrival
+    # line; the cold open plays the breach FX (flash, shake, door, boom)
+    # and Volkov's new in-room line — the time-pressure beat the cutscene
+    # didn't have room for.
+    # The chair break + leg grab is a SEPARATE post-dialogue cinematic
+    # (see chair_break_shots + cutscenes.py's cb_* renderers), not a text caption here.
+    {"type": "action", "action": "breach"},
+    {"type": "line", "speaker": "VOLKOV", "color": C_VOLKOV,
+     "text": "Door's kicked. Camera loop: four minutes, maybe less. I get you out, you get me clear. Move."},
+    {"type": "line", "speaker": "VOLKOV", "color": C_VOLKOV,
+     "text": "I came in through their own back door. Same way out, if you keep up. Move, operator. Move."},
+]
+
+# Auto-advance timing (frames @ 60fps). Never blocks ENTER / SPACE — these
+# only kick in if the player lets a beat sit.
+#
+# The auto-advance is driven by the typewriter: once the current beat's text
+# is fully revealed, the system holds for a length-scaled number of frames
+# and then advances. The hold scales with text length so a one-liner doesn't
+# drag and a long monologue gets time to breathe:
+#   40-char beat   -> 180 frames (3.0s)   [floor]
+#   80-char beat   -> 240 frames (4.0s)
+#   100-char beat  -> 300 frames (5.0s)
+#   120-char beat  -> 360 frames (6.0s)   [ceiling]
+#   140+ char beat -> 360 frames (6.0s)   [capped]
+# Long lines also get all their characters typed out before the hold even
+# starts -- a slow reader is never cut off mid-type.
+_POST_TYPE_HOLD_MIN = 420           # 7s floor — readable, no rush
+_POST_TYPE_HOLD_MAX = 720           # 12s ceiling — long monologues breathe
+_POST_TYPE_HOLD_PER_CHAR = 8        # frames of hold per character of text
+_BREACH_FREEZE_FRAMES = 90          # post-breach pause before the door reads as open
+
+
+def _post_type_hold_frames(beat):
+    """Length-scaled hold (in frames) for the given beat's text.
+
+    See _POST_TYPE_HOLD_* constants above for the calibration table. Uses
+    _beat_text() so action captions and choice prompts scale the same way
+    spoken lines do.
+    """
+    text = _beat_text(beat)
+    n = max(0, len(text))
+    return max(_POST_TYPE_HOLD_MIN,
+               min(_POST_TYPE_HOLD_MAX, n * _POST_TYPE_HOLD_PER_CHAR))
+
+# Tone memory: defiant=0, probing=1, silent=2 (the option index the player
+# picked). Later slices can read STATE.mission3_tone to color Biribel's
+# voice in radio chatter and the ending cutscene.
+_TONE_DEFIANT = 0
+_TONE_PROBING = 1
+_TONE_SILENT = 2
+
+# ─────────────────────────────────────────────
+# Map / authored layout
+# ─────────────────────────────────────────────
+# Procedural tilemap (M2-style) so the existing renderer, minimap, wall
+# builder, and collision systems keep working. Smaller than M2's 70x80
+# because the Stabilization Center is interior space — tight corridors,
+# not open highway.
+MAP_W, MAP_H = 48, 48
+
+# Tile char legend (parsed in _build_world, drawn in game_draw):
+#   "C"  solid concrete wall (full-tile Rect → STATE.walls)
+#   "B"  barrier/cover (inset Rect → STATE.walls + STATE.mission3_barriers)
+#   "O"  interior floor (office/control sector color)
+#   "."  corridor floor
+#   "g"  exterior ground (default fill)
+#   "P"  player spawn
+#   "X"  exfil / objective marker
+#   "D"  cell door (passable visual — foreshadows locked-door beats)
+#   "K"  kitchen / utility floor tile
+#   "L"  laundry / uniform processing floor
+#   "Y"  exercise-yard concrete floor
+#   "M"  maintenance / boiler wing floor
+#   "E"  exit zone tiles
+#   "S"  security glass (visual only — passable, frosted-cyan tint)
+PLAYER_START_TILE = (32, 9)   # inside the southernmost cell
+
+
+def _set_tile(g, col, row, tile):
+    if 0 <= col < MAP_W and 0 <= row < MAP_H:
+        g[row][col] = tile
+
+
+def _paint_tiles(g, rect, tile):
+    for row in range(rect.y, rect.y + rect.h):
+        for col in range(rect.x, rect.x + rect.w):
+            _set_tile(g, col, row, tile)
+
+
+def _outline_building(g, col, row, w, h, interior="O", door_tiles=()):
+    """Draw a rectangular building perimeter with a door gap.
+
+    Mirrors mission2._outline_building so door punches read the same way.
+    """
+    for yy in range(row, row + h):
+        for xx in range(col, col + w):
+            border = xx in (col, col + w - 1) or yy in (row, row + h - 1)
+            _set_tile(g, xx, yy, "C" if border else interior)
+    for dx, dy in door_tiles:
+        _set_tile(g, col + dx, row + dy, interior)
+
+
+def _generate_map():
+    """Build the Stabilization Center tilemap — a real prison block.
+
+    Layout (48x48 tiles):
+      - Cell block: 4 cells (north side), each 8 wide x 8 tall, rows 5-12
+      - Main corridor: rows 14-16, east-west artery
+      - Guard room: rows 18-24, central monitoring station
+      - Kitchen / utility: west side, rows 20-24
+      - Exit double doors: east side of main corridor
+      - Player spawn: southernmost cell (32, 9)
+    """
+    g = [["g" for _ in range(MAP_W)] for _ in range(MAP_H)]
+
+    # World border (concrete perimeter — keeps the player inside).
+    for x in range(MAP_W):
+        g[0][x] = g[MAP_H - 1][x] = "C"
+    for y in range(MAP_H):
+        g[y][0] = g[y][MAP_W - 1] = "C"
+
+    # --- Cell block (north side, rows 5-12) ---
+    # 4 cells, each 8 tiles wide, door gap at the south wall.
+    for cell in range(4):
+        cx = 6 + cell * 8
+        for y in range(5, 13):
+            for x in range(cx, cx + 8):
+                if y == 5 or y == 12 or x == cx or x == cx + 7:
+                    if y == 12 and cx + 3 <= x <= cx + 4:
+                        g[y][x] = "D"
+                    else:
+                        g[y][x] = "C"
+                else:
+                    g[y][x] = "."
+
+    # --- Cell-block approach hallway (row 13, cols 6-39) ---
+    # 1-tile strip directly south of the four cell doors. Gives Volkov a
+    # real, visible space to approach through during the breach cutscene
+    # (instead of spawning in undefined exterior ground) and gives the
+    # player a natural threshold to step onto when leaving the cell in
+    # STAGE_BREAKOUT. Connects the cell doors (row 12) to the main
+    # corridor (rows 14-16) without any map gaps.
+    for x in range(6, 40):
+        g[13][x] = "."
+
+    # --- Main corridor (rows 14-16, cols 6-40) ---
+    for y in range(14, 17):
+        for x in range(6, 40):
+            g[y][x] = "."
+
+    # --- Guard room (south side, rows 18-24, cols 10-35) ---
+    for y in range(18, 25):
+        for x in range(10, 36):
+            if y == 18 or y == 24 or x == 10 or x == 35:
+                g[y][x] = "C"
+            else:
+                g[y][x] = "O"
+
+    # Connect the guard room to the main corridor. Without this north-wall
+    # door, Guard 3 spawned inside a sealed room and could never be reached.
+    # Row 17 is a short approach strip between the corridor and the room.
+    for x in range(21, 24):
+        g[17][x] = "."
+    g[18][22] = "D"
+
+    # --- Kitchen / utility room (west, rows 20-24, cols 2-6) ---
+    for y in range(20, 25):
+        for x in range(2, 7):
+            if y == 20 or y == 24 or x == 2 or x == 6:
+                g[y][x] = "C"
+            else:
+                g[y][x] = "K"
+
+    # Punch a door in the east wall of the kitchen so the player can exit
+    g[22][6] = "D"
+
+    # --- Armory (east of guard room, locked-down weapon cage) ---
+    # This is where the K-9 suppressed SMG is mounted on the north wall. The
+    # room connects to the guard/control room through a normal openable door.
+    for y in range(18, 25):
+        for x in range(36, 45):
+            if y == 18 or y == 24 or x == 36 or x == 44:
+                g[y][x] = "C"
+            else:
+                g[y][x] = "O"
+    # Door gap between guard room and armory.
+    g[21][35] = "D"
+    g[21][36] = "D"
+
+    # --- Lower service wing (optional space, not objective-critical) ---
+    # A coherent lower branch: guard room -> service spine -> laundry / yard /
+    # maintenance. This fills the dead lower map with believable facility space
+    # instead of loose props glued onto the floor.
+    for y in range(25, 31):
+        for x in range(3, 46):
+            border = y in (25, 30) or x in (3, 45)
+            g[y][x] = "C" if border else "."
+
+    # South exit from the guard room down into the service spine.
+    g[24][22] = "D"
+    g[24][23] = "D"
+    g[25][22] = "."
+    g[25][23] = "."
+
+    # Three doors along the lower service spine.
+    for x in (10, 11):
+        g[30][x] = "D"       # laundry
+    for x in (23, 24):
+        g[30][x] = "D"       # exercise yard
+    for x in (36, 37):
+        g[30][x] = "D"       # maintenance wing
+
+    # Laundry / uniform processing room (west).
+    for y in range(31, 43):
+        for x in range(4, 18):
+            border = y in (31, 42) or x in (4, 17)
+            if border and not (y == 31 and x in (10, 11)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "L"
+
+    # Exercise yard / concrete rec cage (middle). It is indoor-visible optional
+    # space: fenced concrete, workout lines, no story payload.
+    for y in range(31, 44):
+        for x in range(18, 31):
+            border = y in (31, 43) or x in (18, 30)
+            if border and not (y == 31 and x in (23, 24)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "Y"
+
+    # Maintenance / boiler wing (east).
+    for y in range(31, 43):
+        for x in range(31, 45):
+            border = y in (31, 42) or x in (31, 44)
+            if border and not (y == 31 and x in (36, 37)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "M"
+
+    # --- Exit double doors (east side of main corridor) ---
+    # Aligned with the cell-block road/corridor rows (14-16). The previous
+    # 15-17 placement sat one tile too low, so the service exit looked off the
+    # corridor's Y-axis.
+    for y in range(14, 17):
+        for x in range(40, 43):
+            g[y][x] = "E"
+
+    # --- Player spawn in the southernmost cell (cell 3, centre floor) ---
+    pc, pr = PLAYER_START_TILE
+    _set_tile(g, pc, pr, "P")
+
+    return ["".join(row) for row in g]
+
+
+def _generate_comms_map():
+    """Build the second Mission 3 map: service/comms wing.
+
+    This is a separate playable map loaded after the service-exit transition
+    cutscene. It is intentionally compact: service corridor, relay room,
+    server cage, side utility room, and an east archive-access door for the
+    next slice.
+    """
+    g = [["g" for _ in range(MAP_W)] for _ in range(MAP_H)]
+
+    # World border.
+    for x in range(MAP_W):
+        g[0][x] = g[MAP_H - 1][x] = "C"
+    for y in range(MAP_H):
+        g[y][0] = g[y][MAP_W - 1] = "C"
+
+    # Service arrival corridor.
+    for y in range(22, 28):
+        for x in range(3, 45):
+            border = y in (22, 27) or x in (3, 44)
+            g[y][x] = "C" if border else "."
+
+    # West service airlock / spawn area.
+    for y in range(18, 29):
+        for x in range(3, 11):
+            border = y in (18, 28) or x in (3, 10)
+            if border and not (x == 10 and y in (24, 25)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "."
+    g[24][10] = "D"
+    g[25][10] = "D"
+    g[24][6] = "P"
+
+    # Security booth / access desk just east of the airlock. This makes the
+    # spawn area feel like a connected checkpoint instead of an empty hallway.
+    for y in range(17, 23):
+        for x in range(11, 16):
+            border = y in (17, 22) or x in (11, 15)
+            if border and not (y == 22 and x in (12, 13)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "O"
+    g[22][12] = "D"
+    g[22][13] = "D"
+
+    # Main comms relay room, north of corridor.
+    for y in range(10, 22):
+        for x in range(15, 33):
+            border = y in (10, 21) or x in (15, 32)
+            if border and not (y == 21 and x in (23, 24)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "O"
+    g[21][23] = "D"
+    g[21][24] = "D"
+    # Short threshold through the service-corridor north wall.
+    g[22][23] = "."
+    g[22][24] = "."
+
+    # Server cage / equipment bay to the east.
+    for y in range(13, 30):
+        for x in range(34, 45):
+            border = y in (13, 29) or x in (34, 44)
+            if border and not (x == 34 and y in (23, 24)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "S" if x in (35, 36, 42, 43) and 15 <= y <= 27 else "O"
+    g[23][34] = "D"
+    g[24][34] = "D"
+    # East archive-access door out of the server cage.
+    g[24][44] = "D"
+
+    # South utility / battery backup room.
+    for y in range(29, 40):
+        for x in range(13, 31):
+            border = y in (29, 39) or x in (13, 30)
+            if border and not (y == 29 and x in (21, 22)):
+                g[y][x] = "C"
+            else:
+                g[y][x] = "M"
+    # Vertical access from the service spine into utility.
+    g[27][21] = "D"
+    g[27][22] = "D"
+    g[28][21] = "."
+    g[28][22] = "."
+    g[29][21] = "D"
+    g[29][22] = "D"
+
+    # East archive-access transition marker (next slice).
+    for y in range(23, 26):
+        for x in range(45, 47):
+            g[y][x] = "E"
+    g[24][46] = "X"
+
+    return ["".join(row) for row in g]
+
+
+def _generate_archives_map():
+    """Build the third Mission 3 map: IPA Central Archives.
+
+    Deliberately NOT a reskin of the Comms Wing. Comms is a horizontal
+    service corridor (west airlock → relay → east exit). Archives is a
+    vertical research stack:
+
+        SOUTH  service elevator lobby (spawn, sealed shaft behind)
+        CENTER multi-floor atrium with mezzanine pillars
+        WEST   long parallel catalog stacks
+        EAST   research cubicles / microfilm booths
+        NW     Maru's dead-drop (hidden clerk office)
+        NE     cold-storage vault with the Vostral pedestal
+        NORTH  kill-order stairwell exit (opens after file)
+
+    All doorways are SINGLE-TILE-THICK (one row/col of D only).
+    """
+    g = [["g" for _ in range(MAP_W)] for _ in range(MAP_H)]
+
+    # World border.
+    for x in range(MAP_W):
+        g[0][x] = g[MAP_H - 1][x] = "C"
+    for y in range(MAP_H):
+        g[y][0] = g[y][MAP_W - 1] = "C"
+
+    def fill_floor(x0, y0, x1, y1, floor="."):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                g[y][x] = floor
+
+    def wall_rect(x0, y0, x1, y1):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                if y in (y0, y1) or x in (x0, x1):
+                    g[y][x] = "C"
+
+    def doorway_h(x0, x1, row):
+        """Horizontal doorway opening on a wall row — single thickness."""
+        for x in range(x0, x1 + 1):
+            g[row][x] = "D"
+
+    def doorway_v(col, y0, y1):
+        """Vertical doorway opening on a wall column — single thickness."""
+        for y in range(y0, y1 + 1):
+            g[y][col] = "D"
+
+    # ── SOUTH: elevator lobby ───────────────────────────────────────
+    wall_rect(18, 38, 30, 45)
+    fill_floor(19, 39, 29, 44, ".")
+    doorway_h(23, 25, 38)          # north into atrium
+    g[42][24] = "P"
+    for x in (20, 21, 22, 26, 27, 28):
+        g[44][x] = "S"             # sealed elevator panels
+
+    # ── CENTER: vertical atrium ─────────────────────────────────────
+    # Walls only on the long sides; north/south ends open into vestibule/lobby
+    # via explicit doorways (not double-thick).
+    for y in range(13, 38):
+        g[y][20] = "C"
+        g[y][28] = "C"
+        for x in range(21, 28):
+            g[y][x] = "."
+    # Mezzanine pillars (cover).
+    for y in (22, 30):
+        for x in (22, 26):
+            g[y][x] = "B"
+    # South atrium already meets lobby doors at row 38.
+    # North atrium meets vestibule doors at row 12 (set below).
+
+    # ── WEST: catalog stacks ────────────────────────────────────────
+    wall_rect(4, 18, 20, 36)
+    fill_floor(5, 19, 19, 35, "L")
+    doorway_v(20, 24, 25)          # into atrium (east wall of stacks)
+    # Interior aisle walls.
+    for y in range(20, 35):
+        for x in (7, 10, 13, 16):
+            if y not in (24, 25, 30, 31):
+                g[y][x] = "C"
+    # Cross-aisles.
+    for x in range(5, 20):
+        for y in (24, 25, 30, 31):
+            if g[y][x] == "C" and x not in (4, 20):
+                g[y][x] = "L"
+    # Re-assert atrium connection floor east of doorway.
+    g[24][21] = "."
+    g[25][21] = "."
+
+    # ── NW: Maru clerk office ───────────────────────────────────────
+    wall_rect(6, 8, 16, 18)
+    fill_floor(7, 9, 15, 17, "O")
+    doorway_h(10, 11, 18)          # south into stacks
+    # Floor immediately south of doorway (stacks side) — NOT a second door.
+    g[19][10] = "L"
+    g[19][11] = "L"
+
+    # ── EAST: research cubicles ─────────────────────────────────────
+    wall_rect(28, 18, 43, 36)
+    fill_floor(29, 19, 42, 35, "O")
+    doorway_v(28, 24, 25)          # into atrium
+    g[24][27] = "."
+    g[25][27] = "."
+    # Cubicle partitions.
+    for y in range(20, 34):
+        if y in (24, 25, 29, 30):
+            continue
+        for x in (32, 36, 40):
+            g[y][x] = "C"
+    for x in range(30, 42):
+        for y in (24, 25, 29, 30):
+            if g[y][x] == "C" and x not in (28, 43):
+                g[y][x] = "O"
+
+    # ── NORTH-CENTER: vault vestibule ───────────────────────────────
+    wall_rect(20, 6, 36, 12)
+    fill_floor(21, 7, 35, 11, ".")
+    doorway_h(23, 25, 12)          # south into atrium
+    g[13][23] = "."
+    g[13][24] = "."
+    g[13][25] = "."
+    # Vestibule east wall door into vault.
+    doorway_v(36, 8, 9)
+
+    # ── NE: Vostral cold vault ──────────────────────────────────────
+    wall_rect(36, 4, 46, 14)
+    fill_floor(37, 5, 45, 13, "O")
+    doorway_v(36, 8, 9)            # west wall — vault doors (LOCKED in build)
+    # Ensure BOTH door rows are D (wall_rect may have left only one open).
+    g[8][36] = "D"
+    g[9][36] = "D"
+    # No bypass tiles around the door.
+    g[7][36] = "C"
+    g[10][36] = "C"
+    g[8][37] = "O"
+    g[9][37] = "O"
+    # Frosted glass side panels.
+    for y in range(6, 13):
+        g[y][38] = "S"
+        g[y][44] = "S"
+    g[9][42] = "X"                 # pedestal
+
+    # ── NORTH: kill-order stairwell ─────────────────────────────────
+    wall_rect(22, 2, 28, 6)
+    fill_floor(23, 3, 27, 5, "E")
+    doorway_h(24, 25, 6)           # south into vestibule — EXIT (LOCKED)
+    g[7][24] = "."
+    g[7][25] = "."
+    g[5][24] = "E"
+    g[5][25] = "E"
+    g[3][24] = "X"
+
+    # Final pass: collapse 2×2 door blocks only (double-thick doorways).
+    # Valid doorways are 1-deep strips: horizontal (same row, adjacent cols)
+    # or vertical (same col, adjacent rows). A 2×2 block is always wrong.
+    for y in range(1, MAP_H - 1):
+        for x in range(1, MAP_W - 1):
+            if (g[y][x] == "D" and g[y][x + 1] == "D"
+                    and g[y + 1][x] == "D" and g[y + 1][x + 1] == "D"):
+                g[y + 1][x] = "."
+                g[y + 1][x + 1] = "."
+
+    return ["".join(row) for row in g]
+
+
+MISSION3_CELL_MAP = _generate_map()
+MISSION3_COMMS_MAP = _generate_comms_map()
+MISSION3_ARCHIVES_MAP = _generate_archives_map()
+MISSION3_MAP = MISSION3_CELL_MAP
+
+# Module-level draw/update scratch.
+_last_keys = None
+_objective = "Survive the interrogation."
+_radio_marks = set()
+# The interrogation chair's collision rect. Set in _build_world, filtered out
+# by _solid_walls once the chair breaks. Stored module-level (not as an attr
+# on the Rect itself) because pygame.Rect is a C type without __dict__.
+_CHAIR_RECT = None
+
+# Dialogue state (Slice 1: the interrogation cold open). Kept here so
+# handle_event can read/write it without a STATE round-trip; mirrored onto
+# STATE on start for save/inspect surfaces.
+#   _dialogue_beats   — working list of beats (starts as a copy of the
+#                       script; choice beats inject the player's follow-up
+#                       line in-place, so the player's voice actually plays).
+#   _dialogue_index   — index of the currently-visible beat.
+#   _dialogue_timer   — frames the current beat has been on screen; used by
+#                       the auto-advance fallback when the player doesn't
+#                       press ENTER / SPACE.
+#   _dialogue_choice  — highlighted option index while a choice beat is up.
+#   _dialogue_tone    — list of option indices the player has picked so far
+#                       (one entry per choice beat). Merged into
+#                       STATE.mission3_tone at the end.
+#   _dialogue_char_idx — typewriter: how many chars of the current line/action
+#                       caption are revealed. Reset to 0 on each beat entry,
+#                       advanced per-frame by _update_interrogation with the
+#                       same punctuation-pause cadence as the cutscene engine
+#                       (acaristan.py TEXT_SPEED). Reuses the cutscene's
+#                       _play_typewriter_tick pattern for audio.
+#   _dialogue_slide   — panel slide-up animation offset (12 -> 0 over ~12
+#                       frames on beat entry, cubic ease), mirroring
+#                       cutscenes.draw_dialogue_box's _dialogue_box_slide.
+_dialogue_beats = []
+_dialogue_index = 0
+_dialogue_timer = 0
+_dialogue_choice = 0
+_dialogue_tone = []
+_dialogue_char_idx = 0
+_dialogue_slide = 0.0
+
+# Typewriter cadence — matches acaristan.py's cutscene TEXT_SPEED (4 frames
+# per char) and its punctuation-pause logic (extra frames after .!?,;:).
+_TYPE_SPEED = 4
+_TYPE_PAUSE_FULL = 25   # extra frames after . ! ?
+_TYPE_PAUSE_SOFT = 12   # extra frames after , ; :
+_TYPE_PAUSE_MID = 15    # extra frames after : (between soft/full)
+# Visual FX flags the dialogue system raises and the renderer reads:
+#   _monitor_on        — Balaceanu's wall monitor is lit (draws a red glow).
+#   _breach_flash      — frames-remaining of the white breach flash overlay.
+#   _light_flicker     — frames-remaining of the post-monitor-off flicker.
+#   _volkov_breach_t   — animation clock for Volkov's door-kick: counts UP
+#                        from 0 starting on the breach beat; renderer reads
+#                        it to position his leg / body / door swing. Stays
+#                        positive (and Volkov stays in the doorway) for the
+#                        rest of STAGE_INTERROGATION and into early
+#                        STAGE_BREAKOUT, so the kick is visible AND the
+#                        aftermath reads as "Volkov is here, in the room."
+_monitor_on = False
+_breach_flash = 0
+_light_flicker = 0
+_volkov_breach_t = -1   # -1 = not yet triggered; >=0 = frames since breach
+# Boots-in-the-corridor establishing beat. Set to 0 by the "boots_approach"
+# action beat (fired BEFORE the breach beat). Renderer reads it to draw a
+# faint shadow sweeping under the cell door — evidence that someone is
+# approaching before the C4 appears. Counts up while active; -1 = inactive.
+_boots_approach_t = -1
+# Per-beat counter: frames elapsed since the typewriter finished revealing
+# the current beat's text. Reset to 0 in _advance_beat and on every frame the
+# typewriter is still working. When it reaches _post_type_hold_frames(beat)
+# (length-scaled: 3s floor, 6s ceiling, ~3 frames/char in between), the beat
+# auto-advances.
+_post_type_hold = 0
+
+# Interactive struggle component (removed in favor of cinematic)
+# _chair_struggle = None
+
+# ─────────────────────────────────────────────
+# Chair-break cutscene shots (Mission 3 — the post-breach moment).
+# These scene IDs route to bespoke cinematic renderers in cutscenes.py.
+# They show the whole beat: restraints strain → chair leg snaps free →
+# Biribel grabs it → he stands ready with the improvised weapon.
+# ─────────────────────────────────────────────
+chair_break_shots = [
+    {
+        "scene": "cb_strain",
+        "speaker": "BIRIBEL",
+        "text": "Come on... break.",
+        "min_ms": 4000,
+    },
+    {
+        "scene": "cb_crack",
+        "speaker": "",
+        "text": "[ METAL SCREAMS. THE CHAIR LEG TEARS FREE. ]",
+        "min_ms": 2200,
+    },
+    {
+        "scene": "cb_grab",
+        "speaker": "BIRIBEL",
+        "text": "Finally.",
+        "min_ms": 2400,
+    },
+    {
+        "scene": "cb_ready",
+        "speaker": "BIRIBEL",
+        "text": "Volkov was right. I owe him one.",
+        "min_ms": 3000,
+    },
+]
+
+# ─────────────────────────────────────────────
+# Utility helpers
+# ─────────────────────────────────────────────
+def _dist(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def _player_pos():
+    if not STATE.player:
+        return (0, 0)
+    return STATE.player.rect.centerx, STATE.player.rect.centery
+
+
+def _interrogation_chair_pos():
+    """World-space center of the restraint chair used during Phase 1.
+
+    The map spawn tile is just a fallback marker. During the interrogation
+    Biribel is physically cuffed into the chair under the monitor, so camera
+    framing and the eventual breakout should originate from this prop.
+    """
+    return (
+        int((_MONITOR_TILE_COL + 0.5) * TILE_SIZE),
+        int((_CELL_ROW_NORTH + 1) * TILE_SIZE + TILE_SIZE // 2),
+    )
+
+
+def _near(pos, radius=80):
+    return STATE.player and _dist(_player_pos(), pos) <= radius
+
+
+def _camera_offset_for_target(target):
+    tx, ty = target
+    max_x = max(0, MAP_W * TILE_SIZE - WIDTH)
+    max_y = max(0, MAP_H * TILE_SIZE - HEIGHT)
+    cam_x = tx - WIDTH // 2
+    cam_y = ty - HEIGHT // 2
+    cam_x = max(0, min(max_x, cam_x))
+    cam_y = max(0, min(max_y, cam_y))
+    return cam_x, cam_y
+
+
+def _snap_camera_to(target=None):
+    if target is None:
+        target = _player_pos()
+    cam_x, cam_y = _camera_offset_for_target(target)
+    STATE.camera_x = cam_x
+    STATE.camera_y = cam_y
+    STATE.cam_kick_x = 0.0
+    STATE.cam_kick_y = 0.0
+    STATE.screen_shake = 0
+
+
+def _solid_walls():
+    """All solid collision rects for this frame.
+
+    Includes STATE.walls + STATE.mission3_barriers, with two dynamic tweaks:
+      - If the chair is broken, its barrier rect is filtered out (it's rubble).
+      - If the player hasn't crafted a shiv yet, a temporary rect blocks the
+        doorway (mandatory crafting — Volkov holds the door until the shiv
+        is done).
+    """
+    out = list(STATE.walls)
+    barriers = list(getattr(STATE, "mission3_barriers", []))
+    # Remove the chair's collision rect once the chair is broken. pygame.Rect
+    # is a C type without __dict__, so we can't tag the rect with an attribute
+    # — instead we filter by identity against the module-level _CHAIR_RECT.
+    if getattr(STATE, "mission3_chair_broken", False) and _CHAIR_RECT is not None:
+        barriers = [b for b in barriers if b is not _CHAIR_RECT]
+    out.extend(barriers)
+    # Doorway blocked until the shiv is crafted (mandatory crafting lock).
+    if getattr(STATE, "mission3_doorway_blocked", False):
+        out.append(pygame.Rect(
+            _DOOR_TILE_COL * TILE_SIZE + 4,
+            _DOOR_TILE_ROW * TILE_SIZE + 4,
+            TILE_SIZE - 8, TILE_SIZE - 8))
+
+    for d in getattr(STATE, "doors", []):
+        if getattr(d, "collision_rect", None):
+            out.append(d.collision_rect)
+
+    return out
+
+
+def _m3_cell_door_pair_for_col(row, col):
+    """Return the two D-tile columns for a Mission 3 cell door.
+
+    Cell doors are row 12, two tiles wide:
+    cell 0: cols 9-10
+    cell 1: cols 17-18
+    cell 2: cols 25-26
+    cell 3: cols 33-34
+    """
+    if row != _DOOR_TILE_ROW:
+        return None
+
+    for cell_idx in range(4):
+        base = 6 + cell_idx * 8
+        a = base + 3
+        b = base + 4
+        if col in (a, b):
+            return (a, b)
+
+    return None
+
+
+def _m3_door_obj_at(col, row):
+    wx = col * TILE_SIZE
+    wy = row * TILE_SIZE
+    for d in getattr(STATE, "doors", []):
+        if d.rect.x == wx and d.rect.y == wy:
+            return d
+    return None
+
+
+def _m3_cell_door_pair_objects(row, col):
+    pair = _m3_cell_door_pair_for_col(row, col)
+    if pair is None:
+        return []
+
+    out = []
+    for pair_col in pair:
+        d = _m3_door_obj_at(pair_col, row)
+        if d is not None:
+            out.append(d)
+    return out
+
+
+def _m3_open_cell_door_pair(row, col):
+    """Force-open both tiles of a cell door."""
+    doors = _m3_cell_door_pair_objects(row, col)
+    if not doors:
+        return
+
+    for d in doors:
+        d.locked = False
+        d.target_open = True
+        d.anim_progress = 1.0
+        d.collision_disabled = True
+        d.manual_timer = 9999
+        d.m3_forced_open = True
+        d.m3_shot_hits = getattr(d, "m3_required_shots", 6)
+
+    # Feedback at the door center.
+    pair = _m3_cell_door_pair_for_col(row, col)
+    if pair:
+        wx = (pair[0] + pair[1] + 1) * TILE_SIZE // 2
+        wy = row * TILE_SIZE + TILE_SIZE // 2
+    else:
+        wx = col * TILE_SIZE + TILE_SIZE // 2
+        wy = row * TILE_SIZE + TILE_SIZE // 2
+
+    STATE.floating_texts.append([
+        wx,
+        wy - 32,
+        "CELL DOOR UNLOCKED",
+        (120, 220, 150),
+        90,
+    ])
+
+    try:
+        audio.play("door_open", volume=0.45)
+    except Exception:
+        pass
+
+
+def _m3_damage_cell_door_with_bullet(b):
+    """Handle player bullets damaging locked Mission 3 cell doors.
+
+    Returns True if the bullet hit a door and should be removed.
+    """
+    if b.get("owner") != "player":
+        return False
+
+    prev = (b.get("prev_x", b["x"]), b.get("prev_y", b["y"]))
+    cur = (b["x"], b["y"])
+
+    for d in getattr(STATE, "doors", []):
+        if not getattr(d, "m3_cell_door", False):
+            continue
+
+        col = d.rect.x // TILE_SIZE
+        row = d.rect.y // TILE_SIZE
+
+        # Do not use this system on Biribel's breached starting cell door.
+        if row == _DOOR_TILE_ROW and col in (_DOOR_TILE_COL, _DOOR_TILE_COL + 1):
+            continue
+
+        # Already open / collision disabled: bullet passes this door logic.
+        if getattr(d, "collision_disabled", False) or d.collision_rect is None:
+            continue
+
+        if d.rect.clipline(prev, cur):
+            doors = _m3_cell_door_pair_objects(row, col)
+            if not doors:
+                return True
+
+            required = max(getattr(x, "m3_required_shots", 6) for x in doors)
+            current_hits = max(getattr(x, "m3_shot_hits", 0) for x in doors)
+            new_hits = min(required, current_hits + 1)
+
+            for x in doors:
+                x.m3_shot_hits = new_hits
+
+            hit_x, hit_y = cur
+
+            try:
+                effects.burst(hit_x, hit_y, (120, 118, 108), 10, speed_mul=1.3)
+            except Exception:
+                pass
+            try:
+                effects.shake(3)
+            except Exception:
+                pass
+
+            try:
+                audio.play("bullet_impact", volume=0.35)
+            except Exception:
+                pass
+
+            if new_hits >= required:
+                _m3_open_cell_door_pair(row, col)
+                try:
+                    effects.burst(hit_x, hit_y, (200, 180, 120), 18, speed_mul=1.8)
+                except Exception:
+                    pass
+            else:
+                STATE.floating_texts.append([
+                    hit_x,
+                    hit_y - 20,
+                    f"LOCK DAMAGE {new_hits}/{required}",
+                    (220, 180, 90),
+                    42,
+                ])
+
+            return True
+
+    return False
+
+
+def _set_objective(text):
+    global _objective
+    _objective = text
+
+
+def _movement_locked():
+    # Phase 1 (interrogation): Biribel is cuffed to the chair, no movement.
+    if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_INTERROGATION:
+        return True
+    # Relay tuning is an interact/hold moment at the terminal.
+    if getattr(STATE, "m3_relay_active", False):
+        return True
+    # Maru dead-drop contact locks movement while the message plays.
+    if getattr(STATE, "m3_maru_contact_active", False):
+        return True
+    return False
+
+
+def _radio(text, color=C_SYSTEM, duration=320, mark=None):
+    """Pinned-radio helper, mirroring mission2._radio's signature.
+
+    The interrogation cold open does NOT use this (its dialogue is a
+    bespoke full-screen panel). It's here so Phase 3 (KRAP re-contact)
+    and onward can drop radio beats in without re-deriving the helper.
+    """
+    global _radio_marks
+    if mark and mark in _radio_marks:
+        return
+    if mark:
+        _radio_marks.add(mark)
+    try:
+        from interactions import trigger_radio_chatter
+        trigger_radio_chatter(text, color=color, duration=duration)
+    except Exception:
+        # Audio/interactions are optional in headless test harnesses.
+        pass
+
+
+def _start_m3_alarm():
+    """Start the Mission 3 lockdown alarm: quiet loop + state flag."""
+    if getattr(STATE, "m3_alarm_active", False):
+        return
+
+    STATE.m3_alarm_active = True
+    STATE.m3_alarm_timer = 0
+
+    try:
+        if hasattr(audio, "play_mission3_alarm"):
+            audio.play_mission3_alarm(volume=0.18)
+        else:
+            audio.play("alarm", volume=0.12, loops=-1, channel="m3_alarm")
+    except Exception:
+        pass
+
+
+def _stop_m3_alarm(force=False):
+    """Stop the Mission 3 lockdown alarm."""
+    if not force and not getattr(STATE, "m3_alarm_active", False):
+        return
+
+    STATE.m3_alarm_active = False
+    STATE.m3_alarm_timer = 0
+
+    try:
+        if hasattr(audio, "stop_mission3_alarm"):
+            audio.stop_mission3_alarm()
+        else:
+            audio.stop("alarm")
+            audio.stop(channel="m3_alarm")
+    except Exception:
+        pass
+
+
+def _draw_m3_alarm_effect(surface):
+    """Prison lockdown alarm: hard red flash on/off cycle.
+
+    Like real emergency lighting — the overhead strips snap red, hold
+    for half a second, go dark, repeat. Simple, readable, not annoying.
+    """
+    if not getattr(STATE, "m3_alarm_active", False):
+        return
+
+    timer = getattr(STATE, "m3_alarm_timer", 0)
+
+    # Hard on/off cycle: 40 frames on, 30 frames off (~1.2s period at 60fps).
+    cycle = timer % 70
+    on = cycle < 40
+
+    if not on:
+        return
+
+    # Fade within the ON phase so it's not a flat rectangle.
+    # Ramps up fast (10 frames), holds, ramps down fast (10 frames).
+    if cycle < 10:
+        strength = cycle / 10.0
+    elif cycle > 30:
+        strength = (40 - cycle) / 10.0
+    else:
+        strength = 1.0
+
+    alpha = int(45 * strength)
+
+    flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    flash.fill((200, 15, 10, alpha))
+    surface.blit(flash, (0, 0))
+
+
+def _update_volkov_escape_route():
+    """After Volkov gets Biribel out, he sprints away to draw attention.
+
+    This only starts after the interrogation handoff flips into STAGE_BREAKOUT.
+    """
+    if not getattr(STATE, "m3_volkov_run_active", False):
+        return
+    if getattr(STATE, "m3_volkov_run_done", False):
+        return
+
+    STATE.m3_volkov_run_timer = getattr(STATE, "m3_volkov_run_timer", 0) + 1
+
+    # Running footstep foley.
+    if STATE.m3_volkov_run_timer % 16 == 0:
+        try:
+            audio.play("footstep", volume=0.32)
+        except Exception:
+            pass
+
+    # Once he reaches the east/service-exit side, fade him out and remove him.
+    # Shorter than the old 520-frame wait so he does not stand around at the
+    # edge of the map after his run is visually over.
+    if STATE.m3_volkov_run_timer > 240:
+        STATE.m3_volkov_run_done = True
+
+
+def _volkov_escape_path_points():
+    """World-space path Volkov runs after freeing Biribel.
+
+    Route:
+    doorway -> main corridor -> east/service-exit side.
+    """
+    door_wx = _DOOR_TILE_COL * TILE_SIZE + TILE_SIZE
+    door_wy = _DOOR_TILE_ROW * TILE_SIZE
+    doorway_y = door_wy + TILE_SIZE // 2
+    corridor_y = 15 * TILE_SIZE + TILE_SIZE // 2
+
+    return [
+        (door_wx, doorway_y),
+        (door_wx, corridor_y),
+        (37 * TILE_SIZE + TILE_SIZE // 2, corridor_y),
+        (41 * TILE_SIZE + TILE_SIZE // 2, corridor_y),
+        (44 * TILE_SIZE + TILE_SIZE // 2, corridor_y),
+    ]
+
+
+def _sample_volkov_escape_path(timer, speed=5.4):
+    """Return (x, y, facing_angle, running) for Volkov's escape route."""
+    pts = _volkov_escape_path_points()
+    if len(pts) < 2:
+        return None
+
+    remaining = timer * speed
+
+    for i in range(len(pts) - 1):
+        x1, y1 = pts[i]
+        x2, y2 = pts[i + 1]
+        seg_len = math.hypot(x2 - x1, y2 - y1)
+
+        if remaining <= seg_len:
+            t = remaining / max(1.0, seg_len)
+            x = x1 + (x2 - x1) * t
+            y = y1 + (y2 - y1) * t
+            angle = math.atan2(y2 - y1, x2 - x1)
+            return (x, y, angle, True)
+
+        remaining -= seg_len
+
+    # Arrived at final point.
+    x, y = pts[-1]
+    prev_x, prev_y = pts[-2]
+    angle = math.atan2(y - prev_y, x - prev_x)
+    return (x, y, angle, False)
+
+
+def _volkov_world_pose():
+    """Return Volkov's full world pose.
+
+    Returns:
+      (x, y, facing_angle, running)
+
+    Or None if Volkov should not be drawn.
+    """
+    if getattr(STATE, "m3_volkov_run_done", False):
+        return None
+
+    door_wx = _DOOR_TILE_COL * TILE_SIZE + TILE_SIZE
+    door_wy = _DOOR_TILE_ROW * TILE_SIZE
+    t = _volkov_breach_t
+
+    if t < 0:
+        return None
+
+    corridor_y = door_wy + TILE_SIZE * 3
+    doorway_y = door_wy + TILE_SIZE // 2
+
+    # After breakout begins, Volkov runs away to draw attention.
+    if getattr(STATE, "m3_volkov_run_active", False):
+        run_t = getattr(STATE, "m3_volkov_run_timer", 0)
+        return _sample_volkov_escape_path(run_t)
+
+    # Original breach choreography.
+    if t <= 90:
+        p = t / 90.0
+        return (door_wx, corridor_y + (doorway_y - corridor_y) * p, -math.pi / 2, False)
+    elif t <= 210:
+        return (door_wx, doorway_y, -math.pi / 2, False)
+    elif t <= 300:
+        p = (t - 210) / 90.0
+        return (door_wx, doorway_y + (corridor_y - doorway_y) * p, math.pi / 2, False)
+    elif t <= 306:
+        return (door_wx, corridor_y, -math.pi / 2, False)
+    elif t <= 390:
+        p = (t - 306) / 84.0
+        return (door_wx, corridor_y + (doorway_y - corridor_y) * p, -math.pi / 2, False)
+
+    return (door_wx, doorway_y, -math.pi / 2, False)
+
+
+def _volkov_world_pos():
+    """Compatibility wrapper used by the camera."""
+    pose = _volkov_world_pose()
+    if pose is None:
+        return None
+    return (pose[0], pose[1])
+
+
+# ─────────────────────────────────────────────
+# Slice 2 — Breakout: guard spawns
+# ─────────────────────────────────────────────
+# IPA guards patrol the prison block. They start UNAWARE (alerted=False)
+# so the player can use the shiv for silent takedowns. Once one fires or
+# hears a shot, the others aggro via enemy_hear_shot().
+
+# Guard posts (tile coords) for the new 48x48 layout:
+#   1 — Main corridor east (patrols east-west)
+#   2 — Guard room entrance (stationary, watching the corridor)
+#   3 — Guard room interior (patrols the room)
+#   4 — Kitchen area (stationary, by the vent)
+#   5 — Main corridor centre (patrols mid-section)
+_GUARD_POST_1_TILE = (34, 15)   # main corridor east end
+_GUARD_POST_2_TILE = (22, 15)   # main corridor centre
+_GUARD_POST_3_TILE = (22, 21)   # guard room interior, facing door
+_GUARD_POST_4_TILE = (4, 22)    # kitchen area
+_GUARD_POST_5_TILE = (15, 15)   # main corridor west
+_GUARD_POST_6_TILE = (40, 22)   # armory interior patrol
+_GUARD_POST_7_TILE = (41, 15)   # service-exit checkpoint
+_GUARD_POST_8_TILE = (30, 21)   # guard room east patrol
+
+# Patrol routes (world-space (x, y) tuples).
+_PATROL_ROUTE_1 = [
+    (_GUARD_POST_1_TILE[0] * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_1_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+    (22 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_1_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+]
+_PATROL_ROUTE_2 = []  # stationary — no patrol
+_PATROL_ROUTE_3 = [
+    (_GUARD_POST_3_TILE[0] * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_3_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+    (14 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_3_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+]
+_PATROL_ROUTE_4 = []  # stationary — kitchen guard
+_PATROL_ROUTE_5 = [
+    (8 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_5_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+    (22 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_5_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+]
+_PATROL_ROUTE_6 = [
+    (38 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_6_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+    (42 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_6_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+]
+_PATROL_ROUTE_7 = []  # stationary — service-exit checkpoint guard
+_PATROL_ROUTE_8 = [
+    (26 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_8_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+    (33 * TILE_SIZE + TILE_SIZE // 2,
+     _GUARD_POST_8_TILE[1] * TILE_SIZE + TILE_SIZE // 2),
+]
+
+# Cell-block exit tile — reaching the centre E tile triggers STAGE_COMMS.
+_EXIT_TILE_COL, _EXIT_TILE_ROW = 41, 15
+
+# Volkov's escape destination — he runs east/right toward the service-exit
+# side of the map after the breach instead of sprinting away from the objective.
+_VOLKOV_ESCAPE_TARGET = (
+    43 * TILE_SIZE + TILE_SIZE // 2,
+    15 * TILE_SIZE + TILE_SIZE // 2,
+)
+
+# Vent shaft — secondary exit from Biribel's cell to the kitchen.
+# The grate is at the SW corner of the cell (drawn in _draw_cell_details).
+# Player can pry it open with the shiv, then crawl through to the kitchen.
+_VENT_GRATE_COL, _VENT_GRATE_ROW = 31, 10   # inside cell, SW area
+_VENT_EXIT_COL, _VENT_EXIT_ROW = 4, 22       # kitchen area
+_K9_STAND_COL, _K9_STAND_ROW = 41, 19        # armory north-wall weapon stand
+_RELAY_TILE_COL, _RELAY_TILE_ROW = 24, 19         # Comms Wing relay terminal
+_ARCHIVE_EXIT_COL, _ARCHIVE_EXIT_ROW = 46, 24     # Comms Wing archive access marker
+# Archives Wing interactables (Phase 4).
+_MARU_TERMINAL_COL, _MARU_TERMINAL_ROW = 11, 12   # dead-drop terminal in NW clerk office
+_VOSTRAL_FILE_COL, _VOSTRAL_FILE_ROW = 42, 9      # classified file pedestal (NE vault)
+_ARCHIVES_SPAWN_COL, _ARCHIVES_SPAWN_ROW = 24, 42 # south elevator lobby
+_ARCHIVES_EXIT_COL, _ARCHIVES_EXIT_ROW = 24, 4    # north stairwell → Kill Order
+_VOSTRAL_DOOR_COLS = (36,)                        # vault door column (rows 8-9)
+_VOSTRAL_DOOR_ROWS = (8, 9)
+_EXIT_DOOR_COLS = (24, 25)
+_EXIT_DOOR_ROWS = (6,)
+
+
+def _spawn_m3_guard(col, row, *, hp=90, speed=1.6, patrol=None,
+                    facing=None, label="IPA_GUARD", enemy_type="guard"):
+    """Spawn a Mission 3 IPA cell-block guard.
+
+    Mirrors mission2._spawn_enemy but tuned for stealth-first gameplay:
+      - Lower HP (90 vs 115) so a shiv backstab two-shots them.
+      - Slower speed (1.6 vs 2.0) so the player can break LOS.
+      - Starts UNAWARE (alerted=False). state="PATROL" if a patrol route
+        is provided, else "IDLE".
+      - `facing` (radians, optional) sets the initial sight-cone
+        direction so designers can angle guards away from the breach
+        route.
+      - `label` is stashed on the enemy for pickup-drop logic and
+        death-event tracking (e.g. "guard_post_1_down").
+    """
+    x = col * TILE_SIZE + TILE_SIZE // 2
+    y = row * TILE_SIZE + TILE_SIZE // 2
+    e = Enemy(x - 16, y - 16)
+    e.hp = hp
+    e.speed = speed
+    e.alerted = False
+    e.state = "PATROL" if patrol else "IDLE"
+    e.fire_cooldown = random.randint(30, 90)
+    e.is_mission3_ipa = True
+    e.m3_label = label
+    e.m3_type = enemy_type
+
+    # Per-type combat tuning. These feed Mission 3's custom shooting path and
+    # visual overlay. Values are modest so new types add texture without
+    # turning the slice into a bullet sponge wall.
+    type_stats = {
+        "guard":      {"damage": ENEMY_DAMAGE, "cooldown": ENEMY_FIRE_COOLDOWN, "spread": 0.06,  "bullet_speed": 18, "attack_range": ENEMY_ATTACK_RANGE},
+        "breacher":   {"damage": 15,           "cooldown": 38,                  "spread": 0.12,  "bullet_speed": 17, "attack_range": 145},
+        "shield":     {"damage": 12,           "cooldown": 68,                  "spread": 0.08,  "bullet_speed": 16, "attack_range": 175},
+        "technician": {"damage": 10,           "cooldown": 76,                  "spread": 0.10,  "bullet_speed": 16, "attack_range": 215},
+        "marksman":   {"damage": 30,           "cooldown": 92,                  "spread": 0.025, "bullet_speed": 22, "attack_range": 430},
+    }
+    stats = type_stats.get(enemy_type, type_stats["guard"])
+    e.m3_damage = stats["damage"]
+    e.m3_fire_cooldown = stats["cooldown"]
+    e.m3_spread = stats["spread"]
+    e.m3_bullet_speed = stats["bullet_speed"]
+    e.m3_attack_range = stats["attack_range"]
+    if enemy_type == "shield":
+        e.shield_angle_width = math.radians(78)
+    if patrol:
+        e.patrol_points = list(patrol)
+        e.patrol_idx = 0
+    if facing is not None:
+        e.angle = facing
+        e.idle_angle = facing
+    STATE.enemies.append(e)
+    return e
+
+
+# ─────────────────────────────────────────────
+# World build
+# ─────────────────────────────────────────────
+def _build_world():
+    """Parse MISSION3_MAP into STATE entities, then register furniture
+    collision rects for the cell's solid fixtures (chair, cot, sink).
+
+    The furniture rects are added to STATE.mission3_barriers (which
+    _solid_walls() includes), so the player collides with them. Each
+    rect is inset slightly from the drawn sprite so the player's collision
+    feels fair (they stop at the visible edge of the object, not at a
+    larger invisible box).
+
+    Spawns IPA guards across the prison block (corridor, guard room, kitchen,
+    armory, exit checkpoint). They start unaware so the player can use the shiv for
+    silent takedowns before any gunfire escalates the situation.
+    """
+    global _CHAIR_RECT
+    STATE.walls = []
+    STATE.enemies = []
+    STATE.pickups = []
+    STATE.blood_decals = []
+    STATE.bullets = []
+    STATE.casings = []
+    STATE.particles = []
+    STATE.floating_texts = []
+    STATE.mission3_barriers = []
+    STATE.doors = []
+    STATE.player = None
+
+    for row_idx, row in enumerate(MISSION3_MAP):
+        for col_idx, tile in enumerate(row):
+            x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
+            if tile == "C":
+                STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+            elif tile == "B":
+                r = pygame.Rect(x + 4, y + 12, TILE_SIZE - 8, TILE_SIZE - 24)
+                STATE.walls.append(r)
+                STATE.mission3_barriers.append(r)
+            elif tile == "D":
+                from interactions import Door
+                new_door = Door(x, y, is_bay=False)
+
+                # Mission 3 cell doors stay locked and can be shot open after
+                # 6 hits. Utility/guard-room doors are normal unlocked doors;
+                # locking every D tile made some guards unreachable and could
+                # trap the player in side rooms.
+                new_door.m3_cell_door = (row_idx == _DOOR_TILE_ROW)
+                is_armory_door = (row_idx == 21 and col_idx in (35, 36))
+                new_door.locked = bool(new_door.m3_cell_door)
+                new_door.m3_shot_hits = 0
+                new_door.m3_required_shots = 6
+                new_door.m3_forced_open = False
+
+                # The armory entrance is a double security doorway between two
+                # wall columns. If both halves behave like normal automatic
+                # doors, the player can be stopped by the second panel before
+                # getting close enough to open it. Keep it visually present but
+                # forced open/collisionless so the room is actually reachable.
+                if is_armory_door:
+                    new_door.locked = False
+                    new_door.target_open = True
+                    new_door.anim_progress = 1.0
+                    new_door.collision_disabled = True
+                    new_door.collision_rect = None
+                    new_door.manual_timer = 9999
+
+                STATE.doors.append(new_door)
+            elif tile == "P":
+                STATE.player = Player(x + 16, y + 16, max_hp=115)
+            # "S", "K", "E", "X" are passable visual tiles — no collision.
+            # "O", ".", "g" are floor variants — no collision.
+
+    if STATE.player is None:
+        # Fallback spawn if the map ever loses its "P".
+        sx, sy = PLAYER_START_TILE
+        STATE.player = Player(sx * TILE_SIZE + 16, sy * TILE_SIZE + 16, max_hp=115)
+
+    # ── Furniture collision rects ──
+    # Each rect matches the drawn sprite's footprint (inset slightly for
+    # fair collision). Coordinates must match _draw_cell_details exactly.
+    # Interrogation chair (tile 7, 6): 24x18 seat, inset 2px.
+    # Stored in the module-level _CHAIR_RECT so _solid_walls can filter it
+    # out by identity once the chair breaks (during the breach). We can't
+    # tag the Rect itself because pygame.Rect is a C type without __dict__.
+    chair_cx = (_MONITOR_TILE_COL + 0.5) * TILE_SIZE
+    chair_cy = 6 * TILE_SIZE + TILE_SIZE // 2
+    chair_rect = pygame.Rect(
+        int(chair_cx) - 10, int(chair_cy) - 6, 20, 14)
+    _CHAIR_RECT = chair_rect
+    STATE.mission3_barriers.append(chair_rect)
+    # Metal cot (west wall, tiles 5, rows 9-12): 22 wide, 3 tiles tall.
+    cot_x = int((_CELL_COL_WEST + 0.5) * TILE_SIZE) - 2
+    cot_y_top = 9 * TILE_SIZE
+    cot_y_bot = 12 * TILE_SIZE
+    STATE.mission3_barriers.append(pygame.Rect(
+        cot_x - 9, cot_y_top + 2, 18, cot_y_bot - cot_y_top - 4))
+    # Stainless sink (NE corner, tile 14, 5): oval basin ~24x16, inset.
+    sink_cx = int((_CELL_COL_EAST + 0.5) * TILE_SIZE) - 4
+    sink_cy = (_CELL_ROW_NORTH + 0.5) * TILE_SIZE + 2
+    STATE.mission3_barriers.append(pygame.Rect(
+        sink_cx - 9, int(sink_cy) - 6, 18, 12))
+
+    # ── Kitchen collision rects ──
+    # Fridge (tile 3, 21)
+    fridge_x = int((3 + 0.5) * TILE_SIZE)
+    fridge_y = int((21 + 0.5) * TILE_SIZE)
+    STATE.mission3_barriers.append(pygame.Rect(
+        fridge_x - 12, fridge_y - 16, 24, 32))
+
+    # Stove (tile 5, 21)
+    stove_x = int((5 + 0.5) * TILE_SIZE)
+    stove_y = int((21 + 0.5) * TILE_SIZE)
+    STATE.mission3_barriers.append(pygame.Rect(
+        stove_x - 14, stove_y - 14, 28, 28))
+
+    # Counter (tiles 3-5, row 23)
+    counter_x = int((4 + 0.5) * TILE_SIZE)
+    counter_y = int((23 + 0.5) * TILE_SIZE)
+    STATE.mission3_barriers.append(pygame.Rect(
+        counter_x - 30, counter_y - 8, 60, 16))
+
+    # ── Guard-room prop collision rects ──
+    # Keep these to wall-hugging fixtures so Guard 3's patrol route remains
+    # clean, but the player no longer walks through consoles/lockers/racks.
+    # IMPORTANT: do NOT use one long north-wall collision strip. It blocked the
+    # guard-room doorway at (22,18), making the room unreachable and causing the
+    # guard inside to jitter while trying to path out.
+    for _tx in (13, 17, 21, 25, 29, 33):
+        STATE.mission3_barriers.append(pygame.Rect(
+            _tx * TILE_SIZE + 8,
+            19 * TILE_SIZE + 8,
+            44, 22))  # individual north console
+    STATE.mission3_barriers.append(pygame.Rect(
+        13 * TILE_SIZE + 4, 23 * TILE_SIZE + 18,
+        3 * TILE_SIZE - 8, 40))  # south lockers
+    STATE.mission3_barriers.append(pygame.Rect(
+        31 * TILE_SIZE + 4, 23 * TILE_SIZE + 24,
+        2 * TILE_SIZE - 8, 24))  # weapon rack
+
+    # ── Background/set-dressing prop collision rects ──
+    # Only the larger props get collision. Small stains, pipes, vents, mops,
+    # and paper clutter stay cosmetic so traversal remains smooth.
+    for _cx, _cy, _w, _h in [
+        (3.6, 17.7, 76, 42),   # west crate stack
+        (44.2, 24.5, 66, 38),  # east crate stack
+        (30.2, 30.3, 78, 42),  # lower service crates
+        (37.5, 27.2, 72, 34),  # service cart
+        (4.8, 33.0, 72, 34),   # lower service cart
+        (42.9, 13.7, 56, 30),  # barrel cluster near exit background
+        (39.5, 33.2, 58, 30),  # lower barrel cluster
+    ]:
+        STATE.mission3_barriers.append(pygame.Rect(
+            int(_cx * TILE_SIZE - _w / 2),
+            int(_cy * TILE_SIZE - _h / 2),
+            int(_w), int(_h)))
+
+    # ── Lower service-wing prop collisions ──
+    # Laundry: machine bank, folding table, two carts.
+    STATE.mission3_barriers.append(pygame.Rect(5 * TILE_SIZE, 33 * TILE_SIZE, 5 * TILE_SIZE, 42))
+    STATE.mission3_barriers.append(pygame.Rect(int(10.2 * TILE_SIZE), int(36.0 * TILE_SIZE), 176, 40))
+    STATE.mission3_barriers.append(pygame.Rect(int(6.1 * TILE_SIZE - 22), int(41.0 * TILE_SIZE - 12), 44, 30))
+    STATE.mission3_barriers.append(pygame.Rect(int(15.2 * TILE_SIZE - 22), int(34.9 * TILE_SIZE - 12), 44, 30))
+    # Exercise yard: benches + pull-up frames.
+    STATE.mission3_barriers.append(pygame.Rect(int(21.5 * TILE_SIZE - 38), int(41.0 * TILE_SIZE - 7), 76, 16))
+    STATE.mission3_barriers.append(pygame.Rect(int(27.1 * TILE_SIZE - 38), int(41.0 * TILE_SIZE - 7), 76, 16))
+    for _tx, _ty in ((20.4, 35.8), (27.8, 35.8)):
+        STATE.mission3_barriers.append(pygame.Rect(int(_tx * TILE_SIZE - 26), int(_ty * TILE_SIZE - 34), 52, 70))
+    # Maintenance: boilers, generator, pipe manifold footprint.
+    STATE.mission3_barriers.append(pygame.Rect(int(34.0 * TILE_SIZE - 32), int(35.0 * TILE_SIZE - 62), 64, 124))
+    STATE.mission3_barriers.append(pygame.Rect(int(42.0 * TILE_SIZE - 36), int(35.4 * TILE_SIZE - 42), 72, 84))
+    STATE.mission3_barriers.append(pygame.Rect(int(37.3 * TILE_SIZE), int(38.1 * TILE_SIZE), 128, 58))
+    STATE.mission3_barriers.append(pygame.Rect(int(34.2 * TILE_SIZE), int(33.0 * TILE_SIZE - 8), int(9.2 * TILE_SIZE), 16))
+
+    # Guards intentionally do NOT spawn during the interrogation / Volkov breach
+    # sequence. They are spawned later, after the chair-leg crafting lock is
+    # cleared and the breakout becomes real gameplay.
+    global _security_camera
+    _security_camera = None
+
+
+def _build_comms_world():
+    """Switch to the second Mission 3 map and rebuild world entities.
+
+    Keeps campaign/combat state (HP, K-9 ammo, etc.) but replaces the cell-block
+    geometry with the Comms Wing geometry.
+    """
+    global MISSION3_MAP, _CHAIR_RECT, _security_camera
+    MISSION3_MAP = MISSION3_COMMS_MAP
+    _CHAIR_RECT = None
+    _security_camera = None
+
+    old_player = STATE.player
+    old_hp = old_player.hp if old_player else 115
+    old_max_hp = old_player.max_hp if old_player else 115
+
+    STATE.walls = []
+    STATE.enemies = []
+    STATE.pickups = []
+    STATE.blood_decals = []
+    STATE.bullets = []
+    STATE.casings = []
+    STATE.particles = []
+    STATE.floating_texts = []
+    STATE.mission3_barriers = []
+    STATE.doors = []
+    STATE.mission3_detainees = []
+
+    spawn_pos = None
+    from interactions import Door
+    for row_idx, row in enumerate(MISSION3_MAP):
+        for col_idx, tile in enumerate(row):
+            x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
+            if tile in ("C", "g"):
+                # In the Comms Wing, ``g`` is outside the authored building,
+                # not playable ground. Treating it as walkable let the player
+                # squeeze through any visual seam beside a doorway and roam
+                # outside the facility shell.
+                STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+            elif tile == "D":
+                d = Door(x, y, is_bay=False)
+                # Archive access is physically sealed until the relay handshake
+                # succeeds. Other Comms Wing doors remain automatic.
+                d.m3_archive_access = (col_idx == 44 and row_idx == 24)
+                d.locked = bool(d.m3_archive_access)
+                STATE.doors.append(d)
+            elif tile == "P":
+                spawn_pos = (x + TILE_SIZE // 2, y + TILE_SIZE // 2)
+
+    if old_player is None:
+        STATE.player = Player(0, 0, max_hp=old_max_hp)
+    else:
+        STATE.player = old_player
+    STATE.player.hp = min(old_hp, old_max_hp)
+    STATE.player.max_hp = old_max_hp
+    if spawn_pos is None:
+        spawn_pos = (6 * TILE_SIZE + TILE_SIZE // 2, 24 * TILE_SIZE + TILE_SIZE // 2)
+    STATE.player.rect.center = spawn_pos
+
+    # Volkov enters this slice as a temporary ally. He stays near Biribel and
+    # takes controlled shots at visible guards instead of being a full companion
+    # system. This makes the Comms Wing feel like a joint breakout without
+    # introducing escort jank.
+    STATE.m3_volkov_ally_active = True
+    STATE.m3_volkov_ally_x = float(spawn_pos[0] - 54)
+    STATE.m3_volkov_ally_y = float(spawn_pos[1] + 22)
+    STATE.m3_volkov_ally_angle = 0.0
+    STATE.m3_volkov_ally_cooldown = 45
+    STATE.m3_volkov_ally_shots = []
+    STATE.m3_volkov_ally_max_hp = 220
+    STATE.m3_volkov_ally_hp = 220
+    STATE.m3_volkov_ally_hit_flash = 0
+    STATE.m3_volkov_path = []
+    STATE.m3_volkov_path_timer = 0
+    STATE.m3_volkov_path_goal = None
+    STATE.m3_volkov_stuck_timer = 0
+    STATE.m3_volkov_last_pos = (
+        float(spawn_pos[0] - 54), float(spawn_pos[1] + 22))
+    STATE.m3_relay_active = False
+    STATE.m3_relay_timer = 0
+    STATE.m3_relay_tuned = False
+    STATE.m3_comms_power_restored = False
+    STATE.m3_comms_auth_acquired = False
+    STATE.m3_comms_ambience_timer = 0
+
+    # Relay/server room collision props. Keep only large fixtures solid.
+    for _cx, _cy, _w, _h in [
+        (19.8, 16.4, 140, 42),   # relay console bank
+        (28.2, 16.4, 140, 42),   # relay console bank
+        (24.0, 19.2, 118, 52),   # central table / tuning desk
+        (36.0, 18.0, 58, 230),   # server rack west row
+        (42.0, 18.0, 58, 230),   # server rack east row
+        (17.0, 35.0, 70, 118),   # battery stack
+        (27.2, 35.0, 70, 118),   # battery stack
+        (37.5, 25.0, 128, 42),   # server workbench
+    ]:
+        STATE.mission3_barriers.append(pygame.Rect(
+            int(_cx * TILE_SIZE - _w / 2), int(_cy * TILE_SIZE - _h / 2), int(_w), int(_h)
+        ))
+
+    # Comms-wing guards — separate from cell-block slice.
+    _spawn_m3_guard(12, 24, hp=145, speed=1.35,
+                    patrol=[(12*TILE_SIZE+32, 24*TILE_SIZE+32), (20*TILE_SIZE+32, 24*TILE_SIZE+32)],
+                    facing=0.0, label="comms_corridor_guard", enemy_type="guard")
+    _spawn_m3_guard(24, 18, hp=135, speed=1.2,
+                    patrol=None, facing=math.pi * 0.5, label="relay_technician", enemy_type="technician")
+    _spawn_m3_guard(39, 23, hp=145, speed=1.3,
+                    patrol=[(36*TILE_SIZE+32, 23*TILE_SIZE+32), (42*TILE_SIZE+32, 26*TILE_SIZE+32)],
+                    facing=math.pi, label="server_marksman", enemy_type="marksman")
+    _spawn_m3_guard(22, 35, hp=135, speed=1.75,
+                    patrol=[(16*TILE_SIZE+32, 35*TILE_SIZE+32), (28*TILE_SIZE+32, 35*TILE_SIZE+32)],
+                    facing=0.0, label="utility_breacher", enemy_type="breacher")
+    _spawn_m3_guard(13, 19, hp=130, speed=1.25,
+                    patrol=None, facing=math.pi * 0.5, label="security_technician", enemy_type="technician")
+    _spawn_m3_guard(36, 21, hp=230, speed=1.0,
+                    patrol=[(36*TILE_SIZE+32, 21*TILE_SIZE+32), (36*TILE_SIZE+32, 26*TILE_SIZE+32)],
+                    facing=math.pi, label="server_shield", enemy_type="shield")
+    _spawn_m3_guard(43, 24, hp=155, speed=1.25,
+                    patrol=None, facing=math.pi, label="archive_marksman", enemy_type="marksman")
+    _spawn_m3_guard(28, 18, hp=130, speed=1.75,
+                    patrol=[(20*TILE_SIZE+32, 18*TILE_SIZE+32), (29*TILE_SIZE+32, 18*TILE_SIZE+32)],
+                    facing=math.pi, label="relay_breacher", enemy_type="breacher")
+
+    STATE.minimap = MiniMap(MISSION3_MAP)
+    reset_camera_state()
+    _snap_camera_to(STATE.player.rect.center)
+
+
+
+def _build_archives_world():
+    """Switch to the Archives Wing map and rebuild world entities.
+
+    Keeps combat loadout (HP, K-9, etc.) from the Comms Wing. Volkov stays
+    behind to hold the relay — this slice is Biribel alone with Maru's ghost
+    in the system and the Vostral file under glass.
+    """
+    global MISSION3_MAP, _CHAIR_RECT, _security_camera
+    MISSION3_MAP = MISSION3_ARCHIVES_MAP
+    _CHAIR_RECT = None
+    _security_camera = None
+
+    old_player = STATE.player
+    old_hp = old_player.hp if old_player else 115
+    old_max_hp = old_player.max_hp if old_player else 115
+
+    STATE.walls = []
+    STATE.enemies = []
+    STATE.pickups = []
+    STATE.blood_decals = []
+    STATE.bullets = []
+    STATE.casings = []
+    STATE.particles = []
+    STATE.floating_texts = []
+    STATE.mission3_barriers = []
+    STATE.doors = []
+    STATE.mission3_detainees = []
+
+    # Volkov comes through with Biribel — same temporary ally as Comms.
+    STATE.m3_volkov_ally_shots = []
+    STATE.m3_volkov_path = []
+    STATE.m3_volkov_path_timer = 0
+    STATE.m3_volkov_path_goal = None
+    STATE.m3_volkov_stuck_timer = 0
+    STATE.m3_volkov_mags = []
+
+    spawn_pos = None
+    from interactions import Door
+    for row_idx, row in enumerate(MISSION3_MAP):
+        for col_idx, tile in enumerate(row):
+            x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
+            if tile in ("C", "g"):
+                STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+            elif tile == "B":
+                # Atrium pillar cover — solid inset barrier, not full wall tile.
+                inset = 10
+                STATE.mission3_barriers.append(pygame.Rect(
+                    x + inset, y + inset, TILE_SIZE - inset * 2, TILE_SIZE - inset * 2))
+            elif tile == "D":
+                d = Door(x, y, is_bay=False)
+                is_vault = (
+                    col_idx in _VOSTRAL_DOOR_COLS
+                    and row_idx in _VOSTRAL_DOOR_ROWS
+                )
+                is_kill_order_exit = (
+                    col_idx in _EXIT_DOOR_COLS
+                    and row_idx in _EXIT_DOOR_ROWS
+                )
+                d.m3_vostral_vault = is_vault
+                d.m3_kill_order_exit = is_kill_order_exit
+                d.locked = bool(is_vault or is_kill_order_exit)
+                STATE.doors.append(d)
+            elif tile == "P":
+                spawn_pos = (x + TILE_SIZE // 2, y + TILE_SIZE // 2)
+
+    if old_player is None:
+        STATE.player = Player(0, 0, max_hp=old_max_hp)
+    else:
+        STATE.player = old_player
+    STATE.player.hp = min(old_hp, old_max_hp)
+    STATE.player.max_hp = old_max_hp
+    if spawn_pos is None:
+        spawn_pos = (
+            _ARCHIVES_SPAWN_COL * TILE_SIZE + TILE_SIZE // 2,
+            _ARCHIVES_SPAWN_ROW * TILE_SIZE + TILE_SIZE // 2,
+        )
+    STATE.player.rect.center = spawn_pos
+    # Face north into the atrium on arrival.
+    STATE.player.angle = -math.pi / 2
+
+    # Volkov spawns beside Biribel in the elevator lobby.
+    STATE.m3_volkov_ally_active = True
+    STATE.m3_volkov_ally_x = float(spawn_pos[0] - 54)
+    STATE.m3_volkov_ally_y = float(spawn_pos[1] + 28)
+    STATE.m3_volkov_ally_angle = -math.pi / 2
+    STATE.m3_volkov_ally_cooldown = 30
+    STATE.m3_volkov_ally_max_hp = 220
+    STATE.m3_volkov_ally_hp = 220
+    STATE.m3_volkov_ally_hit_flash = 0
+    STATE.m3_volkov_last_pos = (
+        float(spawn_pos[0] - 54), float(spawn_pos[1] + 28))
+    STATE.m3_volkov_mags_thrown_count = 0
+
+    # Phase-4 progress flags (fresh on each world build).
+    STATE.m3_archives_cleared = False
+    STATE.m3_maru_contacted = False
+    STATE.m3_maru_contact_active = False
+    STATE.m3_maru_contact_timer = 0
+    STATE.m3_vostral_acquired = False
+    STATE.m3_archives_ambience_timer = 0
+    STATE.m3_archives_alarm = False
+
+    # Furniture / shelf collision — placed to match the new vertical layout.
+    for _cx, _cy, _w, _h in [
+        # Elevator lobby desk
+        (24.0, 44.0, 140, 36),
+        # West catalog end-caps (extra cover at aisle mouths)
+        (8.5, 22.0, 40, 90),
+        (14.5, 22.0, 40, 90),
+        (8.5, 33.0, 40, 90),
+        (14.5, 33.0, 40, 90),
+        # Maru clerk desk
+        (11.0, 12.0, 96, 48),
+        # Research cubicle desks
+        (34.0, 22.0, 70, 40),
+        (38.0, 22.0, 70, 40),
+        (34.0, 32.0, 70, 40),
+        (38.0, 32.0, 70, 40),
+        # Vault pedestal base
+        (42.0, 9.0, 70, 70),
+        # Vestibule card-catalog island
+        (28.0, 9.0, 120, 40),
+    ]:
+        STATE.mission3_barriers.append(pygame.Rect(
+            int(_cx * TILE_SIZE - _w / 2),
+            int(_cy * TILE_SIZE - _h / 2),
+            int(_w), int(_h),
+        ))
+
+    # Archives security — placed for the vertical atrium layout.
+    _spawn_m3_guard(
+        24, 34, hp=150, speed=1.35,
+        patrol=[(24 * TILE_SIZE + 32, 34 * TILE_SIZE + 32),
+                (24 * TILE_SIZE + 32, 18 * TILE_SIZE + 32)],
+        facing=-math.pi / 2, label="atrium_patrol", enemy_type="guard",
+    )
+    _spawn_m3_guard(
+        12, 26, hp=140, speed=1.2,
+        patrol=[(6 * TILE_SIZE + 32, 26 * TILE_SIZE + 32),
+                (18 * TILE_SIZE + 32, 26 * TILE_SIZE + 32)],
+        facing=0.0, label="stacks_clerk_guard", enemy_type="technician",
+    )
+    _spawn_m3_guard(
+        8, 32, hp=155, speed=1.3,
+        patrol=[(8 * TILE_SIZE + 32, 21 * TILE_SIZE + 32),
+                (8 * TILE_SIZE + 32, 34 * TILE_SIZE + 32)],
+        facing=math.pi / 2, label="stacks_marksman", enemy_type="marksman",
+    )
+    _spawn_m3_guard(
+        11, 14, hp=145, speed=1.25,
+        patrol=None, facing=math.pi / 2,
+        label="maru_office_guard", enemy_type="guard",
+    )
+    _spawn_m3_guard(
+        34, 26, hp=150, speed=1.75,
+        patrol=[(30 * TILE_SIZE + 32, 26 * TILE_SIZE + 32),
+                (41 * TILE_SIZE + 32, 26 * TILE_SIZE + 32)],
+        facing=math.pi, label="research_breacher", enemy_type="breacher",
+    )
+    _spawn_m3_guard(
+        38, 21, hp=160, speed=1.3,
+        patrol=None, facing=math.pi,
+        label="cubicle_marksman", enemy_type="marksman",
+    )
+    # Vestibule shield — NEVER inside the locked vault (that soft-locked
+    # "clear hostiles" because the player could not reach the last enemy).
+    _spawn_m3_guard(
+        33, 9, hp=240, speed=1.0,
+        patrol=[(30 * TILE_SIZE + 32, 9 * TILE_SIZE + 32),
+                (35 * TILE_SIZE + 32, 9 * TILE_SIZE + 32)],
+        facing=0.0, label="vault_shield", enemy_type="shield",
+    )
+    _spawn_m3_guard(
+        24, 10, hp=155, speed=1.4,
+        patrol=[(22 * TILE_SIZE + 32, 10 * TILE_SIZE + 32),
+                (32 * TILE_SIZE + 32, 10 * TILE_SIZE + 32)],
+        facing=0.0, label="vestibule_guard", enemy_type="guard",
+    )
+
+    STATE.minimap = MiniMap(MISSION3_MAP)
+    reset_camera_state()
+    _snap_camera_to(STATE.player.rect.center)
+
+
+def _spawn_m3_guards_once():
+    """Spawn Mission 3 guards only after Volkov's scripted breach is over.
+
+    They used to exist from mission start, which meant they could gather around
+    Biribel's cell during the in-game Volkov cutscene and jitter against the
+    locked doorway. Spawning here keeps the cinematic clean and starts combat
+    only once the player has a shiv / the doorway is no longer blocked.
+    """
+    global _security_camera
+    if getattr(STATE, "mission3_guards_spawned", False):
+        return
+    # Do not spawn while Volkov is still visibly running/fading out. Otherwise
+    # guards can appear during his scripted distraction and start colliding with
+    # the cell/doorway beats.
+    if not getattr(STATE, "m3_volkov_run_done", False):
+        return
+    STATE.mission3_guards_spawned = True
+    STATE.enemies = []
+    # ── Spawn the five IPA cell-block guards ──
+    # Guard 1 — main corridor east, east-west patrol.
+    _spawn_m3_guard(
+        *_GUARD_POST_1_TILE,
+        hp=140, speed=1.4,
+        patrol=_PATROL_ROUTE_1,
+        facing=math.pi,          # facing west (toward corridor)
+        label="guard_post_1",
+        enemy_type="guard",
+    )
+    # Guard 2 — main corridor centre, stationary, looking north toward cells.
+    _spawn_m3_guard(
+        *_GUARD_POST_2_TILE,
+        hp=135, speed=1.4,
+        patrol=None,
+        facing=math.pi * 1.5,    # facing north
+        label="guard_post_2",
+        enemy_type="marksman",
+    )
+    # Guard 3 — guard room interior, patrols east-west inside the room.
+    _spawn_m3_guard(
+        *_GUARD_POST_3_TILE,
+        hp=150, speed=1.4,
+        patrol=_PATROL_ROUTE_3,
+        facing=0.0,              # facing east
+        label="guard_post_3",
+        enemy_type="guard",
+    )
+    # Guard 4 — kitchen area, stationary, facing the vent.
+    _spawn_m3_guard(
+        *_GUARD_POST_4_TILE,
+        hp=130, speed=1.2,
+        patrol=None,
+        facing=math.pi * 0.5,    # facing south
+        label="guard_post_4",
+        enemy_type="breacher",
+    )
+    # Guard 5 — main corridor west, east-west patrol.
+    _spawn_m3_guard(
+        *_GUARD_POST_5_TILE,
+        hp=135, speed=1.4,
+        patrol=_PATROL_ROUTE_5,
+        facing=0.0,              # facing east
+        label="guard_post_5",
+        enemy_type="guard",
+    )
+    # Guard 6 — armory patrol. Makes the K-9 pickup feel earned.
+    _spawn_m3_guard(
+        *_GUARD_POST_6_TILE,
+        hp=165, speed=1.35,
+        patrol=_PATROL_ROUTE_6,
+        facing=math.pi,          # facing west across the rack room
+        label="guard_armory",
+        enemy_type="shield",
+    )
+    # Guard 7 — service-exit checkpoint. Blocks the final sprint unless cleared.
+    _spawn_m3_guard(
+        *_GUARD_POST_7_TILE,
+        hp=160, speed=1.35,
+        patrol=None,
+        facing=math.pi,          # facing west into the corridor
+        label="guard_exit_checkpoint",
+        enemy_type="marksman",
+    )
+    # Guard 8 — second guard-room patrol so the big room is not empty.
+    _spawn_m3_guard(
+        *_GUARD_POST_8_TILE,
+        hp=145, speed=1.4,
+        patrol=_PATROL_ROUTE_8,
+        facing=math.pi,          # facing west
+        label="guard_room_east",
+        enemy_type="technician",
+    )
+    # Guard 9 — lower service spine breacher, makes the expanded wing matter.
+    _spawn_m3_guard(
+        24, 27,
+        hp=135, speed=1.75,
+        patrol=[(18*TILE_SIZE+32, 27*TILE_SIZE+32), (31*TILE_SIZE+32, 27*TILE_SIZE+32)],
+        facing=math.pi,
+        label="guard_service_breacher",
+        enemy_type="breacher",
+    )
+    # Guard 10 — maintenance shield guard, slow pressure enemy.
+    _spawn_m3_guard(
+        38, 37,
+        hp=230, speed=1.0,
+        patrol=[(36*TILE_SIZE+32, 37*TILE_SIZE+32), (42*TILE_SIZE+32, 37*TILE_SIZE+32)],
+        facing=math.pi,
+        label="guard_maintenance_shield",
+        enemy_type="shield",
+    )
+
+    # ── Security camera in the kitchen ──
+    _security_camera = SecurityCamera(_CAMERA_TILE_COL, _CAMERA_TILE_ROW,
+                                      angle=math.radians(100))  # looking SW
+
+
+
+# ─────────────────────────────────────────────
+# Ambient detainees — non-combat life in the black-site
+# ─────────────────────────────────────────────
+def _init_m3_detainees():
+    """Populate non-combat prisoners/workers.
+
+    These are not Enemy objects: no minimap dots, no aim-assist target, no
+    collision. They exist to make the prison feel inhabited without adding an
+    escort/quest system.
+    """
+    def _w(tx, ty):
+        return tx * TILE_SIZE + TILE_SIZE // 2, ty * TILE_SIZE + TILE_SIZE // 2
+
+    specs = [
+        # Neighbor cells — quiet silhouettes that make the decorated cells feel occupied.
+        ("cell_bars", 9.4, 8.2, "bars", "cell", 101, "..."),
+        ("cell_sit", 17.5, 8.8, "sit", "cell", 102, "keep moving"),
+        ("cell_huddle", 26.0, 10.2, "cower", "cell", 103, "don't look back"),
+
+        # Laundry — forced-labor / uniform processing, not story-critical.
+        ("laundry_fold", 12.2, 36.6, "fold", "laundry", 201, "they check the carts"),
+        ("laundry_cart", 6.7, 40.4, "lean", "laundry", 202, "go"),
+        ("laundry_wall", 15.3, 38.5, "stand", "laundry", 203, "not me"),
+
+        # Rec yard — most visible ambient population.
+        ("yard_pacer", 21.2, 35.7, "pace_x", "yard", 301, "door's open?"),
+        ("yard_fence", 28.4, 40.2, "bars", "yard", 302, "quiet"),
+        ("yard_sit", 22.2, 41.1, "sit", "yard", 303, "please"),
+        ("yard_push", 24.5, 38.2, "pushup", "yard", 304, ""),
+        ("yard_stand", 27.0, 35.3, "stand", "yard", 305, "don't shoot"),
+
+        # Maintenance — forced-labor silhouettes.
+        ("maint_worker", 33.5, 38.8, "worker", "maintenance", 401, "valve's stuck"),
+        ("maint_crouch", 41.0, 39.6, "cower", "maintenance", 402, ""),
+    ]
+
+    STATE.mission3_detainees = []
+    for name, tx, ty, pose, room, seed, line in specs:
+        x, y = _w(tx, ty)
+        STATE.mission3_detainees.append({
+            "name": name,
+            "x": x,
+            "y": y,
+            "base_x": x,
+            "base_y": y,
+            "pose": pose,
+            "room": room,
+            "seed": seed,
+            "line": line,
+            "line_timer": 0,
+            "cooldown": 90 + (seed % 160),
+            "state": "idle",
+            "timer": 0,
+        })
+
+
+def _update_m3_detainees():
+    detainees = getattr(STATE, "mission3_detainees", [])
+    if not detainees:
+        return
+
+    threat = bool(getattr(STATE, "m3_alarm_active", False))
+    threat = threat or any(getattr(e, "state", "") in ("CHASE", "ATTACK") or getattr(e, "alerted", False)
+                           for e in getattr(STATE, "enemies", []))
+    threat = threat or any(b.get("owner") in ("player", "enemy") for b in getattr(STATE, "bullets", []))
+
+    px = STATE.player.rect.centerx if STATE.player else 0
+    py = STATE.player.rect.centery if STATE.player else 0
+
+    for d in detainees:
+        if d.get("dead"):
+            d["line_timer"] = 0
+            continue
+        d["timer"] = d.get("timer", 0) + 1
+        d["state"] = "cower" if threat else "idle"
+        if d.get("line_timer", 0) > 0:
+            d["line_timer"] -= 1
+        d["cooldown"] = max(0, d.get("cooldown", 0) - 1)
+
+        # Very light, local barks when the player passes close. No global quest,
+        # no pinned radio spam.
+        if (not threat and d.get("line") and d.get("cooldown", 0) <= 0
+                and math.hypot(px - d["base_x"], py - d["base_y"]) < 130):
+            d["line_timer"] = 115
+            d["cooldown"] = 520 + (d.get("seed", 0) % 180)
+
+
+def _detainee_draw_pos(d):
+    x, y = d.get("base_x", d.get("x", 0)), d.get("base_y", d.get("y", 0))
+    if d.get("state") != "cower" and d.get("pose") == "pace_x":
+        x += math.sin(d.get("timer", 0) * 0.025 + d.get("seed", 0)) * 28
+    return x, y
+
+
+def _detainee_palette(seed, room="yard"):
+    """Readable prisoner palette.
+
+    Previous detainees were too muted/round and read like floor props. These
+    colors make them identifiable as people in facility clothing without
+    making them look like enemies.
+    """
+    rng = random.Random(seed)
+    if room == "maintenance":
+        cloth = rng.choice([(62, 72, 68), (70, 76, 64), (56, 66, 66)])
+        stripe = (178, 138, 55)  # work-detail armband/stripe
+    elif room == "laundry":
+        cloth = rng.choice([(76, 88, 88), (66, 82, 86), (82, 82, 72)])
+        stripe = (155, 176, 170)
+    elif room == "cell":
+        cloth = rng.choice([(74, 66, 52), (68, 72, 66), (78, 70, 58)])
+        stripe = (160, 126, 68)
+    else:
+        cloth = rng.choice([(86, 76, 56), (92, 82, 60), (72, 78, 70), (82, 72, 54)])
+        stripe = (190, 145, 64)  # dirty prison-orange accent
+    cloth_dark = (max(0, cloth[0] - 30), max(0, cloth[1] - 30), max(0, cloth[2] - 30))
+    cloth_hi = (min(255, cloth[0] + 22), min(255, cloth[1] + 22), min(255, cloth[2] + 18))
+    skin = rng.choice([(158, 118, 88), (176, 132, 96), (122, 90, 70),
+                       (194, 152, 112), (144, 102, 78)])
+    hair = rng.choice([(18, 14, 12), (32, 24, 18), (48, 38, 26), (70, 58, 42)])
+    outline = (8, 9, 9)
+    cuff = (36, 38, 36)
+    return cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff
+
+
+def _draw_detainee_shadow(surface, sx, sy, w=30, h=10, alpha=62):
+    sh = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (0, 0, 0, alpha), sh.get_rect())
+    surface.blit(sh, (int(sx - w // 2), int(sy + 11)))
+
+
+def _poly_rot(cx, cy, angle, pts):
+    ca, sa = math.cos(angle), math.sin(angle)
+    return [(cx + x * ca - y * sa, cy + x * sa + y * ca) for x, y in pts]
+
+
+def _draw_rot_line(surface, color, cx, cy, angle, p1, p2, width=1):
+    a = _poly_rot(cx, cy, angle, [p1, p2])
+    pygame.draw.line(surface, color, a[0], a[1], width)
+
+
+def _draw_prisoner_core(surface, sx, sy, d, *, facing=None, crouched=False, seated=False):
+    """Draw an articulated prisoner-shaped top-down sprite.
+
+    Uses the same scale language as player/enemy sprites: visible head, torso,
+    arms, feet, clothing stripe, cuffs. This should read as a person, not a
+    decorative blob.
+    """
+    seed = d.get("seed", 0)
+    room = d.get("room", "yard")
+    cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff = _detainee_palette(seed, room)
+    if facing is None:
+        facing = (seed % 628) / 100.0
+    if d.get("state") == "cower":
+        crouched = True
+    sway = 0 if crouched or seated else math.sin(d.get("timer", 0) * 0.035 + seed) * 0.8
+    sy += sway
+    ca, sa = math.cos(facing), math.sin(facing)
+    px, py = -sa, ca
+
+    if seated:
+        _draw_detainee_shadow(surface, sx, sy, 36, 12, 54)
+        # Bent legs, torso and head clearly separate.
+        torso = _poly_rot(sx, sy, facing, [(-10, -7), (9, -7), (10, 8), (0, 13), (-11, 8)])
+        pygame.draw.polygon(surface, outline, torso)
+        inner = _poly_rot(sx, sy, facing, [(-7, -5), (7, -5), (8, 6), (0, 10), (-8, 6)])
+        pygame.draw.polygon(surface, cloth, inner)
+        _draw_rot_line(surface, stripe, sx, sy, facing, (-7, -1), (7, -1), 2)
+        # Legs forward in a V.
+        for side in (-1, 1):
+            hip = _poly_rot(sx, sy, facing, [(side * 5, 8)])[0]
+            knee = (hip[0] - ca * 10 + px * side * 6, hip[1] - sa * 10 + py * side * 6)
+            foot = (knee[0] - ca * 7 + px * side * 5, knee[1] - sa * 7 + py * side * 5)
+            pygame.draw.line(surface, outline, hip, foot, 5)
+            pygame.draw.line(surface, cloth_dark, hip, foot, 3)
+            pygame.draw.ellipse(surface, outline, (int(foot[0] - 4), int(foot[1] - 2), 8, 5))
+        # Head tucked near chest.
+        hx, hy = _poly_rot(sx, sy, facing, [(0, -16)])[0]
+        pygame.draw.circle(surface, outline, (int(hx), int(hy)), 7)
+        pygame.draw.circle(surface, skin, (int(hx), int(hy)), 6)
+        pygame.draw.arc(surface, hair, (int(hx - 6), int(hy - 8), 12, 11), math.pi, math.tau, 3)
+        return
+
+    if crouched:
+        # Compact, but still person-shaped: head + back + arms over head.
+        _draw_detainee_shadow(surface, sx, sy, 32, 12, 68)
+        torso = _poly_rot(sx, sy, facing, [(-13, -6), (10, -8), (15, 5), (3, 13), (-13, 9)])
+        pygame.draw.polygon(surface, outline, torso)
+        inner = _poly_rot(sx, sy, facing, [(-10, -4), (7, -6), (11, 4), (2, 10), (-10, 7)])
+        pygame.draw.polygon(surface, cloth_dark, inner)
+        hx, hy = _poly_rot(sx, sy, facing, [(-4, -13)])[0]
+        pygame.draw.circle(surface, outline, (int(hx), int(hy)), 7)
+        pygame.draw.circle(surface, skin, (int(hx), int(hy)), 6)
+        pygame.draw.arc(surface, hair, (int(hx - 6), int(hy - 8), 12, 11), math.pi, math.tau, 3)
+        # Forearms over head.
+        a1 = _poly_rot(sx, sy, facing, [(-12, -5), (-3, -15)])[0]
+        a2 = _poly_rot(sx, sy, facing, [(7, -4), (-2, -15)])[0]
+        pygame.draw.line(surface, outline, a1, a2, 4)
+        pygame.draw.line(surface, cloth_hi, a1, a2, 2)
+        return
+
+    _draw_detainee_shadow(surface, sx, sy, 28, 10, 55)
+
+    # Legs / shoes first.
+    for side in (-1, 1):
+        hip = _poly_rot(sx, sy, facing, [(side * 5, -5)])[0]
+        foot = _poly_rot(sx, sy, facing, [(side * 6, -17)])[0]
+        pygame.draw.line(surface, outline, hip, foot, 5)
+        pygame.draw.line(surface, cloth_dark, hip, foot, 3)
+        pygame.draw.ellipse(surface, outline, (int(foot[0] - 4), int(foot[1] - 2), 8, 5))
+
+    # Torso/shoulders.
+    torso = _poly_rot(sx, sy, facing, [(-9, -7), (9, -7), (11, 7), (0, 13), (-11, 7)])
+    pygame.draw.polygon(surface, outline, torso)
+    inner = _poly_rot(sx, sy, facing, [(-7, -5), (7, -5), (8, 6), (0, 10), (-8, 6)])
+    pygame.draw.polygon(surface, cloth, inner)
+    _draw_rot_line(surface, cloth_hi, sx, sy, facing, (-5, -4), (5, -4), 1)
+    _draw_rot_line(surface, stripe, sx, sy, facing, (-7, 0), (7, 0), 2)
+    # Tiny ID patch / wrist cuffs.
+    patch = _poly_rot(sx, sy, facing, [(4, 4)])[0]
+    pygame.draw.rect(surface, stripe, (int(patch[0] - 1), int(patch[1] - 1), 3, 2))
+
+    # Arms hang low, no weapons.
+    for side in (-1, 1):
+        shoulder = _poly_rot(sx, sy, facing, [(side * 9, -3)])[0]
+        hand = _poly_rot(sx, sy, facing, [(side * 13, 8)])[0]
+        pygame.draw.line(surface, outline, shoulder, hand, 5)
+        pygame.draw.line(surface, cloth_dark, shoulder, hand, 3)
+        pygame.draw.circle(surface, skin, (int(hand[0]), int(hand[1])), 2)
+        pygame.draw.circle(surface, cuff, (int(hand[0] - side * 2), int(hand[1])), 2, 1)
+
+    # Head/neck forward.
+    hx, hy = _poly_rot(sx, sy, facing, [(0, 17)])[0]
+    pygame.draw.circle(surface, outline, (int(hx), int(hy)), 8)
+    pygame.draw.circle(surface, skin, (int(hx), int(hy)), 7)
+    pygame.draw.arc(surface, hair, (int(hx - 7), int(hy - 8), 14, 11), 0, math.pi, 4)
+    # Face tick so head reads as a head at small size.
+    pygame.draw.line(surface, (70, 46, 34), (int(hx - 3), int(hy + 3)), (int(hx + 3), int(hy + 3)), 1)
+
+
+def _draw_detainee_stand(surface, sx, sy, d, cower=False):
+    if cower or d.get("state") == "cower":
+        _draw_prisoner_core(surface, sx, sy, d, crouched=True)
+        return
+    facing = (d.get("seed", 0) % 628) / 100.0
+    if STATE.player:
+        dx = STATE.player.rect.centerx - d.get("base_x", d.get("x", 0))
+        dy = STATE.player.rect.centery - d.get("base_y", d.get("y", 0))
+        if math.hypot(dx, dy) < 180:
+            facing = math.atan2(dy, dx)
+    _draw_prisoner_core(surface, sx, sy, d, facing=facing)
+
+
+def _draw_detainee_sit(surface, sx, sy, d):
+    """Consistent seated prisoner pose.
+
+    Cross-legged / slumped, but still built from the same head-torso-limb
+    language as standing detainees. The older variant looked like loose debris.
+    """
+    if d.get("state") == "cower":
+        _draw_detainee_cower(surface, sx, sy, d)
+        return
+    cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff = _detainee_palette(d.get("seed", 0), d.get("room", "yard"))
+    _draw_detainee_shadow(surface, sx, sy, 34, 10, 48)
+    facing = -math.pi / 2
+    # Torso upright but low.
+    torso = _poly_rot(sx, sy, facing, [(-9, -6), (9, -6), (10, 6), (0, 11), (-10, 6)])
+    pygame.draw.polygon(surface, outline, torso)
+    inner = _poly_rot(sx, sy, facing, [(-7, -4), (7, -4), (8, 5), (0, 8), (-8, 5)])
+    pygame.draw.polygon(surface, cloth, inner)
+    _draw_rot_line(surface, stripe, sx, sy, facing, (-7, 0), (7, 0), 2)
+    # Crossed legs as two clear dark strokes in front.
+    for side in (-1, 1):
+        hip = _poly_rot(sx, sy, facing, [(side * 5, 7)])[0]
+        knee = (sx + side * 12, sy + 13)
+        foot = (sx + side * 20, sy + 11)
+        pygame.draw.line(surface, outline, hip, knee, 5)
+        pygame.draw.line(surface, cloth_dark, hip, knee, 3)
+        pygame.draw.line(surface, outline, knee, foot, 4)
+        pygame.draw.line(surface, cloth_dark, knee, foot, 2)
+    # Hands on knees.
+    for side in (-1, 1):
+        pygame.draw.circle(surface, skin, (int(sx + side * 9), int(sy + 7)), 2)
+    # Head and hair.
+    hx, hy = sx, sy - 14
+    pygame.draw.circle(surface, outline, (int(hx), int(hy)), 8)
+    pygame.draw.circle(surface, skin, (int(hx), int(hy)), 7)
+    pygame.draw.arc(surface, hair, (int(hx - 7), int(hy - 8), 14, 11), math.pi, math.tau, 3)
+
+
+def _draw_detainee_cower(surface, sx, sy, d):
+    _draw_prisoner_core(surface, sx, sy, d, crouched=True)
+
+
+def _draw_detainee_pushup(surface, sx, sy, d):
+    """Exercise-yard detainee pose.
+
+    Instead of a prone push-up silhouette (which read like a dropped prop/body),
+    use a kneeling stretch/rest pose that keeps the prisoner anatomy readable.
+    """
+    if d.get("state") == "cower":
+        _draw_detainee_cower(surface, sx, sy, d)
+        return
+    cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff = _detainee_palette(d.get("seed", 0), d.get("room", "yard"))
+    bounce = math.sin(d.get("timer", 0) * 0.055) * 1.2
+    _draw_detainee_shadow(surface, sx, sy, 34, 10, 45)
+    # Kneeling body.
+    torso = [(sx - 10, sy - 6 + bounce), (sx + 9, sy - 7 + bounce),
+             (sx + 11, sy + 7 + bounce), (sx, sy + 13 + bounce),
+             (sx - 12, sy + 7 + bounce)]
+    pygame.draw.polygon(surface, outline, torso)
+    pygame.draw.polygon(surface, cloth, [(sx - 7, sy - 4 + bounce), (sx + 7, sy - 5 + bounce),
+                                         (sx + 8, sy + 5 + bounce), (sx, sy + 10 + bounce),
+                                         (sx - 8, sy + 5 + bounce)])
+    pygame.draw.line(surface, stripe, (int(sx - 7), int(sy + 1 + bounce)), (int(sx + 7), int(sy + 1 + bounce)), 2)
+    # Knees/feet on the floor.
+    for side in (-1, 1):
+        pygame.draw.line(surface, outline, (int(sx + side * 5), int(sy + 9 + bounce)), (int(sx + side * 14), int(sy + 19)), 5)
+        pygame.draw.line(surface, cloth_dark, (int(sx + side * 5), int(sy + 9 + bounce)), (int(sx + side * 14), int(sy + 19)), 3)
+        pygame.draw.ellipse(surface, outline, (int(sx + side * 14 - 4), int(sy + 18), 8, 5))
+    # Hands braced on floor, like stretching/resting.
+    pygame.draw.line(surface, outline, (int(sx - 8), int(sy - 1 + bounce)), (int(sx - 21), int(sy + 7)), 4)
+    pygame.draw.line(surface, cloth_dark, (int(sx - 8), int(sy - 1 + bounce)), (int(sx - 21), int(sy + 7)), 2)
+    pygame.draw.line(surface, outline, (int(sx + 8), int(sy - 1 + bounce)), (int(sx + 19), int(sy + 7)), 4)
+    pygame.draw.line(surface, cloth_dark, (int(sx + 8), int(sy - 1 + bounce)), (int(sx + 19), int(sy + 7)), 2)
+    pygame.draw.circle(surface, skin, (int(sx - 22), int(sy + 7)), 2)
+    pygame.draw.circle(surface, skin, (int(sx + 20), int(sy + 7)), 2)
+    # Head.
+    pygame.draw.circle(surface, outline, (int(sx), int(sy - 14 + bounce)), 8)
+    pygame.draw.circle(surface, skin, (int(sx), int(sy - 14 + bounce)), 7)
+    pygame.draw.arc(surface, hair, (int(sx - 7), int(sy - 22 + bounce), 14, 11), math.pi, math.tau, 3)
+
+
+def _draw_detainee_bars(surface, sx, sy, d):
+    """Prisoner at bars/fence, with the same body language as others."""
+    cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff = _detainee_palette(d.get("seed", 0), d.get("room", "cell"))
+    _draw_detainee_shadow(surface, sx, sy, 28, 8, 32)
+    facing = math.pi / 2
+    # Draw a full small prisoner first so it reads human, then put bars over it.
+    _draw_prisoner_core(surface, sx, sy, d, facing=facing)
+    # Hands on/through the bars.
+    pygame.draw.circle(surface, skin, (int(sx - 12), int(sy - 7)), 3)
+    pygame.draw.circle(surface, skin, (int(sx + 12), int(sy - 7)), 3)
+    # Bars/fence overlay; this is what makes the pose make sense.
+    for bx in (-18, -9, 0, 9, 18):
+        pygame.draw.line(surface, (80, 84, 78), (int(sx + bx), int(sy - 30)), (int(sx + bx), int(sy + 18)), 2)
+        pygame.draw.line(surface, (26, 28, 26), (int(sx + bx + 2), int(sy - 30)), (int(sx + bx + 2), int(sy + 18)), 1)
+    pygame.draw.line(surface, (92, 96, 88), (int(sx - 24), int(sy - 20)), (int(sx + 24), int(sy - 20)), 2)
+    pygame.draw.line(surface, (92, 96, 88), (int(sx - 24), int(sy + 6)), (int(sx + 24), int(sy + 6)), 2)
+
+
+def _draw_detainee_worker(surface, sx, sy, d):
+    if d.get("state") == "cower":
+        _draw_detainee_cower(surface, sx, sy, d)
+        return
+    _draw_prisoner_core(surface, sx, sy, d, facing=-0.3)
+    pygame.draw.line(surface, (124, 118, 92), (int(sx + 10), int(sy - 1)), (int(sx + 24), int(sy - 8)), 2)
+    pygame.draw.circle(surface, (76, 76, 66), (int(sx + 26), int(sy - 9)), 3, 1)
+
+
+def _draw_prisoner_player_sprite(surface, sx, sy, d, *, bars=False, cower=False, _scaled=False):
+    """Readable ambient prisoner sprite with better human silhouettes.
+
+    Detainees are non-combat world dressing, but they need to read instantly as
+    people: shoulders, head, hands, cuffs, posture, clothing, and context.  This
+    renderer keeps them slightly more figurative than top-down guards so the
+    black-site feels inhabited instead of decorated with small props.
+    """
+    if not _scaled:
+        # Keep detainees readable but clearly smaller/lower-priority than the
+        # player/guards.  1.22 made them look hero-sized; 0.96 better matches
+        # the game's top-down actor scale.
+        scale = 0.96
+        pad = 68
+        temp = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
+        _draw_prisoner_player_sprite(temp, pad, pad, d, bars=bars, cower=cower, _scaled=True)
+        sw, sh = int(temp.get_width() * scale), int(temp.get_height() * scale)
+        temp = pygame.transform.smoothscale(temp, (sw, sh))
+        surface.blit(temp, (int(sx - sw // 2), int(sy - sh // 2)))
+        return
+
+    seed = d.get("seed", 0)
+    room = d.get("room", "yard")
+    pose = d.get("pose", "stand")
+    cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff = _detainee_palette(seed, room)
+    rng = random.Random(seed)
+
+    # Strong, consistent detainee identity: dirty jumpsuit colors by work area,
+    # never enemy-uniform colors.  The stripe/patch distinguishes prisoners at
+    # small scale.
+    if room in ("yard", "cell"):
+        suit = rng.choice([(158, 88, 35), (142, 78, 32), (174, 102, 44)])
+        suit_dark = (74, 43, 24)
+        suit_hi = (214, 134, 62)
+    elif room == "laundry":
+        suit = rng.choice([(88, 110, 108), (78, 98, 104), (96, 106, 92)])
+        suit_dark = (42, 54, 56)
+        suit_hi = (150, 174, 166)
+    else:
+        suit = rng.choice([(84, 98, 78), (76, 92, 84), (92, 94, 70)])
+        suit_dark = (38, 50, 42)
+        suit_hi = (182, 144, 64)
+    id_patch = (226, 190, 118)
+
+    timer = d.get("timer", 0)
+    bob = 0 if cower or d.get("state") == "cower" else math.sin(timer * 0.035 + seed) * 0.8
+    sy += bob
+    facing = -1 if seed % 2 else 1
+
+    def I(v):
+        return int(round(v))
+
+    def shadow(w=34, h=11, a=58, dy=18):
+        _draw_detainee_shadow(surface, sx, sy + dy - 11, w, h, a)
+
+    def limb(p1, p2, col, width=5, inner=None, inner_w=3):
+        pygame.draw.line(surface, outline, (I(p1[0]), I(p1[1])), (I(p2[0]), I(p2[1])), width)
+        pygame.draw.line(surface, inner or col, (I(p1[0]), I(p1[1])), (I(p2[0]), I(p2[1])), inner_w)
+
+    def head(cx, cy, r=8, tilt=0):
+        pygame.draw.circle(surface, outline, (I(cx), I(cy)), r + 1)
+        pygame.draw.circle(surface, skin, (I(cx), I(cy)), r)
+        # Hair cap / shaved head variations.
+        if seed % 5 == 0:
+            pygame.draw.arc(surface, (92, 74, 58), (I(cx-r), I(cy-r-1), r*2, r+5), math.pi, math.tau, 2)
+        else:
+            pygame.draw.arc(surface, hair, (I(cx-r), I(cy-r-2), r*2, r+7), math.pi, math.tau, 4)
+        # Tiny face direction mark, enough to avoid faceless blobs.
+        pygame.draw.line(surface, (76, 48, 35), (I(cx - 3*facing), I(cy)), (I(cx + 3*facing), I(cy)), 1)
+        if seed % 3 == 0:
+            pygame.draw.line(surface, (95, 58, 42), (I(cx - 3), I(cy + 4)), (I(cx + 3), I(cy + 4)), 1)
+
+    def torso(cx, cy, crouch=False):
+        if crouch:
+            outer = [(cx-15, cy-7), (cx+10, cy-10), (cx+17, cy+2), (cx+7, cy+14), (cx-14, cy+10)]
+            inner = [(cx-12, cy-5), (cx+7, cy-7), (cx+13, cy+2), (cx+5, cy+10), (cx-11, cy+7)]
+        else:
+            outer = [(cx-12, cy-13), (cx+12, cy-13), (cx+15, cy+7), (cx, cy+18), (cx-15, cy+7)]
+            inner = [(cx-9, cy-10), (cx+9, cy-10), (cx+11, cy+6), (cx, cy+14), (cx-11, cy+6)]
+        pygame.draw.polygon(surface, outline, [(I(x), I(y)) for x, y in outer])
+        pygame.draw.polygon(surface, suit, [(I(x), I(y)) for x, y in inner])
+        pygame.draw.line(surface, suit_hi, (I(cx-9), I(cy-2)), (I(cx+9), I(cy-2)), 2)
+        pygame.draw.rect(surface, id_patch, (I(cx + 4), I(cy + 5), 5, 4))
+        # Vertical seam.
+        pygame.draw.line(surface, suit_dark, (I(cx), I(cy-8)), (I(cx), I(cy+12)), 1)
+
+    # Threat response: cower variations, not one repeated blob.
+    if cower or d.get("state") == "cower":
+        shadow(40, 13, 78, dy=18)
+        variant = seed % 3
+        if variant == 0:
+            # Curled on knees, arms over head.
+            torso(sx, sy + 4, crouch=True)
+            head(sx - 7, sy - 11, 8)
+            limb((sx - 16, sy - 2), (sx - 5, sy - 17), suit_dark, 5, suit_hi, 2)
+            limb((sx + 10, sy - 2), (sx - 2, sy - 17), suit_dark, 5, suit_hi, 2)
+            for side in (-1, 1):
+                limb((sx + side*5, sy + 13), (sx + side*18, sy + 22), suit_dark, 5, suit_dark, 3)
+        elif variant == 1:
+            # Kneeling with hands visible on floor.
+            torso(sx, sy + 2, crouch=True)
+            head(sx + 3, sy - 14, 8)
+            for side in (-1, 1):
+                limb((sx + side*10, sy + 3), (sx + side*25, sy + 11), suit_dark, 5, suit_dark, 3)
+                pygame.draw.circle(surface, skin, (I(sx + side*28), I(sy + 12)), 3)
+                limb((sx + side*5, sy + 13), (sx + side*14, sy + 24), suit_dark, 5, suit_dark, 3)
+        else:
+            # Side huddle.
+            pygame.draw.ellipse(surface, outline, (I(sx-20), I(sy-8), 39, 24))
+            pygame.draw.ellipse(surface, suit_dark, (I(sx-17), I(sy-6), 33, 19))
+            head(sx - 13, sy - 12, 8)
+            limb((sx - 4, sy - 3), (sx - 18, sy - 16), suit_dark, 5, suit_hi, 2)
+        return
+
+    # Pose-specific silhouettes.
+    if bars:
+        # Prisoner pressed to bars/fence: hands and face visible behind metal.
+        shadow(34, 10, 45, dy=16)
+        torso(sx, sy + 0, crouch=False)
+        head(sx, sy - 22, 8)
+        for side in (-1, 1):
+            hand = (sx + side * 19, sy - 10)
+            limb((sx + side*10, sy - 6), hand, suit_dark, 5, suit_dark, 3)
+            pygame.draw.circle(surface, skin, (I(hand[0]), I(hand[1])), 4)
+            pygame.draw.circle(surface, cuff, (I(hand[0] - side*3), I(hand[1] + 2)), 3, 1)
+        # Bars in foreground, now more contextual and taller.
+        for bx in (-24, -12, 0, 12, 24):
+            pygame.draw.line(surface, (105, 110, 102), (I(sx + bx), I(sy - 42)), (I(sx + bx), I(sy + 26)), 2)
+            pygame.draw.line(surface, (18, 20, 19), (I(sx + bx + 2), I(sy - 42)), (I(sx + bx + 2), I(sy + 26)), 1)
+        pygame.draw.line(surface, (120, 124, 112), (I(sx - 30), I(sy - 24)), (I(sx + 30), I(sy - 24)), 2)
+        pygame.draw.line(surface, (120, 124, 112), (I(sx - 30), I(sy + 8)), (I(sx + 30), I(sy + 8)), 2)
+        return
+
+    if pose == "sit":
+        shadow(42, 12, 56, dy=20)
+        # Cross-legged / exhausted seated pose.
+        torso(sx, sy + 1, crouch=False)
+        limb((sx - 4, sy + 15), (sx - 25, sy + 26), suit_dark, 6, suit_dark, 4)
+        limb((sx + 4, sy + 15), (sx + 25, sy + 26), suit_dark, 6, suit_dark, 4)
+        pygame.draw.ellipse(surface, outline, (I(sx-30), I(sy+23), 12, 6))
+        pygame.draw.ellipse(surface, outline, (I(sx+18), I(sy+23), 12, 6))
+        for side in (-1, 1):
+            limb((sx + side*11, sy - 5), (sx + side*18, sy + 12), suit_dark, 5, suit_dark, 3)
+            pygame.draw.circle(surface, skin, (I(sx + side*19), I(sy + 13)), 3)
+        head(sx, sy - 23, 8)
+        return
+
+    if pose == "pushup":
+        # Make the exercise-yard figure read as kneeling/resting, not corpse.
+        shadow(40, 11, 50, dy=20)
+        torso(sx, sy + 1, crouch=False)
+        head(sx, sy - 23, 8)
+        for side in (-1, 1):
+            limb((sx + side*6, sy + 14), (sx + side*17, sy + 28), suit_dark, 6, suit_dark, 4)
+            limb((sx + side*11, sy - 3), (sx + side*27, sy + 6), suit_dark, 5, suit_dark, 3)
+            pygame.draw.circle(surface, skin, (I(sx + side*29), I(sy + 7)), 3)
+        return
+
+    # Standing / pacing / worker / lean / fold.  Clear biped silhouette with
+    # slight pose variation based on authored pose.
+    shadow(32, 10, 58, dy=18)
+    lean = 0
+    if pose == "lean":
+        lean = -5 * facing
+    elif pose == "fold":
+        lean = 2 * facing
+    elif pose == "worker":
+        lean = 4 * facing
+    bx = sx + lean
+
+    # Legs / feet.
+    step = math.sin(timer * 0.06 + seed) * (2.0 if pose == "pace_x" else 0.5)
+    for side in (-1, 1):
+        hip = (bx + side * 6, sy + 10)
+        foot = (bx + side * (8 + step), sy + 29)
+        limb(hip, foot, suit_dark, 6, suit_dark, 4)
+        pygame.draw.ellipse(surface, outline, (I(foot[0]-5), I(foot[1]-2), 11, 6))
+
+    torso(bx, sy - 1, crouch=False)
+
+    # Arms by pose.
+    if pose == "fold":
+        # Laundry folding: both hands forward over an implied bundle/table.
+        pygame.draw.rect(surface, (190, 196, 184), (I(bx-18), I(sy+8), 36, 8), border_radius=2)
+        for side in (-1, 1):
+            limb((bx + side*10, sy - 5), (bx + side*14, sy + 8), suit_dark, 5, suit_dark, 3)
+            pygame.draw.circle(surface, skin, (I(bx + side*15), I(sy + 8)), 3)
+    elif pose == "worker":
+        # Maintenance worker with tool/valve gesture.
+        limb((bx - 10, sy - 4), (bx - 18, sy + 13), suit_dark, 5, suit_dark, 3)
+        limb((bx + 10, sy - 4), (bx + 28, sy - 10), suit_dark, 5, suit_dark, 3)
+        pygame.draw.circle(surface, skin, (I(bx - 19), I(sy + 14)), 3)
+        pygame.draw.circle(surface, skin, (I(bx + 30), I(sy - 10)), 3)
+        pygame.draw.line(surface, (142, 130, 92), (I(bx + 25), I(sy - 12)), (I(bx + 40), I(sy - 20)), 2)
+        pygame.draw.circle(surface, (72, 74, 66), (I(bx + 42), I(sy - 21)), 4, 1)
+    elif pose == "lean":
+        # One hand to wall/cart, one hanging.
+        limb((bx - facing*10, sy - 4), (bx - facing*25, sy + 0), suit_dark, 5, suit_dark, 3)
+        pygame.draw.circle(surface, skin, (I(bx - facing*27), I(sy)), 3)
+        limb((bx + facing*10, sy - 3), (bx + facing*15, sy + 13), suit_dark, 5, suit_dark, 3)
+        pygame.draw.circle(surface, skin, (I(bx + facing*16), I(sy + 14)), 3)
+    else:
+        for side in (-1, 1):
+            shoulder = (bx + side * 12, sy - 5)
+            hand = (bx + side * 16, sy + 12)
+            limb(shoulder, hand, suit_dark, 5, suit_dark, 3)
+            pygame.draw.circle(surface, skin, (I(hand[0]), I(hand[1])), 3)
+            pygame.draw.circle(surface, cuff, (I(hand[0] - side * 2), I(hand[1] + 1)), 3, 1)
+
+    head(bx, sy - 24, 8)
+
+    # Low alpha facility ID number above visible prisoners; tiny diegetic detail,
+    # not gameplay UI.
+    if room in ("yard", "maintenance") and seed % 2 == 1:
+        tag = font_terminal_small.render(str(seed)[-2:], True, (70, 66, 54))
+        tag.set_alpha(115)
+        surface.blit(tag, (I(bx - tag.get_width() // 2), I(sy + 34)))
+
+
+def _draw_detainee_dead(surface, sx, sy, d):
+    """Fallen detainee body; still clearly human, not a loot prop."""
+    cloth, cloth_dark, cloth_hi, stripe, skin, hair, outline, cuff = _detainee_palette(d.get("seed", 0), d.get("room", "yard"))
+    angle = 0.35 + (d.get("seed", 0) % 5) * 0.18
+    _draw_detainee_shadow(surface, sx, sy, 46, 11, 65)
+    # Blood under/near torso, subtle but readable.
+    blood = pygame.Surface((48, 34), pygame.SRCALPHA)
+    pygame.draw.ellipse(blood, (58, 6, 6, 120), (4, 8, 38, 20))
+    pygame.draw.ellipse(blood, (35, 3, 3, 150), (14, 12, 20, 12))
+    surface.blit(blood, (int(sx - 24), int(sy - 8)))
+    # Prone body line.
+    body_pts = _poly_rot(sx, sy, angle, [(-17, -6), (12, -7), (18, 4), (6, 10), (-17, 7)])
+    pygame.draw.polygon(surface, outline, body_pts)
+    inner = _poly_rot(sx, sy, angle, [(-14, -4), (10, -5), (14, 3), (5, 7), (-14, 5)])
+    pygame.draw.polygon(surface, cloth_dark, inner)
+    # Head to one side.
+    hx, hy = _poly_rot(sx, sy, angle, [(22, -2)])[0]
+    pygame.draw.circle(surface, outline, (int(hx), int(hy)), 8)
+    pygame.draw.circle(surface, skin, (int(hx), int(hy)), 7)
+    pygame.draw.arc(surface, hair, (int(hx - 7), int(hy - 8), 14, 11), 0, math.pi, 3)
+    # Limbs.
+    for p1, p2 in [((-8, 5), (-22, 15)), ((5, 6), (20, 15)), ((-10, -5), (-24, -12)), ((8, -5), (20, -13))]:
+        a, b = _poly_rot(sx, sy, angle, [p1, p2])
+        pygame.draw.line(surface, outline, a, b, 4)
+        pygame.draw.line(surface, cloth_dark, a, b, 2)
+
+
+
+def _draw_volkov_mags(cam_x, cam_y):
+    """Draw the flying magazines from Volkov (with motion trail for visibility)."""
+    mags = getattr(STATE, "m3_volkov_mags", [])
+    if not mags:
+        return
+
+    for mag in mags:
+        if mag.get("caught"):
+            continue
+
+        sx = mag["x"] - cam_x
+        sy = mag["y"] - cam_y
+
+        # Compact motion trail. Keep it narrower than the actual mag so the
+        # trail reads as speed rather than making the object look oversized.
+        trail_alpha = 58
+        for i in range(2):
+            tx = sx - mag.get("vx", 0) * (i + 1) * 1.5
+            ty = sy - mag.get("vy", 0) * (i + 1) * 1.5
+            trail = pygame.Surface((7, 19), pygame.SRCALPHA)
+            pygame.draw.rect(
+                trail, (68, 82, 76, trail_alpha - i * 22),
+                (1, 1, 5, 17), border_radius=1,
+            )
+            rot_trail = pygame.transform.rotate(
+                trail, math.degrees(mag.get("rot", 0)))
+            screen.blit(rot_trail, (tx - rot_trail.get_width() // 2,
+                                    ty - rot_trail.get_height() // 2))
+
+        # K-9 24-round straight stick magazine. This matches the SMG/HUD art:
+        # slim, dark parkerized body, slight perspective taper, witness holes,
+        # metal feed lips, and a dark base plate. The old 22x40 sprite with a
+        # big gold base looked like an oversized rifle/box magazine.
+        surf = pygame.Surface((12, 29), pygame.SRCALPHA)
+        body = [(2, 4), (10, 4), (9, 25), (3, 25)]
+        pygame.draw.polygon(surf, (25, 32, 30), body)
+        pygame.draw.polygon(surf, (82, 98, 90), body, 1)
+        # Subtle stamped spine and horizontal ribs.
+        pygame.draw.line(surf, (48, 60, 56), (4, 6), (4, 23), 1)
+        for ry in (10, 15, 20):
+            pygame.draw.line(surf, (56, 68, 63), (4, ry), (8, ry), 1)
+        # Tiny brass witness holes identify it as the K-9's loaded stick mag.
+        for wy in (8, 14, 20):
+            pygame.draw.circle(surf, (166, 137, 55), (7, wy), 1)
+        # Feed lips and slim reinforced base plate.
+        pygame.draw.line(surf, (132, 145, 138), (3, 3), (5, 1), 1)
+        pygame.draw.line(surf, (132, 145, 138), (9, 3), (7, 1), 1)
+        pygame.draw.rect(surf, (12, 16, 15), (2, 24, 8, 4), border_radius=1)
+        pygame.draw.line(surf, (70, 82, 76), (3, 24), (9, 24), 1)
+
+        rot = pygame.transform.rotate(surf, math.degrees(mag.get("rot", 0)))
+        screen.blit(rot, (sx - rot.get_width() // 2,
+                          sy - rot.get_height() // 2))
+
+
+def _draw_m3_detainees(cam_x, cam_y):
+    detainees = getattr(STATE, "mission3_detainees", [])
+    if not detainees:
+        return
+    for d in detainees:
+        wx, wy = _detainee_draw_pos(d)
+        sx, sy = wx - cam_x, wy - cam_y
+        if sx < -80 or sx > WIDTH + 80 or sy < -80 or sy > HEIGHT + 80:
+            continue
+        if d.get("dead"):
+            _draw_detainee_dead(screen, sx, sy, d)
+            continue
+        pose = d.get("pose", "stand")
+        cower = (d.get("state") == "cower")
+        bars = pose == "bars"
+        # Use a single consistent prisoner sprite for all ambient detainees.
+        # Minor pose differences are contextual (bars/cower), not totally
+        # different silhouettes that read as props.
+        _draw_prisoner_player_sprite(screen, sx, sy, d, bars=bars, cower=cower)
+
+        if d.get("line_timer", 0) > 0 and d.get("line"):
+            alpha = min(220, int(d["line_timer"] * 3))
+            txt = font_terminal_small.render(d["line"], True, (190, 204, 184))
+            txt.set_alpha(alpha)
+            bg = pygame.Surface((txt.get_width() + 16, txt.get_height() + 8), pygame.SRCALPHA)
+            pygame.draw.rect(bg, (2, 4, 4, min(162, alpha)), bg.get_rect(), border_radius=5)
+            pygame.draw.rect(bg, (90, 104, 88, min(90, alpha)), bg.get_rect(), 1, border_radius=5)
+            # Small pointer tail makes this read as a whispered bark from the
+            # detainee rather than detached UI text.
+            pygame.draw.polygon(bg, (2, 4, 4, min(162, alpha)), [
+                (bg.get_width() // 2 - 4, bg.get_height() - 1),
+                (bg.get_width() // 2 + 4, bg.get_height() - 1),
+                (bg.get_width() // 2, bg.get_height() + 5),
+            ])
+            screen.blit(bg, (int(sx - bg.get_width() // 2), int(sy - 54)))
+            screen.blit(txt, (int(sx - txt.get_width() // 2), int(sy - 50)))
+
+
+
+# ─────────────────────────────────────────────
+# Mission start / completion
+# ─────────────────────────────────────────────
+def start_mission3(preserve_timer=False):
+    """Called by game_core/acaristan to begin Mission 3 gameplay."""
+    global MISSION3_MAP
+    global _objective, _radio_marks, _last_keys
+    global _dialogue_beats, _dialogue_index, _dialogue_timer, _dialogue_choice, _dialogue_tone
+    global _dialogue_char_idx, _dialogue_slide
+    global _monitor_on, _breach_flash, _light_flicker, _volkov_breach_t, _post_type_hold
+    global _chair_struggle
+    global _boots_approach_t
+
+    _stop_m3_alarm(force=True)
+    MISSION3_MAP = MISSION3_CELL_MAP
+
+    STATE.reset()
+    STATE.active_mission = MISSION3_KEY
+    STATE.active_mission_id = MISSION3_ID
+    STATE.active_mission_title = MISSION3_TITLE
+    STATE.active_mission_operation = "THE STABILIZATION CENTER — THE VOSTRAL"
+    STATE.active_mission_outcome = "Biribel disavowed  ·  Balaceanu's vendetta in motion  ·  Broadcast tonight"
+    STATE.active_mission_quote_attr = "Balaceanu, on the monitor:"
+    STATE.active_mission_quote = '"You told them I was a coward, Biribel. A fake. Tonight I tell the nation what you are."'
+    STATE.show_minimap = True
+    STATE.m3_door_glow = False
+    STATE.m3_hide_molotov = True
+    STATE.minimap = MiniMap(MISSION3_MAP)
+    STATE.mission_start_time = (
+        STATE.mission_start_time if (preserve_timer and STATE.mission_start_time)
+        else pygame.time.get_ticks()
+    )
+    STATE.mission_end_time = 0
+    STATE.hostiles_killed = 0
+    STATE.shots_fired = 0
+    STATE.shots_hit = 0
+    STATE.request_mission_complete = False
+    STATE.request_mission3_ending = False
+    STATE.request_chair_break_cutscene = False
+    STATE.request_death_screen = False
+    STATE.player_dead = False
+    STATE.death_timer = 0
+
+    # ── Mission 3 stage / phase ──
+    STATE.mission3_stage = STAGE_INTERROGATION
+    STATE.mission_phase = "m3_interrogation"
+    STATE.mission3_events = set()
+    STATE.mission3_evidence_uploaded = False
+    STATE.mission3_guards_spawned = False
+    STATE.mission3_ammo_drops_spawned = 0
+    STATE.mission3_bandages_spawned = 0
+    STATE.mission3_dialogue_index = 0
+    STATE.mission3_dialogue_choices = []
+    # Tone memory: list of option indices the player picked at each choice
+    # beat. Empty until the first choice resolves. Later slices (and the
+    # ending cutscene) read this to color Biribel's voice.
+    STATE.mission3_tone = []
+    # Door-open flag for the breakout gate (set True by the breach beat).
+    STATE.mission3_cell_open = False
+
+    STATE.m3_alarm_active = False
+    STATE.m3_alarm_timer = 0
+
+    STATE.m3_volkov_run_active = False
+    STATE.m3_volkov_run_timer = 0
+    STATE.m3_volkov_run_done = False
+
+    # Biribel is DISARMED in the cell — no pistol, no molotovs, no melee.
+    # weapons.py reads this flag and early-returns from handle_shoot /
+    # start_reload / handle_throw_bottle / handle_melee / switch_weapon so
+    # the player can't fire / reload / throw with nothing in their hands.
+    # Slice 2 sets this False when the player picks up a shank or takes a
+    # sidearm off a dead guard.
+    STATE.player_disarmed = True
+    STATE.ammo_in_mag = 0
+    STATE.spare_mags = 0
+    STATE.mission3_weapon = "none"
+    STATE.current_weapon = "pistol"
+    STATE.k9_unlocked = False
+    STATE.k9_ammo_in_mag = 24
+    STATE.k9_mag_size = 24
+    STATE.k9_spare_mags = 2
+    STATE.k9_shot_cooldown = 0
+    STATE.request_k9_pickup_cutscene = False
+    STATE.request_service_transition_cutscene = False
+    STATE.mission3_transition_kind = ""
+    STATE.m3_volkov_ally_active = False
+    STATE.m3_volkov_ally_x = 0.0
+    STATE.m3_volkov_ally_y = 0.0
+    STATE.m3_volkov_ally_angle = 0.0
+    STATE.m3_volkov_ally_cooldown = 0
+    STATE.m3_volkov_ally_shots = []
+    STATE.m3_volkov_ally_max_hp = 220
+    STATE.m3_volkov_ally_hp = 220
+    STATE.m3_volkov_ally_hit_flash = 0
+    STATE.m3_relay_active = False
+    STATE.m3_relay_timer = 0
+    STATE.m3_relay_tuned = False
+    STATE.m3_comms_power_restored = False
+    STATE.m3_comms_auth_acquired = False
+    STATE.m3_comms_ambience_timer = 0
+
+    # Archives (Phase 4)
+    STATE.mission3_archives_checkpoint_reached = False
+    STATE.m3_archives_cleared = False
+    STATE.m3_maru_contacted = False
+    STATE.m3_maru_contact_active = False
+    STATE.m3_maru_contact_timer = 0
+    STATE.m3_vostral_acquired = False
+    STATE.m3_archives_ambience_timer = 0
+    STATE.m3_archives_alarm = False
+    STATE.request_archives_transition_cutscene = False
+
+    # ── Black Ledger easter egg ──
+    # Triggered only if the player personally shoots every ambient detainee.
+    # This is deliberately a punishment/consequence encounter, not a reward.
+    STATE.m3_black_ledger_triggered = False
+    STATE.m3_black_ledger_inmate_active = False
+    STATE.m3_black_ledger_inmate = None
+    STATE.m3_black_ledger_intro_timer = 0
+    STATE.m3_black_ledger_death_active = False
+    STATE.m3_black_ledger_death_timer = 0
+
+    # World build + camera snap.
+    _build_world()
+    _init_m3_detainees()
+    if STATE.player is not None:
+        # Phase 1 starts with Biribel cuffed to the interrogation chair, not
+        # standing on the generic map spawn tile. Once the chair breaks, the
+        # same world position becomes the breakout starting point.
+        STATE.player.rect.center = _interrogation_chair_pos()
+    reset_camera_state()
+    _snap_camera_to(_interrogation_chair_pos())
+
+    # Fresh scratch.
+    _objective = "Survive the interrogation."
+    _radio_marks = set()
+    _last_keys = None
+
+    # Dialogue cold-open: deep-copy the script so choice beats can inject
+    # the player's follow-up line in-place without mutating the template.
+    _dialogue_beats = [dict(b) for b in INTERROGATION_SCRIPT]
+    _dialogue_index = 0
+    _dialogue_timer = 0
+    _dialogue_choice = 0
+    _dialogue_tone = []
+    _dialogue_char_idx = 0
+    _dialogue_slide = 0.0
+    _monitor_on = False
+    _breach_flash = 0
+    _light_flicker = 0
+    _post_type_hold = 0
+    _volkov_breach_t = -1
+    _boots_approach_t = -1
+
+    # _chair_struggle = ChairStruggle()
+
+    return STATE.player
+
+
+def start_mission3_breakout_checkpoint(preserve_timer=False):
+    """Respawn Mission 3 at playable breakout after Volkov's breach.
+
+    Used by restart_current_mission() once the player has already reached the
+    post-breach gameplay. This intentionally skips:
+      - Mission 3 intro cutscene,
+      - interactive interrogation,
+      - Volkov breach cinematic,
+      - chair-break cutscene.
+
+    The player respawns in the cell with the chair leg and must sharpen it at
+    the drain, matching the first real gameplay objective after the cutscenes.
+    """
+    global _objective, _radio_marks, _last_keys
+    global _dialogue_beats, _dialogue_index, _dialogue_timer, _dialogue_choice, _dialogue_tone
+    global _dialogue_char_idx, _dialogue_slide
+    global _monitor_on, _breach_flash, _light_flicker, _volkov_breach_t, _boots_approach_t, _post_type_hold
+
+    start_mission3(preserve_timer=preserve_timer)
+
+    # Mechanical post-breach state.
+    STATE.mission3_stage = STAGE_BREAKOUT
+    STATE.mission_phase = "m3_breakout"
+    STATE.mission3_breakout_checkpoint_reached = True
+    STATE.mission3_cell_open = True
+    STATE.mission3_chair_broken = True
+    STATE.mission3_chair_break_anim = -1
+    STATE.request_chair_break_cutscene = False
+    STATE.player_disarmed = False
+    STATE.mission3_weapon = "chair_leg"
+    STATE.current_weapon = "pistol"
+    STATE.mission3_doorway_blocked = True
+    STATE.mission3_crafting_active = False
+    STATE.mission3_crafting_progress = 0.0
+    STATE.mission3_crafting_shavings = []
+    STATE.mission3_vent_open = False
+    STATE.mission3_breakout_announced = True
+
+    # Volkov's breach/run is already over for checkpoint purposes; don't replay
+    # him standing/running through the doorway on every death restart.
+    STATE.m3_volkov_run_active = False
+    STATE.m3_volkov_run_timer = 241
+    STATE.m3_volkov_run_done = True
+    _volkov_breach_t = -1
+    _boots_approach_t = -1
+    _breach_flash = 0
+    _light_flicker = 0
+    _monitor_on = False
+    _post_type_hold = 0
+
+    # Make the blasted cell door passable/visually resolved.
+    for door in STATE.doors:
+        if (door.rect.x // TILE_SIZE in (_DOOR_TILE_COL, _DOOR_TILE_COL + 1)
+                and door.rect.y // TILE_SIZE == _DOOR_TILE_ROW):
+            door.locked = True
+            door.target_open = False
+            door.anim_progress = 0.0
+            door.collision_disabled = True
+    _open_cell_door()
+
+    # Respawn at the first playable post-cutscene position.
+    if STATE.player is not None:
+        STATE.player.rect.center = _interrogation_chair_pos()
+        STATE.player.hp = STATE.player.max_hp
+        STATE.player_dead = False
+        STATE.death_timer = 0
+        STATE.death_anim_phase = 0
+        STATE.death_anim_timer = 0
+        STATE.request_death_screen = False
+        STATE.player.angle = math.pi / 2
+
+    # Dialogue/cutscene state is done; keep tone empty unless a save system later
+    # wants to preserve choices.
+    _dialogue_beats = []
+    _dialogue_index = 0
+    _dialogue_timer = 0
+    _dialogue_choice = 0
+    _dialogue_tone = []
+    _dialogue_char_idx = 0
+    _dialogue_slide = 0.0
+    STATE.mission3_dialogue_index = 0
+    STATE.mission3_dialogue_choices = []
+
+    _objective = "Sharpen the chair leg at the drain. Volkov holds the door."
+    _radio_marks = set()
+    _last_keys = None
+    _set_objective("Craft shiv at marked drain.")
+    _radio("VOLKOV: I bought you seconds. Make the leg useful, then move.",
+           color=C_VOLKOV, duration=300, mark="breakout_checkpoint_respawn")
+
+    reset_camera_state()
+    _snap_camera_to(_interrogation_chair_pos())
+    return STATE.player
+
+
+def start_mission3_comms_checkpoint(preserve_timer=False):
+    """Respawn Mission 3 at the Comms Wing after reaching STAGE_COMMS.
+
+    Used by restart_current_mission() once the player has already reached the
+    Comms Wing (``mission3_comms_checkpoint_reached``). This intentionally
+    skips the entire breakout slice — interrogation, Volkov breach, cell-block
+    guards, the service-door transition cutscene, and the K-9 armory — because
+    reaching comms already required clearing all of that. The player respawns
+    in the Comms Wing with the K-9 loadout and full health.
+    """
+    global _objective, _radio_marks, _last_keys
+    global _dialogue_beats, _dialogue_index, _dialogue_timer, _dialogue_choice, _dialogue_tone
+    global _dialogue_char_idx, _dialogue_slide
+    global _monitor_on, _breach_flash, _light_flicker, _volkov_breach_t, _boots_approach_t, _post_type_hold
+
+    start_mission3(preserve_timer=preserve_timer)
+
+    # Comms-wing mechanical state — reaching comms implies all breakout beats
+    # are done, so mirror the post-cutscene state here.
+    STATE.mission3_stage = STAGE_COMMS
+    STATE.mission_phase = "m3_comms"
+    STATE.mission3_breakout_checkpoint_reached = True
+    STATE.mission3_comms_checkpoint_reached = True
+    STATE.mission3_cell_block_cleared = True
+    STATE.mission3_cell_open = True
+    STATE.mission3_chair_broken = True
+    STATE.mission3_chair_break_anim = -1
+    STATE.request_chair_break_cutscene = False
+    STATE.player_disarmed = False
+    STATE.mission3_weapon = "k9_smg"
+    STATE.current_weapon = "k9_smg"
+    STATE.k9_unlocked = True
+    STATE.k9_ammo_in_mag = STATE.k9_mag_size
+    STATE.k9_spare_mags = 2
+    STATE.k9_shot_cooldown = 0
+    STATE.mission3_doorway_blocked = False
+    STATE.mission3_crafting_active = False
+    STATE.mission3_crafting_progress = 0.0
+    STATE.mission3_crafting_shavings = []
+    STATE.mission3_vent_open = False
+    STATE.mission3_breakout_announced = True
+    STATE.m3_volkov_run_active = False
+    STATE.m3_volkov_run_timer = 241
+    STATE.m3_volkov_run_done = True
+    _volkov_breach_t = -1
+    _boots_approach_t = -1
+    _breach_flash = 0
+    _light_flicker = 0
+    _monitor_on = False
+    _post_type_hold = 0
+
+    # Swap to the Comms Wing map and entities (also fully heals the player).
+    _build_comms_world()
+    if STATE.player is not None:
+        STATE.player.hp = STATE.player.max_hp
+        STATE.player_dead = False
+        STATE.death_timer = 0
+        STATE.death_anim_phase = 0
+        STATE.death_anim_timer = 0
+        STATE.request_death_screen = False
+        STATE.player.angle = math.pi / 2
+
+    # Dialogue/cutscene state is done.
+    _dialogue_beats = []
+    _dialogue_index = 0
+    _dialogue_timer = 0
+    _dialogue_choice = 0
+    _dialogue_tone = []
+    _dialogue_char_idx = 0
+    _dialogue_slide = 0.0
+    STATE.mission3_dialogue_index = 0
+    STATE.mission3_dialogue_choices = []
+
+    _objective = "Reach the relay terminal. Re-establish KRAP contact."
+    _radio_marks = set()
+    _last_keys = None
+    _set_objective("Reach the relay terminal. Re-establish KRAP contact.")
+    _radio("VASILE: You made it to comms. Get the relay live — I'll cover.",
+           color=C_VASILE, duration=300, mark="comms_checkpoint_respawn")
+
+    reset_camera_state()
+    _snap_camera_to(STATE.player.rect.center)
+    return STATE.player
+
+
+
+def start_mission3_archives_checkpoint(preserve_timer=False):
+    """Respawn Mission 3 at the Archives Wing after reaching STAGE_ARCHIVES.
+
+    Used by restart_current_mission() once the player has crossed from Comms
+    into Archives. Skips interrogation / breakout / comms entirely and drops
+    the player at the Archives foyer with the K-9 loadout and full health.
+    """
+    global _objective, _radio_marks, _last_keys
+    global _dialogue_beats, _dialogue_index, _dialogue_timer, _dialogue_choice, _dialogue_tone
+    global _dialogue_char_idx, _dialogue_slide
+    global _monitor_on, _breach_flash, _light_flicker, _volkov_breach_t, _boots_approach_t, _post_type_hold
+
+    start_mission3(preserve_timer=preserve_timer)
+
+    STATE.mission3_stage = STAGE_ARCHIVES
+    STATE.mission_phase = "m3_archives"
+    STATE.mission3_breakout_checkpoint_reached = True
+    STATE.mission3_comms_checkpoint_reached = True
+    STATE.mission3_archives_checkpoint_reached = True
+    STATE.mission3_cell_block_cleared = True
+    STATE.mission3_cell_open = True
+    STATE.mission3_chair_broken = True
+    STATE.mission3_chair_break_anim = -1
+    STATE.request_chair_break_cutscene = False
+    STATE.player_disarmed = False
+    STATE.mission3_weapon = "k9_smg"
+    STATE.current_weapon = "k9_smg"
+    STATE.k9_unlocked = True
+    STATE.k9_ammo_in_mag = STATE.k9_mag_size
+    STATE.k9_spare_mags = 2
+    STATE.k9_shot_cooldown = 0
+    STATE.mission3_doorway_blocked = False
+    STATE.mission3_crafting_active = False
+    STATE.mission3_crafting_progress = 0.0
+    STATE.mission3_crafting_shavings = []
+    STATE.mission3_vent_open = False
+    STATE.mission3_breakout_announced = True
+    STATE.m3_volkov_run_active = False
+    STATE.m3_volkov_run_timer = 241
+    STATE.m3_volkov_run_done = True
+    # Comms already done.
+    STATE.m3_relay_tuned = True
+    STATE.m3_comms_power_restored = True
+    STATE.m3_comms_auth_acquired = True
+    _volkov_breach_t = -1
+    _boots_approach_t = -1
+    _breach_flash = 0
+    _light_flicker = 0
+    _monitor_on = False
+    _post_type_hold = 0
+
+    _build_archives_world()
+    if STATE.player is not None:
+        STATE.player.hp = STATE.player.max_hp
+        STATE.player_dead = False
+        STATE.death_timer = 0
+        STATE.death_anim_phase = 0
+        STATE.death_anim_timer = 0
+        STATE.request_death_screen = False
+        STATE.player.angle = -math.pi / 2
+
+    _dialogue_beats = []
+    _dialogue_index = 0
+    _dialogue_timer = 0
+    _dialogue_choice = 0
+    _dialogue_tone = []
+    _dialogue_char_idx = 0
+    _dialogue_slide = 0.0
+    STATE.mission3_dialogue_index = 0
+    STATE.mission3_dialogue_choices = []
+
+    _objective = "With Volkov — clear the atrium, then find Maru's dead-drop (NW)."
+    _radio_marks = set()
+    _last_keys = None
+    _set_objective("With Volkov — clear the atrium, then find Maru's dead-drop (NW).")
+    _radio("VOLKOV: Back on your six. Call when you're dry — I've got mags.",
+           color=C_VOLKOV, duration=300, mark="archives_checkpoint_volkov")
+    _radio("VASILE: Archives wing is live. Maru's dead-drop is northwest.",
+           color=C_VASILE, duration=320, mark="archives_checkpoint_respawn")
+
+    reset_camera_state()
+    _snap_camera_to(STATE.player.rect.center)
+    return STATE.player
+
+
+def _complete_mission3():
+    """Signal mission completion → acaristan plays mission3_ending_shots."""
+    if getattr(STATE, "request_mission3_ending", False):
+        return  # idempotent guard
+
+    _stop_m3_alarm()
+
+    STATE.mission3_stage = STAGE_DONE
+    STATE.mission3_evidence_uploaded = True
+    STATE.mission_end_time = pygame.time.get_ticks()
+    STATE.request_mission3_ending = True
+    audio.play("terminal_glitch", volume=0.55)
+
+
+# ─────────────────────────────────────────────
+# Per-frame update
+# ─────────────────────────────────────────────
+def _update_player(keys, solid_walls):
+    if not STATE.player or STATE.player_dead:
+        return
+    STATE.player.speed = 3.6
+
+    mx, my = get_scaled_mouse()
+    world_mx = mx + STATE.camera_x
+    world_my = my + STATE.camera_y
+    STATE.player.angle = math.atan2(
+        world_my - STATE.player.rect.centery,
+        world_mx - STATE.player.rect.centerx,
+    )
+
+    dx = dy = 0
+    if not _movement_locked() and _last_keys is not None:
+        # Delta-time aware: speed is in px/frame, multiply by (60*dt).
+        _dt_mul = 60.0 * STATE.dt
+        if _last_keys[pygame.K_w]:
+            dy -= STATE.player.speed * _dt_mul
+        if _last_keys[pygame.K_s]:
+            dy += STATE.player.speed * _dt_mul
+        if _last_keys[pygame.K_a]:
+            dx -= STATE.player.speed * _dt_mul
+        if _last_keys[pygame.K_d]:
+            dx += STATE.player.speed * _dt_mul
+    if dx and dy:
+        dx *= 0.707
+        dy *= 0.707
+    STATE.player.move(dx, dy, solid_walls)
+
+    if dx or dy:
+        STATE._footstep_timer -= 1
+        if STATE._footstep_timer <= 0:
+            audio.play("footstep", volume=0.25)
+            STATE._footstep_timer = 27 + random.randint(0, 8)
+
+
+# Chair-break cutscene phase boundaries (frames @ 60fps).
+_CB_SHOT1 = cutscenes.CB_SHOT1   # ① Strain  (wrist close-up)   ~4s
+_CB_SHOT2 = cutscenes.CB_SHOT2   # ② Crack   (chair bursts)     ~2.2s
+_CB_SHOT3 = cutscenes.CB_SHOT3   # ③ Grab    (hand on the leg)   ~2.4s
+_CB_SHOT4 = cutscenes.CB_SHOT4   # ④ Ready   (hefts the leg)     ~3s
+_CB_END   = cutscenes.CB_END     # total cutscene length
+
+# Individual shot durations (smoke_test / inspection imports these).
+_CB_SHOT1_DUR = cutscenes.CB_SHOT1_DUR
+_CB_SHOT2_DUR = cutscenes.CB_SHOT2_DUR
+_CB_SHOT3_DUR = cutscenes.CB_SHOT3_DUR
+_CB_SHOT4_DUR = cutscenes.CB_SHOT4_DUR
+
+
+def _draw_chair_break_cutscene(anim_t: int) -> None:
+    """Render the chair-break cinematic for global-clock frame `anim_t`.
+
+    Each shot is a self-contained full-screen cinematic illustration.
+    No tilemap compositing — each shot draws its own background,
+    characters, and lighting from scratch.
+
+    Transitions:
+    - Shot 1-2: hard cut (the crack snaps — no dissolve needed)
+    - Shot 2-3: hard cut (the break cuts to the grab)
+    - Shot 3-4: 12-frame cross-dissolve (smooths the pose change)
+    - Shot 4-gameplay: fade to black (handled inside the shot)
+    """
+    # Cross-dissolve between Shot 3 and Shot 4
+    xfade_in = _CB_SHOT4
+    xfade_len = 12
+    if xfade_in <= anim_t < xfade_in + xfade_len:
+        p = (anim_t - xfade_in) / xfade_len
+        # Draw Shot 3 at its final frame
+        cutscenes._draw_cb_grab(screen, cutscenes.CB_SHOT3_DUR - 1)
+        # Blend Shot 4 at its first frame on top
+        rs = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        cutscenes._draw_cb_ready(rs, 0)
+        rs.set_alpha(int(255 * p))
+        screen.blit(rs, (0, 0))
+    elif anim_t < _CB_SHOT2:
+        cutscenes._draw_cb_strain(screen, anim_t - _CB_SHOT1)
+    elif anim_t < _CB_SHOT3:
+        cutscenes._draw_cb_crack(screen, anim_t - _CB_SHOT2)
+    elif anim_t < _CB_SHOT4:
+        cutscenes._draw_cb_grab(screen, anim_t - _CB_SHOT3)
+    else:
+        cutscenes._draw_cb_ready(screen, anim_t - _CB_SHOT4)
+
+
+def _grant_chair_leg_from_cutscene():
+    """Apply the gameplay handoff authored into the chair-break cinematic.
+
+    The full application loop also performs these mutations when it launches
+    the legacy cutscene request. Mission 3's own update/render path uses
+    STATE.mission3_chair_break_anim directly, so the mission module must own
+    the same handoff for smoke tests, debug starts, and in-engine cinematic
+    rendering.
+    """
+    if getattr(STATE, "mission3_chair_broken", False):
+        return
+
+    STATE.mission3_chair_broken = True
+    STATE.player_disarmed = False
+    STATE.mission3_weapon = "chair_leg"
+
+    try:
+        audio.play("door_break", volume=0.35)
+    except Exception:
+        pass
+
+
+def _update_chair_break_cutscene_state():
+    """Advance the Mission 3 chair-break cinematic clock.
+
+    Returns True while the cinematic is active, allowing game_update() to
+    pause normal combat/player simulation until the cutscene hands control
+    back to the breakout.
+    """
+    anim_t = getattr(STATE, "mission3_chair_break_anim", -1)
+    if anim_t < 0:
+        return False
+
+    if anim_t >= _CB_SHOT2:
+        _grant_chair_leg_from_cutscene()
+
+    if anim_t >= _CB_END:
+        _grant_chair_leg_from_cutscene()
+        STATE.mission3_chair_break_anim = -1
+        STATE.request_chair_break_cutscene = False
+        _set_objective("Sharpen the chair leg at the drain. Volkov holds the door.")
+        return True
+
+    STATE.mission3_chair_break_anim = anim_t + 1
+    return True
+
+
+def _update_stage(keys):
+    """Phase dispatcher.
+
+    STAGE_INTERROGATION (Slice 1): advance the dialogue cold open. Line and
+    action beats auto-advance after a reading-time timeout; choice beats
+    block until the player picks. When the script runs off the end, the
+    breach has already fired — flip to STAGE_BREAKOUT and open the cell.
+
+    STAGE_BREAKOUT (Slice 2): stealth-first escape. The player must reach
+    the cell-block exit tile (south of the security door) to advance to
+    STAGE_COMMS. Guards start unaware; killing them or making noise will
+    alert the others via enemy_hear_shot. Picking up a guard's dropped
+    sidearm lets the player engage at range (and escalates any nearby
+    guards who hear the gunshot).
+
+    STAGE_ARCHIVES (Slice 4): separate map, clear security, Maru dead-drop
+    contact, steal the Vostral file, exit east toward Kill Order.
+
+    Later stages (KILL_ORDER / BROADCAST) remain stubs — only the objective
+    text is set; full implementation lives in later slices.
+    """
+    global _dialogue_timer, _dialogue_index, _breach_flash, _light_flicker
+    global _volkov_breach_t, _chair_struggle
+    global _boots_approach_t
+    stage = getattr(STATE, "mission3_stage", STAGE_INTERROGATION)
+
+    if getattr(STATE, "m3_alarm_active", False):
+        STATE.m3_alarm_timer = getattr(STATE, "m3_alarm_timer", 0) + 1
+
+    if stage == STAGE_INTERROGATION:
+        _set_objective("Survive the interrogation.")
+        _update_interrogation()
+        return
+
+    # STAGE_BREAKOUT onward: keep ticking the breach animation clock (so
+    # Volkov's kick finishes and he stands in the doorway) and decay any
+    # residual FX. The renderer reads these flags in every stage.
+    if _volkov_breach_t >= 0 and _volkov_breach_t < 600:
+        _volkov_breach_t += 1
+        if _volkov_breach_t == 301:
+            _detonate_cell_door()
+        # At frame 150, the C4 brick is "seated" on the door hinge — play a
+        # soft metallic click so the placement reads as a deliberate action,
+        # not silent debris appearing.
+        if _volkov_breach_t == 150 and "volkov_charge_placed" not in STATE.mission3_events:
+            STATE.mission3_events.add("volkov_charge_placed")
+            try:
+                audio.play("rifle_handle", volume=0.25)
+            except Exception:
+                pass
+    if _breach_flash > 0:
+        _breach_flash -= 1
+    if _light_flicker > 0:
+        _light_flicker -= 1
+
+    if stage == STAGE_BREAKOUT:
+        _update_breakout_stage()
+    elif stage == STAGE_VENT_CUTSCENE:
+        # Cutscene is playing (handled by acaristan.py). Once the request
+        # flag is consumed, transition to STAGE_COMMS.
+        if not getattr(STATE, "request_vent_cutscene", False):
+            _start_comms_phase()
+    elif stage == STAGE_COMMS:
+        STATE.m3_comms_ambience_timer = getattr(
+            STATE, "m3_comms_ambience_timer", 0) + 1
+        _m3_check_volkov_ammo_resupply()
+        _update_volkov_mags()
+        if getattr(STATE, "m3_relay_active", False):
+            _set_objective("Tuning relay...")
+        elif not getattr(STATE, "m3_relay_tuned", False):
+            if len(getattr(STATE, "enemies", [])) > 0:
+                _set_objective(f"Clear Comms Wing: {len(STATE.enemies)} guard(s) left.")
+            elif not getattr(STATE, "m3_comms_power_restored", False):
+                _set_objective("Restore auxiliary power in Battery Backup.")
+            elif not getattr(STATE, "m3_comms_auth_acquired", False):
+                _set_objective("Copy relay authorization from the Security booth.")
+            else:
+                _set_objective("Return to the relay and establish KRAP contact.")
+        else:
+            _set_objective("Signal restored. Reach Archives.")
+            _maybe_trigger_archives_handoff()
+    elif stage == STAGE_ARCHIVES:
+        _m3_check_volkov_ammo_resupply()
+        _update_volkov_mags()
+        _update_archives_stage()
+    elif stage == STAGE_KILL_ORDER:
+        # Phase 5 stub — entered after Vostral is secured and player exits east.
+        _set_objective("Survive Balaceanu's security sweep. (Phase 5 — pending)")
+    elif stage == STAGE_BROADCAST:
+        # Phase 6 stub.
+        _set_objective("Get the file onto the live broadcast uplink. (Phase 6 — pending)")
+
+
+def _m3_exit_requirements():
+    """Return (ready, reason) for leaving the cell-block slice.
+
+    The service exit should not fire just because the player reaches the tile.
+    It now requires the authored slice beats: Volkov has drawn attention away,
+    guards are spawned/cleared, and the armory K-9 has been taken.
+    """
+    if not getattr(STATE, "m3_volkov_run_done", False):
+        return False, "Wait for Volkov to clear out."
+    if not getattr(STATE, "mission3_guards_spawned", False):
+        return False, "Secure the cell block first."
+    guards_left = len(getattr(STATE, "enemies", []))
+    if guards_left > 0:
+        return False, f"{guards_left} guard(s) left."
+    if not getattr(STATE, "k9_unlocked", False):
+        return False, "Take the K-9 in the armory."
+    return True, "Service exit clear."
+
+
+def _m3_check_volkov_ammo_resupply():
+    """Dynamic in-world resupply: Volkov throws magazines when the player
+    runs completely dry (Comms Wing + Archives).
+
+    No cutscene. Magazines fly through the world and land near the player.
+    """
+    if not getattr(STATE, "m3_volkov_ally_active", False):
+        return
+    if getattr(STATE, "m3_volkov_ally_hp", 0) <= 0:
+        return
+    if len(getattr(STATE, "m3_volkov_mags", [])) > 0:
+        return  # already throwing
+
+    weapon = getattr(STATE, "current_weapon", "pistol")
+    if weapon == "k9_smg":
+        empty = STATE.k9_ammo_in_mag <= 0 and STATE.k9_spare_mags <= 0
+    elif weapon == "pistol":
+        empty = STATE.ammo_in_mag <= 0 and STATE.spare_mags <= 0
+    else:
+        empty = False
+
+    if empty:
+        _trigger_volkov_mags_throw()
+
+
+def _update_volkov_mags():
+    """Update flying magazines. When they land near the player, grant ammo."""
+    if not getattr(STATE, "m3_volkov_mags", None):
+        return
+    if not STATE.player:
+        return
+
+    px, py = STATE.player.rect.center
+    remaining = []
+
+    for mag in STATE.m3_volkov_mags:
+        if mag.get("caught"):
+            continue
+
+        # Authored ballistic arc rather than frame-by-frame gravity.  The old
+        # values used very low horizontal speed with extremely strong gravity,
+        # so the mags dropped beside Volkov like heavy blocks.  Interpolating
+        # over a fixed flight time guarantees a clean throw toward Biribel while
+        # the parabolic lift still makes it look physical.
+        mag["age"] = mag.get("age", 0) + 1
+        mag["life"] -= 1
+        delay = mag.get("delay", 0)
+        flight_age = max(0, mag["age"] - delay)
+        duration = max(1, mag.get("duration", 42))
+
+        # Let the catch point follow Biribel gently during flight. This avoids
+        # misses when the player keeps moving without making the mag visibly
+        # home or snap sideways.
+        if flight_age > 0:
+            follow = 0.075
+            mag["target_x"] += (px - mag["target_x"]) * follow
+            mag["target_y"] += (py - mag["target_y"]) * follow
+
+        t = max(0.0, min(1.0, flight_age / duration))
+        eased = t * t * (3.0 - 2.0 * t)  # smooth launch and catch
+        old_x, old_y = mag["x"], mag["y"]
+        base_x = mag["start_x"] + (mag["target_x"] - mag["start_x"]) * eased
+        base_y = mag["start_y"] + (mag["target_y"] - mag["start_y"]) * eased
+        arc = math.sin(math.pi * t) * mag.get("arc_height", 76.0)
+        mag["x"] = base_x
+        mag["y"] = base_y - arc
+        mag["vx"] = mag["x"] - old_x
+        mag["vy"] = mag["y"] - old_y
+        mag["rot"] = mag.get("rot", 0.0) + 0.24
+
+        # Resolve exactly at the catch point. Life expiry remains a safety net.
+        if (flight_age >= duration) or mag["life"] <= 0:
+            # Grant the mag
+            if getattr(STATE, "current_weapon", "") == "k9_smg":
+                STATE.k9_spare_mags = getattr(STATE, "k9_spare_mags", 0) + 1
+            else:
+                STATE.spare_mags = getattr(STATE, "spare_mags", 0) + 1
+
+            # Floating text
+            STATE.floating_texts.append([
+                mag["x"], mag["y"] - 18,
+                "+1 MAG",
+                (140, 220, 160),
+                55,
+            ])
+
+            try:
+                audio.play("pickup", volume=0.65)
+            except Exception:
+                pass
+
+            mag["caught"] = True
+            continue
+
+        remaining.append(mag)
+
+    STATE.m3_volkov_mags = remaining
+
+    # When all mags are caught, clear the list
+    if not remaining:
+        STATE.m3_volkov_mags = []
+
+
+def _trigger_volkov_mags_throw():
+    """Volkov throws two magazines in-world when the player is dry.
+
+    Magazines now spawn directly from Volkov's current position so the throw
+    is clearly visible.
+    """
+    if not STATE.player:
+        return
+    if len(getattr(STATE, "m3_volkov_mags", [])) > 0:
+        return
+
+    px, py = STATE.player.rect.center
+
+    # Use Volkov's actual position if he's active as an ally
+    if getattr(STATE, "m3_volkov_ally_active", False):
+        volkov_x = getattr(STATE, "m3_volkov_ally_x", px - 80)
+        volkov_y = getattr(STATE, "m3_volkov_ally_y", py - 30)
+    else:
+        volkov_x = px - 80
+        volkov_y = py - 30
+
+    # Two magazines with different trajectories (clear arc)
+    mags = []
+    for i, (ox, oy) in enumerate([(-18, -12), (22, -9)]):
+        target_x = px + random.randint(-22, 22)
+        target_y = py + random.randint(-15, 15)
+
+        # Fixed-time ballistic throw. The second mag leaves a few frames later
+        # and takes a slightly different/lower arc so the pair is readable.
+        start_x = volkov_x + ox
+        start_y = volkov_y + oy
+        duration = 40 + i * 5
+        mag = {
+            "x": start_x,
+            "y": start_y,
+            "target_x": target_x,
+            "target_y": target_y,
+            "life": 100,
+            "duration": duration,
+            "delay": i * 6,
+            "arc_height": 82.0 - i * 12.0,
+            "vx": (target_x - start_x) / duration,
+            "vy": (target_y - start_y) / duration,
+            "rot": random.uniform(-1.1, 1.1),
+            "age": 0,
+            "caught": False,
+            "start_x": start_x,
+            "start_y": start_y,
+        }
+        mags.append(mag)
+
+    STATE.m3_volkov_mags = mags
+
+    # Small particle burst at throw origin
+    try:
+        effects.burst(volkov_x, volkov_y, (255, 200, 80), count=8, speed_mul=0.8, life_min=12, life_max=22)
+    except Exception:
+        pass
+
+    # Radio line from Volkov (stage-aware, rotating).
+    STATE.m3_volkov_mags_thrown_count = getattr(STATE, "m3_volkov_mags_thrown_count", 0) + 1
+    stage = getattr(STATE, "mission3_stage", "")
+    n = STATE.m3_volkov_mags_thrown_count
+    if stage == STAGE_ARCHIVES:
+        lines = (
+            "VOLKOV: Dry? Catch — don't make me regret this!",
+            "VOLKOV: Mag! Keep pushing the stacks!",
+            "VOLKOV: Last spare. Make them count!",
+        )
+    else:
+        lines = (
+            "VOLKOV: Out?! Catch!",
+            "VOLKOV: Mag up — move!",
+            "VOLKOV: Stay lethal!",
+        )
+    line = lines[min(n - 1, len(lines) - 1)]
+    try:
+        from interactions import trigger_radio_chatter
+        trigger_radio_chatter(line, color=C_VOLKOV, duration=180)
+    except Exception:
+        pass
+
+    try:
+        audio.play("rifle_handle", volume=0.55)
+    except Exception:
+        pass
+
+
+def _update_breakout_stage():
+    _update_volkov_escape_route()
+
+    # Guards enter the simulation only after the scripted breach/chair-leg
+    # sequence is over and the player has actually unlocked the cell doorway.
+    if (not getattr(STATE, "mission3_doorway_blocked", False)
+            and getattr(STATE, "mission3_weapon", "none") in ("shiv", "sidearm", "k9_smg")):
+        _spawn_m3_guards_once()
+
+    if not getattr(STATE, "mission3_breakout_announced", False):
+        STATE.mission3_breakout_announced = True
+        _radio("VOLKOV: They're awake now. South hall — move.",
+               color=C_VOLKOV, duration=420, mark="breakout_announced")
+
+    weapon = getattr(STATE, "mission3_weapon", "none")
+    has_sidearm = getattr(STATE, "mission3_sidearm_acquired", False)
+    guards_left = len(STATE.enemies)
+    # Once every cell-block guard is dead, remember it so the service-door
+    # marker + arrow can show on the minimap regardless of later state.
+    if getattr(STATE, "mission3_guards_spawned", False) and guards_left == 0:
+        STATE.m3_guards_all_killed = True
+
+    exit_ready, exit_reason = _m3_exit_requirements()
+    if weapon == "chair_leg":
+        _set_objective("Craft shiv at marked drain.")
+    elif not getattr(STATE, "m3_volkov_run_done", False):
+        _set_objective("Wait for Volkov to clear out.")
+    elif not getattr(STATE, "mission3_guards_spawned", False):
+        _set_objective("Secure the cell block.")
+    elif guards_left > 0:
+        _set_objective(f"Clear hostiles: {guards_left} guard(s) left.")
+    elif not getattr(STATE, "k9_unlocked", False):
+        _set_objective("Armory: take the K-9 SMG.")
+    elif exit_ready:
+        _set_objective("Reach the service exit.")
+    else:
+        _set_objective(exit_reason)
+
+    if STATE.player is not None:
+        exit_pos = (_EXIT_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                    _EXIT_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if _near(exit_pos, radius=TILE_SIZE * 0.6):
+            exit_ready, exit_reason = _m3_exit_requirements()
+            if exit_ready:
+                STATE.mission3_stage = STAGE_VENT_CUTSCENE
+                STATE.mission_phase = "m3_service_transition"
+                STATE.mission3_transition_kind = "service"
+                STATE.request_service_transition_cutscene = True
+            else:
+                _set_objective(exit_reason)
+                warn_t = getattr(STATE, "m3_exit_block_hint_timer", 0)
+                if warn_t <= 0:
+                    STATE.m3_exit_block_hint_timer = 75
+                    STATE.floating_texts.append([
+                        exit_pos[0], exit_pos[1] - 36,
+                        exit_reason,
+                        (220, 170, 90), 70,
+                    ])
+        if getattr(STATE, "m3_exit_block_hint_timer", 0) > 0:
+            STATE.m3_exit_block_hint_timer -= 1
+
+
+def _start_comms_phase():
+    """Slice 2 → Slice 3 transition: flip STAGE_BREAKOUT → STAGE_COMMS.
+
+    This is the Phase 2 win. The cell-block exit fires, the breakout is
+    marked cleared on STATE (so later slices can read it for narrative
+    callbacks), and the objective updates to the Phase 3 stub text. The
+    actual Vasile re-contact cutscene + comms relay puzzle is Slice 3.
+    """
+    if getattr(STATE, "mission3_stage", None) == STAGE_COMMS:
+        return  # idempotent
+
+    _stop_m3_alarm()
+
+    _build_comms_world()
+    STATE.mission3_stage = STAGE_COMMS
+    STATE.mission_phase = "m3_comms"
+    STATE.mission3_cell_block_cleared = True
+    # Comms checkpoint: reaching the Comms Wing is a respawn point AND a full
+    # heal, so dying later in the mission doesn't punish the whole breakout.
+    STATE.mission3_comms_checkpoint_reached = True
+    if STATE.player is not None:
+        STATE.player.hp = STATE.player.max_hp
+    STATE.mission3_transition_kind = ""
+    _set_objective("Reach the relay terminal. Re-establish KRAP contact.")
+    # Audio cue: a brief radio-static burst signals the transition into
+    # the next phase's beats. Silently no-ops in headless test harnesses.
+    try:
+        audio.play("radio_static", volume=0.35)
+    except Exception:
+        pass
+
+
+
+
+def _maybe_trigger_archives_handoff():
+    """If the player reaches the Comms Wing east archive E-tile after the
+    relay is live, flip into STAGE_ARCHIVES."""
+    if getattr(STATE, "mission3_stage", None) != STAGE_COMMS:
+        return
+    if not getattr(STATE, "m3_relay_tuned", False):
+        return
+    if STATE.player is None:
+        return
+    exit_pos = (
+        _ARCHIVE_EXIT_COL * TILE_SIZE + TILE_SIZE // 2,
+        _ARCHIVE_EXIT_ROW * TILE_SIZE + TILE_SIZE // 2,
+    )
+    if _near(exit_pos, radius=TILE_SIZE * 0.85):
+        _start_archives_phase()
+
+
+def _start_archives_phase():
+    """Comms → Archives transition: load the Archives map and Phase 4 state."""
+    if getattr(STATE, "mission3_stage", None) == STAGE_ARCHIVES:
+        return  # idempotent
+
+    _stop_m3_alarm()
+    _build_archives_world()
+    STATE.mission3_stage = STAGE_ARCHIVES
+    STATE.mission_phase = "m3_archives"
+    STATE.mission3_archives_checkpoint_reached = True
+    if STATE.player is not None:
+        STATE.player.hp = STATE.player.max_hp
+    STATE.mission3_transition_kind = ""
+    _set_objective("With Volkov — clear the atrium, then find Maru's dead-drop (NW).")
+    try:
+        audio.play("radio_static", volume=0.35)
+        audio.play("terminal_glitch", volume=0.30)
+    except Exception:
+        pass
+    _radio(
+        "VOLKOV: I'm with you. Stacks west, vault northeast. Don't dry the mag — I'll toss you one.",
+        color=C_VOLKOV, duration=360, mark="archives_entered_volkov",
+    )
+    _radio(
+        "VASILE: Maru's dead-drop is in the northwest clerk office. Clear a path.",
+        color=C_VASILE, duration=340, mark="archives_entered",
+    )
+
+
+def _maru_terminal_pos():
+    return (
+        _MARU_TERMINAL_COL * TILE_SIZE + TILE_SIZE // 2,
+        _MARU_TERMINAL_ROW * TILE_SIZE + TILE_SIZE // 2,
+    )
+
+
+def _vostral_file_pos():
+    return (
+        _VOSTRAL_FILE_COL * TILE_SIZE + TILE_SIZE // 2,
+        _VOSTRAL_FILE_ROW * TILE_SIZE + TILE_SIZE // 2,
+    )
+
+
+def _archives_exit_pos():
+    return (
+        _ARCHIVES_EXIT_COL * TILE_SIZE + TILE_SIZE // 2,
+        _ARCHIVES_EXIT_ROW * TILE_SIZE + TILE_SIZE // 2,
+    )
+
+
+
+def _archives_nav_target():
+    """World position the player should head to next, or None."""
+    if getattr(STATE, "mission3_stage", None) not in (STAGE_ARCHIVES, STAGE_KILL_ORDER):
+        return None
+    if getattr(STATE, "m3_maru_contact_active", False):
+        return None
+    # Only guide once the wing is clear of fightable hostiles.
+    if len(_archives_reachable_hostiles()) > 0:
+        return None
+
+    if getattr(STATE, "m3_vostral_acquired", False):
+        return _archives_exit_pos()
+    if not getattr(STATE, "m3_maru_contacted", False):
+        return _maru_terminal_pos()
+    # Vault unlocked — guide to the file pedestal.
+    return _vostral_file_pos()
+
+
+def _draw_archives_nav_arrow(cam_x, cam_y):
+    """Floating arrow above Biribel pointing toward the next objective.
+
+    Hides when the player is close enough that the interact prompt takes over,
+    so the arrow never sits on top of desks/plaques/prompts.
+    """
+    if not STATE.player or STATE.player_dead:
+        return
+    target = _archives_nav_target()
+    if target is None:
+        return
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+    tx, ty = target
+    dx, dy = tx - px, ty - py
+    dist = math.hypot(dx, dy)
+    # Interact range owns the last stretch — hide arrow to avoid clutter.
+    if dist < 140:
+        return
+    # Inside the Vostral vault room while hunting the file: no arrow (room is small).
+    pc, pr = px // TILE_SIZE, py // TILE_SIZE
+    if target == _vostral_file_pos() and 36 <= pc <= 46 and 4 <= pr <= 14:
+        return
+
+    angle = math.atan2(dy, dx)
+    bob = math.sin(pygame.time.get_ticks() * 0.008) * 3
+    sx = int(px - cam_x)
+    # High above the sprite so it clears Volkov labels / furniture.
+    sy = int(py - cam_y - 58 + bob)
+    # Clamp so the arrow itself never draws under the top HUD.
+    sy = max(64, min(HEIGHT - 90, sy))
+    sx = max(24, min(WIDTH - 24, sx))
+
+    col = (255, 220, 90)
+    tip_len = 16
+    tip = (sx + math.cos(angle) * tip_len, sy + math.sin(angle) * tip_len)
+    left = (sx + math.cos(angle + 2.45) * 11, sy + math.sin(angle + 2.45) * 11)
+    right = (sx + math.cos(angle - 2.45) * 11, sy + math.sin(angle - 2.45) * 11)
+    pygame.draw.polygon(screen, (0, 0, 0),
+                        [(tip[0] + 1, tip[1] + 1), (left[0] + 1, left[1] + 1),
+                         (right[0] + 1, right[1] + 1)])
+    pygame.draw.polygon(screen, col, [tip, left, right])
+
+    # Distance plate ABOVE the arrow (not on the cork board / desk).
+    meters = max(1, int(dist / 8))
+    tag = font_terminal_small.render(f"{meters}m", True, col)
+    tw, th = tag.get_width() + 8, tag.get_height() + 4
+    txp = max(4, min(WIDTH - tw - 4, sx - tw // 2))
+    typ = max(54, sy - th - 10)
+    plate = pygame.Surface((tw, th), pygame.SRCALPHA)
+    pygame.draw.rect(plate, (0, 0, 0, 200), plate.get_rect(), border_radius=2)
+    pygame.draw.rect(plate, (*col, 180), plate.get_rect(), 1, border_radius=2)
+    screen.blit(plate, (txp, typ))
+    screen.blit(tag, (txp + 4, typ + 2))
+
+
+def _archives_reachable_hostiles():
+    """Enemies the player can fight right now (not trapped behind locked doors)."""
+    locked_vault = not getattr(STATE, "m3_maru_contacted", False)
+    locked_exit = not getattr(STATE, "m3_vostral_acquired", False)
+    out = []
+    for e in getattr(STATE, "enemies", []):
+        c = e.rect.centerx // TILE_SIZE
+        r = e.rect.centery // TILE_SIZE
+        # Inside sealed Vostral vault chamber.
+        if locked_vault and c >= 37 and 5 <= r <= 13:
+            continue
+        # Inside sealed north stairwell.
+        if locked_exit and 23 <= c <= 27 and 3 <= r <= 5:
+            continue
+        out.append(e)
+    return out
+
+
+def _start_maru_contact():
+    """Begin the Maru dead-drop contact sequence (locks movement briefly)."""
+    if getattr(STATE, "m3_maru_contacted", False):
+        return
+    if getattr(STATE, "m3_maru_contact_active", False):
+        return
+    hostiles = _archives_reachable_hostiles()
+    if len(hostiles) > 0:
+        mx, my = _maru_terminal_pos()
+        STATE.floating_texts.append([
+            mx, my - 34, "CLEAR HOSTILES FIRST", (220, 150, 90), 90])
+        _set_objective(
+            f"Clear Archives hostiles ({len(hostiles)}) before contacting Maru.")
+        return
+
+    STATE.m3_maru_contact_active = True
+    STATE.m3_maru_contact_timer = 0
+    _set_objective("Hold position — receiving Maru's ghost-channel...")
+    try:
+        audio.play("terminal_glitch", volume=0.50)
+        audio.play("radio_static", volume=0.40)
+        audio.play("type_tick", volume=0.18)
+    except Exception:
+        pass
+
+
+def _update_maru_contact():
+    """Advance the Maru contact cinematic timer; unlock vault on completion."""
+    if not getattr(STATE, "m3_maru_contact_active", False):
+        return
+    STATE.m3_maru_contact_timer = getattr(STATE, "m3_maru_contact_timer", 0) + 1
+    t = STATE.m3_maru_contact_timer
+    duration = int(getattr(STATE, "m3_maru_contact_duration", 960) or 960)
+
+    if t in (50, 120, 200, 300, 420, 540, 680, 820):
+        try:
+            audio.play("type_tick", volume=0.12)
+        except Exception:
+            pass
+
+    if t >= duration:
+        STATE.m3_maru_contact_active = False
+        STATE.m3_maru_contacted = True
+        STATE.m3_maru_contact_timer = duration
+        # Unlock the Vostral vault doors.
+        for door in getattr(STATE, "doors", []):
+            if getattr(door, "m3_vostral_vault", False):
+                door.locked = False
+                door.target_open = True
+                door.anim_progress = 1.0
+                door.collision_rect = None
+                door.manual_timer = 400
+        _set_objective("Vault unlocked (NE). Walk in and [E] Take the Vostral file.")
+        # Waypoint ping on the vault doors.
+        for door in getattr(STATE, "doors", []):
+            if getattr(door, "m3_vostral_vault", False):
+                STATE.floating_texts.append([
+                    door.rect.centerx, door.rect.centery - 36,
+                    "VAULT OPEN", (180, 140, 220), 140])
+                break
+        try:
+            audio.play("terminal_glitch", volume=0.55)
+            audio.play("door_break", volume=0.30)
+        except Exception:
+            pass
+        _radio(
+            "MARU: The only unforged copy is under glass in the cold vault. Take it. "
+            "Then the north stairwell — Balaceanu's sweep is already moving.",
+            color=C_MARU, duration=480, mark="maru_contact_done",
+        )
+        mx, my = _maru_terminal_pos()
+        STATE.floating_texts.append([
+            mx, my - 40, "VAULT AUTHORIZATION GRANTED", (180, 140, 220), 140])
+
+
+def _acquire_vostral_file():
+    """Player takes the Vostral dossier from the vault pedestal."""
+    if getattr(STATE, "m3_vostral_acquired", False):
+        return
+    if not getattr(STATE, "m3_maru_contacted", False):
+        vx, vy = _vostral_file_pos()
+        STATE.floating_texts.append([
+            vx, vy - 34, "VAULT SEALED — CONTACT MARU", (220, 165, 80), 100])
+        _set_objective("Vault sealed. NW clerk office — contact Maru first.")
+        return
+    hostiles = _archives_reachable_hostiles()
+    if len(hostiles) > 0:
+        vx, vy = _vostral_file_pos()
+        STATE.floating_texts.append([
+            vx, vy - 34, "CLEAR HOSTILES FIRST", (220, 150, 90), 90])
+        _set_objective(f"Clear {len(hostiles)} hostile(s), then take the Vostral.")
+        return
+
+    STATE.m3_vostral_acquired = True
+    STATE.mission3_evidence_uploaded = False  # file held, not yet broadcast
+    # Open the east Kill Order exit.
+    for door in getattr(STATE, "doors", []):
+        if getattr(door, "m3_kill_order_exit", False):
+            door.locked = False
+            door.target_open = True
+            door.manual_timer = 200
+    vx, vy = _vostral_file_pos()
+    STATE.floating_texts.append([
+        vx, vy - 42, "VOSTRAL FILE ACQUIRED", (200, 230, 160), 150])
+    try:
+        audio.play("pickup", volume=0.55)
+        audio.play("terminal_glitch", volume=0.35)
+    except Exception:
+        pass
+    _set_objective("Vostral secured. North stairwell — exit before the sweep.")
+    _radio(
+        "VASILE: Confirmed — Vostral is in your hands. North stairwell. Move.",
+        color=C_VASILE, duration=360, mark="vostral_acquired",
+    )
+    _radio(
+        "VOLKOV: I've got your back to the door. Go.",
+        color=C_VOLKOV, duration=260, mark="vostral_acquired_volkov",
+    )
+    _radio(
+        "MARU: They will burn the wing when they realize. Don't look back.",
+        color=C_MARU, duration=320, mark="maru_exit_warning",
+    )
+
+
+def _update_archives_stage():
+    """Phase 4 runtime: objectives, Maru contact, file pickup, north exit."""
+    STATE.m3_archives_ambience_timer = getattr(
+        STATE, "m3_archives_ambience_timer", 0) + 1
+    _update_maru_contact()
+
+    guards_left = len(_archives_reachable_hostiles())
+    total_left = len(getattr(STATE, "enemies", []))
+    if total_left == 0:
+        STATE.m3_archives_cleared = True
+
+    volkov_up = (
+        getattr(STATE, "m3_volkov_ally_active", False)
+        and getattr(STATE, "m3_volkov_ally_hp", 0) > 0
+    )
+    tag = "with Volkov" if volkov_up else "solo"
+
+    if getattr(STATE, "m3_maru_contact_active", False):
+        _set_objective("Hold position — receiving Maru's ghost-channel...")
+    elif getattr(STATE, "m3_vostral_acquired", False):
+        _set_objective(f"Vostral secured ({tag}). North stairwell — exit before the sweep.")
+        if STATE.player is not None and _near(_archives_exit_pos(), radius=TILE_SIZE * 0.85):
+            _start_kill_order_phase()
+    elif not getattr(STATE, "m3_maru_contacted", False):
+        if guards_left > 0:
+            _set_objective(
+                f"Clear Archives hostiles ({guards_left}) — then NW clerk office ({tag}).")
+        else:
+            _set_objective(
+                "Vault is sealed. NW clerk office — [E] contact Maru to unlock it.")
+    else:
+        # Vault unlocked after Maru contact.
+        if guards_left > 0:
+            _set_objective(
+                f"Vault unlocked (NE). Clear {guards_left} hostile(s), then [E] Vostral.")
+        else:
+            _set_objective("Vault unlocked (NE). Walk in and [E] Take the Vostral file.")
+
+
+def _start_kill_order_phase():
+    """Archives → Kill Order handoff (Phase 5 stub entry).
+
+    Does not build a new map yet — marks stage and objective so the campaign
+    spine continues. Full Phase 5 combat comes in a later slice.
+    """
+    if getattr(STATE, "mission3_stage", None) == STAGE_KILL_ORDER:
+        return
+    if not getattr(STATE, "m3_vostral_acquired", False):
+        return
+    STATE.mission3_stage = STAGE_KILL_ORDER
+    STATE.mission_phase = "m3_kill_order"
+    _set_objective("Survive Balaceanu's security sweep. (Phase 5 — pending)")
+    try:
+        audio.play("radio_static", volume=0.40)
+    except Exception:
+        pass
+    _radio(
+        "VASILE: Sweep teams inbound. Hold the file — Phase 5 is not scripted yet.",
+        color=C_VASILE, duration=400, mark="kill_order_stub",
+    )
+    # Soft landing: keep the player in Archives geometry so they aren't soft-locked.
+    # A floating notice makes the stub explicit.
+    if STATE.player is not None:
+        px, py = STATE.player.rect.center
+        STATE.floating_texts.append([
+            px, py - 48, "PHASE 5 PENDING — FILE SECURED", (220, 180, 90), 180])
+
+
+def _current_beat():
+    """Return the active dialogue beat, or None once the script is done."""
+    if 0 <= _dialogue_index < len(_dialogue_beats):
+        return _dialogue_beats[_dialogue_index]
+    return None
+
+
+def _beat_text(beat):
+    """The string the typewriter reveals for this beat.
+
+    Lines type their ``text``; action beats type their caption text (pulled
+    from _ACTION_CAPTIONS so the renderer and typewriter stay in sync);
+    choice beats type their ``prompt`` (the options appear only after the
+    prompt finishes, so the panel reads as "think, then choose").
+    """
+    if not beat:
+        return ""
+    btype = beat.get("type")
+    if btype == "line":
+        return beat.get("text", "")
+    if btype == "action":
+        caption, _color = _ACTION_CAPTIONS.get(beat.get("action"), ("", C_SYSTEM))
+        return caption
+    if btype == "choice":
+        return beat.get("prompt", "")
+    return ""
+
+
+def _advance_beat():
+    """Move to the next beat. Resets per-beat timer, typewriter, slide, and
+    post-typewriter hold. Fires the breach transition when the script runs
+    off the end."""
+    global _dialogue_index, _dialogue_timer, _dialogue_char_idx, _dialogue_slide
+    global _post_type_hold
+    _dialogue_index += 1
+    _dialogue_timer = 0
+    _dialogue_char_idx = 0
+    _dialogue_slide = 0.0
+    _post_type_hold = 0
+    # Mirror onto STATE for save/inspect surfaces.
+    STATE.mission3_dialogue_index = _dialogue_index
+    if _dialogue_index >= len(_dialogue_beats):
+        _transition_to_breakout()
+
+
+def _line_fully_typed(beat):
+    """True once the typewriter has revealed every char of this beat's text."""
+    return _dialogue_char_idx >= len(_beat_text(beat))
+
+
+def _play_typewriter_tick(ch, idx, volume=0.11):
+    """Per-char tick sound — mirrors acaristan._play_typewriter_tick exactly.
+
+    Skips odd-index non-punctuation chars so it never sounds like a machine
+    gun, but always ticks lightly on . ! ? so sentence ends land.
+    """
+    if not ch or ch.isspace():
+        return
+    if idx % 2 != 0 and ch not in ".!?":
+        return
+    try:
+        audio.play("type_tick", volume=volume)
+    except Exception:
+        pass
+
+
+def _update_interrogation():
+    """Drive the typewriter, then auto-advance line/action beats once typing
+    finishes plus a 2s hold. Choice beats block until handle_event resolves
+    them."""
+    global _dialogue_timer, _light_flicker, _breach_flash
+    global _dialogue_char_idx, _dialogue_slide, _post_type_hold, _volkov_breach_t
+    global _boots_approach_t
+    beat = _current_beat()
+    if beat is None:
+        # Script is done but we haven't handed off yet (e.g. choice resolved
+        # on the final beat). Still decay FX so the flash doesn't stick.
+        if _breach_flash > 0:
+            _breach_flash -= 1
+        if _light_flicker > 0:
+            _light_flicker -= 1
+        if _volkov_breach_t >= 0:
+            _volkov_breach_t += 1   # keep animating Volkov post-breach
+        # Decay boots-approach too (in case the script ended mid-beat).
+        if _boots_approach_t >= 0:
+            _boots_approach_t += 1
+        return
+    _dialogue_timer += 1
+
+    # Tick down FX flags the renderer reads.
+    if _light_flicker > 0:
+        _light_flicker -= 1
+    if _breach_flash > 0:
+        _breach_flash -= 1
+    # Tick UP the breach animation clock once it's been seeded. The renderer
+    # reads _volkov_breach_t to position Volkov's body, leg, and the swinging
+    # door panel across the kick animation. Capped at 600 (10s) so the int
+    # stays small even if the player walks away from the keyboard.
+    if _volkov_breach_t >= 0 and _volkov_breach_t < 600:
+        _volkov_breach_t += 1
+        if _volkov_breach_t == 301:
+            _detonate_cell_door()
+        # At frame 150, the C4 brick is "seated" on the door hinge — play a
+        # soft metallic click so the placement reads as a deliberate action,
+        # not silent debris appearing.
+        if _volkov_breach_t == 150 and "volkov_charge_placed" not in STATE.mission3_events:
+            STATE.mission3_events.add("volkov_charge_placed")
+            try:
+                audio.play("rifle_handle", volume=0.25)
+            except Exception:
+                pass
+
+    # Tick UP the boots-approach clock while the establishing beat is active.
+    # The renderer reads _boots_approach_t to draw a faint shadow sweeping
+    # under the cell door. Spaced footstep SFX at frames 0, 45, 90 (~0.75s
+    # apart) sell "deliberate, slow cadence — not a patrol round."
+    if _boots_approach_t >= 0:
+        _boots_approach_t += 1
+        if _boots_approach_t in (45, 90) and \
+                f"boots_step_{_boots_approach_t}" not in STATE.mission3_events:
+            STATE.mission3_events.add(f"boots_step_{_boots_approach_t}")
+            try:
+                audio.play("footstep", volume=0.40)
+            except Exception:
+                pass
+
+    # Panel slide-up on entry: ramps 0 -> 12 in the first frames, then the
+    # renderer eases it back down to 0 (see _draw_dialogue_panel).
+    if _dialogue_timer <= 12:
+        _dialogue_slide = min(12.0, _dialogue_timer)
+
+    btype = beat.get("type")
+
+    # ── Typewriter: reveal one char per _TYPE_SPEED frames, with the
+    # cutscene engine's punctuation-pause cadence. Drives the per-char tick.
+    full_text = _beat_text(beat)
+    if _dialogue_char_idx < len(full_text):
+        if _dialogue_timer % _TYPE_SPEED == 0:
+            # Apply punctuation pause to the PREVIOUS char (matches
+            # acaristan.py:1277-1281): slow down after .!?,;:.
+            prev = full_text[_dialogue_char_idx - 1] if _dialogue_char_idx > 0 else ""
+            if prev in ".!?":
+                pass  # full pause already consumed via the modulo skip below
+            nxt = full_text[_dialogue_char_idx]
+            _play_typewriter_tick(nxt, _dialogue_char_idx, volume=0.11)
+            _dialogue_char_idx += 1
+
+    # Choice beats: once the prompt finishes typing, the options appear and
+    # the beat blocks until the player picks. Never auto-advance.
+    if btype == "choice":
+        return
+
+    # Fire action-beat FX on entry (first frame the beat is visible).
+    if btype == "action" and _dialogue_timer == 1:
+        _trigger_action(beat.get("action"))
+
+    # Auto-advance rule: once the typewriter has revealed every character of
+    # the current beat's text, hold for a length-scaled number of frames
+    # (_post_type_hold_frames(beat) -- 3s floor, 6s ceiling, ~3 frames/char
+    # in between), then advance. While the typewriter is still working, the
+    # hold counter stays at 0 so a long line is never cut off mid-type.
+    # Choice beats already returned above and never reach here.
+    if not _line_fully_typed(beat):
+        _post_type_hold = 0
+        return
+    _post_type_hold += 1
+
+    # Do not auto-cut away from unskippable cinematic actions early.
+    if _action_auto_locked(beat):
+        return
+
+    if _post_type_hold >= _post_type_hold_frames(beat):
+        _advance_beat()
+
+
+def _detonate_cell_door():
+    """Actual detonation beat for Volkov's breach animation.
+
+    Called when _volkov_breach_t reaches the detonation frame.
+    This prevents the explosion SFX/flash from firing before Volkov
+    has approached, planted the charge, and stepped back.
+    """
+    global _breach_flash
+
+    if "volkov_breach_detonated" in STATE.mission3_events:
+        return
+
+    STATE.mission3_events.add("volkov_breach_detonated")
+    STATE.mission3_cell_open = True
+
+    _breach_flash = 28
+    effects.shake(36)
+
+    # High-action lockdown alarm moment.
+    _start_m3_alarm()
+
+    try:
+        audio.play("explosion", volume=0.9)
+        audio.play("door_open", volume=0.6)
+    except Exception:
+        pass
+
+    # The alarm alerts the entire cell block.
+    for e in getattr(STATE, "enemies", []):
+        try:
+            e.alerted = True
+            if e.state in ("IDLE", "PATROL", "SEARCH"):
+                e.state = "CHASE"
+            e.last_seen_pos = (
+                _DOOR_TILE_COL * TILE_SIZE + TILE_SIZE,
+                _DOOR_TILE_ROW * TILE_SIZE + TILE_SIZE // 2,
+            )
+            e.combat_alert_timer = max(getattr(e, "combat_alert_timer", 0), 420)
+        except Exception:
+            pass
+
+    _set_objective("ALARMS TRIGGERED — GET OUT OF THE CELL BLOCK")
+
+    door_px = _DOOR_TILE_COL * TILE_SIZE + TILE_SIZE // 2
+    door_py = _DOOR_TILE_ROW * TILE_SIZE + TILE_SIZE // 2
+
+    for _ in range(40):
+        STATE.particles.append(Particle(
+            door_px + random.randint(-20, 20),
+            door_py + random.randint(-20, 20),
+            (255, random.randint(100, 200), 0)
+        ))
+
+    STATE.gc_flash_timer = max(getattr(STATE, "gc_flash_timer", 0), 10)
+    STATE.floating_texts.append([
+        STATE.player.rect.centerx if STATE.player else door_px,
+        (STATE.player.rect.centery - 50) if STATE.player else (door_py - 30),
+        "ALARM TRIGGERED",
+        (255, 60, 60),
+        90,
+    ])
+
+    _radio("VOLKOV: Too loud now. Move!", color=C_VOLKOV, duration=220, mark="volkov_alarm_line")
+
+
+def _trigger_action(action):
+    """Fire the diegetic FX for an action beat (monitor on/off, breach, ...).
+
+    Called from handle_event the first time an action beat becomes active so
+    the sound/shake/caption land on entry, not on every frame the beat sits.
+    """
+    global _monitor_on, _breach_flash, _light_flicker, _volkov_breach_t
+    global _boots_approach_t
+    if action == "monitor_on":
+        _monitor_on = True
+        try:
+            audio.play("radio_static", volume=0.5)
+            audio.play("terminal_glitch", volume=0.4)
+        except Exception:
+            pass
+        effects.shake(4)
+    elif action == "monitor_off":
+        _monitor_on = False
+        _light_flicker = 60  # ~1s of fluorescent flicker after the cut
+        try:
+            audio.play("radio_static", volume=0.4)
+        except Exception:
+            pass
+    elif action == "broadcast_caption":
+        # The "STATE ADDRESS — LIVE TONIGHT — 22:00" caption beat. No FX of
+        # its own beyond a soft CRT hum; the caption text does the work.
+        try:
+            audio.play("terminal_glitch", volume=0.25)
+        except Exception:
+            pass
+    elif action == "boots_approach":
+        # Pre-breach establishing beat. Someone is walking down the corridor
+        # outside the cell — Volkov, but the player doesn't know that yet.
+        # We play three spaced footsteps (3 separate SFX calls spread across
+        # the beat's hold) and seed _boots_approach_t so the renderer can
+        # draw a faint shadow sweeping under the cell door. The boots are
+        # "wrong cadence" — too deliberate for a patrol — which is the
+        # fiction cue that this isn't a normal guard round.
+        _boots_approach_t = 0
+        try:
+            audio.play("footstep", volume=0.45)
+        except Exception:
+            pass
+    elif action == "breach":
+        # Start Volkov's breach animation.
+        # Important: DO NOT detonate immediately. The explosion now fires
+        # from _detonate_cell_door() when _volkov_breach_t reaches the
+        # planted-charge detonation frame.
+        STATE.mission3_events.add("volkov_breach")
+        _volkov_breach_t = 0
+        # Boots approach beat is done — stop drawing the under-door shadow.
+        _boots_approach_t = -1
+
+        try:
+            audio.play("door_creak", volume=0.35)
+            audio.play("rifle_handle", volume=0.35)
+        except Exception:
+            pass
+
+
+def _transition_to_breakout():
+    """Flip STAGE_INTERROGATION → STAGE_BREAKOUT, open the cell door, and
+    trigger the chair-break cinematic.
+
+    The breach beat already played the FX; this is the mechanical handoff:
+    movement unlocks (see _movement_locked), the objective updates, and the
+    cell's south-wall door tile becomes walkable so Biribel can step out.
+
+    The chair break is now a cinematic cutscene, replacing the old
+    interactive mash minigame.
+    """
+    global _monitor_on
+    STATE.mission3_stage = STAGE_BREAKOUT
+    STATE.mission_phase = "m3_breakout"
+    STATE.mission3_cell_open = True
+    STATE.mission3_breakout_checkpoint_reached = True
+    STATE.mission3_tone = list(_dialogue_tone)
+    _monitor_on = False
+
+    # Volkov does not wait in the doorway forever — he draws attention away.
+    STATE.m3_volkov_run_active = True
+    STATE.m3_volkov_run_timer = 0
+    STATE.m3_volkov_run_done = False
+
+    _radio(
+        "VOLKOV: Alarm's up. I'll draw them off — you move.",
+        color=C_VOLKOV,
+        duration=360,
+        mark="volkov_draws_them_off",
+    )
+
+    # Biribel's cell door is NEVER interactactable. The C4 blast tore a
+    # hole through it — the player walks through the hole, they don't open
+    # the door. Keep door.locked = True (so interact_door() rejects E-key
+    # presses with a "locked" no-op) and disable its collision_rect (so
+    # the player can walk through the blasted opening). The door STAYS
+    # locked for the rest of the mission — it never becomes a normal
+    # toggleable door.
+    for door in STATE.doors:
+        if door.rect.x // TILE_SIZE == _DOOR_TILE_COL and door.rect.y // TILE_SIZE == _DOOR_TILE_ROW:
+            door.locked = True            # stays locked — no toggle, no E-key
+            door.target_open = False      # never animates open
+            door.anim_progress = 0.0      # stays in closed visual state
+            door.collision_disabled = True  # but player can walk through (blast hole)
+        elif (door.rect.x // TILE_SIZE == _DOOR_TILE_COL + 1 and
+              door.rect.y // TILE_SIZE == _DOOR_TILE_ROW):
+            door.locked = True
+            door.target_open = False
+            door.anim_progress = 0.0
+            door.collision_disabled = True
+
+    _open_cell_door()
+    # Trigger the cinematic cutscene via acaristan's unified engine.
+    # Mutations (chair broken, armed) are handled by the acaristan loop
+    # when picking up this request.
+    STATE.request_chair_break_cutscene = True
+
+
+def _open_cell_door():
+    """Punch the cell's south-wall door tile open so the player can leave.
+
+    The interrogation cell is the 12x10 room outlined at (4,4) with a door
+    gap at tile offset (5,9). That gap is already floor in MISSION3_MAP, but
+    the wall tiles flanking it are solid 'C' — Slice 0 left them so the
+    player couldn't wander during the (then-stub) cold open. Now that the
+    breach has fired, we don't need to mutate the map (the door gap is
+    already walkable); we just make sure no barrier rect overlaps the
+    threshold. Kept as a no-op-safe hook for Slice 2's lockpick/shank beat.
+    """
+    # The door tile (col 9, row 13 → 4+5, 4+9) is already "." in the map.
+    # No wall removal needed in Slice 1; this is the seam Slice 2 will use
+    # to swap a locked-door tile for an open one.
+    return
+
+
+
+def _update_camera():
+    """Per-frame camera. Returns the final render camera with shake + recoil."""
+    target = _player_pos()
+
+    # Interrogation breach focus
+    if (getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_INTERROGATION
+            and _volkov_breach_t >= 0):
+        volkov_pos = _volkov_world_pos()
+        if volkov_pos is not None:
+            t = _volkov_breach_t
+            if t <= 90:
+                # Approach phase (~1.5s): TWO-SHOT. Frame both Volkov (in
+                # the corridor, south) and the player (in the cell, north)
+                # so the player sees where Volkov is coming from. Midpoint
+                # between the two, biased slightly toward Volkov so his
+                # silhouette isn't cut off at the screen's bottom edge.
+                player_pos = _player_pos()
+                mid_x = (volkov_pos[0] + player_pos[0]) // 2
+                mid_y = (volkov_pos[1] + player_pos[1]) // 2
+                # Bias toward Volkov by 25% so he gets more screen real
+                # estate during the approach.
+                target = (
+                    int(mid_x + (volkov_pos[0] - mid_x) * 0.25),
+                    int(mid_y + (volkov_pos[1] - mid_y) * 0.25) - 20,
+                )
+                # Slower focus factor during the two-shot so the pull-back
+                # reads as cinematic, not as a bug.
+                return update_camera(target, map_w=MAP_W, map_h=MAP_H,
+                                     focus_factor=0.15)
+            else:
+                # Plant / retreat / detonation / re-enter: tight follow on
+                # Volkov (original behavior).
+                target = (volkov_pos[0], volkov_pos[1] - 40)
+                return update_camera(target, map_w=MAP_W, map_h=MAP_H,
+                                     focus_factor=0.22)
+
+    return update_camera(target, map_w=MAP_W, map_h=MAP_H)
+
+
+
+def _mission3_melee_duration(weapon=None):
+    """Return the melee animation duration for Mission 3's improvised weapons."""
+    if weapon is None:
+        weapon = getattr(STATE, "mission3_weapon", "none")
+    if weapon == "chair_leg":
+        return 24.0
+    if weapon == "shiv":
+        return 14.0
+    if weapon == "k9_smg":
+        return 20.0
+    return 18.0
+
+
+def _mission3_melee_progress():
+    """0..1 swing progress, using the same durations as weapons.handle_melee."""
+    if not getattr(STATE, "melee_active", False) or getattr(STATE, "melee_timer", 0) <= 0:
+        return 0.0
+    dur = max(1.0, _mission3_melee_duration())
+    return max(0.0, min(1.0, 1.0 - STATE.melee_timer / dur))
+
+
+def _update_mission3_melee(solid_walls):
+    """Tick Mission 3 melee so the chair-leg/shiv swing animates in gameplay.
+
+    M1/M2 already update STATE.melee_timer in their own loops. Mission 3 was
+    missing that because its first slice had no combat, so pressing V could set
+    melee_active forever. This keeps the improvised weapon visible and gives
+    future M3 guards the same shared hit resolver as the rest of the game.
+
+    The hit resolves at a weapon-specific frame so the DAMAGE lands on the
+    visual peak of the swing, not before it:
+      - shiv:      timer <= 7  → progress 0.5, the thrust-peak extension
+      - chair_leg: timer <= 10 → the swing midpoint (unchanged)
+    """
+    if not getattr(STATE, "melee_active", False):
+        return
+    STATE.melee_timer -= 1
+    hit_frame = 7 if getattr(STATE, "mission3_weapon", "none") == "shiv" else 10
+    if STATE.player and not getattr(STATE, "melee_hit_done", False) and STATE.melee_timer <= hit_frame:
+        hit_enemy = resolve_melee(STATE.player, STATE.enemies, solid_walls, C_BLOOD)
+        STATE.melee_hit_done = True
+        if hit_enemy is not None:
+            STATE.shots_hit += 1
+    if STATE.melee_timer <= 0:
+        STATE.melee_active = False
+        STATE.melee_hit_done = False
+
+
+def _mission3_arm_pose_for_weapon(cam_x, cam_y):
+    """Return the same two-hand grip point Player.draw uses, in screen space.
+
+    Player.draw already supports melee arm animation even when no_gun=True.
+    This helper mirrors that math so the separate Mission 3 shiv/chair-leg
+    overlay sits exactly in the player's hands instead of floating nearby.
+    """
+    if not STATE.player:
+        return None
+    draw_x = STATE.player.rect.centerx - cam_x
+    draw_y = STATE.player.rect.centery - cam_y + getattr(STATE.player, "breathing", 0.0)
+    a = STATE.player.angle
+    arm_angle = a
+    arm_factor = 1.0
+    p = _mission3_melee_progress()
+    weapon = getattr(STATE, "mission3_weapon", "none")
+    if getattr(STATE, "melee_active", False) and p > 0.0 and weapon != "shiv":
+        # Chair-leg attacks are broad blunt swings, so they reuse the normal
+        # melee arm arc. Shiv attacks are a straight thrust and must keep the
+        # arm aimed at the mouse; otherwise the stab trail points sideways.
+        if p < 0.25:
+            t = p / 0.25
+            arm_factor = 1.0 - t * 0.6
+            arm_angle = a - t * math.pi / 4
+        elif p < 0.75:
+            t = (p - 0.25) / 0.5
+            arm_factor = 0.4 + t * 0.8
+            arm_angle = a - math.pi / 4 + t * (math.pi / 4 + math.pi / 3)
+        else:
+            t = (p - 0.75) / 0.25
+            arm_factor = 1.2 - t * 0.2
+            arm_angle = a + math.pi / 3 - t * math.pi / 3
+    arm_len = int(16 * arm_factor)
+    dx = math.cos(arm_angle)
+    dy = math.sin(arm_angle)
+    px = -dy
+    py = dx
+    grip_x = draw_x + dx * (arm_len + 4)
+    grip_y = draw_y + dy * (arm_len + 4)
+    return draw_x, draw_y, grip_x, grip_y, dx, dy, px, py, p
+
+
+
+def _rot_vec(dx, dy, angle):
+    """Rotate a unit vector by angle radians."""
+    ca = math.cos(angle)
+    sa = math.sin(angle)
+    return dx * ca - dy * sa, dx * sa + dy * ca
+
+
+def _draw_weapon_layer(surface, alpha, draw_fn):
+    """Draw weapon art with optional alpha.
+
+    Performance note: the old version allocated a full-screen SRCALPHA surface
+    for every ghost weapon pose during melee. Chair-leg swings spawned several
+    of those per frame, which caused visible attack stutter. Low-alpha ghost
+    poses are now skipped; live weapon art draws directly.
+    """
+    if alpha < 120:
+        return
+    draw_fn(surface)
+
+
+
+
+def _draw_tapered_blade(surface, grip_x, grip_y, dx, dy, px, py, length=20, alpha=255):
+    """Draw the crafted shiv as an actual small knife in gameplay.
+
+    Reads at a glance as an improvised knife: cloth-wrapped grip with fraying
+    tails and a dark pommel cap, a small riveted guard, and an asymmetric
+    chisel-ground blade with a fuller, edge bevel, scratches, an oxidation
+    spot, a faint use-stain near the tip, and a bright tip glint. The
+    chisel-ground asymmetry (wider on the edge side, narrower on the spine
+    side) keeps the improvised feel — this is a ground-down chair leg,
+    not a factory blade.
+    """
+    def _draw(target):
+        # ── Drop shadow under the whole weapon silhouette ──
+        # A short fat dark line that the rest of the weapon paints over, so
+        # the weapon sits on the floor plane instead of floating.
+        pygame.draw.line(target, (0, 0, 0),
+                         (grip_x - dx * 10 + 1, grip_y - dy * 10 + 2),
+                         (grip_x + dx * (length + 2) + 1,
+                          grip_y + dy * (length + 2) + 2), 6)
+
+        # ── Handle core (the broken chair-leg tube under the wrap) ──
+        butt_x = grip_x - dx * 10
+        butt_y = grip_y - dy * 10
+        guard_x = grip_x + dx * 4
+        guard_y = grip_y + dy * 4
+        # Core (darkest) — the underlying metal.
+        pygame.draw.line(target, (22, 17, 13), (butt_x, butt_y), (guard_x, guard_y), 8)
+        # Mid-tone highlight band on the upper side.
+        pygame.draw.line(target, (74, 56, 40),
+                         (butt_x + px * 1.8, butt_y + py * 1.8),
+                         (guard_x + px * 1.8, guard_y + py * 1.8), 2)
+        # Top edge sheen — catches light along the back of the grip.
+        pygame.draw.line(target, (112, 86, 60),
+                         (butt_x + px * 2.6, butt_y + py * 2.6),
+                         (guard_x + px * 2.6, guard_y + py * 2.6), 1)
+        # Lower-edge shadow — grounds the cylinder shape.
+        pygame.draw.line(target, (10, 7, 5),
+                         (butt_x - px * 2.8, butt_y - py * 2.8),
+                         (guard_x - px * 2.8, guard_y - py * 2.8), 1)
+
+        # ── Pommel / butt cap ──
+        # A small darker cap at the back end with a rivet dot — closes off
+        # the handle so it doesn't read as an open tube.
+        pommel = [
+            (butt_x - dx * 2.0 + px * 3.6, butt_y - dy * 2.0 + py * 3.6),
+            (butt_x + dx * 1.0 + px * 3.6, butt_y + dy * 1.0 + py * 3.6),
+            (butt_x + dx * 1.0 - px * 3.6, butt_y + dy * 1.0 - py * 3.6),
+            (butt_x - dx * 2.0 - px * 3.6, butt_y - dy * 2.0 - py * 3.6),
+        ]
+        pygame.draw.polygon(target, (44, 34, 24), pommel)
+        pygame.draw.polygon(target, (12, 9, 6), pommel, 1)
+        # Pommel top sheen.
+        pygame.draw.line(target, (88, 66, 44),
+                         (butt_x - dx * 1.2 + px * 2.6, butt_y - dy * 1.2 + py * 2.6),
+                         (butt_x + dx * 0.4 + px * 2.6, butt_y + dy * 0.4 + py * 2.6), 1)
+        # Rivet dot — tiny bright spec on the pommel face.
+        pygame.draw.circle(target, (96, 72, 50),
+                           (int(butt_x - dx * 0.6), int(butt_y - dy * 0.6)), 1)
+
+        # ── Cloth wrap: 4 bands with alternating tones + frayed tails ──
+        # Each band is a perpendicular stripe across the handle. Tones
+        # alternate dark/light so the wrap reads as overlapping strips of
+        # torn cloth, not a single solid sleeve. A short frayed tail wisps
+        # off one side of each band — the loose end of the cloth strip.
+        wrap_bands = (
+            (-7.0, 3.8, (28, 22, 17), (98, 76, 56),  1),
+            (-4.0, 3.6, (18, 14, 10), (110, 86, 62), -1),
+            (-1.0, 3.4, (32, 24, 18), (90, 70, 50),  1),
+            ( 2.0, 3.2, (22, 17, 12), (116, 90, 64), -1),
+        )
+        for off, half_w, dark_col, lite_col, tail_side in wrap_bands:
+            cx = grip_x + dx * off
+            cy = grip_y + dy * off
+            # Band body — perpendicular line across the handle.
+            pygame.draw.line(target, dark_col,
+                             (cx - px * half_w, cy - py * half_w),
+                             (cx + px * half_w, cy + py * half_w), 2)
+            # Top highlight stripe — narrower, sits just inside the band.
+            pygame.draw.line(target, lite_col,
+                             (cx - px * (half_w - 0.7), cy - py * (half_w - 0.7)),
+                             (cx + px * (half_w - 0.7), cy + py * (half_w - 0.7)), 1)
+            # Frayed tail — short wispy line off one side of the band.
+            tx = cx + px * half_w * tail_side
+            ty = cy + py * half_w * tail_side
+            pygame.draw.line(target, (66, 50, 34),
+                             (tx, ty),
+                             (tx + px * 1.6 * tail_side + dx * 1.6,
+                              ty + py * 1.6 * tail_side + dy * 1.6), 1)
+
+        # ── Guard / stop — a small perpendicular bar with two rivets ──
+        # This is what makes the weapon read as a knife (not a key or spike):
+        # a clear cross-bar between handle and blade.
+        guard_poly = [
+            (guard_x - dx * 1.2 + px * 5.6, guard_y - dy * 1.2 + py * 5.6),
+            (guard_x + dx * 1.2 + px * 5.6, guard_y + dy * 1.2 + py * 5.6),
+            (guard_x + dx * 1.2 - px * 5.6, guard_y + dy * 1.2 - py * 5.6),
+            (guard_x - dx * 1.2 - px * 5.6, guard_y - dy * 1.2 - py * 5.6),
+        ]
+        pygame.draw.polygon(target, (54, 56, 56), guard_poly)
+        pygame.draw.polygon(target, (22, 24, 24), guard_poly, 1)
+        # Top sheen across the guard.
+        pygame.draw.line(target, (132, 136, 134),
+                         (guard_x - px * 4.4, guard_y - py * 4.4),
+                         (guard_x + px * 4.4, guard_y + py * 4.4), 1)
+        # Two rivets pinning the guard to the handle.
+        for rivet_off in (-2.6, 2.6):
+            rx = guard_x + px * rivet_off
+            ry = guard_y + py * rivet_off
+            pygame.draw.circle(target, (24, 26, 26), (int(rx), int(ry)), 2)
+            pygame.draw.circle(target, (152, 156, 154),
+                               (int(rx - 0.4), int(ry - 0.4)), 1)
+
+        # ── Blade — asymmetric chisel-ground point with fuller + bevels ──
+        # The edge side (px +) widens out more than the spine side (px -),
+        # giving the asymmetric chisel-ground profile of an improvised edge.
+        base_x     = grip_x + dx * 5
+        base_y     = grip_y + dy * 5
+        shoulder_x = grip_x + dx * 10
+        shoulder_y = grip_y + dy * 10
+        mid_x      = grip_x + dx * (length * 0.58)
+        mid_y      = grip_y + dy * (length * 0.58)
+        tip_x      = grip_x + dx * length
+        tip_y      = grip_y + dy * length
+
+        blade = [
+            (base_x     + px * 3.8, base_y     + py * 3.8),  # edge side of base
+            (shoulder_x + px * 3.2, shoulder_y + py * 3.2),  # edge widest point
+            (mid_x      + px * 2.2, mid_y      + py * 2.2),  # edge tapering
+            (tip_x,                       tip_y),                 # tip
+            (mid_x      - px * 1.4, mid_y      - py * 1.4),  # spine return
+            (shoulder_x - px * 2.4, shoulder_y - py * 2.4),  # spine
+            (base_x     - px * 3.4, base_y     - py * 3.4),  # spine side of base
+        ]
+        pygame.draw.polygon(target, (122, 130, 134), blade)
+        pygame.draw.polygon(target, (18, 20, 22), blade, 1)
+
+        # Spine — darker band along the back edge of the blade.
+        pygame.draw.line(target, (58, 64, 68),
+                         (base_x - px * 2.6 + dx * 1.0,
+                          base_y - py * 2.6 + dy * 1.0),
+                         (shoulder_x - px * 1.8, shoulder_y - py * 1.8), 1)
+        pygame.draw.line(target, (58, 64, 68),
+                         (shoulder_x - px * 1.8, shoulder_y - py * 1.8),
+                         (mid_x - px * 0.9, mid_y - py * 0.9), 1)
+        pygame.draw.line(target, (78, 84, 88),
+                         (mid_x - px * 0.9, mid_y - py * 0.9),
+                         (tip_x - dx * 3, tip_y - dy * 3), 1)
+
+        # Chisel-ground bevel flat — a slightly lighter inset polygon on the
+        # edge side, faking the flat ground into the edge.
+        bevel = [
+            (base_x     + px * 2.6, base_y     + py * 2.6),
+            (shoulder_x + px * 2.0, shoulder_y + py * 2.0),
+            (mid_x      + px * 1.2, mid_y      + py * 1.2),
+            (mid_x      + px * 0.4, mid_y      + py * 0.4),
+            (shoulder_x + px * 1.0, shoulder_y + py * 1.0),
+            (base_x     + px * 1.4, base_y     + py * 1.4),
+        ]
+        pygame.draw.polygon(target, (150, 158, 162), bevel)
+
+        # Fuller — a thin darker groove running down the middle of the blade.
+        fuller_a = (base_x + px * 0.6 + dx * 1.5, base_y + py * 0.6 + dy * 1.5)
+        fuller_b = (mid_x  + px * 0.2,             mid_y  + py * 0.2)
+        fuller_c = (tip_x  - dx * 4 - px * 0.3,    tip_y  - dy * 4 - py * 0.3)
+        pygame.draw.line(target, (76, 82, 86), fuller_a, fuller_b, 1)
+        pygame.draw.line(target, (92, 98, 102), fuller_b, fuller_c, 1)
+
+        # Sharpened edge — bright glint line along the very edge of the blade.
+        pygame.draw.line(target, (238, 246, 242),
+                         (base_x     + px * 3.2 + dx * 1.0,
+                          base_y     + py * 3.2 + dy * 1.0),
+                         (shoulder_x + px * 2.6, shoulder_y + py * 2.6), 1)
+        pygame.draw.line(target, (238, 246, 242),
+                         (shoulder_x + px * 2.6, shoulder_y + py * 2.6),
+                         (mid_x      + px * 1.6, mid_y      + py * 1.6), 1)
+        pygame.draw.line(target, (220, 228, 224),
+                         (mid_x + px * 1.6, mid_y + py * 1.6),
+                         (tip_x - dx * 1.5, tip_y - dy * 1.5), 1)
+
+        # Tip glint — tiny bright dot right at the point.
+        pygame.draw.circle(target, (250, 252, 250),
+                           (int(tip_x - dx * 0.5), int(tip_y - dy * 0.5)), 1)
+
+        # Scratches — three short bright marks at angles across the flat,
+        # evidence of the blade being dragged across the drain grate.
+        for s_off, s_len, s_col in (
+            (0.30, 2.6, (204, 214, 214)),
+            (0.55, 2.0, (182, 192, 194)),
+            (0.72, 1.6, (212, 222, 220)),
+        ):
+            sx = grip_x + dx * (length * s_off)
+            sy = grip_y + dy * (length * s_off)
+            pygame.draw.line(target, s_col,
+                             (sx + px * 1.8, sy + py * 1.8),
+                             (sx + px * 1.8 - dx * s_len * 0.6 + px * s_len * 0.4,
+                              sy + py * 1.8 - dy * s_len * 0.6 + py * s_len * 0.4), 1)
+
+        # Oxidation / patina spot near the base of the blade.
+        ox_x = base_x + dx * 2.0 + px * 1.5
+        ox_y = base_y + dy * 2.0 + py * 1.5
+        pygame.draw.circle(target, (78, 60, 48), (int(ox_x), int(ox_y)), 1)
+
+        # Faint use-stain near the tip — small dark patch, evidence this
+        # thing has already been used at least once.
+        stain_x = tip_x - dx * 5
+        stain_y = tip_y - dy * 5
+        pygame.draw.circle(target, (92, 40, 36), (int(stain_x), int(stain_y)), 1)
+    _draw_weapon_layer(surface, alpha, _draw)
+
+def _draw_chair_leg_weapon(surface, grip_x, grip_y, dx, dy, px, py, alpha=255):
+    """Draw the snapped chair leg as a short piece of broken furniture.
+
+    It is a bent metal tube with a rubber foot, a tiny bolt bracket, and a
+    jagged hollow end — top-down scale, not a full-length pipe.
+    """
+    def _draw(target):
+        start_x = grip_x - dx * 5
+        start_y = grip_y - dy * 5
+        knee_x = grip_x + dx * 10 + px * 2.2
+        knee_y = grip_y + dy * 10 + py * 2.2
+        end_x = grip_x + dx * 24 + px * 4.0
+        end_y = grip_y + dy * 24 + py * 4.0
+
+        # Ground shadow.
+        pygame.draw.line(target, (0, 0, 0),
+                         (start_x + 1, start_y + 2), (knee_x + 1, knee_y + 2), 7)
+        pygame.draw.line(target, (0, 0, 0),
+                         (knee_x + 1, knee_y + 2), (end_x + 1, end_y + 2), 7)
+
+        # Main bent tube.
+        pygame.draw.line(target, (24, 25, 26), (start_x, start_y), (knee_x, knee_y), 6)
+        pygame.draw.line(target, (34, 35, 36), (knee_x, knee_y), (end_x, end_y), 6)
+        pygame.draw.line(target, (94, 98, 100),
+                         (start_x + px * 1.3, start_y + py * 1.3),
+                         (end_x + px * 1.3, end_y + py * 1.3), 2)
+        pygame.draw.line(target, (9, 10, 11),
+                         (start_x - px * 2.2, start_y - py * 2.2),
+                         (end_x - px * 2.2, end_y - py * 2.2), 1)
+
+        # Small square welded/bolt bracket from the old chair frame.
+        bx = grip_x + dx * 6 - px * 1
+        by = grip_y + dy * 6 - py * 1
+        bracket = [
+            (bx - dx * 4 - px * 3, by - dy * 4 - py * 3),
+            (bx + dx * 4 - px * 3, by + dy * 4 - py * 3),
+            (bx + dx * 4 + px * 3, by + dy * 4 + py * 3),
+            (bx - dx * 4 + px * 3, by - dy * 4 + py * 3),
+        ]
+        pygame.draw.polygon(target, (50, 48, 43), bracket)
+        pygame.draw.polygon(target, (112, 105, 88), bracket, 1)
+        pygame.draw.circle(target, (150, 140, 112), (int(bx), int(by)), 1)
+
+        # Rubber foot cap on the back end.
+        foot_x = start_x - dx * 3
+        foot_y = start_y - dy * 3
+        pygame.draw.circle(target, (9, 9, 10), (int(foot_x), int(foot_y)), 4)
+        pygame.draw.circle(target, (55, 55, 54), (int(foot_x), int(foot_y)), 4, 1)
+
+        # Jagged hollow snapped end.
+        pygame.draw.circle(target, (13, 13, 15), (int(end_x), int(end_y)), 4)
+        pygame.draw.circle(target, (122, 122, 116), (int(end_x), int(end_y)), 4, 1)
+        for off in (-3, 0, 3):
+            pygame.draw.line(target, (160, 148, 116),
+                             (end_x - dx * 3 + px * off, end_y - dy * 3 + py * off),
+                             (end_x + dx * 2 - px * off * 0.4, end_y + dy * 2 - py * off * 0.4), 1)
+    _draw_weapon_layer(surface, alpha, _draw)
+
+
+
+def _draw_gripping_hand(surface, grip_x, grip_y, dx, dy, px, py,
+                        origin_x=None, origin_y=None):
+    """Draw a top-down clenched hand locked around the handle.
+
+    This replaces the old loose circle hand, which made the wrist/handle look
+    broken. The palm, thumb, and knuckles are oriented to the weapon vector and
+    the handle passes through the fist.
+
+    When ``origin_x``/``origin_y`` (the player's screen-space centre) are
+    supplied, a uniform-coloured forearm is drawn from the shoulder out to the
+    grip as a tapered quad. This lets the grip sit WELL past the neutral hand
+    position — so during a shiv thrust the whole arm visibly extends forward
+    instead of the blade floating off a frozen wrist. Without the origin the
+    original short wrist stub is drawn (used by the chair-leg swing, whose
+    grip stays put).
+    """
+    skin = C_PLAYER_SKIN
+    shade = (145, 112, 84)
+    dark = (82, 55, 38)
+
+    if origin_x is not None:
+        # Extending forearm: shoulder (near player centre) → wrist (just
+        # behind the grip). Drawn AFTER Player.draw's static arm, so it
+        # paints over it and the reach reads as the arm straightening.
+        sh_x = origin_x + dx * 9
+        sh_y = origin_y + dy * 9
+        w0 = 7.0    # shoulder half-width
+        w1 = 3.5    # wrist half-width
+        forearm = [
+            (sh_x + px * w0, sh_y + py * w0),
+            (sh_x - px * w0, sh_y - py * w0),
+            (grip_x - px * w1 - dx * 3, grip_y - py * w1 - dy * 3),
+            (grip_x + px * w1 - dx * 3, grip_y + py * w1 - dy * 3),
+        ]
+        pygame.draw.polygon(surface, (18, 24, 18),
+                            [(x + 1, y + 1) for x, y in forearm])
+        pygame.draw.polygon(surface, C_PLAYER_UNIFORM, forearm)
+        pygame.draw.polygon(surface,
+                            (max(0, C_PLAYER_UNIFORM[0] - 12),
+                             max(0, C_PLAYER_UNIFORM[1] - 9),
+                             max(0, C_PLAYER_UNIFORM[2] - 7)),
+                            forearm, 1)
+        # Sleeve cuff ring where the forearm meets the fist.
+        cuff_x = grip_x - dx * 5
+        cuff_y = grip_y - dy * 5
+        pygame.draw.line(surface, (26, 32, 24),
+                         (cuff_x - px * 4, cuff_y - py * 4),
+                         (cuff_x + px * 4, cuff_y + py * 4), 3)
+    else:
+        # Original short visible wrist/cuff stub.
+        wx0 = grip_x - dx * 9
+        wy0 = grip_y - dy * 9
+        wx1 = grip_x - dx * 2
+        wy1 = grip_y - dy * 2
+        pygame.draw.line(surface, (42, 52, 44), (wx0, wy0), (wx1, wy1), 5)
+        pygame.draw.line(surface, (24, 30, 26),
+                         (wx0 - px * 2, wy0 - py * 2), (wx1 - px * 2, wy1 - py * 2), 1)
+
+    # Palm polygon angled with the grip.
+    palm = [
+        (grip_x - dx * 5 + px * 5, grip_y - dy * 5 + py * 5),
+        (grip_x + dx * 5 + px * 4, grip_y + dy * 5 + py * 4),
+        (grip_x + dx * 7 - px * 3, grip_y + dy * 7 - py * 3),
+        (grip_x - dx * 3 - px * 5, grip_y - dy * 3 - py * 5),
+    ]
+    pygame.draw.polygon(surface, dark, [(x + 1, y + 1) for x, y in palm])
+    pygame.draw.polygon(surface, skin, palm)
+    pygame.draw.polygon(surface, shade, palm, 1)
+
+    # Knuckles curling over the handle on the forward side.
+    for off in (-3.5, 0.0, 3.5):
+        kx = grip_x + dx * 5 + px * off
+        ky = grip_y + dy * 5 + py * off
+        pygame.draw.circle(surface, skin, (int(kx), int(ky)), 3)
+        pygame.draw.circle(surface, shade, (int(kx + dx * 1), int(ky + dy * 1)), 2, 1)
+
+    # Thumb crosses the handle; this is the visual anchor that makes the
+    # weapon read as gripped instead of floating past the hand.
+    t0 = (grip_x - dx * 2 + px * 5, grip_y - dy * 2 + py * 5)
+    t1 = (grip_x + dx * 6 - px * 3, grip_y + dy * 6 - py * 3)
+    pygame.draw.line(surface, shade, (t0[0] + 1, t0[1] + 1), (t1[0] + 1, t1[1] + 1), 5)
+    pygame.draw.line(surface, skin, t0, t1, 4)
+    pygame.draw.circle(surface, skin, (int(t1[0]), int(t1[1])), 2)
+
+def _draw_shiv_spark(surface, x, y, t):
+    """Brief additive glint at the blade tip on the thrust peak.
+
+    Drawn with pre-multiplied RGB on a black surface + BLEND_RGB_ADD so it
+    reads as a real light flash (brightens whatever is underneath) rather
+    than an opaque blob pasted on top. ``t`` is 0..1 across the flash life
+    (0 = full intensity, 1 = faded out).
+    """
+    fade = max(0.0, 1.0 - t)
+    size = 24
+    spark = pygame.Surface((size * 2, size * 2))   # opaque black, no alpha
+    spark.fill((0, 0, 0))
+    cx = cy = size
+
+    # Bright core (pre-multiplied for additive blend).
+    core_r = max(2, int(3 + 4 * fade))
+    core_v = int(225 * fade)
+    pygame.draw.circle(spark, (core_v, core_v, min(255, core_v + 18)), (cx, cy), core_r)
+    halo_v = int(85 * fade)
+    pygame.draw.circle(spark, (halo_v, halo_v, min(255, halo_v + 12)), (cx, cy), core_r + 4)
+
+    # Four short cross-spikes radiating from the core.
+    spike_v = int(155 * fade)
+    spike_len = 10 * fade + 4
+    for ang in (0.0, math.pi / 2, math.pi / 4, -math.pi / 4):
+        ex = cx + math.cos(ang) * spike_len
+        ey = cy + math.sin(ang) * spike_len
+        pygame.draw.line(spark, (spike_v, spike_v, min(255, spike_v + 12)),
+                         (cx, cy), (int(ex), int(ey)), 2)
+
+    surface.blit(spark, (int(x) - size, int(y) - size),
+                 special_flags=pygame.BLEND_RGB_ADD)
+
+
+def _draw_mission3_hand_weapon(surface, cam_x, cam_y):
+    """Draw the actual M3 improvised weapon in Biribel's hands in gameplay."""
+    weapon = getattr(STATE, "mission3_weapon", "none")
+    if weapon not in ("chair_leg", "shiv") or not STATE.player:
+        return
+    pose = _mission3_arm_pose_for_weapon(cam_x, cam_y)
+    if pose is None:
+        return
+    _draw_x, _draw_y, grip_x, grip_y, dx, dy, px, py, swing_p = pose
+    attacking = bool(getattr(STATE, "melee_active", False)) and swing_p > 0.0
+
+    if weapon == "chair_leg":
+        # Heavy side-swing: wind-up left, sweep right, recover. The trail is
+        # built from the weapon's real tip positions, so it always follows the
+        # actual swing direction instead of using a generic screen-space arc.
+        if attacking:
+            base_dx, base_dy = dx, dy
+            e = swing_p * swing_p * (3 - 2 * swing_p)
+            sweep = -0.95 + 1.9 * e
+
+            def _chair_tip(angle):
+                tdx, tdy = _rot_vec(base_dx, base_dy, angle)
+                tpx, tpy = -tdy, tdx
+                return (grip_x + tdx * 30 + tpx * 4,
+                        grip_y + tdy * 30 + tpy * 4)
+
+            # Lightweight swing indication: no full-screen alpha surfaces.
+            # The old ghost/smear pass allocated several WIDTH x HEIGHT surfaces
+            # every frame and made chair-leg attacks stutter badly.
+            old_tip = _chair_tip(-0.95 + 1.9 * max(0.0, e - 0.16))
+            live_tip = _chair_tip(sweep)
+
+            dx, dy = _rot_vec(base_dx, base_dy, sweep)
+            px, py = -dy, dx
+
+            if 0.22 < swing_p < 0.78:
+                pygame.draw.line(surface, (90, 96, 90), old_tip, live_tip, 2)
+                pygame.draw.circle(surface, (120, 125, 110), (int(live_tip[0]), int(live_tip[1])), 3)
+        _draw_chair_leg_weapon(surface, grip_x, grip_y, dx, dy, px, py)
+
+    else:  # shiv
+        # FAST STAB — a knife THRUST, not a slash. Three phases (all driven
+        # by the smoothstepped progress ``e`` so the motion eases naturally):
+        #
+        #   windup   (e 0.00→0.22): cock the blade back ~6px and flick the
+        #                            wrist ~23° to telegraph the strike.
+        #   thrust   (e 0.22→0.50): blade shoots forward FAST (ease-out) to
+        #                            ~18px past the neutral grip — the stab.
+        #                            Wrist straightens back to dead-ahead.
+        #   recover  (e 0.50→1.00): settle back to the neutral ready pose.
+        #
+        # The grip itself extends forward along the aim direction (the
+        # ``reach`` offset), and _draw_gripping_hand draws a forearm that
+        # stretches from the player's shoulder out to that grip — so the
+        # whole arm+blade visibly LUNGES, instead of the blade wiggling on a
+        # frozen wrist. A motion-blur trail traces the blade tip's path and
+        # a bright glint flashes at the thrust peak (where the hit lands).
+        if attacking:
+            base_dx, base_dy = dx, dy
+            ox, oy = grip_x, grip_y          # neutral grip from the arm pose
+            e = swing_p * swing_p * (3 - 2 * swing_p)
+
+            def _stab(pe):
+                """Blade state at progress ``pe``.
+
+                Returns (reach, flick, dir_x, dir_y, perp_x, perp_y) where
+                reach is the forward grip offset along the aim vector and
+                flick is the wrist rotation applied to the blade direction.
+                """
+                if pe < 0.22:                # windup — cock back, telegraph
+                    t = pe / 0.22
+                    reach = -6.0 * t
+                    flick = 0.40 * t
+                elif pe < 0.50:              # thrust — shoot forward (snappy)
+                    t = (pe - 0.22) / 0.28
+                    te = 1.0 - (1.0 - t) ** 2   # ease-out: fast off the mark
+                    reach = -6.0 + 24.0 * te
+                    flick = 0.40 * (1.0 - te)
+                else:                        # recover — settle to neutral
+                    t = (pe - 0.50) / 0.50
+                    reach = 18.0 - 18.0 * t
+                    flick = 0.0
+                fdx, fdy = _rot_vec(base_dx, base_dy, flick)
+                return reach, flick, fdx, fdy, -fdy, fdx
+
+            # Lightweight thrust line. Avoid full-screen motion-blur surfaces;
+            # the live blade + hand extension is readable enough and cheaper.
+            pe_tail = max(0.0, e - 0.10)
+            tr, _tf, tdx, tdy, _tpx, _tpy = _stab(pe_tail)
+            tail_tip = (ox + base_dx * tr + tdx * 20,
+                        oy + base_dy * tr + tdy * 20)
+
+            # ── Live blade at the current progress ──
+            r, f, fdx, fdy, fpx, fpy = _stab(e)
+            grip_x = ox + base_dx * r
+            grip_y = oy + base_dy * r
+            dx, dy, px, py = fdx, fdy, fpx, fpy
+            live_tip = (grip_x + dx * 20, grip_y + dy * 20)
+            if 0.22 < e < 0.58:
+                pygame.draw.line(surface, (115, 130, 126), tail_tip, live_tip, 2)
+
+            # ── Thrust-peak glint: a bright additive flash at full extension ──
+            # Fires right around e≈0.5, which is exactly where the melee hit
+            # resolves (see _update_mission3_melee). Reads as the blade
+            # catching light at the moment of impact.
+            if 0.44 < e < 0.60:
+                _draw_shiv_spark(surface,
+                                 grip_x + dx * 20, grip_y + dy * 20,
+                                 (e - 0.44) / 0.16)
+        _draw_tapered_blade(surface, grip_x, grip_y, dx, dy, px, py, length=20)
+
+    # Repaint a proper oriented fist over the handle so it reads as gripped.
+    # The shiv passes the player's centre so _draw_gripping_hand can render
+    # the extending forearm that lunges with the thrust.
+    if weapon == "shiv":
+        _draw_gripping_hand(surface, grip_x, grip_y, dx, dy, px, py,
+                            origin_x=_draw_x, origin_y=_draw_y)
+    else:
+        _draw_gripping_hand(surface, grip_x, grip_y, dx, dy, px, py)
+
+def _draw_m3_weapon_icon(surface, x, y, weapon):
+    """Tiny HUD icon for Mission 3's improvised weapon."""
+    if weapon == "shiv":
+        # Unique M3 shiv icon: wrapped handle with pommel cap + riveted
+        # guard + asymmetric chisel-ground blade with fuller, edge bevel,
+        # scratches, and a tip glint. Same visual language as the in-world
+        # _draw_tapered_blade, just simplified for the 40x24 icon box.
+        # Handle core.
+        pygame.draw.line(surface, (22, 17, 13), (x, y + 18), (x + 13, y + 10), 6)
+        pygame.draw.line(surface, (96, 76, 56),
+                         (x + 1, y + 16), (x + 12, y + 9), 1)
+        # Pommel cap at the back.
+        pygame.draw.circle(surface, (44, 34, 24), (x - 1, y + 19), 3)
+        pygame.draw.circle(surface, (12, 9, 6), (x - 1, y + 19), 3, 1)
+        pygame.draw.circle(surface, (96, 72, 50), (x - 1, y + 19), 1)
+        # Cloth wrap bands — alternating dark/light with little tails.
+        for ox, col, tail in (
+            (3, (28, 22, 17), 1),
+            (6, (110, 86, 62), -1),
+            (9, (32, 24, 18), 1),
+            (12, (116, 90, 64), -1),
+        ):
+            bx = x + ox
+            by = y + 19 - ox // 2
+            pygame.draw.line(surface, col, (bx, by - 2), (bx, by + 3), 1)
+            pygame.draw.line(surface, (66, 50, 34),
+                             (bx + tail * 2, by + 1),
+                             (bx + tail * 3, by + 2), 1)
+        # Guard bar with two rivets.
+        pygame.draw.line(surface, (54, 56, 56),
+                         (x + 12, y + 7), (x + 16, y + 14), 3)
+        pygame.draw.line(surface, (132, 136, 134),
+                         (x + 12, y + 8), (x + 15, y + 13), 1)
+        pygame.draw.circle(surface, (24, 26, 26), (x + 13, y + 9), 1)
+        pygame.draw.circle(surface, (24, 26, 26), (x + 15, y + 12), 1)
+        # Blade silhouette — asymmetric chisel-ground profile.
+        blade = [
+            (x + 14, y + 9),
+            (x + 22, y + 5),
+            (x + 33, y + 0),
+            (x + 36, y + 4),
+            (x + 30, y + 9),
+            (x + 18, y + 13),
+        ]
+        pygame.draw.polygon(surface, (122, 130, 134), blade)
+        pygame.draw.polygon(surface, (18, 20, 22), blade, 1)
+        # Chisel-ground bevel flat (lighter inset on the edge side).
+        bevel = [
+            (x + 16, y + 9),
+            (x + 24, y + 5),
+            (x + 32, y + 1),
+            (x + 28, y + 6),
+            (x + 20, y + 10),
+        ]
+        pygame.draw.polygon(surface, (150, 158, 162), bevel)
+        # Fuller — darker groove down the middle.
+        pygame.draw.line(surface, (76, 82, 86),
+                         (x + 18, y + 8), (x + 30, y + 3), 1)
+        # Sharpened edge — bright glint along the very edge.
+        pygame.draw.line(surface, (238, 246, 242),
+                         (x + 22, y + 5), (x + 34, y + 0), 1)
+        pygame.draw.line(surface, (220, 228, 224),
+                         (x + 34, y + 0), (x + 36, y + 4), 1)
+        # Tip glint dot.
+        pygame.draw.circle(surface, (250, 252, 250), (x + 35, y + 1), 1)
+        # Two small scratches across the flat.
+        pygame.draw.line(surface, (204, 214, 214),
+                         (x + 22, y + 4), (x + 24, y + 6), 1)
+        pygame.draw.line(surface, (182, 192, 194),
+                         (x + 27, y + 3), (x + 29, y + 5), 1)
+        # Oxidation spot near the base.
+        pygame.draw.circle(surface, (78, 60, 48), (x + 18, y + 9), 1)
+    elif weapon == "chair_leg":
+        # Bent metal tube with rubber foot + jagged end.
+        pygame.draw.line(surface, (36, 38, 40), (x, y + 18), (x + 15, y + 9), 5)
+        pygame.draw.line(surface, (46, 48, 50), (x + 15, y + 9), (x + 34, y + 7), 5)
+        pygame.draw.line(surface, (100, 104, 104), (x + 2, y + 17), (x + 33, y + 6), 1)
+        pygame.draw.circle(surface, (12, 12, 13), (x - 2, y + 20), 4)
+        pygame.draw.circle(surface, (118, 118, 114), (x + 35, y + 7), 4, 1)
+    elif weapon == "k9_smg":
+        # K-9 suppressed SMG — compact receiver, long suppressor, stick mag.
+        pygame.draw.rect(surface, (24, 28, 28), (x + 3, y + 8, 25, 7), border_radius=2)
+        pygame.draw.rect(surface, (78, 98, 90), (x + 3, y + 8, 25, 7), 1, border_radius=2)
+        pygame.draw.line(surface, (40, 46, 46), (x + 27, y + 11), (x + 42, y + 11), 5)
+        pygame.draw.line(surface, (105, 120, 112), (x + 28, y + 9), (x + 41, y + 9), 1)
+        pygame.draw.rect(surface, (18, 20, 20), (x + 13, y + 14, 6, 14), border_radius=1)
+        pygame.draw.rect(surface, (88, 96, 92), (x + 13, y + 14, 6, 14), 1, border_radius=1)
+        pygame.draw.line(surface, (60, 68, 64), (x + 4, y + 14), (x - 5, y + 19), 2)
+        pygame.draw.circle(surface, (7, 8, 8), (x + 43, y + 11), 2)
+    elif weapon == "sidearm":
+        # Looted IPA pistol — top-down silhouette mirroring the ground
+        # pickup marker, with a small highlight on the slide.
+        # Slide.
+        pygame.draw.rect(surface, (40, 40, 44),
+                         (x + 4, y + 6, 28, 8), border_radius=2)
+        pygame.draw.rect(surface, (60, 60, 64),
+                         (x + 4, y + 6, 28, 8), 1, border_radius=2)
+        # Slide highlight.
+        pygame.draw.line(surface, (110, 110, 116),
+                         (x + 6, y + 7), (x + 30, y + 7), 1)
+        # Grip.
+        pygame.draw.rect(surface, (30, 30, 34),
+                         (x + 16, y + 13, 9, 12), border_radius=1)
+        # Trigger guard.
+        pygame.draw.arc(surface, (50, 50, 54),
+                        (x + 10, y + 12, 8, 8),
+                        math.pi * 0.5, math.pi * 1.5, 1)
+        # Sights.
+        pygame.draw.rect(surface, (90, 90, 95), (x + 6, y + 4, 2, 2))
+        pygame.draw.rect(surface, (90, 90, 95), (x + 28, y + 4, 2, 2))
+    else:
+        pygame.draw.circle(surface, (80, 80, 85), (x + 16, y + 8), 8, 1)
+        pygame.draw.line(surface, (110, 70, 70), (x + 8, y), (x + 24, y + 16), 1)
+
+
+def _draw_mission3_hud(surface, cam_x, cam_y):
+    """Mission 3 gameplay HUD. No molotov counter for this mission."""
+    draw_objective_panel(surface, _objective)
+
+    pinned = [ft for ft in STATE.floating_texts if len(ft) >= 6 and ft[5] == "pin"]
+    draw_pinned_radio(surface, pinned)
+
+    if not STATE.player:
+        return
+
+    if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_INTERROGATION:
+        return
+
+    unified_x = 24
+    weapon = getattr(STATE, "mission3_weapon", "none")
+    has_firearm = (weapon in ("sidearm", "k9_smg")
+                   and not getattr(STATE, "player_disarmed", False))
+
+    # ── HP Bar ──
+    hb_x, hb_y = unified_x + 6, HEIGHT - 36
+    hb_w, hb_h = 234, 14
+    hp_ratio = max(0.0, min(1.0, STATE.player.hp / max(1, STATE.player.max_hp)))
+
+    hp_bg = get_panel_bg(246, 30)
+    surface.blit(hp_bg, (unified_x, HEIGHT - 40))
+    surface.blit(font_terminal_small.render("HP", True, C_TERMINAL), (hb_x, HEIGHT - 38))
+
+    pygame.draw.rect(surface, (30, 30, 30), (hb_x + 20, hb_y, hb_w - 20, hb_h))
+    if hp_ratio > 0.5:
+        bar_col = (int(200 * hp_ratio), int(220 * hp_ratio), 40)
+    elif hp_ratio > 0.25:
+        bar_col = (220, int(200 * hp_ratio * 2), 40)
+    else:
+        bar_col = (220, 40, 40)
+    pygame.draw.rect(surface, bar_col, (hb_x + 20, hb_y, int((hb_w - 20) * hp_ratio), hb_h))
+    pygame.draw.rect(surface, C_TERMINAL, (hb_x + 20, hb_y, hb_w - 20, hb_h), 1)
+
+    # ── Weapon / Ammo Panel (sits directly above HP bar, no molotov gap) ──
+    panel_h = 92 if has_firearm else 74
+    panel_y = HEIGHT - 40 - panel_h - 2
+
+    bg = get_panel_bg(246, panel_h)
+    surface.blit(bg, (unified_x, panel_y))
+    pygame.draw.line(surface, C_KRAP_BLUE,
+                     (unified_x, panel_y), (unified_x, panel_y + panel_h), 3)
+
+    if has_firearm:
+        ammo_x, ammo_y = unified_x + 6, panel_y + 6
+        if weapon == "k9_smg":
+            active_ammo = getattr(STATE, "k9_ammo_in_mag", 0)
+            active_mag_size = getattr(STATE, "k9_mag_size", 24)
+            active_spares = getattr(STATE, "k9_spare_mags", 0)
+            caliber_label = "9MM-S"
+            weapon_label = "K-9 SMG"
+        else:
+            active_ammo = STATE.ammo_in_mag
+            active_mag_size = STATE.mag_size
+            active_spares = STATE.spare_mags
+            caliber_label = "9MM"
+            weapon_label = "SIDEARM"
+        for i in range(4):
+            mx = ammo_x + 8 + i * 34
+            my = ammo_y + 8
+            is_active = i == 0
+
+            if weapon == "k9_smg":
+                # K-9 uses straight 24-round stick mags, not chunky pistol mags.
+                mag_w, mag_h = 14, 52
+                rounds = max(0, min(24, active_ammo if is_active else (24 if active_spares >= i else 0)))
+                is_empty = (rounds <= 0)
+                body = pygame.Rect(mx + 5, my, mag_w, mag_h)
+                if is_empty:
+                    base, rim, hi = (24, 28, 28), (52, 62, 58), (36, 42, 40)
+                elif is_active:
+                    base, rim, hi = (36, 48, 44), (120, 230, 180), (70, 92, 84)
+                else:
+                    base, rim, hi = (32, 38, 36), (86, 112, 102), (54, 66, 62)
+                # Slight perspective taper.
+                mag_poly = [
+                    (body.x + 1, body.y), (body.right - 1, body.y + 1),
+                    (body.right - 3, body.bottom), (body.x + 3, body.bottom)
+                ]
+                pygame.draw.polygon(surface, base, mag_poly)
+                pygame.draw.polygon(surface, rim if is_active else (64, 70, 66), mag_poly, 1)
+                pygame.draw.line(surface, hi, (body.x + 4, body.y + 4), (body.x + 5, body.bottom - 5), 1)
+                # Feed lips / base plate.
+                pygame.draw.rect(surface, (80, 86, 78), (body.x + 2, body.y - 3, mag_w - 2, 4), border_radius=1)
+                pygame.draw.rect(surface, (18, 20, 20), (body.x + 1, body.bottom - 4, mag_w - 1, 5), border_radius=1)
+                # 24-round witness holes: two columns, 12 rows.
+                filled_rows = int(round(rounds / 2.0))
+                for row_i in range(12):
+                    wy = body.bottom - 8 - row_i * 3
+                    row_filled = row_i < filled_rows
+                    for col_i, wx_off in enumerate((5, 9)):
+                        wx = body.x + wx_off
+                        if row_filled:
+                            col = (220, 190, 70) if is_active else (150, 128, 58)
+                        else:
+                            col = (18, 20, 20)
+                        pygame.draw.circle(surface, col, (wx, wy), 1)
+                # Small active-mag accent stripe.
+                if is_active:
+                    pygame.draw.line(surface, (120, 230, 180), (body.right + 3, body.y + 4), (body.right + 3, body.bottom - 4), 2)
+            else:
+                is_active = i == 0
+                bullets_fill = min(active_ammo, 12) if is_active else (12 if active_spares >= i else 0)
+                is_empty = (active_ammo <= 0) if is_active else (active_spares < i)
+
+                top_w, bot_w, h = 24, 20, 46
+                taper = (top_w - bot_w) // 2
+                body_pts = [(mx, my), (mx + top_w, my),
+                            (mx + taper + bot_w, my + h), (mx + taper, my + h)]
+
+                if is_empty:
+                    base, hl, rim = (45, 42, 38), (55, 52, 48), (55, 50, 45)
+                elif is_active:
+                    base, hl, rim = (90, 86, 78), (115, 110, 100), (70, 66, 58)
+                else:
+                    base, hl, rim = (72, 68, 62), (92, 88, 80), (60, 56, 50)
+
+                pygame.draw.polygon(surface, base, body_pts)
+                pygame.draw.polygon(surface, hl, [
+                    (mx + 1, my + 2), (mx + 5, my + 2),
+                    (mx + taper + 3, my + h - 3), (mx + taper + 1, my + h - 3)])
+                pygame.draw.polygon(surface, C_TERMINAL if is_active else rim, body_pts, 1)
+
+                gold = (220, 185, 45)
+                dark = (55, 52, 48) if not is_empty else (40, 38, 35)
+                for bi in range(12):
+                    col = gold if bi < bullets_fill else dark
+                    pygame.draw.circle(surface, col, (mx + top_w // 2, my + 8 + bi * 3), 2)
+
+        ammo_text = f"{active_ammo}/{active_mag_size}"
+        text_col = C_TERMINAL if active_ammo > 0 else (220, 60, 60)
+        surface.blit(font_terminal_small.render(weapon_label, True, (150, 210, 190)),
+                     (ammo_x + 154, ammo_y - 6))
+        surface.blit(font_terminal_small.render(ammo_text, True, text_col),
+                     (ammo_x + 154, ammo_y + 10))
+        surface.blit(font_terminal_small.render(caliber_label, True, (100, 130, 120)),
+                     (ammo_x + 154, ammo_y + 28))
+        surface.blit(font_terminal_small.render(f"MAGS: {active_spares}", True, (140, 150, 130)),
+                     (ammo_x + 154, ammo_y + 46))
+
+        if STATE.is_reloading:
+            bar_x, bar_y = ammo_x + 148, ammo_y + 64
+            _cw = getattr(STATE, "current_weapon", "pistol")
+            reload_duration = 90 if _cw == "os12" else (72 if _cw == "k9_smg" else 60)
+            progress = 1.0 - STATE.reload_timer / reload_duration
+            progress = max(0.0, min(1.0, progress))
+            pygame.draw.rect(surface, (50, 50, 50), (bar_x, bar_y, 80, 8), border_radius=2)
+            pygame.draw.rect(surface, (220, 160, 40),
+                             (bar_x, bar_y, int(80 * progress), 8), border_radius=2)
+            surface.blit(font_terminal_small.render("RELOADING", True, (220, 160, 40)),
+                         (ammo_x + 150, ammo_y + 76))
+    else:
+        _draw_m3_weapon_icon(surface, unified_x + 20, panel_y + 34, weapon)
+
+        if weapon == "chair_leg":
+            label, sub, col = "CHAIR LEG", "BLUNT IMPROVISED", (200, 170, 115)
+        elif weapon == "shiv":
+            label, sub, col = "SHIV", "CLOSE-RANGE BLADE", (155, 205, 210)
+        else:
+            label, sub, col = "RESTRAINED", "NO WEAPON", (170, 95, 85)
+
+        surface.blit(font_terminal.render(label, True, col), (unified_x + 70, panel_y + 12))
+        surface.blit(font_terminal_small.render(sub, True, (120, 130, 125)),
+                     (unified_x + 70, panel_y + 35))
+        if weapon != "none":
+            surface.blit(font_terminal_small.render("[V] ATTACK", True, (150, 160, 150)),
+                         (unified_x + 70, panel_y + 53))
+
+    # ── Hostiles counter ──
+    host_bg = pygame.Surface((180, 26), pygame.SRCALPHA)
+    pygame.draw.rect(host_bg, (0, 0, 0, 120), (0, 0, 180, 26))
+    surface.blit(host_bg, (20, 20))
+    surface.blit(font_terminal_small.render(f"HOSTILES: {len(STATE.enemies)}", True, C_TERMINAL),
+                 (30, 25))
+
+    # ── Minimap ──
+    if STATE.show_minimap and STATE.minimap:
+        drain_marker = None
+        if weapon == "chair_leg":
+            drain_marker = (_DRAIN_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                            _DRAIN_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        # After all cell-block guards are dead, mark the service door + draw a
+        # directional arrow. The K-9 stand is marked (cyan) until taken.
+        # Both markers live on the cell-block map, so hide them once the player
+        # live on the cell-block map only — hide on Comms/Archives/later stages.
+        service_door_marker = None
+        smg_marker = None
+        if getattr(STATE, "mission3_stage", "") in (
+                STAGE_INTERROGATION, STAGE_BREAKOUT, STAGE_VENT_CUTSCENE):
+            if getattr(STATE, "m3_guards_all_killed", False):
+                service_door_marker = (_EXIT_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                                       _EXIT_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+            if not getattr(STATE, "k9_unlocked", False):
+                smg_marker = (_K9_STAND_COL * TILE_SIZE + TILE_SIZE // 2,
+                              _K9_STAND_ROW * TILE_SIZE + TILE_SIZE // 2)
+        STATE.minimap.draw(surface, STATE.player, STATE.enemies, cam_x, cam_y,
+                           notebook_pos=drain_marker,
+                           service_door_pos=service_door_marker,
+                           smg_pos=smg_marker)
+
+def _update_weapon_timers():
+    """Tick down weapon cooldowns, reloads, and weapon-swap timers for Mission 3."""
+
+    if STATE.shot_cooldown > 0:
+        STATE.shot_cooldown -= 1
+
+    if getattr(STATE, "os12_shot_cooldown", 0) > 0:
+        STATE.os12_shot_cooldown -= 1
+
+    if getattr(STATE, "k9_shot_cooldown", 0) > 0:
+        STATE.k9_shot_cooldown -= 1
+
+    if STATE.is_reloading:
+        STATE.reload_timer -= 1
+        if STATE.reload_timer <= 0:
+            STATE.is_reloading = False
+
+            current_weapon = getattr(STATE, "current_weapon", "pistol")
+            is_os12 = current_weapon == "os12"
+            is_k9 = current_weapon == "k9_smg"
+
+            if is_os12:
+                if STATE.os12_spare_mags > 0:
+                    STATE.os12_spare_mags -= 1
+                    STATE.os12_ammo_in_mag = STATE.os12_mag_size
+            elif is_k9:
+                if getattr(STATE, "k9_spare_mags", 0) > 0:
+                    STATE.k9_spare_mags -= 1
+                    STATE.k9_ammo_in_mag = STATE.k9_mag_size
+            else:
+                if STATE.spare_mags > 0:
+                    STATE.spare_mags -= 1
+                    STATE.ammo_in_mag = STATE.mag_size
+
+    if getattr(STATE, "weapon_swap_timer", 0) > 0:
+        STATE.weapon_swap_timer -= 1
+
+        duration = getattr(STATE, "weapon_swap_duration", 24)
+        midpoint = duration // 2
+
+        if (
+            STATE.weapon_swap_timer <= midpoint
+            and not getattr(STATE, "weapon_swap_sound_played", False)
+            and getattr(STATE, "weapon_swap_pending", None) is not None
+        ):
+            STATE.current_weapon = STATE.weapon_swap_pending
+            audio.play("rifle_handle", volume=0.35)
+            STATE.weapon_swap_sound_played = True
+
+        if STATE.weapon_swap_timer <= 0:
+            STATE.weapon_swap_pending = None
+            STATE.weapon_swap_sound_played = False
+
+
+def _update_doors():
+    """Update Mission 3 doors like Mission 1 doors."""
+    if not STATE.player:
+        return
+    for d in getattr(STATE, "doors", []):
+        d.update(STATE.player.rect)
+
+
+def _m3_volkov_navigation_walls(solid_walls):
+    """Return obstacles for route planning, treating unlocked doors as routes.
+
+    Closed unlocked doors still block movement for a few animation frames, but
+    Volkov opens them when he approaches. If their temporary collision panels
+    are included in A*, he concludes that the doorway itself is impassable and
+    either takes a ridiculous detour or never enters the room.
+    """
+    passable_door_rects = {
+        id(d.collision_rect)
+        for d in getattr(STATE, "doors", [])
+        if not getattr(d, "locked", False)
+        and getattr(d, "collision_rect", None) is not None
+    }
+    return [w for w in solid_walls if id(w) not in passable_door_rects]
+
+
+def _m3_volkov_segment_clear(x1, y1, x2, y2, walls, padding=13):
+    """Body-width line-of-travel test, not a zero-width LOS ray."""
+    for wall in walls:
+        if wall.inflate(padding * 2, padding * 2).clipline((x1, y1), (x2, y2)):
+            return False
+    return True
+
+
+def _m3_volkov_build_grid(walls):
+    """Build an actor-clearance grid for the 24px-wide ally.
+
+    Unlike the generic enemy grid, this marks every tile touched by wide prop
+    rectangles and inflates obstacles by Volkov's body radius. That prevents
+    paths through server racks, console corners, and decorative barriers.
+    """
+    grid = [[True for _ in range(MAP_W)] for _ in range(MAP_H)]
+    half = 13
+    for wall in walls:
+        expanded = wall.inflate(half * 2, half * 2)
+        min_col = max(0, int((expanded.left - TILE_SIZE / 2) // TILE_SIZE))
+        max_col = min(MAP_W - 1, int((expanded.right - TILE_SIZE / 2) // TILE_SIZE))
+        min_row = max(0, int((expanded.top - TILE_SIZE / 2) // TILE_SIZE))
+        max_row = min(MAP_H - 1, int((expanded.bottom - TILE_SIZE / 2) // TILE_SIZE))
+        for row in range(min_row, max_row + 1):
+            cy = row * TILE_SIZE + TILE_SIZE // 2
+            for col in range(min_col, max_col + 1):
+                cx = col * TILE_SIZE + TILE_SIZE // 2
+                if expanded.collidepoint(cx, cy):
+                    grid[row][col] = False
+    return grid
+
+
+def _m3_volkov_repath(vx, vy, target_x, target_y, walls):
+    grid = _m3_volkov_build_grid(walls)
+    start = (int(vx // TILE_SIZE), int(vy // TILE_SIZE))
+    goal = (int(target_x // TILE_SIZE), int(target_y // TILE_SIZE))
+
+    # A prop can overlap part of the actor's current tile. His current location
+    # is necessarily usable, so keep A* from rejecting the start outright.
+    if 0 <= start[0] < MAP_W and 0 <= start[1] < MAP_H:
+        grid[start[1]][start[0]] = True
+
+    path = _astar(start, goal, grid)
+    return [(col * TILE_SIZE + TILE_SIZE // 2,
+             row * TILE_SIZE + TILE_SIZE // 2) for col, row in path]
+
+
+def _m3_volkov_move(vx, vy, move_x, move_y, solid_walls):
+    """Collision-safe axis movement with clean wall sliding."""
+    actor = pygame.Rect(0, 0, 24, 24)
+    actor.center = (round(vx), round(vy))
+
+    actor.x += round(move_x)
+    for wall in solid_walls:
+        if actor.colliderect(wall):
+            if move_x > 0:
+                actor.right = wall.left
+            elif move_x < 0:
+                actor.left = wall.right
+
+    actor.y += round(move_y)
+    for wall in solid_walls:
+        if actor.colliderect(wall):
+            if move_y > 0:
+                actor.bottom = wall.top
+            elif move_y < 0:
+                actor.top = wall.bottom
+
+    return float(actor.centerx), float(actor.centery)
+
+
+def _update_volkov_ally(solid_walls):
+    """Temporary ally AI for the Comms Wing with real A* navigation.
+
+    Volkov follows Biribel loosely and fires at guards he can actually see.
+    It is intentionally simple: no escort fail state, no minimap marker, no
+    friendly collision. He helps, but the player still owns the fight.
+    """
+    if not getattr(STATE, "m3_volkov_ally_active", False):
+        return
+    if getattr(STATE, "m3_volkov_ally_hp", 0) <= 0:
+        STATE.m3_volkov_ally_active = False
+        return
+    if not STATE.player or STATE.player_dead:
+        return
+    if getattr(STATE, "mission3_stage", None) not in (STAGE_COMMS, STAGE_ARCHIVES):
+        return
+    if getattr(STATE, "m3_volkov_ally_hit_flash", 0) > 0:
+        STATE.m3_volkov_ally_hit_flash -= 1
+
+    vx = float(getattr(STATE, "m3_volkov_ally_x", STATE.player.rect.centerx - 48))
+    vy = float(getattr(STATE, "m3_volkov_ally_y", STATE.player.rect.centery + 28))
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+
+    # Follow behind Biribel. Route planning uses unlocked doors as passable
+    # links, body-width obstacle clearance, periodic A* refreshes, waypoint
+    # smoothing, and stuck recovery. The old implementation only tried X then Y
+    # against the nearest wall, so Volkov had no way to understand corners.
+    follow_dist = 82
+    target_x = px - math.cos(STATE.player.angle) * follow_dist
+    target_y = py - math.sin(STATE.player.angle) * follow_dist
+    dx = target_x - vx
+    dy = target_y - vy
+    dist = math.hypot(dx, dy)
+
+    nav_walls = _m3_volkov_navigation_walls(solid_walls)
+    direct_clear = _m3_volkov_segment_clear(
+        vx, vy, target_x, target_y, nav_walls)
+    goal_tile = (int(target_x // TILE_SIZE), int(target_y // TILE_SIZE))
+    path = list(getattr(STATE, "m3_volkov_path", []))
+    path_timer = max(0, int(getattr(STATE, "m3_volkov_path_timer", 0)) - 1)
+    old_goal = getattr(STATE, "m3_volkov_path_goal", None)
+
+    # Replan when the player enters another tile, periodically while blocked,
+    # or immediately after stuck detection asks for a fresh route.
+    if direct_clear:
+        path = []
+    elif path_timer <= 0 or old_goal != goal_tile or not path:
+        path = _m3_volkov_repath(vx, vy, target_x, target_y, nav_walls)
+        path_timer = 15
+        STATE.m3_volkov_path_goal = goal_tile
+
+    nav_x, nav_y = target_x, target_y
+    if path:
+        # Drop reached nodes.
+        while path and math.hypot(path[0][0] - vx, path[0][1] - vy) < 24:
+            path.pop(0)
+
+        if path:
+            # Path smoothing: take the furthest currently reachable waypoint,
+            # avoiding robotic tile-center zig-zags in open corridors.
+            furthest = 0
+            for i, waypoint in enumerate(path[:8]):
+                if _m3_volkov_segment_clear(vx, vy, waypoint[0], waypoint[1], nav_walls):
+                    furthest = i
+                else:
+                    break
+            if furthest:
+                path = path[furthest:]
+            nav_x, nav_y = path[0]
+
+    move_dx = nav_x - vx
+    move_dy = nav_y - vy
+    move_dist = math.hypot(move_dx, move_dy)
+    if dist > 28 and move_dist > 1:
+        step = min(3.05 * 60.0 * STATE.dt, move_dist)
+        move_x = move_dx / move_dist * step
+        move_y = move_dy / move_dist * step
+        vx, vy = _m3_volkov_move(vx, vy, move_x, move_y, solid_walls)
+
+    # Stuck recovery is based on real displacement, not intended velocity.
+    last_x, last_y = getattr(STATE, "m3_volkov_last_pos", (vx, vy))
+    moved = math.hypot(vx - last_x, vy - last_y)
+    stuck = int(getattr(STATE, "m3_volkov_stuck_timer", 0))
+    if dist > 64 and moved < 0.35:
+        stuck += 1
+    else:
+        stuck = 0
+    if stuck >= 18:
+        path = []
+        path_timer = 0
+        stuck = 0
+
+    STATE.m3_volkov_path = path
+    STATE.m3_volkov_path_timer = path_timer
+    STATE.m3_volkov_stuck_timer = stuck
+    STATE.m3_volkov_last_pos = (vx, vy)
+
+    # Volkov can open non-locked doors near him. Doors use the same target_open
+    # / manual_timer logic as player doors, so they animate instead of popping.
+    for door in getattr(STATE, "doors", []):
+        if getattr(door, "locked", False):
+            continue
+        if getattr(door, "collision_disabled", False):
+            continue
+        if math.hypot(door.rect.centerx - vx, door.rect.centery - vy) <= TILE_SIZE * 1.15:
+            door.target_open = True
+            door.manual_timer = max(getattr(door, "manual_timer", 0), 55)
+
+    # Find nearest visible guard.
+    target = None
+    best = 999999.0
+    for e in getattr(STATE, "enemies", []):
+        if e.hp <= 0:
+            continue
+        ex, ey = e.rect.centerx, e.rect.centery
+        d = math.hypot(ex - vx, ey - vy)
+        if d < best and d < 620 and not _wall_blocks_line(vx, vy, ex, ey, solid_walls):
+            best = d
+            target = e
+
+    if target is not None:
+        angle = math.atan2(target.rect.centery - vy, target.rect.centerx - vx)
+        STATE.m3_volkov_ally_angle = angle
+        cd = max(0, int(getattr(STATE, "m3_volkov_ally_cooldown", 0)) - 1)
+        if cd <= 0:
+            # Fire a real bullet using the same pipeline as the player instead
+            # of directly subtracting HP. This gives Volkov the same tracer,
+            # wall collision, impact, casing, and timing behavior.
+            spread = random.uniform(-0.035, 0.035)
+            shot_a = angle + spread
+            # Match the lifted gun sprite: muzzle comes from chest-height,
+            # not from the sprite center/belt.
+            muzzle_x = vx + math.cos(angle) * 44
+            muzzle_y = vy - 7 + math.sin(angle) * 44
+            STATE.bullets.append({
+                "x": muzzle_x,
+                "y": muzzle_y,
+                "prev_x": muzzle_x,
+                "prev_y": muzzle_y,
+                "dx": math.cos(shot_a) * 24,
+                "dy": math.sin(shot_a) * 24,
+                "life": 20,
+                "owner": "player",
+                "damage": 28,
+                "volkov": True,
+            })
+            try:
+                STATE.casings.append(Casing(
+                    vx + math.cos(angle) * 8 + math.cos(angle - math.pi / 2) * 10,
+                    vy + math.sin(angle) * 8 + math.sin(angle - math.pi / 2) * 10,
+                    angle - math.pi / 2,
+                ))
+            except Exception:
+                pass
+            target.alerted = True
+            target.last_seen_pos = (px, py)
+            STATE.m3_volkov_ally_shots.append([muzzle_x, muzzle_y, target.rect.centerx, target.rect.centery, 5])
+            STATE.particles.append(Particle(muzzle_x, muzzle_y, (255, 190, 90)))
+            try:
+                audio.play("gunshot_distant", volume=0.34)
+            except Exception:
+                pass
+            cd = 32
+        STATE.m3_volkov_ally_cooldown = cd
+    else:
+        if dist > 3:
+            STATE.m3_volkov_ally_angle = math.atan2(dy, dx)
+        STATE.m3_volkov_ally_cooldown = max(0, int(getattr(STATE, "m3_volkov_ally_cooldown", 0)) - 1)
+
+    # Update tracer lifetimes.
+    shots = []
+    for shot in getattr(STATE, "m3_volkov_ally_shots", []):
+        shot[4] -= 1
+        if shot[4] > 0:
+            shots.append(shot)
+    STATE.m3_volkov_ally_shots = shots
+    STATE.m3_volkov_ally_x = vx
+    STATE.m3_volkov_ally_y = vy
+
+
+def _draw_volkov_ally(cam_x, cam_y):
+    if not getattr(STATE, "m3_volkov_ally_active", False):
+        return
+    if getattr(STATE, "mission3_stage", None) not in (STAGE_COMMS, STAGE_ARCHIVES):
+        return
+    # Brief muzzle/tracer hint for Volkov's support shots. The actual projectile
+    # is drawn by the normal bullet system; this is just a small firing cue.
+    for x1, y1, x2, y2, life in getattr(STATE, "m3_volkov_ally_shots", []):
+        sx1, sy1 = x1 - cam_x, y1 - cam_y
+        sx2, sy2 = x2 - cam_x, y2 - cam_y
+        pygame.draw.line(screen, (255, 190, 90), (sx1, sy1), (sx2, sy2), 1)
+        pygame.draw.circle(screen, (255, 210, 120), (int(sx1), int(sy1)), max(1, life))
+    vx = getattr(STATE, "m3_volkov_ally_x", 0.0) - cam_x
+    vy = getattr(STATE, "m3_volkov_ally_y", 0.0) - cam_y
+    angle = getattr(STATE, "m3_volkov_ally_angle", 0.0)
+    _draw_volkov_in_game(screen, vx, vy, angle, kick_phase=0, charge_plant=0)
+
+
+
+def game_update(keys):
+    """Per-frame update. Returns (cam_x, cam_y) for acaristan's renderer."""
+    global _last_keys
+    _last_keys = keys
+    # AEGIS Pass E: advance player i-frame timer + sprite blink every frame.
+    # Mission 3 is interrogation/crafting-focused, but the player can still
+    # take damage during the escape sequence — i-frames must apply uniformly
+    # across the campaign so the player's damage-state expectations are
+    # consistent.
+    if STATE.player:
+        STATE.player.update_iframes(STATE.dt)
+    if STATE.gc_flash_timer > 0:
+        STATE.gc_flash_timer -= 1
+
+    if _update_black_ledger_death():
+        STATE._death_logic_ticks = 1
+        effects.update_particles()
+        effects.update_floating_texts()
+        return _update_camera()
+
+    if STATE.player and STATE.player.hp <= 0 and not STATE.player_dead:
+        _stop_m3_alarm()
+        import death_anim
+        death_anim.trigger_death()
+    if STATE.player_dead:
+        import death_anim
+        ticks = death_anim.update_death_anim()
+        STATE._death_logic_ticks = ticks
+    else:
+        STATE._death_logic_ticks = 1
+
+    if _update_chair_break_cutscene_state():
+        effects.update_particles()
+        effects.update_floating_texts()
+        return _update_camera()
+
+    _update_doors()
+    solid_walls = _solid_walls()
+    _update_player(keys, solid_walls)
+
+    _update_mission3_melee(solid_walls)
+    _update_weapon_timers()
+    _update_volkov_ally(solid_walls)
+    if (getattr(STATE, "current_weapon", "pistol") == "k9_smg"
+            and not getattr(STATE, "mission3_crafting_active", False)
+            and not getattr(STATE, "player_dead", False)):
+        try:
+            if pygame.mouse.get_pressed()[0]:
+                import weapons as _weapons
+                _weapons.handle_shoot()
+        except Exception:
+            pass
+
+    guards_active = _m3_guards_active()
+    if guards_active:
+        _update_m3_enemies(solid_walls)
+        _update_m3_camera(solid_walls)
+    _update_bullets(solid_walls)
+    _update_black_ledger_inmate()
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        effects.update_particles()
+        effects.update_floating_texts()
+        return _update_camera()
+    _update_m3_pickups()
+    _update_comms_relay()
+    _update_m3_detainees()
+    effects.update_particles()
+    effects.update_floating_texts()
+    _update_stage(keys)
+    _update_crafting()
+    return _update_camera()
+
+
+# ─────────────────────────────────────────────
+# Slice 2 — enemy + pickup per-frame loops
+# ─────────────────────────────────────────────
+def _m3_guards_active():
+    """True when Mission 3 guards should run combat/pathfinding.
+
+    Guards used to activate during the Volkov breach/interrogation and pile up
+    against Biribel's cell while the player was still locked in scripted beats.
+    Freeze AI until the actual breakout is playable, and keep them held back
+    while the mandatory chair-leg crafting lock is active (Volkov is holding
+    the doorway in-fiction).
+    """
+    stage = getattr(STATE, "mission3_stage", STAGE_INTERROGATION)
+    if stage in (STAGE_INTERROGATION, STAGE_VENT_CUTSCENE, STAGE_DONE):
+        return False
+    if (stage == STAGE_BREAKOUT
+            and getattr(STATE, "mission3_doorway_blocked", False)
+            and getattr(STATE, "mission3_weapon", "none") == "chair_leg"):
+        return False
+    return True
+
+
+def _m3_enemy_has_strict_los(enemy, px, py, solid_walls):
+    """Mission 3 tactical LOS: center-to-center only.
+
+    The shared Enemy._can_see() samples several points around the player so AI
+    does not forget targets on tiny corner clips in open maps. In this tight
+    prison layout that felt like guards were seeing through cell/room walls.
+    Mission 3 uses stricter center-line visibility for detection and shooting.
+    """
+    return _m3_enemy_has_los_to_point(enemy, px, py, solid_walls)
+
+
+def _m3_enemy_has_los_to_point(enemy, tx, ty, solid_walls):
+    if not enemy:
+        return False
+    ex, ey = enemy.rect.centerx, enemy.rect.centery
+    dist = math.hypot(tx - ex, ty - ey)
+    aware = getattr(enemy, "alerted", False) or getattr(enemy, "combat_alert_timer", 0) > 0
+    max_range = ENEMY_DETECT_RANGE * (2.0 if aware else 1.05)
+    if dist > max_range:
+        return False
+    return not _wall_blocks_line(ex, ey, tx, ty, solid_walls)
+
+
+def _m3_volkov_target_pos():
+    if not getattr(STATE, "m3_volkov_ally_active", False):
+        return None
+    if getattr(STATE, "mission3_stage", None) not in (STAGE_COMMS, STAGE_ARCHIVES):
+        return None
+    if getattr(STATE, "m3_volkov_ally_hp", 0) <= 0:
+        return None
+    return (float(getattr(STATE, "m3_volkov_ally_x", 0.0)),
+            float(getattr(STATE, "m3_volkov_ally_y", 0.0)))
+
+
+def _m3_choose_enemy_target(enemy, player_x, player_y, solid_walls):
+    """Pick whether this guard targets Biribel or Volkov.
+
+    If both are visible, guards split their attention roughly 50/50 and keep the
+    choice for a short window to avoid jitter. If only one target is visible,
+    use that target. If neither is visible, fall back to last-known behavior.
+    """
+    player_visible = _m3_enemy_has_los_to_point(enemy, player_x, player_y, solid_walls)
+    volkov_pos = _m3_volkov_target_pos()
+    volkov_visible = False
+    if volkov_pos is not None:
+        volkov_visible = _m3_enemy_has_los_to_point(enemy, volkov_pos[0], volkov_pos[1], solid_walls)
+
+    # Keep current target briefly if still valid.
+    timer = max(0, int(getattr(enemy, "m3_target_timer", 0)) - 1)
+    current = getattr(enemy, "m3_target_kind", "player")
+    if timer > 0:
+        if current == "volkov" and volkov_visible:
+            enemy.m3_target_timer = timer
+            return "volkov", volkov_pos[0], volkov_pos[1], True
+        if current == "player" and player_visible:
+            enemy.m3_target_timer = timer
+            return "player", player_x, player_y, True
+
+    if player_visible and volkov_visible:
+        # Stable-ish 50/50 split. Use random at retarget moments only.
+        if random.random() < 0.5:
+            enemy.m3_target_kind = "volkov"
+            enemy.m3_target_timer = random.randint(35, 70)
+            return "volkov", volkov_pos[0], volkov_pos[1], True
+        enemy.m3_target_kind = "player"
+        enemy.m3_target_timer = random.randint(35, 70)
+        return "player", player_x, player_y, True
+    if volkov_visible:
+        enemy.m3_target_kind = "volkov"
+        enemy.m3_target_timer = random.randint(30, 60)
+        return "volkov", volkov_pos[0], volkov_pos[1], True
+    if player_visible:
+        enemy.m3_target_kind = "player"
+        enemy.m3_target_timer = random.randint(30, 60)
+        return "player", player_x, player_y, True
+
+    # No current LOS. Continue toward last known target if alert/searching.
+    last = getattr(enemy, "last_seen_pos", None)
+    if last and (getattr(enemy, "alerted", False)
+                 or getattr(enemy, "combat_alert_timer", 0) > 0
+                 or getattr(enemy, "state", "") in ("CHASE", "ATTACK", "SEARCH")):
+        return getattr(enemy, "m3_target_kind", "player"), last[0], last[1], False
+    return "none", -99999, -99999, False
+
+
+def _m3_enemy_update_target(enemy, px, py, strict_can_see):
+    """Target passed into the shared Enemy.update().
+
+    If strict LOS says the player is hidden, do not feed the real player
+    position into Enemy.update(), because its looser multi-point visibility can
+    reacquire through corners/walls. Alerted guards instead act on last-known
+    position; unaware guards get an off-map dummy point so they keep patrolling.
+    """
+    if strict_can_see:
+        return px, py
+    last = getattr(enemy, "last_seen_pos", None)
+    if last and (getattr(enemy, "alerted", False)
+                 or getattr(enemy, "combat_alert_timer", 0) > 0
+                 or getattr(enemy, "state", "") in ("CHASE", "ATTACK", "SEARCH")):
+        return last
+    return (-99999, -99999)
+
+
+def _update_m3_enemies(solid_walls):
+    if not STATE.player or STATE.player_dead:
+        return
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+
+    for e in STATE.enemies[:]:
+        if e.hp > 0:
+            target_kind, tx, ty, can_see = _m3_choose_enemy_target(e, px, py, solid_walls)
+
+            # Feed Enemy.update() the chosen target (Biribel or Volkov). If
+            # neither is visible it receives last-known/dummy coordinates so
+            # it cannot reacquire through walls.
+            e.update(tx, ty, solid_walls, STATE.bullets, STATE.particles,
+                     STATE.enemies, getattr(STATE, "fire_zones", []))
+
+            # Re-evaluate LOS after movement.
+            if target_kind == "volkov":
+                vpos = _m3_volkov_target_pos()
+                if vpos is not None:
+                    tx, ty = vpos
+                    can_see = _m3_enemy_has_los_to_point(e, tx, ty, solid_walls)
+                else:
+                    can_see = False
+            elif target_kind == "player":
+                tx, ty = px, py
+                can_see = _m3_enemy_has_los_to_point(e, tx, ty, solid_walls)
+            else:
+                can_see = False
+
+            dist = math.hypot(e.rect.centerx - tx, e.rect.centery - ty)
+
+            if can_see:
+                e.alerted = True
+                e.combat_alert_timer = 420
+                etype = getattr(e, "m3_type", "guard")
+                attack_range = getattr(e, "m3_attack_range", ENEMY_ATTACK_RANGE)
+
+                # Type identity beyond visuals:
+                # - breachers rush close before firing
+                # - marksmen hold longer sightlines and backpedal if rushed
+                # - technicians alert the room once when they spot you
+                if etype == "breacher" and dist > attack_range:
+                    e.state = "CHASE"
+                    e.last_seen_pos = (tx, ty)
+                    e.speed = max(getattr(e, "speed", 1.4), 1.85)
+                elif etype == "marksman" and dist < 150:
+                    # Backpedal away from the current target while keeping aim.
+                    away = math.atan2(e.rect.centery - ty, e.rect.centerx - tx)
+                    if hasattr(e, "_apply_move"):
+                        e._apply_move(math.cos(away) * 1.8, math.sin(away) * 1.8, solid_walls)
+                    e.state = "ATTACK"
+                    e.last_seen_pos = (tx, ty)
+                elif etype == "technician" and not getattr(e, "m3_called_alert", False):
+                    e.m3_called_alert = True
+                    STATE.floating_texts.append([e.rect.centerx, e.rect.centery - 28, "CALLING IT IN", (90, 220, 150), 70])
+                    for other in getattr(STATE, "enemies", []):
+                        other.combat_alert_timer = max(getattr(other, "combat_alert_timer", 0), 300)
+                        other.alerted = True
+                    e.state = "ATTACK" if dist < attack_range else "CHASE"
+                    e.last_seen_pos = (tx, ty)
+                elif dist < attack_range:
+                    e.state = "ATTACK"
+                    e.last_seen_pos = (tx, ty)
+                else:
+                    e.state = "CHASE"
+                    e.last_seen_pos = (tx, ty)
+            elif e.state == "ATTACK":
+                # Do not keep firing after LOS breaks.
+                e.state = "CHASE" if getattr(e, "last_seen_pos", None) else "SEARCH"
+
+            if e.state == "ATTACK" and can_see and e.fire_cooldown <= 0:
+                spread = random.uniform(-getattr(e, "m3_spread", 0.06), getattr(e, "m3_spread", 0.06))
+                shot_angle = math.atan2(ty - e.rect.centery, tx - e.rect.centerx)
+                bx = e.rect.centerx + math.cos(shot_angle) * 18
+                by = e.rect.centery + math.sin(shot_angle) * 18
+                bullet_speed = getattr(e, "m3_bullet_speed", 18)
+                STATE.bullets.append({
+                    "x": bx, "y": by,
+                    "prev_x": bx, "prev_y": by,
+                    "dx": math.cos(shot_angle + spread) * bullet_speed,
+                    "dy": math.sin(shot_angle + spread) * bullet_speed,
+                    "life": 62 if getattr(e, "m3_type", "guard") == "marksman" else 50,
+                    "owner": "enemy",
+                    "damage": getattr(e, "m3_damage", ENEMY_DAMAGE),
+                    "enemy_type": getattr(e, "m3_type", "guard"),
+                })
+                e.fire_cooldown = getattr(e, "m3_fire_cooldown", ENEMY_FIRE_COOLDOWN)
+                try:
+                    vol = 0.42 if getattr(e, "m3_type", "guard") == "marksman" else 0.34
+                    audio.play("gunshot_distant", volume=vol)
+                except Exception:
+                    pass
+
+        if e.hp <= 0:
+            STATE.hostiles_killed += 1
+            STATE.mission3_guards_killed += 1
+            STATE.blood_decals.append([
+                e.rect.centerx, e.rect.centery, 165, random.randint(12, 22)])
+            effects.burst(e.rect.centerx, e.rect.centery, C_BLOOD, 24)
+            effects.shake(6)
+
+            # FIRST-PISTOL GUARANTEE: the first guard killed in Mission 3 while
+            # the player still lacks a firearm ALWAYS drops a usable sidearm
+            # (pistol) — 100% of the time — so the player can never get stuck
+            # with only the improvised melee weapon. This uses a dedicated
+            # one-shot flag (not the kill counter) so scripted/other kills
+            # can't consume the guarantee and leave the first real guard
+            # dropping only a random mag.
+            label = getattr(e, "m3_label", "")
+            sidearm_pickup_already_spawned = any(
+                len(pu) >= 3 and pu[2] == "sidearm"
+                for pu in getattr(STATE, "pickups", [])
+            )
+            first_pistol_pending = (
+                not getattr(STATE, "mission3_first_pistol_dropped", False)
+                and not getattr(STATE, "mission3_sidearm_acquired", False)
+                and not getattr(STATE, "k9_unlocked", False)
+                and not sidearm_pickup_already_spawned
+            )
+            if first_pistol_pending:
+                STATE.mission3_first_pistol_dropped = True
+                STATE.pickups.append([e.rect.centerx, e.rect.centery, "sidearm"])
+                # Guarantee one emergency bandage with the first pistol so the
+                # player is never sent into the breakout with zero healing.
+                if getattr(STATE, "mission3_bandages_spawned", 0) < 1:
+                    STATE.mission3_bandages_spawned += 1
+                    STATE.pickups.append([
+                        e.rect.centerx + random.randint(-8, 8),
+                        e.rect.centery + random.randint(-8, 8),
+                        "bandage"])
+            else:
+                # Drop economy: after the guaranteed first sidearm, guards only
+                # sometimes drop usable 9mm. Armory/exit guards have a slightly
+                # better chance; extra 9mm drops are rare and capped so the
+                # breakout doesn't turn into a loot piñata.
+                mag_chance = 0.22 + (0.08 if label in ("guard_armory", "guard_exit_checkpoint") else 0.0)
+                can_drop_extra_ammo = (
+                    getattr(STATE, "mission3_sidearm_acquired", False)
+                    or getattr(STATE, "k9_unlocked", False)
+                )
+                if (can_drop_extra_ammo
+                        and getattr(STATE, "mission3_ammo_drops_spawned", 0) < 3
+                        and random.random() < mag_chance):
+                    STATE.mission3_ammo_drops_spawned += 1
+                    STATE.pickups.append([e.rect.centerx, e.rect.centery, "sidearm"])
+
+            # Bandages are scarce in M3 but now noticeably more reliable: up to
+            # three emergency wraps per breakout slice.
+            if (getattr(STATE, "mission3_bandages_spawned", 0) < 3
+                    and random.random() < 0.22):
+                STATE.mission3_bandages_spawned += 1
+                STATE.pickups.append([
+                    e.rect.centerx + random.randint(-8, 8),
+                    e.rect.centery + random.randint(-8, 8),
+                    "bandage"])
+            try:
+                audio.play("bullet_impact_enemy", volume=0.45)
+            except Exception:
+                pass
+            STATE.enemies.remove(e)
+
+
+def _m3_black_ledger_player_hit_count():
+    return sum(1 for d in getattr(STATE, "mission3_detainees", [])
+               if d.get("black_ledger_hit_by_player"))
+
+
+def _m3_spawn_black_ledger_inmate():
+    """Spawn the Black Ledger punishment entity.
+
+    This is intentionally NOT a normal Enemy: it is unkillable, ignores normal
+    hostile counts/drops, and owns a custom death animation.
+    """
+    if getattr(STATE, "m3_black_ledger_triggered", False):
+        return
+
+    STATE.m3_black_ledger_triggered = True
+    STATE.m3_black_ledger_inmate_active = True
+    STATE.m3_black_ledger_intro_timer = 210
+    STATE.m3_alarm_active = True
+    STATE.m3_alarm_timer = 0
+
+    px = STATE.player.rect.centerx if STATE.player else _EXIT_TILE_COL * TILE_SIZE
+    py = STATE.player.rect.centery if STATE.player else _EXIT_TILE_ROW * TILE_SIZE
+
+    # Spawn away from the player but inside the authored cell-block footprint.
+    candidates = [
+        (_EXIT_TILE_COL * TILE_SIZE + TILE_SIZE // 2, _EXIT_TILE_ROW * TILE_SIZE + TILE_SIZE // 2),
+        (28 * TILE_SIZE + TILE_SIZE // 2, 39 * TILE_SIZE + TILE_SIZE // 2),
+        (10 * TILE_SIZE + TILE_SIZE // 2, 37 * TILE_SIZE + TILE_SIZE // 2),
+        (_DOOR_TILE_COL * TILE_SIZE + TILE_SIZE // 2, (_DOOR_TILE_ROW + 2) * TILE_SIZE + TILE_SIZE // 2),
+    ]
+    sx, sy = max(candidates, key=lambda p: math.hypot(p[0] - px, p[1] - py))
+
+    STATE.m3_black_ledger_inmate = {
+        "x": float(sx),
+        "y": float(sy),
+        "angle": math.atan2(py - sy, px - sx),
+        "timer": 0,
+        "lunge_timer": 0,
+        "footstep": 0,
+    }
+
+    _set_objective("SURVIVE THE BLACK LEDGER")
+    STATE.floating_texts.append([
+        px, py - 90,
+        "BLACK LEDGER OPENED",
+        (230, 70, 70),
+        210,
+        "pin",
+    ])
+    _radio("PA SYSTEM: Thirteen names closed. One name opened.",
+           color=(230, 70, 70), duration=360, mark="black_ledger_opened")
+    effects.shake(14)
+    STATE.gc_flash_timer = max(getattr(STATE, "gc_flash_timer", 0), 10)
+    try:
+        audio.play("alarm", volume=0.55)
+        audio.play("door_break", volume=0.45)
+    except Exception:
+        pass
+
+
+def _m3_check_black_ledger_trigger():
+    detainees = getattr(STATE, "mission3_detainees", [])
+    if not detainees or getattr(STATE, "m3_black_ledger_triggered", False):
+        return
+    if _m3_black_ledger_player_hit_count() >= len(detainees):
+        _m3_spawn_black_ledger_inmate()
+
+
+def _trigger_black_ledger_death():
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        return
+    STATE.m3_black_ledger_death_active = True
+    STATE.m3_black_ledger_death_timer = 0
+    STATE.player_dead = True
+    STATE.request_death_screen = False
+    STATE.death_timer = 120
+    effects.shake(22)
+    _set_objective("THE LEDGER COLLECTS")
+    try:
+        audio.play("door_break", volume=0.60)
+        audio.play("bullet_impact_enemy", volume=0.50)
+    except Exception:
+        pass
+
+
+def _update_black_ledger_death():
+    if not getattr(STATE, "m3_black_ledger_death_active", False):
+        return False
+    STATE.m3_black_ledger_death_timer += 1
+    t = STATE.m3_black_ledger_death_timer
+    if t in (1, 24, 54, 88):
+        effects.shake(18 if t < 54 else 10)
+    # Hold the Black Ledger case-file result on-screen before handing off to
+    # the interactive custom death screen. The old 150-frame handoff felt like
+    # a hard cut; this gives the stamp/record time to land.
+    if t >= 270:
+        STATE.request_death_screen = True
+    return True
+
+
+def _update_black_ledger_inmate():
+    if not getattr(STATE, "m3_black_ledger_inmate_active", False):
+        return
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        return
+    if not STATE.player or STATE.player_dead:
+        return
+
+    inmate = getattr(STATE, "m3_black_ledger_inmate", None)
+    if not inmate:
+        return
+
+    inmate["timer"] = inmate.get("timer", 0) + 1
+    STATE.m3_black_ledger_intro_timer = max(0, getattr(STATE, "m3_black_ledger_intro_timer", 0) - 1)
+
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+    dx = px - inmate["x"]
+    dy = py - inmate["y"]
+    dist = max(1.0, math.hypot(dx, dy))
+    inmate["angle"] = math.atan2(dy, dx)
+
+    # Faster than the player and allowed to force through geometry: this is a
+    # supernatural punishment encounter, not a fair combatant.
+    speed = 3.7 + min(2.2, inmate.get("timer", 0) / 360.0)
+    if dist > 260:
+        speed += 1.8
+    if dist > 520:
+        speed += 2.0
+    if dist < 150:
+        speed += 1.4
+    inmate["x"] += (dx / dist) * speed * 60.0 * STATE.dt
+    inmate["y"] += (dy / dist) * speed * 60.0 * STATE.dt
+
+    inmate["footstep"] = inmate.get("footstep", 0) - 1
+    if inmate["footstep"] <= 0:
+        inmate["footstep"] = max(10, int(26 - min(10, inmate.get("timer", 0) / 80)))
+        effects.shake(3 if dist > 220 else 7)
+        try:
+            audio.play("footstep", volume=0.55 if dist < 360 else 0.35)
+        except Exception:
+            pass
+
+    if dist < 54:
+        _trigger_black_ledger_death()
+
+
+def _draw_black_ledger_inmate(cam_x, cam_y):
+    if not getattr(STATE, "m3_black_ledger_inmate_active", False):
+        return
+    inmate = getattr(STATE, "m3_black_ledger_inmate", None)
+    if not inmate:
+        return
+
+    sx = int(inmate["x"] - cam_x)
+    sy = int(inmate["y"] - cam_y)
+    t = inmate.get("timer", 0)
+    stride = math.sin(t * 0.25)
+    bob = int(math.sin(t * 0.13) * 2)
+
+    # Screen-upright on purpose. The old version rotated the whole body toward
+    # movement and read like a sideways bug. This keeps the silhouette readable
+    # as a prisoner from every camera angle, like the other character sprites.
+    outline = (22, 13, 8)
+    suit = (168, 92, 34)          # dirty orange prison jumpsuit
+    suit_dark = (92, 48, 24)
+    suit_hi = (218, 132, 58)
+    stripe = (228, 180, 86)
+    skin = (156, 112, 82)
+    skin_dark = (86, 54, 42)
+    boot = (18, 15, 13)
+    metal = (132, 134, 124)
+    blood_mark = (110, 18, 18)
+
+    # Heavy shadow + subtle alarm stain.
+    shadow = pygame.Surface((132, 88), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 176), (8, 40, 116, 34))
+    if getattr(STATE, "m3_alarm_active", False):
+        pygame.draw.ellipse(shadow, (90, 0, 0, 30), (0, 18, 132, 58))
+    screen.blit(shadow, (sx - 66, sy - 42))
+
+    # Legs / boots. Big, upright, readable.
+    for side, phase in [(-1, stride), (1, -stride)]:
+        hip = (sx + side * 15, sy + 14 + bob)
+        knee = (sx + side * 18, sy + 36 + bob + int(phase * 4))
+        foot = (sx + side * 21, sy + 61 + bob + int(phase * 8))
+        pygame.draw.line(screen, outline, hip, knee, 17)
+        pygame.draw.line(screen, suit_dark, hip, knee, 12)
+        pygame.draw.line(screen, outline, knee, foot, 16)
+        pygame.draw.line(screen, suit, knee, foot, 11)
+        pygame.draw.ellipse(screen, outline, (foot[0] - 13, foot[1] - 7, 26, 14))
+        pygame.draw.ellipse(screen, boot, (foot[0] - 10, foot[1] - 5, 20, 10))
+
+    # Torso: broad orange jumpsuit, shoulder-heavy.
+    torso_outer = [
+        (sx - 40, sy - 38 + bob), (sx - 24, sy - 58 + bob),
+        (sx + 24, sy - 58 + bob), (sx + 40, sy - 38 + bob),
+        (sx + 30, sy + 22 + bob), (sx - 30, sy + 22 + bob),
+    ]
+    pygame.draw.polygon(screen, outline, torso_outer)
+    torso_inner = [
+        (sx - 34, sy - 36 + bob), (sx - 20, sy - 52 + bob),
+        (sx + 20, sy - 52 + bob), (sx + 34, sy - 36 + bob),
+        (sx + 25, sy + 18 + bob), (sx - 25, sy + 18 + bob),
+    ]
+    pygame.draw.polygon(screen, suit, torso_inner)
+
+    # Jumpsuit seams / stripes / zipper.
+    pygame.draw.line(screen, suit_dark, (sx, sy - 51 + bob), (sx, sy + 17 + bob), 3)
+    pygame.draw.line(screen, suit_hi, (sx - 25, sy - 39 + bob), (sx - 12, sy + 10 + bob), 2)
+    pygame.draw.line(screen, suit_hi, (sx + 25, sy - 39 + bob), (sx + 12, sy + 10 + bob), 2)
+    for xoff in (-19, 19):
+        pygame.draw.line(screen, stripe, (sx + xoff, sy - 28 + bob), (sx + xoff, sy + 14 + bob), 2)
+
+    # Chest inmate patch.
+    patch = pygame.Rect(sx - 19, sy - 20 + bob, 38, 17)
+    pygame.draw.rect(screen, (36, 22, 12), patch, border_radius=2)
+    pygame.draw.rect(screen, (230, 170, 90), patch, 1, border_radius=2)
+    num = font_terminal_small.render("000", True, (245, 196, 112))
+    screen.blit(num, (patch.centerx - num.get_width() // 2, patch.centery - num.get_height() // 2 - 1))
+
+    # Arms: huge bare forearms/fists, screen-upright and prisoner-readable.
+    cuffs = []
+    for side, phase in [(-1, -stride), (1, stride)]:
+        shoulder = (sx + side * 39, sy - 36 + bob)
+        elbow = (sx + side * (53 + int(phase * 4)), sy - 6 + bob)
+        hand = (sx + side * (55 + int(phase * 7)), sy + 24 + bob)
+        pygame.draw.line(screen, outline, shoulder, elbow, 19)
+        pygame.draw.line(screen, suit_dark, shoulder, elbow, 14)
+        pygame.draw.line(screen, outline, elbow, hand, 18)
+        pygame.draw.line(screen, skin_dark, elbow, hand, 13)
+        pygame.draw.circle(screen, outline, hand, 14)
+        pygame.draw.circle(screen, skin, hand, 11)
+        pygame.draw.line(screen, skin_dark, (hand[0] - 7, hand[1] + 2), (hand[0] + 7, hand[1] + 2), 2)
+        cuff = (sx + side * (52 + int(phase * 6)), sy + 11 + bob)
+        pygame.draw.circle(screen, metal, cuff, 10, 2)
+        cuffs.append(cuff)
+
+    # Chain between cuffs, with small sag.
+    if len(cuffs) == 2:
+        c1, c2 = cuffs
+        pygame.draw.line(screen, (38, 36, 34), c1, c2, 5)
+        for i in range(7):
+            q = i / 6
+            cx = int(c1[0] * (1 - q) + c2[0] * q)
+            cy = int(c1[1] * (1 - q) + c2[1] * q + 5 + math.sin(t * 0.2 + i) * 2)
+            pygame.draw.ellipse(screen, metal, (cx - 4, cy - 3, 8, 6), 1)
+
+    # Neck + shaved head. Human, upright, not hooded or monster-like.
+    pygame.draw.circle(screen, outline, (sx, sy - 56 + bob), 18)
+    pygame.draw.circle(screen, skin_dark, (sx, sy - 56 + bob), 14)
+    pygame.draw.circle(screen, outline, (sx, sy - 82 + bob), 25)
+    pygame.draw.circle(screen, skin, (sx, sy - 82 + bob), 21)
+    pygame.draw.arc(screen, (54, 38, 30), (sx - 19, sy - 100 + bob, 38, 30), math.pi, math.tau, 5)
+    pygame.draw.circle(screen, (34, 18, 14), (sx - 7, sy - 84 + bob), 2)
+    pygame.draw.circle(screen, (34, 18, 14), (sx + 7, sy - 84 + bob), 2)
+    pygame.draw.line(screen, (58, 26, 20), (sx - 9, sy - 73 + bob), (sx + 9, sy - 73 + bob), 2)
+
+    # Small tally mark on jumpsuit: creepy, but still human/prisoner-coded.
+    pygame.draw.line(screen, blood_mark, (sx + 9, sy - 44 + bob), (sx + 24, sy - 12 + bob), 3)
+
+    # Restrained red rim light only, no monster aura.
+    if getattr(STATE, "m3_alarm_active", False) and (t // 18) % 2 == 0:
+        pygame.draw.arc(screen, (170, 34, 24), (sx - 48, sy - 100 + bob, 96, 132), -0.25, 0.95, 2)
+
+    if getattr(STATE, "m3_black_ledger_intro_timer", 0) > 0:
+        cap = font_terminal_small.render("CAM-13 // INMATE 000 RELEASED", True, (230, 98, 58))
+        bg = pygame.Surface((cap.get_width() + 18, cap.get_height() + 8), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, 165))
+        screen.blit(bg, (sx - bg.get_width() // 2, sy - 132))
+        screen.blit(cap, (sx - cap.get_width() // 2, sy - 128))
+
+def _draw_black_ledger_death_overlay():
+    """Custom Black Ledger death screen.
+
+    The previous pass became too much like an archive UI.  This version is a
+    death screen first: one dominant symbol, one clear verdict, minimal context.
+    The ledger still explains itself through faint tallies/entry text, but the
+    screen is no longer a busy dossier table.
+    """
+    if not getattr(STATE, "m3_black_ledger_death_active", False):
+        return
+
+    t = getattr(STATE, "m3_black_ledger_death_timer", 0)
+    rng = random.Random(99173 + t // 3)
+
+    def clamp01(v):
+        return max(0.0, min(1.0, v))
+
+    def smooth(v):
+        v = clamp01(v)
+        return v * v * (3.0 - 2.0 * v)
+
+    def draw_center(font, text, y, color, alpha=255, shadow=True):
+        surf = font.render(text, True, color)
+        surf.set_alpha(alpha)
+        x = WIDTH // 2 - surf.get_width() // 2
+        if shadow:
+            sh = font.render(text, True, (0, 0, 0))
+            sh.set_alpha(min(alpha, 190))
+            screen.blit(sh, (x + 3, y + 3))
+        screen.blit(surf, (x, y))
+        return surf
+
+    # ── Base death-screen field ────────────────────────────────────────────
+    screen.fill((2, 1, 1))
+    pulse = 0.5 + 0.5 * math.sin(t * 0.045)
+    red = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    red.fill((54, 3, 3, int(70 + 35 * pulse)))
+    screen.blit(red, (0, 0))
+
+    # Dirty static, but sparse — atmosphere, not information overload.
+    for _ in range(18):
+        y = rng.randrange(0, HEIGHT)
+        a = rng.randrange(8, 30)
+        pygame.draw.rect(screen, (150, 90, 70, a), (rng.randrange(-80, 70), y, WIDTH + 140, 1))
+    for _ in range(42):
+        x = rng.randrange(0, WIDTH)
+        y = rng.randrange(0, HEIGHT)
+        col = rng.choice([(50, 12, 10), (20, 8, 7), (80, 22, 18)])
+        screen.set_at((x, y), col)
+
+    # Early impact flash.
+    if t < 18:
+        a = max(0, 180 - t * 10)
+        hit = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        hit.fill((180, 12, 8, a))
+        screen.blit(hit, (0, 0))
+        if t < 5:
+            w = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            w.fill((240, 222, 190, 92 - t * 15))
+            screen.blit(w, (0, 0))
+
+    # Vignette.
+    vign = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    for r, a in ((720, 12), (520, 34), (330, 58), (190, 44)):
+        pygame.draw.circle(vign, (92, 8, 6, a), (WIDTH // 2, HEIGHT // 2), r)
+    screen.blit(vign, (0, 0), special_flags=pygame.BLEND_ADD)
+    draw_vignette(screen, strength=225)
+
+    # ── Central ledger/book silhouette ─────────────────────────────────────
+    appear = smooth((t - 18) / 36.0)
+    book_w = int(520 * appear)
+    book_h = int(330 * appear)
+    book_x = WIDTH // 2 - book_w // 2
+    book_y = HEIGHT // 2 - book_h // 2 - 26
+    if appear > 0:
+        # Book shadow.
+        shadow = pygame.Surface((book_w + 60, book_h + 60), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, 150), (15, book_h + 20, book_w + 30, 32))
+        screen.blit(shadow, (book_x - 30, book_y - 30))
+
+        # Left/right pages, slightly separated by spine.
+        left = pygame.Rect(book_x, book_y, book_w // 2, book_h)
+        right = pygame.Rect(book_x + book_w // 2, book_y, book_w // 2, book_h)
+        pygame.draw.rect(screen, (145, 119, 84), left, border_radius=8)
+        pygame.draw.rect(screen, (170, 143, 102), right, border_radius=8)
+        pygame.draw.rect(screen, (44, 16, 12), (book_x + book_w // 2 - 8, book_y, 16, book_h), border_radius=4)
+        pygame.draw.rect(screen, (72, 24, 18), (book_x, book_y, book_w, book_h), 4, border_radius=8)
+
+        # Page grain and a few cracks, not rows of UI.
+        # Guard against early open frames where book_w/book_h are still tiny;
+        # otherwise randint(min, max) can receive an empty range.
+        if book_w > 40 and book_h > 40:
+            for _ in range(80):
+                # Clamp the range so a too-narrow book can never produce an
+                # empty randint(a, b) (a > b) on early open frames.
+                gx = rng.randint(book_x + 12, max(book_x + 12, book_x + book_w - 12))
+                gy = rng.randint(book_y + 12, max(book_y + 12, book_y + book_h - 12))
+                if 0 <= gx < WIDTH and 0 <= gy < HEIGHT:
+                    screen.set_at((gx, gy), rng.choice([(112, 84, 58), (194, 170, 124), (86, 55, 38)]))
+        if book_w > 130 and book_h > 80:
+            for _ in range(9):
+                x1 = rng.randint(book_x + 22, max(book_x + 22, book_x + book_w - 80))
+                y1 = rng.randint(book_y + 35, max(book_y + 35, book_y + book_h - 35))
+                pygame.draw.line(screen, (83, 48, 34), (x1, y1), (x1 + rng.randint(30, 95), y1 + rng.randint(-6, 6)), 1)
+
+        # Faint tally marks: the 13 detainees. They are symbolic now, not a full
+        # spreadsheet. They fill quickly, then become background guilt.
+        tally_count = min(13, max(0, int((t - 42) / 4)))
+        start_x = book_x + 48
+        start_y = book_y + 78
+        for i in range(13):
+            tx = start_x + (i % 7) * 24
+            ty = start_y + (i // 7) * 48
+            col = (92, 24, 18) if i < tally_count else (88, 66, 48)
+            alpha = 210 if i < tally_count else 80
+            mark = pygame.Surface((20, 34), pygame.SRCALPHA)
+            pygame.draw.line(mark, (*col, alpha), (7, 2), (5, 30), 3)
+            if i % 5 == 4:
+                pygame.draw.line(mark, (*col, alpha), (1, 26), (17, 7), 2)
+            screen.blit(mark, (tx, ty))
+
+        # Entry 014: only the player name and the number matter.
+        entry_p = smooth((t - 82) / 34.0)
+        if entry_p > 0:
+            entry = pygame.Rect(book_x + book_w // 2 + 34, book_y + 92, book_w // 2 - 68, 94)
+            pygame.draw.rect(screen, (112, 82, 58), entry, border_radius=5)
+            pygame.draw.rect(screen, (76, 28, 22), entry, 2, border_radius=5)
+            num = font_terminal.render("014", True, (43, 15, 11))
+            num.set_alpha(int(255 * entry_p))
+            screen.blit(num, (entry.x + 18, entry.y + 16))
+            chars = max(0, min(len("BIRIBEL"), int((t - 88) / 5)))
+            nm = "BIRIBEL"[:chars]
+            cursor = "_" if chars < len("BIRIBEL") and (t // 9) % 2 == 0 else ""
+            name = font_terminal.render(nm + cursor, True, (36, 12, 9))
+            name.set_alpha(int(255 * entry_p))
+            screen.blit(name, (entry.x + 88, entry.y + 16))
+            cause = font_terminal_small.render("ENTRY GENERATED BY LEDGER CONTACT", True, (80, 36, 28))
+            cause.set_alpha(int(210 * entry_p))
+            screen.blit(cause, (entry.x + 20, entry.y + 58))
+
+        # Inmate 000 symbol: small, iconic, not a second whole UI panel.
+        zero_p = smooth((t - 54) / 26.0)
+        if zero_p > 0:
+            mx, my = book_x + book_w // 2, book_y + 52
+            pygame.draw.circle(screen, (8, 5, 4), (mx, my), int(26 * zero_p))
+            pygame.draw.rect(screen, (12, 7, 5), (mx - int(32 * zero_p), my + int(19 * zero_p), int(64 * zero_p), int(35 * zero_p)), border_radius=10)
+            z = font_terminal_small.render("000", True, (188, 48, 38))
+            z.set_alpha(int(230 * zero_p))
+            screen.blit(z, (mx - z.get_width() // 2, my + 36))
+
+    # ── Verdict text / death screen identity ───────────────────────────────
+    title_p = smooth((t - 58) / 24.0)
+    if title_p > 0:
+        draw_center(font_terminal, "BLACK LEDGER", HEIGHT // 2 - 232, (166, 34, 28), int(235 * title_p))
+
+    counted_p = smooth((t - 118) / 18.0)
+    if counted_p > 0:
+        # Big simple death message. This replaces the busy stamp/table climax.
+        scale = 1.0 + (1.0 - counted_p) * 0.35
+        txt = font_title.render("YOU ARE COUNTED", True, (158, 12, 10))
+        if scale != 1.0:
+            txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * scale), int(txt.get_height() * scale)))
+        txt.set_alpha(int(255 * counted_p))
+        x = WIDTH // 2 - txt.get_width() // 2
+        y = HEIGHT // 2 + 126 - txt.get_height() // 2
+        sh = txt.copy()
+        sh.fill((0, 0, 0, int(190 * counted_p)), special_flags=pygame.BLEND_RGBA_MULT)
+        screen.blit(sh, (x + 4, y + 4))
+        screen.blit(txt, (x, y))
+
+    sub_p = smooth((t - 142) / 28.0)
+    if sub_p > 0:
+        draw_center(font_terminal_small, "ENTRY 014 / BIRIBEL / RECORD SEALED",
+                    HEIGHT // 2 + 176, (174, 126, 98), int(220 * sub_p))
+
+    # Make the late state feel like a death screen, not a transition screen.
+    if t > 178:
+        fade = min(130, int((t - 178) * 1.5))
+        veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        veil.fill((0, 0, 0, fade))
+        screen.blit(veil, (0, 0))
+        draw_center(font_terminal, "BLACK LEDGER", HEIGHT // 2 - 54, (150, 34, 30), 240)
+        draw_center(font_title, "YOU ARE COUNTED", HEIGHT // 2 - 12, (172, 18, 14), 255)
+        draw_center(font_terminal_small, "ENTRY 014 / BIRIBEL / RECORD SEALED",
+                    HEIGHT // 2 + 60, (156, 118, 96), 220)
+        if t > 214:
+            # This appears only once it is basically functioning as the custom
+            # death screen. The actual restart/menu input is still handled by
+            # the game's existing DEATH state after handoff.
+            draw_center(font_terminal_small, "death record complete", HEIGHT - 58, (94, 68, 62), 170)
+
+    # Minimal scanlines and occasional glitch.
+    for y in range(0, HEIGHT, 4):
+        pygame.draw.line(screen, (0, 0, 0, 35), (0, y), (WIDTH, y))
+    if t % 10 in (0, 1):
+        for _ in range(4):
+            gy = rng.randint(0, HEIGHT - 1)
+            pygame.draw.rect(screen, (220, 180, 150, rng.randint(12, 38)), (0, gy, WIDTH, 1))
+
+
+def _m3_hit_detainee_with_bullet(b):
+    """Return True if bullet hits an ambient detainee.
+
+    Detainees are non-combat, but they are physical people in the space. Player
+    or enemy bullets can hit them; they then become fallen bodies and stop
+    speaking/animating. They are not enemies and do not affect hostiles count.
+    """
+    if b.get("owner") not in ("player", "enemy"):
+        return False
+    prev = (b.get("prev_x", b.get("x", 0)), b.get("prev_y", b.get("y", 0)))
+    cur = (b.get("x", 0), b.get("y", 0))
+    for d in getattr(STATE, "mission3_detainees", []):
+        if d.get("dead"):
+            continue
+        wx, wy = _detainee_draw_pos(d)
+        hitbox = pygame.Rect(int(wx - 17), int(wy - 24), 34, 46)
+        if hitbox.clipline(prev, cur) or hitbox.collidepoint(cur):
+            d["dead"] = True
+            d["state"] = "dead"
+            d["line_timer"] = 0
+            STATE.blood_decals.append([wx, wy, 150, random.randint(7, 13)])
+            effects.burst(wx, wy, C_BLOOD, 10)
+            if b.get("owner") == "player":
+                d["black_ledger_hit_by_player"] = True
+                STATE.shots_hit += 1
+                hit_count = _m3_black_ledger_player_hit_count()
+                total = max(1, len(getattr(STATE, "mission3_detainees", [])))
+                STATE.floating_texts.append([
+                    wx, wy - 22,
+                    f"DETAINEE HIT {hit_count}/{total}",
+                    (220, 120, 95),
+                    75,
+                ])
+                _m3_check_black_ledger_trigger()
+            try:
+                audio.play("bullet_impact_enemy", volume=0.36)
+            except Exception:
+                pass
+            return True
+    return False
+
+
+
+def _update_bullets(solid_walls):
+    """Move bullets, check player/wall collisions, remove expired.
+
+    Mirrors mission2._update_bullets_enemies but simplified for M3:
+    only enemy-to-player bullets matter (the player fires via weapons.py
+    which handles its own collision). Enemy bullets must move, check the
+    player hitbox, check walls, and expire.
+    """
+    if not STATE.player or STATE.player_dead:
+        return
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+    for b in STATE.bullets[:]:
+        b["prev_x"] = b["x"]
+        b["prev_y"] = b["y"]
+        _dt_mul = 60.0 * STATE.dt
+        b["x"] += b["dx"] * _dt_mul
+        b["y"] += b["dy"] * _dt_mul
+        b["life"] -= 1
+        hit = False
+        # Enemy bullets vs player
+        if b.get("owner") == "enemy" and not hit:
+            if math.hypot(b["x"] - px, b["y"] - py) < 22:
+                if STATE.player.take_damage(b.get("damage", ENEMY_DAMAGE)):
+                    effects.shake(6)
+                    effects.burst(b["x"], b["y"], C_BLOOD, 8)
+                    STATE.gc_flash_timer = max(STATE.gc_flash_timer, 4)
+                    try:
+                        audio.play("bullet_impact_enemy", volume=0.5)
+                    except Exception:
+                        pass
+                hit = True
+        # Bullets vs ambient detainees (non-combat prisoners). They are not
+        # enemies, but they are physical people in the world and can be hit.
+        if not hit:
+            hit = _m3_hit_detainee_with_bullet(b)
+        # Enemy bullets vs Volkov ally
+        if b.get("owner") == "enemy" and not hit and getattr(STATE, "m3_volkov_ally_active", False):
+            if getattr(STATE, "mission3_stage", None) == STAGE_COMMS and getattr(STATE, "m3_volkov_ally_hp", 0) > 0:
+                vx = float(getattr(STATE, "m3_volkov_ally_x", -99999))
+                vy = float(getattr(STATE, "m3_volkov_ally_y", -99999))
+                if math.hypot(b["x"] - vx, b["y"] - vy) < 22:
+                    dmg = b.get("damage", ENEMY_DAMAGE)
+                    STATE.m3_volkov_ally_hp = max(0, getattr(STATE, "m3_volkov_ally_hp", 220) - dmg)
+                    STATE.m3_volkov_ally_hit_flash = 12
+                    effects.shake(3)
+                    effects.burst(b["x"], b["y"], C_BLOOD, 7)
+                    try:
+                        audio.play("bullet_impact_enemy", volume=0.38)
+                    except Exception:
+                        pass
+                    if STATE.m3_volkov_ally_hp <= 0:
+                        STATE.m3_volkov_ally_active = False
+                        STATE.floating_texts.append([vx, vy - 24, "VOLKOV PINNED", (220, 150, 90), 120])
+                    hit = True
+
+        # Player/Volkov bullets vs enemies
+        if b.get("owner") == "player" and not hit:
+            for e in STATE.enemies:
+                if math.hypot(b["x"] - e.rect.centerx, b["y"] - e.rect.centery) < 22:
+                    damage = b.get("damage", 50)
+                    shielded = False
+                    if getattr(e, "m3_type", "") == "shield":
+                        # Front-facing shield reduces incoming fire. Flanking or
+                        # back shots still do full damage.
+                        # Use the bullet's previous position to determine where
+                        # the shot came from. Current position may already have
+                        # crossed through the guard center this frame.
+                        incoming = math.atan2(b.get("prev_y", b["y"]) - e.rect.centery,
+                                              b.get("prev_x", b["x"]) - e.rect.centerx)
+                        diff = abs(math.atan2(math.sin(incoming - e.angle), math.cos(incoming - e.angle)))
+                        if diff < getattr(e, "shield_angle_width", math.radians(78)):
+                            damage = max(3, int(damage * 0.28))
+                            shielded = True
+                    e.hp -= damage
+                    e.on_hit(px, py)
+                    hit = True
+                    STATE.shots_hit += 1
+                    if shielded:
+                        effects.burst(b["x"], b["y"], (150, 150, 125), 8)
+                        if random.random() < 0.35:
+                            STATE.floating_texts.append([b["x"], b["y"] - 18, "SHIELD", (180, 170, 110), 34])
+                    else:
+                        STATE.blood_decals.append([b["x"], b["y"], 140, random.randint(8, 16)])
+                        effects.burst(b["x"], b["y"], C_BLOOD, 14)
+                    try:
+                        audio.play("bullet_impact" if shielded else "bullet_impact_enemy", volume=0.42)
+                    except Exception:
+                        pass
+                    break
+        # Cell-door hits before generic wall hits.
+        if not hit:
+            hit = _m3_damage_cell_door_with_bullet(b)
+
+        # Wall hits (only if no entity / door was hit)
+        if not hit:
+            hit = collide_bullet_walls(b, solid_walls)
+            if hit:
+                effects.burst(b["x"], b["y"], (130, 125, 110), 4)
+                try:
+                    audio.play("bullet_impact", volume=0.30)
+                except Exception:
+                    pass
+        if hit or b["life"] <= 0 or not (-500 < b["x"] < MAP_W * TILE_SIZE + 500 and -500 < b["y"] < MAP_H * TILE_SIZE + 500):
+            if b in STATE.bullets:
+                STATE.bullets.remove(b)
+
+
+def _update_m3_camera(solid_walls):
+    """Per-frame security camera update: sweep, detect, trigger alarm."""
+    global _security_camera
+    if _security_camera is None or not STATE.player or STATE.player_dead:
+        return
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+    _security_camera.update(px, py, solid_walls)
+
+
+def _update_m3_pickups():
+    """Per-frame pickup collection for Mission 3.
+
+    Auto-picks up any pickup within 36px of the player center (generous
+    radius so the player doesn't have to pixel-hunt). Kinds:
+      - "sidearm": looted IPA pistol. Disarms the disarmed flag, clears
+        mission3_weapon past "chair_leg"/"shiv" (so weapons.py's
+        _player_has_firearm() returns True), gives the player a full
+        mag + 2 spare mags. Idempotent — picking up a second sidearm
+        only refills ammo.
+      - "bandage": heals 15 HP. Rare emergency stabilization, not a reset.
+    """
+    if not STATE.player or STATE.player_dead:
+        return
+    for pu in STATE.pickups[:]:
+        if math.hypot(pu[0] - STATE.player.rect.centerx,
+                      pu[1] - STATE.player.rect.centery) > 36:
+            continue
+        kind = pu[2]
+        if kind == "sidearm":
+            if getattr(STATE, "k9_unlocked", False):
+                # Do not downgrade the player from the armory K-9 back to the
+                # looted pistol. Treat sidearms found afterward as spare 9mm.
+                STATE.spare_mags = min(5, STATE.spare_mags + 1)
+                STATE.floating_texts.append([
+                    pu[0], pu[1] - 16, "+1 9MM MAG", C_TERMINAL, 70])
+            elif not getattr(STATE, "mission3_sidearm_acquired", False):
+                STATE.mission3_sidearm_acquired = True
+                STATE.player_disarmed = False
+                # Clear mission3_weapon past the improvised-weapon enum so
+                # weapons._player_has_firearm() returns True and the pistol
+                # can fire. The shiv stays in inventory (V-key still works
+                # for melee — handle_melee checks mission3_weapon first).
+                STATE.mission3_weapon = "sidearm"
+                STATE.current_weapon = "pistol"
+                STATE.ammo_in_mag = STATE.mag_size
+                STATE.spare_mags = 1
+                STATE.floating_texts.append([
+                    pu[0], pu[1] - 16, "SIDEARM ACQUIRED", (220, 200, 120), 90])
+            else:
+                # Already armed — just top off mags.
+                STATE.spare_mags = min(5, STATE.spare_mags + 1)
+                STATE.floating_texts.append([
+                    pu[0], pu[1] - 16, "+1 MAG", C_TERMINAL, 70])
+            try:
+                audio.play("rifle_handle", volume=0.55)
+            except Exception:
+                pass
+        elif kind == "bandage":
+            old = STATE.player.hp
+            heal_amount = 15
+            STATE.player.hp = min(STATE.player.max_hp,
+                                  STATE.player.hp + heal_amount)
+            STATE.floating_texts.append([
+                pu[0], pu[1] - 16,
+                f"+{int(STATE.player.hp - old)} HP",
+                (100, 220, 100), 70])
+            try:
+                audio.play("pickup", volume=0.45)
+            except Exception:
+                pass
+        STATE.pickups.remove(pu)
+
+
+# ─────────────────────────────────────────────
+# Per-frame draw
+# ─────────────────────────────────────────────
+# Tile base colors (mirrors mission2.game_draw's tile_base dict).
+_TILE_BASE = {
+    ".": (32, 33, 33),   # corridor floor
+    "g": (40, 36, 32),   # exterior ground
+    "O": (29, 36, 38),   # interior / control sector
+    "L": (34, 42, 44),   # laundry / uniform processing
+    "Y": (45, 45, 42),   # exercise-yard concrete
+    "M": (31, 34, 32),   # maintenance / boiler wing
+    "X": (29, 38, 32),   # objective marker tile
+    "C": (54, 54, 52),   # concrete wall
+    "B": (60, 50, 40),   # barrier
+    # "D" intentionally omitted — drawn by _draw_m3_door_tile()
+    "S": (60, 90, 100),  # security glass (passable, frosted cyan)
+}
+
+
+def _door_obj_at_tile(col, row):
+    """Return the Door object placed at tile col,row, if any."""
+    wx = col * TILE_SIZE
+    wy = row * TILE_SIZE
+    for d in getattr(STATE, "doors", []):
+        if d.rect.x == wx and d.rect.y == wy:
+            return d
+    return None
+
+
+def _draw_tiny_padlock(surface, x, y, col):
+    """Tiny drawn lock icon. Avoids unicode emoji font issues."""
+    pygame.draw.arc(surface, col, pygame.Rect(x + 2, y, 10, 10), math.pi, math.tau, 2)
+    pygame.draw.rect(surface, col, (x + 1, y + 7, 12, 9), border_radius=2)
+    pygame.draw.rect(surface, (30, 25, 20), (x + 5, y + 10, 4, 4))
+
+
+def _draw_m3_door_tile(surface, sx, sy, col, row):
+    """Draw a proper reinforced prison door at any D tile."""
+    sx, sy = int(sx), int(sy)
+    ts = TILE_SIZE
+
+    d = _door_obj_at_tile(col, row)
+    locked = getattr(d, "locked", True) if d else True
+    open_p = getattr(d, "anim_progress", 0.0) if d else 0.0
+
+    is_cell_door = (col == _DOOR_TILE_COL and row == _DOOR_TILE_ROW) or \
+                   (col == _DOOR_TILE_COL + 1 and row == _DOOR_TILE_ROW)
+    if is_cell_door:
+        # Only show the cell door as OPEN after detonation (frame 301+).
+        # During charge planting (frames 0-300) the door is still INTACT —
+        # Volkov is placing the C4, it hasn't blown yet. Showing the door
+        # as open during this phase made it look like a dark empty doorway
+        # (a "grey box") that was already open/openable before the blast.
+        if getattr(STATE, "mission3_cell_open", False) or _volkov_breach_t >= 301:
+            open_p = 1.0
+            locked = False
+
+    frame_col = (38, 40, 45)
+    frame_dark = (22, 24, 28)
+    frame_hi = (55, 58, 64)
+    pygame.draw.rect(surface, frame_dark, (sx - 2, sy - 2, ts + 4, ts + 4))
+    pygame.draw.rect(surface, frame_col, (sx, sy, ts, ts))
+    pygame.draw.line(surface, frame_hi, (sx, sy), (sx + ts, sy), 1)
+    pygame.draw.line(surface, frame_hi, (sx, sy), (sx, sy + ts), 1)
+    pygame.draw.line(surface, frame_dark, (sx, sy + ts - 1), (sx + ts, sy + ts - 1), 1)
+    pygame.draw.line(surface, frame_dark, (sx + ts - 1, sy), (sx + ts - 1, sy + ts), 1)
+
+    if open_p >= 0.95:
+        inner = pygame.Rect(sx + 4, sy + 4, ts - 8, ts - 8)
+        pygame.draw.rect(surface, (4, 5, 7), inner)
+        # Suppress the door's own green LED while the breach sequence is
+        # active on THIS door — the C4 charge (drawn by _draw_volkov_breach)
+        # carries its own red blinking LED, and the two together read as
+        # random glowing noise. Show the green LED only when the door is
+        # open through normal gameplay (keycard / unlocked), not during the
+        # scripted breach.
+        breach_active_on_this_door = is_cell_door and _volkov_breach_t >= 0
+        if not breach_active_on_this_door:
+            pygame.draw.circle(surface, (60, 220, 110), (sx + ts - 10, sy + 10), 4)
+            pygame.draw.circle(surface, (30, 130, 60), (sx + ts - 10, sy + 10), 4, 1)
+        return
+
+    panel_w = int((ts - 8) * (1.0 - min(0.90, open_p)))
+    if panel_w < 4:
+        panel_w = 4
+
+    panel = pygame.Rect(sx + 4, sy + 4, panel_w, ts - 8)
+    panel_base = (52, 60, 72)
+    panel_dark = (22, 28, 36)
+    panel_hi = (82, 92, 108)
+    panel_mid = (38, 44, 54)
+
+    pygame.draw.rect(surface, panel_base, panel, border_radius=2)
+    pygame.draw.line(surface, panel_hi, (panel.x + 2, panel.y + 1), (panel.right - 2, panel.y + 1), 1)
+    pygame.draw.line(surface, panel_dark, (panel.x + 2, panel.bottom - 2), (panel.right - 2, panel.bottom - 2), 1)
+    pygame.draw.rect(surface, panel_dark, panel, 2, border_radius=2)
+
+    rib_start = panel.x + 8
+    rib_end = panel.right - 8
+    rib_spacing = max(10, (rib_end - rib_start) // 4)
+    for rx in range(rib_start, rib_end, rib_spacing):
+        if rx > panel.right - 6:
+            break
+        pygame.draw.line(surface, panel_dark, (rx, panel.y + 6), (rx, panel.bottom - 6), 3)
+        pygame.draw.line(surface, panel_hi, (rx - 1, panel.y + 6), (rx - 1, panel.bottom - 6), 1)
+
+    for frac in (0.33, 0.66):
+        bar_y = panel.y + int(panel.h * frac)
+        pygame.draw.line(surface, panel_dark, (panel.x + 4, bar_y), (panel.right - 4, bar_y), 2)
+        pygame.draw.line(surface, panel_hi, (panel.x + 4, bar_y - 1), (panel.right - 4, bar_y - 1), 1)
+
+    if panel_w > 20:
+        vp_w = min(28, panel_w - 12)
+        vp_h = 16
+        vp_x = panel.x + 6
+        vp_y = panel.y + 8
+        vp = pygame.Rect(vp_x, vp_y, vp_w, vp_h)
+        pygame.draw.rect(surface, (6, 8, 12), vp)
+        pygame.draw.rect(surface, (70, 82, 96), vp, 1)
+        bar_spacing = max(5, vp_w // 5)
+        for bx in range(vp.x + bar_spacing, vp.right - 2, bar_spacing):
+            pygame.draw.line(surface, (65, 75, 88), (bx, vp.y + 1), (bx, vp.bottom - 1), 2)
+            pygame.draw.line(surface, (105, 118, 135), (bx - 1, vp.y + 1), (bx - 1, vp.bottom - 1), 1)
+
+    if panel_w > 28:
+        kp_w = 11
+        kp_h = 20
+        kp_x = panel.right - kp_w - 6
+        kp_y = panel.centery - kp_h // 2
+        pygame.draw.rect(surface, (14, 18, 24), (kp_x, kp_y, kp_w, kp_h), border_radius=2)
+        pygame.draw.rect(surface, (55, 65, 78), (kp_x, kp_y, kp_w, kp_h), 1, border_radius=2)
+        # Same suppression as the open-state green LED above: hide the
+        # keypad LED during the breach so only the C4's red blink reads.
+        breach_active_on_this_door = is_cell_door and _volkov_breach_t >= 0
+        if not breach_active_on_this_door:
+            led_col = (220, 50, 40) if locked else (60, 230, 120)
+            pygame.draw.circle(surface, led_col, (kp_x + kp_w // 2, kp_y + 5), 2)
+        for ky in range(2):
+            for kx in range(2):
+                btn_x = kp_x + 2 + kx * 4
+                btn_y = kp_y + 10 + ky * 4
+                pygame.draw.rect(surface, (35, 42, 52), (btn_x, btn_y, 3, 3), border_radius=1)
+
+    if panel_w > 22:
+        handle_x = panel.right - 16
+        handle_y = panel.centery + 12
+        pygame.draw.rect(surface, (65, 75, 88), (handle_x - 2, handle_y - 4, 8, 12), border_radius=2)
+        pygame.draw.circle(surface, (120, 130, 145), (handle_x + 2, handle_y + 2), 3)
+        pygame.draw.circle(surface, (45, 52, 62), (handle_x + 2, handle_y + 2), 3, 1)
+
+    if locked and panel_w > 18:
+        lock_x = panel.x + 5
+        lock_y = panel.bottom - 18
+        pygame.draw.arc(surface, (180, 130, 55), pygame.Rect(lock_x + 1, lock_y, 10, 8), 0, math.pi, 2)
+        pygame.draw.rect(surface, (180, 130, 55), (lock_x, lock_y + 5, 12, 9), border_radius=1)
+        pygame.draw.rect(surface, (30, 22, 12), (lock_x + 4, lock_y + 8, 4, 4))
+
+    # Bullet damage overlay for shootable Mission 3 cell doors.
+    hits = getattr(d, "m3_shot_hits", 0) if d else 0
+    if hits > 0 and open_p < 0.95:
+        dmg_rng = random.Random((col * 113) + (row * 271))
+
+        dmg_cx = panel.right - 13 if panel_w > 26 else panel.centerx
+        dmg_cy = panel.centery + 6
+
+        for i in range(hits):
+            ox = dmg_rng.randint(-10, 10)
+            oy = dmg_rng.randint(-14, 10)
+            px = dmg_cx + ox
+            py = dmg_cy + oy
+
+            pygame.draw.circle(surface, (18, 16, 14), (px, py), 3)
+            pygame.draw.circle(surface, (120, 112, 94), (px, py), 3, 1)
+
+            ang = dmg_rng.uniform(0, math.tau)
+            ln = dmg_rng.randint(7, 15)
+            pygame.draw.line(
+                surface,
+                (18, 14, 12),
+                (px, py),
+                (px + math.cos(ang) * ln, py + math.sin(ang) * ln),
+                1,
+            )
+
+        required = getattr(d, "m3_required_shots", 6) if d else 6
+        if hits >= required - 1:
+            if (pygame.time.get_ticks() // 140) % 2 == 0:
+                pygame.draw.line(surface, (255, 180, 80), (dmg_cx - 6, dmg_cy), (dmg_cx + 7, dmg_cy - 5), 2)
+                pygame.draw.circle(surface, (255, 90, 40), (dmg_cx + 7, dmg_cy - 5), 2)
+
+    lbl_col = (180, 140, 70) if locked else (90, 200, 140)
+    lbl = font_terminal_small.render("DOOR", True, lbl_col)
+    surface.blit(lbl, (sx + ts // 2 - lbl.get_width() // 2, sy + ts - 14))
+
+
+def _render_cell_bg(target, cam_x, cam_y):
+    """Render the Mission 3 tilemap cell background (floor + walls + the
+    pulsing objective beacon) onto `target` for the given camera offset.
+
+    Factored out of game_draw so the chair-break cutscene can render the
+    REAL cell (not an invented backdrop) to an offscreen buffer and pass
+    it to the cutscenes._draw_cb_* shots as `cell_surf` — making every
+    shot recognizably the same cell at a different focal length.
+    """
+    start_col = max(0, int(cam_x // TILE_SIZE) - 1)
+    end_col = min(MAP_W, int((cam_x + WIDTH) // TILE_SIZE) + 2)
+    start_row = max(0, int(cam_y // TILE_SIZE) - 1)
+    end_row = min(MAP_H, int((cam_y + HEIGHT) // TILE_SIZE) + 2)
+
+    for row in range(start_row, end_row):
+        map_row = MISSION3_MAP[row]
+        for col in range(start_col, end_col):
+            tile = map_row[col]
+            x = col * TILE_SIZE - cam_x
+            y = row * TILE_SIZE - cam_y
+
+            if tile == "D":
+                pygame.draw.rect(target, _TILE_BASE["."], (x, y, TILE_SIZE, TILE_SIZE))
+                pygame.draw.rect(target, (25, 26, 26), (x, y, TILE_SIZE, TILE_SIZE), 1)
+                continue
+
+            base = _TILE_BASE.get(tile, (40, 36, 32))
+            pygame.draw.rect(target, base, (x, y, TILE_SIZE, TILE_SIZE))
+            if tile == "C":
+                pygame.draw.rect(target, (38, 38, 36),
+                                 (x, y, TILE_SIZE, TILE_SIZE), 1)
+            elif tile == "X":
+                pulse = 0.5 + 0.5 * math.sin(time.time() * 3.0)
+                glow = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+                pygame.draw.rect(
+                    glow,
+                    (int(60 + 80 * pulse), 120, 90, int(60 + 50 * pulse)),
+                    (0, 0, TILE_SIZE, TILE_SIZE),
+                )
+                target.blit(glow, (x, y))
+            elif tile == "S":
+                # Security glass — frosted cyan tint + faint diagonal hatch.
+                hatch = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+                hatch.fill((60, 90, 100, 60))
+                for off in range(-TILE_SIZE, TILE_SIZE, 8):
+                    pygame.draw.line(hatch, (90, 130, 140, 90),
+                                     (off, 0),
+                                     (off + TILE_SIZE, TILE_SIZE), 1)
+                target.blit(hatch, (x, y))
+            elif tile == "K":
+                is_light = (col + row) % 2 == 0
+                base = (60, 62, 66) if is_light else (45, 48, 52)
+                pygame.draw.rect(target, base, (x, y, TILE_SIZE, TILE_SIZE))
+                pygame.draw.rect(target, (35, 38, 42), (x, y, TILE_SIZE, TILE_SIZE), 1)
+            elif tile == "L":
+                base = (36, 46, 48) if (col + row) % 2 == 0 else (30, 39, 42)
+                pygame.draw.rect(target, base, (x, y, TILE_SIZE, TILE_SIZE))
+                pygame.draw.rect(target, (23, 29, 31), (x, y, TILE_SIZE, TILE_SIZE), 1)
+            elif tile == "Y":
+                base = (48, 48, 44) if (col + row) % 2 == 0 else (42, 42, 39)
+                pygame.draw.rect(target, base, (x, y, TILE_SIZE, TILE_SIZE))
+                pygame.draw.rect(target, (34, 34, 31), (x, y, TILE_SIZE, TILE_SIZE), 1)
+            elif tile == "M":
+                base = (34, 36, 34) if (col + row) % 2 == 0 else (27, 31, 30)
+                pygame.draw.rect(target, base, (x, y, TILE_SIZE, TILE_SIZE))
+                pygame.draw.rect(target, (20, 24, 23), (x, y, TILE_SIZE, TILE_SIZE), 1)
+
+
+def _screen_visible_rect(sx, sy, w, h, margin=80):
+    return not (sx > WIDTH + margin or sx + w < -margin or sy > HEIGHT + margin or sy + h < -margin)
+
+
+def _draw_bg_crate_stack(sx, sy, scale=1.0):
+    """Pure set-dressing crates/pallets for empty background space."""
+    s = scale
+    pygame.draw.ellipse(screen, (0, 0, 0), (int(sx - 28*s), int(sy + 15*s), int(82*s), int(18*s)))
+    pygame.draw.rect(screen, (54, 42, 28), (int(sx - 28*s), int(sy + 16*s), int(72*s), int(8*s)))
+    pygame.draw.rect(screen, (28, 22, 16), (int(sx - 28*s), int(sy + 16*s), int(72*s), int(8*s)), 1)
+    boxes = [(-24, -8, 27, 24, (82, 61, 36)), (4, -12, 31, 28, (92, 68, 40)),
+             (-8, -36, 29, 26, (72, 55, 35)), (25, -32, 22, 21, (80, 62, 42))]
+    for bx, by, bw, bh, col in boxes:
+        r = pygame.Rect(int(sx + bx*s), int(sy + by*s), int(bw*s), int(bh*s))
+        pygame.draw.rect(screen, col, r, border_radius=max(1, int(2*s)))
+        pygame.draw.rect(screen, (30, 22, 14), r, 1, border_radius=max(1, int(2*s)))
+        pygame.draw.line(screen, (36, 26, 16), (r.x + 3, r.y + r.h//2), (r.right - 3, r.y + r.h//2), 1)
+        pygame.draw.line(screen, (36, 26, 16), (r.x + r.w//2, r.y + 3), (r.x + r.w//2, r.bottom - 3), 1)
+
+
+def _draw_bg_barrels(sx, sy, count=3):
+    for i in range(count):
+        x = int(sx + i * 18)
+        y = int(sy + (i % 2) * 3)
+        pygame.draw.ellipse(screen, (0, 0, 0), (x - 8, y + 13, 20, 8))
+        pygame.draw.rect(screen, (54, 62, 58), (x - 7, y - 8, 16, 24), border_radius=4)
+        pygame.draw.ellipse(screen, (78, 88, 82), (x - 7, y - 10, 16, 7))
+        pygame.draw.ellipse(screen, (34, 40, 38), (x - 7, y + 11, 16, 7))
+        pygame.draw.line(screen, (96, 104, 96), (x - 6, y - 2), (x + 8, y - 2), 1)
+        pygame.draw.line(screen, (30, 34, 32), (x - 6, y + 7), (x + 8, y + 7), 1)
+
+
+def _draw_bg_cable_coil(sx, sy):
+    pygame.draw.ellipse(screen, (0, 0, 0), (int(sx - 18), int(sy + 10), 38, 10))
+    for r, col in [(16, (32, 32, 30)), (12, (68, 66, 58)), (8, (28, 28, 26))]:
+        pygame.draw.ellipse(screen, col, (int(sx - r), int(sy - r//2), r * 2, r), 2)
+    pygame.draw.line(screen, (62, 60, 54), (int(sx + 13), int(sy + 2)), (int(sx + 36), int(sy + 12)), 2)
+    pygame.draw.circle(screen, (40, 40, 38), (int(sx + 38), int(sy + 13)), 3)
+
+
+def _draw_bg_mop_bucket(sx, sy):
+    pygame.draw.ellipse(screen, (0, 0, 0), (int(sx - 17), int(sy + 14), 38, 10))
+    pygame.draw.rect(screen, (54, 58, 60), (int(sx - 11), int(sy - 2), 25, 18), border_radius=4)
+    pygame.draw.rect(screen, (92, 102, 100), (int(sx - 11), int(sy - 2), 25, 18), 1, border_radius=4)
+    pygame.draw.arc(screen, (110, 116, 112), (int(sx - 8), int(sy - 16), 20, 18), math.pi, math.tau, 2)
+    # Mop handle and head.
+    pygame.draw.line(screen, (104, 82, 46), (int(sx + 18), int(sy + 12)), (int(sx + 45), int(sy - 40)), 3)
+    for off in (-3, 0, 3):
+        pygame.draw.line(screen, (116, 112, 94), (int(sx + 18 + off), int(sy + 12)), (int(sx + 9 + off), int(sy + 25)), 1)
+
+
+def _draw_bg_service_cart(sx, sy):
+    pygame.draw.ellipse(screen, (0, 0, 0), (int(sx - 35), int(sy + 18), 78, 14))
+    pygame.draw.rect(screen, (36, 42, 42), (int(sx - 30), int(sy - 10), 66, 28), border_radius=4)
+    pygame.draw.rect(screen, (82, 90, 86), (int(sx - 30), int(sy - 10), 66, 28), 1, border_radius=4)
+    pygame.draw.line(screen, (86, 92, 88), (int(sx - 24), int(sy)), (int(sx + 30), int(sy)), 1)
+    pygame.draw.rect(screen, (72, 54, 34), (int(sx - 20), int(sy - 24), 22, 15), border_radius=2)
+    pygame.draw.rect(screen, (88, 64, 38), (int(sx + 8), int(sy - 22), 20, 13), border_radius=2)
+    for wx in (sx - 20, sx + 26):
+        pygame.draw.circle(screen, (12, 12, 12), (int(wx), int(sy + 20)), 5)
+        pygame.draw.circle(screen, (62, 62, 58), (int(wx), int(sy + 20)), 2)
+
+
+def _draw_bg_wall_pipe(x1, y1, x2, y2, color=(54, 56, 52)):
+    pygame.draw.line(screen, (20, 20, 18), (int(x1), int(y1 + 3)), (int(x2), int(y2 + 3)), 5)
+    pygame.draw.line(screen, color, (int(x1), int(y1)), (int(x2), int(y2)), 4)
+    pygame.draw.line(screen, (92, 92, 82), (int(x1), int(y1 - 1)), (int(x2), int(y2 - 1)), 1)
+    dist = max(1, int(math.hypot(x2 - x1, y2 - y1)))
+    for k in range(48, dist, 128):
+        q = k / dist
+        px = x1 + (x2 - x1) * q
+        py = y1 + (y2 - y1) * q
+        pygame.draw.rect(screen, (34, 34, 30), (int(px - 5), int(py - 5), 10, 10), border_radius=2)
+
+
+def _draw_m3_background_dressing(cam_x, cam_y):
+    """Dress the big empty negative spaces around the prison block.
+
+    These props are intentionally not lore-heavy: crates, buckets, pipes,
+    carts, vents, stains. They exist to make the place feel cared-for and
+    hand-authored without changing gameplay collision.
+    """
+    start_col = max(0, int(cam_x // TILE_SIZE) - 1)
+    end_col = min(MAP_W, int((cam_x + WIDTH) // TILE_SIZE) + 2)
+    start_row = max(0, int(cam_y // TILE_SIZE) - 1)
+    end_row = min(MAP_H, int((cam_y + HEIGHT) // TILE_SIZE) + 2)
+
+    # Subtle background floor seams/scuffs on the empty 'g' tiles.
+    for row in range(start_row, end_row):
+        for col in range(start_col, end_col):
+            if MISSION3_MAP[row][col] != "g":
+                continue
+            x = col * TILE_SIZE - cam_x
+            y = row * TILE_SIZE - cam_y
+            rng = random.Random(col * 92821 + row * 53117)
+            pygame.draw.line(screen, (34, 31, 28), (x, y), (x + TILE_SIZE, y), 1)
+            pygame.draw.line(screen, (30, 28, 25), (x, y), (x, y + TILE_SIZE), 1)
+            if rng.random() < 0.38:
+                sx = x + rng.randint(8, 56)
+                sy = y + rng.randint(8, 56)
+                pygame.draw.line(screen, (24, 22, 20), (sx, sy), (sx + rng.randint(-18, 22), sy + rng.randint(-10, 16)), 1)
+            if rng.random() < 0.18:
+                pygame.draw.ellipse(screen, (26, 24, 21), (x + rng.randint(3, 35), y + rng.randint(5, 40), rng.randint(14, 36), rng.randint(5, 15)))
+
+    # Long utility pipes following exterior walls.
+    pipe_runs = [
+        (4.4, 3.7, 38.5, 3.7),
+        (4.5, 18.0, 39.5, 18.0),
+        (8.0, 26.2, 36.0, 26.2),
+        (1.8, 13.2, 1.8, 24.8),
+        (44.0, 12.5, 44.0, 20.8),
+    ]
+    for a, b, c, d in pipe_runs:
+        x1, y1 = a * TILE_SIZE - cam_x, b * TILE_SIZE - cam_y
+        x2, y2 = c * TILE_SIZE - cam_x, d * TILE_SIZE - cam_y
+        if _screen_visible_rect(min(x1, x2), min(y1, y2), abs(x2 - x1) + 8, abs(y2 - y1) + 8):
+            _draw_bg_wall_pipe(x1, y1, x2, y2)
+
+    # Hand-placed background props in non-critical space.
+    props = [
+        ("crates", 3.6, 17.7, 0.82), ("barrels", 42.9, 13.7, 3),
+        ("coil", 43.2, 19.8, 1), ("mop", 7.8, 25.5, 1),
+        ("cart", 37.5, 27.2, 1), ("crates", 44.2, 24.5, 0.72),
+        ("barrels", 2.6, 28.3, 2), ("coil", 28.8, 4.5, 1),
+        ("mop", 12.5, 3.8, 1), ("cart", 4.8, 33.0, 1),
+        ("crates", 30.2, 30.3, 0.85), ("barrels", 39.5, 33.2, 3),
+    ]
+    for kind, tx, ty, arg in props:
+        sx = tx * TILE_SIZE - cam_x
+        sy = ty * TILE_SIZE - cam_y
+        if not _screen_visible_rect(sx - 80, sy - 80, 160, 160):
+            continue
+        if kind == "crates":
+            _draw_bg_crate_stack(sx, sy, arg)
+        elif kind == "barrels":
+            _draw_bg_barrels(sx, sy, int(arg))
+        elif kind == "coil":
+            _draw_bg_cable_coil(sx, sy)
+        elif kind == "mop":
+            _draw_bg_mop_bucket(sx, sy)
+        elif kind == "cart":
+            _draw_bg_service_cart(sx, sy)
+
+    # A couple of wall vents / floor access plates.
+    for tx, ty in ((11.5, 17.7), (33.5, 4.2), (45.0, 17.0), (5.5, 27.0)):
+        sx = int(tx * TILE_SIZE - cam_x)
+        sy = int(ty * TILE_SIZE - cam_y)
+        if not _screen_visible_rect(sx - 20, sy - 20, 50, 40):
+            continue
+        plate = pygame.Rect(sx - 17, sy - 8, 34, 16)
+        pygame.draw.rect(screen, (34, 34, 32), plate, border_radius=2)
+        pygame.draw.rect(screen, (78, 78, 70), plate, 1, border_radius=2)
+        for off in (-5, 0, 5):
+            pygame.draw.line(screen, (52, 52, 48), (plate.x + 4, plate.centery + off), (plate.right - 4, plate.centery + off), 1)
+
+
+
+def _draw_m3_corridor_and_map_details(cam_x, cam_y):
+    """Environmental detail pass for the prison-block map.
+
+    The raw tilemap made the four-cell corridor read like a flat road. This
+    pass adds authored, deterministic top-down details while staying under
+    actors/doors so collision readability is unchanged.
+    """
+    _draw_cell_block_corridor_details(cam_x, cam_y)
+    _draw_guard_room_details(cam_x, cam_y)
+    _draw_armory_details(cam_x, cam_y)
+    _draw_lower_service_wing_details(cam_x, cam_y)
+    _draw_lower_wing_wall_readability(cam_x, cam_y)
+    _draw_exit_zone_details(cam_x, cam_y)
+
+
+def _draw_cell_block_corridor_details(cam_x, cam_y):
+    """Dress the row-13..16 corridor that connects the four cells."""
+    x0 = 6 * TILE_SIZE - cam_x
+    y0 = 13 * TILE_SIZE - cam_y
+    w = 34 * TILE_SIZE
+    h = 4 * TILE_SIZE
+    if x0 > WIDTH + 80 or x0 + w < -80 or y0 > HEIGHT + 80 or y0 + h < -80:
+        return
+
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Dark institutional floor wash over the plain tile bases.
+        wash = pygame.Surface((int(w), int(h)), pygame.SRCALPHA)
+        for yy in range(int(h)):
+            p = yy / max(1, h)
+            col = (5, 6, 6, int(26 + 18 * abs(p - 0.5)))
+            pygame.draw.line(wash, col, (0, yy), (int(w), yy))
+        screen.blit(wash, (int(x0), int(y0)))
+
+        # Smaller slab seams and expansion joints — the big 64px tile grid alone
+        # looked like a placeholder road.
+        for gx in range(6 * TILE_SIZE, 40 * TILE_SIZE + 1, 32):
+            sx = gx - cam_x
+            pygame.draw.line(screen, (24, 25, 25), (sx, y0), (sx, y0 + h), 1)
+        for gy in range(13 * TILE_SIZE, 17 * TILE_SIZE + 1, 32):
+            sy = gy - cam_y
+            pygame.draw.line(screen, (23, 24, 24), (x0, sy), (x0 + w, sy), 1)
+
+        # North/south drainage gutters make it read as a corridor, not a road.
+        north = 13 * TILE_SIZE - cam_y + 8
+        south = 17 * TILE_SIZE - cam_y - 12
+        for yy, alpha in ((north, 70), (south, 82)):
+            pygame.draw.rect(screen, (11, 12, 12, alpha), (int(x0), int(yy), int(w), 10))
+            pygame.draw.line(screen, (45, 48, 45), (int(x0), int(yy)), (int(x0 + w), int(yy)), 1)
+            # Drain grating ticks.
+            for gx in range(7 * TILE_SIZE, 39 * TILE_SIZE, 48):
+                sx = gx - cam_x
+                pygame.draw.line(screen, (38, 40, 38), (sx, yy + 2), (sx + 18, yy + 2), 1)
+                pygame.draw.line(screen, (8, 9, 9), (sx, yy + 6), (sx + 18, yy + 6), 1)
+
+        # Worn traffic strip where guards patrol.
+        strip_y = 15 * TILE_SIZE - cam_y + 14
+        strip = pygame.Surface((int(w), 54), pygame.SRCALPHA)
+        pygame.draw.ellipse(strip, (0, 0, 0, 42), (-80, 6, int(w) + 160, 38))
+        pygame.draw.ellipse(strip, (32, 33, 31, 34), (-40, 12, int(w) + 80, 22))
+        screen.blit(strip, (int(x0), int(strip_y - 26)))
+
+        # Cell door thresholds and labels for the four cells.
+        cell_names = ["A-01", "A-02", "A-03", "A-04"]
+        for idx, base in enumerate((6, 14, 22, 30)):
+            door_x = (base + 3) * TILE_SIZE - cam_x
+            door_y = 12 * TILE_SIZE - cam_y
+            thresh = pygame.Rect(int(door_x), int(door_y + TILE_SIZE - 8), TILE_SIZE * 2, 22)
+            pygame.draw.rect(screen, (18, 19, 19), thresh)
+            pygame.draw.rect(screen, (66, 62, 50), thresh, 1)
+            for off in range(8, TILE_SIZE * 2 - 8, 14):
+                pygame.draw.line(screen, (72, 68, 56), (thresh.x + off, thresh.y + 3), (thresh.x + off - 10, thresh.bottom - 3), 1)
+            lbl = font_terminal_small.render(cell_names[idx], True, (78, 84, 80))
+            screen.blit(lbl, (door_x + TILE_SIZE - lbl.get_width() // 2, door_y + TILE_SIZE + 19))
+            # Small red status LEDs next to each cell door.
+            led_on = ((pygame.time.get_ticks() // 700) + idx) % 2 == 0
+            pygame.draw.circle(screen, (145 if led_on else 50, 22, 18), (int(door_x + TILE_SIZE * 2 - 10), int(door_y + TILE_SIZE + 12)), 3)
+
+        # Overhead fixtures represented by narrow reflections on the floor.
+        for i, col in enumerate((10, 16, 22, 28, 34)):
+            lx = col * TILE_SIZE + TILE_SIZE // 2 - cam_x
+            ly = 14 * TILE_SIZE - cam_y + 18
+            pygame.draw.rect(screen, (86, 90, 78), (int(lx - 35), int(ly), 70, 4), border_radius=2)
+            refl = pygame.Surface((120, 42), pygame.SRCALPHA)
+            pygame.draw.ellipse(refl, (160, 165, 135, 20), (0, 0, 120, 42))
+            screen.blit(refl, (int(lx - 60), int(ly + 5)))
+
+        # Directional stencils and hazard striping near the exit side.
+        stencil = font_terminal_small.render("CELL BLOCK A  →  EXIT", True, (74, 84, 72))
+        stencil.set_alpha(165)
+        screen.blit(stencil, (int(28 * TILE_SIZE - cam_x), int(16 * TILE_SIZE - cam_y - 20)))
+        for i in range(10):
+            sx = int(38 * TILE_SIZE - cam_x + i * 18)
+            sy = int(16 * TILE_SIZE - cam_y + 35)
+            col = (110, 92, 44) if i % 2 == 0 else (28, 28, 24)
+            pygame.draw.polygon(screen, col, [(sx, sy), (sx + 13, sy), (sx + 5, sy + 14), (sx - 8, sy + 14)])
+
+        # Deterministic grime, footprints, and a few spent casings.
+        rng = random.Random(13016)
+        for _ in range(34):
+            px = int(x0 + rng.randint(20, max(21, int(w) - 20)))
+            py = int(y0 + rng.randint(24, max(25, int(h) - 24)))
+            sw = rng.randint(14, 54)
+            sh = rng.randint(4, 16)
+            a = rng.randint(12, 34)
+            pygame.draw.ellipse(screen, (5, 6, 5, a), (px - sw // 2, py - sh // 2, sw, sh))
+        for i in range(26):
+            fx = int((9 + (i * 1.05)) * TILE_SIZE - cam_x + rng.randint(-8, 8))
+            fy = int(15 * TILE_SIZE - cam_y + 18 + math.sin(i * 0.9) * 18)
+            pygame.draw.ellipse(screen, (18, 18, 16), (fx, fy, 7, 3))
+            pygame.draw.ellipse(screen, (18, 18, 16), (fx + 8, fy + 5, 7, 3))
+        for _ in range(8):
+            cx = int((18 + rng.random() * 17) * TILE_SIZE - cam_x)
+            cy = int((14.2 + rng.random() * 1.8) * TILE_SIZE - cam_y)
+            pygame.draw.line(screen, (125, 98, 46), (cx, cy), (cx + rng.randint(3, 7), cy + rng.randint(-1, 2)), 2)
+
+        # Low cable conduit along the north wall.
+        pipe_y = int(13 * TILE_SIZE - cam_y + 24)
+        pygame.draw.line(screen, (52, 52, 48), (int(x0 + 26), pipe_y), (int(x0 + w - 26), pipe_y), 3)
+        pygame.draw.line(screen, (83, 82, 72), (int(x0 + 26), pipe_y - 1), (int(x0 + w - 26), pipe_y - 1), 1)
+        for jx in range(8 * TILE_SIZE, 39 * TILE_SIZE, 256):
+            sx = jx - cam_x
+            pygame.draw.rect(screen, (30, 30, 28), (int(sx), pipe_y - 5, 10, 10), border_radius=2)
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_guard_room_details(cam_x, cam_y):
+    """Dress the large guard/control room so it stops reading as an empty box."""
+    x0 = 10 * TILE_SIZE - cam_x
+    y0 = 18 * TILE_SIZE - cam_y
+    w = 26 * TILE_SIZE
+    h = 7 * TILE_SIZE
+    if x0 > WIDTH + 80 or x0 + w < -80 or y0 > HEIGHT + 80 or y0 + h < -80:
+        return
+
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Fine floor seams.
+        for gx in range(11 * TILE_SIZE, 35 * TILE_SIZE, 32):
+            sx = gx - cam_x
+            pygame.draw.line(screen, (22, 28, 29), (sx, y0 + TILE_SIZE), (sx, y0 + h - TILE_SIZE), 1)
+        for gy in range(19 * TILE_SIZE, 24 * TILE_SIZE, 32):
+            sy = gy - cam_y
+            pygame.draw.line(screen, (22, 28, 29), (x0 + TILE_SIZE, sy), (x0 + w - TILE_SIZE, sy), 1)
+
+        # North wall console bank.
+        console_y = int(19 * TILE_SIZE - cam_y + 8)
+        for idx, tx in enumerate((13, 17, 21, 25, 29, 33)):
+            sx = int(tx * TILE_SIZE - cam_x + 8)
+            pygame.draw.rect(screen, (18, 23, 24), (sx, console_y, 44, 24), border_radius=3)
+            pygame.draw.rect(screen, (58, 72, 72), (sx, console_y, 44, 24), 1, border_radius=3)
+            pygame.draw.rect(screen, (12, 20, 18), (sx + 5, console_y + 5, 22, 10))
+            led_col = (75, 210, 130) if idx % 3 else (200, 55, 42)
+            pygame.draw.circle(screen, led_col, (sx + 35, console_y + 9), 2)
+            pygame.draw.line(screen, (42, 76, 58), (sx + 6, console_y + 18), (sx + 25, console_y + 18), 1)
+
+        # Central briefing table / map. Low visual prop, not heavy cover.
+        table_cx = int(23 * TILE_SIZE - cam_x)
+        table_cy = int(21.4 * TILE_SIZE - cam_y)
+        pygame.draw.ellipse(screen, (0, 0, 0, 76), (table_cx - 100, table_cy + 22, 200, 24))
+        table = pygame.Rect(table_cx - 92, table_cy - 20, 184, 44)
+        pygame.draw.rect(screen, (46, 45, 39), table, border_radius=5)
+        pygame.draw.rect(screen, (92, 82, 65), table, 2, border_radius=5)
+        pygame.draw.rect(screen, (32, 42, 38), (table.x + 15, table.y + 8, 70, 26), border_radius=2)
+        pygame.draw.line(screen, (92, 130, 92), (table.x + 22, table.y + 20), (table.x + 78, table.y + 14), 1)
+        pygame.draw.line(screen, (120, 80, 60), (table.x + 42, table.y + 10), (table.x + 62, table.y + 33), 1)
+        for px, py in ((table.x + 106, table.y + 10), (table.x + 124, table.y + 14), (table.x + 145, table.y + 9)):
+            pygame.draw.rect(screen, (115, 105, 78), (px, py, 15, 10))
+            pygame.draw.line(screen, (62, 54, 38), (px + 2, py + 4), (px + 12, py + 4), 1)
+
+        # Chairs around the table.
+        for sx, sy, rot in ((table.x - 16, table.y + 2, 0), (table.right + 2, table.y + 2, 0),
+                            (table.centerx - 10, table.y - 25, 1), (table.centerx - 10, table.bottom + 6, 1)):
+            pygame.draw.ellipse(screen, (0, 0, 0, 55), (sx - 2, sy + 12, 24, 8))
+            pygame.draw.rect(screen, (30, 34, 34), (sx, sy, 20, 18), border_radius=3)
+            pygame.draw.rect(screen, (68, 72, 68), (sx, sy, 20, 18), 1, border_radius=3)
+            if rot:
+                pygame.draw.line(screen, (52, 54, 50), (sx + 3, sy + 4), (sx + 17, sy + 4), 1)
+            else:
+                pygame.draw.line(screen, (52, 54, 50), (sx + 4, sy + 3), (sx + 4, sy + 15), 1)
+
+        # Lockers / weapon rack along south wall.
+        rack_y = int(23 * TILE_SIZE - cam_y + 22)
+        for tx in (13, 14, 15):
+            sx = int(tx * TILE_SIZE - cam_x + 8)
+            pygame.draw.rect(screen, (32, 40, 38), (sx, rack_y, 34, 42), border_radius=2)
+            pygame.draw.rect(screen, (72, 82, 76), (sx, rack_y, 34, 42), 1, border_radius=2)
+            pygame.draw.line(screen, (18, 24, 24), (sx + 17, rack_y + 3), (sx + 17, rack_y + 39), 1)
+            pygame.draw.circle(screen, (110, 95, 50), (sx + 13, rack_y + 22), 2)
+            pygame.draw.circle(screen, (110, 95, 50), (sx + 21, rack_y + 22), 2)
+        wr_x = int(31 * TILE_SIZE - cam_x + 8)
+        wr_y = rack_y + 7
+        pygame.draw.rect(screen, (24, 24, 22), (wr_x, wr_y, 112, 24), border_radius=2)
+        pygame.draw.rect(screen, (82, 76, 62), (wr_x, wr_y, 112, 24), 1, border_radius=2)
+        for i in range(4):
+            rx = wr_x + 12 + i * 24
+            pygame.draw.line(screen, (74, 78, 76), (rx, wr_y + 5), (rx + 14, wr_y + 17), 2)
+            pygame.draw.circle(screen, (24, 24, 22), (rx + 14, wr_y + 17), 2)
+
+        # Scattered paperwork/grime.
+        rng = random.Random(2318)
+        for _ in range(18):
+            px = int(x0 + TILE_SIZE + rng.randint(0, int(w - TILE_SIZE * 2)))
+            py = int(y0 + TILE_SIZE + rng.randint(0, int(h - TILE_SIZE * 2)))
+            if rng.random() < 0.45:
+                pygame.draw.rect(screen, (104, 96, 70), (px, py, rng.randint(8, 14), rng.randint(5, 9)))
+                pygame.draw.line(screen, (58, 52, 38), (px + 2, py + 3), (px + 8, py + 3), 1)
+            else:
+                pygame.draw.ellipse(screen, (0, 0, 0, rng.randint(14, 34)), (px - 14, py - 5, rng.randint(18, 45), rng.randint(6, 18)))
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_k9_wall_stand(surface, x, y, acquired=False, scale=1.0):
+    """Small top-down wall rack for the K-9 SMG."""
+    s = scale
+    # Back plate / pegboard.
+    pygame.draw.rect(surface, (18, 24, 24), (int(x - 38*s), int(y - 18*s), int(76*s), int(36*s)), border_radius=max(1, int(3*s)))
+    pygame.draw.rect(surface, (70, 86, 80), (int(x - 38*s), int(y - 18*s), int(76*s), int(36*s)), 1, border_radius=max(1, int(3*s)))
+    for px in range(-28, 33, 14):
+        for py in (-8, 6):
+            pygame.draw.circle(surface, (36, 48, 44), (int(x + px*s), int(y + py*s)), max(1, int(1*s)))
+    # Hooks.
+    for hx in (-20, 20):
+        pygame.draw.line(surface, (120, 124, 110), (int(x + hx*s), int(y - 3*s)), (int(x + hx*s), int(y + 9*s)), max(1, int(2*s)))
+        pygame.draw.arc(surface, (120, 124, 110), (int(x + hx*s - 5*s), int(y + 4*s), int(10*s), int(8*s)), 0, math.pi, max(1, int(1*s)))
+    if acquired:
+        empty = font_terminal_small.render("EMPTY", True, (80, 90, 84))
+        surface.blit(empty, (int(x - empty.get_width() // 2), int(y - 6*s)))
+        return
+    # K-9 silhouette on rack: suppressor + receiver + stick mag.
+    pygame.draw.line(surface, (22, 26, 26), (int(x - 28*s), int(y - 2*s)), (int(x + 21*s), int(y - 2*s)), max(2, int(5*s)))
+    pygame.draw.line(surface, (78, 98, 90), (int(x - 28*s), int(y - 5*s)), (int(x + 12*s), int(y - 5*s)), max(1, int(1*s)))
+    pygame.draw.line(surface, (40, 46, 46), (int(x + 18*s), int(y - 2*s)), (int(x + 35*s), int(y - 2*s)), max(2, int(5*s)))
+    pygame.draw.line(surface, (100, 116, 108), (int(x + 20*s), int(y - 5*s)), (int(x + 34*s), int(y - 5*s)), max(1, int(1*s)))
+    pygame.draw.rect(surface, (18, 20, 20), (int(x - 3*s), int(y + 1*s), int(7*s), int(18*s)), border_radius=max(1, int(2*s)))
+    pygame.draw.rect(surface, (82, 90, 86), (int(x - 3*s), int(y + 1*s), int(7*s), int(18*s)), 1, border_radius=max(1, int(2*s)))
+    pygame.draw.line(surface, (55, 62, 60), (int(x - 26*s), int(y + 2*s)), (int(x - 40*s), int(y + 7*s)), max(1, int(2*s)))
+
+
+def _draw_armory_details(cam_x, cam_y):
+    """Draw the armory room and the K-9 weapon stand."""
+    x0 = 36 * TILE_SIZE - cam_x
+    y0 = 18 * TILE_SIZE - cam_y
+    w = 9 * TILE_SIZE
+    h = 7 * TILE_SIZE
+    if x0 > WIDTH + 80 or x0 + w < -80 or y0 > HEIGHT + 80 or y0 + h < -80:
+        return
+
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Floor overlay + fine tile grid.
+        interior = pygame.Rect(int(37 * TILE_SIZE - cam_x), int(19 * TILE_SIZE - cam_y), 7 * TILE_SIZE, 5 * TILE_SIZE)
+        pygame.draw.rect(screen, (28, 35, 35), interior)
+        for gx in range(interior.x, interior.right + 1, 16):
+            pygame.draw.line(screen, (20, 25, 25), (gx, interior.y), (gx, interior.bottom), 1)
+        for gy in range(interior.y, interior.bottom + 1, 16):
+            pygame.draw.line(screen, (20, 25, 25), (interior.x, gy), (interior.right, gy), 1)
+        pygame.draw.rect(screen, (0, 0, 0, 75), (int(x0), int(y0), int(w), int(h)), 2)
+
+        # North-wall slat racks and empty hooks.
+        rack_y = int(19 * TILE_SIZE - cam_y + 8)
+        for tx in (37.7, 39.2, 42.6):
+            sx = int(tx * TILE_SIZE - cam_x)
+            pygame.draw.rect(screen, (20, 25, 25), (sx, rack_y, 70, 30), border_radius=3)
+            pygame.draw.rect(screen, (65, 78, 72), (sx, rack_y, 70, 30), 1, border_radius=3)
+            for yy in (rack_y + 8, rack_y + 18):
+                pygame.draw.line(screen, (44, 54, 50), (sx + 6, yy), (sx + 64, yy), 1)
+            for hx in (sx + 16, sx + 36, sx + 56):
+                pygame.draw.line(screen, (112, 110, 96), (hx, rack_y + 13), (hx, rack_y + 22), 1)
+
+        # K-9 wall stand.
+        stand_x = _K9_STAND_COL * TILE_SIZE + TILE_SIZE // 2 - cam_x
+        stand_y = _K9_STAND_ROW * TILE_SIZE + TILE_SIZE // 2 - cam_y
+        _draw_k9_wall_stand(screen, stand_x, stand_y, getattr(STATE, "k9_unlocked", False))
+
+        # Ammo cabinets and crates.
+        for tx, ty, label in ((38.0, 22.6, "9MM"), (42.2, 22.6, "SMG")):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (42, 47, 43), (sx, sy, 54, 42), border_radius=3)
+            pygame.draw.rect(screen, (94, 102, 90), (sx, sy, 54, 42), 1, border_radius=3)
+            pygame.draw.line(screen, (22, 25, 23), (sx + 27, sy + 4), (sx + 27, sy + 38), 1)
+            txt = font_terminal_small.render(label, True, (120, 150, 120))
+            screen.blit(txt, (sx + 27 - txt.get_width() // 2, sy + 14))
+            pygame.draw.circle(screen, (120, 95, 45), (sx + 22, sy + 30), 2)
+            pygame.draw.circle(screen, (120, 95, 45), (sx + 32, sy + 30), 2)
+
+        # Soft green rack light over the weapon wall.
+        light = pygame.Surface((210, 95), pygame.SRCALPHA)
+        pygame.draw.ellipse(light, (90, 150, 120, 28), light.get_rect())
+        screen.blit(light, (int(stand_x - 105), int(stand_y - 58)), special_flags=pygame.BLEND_RGBA_ADD)
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_wall_segment(surface, x1, y1, x2, y2, *, vertical=False, accent=(84, 86, 78)):
+    """Chunky top-down wall edge used to make room boundaries readable."""
+    pygame.draw.line(surface, (5, 5, 5), (int(x1), int(y1)), (int(x2), int(y2)), 10)
+    pygame.draw.line(surface, (34, 36, 34), (int(x1), int(y1)), (int(x2), int(y2)), 7)
+    if vertical:
+        pygame.draw.line(surface, accent, (int(x1) + 2, int(y1)), (int(x2) + 2, int(y2)), 2)
+    else:
+        pygame.draw.line(surface, accent, (int(x1), int(y1) + 2), (int(x2), int(y2) + 2), 2)
+
+
+def _draw_wall_jamb(surface, x, y, *, vertical=True, accent=(110, 100, 76)):
+    """Short bright door-jamb marker at a doorway gap."""
+    if vertical:
+        pygame.draw.rect(surface, (10, 10, 9), (int(x) - 4, int(y) - 16, 8, 32))
+        pygame.draw.rect(surface, accent, (int(x) - 3, int(y) - 14, 6, 28), 1)
+    else:
+        pygame.draw.rect(surface, (10, 10, 9), (int(x) - 16, int(y) - 4, 32, 8))
+        pygame.draw.rect(surface, accent, (int(x) - 14, int(y) - 3, 28, 6), 1)
+
+
+def _draw_room_label_plate(text, cx, cy, color):
+    """Sized to the label text so names never clip inside a fixed plate."""
+    lbl = font_terminal_small.render(text, True, color)
+    pad_x, pad_y = 10, 5
+    w = max(40, lbl.get_width() + pad_x * 2)
+    h = lbl.get_height() + pad_y * 2
+    plate = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(plate, (0, 0, 0, 160), plate.get_rect(), border_radius=3)
+    pygame.draw.rect(plate, (*color, 140), plate.get_rect(), 1, border_radius=3)
+    plate.blit(lbl, (pad_x, pad_y))
+    # Clamp to screen so edge rooms don't get cut off.
+    x = int(cx - w // 2)
+    y = int(cy - h // 2)
+    x = max(4, min(WIDTH - w - 4, x))
+    y = max(4, min(HEIGHT - h - 4, y))
+    screen.blit(plate, (x, y))
+
+
+def _draw_rect_room_frame(cam_x, cam_y, col, row, w_tiles, h_tiles, *, gaps_top=(), gaps_bottom=(), gaps_left=(), gaps_right=(), label=None, label_col=(130, 150, 140)):
+    x = col * TILE_SIZE - cam_x
+    y = row * TILE_SIZE - cam_y
+    w = w_tiles * TILE_SIZE
+    h = h_tiles * TILE_SIZE
+    if not _screen_visible_rect(x, y, w, h, margin=120):
+        return
+
+    def draw_horizontal(ypos, gaps):
+        intervals = []
+        for a, b in gaps:
+            intervals.append((a * TILE_SIZE - cam_x, (b + 1) * TILE_SIZE - cam_x))
+        intervals.sort()
+        cur = x
+        for a, b in intervals:
+            if a > cur:
+                _draw_wall_segment(screen, cur, ypos, a, ypos, vertical=False)
+            _draw_wall_jamb(screen, a, ypos, vertical=True)
+            _draw_wall_jamb(screen, b, ypos, vertical=True)
+            cur = max(cur, b)
+        if cur < x + w:
+            _draw_wall_segment(screen, cur, ypos, x + w, ypos, vertical=False)
+
+    def draw_vertical(xpos, gaps):
+        intervals = []
+        for a, b in gaps:
+            intervals.append((a * TILE_SIZE - cam_y, (b + 1) * TILE_SIZE - cam_y))
+        intervals.sort()
+        cur = y
+        for a, b in intervals:
+            if a > cur:
+                _draw_wall_segment(screen, xpos, cur, xpos, a, vertical=True)
+            _draw_wall_jamb(screen, xpos, a, vertical=False)
+            _draw_wall_jamb(screen, xpos, b, vertical=False)
+            cur = max(cur, b)
+        if cur < y + h:
+            _draw_wall_segment(screen, xpos, cur, xpos, y + h, vertical=True)
+
+    draw_horizontal(y, gaps_top)
+    draw_horizontal(y + h, gaps_bottom)
+    draw_vertical(x, gaps_left)
+    draw_vertical(x + w, gaps_right)
+
+    if label:
+        _draw_room_label_plate(label, x + w // 2, y + 24, label_col)
+
+
+def _draw_lower_wing_wall_readability(cam_x, cam_y):
+    """Strong wall/door outlines for the lower rooms."""
+    _draw_rect_room_frame(
+        cam_x, cam_y, 3, 25, 43, 6,
+        gaps_top=[(22, 23)],
+        gaps_bottom=[(10, 11), (23, 24), (36, 37)],
+        label="SERVICE SPINE", label_col=(120, 135, 120),
+    )
+    _draw_rect_room_frame(
+        cam_x, cam_y, 4, 31, 14, 12,
+        gaps_top=[(10, 11)],
+        label="LAUNDRY", label_col=(120, 170, 180),
+    )
+    _draw_rect_room_frame(
+        cam_x, cam_y, 18, 31, 13, 13,
+        gaps_top=[(23, 24)],
+        label="REC YARD", label_col=(165, 165, 120),
+    )
+    _draw_rect_room_frame(
+        cam_x, cam_y, 31, 31, 14, 12,
+        gaps_top=[(36, 37)],
+        label="MAINTENANCE", label_col=(180, 150, 90),
+    )
+
+
+
+def _draw_lower_service_wing_details(cam_x, cam_y):
+    """Dress the optional lower wing: service spine, laundry, yard, maintenance."""
+    _draw_lower_service_spine_details(cam_x, cam_y)
+    _draw_laundry_room_details(cam_x, cam_y)
+    _draw_exercise_yard_details(cam_x, cam_y)
+    _draw_maintenance_wing_details(cam_x, cam_y)
+
+
+def _draw_lower_service_spine_details(cam_x, cam_y):
+    x0 = 3 * TILE_SIZE - cam_x
+    y0 = 25 * TILE_SIZE - cam_y
+    w = 43 * TILE_SIZE
+    h = 6 * TILE_SIZE
+    if not _screen_visible_rect(x0, y0, w, h):
+        return
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Central worn strip and service arrows.
+        strip_y = 27 * TILE_SIZE - cam_y + 22
+        strip = pygame.Surface((int(w), 66), pygame.SRCALPHA)
+        pygame.draw.ellipse(strip, (0, 0, 0, 44), (-120, 8, int(w) + 240, 38))
+        screen.blit(strip, (int(x0), int(strip_y - 28)))
+        pygame.draw.line(screen, (78, 82, 72), (int(x0 + 36), int(y0 + 20)), (int(x0 + w - 36), int(y0 + 20)), 3)
+        pygame.draw.line(screen, (34, 36, 32), (int(x0 + 36), int(y0 + 24)), (int(x0 + w - 36), int(y0 + 24)), 1)
+        # Direction labels above the three doorways.
+        for label, tx, col in (
+            ("LAUNDRY", 10.5, (130, 175, 185)),
+            ("YARD", 23.5, (160, 170, 135)),
+            ("MAINT", 36.5, (175, 155, 105)),
+        ):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(30 * TILE_SIZE - cam_y - 24)
+            pygame.draw.rect(screen, (8, 10, 10, 150), (sx - 44, sy - 6, 88, 20), border_radius=2)
+            txt = font_terminal_small.render(label, True, col)
+            screen.blit(txt, (sx - txt.get_width() // 2, sy - 2))
+            pygame.draw.polygon(screen, col, [(sx, sy + 20), (sx - 7, sy + 11), (sx + 7, sy + 11)])
+        # Wall pipes and ceiling light strips.
+        for tx in (7, 14, 21, 28, 35, 42):
+            lx = int(tx * TILE_SIZE - cam_x)
+            ly = int(27 * TILE_SIZE - cam_y + 8)
+            pygame.draw.rect(screen, (100, 104, 88), (lx - 34, ly, 68, 4), border_radius=2)
+            glow = pygame.Surface((120, 38), pygame.SRCALPHA)
+            pygame.draw.ellipse(glow, (150, 150, 120, 18), glow.get_rect())
+            screen.blit(glow, (lx - 60, ly + 5))
+        # Utility junction boxes on the walls.
+        for tx, ty, green in ((5.2, 26.4, True), (18.4, 29.2, False), (32.8, 26.5, True), (43.2, 28.8, False)):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (22, 28, 27), (sx - 15, sy - 9, 30, 18), border_radius=2)
+            pygame.draw.rect(screen, (62, 70, 64), (sx - 15, sy - 9, 30, 18), 1, border_radius=2)
+            pygame.draw.circle(screen, (90, 220, 130) if green else (190, 55, 45), (sx + 9, sy - 1), 2)
+        # Floor scuffs.
+        rng = random.Random(2751)
+        for _ in range(28):
+            px = int(x0 + rng.randint(20, max(21, int(w) - 20)))
+            py = int(y0 + rng.randint(22, max(23, int(h) - 22)))
+            pygame.draw.line(screen, (23, 23, 21), (px, py), (px + rng.randint(-28, 28), py + rng.randint(-8, 12)), 1)
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_laundry_room_details(cam_x, cam_y):
+    x0 = 4 * TILE_SIZE - cam_x
+    y0 = 31 * TILE_SIZE - cam_y
+    w = 14 * TILE_SIZE
+    h = 12 * TILE_SIZE
+    if not _screen_visible_rect(x0, y0, w, h):
+        return
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Cohesive room base: a damp blue-grey processing floor that hides the
+        # raw 64px tile grid. Big shapes first, detail second.
+        pygame.draw.rect(screen, (27, 38, 41), (int(x0), int(y0), int(w), int(h)))
+        # Slight wall-to-floor falloff.
+        shade = pygame.Surface((int(w), int(h)), pygame.SRCALPHA)
+        for yy in range(int(h)):
+            p = yy / max(1, h)
+            pygame.draw.line(shade, (0, 0, 0, int(18 + 22 * abs(p - 0.45))), (0, yy), (int(w), yy))
+        screen.blit(shade, (int(x0), int(y0)))
+        # North service wall / tile backsplash.
+        pygame.draw.rect(screen, (34, 48, 50), (int(x0 + 12), int(y0 + 18), int(w - 24), 42), border_radius=3)
+        pygame.draw.line(screen, (82, 98, 96), (int(x0 + 20), int(y0 + 55)), (int(x0 + w - 20), int(y0 + 55)), 2)
+        # Wet tile shine and drains.
+        for tx in range(int(x0 + TILE_SIZE), int(x0 + w - TILE_SIZE), 32):
+            pygame.draw.line(screen, (26, 34, 36), (tx, int(y0 + TILE_SIZE)), (tx, int(y0 + h - TILE_SIZE)), 1)
+        for ty in range(int(y0 + TILE_SIZE), int(y0 + h - TILE_SIZE), 32):
+            pygame.draw.line(screen, (26, 34, 36), (int(x0 + TILE_SIZE), ty), (int(x0 + w - TILE_SIZE), ty), 1)
+        # Washer/dryer bank on west wall.
+        for i in range(5):
+            sx = int((5.0 + i * 1.15) * TILE_SIZE - cam_x)
+            sy = int(33.0 * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (54, 62, 64), (sx, sy, 44, 42), border_radius=4)
+            pygame.draw.rect(screen, (110, 126, 126), (sx, sy, 44, 42), 1, border_radius=4)
+            pygame.draw.circle(screen, (18, 24, 25), (sx + 22, sy + 22), 13)
+            pygame.draw.circle(screen, (86, 110, 112), (sx + 22, sy + 22), 13, 2)
+            pygame.draw.rect(screen, (18, 22, 22), (sx + 7, sy + 5, 13, 5), border_radius=1)
+            pygame.draw.circle(screen, (90, 210, 130), (sx + 34, sy + 7), 2)
+        # Folding tables / uniform racks.
+        table = pygame.Rect(int(10.2 * TILE_SIZE - cam_x), int(36.0 * TILE_SIZE - cam_y), 176, 40)
+        pygame.draw.ellipse(screen, (0, 0, 0, 75), (table.x - 8, table.y + 20, table.w + 16, 22))
+        pygame.draw.rect(screen, (70, 68, 58), table, border_radius=4)
+        pygame.draw.rect(screen, (126, 118, 96), table, 2, border_radius=4)
+        for px, py, col in ((table.x + 15, table.y + 9, (150, 150, 142)), (table.x + 48, table.y + 14, (70, 90, 110)),
+                            (table.x + 88, table.y + 8, (120, 110, 85)), (table.x + 128, table.y + 13, (95, 105, 90))):
+            pygame.draw.rect(screen, col, (px, py, 28, 12), border_radius=2)
+            pygame.draw.line(screen, (40, 40, 38), (px + 3, py + 6), (px + 25, py + 6), 1)
+        # Hanging uniform rail.
+        rail_y = int(39.0 * TILE_SIZE - cam_y)
+        rail_x1 = int(6.0 * TILE_SIZE - cam_x)
+        rail_x2 = int(15.8 * TILE_SIZE - cam_x)
+        pygame.draw.line(screen, (90, 94, 88), (rail_x1, rail_y), (rail_x2, rail_y), 3)
+        rng = random.Random(3301)
+        for i in range(14):
+            hx = rail_x1 + 16 + i * 38
+            col = rng.choice([(36, 50, 58), (46, 52, 48), (62, 58, 44), (34, 44, 40)])
+            pygame.draw.line(screen, (130, 130, 120), (hx, rail_y), (hx - 6, rail_y + 8), 1)
+            pygame.draw.rect(screen, col, (hx - 12, rail_y + 8, 24, 28), border_radius=3)
+            pygame.draw.rect(screen, (14, 16, 16), (hx - 12, rail_y + 8, 24, 28), 1, border_radius=3)
+        # Overhead steam pipe / ductwork ties this room into the service spine.
+        pipe_y = int(32.15 * TILE_SIZE - cam_y)
+        pygame.draw.line(screen, (46, 50, 48), (int(x0 + 46), pipe_y), (int(x0 + w - 46), pipe_y), 6)
+        pygame.draw.line(screen, (106, 112, 104), (int(x0 + 46), pipe_y - 2), (int(x0 + w - 46), pipe_y - 2), 1)
+        for valve_x in (6.8, 12.7, 16.0):
+            vx = int(valve_x * TILE_SIZE - cam_x)
+            pygame.draw.circle(screen, (126, 72, 46), (vx, pipe_y), 8, 2)
+            pygame.draw.line(screen, (126, 72, 46), (vx - 6, pipe_y), (vx + 6, pipe_y), 1)
+            pygame.draw.line(screen, (126, 72, 46), (vx, pipe_y - 6), (vx, pipe_y + 6), 1)
+
+        # Linen cages / sorting bins along the east wall: readable structure,
+        # not just loose props.
+        for tx, ty, tag in ((15.2, 37.3, "LINEN"), (15.2, 39.3, "IPA")):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            cage = pygame.Rect(sx - 34, sy - 24, 68, 48)
+            pygame.draw.rect(screen, (24, 30, 30), cage, border_radius=3)
+            pygame.draw.rect(screen, (78, 88, 84), cage, 2, border_radius=3)
+            for gx in range(cage.x + 10, cage.right - 6, 10):
+                pygame.draw.line(screen, (48, 56, 54), (gx, cage.y + 4), (gx, cage.bottom - 4), 1)
+            for gy in range(cage.y + 12, cage.bottom - 4, 10):
+                pygame.draw.line(screen, (48, 56, 54), (cage.x + 4, gy), (cage.right - 4, gy), 1)
+            lbl = font_terminal_small.render(tag, True, (120, 150, 145))
+            screen.blit(lbl, (cage.centerx - lbl.get_width() // 2, cage.y + 5))
+            # Folded cloth silhouettes inside.
+            for i in range(3):
+                pygame.draw.rect(screen, (88 + i * 12, 94 + i * 10, 92 + i * 8),
+                                 (cage.x + 8 + i * 16, cage.bottom - 15 - i * 2, 14, 7), border_radius=1)
+
+        # Wet floor lane with footprints from machine bank to folding table.
+        wet = pygame.Surface((int(w), int(h)), pygame.SRCALPHA)
+        pygame.draw.ellipse(wet, (10, 22, 24, 42), (int(w * 0.22), int(h * 0.44), int(w * 0.48), 70))
+        screen.blit(wet, (int(x0), int(y0)))
+        for i in range(18):
+            fx = int((6.1 + i * 0.42) * TILE_SIZE - cam_x)
+            fy = int((35.0 + math.sin(i * 0.8) * 0.45) * TILE_SIZE - cam_y)
+            pygame.draw.ellipse(screen, (14, 22, 22), (fx, fy, 8, 3))
+            pygame.draw.ellipse(screen, (14, 22, 22), (fx + 8, fy + 5, 8, 3))
+
+        # Wall signage / floor stencil, purely flavor but anchored to the room.
+        sign = font_terminal_small.render("UNIFORM PROCESSING", True, (95, 135, 140))
+        screen.blit(sign, (int(8.0 * TILE_SIZE - cam_x), int(32.55 * TILE_SIZE - cam_y)))
+        arrow = font_terminal.render("→", True, (90, 125, 130))
+        arrow.set_alpha(150)
+        screen.blit(arrow, (int(13.4 * TILE_SIZE - cam_x), int(32.45 * TILE_SIZE - cam_y)))
+
+        # Laundry carts.
+        for tx, ty in ((6.1, 41.0), (15.2, 34.9)):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (38, 44, 44), (sx - 22, sy - 12, 44, 26), border_radius=4)
+            pygame.draw.rect(screen, (86, 94, 90), (sx - 22, sy - 12, 44, 26), 1, border_radius=4)
+            pygame.draw.line(screen, (74, 84, 82), (sx - 20, sy - 3), (sx + 20, sy - 3), 1)
+            for wx in (-14, 14):
+                pygame.draw.circle(screen, (8, 8, 8), (sx + wx, sy + 16), 4)
+        pygame.draw.rect(screen, (0, 0, 0, 70), (x0, y0, w, h), 2)
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_exercise_yard_details(cam_x, cam_y):
+    x0 = 18 * TILE_SIZE - cam_x
+    y0 = 31 * TILE_SIZE - cam_y
+    w = 13 * TILE_SIZE
+    h = 13 * TILE_SIZE
+    if not _screen_visible_rect(x0, y0, w, h):
+        return
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Cohesive exercise-yard base. Make the whole room read as one worn
+        # concrete rec block instead of raw tile grid plus random props.
+        pygame.draw.rect(screen, (42, 43, 39), (int(x0), int(y0), int(w), int(h)))
+        # Large, uneven concrete slabs.
+        for tx in range(int(x0 + TILE_SIZE), int(x0 + w - TILE_SIZE), 96):
+            pygame.draw.line(screen, (34, 35, 32), (tx, int(y0 + 18)), (tx, int(y0 + h - 18)), 2)
+        for ty in range(int(y0 + TILE_SIZE), int(y0 + h - TILE_SIZE), 96):
+            pygame.draw.line(screen, (34, 35, 32), (int(x0 + 18), ty), (int(x0 + w - 18), ty), 2)
+        # Darkened perimeter under the fence/walls.
+        edge = pygame.Surface((int(w), int(h)), pygame.SRCALPHA)
+        pygame.draw.rect(edge, (0, 0, 0, 80), (0, 0, int(w), 22))
+        pygame.draw.rect(edge, (0, 0, 0, 70), (0, int(h) - 24, int(w), 24))
+        pygame.draw.rect(edge, (0, 0, 0, 55), (0, 0, 22, int(h)))
+        pygame.draw.rect(edge, (0, 0, 0, 55), (int(w) - 22, 0, 22, int(h)))
+        screen.blit(edge, (int(x0), int(y0)))
+        # Concrete court markings.
+        cx = int(x0 + w / 2)
+        cy = int(y0 + h / 2)
+        pygame.draw.rect(screen, (62, 62, 56), (int(x0 + TILE_SIZE), int(y0 + TILE_SIZE), int(w - TILE_SIZE*2), int(h - TILE_SIZE*2)), 2)
+        pygame.draw.line(screen, (70, 70, 62), (cx, int(y0 + TILE_SIZE)), (cx, int(y0 + h - TILE_SIZE)), 1)
+        pygame.draw.circle(screen, (70, 70, 62), (cx, cy), 44, 1)
+        # Chain-link fence is suggested at the edges only. A full-room diagonal
+        # pattern looked very procedural/noisy.
+        fence = pygame.Surface((int(w), int(h)), pygame.SRCALPHA)
+        for off in range(-80, int(w) + 80, 18):
+            pygame.draw.line(fence, (92, 92, 82, 26), (off, 0), (off + 80, 80), 1)
+            pygame.draw.line(fence, (92, 92, 82, 18), (off, int(h) - 80), (off + 80, int(h)), 1)
+        for off in range(-80, int(h) + 80, 18):
+            pygame.draw.line(fence, (92, 92, 82, 20), (0, off), (80, off + 80), 1)
+            pygame.draw.line(fence, (92, 92, 82, 20), (int(w) - 80, off), (int(w), off + 80), 1)
+        screen.blit(fence, (int(x0), int(y0)))
+        # Pull-up bars / benches.
+        for tx, ty in ((20.4, 35.8), (27.8, 35.8)):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            pygame.draw.line(screen, (28, 30, 30), (sx - 20, sy + 30), (sx - 20, sy - 28), 4)
+            pygame.draw.line(screen, (28, 30, 30), (sx + 20, sy + 30), (sx + 20, sy - 28), 4)
+            pygame.draw.line(screen, (90, 92, 86), (sx - 24, sy - 28), (sx + 24, sy - 28), 4)
+        for tx, ty in ((21.5, 41.0), (27.1, 41.0)):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (44, 42, 36), (sx - 38, sy - 7, 76, 14), border_radius=3)
+            pygame.draw.rect(screen, (82, 78, 62), (sx - 38, sy - 7, 76, 14), 1, border_radius=3)
+        # Wall-mounted floodlights and caged skylight shadows make it feel like
+        # a real rec block instead of a flat concrete rectangle.
+        for tx, ty, aim in ((19.2, 32.0, 0.8), (29.2, 32.0, 2.3), (19.2, 42.2, -0.4), (29.2, 42.2, -2.7)):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (28, 30, 28), (sx - 10, sy - 6, 20, 12), border_radius=2)
+            pygame.draw.circle(screen, (112, 116, 96), (sx, sy), 5)
+            cone = pygame.Surface((120, 80), pygame.SRCALPHA)
+            # Very soft cone — bright triangle spotlights looked like placeholder art.
+            pygame.draw.polygon(cone, (170, 170, 125, 9), [(60, 4), (12, 76), (108, 76)])
+            pygame.draw.ellipse(cone, (170, 170, 125, 12), (18, 46, 84, 26))
+            cone = pygame.transform.rotate(cone, math.degrees(aim))
+            screen.blit(cone, (sx - cone.get_width() // 2, sy - cone.get_height() // 2), special_flags=pygame.BLEND_RGBA_ADD)
+
+        # Painted court blocks / exercise lanes.
+        lane_col = (78, 78, 68)
+        for lx in (21.0, 24.0, 27.0):
+            sx = int(lx * TILE_SIZE - cam_x)
+            pygame.draw.line(screen, lane_col, (sx, int(33.0 * TILE_SIZE - cam_y)), (sx, int(42.0 * TILE_SIZE - cam_y)), 1)
+        for ly in (34.6, 39.3):
+            sy = int(ly * TILE_SIZE - cam_y)
+            pygame.draw.line(screen, lane_col, (int(19.2 * TILE_SIZE - cam_x), sy), (int(29.2 * TILE_SIZE - cam_x), sy), 1)
+
+        # Basketball hoop / backboard on the north wall: one big readable focal
+        # element makes the yard feel authored instead of generic.
+        hoop_x = int(24.0 * TILE_SIZE - cam_x)
+        hoop_y = int(32.2 * TILE_SIZE - cam_y)
+        pygame.draw.rect(screen, (58, 58, 52), (hoop_x - 34, hoop_y - 22, 68, 28), border_radius=2)
+        pygame.draw.rect(screen, (118, 118, 96), (hoop_x - 34, hoop_y - 22, 68, 28), 2, border_radius=2)
+        pygame.draw.rect(screen, (42, 42, 38), (hoop_x - 15, hoop_y - 13, 30, 16), 1)
+        pygame.draw.circle(screen, (140, 80, 50), (hoop_x, hoop_y + 12), 10, 2)
+        pygame.draw.line(screen, (110, 100, 78), (hoop_x - 9, hoop_y + 15), (hoop_x - 3, hoop_y + 29), 1)
+        pygame.draw.line(screen, (110, 100, 78), (hoop_x + 9, hoop_y + 15), (hoop_x + 3, hoop_y + 29), 1)
+
+        # Heavy bag station + weight rack.
+        bag_x = int(24.4 * TILE_SIZE - cam_x)
+        bag_y = int(34.2 * TILE_SIZE - cam_y)
+        pygame.draw.line(screen, (72, 72, 66), (bag_x, bag_y - 36), (bag_x, bag_y - 8), 3)
+        pygame.draw.ellipse(screen, (0, 0, 0, 70), (bag_x - 15, bag_y + 21, 30, 10))
+        pygame.draw.rect(screen, (66, 48, 34), (bag_x - 11, bag_y - 8, 22, 34), border_radius=9)
+        pygame.draw.rect(screen, (118, 86, 54), (bag_x - 11, bag_y - 8, 22, 34), 1, border_radius=9)
+        rack = pygame.Rect(int(27.6 * TILE_SIZE - cam_x), int(38.2 * TILE_SIZE - cam_y), 78, 28)
+        pygame.draw.rect(screen, (25, 27, 26), rack, border_radius=3)
+        pygame.draw.rect(screen, (84, 84, 74), rack, 1, border_radius=3)
+        for i in range(4):
+            wx = rack.x + 12 + i * 16
+            pygame.draw.circle(screen, (64, 64, 58), (wx, rack.centery), 6, 2)
+            pygame.draw.line(screen, (116, 112, 92), (wx - 7, rack.centery), (wx + 7, rack.centery), 1)
+
+        # Faint prisoner scrawl / tally target on concrete wall.
+        graff = font_terminal_small.render("REC BLOCK // 12 MIN", True, (72, 72, 62))
+        graff.set_alpha(150)
+        screen.blit(graff, (int(20.0 * TILE_SIZE - cam_x), int(32.2 * TILE_SIZE - cam_y)))
+
+        # Scuffs / chalk marks.
+        rng = random.Random(4414)
+        for _ in range(34):
+            px = int(x0 + rng.randint(70, int(w - 70)))
+            py = int(y0 + rng.randint(70, int(h - 70)))
+            if rng.random() < 0.5:
+                pygame.draw.line(screen, (34, 34, 31), (px, py), (px + rng.randint(-20, 20), py + rng.randint(-10, 12)), 1)
+            else:
+                pygame.draw.ellipse(screen, (25, 25, 23), (px - 10, py - 4, rng.randint(12, 34), rng.randint(4, 12)))
+        pygame.draw.rect(screen, (0, 0, 0, 70), (x0, y0, w, h), 2)
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_maintenance_wing_details(cam_x, cam_y):
+    x0 = 31 * TILE_SIZE - cam_x
+    y0 = 31 * TILE_SIZE - cam_y
+    w = 14 * TILE_SIZE
+    h = 12 * TILE_SIZE
+    if not _screen_visible_rect(x0, y0, w, h):
+        return
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(x0), int(y0), int(w), int(h)))
+    try:
+        # Cohesive maintenance base: dark green utility floor with broad shadow
+        # bands, so the machinery sits inside a room rather than on raw tiles.
+        pygame.draw.rect(screen, (25, 31, 29), (int(x0), int(y0), int(w), int(h)))
+        floor_shadow = pygame.Surface((int(w), int(h)), pygame.SRCALPHA)
+        for yy in range(int(h)):
+            p = yy / max(1, h)
+            pygame.draw.line(floor_shadow, (0, 0, 0, int(20 + 28 * abs(p - 0.35))), (0, yy), (int(w), yy))
+        screen.blit(floor_shadow, (int(x0), int(y0)))
+        # Catwalk stripe / floor grates.
+        for gx in range(int(x0 + TILE_SIZE), int(x0 + w - TILE_SIZE), 24):
+            pygame.draw.line(screen, (18, 24, 22), (gx, int(y0 + TILE_SIZE)), (gx, int(y0 + h - TILE_SIZE)), 1)
+        for gy in range(int(y0 + TILE_SIZE), int(y0 + h - TILE_SIZE), 24):
+            pygame.draw.line(screen, (18, 24, 22), (int(x0 + TILE_SIZE), gy), (int(x0 + w - TILE_SIZE), gy), 1)
+        # Boilers / tanks.
+        for tx, ty, tall in ((34.0, 35.0, True), (42.0, 35.4, False)):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy = int(ty * TILE_SIZE - cam_y)
+            tw, th = (56, 118) if tall else (66, 76)
+            pygame.draw.ellipse(screen, (0, 0, 0, 75), (sx - tw//2 - 6, sy + th//2 - 10, tw + 12, 18))
+            pygame.draw.rect(screen, (48, 54, 50), (sx - tw//2, sy - th//2, tw, th), border_radius=10)
+            pygame.draw.rect(screen, (98, 108, 96), (sx - tw//2, sy - th//2, tw, th), 2, border_radius=10)
+            pygame.draw.line(screen, (130, 132, 110), (sx - tw//2 + 8, sy - th//2 + 12), (sx + tw//2 - 8, sy - th//2 + 12), 1)
+            pygame.draw.circle(screen, (120, 55, 40), (sx + tw//2 - 14, sy - th//2 + 22), 4)
+        # Generator / control desk.
+        gen = pygame.Rect(int(37.3 * TILE_SIZE - cam_x), int(38.1 * TILE_SIZE - cam_y), 128, 58)
+        pygame.draw.ellipse(screen, (0, 0, 0, 80), (gen.x - 8, gen.y + 38, gen.w + 16, 22))
+        pygame.draw.rect(screen, (38, 42, 38), gen, border_radius=6)
+        pygame.draw.rect(screen, (90, 96, 82), gen, 2, border_radius=6)
+        for i in range(5):
+            pygame.draw.rect(screen, (22, 26, 24), (gen.x + 12 + i * 21, gen.y + 14, 12, 30), border_radius=2)
+        pygame.draw.circle(screen, (90, 220, 120), (gen.right - 16, gen.y + 14), 3)
+        # Pipe manifold and valve wheels.
+        pipe_y = int(33.0 * TILE_SIZE - cam_y)
+        pygame.draw.line(screen, (68, 70, 62), (int(x0 + 50), pipe_y), (int(x0 + w - 50), pipe_y), 6)
+        pygame.draw.line(screen, (110, 110, 92), (int(x0 + 50), pipe_y - 2), (int(x0 + w - 50), pipe_y - 2), 1)
+        for tx in (35.5, 39.8, 43.2):
+            sx = int(tx * TILE_SIZE - cam_x)
+            pygame.draw.circle(screen, (118, 64, 44), (sx, pipe_y), 10, 3)
+            pygame.draw.line(screen, (118, 64, 44), (sx - 8, pipe_y), (sx + 8, pipe_y), 2)
+            pygame.draw.line(screen, (118, 64, 44), (sx, pipe_y - 8), (sx, pipe_y + 8), 2)
+        # Raised catwalk rails across the maintenance bay.
+        cat_y = int(36.8 * TILE_SIZE - cam_y)
+        pygame.draw.rect(screen, (23, 28, 26), (int(32.0 * TILE_SIZE - cam_x), cat_y, int(11.8 * TILE_SIZE), 22))
+        for gx in range(int(32.2 * TILE_SIZE - cam_x), int(43.5 * TILE_SIZE - cam_x), 18):
+            pygame.draw.line(screen, (48, 56, 52), (gx, cat_y), (gx, cat_y + 22), 1)
+        pygame.draw.line(screen, (98, 104, 92), (int(32.0 * TILE_SIZE - cam_x), cat_y), (int(43.8 * TILE_SIZE - cam_x), cat_y), 2)
+        pygame.draw.line(screen, (98, 104, 92), (int(32.0 * TILE_SIZE - cam_x), cat_y + 22), (int(43.8 * TILE_SIZE - cam_x), cat_y + 22), 2)
+
+        # Tool cage / workbench along west side.
+        bench = pygame.Rect(int(32.4 * TILE_SIZE - cam_x), int(39.0 * TILE_SIZE - cam_y), 118, 42)
+        pygame.draw.ellipse(screen, (0, 0, 0, 70), (bench.x - 8, bench.y + 26, bench.w + 16, 18))
+        pygame.draw.rect(screen, (54, 48, 38), bench, border_radius=4)
+        pygame.draw.rect(screen, (104, 92, 70), bench, 2, border_radius=4)
+        for i in range(5):
+            tx = bench.x + 12 + i * 20
+            pygame.draw.line(screen, (138, 130, 104), (tx, bench.y + 10), (tx + 12, bench.y + 6), 2)
+            pygame.draw.circle(screen, (36, 36, 32), (tx + 13, bench.y + 6), 2)
+        tag = font_terminal_small.render("TOOLS", True, (130, 115, 80))
+        screen.blit(tag, (bench.x + 8, bench.bottom - 14))
+
+        # Electrical cabinet with gauges and breaker handles.
+        cab = pygame.Rect(int(43.0 * TILE_SIZE - cam_x), int(39.2 * TILE_SIZE - cam_y), 62, 86)
+        pygame.draw.rect(screen, (34, 44, 40), cab, border_radius=4)
+        pygame.draw.rect(screen, (86, 98, 86), cab, 2, border_radius=4)
+        for i, gy in enumerate((cab.y + 16, cab.y + 36, cab.y + 56)):
+            pygame.draw.circle(screen, (22, 28, 26), (cab.x + 18, gy), 8)
+            pygame.draw.circle(screen, (118, 142, 110), (cab.x + 18, gy), 8, 1)
+            pygame.draw.line(screen, (160, 80, 45), (cab.x + 18, gy), (cab.x + 24, gy - 3 + i), 1)
+            pygame.draw.rect(screen, (78, 82, 72), (cab.x + 36, gy - 6, 12, 12), border_radius=1)
+        if (pygame.time.get_ticks() // 500) % 2 == 0:
+            pygame.draw.circle(screen, (80, 220, 120), (cab.right - 10, cab.y + 10), 2)
+
+        # Colored service pipes: not story, just readable industrial routing.
+        for idx, (py_off, col) in enumerate(((0.0, (115, 62, 48)), (0.35, (54, 82, 96)), (0.70, (88, 90, 62)))):
+            py = int((40.5 + py_off) * TILE_SIZE - cam_y)
+            pygame.draw.line(screen, (18, 20, 18), (int(32.2 * TILE_SIZE - cam_x), py + 3), (int(43.7 * TILE_SIZE - cam_x), py + 3), 5)
+            pygame.draw.line(screen, col, (int(32.2 * TILE_SIZE - cam_x), py), (int(43.7 * TILE_SIZE - cam_x), py), 4)
+            pygame.draw.line(screen, (150, 150, 128), (int(32.2 * TILE_SIZE - cam_x), py - 1), (int(43.7 * TILE_SIZE - cam_x), py - 1), 1)
+
+        # Warning floor stripes near machinery.
+        for i in range(9):
+            sx = int(32.0 * TILE_SIZE - cam_x + i * 18)
+            sy = int(41.0 * TILE_SIZE - cam_y)
+            col = (112, 92, 42) if i % 2 == 0 else (28, 28, 24)
+            pygame.draw.polygon(screen, col, [(sx, sy), (sx + 13, sy), (sx + 4, sy + 14), (sx - 8, sy + 14)])
+        # Steam wisps.
+        rng = random.Random(8841)
+        for i in range(10):
+            sx = int((34.2 + rng.random() * 7.2) * TILE_SIZE - cam_x)
+            sy = int((34.0 + rng.random() * 5.5) * TILE_SIZE - cam_y)
+            pygame.draw.ellipse(screen, (105, 120, 112, 28), (sx - 18, sy - 7, 36, 14))
+        pygame.draw.rect(screen, (0, 0, 0, 70), (x0, y0, w, h), 2)
+    finally:
+        screen.set_clip(old_clip)
+
+
+
+def _draw_exit_zone_details(cam_x, cam_y):
+    """Add readable exit/transition language to the east E tiles."""
+    x0 = 40 * TILE_SIZE - cam_x
+    # Rows 14-16: same vertical axis as the main road/cell-block corridor.
+    y0 = 14 * TILE_SIZE - cam_y
+    w = 3 * TILE_SIZE
+    h = 3 * TILE_SIZE
+    if x0 > WIDTH + 80 or x0 + w < -80 or y0 > HEIGHT + 80 or y0 + h < -80:
+        return
+
+    pygame.draw.rect(screen, (18, 30, 24), (int(x0), int(y0), w, h))
+    for yy in range(int(y0 + 10), int(y0 + h - 10), 16):
+        pygame.draw.line(screen, (44, 84, 58), (int(x0 + 8), yy), (int(x0 + w - 8), yy), 1)
+    center_y = y0 + h // 2
+    pygame.draw.rect(screen, (42, 92, 58), (int(x0 + 18), int(center_y - 39), int(w - 36), 18), border_radius=3)
+    sign = font_terminal_small.render("SERVICE EXIT", True, (160, 235, 170))
+    screen.blit(sign, (int(x0 + w // 2 - sign.get_width() // 2), int(center_y - 35)))
+    arrow = font_terminal.render("→", True, (120, 220, 150))
+    screen.blit(arrow, (int(x0 + w // 2 - arrow.get_width() // 2), int(center_y - 10)))
+
+
+
+def _draw_m3_doors_foreground(cam_x, cam_y):
+    """Draw all Mission 3 D tiles as actual doors."""
+    start_col = max(0, int(cam_x // TILE_SIZE) - 1)
+    end_col = min(MAP_W, int((cam_x + WIDTH) // TILE_SIZE) + 2)
+    start_row = max(0, int(cam_y // TILE_SIZE) - 1)
+    end_row = min(MAP_H, int((cam_y + HEIGHT) // TILE_SIZE) + 2)
+
+    for row in range(start_row, end_row):
+        map_row = MISSION3_MAP[row]
+        for col in range(start_col, end_col):
+            if map_row[col] != "D":
+                continue
+            if row == _DOOR_TILE_ROW and col in (_DOOR_TILE_COL, _DOOR_TILE_COL + 1):
+                continue
+            sx = col * TILE_SIZE - cam_x
+            sy = row * TILE_SIZE - cam_y
+            _draw_m3_door_tile(screen, sx, sy, col, row)
+
+
+def _draw_m3_doors(cam_x, cam_y):
+    for d in STATE.doors:
+        # Skip Biribel's cell door — it's drawn entirely by _draw_cell_door
+        # (via _draw_cell_room). Drawing it here too leaves a grey rect
+        # (70, 76, 84) that bleeds through the smaller breached-panel
+        # polygon after detonation, making the door read as a flat grey
+        # box instead of a damaged door.
+        door_col = d.rect.x // TILE_SIZE
+        door_row = d.rect.y // TILE_SIZE
+        if door_row == _DOOR_TILE_ROW and door_col in (_DOOR_TILE_COL, _DOOR_TILE_COL + 1):
+            continue
+        dr = pygame.Rect(d.rect.x - cam_x, d.rect.y - cam_y, TILE_SIZE, TILE_SIZE)
+        if d.anim_progress < 1.0:
+            draw_h = int(TILE_SIZE * (1.0 - d.anim_progress))
+            if draw_h > 0:
+                pygame.draw.rect(screen, (70, 76, 84), (dr.x, dr.y, TILE_SIZE, draw_h))
+                pygame.draw.rect(screen, (30, 36, 42), (dr.x, dr.y, TILE_SIZE, draw_h), 1)
+        else:
+            pygame.draw.rect(screen, (36, 40, 46), (dr.x, dr.y, TILE_SIZE, 4))
+            pygame.draw.rect(screen, (36, 40, 46), (dr.x, dr.bottom - 4, TILE_SIZE, 4))
+            pygame.draw.rect(screen, (36, 40, 46), (dr.x, dr.y, 4, TILE_SIZE))
+            pygame.draw.rect(screen, (36, 40, 46), (dr.right - 4, dr.y, 4, TILE_SIZE))
+
+
+def _draw_interrogation_restrained_player(cam_x, cam_y):
+    """Draw Biribel cuffed into the live gameplay interrogation chair.
+
+    Kept deliberately close to the game's normal top-down sprite language:
+    small footprint, flat colors, readable restraints. The previous pass looked
+    like a separate cutscene icon pasted into the tilemap.
+    """
+    wx, wy = _interrogation_chair_pos()
+    cx = int(wx - cam_x)
+    # Sit the body a few pixels lower than the furniture center so it lines up
+    # with the chair seat drawn by _draw_cell_room instead of floating over it.
+    cy = int(wy - cam_y + 5)
+
+    tick = pygame.time.get_ticks()
+    trem = 1 if (tick // 240) % 2 == 0 else 0
+
+    uniform = C_PLAYER_UNIFORM
+    uniform_dark = (max(0, uniform[0] - 28), max(0, uniform[1] - 28), max(0, uniform[2] - 28))
+    skin = C_PLAYER_SKIN
+    skin_shadow = (126, 88, 66)
+    metal = (96, 94, 86)
+    metal_hi = (148, 144, 130)
+    strap = (58, 64, 64)
+    strap_dark = (18, 20, 20)
+
+    # Small chair silhouette matching the tile-prop scale.
+    pygame.draw.ellipse(screen, (0, 0, 0, 85), (cx - 25, cy + 12, 50, 16))
+    back = pygame.Rect(cx - 17, cy - 28, 34, 26)
+    pygame.draw.rect(screen, (24, 23, 21), back, border_radius=4)
+    pygame.draw.rect(screen, (64, 60, 54), back, 1, border_radius=4)
+    seat = pygame.Rect(cx - 18, cy - 6, 36, 23)
+    pygame.draw.rect(screen, (34, 32, 29), seat, border_radius=4)
+    pygame.draw.rect(screen, (70, 66, 58), seat, 1, border_radius=4)
+
+    # Chair arm rails/anchor plates. These line up with the cuffed wrists and
+    # immediately communicate "locked down" without a huge custom rig.
+    rail_y = cy + 1
+    for side in (-1, 1):
+        pygame.draw.line(screen, (46, 44, 40), (cx + side * 14, rail_y), (cx + side * 42, rail_y), 5)
+        pygame.draw.line(screen, (84, 80, 72), (cx + side * 15, rail_y - 2), (cx + side * 40, rail_y - 2), 1)
+        plate = pygame.Rect(0, 0, 14, 12)
+        plate.center = (cx + side * 45, rail_y)
+        pygame.draw.rect(screen, (36, 34, 31), plate, border_radius=3)
+        pygame.draw.rect(screen, metal, plate, 1, border_radius=3)
+        pygame.draw.circle(screen, (20, 18, 16), plate.center, 2)
+
+    # Hunched torso, same scale as the normal Player sprite.
+    torso = [
+        (cx - 13, cy - 12),
+        (cx + 13, cy - 12),
+        (cx + 16, cy + 13),
+        (cx - 16, cy + 13),
+    ]
+    pygame.draw.polygon(screen, uniform_dark, torso)
+    pygame.draw.polygon(screen, uniform, [(cx - 9, cy - 10), (cx + 10, cy - 10), (cx + 12, cy + 11), (cx - 12, cy + 11)])
+
+    # Harness straps over the normal uniform. This is the main confinement cue.
+    pygame.draw.line(screen, strap, (cx - 13, cy - 11), (cx + 13, cy + 11), 4)
+    pygame.draw.line(screen, strap_dark, (cx - 13, cy - 11), (cx + 13, cy + 11), 1)
+    pygame.draw.line(screen, strap, (cx + 13, cy - 11), (cx - 13, cy + 11), 4)
+    pygame.draw.line(screen, strap_dark, (cx + 13, cy - 11), (cx - 13, cy + 11), 1)
+    pygame.draw.rect(screen, strap, (cx - 17, cy + 1, 34, 6), border_radius=2)
+    pygame.draw.rect(screen, strap_dark, (cx - 17, cy + 1, 34, 6), 1, border_radius=2)
+    pygame.draw.rect(screen, metal_hi, (cx - 4, cy, 8, 8), 1, border_radius=1)
+
+    # Head bowed toward the monitor. It uses the same skin colors as Player.draw
+    # but darker, so it doesn't read as a different art style.
+    pygame.draw.circle(screen, skin_shadow, (cx, cy - 22), 12)
+    pygame.draw.circle(screen, skin, (cx, cy - 24), 10)
+    pygame.draw.arc(screen, (42, 30, 24), (cx - 10, cy - 34, 20, 16), math.pi, math.tau, 4)
+    pygame.draw.line(screen, (46, 34, 28), (cx - 5, cy - 18), (cx + 5, cy - 18), 1)
+
+    # Simple head brace behind the neck, sized like a prop detail rather than a
+    # separate cinematic device.
+    brace = pygame.Rect(cx - 15, cy - 33, 30, 7)
+    pygame.draw.rect(screen, (22, 22, 21), brace, border_radius=2)
+    pygame.draw.rect(screen, metal, brace, 1, border_radius=2)
+
+    # Arms locked outward to the chair rails. Use thick dark sleeves like the
+    # normal player silhouette, then bright cuffs on top.
+    for side in (-1, 1):
+        shoulder = (cx + side * 13, cy - 4)
+        elbow = (cx + side * 25, cy + 2)
+        wrist = (cx + side * (39 + trem), rail_y)
+        pygame.draw.line(screen, uniform_dark, shoulder, elbow, 8)
+        pygame.draw.line(screen, uniform_dark, elbow, wrist, 8)
+        pygame.draw.line(screen, uniform, shoulder, elbow, 3)
+        pygame.draw.line(screen, uniform, elbow, wrist, 3)
+
+        # Hand trapped under cuff.
+        pygame.draw.circle(screen, skin, (wrist[0] - side * 3, wrist[1]), 4)
+        cuff = pygame.Rect(0, 0, 18, 8)
+        cuff.center = wrist
+        pygame.draw.rect(screen, metal, cuff, border_radius=3)
+        pygame.draw.rect(screen, metal_hi, cuff, 1, border_radius=3)
+        pygame.draw.line(screen, (42, 42, 38), (cuff.x + 3, cuff.centery), (cuff.right - 3, cuff.centery), 1)
+
+        # Taut chain from cuff to chair anchor.
+        anchor = (cx + side * 45, rail_y)
+        pygame.draw.line(screen, (54, 54, 50), wrist, anchor, 1)
+        for i in range(2):
+            q = (i + 0.5) / 2.0
+            lx = int(wrist[0] + (anchor[0] - wrist[0]) * q)
+            ly = int(wrist[1] + (anchor[1] - wrist[1]) * q)
+            pygame.draw.ellipse(screen, metal_hi, (lx - 3, ly - 2, 6, 4), 1)
+
+    # Ankles cuffed to the chair base, small but visible when the dialogue panel
+    # is not covering the bottom of the sprite.
+    for side in (-1, 1):
+        foot = pygame.Rect(cx + side * 9 - 6, cy + 17, 12, 6)
+        pygame.draw.rect(screen, (10, 10, 11), foot, border_radius=2)
+        pygame.draw.rect(screen, metal, foot, 1, border_radius=2)
+
+
+
+def _draw_drain_guidance(cam_x, cam_y):
+    """Show where the drain is while the player must craft the shiv."""
+    if getattr(STATE, "mission3_weapon", "none") != "chair_leg":
+        return
+    if getattr(STATE, "mission3_crafting_active", False):
+        return
+    if not STATE.player:
+        return
+
+    drain_x = _DRAIN_TILE_COL * TILE_SIZE + TILE_SIZE // 2
+    drain_y = _DRAIN_TILE_ROW * TILE_SIZE + TILE_SIZE // 2
+    sx = drain_x - cam_x
+    sy = drain_y - cam_y
+    pulse = 0.5 + 0.5 * math.sin(time.time() * 5.0)
+    alpha = int(145 + 80 * pulse)
+    marker_col = (220, 180, 90)
+
+    if -40 <= sx <= WIDTH + 40 and -40 <= sy <= HEIGHT + 40:
+        # World-space ring around the actual drain.
+        ring = pygame.Surface((72, 72), pygame.SRCALPHA)
+        pygame.draw.circle(ring, (*marker_col, int(45 + 35 * pulse)), (36, 36), 31)
+        pygame.draw.circle(ring, (*marker_col, alpha), (36, 36), 24, 2)
+        pygame.draw.circle(ring, (255, 230, 140, alpha), (36, 36), 8, 1)
+        screen.blit(ring, (int(sx - 36), int(sy - 36)))
+        label = font_terminal_small.render("DRAIN", True, marker_col)
+        label.set_alpha(alpha)
+        screen.blit(label, (int(sx - label.get_width() // 2), int(sy - 44)))
+
+        # If the player is not already close enough, draw a small directional
+        # line from player toward the drain so the marker reads as an objective.
+        dist = math.hypot(STATE.player.rect.centerx - drain_x,
+                          STATE.player.rect.centery - drain_y)
+        if dist > 85:
+            px = STATE.player.rect.centerx - cam_x
+            py = STATE.player.rect.centery - cam_y
+            ang = math.atan2(sy - py, sx - px)
+            start = (int(px + math.cos(ang) * 28), int(py + math.sin(ang) * 28))
+            end = (int(px + math.cos(ang) * 68), int(py + math.sin(ang) * 68))
+            pygame.draw.line(screen, (*marker_col, alpha), start, end, 2)
+            # Arrowhead.
+            left = (int(end[0] - math.cos(ang - 0.55) * 10),
+                    int(end[1] - math.sin(ang - 0.55) * 10))
+            right = (int(end[0] - math.cos(ang + 0.55) * 10),
+                     int(end[1] - math.sin(ang + 0.55) * 10))
+            pygame.draw.polygon(screen, marker_col, [end, left, right])
+    else:
+        # Off-screen fallback arrow clamped to screen edge.
+        px = STATE.player.rect.centerx - cam_x
+        py = STATE.player.rect.centery - cam_y
+        ang = math.atan2(sy - py, sx - px)
+        edge_x = max(40, min(WIDTH - 40, int(WIDTH / 2 + math.cos(ang) * (WIDTH / 2 - 60))))
+        edge_y = max(LETTER_H + 35, min(HEIGHT - LETTER_H - 35,
+                                       int(HEIGHT / 2 + math.sin(ang) * (HEIGHT / 2 - LETTER_H - 45))))
+        tip = (edge_x, edge_y)
+        back = (int(edge_x - math.cos(ang) * 24), int(edge_y - math.sin(ang) * 24))
+        left = (int(back[0] + math.cos(ang + math.pi / 2) * 10),
+                int(back[1] + math.sin(ang + math.pi / 2) * 10))
+        right = (int(back[0] - math.cos(ang + math.pi / 2) * 10),
+                 int(back[1] - math.sin(ang + math.pi / 2) * 10))
+        pygame.draw.polygon(screen, marker_col, [tip, left, right])
+        lbl = font_terminal_small.render("DRAIN", True, marker_col)
+        screen.blit(lbl, (edge_x - lbl.get_width() // 2, edge_y + 12))
+
+
+
+def _draw_comms_wing_details(cam_x, cam_y):
+    """Art pass for the second Mission 3 map: service/comms wing."""
+    # Arrival airlock: visually links back to the cell-block service door.
+    ax0 = 3 * TILE_SIZE - cam_x
+    ay0 = 18 * TILE_SIZE - cam_y
+    aw = 8 * TILE_SIZE
+    ah = 11 * TILE_SIZE
+    if _screen_visible_rect(ax0, ay0, aw, ah):
+        pygame.draw.rect(screen, (0, 0, 0, 72), (int(ax0), int(ay0), int(aw), int(ah)), 2)
+        # Same greenish sealed-door language as the transition cutscene.
+        sealed = pygame.Rect(int(4.15 * TILE_SIZE - cam_x), int(19.0 * TILE_SIZE - cam_y), 112, 142)
+        pygame.draw.rect(screen, (5, 7, 8), sealed.inflate(14, 14), border_radius=4)
+        pygame.draw.rect(screen, (46, 76, 68), sealed, border_radius=3)
+        pygame.draw.rect(screen, (110, 168, 142), sealed, 2, border_radius=3)
+        slit = pygame.Rect(sealed.centerx - 8, sealed.y + 10, 16, sealed.h - 20)
+        pygame.draw.rect(screen, (120, 175, 150), slit)
+        pygame.draw.rect(screen, (36, 58, 52), slit, 1)
+        label = font_terminal_small.render("CELL BLOCK A // SEALED", True, (110, 155, 135))
+        label.set_alpha(180)
+        screen.blit(label, (sealed.centerx - label.get_width() // 2, sealed.bottom + 10))
+        # Scuffed handoff / arrival path out of the sealed door into the corridor.
+        path = pygame.Surface((230, 120), pygame.SRCALPHA)
+        pygame.draw.ellipse(path, (0, 0, 0, 55), (0, 25, 230, 58))
+        pygame.draw.ellipse(path, (60, 90, 78, 26), (34, 34, 150, 30))
+        screen.blit(path, (sealed.centerx - 115, sealed.bottom - 15))
+        # Cable/pipe continuation from old service wing.
+        pygame.draw.line(screen, (52, 60, 56), (sealed.right + 16, sealed.y + 18), (int(10.0 * TILE_SIZE - cam_x), sealed.y + 18), 4)
+        pygame.draw.line(screen, (104, 118, 104), (sealed.right + 16, sealed.y + 16), (int(10.0 * TILE_SIZE - cam_x), sealed.y + 16), 1)
+        # Wall panel / status box.
+        panel = pygame.Rect(int(8.3 * TILE_SIZE - cam_x), int(20.0 * TILE_SIZE - cam_y), 54, 38)
+        pygame.draw.rect(screen, (20, 28, 27), panel, border_radius=3)
+        pygame.draw.rect(screen, (72, 90, 84), panel, 1, border_radius=3)
+        pygame.draw.circle(screen, (190, 45, 38), (panel.right - 10, panel.y + 10), 3)
+        pygame.draw.line(screen, (44, 62, 56), (panel.x + 8, panel.y + 24), (panel.right - 8, panel.y + 24), 1)
+        # A few familiar black scuffs so it feels continuous with the first map.
+        for i, (sx, sy, sw, sh) in enumerate(((6.2, 23.0, 44, 12), (4.6, 26.1, 34, 9), (8.7, 24.8, 28, 8))):
+            pygame.draw.ellipse(screen, (5, 6, 6), (int(sx*TILE_SIZE - cam_x), int(sy*TILE_SIZE - cam_y), sw, sh))
+
+    # Service arrival corridor.
+    x0 = 3 * TILE_SIZE - cam_x
+    y0 = 22 * TILE_SIZE - cam_y
+    w = 42 * TILE_SIZE
+    h = 6 * TILE_SIZE
+    if _screen_visible_rect(x0, y0, w, h):
+        pygame.draw.rect(screen, (0, 0, 0, 55), (int(x0), int(y0), int(w), int(h)), 2)
+        stencil = font_terminal_small.render("SERVICE ACCESS  //  COMMS WING", True, (78, 110, 105))
+        stencil.set_alpha(160)
+        screen.blit(stencil, (int(14 * TILE_SIZE - cam_x), int(26 * TILE_SIZE - cam_y + 18)))
+        for tx in (8, 16, 24, 32, 40):
+            lx = tx * TILE_SIZE + TILE_SIZE // 2 - cam_x
+            ly = 23 * TILE_SIZE - cam_y + 8
+            pygame.draw.rect(screen, (95, 112, 104), (int(lx - 38), int(ly), 76, 4), border_radius=2)
+            glow = pygame.Surface((130, 44), pygame.SRCALPHA)
+            pygame.draw.ellipse(glow, (90, 140, 130, 18), glow.get_rect())
+            screen.blit(glow, (int(lx - 65), int(ly + 7)), special_flags=pygame.BLEND_RGBA_ADD)
+
+    # Relay room.
+    rx = 15 * TILE_SIZE - cam_x
+    ry = 10 * TILE_SIZE - cam_y
+    rw = 18 * TILE_SIZE
+    rh = 12 * TILE_SIZE
+    if _screen_visible_rect(rx, ry, rw, rh):
+        pygame.draw.rect(screen, (0, 0, 0, 70), (int(rx), int(ry), int(rw), int(rh)), 2)
+        label = font_terminal.render("RELAY ROOM", True, (120, 185, 165))
+        screen.blit(label, (int(rx + rw // 2 - label.get_width() // 2), int(ry + 18)))
+        # Console banks.
+        for cx_tile in (19.8, 28.2):
+            sx = int(cx_tile * TILE_SIZE - cam_x)
+            sy = int(16.4 * TILE_SIZE - cam_y)
+            console = pygame.Rect(sx - 70, sy - 22, 140, 44)
+            pygame.draw.ellipse(screen, (0, 0, 0, 80), (console.x - 8, console.y + 28, console.w + 16, 20))
+            pygame.draw.rect(screen, (22, 34, 34), console, border_radius=5)
+            pygame.draw.rect(screen, (72, 104, 96), console, 2, border_radius=5)
+            for i in range(4):
+                px = console.x + 16 + i * 28
+                pygame.draw.rect(screen, (8, 16, 14), (px, console.y + 10, 18, 12), border_radius=1)
+                pygame.draw.circle(screen, (80, 220, 130) if i % 2 else (190, 60, 48), (px + 22, console.y + 16), 2)
+        # Central relay table with dish graphic.
+        table = pygame.Rect(int(24 * TILE_SIZE - cam_x - 59), int(19.2 * TILE_SIZE - cam_y - 26), 118, 52)
+        pygame.draw.rect(screen, (42, 48, 44), table, border_radius=5)
+        pygame.draw.rect(screen, (92, 112, 96), table, 2, border_radius=5)
+        pygame.draw.circle(screen, (18, 24, 22), table.center, 18)
+        pygame.draw.arc(screen, (95, 170, 130), (table.centerx - 26, table.centery - 26, 52, 52), math.pi * 0.1, math.pi * 0.9, 2)
+        pygame.draw.line(screen, (95, 170, 130), table.center, (table.centerx + 22, table.centery - 12), 2)
+        # Cable runs.
+        for off in (-38, 0, 38):
+            pygame.draw.line(screen, (32, 42, 40), (table.centerx + off, table.bottom), (table.centerx + off + 24, int(21 * TILE_SIZE - cam_y)), 2)
+
+    # Server cage/equipment bay.
+    sx0 = 34 * TILE_SIZE - cam_x
+    sy0 = 13 * TILE_SIZE - cam_y
+    sw = 11 * TILE_SIZE
+    sh = 17 * TILE_SIZE
+    if _screen_visible_rect(sx0, sy0, sw, sh):
+        pygame.draw.rect(screen, (0, 0, 0, 70), (int(sx0), int(sy0), int(sw), int(sh)), 2)
+        label = font_terminal_small.render("SERVER CAGE", True, (110, 150, 145))
+        screen.blit(label, (int(sx0 + sw // 2 - label.get_width() // 2), int(sy0 + 14)))
+        for cx_tile in (36, 42):
+            rack = pygame.Rect(int(cx_tile * TILE_SIZE - cam_x - 29), int(18 * TILE_SIZE - cam_y - 115), 58, 230)
+            pygame.draw.rect(screen, (16, 22, 24), rack, border_radius=4)
+            pygame.draw.rect(screen, (58, 80, 78), rack, 2, border_radius=4)
+            for yy in range(rack.y + 16, rack.bottom - 12, 18):
+                pygame.draw.line(screen, (30, 42, 42), (rack.x + 6, yy), (rack.right - 6, yy), 1)
+                if (yy // 18) % 3 == 0:
+                    pygame.draw.circle(screen, (65, 210, 120), (rack.right - 10, yy + 4), 2)
+        # Workbench.
+        bench = pygame.Rect(int(37.5 * TILE_SIZE - cam_x - 64), int(25 * TILE_SIZE - cam_y - 21), 128, 42)
+        pygame.draw.rect(screen, (48, 44, 38), bench, border_radius=4)
+        pygame.draw.rect(screen, (104, 92, 70), bench, 2, border_radius=4)
+        for i in range(4):
+            pygame.draw.rect(screen, (95, 90, 70), (bench.x + 12 + i * 25, bench.y + 10, 16, 10))
+
+    # South utility/battery room.
+    ux = 13 * TILE_SIZE - cam_x
+    uy = 29 * TILE_SIZE - cam_y
+    uw = 18 * TILE_SIZE
+    uh = 11 * TILE_SIZE
+    if _screen_visible_rect(ux, uy, uw, uh):
+        pygame.draw.rect(screen, (0, 0, 0, 70), (int(ux), int(uy), int(uw), int(uh)), 2)
+        label = font_terminal_small.render("BATTERY BACKUP", True, (160, 145, 100))
+        screen.blit(label, (int(ux + uw // 2 - label.get_width() // 2), int(uy + 14)))
+        for cx_tile in (17.0, 27.2):
+            sx = int(cx_tile * TILE_SIZE - cam_x)
+            sy = int(35.0 * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (36, 42, 34), (sx - 35, sy - 59, 70, 118), border_radius=6)
+            pygame.draw.rect(screen, (88, 104, 78), (sx - 35, sy - 59, 70, 118), 2, border_radius=6)
+            for i in range(4):
+                pygame.draw.rect(screen, (18, 22, 18), (sx - 22, sy - 44 + i * 24, 44, 12), border_radius=2)
+                pygame.draw.circle(screen, (190, 80, 40), (sx + 26, sy - 38 + i * 24), 2)
+
+    # Archive access door marker, east side.
+    ax = 46 * TILE_SIZE + TILE_SIZE // 2 - cam_x
+    ay = 24 * TILE_SIZE + TILE_SIZE // 2 - cam_y
+    if -80 < ax < WIDTH + 80 and -80 < ay < HEIGHT + 80:
+        sign = font_terminal.render("ARCHIVES →", True, (150, 220, 170))
+        screen.blit(sign, (int(ax - sign.get_width() - 20), int(ay - 45)))
+        pygame.draw.rect(screen, (30, 80, 48), (int(ax - 32), int(ay - 20), 64, 40), 2, border_radius=4)
+
+
+def _draw_comms_map_polish(cam_x, cam_y):
+    """Final readability/art pass for the Comms Wing map."""
+    _draw_rect_room_frame(cam_x, cam_y, 3, 18, 8, 11, gaps_right=[(24, 25)], label="AIRLOCK", label_col=(120, 165, 145))
+    _draw_rect_room_frame(cam_x, cam_y, 11, 17, 5, 6, gaps_bottom=[(12, 13)], label="SECURITY", label_col=(145, 155, 120))
+    _draw_rect_room_frame(cam_x, cam_y, 15, 10, 18, 12, gaps_bottom=[(23, 24)], label="RELAY ROOM", label_col=(120, 190, 165))
+    _draw_rect_room_frame(cam_x, cam_y, 34, 13, 11, 17, gaps_left=[(23, 24)], gaps_right=[(24, 24)], label="SERVER CAGE", label_col=(110, 155, 150))
+    _draw_rect_room_frame(cam_x, cam_y, 13, 29, 18, 11, gaps_top=[(21, 22)], label="BATTERY BACKUP", label_col=(170, 145, 90))
+
+    # Security booth details.
+    bx = 11 * TILE_SIZE - cam_x
+    by = 17 * TILE_SIZE - cam_y
+    if _screen_visible_rect(bx, by, 5*TILE_SIZE, 6*TILE_SIZE):
+        glass = pygame.Rect(int(11.2*TILE_SIZE - cam_x), int(20.0*TILE_SIZE - cam_y), 46, 92)
+        pygame.draw.rect(screen, (30, 55, 58), glass, border_radius=3)
+        pygame.draw.rect(screen, (90, 130, 132), glass, 1, border_radius=3)
+        for off in range(-40, 80, 12):
+            pygame.draw.line(screen, (120, 165, 165, 60), (glass.x + off, glass.y), (glass.x + off + 70, glass.bottom), 1)
+        desk = pygame.Rect(int(12.0*TILE_SIZE - cam_x), int(18.45*TILE_SIZE - cam_y), 165, 44)
+        pygame.draw.ellipse(screen, (0,0,0,75), (desk.x-8, desk.y+28, desk.w+16, 18))
+        pygame.draw.rect(screen, (48, 43, 36), desk, border_radius=4)
+        pygame.draw.rect(screen, (106, 92, 70), desk, 2, border_radius=4)
+        mon = pygame.Rect(desk.x + 14, desk.y - 24, 42, 25)
+        pygame.draw.rect(screen, (10, 18, 18), mon, border_radius=3)
+        pygame.draw.rect(screen, (66, 95, 88), mon, 1, border_radius=3)
+        pygame.draw.circle(screen, (80, 220, 130), (mon.right - 6, mon.y + 6), 2)
+        for i in range(3):
+            pygame.draw.rect(screen, (105, 98, 74), (desk.x + 72 + i*24, desk.y + 12, 16, 10))
+        chair = pygame.Rect(int(13.8*TILE_SIZE - cam_x), int(19.35*TILE_SIZE - cam_y), 24, 24)
+        pygame.draw.ellipse(screen, (0,0,0,60), (chair.x-2, chair.y+14, 28, 10))
+        pygame.draw.rect(screen, (32, 38, 38), chair, border_radius=4)
+        pygame.draw.rect(screen, (70, 78, 74), chair, 1, border_radius=4)
+
+    # Cable tray connecting airlock -> relay/server/utility.
+    sx0 = 10 * TILE_SIZE - cam_x
+    sy = 25 * TILE_SIZE - cam_y + 12
+    sx1 = 43 * TILE_SIZE - cam_x
+    if _screen_visible_rect(sx0, sy-40, sx1-sx0, 120):
+        pygame.draw.rect(screen, (18, 22, 22), (int(sx0), int(sy), int(sx1-sx0), 14), border_radius=2)
+        pygame.draw.rect(screen, (58, 68, 62), (int(sx0), int(sy), int(sx1-sx0), 14), 1, border_radius=2)
+        for i, col in enumerate([(120,60,48), (62,98,120), (92,110,70), (130,110,55)]):
+            y = int(sy + 3 + i*2)
+            pygame.draw.line(screen, col, (int(sx0+12), y), (int(sx1-12), y), 1)
+        for tx, branch_y in ((23.5, 21.0), (38.0, 23.4), (22.0, 29.2)):
+            bx2 = int(tx*TILE_SIZE - cam_x)
+            by2 = int(branch_y*TILE_SIZE - cam_y)
+            pygame.draw.line(screen, (42, 54, 50), (bx2, int(sy+7)), (bx2, by2), 3)
+            pygame.draw.line(screen, (90, 125, 105), (bx2+2, int(sy+7)), (bx2+2, by2), 1)
+
+    sign = font_terminal_small.render("FROM CELL BLOCK A", True, (92, 140, 120))
+    sign.set_alpha(170)
+    screen.blit(sign, (int(4.45*TILE_SIZE - cam_x), int(26.6*TILE_SIZE - cam_y)))
+    spool_x = int(8.2*TILE_SIZE - cam_x)
+    spool_y = int(26.1*TILE_SIZE - cam_y)
+    if -80 < spool_x < WIDTH+80 and -80 < spool_y < HEIGHT+80:
+        pygame.draw.ellipse(screen, (0,0,0,70), (spool_x-20, spool_y+12, 42, 12))
+        pygame.draw.circle(screen, (52,42,30), (spool_x, spool_y), 16)
+        pygame.draw.circle(screen, (26,22,18), (spool_x, spool_y), 8)
+        pygame.draw.line(screen, (60,58,48), (spool_x+12, spool_y+7), (spool_x+46, spool_y+24), 3)
+    for i in range(5):
+        ax = int((11.2+i*0.55)*TILE_SIZE - cam_x)
+        ay = int(26.1*TILE_SIZE - cam_y)
+        pygame.draw.polygon(screen, (120, 100, 46), [(ax,ay), (ax+18,ay), (ax+10,ay+12), (ax-8,ay+12)])
+
+    # Relay room wall map + mast.
+    rx = 15 * TILE_SIZE - cam_x
+    ry = 10 * TILE_SIZE - cam_y
+    if _screen_visible_rect(rx, ry, 18*TILE_SIZE, 12*TILE_SIZE):
+        wallmap = pygame.Rect(int(16.0*TILE_SIZE - cam_x), int(11.1*TILE_SIZE - cam_y), 210, 92)
+        pygame.draw.rect(screen, (18, 30, 30), wallmap, border_radius=4)
+        pygame.draw.rect(screen, (72, 108, 98), wallmap, 1, border_radius=4)
+        pts = [(wallmap.x+20, wallmap.y+70), (wallmap.x+58, wallmap.y+32), (wallmap.x+102, wallmap.y+48), (wallmap.x+144, wallmap.y+20), (wallmap.x+190, wallmap.y+60)]
+        pygame.draw.lines(screen, (90,175,135), False, pts, 2)
+        for pt in pts:
+            pygame.draw.circle(screen, (120,220,160), pt, 3)
+        mast_x = int(30.0*TILE_SIZE - cam_x)
+        mast_y = int(12.1*TILE_SIZE - cam_y)
+        pygame.draw.line(screen, (70,86,78), (mast_x, mast_y), (mast_x, mast_y+180), 5)
+        for off in (24,62,104):
+            pygame.draw.line(screen, (90,116,104), (mast_x-42, mast_y+off), (mast_x+42, mast_y+off), 2)
+
+    # Server cage mesh overlay.
+    sx = 34*TILE_SIZE - cam_x
+    syc = 13*TILE_SIZE - cam_y
+    sw = 11*TILE_SIZE
+    sh = 17*TILE_SIZE
+    if _screen_visible_rect(sx, syc, sw, sh):
+        mesh = pygame.Surface((int(sw), int(sh)), pygame.SRCALPHA)
+        for off in range(-int(sh), int(sw), 18):
+            pygame.draw.line(mesh, (95,110,105,45), (off,0), (off+int(sh), int(sh)), 1)
+            pygame.draw.line(mesh, (95,110,105,30), (off,int(sh)), (off+int(sh), 0), 1)
+        screen.blit(mesh, (int(sx), int(syc)))
+        pygame.draw.rect(screen, (82,110,100), (int(sx+8), int(syc+8), int(sw-16), int(sh-16)), 1)
+
+
+
+def _relay_pos():
+    return (_RELAY_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+            _RELAY_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+
+
+def _comms_breaker_pos():
+    # East wall of the battery-backup room.
+    return (29 * TILE_SIZE + TILE_SIZE // 2,
+            36 * TILE_SIZE + TILE_SIZE // 2)
+
+
+def _comms_auth_pos():
+    # Security-booth desk terminal near the arrival airlock.
+    return (13 * TILE_SIZE + TILE_SIZE // 2,
+            19 * TILE_SIZE + TILE_SIZE // 2)
+
+
+def _restore_comms_power():
+    if getattr(STATE, "m3_comms_power_restored", False):
+        return
+    STATE.m3_comms_power_restored = True
+    bx, by = _comms_breaker_pos()
+    STATE.floating_texts.append([
+        bx, by - 34, "AUXILIARY POWER RESTORED", (125, 225, 160), 120])
+    try:
+        audio.play("rifle_handle", volume=0.48)
+        audio.play("terminal_glitch", volume=0.35)
+    except Exception:
+        pass
+    _radio("VASILE: Power spike received. Now find a relay authorization key.",
+           color=C_SYSTEM, duration=300, mark="comms_power_restored")
+
+
+def _acquire_comms_auth():
+    if getattr(STATE, "m3_comms_auth_acquired", False):
+        return
+    STATE.m3_comms_auth_acquired = True
+    ax, ay = _comms_auth_pos()
+    STATE.floating_texts.append([
+        ax, ay - 34, "RELAY AUTHORIZATION COPIED", (130, 215, 190), 120])
+    try:
+        audio.play("pickup", volume=0.50)
+        audio.play("type_tick", volume=0.16)
+    except Exception:
+        pass
+    _radio("VOLKOV: Authorization is good. Get back to the relay.",
+           color=C_VOLKOV, duration=280, mark="comms_auth_acquired")
+
+
+def _start_comms_relay_tuning():
+    if getattr(STATE, "m3_relay_tuned", False):
+        return
+    if getattr(STATE, "m3_relay_active", False):
+        return
+    if len(getattr(STATE, "enemies", [])) > 0:
+        rx, ry = _relay_pos()
+        STATE.floating_texts.append([rx, ry - 34, "CLEAR HOSTILES FIRST", (220, 150, 90), 90])
+        _set_objective(f"Clear hostiles: {len(STATE.enemies)} guard(s) left.")
+        return
+    if not getattr(STATE, "m3_comms_power_restored", False):
+        rx, ry = _relay_pos()
+        STATE.floating_texts.append([
+            rx, ry - 34, "NO POWER — CHECK BATTERY BACKUP", (220, 165, 80), 100])
+        _set_objective("Restore auxiliary power in Battery Backup.")
+        return
+    if not getattr(STATE, "m3_comms_auth_acquired", False):
+        rx, ry = _relay_pos()
+        STATE.floating_texts.append([
+            rx, ry - 34, "AUTHORIZATION REQUIRED", (220, 165, 80), 100])
+        _set_objective("Copy relay authorization from the Security booth.")
+        return
+    STATE.m3_relay_active = True
+    STATE.m3_relay_timer = 0
+    _set_objective("Tuning relay...")
+    try:
+        audio.play("terminal_glitch", volume=0.45)
+        audio.play("radio_static", volume=0.40)
+    except Exception:
+        pass
+
+
+def _update_comms_relay():
+    if getattr(STATE, "mission3_stage", None) != STAGE_COMMS:
+        return
+    if not getattr(STATE, "m3_relay_active", False):
+        return
+
+    duration = int(getattr(STATE, "m3_relay_duration", 360) or 360)
+    STATE.m3_relay_timer = getattr(STATE, "m3_relay_timer", 0) + 1
+    t = STATE.m3_relay_timer
+
+    # Longer, staged tuning sequence: noisy scan -> handshake -> sync -> auth -> lock.
+    # Audio ticks are sparse and diegetic so the overlay feels like a machine
+    # stabilizing, not a QTE.
+    if t in (34, 72, 118, 166, 218, 274, 326):
+        try:
+            audio.play("type_tick", volume=0.12)
+            audio.play("radio_static", volume=0.20)
+        except Exception:
+            pass
+
+    if t >= duration:
+        STATE.m3_relay_active = False
+        STATE.m3_relay_tuned = True
+        STATE.m3_relay_timer = duration
+        for door in getattr(STATE, "doors", []):
+            if getattr(door, "m3_archive_access", False):
+                door.locked = False
+                door.target_open = True
+                door.manual_timer = 180
+        _set_objective("Signal restored. Reach Archives.")
+        try:
+            audio.play("terminal_glitch", volume=0.50)
+            audio.play("radio_chatter", volume=0.34)
+        except Exception:
+            pass
+        _radio("VASILE: Biribel. Confirmed. I have you. Archives access is east.",
+               color=C_SYSTEM, duration=420, mark="comms_relay_restored")
+
+
+def _draw_comms_relay_prompt(cam_x, cam_y):
+    if getattr(STATE, "mission3_stage", None) != STAGE_COMMS:
+        return
+    if getattr(STATE, "m3_relay_active", False):
+        return
+    rx, ry = _relay_pos()
+    sx, sy = rx - cam_x, ry - cam_y
+    if not (-80 < sx < WIDTH + 80 and -80 < sy < HEIGHT + 80):
+        return
+    if getattr(STATE, "m3_relay_tuned", False):
+        prompt = "RELAY ONLINE"
+        col = (120, 220, 160)
+    elif not getattr(STATE, "m3_comms_power_restored", False):
+        prompt = "RELAY OFFLINE // NO POWER"
+        col = (165, 95, 65)
+    elif not getattr(STATE, "m3_comms_auth_acquired", False):
+        prompt = "RELAY LOCKED // AUTH REQUIRED"
+        col = (190, 140, 72)
+    elif STATE.player and math.hypot(STATE.player.rect.centerx - rx, STATE.player.rect.centery - ry) <= 92:
+        prompt = "[E] ESTABLISH KRAP LINK"
+        col = (145, 220, 190)
+    else:
+        prompt = "RELAY READY"
+        col = (90, 155, 125)
+    a = int(175 + math.sin(time.time() * 4) * 50)
+    label = font_terminal_small.render(prompt, True, col)
+    label.set_alpha(a)
+    screen.blit(label, (int(sx - label.get_width() // 2), int(sy - 58)))
+    # Soft marker ring.
+    ring = pygame.Surface((72, 72), pygame.SRCALPHA)
+    pygame.draw.circle(ring, (*col, 28), (36, 36), 30)
+    pygame.draw.circle(ring, (*col, a), (36, 36), 24, 1)
+    screen.blit(ring, (int(sx - 36), int(sy - 36)))
+
+
+def _draw_comms_dynamic_atmosphere(cam_x, cam_y):
+    """State-driven lighting and machinery feedback for the Comms Wing."""
+    timer = getattr(STATE, "m3_comms_ambience_timer", 0)
+    powered = getattr(STATE, "m3_comms_power_restored", False)
+
+    if not powered:
+        # Emergency power: slow red rotating-beacon wash with occasional hard
+        # fluorescent dropouts. Kept under actors/HUD in the draw order.
+        pulse = 0.5 + 0.5 * math.sin(timer * 0.055)
+        wash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        wash.fill((105, 8, 6, int(12 + 25 * pulse)))
+        screen.blit(wash, (0, 0))
+        if timer % 150 in range(0, 5):
+            dropout = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dropout.fill((0, 0, 0, 82))
+            screen.blit(dropout, (0, 0))
+    else:
+        # Restored green status glow centered on the relay room.
+        rx, ry = _relay_pos()
+        sx, sy = int(rx - cam_x), int(ry - cam_y)
+        glow = pygame.Surface((220, 220), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (45, 180, 105, 24), (110, 110), 104)
+        pygame.draw.circle(glow, (80, 225, 145, 22), (110, 110), 58)
+        screen.blit(glow, (sx - 110, sy - 110), special_flags=pygame.BLEND_RGBA_ADD)
+
+
+def _draw_comms_system_prompts(cam_x, cam_y):
+    """World-space prompts for the power/auth/relay objective chain."""
+    objectives = [
+        (_comms_breaker_pos(),
+         "POWER ONLINE" if getattr(STATE, "m3_comms_power_restored", False)
+         else "[E] RESTORE AUX POWER",
+         getattr(STATE, "m3_comms_power_restored", False)),
+        (_comms_auth_pos(),
+         "AUTH COPIED" if getattr(STATE, "m3_comms_auth_acquired", False)
+         else "[E] COPY RELAY AUTH",
+         getattr(STATE, "m3_comms_auth_acquired", False)),
+    ]
+    for (wx, wy), text, complete in objectives:
+        sx, sy = wx - cam_x, wy - cam_y
+        if not (-90 < sx < WIDTH + 90 and -90 < sy < HEIGHT + 90):
+            continue
+        near = bool(STATE.player) and math.hypot(
+            STATE.player.rect.centerx - wx,
+            STATE.player.rect.centery - wy) <= 78
+        col = (105, 210, 150) if complete else ((225, 184, 92) if near else (135, 118, 76))
+        alpha = int(170 + 55 * math.sin(time.time() * 4.0)) if near else 155
+        label = font_terminal_small.render(text, True, col)
+        label.set_alpha(max(70, min(230, alpha)))
+        screen.blit(label, (int(sx - label.get_width() // 2), int(sy - 47)))
+        pygame.draw.circle(screen, col, (int(sx), int(sy)), 22, 2 if near else 1)
+
+    # Diegetic archive-lock status beside the east portal.
+    wx = 44 * TILE_SIZE + TILE_SIZE // 2
+    wy = 24 * TILE_SIZE + TILE_SIZE // 2
+    sx, sy = wx - cam_x, wy - cam_y
+    if -90 < sx < WIDTH + 90 and -90 < sy < HEIGHT + 90:
+        unlocked = getattr(STATE, "m3_relay_tuned", False)
+        text = "ARCHIVE LINK OPEN" if unlocked else "ARCHIVE LINK SEALED"
+        col = (110, 220, 155) if unlocked else (210, 72, 55)
+        label = font_terminal_small.render(text, True, col)
+        screen.blit(label, (int(sx - label.get_width() // 2), int(sy - 48)))
+
+
+def _draw_comms_relay_overlay():
+    if not getattr(STATE, "m3_relay_active", False):
+        return
+    t = getattr(STATE, "m3_relay_timer", 0)
+    duration = int(getattr(STATE, "m3_relay_duration", 360) or 360)
+    progress = max(0.0, min(1.0, t / float(duration)))
+
+    panel_w, panel_h = 650, 280
+    panel_x = WIDTH // 2 - panel_w // 2
+    panel_y = HEIGHT // 2 - panel_h // 2
+
+    dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, 155))
+    screen.blit(dim, (0, 0))
+
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (4, 10, 10, 242), panel.get_rect(), border_radius=7)
+    pygame.draw.rect(panel, (74, 136, 116, 220), panel.get_rect(), 2, border_radius=7)
+    pygame.draw.line(panel, (26, 48, 44, 220), (0, 42), (panel_w, 42), 1)
+
+    title = font_terminal.render("KRAP RELAY TUNER", True, (142, 235, 195))
+    panel.blit(title, (20, 13))
+    sub = font_terminal_small.render("STABILIZATION CENTER // SERVICE RELAY", True, (82, 126, 110))
+    panel.blit(sub, (panel_w - sub.get_width() - 18, 18))
+
+    # Main waveform scope.
+    scope = pygame.Rect(34, 62, 390, 126)
+    pygame.draw.rect(panel, (2, 7, 7), scope, border_radius=4)
+    pygame.draw.rect(panel, (48, 90, 78), scope, 1, border_radius=4)
+    # Scope grid.
+    for gx in range(scope.x + 32, scope.right, 32):
+        pygame.draw.line(panel, (12, 28, 26), (gx, scope.y + 4), (gx, scope.bottom - 4), 1)
+    for gy in range(scope.y + 24, scope.bottom, 24):
+        pygame.draw.line(panel, (12, 28, 26), (scope.x + 4, gy), (scope.right - 4, gy), 1)
+
+    # Target center line and unstable waveform. As progress rises, amplitude and
+    # phase jitter collapse toward a clean signal.
+    pygame.draw.line(panel, (38, 70, 60), (scope.x + 6, scope.centery), (scope.right - 6, scope.centery), 1)
+    pts = []
+    phase_jitter = math.sin(t * 0.041) * (1.0 - progress) * 14
+    amp = 33 * (1.0 - progress) + 7
+    for i in range(scope.w - 14):
+        x = scope.x + 7 + i
+        harmonic = math.sin(i * 0.048 + t * 0.080 + phase_jitter)
+        noise = math.sin(i * 0.19 + t * 0.15) * (1.0 - progress) * 10
+        y = scope.centery + harmonic * amp + noise
+        pts.append((x, y))
+    if len(pts) > 1:
+        pygame.draw.lines(panel, (112, 245, 174), False, pts, 2)
+    # Secondary ghost/noise trace early on.
+    if progress < 0.72:
+        pts2 = []
+        for i in range(scope.w - 14):
+            x = scope.x + 7 + i
+            y = scope.centery + math.sin(i * 0.072 - t * 0.11) * (amp * 0.55) + math.sin(i * 0.31) * (12 * (1-progress))
+            pts2.append((x, y))
+        if len(pts2) > 1:
+            pygame.draw.lines(panel, (50, 120, 102, 80), False, pts2, 1)
+
+    # Right side signal/buffer meter.
+    meter = pygame.Rect(452, 62, 160, 126)
+    pygame.draw.rect(panel, (3, 8, 8), meter, border_radius=4)
+    pygame.draw.rect(panel, (48, 90, 78), meter, 1, border_radius=4)
+    meter_title = font_terminal_small.render("SIGNAL LOCK", True, (116, 170, 145))
+    panel.blit(meter_title, (meter.centerx - meter_title.get_width() // 2, meter.y + 9))
+    for i in range(8):
+        bh = 8 + i * 6
+        bx = meter.x + 25 + i * 14
+        by = meter.bottom - 20 - bh
+        locked = progress >= (i + 1) / 8.8
+        col = (90, 225, 145) if locked else (22, 38, 35)
+        pygame.draw.rect(panel, col, (bx, by, 8, bh), border_radius=2)
+        pygame.draw.rect(panel, (70, 100, 86), (bx, by, 8, bh), 1, border_radius=2)
+
+    # Step boxes — longer sequence than the old three locks.
+    steps = [
+        ("SCAN", 0.16),
+        ("HANDSHAKE", 0.34),
+        ("SYNC", 0.54),
+        ("AUTH", 0.74),
+        ("LOCK", 0.94),
+    ]
+    base_y = 205
+    for idx, (label, threshold) in enumerate(steps):
+        bx = 34 + idx * 116
+        by = base_y
+        complete = progress >= threshold
+        active = (idx == 0 and progress < threshold) or (idx > 0 and progress >= steps[idx-1][1] and progress < threshold)
+        bg = (12, 22, 20) if not complete else (10, 42, 28)
+        border = (80, 220, 130) if complete else ((160, 150, 80) if active else (64, 76, 70))
+        pygame.draw.rect(panel, bg, (bx, by, 92, 34), border_radius=4)
+        pygame.draw.rect(panel, border, (bx, by, 92, 34), 1, border_radius=4)
+        txt = font_terminal_small.render(label, True, (110, 240, 160) if complete else ((210, 190, 90) if active else (110, 125, 118)))
+        panel.blit(txt, (bx + 46 - txt.get_width() // 2, by + 10))
+
+    # Progress line.
+    pygame.draw.rect(panel, (15, 24, 22), (34, 255, panel_w - 68, 9), border_radius=3)
+    pygame.draw.rect(panel, (92, 220, 145), (34, 255, int((panel_w - 68) * progress), 9), border_radius=3)
+    pct = font_terminal_small.render(f"{int(progress * 100):03d}%", True, (120, 200, 160))
+    panel.blit(pct, (panel_w - pct.get_width() - 36, 240))
+
+    # Warning/hold hint.
+    hint = "HOLD POSITION — RELAY CARRIER LOCKING"
+    if progress > 0.92:
+        hint = "SIGNAL STABLE — KRAP HANDSHAKE COMPLETE"
+    hsurf = font_terminal_small.render(hint, True, (120, 150, 132))
+    panel.blit(hsurf, (34, 240))
+
+    screen.blit(panel, (panel_x, panel_y))
+
+
+
+def _draw_m3_enemy_type_overlay(surface, enemy, cam_x, cam_y):
+    """Mission 3 enemy visual differentiation.
+
+    Draw these as equipment layers on top of the shared Enemy.draw() silhouette,
+    not as labels/UI. The goal is: same game style, distinct roles.
+    """
+    et = getattr(enemy, "m3_type", "guard")
+    if et == "guard" or enemy.hp <= 0:
+        return
+    x = enemy.rect.centerx - cam_x
+    y = enemy.rect.centery - cam_y
+    a = enemy.angle
+    dx, dy = math.cos(a), math.sin(a)
+    px, py = -dy, dx
+
+    def _rot_box(cx, cy, length, half_w, col, outline=(10, 10, 10), offset=0.0):
+        ax = cx - dx * length * 0.5 + px * offset
+        ay = cy - dy * length * 0.5 + py * offset
+        bx = cx + dx * length * 0.5 + px * offset
+        by = cy + dy * length * 0.5 + py * offset
+        poly = [(ax + px*half_w, ay + py*half_w), (ax - px*half_w, ay - py*half_w),
+                (bx - px*half_w, by - py*half_w), (bx + px*half_w, by + py*half_w)]
+        pygame.draw.polygon(surface, outline, poly)
+        inner = [(ax + px*(half_w-1), ay + py*(half_w-1)), (ax - px*(half_w-1), ay - py*(half_w-1)),
+                 (bx - px*(half_w-1), by - py*(half_w-1)), (bx + px*(half_w-1), by + py*(half_w-1))]
+        pygame.draw.polygon(surface, col, inner)
+        return poly
+
+    if et == "breacher":
+        # Armored vest + compact weapon, all in-body and in same palette.
+        vest = [(x - 9, y - 11), (x + 9, y - 11), (x + 11, y + 8), (x, y + 13), (x - 11, y + 8)]
+        pygame.draw.polygon(surface, (12, 14, 14), vest)
+        pygame.draw.polygon(surface, (40, 45, 40), [(x - 7, y - 9), (x + 7, y - 9), (x + 8, y + 6), (x, y + 10), (x - 8, y + 6)])
+        # Red shoulder tabs, subtle not UI text.
+        pygame.draw.line(surface, (150, 55, 42), (x - 10, y - 6), (x - 4, y - 9), 3)
+        pygame.draw.line(surface, (150, 55, 42), (x + 10, y - 6), (x + 4, y - 9), 3)
+        # Compact SMG barrel overlay aligned with enemy aim.
+        _rot_box(x + dx*24, y + dy*24, 26, 2.2, (34, 31, 25))
+        pygame.draw.circle(surface, (8, 8, 8), (int(x + dx*38), int(y + dy*38)), 2)
+        # Visor/goggles on head.
+        hx, hy = x + dx*2, y + dy*2
+        pygame.draw.line(surface, (20, 18, 16), (hx - px*5, hy - py*5), (hx + px*5, hy + py*5), 3)
+
+    elif et == "shield":
+        # Riot shield as the silhouette feature. No floating label.
+        cx = x + dx * 20
+        cy = y + dy * 20
+        hw, hh = 13, 23
+        shield = [
+            (cx + px*hw - dx*hh, cy + py*hw - dy*hh),
+            (cx - px*hw - dx*hh, cy - py*hw - dy*hh),
+            (cx - px*hw + dx*hh, cy - py*hw + dy*hh),
+            (cx + px*hw + dx*hh, cy + py*hw + dy*hh),
+        ]
+        pygame.draw.polygon(surface, (8, 12, 14), shield)
+        inner = [
+            (cx + px*(hw-2) - dx*(hh-2), cy + py*(hw-2) - dy*(hh-2)),
+            (cx - px*(hw-2) - dx*(hh-2), cy - py*(hw-2) - dy*(hh-2)),
+            (cx - px*(hw-2) + dx*(hh-2), cy - py*(hw-2) + dy*(hh-2)),
+            (cx + px*(hw-2) + dx*(hh-2), cy + py*(hw-2) + dy*(hh-2)),
+        ]
+        pygame.draw.polygon(surface, (34, 44, 46), inner)
+        pygame.draw.polygon(surface, (110, 130, 124), shield, 2)
+        # Viewport slit.
+        pygame.draw.line(surface, (132, 164, 154),
+                         (cx - px*8 - dx*8, cy - py*8 - dy*8),
+                         (cx + px*8 - dx*8, cy + py*8 - dy*8), 3)
+        # Shield center stripe.
+        pygame.draw.line(surface, (70, 82, 80), (cx - dx*15, cy - dy*15), (cx + dx*17, cy + dy*17), 1)
+
+    elif et == "technician":
+        # Backpack/radio pack + headset, but still same human silhouette.
+        pack_cx = x - dx*10
+        pack_cy = y - dy*10
+        _rot_box(pack_cx, pack_cy, 18, 7, (20, 40, 38), offset=0)
+        pygame.draw.rect(surface, (70, 145, 120), (int(pack_cx-3), int(pack_cy-3), 6, 6))
+        # Antenna/back cable.
+        pygame.draw.line(surface, (88, 170, 135), (int(pack_cx), int(pack_cy-8)), (int(pack_cx - px*5 - dx*12), int(pack_cy - py*5 - dy*12)), 2)
+        # Headset line around head.
+        hx, hy = x + dx*2, y + dy*2
+        pygame.draw.arc(surface, (80, 190, 140), (int(hx-9), int(hy-9), 18, 18), a-1.9, a+1.9, 2)
+        pygame.draw.circle(surface, (80, 220, 140), (int(hx + px*8), int(hy + py*8)), 2)
+        # Small tablet/satchel.
+        tab = pygame.Rect(int(x + px*12 - 5), int(y + py*12 - 4), 12, 8)
+        pygame.draw.rect(surface, (32, 54, 50), tab, border_radius=2)
+        pygame.draw.rect(surface, (86, 140, 120), tab, 1, border_radius=2)
+
+    elif et == "marksman":
+        # Long rifle and scope integrated with base arms.
+        start = (x + dx*13, y + dy*13)
+        end = (x + dx*46, y + dy*46)
+        pygame.draw.line(surface, (8, 8, 8), start, end, 6)
+        pygame.draw.line(surface, (42, 40, 34), start, end, 4)
+        pygame.draw.line(surface, (96, 92, 76), (start[0]-px*1.5, start[1]-py*1.5), (end[0]-px*1.5, end[1]-py*1.5), 1)
+        # Scope and muzzle.
+        scope = (x + dx*24 - px*3, y + dy*24 - py*3)
+        pygame.draw.circle(surface, (12, 16, 16), (int(scope[0]), int(scope[1])), 5)
+        pygame.draw.circle(surface, (92, 150, 128), (int(scope[0]), int(scope[1])), 2)
+        pygame.draw.circle(surface, (5, 5, 5), (int(end[0]), int(end[1])), 2)
+        # Helmet/visor stripe.
+        hx, hy = x + dx*2, y + dy*2
+        pygame.draw.arc(surface, (18, 18, 16), (int(hx-10), int(hy-11), 20, 16), math.pi, math.tau, 4)
+        pygame.draw.line(surface, (120, 95, 60), (hx - px*6, hy - py*6), (hx + px*6, hy + py*6), 2)
+
+
+
+
+def _draw_archives_wing_details(cam_x, cam_y):
+    """Art pass for the redesigned vertical Archives stack."""
+    # ── Elevator lobby (south) ──
+    lx = 18 * TILE_SIZE - cam_x
+    ly = 38 * TILE_SIZE - cam_y
+    lw, lh = 13 * TILE_SIZE, 8 * TILE_SIZE
+    if _screen_visible_rect(lx, ly, lw, lh):
+        # Sealed elevator doors.
+        for ex in (20.5, 26.5):
+            door = pygame.Rect(int(ex * TILE_SIZE - cam_x - 28),
+                               int(44 * TILE_SIZE - cam_y - 40), 56, 80)
+            pygame.draw.rect(screen, (10, 10, 14), door.inflate(8, 8), border_radius=3)
+            pygame.draw.rect(screen, (50, 48, 70), door, border_radius=2)
+            pygame.draw.rect(screen, (130, 120, 170), door, 2, border_radius=2)
+            pygame.draw.line(screen, (90, 85, 120),
+                             (door.centerx, door.top + 6),
+                             (door.centerx, door.bottom - 6), 2)
+        tag = font_terminal_small.render("SERVICE ELEVATOR // SEALED", True, (140, 125, 180))
+        tag.set_alpha(180)
+        screen.blit(tag, (int(24 * TILE_SIZE - cam_x - tag.get_width() // 2),
+                          int(43.1 * TILE_SIZE - cam_y)))
+        stencil = font_terminal_small.render("ARRIVAL LOBBY", True, (120, 110, 150))
+        stencil.set_alpha(150)
+        screen.blit(stencil, (int(24 * TILE_SIZE - cam_x - stencil.get_width() // 2),
+                              int(39.2 * TILE_SIZE - cam_y)))
+
+    # ── Atrium (vertical spine) ──
+    ax = 20 * TILE_SIZE - cam_x
+    ay = 12 * TILE_SIZE - cam_y
+    aw, ah = 9 * TILE_SIZE, 27 * TILE_SIZE
+    if _screen_visible_rect(ax, ay, aw, ah):
+        # Floor stripe down the atrium center.
+        for yy in range(14, 38, 2):
+            stripe = pygame.Rect(int(23.2 * TILE_SIZE - cam_x),
+                                 int(yy * TILE_SIZE - cam_y),
+                                 int(2.6 * TILE_SIZE), 10)
+            pygame.draw.rect(screen, (40, 34, 55), stripe)
+        # Overhead lamp fixtures (hard geometry, no soft blobs).
+        for yy in (16, 22, 28, 34):
+            cx = int(24 * TILE_SIZE - cam_x)
+            cy = int(yy * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (55, 48, 70), (cx - 34, cy - 8, 68, 8), border_radius=2)
+            pygame.draw.rect(screen, (140, 125, 170), (cx - 30, cy - 5, 60, 3), border_radius=1)
+            pygame.draw.line(screen, (90, 80, 120), (cx - 20, cy + 3), (cx + 20, cy + 3), 1)
+        label = font_terminal.render("ATRIUM", True, (160, 140, 200))
+        label.set_alpha(160)
+        screen.blit(label, (int(24 * TILE_SIZE - cam_x - label.get_width() // 2),
+                            int(15 * TILE_SIZE - cam_y)))
+        # Pillar tops.
+        for py_t, px_t in ((22, 22), (22, 26), (30, 22), (30, 26)):
+            px = int(px_t * TILE_SIZE - cam_x + TILE_SIZE // 2)
+            py = int(py_t * TILE_SIZE - cam_y + TILE_SIZE // 2)
+            pygame.draw.rect(screen, (28, 24, 36), (px - 16, py - 16, 32, 32), border_radius=3)
+            pygame.draw.rect(screen, (70, 60, 95), (px - 16, py - 16, 32, 32), 2, border_radius=3)
+
+    # ── West catalog stacks ──
+    sx0 = 4 * TILE_SIZE - cam_x
+    sy0 = 18 * TILE_SIZE - cam_y
+    sw, sh = 17 * TILE_SIZE, 19 * TILE_SIZE
+    if _screen_visible_rect(sx0, sy0, sw, sh):
+        title = font_terminal_small.render("CATALOG STACKS", True, (130, 150, 150))
+        title.set_alpha(170)
+        screen.blit(title, (int(12 * TILE_SIZE - cam_x - title.get_width() // 2),
+                            int(19.2 * TILE_SIZE - cam_y)))
+        # Book spines on aisle walls.
+        for aisle_x in (7, 10, 13, 16):
+            for yy in range(20, 35):
+                if yy in (24, 25, 30, 31):
+                    continue
+                bx = int(aisle_x * TILE_SIZE - cam_x)
+                by = int(yy * TILE_SIZE - cam_y)
+                for i in range(5):
+                    col = ((90, 50, 70), (50, 70, 90), (70, 60, 40),
+                           (60, 40, 80), (40, 55, 50))[(yy + i) % 5]
+                    pygame.draw.rect(screen, col, (bx + 8 + i * 10, by + 12, 7, 36))
+
+    # ── Maru clerk office (hero set-piece) ──
+    mx0 = 6 * TILE_SIZE - cam_x
+    my0 = 8 * TILE_SIZE - cam_y
+    mw, mh = 11 * TILE_SIZE, 11 * TILE_SIZE
+    if _screen_visible_rect(mx0, my0, mw, mh):
+        # Carpet / office floor plate.
+        floor = pygame.Surface((int(mw - 16), int(mh - 16)), pygame.SRCALPHA)
+        floor.fill((32, 26, 42, 55))
+        for yy in range(0, floor.get_height(), 8):
+            pygame.draw.line(floor, (40, 32, 52, 40), (0, yy), (floor.get_width(), yy), 1)
+        screen.blit(floor, (int(mx0 + 8), int(my0 + 8)))
+
+        # Brass wall plaque.
+        label = font_terminal_small.render("CLERK 07 — RESTRICTED", True, (230, 200, 120))
+        pw = label.get_width() + 20
+        plaque = pygame.Rect(int(11 * TILE_SIZE - cam_x - pw // 2),
+                             int(8.35 * TILE_SIZE - cam_y), pw, 22)
+        pygame.draw.rect(screen, (48, 38, 22), plaque, border_radius=2)
+        pygame.draw.rect(screen, (180, 150, 70), plaque, 1, border_radius=2)
+        screen.blit(label, (plaque.centerx - label.get_width() // 2, plaque.y + 4))
+
+        # Back wall shelves packed with dossiers.
+        for col_i, fx in enumerate((7.2, 8.6, 13.4, 14.8)):
+            shelf_x = int(fx * TILE_SIZE - cam_x)
+            shelf_y = int(9.3 * TILE_SIZE - cam_y)
+            # Cabinet body
+            cab = pygame.Rect(shelf_x - 18, shelf_y, 40, 110)
+            pygame.draw.rect(screen, (28, 24, 34), cab, border_radius=2)
+            pygame.draw.rect(screen, (70, 58, 88), cab, 1, border_radius=2)
+            for row in range(5):
+                ry = shelf_y + 8 + row * 20
+                pygame.draw.line(screen, (50, 42, 62), (cab.x + 3, ry), (cab.right - 3, ry), 1)
+                for b in range(4):
+                    bc = ((90, 50, 70), (50, 70, 100), (70, 60, 40), (60, 40, 90))[(row + b + col_i) % 4]
+                    pygame.draw.rect(screen, bc, (cab.x + 5 + b * 8, ry - 14, 6, 13))
+            # Drawer pulls
+            pygame.draw.circle(screen, (160, 140, 90), (cab.centerx, cab.bottom - 12), 2)
+
+        # Cork notice board on north wall.
+        board = pygame.Rect(int(11 * TILE_SIZE - cam_x - 50),
+                            int(9.5 * TILE_SIZE - cam_y), 100, 48)
+        pygame.draw.rect(screen, (92, 68, 40), board, border_radius=2)
+        pygame.draw.rect(screen, (140, 110, 70), board, 1, border_radius=2)
+        for i, (px, py, pw, ph, pc) in enumerate((
+            (6, 6, 28, 16, (220, 210, 180)),
+            (38, 8, 24, 14, (200, 190, 160)),
+            (66, 6, 26, 18, (210, 200, 170)),
+            (12, 26, 32, 14, (190, 185, 160)),
+            (50, 28, 36, 12, (200, 195, 170)),
+        )):
+            pygame.draw.rect(screen, pc, (board.x + px, board.y + py, pw, ph))
+            pygame.draw.circle(screen, (160, 40, 40), (board.x + px + 3, board.y + py + 3), 2)
+
+        # Main dead-drop terminal — heavy console, dual screens, keyboard.
+        term_cx = int(11 * TILE_SIZE - cam_x)
+        term_cy = int(12.1 * TILE_SIZE - cam_y)
+        # Desk slab
+        desk = pygame.Rect(term_cx - 70, term_cy - 18, 140, 58)
+        pygame.draw.rect(screen, (10, 10, 14), (desk.x - 4, desk.y + 40, desk.w + 8, 14), border_radius=2)
+        pygame.draw.rect(screen, (36, 30, 48), desk, border_radius=3)
+        pygame.draw.rect(screen, (110, 90, 150), desk, 2, border_radius=3)
+        # Desk edge highlight
+        pygame.draw.line(screen, (70, 58, 90), (desk.x + 6, desk.y + 4), (desk.right - 6, desk.y + 4), 1)
+        # Twin CRT housings
+        live = not getattr(STATE, "m3_maru_contacted", False)
+        bezel = (180, 150, 230) if live else (90, 190, 140)
+        for ox, w in ((-58, 54), (4, 54)):
+            mon = pygame.Rect(term_cx + ox, term_cy - 10, w, 34)
+            pygame.draw.rect(screen, (18, 16, 24), mon.inflate(6, 6), border_radius=2)
+            pygame.draw.rect(screen, (8, 10, 12), mon, border_radius=2)
+            pygame.draw.rect(screen, bezel, mon, 1, border_radius=2)
+            # phosphor content
+            if live:
+                for i in range(4):
+                    pygame.draw.line(screen, (90, 70, 130),
+                                     (mon.x + 6, mon.y + 8 + i * 6),
+                                     (mon.x + 12 + (i * 7) % 28, mon.y + 8 + i * 6), 1)
+                pygame.draw.circle(screen, bezel, (mon.right - 7, mon.y + 7), 2)
+            else:
+                ok = font_terminal_small.render("OK", True, (100, 210, 140))
+                screen.blit(ok, (mon.centerx - ok.get_width() // 2, mon.centery - 6))
+        # Keyboard
+        kb = pygame.Rect(term_cx - 40, term_cy + 22, 80, 14)
+        pygame.draw.rect(screen, (22, 20, 28), kb, border_radius=2)
+        for i in range(10):
+            pygame.draw.rect(screen, (50, 48, 58), (kb.x + 4 + i * 7, kb.y + 3, 5, 4))
+        # Side tower PC
+        tower = pygame.Rect(term_cx + 62, term_cy - 8, 18, 42)
+        pygame.draw.rect(screen, (24, 22, 30), tower, border_radius=2)
+        pygame.draw.rect(screen, (80, 70, 100), tower, 1, border_radius=2)
+        pygame.draw.circle(screen, bezel, (tower.centerx, tower.y + 10), 2)
+        for i in range(3):
+            pygame.draw.line(screen, (45, 40, 55), (tower.x + 3, tower.y + 18 + i * 6),
+                             (tower.right - 3, tower.y + 18 + i * 6), 1)
+        # Desk lamp
+        pygame.draw.line(screen, (90, 85, 70), (term_cx - 62, term_cy + 8),
+                         (term_cx - 50, term_cy - 22), 2)
+        pygame.draw.polygon(screen, (200, 180, 100),
+                            [(term_cx - 56, term_cy - 24),
+                             (term_cx - 44, term_cy - 20),
+                             (term_cx - 48, term_cy - 14),
+                             (term_cx - 58, term_cy - 16)])
+        # Floor cable
+        pygame.draw.lines(screen, (40, 36, 48), False, [
+            (term_cx + 20, term_cy + 40),
+            (term_cx + 40, term_cy + 55),
+            (term_cx + 70, term_cy + 60),
+        ], 2)
+        # No floor caption here — the wall plaque + near-prompt cover naming
+        # without stacking a third label on the desk.
+
+    # ── East research cubicles ──
+    rx0 = 28 * TILE_SIZE - cam_x
+    ry0 = 18 * TILE_SIZE - cam_y
+    rw, rh = 16 * TILE_SIZE, 19 * TILE_SIZE
+    if _screen_visible_rect(rx0, ry0, rw, rh):
+        label = font_terminal_small.render("RESEARCH", True, (150, 145, 120))
+        label.set_alpha(170)
+        screen.blit(label, (int(35.5 * TILE_SIZE - cam_x - label.get_width() // 2),
+                            int(19.2 * TILE_SIZE - cam_y)))
+        for cx_t, cy_t in ((34, 22), (38, 22), (34, 32), (38, 32)):
+            desk = pygame.Rect(int(cx_t * TILE_SIZE - cam_x - 35),
+                               int(cy_t * TILE_SIZE - cam_y - 20), 70, 40)
+            pygame.draw.rect(screen, (36, 34, 30), desk, border_radius=3)
+            pygame.draw.rect(screen, (90, 85, 70), desk, 1, border_radius=3)
+            pygame.draw.rect(screen, (20, 30, 28), (desk.x + 10, desk.y + 8, 28, 18), border_radius=1)
+            pygame.draw.circle(screen, (80, 200, 120), (desk.right - 14, desk.y + 14), 3)
+
+    # ── Vault vestibule (security antechamber) ──
+    vx0 = 20 * TILE_SIZE - cam_x
+    vy0 = 6 * TILE_SIZE - cam_y
+    vw, vh = 17 * TILE_SIZE, 7 * TILE_SIZE
+    if _screen_visible_rect(vx0, vy0, vw, vh):
+        t_sec = pygame.time.get_ticks() / 1000.0
+        unlocked = getattr(STATE, "m3_maru_contacted", False)
+
+        # 1. High-security two-tone slate marble floor with bevel tiles
+        for ty in range(7, 12):
+            for tx in range(21, 36):
+                fx = int(tx * TILE_SIZE - cam_x)
+                fy = int(ty * TILE_SIZE - cam_y)
+                is_alt = (tx + ty) % 2 == 0
+                bg_col = (42, 38, 34) if is_alt else (28, 25, 22)
+                bevel_col = (62, 56, 50) if is_alt else (42, 38, 33)
+                shadow_col = (18, 16, 14)
+
+                pygame.draw.rect(screen, bg_col, (fx + 1, fy + 1, TILE_SIZE - 2, TILE_SIZE - 2))
+                # Tile bevel highlights
+                pygame.draw.line(screen, bevel_col, (fx + 1, fy + 1), (fx + TILE_SIZE - 2, fy + 1), 1)
+                pygame.draw.line(screen, bevel_col, (fx + 1, fy + 1), (fx + 1, fy + TILE_SIZE - 2), 1)
+                pygame.draw.line(screen, shadow_col, (fx + 1, fy + TILE_SIZE - 2), (fx + TILE_SIZE - 2, fy + TILE_SIZE - 2), 1)
+                pygame.draw.line(screen, shadow_col, (fx + TILE_SIZE - 2, fy + 1), (fx + TILE_SIZE - 2, fy + TILE_SIZE - 2), 1)
+
+        # Floor grid metallic brass/steel inlay seams
+        for tx in range(21, 37):
+            sx = int(tx * TILE_SIZE - cam_x)
+            sy1 = int(7 * TILE_SIZE - cam_y)
+            sy2 = int(12 * TILE_SIZE - cam_y)
+            pygame.draw.line(screen, (16, 14, 12), (sx, sy1), (sx, sy2), 2)
+            pygame.draw.line(screen, (80, 70, 50), (sx, sy1), (sx, sy2), 1)
+
+        for ty in range(7, 13):
+            sy = int(ty * TILE_SIZE - cam_y)
+            sx1 = int(21 * TILE_SIZE - cam_x)
+            sx2 = int(36 * TILE_SIZE - cam_x)
+            pygame.draw.line(screen, (16, 14, 12), (sx1, sy), (sx2, sy), 2)
+            pygame.draw.line(screen, (80, 70, 50), (sx1, sy), (sx2, sy), 1)
+
+        # Central inlaid security floor crest (tile center at 28.5, 9.5)
+        cx_crest = int(28.5 * TILE_SIZE - cam_x)
+        cy_crest = int(9.5 * TILE_SIZE - cam_y)
+        pygame.draw.circle(screen, (18, 16, 14), (cx_crest, cy_crest), 54)
+        pygame.draw.circle(screen, (140, 115, 60), (cx_crest, cy_crest), 52, 2)
+        pygame.draw.circle(screen, (200, 165, 80), (cx_crest, cy_crest), 46, 1)
+        pygame.draw.circle(screen, (32, 28, 24), (cx_crest, cy_crest), 44)
+        # Emblem star / eagle cross geometric inlay
+        for angle in range(0, 360, 45):
+            rad = math.radians(angle)
+            x1 = cx_crest + int(math.cos(rad) * 16)
+            y1 = cy_crest + int(math.sin(rad) * 16)
+            x2 = cx_crest + int(math.cos(rad) * 42)
+            y2 = cy_crest + int(math.sin(rad) * 42)
+            pygame.draw.line(screen, (180, 150, 70), (x1, y1), (x2, y2), 2 if angle % 90 == 0 else 1)
+        pygame.draw.circle(screen, (220, 180, 90), (cx_crest, cy_crest), 10)
+        pygame.draw.circle(screen, (40, 32, 20), (cx_crest, cy_crest), 6)
+
+        # 2. South Warning Hazard Striping along entry threshold (y = 11.75 * TILE_SIZE)
+        bx1 = int(21 * TILE_SIZE - cam_x)
+        bx2 = int(36 * TILE_SIZE - cam_x)
+        by = int(11.7 * TILE_SIZE - cam_y)
+        bw_total = bx2 - bx1
+
+        # Background base plate for hazard striping
+        pygame.draw.rect(screen, (20, 18, 16), (bx1, by, bw_total, 14))
+        # Angled hazard slashes
+        stripe_w = 16
+        for sx in range(bx1 - 16, bx2 + 16, stripe_w * 2):
+            pts = [
+                (max(bx1, min(bx2, sx)), by),
+                (max(bx1, min(bx2, sx + stripe_w)), by),
+                (max(bx1, min(bx2, sx + stripe_w - 8)), by + 14),
+                (max(bx1, min(bx2, sx - 8)), by + 14),
+            ]
+            if pts[1][0] > pts[0][0]:
+                pygame.draw.polygon(screen, (210, 170, 40), pts)
+
+        # Metal edge trim & rivet studs top & bottom
+        pygame.draw.line(screen, (120, 110, 90), (bx1, by), (bx2, by), 2)
+        pygame.draw.line(screen, (120, 110, 90), (bx1, by + 14), (bx2, by + 14), 2)
+        for rx in range(bx1 + 8, bx2, 32):
+            pygame.draw.circle(screen, (180, 170, 150), (rx, by + 2), 2)
+            pygame.draw.circle(screen, (180, 170, 150), (rx, by + 12), 2)
+
+        # 3. Dual Metal-Detector Archways & Security Gate (south doorway tx=23..25, ty=11)
+        gate_x1 = int(23.2 * TILE_SIZE - cam_x)
+        gate_x2 = int(25.8 * TILE_SIZE - cam_x)
+        gate_y = int(11.2 * TILE_SIZE - cam_y)
+
+        # Translucent scanning floor line
+        scan_surf = pygame.Surface((gate_x2 - gate_x1 + 12, 16), pygame.SRCALPHA)
+        scan_alpha = int(120 + 60 * math.sin(t_sec * 4.0))
+        scan_surf.fill((40, 180, 240, scan_alpha // 3))
+        pygame.draw.line(scan_surf, (80, 220, 255, scan_alpha), (0, 8), (gate_x2 - gate_x1 + 12, 8), 3)
+        screen.blit(scan_surf, (gate_x1 - 6, gate_y - 2))
+
+        # Metal detector upright pillars
+        for px_gate in (gate_x1, gate_x2):
+            pill = pygame.Rect(px_gate - 8, gate_y - 12, 16, 28)
+            pygame.draw.rect(screen, (14, 16, 20), pill.inflate(4, 4), border_radius=3)
+            pygame.draw.rect(screen, (50, 56, 66), pill, border_radius=2)
+            pygame.draw.rect(screen, (140, 150, 170), pill, 2, border_radius=2)
+
+            # Indicator lights on top
+            led_col = (80, 220, 120) if unlocked else ((220, 60, 50) if int(t_sec * 3) % 2 == 0 else (120, 30, 25))
+            pygame.draw.circle(screen, led_col, (pill.centerx, pill.y + 6), 3)
+            pygame.draw.circle(screen, (220, 230, 255), (pill.centerx - 1, pill.y + 5), 1)
+
+            # Scanner sensor vertical strip
+            pygame.draw.line(screen, (20, 24, 30), (pill.centerx, pill.y + 12), (pill.centerx, pill.bottom - 4), 3)
+            pygame.draw.line(screen, (60, 200, 255), (pill.centerx, pill.y + 12), (pill.centerx, pill.bottom - 4), 1)
+
+        # Overhead arch bar joining pillars
+        arch_bar = pygame.Rect(gate_x1 - 8, gate_y - 14, (gate_x2 - gate_x1) + 16, 6)
+        pygame.draw.rect(screen, (40, 46, 56), arch_bar, border_radius=1)
+        pygame.draw.rect(screen, (120, 130, 150), arch_bar, 1, border_radius=1)
+
+        # 4. Overhead Dome Security Cameras with Dynamic Laser Cones
+        for cx_t in (23, 30):
+            cx = int(cx_t * TILE_SIZE - cam_x)
+            cy = int(6.4 * TILE_SIZE - cam_y)
+
+            # Laser cone sweep projected down
+            sweep_angle = math.sin(t_sec * 1.5 + (cx_t * 0.7)) * 0.35
+            laser_w = 48
+            laser_h = 96
+            poly_laser = [
+                (cx, cy + 12),
+                (cx - laser_w + int(sweep_angle * 35), cy + laser_h),
+                (cx + laser_w + int(sweep_angle * 35), cy + laser_h),
+            ]
+            laser_surf = pygame.Surface((vw, vh), pygame.SRCALPHA)
+            # draw laser relative to room visible rect
+            rel_pts = [(p[0] - vx0, p[1] - vy0) for p in poly_laser]
+            pygame.draw.polygon(laser_surf, (220, 50, 40, 22), rel_pts)
+            pygame.draw.polygon(laser_surf, (255, 100, 80, 50), rel_pts, 1)
+            screen.blit(laser_surf, (vx0, vy0))
+
+            # Wall mount bracket & conduit pipe
+            pygame.draw.line(screen, (40, 42, 48), (cx, cy - 8), (cx, cy + 4), 4)
+            pygame.draw.rect(screen, (25, 28, 34), (cx - 14, cy - 10, 28, 8), border_radius=2)
+            pygame.draw.rect(screen, (90, 95, 110), (cx - 14, cy - 10, 28, 8), 1, border_radius=2)
+
+            # Dome housing
+            pygame.draw.circle(screen, (18, 20, 24), (cx, cy + 12), 11)
+            pygame.draw.circle(screen, (60, 65, 78), (cx, cy + 12), 11, 2)
+            # Tinted glass lens
+            pygame.draw.circle(screen, (30, 35, 45), (cx, cy + 12), 8)
+            # Lens specular reflection
+            pygame.draw.arc(screen, (200, 220, 255), (cx - 6, cy + 6, 12, 12), math.radians(45), math.radians(160), 2)
+            # Recording status LED
+            rec_led = (240, 40, 40) if int(t_sec * 2.5) % 2 == 0 else (120, 20, 20)
+            pygame.draw.circle(screen, rec_led, (cx + 5, cy + 8), 2)
+
+        # 5. Wall Sign Plaque ("SECURITY VESTIBULE // ZONE 04")
+        lab = font_prompt.render("SECURITY VESTIBULE", True, (245, 215, 120))
+        sub_lab = font_terminal_small.render("ZONE 04 — SECURITY CHECKPOINT", True, (180, 160, 110))
+
+        pw = max(lab.get_width(), sub_lab.get_width()) + 20
+        ph = 28
+        target_cx = int(30.5 * TILE_SIZE - cam_x)
+        sign_x = target_cx - pw // 2
+
+        # Strict bounds clamping: keep plaque on solid north wall between doorway (col 26) and east wall (col 36)
+        min_x = int(26.2 * TILE_SIZE - cam_x)
+        max_x = int(35.8 * TILE_SIZE - cam_x - pw)
+        if max_x >= min_x:
+            sign_x = max(min_x, min(max_x, sign_x))
+
+        sign = pygame.Rect(sign_x, int(6.35 * TILE_SIZE - cam_y), pw, ph)
+
+        # Drop shadow
+        pygame.draw.rect(screen, (10, 8, 6), sign.move(2, 2), border_radius=3)
+        # Metallic brass frame
+        pygame.draw.rect(screen, (42, 34, 20), sign, border_radius=3)
+        pygame.draw.rect(screen, (180, 145, 65), sign, 2, border_radius=3)
+        pygame.draw.rect(screen, (100, 80, 35), sign.inflate(-4, -4), 1, border_radius=2)
+
+        # Rivets
+        for rx, ry in ((sign.x + 3, sign.y + 3), (sign.right - 4, sign.y + 3),
+                       (sign.x + 3, sign.bottom - 4), (sign.right - 4, sign.bottom - 4)):
+            pygame.draw.circle(screen, (220, 185, 90), (rx, ry), 2)
+
+        screen.blit(lab, (sign.centerx - lab.get_width() // 2, sign.y + 2))
+        screen.blit(sub_lab, (sign.centerx - sub_lab.get_width() // 2, sign.y + 15))
+
+        # 6. High-Detail Central Card-Catalog / Security Desk Console Island
+        cat = pygame.Rect(int(28 * TILE_SIZE - cam_x - 70),
+                          int(9 * TILE_SIZE - cam_y - 22), 140, 48)
+        # Soft floor shadow
+        pygame.draw.rect(screen, (12, 10, 8), cat.move(4, 6), border_radius=4)
+
+        # Mahogany body
+        pygame.draw.rect(screen, (52, 38, 24), cat, border_radius=4)
+        pygame.draw.rect(screen, (150, 115, 65), cat, 2, border_radius=4)
+
+        # Corner brass trim plates
+        for bx_c, by_c in ((cat.x, cat.y), (cat.right - 8, cat.y),
+                           (cat.x, cat.bottom - 8), (cat.right - 8, cat.bottom - 8)):
+            corner_r = pygame.Rect(bx_c, by_c, 8, 8)
+            pygame.draw.rect(screen, (180, 145, 65), corner_r)
+            pygame.draw.circle(screen, (80, 60, 25), corner_r.center, 1)
+
+        # Drawer Matrix (2 rows x 7 drawers)
+        for row in range(2):
+            for i in range(7):
+                drawer = pygame.Rect(cat.x + 8 + i * 18, cat.y + 6 + row * 20, 15, 16)
+                pygame.draw.rect(screen, (32, 24, 16), drawer, border_radius=2)
+                pygame.draw.rect(screen, (95, 72, 42), drawer, 1, border_radius=2)
+
+                # Brass index label card slot
+                label_slot = pygame.Rect(drawer.x + 2, drawer.y + 2, 11, 6)
+                pygame.draw.rect(screen, (210, 200, 170), label_slot)
+                pygame.draw.rect(screen, (160, 125, 55), label_slot, 1)
+                pygame.draw.line(screen, (40, 30, 20), (label_slot.x + 2, label_slot.y + 3), (label_slot.right - 2, label_slot.y + 3), 1)
+
+                # Brass pull handle
+                pygame.draw.rect(screen, (180, 145, 65), (drawer.centerx - 3, drawer.y + 10, 6, 3), border_radius=1)
+
+        # Desktop accessories (Logbook + Gooseneck Lamp)
+        logbook = pygame.Rect(cat.x + 14, cat.y + 12, 22, 24)
+        pygame.draw.rect(screen, (140, 40, 30), logbook, border_radius=2)
+        pygame.draw.rect(screen, (220, 210, 185), (logbook.x + 2, logbook.y + 2, logbook.w - 4, logbook.h - 4))
+        for ly in range(logbook.y + 5, logbook.bottom - 4, 4):
+            pygame.draw.line(screen, (80, 90, 120), (logbook.x + 4, ly), (logbook.right - 4, ly), 1)
+
+        # Desk gooseneck lamp with warm radial glow on desk
+        lamp_x = cat.right - 22
+        lamp_y = cat.y + 16
+        glow_surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (255, 220, 140, 35), (32, 32), 32)
+        pygame.draw.circle(glow_surf, (255, 235, 180, 60), (32, 32), 18)
+        screen.blit(glow_surf, (lamp_x - 32, lamp_y - 32))
+
+        pygame.draw.line(screen, (160, 130, 70), (lamp_x + 6, lamp_y + 12), (lamp_x, lamp_y), 2)
+        pygame.draw.polygon(screen, (210, 170, 70), [(lamp_x - 6, lamp_y - 4), (lamp_x + 6, lamp_y - 4), (lamp_x + 8, lamp_y + 4), (lamp_x - 8, lamp_y + 4)])
+
+        # 7. Heavy Access Terminal & Biometric Keypad next to Vault Door
+        pad = pygame.Rect(int(35.2 * TILE_SIZE - cam_x),
+                          int(8.1 * TILE_SIZE - cam_y), 26, 38)
+
+        # Cable conduit coming from ceiling
+        pygame.draw.line(screen, (25, 28, 32), (pad.centerx, pad.y - 14), (pad.centerx, pad.y), 3)
+        pygame.draw.line(screen, (70, 80, 90), (pad.centerx, pad.y - 14), (pad.centerx, pad.y), 1)
+
+        # Terminal body frame
+        pygame.draw.rect(screen, (10, 12, 14), pad.move(2, 2), border_radius=3)
+        pygame.draw.rect(screen, (28, 34, 40), pad, border_radius=3)
+        pygame.draw.rect(screen, (110, 130, 140), pad, 2, border_radius=3)
+
+        # Screen display box
+        scr_rect = pygame.Rect(pad.x + 3, pad.y + 4, 20, 12)
+        pygame.draw.rect(screen, (8, 14, 12) if unlocked else (16, 8, 8), scr_rect)
+        pygame.draw.rect(screen, (60, 160, 120) if unlocked else (160, 60, 50), scr_rect, 1)
+
+        # Phosphor status text lines inside screen
+        scr_col = (80, 230, 140) if unlocked else (240, 80, 70)
+        for i in range(2):
+            pygame.draw.line(screen, scr_col, (scr_rect.x + 2, scr_rect.y + 3 + i * 4), (scr_rect.right - 3, scr_rect.y + 3 + i * 4), 1)
+
+        # Keypad buttons (3 cols x 3 rows)
+        for r in range(3):
+            for c in range(3):
+                kp_btn = pygame.Rect(pad.x + 4 + c * 6, pad.y + 18 + r * 4, 4, 3)
+                pygame.draw.rect(screen, (60, 70, 75), kp_btn, border_radius=1)
+
+        # Biometric thumbprint reader slot below buttons
+        bio = pygame.Rect(pad.x + 4, pad.y + 31, 18, 4)
+        pygame.draw.rect(screen, (15, 18, 22), bio, border_radius=1)
+        bio_laser = scr_col if int(t_sec * 4) % 2 == 0 else (100, 100, 100)
+        pygame.draw.line(screen, bio_laser, (bio.x + 2, bio.centery), (bio.right - 2, bio.centery), 1)
+
+        # Wall emergency override lock box on West wall (tx=21, ty=8.5)
+        box_x = int(21.1 * TILE_SIZE - cam_x)
+        box_y = int(8.5 * TILE_SIZE - cam_y)
+        lockbox = pygame.Rect(box_x, box_y, 18, 24)
+        pygame.draw.rect(screen, (140, 30, 25), lockbox, border_radius=2)
+        pygame.draw.rect(screen, (200, 60, 50), lockbox, 1, border_radius=2)
+        pygame.draw.rect(screen, (220, 230, 240, 120), (lockbox.x + 3, lockbox.y + 3, 12, 18))
+        pygame.draw.rect(screen, (180, 190, 200), (lockbox.x + 3, lockbox.y + 3, 12, 18), 1)
+        pygame.draw.line(screen, (200, 40, 40), (lockbox.x + 6, lockbox.y + 12), (lockbox.right - 6, lockbox.y + 12), 2)
+
+    # ── Vostral cold vault (prize room) ──
+    # Dense archive vault: metal floor, wall racks, cryo canisters, and a
+    # single glass-case centerpiece. No stacked floating labels.
+    vx = 36 * TILE_SIZE - cam_x
+    vy = 4 * TILE_SIZE - cam_y
+    vw, vh = 11 * TILE_SIZE, 11 * TILE_SIZE
+    if _screen_visible_rect(vx, vy, vw, vh):
+        # Dark steel floor tiles.
+        for ty in range(5, 14):
+            for tx in range(37, 46):
+                fx = int(tx * TILE_SIZE - cam_x)
+                fy = int(ty * TILE_SIZE - cam_y)
+                base = (28, 32, 36) if (tx + ty) % 2 == 0 else (22, 26, 30)
+                pygame.draw.rect(screen, base, (fx + 1, fy + 1, TILE_SIZE - 2, TILE_SIZE - 2))
+                pygame.draw.rect(screen, (14, 16, 18), (fx + 1, fy + 1, TILE_SIZE - 2, TILE_SIZE - 2), 1)
+                # Bolt marks in corners of every other tile.
+                if (tx + ty) % 2 == 0:
+                    for ox, oy in ((4, 4), (TILE_SIZE - 8, 4), (4, TILE_SIZE - 8), (TILE_SIZE - 8, TILE_SIZE - 8)):
+                        pygame.draw.circle(screen, (50, 55, 60), (fx + ox, fy + oy), 2)
+
+        # Hazard tape strip along the inner wall perimeter.
+        for tx in range(37, 46):
+            bx = int(tx * TILE_SIZE - cam_x)
+            by = int(5.15 * TILE_SIZE - cam_y)
+            col = (200, 170, 40) if tx % 2 == 0 else (18, 16, 14)
+            pygame.draw.rect(screen, col, (bx, by, TILE_SIZE, 5))
+        for ty in range(5, 14):
+            for tx in (37, 45):
+                bx = int(tx * TILE_SIZE - cam_x + (0 if tx == 37 else TILE_SIZE - 5))
+                by = int(ty * TILE_SIZE - cam_y)
+                col = (200, 170, 40) if ty % 2 == 0 else (18, 16, 14)
+                pygame.draw.rect(screen, col, (bx, by, 5, TILE_SIZE))
+
+        # North wall plaque (single clean title).
+        title = font_prompt.render("VOSTRAL VAULT", True, (255, 220, 140))
+        tw = title.get_width() + 28
+        title_bg = pygame.Rect(int(41 * TILE_SIZE - cam_x - tw // 2),
+                               int(4.55 * TILE_SIZE - cam_y), tw, 26)
+        pygame.draw.rect(screen, (24, 20, 14), title_bg, border_radius=2)
+        pygame.draw.rect(screen, (190, 150, 60), title_bg, 2, border_radius=2)
+        screen.blit(title, (title_bg.centerx - title.get_width() // 2, title_bg.y + 5))
+
+        # West wall: vertical file racks (fills the old empty glass-stripe zone).
+        for i, ty in enumerate((6.2, 8.0, 9.8, 11.6)):
+            rx = int(37.55 * TILE_SIZE - cam_x)
+            ry = int(ty * TILE_SIZE - cam_y)
+            rack = pygame.Rect(rx, ry, 52, 70)
+            pygame.draw.rect(screen, (18, 20, 24), rack, border_radius=2)
+            pygame.draw.rect(screen, (70, 80, 90), rack, 1, border_radius=2)
+            for row in range(4):
+                yy = ry + 8 + row * 14
+                pygame.draw.line(screen, (40, 48, 55), (rx + 4, yy), (rx + 48, yy), 1)
+                for b in range(5):
+                    bc = ((90, 40, 40), (40, 60, 90), (70, 60, 35), (50, 45, 70), (35, 55, 50))[(i + row + b) % 5]
+                    pygame.draw.rect(screen, bc, (rx + 6 + b * 8, yy - 10, 6, 10))
+
+        # East wall: cryo canisters + conduit.
+        for i, ty in enumerate((6.4, 8.6, 10.8)):
+            cx = int(44.6 * TILE_SIZE - cam_x)
+            cy = int(ty * TILE_SIZE - cam_y)
+            # Tank body
+            pygame.draw.ellipse(screen, (12, 14, 16), (cx - 18, cy + 40, 36, 12))
+            tank = pygame.Rect(cx - 16, cy, 32, 44)
+            pygame.draw.rect(screen, (48, 58, 68), tank, border_radius=4)
+            pygame.draw.rect(screen, (90, 120, 140), tank, 2, border_radius=4)
+            pygame.draw.rect(screen, (30, 40, 50), (cx - 12, cy + 6, 24, 18), border_radius=2)
+            # Frost lines
+            for ly in (cy + 8, cy + 14, cy + 20):
+                pygame.draw.line(screen, (140, 180, 200), (cx - 10, ly), (cx + 8, ly), 1)
+            # Valve
+            pygame.draw.circle(screen, (160, 160, 150), (cx, cy + 2), 4)
+            pygame.draw.circle(screen, (80, 80, 70), (cx, cy + 2), 4, 1)
+            # Status LED
+            led = (80, 200, 220) if i != 1 else (200, 80, 60)
+            pygame.draw.circle(screen, led, (cx + 10, cy + 30), 2)
+        # Pipe along east wall
+        pygame.draw.line(screen, (60, 70, 80),
+                         (int(45.4 * TILE_SIZE - cam_x), int(6.2 * TILE_SIZE - cam_y)),
+                         (int(45.4 * TILE_SIZE - cam_x), int(12.8 * TILE_SIZE - cam_y)), 4)
+        pygame.draw.line(screen, (100, 120, 130),
+                         (int(45.4 * TILE_SIZE - cam_x) - 1, int(6.2 * TILE_SIZE - cam_y)),
+                         (int(45.4 * TILE_SIZE - cam_x) - 1, int(12.8 * TILE_SIZE - cam_y)), 1)
+
+        # South wall bench with tools.
+        bench = pygame.Rect(int(39.5 * TILE_SIZE - cam_x),
+                            int(12.6 * TILE_SIZE - cam_y), 140, 28)
+        pygame.draw.rect(screen, (16, 16, 18), (bench.x + 4, bench.bottom - 2, bench.w - 4, 8))
+        pygame.draw.rect(screen, (42, 40, 38), bench, border_radius=2)
+        pygame.draw.rect(screen, (90, 85, 70), bench, 1, border_radius=2)
+        for i in range(4):
+            pygame.draw.rect(screen, (70, 70, 65), (bench.x + 12 + i * 30, bench.y + 6, 18, 10), border_radius=1)
+            pygame.draw.circle(screen, (180, 160, 60), (bench.x + 21 + i * 30, bench.y + 20), 2)
+
+        # Overhead hard light bars (no soft blobs).
+        for lx in (39.5, 42.0, 44.5):
+            x = int(lx * TILE_SIZE - cam_x)
+            y = int(5.5 * TILE_SIZE - cam_y)
+            pygame.draw.rect(screen, (50, 55, 60), (x - 28, y, 56, 7), border_radius=2)
+            pygame.draw.rect(screen, (200, 210, 220), (x - 24, y + 2, 48, 3), border_radius=1)
+
+        # ── Centerpiece: multi-tier pedestal + glass cube ──
+        ped_cx = int(42 * TILE_SIZE - cam_x)
+        ped_cy = int(9.1 * TILE_SIZE - cam_y)
+
+        # Floor ring / warning circle (thin, geometric — not a blob).
+        for r, c in ((54, (50, 55, 60)), (48, (90, 80, 40)), (42, (50, 55, 60))):
+            pygame.draw.circle(screen, c, (ped_cx, ped_cy + 18), r, 2)
+        # Cross marks on ring
+        for ang in (0, 90, 180, 270):
+            rad = math.radians(ang)
+            pygame.draw.line(screen, (120, 100, 50),
+                             (ped_cx + math.cos(rad) * 44, ped_cy + 18 + math.sin(rad) * 44),
+                             (ped_cx + math.cos(rad) * 52, ped_cy + 18 + math.sin(rad) * 52), 2)
+
+        # Tiered stone/metal base
+        pygame.draw.rect(screen, (18, 18, 20), (ped_cx - 40, ped_cy + 22, 80, 12), border_radius=2)
+        pygame.draw.rect(screen, (55, 52, 48), (ped_cx - 36, ped_cy + 10, 72, 16), border_radius=2)
+        pygame.draw.rect(screen, (100, 90, 70), (ped_cx - 36, ped_cy + 10, 72, 16), 1, border_radius=2)
+        # Column
+        pygame.draw.rect(screen, (40, 38, 36), (ped_cx - 18, ped_cy - 8, 36, 22), border_radius=2)
+        pygame.draw.rect(screen, (120, 105, 70), (ped_cx - 18, ped_cy - 8, 36, 22), 2, border_radius=2)
+        # Brass capital
+        pygame.draw.rect(screen, (150, 125, 55), (ped_cx - 26, ped_cy - 14, 52, 10), border_radius=2)
+        pygame.draw.rect(screen, (200, 170, 80), (ped_cx - 26, ped_cy - 14, 52, 10), 1, border_radius=2)
+        # Tiny bolts on capital
+        for ox in (-18, -6, 6, 18):
+            pygame.draw.circle(screen, (90, 75, 40), (ped_cx + ox, ped_cy - 9), 2)
+
+        taken = getattr(STATE, "m3_vostral_acquired", False)
+        # Glass cube case
+        case = pygame.Rect(ped_cx - 28, ped_cy - 58, 56, 48)
+        # Shadow under case
+        pygame.draw.rect(screen, (10, 12, 14), (case.x + 4, case.bottom - 2, case.w - 4, 6))
+        # Metal frame
+        pygame.draw.rect(screen, (70, 78, 86), case, border_radius=2)
+        pygame.draw.rect(screen, (160, 170, 180), case, 2, border_radius=2)
+        # Glass fill
+        glass = pygame.Surface((case.w - 6, case.h - 6), pygame.SRCALPHA)
+        glass.fill((140, 180, 200, 28))
+        # Diagonal highlight
+        pygame.draw.line(glass, (220, 240, 255, 50), (4, 4), (glass.get_width() - 8, glass.get_height() // 2), 2)
+        screen.blit(glass, (case.x + 3, case.y + 3))
+        # Corner brackets
+        for cx0, cy0, dx, dy in (
+            (case.x, case.y, 1, 1),
+            (case.right, case.y, -1, 1),
+            (case.x, case.bottom, 1, -1),
+            (case.right, case.bottom, -1, -1),
+        ):
+            pygame.draw.line(screen, (200, 210, 220), (cx0, cy0), (cx0 + dx * 10, cy0), 2)
+            pygame.draw.line(screen, (200, 210, 220), (cx0, cy0), (cx0, cy0 + dy * 10), 2)
+
+        if not taken:
+            # Dossier inside case — readable, single object
+            folder = pygame.Rect(ped_cx - 14, ped_cy - 46, 28, 24)
+            pygame.draw.rect(screen, (120, 22, 22), folder, border_radius=2)
+            pygame.draw.rect(screen, (200, 160, 60), folder, 2, border_radius=2)
+            pygame.draw.line(screen, (240, 200, 100), (folder.x + 4, folder.y + 7), (folder.right - 4, folder.y + 7), 1)
+            pygame.draw.line(screen, (240, 200, 100), (folder.x + 4, folder.y + 12), (folder.right - 6, folder.y + 12), 1)
+            # Wax seal on folder
+            pygame.draw.circle(screen, (100, 18, 18), (folder.centerx, folder.bottom - 6), 4)
+            pygame.draw.circle(screen, (190, 150, 50), (folder.centerx, folder.bottom - 6), 4, 1)
+            # Nameplate ON the case front only (one label).
+            plate_w = 72
+            plate = pygame.Rect(ped_cx - plate_w // 2, case.bottom - 2, plate_w, 16)
+            pygame.draw.rect(screen, (20, 18, 14), plate, border_radius=2)
+            pygame.draw.rect(screen, (200, 170, 70), plate, 1, border_radius=2)
+            nm = font_terminal_small.render("VOSTRAL  ·  Y-1", True, (255, 230, 150))
+            screen.blit(nm, (plate.centerx - nm.get_width() // 2, plate.y + 2))
+        else:
+            # Empty mount
+            pygame.draw.rect(screen, (40, 44, 48), (ped_cx - 12, ped_cy - 40, 24, 8), border_radius=1)
+            plate_w = 72
+            plate = pygame.Rect(ped_cx - plate_w // 2, case.bottom - 2, plate_w, 16)
+            pygame.draw.rect(screen, (14, 20, 16), plate, border_radius=2)
+            pygame.draw.rect(screen, (100, 180, 130), plate, 1, border_radius=2)
+            nm = font_terminal_small.render("CASE EMPTY", True, (140, 210, 160))
+            screen.blit(nm, (plate.centerx - nm.get_width() // 2, plate.y + 2))
+
+        # Side spot lamps aimed at case (hard geometry).
+        for side in (-1, 1):
+            lx = ped_cx + side * 58
+            ly = ped_cy - 30
+            pygame.draw.rect(screen, (40, 42, 46), (lx - 6, ly - 8, 12, 10), border_radius=1)
+            pygame.draw.polygon(screen, (70, 75, 80),
+                                [(lx, ly + 2), (lx - side * 8, ly + 18), (lx + side * 4, ly + 18)])
+
+    # ── North stairwell exit ──
+    ex = 22 * TILE_SIZE - cam_x
+    ey = 2 * TILE_SIZE - cam_y
+    if _screen_visible_rect(ex, ey, 7 * TILE_SIZE, 5 * TILE_SIZE):
+        unlocked = getattr(STATE, "m3_vostral_acquired", False)
+        sx_center = int(25 * TILE_SIZE - cam_x)
+
+        # Recessed stairwell cavity background
+        stair_box = pygame.Rect(int(23.5 * TILE_SIZE - cam_x),
+                                int(2.4 * TILE_SIZE - cam_y),
+                                int(3.0 * TILE_SIZE),
+                                int(3.4 * TILE_SIZE))
+        pygame.draw.rect(screen, (14, 16, 20), stair_box, border_radius=2)
+        pygame.draw.rect(screen, (35, 40, 50), stair_box, 1, border_radius=2)
+
+        # 1. 3D Top-Down Concrete Step Treads
+        step_rows = [5.3, 4.8, 4.3, 3.8, 3.3, 2.8]
+        nose_col = (140, 220, 160) if unlocked else (210, 160, 50)
+
+        for idx, r_y in enumerate(step_rows):
+            sy = int(r_y * TILE_SIZE - cam_y)
+            step_w = int(108 - idx * 4)  # Slight perspective narrowing towards top landing
+            step_x = sx_center - step_w // 2
+
+            # Step riser (shadow face under tread)
+            pygame.draw.rect(screen, (18, 20, 26), (step_x, sy, step_w, 3))
+            # Step tread surface
+            tread = pygame.Rect(step_x, sy + 3, step_w, 8)
+            pygame.draw.rect(screen, (48, 54, 64), tread)
+            pygame.draw.rect(screen, (32, 36, 44), tread, 1)
+
+            # Anti-slip texture lines
+            for gx in range(step_x + 8, step_x + step_w - 8, 12):
+                pygame.draw.line(screen, (38, 44, 52), (gx, sy + 5), (gx + 6, sy + 5), 1)
+
+            # High-visibility nosing lip along front edge
+            pygame.draw.line(screen, nose_col, (step_x + 2, sy + 3), (step_x + step_w - 2, sy + 3), 2)
+
+            # Step side wall lights (recessed lamps)
+            if idx in (1, 4):
+                for side_x in (step_x - 4, step_x + step_w + 1):
+                    pygame.draw.circle(screen, (120, 130, 140), (side_x + 1, sy + 4), 2)
+                    lamp_glow = nose_col + (40,)
+                    gl_surf = pygame.Surface((16, 16), pygame.SRCALPHA)
+                    pygame.draw.circle(gl_surf, lamp_glow, (8, 8), 7)
+                    screen.blit(gl_surf, (side_x - 7, sy - 4))
+
+        # 2. Stainless Steel Safety Banister Handrails
+        x_left_bottom, y_bottom = sx_center - 50, int(5.4 * TILE_SIZE - cam_y)
+        x_left_top, y_top = sx_center - 42, int(2.7 * TILE_SIZE - cam_y)
+
+        x_right_bottom = sx_center + 50
+        x_right_top = sx_center + 42
+
+        for (x_b, x_t) in ((x_left_bottom, x_left_top), (x_right_bottom, x_right_top)):
+            # Shadow line
+            pygame.draw.line(screen, (12, 14, 18), (x_b + 2, y_bottom + 2), (x_t + 2, y_top + 2), 4)
+            # Main tubular rail
+            pygame.draw.line(screen, (80, 90, 105), (x_b, y_bottom), (x_t, y_top), 4)
+            # Top specular shine
+            pygame.draw.line(screen, (200, 215, 235), (x_b, y_bottom - 1), (x_t, y_top - 1), 1)
+
+            # Vertical support stanchions attached to steps
+            for frac in (0.2, 0.55, 0.85):
+                px_rail = int(x_b + (x_t - x_b) * frac)
+                py_rail = int(y_bottom + (y_top - y_bottom) * frac)
+                pygame.draw.line(screen, (100, 110, 125), (px_rail, py_rail), (px_rail, py_rail + 6), 2)
+                pygame.draw.circle(screen, (160, 170, 180), (px_rail, py_rail + 6), 2)
+
+        # 3. Backlit Exit Sign Plaque on North Landing Wall
+        col_sign = (80, 220, 140) if unlocked else (230, 70, 60)
+        bg_sign = (12, 38, 22) if unlocked else (48, 14, 14)
+        txt_str = "EXIT → KILL ORDER" if unlocked else "STAIRWELL SEALED"
+
+        sign_lbl = font_terminal_small.render(txt_str, True, col_sign)
+        sign_w = sign_lbl.get_width() + 20
+        sign_rect = pygame.Rect(sx_center - sign_w // 2, int(2.15 * TILE_SIZE - cam_y), sign_w, 20)
+
+        # Glow halo
+        glow_box = sign_rect.inflate(8, 6)
+        glow_surf = pygame.Surface((glow_box.w, glow_box.h), pygame.SRCALPHA)
+        pygame.draw.rect(glow_surf, col_sign + (40,), glow_surf.get_rect(), border_radius=4)
+        screen.blit(glow_surf, glow_box)
+
+        # Frame and plate
+        pygame.draw.rect(screen, bg_sign, sign_rect, border_radius=3)
+        pygame.draw.rect(screen, col_sign, sign_rect, 2, border_radius=3)
+        screen.blit(sign_lbl, (sign_rect.centerx - sign_lbl.get_width() // 2, sign_rect.y + 2))
+
+
+def _draw_archives_map_polish(cam_x, cam_y):
+    """Room frames only. Hero rooms keep their custom wall plaques —
+    duplicate frame labels (DEAD-DROP / VOSTRAL / VESTIBULE) used to
+    stack on top of those plaques and clip."""
+    _draw_rect_room_frame(cam_x, cam_y, 18, 38, 13, 8, gaps_top=[(23, 25)],
+                          label="LOBBY", label_col=(140, 120, 180))
+    _draw_rect_room_frame(cam_x, cam_y, 20, 12, 9, 27, gaps_bottom=[(23, 25)],
+                          gaps_top=[(23, 25)], gaps_left=[(24, 25)], gaps_right=[(24, 25)],
+                          label="ATRIUM", label_col=(160, 140, 200))
+    _draw_rect_room_frame(cam_x, cam_y, 4, 18, 17, 19, gaps_right=[(24, 25)],
+                          gaps_top=[(10, 11)],
+                          label="STACKS", label_col=(120, 150, 145))
+    # Clerk office / dead-drop — frame only, plaque drawn in wing details.
+    _draw_rect_room_frame(cam_x, cam_y, 6, 8, 11, 11, gaps_bottom=[(10, 11)],
+                          label=None)
+    _draw_rect_room_frame(cam_x, cam_y, 28, 18, 16, 19, gaps_left=[(24, 25)],
+                          label="RESEARCH", label_col=(150, 145, 120))
+    # Vestibule + vault + exit — custom signs only.
+    _draw_rect_room_frame(cam_x, cam_y, 20, 6, 16, 6,
+                          gaps_top=[(24, 25)], gaps_bottom=[(23, 25)], gaps_right=[(8, 9)],
+                          label=None)
+    _draw_rect_room_frame(cam_x, cam_y, 36, 4, 10, 10, gaps_left=[(8, 9)],
+                          label=None)
+    _draw_rect_room_frame(cam_x, cam_y, 22, 2, 7, 5, gaps_bottom=[(24, 25)],
+                          label=None)
+
+
+def _draw_prompt_tag(sx, sy, text, col, *, y_off=-46):
+    """Readable world prompt: solid plate + bright text. Clamped on-screen."""
+    label = font_prompt.render(text, True, col)
+    pad_x, pad_y = 10, 5
+    w = label.get_width() + pad_x * 2
+    h = label.get_height() + pad_y * 2
+    x = int(sx - w // 2)
+    y = int(sy + y_off)
+    # Keep fully inside the viewport (avoids cutoff at room edges / HUD).
+    x = max(6, min(WIDTH - w - 6, x))
+    y = max(52, min(HEIGHT - h - 70, y))  # leave room for objective + ammo HUD
+    plate = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(plate, (8, 8, 12, 220), plate.get_rect(), border_radius=3)
+    pygame.draw.rect(plate, (*col[:3], 220), plate.get_rect(), 1, border_radius=3)
+    screen.blit(plate, (x, y))
+    screen.blit(label, (x + pad_x, y + pad_y))
+
+
+def _draw_archives_system_prompts(cam_x, cam_y):
+    """Sparse world prompts — only when the player is in range to act.
+
+    Far-away status labels used to stack on room plaques and get clipped.
+    The nav arrow + objective panel already handle long-range guidance.
+    """
+    if getattr(STATE, "mission3_stage", None) not in (STAGE_ARCHIVES, STAGE_KILL_ORDER):
+        return
+    if not STATE.player:
+        return
+    if getattr(STATE, "m3_maru_contact_active", False):
+        return  # fullscreen overlay owns the UI
+
+    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+
+    # Maru terminal — only when close enough to interact.
+    mx, my = _maru_terminal_pos()
+    if math.hypot(px - mx, py - my) <= 88:
+        sx, sy = mx - cam_x, my - cam_y
+        if getattr(STATE, "m3_maru_contacted", False):
+            _draw_prompt_tag(sx, sy, "CHANNEL CLOSED", (120, 220, 160), y_off=-62)
+        else:
+            _draw_prompt_tag(sx, sy, "[E] CONTACT MARU", (255, 210, 110), y_off=-62)
+
+    # Vostral file — near pedestal only.
+    if not getattr(STATE, "m3_vostral_acquired", False):
+        vx, vy = _vostral_file_pos()
+        if math.hypot(px - vx, py - vy) <= 96:
+            sx, sy = vx - cam_x, vy - cam_y
+            if not getattr(STATE, "m3_maru_contacted", False):
+                _draw_prompt_tag(sx, sy, "VAULT SEALED — CONTACT MARU", (220, 130, 90), y_off=-74)
+            else:
+                _draw_prompt_tag(sx, sy, "[E] TAKE VOSTRAL FILE", (255, 210, 110), y_off=-74)
+
+    # North exit — near only.
+    ex, ey = _archives_exit_pos()
+    if math.hypot(px - ex, py - ey) <= 110:
+        sx, sy = ex - cam_x, ey - cam_y
+        if getattr(STATE, "m3_vostral_acquired", False):
+            _draw_prompt_tag(sx, sy, "[E] EXIT — KILL ORDER", (120, 230, 160), y_off=-48)
+        else:
+            _draw_prompt_tag(sx, sy, "EXIT SEALED", (230, 90, 70), y_off=-48)
+
+
+def _draw_archives_atmosphere(cam_x, cam_y):
+    """Subtle cool grade only — no soft circular blobs."""
+    wash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    wash.fill((18, 12, 28, 18))
+    screen.blit(wash, (0, 0))
+
+
+def _draw_maru_contact_overlay():
+    """Fullscreen Maru transmission — slow, readable, high-contrast."""
+    if not getattr(STATE, "m3_maru_contact_active", False):
+        return
+    t = getattr(STATE, "m3_maru_contact_timer", 0)
+    duration = int(getattr(STATE, "m3_maru_contact_duration", 960) or 960)
+    progress = max(0.0, min(1.0, t / float(duration)))
+
+    dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, 200))
+    screen.blit(dim, (0, 0))
+
+    panel_w, panel_h = min(860, WIDTH - 36), min(430, HEIGHT - 50)
+    panel_x = WIDTH // 2 - panel_w // 2
+    panel_y = HEIGHT // 2 - panel_h // 2
+
+    panel = pygame.Surface((panel_w, panel_h))
+    panel.fill((12, 12, 16))
+    pygame.draw.rect(panel, (200, 170, 255), panel.get_rect(), 3, border_radius=6)
+    pygame.draw.rect(panel, (40, 36, 52), (3, 3, panel_w - 6, 56), border_radius=4)
+    pygame.draw.line(panel, (140, 120, 190), (16, 62), (panel_w - 16, 62), 2)
+
+    title = font_speaker.render("GHOST CHANNEL  //  M.A.G.", True, (245, 235, 255))
+    panel.blit(title, (22, 16))
+    sub = font_prompt.render("FORMER IPA ARCHIVIST  —  DEAD DROP", True, (200, 185, 230))
+    panel.blit(sub, (panel_w - sub.get_width() - 22, 24))
+
+    # Staggered over ~16s so players can read each line fully.
+    # thresh = when line starts; type_frames = how long it types out.
+    lines = [
+        (40,  70,  "MARU",   "You shouldn't be alive, Biribel."),
+        (150, 70,  "MARU",   "Neither should this file."),
+        (280, 90,  "MARU",   "Balaceanu forged every medal."),
+        (420, 100, "MARU",   "The real record is in the cold vault."),
+        (560, 100, "MARU",   "I unlock it. You steal it. Then run north."),
+        (720, 120, "SYSTEM", "Vault authorization — granting access..."),
+        (860, 80,  "SYSTEM", "Access granted. East vault door is open."),
+    ]
+
+    body_y = 84
+    for thresh, type_frames, speaker, line in lines:
+        if t < thresh:
+            continue
+        local = max(0.0, min(1.0, (t - thresh) / float(type_frames)))
+        shown = line[:max(1, int(len(line) * local))]
+        if speaker == "MARU":
+            sp_col = (210, 170, 255)
+            body_col = (245, 245, 250)
+        else:
+            sp_col = (120, 220, 240)
+            body_col = (200, 235, 245)
+        sp = font_dialogue.render(f"{speaker}:", True, sp_col)
+        body = font_dialogue.render(shown, True, body_col)
+        panel.blit(font_dialogue.render(f"{speaker}:", True, (0, 0, 0)), (25, body_y + 1))
+        panel.blit(sp, (24, body_y))
+        panel.blit(font_dialogue.render(shown, True, (0, 0, 0)), (24 + sp.get_width() + 11, body_y + 1))
+        panel.blit(body, (24 + sp.get_width() + 10, body_y))
+        # Cursor while typing.
+        if local < 1.0 and int(t / 8) % 2 == 0:
+            cx = 24 + sp.get_width() + 10 + body.get_width() + 2
+            pygame.draw.rect(panel, body_col, (cx, body_y + 4, 8, font_dialogue.get_height() - 8))
+        body_y += 40
+
+    bar = pygame.Rect(24, panel_h - 48, panel_w - 48, 18)
+    pygame.draw.rect(panel, (30, 28, 40), bar, border_radius=3)
+    fill = bar.copy()
+    fill.width = max(4, int(bar.width * progress))
+    pygame.draw.rect(panel, (170, 130, 230), fill, border_radius=3)
+    pygame.draw.rect(panel, (220, 200, 255), bar, 2, border_radius=3)
+    pct = font_prompt.render(f"HANDSHAKE  {int(progress * 100):02d}%", True, (235, 225, 255))
+    panel.blit(pct, (bar.centerx - pct.get_width() // 2, bar.y - 24))
+    hint = font_terminal_small.render("Stand by — channel locked until handshake completes", True, (160, 150, 180))
+    panel.blit(hint, (bar.centerx - hint.get_width() // 2, bar.bottom + 4))
+
+    scan = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    for yy in range(0, panel_h, 4):
+        pygame.draw.line(scan, (0, 0, 0, 22), (0, yy), (panel_w, yy), 1)
+    panel.blit(scan, (0, 0))
+
+    screen.blit(panel, (panel_x, panel_y))
+
+
+
+def _game_draw_archives(fcx, fcy):
+    """Draw path for the Archives Wing map (Phase 4)."""
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        screen.fill((3, 2, 2))
+        _draw_black_ledger_death_overlay()
+        return
+
+    screen.fill((12, 10, 16))
+    cam_x, cam_y = int(round(fcx)), int(round(fcy))
+
+    _render_cell_bg(screen, cam_x, cam_y)
+    _draw_archives_wing_details(cam_x, cam_y)
+    _draw_archives_map_polish(cam_x, cam_y)
+    _draw_archives_atmosphere(cam_x, cam_y)
+    _draw_m3_doors(cam_x, cam_y)
+    _draw_m3_doors_foreground(cam_x, cam_y)
+
+    if STATE.player:
+        import death_anim as _da
+        if not _da.should_skip_player_draw():
+            is_moving = bool(_last_keys) and (
+                _last_keys[pygame.K_w] or _last_keys[pygame.K_s]
+                or _last_keys[pygame.K_a] or _last_keys[pygame.K_d]
+            ) and not _movement_locked()
+            _m3_weapon = getattr(STATE, "mission3_weapon", "none")
+            _has_firearm = (_m3_weapon not in ("none", "chair_leg", "shiv")
+                            and not getattr(STATE, "player_disarmed", False))
+            _cw = getattr(STATE, "current_weapon", "pistol")
+            reload_duration = 90 if _cw == "os12" else (72 if _cw == "k9_smg" else 60)
+            reload_progress = (1.0 - STATE.reload_timer / reload_duration
+                               if STATE.is_reloading and STATE.reload_timer > 0 else 0.0)
+            reload_progress = max(0.0, min(1.0, reload_progress))
+            _animate_player_melee = bool(getattr(STATE, "melee_active", False))
+            STATE.player.draw(
+                screen, cam_x, cam_y,
+                walls=solid_walls_view(),
+                reload_active=STATE.is_reloading and _has_firearm,
+                reload_progress=reload_progress,
+                no_gun=not _has_firearm,
+                melee_active=_animate_player_melee,
+                melee_progress=_mission3_melee_progress() if _animate_player_melee else 0.0,
+                is_moving=is_moving,
+            )
+
+    _draw_volkov_ally(cam_x, cam_y)
+    _draw_volkov_mags(cam_x, cam_y)
+    _draw_archives_nav_arrow(cam_x, cam_y)
+
+    draw_bullets(screen, STATE.bullets, cam_x, cam_y, with_glow=True)
+    for e in STATE.enemies:
+        e.draw(screen, cam_x, cam_y)
+        _draw_m3_enemy_type_overlay(screen, e, cam_x, cam_y)
+    _draw_black_ledger_inmate(cam_x, cam_y)
+    for p in STATE.particles:
+        p.draw(screen, cam_x, cam_y)
+    for c in STATE.casings:
+        c.draw(screen, cam_x, cam_y)
+    for decal in STATE.blood_decals[:]:
+        surf = get_blood_decal(decal[3])
+        surf.set_alpha(int(decal[2]))
+        screen.blit(surf, (decal[0] - decal[3] - cam_x, decal[1] - decal[3] - cam_y))
+        decal[2] -= 0.25
+        if decal[2] <= 0:
+            STATE.blood_decals.remove(decal)
+    for pu in STATE.pickups:
+        _draw_m3_pickup(screen, pu, cam_x, cam_y)
+
+    _draw_archives_system_prompts(cam_x, cam_y)
+
+    for ft in [ft for ft in STATE.floating_texts if not (len(ft) >= 6 and ft[5] == "pin")]:
+        txt = font_terminal_small.render(ft[2], True, ft[3])
+        screen.blit(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y))
+
+    if STATE.player_dead:
+        import death_anim
+        death_anim.draw_death_overlay(screen, cam_x, cam_y)
+
+    draw_vignette(screen, strength=130)
+    draw_scanlines(screen)
+    _draw_mission3_hud(screen, cam_x, cam_y)
+    _draw_maru_contact_overlay()
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        _draw_black_ledger_death_overlay()
+
+    if (STATE.player_dead
+            and not getattr(STATE, "m3_black_ledger_death_active", False)):
+        import death_anim
+        death_anim.apply_camera_tilt(screen)
+
+
+def _game_draw_comms(fcx, fcy):
+    """Draw path for the separate Comms Wing map."""
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        screen.fill((3, 2, 2))
+        _draw_black_ledger_death_overlay()
+        return
+
+    screen.fill((14, 18, 18))
+    cam_x, cam_y = int(round(fcx)), int(round(fcy))
+
+    _render_cell_bg(screen, cam_x, cam_y)
+    _draw_comms_wing_details(cam_x, cam_y)
+    _draw_comms_map_polish(cam_x, cam_y)
+    _draw_comms_dynamic_atmosphere(cam_x, cam_y)
+    _draw_m3_doors(cam_x, cam_y)
+    _draw_m3_doors_foreground(cam_x, cam_y)
+
+    if STATE.player:
+        import death_anim as _da
+        if not _da.should_skip_player_draw():
+            is_moving = bool(_last_keys) and (
+                _last_keys[pygame.K_w] or _last_keys[pygame.K_s]
+                or _last_keys[pygame.K_a] or _last_keys[pygame.K_d]
+            )
+            _m3_weapon = getattr(STATE, "mission3_weapon", "none")
+            _has_firearm = (_m3_weapon not in ("none", "chair_leg", "shiv")
+                            and not getattr(STATE, "player_disarmed", False))
+            _cw = getattr(STATE, "current_weapon", "pistol")
+            reload_duration = 90 if _cw == "os12" else (72 if _cw == "k9_smg" else 60)
+            reload_progress = (1.0 - STATE.reload_timer / reload_duration
+                               if STATE.is_reloading and STATE.reload_timer > 0 else 0.0)
+            reload_progress = max(0.0, min(1.0, reload_progress))
+            _animate_player_melee = bool(getattr(STATE, "melee_active", False))
+            STATE.player.draw(
+                screen, cam_x, cam_y,
+                walls=solid_walls_view(),
+                reload_active=STATE.is_reloading and _has_firearm,
+                reload_progress=reload_progress,
+                no_gun=not _has_firearm,
+                melee_active=_animate_player_melee,
+                melee_progress=_mission3_melee_progress() if _animate_player_melee else 0.0,
+                is_moving=is_moving,
+            )
+
+    _draw_volkov_ally(cam_x, cam_y)
+
+    # The Comms Wing has its own early-return draw path, so world objects that
+    # only exist in this slice must be rendered here.  Previously the magazines
+    # were drawn only in game_draw() *after* the STAGE_COMMS early return, which
+    # made Volkov's resupply throw completely invisible even though its physics
+    # and ammo grant were running.
+    _draw_volkov_mags(cam_x, cam_y)
+
+    draw_bullets(screen, STATE.bullets, cam_x, cam_y, with_glow=True)
+    for e in STATE.enemies:
+        e.draw(screen, cam_x, cam_y)
+        _draw_m3_enemy_type_overlay(screen, e, cam_x, cam_y)
+    _draw_black_ledger_inmate(cam_x, cam_y)
+    for p in STATE.particles:
+        p.draw(screen, cam_x, cam_y)
+    for c in STATE.casings:
+        c.draw(screen, cam_x, cam_y)
+    for decal in STATE.blood_decals[:]:
+        surf = get_blood_decal(decal[3])
+        surf.set_alpha(int(decal[2]))
+        screen.blit(surf, (decal[0] - decal[3] - cam_x, decal[1] - decal[3] - cam_y))
+        decal[2] -= 0.25
+        if decal[2] <= 0:
+            STATE.blood_decals.remove(decal)
+    for pu in STATE.pickups:
+        _draw_m3_pickup(screen, pu, cam_x, cam_y)
+    _draw_comms_system_prompts(cam_x, cam_y)
+    _draw_comms_relay_prompt(cam_x, cam_y)
+    for ft in [ft for ft in STATE.floating_texts if not (len(ft) >= 6 and ft[5] == "pin")]:
+        txt = font_terminal_small.render(ft[2], True, ft[3])
+        screen.blit(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y))
+
+    # The Comms Wing is a separate draw path and returns before game_draw()'s
+    # normal death pass. Without this call the standing player was hidden, but
+    # the replacement fallen body/blood pool was never drawn, making Biribel
+    # appear to sink underneath the floor.
+    if STATE.player_dead:
+        import death_anim
+        death_anim.draw_death_overlay(screen, cam_x, cam_y)
+
+    draw_vignette(screen, strength=125)
+    draw_scanlines(screen)
+    _draw_mission3_hud(screen, cam_x, cam_y)
+    _draw_comms_relay_overlay()
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        _draw_black_ledger_death_overlay()
+
+    # Match the normal Mission 3 path: tilt only after the complete scene and
+    # HUD have been composed. Applying it earlier can rotate the corpse and then
+    # paint floor/HUD layers over it, which looks like the body is buried.
+    if (STATE.player_dead
+            and not getattr(STATE, "m3_black_ledger_death_active", False)):
+        import death_anim
+        death_anim.apply_camera_tilt(screen)
+
+
+
+
+def _draw_interrogation_monitor_view():
+    """Interactive Mission 3 interrogation staging: restrained POV at monitor.
+
+    This replaces the top-down cell view ONLY while STAGE_INTERROGATION is
+    active.  The dialogue tree/input is unchanged; only the camera language
+    changes so the scene reads as Biribel staring at Balaceanu's monitor, not
+    a gameplay map with an overlay.
+    """
+    beat = _current_beat()
+    ticks = pygame.time.get_ticks()
+    btype = beat.get("type") if beat else "line"
+    speaker = beat.get("speaker", "") if beat else ""
+    accent = beat.get("color", C_BIRIBEL) if beat else C_BIRIBEL
+
+    # Concrete wall / black-site room.  Everything is screen-space because this
+    # is a restrained POV, not a movable gameplay camera.
+    screen.fill((5, 6, 8))
+    for y in range(0, HEIGHT, 4):
+        shade = 9 + int(10 * (y / HEIGHT))
+        pygame.draw.rect(screen, (shade, shade + 1, shade + 3), (0, y, WIDTH, 4))
+
+    # Dirty wall texture.
+    rng = random.Random(3003)
+    for _ in range(130):
+        x = rng.randrange(0, WIDTH)
+        y = rng.randrange(0, HEIGHT)
+        col = rng.choice([(18, 19, 21), (22, 20, 18), (12, 13, 15), (28, 25, 22)])
+        a = rng.randrange(24, 70)
+        s = pygame.Surface((rng.randrange(8, 38), rng.randrange(1, 5)), pygame.SRCALPHA)
+        s.fill((*col, a))
+        screen.blit(s, (x, y))
+
+    # Monitor glow on wall.
+    mon = pygame.Rect(145, 58, 710, 390)
+    glow = pygame.Surface((mon.w + 170, mon.h + 170), pygame.SRCALPHA)
+    glow_col = (105, 18, 18) if (speaker == "BALACEANU" or _monitor_on) else (35, 45, 48)
+    for i in range(18):
+        a = int(42 * (1 - i / 18) ** 2)
+        pygame.draw.rect(glow, (*glow_col, a), glow.get_rect().inflate(-i * 9, -i * 9), border_radius=28)
+    screen.blit(glow, (mon.x - 85, mon.y - 85))
+
+    # Heavy monitor housing.
+    pygame.draw.rect(screen, (3, 4, 5), mon.inflate(34, 34), border_radius=12)
+    pygame.draw.rect(screen, (28, 30, 30), mon.inflate(24, 24), 3, border_radius=10)
+    pygame.draw.rect(screen, (0, 1, 2), mon, border_radius=5)
+
+    # Monitor surface.
+    crt = pygame.Surface(mon.size, pygame.SRCALPHA)
+    live = speaker == "BALACEANU" or (beat and beat.get("type") == "action" and beat.get("action") in {"monitor_on", "broadcast_caption"}) or _monitor_on
+    base = (24, 5, 6) if live else (4, 8, 9)
+    crt.fill((*base, 255))
+
+    # CRT scan/noise.
+    for yy in range(0, mon.h, 3):
+        pygame.draw.line(crt, (0, 0, 0, 60), (0, yy), (mon.w, yy))
+    noise_rng = random.Random(ticks // 80)
+    for _ in range(90 if live else 55):
+        nx = noise_rng.randrange(0, mon.w)
+        ny = noise_rng.randrange(0, mon.h)
+        na = noise_rng.randrange(16, 55)
+        pygame.draw.rect(crt, (180, 45, 45, na) if live else (80, 110, 110, na), (nx, ny, noise_rng.randrange(2, 10), 1))
+
+    # Balaceanu on the monitor / dead screen.  IMPORTANT: match the existing
+    # campaign design from cutscenes._m3_draw_balaceanu(): tailored dark suit,
+    # red tie, rigid posture, and VOSTRAL folder/tablet.  Do not invent a new
+    # face here; this is a degraded state-TV feed of the same character.
+    if live:
+        pulse = 0.5 + 0.5 * math.sin(ticks * 0.004)
+        cx = mon.w // 2
+
+        # Broadcast backdrop: red institutional field with a faint podium/flag
+        # shape, so the full-body Balaceanu figure reads like a state address.
+        pygame.draw.rect(crt, (20, 4, 5, 255), (0, 0, mon.w, mon.h))
+        pygame.draw.rect(crt, (42, 8, 9, 185), (60, 54, mon.w - 120, mon.h - 88), border_radius=4)
+        pygame.draw.line(crt, (120, 26, 24, 95), (85, 86), (mon.w - 85, 86), 1)
+        pygame.draw.line(crt, (120, 26, 24, 75), (85, mon.h - 72), (mon.w - 85, mon.h - 72), 1)
+        for sx in (cx - 230, cx + 230):
+            pygame.draw.polygon(crt, (65, 12, 14, 80), [(sx, 80), (sx + 34, 260), (sx - 18, 350), (sx - 50, 150)])
+
+        # Draw the actual existing Balaceanu figure from cutscenes.py to a
+        # transparent feed layer, then tint/degrade it with CRT effects.
+        feed = pygame.Surface(mon.size, pygame.SRCALPHA)
+        cutscenes._m3_draw_balaceanu(feed, cx, mon.h - 26, scale=1.10, facing_left=True)
+
+        # Red monitor grading: keep recognisable suit/tie/folder colors, but
+        # wash them into the CRT palette so it still feels like a transmission.
+        red_wash = pygame.Surface(mon.size, pygame.SRCALPHA)
+        red_wash.fill((95, 10, 9, 58))
+        feed.blit(red_wash, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+        # Slight ghost offset to mimic analog signal bleed without changing the
+        # character design.
+        ghost = feed.copy()
+        ghost.set_alpha(58)
+        crt.blit(ghost, (3, 0))
+        crt.blit(feed, (0, 0))
+
+        # State-TV crop around the real figure.
+        pygame.draw.rect(crt, (150, 38, 34, 105), (cx - 155, 56, 310, 306), 1)
+        pygame.draw.rect(crt, (255, 80, 55, int(22 + 24 * pulse)), (cx - 151, 60, 302, 298), 1)
+
+        # Subtle scan hotspot around head/shoulders, not a new face.
+        head_glow = pygame.Surface(mon.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(head_glow, (160, 36, 32, int(34 + 28 * pulse)), (cx - 82, 62, 164, 116), 2)
+        crt.blit(head_glow, (0, 0), special_flags=pygame.BLEND_ADD)
+    else:
+        pygame.draw.line(crt, (55, 75, 78, 95), (40, mon.h // 2), (mon.w - 40, mon.h // 2), 1)
+        pygame.draw.line(crt, (55, 75, 78, 65), (mon.w // 2, 40), (mon.w // 2, mon.h - 40), 1)
+
+    # In-monitor surveillance labels, not external HUD.
+    rec_on = (ticks // 360) % 2 == 0
+    if rec_on:
+        pygame.draw.circle(crt, (190, 25, 25, 190), (24, 24), 4)
+    lab = font_terminal_small.render("CELL 03 / RECORDING", True, (125, 110, 105) if live else (80, 105, 105))
+    lab.set_alpha(145)
+    crt.blit(lab, (36, 15))
+    stamp = font_terminal_small.render("22:00 ADDRESS PENDING", True, (125, 72, 72))
+    stamp.set_alpha(130)
+    crt.blit(stamp, (mon.w - stamp.get_width() - 22, 15))
+
+    # Dialogue as part of the monitor/room composition.
+    if beat:
+        if btype == "action":
+            caption, cap_color = _ACTION_CAPTIONS.get(beat.get("action"), ("[...]", C_SYSTEM))
+            visible = caption[:_dialogue_char_idx]
+            lines = _wrap(visible, font_terminal, mon.w - 100)
+            yy = mon.h - 92
+            for i, ln in enumerate(lines[:2]):
+                surf = font_terminal.render(ln, True, cap_color)
+                surf.set_alpha(min(230, max(30, _dialogue_char_idx * 8 - i * 35)))
+                crt.blit(surf, ((mon.w - surf.get_width()) // 2, yy + i * 28))
+
+        elif btype == "line" and speaker == "BALACEANU":
+            full_text = beat.get("text", "")
+            visible = full_text[:_dialogue_char_idx]
+            lines = _wrap(visible, font_dialogue, mon.w - 110)
+            yy = mon.h - 112
+            name = font_terminal_small.render("BALACEANU / PRERECORDED", True, C_BALACEANU)
+            name.set_alpha(185)
+            crt.blit(name, (54, yy - 26))
+            for i, ln in enumerate(lines[:3]):
+                surf = font_dialogue.render(ln, True, (232, 205, 198))
+                surf.set_alpha(min(238, max(25, _dialogue_char_idx * 8 - i * 38)))
+                crt.blit(surf, (54, yy + i * 27))
+
+        elif btype == "choice":
+            # The prompt/choices appear as faint response telemetry reflected in
+            # the CRT glass — still readable, but no boxes/cards/overlay panel.
+            prompt = beat.get("prompt", "Choose:")
+            visible_prompt = prompt[:_dialogue_char_idx]
+            lines = _wrap(visible_prompt, font_dialogue, mon.w - 130)
+            yy = mon.h - 155
+            for i, ln in enumerate(lines[:2]):
+                surf = font_dialogue.render(ln, True, C_PROMPT)
+                surf.set_alpha(min(210, max(20, _dialogue_char_idx * 8 - i * 35)))
+                crt.blit(surf, (66, yy + i * 27))
+            if _line_fully_typed(beat):
+                opt_y = yy + 62
+                for i, (label, _line) in enumerate(beat.get("options", [])):
+                    selected = i == _dialogue_choice
+                    prefix = ">" if selected else " "
+                    col = (245, 220, 145) if selected else (135, 135, 130)
+                    alpha = 230 if selected else 130
+                    surf = font_dialogue.render(f"{prefix} {label}", True, col)
+                    surf.set_alpha(alpha)
+                    crt.blit(surf, (92, opt_y + i * 28))
+                    if selected:
+                        pulse = int(45 + 35 * (0.5 + 0.5 * math.sin(ticks * 0.007)))
+                        pygame.draw.line(crt, (*C_PROMPT, pulse), (94, opt_y + i * 28 + 24), (310, opt_y + i * 28 + 24), 1)
+
+    screen.blit(crt, mon.topleft)
+    pygame.draw.rect(screen, (120, 26, 24, 105) if live else (70, 90, 92, 90), mon, 2, border_radius=5)
+
+    # Restraints / hands in foreground to sell the first-person chair POV.
+    table_y = 535
+    table = pygame.Surface((WIDTH, HEIGHT - table_y), pygame.SRCALPHA)
+    pygame.draw.polygon(table, (12, 11, 10, 235), [(80, 70), (WIDTH - 80, 70), (WIDTH, HEIGHT - table_y), (0, HEIGHT - table_y)])
+    pygame.draw.line(table, (46, 41, 35, 165), (90, 72), (WIDTH - 90, 72), 2)
+    screen.blit(table, (0, table_y))
+
+    # Chair arms, forearms, hands, and cuffs.  These are intentionally drawn
+    # with asymmetry and perspective so they read as Biribel's restrained POV,
+    # not two flat cartoon ovals pasted over the scene.
+    def _draw_bound_hand(hx, side):
+        # Chair arm: broad foreground shape with a cold metal restraint rail.
+        arm_y = 574
+        pygame.draw.rect(screen, (18, 16, 13), (hx - 92, arm_y + 14, 184, 48), border_radius=15)
+        pygame.draw.rect(screen, (42, 36, 29), (hx - 88, arm_y + 4, 176, 34), border_radius=13)
+        pygame.draw.line(screen, (82, 75, 65), (hx - 76, arm_y + 9), (hx + 76, arm_y + 9), 2)
+        pygame.draw.line(screen, (8, 7, 6), (hx - 76, arm_y + 38), (hx + 76, arm_y + 38), 2)
+
+        # Sleeve / forearm disappears toward the player's body at the bottom.
+        sleeve = (36, 43, 38)
+        sleeve_hi = (55, 62, 54)
+        forearm = [
+            (hx - side * 58, 675),
+            (hx + side * 36, 675),
+            (hx + side * 34, 604),
+            (hx - side * 38, 598),
+        ]
+        pygame.draw.polygon(screen, sleeve, forearm)
+        pygame.draw.line(screen, sleeve_hi, forearm[2], forearm[3], 2)
+        pygame.draw.line(screen, (12, 14, 12), forearm[0], forearm[3], 2)
+
+        # Wrist skin visible above sleeve, compressed by cuff.
+        skin = (151, 111, 82)
+        skin_hi = (184, 137, 98)
+        skin_shadow = (88, 59, 44)
+        wrist_rect = pygame.Rect(hx - 36, 586, 72, 36)
+        pygame.draw.ellipse(screen, skin_shadow, wrist_rect.move(0, 6))
+        pygame.draw.ellipse(screen, skin, wrist_rect)
+        pygame.draw.arc(screen, skin_hi, wrist_rect.inflate(-10, -8), math.radians(198), math.radians(330), 2)
+
+        # Palm: flattened against chair arm, with heel of hand lower/darker.
+        palm_rect = pygame.Rect(hx - 47, 536, 94, 72)
+        pygame.draw.ellipse(screen, (72, 45, 34), palm_rect.move(0, 9))
+        pygame.draw.ellipse(screen, skin, palm_rect)
+        pygame.draw.ellipse(screen, skin_hi, palm_rect.inflate(-24, -22).move(-side * 5, -8))
+        pygame.draw.arc(screen, (116, 78, 58), palm_rect.inflate(-20, -16), math.radians(15), math.radians(160), 2)
+        pygame.draw.arc(screen, (116, 78, 58), palm_rect.inflate(-34, -30).move(side * 8, 8), math.radians(200), math.radians(340), 1)
+
+        # Thumb wraps inward; side flips left/right hand.
+        thumb_poly = [
+            (hx - side * 42, 570),
+            (hx - side * 70, 558),
+            (hx - side * 78, 579),
+            (hx - side * 54, 596),
+        ]
+        pygame.draw.polygon(screen, skin_shadow, [(x, y + 5) for x, y in thumb_poly])
+        pygame.draw.polygon(screen, skin, thumb_poly)
+        pygame.draw.line(screen, (113, 77, 58), thumb_poly[0], thumb_poly[2], 1)
+
+        # Fingers: individual tapered vertical shapes with varied lengths and
+        # small nail/knuckle details.  Drawn from far to near.
+        finger_specs = [(-30, 45, 13), (-11, 53, 14), (9, 50, 14), (28, 40, 12)]
+        for idx, (off, length, width) in enumerate(finger_specs):
+            fx = hx + off
+            fy = 523 - length // 5 + (idx % 2) * 2
+            rect = pygame.Rect(fx - width // 2, fy, width, length)
+            pygame.draw.ellipse(screen, skin_shadow, rect.move(0, 5))
+            pygame.draw.ellipse(screen, skin, rect)
+            # Fingertip highlight / nail.
+            nail = pygame.Rect(fx - width // 2 + 2, fy + 3, width - 4, 9)
+            pygame.draw.ellipse(screen, (196, 154, 124), nail)
+            pygame.draw.arc(screen, (104, 70, 52), rect.inflate(-3, -12).move(0, 14), 0, math.pi, 1)
+            # Finger separation dark line.
+            if idx < 3:
+                pygame.draw.line(screen, (91, 58, 43), (fx + width // 2 + 2, fy + 20),
+                                 (fx + width // 2 - 1, fy + length - 8), 1)
+
+        # Knuckle ridge.
+        for off in (-28, -9, 10, 28):
+            pygame.draw.arc(screen, (112, 74, 54), pygame.Rect(hx + off - 8, 552, 16, 12),
+                            math.radians(190), math.radians(350), 1)
+
+        # Metal cuff sits over wrist/palm transition and visibly bites into the
+        # hand.  The highlight gives it a rounded shackle feel.
+        cuff_outer = pygame.Rect(hx - 56, 576, 112, 24)
+        cuff_inner = pygame.Rect(hx - 48, 581, 96, 14)
+        pygame.draw.rect(screen, (20, 21, 22), cuff_outer, border_radius=9)
+        pygame.draw.rect(screen, (112, 114, 108), cuff_outer, 2, border_radius=9)
+        pygame.draw.rect(screen, (50, 52, 51), cuff_inner, border_radius=6)
+        pygame.draw.line(screen, (185, 185, 170), (hx - 45, 579), (hx + 43, 579), 1)
+        pygame.draw.circle(screen, (22, 23, 24), (hx + side * 43, 588), 5)
+        pygame.draw.circle(screen, (138, 138, 128), (hx + side * 43, 588), 5, 1)
+
+        # Short chain links from cuff to chair arm anchor.
+        anchor_x = hx + side * 72
+        anchor_y = arm_y + 25
+        pygame.draw.circle(screen, (28, 28, 27), (anchor_x, anchor_y), 9)
+        pygame.draw.circle(screen, (116, 116, 108), (anchor_x, anchor_y), 9, 2)
+        x0, y0 = hx + side * 50, 589
+        for k in range(4):
+            t = (k + 1) / 5
+            lx = int(x0 + (anchor_x - x0) * t)
+            ly = int(y0 + (anchor_y - y0) * t + math.sin(k) * 3)
+            link = pygame.Rect(lx - 8, ly - 5, 16, 10)
+            pygame.draw.ellipse(screen, (22, 22, 21), link)
+            pygame.draw.ellipse(screen, (128, 128, 118), link, 2)
+
+        # Red monitor rim light on skin/cuff.
+        rim_col = (120, 35, 32)
+        pygame.draw.arc(screen, rim_col, palm_rect.inflate(6, 6), math.radians(205), math.radians(330), 2)
+        pygame.draw.line(screen, (150, 52, 45), (hx - 42, 575), (hx + 42, 575), 1)
+
+    _draw_bound_hand(310, -1)
+    _draw_bound_hand(690, 1)
+
+    # Biribel/Volkov lines are not on the monitor; they sit low in the room as
+    # restrained mutters, still without a panel.
+    if beat and btype == "line" and speaker != "BALACEANU":
+        full_text = beat.get("text", "")
+        visible = full_text[:_dialogue_char_idx]
+        lines = _wrap(visible, font_dialogue, WIDTH - 180)
+        name = font_terminal_small.render(speaker.upper(), True, accent)
+        name.set_alpha(175)
+        screen.blit(name, (88, 478))
+        pygame.draw.line(screen, (*accent, 105), (88, 500), (172, 500), 1)
+        for i, ln in enumerate(lines[:3]):
+            _draw_text_shadowed(screen, font_dialogue, ln, (88, 510 + i * 27), (224, 226, 224), alpha=min(230, max(25, _dialogue_char_idx * 8 - i * 38)))
+
+    # Instructions are tiny and almost dead, not a UI prompt.
+    if beat and _line_fully_typed(beat) and not _action_is_unskippable(beat):
+        hint = "ENTER" if btype == "choice" else "SPACE / ENTER"
+        if btype == "choice":
+            hint = "↑/↓   ENTER"
+        h = font_terminal_small.render(hint, True, (90, 86, 78))
+        h.set_alpha(int(80 + 35 * (0.5 + 0.5 * math.sin(ticks * 0.004))))
+        screen.blit(h, (WIDTH - h.get_width() - 30, HEIGHT - 28))
+
+    # Final oppressive vignette and scanlines.
+    draw_vignette(screen, strength=215)
+    draw_scanlines(screen)
+
+
+def _clamp_m3_camera(cx, cy):
+    """Clamp desired camera top-left to the Mission 3 map bounds."""
+    max_x = max(0, MAP_W * TILE_SIZE - WIDTH)
+    max_y = max(0, MAP_H * TILE_SIZE - HEIGHT)
+    return max(0, min(int(cx), max_x)), max(0, min(int(cy), max_y))
+
+
+def _ease_in_out(p):
+    p = max(0.0, min(1.0, p))
+    return p * p * (3.0 - 2.0 * p)
+
+
+def _mission3_breach_camera():
+    """Cinematic camera director for Volkov's breach.
+
+    The breach choreography already exists in world space; this function makes
+    the camera *show* it:
+      - starts near Biribel's restrained chair,
+      - pans/leans to the door as boots/charge become important,
+      - holds on Volkov planting/backing away,
+      - kicks hard on detonation,
+      - settles between Biribel and the blown doorway for Volkov's line.
+    """
+    chair_x, chair_y = _interrogation_chair_pos()
+    door_x = _DOOR_TILE_COL * TILE_SIZE + TILE_SIZE
+    door_y = _DOOR_TILE_ROW * TILE_SIZE + TILE_SIZE // 2
+    t = max(0, _volkov_breach_t)
+
+    # Volkov, if available, becomes the moving focus. Otherwise use doorway.
+    pose = _volkov_world_pose()
+    if pose:
+        vx, vy, _ang, _running = pose
+    else:
+        vx, vy = door_x, door_y
+
+    # Stage targets.  Offsets bias the camera so the relevant subject sits in
+    # the upper/middle of frame instead of dead-center under UI text.
+    chair_cam = (chair_x - WIDTH * 0.50, chair_y - HEIGHT * 0.55)
+    door_cam = (door_x - WIDTH * 0.50, door_y - HEIGHT * 0.43)
+    volkov_cam = (vx - WIDTH * 0.50, vy - HEIGHT * 0.46)
+    two_shot_cam = (((chair_x + door_x) * 0.5) - WIDTH * 0.50,
+                    ((chair_y + door_y) * 0.5) - HEIGHT * 0.48)
+
+    if t < 55:
+        # Snap out of monitor POV and begin turning toward the noise.
+        p = _ease_in_out(t / 55.0)
+        cam_x = chair_cam[0] + (two_shot_cam[0] - chair_cam[0]) * p
+        cam_y = chair_cam[1] + (two_shot_cam[1] - chair_cam[1]) * p
+    elif t < 145:
+        # Track Volkov as he reaches/works at the door.
+        p = _ease_in_out((t - 55) / 90.0)
+        cam_x = two_shot_cam[0] + (volkov_cam[0] - two_shot_cam[0]) * p
+        cam_y = two_shot_cam[1] + (volkov_cam[1] - two_shot_cam[1]) * p
+    elif t < 260:
+        # Hold on the planted charge / Volkov backing away. Small breathing sway.
+        cam_x, cam_y = door_cam
+        cam_x += math.sin(t * 0.055) * 4
+        cam_y += math.sin(t * 0.041 + 1.2) * 3
+    elif t < 306:
+        # Pre-blast tension: slowly drift wider so the whole doorway reads.
+        p = _ease_in_out((t - 260) / 46.0)
+        cam_x = door_cam[0] + (two_shot_cam[0] - door_cam[0]) * p
+        cam_y = door_cam[1] + (two_shot_cam[1] - door_cam[1]) * p
+    else:
+        # After detonation: settle on the blown doorway and Volkov entering.
+        p = _ease_in_out(min(1.0, (t - 306) / 90.0))
+        cam_x = door_cam[0] + (two_shot_cam[0] - door_cam[0]) * p
+        cam_y = door_cam[1] + (two_shot_cam[1] - door_cam[1]) * p
+
+    # Impact shake around detonation and first entrance frames.
+    shake = 0
+    if 296 <= t <= 340:
+        shake = int(max(0, 18 * (1.0 - abs(t - 306) / 44.0)))
+    elif 341 <= t <= 390:
+        shake = int(max(0, 7 * (1.0 - (t - 341) / 49.0)))
+    if shake > 0 and not getattr(STATE, "reduced_motion", False):
+        # Deterministic per-frame shake so screenshots are stable for a given t.
+        rng = random.Random(9100 + int(t))
+        cam_x += rng.randint(-shake, shake)
+        cam_y += rng.randint(-shake, shake)
+
+    return _clamp_m3_camera(cam_x, cam_y)
+
+
+def _draw_breach_cinematic_letterbox():
+    """Subtle letterbox during the breach so it reads as directed action."""
+    h = 46
+    top = pygame.Surface((WIDTH, h), pygame.SRCALPHA)
+    bot = pygame.Surface((WIDTH, h), pygame.SRCALPHA)
+    top.fill((0, 0, 0, 190))
+    bot.fill((0, 0, 0, 190))
+    screen.blit(top, (0, 0))
+    screen.blit(bot, (0, HEIGHT - h))
+
+def game_draw(fcx, fcy):
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        screen.fill((3, 2, 2))
+        _draw_black_ledger_death_overlay()
+        return
+
+    stage_now = getattr(STATE, "mission3_stage", STAGE_INTERROGATION)
+
+    if stage_now == STAGE_COMMS:
+        _game_draw_comms(fcx, fcy)
+        return
+
+    if stage_now in (STAGE_ARCHIVES, STAGE_KILL_ORDER):
+        # Kill Order currently reuses Archives geometry (Phase 5 map pending).
+        _game_draw_archives(fcx, fcy)
+        return
+
+    # Interactive interrogation uses a restrained-chair monitor POV instead of
+    # the normal top-down gameplay renderer, BUT only until Volkov's breach.
+    # Once the breach starts, the monitor POV ends and the scene returns to the
+    # real cell so the door, C4, flash, and Volkov entrance are physically seen.
+    if stage_now == STAGE_INTERROGATION:
+        beat = _current_beat()
+        breach_started = (
+            _volkov_breach_t >= 0
+            or (beat is not None and beat.get("type") == "action" and beat.get("action") == "breach")
+            or (beat is not None and beat.get("speaker") == "VOLKOV")
+        )
+        if not breach_started:
+            _draw_interrogation_monitor_view()
+            return
+
+        # Directed breach camera: pan from Biribel's chair to the door/Volkov,
+        # hold on charge placement, shake on detonation, then settle for the
+        # doorway entrance. This replaces the old static chair-centered view.
+        if _volkov_breach_t >= 0:
+            fcx, fcy = _mission3_breach_camera()
+        else:
+            _cx, _cy = _interrogation_chair_pos()
+            fcx, fcy = _clamp_m3_camera(_cx - WIDTH // 2, _cy - HEIGHT // 2)
+
+    screen.fill((18, 18, 22))
+    cam_x, cam_y = int(round(fcx)), int(round(fcy))
+
+    _render_cell_bg(screen, cam_x, cam_y)
+    _draw_m3_background_dressing(cam_x, cam_y)
+    _draw_m3_corridor_and_map_details(cam_x, cam_y)
+    _draw_m3_doors(cam_x, cam_y)
+
+    if getattr(STATE, "m3_hide_molotov", False):
+        STATE.show_molotov_hud = False
+    else:
+        STATE.show_molotov_hud = True
+
+    stage = getattr(STATE, "mission3_stage", STAGE_INTERROGATION)
+
+    # Static world detail pass. Keep doors/props behind actors so the player is
+    # never visually swallowed by an open doorway tile.
+    _draw_neighbor_cells(cam_x, cam_y)
+    _draw_cell_room(cam_x, cam_y)
+    _draw_m3_doors_foreground(cam_x, cam_y)
+    _draw_m3_detainees(cam_x, cam_y)
+
+    # Volkov mags resupply (Comms Wing)
+    _draw_volkov_mags(cam_x, cam_y)
+
+    # Player — skip during death animation (fallen body drawn by death_anim).
+    if STATE.player:
+        import death_anim as _da
+        if not _da.should_skip_player_draw():
+            if stage == STAGE_INTERROGATION:
+                _draw_interrogation_restrained_player(cam_x, cam_y)
+            else:
+                is_moving = bool(_last_keys) and (
+                    _last_keys[pygame.K_w] or _last_keys[pygame.K_s]
+                    or _last_keys[pygame.K_a] or _last_keys[pygame.K_d]
+                ) and not _movement_locked()
+                _m3_weapon = getattr(STATE, "mission3_weapon", "none")
+                _animate_player_melee = (getattr(STATE, "melee_active", False)
+                                         and _m3_weapon != "shiv")
+                # Once the sidearm is acquired, the player has a real firearm —
+                # pass no_gun=False so Player.draw renders the pistol. While the
+                # player only has the chair_leg/shiv (or nothing), keep no_gun=True
+                # so the improvised weapon overlay (_draw_mission3_hand_weapon
+                # below) is the only weapon shown.
+                _has_firearm = (_m3_weapon not in ("none", "chair_leg", "shiv")
+                                and not getattr(STATE, "player_disarmed", False))
+
+                # Match Mission 1 / Mission 2's player reload animation path.
+                _cw = getattr(STATE, "current_weapon", "pistol")
+                reload_duration = 90 if _cw == "os12" else (72 if _cw == "k9_smg" else 60)
+                reload_progress = (
+                    1.0 - STATE.reload_timer / reload_duration
+                    if STATE.is_reloading and STATE.reload_timer > 0 else 0.0
+                )
+                reload_progress = max(0.0, min(1.0, reload_progress))
+
+                STATE.player.draw(
+                    screen, cam_x, cam_y,
+                    walls=solid_walls_view(),
+                    reload_active=STATE.is_reloading and _has_firearm,
+                    reload_progress=reload_progress,
+                    no_gun=not _has_firearm,
+                    melee_active=_animate_player_melee,
+                    melee_progress=_mission3_melee_progress() if _animate_player_melee else 0.0,
+                    is_moving=is_moving,
+                )
+
+    # Bullets (player + enemy fire).
+    draw_bullets(screen, STATE.bullets, cam_x, cam_y, with_glow=True)
+
+    # Enemies (IPA cell-block guards). Drawn after bullets so a guard
+    # hit by a bullet appears in front of the impact particle (matches
+    # M2's z-order).
+    for e in STATE.enemies:
+        e.draw(screen, cam_x, cam_y)
+        _draw_m3_enemy_type_overlay(screen, e, cam_x, cam_y)
+    _draw_black_ledger_inmate(cam_x, cam_y)
+
+    # Particles (impact sparks, blood bursts, metal filings).
+    for p in STATE.particles:
+        p.draw(screen, cam_x, cam_y)
+
+    # Shell casings ejected from firearms.
+    for c in STATE.casings:
+        c.draw(screen, cam_x, cam_y)
+
+    # Blood decals (fading pools from killed enemies).
+    for decal in STATE.blood_decals[:]:
+        surf = get_blood_decal(decal[3])
+        surf.set_alpha(int(decal[2]))
+        screen.blit(surf, (decal[0] - decal[3] - cam_x, decal[1] - decal[3] - cam_y))
+        decal[2] -= 0.25
+        if decal[2] <= 0:
+            STATE.blood_decals.remove(decal)
+
+    # Fire zones (molotov burning areas).
+    for fz in STATE.fire_zones:
+        fz.draw(screen, cam_x, cam_y)
+
+    # Security camera cone + body in the kitchen area.
+    _draw_security_camera(cam_x, cam_y, _solid_walls())
+
+    # Pickups (looted sidearms + bandages). Drawn as small ground
+    # markers so the player can spot them at a glance.
+    for pu in STATE.pickups:
+        _draw_m3_pickup(screen, pu, cam_x, cam_y)
+
+    # Unpinned floating texts (damage numbers, pickup notifications).
+    unpinned = [ft for ft in STATE.floating_texts if not (len(ft) >= 6 and ft[5] == "pin")]
+    for ft in unpinned:
+        txt = font_terminal_small.render(ft[2], True, ft[3])
+        screen.blit(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y))
+
+    # Subtle facility lockdown lighting after Volkov detonates the door.
+    _draw_m3_alarm_effect(screen)
+
+    # Drain objective marker while crafting the shiv objective is active.
+    _draw_drain_guidance(cam_x, cam_y)
+
+    # Draw the Mission 3 improvised weapon after the room overlays so the
+    # chair leg / crafted shiv is visibly in Biribel's hands during gameplay.
+    # (Only drawn while the player has an improvised weapon; once the sidearm
+    # is acquired, the pistol is rendered by Player.draw above and this overlay
+    # is suppressed.)
+    _draw_mission3_hand_weapon(screen, cam_x, cam_y)
+
+    # Muzzle flash — matches M1/M2 barrel-tip flash.
+    if STATE.muzzle_flash_timer > 0 and STATE.player:
+        if hasattr(STATE.player, "barrel_tip"):
+            tip_x, tip_y = STATE.player.barrel_tip()
+        else:
+            tip_x = STATE.player.rect.centerx + math.cos(STATE.player.angle) * 39
+            tip_y = STATE.player.rect.centery + math.sin(STATE.player.angle) * 39
+        screen.blit(MUZZLE_FLASH, (int(tip_x - cam_x - 40), int(tip_y - cam_y - 40)))
+        STATE.muzzle_flash_timer -= 1
+
+    # Default vignette + scanlines for the live gameplay view. The
+    # chair-break cutscene branch (above) returns early and never reaches
+    # here, so we always draw the gameplay vignette on this path.
+    v_default = 180 if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_INTERROGATION else 130
+    draw_vignette(screen, strength=v_default)
+    draw_scanlines(screen)
+
+    # Death animation overlay (blood pool, fallen body, tinnitus).
+    # Black Ledger owns its own custom death animation.
+    if getattr(STATE, "m3_black_ledger_death_active", False):
+        _draw_black_ledger_death_overlay()
+    elif STATE.player_dead:
+        import death_anim
+        death_anim.draw_death_overlay(screen, cam_x, cam_y)
+
+    # GC flash overlay (grenade/blast white flash) — matches M1/M2.
+    if STATE.gc_flash_timer > 0 and not getattr(STATE, "reduced_motion", False):
+        flash_surf = get_fullscreen_overlay((255, 255, 255, 255))
+        flash_surf.set_alpha(min(255, STATE.gc_flash_timer * 22))
+        screen.blit(flash_surf, (0, 0))
+
+    # HUD + dialogue panel — drawn LAST so they sit on top of all world
+    # geometry, props, and atmosphere overlays. During the held interrogation
+    # beat the normal combat HUD/minimap is intentionally suppressed; Biribel
+    # is restrained and the only useful information is the scene objective.
+    if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_INTERROGATION:
+        if _volkov_breach_t >= 0:
+            # Breach is a physical action beat now: no REC/status strip, just
+            # directed camera + letterbox + the current caption/Volkov line.
+            _draw_breach_cinematic_letterbox()
+            _draw_dialogue_panel()
+        else:
+            _draw_interrogation_status_strip()
+            _draw_dialogue_panel()
+    else:
+        _draw_mission3_hud(screen, cam_x, cam_y)
+
+    # Drain prompt: if the player has a chair_leg and is near the drain,
+    # show "Press E to sharpen" so they know to start crafting.
+    if (getattr(STATE, "mission3_weapon", "none") == "chair_leg"
+            and not getattr(STATE, "mission3_crafting_active", False)):
+        drain_pos = (_DRAIN_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                     _DRAIN_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if _near(drain_pos, radius=60):
+            prompt = font_terminal_small.render(
+                "[E] SHARPEN THE LEG", True, (200, 170, 120))
+            px = drain_pos[0] - cam_x
+            py = drain_pos[1] - cam_y - 30
+            # Pulsing alpha.
+            a = int(180 + math.sin(time.time() * 4) * 60)
+            prompt.set_alpha(a)
+            screen.blit(prompt,
+                        (px - prompt.get_width() // 2, py))
+
+    # Vent shaft prompt: show when near the grate in the cell.
+    if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_BREAKOUT:
+        vent_pos = (_VENT_GRATE_COL * TILE_SIZE + TILE_SIZE // 2,
+                    _VENT_GRATE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if _near(vent_pos, radius=50):
+            if not getattr(STATE, "mission3_vent_open", False):
+                prompt = font_terminal_small.render(
+                    "[E] PRY OPEN VENT", True, (200, 170, 120))
+            else:
+                prompt = font_terminal_small.render(
+                    "[E] CRAWL INTO VENT", True, (140, 220, 160))
+            px = vent_pos[0] - cam_x
+            py = vent_pos[1] - cam_y - 30
+            a = int(180 + math.sin(time.time() * 4) * 60)
+            prompt.set_alpha(a)
+            screen.blit(prompt,
+                        (px - prompt.get_width() // 2, py))
+
+    # Cell-block exit prompt: if the player is in STAGE_BREAKOUT and near
+    # the exit tile, show "Reach the exit" so they know where to go. The
+    # actual STAGE_COMMS transition fires from _update_stage when the
+    # player enters the exit tile.
+    if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_BREAKOUT:
+        exit_pos = (_EXIT_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                    _EXIT_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if _near(exit_pos, radius=120):
+            exit_ready, exit_reason = _m3_exit_requirements()
+            prompt_text = "[ REACH THE EXIT ]" if exit_ready else "[ EXIT LOCKED: OBJECTIVE INCOMPLETE ]"
+            prompt_col = (140, 220, 160) if exit_ready else (220, 170, 90)
+            prompt = font_terminal_small.render(prompt_text, True, prompt_col)
+            px = exit_pos[0] - cam_x
+            py = exit_pos[1] - cam_y - 36
+            a = int(180 + math.sin(time.time() * 4) * 60)
+            prompt.set_alpha(a)
+            screen.blit(prompt,
+                        (px - prompt.get_width() // 2, py))
+            if not exit_ready:
+                reason = font_terminal_small.render(exit_reason[:54], True, (170, 140, 100))
+                reason.set_alpha(a)
+                screen.blit(reason, (px - reason.get_width() // 2, py + 16))
+
+    # K-9 wall-stand prompt in the armory.
+    if not getattr(STATE, "k9_unlocked", False):
+        k9_pos = (_K9_STAND_COL * TILE_SIZE + TILE_SIZE // 2,
+                  _K9_STAND_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if _near(k9_pos, radius=72):
+            prompt = font_terminal_small.render(
+                "[E] TAKE K-9 SUPPRESSED SMG", True, (140, 230, 190))
+            px = k9_pos[0] - cam_x
+            py = k9_pos[1] - cam_y + 36
+            a = int(180 + math.sin(time.time() * 4) * 60)
+            prompt.set_alpha(a)
+            screen.blit(prompt, (px - prompt.get_width() // 2, py))
+
+    # Crafting overlay — drawn LAST, on top of everything, when active.
+    if getattr(STATE, "mission3_crafting_active", False):
+        _draw_crafting_overlay()
+
+    # Camera tilt on death — applied at the very end so the entire
+    # rendered scene (world + HUD + overlays) rotates together. Matches M1/M2.
+    # Black Ledger uses its own full-screen death composition instead.
+    if STATE.player_dead and not getattr(STATE, "m3_black_ledger_death_active", False):
+        import death_anim
+        death_anim.apply_camera_tilt(screen)
+
+    # Interactive struggle removed.
+
+
+def _draw_m3_pickup(surface, pu, cam_x, cam_y):
+    """Draw a Mission 3 ground pickup (looted sidearm or bandage).
+
+    Small isometric marker so the player can spot them at a glance — a
+    pistol-shaped silhouette for sidearms, a white cross for bandages.
+    Faint pulsing glow so they read as "interactive" without screaming.
+    """
+    px = pu[0] - cam_x
+    py = pu[1] - cam_y
+    kind = pu[2]
+    # Cull if off-screen.
+    if px < -40 or px > WIDTH + 40 or py < -40 or py > HEIGHT + 40:
+        return
+    pulse = 0.5 + 0.5 * math.sin(time.time() * 3.0)
+    if kind == "sidearm":
+        # Dark gun-shaped silhouette on a faint amber ground halo.
+        halo = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.circle(halo, (220, 180, 80, int(40 + 30 * pulse)),
+                           (20, 20), 18)
+        surface.blit(halo, (px - 20, py - 20))
+        # Pistol body (top-down): slide + grip.
+        pygame.draw.rect(surface, (40, 40, 44),
+                         (px - 8, py - 3, 16, 6), border_radius=1)
+        pygame.draw.rect(surface, (40, 40, 44),
+                         (px - 3, py + 2, 6, 7), border_radius=1)
+        # Subtle highlight on the slide.
+        pygame.draw.line(surface, (90, 90, 95),
+                         (px - 7, py - 2), (px + 7, py - 2), 1)
+    elif kind == "bandage":
+        # White cross on a faint green ground halo.
+        halo = pygame.Surface((32, 32), pygame.SRCALPHA)
+        pygame.draw.circle(halo, (120, 220, 120, int(40 + 30 * pulse)),
+                           (16, 16), 14)
+        surface.blit(halo, (px - 16, py - 16))
+        pygame.draw.rect(surface, (240, 240, 240),
+                         (px - 7, py - 2, 14, 4))
+        pygame.draw.rect(surface, (240, 240, 240),
+                         (px - 2, py - 7, 4, 14))
+
+
+def solid_walls_view():
+    """Walls subset passed to Player.draw for gun-occlusion logic.
+
+    Player.draw uses walls only to hide the gun barrel behind cover; in
+    the cell (no gun) this is a no-op, but we keep the signature right so
+    Slice 2 combat drops in without touching the call site.
+    """
+    return _solid_walls()
+
+
+# ─────────────────────────────────────
+# Phase 1 — Interrogation renderer
+# ─────────────────────────────────────
+# The cold-open is a fixed-camera beat: the player is cuffed to the chair
+# facing the monitor, so we render the dialogue as a full-width letterboxed
+# panel at the bottom of the screen and the Balaceanu monitor as a glowing
+# rectangle on the cell's north wall. No new art assets — all procedural,
+# matching the project's "cinematic art deferred to Slice C" note in
+# MISSION3_PLOT.md.
+
+# Screen layout constants for the interrogation UI.  This scene is a held,
+# non-combat beat, so it intentionally uses a cleaner cinematic lower-third
+# instead of the full gameplay HUD + full-width dialogue slab.
+_PANEL_H = 154
+_PANEL_PAD = 18
+_PANEL_W = 820
+_PANEL_X = (WIDTH - _PANEL_W) // 2
+_MONITOR_TILE_COL, _MONITOR_TILE_ROW = 33, 5  # north wall of Biribel's cell (cell 3)
+
+_ACTION_CAPTIONS = {
+    "monitor_on":        ("MONITOR: LIVE",                  C_BALACEANU),
+    "monitor_off":       ("MONITOR: SIGNAL LOST",           (120, 120, 120)),
+    "broadcast_caption": ("STATE ADDRESS — LIVE TONIGHT — 22:00 — SUBJECT: ROUTE 12 PERPETRATOR", C_SYSTEM),
+    "boots_approach":    ("(Boots in the corridor. Wrong cadence — too deliberate for a patrol.)", C_SYSTEM),
+    "breach":            ("[ THE DOOR COMES IN ]",          C_VOLKOV),
+}
+
+_UNSKIPPABLE_ACTIONS = {"breach"}
+
+# Volkov breach timing:
+# 0-90   approach
+# 90-210 plant charge
+# 210-300 retreat
+# 301    detonation
+# 306-390 re-enter
+# 430+   safe to let the script continue naturally
+_UNSKIPPABLE_ACTION_MIN_FRAMES = {
+    "breach": 430,
+}
+
+
+def _action_is_unskippable(beat):
+    return (
+        beat is not None
+        and beat.get("type") == "action"
+        and beat.get("action") in _UNSKIPPABLE_ACTIONS
+    )
+
+
+def _action_auto_locked(beat):
+    """True while an unskippable action is still playing.
+
+    Player input is ignored for unskippable actions, but this also stops
+    the auto-advance from cutting away too early if timing constants change.
+    """
+    if not _action_is_unskippable(beat):
+        return False
+
+    action = beat.get("action")
+
+    if action == "breach":
+        return _volkov_breach_t < _UNSKIPPABLE_ACTION_MIN_FRAMES["breach"]
+
+    return True
+
+
+def _wrap(text, font, max_width):
+    """Word-wrap ``text`` to fit ``max_width`` pixels using ``font``.
+
+    Returns a list of lines. Preserves explicit newlines in the source text
+    so multi-line captions (e.g. the title card) keep their breaks.
+    """
+    lines = []
+    for raw in text.split("\n"):
+        if not raw:
+            lines.append("")
+            continue
+        words = raw.split(" ")
+        cur = ""
+        for w in words:
+            trial = w if not cur else cur + " " + w
+            if font.size(trial)[0] <= max_width:
+                cur = trial
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = w
+        lines.append(cur)
+    return lines
+
+
+def _draw_wall_monitor(cam_x, cam_y):
+    """Draw the wall monitor on the cell's north wall.
+
+    Lit (Balaceanu's feed) → a red CRT with a dark head-and-shoulders
+    silhouette (so it reads as a man on a screen, not just a label),
+    scanline noise, and a pulsing red glow halo that washes the cell.
+    Off → a dead dark rectangle. The flicker flag (post-monitor-off)
+    strobes between the two for ~1s.
+    """
+    global _monitor_on
+    sx = _MONITOR_TILE_COL * TILE_SIZE - cam_x
+    sy = _MONITOR_TILE_ROW * TILE_SIZE - cam_y
+    mw, mh = TILE_SIZE * 3, int(TILE_SIZE * 0.9)
+    rect = pygame.Rect(sx, sy + 6, mw, mh)
+
+    # The monitor's lit state is driven solely by _monitor_on. The
+    # post-cutoff _light_flicker is allowed to strobe the room's fluorescent
+    # tube and the red wash (see _draw_atmosphere), but the monitor itself
+    # stays in its "NO SIGNAL" disconnected state once monitor_off fires —
+    # no flickering back to Balaceanu's face.
+    lit = _monitor_on
+
+    if lit:
+        # CRT bezel + screen.
+        pygame.draw.rect(screen, (30, 18, 18), rect.inflate(8, 8), border_radius=4)
+        pygame.draw.rect(screen, (10, 6, 6), rect, border_radius=2)
+        # Red glow halo (the monitor is the cell's light source).
+        glow = pygame.Surface((mw + 120, mh + 120), pygame.SRCALPHA)
+        pulse = 0.5 + 0.5 * math.sin(time.time() * 6.0)
+        for r, a in ((1.0, 18), (0.7, 26), (0.45, 40)):
+            pygame.draw.rect(
+                glow,
+                (170, 40, 40, int(a * (0.6 + 0.4 * pulse))),
+                (60 - mw * r / 2 + mw / 2, 60 - mh * r / 2 + mh / 2,
+                 mw * r, mh * r),
+                border_radius=6,
+            )
+        screen.blit(glow, (rect.x - 60, rect.y - 60), special_flags=pygame.BLEND_ADD)
+        # Balaceanu silhouette: head + shoulders, dark on the red field.
+        cx = rect.centerx
+        head_cy = rect.y + int(mh * 0.40)
+        head_r = int(mh * 0.22)
+        shoulder_top = head_cy + head_r - 2
+        shoulder_w = int(mw * 0.55)
+        pygame.draw.circle(screen, (4, 2, 2), (cx, head_cy), head_r)
+        pygame.draw.ellipse(
+            screen, (4, 2, 2),
+            (cx - shoulder_w // 2, shoulder_top, shoulder_w, rect.bottom - shoulder_top + 6),
+        )
+        # Scanline noise across the screen.
+        for ny in range(rect.y + 2, rect.bottom - 2, 3):
+            pygame.draw.line(screen, (60, 20, 20),
+                             (rect.x + 2, ny), (rect.right - 2, ny), 1)
+        # Recording label + blinking REC dot.
+        label = font_terminal_small.render("BALACEANU", True, (210, 90, 90))
+        screen.blit(label, (rect.x + 6, rect.y + 4))
+        if int(time.time() * 2) % 2 == 0:
+            pygame.draw.circle(screen, (220, 40, 40),
+                               (rect.right - 14, rect.y + 10), 3)
+        rec = font_terminal_small.render("REC", True, (180, 60, 60))
+        screen.blit(rec, (rect.right - 40, rect.y + 4))
+    else:
+        pygame.draw.rect(screen, (30, 30, 34), rect.inflate(8, 8), border_radius=4)
+        pygame.draw.rect(screen, (8, 8, 10), rect, border_radius=2)
+        pygame.draw.rect(screen, (40, 40, 44), rect, 1)
+        dead = font_terminal_small.render("NO SIGNAL", True, (70, 70, 74))
+        screen.blit(dead, (rect.x + 6, rect.y + 4))
+
+
+def _draw_interrogation_status_strip():
+    """Tiny diegetic monitor noise for the interrogation.
+
+    No mission title, no objective box: the point of this stage is that Biribel
+    is trapped, not browsing a HUD.  This reads as surveillance/recording noise
+    rather than a gameplay panel.
+    """
+    ticks = pygame.time.get_ticks()
+    rec_on = (ticks // 420) % 2 == 0
+    x, y = 26, 22
+    if rec_on:
+        pygame.draw.circle(screen, (170, 28, 28), (x, y + 7), 4)
+    rec = font_terminal_small.render("REC / CELL 03", True, (95, 100, 100))
+    time_left = font_terminal_small.render("22:00 ADDRESS PENDING", True, (105, 70, 70))
+    rec.set_alpha(145)
+    time_left.set_alpha(118)
+    screen.blit(rec, (x + 12, y))
+    screen.blit(time_left, (x + 12, y + 18))
+
+
+def _draw_text_shadowed(surface, font, text, pos, color, shadow=(0, 0, 0), alpha=255):
+    """Small helper for minimal interrogation text: no boxes, just readable text."""
+    sx, sy = pos
+    sh = font.render(text, True, shadow)
+    sh.set_alpha(min(alpha, 190))
+    surface.blit(sh, (sx + 2, sy + 2))
+    fg = font.render(text, True, color)
+    fg.set_alpha(alpha)
+    surface.blit(fg, pos)
+    return fg.get_width(), fg.get_height()
+
+
+def _draw_interrogation_text_scrim(y, h, alpha=78):
+    """Very soft readability band; deliberately not a panel/card."""
+    scrim = pygame.Surface((WIDTH, h), pygame.SRCALPHA)
+    for i in range(h):
+        # darkest at center, feathered at top/bottom
+        mid = 1.0 - abs((i / max(1, h - 1)) * 2.0 - 1.0)
+        a = int(alpha * (mid ** 0.75))
+        pygame.draw.line(scrim, (0, 0, 0, a), (0, i), (WIDTH, i))
+    screen.blit(scrim, (0, y))
+
+
+def _draw_dialogue_panel():
+    """Render the minimal-horror Mission 3 interrogation interface.
+
+    This intentionally avoids obvious UI furniture: no cards, no large panels,
+    no boxed objective.  Dialogue becomes sparse subtitle text over the cell;
+    choices become bare thoughts/responses, like things Biribel can force out
+    while restrained.
+    """
+    global _dialogue_slide
+    beat = _current_beat()
+    if beat is None:
+        return
+
+    if _dialogue_slide > 0:
+        _dialogue_slide = max(0.0, _dialogue_slide - 1.0)
+    slide_offset = int(_dialogue_slide)
+
+    btype = beat.get("type")
+    speaker = beat.get("speaker", "")
+    accent = beat.get("color", C_BIRIBEL)
+    ticks = pygame.time.get_ticks()
+    cursor_visible = (ticks // 330) % 2 == 0
+
+    # Oppressive focus layer: always slight; heavier when the player is forced
+    # to choose.  This replaces the previous UI cards with mood.
+    dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    dim_alpha = 34 if btype != "choice" else 82
+    dim.fill((0, 0, 0, dim_alpha))
+    screen.blit(dim, (0, 0))
+
+    if btype == "action":
+        caption, cap_color = _ACTION_CAPTIONS.get(beat.get("action"), ("[...]", C_SYSTEM))
+        visible = caption[:_dialogue_char_idx]
+        lines = _wrap(visible, font_terminal, WIDTH - 160)
+        total_h = max(1, len(lines[:2])) * 30
+        y = HEIGHT // 2 - total_h // 2
+        _draw_interrogation_text_scrim(y - 28, total_h + 56, alpha=58)
+        for i, ln in enumerate(lines[:2]):
+            surf = font_terminal.render(ln, True, cap_color)
+            surf.set_alpha(min(230, max(80, _dialogue_char_idx * 7 - i * 35)))
+            x = WIDTH // 2 - surf.get_width() // 2
+            _draw_text_shadowed(screen, font_terminal, ln, (x, y + i * 30), cap_color, alpha=surf.get_alpha())
+        if not _line_fully_typed(beat) and cursor_visible:
+            pygame.draw.rect(screen, cap_color, (WIDTH // 2 + 4, y + total_h + 2, 8, 18))
+        _draw_continue_hint(0, accent, beat, "SPACE / ENTER")
+        return
+
+    if btype == "line":
+        full_text = beat.get("text", "")
+        visible = full_text[:_dialogue_char_idx]
+        inner_w = WIDTH - 180
+        lines = _wrap(visible, font_dialogue, inner_w)
+        speaker_label = speaker.upper() if speaker else ""
+
+        block_h = 26 + max(1, len(lines[:3])) * 28
+        y = HEIGHT - block_h - 52 + slide_offset
+        x = 92
+        _draw_interrogation_text_scrim(y - 18, block_h + 46, alpha=70)
+
+        if speaker_label:
+            _draw_text_shadowed(screen, font_terminal_small, speaker_label,
+                                (x, y), accent, alpha=190)
+            # Small speaker-color wound line; less UI than a full stripe.
+            pygame.draw.line(screen, (*accent, 125), (x, y + 20), (x + 94, y + 20), 1)
+        ty = y + 30
+        for i, ln in enumerate(lines[:3]):
+            la = min(238, max(0, _dialogue_char_idx * 8 - i * 40))
+            _draw_text_shadowed(screen, font_dialogue, ln, (x, ty + i * 28),
+                                (228, 230, 230), alpha=la)
+        if not _line_fully_typed(beat) and lines and cursor_visible:
+            last = lines[min(len(lines), 3) - 1]
+            cx = x + font_dialogue.size(last)[0] + 4
+            cy = ty + (min(len(lines), 3) - 1) * 28 + 4
+            pygame.draw.rect(screen, accent, (cx, cy, 8, 20))
+        _draw_continue_hint(0, accent, beat, "SPACE / ENTER")
+        return
+
+    if btype == "choice":
+        prompt = beat.get("prompt", "Choose:")
+        visible_prompt = prompt[:_dialogue_char_idx]
+        inner_w = WIDTH - 200
+        prompt_lines = _wrap(visible_prompt, font_dialogue, inner_w)
+
+        x = 118
+        y = HEIGHT - 232
+        _draw_interrogation_text_scrim(y - 22, 190, alpha=82)
+        for i, ln in enumerate(prompt_lines[:2]):
+            la = min(220, max(0, _dialogue_char_idx * 8 - i * 40))
+            _draw_text_shadowed(screen, font_dialogue, ln, (x, y + i * 28),
+                                C_PROMPT, alpha=la)
+
+        if not _line_fully_typed(beat):
+            if cursor_visible:
+                last_line = prompt_lines[-1] if prompt_lines else ""
+                cx = x + font_dialogue.size(last_line)[0] + 4
+                pygame.draw.rect(screen, C_PROMPT, (cx, y + 4, 8, 20))
+            return
+
+        options = beat.get("options", [])
+        opt_y = y + 66
+        for i, (label, _line) in enumerate(options):
+            selected = (i == _dialogue_choice)
+            prefix = ">" if selected else " "
+            col = (245, 216, 132) if selected else (150, 154, 154)
+            alpha = 235 if selected else 150
+            line = f"{prefix} {label}"
+            _draw_text_shadowed(screen, font_dialogue, line, (x + 24, opt_y + i * 30),
+                                col, alpha=alpha)
+            if selected:
+                pulse = int(80 + 50 * (0.5 + 0.5 * math.sin(ticks * 0.006)))
+                pygame.draw.line(screen, (*C_PROMPT, pulse),
+                                 (x + 24, opt_y + i * 30 + 25),
+                                 (x + 235, opt_y + i * 30 + 25), 1)
+        _draw_continue_hint(0, accent, beat, "↑/↓ choose   ENTER")
+        return
+
+
+def _draw_continue_hint(x, accent, beat, text):
+    """Pulsing bottom-right hint — only once the current line is fully typed
+    (so it never reads as skippable mid-type). Mirrors draw_dialogue_box's
+    sine-modulated "▼ SPACE TO CONTINUE"."""
+    if _action_is_unskippable(beat):
+        return
+
+    if not _line_fully_typed(beat):
+        return
+    ticks = pygame.time.get_ticks()
+    a = int(140 + math.sin(ticks * 0.004) * 60)
+    hint = font_terminal_small.render(text, True,
+                                      (accent[0] // 2, accent[1] // 2, accent[2] // 2))
+    hint.set_alpha(a)
+    screen.blit(hint, (WIDTH - hint.get_width() - 22, HEIGHT - 24))
+
+
+def _draw_cell_atmosphere(cam_x, cam_y):
+    """Atmospheric overlays that sell the cell as a cell, not a tilemap.
+
+    Layers, back-to-front:
+      - Red monitor wash: when the monitor is lit, a low-alpha red overlay
+        tinting the visible interior (the monitor is the only light source).
+      - Hanging fluorescent light: a tube on the ceiling + a soft light cone
+        spilling down. Flickers (steady while lit, strobing after the cut).
+    Drawn BEFORE the monitor so the monitor's glow halo sits on top.
+    """
+    # Red monitor wash over the whole screen while Balaceanu's feed is live.
+    if _monitor_on and not (_light_flicker > 0 and _light_flicker % 8 < 4):
+        pulse = 0.5 + 0.5 * math.sin(time.time() * 6.0)
+        wash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        wash.fill((90, 12, 12, int(28 + 18 * pulse)))
+        screen.blit(wash, (0, 0))
+
+    # Hanging fluorescent tube on the ceiling + light cone below it.
+    # Position it a couple tiles right of the monitor, high on the wall.
+    tube_cx = (_MONITOR_TILE_COL + 5) * TILE_SIZE - cam_x
+    tube_cy = _MONITOR_TILE_ROW * TILE_SIZE - cam_y + 6
+    tube_w, tube_h = TILE_SIZE, 8
+    # Flicker: steady while the monitor is on; strobe after monitor_off.
+    tube_lit = True
+    if _light_flicker > 0:
+        tube_lit = _light_flicker % 10 < 6
+    if tube_lit:
+        # The tube itself.
+        pygame.draw.rect(screen, (30, 30, 26),
+                         (tube_cx - tube_w // 2 - 4, tube_cy - 6, tube_w + 8, tube_h + 6),
+                         border_radius=2)
+        glow_pulse = 0.75 + 0.25 * math.sin(time.time() * 8.0)
+        pygame.draw.rect(
+            screen,
+            (int(200 * glow_pulse), int(205 * glow_pulse), int(180 * glow_pulse)),
+            (tube_cx - tube_w // 2, tube_cy, tube_w, tube_h),
+            border_radius=2,
+        )
+        # Soft cone of cold light spilling DOWN into the cell only.
+        # The tube is on the north wall; light should only illuminate south
+        # (into the cell interior), NOT north (into the wall above the tube).
+        # _draw_light_cone draws a full radial circle which leaks up; we
+        # draw a half-cone manually -- a half-circle glow clipped to y >=
+        # tube_cy + tube_h.
+        cone_radius = int(TILE_SIZE * 2.2)
+        cone_cx = tube_cx
+        cone_cy = tube_cy + tube_h
+        cone_alpha = int(55 * glow_pulse)
+        if cone_alpha > 0 and cone_radius > 0:
+            # Build the glow on a surface sized to the lower half only.
+            cone_surf = pygame.Surface((cone_radius * 2, cone_radius),
+                                        pygame.SRCALPHA)
+            steps = 16
+            for i in range(steps):
+                t = i / steps
+                rad = int(cone_radius * (1 - t * 0.6))
+                aa = int(cone_alpha * (1 - t) ** 2)
+                if aa > 0 and rad > 0:
+                    # Draw a half-circle (bottom half) centered at the top
+                    # edge of the cone_surf.
+                    pygame.draw.circle(
+                        cone_surf, (210, 215, 190, aa),
+                        (cone_radius, 0), rad,
+                        draw_top_right=False, draw_top_left=False,
+                        draw_bottom_right=True, draw_bottom_left=True,
+                    )
+            screen.blit(cone_surf, (cone_cx - cone_radius, cone_cy))
+
+
+# Cell interior tile bounds (Biribel's cell = cell index 3 in the new 48x48
+# layout: cols 30..37, rows 5..12). Used to place furniture against walls.
+_CELL_COL_WEST = 30
+_CELL_COL_EAST = 37
+_CELL_ROW_NORTH = 5
+_CELL_ROW_SOUTH = 12
+
+
+def _draw_cell_details(cam_x, cam_y):
+    """Draw cell furniture, floor details, and wall scratches to make the
+    cell read as a real interrogation cell, not a bare tilemap.
+
+    All fixtures use seeded random (random.Random(42)) so stains and cracks
+    look organic but stay deterministic (no per-frame shimmer).
+
+    Called from _draw_cell_room AFTER atmosphere but BEFORE the wall monitor.
+    This function draws Biribel's cell (cell 3) only — neighbor cells
+    are handled by _draw_neighbor_cells.
+    """
+    rng = random.Random(42)
+
+    # Wall baseboard
+    base_col = (22, 24, 26)
+    base_h = 3
+    by = _CELL_ROW_NORTH * TILE_SIZE - cam_y - base_h
+    pygame.draw.rect(screen, base_col,
+                     (_CELL_COL_WEST * TILE_SIZE - cam_x, by,
+                      (_CELL_COL_EAST - _CELL_COL_WEST + 1) * TILE_SIZE, base_h))
+    bx = _CELL_COL_WEST * TILE_SIZE - cam_x - base_h
+    pygame.draw.rect(screen, base_col,
+                     (bx, _CELL_ROW_NORTH * TILE_SIZE - cam_y,
+                      base_h, (_CELL_ROW_SOUTH - _CELL_ROW_NORTH + 1) * TILE_SIZE))
+    bx = (_CELL_COL_EAST + 1) * TILE_SIZE - cam_x
+    pygame.draw.rect(screen, base_col,
+                     (bx, _CELL_ROW_NORTH * TILE_SIZE - cam_y,
+                      base_h, (_CELL_ROW_SOUTH - _CELL_ROW_NORTH + 1) * TILE_SIZE))
+
+    # Barred window
+    win_x = (_CELL_COL_WEST + 3) * TILE_SIZE - cam_x + 20
+    win_y = _CELL_ROW_NORTH * TILE_SIZE - cam_y + 4
+    win_w, win_h = 42, 18
+    pygame.draw.rect(screen, (10, 12, 16), (win_x, win_y, win_w, win_h))
+    pygame.draw.rect(screen, (60, 64, 68), (win_x, win_y, win_w, win_h), 2)
+    bar_col = (50, 54, 58)
+    for bar_off in (6, 16, 26, 36):
+        pygame.draw.line(screen, bar_col, (win_x + bar_off, win_y + 1), (win_x + bar_off, win_y + win_h - 1), 2)
+    glow = pygame.Surface((win_w, win_h), pygame.SRCALPHA)
+    pygame.draw.rect(glow, (40, 60, 80, 30), glow.get_rect())
+    screen.blit(glow, (win_x, win_y))
+
+    # Floor drain
+    drain_x = _DRAIN_TILE_COL * TILE_SIZE - cam_x + TILE_SIZE // 2
+    drain_y = _DRAIN_TILE_ROW * TILE_SIZE - cam_y + TILE_SIZE // 2
+    pygame.draw.rect(screen, (28, 26, 22), (drain_x - 11, drain_y - 11, 22, 22), border_radius=3)
+    pygame.draw.rect(screen, (18, 17, 14), (drain_x - 9, drain_y - 9, 18, 18))
+    pygame.draw.rect(screen, (6, 6, 5), (drain_x - 7, drain_y - 7, 14, 14))
+    bar_col = (40, 36, 32)
+    bar_hi = (58, 52, 46)
+    for off in (-5, 0, 5):
+        pygame.draw.line(screen, bar_col, (drain_x - 7, drain_y + off), (drain_x + 7, drain_y + off), 1)
+        pygame.draw.line(screen, bar_col, (drain_x + off, drain_y - 7), (drain_x + off, drain_y + 7), 1)
+    for off in (-5, 0, 5):
+        pygame.draw.line(screen, bar_hi, (drain_x - 7, drain_y + off - 1), (drain_x + 7, drain_y + off - 1), 1)
+
+    # Ventilation grate
+    vent_x = (_CELL_COL_WEST + 1) * TILE_SIZE - cam_x + TILE_SIZE // 2
+    vent_y = (_CELL_ROW_SOUTH - 2) * TILE_SIZE - cam_y + TILE_SIZE // 2
+    vent_w, vent_h = 28, 14
+    pygame.draw.rect(screen, (6, 6, 8), (vent_x - vent_w // 2, vent_y - vent_h // 2, vent_w, vent_h), border_radius=2)
+    pygame.draw.rect(screen, (44, 42, 38), (vent_x - vent_w // 2, vent_y - vent_h // 2, vent_w, vent_h), 2, border_radius=2)
+    slat_col = (38, 36, 32)
+    for slat_off in (-4, 0, 4):
+        pygame.draw.line(screen, slat_col, (vent_x - vent_w // 2 + 3, vent_y + slat_off), (vent_x + vent_w // 2 - 3, vent_y + slat_off), 2)
+    draft = pygame.Surface((vent_w - 4, 2), pygame.SRCALPHA)
+    draft.fill((60, 80, 100, 20))
+    screen.blit(draft, (vent_x - vent_w // 2 + 2, vent_y - 2))
+
+    # Floor stains
+    stain = pygame.Surface((56, 42), pygame.SRCALPHA)
+    pygame.draw.ellipse(stain, (28, 24, 18, 60), (0, 0, 56, 42))
+    pygame.draw.ellipse(stain, (32, 26, 18, 80), (8, 6, 40, 30))
+    pygame.draw.ellipse(stain, (22, 18, 14, 100), (16, 12, 24, 18))
+    for _ in range(8):
+        bx = rng.randint(0, 52)
+        by = rng.randint(0, 38)
+        br = rng.randint(2, 5)
+        pygame.draw.circle(stain, (26, 22, 16, 70), (bx, by), br)
+    screen.blit(stain, (drain_x - 28, drain_y - 21))
+
+    # Blood stain
+    blood_x = (_CELL_COL_WEST + 2) * TILE_SIZE - cam_x + TILE_SIZE // 2
+    blood_y = (_CELL_ROW_NORTH + 2) * TILE_SIZE - cam_y + TILE_SIZE // 2 + 8
+    blood = pygame.Surface((40, 32), pygame.SRCALPHA)
+    pygame.draw.ellipse(blood, (40, 6, 6, 80), (0, 0, 40, 32))
+    pygame.draw.ellipse(blood, (55, 8, 8, 160), (6, 4, 28, 22))
+    pygame.draw.ellipse(blood, (50, 6, 6, 200), (12, 8, 16, 14))
+    for _ in range(10):
+        sx = 20 + rng.randint(-16, 16)
+        sy = 16 + rng.randint(-12, 12)
+        sr = rng.randint(1, 3)
+        pygame.draw.circle(blood, (45, 8, 8, 140), (sx, sy), sr)
+    for _ in range(3):
+        sx = 20 + rng.randint(-14, 14)
+        sy = 16 + rng.randint(-10, 10)
+        ex = sx + rng.randint(-2, 2)
+        ey = sy + rng.randint(2, 6)
+        pygame.draw.line(blood, (40, 6, 6, 120), (sx, sy), (ex, ey), 1)
+    screen.blit(blood, (blood_x - 20, blood_y - 16))
+
+    # Floor cracks
+    crack_col = (20, 18, 16)
+    for _ in range(5):
+        angle = rng.uniform(0, math.pi * 2)
+        length = rng.randint(35, 55)
+        cx, cy = drain_x, drain_y
+        for _ in range(4):
+            seg_len = length / 4
+            ex = cx + math.cos(angle) * seg_len + rng.randint(-3, 3)
+            ey = cy + math.sin(angle) * seg_len + rng.randint(-3, 3)
+            pygame.draw.line(screen, crack_col, (cx, cy), (int(ex), int(ey)), 1)
+            cx, cy = ex, ey
+            angle += rng.uniform(-0.4, 0.4)
+
+    # Tally marks
+    wall_x = _CELL_COL_WEST * TILE_SIZE - cam_x
+    tally_start_y = (_CELL_ROW_NORTH + 2) * TILE_SIZE - cam_y
+    tally_col = (62, 56, 46)
+    for group in range(4):
+        gx = wall_x + 5
+        gy = tally_start_y + group * 22
+        for i in range(4):
+            x = gx + i * 4 + rng.randint(-1, 1)
+            y_off = rng.randint(0, 2)
+            pygame.draw.line(screen, tally_col, (x, gy + y_off), (x, gy + 14 + y_off), 1)
+        pygame.draw.line(screen, tally_col, (gx - 2, gy + 14), (gx + 14, gy), 1)
+
+    # Graffiti (MAG tag + IPA crest)
+    gx = (_CELL_COL_EAST + 1) * TILE_SIZE - cam_x - 14
+    tag_col = (140, 60, 40, 120)
+    mag_y = (_CELL_ROW_NORTH + 3) * TILE_SIZE - cam_y
+    tag_surf = pygame.Surface((30, 24), pygame.SRCALPHA)
+    for i, letter in enumerate("MAG"):
+        lx = 2 + i * 10
+        ly = 4
+        for j in range(5):
+            ch = rng.randint(-1, 1)
+            tag_surf.set_at((lx + j, ly + i * 7 + ch), tag_col)
+            tag_surf.set_at((lx + j, ly + i * 7 + 1 + ch), tag_col)
+    screen.blit(tag_surf, (gx, mag_y))
+    crest_cx = gx + 12
+    crest_cy = mag_y + 36
+    pygame.draw.circle(screen, (40, 45, 55, 80), (crest_cx, crest_cy), 6, 1)
+
+    # Conduit pipe
+    conduit_col = (44, 42, 38)
+    conduit_hi = (62, 58, 52)
+    conduit_x = (_MONITOR_TILE_COL + 1) * TILE_SIZE - cam_x
+    conduit_start_y = (_MONITOR_TILE_ROW + 1) * TILE_SIZE - cam_y
+    conduit_end_y = conduit_start_y + TILE_SIZE * 2
+    pygame.draw.line(screen, conduit_col, (conduit_x, conduit_start_y), (conduit_x, conduit_end_y), 4)
+    pygame.draw.line(screen, conduit_hi, (conduit_x - 1, conduit_start_y), (conduit_x - 1, conduit_end_y), 1)
+    box_rect = pygame.Rect(conduit_x - 6, conduit_end_y, 12, 9)
+    pygame.draw.rect(screen, (50, 46, 40), box_rect, border_radius=1)
+    pygame.draw.rect(screen, (30, 28, 24), box_rect, 1, border_radius=1)
+    pygame.draw.circle(screen, (200, 140, 30), (conduit_x, conduit_end_y + 4), 1)
+    pygame.draw.circle(screen, (90, 86, 80), (conduit_x - 4, conduit_end_y + 2), 1)
+    pygame.draw.circle(screen, (90, 86, 80), (conduit_x + 4, conduit_end_y + 2), 1)
+
+    # Water stains
+    for (sx_frac, sy_off, sw, sh) in [
+        (0.25, 2, 36, 10), (0.65, 4, 28, 8), (0.85, 6, 20, 6),
+    ]:
+        sx = (_CELL_COL_WEST + int((_CELL_COL_EAST - _CELL_COL_WEST) * sx_frac)) * TILE_SIZE - cam_x
+        sy = _CELL_ROW_NORTH * TILE_SIZE - cam_y + sy_off
+        ws = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        pygame.draw.ellipse(ws, (22, 20, 18, 60), (0, 0, sw, sh))
+        pygame.draw.ellipse(ws, (18, 16, 14, 80), (4, 2, sw - 8, sh - 4))
+        pygame.draw.ellipse(ws, (14, 12, 10, 60), (8, 4, sw - 16, sh - 8))
+        screen.blit(ws, (sx, sy))
+
+    # Loudspeaker
+    speaker_x = (_CELL_COL_EAST + 1) * TILE_SIZE - cam_x - 10
+    speaker_y = (_CELL_ROW_NORTH + 1) * TILE_SIZE - cam_y - 2
+    pygame.draw.rect(screen, (80, 74, 66), (speaker_x, speaker_y, 16, 12), border_radius=2)
+    pygame.draw.rect(screen, (60, 56, 50), (speaker_x, speaker_y, 16, 12), 1, border_radius=2)
+    for grille_y in range(speaker_y + 3, speaker_y + 11, 3):
+        pygame.draw.line(screen, (50, 46, 40), (speaker_x + 3, grille_y), (speaker_x + 13, grille_y), 1)
+    led_on = (pygame.time.get_ticks() // 1200) % 3 != 0
+    pygame.draw.circle(screen, (200 if led_on else 60, 20, 20), (speaker_x + 4, speaker_y + 2), 1)
+
+    # Interrogation chair
+    chair_cx = (_MONITOR_TILE_COL + 0.5) * TILE_SIZE - cam_x
+    chair_cy = (_CELL_ROW_NORTH + 1) * TILE_SIZE - cam_y + TILE_SIZE // 2
+    seat_col = (42, 40, 36)
+    seat_dark = (28, 26, 24)
+    seat_edge = (60, 56, 50)
+
+    if not getattr(STATE, "mission3_chair_broken", False):
+        chair_shad = pygame.Surface((34, 28), pygame.SRCALPHA)
+        pygame.draw.ellipse(chair_shad, (0, 0, 0, 90), (0, 0, 34, 28))
+        screen.blit(chair_shad, (chair_cx - 17, chair_cy - 10 + 6))
+        back_r = pygame.Rect(int(chair_cx) - 13, int(chair_cy) - 14, 26, 8)
+        pygame.draw.rect(screen, seat_col, back_r, border_radius=2)
+        pygame.draw.rect(screen, seat_edge, back_r, 1, border_radius=2)
+        pygame.draw.line(screen, seat_dark, (int(chair_cx), int(chair_cy) - 13), (int(chair_cx), int(chair_cy) - 8), 1)
+        seat_r = pygame.Rect(int(chair_cx) - 13, int(chair_cy) - 8, 26, 18)
+        pygame.draw.rect(screen, seat_col, seat_r, border_radius=2)
+        pygame.draw.rect(screen, seat_edge, seat_r, 1, border_radius=2)
+        pygame.draw.rect(screen, seat_dark, (int(chair_cx) - 10, int(chair_cy) - 5, 20, 12), border_radius=1)
+        for side in (-1, 1):
+            ar = pygame.Rect(int(chair_cx) + side * 13 - 2, int(chair_cy) - 6, 4, 14)
+            pygame.draw.rect(screen, seat_col, ar, border_radius=1)
+            pygame.draw.rect(screen, seat_edge, ar, 1, border_radius=1)
+        bolt_col = (76, 72, 64)
+        bolt_dark = (30, 28, 24)
+        for (bx, by) in [(-13, -8), (13, -8), (-13, 10), (13, 10)]:
+            pygame.draw.circle(screen, bolt_col, (int(chair_cx + bx), int(chair_cy + by)), 2)
+            pygame.draw.circle(screen, bolt_dark, (int(chair_cx + bx), int(chair_cy + by)), 1)
+        chain_col = (100, 96, 88)
+        chain_dark = (60, 56, 50)
+        for side in (-1, 1):
+            cx = chair_cx + side * 11
+            cy = chair_cy - 2
+            for i in range(4):
+                pygame.draw.circle(screen, chain_col, (int(cx), int(cy + i * 3)), 2, 1)
+            cuff_y = cy + 11
+            pygame.draw.circle(screen, (130, 124, 112), (int(cx), int(cuff_y)), 3, 1)
+            pygame.draw.circle(screen, chain_dark, (int(cx), int(cuff_y)), 1)
+    else:
+        chair_shad = pygame.Surface((30, 22), pygame.SRCALPHA)
+        pygame.draw.ellipse(chair_shad, (0, 0, 0, 70), (0, 0, 30, 22))
+        screen.blit(chair_shad, (chair_cx - 15, chair_cy - 6 + 6))
+        back_r = pygame.Rect(int(chair_cx) - 13, int(chair_cy) - 12, 26, 6)
+        pygame.draw.rect(screen, seat_dark, back_r, border_radius=2)
+        pygame.draw.line(screen, (52, 44, 36), (int(chair_cx) - 13, int(chair_cy) - 12), (int(chair_cx) - 8, int(chair_cy) - 14), 1)
+        pygame.draw.line(screen, (52, 44, 36), (int(chair_cx) - 8, int(chair_cy) - 14), (int(chair_cx) - 3, int(chair_cy) - 11), 1)
+        pygame.draw.line(screen, (52, 44, 36), (int(chair_cx) - 3, int(chair_cy) - 11), (int(chair_cx) + 2, int(chair_cy) - 15), 1)
+        pygame.draw.line(screen, (52, 44, 36), (int(chair_cx) + 2, int(chair_cy) - 15), (int(chair_cx) + 8, int(chair_cy) - 12), 1)
+        pygame.draw.line(screen, (52, 44, 36), (int(chair_cx) + 8, int(chair_cy) - 12), (int(chair_cx) + 13, int(chair_cy) - 14), 1)
+        seat_r = pygame.Rect(int(chair_cx) - 13, int(chair_cy) - 8, 26, 16)
+        pygame.draw.rect(screen, seat_dark, seat_r, border_radius=2)
+        pygame.draw.rect(screen, (48, 44, 38), seat_r, 1, border_radius=2)
+        pygame.draw.line(screen, (16, 14, 12), (int(chair_cx) - 10, int(chair_cy) - 5), (int(chair_cx) + 8, int(chair_cy) + 4), 1)
+        bolt_col = (76, 72, 64)
+        bolt_dark = (30, 28, 24)
+        for (bx, by) in [(-13, -8), (13, -8), (-13, 10)]:
+            pygame.draw.circle(screen, bolt_col, (int(chair_cx + bx), int(chair_cy + by)), 2)
+            pygame.draw.circle(screen, bolt_dark, (int(chair_cx + bx), int(chair_cy + by)), 1)
+        pygame.draw.circle(screen, (12, 10, 8), (int(chair_cx + 13), int(chair_cy + 10)), 3)
+        pygame.draw.circle(screen, (6, 5, 4), (int(chair_cx + 13), int(chair_cy + 10)), 2)
+        splinter_col = (50, 42, 34)
+        for (sx, sy, slen, sang) in [(18, 14, 5, 0.3), (-20, 8, 4, -0.2), (22, -4, 6, 1.2), (-16, -12, 4, 0.8), (6, 18, 5, -0.5)]:
+            ex = chair_cx + sx + math.cos(sang) * slen
+            ey = chair_cy + sy + math.sin(sang) * slen
+            pygame.draw.line(screen, splinter_col, (int(chair_cx + sx), int(chair_cy + sy)), (int(ex), int(ey)), 1)
+        pygame.draw.circle(screen, (90, 84, 76), (int(chair_cx + 16), int(chair_cy + 6)), 2, 1)
+
+    # Metal cot
+    cot_x = int((_CELL_COL_WEST + 0.5) * TILE_SIZE) - cam_x - 2
+    cot_y_top = 9 * TILE_SIZE - cam_y
+    cot_y_bot = 12 * TILE_SIZE - cam_y
+    cot_w = 24
+    cot_h = cot_y_bot - cot_y_top
+    cot_shad = pygame.Surface((cot_w + 8, cot_h + 4), pygame.SRCALPHA)
+    pygame.draw.ellipse(cot_shad, (0, 0, 0, 70), (0, 0, cot_w + 8, cot_h + 4))
+    screen.blit(cot_shad, (cot_x - cot_w // 2 - 4, cot_y_top))
+    frame_col = (32, 30, 28)
+    frame_edge = (50, 46, 42)
+    frame_r = pygame.Rect(cot_x - cot_w // 2, cot_y_top, cot_w, cot_h)
+    pygame.draw.rect(screen, frame_col, frame_r, border_radius=2)
+    pygame.draw.rect(screen, frame_edge, frame_r, 1, border_radius=2)
+    matt_col = (54, 50, 44)
+    matt_r = pygame.Rect(cot_x - cot_w // 2 + 2, cot_y_top + 2, cot_w - 4, cot_h - 4)
+    pygame.draw.rect(screen, matt_col, matt_r, border_radius=1)
+    mesh_col = (44, 40, 36)
+    for my in range(matt_r.top + 4, matt_r.bottom - 2, 5):
+        pygame.draw.line(screen, mesh_col, (matt_r.left + 2, my), (matt_r.right - 2, my), 1)
+    for mx in range(matt_r.left + 4, matt_r.right - 2, 5):
+        pygame.draw.line(screen, mesh_col, (mx, matt_r.top + 2), (mx, matt_r.bottom - 2), 1)
+    pillow_col = (66, 60, 52)
+    pillow_r = pygame.Rect(cot_x - cot_w // 2 + 3, cot_y_top + 3, cot_w - 6, 10)
+    pygame.draw.rect(screen, pillow_col, pillow_r, border_radius=2)
+    pygame.draw.rect(screen, (80, 74, 64), pillow_r, 1, border_radius=2)
+    pygame.draw.line(screen, (50, 46, 40), (pillow_r.left + 2, pillow_r.centery), (pillow_r.right - 2, pillow_r.centery), 1)
+    leg_col = (24, 22, 20)
+    leg_hi = (44, 40, 36)
+    for (lx, ly) in [(cot_x - cot_w // 2, cot_y_top), (cot_x + cot_w // 2, cot_y_top), (cot_x - cot_w // 2, cot_y_bot), (cot_x + cot_w // 2, cot_y_bot)]:
+        pygame.draw.circle(screen, leg_col, (int(lx), int(ly)), 3)
+        pygame.draw.circle(screen, leg_hi, (int(lx), int(ly)), 3, 1)
+
+    # Stainless steel sink
+    sink_cx = int((_CELL_COL_EAST + 0.5) * TILE_SIZE) - cam_x - 4
+    sink_cy = int((_CELL_ROW_NORTH + 0.5) * TILE_SIZE + 2) - cam_y
+    sink_shad = pygame.Surface((32, 22), pygame.SRCALPHA)
+    pygame.draw.ellipse(sink_shad, (0, 0, 0, 80), (0, 0, 32, 22))
+    screen.blit(sink_shad, (sink_cx - 16, sink_cy - 6))
+    rim_col = (110, 112, 116)
+    rim_dark = (70, 72, 76)
+    pygame.draw.ellipse(screen, rim_col, (sink_cx - 14, sink_cy - 9, 28, 18))
+    pygame.draw.ellipse(screen, rim_dark, (sink_cx - 14, sink_cy - 9, 28, 18), 1)
+    basin_col = (80, 82, 86)
+    pygame.draw.ellipse(screen, basin_col, (sink_cx - 11, sink_cy - 6, 22, 12))
+    deep = pygame.Surface((22, 5), pygame.SRCALPHA)
+    pygame.draw.ellipse(deep, (0, 0, 0, 90), (0, 0, 22, 5))
+    screen.blit(deep, (sink_cx - 11, sink_cy - 6))
+    pygame.draw.circle(screen, (16, 16, 18), (sink_cx, sink_cy + 1), 3)
+    pygame.draw.circle(screen, (6, 6, 8), (sink_cx, sink_cy + 1), 2)
+    pygame.draw.line(screen, (40, 40, 42), (sink_cx - 2, sink_cy + 1), (sink_cx + 2, sink_cy + 1), 1)
+    pygame.draw.line(screen, (40, 40, 42), (sink_cx, sink_cy - 1), (sink_cx, sink_cy + 3), 1)
+    faucet_col = (120, 122, 126)
+    faucet_dark = (80, 82, 86)
+    pygame.draw.line(screen, faucet_col, (sink_cx, sink_cy - 8), (sink_cx, sink_cy - 16), 3)
+    pygame.draw.line(screen, faucet_dark, (sink_cx + 1, sink_cy - 8), (sink_cx + 1, sink_cy - 16), 1)
+    pygame.draw.line(screen, faucet_col, (sink_cx, sink_cy - 16), (sink_cx + 5, sink_cy - 16), 3)
+    pygame.draw.line(screen, faucet_dark, (sink_cx, sink_cy - 15), (sink_cx + 5, sink_cy - 15), 1)
+    pygame.draw.circle(screen, faucet_dark, (sink_cx + 5, sink_cy - 16), 2)
+    pygame.draw.arc(screen, (160, 162, 166), (sink_cx - 12, sink_cy - 7, 24, 14), math.pi * 1.1, math.pi * 1.9, 2)
+    pygame.draw.line(screen, (50, 52, 56), (sink_cx - 4, sink_cy - 2), (sink_cx - 2, sink_cy), 1)
+
+
+def _draw_neighbor_cell_base(cell_idx, L, T, W, H):
+    """Extra atmosphere/detail pass for the non-player cells.
+
+    Makes the side cells read as distinct rooms instead of plain grey boxes:
+    - unique color wash per cell
+    - ceiling light / shadow falloff
+    - grime, cracks, warning plaques
+    - foreground bars / cell numbers
+    - extra themed clutter
+    """
+    ix, iy, iw, ih = int(L), int(T), int(W), int(H)
+
+    themes = [
+        # cell_idx 0 — storage / archives overflow
+        {
+            "tint": (85, 70, 35),
+            "label": "CELL 01 / STORAGE",
+            "sub": "ARCHIVE OVERFLOW",
+            "accent": (190, 150, 70),
+        },
+        # cell_idx 1 — torture / interrogation overflow
+        {
+            "tint": (105, 28, 22),
+            "label": "CELL 02 / INTERVIEW",
+            "sub": "CLEANED DAILY",
+            "accent": (210, 65, 45),
+        },
+        # cell_idx 2 — remains / Vostral rumor cell
+        {
+            "tint": (45, 82, 60),
+            "label": "CELL 03 / NO LOG",
+            "sub": "TRANSFER RECORD MISSING",
+            "accent": (110, 180, 130),
+        },
+    ]
+
+    theme = themes[cell_idx]
+    tint = theme["tint"]
+    accent = theme["accent"]
+
+    # ── Cell-wide colored grime wash ──
+    wash = pygame.Surface((iw, ih), pygame.SRCALPHA)
+    for yy in range(ih):
+        p = yy / max(1, ih)
+        a = int(14 + p * 34)
+        pygame.draw.line(wash, (*tint, a), (0, yy), (iw, yy))
+    screen.blit(wash, (ix, iy))
+
+    # ── Dark corners / cell occlusion ──
+    edge = pygame.Surface((iw, ih), pygame.SRCALPHA)
+    pygame.draw.rect(edge, (0, 0, 0, 110), (0, 0, iw, ih), 3)
+    pygame.draw.rect(edge, (0, 0, 0, 55), (4, 4, iw - 8, ih - 8), 2)
+    screen.blit(edge, (ix, iy))
+
+    # ── Broken fluorescent strip / mood light ──
+    light_x = ix + iw // 2 + (-48 if cell_idx == 0 else 0 if cell_idx == 1 else 46)
+    light_y = iy + 12
+
+    pygame.draw.rect(screen, (18, 18, 17), (light_x - 34, light_y - 4, 68, 8), border_radius=2)
+
+    flicker = 0.7 + 0.3 * math.sin(time.time() * (5.0 + cell_idx))
+    if cell_idx == 1:
+        light_col = (180, 55, 45)
+    elif cell_idx == 2:
+        light_col = (120, 190, 145)
+    else:
+        light_col = (210, 185, 115)
+
+    pygame.draw.rect(
+        screen,
+        tuple(int(c * flicker) for c in light_col),
+        (light_x - 30, light_y - 2, 60, 4),
+        border_radius=2,
+    )
+
+    # Light pool on the floor
+    pool = pygame.Surface((iw, ih), pygame.SRCALPHA)
+    pygame.draw.ellipse(
+        pool,
+        (*light_col, 26),
+        (iw // 2 - 115, 18, 230, ih - 30),
+    )
+    screen.blit(pool, (ix, iy))
+
+    # ── Cell number / warning plaque ──
+    plaque = pygame.Surface((150, 30), pygame.SRCALPHA)
+    plaque.fill((0, 0, 0, 145))
+    pygame.draw.rect(plaque, (*accent, 145), plaque.get_rect(), 1)
+    pygame.draw.rect(plaque, (*accent, 180), (0, 0, 4, 30))
+    lbl = font_terminal_small.render(theme["label"], True, accent)
+    sub = font_terminal_small.render(theme["sub"], True, (140, 130, 110))
+    plaque.blit(lbl, (8, 3))
+    plaque.blit(sub, (8, 16))
+    screen.blit(plaque, (ix + 8, iy + ih - 38))
+
+    # ── Deterministic grime, cracks, scratches ──
+    rng = random.Random(9100 + cell_idx)
+
+    for _ in range(10):
+        sx = ix + rng.randint(10, max(12, iw - 28))
+        sy = iy + rng.randint(8, max(10, ih - 36))
+        sh = rng.randint(16, 50)
+        stain = pygame.Surface((12, sh), pygame.SRCALPHA)
+        for yy in range(sh):
+            a = int(45 * (1 - yy / max(1, sh)))
+            pygame.draw.line(stain, (12, 10, 8, a), (6, yy), (6 + rng.randint(-3, 3), yy))
+        screen.blit(stain, (sx, sy))
+
+    for _ in range(6):
+        cx = ix + rng.randint(20, max(24, iw - 24))
+        cy = iy + rng.randint(28, max(32, ih - 28))
+        pts = [(cx, cy)]
+        for _seg in range(rng.randint(2, 4)):
+            pts.append((pts[-1][0] + rng.randint(-20, 20),
+                        pts[-1][1] + rng.randint(-12, 18)))
+        pygame.draw.lines(screen, (18, 16, 14), False, pts, 1)
+
+    # ── Stronger bars / foreground shadow at cell opening ──
+    bar_y = iy + ih - 18
+    for bx in range(ix + 14, ix + iw - 10, 22):
+        pygame.draw.line(screen, (8, 8, 9), (bx, bar_y), (bx, iy + ih + 8), 3)
+        pygame.draw.line(screen, (50, 50, 55), (bx - 1, bar_y), (bx - 1, iy + ih + 8), 1)
+
+    # ── Themed extra clutter per neighboring cell ──
+    if cell_idx == 0:
+        # Storage shelves with folders and evidence boxes
+        shelf_x = ix + iw - 58
+        shelf_y = iy + 48
+        pygame.draw.rect(screen, (36, 32, 24), (shelf_x, shelf_y, 42, ih - 100))
+        pygame.draw.rect(screen, (88, 64, 34), (shelf_x, shelf_y, 42, ih - 100), 2)
+
+        for row in range(4):
+            yy = shelf_y + 14 + row * 34
+            pygame.draw.line(screen, (62, 44, 24), (shelf_x + 3, yy), (shelf_x + 39, yy), 2)
+
+            for b in range(3):
+                bx = shelf_x + 6 + b * 11
+                by = yy - 11
+                col = rng.choice([(120, 96, 52), (92, 80, 58), (130, 110, 72)])
+                pygame.draw.rect(screen, col, (bx, by, 8, 10))
+                pygame.draw.rect(screen, (45, 34, 22), (bx, by, 8, 10), 1)
+
+        tag = font_terminal_small.render("EVIDENCE HOLD", True, (190, 150, 70))
+        tag.set_alpha(160)
+        screen.blit(tag, (ix + 20, iy + 42))
+
+    elif cell_idx == 1:
+        # Restraint chair / bloody cleaning tray
+        table = pygame.Rect(ix + iw // 2 - 36, iy + ih // 2 - 12, 72, 24)
+        pygame.draw.ellipse(screen, (0, 0, 0, 90), (table.x - 6, table.y + 12, table.w + 12, 22))
+        pygame.draw.rect(screen, (56, 48, 42), table, border_radius=3)
+        pygame.draw.rect(screen, (95, 80, 66), table, 2, border_radius=3)
+
+        for strap_y in (table.y + 5, table.y + 17):
+            pygame.draw.line(screen, (20, 16, 12), (table.x + 6, strap_y), (table.right - 6, strap_y), 3)
+
+        # Small red-stained drain
+        dx = ix + iw // 2 + 70
+        dy = iy + ih // 2 + 34
+        pygame.draw.circle(screen, (28, 24, 20), (dx, dy), 10)
+        pygame.draw.circle(screen, (8, 6, 5), (dx, dy), 6)
+        pygame.draw.ellipse(screen, (70, 8, 8, 120), (dx - 20, dy - 7, 40, 14))
+
+        # Hanging hook silhouettes
+        for hx in (ix + 42, ix + 72, ix + iw - 70):
+            pygame.draw.line(screen, (46, 44, 42), (hx, iy + 10), (hx, iy + 40), 2)
+            pygame.draw.arc(screen, (75, 70, 64), (hx - 6, iy + 34, 12, 14), 0, math.pi * 1.4, 2)
+
+    elif cell_idx == 2:
+        # Flies around the remains
+        fly_t = time.time() * 4.0
+        for i in range(14):
+            fx = ix + iw // 2 + math.sin(fly_t + i * 1.7) * (18 + i % 4 * 4)
+            fy = iy + ih // 2 + math.cos(fly_t * 0.7 + i * 2.1) * (14 + i % 3 * 3)
+            pygame.draw.circle(screen, (4, 4, 4), (int(fx), int(fy)), 1)
+
+        # Vostral file-shaped scrape on floor
+        doc_x = ix + iw - 92
+        doc_y = iy + ih - 92
+        pygame.draw.rect(screen, (110, 100, 72), (doc_x, doc_y, 46, 30))
+        pygame.draw.rect(screen, (58, 48, 32), (doc_x, doc_y, 46, 30), 1)
+        pygame.draw.line(screen, (70, 56, 38), (doc_x + 5, doc_y + 10), (doc_x + 40, doc_y + 10), 1)
+        pygame.draw.line(screen, (70, 56, 38), (doc_x + 5, doc_y + 18), (doc_x + 34, doc_y + 18), 1)
+
+        stamp = font_terminal_small.render("VOSTRAL", True, (110, 180, 130))
+        stamp.set_alpha(170)
+        screen.blit(stamp, (doc_x + 4, doc_y - 16))
+
+
+def _draw_neighbor_cells(cam_x, cam_y):
+    """Draw props inside cells 0, 1, 2 (the 3 cells next to yours).
+
+    Does not touch floors, walls, or your cell (cell 3).
+    Uses world-to-screen math that matches the tilemap exactly.
+    """
+    for cell_idx in range(3):
+        col_start = 6 + cell_idx * 8
+
+        # World-space cell interior (1 tile inset from walls on each side)
+        world_left   = (col_start + 1) * TILE_SIZE
+        world_right  = (col_start + 7) * TILE_SIZE
+        world_top    = (_CELL_ROW_NORTH + 1) * TILE_SIZE
+        world_bottom = _CELL_ROW_SOUTH * TILE_SIZE
+
+        # Screen-space
+        L = world_left - cam_x
+        R = world_right - cam_x
+        T = world_top - cam_y
+        B = world_bottom - cam_y
+        W = R - L
+        H = B - T
+
+        # Skip if off screen
+        if R < -40 or L > WIDTH + 40 or B < -40 or T > HEIGHT + 40:
+            continue
+
+        # Clip to cell interior
+        old_clip = screen.get_clip()
+        screen.set_clip(pygame.Rect(int(L), int(T), int(W), int(H)))
+
+        try:
+            _draw_neighbor_cell_base(cell_idx, L, T, W, H)
+
+            if cell_idx == 2:
+                # ════════════════════════════════════
+                # REMAINS CELL — skeleton on cot, bucket, Vostral graffiti
+                # ════════════════════════════════════
+
+                # ── Cot against west wall ──
+                cot_x = int(L + 6)
+                cot_y = int(T + 20)
+                cot_w = 20
+                cot_h = 52
+                # Shadow
+                pygame.draw.ellipse(screen, (0, 0, 0, 60), (cot_x - 2, cot_y + cot_h - 2, cot_w + 4, 6))
+                # Frame
+                pygame.draw.rect(screen, (40, 36, 32), (cot_x, cot_y, cot_w, cot_h), border_radius=2)
+                pygame.draw.rect(screen, (52, 48, 42), (cot_x, cot_y, cot_w, cot_h), 1, border_radius=2)
+                # Mattress
+                pygame.draw.rect(screen, (44, 40, 34), (cot_x + 2, cot_y + 2, cot_w - 4, cot_h - 4))
+                # Blood on mattress
+                pygame.draw.ellipse(screen, (52, 10, 10, 140), (cot_x + 4, cot_y + 12, 12, 8))
+                # Mesh lines
+                for my in range(cot_y + 8, cot_y + cot_h - 4, 6):
+                    pygame.draw.line(screen, (32, 28, 24), (cot_x + 3, my), (cot_x + cot_w - 3, my), 1)
+
+                # ── Skeleton on the cot ──
+                sk_x = cot_x + cot_w // 2
+                sk_y = cot_y + 10
+                # Skull
+                pygame.draw.circle(screen, (198, 190, 174), (sk_x, sk_y), 5)
+                pygame.draw.circle(screen, (14, 12, 10), (sk_x, sk_y), 5, 1)
+                # Eye sockets
+                pygame.draw.circle(screen, (10, 8, 6), (sk_x - 2, sk_y), 1)
+                pygame.draw.circle(screen, (10, 8, 6), (sk_x + 2, sk_y), 1)
+                # Jaw
+                pygame.draw.arc(screen, (14, 12, 10), (sk_x - 3, sk_y + 1, 6, 4), 0, math.pi, 1)
+                # Spine
+                pygame.draw.line(screen, (198, 190, 174), (sk_x, sk_y + 5), (sk_x, sk_y + 28), 2)
+                # Ribs (4 pairs)
+                for ri in range(4):
+                    ry = sk_y + 9 + ri * 5
+                    pygame.draw.line(screen, (190, 182, 166), (sk_x, ry), (sk_x - 5, ry + 2), 1)
+                    pygame.draw.line(screen, (190, 182, 166), (sk_x, ry), (sk_x + 5, ry + 2), 1)
+                # Pelvis
+                pygame.draw.arc(screen, (190, 182, 166), (sk_x - 4, sk_y + 28, 8, 4), math.pi, math.tau, 1)
+                # Legs (splayed)
+                pygame.draw.line(screen, (190, 182, 166), (sk_x - 2, sk_y + 32), (sk_x - 6, sk_y + 44), 1)
+                pygame.draw.line(screen, (190, 182, 166), (sk_x + 2, sk_y + 32), (sk_x + 5, sk_y + 42), 1)
+
+                # ── Rusted sink (NE corner) ──
+                sink_x = int(R - 28)
+                sink_y = int(T + 8)
+                pygame.draw.ellipse(screen, (78, 54, 35), (sink_x, sink_y, 18, 12))
+                pygame.draw.ellipse(screen, (48, 34, 20), (sink_x, sink_y, 18, 12), 1)
+                pygame.draw.ellipse(screen, (42, 30, 18), (sink_x + 3, sink_y + 3, 12, 6))
+                pygame.draw.circle(screen, (10, 8, 6), (sink_x + 9, sink_y + 6), 2)
+                # Rust drip stain below sink
+                pygame.draw.line(screen, (65, 42, 22), (sink_x + 9, sink_y + 12), (sink_x + 9, sink_y + 22), 2)
+                pygame.draw.line(screen, (55, 36, 18), (sink_x + 8, sink_y + 18), (sink_x + 10, sink_y + 28), 1)
+
+                # ── Rusted bucket ──
+                bk_x = int(R - 55)
+                bk_y = int(B - 28)
+                pygame.draw.ellipse(screen, (0, 0, 0, 65), (bk_x - 7, bk_y + 4, 14, 6))
+                pygame.draw.circle(screen, (72, 48, 26), (bk_x, bk_y), 6)
+                pygame.draw.circle(screen, (42, 28, 14), (bk_x, bk_y), 6, 2)
+                pygame.draw.circle(screen, (18, 14, 10), (bk_x, bk_y), 3)
+                # Bucket handle
+                pygame.draw.arc(screen, (55, 45, 30), (bk_x - 5, bk_y - 8, 10, 8), 0, math.pi, 1)
+
+                # ── Scratched wall text ──
+                t1 = font_terminal_small.render("THE VOSTRAL IS REAL", True, (62, 56, 46))
+                t1.set_alpha(185)
+                screen.blit(t1, (int(L + 10), int(T + 6)))
+
+                t2 = font_terminal_small.render("THEY LIED ABOUT HIS SERVICE", True, (55, 50, 42))
+                t2.set_alpha(150)
+                screen.blit(t2, (int(L + 10), int(T + 20)))
+
+                t3 = font_terminal_small.render("THE RECORD EXISTS", True, (50, 45, 38))
+                t3.set_alpha(130)
+                screen.blit(t3, (int(L + 10), int(T + 34)))
+
+                # ── Blood smears on floor ──
+                for bx_off, by_off, bsz in [(65, H - 45, 22), (W // 2, H - 30, 14)]:
+                    bl = pygame.Surface((bsz * 2, int(bsz * 1.2)), pygame.SRCALPHA)
+                    pygame.draw.ellipse(bl, (48, 8, 8, 130), bl.get_rect())
+                    screen.blit(bl, (int(L + bx_off - bsz), int(T + by_off)))
+
+                # ── Paper scraps on floor ──
+                scrap_rng = random.Random(2010)
+                for _ in range(8):
+                    px = int(L + 30 + scrap_rng.randint(0, max(1, W - 60)))
+                    py = int(T + 55 + scrap_rng.randint(0, max(1, H - 90)))
+                    pw = scrap_rng.randint(8, 12)
+                    ph = scrap_rng.randint(5, 8)
+                    pygame.draw.rect(screen, (115, 108, 86), (px, py, pw, ph))
+                    pygame.draw.rect(screen, (75, 68, 50), (px, py, pw, ph), 1)
+                    # Text line on paper
+                    pygame.draw.line(screen, (58, 52, 40), (px + 2, py + 3), (px + pw - 2, py + 3), 1)
+
+            elif cell_idx == 1:
+                # ════════════════════════════════════
+                # TORTURE CELL — chains, blood, torn cot, drag marks
+                # ════════════════════════════════════
+
+                # ── Torn cot ──
+                cot_x = int(L + 6)
+                cot_y = int(T + 20)
+                cot_w = 20
+                cot_h = 52
+                pygame.draw.ellipse(screen, (0, 0, 0, 60), (cot_x - 2, cot_y + cot_h - 2, cot_w + 4, 6))
+                pygame.draw.rect(screen, (40, 36, 32), (cot_x, cot_y, cot_w, cot_h), border_radius=2)
+                pygame.draw.rect(screen, (52, 48, 42), (cot_x, cot_y, cot_w, cot_h), 1, border_radius=2)
+                pygame.draw.rect(screen, (44, 40, 34), (cot_x + 2, cot_y + 2, cot_w - 4, cot_h - 4))
+                # Rip across mattress
+                pygame.draw.line(screen, (12, 10, 8), (cot_x + 3, cot_y + 16), (cot_x + cot_w - 3, cot_y + 30), 3)
+                # Cotton stuffing
+                for ox, oy in [(-5, 22), (7, 28), (2, 34), (10, 18)]:
+                    pygame.draw.circle(screen, (162, 155, 142), (cot_x + cot_w // 2 + ox, cot_y + oy), 3)
+                    pygame.draw.circle(screen, (140, 134, 122), (cot_x + cot_w // 2 + ox, cot_y + oy), 3, 1)
+
+                # ── Rusted sink ──
+                sink_x = int(R - 28)
+                sink_y = int(T + 8)
+                pygame.draw.ellipse(screen, (78, 54, 35), (sink_x, sink_y, 18, 12))
+                pygame.draw.ellipse(screen, (48, 34, 20), (sink_x, sink_y, 18, 12), 1)
+                pygame.draw.ellipse(screen, (42, 30, 18), (sink_x + 3, sink_y + 3, 12, 6))
+
+                # ── Wall chains (two sets) ──
+                for chain_x_off in (35, 90):
+                    cx = int(L + chain_x_off)
+                    cy = int(T + 4)
+                    # Wall anchor bolt
+                    pygame.draw.circle(screen, (55, 52, 48), (cx, cy), 3)
+                    pygame.draw.circle(screen, (35, 32, 28), (cx, cy), 3, 1)
+                    # Chain links
+                    for i in range(6):
+                        pygame.draw.ellipse(screen, (52, 52, 58),
+                                            (cx - 2, cy + 4 + i * 5, 4, 6), 1)
+                    # Open shackle at bottom
+                    pygame.draw.ellipse(screen, (82, 78, 68),
+                                        (cx - 5, cy + 34, 10, 6), 1)
+                    pygame.draw.circle(screen, (75, 72, 64), (cx - 5, cy + 37), 2)
+
+                # ── Heavy blood pools ──
+                for bx_off, by_off, bsz in [
+                    (W // 3, H // 3, 28),
+                    (W * 2 // 3, H - 40, 18),
+                    (W // 2 - 10, H // 2 + 20, 14),
+                ]:
+                    bl = pygame.Surface((bsz * 2, int(bsz * 1.4)), pygame.SRCALPHA)
+                    pygame.draw.ellipse(bl, (50, 8, 8, 145), bl.get_rect())
+                    pygame.draw.ellipse(bl, (30, 4, 4, 175),
+                                        (bsz // 3, bsz // 4, bsz, int(bsz * 0.7)))
+                    screen.blit(bl, (int(L + bx_off - bsz), int(T + by_off)))
+
+                # ── Floor drag marks ──
+                for i in range(5):
+                    y0 = int(T + H // 3 + i * 12)
+                    pygame.draw.line(screen, (55, 10, 10),
+                                     (int(L + 40), y0),
+                                     (int(L + 110), y0 + 14), 1)
+
+                # ── Scratched text ──
+                t1 = font_terminal_small.render("THEY TOOK EVERYTHING", True, (60, 54, 44))
+                t1.set_alpha(180)
+                screen.blit(t1, (int(L + 10), int(T + 6)))
+
+                t2 = font_terminal_small.render("DO NOT CONFESS", True, (55, 50, 42))
+                t2.set_alpha(150)
+                screen.blit(t2, (int(L + 10), int(T + 20)))
+
+                t3 = font_terminal_small.render("I WILL NOT BREAK", True, (50, 44, 38))
+                t3.set_alpha(120)
+                screen.blit(t3, (int(L + 10), int(T + 34)))
+
+            elif cell_idx == 0:
+                # ════════════════════════════════════
+                # STORAGE CELL — crates, cabinets, folders, clutter
+                # ════════════════════════════════════
+
+                # ── Stacked crates (two, against south wall) ──
+                for i, col in enumerate([(82, 54, 26), (96, 66, 34)]):
+                    cx = int(L + 10 + i * 3)
+                    cy = int(B - 36 - i * 16)
+                    pygame.draw.rect(screen, (0, 0, 0, 55), (cx + 2, cy + 2, 24, 18))
+                    pygame.draw.rect(screen, col, (cx, cy, 24, 18), border_radius=1)
+                    pygame.draw.rect(screen, (28, 18, 8), (cx, cy, 24, 18), 1, border_radius=1)
+                    # Cross plank
+                    pygame.draw.line(screen, (28, 18, 8), (cx + 1, cy + 1), (cx + 23, cy + 17), 1)
+                    pygame.draw.line(screen, (28, 18, 8), (cx + 23, cy + 1), (cx + 1, cy + 17), 1)
+                    # Plank seam
+                    pygame.draw.line(screen, (28, 18, 8), (cx, cy + 9), (cx + 24, cy + 9), 1)
+
+                # ── Filing cabinets (two, against north wall) ──
+                for cx_off, cy_off in [(W // 3 - 12, 14), (W * 2 // 3 - 12, 32)]:
+                    cab_x = int(L + cx_off)
+                    cab_y = int(T + cy_off)
+                    # Shadow
+                    pygame.draw.rect(screen, (0, 0, 0, 55), (cab_x + 2, cab_y + 2, 26, 20))
+                    # Body
+                    pygame.draw.rect(screen, (34, 44, 38), (cab_x, cab_y, 26, 20))
+                    pygame.draw.rect(screen, (20, 28, 22), (cab_x, cab_y, 26, 20), 1)
+                    # Two drawers
+                    for dx in (0, 13):
+                        pygame.draw.rect(screen, (22, 30, 26),
+                                         (cab_x + dx + 1, cab_y + 2, 11, 16))
+                        pygame.draw.rect(screen, (16, 22, 18),
+                                         (cab_x + dx + 1, cab_y + 2, 11, 16), 1)
+                        # Brass handle
+                        pygame.draw.line(screen, (132, 108, 48),
+                                         (cab_x + dx + 3, cab_y + 10),
+                                         (cab_x + dx + 9, cab_y + 10), 2)
+
+                # ── Loose folders scattered on floor ──
+                folder_rng = random.Random(3010)
+                for _ in range(8):
+                    fx = int(L + 25 + folder_rng.randint(0, max(1, W - 50)))
+                    fy = int(T + 60 + folder_rng.randint(0, max(1, H - 100)))
+                    fw = folder_rng.randint(12, 16)
+                    fh = folder_rng.randint(8, 10)
+                    fcol = folder_rng.choice([
+                        (125, 112, 74), (135, 118, 82), (115, 102, 68)
+                    ])
+                    pygame.draw.rect(screen, fcol, (fx, fy, fw, fh))
+                    pygame.draw.rect(screen, (62, 52, 32), (fx, fy, fw, fh), 1)
+                    # Text lines on folder
+                    pygame.draw.line(screen, (58, 50, 38), (fx + 2, fy + 3), (fx + fw - 2, fy + 3), 1)
+                    if fh > 8:
+                        pygame.draw.line(screen, (58, 50, 38), (fx + 2, fy + 6), (fx + fw - 4, fy + 6), 1)
+
+                # ── Junk pile in corner ──
+                junk_x = int(R - 30)
+                junk_y = int(B - 26)
+                pygame.draw.ellipse(screen, (0, 0, 0, 50), (junk_x - 10, junk_y + 4, 22, 8))
+                pygame.draw.polygon(screen, (88, 78, 62),
+                                    [(junk_x - 6, junk_y), (junk_x + 2, junk_y - 10),
+                                     (junk_x + 12, junk_y - 2), (junk_x + 6, junk_y + 6)])
+                pygame.draw.polygon(screen, (68, 58, 42),
+                                    [(junk_x - 6, junk_y), (junk_x + 2, junk_y - 10),
+                                     (junk_x + 12, junk_y - 2), (junk_x + 6, junk_y + 6)], 1)
+                pygame.draw.circle(screen, (48, 44, 38), (junk_x - 8, junk_y + 4), 3)
+                pygame.draw.circle(screen, (32, 28, 24), (junk_x + 10, junk_y - 4), 4)
+
+                # ── Scratched text ──
+                t1 = font_terminal_small.render("DO NOT OPEN", True, (60, 54, 44))
+                t1.set_alpha(180)
+                screen.blit(t1, (int(L + 10), int(T + 6)))
+
+                t2 = font_terminal_small.render("ARCHIVE TRANSFER // VOID", True, (52, 48, 40))
+                t2.set_alpha(140)
+                screen.blit(t2, (int(L + 10), int(T + 20)))
+
+            # Final foreground grime/bar pass so the cells feel boxed-in.
+            pygame.draw.rect(screen, (0, 0, 0, 75), (int(L), int(T), int(W), int(H)), 2)
+
+        finally:
+            screen.set_clip(old_clip)
+
+
+def _draw_kitchen_details(cam_x, cam_y):
+    """Draw the prison kitchen/utility room as a coherent top-down space.
+
+    The old pass was three isolated props on huge 64px checker tiles. This
+    keeps the same collision footprint, but adds a clipped room treatment:
+    smaller floor tiles, wall backsplash, shelves, stains, vent hatch, and
+    stainless fixtures that match the rest of Mission 3's grimy institutional
+    style.
+    """
+    room_x = 2 * TILE_SIZE - cam_x
+    room_y = 20 * TILE_SIZE - cam_y
+    room_w = 5 * TILE_SIZE
+    room_h = 5 * TILE_SIZE
+
+    if room_x > WIDTH + 80 or room_x + room_w < -80 or room_y > HEIGHT + 80 or room_y + room_h < -80:
+        return
+
+    old_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(int(room_x), int(room_y), room_w, room_h))
+
+    try:
+        # Interior floor: cols 3-5 / rows 21-23. Door threshold is col 6,row22.
+        ix = 3 * TILE_SIZE - cam_x
+        iy = 21 * TILE_SIZE - cam_y
+        iw = 3 * TILE_SIZE
+        ih = 3 * TILE_SIZE
+
+        # Subtle unified floor base over the K tiles.
+        pygame.draw.rect(screen, (38, 42, 43), (ix, iy, iw, ih))
+        # Smaller institutional tiles so the kitchen stops looking like three
+        # giant checkerboard blocks.
+        for ty in range(int(iy), int(iy + ih) + 1, 16):
+            pygame.draw.line(screen, (27, 30, 31), (ix, ty), (ix + iw, ty), 1)
+        for tx in range(int(ix), int(ix + iw) + 1, 16):
+            pygame.draw.line(screen, (27, 30, 31), (tx, iy), (tx, iy + ih), 1)
+        # Uneven grime passes.
+        grime_rng = random.Random(4217)
+        for _ in range(42):
+            gx = int(ix + grime_rng.randint(0, iw - 1))
+            gy = int(iy + grime_rng.randint(0, ih - 1))
+            gw = grime_rng.randint(8, 28)
+            gh = grime_rng.randint(3, 12)
+            a = grime_rng.randint(10, 28)
+            pygame.draw.ellipse(screen, (8, 9, 9, a), (gx - gw // 2, gy - gh // 2, gw, gh))
+
+        # Low wall/backsplash band on the north edge.
+        wall_band = pygame.Rect(int(ix), int(iy - 20), iw, 24)
+        pygame.draw.rect(screen, (30, 36, 36), wall_band)
+        pygame.draw.line(screen, (62, 70, 68), (wall_band.x, wall_band.bottom - 2), (wall_band.right, wall_band.bottom - 2), 2)
+        for tx in range(wall_band.x, wall_band.right, 24):
+            pygame.draw.line(screen, (22, 26, 26), (tx, wall_band.y), (tx, wall_band.bottom), 1)
+
+        # Door threshold / scuffed traffic path toward corridor.
+        door_x = 6 * TILE_SIZE - cam_x
+        door_y = 22 * TILE_SIZE - cam_y
+        pygame.draw.rect(screen, (35, 38, 39), (door_x - 6, door_y + 4, 12, TILE_SIZE - 8))
+        pygame.draw.line(screen, (82, 80, 70), (door_x - 6, door_y + 10), (door_x - 6, door_y + TILE_SIZE - 10), 1)
+        path = pygame.Surface((84, 54), pygame.SRCALPHA)
+        pygame.draw.ellipse(path, (0, 0, 0, 42), (0, 8, 84, 28))
+        screen.blit(path, (int(door_x - 72), int(door_y + 15)))
+
+        # Vent hatch where Biribel emerges. Keep it under the player sprite.
+        vent_x = int((_VENT_EXIT_COL + 0.5) * TILE_SIZE - cam_x)
+        vent_y = int((_VENT_EXIT_ROW + 0.5) * TILE_SIZE - cam_y)
+        pygame.draw.ellipse(screen, (0, 0, 0, 70), (vent_x - 22, vent_y + 10, 44, 14))
+        vent = pygame.Rect(vent_x - 15, vent_y - 9, 30, 18)
+        pygame.draw.rect(screen, (18, 20, 22), vent, border_radius=3)
+        pygame.draw.rect(screen, (82, 88, 88), vent, 2, border_radius=3)
+        for off in (-8, -3, 2, 7):
+            pygame.draw.line(screen, (56, 62, 62), (vent.x + 4, vent.centery + off), (vent.right - 4, vent.centery + off), 1)
+
+        # ── Fridge (tile 3,21): grim stainless locker, not a toy block. ──
+        fridge_x = int((3 + 0.5) * TILE_SIZE) - cam_x
+        fridge_y = int((21 + 0.5) * TILE_SIZE) - cam_y
+        pygame.draw.ellipse(screen, (0, 0, 0, 75), (fridge_x - 17, fridge_y + 10, 34, 12))
+        fridge = pygame.Rect(fridge_x - 13, fridge_y - 18, 26, 36)
+        pygame.draw.rect(screen, (92, 100, 102), fridge, border_radius=3)
+        pygame.draw.rect(screen, (155, 164, 164), fridge, 1, border_radius=3)
+        pygame.draw.line(screen, (60, 66, 68), (fridge.centerx, fridge.y + 2), (fridge.centerx, fridge.bottom - 2), 1)
+        pygame.draw.line(screen, (188, 196, 194), (fridge.x + 4, fridge.y + 3), (fridge.right - 4, fridge.y + 3), 1)
+        for hx in (fridge.x + 5, fridge.centerx + 5):
+            pygame.draw.rect(screen, (54, 58, 60), (hx, fridge.y + 10, 3, 10), border_radius=1)
+        # Warning sticker / grime.
+        pygame.draw.rect(screen, (145, 124, 48), (fridge.x + 4, fridge.bottom - 10, 7, 4))
+        pygame.draw.line(screen, (58, 62, 63), (fridge.x + 3, fridge.y + 17), (fridge.right - 4, fridge.y + 20), 1)
+
+        # ── Stove (tile 5,21): industrial cooktop with hood shadow. ──
+        stove_x = int((5 + 0.5) * TILE_SIZE) - cam_x
+        stove_y = int((21 + 0.5) * TILE_SIZE) - cam_y
+        pygame.draw.ellipse(screen, (0, 0, 0, 80), (stove_x - 20, stove_y + 10, 40, 13))
+        hood = pygame.Rect(stove_x - 18, stove_y - 24, 36, 8)
+        pygame.draw.rect(screen, (42, 46, 48), hood, border_radius=2)
+        pygame.draw.line(screen, (82, 86, 86), (hood.x + 3, hood.y + 2), (hood.right - 3, hood.y + 2), 1)
+        stove = pygame.Rect(stove_x - 16, stove_y - 15, 32, 30)
+        pygame.draw.rect(screen, (42, 44, 48), stove, border_radius=3)
+        pygame.draw.rect(screen, (82, 84, 88), stove, 1, border_radius=3)
+        pygame.draw.rect(screen, (28, 30, 34), (stove.x + 3, stove.bottom - 9, stove.w - 6, 6), border_radius=1)
+        for bx, by in [(-7, -6), (7, -6), (-7, 6), (7, 6)]:
+            pygame.draw.circle(screen, (20, 21, 23), (stove_x + bx, stove_y + by), 5)
+            pygame.draw.circle(screen, (72, 72, 74), (stove_x + bx, stove_y + by), 5, 1)
+            pygame.draw.circle(screen, (8, 8, 9), (stove_x + bx, stove_y + by), 2)
+        # Small cold pilot light.
+        pygame.draw.circle(screen, (60, 120, 120), (stove.right - 5, stove.y + 5), 2)
+
+        # ── South prep counter / sink. ──
+        counter_x = int((4 + 0.5) * TILE_SIZE) - cam_x
+        counter_y = int((23 + 0.5) * TILE_SIZE) - cam_y
+        pygame.draw.ellipse(screen, (0, 0, 0, 78), (counter_x - 40, counter_y + 6, 80, 16))
+        counter = pygame.Rect(counter_x - 36, counter_y - 11, 72, 22)
+        pygame.draw.rect(screen, (78, 76, 66), counter, border_radius=3)
+        pygame.draw.rect(screen, (122, 118, 102), counter, 1, border_radius=3)
+        pygame.draw.line(screen, (142, 136, 118), (counter.x + 4, counter.y + 3), (counter.right - 4, counter.y + 3), 1)
+        basin = pygame.Rect(counter.centerx - 11, counter.centery - 5, 22, 10)
+        pygame.draw.ellipse(screen, (52, 58, 62), basin)
+        pygame.draw.ellipse(screen, (28, 32, 34), basin.inflate(-5, -3))
+        pygame.draw.line(screen, (134, 138, 136), (counter.centerx + 3, counter.y + 1), (counter.centerx + 3, counter.y - 8), 2)
+        pygame.draw.line(screen, (134, 138, 136), (counter.centerx + 3, counter.y - 8), (counter.centerx + 10, counter.y - 8), 2)
+        # Knife/tray clutter, small enough not to imply pickup.
+        pygame.draw.rect(screen, (48, 50, 48), (counter.x + 7, counter.y + 7, 14, 6), border_radius=1)
+        pygame.draw.line(screen, (155, 160, 158), (counter.right - 19, counter.y + 8), (counter.right - 7, counter.y + 4), 2)
+        pygame.draw.line(screen, (70, 48, 30), (counter.right - 8, counter.y + 4), (counter.right - 3, counter.y + 2), 2)
+
+        # Shelf + hanging utensils on the west/top wall.
+        shelf_y = int(21 * TILE_SIZE - cam_y - 9)
+        shelf_x = int(3 * TILE_SIZE - cam_x + 10)
+        pygame.draw.rect(screen, (54, 48, 42), (shelf_x, shelf_y, 112, 5), border_radius=1)
+        pygame.draw.line(screen, (102, 90, 76), (shelf_x, shelf_y), (shelf_x + 112, shelf_y), 1)
+        for i, px in enumerate((shelf_x + 16, shelf_x + 38, shelf_x + 72, shelf_x + 95)):
+            pygame.draw.line(screen, (70, 70, 66), (px, shelf_y + 5), (px, shelf_y + 18 + (i % 2) * 3), 1)
+            if i == 0:
+                pygame.draw.circle(screen, (92, 88, 78), (px, shelf_y + 22), 5, 1)
+            elif i == 1:
+                pygame.draw.rect(screen, (90, 86, 76), (px - 4, shelf_y + 18, 8, 8), 1)
+            else:
+                pygame.draw.line(screen, (130, 130, 120), (px - 5, shelf_y + 20), (px + 5, shelf_y + 16), 2)
+
+        # Floor drain / wet patch away from the vent, to ground the room.
+        drain_x = int(3.35 * TILE_SIZE - cam_x)
+        drain_y = int(23.25 * TILE_SIZE - cam_y)
+        wet = pygame.Surface((54, 34), pygame.SRCALPHA)
+        pygame.draw.ellipse(wet, (8, 12, 13, 55), wet.get_rect())
+        pygame.draw.ellipse(wet, (18, 26, 28, 55), (8, 7, 38, 18))
+        screen.blit(wet, (drain_x - 27, drain_y - 17))
+        pygame.draw.circle(screen, (20, 22, 23), (drain_x, drain_y), 7)
+        pygame.draw.circle(screen, (66, 70, 68), (drain_x, drain_y), 7, 1)
+        for a in (0, math.pi / 3, 2 * math.pi / 3):
+            pygame.draw.line(screen, (42, 44, 44),
+                             (drain_x + math.cos(a) * 2, drain_y + math.sin(a) * 2),
+                             (drain_x + math.cos(a) * 6, drain_y + math.sin(a) * 6), 1)
+
+        # Final subtle room outline so the tiny utility room reads intentionally.
+        pygame.draw.rect(screen, (0, 0, 0, 70), (room_x, room_y, room_w, room_h), 2)
+    finally:
+        screen.set_clip(old_clip)
+
+
+def _draw_cell_room(cam_x, cam_y):
+    """Render the cell's persistent room elements: atmosphere (red wash +
+    fluorescent tube), cell details (floor drain, furniture, wall scratches),
+    wall monitor, the cell door (closed/swinging/open depending on breach
+    state), Volkov in the doorway (if the breach has fired), and the breach
+    flash.
+
+    Called in EVERY stage so the player sees the cell they just escaped,
+    the dead monitor still on the wall, the kicked-in door, and Volkov
+    standing in the doorway. The dialogue panel is rendered separately,
+    only during STAGE_INTERROGATION (see game_draw).
+    """
+    # 1. Atmospheric layers (wash + fluorescent light) under everything.
+    _draw_cell_atmosphere(cam_x, cam_y)
+
+    # 2. Cell details: floor drain, stains, furniture (chair, cot, sink),
+    # wall tally marks, conduit. Drawn BEFORE the monitor so the monitor's
+    # glow sits on top of the furniture.
+    _draw_cell_details(cam_x, cam_y)
+
+    # Kitchen details (fridge, stove, counters)
+    _draw_kitchen_details(cam_x, cam_y)
+
+    # 3. Wall monitor on the cell's north wall (its glow sits on top of details).
+    _draw_wall_monitor(cam_x, cam_y)
+
+    # 3.5 Boots-approach shadow: while the pre-breach establishing beat is
+    # active, draw a faint dark sliver sweeping under the cell door. This is
+    # the visible cue that someone is walking past in the corridor outside
+    # BEFORE the breach fires — answering "where did he come from?" before
+    # the C4 even appears. Suppressed once the breach action fires.
+    if _boots_approach_t >= 0 and _volkov_breach_t < 0:
+        _draw_boots_approach_shadow(cam_x, cam_y)
+
+    # 4. Cell door on the south wall. Drawn BEFORE Volkov so Volkov (who
+    # steps through the doorway) appears in front of the open door panel.
+    _draw_cell_door(cam_x, cam_y)
+
+    # 5. Volkov in the doorway (only once the breach has been triggered).
+    if _volkov_breach_t >= 0:
+        _draw_volkov_breach(cam_x, cam_y)
+
+    # 6. Breach flash: a decaying white overlay (max ~28 frames).
+    if _breach_flash > 0:
+        alpha = int(255 * (_breach_flash / 28.0))
+        flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        flash.fill((255, 255, 255, alpha))
+        screen.blit(flash, (0, 0))
+        # Second layer: orange flash on the door (explosion fireball).
+        if _breach_flash > 18:
+            fire_alpha = int(180 * ((_breach_flash - 18) / 10.0))
+            door_x = _DOOR_TILE_COL * TILE_SIZE - cam_x
+            door_y = _DOOR_TILE_ROW * TILE_SIZE - cam_y
+            fire = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+            pygame.draw.circle(fire, (255, 140, 40, fire_alpha),
+                               (TILE_SIZE // 2, TILE_SIZE // 2), TILE_SIZE // 2)
+            screen.blit(fire, (door_x, door_y), special_flags=pygame.BLEND_ADD)
+
+
+# Door tile (col 9, row 13) is where the cell's south-wall door sits.
+# Computed from the map authoring: outline at (4,4) w=12 h=10 with a door
+# gap at tile offset (5,9) -> (4+5, 4+9) = (9, 13).
+_DOOR_TILE_COL, _DOOR_TILE_ROW = 33, 12   # south wall of Biribel's cell
+
+
+def _draw_boots_approach_shadow(cam_x, cam_y):
+    """Draw a faint shadow sweeping under the cell door during the
+    boots-approach establishing beat.
+
+    The shadow is a soft dark sliver that appears at the bottom edge of the
+    closed cell door — light from the corridor leaking under the door, then
+    partially blocked by someone walking past. It sweeps horizontally back
+    and forth (south-to-north light block) to read as "footsteps in the
+    corridor" rather than a static stain.
+
+    Driven by _boots_approach_t (frames since the boots_approach action fired).
+    The shadow is intentionally subtle (low alpha) so the player registers
+    it peripherally — "did something just move?" — rather than as a bright
+    UI element demanding attention.
+    """
+    t = _boots_approach_t
+    if t < 0:
+        return
+
+    # Door position in screen space.
+    door_x = _DOOR_TILE_COL * TILE_SIZE - cam_x
+    door_y = _DOOR_TILE_ROW * TILE_SIZE - cam_y
+    door_w = TILE_SIZE * 2  # the cell door is a 2-tile gap
+
+    # Sweep: shadow x-offset oscillates across the door width over ~3s
+    # (180 frames). Two full passes during the beat's hold, which matches
+    # the three spaced footstep SFX (frames 0, 45, 90).
+    sweep_period = 180
+    phase = (t % sweep_period) / sweep_period  # 0..1
+    # Ease in/out so the shadow slows at the edges (matches a walker
+    # reaching the door's far jamb, then turning back).
+    eased = 0.5 - 0.5 * math.cos(phase * math.pi * 2)
+    shadow_cx = door_x + int(door_w * eased)
+
+    # Shadow shape: a short horizontal sliver at the very bottom of the
+    # door gap, wider than tall (reads as feet blocking light from a
+    # side-on angle).
+    shadow_w = 28
+    shadow_h = 6
+    shadow_surf = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
+    # Pulse the alpha slightly so the shadow "breathes" — adds motion
+    # even when the sweep is at its slow eased edges.
+    pulse = 0.85 + 0.15 * math.sin(t * 0.4)
+    alpha = int(90 * pulse)
+    pygame.draw.ellipse(shadow_surf, (0, 0, 0, alpha),
+                        (0, 0, shadow_w, shadow_h))
+    # Soft edge: blit a slightly larger, dimmer ellipse under the main one.
+    soft = pygame.Surface((shadow_w + 8, shadow_h + 4), pygame.SRCALPHA)
+    pygame.draw.ellipse(soft, (0, 0, 0, max(0, alpha // 3)),
+                        (0, 0, shadow_w + 8, shadow_h + 4))
+    screen.blit(soft, (shadow_cx - (shadow_w + 8) // 2,
+                       door_y + TILE_SIZE - 4))
+    screen.blit(shadow_surf, (shadow_cx - shadow_w // 2,
+                              door_y + TILE_SIZE - 3))
+
+
+def _draw_cell_door(cam_x, cam_y):
+    """Draw the cell door on the south wall, top-down.
+
+    The door is a reinforced metal panel. Before the breach it sits intact
+    in the frame. After detonation, the C4 tears a jagged blast hole
+    through the center — but the door stays IN the doorway (it doesn't
+    fly across the room). Scorch marks and cracks radiate from the hole.
+
+    States (driven by _volkov_breach_t):
+      t < 0           (pre-breach):    Door fills the doorway intact.
+      0 <= t < 301    (charge planted): Door still intact; C4 visible on
+                                       the surface (drawn by _draw_volkov_breach).
+      t >= 301        (post-blast):    Door panel still in place but with
+                                       a jagged blast hole, scorch marks,
+                                       and cracks radiating from the hole.
+    """
+    global _volkov_breach_t
+    t = _volkov_breach_t
+
+    door_x = _DOOR_TILE_COL * TILE_SIZE - cam_x
+    door_y = _DOOR_TILE_ROW * TILE_SIZE - cam_y
+    door_w = TILE_SIZE * 2
+    door_h = TILE_SIZE
+    doorway_cy = door_y + door_h // 2
+
+    # ── Door jamb (frame posts on either side) ──
+    jamb_col = (50, 48, 44)
+    jamb_dark = (32, 30, 28)
+    pygame.draw.rect(screen, jamb_col,
+                     (door_x - 4, doorway_cy - 8, 5, 16))
+    pygame.draw.rect(screen, jamb_dark,
+                     (door_x - 4, doorway_cy - 8, 5, 16), 1)
+    pygame.draw.rect(screen, jamb_col,
+                     (door_x + door_w, doorway_cy - 8, 5, 16))
+    pygame.draw.rect(screen, jamb_dark,
+                     (door_x + door_w, doorway_cy - 8, 5, 16), 1)
+
+    # ── Scorch marks around the frame (post-breach) ──
+    if t >= 0:
+        scorch = pygame.Surface((door_w + 16, door_h + 16), pygame.SRCALPHA)
+        for i in range(8):
+            r = 12 + t // 4
+            a = max(0, 60 - t // 2)
+            pygame.draw.circle(scorch, (20, 15, 10, a),
+                               (r + i * 4, r + i * 3), r)
+        screen.blit(scorch, (door_x - 8, door_y - 8))
+
+    # ── Pre-detonation / pre-breach: door sits intact in the frame. ──
+    if t < 0:
+        _draw_m3_door_tile(screen, door_x, door_y, _DOOR_TILE_COL, _DOOR_TILE_ROW)
+        _draw_m3_door_tile(screen, door_x + TILE_SIZE, door_y, _DOOR_TILE_COL + 1, _DOOR_TILE_ROW)
+        pygame.draw.line(screen, (18, 20, 24), (door_x + TILE_SIZE, door_y + 6), (door_x + TILE_SIZE, door_y + TILE_SIZE - 6), 3)
+        return
+
+    # ── Charge planted: door still closed while Volkov backs away. ──
+    # During frames 0-300, the door is INTACT (closed panel). The C4 charge
+    # is drawn on top by _draw_volkov_breach. The door does NOT show as
+    # open/openable during this phase — it's a solid closed door with a
+    # bomb on it.
+    if 0 <= t < 301:
+        _draw_m3_door_tile(screen, door_x, door_y, _DOOR_TILE_COL, _DOOR_TILE_ROW)
+        _draw_m3_door_tile(screen, door_x + TILE_SIZE, door_y, _DOOR_TILE_COL + 1, _DOOR_TILE_ROW)
+        pygame.draw.line(screen, (18, 20, 24), (door_x + TILE_SIZE, door_y + 6), (door_x + TILE_SIZE, door_y + TILE_SIZE - 6), 3)
+        return
+
+    # ── Post-detonation (t >= 301): the door is BLOWN but still IN the
+    # doorway. We draw the intact door panel (same ribs, same colors, same
+    # proportions as _draw_m3_door_tile) and add visible blast damage on
+    # top: scorch marks, a jagged blast hole in the center (so the player
+    # can see the doorway is passable), and cracks radiating from the
+    # hole. This keeps the door reading as the SAME object pre- and
+    # post-breach — not a flat grey box. ──
+
+    # 1. Draw the intact door panel (closed state). Temporarily fake
+    #    _volkov_breach_t to -1 so _draw_m3_door_tile renders the closed
+    #    panel (not the open doorway).
+    saved_breach_t = _volkov_breach_t
+    _volkov_breach_t = -1
+    _draw_m3_door_tile(screen, door_x, door_y, _DOOR_TILE_COL, _DOOR_TILE_ROW)
+    _draw_m3_door_tile(screen, door_x + TILE_SIZE, door_y, _DOOR_TILE_COL + 1, _DOOR_TILE_ROW)
+    pygame.draw.line(screen, (18, 20, 24),
+                     (door_x + TILE_SIZE, door_y + 6),
+                     (door_x + TILE_SIZE, door_y + TILE_SIZE - 6), 3)
+    _volkov_breach_t = saved_breach_t
+
+    # 2. Blast hole in the center of the door (where the C4 was). An
+    #    irregular dark shape showing the door has been torn open. The
+    #    hole grows over ~12 frames from the detonation point.
+    dt = t - 301
+    if dt > 0:
+        hole_p = min(1.0, dt / 12.0)
+        hole_cx = door_x + door_w // 2
+        hole_cy = door_y + door_h // 2
+        hole_rx = int(TILE_SIZE * 0.45 * hole_p)
+        hole_ry = int(TILE_SIZE * 0.35 * hole_p)
+        if hole_rx > 2 and hole_ry > 2:
+            # Jagged blast hole: draw several overlapping dark ellipses
+            # with slightly offset centers to create an irregular edge.
+            for i, (ox, oy, scale) in enumerate([
+                (0, 0, 1.0), (-3, 2, 0.8), (4, -1, 0.7), (-1, 4, 0.6)
+            ]):
+                rx = max(1, int(hole_rx * scale))
+                ry = max(1, int(hole_ry * scale))
+                pygame.draw.ellipse(screen, (6, 5, 4),
+                                    (hole_cx + ox - rx, hole_cy + oy - ry,
+                                     rx * 2, ry * 2))
+            # Orange-hot edge around the hole (fades over ~20 frames).
+            if dt < 20:
+                edge_alpha = int(180 * (1.0 - dt / 20.0))
+                edge_surf = pygame.Surface((hole_rx * 3, hole_ry * 3),
+                                           pygame.SRCALPHA)
+                pygame.draw.ellipse(edge_surf, (255, 120, 30, edge_alpha),
+                                    (0, 0, hole_rx * 3, hole_ry * 3), 3)
+                screen.blit(edge_surf,
+                            (hole_cx - hole_rx * 3 // 2,
+                             hole_cy - hole_ry * 3 // 2))
+
+    # 3. Scorch marks on the door panel (dark overlay radiating from the
+    #    blast hole). Drawn as several dark semi-transparent circles.
+    scorch_surf = pygame.Surface((door_w, door_h), pygame.SRCALPHA)
+    scorch_intensity = min(1.0, dt / 10.0) if dt > 0 else 0.0
+    if scorch_intensity > 0:
+        for i in range(6):
+            r = int(8 + i * 4)
+            a = int(100 * scorch_intensity * (1.0 - i * 0.15))
+            if a > 0:
+                pygame.draw.circle(scorch_surf, (15, 10, 8, a),
+                                   (door_w // 2, door_h // 2), r)
+        screen.blit(scorch_surf, (door_x, door_y))
+
+    # 4. Cracks radiating from the blast hole — thin dark lines going
+    #    outward from the hole edges to the door frame.
+    if dt > 6:
+        crack_alpha = min(255, int(255 * (dt - 6) / 10.0))
+        crack_surf = pygame.Surface((door_w, door_h), pygame.SRCALPHA)
+        hole_cx_local = door_w // 2
+        hole_cy_local = door_h // 2
+        for angle_deg in (30, 75, 120, 165, 210, 255, 300, 345):
+            a = math.radians(angle_deg)
+            r1 = int(TILE_SIZE * 0.4)
+            r2 = int(TILE_SIZE * 0.8)
+            x1 = hole_cx_local + math.cos(a) * r1
+            y1 = hole_cy_local + math.sin(a) * r1
+            x2 = hole_cx_local + math.cos(a) * r2
+            y2 = hole_cy_local + math.sin(a) * r2
+            pygame.draw.line(crack_surf, (10, 8, 6, crack_alpha),
+                             (x1, y1), (x2, y2), 1)
+        screen.blit(crack_surf, (door_x, door_y))
+
+    # 5. Torn hinge on the left jamb (broken bolt visible).
+    pygame.draw.circle(screen, (30, 28, 26),
+                       (door_x + 1, doorway_cy), 3)
+    pygame.draw.line(screen, (60, 56, 52),
+                     (door_x - 2, doorway_cy - 2),
+                     (door_x + 4, doorway_cy + 2), 2)
+
+
+def _draw_volkov_breach(cam_x, cam_y):
+    """Draw Volkov during the breach, then during his escape run.
+
+    After the cell door detonates and the interrogation hands off to
+    STAGE_BREAKOUT, Volkov sprints east toward the service-exit side to draw
+    attention instead of standing forever in the doorway.
+    """
+    t = _volkov_breach_t
+    if t < 0:
+        return
+
+    door_x = _DOOR_TILE_COL * TILE_SIZE - cam_x
+    door_y = _DOOR_TILE_ROW * TILE_SIZE - cam_y
+    door_w = TILE_SIZE * 2
+
+    pose = _volkov_world_pose()
+    if pose is None:
+        return
+
+    world_x, world_y, facing_angle, running = pose
+    draw_x = world_x - cam_x
+    draw_y = world_y - cam_y
+
+    # Charge position on the door.
+    charge_cx = door_x + door_w // 2 - 4
+    charge_cy = door_y - 2
+
+    # Planting arm phase only during the breach choreography, not while running.
+    charge_plant_phase = 0
+    if not running:
+        if 91 <= t <= 140:
+            charge_plant_phase = 1
+        elif 141 <= t <= 210:
+            charge_plant_phase = 2
+        elif 211 <= t <= 250:
+            charge_plant_phase = 3
+
+    # Running dust / motion accents.
+    if running:
+        # Dust behind his feet.
+        if getattr(STATE, "m3_volkov_run_timer", 0) % 6 == 0:
+            for _ in range(2):
+                STATE.particles.append(Particle(
+                    world_x + random.randint(-6, 6),
+                    world_y + random.randint(4, 14),
+                    random.choice([(85, 78, 66), (55, 50, 45), (110, 95, 75)])
+                ))
+
+        # Screen-space afterimage trail opposite the movement direction.
+        trail = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        for i in range(3):
+            back = (i + 1) * 10
+            tx = draw_x - math.cos(facing_angle) * back
+            ty = draw_y - math.sin(facing_angle) * back
+            alpha = 42 - i * 12
+            pygame.draw.ellipse(trail, (255, 110, 40, alpha), (tx - 11, ty - 18, 22, 34))
+        screen.blit(trail, (0, 0))
+
+    # Draw Volkov. During his eastbound escape, fade him out as he clears the
+    # service-exit side so he doesn't linger awkwardly at the edge of the map.
+    alpha = 255
+    if getattr(STATE, "m3_volkov_run_active", False):
+        run_t = getattr(STATE, "m3_volkov_run_timer", 0)
+        if run_t > 150:
+            alpha = max(0, min(255, int(255 * (1.0 - (run_t - 150) / 90.0))))
+    if alpha >= 255:
+        _draw_volkov_in_game(
+            screen,
+            draw_x,
+            draw_y,
+            facing_angle,
+            kick_phase=0,
+            charge_plant=charge_plant_phase,
+        )
+    elif alpha > 0:
+        volkov_surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        _draw_volkov_in_game(
+            volkov_surf,
+            draw_x,
+            draw_y,
+            facing_angle,
+            kick_phase=0,
+            charge_plant=charge_plant_phase,
+        )
+        volkov_surf.set_alpha(alpha)
+        screen.blit(volkov_surf, (0, 0))
+
+    # Door charge, visible after Volkov places it and before detonation.
+    if 150 <= t <= 300:
+        pygame.draw.rect(screen, (90, 75, 60),
+                         (charge_cx, charge_cy, 8, 6), border_radius=1)
+        pygame.draw.rect(screen, (60, 50, 40),
+                         (charge_cx, charge_cy, 8, 6), 1, border_radius=1)
+
+        pygame.draw.circle(screen, (40, 40, 45),
+                           (charge_cx + 4, charge_cy - 2), 2)
+
+        pygame.draw.line(screen, (120, 50, 30),
+                         (charge_cx + 4, charge_cy - 2),
+                         (charge_cx + 2, charge_cy - 8), 1)
+
+        blink_interval_ms = max(80, 300 - max(0, t - 150) * 2)
+        led_on = (pygame.time.get_ticks() // blink_interval_ms) % 2 == 0
+        pygame.draw.circle(screen, (255 if led_on else 60, 0, 0),
+                           (charge_cx + 6, charge_cy), 1)
+
+    elif 300 < t <= 306:
+        pygame.draw.circle(screen, (255, 160, 40, 180),
+                           (charge_cx + 4, charge_cy + 3), 14)
+        pygame.draw.circle(screen, (255, 200, 100, 120),
+                           (charge_cx + 4, charge_cy + 3), 20)
+
+
+# Volkov's palette -- mirrors his cutscene sprite (cutscenes.draw_volkov)
+# exactly, so the in-game top-down sprite reads as the same character the
+# player saw in the intro cutscene. The M2 squadmate top-down STRUCTURE is
+# used (legs, shadow, layered head, name label) but every COLOR is
+# Volkov's, not the KRAP squad's.
+_C_VOLKOV_COAT = (14, 14, 20)        # near-black coat (cutscene coat_col)
+_C_VOLKOV_COAT_OPEN = (30, 28, 32)   # center opening line (cutscene)
+_C_VOLKOV_LEG = (18, 18, 24)         # dark navy legs (cutscene leg_col)
+_C_VOLKOV_BOOT = (12, 10, 10)        # near-black shoes (cutscene shoe_col)
+_C_VOLKOV_RIM = (255, 110, 40)       # orange rim light (cutscene rim_col)
+_C_VOLKOV_RIM_DIM = (102, 44, 16)    # rim at 0.4 intensity (cutscene halo)
+_C_VOLKOV_HEAD_RIM = (153, 33, 4)    # head rim (rim_col at 0.6/0.3/0.1)
+_C_VOLKOV_SKIN = (42, 36, 32)        # DARK skin (cutscene skin_col)
+_C_VOLKOV_HAIR = (8, 6, 6)           # near-black hair arc (cutscene)
+_C_VOLKOV_EYE_OUTER = (100, 35, 35)  # dark red eye (cutscene)
+_C_VOLKOV_EYE_INNER = (180, 60, 40)  # brighter red pupil (cutscene)
+_C_VOLKOV_CIG = (200, 200, 200)      # cigarette paper (cutscene)
+_C_VOLKOV_EMBER = (255, 80, 20)      # glowing ember (cutscene)
+_C_VOLKOV_NAME = (255, 180, 100)     # amber name label
+
+
+def _draw_volkov_in_game(surface, draw_x, draw_y, angle, kick_phase=0,
+                         charge_plant=0):
+    """Draw Volkov top-down, matching the M2 squadmate STRUCTURE but using
+    his cutscene sprite's exact colors and features.
+
+    Structure (from mission2._draw_actor -- top-down KRAP squadmate):
+      - shadow ellipse at the feet
+      - visible legs (boot ellipses + trouser rects)
+      - trapezoid torso with outline
+      - arms as thick lines from shoulders to hands
+      - multi-layer head (outer ring + inner + face dot + eyes)
+      - name label above head with drop shadow
+
+    Colors/features (from cutscenes.draw_volkov -- his actual identity):
+      - Near-black coat (14,14,20), NOT M2 navy
+      - Orange RIM LIGHT HALO behind the torso and head (his signature --
+        drawn as dim orange polygons/circles slightly larger than the body,
+        BEFORE the body, so it rims his silhouette)
+      - Dark skin (42,36,32), NOT light
+      - RED eyes (100,35,35 outer, 180,60,40 inner), NOT brown
+      - Near-black hair arc on top of head
+      - Center coat opening line (vertical, down the middle)
+      - NO vest, NO accent stripe, NO headband -- plain dark coat + rim
+      - Cigarette + glowing ember at the mouth corner
+
+    kick_phase drives the kick leg overlay:
+      0 = idle, 1 = cocked back, 2 = forward/impact, 3 = retracting
+
+    charge_plant drives the planting arm overlay (for the explosive breach):
+      0 = idle (normal arms), 1 = arm reaching back (holding charge),
+      2 = arm forward (placing charge on door), 3 = arm retracting.
+
+    The `angle` parameter is accepted for call-site compatibility but
+    IGNORED -- Volkov always faces north (up on screen) like the M2
+    squadmates, which is correct for the breach scene.
+    """
+    x = int(draw_x)
+    y = int(draw_y)
+
+    # ── Shadow (matches M2: 36x14 ellipse, alpha 70, at cy+12) ──
+    shad = pygame.Surface((36, 14), pygame.SRCALPHA)
+    pygame.draw.ellipse(shad, (0, 0, 0, 70), shad.get_rect())
+    surface.blit(shad, (x - 18, y + 12))
+
+    # ── RIM LIGHT HALO behind the torso (Volkov's signature) ──
+    # Drawn FIRST, as a dim orange trapezoid slightly wider/taller than the
+    # coat, so the coat polygon (drawn next) rims it. Mirrors the cutscene's
+    # rim_pts polygon (rim_col * 0.4 = (102, 44, 16)).
+    rim_halo_pts = [
+        (x - 16, y - 16), (x + 16, y - 16),
+        (x + 14, y + 12), (x - 14, y + 12),
+    ]
+    pygame.draw.polygon(surface, _C_VOLKOV_RIM_DIM, rim_halo_pts)
+
+    # ── Legs (matches M2 upright: boot ellipses + trouser rects) ──
+    pygame.draw.ellipse(surface, _C_VOLKOV_BOOT, (x - 13, y + 17, 12, 7))
+    pygame.draw.ellipse(surface, _C_VOLKOV_BOOT, (x + 1, y + 17, 12, 7))
+    pygame.draw.rect(surface, _C_VOLKOV_LEG,
+                     (x - 10, y + 3, 8, 15), border_radius=2)
+    pygame.draw.rect(surface, _C_VOLKOV_LEG,
+                     (x + 2, y + 3, 8, 15), border_radius=2)
+
+    # ── Kick leg overlay (optional, only during breach) ──
+    if kick_phase > 0:
+        if kick_phase == 1:
+            end_x, end_y = x, y + 26       # cocked back (south, into corridor)
+        elif kick_phase == 2:
+            end_x, end_y = x, y - 26       # forward (north, into door)
+        else:
+            end_x, end_y = x, y - 12       # retracting
+        pygame.draw.line(surface, _C_VOLKOV_LEG,
+                         (x, y), (end_x, end_y), 5)
+        pygame.draw.ellipse(surface, _C_VOLKOV_BOOT,
+                            (end_x - 6, end_y - 3, 12, 7))
+
+    # ── Torso (trapezoid, near-black coat + center opening line) ──
+    torso_pts = [
+        (x - 13, y - 14), (x + 13, y - 14),
+        (x + 11, y + 10), (x - 11, y + 10),
+    ]
+    pygame.draw.polygon(surface, _C_VOLKOV_COAT, torso_pts)
+    # Center coat opening line (cutscene signature -- the coat's lapels).
+    pygame.draw.line(surface, _C_VOLKOV_COAT_OPEN,
+                     (x, y - 14), (x, y + 8), 2)
+
+    # ── Arms (thick lines from shoulders to hands, empty hands) ──
+    lh = (x - 14, y + 6)
+    rh = (x + 14, y + 6)
+    # If charge_plant is active, override the right arm (reaches forward).
+    if charge_plant > 0:
+        if charge_plant == 1:
+            # Arm reaching back (holding the charge).
+            plant_end = (x + 20, y + 2)
+        elif charge_plant == 2:
+            # Arm forward, placing charge on the door.
+            plant_end = (x + 16, y - 14)
+        else:
+            # Arm retracting.
+            plant_end = (x + 10, y - 6)
+        # Hide right arm, draw planting arm instead.
+        pygame.draw.line(surface, _C_VOLKOV_COAT,
+                         (x - 11, y - 4), lh, 5)
+        pygame.draw.line(surface, _C_VOLKOV_COAT,
+                         (x + 9, y - 6), plant_end, 5)
+        pygame.draw.circle(surface, _C_VOLKOV_SKIN, lh, 3)
+        pygame.draw.circle(surface, _C_VOLKOV_SKIN, plant_end, 3)
+        # Small grey rectangle at the hand (the charge).
+        if charge_plant == 2:
+            charge_rect = pygame.Rect(plant_end[0] - 3, plant_end[1] - 2, 6, 4)
+            pygame.draw.rect(surface, (90, 75, 60), charge_rect, border_radius=1)
+            pygame.draw.rect(surface, (60, 50, 40), charge_rect, 1, border_radius=1)
+    else:
+        # Combat/ally pose: Volkov holds a compact rifle/SMG in the same
+        # top-down language as the player/enemies. Earlier versions left his
+        # hands empty, so support fire felt disconnected from the sprite.
+        gun_dx = math.cos(angle)
+        gun_dy = math.sin(angle)
+        gun_px = -gun_dy
+        gun_py = gun_dx
+        # Lift the whole weapon rig to chest/shoulder height. Previously the
+        # gun was anchored at Volkov's sprite center, which made it look like it
+        # was coming out of his belt/groin.
+        gun_anchor_x = x
+        gun_anchor_y = y - 7
+        shoulder_l = (x + gun_px * 9 - gun_dx * 1, gun_anchor_y + gun_py * 9 - gun_dy * 1)
+        shoulder_r = (x - gun_px * 9 - gun_dx * 1, gun_anchor_y - gun_py * 9 - gun_dy * 1)
+        hand_l = (gun_anchor_x + gun_dx * 17 + gun_px * 4, gun_anchor_y + gun_dy * 17 + gun_py * 4)
+        hand_r = (gun_anchor_x + gun_dx * 20 - gun_px * 4, gun_anchor_y + gun_dy * 20 - gun_py * 4)
+        pygame.draw.line(surface, _C_VOLKOV_COAT, shoulder_l, hand_l, 5)
+        pygame.draw.line(surface, _C_VOLKOV_COAT, shoulder_r, hand_r, 5)
+        pygame.draw.circle(surface, _C_VOLKOV_SKIN, (int(hand_l[0]), int(hand_l[1])), 3)
+        pygame.draw.circle(surface, _C_VOLKOV_SKIN, (int(hand_r[0]), int(hand_r[1])), 3)
+        # Weapon body: dark receiver, short barrel, tiny stock.
+        grip_x = gun_anchor_x + gun_dx * 19
+        grip_y = gun_anchor_y + gun_dy * 19
+        start_x = grip_x - gun_dx * 8
+        start_y = grip_y - gun_dy * 8
+        end_x = grip_x + gun_dx * 22
+        end_y = grip_y + gun_dy * 22
+        pygame.draw.line(surface, (8, 9, 10), (start_x, start_y), (end_x, end_y), 7)
+        pygame.draw.line(surface, (36, 38, 38), (start_x, start_y), (end_x, end_y), 5)
+        pygame.draw.line(surface, (92, 96, 90),
+                         (start_x - gun_px * 1.8, start_y - gun_py * 1.8),
+                         (end_x - gun_px * 1.8, end_y - gun_py * 1.8), 1)
+        muzzle_x = end_x + gun_dx * 6
+        muzzle_y = end_y + gun_dy * 6
+        pygame.draw.line(surface, (18, 20, 20), (end_x, end_y), (muzzle_x, muzzle_y), 4)
+        pygame.draw.circle(surface, (5, 5, 6), (int(muzzle_x), int(muzzle_y)), 2)
+        # Stick magazine / grip hanging below receiver.
+        mag_base = (start_x + gun_dx * 11, start_y + gun_dy * 11)
+        pygame.draw.line(surface, (16, 18, 18), mag_base,
+                         (mag_base[0] + gun_px * 9 - gun_dx * 1,
+                          mag_base[1] + gun_py * 9 - gun_dy * 1), 5)
+        # Short collapsed stock.
+        stock_root = (start_x - gun_dx * 1, start_y - gun_dy * 1)
+        stock_tip = (start_x - gun_dx * 10 + gun_px * 2, start_y - gun_dy * 10 + gun_py * 2)
+        pygame.draw.line(surface, (42, 44, 42), stock_root, stock_tip, 2)
+
+    # ── Head rim halo (dim orange circle behind the head) ──
+    # Mirrors cutscene: rim_col at (0.6, 0.3, 0.1) = (153, 33, 4), drawn as
+    # a circle slightly larger than the head.
+    head_y = y - 24
+    pygame.draw.circle(surface, _C_VOLKOV_HEAD_RIM,
+                       (int(x), int(head_y)), 12)
+
+    # ── Head (dark skin + near-black hair arc on top) ──
+    pygame.draw.circle(surface, _C_VOLKOV_SKIN,
+                       (int(x), int(head_y)), 10)
+    # Hair arc on the top half of the head (cutscene signature).
+    pygame.draw.arc(
+        surface, _C_VOLKOV_HAIR,
+        (int(x - 10), int(head_y - 10), 20, 20),
+        0, math.pi, 5,
+    )
+
+    # ── Eyes (RED -- dark red outer + brighter red inner, cutscene signature) ──
+    # Two eyes, slightly offset left/right of center.
+    for ex_off in (-3, 3):
+        ex = x + ex_off
+        ey = head_y + 1
+        pygame.draw.circle(surface, _C_VOLKOV_EYE_OUTER,
+                           (int(ex), int(ey)), 2)
+        pygame.draw.circle(surface, _C_VOLKOV_EYE_INNER,
+                           (int(ex), int(ey)), 1)
+
+    # ── Cigarette + glowing ember at the mouth corner ──
+    # Mouth is below the face center; cig sticks out to the right.
+    mouth_x = x + 6
+    mouth_y = head_y + 5
+    cig_end_x = mouth_x + 7
+    cig_end_y = mouth_y - 1
+    pygame.draw.line(surface, _C_VOLKOV_CIG,
+                     (mouth_x, mouth_y), (cig_end_x, cig_end_y), 2)
+    # Ember flickers ~3Hz (matches cutscene cadence).
+    if int(pygame.time.get_ticks() / 170) % 2 == 0:
+        pygame.draw.circle(surface, _C_VOLKOV_EMBER,
+                           (int(cig_end_x), int(cig_end_y)), 2)
+        # Soft ember glow halo.
+        ember_glow = pygame.Surface((12, 12), pygame.SRCALPHA)
+        pygame.draw.circle(ember_glow, (255, 100, 30, 60),
+                           (6, 6), 6)
+        surface.blit(ember_glow,
+                     (int(cig_end_x - 6), int(cig_end_y - 6)),
+                     special_flags=pygame.BLEND_ADD)
+
+    # ── Name label (M2 style: font_terminal_small, with drop shadow) ──
+    name = "VOLKOV"
+    lbl = font_terminal_small.render(name, True, _C_VOLKOV_NAME)
+    shad_lbl = font_terminal_small.render(name, True, (0, 0, 0))
+    label_y = y - 44
+    surface.blit(shad_lbl, (x - lbl.get_width() // 2 + 1, label_y + 1))
+    surface.blit(lbl, (x - lbl.get_width() // 2, label_y))
+
+
+# ─────────────────────────────────────────────
+# Crafting — grind the chair leg into a shiv
+# ─────────────────────────────────────────────
+# After the chair breaks, the player has a "chair_leg" (blunt, slow, weak).
+# They walk to the floor drain (tile 9, 8) and press E to open the crafting
+# overlay. The overlay is a close-up of the drain grate with the metal chair leg
+# lying across it. The player holds the left mouse button and drags
+# left/right to grind the leg against the metal grate. Progress accrues
+# based on drag distance; the leg visually transforms from a thick tube
+# to a tapered shiv. At 100%, the shiv is done, the overlay closes,
+# the doorway unblocks, and the objective updates.
+#
+# This is NOT a timing bar or QTE — the crafting IS the drag motion. The
+# player is directly manipulating the object, and the object transforms in
+# real-time based on how much they've dragged.
+
+_DRAIN_TILE_COL, _DRAIN_TILE_ROW = 34, 9   # centre floor of Biribel's cell
+_CRAFT_DRAG_RATE = 0.0004   # legacy tuning note; current minigame uses strokes
+_CRAFT_MAX_OFFSET = 86      # how far the leg slides left/right (px)
+_CRAFT_CONTACT_Y = HEIGHT // 2 + 20
+_CRAFT_CONTACT_BAND = 58    # vertical mouse band where pressure/contact is good
+
+
+def is_crafting_active():
+    """True while the crafting overlay is open. acaristan.py checks this to
+    route mouse/keyboard input to handle_crafting_event instead of the
+    normal game input."""
+    return bool(getattr(STATE, "mission3_crafting_active", False))
+
+
+def grant_k9_smg():
+    """Equip the Mission 3 armory reward."""
+    if getattr(STATE, "k9_unlocked", False):
+        return
+    STATE.k9_unlocked = True
+    STATE.player_disarmed = False
+    STATE.mission3_weapon = "k9_smg"
+    STATE.current_weapon = "k9_smg"
+    STATE.k9_mag_size = 24
+    STATE.k9_ammo_in_mag = STATE.k9_mag_size
+    STATE.k9_spare_mags = 2
+    STATE.k9_shot_cooldown = 0
+    STATE.is_reloading = False
+    STATE.reload_timer = 0
+    STATE.floating_texts.append([
+        _K9_STAND_COL * TILE_SIZE + TILE_SIZE // 2,
+        _K9_STAND_ROW * TILE_SIZE + TILE_SIZE // 2 - 24,
+        "K-9 SUPPRESSED SMG ACQUIRED",
+        (140, 230, 190),
+        120,
+    ])
+    try:
+        audio.play("pickup", volume=0.55)
+    except Exception:
+        pass
+
+
+def start_black_ledger_debug():
+    """Dev jump: 12/13 detainees counted, full loadout, guards removed.
+
+    Leaves exactly one living detainee near the player so testers can fire the
+    final shot and trigger the Black Ledger easter egg naturally.
+    """
+    start_mission3(preserve_timer=True)
+
+    STATE.mission3_stage = STAGE_BREAKOUT
+    STATE.mission_phase = "m3_black_ledger_debug"
+    STATE.mission3_cell_open = True
+    STATE.mission3_chair_broken = True
+    STATE.mission3_chair_break_anim = -1
+    STATE.mission3_doorway_blocked = False
+    STATE.mission3_crafting_active = False
+    STATE.mission3_crafting_progress = 1.0
+    STATE.mission3_vent_open = True
+    STATE.mission3_cell_block_cleared = True
+    STATE.mission3_guards_spawned = True
+    STATE.mission3_guards_killed = 999
+    STATE.enemies = []
+    STATE.bullets = []
+    STATE.pickups = []
+    STATE.fire_zones = []
+    STATE.thrown_bottles = []
+    STATE.m3_alarm_active = False
+    STATE.m3_black_ledger_triggered = False
+    STATE.m3_black_ledger_inmate_active = False
+    STATE.m3_black_ledger_inmate = None
+    STATE.m3_black_ledger_intro_timer = 0
+    STATE.m3_black_ledger_death_active = False
+    STATE.m3_black_ledger_death_timer = 0
+
+    # Complete practical M3 loadout: crafted shiv state, sidearm progression,
+    # and armory K-9 equipped with full ammo.
+    STATE.player_disarmed = False
+    STATE.mission3_weapon = "k9_smg"
+    STATE.current_weapon = "k9_smg"
+    STATE.mission3_sidearm_acquired = True
+    STATE.k9_unlocked = True
+    STATE.k9_mag_size = 24
+    STATE.k9_ammo_in_mag = 24
+    STATE.k9_spare_mags = 4
+    STATE.ammo_in_mag = 15
+    STATE.spare_mags = 4
+    STATE.is_reloading = False
+    STATE.reload_timer = 0
+    STATE.player_bottles = 0
+    if STATE.player:
+        STATE.player.hp = STATE.player.max_hp
+
+    detainees = getattr(STATE, "mission3_detainees", [])
+    for d in detainees:
+        d["dead"] = False
+        d["state"] = "idle"
+        d["line_timer"] = 0
+        d.pop("black_ledger_hit_by_player", None)
+
+    # Count every detainee except the final one. Use the last authored
+    # detainee so repeated debug starts are deterministic.
+    final = detainees[-1] if detainees else None
+    for d in detainees[:-1]:
+        d["dead"] = True
+        d["state"] = "dead"
+        d["line_timer"] = 0
+        d["black_ledger_hit_by_player"] = True
+
+    STATE.blood_decals = []
+    for d in detainees[:-1]:
+        wx, wy = _detainee_draw_pos(d)
+        STATE.blood_decals.append([wx, wy, 115, 10])
+
+    if final and STATE.player:
+        fx, fy = _detainee_draw_pos(final)
+        # Put Biribel just west of the last detainee, facing them. Tester only
+        # needs to aim/click once to open the Ledger.
+        STATE.player.rect.centerx = int(fx - 105)
+        STATE.player.rect.centery = int(fy)
+        STATE.player.angle = 0.0
+        final["line_timer"] = 120
+        final["line"] = final.get("line") or "don't"
+        _snap_camera_to((STATE.player.rect.centerx, STATE.player.rect.centery))
+
+    _set_objective("DEBUG: shoot the last detainee to open the Black Ledger. 12/13 counted.")
+    STATE.floating_texts.append([
+        STATE.player.rect.centerx if STATE.player else 0,
+        (STATE.player.rect.centery - 64) if STATE.player else 0,
+        "BLACK LEDGER DEBUG: 12/13",
+        (230, 90, 80),
+        210,
+    ])
+    return final
+
+
+def handle_interact():
+    """E key handler for M3. Routes:
+      - Crafting overlay open → no-op (let handle_crafting_event handle it).
+      - Near the drain with a chair_leg → start crafting.
+      - Near the vent grate with a shiv → pry open / crawl through.
+      - Near the armory wall stand → acquire the K-9 and trigger FP pickup.
+    """
+    if getattr(STATE, "mission3_crafting_active", False):
+        return
+
+    weapon = getattr(STATE, "mission3_weapon", "none")
+
+    # Comms Wing now has a small objective chain instead of one passive relay
+    # interaction: clear the wing, restore battery power, copy authorization
+    # from Security, then tune the relay.
+    if getattr(STATE, "mission3_stage", None) == STAGE_COMMS:
+        bx, by = _comms_breaker_pos()
+        if _near((bx, by), radius=78):
+            _restore_comms_power()
+            return
+        ax, ay = _comms_auth_pos()
+        if _near((ax, ay), radius=78):
+            _acquire_comms_auth()
+            return
+        rx, ry = _relay_pos()
+        if _near((rx, ry), radius=92):
+            _start_comms_relay_tuning()
+            return
+        # Manual archive-door push if the player presses E on the E-tile.
+        if getattr(STATE, "m3_relay_tuned", False):
+            exit_pos = (
+                _ARCHIVE_EXIT_COL * TILE_SIZE + TILE_SIZE // 2,
+                _ARCHIVE_EXIT_ROW * TILE_SIZE + TILE_SIZE // 2,
+            )
+            if _near(exit_pos, radius=TILE_SIZE * 0.9):
+                _start_archives_phase()
+                return
+
+    if getattr(STATE, "mission3_stage", None) == STAGE_ARCHIVES:
+        if getattr(STATE, "m3_maru_contact_active", False):
+            return  # locked during transmission
+        mx, my = _maru_terminal_pos()
+        if _near((mx, my), radius=78):
+            _start_maru_contact()
+            return
+        vx, vy = _vostral_file_pos()
+        if _near((vx, vy), radius=78):
+            _acquire_vostral_file()
+            return
+        if getattr(STATE, "m3_vostral_acquired", False):
+            if _near(_archives_exit_pos(), radius=TILE_SIZE * 0.9):
+                _start_kill_order_phase()
+                return
+
+    # Check proximity to the drain (crafting).
+    if weapon == "chair_leg":
+        drain_pos = (_DRAIN_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
+                     _DRAIN_TILE_ROW * TILE_SIZE + TILE_SIZE // 2)
+        if _near(drain_pos, radius=60):
+            start_crafting()
+            return
+
+    # Check proximity to the vent grate.
+    vent_pos = (_VENT_GRATE_COL * TILE_SIZE + TILE_SIZE // 2,
+                _VENT_GRATE_ROW * TILE_SIZE + TILE_SIZE // 2)
+    if _near(vent_pos, radius=50):
+        if not getattr(STATE, "mission3_vent_open", False):
+            # Pry open with shiv.
+            try:
+                audio.play("door_break", volume=0.4)
+            except Exception:
+                pass
+            STATE.mission3_vent_open = True
+            _set_objective("Escape through the vent or the corridor.")
+        else:
+            # Teleport to vent exit.
+            STATE.player.rect.centerx = _VENT_EXIT_COL * TILE_SIZE + TILE_SIZE // 2
+            STATE.player.rect.centery = _VENT_EXIT_ROW * TILE_SIZE + TILE_SIZE // 2
+            # Trigger the escape cutscene.
+            STATE.mission3_stage = STAGE_VENT_CUTSCENE
+            STATE.mission_phase = "m3_vent_cutscene"
+            STATE.request_vent_cutscene = True
+            return
+
+    # Armory wall stand: acquire K-9 suppressed SMG and play the first-person
+    # pickup cutscene. The grant happens immediately so returning from the
+    # cutscene leaves the player armed.
+    k9_pos = (_K9_STAND_COL * TILE_SIZE + TILE_SIZE // 2,
+              _K9_STAND_ROW * TILE_SIZE + TILE_SIZE // 2)
+    if not getattr(STATE, "k9_unlocked", False) and _near(k9_pos, radius=72):
+        grant_k9_smg()
+        STATE.request_k9_pickup_cutscene = True
+        return
+
+    from interactions import interact_door
+    interact_door()
+
+
+def start_crafting():
+    """Open the crafting overlay. Called when the player presses E near the
+    drain while holding a chair_leg."""
+    if getattr(STATE, "mission3_weapon", "none") != "chair_leg":
+        return
+    if getattr(STATE, "mission3_crafting_active", False):
+        return
+    STATE.mission3_crafting_active = True
+    STATE.mission3_crafting_mouse_held = False
+    mx, _ = get_scaled_mouse()
+    STATE.mission3_crafting_prev_mx = mx
+    STATE.mission3_crafting_accum = 0.0
+    STATE.mission3_crafting_progress = 0.0
+    STATE.mission3_crafting_stroke_dir = 1       # start by dragging right
+    STATE.mission3_crafting_stroke_progress = 0.0
+    STATE.mission3_crafting_stroke_target = 150.0   # pixels per stroke; pressure gates speed
+    STATE.mission3_crafting_strokes_done = 0
+    STATE.mission3_crafting_strokes_needed = 9
+    STATE.mission3_crafting_heat = 0.0             # 0..1, visual/spark intensity
+    STATE.mission3_crafting_wrong_flash = 0        # frames of red feedback
+    STATE.mission3_crafting_contact = 0.0          # 0..1 pressure/contact quality
+    STATE.mission3_crafting_last_dx = 0.0
+    STATE.mission3_crafting_last_good = False
+    STATE.mission3_crafting_tip_glow = 0.0
+    pygame.mouse.set_visible(True)
+
+
+def _finish_crafting():
+    """Called when progress reaches 1.0 — the shiv is done."""
+    STATE.mission3_weapon = "shiv"
+    STATE.mission3_doorway_blocked = False
+    STATE.mission3_crafting_active = False
+    STATE.mission3_crafting_progress = 1.0
+    STATE.mission3_crafting_shavings = []
+    _spawn_m3_guards_once()
+    pygame.mouse.set_visible(False)
+    try:
+        audio.play("melee_hit", volume=0.5)  # final "done" thunk
+    except Exception:
+        pass
+
+
+def _craft_contact_from_mouse(my):
+    """Return pressure/contact quality based on vertical mouse position.
+
+    The chair leg must be pressed near the drain grate to grind.  This makes
+    the minigame feel physical instead of "move mouse horizontally anywhere".
+    """
+    dist = abs(my - _CRAFT_CONTACT_Y)
+    return max(0.0, min(1.0, 1.0 - dist / _CRAFT_CONTACT_BAND))
+
+
+def _craft_overall_progress():
+    needed = max(1, getattr(STATE, "mission3_crafting_strokes_needed", 9))
+    done = getattr(STATE, "mission3_crafting_strokes_done", 0)
+    target = max(1.0, getattr(STATE, "mission3_crafting_stroke_target", 150.0))
+    partial = max(0.0, min(1.0, getattr(STATE, "mission3_crafting_stroke_progress", 0.0) / target))
+    return max(0.0, min(1.0, (done + partial) / needed))
+
+
+def handle_crafting_event(event):
+    """Handle input while the sharpening overlay is open.
+
+    Improved interaction model:
+      - Hold LMB to grip the chair leg.
+      - Drag in the indicated direction.
+      - Keep the mouse near the grate for good pressure/contact.
+      - Wrong direction slips and flashes red instead of feeling silent.
+      - Partial stroke progress contributes visibly to the blade shape.
+    """
+    if not getattr(STATE, "mission3_crafting_active", False):
+        return
+
+    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        STATE.mission3_crafting_mouse_held = True
+        mx, my = get_scaled_mouse()
+        STATE.mission3_crafting_prev_mx = mx
+        STATE.mission3_crafting_contact = _craft_contact_from_mouse(my)
+        STATE.mission3_crafting_last_dx = 0.0
+        STATE.mission3_crafting_last_good = False
+        return
+
+    if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+        STATE.mission3_crafting_mouse_held = False
+        # Releasing does not wipe progress anymore; it just cools the motion.
+        STATE.mission3_crafting_last_dx = 0.0
+        STATE.mission3_crafting_last_good = False
+        return
+
+    if event.type == pygame.MOUSEMOTION and STATE.mission3_crafting_mouse_held:
+        mx, my = get_scaled_mouse()
+        dx = mx - STATE.mission3_crafting_prev_mx
+        STATE.mission3_crafting_prev_mx = mx
+        STATE.mission3_crafting_last_dx = dx
+
+        contact = _craft_contact_from_mouse(my)
+        STATE.mission3_crafting_contact = contact
+        required_dir = STATE.mission3_crafting_stroke_dir
+
+        # Tiny jitter should not punish the player.
+        if abs(dx) < 0.4:
+            return
+
+        if dx * required_dir > 0 and contact > 0.12:
+            # Correct direction + near the grate: grind.  Better contact gives
+            # more progress and hotter sparks.
+            gain = abs(dx) * (0.35 + contact * 0.85)
+            STATE.mission3_crafting_stroke_progress += gain
+            STATE.mission3_crafting_heat = min(1.0, getattr(STATE, "mission3_crafting_heat", 0.0) + 0.018 + contact * 0.018)
+            STATE.mission3_crafting_tip_glow = min(1.0, getattr(STATE, "mission3_crafting_tip_glow", 0.0) + 0.035)
+            STATE.mission3_crafting_last_good = True
+
+            if abs(dx) > 1:
+                _spawn_shaving(contact=contact, speed=abs(dx), good=True)
+
+            target = STATE.mission3_crafting_stroke_target
+            if STATE.mission3_crafting_stroke_progress >= target:
+                STATE.mission3_crafting_strokes_done += 1
+                STATE.mission3_crafting_stroke_progress = 0.0
+                STATE.mission3_crafting_stroke_dir *= -1
+                STATE.mission3_crafting_progress = _craft_overall_progress()
+                effects.shake(3)
+                try:
+                    audio.play("melee_hit", volume=0.34 + 0.14 * contact)
+                except Exception:
+                    pass
+
+                if STATE.mission3_crafting_strokes_done >= STATE.mission3_crafting_strokes_needed:
+                    STATE.mission3_crafting_progress = 1.0
+                    _finish_crafting()
+                    return
+            else:
+                STATE.mission3_crafting_progress = _craft_overall_progress()
+        else:
+            # Slip: wrong direction or no pressure.  Do not obliterate progress,
+            # but bleed a little so the player understands the stroke failed.
+            STATE.mission3_crafting_last_good = False
+            STATE.mission3_crafting_wrong_flash = 14
+            STATE.mission3_crafting_stroke_progress = max(
+                0.0, STATE.mission3_crafting_stroke_progress - abs(dx) * 0.45)
+            STATE.mission3_crafting_heat = max(0.0, getattr(STATE, "mission3_crafting_heat", 0.0) - 0.015)
+            STATE.mission3_crafting_progress = _craft_overall_progress()
+            if abs(dx) > 2:
+                _spawn_shaving(contact=max(0.15, contact), speed=abs(dx), good=False)
+        return
+
+    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+        # Mandatory crafting lock: cannot cancel, but give subtle feedback.
+        STATE.mission3_crafting_wrong_flash = 10
+        return
+
+
+def _spawn_shaving(contact=1.0, speed=4.0, good=True):
+    """Spawn sparks and metal filings at the grinding contact point."""
+    cx = WIDTH // 2
+    cy = _CRAFT_CONTACT_Y + 8
+    mx, _ = get_scaled_mouse()
+    contact_x = int(cx + max(-_CRAFT_MAX_OFFSET, min(_CRAFT_MAX_OFFSET, mx - cx)) * 0.62)
+
+    spark_count = 1 + int(min(5, speed / 4.0 + contact * 3.0))
+    if not good:
+        spark_count = max(1, spark_count // 2)
+
+    for _ in range(spark_count):
+        hot = good and random.random() < (0.55 + contact * 0.35)
+        STATE.mission3_crafting_shavings.append({
+            "x": contact_x + random.randint(-12, 12),
+            "y": cy + random.randint(-4, 5),
+            "vx": random.uniform(-3.8, 3.8) + (0.7 if STATE.mission3_crafting_stroke_dir > 0 else -0.7),
+            "vy": random.uniform(-3.2, -0.6),
+            "life": 16 + random.randint(0, 18),
+            "rot": random.uniform(0, math.pi * 2),
+            "len": random.randint(3, 8) if hot else random.randint(2, 5),
+            "type": "spark" if hot else "filing",
+            "good": good,
+        })
+
+    # Longer dull curls of scraped metal.
+    if random.random() < (0.25 + contact * 0.4):
+        STATE.mission3_crafting_shavings.append({
+            "x": contact_x + random.randint(-22, 22),
+            "y": cy + random.randint(-2, 4),
+            "vx": random.uniform(-1.3, 1.3),
+            "vy": random.uniform(-0.5, 0.25),
+            "life": 55 + random.randint(0, 40),
+            "rot": random.uniform(0, math.pi * 2),
+            "len": random.randint(5, 11),
+            "type": "filing",
+            "good": good,
+        })
+
+
+def _update_crafting():
+    """Per-frame update for the crafting overlay (heat + particles)."""
+    if not getattr(STATE, "mission3_crafting_active", False):
+        return
+
+    # Heat and feedback decay. Heat gives the tip glow/sparks a physical rhythm.
+    STATE.mission3_crafting_heat = max(0.0, getattr(STATE, "mission3_crafting_heat", 0.0) - 0.006)
+    STATE.mission3_crafting_tip_glow = max(0.0, getattr(STATE, "mission3_crafting_tip_glow", 0.0) - 0.012)
+    if getattr(STATE, "mission3_crafting_wrong_flash", 0) > 0:
+        STATE.mission3_crafting_wrong_flash -= 1
+    if not getattr(STATE, "mission3_crafting_mouse_held", False):
+        STATE.mission3_crafting_contact = max(0.0, getattr(STATE, "mission3_crafting_contact", 0.0) - 0.04)
+
+    # Keep the displayed total in sync with partial stroke progress.
+    STATE.mission3_crafting_progress = _craft_overall_progress()
+
+    for s in STATE.mission3_crafting_shavings:
+        s["x"] += s["vx"]
+        s["y"] += s["vy"]
+        s["vy"] += 0.16  # gravity
+        s["vx"] *= 0.985
+        s["life"] -= 1
+        s["rot"] += 0.16 if s.get("type") == "spark" else 0.06
+
+    STATE.mission3_crafting_shavings = [
+        s for s in STATE.mission3_crafting_shavings if s["life"] > 0
+    ]
+
+
+def _draw_crafting_overlay():
+    """Draw the improved full-screen sharpening overlay.
+
+    The goal is to feel like Biribel is physically grinding a broken chair leg
+    against the drain grate: pressure/contact, scrape direction, heat, filings,
+    and blade transformation are all visible.
+    """
+    ticks = pygame.time.get_ticks()
+    progress = max(0.0, min(1.0, getattr(STATE, "mission3_crafting_progress", 0.0)))
+    heat = max(0.0, min(1.0, getattr(STATE, "mission3_crafting_heat", 0.0)))
+    contact = max(0.0, min(1.0, getattr(STATE, "mission3_crafting_contact", 0.0)))
+    wrong_flash = getattr(STATE, "mission3_crafting_wrong_flash", 0)
+    held = getattr(STATE, "mission3_crafting_mouse_held", False)
+
+    # Dark close-up background with a cold concrete texture.
+    backdrop = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    backdrop.fill((3, 4, 6, 232))
+    screen.blit(backdrop, (0, 0))
+    rng = random.Random(4404)
+    for _ in range(90):
+        x = rng.randrange(0, WIDTH)
+        y = rng.randrange(0, HEIGHT)
+        col = rng.choice([(12, 13, 14), (18, 17, 15), (7, 8, 10), (22, 20, 17)])
+        pygame.draw.rect(screen, col, (x, y, rng.randrange(8, 34), rng.randrange(1, 4)))
+
+    cx = WIDTH // 2
+    cy = _CRAFT_CONTACT_Y
+    mx, my = get_scaled_mouse()
+    drag = max(-_CRAFT_MAX_OFFSET, min(_CRAFT_MAX_OFFSET, mx - cx)) if held else 0
+    leg_cx = cx + drag
+    leg_cy = cy - 4 + int((1.0 - contact) * 10 if held else 4)
+    stroke_dir = getattr(STATE, "mission3_crafting_stroke_dir", 1)
+    stroke_prog = getattr(STATE, "mission3_crafting_stroke_progress", 0.0)
+    stroke_target = max(1.0, getattr(STATE, "mission3_crafting_stroke_target", 150.0))
+    stroke_p = max(0.0, min(1.0, stroke_prog / stroke_target))
+
+    # Wrong-direction flash: visible but brief.
+    if wrong_flash > 0:
+        flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        flash.fill((130, 20, 14, min(95, wrong_flash * 7)))
+        screen.blit(flash, (0, 0))
+
+    # Soft spotlight over the work area.
+    light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    for r, a in ((360, 22), (260, 30), (150, 38)):
+        pygame.draw.circle(light, (160, 145, 105, a), (cx, cy + 12), r)
+    screen.blit(light, (0, 0), special_flags=pygame.BLEND_ADD)
+
+    # Drain assembly: large, heavy, dirty, not just a thin bar.
+    basin = pygame.Rect(cx - 190, cy - 54, 380, 118)
+    pygame.draw.ellipse(screen, (8, 8, 7), basin.move(0, 18))
+    pygame.draw.rect(screen, (20, 19, 16), basin, border_radius=18)
+    pygame.draw.rect(screen, (48, 44, 36), basin, 2, border_radius=18)
+    pygame.draw.rect(screen, (10, 9, 8), (cx - 160, cy - 24, 320, 68), border_radius=12)
+
+    grate_w, grate_h = 290, 42
+    grate_rect = pygame.Rect(cx - grate_w // 2, cy - 10, grate_w, grate_h)
+    pygame.draw.rect(screen, (38, 35, 29), grate_rect, border_radius=7)
+    pygame.draw.rect(screen, (78, 70, 55), grate_rect, 2, border_radius=7)
+    for off in range(12, grate_w - 8, 18):
+        x = grate_rect.x + off
+        col = (92, 82, 62) if off % 36 == 12 else (58, 53, 43)
+        pygame.draw.line(screen, col, (x, grate_rect.y + 5), (x - 12, grate_rect.bottom - 5), 3)
+        pygame.draw.line(screen, (13, 12, 10), (x + 2, grate_rect.y + 7), (x - 10, grate_rect.bottom - 3), 1)
+    # Contact groove / scrape mark.
+    groove_alpha = int(55 + 120 * progress + 50 * heat)
+    pygame.draw.line(screen, (210, 156, 72), (cx - 130, cy + 8), (cx + 130, cy + 8), 2)
+    pygame.draw.line(screen, (255, 190, 80, min(210, groove_alpha)), (cx - 128, cy + 7), (cx + 128, cy + 7), 1)
+
+    # Direction rail with stroke progress. This is diegetic-ish: scratched into
+    # the work area rather than a clean arcade bar.
+    rail_y = cy - 112
+    pygame.draw.line(screen, (64, 57, 45), (cx - 160, rail_y), (cx + 160, rail_y), 4)
+    if stroke_dir > 0:
+        sx, ex = cx - 160, cx - 160 + int(320 * stroke_p)
+    else:
+        sx, ex = cx + 160, cx + 160 - int(320 * stroke_p)
+    pygame.draw.line(screen, (205, 160, 82), (sx, rail_y), (ex, rail_y), 5)
+    arrow = "DRAG RIGHT" if stroke_dir > 0 else "DRAG LEFT"
+    arrow_col = (230, 190, 110) if (held and contact > 0.18) else (150, 132, 98)
+    arrow_surf = font_dialogue.render(("→ " + arrow + " →") if stroke_dir > 0 else ("← " + arrow + " ←"), True, arrow_col)
+    screen.blit(arrow_surf, (cx - arrow_surf.get_width() // 2, rail_y - 36))
+
+    # Contact/pressure meter: close to the grate = good pressure.
+    meter_x, meter_y = cx + 216, cy - 54
+    pygame.draw.rect(screen, (16, 14, 12), (meter_x, meter_y, 16, 118), border_radius=6)
+    fill_h = int(112 * contact)
+    fill_col = (210, 145, 65) if contact > 0.35 else (120, 75, 52)
+    pygame.draw.rect(screen, fill_col, (meter_x + 3, meter_y + 115 - fill_h, 10, fill_h), border_radius=4)
+    pygame.draw.rect(screen, (70, 62, 48), (meter_x, meter_y, 16, 118), 1, border_radius=6)
+    label = font_terminal_small.render("PRESS", True, (130, 116, 92))
+    screen.blit(label, (meter_x - label.get_width() // 2 + 8, meter_y + 126))
+
+    # Chair leg / blade transformation.  The right end tapers into the shiv.
+    leg_len = 260
+    base_w = 28 - 14 * progress
+    leg_left = leg_cx - leg_len // 2
+    leg_right = leg_cx + leg_len // 2
+    top_pts, bot_pts = [], []
+    for i in range(leg_len + 1):
+        t = i / leg_len
+        taper_zone = max(0.0, (t - 0.38) / 0.62)
+        taper = 1.0 - taper_zone * progress * 0.96
+        jag = math.sin((i + ticks * 0.03) * 0.27) * 0.65 * (1.0 - progress)
+        w = max(2.2, base_w * taper)
+        x = leg_left + i
+        top_pts.append((x, leg_cy - w / 2 + jag))
+        bot_pts.append((x, leg_cy + w / 2 + jag * 0.4))
+    leg_pts = top_pts + list(reversed(bot_pts))
+
+    # Shadow and contact glow.
+    pygame.draw.polygon(screen, (3, 3, 3), [(x, y + 10) for x, y in leg_pts])
+    pygame.draw.polygon(screen, (116, 118, 120), leg_pts)
+    pygame.draw.polygon(screen, (48, 50, 54), leg_pts, 2)
+    pygame.draw.line(screen, (170, 174, 176), (leg_left + 14, leg_cy - base_w * 0.22), (leg_right - 18, leg_cy - 2), 2)
+    pygame.draw.line(screen, (72, 74, 78), (leg_left + 12, leg_cy + base_w * 0.28), (leg_right - 12, leg_cy + 3), 2)
+
+    # Wrapped grip end and sharpened bright tip.
+    for k in range(5):
+        x = leg_left + 14 + k * 12
+        pygame.draw.line(screen, (70, 52, 36), (x, leg_cy - 18), (x + 16, leg_cy + 17), 3)
+    tip_glow = max(heat, getattr(STATE, "mission3_crafting_tip_glow", 0.0), progress * 0.55)
+    if progress > 0.20 or heat > 0.05:
+        tip_x = int(leg_right - 5)
+        pygame.draw.circle(screen, (245, 230, 190), (tip_x, int(leg_cy)), max(2, int(2 + progress * 4)))
+        glow = pygame.Surface((90, 70), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (255, 145, 55, int(80 * tip_glow)), (45, 35), int(16 + 24 * tip_glow))
+        screen.blit(glow, (tip_x - 45, int(leg_cy) - 35), special_flags=pygame.BLEND_ADD)
+
+    # Hands/grip in close-up. They help sell this as a physical action instead
+    # of a progress screen.
+    hand_skin = (145, 103, 77)
+    hand_hi = (178, 130, 96)
+    for side, hx in [(-1, leg_left + 36), (1, leg_left + 76)]:
+        pygame.draw.ellipse(screen, (50, 30, 22), (hx - 29, leg_cy + 14, 58, 34))
+        pygame.draw.ellipse(screen, hand_skin, (hx - 28, leg_cy + 2, 56, 38))
+        pygame.draw.ellipse(screen, hand_hi, (hx - 17, leg_cy + 6, 30, 14))
+        pygame.draw.rect(screen, (34, 40, 36), (hx - 36, leg_cy + 30, 72, 30), border_radius=10)
+        for f in range(4):
+            pygame.draw.ellipse(screen, hand_skin, (hx - 28 + f * 14, leg_cy - 6, 13, 29))
+
+    # Sparks and filings.
+    for s in STATE.mission3_crafting_shavings:
+        alpha = max(0, min(255, s["life"] * (9 if s["type"] == "spark" else 4)))
+        if s["type"] == "spark":
+            col = (255, random.randint(150, 225), 45, alpha) if s.get("good", True) else (180, 70, 55, alpha)
+        else:
+            col = (92, 94, 92, alpha)
+        sv = pygame.Surface((s["len"] * 2 + 4, 5), pygame.SRCALPHA)
+        pygame.draw.line(sv, col, (1, 2), (s["len"] + 1, 2), 2 if s["type"] == "spark" else 1)
+        sv_rot = pygame.transform.rotate(sv, math.degrees(s["rot"]))
+        screen.blit(sv_rot, (int(s["x"]) - sv_rot.get_width() // 2, int(s["y"]) - sv_rot.get_height() // 2))
+
+    # Overall progress as blade transformation + compact top readout.
+    strokes_done = getattr(STATE, "mission3_crafting_strokes_done", 0)
+    strokes_needed = getattr(STATE, "mission3_crafting_strokes_needed", 9)
+    title = font_speaker.render("SHARPEN THE CHAIR LEG", True, (215, 190, 135))
+    screen.blit(title, (cx - title.get_width() // 2, 34))
+    sub = font_terminal_small.render(
+        f"STROKE {strokes_done}/{strokes_needed}  ·  EDGE {int(progress * 100)}%",
+        True, (160, 142, 104))
+    screen.blit(sub, (cx - sub.get_width() // 2, 72))
+
+    # Small heat/edge meter at top, more thematic than the old generic bar.
+    bar_w, bar_h = 360, 7
+    bar_x, bar_y = cx - bar_w // 2, 98
+    pygame.draw.rect(screen, (28, 24, 18), (bar_x, bar_y, bar_w, bar_h), border_radius=3)
+    pygame.draw.rect(screen, (170, 120, 58), (bar_x, bar_y, int(bar_w * progress), bar_h), border_radius=3)
+    if heat > 0:
+        pygame.draw.rect(screen, (255, 100, 35), (bar_x, bar_y, int(bar_w * min(1.0, heat)), bar_h), 1, border_radius=3)
+    pygame.draw.rect(screen, (76, 62, 42), (bar_x, bar_y, bar_w, bar_h), 1, border_radius=3)
+
+    # Bottom instruction changes based on what the player is doing wrong/right.
+    if not held:
+        instr = "HOLD LEFT MOUSE ON THE LEG"
+        instr_col = (205, 180, 130)
+    elif contact <= 0.18:
+        instr = "LOWER / RAISE THE MOUSE TO PRESS AGAINST THE GRATE"
+        instr_col = (205, 120, 90)
+    elif wrong_flash > 0:
+        instr = "WRONG WAY — FOLLOW THE SCRATCH DIRECTION"
+        instr_col = (230, 90, 75)
+    else:
+        instr = "GRIND — KEEP PRESSURE, FINISH THE STROKE"
+        instr_col = (220, 185, 105)
+    instr_surf = font_dialogue.render(instr, True, instr_col)
+    screen.blit(instr_surf, (cx - instr_surf.get_width() // 2, HEIGHT - 82))
+
+    hint = font_terminal_small.render("Volkov holds the door. Make it quiet. Make it sharp.", True, (115, 105, 88))
+    screen.blit(hint, (cx - hint.get_width() // 2, HEIGHT - 50))
+
+    # Vignette.
+    draw_vignette(screen, strength=190)
+    draw_scanlines(screen)
+
+
+# ─────────────────────────────────────────────
+# Input (dialogue router — the scaffolding calls this for ALL M3 input)
+# ─────────────────────────────────────────────
+def handle_event(event):
+    """Mission 3 input router.
+
+    acaristan.py routes every event here while active_mission == "MISSION3".
+
+    Once the stage leaves STAGE_INTERROGATION, acaristan.py stops routing
+    here and normal mouse-shoot / movement input falls through.
+    """
+    global _dialogue_choice, _dialogue_tone, _dialogue_char_idx
+
+    if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) != STAGE_INTERROGATION:
+        return  # action phases own their own input via acaristan's fallthrough
+
+    if event.type != pygame.KEYDOWN:
+        return
+
+    beat = _current_beat()
+    if beat is None:
+        return
+
+    btype = beat.get("type")
+
+    # Volkov breach is a cinematic beat. Ignore SPACE/ENTER so the player
+    # cannot skip the approach → charge plant → retreat → detonation → re-entry.
+    if _action_is_unskippable(beat):
+        return
+
+    if btype == "choice":
+        # Options are inert until the prompt finishes typing.
+        if not _line_fully_typed(beat):
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                _dialogue_char_idx = len(_beat_text(beat))  # finish the prompt
+            return
+        options = beat.get("options", [])
+        if not options:
+            _advance_beat()
+            return
+        if event.key in (pygame.K_UP, pygame.K_LEFT):
+            _dialogue_choice = (_dialogue_choice - 1) % len(options)
+            _click_blip()
+        elif event.key in (pygame.K_DOWN, pygame.K_RIGHT):
+            _dialogue_choice = (_dialogue_choice + 1) % len(options)
+            _click_blip()
+        elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+            _resolve_choice(beat, _dialogue_choice)
+        return
+
+    # line / action beat: two-stage ENTER (finish typing, then advance).
+    if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+        if not _line_fully_typed(beat):
+            # First press: snap the typewriter to full length so the whole
+            # line is readable, then the next press advances.
+            _dialogue_char_idx = len(_beat_text(beat))
+        else:
+            # If the player mashes ENTER on an action beat before its FX
+            # fired on entry, fire them now so the breach flash/shake lands.
+            if btype == "action" and _dialogue_timer <= 1:
+                _trigger_action(beat.get("action"))
+            _advance_beat()
+
+
+def _resolve_choice(beat, chosen):
+    """Confirm a choice: remember the tone, inject the player's line, advance.
+
+    The chosen option's ``line`` (the second tuple element) becomes a new
+    BIRIBEL beat inserted right after this choice beat, so the player's
+    voice plays in-scene before the next scripted line. The option *index*
+    (0/1/2) is appended to _dialogue_tone for later slices to read.
+    """
+    global _dialogue_tone, _dialogue_choice
+    options = beat.get("options", [])
+    if not (0 <= chosen < len(options)):
+        return
+    _label, line = options[chosen]
+    _dialogue_tone.append(chosen)
+    STATE.mission3_dialogue_choices.append(chosen)
+
+    follow_up = {
+        "type": "line",
+        "speaker": "BIRIBEL",
+        "color": C_BIRIBEL,
+        "text": line,
+    }
+    idx = _dialogue_index
+    _dialogue_beats.insert(idx + 1, follow_up)
+    _dialogue_choice = 0  # reset highlight for the next choice beat
+    _click_blip(confirm=True)
+    _advance_beat()
+
+
+def _click_blip(confirm=False):
+    """Tiny UI sound for choice navigation. Falls back to silence if the
+    audio sample is missing (headless test harness)."""
+    try:
+        if confirm:
+            audio.play("type_tick", volume=0.18)
+        else:
+            audio.play("type_tick", volume=0.10)
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────
+# Security camera — kitchen area
+# ─────────────────────────────────────────────
+# A surveillance camera mounted on the kitchen's north wall that sweeps
+# back and forth. If it detects the player, it triggers an alarm and
+# alerts all guards in the cell block.
+
+_CAMERA_TILE_COL = 16          # centre of kitchen north wall
+_CAMERA_TILE_ROW = 4           # north wall of kitchen
+_CAMERA_SWEEP_HALF = math.radians(60)   # ±60° sweep
+_CAMERA_SWEEP_SPEED = 0.008    # radians per frame
+_CAMERA_CONE_HALF = math.radians(40)    # 80° total FOV
+_CAMERA_DETECT_RANGE = 250     # px
+
+
+class SecurityCamera:
+    """A ceiling-mounted security camera that sweeps and detects the player.
+
+    Attributes:
+        col, row: tile position
+        angle: current facing direction (radians, 0=east, pi/2=south)
+        sweep_center: centre angle of the sweep arc
+        sweep_dir: 1 or -1 (current sweep direction)
+        alerted: True if the camera has spotted the player
+        alarm_timer: frames remaining on the alarm flash
+        sweep_lock: if alerted, stop sweeping and lock on player
+    """
+    __slots__ = ("col", "row", "angle", "sweep_center", "sweep_dir",
+                 "alerted", "alarm_timer", "sweep_lock")
+
+    def __init__(self, col, row, angle=math.pi * 0.5):
+        self.col = col
+        self.row = row
+        self.angle = angle
+        self.sweep_center = angle
+        self.sweep_dir = 1
+        self.alerted = False
+        self.alarm_timer = 0
+        self.sweep_lock = False
+
+    @property
+    def rect(self):
+        cx = self.col * TILE_SIZE + TILE_SIZE // 2
+        cy = self.row * TILE_SIZE + TILE_SIZE // 2
+        return pygame.Rect(cx - 8, cy - 8, 16, 16)
+
+    @property
+    def center(self):
+        return (self.col * TILE_SIZE + TILE_SIZE // 2,
+                self.row * TILE_SIZE + TILE_SIZE // 2)
+
+    def update(self, px, py, walls):
+        """Per-frame update: sweep, detect, alarm."""
+        if self.alerted:
+            # Lock onto player position while alarmed.
+            dx = px - self.center[0]
+            dy = py - self.center[1]
+            if dx != 0 or dy != 0:
+                self.angle = math.atan2(dy, dx)
+            if self.alarm_timer > 0:
+                self.alarm_timer -= 1
+            return
+
+        # Sweep back and forth.
+        self.angle += _CAMERA_SWEEP_SPEED * self.sweep_dir
+        if abs(self.angle - self.sweep_center) > _CAMERA_SWEEP_HALF:
+            self.sweep_dir *= -1
+
+        # Detection check.
+        dist = math.hypot(px - self.center[0], py - self.center[1])
+        if dist > _CAMERA_DETECT_RANGE:
+            return
+
+        # Check if player is within the cone of vision.
+        angle_to_player = math.atan2(py - self.center[1],
+                                     px - self.center[0])
+        diff = abs(angle_to_player - self.angle)
+        if diff > math.pi:
+            diff = 2 * math.pi - diff
+        if diff > _CAMERA_CONE_HALF:
+            return
+
+        # Line-of-sight check: ray from camera to player.
+        if not _has_los(self.center[0], self.center[1], px, py, walls):
+            return
+
+        # DETECTED!
+        self.alerted = True
+        self.alarm_timer = 120   # 2 seconds of alarm flash
+        self.sweep_lock = True
+        effects.shake(8)
+        try:
+            audio.play("alarm", volume=0.6)
+        except Exception:
+            pass
+        # Alert all guards.
+        for e in STATE.enemies:
+            if hasattr(e, 'is_mission3_ipa') and e.is_mission3_ipa:
+                e.alerted = True
+                if e.state in ("IDLE", "PATROL"):
+                    e.state = "CHASE"
+                e.last_seen_pos = (px, py)
+
+
+def _has_los(x1, y1, x2, y2, walls):
+    """True if the line (x1,y1)->(x2,y2) is unobstructed by solid walls."""
+    for w in walls:
+        if w.clipline(x1, y1, x2, y2):
+            return False
+    return True
+
+
+# Camera instance (created in _build_world).
+_security_camera = None
+
+
+def _draw_security_camera(cam_x, cam_y, walls):
+    """Draw the security camera body + detection cone."""
+    global _security_camera
+    cam = _security_camera
+    if cam is None:
+        return
+    cx = cam.center[0] - cam_x
+    cy = cam.center[1] - cam_y
+
+    # Draw the detection cone.
+    cone_col = (255, 220, 60, 40) if not cam.alerted else (255, 40, 40, 80)
+    cone_len = _CAMERA_DETECT_RANGE
+    cone_surf = pygame.Surface((cone_len * 2, cone_len * 2), pygame.SRCALPHA)
+    left_angle = cam.angle - _CAMERA_CONE_HALF
+    right_angle = cam.angle + _CAMERA_CONE_HALF
+
+    # Build cone polygon.
+    cone_pts = [(cone_len, cone_len)]
+    steps = 16
+    for i in range(steps + 1):
+        t = i / steps
+        a = left_angle + (right_angle - left_angle) * t
+        px = cone_len + math.cos(a) * cone_len
+        py = cone_len + math.sin(a) * cone_len
+        cone_pts.append((px, py))
+    pygame.draw.polygon(cone_surf, cone_col, cone_pts)
+    screen.blit(cone_surf, (cx - cone_len, cy - cone_len),
+                special_flags=pygame.BLEND_ALPHA_SDL2)
+
+    # Draw cone outline (thin dashed-style lines at the edges).
+    edge_col = (255, 200, 50, 120) if not cam.alerted else (255, 50, 50, 180)
+    for a in (left_angle, right_angle):
+        ex = cx + math.cos(a) * cone_len
+        ey = cy + math.sin(a) * cone_len
+        pygame.draw.line(screen, edge_col, (cx, cy), (ex, ey), 1)
+
+    # Draw camera body.
+    body_cx = int(cx)
+    body_cy = int(cy)
+
+    # Mounting bracket (small rectangle on ceiling).
+    pygame.draw.rect(screen, (60, 60, 65),
+                     (body_cx - 5, body_cy - 6, 10, 5))
+    # Camera dome (dark glass hemisphere).
+    dome_alpha = 180 if not cam.alerted else 255
+    dome_surf = pygame.Surface((14, 14), pygame.SRCALPHA)
+    pygame.draw.circle(dome_surf, (30, 30, 40, dome_alpha),
+                       (7, 7), 7)
+    screen.blit(dome_surf, (body_cx - 7, body_cy - 7))
+
+    # Glint on the dome (small bright dot at the edge — catches light).
+    glint_off = (int(3 * math.cos(cam.angle - 0.5)),
+                 int(3 * math.sin(cam.angle - 0.5)))
+    pygame.draw.circle(screen, (180, 200, 220),
+                       (body_cx + glint_off[0], body_cy + glint_off[1]), 2)
+
+    # Red alarm light (flashing when alerted).
+    if cam.alerted and (cam.alarm_timer // 15) % 2 == 0:
+        pygame.draw.circle(screen, (255, 20, 20),
+                           (body_cx, body_cy - 8), 3)
+        # Glow.
+        glow = pygame.Surface((16, 16), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (255, 50, 50, 80), (8, 8), 8)
+        screen.blit(glow, (body_cx - 8, body_cy - 16),
+                    special_flags=pygame.BLEND_ADD)
+
+
+# ─────────────────────────────────────────────
+# Inspector-style getters (mirrors mission2's surface for menus/acaristan)
+# ─────────────────────────────────────────────
+def get_mission3_overview():
+    return {
+        "id": MISSION3_ID,
+        "title": MISSION3_TITLE,
+        "location": MISSION3_LOCATION,
+        "style": MISSION3_PRIMARY_STYLE,
+        "story_flags": dict(MISSION3_STORY_FLAGS),
+    }
+
+
+def get_opening_cinematic():
+    return list(OPENING_CINEMATIC)
+
+
+def get_mission_phases():
+    return [dict(p) for p in MISSION_PHASES]
+
+
+def get_ending_cinematic():
+    return [{"speaker": s.get("speaker", ""), "text": s.get("text", "")}
+            for s in mission3_ending_shots]

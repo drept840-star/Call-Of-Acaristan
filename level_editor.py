@@ -1,0 +1,223 @@
+import pygame
+import os
+import math
+from config import TILE_SIZE, WIDTH, HEIGHT
+from state import STATE
+
+TILE_TYPES = ['.', 'C', 'W', 'D', 'B', 'P', 'E', 'V', 'N', 'X', 'K']
+TILE_COLORS = {
+    '.': (40, 40, 40),
+    'C': (100, 100, 100),
+    'W': (120, 80, 60),
+    'D': (80, 120, 80),
+    'B': (160, 120, 80),
+    'P': (0, 200, 0),
+    'E': (200, 0, 0),
+    'V': (200, 200, 0),
+    'N': (0, 100, 200),
+    'X': (200, 100, 200),
+    'K': (255, 80, 0),
+}
+ENTITY_CHARS = ['P', 'E', 'V', 'N', 'X', 'K']
+
+
+class LevelEditor:
+    def __init__(self, map_data=None, map_name="unnamed"):
+        self.active = False
+        self.map_data = map_data
+        self.map_name = map_name
+        self.current_tile_index = 0
+        self.current_entity = 'P'
+        self.hover_col = 0
+        self.hover_row = 0
+        self.font = pygame.font.SysFont("Consolas", 18)
+        self._built_once = False
+
+    def set_map(self, map_data, map_name="unnamed"):
+        self.map_data = map_data
+        self.map_name = map_name
+        self._built_once = False
+
+    def toggle(self):
+        if self.map_data is None:
+            return
+        self.active = not self.active
+        if self.active and not self._built_once:
+            self.rebuild_world()
+            self._built_once = True
+        pygame.mouse.set_visible(self.active)
+
+    def handle_event(self, event):
+        if not self.active or self.map_data is None:
+            return False
+        mx, my = pygame.mouse.get_pos()
+        cam_x = getattr(STATE, "camera_x", 0)
+        cam_y = getattr(STATE, "camera_y", 0)
+        world_x = mx + cam_x
+        world_y = my + cam_y
+        col = int(world_x // TILE_SIZE)
+        row = int(world_y // TILE_SIZE)
+        if 0 <= row < len(self.map_data) and 0 <= col < len(self.map_data[0]):
+            self.hover_col, self.hover_row = col, row
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    self._paint_tile(col, row, rebuild=True)
+                elif event.button == 3:
+                    self._place_entity(col, row, rebuild=True)
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_F5:
+                self.save_map()
+            elif event.key == pygame.K_TAB:
+                self.current_tile_index = (self.current_tile_index + 1) % len(TILE_TYPES)
+                print(f"[Editor] Tile: {TILE_TYPES[self.current_tile_index]}")
+                return True
+            elif event.key == pygame.K_e:
+                idx = ENTITY_CHARS.index(self.current_entity) if self.current_entity in ENTITY_CHARS else 0
+                idx = (idx + 1) % len(ENTITY_CHARS)
+                self.current_entity = ENTITY_CHARS[idx]
+                print(f"[Editor] Entity: {self.current_entity}")
+                return True
+            elif event.key == pygame.K_r:
+                self.rebuild_world()
+                print("[Editor] World rebuilt from map data.")
+                return True
+        return True
+
+    def _paint_tile(self, col, row, rebuild=False):
+        if not self.map_data:
+            return
+        map_list = [list(line) for line in self.map_data]
+        map_list[row][col] = TILE_TYPES[self.current_tile_index]
+        self.map_data[:] = [''.join(line) for line in map_list]
+        if rebuild:
+            self.rebuild_world()
+
+    def _place_entity(self, col, row, rebuild=False):
+        if not self.map_data:
+            return
+        map_list = [list(line) for line in self.map_data]
+        map_list[row][col] = self.current_entity
+        self.map_data[:] = [''.join(line) for line in map_list]
+        if rebuild:
+            self.rebuild_world()
+
+    def rebuild_world(self):
+        from player import Player
+        from enemy_ai import Enemy
+        from interactions import Door
+
+        STATE.walls = []
+        STATE.enemies = []
+        STATE.player = None
+        STATE.doors = []
+        STATE.bullets = []
+        STATE.particles = []
+        STATE.casings = []
+        STATE.pickups = []
+        STATE.blood_decals = []
+        STATE.floating_texts = []
+        STATE.mission3_barriers = getattr(STATE, "mission3_barriers", [])
+        STATE.mission3_barriers.clear()
+        STATE.mission2_barriers = getattr(STATE, "mission2_barriers", [])
+        STATE.mission2_barriers.clear()
+        STATE.breach_markers = []
+
+        for row_idx, row in enumerate(self.map_data):
+            for col_idx, tile in enumerate(row):
+                x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
+                if tile in ('C', 'W'):
+                    STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+                    if tile == 'W':
+                        STATE.warehouse_walls_set.add((col_idx, row_idx))
+                elif tile == 'B':
+                    r = pygame.Rect(x + 4, y + 12, TILE_SIZE - 8, TILE_SIZE - 24)
+                    STATE.walls.append(r)
+                    STATE.mission3_barriers.append(r)
+                    STATE.mission2_barriers.append(r)
+                elif tile == 'D':
+                    try:
+                        new_door = Door(x, y, is_bay=False)
+                        STATE.doors.append(new_door)
+                    except Exception:
+                        pass
+                elif tile == 'P':
+                    STATE.player = Player(x + 16, y + 16, max_hp=100)
+                elif tile == 'E':
+                    STATE.enemies.append(Enemy(x + 16, y + 16))
+                elif tile == 'K':
+                    commander = Enemy(x + 16, y + 16)
+                    commander.hp = 250
+                    commander.is_commander = True
+                    commander.speed = 2.2
+                    STATE.enemies.append(commander)
+                elif tile == 'V':
+                    STATE.volkov_pos = (x + 32, y + 32)
+                elif tile == 'N':
+                    STATE.NOTEBOOK_POS = (x + 32, y + 32)
+                elif tile == 'X':
+                    STATE.EXFIL_POS = (x + 32, y + 32)
+
+        if STATE.player:
+            STATE.camera_x = STATE.player.rect.centerx - WIDTH // 2
+            STATE.camera_y = STATE.player.rect.centery - HEIGHT // 2
+        print(f"[Editor] Rebuilt: {len(STATE.walls)} walls, "
+              f"{len(STATE.enemies)} enemies, "
+              f"player={STATE.player is not None}")
+
+    def save_map(self):
+        if self.map_data is None:
+            print("[Editor] No map data to save.")
+            return
+        os.makedirs("maps", exist_ok=True)
+        filename = f"maps/{self.map_name}.map"
+        with open(filename, "w") as f:
+            for line in self.map_data:
+                f.write(line + "\n")
+        print(f"[Editor] Map saved to {filename} ({len(self.map_data)} rows)")
+
+    def load_map(self, filename):
+        try:
+            with open(filename, "r") as f:
+                lines = [line.rstrip("\n") for line in f.readlines()]
+            self.map_data = lines
+            self.rebuild_world()
+            print(f"[Editor] Loaded map from {filename}")
+        except FileNotFoundError:
+            print(f"[Editor] Map file {filename} not found.")
+
+    def draw(self, surface):
+        if not self.active or self.map_data is None:
+            return
+        cam_x = getattr(STATE, "camera_x", 0)
+        cam_y = getattr(STATE, "camera_y", 0)
+
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 60))
+        surface.blit(overlay, (0, 0))
+
+        offset_x = -int(cam_x) % TILE_SIZE
+        offset_y = -int(cam_y) % TILE_SIZE
+        for x in range(offset_x - TILE_SIZE, WIDTH + TILE_SIZE, TILE_SIZE):
+            pygame.draw.line(surface, (255, 255, 255, 40), (x, 0), (x, HEIGHT), 1)
+        for y in range(offset_y - TILE_SIZE, HEIGHT + TILE_SIZE, TILE_SIZE):
+            pygame.draw.line(surface, (255, 255, 255, 40), (0, y), (WIDTH, y), 1)
+
+        hx = self.hover_col * TILE_SIZE - cam_x
+        hy = self.hover_row * TILE_SIZE - cam_y
+        pygame.draw.rect(surface, (255, 255, 0, 150), (hx, hy, TILE_SIZE, TILE_SIZE), 3)
+
+        lines = [
+            f"Tile: {TILE_TYPES[self.current_tile_index]}  Entity: {self.current_entity}",
+            f"Cursor: ({self.hover_col}, {self.hover_row})",
+            "F12: toggle  TAB: tile  E: entity  F5: save  R: rebuild",
+        ]
+        for i, text in enumerate(lines):
+            color = (255, 255, 255) if i == 0 else ((200, 200, 200) if i == 1 else (160, 160, 160))
+            txt = self.font.render(text, True, color)
+            surface.blit(txt, (10, 10 + i * 22))
+
+        if 0 <= self.hover_row < len(self.map_data) and 0 <= self.hover_col < len(self.map_data[0]):
+            tile_char = self.map_data[self.hover_row][self.hover_col]
+            info = self.font.render(f"Tile under cursor: '{tile_char}'", True, (255, 220, 100))
+            surface.blit(info, (10, HEIGHT - 30))

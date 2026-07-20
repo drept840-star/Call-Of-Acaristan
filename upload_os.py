@@ -1,0 +1,2623 @@
+"""Upload OS — a retro CRT terminal operating system for the evidence upload.
+
+Replaces the old "hold [E] to upload" mechanic with a full interactive OS:
+  1. BOOT     — CRT warm-up, BIOS POST, IPA OS boot screen (~8s, skippable)
+  2. LOGIN    — username pre-filled, password field (admin/admin), ENTER to log in
+  3. DESKTOP  — 4 clickable icons: EVIDENCE, ACARIZWORK, SYSTEM, LOGS
+  4. BROWSER  — Acarizwork browser with URL bar, navigate to upload site
+  5. UPLOAD   — file picker (select 3 evidence files), progress bar with status
+  6. DONE     — "UPLOAD COMPLETE", then transition back to gameplay
+
+The OS freezes enemies (handled by mission2.game_update when this is active).
+Visual style: green phosphor CRT, scanlines, boot text, retro terminal feel.
+"""
+import math
+import random
+import pygame
+
+from config import WIDTH, HEIGHT, C_TERMINAL, audio
+from state import STATE
+
+
+# ── OS phase constants ───────────────────────────────────────────────
+PHASE_BOOT = "boot"
+PHASE_LOGIN = "login"
+PHASE_DESKTOP = "desktop"
+PHASE_BROWSER = "browser"
+PHASE_FILE_PICKER = "file_picker"
+PHASE_UPLOAD = "upload"
+PHASE_DONE = "done"
+PHASE_INFO = "info"  # generic info window for EVIDENCE/SYSTEM/LOGS icons
+
+# ── Colors (retro CRT green phosphor) ────────────────────────────────
+CRT_BG = (4, 12, 8)            # near-black with green tint
+CRT_GREEN = (100, 230, 120)    # bright phosphor green
+CRT_DIM_GREEN = (60, 140, 75)  # dim green for borders/secondary text
+CRT_BRIGHT = (180, 255, 200)   # brightest green for highlights
+CRT_AMBER = (255, 200, 100)    # amber for warnings/status
+CRT_RED = (255, 80, 80)        # red for errors/critical
+CRT_DARK = (20, 50, 30)        # dark green for inactive elements
+
+# ── Boot sequence lines (BIOS POST style) ────────────────────────────
+BOOT_LINES = [
+    "IPA BIOS v3.7.2 — (C) 1987 Acaristan State Computing",
+    "CPU: KRAP-8088 @ 4.77 MHz  ............  OK",
+    "Memory Test: 640K  .....................  OK",
+    "Detecting IDE Devices  .................",
+    "  > Primary Master: IPA-STORAGE 240K",
+    "  > Secondary: Acarizwork Modem 2400 baud",
+    "Initializing Network Stack  ...........  OK",
+    "Loading IPA OS v3.7.2  .................",
+    "",
+    "IPA OS v3.7.2 — STATE COMPUTING DIVISION",
+    "Unauthorized access is a class-3 offense.",
+    "",
+]
+
+# ── Desktop icons ────────────────────────────────────────────────────
+DESKTOP_ICONS = [
+    {"id": "evidence", "label": "EVIDENCE", "desc": "3 files — Route 12 package"},
+    {"id": "acarizwork", "label": "ACARIZWORK", "desc": "Network browser"},
+    {"id": "system", "label": "SYSTEM", "desc": "IPA OS v3.7.2 — operator"},
+    {"id": "logs", "label": "LOGS", "desc": "Radio transmission logs"},
+]
+
+# ── Evidence files (for the file picker) ─────────────────────────────
+EVIDENCE_FILES = [
+    {"name": "decree_47.txt", "size": "2.1K", "desc": "Presidential Decree No. 47"},
+    {"name": "auth_chain.log", "size": "4.8K", "desc": "Balaceanu authorization trace"},
+    {"name": "mag_packet.draft", "size": "1.4K", "desc": "Pre-written MAG blame packet"},
+]
+
+# ── Upload status messages (rotated during progress) ─────────────────
+UPLOAD_STATUS_MESSAGES = [
+    "Encrypting evidence package...",
+    "Routing through Acarizwork nodes...",
+    "Bypassing IPA firewall [layer 1]...",
+    "Bypassing IPA firewall [layer 2]...",
+    "Uploading to primary mirror...",
+    "Replicating to secondary mirrors...",
+    "Notifying journalist contacts...",
+    "Scrubbing origin trace...",
+    "Finalizing transmission...",
+]
+
+
+# ── State (module-level, reset by start_upload_os) ───────────────────
+_os_active = False
+_os_phase = PHASE_BOOT
+_os_timer = 0          # frames in current phase
+_boot_lines_shown = 0  # how many boot lines have appeared
+_boot_line_ages = {}   # line index → frames since appeared (for afterglow)
+_login_password = ""   # typed password
+_login_error = ""      # error message on failed login
+_login_attempts = 0    # failed login attempts (for lockout)
+_login_lockout_timer = 0  # frames remaining locked (0 = not locked)
+_browser_url = "acarizwork.net"  # current URL (also the editable text)
+_browser_page = "home"  # "home", "upload", "news", "weather", "forum", "freedom"
+_url_editing = False   # is the URL bar being edited?
+_url_cursor_visible = True  # blinking cursor in URL bar
+_file_picker_selected = set()  # selected file indices
+_upload_progress = 0.0  # 0.0 to 1.0
+_upload_status_idx = 0
+_upload_intrusion_active = False  # IPA counter-intrusion popup showing?
+_upload_intrusion_timer = 0  # frames the popup has been showing
+_upload_intrusions_triggered = set()  # which thresholds (0.4, 0.7) have fired
+_done_timer = 0
+_info_content = None  # which info window is open: "evidence", "system", or "logs"
+_info_sub = None  # sub-content within an info window (e.g. "decree", "network", "display")
+_state_broadcast_timer = 300 * 60  # 5:00 countdown (frames at 60fps)
+_modem_played = False  # has the modem sound started for this upload?
+_crt_whine_played = False  # has the boot whine played?
+_vasile_warning_played = False  # has Vasile's 50% warning played? (checked by mission2)
+# Start menu + Run dialog state
+_start_menu_open = False
+_start_submenu = None  # "programs", "documents", "settings", or None
+_run_dialog_open = False
+_run_dialog_text = ""
+_run_cursor_visible = True
+# Double-click detection for file manager
+_last_click_time = 0
+_last_clicked_file = -1
+# Waveform visualizer bars (for LOGS window)
+_waveform_bars = [0.0] * 40  # 40 bars, each 0.0 to 1.0
+
+
+# ── Info window content ──────────────────────────────────────────────
+INFO_CONTENT = {
+    "evidence": {
+        "title": "Evidence Files",
+        "lines": [
+            "3 evidence files recovered from Route 12:",
+            "",
+            "  decree_47.txt       (2.1K)",
+            "  auth_chain.log      (4.8K)",
+            "  mag_packet.draft    (1.4K)",
+            "",
+            "These files document the IPA conspiracy:",
+            "Retardovici → Balaceanu → MAG framing.",
+            "",
+            "To upload, open ACARIZWORK and visit the",
+            "Public Evidence Portal.",
+        ],
+    },
+    "system": {
+        "title": "System Information",
+        "lines": [
+            "IPA OS v3.7.2 (State Computing Division)",
+            "",
+            "Operator:    operator",
+            "Clearance:   Level 2 — Field Operations",
+            "Machine:     IPA-WORKSTATION-12",
+            "Location:    Route 12 Control Building",
+            "",
+            "CPU:         KRAP-8088 @ 4.77 MHz",
+            "Memory:      640K conventional",
+            "Storage:     240K (87% full)",
+            "Network:     Acarizwork Modem 2400 baud",
+            "",
+            "Last boot:   03:12 — 35 minutes ago",
+        ],
+    },
+    "logs": {
+        "title": "Radio Transmission Logs",
+        "lines": [
+            "Recent radio transmissions (decoded):",
+            "",
+            "03:42  VASILE: Balaceanu logistics. Not MAG.",
+            "03:44  VASILE: Hidden detonator! Run to shelter!",
+            "03:47  SYSTEM: Tanker detonation detected.",
+            "03:48  VASILE: [signal degraded]",
+            "03:51  VASILE: You made it. Control building.",
+            "03:53  SYSTEM: Evidence files recovered (3/3)",
+            "",
+            "Signal quality: DEGRADED",
+            "Comms status:   INTERMITTENT",
+        ],
+    },
+}
+
+
+# ── Browser page content (for the non-upload pages) ──────────────────
+BROWSER_PAGES = {
+    "news": {
+        "title": "Acarizwork State News Network",
+        "url": "acarizwork.net/news",
+        "lines": [
+            ("BREAKING", "TANKER EXPLOSION ON ROUTE 12 — KRAP BLAMES NON-STATE ACTORS", CRT_BRIGHT),
+            ("", "", None),
+            ("", "Route 12, ACARISTAN — A fuel tanker detonated on the", CRT_GREEN),
+            ("", "Route 12 corridor early this morning, causing significant", CRT_GREEN),
+            ("", "structural damage. KRAP officials attribute the blast to", CRT_GREEN),
+            ("", "\"non-state saboteurs\" and deny any operational involvement.", CRT_GREEN),
+            ("", "", None),
+            ("", "\"The explosion was caused by hostile elements intent on", CRT_DIM_GREEN),
+            ("", "destabilizing the region,\" a KRAP spokesperson stated.", CRT_DIM_GREEN),
+            ("", "", None),
+            ("ALERT", "Citizens are advised to avoid the Route 12 area.", CRT_AMBER),
+            ("", "Report suspicious activity to your local IPA office.", CRT_DIM_GREEN),
+        ],
+    },
+    "weather": {
+        "title": "Acaristan Meteorological Service",
+        "url": "acarizwork.net/weather",
+        "lines": [
+            ("", "ACARISTAN METEOROLOGICAL SERVICE", CRT_BRIGHT),
+            ("", "Official State Weather Forecast", CRT_DIM_GREEN),
+            ("", "", None),
+            ("FORECAST", "100% CHANCE OF SURVEILLANCE — INDEFINITELY", CRT_AMBER),
+            ("", "", None),
+            ("", "Temperature:    14°C (feels like being watched)", CRT_GREEN),
+            ("", "Humidity:       87% (oppression index: HIGH)", CRT_GREEN),
+            ("", "Wind:           Variable, shifting to cover your position", CRT_GREEN),
+            ("", "Visibility:     Moderate, impaired by state media fog", CRT_GREEN),
+            ("", "", None),
+            ("", "Extended forecast: More of the same. Always more of the same.", CRT_DIM_GREEN),
+        ],
+    },
+    "forum": {
+        "title": "Acarizwork Citizen Discussion Boards",
+        "url": "acarizwork.net/forum",
+        "lines": [
+            ("", "ACARIZWORK CITIZEN DISCUSSION BOARDS", CRT_BRIGHT),
+            ("", "Moderated by the Ministry of Information", CRT_DIM_GREEN),
+            ("", "", None),
+            ("SUSPENDED", "THIS BOARD HAS BEEN SUSPENDED BY ORDER", CRT_RED),
+            ("SUSPENDED", "OF THE MINISTRY OF INFORMATION", CRT_RED),
+            ("", "", None),
+            ("", "Pursuant to Decree No. 47, all citizen discussion", CRT_DIM_GREEN),
+            ("", "platforms are suspended pending review of content", CRT_DIM_GREEN),
+            ("", "compliance with state security objectives.", CRT_DIM_GREEN),
+            ("", "", None),
+            ("", "Last message before suspension (03:41):", CRT_DIM_GREEN),
+            ("", "  \"Did anyone else hear that explosion on Route 12?\"", CRT_GREEN),
+            ("", "  [POST REMOVED BY MODERATOR]", CRT_RED),
+        ],
+    },
+    "freedom": {
+        "title": "",
+        "url": "acarizwork.net/freedom",
+        "lines": [
+            ("", "", None),
+            ("", "", None),
+            ("", "", None),
+            ("", "The Acaristan people remember.", CRT_BRIGHT),
+            ("", "", None),
+            ("", "", None),
+            ("", "This page will not be here when you return.", CRT_DIM_GREEN),
+        ],
+    },
+}
+
+
+def _get_radio_log_lines():
+    """Pull actual radio transmissions from STATE for the LOGS info window.
+
+    Returns a list of (prefix, text, color) tuples. If STATE isn't available
+    (e.g. import fails), falls back to the static canned content.
+    """
+    try:
+        from state import STATE
+        # STATE.floating_texts contains [x, y, text, color, timer, mark] entries.
+        # The "pin" mark indicates pinned radio messages. Filter for those
+        # that look like radio transmissions (start with "VASILE:" or "SYSTEM:").
+        pinned = []
+        for ft in getattr(STATE, "floating_texts", []):
+            if len(ft) >= 6 and ft[5] == "pin":
+                text = ft[2]
+                color = ft[3] if len(ft) > 3 else CRT_GREEN
+                # Determine prefix from the text.
+                if ":" in text:
+                    prefix, rest = text.split(":", 1)
+                    prefix = prefix.strip()
+                    rest = rest.strip()
+                    pinned.append((prefix, rest, color))
+                else:
+                    pinned.append(("", text, color))
+        if pinned:
+            # Take the last 10 messages (most recent).
+            return pinned[-10:]
+    except Exception:
+        pass
+    # Fallback: static content from INFO_CONTENT.
+    return None
+
+
+# ── Evidence document content (for the document viewer) ──────────────
+# Each document has a "kind" that determines how it's rendered:
+#   "decree"    → official letterhead with seal
+#   "terminal"  → green-on-black terminal log
+#   "draft"     → typewritten draft with redactions
+EVIDENCE_DOCS = {
+    "decree": {
+        "title": "decree_47.txt",
+        "kind": "decree",
+        "header": "OFFICE OF THE PRESIDENT",
+        "subheader": "ACARISTAN REPUBLIC",
+        "seal_text": "IPA",
+        "body_lines": [
+            "DECREE NO. 47",
+            "",
+            "By the authority vested in the Office of the President,",
+            "the Regional Coalition for Defense and Peace (KRAP) is",
+            "hereby authorized to conduct stabilization operations",
+            "along the Route 12 corridor.",
+            "",
+            "All liability for collateral outcomes shall be attributed",
+            "to non-state actors. This decree is effective immediately",
+            "and supersedes all prior determinations.",
+            "",
+            "Sebastian Retardovici",
+            "President of Acaristan",
+        ],
+        "footer": "FILED: 03/14 — STATE ARCHIVE — CLASSIFIED",
+    },
+    "auth_chain": {
+        "title": "auth_chain.log",
+        "kind": "terminal",
+        "header": "> ACCESSING AUTHORIZATION CHAIN...",
+        "body_lines": [
+            "> AUTH NODE 1: RETARDOVICI, S. — PRESIDENTIAL",
+            "  > CLEARANCE: OMEGA — UNLIMITED",
+            "  > AUTHORIZED: DECREE 47 SIGNATURE",
+            "",
+            "> AUTH NODE 2: BALACEANU, V. — KRAP LIAISON",
+            "  > CLEARANCE: DELTA — REGIONAL",
+            "  > AUTHORIZED: ROUTE 12 OPERATIONS",
+            "  > NOTE: LOGISTICS COORDINATOR — NOT MAG",
+            "",
+            "> AUTH NODE 3: [REDACTED] — MAG FORWARD OPERATIONS",
+            "  > CLEARANCE: [REDACTED]",
+            "  > AUTHORIZED: [REDACTED]",
+            "  > WARNING: AUTH CHAIN FORGED — SEE DECREE 47",
+            "",
+            "> TRACE COMPLETE — CHAIN INTEGRITY: COMPROMISED",
+        ],
+        "footer": "LOG ENDS — 3 NODES TRACED",
+    },
+    "mag_packet": {
+        "title": "mag_packet.draft",
+        "kind": "draft",
+        "header": "DRAFT — DO NOT DISTRIBUTE",
+        "body_lines": [
+            "TO: MAG REGIONAL COMMAND",
+            "FROM: [REDACTED]",
+            "RE: ROUTE 12 FRAMING PACKAGE",
+            "",
+            "Per Decree 47, the following narrative is authorized",
+            "for distribution to state media assets:",
+            "",
+            "1. The Route 12 tanker explosion was caused by",
+            "   non-state saboteurs affiliated with [REDACTED].",
+            "",
+            "2. KRAP forces acted in self-defense.",
+            "",
+            "3. The operator known as [REDACTED] is to be designated",
+            "   a class-1 hostile and held responsible.",
+            "",
+            "4. No MAG personnel were present at the site.",
+            "   (AUTH CHAIN REFUTES — SEE auth_chain.log)",
+        ],
+        "footer": "DRAFT v3 — NOT SENT — EVIDENCE OF CONSPIRACY",
+    },
+}
+
+
+# ── Control Panel sub-window content ─────────────────────────────────
+CONTROL_PANEL_ITEMS = [
+    {"id": "display", "label": "Display", "icon": "D", "desc": "Resolution, brightness"},
+    {"id": "sound", "label": "Sound", "icon": "S", "desc": "Volume, mute"},
+    {"id": "network", "label": "Network", "icon": "N", "desc": "Acarizwork modem"},
+    {"id": "security", "label": "Security", "icon": "X", "desc": "Clearance, personnel"},
+    {"id": "about", "label": "About", "icon": "i", "desc": "System information"},
+]
+
+
+def start_upload_os():
+    """Activate the upload OS. Called when player presses [E] at the upload terminal."""
+    global _os_active, _os_phase, _os_timer, _boot_lines_shown, _boot_line_ages
+    global _login_password, _login_error, _login_attempts, _login_lockout_timer
+    global _browser_url, _browser_page, _file_picker_selected
+    global _upload_progress, _upload_status_idx, _done_timer, _info_content
+    global _url_editing, _url_cursor_visible
+    global _upload_intrusion_active, _upload_intrusion_timer, _upload_intrusions_triggered
+    global _state_broadcast_timer, _modem_played, _crt_whine_played, _vasile_warning_played
+    global _info_sub, _start_menu_open, _start_submenu
+    global _run_dialog_open, _run_dialog_text, _run_cursor_visible
+    global _last_click_time, _last_clicked_file, _waveform_bars
+    _os_active = True
+    _os_phase = PHASE_BOOT
+    _os_timer = 0
+    _boot_lines_shown = 0
+    _boot_line_ages = {}
+    _login_password = ""
+    _login_error = ""
+    _login_attempts = 0
+    _login_lockout_timer = 0
+    _browser_url = "acarizwork.net"
+    _browser_page = "home"
+    _url_editing = False
+    _url_cursor_visible = True
+    _file_picker_selected = set()
+    _upload_progress = 0.0
+    _upload_status_idx = 0
+    _done_timer = 0
+    _info_content = None
+    _info_sub = None
+    _upload_intrusion_active = False
+    _upload_intrusion_timer = 0
+    _upload_intrusions_triggered = set()
+    _state_broadcast_timer = 300 * 60  # 5:00 countdown
+    _modem_played = False
+    _crt_whine_played = False
+    _vasile_warning_played = False
+    _start_menu_open = False
+    _start_submenu = None
+    _run_dialog_open = False
+    _run_dialog_text = ""
+    _run_cursor_visible = True
+    _last_click_time = 0
+    _last_clicked_file = -1
+    _waveform_bars = [0.0] * 40
+    # CRT power-on whine — plays over the green warm-up flash.
+    audio.play("crt_whine", volume=0.3)
+    audio.play("terminal_glitch", volume=0.4)
+    _crt_whine_played = True
+    # Hide the system cursor — the OS draws its own custom CRT-green arrow.
+    pygame.mouse.set_visible(False)
+
+
+def deactivate_upload_os():
+    """Deactivate the OS and play the CRT power-off thunk.
+
+    Called by mission2.py when the upload completes (after the DONE phase).
+    Restores the system cursor.
+    """
+    global _os_active
+    _os_active = False
+    audio.play("crt_thunk", volume=0.5)
+    pygame.mouse.set_visible(True)
+
+
+def is_upload_os_active():
+    """Returns True if the upload OS is currently active (gameplay should freeze)."""
+    return _os_active
+
+
+def is_upload_complete():
+    """Returns True if the upload has completed and the OS should hand off to gameplay."""
+    return _os_phase == PHASE_DONE and _done_timer > 180
+
+
+def update_upload_os(keys, mouse_pos):
+    """Advance the upload OS by one frame.
+
+    Args:
+        keys: pygame.key.get_pressed() result (for hotkeys).
+        mouse_pos: (x, y) current mouse position.
+
+    Note: click events are dispatched through handle_upload_os_event()
+    by the main event loop in acaristan.py. This function only handles
+    frame-based progression (boot reveal, upload progress bar, done timer).
+    """
+    global _os_timer, _boot_lines_shown, _os_phase, _boot_line_ages
+    global _upload_progress, _upload_status_idx, _done_timer
+    global _login_lockout_timer, _url_cursor_visible
+    global _upload_intrusion_active, _upload_intrusion_timer
+    global _upload_intrusions_triggered, _state_broadcast_timer, _modem_played
+    global _waveform_bars, _run_cursor_visible
+
+    if not _os_active:
+        return
+
+    _os_timer += 1
+
+    # ── URL + Run dialog cursor blink (every 30 frames = 0.5s) ──
+    if _os_timer % 30 == 0:
+        _url_cursor_visible = not _url_cursor_visible
+        _run_cursor_visible = not _run_cursor_visible
+
+    # ── Waveform visualizer animation (for LOGS window) ──
+    # Each bar drifts toward a new random target, giving a smooth
+    # audio-waveform feel. Bars near the center are taller (louder).
+    for i in range(len(_waveform_bars)):
+        center_weight = 1.0 - abs(i - len(_waveform_bars) / 2) / (len(_waveform_bars) / 2)
+        target = random.random() * (0.3 + 0.7 * center_weight)
+        _waveform_bars[i] = _waveform_bars[i] * 0.7 + target * 0.3
+
+    # ── Login lockout countdown ──
+    if _login_lockout_timer > 0:
+        _login_lockout_timer -= 1
+
+    # ── State broadcast countdown (ticks during UPLOAD + DONE) ──
+    if _os_phase in (PHASE_UPLOAD, PHASE_DONE) and _state_broadcast_timer > 0:
+        _state_broadcast_timer -= 1
+
+    if _os_phase == PHASE_BOOT:
+        # Reveal boot lines progressively (1 line every 18 frames = 0.3s).
+        target_lines = min(len(BOOT_LINES), _os_timer // 18)
+        if target_lines > _boot_lines_shown:
+            _boot_lines_shown = target_lines
+            _boot_line_ages[_boot_lines_shown - 1] = 0  # age starts at 0
+            audio.play("type_tick", volume=0.15)
+        # Age all shown boot lines (for phosphor afterglow).
+        for i in range(_boot_lines_shown):
+            _boot_line_ages[i] = _boot_line_ages.get(i, 999) + 1
+        # Auto-advance to login after all lines shown + 1s pause.
+        if _boot_lines_shown >= len(BOOT_LINES) and _os_timer > len(BOOT_LINES) * 18 + 60:
+            _os_phase = PHASE_LOGIN
+            _os_timer = 0
+
+    elif _os_phase == PHASE_LOGIN:
+        pass
+
+    elif _os_phase == PHASE_DESKTOP:
+        pass
+
+    elif _os_phase == PHASE_BROWSER:
+        pass
+
+    elif _os_phase == PHASE_FILE_PICKER:
+        pass
+
+    elif _os_phase == PHASE_UPLOAD:
+        # ── Modem dial-up sound at the start of upload ──
+        if not _modem_played:
+            audio.play("modem_dialup", volume=0.35)
+            _modem_played = True
+
+        # ── IPA counter-intrusion popups at 40% and 70% ──
+        # When progress crosses 0.4 or 0.7, fire an intrusion popup.
+        # The popup pauses upload progress until dismissed.
+        if not _upload_intrusion_active:
+            for threshold in (0.4, 0.7):
+                if threshold not in _upload_intrusions_triggered and _upload_progress >= threshold:
+                    _upload_intrusion_active = True
+                    _upload_intrusion_timer = 0
+                    _upload_intrusions_triggered.add(threshold)
+                    audio.play("terminal_glitch", volume=0.5)
+                    break
+
+        # ── Upload progress (paused during intrusion popups) ──
+        if not _upload_intrusion_active:
+            _upload_progress = min(1.0, _upload_progress + 1 / 720)
+            target_idx = min(len(UPLOAD_STATUS_MESSAGES) - 1,
+                             int(_upload_progress * len(UPLOAD_STATUS_MESSAGES)))
+            if target_idx > _upload_status_idx:
+                _upload_status_idx = target_idx
+                audio.play("type_tick", volume=0.2)
+            if _upload_progress >= 1.0:
+                _os_phase = PHASE_DONE
+                _os_timer = 0
+                _done_timer = 0
+                audio.play("mission_complete", volume=0.5)
+        else:
+            _upload_intrusion_timer += 1
+
+    elif _os_phase == PHASE_DONE:
+        _done_timer += 1
+
+
+def _navigate_to_url(url):
+    """Parse a typed URL and navigate to the matching browser page.
+
+    Supports: acarizwork.net, /news, /weather, /upload, /forum, /freedom.
+    Unknown URLs show a "PAGE NOT FOUND" style result (falls back to home).
+    """
+    global _browser_page, _browser_url
+    url = url.strip().lower()
+    # Strip protocol prefix if present.
+    for prefix in ("http://", "https://", "www."):
+        if url.startswith(prefix):
+            url = url[len(prefix):]
+    # Match known pages.
+    if "freedom" in url:
+        _browser_page = "freedom"
+    elif "news" in url:
+        _browser_page = "news"
+    elif "weather" in url:
+        _browser_page = "weather"
+    elif "forum" in url:
+        _browser_page = "forum"
+    elif "upload" in url:
+        _browser_page = "upload"
+    else:
+        _browser_page = "home"
+    _browser_url = url if url else "acarizwork.net"
+
+
+def _draw_chromatic_text(surface, font, text, pos, color, offset=1):
+    """Render text with a subtle chromatic aberration (R left, B right).
+
+    Only worth using for bright/highlight text — body text is too small
+    for the effect to read. The offset is 1px by default.
+    """
+    # Red shadow (offset left).
+    r_surf = font.render(text, True, (min(255, color[0]), max(0, color[1] - 60), max(0, color[2] - 60)))
+    r_surf.set_alpha(120)
+    surface.blit(r_surf, (pos[0] - offset, pos[1]))
+    # Blue shadow (offset right).
+    b_surf = font.render(text, True, (max(0, color[0] - 60), max(0, color[1] - 60), min(255, color[2] + 40)))
+    b_surf.set_alpha(120)
+    surface.blit(b_surf, (pos[0] + offset, pos[1]))
+    # Main text.
+    main = font.render(text, True, color)
+    surface.blit(main, pos)
+
+
+def _draw_radial_vignette(surface):
+    """Draw a radial CRT vignette (darker corners, bright center).
+
+    Replaces the old rectangular vignette (40 nested rectangles) with a
+    single radial gradient surface. Sells the curved CRT glass.
+    """
+    # Create the vignette once per frame (cheap enough at 1000x700).
+    vignette = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    max_dist = math.hypot(cx, cy)
+    # Draw concentric circles from outside in, increasing alpha.
+    steps = 30
+    for i in range(steps):
+        t = i / steps  # 0 = center, 1 = corner
+        radius = int(max_dist * (1 - t * 0.3))
+        alpha = int(80 * t * t)  # quadratic falloff
+        if alpha > 0:
+            pygame.draw.circle(vignette, (0, 10, 5, alpha), (cx, cy), radius)
+    surface.blit(vignette, (0, 0))
+
+
+def _draw_custom_cursor(surface):
+    """Draw a pixel-art CRT-green arrow cursor at the mouse position.
+
+    The system cursor is hidden (set in start_upload_os). This draws a
+    retro 1-bit arrow with a phosphor glow, matching the OS aesthetic.
+    """
+    mx, my = pygame.mouse.get_pos()
+    # Arrow outline (pixel art style — each pixel is 2x2 for visibility).
+    p = 2  # pixel size
+    # Arrow shape (1 = filled, 0 = empty):
+    arrow = [
+        [1, 0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0, 0],
+        [1, 1, 1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 0, 1, 1, 1, 0],
+        [0, 0, 0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 1, 0, 0],
+    ]
+    # Draw glow first (offset copies at low alpha).
+    glow_surf = pygame.Surface((7 * p + 6, 10 * p + 6), pygame.SRCALPHA)
+    for gy in range(len(arrow)):
+        for gx in range(len(arrow[gy])):
+            if arrow[gy][gx]:
+                pygame.draw.rect(glow_surf, (*CRT_BRIGHT, 60),
+                                 (gx * p + 3, gy * p + 3, p + 2, p + 2))
+    surface.blit(glow_surf, (mx - 3, my - 3))
+    # Draw solid arrow.
+    for gy in range(len(arrow)):
+        for gx in range(len(arrow[gy])):
+            if arrow[gy][gx]:
+                pygame.draw.rect(surface, CRT_BRIGHT,
+                                 (mx + gx * p, my + gy * p, p, p))
+
+
+def handle_upload_os_event(event):
+    """Handle a pygame event (keyboard/mouse) for the upload OS.
+
+    Returns True if the event was consumed by the OS, False otherwise.
+    """
+    global _os_phase, _os_timer, _login_password, _login_error
+    global _browser_url, _browser_page, _file_picker_selected
+    global _upload_progress, _upload_status_idx, _info_content
+    global _login_attempts, _login_lockout_timer
+    global _url_editing, _upload_intrusion_active, _done_timer
+    global _info_sub, _start_menu_open, _start_submenu
+    global _run_dialog_open, _run_dialog_text
+    global _last_click_time, _last_clicked_file
+
+    if not _os_active:
+        return False
+
+    # ── BOOT: SPACE to skip ──
+    if _os_phase == PHASE_BOOT:
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            _os_phase = PHASE_LOGIN
+            _os_timer = 0
+            return True
+        return True  # consume all events during boot
+
+    # ── LOGIN: type password, ENTER to submit (with lockout) ──
+    if _os_phase == PHASE_LOGIN:
+        # If locked out, reject all input except ESC (which does nothing but consume).
+        if _login_lockout_timer > 0:
+            return True
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                if _login_password.lower() in ("admin", "admin/admin", ""):
+                    _os_phase = PHASE_DESKTOP
+                    _os_timer = 0
+                    _login_attempts = 0  # reset on success
+                    audio.play("menu_click", volume=0.4)
+                else:
+                    _login_attempts += 1
+                    if _login_attempts >= 3:
+                        _login_error = "ACCOUNT LOCKED — 10s"
+                        _login_lockout_timer = 600  # 10 seconds at 60fps
+                        audio.play("empty_click", volume=0.4)
+                    else:
+                        _login_error = f"ACCESS DENIED — Invalid credentials ({_login_attempts}/3)"
+                        audio.play("empty_click", volume=0.3)
+                return True
+            elif event.key == pygame.K_BACKSPACE:
+                _login_password = _login_password[:-1]
+                _login_error = ""
+                return True
+            elif event.unicode and event.unicode.isprintable() and len(_login_password) < 20:
+                _login_password += event.unicode
+                _login_error = ""
+                audio.play("type_tick", volume=0.15)
+                return True
+        return True
+
+    # ── UPLOAD: intrusion popup dismissal ──
+    if _os_phase == PHASE_UPLOAD and _upload_intrusion_active:
+        if event.type == pygame.KEYDOWN or (
+            event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+        ):
+            _upload_intrusion_active = False
+            audio.play("menu_click", volume=0.4)
+        return True  # consume all events while the popup is up
+
+    # ── Run dialog (modal over desktop) ──
+    if _os_phase == PHASE_DESKTOP and _run_dialog_open:
+        # Mouse clicks on OK / Cancel buttons.
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            # Button positions (must match _draw_run_dialog).
+            dw, dh = 420, 140
+            dx = WIDTH // 2 - dw // 2
+            dy = HEIGHT // 2 - dh // 2
+            body_right = dx + 2 + dw - 4
+            body_bottom = dy + 30 + dh - 32
+            ok_rect = pygame.Rect(body_right - 180, body_bottom - 32, 80, 24)
+            cancel_rect = pygame.Rect(body_right - 90, body_bottom - 32, 80, 24)
+            if ok_rect.collidepoint(mx, my):
+                _run_dialog_open = False
+                if _run_dialog_text.strip():
+                    _os_phase = PHASE_BROWSER
+                    _browser_url = _run_dialog_text.strip()
+                    _navigate_to_url(_run_dialog_text.strip())
+                    _run_dialog_text = ""
+                    audio.play("menu_click", volume=0.4)
+                else:
+                    audio.play("empty_click", volume=0.2)
+                return True
+            if cancel_rect.collidepoint(mx, my):
+                _run_dialog_open = False
+                _run_dialog_text = ""
+                audio.play("empty_click", volume=0.2)
+                return True
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                _run_dialog_open = False
+                if _run_dialog_text.strip():
+                    _os_phase = PHASE_BROWSER
+                    _browser_url = _run_dialog_text.strip()
+                    _navigate_to_url(_run_dialog_text.strip())
+                    _run_dialog_text = ""
+                    audio.play("menu_click", volume=0.4)
+                else:
+                    audio.play("empty_click", volume=0.2)
+                return True
+            elif event.key == pygame.K_ESCAPE:
+                _run_dialog_open = False
+                _run_dialog_text = ""
+                audio.play("empty_click", volume=0.2)
+                return True
+            elif event.key == pygame.K_BACKSPACE:
+                _run_dialog_text = _run_dialog_text[:-1]
+                audio.play("type_tick", volume=0.1)
+                return True
+            elif event.unicode and event.unicode.isprintable() and len(_run_dialog_text) < 40:
+                _run_dialog_text += event.unicode
+                audio.play("type_tick", volume=0.1)
+                return True
+        return True  # consume all events while the Run dialog is open
+
+    # ── Start menu (overlays on desktop) ──
+    if _os_phase == PHASE_DESKTOP and _start_menu_open:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            # Start menu position (must match _draw_start_menu).
+            sm_x = 4
+            sm_y = HEIGHT - 36 - 280
+            sm_w = 200
+            sm_h = 280
+            # Click outside the menu closes it.
+            if not (sm_x <= mx <= sm_x + sm_w and sm_y <= my <= sm_y + sm_h):
+                _start_menu_open = False
+                _start_submenu = None
+                audio.play("empty_click", volume=0.2)
+                return True
+            # Menu items.
+            items = [
+                ("programs", 0), ("documents", 1), ("settings", 2),
+                ("find", 3), ("help", 4), ("run", 5), ("shutdown", 6),
+            ]
+            for item_id, idx in items:
+                iy = sm_y + 8 + idx * 36
+                # Sidebar width = 28 (matches _draw_start_menu). Items start
+                # after the sidebar so the "IPA" banner isn't clickable.
+                sidebar_w = 28
+                item_rect = pygame.Rect(sm_x + sidebar_w + 4, iy, sm_w - sidebar_w - 8, 32)
+                if item_rect.collidepoint(mx, my):
+                    if item_id == "programs":
+                        # Toggle submenu.
+                        _start_submenu = "programs" if _start_submenu != "programs" else None
+                        audio.play("menu_hover", volume=0.2)
+                    elif item_id == "documents":
+                        _start_submenu = "documents" if _start_submenu != "documents" else None
+                        audio.play("menu_hover", volume=0.2)
+                    elif item_id == "settings":
+                        _start_menu_open = False
+                        _start_submenu = None
+                        _os_phase = PHASE_INFO
+                        _info_content = "system"
+                        _info_sub = None
+                        audio.play("menu_click", volume=0.4)
+                    elif item_id == "run":
+                        _start_menu_open = False
+                        _start_submenu = None
+                        _run_dialog_open = True
+                        _run_dialog_text = ""
+                        audio.play("menu_click", volume=0.4)
+                    elif item_id == "shutdown":
+                        _start_menu_open = False
+                        _start_submenu = None
+                        # Shut down the OS — returns to gameplay.
+                        deactivate_upload_os()
+                        audio.play("menu_click", volume=0.4)
+                    else:
+                        # Find / Help — no action, just close.
+                        _start_menu_open = False
+                        _start_submenu = None
+                        audio.play("empty_click", volume=0.2)
+                    return True
+            # Submenu clicks (Programs / Documents).
+            if _start_submenu == "programs":
+                sub_items = ["evidence", "acarizwork", "system", "logs"]
+                sub_x = sm_x + sm_w
+                for i, sid in enumerate(sub_items):
+                    sy = sm_y + 8 + i * 36
+                    sub_rect = pygame.Rect(sub_x + 4, sy, 180, 32)
+                    if sub_rect.collidepoint(mx, my):
+                        _start_menu_open = False
+                        _start_submenu = None
+                        if sid == "acarizwork":
+                            _os_phase = PHASE_BROWSER
+                            _browser_page = "home"
+                        else:
+                            _os_phase = PHASE_INFO
+                            _info_content = sid
+                            _info_sub = None
+                        audio.play("menu_click", volume=0.4)
+                        return True
+            elif _start_submenu == "documents":
+                doc_ids = ["decree", "auth_chain", "mag_packet"]
+                sub_x = sm_x + sm_w
+                for i, did in enumerate(doc_ids):
+                    sy = sm_y + 8 + i * 36
+                    sub_rect = pygame.Rect(sub_x + 4, sy, 180, 32)
+                    if sub_rect.collidepoint(mx, my):
+                        _start_menu_open = False
+                        _start_submenu = None
+                        _os_phase = PHASE_INFO
+                        _info_content = "evidence"
+                        _info_sub = did  # open the document viewer directly
+                        audio.play("menu_click", volume=0.4)
+                        return True
+            return True
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            _start_menu_open = False
+            _start_submenu = None
+            return True
+        # Mouse motion updates the hovered submenu (for cascade feel).
+        if event.type == pygame.MOUSEMOTION:
+            mx, my = event.pos
+            sm_x = 4
+            sm_y = HEIGHT - 36 - 280
+            # If hovering Programs/Documents, auto-open that submenu.
+            for item_id, idx in [("programs", 0), ("documents", 1)]:
+                iy = sm_y + 8 + idx * 36
+                sidebar_w = 28  # match _draw_start_menu
+                item_rect = pygame.Rect(sm_x + sidebar_w + 4, iy, 200 - sidebar_w - 8, 32)
+                if item_rect.collidepoint(mx, my):
+                    if _start_submenu != item_id:
+                        _start_submenu = item_id
+                    return True
+        return True  # consume all events while the Start menu is open
+
+    # ── DESKTOP: click icons + Start button ──
+    if _os_phase == PHASE_DESKTOP:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            # Start button (bottom-left, in the taskbar).
+            start_btn_rect = pygame.Rect(4, HEIGHT - 36 + 4, 80, 28)
+            if start_btn_rect.collidepoint(mx, my):
+                _start_menu_open = not _start_menu_open
+                _start_submenu = None
+                audio.play("menu_click", volume=0.4)
+                return True
+            # Desktop icons.
+            icon_rects = _get_desktop_icon_click_rects()
+            for i, icon in enumerate(DESKTOP_ICONS):
+                rect = icon_rects[i]
+                if rect.collidepoint(mx, my):
+                    if icon["id"] == "acarizwork":
+                        _os_phase = PHASE_BROWSER
+                        _os_timer = 0
+                        _browser_page = "home"
+                        audio.play("menu_click", volume=0.4)
+                    elif icon["id"] == "evidence":
+                        _os_phase = PHASE_INFO
+                        _info_content = "evidence"
+                        _info_sub = None  # start at file manager
+                        audio.play("menu_click", volume=0.4)
+                    elif icon["id"] == "system":
+                        _os_phase = PHASE_INFO
+                        _info_content = "system"
+                        _info_sub = None  # start at control panel
+                        audio.play("menu_click", volume=0.4)
+                    elif icon["id"] == "logs":
+                        _os_phase = PHASE_INFO
+                        _info_content = "logs"
+                        _info_sub = None
+                        audio.play("menu_click", volume=0.4)
+                    return True
+        return True
+
+    # ── INFO: file manager / control panel / logs / document viewer ──
+    if _os_phase == PHASE_INFO:
+        # Window position (must match _draw_info).
+        win_x = WIDTH // 2 - 280
+        win_y = 100
+        win_w, win_h = 560, 460  # bigger window for the richer content
+        win_rect = pygame.Rect(win_x, win_y, win_w, win_h)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            # Click outside the window closes it.
+            if not win_rect.collidepoint(mx, my):
+                _os_phase = PHASE_DESKTOP
+                _info_content = None
+                _info_sub = None
+                audio.play("menu_click", volume=0.3)
+                return True
+            # Close (X) button — top-right of title bar.
+            close_rect = pygame.Rect(win_x + win_w - 28, win_y + 4, 22, 20)
+            if close_rect.collidepoint(mx, my):
+                _os_phase = PHASE_DESKTOP
+                _info_content = None
+                _info_sub = None
+                audio.play("menu_click", volume=0.3)
+                return True
+            # Back button (when in a sub-view like a document or control panel sub).
+            if _info_sub is not None:
+                back_rect = pygame.Rect(win_x + 12, win_y + win_h - 38, 80, 28)
+                if back_rect.collidepoint(mx, my):
+                    _info_sub = None
+                    audio.play("menu_click", volume=0.3)
+                    return True
+            # ── Evidence file manager: file double-click ──
+            if _info_content == "evidence" and _info_sub is None:
+                # File list area (right pane). The +28 offset matches the
+                # column headers drawn above the file rows in
+                # _draw_evidence_file_manager (NAME/SIZE/MODIFIED).
+                list_x = win_x + 160
+                list_y = win_y + 40
+                doc_ids = ["decree", "auth_chain", "mag_packet"]
+                for i, did in enumerate(doc_ids):
+                    ry = list_y + 28 + i * 40  # +28 to skip the column header row
+                    row_rect = pygame.Rect(list_x, ry, win_w - 170, 32)
+                    if row_rect.collidepoint(mx, my):
+                        now = pygame.time.get_ticks()
+                        # Double-click detection: same file, within 500ms.
+                        if (_last_clicked_file == i and now - _last_click_time < 500):
+                            _info_sub = did  # open the document viewer
+                            audio.play("menu_click", volume=0.4)
+                        else:
+                            _last_clicked_file = i
+                            _last_click_time = now
+                            audio.play("type_tick", volume=0.15)
+                        return True
+            # ── System control panel: icon clicks ──
+            if _info_content == "system" and _info_sub is None:
+                # Grid of 5 icons (3 columns x 2 rows, last row has 2).
+                # Anchored to body_rect (window body, below the title bar) —
+                # must match _draw_control_panel_grid exactly.
+                grid_x = win_x + 2 + 40   # body_rect.x + 40 (body_rect.x = win_x + 2)
+                grid_y = win_y + 30 + 30  # body_rect.y + 30 (body_rect.y = win_y + 30)
+                icon_w, icon_h = 80, 80
+                gap_x, gap_y = 120, 110
+                for i, item in enumerate(CONTROL_PANEL_ITEMS):
+                    col = i % 3
+                    row = i // 3
+                    ix = grid_x + col * (icon_w + gap_x)
+                    iy = grid_y + row * (icon_h + gap_y)
+                    icon_rect = pygame.Rect(ix, iy, icon_w, icon_h)
+                    if icon_rect.collidepoint(mx, my):
+                        _info_sub = item["id"]
+                        audio.play("menu_click", volume=0.4)
+                        return True
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            if _info_sub is not None:
+                _info_sub = None
+                audio.play("menu_click", volume=0.3)
+            else:
+                _os_phase = PHASE_DESKTOP
+                _info_content = None
+                _info_sub = None
+                audio.play("menu_click", volume=0.3)
+            return True
+        return True
+
+    # ── BROWSER: click links/buttons + URL bar editing ──
+    if _os_phase == PHASE_BROWSER:
+        # ── URL bar editing (keyboard input when _url_editing is True) ──
+        if _url_editing:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                    # Navigate to the typed URL.
+                    _url_editing = False
+                    _navigate_to_url(_browser_url)
+                    audio.play("menu_click", volume=0.4)
+                    return True
+                elif event.key == pygame.K_ESCAPE:
+                    _url_editing = False
+                    _browser_url = BROWSER_PAGES.get(_browser_page, {}).get("url", "acarizwork.net")
+                    audio.play("empty_click", volume=0.2)
+                    return True
+                elif event.key == pygame.K_BACKSPACE:
+                    _browser_url = _browser_url[:-1]
+                    audio.play("type_tick", volume=0.1)
+                    return True
+                elif event.unicode and event.unicode.isprintable() and len(_browser_url) < 40:
+                    _browser_url += event.unicode
+                    audio.play("type_tick", volume=0.1)
+                    return True
+            return True  # consume all events while editing
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            win_x = WIDTH // 2 - 360
+            win_y = 60
+            body_x = win_x + 2
+            body_y = win_y + 30
+            tb_y = body_y + 8
+            page_y = tb_y + 32
+            # ── URL bar click → start editing ──
+            url_rect = pygame.Rect(body_x + 178, tb_y, 720 - 188, 24)
+            if url_rect.collidepoint(mx, my):
+                _url_editing = True
+                audio.play("type_tick", volume=0.15)
+                return True
+            # ── Toolbar buttons: Back / Forward / Home ──
+            back_rect = pygame.Rect(body_x + 10, tb_y, 50, 24)
+            fwd_rect = pygame.Rect(body_x + 66, tb_y, 50, 24)
+            home_rect = pygame.Rect(body_x + 122, tb_y, 50, 24)
+            if back_rect.collidepoint(mx, my):
+                if _browser_page != "home":
+                    _browser_page = "home"
+                    _browser_url = "acarizwork.net"
+                    audio.play("menu_click", volume=0.3)
+                else:
+                    audio.play("empty_click", volume=0.2)
+                return True
+            if fwd_rect.collidepoint(mx, my):
+                audio.play("empty_click", volume=0.2)
+                return True
+            if home_rect.collidepoint(mx, my):
+                if _browser_page != "home":
+                    _browser_page = "home"
+                    _browser_url = "acarizwork.net"
+                    audio.play("menu_click", volume=0.3)
+                else:
+                    audio.play("empty_click", volume=0.2)
+                return True
+            # ── Page-specific action buttons + site links ──
+            if _browser_page == "home":
+                # "Visit Upload Portal" button.
+                page_cx = body_x + 8 + (720 - 4 - 16) // 2
+                link_rect = pygame.Rect(page_cx - 120, page_y + 240, 240, 32)
+                if link_rect.collidepoint(mx, my):
+                    _browser_page = "upload"
+                    _browser_url = "acarizwork.net/upload"
+                    audio.play("menu_click", volume=0.4)
+                    return True
+                # Site links (clickable text lines for news/weather/forum).
+                sites = [
+                    ("news", "acarizwork.net/news", page_y + 142),
+                    ("weather", "acarizwork.net/weather", page_y + 164),
+                    ("upload", "acarizwork.net/upload", page_y + 186),
+                    ("forum", "acarizwork.net/forum", page_y + 208),
+                ]
+                for page_id, url, sy in sites:
+                    site_rect = pygame.Rect(body_x + 36, sy - 2, 700 - 72, 20)
+                    if site_rect.collidepoint(mx, my):
+                        _browser_page = page_id
+                        _browser_url = url
+                        audio.play("menu_click", volume=0.3)
+                        return True
+            elif _browser_page == "upload":
+                page_cx = body_x + 8 + (720 - 4 - 16) // 2
+                attach_rect = pygame.Rect(page_cx - 80, page_y + 180, 160, 34)
+                if attach_rect.collidepoint(mx, my):
+                    _os_phase = PHASE_FILE_PICKER
+                    _os_timer = 0
+                    audio.play("menu_click", volume=0.4)
+                    return True
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            _os_phase = PHASE_DESKTOP
+            audio.play("menu_click", volume=0.3)
+            return True
+        return True
+
+    # ── FILE PICKER: select files, then UPLOAD ──
+    if _os_phase == PHASE_FILE_PICKER:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            # File picker window position (must match _draw_file_picker).
+            win_x = WIDTH // 2 - 340
+            win_y = 60
+            body_x = win_x + 2
+            body_y = win_y + 30
+            body_w = 680 - 4
+            # Check file row clicks.
+            for i in range(len(EVIDENCE_FILES)):
+                row_y = body_y + 40 + i * 40
+                row_rect = pygame.Rect(body_x + 12, row_y, body_w - 24, 32)
+                if row_rect.collidepoint(mx, my):
+                    if i in _file_picker_selected:
+                        _file_picker_selected.discard(i)
+                    else:
+                        _file_picker_selected.add(i)
+                    audio.play("type_tick", volume=0.2)
+                    return True
+            # "UPLOAD" button — only enabled when all 3 files selected.
+            upload_btn_rect = pygame.Rect(body_x + body_w // 2 - 60, body_y + (440 - 32) - 38, 120, 28)
+            if upload_btn_rect.collidepoint(mx, my):
+                if len(_file_picker_selected) == 3:
+                    _os_phase = PHASE_UPLOAD
+                    _os_timer = 0
+                    _upload_progress = 0.0
+                    _upload_status_idx = 0
+                    audio.play("menu_click", volume=0.5)
+                    return True
+                else:
+                    audio.play("empty_click", volume=0.3)
+                    return True
+            # "BACK" button.
+            back_btn_rect = pygame.Rect(body_x + 12, body_y + (440 - 32) - 38, 80, 28)
+            if back_btn_rect.collidepoint(mx, my):
+                _os_phase = PHASE_BROWSER
+                _os_timer = 0
+                audio.play("menu_click", volume=0.3)
+                return True
+        # ESC also backs out to the browser.
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            _os_phase = PHASE_BROWSER
+            _os_timer = 0
+            audio.play("menu_click", volume=0.3)
+            return True
+        return True
+
+    # ── UPLOAD: no input (auto-progress) ──
+    if _os_phase == PHASE_UPLOAD:
+        return True
+
+    # ── DONE: any key/click to continue (after minimum hold) ──
+    if _os_phase == PHASE_DONE:
+        # After a short minimum hold (so the player can read the success
+        # message), any click or keypress force-completes the upload and
+        # hands off to gameplay. Without this the "[CLICK] to continue"
+        # hint was a lie — clicks were silently swallowed and the player
+        # had to wait the full 3-second timer.
+        if _done_timer > 60:
+            if event.type == pygame.KEYDOWN or (
+                event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+            ):
+                # Force the done timer past the auto-handoff threshold so
+                # is_upload_complete() returns True on the next frame.
+                _done_timer = 240
+                audio.play("menu_click", volume=0.4)
+                return True
+        return True
+
+    return True
+
+
+def _get_desktop_icon_rects():
+    """Return draw rects for the 4 desktop icons.
+
+    Layout: 2x2 grid in the upper-left corner. The previous vertical stack
+    reached y≈450 and overlapped the IPA wallpaper logo (centered at
+    HEIGHT/2-40 with radius 80, so spanning y=230..390). A 2x2 grid keeps
+    every icon well clear of the logo.
+    """
+    rects = []
+    icon_w, icon_h = 72, 72
+    start_x = 30
+    start_y = 50
+    gap_x, gap_y = 24, 96  # extra vertical gap for the label
+    for i in range(4):
+        col = i % 2
+        row = i // 2
+        x = start_x + col * (icon_w + gap_x)
+        y = start_y + row * (icon_h + gap_y)
+        rects.append(pygame.Rect(x, y, icon_w, icon_h))
+    return rects
+
+
+def _get_desktop_icon_click_rects():
+    """Return click rects INCLUDING the label area (for hover/click detection).
+
+    Must mirror the layout returned by _get_desktop_icon_rects (2x2 grid).
+    """
+    rects = []
+    icon_w, icon_h = 72, 72
+    start_x = 30
+    start_y = 50
+    gap_x, gap_y = 24, 96
+    for i in range(4):
+        col = i % 2
+        row = i // 2
+        x = start_x + col * (icon_w + gap_x)
+        y = start_y + row * (icon_h + gap_y)
+        rects.append(pygame.Rect(x - 4, y - 4, icon_w + 8, icon_h + 24))
+    return rects
+
+
+def _draw_rounded_rect(surface, color, rect, radius=6, width=0):
+    """Draw a rounded rectangle — Win XP style."""
+    pygame.draw.rect(surface, color, rect, width, border_radius=radius)
+
+
+def _draw_xp_button(surface, rect, text, font, hovered=False, enabled=True, color=None):
+    """Draw a Win XP-style button: rounded, gradient, beveled."""
+    if not enabled:
+        bg = CRT_DARK; border = CRT_DARK; text_col = CRT_DARK
+    elif hovered:
+        bg = (15, 60, 30); border = CRT_BRIGHT; text_col = CRT_BRIGHT
+    else:
+        bg = (8, 35, 18); border = CRT_GREEN; text_col = CRT_GREEN if color is None else color
+    _draw_rounded_rect(surface, bg, rect, radius=4)
+    _draw_rounded_rect(surface, border, rect, radius=4, width=1)
+    txt = font.render(text, True, text_col)
+    surface.blit(txt, (rect.centerx - txt.get_width() // 2, rect.centery - txt.get_height() // 2))
+
+
+def _draw_xp_title_bar(surface, rect, title_text, font, active=True):
+    """Draw a Win XP-style window title bar (green-phosphor)."""
+    tb_h = 28
+    for i in range(tb_h):
+        t = i / tb_h
+        r = int(CRT_DARK[0] + (CRT_GREEN[0] - CRT_DARK[0]) * t * 0.6)
+        g = int(CRT_DARK[1] + (CRT_GREEN[1] - CRT_DARK[1]) * t * 0.6)
+        b = int(CRT_DARK[2] + (CRT_GREEN[2] - CRT_DARK[2]) * t * 0.6)
+        pygame.draw.line(surface, (r, g, b), (rect.x + 2, rect.y + i), (rect.right - 2, rect.y + i))
+    for corner in [(rect.x, rect.y), (rect.right - 1, rect.y)]:
+        pygame.draw.circle(surface, CRT_BG, corner, 4)
+    title = font.render(title_text, True, CRT_BRIGHT if active else CRT_DIM_GREEN)
+    surface.blit(title, (rect.x + 10, rect.y + 6))
+    btn_w, btn_h = 18, 16
+    btn_y = rect.y + 6
+    for bx_offset, symbol in [(rect.right - 70, "_"), (rect.right - 48, "[]"), (rect.right - 26, "X")]:
+        btn_rect = pygame.Rect(bx_offset, btn_y, btn_w, btn_h)
+        pygame.draw.rect(surface, (8, 35, 18), btn_rect, border_radius=2)
+        pygame.draw.rect(surface, CRT_GREEN, btn_rect, 1, border_radius=2)
+        sym = font.render(symbol, True, CRT_GREEN)
+        surface.blit(sym, (btn_rect.centerx - sym.get_width() // 2, btn_rect.centery - sym.get_height() // 2))
+
+
+def _draw_xp_window(surface, rect, title_text, font, font_small):
+    """Draw a full Win XP-style window: title bar + body + border."""
+    shadow = pygame.Surface((rect.w + 8, rect.h + 8), pygame.SRCALPHA)
+    pygame.draw.rect(shadow, (0, 30, 15, 100), shadow.get_rect(), border_radius=8)
+    surface.blit(shadow, (rect.x - 2, rect.y + 4))
+    _draw_rounded_rect(surface, CRT_BG, rect, radius=6)
+    _draw_rounded_rect(surface, CRT_GREEN, rect, radius=6, width=2)
+    _draw_xp_title_bar(surface, rect, title_text, font_small)
+    body_rect = pygame.Rect(rect.x + 2, rect.y + 30, rect.w - 4, rect.h - 32)
+    pygame.draw.rect(surface, CRT_BG, body_rect)
+    pygame.draw.line(surface, CRT_DIM_GREEN, (body_rect.x, body_rect.y), (body_rect.right, body_rect.y), 1)
+    return body_rect
+
+
+def _draw_ipa_wallpaper(surface):
+    """Draw the IPA propaganda wallpaper (green-phosphor on black)."""
+    for i in range(-HEIGHT, WIDTH, 40):
+        pygame.draw.line(surface, (3, 15, 8), (i, 0), (i + HEIGHT, HEIGHT), 1)
+    logo_cx = WIDTH - 200
+    logo_cy = HEIGHT // 2 - 40
+    logo_r = 80
+    shield_pts = [
+        (logo_cx - logo_r, logo_cy - logo_r), (logo_cx + logo_r, logo_cy - logo_r),
+        (logo_cx + logo_r, logo_cy + logo_r // 2), (logo_cx, logo_cy + logo_r),
+        (logo_cx - logo_r, logo_cy + logo_r // 2),
+    ]
+    pygame.draw.polygon(surface, (5, 25, 12), shield_pts)
+    pygame.draw.polygon(surface, (10, 40, 20), shield_pts, 2)
+    star_pts = []
+    for i in range(10):
+        angle = i * math.pi / 5 - math.pi / 2
+        r = logo_r * 0.5 if i % 2 == 0 else logo_r * 0.22
+        star_pts.append((logo_cx + math.cos(angle) * r, logo_cy + math.sin(angle) * r))
+    pygame.draw.polygon(surface, (8, 35, 18), star_pts)
+    pygame.draw.polygon(surface, (15, 50, 25), star_pts, 1)
+    ipa_font = pygame.font.SysFont("Arial Black", 28, bold=True)
+    ipa_text = ipa_font.render("IPA", True, (15, 55, 28))
+    surface.blit(ipa_text, (logo_cx - ipa_text.get_width() // 2, logo_cy - ipa_text.get_height() // 2))
+    slogan_font = pygame.font.SysFont("Arial", 13, bold=True)
+    slogan = slogan_font.render("SECURITY THROUGH VIGILANCE", True, (8, 35, 18))
+    surface.blit(slogan, (WIDTH // 2 - slogan.get_width() // 2, HEIGHT - 50))
+    sub_font = pygame.font.SysFont("Arial", 10)
+    sub = sub_font.render("STATE COMPUTING DIVISION — ACARISTAN", True, (5, 25, 12))
+    surface.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT - 32))
+
+
+def _draw_taskbar(surface, font_small):
+    """Draw the Win XP-style taskbar (green-phosphor) at the bottom."""
+    tb_y = HEIGHT - 36
+    tb_h = 36
+    for i in range(tb_h):
+        t = i / tb_h
+        r = int(4 + 8 * t); g = int(20 + 25 * t); b = int(10 + 12 * t)
+        pygame.draw.line(surface, (r, g, b), (0, tb_y + i), (WIDTH, tb_y + i))
+    pygame.draw.line(surface, CRT_DIM_GREEN, (0, tb_y), (WIDTH, tb_y), 1)
+    # Start button.
+    start_rect = pygame.Rect(4, tb_y + 4, 80, 28)
+    mouse_pos = pygame.mouse.get_pos()
+    start_hovered = start_rect.collidepoint(mouse_pos)
+    start_bg = (15, 60, 30) if start_hovered else (8, 40, 20)
+    _draw_rounded_rect(surface, start_bg, start_rect, radius=4)
+    _draw_rounded_rect(surface, CRT_BRIGHT if start_hovered else CRT_GREEN, start_rect, radius=4, width=1)
+    flag_x = start_rect.x + 12; flag_y = start_rect.centery
+    pygame.draw.polygon(surface, CRT_BRIGHT, [
+        (flag_x, flag_y - 7), (flag_x + 8, flag_y - 4),
+        (flag_x + 8, flag_y + 4), (flag_x, flag_y + 7),
+    ])
+    start_text = font_small.render("start", True, CRT_BRIGHT)
+    surface.blit(start_text, (flag_x + 14, start_rect.centery - start_text.get_height() // 2))
+    # Task button for open app.
+    if _os_phase in (PHASE_BROWSER, PHASE_FILE_PICKER, PHASE_UPLOAD):
+        task_label = "Acarizwork Browser" if _os_phase == PHASE_BROWSER else \
+                     "File Picker" if _os_phase == PHASE_FILE_PICKER else "Uploading..."
+        task_rect = pygame.Rect(92, tb_y + 4, 160, 28)
+        _draw_rounded_rect(surface, (10, 45, 22), task_rect, radius=3)
+        _draw_rounded_rect(surface, CRT_GREEN, task_rect, radius=3, width=1)
+        task_text = font_small.render(task_label, True, CRT_BRIGHT)
+        surface.blit(task_text, (task_rect.x + 8, task_rect.centery - task_text.get_height() // 2))
+    # Clock.
+    clock_text = font_small.render("03:47", True, CRT_DIM_GREEN)
+    surface.blit(clock_text, (WIDTH - clock_text.get_width() - 12, tb_y + 10))
+
+
+def draw_upload_os(surface):
+    """Draw the upload OS on the given surface."""
+    if not _os_active:
+        return
+
+    # ── CRT background ──
+    surface.fill(CRT_BG)
+
+    # ── Scanlines (every 3px) ──
+    for y in range(0, HEIGHT, 3):
+        pygame.draw.line(surface, (0, 30, 15), (0, y), (WIDTH, y), 1)
+
+    # ── CRT flicker (subtle, random) ──
+    if random.random() < 0.08:
+        flicker = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        flicker.fill((30, 80, 40, 12))
+        surface.blit(flicker, (0, 0))
+
+    # ── Radial CRT vignette (darker corners, bright center) ──
+    _draw_radial_vignette(surface)
+
+    # ── Phase-specific rendering ──
+    if _os_phase == PHASE_BOOT:
+        _draw_boot(surface)
+    elif _os_phase == PHASE_LOGIN:
+        _draw_login(surface)
+    elif _os_phase == PHASE_DESKTOP:
+        _draw_desktop(surface)
+    elif _os_phase == PHASE_BROWSER:
+        _draw_browser(surface)
+    elif _os_phase == PHASE_FILE_PICKER:
+        _draw_file_picker(surface)
+    elif _os_phase == PHASE_UPLOAD:
+        _draw_upload(surface)
+    elif _os_phase == PHASE_DONE:
+        _draw_done(surface)
+    elif _os_phase == PHASE_INFO:
+        _draw_info(surface)
+
+    # ── Custom cursor (drawn last, on top of everything) ──
+    _draw_custom_cursor(surface)
+
+
+def _draw_boot(surface):
+    """Phase 1: BIOS POST + IPA OS boot screen.
+
+    The CRT warm-up is a 3-stage effect that mimics a real CRT powering on:
+      Frames  0–14: Green flash fades IN (CRT tube charges up)
+      Frames 15–29: Green flash fades OUT, revealing boot text underneath
+      Frame  30+:   Boot text only, no flash
+    Previously the warm-up faded IN to full opaque green then hard-cut to
+    black — that read as a glitch, not a power-on.
+    """
+    # ── CRT warm-up flash overlay ──
+    # Fade in (0–14) then fade out (15–29). The boot text is drawn
+    # underneath the flash, so as the flash fades out the text "appears"
+    # through it — like a real CRT warming up.
+    if _os_timer < 30:
+        if _os_timer < 15:
+            # Fade in: alpha 0 → 220 (not full 255 — a real CRT flash
+            # isn't perfectly opaque, you can still see scanlines through it).
+            flash_alpha = int(220 * (_os_timer / 15))
+        else:
+            # Fade out: alpha 220 → 0 over 15 frames.
+            flash_alpha = int(220 * (1 - (_os_timer - 15) / 15))
+        if flash_alpha > 0:
+            flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            flash.fill((CRT_GREEN[0], CRT_GREEN[1], CRT_GREEN[2], flash_alpha))
+            surface.blit(flash, (0, 0))
+
+    # ── Boot lines (typed out progressively, with phosphor afterglow) ──
+    # Drawn underneath the warm-up flash, so they're hidden while the flash
+    # is opaque and revealed as it fades.
+    # Each line starts bright (PHOS_BRIGHT) when it first appears, then
+    # fades to its normal color over ~10 frames — mimics phosphor decay.
+    font = pygame.font.SysFont("Consolas", 16)
+    y = 60
+    for i in range(_boot_lines_shown):
+        line = BOOT_LINES[i]
+        base_color = CRT_BRIGHT if "IPA OS" in line else CRT_GREEN
+        if "class-3 offense" in line:
+            base_color = CRT_AMBER
+        age = _boot_line_ages.get(i, 999)
+        if age < 10:
+            # Fresh line — blend from PHOS_BRIGHT to base_color.
+            t = age / 10.0
+            color = tuple(int(CRT_BRIGHT[j] * (1 - t) + base_color[j] * t) for j in range(3))
+        else:
+            color = base_color
+        txt = font.render(line, True, color)
+        surface.blit(txt, (60, y))
+        y += 22
+
+    # Blinking cursor at the end.
+    if _boot_lines_shown < len(BOOT_LINES) and (_os_timer % 24) < 12:
+        cursor_y = 60 + _boot_lines_shown * 22
+        pygame.draw.rect(surface, CRT_GREEN, (60, cursor_y + 2, 10, 16))
+
+    # Skip hint at the bottom (appears after the warm-up finishes).
+    if _os_timer > 30:
+        skip_font = pygame.font.SysFont("Consolas", 13)
+        skip_txt = skip_font.render("[SPACE] SKIP", True, CRT_DIM_GREEN)
+        surface.blit(skip_txt, (WIDTH - skip_txt.get_width() - 20, HEIGHT - 30))
+
+
+def _draw_login(surface):
+    """Phase 2: Login screen with username + password."""
+    font_big = pygame.font.SysFont("Consolas", 28, bold=True)
+    font = pygame.font.SysFont("Consolas", 18)
+    font_small = pygame.font.SysFont("Consolas", 14)
+
+    # Title (with chromatic aberration — it's the brightest text on screen).
+    _draw_chromatic_text(surface, font_big, "IPA OS v3.7.2 — LOGIN",
+                         (WIDTH // 2 - font_big.size("IPA OS v3.7.2 — LOGIN")[0] // 2, 120),
+                         CRT_BRIGHT, offset=1)
+
+    # Subtitle.
+    sub = font.render("State Computing Division — Authorized Operators Only", True, CRT_DIM_GREEN)
+    surface.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 160))
+
+    # Username field (pre-filled).
+    user_label = font.render("USERNAME:", True, CRT_GREEN)
+    surface.blit(user_label, (WIDTH // 2 - 150, 240))
+    user_value = font.render("operator", True, CRT_BRIGHT)
+    surface.blit(user_value, (WIDTH // 2 - 150, 270))
+    pygame.draw.line(surface, CRT_DIM_GREEN,
+                     (WIDTH // 2 - 150, 295), (WIDTH // 2 + 150, 295), 1)
+
+    # Password field.
+    pass_label = font.render("PASSWORD:", True, CRT_GREEN)
+    surface.blit(pass_label, (WIDTH // 2 - 150, 330))
+    # Mask password with asterisks.
+    masked = "*" * len(_login_password)
+    pass_value = font.render(masked, True, CRT_BRIGHT)
+    surface.blit(pass_value, (WIDTH // 2 - 150, 360))
+    pygame.draw.line(surface, CRT_DIM_GREEN,
+                     (WIDTH // 2 - 150, 385), (WIDTH // 2 + 150, 385), 1)
+
+    # Blinking cursor on password.
+    if (_os_timer % 24) < 12:
+        cursor_x = WIDTH // 2 - 150 + pass_value.get_width() + 2
+        pygame.draw.rect(surface, CRT_GREEN, (cursor_x, 362, 10, 20))
+
+    # Error message (or lockout countdown).
+    if _login_lockout_timer > 0:
+        secs = _login_lockout_timer // 60 + 1
+        lock_msg = font.render(f"ACCOUNT LOCKED — {secs}s", True, CRT_RED)
+        # Pulsing effect.
+        if (_os_timer % 30) < 15:
+            lock_msg = font.render(f"ACCOUNT LOCKED — {secs}s", True, (255, 120, 120))
+        surface.blit(lock_msg, (WIDTH // 2 - lock_msg.get_width() // 2, 420))
+        # Sub-message.
+        sub_lock = font_small.render("Too many failed attempts. Wait or contact your administrator.", True, CRT_DIM_GREEN)
+        surface.blit(sub_lock, (WIDTH // 2 - sub_lock.get_width() // 2, 448))
+    elif _login_error:
+        err = font.render(_login_error, True, CRT_RED)
+        surface.blit(err, (WIDTH // 2 - err.get_width() // 2, 420))
+
+    # Hint (sticky note style).
+    hint_box = pygame.Surface((280, 70), pygame.SRCALPHA)
+    hint_box.fill((80, 80, 60, 200))
+    pygame.draw.rect(hint_box, (140, 140, 100), hint_box.get_rect(), 1)
+    surface.blit(hint_box, (WIDTH // 2 - 140, 470))
+    hint_title = font_small.render("[ STICKY NOTE ]", True, (200, 200, 150))
+    surface.blit(hint_title, (WIDTH // 2 - hint_title.get_width() // 2, 478))
+    hint_text = font_small.render("Default admin password: admin", True, (220, 220, 180))
+    surface.blit(hint_text, (WIDTH // 2 - hint_text.get_width() // 2, 498))
+    hint_text2 = font_small.render("(reset by IT last quarter — never changed)", True, (180, 180, 140))
+    surface.blit(hint_text2, (WIDTH // 2 - hint_text2.get_width() // 2, 514))
+
+    # Enter hint.
+    enter_hint = font.render("[ENTER] LOGIN", True, CRT_DIM_GREEN)
+    surface.blit(enter_hint, (WIDTH // 2 - enter_hint.get_width() // 2, 580))
+
+
+def _draw_desktop(surface):
+    """Phase 3: Win XP-style desktop (green-phosphor) with taskbar + icons."""
+    font = pygame.font.SysFont("Arial", 13, bold=True)
+    font_small = pygame.font.SysFont("Arial", 11)
+    _draw_ipa_wallpaper(surface)
+    mouse_pos = pygame.mouse.get_pos()
+    icon_rects = _get_desktop_icon_click_rects()
+    icon_draw_rects = _get_desktop_icon_rects()
+    for i, icon in enumerate(DESKTOP_ICONS):
+        draw_rect = icon_draw_rects[i]
+        click_rect = icon_rects[i]
+        hovered = click_rect.collidepoint(mouse_pos)
+        if hovered:
+            bg = pygame.Surface((click_rect.w, click_rect.h), pygame.SRCALPHA)
+            bg.fill((20, 80, 40, 80))
+            surface.blit(bg, (click_rect.x, click_rect.y))
+            pygame.draw.rect(surface, CRT_DIM_GREEN, click_rect, 1)
+        gx, gy = draw_rect.centerx, draw_rect.centery
+        if icon["id"] == "evidence":
+            for j in range(3):
+                fx = gx - 18 + j * 3; fy = gy - 18 + j * 3
+                pygame.draw.rect(surface, (10, 45, 22), (fx, fy, 32, 36), border_radius=2)
+                pygame.draw.rect(surface, CRT_GREEN, (fx, fy, 32, 36), 1, border_radius=2)
+                pygame.draw.line(surface, CRT_GREEN, (fx + 5, fy + 10), (fx + 27, fy + 10), 1)
+                pygame.draw.line(surface, CRT_GREEN, (fx + 5, fy + 16), (fx + 27, fy + 16), 1)
+                pygame.draw.line(surface, CRT_GREEN, (fx + 5, fy + 22), (fx + 22, fy + 22), 1)
+        elif icon["id"] == "acarizwork":
+            pygame.draw.circle(surface, (5, 30, 15), (gx, gy), 22)
+            pygame.draw.circle(surface, CRT_GREEN, (gx, gy), 22, 2)
+            pygame.draw.ellipse(surface, CRT_GREEN, (gx - 22, gy - 10, 44, 20), 1)
+            pygame.draw.ellipse(surface, CRT_GREEN, (gx - 22, gy - 18, 44, 36), 1)
+            pygame.draw.line(surface, CRT_GREEN, (gx - 22, gy), (gx + 22, gy), 1)
+            pygame.draw.line(surface, CRT_GREEN, (gx, gy - 22), (gx, gy + 22), 1)
+        elif icon["id"] == "system":
+            pygame.draw.rect(surface, (8, 35, 18), (gx - 20, gy - 16, 40, 28), border_radius=3)
+            pygame.draw.rect(surface, CRT_GREEN, (gx - 20, gy - 16, 40, 28), 2, border_radius=3)
+            pygame.draw.rect(surface, (5, 25, 12), (gx - 16, gy - 12, 32, 20))
+            pygame.draw.rect(surface, CRT_DIM_GREEN, (gx - 7, gy + 12, 14, 4), border_radius=1)
+            pygame.draw.rect(surface, CRT_DIM_GREEN, (gx - 12, gy + 16, 24, 3), border_radius=1)
+        elif icon["id"] == "logs":
+            pygame.draw.rect(surface, (8, 35, 18), (gx - 18, gy - 20, 36, 40), border_radius=2)
+            pygame.draw.rect(surface, CRT_GREEN, (gx - 18, gy - 20, 36, 40), 1, border_radius=2)
+            for j in range(4):
+                ly = gy - 12 + j * 8
+                pygame.draw.line(surface, CRT_GREEN, (gx - 12, ly), (gx + 12, ly), 1)
+        label_color = CRT_BRIGHT if hovered else CRT_GREEN
+        label = font.render(icon["label"], True, label_color)
+        shadow = font.render(icon["label"], True, (0, 0, 0))
+        surface.blit(shadow, (draw_rect.centerx - shadow.get_width() // 2 + 1, draw_rect.bottom + 1))
+        surface.blit(label, (draw_rect.centerx - label.get_width() // 2, draw_rect.bottom))
+    _draw_taskbar(surface, font_small)
+    # Start menu (drawn on top of the desktop when open).
+    if _start_menu_open:
+        _draw_start_menu(surface, font, font_small)
+    # Run dialog (drawn on top of everything when open).
+    if _run_dialog_open:
+        _draw_run_dialog(surface, font, font_small)
+
+
+def _draw_start_menu(surface, font, font_small):
+    """Classic Win-95 style Start menu with cascading submenus."""
+    mouse_pos = pygame.mouse.get_pos()
+    sm_x = 4
+    sm_y = HEIGHT - 36 - 280
+    sm_w = 200
+    sm_h = 280
+    # Menu background.
+    _draw_rounded_rect(surface, (8, 35, 18), (sm_x, sm_y, sm_w, sm_h), radius=4)
+    _draw_rounded_rect(surface, CRT_GREEN, (sm_x, sm_y, sm_w, sm_h), radius=4, width=1)
+    # Left sidebar (IPA banner).
+    sidebar_w = 28
+    _draw_rounded_rect(surface, (15, 55, 28), (sm_x + 2, sm_y + 2, sidebar_w, sm_h - 4), radius=3)
+    # Vertical "IPA OS" text.
+    sidebar_font = pygame.font.SysFont("Arial Black", 14, bold=True)
+    sb_text = sidebar_font.render("IPA", True, CRT_BRIGHT)
+    sb_rot = pygame.transform.rotate(sb_text, 90)
+    surface.blit(sb_rot, (sm_x + 8, sm_y + sm_h // 2 - sb_rot.get_height() // 2))
+    # Menu items.
+    items = [
+        ("programs", "Programs", "▸"),
+        ("documents", "Documents", "▸"),
+        ("settings", "Settings", ""),
+        ("find", "Find", ""),
+        ("help", "Help", ""),
+        ("run", "Run...", ""),
+        ("shutdown", "Shut Down...", ""),
+    ]
+    for i, (item_id, label, arrow) in enumerate(items):
+        iy = sm_y + 8 + i * 36
+        item_rect = pygame.Rect(sm_x + sidebar_w + 4, iy, sm_w - sidebar_w - 8, 32)
+        hovered = item_rect.collidepoint(mouse_pos)
+        if hovered:
+            _draw_rounded_rect(surface, (15, 60, 30), item_rect, radius=2)
+        # Label.
+        lbl_col = CRT_BRIGHT if hovered else CRT_GREEN
+        lbl = font.render(label, True, lbl_col)
+        surface.blit(lbl, (item_rect.x + 8, item_rect.centery - lbl.get_height() // 2))
+        # Arrow (for items with submenus).
+        if arrow:
+            ar = font.render(arrow, True, lbl_col)
+            surface.blit(ar, (item_rect.right - 16, item_rect.centery - ar.get_height() // 2))
+    # Submenu (Programs or Documents).
+    if _start_submenu:
+        sub_items = []
+        if _start_submenu == "programs":
+            sub_items = [
+                ("Evidence", "evidence"),
+                ("Acarizwork", "acarizwork"),
+                ("System", "system"),
+                ("Logs", "logs"),
+            ]
+        elif _start_submenu == "documents":
+            sub_items = [
+                ("decree_47.txt", "decree"),
+                ("auth_chain.log", "auth_chain"),
+                ("mag_packet.draft", "mag_packet"),
+            ]
+        sub_x = sm_x + sm_w
+        sub_w = 180
+        sub_h = len(sub_items) * 36 + 16
+        _draw_rounded_rect(surface, (8, 35, 18), (sub_x, sm_y, sub_w, sub_h), radius=4)
+        _draw_rounded_rect(surface, CRT_GREEN, (sub_x, sm_y, sub_w, sub_h), radius=4, width=1)
+        for i, (label, sid) in enumerate(sub_items):
+            iy = sm_y + 8 + i * 36
+            item_rect = pygame.Rect(sub_x + 4, iy, sub_w - 8, 32)
+            hovered = item_rect.collidepoint(mouse_pos)
+            if hovered:
+                _draw_rounded_rect(surface, (15, 60, 30), item_rect, radius=2)
+            lbl_col = CRT_BRIGHT if hovered else CRT_GREEN
+            lbl = font.render(label, True, lbl_col)
+            surface.blit(lbl, (item_rect.x + 12, item_rect.centery - lbl.get_height() // 2))
+
+
+def _draw_run_dialog(surface, font, font_small):
+    """Run dialog — text input for typing a URL."""
+    dw, dh = 420, 140
+    dx = WIDTH // 2 - dw // 2
+    dy = HEIGHT // 2 - dh // 2
+    # Dim background.
+    dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, 120))
+    surface.blit(dim, (0, 0))
+    # Dialog window.
+    win_rect = pygame.Rect(dx, dy, dw, dh)
+    _draw_xp_window(surface, win_rect, "Run", font, font_small)
+    body_rect = pygame.Rect(dx + 2, dy + 30, dw - 4, dh - 32)
+    # Prompt.
+    surface.blit(font.render("Type the address of a website:", True, CRT_GREEN),
+                 (body_rect.x + 12, body_rect.y + 8))
+    # Text field.
+    field_rect = pygame.Rect(body_rect.x + 12, body_rect.y + 32, body_rect.w - 24, 24)
+    _draw_rounded_rect(surface, (2, 15, 8), field_rect, radius=3)
+    _draw_rounded_rect(surface, CRT_BRIGHT, field_rect, radius=3, width=1)
+    field_text = font_small.render(_run_dialog_text, True, CRT_BRIGHT)
+    surface.blit(field_text, (field_rect.x + 4, field_rect.centery - field_text.get_height() // 2))
+    # Blinking cursor.
+    if _run_cursor_visible:
+        cx = field_rect.x + 4 + field_text.get_width()
+        pygame.draw.rect(surface, CRT_BRIGHT, (cx, field_rect.y + 4, 2, field_rect.h - 8))
+    # Hint.
+    hint = font_small.render("Example: acarizwork.net/freedom", True, CRT_DIM_GREEN)
+    surface.blit(hint, (body_rect.x + 12, body_rect.y + 64))
+    # OK + Cancel buttons.
+    ok_rect = pygame.Rect(body_rect.right - 180, body_rect.bottom - 32, 80, 24)
+    cancel_rect = pygame.Rect(body_rect.right - 90, body_rect.bottom - 32, 80, 24)
+    mouse_pos = pygame.mouse.get_pos()
+    _draw_xp_button(surface, ok_rect, "OK", font_small, hovered=ok_rect.collidepoint(mouse_pos))
+    _draw_xp_button(surface, cancel_rect, "Cancel", font_small, hovered=cancel_rect.collidepoint(mouse_pos))
+    # ESC/ENTER hint.
+    surface.blit(font_small.render("[ENTER] open  ·  [ESC] cancel", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.bottom - 26))
+
+
+def _draw_browser(surface):
+    """Phase 4: Acarizwork browser in a Win XP-style window."""
+    font_big = pygame.font.SysFont("Arial", 18, bold=True)
+    font = pygame.font.SysFont("Arial", 14)
+    font_small = pygame.font.SysFont("Arial", 12)
+    _draw_ipa_wallpaper(surface)
+    win_rect = pygame.Rect(WIDTH // 2 - 360, 60, 720, 520)
+    body_rect = _draw_xp_window(surface, win_rect, "Acarizwork Browser", font, font_small)
+    # Toolbar (URL bar + nav buttons).
+    tb_y = body_rect.y + 8
+    mouse_pos = pygame.mouse.get_pos()
+    back_rect = pygame.Rect(body_rect.x + 10, tb_y, 50, 24)
+    _draw_xp_button(surface, back_rect, "< Back", font_small, hovered=back_rect.collidepoint(mouse_pos))
+    fwd_rect = pygame.Rect(body_rect.x + 66, tb_y, 50, 24)
+    _draw_xp_button(surface, fwd_rect, "Fwd >", font_small, hovered=fwd_rect.collidepoint(mouse_pos),
+                    enabled=False)
+    home_rect = pygame.Rect(body_rect.x + 122, tb_y, 50, 24)
+    _draw_xp_button(surface, home_rect, "Home", font_small, hovered=home_rect.collidepoint(mouse_pos))
+    url_rect = pygame.Rect(body_rect.x + 178, tb_y, body_rect.w - 188, 24)
+    # URL bar — highlight when editing.
+    url_bg = (15, 50, 25) if _url_editing else (2, 15, 8)
+    url_border = CRT_BRIGHT if _url_editing else CRT_DIM_GREEN
+    _draw_rounded_rect(surface, url_bg, url_rect, radius=3)
+    _draw_rounded_rect(surface, url_border, url_rect, radius=3, width=1)
+    url_text = font_small.render(f"  {_browser_url}", True, CRT_BRIGHT if _url_editing else CRT_GREEN)
+    surface.blit(url_text, (url_rect.x + 4, url_rect.centery - url_text.get_height() // 2))
+    # Blinking cursor when editing.
+    if _url_editing and _url_cursor_visible:
+        cx = url_rect.x + 4 + url_text.get_width()
+        pygame.draw.rect(surface, CRT_BRIGHT, (cx, url_rect.y + 4, 2, url_rect.h - 8))
+    # Page content area.
+    page_rect = pygame.Rect(body_rect.x + 8, tb_y + 32, body_rect.w - 16, body_rect.h - 48)
+    _draw_rounded_rect(surface, (2, 12, 6), page_rect, radius=3)
+    _draw_rounded_rect(surface, CRT_DARK, page_rect, radius=3, width=1)
+    if _browser_page == "home":
+        _draw_browser_home(surface, page_rect, font_big, font, font_small)
+    elif _browser_page == "upload":
+        _draw_browser_upload(surface, page_rect, font_big, font, font_small)
+    elif _browser_page in BROWSER_PAGES:
+        _draw_browser_generic_page(surface, page_rect, font_big, font, font_small)
+    _draw_taskbar(surface, font_small)
+
+
+def _draw_browser_home(surface, rect, font_big, font, font_small):
+    """The Acarizwork home page — inside the browser window."""
+    title = font_big.render("Welcome to Acarizwork", True, CRT_BRIGHT)
+    surface.blit(title, (rect.centerx - title.get_width() // 2, rect.y + 16))
+    sub = font.render("The State-Sanctioned Information Network of Acaristan", True, CRT_DIM_GREEN)
+    surface.blit(sub, (rect.centerx - sub.get_width() // 2, rect.y + 44))
+    search_rect = pygame.Rect(rect.centerx - 180, rect.y + 76, 360, 24)
+    _draw_rounded_rect(surface, (2, 15, 8), search_rect, radius=3)
+    _draw_rounded_rect(surface, CRT_DARK, search_rect, radius=3, width=1)
+    search_hint = font_small.render("Search the Acarizwork...", True, CRT_DIM_GREEN)
+    surface.blit(search_hint, (search_rect.x + 8, search_rect.centery - search_hint.get_height() // 2))
+    featured = font.render("FEATURED SITES", True, CRT_GREEN)
+    surface.blit(featured, (rect.x + 24, rect.y + 116))
+    sites = [
+        "acarizwork.net/news        — State News Network",
+        "acarizwork.net/weather     — Acaristan Meteorological",
+        "acarizwork.net/upload      — Public Evidence Portal",
+        "acarizwork.net/forum       — Citizen Discussion Boards",
+    ]
+    for i, site in enumerate(sites):
+        site_txt = font.render(site, True, CRT_GREEN)
+        surface.blit(site_txt, (rect.x + 36, rect.y + 142 + i * 22))
+    link_rect = pygame.Rect(rect.centerx - 120, rect.y + 240, 240, 32)
+    mouse_pos = pygame.mouse.get_pos()
+    _draw_xp_button(surface, link_rect, ">> VISIT UPLOAD PORTAL <<", font_small,
+                     hovered=link_rect.collidepoint(mouse_pos), color=CRT_BRIGHT)
+
+
+def _draw_browser_upload(surface, rect, font_big, font, font_small):
+    """The Acarizwork upload portal page."""
+    title = font_big.render("Public Evidence Portal", True, CRT_BRIGHT)
+    surface.blit(title, (rect.centerx - title.get_width() // 2, rect.y + 16))
+    desc_lines = [
+        "Submit evidence of state misconduct to the public record.",
+        "Submissions are encrypted and mirrored across the Acarizwork.",
+        "Your identity is scrubbed. Once submitted, evidence cannot be recalled.",
+    ]
+    for i, line in enumerate(desc_lines):
+        desc = font_small.render(line, True, CRT_DIM_GREEN)
+        surface.blit(desc, (rect.centerx - desc.get_width() // 2, rect.y + 48 + i * 18))
+    warn_rect = pygame.Rect(rect.centerx - 230, rect.y + 112, 460, 48)
+    _draw_rounded_rect(surface, (40, 20, 10), warn_rect, radius=4)
+    _draw_rounded_rect(surface, CRT_AMBER, warn_rect, radius=4, width=1)
+    warn_text = font_small.render("WARNING: This action is a class-1 offense against the state.", True, CRT_AMBER)
+    surface.blit(warn_text, (warn_rect.centerx - warn_text.get_width() // 2, warn_rect.y + 8))
+    warn_text2 = font_small.render("Proceeding will mark you as a hostile operator.", True, CRT_AMBER)
+    surface.blit(warn_text2, (warn_rect.centerx - warn_text2.get_width() // 2, warn_rect.y + 26))
+    attach_rect = pygame.Rect(rect.centerx - 80, rect.y + 180, 160, 34)
+    mouse_pos = pygame.mouse.get_pos()
+    _draw_xp_button(surface, attach_rect, "[ATTACH FILES]", font,
+                     hovered=attach_rect.collidepoint(mouse_pos), color=CRT_BRIGHT)
+
+
+def _draw_browser_generic_page(surface, rect, font_big, font, font_small):
+    """Render a browser page from the BROWSER_PAGES dict (news/weather/forum/freedom)."""
+    page_data = BROWSER_PAGES.get(_browser_page, BROWSER_PAGES["news"])
+    title = page_data["title"]
+    if title:
+        # Chromatic aberration on the page title (bright text).
+        title_w = font_big.size(title)[0]
+        _draw_chromatic_text(surface, font_big, title,
+                             (rect.centerx - title_w // 2, rect.y + 16),
+                             CRT_BRIGHT, offset=1)
+    # Content lines.
+    y = rect.y + 50
+    for prefix, text, color in page_data["lines"]:
+        if not text and not prefix:
+            y += 10
+            continue
+        if color is None:
+            color = CRT_GREEN
+        if prefix:
+            # Prefix tag (e.g. "BREAKING", "ALERT") in a colored box.
+            prefix_surf = font_small.render(prefix, True, CRT_BG)
+            pw = prefix_surf.get_width() + 8
+            tag_rect = pygame.Rect(rect.x + 20, y, pw, 16)
+            pygame.draw.rect(surface, color, tag_rect, border_radius=2)
+            surface.blit(prefix_surf, (tag_rect.x + 4, tag_rect.y + 1))
+            # Text after the tag.
+            txt = font.render(text, True, color)
+            surface.blit(txt, (rect.x + 20 + pw + 6, y))
+        else:
+            txt = font.render(text, True, color)
+            surface.blit(txt, (rect.x + 20, y))
+        y += 22
+
+
+def _draw_file_picker(surface):
+    """Phase 5: File picker in a Win XP-style window."""
+    font_big = pygame.font.SysFont("Arial", 16, bold=True)
+    font = pygame.font.SysFont("Arial", 14)
+    font_small = pygame.font.SysFont("Arial", 12)
+    _draw_ipa_wallpaper(surface)
+    win_rect = pygame.Rect(WIDTH // 2 - 340, 60, 680, 440)
+    body_rect = _draw_xp_window(surface, win_rect, "Select Evidence Files", font, font_small)
+    instr = font_small.render(f"Select all 3 files ({len(_file_picker_selected)}/3 selected)", True, CRT_GREEN)
+    surface.blit(instr, (body_rect.x + 12, body_rect.y + 10))
+    mouse_pos = pygame.mouse.get_pos()
+    for i, file in enumerate(EVIDENCE_FILES):
+        row_y = body_rect.y + 40 + i * 40
+        row_rect = pygame.Rect(body_rect.x + 12, row_y, body_rect.w - 24, 32)
+        hovered = row_rect.collidepoint(mouse_pos)
+        selected = i in _file_picker_selected
+        if selected:
+            _draw_rounded_rect(surface, (12, 55, 28), row_rect, radius=3)
+            pygame.draw.rect(surface, CRT_BRIGHT, row_rect, 1, border_radius=3)
+        elif hovered:
+            _draw_rounded_rect(surface, (8, 35, 18), row_rect, radius=3)
+            pygame.draw.rect(surface, CRT_GREEN, row_rect, 1, border_radius=3)
+        else:
+            pygame.draw.rect(surface, CRT_DARK, row_rect, 1, border_radius=3)
+        checkbox_rect = pygame.Rect(row_rect.x + 10, row_rect.centery - 8, 16, 16)
+        _draw_rounded_rect(surface, (2, 15, 8), checkbox_rect, radius=2)
+        border_col = CRT_BRIGHT if selected else (CRT_GREEN if hovered else CRT_DIM_GREEN)
+        _draw_rounded_rect(surface, border_col, checkbox_rect, radius=2, width=1)
+        if selected:
+            pygame.draw.line(surface, CRT_BRIGHT, (checkbox_rect.x + 3, checkbox_rect.centery), (checkbox_rect.x + 7, checkbox_rect.bottom - 3), 2)
+            pygame.draw.line(surface, CRT_BRIGHT, (checkbox_rect.x + 7, checkbox_rect.bottom - 3), (checkbox_rect.right - 3, checkbox_rect.y + 3), 2)
+        doc_x = row_rect.x + 36; doc_y = row_rect.centery - 12
+        pygame.draw.polygon(surface, (8, 35, 18), [(doc_x, doc_y), (doc_x + 14, doc_y), (doc_x + 18, doc_y + 4), (doc_x + 18, doc_y + 24), (doc_x, doc_y + 24)])
+        pygame.draw.polygon(surface, CRT_GREEN, [(doc_x, doc_y), (doc_x + 14, doc_y), (doc_x + 18, doc_y + 4), (doc_x + 18, doc_y + 24), (doc_x, doc_y + 24)], 1)
+        pygame.draw.line(surface, CRT_GREEN, (doc_x + 14, doc_y), (doc_x + 14, doc_y + 4), 1)
+        pygame.draw.line(surface, CRT_GREEN, (doc_x + 14, doc_y + 4), (doc_x + 18, doc_y + 4), 1)
+        name = font.render(file["name"], True, CRT_BRIGHT if selected else CRT_GREEN)
+        surface.blit(name, (doc_x + 26, row_rect.centery - name.get_height() // 2))
+        size = font_small.render(file["size"], True, CRT_DIM_GREEN)
+        surface.blit(size, (row_rect.right - 180, row_rect.centery - size.get_height() // 2))
+        desc = font_small.render(file["desc"], True, CRT_DIM_GREEN)
+        surface.blit(desc, (row_rect.right - 140, row_rect.centery - desc.get_height() // 2))
+    back_rect = pygame.Rect(body_rect.x + 12, body_rect.bottom - 38, 80, 28)
+    _draw_xp_button(surface, back_rect, "[BACK]", font_small, hovered=back_rect.collidepoint(mouse_pos))
+    upload_rect = pygame.Rect(body_rect.centerx - 60, body_rect.bottom - 38, 120, 28)
+    all_selected = len(_file_picker_selected) == 3
+    _draw_xp_button(surface, upload_rect, "[UPLOAD]", font_small,
+                     hovered=upload_rect.collidepoint(mouse_pos) and all_selected,
+                     enabled=all_selected, color=CRT_BRIGHT if all_selected else CRT_DARK)
+    _draw_taskbar(surface, font_small)
+
+
+def _draw_upload(surface):
+    """Phase 6: Upload progress with rotating status messages + intrusion popups."""
+    font_big = pygame.font.SysFont("Consolas", 24, bold=True)
+    font = pygame.font.SysFont("Consolas", 18)
+    font_small = pygame.font.SysFont("Consolas", 14)
+
+    # Title (chromatic aberration — brightest text).
+    title_w = font_big.size("TRANSMITTING EVIDENCE")[0]
+    _draw_chromatic_text(surface, font_big, "TRANSMITTING EVIDENCE",
+                         (WIDTH // 2 - title_w // 2, 120), CRT_BRIGHT, offset=1)
+
+    # ── State broadcast countdown (top-right corner) ──
+    secs = _state_broadcast_timer // 60
+    mins = secs // 60
+    rem_secs = secs % 60
+    bc_text = font_small.render(f"STATE BROADCAST IN: {mins:02d}:{rem_secs:02d}", True, CRT_AMBER)
+    # Pulsing when under 60 seconds.
+    if secs < 60 and (_state_broadcast_timer % 30) < 15:
+        bc_text = font_small.render(f"STATE BROADCAST IN: {mins:02d}:{rem_secs:02d}", True, CRT_RED)
+    surface.blit(bc_text, (WIDTH - bc_text.get_width() - 20, 20))
+
+    # Status message.
+    status = UPLOAD_STATUS_MESSAGES[_upload_status_idx]
+    status_surf = font.render(status, True, CRT_GREEN)
+    surface.blit(status_surf, (WIDTH // 2 - status_surf.get_width() // 2, 180))
+
+    # Progress bar.
+    bar_w = 500
+    bar_h = 24
+    bar_x = WIDTH // 2 - bar_w // 2
+    bar_y = 240
+    pygame.draw.rect(surface, CRT_BG, (bar_x, bar_y, bar_w, bar_h))
+    pygame.draw.rect(surface, CRT_DIM_GREEN, (bar_x, bar_y, bar_w, bar_h), 1)
+    fill_w = int(bar_w * _upload_progress)
+    if fill_w > 0:
+        pygame.draw.rect(surface, CRT_GREEN, (bar_x, bar_y, fill_w, bar_h))
+    pct = int(_upload_progress * 100)
+    pct_text = font.render(f"{pct}%", True, CRT_BRIGHT)
+    surface.blit(pct_text, (WIDTH // 2 - pct_text.get_width() // 2, bar_y + 30))
+
+    # Status log.
+    log_y = 320
+    log_font = font_small
+    shown_messages = UPLOAD_STATUS_MESSAGES[:_upload_status_idx + 1]
+    for i, msg in enumerate(shown_messages):
+        done = i < _upload_status_idx
+        color = CRT_DIM_GREEN if done else CRT_BRIGHT
+        prefix = "[OK] " if done else ">> "
+        log_line = log_font.render(prefix + msg, True, color)
+        surface.blit(log_line, (bar_x, log_y + i * 20))
+
+    # ── IPA counter-intrusion popup ──
+    # When active, pauses upload progress and shows a red modal demanding
+    # the player click to reroute. Adds tension — "they're coming for you".
+    if _upload_intrusion_active:
+        # Dim the background.
+        dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dim.fill((40, 0, 0, 120))
+        surface.blit(dim, (0, 0))
+        # Modal window.
+        mw, mh = 500, 180
+        mx = WIDTH // 2 - mw // 2
+        my = HEIGHT // 2 - mh // 2
+        modal_rect = pygame.Rect(mx, my, mw, mh)
+        _draw_rounded_rect(surface, (20, 5, 5), modal_rect, radius=6)
+        _draw_rounded_rect(surface, CRT_RED, modal_rect, radius=6, width=2)
+        # Pulsing border.
+        pulse = 0.5 + 0.5 * math.sin(_upload_intrusion_timer * 0.2)
+        if pulse > 0.5:
+            _draw_rounded_rect(surface, (255, 100, 100), modal_rect, radius=6, width=1)
+        # Title.
+        intr_title = font_big.render("⚠ IPA FIREWALL TRACE", True, CRT_RED)
+        surface.blit(intr_title, (mx + mw // 2 - intr_title.get_width() // 2, my + 16))
+        # Body.
+        intr_body = font.render("Counter-intrusion detected. Rerouting transmission.", True, CRT_AMBER)
+        surface.blit(intr_body, (mx + mw // 2 - intr_body.get_width() // 2, my + 56))
+        # Click hint.
+        if (_upload_intrusion_timer % 30) < 15:
+            hint = font_small.render("[CLICK] / [ANY KEY] TO REROUTE", True, CRT_BRIGHT)
+            surface.blit(hint, (mx + mw // 2 - hint.get_width() // 2, my + 100))
+    elif _upload_progress > 0.5:
+        warn = font_small.render("IPA COUNTER-INTRUSION DETECTED — TRANSMISSION PROCEEDING", True, CRT_AMBER)
+        surface.blit(warn, (WIDTH // 2 - warn.get_width() // 2, HEIGHT - 60))
+
+
+def _draw_done(surface):
+    """Phase 7: Upload complete — the payoff."""
+    font_huge = pygame.font.SysFont("Consolas", 36, bold=True)
+    font = pygame.font.SysFont("Consolas", 18)
+    font_small = pygame.font.SysFont("Consolas", 14)
+
+    # Big "UPLOAD COMPLETE" text (fades in, with chromatic aberration).
+    fade = min(1.0, _done_timer / 30.0)
+    title_w = font_huge.size("UPLOAD COMPLETE")[0]
+    _draw_chromatic_text(surface, font_huge, "UPLOAD COMPLETE",
+                         (WIDTH // 2 - title_w // 2, 180), CRT_BRIGHT, offset=1)
+    # Apply fade by drawing a black overlay with inverse alpha.
+    if fade < 1.0:
+        fade_overlay = pygame.Surface((title_w + 10, font_huge.get_height() + 4), pygame.SRCALPHA)
+        fade_overlay.fill((0, 0, 0, int(255 * (1 - fade))))
+        surface.blit(fade_overlay, (WIDTH // 2 - title_w // 2 - 5, 178))
+
+    # State broadcast countdown (still ticking — adds urgency even after upload).
+    secs = _state_broadcast_timer // 60
+    mins = secs // 60
+    rem_secs = secs % 60
+    bc_text = font_small.render(f"STATE BROADCAST IN: {mins:02d}:{rem_secs:02d}", True, CRT_AMBER)
+    surface.blit(bc_text, (WIDTH - bc_text.get_width() - 20, 20))
+
+    # Sub-text.
+    if _done_timer > 40:
+        sub_lines = [
+            "Evidence package transmitted to 7 mirror sites.",
+            "Journalist contacts notified.",
+            "The Route 12 conspiracy is now public record.",
+        ]
+        for i, line in enumerate(sub_lines):
+            sub = font.render(line, True, CRT_GREEN)
+            sub.set_alpha(min(255, (_done_timer - 40) * 8))
+            surface.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 260 + i * 30))
+
+    # "Continue" hint.
+    if _done_timer > 60:
+        hint = font_small.render("[CLICK] / [ANY KEY] to continue", True, CRT_DIM_GREEN)
+        if (_done_timer % 30) < 15:
+            surface.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 80))
+
+
+def _draw_info(surface):
+    """Info window for EVIDENCE / SYSTEM / LOGS icons.
+
+    Now renders rich content:
+      - evidence → file manager (tree + file list) OR document viewer (if _info_sub set)
+      - system   → control panel grid OR sub-window (if _info_sub set)
+      - logs     → waveform visualizer + scrolling radio log
+    """
+    # Defensive guard: if _info_content is None, fall back to desktop.
+    if _info_content is None:
+        global _os_phase
+        _os_phase = PHASE_DESKTOP
+        return
+
+    font_big = pygame.font.SysFont("Arial", 16, bold=True)
+    font = pygame.font.SysFont("Consolas", 14)
+    font_small = pygame.font.SysFont("Arial", 12)
+
+    # Draw the desktop wallpaper behind the window.
+    _draw_ipa_wallpaper(surface)
+
+    # Info window — centered, 560x460 (bigger for richer content).
+    win_x = WIDTH // 2 - 280
+    win_y = 100
+    win_w, win_h = 560, 460
+    win_rect = pygame.Rect(win_x, win_y, win_w, win_h)
+    body_rect = _draw_xp_window(surface, win_rect, _get_info_title(), font, font_small)
+
+    # Render the appropriate content.
+    if _info_content == "evidence":
+        if _info_sub is not None:
+            _draw_evidence_document(surface, body_rect, font, font_small)
+        else:
+            _draw_evidence_file_manager(surface, body_rect, font, font_small)
+    elif _info_content == "system":
+        if _info_sub is not None:
+            _draw_control_panel_sub(surface, body_rect, font, font_small)
+        else:
+            _draw_control_panel_grid(surface, body_rect, font, font_small)
+    elif _info_content == "logs":
+        _draw_logs_waveform(surface, body_rect, font, font_small)
+
+    # Back button (when in a sub-view).
+    if _info_sub is not None:
+        back_rect = pygame.Rect(win_x + 12, win_y + win_h - 38, 80, 28)
+        mouse_pos = pygame.mouse.get_pos()
+        _draw_xp_button(surface, back_rect, "< BACK", font_small,
+                        hovered=back_rect.collidepoint(mouse_pos))
+
+    # Hint.
+    hint = font_small.render("[ESC] to close" + ("  ·  [ESC] back" if _info_sub else ""),
+                             True, CRT_DIM_GREEN)
+    surface.blit(hint, (body_rect.x + 100, win_y + win_h - 32))
+
+    # Taskbar.
+    _draw_taskbar(surface, font_small)
+
+
+def _get_info_title():
+    """Return the window title for the current info content/sub."""
+    if _info_content == "evidence":
+        if _info_sub is not None:
+            doc = EVIDENCE_DOCS.get(_info_sub, {})
+            return f"Evidence — {doc.get('title', _info_sub)}"
+        return "Evidence — File Manager"
+    elif _info_content == "system":
+        if _info_sub is not None:
+            for item in CONTROL_PANEL_ITEMS:
+                if item["id"] == _info_sub:
+                    return f"Control Panel — {item['label']}"
+            return "Control Panel"
+        return "Control Panel"
+    elif _info_content == "logs":
+        return "Radio Transmission Logs"
+    return "Info"
+
+
+def _draw_evidence_file_manager(surface, body_rect, font, font_small):
+    """Win-95 style file manager: tree pane (left) + file list (right)."""
+    mouse_pos = pygame.mouse.get_pos()
+    # ── Left pane: folder tree ──
+    tree_x = body_rect.x + 8
+    tree_y = body_rect.y + 8
+    tree_w = 140
+    tree_h = body_rect.h - 16
+    _draw_rounded_rect(surface, (2, 15, 8), (tree_x, tree_y, tree_w, tree_h), radius=3)
+    _draw_rounded_rect(surface, CRT_DARK, (tree_x, tree_y, tree_w, tree_h), radius=3, width=1)
+    # Tree header.
+    header = font_small.render("FOLDERS", True, CRT_DIM_GREEN)
+    surface.blit(header, (tree_x + 8, tree_y + 6))
+    # Folders.
+    folders = [
+        ("C:\\EVIDENCE", True),  # expanded
+        ("  decrees", False),
+        ("  logs", False),
+        ("  drafts", False),
+        ("C:\\SYSTEM", False),
+        ("  drivers", False),
+        ("  config", False),
+    ]
+    fy = tree_y + 24
+    for name, expanded in folders:
+        is_active = name.strip() == "decrees"
+        col = CRT_BRIGHT if is_active else CRT_GREEN
+        # Folder icon (small square).
+        ix = tree_x + 8
+        pygame.draw.rect(surface, col, (ix, fy + 2, 8, 6), border_radius=1)
+        pygame.draw.rect(surface, col, (ix, fy, 4, 3), border_radius=1)
+        txt = font_small.render(name, True, col)
+        surface.blit(txt, (ix + 12, fy))
+        fy += 18
+
+    # ── Right pane: file list ──
+    list_x = tree_x + tree_w + 4
+    list_y = tree_y
+    list_w = body_rect.w - tree_w - 20
+    list_h = tree_h
+    _draw_rounded_rect(surface, (2, 12, 6), (list_x, list_y, list_w, list_h), radius=3)
+    _draw_rounded_rect(surface, CRT_DARK, (list_x, list_y, list_w, list_h), radius=3, width=1)
+    # Column headers.
+    col_y = list_y + 6
+    surface.blit(font_small.render("NAME", True, CRT_DIM_GREEN), (list_x + 28, col_y))
+    surface.blit(font_small.render("SIZE", True, CRT_DIM_GREEN), (list_x + 200, col_y))
+    surface.blit(font_small.render("MODIFIED", True, CRT_DIM_GREEN), (list_x + 260, col_y))
+    pygame.draw.line(surface, CRT_DARK, (list_x + 4, col_y + 16), (list_x + list_w - 4, col_y + 16), 1)
+    # Files.
+    files = [
+        ("decree_47.txt", "2.1K", "03/14 03:12", "decree"),
+        ("auth_chain.log", "4.8K", "03/14 03:08", "auth_chain"),
+        ("mag_packet.draft", "1.4K", "03/14 02:55", "mag_packet"),
+    ]
+    for i, (fname, fsize, fmod, fid) in enumerate(files):
+        ry = list_y + 28 + i * 40
+        row_rect = pygame.Rect(list_x + 4, ry, list_w - 8, 32)
+        hovered = row_rect.collidepoint(mouse_pos)
+        selected = (_last_clicked_file == i)
+        if selected:
+            _draw_rounded_rect(surface, (12, 55, 28), row_rect, radius=2)
+            pygame.draw.rect(surface, CRT_BRIGHT, row_rect, 1, border_radius=2)
+        elif hovered:
+            _draw_rounded_rect(surface, (8, 35, 18), row_rect, radius=2)
+        # File icon (document shape).
+        ix = list_x + 8
+        iy = ry + 8
+        pygame.draw.polygon(surface, (8, 35, 18),
+                            [(ix, iy), (ix + 10, iy), (ix + 14, iy + 4),
+                             (ix + 14, iy + 16), (ix, iy + 16)])
+        pygame.draw.polygon(surface, CRT_GREEN,
+                            [(ix, iy), (ix + 10, iy), (ix + 14, iy + 4),
+                             (ix + 14, iy + 16), (ix, iy + 16)], 1)
+        # Name.
+        name_col = CRT_BRIGHT if (selected or hovered) else CRT_GREEN
+        surface.blit(font.render(fname, True, name_col), (list_x + 28, ry + 8))
+        surface.blit(font_small.render(fsize, True, CRT_DIM_GREEN), (list_x + 200, ry + 10))
+        surface.blit(font_small.render(fmod, True, CRT_DIM_GREEN), (list_x + 260, ry + 10))
+    # Double-click hint.
+    hint = font_small.render("Double-click a file to view its contents", True, CRT_DIM_GREEN)
+    surface.blit(hint, (list_x + 4, list_y + list_h - 18))
+
+
+def _draw_evidence_document(surface, body_rect, font, font_small):
+    """Document viewer — renders the evidence file based on its kind."""
+    doc = EVIDENCE_DOCS.get(_info_sub, EVIDENCE_DOCS["decree"])
+    kind = doc.get("kind", "decree")
+    doc_x = body_rect.x + 12
+    doc_y = body_rect.y + 12
+    doc_w = body_rect.w - 24
+    doc_h = body_rect.h - 50
+
+    if kind == "decree":
+        _draw_doc_decree(surface, doc, doc_x, doc_y, doc_w, doc_h, font, font_small)
+    elif kind == "terminal":
+        _draw_doc_terminal(surface, doc, doc_x, doc_y, doc_w, doc_h, font, font_small)
+    elif kind == "draft":
+        _draw_doc_draft(surface, doc, doc_x, doc_y, doc_w, doc_h, font, font_small)
+
+
+def _draw_doc_decree(surface, doc, x, y, w, h, font, font_small):
+    """Official decree on letterhead with a seal."""
+    # Paper background (off-white, slightly yellowed).
+    paper = pygame.Surface((w, h), pygame.SRCALPHA)
+    paper.fill((230, 222, 195, 240))
+    surface.blit(paper, (x, y))
+    pygame.draw.rect(surface, (140, 130, 100), (x, y, w, h), 1)
+    # Letterhead.
+    head_font = pygame.font.SysFont("Times New Roman", 18, bold=True)
+    sub_font = pygame.font.SysFont("Times New Roman", 12, italic=True)
+    body_font = pygame.font.SysFont("Times New Roman", 13)
+    foot_font = pygame.font.SysFont("Times New Roman", 10)
+    # Header text.
+    h1 = head_font.render(doc["header"], True, (30, 25, 15))
+    surface.blit(h1, (x + w // 2 - h1.get_width() // 2, y + 16))
+    h2 = sub_font.render(doc["subheader"], True, (80, 65, 40))
+    surface.blit(h2, (x + w // 2 - h2.get_width() // 2, y + 40))
+    # Divider.
+    pygame.draw.line(surface, (120, 100, 60), (x + 40, y + 60), (x + w - 40, y + 60), 1)
+    # Seal (circle with text).
+    seal_cx = x + w - 50
+    seal_cy = y + 90
+    pygame.draw.circle(surface, (140, 30, 30), (seal_cx, seal_cy), 28, 2)
+    pygame.draw.circle(surface, (140, 30, 30), (seal_cx, seal_cy), 22, 1)
+    seal_font = pygame.font.SysFont("Arial Black", 14, bold=True)
+    seal_txt = seal_font.render(doc["seal_text"], True, (140, 30, 30))
+    surface.blit(seal_txt, (seal_cx - seal_txt.get_width() // 2, seal_cy - seal_txt.get_height() // 2))
+    # Body text.
+    ty = y + 80
+    for line in doc["body_lines"]:
+        if not line:
+            ty += 8
+            continue
+        # Signature lines get bold.
+        is_sig = "Retardovici" in line or "President" in line
+        f = head_font if is_sig else body_font
+        col = (20, 15, 10) if is_sig else (35, 30, 20)
+        txt = f.render(line, True, col)
+        surface.blit(txt, (x + 40, ty))
+        ty += 20
+    # Footer.
+    foot = foot_font.render(doc["footer"], True, (100, 80, 50))
+    surface.blit(foot, (x + 40, y + h - 24))
+
+
+def _draw_doc_terminal(surface, doc, x, y, w, h, font, font_small):
+    """Green-on-black terminal log."""
+    # Terminal background.
+    pygame.draw.rect(surface, (4, 12, 8), (x, y, w, h), border_radius=3)
+    pygame.draw.rect(surface, CRT_DIM_GREEN, (x, y, w, h), 1, border_radius=3)
+    term_font = pygame.font.SysFont("Consolas", 13)
+    # Header.
+    surface.blit(term_font.render(doc["header"], True, CRT_BRIGHT), (x + 12, y + 12))
+    pygame.draw.line(surface, CRT_DIM_GREEN, (x + 8, y + 32), (x + w - 8, y + 32), 1)
+    # Body lines.
+    ty = y + 40
+    for line in doc["body_lines"]:
+        if not line:
+            ty += 8
+            continue
+        # [REDACTED] text gets a black bar.
+        if "[REDACTED]" in line:
+            # Render the parts around [REDACTED].
+            parts = line.split("[REDACTED]")
+            cx = x + 12
+            for i, part in enumerate(parts):
+                if part:
+                    txt = term_font.render(part, True, CRT_GREEN)
+                    surface.blit(txt, (cx, ty))
+                    cx += txt.get_width()
+                if i < len(parts) - 1:
+                    # Draw the redaction bar.
+                    bar_w = term_font.size("[REDACTED]")[0]
+                    pygame.draw.rect(surface, (0, 0, 0), (cx, ty, bar_w, 16))
+                    pygame.draw.rect(surface, CRT_DIM_GREEN, (cx, ty, bar_w, 16), 1)
+                    cx += bar_w
+        else:
+            col = CRT_AMBER if "WARNING" in line or "COMPROMISED" in line else CRT_GREEN
+            txt = term_font.render(line, True, col)
+            surface.blit(txt, (x + 12, ty))
+        ty += 18
+    # Footer.
+    foot = term_font.render(doc["footer"], True, CRT_DIM_GREEN)
+    surface.blit(foot, (x + 12, y + h - 24))
+    # Blinking cursor at the end.
+    if (_os_timer % 24) < 12:
+        pygame.draw.rect(surface, CRT_GREEN, (x + 12 + foot.get_width() + 4, y + h - 24, 8, 14))
+
+
+def _draw_doc_draft(surface, doc, x, y, w, h, font, font_small):
+    """Typewritten draft with redactions."""
+    # Paper background (slightly creased).
+    paper = pygame.Surface((w, h), pygame.SRCALPHA)
+    paper.fill((240, 235, 215, 240))
+    surface.blit(paper, (x, y))
+    pygame.draw.rect(surface, (120, 110, 85), (x, y, w, h), 1)
+    draft_font = pygame.font.SysFont("Courier New", 12)
+    head_font = pygame.font.SysFont("Courier New", 12, bold=True)
+    # Header (DRAFT stamp).
+    stamp_font = pygame.font.SysFont("Arial Black", 28, bold=True)
+    stamp = stamp_font.render("DRAFT", True, (180, 30, 30))
+    stamp.set_alpha(120)
+    surface.blit(stamp, (x + w - 100, y + 20))
+    # Header lines.
+    ty = y + 16
+    for line in doc["body_lines"][:4]:  # TO/FROM/RE
+        txt = head_font.render(line, True, (40, 30, 20))
+        surface.blit(txt, (x + 20, ty))
+        ty += 16
+    ty += 8
+    # Body.
+    for line in doc["body_lines"][4:]:
+        if not line:
+            ty += 8
+            continue
+        # [REDACTED] handling.
+        if "[REDACTED]" in line:
+            parts = line.split("[REDACTED]")
+            cx = x + 20
+            for i, part in enumerate(parts):
+                if part:
+                    txt = draft_font.render(part, True, (35, 30, 20))
+                    surface.blit(txt, (cx, ty))
+                    cx += txt.get_width()
+                if i < len(parts) - 1:
+                    bar_w = draft_font.size("[REDACTED]")[0]
+                    pygame.draw.rect(surface, (15, 15, 15), (cx, ty, bar_w, 14))
+                    cx += bar_w
+        else:
+            # Numbered lines get emphasis.
+            col = (120, 30, 20) if (line.strip().startswith(tuple("1234")) and "." in line[:3]) else (35, 30, 20)
+            txt = draft_font.render(line, True, col)
+            surface.blit(txt, (x + 20, ty))
+        ty += 16
+    # Footer.
+    foot = pygame.font.SysFont("Courier New", 10).render(doc["footer"], True, (100, 80, 50))
+    surface.blit(foot, (x + 20, y + h - 24))
+
+
+def _draw_control_panel_grid(surface, body_rect, font, font_small):
+    """Grid of clickable control panel icons."""
+    mouse_pos = pygame.mouse.get_pos()
+    # Grid of 5 icons (3 columns x 2 rows, last row has 2).
+    grid_x = body_rect.x + 40
+    grid_y = body_rect.y + 30
+    icon_w, icon_h = 80, 80
+    gap_x, gap_y = 120, 110
+    for i, item in enumerate(CONTROL_PANEL_ITEMS):
+        col = i % 3
+        row = i // 3
+        ix = grid_x + col * (icon_w + gap_x)
+        iy = grid_y + row * (icon_h + gap_y)
+        icon_rect = pygame.Rect(ix, iy, icon_w, icon_h)
+        hovered = icon_rect.collidepoint(mouse_pos)
+        # Icon background.
+        bg = (15, 60, 30) if hovered else (8, 35, 18)
+        _draw_rounded_rect(surface, bg, icon_rect, radius=6)
+        border = CRT_BRIGHT if hovered else CRT_GREEN
+        _draw_rounded_rect(surface, border, icon_rect, radius=6, width=1)
+        # Icon symbol (big letter).
+        sym_font = pygame.font.SysFont("Arial Black", 32, bold=True)
+        sym = sym_font.render(item["icon"], True, CRT_BRIGHT if hovered else CRT_GREEN)
+        surface.blit(sym, (icon_rect.centerx - sym.get_width() // 2,
+                           icon_rect.centery - sym.get_height() // 2 - 8))
+        # Label.
+        lbl = font_small.render(item["label"], True, CRT_BRIGHT if hovered else CRT_GREEN)
+        surface.blit(lbl, (icon_rect.centerx - lbl.get_width() // 2, icon_rect.bottom - 18))
+    # Description hint for hovered icon.
+    for i, item in enumerate(CONTROL_PANEL_ITEMS):
+        col = i % 3
+        row = i // 3
+        ix = grid_x + col * (icon_w + gap_x)
+        iy = grid_y + row * (icon_h + gap_y)
+        if pygame.Rect(ix, iy, icon_w, icon_h).collidepoint(mouse_pos):
+            desc = font_small.render(item["desc"], True, CRT_DIM_GREEN)
+            surface.blit(desc, (body_rect.centerx - desc.get_width() // 2, body_rect.bottom - 30))
+            break
+
+
+def _draw_control_panel_sub(surface, body_rect, font, font_small):
+    """Sub-window for a control panel item (Display, Sound, Network, etc.)."""
+    if _info_sub == "display":
+        _draw_cp_display(surface, body_rect, font, font_small)
+    elif _info_sub == "sound":
+        _draw_cp_sound(surface, body_rect, font, font_small)
+    elif _info_sub == "network":
+        _draw_cp_network(surface, body_rect, font, font_small)
+    elif _info_sub == "security":
+        _draw_cp_security(surface, body_rect, font, font_small)
+    elif _info_sub == "about":
+        _draw_cp_about(surface, body_rect, font, font_small)
+
+
+def _draw_cp_display(surface, body_rect, font, font_small):
+    """Display settings — fake resolution + brightness sliders."""
+    surface.blit(font.render("Display Properties", True, CRT_BRIGHT), (body_rect.x + 12, body_rect.y + 8))
+    surface.blit(font_small.render("Resolution:", True, CRT_GREEN), (body_rect.x + 12, body_rect.y + 40))
+    surface.blit(font.render("1000 x 700 (recommended)", True, CRT_BRIGHT), (body_rect.x + 120, body_rect.y + 38))
+    # Fake slider.
+    sx = body_rect.x + 12
+    sy = body_rect.y + 70
+    sw = body_rect.w - 24
+    pygame.draw.rect(surface, CRT_DARK, (sx, sy, sw, 6), border_radius=2)
+    pygame.draw.rect(surface, CRT_GREEN, (sx, sy, sw * 7 // 10, 6), border_radius=2)
+    pygame.draw.circle(surface, CRT_BRIGHT, (sx + sw * 7 // 10, sy + 3), 6)
+    pygame.draw.circle(surface, CRT_DARK, (sx + sw * 7 // 10, sy + 3), 6, 1)
+    surface.blit(font_small.render("Brightness:", True, CRT_GREEN), (body_rect.x + 12, body_rect.y + 90))
+    pygame.draw.rect(surface, CRT_DARK, (sx, body_rect.y + 120, sw, 6), border_radius=2)
+    pygame.draw.rect(surface, CRT_GREEN, (sx, body_rect.y + 120, sw * 5 // 10, 6), border_radius=2)
+    pygame.draw.circle(surface, CRT_BRIGHT, (sx + sw * 5 // 10, body_rect.y + 123), 6)
+    pygame.draw.circle(surface, CRT_DARK, (sx + sw * 5 // 10, body_rect.y + 123), 6, 1)
+    surface.blit(font_small.render("Color depth: 8-bit (CRT phosphor)", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.y + 140))
+    surface.blit(font_small.render("Refresh rate: 60 Hz (interlaced)", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.y + 158))
+
+
+def _draw_cp_sound(surface, body_rect, font, font_small):
+    """Sound settings — volume slider + mute toggle."""
+    surface.blit(font.render("Sound Properties", True, CRT_BRIGHT), (body_rect.x + 12, body_rect.y + 8))
+    surface.blit(font_small.render("Master Volume:", True, CRT_GREEN), (body_rect.x + 12, body_rect.y + 40))
+    sx = body_rect.x + 12
+    sy = body_rect.y + 70
+    sw = body_rect.w - 24
+    pygame.draw.rect(surface, CRT_DARK, (sx, sy, sw, 6), border_radius=2)
+    pygame.draw.rect(surface, CRT_GREEN, (sx, sy, sw * 8 // 10, 6), border_radius=2)
+    pygame.draw.circle(surface, CRT_BRIGHT, (sx + sw * 8 // 10, sy + 3), 6)
+    surface.blit(font_small.render("80%", True, CRT_BRIGHT), (body_rect.x + sw + 4, sy - 4))
+    # Mute checkbox.
+    mute_rect = pygame.Rect(body_rect.x + 12, body_rect.y + 100, 16, 16)
+    _draw_rounded_rect(surface, (2, 15, 8), mute_rect, radius=2)
+    _draw_rounded_rect(surface, CRT_GREEN, mute_rect, radius=2, width=1)
+    surface.blit(font_small.render("Mute all sounds", True, CRT_GREEN),
+                 (body_rect.x + 36, body_rect.y + 102))
+    surface.blit(font_small.render("Audio device: Acarizwork Modem 2400 (mono)", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.y + 130))
+    surface.blit(font_small.render("Driver: IPA-AUDIO.SYS v1.2", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.y + 148))
+
+
+def _draw_cp_network(surface, body_rect, font, font_small):
+    """Network settings — Acarizwork modem status + signal bar."""
+    surface.blit(font.render("Network Properties", True, CRT_BRIGHT), (body_rect.x + 12, body_rect.y + 8))
+    surface.blit(font_small.render("Connection: Acarizwork Modem 2400 baud", True, CRT_GREEN),
+                 (body_rect.x + 12, body_rect.y + 40))
+    surface.blit(font_small.render("Status: CONNECTED", True, CRT_BRIGHT),
+                 (body_rect.x + 12, body_rect.y + 58))
+    # Signal bar (5 bars, 3 lit).
+    surface.blit(font_small.render("Signal:", True, CRT_GREEN), (body_rect.x + 12, body_rect.y + 80))
+    bx = body_rect.x + 70
+    by = body_rect.y + 84
+    for i in range(5):
+        bh = 4 + i * 4
+        col = CRT_BRIGHT if i < 3 else CRT_DARK
+        pygame.draw.rect(surface, col, (bx + i * 10, by + (20 - bh), 8, bh))
+        pygame.draw.rect(surface, CRT_DIM_GREEN, (bx + i * 10, by + (20 - bh), 8, bh), 1)
+    surface.blit(font_small.render("IP Address: 10.47.12.8", True, CRT_GREEN),
+                 (body_rect.x + 12, body_rect.y + 120))
+    surface.blit(font_small.render("Gateway: 10.47.0.1 (IPA routing)", True, CRT_GREEN),
+                 (body_rect.x + 12, body_rect.y + 138))
+    surface.blit(font_small.render("Ping: 847ms (DEGRADED)", True, CRT_AMBER),
+                 (body_rect.x + 12, body_rect.y + 156))
+    surface.blit(font_small.render("Bytes sent: 12,847", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.y + 174))
+    surface.blit(font_small.render("Bytes received: 8,234", True, CRT_DIM_GREEN),
+                 (body_rect.x + 12, body_rect.y + 192))
+
+
+def _draw_cp_security(surface, body_rect, font, font_small):
+    """Security settings — clearance level + redacted personnel file."""
+    surface.blit(font.render("Security Information", True, CRT_BRIGHT), (body_rect.x + 12, body_rect.y + 8))
+    surface.blit(font_small.render("Operator: operator", True, CRT_GREEN), (body_rect.x + 12, body_rect.y + 40))
+    surface.blit(font_small.render("Clearance: Level 2 — Field Operations", True, CRT_AMBER),
+                 (body_rect.x + 12, body_rect.y + 58))
+    # Redacted personnel file.
+    surface.blit(font_small.render("PERSONNEL FILE — CLASSIFIED", True, CRT_RED),
+                 (body_rect.x + 12, body_rect.y + 90))
+    pygame.draw.line(surface, CRT_DIM_GREEN, (body_rect.x + 12, body_rect.y + 108),
+                     (body_rect.right - 12, body_rect.y + 108), 1)
+    file_lines = [
+        "Name:           [REDACTED]",
+        "Rank:           [REDACTED]",
+        "Assignment:     Route 12 Control Building",
+        "Last activity:  03:12 — terminal login",
+        "Notes:          Subject flagged for review.",
+        "                Authorization trace in progress.",
+    ]
+    ty = body_rect.y + 116
+    term_font = pygame.font.SysFont("Consolas", 12)
+    for line in file_lines:
+        if "[REDACTED]" in line:
+            parts = line.split("[REDACTED]")
+            cx = body_rect.x + 16
+            for i, part in enumerate(parts):
+                if part:
+                    txt = term_font.render(part, True, CRT_GREEN)
+                    surface.blit(txt, (cx, ty))
+                    cx += txt.get_width()
+                if i < len(parts) - 1:
+                    bar_w = term_font.size("[REDACTED]")[0]
+                    pygame.draw.rect(surface, (0, 0, 0), (cx, ty, bar_w, 14))
+                    pygame.draw.rect(surface, CRT_DIM_GREEN, (cx, ty, bar_w, 14), 1)
+                    cx += bar_w
+        else:
+            txt = term_font.render(line, True, CRT_GREEN)
+            surface.blit(txt, (body_rect.x + 16, ty))
+        ty += 18
+
+
+def _draw_cp_about(surface, body_rect, font, font_small):
+    """About — system info (the old static content)."""
+    surface.blit(font.render("About IPA OS", True, CRT_BRIGHT), (body_rect.x + 12, body_rect.y + 8))
+    # IPA logo (small).
+    logo_cx = body_rect.centerx
+    logo_cy = body_rect.y + 70
+    pygame.draw.circle(surface, (10, 40, 20), (logo_cx, logo_cy), 30)
+    pygame.draw.circle(surface, CRT_GREEN, (logo_cx, logo_cy), 30, 2)
+    logo_font = pygame.font.SysFont("Arial Black", 20, bold=True)
+    logo_txt = logo_font.render("IPA", True, CRT_BRIGHT)
+    surface.blit(logo_txt, (logo_cx - logo_txt.get_width() // 2, logo_cy - logo_txt.get_height() // 2))
+    # System info.
+    info_lines = [
+        "IPA OS v3.7.2 (State Computing Division)",
+        "",
+        "Operator:    operator",
+        "Clearance:   Level 2 — Field Operations",
+        "Machine:     IPA-WORKSTATION-12",
+        "Location:    Route 12 Control Building",
+        "",
+        "CPU:         KRAP-8088 @ 4.77 MHz",
+        "Memory:      640K conventional",
+        "Storage:     240K (87% full)",
+        "Network:     Acarizwork Modem 2400 baud",
+        "",
+        "Last boot:   03:12 — 35 minutes ago",
+    ]
+    ty = body_rect.y + 120
+    term_font = pygame.font.SysFont("Consolas", 12)
+    for line in info_lines:
+        if not line:
+            ty += 8
+            continue
+        col = CRT_BRIGHT if "IPA OS" in line else CRT_GREEN
+        txt = term_font.render(line, True, col)
+        surface.blit(txt, (body_rect.x + 20, ty))
+        ty += 16
+
+
+def _draw_logs_waveform(surface, body_rect, font, font_small):
+    """Waveform visualizer at top + scrolling radio log below."""
+    # ── Waveform visualizer (top third) ──
+    wf_x = body_rect.x + 12
+    wf_y = body_rect.y + 12
+    wf_w = body_rect.w - 24
+    wf_h = 80
+    pygame.draw.rect(surface, (2, 12, 6), (wf_x, wf_y, wf_w, wf_h), border_radius=3)
+    pygame.draw.rect(surface, CRT_DIM_GREEN, (wf_x, wf_y, wf_w, wf_h), 1, border_radius=3)
+    # Center line.
+    pygame.draw.line(surface, (10, 30, 18), (wf_x + 4, wf_y + wf_h // 2), (wf_x + wf_w - 4, wf_y + wf_h // 2), 1)
+    # Bars.
+    n_bars = len(_waveform_bars)
+    bar_w = max(2, (wf_w - 8) // n_bars - 1)
+    for i, val in enumerate(_waveform_bars):
+        bh = max(2, int(val * (wf_h // 2 - 4)))
+        bx = wf_x + 4 + i * (bar_w + 1)
+        # Top half.
+        pygame.draw.rect(surface, CRT_GREEN, (bx, wf_y + wf_h // 2 - bh, bar_w, bh))
+        # Bottom half (mirror).
+        pygame.draw.rect(surface, CRT_GREEN, (bx, wf_y + wf_h // 2, bar_w, bh))
+    # Label.
+    surface.blit(font_small.render("◆ LIVE SIGNAL", True, CRT_BRIGHT), (wf_x + 8, wf_y + 4))
+    # Frequency readout (fake).
+    freq = 2400 + int(_waveform_bars[20] * 200)
+    surface.blit(font_small.render(f"{freq} Hz", True, CRT_DIM_GREEN), (wf_x + wf_w - 60, wf_y + 4))
+
+    # ── Radio log (bottom two-thirds) ──
+    log_x = body_rect.x + 12
+    log_y = wf_y + wf_h + 8
+    log_w = body_rect.w - 24
+    log_h = body_rect.h - wf_h - 60
+    pygame.draw.rect(surface, (4, 12, 8), (log_x, log_y, log_w, log_h), border_radius=3)
+    pygame.draw.rect(surface, CRT_DIM_GREEN, (log_x, log_y, log_w, log_h), 1, border_radius=3)
+    # Header.
+    surface.blit(font_small.render("TIME    SOURCE    MESSAGE", True, CRT_DIM_GREEN),
+                 (log_x + 12, log_y + 6))
+    pygame.draw.line(surface, CRT_DIM_GREEN, (log_x + 8, log_y + 22), (log_x + log_w - 8, log_y + 22), 1)
+    # Log entries — pull from STATE via _get_radio_log_lines().
+    radio_lines = _get_radio_log_lines()
+    if radio_lines is None:
+        # Fallback static content.
+        radio_lines = [
+            ("SYSTEM", "Radio transmission logs (decoded):", CRT_GREEN),
+            ("VASILE", "Balaceanu logistics. Not MAG.", CRT_GREEN),
+            ("VASILE", "Hidden detonator! Run to shelter!", CRT_AMBER),
+            ("SYSTEM", "Tanker detonation detected.", CRT_RED),
+            ("VASILE", "[signal degraded]", CRT_DIM_GREEN),
+            ("VASILE", "You made it. Control building.", CRT_GREEN),
+            ("SYSTEM", "Evidence files recovered (3/3)", CRT_BRIGHT),
+        ]
+    term_font = pygame.font.SysFont("Consolas", 12)
+    ty = log_y + 28
+    # Fake timestamps.
+    base_time = 342  # 03:42
+    for i, (prefix, text, color) in enumerate(radio_lines):
+        ts = base_time + i * 2
+        ts_str = f"{ts // 60:02d}:{ts % 60:02d}"
+        surface.blit(term_font.render(ts_str, True, CRT_DIM_GREEN), (log_x + 12, ty))
+        surface.blit(term_font.render(prefix[:8], True, color), (log_x + 70, ty))
+        # Truncate text if too long.
+        max_text_w = log_w - 160
+        display_text = text
+        while term_font.size(display_text)[0] > max_text_w and len(display_text) > 3:
+            display_text = display_text[:-1]
+        if display_text != text:
+            display_text += "..."
+        surface.blit(term_font.render(display_text, True, color), (log_x + 140, ty))
+        ty += 16
+        if ty > log_y + log_h - 16:
+            break
+    # Signal quality footer.
+    surface.blit(font_small.render("Signal quality: DEGRADED  ·  Comms: INTERMITTENT", True, CRT_AMBER),
+                 (log_x + 12, log_y + log_h + 6))

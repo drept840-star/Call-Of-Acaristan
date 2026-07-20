@@ -1,0 +1,1863 @@
+# ------------------------------------------------------------
+# menu.py
+# ------------------------------------------------------------
+
+from config import *
+from state import STATE
+import save_system
+class ModernButton:
+    def __init__(self, x, y, text):
+        self.x, self.y, self.text = x, y, text
+        self.width, self.height = 300, 40
+        self.rect = pygame.Rect(x, y, self.width, self.height)
+        self.is_hovered = False
+        self._prev_hover = False
+        self.anim_offset = 0
+    def draw(self, surface):
+        self.anim_offset += ((20 if self.is_hovered else 0) - self.anim_offset) * 0.2
+        text_color = C_WHITE if self.is_hovered else C_GREY
+        actual_x = self.x + self.anim_offset
+        # Always-visible tick mark (orange accent bar on the left)
+        tick_col = C_ORANGE if self.is_hovered else (90, 55, 20)
+        pygame.draw.rect(surface, tick_col, (self.x - 25, self.y + 6, 3, self.height - 12))
+        # Always-visible chevron prefix
+        chevron_col = C_ORANGE if self.is_hovered else (110, 110, 110)
+        chevron = font_btn.render(">", True, chevron_col)
+        surface.blit(chevron, (self.x - 15, self.y + 4))
+        if self.is_hovered:
+            pygame.draw.rect(surface, C_ORANGE, (actual_x - 15, self.y, 5, self.height))
+            surface.blit(_btn_hover_bg, (actual_x - 5, self.y))
+        surface.blit(font_btn.render(self.text, True, text_color), (actual_x, self.y + 4))
+    def check_hover(self, mp):
+        self._prev_hover = self.is_hovered
+        self.is_hovered = self.rect.collidepoint(mp)
+        if self.is_hovered and not self._prev_hover:
+            audio.play("menu_hover", volume=0.3)
+    def is_clicked(self, event, mp):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
+            audio.play("menu_click", volume=0.5)
+            return True
+        return False
+buttons = [
+    ModernButton(135, 330, "CONTINUE"),
+    ModernButton(135, 390, "NEW CAMPAIGN"),
+    ModernButton(135, 450, "MULTIPLAYER"),
+    ModernButton(135, 510, "SETTINGS"),
+    ModernButton(135, 570, "EXIT"),
+]
+# Pre-rendered overlays and decorations
+_menu_overlay = pygame.Surface((500, HEIGHT), pygame.SRCALPHA)
+pygame.draw.rect(_menu_overlay, (5, 5, 8, 230), (0, 0, 500, HEIGHT))
+# Soft gradient fade on the right edge of the dark panel for smoother transition
+for fx in range(40):
+    a = int(230 * (1 - fx / 40))
+    pygame.draw.line(_menu_overlay, (5, 5, 8, a), (500 - fx, 0), (500 - fx, HEIGHT))
+# Faint horizontal scanlines baked into the panel for a CRT terminal feel
+for sy in range(0, HEIGHT, 3):
+    pygame.draw.line(_menu_overlay, (255, 255, 255, 6), (0, sy), (500, sy))
+# Vertical accent bar on the right edge of the panel
+pygame.draw.line(_menu_overlay, (255, 120, 0, 70), (498, 0), (498, HEIGHT), 1)
+pygame.draw.line(_menu_overlay, (255, 120, 0, 30), (495, 0), (495, HEIGHT), 1)
+_btn_hover_bg = pygame.Surface((300, 40), pygame.SRCALPHA)
+pygame.draw.rect(_btn_hover_bg, (0, 0, 0, 180), _btn_hover_bg.get_rect())
+# Diagonal hatched pattern at very top-right corner of panel
+for hx in range(0, 60, 4):
+    pygame.draw.line(_menu_overlay, (255, 120, 0, 25), (440 + hx, 0), (500, 60 - hx), 1)
+# Subtitle / accent fonts
+_subtitle_font = pygame.font.SysFont("Consolas", 18, bold=True)
+_tagline_font = pygame.font.SysFont("Consolas", 14, italic=True)
+_footer_font = pygame.font.SysFont("Consolas", 12)
+_classification_font = pygame.font.SysFont("Consolas", 11, bold=True)
+_micro_font = pygame.font.SysFont("Consolas", 10)
+_glyph_font = pygame.font.SysFont("Consolas", 10, bold=True)
+# Decorative corner ticks — drawn directly to the overlay so they're free at runtime
+for cx, cy in [(8, 8), (488, 8), (8, HEIGHT - 8), (488, HEIGHT - 8)]:
+    pygame.draw.line(_menu_overlay, (255, 120, 0, 180), (cx, cy), (cx + 12 if cx < 200 else cx - 12, cy), 1)
+    pygame.draw.line(_menu_overlay, (255, 120, 0, 180), (cx, cy), (cx, cy + 12 if cy < 200 else cy - 12), 1)
+def draw_menu_background():
+    if bg_image:
+        screen.blit(bg_image, (0, 0))
+    else:
+        screen.fill(C_BLACK)
+def draw_menu():
+    draw_menu_background()
+    screen.blit(_menu_overlay, (0, 0))
+    # ── Top classification banner ──
+    classif_bar = pygame.Surface((460, 22), pygame.SRCALPHA)
+    classif_bar.fill((8, 10, 14, 220))
+    pygame.draw.line(classif_bar, C_ORANGE, (0, 0), (460, 0), 1)
+    pygame.draw.line(classif_bar, C_ORANGE, (0, 21), (460, 21), 1)
+    screen.blit(classif_bar, (20, 20))
+    classif_text = _classification_font.render(
+        "// KRAPNET TERMINAL — CLEARANCE: OPERATOR //", True, C_ORANGE
+    )
+    screen.blit(classif_text, (30, 24))
+    # ── Title (pushed further left, no subtitle/tagline) ──
+    title_x = 40
+    title_y = 110
+    # Drop shadow
+    screen.blit(font_title.render("CALL OF ACARISTAN", True, (0, 0, 0)), (title_x + 4, title_y + 4))
+    # Main title
+    screen.blit(font_title.render("CALL OF ACARISTAN", True, C_WHITE), (title_x, title_y))
+    # Orange accent bar under title
+    pygame.draw.rect(screen, C_ORANGE, (title_x, title_y + 88, 320, 3))
+    # ── Section header above menu buttons ──
+    pygame.draw.line(screen, (60, 45, 25), (135, 320), (420, 320), 1)
+    section_lbl = _classification_font.render("MAIN TERMINAL", True, (140, 100, 50))
+    screen.blit(section_lbl, (135, 305))
+    # ── Active save slot summary ──
+    slot = save_system.get_slot()
+    slot_idx = save_system.current_slot_index() + 1
+    slot_panel = pygame.Surface((350, 48), pygame.SRCALPHA)
+    slot_panel.fill((0, 0, 0, 135))
+    pygame.draw.rect(slot_panel, (45, 70, 90, 120), slot_panel.get_rect(), 1)
+    pygame.draw.line(slot_panel, C_KRAP_BLUE, (0, 0), (0, 48), 3)
+    screen.blit(slot_panel, (135, 260))
+    active = _footer_font.render(f"ACTIVE SAVE SLOT: {slot_idx}", True, (80, 150, 190))
+    last = slot.get("last_completed_label", "No missions completed")
+    if slot.get("last_completed_mission"):
+        last = "LAST COMPLETED: " + last
+    elif slot.get("occupied"):
+        last = slot.get("last_completed_label", "Campaign started")
+    else:
+        last = "EMPTY SLOT — START A NEW CAMPAIGN"
+    last_surf = _footer_font.render(last[:48], True, (145, 145, 135))
+    screen.blit(active, (150, 268))
+    screen.blit(last_surf, (150, 286))
+    # ── Buttons ──
+    has_save = save_system.has_any_save()
+    if has_save:
+        layout = [
+            (0, 330, "CONTINUE"),
+            (1, 390, "NEW CAMPAIGN"),
+            (2, 450, "MULTIPLAYER"),
+            (3, 510, "SETTINGS"),
+            (4, 570, "EXIT"),
+        ]
+    else:
+        # No Continue button until at least one save slot exists.
+        layout = [
+            (0, -999, "CONTINUE"),
+            (1, 350, "NEW CAMPAIGN"),
+            (2, 410, "MULTIPLAYER"),
+            (3, 470, "SETTINGS"),
+            (4, 530, "EXIT"),
+        ]
+    for idx, y, text in layout:
+        buttons[idx].text = text
+        buttons[idx].y = y
+        buttons[idx].rect.y = y
+    for btn in buttons:
+        if btn.y < 0:
+            btn.is_hovered = False
+            continue
+        btn.check_hover(get_scaled_mouse())
+        btn.draw(screen)
+    # ── Bottom divider line above footer ──
+    pygame.draw.line(screen, (40, 30, 15), (30, HEIGHT - 50), (470, HEIGHT - 50), 1)
+    # ── Footer ──
+    footer_left = _footer_font.render(
+        "v0.1.0  ·  BUILD 4471", True, (90, 90, 95)
+    )
+    screen.blit(footer_left, (30, HEIGHT - 38))
+    footer_right = _footer_font.render(
+        "© RETARDOVICI INC.", True, (90, 90, 95)
+    )
+    screen.blit(footer_right, (470 - footer_right.get_width(), HEIGHT - 38))
+    # Blinking status indicator
+    if (pygame.time.get_ticks() // 600) % 2 == 0:
+        pygame.draw.circle(screen, (50, 220, 100), (40, HEIGHT - 22), 3)
+    else:
+        pygame.draw.circle(screen, (30, 130, 60), (40, HEIGHT - 22), 3)
+    status_text = _footer_font.render("CONNECTED — KRAPNET RELAY 7", True, (60, 70, 65))
+    screen.blit(status_text, (50, HEIGHT - 26))
+# ─────────────────────────────────────────────
+# SERVER BROWSER
+# ─────────────────────────────────────────────
+server_list = [
+    ("Micul Fuego's FUEGOTECH K1 Launch Party!!", 3, 6, 45),
+    ("Dekro Palace [MODDED] [NO RULES]", 1, 50, 120),
+    ("Sebi's Parlament [RP] [SERIOUS ONLY]", 50, 49, 30),
+    ("KGB Archives // LEAKED", 0, 12, 89),
+    ("Putin's Summer House [VIP ONLY]", 2, 8, 202),
+    ("█████████ [REDACTED]", 7, 7, 999),
+    ("Vasile's Cigarette Break", 1, 4, 12),
+    ("Biribel's Safe House (PASS: 742)", 0, 2, 67),
+    ("MAG Recruitment Center", 24, 32, 88),
+    ("Krapistan #1 Official", 0, 64, 350),
+    ("noobs only pls", 3, 10, 156),
+    ("[24/7] OIL RIG EXPLOSION SIM", 12, 16, 78),
+    ("MR.BEAST GIVING AWAY CIGARETTES", 99, 100, 45),
+    ("yo mama's basement", 1, 2, 4),
+    ("FREE V-BUCKS REAL NOT FAKE", 6, 6, 230),
+]
+# Server rules — shown on hover
+SERVER_RULES = {
+    "Micul Fuego's FUEGOTECH K1 Launch Party!!": [
+        "GAMEMODE:  Launch Party Deathmatch",
+        "MAP:       FuegoTech HQ Rooftop",
+        "RULES:     1. Bring your own fireworks.",
+        "           2. No actual fuego allowed.",
+        "           3. Micul Fuego always wins.",
+    ],
+    "Dekro Palace [MODDED] [NO RULES]": [
+        "GAMEMODE:  Free For All",
+        "MAP:       The Palace",
+        "RULES:     Literally none. We tried.",
+        "           Last admin resigned in tears.",
+    ],
+    "Sebi's Parlament [RP] [SERIOUS ONLY]": [
+        "GAMEMODE:  Parliamentary Procedure RP",
+        "MAP:       Parlament Chamber",
+        "RULES:     1. Address the chair properly.",
+        "           2. No filibustering past 3am.",
+        "           3. Bring snacks for the recess.",
+    ],
+    "KGB Archives // LEAKED": [
+        "GAMEMODE:  ???",
+        "MAP:       ???",
+        "RULES:     Do not discuss what you see here.",
+        "           Это всё, что вам нужно знать.",
+    ],
+    "Putin's Summer House [VIP ONLY]": [
+        "GAMEMODE:  Bear Wrestling",
+        "MAP:       Dacha + Sauna",
+        "RULES:     1. No shirts allowed.",
+        "           2. Stay away from the windows.",
+        "           3. Compliment the host's judo.",
+    ],
+    "█████████ [REDACTED]": [
+        "GAMEMODE:  █████████",
+        "MAP:       █████████",
+        "RULES:     ████ ██ ████████ ██ ████.",
+        "           ████████ ████ ██ █████.",
+    ],
+    "Vasile's Cigarette Break": [
+        "GAMEMODE:  Standing Around",
+        "MAP:       Behind the Warehouse",
+        "RULES:     1. No talking shop.",
+        "           2. Share the lighter.",
+        "           3. Back to work in 5 minutes.",
+    ],
+    "Biribel's Safe House (PASS: 742)": [
+        "GAMEMODE:  Cooperative Stealth",
+        "MAP:       Safe House Interior",
+        "RULES:     1. Keep your voice down.",
+        "           2. Do not turn on the lights.",
+        "           3. The code is in the desk.",
+    ],
+    "MAG Recruitment Center": [
+        "GAMEMODE:  Capture the Flag",
+        "MAP:       Slum District",
+        "RULES:     1. Free graffiti supplies provided.",
+        "           2. No KRAP affiliates.",
+        "           3. MARU SEES YOU.",
+    ],
+    "Krapistan #1 Official": [
+        "GAMEMODE:  Peacekeeping Simulator",
+        "MAP:       Acaristan-wide",
+        "RULES:     1. Follow protocol at all times.",
+        "           2. Paperwork must be in triplicate.",
+        "           3. Do not ask about the oil.",
+    ],
+    "noobs only pls": [
+        "GAMEMODE:  Training Grounds",
+        "MAP:       Tutorial Map",
+        "RULES:     1. No tryhards.",
+        "           2. Be nice to new players.",
+        "           3. We were all noobs once.",
+    ],
+    "[24/7] OIL RIG EXPLOSION SIM": [
+        "GAMEMODE:  Demolition Derby",
+        "MAP:       Kilemeno Ocean Platform",
+        "RULES:     1. Everything must explode.",
+        "           2. Survive 5 minutes for VIP.",
+        "           3. No fishing during gameplay.",
+    ],
+    "MR.BEAST GIVING AWAY CIGARETTES": [
+        "GAMEMODE:  Subscribe Battle Royale",
+        "MAP:       Mystery Warehouse",
+        "RULES:     1. Must subscribe to enter.",
+        "           2. Last sub wins cigarettes.",
+        "           3. Not actually MrBeast.",
+    ],
+    "yo mama's basement": [
+        "GAMEMODE:  LAN Party",
+        "MAP:       The Basement",
+        "RULES:     1. Bring your own Mountain Dew.",
+        "           2. Mom said pizza at 8.",
+        "           3. No yelling, she's sleeping.",
+    ],
+    "FREE V-BUCKS REAL NOT FAKE": [
+        "GAMEMODE:   TROJAN.WIN32.SUSPICIOUS",
+        "MAP:       N/A",
+        "RULES:     Just enter your card details.",
+        "           100% legit. We promise.",
+    ],
+}
+# Region rotation for flavor
+SERVER_REGIONS = [
+    "ACARISTAN-EAST relay",
+    "KILEMENO-NORTH relay",
+    "KRAPISTAN-CENTRAL relay",
+    "SLUM-DISTRICT mesh",
+    "[UNKNOWN ORIGIN]",
+]
+# Server-specific kick messages — falls back to global pool
+KICK_MESSAGES_BY_SERVER = {
+    "Sebi's Parlament [RP] [SERIOUS ONLY]": [
+        "Kicked: lacked sufficient bureaucratic forms",
+        "Disconnected: your parliamentary immunity has expired",
+        "Kicked: failed to address the chair properly",
+    ],
+    "KGB Archives // LEAKED": [
+        "Connection severed by external party",
+        "Кикнут. Не задавайте больше вопросов.",
+        "You were never here.",
+    ],
+    "Putin's Summer House [VIP ONLY]": [
+        "Kicked: insufficient loyalty score",
+        "Disconnected: a man fell out of a window",
+        "Kicked: refused to take shirt off",
+    ],
+    "█████████ [REDACTED]": [
+        "███████ ███████████ ████.",
+        "████ ████ ███ ███████████ ████.",
+    ],
+    "MR.BEAST GIVING AWAY CIGARETTES": [
+        "Kicked: did not subscribe",
+        "Connection failed: insufficient ad revenue",
+    ],
+    "FREE V-BUCKS REAL NOT FAKE": [
+        "Antivirus prevented connection",
+        "Connection rejected: you actually have a brain",
+    ],
+    "yo mama's basement": [
+        "Kicked: mom said it's bedtime",
+        "Disconnected: pizza arrived",
+    ],
+}
+KICK_MESSAGES = [
+    "Connection rejected: your chair lacks RGB",
+    "Kicked: skill issue detected",
+    "Connection lost: packet of crisps required",
+    "Server full: try again in 1984",
+    "Kicked: you were born in the wrong decade",
+    "Authentication failed: no admin mod installed",
+    "Disconnected: your aura is misaligned",
+]
+# ── Live chat ticker ──
+CHAT_POOL = [
+    # ── Recurring regulars ──
+    ("VasileFan2007", "ez clap", (180, 180, 180)),
+    ("VasileFan2007", "lol", (180, 180, 180)),
+    ("VasileFan2007", "vasile carried", (180, 180, 180)),
+    ("VasileFan2007", "report this guy", (180, 180, 180)),
+    ("VasileFan2007", "im not toxic ur just bad", (180, 180, 180)),
+    ("xX_KRAP_Xx", "anyone got the notebook code?", (180, 180, 180)),
+    ("xX_KRAP_Xx", "fine", (180, 180, 180)),
+    ("xX_KRAP_Xx", "ok ok i wont ask again", (180, 180, 180)),
+    ("xX_KRAP_Xx", "is it 742", (180, 180, 180)),
+    ("xX_KRAP_Xx", "guys??", (180, 180, 180)),
+    ("BiribelMain", "skill issue", (180, 180, 180)),
+    ("BiribelMain", "down bad", (180, 180, 180)),
+    ("BiribelMain", "no scope only", (180, 180, 180)),
+    ("BiribelMain", "ur mom", (180, 180, 180)),
+    ("Volkov_Real", "i am literally him", (255, 100, 60)),
+    ("Volkov_Real", "the IPA doesnt control me", (255, 100, 60)),
+    ("Volkov_Real", "stop dming me", (255, 100, 60)),
+    ("Volkov_Real", "im not selling secrets", (255, 100, 60)),
+    ("Volkov_Real", "ok maybe a few secrets", (255, 100, 60)),
+    # ── Admin / moderation drama ──
+    ("admin", "do not discuss the notebook code in chat", (255, 120, 0)),
+    ("admin", "KICKED: CommanderActual (impersonating officer)", (255, 120, 0)),
+    ("admin", "server restart in 2 hours", (255, 120, 0)),
+    ("admin", "stop spamming", (255, 120, 0)),
+    ("admin", "MUTED: VasileFan2007 (10min)", (255, 120, 0)),
+    ("admin", "please report bugs in the appropriate channel", (255, 120, 0)),
+    ("admin", "no, we will not add a battle pass", (255, 120, 0)),
+    ("admin", "the duplication glitch is patched", (255, 120, 0)),
+    ("admin", "stop asking about the duplication glitch", (255, 120, 0)),
+    ("admin", "MUTED: BiribelMain (toxicity)", (255, 120, 0)),
+    ("MOD_Krapov", "guys keep it civil", (255, 150, 60)),
+    ("MOD_Krapov", "first warning", (255, 150, 60)),
+    ("MOD_Krapov", "i am NOT a bot", (255, 150, 60)),
+    ("MOD_Krapov", "this is your final warning", (255, 150, 60)),
+    # ── Faction roleplayers ──
+    ("CommanderActual", "hello soldiers", (200, 200, 200)),
+    ("CommanderActual_2", "i am the REAL commander", (200, 200, 200)),
+    ("CommanderActual_3", "no I am", (200, 200, 200)),
+    ("CommanderActual_4", "stop impersonating me", (200, 200, 200)),
+    ("MaruWatches", "MARU SEES YOU", (140, 30, 30)),
+    ("MaruWatches", "MARU IS DISPLEASED", (140, 30, 30)),
+    ("MaruWatches", "the eye does not blink", (140, 30, 30)),
+    ("MaruWatches", "MARU SEES YOU SPECIFICALLY", (140, 30, 30)),
+    ("MAGRecruiter", "join us. the slums need you.", (140, 30, 30)),
+    ("MAGRecruiter", "down with KRAP", (140, 30, 30)),
+    ("MAGRecruiter", "free graffiti supplies for new members", (140, 30, 30)),
+    ("MAGRecruiter", "the revolution will be uploaded to youtube", (140, 30, 30)),
+    ("IPA_OFFICIAL", "stability through prosperity", (180, 100, 100)),
+    ("IPA_OFFICIAL", "your oil. our future.", (180, 100, 100)),
+    ("IPA_OFFICIAL", "MAG is a terrorist organization", (180, 100, 100)),
+    ("IPA_OFFICIAL", "please vote yes on the new pipeline", (180, 100, 100)),
+    ("Sebi_PM", "vote yes on bill 7742", (100, 160, 220)),
+    ("Sebi_PM", "or else", (100, 160, 220)),
+    ("Sebi_PM", "my approval rating is fine actually", (100, 160, 220)),
+    ("Sebi_PM", "the polls are rigged", (100, 160, 220)),
+    ("Sebi_PM", "i was elected fair and square", (100, 160, 220)),
+    ("KGB_Watching", "you have been added to the list", (180, 180, 180)),
+    ("KGB_Watching", "we know where you live", (180, 180, 180)),
+    ("KGB_Watching", "пожалуйста подтвердите свою личность", (180, 180, 180)),
+    ("KGB_Watching", "your cat is also on the list", (180, 180, 180)),
+    # ── Cigarette guy saga ──
+    ("Cigarette_Enjoyer", "got a light?", (180, 180, 180)),
+    ("Cigarette_Enjoyer", "anyone??", (180, 180, 180)),
+    ("Cigarette_Enjoyer", "ill trade ammo for a smoke", (180, 180, 180)),
+    ("Cigarette_Enjoyer", "two clips for one cigarette", (180, 180, 180)),
+    ("Cigarette_Enjoyer", "please", (180, 180, 180)),
+    ("Cigarette_Enjoyer", "you guys are heartless", (180, 180, 180)),
+    ("Cigarette_Enjoyer", "found one. nvm", (180, 180, 180)),
+    # ── Old Fisherman ──
+    ("OldFisherman", "third time this month...", (140, 140, 120)),
+    ("OldFisherman", "you'll learn", (140, 140, 120)),
+    ("OldFisherman", "the ocean was different before", (140, 140, 120)),
+    ("OldFisherman", "back in my day we had two fish", (140, 140, 120)),
+    ("OldFisherman", "now there's just the one", (140, 140, 120)),
+    # ── Noob ──
+    ("noob123", "how do i shoot", (180, 180, 180)),
+    ("noob123", "nvm", (180, 180, 180)),
+    ("noob123", "how do i reload", (180, 180, 180)),
+    ("noob123", "WHAT IS THIS GAME", (180, 180, 180)),
+    ("noob123", "where are the controls", (180, 180, 180)),
+    ("noob123", "i pressed a button and now im dead", (180, 180, 180)),
+    ("noob123", "wait its WASD?", (180, 180, 180)),
+    ("noob123", "ohhhh", (180, 180, 180)),
+    ("noob123", "this game is hard", (180, 180, 180)),
+    ("noob123", "why is everyone shooting me", (180, 180, 180)),
+    # ── FuegoTech fanboy ──
+    ("FuegoTechFan", "K1 is the best gun in the game change my mind", (180, 180, 180)),
+    ("FuegoTechFan", "FUEGO FUEGO FUEGO", (180, 180, 180)),
+    ("FuegoTechFan", "micul fuego is god", (180, 180, 180)),
+    ("FuegoTechFan", "FT > all other brands", (180, 180, 180)),
+    ("FuegoTechFan", "K2 leak when???", (180, 180, 180)),
+    # ── Toxic teen squad ──
+    ("KGB_Hater_69", "this game is rigged", (180, 180, 180)),
+    ("KGB_Hater_69", "modded lobby", (180, 180, 180)),
+    ("KGB_Hater_69", "everyone is cheating", (180, 180, 180)),
+    ("KGB_Hater_69", "uninstalling", (180, 180, 180)),
+    ("KGB_Hater_69", "im back", (180, 180, 180)),
+    ("Putin_Stan_88", "russia stronk", (180, 180, 180)),
+    ("Putin_Stan_88", "in soviet acaristan...", (180, 180, 180)),
+    # ── Lore / atmosphere ──
+    ("???", "...", (90, 90, 90)),
+    ("???", "is anyone still here", (90, 90, 90)),
+    ("???", "the lights flicker again", (90, 90, 90)),
+    ("???", "i can hear them through the wall", (90, 90, 90)),
+    ("BANNED_USER", "[message redacted]", (90, 90, 90)),
+    ("BANNED_USER", "[user banned]", (90, 90, 90)),
+    ("BANNED_USER", "[evading ban detected]", (90, 90, 90)),
+    ("DELETED_ACCOUNT", "[this user no longer exists]", (90, 90, 90)),
+    # ── Salesmen / spam ──
+    ("CHEAP_BOOSTING", "RANK UP FAST! DM FOR PRICES", (110, 110, 110)),
+    ("CHEAP_BOOSTING", "RANK 1 GUARANTEED $20", (110, 110, 110)),
+    ("CHEAP_BOOSTING", "VAC PROOF (probably)", (110, 110, 110)),
+    ("admin", "KICKED: CHEAP_BOOSTING (advertising)", (255, 120, 0)),
+    ("WTF_IS_OIL", "what is oil", (180, 180, 180)),
+    ("WTF_IS_OIL", "no like seriously", (180, 180, 180)),
+    ("WTF_IS_OIL", "why are we fighting over it", (180, 180, 180)),
+    # ── Random one-liners ──
+    ("Cmdr_VodkaTime", "anyone wanna duo?", (180, 180, 180)),
+    ("Cmdr_VodkaTime", "im drunk", (180, 180, 180)),
+    ("Cmdr_VodkaTime", "lets go", (180, 180, 180)),
+    ("StealthMain_42", "if you shoot you lose", (180, 180, 180)),
+    ("StealthMain_42", "throw bottles. always.", (180, 180, 180)),
+    ("StealthMain_42", "i havent fired a shot in 200 hours", (180, 180, 180)),
+    ("RushB_Acaristan", "RUSH B", (180, 180, 180)),
+    ("RushB_Acaristan", "RUSH B CYKA", (180, 180, 180)),
+    ("RushB_Acaristan", "WHY NOBODY RUSH B", (180, 180, 180)),
+    ("MicrowaveChef", "im cooking dinner brb", (180, 180, 180)),
+    ("MicrowaveChef", "back. it was hot pockets", (180, 180, 180)),
+    ("ServerRegular", "another day in acaristan", (160, 160, 165)),
+    ("ServerRegular", "same as yesterday", (160, 160, 165)),
+    ("ServerRegular", "and the day before", (160, 160, 165)),
+    ("ConspiracyGuy", "the oil rigs were an inside job", (180, 180, 180)),
+    ("ConspiracyGuy", "wake up sheeple", (180, 180, 180)),
+    ("ConspiracyGuy", "MARU is just a CIA op", (180, 180, 180)),
+    ("LonelyHeart", "anyone wanna be my friend?", (180, 180, 180)),
+    ("LonelyHeart", "no?", (180, 180, 180)),
+    ("LonelyHeart", "ok", (180, 180, 180)),
+    ("SystemBot_v3", "REMINDER: Drink water.", (80, 140, 100)),
+    ("SystemBot_v3", "REMINDER: Take a break.", (80, 140, 100)),
+    ("SystemBot_v3", "REMINDER: Your posture is bad.", (80, 140, 100)),
+    ("EX_KRAP_OPERATOR", "i shouldnt be here", (180, 100, 100)),
+    ("EX_KRAP_OPERATOR", "they think im dead", (180, 100, 100)),
+    ("EX_KRAP_OPERATOR", "if anyone sees this, run", (180, 100, 100)),
+    # ── Meme / quote spam ──
+    ("MemeLord_AC", "the notebook was inside us all along", (180, 180, 180)),
+    ("MemeLord_AC", "what if acaristan was a game", (180, 180, 180)),
+    ("MemeLord_AC", "it's just a flesh wound", (180, 180, 180)),
+    ("CapsLock_Stuck", "WHY IS MY CAPS LOCK STUCK", (180, 180, 180)),
+    ("CapsLock_Stuck", "PLEASE HELP", (180, 180, 180)),
+    ("CapsLock_Stuck", "I CANT TYPE NORMAL", (180, 180, 180)),
+    ("CapsLock_Stuck", "OH WAIT NVM", (180, 180, 180)),
+    # ── The Returning Joke ──
+    ("xX_KRAP_Xx", "wait the code IS 742??", (180, 180, 180)),
+    ("admin", "MUTED: xX_KRAP_Xx (permanent)", (255, 120, 0)),
+]
+# ── Connections / DM system ──
+CONNECTIONS = [
+    {
+        "name": "Vasile",
+        "status": "Online",
+        "last_seen": "now",
+        "color": (100, 160, 220),
+        "replies": [
+            "Biribel. Get to the point.",
+            "I'm in a meeting. Make it quick.",
+            "Did you check the safe code? It's in the desk.",
+            "Stop messaging me on KRAPNET. Use the encrypted line.",
+            "I hate paperwork. This is paperwork.",
+            "Don't die. I hate the funeral forms even more.",
+        ],
+    },
+    {
+        "name": "Volkov",
+        "status": "Away",
+        "last_seen": "3m ago",
+        "color": (255, 100, 60),
+        "replies": [
+            "Who is this?",
+            "How did you get this number.",
+            "I'm not Volkov. You have the wrong person.",
+            "Stop. Messaging. Me.",
+            "If you tell anyone, you'll regret it.",
+            "Fine. What do you want.",
+        ],
+    },
+    {
+        "name": "Old Fisherman",
+        "status": "Online",
+        "last_seen": "now",
+        "color": (140, 140, 120),
+        "replies": [
+            "The ocean was different before.",
+            "Third time this month.",
+            "You'll learn.",
+            "Back in my day we had two fish. Now there's just the one.",
+            "The rigs burn brighter every year.",
+            "Don't trust the men in blue.",
+        ],
+    },
+    {
+        "name": "Sebi (PM)",
+        "status": "In Meeting",
+        "last_seen": "1h ago",
+        "color": (100, 160, 220),
+        "replies": [
+            "I do not have time for citizens right now.",
+            "Vote yes on bill 7742.",
+            "My approval rating is fine, actually.",
+            "The polls are rigged.",
+            "I was elected fair and square.",
+            "Please direct all complaints to /dev/null.",
+        ],
+    },
+    {
+        "name": "MaruWatches",
+        "status": "Online",
+        "last_seen": "always",
+        "color": (140, 30, 30),
+        "replies": [
+            "MARU SEES YOU.",
+            "THE EYE DOES NOT BLINK.",
+            "WHY ARE YOU MESSAGING ME.",
+            "MARU IS DISPLEASED.",
+            "MARU SAW THAT.",
+            "MARU SEES YOU SPECIFICALLY.",
+        ],
+    },
+    {
+        "name": "Micul Fuego",
+        "status": "Online — LAUNCH PARTY!",
+        "last_seen": "now",
+        "color": (255, 180, 60),
+        "replies": [
+            "YO BIRIBEL!! u coming to the K1 launch?!?!",
+            "bro the new gun goes HARD",
+            "FUEGO FUEGO FUEGO \U0001f525\U0001f525\U0001f525",
+            "i got u a free K1. dm me your address",
+            "wait dont dm me your address. the IPA is watching",
+            "actually do. its fine. probably.",
+        ],
+    },
+    {
+        "name": "noob123",
+        "status": "Online",
+        "last_seen": "now",
+        "color": (180, 180, 180),
+        "replies": [
+            "how do i play",
+            "is this discord",
+            "where am i",
+            "are u the admin",
+            "i pressed a button",
+            "ok",
+        ],
+    },
+    {
+        "name": "Cigarette_Enjoyer",
+        "status": "Online",
+        "last_seen": "now",
+        "color": (180, 180, 180),
+        "replies": [
+            "got a light?",
+            "please",
+            "ill trade ammo for a smoke",
+            "two clips for one cigarette. final offer",
+            "you guys are heartless",
+            "fine ill ask someone else",
+        ],
+    },
+    {
+        "name": "KGB_Watching",
+        "status": "Online",
+        "last_seen": "always",
+        "color": (180, 180, 180),
+        "replies": [
+            "We know who you are.",
+            "You have been added to the list.",
+            "Your cat is also on the list.",
+            "Please confirm your identity.",
+            "\u0414\u043e\u0431\u0440\u043e\u0435 \u0443\u0442\u0440\u043e.",
+            "We are inside your walls.",
+        ],
+    },
+    {
+        "name": "MAGRecruiter",
+        "status": "Online",
+        "last_seen": "now",
+        "color": (140, 30, 30),
+        "replies": [
+            "Join us. The slums need you.",
+            "Down with KRAP.",
+            "Free graffiti supplies for new members.",
+            "The revolution will be uploaded to youtube.",
+            "Are you really one of them?",
+            "It's not too late to switch sides.",
+        ],
+    },
+    {
+        "name": "EX_KRAP_OPERATOR",
+        "status": "Away",
+        "last_seen": "unknown",
+        "color": (180, 100, 100),
+        "replies": [
+            "I shouldn't be here.",
+            "They think I'm dead.",
+            "If anyone sees this, run.",
+            "Do not trust the Commander.",
+            "I left a notebook. Find it.",
+            "Don't reply to this message.",
+        ],
+    },
+    {
+        "name": "Mom",
+        "status": "Offline",
+        "last_seen": "2 days ago",
+        "color": (200, 180, 180),
+        "replies": [
+            "honey when are you coming home",
+            "i made your favorite soup",
+            "did you eat today",
+            "your father says hello",
+            "please call me",
+            "i love you",
+        ],
+    },
+    {
+        "name": "[REDACTED]",
+        "status": "\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+        "last_seen": "\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+        "color": (110, 110, 110),
+        "replies": [
+            "\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588 \u2588\u2588\u2588 \u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588.",
+            "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588.",
+            "\u2588\u2588 \u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588.",
+            "\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588 \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588.",
+        ],
+    },
+    {
+        "name": "DELETED_USER",
+        "status": "Account Deleted",
+        "last_seen": "never",
+        "color": (90, 90, 90),
+        "replies": [
+            "[this user no longer exists]",
+            "[message could not be delivered]",
+            "[recipient is gone]",
+        ],
+    },
+    {
+        "name": "Captain Krapov",
+        "status": "In Game",
+        "last_seen": "now",
+        "color": (180, 150, 100),
+        "replies": [
+            "Operator. Report status.",
+            "Negative. Stay on mission.",
+            "I don't have time for this. Out.",
+            "Watch your tone, soldier.",
+            "Affirmative.",
+            "Out.",
+        ],
+    },
+]
+# DM state
+_dm_open_user = None
+_dm_history = {}
+_dm_input = ""
+_dm_response_delay = 0
+_dm_pending_reply = None
+_dm_scroll_offset = 0
+# Tab state
+_mp_tab = "SERVERS"
+# Button rects
+servers_tab_rect = pygame.Rect(0, 0, 130, 28)
+connections_tab_rect = pygame.Rect(0, 0, 150, 28)
+SERVER_PANEL_W = 880
+SERVER_PANEL_H = 540
+SERVER_PANEL_X = (WIDTH - SERVER_PANEL_W) // 2
+SERVER_PANEL_Y = (HEIGHT - SERVER_PANEL_H) // 2
+# Server list lives on the LEFT side of the panel
+SERVER_ROW_X = SERVER_PANEL_X + 34
+SERVER_ROW_W = 540
+SERVER_ROW_H = 50
+SERVER_LIST_TOP = SERVER_PANEL_Y + 184
+# Chat panel lives on the RIGHT side
+CHAT_PANEL_X = SERVER_PANEL_X + SERVER_PANEL_W - 270
+CHAT_PANEL_Y = SERVER_PANEL_Y + 184
+CHAT_PANEL_W = 240
+CHAT_PANEL_H = SERVER_PANEL_H - 240
+_chat_messages = []
+_chat_next_spawn = 0
+_server_animation_timer = 0
+_refresh_active = False
+_refresh_progress = 0.0
+_scroll_offset = 0
+refresh_btn_rect = pygame.Rect(SERVER_PANEL_X + SERVER_PANEL_W - 130, SERVER_PANEL_Y + 80, 82, 24)
+kick_dismiss_btn_rect = pygame.Rect(0, 0, 160, 30)
+def _server_status(cur, max_p, ping):
+    if cur >= max_p:
+        return "FULL", (220, 120, 45)
+    if ping >= 180:
+        return "UNSTABLE", (220, 80, 70)
+    return "OPEN", C_TERMINAL
+def _draw_server_badge(text, color, x, y, w=78):
+    badge = pygame.Surface((w, 22), pygame.SRCALPHA)
+    badge.fill((8, 12, 16, 210))
+    pygame.draw.rect(badge, color, badge.get_rect(), 1)
+    screen.blit(badge, (x, y))
+    label = font_terminal_small.render(text, True, color)
+    screen.blit(label, (x + w // 2 - label.get_width() // 2, y + 4))
+def _fit_text(text, font, max_width):
+    if font.size(text)[0] <= max_width:
+        return text
+    ellipsis = "..."
+    while text and font.size(text + ellipsis)[0] > max_width:
+        text = text[:-1]
+    return text + ellipsis
+def update_server_browser_animation():
+    """Called once per frame while on multiplayer screen."""
+    global _server_animation_timer, _chat_next_spawn, _chat_messages
+    global _refresh_active, _refresh_progress
+    _server_animation_timer += 1
+    # Animate pings + player counts every ~90 frames (1.5s)
+    if _server_animation_timer % 90 == 0 and not _refresh_active:
+        for i, (name, cur, max_p, ping) in enumerate(server_list):
+            delta = random.choice([-1, 0, 0, 0, 0, 1])
+            new_cur = max(0, min(max_p, cur + delta))
+            new_ping = max(8, min(400, ping + random.randint(-6, 6)))
+            server_list[i] = (name, new_cur, max_p, new_ping)
+    # Refresh progress
+    if _refresh_active:
+        _refresh_progress += 0.025
+        if _refresh_progress >= 1.0:
+            _refresh_active = False
+            _refresh_progress = 0.0
+            for i, (name, cur, max_p, ping) in enumerate(server_list):
+                new_cur = max(0, min(max_p, cur + random.randint(-3, 3)))
+                new_ping = max(8, min(400, ping + random.randint(-25, 25)))
+                server_list[i] = (name, new_cur, max_p, new_ping)
+    # Spawn chat messages
+    _chat_next_spawn -= 1
+    if _chat_next_spawn <= 0:
+        msg = random.choice(CHAT_POOL)
+        _chat_messages.append({
+            "user": msg[0],
+            "text": msg[1],
+            "color": msg[2],
+            "age": 0,
+        })
+        _chat_next_spawn = random.randint(60, 130)
+        if random.random() < 0.18:
+            msg2 = random.choice(CHAT_POOL)
+            _chat_messages.append({
+                "user": msg2[0],
+                "text": msg2[1],
+                "color": msg2[2],
+                "age": 0,
+            })
+        if len(_chat_messages) > 50:
+            _chat_messages.pop(0)
+    # Age messages
+    for m in _chat_messages:
+        m["age"] += 1
+def switch_mp_tab(tab):
+    global _mp_tab
+    _mp_tab = tab
+    audio.play("menu_click", volume=0.3)
+def open_dm(user_idx):
+    global _dm_open_user, _dm_input
+    _dm_open_user = user_idx
+    _dm_input = ""
+    if user_idx not in _dm_history:
+        _dm_history[user_idx] = []
+    audio.play("menu_click", volume=0.3)
+def close_dm():
+    global _dm_open_user, _dm_input
+    _dm_open_user = None
+    _dm_input = ""
+def send_dm_message():
+    global _dm_input, _dm_response_delay, _dm_pending_reply
+    if _dm_open_user is None or not _dm_input.strip():
+        return
+    _dm_history[_dm_open_user].append({
+        "from": "you",
+        "text": _dm_input.strip(),
+        "age": 0,
+    })
+    _dm_input = ""
+    _dm_response_delay = random.randint(45, 110)
+    _dm_pending_reply = _dm_open_user
+    audio.play("menu_click", volume=0.2)
+def update_dm_state():
+    global _dm_response_delay, _dm_pending_reply
+    if _dm_open_user is not None and _dm_open_user in _dm_history:
+        for m in _dm_history[_dm_open_user]:
+            m["age"] += 1
+    if _dm_response_delay > 0:
+        _dm_response_delay -= 1
+        if _dm_response_delay == 0 and _dm_pending_reply is not None:
+            reply = random.choice(CONNECTIONS[_dm_pending_reply]["replies"])
+            _dm_history[_dm_pending_reply].append({
+                "from": "them",
+                "text": reply,
+                "age": 0,
+            })
+            _dm_pending_reply = None
+            audio.play("menu_hover", volume=0.3)
+def _status_color(status):
+    if "Online" in status or status == "always":
+        return (80, 220, 100)
+    if "Away" in status or "Meeting" in status:
+        return (220, 180, 60)
+    if "Game" in status:
+        return (100, 160, 220)
+    if "Offline" in status or "Deleted" in status or "never" in status:
+        return (110, 110, 110)
+    if "\u2588" in status:
+        return (140, 60, 60)
+    return (180, 180, 180)
+def draw_connections_panel():
+    """Draws the friends list + active DM window."""
+    mouse_pos = get_scaled_mouse()
+    list_x = SERVER_PANEL_X + 28
+    list_y = SERVER_LIST_TOP - 4
+    list_w = 340
+    row_h = 38
+    list_header = font_terminal_small.render("CONTACTS", True, (80, 130, 160))
+    screen.blit(list_header, (list_x + 6, list_y - 20))
+    online_count = sum(1 for c in CONNECTIONS if "Online" in c["status"])
+    online_lbl = font_terminal_small.render(
+        f"{online_count} ONLINE  \u00b7  {len(CONNECTIONS)} TOTAL",
+        True, (90, 130, 100),
+    )
+    screen.blit(online_lbl, (list_x + list_w - online_lbl.get_width() - 6, list_y - 20))
+    list_bottom_limit = SERVER_PANEL_Y + SERVER_PANEL_H - 90
+    visible_friends = (list_bottom_limit - list_y) // row_h
+    visible_friends = min(visible_friends, len(CONNECTIONS))
+    for vi in range(visible_friends):
+        i = vi + _dm_scroll_offset
+        if i >= len(CONNECTIONS):
+            break
+        conn = CONNECTIONS[i]
+        ry = list_y + vi * row_h
+        row_rect = pygame.Rect(list_x, ry, list_w, row_h - 4)
+        hover = row_rect.collidepoint(mouse_pos)
+        is_open = _dm_open_user == i
+        row_surf = pygame.Surface((list_w, row_h - 4), pygame.SRCALPHA)
+        if is_open:
+            row_surf.fill((28, 36, 42, 235))
+            pygame.draw.rect(row_surf, C_ORANGE, row_surf.get_rect(), 1)
+            pygame.draw.rect(row_surf, (255, 120, 0, 130), (0, 0, 3, row_h - 4))
+        elif hover:
+            row_surf.fill((18, 28, 34, 225))
+            pygame.draw.rect(row_surf, (80, 120, 140), row_surf.get_rect(), 1)
+        else:
+            row_surf.fill((9, 14, 18, 210))
+            pygame.draw.rect(row_surf, (28, 44, 56), row_surf.get_rect(), 1)
+        screen.blit(row_surf, row_rect)
+        s_col = _status_color(conn["status"])
+        pygame.draw.circle(screen, s_col, (list_x + 14, ry + 17), 4)
+        name_col = C_WHITE if (hover or is_open) else conn["color"]
+        name_surf = font_terminal.render(conn["name"], True, name_col)
+        screen.blit(name_surf, (list_x + 28, ry + 4))
+        status_text = f"{conn['status']}  \u00b7  {conn['last_seen']}"
+        if len(status_text) > 38:
+            status_text = status_text[:35] + "..."
+        st_surf = font_terminal_small.render(status_text, True, (120, 130, 140))
+        screen.blit(st_surf, (list_x + 28, ry + 22))
+    # ── Scroll indicators ──
+    remaining_below = len(CONNECTIONS) - (_dm_scroll_offset + visible_friends)
+    remaining_above = _dm_scroll_offset
+    more_y = list_y + visible_friends * row_h + 4
+    if remaining_below > 0 and remaining_above > 0:
+        more_lbl = font_terminal_small.render(
+            f"\u25b2 {remaining_above} above  \u00b7  \u25bc {remaining_below} below  \u00b7  scroll wheel",
+            True, (90, 110, 130),
+        )
+        screen.blit(more_lbl, (list_x + 6, more_y))
+    elif remaining_below > 0:
+        more_lbl = font_terminal_small.render(
+            f"\u25bc {remaining_below} more contacts  \u00b7  scroll wheel",
+            True, (90, 110, 130),
+        )
+        screen.blit(more_lbl, (list_x + 6, more_y))
+    elif remaining_above > 0:
+        more_lbl = font_terminal_small.render(
+            f"\u25b2 {remaining_above} above  \u00b7  scroll wheel",
+            True, (90, 110, 130),
+        )
+        screen.blit(more_lbl, (list_x + 6, more_y))
+    # ── Scrollbar for contacts ──
+    if len(CONNECTIONS) > visible_friends:
+        sb_x = list_x + list_w + 4
+        sb_y = list_y
+        sb_h = visible_friends * row_h - 4
+        sb_w = 5
+        pygame.draw.rect(screen, (15, 22, 28), (sb_x, sb_y, sb_w, sb_h))
+        pygame.draw.rect(screen, (28, 44, 56), (sb_x, sb_y, sb_w, sb_h), 1)
+        thumb_ratio = visible_friends / len(CONNECTIONS)
+        thumb_h = max(20, int(sb_h * thumb_ratio))
+        max_scroll = max(1, len(CONNECTIONS) - visible_friends)
+        thumb_y = sb_y + int((sb_h - thumb_h) * (_dm_scroll_offset / max_scroll))
+        pygame.draw.rect(screen, C_ORANGE, (sb_x, thumb_y, sb_w, thumb_h))
+    # DM window (right column)
+    dm_x = list_x + list_w + 16
+    dm_y = list_y - 4
+    dm_w = SERVER_PANEL_X + SERVER_PANEL_W - dm_x - 28
+    dm_h = SERVER_PANEL_H - 220
+    dm_bg = pygame.Surface((dm_w, dm_h), pygame.SRCALPHA)
+    dm_bg.fill((6, 11, 16, 230))
+    pygame.draw.rect(dm_bg, (30, 50, 60), dm_bg.get_rect(), 1)
+    pygame.draw.rect(dm_bg, (40, 60, 70, 100), dm_bg.get_rect(), 1)
+    screen.blit(dm_bg, (dm_x, dm_y))
+    if _dm_open_user is None:
+        empty_lbl = font_terminal.render("// SELECT A CONTACT //", True, (60, 90, 110))
+        screen.blit(
+            empty_lbl,
+            (dm_x + dm_w // 2 - empty_lbl.get_width() // 2,
+             dm_y + dm_h // 2 - 20),
+        )
+        hint = font_terminal_small.render(
+            "Click a name on the left to start a conversation",
+            True, (50, 70, 85),
+        )
+        screen.blit(
+            hint,
+            (dm_x + dm_w // 2 - hint.get_width() // 2,
+             dm_y + dm_h // 2 + 8),
+        )
+    else:
+        conn = CONNECTIONS[_dm_open_user]
+        s_col = _status_color(conn["status"])
+        pygame.draw.circle(screen, s_col, (dm_x + 14, dm_y + 14), 4)
+        hdr = font_terminal.render(conn["name"], True, conn["color"])
+        screen.blit(hdr, (dm_x + 26, dm_y + 4))
+        st = font_terminal_small.render(
+            conn["status"], True, _status_color(conn["status"]),
+        )
+        screen.blit(st, (dm_x + 26, dm_y + 22))
+        pygame.draw.line(
+            screen, (30, 50, 60),
+            (dm_x + 8, dm_y + 40),
+            (dm_x + dm_w - 8, dm_y + 40), 1,
+        )
+        msg_x = dm_x + 12
+        msg_y = dm_y + 48
+        msg_w = dm_w - 24
+        msg_area_h = dm_h - 100
+        history = _dm_history.get(_dm_open_user, [])
+        rendered = []
+        for m in history:
+            text = m["text"]
+            is_you = m["from"] == "you"
+            col = (220, 220, 220) if is_you else conn["color"]
+            words = text.split(" ")
+            line = ""
+            wrapped = []
+            for w in words:
+                test = (line + " " + w).strip() if line else w
+                if font_terminal_small.size(test)[0] <= msg_w - 60:
+                    line = test
+                else:
+                    if line:
+                        wrapped.append(line)
+                    line = w
+            if line:
+                wrapped.append(line)
+            for li, ln in enumerate(wrapped):
+                prefix = ""
+                if li == 0:
+                    prefix = "you: " if is_you else f"{conn['name']}: "
+                rendered.append((prefix, ln, col, is_you, m["age"]))
+        line_h = 16
+        max_lines = msg_area_h // line_h
+        visible = rendered[-max_lines:]
+        for li, (prefix, ln, col, is_you, age) in enumerate(visible):
+            ly = msg_y + li * line_h
+            alpha = min(255, age * 15)
+            if prefix:
+                p_col = (140, 140, 145) if is_you else col
+                ps = font_terminal_small.render(prefix, True, p_col)
+                ps.set_alpha(alpha)
+                screen.blit(ps, (msg_x, ly))
+                ts = font_terminal_small.render(ln, True, (220, 220, 220) if is_you else (210, 210, 215))
+                ts.set_alpha(alpha)
+                screen.blit(ts, (msg_x + ps.get_width(), ly))
+            else:
+                ts = font_terminal_small.render("  " + ln, True, (210, 210, 215))
+                ts.set_alpha(alpha)
+                screen.blit(ts, (msg_x, ly))
+        if _dm_response_delay > 0 and _dm_pending_reply == _dm_open_user:
+            dots = "." * (((pygame.time.get_ticks() // 300) % 3) + 1)
+            typing = font_terminal_small.render(
+                f"{conn['name']} is typing{dots}", True, (100, 130, 150),
+            )
+            screen.blit(typing, (msg_x, dm_y + dm_h - 64))
+        input_box_y = dm_y + dm_h - 42
+        pygame.draw.rect(screen, (15, 22, 28), (dm_x + 8, input_box_y, dm_w - 16, 32))
+        pygame.draw.rect(screen, (50, 80, 100), (dm_x + 8, input_box_y, dm_w - 16, 32), 1)
+        cursor = "_" if (pygame.time.get_ticks() // 500) % 2 == 0 else " "
+        input_display = _dm_input + cursor
+        if not _dm_input:
+            input_display = "Type a message..."
+            in_col = (90, 100, 110)
+        else:
+            in_col = C_WHITE
+        ins = font_terminal_small.render(input_display, True, in_col)
+        screen.blit(ins, (dm_x + 16, input_box_y + 10))
+        send_hint = font_terminal_small.render(
+            "[ENTER] send  \u00b7  [ESC] close DM",
+            True, (90, 110, 120),
+        )
+        screen.blit(send_hint, (dm_x + 12, dm_y + dm_h + 4))
+def scroll_server_list(direction):
+    """direction: +1 scrolls down, -1 scrolls up."""
+    global _scroll_offset
+    max_offset = max(0, len(server_list) - 1)
+    _scroll_offset = max(0, min(max_offset, _scroll_offset + direction))
+def scroll_dm_list(direction):
+    global _dm_scroll_offset
+    list_bottom_limit = SERVER_PANEL_Y + SERVER_PANEL_H - 90
+    list_y = SERVER_LIST_TOP - 4
+    row_h = 38
+    visible_friends = (list_bottom_limit - list_y) // row_h
+    max_offset = max(0, len(CONNECTIONS) - visible_friends)
+    _dm_scroll_offset = max(0, min(max_offset, _dm_scroll_offset + direction))
+def trigger_server_refresh():
+    global _refresh_active, _refresh_progress
+    if not _refresh_active:
+        _refresh_active = True
+        _refresh_progress = 0.0
+        audio.play("menu_click", volume=0.4)
+def get_kick_message_for_server(server_name):
+    if server_name in KICK_MESSAGES_BY_SERVER:
+        return random.choice(KICK_MESSAGES_BY_SERVER[server_name])
+    return random.choice(KICK_MESSAGES)
+_server_shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+_server_shade.fill((0, 0, 0, 115))
+_server_panel = pygame.Surface((SERVER_PANEL_W, SERVER_PANEL_H), pygame.SRCALPHA)
+_server_panel.fill((7, 10, 13, 236))
+pygame.draw.rect(_server_panel, (38, 58, 70, 170), _server_panel.get_rect(), 1)
+pygame.draw.rect(_server_panel, (255, 120, 0, 90), (0, 0, SERVER_PANEL_W, 3))
+def _wrap_server_name(name, font, max_width, max_lines=2):
+    """Wrap a server name into up to max_lines lines.
+    Returns a list of rendered strings (1 or 2 elements)."""
+    if font.size(name)[0] <= max_width:
+        return [name]
+    words = name.split(" ")
+    if len(words) > 1:
+        best_split = 1
+        for i in range(1, len(words)):
+            first = " ".join(words[:i])
+            if font.size(first)[0] <= max_width:
+                best_split = i
+            else:
+                break
+        line1 = " ".join(words[:best_split])
+        line2 = " ".join(words[best_split:])
+        if font.size(line2)[0] > max_width:
+            ellipsis = "..."
+            while line2 and font.size(line2 + ellipsis)[0] > max_width:
+                line2 = line2[:-1]
+            line2 = line2 + ellipsis
+        return [line1, line2]
+    mid = len(name) // 2
+    while mid > 1 and font.size(name[:mid])[0] > max_width:
+        mid -= 1
+    line1 = name[:mid]
+    line2 = name[mid:]
+    if font.size(line2)[0] > max_width:
+        ellipsis = "..."
+        while line2 and font.size(line2 + ellipsis)[0] > max_width:
+            line2 = line2[:-1]
+        line2 = line2 + ellipsis
+    return [line1, line2]
+def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0.0):
+    draw_menu_background()
+    screen.blit(_server_shade, (0, 0))
+    screen.blit(_server_panel, (SERVER_PANEL_X, SERVER_PANEL_Y))
+    # ── Faint horizontal grid behind list ──
+    for gy in range(SERVER_LIST_TOP + 50, SERVER_PANEL_Y + SERVER_PANEL_H - 80, 50):
+        pygame.draw.line(
+            screen, (15, 27, 34),
+            (SERVER_ROW_X, gy),
+            (SERVER_ROW_X + SERVER_ROW_W, gy), 1,
+        )
+    # ── Title ──
+    screen.blit(_server_title_font.render("SERVER BROWSER", True, (0, 0, 0)), (SERVER_PANEL_X + 30, SERVER_PANEL_Y + 25))
+    screen.blit(_server_title_font.render("SERVER BROWSER", True, C_WHITE), (SERVER_PANEL_X + 28, SERVER_PANEL_Y + 22))
+    subtitle = font_terminal_small.render(
+        f"KRAPNET regional lobbies  ·  {len(server_list)} servers online",
+        True, (95, 125, 145),
+    )
+    screen.blit(subtitle, (SERVER_PANEL_X + 31, SERVER_PANEL_Y + 79))
+    # ── Tabs (SERVERS / CONNECTIONS) ──
+    tab_y = SERVER_PANEL_Y + 120
+    servers_tab_rect.x = SERVER_PANEL_X + 28
+    servers_tab_rect.y = tab_y
+    connections_tab_rect.x = SERVER_PANEL_X + 28 + servers_tab_rect.w + 4
+    connections_tab_rect.y = tab_y
+    for tab_name, tab_rect in [("SERVERS", servers_tab_rect), ("CONNECTIONS", connections_tab_rect)]:
+        is_active = _mp_tab == tab_name
+        hover = tab_rect.collidepoint(get_scaled_mouse())
+        if is_active:
+            pygame.draw.rect(screen, (28, 38, 48), tab_rect)
+            pygame.draw.rect(screen, C_ORANGE, tab_rect, 1)
+            pygame.draw.rect(screen, C_ORANGE, (tab_rect.x, tab_rect.bottom - 2, tab_rect.w, 2))
+        else:
+            pygame.draw.rect(screen, (10, 16, 22), tab_rect)
+            pygame.draw.rect(screen, (50, 70, 85) if hover else (28, 44, 56), tab_rect, 1)
+        label_text = tab_name
+        if tab_name == "CONNECTIONS":
+            online = sum(1 for c in CONNECTIONS if "Online" in c["status"])
+            label_text = f"CONNECTIONS  ({online})"
+        ts = font_terminal_small.render(label_text, True, C_WHITE if (is_active or hover) else (150, 160, 170))
+        screen.blit(ts, (tab_rect.centerx - ts.get_width() // 2, tab_rect.centery - ts.get_height() // 2))
+    # ── Refresh button ──
+    refresh_hover = refresh_btn_rect.collidepoint(get_scaled_mouse())
+    refresh_bg = (40, 50, 60, 220) if refresh_hover else (20, 30, 40, 200)
+    btn_surf = pygame.Surface((refresh_btn_rect.w, refresh_btn_rect.h), pygame.SRCALPHA)
+    btn_surf.fill(refresh_bg)
+    pygame.draw.rect(btn_surf, C_ORANGE if refresh_hover else (80, 100, 120), btn_surf.get_rect(), 1)
+    screen.blit(btn_surf, refresh_btn_rect)
+    if _refresh_active:
+        fw = int(refresh_btn_rect.w * _refresh_progress)
+        pygame.draw.rect(screen, (255, 120, 0, 100), (refresh_btn_rect.x, refresh_btn_rect.y, fw, refresh_btn_rect.h))
+        rt = font_terminal_small.render("SCANNING...", True, C_ORANGE)
+    else:
+        rt = font_terminal_small.render("[REFRESH]", True, C_ORANGE if refresh_hover else (180, 180, 190))
+    screen.blit(rt, (refresh_btn_rect.centerx - rt.get_width() // 2, refresh_btn_rect.centery - rt.get_height() // 2))
+    mouse_pos = get_scaled_mouse()
+    if _mp_tab == "SERVERS":
+        # ── Divider under header ──
+        pygame.draw.line(
+            screen, C_ORANGE,
+            (SERVER_PANEL_X + 28, SERVER_PANEL_Y + 156),
+            (SERVER_PANEL_X + SERVER_PANEL_W - 28, SERVER_PANEL_Y + 156), 1,
+        )
+        # ── Column headers (above list) ──
+        header_y = SERVER_LIST_TOP - 22
+        status_x = SERVER_ROW_X + 320
+        players_x = SERVER_ROW_X + 402
+        ping_x = SERVER_ROW_X + 468
+        headers = [
+            ("SERVER", SERVER_ROW_X + 14),
+            ("STATUS", status_x + 5),
+            ("PLAYERS", players_x),
+            ("PING", ping_x),
+        ]
+        for label, hx in headers:
+            screen.blit(font_terminal_small.render(label, True, (80, 130, 160)), (hx, header_y))
+        # ── Server list (left side) — rows can be 1 or 2 lines tall ──
+        visible_count = 5
+        hovered_server_idx = -1
+        list_top = SERVER_LIST_TOP
+        SERVER_ROW_H_SINGLE = 50
+        SERVER_ROW_H_DOUBLE = 64
+        ROW_GAP = 5
+        name_max_width = (status_x - SERVER_ROW_X) - 24
+        row_layouts = []
+        cur_y = list_top
+        for vi in range(visible_count):
+            i = vi + _scroll_offset
+            if i >= len(server_list):
+                break
+            name = server_list[i][0]
+            name_lines = _wrap_server_name(name, font_terminal, name_max_width)
+            row_h = SERVER_ROW_H_DOUBLE if len(name_lines) > 1 else SERVER_ROW_H_SINGLE
+            row_layouts.append((i, name_lines, row_h, cur_y))
+            cur_y += row_h + ROW_GAP
+        list_bottom = cur_y
+        for i, name_lines, row_h, ry in row_layouts:
+            name, cur, max_p, ping = server_list[i]
+            row_rect = pygame.Rect(SERVER_ROW_X, ry, SERVER_ROW_W, row_h - 4)
+            hover = row_rect.collidepoint(mouse_pos) and not _refresh_active and not connecting and not kicked_msg
+            if hover:
+                hovered_server_idx = i
+            status, status_color = _server_status(cur, max_p, ping)
+            row_surf = pygame.Surface((SERVER_ROW_W, row_h - 4), pygame.SRCALPHA)
+            if i == selected_idx:
+                row_surf.fill((28, 36, 42, 235))
+                pygame.draw.rect(row_surf, C_ORANGE, row_surf.get_rect(), 1)
+                pygame.draw.rect(row_surf, (255, 120, 0, 130), (0, 0, 4, row_h - 4))
+            elif hover:
+                row_surf.fill((18, 28, 34, 225))
+                pygame.draw.rect(row_surf, (80, 120, 140), row_surf.get_rect(), 1)
+            else:
+                row_surf.fill((9, 14, 18, 210))
+                pygame.draw.rect(row_surf, (28, 44, 56), row_surf.get_rect(), 1)
+            if _refresh_active:
+                fade = pygame.Surface((SERVER_ROW_W, row_h - 4), pygame.SRCALPHA)
+                fade.fill((0, 0, 0, 140))
+                row_surf.blit(fade, (0, 0))
+            screen.blit(row_surf, row_rect)
+            name_color = C_WHITE if (hover or i == selected_idx) and not _refresh_active else (195, 205, 210)
+            for li, line in enumerate(name_lines):
+                line_surf = font_terminal.render(line, True, name_color)
+                screen.blit(line_surf, (SERVER_ROW_X + 12, ry + 6 + li * 20))
+            region_y_base = ry + 6 + len(name_lines) * 20
+            region_idx = (sum(ord(c) for c in name) + i) % len(SERVER_REGIONS)
+            region = font_terminal_small.render(SERVER_REGIONS[region_idx], True, (80, 95, 105))
+            screen.blit(region, (SERVER_ROW_X + 13, region_y_base + 2))
+            center_y = ry + (row_h - 4) // 2 - 11
+            _draw_server_badge(status, status_color, status_x, center_y)
+            pc = font_terminal.render(f"{cur:02d}/{max_p:02d}", True, C_ORANGE if cur >= max_p else C_TERMINAL)
+            ping_c = (100, 200, 100) if ping < 60 else ((200, 200, 100) if ping < 150 else (200, 100, 100))
+            ping_t = font_terminal.render(f"{ping}ms", True, ping_c)
+            screen.blit(pc, (players_x, center_y + 1))
+            screen.blit(ping_t, (ping_x, center_y + 1))
+            bar_x = ping_x
+            bar_y = center_y + 22
+            pygame.draw.rect(screen, (25, 28, 30), (bar_x, bar_y, 42, 4))
+            fill_w = max(6, min(42, int(42 * (1 - min(ping, 240) / 240))))
+            pygame.draw.rect(screen, ping_c, (bar_x, bar_y, fill_w, 4))
+        if len(server_list) > visible_count:
+            sb_x = SERVER_ROW_X + SERVER_ROW_W + 8
+            sb_y = list_top
+            sb_h = list_bottom - list_top - ROW_GAP
+            sb_w = 5
+            pygame.draw.rect(screen, (15, 22, 28), (sb_x, sb_y, sb_w, sb_h))
+            pygame.draw.rect(screen, (28, 44, 56), (sb_x, sb_y, sb_w, sb_h), 1)
+            thumb_ratio = visible_count / len(server_list)
+            thumb_h = max(20, int(sb_h * thumb_ratio))
+            max_scroll = max(1, len(server_list) - visible_count)
+            thumb_y = sb_y + int((sb_h - thumb_h) * (_scroll_offset / max_scroll))
+            pygame.draw.rect(screen, C_ORANGE, (sb_x, thumb_y, sb_w, thumb_h))
+        # ── Scroll indicators (bottom of list, right-aligned to avoid BACK button) ──
+        rendered_count = len(row_layouts)
+        remaining_below = len(server_list) - (_scroll_offset + rendered_count)
+        remaining_above = _scroll_offset
+        if remaining_below > 0 or remaining_above > 0:
+            if remaining_below > 0 and remaining_above > 0:
+                hint_text = f"\u25b2 {remaining_above} above  \u00b7  \u25bc {remaining_below} below  \u00b7  scroll wheel"
+            elif remaining_below > 0:
+                hint_text = f"\u25bc {remaining_below} more servers  \u00b7  scroll wheel"
+            else:
+                hint_text = f"\u25b2 {remaining_above} above  \u00b7  scroll wheel"
+            more_hint = font_terminal_small.render(hint_text, True, (90, 110, 130))
+            screen.blit(
+                more_hint,
+                (
+                    SERVER_ROW_X + SERVER_ROW_W - more_hint.get_width() - 4,
+                    list_bottom + 4,
+                ),
+            )
+        # ── Vertical Chat Panel (right side) ──
+        chat_bg = pygame.Surface((CHAT_PANEL_W, CHAT_PANEL_H), pygame.SRCALPHA)
+        chat_bg.fill((4, 8, 12, 215))
+        pygame.draw.rect(chat_bg, (30, 50, 60), chat_bg.get_rect(), 1)
+        pygame.draw.rect(chat_bg, (80, 130, 160, 90), (0, 0, CHAT_PANEL_W, 2))
+        screen.blit(chat_bg, (CHAT_PANEL_X, CHAT_PANEL_Y))
+        chat_lbl = font_terminal_small.render("// GLOBAL CHAT //", True, (80, 130, 160))
+        screen.blit(chat_lbl, (CHAT_PANEL_X + 10, CHAT_PANEL_Y + 8))
+        online_dot_pulse = (pygame.time.get_ticks() // 500) % 2
+        dot_col = (80, 220, 100) if online_dot_pulse else (40, 140, 70)
+        pygame.draw.circle(screen, dot_col, (CHAT_PANEL_X + CHAT_PANEL_W - 22, CHAT_PANEL_Y + 14), 3)
+        online_lbl = font_terminal_small.render("LIVE", True, (80, 130, 100))
+        screen.blit(online_lbl, (CHAT_PANEL_X + CHAT_PANEL_W - 60, CHAT_PANEL_Y + 8))
+        pygame.draw.line(
+            screen, (30, 50, 60),
+            (CHAT_PANEL_X + 8, CHAT_PANEL_Y + 28),
+            (CHAT_PANEL_X + CHAT_PANEL_W - 8, CHAT_PANEL_Y + 28), 1,
+        )
+        msg_area_x = CHAT_PANEL_X + 10
+        msg_area_y = CHAT_PANEL_Y + 36
+        msg_area_w = CHAT_PANEL_W - 20
+        msg_area_h = CHAT_PANEL_H - 60
+        rendered_lines = []
+        for msg in _chat_messages:
+            alpha = min(255, msg["age"] * 13)
+            user_text = f"[{msg['user']}]"
+            body_text = msg["text"]
+            user_surf = font_terminal_small.render(user_text, True, msg["color"])
+            user_surf.set_alpha(alpha)
+            rendered_lines.append([(user_surf, msg_area_x, alpha)])
+            words = body_text.split(" ")
+            line = ""
+            for w in words:
+                test = (line + " " + w).strip() if line else w
+                if font_terminal_small.size(test)[0] <= msg_area_w - 12:
+                    line = test
+                else:
+                    if line:
+                        s = font_terminal_small.render(line, True, (200, 200, 205))
+                        s.set_alpha(alpha)
+                        rendered_lines.append([(s, msg_area_x + 12, alpha)])
+                    line = w
+            if line:
+                s = font_terminal_small.render(line, True, (200, 200, 205))
+                s.set_alpha(alpha)
+                rendered_lines.append([(s, msg_area_x + 12, alpha)])
+            rendered_lines.append([])
+        line_h = 14
+        max_lines = msg_area_h // line_h
+        visible_lines = rendered_lines[-max_lines:]
+        for li, line_entries in enumerate(visible_lines):
+            ly = msg_area_y + li * line_h
+            for surf, x, _ in line_entries:
+                screen.blit(surf, (x, ly))
+        typing_y = CHAT_PANEL_Y + CHAT_PANEL_H - 18
+        pygame.draw.line(
+            screen, (30, 50, 60),
+            (CHAT_PANEL_X + 8, typing_y - 4),
+            (CHAT_PANEL_X + CHAT_PANEL_W - 8, typing_y - 4), 1,
+        )
+        typing_dots = "." * ((pygame.time.get_ticks() // 400) % 4)
+        typing_users = [
+            "Volkov_Real", "admin", "noob123", "MaruWatches", "Sebi_PM",
+            "VasileFan2007", "xX_KRAP_Xx", "Cigarette_Enjoyer", "MOD_Krapov",
+            "OldFisherman", "ConspiracyGuy", "MAGRecruiter", "Cmdr_VodkaTime",
+            "RushB_Acaristan", "EX_KRAP_OPERATOR", "CapsLock_Stuck",
+        ]
+        typing_user = typing_users[(pygame.time.get_ticks() // 4000) % len(typing_users)]
+        typing_lbl = font_terminal_small.render(
+            f"{typing_user} is typing{typing_dots}", True, (90, 110, 120),
+        )
+        screen.blit(typing_lbl, (CHAT_PANEL_X + 10, typing_y))
+        if hovered_server_idx >= 0 and not _refresh_active and not connecting and not kicked_msg:
+            name = server_list[hovered_server_idx][0]
+            rules = SERVER_RULES.get(name)
+            if rules:
+                tip_w = 360
+                tip_h = 22 + len(rules) * 16 + 12
+                tip_x = min(mouse_pos[0] + 16, WIDTH - tip_w - 10)
+                tip_y = min(mouse_pos[1] + 16, HEIGHT - tip_h - 10)
+                tip_surf = pygame.Surface((tip_w, tip_h), pygame.SRCALPHA)
+                tip_surf.fill((6, 10, 14, 245))
+                pygame.draw.rect(tip_surf, C_ORANGE, tip_surf.get_rect(), 1)
+                pygame.draw.rect(tip_surf, (255, 120, 0, 100), (0, 0, tip_w, 3))
+                screen.blit(tip_surf, (tip_x, tip_y))
+                tlbl = font_terminal_small.render("SERVER INFO", True, C_ORANGE)
+                screen.blit(tlbl, (tip_x + 10, tip_y + 6))
+                for li, line in enumerate(rules):
+                    col = (200, 200, 210) if not line.startswith(" ") else (140, 140, 150)
+                    ls = font_terminal_small.render(line, True, col)
+                    screen.blit(ls, (tip_x + 10, tip_y + 24 + li * 16))
+    else:
+        draw_connections_panel()
+    # ── Back button ──
+    server_back_btn.x = SERVER_PANEL_X + 28
+    server_back_btn.y = SERVER_PANEL_Y + SERVER_PANEL_H - 62
+    server_back_btn.width = 150
+    server_back_btn.rect.x = server_back_btn.x
+    server_back_btn.rect.y = server_back_btn.y
+    server_back_btn.rect.width = server_back_btn.width
+    server_back_btn.check_hover(get_scaled_mouse())
+    server_back_btn.draw(screen)
+    hint = font_terminal_small.render("ESC returns to menu", True, (95, 110, 120))
+    screen.blit(hint, (SERVER_PANEL_X + SERVER_PANEL_W - hint.get_width() - 28, SERVER_PANEL_Y + SERVER_PANEL_H - 48))
+    # ── Connecting popup ──
+    if connecting:
+        popup = pygame.Surface((460, 220), pygame.SRCALPHA)
+        popup.fill((8, 11, 16, 248))
+        popup_rect = popup.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        pygame.draw.rect(popup, C_ORANGE, popup.get_rect(), 1)
+        pygame.draw.rect(popup, (255, 120, 0, 120), (0, 0, 460, 3))
+        screen.blit(popup, popup_rect)
+        progress = max(0.0, min(1.0, float(connect_progress or 0.0)))
+        dots = "." * ((pygame.time.get_ticks() // 300) % 4)
+        t = font_speaker.render(f"CONNECTING{dots}", True, C_ORANGE)
+        screen.blit(t, (popup_rect.x + 28, popup_rect.y + 18))
+        pct = font_terminal_small.render(f"{int(progress * 100):02d}%", True, (120, 160, 175))
+        screen.blit(pct, (popup_rect.right - pct.get_width() - 30, popup_rect.y + 28))
+        log_lines = [
+            (0.00, "Resolving krapnet.acaristan.gov..."),
+            (0.16, "Handshake established"),
+            (0.32, "Verifying loyalty token..."),
+            (0.50, "Bypassing IPA firewall..."),
+            (0.68, "Downloading server modpack (4.7 GB)..."),
+            (0.88, "Almost there..."),
+        ]
+        ly = popup_rect.y + 60
+        for threshold, line in log_lines:
+            active = progress >= threshold
+            col = (140, 200, 140) if active else (55, 75, 75)
+            prefix = ">" if active else "·"
+            ls = font_terminal_small.render(f"{prefix} {line}", True, col)
+            screen.blit(ls, (popup_rect.x + 30, ly))
+            ly += 18
+        pygame.draw.rect(screen, (24, 28, 32), (popup_rect.x + 30, popup_rect.y + 180, 400, 10))
+        fill_w = int(400 * progress)
+        pygame.draw.rect(screen, C_ORANGE, (popup_rect.x + 30, popup_rect.y + 180, fill_w, 10))
+        # Small moving scan highlight inside the filled portion; does not affect progress.
+        if fill_w > 12:
+            scan_x = popup_rect.x + 30 + int((pygame.time.get_ticks() * 0.12) % max(1, fill_w))
+            pygame.draw.rect(screen, (255, 190, 80), (scan_x, popup_rect.y + 180, min(18, fill_w), 10))
+        pygame.draw.rect(screen, (80, 70, 55), (popup_rect.x + 30, popup_rect.y + 180, 400, 10), 1)
+    elif kicked_msg:
+        popup_w, popup_h = 460, 220
+        popup = pygame.Surface((popup_w, popup_h), pygame.SRCALPHA)
+        popup.fill((15, 10, 10, 245))
+        popup_rect = popup.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        pygame.draw.rect(popup, (200, 50, 50), popup.get_rect(), 1)
+        pygame.draw.rect(popup, (220, 60, 60, 120), (0, 0, popup_w, 3))
+        screen.blit(popup, popup_rect)
+        t = font_speaker.render("KICKED", True, (220, 60, 60))
+        screen.blit(t, (popup_rect.x + 28, popup_rect.y + 18))
+        pygame.draw.line(
+            screen, (90, 30, 30),
+            (popup_rect.x + 20, popup_rect.y + 52),
+            (popup_rect.right - 20, popup_rect.y + 52), 1,
+        )
+        reason_lbl = font_terminal_small.render("REASON:", True, (140, 90, 90))
+        screen.blit(reason_lbl, (popup_rect.x + 28, popup_rect.y + 64))
+        words = kicked_msg.split(" ")
+        wrap_w = popup_w - 60
+        lines = []
+        line = ""
+        for w in words:
+            test = (line + " " + w).strip() if line else w
+            if font_terminal.size(test)[0] <= wrap_w:
+                line = test
+            else:
+                if line:
+                    lines.append(line)
+                line = w
+        if line:
+            lines.append(line)
+        for j, ln in enumerate(lines):
+            lt = font_terminal.render(ln, True, (220, 200, 200))
+            screen.blit(lt, (popup_rect.x + 30, popup_rect.y + 88 + j * 24))
+        kick_dismiss_btn_rect.x = popup_rect.centerx - kick_dismiss_btn_rect.w // 2
+        kick_dismiss_btn_rect.y = popup_rect.bottom - 46
+        btn_hover = kick_dismiss_btn_rect.collidepoint(mouse_pos)
+        bg_col = (60, 25, 25) if btn_hover else (40, 18, 18)
+        outline_col = (220, 80, 80) if btn_hover else (140, 50, 50)
+        pygame.draw.rect(screen, bg_col, kick_dismiss_btn_rect, border_radius=3)
+        pygame.draw.rect(screen, outline_col, kick_dismiss_btn_rect, 1, border_radius=3)
+        ok = font_btn.render("DISMISS", True, C_WHITE if btn_hover else (200, 180, 180))
+        screen.blit(
+            ok,
+            (
+                kick_dismiss_btn_rect.centerx - ok.get_width() // 2,
+                kick_dismiss_btn_rect.centery - ok.get_height() // 2,
+            ),
+        )
+        hint2 = font_terminal_small.render("[ESC] also dismisses", True, (110, 70, 70))
+        screen.blit(
+            hint2,
+            (
+                popup_rect.centerx - hint2.get_width() // 2,
+                kick_dismiss_btn_rect.bottom + 4,
+            ),
+        )
+# ─────────────────────────────────────────────
+# SETTINGS (tabbed: Display / Audio / Accessibility)
+# ─────────────────────────────────────────────
+SETTINGS_RESOLUTIONS = ["1920x1080", "1600x900", "1280x720"]
+DISPLAY_MODES = ["Windowed", "Fullscreen"]
+SETTINGS_TABS = ["DISPLAY", "AUDIO", "ACCESSIBILITY"]
+
+SETTINGS_PANEL_W = 640
+SETTINGS_PANEL_H = 520
+SETTINGS_PANEL_X = WIDTH // 2 - SETTINGS_PANEL_W // 2
+SETTINGS_PANEL_Y = 70
+
+# Tab bar
+TAB_BAR_Y = SETTINGS_PANEL_Y + 80
+TAB_W = SETTINGS_PANEL_W // len(SETTINGS_TABS)
+settings_tab_rects = [
+    pygame.Rect(SETTINGS_PANEL_X + i * TAB_W, TAB_BAR_Y, TAB_W, 36)
+    for i in range(len(SETTINGS_TABS))
+]
+
+# Content area
+CONTENT_Y = TAB_BAR_Y + 60
+LABEL_X = SETTINGS_PANEL_X + 50
+CONTROL_X = SETTINGS_PANEL_X + 340
+
+# ── DISPLAY tab rows ──
+ROW_RES_Y = CONTENT_Y + 20
+ROW_DISPLAY_Y = CONTENT_Y + 80
+settings_res_left_rect    = pygame.Rect(CONTROL_X, ROW_RES_Y - 4, 32, 32)
+settings_res_right_rect   = pygame.Rect(CONTROL_X + 188, ROW_RES_Y - 4, 32, 32)
+settings_display_left_rect  = pygame.Rect(CONTROL_X, ROW_DISPLAY_Y - 4, 32, 32)
+settings_display_right_rect = pygame.Rect(CONTROL_X + 188, ROW_DISPLAY_Y - 4, 32, 32)
+
+# ── AUDIO tab rows (three sliders) ──
+VOL_BAR_W = 200
+VOL_BAR_X = CONTROL_X + 42
+ROW_MASTER_Y = CONTENT_Y + 20
+ROW_MUSIC_Y  = CONTENT_Y + 80
+ROW_SFX_Y    = CONTENT_Y + 140
+settings_master_left_rect  = pygame.Rect(CONTROL_X, ROW_MASTER_Y - 4, 32, 32)
+settings_master_right_rect = pygame.Rect(VOL_BAR_X + VOL_BAR_W + 10, ROW_MASTER_Y - 4, 32, 32)
+settings_master_bar_rect   = pygame.Rect(VOL_BAR_X, ROW_MASTER_Y + 8, VOL_BAR_W, 16)
+settings_music_left_rect   = pygame.Rect(CONTROL_X, ROW_MUSIC_Y - 4, 32, 32)
+settings_music_right_rect  = pygame.Rect(VOL_BAR_X + VOL_BAR_W + 10, ROW_MUSIC_Y - 4, 32, 32)
+settings_music_bar_rect    = pygame.Rect(VOL_BAR_X, ROW_MUSIC_Y + 8, VOL_BAR_W, 16)
+settings_sfx_left_rect     = pygame.Rect(CONTROL_X, ROW_SFX_Y - 4, 32, 32)
+settings_sfx_right_rect    = pygame.Rect(VOL_BAR_X + VOL_BAR_W + 10, ROW_SFX_Y - 4, 32, 32)
+settings_sfx_bar_rect      = pygame.Rect(VOL_BAR_X, ROW_SFX_Y + 8, VOL_BAR_W, 16)
+
+# ── ACCESSIBILITY tab rows ──
+ROW_REDUCED_MOTION_Y = CONTENT_Y + 20
+settings_reduced_motion_rect = pygame.Rect(CONTROL_X, ROW_REDUCED_MOTION_Y - 2, 60, 28)
+
+# Pre-rendered volume bar gradient
+_VOL_GRADIENT = pygame.Surface((VOL_BAR_W, 16))
+for vx in range(VOL_BAR_W):
+    t = vx / VOL_BAR_W
+    _VOL_GRADIENT.set_at((vx, 0), (int(200 - t * 40), int(150 - t * 60), 50))
+
+# Back buttons (distinct instances for settings and server browser)
+settings_back_btn = ModernButton(
+    WIDTH // 2 - 150,
+    SETTINGS_PANEL_Y + SETTINGS_PANEL_H - 60,
+    "BACK",
+)
+server_back_btn = ModernButton(0, 0, "BACK")
+
+
+def _draw_arrow_btn(rect, sym):
+    hover = rect.collidepoint(get_scaled_mouse())
+    bg = (90, 92, 88) if hover else (50, 52, 48)
+    pygame.draw.rect(screen, bg, rect)
+    pygame.draw.rect(screen, C_ORANGE if hover else (90, 90, 90), rect, 1)
+    c = font_btn.render(sym, True, C_WHITE)
+    screen.blit(c, (rect.centerx - c.get_width() // 2, rect.centery - c.get_height() // 2))
+
+
+def _draw_volume_slider(label, bar_rect, left_rect, right_rect, value, row_y):
+    screen.blit(font_terminal_small.render(label, True, C_GREY), (LABEL_X, row_y + 3))
+    _draw_arrow_btn(left_rect, "<")
+    pygame.draw.rect(screen, (25, 25, 28), bar_rect)
+    fill_w = int(bar_rect.width * value / 100)
+    if fill_w > 0:
+        screen.blit(_VOL_GRADIENT, bar_rect.topleft, (0, 0, fill_w, bar_rect.height))
+    pygame.draw.rect(screen, (80, 80, 85), bar_rect, 1)
+    _draw_arrow_btn(right_rect, ">")
+    pct = font_terminal.render(f"{value:>3}%", True, C_WHITE)
+    screen.blit(pct, (right_rect.right + 12, row_y + 2))
+
+
+def _draw_toggle(label, rect, value, row_y):
+    screen.blit(font_terminal_small.render(label, True, C_GREY), (LABEL_X, row_y + 3))
+    hover = rect.collidepoint(get_scaled_mouse())
+    on_col = (200, 140, 50) if value else (45, 45, 48)
+    off_col = (90, 90, 90) if hover else (60, 60, 60)
+    pygame.draw.rect(screen, on_col, rect)
+    pygame.draw.rect(screen, C_ORANGE if hover else off_col, rect, 1)
+    # knob
+    knob_x = rect.right - 22 if value else rect.x + 4
+    pygame.draw.rect(screen, C_WHITE, (knob_x, rect.y + 4, 18, rect.height - 8))
+    state_label = "ON" if value else "OFF"
+    s = font_terminal_small.render(state_label, True, C_WHITE)
+    screen.blit(s, (rect.right + 12, row_y + 4))
+
+
+_settings_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+_settings_overlay.fill((0, 0, 0, 180))
+_settings_panel = pygame.Surface((SETTINGS_PANEL_W, SETTINGS_PANEL_H), pygame.SRCALPHA)
+_settings_panel.fill((10, 12, 16, 245))
+pygame.draw.rect(_settings_panel, (60, 60, 65), (0, 0, SETTINGS_PANEL_W, SETTINGS_PANEL_H), 1)
+
+
+def draw_settings(active_tab, display_mode, res_idx,
+                  master_volume, music_volume, sfx_volume,
+                  reduced_motion):
+    """Render the settings overlay.
+
+    active_tab: 0 = DISPLAY, 1 = AUDIO, 2 = ACCESSIBILITY
+    """
+    screen.blit(_settings_overlay, (0, 0))
+    screen.blit(_settings_panel, (SETTINGS_PANEL_X, SETTINGS_PANEL_Y))
+
+    # Title
+    title_surf = font_speaker.render("SETTINGS", True, C_WHITE)
+    title_x = SETTINGS_PANEL_X + SETTINGS_PANEL_W // 2 - title_surf.get_width() // 2
+    screen.blit(font_speaker.render("SETTINGS", True, (0, 0, 0)), (title_x + 2, SETTINGS_PANEL_Y + 27))
+    screen.blit(title_surf, (title_x, SETTINGS_PANEL_Y + 25))
+    pygame.draw.line(screen, C_ORANGE,
+                     (SETTINGS_PANEL_X + 80, SETTINGS_PANEL_Y + 68),
+                     (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 80, SETTINGS_PANEL_Y + 68), 1)
+
+    # Tab bar
+    mouse = get_scaled_mouse()
+    for i, (rect, label) in enumerate(zip(settings_tab_rects, SETTINGS_TABS)):
+        is_active = (i == active_tab)
+        hover = rect.collidepoint(mouse)
+        bg = (30, 22, 12) if is_active else ((22, 22, 26) if hover else (14, 14, 18))
+        pygame.draw.rect(screen, bg, rect)
+        # underline for active tab
+        if is_active:
+            pygame.draw.rect(screen, C_ORANGE, (rect.x, rect.bottom - 3, rect.width, 3))
+        else:
+            pygame.draw.line(screen, (50, 50, 55), (rect.x, rect.bottom), (rect.right, rect.bottom), 1)
+        col = C_WHITE if is_active else (C_GREY if not hover else (210, 210, 210))
+        ts = font_btn.render(label, True, col)
+        screen.blit(ts, (rect.centerx - ts.get_width() // 2, rect.centery - ts.get_height() // 2))
+
+    # Tab content
+    if active_tab == 0:
+        # DISPLAY
+        screen.blit(font_terminal_small.render("Resolution", True, C_GREY),
+                    (LABEL_X, ROW_RES_Y + 3))
+        _draw_arrow_btn(settings_res_left_rect, "<")
+        res_str = SETTINGS_RESOLUTIONS[res_idx] if res_idx < len(SETTINGS_RESOLUTIONS) else "N/A"
+        res_surf = font_terminal.render(res_str, True, C_WHITE)
+        res_box_cx = (settings_res_left_rect.right + settings_res_right_rect.left) // 2
+        screen.blit(res_surf, (res_box_cx - res_surf.get_width() // 2, ROW_RES_Y))
+        _draw_arrow_btn(settings_res_right_rect, ">")
+
+        screen.blit(font_terminal_small.render("Display Mode", True, C_GREY),
+                    (LABEL_X, ROW_DISPLAY_Y + 3))
+        _draw_arrow_btn(settings_display_left_rect, "<")
+        mode_str = DISPLAY_MODES[display_mode] if display_mode < len(DISPLAY_MODES) else "N/A"
+        mode_surf = font_terminal.render(mode_str, True, C_WHITE)
+        mode_box_cx = (settings_display_left_rect.right + settings_display_right_rect.left) // 2
+        screen.blit(mode_surf, (mode_box_cx - mode_surf.get_width() // 2, ROW_DISPLAY_Y))
+        _draw_arrow_btn(settings_display_right_rect, ">")
+
+    elif active_tab == 1:
+        # AUDIO
+        _draw_volume_slider("Master Volume", settings_master_bar_rect,
+                            settings_master_left_rect, settings_master_right_rect,
+                            master_volume, ROW_MASTER_Y)
+        _draw_volume_slider("Music Volume", settings_music_bar_rect,
+                            settings_music_left_rect, settings_music_right_rect,
+                            music_volume, ROW_MUSIC_Y)
+        _draw_volume_slider("SFX Volume", settings_sfx_bar_rect,
+                            settings_sfx_left_rect, settings_sfx_right_rect,
+                            sfx_volume, ROW_SFX_Y)
+
+    else:
+        # ACCESSIBILITY
+        _draw_toggle("Reduced Motion", settings_reduced_motion_rect,
+                     reduced_motion, ROW_REDUCED_MOTION_Y)
+        # Helper text under the toggle
+        hint = font_terminal_small.render(
+            "Disables screen shake and bright full-screen flashes.",
+            True, (140, 140, 140))
+        screen.blit(hint, (LABEL_X, ROW_REDUCED_MOTION_Y + 44))
+
+    # Back button
+    settings_back_btn.x = WIDTH // 2 - 150
+    settings_back_btn.y = SETTINGS_PANEL_Y + SETTINGS_PANEL_H - 60
+    settings_back_btn.width = 300
+    settings_back_btn.rect = pygame.Rect(settings_back_btn.x, settings_back_btn.y, 300, 40)
+    settings_back_btn.check_hover(get_scaled_mouse())
+    settings_back_btn.draw(screen)
+# ─────────────────────────────────────────────
+# PAUSE / DEATH
+# ─────────────────────────────────────────────
+pause_buttons = [
+    ModernButton(WIDTH // 2 - 150, 280, "RESUME"),
+    ModernButton(WIDTH // 2 - 150, 340, "RESTART MISSION"),
+    ModernButton(WIDTH // 2 - 150, 400, "QUIT TO MENU"),
+]
+death_buttons = [
+    ModernButton(WIDTH // 2 - 150, 330, "RESTART MISSION"),
+    ModernButton(WIDTH // 2 - 150, 390, "QUIT TO MENU"),
+]
+_pause_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+_pause_overlay.fill((0, 0, 0, 180))
+def draw_pause_menu():
+    screen.blit(_pause_overlay, (0, 0))
+    txt = font_speaker.render("PAUSED", True, C_WHITE)
+    screen.blit(txt, (WIDTH // 2 - txt.get_width() // 2, 180))
+    for btn in pause_buttons:
+        btn.check_hover(get_scaled_mouse())
+        btn.draw(screen)
+_death_animation_start = 0
+_death_particles = []
+_death_font = pygame.font.SysFont("Arial Black", 70)
+_death_sub_font = pygame.font.SysFont("Consolas", 22, bold=True)
+_death_flavor_font = pygame.font.SysFont("Consolas", 16)
+_server_title_font = pygame.font.SysFont("Impact", 46)
+def reset_death_animation():
+    global _death_animation_start, _death_particles
+    _death_animation_start = 0
+    _death_particles = []
+def draw_death_screen():
+    global _death_animation_start, _death_particles
+    if _death_animation_start == 0:
+        _death_animation_start = pygame.time.get_ticks()
+        for _ in range(150):
+            _death_particles.append({
+                'x': random.randint(0, WIDTH),
+                'y': random.randint(0, HEIGHT),
+                'r': random.randint(2, 7),
+                'a': random.randint(60, 160),
+                'vy': random.uniform(0.1, 0.4)
+            })
+    elapsed = pygame.time.get_ticks() - _death_animation_start
+    dark_alpha = min(180, int(elapsed * 0.15))
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((10, 5, 5, dark_alpha))
+    screen.blit(overlay, (0, 0))
+    beat_cycle = elapsed % 1200
+    if beat_cycle < 200:
+        beat_intensity = 1.0 - (beat_cycle / 200.0)
+    else:
+        beat_intensity = 0.0
+    vig_alpha = int(100 * beat_intensity) + 30
+    vig = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    for i in range(0, WIDTH, 3):
+        a = max(0, vig_alpha - int(vig_alpha * i / WIDTH * 1.2))
+        if a > 0:
+            pygame.draw.rect(vig, (120, 0, 0, a), (i, i, WIDTH - i * 2, HEIGHT - i * 2), 3)
+    screen.blit(vig, (0, 0))
+    for p in _death_particles:
+        p['y'] += p['vy']
+        pygame.draw.circle(screen, (80, 5, 5, p['a']), (int(p['x']), int(p['y'])), p['r'])
+    if elapsed < 400:
+        flash_alpha = max(0, 255 - int(elapsed * 1.2))
+        flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        if elapsed < 100:
+            flash_color = (255, 220, 220, flash_alpha)
+        else:
+            flash_color = (150, 10, 10, flash_alpha)
+        flash.fill(flash_color)
+        screen.blit(flash, (0, 0))
+    if elapsed > 600:
+        text_alpha = min(255, (elapsed - 600) * 2)
+        offset_x, offset_y = 0, 0
+        if elapsed < 700:
+            offset_x = random.randint(-8, 8)
+            offset_y = random.randint(-4, 4)
+        shadow_surf = _death_font.render("MISSION FAILED", True, (0, 0, 0))
+        shadow_surf.set_alpha(text_alpha)
+        title_y = HEIGHT // 2 - 140
+        screen.blit(shadow_surf, (WIDTH // 2 - shadow_surf.get_width() // 2 + 4 + offset_x, title_y + 4 + offset_y))
+        text_surf = _death_font.render("MISSION FAILED", True, (210, 30, 30))
+        text_surf.set_alpha(text_alpha)
+        screen.blit(text_surf, (WIDTH // 2 - text_surf.get_width() // 2 + offset_x, title_y + offset_y))
+    if elapsed > 1000:
+        sub_alpha = min(255, (elapsed - 1000) * 2)
+        if getattr(STATE, "active_mission", "MISSION1") == "MISSION2":
+            sub_text = "OPERATION QUIET ON ROUTE 12 COMPROMISED"
+            flavor_text = "VASILE LINK: LOST. IPA CLEANUP TEAMS CLOSING ON ROUTE 12."
+        else:
+            sub_text = "OPERATION BLACK NOTEBOOK COMPROMISED"
+            flavor_text = "KRAP COMMAND: SIGNAL LOST. DISPATCHING CLEANUP CREW."
+        sub = _death_sub_font.render(sub_text, True, (180, 180, 180))
+        sub.set_alpha(sub_alpha)
+        screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT // 2 - 60))
+        flavor = _death_flavor_font.render(flavor_text, True, (120, 120, 120))
+        flavor.set_alpha(sub_alpha)
+        screen.blit(flavor, (WIDTH // 2 - flavor.get_width() // 2, HEIGHT // 2 - 30))
+    if elapsed > 1150:
+        panel_alpha = min(230, int((elapsed - 1150) * 0.35))
+        try:
+            import walking_sim
+            civilians_helped = sum(1 for n in walking_sim.walk_npcs if n.get("has_given"))
+            rations_used = max(0, 2 - int(walking_sim.player_rations))
+        except Exception:
+            civilians_helped = 0
+            rations_used = 0
+        end_t = STATE.mission_end_time or pygame.time.get_ticks()
+        start_t = STATE.mission_start_time or end_t
+        elapsed_sec = max(0, (end_t - start_t) // 1000)
+        accuracy = int((STATE.shots_hit / STATE.shots_fired) * 100) if STATE.shots_fired > 0 else 0
+        if getattr(STATE, "active_mission", "MISSION1") == "MISSION2":
+            evidence_found = 0
+            try:
+                evidence_found = sum(1 for item in getattr(STATE, "mission2_evidence", []) if item.get("done"))
+            except Exception:
+                evidence_found = 0
+            stats = [
+                ("KILLS", str(STATE.hostiles_killed)),
+                ("SHOTS FIRED", str(STATE.shots_fired)),
+                ("ACCURACY", f"{accuracy}%"),
+                ("TOTAL TIME", f"{elapsed_sec // 60:02d}:{elapsed_sec % 60:02d}"),
+                ("EVIDENCE FOUND", f"{evidence_found}/3"),
+                ("COMMS", "OFFLINE" if getattr(STATE, "mission2_comms_cut", False) else "VASILE"),
+            ]
+        else:
+            stats = [
+                ("KILLS", str(STATE.hostiles_killed)),
+                ("SHOTS FIRED", str(STATE.shots_fired)),
+                ("ACCURACY", f"{accuracy}%"),
+                ("TOTAL TIME", f"{elapsed_sec // 60:02d}:{elapsed_sec % 60:02d}"),
+                ("CIVILIANS HELPED", str(civilians_helped)),
+                ("RATIONS USED", str(rations_used)),
+            ]
+        panel_w, panel_h = 520, 104
+        panel_x = WIDTH // 2 - panel_w // 2
+        panel_y = HEIGHT // 2 + 16
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((8, 8, 12, panel_alpha))
+        pygame.draw.rect(panel, (120, 35, 35, min(160, panel_alpha)), panel.get_rect(), 1)
+        pygame.draw.rect(panel, (170, 35, 35, min(200, panel_alpha)), (0, 0, 4, panel_h))
+        screen.blit(panel, (panel_x, panel_y))
+        for i, (label, value) in enumerate(stats):
+            col = i % 3
+            row = i // 3
+            sx = panel_x + 24 + col * 165
+            sy = panel_y + 16 + row * 42
+            lbl = font_terminal_small.render(label, True, (135, 80, 80))
+            val = _death_sub_font.render(value, True, (220, 210, 205))
+            lbl.set_alpha(panel_alpha)
+            val.set_alpha(panel_alpha)
+            screen.blit(lbl, (sx, sy))
+            screen.blit(val, (sx, sy + 15))
+    if elapsed > 600 and random.random() > 0.92:
+        glitch_y = random.randint(0, HEIGHT)
+        glitch_h = random.randint(2, 8)
+        glitch_surf = pygame.Surface((WIDTH, glitch_h), pygame.SRCALPHA)
+        glitch_surf.fill((255, 255, 255, 40))
+        screen.blit(glitch_surf, (random.randint(-10, 10), glitch_y))
+    if elapsed > 1500:
+        btn_progress = min(1.0, (elapsed - 1500) / 600.0)
+        ease = 1 - (1 - btn_progress) ** 3
+        for i, btn in enumerate(death_buttons):
+            target_y = HEIGHT // 2 + 150 + i * 60
+            start_y = target_y + 40
+            current_y = start_y + (target_y - start_y) * ease
+            btn.y = int(current_y)
+            btn.rect.y = btn.y
+            btn.check_hover(get_scaled_mouse())
+            btn.draw(screen)

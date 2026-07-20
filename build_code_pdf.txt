@@ -1,0 +1,315 @@
+"""
+build_code_pdf.py
+
+Bundles all .py files in the project into a single PDF.
+
+Format:
+    filename.py
+    (code)
+    next_file.py
+    (code)
+
+Usage:
+    pip install fpdf2
+    python build_code_pdf.py
+
+Notes:
+    - This script includes every .py file under the project root, except itself
+      and files inside skipped cache/build/virtualenv folders.
+    - Files listed in PREFERRED_ORDER are placed first in that order.
+    - Any additional .py files are appended alphabetically, so new game modules
+      will automatically be included.
+"""
+
+from pathlib import Path
+from fpdf import FPDF
+
+# ─── CONFIG ────────────────────────────────────────────────
+OUTPUT_PDF = "game_source.pdf"
+
+# Very small, as requested.
+# If the PDF is too tiny to read, try FONT_SIZE = 2.5 and LINE_HEIGHT = 2.8.
+FONT_SIZE = 0.01
+LINE_HEIGHT = 0.6
+
+HEADER_SIZE = 1
+MARGIN = 8
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+# Files in the order you want them.
+# Any .py files not listed here will still be appended alphabetically.
+PREFERRED_ORDER = [
+    # Main launcher / config
+    "acaristan.py",
+    "config.py",
+
+    # Refactored architecture files
+    "state.py",
+    "game_core.py",
+    "player.py",
+    "weapons.py",
+    "mission.py",
+    "mission2.py",
+    "cutscenes.py",
+    "walking_sim.py",
+    "effects.py",
+    "ui_hud.py",
+    "interactions.py",
+
+    # Existing core systems
+    "enemy_ai.py",
+    "menu.py",
+    "audio.py",
+    "save_system.py",
+
+    # Tests/tools
+    "smoke_test.py",
+]
+
+# Folders/files to skip
+SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "venv",
+    "env",
+    "build",
+    "dist",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    "node_modules",
+}
+
+SKIP_FILES = {
+    Path(__file__).name,
+}
+
+# Optional line numbers
+INCLUDE_LINE_NUMBERS = False
+
+# If a monospace Unicode font is found, the PDF can preserve more characters.
+# If not, the script falls back to Courier and replaces unsupported chars.
+UNICODE_MONO_FONT_CANDIDATES = [
+    PROJECT_ROOT / "DejaVuSansMono.ttf",
+    PROJECT_ROOT / "assets" / "DejaVuSansMono.ttf",
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"),
+    Path("/usr/local/share/fonts/DejaVuSansMono.ttf"),
+    Path("C:/Windows/Fonts/consola.ttf"),
+    Path("C:/Windows/Fonts/cour.ttf"),
+    Path("/Library/Fonts/Menlo.ttf"),
+]
+# ───────────────────────────────────────────────────────────
+
+
+def find_py_files(root: Path):
+    """Return all project .py files, ordered by PREFERRED_ORDER first."""
+    found = []
+
+    for path in root.rglob("*.py"):
+        rel = path.relative_to(root)
+
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+
+        if path.name in SKIP_FILES:
+            continue
+
+        found.append(rel)
+
+    def sort_key(path: Path):
+        name = path.name
+        rel_str = str(path).replace("\\", "/")
+
+        if name in PREFERRED_ORDER:
+            return (0, PREFERRED_ORDER.index(name), rel_str.lower())
+
+        return (1, 9999, rel_str.lower())
+
+    return sorted(found, key=sort_key)
+
+
+def find_unicode_mono_font():
+    for candidate in UNICODE_MONO_FONT_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+class CodePDF(FPDF):
+    def header(self):
+        pass
+
+    def footer(self):
+        self.set_y(-6)
+        self.set_font("Courier", size=4)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 3, f"Page {self.page_no()}", align="C")
+        self.set_text_color(0, 0, 0)
+
+
+def safe_text(text: str, unicode_font_available: bool) -> str:
+    """Prepare text for FPDF.
+
+    Core PDF fonts are latin-1 only. If no Unicode font is available,
+    unsupported characters are replaced.
+    """
+    text = text.replace("\ufeff", "")
+
+    if unicode_font_available:
+        return text
+
+    return text.encode("latin-1", "replace").decode("latin-1")
+
+
+def setup_font(pdf: FPDF):
+    """Try to use a Unicode monospace font. Fall back to Courier."""
+    font_path = find_unicode_mono_font()
+
+    if font_path:
+        try:
+            pdf.add_font("CodeFont", "", str(font_path))
+            pdf.add_font("CodeFont", "B", str(font_path))
+            print(f"Using Unicode font: {font_path}")
+            return "CodeFont", True
+        except Exception as e:
+            print(f"Could not load Unicode font '{font_path}': {e}")
+
+    print("Using built-in Courier font. Unsupported characters will be replaced.")
+    return "Courier", False
+
+
+def ensure_room_for_header(pdf: FPDF):
+    """Avoid placing a filename header at the very bottom of the page."""
+    if pdf.get_y() > pdf.h - MARGIN - 12:
+        pdf.add_page()
+
+
+def write_code_line(
+    pdf: FPDF,
+    line: str,
+    line_no: int,
+    usable_width: float,
+    unicode_font_available: bool,
+):
+    """Write one logical code line, wrapping if necessary."""
+    line = line.replace("\t", "    ")
+    line = safe_text(line, unicode_font_available)
+
+    if INCLUDE_LINE_NUMBERS:
+        first_prefix = f"{line_no:5d} | "
+        cont_prefix = "      | "
+    else:
+        first_prefix = ""
+        cont_prefix = ""
+
+    if line == "":
+        if INCLUDE_LINE_NUMBERS:
+            pdf.cell(
+                0,
+                LINE_HEIGHT,
+                first_prefix,
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
+        else:
+            pdf.ln(LINE_HEIGHT)
+        return
+
+    char_w = pdf.get_string_width("M") or 0.001
+
+    start = 0
+    first = True
+
+    while start < len(line):
+        prefix = first_prefix if first else cont_prefix
+        prefix_w = pdf.get_string_width(prefix)
+        available_for_code = max(1.0, usable_width - prefix_w)
+        max_chars = max(1, int(available_for_code / char_w))
+
+        chunk = line[start : start + max_chars]
+
+        pdf.cell(
+            0,
+            LINE_HEIGHT,
+            prefix + chunk,
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+        start += max_chars
+        first = False
+
+
+def build_pdf():
+    files = find_py_files(PROJECT_ROOT)
+
+    if not files:
+        print("No .py files found.")
+        return
+
+    pdf = CodePDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=MARGIN)
+    pdf.set_margins(MARGIN, MARGIN, MARGIN)
+
+    font_family, unicode_font_available = setup_font(pdf)
+
+    pdf.add_page()
+
+    usable_width = pdf.w - 2 * MARGIN
+
+    for filepath in files:
+        abs_path = PROJECT_ROOT / filepath
+
+        try:
+            code = abs_path.read_text(encoding="utf-8")
+        except Exception as e:
+            print(f"Skipping {filepath}: {e}")
+            continue
+
+        ensure_room_for_header(pdf)
+
+        # ── Filename header ──
+        pdf.set_font(font_family, style="B", size=HEADER_SIZE)
+        pdf.set_text_color(0, 0, 150)
+        pdf.ln(2)
+
+        pdf.cell(
+            0,
+            3,
+            safe_text(str(filepath).replace("\\", "/"), unicode_font_available),
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(1)
+
+        # ── Code body ──
+        pdf.set_font(font_family, size=FONT_SIZE)
+
+        for line_no, raw_line in enumerate(code.splitlines(), start=1):
+            write_code_line(
+                pdf=pdf,
+                line=raw_line,
+                line_no=line_no,
+                usable_width=usable_width,
+                unicode_font_available=unicode_font_available,
+            )
+
+        pdf.ln(3)
+        print(f"Added: {filepath}")
+
+    output_path = PROJECT_ROOT / OUTPUT_PDF
+    pdf.output(str(output_path))
+
+    print(f"\nDone -> {output_path}")
+    print(f"Files included: {len(files)}")
+    for file in files:
+        print(f" - {file}")
+
+
+if __name__ == "__main__":
+    build_pdf()

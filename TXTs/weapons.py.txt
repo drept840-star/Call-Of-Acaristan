@@ -1,0 +1,576 @@
+# ------------------------------------------------------------
+# weapons.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# weapons.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# weapons.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+
+"""Player weapons: pistol, melee, molotov cocktails, fire zones."""
+import math
+import random
+import pygame
+from config import (
+    WIDTH, HEIGHT, TILE_SIZE, audio, Particle, Casing, C_BLOOD,
+    ENEMY_HEAR_RADIUS, get_scaled_mouse,
+)
+from state import STATE
+from effects import spawn_particles, shake
+from user_settings import SETTINGS
+MOLOTOV_RADIUS = 92
+MOLOTOV_DURATION = 300
+# Per-frame damage inside the fire zone. A molotov actually deals damage
+# from two sources at once — the molotov_fires loop in mission2.py and the
+# FireZone in weapons.py — so per-frame values must stay modest or the
+# total adds up to an instant kill.
+#
+# Tuned values: a standard IPA grunt (115 HP) standing at the centre of
+# the fire dies in ~1.8 seconds. An enemy skirting the outer edge can
+# escape with light damage. The player takes ~7-8 seconds of full-burn
+# exposure to lose half their HP.
+MOLOTOV_ENEMY_DAMAGE = 0.6
+MOLOTOV_PLAYER_DAMAGE = 0.35
+
+
+def _mission2_actions_blocked():
+    """Hard safety gate for authored Mission 2 beats.
+
+    The main loop also blocks input, but weapon functions can be reached from
+    multiple paths.  Keeping this guard here prevents shooting/reload/molotov
+    leaks during sniper/blackout/cinematic locks.
+    """
+    if getattr(STATE, "active_mission", "") != "MISSION2":
+        return False
+    return (
+        getattr(STATE, "mission2_card", None) is not None
+        or getattr(STATE, "mission2_stage", "") in {"sniper", "blackout", "done"}
+    )
+
+
+def _player_disarmed():
+    """True when the player has no weapon at all (e.g. Mission 3's cell,
+    before the chair breaks). Blocks ALL weapon actions."""
+    return bool(getattr(STATE, "player_disarmed", False))
+
+
+def _player_has_firearm():
+    """True when the player has a ranged weapon (pistol / OS-12 / sidearm).
+
+    M3's improvised weapons (chair_leg, shiv) are melee-only — they block
+    shooting, reloading, molotovs, and weapon-switching. The player can
+    only melee with them until they take a sidearm off a dead guard (which
+    sets mission3_weapon to "sidearm" and re-enables ranged).
+    """
+    weapon = getattr(STATE, "mission3_weapon", "none")
+    if weapon in ("chair_leg", "shiv"):
+        return False
+    if weapon == "sidearm":
+        return True
+    return not getattr(STATE, "player_disarmed", False)
+
+
+class FireZone:
+    """Persistent ground fire created by a Molotov impact."""
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.radius = 48
+        self.life = 420
+        self.max_life = 420
+        self.damage_tick = 0
+    def update(self, enemies, player_rect, audio_sys):
+        self.life -= 1
+        self.damage_tick += 1
+        player_center = (player_rect.centerx, player_rect.centery) if player_rect else (self.x, self.y)
+        if self.damage_tick >= 12:
+            self.damage_tick = 0
+            for e in enemies:
+                if e.hp <= 0:
+                    continue
+                dist = math.hypot(e.rect.centerx - self.x, e.rect.centery - self.y)
+                if dist < self.radius:
+                    dmg = 15 if dist < self.radius * 0.4 else 8
+                    fire_mult = getattr(e, "fire_weakness", 1.0)
+                    e.hp -= dmg * fire_mult
+                    e.alerted = True
+                    spark_count = 4 if getattr(e, "is_breach_enemy", False) else 3
+                    for _ in range(spark_count):
+                        STATE.particles.append(Particle(
+                            e.rect.centerx + random.randint(-6, 6),
+                            e.rect.centery + random.randint(-6, 6),
+                            (255, random.randint(80, 210), 0)
+                        ))
+        if random.random() < 0.04 and audio_sys:
+            audio_sys.play_3d("explosion", (self.x, self.y), player_center, base_volume=0.08)
+        return self.life > 0
+    def draw(self, surface, cam_x, cam_y):
+        sx = int(self.x - cam_x)
+        sy = int(self.y - cam_y)
+        if not (-self.radius - 60 < sx < WIDTH + self.radius + 60 and
+                -self.radius - 60 < sy < HEIGHT + self.radius + 60):
+            return
+        life_ratio = max(0.0, self.life / self.max_life)
+        flicker = 0.75 + 0.25 * math.sin(pygame.time.get_ticks() * 0.018)
+        # Scorched irregular ground patch
+        scorch = pygame.Surface((self.radius * 3, self.radius * 3), pygame.SRCALPHA)
+        cx = cy = self.radius * 3 // 2
+        rng = random.Random(int(self.x * 13 + self.y * 7))
+        points = []
+        for i in range(18):
+            ang = i / 18.0 * math.pi * 2
+            rr = self.radius * rng.uniform(0.75, 1.25)
+            points.append((cx + math.cos(ang) * rr, cy + math.sin(ang) * rr * 0.72))
+        pygame.draw.polygon(scorch, (10, 7, 5, int(115 * life_ratio)), points)
+        pygame.draw.polygon(scorch, (45, 22, 8, int(80 * life_ratio)), points, 2)
+        surface.blit(scorch, (sx - cx, sy - cy))
+        # Low orange glow, not a giant perfect circle
+        glow = pygame.Surface((self.radius * 3, self.radius * 2), pygame.SRCALPHA)
+        for r, a in [
+            (self.radius + 25, 24),
+            (self.radius, 40),
+            (self.radius - 20, 65),
+        ]:
+            if r > 0:
+                pygame.draw.ellipse(
+                    glow,
+                    (255, 95, 20, int(a * life_ratio * flicker)),
+                    (
+                        self.radius * 3 // 2 - r,
+                        self.radius - int(r * 0.45),
+                        r * 2,
+                        int(r * 0.9),
+                    ),
+                )
+        surface.blit(glow, (sx - self.radius * 3 // 2, sy - self.radius))
+        # Pixel flame tongues
+        flame_count = int(9 * life_ratio) + 3
+        for i in range(flame_count):
+            seed = i * 31
+            ang = seed * 0.77 + math.sin(pygame.time.get_ticks() * 0.004 + i)
+            rr = self.radius * (0.15 + (i % 5) * 0.13)
+            fx = sx + math.cos(ang) * rr
+            fy = sy + math.sin(ang) * rr * 0.55
+            h = int((18 + (i % 4) * 5) * life_ratio * flicker)
+            w = max(4, h // 3)
+            outer = [
+                (fx, fy - h),
+                (fx - w, fy + h * 0.25),
+                (fx + w, fy + h * 0.25),
+            ]
+            inner = [
+                (fx, fy - h * 0.6),
+                (fx - w * 0.45, fy + h * 0.05),
+                (fx + w * 0.45, fy + h * 0.05),
+            ]
+            pygame.draw.polygon(surface, (255, 85, 18), outer)
+            pygame.draw.polygon(surface, (255, 205, 80), inner)
+        # Smoke wisps
+        if life_ratio > 0.2:
+            for i in range(5):
+                drift = math.sin(pygame.time.get_ticks() * 0.002 + i) * 12
+                smoke_x = sx + int(drift) + (i - 2) * 12
+                smoke_y = sy - 35 - i * 8
+                sr = 7 + i
+                smoke_a = int(32 * life_ratio)
+                sm = pygame.Surface((sr * 2, sr * 2), pygame.SRCALPHA)
+                pygame.draw.circle(sm, (45, 43, 40, smoke_a), (sr, sr), sr)
+                surface.blit(sm, (smoke_x - sr, smoke_y - sr))
+        if life_ratio > 0.15:
+            for _ in range(2):
+                smoke_x = sx + random.randint(-int(self.radius * 0.5), int(self.radius * 0.5))
+                smoke_y = sy - random.randint(10, 35)
+                smoke_r = random.randint(4, 10)
+                smoke_a = int(40 * life_ratio)
+                smoke_s = pygame.Surface((smoke_r * 2, smoke_r * 2), pygame.SRCALPHA)
+                pygame.draw.circle(smoke_s, (50, 45, 40, smoke_a),
+                                   (smoke_r, smoke_r), smoke_r)
+                surface.blit(smoke_s, (smoke_x - smoke_r, smoke_y - smoke_r))
+def _wall_blocks_line(x1, y1, x2, y2, solid_walls):
+    for w in solid_walls:
+        if w.clipline((x1, y1), (x2, y2)):
+            return True
+    return False
+def _solid_walls():
+    out = list(STATE.walls)
+    for d in STATE.doors:
+        if d.collision_rect:
+            out.append(d.collision_rect)
+    return out
+def start_reload():
+    if _mission2_actions_blocked():
+        return
+    if _player_disarmed():
+        return
+    if not _player_has_firearm():
+        return   # melee-only weapon — no gun to reload
+    current_weapon = getattr(STATE, "current_weapon", "pistol")
+    is_os12 = current_weapon == "os12"
+    is_k9 = current_weapon == "k9_smg"
+
+    if is_os12:
+        if (STATE.os12_spare_mags <= 0
+                or STATE.os12_ammo_in_mag == STATE.os12_mag_size
+                or STATE.is_reloading):
+            return
+        STATE.is_reloading = True
+        STATE.reload_timer = 90  # heavier gun, slower reload
+        audio.play("reload", volume=0.6)
+    elif is_k9:
+        if (getattr(STATE, "k9_spare_mags", 0) <= 0
+                or getattr(STATE, "k9_ammo_in_mag", 0) == getattr(STATE, "k9_mag_size", 24)
+                or STATE.is_reloading):
+            return
+        STATE.is_reloading = True
+        STATE.reload_timer = 72  # unique SMG mag-pull / palm-slap reload
+        audio.play("reload", volume=0.52)
+    else:
+        if (STATE.spare_mags <= 0
+                or STATE.ammo_in_mag == STATE.mag_size
+                or STATE.is_reloading):
+            return
+        STATE.is_reloading = True
+        STATE.reload_timer = 60
+        audio.play("reload", volume=0.6)
+
+    if STATE.player:
+        for _ in range(6):
+            STATE.particles.append(Particle(
+                STATE.player.rect.centerx + random.randint(-6, 6),
+                STATE.player.rect.centery + random.randint(-4, 4),
+                (160, 155, 140),
+            ))
+def handle_shoot():
+    from enemy_ai import enemy_hear_shot
+    if _mission2_actions_blocked():
+        return
+    if _player_disarmed():
+        return
+    if not _player_has_firearm():
+        # Mission 3 improvised weapons are melee-only. Let left-click use
+        # the equipped chair leg / shiv instead of silently doing nothing.
+        if getattr(STATE, "mission3_weapon", "none") in ("chair_leg", "shiv"):
+            handle_melee()
+        return   # melee-only weapon — no gun to fire
+    current_weapon = getattr(STATE, "current_weapon", "pistol")
+    is_os12 = current_weapon == "os12"
+    is_k9 = current_weapon == "k9_smg"
+
+    # Pick the right ammo/cooldown state for the active weapon
+    if is_os12:
+        ammo = STATE.os12_ammo_in_mag
+        cooldown = STATE.os12_shot_cooldown
+    elif is_k9:
+        ammo = getattr(STATE, "k9_ammo_in_mag", 0)
+        cooldown = getattr(STATE, "k9_shot_cooldown", 0)
+    else:
+        ammo = STATE.ammo_in_mag
+        cooldown = STATE.shot_cooldown
+
+    if (STATE.player_dead or not STATE.player
+            or STATE.is_reloading or cooldown > 0):
+        return
+    if getattr(STATE.player, "weapon_raised", False):
+        return
+    # Block firing during weapon swap animation
+    if getattr(STATE, "weapon_swap_timer", 0) > 0:
+        return
+    if ammo <= 0:
+        audio.play("empty_click", volume=0.5)
+        # Auto-reload (Gameplay → Auto-Reload setting) — only if user opted in
+        # and the player has spare magazines.
+        if SETTINGS.auto_reload:
+            if is_os12 and STATE.os12_spare_mags > 0:
+                start_reload()
+            elif is_k9 and getattr(STATE, "k9_spare_mags", 0) > 0:
+                start_reload()
+            elif not is_os12 and not is_k9 and STATE.spare_mags > 0:
+                start_reload()
+        return
+
+    p = STATE.player
+
+    # ── Aim assist (Gameplay → Aim Assist setting) ──
+    # Snap the player's aim slightly toward the closest visible enemy that's
+    # already near the cursor line. Magnet strength is small (~6° max swing)
+    # so it feels like a forgiveness window, not auto-targeting.
+    if SETTINGS.aim_assist and STATE.enemies:
+        best = None
+        best_diff = math.radians(7.0)  # 7° cone
+        px, py = p.rect.centerx, p.rect.centery
+        cur_angle = p.angle
+        solid = _solid_walls()
+        for e in STATE.enemies:
+            if e.hp <= 0:
+                continue
+            ex, ey = e.rect.centerx, e.rect.centery
+            dist = math.hypot(ex - px, ey - py)
+            if dist > 500 or dist < 40:
+                continue
+            target_angle = math.atan2(ey - py, ex - px)
+            # Wrap-around safe angle diff
+            diff = math.atan2(math.sin(target_angle - cur_angle),
+                              math.cos(target_angle - cur_angle))
+            adiff = abs(diff)
+            if adiff < best_diff and not _wall_blocks_line(px, py, ex, ey, solid):
+                best_diff = adiff
+                best = (target_angle, diff)
+        if best is not None:
+            # Pull halfway toward the target (smooth, not snap)
+            p.angle = cur_angle + best[1] * 0.5
+
+    if hasattr(p, "barrel_tip"):
+        bx, by = p.barrel_tip()
+    else:
+        bx = p.rect.centerx + math.cos(p.angle) * 39
+        by = p.rect.centery + math.sin(p.angle) * 39
+
+    # OS 12: slightly slower bullet, longer range.
+    # Damage history:
+    #   35 (original)  — trivialized M2, killed anything in 3-4 shots.
+    #   22 (nerf #1)   — overcorrected, felt too weak (6 shots per grunt,
+    #                    5 per reinforcement, mag emptied after 3 kills).
+    #   28 (current)   — middle ground. 115-HP grunt takes 5 shots, 100-HP
+    #                    reinforcement takes 4. With 25-round mag = 5 clean
+    #                    kills per mag. Player must aim but isn't punished
+    #                    for spraying under pressure.
+    # Mag size history: 30 → 20 → 25 (same middle-ground logic).
+    # Spare mags: capped at exactly 2 from pickup, no mid-mission rewards —
+    # ammo scarcity is the design tension that makes the OS-12 feel earned.
+    if is_os12:
+        bullet_speed = 22
+        bullet_life = 24
+        bullet_damage = 28
+    elif is_k9:
+        bullet_speed = 25
+        bullet_life = 18
+        bullet_damage = 18
+    else:
+        bullet_speed = 24
+        bullet_life = 20
+        bullet_damage = 50
+
+    STATE.bullets.append({
+        "x": bx, "y": by,
+        "prev_x": bx, "prev_y": by,
+        "dx": math.cos(p.angle) * bullet_speed,
+        "dy": math.sin(p.angle) * bullet_speed,
+        "life": bullet_life,
+        "owner": "player",
+        "damage": bullet_damage,
+    })
+    solid_for_noise = _solid_walls()
+    if is_k9:
+        # Suppressed, not silent: only nearby guards with a clear acoustic path
+        # react. Keeps the K-9 useful in the black-site without making it magic.
+        for e in STATE.enemies:
+            if math.hypot(e.rect.centerx - bx, e.rect.centery - by) <= ENEMY_HEAR_RADIUS * 0.45:
+                if not _wall_blocks_line(bx, by, e.rect.centerx, e.rect.centery, solid_for_noise):
+                    e.hear_shot(bx, by, solid_for_noise)
+    else:
+        enemy_hear_shot(bx, by, STATE.enemies, solid_for_noise)
+
+    if is_os12:
+        shake(20)
+        STATE.cam_kick_x = -math.cos(p.angle) * 22.0
+        STATE.cam_kick_y = -math.sin(p.angle) * 22.0
+    elif is_k9:
+        shake(6)
+        STATE.cam_kick_x = -math.cos(p.angle) * 7.0
+        STATE.cam_kick_y = -math.sin(p.angle) * 7.0
+    else:
+        shake(13)
+        STATE.cam_kick_x = -math.cos(p.angle) * 15.0
+        STATE.cam_kick_y = -math.sin(p.angle) * 15.0
+
+    STATE.muzzle_flash_timer = 5 if is_os12 else (2 if is_k9 else 4)
+
+    # Recoil
+    if is_os12:
+        p._recoil_timer = 12
+        p._recoil_offset = -10.0
+        p._slide_timer = 0  # no slide on a rifle
+    elif is_k9:
+        p._recoil_timer = 5
+        p._recoil_offset = -3.5
+        p._slide_timer = 0
+    else:
+        p._recoil_timer = 8
+        p._recoil_offset = -6.0
+        p._slide_timer = 6
+
+    # Casing eject — OS 12 ejects further
+    eject_offset = 13 if is_os12 else 10
+    STATE.casings.append(Casing(
+        p.rect.centerx + math.cos(p.angle) * 8
+        + math.cos(p.angle - math.pi / 2) * eject_offset,
+        p.rect.centery + math.sin(p.angle) * 8
+        + math.sin(p.angle - math.pi / 2) * eject_offset,
+        p.angle - math.pi / 2,
+    ))
+
+    # Consume ammo
+    if is_os12:
+        STATE.os12_ammo_in_mag -= 1
+        STATE.os12_shot_cooldown = 8   # full-auto: ~7.5 shots/sec (~450 RPM, AK cadence)
+    elif is_k9:
+        STATE.k9_ammo_in_mag -= 1
+        STATE.k9_shot_cooldown = 5     # compact SMG cadence (~720 RPM equivalent)
+    else:
+        STATE.ammo_in_mag -= 1
+        STATE.shot_cooldown = 12       # semi-auto: ~5 shots/sec
+
+    STATE.shots_fired += 1
+
+    if is_os12:
+        audio.play("gunshot", volume=0.8)  # louder, heavier
+    elif is_k9:
+        audio.play("gunshot", volume=0.34)  # suppressed SMG thump
+    else:
+        audio.play("gunshot", volume=0.7)
+
+    # Auto-reload on empty (Gameplay → Auto-Reload)
+    if SETTINGS.auto_reload:
+        if is_os12 and STATE.os12_ammo_in_mag <= 0 and STATE.os12_spare_mags > 0:
+            start_reload()
+        elif is_k9 and STATE.k9_ammo_in_mag <= 0 and STATE.k9_spare_mags > 0:
+            start_reload()
+        elif not is_os12 and not is_k9 and STATE.ammo_in_mag <= 0 and STATE.spare_mags > 0:
+            start_reload()
+def handle_melee():
+    if _mission2_actions_blocked():
+        return
+    if _player_disarmed():
+        return
+    if STATE.player_dead or not STATE.player or STATE.melee_active:
+        return
+    STATE.is_reloading = False
+    STATE.reload_timer = 0
+    STATE.melee_active = True
+    # Melee timer + damage scale with the equipped weapon. The chair leg is
+    # slow and blunt; the shiv is fast and piercing. Default (M1/M2) is the
+    # original pistol-butt value.
+    weapon = getattr(STATE, "mission3_weapon", "none")
+    if weapon == "chair_leg":
+        STATE.melee_timer = 24
+        STATE.melee_damage = 50
+    elif weapon == "shiv":
+        STATE.melee_timer = 14
+        STATE.melee_damage = 85
+    elif weapon == "k9_smg":
+        # Quick buttstroke / muzzle shove with the compact SMG.
+        STATE.melee_timer = 20
+        STATE.melee_damage = 62
+    else:
+        STATE.melee_timer = 18
+        STATE.melee_damage = 78
+    STATE.melee_hit_done = False
+    audio.play("melee_hit", volume=0.6)
+def handle_throw_bottle():
+    if _mission2_actions_blocked():
+        return
+    if _player_disarmed():
+        return
+    if not _player_has_firearm():
+        return   # melee-only weapon — no molotovs
+    if STATE.player_dead or not STATE.player:
+        return
+    if STATE.player_bottles <= 0:
+        STATE.floating_texts.append([
+            STATE.player.rect.centerx,
+            STATE.player.rect.centery - 40,
+            "NO MOLOTOVS", (220, 60, 60), 60,
+        ])
+        return
+    mx, my = get_scaled_mouse()
+    world_mx = mx + STATE.camera_x
+    world_my = my + STATE.camera_y
+    dx = world_mx - STATE.player.rect.centerx
+    dy = world_my - STATE.player.rect.centery
+    dist = math.hypot(dx, dy)
+    if dist > 400:
+        world_mx = STATE.player.rect.centerx + (dx / dist) * 400
+        world_my = STATE.player.rect.centery + (dy / dist) * 400
+    STATE.player_bottles -= 1
+    STATE.thrown_bottles.append({
+        "x": STATE.player.rect.centerx,
+        "y": STATE.player.rect.centery,
+        "start_x": STATE.player.rect.centerx,
+        "start_y": STATE.player.rect.centery,
+        "tx": world_mx, "ty": world_my,
+        "t": 0.0, "speed": 0.035,
+        "spin": random.uniform(0, 360),
+    })
+    audio.play("molotov_throw", volume=0.6)
+def spawn_molotov_fire(tx, ty, solid_walls):
+    STATE.molotov_fires.append({
+        "x": tx, "y": ty,
+        "life": MOLOTOV_DURATION,
+        "max_life": MOLOTOV_DURATION,
+    })
+    STATE.fire_zones.append(FireZone(tx, ty))
+    shake(12)
+    listener = ((STATE.player.rect.centerx, STATE.player.rect.centery)
+                if STATE.player else (tx, ty))
+    audio.play_3d("molotov_explode", (tx, ty), listener, base_volume=0.9)
+    # ── Impact burst ──
+    for _ in range(40): spawn_particles(tx, ty, (255, 200, 80), 1)
+    for _ in range(30): spawn_particles(tx, ty, (255, 120, 35), 1)
+    for _ in range(24): spawn_particles(tx, ty, (80, 75, 70), 1)
+    for _ in range(15): spawn_particles(tx, ty, (190, 220, 190), 1)
+    # Fire bloom ring expands outward
+    for ring_r in range(10, 80, 8):
+        for ang in range(0, 360, 30):
+            ang_r = math.radians(ang)
+            px = tx + math.cos(ang_r) * ring_r
+            py = ty + math.sin(ang_r) * ring_r
+            STATE.particles.append(Particle(px, py, (255, random.randint(80, 180), 0)))
+            STATE.particles[-1].life = random.randint(12, 24)
+            STATE.particles[-1].dy -= random.uniform(0.5, 1.5)
+    for e in STATE.enemies:
+        d = math.hypot(e.rect.centerx - tx, e.rect.centery - ty)
+        if d < MOLOTOV_RADIUS * 2.4 and not _wall_blocks_line(
+                tx, ty, e.rect.centerx, e.rect.centery, solid_walls):
+            e.alerted = True
+            e.last_seen_pos = (tx, ty)
+            if d < MOLOTOV_RADIUS:
+                e.state = "CHASE"
+            elif e.state in ("IDLE", "PATROL"):
+                e.state = "SEARCH"
+                e.search_timer = 240
+                e.distraction_target = (tx, ty)
+                e.path = []
+
+
+def switch_weapon():
+    """Toggle between pistol and OS 12 (Q key)."""
+    if _player_disarmed():
+        return
+    if not _player_has_firearm():
+        return   # melee-only weapon — nothing to switch to
+    if not getattr(STATE, "os12_unlocked", False):
+        return
+    if STATE.is_reloading:
+        return
+    if STATE.player_dead or not STATE.player:
+        return
+    # Block if a swap is already in progress
+    if getattr(STATE, "weapon_swap_timer", 0) > 0:
+        return
+
+    # Determine target weapon (flipped at midpoint, not immediately)
+    target = "os12" if STATE.current_weapon == "pistol" else "pistol"
+
+    # Kick off the swap animation
+    STATE.weapon_swap_timer = STATE.weapon_swap_duration
+    STATE.weapon_swap_pending = target
+    STATE.weapon_swap_sound_played = False
+
+    # Cancel any in-progress reload since we initiated a swap
+    STATE.is_reloading = False
+    STATE.reload_timer = 0

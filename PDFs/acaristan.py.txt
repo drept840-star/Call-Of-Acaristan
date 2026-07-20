@@ -1,0 +1,1253 @@
+# ------------------------------------------------------------
+# acaristan.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# acaristan.py
+# ------------------------------------------------------------
+
+import random
+from config import *
+from state import STATE
+import menu
+import game_core as gc
+import save_system
+import settings_store
+# ─────────────────────────────────────────────
+# STATE
+# ─────────────────────────────────────────────
+game_state = "MENU"
+prev_game_state = "MENU"
+transitioning = False
+fade_alpha = 0
+fade_speed = 10
+next_state = ""
+mission_complete_timer = 0
+mission_complete_fade = 0
+# Cosmetic transition / briefing screens. These are intentionally NOT used for
+# the intro cutscene or the van cutscene shot fades.
+briefing_timer = 0
+briefing_kind = "warehouse"
+BRIEFING_DURATION = 360
+escape_cutscene_timer = 0
+ESCAPE_CUTSCENE_DURATION = 1080
+# Cutscene state
+active_cutscene_shots = None
+cutscene_shot_idx = 0
+cutscene_char_idx = 0
+cutscene_timer = 0
+cutscene_start_time = 0
+cutscene_after = ""
+cutscene_transition_timer = 0  # >0 = fading out, <0 = fading in, 0 = none
+cutscene_use_fades = True
+last_fcx = 0
+last_fcy = 0
+# Mission complete cached surfaces (populated on first render)
+MISSION_COMPLETE_BG = pygame.Surface((WIDTH, HEIGHT))
+MISSION_COMPLETE_CARD = pygame.Surface((1, 1), pygame.SRCALPHA)
+# Multiplayer easter egg
+mp_state = "browser"
+mp_timer = 0
+mp_selected = -1
+mp_kick_msg = ""
+menu_notice = ""
+menu_notice_timer = 0
+mission_complete_saved = False
+_slot_rects = []
+slot_select_purpose = "new"
+_last_briefing_title_chars = 0
+_cutscene_fog = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+_cutscene_fog.fill((18, 22, 30, 60))
+_cutscene_top_fog = pygame.Surface((WIDTH, HEIGHT // 2), pygame.SRCALPHA)
+for _i in range(HEIGHT // 2):
+    _a = int(80 * (1 - _i / (HEIGHT // 2)))
+    pygame.draw.line(_cutscene_top_fog, (20, 25, 35, _a), (0, _i), (WIDTH, _i))
+TEXT_SPEED = 4  # frames between each cutscene character; slower/readable
+_fade_surf = pygame.Surface((WIDTH, HEIGHT))
+# Settings — loaded from settings_store
+_settings = settings_store.load()
+
+STATE.reduced_motion = _settings["reduced_motion"]
+display_mode = _settings["display_mode"]
+res_idx = _settings["resolution_idx"]
+master_volume = _settings["master_volume"]
+music_volume = _settings["music_volume"]
+sfx_volume = _settings["sfx_volume"]
+
+settings_active_tab = 0
+
+def _persist_settings():
+    settings_store.save({
+        "display_mode": display_mode,
+        "resolution_idx": res_idx,
+        "master_volume": master_volume,
+        "music_volume": music_volume,
+        "sfx_volume": sfx_volume,
+        "reduced_motion": STATE.reduced_motion,
+    })
+
+audio.set_master_volume(master_volume)
+if hasattr(audio, "set_music_volume"):
+    audio.set_music_volume(music_volume / 100.0)
+
+def handle_settings_event(event):
+    global settings_active_tab
+    global display_mode, res_idx
+    global master_volume, music_volume, sfx_volume
+
+    if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+        return None
+
+    mp = get_scaled_mouse()
+
+    # Back button
+    if menu.settings_back_btn.rect.collidepoint(mp):
+        _persist_settings()
+        return "back"
+
+    # Tab switching
+    for i, rect in enumerate(menu.settings_tab_rects):
+        if rect.collidepoint(mp):
+            settings_active_tab = i
+            audio.play("menu_click", volume=0.4)
+            return None
+
+    if settings_active_tab == 0:
+        # DISPLAY
+        if menu.settings_res_left_rect.collidepoint(mp):
+            res_idx = (res_idx - 1) % len(menu.SETTINGS_RESOLUTIONS)
+            _persist_settings()
+        elif menu.settings_res_right_rect.collidepoint(mp):
+            res_idx = (res_idx + 1) % len(menu.SETTINGS_RESOLUTIONS)
+            _persist_settings()
+        elif menu.settings_display_left_rect.collidepoint(mp):
+            display_mode = (display_mode - 1) % len(menu.DISPLAY_MODES)
+            _persist_settings()
+        elif menu.settings_display_right_rect.collidepoint(mp):
+            display_mode = (display_mode + 1) % len(menu.DISPLAY_MODES)
+            _persist_settings()
+
+    elif settings_active_tab == 1:
+        # AUDIO — arrows step by 5, clicking the bar jumps to that position
+        step = 5
+
+        # Master
+        if menu.settings_master_left_rect.collidepoint(mp):
+            master_volume = max(0, master_volume - step)
+        elif menu.settings_master_right_rect.collidepoint(mp):
+            master_volume = min(100, master_volume + step)
+        elif menu.settings_master_bar_rect.collidepoint(mp):
+            t = (mp[0] - menu.settings_master_bar_rect.x) / menu.settings_master_bar_rect.width
+            master_volume = max(0, min(100, int(t * 100)))
+        # Music
+        elif menu.settings_music_left_rect.collidepoint(mp):
+            music_volume = max(0, music_volume - step)
+        elif menu.settings_music_right_rect.collidepoint(mp):
+            music_volume = min(100, music_volume + step)
+        elif menu.settings_music_bar_rect.collidepoint(mp):
+            t = (mp[0] - menu.settings_music_bar_rect.x) / menu.settings_music_bar_rect.width
+            music_volume = max(0, min(100, int(t * 100)))
+        # SFX
+        elif menu.settings_sfx_left_rect.collidepoint(mp):
+            sfx_volume = max(0, sfx_volume - step)
+        elif menu.settings_sfx_right_rect.collidepoint(mp):
+            sfx_volume = min(100, sfx_volume + step)
+        elif menu.settings_sfx_bar_rect.collidepoint(mp):
+            t = (mp[0] - menu.settings_sfx_bar_rect.x) / menu.settings_sfx_bar_rect.width
+            sfx_volume = max(0, min(100, int(t * 100)))
+        else:
+            return None
+
+        # Apply audio changes immediately
+        audio.set_master_volume(master_volume)
+        if hasattr(audio, "set_music_volume"):
+            audio.set_music_volume(music_volume / 100.0)
+        if hasattr(audio, "set_sfx_volume"):
+            audio.set_sfx_volume(sfx_volume / 100.0)
+        _persist_settings()
+
+    else:
+        # ACCESSIBILITY
+        if menu.settings_reduced_motion_rect.collidepoint(mp):
+            STATE.reduced_motion = not STATE.reduced_motion
+            audio.play("menu_click", volume=0.4)
+            _persist_settings()
+
+    return None
+def trigger_transition(target_state):
+    global transitioning, next_state, fade_speed
+    transitioning, next_state, fade_speed = True, target_state, 12
+def start_cutscene(shots, after_state, use_fades=True):
+    global active_cutscene_shots, cutscene_shot_idx, cutscene_char_idx
+    global cutscene_timer, cutscene_start_time, cutscene_after
+    global cutscene_transition_timer, cutscene_use_fades
+    active_cutscene_shots = shots
+    cutscene_shot_idx = 0
+    cutscene_char_idx = 0
+    cutscene_timer = 0
+    cutscene_start_time = pygame.time.get_ticks()
+    cutscene_after = after_state
+    cutscene_transition_timer = 0
+    cutscene_use_fades = use_fades
+    gc.reset_dialogue_slide()
+_current_ambience = set()
+_prev_ambience_state = ""
+MENU_MUSIC_FILE = "menu_theme.mp3"
+_menu_music_active = False
+_menu_music_failed = False
+MENU_MUSIC_STATES = {"MENU", "SLOT_SELECT", "SETTINGS", "MULTIPLAYER"}
+
+def _set_menu_music(should_play):
+    """Start/stop streamed menu music without restarting it every frame."""
+    global _menu_music_active, _menu_music_failed
+    if should_play:
+        if not _menu_music_active and not _menu_music_failed:
+            _menu_music_active = bool(audio.play_music(MENU_MUSIC_FILE, volume=0.48))
+            _menu_music_failed = not _menu_music_active
+    else:
+        if _menu_music_active:
+            audio.stop_music()
+            _menu_music_active = False
+
+def _play_typewriter_tick(ch, idx, volume=0.11):
+    """Subtle audio feedback for typewriter text reveal."""
+    if not ch or ch.isspace():
+        return
+    # Avoid a machine-gun sound: skip some characters, but always tick punctuation lightly.
+    if idx % 2 != 0 and ch not in ".!?":
+        return
+    try:
+        audio.play("type_tick", volume=volume)
+    except Exception:
+        pass
+def _set_ambience(sounds_to_play):
+    global _current_ambience
+    for name in list(_current_ambience):
+        if name not in sounds_to_play:
+            audio.stop(name)
+    for name in sounds_to_play:
+        if name not in _current_ambience:
+            audio.play(name, volume=0.3, loops=-1)
+    _current_ambience = set(sounds_to_play)
+def apply_display_mode(mode):
+    """Apply display mode: 0=Windowed, 1=Fullscreen"""
+    global screen, display_mode
+    flags = pygame.SCALED | pygame.RESIZABLE
+    if mode == 1:  # Fullscreen
+        flags = pygame.SCALED | pygame.FULLSCREEN
+    try:
+        new_surf = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        display_mode = mode
+        # Propagate to all modules
+        import config, game_core, menu as m
+        config.screen = new_surf
+        game_core.screen = new_surf
+        m.screen = new_surf
+        screen = new_surf
+        print(f"Display mode set to: {['Windowed', 'Fullscreen'][mode]}")
+    except Exception as e:
+        print(f"Display mode change failed ({e}), falling back to Windowed")
+        # Fallback to safe windowed mode
+        try:
+            fallback = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
+            import config, game_core, menu as m
+            config.screen = fallback
+            game_core.screen = fallback
+            m.screen = fallback
+            screen = fallback
+            display_mode = 0
+        except Exception as e2:
+            print(f"FATAL: Cannot create display surface: {e2}")
+def _mission_report_data(success=True):
+    """Build after-action stats for mission complete / failure screens."""
+    end_t = gc.mission_end_time or pygame.time.get_ticks()
+    start_t = gc.mission_start_time or end_t
+    elapsed_sec = max(0, (end_t - start_t) // 1000)
+    accuracy = int((gc.shots_hit / gc.shots_fired) * 100) if gc.shots_fired > 0 else 0
+    civilians_helped = 0
+    try:
+        civilians_helped = sum(1 for n in gc.walk_npcs if n.get("has_given"))
+    except Exception:
+        civilians_helped = 0
+    try:
+        rations_used = max(0, 2 - int(gc.player_rations))
+    except Exception:
+        rations_used = 0
+    if getattr(gc, "active_mission", "MISSION1") == "MISSION2":
+        intel_found = bool(getattr(gc, "mission2_evidence_uploaded", False))
+    else:
+        intel_found = bool(getattr(gc, "notebook_collected", False) or getattr(gc, "warehouse_intel_given", False))
+    stealth_clean = bool(getattr(gc, "stealth_clean", False))
+    score = 0
+    if success:
+        score += 40
+    score += min(25, int(gc.hostiles_killed) * 3)
+    score += min(15, accuracy // 5)
+    score += civilians_helped * 8
+    score += 10 if intel_found else 0
+    score += 8 if stealth_clean else 0
+    score -= max(0, (elapsed_sec - 900) // 45) * 2
+    score = max(0, min(100, score))
+    if not success:
+        rank = "FAILED"
+    elif score >= 92:
+        rank = "S"
+    elif score >= 82:
+        rank = "A"
+    elif score >= 68:
+        rank = "B"
+    elif score >= 52:
+        rank = "C"
+    else:
+        rank = "D"
+    return {
+        "kills": int(gc.hostiles_killed),
+        "shots_fired": int(gc.shots_fired),
+        "shots_hit": int(gc.shots_hit),
+        "accuracy": accuracy,
+        "time_str": f"{elapsed_sec // 60:02d}:{elapsed_sec % 60:02d}",
+        "civilians_helped": civilians_helped,
+        "rations_used": rations_used,
+        "intel_found": intel_found,
+        "stealth_clean": stealth_clean,
+        "score": score,
+        "rank": rank,
+    }
+def draw_slot_select_screen():
+    """Choose a save slot for New Campaign or Continue."""
+    global _slot_rects
+    menu.draw_menu_background()
+    dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, 180))
+    screen.blit(dim, (0, 0))
+    title_text = "SELECT SAVE SLOT" if slot_select_purpose == "new" else "CONTINUE — SELECT SAVE"
+    sub_text = ("Choose a slot to overwrite/use for the new campaign."
+                if slot_select_purpose == "new"
+                else "Choose an existing save file to continue from.")
+    title = pygame.font.SysFont("Consolas", 44, bold=True).render(title_text, True, C_WHITE)
+    sub = font_terminal_small.render(sub_text, True, (155, 155, 145))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 86))
+    screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 136))
+    _slot_rects = []
+    data = save_system.load_data()
+    mouse = pygame.mouse.get_pos()
+    card_w, card_h = 260, 230
+    gap = 28
+    start_x = WIDTH // 2 - (card_w * 3 + gap * 2) // 2
+    y = 220
+    for i in range(3):
+        x = start_x + i * (card_w + gap)
+        rect = pygame.Rect(x, y, card_w, card_h)
+        _slot_rects.append(rect)
+        slot = data["slots"][i]
+        selectable = slot_select_purpose == "new" or slot.get("occupied")
+        hovered = rect.collidepoint(mouse) and selectable
+        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        card.fill((7, 12, 18, 238 if hovered else (150 if not selectable else 218)))
+        pygame.draw.rect(card, C_ORANGE if hovered else ((50, 50, 55) if not selectable else (45, 78, 105)), card.get_rect(), 2 if hovered else 1)
+        pygame.draw.rect(card, C_KRAP_BLUE, (0, 0, 4, card_h))
+        screen.blit(card, (x, y))
+        header = font_terminal.render(f"SAVE SLOT {i + 1}", True, C_ORANGE if hovered else (120, 180, 220))
+        screen.blit(header, (x + 22, y + 20))
+        if slot.get("occupied"):
+            status = font_prompt.render("ACTIVE FILE", True, (90, 220, 135))
+            mission = slot.get("last_completed_label", "Campaign started")
+            completed = slot.get("last_completed_mission")
+            if completed:
+                l1 = "LAST COMPLETED"
+                l2 = mission
+            else:
+                l1 = "IN PROGRESS"
+                l2 = mission
+            tline = f"TOTAL TIME: {slot.get('total_time', '00:00')}"
+            updated = "UPDATED: " + save_system.format_timestamp(slot.get("updated_at"))
+        else:
+            status = font_prompt.render("EMPTY", True, (120, 120, 120))
+            l1 = "NO CAMPAIGN DATA"
+            l2 = "Start a new campaign"
+            tline = "TOTAL TIME: --:--"
+            updated = "UPDATED: never"
+        screen.blit(status, (x + 22, y + 58))
+        for j, line in enumerate((l1, l2[:30], tline, updated)):
+            col = (170, 170, 160) if j != 0 else (80, 140, 180)
+            surf = font_terminal_small.render(line, True, col)
+            screen.blit(surf, (x + 22, y + 96 + j * 28))
+        prompt_text = "CLICK TO USE SLOT" if selectable else "EMPTY"
+        prompt = font_terminal_small.render(prompt_text, True, C_ORANGE if hovered else (90, 95, 100))
+        screen.blit(prompt, (x + card_w // 2 - prompt.get_width() // 2, y + card_h - 34))
+    footer = font_terminal_small.render("Save file: save_data.json", True, (85, 90, 95))
+    screen.blit(footer, (WIDTH // 2 - footer.get_width() // 2, HEIGHT - 70))
+def start_briefing(kind="warehouse"):
+    """Start a purely cosmetic interstitial screen. No gameplay state is changed here."""
+    global briefing_timer, briefing_kind, _last_briefing_title_chars
+    briefing_timer = 0
+    briefing_kind = kind
+    _last_briefing_title_chars = 0
+    audio.play("radio_static", volume=0.22)
+    audio.play("menu_click", volume=0.35)
+def finish_briefing():
+    """End the cosmetic briefing and enter gameplay."""
+    global game_state
+    if briefing_kind == "warehouse":
+        gc.start_mission(preserve_timer=True)
+        game_state = "GAME"
+        pygame.mouse.set_visible(False)
+def draw_briefing_screen():
+    """Draw KRAP signal / mission briefing presentation screen. Cosmetic only."""
+    global _last_briefing_title_chars
+    t = briefing_timer
+    # Background: terminal-blue dark gradient, no fade-to-black dependency.
+    for y in range(HEIGHT):
+        p = y / HEIGHT
+        col = (int(4 + p * 6), int(8 + p * 12), int(15 + p * 22))
+        pygame.draw.line(screen, col, (0, y), (WIDTH, y))
+    # Moving scan bands / signal noise.
+    rng = random.Random(t // 2)
+    for _ in range(55):
+        nx = rng.randint(0, WIDTH - 1)
+        ny = rng.randint(0, HEIGHT - 1)
+        shade = rng.randint(12, 32)
+        screen.set_at((nx, ny), (shade, shade + 4, shade + 10))
+    for y in range((t * 2) % 6, HEIGHT, 6):
+        pygame.draw.line(screen, (0, 0, 0, 32), (0, y), (WIDTH, y), 1)
+    sweep_y = int((t * 2.4) % (HEIGHT + 120)) - 60
+    sweep = pygame.Surface((WIDTH, 80), pygame.SRCALPHA)
+    for i in range(80):
+        a = int(36 * (1 - abs(i - 40) / 40))
+        pygame.draw.line(sweep, (45, 110, 160, max(0, a)), (0, i), (WIDTH, i))
+    screen.blit(sweep, (0, sweep_y))
+    # Main terminal panel. Wider/taller so long status lines and objectives do not clip.
+    panel_w, panel_h = min(860, WIDTH - 110), 470
+    panel_x = WIDTH // 2 - panel_w // 2
+    panel_y = HEIGHT // 2 - panel_h // 2 - 4
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    panel.fill((5, 10, 17, 232))
+    pygame.draw.rect(panel, (45, 88, 126, 170), panel.get_rect(), 1)
+    pygame.draw.rect(panel, C_KRAP_BLUE, (0, 0, 4, panel_h))
+    pygame.draw.line(panel, (45, 88, 126, 120), (18, 64), (panel_w - 18, 64), 1)
+    screen.blit(panel, (panel_x, panel_y))
+    # Slight glitch strips.
+    if 18 < t < 80 or (t // 45) % 5 == 0:
+        for _ in range(3):
+            gy = panel_y + rng.randint(20, panel_h - 20)
+            gh = rng.randint(2, 7)
+            gx = panel_x + rng.randint(-16, 16)
+            strip = pygame.Surface((panel_w, gh), pygame.SRCALPHA)
+            strip.fill((90, 170, 220, rng.randint(18, 45)))
+            screen.blit(strip, (gx, gy))
+    def blit_alpha(surf, x, y, alpha):
+        surf.set_alpha(max(0, min(255, int(alpha))))
+        screen.blit(surf, (x, y))
+    boot_alpha = min(255, t * 7)
+    eyebrow = font_terminal_small.render("KRAP SIGNAL INTERCEPTED", True, (85, 170, 220))
+    blit_alpha(eyebrow, panel_x + 24, panel_y + 20, boot_alpha)
+    stamp = font_terminal_small.render("FIELD COPY // UNVERIFIED", True, (190, 80, 60))
+    blit_alpha(stamp, panel_x + panel_w - stamp.get_width() - 22, panel_y + 20, boot_alpha)
+    # Type-on title.
+    title_text = "MISSION BRIEFING"
+    title_chars = min(len(title_text), max(0, (t - 28) // 2))
+    if title_chars > _last_briefing_title_chars:
+        ch = title_text[title_chars - 1]
+        _play_typewriter_tick(ch, title_chars - 1, volume=0.095)
+        _last_briefing_title_chars = title_chars
+    title = pygame.font.SysFont("Consolas", 40, bold=True).render(title_text[:title_chars], True, (220, 225, 220))
+    blit_alpha(title, panel_x + 36, panel_y + 86, 255)
+    loc_alpha = min(255, max(0, (t - 62) * 6))
+    lines = [
+        ("OPERATION", "BLACK NOTEBOOK"),
+        ("LOCATION", "KILEMENO HARBOR DISTRICT / WAREHOUSE ROW"),
+        ("STATUS", "OFFSHORE RIGS DESTROYED — UNKNOWN ATTACK CRAFT CONFIRMED"),
+    ]
+    value_x = panel_x + 170
+    max_value_w = panel_w - 210
+    for i, (label, value) in enumerate(lines):
+        y = panel_y + 150 + i * 42
+        lbl = font_terminal_small.render(label, True, (65, 120, 160))
+        # The STATUS string is long, so use the smaller prompt font if needed.
+        val_font = font_terminal
+        val = val_font.render(value, True, (190, 190, 176))
+        if val.get_width() > max_value_w:
+            val_font = font_prompt
+            val = val_font.render(value, True, (190, 190, 176))
+        blit_alpha(lbl, panel_x + 42, y, loc_alpha - i * 35)
+        blit_alpha(val, value_x, y - 4, loc_alpha - i * 35)
+    obj_alpha = min(255, max(0, (t - 128) * 5))
+    obj_divider_y = panel_y + 292
+    pygame.draw.line(screen, (35, 68, 96), (panel_x + 36, obj_divider_y), (panel_x + panel_w - 36, obj_divider_y), 1)
+    obj_title = font_terminal.render("OBJECTIVES", True, (255, 150, 60))
+    blit_alpha(obj_title, panel_x + 42, panel_y + 312, obj_alpha)
+    objectives = [
+        "Infiltrate the warehouse perimeter",
+        "Locate and recover the black notebook",
+        "Escape through the service exit",
+    ]
+    for i, txt in enumerate(objectives):
+        alpha = obj_alpha - i * 30
+        bullet = font_terminal.render("■", True, (65, 150, 210))
+        line = font_prompt.render(txt, True, (205, 205, 195))
+        row_y = panel_y + 350 + i * 26
+        blit_alpha(bullet, panel_x + 48, row_y, alpha)
+        blit_alpha(line, panel_x + 72, row_y, alpha)
+    # Bottom status / prompt.
+    bar_w = int((panel_w - 72) * min(1.0, max(0, (t - 42) / max(1, BRIEFING_DURATION - 92))))
+    bar_y = panel_y + panel_h - 34
+    pygame.draw.rect(screen, (10, 20, 30), (panel_x + 36, bar_y, panel_w - 72, 5))
+    pygame.draw.rect(screen, C_KRAP_BLUE, (panel_x + 36, bar_y, bar_w, 5))
+    prompt_txt = "PRESS SPACE TO DEPLOY" if t > 115 else "DECODING FIELD TRANSMISSION..."
+    prompt_col = C_ORANGE if t > 115 else (95, 125, 145)
+    prompt = font_terminal_small.render(prompt_txt, True, prompt_col)
+    if t <= 115 or (pygame.time.get_ticks() // 450) % 2 == 0:
+        blit_alpha(prompt, WIDTH // 2 - prompt.get_width() // 2, panel_y + panel_h + 22, min(255, t * 5))
+    draw_scanlines(screen)
+    draw_vignette(screen, strength=155)
+def _apply_dev_args():
+    """Small developer shortcuts for testing campaign entry points."""
+    global game_state, mission_complete_saved
+    args = set(sys.argv[1:])
+    if "--dev-mission2" in args or "--m2" in args:
+        # Start at the full Mission 2 intro cutscene, then enter gameplay normally.
+        gc.mission_start_time = pygame.time.get_ticks()
+        gc.mission_end_time = 0
+        mission_complete_saved = False
+        start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
+        game_state = "CUTSCENE"
+        pygame.mouse.set_visible(True)
+    elif "--dev-mission2-game" in args or "--m2-game" in args:
+        # Skip the intro and spawn directly into Route 12 gameplay.
+        gc.mission_start_time = pygame.time.get_ticks()
+        gc.mission_end_time = 0
+        mission_complete_saved = False
+        gc.start_mission2(preserve_timer=True)
+        game_state = "GAME"
+        pygame.mouse.set_visible(False)
+_apply_dev_args()
+# ─────────────────────────────────────────────
+# MAIN LOOP
+# ─────────────────────────────────────────────
+running = True
+while running:
+    mouse_x, mouse_y = pygame.mouse.get_pos()
+    keys = pygame.key.get_pressed()
+    if hasattr(audio, "update"):
+        audio.update()
+    pygame.mouse.set_visible(game_state not in ("GAME", "WALK"))
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if not transitioning:
+            if game_state == "SLOT_SELECT":
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    game_state = "MENU"
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    data = save_system.load_data()
+                    for i, rect in enumerate(_slot_rects):
+                        if rect.collidepoint(mouse_x, mouse_y):
+                            if slot_select_purpose == "continue" and not data["slots"][i].get("occupied"):
+                                continue
+                            save_system.select_slot(i)
+                            audio.play("menu_click", volume=0.5)
+                            if slot_select_purpose == "new":
+                                save_system.start_new_campaign(i)
+                                gc.mission_start_time = pygame.time.get_ticks()
+                                gc.mission_end_time = 0
+                                mission_complete_saved = False
+                                start_cutscene(gc.cutscene1_shots, "WALK", use_fades=False)
+                                trigger_transition("CUTSCENE")
+                            else:
+                                slot = save_system.get_slot(i)
+                                if slot.get("last_completed_mission") == "MISSION_1":
+                                    gc.mission_start_time = pygame.time.get_ticks()
+                                    gc.mission_end_time = 0
+                                    mission_complete_saved = False
+                                    start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
+                                    trigger_transition("CUTSCENE")
+                                elif slot.get("last_completed_mission") == "MISSION_2":
+                                    menu_notice = "MISSION 2 COMPLETE — MISSION 3 NOT AVAILABLE YET"
+                                    menu_notice_timer = 220
+                                    game_state = "MENU"
+                                else:
+                                    menu_notice = "SAVE SELECTED — NO CHECKPOINT RESUME YET"
+                                    menu_notice_timer = 200
+                                    game_state = "MENU"
+                            break
+            elif game_state == "MENU":
+                if menu.buttons[0].is_clicked(event, (mouse_x, mouse_y)) and save_system.has_any_save():
+                    slot_select_purpose = "continue"
+                    game_state = "SLOT_SELECT"
+                if menu.buttons[1].is_clicked(event, (mouse_x, mouse_y)):
+                    slot_select_purpose = "new"
+                    game_state = "SLOT_SELECT"
+                if menu.buttons[2].is_clicked(event, (mouse_x, mouse_y)):
+                    mp_state = "browser"
+                    mp_selected = -1
+                    mp_kick_msg = ""
+                    game_state = "MULTIPLAYER"
+                if menu.buttons[3].is_clicked(event, (mouse_x, mouse_y)):
+                    game_state = "SETTINGS"
+                if menu.buttons[4].is_clicked(event, (mouse_x, mouse_y)):
+                    running = False
+            elif game_state == "MULTIPLAYER":
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    if mp_state == "kicked":
+                        mp_state = "browser"
+                        mp_kick_msg = ""
+                        mp_selected = -1
+                    elif menu._dm_open_user is not None:
+                        menu.close_dm()
+                    else:
+                        game_state = "MENU"
+                if event.type == pygame.MOUSEWHEEL and mp_state == "browser":
+                    if menu._mp_tab == "SERVERS":
+                        menu.scroll_server_list(-event.y)
+                    elif menu._mp_tab == "CONNECTIONS":
+                        menu.scroll_dm_list(-event.y)
+                if mp_state == "browser":
+                    if menu._mp_tab == "CONNECTIONS" and menu._dm_open_user is not None:
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_RETURN:
+                                menu.send_dm_message()
+                            elif event.key == pygame.K_BACKSPACE:
+                                menu._dm_input = menu._dm_input[:-1]
+                            elif event.unicode and event.unicode.isprintable() and len(menu._dm_input) < 200:
+                                menu._dm_input += event.unicode
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        menu.server_back_btn.is_hovered = False
+                        if menu.server_back_btn.rect.collidepoint(get_scaled_mouse()):
+                            game_state = "MENU"
+                        elif menu.servers_tab_rect.collidepoint(get_scaled_mouse()):
+                            menu.switch_mp_tab("SERVERS")
+                        elif menu.connections_tab_rect.collidepoint(get_scaled_mouse()):
+                            menu.switch_mp_tab("CONNECTIONS")
+                        elif menu._mp_tab == "SERVERS":
+                            if menu.refresh_btn_rect.collidepoint(get_scaled_mouse()):
+                                menu.trigger_server_refresh()
+                            else:
+                                cur_y = menu.SERVER_LIST_TOP
+                                mp_scaled = get_scaled_mouse()
+                                for vi in range(5):
+                                    i = vi + menu._scroll_offset
+                                    if i >= len(menu.server_list):
+                                        break
+                                    name = menu.server_list[i][0]
+                                    name_max_w = 320 - 24
+                                    lines = menu._wrap_server_name(name, menu.font_terminal, name_max_w)
+                                    row_h = 64 if len(lines) > 1 else 50
+                                    row_rect = pygame.Rect(
+                                        menu.SERVER_ROW_X,
+                                        cur_y,
+                                        menu.SERVER_ROW_W,
+                                        row_h - 4,
+                                    )
+                                    if row_rect.collidepoint(mp_scaled):
+                                        mp_selected = i
+                                        mp_state = "connecting"
+                                        mp_timer = 180
+                                        break
+                                    cur_y += row_h + 5
+                        elif menu._mp_tab == "CONNECTIONS":
+                            list_x = menu.SERVER_PANEL_X + 28
+                            list_y = menu.SERVER_LIST_TOP - 4
+                            list_w = 340
+                            row_h = 38
+                            list_bottom_limit = menu.SERVER_PANEL_Y + menu.SERVER_PANEL_H - 90
+                            visible_friends = (list_bottom_limit - list_y) // row_h
+                            visible_friends = min(visible_friends, len(menu.CONNECTIONS))
+                            mp_scaled = get_scaled_mouse()
+                            for vi in range(visible_friends):
+                                i = vi + menu._dm_scroll_offset
+                                if i >= len(menu.CONNECTIONS):
+                                    break
+                                ry = list_y + vi * row_h
+                                row_rect = pygame.Rect(list_x, ry, list_w, row_h - 4)
+                                if row_rect.collidepoint(mp_scaled):
+                                    menu.open_dm(i)
+                                    break
+                elif mp_state == "kicked":
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        if menu.kick_dismiss_btn_rect.collidepoint(get_scaled_mouse()):
+                            mp_state = "browser"
+                            mp_kick_msg = ""
+                            mp_selected = -1
+            elif game_state == "SETTINGS":
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    _persist_settings()
+                    game_state = "MENU"
+                result = handle_settings_event(event)
+                if result == "back":
+                    game_state = "MENU"
+            elif game_state == "CUTSCENE":
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    shot = active_cutscene_shots[cutscene_shot_idx]
+                    if cutscene_char_idx < len(shot["text"]):
+                        cutscene_char_idx = len(shot["text"])
+                    else:
+                        elapsed_ms = pygame.time.get_ticks() - cutscene_start_time
+                        if elapsed_ms < shot.get("min_ms", 0):
+                            audio.play("menu_hover", volume=0.12)
+                            continue
+                        if cutscene_shot_idx < len(active_cutscene_shots) - 1:
+                            audio.play("menu_click", volume=0.3)
+                            if cutscene_use_fades:
+                                cutscene_transition_timer = 15  # fade out
+                            else:
+                                cutscene_shot_idx += 1
+                                cutscene_char_idx = 0
+                                cutscene_timer = 0
+                                cutscene_start_time = pygame.time.get_ticks()
+                                gc.reset_dialogue_slide()
+                        else:
+                            after = cutscene_after
+                            if after == "WALK":
+                                gc.start_walking_sim()
+                                trigger_transition("WALK")
+                            elif after == "GAME":
+                                gc.start_mission(preserve_timer=True)
+                                trigger_transition("GAME")
+                            elif after == "MISSION2":
+                                gc.start_mission2(preserve_timer=True)
+                                mission_complete_saved = False
+                                trigger_transition("GAME")
+                            elif after == "MISSION2_COMPLETE":
+                                game_state = "MISSION_COMPLETE"
+                                mission_complete_timer = 0
+                                mission_complete_fade = 0
+                                pygame.mouse.set_visible(True)
+                            elif after == "BRIEFING":
+                                start_briefing("warehouse")
+                                game_state = "BRIEFING"
+            elif game_state == "BRIEFING":
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                    finish_briefing()
+            elif game_state == "WALK":
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    prev_game_state = "WALK"
+                    game_state = "PAUSED"
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    if gc.walk_dialogue_active:
+                        if gc.walk_dialogue_char_idx < len(gc.walk_dialogue_text):
+                            gc.walk_dialogue_char_idx = len(gc.walk_dialogue_text)
+                        else:
+                            gc.walk_dialogue_active = False
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                    gc.handle_walk_interact()
+            elif game_state == "GAME":
+                if getattr(gc, "active_mission", "MISSION1") == "MISSION2" and getattr(gc, "mission2_card", None):
+                    # Mission 2 intel cards own input while open. Prevent shooting,
+                    # pausing, or other actions from leaking through the card.
+                    if event.type == pygame.KEYDOWN and event.key in (pygame.K_e, pygame.K_SPACE, pygame.K_RETURN, pygame.K_ESCAPE):
+                        gc.handle_interact()
+                    continue
+                if getattr(gc, "active_mission", "MISSION1") == "MISSION2" and getattr(gc, "blocks_player_actions", lambda: False)():
+                    # Mission 2 authored panic/blackout beats lock player actions.
+                    # Movement is already locked in mission2.py; this stops mouse
+                    # clicks, reloads, molotovs, etc. from leaking through.
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                        prev_game_state = "GAME"
+                        game_state = "PAUSED"
+                    continue
+                if gc.active_read_note:
+                    if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_e, pygame.K_RETURN):
+                        gc.dismiss_note()
+                elif gc.safe_keypad_active:
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        gc.handle_keypad_click(event.pos)
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            gc.safe_keypad_active = False
+                            pygame.mouse.set_visible(False)
+                        else:
+                            gc.handle_keypad_keypress(event.key)
+                else:
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        if gc.truck_hotwiring:
+                            gc.handle_hotwire_click(event.pos)
+                        else:
+                            gc.handle_shoot()
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                        if not gc.truck_hotwiring:
+                            gc.handle_throw_bottle()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_g:
+                        gc.handle_throw_bottle()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                        gc.start_reload()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                        if gc.truck_hotwiring:
+                            gc.handle_hotwire_press()
+                        else:
+                            gc.handle_interact()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_v:
+                        gc.handle_melee()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                        gc.show_minimap = not gc.show_minimap
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_F9:
+                        gc.debug_jump_to_exfil()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                        prev_game_state = "GAME"
+                        game_state = "PAUSED"
+            elif game_state == "ESCAPE_CUTSCENE":
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                    gc.mission_end_time = pygame.time.get_ticks()
+                    game_state = "MISSION_COMPLETE"
+                    mission_complete_timer = 0
+                    mission_complete_fade = 0
+                    pygame.mouse.set_visible(True)
+            elif game_state == "NOTEBOOK_INSPECT":
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                    game_state = "GAME"
+                    pygame.mouse.set_visible(False)
+            elif game_state == "PAUSED":
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    game_state = prev_game_state
+                    pygame.mouse.set_visible(False)
+                if menu.pause_buttons[0].is_clicked(event, (mouse_x, mouse_y)):
+                    game_state = prev_game_state
+                    pygame.mouse.set_visible(False)
+                if menu.pause_buttons[1].is_clicked(event, (mouse_x, mouse_y)):
+                    gc.restart_current_mission()
+                    game_state = "GAME"
+                    pygame.mouse.set_visible(False)
+                if menu.pause_buttons[2].is_clicked(event, (mouse_x, mouse_y)):
+                    trigger_transition("MENU")
+            elif game_state == "DEATH":
+                if menu.death_buttons[0].is_clicked(event, (mouse_x, mouse_y)):
+                    gc.restart_current_mission()
+                    game_state = "GAME"
+                    pygame.mouse.set_visible(False)
+                    menu.reset_death_animation()
+                if menu.death_buttons[1].is_clicked(event, (mouse_x, mouse_y)):
+                    trigger_transition("MENU")
+                    menu.reset_death_animation()
+            elif game_state == "MISSION_COMPLETE":
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                    if getattr(gc, "active_mission", "MISSION1") == "MISSION1":
+                        gc.mission_start_time = pygame.time.get_ticks()
+                        gc.mission_end_time = 0
+                        mission_complete_saved = False
+                        start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
+                        trigger_transition("CUTSCENE")
+                    else:
+                        trigger_transition("MENU")
+    # --- UPDATE ---
+    if game_state == "CUTSCENE":
+        cutscene_timer += 1
+        shot = active_cutscene_shots[cutscene_shot_idx]
+        # ── Handle shot-to-shot transition ──
+        if cutscene_transition_timer > 0:
+            cutscene_transition_timer -= 1
+            if cutscene_transition_timer == 8:
+                # Mid-transition: advance shot
+                cutscene_shot_idx += 1
+                cutscene_char_idx = 0
+                cutscene_timer = 0
+                cutscene_start_time = pygame.time.get_ticks()
+                cutscene_transition_timer = -12  # fade in
+        elif cutscene_transition_timer < 0:
+            cutscene_transition_timer += 1
+        if cutscene_char_idx < len(shot["text"]):
+            if cutscene_timer >= TEXT_SPEED:
+                cutscene_timer = 0
+                last = shot["text"][max(0, cutscene_char_idx - 1)]
+                if last in ".!?":
+                    cutscene_timer -= 25
+                elif last in ",;:":
+                    cutscene_timer -= 12
+                elif last == "-":
+                    cutscene_timer -= 15
+                next_ch = shot["text"][cutscene_char_idx] if cutscene_char_idx < len(shot["text"]) else ""
+                _play_typewriter_tick(next_ch, cutscene_char_idx, volume=0.11)
+                cutscene_char_idx += 1
+    elif game_state == "WALK":
+        cx, cy, complete = gc.update_walking_sim(keys)
+        if complete:
+            # Van cutscene remains fade-free; the briefing appears only after it ends.
+            start_cutscene(gc.cutscene2_shots, "BRIEFING", use_fades=False)
+            trigger_transition("CUTSCENE")
+    elif game_state == "BRIEFING":
+        briefing_timer += 1
+        if briefing_timer >= BRIEFING_DURATION:
+            finish_briefing()
+    elif game_state == "MULTIPLAYER":
+        menu.update_server_browser_animation()
+        menu.update_dm_state()
+        if mp_state == "connecting":
+            mp_timer -= 1
+            if mp_timer <= 0:
+                mp_state = "kicked"
+                # Use server-specific kick if available
+                if 0 <= mp_selected < len(menu.server_list):
+                    server_name = menu.server_list[mp_selected][0]
+                    mp_kick_msg = menu.get_kick_message_for_server(server_name)
+                else:
+                    mp_kick_msg = random.choice(menu.KICK_MESSAGES)
+                mp_timer = 0
+    elif game_state == "GAME":
+        if gc.request_death_screen:
+            gc.request_death_screen = False
+            if not gc.mission_end_time:
+                gc.mission_end_time = pygame.time.get_ticks()
+            game_state = "DEATH"
+            pygame.mouse.set_visible(True)
+            menu.reset_death_animation()
+        elif gc.request_notebook_inspect:
+            game_state = "NOTEBOOK_INSPECT"
+            gc.request_notebook_inspect = False
+            pygame.mouse.set_visible(True)
+            import ui_hud; ui_hud.reset_notebook_inspect()
+        else:
+            last_fcx, last_fcy = gc.game_update(keys)
+            if getattr(gc, "request_mission2_ending", False):
+                gc.request_mission2_ending = False
+                start_cutscene(gc.mission2_ending_shots, "MISSION2_COMPLETE", use_fades=True)
+                trigger_transition("CUTSCENE")
+                pygame.mouse.set_visible(True)
+            elif getattr(gc, "request_escape_cutscene", False):
+                gc.request_escape_cutscene = False
+                game_state = "ESCAPE_CUTSCENE"
+                escape_cutscene_timer = 0
+                pygame.mouse.set_visible(False)
+            elif gc.request_mission_complete:
+                gc.request_mission_complete = False
+                if not gc.mission_end_time:
+                    gc.mission_end_time = pygame.time.get_ticks()
+                game_state = "MISSION_COMPLETE"
+                mission_complete_timer = 0
+                mission_complete_fade = 0
+    elif game_state == "ESCAPE_CUTSCENE":
+        escape_cutscene_timer += 1
+        if escape_cutscene_timer == 18:
+            audio.play("door_open", volume=0.45)
+        if escape_cutscene_timer == 38:
+            audio.play("rig_low_boom", volume=0.25)
+        if escape_cutscene_timer == 310:
+            audio.play("missile_launch", volume=0.32)
+        if escape_cutscene_timer == 650:
+            audio.play("radio_static", volume=0.22)
+        if escape_cutscene_timer == 735:
+            audio.play("terminal_glitch", volume=0.24)
+        if escape_cutscene_timer == 820:
+            audio.play("menu_click", volume=0.34)
+        if escape_cutscene_timer >= ESCAPE_CUTSCENE_DURATION:
+            gc.mission_end_time = pygame.time.get_ticks()
+            game_state = "MISSION_COMPLETE"
+            mission_complete_timer = 0
+            mission_complete_fade = 0
+            pygame.mouse.set_visible(True)
+    # --- AMBIENCE ---
+    if game_state == "CUTSCENE":
+        shot = active_cutscene_shots[cutscene_shot_idx]
+        rain_scenes = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy", "route12_checkpoint", "route12_tanker", "route12_aftermath"}
+        amb = {"ambient_drone"}
+        if shot["scene"] in rain_scenes:
+            amb.add("rain")
+            amb.add("wind")
+        _set_ambience(amb)
+    elif game_state == "WALK":
+        _set_ambience({"ambient_drone", "rain", "wind"})
+    elif game_state == "DEATH":
+        _set_ambience({"heartbeat"})
+    elif game_state == "ESCAPE_CUTSCENE":
+        _set_ambience({"rain", "wind", "ambient_drone"})
+    elif game_state == "MISSION_COMPLETE":
+        _set_ambience(set())
+        if mission_complete_timer == 1:
+            audio.play("mission_complete", volume=0.6)
+    elif game_state == "BRIEFING":
+        _set_ambience({"ambient_drone"})
+    elif game_state == "GAME":
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION2":
+            _set_ambience({"ambient_drone", "rain", "wind"})
+        else:
+            _set_ambience(set())
+    elif game_state in ("MENU", "MULTIPLAYER", "SETTINGS", "PAUSED", "NOTEBOOK_INSPECT"):
+        _set_ambience(set())
+    # Stream the main menu theme only on menu-family screens.
+    music_state = next_state if transitioning and fade_speed > 0 else game_state
+    _set_menu_music(music_state in MENU_MUSIC_STATES)
+    # --- RENDER ---
+    if game_state == "SLOT_SELECT":
+        draw_slot_select_screen()
+    elif game_state == "MENU":
+        menu.draw_menu()
+        if menu_notice_timer > 0:
+            notice = font_prompt.render(menu_notice, True, C_ORANGE)
+            bg = pygame.Surface((notice.get_width() + 28, notice.get_height() + 12), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 190))
+            pygame.draw.rect(bg, (120, 70, 20), bg.get_rect(), 1)
+            screen.blit(bg, (WIDTH // 2 - bg.get_width() // 2, HEIGHT - 120))
+            screen.blit(notice, (WIDTH // 2 - notice.get_width() // 2, HEIGHT - 114))
+            menu_notice_timer -= 1
+    elif game_state == "MULTIPLAYER":
+        menu.draw_menu_background()
+        mp_connect_progress = 0.0
+        if mp_state == "connecting":
+            mp_connect_progress = 1.0 - max(0, min(180, mp_timer)) / 180.0
+        menu.draw_server_browser(
+            mp_selected,
+            mp_state == "connecting",
+            mp_kick_msg if mp_state == "kicked" else "",
+            mp_connect_progress,
+        )
+    elif game_state == "SETTINGS":
+        menu.draw_menu_background()
+        menu.draw_settings(
+            settings_active_tab,
+            display_mode, res_idx,
+            master_volume, music_volume, sfx_volume,
+            STATE.reduced_motion,
+        )
+    elif game_state == "CUTSCENE":
+        shot = active_cutscene_shots[cutscene_shot_idx]
+        t_ms = pygame.time.get_ticks() - cutscene_start_time
+        gc.draw_cutscene_scene(screen, shot, t_ms)
+        if shot["scene"] == "title_card":
+            lines = shot["text"].split("\n")
+            gc.draw_typewriter_title(screen, lines, cutscene_char_idx)
+        else:
+            if shot["scene"] in ("ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy", "route12_checkpoint", "route12_tanker", "route12_aftermath"):
+                draw_rain(screen, gc.rain_drops, speed_mul=1.0)
+                screen.blit(_cutscene_fog, (0, 0))
+                screen.blit(_cutscene_top_fog, (0, LETTER_H))
+            draw_vignette(screen, strength=180)
+            draw_scanlines(screen)
+            draw_letterbox(screen)
+            can_continue = (pygame.time.get_ticks() - cutscene_start_time) >= shot.get("min_ms", 0)
+            gc.draw_dialogue_box(
+                screen,
+                shot["speaker"],
+                shot["text"],
+                cutscene_char_idx,
+                len(shot["text"]),
+                can_continue,
+            )
+            grain_frame += 1
+            if grain_frame >= 3:
+                grain_frame = 0
+                grain_idx = (grain_idx + 1) % len(GRAIN_VARIANTS)
+            screen.blit(GRAIN_VARIANTS[grain_idx], (0, 0))
+        # ── Shot transition fade ──
+        if abs(cutscene_transition_timer) > 0:
+            fade_alpha = 0
+            if cutscene_transition_timer > 0:
+                fade_alpha = int(255 * (cutscene_transition_timer / 15))
+            else:
+                fade_alpha = int(255 * (1 - abs(cutscene_transition_timer) / 12))
+            fade_surf = pygame.Surface((WIDTH, HEIGHT))
+            fade_surf.fill((0, 0, 0))
+            fade_surf.set_alpha(min(255, fade_alpha))
+            screen.blit(fade_surf, (0, 0))
+    elif game_state == "BRIEFING":
+        draw_briefing_screen()
+    elif game_state == "WALK":
+        gc.draw_walking_sim()
+        grain_frame += 1
+        if grain_frame >= 3:
+            grain_frame = 0
+            grain_idx = (grain_idx + 1) % len(GRAIN_VARIANTS)
+        screen.blit(GRAIN_VARIANTS[grain_idx], (0, 0))
+    elif game_state == "GAME":
+        gc.game_draw(last_fcx, last_fcy)
+        grain_frame += 1
+        if grain_frame >= 3:
+            grain_frame = 0
+            grain_idx = (grain_idx + 1) % len(GRAIN_VARIANTS)
+        screen.blit(GRAIN_VARIANTS[grain_idx], (0, 0))
+        gc.draw_desk_note()
+        gc.draw_safe_keypad()
+    elif game_state == "ESCAPE_CUTSCENE":
+        gc.draw_biribel_escape_cutscene(screen, escape_cutscene_timer)
+    elif game_state == "NOTEBOOK_INSPECT":
+        gc.game_draw(last_fcx, last_fcy)
+        gc.draw_notebook_inspection()
+    elif game_state == "PAUSED":
+        gc.game_draw(last_fcx, last_fcy)
+        grain_frame += 1
+        if grain_frame >= 3:
+            grain_frame = 0
+            grain_idx = (grain_idx + 1) % len(GRAIN_VARIANTS)
+        screen.blit(GRAIN_VARIANTS[grain_idx], (0, 0))
+        menu.draw_pause_menu()
+    elif game_state == "DEATH":
+        gc.game_draw(last_fcx, last_fcy)
+        grain_frame += 1
+        if grain_frame >= 3:
+            grain_frame = 0
+            grain_idx = (grain_idx + 1) % len(GRAIN_VARIANTS)
+        screen.blit(GRAIN_VARIANTS[grain_idx], (0, 0))
+        menu.draw_death_screen()
+    elif game_state == "MISSION_COMPLETE":
+        mission_complete_timer += 1
+        mission_complete_fade = min(255, mission_complete_timer * 5)
+        if not mission_complete_saved:
+            report = _mission_report_data(success=True)
+            if getattr(gc, "active_mission", "MISSION1") == "MISSION2":
+                save_system.save_mission_complete(
+                    "MISSION_2",
+                    "Mission 2 — Quiet on Route 12",
+                    report["time_str"],
+                    stats=report,
+                    flags={"mission1_complete": True, "mission2_complete": True},
+                )
+            else:
+                save_system.save_mission_complete(
+                    "MISSION_1",
+                    "Mission 1 — Black Notebook",
+                    report["time_str"],
+                    stats=report,
+                    flags={"mission1_complete": True},
+                )
+            mission_complete_saved = True
+        # ── Background ──
+        for i in range(HEIGHT):
+            t = i / HEIGHT
+            r = int(5 + t * 8)
+            g = int(8 + t * 12)
+            b = int(14 + t * 20)
+            pygame.draw.line(screen, (r, g, b), (0, i), (WIDTH, i))
+        # Subtle noise
+        if mission_complete_timer % 3 == 0:
+            rng_n = random.Random(mission_complete_timer // 3)
+            for _ in range(60):
+                nx = rng_n.randint(0, WIDTH - 1)
+                ny = rng_n.randint(0, HEIGHT - 1)
+                screen.set_at((nx, ny), (12, 16, 22))
+        # ── Card ──
+        card_w, card_h = 520, 440
+        card_x = WIDTH // 2 - card_w // 2
+        card_y = HEIGHT // 2 - card_h // 2 - 10
+        # Card shadow
+        shadow = pygame.Surface((card_w + 16, card_h + 16), pygame.SRCALPHA)
+        shadow.fill((0, 0, 0, 80))
+        screen.blit(shadow, (card_x + 8, card_y + 8))
+        # Card body
+        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        card.fill((8, 12, 18, 235))
+        pygame.draw.rect(card, (35, 60, 85, 160), (0, 0, card_w, card_h), 1)
+        # Left accent
+        pygame.draw.rect(card, (50, 120, 180), (0, 0, 4, card_h))
+        screen.blit(card, (card_x, card_y))
+        def _mc_text(surf, x, y, alpha):
+            surf.set_alpha(min(255, alpha))
+            screen.blit(surf, (x, y))
+        # ── Header area ──
+        pygame.draw.rect(screen, (6, 10, 16, 240),
+                          (card_x + 4, card_y, card_w - 4, 42))
+        pygame.draw.line(screen, (35, 60, 85),
+                          (card_x + 16, card_y + 42),
+                          (card_x + card_w - 16, card_y + 42), 1)
+        eyebrow = font_terminal_small.render(
+            "KRAP INTEL — AFTER ACTION REPORT", True, (60, 120, 170))
+        _mc_text(eyebrow,
+                 card_x + card_w // 2 - eyebrow.get_width() // 2,
+                 card_y + 8, mission_complete_fade)
+        # Classification stamp
+        classif = font_terminal_small.render("CLASSIFIED", True, (180, 60, 50))
+        _mc_text(classif, card_x + card_w - classif.get_width() - 20,
+                 card_y + 8, mission_complete_fade)
+        # ── Title — smaller, cleaner ──
+        title_font = pygame.font.SysFont("Consolas", 32, bold=True)
+        title_surf = title_font.render("MISSION COMPLETE", True, (200, 198, 190))
+        _mc_text(title_surf,
+                 card_x + card_w // 2 - title_surf.get_width() // 2,
+                 card_y + 56, mission_complete_fade)
+        # ── Operation name ──
+        op_name = getattr(gc, "active_mission_operation", "WAREHOUSE RAID — BLACK NOTEBOOK")
+        op = font_terminal.render(op_name, True, (160, 155, 145))
+        _mc_text(op,
+                 card_x + card_w // 2 - op.get_width() // 2,
+                 card_y + 96, mission_complete_fade)
+        # ── Outcome line ──
+        outcome_line = getattr(gc, "active_mission_outcome", "Target escaped  ·  Notebook recovered  ·  Questions remain")
+        out = font_terminal_small.render(
+            outcome_line,
+            True, (150, 120, 90))
+        _mc_text(out,
+                 card_x + card_w // 2 - out.get_width() // 2,
+                 card_y + 120, mission_complete_fade)
+        pygame.draw.line(screen, (30, 50, 70),
+                          (card_x + 30, card_y + 145),
+                          (card_x + card_w - 30, card_y + 145), 1)
+        # ── Stats grid ──
+        if mission_complete_timer > 25:
+            stats_fade = min(255, (mission_complete_timer - 25) * 7)
+            report = _mission_report_data(success=True)
+            stats = [
+                ("KILLS", str(report["kills"])),
+                ("SHOTS FIRED", str(report["shots_fired"])),
+                ("ACCURACY", f"{report['accuracy']}%"),
+                ("TOTAL TIME", report["time_str"]),
+                ("CIVILIANS HELPED", str(report["civilians_helped"])),
+                ("INTEL FOUND", "YES" if report["intel_found"] else "NO"),
+                ("RATIONS USED", str(report["rations_used"])),
+                ("RANK", report["rank"]),
+            ]
+            stat_x = card_x + 36
+            stat_y = card_y + 158
+            for i, (label, value) in enumerate(stats):
+                col = i % 2
+                row = i // 2
+                sx = stat_x + col * 240
+                sy = stat_y + row * 42
+                lbl = font_terminal_small.render(label, True, (55, 95, 130))
+                lbl.set_alpha(stats_fade)
+                screen.blit(lbl, (sx, sy))
+                val_font = pygame.font.SysFont("Consolas", 22, bold=True)
+                val_col = (255, 220, 120) if label == "RANK" else (180, 220, 245)
+                val = val_font.render(value, True, val_col)
+                val.set_alpha(stats_fade)
+                screen.blit(val, (sx, sy + 14))
+                line_alpha = min(stats_fade, 60)
+                ul = pygame.Surface((200, 1), pygame.SRCALPHA)
+                ul.fill((35, 60, 85, line_alpha))
+                screen.blit(ul, (sx, sy + 34))
+        # ── Divider before quote ──
+        pygame.draw.line(screen, (30, 50, 70),
+                          (card_x + 30, card_y + 325),
+                          (card_x + card_w - 30, card_y + 325), 1)
+        # ── Vasile quote ──
+        if mission_complete_timer > 70:
+            q_fade = min(255, (mission_complete_timer - 70) * 5)
+            attr = font_terminal_small.render(
+                getattr(gc, "active_mission_quote_attr", "Vasile, after a long pause:"), True, (90, 80, 70))
+            attr.set_alpha(q_fade)
+            screen.blit(attr, (card_x + 36, card_y + 338))
+            quote = font_dialogue.render(
+                getattr(gc, "active_mission_quote", '"Bring it straight to me. Don\'t read it."'),
+                True, C_VASILE)
+            quote.set_alpha(q_fade)
+            screen.blit(quote,
+                         (card_x + card_w // 2 - quote.get_width() // 2,
+                          card_y + 362))
+        # ── Bottom bar ──
+        pygame.draw.line(screen, (35, 60, 85),
+                          (card_x + 16, card_y + card_h - 34),
+                          (card_x + card_w - 16, card_y + card_h - 34), 1)
+        footer = font_terminal_small.render(
+            "KRAP INTELLIGENCE DIVISION — FIELD COPY", True, (45, 65, 80))
+        _mc_text(footer,
+                 card_x + card_w // 2 - footer.get_width() // 2,
+                 card_y + card_h - 26, mission_complete_fade)
+        # ── Continue prompt ──
+        if mission_complete_timer > 120 and (pygame.time.get_ticks() // 600) % 2 == 0:
+            next_prompt = "PRESS SPACE TO START MISSION 2" if getattr(gc, "active_mission", "MISSION1") == "MISSION1" else "PRESS SPACE TO RETURN TO MENU"
+            prompt = font_btn.render(next_prompt, True, C_ORANGE)
+            prompt.set_alpha(mission_complete_fade)
+            screen.blit(prompt,
+                         (WIDTH // 2 - prompt.get_width() // 2,
+                          card_y + card_h + 18))
+    # --- FADE TRANSITION ---
+    if transitioning:
+        fade_alpha += fade_speed
+        if fade_alpha >= 255:
+            fade_alpha = 255
+            fade_speed = -12
+            game_state = next_state
+        elif fade_alpha <= 0 and fade_speed < 0:
+            fade_alpha = 0
+            transitioning = False
+        _fade_surf.fill((0, 0, 0))
+        _fade_surf.set_alpha(fade_alpha)
+        screen.blit(_fade_surf, (0, 0))
+    pygame.display.flip()
+    clock.tick(60)
+pygame.quit()
+sys.exit()

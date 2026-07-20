@@ -1,0 +1,625 @@
+# ------------------------------------------------------------
+# ui_hud.py
+# ------------------------------------------------------------
+
+"""HUD overlays: minimap, safe keypad, notebook inspection, desk notes."""
+import math
+import random
+import pygame
+_last_note_tick_key = None
+from config import (
+    WIDTH, HEIGHT, TILE_SIZE, FLOOR_TILE_SIZE,
+    C_WHITE, C_ORANGE, C_TERMINAL, C_KRAP_BLUE, C_GREY,
+    C_BG_GAME, LETTER_H, SCENE_TOP, SCENE_BOT,
+    font_terminal, font_terminal_small, font_speaker,
+    font_btn, font_prompt, font_dialogue, font_title, screen,
+    CONTAINER_TILE_RED, CONTAINER_TILE_BLUE, CONTAINER_TILE_RUST, CONTAINER_TILE_GREY,
+    audio,
+)
+from state import STATE
+class MiniMap:
+    def __init__(self, map_data, tile_size=64):
+        self.tile_size = tile_size
+        self.map_w = len(map_data[0])
+        self.map_h = len(map_data)
+        self.world_w = self.map_w * tile_size
+        self.world_h = self.map_h * tile_size
+        self.minimap_w = 160
+        self.minimap_h = 160
+        self.scale_x = self.minimap_w / self.world_w
+        self.scale_y = self.minimap_h / self.world_h
+        self.margin = 10
+        self.x = WIDTH - self.minimap_w - self.margin
+        self.y = self.margin
+        self.static_surface = self._build_static_surface(map_data)
+    def _build_static_surface(self, map_data):
+        surf = pygame.Surface((self.minimap_w, self.minimap_h), pygame.SRCALPHA)
+        surf.fill((10, 10, 12, 220))
+        wall_color = (60, 55, 50)
+        door_color = (80, 70, 60)
+        for row_idx, row in enumerate(map_data):
+            for col_idx, tile in enumerate(row):
+                if tile in ("C", "W"):
+                    px = int(col_idx * self.tile_size * self.scale_x)
+                    py = int(row_idx * self.tile_size * self.scale_y)
+                    pw = max(1, int(self.tile_size * self.scale_x))
+                    ph = max(1, int(self.tile_size * self.scale_y))
+                    c = door_color if tile == "D" else wall_color
+                    pygame.draw.rect(surf, c, (px, py, pw, ph))
+        return surf
+    def draw(
+        self,
+        surface,
+        player,
+        enemies,
+        camera_x,
+        camera_y,
+        notebook_pos=None,
+        exfil_pos=None,
+        volkov_pos=None,
+        commander_pos=None,
+    ):
+        if player is None:
+            return
+        panel = self.static_surface.copy()
+        px = int(player.rect.centerx * self.scale_x)
+        py = int(player.rect.centery * self.scale_y)
+        pygame.draw.circle(panel, (80, 220, 100), (px, py), 3)
+        angle = player.angle
+        dir_len = 6
+        dx = int(math.cos(angle) * dir_len)
+        dy = int(math.sin(angle) * dir_len)
+        pygame.draw.line(panel, (80, 220, 100), (px, py), (px + dx, py + dy), 2)
+        for e in enemies:
+            ex = int(e.rect.centerx * self.scale_x)
+            ey = int(e.rect.centery * self.scale_y)
+            pygame.draw.circle(panel, (220, 60, 60), (ex, ey), 2)
+        if notebook_pos:
+            nx = int(notebook_pos[0] * self.scale_x)
+            ny = int(notebook_pos[1] * self.scale_y)
+            pygame.draw.rect(panel, (255, 220, 100), (nx - 3, ny - 3, 6, 6))
+            pygame.draw.rect(panel, (255, 255, 255), (nx - 3, ny - 3, 6, 6), 1)
+        if exfil_pos:
+            ex = int(exfil_pos[0] * self.scale_x)
+            ey = int(exfil_pos[1] * self.scale_y)
+            pygame.draw.circle(panel, (80, 220, 100), (ex, ey), 4, 1)
+        if volkov_pos:
+            vx = int(volkov_pos[0] * self.scale_x)
+            vy = int(volkov_pos[1] * self.scale_y)
+            pygame.draw.circle(panel, (255, 160, 60), (vx, vy), 3)
+        if commander_pos:
+            cx = int(commander_pos[0] * self.scale_x)
+            cy = int(commander_pos[1] * self.scale_y)
+            pygame.draw.circle(panel, (255, 160, 60), (cx, cy), 3)
+        pygame.draw.rect(panel, (90, 75, 45), (0, 0, self.minimap_w, self.minimap_h), 2)
+        pygame.draw.rect(
+            panel, (55, 45, 28), (1, 1, self.minimap_w - 2, self.minimap_h - 2), 1
+        )
+        surface.blit(panel, (self.x, self.y))
+def _draw_dirty_hand_text(surface, text, x, y, font, color, seed=0, alpha=120, jitter=2, angle=0):
+    rng = random.Random(seed)
+    cx = x
+    for i, ch in enumerate(text):
+        if ch == " ":
+            cx += font.size(" ")[0] + rng.randint(2, 6)
+            continue
+        ch_surf = font.render(ch, True, color).convert_alpha()
+        ch_surf.set_alpha(max(0, min(255, alpha + rng.randint(-45, 25))))
+        rot = pygame.transform.rotate(ch_surf, angle + rng.uniform(-9, 9))
+        rx = cx + rng.randint(-jitter, jitter)
+        ry = y + rng.randint(-jitter, jitter)
+        surface.blit(rot, (rx, ry))
+        if rng.random() < 0.65:
+            ghost = font.render(ch, True, color).convert_alpha()
+            ghost.set_alpha(max(0, alpha // 3))
+            ghost = pygame.transform.rotate(ghost, angle + rng.uniform(-14, 14))
+            surface.blit(ghost, (rx + rng.randint(-3, 3), ry + rng.randint(-2, 3)))
+        cx += font.size(ch)[0] + rng.randint(-2, 3)
+def _draw_crumpled_safe_scrap():
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 215))
+    screen.blit(overlay, (0, 0))
+    rng = random.Random(742)
+    paper_w, paper_h = 460, 330
+    paper = pygame.Surface((paper_w, paper_h), pygame.SRCALPHA)
+    pts = [
+        (28, 18), (90, 5), (158, 16), (236, 8), (315, 20), (404, 10), (444, 38),
+        (433, 92), (452, 148), (430, 205), (445, 286), (388, 317), (316, 306),
+        (244, 326), (173, 308), (98, 321), (28, 292), (15, 230), (30, 166),
+        (10, 96),
+    ]
+    shadow = pygame.Surface((paper_w + 40, paper_h + 40), pygame.SRCALPHA)
+    pygame.draw.polygon(shadow, (0, 0, 0, 120), [(x + 20, y + 22) for x, y in pts])
+    shadow_rot = pygame.transform.rotate(shadow, -4)
+    shadow_rect = shadow_rot.get_rect(center=(WIDTH // 2 + 10, HEIGHT // 2 + 12))
+    screen.blit(shadow_rot, shadow_rect)
+    pygame.draw.polygon(paper, (177, 160, 118), pts)
+    pygame.draw.polygon(paper, (92, 73, 45), pts, 2)
+    for _ in range(900):
+        x = rng.randint(10, paper_w - 12)
+        y = rng.randint(8, paper_h - 10)
+        if rng.random() < 0.75:
+            col = rng.choice([
+                (120, 96, 58, 35), (70, 55, 35, 28),
+                (210, 196, 150, 18), (35, 28, 20, 20),
+            ])
+            paper.set_at((x, y), col)
+    for _ in range(12):
+        sx = rng.randint(45, paper_w - 80)
+        sy = rng.randint(35, paper_h - 70)
+        sw = rng.randint(30, 110)
+        sh = rng.randint(18, 70)
+        stain = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        pygame.draw.ellipse(stain, rng.choice([
+            (45, 32, 20, 45), (78, 51, 22, 38), (20, 20, 18, 35),
+        ]), stain.get_rect())
+        paper.blit(stain, (sx, sy))
+    facets = [
+        [(40, 30), (180, 42), (95, 150)],
+        [(190, 20), (315, 45), (250, 145)],
+        [(320, 38), (430, 70), (365, 180)],
+        [(32, 175), (120, 150), (75, 285)],
+        [(150, 170), (265, 150), (220, 310)],
+        [(275, 165), (420, 210), (335, 300)],
+    ]
+    for i, fpts in enumerate(facets):
+        col = (255, 240, 180, 18) if i % 2 == 0 else (20, 12, 8, 35)
+        pygame.draw.polygon(paper, col, fpts)
+    fold_lines = [
+        ((35, 76), (430, 58), 38), ((54, 145), (432, 132), 62),
+        ((34, 220), (428, 205), 45), ((112, 20), (122, 310), 50),
+        ((248, 18), (230, 320), 65), ((365, 35), (318, 304), 55),
+        ((38, 285), (440, 40), 32), ((30, 44), (420, 292), 30),
+    ]
+    for (a, b, alpha) in fold_lines:
+        pygame.draw.line(paper, (42, 31, 19, alpha), a, b, 4)
+        pygame.draw.line(paper, (225, 210, 160, max(15, alpha // 2)),
+                         (a[0] + 2, a[1] - 2), (b[0] + 2, b[1] - 2), 1)
+    hand_font_big = pygame.font.SysFont("Comic Sans MS", 35, bold=True)
+    hand_font_mid = pygame.font.SysFont("Comic Sans MS", 25, bold=True)
+    hand_font_small = pygame.font.SysFont("Comic Sans MS", 18, bold=True)
+    ink = (37, 31, 25)
+    _draw_dirty_hand_text(paper, "dont forget", 72, 72, hand_font_small, ink,
+                          seed=12, alpha=55, jitter=3, angle=-6)
+    _draw_dirty_hand_text(paper, "7", 122, 132, hand_font_big, ink,
+                          seed=1, alpha=95, jitter=5, angle=-10)
+    _draw_dirty_hand_text(paper, "4", 210, 126, hand_font_big, ink,
+                          seed=2, alpha=62, jitter=7, angle=7)
+    _draw_dirty_hand_text(paper, "2", 306, 138, hand_font_big, ink,
+                          seed=3, alpha=78, jitter=6, angle=-4)
+    _draw_dirty_hand_text(paper, "7  ?  2", 120, 182, hand_font_mid, ink,
+                          seed=4, alpha=48, jitter=7, angle=3)
+    _draw_dirty_hand_text(paper, "last three", 80, 244, hand_font_small, ink,
+                          seed=5, alpha=45, jitter=3, angle=-3)
+    for _ in range(34):
+        x1 = rng.randint(90, 360)
+        y1 = rng.randint(115, 210)
+        x2 = x1 + rng.randint(-55, 80)
+        y2 = y1 + rng.randint(-10, 18)
+        pygame.draw.line(paper, rng.choice([
+            (20, 14, 8, 65), (70, 45, 20, 55), (120, 96, 58, 45),
+        ]), (x1, y1), (x2, y2), rng.randint(2, 6))
+    fold = pygame.Surface((paper_w, paper_h), pygame.SRCALPHA)
+    pygame.draw.polygon(fold, (18, 12, 8, 80),
+                        [(155, 105), (292, 92), (278, 230), (140, 246)])
+    pygame.draw.line(fold, (235, 215, 160, 45), (160, 105), (145, 245), 2)
+    paper.blit(fold, (0, 0))
+    for _ in range(18):
+        hx = rng.randint(35, paper_w - 40)
+        hy = rng.randint(30, paper_h - 30)
+        if rng.random() < 0.45:
+            pygame.draw.line(paper, (65, 45, 28, 90),
+                             (hx, hy), (hx + rng.randint(-20, 25), hy + rng.randint(-7, 9)),
+                             rng.randint(1, 3))
+    for _ in range(85):
+        edge = rng.choice(["top", "bottom", "left", "right"])
+        if edge == "top":
+            x, y = rng.randint(25, paper_w - 25), rng.randint(8, 35)
+        elif edge == "bottom":
+            x, y = rng.randint(25, paper_w - 25), rng.randint(paper_h - 38, paper_h - 8)
+        elif edge == "left":
+            x, y = rng.randint(8, 38), rng.randint(25, paper_h - 25)
+        else:
+            x, y = rng.randint(paper_w - 40, paper_w - 8), rng.randint(25, paper_h - 25)
+        pygame.draw.circle(paper, (35, 24, 15, rng.randint(25, 80)), (x, y), rng.randint(1, 5))
+    paper_rot = pygame.transform.rotate(paper, -4)
+    paper_rect = paper_rot.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 12))
+    screen.blit(paper_rot, paper_rect)
+    if (pygame.time.get_ticks() // 600) % 2 == 0:
+        prompt = font_prompt.render("[ SPACE ] close", True, (160, 145, 100))
+        screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, HEIGHT // 2 + 210))
+    lbl = font_terminal_small.render("crumpled scrap", True, (95, 82, 58))
+    screen.blit(lbl, (WIDTH // 2 - lbl.get_width() // 2, HEIGHT // 2 - 218))
+def _schedule_text_ticks(text, start_delay=0, step=2, volume=0.08, max_ticks=42):
+    tick_i = 0
+    for ch in text:
+        if ch and not ch.isspace():
+            if tick_i < max_ticks and (tick_i % 2 == 0 or ch in ".!?"):
+                audio.schedule(start_delay + tick_i * step, "type_tick", volume=volume)
+            tick_i += 1
+def _play_ui_type_tick(volume=0.095):
+    try:
+        audio.play("type_tick", volume=volume)
+    except Exception:
+        pass
+def draw_desk_note():
+    global _last_note_tick_key
+    if not STATE.active_read_note:
+        _last_note_tick_key = None
+        return
+    if _last_note_tick_key != STATE.active_read_note:
+        _last_note_tick_key = STATE.active_read_note
+        _schedule_text_ticks(str(STATE.active_read_note).replace("__CRUMPLED_SAFE_SCRAP__", "crumpled scrap"), start_delay=0, step=2, volume=0.075, max_ticks=38)
+    if STATE.active_read_note == "__CRUMPLED_SAFE_SCRAP__":
+        _draw_crumpled_safe_scrap()
+        return
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 280
+    panel_x = (WIDTH - panel_w) // 2
+    panel_y = (HEIGHT - panel_h) // 2
+    paper = pygame.Surface((panel_w, panel_h))
+    paper.fill((32, 28, 22))
+    for row in range(0, panel_h, 3):
+        shade = random.randint(-3, 3)
+        c = max(0, min(255, 32 + shade))
+        pygame.draw.line(paper, (c, c - 2, c - 4), (0, row), (panel_w, row))
+    screen.blit(paper, (panel_x, panel_y))
+    pygame.draw.rect(screen, (80, 70, 50), (panel_x, panel_y, panel_w, panel_h), 2)
+    header = font_speaker.render("FIELD NOTE", True, C_ORANGE)
+    screen.blit(header, (panel_x + 16, panel_y + 12))
+    pygame.draw.line(
+        screen,
+        (80, 65, 35),
+        (panel_x + 16, panel_y + 42),
+        (panel_x + panel_w - 16, panel_y + 42),
+        1,
+    )
+    lines = STATE.active_read_note.split("\n")
+    y = panel_y + 56
+    for line in lines:
+        surf = font_terminal.render(line, True, C_WHITE)
+        screen.blit(surf, (panel_x + 20, y))
+        y += 28
+    if (pygame.time.get_ticks() // 600) % 2 == 0:
+        prompt = font_prompt.render("[ SPACE ] close", True, (160, 145, 100))
+        screen.blit(
+            prompt,
+            (panel_x + panel_w // 2 - prompt.get_width() // 2, panel_y + panel_h - 28),
+        )
+_notebook_inspect_timer = 0
+def reset_notebook_inspect():
+    global _notebook_inspect_timer
+    _notebook_inspect_timer = 0
+def draw_notebook_inspection():
+    global _notebook_inspect_timer
+    _notebook_inspect_timer += 1
+    # ── Dark overlay fades in ──
+    overlay_alpha = min(210, _notebook_inspect_timer * 8)
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, overlay_alpha))
+    screen.blit(overlay, (0, 0))
+    # ── Notebook slides/zooms in ──
+    slide_progress = min(1.0, _notebook_inspect_timer / 20.0)
+    ease = 1.0 - (1.0 - slide_progress) ** 2
+    # ── Bounce settle at end ──
+    if slide_progress >= 0.85:
+        b_t = (slide_progress - 0.85) / 0.15
+        bounce_os = -math.sin(b_t * math.pi * 2) * 5 * (1.0 - b_t)
+    else:
+        bounce_os = 0
+    slide_offset = int((1.0 - ease) * 60 + bounce_os)
+    panel_w, panel_h = 780, 520
+    panel_x = (WIDTH - panel_w) // 2
+    panel_y = (HEIGHT - panel_h) // 2
+    # ── Panel rendered with slide offset ──
+    paper = pygame.Surface((panel_w, panel_h))
+    paper.fill((28, 24, 18))
+    for row in range(0, panel_h, 3):
+        shade = random.randint(-3, 3)
+        c = max(0, min(255, 28 + shade))
+        pygame.draw.line(paper, (c, c - 2, c - 4), (0, row), (panel_w, row))
+    screen.blit(paper, (panel_x, panel_y + slide_offset))
+    pygame.draw.rect(screen, (90, 75, 45), (panel_x, panel_y + slide_offset, panel_w, panel_h), 2)
+    pygame.draw.rect(
+        screen, (55, 45, 28), (panel_x + 5, panel_y + 5 + slide_offset, panel_w - 10, panel_h - 10), 1
+    )
+    # ── Classified stamp appears after delay ──
+    stamp_alpha = min(255, max(0, _notebook_inspect_timer - 30) * 12)
+    stamp_surf = pygame.Surface((180, 60), pygame.SRCALPHA)
+    stamp_txt = font_speaker.render("CLASSIFIED", True, (180, 30, 30, stamp_alpha))
+    stamp_surf.blit(stamp_txt, (0, 10))
+    pygame.draw.rect(
+        stamp_surf,
+        (180, 30, 30, stamp_alpha),
+        (0, 8, stamp_txt.get_width() + 4, stamp_txt.get_height() + 4),
+        2,
+    )
+    rotated = pygame.transform.rotate(stamp_surf, -18)
+    screen.blit(rotated, (panel_x + panel_w - 190, panel_y + 8 + slide_offset))
+    pygame.draw.rect(screen, (20, 16, 10), (panel_x, panel_y, panel_w, 44))
+    pygame.draw.line(
+        screen,
+        (90, 75, 45),
+        (panel_x, panel_y + 44),
+        (panel_x + panel_w, panel_y + 44),
+        1,
+    )
+    header_lbl = font_terminal_small.render(
+        "OPERATION BLACK NOTEBOOK // FIELD INTELLIGENCE DOSSIER // EYES ONLY",
+        True,
+        (120, 100, 60),
+    )
+    screen.blit(header_lbl, (panel_x + 16, panel_y + 14))
+    col_div = panel_x + panel_w // 2 - 10
+    pygame.draw.line(
+        screen,
+        (55, 45, 30),
+        (col_div, panel_y + 52),
+        (col_div, panel_y + panel_h - 40),
+        1,
+    )
+    lx = panel_x + 20
+    ly = panel_y + 58
+    map_hdr = font_terminal_small.render("[ OPERATIONAL MAP ]", True, (160, 130, 60))
+    screen.blit(map_hdr, (lx, ly))
+    pygame.draw.line(screen, (80, 65, 35), (lx, ly + 16), (col_div - 20, ly + 16), 1)
+    ly += 24
+    map_lines = [
+        ("IPA safehouses", "7 marked", (200, 80, 80)),
+        ("KRAP checkpoints", "12 marked", (80, 120, 200)),
+        ("MAG supply routes", "sewers", (80, 160, 80)),
+        ("Volkov handoff", "WAREHOUSE DISTRICT", (220, 180, 60)),
+        ("Exfil route", "STAIR \u2192 BAY DOOR", (160, 140, 200)),
+    ]
+    for label, value, vcol in map_lines:
+        lbl_s = font_terminal_small.render(label, True, (140, 130, 110))
+        val_s = font_terminal_small.render(value, True, vcol)
+        screen.blit(lbl_s, (lx + 8, ly))
+        screen.blit(val_s, (lx + 8 + lbl_s.get_width() + 6, ly))
+        ly += 19
+    ly += 12
+    tgt_hdr = font_terminal_small.render("[ TARGET PHOTO ]", True, (160, 130, 60))
+    screen.blit(tgt_hdr, (lx, ly))
+    pygame.draw.line(screen, (80, 65, 35), (lx, ly + 16), (col_div - 20, ly + 16), 1)
+    ly += 24
+    photo_w, photo_h = 90, 110
+    photo_x, photo_y = lx + 8, ly
+    pygame.draw.rect(screen, (18, 16, 14), (photo_x, photo_y, photo_w, photo_h))
+    pygame.draw.rect(screen, (50, 45, 38), (photo_x, photo_y, photo_w, photo_h), 1)
+    pygame.draw.circle(screen, (42, 38, 32), (photo_x + photo_w // 2, photo_y + 32), 22)
+    pygame.draw.ellipse(screen, (38, 34, 28), (photo_x + 14, photo_y + 52, 62, 55))
+    if not hasattr(draw_notebook_inspection, "_photo_noise"):
+        noise_surf = pygame.Surface((photo_w, photo_h), pygame.SRCALPHA)
+        rng = random.Random(42)
+        for _ in range(200):
+            gx = rng.randint(0, photo_w - 1)
+            gy = rng.randint(0, photo_h - 1)
+            v = rng.randint(30, 70)
+            noise_surf.set_at((gx, gy), (v, v, v, 255))
+        draw_notebook_inspection._photo_noise = noise_surf
+    screen.blit(draw_notebook_inspection._photo_noise, (photo_x, photo_y))
+    photo_lbl = font_terminal_small.render("SEBASTIAN VOLKOV", True, (200, 180, 100))
+    screen.blit(photo_lbl, (photo_x + photo_w + 10, photo_y + 4))
+    target_details = [
+        ("Affiliation", "IPA"),
+        ("Role", "Logistics coord."),
+        ("Last seen", "Slum dist. 22:47"),
+        ("Status", "AT LARGE"),
+    ]
+    ty2 = photo_y + 24
+    for k, v in target_details:
+        ks = font_terminal_small.render(k + ": ", True, (110, 105, 90))
+        vs = font_terminal_small.render(v, True, (200, 195, 175))
+        screen.blit(ks, (photo_x + photo_w + 10, ty2))
+        screen.blit(vs, (photo_x + photo_w + 10, ty2 + 14))
+        ty2 += 34
+    rx = col_div + 20
+    ry = panel_y + 58
+    ev_hdr = font_terminal_small.render("[ EVIDENCE LOG ]", True, (160, 130, 60))
+    screen.blit(ev_hdr, (rx, ry))
+    pygame.draw.line(
+        screen, (80, 65, 35), (rx, ry + 16), (panel_x + panel_w - 20, ry + 16), 1
+    )
+    ry += 24
+    evidence = [
+        ("ITEM", "Black notebook, leather, unmarked"),
+        ("CONTENTS", "FuegoTech serial registry"),
+        ("SERIALS", "FT-7742 FT-7743 FT-7744 FT-7745"),
+        ("CROSS-REF", "IPA procurement #8841\u20138844"),
+        ("MFG", "FuegoTech Ind., Kilemene Sector"),
+        ("STATUS", "RECOVERED"),
+    ]
+    for key, val in evidence:
+        ks = font_terminal_small.render(key, True, (110, 105, 90))
+        screen.blit(ks, (rx + 8, ry))
+        if key == "STATUS":
+            vcol2 = (80, 220, 100)
+        elif key == "SERIALS":
+            vcol2 = (220, 160, 60)
+        else:
+            vcol2 = (190, 185, 165)
+        vs = font_terminal_small.render(val, True, vcol2)
+        screen.blit(vs, (rx + 16, ry + 15))
+        ry += 38
+    ry += 4
+    pygame.draw.line(screen, (70, 60, 35), (rx, ry), (panel_x + panel_w - 20, ry), 1)
+    ry += 10
+    q1 = font_terminal_small.render('"The fire burns both ways."', True, (140, 120, 80))
+    q2 = font_terminal_small.render("\u2014 Cmdr.", True, (110, 95, 60))
+    screen.blit(q1, (rx + 8, ry))
+    screen.blit(q2, (rx + 8, ry + 18))
+    pygame.draw.line(
+        screen,
+        (55, 45, 28),
+        (panel_x + 10, panel_y + panel_h - 34),
+        (panel_x + panel_w - 10, panel_y + panel_h - 34),
+        1,
+    )
+    footer = font_terminal_small.render(
+        "KRAP INTELLIGENCE DIVISION // FIELD COPY \u2014 DO NOT DUPLICATE",
+        True,
+        (80, 70, 45),
+    )
+    screen.blit(
+        footer,
+        (panel_x + panel_w // 2 - footer.get_width() // 2, panel_y + panel_h - 26),
+    )
+    if (pygame.time.get_ticks() // 600) % 2 == 0:
+        prompt = font_prompt.render("[ SPACE ] close", True, (160, 145, 100))
+        screen.blit(
+            prompt,
+            (panel_x + panel_w // 2 - prompt.get_width() // 2, panel_y + panel_h + 14),
+        )
+def draw_safe_keypad():
+    if not STATE.safe_keypad_active:
+        return
+    ticks = pygame.time.get_ticks()
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 340, 360
+    panel_x = (WIDTH - panel_w) // 2
+    panel_y = (HEIGHT - panel_h) // 2
+    paper = pygame.Surface((panel_w, panel_h))
+    paper.fill((20, 22, 26))
+    for row in range(0, panel_h, 4):
+        pygame.draw.line(paper, (14, 16, 18), (0, row), (panel_w, row), 1)
+    screen.blit(paper, (panel_x, panel_y))
+    pygame.draw.rect(screen, C_ORANGE, (panel_x, panel_y, panel_w, panel_h), 2)
+    pygame.draw.rect(
+        screen, (35, 40, 45), (panel_x + 3, panel_y + 3, panel_w - 6, panel_h - 6), 1
+    )
+    # Silver Corner Screws with small dark grooves (mechanical detailing)
+    for sx, sy in [
+        (panel_x + 12, panel_y + 12),
+        (panel_x + panel_w - 12, panel_y + 12),
+        (panel_x + 12, panel_y + panel_h - 12),
+        (panel_x + panel_w - 12, panel_y + panel_h - 12),
+    ]:
+        pygame.draw.circle(screen, (90, 95, 100), (sx, sy), 5)
+        pygame.draw.circle(screen, (50, 52, 55), (sx, sy), 5, 1)
+        pygame.draw.line(screen, (40, 42, 45), (sx - 3, sy - 1), (sx + 3, sy + 1), 1)
+        
+    # Blinking status LED (Green for power/ready)
+    led_color = (50, 255, 100) if (ticks // 400) % 2 == 0 else (15, 80, 30)
+    pygame.draw.circle(screen, led_color, (panel_x + panel_w - 32, panel_y + 16), 4)
+    # LED label
+    led_lbl = font_terminal_small.render("PWR", True, (110, 115, 120))
+    screen.blit(led_lbl, (panel_x + panel_w - 62, panel_y + 10))
+    
+    status_lbl = font_terminal_small.render(
+        "SECURE CONSOLE - ACCESS LEVEL 1", True, (110, 115, 120)
+    )
+    screen.blit(status_lbl, (panel_x + 16, panel_y + 8))
+    pygame.draw.line(
+        screen,
+        (35, 40, 45),
+        (panel_x + 10, panel_y + 24),
+        (panel_x + panel_w - 10, panel_y + 24),
+        1,
+    )
+    header = font_speaker.render("SAFE KEYPAD", True, C_ORANGE)
+    screen.blit(
+        header, (panel_x + panel_w // 2 - header.get_width() // 2, panel_y + 28)
+    )
+    display_x = panel_x + 30
+    display_y = panel_y + 64
+    display_w = panel_w - 60
+    display_h = 42
+    # CRT Green background screen
+    pygame.draw.rect(screen, (5, 24, 10), (display_x, display_y, display_w, display_h))
+    pygame.draw.rect(
+        screen, (50, 180, 100), (display_x, display_y, display_w, display_h), 1
+    )
+    # Draw scanlines specifically on the keypad LCD screen
+    for sy in range(2, display_h, 3):
+        line_y = display_y + sy
+        pygame.draw.line(screen, (10, 38, 15), (display_x + 1, line_y), (display_x + display_w - 2, line_y), 1)
+        
+    # Pulsing cursor "_" in terminal text
+    blink_cursor = "_" if (ticks // 350) % 2 == 0 else " "
+    code_display = (
+        STATE.safe_keypad_code + blink_cursor if len(STATE.safe_keypad_code) < 6 else STATE.safe_keypad_code
+    )
+    code_surf = font_terminal.render(code_display, True, (65, 255, 160))
+    text_x = display_x + (display_w - code_surf.get_width()) // 2
+    text_y = display_y + (display_h - code_surf.get_height()) // 2
+    screen.blit(code_surf, (text_x, text_y))
+    btn_w, btn_h = 64, 44
+    gap = 10
+    start_x = panel_x + (panel_w - (3 * btn_w + 2 * gap)) // 2
+    btn_y_start = display_y + display_h + 16
+    _keypad_buttons_ref = []
+    keys_7_9 = [("7", 0), ("8", 1), ("9", 2)]
+    keys_4_6 = [("4", 0), ("5", 1), ("6", 2)]
+    keys_1_3 = [("1", 0), ("2", 1), ("3", 2)]
+    keys_bksp_0_ent = [("DEL", 0), ("0", 1), ("ENT", 2)]
+    mouse_pos = pygame.mouse.get_pos()
+    rows = [keys_7_9, keys_4_6, keys_1_3, keys_bksp_0_ent]
+    for ri, row in enumerate(rows):
+        for label, col in row:
+            bx = start_x + col * (btn_w + gap)
+            by = btn_y_start + ri * (btn_h + gap)
+            rect = pygame.Rect(bx, by, btn_w, btn_h)
+            hover = rect.collidepoint(mouse_pos)
+            bg_color = (48, 52, 58) if hover else (26, 28, 32)
+            outline_color = C_ORANGE if hover else (70, 75, 80)
+            pygame.draw.rect(screen, bg_color, rect, border_radius=3)
+            pygame.draw.rect(screen, outline_color, rect, 1, border_radius=3)
+            text_color = C_WHITE if hover else (180, 190, 200)
+            lbl = (
+                font_terminal_small.render(label, True, text_color)
+                if len(label) > 1
+                else font_terminal.render(label, True, text_color)
+            )
+            lbl_x = bx + (btn_w - lbl.get_width()) // 2
+            lbl_y = by + (btn_h - lbl.get_height()) // 2
+            screen.blit(lbl, (lbl_x, lbl_y))
+            _keypad_buttons_ref.append((rect, label))
+    handle_keypad_click._buttons = _keypad_buttons_ref
+    hint = font_terminal_small.render("[ESC] cancel", True, (120, 110, 90))
+    screen.blit(
+        hint, (panel_x + panel_w // 2 - hint.get_width() // 2, panel_y + panel_h - 22)
+    )
+def handle_keypad_click(pos):
+    if not STATE.safe_keypad_active:
+        return
+    buttons = getattr(handle_keypad_click, "_buttons", [])
+    for rect, label in buttons:
+        if rect.collidepoint(pos):
+            if label == "ENT":
+                _play_ui_type_tick(0.09)
+                if STATE.safe_keypad_callback:
+                    STATE.safe_keypad_callback(STATE.safe_keypad_code == STATE.safe_keypad_target)
+                STATE.safe_keypad_active = False
+                pygame.mouse.set_visible(False)
+            elif label == "DEL":
+                if len(STATE.safe_keypad_code) > 0:
+                    STATE.safe_keypad_code = STATE.safe_keypad_code[:-1]
+                    _play_ui_type_tick(0.09)
+            elif len(STATE.safe_keypad_code) < 6:
+                STATE.safe_keypad_code += label
+                _play_ui_type_tick(0.10)
+def handle_keypad_keypress(key):
+    if not STATE.safe_keypad_active:
+        return
+    if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
+        _play_ui_type_tick(0.09)
+        if STATE.safe_keypad_callback:
+            STATE.safe_keypad_callback(STATE.safe_keypad_code == STATE.safe_keypad_target)
+        STATE.safe_keypad_active = False
+        pygame.mouse.set_visible(False)
+    elif key == pygame.K_BACKSPACE:
+        if len(STATE.safe_keypad_code) > 0:
+            STATE.safe_keypad_code = STATE.safe_keypad_code[:-1]
+            _play_ui_type_tick(0.09)
+    elif pygame.K_0 <= key <= pygame.K_9:
+        if len(STATE.safe_keypad_code) < 6:
+            STATE.safe_keypad_code += chr(key)
+            _play_ui_type_tick(0.10)
+    elif pygame.K_KP0 <= key <= pygame.K_KP9:
+        if len(STATE.safe_keypad_code) < 6:
+            STATE.safe_keypad_code += chr(key - pygame.K_KP0 + ord("0"))
+            _play_ui_type_tick(0.10)

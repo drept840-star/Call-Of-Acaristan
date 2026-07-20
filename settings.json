@@ -1,0 +1,21 @@
+{
+  "aim_assist": true,
+  "auto_reload": true,
+  "brightness": 50,
+  "colorblind_mode": 0,
+  "crosshair": true,
+  "crosshair_size": 6,
+  "display_mode": 1,
+  "grain": true,
+  "invert_mouse": false,
+  "master_volume": 25,
+  "mouse_sensitivity": 100,
+  "music_volume": 98,
+  "mute_on_focus_loss": true,
+  "particle_density": 75,
+  "reduced_motion": false,
+  "resolution_idx": 0,
+  "scanlines": true,
+  "sfx_volume": 100,
+  "subtitles": true
+}

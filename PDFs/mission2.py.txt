@@ -1,0 +1,4311 @@
+# ------------------------------------------------------------
+# mission2.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# mission2.py
+# ------------------------------------------------------------
+
+"""Mission 2: Quiet on Route 12 — clean cinematic vertical slice.
+
+This module keeps the existing game integration intact:
+    - game_core.start_mission2()
+    - game_core.game_update()/game_draw() routing
+    - acaristan.py Mission 2 intro and ending cutscenes
+    - save as MISSION_2
+    - dev command: python acaristan.py --dev-mission2
+
+
+"""
+
+import math
+import random
+import time
+
+import pygame
+
+from config import *
+from state import STATE
+from player import Player
+from enemy_ai import Enemy
+from ui_hud import MiniMap
+from interactions import trigger_radio_chatter
+from weapons import (
+    spawn_molotov_fire as _spawn_molotov_fire,
+    _wall_blocks_line,
+    MOLOTOV_RADIUS,
+    MOLOTOV_ENEMY_DAMAGE,
+    MOLOTOV_PLAYER_DAMAGE,
+)
+
+# ─────────────────────────────────────────────
+# Public mission metadata / cutscene lists
+# ─────────────────────────────────────────────
+MISSION2_ID = "MISSION_2"
+MISSION2_KEY = "MISSION2"
+MISSION2_TITLE = "Quiet on Route 12"
+MISSION2_LOCATION = "Route 12 / Checkpoint 12 Highway Corridor"
+MISSION2_PRIMARY_STYLE = "Slow-burn thriller into focused action set-piece"
+
+MISSION2_STORY_FLAGS = {
+    "initial_assumption": "KRAP initially believes Route 12 was a MAG bombing.",
+    "real_enemy": "IPA forces acting under Balaceanu and President Sebastian Retardovici.",
+    "president_role": "President Sebastian Retardovici is openly complicit in the frame-up.",
+    "mag_presence": "MAG is mentioned and blamed, but MAG soldiers never appear.",
+    "krap_squadmates": "Gabi, Seby, and Darius are scripted KRAP squad actors who die in the sniper kill-box.",
+    "vasile_contact": "Vasile loses contact after the tanker blast.",
+}
+
+# Keep these names: acaristan.py uses them.
+mission2_intro_shots = [
+    {
+        "scene": "route12_black",
+        "speaker": "VASILE",
+        "text": "Volkov's file mentions Route 12 before the attack was reported.",
+        "lighting": (3, 4, 7),
+    },
+    {
+        "scene": "route12_files",
+        "speaker": "VASILE",
+        "text": "Checkpoint 12 was marked unstable before the first bomb went off.",
+        "lighting": (8, 13, 20),
+        # Let the dossier shot reach its close-up/finger beat before advancing.
+        "min_ms": 3200,
+    },
+    {
+        "scene": "route12_mag_alert",
+        "speaker": "VASILE",
+        "text": "Official line says MAG bombing. The timestamps say otherwise.",
+        "lighting": (18, 17, 15),
+        "min_ms": 1900,
+    },
+    {
+        "scene": "route12_checkpoint",
+        "speaker": "VASILE",
+        "text": "We go in quiet. We verify the scene. We do not repeat their lie.",
+        "lighting": (11, 14, 16),
+    },
+    {
+        "scene": "title_card",
+        "speaker": "",
+        "text": "MISSION 2\nQUIET ON ROUTE 12",
+        "lighting": (5, 5, 8),
+    },
+]
+
+mission2_ending_shots = [
+    {
+        "scene": "route12_aftermath",
+        "speaker": "SYSTEM",
+        "text": "TRANSMISSION SENT / ARCHIVE PARTIALLY CORRUPTED",
+        "lighting": (12, 10, 8),
+    },
+    {
+        "scene": "route12_broadcast",
+        "speaker": "PRESIDENT RETARDOVICI",
+        "text": "Route 12 will be remembered as the day KRAP discipline failed the nation.",
+        "lighting": (18, 14, 12),
+    },
+    {
+        "scene": "route12_broadcast",
+        "speaker": "BALACEANU",
+        "text": "Effective immediately, KRAP operations in the highway corridor fall under government review.",
+        "lighting": (18, 14, 12),
+    },
+    {
+        "scene": "route12_aftermath",
+        "speaker": "VASILE",
+        "text": "Biribel... tell me you got out.",
+        "lighting": (10, 10, 12),
+    },
+    {
+        "scene": "route12_aftermath",
+        "speaker": "BIRIBEL",
+        "text": "They framed KRAP.",
+        "lighting": (10, 10, 12),
+    },
+    {
+        "scene": "route12_black",
+        "speaker": "VASILE",
+        "text": "No. They framed you first.",
+        "lighting": (2, 2, 4),
+    },
+]
+
+OPENING_CINEMATIC = [
+    {"speaker": s["speaker"], "text": s["text"]}
+    for s in mission2_intro_shots
+    if s.get("speaker")
+]
+
+SQUADMATE_DEATH_CUTSCENE = [
+    {"speaker": "GABI", "text": "No MAG banners. No claim. Just a scene waiting for us."},
+    {"speaker": "VASILE", "text": "Stop. Everybody down."},
+    {"speaker": "SEBY", "text": "Sniper! Highway sign!"},
+    {"speaker": "VASILE", "text": "That is IPA fire discipline. Biribel, survive the kill-box."},
+]
+
+MISSION_PHASES = [
+    {"phase": 1, "name": "Investigation", "objective": "Inspect staged Route 12 evidence."},
+    {"phase": 2, "name": "Sniper Kill-Box", "objective": "Witness the squad ambush."},
+    {"phase": 3, "name": "IPA Reveal", "objective": "Clear a small authored IPA team."},
+    {"phase": 4, "name": "Tanker Run", "objective": "Run before the hidden detonator fires."},
+    {"phase": 5, "name": "Comms Blackout", "objective": "Process the blast and move alone."},
+    {"phase": 6, "name": "Evidence", "objective": "Collect and upload proof of the frame-up."},
+]
+
+# ─────────────────────────────────────────────
+# Map / authored layout
+# ─────────────────────────────────────────────
+# Final-build Mission 2 uses a much larger route/checkpoint space.  The map is
+# still generated as a tilemap so the existing renderer, minimap, wall builder,
+# and collision systems keep working.
+MAP_W, MAP_H = 70, 80
+
+STAGE_INVESTIGATE = "investigate"
+STAGE_SNIPER = "sniper"
+STAGE_COMBAT = "combat"
+STAGE_TRUCK = "truck"
+STAGE_TANKER = "tanker"
+STAGE_RUN = "tanker_run"
+STAGE_BLACKOUT = "blackout"
+STAGE_EVIDENCE = "evidence"
+STAGE_UPLOAD = "upload"
+STAGE_EXFIL = "exfil"
+STAGE_DONE = "done"
+
+# Five investigation clues are available; four are required so the player gets
+# a fuller detective beat without being hard-stuck on one missed prop.
+REQUIRED_INVESTIGATION_CLUES = 4
+
+# Named regions are the backbone for final-build level scripting.  Each zone has
+# a tile-space rect and a generated world-space rect.  Clues, travel-buffer
+# triggers, ambient events, and camera logic can all reference these names.
+ZONE_DEFS = {
+    "approach": {
+        "label": "West Approach Road",
+        "tile_rect": pygame.Rect(2, 66, 30, 12),
+        "floor": ".",
+        "color": (38, 37, 34),
+    },
+    "blast_scene": {
+        "label": "Blast Scene / Staged MAG Evidence",
+        "tile_rect": pygame.Rect(10, 52, 40, 15),
+        "floor": ".",
+        "color": (37, 35, 32),
+    },
+    "south_ditch": {
+        "label": "South Drainage Ditch",
+        "tile_rect": pygame.Rect(3, 43, 25, 21),
+        "floor": "d",
+        "color": (30, 35, 34),
+    },
+    "north_service": {
+        "label": "North Service Road",
+        "tile_rect": pygame.Rect(43, 36, 25, 20),
+        "floor": "s",
+        "color": (33, 36, 35),
+    },
+    "toll_plaza": {
+        "label": "Checkpoint 12 Toll Plaza / Kill-Box",
+        "tile_rect": pygame.Rect(18, 28, 39, 16),
+        "floor": ".",
+        "color": (34, 34, 33),
+    },
+    "east_control": {
+        "label": "East Control Building / Upload Sector",
+        "tile_rect": pygame.Rect(39, 7, 29, 23),
+        "floor": "O",
+        "color": (29, 36, 38),
+    },
+}
+
+
+def _tc(col, row):
+    return col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2
+
+
+def _tile_rect(col, row, w=1, h=1):
+    return pygame.Rect(col * TILE_SIZE, row * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE)
+
+
+def _zone_world_rect(zone_name):
+    tr = ZONE_DEFS[zone_name]["tile_rect"]
+    return _tile_rect(tr.x, tr.y, tr.w, tr.h)
+
+
+ZONE_WORLD_RECTS = {name: _zone_world_rect(name) for name in ZONE_DEFS}
+
+
+def get_zone_for_world_pos(pos):
+    """Return the authored zone name for a world-space point, or None."""
+    for name, rect in ZONE_WORLD_RECTS.items():
+        if rect.collidepoint(pos):
+            return name
+    return None
+
+
+# Final build authored points.
+PLAYER_START = _tc(8, 74)
+KILL_ZONE = _tc(36, 34)
+FIELD_RADIO_POS = _tc(39, 36)  # Local panic prop for Darius; not the distant clue radio.
+SNIPER_NEST_POS = _tc(58, 26)  # Highway sign gantry / overpass platform.
+SNIPER_CLOSE_KILL_RADIUS = 170
+SNIPER_CLOSE_KILL_TEXT = "TOO CLOSE — SNIPER EXECUTION"
+
+# Sniper cutscene camera anchors — designed compositions, not dynamic tracking.
+SNIPER_ARENA_CAM = _tc(36, 36)
+SNIPER_ARENA_CAM_2 = _tc(34, 38)  # frames the drag toward cover (SW of CAM)
+SNIPER_PLAYER_CAM = _tc(38, 40)
+
+# Fixed cinematic anchors — the camera holds these, not midpoints.
+CAM_SQUAD_WIDE    = _tc(35, 36)  # establishes all three squadmates
+CAM_GABI_BODY     = _tc(35, 35)  # tight on Gabi where she falls
+CAM_GANTRY_REVEAL = (SNIPER_NEST_POS[0], SNIPER_NEST_POS[1] + 140)  # low-angle hero shot of the gantry
+CAM_SEBY_DRAG     = _tc(34, 36)  # frames Seby and Gabi during the drag
+CAM_DARIUS_RADIO  = _tc(36, 36)  # tight on Darius reaching for the radio
+
+IPA_TRUCK_POS = _tc(48, 32)
+TANKER_POS = _tc(42, 38)  # Interaction point beside the tanker, not inside collision.
+SAFE_ZONE = _tc(29, 47)
+CONTROL_ROOM = _tc(58, 18)
+UPLOAD_TERMINAL_POS = _tc(61, 16)
+EXFIL_POS = _tc(64, 12)
+
+# Post-ambush gameplay anchors.  These turn the cutscene's promise (the road is
+# a sniper kill-box) into playable objectives: get cover, survive sightlines,
+# then flank the gantry.
+KILLBOX_COVER_POSITIONS = [
+    _tc(34, 39), _tc(40, 40), _tc(30, 42), _tc(42, 34), _tc(28, 37)
+]
+KILLBOX_FLANK_POSITIONS = [
+    _tc(22, 47),  # south ditch route
+    _tc(55, 45),  # north service route
+]
+SNIPER_FLANK_POS = _tc(54, 28)
+KILLBOX_DANGER_RECT = _tile_rect(27, 30, 20, 15)
+SNIPER_MAX_LOS_RANGE = 1900          # sniper sees far down Route 12
+SNIPER_POINT_BLANK_RANGE = 520       # if you walk near the gantry, you get deleted
+SNIPER_AIM_FRAMES = 34               # normal exposed aim time
+SNIPER_CLOSE_AIM_FRAMES = 8          # close-range snap shot
+SNIPER_DAMAGE = 75                   # normal sniper hit
+SNIPER_EXECUTION_DAMAGE = 9999       # too close = dead
+REGROUP_ENTRY_POSITIONS = [
+    _tc(33, 38),   # Gabi — clear path north
+    _tc(35, 38),   # Seby
+    _tc(37, 38),   # Darius
+]
+REGROUP_TARGET_POSITIONS = [
+    _tc(33, 35),   # Gabi forward
+    _tc(35, 35),   # Seby center
+    _tc(37, 35),   # Darius right
+]
+
+# Post-cutscene sniper pressure tuning.
+SNIPER_GRACE_FRAMES = 90        # time after cutscene before sniper starts lethal tracking
+SNIPER_LOCK_FRAMES = 105        # exposed frames before instant kill
+SNIPER_LOCK_DECAY = 5           # how quickly lock drains in cover
+SNIPER_WARN_THRESHOLDS = (35, 65, 90)
+
+# Reinforcement spawn anchors for the kill-box.  These are perimeter positions
+# (service-road gate, ditch culvert, toll-booth alleys, gantry support) where
+# IPA shooters can plausibly pour in once the player commits to cover.  Each
+# is a world-space anchor; spawns are placed near these with small jitter.
+KILLBOX_REINFORCEMENT_SPAWNS = [
+    (58, 32),  # north service road, east of gantry
+    (54, 41),  # north service road, behind toll booths
+    (46, 28),  # gantry support, drops onto road
+    (20, 41),  # south ditch culvert, west flank
+    (26, 44),  # south ditch, closer push
+    (50, 34),  # toll booth alley, mid-right
+    (30, 30),  # toll booth alley, mid-left
+]
+
+
+MISSION2_CLUE_DEFS = [
+    {
+        "id": "paint",
+        "zone": "blast_scene",
+        "kind": "mag_paint",
+        "name": "MAG PAINT",
+        "pos": _tc(20, 59),
+        "title": "FRESH MAG PAINT",
+        "lines": [
+            "The stencil is wet.",
+            "There is soot under the paint, not over it.",
+            "Someone marked this after the blast.",
+        ],
+    },
+    {
+        "id": "timer",
+        "zone": "toll_plaza",
+        "kind": "timer_fragment",
+        "name": "TIMER FRAGMENT",
+        "pos": _tc(33, 40),
+        "title": "TIMING RELAY FRAGMENT",
+        "lines": [
+            "A burned timing board is lodged under the barrier.",
+            "The relay uses checkpoint-grade parts, not scavenged MAG hardware.",
+            "This was delayed, measured, and clean.",
+        ],
+    },
+    {
+        "id": "radio",
+        "zone": "south_ditch",
+        "kind": "radio",
+        "name": "BROKEN RADIO",
+        "pos": _tc(13, 50),
+        "title": "BROKEN KRAP RADIO",
+        "lines": [
+            "The alert code loops before the first bomb report.",
+            "The official MAG story was queued too early.",
+        ],
+    },
+    {
+        "id": "bootprints",
+        "zone": "north_service",
+        "kind": "bootprints",
+        "name": "BOOTPRINTS",
+        "pos": _tc(55, 45),
+        "title": "CLEAN BOOTPRINTS",
+        "lines": [
+            "The prints cross over soot and broken glass.",
+            "Heavy square tread. Steel heel plate.",
+            "MAG patrols do not wear checkpoint-issue boots.",
+        ],
+    },
+    {
+        "id": "range_card",
+        "zone": "toll_plaza",
+        "kind": "range_card",
+        "name": "RANGE MARKS",
+        "pos": _tc(38, 33),
+        "title": "SCRATCHED RANGE MARKS",
+        "lines": [
+            "Numbers are scratched into the concrete: 180, 220, 260.",
+            "They line up with the toll barrier and the KRAP regroup point.",
+            "Someone measured this kill-box before you arrived.",
+        ],
+    },
+]
+
+
+MISSION2_TRIGGER_DEFS = [
+    {
+        "id": "arrival_flares",
+        "zone": "approach",
+        "rect": _tile_rect(5, 69, 21, 7),
+        "dialogue": 'VASILE: "Route 12 opens into the checkpoint corridor. Stay slow."',
+        "sound": "radio_static",
+        "volume": 0.18,
+        "props": [
+            {"kind": "flare", "pos": _tc(12, 70)},
+            {"kind": "flare", "pos": _tc(19, 67)},
+        ],
+    },
+    {
+        "id": "blast_overlook",
+        "zone": "blast_scene",
+        "rect": _tile_rect(15, 61, 25, 5),
+        "dialogue": 'GABI: "Blast pattern is too clean for a panic bombing."',
+        "sound": "water_drip",
+        "volume": 0.16,
+        "props": [
+            {"kind": "soot", "pos": _tc(23, 60)},
+            {"kind": "flare", "pos": _tc(30, 61)},
+        ],
+    },
+    {
+        "id": "ditch_static",
+        "zone": "south_ditch",
+        "rect": _tile_rect(6, 47, 17, 10),
+        "dialogue": 'DARIUS: "Static is pooling down here. Something jammed the channel."',
+        "sound": "radio_static",
+        "volume": 0.28,
+        "props": [
+            {"kind": "broken_camera", "pos": _tc(17, 52)},
+        ],
+    },
+    {
+        "id": "service_gate",
+        "zone": "north_service",
+        "rect": _tile_rect(48, 41, 17, 9),
+        "dialogue": 'VASILE: "Government tread, checkpoint equipment... keep your heads down."',
+        "sound": "menu_hover",
+        "volume": 0.14,
+        "props": [
+            {"kind": "spark_box", "pos": _tc(61, 43)},
+        ],
+    },
+    {
+        "id": "gantry_glint_preview",
+        "zone": "toll_plaza",
+        "rect": _tile_rect(28, 31, 18, 8),
+        "dialogue": 'SEBY: "Did anyone else see that flash above the gantry?"',
+        "sound": "menu_hover",
+        "volume": 0.18,
+        "props": [
+            {"kind": "glint", "pos": SNIPER_NEST_POS},
+        ],
+    },
+]
+
+
+# Reordered cutscene per the 12-point rework.
+#
+# - "wrong_scan": squad looks the WRONG way (west cars / south ditch).  This
+#   widens the gap between what the audience knows and what the squad knows.
+# - "gabi_shot" is now SHORT and has NO laser telegraph for the first kill —
+#   she dies mid-sentence to maximize shock.
+# - "dead_air" is a held silent beat after Gabi falls (no music, ducked ambience,
+#   tinnitus, dripping radio).  The squad is frozen in disbelief.
+# - "origin_reveal" now happens AFTER the first death: muzzle flash, brief
+#   silhouette of the shooter on the gantry, then he hides again.
+# - Seby's death is long and physical (he drags Gabi, shouts at the gantry).
+# - Darius's death is mid-radio-call: he reaches for the field radio handset
+#   and dies whispering a mayday into it.
+# - "biribel_near_miss" freezes player input, slams camera to impact, etc.
+# - "handoff": single hard black frame at the very end before gameplay.
+SNIPER_PHASES = [
+    {"name": "regroup",        "duration": 280},
+    {"name": "movement_one",   "duration": 760},
+    {"name": "movement_two",   "duration": 720},
+    {"name": "movement_three", "duration": 360},
+]
+
+SNIPER_BEAT_CLOCK = {
+    "regroup": {
+        "spread_line": 80,
+    },
+    "movement_one": {
+        "regroup_line":   70,
+        "scan_west":      170,
+        "gabi_crack":     300,
+        "silence_start":  302,
+        "silence_frames": 110,
+        "vasile_down":    320,
+        "origin_flash":   440,
+        "muzzle_flash":   440,
+        "gantry_hold":    460,
+        "seby_react":     660,
+    },
+    "movement_two": {
+        "seby_breaks":             70,
+        "seby_arrives":            190,
+        "seby_drag_to_cover_end":  460,
+        "seby_crack":              430,
+        "vasile_cover":            100,
+        "vasile_hold":             450,
+        "darius_reaches":          500,
+        "darius_crack":            570,
+    },
+    "movement_three": {
+        "near_miss": 110,
+        "hard_black": 300,
+    },
+}
+
+
+def _beat(phase, event, default=0):
+    return SNIPER_BEAT_CLOCK.get(phase, {}).get(event, default)
+
+def _beat_now(phase, pt, event):
+    f = SNIPER_BEAT_CLOCK.get(phase, {}).get(event)
+    return f is not None and pt == f
+
+
+def _set_tile(g, col, row, tile):
+    if 0 <= col < MAP_W and 0 <= row < MAP_H:
+        g[row][col] = tile
+
+
+def _paint_tiles(g, rect, tile):
+    for row in range(rect.y, rect.y + rect.h):
+        for col in range(rect.x, rect.x + rect.w):
+            _set_tile(g, col, row, tile)
+
+
+def _outline_building(g, col, row, w, h, interior="O", door_tiles=()):
+    for yy in range(row, row + h):
+        for xx in range(col, col + w):
+            border = xx in (col, col + w - 1) or yy in (row, row + h - 1)
+            _set_tile(g, xx, yy, "C" if border else interior)
+    for dx, dy in door_tiles:
+        _set_tile(g, col + dx, row + dy, interior)
+
+
+def _generate_map():
+    g = [["g" for _ in range(MAP_W)] for _ in range(MAP_H)]
+
+    # Paint authored regions first.  Collidable structure is added after.
+    for zone in ZONE_DEFS.values():
+        _paint_tiles(g, zone["tile_rect"], zone["floor"])
+
+    # Continuous highway spine and shoulders.  These broad open sightlines are
+    # intentional: the sniper ambush later weaponizes this road geometry.
+    _paint_tiles(g, pygame.Rect(17, 23, 37, 55), ".")
+    _paint_tiles(g, pygame.Rect(12, 54, 42, 13), ".")
+    _paint_tiles(g, pygame.Rect(7, 70, 25, 8), ".")
+    _paint_tiles(g, pygame.Rect(4, 47, 23, 15), "d")
+    _paint_tiles(g, pygame.Rect(45, 38, 23, 15), "s")
+    _paint_tiles(g, pygame.Rect(39, 12, 28, 16), "O")
+
+    # World border.
+    for x in range(MAP_W):
+        g[0][x] = g[MAP_H - 1][x] = "C"
+    for y in range(MAP_H):
+        g[y][0] = g[y][MAP_W - 1] = "C"
+
+    # Control building and offices.
+    _outline_building(g, 51, 9, 17, 17, interior="O", door_tiles=((6, 16), (7, 16), (0, 9)))
+    # Smaller security hut / checkpoint utility room.
+    _outline_building(g, 41, 18, 9, 8, interior="O", door_tiles=((4, 7),))
+
+    # Toll booths and gantry supports.
+    for bx, by in [(23, 32), (30, 32), (44, 32), (51, 32), (24, 37), (45, 37)]:
+        for yy in range(by, by + 2):
+            for xx in range(bx, bx + 2):
+                _set_tile(g, xx, yy, "C")
+    for sx, sy in [(56, 25), (59, 25), (56, 27), (59, 27)]:
+        _set_tile(g, sx, sy, "C")
+
+    # Barriers / cover.  These break up travel without deleting the long sniper
+    # sightline through the center lane.
+    barriers = [
+        (12, 72), (13, 72), (21, 69), (22, 69),
+        (18, 61), (19, 61), (27, 60), (28, 60), (37, 58),
+        (10, 51), (11, 51), (20, 47), (21, 47),
+        (29, 40), (30, 40), (34, 39), (35, 39), (40, 40),
+        (47, 45), (48, 45), (62, 47), (63, 47),
+        (44, 27), (45, 27), (49, 28), (50, 28),
+        (57, 21), (58, 21), (62, 18), (63, 18),
+    ]
+    for col, row in barriers:
+        _set_tile(g, col, row, "B")
+
+    # Final-build density pass: guardrails, broken dividers, service-road clutter,
+    # and ditch obstructions.  These are intentionally staggered so the map has
+    # shape without blocking the central sniper sightline.
+    for row in range(25, 76, 4):
+        if row not in (32, 33, 34, 35, 36, 37, 38, 39):
+            _set_tile(g, 16, row, "B")
+            _set_tile(g, 54, row + (row // 4) % 2, "B")
+    for row in range(55, 66, 3):
+        for col in (14, 41, 46, 51):
+            _set_tile(g, col, row, "B")
+    for col in range(6, 26, 4):
+        _set_tile(g, col, 46, "B")
+        _set_tile(g, col + 1, 59, "B")
+    for col in range(46, 66, 4):
+        _set_tile(g, col, 40, "B")
+        _set_tile(g, col + 1, 51, "B")
+    for col in range(21, 53, 7):
+        _set_tile(g, col, 30, "B")
+        _set_tile(g, col + 2, 42, "B")
+    # Interior partitions in the control building so it no longer reads as one
+    # empty rectangle.  Door gaps keep all evidence reachable.
+    for col in range(53, 67):
+        if col not in (57, 62):
+            _set_tile(g, col, 17, "C")
+    for row in range(11, 25):
+        if row not in (15, 21):
+            _set_tile(g, 60, row, "C")
+
+    # Tanker footprint.  The actual collision uses mission2_tanker_rect.
+    for row in range(36, 39):
+        for col in range(43, 48):
+            _set_tile(g, col, row, "T")
+
+    _set_tile(g, 8, 74, "P")
+    _set_tile(g, 64, 12, "X")
+    return ["".join(row) for row in g]
+
+
+MISSION2_MAP = _generate_map()
+
+# Module-level draw/update scratch.
+_last_keys = None
+_objective = "Inspect staged evidence markers with [E]"
+_radio_marks = set()
+
+# ─────────────────────────────────────────────
+# Utility helpers
+# ─────────────────────────────────────────────
+def _dist(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def _player_pos():
+    if not STATE.player:
+        return (0, 0)
+    return STATE.player.rect.centerx, STATE.player.rect.centery
+
+
+def _near(pos, radius=80):
+    return STATE.player and _dist(_player_pos(), pos) <= radius
+
+
+def _camera_offset_for_target(target):
+    tx, ty = target
+    max_x = max(0, MAP_W * TILE_SIZE - WIDTH)
+    max_y = max(0, MAP_H * TILE_SIZE - HEIGHT)
+    cam_x = tx - WIDTH // 2
+    cam_y = ty - HEIGHT // 2
+    cam_x = max(0, min(max_x, cam_x))
+    cam_y = max(0, min(max_y, cam_y))
+    return cam_x, cam_y
+
+
+def _snap_camera_to(target=None):
+    if target is None:
+        target = _player_pos()
+    cam_x, cam_y = _camera_offset_for_target(target)
+    STATE.camera_x = cam_x
+    STATE.camera_y = cam_y
+    STATE.cam_kick_x = 0.0
+    STATE.cam_kick_y = 0.0
+    STATE.screen_shake = 0
+
+
+def _solid_walls():
+    return (
+        list(STATE.walls)
+        + list(getattr(STATE, "mission2_vehicle_walls", []))
+        + list(getattr(STATE, "mission2_prop_walls", []))
+    )
+
+
+def _set_objective(text):
+    global _objective
+    _objective = text
+
+
+def _radio(text, color=C_VASILE, duration=300, mark=None, allow_when_cut=False):
+    """Small radio helper. Used sparingly; cards do most story work."""
+    if mark and mark in _radio_marks:
+        return
+    if mark:
+        _radio_marks.add(mark)
+
+    # Sniper subtitles need reading time (~4 seconds minimum).
+    if getattr(STATE, "mission2_stage", "") == STAGE_SNIPER:
+        duration = max(duration, 240)
+
+    if getattr(STATE, "mission2_comms_cut", False) and not allow_when_cut:
+        text = "RADIO: <static>"
+        color = (125, 125, 135)
+        duration = min(duration, 140)
+    # Muffled radio after the near-miss: drop letters, insert ellipses, fade
+    # color so it visually reads as "underwater" without needing a real
+    # low-pass filter.
+    if getattr(STATE, "mission2_radio_muffle_timer", 0) > 0 and not text.startswith("RADIO:"):
+        text = _muffle_radio_text(text)
+        color = tuple(max(70, int(c * 0.62)) for c in color)
+        if getattr(STATE, "mission2_stage", "") == STAGE_SNIPER:
+            duration = max(duration, 240)
+        else:
+            duration = max(160, int(duration * 0.75))
+    trigger_radio_chatter(text, color=color, duration=duration)
+
+
+def _muffle_radio_text(text):
+    """Drop syllables and insert ellipses so a radio line reads as ear-ringing.
+
+    Ramps the muffle severity based on mission2_radio_muffle_timer so the
+    effect fades out gradually as the player's hearing returns.
+    """
+    timer = getattr(STATE, "mission2_radio_muffle_timer", 0)
+    if timer <= 0:
+        return text
+    if ":" in text:
+        speaker, _, spoken = text.partition(":")
+        spoken = spoken.strip().strip('"')
+        words = spoken.split()
+        if len(words) <= 2:
+            return text
+        intensity = min(0.6, timer / 180.0)
+        keep = []
+        for i, w in enumerate(words):
+            if i == 0 or random.random() > intensity:
+                keep.append(w)
+        return f'{speaker}: "{" . . . ".join(keep)}"'
+    return text
+
+
+def _burst(x, y, color, count=20, speed_mul=1.0):
+    for _ in range(count):
+        p = Particle(x + random.randint(-8, 8), y + random.randint(-8, 8), color)
+        p.dx *= speed_mul
+        p.dy *= speed_mul
+        p.life = random.randint(18, 50)
+        STATE.particles.append(p)
+
+
+def _open_card(title, lines, color=C_TERMINAL, after=None, kind="document"):
+    """Open a readable inspection/intel card. It stays until the player presses E."""
+    if isinstance(lines, str):
+        lines = [lines]
+    STATE.mission2_card = {
+        "title": title,
+        "lines": list(lines),
+        "color": color,
+        "age": 0,
+        "after": after,
+        "kind": kind,
+    }
+    audio.play("terminal_glitch", volume=0.24)
+
+
+def _close_card():
+    card = getattr(STATE, "mission2_card", None)
+    if not card:
+        return
+    after = card.get("after")
+    STATE.mission2_card = None
+    audio.play("menu_click", volume=0.24)
+    if after == "truck_done":
+        STATE.mission2_stage = STAGE_TANKER
+        STATE.mission_phase = "m2_tanker"
+        _set_objective("Approach the leaking fuel tanker")
+        _radio('VASILE: "Balaceanu logistics. Not MAG. Move to the tanker — slow."', color=(255, 170, 80), mark="truck_done")
+    elif after == "blast_done":
+        STATE.mission2_stage = STAGE_EVIDENCE
+        STATE.mission_phase = "m2_evidence"
+        _set_objective("Enter the control building and inspect green evidence terminals")
+        _spawn_control_cleanup()
+    elif after == "evidence_ready":
+        _set_objective("Hold [E] at the upload terminal")
+    elif after == "upload_done":
+        STATE.mission2_stage = STAGE_EXFIL
+        STATE.mission_phase = "m2_exfil"
+        STATE.mission2_camera_focus = None
+        _set_objective("Reach the green exfil marker")
+        _radio('SYSTEM: Evidence transmitted. Move to extraction.', color=C_TERMINAL, mark="exfil", allow_when_cut=True)
+
+
+def _spawn_enemy(col, row, hp=115, speed=2.0, sniper=False):
+    x, y = _tc(col, row)
+    e = Enemy(x - 16, y - 16)
+    e.hp = hp
+    e.speed = speed
+    e.alerted = True
+    e.state = "CHASE"
+    e.last_seen_pos = _player_pos()
+    e.fire_cooldown = random.randint(18, 75)
+    e.is_mission2_ipa = True
+    e.is_mission2_sniper = sniper
+    if sniper:
+        e.speed = 1.1
+        e.hp = 90
+    STATE.enemies.append(e)
+    return e
+
+
+# ─────────────────────────────────────────────
+# Initialization
+# ─────────────────────────────────────────────
+def _build_world():
+    STATE.walls = []
+    STATE.doors = []
+    STATE.enemies = []
+    STATE.pickups = []
+    STATE.blood_decals = []
+    STATE.bullets = []
+    STATE.casings = []
+    STATE.particles = []
+    STATE.thrown_bottles = []
+    STATE.molotov_fires = []
+    STATE.fire_zones = []
+    STATE.floating_texts = []
+    STATE.mission2_barriers = []
+    STATE.mission2_vehicle_walls = []
+    STATE.mission2_prop_walls = []
+    STATE.player = None
+
+    for row_idx, row in enumerate(MISSION2_MAP):
+        for col_idx, tile in enumerate(row):
+            x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
+            if tile == "C":
+                STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+            elif tile == "B":
+                r = pygame.Rect(x + 4, y + 12, TILE_SIZE - 8, TILE_SIZE - 24)
+                STATE.walls.append(r)
+                STATE.mission2_barriers.append(r)
+            elif tile == "P":
+                STATE.player = Player(x + 16, y + 16, max_hp=115)
+
+    if STATE.player is None:
+        STATE.player = Player(PLAYER_START[0] - 16, PLAYER_START[1] - 16, max_hp=115)
+    STATE.player.speed = 3.35
+
+    STATE.mission2_tanker_rect = pygame.Rect(43 * TILE_SIZE + 6, 36 * TILE_SIZE + 8, TILE_SIZE * 5 - 12, TILE_SIZE * 3 - 16)
+    STATE.walls.append(STATE.mission2_tanker_rect)
+
+    # Seal the gantry so the player can't walk into the sniper's elevated nest.
+    STATE.walls.append(pygame.Rect(56 * TILE_SIZE, 25 * TILE_SIZE, 4 * TILE_SIZE, 3 * TILE_SIZE))
+
+    # Vehicles are visual props and collision/LOS blockers, but are not drawn as
+    # wall tiles.  Vehicle collision is returned by _solid_walls().
+    STATE.mission2_vehicles = [
+        {"kind": "civilian", "rect": pygame.Rect(9 * TILE_SIZE + 8, 70 * TILE_SIZE + 14, 118, 44)},
+        {"kind": "burned", "rect": pygame.Rect(18 * TILE_SIZE + 8, 60 * TILE_SIZE + 10, 126, 48)},
+        {"kind": "civilian", "rect": pygame.Rect(31 * TILE_SIZE + 5, 57 * TILE_SIZE + 16, 110, 42)},
+        {"kind": "burned", "rect": pygame.Rect(12 * TILE_SIZE + 8, 48 * TILE_SIZE + 14, 112, 44)},
+        {"kind": "civilian", "rect": pygame.Rect(49 * TILE_SIZE + 5, 45 * TILE_SIZE + 12, 116, 44)},
+        {"kind": "ipa_truck", "rect": pygame.Rect(46 * TILE_SIZE + 8, 31 * TILE_SIZE + 12, 160, 54)},
+        {"kind": "burned", "rect": pygame.Rect(41 * TILE_SIZE + 6, 25 * TILE_SIZE + 12, 126, 46)},
+    ]
+    for v in STATE.mission2_vehicles:
+        STATE.mission2_vehicle_walls.append(v["rect"].inflate(-12, -10))
+
+    STATE.pickups.extend([
+        [12 * TILE_SIZE + 32, 68 * TILE_SIZE + 32, "bandage"],
+        [24 * TILE_SIZE + 32, 57 * TILE_SIZE + 32, "mag"],
+        [54 * TILE_SIZE + 32, 43 * TILE_SIZE + 32, "bandage"],
+        [57 * TILE_SIZE + 32, 24 * TILE_SIZE + 32, "mag"],
+    ])
+
+
+def _spawn_mission2_clues():
+    """Create mutable clue state from the static clue definitions."""
+    STATE.mission2_clues = []
+    STATE.mission2_clues_found = set()
+    for definition in MISSION2_CLUE_DEFS:
+        clue = dict(definition)
+        clue["done"] = False
+        clue["world_zone"] = definition.get("zone")
+        STATE.mission2_clues.append(clue)
+
+
+def _setup_travel_triggers():
+    """Build one-shot environmental story triggers for the larger map."""
+    STATE.mission2_triggers = []
+    STATE.mission2_story_props = []
+    for definition in MISSION2_TRIGGER_DEFS:
+        trig = dict(definition)
+        trig["triggered"] = False
+        STATE.mission2_triggers.append(trig)
+
+
+# Only props that visually imply mass should block movement/line-of-sight.  Flares,
+# soot, puddles, and glints stay decorative; cones/barrels/signs/electrical boxes
+# get compact collision so they feel grounded without making navigation annoying.
+STORY_PROP_COLLISION_SIZES = {
+    "cone": (22, 18),
+    "barrel": (30, 30),
+    "sign": (34, 18),
+    "spark_box": (30, 32),
+    "field_radio": (24, 18),
+    "broken_camera": (28, 18),
+}
+
+
+def _story_prop_collision_rect(prop):
+    size = STORY_PROP_COLLISION_SIZES.get(prop.get("kind"))
+    if not size:
+        return None
+    x, y = prop.get("pos", (0, 0))
+    w, h = size
+    return pygame.Rect(int(x - w // 2), int(y - h // 2), w, h)
+
+
+def _sync_story_prop_collisions():
+    STATE.mission2_prop_walls = []
+    for prop in getattr(STATE, "mission2_story_props", []):
+        rect = _story_prop_collision_rect(prop)
+        if rect is not None:
+            STATE.mission2_prop_walls.append(rect)
+
+
+def _init_scripted_props():
+    _spawn_mission2_clues()
+    _setup_travel_triggers()
+    # Baseline non-interactive set dressing.  Trigger props still add more
+    # moment-to-moment story beats, but these make the larger map feel occupied
+    # immediately instead of waiting for trigger activation.
+    STATE.mission2_story_props.extend([
+        {"kind": "flare", "pos": _tc(9, 72), "life": -1, "age": 0},
+        {"kind": "cone", "pos": _tc(15, 69), "life": -1, "age": 0},
+        {"kind": "cone", "pos": _tc(24, 66), "life": -1, "age": 0},
+        {"kind": "soot", "pos": _tc(19, 60), "life": -1, "age": 0},
+        {"kind": "soot", "pos": _tc(32, 58), "life": -1, "age": 0},
+        {"kind": "barrel", "pos": _tc(27, 55), "life": -1, "age": 0},
+        {"kind": "puddle", "pos": _tc(10, 53), "life": -1, "age": 0},
+        {"kind": "puddle", "pos": _tc(21, 49), "life": -1, "age": 0},
+        {"kind": "sign", "pos": _tc(34, 43), "life": -1, "age": 0},
+        {"kind": "field_radio", "pos": FIELD_RADIO_POS, "life": -1, "age": 0},
+        {"kind": "cone", "pos": _tc(40, 35), "life": -1, "age": 0},
+        {"kind": "barrel", "pos": _tc(49, 42), "life": -1, "age": 0},
+        {"kind": "puddle", "pos": _tc(58, 48), "life": -1, "age": 0},
+        {"kind": "spark_box", "pos": _tc(61, 43), "life": -1, "age": 0},
+        {"kind": "sign", "pos": _tc(55, 29), "life": -1, "age": 0},
+        {"kind": "barrel", "pos": _tc(56, 22), "life": -1, "age": 0},
+        {"kind": "barrel", "pos": _tc(64, 20), "life": -1, "age": 0},
+        {"kind": "puddle", "pos": _tc(59, 15), "life": -1, "age": 0},
+    ])
+    # Repeating low-cost dressing across long travel lanes.  These are small
+    # enough not to distract from clues, but frequent enough to break up empty
+    # asphalt/shoulder screens.
+    for col, row, kind in [
+        (18, 72, "cone"), (27, 72, "puddle"), (33, 70, "barrel"),
+        (18, 65, "puddle"), (36, 64, "cone"), (44, 62, "barrel"),
+        (16, 57, "cone"), (39, 55, "puddle"), (49, 56, "sign"),
+        (8, 56, "barrel"), (23, 54, "puddle"), (6, 49, "cone"),
+        (52, 50, "cone"), (65, 50, "barrel"), (47, 47, "puddle"),
+        (23, 43, "sign"), (30, 42, "cone"), (50, 39, "barrel"),
+        (22, 34, "puddle"), (42, 34, "cone"), (53, 34, "sign"),
+        (43, 24, "barrel"), (48, 23, "cone"), (65, 24, "puddle"),
+        (54, 13, "cone"), (66, 14, "barrel"), (53, 19, "puddle"),
+    ]:
+        STATE.mission2_story_props.append({"kind": kind, "pos": _tc(col, row), "life": -1, "age": 0})
+    _sync_story_prop_collisions()
+
+    STATE.mission2_truck_manifest = {
+        "kind": "manifest",
+        "name": "IPA MANIFEST",
+        "pos": IPA_TRUCK_POS,
+        "done": False,
+        "title": "IPA TRUCK MANIFEST",
+        "lines": [
+            "Cargo cleared by Balaceanu infrastructure office.",
+            "Destination: Checkpoint 12.",
+            "Timestamp: before the bombing report.",
+        ],
+    }
+    STATE.mission2_evidence = [
+        {
+            "id": "decree",
+            "kind": "decree",
+            "name": "DECREE",
+            "pos": _tc(59, 14),
+            "done": False,
+            "title": "PRESIDENTIAL DECREE",
+            "lines": [
+                "Retardovici signed KRAP-blame language in advance.",
+                "The decree predates the checkpoint sweep.",
+            ],
+        },
+        {
+            "id": "balaceanu",
+            "kind": "terminal",
+            "name": "AUTH CHAIN",
+            "pos": _tc(63, 19),
+            "done": False,
+            "title": "BALACEANU AUTHORIZATION CHAIN",
+            "lines": [
+                "IPA cleanup access was routed through Balaceanu's office.",
+                "The order masks itself as infrastructure repair.",
+            ],
+        },
+        {
+            "id": "mag_packet",
+            "kind": "packet",
+            "name": "MAG PACKET",
+            "pos": _tc(55, 23),
+            "done": False,
+            "title": "MAG BLAME PACKET",
+            "lines": [
+                "A prewritten press packet blames MAG.",
+                "It was prepared hours before investigators arrived.",
+            ],
+        },
+    ]
+    # Scripted actors. They do not pathfind and cannot phase through walls.
+    # `reaction` drives draw posture during the sniper sequence:
+    #   standing  - default upright
+    #   breaking  - leaning toward a run, the veteran response (sideways escape)
+    #   frozen    - paralysed mid-decision (hands half-raised)
+    #   ducked    - crouched (the instinctive, futile response from a steep angle)
+    #   down      - prone / dead
+    STATE.mission2_squad = [
+        {"name": "GABI",   "pos": list(_tc(31, 41)), "alive": True, "activity": "regrouping", "reaction": "standing"},
+        {"name": "SEBY",   "pos": list(_tc(30, 42)), "alive": True, "activity": "regrouping", "reaction": "standing"},
+        {"name": "DARIUS", "pos": list(_tc(32, 42)), "alive": True, "activity": "regrouping", "reaction": "standing"},
+    ]
+
+
+def start_mission2(preserve_timer=False):
+    """Called by game_core/acaristan to begin Mission 2 gameplay."""
+    global _objective, _radio_marks, _last_keys
+    STATE.reset()
+    STATE.active_mission = MISSION2_KEY
+    STATE.active_mission_id = MISSION2_ID
+    STATE.active_mission_title = MISSION2_TITLE
+    STATE.active_mission_operation = "ROUTE 12 — QUIET ON ROUTE 12"
+    STATE.active_mission_outcome = "KRAP framed  ·  Evidence transmitted  ·  Comms compromised"
+    STATE.active_mission_quote_attr = "Vasile, over broken static:"
+    STATE.active_mission_quote = '"No. They framed you first."'
+    STATE.show_minimap = False
+    STATE.minimap = MiniMap(MISSION2_MAP)
+    STATE.mission_start_time = STATE.mission_start_time if (preserve_timer and STATE.mission_start_time) else pygame.time.get_ticks()
+    STATE.mission_end_time = 0
+    STATE.hostiles_killed = 0
+    STATE.shots_fired = 0
+    STATE.shots_hit = 0
+    STATE.request_mission_complete = False
+    STATE.request_mission2_ending = False
+    STATE.request_death_screen = False
+    STATE.player_dead = False
+    STATE.death_timer = 0
+
+    STATE.mission2_stage = STAGE_INVESTIGATE
+    STATE.mission_phase = "m2_investigate"
+    STATE.mission2_timer = 0
+    STATE.mission2_events = set()
+    STATE.mission2_card = None
+    STATE.mission2_comms_cut = False
+    STATE.mission2_tanker_exploded = False
+    STATE.mission2_countdown = 0
+    STATE.mission2_upload_progress = 0.0
+    STATE.mission2_upload_started = False
+    STATE.mission2_evidence_uploaded = False
+    STATE.mission2_camera_focus = None
+    STATE.mission2_sniper_traces = []
+    STATE.mission2_sniper_lasers = []
+    STATE.mission2_sniper_muzzle_flashes = []
+    STATE.mission2_sniper_flash = 0
+    STATE.mission2_near_miss_flash = 0
+    STATE.mission2_tinnitus_timer = 0
+    STATE.mission2_all_clues_found = False
+    STATE.mission2_camera_focus_timer = 0
+    STATE.mission2_panic_notice = 0
+    STATE.mission2_current_zone = "approach"
+    STATE.mission2_post_sniper_phase = ""
+    STATE.mission2_post_sniper_timer = 0
+    STATE.mission2_grace_timer = 0
+    STATE.mission2_sniper_pressure_timer = 0
+    STATE.mission2_sniper_pending_timer = 0
+    STATE.mission2_sniper_target = None
+    STATE.mission2_sniper_suppressed = False
+    STATE.mission2_sniper_lock = 0
+    STATE.mission2_sniper_lock_max = SNIPER_LOCK_FRAMES
+    STATE.mission2_sniper_warned = set()
+    STATE.mission2_sniper_lethal_target = None
+    STATE.mission2_sniper_kill_flash = 0
+    STATE.mission2_sniper_close_execute_done = False
+    STATE.mission2_cover_hold = 0
+    STATE.mission2_reinforcement_waves = 0
+    STATE.mission2_reinforcement_timer = 0
+    STATE.mission2_reinforcement_triggered = False
+    # Sniper-cutscene removed. Minimal combat state kept below.
+    STATE.mission2_input_freeze = 0
+    STATE.mission2_radio_muffle_timer = 0
+    STATE.mission2_heartbeat_active = False
+    STATE.mission2_heartbeat_timer = 0
+    STATE.mission2_rain_suppressed = False
+    STATE.mission2_rain_intensity = 1.0
+    STATE.mission2_hard_black = 0
+    STATE.mission2_chromatic_timer = 0
+    STATE.mission2_death_callout = None
+    STATE.mission2_rain_drops = [[random.randint(0, WIDTH), random.randint(-80, HEIGHT), random.randint(10, 24)] for _ in range(180)]
+
+    STATE.ammo_in_mag = 12
+    STATE.mag_size = 12
+    STATE.spare_mags = 4
+    STATE.player_bottles = 2
+    STATE.shot_cooldown = 0
+    STATE.is_reloading = False
+    STATE.reload_timer = 0
+    STATE.melee_active = False
+    STATE.melee_timer = 0
+
+    _build_world()
+    _init_scripted_props()
+
+    _snap_camera_to(_player_pos())
+    STATE.mission2_camera_initialized = True
+
+    _objective = f"Inspect staged evidence markers with [E] (0/{REQUIRED_INVESTIGATION_CLUES})"
+    _radio_marks = set()
+    _last_keys = None
+    _radio('VASILE: "Start with the obvious lie. Inspect the staged evidence."', mark="start")
+    return STATE.player
+
+
+# ─────────────────────────────────────────────
+# Story scripting / interactions
+# ─────────────────────────────────────────────
+def _clue_count():
+    return sum(1 for c in STATE.mission2_clues if c.get("done"))
+
+
+def _evidence_count():
+    return sum(1 for e in STATE.mission2_evidence if e.get("done"))
+
+
+def _activate_travel_trigger(trigger):
+    trigger["triggered"] = True
+    sound = trigger.get("sound")
+    if sound:
+        audio.play(sound, volume=trigger.get("volume", 0.2))
+    dialogue = trigger.get("dialogue")
+    if dialogue:
+        _radio(dialogue, color=trigger.get("color", C_VASILE), duration=trigger.get("duration", 260), mark=trigger["id"])
+    for prop in trigger.get("props", []):
+        story_prop = dict(prop)
+        story_prop.setdefault("life", -1)
+        story_prop.setdefault("age", 0)
+        story_prop.setdefault("source", trigger["id"])
+        STATE.mission2_story_props.append(story_prop)
+    _sync_story_prop_collisions()
+
+
+def _update_travel_triggers():
+    """One-shot environmental story beats between clue zones."""
+    if (not STATE.player or getattr(STATE, "mission2_stage", "") != STAGE_INVESTIGATE
+            or getattr(STATE, "mission2_card", None) is not None):
+        return
+    player_pos = _player_pos()
+    STATE.mission2_current_zone = get_zone_for_world_pos(player_pos)
+    for trigger in getattr(STATE, "mission2_triggers", []):
+        if trigger.get("triggered"):
+            continue
+        if trigger["rect"].collidepoint(player_pos):
+            _activate_travel_trigger(trigger)
+
+
+def _actor_collision_rect(x, y):
+    return pygame.Rect(int(x - 12), int(y - 12), 24, 24)
+
+
+def _actor_rect_collides(rect):
+    for wall in _solid_walls():
+        if rect.colliderect(wall):
+            return True
+    return False
+
+
+def _try_actor_step(actor, dx, dy):
+    if abs(dx) < 0.001 and abs(dy) < 0.001:
+        return False
+    moved = False
+    x, y = actor["pos"]
+    # X axis first.
+    if abs(dx) > 0.001:
+        nr = _actor_collision_rect(x + dx, y)
+        if not _actor_rect_collides(nr):
+            actor["pos"][0] = x + dx
+            x = actor["pos"][0]
+            moved = True
+    # Y axis second.
+    if abs(dy) > 0.001:
+        nr = _actor_collision_rect(x, y + dy)
+        if not _actor_rect_collides(nr):
+            actor["pos"][1] = y + dy
+            moved = True
+    return moved
+
+
+def _move_actor_towards(actor, target, rate=0.055, max_step=2.7):
+    """Move scripted squad actors while respecting walls/vehicles/solid props.
+
+    This is deliberately not full combat pathfinding.  It is a lightweight
+    cinematic/ambient mover with axis collision and a small sidestep fallback so
+    actors stop sliding through barriers but can still work around minor clutter.
+    """
+    if not actor.get("alive", True):
+        return
+    x, y = actor["pos"]
+    dx = target[0] - x
+    dy = target[1] - y
+    dist = math.hypot(dx, dy)
+    if dist < 1:
+        return
+    step = min(max_step, dist * rate)
+    nx = dx / dist * step
+    ny = dy / dist * step
+    moved = _try_actor_step(actor, nx, ny)
+    if not moved and dist > 8:
+        # Try sliding around small props/barriers.  Alternating side preference
+        # stops all three squadmates choosing the exact same detour.
+        side = -1 if (hash(actor.get("name", "")) % 2) else 1
+        px = -ny * side
+        py = nx * side
+        if not _try_actor_step(actor, px, py):
+            _try_actor_step(actor, -px, -py)
+    if not moved and dist > 8:
+        # Broader escape — try multiple angles when stuck on adjacent barriers.
+        for slide_angle in (0.5, -0.5, 1.0, -1.0, 1.5, -1.5):
+            cs = math.cos(slide_angle)
+            sn = math.sin(slide_angle)
+            sx = nx * cs - ny * sn
+            sy = nx * sn + ny * cs
+            if _try_actor_step(actor, sx, sy):
+                break
+
+
+def _nearest_unfound_clue(max_dist=360):
+    if not STATE.player:
+        return None
+    px, py = _player_pos()
+    best = None
+    best_d = max_dist
+    for clue in getattr(STATE, "mission2_clues", []):
+        if clue.get("done"):
+            continue
+        d = math.hypot(clue["pos"][0] - px, clue["pos"][1] - py)
+        if d < best_d:
+            best = clue
+            best_d = d
+    return best
+
+
+def _update_squad_ambient():
+    """Zone-post squad behavior: active, but not player-following.
+
+    The team occupies authored posts in the same broad investigation zone instead
+    of orbiting Biribel.  They still move, scan, and peel toward relevant clues,
+    but they do not form a follow-the-player escort blob.
+    """
+    if not STATE.player or getattr(STATE, "mission2_stage", "") != STAGE_INVESTIGATE:
+        return
+
+    px, py = _player_pos()
+    zone = getattr(STATE, "mission2_current_zone", None) or get_zone_for_world_pos((px, py)) or "approach"
+    tick = pygame.time.get_ticks()
+    patrol_step = (tick // 3600) % 2
+
+    zone_posts = {
+        "approach": [
+            [(_tc(10, 72), _tc(14, 70)), (_tc(16, 74), _tc(21, 72)), (_tc(11, 75), _tc(18, 76))],
+            ["scanning road", "covering rear", "radio check"],
+            [SNIPER_NEST_POS, _tc(8, 74), _tc(12, 70)],
+        ],
+        "blast_scene": [
+            [(_tc(20, 59), _tc(25, 58)), (_tc(31, 61), _tc(38, 60)), (_tc(28, 55), _tc(33, 56))],
+            ["checking markings", "covering road", "checking timer"],
+            [_tc(20, 59), SNIPER_NEST_POS, _tc(33, 40)],
+        ],
+        "south_ditch": [
+            [(_tc(12, 50), _tc(18, 49)), (_tc(20, 47), _tc(23, 53)), (_tc(13, 50), _tc(17, 52))],
+            ["watching bank", "covering ditch", "tracking signal"],
+            [_tc(20, 47), _tc(6, 49), _tc(13, 50)],
+        ],
+        "north_service": [
+            [(_tc(51, 43), _tc(58, 42)), (_tc(55, 45), _tc(62, 47)), (_tc(61, 43), _tc(56, 48))],
+            ["checking gate", "checking tread", "comms diag"],
+            [SNIPER_NEST_POS, _tc(55, 45), _tc(61, 43)],
+        ],
+        "toll_plaza": [
+            [(_tc(38, 33), _tc(35, 34)), (_tc(34, 37), _tc(40, 35)), (_tc(39, 36), _tc(37, 37))],
+            ["watching gantry", "covering lane", "checking radio"],
+            [SNIPER_NEST_POS, SNIPER_NEST_POS, FIELD_RADIO_POS],
+        ],
+        "east_control": [
+            [(_tc(55, 23), _tc(58, 20)), (_tc(63, 22), _tc(64, 18)), (_tc(61, 16), _tc(59, 15))],
+            ["covering door", "watching hall", "terminal check"],
+            [_tc(51, 25), _tc(67, 9), UPLOAD_TERMINAL_POS],
+        ],
+    }
+    posts, activities, lookats = zone_posts.get(zone, zone_posts["approach"])
+
+    # If Biribel is close to an unfound clue, the role-relevant teammate moves
+    # to that clue, not to Biribel.
+    clue = _nearest_unfound_clue(max_dist=380)
+    chosen_posts = [post_pair[int(patrol_step)] for post_pair in posts]
+    chosen_activities = list(activities)
+    chosen_lookats = list(lookats)
+    if clue:
+        cx, cy = clue["pos"]
+        kind = clue.get("kind")
+        if kind in ("mag_paint", "range_card"):
+            chosen_posts[0] = (cx - 38, cy + 26)
+            chosen_activities[0] = "reading marks"
+            chosen_lookats[0] = clue["pos"]
+        elif kind in ("bootprints", "timer_fragment"):
+            chosen_posts[1] = (cx + 38, cy + 22)
+            chosen_activities[1] = "inspecting scene"
+            chosen_lookats[1] = clue["pos"]
+        elif kind == "radio":
+            chosen_posts[2] = (cx + 34, cy + 18)
+            chosen_activities[2] = "checking static"
+            chosen_lookats[2] = clue["pos"]
+
+    for actor, target, activity, look_at in zip(STATE.mission2_squad, chosen_posts, chosen_activities, chosen_lookats):
+        actor["activity"] = activity
+        actor["look_at"] = look_at
+        _move_actor_towards(actor, target, rate=0.035, max_step=1.85)
+
+
+def _sniper_phase_activity():
+    return
+
+
+def _update_squad_actor_positions():
+    squad = getattr(STATE, "mission2_squad", None)
+    if not squad or len(squad) < 3:
+        return
+
+    gabi, seby, darius = squad[0], squad[1], squad[2]
+    seby_activity = (seby.get("activity") or "").lower()
+    darius_activity = (darius.get("activity") or "").lower()
+    pt = int(getattr(STATE, "mission2_sniper_phase_timer", 0))
+
+    if "sprint" in seby_activity or "drag" in seby_activity or "kneel" in seby_activity:
+        if "_sprint_origin" not in seby:
+            seby["_sprint_origin"] = tuple(seby["pos"])
+        if "_corpse_origin" not in gabi:
+            gabi["_corpse_origin"] = tuple(gabi["pos"])
+
+        s_ox, s_oy = seby["_sprint_origin"]
+        g_ox, g_oy = gabi["_corpse_origin"]
+
+        kneel_x, kneel_y = g_ox - 22, g_oy - 4
+        cover_x, cover_y = g_ox - 70, g_oy + 18
+
+        if "sprint" in seby_activity:
+            start = _beat("movement_two", "seby_breaks", 80)
+            end = _beat("movement_two", "seby_arrives", 180)
+            t = max(0.0, min(1.0, (pt - start) / max(1, end - start)))
+            t = 1.0 - (1.0 - t) ** 2
+            seby["pos"] = [s_ox + (kneel_x - s_ox) * t,
+                           s_oy + (kneel_y - s_oy) * t]
+
+        elif "drag" in seby_activity or "kneel" in seby_activity:
+            # Use cover-lerp during the actual dragging phase.
+            # _drag_lerp was only used for the earlier sprint-to-Gabi phase.
+            t = max(0.0, min(1.0, float(seby.get("_cover_lerp", seby.get("_drag_lerp", 0.0)))))
+            start = _beat("movement_two", "seby_arrives", 180)
+            end = _beat("movement_two", "seby_drag_to_cover_end", 340)
+            t = max(0.0, min(1.0, (pt - start) / max(1, end - start)))
+            t = t * t * (3.0 - 2.0 * t)
+            seby["pos"] = [kneel_x + (cover_x + 18 - kneel_x) * t,
+                           kneel_y + (cover_y - 4 - kneel_y) * t]
+            gabi["pos"] = [g_ox + (cover_x - g_ox) * t,
+                           g_oy + (cover_y - g_oy) * t]
+
+            if pt % 5 == 0:
+                STATE.blood_decals.append([
+                    gabi["pos"][0] + random.randint(-4, 4),
+                    gabi["pos"][1] + random.randint(-2, 2),
+                    90,
+                    random.randint(8, 14),
+                ])
+    else:
+        seby.pop("_sprint_origin", None)
+        gabi.pop("_corpse_origin", None)
+
+    if "reach" in darius_activity:
+        if "_reach_origin" not in darius:
+            darius["_reach_origin"] = tuple(darius["pos"])
+        ox, oy = darius["_reach_origin"]
+        darius["pos"] = [ox + 18, oy - 8]
+    elif "_reach_origin" in darius and "down" not in darius_activity:
+        ox, oy = darius["_reach_origin"]
+        darius["pos"] = [ox, oy]
+
+
+SNIPER_PHASE_NAMES = ["regroup", "movement_one", "movement_two", "movement_three"]
+
+
+def _sniper_phase_index():
+    name = getattr(STATE, "mission2_sniper_phase", "regroup")
+    return SNIPER_PHASE_NAMES.index(name) if name in SNIPER_PHASE_NAMES else 0
+
+def _sniper_phase():
+    return SNIPER_PHASES[_sniper_phase_index()]
+
+def _sniper_phase_name():
+    return getattr(STATE, "mission2_sniper_phase", "")
+
+def _sniper_phase_event(name):
+    events = getattr(STATE, "mission2_sniper_events_fired", None)
+    if events is None:
+        events = set()
+        STATE.mission2_sniper_events_fired = events
+    if name in events:
+        return False
+    events.add(name)
+    return True
+
+
+def _sniper_actor_pos(index):
+    try:
+        return tuple(STATE.mission2_squad[index]["pos"])
+    except Exception:
+        return KILL_ZONE
+
+
+def _midpoint(a, b, t=0.5):
+    return (
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+    )
+
+
+def _avg_points(points):
+    if not points:
+        return KILL_ZONE
+    return (
+        sum(p[0] for p in points) / len(points),
+        sum(p[1] for p in points) / len(points),
+    )
+
+
+def _squad_focus(include_dead=True):
+    pts = []
+    for actor in getattr(STATE, "mission2_squad", []):
+        if include_dead or actor.get("alive", True):
+            pts.append(tuple(actor["pos"]))
+    return _avg_points(pts) if pts else KILL_ZONE
+
+
+def _sniper_camera_target(t, phase):
+    """Anchor-based camera target — the camera holds fixed compositions."""
+    if phase == "movement_one":
+        if t < _beat("movement_one", "gabi_crack") - 25:
+            return CAM_SQUAD_WIDE
+        if t < _beat("movement_one", "gantry_hold"):
+            return CAM_GABI_BODY          # hold completely still on the body
+        if t < _beat("movement_one", "seby_react"):
+            return CAM_GANTRY_REVEAL      # hold for ~200 frames on the gantry
+        return CAM_SEBY_DRAG              # settle on Seby for the transition
+
+    elif phase == "movement_two":
+        if t < _beat("movement_two", "seby_crack") + 60:
+            return CAM_SEBY_DRAG          # hold during the entire drag
+        if t < _beat("movement_two", "darius_crack") + 40:
+            return CAM_DARIUS_RADIO       # hold on Darius
+        return CAM_DARIUS_RADIO
+
+    elif phase == "movement_three":
+        if STATE.player:
+            return (STATE.player.rect.centerx, STATE.player.rect.centery - 20)
+        return KILL_ZONE
+
+    return KILL_ZONE
+
+
+def _advance_sniper_phase():
+    idx = _sniper_phase_index() + 1
+    if idx >= len(SNIPER_PHASE_NAMES):
+        _finish_sniper_sequence()
+        return
+    STATE.mission2_sniper_phase = SNIPER_PHASE_NAMES[idx]
+    STATE.mission2_sniper_phase_timer = 0
+    STATE.mission2_sniper_events_fired = set()
+
+
+def _start_sniper_aftermath():
+    STATE.mission2_stage = STAGE_COMBAT
+    STATE.mission_phase = "m2_killbox_get_cover"
+    STATE.mission2_post_sniper_phase = "get_cover"
+    STATE.mission2_post_sniper_timer = 0
+
+    STATE.mission2_grace_timer = SNIPER_GRACE_FRAMES
+
+    STATE.mission2_sniper_pressure_timer = 0
+    STATE.mission2_sniper_pending_timer = 0
+    STATE.mission2_sniper_target = None
+    STATE.mission2_sniper_suppressed = False
+
+    STATE.mission2_sniper_lock = 0
+    STATE.mission2_sniper_lock_max = SNIPER_LOCK_FRAMES
+    STATE.mission2_sniper_warned = set()
+    STATE.mission2_sniper_lethal_target = None
+    STATE.mission2_sniper_kill_flash = 0
+    STATE.mission2_cover_hold = 0
+
+    STATE.mission2_input_freeze = 18
+    STATE.mission2_camera_focus = None
+    STATE.mission2_camera_focus_timer = 0
+
+    _spawn_initial_ipa_team()
+
+    _set_objective("GET TO COVER — sniper has the lane")
+
+
+def _finish_sniper_sequence():
+    _start_sniper_aftermath()
+
+
+def _start_mission2_post_investigation():
+    """Placeholder after Mission 2 investigation.
+
+    The old sniper cutscene has been removed.
+    This is now the clean handoff point for rebuilding the sequence later.
+    """
+    STATE.mission2_stage = STAGE_COMBAT
+    STATE.mission_phase = "m2_killbox_get_cover"
+    STATE.mission2_post_sniper_phase = "get_cover"
+    STATE.mission2_post_sniper_timer = 0
+    STATE.mission2_grace_timer = 15
+    STATE.mission2_sniper_pressure_timer = 90
+    STATE.mission2_sniper_pending_timer = 0
+    STATE.mission2_sniper_target = None
+    STATE.mission2_sniper_suppressed = False
+    STATE.mission2_input_freeze = 0
+    STATE.mission2_hard_black = 0
+    STATE.mission2_radio_muffle_timer = 0
+    STATE.mission2_chromatic_timer = 0
+    STATE.mission2_heartbeat_active = False
+    STATE.mission2_death_callout = None
+    STATE.mission2_sniper_cutscene_active = False
+    STATE.mission2_sniper_phase_timer = 0
+    STATE.mission2_sniper_phase_idx = 0
+    STATE.mission2_sniper_events = set()
+
+    for actor in STATE.mission2_squad:
+        actor["alive"] = True
+        actor["activity"] = "idle"
+
+    _set_objective("Hold position. Route 12 evidence secured.")
+    audio.play("radio_static", volume=0.22)
+
+
+def _nearest_killbox_cover():
+    if not STATE.player:
+        return KILLBOX_COVER_POSITIONS[0]
+    px, py = _player_pos()
+    return min(KILLBOX_COVER_POSITIONS, key=lambda p: math.hypot(p[0] - px, p[1] - py))
+
+
+def _nearest_flank_marker():
+    if not STATE.player:
+        return KILLBOX_FLANK_POSITIONS[0]
+    px, py = _player_pos()
+    return min(KILLBOX_FLANK_POSITIONS, key=lambda p: math.hypot(p[0] - px, p[1] - py))
+
+
+def _sniper_alive():
+    return any(getattr(e, "is_mission2_sniper", False) and e.hp > 0 for e in STATE.enemies)
+
+
+def _player_exposed_to_sniper():
+    if (
+        not STATE.player
+        or not _sniper_alive()
+        or getattr(STATE, "mission2_sniper_suppressed", False)
+        or getattr(STATE, "mission2_stage", "") != STAGE_COMBAT
+    ):
+        return False
+
+    px, py = _player_pos()
+    sx, sy = SNIPER_NEST_POS
+
+    dist = math.hypot(px - sx, py - sy)
+
+    # The sniper should not shoot across the entire giant map,
+    # but if you are anywhere near the checkpoint/gantry road and visible,
+    # you are in danger.
+    if dist > SNIPER_MAX_LOS_RANGE:
+        return False
+
+    # If nothing blocks line-of-sight, the sniper sees you.
+    # No tiny killbox rectangle. No magic safety just because you walked past it.
+    return not _wall_blocks_line(sx, sy, px, py, _solid_walls())
+
+
+def _player_in_meaningful_cover():
+    if not STATE.player:
+        return False
+    if _player_exposed_to_sniper():
+        STATE.mission2_cover_hold = 0
+        return False
+    STATE.mission2_cover_hold = min(90, getattr(STATE, "mission2_cover_hold", 0) + 1)
+    return STATE.mission2_cover_hold >= 30
+
+
+def _suppress_or_remove_sniper():
+    if getattr(STATE, "mission2_sniper_suppressed", False):
+        return
+    STATE.mission2_sniper_suppressed = True
+    for e in STATE.enemies[:]:
+        if getattr(e, "is_mission2_sniper", False):
+            e.hp = 0
+            _burst(e.rect.centerx, e.rect.centery, (90, 90, 85), 18, speed_mul=1.4)
+    STATE.mission2_sniper_lasers = []
+    STATE.mission2_sniper_pending_timer = 0
+    STATE.mission2_sniper_target = None
+    audio.play("radio_static", volume=0.24)
+    _radio('VASILE: "Sniper is relocating. Clear the cleanup team."', color=C_VASILE, mark="sniper_suppressed")
+
+
+def _player_too_close_to_active_sniper():
+    if not STATE.player or STATE.player_dead:
+        return False
+    if not _sniper_alive():
+        return False
+    if getattr(STATE, "mission2_sniper_suppressed", False):
+        return False
+    px, py = _player_pos()
+    return math.hypot(px - SNIPER_NEST_POS[0], py - SNIPER_NEST_POS[1]) <= SNIPER_CLOSE_KILL_RADIUS
+
+
+def _sniper_close_execute_player():
+    if getattr(STATE, "mission2_sniper_close_execute_done", False):
+        return
+
+    STATE.mission2_sniper_close_execute_done = True
+
+    if not STATE.player:
+        return
+
+    px, py = _player_pos()
+
+    _sniper_fire(
+        (px, py),
+        body=True,
+        trace_life=70,
+        shake=52,
+    )
+
+    _sniper_callout(
+        SNIPER_CLOSE_KILL_TEXT,
+        (px, py),
+        color=(255, 55, 35),
+        frames=120,
+    )
+
+    _burst(px, py, C_BLOOD, 70, speed_mul=2.0)
+    STATE.blood_decals.append([px, py, 220, random.randint(20, 30)])
+
+    STATE.player.hp = 0
+    STATE.player_dead = True
+    STATE.death_timer = 90
+    STATE.screen_shake = max(STATE.screen_shake, 48)
+    STATE.mission2_near_miss_flash = max(getattr(STATE, "mission2_near_miss_flash", 0), 50)
+    STATE.mission2_tinnitus_timer = max(getattr(STATE, "mission2_tinnitus_timer", 0), 130)
+
+    audio.play("sniper_crack", volume=1.0)
+    audio.play("bullet_impact_enemy", volume=0.85)
+    audio.schedule(8, "tinnitus", volume=0.55)
+
+    STATE.floating_texts.append([
+        px,
+        py - 54,
+        SNIPER_CLOSE_KILL_TEXT,
+        (255, 70, 45),
+        100,
+    ])
+
+
+def _update_sniper_pressure():
+    if (
+        STATE.mission2_stage != STAGE_COMBAT
+        or not _sniper_alive()
+        or getattr(STATE, "mission2_sniper_suppressed", False)
+        or not STATE.player
+        or STATE.player_dead
+    ):
+        return
+
+    if getattr(STATE, "mission2_grace_timer", 0) > 0:
+        STATE.mission2_grace_timer -= 1
+        return
+
+    px, py = _player_pos()
+    sx, sy = SNIPER_NEST_POS
+    dist_to_sniper = math.hypot(px - sx, py - sy)
+    exposed = _player_exposed_to_sniper()
+
+    # Already aiming/firing
+    if STATE.mission2_sniper_pending_timer > 0:
+        STATE.mission2_sniper_pending_timer -= 1
+
+        # Keep laser snapping to the player's current position
+        if exposed and STATE.mission2_sniper_pending_timer in (28, 18, 8, 4):
+            tx, ty = _player_pos()
+            STATE.mission2_sniper_target = (
+                tx + random.randint(-10, 10),
+                ty + random.randint(-10, 10),
+            )
+            _add_sniper_laser(STATE.mission2_sniper_target, life=24)
+
+        if STATE.mission2_sniper_pending_timer <= 0:
+            target = STATE.mission2_sniper_target or _player_pos()
+
+            if exposed:
+                too_close = dist_to_sniper <= SNIPER_POINT_BLANK_RANGE
+
+                if too_close:
+                    damage = SNIPER_EXECUTION_DAMAGE
+                    msg = "SNIPER EXECUTION"
+                else:
+                    damage = SNIPER_DAMAGE
+                    msg = "SNIPER HIT"
+
+                STATE.player.hp -= damage
+                _burst(STATE.player.rect.centerx, STATE.player.rect.centery, C_BLOOD, 18, speed_mul=1.4)
+
+                STATE.floating_texts.append([
+                    STATE.player.rect.centerx,
+                    STATE.player.rect.centery - 48,
+                    msg,
+                    (255, 55, 35),
+                    80,
+                ])
+
+                _sniper_fire_at(_player_pos(), body=True, trace_life=38, shake=34 if too_close else 26)
+
+            else:
+                # Player reached cover before the shot landed
+                cover = _nearest_killbox_cover()
+                _sniper_fire_at(cover, concrete=True, trace_life=32, shake=18)
+
+            STATE.mission2_sniper_pressure_timer = 120
+            STATE.mission2_sniper_target = None
+            return
+
+    # Not currently aiming
+    if exposed:
+        STATE.mission2_sniper_pressure_timer -= 1
+
+        # If the player walks close to the sniper, near-instant kill.
+        if dist_to_sniper <= SNIPER_POINT_BLANK_RANGE:
+            STATE.mission2_sniper_pending_timer = SNIPER_CLOSE_AIM_FRAMES
+            STATE.mission2_sniper_target = _player_pos()
+            _add_sniper_laser(STATE.mission2_sniper_target, life=18)
+            audio.play("rifle_handle", volume=0.35)
+            STATE.floating_texts.append([
+                px,
+                py - 58,
+                "TOO CLOSE — SNIPER HAS YOU",
+                (255, 60, 40),
+                60,
+            ])
+            return
+
+        # Normal long-range sniper acquisition
+        if STATE.mission2_sniper_pressure_timer <= 0:
+            STATE.mission2_sniper_pending_timer = SNIPER_AIM_FRAMES
+            STATE.mission2_sniper_target = (
+                px + random.randint(-12, 12),
+                py + random.randint(-12, 12),
+            )
+            _add_sniper_laser(STATE.mission2_sniper_target, life=44)
+            audio.play("rifle_handle", volume=0.30)
+            STATE.floating_texts.append([
+                px,
+                py - 58,
+                "SNIPER LINE!",
+                (255, 110, 60),
+                58,
+            ])
+
+    else:
+        # If covered, keep pressure timer from instantly firing the moment player peeks.
+        STATE.mission2_sniper_pressure_timer = max(45, STATE.mission2_sniper_pressure_timer)
+
+
+def _update_post_sniper_gameplay():
+    if STATE.mission2_stage != STAGE_COMBAT:
+        return
+    phase = getattr(STATE, "mission2_post_sniper_phase", "")
+    if not phase:
+        return
+    STATE.mission2_post_sniper_timer += 1
+    _update_sniper_pressure()
+
+    if phase == "get_cover":
+        STATE.mission_phase = "m2_get_cover"
+        if STATE.mission2_post_sniper_timer == 1:
+            _spawn_initial_ipa_team()
+        if STATE.mission2_post_sniper_timer == 15:
+            _set_objective("GET TO COVER — break the sniper line")
+            _radio('VASILE: "Concrete blocks! Left side! Move now!"', color=(255, 170, 80), mark="post_cover")
+        if _player_in_meaningful_cover() and STATE.mission2_post_sniper_timer > 45:
+            STATE.mission2_post_sniper_phase = "survive"
+            STATE.mission2_post_sniper_timer = 0
+            STATE.mission2_sniper_pressure_timer = 70
+            _radio('VASILE: "Hold there. Watch the glint. Move only between shots."', color=C_VASILE, mark="survive_killbox")
+            # Player committed to cover -> IPA pours in from the flanks to
+            # punish the static position.  First wave is immediate and a bit
+            # bigger; follow-up waves are scheduled below in the survive phase.
+            if not getattr(STATE, "mission2_reinforcement_triggered", False):
+                STATE.mission2_reinforcement_triggered = True
+                _spawn_reinforcement_wave(count=4, prefer_far=True)
+                STATE.mission2_reinforcement_waves = 1
+                STATE.mission2_reinforcement_timer = 360
+                _radio('VASILE: "They saw you stop! Contacts moving in from both flanks!"',
+                       color=(255, 130, 75), mark="reinforce_warn")
+        elif STATE.mission2_post_sniper_timer > 360:
+            # Fail-soft: if the player is confused but alive, advance to survival
+            # instead of trapping the mission in a tutorial objective.
+            STATE.mission2_post_sniper_phase = "survive"
+            STATE.mission2_post_sniper_timer = 0
+    elif phase == "survive":
+        STATE.mission_phase = "m2_survive_killbox"
+        _set_objective("SURVIVE THE KILL-BOX — stay behind cover")
+        # Keep IPA pressure up while the player holds cover.  Waves taper
+        # off in size, and stop entirely once a cap is reached so the fight
+        # can actually be cleared.
+        if getattr(STATE, "mission2_reinforcement_triggered", False):
+            STATE.mission2_reinforcement_timer = max(0, STATE.mission2_reinforcement_timer - 1)
+            if (STATE.mission2_reinforcement_timer <= 0
+                    and STATE.mission2_reinforcement_waves < 3
+                    and len(STATE.enemies) < 7):
+                STATE.mission2_reinforcement_waves += 1
+                wave_size = 3 if STATE.mission2_reinforcement_waves == 2 else 2
+                _spawn_reinforcement_wave(count=wave_size, prefer_far=False)
+                STATE.mission2_reinforcement_timer = 420
+        if not getattr(STATE, "mission2_late_reveal_played", False) and STATE.mission2_post_sniper_timer > 480:
+            STATE.mission2_late_reveal_played = True
+            _radio('VASILE: "Biribel — the tanker manifest — it lists a second cargo..."', color=C_VASILE, mark="late_reveal")
+        if STATE.mission2_post_sniper_timer > 520 or not _sniper_alive():
+            STATE.mission2_post_sniper_phase = "flank"
+            STATE.mission2_post_sniper_timer = 0
+            _radio('VASILE: "Center lane is death. Flank through the ditch or service road."', color=(255, 170, 80), mark="flank_sniper")
+    elif phase == "flank":
+        STATE.mission_phase = "m2_flank_sniper"
+        _set_objective("FLANK THE SNIPER LINE — reach side cover")
+        px, py = _player_pos()
+        reached_flank = any(math.hypot(px - f[0], py - f[1]) < 105 for f in KILLBOX_FLANK_POSITIONS)
+        reached_nest_angle = math.hypot(px - SNIPER_FLANK_POS[0], py - SNIPER_FLANK_POS[1]) < 160
+        if reached_flank or reached_nest_angle or not _sniper_alive():
+            _suppress_or_remove_sniper()
+            STATE.mission2_post_sniper_phase = "clear"
+            STATE.mission2_post_sniper_timer = 0
+    elif phase == "clear":
+        STATE.mission_phase = "m2_clear_ipa"
+        _set_objective(f"CLEAR REMAINING IPA CONTACTS ({len(STATE.enemies)} left)")
+
+
+def _smoothstep(t):
+    return t * t * (3 - 2 * t) if 0 < t < 1 else max(0, min(1, t))
+
+def _ease_out_cubic_m2(t):
+    return 1 - pow(1 - max(0, min(1, t)), 3)
+
+def _pulse01(t, period=60):
+    """Sawtooth 0→1 over `period` frames, resets at every multiple."""
+    return max(0, min(1, (t % period) / period))
+
+def _sniper_set_focus(pos, frames=90, snap=False):
+    STATE.mission2_camera_focus = (pos[0], pos[1])
+    STATE.mission2_camera_focus_timer = frames
+    if snap:
+        _snap_camera_to(pos)
+
+
+def _sniper_callout(label, pos, color=(255, 70, 45), frames=105):
+    STATE.mission2_death_callout = {
+        "label": label, "pos": (pos[0], pos[1]),
+        "color": color, "life": frames, "max_life": frames,
+    }
+
+
+def _sniper_fire(target_pos, body=False, concrete=False, near_miss=False,
+                 trace_life=44, shake=30, dead_air=False):
+    kind = "near_miss" if near_miss else "concrete" if concrete else "body"
+    STATE.mission2_sniper_traces.append({
+        "from": SNIPER_NEST_POS, "to": target_pos, "kind": kind,
+        "life": trace_life, "max_life": trace_life,
+    })
+    STATE.mission2_sniper_muzzle_flashes.append({
+        "pos": SNIPER_NEST_POS, "life": 16, "max_life": 16,
+    })
+    STATE.mission2_sniper_flash = max(getattr(STATE, "mission2_sniper_flash", 0),
+                                      24 if near_miss else 16)
+    STATE.screen_shake = max(STATE.screen_shake, shake)
+    audio.play("bullet_snap", volume=0.9 if near_miss else 0.6)
+    audio.schedule(2, "sniper_crack", volume=1.0)
+    audio.play("rig_low_boom", volume=0.2)
+    if body:
+        audio.schedule(5, "bullet_impact_enemy", volume=0.86)
+    if concrete or near_miss:
+        audio.schedule(5, "concrete_impact", volume=0.95 if near_miss else 0.72)
+    _burst(target_pos[0], target_pos[1], (220, 196, 128), 34 if near_miss else 22, speed_mul=2.3)
+    _burst(target_pos[0], target_pos[1], (120, 118, 108), 26 if near_miss else 14, speed_mul=1.7)
+    audio.schedule(12, "radio_static", volume=0.34 if near_miss else 0.20)
+    if near_miss:
+        STATE.mission2_near_miss_flash = max(getattr(STATE, "mission2_near_miss_flash", 0), 64)
+        STATE.mission2_tinnitus_timer = max(getattr(STATE, "mission2_tinnitus_timer", 0), 150)
+        audio.schedule(8, "tinnitus", volume=0.62)
+    try:
+        if dead_air:
+            audio.duck_ambience(frames=_beat("movement_one", "silence_frames", 110), factor=0.0)
+        else:
+            audio.duck_ambience(frames=55 if not near_miss else 130,
+                                factor=0.16 if not near_miss else 0.05)
+    except Exception:
+        pass
+
+
+def _sniper_concrete_impact(pos, trace_life=32, shake=20):
+    _sniper_fire(pos, concrete=True, trace_life=trace_life, shake=shake)
+
+
+def _sniper_fire_at(target_pos, body=False, concrete=False, trace_life=44, shake=30):
+    _sniper_fire(target_pos, body=body, concrete=concrete, trace_life=trace_life, shake=shake)
+
+
+def _draw_sniper_callout(surface, fcx, fcy):
+    callout = getattr(STATE, "mission2_death_callout", None)
+    if not callout:
+        return
+    sx, sy = _world(callout["pos"], fcx, fcy)
+    life = callout.get("life", 0)
+    max_life = max(1, callout.get("max_life", 1))
+    t = max(0.0, min(1.0, life / max_life))
+    color = callout.get("color", (255, 70, 45))
+    alpha = int(255 * t)
+    r = int(30 + (1.0 - t) * 34)
+    m = pygame.Surface((190, 190), pygame.SRCALPHA)
+    cx = cy = 95
+    pygame.draw.circle(m, (*color, alpha), (cx, cy), r, 3)
+    pygame.draw.circle(m, (*color, alpha // 2), (cx, cy), r + 10, 1)
+    for ang in (0, 90, 180, 270):
+        a = math.radians(ang)
+        pygame.draw.line(m, (*color, alpha),
+                         (cx + math.cos(a) * (r - 6), cy + math.sin(a) * (r - 6)),
+                         (cx + math.cos(a) * (r + 14), cy + math.sin(a) * (r + 14)), 2)
+    surface.blit(m, (sx - cx, sy - cy))
+    lbl = font_terminal.render(callout["label"], True, color)
+    lbl.set_alpha(alpha)
+    bg = pygame.Surface((lbl.get_width() + 18, lbl.get_height() + 8), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, min(190, alpha)))
+    pygame.draw.rect(bg, (*color, min(200, alpha)), bg.get_rect(), 1)
+    surface.blit(bg, (sx - bg.get_width() // 2, sy - r - 52))
+    surface.blit(lbl, (sx - lbl.get_width() // 2, sy - r - 48))
+
+
+def _sniper_phase_activity():
+    for a in STATE.mission2_squad:
+        if not a.get("alive", True):
+            a["activity"] = "down"
+
+
+def _m0_regroup(pt):
+    all_set = True
+    for actor, target in zip(STATE.mission2_squad, REGROUP_TARGET_POSITIONS):
+        actor["look_at"] = KILL_ZONE
+        d = math.hypot(target[0] - actor["pos"][0], target[1] - actor["pos"][1])
+        if d > 6:
+            all_set = False
+            actor["activity"] = "regrouping"
+            _move_actor_towards(actor, target, rate=0.06, max_step=2.4)
+        else:
+            actor["pos"][0], actor["pos"][1] = target[0], target[1]
+            actor["activity"] = "covering"
+    if _beat_now("regroup", pt, "spread_line") and _sniper_phase_event("m0_spread"):
+        _radio('VASILE: "Form up at the barrier. Eyes up."', mark="m0_spread", duration=120)
+
+
+def _m1_regroup_wrong_scan(pt):
+    """SHOCK — Gabi dies mid-sentence, no warning."""
+    gabi, seby, darius = STATE.mission2_squad
+    for actor, target in zip(STATE.mission2_squad, REGROUP_TARGET_POSITIONS):
+        if actor.get("alive", True):
+            d = math.hypot(target[0] - actor["pos"][0],
+                           target[1] - actor["pos"][1])
+            if d > 3:
+                _move_actor_towards(actor, target, rate=0.10, max_step=2.0)
+    if gabi.get("alive"):
+        gabi["activity"] = "watching lane"; gabi["look_at"] = KILL_ZONE
+    if seby.get("alive"):
+        seby["activity"] = "covering west"; seby["look_at"] = _tc(18, 60)
+    if darius.get("alive"):
+        darius["activity"] = "holding radio"; darius["look_at"] = KILL_ZONE
+
+    if _beat_now("movement_one", pt, "regroup_line") and _sniper_phase_event("m1_gabi1"):
+        _radio('GABI: "Nobody likes this lane."', color=(220, 220, 205), mark="m1_gabi1", duration=120)
+    if _beat_now("movement_one", pt, "scan_west") and _sniper_phase_event("m1_scan"):
+        _radio("SEBY: \"West side's clear. Just burned-out cars.\"", color=(255, 210, 180), mark="m1_scan", duration=120)
+    if _beat_now("movement_one", pt, "gabi_crack") and _sniper_phase_event("m1_crack"):
+        _radio('GABI: "Vasile, I have—"', color=(220, 220, 205), mark="m1_last", duration=55)
+        _kill_actor(0, SNIPER_NEST_POS, dead_air=True)
+    if _beat_now("movement_one", pt, "vasile_down") and _sniper_phase_event("m1_vasile"):
+        _radio('VASILE: "Everybody DOWN. Do not move."',
+               color=C_VASILE, mark="m1_vasile", duration=140)
+    if _beat_now("movement_one", pt, "origin_flash") and _sniper_phase_event("m1_origin"):
+        STATE.mission2_sniper_origin_revealed = True
+        STATE.mission2_sniper_flash = 12
+        STATE.mission2_sniper_silhouette_flash = 14
+        STATE.mission2_sniper_muzzle_flashes.append({"pos": SNIPER_NEST_POS, "life": 16, "max_life": 16})
+        _sniper_set_focus(SNIPER_NEST_POS, frames=55)
+        audio.play("sniper_crack", volume=0.5)
+    if _beat_now("movement_one", pt, "gantry_hold") and _sniper_phase_event("m1_silhouette2"):
+        STATE.mission2_sniper_silhouette_flash = 20
+        STATE.mission2_sniper_muzzle_flashes.append({"pos": SNIPER_NEST_POS, "life": 16, "max_life": 16})
+        audio.play("sniper_crack", volume=0.35)
+    if _beat_now("movement_one", pt, "seby_react") and _sniper_phase_event("m1_react"):
+        _radio('SEBY: "GABI! NO!"', color=(255, 210, 180), mark="m1_react", duration=120)
+        if seby.get("alive"):
+            seby["activity"] = "breaking"; seby["look_at"] = gabi["pos"]
+
+
+def _m2_seby_darius_die(pt):
+    """DESPERATION — Seby drags Gabi, both he and Darius die."""
+    gabi, seby, darius = STATE.mission2_squad
+    gabi["alive"] = False
+    gabi["activity"] = "down"
+
+    seby_breaks   = _beat("movement_two", "seby_breaks", 70)
+    seby_arrives  = _beat("movement_two", "seby_arrives", 190)
+    drag_end      = _beat("movement_two", "seby_drag_to_cover_end", 380)
+    seby_shot     = _beat("movement_two", "seby_crack", 430)
+
+    if pt < seby_breaks:
+        if seby.get("alive"):   seby["activity"]   = "frozen shock"
+        if darius.get("alive"): darius["activity"] = "frozen"
+    elif pt < seby_arrives:
+        if seby.get("alive"):   seby["activity"]   = "sprinting_to_gabi"
+        if darius.get("alive"): darius["activity"] = "frozen"
+    elif pt < drag_end:
+        if seby.get("alive"):   seby["activity"]   = "dragging_body"
+        if darius.get("alive"): darius["activity"] = "turning to radio"
+
+    if _beat_now("movement_two", pt, "vasile_cover") and _sniper_phase_event("m2_vasile1"):
+        _radio('VASILE: "Seby — stay low — do NOT go out there."',
+               color=C_VASILE, mark="m2_vasile1", duration=120)
+    if _beat_now("movement_two", pt, "vasile_hold") and _sniper_phase_event("m2_vasile2"):
+        _radio('VASILE: "Biribel. Stay behind the barrier. Do not look up."',
+               color=C_VASILE, mark="m2_vasile2", duration=160)
+    if _beat_now("movement_two", pt, "seby_breaks") and _sniper_phase_event("m2_break"):
+        _radio('SEBY: "Hold on — I got you — I GOT YOU—"', color=(255, 210, 180), mark="m2_break", duration=130)
+    if _beat_now("movement_two", pt, "seby_crack") and _sniper_phase_event("m2_seby"):
+        _kill_actor(1, SNIPER_NEST_POS)
+    if pt >= seby_shot and darius.get("alive"):
+        darius["activity"] = "reaching for radio"
+    if _beat_now("movement_two", pt, "darius_reaches") and _sniper_phase_event("m2_dar_reach"):
+        _radio('DARIUS: "Mayday, mayday, this is—"', color=(255, 190, 130), mark="m2_mayday", duration=90)
+        _sniper_set_focus(_sniper_actor_pos(2), frames=130)
+    if _beat_now("movement_two", pt, "darius_crack") and _sniper_phase_event("m2_dar"):
+        _kill_actor(2, SNIPER_NEST_POS)
+
+
+def _m3_near_miss_handoff(pt):
+    """YOU'RE NEXT — near-miss on the player, then hard cut."""
+    for actor in STATE.mission2_squad:
+        actor["alive"] = False
+        actor["activity"] = "down"
+    if _beat_now("movement_three", pt, "near_miss") and _sniper_phase_event("m3_miss"):
+        target = ((STATE.player.rect.centerx + 40, STATE.player.rect.centery - 24)
+                  if STATE.player else KILL_ZONE)
+        _sniper_set_focus(target, frames=120, snap=True)
+        _sniper_fire(target, concrete=True, near_miss=True, trace_life=60, shake=42)
+        _sniper_callout("MISSED — YOU'RE NEXT", target, color=(255, 190, 90), frames=120)
+        STATE.mission2_chromatic_timer = 90
+        STATE.mission2_radio_muffle_timer = 200
+        STATE.mission2_heartbeat_active = True
+        STATE.mission2_heartbeat_timer = 0
+        _radio('VASILE: "Biribel — MOVE!"', mark="m3_move", duration=120)
+    if _beat_now("movement_three", pt, "hard_black") and _sniper_phase_event("m3_black"):
+        STATE.mission2_hard_black = 6
+        _finish_sniper_sequence()
+
+
+def _update_sniper_sequence():
+    pt = int(getattr(STATE, "mission2_sniper_phase_timer", 0))
+    phase = _sniper_phase_name()
+    new_target = _sniper_camera_target(pt, phase)
+    existing = STATE.mission2_camera_focus
+    if existing is None:
+        STATE.mission2_camera_focus = new_target
+    else:
+        cx, cy = existing
+        nx, ny = new_target
+        if math.hypot(nx - cx, ny - cy) > 4:
+            STATE.mission2_camera_focus = new_target
+    _sniper_phase_activity()
+    if phase == "regroup":           _m0_regroup(pt)
+    elif phase == "movement_one":    _m1_regroup_wrong_scan(pt)
+    elif phase == "movement_two":    _m2_seby_darius_die(pt)
+    elif phase == "movement_three":  _m3_near_miss_handoff(pt)
+    _update_squad_actor_positions()
+    STATE.mission2_sniper_phase_timer = pt + 1
+    if STATE.mission2_sniper_phase_timer >= _sniper_phase().get("duration", 120):
+        _advance_sniper_phase()
+
+
+def _start_sniper_sequence():
+    STATE.mission2_stage = STAGE_SNIPER
+    STATE.mission_phase = "m2_sniper"
+    STATE.mission2_sniper_phase = "regroup"
+    STATE.mission2_sniper_phase_timer = 0
+    STATE.mission2_sniper_events_fired = set()
+    STATE.mission2_sniper_origin_revealed = False
+    STATE.mission2_sniper_silhouette_flash = 0
+    STATE.mission2_sniper_flash = 0
+    STATE.mission2_death_callout = None
+    STATE.mission2_camera_focus = SNIPER_ARENA_CAM
+    STATE.mission2_camera_focus_timer = 0
+    for actor, entry in zip(STATE.mission2_squad, REGROUP_ENTRY_POSITIONS):
+        actor["alive"] = True
+        actor["pos"] = list(entry)
+        actor["activity"] = "regrouping"
+        actor.pop("_sprint_origin", None)
+        actor.pop("_corpse_origin", None)
+        actor.pop("_reach_origin", None)
+        actor.pop("_cover_lerp", None)
+        actor.pop("_drag_lerp", None)
+    _snap_camera_to(SNIPER_ARENA_CAM)
+    _set_objective("")
+    audio.play("radio_static", volume=0.2)
+
+
+def _kill_actor(index, origin_pos, dead_air=False):
+    actor = STATE.mission2_squad[index]
+    if not actor.get("alive", True):
+        return
+    actor["alive"] = False
+    actor["activity"] = "down"
+    pos = tuple(actor.get("pos", (0, 0)))
+    name = actor.get("name", "SQUAD")
+    _sniper_callout(f"{name} DOWN", pos, color=(255, 70, 45), frames=110)
+    _sniper_fire(pos, body=True, trace_life=60, shake=22, dead_air=dead_air)
+    _burst(pos[0], pos[1], C_BLOOD, 46, speed_mul=1.2)
+    STATE.blood_decals.append([pos[0], pos[1], 190, random.randint(16, 24)])
+    STATE.mission2_chromatic_timer = max(getattr(STATE, "mission2_chromatic_timer", 0), 28)
+
+
+def _add_sniper_laser(target_pos, life=55):
+    STATE.mission2_sniper_lasers.append({"from": SNIPER_NEST_POS, "to": target_pos, "life": life})
+
+
+def _spawn_initial_ipa_team():
+    if "initial_ipa_team" in STATE.mission2_events:
+        return
+    STATE.mission2_events.add("initial_ipa_team")
+    spawned = [
+        _spawn_enemy(58, 26, hp=90, speed=0.0, sniper=True),
+        _spawn_enemy(47, 35, hp=115, speed=1.85),
+        _spawn_enemy(52, 41, hp=115, speed=1.85),
+        _spawn_enemy(42, 31, hp=105, speed=1.75),
+    ]
+    for e in spawned:
+        e.fire_cooldown = 150 + random.randint(0, 80)
+    _radio('VASILE: "IPA rifles from the gantry. Not MAG. Clear the lanes."', color=(255, 170, 80), mark="ipa_reveal")
+
+
+def _spawn_reinforcement_wave(count=3, prefer_far=True):
+    """Pour in IPA reinforcements from kill-box perimeter spawn anchors.
+
+    Triggered when the player commits to cover during the kill-box.  The wave
+    picks spawn anchors farther from the player so it reads as enemies closing
+    in from the flanks rather than materializing on top of them.  Each spawn
+    gets a small dust/spark burst so it doesn't pop in silently.
+    """
+    if not STATE.player:
+        return
+    px, py = _player_pos()
+    anchors = list(KILLBOX_REINFORCEMENT_SPAWNS)
+    # Sort by distance; pick from the far half if prefer_far, else random.
+    anchors.sort(key=lambda a: math.hypot(_tc(*a)[0] - px, _tc(*a)[1] - py),
+                 reverse=prefer_far)
+    pool = anchors[: max(count + 2, 4)]
+    random.shuffle(pool)
+    spawned = []
+    for col, row in pool[:count]:
+        # Small tile jitter so successive waves don't stack identically.
+        jc = col + random.randint(-1, 1)
+        jr = row + random.randint(-1, 1)
+        e = _spawn_enemy(jc, jr, hp=100, speed=2.05)
+        e.fire_cooldown = 70 + random.randint(0, 50)
+        spawned.append(e)
+        # Visual cue: dust kick + spark so the spawn reads as "running in."
+        ex, ey = e.rect.center
+        _burst(ex, ey, (120, 110, 95), 14, speed_mul=1.6)
+        _burst(ex, ey, (255, 200, 110), 4, speed_mul=2.1)
+    if spawned:
+        audio.play("radio_static", volume=0.18)
+        audio.schedule(8, "footstep", volume=0.35)
+    return spawned
+
+
+def _spawn_control_cleanup():
+    # Small authored team; do not overwhelm the evidence phase.
+    if "control_cleanup" in STATE.mission2_events:
+        return
+    STATE.mission2_events.add("control_cleanup")
+    _spawn_enemy(54, 20, hp=105, speed=2.0)
+    _spawn_enemy(64, 22, hp=105, speed=2.0)
+    _radio('SYSTEM: IPA cleanup team in control sector.', color=(255, 130, 75), mark="cleanup", allow_when_cut=True)
+
+
+def _start_tanker_run():
+    STATE.mission2_stage = STAGE_RUN
+    STATE.mission_phase = "m2_tanker_run"
+    STATE.mission2_timer = 0
+    STATE.mission2_countdown = 420
+    STATE.mission2_camera_focus = None
+    _set_objective("RUN to the blue shelter marker before the tanker detonates")
+    _radio('VASILE: "Hidden detonator! Run to the concrete shelter!"', color=(255, 150, 70), mark="run")
+    audio.play("alarm", volume=0.45)
+
+
+def _explode_tanker():
+    if STATE.mission2_tanker_exploded:
+        return
+    STATE.mission2_tanker_exploded = True
+    STATE.mission2_stage = STAGE_BLACKOUT
+    STATE.mission_phase = "m2_blackout"
+    STATE.mission2_timer = 0
+    STATE.mission2_countdown = 0
+    STATE.mission2_comms_cut = True
+    STATE.mission2_camera_focus = TANKER_POS
+    _set_objective("Comms lost")
+    audio.play("explosion", volume=1.0)
+    audio.play("rig_low_boom", volume=0.48)
+    STATE.screen_shake = 62
+    STATE.gc_flash_timer = 25
+    tanker = STATE.mission2_tanker_rect
+    for _ in range(160):
+        col = random.choice([(255, 95, 20), (255, 190, 60), (95, 88, 76), (42, 37, 33)])
+        p = Particle(tanker.centerx + random.randint(-110, 110), tanker.centery + random.randint(-80, 80), col)
+        p.dx *= 3.2
+        p.dy *= 3.2
+        p.life = random.randint(35, 95)
+        STATE.particles.append(p)
+    for ox, oy in [(-80, -40), (0, 0), (86, 44)]:
+        _spawn_molotov_fire(tanker.centerx + ox, tanker.centery + oy, _solid_walls())
+    if STATE.player:
+        d = _dist(_player_pos(), TANKER_POS)
+        if d < 310:
+            dmg = max(10, int(90 * (1.0 - d / 310)))
+            STATE.player.hp -= dmg
+            STATE.floating_texts.append([STATE.player.rect.centerx, STATE.player.rect.centery - 48, f"-{dmg} HP BLAST", (255, 75, 45), 110])
+
+
+def _complete_mission2():
+    if getattr(STATE, "request_mission2_ending", False):
+        return
+    STATE.mission2_stage = STAGE_DONE
+    STATE.mission2_evidence_uploaded = True
+    STATE.mission_end_time = pygame.time.get_ticks()
+    STATE.request_mission2_ending = True
+    audio.play("terminal_glitch", volume=0.55)
+
+
+def handle_interact():
+    """Mission-specific [E] interactions. Called through game_core."""
+    if not STATE.player or STATE.player_dead:
+        return
+    if getattr(STATE, "mission2_card", None):
+        if STATE.mission2_card.get("age", 0) >= 18:
+            _close_card()
+        return
+
+    stage = STATE.mission2_stage
+    if stage == STAGE_SNIPER:
+        gabi_pos = _sniper_actor_pos(0)
+        if _dist(_player_pos(), gabi_pos) < 90:
+            # Point 10: Player can try to save Gabi during the 40-frame window
+            # Input is read but does nothing; acknowledged later in Vasile line
+            window_start = _beat("movement_one", "tried_to_save_window_start", 340)
+            window_end = _beat("movement_one", "tried_to_save_window_end", 380)
+            pt = int(getattr(STATE, "mission2_sniper_phase_timer", 0))
+            if window_start <= pt < window_end:
+                if not getattr(STATE, "mission2_tried_to_save", False):
+                    STATE.mission2_tried_to_save = True
+                    # Store that player tried - will be acknowledged later
+                    STATE.mission2_tried_to_save_acknowledged = False
+            return
+    if stage == STAGE_INVESTIGATE:
+        for clue in STATE.mission2_clues:
+            if not clue["done"] and _near(clue["pos"], 86):
+                clue["done"] = True
+                STATE.mission2_clues_found.add(clue["id"])
+                _open_card(clue["title"], clue["lines"], color=(245, 190, 65), kind=clue.get("kind", "document"))
+                if _clue_count() >= REQUIRED_INVESTIGATION_CLUES:
+                    _set_objective("Regroup at the blue toll-barrier marker")
+                return
+    elif stage == STAGE_TRUCK:
+        truck = STATE.mission2_truck_manifest
+        if not truck["done"] and _near(truck["pos"], 100):
+            truck["done"] = True
+            _open_card(truck["title"], truck["lines"], color=(255, 190, 90), after="truck_done", kind=truck.get("kind", "manifest"))
+            return
+    elif stage == STAGE_EVIDENCE:
+        if STATE.enemies:
+            if any(_near(ev["pos"], 82) for ev in STATE.mission2_evidence if not ev["done"]):
+                STATE.floating_texts.append([STATE.player.rect.centerx, STATE.player.rect.centery - 42, "CLEAR IPA CONTACTS FIRST", (255, 120, 75), 90])
+            return
+        for ev in STATE.mission2_evidence:
+            if not ev["done"] and _near(ev["pos"], 82):
+                ev["done"] = True
+                after = "evidence_ready" if _evidence_count() >= 3 else None
+                _open_card(ev["title"], ev["lines"], color=C_TERMINAL, after=after, kind=ev.get("kind", "terminal"))
+                return
+        if _evidence_count() >= 3 and _near(UPLOAD_TERMINAL_POS, 95):
+            _set_objective("Hold [E] at the upload terminal")
+
+
+def blocks_player_actions():
+    """True when the main input router should suppress weapons/items."""
+    return (
+        getattr(STATE, "active_mission", "") == MISSION2_KEY
+        and (
+            getattr(STATE, "mission2_card", None) is not None
+            or getattr(STATE, "mission2_stage", "") in (STAGE_SNIPER, STAGE_BLACKOUT, STAGE_DONE)
+        )
+    )
+
+
+def debug_jump_to_evidence():
+    if not STATE.player:
+        return
+    STATE.mission2_stage = STAGE_EVIDENCE
+    STATE.mission_phase = "m2_debug_evidence"
+    STATE.mission2_comms_cut = True
+    STATE.mission2_tanker_exploded = True
+    STATE.mission2_camera_focus = None
+    STATE.enemies.clear()
+    STATE.player.rect.center = CONTROL_ROOM
+    _set_objective("Debug: inspect green evidence terminals")
+
+
+# ─────────────────────────────────────────────
+# Stage update
+# ─────────────────────────────────────────────
+def _movement_locked():
+    return (
+        STATE.player_dead
+        or STATE.mission2_stage in (STAGE_SNIPER, STAGE_BLACKOUT, STAGE_DONE)
+        or getattr(STATE, "mission2_card", None) is not None
+    )
+
+
+def _update_stage(keys):
+    stage = STATE.mission2_stage
+    STATE.mission2_timer += 1
+    if getattr(STATE, "mission2_card", None):
+        STATE.mission2_card["age"] += 1
+        return
+
+    if stage == STAGE_INVESTIGATE:
+        count = _clue_count()
+        total = len(STATE.mission2_clues)
+        if count < REQUIRED_INVESTIGATION_CLUES:
+            _set_objective(f"Inspect staged evidence markers with [E] ({count}/{REQUIRED_INVESTIGATION_CLUES})")
+        else:
+            _set_objective("Regroup at the blue toll-barrier marker")
+            if count >= total and "all_clues_warning" not in STATE.mission2_events:
+                STATE.mission2_events.add("all_clues_warning")
+                _radio('VASILE: "Range marks, timing relay, clean boots... this scene is a trap."', color=(255, 170, 80), mark="all_clues")
+            if _near(KILL_ZONE, 120):
+                _start_sniper_sequence()
+
+    elif stage == STAGE_SNIPER:
+        _update_sniper_sequence()
+
+    elif stage == STAGE_COMBAT:
+        _update_post_sniper_gameplay()
+        post_phase = getattr(STATE, "mission2_post_sniper_phase", "")
+        if STATE.enemies:
+            if post_phase in ("", "clear"):
+                _set_objective(f"CLEAR REMAINING IPA CONTACTS ({len(STATE.enemies)} left)")
+        else:
+            STATE.mission2_post_sniper_phase = ""
+            STATE.mission2_stage = STAGE_TRUCK
+            STATE.mission_phase = "m2_truck"
+            _set_objective("Inspect the IPA truck manifest with [E]")
+            _radio('VASILE: "No MAG soldiers. Find out why that IPA truck is here."', mark="truck")
+    elif stage == STAGE_TRUCK:
+        _set_objective("Inspect the IPA truck manifest with [E]")
+    elif stage == STAGE_TANKER:
+        if _near(TANKER_POS, 170):
+            _start_tanker_run()
+        else:
+            _set_objective("Approach the leaking fuel tanker")
+    elif stage == STAGE_RUN:
+        if _near(SAFE_ZONE, 105):
+            STATE.mission2_countdown = min(STATE.mission2_countdown, 90)
+            _set_objective("Stay in cover — brace for the tanker blast")
+        else:
+            _set_objective("RUN to the blue shelter marker before the tanker detonates")
+        STATE.mission2_countdown -= 1
+        if STATE.mission2_countdown <= 0:
+            _explode_tanker()
+    elif stage == STAGE_BLACKOUT:
+        if STATE.mission2_timer >= 210:
+            _open_card(
+                "COMMS LOST",
+                [
+                    "Vasile cuts out mid-sentence.",
+                    "The checkpoint loudspeakers are dead.",
+                    "Only the control building still has power.",
+                ],
+                color=(165, 170, 180),
+                after="blast_done",
+                kind="static",
+            )
+    elif stage == STAGE_EVIDENCE:
+        found = _evidence_count()
+        if STATE.enemies:
+            _set_objective(f"Clear IPA cleanup team ({len(STATE.enemies)} left)")
+        elif found < 3:
+            _set_objective(f"Inspect green evidence terminals with [E] ({found}/3)")
+        else:
+            _set_objective("Hold [E] at the upload terminal")
+            if _near(UPLOAD_TERMINAL_POS, 95) and keys[pygame.K_e]:
+                STATE.mission2_stage = STAGE_UPLOAD
+                STATE.mission_phase = "m2_upload"
+                STATE.mission2_timer = 0
+    elif stage == STAGE_UPLOAD:
+        if not _near(UPLOAD_TERMINAL_POS, 110):
+            _set_objective("Return to the upload terminal")
+            STATE.mission2_upload_progress = max(0.0, STATE.mission2_upload_progress - 1 / 360)
+        else:
+            _set_objective("Hold [E] to upload Route 12 evidence")
+            if keys[pygame.K_e]:
+                if not STATE.mission2_upload_started:
+                    STATE.mission2_upload_started = True
+                    _radio('SYSTEM: TRANSMITTING ROUTE 12 EVIDENCE PACKAGE', color=C_TERMINAL, allow_when_cut=True, mark="upload")
+                STATE.mission2_upload_progress = min(1.0, STATE.mission2_upload_progress + 1 / 240)
+                if STATE.mission2_upload_progress >= 1.0:
+                    _open_card(
+                        "TRANSMISSION SENT",
+                        [
+                            "The Route 12 evidence package is out.",
+                            "IPA corrupted part of the archive, but enough survived.",
+                            "Move to extraction before the state broadcast lands.",
+                        ],
+                        color=C_TERMINAL,
+                        after="upload_done",
+                        kind="terminal",
+                    )
+            else:
+                STATE.mission2_upload_progress = max(0.0, STATE.mission2_upload_progress - 1 / 500)
+    elif stage == STAGE_EXFIL:
+        _set_objective("Reach the green exfil marker")
+        if _near(EXFIL_POS, 92):
+            _complete_mission2()
+
+
+# ─────────────────────────────────────────────
+# Combat/update helpers
+# ─────────────────────────────────────────────
+def _update_player(keys, solid_walls):
+    if not STATE.player or STATE.player_dead:
+        return
+    if STATE.mission2_stage == STAGE_INVESTIGATE:
+        STATE.player.speed = 3.45
+    elif STATE.mission2_stage == STAGE_RUN:
+        STATE.player.speed = 4.45
+    else:
+        STATE.player.speed = 3.6
+
+    mx, my = get_scaled_mouse()
+    world_mx = mx + STATE.camera_x
+    world_my = my + STATE.camera_y
+    STATE.player.angle = math.atan2(world_my - STATE.player.rect.centery, world_mx - STATE.player.rect.centerx)
+
+    dx = dy = 0
+    if getattr(STATE, "mission2_input_freeze", 0) > 0:
+        keys_for_move = {pygame.K_w: False, pygame.K_s: False, pygame.K_a: False, pygame.K_d: False}
+    else:
+        keys_for_move = _last_keys
+    if not _movement_locked():
+        if keys_for_move[pygame.K_w]:
+            dy -= STATE.player.speed
+        if keys_for_move[pygame.K_s]:
+            dy += STATE.player.speed
+        if keys_for_move[pygame.K_a]:
+            dx -= STATE.player.speed
+        if keys_for_move[pygame.K_d]:
+            dx += STATE.player.speed
+    if dx and dy:
+        dx *= 0.707
+        dy *= 0.707
+    STATE.player.move(dx, dy, solid_walls)
+
+    if dx or dy:
+        STATE._footstep_timer -= 1
+        if STATE._footstep_timer <= 0:
+            audio.play("footstep", volume=0.25)
+            STATE._footstep_timer = 27 + random.randint(0, 8)
+
+
+def _update_weapon_timers():
+    if STATE.shot_cooldown > 0:
+        STATE.shot_cooldown -= 1
+    if STATE.is_reloading:
+        STATE.reload_timer -= 1
+        if STATE.reload_timer <= 0:
+            STATE.is_reloading = False
+            if STATE.spare_mags > 0:
+                STATE.spare_mags -= 1
+                STATE.ammo_in_mag = STATE.mag_size
+    if STATE.melee_active:
+        STATE.melee_timer -= 1
+        if STATE.player and not STATE.melee_hit_done and STATE.melee_timer <= 10:
+            px, py = _player_pos()
+            for e in STATE.enemies:
+                if math.hypot(e.rect.centerx - px, e.rect.centery - py) < 55:
+                    e.hp -= 75
+                    e.on_hit(px, py)
+                    STATE.melee_hit_done = True
+                    STATE.shots_hit += 1
+                    _burst(e.rect.centerx, e.rect.centery, C_BLOOD, 12)
+                    break
+        if STATE.melee_timer <= 0:
+            STATE.melee_active = False
+            STATE.melee_hit_done = False
+
+
+def _update_molotovs(solid_walls):
+    player_hit = False
+    for b in STATE.thrown_bottles[:]:
+        prev_x, prev_y = b["x"], b["y"]
+        b["t"] = min(1.0, b["t"] + b["speed"])
+        nx = b["start_x"] + (b["tx"] - b["start_x"]) * b["t"]
+        ny = b["start_y"] + (b["ty"] - b["start_y"]) * b["t"]
+        ix, iy = nx, ny
+        hit_wall = False
+        for wall in solid_walls:
+            clipped = wall.clipline((prev_x, prev_y), (nx, ny))
+            if clipped:
+                ix, iy = clipped[0]
+                hit_wall = True
+                break
+        if b["t"] >= 1.0 or hit_wall:
+            _spawn_molotov_fire(ix, iy, solid_walls)
+            STATE.thrown_bottles.remove(b)
+        else:
+            b["x"], b["y"] = nx, ny
+
+    for fire in STATE.molotov_fires[:]:
+        fire["life"] -= 1
+        fx, fy = fire["x"], fire["y"]
+        if random.random() < 0.55:
+            STATE.particles.append(Particle(fx + random.randint(-55, 55), fy + random.randint(-45, 45), random.choice([(255, 95, 25), (255, 160, 45), (70, 65, 60)])))
+        for e in STATE.enemies:
+            d = math.hypot(e.rect.centerx - fx, e.rect.centery - fy)
+            if d < MOLOTOV_RADIUS and not _wall_blocks_line(fx, fy, e.rect.centerx, e.rect.centery, solid_walls):
+                e.hp -= MOLOTOV_ENEMY_DAMAGE * (0.5 + (1 - d / MOLOTOV_RADIUS))
+                e.alerted = True
+                e.state = "CHASE"
+        if STATE.player and not STATE.player_dead and not _movement_locked():
+            d = math.hypot(STATE.player.rect.centerx - fx, STATE.player.rect.centery - fy)
+            if d < MOLOTOV_RADIUS * 0.7 and not _wall_blocks_line(fx, fy, STATE.player.rect.centerx, STATE.player.rect.centery, solid_walls):
+                STATE.player.hp -= MOLOTOV_PLAYER_DAMAGE
+                player_hit = True
+        if fire["life"] <= 0:
+            STATE.molotov_fires.remove(fire)
+
+    if STATE.player and not STATE.player_dead:
+        STATE.fire_zones[:] = [fz for fz in STATE.fire_zones if fz.update(STATE.enemies, STATE.player.rect, audio)]
+    return player_hit
+
+
+def _update_sniper_enemy(e, solid_walls):
+    """Mission 2 sniper: fixed nest, long sightline, deliberate shots."""
+    if not STATE.player or STATE.player_dead:
+        return
+    px, py = _player_pos()
+    dx = px - e.rect.centerx
+    dy = py - e.rect.centery
+    e.angle = math.atan2(dy, dx)
+    if e.fire_cooldown > 0:
+        e.fire_cooldown -= 1
+    if _wall_blocks_line(e.rect.centerx, e.rect.centery, px, py, solid_walls):
+        return
+    if e.fire_cooldown <= 0:
+        dist = max(1.0, math.hypot(dx, dy))
+        vx, vy = dx / dist, dy / dist
+        STATE.bullets.append({
+            "x": e.rect.centerx + vx * 22,
+            "y": e.rect.centery + vy * 22,
+            "prev_x": e.rect.centerx + vx * 22,
+            "prev_y": e.rect.centery + vy * 22,
+            "dx": vx * 28,
+            "dy": vy * 28,
+            "life": 34,
+            "owner": "enemy",
+            "damage": 26,
+        })
+        STATE.mission2_sniper_traces.append({"from": (e.rect.centerx, e.rect.centery), "to": (px, py), "life": 10})
+        audio.play("gunshot_distant", volume=0.55)
+        e.fire_cooldown = 115 + random.randint(0, 45)
+
+
+def _update_bullets_enemies(solid_walls):
+    player_hit = False
+    for b in STATE.bullets[:]:
+        b["prev_x"], b["prev_y"] = b["x"], b["y"]
+        b["x"] += b["dx"]
+        b["y"] += b["dy"]
+        b["life"] -= 1
+        hit = False
+        for wall in solid_walls:
+            if wall.clipline((b["prev_x"], b["prev_y"]), (b["x"], b["y"])):
+                hit = True
+                _burst(b["x"], b["y"], (130, 125, 110), 4)
+                audio.play("bullet_impact", volume=0.16)
+                break
+        if not hit and b.get("owner") == "player":
+            for e in STATE.enemies:
+                if math.hypot(b["x"] - e.rect.centerx, b["y"] - e.rect.centery) < 22:
+
+                    # You cannot pistol-snipe the sniper from the open road.
+                    # If your bullet can reach him, he has already seen you.
+                    if getattr(e, "is_mission2_sniper", False) and not getattr(STATE, "mission2_sniper_suppressed", False):
+                        hit = True
+
+                        STATE.mission2_sniper_pressure_timer = 0
+                        STATE.mission2_sniper_pending_timer = min(
+                            getattr(STATE, "mission2_sniper_pending_timer", 999),
+                            SNIPER_CLOSE_AIM_FRAMES,
+                        )
+                        STATE.mission2_sniper_target = _player_pos()
+                        _add_sniper_laser(STATE.mission2_sniper_target, life=20)
+
+                        STATE.floating_texts.append([
+                            STATE.player.rect.centerx,
+                            STATE.player.rect.centery - 52,
+                            "SNIPER HAS YOUR ANGLE",
+                            (255, 60, 40),
+                            70,
+                        ])
+
+                        _burst(b["x"], b["y"], (140, 135, 120), 10, speed_mul=1.4)
+                        audio.play("concrete_impact", volume=0.45)
+                        break
+
+                    e.hp -= 50
+                    e.on_hit(STATE.player.rect.centerx, STATE.player.rect.centery)
+                    hit = True
+                    STATE.shots_hit += 1
+                    STATE.blood_decals.append([b["x"], b["y"], 140, random.randint(8, 16)])
+                    _burst(b["x"], b["y"], C_BLOOD, 14)
+                    audio.play("bullet_impact_enemy", volume=0.42)
+                    break
+        if not hit and b.get("owner") == "enemy" and STATE.player and not STATE.player_dead:
+            if math.hypot(b["x"] - STATE.player.rect.centerx, b["y"] - STATE.player.rect.centery) < 22:
+                if getattr(STATE, "mission2_grace_timer", 0) <= 0:
+                    STATE.player.hp -= b.get("damage", ENEMY_DAMAGE)
+                    player_hit = True
+                hit = True
+                STATE.screen_shake = max(STATE.screen_shake, 6)
+                _burst(b["x"], b["y"], C_BLOOD, 8)
+                audio.play("bullet_impact_enemy", volume=0.5)
+        if hit or b["life"] <= 0 or not (-500 < b["x"] < MAP_W * TILE_SIZE + 500 and -500 < b["y"] < MAP_H * TILE_SIZE + 500):
+            if b in STATE.bullets:
+                STATE.bullets.remove(b)
+
+    for e in STATE.enemies[:]:
+        if STATE.player and not STATE.player_dead:
+            e.alerted = True
+            if getattr(e, "is_mission2_sniper", False):
+                # Mission 2's post-ambush sniper is handled by the authored
+                # kill-box pressure system, not generic enemy fire. Keep the
+                # actor facing the player for drawing/feedback.
+                px, py = _player_pos()
+                e.angle = math.atan2(py - e.rect.centery, px - e.rect.centerx)
+            else:
+                if e.state in ("IDLE", "PATROL", "SEARCH"):
+                    e.state = "CHASE"
+                e.last_seen_pos = _player_pos()
+                e.update(STATE.player.rect.centerx, STATE.player.rect.centery, solid_walls, STATE.bullets, STATE.particles, STATE.enemies, STATE.fire_zones)
+        if e.hp <= 0:
+            STATE.hostiles_killed += 1
+            STATE.blood_decals.append([e.rect.centerx, e.rect.centery, 165, random.randint(12, 22)])
+            _burst(e.rect.centerx, e.rect.centery, C_BLOOD, 24)
+            roll = random.random()
+            if roll < 0.28:
+                STATE.pickups.append([e.rect.centerx, e.rect.centery, "bandage"])
+            elif roll < 0.56 and STATE.spare_mags < 5:
+                STATE.pickups.append([e.rect.centerx, e.rect.centery, "mag"])
+            STATE.enemies.remove(e)
+    return player_hit
+
+
+def _update_pickups():
+    if not STATE.player or STATE.player_dead:
+        return
+    for pu in STATE.pickups[:]:
+        if math.hypot(pu[0] - STATE.player.rect.centerx, pu[1] - STATE.player.rect.centery) > 32:
+            continue
+        kind = pu[2]
+        if kind == "bandage":
+            old = STATE.player.hp
+            STATE.player.hp = min(STATE.player.max_hp, STATE.player.hp + 35)
+            STATE.floating_texts.append([pu[0], pu[1] - 16, f"+{int(STATE.player.hp - old)} HP", (100, 220, 100), 70])
+        elif kind == "mag":
+            STATE.spare_mags = min(5, STATE.spare_mags + 1)
+            STATE.floating_texts.append([pu[0], pu[1] - 16, "+1 MAG", C_TERMINAL, 70])
+        audio.play("pickup", volume=0.45)
+        STATE.pickups.remove(pu)
+
+
+def _update_particles_texts(solid_walls):
+    for p in STATE.particles[:]:
+        p.update()
+        if p.life <= 0:
+            STATE.particles.remove(p)
+    for c in STATE.casings[:]:
+        c.update(solid_walls)
+        if c.life <= 0:
+            STATE.casings.remove(c)
+    for ft in STATE.floating_texts[:]:
+        if len(ft) < 6 or ft[5] != "pin":
+            ft[1] -= 1.0
+        ft[4] -= 1
+        if ft[4] <= 0:
+            STATE.floating_texts.remove(ft)
+    for tr in STATE.mission2_sniper_traces[:]:
+        tr["life"] -= 1
+        if tr["life"] <= 0:
+            STATE.mission2_sniper_traces.remove(tr)
+    for laser in getattr(STATE, "mission2_sniper_lasers", [])[:]:
+        laser["life"] -= 1
+        if laser["life"] <= 0:
+            STATE.mission2_sniper_lasers.remove(laser)
+    for flash in getattr(STATE, "mission2_sniper_muzzle_flashes", [])[:]:
+        flash["life"] -= 1
+        if flash["life"] <= 0:
+            STATE.mission2_sniper_muzzle_flashes.remove(flash)
+    if getattr(STATE, "mission2_tinnitus_timer", 0) > 0:
+        STATE.mission2_tinnitus_timer -= 1
+    if getattr(STATE, "mission2_sniper_kill_flash", 0) > 0:
+        STATE.mission2_sniper_kill_flash -= 1
+    props_changed = False
+    for prop in getattr(STATE, "mission2_story_props", [])[:]:
+        prop["age"] = prop.get("age", 0) + 1
+        if prop.get("life", -1) > 0:
+            prop["life"] -= 1
+            if prop["life"] <= 0:
+                STATE.mission2_story_props.remove(prop)
+                props_changed = True
+    if props_changed:
+        _sync_story_prop_collisions()
+    if getattr(STATE, "mission2_sniper_flash", 0) > 0:
+        STATE.mission2_sniper_flash -= 1
+    if getattr(STATE, "mission2_near_miss_flash", 0) > 0:
+        STATE.mission2_near_miss_flash -= 1
+
+    callout = getattr(STATE, "mission2_death_callout", None)
+    if callout:
+        callout["life"] -= 1
+        if callout["life"] <= 0:
+            STATE.mission2_death_callout = None
+
+
+def _update_camera():
+    target = STATE.mission2_camera_focus or _player_pos()
+    tx, ty = target
+
+    if getattr(STATE, "mission2_camera_snap", None):
+        tx, ty = STATE.mission2_camera_snap
+        STATE.mission2_camera_snap = None
+
+    sx = sy = 0
+    if getattr(STATE, "reduced_motion", False):
+        STATE.screen_shake = 0
+    elif STATE.screen_shake > 0:
+        sx = random.randint(-STATE.screen_shake, STATE.screen_shake)
+        sy = random.randint(-STATE.screen_shake, STATE.screen_shake)
+        STATE.screen_shake = max(0, STATE.screen_shake - 1)
+
+    STATE.cam_kick_x *= 0.82
+    STATE.cam_kick_y *= 0.82
+
+    desired_x, desired_y = _camera_offset_for_target((
+        tx + STATE.cam_kick_x + sx,
+        ty + STATE.cam_kick_y + sy,
+    ))
+
+    if not getattr(STATE, "mission2_camera_initialized", False):
+        STATE.camera_x = desired_x
+        STATE.camera_y = desired_y
+        STATE.mission2_camera_initialized = True
+        return STATE.camera_x, STATE.camera_y
+
+    if getattr(STATE, "mission2_stage", "") == STAGE_SNIPER:
+        # Smoothstep easing — slow start, slow end, fast middle
+        dx = desired_x - STATE.camera_x
+        dy = desired_y - STATE.camera_y
+        dist = math.hypot(dx, dy)
+        if dist < 1.0:
+            STATE.camera_x = desired_x
+            STATE.camera_y = desired_y
+        else:
+            factor = min(1.0, 0.08 * (1.0 + dist / 600.0))
+            factor = factor * factor * (3.0 - 2.0 * factor)
+            STATE.camera_x += dx * factor
+            STATE.camera_y += dy * factor
+    elif getattr(STATE, "mission2_camera_focus_timer", 0) > 0:
+        ease = 0.38
+        STATE.camera_x += (desired_x - STATE.camera_x) * ease
+        STATE.camera_y += (desired_y - STATE.camera_y) * ease
+    else:
+        ease = 0.14
+        STATE.camera_x += (desired_x - STATE.camera_x) * ease
+        STATE.camera_y += (desired_y - STATE.camera_y) * ease
+
+    max_x = max(0, MAP_W * TILE_SIZE - WIDTH)
+    max_y = max(0, MAP_H * TILE_SIZE - HEIGHT)
+    STATE.camera_x = max(0, min(max_x, STATE.camera_x))
+    STATE.camera_y = max(0, min(max_y, STATE.camera_y))
+
+    if getattr(STATE, "mission2_stage", "") == STAGE_SNIPER:
+        if not getattr(STATE, "reduced_motion", False):
+            timer = getattr(STATE, "mission2_sniper_phase_timer", 0)
+            STATE.camera_x += math.sin(timer * 0.13) * 0.8
+            STATE.camera_y += math.cos(timer * 0.17) * 0.6
+
+    return STATE.camera_x, STATE.camera_y
+
+
+def game_update(keys):
+    global _last_keys
+    _last_keys = keys
+    if STATE.gc_flash_timer > 0:
+        STATE.gc_flash_timer -= 1
+    if STATE.player and STATE.player.hp <= 0 and not STATE.player_dead:
+        STATE.player_dead = True
+        STATE.death_timer = 120
+        STATE.screen_shake = 22
+        _burst(STATE.player.rect.centerx, STATE.player.rect.centery, C_BLOOD, 48, speed_mul=1.6)
+    if STATE.player_dead:
+        STATE.death_timer -= 1
+        if STATE.death_timer <= 0:
+            if not STATE.mission_end_time:
+                STATE.mission_end_time = pygame.time.get_ticks()
+            STATE.request_death_screen = True
+
+    solid_walls = _solid_walls()
+    _update_player(keys, solid_walls)
+    _update_travel_triggers()
+    _update_squad_ambient()
+    _update_weapon_timers()
+    player_hit = _update_molotovs(solid_walls)
+    if STATE.mission2_stage not in (STAGE_SNIPER, STAGE_BLACKOUT, STAGE_DONE) and not getattr(STATE, "mission2_card", None):
+        player_hit = _update_bullets_enemies(solid_walls) or player_hit
+    if player_hit:
+        STATE.screen_shake = max(STATE.screen_shake, 4)
+    _update_pickups()
+    _update_stage(keys)
+    _update_particles_texts(solid_walls)
+
+    if getattr(STATE, "mission2_chromatic_timer", 0) > 0:
+        STATE.mission2_chromatic_timer -= 1
+    if getattr(STATE, "mission2_sniper_silhouette_flash", 0) > 0:
+        STATE.mission2_sniper_silhouette_flash -= 1
+    if getattr(STATE, "mission2_radio_muffle_timer", 0) > 0:
+        STATE.mission2_radio_muffle_timer -= 1
+    if getattr(STATE, "mission2_input_freeze", 0) > 0:
+        STATE.mission2_input_freeze -= 1
+
+    if getattr(STATE, "mission2_heartbeat_active", False):
+        STATE.mission2_heartbeat_timer += 1
+        if STATE.mission2_heartbeat_timer % 72 == 0:
+            audio.play("heartbeat", volume=0.18)
+        # Point 12: Fade heartbeat as player takes first action (moves, shoots, etc.)
+        # Also hard cap at ~12 seconds (720 frames)
+        player_acting = False
+        if STATE.player and not STATE.player_dead:
+            keys = _last_keys
+            if keys and (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d] or keys[pygame.K_e] or keys[pygame.K_SPACE] or keys[pygame.K_r] or keys[pygame.K_g] or keys[pygame.K_v]):
+                player_acting = True
+        if (STATE.mission2_stage == STAGE_COMBAT and (STATE.mission2_heartbeat_timer > 720 or player_acting)):
+            STATE.mission2_heartbeat_active = False
+
+    return _update_camera()
+
+
+# ─────────────────────────────────────────────
+# Drawing helpers
+# ─────────────────────────────────────────────
+# Mission 2 clue/prop draw tuning.  The same _draw_prop_icon() artwork is used
+# both on the ground and inside the inspection cards; only the presentation shell
+# changes.  Keep world props small, then use halos/markers for readability.
+PROP_WORLD_SCALE = 0.62
+PROP_CARD_SCALE = 1.05
+PROP_WORLD_HALO_RADIUS = 22
+MARKER_RADIUS = 22
+
+
+def _world(pos, fcx, fcy):
+    # Snap world-to-screen coordinates to whole pixels.  Mission 2 camera values
+    # can be fractional because the player speed is fractional; drawing tiles and
+    # clue icons at fractional positions causes shimmering/"glitchy" textures
+    # while walking.
+    return int(round(pos[0] - fcx)), int(round(pos[1] - fcy))
+
+
+def _draw_vehicle(surface, rect, kind, fcx, fcy):
+    r = pygame.Rect(rect.x - fcx, rect.y - fcy, rect.w, rect.h)
+    col = {"ipa_truck": (75, 58, 45), "civilian": (58, 53, 48), "burned": (32, 30, 28)}.get(kind, (58, 53, 48))
+    pygame.draw.rect(surface, (0, 0, 0), r.move(4, 5), border_radius=5)
+    pygame.draw.rect(surface, col, r, border_radius=5)
+    pygame.draw.rect(surface, (105, 95, 80), r, 2, border_radius=5)
+    pygame.draw.rect(surface, (18, 22, 24), (r.x + r.w - 34, r.y + 8, 24, r.h - 16), border_radius=3)
+    for wx in (r.x + 18, r.x + r.w - 22):
+        pygame.draw.circle(surface, (10, 10, 12), (wx, r.bottom - 2), 8)
+        pygame.draw.circle(surface, (10, 10, 12), (wx, r.y + 2), 8)
+    if kind == "ipa_truck":
+        label = font_terminal_small.render("IPA", True, (210, 55, 45))
+        surface.blit(label, (r.x + 12, r.y + r.h // 2 - 7))
+
+
+def _draw_tanker(surface, fcx, fcy):
+    rect = STATE.mission2_tanker_rect
+    x, y = rect.x - fcx, rect.y - fcy
+    pygame.draw.ellipse(surface, (0, 0, 0), (x - 15, y + 22, rect.w + 30, rect.h + 42))
+    col = (34, 30, 27) if STATE.mission2_tanker_exploded else (80, 74, 64)
+    rim = (90, 60, 45) if STATE.mission2_tanker_exploded else (135, 126, 98)
+    pygame.draw.rect(surface, col, (x, y, rect.w, rect.h), border_radius=22)
+    pygame.draw.rect(surface, rim, (x, y, rect.w, rect.h), 2, border_radius=22)
+    pygame.draw.rect(surface, (140, 40, 32), (x + 12, y + rect.h // 2 - 9, rect.w - 24, 18))
+    for sx in range(int(x + 24), int(x + rect.w - 20), 38):
+        pygame.draw.line(surface, (42, 45, 48), (sx, y + 10), (sx, y + rect.h - 10), 3)
+    label = font_terminal_small.render("FUEL", True, (225, 205, 160))
+    surface.blit(label, (x + rect.w // 2 - label.get_width() // 2, y + rect.h // 2 - 7))
+    if not STATE.mission2_tanker_exploded:
+        leak = pygame.Surface((100, 36), pygame.SRCALPHA)
+        pygame.draw.ellipse(leak, (45, 38, 25, 125), (0, 0, 100, 36))
+        surface.blit(leak, (x + rect.w - 24, y + rect.h - 5))
+
+
+def _draw_story_prop(surface, prop, fcx, fcy):
+    """Small non-interactive environmental props spawned by trigger zones."""
+    sx, sy = _world(prop["pos"], fcx, fcy)
+    kind = prop.get("kind", "soot")
+    age = prop.get("age", 0)
+    pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008 + sx * 0.01)
+    if kind == "flare":
+        glow = pygame.Surface((70, 50), pygame.SRCALPHA)
+        pygame.draw.ellipse(glow, (255, 80, 25, int(45 + 40 * pulse)), (0, 10, 70, 30))
+        surface.blit(glow, (sx - 35, sy - 24))
+        pygame.draw.rect(surface, (95, 35, 25), (sx - 10, sy - 3, 20, 6), border_radius=2)
+        pygame.draw.circle(surface, (255, 190, 75), (sx + 9, sy), 4)
+    elif kind == "soot":
+        patch = pygame.Surface((95, 60), pygame.SRCALPHA)
+        pygame.draw.ellipse(patch, (8, 7, 6, 120), (0, 0, 95, 60))
+        pygame.draw.ellipse(patch, (55, 42, 28, 45), (10, 8, 76, 42), 2)
+        surface.blit(patch, (sx - 48, sy - 30))
+    elif kind == "broken_camera":
+        pygame.draw.ellipse(surface, (0, 0, 0, 65), (sx - 18, sy + 8, 36, 10))
+        pygame.draw.rect(surface, (28, 32, 34), (sx - 16, sy - 9, 32, 18), border_radius=3)
+        pygame.draw.circle(surface, (5, 7, 8), (sx + 8, sy), 7)
+        pygame.draw.line(surface, (80, 84, 82), (sx - 14, sy - 8), (sx - 28, sy - 24), 2)
+        pygame.draw.line(surface, (125, 40, 35), (sx - 12, sy + 2), (sx - 25, sy + 12), 2)
+    elif kind == "spark_box":
+        pygame.draw.rect(surface, (35, 38, 34), (sx - 14, sy - 16, 28, 32), border_radius=3)
+        pygame.draw.rect(surface, (85, 95, 80), (sx - 14, sy - 16, 28, 32), 1, border_radius=3)
+        if age % 45 < 10:
+            for i in range(5):
+                ang = i / 5.0 * math.tau + age * 0.12
+                pygame.draw.line(surface, (255, 210, 90), (sx, sy), (sx + math.cos(ang) * 18, sy + math.sin(ang) * 12), 1)
+    elif kind == "glint":
+        a = int(110 + 90 * pulse)
+        pygame.draw.circle(surface, (255, 255, 210), (sx, sy), 4)
+        pygame.draw.circle(surface, (255, 90, 45, a), (sx, sy), 15, 1)
+        pygame.draw.line(surface, (255, 235, 190), (sx - 30, sy), (sx + 30, sy), 1)
+        pygame.draw.line(surface, (255, 235, 190), (sx, sy - 30), (sx, sy + 30), 1)
+    elif kind == "field_radio":
+        _draw_prop_icon(surface, "radio", sx, sy, scale=0.62, active=True, color=(245, 190, 65))
+    elif kind == "cone":
+        pygame.draw.ellipse(surface, (0, 0, 0, 55), (sx - 12, sy + 7, 24, 8))
+        pygame.draw.polygon(surface, (220, 90, 28), [(sx, sy - 17), (sx - 12, sy + 12), (sx + 12, sy + 12)])
+        pygame.draw.line(surface, (245, 210, 130), (sx - 6, sy - 2), (sx + 6, sy - 2), 2)
+        pygame.draw.rect(surface, (80, 55, 35), (sx - 15, sy + 10, 30, 5), border_radius=1)
+    elif kind == "barrel":
+        pygame.draw.ellipse(surface, (0, 0, 0, 60), (sx - 16, sy + 12, 32, 10))
+        pygame.draw.rect(surface, (75, 62, 45), (sx - 13, sy - 17, 26, 34), border_radius=5)
+        pygame.draw.rect(surface, (110, 90, 55), (sx - 13, sy - 17, 26, 34), 2, border_radius=5)
+        pygame.draw.line(surface, (45, 40, 34), (sx - 12, sy - 5), (sx + 12, sy - 5), 2)
+        pygame.draw.line(surface, (45, 40, 34), (sx - 12, sy + 7), (sx + 12, sy + 7), 2)
+    elif kind == "puddle":
+        puddle = pygame.Surface((80, 38), pygame.SRCALPHA)
+        pygame.draw.ellipse(puddle, (25, 35, 44, 105), (0, 0, 80, 38))
+        pygame.draw.ellipse(puddle, (92, 110, 125, 38), (12, 7, 42, 16), 1)
+        surface.blit(puddle, (sx - 40, sy - 19))
+    elif kind == "sign":
+        pygame.draw.ellipse(surface, (0, 0, 0, 55), (sx - 20, sy + 12, 40, 10))
+        pygame.draw.line(surface, (80, 80, 72), (sx - 10, sy + 14), (sx + 12, sy - 16), 3)
+        pygame.draw.rect(surface, (55, 62, 65), (sx - 26, sy - 25, 42, 18))
+        pygame.draw.rect(surface, (150, 150, 125), (sx - 26, sy - 25, 42, 18), 1)
+        txt = font_terminal_small.render("12", True, (190, 190, 160))
+        surface.blit(txt, (sx - txt.get_width() // 2 - 5, sy - 24))
+    else:
+        pygame.draw.circle(surface, (90, 80, 65), (sx, sy), 8)
+
+
+def _draw_story_props(surface, fcx, fcy):
+    for prop in getattr(STATE, "mission2_story_props", []):
+        _draw_story_prop(surface, prop, fcx, fcy)
+
+
+def _draw_sniper_lasers_world(surface, fcx, fcy):
+    for laser in getattr(STATE, "mission2_sniper_lasers", []):
+        sx1, sy1 = _world(laser["from"], fcx, fcy)
+        sx2, sy2 = _world(laser["to"], fcx, fcy)
+        alpha = max(0, min(190, int(laser.get("life", 0) * 4)))
+        beam = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        pygame.draw.line(beam, (255, 35, 22, alpha), (sx1, sy1), (sx2, sy2), 3)
+        pygame.draw.line(beam, (255, 175, 110, alpha // 2), (sx1, sy1), (sx2, sy2), 1)
+        pygame.draw.circle(beam, (255, 45, 30, alpha), (int(sx2), int(sy2)), 8, 1)
+        surface.blit(beam, (0, 0))
+
+
+def _draw_sniper_muzzle_flashes(surface, fcx, fcy):
+    for flash in getattr(STATE, "mission2_sniper_muzzle_flashes", []):
+        sx, sy = _world(flash.get("pos", SNIPER_NEST_POS), fcx, fcy)
+        life = flash.get("life", 1)
+        max_life = max(1, flash.get("max_life", 16))
+        t = max(0.0, min(1.0, life / max_life))
+        glow = pygame.Surface((150, 120), pygame.SRCALPHA)
+        cx, cy = 75, 60
+        pygame.draw.circle(glow, (255, 245, 190, int(210 * t)), (cx, cy), int(10 + 20 * t))
+        pygame.draw.circle(glow, (255, 110, 35, int(130 * t)), (cx, cy), int(26 + 32 * t), 2)
+        pygame.draw.line(glow, (255, 220, 130, int(180 * t)), (cx, cy), (cx - 48, cy + 38), 4)
+        surface.blit(glow, (sx - cx, sy - cy))
+
+
+def _draw_tinnitus_overlay(surface):
+    timer = getattr(STATE, "mission2_tinnitus_timer", 0)
+    if timer <= 0:
+        return
+    strength = min(1.0, timer / 120.0)
+    gray = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    gray.fill((185, 185, 175, int(46 * strength)))
+    surface.blit(gray, (0, 0))
+    red = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    pygame.draw.rect(red, (120, 0, 0, int(45 * strength)), (0, 0, WIDTH, HEIGHT), 18)
+    surface.blit(red, (0, 0))
+    # Cheap disorientation: scanline jitter bars.
+    for i in range(9):
+        y = (pygame.time.get_ticks() // 6 + i * 71) % HEIGHT
+        bar = pygame.Surface((WIDTH, 3), pygame.SRCALPHA)
+        bar.fill((255, 245, 220, int(22 * strength)))
+        surface.blit(bar, (random.randint(-5, 5), y))
+
+
+def _draw_gantry(surface, fcx, fcy):
+    """Clear top-down highway sign gantry / sniper platform landmark."""
+    sx, sy = _world(SNIPER_NEST_POS, fcx, fcy)
+    # Platform shadow.
+    shadow = pygame.Surface((330, 120), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 70), (8, 62, 314, 36))
+    surface.blit(shadow, (sx - 165, sy - 50))
+    # Crossbeam and service catwalk.
+    pygame.draw.rect(surface, (46, 48, 46), (sx - 160, sy - 38, 320, 18), border_radius=2)
+    pygame.draw.rect(surface, (83, 84, 78), (sx - 160, sy - 38, 320, 18), 2, border_radius=2)
+    for gx in range(sx - 148, sx + 150, 22):
+        pygame.draw.line(surface, (26, 28, 27), (gx, sy - 38), (gx + 18, sy - 20), 2)
+    # Support towers.
+    for lx in (sx - 142, sx + 142):
+        pygame.draw.rect(surface, (55, 56, 52), (lx - 8, sy - 72, 16, 90))
+        pygame.draw.rect(surface, (96, 95, 84), (lx - 8, sy - 72, 16, 90), 2)
+        for yy in range(sy - 62, sy + 12, 14):
+            pygame.draw.line(surface, (25, 25, 24), (lx - 7, yy), (lx + 7, yy + 12), 2)
+            pygame.draw.line(surface, (25, 25, 24), (lx + 7, yy), (lx - 7, yy + 12), 2)
+    # Road signs under the gantry.
+    sign_rects = [pygame.Rect(sx - 108, sy - 74, 92, 40), pygame.Rect(sx + 16, sy - 74, 92, 40)]
+    for i, rect in enumerate(sign_rects):
+        pygame.draw.rect(surface, (38, 55, 52), rect, border_radius=4)
+        pygame.draw.rect(surface, (150, 165, 140), rect, 2, border_radius=4)
+        txt = font_terminal_small.render("ROUTE 12" if i == 0 else "CHECKPOINT", True, (205, 220, 190))
+        surface.blit(txt, (rect.centerx - txt.get_width() // 2, rect.y + 7))
+        txt2 = font_terminal_small.render("NORTH" if i == 0 else "12", True, (160, 185, 160))
+        surface.blit(txt2, (rect.centerx - txt2.get_width() // 2, rect.y + 22))
+    # Sniper silhouette and rifle, so the origin is physically readable.
+    pygame.draw.circle(surface, (8, 8, 8), (sx, sy - 15), 7)
+    pygame.draw.rect(surface, (12, 12, 11), (sx - 6, sy - 12, 12, 19), border_radius=3)
+    pygame.draw.line(surface, (8, 8, 7), (sx + 3, sy - 10), (sx - 34, sy + 20), 4)
+    pygame.draw.circle(surface, (255, 230, 160), (sx - 34, sy + 20), 3)
+    if getattr(STATE, "mission2_stage", "") == STAGE_SNIPER or getattr(STATE, "mission2_sniper_origin_revealed", False):
+        lab = font_terminal_small.render("NORTHEAST GANTRY", True, (255, 170, 90))
+        surface.blit(lab, (sx - lab.get_width() // 2, sy + 28))
+
+
+def _draw_actor(surface, actor, fcx, fcy):
+    """Top-down KRAP squadmate. Pose is driven entirely by activity string."""
+    x = actor["pos"][0] - fcx
+    y = actor["pos"][1] - fcy
+    name  = actor.get("name", "")
+    activity = (actor.get("activity") or "standing").lower()
+
+    # alive is ONLY used for label colour and blood — never for pose branch.
+    alive = actor.get("alive", True)
+
+    accent = {
+        "GABI":   (220, 175,  70),
+        "SEBY":   ( 85, 170, 225),
+        "DARIUS": (110, 220, 145),
+    }.get(name, C_KRAP_BLUE)
+    name_col = (150, 185, 230) if alive else (130, 80, 80)
+
+    # --- Pose flags ---------------------------------------------------
+    is_down      = "down"   in activity or "dead" in activity
+    is_drag_body = "dragging_body" in activity
+    is_drag      = ("drag" in activity) and not is_drag_body
+    is_reach     = "reach"  in activity or "radio" in activity
+    is_frozen    = "frozen" in activity or "shock" in activity
+    is_crouch    = is_drag or is_reach or is_frozen or "crouch" in activity or "cover" in activity
+    is_shout     = "shout"  in activity or "yell" in activity
+
+    if is_down:
+        # ---- DOWNED body ------------------------------------------------
+        pygame.draw.ellipse(surface, (0, 0, 0, 110),
+                            (x - 28, y + 2, 56, 16))
+        pygame.draw.rect(surface, (36, 44, 52),
+                         (x - 22, y - 10, 44, 18), border_radius=6)
+        pygame.draw.rect(surface, C_KRAP_BLUE,
+                         (x - 12, y - 10, 24, 4), border_radius=2)
+        # Rifle dropped beside body
+        pygame.draw.line(surface, (16, 16, 15),
+                         (x - 26, y + 6), (x + 26, y - 4), 4)
+        # Head
+        pygame.draw.circle(surface, C_PLAYER_SKIN,
+                           (int(x - 20), int(y - 3)), 5)
+        # Blood smear
+        pygame.draw.ellipse(surface, (90, 14, 14, 190),
+                            (x - 14, y + 6, 28, 9))
+
+    else:
+        # ---- UPRIGHT / CROUCHED body ------------------------------------
+        body_dy = 6 if is_crouch else 0
+        cy = y + body_dy
+
+        # Shadow
+        sw = 44 if is_crouch else 36
+        shad = pygame.Surface((sw, 14), pygame.SRCALPHA)
+        pygame.draw.ellipse(shad, (0, 0, 0, 70), shad.get_rect())
+        surface.blit(shad, (x - sw // 2, cy + 12))
+
+        # Legs
+        boot = (10, 10, 12)
+        trouser = (24, 28, 34)
+        if is_crouch:
+            pygame.draw.ellipse(surface, boot,    (x - 15, cy + 11, 14, 8))
+            pygame.draw.ellipse(surface, boot,    (x +  1, cy + 11, 14, 8))
+            pygame.draw.rect(surface,   trouser,  (x - 14, cy +  4, 10, 10), border_radius=2)
+            pygame.draw.rect(surface,   trouser,  (x +  4, cy +  4, 10, 10), border_radius=2)
+        else:
+            pygame.draw.ellipse(surface, boot,    (x - 13, cy + 17, 12, 7))
+            pygame.draw.ellipse(surface, boot,    (x +  1, cy + 17, 12, 7))
+            pygame.draw.rect(surface,   trouser,  (x - 10, cy +  3,  8, 15), border_radius=2)
+            pygame.draw.rect(surface,   trouser,  (x +  2, cy +  3,  8, 15), border_radius=2)
+
+        # Torso
+        torso_pts = [
+            (x - 13, cy - 14), (x + 13, cy - 14),
+            (x + 11, cy + 10), (x -  11, cy + 10),
+        ]
+        pygame.draw.polygon(surface, (44, 54, 60), torso_pts)
+        pygame.draw.polygon(surface, (22, 28, 32), torso_pts, 2)
+        pygame.draw.rect(surface, (34, 42, 48),
+                         (x - 9, cy - 9, 18, 14), border_radius=3)
+        pygame.draw.rect(surface, C_KRAP_BLUE,
+                         (x - 11, cy - 12, 22, 4), border_radius=2)
+        pygame.draw.circle(surface, accent, (int(x + 9), int(cy + 3)), 3)
+
+        # --- Arms & rifle: branch on pose ---
+        if is_drag:
+            # Both arms extended, pulling a body behind them
+            lh = (x - 24, cy + 14)
+            rh = (x - 18, cy +  6)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x - 11, cy - 4), lh, 5)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x -  9, cy - 6), rh, 5)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, lh, 3)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, rh, 3)
+            # Rifle slung across back
+            pygame.draw.line(surface, (16, 16, 15),
+                             (x + 6, cy - 4), (x + 22, cy + 12), 3)
+
+        elif is_reach:
+            # One arm reaching forward to grab the radio handset
+            lh = (x - 12, cy + 2)
+            rh = (x + 20, cy - 16)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x - 11, cy - 4), lh, 5)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x +  9, cy - 6), rh, 5)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, lh, 3)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, rh, 3)
+            # Radio handset in reaching hand
+            pygame.draw.rect(surface, (20, 24, 28),
+                             (rh[0] - 3, rh[1] - 5, 6, 9), border_radius=1)
+            pygame.draw.line(surface, (40, 50, 55),
+                             rh, (rh[0] - 6, rh[1] + 10), 1)
+            # Rifle dropped across lap
+            pygame.draw.line(surface, (16, 16, 15),
+                             (x - 14, cy + 8), (x + 14, cy + 8), 3)
+
+        elif is_drag_body:
+            # Hunched forward, walking backward, both arms gripping under Gabi's arms.
+            arm_thick = 5
+            leg_col = (24, 28, 34)
+            skin = C_PLAYER_SKIN
+            step = (pygame.time.get_ticks() // 140) % 2
+            leg_off = 3 if step else -3
+            pygame.draw.rect(surface, leg_col,
+                             (x - 12 + leg_off, cy + 4, 7, 14), border_radius=2)
+            pygame.draw.rect(surface, leg_col,
+                             (x + 5 - leg_off, cy + 4, 7, 14), border_radius=2)
+            lh = (x - 16, cy + 14)
+            rh = (x + 4, cy + 16)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x - 11, cy - 4), lh, arm_thick + 1)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x + 9, cy - 6), rh, arm_thick + 1)
+            pygame.draw.circle(surface, skin, lh, 4)
+            pygame.draw.circle(surface, skin, rh, 4)
+            pygame.draw.arc(surface, (60, 72, 84),
+                (x - 18, cy - 12, 36, 24),
+                math.pi * 0.8, math.pi * 1.8, 3)
+            pygame.draw.line(surface, (16, 16, 15),
+                (x + 8 + step, cy - 10), (x + 26 + step, cy - 2), 3)
+
+        elif is_frozen or is_shout:
+            # Rifle lowered in shock, hands gripping low
+            lh = (x -  8, cy + 8)
+            rh = (x + 10, cy + 10)
+            pygame.draw.line(surface, (16, 16, 15),
+                             lh, (x + 18, cy + 2), 3)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x - 11, cy - 4), lh, 5)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x +  9, cy - 6), rh, 5)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, lh, 3)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, rh, 3)
+
+        else:
+            # Standard rifle-raised scanning pose
+            stock  = (x - 14, cy - 2)
+            muzzle = (x + 26, cy - 8)
+            lh     = (x -  4, cy - 4)
+            rh     = (x + 12, cy - 6)
+            pygame.draw.line(surface, (75, 55, 34),
+                             (x - 22, cy), stock, 4)
+            pygame.draw.line(surface, (16, 16, 15), stock, muzzle, 3)
+            pygame.draw.rect(surface, (25, 26, 24),
+                             (x - 8, cy - 8, 14, 6), border_radius=2)
+            pygame.draw.circle(surface, (9, 9, 8), muzzle, 2)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x - 11, cy - 4), lh, 5)
+            pygame.draw.line(surface, C_KRAP_UNIFORM,
+                             (x +  9, cy - 6), rh, 5)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, lh, 3)
+            pygame.draw.circle(surface, C_PLAYER_SKIN, rh, 3)
+
+        # Head
+        head_y = cy - (18 if is_crouch else 24)
+        pygame.draw.circle(surface, ( 7,  8,  9),
+                           (int(x), int(head_y)), 10)
+        pygame.draw.circle(surface, (58, 70, 82),
+                           (int(x), int(head_y)),  8)
+        pygame.draw.rect(surface, C_KRAP_BLUE,
+                         (x - 7, head_y - 5, 14, 3), border_radius=2)
+        pygame.draw.circle(surface, C_PLAYER_SKIN,
+                           (int(x + 1), int(head_y + 2)), 5)
+        # Eyes — dot pair
+        pygame.draw.circle(surface, (35, 22, 12),
+                           (int(x - 1), int(head_y + 1)), 1)
+        pygame.draw.circle(surface, (35, 22, 12),
+                           (int(x + 3), int(head_y + 1)), 1)
+
+    # Eye-line toward look_at target
+    if alive and actor.get("look_at"):
+        lx = actor["look_at"][0] - fcx
+        ly = actor["look_at"][1] - fcy
+        dx, dy = lx - x, ly - y
+        d = max(1.0, math.hypot(dx, dy))
+        ex, ey = x + dx / d * 34, y + dy / d * 34
+        pygame.draw.line(surface, (95, 150, 170),
+                         (int(x), int(y)), (int(ex), int(ey)), 1)
+        pygame.draw.circle(surface, (95, 150, 170),
+                           (int(ex), int(ey)), 2)
+
+    # Name label
+    lbl  = font_terminal_small.render(name, True, name_col)
+    shad = font_terminal_small.render(name, True, (0, 0, 0))
+    label_y = y - 44 if not is_down else y - 26
+    surface.blit(shad, (x - lbl.get_width() // 2 + 1, label_y + 1))
+    surface.blit(lbl,  (x - lbl.get_width() // 2,     label_y))
+
+    # Activity sub-label removed — was only used by deleted sniper cutscene.
+
+def _draw_prop_icon(surface, kind, cx, cy, scale=1.0, active=True, color=C_TERMINAL):
+    """Draw a readable clue/evidence prop icon.
+
+    Used by both the in-world prop and the card preview so the object identity
+    stays consistent.  Positions are snapped to pixels to prevent texture shimmer
+    when the camera scrolls.
+    """
+    s = max(0.35, float(scale))
+    cx, cy = int(round(cx)), int(round(cy))
+    pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.006)
+    if kind == "radio" or kind == "static":
+        # Smaller broken field radio: cracked case, bent antenna, dead speaker,
+        # loose wire, and a failing red indicator.
+        w, h = int(34 * s), int(24 * s)
+        x, y = cx - w // 2, cy - h // 2
+        # Broken shadow / tilted debris plate.
+        pygame.draw.ellipse(surface, (0, 0, 0, 65), (x - int(5*s), y + int(16*s), w + int(10*s), int(10*s)))
+        pygame.draw.rect(surface, (10, 13, 14), (x, y, w, h), border_radius=max(2, int(3*s)))
+        pygame.draw.rect(surface, (74, 86, 88), (x, y, w, h), max(1, int(2*s)), border_radius=max(2, int(3*s)))
+        # Chipped corner.
+        chip = [(x + w - int(8*s), y), (x + w, y), (x + w, y + int(8*s))]
+        pygame.draw.polygon(surface, (4, 6, 7), chip)
+        # Cracked display.
+        pygame.draw.rect(surface, (3, 6, 7), (x + int(5*s), y + int(6*s), int(13*s), int(8*s)))
+        pygame.draw.line(surface, (55, 75, 76), (x + int(6*s), y + int(7*s)), (x + int(16*s), y + int(13*s)), max(1, int(1*s)))
+        pygame.draw.line(surface, (55, 75, 76), (x + int(12*s), y + int(7*s)), (x + int(9*s), y + int(14*s)), max(1, int(1*s)))
+        # Speaker/knob, dark and damaged.
+        pygame.draw.circle(surface, (25, 29, 30), (x + int(25*s), y + int(13*s)), max(4, int(5*s)))
+        pygame.draw.circle(surface, (8, 10, 11), (x + int(25*s), y + int(13*s)), max(2, int(3*s)))
+        # Bent antenna and loose cable.
+        pygame.draw.line(surface, (82, 90, 92), (x + int(7*s), y + int(1*s)), (x - int(5*s), y - int(13*s)), max(1, int(2*s)))
+        pygame.draw.line(surface, (82, 90, 92), (x - int(5*s), y - int(13*s)), (x - int(2*s), y - int(20*s)), max(1, int(1*s)))
+        pygame.draw.line(surface, (45, 48, 42), (x + int(8*s), y + h), (x - int(8*s), y + h + int(8*s)), max(1, int(2*s)))
+        pygame.draw.circle(surface, (38, 40, 36), (x - int(9*s), y + h + int(8*s)), max(1, int(2*s)))
+        led = (255, 45, 30) if active and pulse > 0.58 else (75, 18, 14)
+        pygame.draw.circle(surface, led, (x + w - int(5*s), y + int(5*s)), max(2, int(2*s)))
+    elif kind == "mag_paint":
+        tag = font_terminal.render("MAG", True, (22, 22, 20))
+        tag = pygame.transform.rotate(tag, -9)
+        if scale != 1.0:
+            tag = pygame.transform.smoothscale(tag, (max(1, int(tag.get_width()*s)), max(1, int(tag.get_height()*s))))
+        tag.set_alpha(190 if active else 120)
+        surface.blit(tag, (cx - tag.get_width()//2, cy - tag.get_height()//2))
+        pygame.draw.line(surface, (18, 18, 16), (cx - int(28*s), cy + int(18*s)), (cx + int(30*s), cy - int(16*s)), max(2, int(3*s)))
+        pygame.draw.rect(surface, (95, 90, 75), (cx + int(32*s), cy - int(20*s), int(10*s), int(22*s)), border_radius=max(1, int(2*s)))
+        pygame.draw.rect(surface, (25, 25, 25), (cx + int(32*s), cy - int(25*s), int(10*s), int(5*s)))
+    elif kind == "timer_fragment":
+        # Charred circuit/timing relay with clipped wires.
+        w, h = int(42*s), int(28*s)
+        x, y = cx - w//2, cy - h//2
+        pygame.draw.ellipse(surface, (0, 0, 0, 62), (x - int(5*s), y + int(18*s), w + int(10*s), int(10*s)))
+        pygame.draw.rect(surface, (10, 20, 14), (x, y, w, h), border_radius=max(2, int(3*s)))
+        pygame.draw.rect(surface, (42, 92, 58), (x, y, w, h), max(1, int(2*s)), border_radius=max(2, int(3*s)))
+        for wx1, wx2 in [(-int(11*s), -int(2*s)), (w + int(2*s), w + int(12*s))]:
+            pygame.draw.line(surface, (120, 45, 35), (x + wx1, y + int(7*s)), (x + wx2, y + int(15*s)), max(1, int(2*s)))
+        for i, chip_col in enumerate([(18, 50, 28), (58, 120, 70), (20, 35, 28)]):
+            pygame.draw.rect(surface, chip_col, (x + int((7 + i*11)*s), y + int(7*s), int(7*s), int(6*s)))
+        pygame.draw.circle(surface, (255, 55, 38) if active and pulse > 0.5 else (90, 22, 18), (x + w - int(8*s), y + int(8*s)), max(2, int(3*s)))
+        pygame.draw.arc(surface, (25, 25, 20), (x - int(7*s), y - int(6*s), w + int(14*s), h + int(16*s)), 0.2, 2.7, max(1, int(2*s)))
+    elif kind == "bootprints":
+        # Two clean square-tread government prints crossing the blast soot.
+        w, h = int(18*s), int(32*s)
+        for i, (ox, oy, rot) in enumerate([(-10, -8, -10), (9, 9, 8)]):
+            foot = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
+            pygame.draw.ellipse(foot, (0, 0, 0, 50), (2, h - int(7*s), w + 4, int(10*s)))
+            pygame.draw.rect(foot, (30, 27, 23), (4, 3, w, h), border_radius=max(2, int(4*s)))
+            pygame.draw.rect(foot, (12, 12, 10), (5, 4, w-2, h-2), max(1, int(1*s)), border_radius=max(2, int(4*s)))
+            for ty in range(7, max(8, h - 4), max(4, int(6*s))):
+                pygame.draw.line(foot, (82, 75, 58), (7, ty), (w + 1, ty), max(1, int(1*s)))
+            foot = pygame.transform.rotate(foot, rot)
+            surface.blit(foot, (cx + int(ox*s) - foot.get_width()//2, cy + int(oy*s) - foot.get_height()//2))
+        pygame.draw.arc(surface, (92, 82, 55), (cx - int(28*s), cy - int(20*s), int(56*s), int(42*s)), 3.4, 5.9, max(1, int(1*s)))
+    elif kind == "range_card":
+        # Scratch marks / folded range card foreshadowing the kill-box.
+        w, h = int(46*s), int(32*s)
+        x, y = cx - w//2, cy - h//2
+        pygame.draw.rect(surface, (0, 0, 0), (x + int(3*s), y + int(4*s), w, h), border_radius=max(1, int(2*s)))
+        pygame.draw.polygon(surface, (185, 174, 132), [(x, y), (x+w, y+int(3*s)), (x+w-int(4*s), y+h), (x+int(3*s), y+h-int(2*s))])
+        pygame.draw.polygon(surface, (80, 65, 42), [(x, y), (x+w, y+int(3*s)), (x+w-int(4*s), y+h), (x+int(3*s), y+h-int(2*s))], max(1, int(1*s)))
+        for i, mark in enumerate(("180", "220", "260")):
+            yy = y + int((7 + i*8)*s)
+            pygame.draw.line(surface, (95, 68, 45), (x + int(7*s), yy), (x + int(24*s), yy), max(1, int(1*s)))
+            if s >= 0.8:
+                txt = font_terminal_small.render(mark, True, (75, 48, 35))
+                txt = pygame.transform.smoothscale(txt, (max(1, int(txt.get_width()*s*0.55)), max(1, int(txt.get_height()*s*0.55))))
+                surface.blit(txt, (x + int(27*s), yy - int(5*s)))
+        pygame.draw.line(surface, (155, 35, 30), (x + int(8*s), y + h - int(7*s)), (x + w - int(8*s), y + int(6*s)), max(1, int(2*s)))
+    elif kind in ("manifest", "decree", "packet", "document"):
+        w, h = int(38*s), int(48*s)
+        x, y = cx - w//2, cy - h//2
+        paper_col = (215, 205, 174) if kind != "packet" else (185, 170, 130)
+        pygame.draw.rect(surface, (0, 0, 0), (x + int(3*s), y + int(4*s), w, h), border_radius=max(1, int(2*s)))
+        pygame.draw.rect(surface, paper_col, (x, y, w, h), border_radius=max(1, int(2*s)))
+        pygame.draw.rect(surface, (75, 60, 42), (x, y, w, h), max(1, int(1*s)), border_radius=max(1, int(2*s)))
+        if kind == "manifest":
+            pygame.draw.rect(surface, (70, 55, 35), (x + int(8*s), y - int(5*s), int(22*s), int(8*s)), border_radius=max(1, int(2*s)))
+        if kind == "decree":
+            pygame.draw.rect(surface, (160, 35, 30), (x + int(5*s), y + int(7*s), w - int(10*s), int(8*s)))
+        for i in range(4):
+            yy = y + int((18 + i*7)*s)
+            pygame.draw.line(surface, (95, 82, 62), (x + int(7*s), yy), (x + w - int(7*s), yy), max(1, int(1*s)))
+        if kind == "packet":
+            pygame.draw.circle(surface, (155, 30, 28), (x + w - int(10*s), y + int(12*s)), max(3, int(5*s)), max(1, int(1*s)))
+    else:
+        w, h = int(54*s), int(38*s)
+        x, y = cx - w//2, cy - h//2
+        pygame.draw.rect(surface, (4, 9, 10), (x, y, w, h), border_radius=max(2, int(4*s)))
+        pygame.draw.rect(surface, color, (x, y, w, h), max(1, int(2*s)), border_radius=max(2, int(4*s)))
+        pygame.draw.rect(surface, (7, 22, 18), (x + int(7*s), y + int(7*s), w - int(14*s), h - int(16*s)))
+        for i in range(3):
+            yy = y + int((12 + i*6)*s)
+            pygame.draw.line(surface, color, (x + int(12*s), yy), (x + w - int(12*s), yy), max(1, int(1*s)))
+        if active:
+            pygame.draw.circle(surface, color, (x + w - int(8*s), y + int(8*s)), max(2, int(3*s)))
+
+
+def _draw_world_prop(surface, item, fcx, fcy, active=True):
+    sx, sy = _world(item["pos"], fcx, fcy)
+    kind = item.get("kind", item.get("id", "document"))
+    if item in getattr(STATE, "mission2_clues", []):
+        prop_col = (245, 190, 65)
+    elif kind == "manifest":
+        prop_col = (255, 190, 90)
+    else:
+        prop_col = C_TERMINAL
+
+    # Small object, readable silhouette: visibility comes from a restrained halo
+    # instead of oversized clue art.  Completed props stay visible but quieter.
+    halo_r = PROP_WORLD_HALO_RADIUS
+    halo = pygame.Surface((halo_r * 2 + 8, halo_r * 2 + 8), pygame.SRCALPHA)
+    pulse = 0.62 + 0.38 * math.sin(pygame.time.get_ticks() * 0.005)
+    halo_alpha = int((48 if active else 20) * pulse)
+    pygame.draw.circle(halo, (*prop_col, halo_alpha), (halo_r + 4, halo_r + 4), halo_r)
+    pygame.draw.circle(halo, (*prop_col, min(120, halo_alpha + 38)), (halo_r + 4, halo_r + 4), halo_r, 1)
+    surface.blit(halo, (sx - halo_r - 4, sy - halo_r - 4))
+
+    _draw_prop_icon(surface, kind, sx, sy, scale=PROP_WORLD_SCALE, active=active, color=prop_col)
+
+
+def _draw_marker(surface, pos, label, col, fcx, fcy, radius=MARKER_RADIUS):
+    sx, sy = _world(pos, fcx, fcy)
+    pulse = int(80 + math.sin(time.time() * 5) * 35)
+    if -60 < sx < WIDTH + 60 and -60 < sy < HEIGHT + 60:
+        ring = pygame.Surface((radius * 3, radius * 3), pygame.SRCALPHA)
+        pygame.draw.circle(ring, (*col, pulse), (radius * 3 // 2, radius * 3 // 2), radius, 2)
+        pygame.draw.circle(ring, (*col, pulse // 2), (radius * 3 // 2, radius * 3 // 2), radius + 5, 1)
+        surface.blit(ring, (sx - radius * 3 // 2, sy - radius * 3 // 2))
+        txt = font_terminal_small.render(label, True, col)
+        surface.blit(txt, (sx - txt.get_width() // 2, sy - radius - 23))
+    else:
+        # Edge arrow.
+        cx = max(32, min(WIDTH - 32, sx))
+        cy = max(90, min(HEIGHT - 58, sy))
+        ang = math.atan2(sy - HEIGHT / 2, sx - WIDTH / 2)
+        pts = [
+            (cx + math.cos(ang) * 16, cy + math.sin(ang) * 16),
+            (cx + math.cos(ang + 2.45) * 12, cy + math.sin(ang + 2.45) * 12),
+            (cx + math.cos(ang - 2.45) * 12, cy + math.sin(ang - 2.45) * 12),
+        ]
+        pygame.draw.polygon(surface, col, pts)
+        txt = font_terminal_small.render(label, True, col)
+        surface.blit(txt, (cx - txt.get_width() // 2, cy + 16))
+
+
+def _draw_interactables(surface, fcx, fcy):
+    if STATE.mission2_stage == STAGE_INVESTIGATE:
+        for clue in STATE.mission2_clues:
+            _draw_world_prop(surface, clue, fcx, fcy, active=not clue["done"])
+            if not clue["done"]:
+                label = f"{clue['name']} [E]"
+                _draw_marker(surface, clue["pos"], label, (245, 190, 65), fcx, fcy)
+        if _clue_count() >= REQUIRED_INVESTIGATION_CLUES:
+            _draw_marker(surface, KILL_ZONE, "REGROUP", C_VASILE, fcx, fcy)
+    elif STATE.mission2_stage == STAGE_COMBAT:
+        phase = getattr(STATE, "mission2_post_sniper_phase", "")
+        if phase == "get_cover":
+            _draw_marker(surface, _nearest_killbox_cover(), "COVER", C_VASILE, fcx, fcy, radius=34)
+        elif phase == "survive":
+            _draw_marker(surface, _nearest_killbox_cover(), "STAY IN COVER", C_VASILE, fcx, fcy, radius=30)
+            _draw_marker(surface, SNIPER_NEST_POS, "SNIPER NEST", (255, 110, 60), fcx, fcy, radius=34)
+        elif phase == "flank":
+            _draw_marker(surface, _nearest_flank_marker(), "FLANK ROUTE", (255, 170, 80), fcx, fcy, radius=34)
+            _draw_marker(surface, SNIPER_NEST_POS, "SNIPER LINE", (255, 110, 60), fcx, fcy, radius=30)
+        elif phase == "clear":
+            _draw_marker(surface, SNIPER_NEST_POS, "SNIPER SUPPRESSED", (120, 220, 150), fcx, fcy, radius=28)
+    elif STATE.mission2_stage == STAGE_TRUCK:
+        truck = STATE.mission2_truck_manifest
+        _draw_world_prop(surface, truck, fcx, fcy, active=not truck["done"])
+        _draw_marker(surface, IPA_TRUCK_POS, "IPA MANIFEST [E]", (255, 190, 90), fcx, fcy)
+    elif STATE.mission2_stage == STAGE_TANKER:
+        _draw_marker(surface, TANKER_POS, "LEAKING TANKER", (255, 140, 60), fcx, fcy, radius=34)
+    elif STATE.mission2_stage == STAGE_RUN:
+        _draw_marker(surface, SAFE_ZONE, "RUN HERE", C_VASILE, fcx, fcy, radius=34)
+    elif STATE.mission2_stage == STAGE_EVIDENCE:
+        for ev in STATE.mission2_evidence:
+            _draw_world_prop(surface, ev, fcx, fcy, active=not ev["done"])
+            if not ev["done"]:
+                _draw_marker(surface, ev["pos"], f"{ev['name']} [E]", C_TERMINAL, fcx, fcy)
+        if _evidence_count() >= 3:
+            _draw_marker(surface, UPLOAD_TERMINAL_POS, "UPLOAD [E]", C_TERMINAL, fcx, fcy)
+    elif STATE.mission2_stage == STAGE_UPLOAD:
+        _draw_prop_icon(surface, "terminal", *_world(UPLOAD_TERMINAL_POS, fcx, fcy), scale=0.9, active=True, color=C_TERMINAL)
+        _draw_marker(surface, UPLOAD_TERMINAL_POS, "UPLOAD", C_TERMINAL, fcx, fcy)
+    elif STATE.mission2_stage == STAGE_EXFIL:
+        _draw_marker(surface, EXFIL_POS, "EXFIL", (80, 220, 120), fcx, fcy, radius=34)
+
+
+def _draw_card(surface):
+    card = getattr(STATE, "mission2_card", None)
+    if not card:
+        return
+    age = card.get("age", 0)
+    open_t = min(1.0, age / 18.0)
+    ease = 1 - (1 - open_t) ** 3
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, int(170 * ease)))
+    surface.blit(overlay, (0, 0))
+    col = card["color"]
+    w, h = 720, 330
+    x = WIDTH // 2 - w // 2
+    y = int(HEIGHT // 2 - h // 2 + (1 - ease) * 80)
+    shadow = pygame.Surface((w + 22, h + 22), pygame.SRCALPHA)
+    shadow.fill((0, 0, 0, int(105 * ease)))
+    surface.blit(shadow, (x + 10, y + 12))
+    pygame.draw.rect(surface, (5, 10, 13), (x, y, w, h), border_radius=6)
+    pygame.draw.rect(surface, col, (x, y, w, h), 2, border_radius=6)
+    pygame.draw.rect(surface, (2, 5, 8), (x, y, w, 54), border_radius=6)
+    pygame.draw.rect(surface, col, (x, y, 5, h), border_radius=3)
+    title = font_speaker.render(card["title"], True, col)
+    surface.blit(title, (x + 28, y + 13))
+    preview_w, preview_h = 142, 158
+    prop_x, prop_y = x + 102, y + 178
+    preview = pygame.Surface((preview_w, preview_h), pygame.SRCALPHA)
+    scan_y = int((age * 2) % preview_h)
+    pygame.draw.rect(preview, (0, 0, 0, 70), (0, 0, preview_w, preview_h), border_radius=8)
+    pygame.draw.rect(preview, (*col, 110), (0, 0, preview_w, preview_h), 1, border_radius=8)
+    _draw_prop_icon(preview, card.get("kind", "document"), preview_w // 2, preview_h // 2, scale=PROP_CARD_SCALE, active=True, color=col)
+    pygame.draw.line(preview, (*col, 125), (8, scan_y), (preview_w - 8, scan_y), 1)
+    surface.blit(preview, (prop_x - preview_w // 2, prop_y - preview_h // 2))
+    yy = y + 82
+    text_x = x + 195
+    max_w = w - 225
+    for line in card["lines"]:
+        words = line.split()
+        cur = ""
+        wrapped = []
+        for word in words:
+            test = (cur + " " + word).strip()
+            if font_dialogue.size(test)[0] > max_w and cur:
+                wrapped.append(cur)
+                cur = word
+            else:
+                cur = test
+        if cur:
+            wrapped.append(cur)
+        for part in wrapped:
+            surf = font_dialogue.render(part, True, C_WHITE)
+            surface.blit(surf, (text_x, yy))
+            yy += 32
+        yy += 8
+    hint = font_terminal.render("PRESS [E] TO CLOSE", True, col)
+    if age >= 18 or (pygame.time.get_ticks() // 400) % 2 == 0:
+        surface.blit(hint, (x + w - hint.get_width() - 26, y + h - 40))
+
+
+def _draw_hud(surface):
+    if not STATE.player:
+        return
+    # Exact Mission 1 HUD layout/positioning, with Mission 2 objective text.
+    hb_x, hb_y, hb_w, hb_h = 30, HEIGHT - 50, 160, 14
+    hp_ratio = max(0.0, STATE.player.hp / STATE.player.max_hp)
+    hud_bg = pygame.Surface((hb_w + 20, hb_h + 28), pygame.SRCALPHA)
+    pygame.draw.rect(hud_bg, (0, 0, 0, 140), (0, 0, hb_w + 20, hb_h + 28))
+    surface.blit(hud_bg, (hb_x - 10, hb_y - 16))
+    surface.blit(font_terminal_small.render("HP", True, C_TERMINAL), (hb_x, hb_y - 14))
+    pygame.draw.rect(surface, (30, 30, 30), (hb_x, hb_y, hb_w, hb_h))
+    if hp_ratio > 0.5:
+        bar_col = (int(200 * hp_ratio), int(220 * hp_ratio), 40)
+    elif hp_ratio > 0.25:
+        bar_col = (220, int(200 * hp_ratio * 2), 40)
+    else:
+        bar_col = (220, 40, 40)
+    pygame.draw.rect(surface, bar_col, (hb_x, hb_y, int(hb_w * hp_ratio), hb_h))
+    pygame.draw.rect(surface, C_TERMINAL, (hb_x, hb_y, hb_w, hb_h), 1)
+
+    obj_bg = pygame.Surface((620, 30), pygame.SRCALPHA)
+    pygame.draw.rect(obj_bg, (0, 0, 0, 150), (0, 0, 620, 30))
+    pygame.draw.line(obj_bg, C_KRAP_BLUE, (0, 0), (0, 30), 3)
+    surface.blit(obj_bg, (20, LETTER_H + 10))
+    obj_surf = font_prompt.render("OBJECTIVE: " + _objective, True, C_WHITE)
+    surface.blit(obj_surf, (30, LETTER_H + 18))
+
+    ammo_x, ammo_y = 30, hb_y - 96
+    bg_w, bg_h = 246, 92
+    bg = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
+    pygame.draw.rect(bg, (0, 0, 0, 140), (0, 0, bg_w, bg_h), border_radius=4)
+    pygame.draw.rect(bg, (40, 42, 38), (0, 0, bg_w, bg_h), 1, border_radius=4)
+    surface.blit(bg, (ammo_x - 6, ammo_y))
+    for i in range(4):
+        mx = ammo_x + 8 + i * 36
+        my = ammo_y + 8
+        is_active = i == 0
+        if is_active:
+            bullets_fill = min(STATE.ammo_in_mag, 12)
+            is_empty = STATE.ammo_in_mag <= 0
+        else:
+            bullets_fill = 12 if STATE.spare_mags >= i else 0
+            is_empty = STATE.spare_mags < i
+        top_w, bot_w, h = 24, 20, 46
+        taper = (top_w - bot_w) // 2
+        body_pts = [(mx, my), (mx + top_w, my), (mx + taper + bot_w, my + h), (mx + taper, my + h)]
+        if is_empty:
+            base = (45, 42, 38); hl = (55, 52, 48); rim = (55, 50, 45)
+        elif is_active:
+            base = (90, 86, 78); hl = (115, 110, 100); rim = (70, 66, 58)
+        else:
+            base = (72, 68, 62); hl = (92, 88, 80); rim = (60, 56, 50)
+        pygame.draw.polygon(surface, base, body_pts)
+        pygame.draw.polygon(surface, hl, [(mx + 1, my + 2), (mx + 5, my + 2), (mx + taper + 3, my + h - 3), (mx + taper + 1, my + h - 3)])
+        outline = C_TERMINAL if is_active else (rim if not is_empty else (55, 50, 45))
+        pygame.draw.polygon(surface, outline, body_pts, 1)
+        bullet_y = my + 8
+        gold = (220, 185, 45)
+        dark = (55, 52, 48) if not is_empty else (40, 38, 35)
+        for bi in range(12):
+            col = gold if bi < bullets_fill else dark
+            pygame.draw.circle(surface, col, (mx + top_w // 2, bullet_y + bi * 3), 2)
+        if is_empty:
+            pygame.draw.line(surface, (90, 55, 55), (mx + 2, my + 2), (mx + top_w - 2, my + h - 2), 1)
+            pygame.draw.line(surface, (90, 55, 55), (mx + top_w - 2, my + 2), (mx + 2, my + h - 2), 1)
+    ammo_text = f"{STATE.ammo_in_mag}/{STATE.mag_size}"
+    text_col = C_TERMINAL if STATE.ammo_in_mag > 0 else (220, 60, 60)
+    surface.blit(font_terminal_small.render(ammo_text, True, text_col), (ammo_x + 154, ammo_y + 8))
+    surface.blit(font_terminal_small.render("9MM", True, (100, 110, 100)), (ammo_x + 154, ammo_y + 26))
+    if STATE.is_reloading:
+        bar_x, bar_y = ammo_x + 148, ammo_y + 46
+        bar_w, bar_h = 80, 8
+        progress = 1.0 - STATE.reload_timer / 60.0
+        pygame.draw.rect(surface, (50, 50, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=2)
+        pygame.draw.rect(surface, (220, 160, 40), (bar_x, bar_y, int(bar_w * progress), bar_h), border_radius=2)
+        reload_lbl = font_terminal_small.render("RELOADING", True, (220, 160, 40))
+        surface.blit(reload_lbl, (ammo_x + 150, ammo_y + 58))
+    else:
+        mag_label = f"MAGS: {STATE.spare_mags}"
+        surface.blit(font_terminal_small.render(mag_label, True, (140, 150, 130)), (ammo_x + 154, ammo_y + 44))
+
+    bot_x = ammo_x - 6
+    bot_y = ammo_y - 42
+    bot_bg_w, bot_bg_h = 246, 36
+    bot_bg = pygame.Surface((bot_bg_w, bot_bg_h), pygame.SRCALPHA)
+    pygame.draw.rect(bot_bg, (0, 0, 0, 140), (0, 0, bot_bg_w, bot_bg_h), border_radius=4)
+    pygame.draw.rect(bot_bg, (40, 42, 38), (0, 0, bot_bg_w, bot_bg_h), 1, border_radius=4)
+    surface.blit(bot_bg, (bot_x, bot_y))
+    from mission import _draw_molotov_icon as _mission1_molotov_icon
+    for bi in range(4):
+        icon_x = bot_x + 18 + bi * 26
+        icon_y = bot_y + 23
+        _mission1_molotov_icon(surface, icon_x, icon_y, bi < STATE.player_bottles)
+    bot_lbl = font_terminal_small.render(f"MOLOTOVS  [G]", True, (255, 150, 60) if STATE.player_bottles > 0 else (130, 80, 80))
+    surface.blit(bot_lbl, (bot_x + 120, bot_y + 4))
+    bot_count = font_terminal_small.render(f"{STATE.player_bottles} / 4", True, C_TERMINAL if STATE.player_bottles > 0 else (180, 60, 60))
+    surface.blit(bot_count, (bot_x + 120, bot_y + 18))
+
+    hud_bg2 = pygame.Surface((180, 26), pygame.SRCALPHA)
+    pygame.draw.rect(hud_bg2, (0, 0, 0, 120), (0, 0, 180, 26))
+    surface.blit(hud_bg2, (20, 20))
+    surface.blit(font_terminal_small.render(f"HOSTILES: {len(STATE.enemies)}", True, C_TERMINAL), (30, 25))
+
+    comms = "COMMS OFFLINE" if STATE.mission2_comms_cut else "COMMS: VASILE"
+    comms_col = (220, 60, 55) if STATE.mission2_comms_cut else C_VASILE
+    cs = font_terminal_small.render(comms, True, comms_col)
+    surface.blit(cs, (WIDTH - cs.get_width() - 28, HEIGHT - 40))
+
+    if STATE.mission2_stage == STAGE_COMBAT and getattr(STATE, "mission2_post_sniper_phase", "") in ("get_cover", "survive", "flank"):
+        phase = getattr(STATE, "mission2_post_sniper_phase", "")
+        exposed = _player_exposed_to_sniper()
+        lock = getattr(STATE, "mission2_sniper_lock", 0)
+        lock_max = max(1, getattr(STATE, "mission2_sniper_lock_max", SNIPER_LOCK_FRAMES))
+        grace = getattr(STATE, "mission2_grace_timer", 0)
+
+        if grace > 0:
+            label = "SNIPER ACQUIRING"
+            col = (255, 180, 80)
+            ratio = 1.0 - grace / max(1, SNIPER_GRACE_FRAMES)
+        elif exposed:
+            label = "SNIPER LOCK"
+            col = (255, 65, 40)
+            ratio = lock / lock_max
+        else:
+            if phase == "get_cover":
+                label = "BEHIND COVER"
+            elif phase == "survive":
+                label = "HOLD COVER"
+            elif phase == "flank":
+                label = "FLANK NOW"
+            else:
+                label = "LINE BROKEN"
+            col = (90, 220, 135)
+            ratio = lock / lock_max
+
+        is_safe = not exposed and grace <= 0
+        show_bar = not (phase == "flank" and is_safe)
+
+        if is_safe:
+            panel_w, panel_h = 220, 34
+        else:
+            panel_w, panel_h = 380, 58
+
+        panel_x = WIDTH // 2 - panel_w // 2
+        panel_y = 92
+
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 190))
+        pygame.draw.rect(panel, col, panel.get_rect(), 1)
+        pygame.draw.rect(panel, (*col, 130), (0, 0, 5, panel_h))
+
+        surface.blit(panel, (panel_x, panel_y))
+
+        warn = font_terminal.render(label, True, col)
+        surface.blit(warn, (WIDTH // 2 - warn.get_width() // 2, panel_y + 7))
+
+        if show_bar:
+            bar_w = 310 if not is_safe else 180
+            bar_h = 9 if not is_safe else 5
+            bx = WIDTH // 2 - bar_w // 2
+            by = panel_y + (38 if not is_safe else 22)
+
+            pygame.draw.rect(surface, (35, 20, 18), (bx, by, bar_w, bar_h))
+
+            fill_w = int(bar_w * max(0.0, min(1.0, ratio)))
+
+            if grace > 0:
+                fill_col = (255, 180, 80)
+            elif exposed:
+                fill_col = (255, 55, 35)
+            else:
+                fill_col = (90, 220, 135)
+
+            pygame.draw.rect(surface, fill_col, (bx, by, fill_w, bar_h))
+            pygame.draw.rect(surface, col, (bx, by, bar_w, bar_h), 1)
+
+            if exposed and lock > lock_max * 0.75 and (pygame.time.get_ticks() // 160) % 2 == 0:
+                urgent = font_terminal_small.render("MOVE OR DIE", True, (255, 210, 190))
+                surface.blit(urgent, (WIDTH // 2 - urgent.get_width() // 2, by + 13))
+
+    if STATE.mission2_stage == STAGE_RUN:
+        sec = max(0, STATE.mission2_countdown // 60 + 1)
+        warn = font_speaker.render(f"RUN — TANKER DETONATION {sec}", True, (255, 75, 45))
+        panel = pygame.Surface((warn.get_width() + 34, warn.get_height() + 14), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 195))
+        pygame.draw.rect(panel, (220, 60, 40), panel.get_rect(), 2)
+        surface.blit(panel, (WIDTH // 2 - panel.get_width() // 2, 96))
+        surface.blit(warn, (WIDTH // 2 - warn.get_width() // 2, 103))
+
+    if STATE.mission2_stage == STAGE_UPLOAD:
+        pct = int(STATE.mission2_upload_progress * 100)
+        bar_w = 360
+        bx = WIDTH // 2 - bar_w // 2
+        by = HEIGHT - 116
+        pygame.draw.rect(surface, (0, 0, 0), (bx - 12, by - 28, bar_w + 24, 58))
+        surface.blit(font_terminal.render(f"EVIDENCE UPLOAD {pct}%", True, C_TERMINAL), (bx, by - 23))
+        pygame.draw.rect(surface, (30, 30, 30), (bx, by + 7, bar_w, 10))
+        pygame.draw.rect(surface, C_TERMINAL, (bx, by + 7, int(bar_w * STATE.mission2_upload_progress), 10))
+        pygame.draw.rect(surface, C_TERMINAL, (bx, by + 7, bar_w, 10), 1)
+
+
+def _draw_radio_text(surface):
+    if getattr(STATE, "mission2_card", None) or STATE.mission2_stage in (STAGE_SNIPER, STAGE_BLACKOUT):
+        return
+    pinned = [ft for ft in STATE.floating_texts if len(ft) >= 6 and ft[5] == "pin"]
+    for i, ft in enumerate(pinned[-2:]):
+        alpha = min(230, ft[4] * 3)
+        txt = font_terminal_small.render(ft[2], True, ft[3])
+        bg = pygame.Surface((min(520, txt.get_width() + 16), txt.get_height() + 8), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, min(150, alpha)))
+        pygame.draw.line(bg, (*ft[3], min(200, alpha)), (0, 0), (0, bg.get_height()), 3)
+        x = WIDTH - bg.get_width() - 28
+        y = LETTER_H + 74 + i * 30
+        surface.blit(bg, (x, y))
+        surface.blit(txt, (x + 10, y + 4))
+
+
+def _draw_clues_note(surface):
+    if not getattr(STATE, "mission2_all_clues_found", False):
+        return
+    if STATE.mission2_stage != STAGE_SNIPER:
+        return
+    phase = _sniper_phase_name()
+    if phase != "movement_one":
+        return
+    txt = font_dialogue.render("The evidence was wrong.", True, C_TERMINAL)
+    bg = pygame.Surface((txt.get_width() + 24, txt.get_height() + 12), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, 150))
+    pygame.draw.rect(bg, C_TERMINAL, bg.get_rect(), 1)
+    surface.blit(bg, (WIDTH // 2 - bg.get_width() // 2, HEIGHT - 90))
+    surface.blit(txt, (WIDTH // 2 - txt.get_width() // 2, HEIGHT - 86))
+
+
+def _draw_sniper_closeup_insert(surf, actor, cam_x, cam_y):
+    sx, sy = _world(actor["pos"], cam_x, cam_y)
+    panel_w, panel_h = 220, 280
+    px = WIDTH // 2 - panel_w // 2
+    py = 0
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    panel.fill((18, 16, 20, 235))
+    name = actor.get("name", "???")
+    fnt = pygame.font.Font(None, 22)
+    name_s = fnt.render(name, True, (200, 195, 180))
+    panel.blit(name_s, (panel_w // 2 - name_s.get_width() // 2, 8))
+    portrait_rect = pygame.Rect(panel_w // 2 - 48, 40, 96, 120)
+    pygame.draw.rect(panel, (35, 30, 28), portrait_rect, border_radius=4)
+    pygame.draw.rect(panel, (80, 75, 65), portrait_rect, 1, border_radius=4)
+    face_cx = portrait_rect.centerx
+    face_cy = portrait_rect.centery + 6
+    pygame.draw.circle(panel, (60, 55, 50), (face_cx, face_cy), 28)
+    pygame.draw.circle(panel, (85, 78, 70), (face_cx - 8, face_cy - 6), 5)
+    pygame.draw.circle(panel, (85, 78, 70), (face_cx + 8, face_cy - 6), 5)
+    activity = actor.get("activity", "")
+    if activity == "frozen":
+        pygame.draw.line(panel, (100, 95, 85), (face_cx - 14, face_cy + 12), (face_cx + 14, face_cy + 12), 2)
+    elif activity in ("shouting", "breaking"):
+        mouth_pts = [(face_cx - 10, face_cy + 10), (face_cx, face_cy + 16), (face_cx + 10, face_cy + 10)]
+        pygame.draw.lines(panel, (140, 130, 115), False, mouth_pts, 2)
+    hr_fnt = pygame.font.Font(None, 16)
+    hr = hr_fnt.render("HR 112 — SIG ACTIVE", True, (140, 35, 30))
+    panel.blit(hr, (panel_w // 2 - hr.get_width() // 2, 168))
+    for i in range(8):
+        bar_h = 4 + ((i * 7 + getattr(STATE, "mission2_timer", 0) * 3) % 17)
+        bar_x = 24 + i * 24
+        bar_y = 194 + (22 - bar_h)
+        c = (100 + i * 12, 180 + i * 6, 60 + i * 8)
+        pygame.draw.rect(panel, c, (bar_x, bar_y, 12, bar_h))
+    for i in range(6):
+        sy2 = 222 + i * 8
+        pygame.draw.line(panel, (55, 65, 50, 60 + i * 20), (16, sy2), (panel_w - 16, sy2), 1)
+    pygame.draw.line(panel, (40, 120, 200, 100), (16, 260), (panel_w - 16, 260), 1)
+    pygame.draw.line(panel, (40, 120, 200, 100), (16, 264), (panel_w - 16, 264), 1)
+    audio_lines = ["V-16  //  MIC-DROP", "BW  4.2kHz  //  VOX"]
+    for j, line in enumerate(audio_lines):
+        al = hr_fnt.render(line, True, (80, 160, 210))
+        panel.blit(al, (panel_w // 2 - al.get_width() // 2, 242 + j * 14))
+    surf.blit(panel, (px, py))
+    rain_dots = getattr(STATE, "mission2_rain_intensity", 0) > 0.5
+    if rain_dots:
+        for i in range(14):
+            dx = (getattr(STATE, "mission2_timer", 0) * 5 + i * 31) % panel_w
+            dy = (getattr(STATE, "mission2_timer", 0) * 7 + i * 53) % panel_h
+            a = 40 + (i * 17) % 80
+            panel.set_at((int(dx), int(dy)), (180, 195, 210, a))
+
+def _draw_dead_air_overlay(surf):
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((8, 6, 10, 110))
+    surf.blit(overlay, (0, 0))
+
+
+def _draw_sniper_subtitles(surface, bar_h):
+    pinned = [ft for ft in STATE.floating_texts if len(ft) >= 6 and ft[5] == "pin"]
+    if not pinned:
+        return
+    newest = pinned[-1]
+    for ft in pinned[:-1]:
+        if ft[4] > 10:
+            ft[4] = 10
+    raw = newest[2] or ""
+    color = newest[3] if len(newest) > 3 else (220, 220, 220)
+    life = newest[4] if len(newest) > 4 else 60
+    if ":" in raw:
+        speaker, _, spoken = raw.partition(":")
+        body_text = f"{speaker.strip()}: {spoken.strip().strip(chr(34))}"
+    else:
+        body_text = raw.strip()
+    if not body_text:
+        return
+    alpha = 255 if life > 20 else max(0, life * 12)
+    line = font_dialogue.render(body_text, True, (238, 235, 226))
+    if line.get_width() > WIDTH - 80:
+        line = font_terminal.render(body_text, True, (238, 235, 226))
+    line.set_alpha(alpha)
+    bar_top = HEIGHT - bar_h
+    card_h = min(bar_h - 6, line.get_height() + 10)
+    card_w = min(WIDTH - 60, line.get_width() + 36)
+    x = WIDTH // 2 - card_w // 2
+    y = bar_top + (bar_h - card_h) // 2
+    bg = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, min(210, alpha)))
+    pygame.draw.rect(bg, (*color, min(200, alpha)), (0, 0, 4, card_h))
+    surface.blit(bg, (x, y))
+    surface.blit(line, (x + 18, y + (card_h - line.get_height()) // 2))
+
+
+def _draw_sniper_overlay(surface):
+    if STATE.mission2_stage != STAGE_SNIPER:
+        return
+    phase = _sniper_phase_name()
+    pt = int(getattr(STATE, "mission2_sniper_phase_timer", 0))
+    cam_x = int(round(STATE.camera_x))
+    cam_y = int(round(STATE.camera_y))
+
+    def clamp(v, lo=0, hi=255):
+        return max(lo, min(hi, int(v)))
+
+    if getattr(STATE, "mission2_sniper_origin_revealed", False):
+        pulse = (math.sin(STATE.mission2_timer * 0.06) + 1) / 2
+        sx, sy = _world(SNIPER_NEST_POS, cam_x, cam_y)
+        gl = pygame.Surface((60, 60), pygame.SRCALPHA)
+        a = 90 + int(80 * pulse)
+        pygame.draw.circle(gl, (255, 255, 210, a), (30, 30), 4)
+        pygame.draw.circle(gl, (255, 255, 220, a // 2), (30, 30), 9)
+        surface.blit(gl, (sx - 30, sy - 30))
+
+    sil = getattr(STATE, "mission2_sniper_silhouette_flash", 0)
+    if sil > 0:
+        sx, sy = _world(SNIPER_NEST_POS, cam_x, cam_y)
+        a = clamp(sil * 12, 0, 220)
+        s = pygame.Surface((46, 58), pygame.SRCALPHA)
+        pygame.draw.ellipse(s, (10, 8, 10, a), (16, 4, 14, 14))
+        pygame.draw.polygon(s, (10, 8, 10, a), [(10, 22), (36, 22), (40, 50), (6, 50)])
+        pygame.draw.line(s, (10, 8, 10, a), (24, 26), (46, 18), 3)
+        surface.blit(s, (sx - 23, sy - 48))
+
+    flash = getattr(STATE, "mission2_sniper_flash", 0)
+    if flash > 0:
+        full = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        full.fill((255, 245, 220, clamp(flash * 12, 0, 200) // 6))
+        surface.blit(full, (0, 0))
+
+    bar_h = 64
+    bar = pygame.Surface((WIDTH, bar_h), pygame.SRCALPHA)
+    bar.fill((0, 0, 0, 235))
+    surface.blit(bar, (0, 0))
+    surface.blit(bar, (0, HEIGHT - bar_h))
+
+    label = {"regroup": "ROUTE 12 \u00b7 CHECKPOINT 12",
+             "movement_one": "ROUTE 12 \u00b7 CONTACT",
+             "movement_two": "ROUTE 12 \u00b7 THE SQUAD",
+             "movement_three": "ROUTE 12 \u00b7 YOU'RE NEXT"}.get(phase, "ROUTE 12")
+    stamp = font_terminal_small.render(label, True, (180, 60, 60))
+    surface.blit(stamp, (28, bar_h // 2 - stamp.get_height() // 2))
+    if (pygame.time.get_ticks() // 500) % 2 == 0:
+        rec = font_terminal_small.render("\u25cf REC", True, (220, 50, 50))
+        surface.blit(rec, (WIDTH - rec.get_width() - 28, bar_h // 2 - rec.get_height() // 2))
+
+    s_start = _beat("movement_one", "silence_start", 999999)
+    s_len = _beat("movement_one", "silence_frames", 110)
+    if phase == "movement_one" and s_start <= pt < s_start + s_len:
+        _draw_dead_air_overlay(surface)
+
+    _draw_sniper_callout(surface, cam_x, cam_y)
+    _draw_sniper_subtitles(surface, bar_h)
+    _draw_tinnitus_overlay(surface)
+    draw_vignette(surface, strength=210)
+
+
+def clamp_alpha(v):
+    return max(0, min(255, int(v)))
+
+
+def _wrap_text(text, font, max_width):
+    """Simple word-wrap that respects an existing pygame font."""
+    words = text.split()
+    if not words:
+        return [""]
+    lines = []
+    cur = words[0]
+    for w in words[1:]:
+        trial = cur + " " + w
+        if font.size(trial)[0] <= max_width:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    lines.append(cur)
+    return lines
+
+def _draw_blackout_overlay(surface):
+    if STATE.mission2_stage != STAGE_BLACKOUT:
+        return
+    fade = min(220, 220 - max(0, STATE.mission2_timer - 70))
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, max(90, fade)))
+    surface.blit(overlay, (0, 0))
+    if 35 < STATE.mission2_timer < 125:
+        txt = font_dialogue.render('VASILE: "Biribel, the file said there was a second--"', True, C_VASILE)
+        surface.blit(txt, (WIDTH // 2 - txt.get_width() // 2, HEIGHT // 2 - 52))
+    if STATE.mission2_timer > 95:
+        txt = font_speaker.render("COMMS LOST", True, (160, 165, 175))
+        surface.blit(txt, (WIDTH // 2 - txt.get_width() // 2, HEIGHT // 2 - 10))
+
+
+def game_draw(fcx: float, fcy: float) -> None:
+    screen.fill((25, 26, 26))
+    # Render from an integer camera.  This removes the tile/prop seam shimmer
+    # that happens when the camera scrolls by fractional pixels.
+    cam_x, cam_y = int(round(fcx)), int(round(fcy))
+
+    start_col = max(0, int(cam_x // TILE_SIZE) - 1)
+    end_col = min(MAP_W, int((cam_x + WIDTH) // TILE_SIZE) + 2)
+    start_row = max(0, int(cam_y // TILE_SIZE) - 1)
+    end_row = min(MAP_H, int((cam_y + HEIGHT) // TILE_SIZE) + 2)
+
+    tile_base = {
+        ".": (32, 33, 33),   # wet asphalt / highway
+        "g": (40, 36, 32),   # muddy shoulder
+        "d": (29, 35, 34),   # drainage ditch
+        "s": (34, 37, 35),   # service road
+        "O": (29, 36, 38),   # interior/control sector
+        "X": (29, 38, 32),
+        "T": (35, 32, 28),
+        "C": (54, 54, 52),
+        "B": (82, 82, 76),
+    }
+    for row in range(start_row, end_row):
+        for col in range(start_col, end_col):
+            sx, sy = col * TILE_SIZE - cam_x, row * TILE_SIZE - cam_y
+            tile = MISSION2_MAP[row][col]
+            base = tile_base.get(tile, (31, 32, 32))
+            pygame.draw.rect(screen, base, (sx, sy, TILE_SIZE, TILE_SIZE))
+            if (row + col) % 3 == 0:
+                seam = (25, 26, 26) if tile in ".TOX" else (31, 30, 28)
+                pygame.draw.line(screen, seam, (sx, sy + TILE_SIZE - 1), (sx + TILE_SIZE, sy + TILE_SIZE - 1), 1)
+            # Deterministic micro-detail keeps the big map from reading as an
+            # empty grid while avoiding per-frame random shimmer.
+            seed = row * 97 + col * 131
+            if tile == ".":
+                if seed % 11 == 0:
+                    pygame.draw.line(screen, (22, 22, 22), (sx + 10, sy + 18), (sx + 42, sy + 28), 1)
+                if seed % 17 == 0:
+                    pygame.draw.line(screen, (45, 42, 38), (sx + 4, sy + 50), (sx + 58, sy + 44), 2)
+            elif tile == "g":
+                if seed % 7 == 0:
+                    pygame.draw.circle(screen, (55, 48, 38), (sx + 18, sy + 38), 3)
+                if seed % 13 == 0:
+                    pygame.draw.line(screen, (48, 58, 42), (sx + 45, sy + 25), (sx + 49, sy + 18), 1)
+            elif tile == "d":
+                if seed % 5 == 0:
+                    pygame.draw.ellipse(screen, (24, 31, 38), (sx + 8, sy + 34, 34, 13))
+            elif tile in "sO":
+                if seed % 9 == 0:
+                    pygame.draw.rect(screen, (23, 27, 28), (sx + 8, sy + 8, 12, 3))
+
+    # Vertical lane stripes for the expanded Route 12 corridor.
+    for xcol in (28, 36, 44):
+        x = xcol * TILE_SIZE + TILE_SIZE // 2 - cam_x
+        for y in range(-int(cam_y) % 150 - 150, HEIGHT + 150, 150):
+            pygame.draw.rect(screen, (145, 130, 60), (x, y, 5, 72))
+
+    for v in STATE.mission2_vehicles:
+        _draw_vehicle(screen, v["rect"], v["kind"], cam_x, cam_y)
+
+    barrier_ids = {id(r) for r in STATE.mission2_barriers}
+    for wall in STATE.walls:
+        if wall is STATE.mission2_tanker_rect:
+            continue
+        dr = pygame.Rect(wall.x - cam_x, wall.y - cam_y, wall.w, wall.h)
+        if id(wall) in barrier_ids:
+            pygame.draw.rect(screen, (92, 92, 84), dr, border_radius=4)
+            pygame.draw.rect(screen, (38, 38, 36), dr, 2, border_radius=4)
+            pygame.draw.line(screen, (130, 130, 120), (dr.x + 6, dr.y + 8), (dr.right - 6, dr.y + 8), 1)
+        else:
+            pygame.draw.rect(screen, (63, 61, 58), dr)
+            pygame.draw.rect(screen, (106, 100, 90), dr, 2)
+
+    _draw_gantry(screen, cam_x, cam_y)
+
+    for decal in STATE.blood_decals[:]:
+        surf = pygame.Surface((decal[3] * 2, decal[3] * 2), pygame.SRCALPHA)
+        pygame.draw.circle(surf, (130, 10, 10, int(decal[2])), (decal[3], decal[3]), decal[3])
+        screen.blit(surf, (decal[0] - decal[3] - cam_x, decal[1] - decal[3] - cam_y))
+        decal[2] -= 0.25
+        if decal[2] <= 0:
+            STATE.blood_decals.remove(decal)
+
+    _draw_tanker(screen, cam_x, cam_y)
+    for fz in STATE.fire_zones:
+        fz.draw(screen, cam_x, cam_y)
+    _draw_story_props(screen, cam_x, cam_y)
+
+    _draw_interactables(screen, cam_x, cam_y)
+
+    for b in STATE.bullets:
+        pygame.draw.circle(screen, C_BULLET, (int(b["x"] - cam_x), int(b["y"] - cam_y)), 2)
+        pygame.draw.line(screen, (255, 220, 140), (b["x"] - cam_x, b["y"] - cam_y), (b.get("prev_x", b["x"] - b["dx"]) - cam_x, b.get("prev_y", b["y"] - b["dy"]) - cam_y), 2)
+
+    for tr in STATE.mission2_sniper_traces:
+        sx1, sy1 = _world(tr["from"], cam_x, cam_y)
+        sx2, sy2 = _world(tr["to"], cam_x, cam_y)
+        life_pct = max(0, min(1, tr["life"] / max(tr.get("max_life", 1), 1)))
+        a = max(0, min(255, int(life_pct * 200)))
+        kind = tr.get("kind", "body")
+        if kind == "near_miss":
+            base_c = (255, 220, 180)
+        elif kind == "concrete":
+            base_c = (200, 185, 160)
+        else:
+            base_c = (220, 180, 170)
+        segments = 9
+        seg_dist = 6
+        trace_surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        for i in range(segments):
+            frac = i / segments
+            jfrac = (i + 1) / segments
+            mx1 = sx1 + (sx2 - sx1) * frac + random.randint(-3, 3)
+            my1 = sy1 + (sy2 - sy1) * frac + random.randint(-3, 3)
+            mx2 = sx1 + (sx2 - sx1) * jfrac + random.randint(-3, 3)
+            my2 = sy1 + (sy2 - sy1) * jfrac + random.randint(-3, 3)
+            seg_a = max(0, a - i * 15)
+            thickness = max(1, 4 - i // 3)
+            pygame.draw.line(trace_surf, (*base_c, seg_a), (mx1, my1), (mx2, my2), thickness)
+        screen.blit(trace_surf, (0, 0))
+        if life_pct > 0.6:
+            spark = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            end_a = int((life_pct - 0.6) / 0.4 * 180)
+            pygame.draw.circle(spark, (255, 200, 150, end_a), (int(sx2), int(sy2)), 4)
+            pygame.draw.circle(spark, (255, 240, 220, end_a // 2), (int(sx2), int(sy2)), 8)
+            screen.blit(spark, (0, 0))
+
+    _draw_sniper_lasers_world(screen, cam_x, cam_y)
+    _draw_sniper_muzzle_flashes(screen, cam_x, cam_y)
+
+    for b in STATE.thrown_bottles:
+        t = b["t"]
+        bx = b["x"] - cam_x
+        by = b["y"] - cam_y - math.sin(t * math.pi) * 40
+        pygame.draw.circle(screen, (255, 120, 35), (int(bx), int(by)), 5)
+        pygame.draw.line(screen, (90, 55, 25), (bx, by), (bx + 3, by - 12), 3)
+
+    for actor in STATE.mission2_squad:
+        _draw_actor(screen, actor, cam_x, cam_y)
+
+    for e in STATE.enemies:
+        e.draw(screen, cam_x, cam_y)
+
+    reload_progress = 1.0 - STATE.reload_timer / 60.0 if STATE.is_reloading and STATE.reload_timer > 0 else 0.0
+    melee_progress = 1.0 - STATE.melee_timer / 18.0 if STATE.melee_active and STATE.melee_timer > 0 else 0.0
+    if STATE.player:
+        STATE.player.draw(
+            screen,
+            cam_x,
+            cam_y,
+            STATE.walls,
+            STATE.is_reloading,
+            reload_progress,
+            STATE.melee_active,
+            melee_progress,
+            is_moving=not STATE.player_dead and _last_keys and (_last_keys[pygame.K_w] or _last_keys[pygame.K_s] or _last_keys[pygame.K_a] or _last_keys[pygame.K_d]),
+        )
+
+    for p in STATE.particles:
+        p.draw(screen, cam_x, cam_y)
+    for c in STATE.casings:
+        c.draw(screen, cam_x, cam_y)
+    for pu in STATE.pickups:
+        px = pu[0] - cam_x
+        py = pu[1] - cam_y + math.sin(time.time() * 3 + pu[0]) * 3
+        if pu[2] == "bandage":
+            pygame.draw.rect(screen, (240, 240, 240), (px - 10, py - 10, 20, 20), border_radius=3)
+            pygame.draw.rect(screen, (220, 40, 40), (px - 2, py - 6, 4, 12))
+            pygame.draw.rect(screen, (220, 40, 40), (px - 6, py - 2, 12, 4))
+        else:
+            pygame.draw.rect(screen, (95, 90, 82), (px - 7, py - 12, 14, 24))
+
+    # Rain overlay.  Suppressed during the kill-box silence; intensity > 1.0
+    # spawns extra drops (rain spike on first kill -- Point 9 of the rework).
+    rain_suppressed = getattr(STATE, "mission2_rain_suppressed", False)
+    rain_intensity = getattr(STATE, "mission2_rain_intensity", 1.0)
+    if not rain_suppressed:
+        for drop in STATE.mission2_rain_drops:
+            x, y, length = drop
+            pygame.draw.line(screen, C_RAIN, (x, y), (x - 4, y + length), 1)
+            drop[0] -= 3
+            drop[1] += length
+            if drop[1] > HEIGHT + 30:
+                drop[0] = random.randint(0, WIDTH)
+                drop[1] = random.randint(-90, -10)
+        # Extra sheets of rain when intensity is boosted (first-kill spike).
+        if rain_intensity > 1.05:
+            extra = int(len(STATE.mission2_rain_drops) * (rain_intensity - 1.0))
+            for _ in range(extra):
+                x = random.randint(0, WIDTH)
+                y = random.randint(0, HEIGHT)
+                length = random.randint(10, 24)
+                pygame.draw.line(screen, C_RAIN, (x, y), (x - 4, y + length), 1)
+        # Decay intensity back toward 1.0 so the spike fades naturally.
+        if rain_intensity > 1.01:
+            STATE.mission2_rain_intensity = max(1.0, rain_intensity - 0.004)
+
+    if STATE.muzzle_flash_timer > 0 and STATE.player:
+        tip_x, tip_y = STATE.player.barrel_tip()
+        screen.blit(MUZZLE_FLASH, (int(tip_x - cam_x - 40), int(tip_y - cam_y - 40)))
+        STATE.muzzle_flash_timer -= 1
+
+    ch_x, ch_y = get_scaled_mouse()
+    if not getattr(STATE, "mission2_card", None) and STATE.mission2_stage not in (STAGE_SNIPER, STAGE_BLACKOUT):
+        pygame.draw.circle(screen, C_ORANGE, (ch_x, ch_y), 14, 1)
+        pygame.draw.circle(screen, C_ORANGE, (ch_x, ch_y), 2)
+        for x1, y1, x2, y2 in [(ch_x - 12, ch_y, ch_x - 3, ch_y), (ch_x + 3, ch_y, ch_x + 12, ch_y), (ch_x, ch_y - 12, ch_x, ch_y - 3), (ch_x, ch_y + 3, ch_x, ch_y + 12)]:
+            pygame.draw.line(screen, C_ORANGE, (x1, y1), (x2, y2), 1)
+
+    if STATE.player_dead:
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((120, 10, 10, 90))
+        screen.blit(overlay, (0, 0))
+    if STATE.gc_flash_timer > 0 and not getattr(STATE, "reduced_motion", False):
+        flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        flash.fill((255, 245, 220, min(255, STATE.gc_flash_timer * 18)))
+        screen.blit(flash, (0, 0))
+
+    if getattr(STATE, "mission2_sniper_kill_flash", 0) > 0:
+        a = min(220, STATE.mission2_sniper_kill_flash * 10)
+        flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        flash.fill((255, 40, 25, a))
+        screen.blit(flash, (0, 0))
+
+    draw_vignette(screen, strength=150)
+    draw_scanlines(screen)
+
+    if STATE.mission2_stage == STAGE_SNIPER:
+        _draw_sniper_overlay(screen)
+    elif STATE.mission2_stage == STAGE_BLACKOUT:
+        _draw_blackout_overlay(screen)
+    else:
+        _draw_hud(screen)
+        _draw_radio_text(screen)
+        if STATE.show_minimap and STATE.minimap:
+            STATE.minimap.draw(screen, STATE.player, STATE.enemies, cam_x, cam_y, notebook_pos=UPLOAD_TERMINAL_POS, exfil_pos=EXFIL_POS)
+    _draw_card(screen)
+
+    # Hard black cut (Point 11): overrides everything for a few frames at the
+    # cutscene -> gameplay handoff.  Decrement here so the counter ticks once
+    # per drawn frame regardless of update timing.
+    if getattr(STATE, "mission2_hard_black", 0) > 0:
+        screen.fill((0, 0, 0))
+        STATE.mission2_hard_black -= 1
+
+
+# ─────────────────────────────────────────────
+# Data helper accessors
+# ─────────────────────────────────────────────
+def get_mission2_overview():
+    return {
+        "id": MISSION2_ID,
+        "title": MISSION2_TITLE,
+        "location": MISSION2_LOCATION,
+        "style": MISSION2_PRIMARY_STYLE,
+        "story_flags": MISSION2_STORY_FLAGS.copy(),
+    }
+
+
+def get_opening_cinematic():
+    return list(OPENING_CINEMATIC)
+
+
+def get_squadmate_death_cutscene():
+    return list(SQUADMATE_DEATH_CUTSCENE)
+
+
+def get_mission_phases():
+    return list(MISSION_PHASES)
+
+
+def get_mission2_zones():
+    return {
+        name: {
+            "label": data["label"],
+            "tile_rect": (data["tile_rect"].x, data["tile_rect"].y, data["tile_rect"].w, data["tile_rect"].h),
+        }
+        for name, data in ZONE_DEFS.items()
+    }
+
+
+def get_mission2_clue_defs():
+    return [
+        {"id": c["id"], "name": c["name"], "zone": c["zone"], "pos": c["pos"]}
+        for c in MISSION2_CLUE_DEFS
+    ]
+
+
+def get_ending_cinematic():
+    return list(mission2_ending_shots)
+
+
+def get_all_dialogue_lines():
+    out = []
+    for group in (mission2_intro_shots, mission2_ending_shots, SQUADMATE_DEATH_CUTSCENE):
+        for beat in group:
+            if beat.get("speaker") and beat.get("text"):
+                out.append({"speaker": beat["speaker"], "text": beat["text"]})
+    return out
+
+
+if __name__ == "__main__":
+    print(f"{MISSION2_TITLE} — clean vertical slice")
+    print(f"Map: {MAP_W}x{MAP_H}")
+    print(f"Intro shots: {len(mission2_intro_shots)}")
+    print(f"Ending shots: {len(mission2_ending_shots)}")

@@ -1,0 +1,38 @@
+Traceback (most recent call last):
+  File "<string>", line 14, in <module>
+    print(clean[:200])
+    ~~~~~^^^^^^^^^^^^^
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.3824.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 6-7: character maps to <undefined>
+--- Page 1 ---
+mission2.py
+# ------------------------------------------------------------
+# mission2.py
+# ------------------------------------------------------------
+# mission2.py
+# --------------------------------
+
+--- Page 2 ---
+        "zone": "blast_scene",
+        "rect": _tile_rect(15, 61, 25, 5),
+        "dialogue": 'GABI: "Blast pattern is too clean for a panic bombing."',
+        "sound": "water_drip",
+        "volume"
+
+--- Page 3 ---
+    STATE.pickups.extend([
+        [12 * TILE_SIZE + 32, 68 * TILE_SIZE + 32, "bandage"],
+        [24 * TILE_SIZE + 32, 57 * TILE_SIZE + 32, "mag"],
+        [54 * TILE_SIZE + 32, 43 * TILE_SIZE + 32, 
+
+--- Page 11 ---
+    valve_col    = (140, 35, 30)
+    fuel_col     = (45, 38, 25)
+    # --- Cab (left ~18% of rect) ---
+    cab_w = int(rect.w * 0.18)
+    cab_rect = pygame.Rect(x, y, cab_w, rect.h)
+    pygame.draw.re
+
+--- Page 21 ---

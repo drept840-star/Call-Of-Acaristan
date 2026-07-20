@@ -1,0 +1,9 @@
+[project]
+name = "first-try"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.1",
+    "pygame-ce>=2.5.7",
+    "setuptools>=82.0.1",
+]

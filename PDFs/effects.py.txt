@@ -1,0 +1,77 @@
+# ------------------------------------------------------------
+# effects.py
+# ------------------------------------------------------------
+
+"""Visual effects: particles, casings, breach markers, blood decals."""
+import math
+import random
+import pygame
+
+from config import (
+    TILE_SIZE, WIDTH, HEIGHT, LETTER_H,
+    SCENE_TOP, SCENE_BOT, C_BLOOD, Particle, Casing,
+)
+from state import STATE
+
+
+_wall_shadow = pygame.Surface((TILE_SIZE + 8, TILE_SIZE + 8), pygame.SRCALPHA)
+pygame.draw.rect(_wall_shadow, (0, 0, 0, 50), (4, 4, TILE_SIZE + 4, TILE_SIZE + 4))
+
+_bullet_glow = pygame.Surface((16, 16), pygame.SRCALPHA)
+pygame.draw.circle(_bullet_glow, (255, 200, 100, 60), (8, 8), 8)
+
+_bay_door_shadow = pygame.Surface(
+    (TILE_SIZE * 3 + 8, TILE_SIZE + 8), pygame.SRCALPHA
+)
+pygame.draw.rect(
+    _bay_door_shadow, (0, 0, 0, 50),
+    (4, 4, TILE_SIZE * 3 + 4, TILE_SIZE + 4),
+)
+
+
+def add_blood(x, y, life=120, size_range=(8, 16)):
+    STATE.blood_decals.append([x, y, life, random.randint(*size_range)])
+
+
+def spawn_particles(x, y, color, count=8):
+    for _ in range(count):
+        STATE.particles.append(Particle(x, y, color))
+
+
+def update_particles():
+    for p in STATE.particles[:]:
+        p.update()
+        if p.life <= 0:
+            STATE.particles.remove(p)
+
+
+def update_casings(solid_walls):
+    for c in STATE.casings[:]:
+        c.update(solid_walls)
+        if c.life <= 0:
+            STATE.casings.remove(c)
+
+
+def update_floating_texts():
+    for ft in STATE.floating_texts[:]:
+        if len(ft) < 6 or ft[5] != "pin":
+            ft[1] -= 1.0
+        ft[4] -= 1
+        if ft[4] <= 0:
+            STATE.floating_texts.remove(ft)
+
+
+def update_breach_markers():
+    for marker in STATE.breach_markers[:]:
+        marker[2] -= 1
+        if marker[2] <= 0:
+            STATE.breach_markers.remove(marker)
+
+
+def shake(amount):
+    if amount > STATE.screen_shake:
+        STATE.screen_shake = amount
+
+
+def flash(frames=15):
+    STATE.gc_flash_timer = frames

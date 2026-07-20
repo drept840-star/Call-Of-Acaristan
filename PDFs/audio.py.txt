@@ -1,0 +1,1699 @@
+# ------------------------------------------------------------
+# audio.py
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# audio.py
+# ------------------------------------------------------------
+
+import pygame
+import math
+import random
+import struct
+import io
+import array
+import time
+
+SAMPLE_RATE = 22050
+MAX_AMP = 32767
+
+def _arr(n):
+    return array.array("h", [0]) * n
+
+def _wav(samples):
+    n = len(samples)
+    data_size = n * 2
+    buf = io.BytesIO()
+    buf.write(b"RIFF")
+    buf.write(struct.pack("<I", 36 + data_size))
+    buf.write(b"WAVE")
+    buf.write(b"fmt ")
+    buf.write(struct.pack("<I", 16))
+    buf.write(struct.pack("<H", 1))
+    buf.write(struct.pack("<H", 1))
+    buf.write(struct.pack("<I", SAMPLE_RATE))
+    buf.write(struct.pack("<I", SAMPLE_RATE * 2))
+    buf.write(struct.pack("<H", 2))
+    buf.write(struct.pack("<H", 16))
+    buf.write(b"data")
+    buf.write(struct.pack("<I", data_size))
+    buf.write(samples.tobytes())
+    return buf.getvalue()
+
+def _load(wav_bytes):
+    return pygame.mixer.Sound(io.BytesIO(wav_bytes))
+
+def _write(buf, samples, amp=1.0):
+    for i in range(len(buf)):
+        v = int(samples[i] * amp)
+        buf[i] = max(-MAX_AMP, min(MAX_AMP, buf[i] + v))
+
+def _sin(n, freq, amp=1.0, phase=0.0):
+    a = _arr(n)
+    step = 2 * math.pi * freq / SAMPLE_RATE
+    sin = math.sin
+    max_amp_amp = MAX_AMP * amp
+    for i in range(n):
+        a[i] = int(max_amp_amp * sin(phase))
+        phase += step
+    return a
+
+def _noise(n, amp=1.0):
+    a = _arr(n)
+    max_amp_amp = MAX_AMP * amp
+    for i in range(n):
+        a[i] = int(max_amp_amp * (random.random() * 2 - 1))
+    return a
+
+def _env_linear(buf, start=1.0, end=0.0):
+    n = len(buf)
+    for i in range(n):
+        t = start + (end - start) * (i / n)
+        buf[i] = int(buf[i] * t)
+
+def _env_exp(buf, start=1.0, end=0.001, rate=5.0):
+    n = len(buf)
+    for i in range(n):
+        t = start * math.exp(-rate * i / n)
+        if t < end:
+            t = 0
+        buf[i] = int(buf[i] * t)
+
+def _env_adsr(buf, attack=0.1, decay=0.2, sustain=0.5, release=0.2, sus_level=0.6):
+    n = len(buf)
+    a_i = int(n * attack)
+    d_i = int(n * decay)
+    s_i = int(n * (1 - release))
+    for i in range(n):
+        if i < a_i:
+            t = i / a_i
+        elif i < a_i + d_i:
+            t = 1.0 - (1.0 - sus_level) * ((i - a_i) / d_i)
+        elif i < s_i:
+            t = sus_level
+        else:
+            t = sus_level * (1.0 - (i - s_i) / (n - s_i))
+        buf[i] = int(buf[i] * t)
+
+def _mix(base, overlay, overlay_amp=1.0):
+    for i in range(min(len(base), len(overlay))):
+        v = int(overlay[i] * overlay_amp)
+        base[i] = max(-MAX_AMP, min(MAX_AMP, base[i] + v))
+
+def _sine_sweep(n, f_start, f_end, amp=1.0):
+    a = _arr(n)
+    phase = 0.0
+    sin = math.sin
+    max_amp_amp = MAX_AMP * amp
+    for i in range(n):
+        t = i / n
+        freq = f_start + (f_end - f_start) * t
+        a[i] = int(max_amp_amp * sin(phase))
+        phase += 2 * math.pi * freq / SAMPLE_RATE
+    return a
+
+def _lowpass(buf, strength=0.3):
+    prev = 0
+    for i in range(len(buf)):
+        prev = prev * (1 - strength) + buf[i] * strength
+        buf[i] = int(prev)
+
+def _harmonics(n, base_freq, amps, amp=1.0):
+    a = _arr(n)
+    for i, h_amp in enumerate(amps):
+        if h_amp:
+            h = _sin(n, base_freq * (i + 1), amp * h_amp)
+            _mix(a, h)
+    return a
+
+# ── New Powerful DSP Helpers for 16-Bit DOS Style Sound Design ──
+
+def _resonant_filter(buf, cutoff_hz, resonance=0.5, filter_type="low"):
+    """
+    Chamberlin State Variable Filter (SVF) for beautiful analog-sounding sweeps.
+    resonance: damping Q factor from 0.0 (flat) to 0.95 (ringing self-oscillation)
+    """
+    n = len(buf)
+    out = _arr(n)
+    cutoff_hz = max(12, min(9500, cutoff_hz))
+    
+    # SVF coefficients
+    f = 2.0 * math.sin(math.pi * cutoff_hz / SAMPLE_RATE)
+    q = 2.0 * (1.0 - max(0.0, min(0.95, resonance)))
+    
+    low = 0.0
+    band = 0.0
+    
+    for i in range(n):
+        input_val = float(buf[i])
+        high = input_val - low - q * band
+        band += f * high
+        low += f * band
+        
+        if filter_type == "low":
+            val = low
+        elif filter_type == "high":
+            val = high
+        elif filter_type == "band":
+            val = band
+        else: # notch
+            val = high + low
+            
+        out[i] = int(max(-MAX_AMP, min(MAX_AMP, val)))
+        
+    for i in range(n):
+        buf[i] = out[i]
+
+def _fm(n, carrier_hz, carrier_amp, mod_hz, mod_index, decay_rate=0.0):
+    """
+    Two-Operator FM Synthesizer.
+    Generates rich metallic, mechanical, brassy, or chest-pounding sounds.
+    """
+    buf = _arr(n)
+    phase_c = 0.0
+    phase_m = 0.0
+    step_c = 2.0 * math.pi * carrier_hz / SAMPLE_RATE
+    step_m = 2.0 * math.pi * mod_hz / SAMPLE_RATE
+    
+    sin = math.sin
+    max_amp_camp = MAX_AMP * carrier_amp
+    
+    for i in range(n):
+        mod_env = math.exp(-decay_rate * i / n) if decay_rate > 0 else 1.0
+        current_mod_index = mod_index * mod_env
+        
+        # Modulator output
+        mod_val = sin(phase_m)
+        phase_m += step_m
+        
+        # Frequency modulation
+        inst_freq_mod = current_mod_index * step_m * mod_val
+        
+        buf[i] = int(max_amp_camp * sin(phase_c))
+        phase_c += step_c + inst_freq_mod
+        
+    return buf
+
+def _apply_delay(buf, delay_ms, feedback=0.4, wet=0.3):
+    """
+    Feedback delay line to simulate space, echo, and acoustic room depth.
+    """
+    n = len(buf)
+    delay_samples = int(SAMPLE_RATE * (delay_ms / 1000.0))
+    if delay_samples <= 0 or delay_samples >= n:
+        return
+    
+    history = [0.0] * delay_samples
+    ptr = 0
+    
+    for i in range(n):
+        dry = float(buf[i])
+        delayed = history[ptr]
+        
+        # Calculate new delay state
+        new_history = dry + feedback * delayed
+        history[ptr] = max(-MAX_AMP, min(MAX_AMP, new_history))
+        ptr = (ptr + 1) % delay_samples
+        
+        # Mix dry and wet signals
+        mixed = dry * (1.0 - wet) + delayed * wet
+        buf[i] = int(max(-MAX_AMP, min(MAX_AMP, mixed)))
+
+def _soft_clip(buf, drive=1.0):
+    """
+    Cubic saturation model to add warmth, weight, and prevent harsh digital clipping.
+    """
+    for i in range(len(buf)):
+        x = (buf[i] / MAX_AMP) * drive
+        # Cubic soft clipper
+        if x > 1.25:
+            y = 1.0
+        elif x < -1.25:
+            y = -1.0
+        else:
+            y = x - (x**3) / 3.0
+            y = y * 0.95
+        buf[i] = int(max(-1.0, min(1.0, y)) * MAX_AMP)
+
+def _offset_mix(base, overlay, offset=0, amp=1.0):
+    for i in range(min(len(overlay), len(base) - offset)):
+        if offset + i < 0:
+            continue
+        v = int(overlay[i] * amp)
+        base[offset + i] = max(-MAX_AMP, min(MAX_AMP, base[offset + i] + v))
+
+# ── Upgraded DOS/16-Bit Sound Generators ──
+
+def _gen_gunshot_core(volume=1.0, lowpass_strength=0.0):
+    """
+    Layered gunshot: sharp transient crack → resonant muzzle blast → chest-hitting FM thump → metallic FM casing drop → simulated echo chamber delay.
+    """
+    dur = 0.85
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Layer 1: Ultra-sharp initial transient (1ms of noise)
+    crack_n = int(SAMPLE_RATE * 0.001)
+    crack = _noise(crack_n, 1.0 * volume)
+    _mix(buf, crack)
+    
+    # Layer 2: Muzzle blast - mid-range noise, resonant lowpass filter
+    blast_n = int(SAMPLE_RATE * 0.1)
+    blast = _noise(blast_n, 0.78 * volume)
+    _resonant_filter(blast, 800, 0.35, "low")
+    _env_exp(blast, 1.0, 0.001, 24.0)
+    _offset_mix(buf, blast, int(SAMPLE_RATE * 0.001))
+    
+    # Layer 3: Chest-hitting FM sub thump (Simulates raw kinetic pressure wave)
+    thump = _fm(int(SAMPLE_RATE * 0.35), 55, 0.9 * volume, 110, 1.8, decay_rate=7.0)
+    _env_exp(thump, 1.0, 0.001, 6.0)
+    _offset_mix(buf, thump, int(SAMPLE_RATE * 0.003))
+    
+    # Layer 4: Upper-mid body crackle
+    mid_n = int(SAMPLE_RATE * 0.15)
+    mid = _noise(mid_n, 0.52 * volume)
+    _resonant_filter(mid, 2200, 0.2, "low")
+    _env_exp(mid, 1.0, 0.001, 15.0)
+    _offset_mix(buf, mid, int(SAMPLE_RATE * 0.002))
+    
+    # Layer 5: Meaty body resonance (FM carrier 200Hz, modulated by 100Hz)
+    body_n = int(SAMPLE_RATE * 0.18)
+    body = _fm(body_n, 200, 0.36 * volume, 100, 0.8, decay_rate=12.0)
+    _env_exp(body, 1.0, 0.001, 14.0)
+    _offset_mix(buf, body, int(SAMPLE_RATE * 0.002))
+    
+    # Layer 6: Brass shell casing hitting floor (Realistic metallic ring via FM)
+    casing_delay = int(SAMPLE_RATE * 0.4)
+    casing_n = int(SAMPLE_RATE * 0.15)
+    casing = _fm(casing_n, 5200, 0.18 * volume, 8200, 3.5, decay_rate=18.0)
+    _env_exp(casing, 1.0, 0.001, 14.0)
+    _offset_mix(buf, casing, casing_delay)
+    
+    # Feedback echo simulating tight indoor warehouse walls
+    _apply_delay(buf, 120, feedback=0.35, wet=0.25)
+    _apply_delay(buf, 45, feedback=0.2, wet=0.15)
+    
+    # Cubic saturation and limiting
+    _soft_clip(buf, 1.45)
+    _env_exp(buf, 1.0, 0.001, 1.4)
+    
+    if lowpass_strength > 0:
+        _resonant_filter(buf, int(750 * (1.0 - lowpass_strength)), 0.1)
+        
+    return _wav(buf)
+
+def _gen_gunshot():
+    return _gen_gunshot_core(volume=1.0, lowpass_strength=0.0)
+
+def _gen_gunshot_distant():
+    """Muffled distant version: high-frequencies stripped, bass thuds enhanced."""
+    return _gen_gunshot_core(volume=0.5, lowpass_strength=0.075)
+
+
+def _gen_sniper_crack():
+    """High-powered distant sniper rifle: supersonic snap + delayed heavy report."""
+    n = int(SAMPLE_RATE * 1.15)
+    buf = _arr(n)
+
+    # Instant supersonic crack.
+    snap = _noise(int(SAMPLE_RATE * 0.004), 0.98)
+    _resonant_filter(snap, 4200, 0.18, "high")
+    _env_exp(snap, 1.0, 0.001, 80.0)
+    _mix(buf, snap)
+
+    # Rifle report arrives a hair later.
+    blast = _noise(int(SAMPLE_RATE * 0.16), 0.62)
+    _resonant_filter(blast, 620, 0.38, "low")
+    _env_exp(blast, 1.0, 0.001, 16.0)
+    _offset_mix(buf, blast, int(SAMPLE_RATE * 0.035))
+
+    # Distant valley/building slap echo.
+    echo = _noise(int(SAMPLE_RATE * 0.34), 0.24)
+    _resonant_filter(echo, 280, 0.35, "low")
+    _env_exp(echo, 1.0, 0.001, 6.2)
+    _offset_mix(buf, echo, int(SAMPLE_RATE * 0.19))
+
+    # Low pressure bloom.
+    sub = _fm(int(SAMPLE_RATE * 0.55), 45, 0.34, 22, 0.7, decay_rate=4.8)
+    _env_exp(sub, 1.0, 0.001, 5.0)
+    _offset_mix(buf, sub, int(SAMPLE_RATE * 0.045))
+
+    _apply_delay(buf, 170, feedback=0.26, wet=0.18)
+    _soft_clip(buf, 1.45)
+    _env_exp(buf, 1.0, 0.001, 1.25)
+    return _wav(buf)
+
+
+def _gen_bullet_snap():
+    """Terrifying near-miss whip/snap passing the listener."""
+    n = int(SAMPLE_RATE * 0.22)
+    buf = _arr(n)
+    zip1 = _sine_sweep(int(SAMPLE_RATE * 0.07), 6200, 1700, 0.42)
+    _env_exp(zip1, 1.0, 0.001, 18.0)
+    _mix(buf, zip1)
+    grit = _noise(int(SAMPLE_RATE * 0.035), 0.34)
+    _resonant_filter(grit, 5200, 0.2, "high")
+    _env_exp(grit, 1.0, 0.001, 55.0)
+    _offset_mix(buf, grit, int(SAMPLE_RATE * 0.006))
+    tail = _sine_sweep(int(SAMPLE_RATE * 0.12), 1800, 520, 0.16)
+    _env_exp(tail, 1.0, 0.001, 13.0)
+    _offset_mix(buf, tail, int(SAMPLE_RATE * 0.035))
+    _soft_clip(buf, 1.2)
+    return _wav(buf)
+
+
+def _gen_concrete_impact():
+    """Heavy concrete bullet strike with debris scatter."""
+    n = int(SAMPLE_RATE * 0.32)
+    buf = _arr(n)
+    hit = _noise(int(SAMPLE_RATE * 0.028), 0.92)
+    _resonant_filter(hit, 760, 0.42, "low")
+    _env_exp(hit, 1.0, 0.001, 28.0)
+    _mix(buf, hit)
+    crunch = _noise(int(SAMPLE_RATE * 0.18), 0.38)
+    _resonant_filter(crunch, 420, 0.55)
+    _env_exp(crunch, 1.0, 0.001, 9.5)
+    _offset_mix(buf, crunch, int(SAMPLE_RATE * 0.012))
+    for off_ms in (38, 74, 112):
+        chip = _noise(int(SAMPLE_RATE * 0.018), 0.22)
+        _resonant_filter(chip, 2400, 0.25, "high")
+        _env_exp(chip, 1.0, 0.001, 36.0)
+        _offset_mix(buf, chip, int(SAMPLE_RATE * off_ms / 1000))
+    _soft_clip(buf, 1.35)
+    return _wav(buf)
+
+
+def _gen_tinnitus():
+    """Post-near-miss ear ringing with slow fade."""
+    n = int(SAMPLE_RATE * 2.1)
+    buf = _arr(n)
+    tone = _sin(n, 3180, 0.24)
+    wobble = _sin(n, 7.0, 0.06)
+    for i in range(n):
+        # Amplitude shimmer, intentionally uncomfortable but not too loud.
+        amp = 0.72 + 0.28 * math.sin(i * 0.004)
+        buf[i] = int(tone[i] * amp + wobble[i] * 0.2)
+    _env_adsr(buf, 0.02, 0.18, 0.42, 0.58, 0.72)
+    _soft_clip(buf, 1.05)
+    return _wav(buf)
+
+
+def _gen_rifle_handle():
+    """Small metallic rifle handling tick for origin reveal tension."""
+    n = int(SAMPLE_RATE * 0.14)
+    buf = _arr(n)
+    for off_ms, freq in [(0, 1800), (38, 2600), (82, 1200)]:
+        click = _fm(int(SAMPLE_RATE * 0.025), freq, 0.22, freq * 1.6, 2.4, decay_rate=35.0)
+        _env_exp(click, 1.0, 0.001, 42.0)
+        _offset_mix(buf, click, int(SAMPLE_RATE * off_ms / 1000))
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+
+def _gen_footstep_variant(pitch_mul=1.0, amp=0.3, dur=0.045):
+    """Foley style walk steps: punchy, organic, and clean of boxiness."""
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Heel strike: FM low-frequency thump (removes paper-thin sound)
+    thump = _fm(n, int(82 * pitch_mul), amp, int(41 * pitch_mul), 0.5, decay_rate=20.0)
+    _env_exp(thump, 1.0, 0.001, 28.0)
+    
+    # Friction texture: brief filtered noise
+    grit = _noise(n, amp * 0.32)
+    _resonant_filter(grit, 450, 0.2)
+    _env_exp(grit, 1.0, 0.001, 32.0)
+    
+    # Toe-off tap transient
+    click_n = min(n, int(SAMPLE_RATE * 0.008))
+    click = _noise(click_n, amp * 0.45)
+    _resonant_filter(click, 1800, 0.15)
+    _env_exp(click, 1.0, 0.001, 60.0)
+    
+    _mix(buf, thump)
+    _mix(buf, grit)
+    _offset_mix(buf, click, 0)
+    
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_footstep():
+    return _gen_footstep_variant(pitch_mul=1.05, amp=0.34, dur=0.042)
+
+def _gen_footstep_b():
+    """Heavier boot step: deeper FM thump, wider gravel scrape."""
+    n = int(SAMPLE_RATE * 0.055)
+    buf = _arr(n)
+    thump = _fm(n, 70, 0.38, 35, 0.7, decay_rate=15.0)
+    _env_exp(thump, 1.0, 0.001, 22.0)
+    
+    slap = _noise(n, 0.32)
+    _resonant_filter(slap, 320, 0.15)
+    _env_exp(slap, 1.0, 0.001, 26.0)
+    
+    _mix(buf, thump)
+    _mix(buf, slap)
+    _soft_clip(buf, 1.15)
+    return _wav(buf)
+
+def _gen_footstep_c():
+    """Light quick sneaker tap."""
+    n = int(SAMPLE_RATE * 0.038)
+    buf = _arr(n)
+    thump = _fm(n, 105, 0.3, 52, 0.4, decay_rate=25.0)
+    _env_exp(thump, 1.0, 0.001, 32.0)
+    
+    click = _noise(n, 0.38)
+    _resonant_filter(click, 1400, 0.3)
+    _env_exp(click, 1.0, 0.001, 45.0)
+    
+    _mix(buf, thump)
+    _mix(buf, click)
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_footstep_walk_variant(pitch_mul=1.0, amp=0.22, dur=0.060):
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    thump = _fm(n, int(76 * pitch_mul), amp * 0.6, int(38 * pitch_mul), 0.3, decay_rate=18.0)
+    _env_exp(thump, 1.0, 0.001, 18.0)
+    
+    scruff = _noise(n, amp * 0.42)
+    _resonant_filter(scruff, 380, 0.1)
+    _env_exp(scruff, 1.0, 0.001, 20.0)
+    
+    _mix(buf, thump)
+    _mix(buf, scruff)
+    _soft_clip(buf, 1.0)
+    return _wav(buf)
+
+def _gen_footstep_walk():
+    return _gen_footstep_walk_variant(pitch_mul=1.0, amp=0.22, dur=0.060)
+
+def _gen_footstep_walk_b():
+    n = int(SAMPLE_RATE * 0.065)
+    buf = _arr(n)
+    thump = _fm(n, 62, 0.22, 31, 0.3, decay_rate=12.0)
+    _env_exp(thump, 1.0, 0.001, 15.0)
+    
+    scruff = _noise(n, 0.28)
+    _resonant_filter(scruff, 280, 0.1)
+    _env_exp(scruff, 1.0, 0.001, 18.0)
+    
+    _mix(buf, thump)
+    _mix(buf, scruff)
+    return _wav(buf)
+
+def _gen_footstep_walk_c():
+    n = int(SAMPLE_RATE * 0.050)
+    buf = _arr(n)
+    thump = _fm(n, 88, 0.20, 44, 0.3, decay_rate=22.0)
+    _env_exp(thump, 1.0, 0.001, 22.0)
+    
+    scruff = _noise(n, 0.24)
+    _resonant_filter(scruff, 650, 0.2)
+    _env_exp(scruff, 1.0, 0.001, 28.0)
+    
+    _mix(buf, thump)
+    _mix(buf, scruff)
+    return _wav(buf)
+
+def _gen_melee_hit():
+    """Fleshy blunt trauma: solid FM thump + wood/bone shatter + resonant low slap."""
+    n = int(SAMPLE_RATE * 0.18)
+    buf = _arr(n)
+    
+    # Crack transient
+    crack_n = int(SAMPLE_RATE * 0.003)
+    crack = _noise(crack_n, 0.85)
+    _mix(buf, crack)
+    
+    # Low body punch (FM synthesis carrier 60Hz modulated by 120Hz)
+    punch = _fm(n, 60, 0.65, 120, 1.6, decay_rate=14.0)
+    _env_exp(punch, 1.0, 0.001, 12.0)
+    _mix(buf, punch)
+    
+    # Bone/flesh resonance harmonics
+    thump = _harmonics(n, 160, [0.6, 0.3, 0.1], 0.42)
+    _env_exp(thump, 1.0, 0.001, 10.0)
+    _mix(buf, thump)
+    
+    # Ringing knuckles/skull (metallic ping)
+    ring_n = int(SAMPLE_RATE * 0.06)
+    ring = _fm(ring_n, 1200, 0.15, 2400, 2.5, decay_rate=30.0)
+    _env_exp(ring, 1.0, 0.001, 25.0)
+    _offset_mix(buf, ring, int(SAMPLE_RATE * 0.005))
+    
+    _soft_clip(buf, 1.35)
+    return _wav(buf)
+
+def _gen_bullet_impact():
+    """Concrete ricochet: hard punch, debris lowpass hiss, and dual FM metallic whine."""
+    n = int(SAMPLE_RATE * 0.08)
+    buf = _arr(n)
+    
+    # Hard transient
+    tick_n = int(SAMPLE_RATE * 0.0015)
+    tick = _noise(tick_n, 0.9)
+    _mix(buf, tick)
+    
+    # Impact body
+    body = _noise(n, 0.48)
+    _resonant_filter(body, 650, 0.4, "low")
+    _env_exp(body, 1.0, 0.001, 35.0)
+    _mix(buf, body)
+    
+    # Ricochet whine (FM sine sweep: gorgeous laser-ricochet ring!)
+    whine_n = int(SAMPLE_RATE * 0.035)
+    whine = _fm(whine_n, 2100, 0.22, 4200, 3.2, decay_rate=25.0)
+    _env_exp(whine, 1.0, 0.001, 40.0)
+    _offset_mix(buf, whine, int(SAMPLE_RATE * 0.002))
+    
+    _soft_clip(buf, 1.25)
+    return _wav(buf)
+
+def _gen_bullet_impact_enemy():
+    """Flesh bullet hit: squishy wet splatter + chest-pounding FM low thump."""
+    n = int(SAMPLE_RATE * 0.10)
+    buf = _arr(n)
+    
+    # Squishy wet splatter (noise, heavily lowpassed with high resonance Q)
+    wet = _noise(n, 0.52)
+    _resonant_filter(wet, 180, 0.65, "low")
+    _env_exp(wet, 1.0, 0.001, 16.0)
+    _mix(buf, wet)
+    
+    # Low chest thump (FM)
+    thump = _fm(n, 58, 0.6, 116, 1.5, decay_rate=12.0)
+    _env_exp(thump, 1.0, 0.001, 14.0)
+    _mix(buf, thump)
+    
+    # Upper bone crack
+    crack_n = int(SAMPLE_RATE * 0.0025)
+    crack = _noise(crack_n, 0.55)
+    _env_exp(crack, 1.0, 0.001, 70.0)
+    _offset_mix(buf, crack, 0)
+    
+    _soft_clip(buf, 1.4)
+    return _wav(buf)
+
+def _gen_door_creak():
+    """Wooden friction creak: slow pitch FM modulator sweep + resonant low groan."""
+    n = int(SAMPLE_RATE * 0.6)
+    buf = _arr(n)
+    
+    # Swept FM friction squeak
+    squeak = _fm(n, 340, 0.28, 48, 1.8)
+    for i in range(n):
+        t = i / n
+        pitch_mod = 1.0 + 0.55 * math.sin(t * math.pi * 3.5)
+        squeak[i] = int(squeak[i] * pitch_mod)
+    _env_adsr(squeak, 0.12, 0.28, 0.45, 0.15, 0.5)
+    
+    # Wood body groan noise (bandpassed)
+    groan = _noise(n, 0.24)
+    _resonant_filter(groan, 220, 0.65, "low")
+    _env_exp(groan, 1.0, 0.001, 4.0)
+    
+    _mix(buf, squeak)
+    _mix(buf, groan)
+    _apply_delay(buf, 40, feedback=0.25, wet=0.2)
+    _soft_clip(buf, 1.25)
+    return _wav(buf)
+
+def _gen_door_rattle():
+    """Heavy steel-reinforced door punch: massive sub-thump + dual-phase FM metallic rattle."""
+    n = int(SAMPLE_RATE * 0.35)
+    buf = _arr(n)
+    
+    thud = _noise(n, 0.6)
+    _resonant_filter(thud, 180, 0.5, "low")
+    _env_exp(thud, 1.0, 0.001, 14.0)
+    _mix(buf, thud)
+    
+    sub = _fm(n, 48, 0.62, 24, 1.0, decay_rate=12.0)
+    _env_exp(sub, 1.0, 0.001, 10.0)
+    _mix(buf, sub)
+    
+    # Scattered metallic rattles
+    for delay_sec, amp in ((0.04, 0.38), (0.10, 0.26), (0.17, 0.14)):
+        off = int(SAMPLE_RATE * delay_sec)
+        rattle_n = int(SAMPLE_RATE * 0.06)
+        r = _fm(rattle_n, 850, amp, 1400, 3.2, decay_rate=22.0)
+        _env_exp(r, 1.0, 0.001, 30.0)
+        _offset_mix(buf, r, off)
+        
+    _soft_clip(buf, 1.35)
+    return _wav(buf)
+
+def _gen_door_open():
+    """Deadbolt mechanics: crisp latch snap + metal handle friction sweep."""
+    n = int(SAMPLE_RATE * 0.3)
+    buf = _arr(n)
+    
+    slide = _fm(n, 180, 0.32, 540, 3.0, decay_rate=8.0)
+    _env_exp(slide, 1.0, 0.001, 8.0)
+    _mix(buf, slide)
+    
+    # High crisp metal snap (FM operator)
+    click_n = int(SAMPLE_RATE * 0.02)
+    click = _fm(click_n, 3200, 0.55, 4800, 4.5, decay_rate=35.0)
+    _env_exp(click, 1.0, 0.001, 40.0)
+    _offset_mix(buf, click, 0)
+    
+    _soft_clip(buf, 1.2)
+    return _wav(buf)
+
+def _gen_reload():
+    """Tactical reloading: Mag Out (crisp metallic friction) → Mag In (deep mechanical slam) → Slide Release (sliding metal click)."""
+    n = int(SAMPLE_RATE * 0.6)
+    buf = _arr(n)
+    
+    # Mag Out (high metallic scrape, 0.05s)
+    m1_n = int(SAMPLE_RATE * 0.04)
+    mag_out = _fm(m1_n, 1200, 0.58, 1900, 3.5, decay_rate=25.0)
+    _env_exp(mag_out, 1.0, 0.001, 35.0)
+    _offset_mix(buf, mag_out, int(SAMPLE_RATE * 0.05))
+    
+    # Mag In (Heavy chamber latch slam, 0.25s)
+    m2_n = int(SAMPLE_RATE * 0.05)
+    mag_in_fm = _fm(m2_n, 780, 0.65, 1200, 2.8, decay_rate=20.0)
+    mag_in_noise = _noise(m2_n, 0.25)
+    _resonant_filter(mag_in_noise, 1100, 0.3)
+    _mix(mag_in_fm, mag_in_noise)
+    _env_exp(mag_in_fm, 1.0, 0.001, 25.0)
+    _offset_mix(buf, mag_in_fm, int(SAMPLE_RATE * 0.25))
+    
+    # Slide Release (Friction-slide recoil metal, 0.4s)
+    s_n = int(SAMPLE_RATE * 0.18)
+    slide = _fm(s_n, 160, 0.48, 620, 4.2, decay_rate=6.0)
+    slide_noise = _noise(s_n, 0.18)
+    _resonant_filter(slide_noise, 2800, 0.45)
+    _mix(slide, slide_noise)
+    _env_adsr(slide, 0.02, 0.05, 0.55, 0.1, 0.65)
+    _offset_mix(buf, slide, int(SAMPLE_RATE * 0.4))
+    
+    _soft_clip(buf, 1.35)
+    return _wav(buf)
+
+def _gen_ambient_drone():
+    """Deep industrial machine hum: Tri-operator FM drone with perfect 5th harmonics + LFO swept resonant lowpass filter."""
+    dur = 4.0
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Stacking FM drone operators (sub, mid, fifth)
+    drone1 = _fm(n, 55, 0.30, 11, 2.0)
+    drone2 = _fm(n, 82.5, 0.18, 16.5, 1.5)  # Perfect fifth
+    drone3 = _fm(n, 110, 0.12, 5.5, 1.0)
+    _mix(buf, drone1)
+    _mix(buf, drone2)
+    _mix(buf, drone3)
+    
+    # Moving resonant lowpass filter on noise bed (Slow sweep over 4 seconds)
+    noise = _noise(n, 0.14)
+    out_noise = _arr(n)
+    low = 0.0
+    band = 0.0
+    for i in range(n):
+        # LFO modulating cutoff from 130Hz to 230Hz
+        cutoff = 180.0 + 50.0 * math.sin(i * 0.0003)
+        f = 2.0 * math.sin(math.pi * cutoff / SAMPLE_RATE)
+        high = float(noise[i]) - low - 0.45 * band
+        band += f * high
+        low += f * band
+        out_noise[i] = int(max(-MAX_AMP, min(MAX_AMP, band)))
+    _mix(buf, out_noise)
+    
+    # Soft global loop boundaries fade
+    fade = int(n * 0.05)
+    for i in range(fade):
+        t = i / fade
+        buf[i] = int(buf[i] * t)
+        buf[n - 1 - i] = int(buf[n - 1 - i] * t)
+        
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_rain():
+    """Moody weather: heavily filtered cloudpour noise + random scattered droplet splashes filtered through a high-resonance peak."""
+    dur = 3.0
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Overlapping rain roar
+    noise = _noise(n, 0.28)
+    _resonant_filter(noise, 450, 0.1, "low")
+    _mix(buf, noise)
+    
+    # Procedural droplet drops
+    for _ in range(25):
+        tick_pos = random.randint(0, n - int(SAMPLE_RATE * 0.015))
+        tick_len = int(SAMPLE_RATE * 0.012)
+        tick = _noise(tick_len, 0.35)
+        _resonant_filter(tick, 2200, 0.5)
+        _env_exp(tick, 1.0, 0.001, 45.0)
+        _offset_mix(buf, tick, tick_pos)
+        
+    fade = int(n * 0.03)
+    for i in range(fade):
+        t = i / fade
+        buf[i] = int(buf[i] * t)
+        buf[n - 1 - i] = int(buf[n - 1 - i] * t)
+        
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_wind():
+    """Swirling storm gusts: slow swept resonant filter on wind noise + sub bass rumble."""
+    dur = 4.0
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    noise = _noise(n, 0.15)
+    # Slow LFO frequency sweep to emulate rushing wind gusts
+    low = 0.0
+    band = 0.0
+    q = 0.32
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        cutoff = 380.0 + 160.0 * math.sin(t * 0.8) + 60.0 * math.cos(t * 1.6)
+        f = 2.0 * math.sin(math.pi * cutoff / SAMPLE_RATE)
+        high = float(noise[i]) - low - q * band
+        band += f * high
+        low += f * band
+        buf[i] = int(max(-MAX_AMP, min(MAX_AMP, low)))
+        
+    # Deep physical sub roar (modulated volume)
+    sub = _sin(n, 42, 0.06)
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        sub[i] = int(sub[i] * (0.35 + 0.65 * math.sin(t * 0.5)))
+    _mix(buf, sub)
+    
+    fade = int(n * 0.05)
+    for i in range(fade):
+        t = i / fade
+        buf[i] = int(buf[i] * t)
+        buf[n - 1 - i] = int(buf[n - 1 - i] * t)
+        
+    _soft_clip(buf, 1.15)
+    return _wav(buf)
+
+def _gen_explosion():
+    """Muffled devastating explosion: thick resonant low-pass roar + deep FM sub thuds + falling concrete crackles + room space echoes."""
+    dur = 1.5
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # 1. Main rumble
+    noise = _noise(n, 0.82)
+    _resonant_filter(noise, 220, 0.4, "low")
+    _env_adsr(noise, 0.04, 0.28, 0.5, 0.15, 0.7)
+    _mix(buf, noise)
+    
+    # 2. Huge dual FM chest thumps
+    thump = _fm(n, 38, 0.8, 76, 1.8, decay_rate=5.0)
+    _env_adsr(thump, 0.02, 0.4, 0.5, 0.05, 0.9)
+    _mix(buf, thump)
+    
+    # 3. High-freq cracking debris
+    for _ in range(8):
+        off = random.randint(0, int(SAMPLE_RATE * 0.3))
+        ln = int(SAMPLE_RATE * 0.08)
+        crack = _noise(ln, 0.35)
+        _resonant_filter(crack, 1500, 0.3)
+        _env_exp(crack, 1.0, 0.001, 15.0)
+        _offset_mix(buf, crack, off)
+        
+    # Global delay echo
+    _apply_delay(buf, 180, feedback=0.45, wet=0.35)
+    _apply_delay(buf, 75, feedback=0.25, wet=0.2)
+    
+    _soft_clip(buf, 1.5)
+    _env_exp(buf, 1.0, 0.001, 2.5)
+    return _wav(buf)
+
+def _gen_heartbeat():
+    """Deep chest pulse: dual-thump FM sweep for heavy pressure wave."""
+    dur = 1.8
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    beat_n = int(SAMPLE_RATE * 0.16)
+    
+    for offset in [int(SAMPLE_RATE * 0.1), int(SAMPLE_RATE * 0.42)]:
+        # Dual-thump FM: carrier 45Hz modulated by 22Hz (very heavy sub bass)
+        beat = _fm(beat_n, 45, 0.72, 22, 1.2, decay_rate=14.0)
+        _env_exp(beat, 1.0, 0.001, 10.0)
+        _offset_mix(buf, beat, offset)
+        
+    floor = _noise(n, 0.01)
+    _mix(buf, floor)
+    
+    fade = int(n * 0.02)
+    for i in range(fade):
+        t = i / fade
+        buf[i] = int(buf[i] * t)
+        buf[n - 1 - i] = int(buf[n - 1 - i] * t)
+    return _wav(buf)
+
+def _gen_menu_click():
+    """Crisp elegant 16-bit chime click: quick high-quality FM metal tap."""
+    n = int(SAMPLE_RATE * 0.025)
+    buf = _arr(n)
+    
+    click = _fm(n, 1500, 0.48, 2200, 3.5, decay_rate=45.0)
+    _env_exp(click, 1.0, 0.001, 55.0)
+    _mix(buf, click)
+    
+    body = _sin(n, 440, 0.22)
+    _env_exp(body, 1.0, 0.001, 35.0)
+    _mix(buf, body)
+    
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_menu_hover():
+    """Very subtle high-frequency FM blip."""
+    n = int(SAMPLE_RATE * 0.008)
+    buf = _arr(n)
+    click = _fm(n, 2800, 0.26, 4200, 1.5, decay_rate=75.0)
+    _env_exp(click, 1.0, 0.001, 80.0)
+    _mix(buf, click)
+    return _wav(buf)
+
+def _gen_radio_static():
+    dur = 1.5
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Scattered static noise bursts
+    for _ in range(30):
+        burst_start = random.randint(0, n - int(SAMPLE_RATE * 0.05))
+        burst_len = int(SAMPLE_RATE * 0.02 + random.random() * 0.03)
+        burst = _noise(burst_len, 0.45 + random.random() * 0.4)
+        _resonant_filter(burst, 1200, 0.2)
+        _env_exp(burst, 1.0, 0.001, 30.0)
+        _offset_mix(buf, burst, burst_start)
+        
+    carrier = _noise(n, 0.08)
+    _resonant_filter(carrier, 300, 0.1)
+    _mix(buf, carrier)
+    
+    fade = int(n * 0.02)
+    for i in range(fade):
+        t = i / fade
+        buf[i] = int(buf[i] * t)
+        buf[n - 1 - i] = int(buf[n - 1 - i] * t)
+    return _wav(buf)
+
+def _gen_radio_chatter():
+    """Garbled vocal transmission: ring modulator + swept bandpass on noise (classic military radio speaker feel)."""
+    dur = 2.0
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    noise = _noise(n, 0.22)
+    # Garble with Ring Modulation (multiplied by a 400Hz voice pitch)
+    for i in range(n):
+        mod = 0.35 + 0.65 * (0.5 + 0.5 * math.sin(2 * math.pi * 380 * i / SAMPLE_RATE))
+        buf[i] = int(noise[i] * mod)
+        
+    # Bandpass voice filter to isolate nasal speaking frequencies
+    _resonant_filter(buf, 950, 0.6, "band")
+    _env_adsr(buf, 0.08, 0.18, 0.5, 0.2, 0.5)
+    
+    # Intermittent squelch bursts
+    for _ in range(8):
+        burst_start = random.randint(0, n - int(SAMPLE_RATE * 0.02))
+        burst = _noise(int(SAMPLE_RATE * 0.015), 0.32)
+        _resonant_filter(burst, 3500, 0.3, "high")
+        _env_exp(burst, 1.0, 0.001, 40.0)
+        _offset_mix(buf, burst, burst_start)
+        
+    _soft_clip(buf, 1.35)
+    return _wav(buf)
+
+def _gen_water_drip():
+    """Dripping cavern: swept sine bubble plop + resonant bandpass splash + delay echo."""
+    n = int(SAMPLE_RATE * 0.22)
+    buf = _arr(n)
+    
+    # Fast pitch slide (recreates water surface tension bubble snap)
+    tone = _sine_sweep(n, 650, 1150, 0.45)
+    _env_exp(tone, 1.0, 0.001, 14.0)
+    _mix(buf, tone)
+    
+    # Debris splash
+    splash = _noise(n, 0.14)
+    _resonant_filter(splash, 2200, 0.4)
+    _env_exp(splash, 1.0, 0.001, 28.0)
+    _mix(buf, splash)
+    
+    _apply_delay(buf, 35, feedback=0.3, wet=0.25)
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_mission_complete():
+    """16-bit arpeggiated victory chord: stacked major triads with FM synthesizer brass envelopes."""
+    dur = 1.4
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Stacked major triad chord notes (C3, E3, G3, C4)
+    freqs = [261.6, 329.6, 392.0, 523.3]
+    note_dur = int(SAMPLE_RATE * 0.8)
+    
+    for idx, f in enumerate(freqs):
+        # Cascaded starting delays (arpeggio style)
+        delay = int(SAMPLE_RATE * 0.12 * idx)
+        # FM brass operator (freq modulated by 1.5x ratio)
+        tone = _fm(note_dur, f, 0.32, f * 1.5, 1.2, decay_rate=2.2)
+        _env_adsr(tone, 0.08, 0.18, 0.6, 0.35, 0.7)
+        _offset_mix(buf, tone, delay)
+        
+    _apply_delay(buf, 150, feedback=0.32, wet=0.22)
+    _soft_clip(buf, 1.25)
+    return _wav(buf)
+
+def _gen_breach():
+    """Wall breaching explosion: heavy plaster/wooden door splintering crash, massive low rumble, no sci-fi beeps."""
+    dur = 0.85
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # 1. Main splintering/crushing noise
+    noise = _noise(n, 0.8)
+    _resonant_filter(noise, 340, 0.45, "low")
+    _env_adsr(noise, 0.01, 0.22, 0.48, 0.25, 0.6)
+    _mix(buf, noise)
+    
+    # 2. Massive low-frequency structural thump (FM sub thud)
+    thump = _fm(n, 75, 0.72, 38, 1.5, decay_rate=12.0)
+    _env_adsr(thump, 0.0, 0.18, 0.5, 0.32, 0.7)
+    _mix(buf, thump)
+    
+    # 3. Falling plaster and wooden debris crumble (noise swept from high-mid to low)
+    debris_n = int(SAMPLE_RATE * 0.45)
+    debris = _noise(debris_n, 0.52)
+    low = 0.0
+    band = 0.0
+    q = 0.35
+    for i in range(debris_n):
+        t = i / debris_n
+        cutoff = 1800.0 - 1500.0 * (t ** 0.5) # sweep down from 1800Hz to 300Hz
+        f = 2.0 * math.sin(math.pi * cutoff / SAMPLE_RATE)
+        high = float(debris[i]) - low - q * band
+        band += f * high
+        low += f * band
+        debris[i] = int(max(-MAX_AMP, min(MAX_AMP, band)))
+    _env_exp(debris, 1.0, 0.001, 8.0)
+    _offset_mix(buf, debris, int(SAMPLE_RATE * 0.01))
+    
+    _apply_delay(buf, 90, feedback=0.4, wet=0.28)
+    _soft_clip(buf, 1.45)
+    return _wav(buf)
+
+def _gen_molotov_throw():
+    """Whoosh of a burning rag bottle being thrown: soft attack, sweeping wind-like noise."""
+    dur = 0.35
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Whoosh noise swept from low-mid
+    noise = _noise(n, 0.45)
+    low = 0.0
+    band = 0.0
+    q = 0.25
+    for i in range(n):
+        t = i / n
+        cutoff = 180.0 + 320.0 * math.sin(t * math.pi)
+        f = 2.0 * math.sin(math.pi * cutoff / SAMPLE_RATE)
+        high = float(noise[i]) - low - q * band
+        band += f * high
+        low += f * band
+        buf[i] = int(max(-MAX_AMP, min(MAX_AMP, low)))
+        
+    _env_adsr(buf, 0.12, 0.18, 0.6, 0.1, 0.7)
+    _soft_clip(buf, 1.25)
+    return _wav(buf)
+
+def _gen_molotov_explode():
+    """Molotov ignition burst: sharp bottle smash + roaring liquid fire burst."""
+    dur = 1.3
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # 1. Glass bottle smash (scattered high-pitch FM ringing)
+    for _ in range(6):
+        shard_start = random.randint(0, int(SAMPLE_RATE * 0.04))
+        shard_len = int(SAMPLE_RATE * 0.05 + random.random() * 0.05)
+        freq = 3400 + random.random() * 2500
+        shard = _fm(shard_len, freq, 0.35, freq * 1.4, 3.5, decay_rate=22.0)
+        _env_exp(shard, 1.0, 0.001, 35.0)
+        _offset_mix(buf, shard, shard_start)
+        
+    # 2. Liquid fire burst whoosh (noise swept via resonant bandpass filter)
+    whoosh_n = int(SAMPLE_RATE * 0.8)
+    whoosh = _noise(whoosh_n, 0.65)
+    low = 0.0
+    band = 0.0
+    q = 0.45 # high resonance
+    for i in range(whoosh_n):
+        t = i / whoosh_n
+        cutoff = 220.0 + 440.0 * math.sin(t * math.pi)
+        f = 2.0 * math.sin(math.pi * cutoff / SAMPLE_RATE)
+        high = float(whoosh[i]) - low - q * band
+        band += f * high
+        low += f * band
+        whoosh[i] = int(max(-MAX_AMP, min(MAX_AMP, band)))
+        
+    _env_adsr(whoosh, 0.02, 0.15, 0.6, 0.25, 0.7)
+    _offset_mix(buf, whoosh, int(SAMPLE_RATE * 0.005))
+    
+    # 3. Flame crackles (high frequency noise spikes)
+    for _ in range(15):
+        off = random.randint(int(SAMPLE_RATE * 0.05), int(SAMPLE_RATE * 0.65))
+        crackle = _noise(int(SAMPLE_RATE * 0.015), 0.28)
+        _resonant_filter(crackle, 3500, 0.3, "high")
+        _env_exp(crackle, 1.0, 0.001, 60.0)
+        _offset_mix(buf, crackle, off)
+        
+    _apply_delay(buf, 65, feedback=0.25, wet=0.18)
+    _soft_clip(buf, 1.35)
+    _env_exp(buf, 1.0, 0.001, 2.2)
+    return _wav(buf)
+
+def _gen_pickup():
+    """Satisfying ascending arcade chime: fast stacked FM laser sweep."""
+    n = int(SAMPLE_RATE * 0.15)
+    buf = _arr(n)
+    
+    # Rapid ascending sweep
+    tone = _sine_sweep(n, 380, 1150, 0.32)
+    _env_exp(tone, 1.0, 0.001, 9.0)
+    _mix(buf, tone)
+    
+    # Stacked high harmonic tap
+    harm = _sine_sweep(n, 760, 2300, 0.15)
+    _env_exp(harm, 1.0, 0.001, 14.0)
+    _mix(buf, harm)
+    
+    _soft_clip(buf, 1.1)
+    return _wav(buf)
+
+def _gen_alarm():
+    """Industrial security siren: swept FM alarm warbling over LFO + simulated warehouse acoustic echo."""
+    dur = 1.0
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # LFO sweeping pitch back and forth between 600Hz and 880Hz at 6.2Hz rate
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        freq = 740.0 + 140.0 * math.sin(2.0 * math.pi * 6.2 * t)
+        buf[i] = int(MAX_AMP * 0.38 * math.sin(2.0 * math.pi * freq * i / SAMPLE_RATE))
+        
+    _env_adsr(buf, 0.02, 0.08, 0.82, 0.08, 0.9)
+    _apply_delay(buf, 85, feedback=0.42, wet=0.32)
+    _soft_clip(buf, 1.25)
+    return _wav(buf)
+
+def _gen_empty_click():
+    """Pistol dry firing pin: quick dry FM metallic spring snap."""
+    n = int(SAMPLE_RATE * 0.03)
+    buf = _arr(n)
+    
+    click = _fm(n, 1800, 0.45, 3400, 5.0, decay_rate=65.0)
+    _env_exp(click, 1.0, 0.001, 50.0)
+    _mix(buf, click)
+    
+    return _wav(buf)
+
+def _gen_glass_shatter():
+    """Falling glass pane: multiple scattered FM metallic shattering pings + high frequency noise shards."""
+    n = int(SAMPLE_RATE * 0.4)
+    buf = _arr(n)
+    
+    # Scattered shard rings
+    for _ in range(12):
+        shard_start = random.randint(0, n - int(SAMPLE_RATE * 0.05))
+        shard_len = int(SAMPLE_RATE * 0.02 + random.random() * 0.03)
+        freq = 3100 + random.random() * 4500
+        
+        # High crisp metallic FM shard ping
+        shard = _fm(shard_len, freq, 0.22, freq * 1.5, 4.2, decay_rate=35.0)
+        _env_exp(shard, 1.0, 0.001, 40.0)
+        
+        noise_part = _noise(shard_len, 0.16)
+        _resonant_filter(noise_part, 4200, 0.3, "high")
+        _env_exp(noise_part, 1.0, 0.001, 50.0)
+        
+        # Mix shard and noise part
+        _mix(shard, noise_part)
+        _offset_mix(buf, shard, shard_start)
+        
+    _soft_clip(buf, 1.2)
+    return _wav(buf)
+
+# ── Cinematic procedural sounds ──
+
+def _gen_terminal_glitch():
+    """Digital terminal data transfer: rapid FM data chirps and radio packet breakups."""
+    rng = random.Random(301)
+    dur = 0.34
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    bed = _noise(n, 0.18)
+    _resonant_filter(bed, 650, 0.2, "low")
+    _env_exp(bed, 1.0, 0.001, 5.0)
+    _mix(buf, bed)
+    
+    # FM digital burst spikes
+    for _ in range(11):
+        ln = rng.randint(int(SAMPLE_RATE * 0.006), int(SAMPLE_RATE * 0.026))
+        off = rng.randint(0, max(1, n - ln))
+        
+        # Digital data chirp via FM (1800Hz modulated with high index)
+        burst = _fm(ln, rng.uniform(1100, 2600), rng.uniform(0.3, 0.55), 3200, 5.0, decay_rate=25.0)
+        _env_exp(burst, 1.0, 0.001, rng.uniform(18.0, 45.0))
+        _offset_mix(buf, burst, off)
+        
+    carrier = _sin(n, 95, 0.055)
+    _env_exp(carrier, 1.0, 0.001, 3.5)
+    _mix(buf, carrier)
+    
+    _resonant_filter(buf, 1800, 0.1)
+    _soft_clip(buf, 1.3)
+    _env_linear(buf, 1.0, 0.0)
+    return _wav(buf)
+
+def _gen_missile_launch():
+    """Rocket motor launch: heavy dirty ignition cough + low engine pressure roar."""
+    rng = random.Random(410)
+    dur = 0.78
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Ignition blast
+    cough_n = int(SAMPLE_RATE * 0.12)
+    cough = _noise(cough_n, 0.72)
+    _resonant_filter(cough, 180, 0.45, "low")
+    _env_exp(cough, 1.0, 0.001, 13.0)
+    _mix(buf, cough)
+    
+    # Engine roar (noise, resonant bandpass)
+    roar = _noise(n, 0.3)
+    _resonant_filter(roar, 140, 0.5, "low")
+    for i in range(n):
+        wobble = 0.72 + 0.18 * math.sin(i * 0.006) + 0.10 * math.sin(i * 0.019)
+        roar[i] = int(roar[i] * wobble)
+    _env_adsr(roar, 0.03, 0.20, 0.45, 0.32, 0.48)
+    _mix(buf, roar)
+    
+    # Sub-bass rocket pressure (FM thud)
+    sub = _fm(n, 46, 0.3, 23, 0.5, decay_rate=3.0)
+    _env_exp(sub, 1.0, 0.001, 3.0)
+    _mix(buf, sub)
+    
+    _apply_delay(buf, 60, feedback=0.3, wet=0.2)
+    _soft_clip(buf, 1.4)
+    return _wav(buf)
+
+def _gen_missile_flyby():
+    """Rushing air doppler effect: swept-cutoff wind roar past listener."""
+    dur = 0.92
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    air = _noise(n, 0.36)
+    _resonant_filter(air, 450, 0.1, "low")
+    
+    for i in range(n):
+        x = i / n
+        whoosh = math.exp(-((x - 0.42) ** 2) / 0.055)
+        flutter = 0.86 + 0.14 * math.sin(i * 0.032)
+        air[i] = int(air[i] * (0.18 + 1.05 * whoosh) * flutter)
+    _mix(buf, air)
+    
+    low_air = _noise(n, 0.14)
+    _resonant_filter(low_air, 120, 0.1, "low")
+    _env_adsr(low_air, 0.14, 0.20, 0.38, 0.28, 0.50)
+    _mix(buf, low_air)
+    
+    _env_adsr(buf, 0.10, 0.18, 0.46, 0.26, 0.60)
+    _soft_clip(buf, 1.15)
+    return _wav(buf)
+
+def _gen_rig_impact_crack():
+    """Distant structural collapse crack: giant filtered crunch."""
+    dur = 0.55
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    crack_n = int(SAMPLE_RATE * 0.045)
+    crack = _noise(crack_n, 0.9)
+    _resonant_filter(crack, 380, 0.4, "low")
+    _env_exp(crack, 1.0, 0.001, 28.0)
+    _mix(buf, crack)
+    
+    slap = _noise(int(SAMPLE_RATE * 0.20), 0.45)
+    _resonant_filter(slap, 180, 0.3)
+    _env_exp(slap, 1.0, 0.001, 8.0)
+    _offset_mix(buf, slap, int(SAMPLE_RATE * 0.012))
+    
+    sub = _fm(int(SAMPLE_RATE * 0.36), 52, 0.4, 26, 0.5, decay_rate=5.5)
+    _env_exp(sub, 1.0, 0.001, 5.5)
+    _offset_mix(buf, sub, int(SAMPLE_RATE * 0.006))
+    
+    _apply_delay(buf, 140, feedback=0.4, wet=0.3)
+    _soft_clip(buf, 1.8)
+    return _wav(buf)
+
+def _gen_rig_low_boom():
+    """The main dark pressure wave: heavy sub rumble + multi-operator low-end FM."""
+    dur = 2.65
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # Overlapping low FM sub layers
+    for off_ms, freq, amp, rate in [(0, 36, 0.62, 2.0), (70, 48, 0.48, 2.4), (160, 68, 0.28, 3.1)]:
+        ln = n - int(SAMPLE_RATE * off_ms / 1000)
+        tone = _fm(max(1, ln), freq, amp, freq // 2, 0.5, decay_rate=rate)
+        _offset_mix(buf, tone, int(SAMPLE_RATE * off_ms / 1000))
+        
+    rumble = _noise(n, 0.36)
+    _resonant_filter(rumble, 80, 0.5, "low")
+    for i in range(n):
+        rumble[i] = int(rumble[i] * (0.8 + 0.2 * math.sin(i * 0.0017)))
+    _env_exp(rumble, 1.0, 0.001, 1.75)
+    _mix(buf, rumble)
+    
+    _apply_delay(buf, 200, feedback=0.35, wet=0.25)
+    _soft_clip(buf, 1.35)
+    return _wav(buf)
+
+def _gen_rig_secondary_explosion():
+    """Muffled fuel tank eruptions: low thuds and deep rumbles."""
+    rng = random.Random(512)
+    dur = 1.35
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    for start_ms, amp, lp in [(0, 0.48, 120), (130, 0.34, 100), (310, 0.24, 80)]:
+        ln = int(SAMPLE_RATE * rng.uniform(0.24, 0.44))
+        blast = _noise(ln, amp)
+        _resonant_filter(blast, lp, 0.4, "low")
+        _env_exp(blast, 1.0, 0.001, rng.uniform(6.0, 9.0))
+        _offset_mix(buf, blast, int(SAMPLE_RATE * start_ms / 1000))
+        
+    sub = _fm(n, 58, 0.22, 29, 0.5, decay_rate=3.4)
+    _env_exp(sub, 1.0, 0.001, 3.4)
+    _mix(buf, sub)
+    
+    _apply_delay(buf, 110, feedback=0.3, wet=0.2)
+    _soft_clip(buf, 1.4)
+    return _wav(buf)
+
+def _gen_rig_metal_collapse():
+    """Collapsing metal beams: grinding FM wood/metal groans + heavy thuds."""
+    rng = random.Random(777)
+    dur = 2.8
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    for off_ms, start_f, end_f, amp in [(0, 130, 72, 0.2), (260, 96, 54, 0.18), (620, 155, 82, 0.12)]:
+        ln = n - int(SAMPLE_RATE * off_ms / 1000)
+        groan = _sine_sweep(max(1, ln), start_f, end_f, amp)
+        grit = _noise(len(groan), amp * 0.9)
+        _resonant_filter(grit, 140, 0.6)
+        _mix(groan, grit)
+        _env_adsr(groan, 0.08, 0.22, 0.48, 0.22, 0.55)
+        _offset_mix(buf, groan, int(SAMPLE_RATE * off_ms / 1000))
+        
+    # Steel frame snap hits
+    for _ in range(15):
+        off = rng.randint(int(SAMPLE_RATE * 0.18), n - int(SAMPLE_RATE * 0.12))
+        ln = rng.randint(int(SAMPLE_RATE * 0.07), int(SAMPLE_RATE * 0.20))
+        hit = _noise(ln, rng.uniform(0.14, 0.32))
+        _resonant_filter(hit, rng.randint(80, 240), 0.4)
+        _env_exp(hit, 1.0, 0.001, rng.uniform(10, 24))
+        _offset_mix(buf, hit, off)
+        
+    _apply_delay(buf, 150, feedback=0.35, wet=0.25)
+    _soft_clip(buf, 1.45)
+    return _wav(buf)
+
+def _gen_rig_water_splash():
+    """Massive ocean splash: low mass surge + steam spray noise."""
+    dur = 1.9
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    slap = _noise(int(SAMPLE_RATE * 0.20), 0.58)
+    _resonant_filter(slap, 180, 0.3)
+    _env_exp(slap, 1.0, 0.001, 10.5)
+    _mix(buf, slap)
+    
+    surge = _noise(n, 0.24)
+    _resonant_filter(surge, 90, 0.1, "low")
+    _env_exp(surge, 1.0, 0.001, 2.2)
+    _mix(buf, surge)
+    
+    steam = _noise(n, 0.14)
+    _resonant_filter(steam, 1100, 0.2)
+    _env_adsr(steam, 0.04, 0.26, 0.44, 0.26, 0.52)
+    _offset_mix(buf, steam, int(SAMPLE_RATE * 0.11))
+    
+    wave = _sin(n, 39, 0.12)
+    _env_exp(wave, 1.0, 0.001, 2.1)
+    _mix(buf, wave)
+    
+    _apply_delay(buf, 120, feedback=0.3, wet=0.2)
+    _soft_clip(buf, 1.25)
+    return _wav(buf)
+
+def _gen_rig_fire_burst():
+    """Fireball whoosh: dark low whoomp + burning roar crackles."""
+    dur = 2.35
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    whoomp = _noise(int(SAMPLE_RATE * 0.62), 0.38)
+    _resonant_filter(whoomp, 120, 0.4, "low")
+    _env_exp(whoomp, 1.0, 0.001, 4.2)
+    _mix(buf, whoomp)
+    
+    burn = _noise(n, 0.13)
+    _resonant_filter(burn, 380, 0.1)
+    for i in range(n):
+        burn[i] = int(burn[i] * (0.75 + 0.25 * math.sin(i * 0.004)))
+    _env_adsr(burn, 0.14, 0.24, 0.44, 0.18, 0.45)
+    _mix(buf, burn)
+    
+    sub = _fm(n, 45, 0.1, 22, 0.3, decay_rate=2.6)
+    _env_exp(sub, 1.0, 0.001, 2.6)
+    _mix(buf, sub)
+    
+    _apply_delay(buf, 100, feedback=0.25, wet=0.15)
+    _soft_clip(buf, 1.2)
+    return _wav(buf)
+
+def _gen_type_tick_variant(freq=1350, amp=0.16, dur=0.042):
+    """
+    Simulates a highly satisfying mechanical typewriter key strike (tactile mechanical click + hollow platen impact + spring ring).
+    """
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    
+    # 1. High-frequency tactile switch transient (metal key striking paper/platen)
+    snap_n = int(SAMPLE_RATE * 0.005)
+    snap = _noise(snap_n, amp * 0.85)
+    _resonant_filter(snap, 4500, 0.4, "high")
+    _env_exp(snap, 1.0, 0.001, 45.0)
+    _mix(buf, snap)
+    
+    # 2. Hollow mechanical body thud (key mechanism hitting platen roller ~280Hz)
+    body = _fm(n, freq * 0.2, amp * 0.45, freq * 0.1, 1.5, decay_rate=18.0)
+    _resonant_filter(body, 350, 0.5, "low")
+    _env_exp(body, 1.0, 0.001, 25.0)
+    _mix(buf, body)
+    
+    # 3. Tiny ringing steel spring ring (gives it authentic typewriter lever resonance)
+    spring = _fm(n, freq * 3.5, amp * 0.28, freq * 4.5, 3.2, decay_rate=30.0)
+    _env_exp(spring, 1.0, 0.001, 35.0)
+    _mix(buf, spring)
+    
+    # Apply a tight desk-reflection slapback echo
+    _apply_delay(buf, 15, feedback=0.15, wet=0.1)
+    
+    _soft_clip(buf, 1.2)
+    return _wav(buf)
+
+def _gen_type_tick():
+    return _gen_type_tick_variant(1320, 0.75, 0.040)
+
+def _gen_type_tick_b():
+    return _gen_type_tick_variant(1560, 0.70, 0.038)
+
+def _gen_type_tick_c():
+    return _gen_type_tick_variant(1180, 0.72, 0.044)
+
+# ── Audio Manager ──
+
+_channels = {}
+
+def _ch(ch_id):
+    if ch_id not in _channels:
+        idx = min(len(_channels), 31)
+        _channels[ch_id] = pygame.mixer.Channel(idx)
+    return _channels[ch_id]
+
+class AudioManager:
+    def __init__(self):
+        self.sounds = {}
+        self.master_volume = 0.8
+        self.scheduled = []
+        self._loop_channels = {}
+        self._loop_base_volumes = {}
+        self._duck_frames = 0
+        self._duck_factor = 1.0
+        self._ambience_names = {"rain", "wind", "ambient_drone"}
+        self._init_mixer()
+        self._generate_all()
+        
+    def _pick_footstep(self, prefix, count):
+        key = f"{prefix}_{random.randint(1, count)}"
+        return self.sounds.get(key, self.sounds.get(prefix))
+        
+    def _init_mixer(self):
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=2)
+        except Exception:
+            pass
+        try:
+            pygame.mixer.set_num_channels(32)
+        except Exception:
+            pass
+            
+    def _generate_all(self):
+        gens = [
+            ("gunshot", _gen_gunshot),
+            ("gunshot_distant", _gen_gunshot_distant),
+            ("sniper_crack", _gen_sniper_crack),
+            ("bullet_snap", _gen_bullet_snap),
+            ("concrete_impact", _gen_concrete_impact),
+            ("tinnitus", _gen_tinnitus),
+            ("rifle_handle", _gen_rifle_handle),
+            ("footstep", _gen_footstep),
+            ("footstep_1", _gen_footstep),
+            ("footstep_2", _gen_footstep_b),
+            ("footstep_3", _gen_footstep_c),
+            ("footstep_walk", _gen_footstep_walk),
+            ("footstep_walk_1", _gen_footstep_walk),
+            ("footstep_walk_2", _gen_footstep_walk_b),
+            ("footstep_walk_3", _gen_footstep_walk_c),
+            ("melee_hit", _gen_melee_hit),
+            ("bullet_impact", _gen_bullet_impact),
+            ("bullet_impact_enemy", _gen_bullet_impact_enemy),
+            ("door_creak", _gen_door_creak),
+            ("door_rattle", _gen_door_rattle),
+            ("door_open", _gen_door_open),
+            ("reload", _gen_reload),
+            ("ambient_drone", _gen_ambient_drone),
+            ("rain", _gen_rain),
+            ("wind", _gen_wind),
+            ("explosion", _gen_explosion),
+            ("terminal_glitch", _gen_terminal_glitch),
+            ("missile_launch", _gen_missile_launch),
+            ("missile_flyby", _gen_missile_flyby),
+            ("rig_impact_crack", _gen_rig_impact_crack),
+            ("rig_low_boom", _gen_rig_low_boom),
+            ("rig_secondary_explosion", _gen_rig_secondary_explosion),
+            ("rig_metal_collapse", _gen_rig_metal_collapse),
+            ("rig_water_splash", _gen_rig_water_splash),
+            ("rig_fire_burst", _gen_rig_fire_burst),
+            ("heartbeat", _gen_heartbeat),
+            ("menu_click", _gen_menu_click),
+            ("menu_hover", _gen_menu_hover),
+            ("type_tick", _gen_type_tick),
+            ("type_tick_1", _gen_type_tick),
+            ("type_tick_2", _gen_type_tick_b),
+            ("type_tick_3", _gen_type_tick_c),
+            ("radio_static", _gen_radio_static),
+            ("radio_chatter", _gen_radio_chatter),
+            ("water_drip", _gen_water_drip),
+            ("mission_complete", _gen_mission_complete),
+            ("breach", _gen_breach),
+            ("molotov_throw", _gen_molotov_throw),
+            ("molotov_explode", _gen_molotov_explode),
+            ("pickup", _gen_pickup),
+            ("alarm", _gen_alarm),
+            ("empty_click", _gen_empty_click),
+            ("glass_shatter", _gen_glass_shatter),
+        ]
+        for name, gen in gens:
+            try:
+                self.sounds[name] = _load(gen())
+            except Exception as e:
+                print(f"Audio gen failed: {name} — {e}")
+                
+    def _effective_volume(self, name, volume):
+        duck = self._duck_factor if name in self._ambience_names and self._duck_frames > 0 else 1.0
+        if name == "wind":
+            volume *= 0.40
+        elif name == "rain":
+            volume *= 0.55
+        return max(0.0, min(1.0, self.master_volume * volume * duck))
+        
+    def play(self, name, volume=1.0, loops=0, channel=None):
+        if name in ("footstep", "footstep_walk", "type_tick"):
+            variant = f"{name}_{random.randint(1, 3)}"
+            s = self.sounds.get(variant, self.sounds.get(name))
+            if name == "type_tick":
+                volume = min(1.0, volume * 4.5)
+        else:
+            s = self.sounds.get(name)
+        if s is None:
+            return None
+        vol = self._effective_volume(name, volume)
+        s.set_volume(vol)
+        if channel is not None:
+            c = _ch(channel)
+            c.play(s, loops=loops)
+        else:
+            c = s.play(loops=loops)
+        if c and loops != 0:
+            self._loop_channels[name] = c
+            self._loop_base_volumes[name] = volume
+        return c
+        
+    def play_random(self, prefix, count=3, volume=1.0, loops=0, channel=None):
+        return self.play(f"{prefix}_{random.randint(1, count)}", volume=volume, loops=loops, channel=channel)
+        
+    def schedule(self, delay_frames, name, volume=1.0, loops=0, channel=None):
+        self.scheduled.append({
+            "delay": max(0, int(delay_frames)),
+            "name": name,
+            "volume": volume,
+            "loops": loops,
+            "channel": channel,
+        })
+        
+    def update(self):
+        for item in self.scheduled[:]:
+            item["delay"] -= 1
+            if item["delay"] <= 0:
+                self.play(item["name"], item["volume"], item["loops"], item["channel"])
+                self.scheduled.remove(item)
+        if self._duck_frames > 0:
+            self._duck_frames -= 1
+            if self._duck_frames <= 0:
+                self._duck_factor = 1.0
+            for name, ch in list(self._loop_channels.items()):
+                if ch is None:
+                    continue
+                base = self._loop0_base_volumes.get(name, 1.0) if hasattr(self, '_loop0_base_volumes') else self._loop_base_volumes.get(name, 1.0)
+                try:
+                    ch.set_volume(self._effective_volume(name, base))
+                except Exception:
+                    pass
+                    
+    def duck_ambience(self, frames=90, factor=0.35):
+        self._duck_frames = max(self._duck_frames, int(frames))
+        self._duck_factor = min(self._duck_factor, max(0.0, min(1.0, factor)))
+        
+    def play_3d(self, name, source_pos, listener_pos, max_dist=800, base_volume=1.0):
+        s = self.sounds.get(name)
+        if s is None:
+            return None
+        dx = source_pos[0] - listener_pos[0]
+        dy = source_pos[1] - listener_pos[1]
+        dist = math.hypot(dx, dy)
+        if dist >= max_dist:
+            return None
+        attenuation = max(0.0, 1.0 - (dist / max_dist))
+        final_vol = base_volume * self.master_volume * attenuation
+        pan = dx / max_dist
+        pan = max(-1.0, min(1.0, pan))
+        left_vol = final_vol * min(1.0, 1.0 - pan)
+        right_vol = final_vol * min(1.0, 1.0 + pan)
+        channel = s.play()
+        if channel:
+            channel.set_volume(left_vol, right_vol)
+        return channel
+        
+    def stop(self, name=None, channel=None):
+        if channel is not None and channel in _channels:
+            _channels[channel].stop()
+        elif name and name in self.sounds:
+            self.sounds[name].stop()
+            self._loop_channels.pop(name, None)
+            self._loop_base_volumes.pop(name, None)
+            
+    def stop_all(self):
+        for ch in _channels.values():
+            ch.stop()
+        for name in self.sounds:
+            try:
+                self.sounds[name].stop()
+            except Exception:
+                pass
+        self._loop_channels.clear()
+        self._loop_base_volumes.clear()
+        self.scheduled.clear()
+        
+    def set_master_volume(self, vol_0_to_100):
+        self.master_volume = max(0.0, min(1.0, vol_0_to_100 / 100.0))
+        try:
+            pygame.mixer.music.set_volume(self.master_volume * getattr(self, "_current_music_vol", 0.5))
+        except Exception:
+            pass
+        
+    def play_music(self, filename, volume=0.5):
+        """Loads and streams an MP3 music track in the background."""
+        import os
+        filepath = os.path.join(os.path.dirname(__file__), filename)
+        if not os.path.exists(filepath):
+            filepath = filename
+        if not os.path.exists(filepath):
+            print(f"Music file not found: {filename}")
+            return False
+        try:
+            pygame.mixer.music.load(filepath)
+            self._current_music_vol = volume
+            pygame.mixer.music.set_volume(self.master_volume * volume)
+            pygame.mixer.music.play(loops=-1)
+            return True
+        except Exception as e:
+            print(f"Failed to play music: {e}")
+            return False
+
+    def stop_music(self):
+        """Stops the streaming background music."""
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    def set_music_volume(self, volume):
+        """Adjusts the streaming music volume dynamically."""
+        self._current_music_vol = volume
+        try:
+            pygame.mixer.music.set_volume(self.master_volume * volume)
+        except Exception:
+            pass
+        
+    def get_sound(self, name):
+        return self.sounds.get(name)
+        
+    def is_playing(self, channel):
+        if channel in _channels:
+            return _channels[channel].get_busy()
+        return False
+        
+    def fadeout(self, channel, fade_ms=500):
+        if channel in _channels:
+            _channels[channel].fadeout(fade_ms)
