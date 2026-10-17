@@ -1045,3 +1045,23 @@ docs/engine/CHANGELOG.md for the evidence).
 - Gates: compileall OK; m5_shadow_check OK (median render 55.2 ms);
   units 318 OK; smoke OK; boundaries OK (W1 49 =).
   Proofs in `previews/finale/` (walk_maru, walk_ucilev, leak_sheet).
+
+## 2026-10-17 — Repo hygiene: 3-month snapshot pushed + scratch untracked
+
+- The working tree had been uncommitted since 2026-07-20 (`310c385`); all work
+  since (RPE6 engine migration, sprite pipeline, polish passes) existed only on
+  disk. Snapshot `6ba9b81` pushed to origin as `backup/snapshot-20261017`
+  (local `main` is still 5 commits behind `origin/main`; reconciliation is a
+  separate task).
+- Cleanup commit (files kept on disk unless noted; `.gitignore` extended):
+  - deleted root duplicates whose archived twin is byte-identical in
+    `docs/history/`: FIXES.md, IMPLEMENTED.md, MASTER_PROMPT.md, manifest.json,
+    MULTIPLAYER_PATCH_SHA256.json, VALIDATION.md, MISSION5_W1..W7_README.txt,
+    MULTIPLAYER_PATCH_README.txt, PATCH_INSTRUCTIONS.txt, PATCH_SHA256.txt,
+    SETTINGS_PATCH_README.txt, TUNNEL_TEST_RESULTS.txt;
+  - untracked revert-kit leftovers (README.md, mission5_audio.patch,
+    game_source_*.txt), run logs (`*.err`, `*_log.txt`, `*_err.txt`) and
+    scratch (`_shots/`, `tools/out/`, `handoff/`, `SKILLS/`, `apply_*.py`,
+    `_inspect2.py`, icon*/wordmark files, M5_3D_CUTSCENES_BUNDLE.txt,
+    RESUME_PROMPT.txt, .pixeldrain_last_id_slim, Notion export md).
+- Gates: tree-only change; compileall/smoke unaffected.

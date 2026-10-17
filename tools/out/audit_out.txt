@@ -1,5 +1,0 @@
-pygame-ce 2.5.5 (SDL 2.32.6, Python 3.13.3)
-Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
-saved E:\Code\Call of Acaristan\First try\tools\out\audit_sheet_0.jpg
-saved E:\Code\Call of Acaristan\First try\tools\out\audit_sheet_1.jpg
-saved E:\Code\Call of Acaristan\First try\tools\out\audit_sheet_2.jpg
