@@ -1,0 +1,4 @@
+LINE	FILE	SECONDS	TEXT
+VO_041	Generated Audio October 07, 2026 - 11_45PM(1).ogg	8.2	No MAG banners. No claim. Just a scene waiting for us.
+VO_107	Generated Audio October 07, 2026 - 11_45PM(2).ogg	2.4	Nobody likes this lane.
+VO_110	Generated Audio October 07, 2026 - 11_46PM.ogg	2.6	Vasile, I have-

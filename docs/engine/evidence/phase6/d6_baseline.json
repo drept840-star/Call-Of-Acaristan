@@ -1,0 +1,47 @@
+{
+ "custom": {
+  "m1": 1,
+  "m2": 1,
+  "m3": 1,
+  "m4": 1,
+  "m5": 0
+ },
+ "custom_names": {
+  "m1": [
+   "m1.game_draw"
+  ],
+  "m2": [
+   "m2.game_draw"
+  ],
+  "m3": [
+   "m3.game_draw"
+  ],
+  "m4": [
+   "m4.game_draw"
+  ],
+  "m5": []
+ },
+ "schema": "ae.d6/1",
+ "static": {
+  "m1": {
+   "draw_sites": 288,
+   "painter_sites": 0
+  },
+  "m2": {
+   "draw_sites": 1226,
+   "painter_sites": 0
+  },
+  "m3": {
+   "draw_sites": 1912,
+   "painter_sites": 0
+  },
+  "m4": {
+   "draw_sites": 399,
+   "painter_sites": 0
+  },
+  "m5": {
+   "draw_sites": 275,
+   "painter_sites": 352
+  }
+ }
+}

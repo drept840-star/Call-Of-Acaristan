@@ -1,0 +1,10 @@
+E:\Code\Call of Acaristan\First try\src\core\config.py:32: Warning: no fast renderer available
+  screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:5620: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  plain = pygame.image.tostring(base, "RGBA")
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:5639: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  got = pygame.image.tostring(s, "RGBA")
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:5649: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  return pygame.image.tostring(s, "RGBA")
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:4774: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  return pygame.image.tostring(surf, "RGBA")

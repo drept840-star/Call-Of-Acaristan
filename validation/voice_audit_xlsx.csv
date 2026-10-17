@@ -1,0 +1,98 @@
+sheet,sheet_id,character,mission,text,status,audit_ids,where,notes
+Missing lines,NEW_001,Biribel,1,The memos said something about a shipment number…,OK,VO_174,src/core/interactions.py:189,
+Missing lines,NEW_002,Biribel,1,Shipment 7742. Only the last three digits.,OK,VO_175,src/core/interactions.py:191,
+Missing lines,NEW_003,Biribel,1,7… 4… 2. Has to be.,OK,VO_176,src/core/interactions.py:193,
+Missing lines,NEW_004,Vasile,2,Route 12 opens into the checkpoint corridor. Stay slow.,OK,,src/missions/m2/meta.py:579,text-only system line by design.
+Missing lines,NEW_005,Gabi,2,Blast pattern is too clean for a panic bombing.,OK,,src/missions/m2/meta.py:591,text-only system line by design.
+Missing lines,NEW_006,Darius,2,Static is pooling down here. Something jammed the channel.,OK,,src/missions/m2/meta.py:603,text-only system line by design.
+Missing lines,NEW_007,Vasile,2,"Government tread, checkpoint equipment... keep your heads down.",OK,,src/missions/m2/meta.py:614,text-only system line by design.
+Missing lines,NEW_008,Seby,2,Did anyone else see that flash above the gantry?,OK,,src/missions/m2/meta.py:625,text-only system line by design.
+Missing lines,VO_001,President Retardovici,2,Route 12 will be remembered as the day KRAP discipline failed the nation.,MISSING AUDIO,VO_001,src/missions/m2/meta.py:103,no recording for VO_001.
+Missing lines,VO_002,Balaceanu,2,"Effective immediately, KRAP operations in the highway corridor fall under government review.",OK,VO_002,src/missions/m2/meta.py:109,
+Missing lines,VO_003,IPA Dispatch,2,All units. The KRAP operator is the primary suspect. Bring him in. Authorization IPA-Code Omega.,MISSING AUDIO,VO_003,src/missions/m2/meta.py:141,no recording for VO_003.
+Missing lines,VO_005,Balaceanu,3,"You told them I was a coward, Biribel. / A fake. / Tonight I tell the nation what you are.",OK,VO_005,src/missions/m3/meta.py:99,
+Missing lines,VO_006,Balaceanu,3,"When the address ends, so do you. / That is not a threat. / That is a schedule.",OK,VO_006,"src/missions/m3/meta.py:113, src/missions/m3/meta.py:388",
+Missing lines,VO_010,Balaceanu,3,Six years I have waited to show the nation what a KRAP lie looks like. Up close. On camera.,OK,VO_010,src/missions/m3/meta.py:360,
+Missing lines,VO_011,Balaceanu,3,"They'll see your face, Biribel. They'll hear Route 12. And then they'll see what happens to people who leak rumors about their Prime Minister.",OK,VO_011,src/missions/m3/meta.py:362,
+Missing lines,VO_012,Balaceanu,3,"At twenty-two hundred, the President names you. Route 12. By face. I made sure the file is... thorough.",OK,VO_012,src/missions/m3/meta.py:369,
+Missing lines,VO_013,Balaceanu,3,"Oh, save it. This tape is one-way. I'm told the acoustics in here are... unkind.",OK,VO_013,src/missions/m3/meta.py:386,
+Missing lines,VO_071,Volkov,3,"Door's kicked. Camera loop: four minutes, maybe less. I get you out, you get me clear. Move.",OK,VO_071,src/missions/m3/meta.py:421,
+Missing lines,VO_072,Volkov,3,"I came in through their own back door. Same way out, if you keep up. Move, operator. Move.",OK,VO_072,src/missions/m3/meta.py:423,
+Missing lines,VO_147,Volkov,3,Too loud now. Move!,OK,VO_147,src/missions/m3/interrog.py:405,
+Missing lines,VO_148,Volkov,3,"Alarm's up. I'll draw them off, you move.",OK,VO_148,src/missions/m3/interrog.py:489,
+Missing lines,VO_131,Volkov,3,"I bought you seconds. Make the leg useful, then move.",OK,VO_131,src/missions/m3/flow.py:441,
+Missing lines,VO_135,Volkov,3,"They're awake now. South hall, move.",OK,VO_135,src/missions/m3/flow.py:1276,
+Missing lines,VO_016,PA System,3,Thirteen names closed. One name opened.,MISSING AUDIO,VO_016,src/missions/m3/systems.py:2121,no recording for VO_016.
+Missing lines,VO_055,Volkov,3,"Biribel! Take the radio. I draw them off, you get the relay alive.",OK,VO_055,src/missions/m3/meta.py:231,
+Missing lines,VO_057,Volkov,3,Out? Here. Two more. Make them count.,OK,VO_057,src/missions/m3/meta.py:239,
+Missing lines,NEW_009,Volkov,3,Out?! Catch!,OK,VO_177,src/missions/m3/flow.py:1248,
+Missing lines,NEW_010,Volkov,3,"Mag up, move!",OK,VO_178,src/missions/m3/flow.py:1249,
+Missing lines,NEW_011,Volkov,3,Stay lethal!,OK,VO_179,src/missions/m3/flow.py:1250,
+Missing lines,VO_129,Volkov,3,Authorization is good. Get back to the relay.,OK,VO_129,"src/missions/m3/draw.py:2437, src/missions/m3/systems.py:3045",
+Missing lines,VO_058,Volkov,3,On your six. Move.,OK,VO_058,src/missions/m3/meta.py:251,
+Missing lines,VO_133,Volkov,3,"Back on your six. Call when you're dry, I've got mags.",OK,VO_133,src/missions/m3/flow.py:627,
+Missing lines,VO_137,Volkov,3,"I'm with you. Stacks west, vault northeast. Don't dry the mag, I'll toss you one.",OK,VO_137,src/missions/m3/flow.py:1409,
+Missing lines,NEW_012,Volkov,3,"Dry? Catch, don't make me regret this!",OK,VO_180,src/missions/m3/flow.py:1242,
+Missing lines,NEW_013,Volkov,3,Mag! Keep pushing the stacks!,OK,VO_181,src/missions/m3/flow.py:1243,
+Missing lines,NEW_014,Volkov,3,Last spare. Make them count!,OK,VO_182,src/missions/m3/flow.py:1244,
+Missing lines,VO_142,Maru,3,"The only unforged copy is under glass in the cold vault. Take it. Then the north stairwell, Balaceanu's sweep is already moving.",MISSING AUDIO,VO_142,src/missions/m3/flow.py:1828,no recording for VO_142.
+Missing lines,VO_144,Volkov,3,I've got your back to the door. Go.,OK,VO_144,src/missions/m3/flow.py:1878,
+Missing lines,VO_145,Maru,3,They will burn the wing when they realize. Don't look back.,MISSING AUDIO,VO_145,src/missions/m3/flow.py:1882,no recording for VO_145.
+Missing lines,VO_060,Volkov,3,"My van's still staged at the dock, I haven't bailed on you yet. Through that smoke, friend, and don't make me regret it.",OK,VO_060,src/missions/m3/meta.py:264,
+Missing lines,VO_008,Balaceanu,3,"Sweep teams: the prisoner is in the lobby levels. Free fire, my address begins at 22:00, and I will not be interrupted.",OK,VO_008,src/missions/m3/meta.py:267,
+Missing lines,VO_004,Balaceanu,3,"Sweep teams, report. The prisoner carries state property. My address begins at 22:00, and he will not outlive it.",OK,VO_004,src/missions/m3/flow.py:954,
+Missing lines,VO_160,Volkov,3,"Contact - shield point ahead! His sight cone is narrow: go around it, friend.",OK,VO_160,src/missions/m3/sweep.py:1044,
+Missing lines,NEW_015,Volkov,3,Window's closing. My engine idles for no one - not even you.,OK,VO_183,src/missions/m3/sweep.py:755,
+Missing lines,VO_149,Volkov,3,"Shield point is down - the south is open. Push, friend.",OK,VO_149,src/missions/m3/sweep.py:287,
+Missing lines,NEW_016,Vasile,3,Volkov's patience is a resource. Spend it wisely.,MISSING AUDIO,,src/missions/m3/sweep.py:758,"no VO id: add to VOICE_LINES, then record."
+Missing lines,NEW_017,Volkov,3,Forty-five seconds. Then I'm a memory.,OK,VO_184,src/missions/m3/sweep.py:760,
+Missing lines,VO_150,Maru,3,Dock gates open. No van waiting - move.,MISSING AUDIO,VO_150,src/missions/m3/sweep.py:290,no recording for VO_150.
+Missing lines,VO_151,Volkov,3,Their marksman is gone. Dock gates are open - I'll cycle the door when you get there.,OK,VO_151,src/missions/m3/sweep.py:293,
+Missing lines,VO_154,Volkov,3,"...The van's gone. Dock crane, roof line - you're resourceful. Sorry, friend.",OK,VO_154,src/missions/m3/sweep.py:769,
+Missing lines,VO_155,Volkov,3,Behind me. Door cycles in forty-five. I'll keep them off it.,OK,VO_155,src/missions/m3/sweep.py:874,
+Missing lines,VO_156,Maru,3,No van. The crane cage lifts to the roof line - hold the dock until it clears.,MISSING AUDIO,VO_156,src/missions/m3/sweep.py:877,no recording for VO_156.
+Missing lines,VO_157,Volkov,3,"Van's held - sweep teams still on you. Clear them, then we roll!",OK,VO_157,src/missions/m3/sweep.py:955,
+Missing lines,VO_158,Maru,3,"Roof line confirmed. You're a ghost again, Biribel. Now - the broadcast.",MISSING AUDIO,VO_158,src/missions/m3/sweep.py:985,no recording for VO_158.
+Missing lines,VO_159,Volkov,3,"File's aboard. I drive, you watch the mirrors. DRIVE!",OK,VO_159,src/missions/m3/sweep.py:988,
+Missing lines,VO_009,Balaceanu,3,"The prisoner is contained. At twenty-two hundred I will close the matter of Route 12, on camera, before the nation.",OK,VO_009,src/missions/m3/meta.py:288,
+Missing lines,VO_140,Volkov,3,"I'm on your six. You take the desk, I'll hold the floor.",OK,VO_140,src/missions/m3/flow.py:1454,
+Missing lines,VO_015,Balaceanu,3,Twenty-two hundred. The address is finished. The prisoner is contained. Route 12 is closed.,OK,VO_015,src/missions/m3/meta.py:483,
+Missing lines,VO_007,Balaceanu,3,What is this? Cut the feed. CUT THE FEED!,MISSING AUDIO,VO_007,src/missions/m3/meta.py:140,no recording for VO_007.
+Missing lines,VO_052,Volkov,3,Six years he spent building it. You read it in one minute.,OK,VO_052,src/missions/m3/meta.py:154,
+Missing lines,NEW_018,Vasile,4,This isn't a crackdown - it's a collapse. Stay off the boulevard.,MISSING AUDIO,,src/missions/m4/flow.py:73,"no VO id: add to VOICE_LINES, then record."
+Missing lines,NEW_019,Intercept Operator,4,North border logged one vehicle at first light. Volkov ran.,MISSING AUDIO,,src/missions/m4/flow.py:76,"no VO id: add to VOICE_LINES, then record."
+Missing lines,NEW_020,Presidential PA,4,Citizens. Curfew holds. The Presidency has this under control.,MISSING AUDIO,,src/missions/m4/flow.py:79,"no VO id: add to VOICE_LINES, then record."
+Missing lines,VO_073,Maru,4,"You got the file on air. Out here, that's not nothing.",MISSING AUDIO,VO_073,src/missions/m4/flow.py:135,no recording for VO_073.
+Missing lines,VO_074,Maru,4,His men have this block pinned. Hold the transmitter and let the arrest air.,MISSING AUDIO,VO_074,src/missions/m4/flow.py:137,no recording for VO_074.
+Missing lines,VO_075,Maru,4,One question before you bleed for this building - who are you fighting for?,MISSING AUDIO,VO_075,src/missions/m4/flow.py:139,no recording for VO_075.
+Missing lines,VO_076,Maru,4,Then hold the line. Order is all that's between this city and the pit.,MISSING AUDIO,VO_076,src/missions/m4/flow.py:144,no recording for VO_076.
+Missing lines,VO_077,Maru,4,Good answer. Tools get pointed at the people too - remember that.,MISSING AUDIO,VO_077,src/missions/m4/flow.py:146,no recording for VO_077.
+Missing lines,VO_164,Maru,4,Jammer's on the east rack. Break their comms before they organize.,MISSING AUDIO,VO_164,src/missions/m4/flow.py:275,no recording for VO_164.
+Missing lines,VO_171,Maru,4,That's the rack. Plant it (E) and their comms go dark.,MISSING AUDIO,VO_171,src/missions/m4/flow.py:552,no recording for VO_171.
+Missing lines,VO_173,Maru,4,"Jammer's live. Their comms are soup now. Get to the transmitter and hold it - when Retardovici gives the order, it has to reach every set in the country.",MISSING AUDIO,VO_173,src/missions/m4/flow.py:591,no recording for VO_173.
+Missing lines,NEW_021,Presidential PA,4,"All units. By order of the Presidency, garrison command is... recalibrated.",MISSING AUDIO,,src/missions/m4/flow.py:329,"no VO id: add to VOICE_LINES, then record."
+Missing lines,NEW_022,Presidential PA,4,General Balaceanu is relieved of command and arrested. Escort him out.,MISSING AUDIO,,src/missions/m4/flow.py:331,"no VO id: add to VOICE_LINES, then record."
+Missing lines,NEW_023,Loyalist Comms,4,-say again- who gave the or- our channel's on every set-,MISSING AUDIO,,src/missions/m4/flow.py:333,"no VO id: add to VOICE_LINES, then record."
+Missing lines,NEW_024,Loyalist Comms,4,Fall back! Nobody dies for a man already in a cell. Break off!,MISSING AUDIO,,src/missions/m4/flow.py:337,"no VO id: add to VOICE_LINES, then record."
+Missing lines,VO_081,Maru,4,And the man on the screen smiles. The country is cheering / the wrong name tonight.,MISSING AUDIO,VO_081,src/missions/m4/meta.py:161,no recording for VO_081.
+Text-only review,TEXT_001,Hungry Kid,1,"cough... I haven't eaten in two days. / Do you have any food, sir?",MISSING AUDIO,,src/missions/walking_sim.py:234,"no VO id: add to VOICE_LINES, then record."
+Text-only review,TEXT_002,Hungry Kid,1,"Thanks for the food, sir! Be careful, the guards are on high alert.",MISSING AUDIO,,src/missions/walking_sim.py:242,"no VO id: add to VOICE_LINES, then record."
+Text-only review,TEXT_003,Old Woman,1,"They took everything... even the well water is contaminated. / A dry throat and an empty stomach, that's our reward.",MISSING AUDIO,,src/missions/walking_sim.py:252,"no VO id: add to VOICE_LINES, then record."
+Text-only review,TEXT_004,Old Woman,1,"Bless you, soldier. Listen closely... / The guards at the warehouse safe use a security passcode. / I saw them write it down on notes: 7 - 4 - 2. / Remember it well.",MISSING AUDIO,,src/missions/walking_sim.py:256,"no VO id: add to VOICE_LINES, then record."
+Text-only review,TEXT_005,Old Woman,1,"Remember, the code to the notebook safe is 742.",MISSING AUDIO,,src/missions/walking_sim.py:262,"no VO id: add to VOICE_LINES, then record."
+Text-only review,TEXT_006,Old Fisherman,1,Hear that engine? / Too fast for a fishing boat.,OK,VO_185,src/missions/walking_sim.py:1434,
+Text-only review,TEXT_007,Old Fisherman,1,They come in low during the rain. / The rigs never see them until the first rocket.,OK,VO_186,src/missions/walking_sim.py:1446,
+Text-only review,TEXT_008,Old Fisherman,1,There. Center rig's folding.,OK,VO_187,src/missions/walking_sim.py:1476,
+Text-only review,TEXT_009,Old Fisherman,1,Left rig's falling into the sea.,OK,VO_188,src/missions/walking_sim.py:1482,
+Text-only review,TEXT_010,Old Fisherman,1,Now the last one burns. / Three fires on the horizon.,OK,VO_189,src/missions/walking_sim.py:1488,
+Text-only review,TEXT_011,Old Fisherman,1,Third time this month. / KRAP watches until the oil stops moving.,OK,VO_190,src/missions/walking_sim.py:1462,
+Text-only review,TEXT_012,Old Fisherman,1,You're new. / You'll learn.,OK,VO_191,src/missions/walking_sim.py:1469,
+Text-only review,TEXT_013,System,2,IPA cleanup team in control sector.,OK,,src/missions/m2/sniper.py:1342,text-only system line by design.
+Text-only review,TEXT_014,System,2,Evidence transmitted. Move to extraction.,OK,,src/missions/m2/world.py:434,text-only system line by design.
+Text-only review,TEXT_015,System,2,IPA {SECOND / FINAL} WAVE INBOUND - {hostile count} HOSTILES,OK,,src/missions/m2/sniper.py:1429,text-only system line by design. formatted at runtime.
+Text-only review,TEXT_016,System,2,TRANSMISSION SENT / ARCHIVE PARTIALLY CORRUPTED,OK,,src/missions/m2/meta.py:97,text-only system line by design.
+Text-only review,TEXT_017,System,3,"STATE ADDRESS, LIVE TONIGHT, 22:00 / SUBJECT: ROUTE 12 PERPETRATOR",OK,,src/missions/m3/meta.py:106,text-only system line by design.
+Text-only review,TEXT_018,System,3,ADDRESS COMPLETE. THE STUDIO IS THEIRS. / FEED RELEASED - WING RESET. GO AGAIN.,OK,,src/missions/m3/meta.py:486,text-only system line by design.
+Text-only review,TEXT_019,System,4,Guns down. That's the President on the wire. The General's in cuffs.,OK,,src/missions/m4/flow.py:335,text-only system line by design.
+Text-only review,TEXT_020,System,4,The transmitter is live. Do not let it go dark.,OK,,src/missions/m4/flow.py:475,text-only system line by design.
+Text-only review,TEXT_021,System,4,All units - the studio transmitter is live. Do not let it go dark.,OK,,src/missions/m4/flow.py:602,text-only system line by design.

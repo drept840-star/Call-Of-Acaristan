@@ -1,0 +1,80 @@
+{
+ "schema": "ae.level/1",
+ "id": "m3.kill_order",
+ "name": "Mission 3 - Kill order",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CgCCCCCCCCCggggggggggggggggggggggggggggggggggggC",
+   "CgCEEEEEEECggggggggggggggggggggggggggggggggggggC",
+   "CgCEEEPEEECggggggggggggggggggggggggggggggggggggC",
+   "CgCEEEEEEECggggggggggggggggggggggggggggggggggggC",
+   "CgCEEEEEEECggggggggggggggggggggggggggggggggggggC",
+   "CgCEEEEEEECggggggggggggggggggggggggggggggggggggC",
+   "CgCEEEEEEECggggggggggggggggggggggggggggggggggggC",
+   "CgCCCDDCCCCCCCCCCCCCCCCCCCCCCCCCCCCCgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....CECDDCEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....DEC..DEEEEEEEEEEBEEEEC.....CgggggggggggC",
+   "CgC.....DEC..CEBEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....CECCCCEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEBEEEEEEEEED.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEEEEEEEED.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....CECCCCEEEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....DEC..DEBEEEEEEEEEEEEEC.....CgggggggggggC",
+   "CgC.....DEC..CEEEEEEEEECCDDCCC.....CgggggggggggC",
+   "CgC.....CECDDCEEEEEEEEECEEEECC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEECEEEECC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEBECEEEECC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEECEEEECC.....CgggggggggggC",
+   "CgC.....CEEEEEEEEEEEEEECCCCCCC.....CgggggggggggC",
+   "CgCCCCCCCDDCCCCCCCCDDCCCCCCCCCCDDCCCgggggggggggC",
+   "CgCCCCCCC..CCgCCCCC..CCCCCgCCCC..CCCCCgggggggggC",
+   "CgC.........CgC..........CgC.........CgggggggggC",
+   "CgC.........CgC..........CgC.........CgggggggggC",
+   "CgC.........CgC..........CgC.........CgggggggggC",
+   "CgCCCCDDCCCCCCCCCCCDDCCCCCCCCCCDDCCCCCgggggggggC",
+   "CgCEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEECgggggggggC",
+   "CgCEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEECgggggggggC",
+   "CgCEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEECgggggggggC",
+   "CgCEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEECgggggggggC",
+   "CgCEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEECgggggggggC",
+   "CgCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCgggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CggggggggggggggggggggggggggggggggggggggggggggggC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@6,3",
+   "kind": "spawn",
+   "tile": [
+    6,
+    3
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m3"
+ }
+}

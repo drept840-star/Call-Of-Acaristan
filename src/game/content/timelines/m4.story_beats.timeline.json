@@ -1,0 +1,47 @@
+{
+ "schema": "ae.timeline/1",
+ "fps_hint": 60,
+ "metadata": {
+  "time_unit": "frames",
+  "kind": "radio_ladder",
+  "source": "missions/m4/flow.py _M4_STORY_BEATS"
+ },
+ "id": "m4.story_beats",
+ "tracks": {
+  "event": [
+   {
+    "t": 240,
+    "name": "beat_loyalists",
+    "text": "VASILE: This isn't a crackdown - it's a collapse. Stay off the boulevard.",
+    "color": [
+     110,
+     160,
+     220
+    ],
+    "duration": 440
+   },
+   {
+    "t": 600,
+    "name": "beat_volkov",
+    "text": "INTERCEPT: North border logged one vehicle at first light. Volkov ran.",
+    "color": [
+     200,
+     140,
+     90
+    ],
+    "duration": 440
+   },
+   {
+    "t": 960,
+    "name": "beat_retardovici",
+    "text": "PA: Citizens. Curfew holds. The Presidency has this under control.",
+    "color": [
+     230,
+     200,
+     120
+    ],
+    "duration": 440
+   }
+  ]
+ }
+}

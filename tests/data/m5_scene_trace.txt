@@ -1,0 +1,29 @@
+# RPE6 §6.2 acceptance trace — Mission 5 flow as mirrored from the legacy FSM (A-005).
+# Produced by tests/unit/test_scene_mirror.py through the real core.fsm.GameStateManager;
+# the sequence is the FSM path of a complete M5 run: boot, menu, slot select, briefing,
+# opening cutscene, gameplay with one pause and one notebook inspection, mid-mission
+# cutscene, death + retry, finale cutscene, mission complete, back to the menu.
+# Lines starting with '#' are comments; the rest must equal SceneStack.trace exactly.
+push BOOT_INTRO
+replace BOOT_INTRO -> MENU
+replace MENU -> SLOT_SELECT
+replace SLOT_SELECT -> BRIEFING
+replace BRIEFING -> CUTSCENE
+replace CUTSCENE -> GAME
+push PAUSED
+pop PAUSED
+push NOTEBOOK_INSPECT
+pop NOTEBOOK_INSPECT
+replace GAME -> CUTSCENE
+replace CUTSCENE -> GAME
+replace GAME -> DEATH
+replace DEATH -> GAME
+replace GAME -> GAME
+push PAUSED
+pop PAUSED
+replace GAME -> MENU
+replace MENU -> SLOT_SELECT
+replace SLOT_SELECT -> GAME
+replace GAME -> CUTSCENE
+replace CUTSCENE -> MISSION_COMPLETE
+replace MISSION_COMPLETE -> MENU

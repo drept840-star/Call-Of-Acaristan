@@ -1,0 +1,7 @@
+{
+ "schema": "ae.lighting3d/1",
+ "id": "exterior_night_rain",
+ "key": {"direction": [-0.4, 0.7, -0.5], "ambient": 0.3, "diffuse": 0.6, "tint": [0.85, 0.95, 1.1]},
+ "fog": {"color": [16, 20, 28], "start": 8.0, "end": 60.0},
+ "sky": [[10, 14, 24], [6, 8, 14]]
+}

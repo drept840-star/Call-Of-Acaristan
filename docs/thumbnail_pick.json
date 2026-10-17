@@ -1,0 +1,154 @@
+{
+  "input": "E:\\Code\\Call of Acaristan\\First try\\trailers\\trailer_final_master.mp4",
+  "selected_t": 18.5,
+  "z": 4.406,
+  "out_png": "E:\\Code\\Call of Acaristan\\First try\\trailers\\thumbnail.png",
+  "out_jpg": "E:\\Code\\Call of Acaristan\\First try\\trailers\\thumbnail_yt.jpg",
+  "jpg_bytes": 365917,
+  "candidates": [
+    {
+      "t": 18.5,
+      "luma_spread": 25.04,
+      "specular": 0.064,
+      "red": 0.411,
+      "edges": 1.87,
+      "z": 4.406
+    },
+    {
+      "t": 17.75,
+      "luma_spread": 24.52,
+      "specular": 0.068,
+      "red": 0.397,
+      "edges": 1.83,
+      "z": 4.023
+    },
+    {
+      "t": 18.25,
+      "luma_spread": 25.19,
+      "specular": 0.052,
+      "red": 0.399,
+      "edges": 1.85,
+      "z": 3.823
+    },
+    {
+      "t": 17.0,
+      "luma_spread": 24.58,
+      "specular": 0.065,
+      "red": 0.383,
+      "edges": 1.85,
+      "z": 3.811
+    },
+    {
+      "t": 16.25,
+      "luma_spread": 24.16,
+      "specular": 0.068,
+      "red": 0.38,
+      "edges": 1.75,
+      "z": 3.411
+    },
+    {
+      "t": 19.0,
+      "luma_spread": 23.17,
+      "specular": 0.001,
+      "red": 0.396,
+      "edges": 1.84,
+      "z": 1.076
+    },
+    {
+      "t": 18.75,
+      "luma_spread": 22.53,
+      "specular": 0.001,
+      "red": 0.402,
+      "edges": 1.86,
+      "z": 0.941
+    },
+    {
+      "t": 17.5,
+      "luma_spread": 22.43,
+      "specular": 0.001,
+      "red": 0.407,
+      "edges": 1.82,
+      "z": 0.851
+    },
+    {
+      "t": 18.0,
+      "luma_spread": 22.18,
+      "specular": 0.001,
+      "red": 0.396,
+      "edges": 1.86,
+      "z": 0.711
+    },
+    {
+      "t": 17.25,
+      "luma_spread": 21.9,
+      "specular": 0.001,
+      "red": 0.379,
+      "edges": 1.83,
+      "z": 0.276
+    },
+    {
+      "t": 16.0,
+      "luma_spread": 21.91,
+      "specular": 0.001,
+      "red": 0.385,
+      "edges": 1.72,
+      "z": 0.046
+    },
+    {
+      "t": 16.5,
+      "luma_spread": 21.79,
+      "specular": 0.001,
+      "red": 0.37,
+      "edges": 1.78,
+      "z": -0.035
+    },
+    {
+      "t": 16.75,
+      "luma_spread": 21.65,
+      "specular": 0.001,
+      "red": 0.366,
+      "edges": 1.81,
+      "z": -0.063
+    },
+    {
+      "t": 5.0,
+      "luma_spread": 20.61,
+      "specular": 0.05,
+      "red": 0.292,
+      "edges": 0.9,
+      "z": -2.368
+    },
+    {
+      "t": 4.5,
+      "luma_spread": 18.28,
+      "specular": 0.007,
+      "red": 0.287,
+      "edges": 0.9,
+      "z": -4.96
+    },
+    {
+      "t": 4.25,
+      "luma_spread": 18.05,
+      "specular": 0.007,
+      "red": 0.286,
+      "edges": 0.88,
+      "z": -5.129
+    },
+    {
+      "t": 4.0,
+      "luma_spread": 17.88,
+      "specular": 0.001,
+      "red": 0.293,
+      "edges": 0.88,
+      "z": -5.321
+    },
+    {
+      "t": 4.75,
+      "luma_spread": 18.57,
+      "specular": 0.007,
+      "red": 0.24,
+      "edges": 0.89,
+      "z": -5.5
+    }
+  ]
+}

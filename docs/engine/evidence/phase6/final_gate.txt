@@ -1,0 +1,36 @@
+RPE6 Phase 6 FINAL gate (sandbox_linux, 2026-10-15) - Phase 6 exit
+golden 373/373, loop 7/7, replay OK, D4 OK, D6 --strict OK (m5 custom=0, exit met), bench ~9.5-10.1 ms avg (sandbox shared CPU), units 242, smoke OK, ae_ci OK
+
+== GOLDEN
+verified 373 shots in 7.0s: 0 failures, 0 errors
+AE GOLDEN: OK
+== LOOP
+AE LOOP: OK (7/7 segments, 43s)
+== REPLAY
+AE REPLAY: OK
+== D4
+AE D4: OK (hard=0, remaining mission-prefixed sites=0, exit criterion met)
+== D6
+AE D6: OK (custom draws: m1=1 m2=1 m3=1 m4=1 m5=0; direct draw sites: m1=288 m2=1226 m3=1912 m4=399 m5=275; exit criterion met)
+== BENCH
+AE BENCH: scenario m5-quarter/rain/6-guards/fire x240 frames: avg=10.14 ms p99=17.51 ms (budget 10 ms) - OVER BUDGET (sandbox hardware - owner re-run decides)
+AE BENCH: draw stats {'floor': 2, 'decor_static': 1, 'decals_dynamic': 1, 'shadows': 0, 'entities': 10, 'fx_world': 73, 'lighting': 0, 'overlay_world': 57, 'ui': 6, 'debug': 0} custom=0 ui_passes=3
+== TEXT
+AE TEXT: OK (table 488 keys, 0 missing, 0 unused, 21 fit slots)
+== BAKE
+AE BAKE SUMMARY: packs=5 baked=0 checked=42 sampled=27 stale=0 missing=0 mismatched=0 errors=0 lint_warnings=9
+AE BAKE: OK
+== UNIT
+Ran 242 tests in 6.951s
+OK
+== SMOKE
+SMOKE TEST: OK
+== CI
+mission 0 (zero engine diffs) ......... TODO (phase 10) 
+
+AE CI: FAIL
+GATE_DONE
+
+== CI RERUN (same tree, after the first CI run flaked one row under load - B-027 pattern)
+AE CI SUMMARY
+AE CI: OK (implemented gates)

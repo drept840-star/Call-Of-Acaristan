@@ -1,0 +1,52 @@
+{
+ "schema": "ae.level/1",
+ "id": "m5.print",
+ "name": "Mission 5 - Print works",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "COOOOOOOOOOOOOOCCOOOOOOOCC",
+   "COOBOOOOBOOOOOODDOOOOOOOCC",
+   "COOBOOOOBOOOBOOCCOOONOOOCC",
+   "COOOOOOOOOOOBOOCCOOBBOOOCC",
+   "CCCCCCDDCCCCCCCCCOOOOOOOCC",
+   "COOOOOOOOOOOOOOOCOOOOOOOCC",
+   "COOHHOOHHOOHHOOOCCCDDCCCCC",
+   "COOOOOOOOOOOOOOOCOOOOOOOOC",
+   "COOOOOOOOOOOOOOODOOOOOOOIC",
+   "COOHHOOHHOOHHOOODOOOOOOOOC",
+   "COOOOOOOOOOOOOOOCOOOOOOOOC",
+   "COOOOOOOOOOOOOOOCCCCDDCCCC",
+   "CCCDDCCCCCCCDDCCCCCCDDCCCC",
+   "CFFFFFFFFCLLLLLLLLLLLLLLCC",
+   "CFFFFFFFFDLLLLLLLLLLLLSLCC",
+   "CFIPFFFFFDLLLLLBBLLLLLLLCC",
+   "CFFFFFFFFCLLILLLLLLLLLLLCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@3,17",
+   "kind": "spawn",
+   "tile": [
+    3,
+    17
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m5"
+ }
+}

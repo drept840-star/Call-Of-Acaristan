@@ -1,0 +1,19 @@
+# P5-M4 gate (2026-10-15T19:36Z), Linux sandbox, ACA_GOLDEN_SET=ACA_LOOP_SET=sandbox_linux, PYTHONHASHSEED=0
+AE REPLAY: OK
+verified 373 shots in 7.6s: 0 failures, 0 errors
+AE GOLDEN: OK
+AE LOOP: OK (7/7 segments, 44s)
+SMOKE TEST: OK
+Ran 204 tests in 6.979s
+OK
+BOUNDARIES: OK (0 engine violations, 56 engine modules; W1 shared->mission 48 (baseline 48, =))
+AE API: OK (53 modules, 320 public names; +0 -0 ~0, 0 errors)
+AE D4: OK (hard=0, remaining mission-prefixed sites=76)
+AE DUMP: segment m5 after 3s sim (180 steps) - 8 entities, 8 component types present, 14 registered
+  M5Guard         7  v1  guard, kind, label, stage, counted, squad, face, passive, hunt_prev, hp0
+  WalkCycle       7  v1  phase, moving, last_x, last_y, primed
+  M5Guard: {"guard": true, "kind": "guard", "label": "q_13_5", "stage": "quarter", "counted": false, "squad": false, "face": null, "passive": false, "hunt_prev": false, "hp0": null}
+AE DUMP: OK
+AE TEXT: OK (table 488 keys, 0 missing, 0 unused, 21 fit slots)
+AE BAKE: FAIL (4 m3 assets "source hash changed" after the m3/systems.py one-line edit; `ae_bake.py --pack m3` re-baked 32 assets: PNG bytes identical, only .bakeinfo.json hashes changed) -> AE BAKE: OK
+GATE_DONE

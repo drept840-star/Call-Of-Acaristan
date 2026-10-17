@@ -1,0 +1,58 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.broadcast_transition",
+ "shots": [
+  {
+   "scene": "m3_bcast_shutter",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "hard_cut": true,
+   "min_ms": 1300,
+   "lighting": [
+    5,
+    6,
+    7
+   ]
+  },
+  {
+   "scene": "m3_bcast_road",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "You're out. Broadcast wing, follow the cable runs. I need you in front of a camera before that address ends.",
+   "min_ms": 2200,
+   "lighting": [
+    6,
+    7,
+    8
+   ]
+  },
+  {
+   "scene": "m3_bcast_mast",
+   "speaker": "BALACEANU (PA)",
+   "text": "The prisoner is contained. At twenty-two hundred I will close the matter of Route 12, on camera, before the nation.",
+   "min_ms": 2400,
+   "lighting": [
+    7,
+    8,
+    9
+   ]
+  },
+  {
+   "scene": "m3_bcast_onair",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Studio door. Two ways to do this, live on his camera, or quiet through my channel. Your call, operator.",
+   "min_ms": 2200,
+   "lighting": [
+    8,
+    9,
+    10
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.broadcast_transition_shots"
+ }
+}

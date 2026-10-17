@@ -1,0 +1,75 @@
+{
+  "schema": "ae.bench-budgets/1",
+  "note": "Reference machine is the owner's dev machine (master prompt 6.22: gameplay frame <= 10 ms). Sandbox caps were recorded in the Arena sandbox on 2026-10-16 and carry ~1.5x headroom; they catch regressions, they do not certify the 10 ms budget. Re-record on the owner machine and tighten.",
+  "scenarios": {
+    "m5-quarter": {
+      "budget_ms": 10.0,
+      "sandbox_linux": {
+        "recorded_avg_ms": 11.27,
+        "recorded_p99_ms": 15.65,
+        "avg_cap_ms": 17.0,
+        "p99_cap_ms": 24.0
+      }
+    },
+    "office3d": {
+      "budget_ms": 20.0,
+      "note": "Phase 11: cutscene render at 480x270 internal, quality high. Sandbox-recorded 2026-10-16 after steps 1-4; caps carry ~1.4x headroom. p99 caps carry extra headroom: sandbox p99 is load-sensitive (CI runs the bench after the 46 s loop row); avg is the regression signal.",
+      "sandbox_linux": {
+        "recorded_avg_ms": 27.34,
+        "recorded_p99_ms": 34.38,
+        "avg_cap_ms": 38.0,
+        "p99_cap_ms": 64.0
+      }
+    },
+    "depot3d": {
+      "budget_ms": 12.0,
+      "note": "Phase 11: Mission 0 depot outro, quality 2 (DOF + textures). Sandbox re-recorded 2026-10-16 after step 9: palette textures cost ~+12 ms at tier 2 in the sandbox (software affine rasterizer, stride path for big quads); tiers q1/q0 are the low-end answer. Owner re-certifies the 12 ms budget on target hardware.",
+      "sandbox_linux": {
+        "recorded_avg_ms": 27.34,
+        "recorded_p99_ms": 40.67,
+        "avg_cap_ms": 38.0,
+        "p99_cap_ms": 55.0
+      }
+    },
+    "depot3d_q1": {
+      "budget_ms": 12.0,
+      "note": "Depot at quality 1: render scale 0.75, no DOF, cast shadows baked, textures on. Sandbox re-recorded 2026-10-16 after step 9.",
+      "sandbox_linux": {
+        "recorded_avg_ms": 19.65,
+        "recorded_p99_ms": 22.4,
+        "avg_cap_ms": 28.0,
+        "p99_cap_ms": 40.0
+      }
+    },
+    "depot3d_q0": {
+      "budget_ms": 12.0,
+      "note": "Depot at quality 0: render scale 0.6, no local lights/shadows/post. Sandbox-recorded 2026-10-16 (P11 low-end pass).",
+      "sandbox_linux": {
+        "recorded_avg_ms": 6.84,
+        "recorded_p99_ms": 17.47,
+        "avg_cap_ms": 10.0,
+        "p99_cap_ms": 26.0
+      }
+    },
+    "office3d_q1": {
+      "budget_ms": 20.0,
+      "note": "Office at quality 1 (legacy 0.6 buffer, fewer lights, no DOF). Sandbox-recorded 2026-10-16 (P11 low-end pass). p99 caps carry extra headroom: sandbox p99 is load-sensitive (CI runs the bench after the 46 s loop row); avg is the regression signal.",
+      "sandbox_linux": {
+        "recorded_avg_ms": 29.39,
+        "recorded_p99_ms": 40.74,
+        "avg_cap_ms": 40.0,
+        "p99_cap_ms": 64.0
+      }
+    },
+    "office3d_q0": {
+      "budget_ms": 20.0,
+      "note": "Office at quality 0 (all P11 features off). Sandbox-recorded 2026-10-16 (P11 low-end pass). p99 caps carry extra headroom: sandbox p99 is load-sensitive (CI runs the bench after the 46 s loop row); avg is the regression signal.",
+      "sandbox_linux": {
+        "recorded_avg_ms": 24.41,
+        "recorded_p99_ms": 36.85,
+        "avg_cap_ms": 34.0,
+        "p99_cap_ms": 64.0
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+counts: 373 373 373
+== sandbox(A) vs full re-baseline(C): true drift (full-sequence vs full-sequence): only-first=0 only-second=0 changed=14
+     cut.m1.cutscene1.05_krap_patch.t25
+     cut.m1.cutscene1.05_krap_patch.t50
+     cut.m1.cutscene1.05_krap_patch.t75
+     cut.m5.mission5_intro_shots.03_m5x_decree.t25
+     cut.m5.mission5_intro_shots.03_m5x_decree.t50
+     cut.m5.mission5_intro_shots.03_m5x_decree.t75
+     gp.m3.cell_a
+     gp.m3.cell_b
+     gp.m3.cell_c
+     gp.m5.print_entry
+     gp.m5.quarter_east
+     gp.m5.quarter_mid
+     gp.m5.quarter_start
+     gp.m5.tunnel
+== partial recapture(B) vs full(C): effective change from the partial step: only-first=0 only-second=0 changed=7
+     cut.m1.cutscene1.05_krap_patch.t25
+     cut.m1.cutscene1.05_krap_patch.t50
+     cut.m1.cutscene1.05_krap_patch.t75
+     gp.m5.quarter_east
+     gp.m5.quarter_mid
+     gp.m5.quarter_start
+     gp.m5.tunnel
+== sandbox(A) vs partial(B): shots overwritten by the partial recapture: only-first=0 only-second=0 changed=10
+     cut.m5.mission5_intro_shots.03_m5x_decree.t25
+     cut.m5.mission5_intro_shots.03_m5x_decree.t50
+     cut.m5.mission5_intro_shots.03_m5x_decree.t75
+     gp.m3.cell_a
+     gp.m3.cell_b
+     gp.m3.cell_c
+     gp.m5.print_entry
+     gp.m5.quarter_east
+     gp.m5.quarter_mid
+     gp.m5.quarter_start

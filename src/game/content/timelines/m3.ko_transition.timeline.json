@@ -1,0 +1,57 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.ko_transition",
+ "shots": [
+  {
+   "scene": "m3_ko_charge",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "hard_cut": true,
+   "min_ms": 1300,
+   "lighting": [
+    5,
+    6,
+    7
+   ]
+  },
+  {
+   "scene": "m3_ko_stairwell",
+   "speaker": "VOLKOV",
+   "text": "My van's still staged at the dock, I haven't bailed on you yet. Through that smoke, friend, and don't make me regret it.",
+   "min_ms": 2200,
+   "lighting": [
+    6,
+    7,
+    8
+   ]
+  },
+  {
+   "scene": "m3_ko_aperture",
+   "speaker": "BALACEANU (PA)",
+   "text": "Sweep teams: the prisoner is in the lobby levels. Free fire, my address begins at 22:00, and I will not be interrupted.",
+   "min_ms": 2400,
+   "lighting": [
+    7,
+    8,
+    9
+   ]
+  },
+  {
+   "scene": "m3_ko_van",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "The loading dock is your only way out, Volkov's van is staged there. Hold it, and the Vostral goes live tonight.",
+   "min_ms": 2600,
+   "lighting": [
+    8,
+    9,
+    10
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.ko_transition_shots"
+ }
+}

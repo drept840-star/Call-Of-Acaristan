@@ -1,0 +1,388 @@
+{
+ "family": "fx",
+ "frames": {
+  "spot_14_0": {
+   "anchor": [
+    23,
+    16
+   ],
+   "flicker": 0.65,
+   "rect": [
+    390,
+    516,
+    46,
+    32
+   ],
+   "size": 14
+  },
+  "spot_14_1": {
+   "anchor": [
+    23,
+    16
+   ],
+   "flicker": 0.78,
+   "rect": [
+    438,
+    516,
+    46,
+    32
+   ],
+   "size": 14
+  },
+  "spot_14_2": {
+   "anchor": [
+    23,
+    16
+   ],
+   "flicker": 0.9,
+   "rect": [
+    486,
+    516,
+    46,
+    32
+   ],
+   "size": 14
+  },
+  "spot_14_3": {
+   "anchor": [
+    23,
+    16
+   ],
+   "flicker": 1.0,
+   "rect": [
+    534,
+    516,
+    46,
+    32
+   ],
+   "size": 14
+  },
+  "spot_18_0": {
+   "anchor": [
+    29,
+    20
+   ],
+   "flicker": 0.65,
+   "rect": [
+    582,
+    516,
+    58,
+    40
+   ],
+   "size": 18
+  },
+  "spot_18_1": {
+   "anchor": [
+    29,
+    20
+   ],
+   "flicker": 0.78,
+   "rect": [
+    642,
+    516,
+    58,
+    40
+   ],
+   "size": 18
+  },
+  "spot_18_2": {
+   "anchor": [
+    29,
+    20
+   ],
+   "flicker": 0.9,
+   "rect": [
+    702,
+    516,
+    58,
+    40
+   ],
+   "size": 18
+  },
+  "spot_18_3": {
+   "anchor": [
+    29,
+    20
+   ],
+   "flicker": 1.0,
+   "rect": [
+    762,
+    516,
+    58,
+    40
+   ],
+   "size": 18
+  },
+  "spot_22_0": {
+   "anchor": [
+    35,
+    24
+   ],
+   "flicker": 0.65,
+   "rect": [
+    822,
+    516,
+    70,
+    48
+   ],
+   "size": 22
+  },
+  "spot_22_1": {
+   "anchor": [
+    35,
+    24
+   ],
+   "flicker": 0.78,
+   "rect": [
+    894,
+    516,
+    70,
+    48
+   ],
+   "size": 22
+  },
+  "spot_22_2": {
+   "anchor": [
+    35,
+    24
+   ],
+   "flicker": 0.9,
+   "rect": [
+    966,
+    516,
+    70,
+    48
+   ],
+   "size": 22
+  },
+  "spot_22_3": {
+   "anchor": [
+    35,
+    24
+   ],
+   "flicker": 1.0,
+   "rect": [
+    1038,
+    516,
+    70,
+    48
+   ],
+   "size": 22
+  },
+  "spot_26_0": {
+   "anchor": [
+    41,
+    28
+   ],
+   "flicker": 0.65,
+   "rect": [
+    1110,
+    516,
+    82,
+    56
+   ],
+   "size": 26
+  },
+  "spot_26_1": {
+   "anchor": [
+    41,
+    28
+   ],
+   "flicker": 0.78,
+   "rect": [
+    1194,
+    516,
+    82,
+    56
+   ],
+   "size": 26
+  },
+  "spot_26_2": {
+   "anchor": [
+    41,
+    28
+   ],
+   "flicker": 0.9,
+   "rect": [
+    1278,
+    516,
+    82,
+    56
+   ],
+   "size": 26
+  },
+  "spot_26_3": {
+   "anchor": [
+    41,
+    28
+   ],
+   "flicker": 1.0,
+   "rect": [
+    1362,
+    516,
+    82,
+    56
+   ],
+   "size": 26
+  },
+  "wreck_core_115": {
+   "alpha": 115,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    1170,
+    258,
+    388,
+    256
+   ]
+  },
+  "wreck_core_150": {
+   "alpha": 150,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    0,
+    516,
+    388,
+    256
+   ]
+  },
+  "wreck_core_40": {
+   "alpha": 40,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    390,
+    258,
+    388,
+    256
+   ]
+  },
+  "wreck_core_80": {
+   "alpha": 80,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    780,
+    258,
+    388,
+    256
+   ]
+  },
+  "wreck_fissure_130": {
+   "alpha": 130,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    1170,
+    0,
+    388,
+    256
+   ]
+  },
+  "wreck_fissure_170": {
+   "alpha": 170,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    0,
+    258,
+    388,
+    256
+   ]
+  },
+  "wreck_fissure_50": {
+   "alpha": 50,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    390,
+    0,
+    388,
+    256
+   ]
+  },
+  "wreck_fissure_90": {
+   "alpha": 90,
+   "anchor": [
+    194,
+    128
+   ],
+   "overlay": true,
+   "rect": [
+    780,
+    0,
+    388,
+    256
+   ]
+  },
+  "wreck_hull": {
+   "anchor": [
+    194,
+    128
+   ],
+   "rect": [
+    0,
+    0,
+    388,
+    256
+   ]
+  }
+ },
+ "image": "spr_fx_m2.png",
+ "meta": {
+  "core_alphas": [
+   40,
+   80,
+   115,
+   150
+  ],
+  "fissure_alphas": [
+   50,
+   90,
+   130,
+   170
+  ],
+  "spot_flicker": [
+   0.65,
+   0.78,
+   0.9,
+   1.0
+  ],
+  "spot_sizes": [
+   14,
+   18,
+   22,
+   26
+  ],
+  "timing": "pick the frame nearest the procedural alpha/flicker each frame"
+ },
+ "scale": 1,
+ "sheet": "spr_fx_m2",
+ "size": [
+  1558,
+  772
+ ],
+ "tile_size": 64
+}

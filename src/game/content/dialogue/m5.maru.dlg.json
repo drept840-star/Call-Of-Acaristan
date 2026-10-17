@@ -1,0 +1,47 @@
+{
+ "schema": "ae.dialogue/1",
+ "id": "m5.maru",
+ "start": "maru_1",
+ "speakers": {
+  "MARU": {},
+  "BIRIBEL": {},
+  "SYSTEM": {}
+ },
+ "nodes": {
+  "maru_1": {
+   "speaker": "MARU",
+   "text": "Biribel. Vasile sent you. Of course he did.",
+   "next": "maru_2"
+  },
+  "maru_2": {
+   "speaker": "BIRIBEL",
+   "text": "He wants you brought in. Breathing, he says.",
+   "next": "maru_3"
+  },
+  "maru_3": {
+   "speaker": "MARU",
+   "text": "Breathing in a Guard cell. Balaceanu was breathing too, last week.",
+   "next": "maru_4"
+  },
+  "maru_4": {
+   "speaker": "BIRIBEL",
+   "text": "Then we don't go to the cell. Is there another way out?",
+   "next": "maru_5"
+  },
+  "maru_5": {
+   "speaker": "MARU",
+   "text": "Basement. The old tunnel runs to the river. If we live long enough to reach it.",
+   "next": "maru_6"
+  },
+  "maru_6": {
+   "speaker": "SYSTEM",
+   "text": "[ Engines outside. Boots on the loading bay. The Guard is here. ]",
+   "next": null
+  }
+ },
+ "metadata": {
+  "mission": "m5",
+  "kind": "conversation",
+  "source": "missions/m5/flow.py _M5_MARU_BEATS"
+ }
+}

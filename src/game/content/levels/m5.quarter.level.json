@@ -1,0 +1,62 @@
+{
+ "schema": "ae.level/1",
+ "id": "m5.quarter",
+ "name": "Mission 5 - Lower Quarter",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCddddddddddddddddddddddddddddddddCCCCCC",
+   "CC...............................dCCCCCC",
+   "CC...........E..................MdCCCCCC",
+   "CCddddddddddddddddddddddddddddddddCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CFFF.dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CFFF.ddddddd..dddddddd..dddddddE.dCCCCCC",
+   "CFFF.....BE.........B...BBB.......CCCCCC",
+   "CFPF................B.........BE..DCCCCC",
+   "CFFF.....B....................B...CCCCCC",
+   "CFFF.ddddddd..dddddddE..ddddddd..dCCCCCC",
+   "CFFF.dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCddddddddddddddddddddddddddddddddCCCCCC",
+   "CC.....................E.........dCCCCCC",
+   "CC...............................dCCCCCC",
+   "CCddddddddddddddddddddddddddddddddCCCCCC",
+   "CCd..dCCCCCd..dCCCCCCd..dCCCCCd..dCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@2,15",
+   "kind": "spawn",
+   "tile": [
+    2,
+    15
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m5"
+ }
+}

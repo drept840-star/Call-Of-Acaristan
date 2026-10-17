@@ -1,0 +1,363 @@
+{
+ "entries": {
+  "m3/archives_static": {
+   "files": {
+    "0": {
+     "file": "archives_static_0.png",
+     "pixels": "a853b1b195e883b57e89fa6fa1d1f9cf1e0b64f9254802f71b49190b8ffe9cff",
+     "size": [
+      3072,
+      3072
+     ]
+    },
+    "1": {
+     "file": "archives_static_1.png",
+     "pixels": "19fbae61327fe71acf977fa654631c4b40568bc3293bc06b13c39a83a9417c84",
+     "size": [
+      3072,
+      3072
+     ]
+    },
+    "2": {
+     "file": "archives_static_2.png",
+     "pixels": "a168f3867d153b17167232cbab4fbe49e941e8849780348bb262fb4620b1fae5",
+     "size": [
+      3072,
+      3072
+     ]
+    }
+   },
+   "source": "b71acf955395f84677d55b0cec7742b51b2189d8f97d2ae68ca88149667e64d4",
+   "variants": 3
+  },
+  "m3/broadcast_static": {
+   "files": {
+    "0": {
+     "file": "broadcast_static_0.png",
+     "pixels": "952797d580792c70b7fa7be4d9f4c09a3a3a1a3efe07b840b1fe38ef42af53bd",
+     "size": [
+      2048,
+      2048
+     ]
+    }
+   },
+   "source": "6609b1148390f8169a3727f5f948613cc86ca2d53f9fbbaffdb1da231fd70abb",
+   "variants": 1
+  },
+  "m3/camera_body": {
+   "files": {
+    "0": {
+     "file": "camera_body_0.png",
+     "pixels": "f5339513c831bca10c49b1a3910eebc295b37f4ce15318dbbe57ecab07f979d0",
+     "size": [
+      14,
+      14
+     ]
+    },
+    "1": {
+     "file": "camera_body_1.png",
+     "pixels": "89f273b3cef4e42d72dad297748a1eeb42248b5779aa4755cd76760880d49139",
+     "size": [
+      14,
+      14
+     ]
+    }
+   },
+   "source": "fd141fa32b600a02a8bd368a3de7d8f48bb68b5fae8de131481aebea7f706874",
+   "variants": 2
+  },
+  "m3/cell_details": {
+   "files": {
+    "0": {
+     "file": "cell_details_0.png",
+     "pixels": "239ccd9abfde425c7282e878a6330f3a6bc395d27b5bc12f54697c8c2784070c",
+     "size": [
+      536,
+      523
+     ]
+    },
+    "1": {
+     "file": "cell_details_1.png",
+     "pixels": "2783ce61efad7d98618fb1632dacbb5867c4fdf626ebb6473635c586c63d3278",
+     "size": [
+      536,
+      523
+     ]
+    }
+   },
+   "source": "1c26df2616b13c684a97216c99cf687e0718b6fde43f1da70a38e14d1c9f8d5a",
+   "variants": 2
+  },
+  "m3/cell_door_blown": {
+   "files": {
+    "0": {
+     "file": "cell_door_blown_0.png",
+     "pixels": "2b6840114c1fdf750286c258122e8c924ee074a4af95f2ce8244fc41a962043a",
+     "size": [
+      138,
+      68
+     ]
+    },
+    "1": {
+     "file": "cell_door_blown_1.png",
+     "pixels": "40bfb38b47df119fe70fb1e187acfeaca7e063340fd8e9fff268f05721cc4845",
+     "size": [
+      138,
+      68
+     ]
+    }
+   },
+   "source": "61eb81dcdcf9b9d6cf64d6f3c5c0c8fee2c4bb66ee2d5b2521ca87efbcfd9767",
+   "variants": 2
+  },
+  "m3/cellblock_static": {
+   "files": {
+    "0": {
+     "file": "cellblock_static_0.png",
+     "pixels": "debe4e8f6cb117a15439a8f4688fde0d18acced25246e5840550302eee3c43d1",
+     "size": [
+      3072,
+      3072
+     ]
+    },
+    "1": {
+     "file": "cellblock_static_1.png",
+     "pixels": "5f9ef111350a13844548fc30a80a262780381597b23a629804199433bbb5669c",
+     "size": [
+      3072,
+      3072
+     ]
+    },
+    "2": {
+     "file": "cellblock_static_2.png",
+     "pixels": "173bde1d57de98a022ba9b2cea4936ae222a80a1f8e134714e43761a39cba56f",
+     "size": [
+      3072,
+      3072
+     ]
+    },
+    "3": {
+     "file": "cellblock_static_3.png",
+     "pixels": "bda66a41118989b60186b1a54794e38f154de2dec43c68ca3e927bb6d337b309",
+     "size": [
+      3072,
+      3072
+     ]
+    }
+   },
+   "source": "c6a03d5b5ffd98f2e2f35281f31a51442f4dd3754d743e0c2e35659e8492478e",
+   "variants": 4
+  },
+  "m3/comms_static": {
+   "files": {
+    "0": {
+     "file": "comms_static_0.png",
+     "pixels": "e66d7f4d102958675626b96b17099d44df47730481a3166a549dc7006311bd57",
+     "size": [
+      3072,
+      3072
+     ]
+    }
+   },
+   "source": "2bb23f5332871ef309e5e04d4121aeb947974b1dcc0a80f47418202dd4f877f3",
+   "variants": 1
+  },
+  "m3/door_tile": {
+   "files": {
+    "0": {
+     "file": "door_tile_0.png",
+     "pixels": "a450f8b697192757f3e406c66ada582dc6665ffaffede4eaf343a6a97d75ab8d",
+     "size": [
+      68,
+      68
+     ]
+    },
+    "1": {
+     "file": "door_tile_1.png",
+     "pixels": "f3d4f9fc126c84c152039c6e042088a85c924148d0a3ac370fbf2f13e9b565a8",
+     "size": [
+      68,
+      68
+     ]
+    },
+    "2": {
+     "file": "door_tile_2.png",
+     "pixels": "44e32157995e6078af630d715809ff70a7afc01b0c2f939f2f17a36534674db0",
+     "size": [
+      68,
+      68
+     ]
+    },
+    "3": {
+     "file": "door_tile_3.png",
+     "pixels": "7ccbacf44a14aefb5ba5f81bfe30223b83ca2fdbc0bbfbc0202f93d6ab9e3deb",
+     "size": [
+      68,
+      68
+     ]
+    }
+   },
+   "source": "839b29801373076b0236c38e44badd271785d6fa7e01a423ce5b57518351d4a9",
+   "variants": 4
+  },
+  "m3/kitchen": {
+   "files": {
+    "0": {
+     "file": "kitchen_0.png",
+     "pixels": "9e73a8d789daa0fa06cc8f05307421800fe8301fbfcee929ba19075e2e16a728",
+     "size": [
+      320,
+      320
+     ]
+    }
+   },
+   "source": "c98c2fd043f1022db63f39accca515f3fba4b364bc594dbdda2d5f8dacd5ace7",
+   "variants": 1
+  },
+  "m3/ko_static": {
+   "files": {
+    "0": {
+     "file": "ko_static_0.png",
+     "pixels": "b711889c2ab943df96264172afc723176fa9549d48081609dc00eda78f9b91cb",
+     "size": [
+      3072,
+      3072
+     ]
+    },
+    "1": {
+     "file": "ko_static_1.png",
+     "pixels": "8ad7eb0d41b47868b38d482d8501e19035aa9199cd4e46c8cad16d579a59cf28",
+     "size": [
+      3072,
+      3072
+     ]
+    }
+   },
+   "source": "8e9a13de8cf4b98b8860ff0551abfbb3a99346a41f2297be46fa3417a423375f",
+   "variants": 2
+  },
+  "m3/neighbor_cells": {
+   "files": {
+    "0": {
+     "file": "neighbor_cells_0.png",
+     "pixels": "d91e6447bdc3ffc092090b64bf9f439f906107672eca71a52414ace7120611b5",
+     "size": [
+      1408,
+      384
+     ]
+    },
+    "1": {
+     "file": "neighbor_cells_1.png",
+     "pixels": "ce7ad43f028508e18177d0d1dd14d2e01b27ca5810315bb3860b30b854db017c",
+     "size": [
+      1408,
+      384
+     ]
+    }
+   },
+   "source": "319fe3ed4c71dd383f7a339cf34c0552426a15caa1a3c25c0743e16f109c3258",
+   "variants": 2
+  },
+  "m3/pickup_icon": {
+   "files": {
+    "0": {
+     "file": "pickup_icon_0.png",
+     "pixels": "4843d04ffa04db13b89202faf06472fc46bd130bf3ead6e78b3e6df823695ffd",
+     "size": [
+      18,
+      18
+     ]
+    },
+    "1": {
+     "file": "pickup_icon_1.png",
+     "pixels": "9ca70f8a1a47ec244d3aa9034d4e93ffc41027dd69b208381d9036c7b95edb43",
+     "size": [
+      18,
+      18
+     ]
+    }
+   },
+   "source": "89f134e12bd298d4ce1aeb52ad6a8c3de991946fa8bfca17f751ac26d3ef9474",
+   "variants": 2
+  },
+  "m3/wall_monitor": {
+   "files": {
+    "0": {
+     "file": "wall_monitor_0.png",
+     "pixels": "63ad5a1b13044c4146fb19ca6cb3cf4b095898f365ccf3ee6bcd957224762df7",
+     "size": [
+      200,
+      67
+     ]
+    },
+    "1": {
+     "file": "wall_monitor_1.png",
+     "pixels": "34fb4cfea81c981360d79b0af7833eb1124e3ade65ce00e3f51574dfb715ce25",
+     "size": [
+      200,
+      67
+     ]
+    },
+    "2": {
+     "file": "wall_monitor_2.png",
+     "pixels": "5e3aeae6057df28dd792e9829fcd0cd8f93822e1dd3342643bf2861c88a58e5b",
+     "size": [
+      200,
+      67
+     ]
+    }
+   },
+   "source": "cafa7379d178f52e89969dc0e509ce75c94c71f5a797e1efe836ee3a0c8f05d3",
+   "variants": 3
+  },
+  "m3/weapon_icon": {
+   "files": {
+    "0": {
+     "file": "weapon_icon_0.png",
+     "pixels": "c7266b51ce4fbe90c4c44a8bb88bb6e2beb0b47f2c88c54a42dfed9a1ed51632",
+     "size": [
+      56,
+      36
+     ]
+    },
+    "1": {
+     "file": "weapon_icon_1.png",
+     "pixels": "c4bd9c21e6699460c245c6b438b58fd6db5b0bfcaae3bcd736bb11216f4206a2",
+     "size": [
+      56,
+      36
+     ]
+    },
+    "2": {
+     "file": "weapon_icon_2.png",
+     "pixels": "715be8b58b92bb79dbf3d90ac43be6851c7d9f4fc9702d7a221d1718f76c27a2",
+     "size": [
+      56,
+      36
+     ]
+    },
+    "3": {
+     "file": "weapon_icon_3.png",
+     "pixels": "4b951a6833e15a455ba80db117f259c66d3aae82135b97d2cafd44d846251797",
+     "size": [
+      56,
+      36
+     ]
+    },
+    "4": {
+     "file": "weapon_icon_4.png",
+     "pixels": "895af9400d6d4a5bc9757ba599f504257482473caefc7cd2f65870074b9f2fde",
+     "size": [
+      56,
+      36
+     ]
+    }
+   },
+   "source": "50e3090993e6629df73f9e899b45b43a484523c36c1c66ce96dae1bcb5646f44",
+   "variants": 5
+  }
+ },
+ "pack": "m3",
+ "schema": "ae.bakeinfo/1",
+ "tool": "ae_bake/1"
+}

@@ -1,0 +1,7 @@
+{
+ "schema": "ae.lighting3d/1",
+ "id": "exterior_overcast",
+ "key": {"direction": [-0.3, 0.8, -0.4], "ambient": 0.55, "diffuse": 0.55, "tint": [0.95, 1.0, 1.05]},
+ "fog": {"color": [96, 98, 104], "start": 18.0, "end": 210.0},
+ "sky": [[120, 124, 130], [88, 90, 96]]
+}

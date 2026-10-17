@@ -1,0 +1,1127 @@
+{
+ "entries": {
+  "m5/armband": {
+   "files": {
+    "0": {
+     "file": "armband_0.png",
+     "pixels": "42a06f36eccb5021c94d1cc6c012a92cbc1289de2d1c82655adc93b3954b48b7",
+     "size": [
+      25,
+      8
+     ]
+    }
+   },
+   "source": "9a81ef167ae9a505ef33bdf5573fda0c457cbd737477b925d8b7a4dcc7c89524",
+   "variants": 1
+  },
+  "m5/bale": {
+   "files": {
+    "0": {
+     "file": "bale_0.png",
+     "pixels": "e0fa1a20f0b801f7c5aab033a88a7c88a804122e608e067de457df3c41baacf7",
+     "size": [
+      56,
+      56
+     ]
+    },
+    "1": {
+     "file": "bale_1.png",
+     "pixels": "8e12fababe45c823365fe9823b391e93113e3a12ffd7753a1586089de18a7c60",
+     "size": [
+      56,
+      56
+     ]
+    },
+    "2": {
+     "file": "bale_2.png",
+     "pixels": "f839b01383ba0791fccf8de5399f3b815741c4907d35bfdc4af75443f3309357",
+     "size": [
+      71,
+      58
+     ]
+    },
+    "3": {
+     "file": "bale_3.png",
+     "pixels": "29a9e6d3be3222af039bbf6ee453d701c19254e5dae4959a05fea3a07b9c96a4",
+     "size": [
+      71,
+      58
+     ]
+    },
+    "4": {
+     "file": "bale_4.png",
+     "pixels": "fdc880509b489e605575687240ccc98a2c65b71c39f70ee528ebc86e1a38b76b",
+     "size": [
+      45,
+      45
+     ]
+    },
+    "5": {
+     "file": "bale_5.png",
+     "pixels": "55eacf8def84fbc95e2aa2292d17f3a69e944c63ca6b69fde5e267091e0018a4",
+     "size": [
+      45,
+      45
+     ]
+    },
+    "6": {
+     "file": "bale_6.png",
+     "pixels": "c8f6d8b93ffaa6c266b7b89f1280d1f3365a399ffe3ca4e0be45100c315964d7",
+     "size": [
+      58,
+      122
+     ]
+    },
+    "7": {
+     "file": "bale_7.png",
+     "pixels": "51ccc3e7119f39884d8a38a2df23317ea554e1bc23fe91cba26b6271f4c07879",
+     "size": [
+      58,
+      122
+     ]
+    }
+   },
+   "source": "db0a5ce6fd2461f395f2739d55ae20bbc08174c0368dced00669132a7416394e",
+   "variants": 8
+  },
+  "m5/calendar": {
+   "files": {
+    "0": {
+     "file": "calendar_0.png",
+     "pixels": "9dbea5feda076b44992c546972a095370f3dd684c08548f2a6174e0e81a25385",
+     "size": [
+      24,
+      32
+     ]
+    }
+   },
+   "source": "79f1ed33b38588f9b2ee7711f687f6aad37d9ac25af9ff24704e10f7434cab59",
+   "variants": 1
+  },
+  "m5/district_map": {
+   "files": {
+    "0": {
+     "file": "district_map_0.png",
+     "pixels": "5103fa98ad5bd545dbe8251e5dd71ceff3e2985d89b372b8c88473e5ae991a31",
+     "size": [
+      52,
+      36
+     ]
+    }
+   },
+   "source": "2b923347870ce9ccc821d14e3154d5c9d0baa2706e6b5fee3cb158d79806f063",
+   "variants": 1
+  },
+  "m5/guard_banner": {
+   "files": {
+    "0": {
+     "file": "guard_banner_0.png",
+     "pixels": "367ace5ace3d78ec89718ecb3b5bb2ebd9fa04d656de0a5821e3dc479e5d3ae0",
+     "size": [
+      36,
+      57
+     ]
+    }
+   },
+   "source": "2b269d3c010aeadbc173c2472f35da7f4f7416d8363c4192c21e1ec34cf42232",
+   "variants": 1
+  },
+  "m5/guard_plate": {
+   "files": {
+    "0": {
+     "file": "guard_plate_0.png",
+     "pixels": "001a3e74d224feb8aa7bb8a7c5065b67953d10b851ce1ff0a58a91b524fc81c4",
+     "size": [
+      36,
+      20
+     ]
+    }
+   },
+   "source": "4c2c49b0ef90a9afc5742ec5b2145feecc303fae9b746c5149a5f5fea38df7c6",
+   "variants": 1
+  },
+  "m5/hq_locker": {
+   "files": {
+    "0": {
+     "file": "hq_locker_0.png",
+     "pixels": "3758153f0151dd529ad9f25b6181e2fd095d9c1a1a49749c8ea040cd0d16a7c1",
+     "size": [
+      26,
+      44
+     ]
+    }
+   },
+   "source": "c7d96a437693ae61969438bf3c37a604dd909e457dff25223a904fa352ecb113",
+   "variants": 1
+  },
+  "m5/inspect_art": {
+   "files": {
+    "0": {
+     "file": "inspect_art_0.png",
+     "pixels": "87ad81de553bd9eae6e80588981d109b92681b13b4fc6bed20e4eaccc3af5c9b",
+     "size": [
+      1300,
+      910
+     ]
+    },
+    "1": {
+     "file": "inspect_art_1.png",
+     "pixels": "9e0ad47fcfa48854e75fdb6ac8acefe68352ed690f1f738e0f43197e8dd80121",
+     "size": [
+      1300,
+      910
+     ]
+    },
+    "2": {
+     "file": "inspect_art_2.png",
+     "pixels": "248d84451dec2d659ee5c9b8746bf810be08a0924d2b4bd420ed7229d822baa1",
+     "size": [
+      1300,
+      910
+     ]
+    },
+    "3": {
+     "file": "inspect_art_3.png",
+     "pixels": "224098e3baacc0b3eb4cfb28dea7cda97a0f8e262677dceae85d49f19c485323",
+     "size": [
+      1300,
+      910
+     ]
+    },
+    "4": {
+     "file": "inspect_art_4.png",
+     "pixels": "b1ee85e1fcf1a921260321c81f5b4a9bb83c10f120cdf912387f1c14f610b8ba",
+     "size": [
+      1300,
+      910
+     ]
+    },
+    "5": {
+     "file": "inspect_art_5.png",
+     "pixels": "25cdd15c0d15c750d759a401414305882ec29957db49835ec1004dfbb2574fc9",
+     "size": [
+      1300,
+      910
+     ]
+    }
+   },
+   "source": "85bb43036e7057fa44032bd1ee00a99dbda6aa1fe408db31198fd57249e6752e",
+   "variants": 6
+  },
+  "m5/m5_guard": {
+   "files": {
+    "0": {
+     "file": "m5_guard_0.png",
+     "pixels": "dce26ea5899f16a12242e0e32cc6628aeed4302aa74535eb313620750fec81e3",
+     "size": [
+      96,
+      96
+     ]
+    },
+    "1": {
+     "file": "m5_guard_1.png",
+     "pixels": "17a7991eb2a5cc4573b0a25d15f7fefb08484878df9dcec50f73a8ab22d88c4d",
+     "size": [
+      96,
+      96
+     ]
+    },
+    "2": {
+     "file": "m5_guard_2.png",
+     "pixels": "a76f36da9c074976d3d1d5fbae87ecf8e1f9f3ae4719f799f833f2895bad13ad",
+     "size": [
+      96,
+      96
+     ]
+    }
+   },
+   "source": "f0dffb03f7746dd310190a0f5f1deb4c13439a2753a53e505717cfeecb00c951",
+   "variants": 3
+  },
+  "m5/mag": {
+   "files": {
+    "0": {
+     "file": "mag_0.png",
+     "pixels": "334e15427ebaa5254f9540e9b5644249951222d4947c7949284681db7fb1229c",
+     "size": [
+      12,
+      29
+     ]
+    },
+    "1": {
+     "file": "mag_1.png",
+     "pixels": "fec818ceac88646c170140ae209ae3cdf242d9814c67982f79dfb1da0a082dfe",
+     "size": [
+      10,
+      19
+     ]
+    }
+   },
+   "source": "0297834532c5fd6e82255ae3450bf87c736a5bd5297c2d7a5f56e3fafdaf007f",
+   "variants": 2
+  },
+  "m5/mag_icon": {
+   "files": {
+    "0": {
+     "file": "mag_icon_0.png",
+     "pixels": "bb336af69589947077c7a9f4ce6447d7d615f9f844c56ac274eba08dcacbd9e7",
+     "size": [
+      26,
+      55
+     ]
+    },
+    "1": {
+     "file": "mag_icon_1.png",
+     "pixels": "26de5069bd4aa1da14f5b28a8c3c93151f6f1b3674bafc155e5353a79f492c1e",
+     "size": [
+      26,
+      55
+     ]
+    },
+    "2": {
+     "file": "mag_icon_2.png",
+     "pixels": "0b3017c1f8f31a8d300fe17a69d7c439a0c21ecd41f02a11336ad22cde09328a",
+     "size": [
+      26,
+      55
+     ]
+    },
+    "3": {
+     "file": "mag_icon_3.png",
+     "pixels": "0d1779303e78dc8811320dc7c9b06acb70af9036797ad4456806a8a8183942e1",
+     "size": [
+      25,
+      47
+     ]
+    },
+    "4": {
+     "file": "mag_icon_4.png",
+     "pixels": "301492d29e33f4ab1825e3977e6e6cee3d1fec3014e26a0368b4024717266b95",
+     "size": [
+      25,
+      47
+     ]
+    },
+    "5": {
+     "file": "mag_icon_5.png",
+     "pixels": "110ce6b44bd7bcc21cf54c33bc97c43ded80473b2986a5836f7ba69318d2fda9",
+     "size": [
+      25,
+      47
+     ]
+    }
+   },
+   "source": "957478e81c6a2011d84af8a7538f4c95619d1669ef3b0a84f3ef89f3de63b819",
+   "variants": 6
+  },
+  "m5/maru": {
+   "files": {
+    "0": {
+     "file": "maru_0.png",
+     "pixels": "215e9168d19a1f7b3644e46df38aac190d8f55392f6139a9d96b8294793426ec",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "1": {
+     "file": "maru_1.png",
+     "pixels": "1c137bc3c076a28e6624712f89e08f1981aa00c4358b07ef6c7a0c277a382454",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "10": {
+     "file": "maru_10.png",
+     "pixels": "d0871ef29381466645679a9cda23cb766817a872038d549fa44da701afdf735b",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "11": {
+     "file": "maru_11.png",
+     "pixels": "d6a09213f31d484cb6f0ef7ca37da9c0c4ef75bdf7da5fafa24f2e9dc4561825",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "12": {
+     "file": "maru_12.png",
+     "pixels": "372cf04eb791694646a9fe8a23c7d18d8653e27a19fb26c4828d392ddfddb2d5",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "13": {
+     "file": "maru_13.png",
+     "pixels": "66b49be56189c7e5f44584e2ea81b89e73e651b9bc0ab119a8c96a1488b8dd9e",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "14": {
+     "file": "maru_14.png",
+     "pixels": "362b1c5660c6cf0826b706e5afb05b91bb932bfab07dc17da9792971bb9f2277",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "15": {
+     "file": "maru_15.png",
+     "pixels": "d147bd7222d807cdb41e6b982d16c905472a082a61baac5a4b76cbbe13d7c885",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "16": {
+     "file": "maru_16.png",
+     "pixels": "f4e138e89eacab07e4b5894342f707e6387f22a92ee7108be522afaa4b635f6e",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "17": {
+     "file": "maru_17.png",
+     "pixels": "24b0a91c24942de61cc356e2e159609f09a16b54b74bee0cdfb034322138761e",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "18": {
+     "file": "maru_18.png",
+     "pixels": "6b3680669d30cbaeb881d975c24220fcdde9def4c4e544563551ee250d304f0c",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "19": {
+     "file": "maru_19.png",
+     "pixels": "785104f689e0d0ed92ad81e3cd97b4048dab7853c6f9e924a2bdeeb2444213d1",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "2": {
+     "file": "maru_2.png",
+     "pixels": "6411941ba4970d0bd71d00e9fd7296f674c6be73e70dc490d18af80ffe392942",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "20": {
+     "file": "maru_20.png",
+     "pixels": "d13d87f1ad7e1a76b9cf5f5e74e3d61a31c985337f1ebe051ec87e88af5d0e8a",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "21": {
+     "file": "maru_21.png",
+     "pixels": "47a841e7be0d8dab4080b3d8b5163ddafcd9e8cc18749fd97418361e2ea44881",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "22": {
+     "file": "maru_22.png",
+     "pixels": "5f9ff539996d0fd996faa177108cfadd74851d42c8bd7de296d62da18ff38000",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "23": {
+     "file": "maru_23.png",
+     "pixels": "f647aad63466faa5409f9a94814207209912f7539529fcd3e1ca0888235236ff",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "24": {
+     "file": "maru_24.png",
+     "pixels": "ef17b632feb8a5e11e2b892dd830ec2bb5d484a755e049b388f7982c70d82abc",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "25": {
+     "file": "maru_25.png",
+     "pixels": "f7c79322373a4dca94a2d414df711e46b829da702c3e8e957daace93982aa074",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "26": {
+     "file": "maru_26.png",
+     "pixels": "c6f10fe02096eec13b3846b3dfee90cac7021ee24578eaef2c74e3f6fd52c2f5",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "27": {
+     "file": "maru_27.png",
+     "pixels": "1893ce7edcc96fc8ba41587f8732fc2fbc4cc87df8774275674057a67cb73869",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "28": {
+     "file": "maru_28.png",
+     "pixels": "c63d9dc9cbf49da9cb3d8726bfa8953526109eaac17418b9e3646c93bba51492",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "29": {
+     "file": "maru_29.png",
+     "pixels": "6021a426929aa7b62474d565150c303085a4fc8f66e37d03b67e862f80d2ce4c",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "3": {
+     "file": "maru_3.png",
+     "pixels": "3d8bd57abc552b24986b6813380588c3cd1738d0175705def5b5c2b69e6e564d",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "30": {
+     "file": "maru_30.png",
+     "pixels": "e404d9f7dc1d49532f3de3658eedba2b608a2eea93aeb8148a874f3fae296e6d",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "31": {
+     "file": "maru_31.png",
+     "pixels": "85e729beba80ec84ec5c15ef46125815616f52bac033a5f9ec4e25b9959ebd1c",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "32": {
+     "file": "maru_32.png",
+     "pixels": "8fae53fd49b112b64a4f5533ff390b9f4db8f3d5dbdcdf7639155fedf8388e6f",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "33": {
+     "file": "maru_33.png",
+     "pixels": "bd167fceeee09b9554bca4f970b4411e2c080b60f71be3f580c8cf94b261832f",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "34": {
+     "file": "maru_34.png",
+     "pixels": "70df7a0ac5f7da33634314f3cb113a30df99f3b681894e03d7ea3a98a9b627f4",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "35": {
+     "file": "maru_35.png",
+     "pixels": "7e4d6277d73c1709686f8413af3111a81cbb781903136d41b7dacc1b22f5750b",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "36": {
+     "file": "maru_36.png",
+     "pixels": "1c9f63fc62289d1a05967d75573320b5fde9f0735037c16c41940ef277c34a81",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "37": {
+     "file": "maru_37.png",
+     "pixels": "d3faefdbefd95061161c1f4fe0ca53eeca72905ed7312dfc6846e75549e19837",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "38": {
+     "file": "maru_38.png",
+     "pixels": "c412593b8b68ca4d059728b472d43bb24302bc6fe41ad4e8845bbb49f09ffc9b",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "39": {
+     "file": "maru_39.png",
+     "pixels": "6a4f41826d496d2efc43facbe49304a302527c96b3563608fc01c86e78d1cacb",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "4": {
+     "file": "maru_4.png",
+     "pixels": "e51ec292d1fd65068e4fe21b151ded94d0024d9f5596f4ec64868befc5c63d0c",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "40": {
+     "file": "maru_40.png",
+     "pixels": "5797e482d3c21a8a674fb3d5af33f7b164c8d237724f60330904bb571b07d2c9",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "41": {
+     "file": "maru_41.png",
+     "pixels": "09d2d2b315509de2187502eb9026a1bc6dda7f7a0b778d524f4e859dc68e0b0e",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "42": {
+     "file": "maru_42.png",
+     "pixels": "bc4e2a3fb8427a86e37a812de3b74dbc091f2de8e4f3c0b055cbec80bdf450ce",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "43": {
+     "file": "maru_43.png",
+     "pixels": "1b4ec9ac0ca72be143643423766eec3bf314b192f32410b3aff731aeab3bb7f7",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "44": {
+     "file": "maru_44.png",
+     "pixels": "a7325a55910c4d6c073a9953baf489d175b0bdbbca840d503efb3f44dea25fcb",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "45": {
+     "file": "maru_45.png",
+     "pixels": "699b22cc9f2011a1b369d793d5238c83d7878f3b86ac9d20cc124ea3022535ea",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "46": {
+     "file": "maru_46.png",
+     "pixels": "fe5869a504807bd37108d0de2bcfcb8b93d8bbdf708cceaed8a81215dce1d4eb",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "47": {
+     "file": "maru_47.png",
+     "pixels": "42d219a48f2ddbe6e7d32aef2d79e386ba6acca81a9e98a461090a905d3d1ee3",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "48": {
+     "file": "maru_48.png",
+     "pixels": "65ad80bac448d4b7949a35bcd30648fd146ff17cf5a2f88fb3d6c846740b53d2",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "49": {
+     "file": "maru_49.png",
+     "pixels": "8cfed676797460909139dbed22793c512b50b344ec9fbc3b875fd3ea43bdb7de",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "5": {
+     "file": "maru_5.png",
+     "pixels": "cf506a9e9ba2af230160314a5f09813356f7bccf6f4b459bc97c67018bbcd198",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "50": {
+     "file": "maru_50.png",
+     "pixels": "d619ac5acfd6e3cf7641287f13b733ea989e05a95383603388a6db80a20aa663",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "51": {
+     "file": "maru_51.png",
+     "pixels": "a91767edf59822c28db53af8d9c06624f7ff6f78df369acbc0abefb392513136",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "52": {
+     "file": "maru_52.png",
+     "pixels": "c5edad1f6ed3ab51c4848ca0ac46c869a572fd395cbcd88846b4a606b77d8e76",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "53": {
+     "file": "maru_53.png",
+     "pixels": "65dfce5ec54a9a4139b226fd0e59a0dc12756a2b9d707cef241a025ace6b39a9",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "54": {
+     "file": "maru_54.png",
+     "pixels": "5812f4e1f678ab7a57ad62b5b6103b7b3e4801166eb5417019db64c23aabc4e7",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "55": {
+     "file": "maru_55.png",
+     "pixels": "80cf76a105ca2c15234ac3c23c99eff494ee556bd82208248e1659ebf156a457",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "56": {
+     "file": "maru_56.png",
+     "pixels": "b7602286717f23b10472ffbb066984046b4a0172aebb68770e4f28ef63782b5d",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "57": {
+     "file": "maru_57.png",
+     "pixels": "a2ab03fe85edf85f34c0650c7a77be502fea89bea1f9ea1c5615ac7cb391b939",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "58": {
+     "file": "maru_58.png",
+     "pixels": "0909fb09107d0af1eac095bae83fbc7055787c773684bfbed0a20da4f74c426c",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "59": {
+     "file": "maru_59.png",
+     "pixels": "32bf57ee4d299d29a13e05af560524ba3e5a126842b17a8ee31cdf6856322f57",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "6": {
+     "file": "maru_6.png",
+     "pixels": "6a7d5c28fd42526c8f01ec6724bf48a0007977edee5532768be279e2f03afd98",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "60": {
+     "file": "maru_60.png",
+     "pixels": "c79165831bd9557efdd9de1622265ddb3ae00869694f99e1fd7562d40bae71db",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "61": {
+     "file": "maru_61.png",
+     "pixels": "07dd61fbaa1707e2b201f31afd58658d509b3efeda7d2f1ab6f1453ecc6a2ac4",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "62": {
+     "file": "maru_62.png",
+     "pixels": "33477bae87dd5b78702faeccfc2b3a8c0e6f6a0d4e095d4b3c140b772df5ff25",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "63": {
+     "file": "maru_63.png",
+     "pixels": "186daa35a5248fa1a20fe89026a8afd649254db910d38d0d707aa64f78fbf61a",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "64": {
+     "file": "maru_64.png",
+     "pixels": "d2fce09019e379b5c8c4b1881fd8924950c3bca252a7195ddc9f51f7fb5ceb36",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "65": {
+     "file": "maru_65.png",
+     "pixels": "1edfb1dcd662497ffc54ec61a791ba7664c18b1ff59719ec99c2b67eb053983f",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "66": {
+     "file": "maru_66.png",
+     "pixels": "cfc00b7d81baff21806ced0b463b49fd55702b7fbcf6df34c1270348b9642c37",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "67": {
+     "file": "maru_67.png",
+     "pixels": "6738e6a5d2a0c7d6bf63cd8eaf3110ec86873d524e10bd7108f4cc1afffe9ab6",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "68": {
+     "file": "maru_68.png",
+     "pixels": "2e062498c1c0f934bdd8a2cc8ff7e728a303ba45deeeb6c6522ed6ee10f64f07",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "69": {
+     "file": "maru_69.png",
+     "pixels": "a0a9a00ae3b231091b0d994af0d474686e2503812ead1f508d96f3b63a0f8aaa",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "7": {
+     "file": "maru_7.png",
+     "pixels": "12f5634fdf70d1088ccd97de965a4a99e9da41edd1199b154c6f9c6b7902a7fb",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "70": {
+     "file": "maru_70.png",
+     "pixels": "99ccc31b9b977a8f74aaa7729a8f9f096d11e9ece926f8382af3a07da50c1373",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "71": {
+     "file": "maru_71.png",
+     "pixels": "efbb3b49ccb65955c629d17af8fdeac8d04721818c0db3728932b5d278b586ed",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "8": {
+     "file": "maru_8.png",
+     "pixels": "192746c90ea8140284da0dd7c1b034788ef62119bf63a00deff5dc412ac10f0f",
+     "size": [
+      84,
+      84
+     ]
+    },
+    "9": {
+     "file": "maru_9.png",
+     "pixels": "faf3abfc601a4b963b39ea89e2460660899404deedf55f0e974dd13f6a53ed11",
+     "size": [
+      84,
+      84
+     ]
+    }
+   },
+   "source": "f9fee757345325e3473ddb7f49e7c7c396fdf18e317a7ca69993819fd0badc18",
+   "variants": 72
+  },
+  "m5/plate": {
+   "files": {
+    "0": {
+     "file": "plate_0.png",
+     "pixels": "765152a75d084f23c7df60de5aac760de2b320c493b5bb5b444dc9f816d3fc1c",
+     "size": [
+      340,
+      46
+     ]
+    }
+   },
+   "source": "3904a38d668827753897790893e986aee6a1f6e28dcadcedf0596766d245646c",
+   "variants": 1
+  },
+  "m5/portrait_frame": {
+   "files": {
+    "0": {
+     "file": "portrait_frame_0.png",
+     "pixels": "60be27ace3d9065498a7247a18da254090200763a051fe5d50398256181a169c",
+     "size": [
+      30,
+      30
+     ]
+    }
+   },
+   "source": "cae23c3cd29f7030a25446a8b1c67a066bace9b4fb51fcc209cc1b8022c5b3b1",
+   "variants": 1
+  },
+  "m5/posters": {
+   "files": {
+    "0": {
+     "file": "posters_0.png",
+     "pixels": "d2fa174d58393415d62156f668c0b30f3f34b6e4724d475c3890944ba96a183c",
+     "size": [
+      32,
+      44
+     ]
+    },
+    "1": {
+     "file": "posters_1.png",
+     "pixels": "862c858604436e28d959592e4f5b89e8bd2f69231b02774dade0a7a0c3761824",
+     "size": [
+      32,
+      44
+     ]
+    },
+    "2": {
+     "file": "posters_2.png",
+     "pixels": "8c56f2b3ee9bd99d0221fd9db1d69c5c402104f1a3b773d387a29ca5ad751b08",
+     "size": [
+      32,
+      44
+     ]
+    },
+    "3": {
+     "file": "posters_3.png",
+     "pixels": "8dd9adc4fb0edc6c5a7dac3f76bafee6a0c2291304107aab943f674d051db1ad",
+     "size": [
+      32,
+      44
+     ]
+    },
+    "4": {
+     "file": "posters_4.png",
+     "pixels": "997f710b662b5b2ca46d5816d016628fe86515aae0c658c0fce45d37dc66fc2a",
+     "size": [
+      32,
+      44
+     ]
+    },
+    "5": {
+     "file": "posters_5.png",
+     "pixels": "c3b0caf50253be560bc24edec2528cdd482beeab44d9ba0b5de00b8b4a3d22e7",
+     "size": [
+      32,
+      44
+     ]
+    }
+   },
+   "source": "164f2f5879052779774c913659bf81e8146db15b03ba16a1897cb0aa161580bb",
+   "variants": 6
+  },
+  "m5/presidential_crest": {
+   "files": {
+    "0": {
+     "file": "presidential_crest_0.png",
+     "pixels": "8470e0d4fb89bd4d7d6ad0c78151b1439940c277984e7e4cf736259365d6d6b5",
+     "size": [
+      40,
+      40
+     ]
+    },
+    "1": {
+     "file": "presidential_crest_1.png",
+     "pixels": "8e83baa37f72caf591d60ec44021759f9472112562ca8236b066688f61bf155b",
+     "size": [
+      40,
+      40
+     ]
+    }
+   },
+   "source": "0039209bb3887ac25f361f5e859065f0600d903cffe46f002537ba5b3be7a294",
+   "variants": 2
+  },
+  "m5/press": {
+   "files": {
+    "0": {
+     "file": "press_0.png",
+     "pixels": "0fd3aa92de718065ddaf9f0327f4fdb3031cd744a83c728f8362ee272ed4b693",
+     "size": [
+      154,
+      64
+     ]
+    },
+    "1": {
+     "file": "press_1.png",
+     "pixels": "bdb736d54b8443f6c6e11b284a06ea6a70b776107007d1fca1d5467784feac3a",
+     "size": [
+      154,
+      64
+     ]
+    }
+   },
+   "source": "a341937cab03c5fa80d8b6105c1656ea4079e1ec6af170095128e1be8db6f026",
+   "variants": 2
+  },
+  "m5/printworks_sign": {
+   "files": {
+    "0": {
+     "file": "printworks_sign_0.png",
+     "pixels": "f9adc51b57a72a237ab80b5dea0e416650a0d484216aee5845bf869834117e37",
+     "size": [
+      96,
+      14
+     ]
+    },
+    "1": {
+     "file": "printworks_sign_1.png",
+     "pixels": "a12bbe0436b096b2cbc3e18ffc8395518c0bfd8dfd1606e76ed5a495bb59ace0",
+     "size": [
+      96,
+      14
+     ]
+    }
+   },
+   "source": "5cb89b697d8016505b74c588c507d64141e487d22f22223d538ffbe850031e89",
+   "variants": 2
+  },
+  "m5/tram_wreck": {
+   "files": {
+    "0": {
+     "file": "tram_wreck_0.png",
+     "pixels": "4d197637e8071f87758d257404e412f5777c0d5e27ec5fa3e717c601f5138780",
+     "size": [
+      297,
+      115
+     ]
+    }
+   },
+   "source": "7fde6049a467252bd1992e9595cbad7aa1fc537c290b32c2dcb7a140b3b52af7",
+   "variants": 1
+  },
+  "m5/wall_posters": {
+   "files": {
+    "0": {
+     "file": "wall_posters_0.png",
+     "pixels": "49f07a09d7d6c24567b054b71ea05f761e0714992ba875b5a4dc7b21d6488103",
+     "size": [
+      60,
+      16
+     ]
+    },
+    "1": {
+     "file": "wall_posters_1.png",
+     "pixels": "db511250f03eceb9336e25fbfe70503667f59c466ca6ae5ceb1bef63ded46fac",
+     "size": [
+      60,
+      16
+     ]
+    },
+    "2": {
+     "file": "wall_posters_2.png",
+     "pixels": "8c17902068ca3120333f62a2e94c988d009b46acc46467c2492ed8222022d357",
+     "size": [
+      54,
+      16
+     ]
+    },
+    "3": {
+     "file": "wall_posters_3.png",
+     "pixels": "9ddaf8bfa832422bdb92e453f24e9c6d0dbea61bc08e7339537504b9e706979f",
+     "size": [
+      54,
+      16
+     ]
+    },
+    "4": {
+     "file": "wall_posters_4.png",
+     "pixels": "fa04eebf766a1a4b1d0fec247c7c59811e1dca708fad68bf0918d87ee866160d",
+     "size": [
+      54,
+      16
+     ]
+    },
+    "5": {
+     "file": "wall_posters_5.png",
+     "pixels": "2f0ee1c89e2ffcd3cdc42abd2681ad17f7854a901379146e9a6f742d0b2313ce",
+     "size": [
+      26,
+      8
+     ]
+    },
+    "6": {
+     "file": "wall_posters_6.png",
+     "pixels": "e54c6fce2074acaadefd5e969e4d32f3a15dbb6953bc98ee443140f68e697b4d",
+     "size": [
+      26,
+      8
+     ]
+    }
+   },
+   "source": "d52ca4413c7a7c8518510a8b4334afd9b0cdbfe652267288f5cd3989f42ed8b1",
+   "variants": 7
+  }
+ },
+ "pack": "m5",
+ "schema": "ae.bakeinfo/1",
+ "tool": "ae_bake/1"
+}

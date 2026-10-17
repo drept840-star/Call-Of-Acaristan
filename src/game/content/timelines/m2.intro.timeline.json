@@ -1,0 +1,62 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m2.intro",
+ "shots": [
+  {
+   "scene": "route12_black",
+   "speaker": "VASILE",
+   "text": "Volkov's file mentions Route 12 before the attack was reported.",
+   "lighting": [
+    3,
+    4,
+    7
+   ]
+  },
+  {
+   "scene": "route12_files",
+   "speaker": "VASILE",
+   "text": "Checkpoint 12 was marked unstable before the first bomb went off.",
+   "lighting": [
+    8,
+    13,
+    20
+   ],
+   "min_ms": 3200
+  },
+  {
+   "scene": "route12_mag_alert",
+   "speaker": "VASILE",
+   "text": "Official line says MAG bombing. The timestamps say otherwise.",
+   "lighting": [
+    18,
+    17,
+    15
+   ],
+   "min_ms": 1900
+  },
+  {
+   "scene": "route12_checkpoint",
+   "speaker": "VASILE",
+   "text": "We go in quiet. We verify the scene. We do not repeat their lie.",
+   "lighting": [
+    11,
+    14,
+    16
+   ]
+  },
+  {
+   "scene": "title_card",
+   "speaker": "",
+   "text": "MISSION 2\nQUIET ON ROUTE 12",
+   "lighting": [
+    5,
+    5,
+    8
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m2.meta.mission2_intro_shots"
+ }
+}

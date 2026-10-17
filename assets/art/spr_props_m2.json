@@ -1,0 +1,285 @@
+{
+ "family": "props",
+ "frames": {
+  "barrel": {
+   "anchor": [
+    20,
+    24
+   ],
+   "rect": [
+    84,
+    0,
+    40,
+    48
+   ]
+  },
+  "barrel_charred": {
+   "anchor": [
+    20,
+    24
+   ],
+   "rect": [
+    126,
+    0,
+    40,
+    48
+   ]
+  },
+  "broken_camera": {
+   "anchor": [
+    32,
+    26
+   ],
+   "rect": [
+    300,
+    0,
+    64,
+    52
+   ]
+  },
+  "cone": {
+   "anchor": [
+    20,
+    22
+   ],
+   "rect": [
+    0,
+    0,
+    40,
+    44
+   ]
+  },
+  "cone_charred": {
+   "anchor": [
+    20,
+    22
+   ],
+   "rect": [
+    42,
+    0,
+    40,
+    44
+   ]
+  },
+  "flare": {
+   "anchor": [
+    16,
+    8
+   ],
+   "rect": [
+    204,
+    58,
+    32,
+    16
+   ]
+  },
+  "puddle": {
+   "anchor": [
+    44,
+    23
+   ],
+   "rect": [
+    412,
+    0,
+    88,
+    46
+   ]
+  },
+  "puddle_scorch": {
+   "anchor": [
+    50,
+    27
+   ],
+   "rect": [
+    0,
+    58,
+    100,
+    54
+   ]
+  },
+  "sign": {
+   "anchor": [
+    32,
+    28
+   ],
+   "rect": [
+    168,
+    0,
+    64,
+    56
+   ]
+  },
+  "sign_charred": {
+   "anchor": [
+    32,
+    28
+   ],
+   "rect": [
+    234,
+    0,
+    64,
+    56
+   ]
+  },
+  "soot": {
+   "anchor": [
+    50,
+    32
+   ],
+   "rect": [
+    102,
+    58,
+    100,
+    64
+   ]
+  },
+  "spark_box": {
+   "anchor": [
+    22,
+    24
+   ],
+   "rect": [
+    366,
+    0,
+    44,
+    48
+   ]
+  },
+  "upload_pc_0_0": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": false,
+   "duration_ms": 500,
+   "pulse": 0.0,
+   "rect": [
+    238,
+    58,
+    60,
+    52
+   ]
+  },
+  "upload_pc_0_1": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": true,
+   "duration_ms": 500,
+   "pulse": 0.0,
+   "rect": [
+    300,
+    58,
+    60,
+    52
+   ]
+  },
+  "upload_pc_1_0": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": false,
+   "duration_ms": 500,
+   "pulse": 0.33,
+   "rect": [
+    362,
+    58,
+    60,
+    52
+   ]
+  },
+  "upload_pc_1_1": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": true,
+   "duration_ms": 500,
+   "pulse": 0.33,
+   "rect": [
+    424,
+    58,
+    60,
+    52
+   ]
+  },
+  "upload_pc_2_0": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": false,
+   "duration_ms": 500,
+   "pulse": 0.67,
+   "rect": [
+    0,
+    124,
+    60,
+    52
+   ]
+  },
+  "upload_pc_2_1": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": true,
+   "duration_ms": 500,
+   "pulse": 0.67,
+   "rect": [
+    62,
+    124,
+    60,
+    52
+   ]
+  },
+  "upload_pc_3_0": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": false,
+   "duration_ms": 500,
+   "pulse": 1.0,
+   "rect": [
+    124,
+    124,
+    60,
+    52
+   ]
+  },
+  "upload_pc_3_1": {
+   "anchor": [
+    24,
+    26
+   ],
+   "cursor": true,
+   "duration_ms": 500,
+   "pulse": 1.0,
+   "rect": [
+    186,
+    124,
+    60,
+    52
+   ]
+  }
+ },
+ "image": "spr_props_m2.png",
+ "meta": {
+  "anchor": "prop world position (procedural sx, sy)",
+  "upload_pc": {
+   "cursor_period_ms": 1000,
+   "frames": "upload_pc_<pulse 0..3>_<cursor 0|1>",
+   "pulse_from": "0.5+0.5*sin(t_ms*0.005)"
+  }
+ },
+ "scale": 1,
+ "sheet": "spr_props_m2",
+ "size": [
+  500,
+  176
+ ],
+ "tile_size": 64
+}

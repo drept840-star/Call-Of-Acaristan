@@ -1,0 +1,88 @@
+{
+  "authored_size": [
+    160,
+    125
+  ],
+  "frames": {
+    "cells": {
+      "anchor": [
+        0,
+        0
+      ],
+      "rect": [
+        640,
+        0,
+        320,
+        250
+      ]
+    },
+    "maru_lost": {
+      "anchor": [
+        0,
+        0
+      ],
+      "rect": [
+        640,
+        250,
+        320,
+        250
+      ]
+    },
+    "notebook": {
+      "anchor": [
+        0,
+        0
+      ],
+      "rect": [
+        0,
+        0,
+        320,
+        250
+      ]
+    },
+    "press": {
+      "anchor": [
+        0,
+        0
+      ],
+      "rect": [
+        320,
+        250,
+        320,
+        250
+      ]
+    },
+    "route": {
+      "anchor": [
+        0,
+        0
+      ],
+      "rect": [
+        320,
+        0,
+        320,
+        250
+      ]
+    },
+    "tower": {
+      "anchor": [
+        0,
+        0
+      ],
+      "rect": [
+        0,
+        250,
+        320,
+        250
+      ]
+    }
+  },
+  "scale": 1,
+  "size": [
+    960,
+    500
+  ],
+  "source_kind": "procedural Python/pygame geometry only; no imported image sources",
+  "source_sha256": "1d73d0e52edeb735539525be6a375bcd3cf9cecebbac9b2726461c96aec3302d",
+  "upscale": "2x nearest-neighbour"
+}

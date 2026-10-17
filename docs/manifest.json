@@ -1,0 +1,362 @@
+[
+  {
+    "file": "src/app.py",
+    "bytes": 122112,
+    "lines": 2636,
+    "top_level_defs": 36
+  },
+  {
+    "file": "src/audio/__init__.py",
+    "bytes": 22,
+    "lines": 1,
+    "top_level_defs": 0
+  },
+  {
+    "file": "src/audio/audio.py",
+    "bytes": 65113,
+    "lines": 1891,
+    "top_level_defs": 77
+  },
+  {
+    "file": "src/core/__init__.py",
+    "bytes": 21,
+    "lines": 1,
+    "top_level_defs": 0
+  },
+  {
+    "file": "src/core/camera.py",
+    "bytes": 8690,
+    "lines": 186,
+    "top_level_defs": 4
+  },
+  {
+    "file": "src/core/config.py",
+    "bytes": 29429,
+    "lines": 729,
+    "top_level_defs": 19
+  },
+  {
+    "file": "src/core/console.py",
+    "bytes": 7818,
+    "lines": 183,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/core/fsm.py",
+    "bytes": 6469,
+    "lines": 160,
+    "top_level_defs": 2
+  },
+  {
+    "file": "src/core/game_core.py",
+    "bytes": 9529,
+    "lines": 249,
+    "top_level_defs": 17
+  },
+  {
+    "file": "src/core/interactions.py",
+    "bytes": 9864,
+    "lines": 258,
+    "top_level_defs": 8
+  },
+  {
+    "file": "src/core/level_editor.py",
+    "bytes": 9102,
+    "lines": 223,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/core/save_system.py",
+    "bytes": 3262,
+    "lines": 116,
+    "top_level_defs": 12
+  },
+  {
+    "file": "src/core/settings_store.py",
+    "bytes": 3103,
+    "lines": 79,
+    "top_level_defs": 2
+  },
+  {
+    "file": "src/core/state.py",
+    "bytes": 16974,
+    "lines": 320,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/core/user_settings.py",
+    "bytes": 3822,
+    "lines": 96,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/cutscenes/__init__.py",
+    "bytes": 3046,
+    "lines": 43,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/cutscenes/cast.py",
+    "bytes": 17905,
+    "lines": 552,
+    "top_level_defs": 5
+  },
+  {
+    "file": "src/cutscenes/chair.py",
+    "bytes": 71299,
+    "lines": 1498,
+    "top_level_defs": 37
+  },
+  {
+    "file": "src/cutscenes/engine.py",
+    "bytes": 33834,
+    "lines": 736,
+    "top_level_defs": 5
+  },
+  {
+    "file": "src/cutscenes/m3cell.py",
+    "bytes": 49818,
+    "lines": 940,
+    "top_level_defs": 12
+  },
+  {
+    "file": "src/cutscenes/m3ops.py",
+    "bytes": 54955,
+    "lines": 1070,
+    "top_level_defs": 20
+  },
+  {
+    "file": "src/cutscenes/route12.py",
+    "bytes": 80936,
+    "lines": 1570,
+    "top_level_defs": 25
+  },
+  {
+    "file": "src/entities/__init__.py",
+    "bytes": 25,
+    "lines": 1,
+    "top_level_defs": 0
+  },
+  {
+    "file": "src/entities/art_cache.py",
+    "bytes": 15420,
+    "lines": 406,
+    "top_level_defs": 13
+  },
+  {
+    "file": "src/entities/death_anim.py",
+    "bytes": 21308,
+    "lines": 473,
+    "top_level_defs": 9
+  },
+  {
+    "file": "src/entities/enemy_ai.py",
+    "bytes": 41168,
+    "lines": 883,
+    "top_level_defs": 5
+  },
+  {
+    "file": "src/entities/player.py",
+    "bytes": 41745,
+    "lines": 904,
+    "top_level_defs": 2
+  },
+  {
+    "file": "src/entities/weapons.py",
+    "bytes": 22740,
+    "lines": 564,
+    "top_level_defs": 12
+  },
+  {
+    "file": "src/fx/__init__.py",
+    "bytes": 19,
+    "lines": 1,
+    "top_level_defs": 0
+  },
+  {
+    "file": "src/fx/effects.py",
+    "bytes": 5789,
+    "lines": 159,
+    "top_level_defs": 11
+  },
+  {
+    "file": "src/missions/__init__.py",
+    "bytes": 25,
+    "lines": 1,
+    "top_level_defs": 0
+  },
+  {
+    "file": "src/missions/m1/__init__.py",
+    "bytes": 1554,
+    "lines": 40,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/missions/m1/draw.py",
+    "bytes": 73086,
+    "lines": 1341,
+    "top_level_defs": 6
+  },
+  {
+    "file": "src/missions/m1/hotwire.py",
+    "bytes": 6218,
+    "lines": 145,
+    "top_level_defs": 4
+  },
+  {
+    "file": "src/missions/m1/main.py",
+    "bytes": 11361,
+    "lines": 308,
+    "top_level_defs": 3
+  },
+  {
+    "file": "src/missions/m1/map.py",
+    "bytes": 2350,
+    "lines": 66,
+    "top_level_defs": 2
+  },
+  {
+    "file": "src/missions/m1/update.py",
+    "bytes": 39937,
+    "lines": 822,
+    "top_level_defs": 2
+  },
+  {
+    "file": "src/missions/m2/__init__.py",
+    "bytes": 5207,
+    "lines": 54,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/missions/m2/draw.py",
+    "bytes": 362226,
+    "lines": 7227,
+    "top_level_defs": 68
+  },
+  {
+    "file": "src/missions/m2/meta.py",
+    "bytes": 27392,
+    "lines": 686,
+    "top_level_defs": 6
+  },
+  {
+    "file": "src/missions/m2/sniper.py",
+    "bytes": 89882,
+    "lines": 1913,
+    "top_level_defs": 59
+  },
+  {
+    "file": "src/missions/m2/starts.py",
+    "bytes": 28329,
+    "lines": 591,
+    "top_level_defs": 10
+  },
+  {
+    "file": "src/missions/m2/update.py",
+    "bytes": 62740,
+    "lines": 1233,
+    "top_level_defs": 14
+  },
+  {
+    "file": "src/missions/m2/world.py",
+    "bytes": 33354,
+    "lines": 752,
+    "top_level_defs": 23
+  },
+  {
+    "file": "src/missions/m3/__init__.py",
+    "bytes": 11144,
+    "lines": 98,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/missions/m3/draw.py",
+    "bytes": 320479,
+    "lines": 6182,
+    "top_level_defs": 80
+  },
+  {
+    "file": "src/missions/m3/flow.py",
+    "bytes": 61926,
+    "lines": 1476,
+    "top_level_defs": 28
+  },
+  {
+    "file": "src/missions/m3/interrog.py",
+    "bytes": 23505,
+    "lines": 555,
+    "top_level_defs": 15
+  },
+  {
+    "file": "src/missions/m3/maps.py",
+    "bytes": 19351,
+    "lines": 507,
+    "top_level_defs": 6
+  },
+  {
+    "file": "src/missions/m3/meta.py",
+    "bytes": 21630,
+    "lines": 424,
+    "top_level_defs": 0
+  },
+  {
+    "file": "src/missions/m3/systems.py",
+    "bytes": 171384,
+    "lines": 3709,
+    "top_level_defs": 74
+  },
+  {
+    "file": "src/missions/m3/world.py",
+    "bytes": 86640,
+    "lines": 1986,
+    "top_level_defs": 46
+  },
+  {
+    "file": "src/missions/walking_sim.py",
+    "bytes": 161968,
+    "lines": 3357,
+    "top_level_defs": 58
+  },
+  {
+    "file": "src/ui/__init__.py",
+    "bytes": 4068,
+    "lines": 77,
+    "top_level_defs": 1
+  },
+  {
+    "file": "src/ui/hud.py",
+    "bytes": 66136,
+    "lines": 1487,
+    "top_level_defs": 23
+  },
+  {
+    "file": "src/ui/main.py",
+    "bytes": 29407,
+    "lines": 724,
+    "top_level_defs": 16
+  },
+  {
+    "file": "src/ui/mp.py",
+    "bytes": 63489,
+    "lines": 2647,
+    "top_level_defs": 17
+  },
+  {
+    "file": "src/ui/system.py",
+    "bytes": 46988,
+    "lines": 1482,
+    "top_level_defs": 15
+  },
+  {
+    "file": "src/ui/upload_os.py",
+    "bytes": 125178,
+    "lines": 2623,
+    "top_level_defs": 47
+  },
+  {
+    "file": "src/ui/widgets.py",
+    "bytes": 9673,
+    "lines": 247,
+    "top_level_defs": 2
+  }
+]

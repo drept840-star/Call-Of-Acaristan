@@ -1,0 +1,65 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.ending",
+ "shots": [
+  {
+   "scene": "m3_end_studio",
+   "speaker": "BIRIBEL",
+   "text": "Twenty-two hundred. He's already talking.",
+   "lighting": [
+    14,
+    12,
+    18
+   ],
+   "min_ms": 3600
+  },
+  {
+   "scene": "m3_end_cut",
+   "speaker": "BALACEANU (PA)",
+   "text": "What is this? Cut the feed. CUT THE FEED!",
+   "lighting": [
+    10,
+    6,
+    8
+   ],
+   "min_ms": 3200
+  },
+  {
+   "scene": "m3_end_nation",
+   "speaker": "NARRATOR",
+   "text": "By 22:07, every screen in Acaristan was reading the Vostral.",
+   "lighting": [
+    10,
+    14,
+    20
+   ],
+   "min_ms": 4200
+  },
+  {
+   "scene": "m3_end_booth_dark",
+   "speaker": "VOLKOV",
+   "text": "Six years he spent building it. You read it in one minute.",
+   "lighting": [
+    5,
+    5,
+    8
+   ],
+   "min_ms": 3400
+  },
+  {
+   "scene": "title_card",
+   "speaker": "BIRIBEL",
+   "text": "He spent six years trying to kill a rumor. Now it's a record.",
+   "lighting": [
+    5,
+    5,
+    8
+   ],
+   "min_ms": 4600
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.mission3_ending_shots"
+ }
+}

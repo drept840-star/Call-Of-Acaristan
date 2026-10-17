@@ -1,0 +1,45 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.vostral_pickup",
+ "shots": [
+  {
+   "scene": "m3_vostral_case_open",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "min_ms": 1300,
+   "lighting": [
+    6,
+    8,
+    10
+   ]
+  },
+  {
+   "scene": "m3_vostral_take",
+   "speaker": "BIRIBEL",
+   "text": "The Vostral. The record they buried.",
+   "min_ms": 1800,
+   "lighting": [
+    7,
+    9,
+    11
+   ]
+  },
+  {
+   "scene": "m3_vostral_confirm",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Confirmed. North stairwell, move before they burn the wing.",
+   "min_ms": 2100,
+   "lighting": [
+    8,
+    9,
+    11
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.vostral_pickup_shots"
+ }
+}

@@ -1,0 +1,9 @@
+AE REPLAY: OK
+verified 373 shots in 7.3s: 0 failures, 0 errors
+AE GOLDEN: OK
+AE LOOP: OK (7/7 segments, 45s)
+mission5_integration: FAIL ValueError('substring not found')
+SMOKE TEST: FAILED
+Ran 197 tests in 7.032s
+OK
+GATE_DONE

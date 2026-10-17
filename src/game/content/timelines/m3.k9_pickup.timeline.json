@@ -1,0 +1,84 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.k9_pickup",
+ "shots": [
+  {
+   "scene": "k9_wall_stand",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 850,
+   "lighting": [
+    8,
+    10,
+    10
+   ]
+  },
+  {
+   "scene": "k9_firstperson_grab",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 2150,
+   "lighting": [
+    8,
+    10,
+    10
+   ],
+   "cues": [
+    [
+     540,
+     "rifle_handle",
+     0.3
+    ],
+    [
+     850,
+     "rifle_handle",
+     0.42
+    ],
+    [
+     1680,
+     "rifle_handle",
+     0.18
+    ]
+   ]
+  },
+  {
+   "scene": "k9_ready_check",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 1800,
+   "lighting": [
+    8,
+    10,
+    10
+   ],
+   "cues": [
+    [
+     590,
+     "rifle_handle",
+     0.33
+    ],
+    [
+     990,
+     "rifle_handle",
+     0.48
+    ]
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.k9_pickup_shots"
+ }
+}

@@ -1,0 +1,89 @@
+{
+ "schema": "ae.level/1",
+ "id": "mission0.depot",
+ "name": "Mission 0 - Depot",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "###############",
+   "#.............#",
+   "#..##....##...#",
+   "#..##....##...#",
+   "#.............#",
+   "#....####.....#",
+   "#....####.....#",
+   "#.............#",
+   "#..##....##..=#",
+   "###############"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player",
+   "kind": "spawn",
+   "tile": [
+    1,
+    1
+   ],
+   "props": {
+    "who": "player"
+   }
+  },
+  {
+   "id": "spawn-sentinel",
+   "kind": "spawn",
+   "tile": [
+    12,
+    2
+   ],
+   "props": {
+    "who": "enemy",
+    "type": "sentinel"
+   }
+  },
+  {
+   "id": "spawn-charger",
+   "kind": "spawn",
+   "tile": [
+    7,
+    7
+   ],
+   "props": {
+    "who": "enemy",
+    "type": "charger"
+   }
+  },
+  {
+   "id": "inspect-crate",
+   "kind": "inspect",
+   "tile": [
+    11,
+    5
+   ],
+   "props": {
+    "label": "SUPPLY CRATE"
+   }
+  }
+ ],
+ "triggers": [
+  {
+   "id": "exit",
+   "kind": "exit",
+   "rect": [
+    13,
+    8,
+    1,
+    1
+   ]
+  }
+ ],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "mission0",
+  "solid": "#",
+  "exit": "="
+ }
+}

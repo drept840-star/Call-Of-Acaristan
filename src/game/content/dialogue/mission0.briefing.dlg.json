@@ -1,0 +1,29 @@
+{
+ "schema": "ae.dialogue/1",
+ "id": "mission0.briefing",
+ "start": "b1",
+ "speakers": {
+  "SYSTEM": {},
+  "BIRIBEL": {}
+ },
+ "nodes": {
+  "b1": {
+   "speaker": "SYSTEM",
+   "text": "Depot sweep. Two hostiles on the floor.",
+   "next": "b2"
+  },
+  "b2": {
+   "speaker": "BIRIBEL",
+   "text": "Copy. I go quiet, I leave by the east door.",
+   "next": "b3"
+  },
+  "b3": {
+   "speaker": "SYSTEM",
+   "text": "Reach the marked exit. Do not be seen if you can help it.",
+   "next": null
+  }
+ },
+ "metadata": {
+  "skippable": true
+ }
+}

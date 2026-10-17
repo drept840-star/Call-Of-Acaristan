@@ -1,0 +1,90 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "core.cutscene1",
+ "shots": [
+  {
+   "scene": "ocean_wide",
+   "speaker": "NARRATOR",
+   "text": "The Kilemeno Ocean. Once a fishing route.\nNow a graveyard of derricks and broken treaties.",
+   "lighting": [
+    30,
+    25,
+    30
+   ]
+  },
+  {
+   "scene": "city_skyline",
+   "speaker": "NARRATOR",
+   "text": "Acaristan. A nation in name only.\nThe ground beneath it is worth more than the people standing on it.",
+   "lighting": [
+    28,
+    22,
+    30
+   ]
+  },
+  {
+   "scene": "ipa_poster",
+   "speaker": "NARRATOR",
+   "text": "The IPA promises rebuilding.\nTheir oil flows. Their guns sell.\nTheir hands are clean - for the cameras.",
+   "lighting": [
+    25,
+    22,
+    20
+   ]
+  },
+  {
+   "scene": "mag_graffiti",
+   "speaker": "NARRATOR",
+   "text": "MAG promises freedom.\nThey bomb checkpoints. They bury their dead in unmarked steppes.\nThe state calls them terrorists. The poor call them family.",
+   "lighting": [
+    35,
+    32,
+    30
+   ]
+  },
+  {
+   "scene": "krap_convoy",
+   "speaker": "NARRATOR",
+   "text": "And then there is KRAP.\nKoaliția Regională de Apărare Și Pace.\nPeacekeepers, they call themselves.",
+   "lighting": [
+    60,
+    50,
+    45
+   ]
+  },
+  {
+   "scene": "krap_patch",
+   "speaker": "NARRATOR",
+   "text": "They keep the highways open.\nThey keep the oil moving.\nThey keep the questions unasked.",
+   "lighting": [
+    25,
+    25,
+    28
+   ]
+  },
+  {
+   "scene": "biribel_arrival",
+   "speaker": "NARRATOR",
+   "text": "Today, one of their operators arrives.\nHe has been told this is a stabilization assignment.\nHe has not been told the truth.",
+   "lighting": [
+    15,
+    18,
+    28
+   ]
+  },
+  {
+   "scene": "title_card",
+   "speaker": "",
+   "text": "ACARISTAN CITY\nOPERATION: BLACK NOTEBOOK\nDAY 1",
+   "lighting": [
+    5,
+    5,
+    8
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "cutscenes.engine.cutscene1_shots"
+ }
+}

@@ -1,0 +1,4 @@
+bore v0.6.0, Windows x86_64 MSVC
+Source: https://github.com/ekzhang/bore/releases/tag/v0.6.0
+Executable SHA256: e8c1096ea01460ba9dbf30017b5eccf2100f63ef2c701930e56fcaca239b48cc
+Licence: MIT; see BORE-LICENSE.txt

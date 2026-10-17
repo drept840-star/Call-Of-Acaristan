@@ -1,0 +1,74 @@
+{
+ "schema": "ae.timeline/1",
+ "fps_hint": 60,
+ "metadata": {
+  "time_unit": "frames",
+  "kind": "radio_ladder",
+  "source": "missions/m4/flow.py _M4_ARREST_BEATS"
+ },
+ "id": "m4.arrest_beats",
+ "tracks": {
+  "event": [
+   {
+    "t": 300,
+    "name": "arrest_open",
+    "text": "PA: All units. By order of the Presidency, garrison command is... recalibrated.",
+    "color": [
+     230,
+     200,
+     120
+    ],
+    "sfx": "pa_mumble",
+    "duration": 470
+   },
+   {
+    "t": 1350,
+    "name": "arrest_order",
+    "text": "PA: General Balaceanu is relieved of command and arrested. Escort him out.",
+    "color": [
+     230,
+     200,
+     120
+    ],
+    "sfx": "pa_mumble",
+    "duration": 470
+   },
+   {
+    "t": 2250,
+    "name": "arrest_confusion",
+    "text": "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-",
+    "color": [
+     220,
+     90,
+     70
+    ],
+    "sfx": "radio_static",
+    "duration": 470
+   },
+   {
+    "t": 3150,
+    "name": "arrest_standdown",
+    "text": "SYSTEM: Guns down. That's the President on the wire. The General's in cuffs.",
+    "color": [
+     150,
+     170,
+     190
+    ],
+    "sfx": "radio_static",
+    "duration": 470
+   },
+   {
+    "t": 4050,
+    "name": "arrest_retreat",
+    "text": "LOYALIST COMMS: Fall back! Nobody dies for a man already in a cell. Break off!",
+    "color": [
+     220,
+     90,
+     70
+    ],
+    "sfx": "footstep",
+    "duration": 470
+   }
+  ]
+ }
+}

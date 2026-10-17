@@ -1,0 +1,45 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.broadcast_fail",
+ "shots": [
+  {
+   "scene": "m3_bcast_fail_studio",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "hard_cut": true,
+   "min_ms": 1500,
+   "lighting": [
+    3,
+    2,
+    3
+   ]
+  },
+  {
+   "scene": "m3_bcast_fail_pa",
+   "speaker": "BALACEANU (PA)",
+   "text": "Twenty-two hundred. The address is finished. The prisoner is contained. Route 12 is closed.",
+   "min_ms": 2600,
+   "lighting": [
+    4,
+    3,
+    4
+   ]
+  },
+  {
+   "scene": "m3_bcast_fail_retry",
+   "speaker": "SYSTEM",
+   "text": "ADDRESS COMPLETE. THE STUDIO IS THEIRS.\nFEED RELEASED - WING RESET. GO AGAIN.",
+   "min_ms": 2200,
+   "lighting": [
+    2,
+    2,
+    2
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.broadcast_fail_shots"
+ }
+}

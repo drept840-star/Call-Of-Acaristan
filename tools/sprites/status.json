@@ -1,0 +1,21 @@
+{
+ "families": {
+  "bodies": "deferred - rig/outfit/anchor-driven (pose cache already in artpack.pose); needs per-outfit sheets, out of T7 scope",
+  "weapons_fx": "partial - M2 blast aftermath baked (spr_fx_scorch, spr_fx_m2); weapon art deferred (rig anchors + shop icons)",
+  "props": "partial - M2 vehicles (spr_vehicles) + story props/upload PC (spr_props_m2) converted; M3/M4 props next",
+  "tiles": "partial (pre-T7) - make_art_pack floor/wall tiles exist; per-mission tile painters still procedural",
+  "decals": "partial - M2 scorch decal baked; posters/blood unchanged",
+  "ui": "partial - radio caller-ID portraits baked (spr_portraits, T6b) + pixel fonts in ui/pixfont; rest of HUD text/vector, icons via make_art_pack i_*",
+  "cutscene": "out of scope (cutscene staging untouched by rule)",
+  "misc": "unchanged"
+ },
+ "fallbacks": {
+  "missions/m2/draw.py": [
+   "_draw_civilian_car",
+   "_draw_burned_car",
+   "_draw_ipa_truck",
+   "_draw_ipa_truck_charred",
+   "_draw_story_prop"
+  ]
+ }
+}

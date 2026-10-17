@@ -1,0 +1,48 @@
+{
+ "schema": "ae.texture/1",
+ "id": "asphalt",
+ "size": [
+  16,
+  16
+ ],
+ "palette": {
+  "a": [
+   54,
+   56,
+   60
+  ],
+  "s": [
+   68,
+   70,
+   74
+  ],
+  "k": [
+   40,
+   42,
+   46
+  ],
+  "l": [
+   88,
+   90,
+   94
+  ]
+ },
+ "rows": [
+  "aaaaaaaaaaksaaaa",
+  "alssaaaasaalslka",
+  "aakaaaaaaaslasaa",
+  "asaaaaalkkaaalsa",
+  "sslsaaaaakaaaaka",
+  "saaakaaaaaaaasak",
+  "akasaaaasaaaaaaa",
+  "laasaaasaaaakkaa",
+  "aaaasaaaaaaaaaaa",
+  "kaaalaaksaaasksl",
+  "aaaaaasssaaaaaak",
+  "aasaaaakaaaaaaaa",
+  "assaaasaaaskaaaa",
+  "akasaaaaaaakaass",
+  "alkasakaaaasslaa",
+  "saaaaaaaaaaaasas"
+ ]
+}

@@ -1,0 +1,274 @@
+{
+ "schema": "ae.manifest/1",
+ "pack": "m3",
+ "baked_dir": "assets/baked/m3",
+ "notes": "Mission 3 (prison) baked world layers. *_static layers replace the runtime core.staticlayer chunk cache (bake source = the mission's _bake_m3_* callback, still the live fallback); camera layers (cell_details) replace per-frame painters. ORIGIN/SIZE live in the game.art.m3 adapter modules.",
+ "assets": [
+  {
+   "id": "m3/cell_details",
+   "kind": "layer",
+   "module": "game.art.m3.cell_details",
+   "variants": 2,
+   "variant_names": [
+    "chair_intact",
+    "chair_broken"
+   ],
+   "origin": [
+    1913,
+    313
+   ],
+   "size": [
+    536,
+    523
+   ],
+   "tags": [
+    "world"
+   ]
+  },
+  {
+   "id": "m3/cellblock_static",
+   "kind": "layer",
+   "module": "game.art.m3.cellblock_static",
+   "variants": 4,
+   "variant_names": [
+    "k9_racked",
+    "k9_unlocked",
+    "k9_racked_vostral",
+    "k9_unlocked_vostral"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    3072,
+    3072
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m3/archives_static",
+   "kind": "layer",
+   "module": "game.art.m3.archives_static",
+   "variants": 3,
+   "variant_names": [
+    "locked",
+    "maru_contacted",
+    "vostral_taken"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    3072,
+    3072
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m3/comms_static",
+   "kind": "layer",
+   "module": "game.art.m3.comms_static",
+   "variants": 1,
+   "variant_names": [
+    "default"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    3072,
+    3072
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m3/broadcast_static",
+   "kind": "layer",
+   "module": "game.art.m3.broadcast_static",
+   "variants": 1,
+   "variant_names": [
+    "default"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    2048,
+    2048
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m3/ko_static",
+   "kind": "layer",
+   "module": "game.art.m3.ko_static",
+   "variants": 2,
+   "variant_names": [
+    "van",
+    "bailed"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    3072,
+    3072
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m3/kitchen",
+   "kind": "layer",
+   "module": "game.art.m3.kitchen",
+   "variants": 1,
+   "variant_names": [
+    "default"
+   ],
+   "origin": [
+    128,
+    1280
+   ],
+   "size": [
+    320,
+    320
+   ],
+   "tags": [
+    "world"
+   ]
+  },
+  {
+   "id": "m3/door_tile",
+   "kind": "sprite_def",
+   "module": "game.art.m3.door_tile",
+   "variants": 4,
+   "variant_names": [
+    "closed_locked",
+    "closed_unlocked",
+    "open_led",
+    "open_dark"
+   ],
+   "size": [
+    68,
+    68
+   ],
+   "tags": [
+    "world",
+    "prop"
+   ]
+  },
+  {
+   "id": "m3/weapon_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m3.weapon_icon",
+   "variants": 5,
+   "variant_names": [
+    "shiv",
+    "chair_leg",
+    "k9_smg",
+    "sidearm",
+    "generic"
+   ],
+   "size": [
+    56,
+    36
+   ],
+   "tags": [
+    "hud",
+    "icon"
+   ]
+  },
+  {
+   "id": "m3/cell_door_blown",
+   "kind": "sprite_def",
+   "module": "game.art.m3.cell_door_blown",
+   "variants": 2,
+   "variant_names": [
+    "open_tiles",
+    "closed_tiles"
+   ],
+   "size": [
+    138,
+    68
+   ],
+   "tags": [
+    "world",
+    "prop"
+   ]
+  },
+  {
+   "id": "m3/wall_monitor",
+   "kind": "sprite_def",
+   "module": "game.art.m3.wall_monitor",
+   "variants": 3,
+   "variant_names": [
+    "off",
+    "lit_base",
+    "lit_fg"
+   ],
+   "size": [
+    200,
+    67
+   ],
+   "tags": [
+    "world",
+    "prop"
+   ]
+  },
+  {
+   "id": "m3/pickup_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m3.pickup_icon",
+   "variants": 2,
+   "variant_names": [
+    "sidearm",
+    "bandage"
+   ],
+   "size": [
+    18,
+    18
+   ],
+   "tags": [
+    "world",
+    "icon"
+   ]
+  },
+  {
+   "id": "m3/camera_body",
+   "kind": "sprite_def",
+   "module": "game.art.m3.camera_body",
+   "variants": 2,
+   "variant_names": [
+    "idle",
+    "alerted"
+   ],
+   "size": [
+    14,
+    14
+   ],
+   "tags": [
+    "world",
+    "prop"
+   ]
+  }
+ ]
+}

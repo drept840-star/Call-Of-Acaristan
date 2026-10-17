@@ -1,0 +1,35 @@
+$ tools/ae_golden.py capture --set baseline_v0 --only gp.m5.quarter
+   [SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+   [CHECKPOINT] Respawned at shelter - evidence phase active
+   captured 3 shots (0 errors) in 1.6s -> E:\Code\Call of Acaristan\First try\tests\golden\baseline_v0
+   AE GOLDEN: OK
+$ tools/ae_golden.py capture --set baseline_v0 --only gp.m5.print_entry
+   [SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+   [CHECKPOINT] Respawned at shelter - evidence phase active
+   captured 1 shots (0 errors) in 1.5s -> E:\Code\Call of Acaristan\First try\tests\golden\baseline_v0
+   AE GOLDEN: OK
+$ tools/ae_golden.py capture --set baseline_v0 --only gp.m3.cell
+   [SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+   [CHECKPOINT] Respawned at shelter - evidence phase active
+   captured 4 shots (0 errors) in 1.6s -> E:\Code\Call of Acaristan\First try\tests\golden\baseline_v0
+   AE GOLDEN: OK
+$ tools/ae_golden.py capture --set baseline_v0 --only cut.m5.mission5_intro_shots.03_m5x_decree
+   [SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+   [CHECKPOINT] Respawned at shelter - evidence phase active
+   captured 3 shots (0 errors) in 1.7s -> E:\Code\Call of Acaristan\First try\tests\golden\baseline_v0
+   AE GOLDEN: OK
+$ tools/ae_golden.py verify
+     FAIL gp.m5.quarter_start: {'max': 75, 'mean': 0.0308, 'pct_over': 0.0596, 'differing_px': 419}
+     FAIL gp.m5.quarter_mid: {'max': 165, 'mean': 0.5105, 'pct_over': 1.4397, 'differing_px': 21693}
+     FAIL gp.m5.quarter_east: {'max': 195, 'mean': 0.5729, 'pct_over': 1.4591, 'differing_px': 21614}
+   AE GOLDEN: FAIL
+E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
+
+.venv\Scripts\python.exe : rc=1
+At line:1 char:1
++ .venv\Scripts\python.exe build\ae_reconcile\rebaseline.py 2>&1 | Tee- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (rc=1:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

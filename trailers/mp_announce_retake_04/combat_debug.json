@@ -1,0 +1,2018 @@
+[
+ {
+  "i": 0,
+  "tick": 37,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1120,
+    "y": 672,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 864,
+    "y": 672,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 864,
+    "y": 416,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1120,
+    "y": 416,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 0,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 0,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 36,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 579,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 416,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 360,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 60,
+  "tick": 97,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1171,
+    "y": 621,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 965,
+    "y": 621,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 976,
+    "y": 473,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1171,
+    "y": 467,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 2,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 3,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 96,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 639,
+    "mx": 1,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 476,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 420,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 120,
+  "tick": 157,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1227,
+    "y": 615,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 973,
+    "y": 618,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 934,
+    "y": 431,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1229,
+    "y": 470,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 3,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 5,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 156,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 699,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 536,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 480,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 180,
+  "tick": 217,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1227,
+    "y": 615,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 973,
+    "y": 618,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1196,
+    "y": 432,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 3,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 216,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 759,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 596,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 540,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 240,
+  "tick": 277,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1227,
+    "y": 615,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 973,
+    "y": 618,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 3,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 276,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 819,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 656,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 600,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 300,
+  "tick": 337,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1147,
+    "y": 645,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 945,
+    "y": 621,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 1,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 336,
+    "mx": 1,
+    "my": -1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 879,
+    "mx": 1,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 716,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 660,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 360,
+  "tick": 397,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1232,
+    "y": 615,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 940,
+    "y": 651,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": false
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 3,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 396,
+    "mx": 1,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 939,
+    "mx": -1,
+    "my": 1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 776,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 720,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 420,
+  "tick": 457,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1199,
+    "y": 648,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": false
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 5,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 456,
+    "mx": -1,
+    "my": 1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 999,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 836,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 780,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 480,
+  "tick": 517,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 66,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 918,
+    "y": 470,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 1,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 516,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1059,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 896,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 840,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 540,
+  "tick": 577,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 958,
+    "y": 455,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1176,
+    "y": 467,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 4,
+    "path": 1,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 576,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1119,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 956,
+    "mx": -1,
+    "my": -1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 900,
+    "mx": 1,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 600,
+  "tick": 637,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1205,
+    "y": 446,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 636,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1179,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1016,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 960,
+    "mx": -1,
+    "my": -1,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 660,
+  "tick": 697,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 32,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 696,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1239,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1076,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1020,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 720,
+  "tick": 757,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 915,
+    "y": 621,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": false
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 756,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1299,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1136,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1080,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 780,
+  "tick": 817,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1171,
+    "y": 621,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 973,
+    "y": 618,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 2,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 816,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1359,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1196,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1140,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 840,
+  "tick": 877,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1232,
+    "y": 615,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 925,
+    "y": 656,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": false
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 4,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 876,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1419,
+    "mx": -1,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1256,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1200,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 900,
+  "tick": 937,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1193,
+    "y": 654,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 879,
+    "y": 431,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 6,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 0,
+    "path": 1,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 936,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1479,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1316,
+    "mx": 1,
+    "my": 1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1260,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 960,
+  "tick": 997,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 976,
+    "y": 473,
+    "hp": 66,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1156,
+    "y": 452,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 3,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 996,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1539,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1376,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1320,
+    "mx": 1,
+    "my": 1,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 1020,
+  "tick": 1057,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 934,
+    "y": 431,
+    "hp": 66,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1229,
+    "y": 470,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 5,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 1056,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1599,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1436,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1380,
+    "mx": 0,
+    "my": 0,
+    "b": 1,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 1080,
+  "tick": 1117,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 879,
+    "y": 662,
+    "hp": 0,
+    "dead": true,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 66,
+    "dead": false,
+    "team": 0,
+    "los": false
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1196,
+    "y": 432,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 1116,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1659,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1496,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1440,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 1140,
+  "tick": 1177,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1141,
+    "y": 666,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 870,
+    "y": 666,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": true
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 66,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": false
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 8,
+    "path": 0,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 1176,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1719,
+    "mx": 1,
+    "my": -1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1556,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1500,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ },
+ {
+  "i": 1200,
+  "tick": 1237,
+  "p": [
+   {
+    "id": 0,
+    "nick": "ANDREI",
+    "x": 1129,
+    "y": 663,
+    "hp": 100,
+    "dead": false,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 1,
+    "nick": "BIRIBEL",
+    "x": 973,
+    "y": 618,
+    "hp": 100,
+    "dead": false,
+    "team": 1,
+    "los": false
+   },
+   {
+    "id": 2,
+    "nick": "MIRELA",
+    "x": 880,
+    "y": 422,
+    "hp": 0,
+    "dead": true,
+    "team": 0,
+    "los": true
+   },
+   {
+    "id": 3,
+    "nick": "MICUL FUEGO",
+    "x": 1135,
+    "y": 426,
+    "hp": 32,
+    "dead": false,
+    "team": 1,
+    "los": true
+   }
+  ],
+  "bots": [
+   {
+    "seat": "host",
+    "pid": 0,
+    "wp": 1,
+    "path": 1,
+    "stuck": 0
+   },
+   {
+    "seat": "client",
+    "pid": 2,
+    "wp": 7,
+    "path": 0,
+    "stuck": 0
+   }
+  ],
+  "inputs": [
+   {
+    "pid": 0,
+    "seq": 1236,
+    "mx": 1,
+    "my": -1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 1,
+    "seq": 1779,
+    "mx": 1,
+    "my": -1,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 2,
+    "seq": 1616,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   },
+   {
+    "pid": 3,
+    "seq": 1560,
+    "mx": 0,
+    "my": 0,
+    "b": 0,
+    "n": 30
+   }
+  ]
+ }
+]

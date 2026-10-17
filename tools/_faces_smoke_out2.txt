@@ -1,0 +1,182 @@
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+
+=== Import checks ===
+import core.state: OK
+import entities.player: OK
+import entities.weapons: OK
+import missions.m1: OK
+import cutscenes: OK
+import missions.walking_sim: OK
+import fx.effects: OK
+import ui.hud: OK
+import core.interactions: OK
+
+=== UI draw checks ===
+draw_menu: OK
+draw_settings: OK
+draw_server_browser_servers: OK
+draw_server_browser_connections: OK
+draw_notebook_inspection: OK
+draw_safe_keypad: OK
+draw_desk_note: OK
+draw_cutscene: OK
+draw_pause_menu: OK
+draw_death_screen: OK
+draw_match_panel: OK
+
+=== Multiplayer checks ===
+multiplayer_opens_on_server_browser: OK
+host_is_taught_how_to_host: OK
+remote_input_is_applied: OK
+lobby_relay_is_not_a_player: OK
+join_token_and_scanner_hardening: OK
+join_token_and_scanner_hardening: OK
+local_shot_kicks_camera: OK
+match_screen_roster: OK
+client_join_completes: OK
+host_left_ends_session: OK
+weapon_switching_in_match: OK
+switch_survives_batched_inputs: OK
+arena_sprite_rig_and_anim: OK
+arena_os12_is_the_story_rifle: OK
+arena_hud_legibility: OK
+match_intro_transition: OK
+join_loopback_fallback: OK
+client_interpolation_smooth: OK
+arena_weapons_and_pickups: OK
+arena_teams_and_rounds: OK
+client_prediction_is_authoritative: OK
+hit_marker_decays: OK
+match_identity_and_comms: OK
+team_claims_survive_balance: OK
+team_pick_codec: OK
+two_friends_pick_the_same_side: OK
+one_sided_lobby_cannot_start: OK
+lobby_owns_the_pointer_not_the_reticle: OK
+fallen_body_wears_the_loadout: OK
+every_corpse_shows_for_everyone: OK
+tab_leaderboard: OK
+
+=== Mission checks ===
+game_core_facade_state: OK
+start_mission: OK
+game_update: OK
+game_draw: OK
+
+=== Save system checks ===
+save_roundtrip_flags_merged: OK
+save_system: unknown mission 'MISSION_X' - not saving
+save_mission3_record: OK
+save_corrupt_recovery: OK
+save_current_slot_persist: OK
+save_progress_marker: OK
+save_atomic_no_tmp: OK
+settings_preserve_omitted_keys: OK
+
+=== Cosmetics and economy checks ===
+appearance_default_is_legacy: OK
+avatar_render_parity: OK
+appearance_junk_rejected: OK
+profile_wallet: OK
+round_credit_is_once_per_round: OK
+payout_is_result_only: OK
+arena_look_reaches_the_sprite: OK
+cosmetic_loadout_survives_a_match: OK
+outfitter_screen: OK
+outfitter_lives_behind_multiplayer: OK
+two_players_wear_what_they_bought: OK
+campaign_player_wears_the_loadout: OK
+
+=== Walking sim checks ===
+walking_sim_start_update_draw: OK
+
+=== Hidden branch checks ===
+molotov_update_path: OK
+[voice] BALACEANU: 13 files -> 12 of 13 lines matched; 1 extra file(s), 1 line(s) without audio - see balaceanu_matches.txt
+[voice] DARIUS: 1 files -> 1 of 1 lines matched; 0 extra file(s), 0 line(s) without audio - see darius_matches.txt
+[voice] GABI: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see gabi_matches.txt
+[voice] NARRATOR: 10 files -> 10 of 10 lines matched; 0 extra file(s), 0 line(s) without audio - see narrator_matches.txt
+[voice] folder 'OLD FISHERMAN' doesn't match a speaker tab - files there are ignored unless named VO_xxx
+[voice] SEBY: 4 files -> 4 of 4 lines matched; 0 extra file(s), 0 line(s) without audio - see seby_matches.txt
+[voice] folder 'TRAILER' doesn't match a speaker tab - files there are ignored unless named VO_xxx
+[voice] VASILE: 84 files -> 83 of 83 lines matched; 1 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+mission2_molotov_update_path: OK
+mission_draw_story_characters: OK
+walking_dialogue_draw: OK
+
+=== Mission 3 chair-break cutscene checks ===
+mission3_chair_break_cutscene: OK
+mission3_chair_break_shots_render: OK
+molotov_update_path: OK
+mission2_molotov_update_path: OK
+mission_draw_story_characters: OK
+walking_dialogue_draw: OK
+
+=== Mission 3 broadcast wing checks ===
+mission3_broadcast_world_build: OK
+mission3_broadcast_wave_spawn: OK
+mission3_broadcast_upload: OK
+mission3_broadcast_timeout_retry: OK
+mission3_broadcast_fail_shots_render: OK
+mission3_broadcast_draw: OK
+
+=== Mission 3 checkpoint routing checks ===
+mission3_death_checkpoints: OK
+
+=== Mission 5 checks ===
+mission5_maps: OK
+mission5_start: FAIL AssertionError()
+mission5_stage_ladder: OK
+mission5_checkpoints_and_maru_fail: OK
+mission5_update_and_draw: OK
+mission5_hq_walk: OK
+mission5_integration: OK
+mission5_cutscene_shots: OK
+mission5_cutscenes_3d: OK
+
+=== Mission 4 checks ===
+mission4_boot_and_walk: OK
+mission4_layout: OK
+mission4_stage_transitions: OK
+mission4_checkpoint_routes: OK
+mission4_hold_clock: OK
+mission4_ending_shots_render: OK
+mission4_cinematic_arrest: OK
+mission4_campaign_chain: OK
+
+=== Multiplayer relay checks ===
+mp_relay_roundtrip: OK
+mp_relay_ui_integration: OK
+==================================================================
+  CALL OF ACARISTAN -- SELF-HOSTED LOBBY
+==================================================================
+  This hosts a LOBBY: server list + chat.
+  It does NOT run the game yet -- you can talk to friends here,
+  but you cannot play together yet. That is a separate project.
+
+  Server name : Call of Acaristan -- hosted game
+  Port        : 27015
+  Max players : 8
+  Your LAN IP : 192.168.0.185
+
+  Public IP   : 82.78.75.170
+  Behind NAT  : yes
+  UPnP gateway: none found
+
+  Notes:
+   - If friends cannot connect, allow the executable through Windows Defender Firewall (private and public).
+   - Double NAT (modem + router) or carrier CGNAT cannot be fixed
+     from software. You would need a tunnel or a VPS.
+mp_host_and_portmap: OK
+
+=== engine3d renderer checks ===
+engine3d_software_backend: OK
+cast3d_from_2d: OK
+engine3d: GPU renderer unavailable, using software (OpenGL 3.3 unavailable: ModuleNotFoundError("No module named 'moderngl'"))
+engine3d_renderer_fallback: OK
+engine3d_gl_backend: SKIP RuntimeError('no OpenGL 3.3 context: ModuleNotFoundError("No module named \'moderngl\'")')
+
+=== Font glyph coverage checks ===
+font_glyph_coverage: OK
+
+SMOKE TEST: FAILED

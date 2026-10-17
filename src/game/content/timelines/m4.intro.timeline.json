@@ -1,0 +1,43 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m4.intro",
+ "shots": [
+  {
+   "scene": "m3_end_nation",
+   "speaker": "NARRATOR",
+   "text": "Forty-eight hours after the Vostral, the address is still\nreading on every screen in the capital.",
+   "lighting": [
+    10,
+    14,
+    20
+   ],
+   "min_ms": 3800
+  },
+  {
+   "scene": "m4_city_curfew",
+   "speaker": "VASILE",
+   "text": "And this is what it bought us. A curfew nobody can enforce\nand a regime that shoots its own order.",
+   "lighting": [
+    12,
+    10,
+    16
+   ],
+   "min_ms": 3600
+  },
+  {
+   "scene": "title_card",
+   "speaker": "",
+   "text": "MISSION 4\nTHE AFTERMATH",
+   "lighting": [
+    5,
+    5,
+    8
+   ],
+   "min_ms": 2000
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m4.meta.mission4_intro_shots"
+ }
+}

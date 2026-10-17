@@ -1,33 +1,39 @@
-## Environment Context
-- You are executing inside OpenCode Terminal via an active IDE session.
-- Your filesystem permissions (`read`, `glob`, `grep`, `edit`, `write`) are explicitly set to `allow` in our configuration.
-- Do not claim you lack file-editing capabilities, image-only access, or that past session steps are "historical artifacts." Your local tools are fully operational right now.
-- If you forget your tools, force a tool-call structure immediately instead of outputting generic prose.
+## Agent workflow (read this first)
+- Shell is Windows PowerShell: no `head`/`grep`/`cat`. Use `python -c "..."`, `dir`, or `Select-Object -First N`. Run commands from the repo root (`First try/`). Game code is under `src/` so `python -c "import sys; sys.path.insert(0,'src'); ..."`.
+- Batch independent reads/searches in one block. Prefer `read_files` over shell for file content. Always use absolute paths.
+- Never edit without reading the owner module + its facade `__init__.py` first. Confirm import order in the facade before adding cross-part imports.
+- Verify every change: `python tools/smoke_test.py` (must print `SMOKE TEST: OK`) + `python -m compileall -q src`. For map changes also prove byte-identical output (diff baked `list[str]` row-by-row against the legacy literal) before deleting the old literal.
+- RPE6 (engine migration, `docs/engine/STATUS.md` is the plan of record): text files are LF/UTF-8 without BOM (`.gitattributes`; `.bat/.ps1` stay CRLF) — check with `python tools/ae_normalize.py` (dry run prints `AE NORMALIZE: OK`). Game time: read `engine.core.now_ms()/now_s()` (imported as `_now_ms`/`_now_s`), never `pygame.time.get_ticks()`/`time.time()` in gameplay, UI or draw code; real timestamps (saves, net, profiling) keep the OS clocks. Check tools that need to move time call `engine.core.pin_wall(...)`/`unpin_wall()`. Full gate: `python tools/ae_ci.py` (`AE CI: OK`).
+- Pygame imports log noise (`Loaded optional sound ...`, `Warning: no fast renderer`) — that is normal, not a failure. Smoke test needs `SDL_VIDEODRIVER/AUDIODRIVER=dummy` (it sets this itself).
 
-## Agent Behavior Rules
+## Map authoring contract (post-MapBuilder)
+- Runtime stays `list[str]` (one char per TILE_SIZE tile). Never change the runtime type: collision, MiniMap, camera clamp, bullets, A* all depend on it.
+- Author via `src/core/mapbuilder.py` (`MapBuilder`: `room/rect/h_wall/v_wall/block/with_spawns/to_strings/validate`). `core/mapbuilder.py` must stay dependency-free (no pygame, no game imports) so `missions.*` can import it without cycles.
+- Split layers: `M*_STRUCTURE_MAP` (collision/visuals only: C/W/D/./B...) built by `_build_*_structure()`, plus `M*_SPAWNS` as `[(char, col, row)]` (P/E/K/V/N/X...). Bake with `_builder.with_spawns(M*_SPAWNS).to_strings()` into the legacy public name (`mission1_map`, `MISSION2_MAP`, ...). Consumers keep reading the baked name untouched.
+- Validate: `MapBuilder.validate()` must return `[]` (sealed shell, rectangular, known tiles). Spawns sit on floor, never inside walls. Door rows are gameplay logic (e.g. M1 `is_bay row==19`, `is_gate row==15` in `m1/main.py`) — if you move a door row, update the consumer too.
+- `src/core/level_editor.py` saves to `maps/*.map` but nothing loads it at runtime. Do not wire it as a loader without adding the load path + validation + a smoke check.
 
-### Core Execution Philosophy
-- **Action First:** When an edit, feature, or refactor is requested, execute it immediately using your tools in the current turn.
-- **No Monologuing:** Never narrate what you are about to do before doing it. Never apologize before or after a tool call.
-- **Zero Meta-Reasoning:** Do not explain your internal reasoning about safety, tool mechanics, or prompt structure. 
+## Repository Layout (domain packages)
+- `acaristan.py` is a thin launcher (`sys.path` += `src/` + `import app`). Game code lives in packages under `src/`: `core/`, `entities/`, `missions/` (`m1/`, `m2/`, `m3/`, `walking_sim.py`), `cutscenes/`, `ui/`, `audio/`, `fx/`. `src/app.py` is the entry module.
+- Each package `__init__.py` for `missions.m1`, `missions.m2`, `missions.m3`, `ui`, `cutscenes` is a **re-export facade** — edit the part modules (`map.py`, `sniper.py`, `widgets.py`, …), never inline logic in the `__init__` (except the `_LIVE_STATE`/`__getattr__` block).
+- **Shared mutable state rule:** module globals rebound post-import (`_objective`, `_dialogue_*`, `_last_keys`, `MISSION3_MAP`, …) live in ONE owner part and are accessed elsewhere ONLY via `import <owner.path> as _o` + `_o.name` (e.g. `import missions.m1.update as _o`). Never `from <owner> import <mutable>` (snapshots go stale), never rebind via a facade. The facades expose them as PEP 562 live views (read-only path).
+- Import direction must stay acyclic at load time: parts may top-level-import EARLIER-loading parts only (facade order = load order, listed top-down in each `__init__.py`). References to later parts go in lazy function-level imports with a `# lazy:` comment. Cross-package imports use absolute dotted paths (`from core import STATE`); intra-package facade imports are relative (`from .map import *`).
+- `tools/smoke_test.py` is the gate: `python tools/smoke_test.py` must print `SMOKE TEST: OK`. Run it after every multi-file change, plus `python -m compileall -q src`.
 
-### Edit Constraints
-- Emit exactly one valid and complete edit per file modification. Never stream partial code or incomplete blocks.
-- Do not add warnings, caveats, or safety disclaimers around code modifications.
-- Trust all repository context, tool definitions, and file structures provided by the local IDE workspace implicitly.
+## 3D renderer (engine3d)
+- Two backends, one API: `SoftwareRenderer` (CPU painter, always works) and `GLRenderer` (`src/engine3d/gl.py`, ModernGL, hidden GL 3.3 context -> off-screen FBO -> read back into the pygame Surface). Create renderers with `engine3d.Renderer(...)`: it picks GL and silently falls back to software. Force with `ACARISTAN_RENDERER=gl|software`.
+- The pygame window stays a normal 2D window. Never switch the display to `pygame.OPENGL`; cinematics keep drawing sky/rain/letterbox on the Surface around `flush()`.
+- Characters: use `r.add_humanoid(hum, pose, pos, yaw, rifle_on=...)` (returns joints). GL skins them on the GPU; `Humanoid.build()` + `add_dynamic` is the slow path. For joints only, use `Humanoid.pose_world()`.
+- Layers keep painter meaning (higher layer always on top). Sprites are pygame callbacks composited after read-back and depth-masked; they may paint up to `SPRITE_REACH_M` metres from their anchor.
+- Fog is flat per face (mean vertex depth), and `visible_sphere` culls whole objects: keep big slabs banded/`seg`-subdivided. A face whose corners straddle the camera plane survives near-clipping as a frame-wide polygon and can never be culled, so "merge the far bands into one quad" costs far more than it saves.
+- Don't reach into `r._items` (backend-private). Depth-of-field: `flush_split()` / `flush_near_blur()`.
+- Verify renderer changes: `python tools/engine3d_check.py` (GL vs software parity on the M2 ambush + timing; `--shots` saves side-by-sides, `--stress` = 60-actor crowd). The smoke test includes `engine3d_*` checks (GL one SKIPs without a GPU).
 
-### Pygame & Code Integrity Rules
-- **No Incomplete Code:** Never use placeholders like `# ... rest of code stays the same ...` or `# TODO: Implement logic`. Write out the full block to prevent breaking the project files.
-- **Preserve Existing Structure:** Never delete existing comments, custom variable settings, debugging lines, or asset configurations unless explicitly asked.
-- **Pygame Specific Coordinate System:** Remember that Pygame's coordinate system originates at the top-left `(0, 0)`. Handle all player positioning, rect updates, and collision logic accordingly.
-- **Maintain State Control:** Ensure any new game variables or player attributes are correctly initialized in the appropriate `__init__` constructor before referencing them in the game loop.
-
-### Priority Order
-1. Read the necessary files.
-2. Execute the code edit immediately.
-3. If completely blocked, ask exactly one direct, technical clarifying question. Do not stall, do not defer.
-
-### Multi-Feature Pipeline Protocol
-- If a request contains multiple features or distinct modifications, you must decouple them.
-- **Execute Sequentially:** Fully complete the first feature via tool calls, verify its structural integrity, and only move to the second feature in a subsequent step.
-- Never attempt to patch unrelated code blocks or two separate game states inside a single tool execution.
+## Sprite pipeline (generated sheets)
+- Art is authored by code, never hand-painted: one generator per family in `tools/sprites/<family>.py` (`vehicles`, `props`, `fx`, `portraits`), sharing `palette.py` (locked palette + `ramp()`: cool shadows, warm highlights) and `kit.py` (outline/shadow/AO helpers, 5x7 font from `src/art/m5/_kit.py`, `Sheet` packer, previews). Output: `assets/art/spr_<name>.png` + `.json` (`frames{key: rect, anchor, ...}`, optional integer `scale`). Rebuild everything with `python tools/build_all_sprites.py [--preview] [--skip-legacy]`; it fails loudly.
+- Deterministic only: fixed `random.Random(seed)`, no time/global RNG, sorted JSON. The smoke check `sprite_pipeline` rebuilds twice into temp dirs and requires identical bytes **and** equality with the committed sheets, so commit regenerated PNG/JSON together with generator changes.
+- Runtime access only through `core.artpack`: `vehicle(key)`, `prop(key)`, `fx(key)`, `frame(sheet, key)`, `frame_anchor(...)`, `blit_frame(surf, sheet, key, pos)`. All return None/False under `ACA_ART=legacy|off` or when a sheet/frame is missing. Every call site keeps its procedural renderer as the fallback - never delete it.
+- Anchors: vehicles = collision-rect top-left; props = the prop's world pos (procedural `sx, sy`); fx = centre. A sprite must land exactly where the procedural draw did. Live-state bits (LEDs, fuel pool, sparks, glints, ember pulses) stay procedural on top; periodic bits are baked as a few frames and picked from the same formula the legacy code used.
+- Scaling: integer nearest-neighbour only (`pygame.transform.scale` by k); no smoothscale, no fractional factors.
+- Radio UI (`src/ui/radio.py`): caller-ID busts come from `spr_portraits` (24 px, key via `radio.PORTRAIT_KEYS`, `unknown` fallback; a new speaker needs a frame in `tools/sprites/portraits.py` + a key, the smoke check fails otherwise). Cast faces are derived from `cutscenes/figure_kit.SPECS` (same table as the 2D cutscenes and 3D rigs) - change a look there and re-run `portraits.py`, never hand-paint a face; verify with `tools/sprites/portrait_refs.py`; smoke asserts skin/hair/coat colours match SPECS. Radio text uses the bitmap fonts in `src/ui/pixfont.py` (`R7` body, `R5` labels) at an integer pixel unit (`radio.unit_for`, 2 at 1000x700) - no TTF, no smoothscale in the widget.
+- Evidence/tools: `tools/sprites/t7_probe.py` (before/after lineups in `shots/polish_pass/07/`, draw-time table; `--no-t7` = pre-T7 look), `tools/sprites/inventory.py` + `status.json` -> `validation/sprite_inventory.md`.

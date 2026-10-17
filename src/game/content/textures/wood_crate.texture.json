@@ -1,0 +1,53 @@
+{
+ "schema": "ae.texture/1",
+ "id": "wood_crate",
+ "size": [
+  16,
+  16
+ ],
+ "palette": {
+  "w": [
+   146,
+   110,
+   66
+  ],
+  "W": [
+   164,
+   128,
+   80
+  ],
+  "d": [
+   118,
+   86,
+   48
+  ],
+  "=": [
+   94,
+   66,
+   38
+  ],
+  "n": [
+   58,
+   48,
+   42
+  ]
+ },
+ "rows": [
+  "dnwwwwwwwwwWwWnw",
+  "wwwwddwwwWwwWwwd",
+  "wwdwwdwwwdwWwwwd",
+  "================",
+  "wnWWwdWWwWWWwwnw",
+  "wwwwWwwdddwdwWwW",
+  "wwwwWwwwdddwdwww",
+  "================",
+  "WndwwWwwdwwWwwnd",
+  "wwwwwwwwwWwwdwww",
+  "wwwWdwWdWdwwwwdW",
+  "================",
+  "wnwWwwwwwWWdwwnw",
+  "wWdWWwwwwwwdWwwd",
+  "wwwwwwwwwwWwdwWd",
+  "================"
+ ]
+}

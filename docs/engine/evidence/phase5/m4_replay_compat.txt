@@ -1,0 +1,8 @@
+# P5-M4 replay compatibility proof (2026-10-15) - baseline_v0 (snapshot v1) vs current code
+# command: PYTHONHASHSEED=0 python3 tools/ae_d4_replay_compat.py
+m1: OK 30/30 version-1 hashes reproduced with legacy-name injection (final 2bbec2400def5ebf, components tracked: 0)
+m2: OK 30/30 version-1 hashes reproduced with legacy-name injection (final f80109f8b020d6ef, components tracked: 0)
+m3: OK 30/30 version-1 hashes reproduced with legacy-name injection (final edd429e9fc6818aa, components tracked: 0)
+m4: OK 30/30 version-1 hashes reproduced with legacy-name injection (final 72737dd7449275b2, components tracked: 0)
+m5: OK 30/30 version-1 hashes reproduced with legacy-name injection (final b05d9ee03d6e99a1, components tracked: 9)
+AE D4 REPLAY COMPAT: OK

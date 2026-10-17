@@ -1,0 +1,51 @@
+def _laser_sight(s,r,dot,muzzle,t):
+    """A real sniper laser over the upscaled frame: beam + hot impact core.
+
+    Screen space AFTER the smoothscale (a centimetre-scale emissive patch alone
+    blurs into a stray pixel). The beam is the 3D muzzle->mark segment, near
+    clipped, so it streaks in from off-frame when the shooter is behind the
+    lens and lands right on near and far framings alike. Depth-scaled impact
+    mark; skipped off-frame/behind camera. Pure function of (dot,muzzle,t):
+    the film stays deterministic.
+    """
+    lay=pygame.Surface((WIDTH,BOT-TOP),pygame.SRCALPHA)
+    pulse=.7+.3*math.sin(t*.012)
+    # ── beam: muzzle -> mark, layered glow tapering to a hot core ──
+    if muzzle is not None:
+        # Fades up with the reveal and down as Ucilev lowers the rifle.
+        fade=k(t,7100,600)*(1-k(t,29100,1500))
+        seg=_clip_seg(r,muzzle,dot) if fade>0 else None
+        if seg is not None:
+            (x0,y0),(x1,y1)=seg;y0-=TOP;y1-=TOP
+            flick=.82+.18*math.sin(t*.05);a=int(150*fade*flick)
+            for w,col in ((9,(255,52,38,a//5)),(5,(255,74,52,int(a*.42))),
+                          (2,(255,132,96,int(a*.72))),(1,(255,226,202,min(255,int(a*1.4))))):
+                if col[3]>0:pygame.draw.line(lay,col,(x0,y0),(x1,y1),w)
+            # A continuous optical sight, not animated projectile beads.
+            # Rain/haze makes the narrow red shaft visible; the hot core
+            # remains attached to the rifle and its target.
+            # Muzzle bloom so the beam reads as emitted, not pasted on.
+            ma=int(95*fade)
+            pygame.draw.circle(lay,(255,118,88,ma),(int(x0),int(y0)),4)
+            pygame.draw.circle(lay,(255,232,206,min(255,ma*2)),(int(x0),int(y0)),2)
+    # ── impact mark: halo + ring + hot core, only while it faces the lens ──
+    p=r.project(dot);core=None
+    if p is not None:
+        sc=min(1.5,max(.55,4.0/max(.5,p[2])))
+        sx=int(p[0]/RW*WIDTH);sy=int(TOP+p[1]/RH*(BOT-TOP))
+        if 0<=sx<WIDTH and TOP<=sy<BOT:
+            a=int(110*pulse);lx,ly=sx,sy-TOP
+            # Stepped falloff (bright centre, soft edge): one flat disc read as
+            # dim as the background here, the stack reads as bloom without
+            # additive blowout (the _ko_glow rationale).
+            for rr,aa in ((16,a//3),(11,a*2//3),(7,a)):
+                pygame.draw.circle(lay,(255,50,32,aa),(lx,ly),round(rr*sc))
+            pygame.draw.circle(lay,(255,90,60,a),(lx,ly),round(8*sc),2)
+            core=(sx,sy,sc)
+    s.blit(lay,(0,TOP))
+    if core is not None:
+        sx,sy,sc=core
+        pygame.draw.circle(s,(255,60,40),(sx,sy),max(3,round(5*sc)))
+        pygame.draw.circle(s,(255,215,180),(sx,sy),max(1,round(2*sc)))
+
+

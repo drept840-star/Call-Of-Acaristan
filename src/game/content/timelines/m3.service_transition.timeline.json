@@ -1,0 +1,57 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.service_transition",
+ "shots": [
+  {
+   "scene": "m3_service_door_transition",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "min_ms": 1500,
+   "lighting": [
+    5,
+    6,
+    7
+   ]
+  },
+  {
+   "scene": "m3_volkov_radio_call",
+   "speaker": "VOLKOV",
+   "text": "Biribel! Take the radio. I draw them off, you get the relay alive.",
+   "min_ms": 2400,
+   "lighting": [
+    5,
+    6,
+    7
+   ]
+  },
+  {
+   "scene": "m3_radio_recovered",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "min_ms": 1600,
+   "lighting": [
+    5,
+    7,
+    8
+   ]
+  },
+  {
+   "scene": "m3_comms_wing_reveal",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Biribel? If you hear me, get to the relay. I can see your signal now.",
+   "min_ms": 2200,
+   "lighting": [
+    6,
+    9,
+    10
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.service_transition_shots"
+ }
+}

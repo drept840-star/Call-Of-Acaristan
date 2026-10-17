@@ -1,0 +1,45 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.archives_transition",
+ "shots": [
+  {
+   "scene": "m3_archives_ingame_enter",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "min_ms": 1400,
+   "lighting": [
+    5,
+    7,
+    8
+   ]
+  },
+  {
+   "scene": "m3_archives_ingame_join",
+   "speaker": "VOLKOV",
+   "text": "Your captain's code opened that IPA relay on the first try. Ask him where he got it.\nOn your six. Move.",
+   "min_ms": 6000,
+   "lighting": [
+    7,
+    9,
+    10
+   ]
+  },
+  {
+   "scene": "m3_archives_ingame_reveal",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Contacts ahead. Maru's dead drop is northwest. Clear a path.",
+   "min_ms": 2200,
+   "lighting": [
+    8,
+    10,
+    12
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.archives_transition_shots"
+ }
+}

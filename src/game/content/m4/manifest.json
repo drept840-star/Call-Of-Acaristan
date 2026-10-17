@@ -1,0 +1,44 @@
+{
+ "schema": "ae.manifest/1",
+ "pack": "m4",
+ "baked_dir": "assets/baked/m4",
+ "notes": "Mission 4 baked world layers. world_static replaces the runtime core.staticlayer chunk cache (bake source = missions.m4.draw._bake_m4_static, still the live fallback); variant = bound map (street / station).",
+ "assets": [
+  {
+   "id": "m4/world_static",
+   "kind": "layer",
+   "module": "game.art.m4.world_static",
+   "variants": 2,
+   "variant_names": [
+    "street",
+    "station"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    2560,
+    2560
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m4/mag_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m4.mag_icon",
+   "variants": 56,
+   "size": [
+    25,
+    56
+   ],
+   "tags": [
+    "hud",
+    "icon"
+   ]
+  }
+ ]
+}

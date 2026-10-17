@@ -1,0 +1,758 @@
+[
+ {
+  "file": "000_intro_0_336.jpg",
+  "mean": 26.2,
+  "std": 35.6,
+  "diff_prev": null
+ },
+ {
+  "file": "001_intro_0_2100.jpg",
+  "mean": 27.2,
+  "std": 35.4,
+  "diff_prev": 7.1
+ },
+ {
+  "file": "002_intro_0_3864.jpg",
+  "mean": 37.7,
+  "std": 43.7,
+  "diff_prev": 17.16
+ },
+ {
+  "file": "003_intro_1_240.jpg",
+  "mean": 23.0,
+  "std": 25.7,
+  "diff_prev": 19.2
+ },
+ {
+  "file": "004_intro_1_1500.jpg",
+  "mean": 23.0,
+  "std": 25.8,
+  "diff_prev": 0.85
+ },
+ {
+  "file": "005_intro_1_2760.jpg",
+  "mean": 23.0,
+  "std": 26.1,
+  "diff_prev": 1.48
+ },
+ {
+  "file": "006_intro_2_368.jpg",
+  "mean": 28.5,
+  "std": 35.6,
+  "diff_prev": 12.51
+ },
+ {
+  "file": "007_intro_2_2300.jpg",
+  "mean": 29.6,
+  "std": 36.2,
+  "diff_prev": 6.04
+ },
+ {
+  "file": "008_intro_2_4232.jpg",
+  "mean": 30.1,
+  "std": 36.5,
+  "diff_prev": 8.27
+ },
+ {
+  "file": "009_intro_3_320.jpg",
+  "mean": 54.1,
+  "std": 57.8,
+  "diff_prev": 29.13
+ },
+ {
+  "file": "010_intro_3_2000.jpg",
+  "mean": 55.4,
+  "std": 58.8,
+  "diff_prev": 3.67
+ },
+ {
+  "file": "011_intro_3_3680.jpg",
+  "mean": 57.1,
+  "std": 60.2,
+  "diff_prev": 4.09
+ },
+ {
+  "file": "012_intro_4_336.jpg",
+  "mean": 39.7,
+  "std": 39.8,
+  "diff_prev": 24.25
+ },
+ {
+  "file": "013_intro_4_2100.jpg",
+  "mean": 39.5,
+  "std": 40.1,
+  "diff_prev": 4.1
+ },
+ {
+  "file": "014_intro_4_3864.jpg",
+  "mean": 39.1,
+  "std": 40.1,
+  "diff_prev": 3.01
+ },
+ {
+  "file": "015_intro_5_352.jpg",
+  "mean": 38.1,
+  "std": 41.1,
+  "diff_prev": 19.05
+ },
+ {
+  "file": "016_intro_5_2200.jpg",
+  "mean": 37.8,
+  "std": 41.0,
+  "diff_prev": 3.74
+ },
+ {
+  "file": "017_intro_5_4048.jpg",
+  "mean": 37.7,
+  "std": 41.0,
+  "diff_prev": 4.79
+ },
+ {
+  "file": "018_intro_6_160.jpg",
+  "mean": 8.5,
+  "std": 30.4,
+  "diff_prev": 34.85
+ },
+ {
+  "file": "019_intro_6_1000.jpg",
+  "mean": 8.5,
+  "std": 30.4,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "020_intro_6_1840.jpg",
+  "mean": 8.5,
+  "std": 30.4,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "021_old_faces_0_224.jpg",
+  "mean": 33.3,
+  "std": 30.6,
+  "diff_prev": 30.45
+ },
+ {
+  "file": "022_old_faces_0_1400.jpg",
+  "mean": 33.6,
+  "std": 30.8,
+  "diff_prev": 0.71
+ },
+ {
+  "file": "023_old_faces_0_2576.jpg",
+  "mean": 33.8,
+  "std": 30.8,
+  "diff_prev": 0.59
+ },
+ {
+  "file": "024_old_faces_1_240.jpg",
+  "mean": 33.6,
+  "std": 31.9,
+  "diff_prev": 9.35
+ },
+ {
+  "file": "025_old_faces_1_1500.jpg",
+  "mean": 33.6,
+  "std": 31.9,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "026_old_faces_1_2760.jpg",
+  "mean": 33.6,
+  "std": 31.9,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "027_old_faces_2_304.jpg",
+  "mean": 33.0,
+  "std": 32.0,
+  "diff_prev": 7.84
+ },
+ {
+  "file": "028_old_faces_2_1900.jpg",
+  "mean": 33.1,
+  "std": 32.2,
+  "diff_prev": 0.26
+ },
+ {
+  "file": "029_old_faces_2_3496.jpg",
+  "mean": 33.0,
+  "std": 32.3,
+  "diff_prev": 0.1
+ },
+ {
+  "file": "030_old_faces_3_240.jpg",
+  "mean": 33.8,
+  "std": 31.3,
+  "diff_prev": 10.83
+ },
+ {
+  "file": "031_old_faces_3_1500.jpg",
+  "mean": 34.2,
+  "std": 31.5,
+  "diff_prev": 2.81
+ },
+ {
+  "file": "032_old_faces_3_2760.jpg",
+  "mean": 34.3,
+  "std": 31.5,
+  "diff_prev": 1.69
+ },
+ {
+  "file": "033_arrival_0_416.jpg",
+  "mean": 30.5,
+  "std": 32.0,
+  "diff_prev": 12.24
+ },
+ {
+  "file": "034_arrival_0_2600.jpg",
+  "mean": 32.0,
+  "std": 33.2,
+  "diff_prev": 3.79
+ },
+ {
+  "file": "035_arrival_0_4784.jpg",
+  "mean": 33.2,
+  "std": 34.1,
+  "diff_prev": 4.35
+ },
+ {
+  "file": "036_arrival_1_288.jpg",
+  "mean": 37.8,
+  "std": 37.4,
+  "diff_prev": 9.52
+ },
+ {
+  "file": "037_arrival_1_1800.jpg",
+  "mean": 43.3,
+  "std": 44.7,
+  "diff_prev": 8.03
+ },
+ {
+  "file": "038_arrival_1_3312.jpg",
+  "mean": 60.6,
+  "std": 60.4,
+  "diff_prev": 19.02
+ },
+ {
+  "file": "039_vasile_0_272.jpg",
+  "mean": 41.2,
+  "std": 41.5,
+  "diff_prev": 28.47
+ },
+ {
+  "file": "040_vasile_0_1700.jpg",
+  "mean": 41.6,
+  "std": 41.6,
+  "diff_prev": 0.87
+ },
+ {
+  "file": "041_vasile_0_3128.jpg",
+  "mean": 42.1,
+  "std": 41.8,
+  "diff_prev": 1.3
+ },
+ {
+  "file": "042_vasile_1_272.jpg",
+  "mean": 52.5,
+  "std": 49.4,
+  "diff_prev": 15.82
+ },
+ {
+  "file": "043_vasile_1_1700.jpg",
+  "mean": 52.8,
+  "std": 49.8,
+  "diff_prev": 0.82
+ },
+ {
+  "file": "044_vasile_1_3128.jpg",
+  "mean": 53.2,
+  "std": 50.1,
+  "diff_prev": 1.26
+ },
+ {
+  "file": "045_vasile_2_272.jpg",
+  "mean": 52.5,
+  "std": 49.4,
+  "diff_prev": 2.92
+ },
+ {
+  "file": "046_vasile_2_1700.jpg",
+  "mean": 52.8,
+  "std": 49.8,
+  "diff_prev": 0.83
+ },
+ {
+  "file": "047_vasile_2_3128.jpg",
+  "mean": 53.2,
+  "std": 50.1,
+  "diff_prev": 1.26
+ },
+ {
+  "file": "048_vasile_3_272.jpg",
+  "mean": 28.8,
+  "std": 28.8,
+  "diff_prev": 26.86
+ },
+ {
+  "file": "049_vasile_3_1700.jpg",
+  "mean": 28.8,
+  "std": 28.8,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "050_vasile_3_3128.jpg",
+  "mean": 28.8,
+  "std": 28.8,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "051_vasile_4_272.jpg",
+  "mean": 47.7,
+  "std": 44.1,
+  "diff_prev": 22.91
+ },
+ {
+  "file": "052_vasile_4_1700.jpg",
+  "mean": 47.5,
+  "std": 44.0,
+  "diff_prev": 4.09
+ },
+ {
+  "file": "053_vasile_4_3128.jpg",
+  "mean": 47.5,
+  "std": 44.0,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "054_maru_0_272.jpg",
+  "mean": 34.1,
+  "std": 36.2,
+  "diff_prev": 23.5
+ },
+ {
+  "file": "055_maru_0_1700.jpg",
+  "mean": 34.1,
+  "std": 36.2,
+  "diff_prev": 0.97
+ },
+ {
+  "file": "056_maru_0_3128.jpg",
+  "mean": 34.0,
+  "std": 36.3,
+  "diff_prev": 1.71
+ },
+ {
+  "file": "057_maru_1_272.jpg",
+  "mean": 31.1,
+  "std": 32.7,
+  "diff_prev": 17.16
+ },
+ {
+  "file": "058_maru_1_1700.jpg",
+  "mean": 31.1,
+  "std": 32.7,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "059_maru_1_3128.jpg",
+  "mean": 31.1,
+  "std": 32.7,
+  "diff_prev": 0.01
+ },
+ {
+  "file": "060_maru_2_272.jpg",
+  "mean": 38.3,
+  "std": 39.9,
+  "diff_prev": 15.87
+ },
+ {
+  "file": "061_maru_2_1700.jpg",
+  "mean": 38.3,
+  "std": 39.9,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "062_maru_2_3128.jpg",
+  "mean": 38.3,
+  "std": 39.9,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "063_maru_3_272.jpg",
+  "mean": 31.3,
+  "std": 33.1,
+  "diff_prev": 16.02
+ },
+ {
+  "file": "064_maru_3_1700.jpg",
+  "mean": 31.3,
+  "std": 33.1,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "065_maru_3_3128.jpg",
+  "mean": 31.3,
+  "std": 33.1,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "066_maru_4_272.jpg",
+  "mean": 38.5,
+  "std": 40.3,
+  "diff_prev": 15.84
+ },
+ {
+  "file": "067_maru_4_1700.jpg",
+  "mean": 38.5,
+  "std": 40.3,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "068_maru_4_3128.jpg",
+  "mean": 38.5,
+  "std": 40.3,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "069_maru_5_208.jpg",
+  "mean": 36.4,
+  "std": 37.1,
+  "diff_prev": 17.5
+ },
+ {
+  "file": "070_maru_5_1300.jpg",
+  "mean": 37.5,
+  "std": 37.9,
+  "diff_prev": 1.42
+ },
+ {
+  "file": "071_maru_5_2392.jpg",
+  "mean": 38.0,
+  "std": 36.8,
+  "diff_prev": 2.64
+ },
+ {
+  "file": "072_maru_6_304.jpg",
+  "mean": 34.9,
+  "std": 36.5,
+  "diff_prev": 16.11
+ },
+ {
+  "file": "073_maru_6_1900.jpg",
+  "mean": 42.7,
+  "std": 49.7,
+  "diff_prev": 10.21
+ },
+ {
+  "file": "074_maru_6_3496.jpg",
+  "mean": 43.1,
+  "std": 49.3,
+  "diff_prev": 1.82
+ },
+ {
+  "file": "075_ending_0_288.jpg",
+  "mean": 22.1,
+  "std": 20.1,
+  "diff_prev": 25.95
+ },
+ {
+  "file": "076_ending_0_1800.jpg",
+  "mean": 22.0,
+  "std": 19.9,
+  "diff_prev": 3.18
+ },
+ {
+  "file": "077_ending_0_3312.jpg",
+  "mean": 21.8,
+  "std": 19.0,
+  "diff_prev": 3.47
+ },
+ {
+  "file": "078_ending_1_416.jpg",
+  "mean": 7.3,
+  "std": 23.3,
+  "diff_prev": 17.93
+ },
+ {
+  "file": "079_ending_1_2600.jpg",
+  "mean": 7.5,
+  "std": 23.5,
+  "diff_prev": 0.83
+ },
+ {
+  "file": "080_ending_1_4784.jpg",
+  "mean": 7.5,
+  "std": 23.5,
+  "diff_prev": 0.25
+ },
+ {
+  "file": "081_ending_2_336.jpg",
+  "mean": 23.3,
+  "std": 30.6,
+  "diff_prev": 18.51
+ },
+ {
+  "file": "082_ending_2_2100.jpg",
+  "mean": 23.4,
+  "std": 30.7,
+  "diff_prev": 2.57
+ },
+ {
+  "file": "083_ending_2_3864.jpg",
+  "mean": 23.0,
+  "std": 29.7,
+  "diff_prev": 3.7
+ },
+ {
+  "file": "084_ending_3_272.jpg",
+  "mean": 19.5,
+  "std": 22.8,
+  "diff_prev": 10.75
+ },
+ {
+  "file": "085_ending_3_1700.jpg",
+  "mean": 19.1,
+  "std": 21.3,
+  "diff_prev": 1.11
+ },
+ {
+  "file": "086_ending_3_3128.jpg",
+  "mean": 18.3,
+  "std": 18.4,
+  "diff_prev": 1.37
+ },
+ {
+  "file": "087_ending_4_384.jpg",
+  "mean": 26.6,
+  "std": 32.3,
+  "diff_prev": 12.49
+ },
+ {
+  "file": "088_ending_4_2400.jpg",
+  "mean": 26.8,
+  "std": 32.6,
+  "diff_prev": 1.56
+ },
+ {
+  "file": "089_ending_4_4416.jpg",
+  "mean": 27.0,
+  "std": 33.2,
+  "diff_prev": 2.69
+ },
+ {
+  "file": "090_ending_5_192.jpg",
+  "mean": 6.5,
+  "std": 23.0,
+  "diff_prev": 24.5
+ },
+ {
+  "file": "091_ending_5_1200.jpg",
+  "mean": 6.5,
+  "std": 23.0,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "092_ending_5_2208.jpg",
+  "mean": 6.5,
+  "std": 23.0,
+  "diff_prev": 0.0
+ },
+ {
+  "file": "093_fallback_0_224.jpg",
+  "mean": 32.3,
+  "std": 29.7,
+  "diff_prev": 29.08
+ },
+ {
+  "file": "094_fallback_0_1400.jpg",
+  "mean": 32.3,
+  "std": 29.7,
+  "diff_prev": 0.06
+ },
+ {
+  "file": "095_fallback_0_2576.jpg",
+  "mean": 32.3,
+  "std": 29.7,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "096_fallback_1_240.jpg",
+  "mean": 32.8,
+  "std": 31.4,
+  "diff_prev": 0.97
+ },
+ {
+  "file": "097_fallback_1_1500.jpg",
+  "mean": 32.8,
+  "std": 31.4,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "098_fallback_1_2760.jpg",
+  "mean": 32.8,
+  "std": 31.4,
+  "diff_prev": 0.04
+ },
+ {
+  "file": "099_fallback_2_304.jpg",
+  "mean": 31.7,
+  "std": 32.2,
+  "diff_prev": 3.84
+ },
+ {
+  "file": "100_fallback_2_1900.jpg",
+  "mean": 31.7,
+  "std": 32.1,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "101_fallback_2_3496.jpg",
+  "mean": 31.7,
+  "std": 32.1,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "102_fallback_3_240.jpg",
+  "mean": 32.5,
+  "std": 30.2,
+  "diff_prev": 3.69
+ },
+ {
+  "file": "103_fallback_3_1500.jpg",
+  "mean": 32.5,
+  "std": 30.2,
+  "diff_prev": 0.05
+ },
+ {
+  "file": "104_fallback_3_2760.jpg",
+  "mean": 32.5,
+  "std": 30.2,
+  "diff_prev": 0.04
+ },
+ {
+  "file": "105_hq_4_11.jpg",
+  "mean": 40.8,
+  "std": 28.4,
+  "diff_prev": 23.95
+ },
+ {
+  "file": "106_hq_20_8.jpg",
+  "mean": 49.2,
+  "std": 33.3,
+  "diff_prev": 22.8
+ },
+ {
+  "file": "107_hq_24_5.jpg",
+  "mean": 41.7,
+  "std": 29.7,
+  "diff_prev": 23.11
+ },
+ {
+  "file": "108_quarter_6_15.jpg",
+  "mean": 22.8,
+  "std": 26.8,
+  "diff_prev": 22.65
+ },
+ {
+  "file": "109_quarter_9_15.jpg",
+  "mean": 23.7,
+  "std": 27.3,
+  "diff_prev": 10.33
+ },
+ {
+  "file": "110_quarter_17_15.jpg",
+  "mean": 24.5,
+  "std": 28.0,
+  "diff_prev": 12.55
+ },
+ {
+  "file": "111_quarter_24_15.jpg",
+  "mean": 24.5,
+  "std": 29.4,
+  "diff_prev": 13.32
+ },
+ {
+  "file": "112_quarter_29_15.jpg",
+  "mean": 27.5,
+  "std": 31.2,
+  "diff_prev": 11.85
+ },
+ {
+  "file": "113_quarter_31_13.jpg",
+  "mean": 26.7,
+  "std": 30.9,
+  "diff_prev": 18.13
+ },
+ {
+  "file": "114_quarter_33_15.jpg",
+  "mean": 26.9,
+  "std": 31.1,
+  "diff_prev": 16.3
+ },
+ {
+  "file": "115_quarter_16_24.jpg",
+  "mean": 13.2,
+  "std": 23.6,
+  "diff_prev": 14.55
+ },
+ {
+  "file": "116_before_encounter.jpg",
+  "mean": 27.2,
+  "std": 30.8,
+  "diff_prev": 15.03
+ },
+ {
+  "file": "117_after_encounter.jpg",
+  "mean": 27.2,
+  "std": 30.9,
+  "diff_prev": 0.48
+ },
+ {
+  "file": "118_print_entry.jpg",
+  "mean": 40.7,
+  "std": 33.8,
+  "diff_prev": 24.21
+ },
+ {
+  "file": "119_print_maru.jpg",
+  "mean": 33.0,
+  "std": 28.7,
+  "diff_prev": 26.17
+ },
+ {
+  "file": "120_raid_0.jpg",
+  "mean": 29.9,
+  "std": 29.5,
+  "diff_prev": 4.89
+ },
+ {
+  "file": "121_raid_30.jpg",
+  "mean": 29.9,
+  "std": 29.5,
+  "diff_prev": 0.04
+ },
+ {
+  "file": "122_raid_90.jpg",
+  "mean": 30.7,
+  "std": 30.3,
+  "diff_prev": 2.15
+ },
+ {
+  "file": "123_tunnel_3_6.jpg",
+  "mean": 26.4,
+  "std": 27.0,
+  "diff_prev": 17.37
+ },
+ {
+  "file": "124_tunnel_10_6.jpg",
+  "mean": 26.8,
+  "std": 26.5,
+  "diff_prev": 13.06
+ },
+ {
+  "file": "125_tunnel_20_6.jpg",
+  "mean": 27.4,
+  "std": 25.7,
+  "diff_prev": 16.86
+ }
+]

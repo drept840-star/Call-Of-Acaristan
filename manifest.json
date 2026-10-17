@@ -1,0 +1,110 @@
+{
+  "src/app.py": {
+    "accepted_sha256": [
+      "48466b5fadf7ecc9d32559ea3abe82eb30d815728f9475d9f64ab40d6cfac3e3",
+      "c264186a83db5d1f8b11fc8ce43af5a0548581aff943c869c4ef50e86c59333d",
+      "3dbc0cd1dad581d201370cf9331e6f9f5aa2b4f349e1bf73e897567120f83ee9"
+    ],
+    "patched_sha256": "3dbc0cd1dad581d201370cf9331e6f9f5aa2b4f349e1bf73e897567120f83ee9"
+  },
+  "src/cutscenes/engine.py": {
+    "accepted_sha256": [
+      "8262c18a318dab0c4697f95872627280c567c408fcb9c7b3dd6482ecc1cdaaf3",
+      "8a1ce7b5382e86cb92038d674e20d9470954a3d08d77830f284974d5a4fef0b4"
+    ],
+    "patched_sha256": "8a1ce7b5382e86cb92038d674e20d9470954a3d08d77830f284974d5a4fef0b4"
+  },
+  "src/cutscenes/m5shadow3d.py": {
+    "accepted_sha256": [
+      null,
+      "7ccef57f22965801c528f1468dd1074007fc49d3e1bc9166c1e8709fe5ef6755"
+    ],
+    "patched_sha256": "4a6b7b742883a90fd314fe3adb2f65fff137d63f6e942efccea9684881a061f1"
+  },
+  "src/missions/m5/meta.py": {
+    "accepted_sha256": [
+      "3d73d4932db156aa8f71965c816d6a841bce71b2ef674ae54f98a92b121469f7",
+      "d9bdea297698d1ea7904bec286f4675120ef1f384f4b6d45bbb7893bd340f43b",
+      "dde781c4a00bcd27b3f5ba3d4a778fe015957465ffe04c8f498875555677a1d9"
+    ],
+    "patched_sha256": "dde781c4a00bcd27b3f5ba3d4a778fe015957465ffe04c8f498875555677a1d9"
+  },
+  "src/missions/m5/flow.py": {
+    "accepted_sha256": [
+      "0b99c5497d66f2f1e49548cb88c07bc9e39d47b0ae1fe59eeaf6a2d0e4369f10",
+      "8b811634f660e9b5356ba95349676577b45944221073c34b4ccc1ba6120ab59d"
+    ],
+    "patched_sha256": "8b811634f660e9b5356ba95349676577b45944221073c34b4ccc1ba6120ab59d"
+  },
+  "src/missions/m5/finale_script.py": {
+    "accepted_sha256": [
+      null,
+      "df226f1fb386eb33640208f299d338303466e72f505d64800593bc7c15094e7e"
+    ],
+    "patched_sha256": "df226f1fb386eb33640208f299d338303466e72f505d64800593bc7c15094e7e"
+  },
+  "src/audio/voice_manifest.py": {
+    "accepted_sha256": [
+      "95b37d13237aae72e6cf0f6d018c5b1553b422bbe6f2fa8da7f57b966d40f4c0",
+      "d00bb8886b14f0abbad2b9a6c00169bac26e0ca0937d0af636be1cf67ce8ffd8"
+    ],
+    "patched_sha256": "d00bb8886b14f0abbad2b9a6c00169bac26e0ca0937d0af636be1cf67ce8ffd8"
+  },
+  "tools/smoke_test.py": {
+    "accepted_sha256": [
+      "505e029ef77f7840e1fe5f904def85494373bf34b6fbfe138756e496ec7da364",
+      "787df372bb77580680f3ba89f6cf4d4bcccc91e2b94b712a2e206465c9f02908",
+      "8513206d52996042a36ac7afcee229f8b14090ca2a4a75aea17924712a2b07b2"
+    ],
+    "patched_sha256": "7c2aee970e365257a2246d4c8f971a6551a8d565423cfc6a1e47bea3fc7ab565"
+  },
+  "tools/m5_finale_cut_check.py": {
+    "accepted_sha256": [
+      null,
+      "8443181017a8584ac17726fd4ba5f51bdbe809235dbbb7fa7e13005d2e4b3192",
+      "03b81ed9575a03986748d207705de035876356575837e495eea6c688bb6fee2b"
+    ],
+    "patched_sha256": "03b81ed9575a03986748d207705de035876356575837e495eea6c688bb6fee2b"
+  },
+  "tools/m5_shadow_check.py": {
+    "accepted_sha256": [
+      null,
+      "056bcc6d1b02fb453a85e55653721fab514bf8f6f8411f25d1626b0d575ad857"
+    ],
+    "patched_sha256": "056bcc6d1b02fb453a85e55653721fab514bf8f6f8411f25d1626b0d575ad857"
+  },
+  "tools/render_m5_shadow.py": {
+    "accepted_sha256": [
+      null,
+      "577358c23d6d0acba0761c2e3ec1571452922d42d7e3abc859395ceb10fa3eb9"
+    ],
+    "patched_sha256": "577358c23d6d0acba0761c2e3ec1571452922d42d7e3abc859395ceb10fa3eb9"
+  },
+  "docs/M5_FINALE_REBUILD_PLAN.md": {
+    "accepted_sha256": [
+      null,
+      "afcfb6405a2cdb3edba94176b2305dba2fe6000a3b16407dbc186e709f519ba3",
+      "7b7f815a0e155837a7073b9bea904ed944fc4d9a7889ec600a63a51ecfdf9247"
+    ],
+    "patched_sha256": "f7e93bc5a6bd8aaa191e79efcdd29ff30e4f4a4dfdd5accdd5a860d506d2503a"
+  },
+  "docs/M5_SHADOW_RECORDING_GUIDE.md": {
+    "accepted_sha256": [
+      null,
+      "387ca2d407dc45a302563b6ef6b3c49463708a2af8d803e7638e634834cb46d4"
+    ],
+    "patched_sha256": "387ca2d407dc45a302563b6ef6b3c49463708a2af8d803e7638e634834cb46d4"
+  },
+  "src/cutscenes/m5harbour_art.py": {
+    "accepted_sha256": [
+      null
+    ],
+    "patched_sha256": "04b4d08ff2e10c89860593712ab778a4286befbd4d906566160ea24410204bc4"
+  },
+  "tools/m5_harbour_art_check.py": {
+    "accepted_sha256": [
+      null
+    ],
+    "patched_sha256": "ad04d7c22daa6bd06d3cc77bd1ac5bf6b5e69f04cdf5cb56d7c1e7b4485db344"
+  }
+}

@@ -1,0 +1,17 @@
+LINE	FILE	SECONDS	TEXT
+VO_002	Generated Audio October 08, 2026 - 7_03PM.ogg	7.0	Effective immediately, KRAP operations in the highway corridor fall under government review.
+VO_004	Generated Audio October 08, 2026 - 7_04PM.ogg	7.7	Sweep teams, report. The prisoner carries state property. My address begins at 22:00, and he will not outlive it.
+VO_005	Generated Audio October 08, 2026 - 7_04PM(1).ogg	8.6	You told them I was a coward, Biribel. / A fake. / Tonight I tell the nation what you are.
+VO_006	Generated Audio October 08, 2026 - 7_04PM(2).ogg	8.6	When the address ends, so do you. / That is not a threat. / That is a schedule.
+VO_007	(NO AUDIO - record & name it VO_007.wav)		What is this? Cut the feed. CUT THE FEED!
+VO_008	Generated Audio October 08, 2026 - 7_04PM(3).ogg	8.8	Sweep teams: the prisoner is in the lobby levels. Free fire, my address begins at 22:00, and I will not be interrupted.
+VO_009	Generated Audio October 08, 2026 - 7_04PM(4).ogg	11.4	The prisoner is contained. At twenty-two hundred I will close the matter of Route 12, on camera, before the nation.
+VO_010	Generated Audio October 08, 2026 - 7_04PM(5).ogg	9.4	Six years I have waited to show the nation what a KRAP lie looks like. Up close. On camera.
+VO_011	Generated Audio October 08, 2026 - 7_05PM.ogg	11.0	They'll see your face, Biribel. They'll hear Route 12. And then they'll see what happens to people who leak rumors about their Prime Minister.
+VO_012	Generated Audio October 08, 2026 - 7_05PM(1).ogg	12.1	At twenty-two hundred, the President names you. Route 12. By face. I made sure the file is... thorough.
+VO_013	Generated Audio October 08, 2026 - 7_05PM(2).ogg	11.6	Oh, save it. This tape is one-way. I'm told the acoustics in here are... unkind.
+VO_014	Generated Audio October 08, 2026 - 7_06PM.ogg	12.2	When the address ends, so do you. That is not a threat. That is a schedule.
+VO_015	Generated Audio October 08, 2026 - 7_06PM(1).ogg	8.9	Twenty-two hundred. The address is finished. The prisoner is contained. Route 12 is closed.
+
+EXTRA FILES (not used - retakes/duplicates?):
+	Generated Audio October 08, 2026 - 7_06PM(2).ogg	3.6

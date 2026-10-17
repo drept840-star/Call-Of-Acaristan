@@ -1,0 +1,9 @@
+{
+  "zip_bytes": 95925269,
+  "zip_sha256": "5d33960cb35144560eeeb1edfa829b3fdc77fbff3c5df5e82d95b4ce4323a7da",
+  "transport_bytes": 52244192,
+  "transport_sha256": "4240149521d51b40227886c2472df727f12088a261bbcd496d34775460c304be",
+  "chunk_size": 4000000,
+  "chunks": 14,
+  "files": 39
+}

@@ -1,0 +1,24 @@
+LINE	FILE	SECONDS	TEXT
+VO_028	Generated Audio October 07, 2026 - 11_33PM.wav	2.2	And if he runs?
+VO_038	Generated Audio October 07, 2026 - 11_34PM.wav	2.1	They framed KRAP.
+VO_045	Generated Audio October 07, 2026 - 11_34PM(1).wav	2.8	Come on... break.
+VO_046	Generated Audio October 07, 2026 - 11_34PM(2).wav	1.8	Finally.
+VO_047	Generated Audio October 07, 2026 - 11_34PM(3).wav	3.1	Volkov was right. I owe him one.
+VO_048	Generated Audio October 07, 2026 - 11_34PM(4).wav	4.8	Three days. Maybe four. / Hard to count with the lights.
+VO_049	Generated Audio October 07, 2026 - 11_34PM(5).wav	7.1	Wrists raw. Chair bolted down. / They were ready for me before I woke up.
+VO_050	Generated Audio October 07, 2026 - 11_34PM(6).wav	2.9	Twenty-two hundred. He's already talking.
+VO_053	Generated Audio October 07, 2026 - 11_34PM(7).wav	5.5	He spent six years trying to kill a rumor. Now it's a record.
+VO_054	Generated Audio October 07, 2026 - 11_35PM.wav	4.7	The kitchen... bypass the corridor guards. Time to move.
+VO_064	Generated Audio October 07, 2026 - 11_35PM(1).wav	3.9	The Vostral. The record they buried.
+VO_066	Generated Audio October 07, 2026 - 11_35PM(2).wav	7.1	He wants me on camera. The Vostral, by my face, tonight. Fine. He'll get his close up.
+VO_067	Generated Audio October 07, 2026 - 11_35PM(3).wav	4.7	Then say it to my face, coward. Not through a screen.
+VO_068	Generated Audio October 07, 2026 - 11_35PM(4).wav	5.1	The Vostral's a rumor because you burned the only copy. So where is it?
+VO_069	Generated Audio October 07, 2026 - 11_35PM(5).wav	5.2	If the file exists, it's in this building. I've broken out of better.
+VO_070	Generated Audio October 07, 2026 - 11_35PM(6).wav	7.7	Vasile's dead air. Gabi, Seby, Darius, all dead. No one is coming.
+VO_082	Generated Audio October 07, 2026 - 11_35PM(7).wav	6.5	Nobody asked us to do this. First time in my life - / that's how it's done right.
+VO_083	Generated Audio October 07, 2026 - 11_36PM.wav	6.2	There's a border that doesn't care about my name. / I'm not taking it. Not yet.
+
+EXTRA FILES (not used - retakes/duplicates?):
+	Generated Audio October 08, 2026 - 7_10PM.wav	3.7
+	Generated Audio October 08, 2026 - 7_10PM(1).wav	5.3
+	Generated Audio October 08, 2026 - 7_10PM(2).wav	4.3

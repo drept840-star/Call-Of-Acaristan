@@ -1,0 +1,104 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m5.intro",
+ "shots": [
+  {
+   "scene": "m5_tv_bulletin",
+   "speaker": "ANCHOR",
+   "text": "Former Prime Minister Balaceanu was found dead in his cell this morning. Preliminary findings: suicide.",
+   "lighting": [
+    10,
+    12,
+    18
+   ],
+   "min_ms": 4200,
+   "post": {
+    "grade": "night_warm",
+    "grain": 0.2,
+    "vignette": 0.45,
+    "bloom": 0.3
+   }
+  },
+  {
+   "scene": "m5_safehouse_tv",
+   "speaker": "BIRIBEL",
+   "text": "Suicide. He didn't have the spine for it.",
+   "lighting": [
+    12,
+    10,
+    10
+   ],
+   "min_ms": 3000
+  },
+  {
+   "scene": "m5_retardovici_tv",
+   "speaker": "PRESIDENT",
+   "text": "Parliament is suspended. KRAP is dissolved into my Presidential Guard - every one of you now answers to me.",
+   "lighting": [
+    14,
+    10,
+    8
+   ],
+   "min_ms": 4600
+  },
+  {
+   "scene": "m5x_decree",
+   "speaker": "BIRIBEL",
+   "text": "Decree Number One. No more KRAP - I'm the President's man now. We all are.",
+   "lighting": [
+    14,
+    12,
+    10
+   ],
+   "min_ms": 4000
+  },
+  {
+   "scene": "m5x_squadmate",
+   "speaker": "OLD SQUADMATE",
+   "text": "Same squad, new colours, Biribel. Y-3 intake - we've always covered each other. Right?",
+   "lighting": [
+    14,
+    12,
+    10
+   ],
+   "min_ms": 4200
+  },
+  {
+   "scene": "m5x_change",
+   "speaker": "QUARTERMASTER",
+   "text": "Tunic, armband, helmet. Sign for them. The blue goes in the bin, Biribel.",
+   "lighting": [
+    14,
+    12,
+    10
+   ],
+   "min_ms": 7700
+  },
+  {
+   "scene": "m5x_barracks",
+   "speaker": "BIRIBEL",
+   "text": "My whole unit in the President's black. If this turns, I'll be shooting at my friends.",
+   "lighting": [
+    14,
+    12,
+    10
+   ],
+   "min_ms": 4400
+  },
+  {
+   "scene": "title_card",
+   "speaker": "",
+   "text": "MISSION 5\nMARTIAL LAW",
+   "lighting": [
+    5,
+    5,
+    8
+   ],
+   "min_ms": 2000
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m5.meta.mission5_intro_shots"
+ }
+}

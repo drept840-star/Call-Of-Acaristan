@@ -1,0 +1,475 @@
+{
+ "act": "act3",
+ "label": "ACT III - THE VOSTRAL",
+ "starter": "gc.start_mission3_archives_checkpoint(preserve_timer=True)",
+ "hz": 60,
+ "frames": 360,
+ "seconds": 12.0,
+ "ticks": 720,
+ "seed": 20261011,
+ "stats": {
+  "shots": 24,
+  "kills": 2,
+  "blind_shots": 0,
+  "enemy_shots": 3
+ },
+ "events": [
+  {
+   "t": 2,
+   "kind": "footstep"
+  },
+  {
+   "t": 12,
+   "kind": "footstep"
+  },
+  {
+   "t": 22,
+   "kind": "footstep"
+  },
+  {
+   "t": 32,
+   "kind": "footstep"
+  },
+  {
+   "t": 41,
+   "kind": "footstep"
+  },
+  {
+   "t": 50,
+   "kind": "footstep"
+  },
+  {
+   "t": 60,
+   "kind": "footstep"
+  },
+  {
+   "t": 68,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 71,
+   "kind": "footstep"
+  },
+  {
+   "t": 76,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 83,
+   "kind": "footstep"
+  },
+  {
+   "t": 93,
+   "kind": "footstep"
+  },
+  {
+   "t": 105,
+   "kind": "footstep"
+  },
+  {
+   "t": 107,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 115,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 119,
+   "kind": "footstep"
+  },
+  {
+   "t": 122,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 124,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 130,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 130,
+   "kind": "footstep"
+  },
+  {
+   "t": 131,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 138,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 139,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 140,
+   "kind": "footstep"
+  },
+  {
+   "t": 142,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 145,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 146,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 150,
+   "kind": "footstep"
+  },
+  {
+   "t": 153,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 153,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 160,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 161,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 164,
+   "kind": "footstep"
+  },
+  {
+   "t": 168,
+   "kind": "enemy_hit",
+   "dmg": 14
+  },
+  {
+   "t": 174,
+   "kind": "footstep"
+  },
+  {
+   "t": 185,
+   "kind": "footstep"
+  },
+  {
+   "t": 197,
+   "kind": "footstep"
+  },
+  {
+   "t": 207,
+   "kind": "footstep"
+  },
+  {
+   "t": 217,
+   "kind": "footstep"
+  },
+  {
+   "t": 228,
+   "kind": "footstep"
+  },
+  {
+   "t": 238,
+   "kind": "footstep"
+  },
+  {
+   "t": 250,
+   "kind": "footstep"
+  },
+  {
+   "t": 261,
+   "kind": "footstep"
+  },
+  {
+   "t": 273,
+   "kind": "footstep"
+  },
+  {
+   "t": 286,
+   "kind": "footstep"
+  },
+  {
+   "t": 298,
+   "kind": "footstep"
+  },
+  {
+   "t": 308,
+   "kind": "footstep"
+  },
+  {
+   "t": 319,
+   "kind": "footstep"
+  },
+  {
+   "t": 330,
+   "kind": "footstep"
+  },
+  {
+   "t": 339,
+   "kind": "footstep"
+  },
+  {
+   "t": 349,
+   "kind": "footstep"
+  },
+  {
+   "t": 360,
+   "kind": "footstep"
+  },
+  {
+   "t": 370,
+   "kind": "footstep"
+  },
+  {
+   "t": 379,
+   "kind": "footstep"
+  },
+  {
+   "t": 390,
+   "kind": "footstep"
+  },
+  {
+   "t": 401,
+   "kind": "footstep"
+  },
+  {
+   "t": 413,
+   "kind": "footstep"
+  },
+  {
+   "t": 425,
+   "kind": "footstep"
+  },
+  {
+   "t": 437,
+   "kind": "footstep"
+  },
+  {
+   "t": 451,
+   "kind": "footstep"
+  },
+  {
+   "t": 464,
+   "kind": "footstep"
+  },
+  {
+   "t": 478,
+   "kind": "footstep"
+  },
+  {
+   "t": 491,
+   "kind": "footstep"
+  },
+  {
+   "t": 505,
+   "kind": "footstep"
+  },
+  {
+   "t": 519,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 519,
+   "kind": "footstep"
+  },
+  {
+   "t": 519,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 526,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 527,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 531,
+   "kind": "footstep"
+  },
+  {
+   "t": 533,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 534,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 540,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 541,
+   "kind": "footstep"
+  },
+  {
+   "t": 541,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 550,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 552,
+   "kind": "footstep"
+  },
+  {
+   "t": 557,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 564,
+   "kind": "footstep"
+  },
+  {
+   "t": 577,
+   "kind": "footstep"
+  },
+  {
+   "t": 583,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 589,
+   "kind": "footstep"
+  },
+  {
+   "t": 590,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 597,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 600,
+   "kind": "footstep"
+  },
+  {
+   "t": 604,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 611,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 612,
+   "kind": "footstep"
+  },
+  {
+   "t": 617,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 623,
+   "kind": "footstep"
+  },
+  {
+   "t": 634,
+   "kind": "footstep"
+  },
+  {
+   "t": 636,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 637,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 643,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 644,
+   "kind": "enemy_hit",
+   "dmg": 18
+  },
+  {
+   "t": 645,
+   "kind": "footstep"
+  },
+  {
+   "t": 653,
+   "kind": "player_shot",
+   "weapon": "k9_smg"
+  },
+  {
+   "t": 653,
+   "kind": "reload"
+  },
+  {
+   "t": 655,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 657,
+   "kind": "footstep"
+  },
+  {
+   "t": 668,
+   "kind": "footstep"
+  },
+  {
+   "t": 680,
+   "kind": "footstep"
+  },
+  {
+   "t": 692,
+   "kind": "footstep"
+  },
+  {
+   "t": 702,
+   "kind": "footstep"
+  },
+  {
+   "t": 714,
+   "kind": "footstep"
+  }
+ ]
+}

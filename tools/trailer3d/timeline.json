@@ -1,0 +1,108 @@
+{
+ "total": 80.0,
+ "marks": {
+  "music_in": 8.0,
+  "hit_biribel": 8.86,
+  "hits_act1": [
+   11.58,
+   14.88,
+   19.52,
+   22.88,
+   26.06,
+   29.28,
+   34.1,
+   40.28
+  ],
+  "sold_start": 45.5,
+  "sold_end": 48.0,
+  "hit_ucilev": 48.15,
+  "hits_act2": [
+   52.17,
+   53.73,
+   62.23
+  ],
+  "dip": [
+   63.25,
+   64.85
+  ],
+  "hit_scopes": 64.91,
+  "silence": [
+   71.05,
+   74.25
+  ],
+  "hit_logo": 74.28999999999999,
+  "end": 80.0
+ },
+ "vo": [
+  {
+   "id": "TR_01",
+   "start": 1.0,
+   "end": 5.63,
+   "text": "The Kilemeno Ocean. Still a graveyard.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_53AM.wav"
+  },
+  {
+   "id": "TR_02",
+   "start": 8.96,
+   "end": 18.05,
+   "text": "Route 12 was supposed to end it. / One ambush. One file. One operator who did what he was told.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_54AM.wav"
+  },
+  {
+   "id": "TR_03",
+   "start": 18.242,
+   "end": 25.632,
+   "text": "But files have copies. / And someone in the capital has been reading his.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_54AM(1).wav"
+  },
+  {
+   "id": "TR_04",
+   "start": 25.825,
+   "end": 35.665,
+   "text": "Martial law came on a Tuesday. / The tanks keep the highways open. / The curfew keeps the questions unasked.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_54AM(2).wav"
+  },
+  {
+   "id": "TR_05",
+   "start": 35.857,
+   "end": 41.427,
+   "text": "A clerk kept a notebook. / Names. Dates. Prices.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_54AM(3).wav"
+  },
+  {
+   "id": "TR_06",
+   "start": 41.77,
+   "end": 47.74,
+   "text": "Route 12 was never an ambush. / It was a sale.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_54AM(4).wav"
+  },
+  {
+   "id": "TR_07",
+   "start": 48.5,
+   "end": 59.8,
+   "text": "And the Presidential Guard has a new face. / Same intake. Same training. / Officially, he died two years ago.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_55AM.wav"
+  },
+  {
+   "id": "TR_08",
+   "start": 60.22,
+   "end": 64.66,
+   "text": "Everyone in Acaristan answers to someone.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_55AM(1).wav"
+  },
+  {
+   "id": "TR_09",
+   "start": 65.51,
+   "end": 70.45,
+   "text": "Some orders you follow. / Some you finish.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_55AM(2).wav"
+  },
+  {
+   "id": "TR_10",
+   "start": 74.99,
+   "end": 77.76,
+   "text": "Call of Acaristan.",
+   "file": "assets/voice/Trailer/Generated Audio October 08, 2026 - 1_55AM(3).wav"
+  }
+ ]
+}

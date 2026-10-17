@@ -1,0 +1,34 @@
+LINE	FILE	SECONDS	TEXT
+VO_052	Generated Audio October 08, 2026 - 7_16PM.wav	9.0	Six years he spent building it. You read it in one minute.
+VO_055	Generated Audio October 08, 2026 - 7_17PM.wav	6.9	Biribel! Take the radio. I draw them off, you get the relay alive.
+VO_057	Generated Audio October 08, 2026 - 7_17PM(1).wav	3.1	Out? Here. Two more. Make them count.
+VO_058	Generated Audio October 08, 2026 - 7_17PM(2).wav	3.7	On your six. Move.
+VO_060	Generated Audio October 08, 2026 - 7_17PM(3).wav	4.1	My van's still staged at the dock, I haven't bailed on you yet. Through that smoke, friend, and don't make me regret it.
+VO_071	Generated Audio October 08, 2026 - 7_17PM(4).wav	4.0	Door's kicked. Camera loop: four minutes, maybe less. I get you out, you get me clear. Move.
+VO_072	Generated Audio October 08, 2026 - 7_17PM(5).wav	5.7	I came in through their own back door. Same way out, if you keep up. Move, operator. Move.
+VO_129	Generated Audio October 08, 2026 - 7_18PM.wav	4.8	Authorization is good. Get back to the relay.
+VO_131	Generated Audio October 08, 2026 - 7_18PM(3).wav	2.5	I bought you seconds. Make the leg useful, then move.
+VO_133	Generated Audio October 08, 2026 - 7_18PM(4).wav	3.9	Back on your six. Call when you're dry, I've got mags.
+VO_135	Generated Audio October 08, 2026 - 7_18PM(6).wav	4.6	They're awake now. South hall, move.
+VO_137	Generated Audio October 08, 2026 - 7_18PM(7).wav	6.5	I'm with you. Stacks west, vault northeast. Don't dry the mag, I'll toss you one.
+VO_140	Generated Audio October 08, 2026 - 7_19PM.wav	4.4	I'm on your six. You take the desk, I'll hold the floor.
+VO_144	Generated Audio October 08, 2026 - 7_19PM(1).wav	3.2	I've got your back to the door. Go.
+VO_147	Generated Audio October 08, 2026 - 7_19PM(2).wav	2.5	Too loud now. Move!
+VO_148	Generated Audio October 08, 2026 - 7_19PM(3).wav	3.2	Alarm's up. I'll draw them off, you move.
+VO_149	Generated Audio October 08, 2026 - 7_19PM(6).wav	5.5	Shield point is down - the south is open. Push, friend.
+VO_151	Generated Audio October 08, 2026 - 7_20PM.wav	5.2	Their marksman is gone. Dock gates are open - I'll cycle the door when you get there.
+VO_154	Generated Audio October 08, 2026 - 7_20PM(3).wav	7.6	...The van's gone. Dock crane, roof line - you're resourceful. Sorry, friend.
+VO_155	Generated Audio October 08, 2026 - 7_21PM.wav	4.6	Behind me. Door cycles in forty-five. I'll keep them off it.
+VO_157	Generated Audio October 08, 2026 - 7_21PM(1).wav	4.6	Van's held - sweep teams still on you. Clear them, then we roll!
+VO_159	Generated Audio October 08, 2026 - 7_21PM(2).wav	4.5	File's aboard. I drive, you watch the mirrors. DRIVE!
+VO_160	Generated Audio October 08, 2026 - 7_21PM(3).wav	4.0	Contact - shield point ahead! His sight cone is narrow: go around it, friend.
+VO_162	Generated Audio October 08, 2026 - 7_21PM(4).wav	5.0	Authorization is good. Get back to the relay.
+
+EXTRA FILES (not used - retakes/duplicates?):
+	Generated Audio October 08, 2026 - 7_18PM(1).wav	2.4
+	Generated Audio October 08, 2026 - 7_18PM(2).wav	2.1
+	Generated Audio October 08, 2026 - 7_18PM(5).wav	2.0
+	Generated Audio October 08, 2026 - 7_19PM(4).wav	9.1
+	Generated Audio October 08, 2026 - 7_19PM(5).wav	6.4
+	Generated Audio October 08, 2026 - 7_20PM(1).wav	3.8
+	Generated Audio October 08, 2026 - 7_20PM(2).wav	4.8

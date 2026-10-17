@@ -1,0 +1,49 @@
+  $ tools/ae_golden.py capture --set probe_det_a --only gp.m5.quarter
+    [CHECKPOINT] Respawned at shelter - evidence phase active
+    captured 3 shots (0 errors) in 1.7s -> E:\Code\Call of Acaristan\First try\tests\golden\probe_det_a
+    AE GOLDEN: OK
+  $ tools/ae_golden.py capture --set probe_det_a --only gp.m3.cell
+    [CHECKPOINT] Respawned at shelter - evidence phase active
+    captured 4 shots (0 errors) in 1.6s -> E:\Code\Call of Acaristan\First try\tests\golden\probe_det_a
+    AE GOLDEN: OK
+  $ tools/ae_golden.py capture --set probe_det_a --only cut.m5.mission5_intro_shots.03_m5x_decree
+    [CHECKPOINT] Respawned at shelter - evidence phase active
+    captured 3 shots (0 errors) in 1.7s -> E:\Code\Call of Acaristan\First try\tests\golden\probe_det_a
+    AE GOLDEN: OK
+  $ tools/ae_golden.py capture --set probe_det_b --only gp.m5.quarter
+    [CHECKPOINT] Respawned at shelter - evidence phase active
+    captured 3 shots (0 errors) in 1.7s -> E:\Code\Call of Acaristan\First try\tests\golden\probe_det_b
+    AE GOLDEN: OK
+  $ tools/ae_golden.py capture --set probe_det_b --only gp.m3.cell
+    [CHECKPOINT] Respawned at shelter - evidence phase active
+    captured 4 shots (0 errors) in 1.6s -> E:\Code\Call of Acaristan\First try\tests\golden\probe_det_b
+    AE GOLDEN: OK
+  $ tools/ae_golden.py capture --set probe_det_b --only cut.m5.mission5_intro_shots.03_m5x_decree
+    [CHECKPOINT] Respawned at shelter - evidence phase active
+    captured 3 shots (0 errors) in 1.6s -> E:\Code\Call of Acaristan\First try\tests\golden\probe_det_b
+    AE GOLDEN: OK
+golden determinism (same shot captured twice):
+  SAME cut.m5.mission5_intro_shots.03_m5x_decree.t25 fbb372bbcede fbb372bbcede
+  SAME cut.m5.mission5_intro_shots.03_m5x_decree.t50 90bb40677d20 90bb40677d20
+  SAME cut.m5.mission5_intro_shots.03_m5x_decree.t75 e2bd3abf0928 e2bd3abf0928
+  SAME gp.m3.cell 1e03dbcf9880 1e03dbcf9880
+  SAME gp.m3.cell_a a6c3223bbcdb a6c3223bbcdb
+  SAME gp.m3.cell_b 1d9ad0dc26d6 1d9ad0dc26d6
+  SAME gp.m3.cell_c 2b55eb5f8b1d 2b55eb5f8b1d
+  SAME gp.m5.quarter_east 9d30759d76a5 9d30759d76a5
+  SAME gp.m5.quarter_mid bcd033f27a3f bcd033f27a3f
+  SAME gp.m5.quarter_start 85fb22af6e09 85fb22af6e09
+  $ tools/ae_loop.py check --seg boot m1 m2 m3 m5
+             rng state first differs at frame None
+      m5     DIFF first frame 1 of 600; states base: GAME@0 | now: GAME@0
+    AE LOOP: FAIL (0/5 segments, 16s)
+  $ tools/ae_loop.py check --seg boot m1 m2 m3 m5
+             rng state first differs at frame None
+      m5     DIFF first frame 1 of 600; states base: GAME@0 | now: GAME@0
+    AE LOOP: FAIL (0/5 segments, 17s)
+loop determinism (same run twice):
+  boot  SAME
+  m1    SAME
+  m2    SAME
+  m3    SAME
+  m5    SAME

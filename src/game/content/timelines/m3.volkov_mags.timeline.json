@@ -1,0 +1,33 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.volkov_mags",
+ "shots": [
+  {
+   "scene": "m3_volkov_gives_mags",
+   "speaker": "VOLKOV",
+   "text": "Out? Here. Two more. Make them count.",
+   "min_ms": 2200,
+   "lighting": [
+    6,
+    7,
+    8
+   ]
+  },
+  {
+   "scene": "m3_volkov_gives_mags",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "min_ms": 1500,
+   "lighting": [
+    6,
+    7,
+    8
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.volkov_mags_shots"
+ }
+}

@@ -1,0 +1,14 @@
+Pass 2 (2026-10-09, Linux sandbox)
+compileall src tools: PASS
+tools/test_tcp_tunnel.py: 6 PASS (adds cancellation)
+tools/smoke_test.py (pygame-ce 2.5.8, dummy SDL): 103 OK, 1 SKIP (GL), 2 FAIL
+  join_loopback_fallback  - sandbox accepts TCP to 10.255.255.1 (env artefact)
+  mission4_cinematic_arrest - stale test vs (shot,"vo") cue key; not networking
+  mp_host_and_portmap (incl. new relay-loss + cancellation checks): OK
+Linux PyInstaller probe, run from /tmp, empty PATH: bundled bore found; bore.pub echo PASS; 0 processes left
+Windows EXE build: NOT RUN (no Windows)
+Two-device gameplay: NOT RUN
+
+Pass 1
+Focused unit tests 5 PASS; real local + bore.pub TCP round-trips PASS;
+CLI --tunnel --no-forward published address and exited cleanly.

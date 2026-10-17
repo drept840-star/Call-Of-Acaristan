@@ -1,0 +1,483 @@
+{
+ "entries": {
+  "m4/mag_icon": {
+   "files": {
+    "0": {
+     "file": "mag_icon_0.png",
+     "pixels": "dd05555eb4b276258770d0407fbc97f3a2b0de685ddc9599899f97c50b17d518",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "1": {
+     "file": "mag_icon_1.png",
+     "pixels": "4844ed13a2b04babd7be9168c7777f108b99ca5985e4e3f785b2b749e40dfbd2",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "10": {
+     "file": "mag_icon_10.png",
+     "pixels": "1d2525aee6650b371387f5293d2b7d6b2a43f47137fbea324715befcb33eef9b",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "11": {
+     "file": "mag_icon_11.png",
+     "pixels": "04080e866373b9c0773be9ecebdf122c944ea2d121eb17b6eda5defe67b15530",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "12": {
+     "file": "mag_icon_12.png",
+     "pixels": "644d955d016f29d173d51a68ca6d3f511359b81a0616e937244e668108ef7dd8",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "13": {
+     "file": "mag_icon_13.png",
+     "pixels": "75b4bc053bc7a81423ecb8400c3dba8b816ca201b064e7712352f388ebf7f17e",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "14": {
+     "file": "mag_icon_14.png",
+     "pixels": "1a74c58341b4361c150030ef9210efbcb96acbd83037b88dad6aa74b08e59128",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "15": {
+     "file": "mag_icon_15.png",
+     "pixels": "0e6079e49ff6d9ac7501734775db9c4f7ed98b7c1517c5e795f9a0ce5097c8fb",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "16": {
+     "file": "mag_icon_16.png",
+     "pixels": "3ddad4882e1c63d5b8a103ef861b1a1114439afb77796535298327f680747dca",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "17": {
+     "file": "mag_icon_17.png",
+     "pixels": "a62ca0c8ccf272df72f5961e66591233e55db16b9cbc665d5ba479f37b3e8dcc",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "18": {
+     "file": "mag_icon_18.png",
+     "pixels": "1c20e7e551aedae9e6f971036fd3304061575ec90d0c3c280028943e02037066",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "19": {
+     "file": "mag_icon_19.png",
+     "pixels": "9cb767dedb8e810a49753308670d0f3a58070f44f84d7ff5a2366295bb35f1b6",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "2": {
+     "file": "mag_icon_2.png",
+     "pixels": "5f8cd73e0a557fda2d6a74d939353c0fff29eed92aa9efc22d2359a6f2de13f0",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "20": {
+     "file": "mag_icon_20.png",
+     "pixels": "beefeb68736d62638da6d65423d79540bc00747a82e4a7c4fd3f3c83b25702bc",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "21": {
+     "file": "mag_icon_21.png",
+     "pixels": "f8f8583bc3e3329bc9939a1f3b92ee042965b3964c832c6fdf9e8ab2741105b6",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "22": {
+     "file": "mag_icon_22.png",
+     "pixels": "9c42a3ce8ab79456a8750f86615947125c07b6200374e5ae8aa8103ca86f75c4",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "23": {
+     "file": "mag_icon_23.png",
+     "pixels": "c785f9621db32656eb9455dd2771a42836ee9f92b289335576636e1eeee56142",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "24": {
+     "file": "mag_icon_24.png",
+     "pixels": "081884ae047dae78fe95ce31821053ed74c15427aae7e41312238fbc490d197b",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "25": {
+     "file": "mag_icon_25.png",
+     "pixels": "72b9ed5a9b14ab3caf13dfd42057ca02fde63b6078af84dab35a91349fcc3e2f",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "26": {
+     "file": "mag_icon_26.png",
+     "pixels": "faf2cf87f5f16a29ebc126e165011d84b08f8018a238864e69f0bd923f46dfca",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "27": {
+     "file": "mag_icon_27.png",
+     "pixels": "40189d7b6585598123ab1e3f90414201cd4742e0a194ce720fd2206323629006",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "28": {
+     "file": "mag_icon_28.png",
+     "pixels": "3263985df28eb88b5c26bb7f2987de1464f6ce834a4a6bd9f944b60ad2b63e81",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "29": {
+     "file": "mag_icon_29.png",
+     "pixels": "aa0c6cb58a0438b855209f585c8f6a54c57c46ea5e0741ca5a1f8262e5538faa",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "3": {
+     "file": "mag_icon_3.png",
+     "pixels": "1e17454bb7e119d8242d2993011c63a701dd654b4c0f3c7bf8fcc362aaa76ff5",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "30": {
+     "file": "mag_icon_30.png",
+     "pixels": "a62fe895fed95f117bd0d45c9599d9b2b6f6c322f6700264715bc67a50452887",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "31": {
+     "file": "mag_icon_31.png",
+     "pixels": "ba8670089d95c1259940f83944f0921df38452024f4ea8eb3c15d05321bf3468",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "32": {
+     "file": "mag_icon_32.png",
+     "pixels": "649ade58c0a6b1b07f98f6ce8da10a7a409ce7c670c4f666d8ab5dcc38d74aa6",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "33": {
+     "file": "mag_icon_33.png",
+     "pixels": "1de65250ed28c52347ff6633337f92ea996d6e8d07d4464c4d67c29b2ec2b5d6",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "34": {
+     "file": "mag_icon_34.png",
+     "pixels": "b587a573fc85ea1e45fd99b4d22f60994b2f48bf2083dfec12da293e7f2fee89",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "35": {
+     "file": "mag_icon_35.png",
+     "pixels": "af9b466d59588743d9d8a46f85782fd09f0bbe2bec40fd924da701cd215217a0",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "36": {
+     "file": "mag_icon_36.png",
+     "pixels": "49b502c8fe2ccfb9d10280dd849a3164c70b55832c2152e2c532b356133ef1de",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "37": {
+     "file": "mag_icon_37.png",
+     "pixels": "044b7671345f587e9cade02d678ed9fbd6d9038fcd5ea3157b4afbdbd039a080",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "38": {
+     "file": "mag_icon_38.png",
+     "pixels": "04828796d32996b91a1e4a1c91d2c88d28fd1050676ab7f1f1b92298ffabdbf0",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "39": {
+     "file": "mag_icon_39.png",
+     "pixels": "97eeb410bc0307e089abf1a0c472493302d5a4ffe2fd80ec5df39f2103bd9c37",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "4": {
+     "file": "mag_icon_4.png",
+     "pixels": "1ebfe0193a278ad927c1531d89751efe316d3ea6cd7c6ae1927f51cda908e550",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "40": {
+     "file": "mag_icon_40.png",
+     "pixels": "9d753268bf339c1c93f523a742121b00a3d13994c035690e11593088599508bb",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "41": {
+     "file": "mag_icon_41.png",
+     "pixels": "35373edd3657cb1f4268a3cea55b5c48945a2553cccd047ff07c45c855ecb58d",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "42": {
+     "file": "mag_icon_42.png",
+     "pixels": "bbc0a9754ddd2700326c8c9b517b81f52f739faf4ece27263270dad897e66968",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "43": {
+     "file": "mag_icon_43.png",
+     "pixels": "b831bd5f68c955618322c75e8796f582a25692cdd4dee26fe7c4f291c0c4aa80",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "44": {
+     "file": "mag_icon_44.png",
+     "pixels": "f5363b6085fcfaa0fcfd9f386c47df6fac3738da8abbca5363eb1a8a8bdbef01",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "45": {
+     "file": "mag_icon_45.png",
+     "pixels": "90616485622147b6a5ac4b1ab4351fd72531b2c8577b600c39201ece83f7bfa6",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "46": {
+     "file": "mag_icon_46.png",
+     "pixels": "63d70427e4de14e2598552f793dc5ded6e79b9785901bbab15f2347bd9473de3",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "47": {
+     "file": "mag_icon_47.png",
+     "pixels": "f7e5a7e3eefe693c6601322ea1c232134d9fb7207dd970233b55010f787d3613",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "48": {
+     "file": "mag_icon_48.png",
+     "pixels": "4d5f04edfb42089c328e92308e1521a701292ce1fcb20ef7189e9e59b9aab84a",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "49": {
+     "file": "mag_icon_49.png",
+     "pixels": "e81d73260d4966a22c6cf867698865d0292eef32c08e35a398a5e14aee40c48a",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "5": {
+     "file": "mag_icon_5.png",
+     "pixels": "1f4ad102fe2cc704f612676180c64c75e521c6fa0b11de918c2c2af57a44ea0f",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "50": {
+     "file": "mag_icon_50.png",
+     "pixels": "6a1362f9581f33d15bfc6e1d93344c920f9cdd1c39ecc5b7b71051ca98babbd3",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "51": {
+     "file": "mag_icon_51.png",
+     "pixels": "d633462dc46ac52f4686bd948e13edb52dbb23550a741bcd5eff5c9707e0a17d",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "52": {
+     "file": "mag_icon_52.png",
+     "pixels": "4da05bea88df3e43c905d7a0172edf706ee4ba2d265f693217ed4364b055541b",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "53": {
+     "file": "mag_icon_53.png",
+     "pixels": "0c076b08436bf4929b2e1262b9a8403bae31262abfb7f76da5c3b9a603fa1b8c",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "54": {
+     "file": "mag_icon_54.png",
+     "pixels": "3b7bfe86b7f717efe6ebe2e24af65643fabdfb39d73ba2cc596b9931e8bd674a",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "55": {
+     "file": "mag_icon_55.png",
+     "pixels": "a5facb61702cd2b54930616bf923ee8bed603e029e593a45c206f5f067a5fbef",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "6": {
+     "file": "mag_icon_6.png",
+     "pixels": "c35d3d86166feb6f038d56b676d4cef847805000f5b292f051dcfe3d24ef5e16",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "7": {
+     "file": "mag_icon_7.png",
+     "pixels": "8ff231ae8e24711d7f5b698f7fd0d5c842cd41519fe589e6d2d2d15a0c6a1172",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "8": {
+     "file": "mag_icon_8.png",
+     "pixels": "ce3c6753575af7d50b1fc4265baeff892b14bfbf2d0a248d7bb0688c70279582",
+     "size": [
+      25,
+      56
+     ]
+    },
+    "9": {
+     "file": "mag_icon_9.png",
+     "pixels": "50124eafe5bba8212937618b3f6b5ec3ce188395c7d258d25c145095aa20e394",
+     "size": [
+      25,
+      56
+     ]
+    }
+   },
+   "source": "03885ff1a8263979897917a383681f9fb9b070c0e1abc62514f4078415445909",
+   "variants": 56
+  },
+  "m4/world_static": {
+   "files": {
+    "0": {
+     "file": "world_static_0.png",
+     "pixels": "18959a2b2be20142c1395f90d71efdfa8a48e125992437566f35c08240b28c5b",
+     "size": [
+      2560,
+      2560
+     ]
+    },
+    "1": {
+     "file": "world_static_1.png",
+     "pixels": "0d05f2d1fa4816af7bc186b75ce57eb35601f992829ba0ba501ca4139153faff",
+     "size": [
+      1536,
+      1536
+     ]
+    }
+   },
+   "source": "48f1d546d059c931cd8dc094256ddff0b43822536ab2298bdf49eb6d38382ae5",
+   "variants": 2
+  }
+ },
+ "pack": "m4",
+ "schema": "ae.bakeinfo/1",
+ "tool": "ae_bake/1"
+}

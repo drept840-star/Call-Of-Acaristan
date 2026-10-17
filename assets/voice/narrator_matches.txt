@@ -1,0 +1,11 @@
+LINE	FILE	SECONDS	TEXT
+VO_017	Generated Audio October 07, 2026 - 11_39PM.ogg	8.0	The Kilemeno Ocean. Once a fishing route. / Now a graveyard of derricks and broken treaties.
+VO_018	Generated Audio October 07, 2026 - 11_39PM(1).ogg	8.5	Acaristan. A nation in name only. / The ground beneath it is worth more than the people standing on it.
+VO_019	Generated Audio October 07, 2026 - 11_39PM(2).ogg	9.4	The IPA promises rebuilding. / Their oil flows. Their guns sell. / Their hands are clean - for the cameras.
+VO_020	Generated Audio October 07, 2026 - 11_39PM(3).ogg	11.6	MAG promises freedom. / They bomb checkpoints. They bury their dead in unmarked steppes. / The state calls them terrorists. The poor call them family.
+VO_021	Generated Audio October 07, 2026 - 11_40PM.ogg	8.1	And then there is KRAP. / Koaliția Regională de Apărare Și Pace. / Peacekeepers, they call themselves.
+VO_022	Generated Audio October 07, 2026 - 11_40PM(1).ogg	7.4	They keep the highways open. / They keep the oil moving. / They keep the questions unasked.
+VO_023	Generated Audio October 07, 2026 - 11_41PM.ogg	8.7	Today, one of their operators arrives. / He has been told this is a stabilization assignment. / He has not been told the truth.
+VO_024	Generated Audio October 07, 2026 - 11_41PM(1).ogg	9.4	The KRAP van cut east through the rain. / Inside, Captain Vasile finally opened the file.
+VO_051	Generated Audio October 07, 2026 - 11_42PM.ogg	7.0	By 22:07, every screen in Acaristan was reading the Vostral.
+VO_078	Generated Audio October 07, 2026 - 11_42PM(1).ogg	8.9	Forty-eight hours after the Vostral, the address is still / reading on every screen in the capital.

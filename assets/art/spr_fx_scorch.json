@@ -1,0 +1,32 @@
+{
+ "family": "fx",
+ "frames": {
+  "scorch": {
+   "anchor": [
+    364,
+    270
+   ],
+   "grow_frames": 40,
+   "radius": 520,
+   "rect": [
+    0,
+    0,
+    729,
+    540
+   ],
+   "scale": 2
+  }
+ },
+ "image": "spr_fx_scorch.png",
+ "meta": {
+  "note": "authored at half resolution; core.artpack expands 2x nearest",
+  "scale": 2
+ },
+ "scale": 1,
+ "sheet": "spr_fx_scorch",
+ "size": [
+  729,
+  540
+ ],
+ "tile_size": 64
+}

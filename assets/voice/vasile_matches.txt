@@ -1,0 +1,87 @@
+LINE	FILE	SECONDS	TEXT
+VO_025	Generated Audio October 07, 2026 - 9_05PM.ogg	4.4	Welcome to Acaristan, Biribel. / Hope you enjoyed the scenery.
+VO_026	Generated Audio October 07, 2026 - 9_05PM(1).ogg	8.3	Sebastian Volkov. IPA affiliate. / We've been tracking him for six months. / Tonight he's making a handoff in the slum district.
+VO_027	Generated Audio October 07, 2026 - 9_06PM.ogg	7.6	Your job: get in, capture him alive, get out. / He knows names. We want those names.
+VO_029	Generated Audio October 07, 2026 - 9_06PM(1).ogg	8.0	He won't get far. / But if he does, bring back anything he leaves behind. / Paper, drives, a notebook - anything.
+VO_030	Generated Audio October 07, 2026 - 9_07PM.ogg	5.5	Here. Standard sidearm. / Keep it holstered until you have no choice.
+VO_031	Generated Audio October 07, 2026 - 9_07PM(1).ogg	5.1	And take these: two molotovs. / Ugly tools, but they clear alleys fast.
+VO_032	Generated Audio October 07, 2026 - 9_07PM(2).ogg	4.8	Comms on channel 4. Don't die. / I hate paperwork.
+VO_033	Generated Audio October 07, 2026 - 9_08PM.ogg	5.2	Volkov's file mentions Route 12 before the attack was reported.
+VO_034	Generated Audio October 07, 2026 - 9_08PM(1).ogg	5.2	Checkpoint 12 was marked unstable before the first bomb went off.
+VO_035	Generated Audio October 07, 2026 - 9_09PM.ogg	5.8	Official line says MAG bombing. The timestamps say otherwise.
+VO_036	Generated Audio October 07, 2026 - 9_09PM(1).ogg	5.6	We go in quiet. We verify the scene. We do not repeat their lie.
+VO_037	Generated Audio October 07, 2026 - 9_09PM(2).ogg	2.8	Biribel... tell me you got out.
+VO_039	Generated Audio October 07, 2026 - 9_09PM(3).ogg	3.6	No. They framed you first.
+VO_040	Generated Audio October 07, 2026 - 9_10PM.ogg	2.6	Biribel? ...Biribel?!
+VO_042	Generated Audio October 07, 2026 - 9_11PM.ogg	2.4	Stop. Everybody down.
+VO_044	Generated Audio October 07, 2026 - 9_11PM(1).ogg	6.6	That is IPA fire discipline. Biribel, survive the kill-box.
+VO_056	Generated Audio October 07, 2026 - 9_13PM.ogg	5.0	Biribel? If you hear me, get to the relay. I can see your signal now.
+VO_059	Generated Audio October 07, 2026 - 9_14PM.ogg	5.6	Contacts ahead. Maru's dead drop is northwest. Clear a path.
+VO_061	Generated Audio October 07, 2026 - 9_14PM(1).ogg	8.8	The loading dock is your only way out, Volkov's van is staged there. Hold it, and the Vostral goes live tonight.
+VO_062	Generated Audio October 07, 2026 - 9_14PM(2).ogg	9.1	You're out. Broadcast wing, follow the cable runs. I need you in front of a camera before that address ends.
+VO_063	Generated Audio October 07, 2026 - 9_15PM.ogg	10.2	Studio door. Two ways to do this, live on his camera, or quiet through my channel. Your call, operator.
+VO_065	Generated Audio October 07, 2026 - 9_16PM.ogg	5.6	Confirmed. North stairwell, move before they burn the wing.
+VO_079	Generated Audio October 07, 2026 - 9_16PM(1).ogg	8.0	And this is what it bought us. A curfew nobody can enforce / and a regime that shoots its own order.
+VO_080	Generated Audio October 07, 2026 - 9_16PM(2).ogg	5.2	It's done. He's in a cell by his own guard's hands.
+VO_084	Generated Audio October 07, 2026 - 9_17PM.ogg	3.4	…Some of this was already in our files.
+VO_085	Generated Audio October 07, 2026 - 9_17PM(1).ogg	3.2	Biribel, they spotted you! Alarm is active!
+VO_086	Generated Audio October 07, 2026 - 9_17PM(2).ogg	3.2	They blocked the stairs! Hotwire the delivery truck!
+VO_087	Generated Audio October 07, 2026 - 9_17PM(3).ogg	3.2	Where'd you get the plate? Keep it on.
+VO_088	Generated Audio October 07, 2026 - 9_17PM(4).ogg	4.6	If that civilian was right, the code's already in your head.
+VO_089	Generated Audio October 07, 2026 - 9_18PM.ogg	3.1	No local help. Search the desks.
+VO_090	Generated Audio October 07, 2026 - 9_18PM(1).ogg	4.6	Gate is open. Signatures ahead, watch the corners.
+VO_091	Generated Audio October 07, 2026 - 9_18PM(2).ogg	4.4	Safe is locked. Look for notes on desks for the code.
+VO_092	Generated Audio October 07, 2026 - 9_18PM(3).ogg	2.6	BRACE! They're breaching the bay doors!
+VO_093	Generated Audio October 07, 2026 - 9_19PM.ogg	3.8	They're coming from both sides! Get to the truck NOW!
+VO_094	Generated Audio October 07, 2026 - 9_19PM(1).ogg	4.0	Volkov escaped! Get that notebook and get out.
+VO_095	Generated Audio October 07, 2026 - 9_20PM.ogg	4.7	Not yet. Clear the yard before you put your head under that dash.
+VO_096	Generated Audio October 07, 2026 - 9_20PM(1).ogg	6.7	Open the panel. Red feeds yellow. Blue wakes green. Black bites white.
+VO_097	Generated Audio October 07, 2026 - 9_20PM(2).ogg	2.7	Sniper bugged out. Nest is empty.
+VO_098	Generated Audio October 07, 2026 - 9_20PM(3).ogg	3.5	Sniper is relocating. Clear the cleanup team.
+VO_099	Generated Audio October 07, 2026 - 9_21PM.ogg	3.8	Concrete blocks! Left side! Move now!
+VO_100	Generated Audio October 07, 2026 - 9_21PM(1).ogg	4.8	Hold there. Watch the glint. Move only between shots.
+VO_101	Generated Audio October 07, 2026 - 9_21PM(2).ogg	4.1	They saw you stop! Contacts moving in from both flanks!
+VO_102	Generated Audio October 07, 2026 - 9_22PM.ogg	5.3	Biribel - the tanker manifest - it lists a second cargo...
+VO_103	Generated Audio October 07, 2026 - 9_22PM(1).ogg	4.3	They're falling back to regroup. Push through - the truck is ahead.
+VO_104	Generated Audio October 07, 2026 - 9_22PM(2).ogg	4.6	Center lane is death. Flank through the ditch or service road.
+VO_105	Generated Audio October 07, 2026 - 9_22PM(3).ogg	3.8	Cleanup squad's between you and the truck. Drop them.
+VO_106	Generated Audio October 07, 2026 - 9_22PM(4).ogg	2.9	Form up at the barrier. Eyes up.
+VO_109	Generated Audio October 07, 2026 - 9_23PM.ogg	4.3	Biribel - stay back. Gabi is gone.
+VO_111	Generated Audio October 07, 2026 - 9_23PM(1).ogg	2.8	Everybody DOWN. Do not move.
+VO_113	Generated Audio October 07, 2026 - 9_23PM(2).ogg	3.3	Seby - stay low - do NOT go out there.
+VO_114	Generated Audio October 07, 2026 - 9_25PM.ogg	5.4	Biribel. Stay behind the barrier. Do not look up.
+VO_117	Generated Audio October 07, 2026 - 9_25PM(2).ogg	2.8	Biribel - MOVE!
+VO_118	Generated Audio October 07, 2026 - 9_26PM.ogg	4.9	IPA rifles from the gantry. Not MAG. Clear the lanes.
+VO_119	Generated Audio October 07, 2026 - 9_26PM(1).ogg	4.7	Seven seconds - GO! Blue marker - south - MOVE!
+VO_120	Generated Audio October 07, 2026 - 9_26PM(2).ogg	4.4	Start with the obvious lie. Inspect the staged evidence.
+VO_121	Generated Audio October 07, 2026 - 9_26PM(3).ogg	4.7	You made it. Control building - move. The evidence is inside.
+VO_122	Generated Audio October 07, 2026 - 9_26PM(4).ogg	5.6	Cleanup team's down. Grab the evidence - three terminals, then upload.
+VO_123	Generated Audio October 07, 2026 - 9_26PM(5).ogg	6.0	Range marks, timing relay, clean boots... this scene is a trap.
+VO_124	Generated Audio October 07, 2026 - 9_27PM.ogg	5.3	No MAG soldiers. Find out why that IPA truck is here.
+VO_125	Generated Audio October 07, 2026 - 9_27PM(1).ogg	2.2	Hurry. They're triangulating.
+VO_126	Generated Audio October 07, 2026 - 9_28PM.ogg	7.4	Balaceanu logistics. Not MAG. Move to the tanker - slow. Confirm what we're dealing with.
+VO_127	Generated Audio October 07, 2026 - 9_28PM(1).ogg	7.0	Biribel, get back! That's a remote-detonated cleanup charge - same frequency as the sniper. They're going to blow it!
+VO_128	Generated Audio October 07, 2026 - 9_28PM(2).ogg	4.4	Power spike received. Now find a relay authorization key.
+VO_130	Generated Audio October 07, 2026 - 9_29PM.ogg	5.5	Biribel. Confirmed. I have you. Archives access is east.
+VO_132	Generated Audio October 07, 2026 - 9_31PM.ogg	8.4	Relay is dead down here. Restore battery backup, copy auth from Security, then tune the terminal.
+VO_134	Generated Audio October 07, 2026 - 9_31PM(1).ogg	4.8	Archives wing is live. Maru's dead-drop is northwest.
+VO_136	Generated Audio October 07, 2026 - 9_31PM(2).ogg	8.0	Relay is dead down here. Restore battery backup, copy auth from Security, then tune the terminal.
+VO_138	Generated Audio October 07, 2026 - 9_31PM(3).ogg	4.8	Maru's dead-drop is in the northwest clerk office. Clear a path.
+VO_139	Generated Audio October 07, 2026 - 9_31PM(4).ogg	6.1	Doors are live. Whatever you choose, fast. The address won't wait.
+VO_141	Generated Audio October 07, 2026 - 9_31PM(5).ogg	4.1	Feed's back on your side. Clock is live again - move.
+VO_143	Generated Audio October 07, 2026 - 9_31PM(6).ogg	5.4	Confirmed, Vostral is in your hands. North stairwell. Move.
+VO_146	Generated Audio October 07, 2026 - 9_32PM.ogg	12.6	Balaceanu signed the kill order on state radio. Every disciplined team in that building is hunting you now, and he's listening. I'll keep their comms in your ear. Vasile out.
+VO_152	Generated Audio October 07, 2026 - 9_32PM(1).ogg	4.8	Nest is dark. Their eyes are out - move while it lasts.
+VO_153	Generated Audio October 07, 2026 - 9_32PM(2).ogg	6.4	Marksman up on that mezzanine - his red line means they have the lane zeroed. Keep your head down.
+VO_161	Generated Audio October 07, 2026 - 9_32PM(3).ogg	4.6	Power spike received. Now find a relay authorization key.
+VO_163	Generated Audio October 07, 2026 - 9_32PM(4).ogg	6.3	Biribel. Confirmed. I have you. Archives access is east.
+VO_165	Generated Audio October 07, 2026 - 9_32PM(5).ogg	6.5	Two days of curfew, the city's coming apart. Meet me at the cache.
+VO_166	Generated Audio October 07, 2026 - 9_33PM.ogg	4.7	Station's ours for now. Find Maru in the transmitter hall.
+VO_167	Generated Audio October 07, 2026 - 9_33PM(1).ogg	4.3	Door's clear. Maru's inside - watch the gallery.
+VO_168	Generated Audio October 07, 2026 - 9_33PM(2).ogg	4.4	That's the drop - the KRAP comms cache. Grab it (E).
+VO_169	Generated Audio October 07, 2026 - 9_33PM(3).ogg	5.5	That file reached every screen. Head east - hold the station.
+VO_170	Generated Audio October 07, 2026 - 9_33PM(4).ogg	4.3	Not without the cache, Biribel. Grab it first.
+VO_172	Generated Audio October 07, 2026 - 9_33PM(5).ogg	5.4	That file reached every screen. Head east - hold the station.
+
+EXTRA FILES (not used - retakes/duplicates?):
+	Generated Audio October 07, 2026 - 9_25PM(1).ogg	2.8

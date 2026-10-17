@@ -1,0 +1,33 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.vent_escape",
+ "shots": [
+  {
+   "scene": "vent_shaft",
+   "speaker": null,
+   "text": null,
+   "lighting": [
+    2,
+    2,
+    3
+   ],
+   "hide_caption": true,
+   "min_ms": 3000
+  },
+  {
+   "scene": "vent_exit",
+   "speaker": "BIRIBEL",
+   "text": "The kitchen... bypass the corridor guards. Time to move.",
+   "lighting": [
+    15,
+    12,
+    18
+   ],
+   "min_ms": 2000
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.vent_escape_shots"
+ }
+}

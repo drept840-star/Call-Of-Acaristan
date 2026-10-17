@@ -1,0 +1,76 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m3.intro",
+ "shots": [
+  {
+   "scene": "cell_ceiling",
+   "speaker": "BIRIBEL",
+   "text": "Three days. Maybe four.\nHard to count with the lights.",
+   "lighting": [
+    4,
+    4,
+    6
+   ],
+   "min_ms": 2600
+  },
+  {
+   "scene": "cell_restraints",
+   "speaker": "BIRIBEL",
+   "text": "Wrists raw. Chair bolted down.\nThey were ready for me before I woke up.",
+   "lighting": [
+    5,
+    5,
+    7
+   ],
+   "min_ms": 3000
+  },
+  {
+   "scene": "interrogation_room",
+   "speaker": "BALACEANU",
+   "text": "You told them I was a coward, Biribel.\nA fake.\nTonight I tell the nation what you are.",
+   "lighting": [
+    5,
+    3,
+    5
+   ],
+   "min_ms": 3200
+  },
+  {
+   "scene": "monitor_broadcast",
+   "speaker": "SYSTEM",
+   "text": "STATE ADDRESS, LIVE TONIGHT, 22:00\nSUBJECT: ROUTE 12 PERPETRATOR",
+   "lighting": [
+    3,
+    2,
+    3
+   ],
+   "min_ms": 3200
+  },
+  {
+   "scene": "interrogation_room",
+   "speaker": "BALACEANU",
+   "text": "When the address ends, so do you.\nThat is not a threat.\nThat is a schedule.",
+   "lighting": [
+    5,
+    3,
+    5
+   ],
+   "min_ms": 3200
+  },
+  {
+   "scene": "title_card",
+   "speaker": "",
+   "text": "MISSION 3\nTHE VOSTRAL",
+   "lighting": [
+    5,
+    5,
+    8
+   ],
+   "min_ms": 1800
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m3.meta.mission3_intro_shots"
+ }
+}

@@ -1,0 +1,48 @@
+{
+ "schema": "ae.level/1",
+ "id": "m5.hq",
+ "name": "Mission 5 - Guard HQ",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCOOOOOOOOOCOOOOOOOOCC",
+   "CCCCCCCCCCOOOOOOOOOCOOOBBBOOCC",
+   "CCCCCCCCCCOBOBOBOBOCOOOOOOOOCC",
+   "CCCCCCCCCCOOOOOOOOOCOOOOOOOOCC",
+   "CCCCCCCCCCOOOOOOOOOCOOOOOOOOCC",
+   "CCCCCCCCCCOOOOOOOOOCOOOOOOOOCC",
+   "CCCCCCCCCCCCCDDCCCCCCCDDCCCCCC",
+   "CFFFFFFFFCCCCDDCCCCCCCDDCCCCCC",
+   "CFFFFFFFFLLLLLLLLLLLLLLLOOOOCC",
+   "CFFFFFFFFLLLLLLLLLLLLLLLOOOOCC",
+   "CFPFFFFFFLLLLLLLLLLLLLLLOOOOCC",
+   "CFFFFFFFFCCCCCCCCCCCCCCCOOBOCC",
+   "CFFFFFFFFCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@2,12",
+   "kind": "spawn",
+   "tile": [
+    2,
+    12
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m5"
+ }
+}

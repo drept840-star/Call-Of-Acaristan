@@ -1,0 +1,61 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "mission0.outro",
+ "shots": [
+  {
+   "scene": "m0_inspect",
+   "speaker": "BIRIBEL",
+   "text": "Manifest says medical supplies. Stamped by the Guard.",
+   "min_ms": 2600,
+   "lighting": [
+    16,
+    18,
+    24
+   ],
+   "post": {
+    "grade": "cold_blue",
+    "grain": 0.15,
+    "vignette": 0.4
+   }
+  },
+  {
+   "scene": "m0_yard3d",
+   "duration_ms": 3600,
+   "min_ms": 1200,
+   "lighting": [
+    16,
+    20,
+    28
+   ],
+   "post": {
+    "grade": "cold_blue",
+    "grain": 0.3,
+    "vignette": 0.5
+   }
+  },
+  {
+   "scene": "m0_depot3d",
+   "speaker": "",
+   "text": "The depot at dawn. Nothing here was ever civilian.",
+   "min_ms": 3200,
+   "lighting": [
+    16,
+    18,
+    24
+   ],
+   "post": {
+    "grade": "night_warm",
+    "grain": 0.35,
+    "vignette": 0.55,
+    "bloom": 0.5,
+    "dof_focus": 6.0,
+    "dof_strength": 0.7
+   }
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "ae_new_mission scaffold"
+ }
+}

@@ -1,0 +1,257 @@
+{
+ "schema": "ae.manifest/1",
+ "pack": "m5",
+ "baked_dir": "assets/baked/m5",
+ "palette": "src/game/content/m5/palette.json",
+ "notes": "Mission 5 sprite pack. ids are m5/<module>; variants per module VARIANTS; baked by tools/ae_bake.py --pack m5.",
+ "assets": [
+  {
+   "id": "m5/posters",
+   "kind": "sprite_def",
+   "module": "game.art.m5.posters",
+   "variants": 6,
+   "size": [
+    32,
+    44
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/printworks_sign",
+   "kind": "sprite_def",
+   "module": "game.art.m5.printworks_sign",
+   "variants": 2,
+   "size": [
+    96,
+    14
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/guard_banner",
+   "kind": "sprite_def",
+   "module": "game.art.m5.guard_banner",
+   "variants": 1,
+   "size": [
+    36,
+    57
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/guard_plate",
+   "kind": "sprite_def",
+   "module": "game.art.m5.guard_plate",
+   "variants": 1,
+   "size": [
+    36,
+    20
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/district_map",
+   "kind": "sprite_def",
+   "module": "game.art.m5.district_map",
+   "variants": 1,
+   "size": [
+    52,
+    36
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/portrait_frame",
+   "kind": "sprite_def",
+   "module": "game.art.m5.portrait_frame",
+   "variants": 1,
+   "size": [
+    30,
+    30
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/presidential_crest",
+   "kind": "sprite_def",
+   "module": "game.art.m5.presidential_crest",
+   "variants": 2,
+   "size": [
+    40,
+    40
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/calendar",
+   "kind": "sprite_def",
+   "module": "game.art.m5.calendar",
+   "variants": 1,
+   "size": [
+    24,
+    32
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/armband",
+   "kind": "sprite_def",
+   "module": "game.art.m5.armband",
+   "variants": 1,
+   "size": [
+    25,
+    8
+   ],
+   "tags": [
+    "decal"
+   ]
+  },
+  {
+   "id": "m5/wall_posters",
+   "kind": "sprite_def",
+   "module": "game.art.m5.wall_posters",
+   "variants": 7,
+   "size": [
+    60,
+    16
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/hq_locker",
+   "kind": "sprite_def",
+   "module": "game.art.m5.hq_locker",
+   "variants": 1,
+   "size": [
+    26,
+    44
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/mag",
+   "kind": "sprite_def",
+   "module": "game.art.m5.mag",
+   "variants": 2,
+   "size": [
+    12,
+    29
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/mag_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m5.mag_icon",
+   "variants": 6,
+   "size": [
+    26,
+    55
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/plate",
+   "kind": "sprite_def",
+   "module": "game.art.m5.plate",
+   "variants": 1,
+   "size": [
+    340,
+    46
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/press",
+   "kind": "sprite_def",
+   "module": "game.art.m5.press",
+   "variants": 2,
+   "size": [
+    154,
+    64
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/bale",
+   "kind": "sprite_def",
+   "module": "game.art.m5.bale",
+   "variants": 8,
+   "size": [
+    56,
+    56
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/m5_guard",
+   "kind": "sprite_def",
+   "module": "game.art.m5.m5_guard",
+   "variants": 3,
+   "size": [
+    96,
+    96
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/maru",
+   "kind": "sprite_def",
+   "module": "game.art.m5.maru",
+   "variants": 72,
+   "size": [
+    84,
+    84
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/tram_wreck",
+   "kind": "sprite_def",
+   "module": "game.art.m5.tram_wreck",
+   "variants": 1,
+   "size": [
+    297,
+    115
+   ],
+   "tags": []
+  },
+  {
+   "id": "m5/inspect_art",
+   "kind": "layer",
+   "module": "game.art.m5.inspect_art",
+   "variants": 6,
+   "size": [
+    1300,
+    910
+   ],
+   "tags": [
+    "layer"
+   ],
+   "variant_names": [
+    "notice",
+    "hq_tv",
+    "portrait",
+    "paint",
+    "shop_tv",
+    "tram"
+   ]
+  }
+ ]
+}

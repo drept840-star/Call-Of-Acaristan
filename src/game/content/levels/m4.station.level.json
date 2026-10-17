@@ -1,0 +1,52 @@
+{
+ "schema": "ae.level/1",
+ "id": "m4.station",
+ "name": "Mission 4 - Station",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCOOOOOOOOOOOOOOOOOCCC",
+   "CCCCOOOOOOOCOOOOOCOOOCCC",
+   "CCCCOOONOOOCOOOOOCOOOCCC",
+   "CCCCOOOOOOOOOOCCOOOOJCCC",
+   "CCCCOOOOOOOOOOOOOOOOOCCC",
+   "CCCCOOOOOOOOOOOOOOOOTCCC",
+   "CCCCOOODDOLLLODDDOLLOCCC",
+   "CCCCCCCLLCDDDCLLLCLLCCCC",
+   "CCCCCCCLLLLLLLLLLLLLCCCC",
+   "CCCCCCCLLLLLLLLLLLDDOOCC",
+   "CCCCCCCLLLLLLLLLLLLLOOCC",
+   "CCCCFFFDDFDDDFCCOOOOOOCC",
+   "CCCCFFFFFFFFFFCCOOCCOOCC",
+   "CCCCFCFFPFFFFDDLLOOOOOCC",
+   "CCCCFCFFFFFFFLLDDOOOOOCC",
+   "CCCCFFFFFFFFFFCCOOOOOOCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@8,15",
+   "kind": "spawn",
+   "tile": [
+    8,
+    15
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m4"
+ }
+}

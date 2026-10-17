@@ -1,0 +1,62 @@
+{
+ "schema": "ae.manifest/1",
+ "pack": "m2",
+ "baked_dir": "assets/baked/m2",
+ "notes": "Mission 2 baked world layers. world_static replaces the runtime core.staticlayer chunk cache (bake source = missions.m2.draw._bake_m2_static, still the live fallback).",
+ "assets": [
+  {
+   "id": "m2/world_static",
+   "kind": "layer",
+   "module": "game.art.m2.world_static",
+   "variants": 1,
+   "variant_names": [
+    "default"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    4608,
+    5120
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m2/nest_bits",
+   "kind": "sprite_def",
+   "module": "game.art.m2.nest_bits",
+   "variants": 3,
+   "variant_names": [
+    "scuff",
+    "casing",
+    "rifle"
+   ],
+   "size": [
+    48,
+    24
+   ],
+   "tags": [
+    "world",
+    "prop"
+   ]
+  },
+  {
+   "id": "m2/prop_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m2.prop_icon",
+   "variants": 19,
+   "size": [
+    64,
+    64
+   ],
+   "tags": [
+    "world",
+    "icon"
+   ]
+  }
+ ]
+}

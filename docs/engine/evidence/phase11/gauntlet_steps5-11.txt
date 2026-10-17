@@ -1,0 +1,18 @@
+/home/user/First try-slim/src/engine/core/app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
+/usr/local/lib/python3.13/site-packages/pygame/sysfont.py:500: UserWarning: The system font 'Arial Black' couldn't be found. Did you mean: 'arial'? Verify your font name input. Using the default font instead.
+  warnings.warn(
+/usr/local/lib/python3.13/site-packages/pygame/sysfont.py:500: UserWarning: The system font 'Impact' couldn't be found. Verify your font name input. Using the default font instead.
+  warnings.warn(
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.16)
+Loaded optional sound 'mission3_alarm_loop': /home/user/First try-slim/assets/alarm.mp3
+engine3d: GPU renderer unavailable, using software (OpenGL 3.3 unavailable: ModuleNotFoundError("No module named 'moderngl'"))
+[voice] BALACEANU: 13 files -> 12 of 13 lines matched; 1 extra file(s), 1 line(s) without audio - see balaceanu_matches.txt
+[voice] DARIUS: 1 files -> 1 of 1 lines matched; 0 extra file(s), 0 line(s) without audio - see darius_matches.txt
+[voice] GABI: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see gabi_matches.txt
+[voice] NARRATOR: 10 files -> 10 of 10 lines matched; 0 extra file(s), 0 line(s) without audio - see narrator_matches.txt
+[voice] SEBY: 4 files -> 4 of 4 lines matched; 0 extra file(s), 0 line(s) without audio - see seby_matches.txt
+[voice] VASILE: 84 files -> 83 of 83 lines matched; 1 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+[SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+[CHECKPOINT] Respawned at shelter - evidence phase active
+AE GAUNTLET: clean (93 shots x2 offsets, 5 gameplay segments x30 shifted frames)

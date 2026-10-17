@@ -1,0 +1,356 @@
+{
+ "family": "portraits",
+ "frames": {
+  "alex": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    234,
+    0,
+    24,
+    24
+   ]
+  },
+  "balaceanu": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    130,
+    0,
+    24,
+    24
+   ]
+  },
+  "biribel": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    0,
+    0,
+    24,
+    24
+   ]
+  },
+  "bodi": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    208,
+    0,
+    24,
+    24
+   ]
+  },
+  "commander": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    78,
+    0,
+    24,
+    24
+   ]
+  },
+  "darius": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    416,
+    0,
+    24,
+    24
+   ]
+  },
+  "fisherman": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    104,
+    0,
+    24,
+    24
+   ]
+  },
+  "gabi": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    364,
+    0,
+    24,
+    24
+   ]
+  },
+  "hungry_kid": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    468,
+    0,
+    24,
+    24
+   ]
+  },
+  "intercept": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "emblem",
+   "rect": [
+    572,
+    0,
+    24,
+    24
+   ]
+  },
+  "ipa_dispatch": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    312,
+    0,
+    24,
+    24
+   ]
+  },
+  "krap_command": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    286,
+    0,
+    24,
+    24
+   ]
+  },
+  "loyalist_comms": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "emblem",
+   "rect": [
+    650,
+    0,
+    24,
+    24
+   ]
+  },
+  "maru": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    182,
+    0,
+    24,
+    24
+   ]
+  },
+  "narrator": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "emblem",
+   "rect": [
+    520,
+    0,
+    24,
+    24
+   ]
+  },
+  "old_squadmate": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    338,
+    0,
+    24,
+    24
+   ]
+  },
+  "old_woman": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    442,
+    0,
+    24,
+    24
+   ]
+  },
+  "pa_system": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "emblem",
+   "rect": [
+    546,
+    0,
+    24,
+    24
+   ]
+  },
+  "president": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    156,
+    0,
+    24,
+    24
+   ]
+  },
+  "radio": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "emblem",
+   "rect": [
+    598,
+    0,
+    24,
+    24
+   ]
+  },
+  "seby": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    390,
+    0,
+    24,
+    24
+   ]
+  },
+  "system": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "emblem",
+   "rect": [
+    624,
+    0,
+    24,
+    24
+   ]
+  },
+  "ucilev": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    260,
+    0,
+    24,
+    24
+   ]
+  },
+  "unknown": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    494,
+    0,
+    24,
+    24
+   ]
+  },
+  "vasile": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    26,
+    0,
+    24,
+    24
+   ]
+  },
+  "volkov": {
+   "anchor": [
+    0,
+    0
+   ],
+   "kind": "face",
+   "rect": [
+    52,
+    0,
+    24,
+    24
+   ]
+  }
+ },
+ "image": "spr_portraits.png",
+ "meta": {
+  "display_scale": 2,
+  "note": "radio caller-ID busts; ui.radio maps speakers to keys",
+  "size": 24
+ },
+ "scale": 1,
+ "sheet": "spr_portraits",
+ "size": [
+  674,
+  24
+ ],
+ "tile_size": 64
+}

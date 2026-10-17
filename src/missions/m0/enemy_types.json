@@ -1,0 +1,27 @@
+{
+ "objective": "Reach the east exit",
+ "hud_plate": "Mission 0 - Depot",
+ "spawn_protection_s": 1,
+ "enemy_types": {
+  "sentinel": {
+   "hp": 200,
+   "speed": 2.0,
+   "sight_mul": 1.0,
+   "color": [
+    150,
+    60,
+    50
+   ]
+  },
+  "charger": {
+   "hp": 90,
+   "speed": 3.4,
+   "sight_mul": 1.35,
+   "color": [
+    200,
+    130,
+    50
+   ]
+  }
+ }
+}

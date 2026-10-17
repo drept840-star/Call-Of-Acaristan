@@ -1,0 +1,5 @@
+LINE	FILE	SECONDS	TEXT
+VO_043	Generated Audio October 07, 2026 - 11_44PM.ogg	2.2	Sniper! Highway sign!
+VO_108	Generated Audio October 07, 2026 - 11_44PM(1).ogg	3.3	West side's clear. Just burned-out cars.
+VO_112	Generated Audio October 07, 2026 - 11_44PM(2).ogg	1.7	GABI! NO!
+VO_115	Generated Audio October 07, 2026 - 11_45PM.ogg	4.7	Hold on - I got you - I GOT YOU-

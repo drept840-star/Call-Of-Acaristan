@@ -1,0 +1,20 @@
+# RPE6 Phase 0 line-ending policy (master prompt R14): LF everywhere, binaries marked.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
+*.mp4 binary
+*.npz binary
+*.pyc binary

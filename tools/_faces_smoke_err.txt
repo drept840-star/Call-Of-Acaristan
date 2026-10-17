@@ -1,0 +1,26 @@
+E:\Code\Call of Acaristan\First try\src\core\config.py:32: Warning: no fast renderer available
+  screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:5620: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  plain = pygame.image.tostring(base, "RGBA")
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:5639: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  got = pygame.image.tostring(s, "RGBA")
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:5649: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  return pygame.image.tostring(s, "RGBA")
+E:\Code\Call of Acaristan\First try\tools\smoke_test.py:4774: DeprecationWarning: pygame.image.tostring deprecated since 2.3.0
+  return pygame.image.tostring(surf, "RGBA")
+Traceback (most recent call last):
+  File "E:\Code\Call of Acaristan\First try\tools\smoke_test.py", line 74, in run_check
+    fn()
+    ~~^^
+  File "E:\Code\Call of Acaristan\First try\tools\smoke_test.py", line 6008, in check_mission5_start
+    assert sum(1 for e in STATE.enemies if e.m5_type == "marksman") == 2
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+Traceback (most recent call last):
+  File "E:\Code\Call of Acaristan\First try\tools\smoke_test.py", line 74, in run_check
+    fn()
+    ~~^^
+  File "E:\Code\Call of Acaristan\First try\tools\smoke_test.py", line 6028, in check_mission5_stage_ladder
+    assert STATE.mission5_stage == m5.STAGE_PRINTWORKS
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

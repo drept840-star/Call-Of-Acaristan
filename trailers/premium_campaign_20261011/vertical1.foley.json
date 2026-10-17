@@ -1,0 +1,633 @@
+{
+ "act": "vertical1",
+ "label": "ACT I - BLACK NOTEBOOK",
+ "starter": "gc.start_mission(preserve_timer=True)",
+ "hz": 60,
+ "frames": 360,
+ "seconds": 12.0,
+ "ticks": 720,
+ "seed": 20261011,
+ "stats": {
+  "shots": 29,
+  "kills": 4,
+  "blind_shots": 0,
+  "enemy_shots": 11
+ },
+ "events": [
+  {
+   "t": 1,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 2,
+   "kind": "footstep"
+  },
+  {
+   "t": 11,
+   "kind": "footstep"
+  },
+  {
+   "t": 20,
+   "kind": "footstep"
+  },
+  {
+   "t": 30,
+   "kind": "footstep"
+  },
+  {
+   "t": 37,
+   "kind": "footstep"
+  },
+  {
+   "t": 46,
+   "kind": "footstep"
+  },
+  {
+   "t": 52,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 54,
+   "kind": "footstep"
+  },
+  {
+   "t": 67,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 71,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 71,
+   "kind": "footstep"
+  },
+  {
+   "t": 76,
+   "kind": "footstep"
+  },
+  {
+   "t": 77,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 84,
+   "kind": "footstep"
+  },
+  {
+   "t": 87,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 93,
+   "kind": "footstep"
+  },
+  {
+   "t": 93,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 101,
+   "kind": "footstep"
+  },
+  {
+   "t": 108,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 108,
+   "kind": "footstep"
+  },
+  {
+   "t": 113,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 116,
+   "kind": "footstep"
+  },
+  {
+   "t": 123,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 125,
+   "kind": "footstep"
+  },
+  {
+   "t": 127,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 127,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 134,
+   "kind": "footstep"
+  },
+  {
+   "t": 138,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 142,
+   "kind": "footstep"
+  },
+  {
+   "t": 150,
+   "kind": "footstep"
+  },
+  {
+   "t": 156,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 171,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 176,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 189,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 190,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 200,
+   "kind": "footstep"
+  },
+  {
+   "t": 206,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 211,
+   "kind": "footstep"
+  },
+  {
+   "t": 219,
+   "kind": "footstep"
+  },
+  {
+   "t": 227,
+   "kind": "footstep"
+  },
+  {
+   "t": 236,
+   "kind": "footstep"
+  },
+  {
+   "t": 246,
+   "kind": "footstep"
+  },
+  {
+   "t": 255,
+   "kind": "footstep"
+  },
+  {
+   "t": 264,
+   "kind": "footstep"
+  },
+  {
+   "t": 272,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 273,
+   "kind": "footstep"
+  },
+  {
+   "t": 277,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 282,
+   "kind": "footstep"
+  },
+  {
+   "t": 289,
+   "kind": "footstep"
+  },
+  {
+   "t": 291,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 291,
+   "kind": "reload"
+  },
+  {
+   "t": 296,
+   "kind": "footstep"
+  },
+  {
+   "t": 305,
+   "kind": "footstep"
+  },
+  {
+   "t": 313,
+   "kind": "footstep"
+  },
+  {
+   "t": 321,
+   "kind": "footstep"
+  },
+  {
+   "t": 329,
+   "kind": "footstep"
+  },
+  {
+   "t": 337,
+   "kind": "footstep"
+  },
+  {
+   "t": 337,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 345,
+   "kind": "footstep"
+  },
+  {
+   "t": 353,
+   "kind": "footstep"
+  },
+  {
+   "t": 360,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 361,
+   "kind": "footstep"
+  },
+  {
+   "t": 369,
+   "kind": "footstep"
+  },
+  {
+   "t": 378,
+   "kind": "footstep"
+  },
+  {
+   "t": 380,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 387,
+   "kind": "footstep"
+  },
+  {
+   "t": 395,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 396,
+   "kind": "footstep"
+  },
+  {
+   "t": 399,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 404,
+   "kind": "footstep"
+  },
+  {
+   "t": 411,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 412,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 413,
+   "kind": "footstep"
+  },
+  {
+   "t": 422,
+   "kind": "footstep"
+  },
+  {
+   "t": 423,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 429,
+   "kind": "footstep"
+  },
+  {
+   "t": 432,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 437,
+   "kind": "footstep"
+  },
+  {
+   "t": 441,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 445,
+   "kind": "footstep"
+  },
+  {
+   "t": 452,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 453,
+   "kind": "footstep"
+  },
+  {
+   "t": 460,
+   "kind": "footstep"
+  },
+  {
+   "t": 468,
+   "kind": "footstep"
+  },
+  {
+   "t": 469,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 477,
+   "kind": "footstep"
+  },
+  {
+   "t": 485,
+   "kind": "footstep"
+  },
+  {
+   "t": 486,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 493,
+   "kind": "footstep"
+  },
+  {
+   "t": 497,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 501,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 501,
+   "kind": "footstep"
+  },
+  {
+   "t": 507,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 510,
+   "kind": "footstep"
+  },
+  {
+   "t": 518,
+   "kind": "footstep"
+  },
+  {
+   "t": 520,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 526,
+   "kind": "footstep"
+  },
+  {
+   "t": 535,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 535,
+   "kind": "footstep"
+  },
+  {
+   "t": 543,
+   "kind": "footstep"
+  },
+  {
+   "t": 548,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 550,
+   "kind": "footstep"
+  },
+  {
+   "t": 556,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 556,
+   "kind": "reload"
+  },
+  {
+   "t": 559,
+   "kind": "footstep"
+  },
+  {
+   "t": 562,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 568,
+   "kind": "footstep"
+  },
+  {
+   "t": 575,
+   "kind": "footstep"
+  },
+  {
+   "t": 583,
+   "kind": "footstep"
+  },
+  {
+   "t": 590,
+   "kind": "footstep"
+  },
+  {
+   "t": 592,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 597,
+   "kind": "footstep"
+  },
+  {
+   "t": 605,
+   "kind": "footstep"
+  },
+  {
+   "t": 608,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 614,
+   "kind": "footstep"
+  },
+  {
+   "t": 622,
+   "kind": "footstep"
+  },
+  {
+   "t": 627,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 630,
+   "kind": "footstep"
+  },
+  {
+   "t": 635,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 637,
+   "kind": "footstep"
+  },
+  {
+   "t": 645,
+   "kind": "footstep"
+  },
+  {
+   "t": 647,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 652,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 652,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 653,
+   "kind": "footstep"
+  },
+  {
+   "t": 661,
+   "kind": "footstep"
+  },
+  {
+   "t": 667,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 668,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 670,
+   "kind": "footstep"
+  },
+  {
+   "t": 675,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 679,
+   "kind": "footstep"
+  },
+  {
+   "t": 686,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 687,
+   "kind": "footstep"
+  },
+  {
+   "t": 693,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 695,
+   "kind": "footstep"
+  },
+  {
+   "t": 704,
+   "kind": "footstep"
+  },
+  {
+   "t": 706,
+   "kind": "player_shot",
+   "weapon": "pistol"
+  },
+  {
+   "t": 712,
+   "kind": "footstep"
+  },
+  {
+   "t": 712,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 712,
+   "kind": "enemy_hit",
+   "dmg": 50
+  },
+  {
+   "t": 720,
+   "kind": "footstep"
+  }
+ ]
+}

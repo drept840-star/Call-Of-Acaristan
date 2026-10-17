@@ -1,0 +1,46 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m2.seby_pickup",
+ "shots": [
+  {
+   "scene": "seby_pickup_body",
+   "speaker": "",
+   "text": "",
+   "lighting": [
+    10,
+    10,
+    12
+   ],
+   "min_ms": 2200,
+   "hide_caption": true
+  },
+  {
+   "scene": "seby_pickup_reach",
+   "speaker": "",
+   "text": "",
+   "lighting": [
+    12,
+    12,
+    14
+   ],
+   "min_ms": 2400,
+   "hide_caption": true
+  },
+  {
+   "scene": "seby_pickup_raise",
+   "speaker": "",
+   "text": "",
+   "lighting": [
+    14,
+    14,
+    16
+   ],
+   "min_ms": 2600,
+   "hide_caption": true
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m2.meta.seby_pickup_shots"
+ }
+}

@@ -1,0 +1,104 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m2.ending",
+ "shots": [
+  {
+   "scene": "route12_aftermath",
+   "speaker": "SYSTEM",
+   "text": "TRANSMISSION SENT / ARCHIVE PARTIALLY CORRUPTED",
+   "lighting": [
+    12,
+    10,
+    8
+   ]
+  },
+  {
+   "scene": "route12_broadcast",
+   "speaker": "PRESIDENT RETARDOVICI",
+   "text": "Route 12 will be remembered as the day KRAP discipline failed the nation.",
+   "lighting": [
+    18,
+    14,
+    12
+   ]
+  },
+  {
+   "scene": "route12_broadcast",
+   "speaker": "BALACEANU",
+   "text": "Effective immediately, KRAP operations in the highway corridor fall under government review.",
+   "lighting": [
+    18,
+    14,
+    12
+   ]
+  },
+  {
+   "scene": "route12_aftermath",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Biribel... tell me you got out.",
+   "lighting": [
+    10,
+    10,
+    12
+   ]
+  },
+  {
+   "scene": "route12_aftermath",
+   "speaker": "BIRIBEL",
+   "text": "They framed KRAP.",
+   "lighting": [
+    10,
+    10,
+    12
+   ]
+  },
+  {
+   "scene": "route12_black",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "No. They framed you first.",
+   "lighting": [
+    2,
+    2,
+    4
+   ]
+  },
+  {
+   "scene": "ipa_radio_chatter",
+   "speaker": "IPA DISPATCH",
+   "text": "All units. The KRAP operator is the primary suspect. Bring him in. Authorization IPA-Code Omega.",
+   "lighting": [
+    10,
+    15,
+    22
+   ]
+  },
+  {
+   "scene": "krap_door_kickin",
+   "speaker": null,
+   "text": null,
+   "lighting": [
+    8,
+    12,
+    20
+   ],
+   "is_transition": true
+  },
+  {
+   "scene": "biribel_blackout",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Biribel? ...Biribel?!",
+   "lighting": [
+    2,
+    2,
+    4
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m2.meta.mission2_ending_shots"
+ }
+}

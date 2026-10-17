@@ -1,0 +1,2 @@
+E:\Code\Call of Acaristan\First try\archive/before_T2/src\core\config.py:32: Warning: no fast renderer available
+  screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)

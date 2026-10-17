@@ -1,0 +1,15 @@
+# P5-M5b full gate (sandbox, pygame-ce 2.5.8, SDL dummy, PYTHONHASHSEED=0, golden/loop sets sandbox_linux) — 2026-10-15
+AE REPLAY: OK
+verified 373 shots in 6.2s: 0 failures, 0 errors
+AE GOLDEN: OK
+AE LOOP: OK (7/7 segments, 43s)
+SMOKE TEST: OK   (first pass failed only in the smoke mirror `mp_host_and_portmap`, which still read `Player._arena_muzzle`; mirror moved to `_view_meta[...].muzzle`, full smoke re-run OK)
+Ran 206 tests in 7.609s
+OK
+BOUNDARIES: OK (0 engine violations, 56 engine modules; W1 shared->mission 48 (baseline 48, =))
+AE API: OK (53 modules, 320 public names; +0 -0 ~0, 0 errors)
+AE D4: OK (hard=0, remaining mission-prefixed sites=0, exit criterion met)
+AE BAKE: OK
+AE TEXT: OK (table 488 keys, 0 missing, 0 unused, 21 fit slots)
+AE D4 REPLAY COMPAT: OK
+GATE_DONE

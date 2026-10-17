@@ -1,0 +1,8 @@
+/vercel/sandbox/data/project/src/core/config.py:32: Warning: no fast renderer available
+  screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.033s
+
+OK
+Loaded optional sound 'mission3_alarm_loop': /vercel/sandbox/data/project/assets/alarm.mp3

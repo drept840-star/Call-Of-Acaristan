@@ -1,0 +1,8 @@
+wall_monitor lit=True t=100000           max 0 px 0
+wall_monitor lit=True t=100500           max 0 px 0
+wall_monitor lit=False t=100000          max 0 px 0
+wall_monitor lit=False t=100500          max 0 px 0
+pickup sidearm                           max 0 px 0
+pickup bandage                           max 0 px 0
+security_camera alerted=False            max 0 px 0
+security_camera alerted=True             max 0 px 0

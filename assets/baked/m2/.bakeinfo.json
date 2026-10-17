@@ -1,0 +1,209 @@
+{
+ "entries": {
+  "m2/nest_bits": {
+   "files": {
+    "0": {
+     "file": "nest_bits_0.png",
+     "pixels": "de949b82965d7438e0af02103d349027fe078a4b24d358ffc301170392f460a2",
+     "size": [
+      48,
+      24
+     ]
+    },
+    "1": {
+     "file": "nest_bits_1.png",
+     "pixels": "39492600bb6703c9b52458e8fd2bf405eb987753ac59c978abcd527cd7f4f3a1",
+     "size": [
+      8,
+      6
+     ]
+    },
+    "2": {
+     "file": "nest_bits_2.png",
+     "pixels": "d3c979056495b74b00b37140d5208102c0e83e0563810ca5ccd159b23342653d",
+     "size": [
+      40,
+      12
+     ]
+    }
+   },
+   "source": "7b0f4f8c98bb9cdd8d283451103594135378d368ede71f2862862b7b2d856fc0",
+   "variants": 3
+  },
+  "m2/prop_icon": {
+   "files": {
+    "0": {
+     "file": "prop_icon_0.png",
+     "pixels": "2eddaef053aac6b401623f08b5301e7c215a761b852bc76e4b348ea997fba3a2",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "1": {
+     "file": "prop_icon_1.png",
+     "pixels": "52655411ed52f6d0a671eeb532631ebf4bc841a219c05746c016a249ac01233b",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "10": {
+     "file": "prop_icon_10.png",
+     "pixels": "6dfca58049089f383415e125cec5c4ae2d90b9cc6cd4e430c1c49f736f4d76b9",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "11": {
+     "file": "prop_icon_11.png",
+     "pixels": "248877b80c31d6dcdfbd8c8e82858b2b029e68c88b6baaecda93400d68b53e24",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "12": {
+     "file": "prop_icon_12.png",
+     "pixels": "54867258cf6f4a6fc88ac4ef42ca9e96d371877f5f8d7f47450755cf2efa182b",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "13": {
+     "file": "prop_icon_13.png",
+     "pixels": "d85a1ff37413810ea2270e0fa7c42872aa3931b39ef733a3620f203ce31a9947",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "14": {
+     "file": "prop_icon_14.png",
+     "pixels": "0a1a49d830e6a6830ff73d456db5961d3911709ab3fcedd75422f60d00204cfb",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "15": {
+     "file": "prop_icon_15.png",
+     "pixels": "1dccb6b3e8a26a63da623df4fb98b929df66f2a33e1940c0335145faa37d1186",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "16": {
+     "file": "prop_icon_16.png",
+     "pixels": "9df37dfa15a9814fea5a61ee4ab037a20469002609cb5a9796f6daa80d23561b",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "17": {
+     "file": "prop_icon_17.png",
+     "pixels": "53d9e66384469cb07cb8011fdf771c2bc4e7de96d9ae7917b60a2e9cdf5df7f3",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "18": {
+     "file": "prop_icon_18.png",
+     "pixels": "b0ac9fa78cd25cdf7a36b7d2950884e1b3640d5d72b33ae721b983a957b6e03b",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "2": {
+     "file": "prop_icon_2.png",
+     "pixels": "959655343e1c25511a621378ab4409ac2a72a1a3ef499d2b7594b0a0ee8fbd12",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "3": {
+     "file": "prop_icon_3.png",
+     "pixels": "2a908420f5b152532514ee153bb1da1c50ce1fddb8630bad4643a7d6b2f7b3db",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "4": {
+     "file": "prop_icon_4.png",
+     "pixels": "f5619dd510d07cdaa80fab3f9b1d6a928674fb1ed5ddb67d687adb5fe6c7d6bf",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "5": {
+     "file": "prop_icon_5.png",
+     "pixels": "15625f4c2e567b834c4dbede49f8b7391ef37aa80e524cb8523988c8fd77817d",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "6": {
+     "file": "prop_icon_6.png",
+     "pixels": "6f54f7fb2a9fbca56136ad3dbf50f80dff3c8f6ce7bdb0688aedd9e1d5d64500",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "7": {
+     "file": "prop_icon_7.png",
+     "pixels": "6084580fa189bfbcba4a4bfaef82fdc933065fa5cad95dbaa3108c67b98ab829",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "8": {
+     "file": "prop_icon_8.png",
+     "pixels": "e6ae3face3c9a26cae9dfa9bc83cf9a56cac5ed79646d5da3b6d073cf80bce65",
+     "size": [
+      64,
+      64
+     ]
+    },
+    "9": {
+     "file": "prop_icon_9.png",
+     "pixels": "dc995d61502ccfdc9ce3cdf19df2d632f1054da936afea2ef0883e15f1d2e730",
+     "size": [
+      64,
+      64
+     ]
+    }
+   },
+   "source": "794e851ca813be6586d3a04c1e77816075fd62039617020dbd5ed5ffeab42050",
+   "variants": 19
+  },
+  "m2/world_static": {
+   "files": {
+    "0": {
+     "file": "world_static_0.png",
+     "pixels": "c900c20be8c525677bf96e8721ac6c75900db981adea4cf1570d958fe99a2480",
+     "size": [
+      4608,
+      5120
+     ]
+    }
+   },
+   "source": "bc625fe3de6c9af435f4eb4b210901f7b3dc6952a0c007afbd0b255c81532bcb",
+   "variants": 1
+  }
+ },
+ "pack": "m2",
+ "schema": "ae.bakeinfo/1",
+ "tool": "ae_bake/1"
+}

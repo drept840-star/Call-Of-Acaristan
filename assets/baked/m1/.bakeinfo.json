@@ -1,0 +1,95 @@
+{
+ "entries": {
+  "m1/exfil_truck": {
+   "files": {
+    "0": {
+     "file": "exfil_truck_0.png",
+     "pixels": "26cb3d8a3e44342803c64ffcc8e3b59f26802b712e08cde4c7d3f92c9f171559",
+     "size": [
+      136,
+      70
+     ]
+    }
+   },
+   "source": "ad785eb5c51c0530d23d63a7cde49e815a53f6e107abfbac4c7e086c5e1a3811",
+   "variants": 1
+  },
+  "m1/molotov_icon": {
+   "files": {
+    "0": {
+     "file": "molotov_icon_0.png",
+     "pixels": "b34044369ca0cbc515db3154cc695fe028ee80377fd6b2f1518bc97693f60cde",
+     "size": [
+      12,
+      36
+     ]
+    },
+    "1": {
+     "file": "molotov_icon_1.png",
+     "pixels": "68d5304cd85719d576748e465c244b2e33a3f03c63d544e627a8e585dce516ba",
+     "size": [
+      12,
+      36
+     ]
+    }
+   },
+   "source": "68498298b81f64ad3d8c33474ed139fccbf2743fcdd81fe18ba642bccc9ae08c",
+   "variants": 2
+  },
+  "m1/pickup_icon": {
+   "files": {
+    "0": {
+     "file": "pickup_icon_0.png",
+     "pixels": "24ee24185ab2bd55b278a2243f979c6f8d11a84aec1b20086857aad9b6e17d41",
+     "size": [
+      32,
+      32
+     ]
+    },
+    "1": {
+     "file": "pickup_icon_1.png",
+     "pixels": "2415a639c70e83a23a1126bb7946f70e84668d52d521e5bc7d9254bb16d1a1a8",
+     "size": [
+      32,
+      32
+     ]
+    },
+    "2": {
+     "file": "pickup_icon_2.png",
+     "pixels": "291a5ce1903c1cae499e7ad7e1816bb1a546651e0caea6a23e175ab5bae0c821",
+     "size": [
+      32,
+      32
+     ]
+    },
+    "3": {
+     "file": "pickup_icon_3.png",
+     "pixels": "20da7275025bf681d1329f1f1d0c3183fc26be9099dc369c7f079bb1b63bb796",
+     "size": [
+      32,
+      32
+     ]
+    }
+   },
+   "source": "1ab9f606f2760f0b2d18c145fb0217d4e77f28bec94d1b399a69bb113121c0eb",
+   "variants": 4
+  },
+  "m1/world_static": {
+   "files": {
+    "0": {
+     "file": "world_static_0.png",
+     "pixels": "96eea6545d039af72377e23734ed943c9719a41a990fc397fc725bddf941d25d",
+     "size": [
+      2048,
+      1536
+     ]
+    }
+   },
+   "source": "9358d2b591fb62c07fa27a1decdb50d46441a2c04bd07fa21b8229b16e8f0910",
+   "variants": 1
+  }
+ },
+ "pack": "m1",
+ "schema": "ae.bakeinfo/1",
+ "tool": "ae_bake/1"
+}

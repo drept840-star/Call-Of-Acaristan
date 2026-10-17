@@ -1,0 +1,1138 @@
+.env.example
+.gitattributes
+.gitignore
+AGENTS.md
+Bodi = Vasile.txt
+Enzo = narator.txt
+Fisherman = Milo.txt
+Iapteus = Volkov.txt
+MEMORY.md
+README.md
+RESUME_PROMPT.txt
+Vasile = Gero.txt
+acaristan.py
+assets/Acaristan Flag.png
+assets/alarm.mp3
+assets/art/L_cone.png
+assets/art/L_dot.png
+assets/art/L_radial.png
+assets/art/cab_dossier.png
+assets/art/cork.png
+assets/art/crt_0.png
+assets/art/crt_1.png
+assets/art/crt_2.png
+assets/art/crt_3.png
+assets/art/door_leaf.png
+assets/art/door_open_inner.png
+assets/art/dossier_confirmed.png
+assets/art/dossier_evidence.png
+assets/art/dossier_plain.png
+assets/art/hand_grip.png
+assets/art/hand_open.png
+assets/art/hand_pinch.png
+assets/art/hand_stamp.png
+assets/art/i_arrow.png
+assets/art/i_bandage.png
+assets/art/i_dossier.png
+assets/art/i_keycard.png
+assets/art/i_molotov.png
+assets/art/i_radio.png
+assets/art/i_relay.png
+assets/art/ladder.png
+assets/art/library_cart.png
+assets/art/panel9.png
+assets/art/pipe_h.png
+assets/art/pipe_v.png
+assets/art/plaque.png
+assets/art/prop_barrels.png
+assets/art/prop_cart.png
+assets/art/prop_coil.png
+assets/art/prop_crate.png
+assets/art/prop_mop.png
+assets/art/rack_0.png
+assets/art/rack_1.png
+assets/art/rack_2.png
+assets/art/rain_0.png
+assets/art/rain_1.png
+assets/art/rain_2.png
+assets/art/rain_3.png
+assets/art/rain_4.png
+assets/art/rain_5.png
+assets/art/shelf_a.png
+assets/art/shelf_b.png
+assets/art/shelf_c.png
+assets/art/shelf_top.png
+assets/art/splash.png
+assets/art/spr_fx_m2.json
+assets/art/spr_fx_m2.png
+assets/art/spr_fx_scorch.json
+assets/art/spr_fx_scorch.png
+assets/art/spr_portraits.json
+assets/art/spr_portraits.png
+assets/art/spr_props_m2.json
+assets/art/spr_props_m2.png
+assets/art/spr_vehicles.json
+assets/art/spr_vehicles.png
+assets/art/t_K_a.png
+assets/art/t_K_b.png
+assets/art/t_L_0.png
+assets/art/t_L_1.png
+assets/art/t_L_2.png
+assets/art/t_L_3.png
+assets/art/t_L_a.png
+assets/art/t_L_b.png
+assets/art/t_M_0.png
+assets/art/t_M_1.png
+assets/art/t_M_2.png
+assets/art/t_M_3.png
+assets/art/t_M_a.png
+assets/art/t_M_b.png
+assets/art/t_O_0.png
+assets/art/t_O_1.png
+assets/art/t_O_2.png
+assets/art/t_O_3.png
+assets/art/t_Y_0.png
+assets/art/t_Y_1.png
+assets/art/t_Y_2.png
+assets/art/t_Y_3.png
+assets/art/t_Y_a.png
+assets/art/t_Y_b.png
+assets/art/t_d_0.png
+assets/art/t_d_1.png
+assets/art/t_d_2.png
+assets/art/t_d_3.png
+assets/art/t_dot_0.png
+assets/art/t_dot_1.png
+assets/art/t_dot_2.png
+assets/art/t_dot_3.png
+assets/art/t_g_0.png
+assets/art/t_g_1.png
+assets/art/t_g_2.png
+assets/art/t_g_3.png
+assets/art/t_s_0.png
+assets/art/t_s_1.png
+assets/art/t_s_2.png
+assets/art/t_s_3.png
+assets/art/trailer_icon.png
+assets/art/w_B_0.png
+assets/art/w_B_1.png
+assets/art/w_C_0.png
+assets/art/w_C_1.png
+assets/art/w_C_2.png
+assets/art/w_C_3.png
+assets/art/w_S.png
+assets/baked/m1/.bakeinfo.json
+assets/baked/m1/exfil_truck_0.png
+assets/baked/m1/molotov_icon_0.png
+assets/baked/m1/molotov_icon_1.png
+assets/baked/m1/pickup_icon_0.png
+assets/baked/m1/pickup_icon_1.png
+assets/baked/m1/pickup_icon_2.png
+assets/baked/m1/pickup_icon_3.png
+assets/baked/m1/world_static_0.png
+assets/baked/m2/.bakeinfo.json
+assets/baked/m2/nest_bits_0.png
+assets/baked/m2/nest_bits_1.png
+assets/baked/m2/nest_bits_2.png
+assets/baked/m2/prop_icon_0.png
+assets/baked/m2/prop_icon_1.png
+assets/baked/m2/prop_icon_10.png
+assets/baked/m2/prop_icon_11.png
+assets/baked/m2/prop_icon_12.png
+assets/baked/m2/prop_icon_13.png
+assets/baked/m2/prop_icon_14.png
+assets/baked/m2/prop_icon_15.png
+assets/baked/m2/prop_icon_16.png
+assets/baked/m2/prop_icon_17.png
+assets/baked/m2/prop_icon_18.png
+assets/baked/m2/prop_icon_2.png
+assets/baked/m2/prop_icon_3.png
+assets/baked/m2/prop_icon_4.png
+assets/baked/m2/prop_icon_5.png
+assets/baked/m2/prop_icon_6.png
+assets/baked/m2/prop_icon_7.png
+assets/baked/m2/prop_icon_8.png
+assets/baked/m2/prop_icon_9.png
+assets/baked/m2/world_static_0.png
+assets/baked/m3/.bakeinfo.json
+assets/baked/m3/archives_static_0.png
+assets/baked/m3/archives_static_1.png
+assets/baked/m3/archives_static_2.png
+assets/baked/m3/broadcast_static_0.png
+assets/baked/m3/camera_body_0.png
+assets/baked/m3/camera_body_1.png
+assets/baked/m3/cell_details_0.png
+assets/baked/m3/cell_details_1.png
+assets/baked/m3/cell_door_blown_0.png
+assets/baked/m3/cell_door_blown_1.png
+assets/baked/m3/cellblock_static_0.png
+assets/baked/m3/cellblock_static_1.png
+assets/baked/m3/cellblock_static_2.png
+assets/baked/m3/cellblock_static_3.png
+assets/baked/m3/comms_static_0.png
+assets/baked/m3/door_tile_0.png
+assets/baked/m3/door_tile_1.png
+assets/baked/m3/door_tile_2.png
+assets/baked/m3/door_tile_3.png
+assets/baked/m3/kitchen_0.png
+assets/baked/m3/ko_static_0.png
+assets/baked/m3/ko_static_1.png
+assets/baked/m3/pickup_icon_0.png
+assets/baked/m3/pickup_icon_1.png
+assets/baked/m3/wall_monitor_0.png
+assets/baked/m3/wall_monitor_1.png
+assets/baked/m3/wall_monitor_2.png
+assets/baked/m3/weapon_icon_0.png
+assets/baked/m3/weapon_icon_1.png
+assets/baked/m3/weapon_icon_2.png
+assets/baked/m3/weapon_icon_3.png
+assets/baked/m3/weapon_icon_4.png
+assets/baked/m4/.bakeinfo.json
+assets/baked/m4/mag_icon_0.png
+assets/baked/m4/mag_icon_1.png
+assets/baked/m4/mag_icon_10.png
+assets/baked/m4/mag_icon_11.png
+assets/baked/m4/mag_icon_12.png
+assets/baked/m4/mag_icon_13.png
+assets/baked/m4/mag_icon_14.png
+assets/baked/m4/mag_icon_15.png
+assets/baked/m4/mag_icon_16.png
+assets/baked/m4/mag_icon_17.png
+assets/baked/m4/mag_icon_18.png
+assets/baked/m4/mag_icon_19.png
+assets/baked/m4/mag_icon_2.png
+assets/baked/m4/mag_icon_20.png
+assets/baked/m4/mag_icon_21.png
+assets/baked/m4/mag_icon_22.png
+assets/baked/m4/mag_icon_23.png
+assets/baked/m4/mag_icon_24.png
+assets/baked/m4/mag_icon_25.png
+assets/baked/m4/mag_icon_26.png
+assets/baked/m4/mag_icon_27.png
+assets/baked/m4/mag_icon_28.png
+assets/baked/m4/mag_icon_29.png
+assets/baked/m4/mag_icon_3.png
+assets/baked/m4/mag_icon_30.png
+assets/baked/m4/mag_icon_31.png
+assets/baked/m4/mag_icon_32.png
+assets/baked/m4/mag_icon_33.png
+assets/baked/m4/mag_icon_34.png
+assets/baked/m4/mag_icon_35.png
+assets/baked/m4/mag_icon_36.png
+assets/baked/m4/mag_icon_37.png
+assets/baked/m4/mag_icon_38.png
+assets/baked/m4/mag_icon_39.png
+assets/baked/m4/mag_icon_4.png
+assets/baked/m4/mag_icon_40.png
+assets/baked/m4/mag_icon_41.png
+assets/baked/m4/mag_icon_42.png
+assets/baked/m4/mag_icon_43.png
+assets/baked/m4/mag_icon_44.png
+assets/baked/m4/mag_icon_45.png
+assets/baked/m4/mag_icon_46.png
+assets/baked/m4/mag_icon_47.png
+assets/baked/m4/mag_icon_48.png
+assets/baked/m4/mag_icon_49.png
+assets/baked/m4/mag_icon_5.png
+assets/baked/m4/mag_icon_50.png
+assets/baked/m4/mag_icon_51.png
+assets/baked/m4/mag_icon_52.png
+assets/baked/m4/mag_icon_53.png
+assets/baked/m4/mag_icon_54.png
+assets/baked/m4/mag_icon_55.png
+assets/baked/m4/mag_icon_6.png
+assets/baked/m4/mag_icon_7.png
+assets/baked/m4/mag_icon_8.png
+assets/baked/m4/mag_icon_9.png
+assets/baked/m4/world_static_0.png
+assets/baked/m4/world_static_1.png
+assets/baked/m5/.bakeinfo.json
+assets/baked/m5/armband_0.png
+assets/baked/m5/bale_0.png
+assets/baked/m5/bale_1.png
+assets/baked/m5/bale_2.png
+assets/baked/m5/bale_3.png
+assets/baked/m5/bale_4.png
+assets/baked/m5/bale_5.png
+assets/baked/m5/bale_6.png
+assets/baked/m5/bale_7.png
+assets/baked/m5/calendar_0.png
+assets/baked/m5/district_map_0.png
+assets/baked/m5/guard_banner_0.png
+assets/baked/m5/guard_plate_0.png
+assets/baked/m5/hq_locker_0.png
+assets/baked/m5/inspect_art_0.png
+assets/baked/m5/inspect_art_1.png
+assets/baked/m5/inspect_art_2.png
+assets/baked/m5/inspect_art_3.png
+assets/baked/m5/inspect_art_4.png
+assets/baked/m5/inspect_art_5.png
+assets/baked/m5/m5_guard_0.png
+assets/baked/m5/m5_guard_1.png
+assets/baked/m5/m5_guard_2.png
+assets/baked/m5/mag_0.png
+assets/baked/m5/mag_1.png
+assets/baked/m5/mag_icon_0.png
+assets/baked/m5/mag_icon_1.png
+assets/baked/m5/mag_icon_2.png
+assets/baked/m5/mag_icon_3.png
+assets/baked/m5/mag_icon_4.png
+assets/baked/m5/mag_icon_5.png
+assets/baked/m5/maru_0.png
+assets/baked/m5/maru_1.png
+assets/baked/m5/maru_10.png
+assets/baked/m5/maru_11.png
+assets/baked/m5/maru_12.png
+assets/baked/m5/maru_13.png
+assets/baked/m5/maru_14.png
+assets/baked/m5/maru_15.png
+assets/baked/m5/maru_16.png
+assets/baked/m5/maru_17.png
+assets/baked/m5/maru_18.png
+assets/baked/m5/maru_19.png
+assets/baked/m5/maru_2.png
+assets/baked/m5/maru_20.png
+assets/baked/m5/maru_21.png
+assets/baked/m5/maru_22.png
+assets/baked/m5/maru_23.png
+assets/baked/m5/maru_24.png
+assets/baked/m5/maru_25.png
+assets/baked/m5/maru_26.png
+assets/baked/m5/maru_27.png
+assets/baked/m5/maru_28.png
+assets/baked/m5/maru_29.png
+assets/baked/m5/maru_3.png
+assets/baked/m5/maru_30.png
+assets/baked/m5/maru_31.png
+assets/baked/m5/maru_32.png
+assets/baked/m5/maru_33.png
+assets/baked/m5/maru_34.png
+assets/baked/m5/maru_35.png
+assets/baked/m5/maru_36.png
+assets/baked/m5/maru_37.png
+assets/baked/m5/maru_38.png
+assets/baked/m5/maru_39.png
+assets/baked/m5/maru_4.png
+assets/baked/m5/maru_40.png
+assets/baked/m5/maru_41.png
+assets/baked/m5/maru_42.png
+assets/baked/m5/maru_43.png
+assets/baked/m5/maru_44.png
+assets/baked/m5/maru_45.png
+assets/baked/m5/maru_46.png
+assets/baked/m5/maru_47.png
+assets/baked/m5/maru_48.png
+assets/baked/m5/maru_49.png
+assets/baked/m5/maru_5.png
+assets/baked/m5/maru_50.png
+assets/baked/m5/maru_51.png
+assets/baked/m5/maru_52.png
+assets/baked/m5/maru_53.png
+assets/baked/m5/maru_54.png
+assets/baked/m5/maru_55.png
+assets/baked/m5/maru_56.png
+assets/baked/m5/maru_57.png
+assets/baked/m5/maru_58.png
+assets/baked/m5/maru_59.png
+assets/baked/m5/maru_6.png
+assets/baked/m5/maru_60.png
+assets/baked/m5/maru_61.png
+assets/baked/m5/maru_62.png
+assets/baked/m5/maru_63.png
+assets/baked/m5/maru_64.png
+assets/baked/m5/maru_65.png
+assets/baked/m5/maru_66.png
+assets/baked/m5/maru_67.png
+assets/baked/m5/maru_68.png
+assets/baked/m5/maru_69.png
+assets/baked/m5/maru_7.png
+assets/baked/m5/maru_70.png
+assets/baked/m5/maru_71.png
+assets/baked/m5/maru_8.png
+assets/baked/m5/maru_9.png
+assets/baked/m5/plate_0.png
+assets/baked/m5/portrait_frame_0.png
+assets/baked/m5/posters_0.png
+assets/baked/m5/posters_1.png
+assets/baked/m5/posters_2.png
+assets/baked/m5/posters_3.png
+assets/baked/m5/posters_4.png
+assets/baked/m5/posters_5.png
+assets/baked/m5/presidential_crest_0.png
+assets/baked/m5/presidential_crest_1.png
+assets/baked/m5/press_0.png
+assets/baked/m5/press_1.png
+assets/baked/m5/printworks_sign_0.png
+assets/baked/m5/printworks_sign_1.png
+assets/baked/m5/tram_wreck_0.png
+assets/baked/m5/wall_posters_0.png
+assets/baked/m5/wall_posters_1.png
+assets/baked/m5/wall_posters_2.png
+assets/baked/m5/wall_posters_3.png
+assets/baked/m5/wall_posters_4.png
+assets/baked/m5/wall_posters_5.png
+assets/baked/m5/wall_posters_6.png
+assets/bg.jpg
+assets/demon.mp3
+assets/fonts/IBMPlexMono-Bold.ttf
+assets/fonts/IBMPlexMono-Regular.ttf
+assets/fonts/IBMPlexMono-SemiBold.ttf
+assets/fonts/Oswald.ttf
+assets/hand_pinch.png
+assets/hand_pinch_thumb.png
+assets/logo.ico
+assets/sprites/station_battery_backup.png
+assets/sprites/station_security_booth.png
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_03PM.ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_04PM(1).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_04PM(2).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_04PM(3).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_04PM(4).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_04PM(5).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_04PM.ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_05PM(1).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_05PM(2).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_05PM.ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_06PM(1).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_06PM(2).ogg
+assets/voice/Balaceanu/Generated Audio October 08, 2026 - 7_06PM.ogg
+assets/voice/Darius/Generated Audio October 07, 2026 - 11_48PM.ogg
+assets/voice/Gabi/Generated Audio October 07, 2026 - 11_45PM(1).ogg
+assets/voice/Gabi/Generated Audio October 07, 2026 - 11_45PM(2).ogg
+assets/voice/Gabi/Generated Audio October 07, 2026 - 11_46PM.ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_39PM(1).ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_39PM(2).ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_39PM(3).ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_39PM.ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_40PM(1).ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_40PM.ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_41PM(1).ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_41PM.ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_42PM(1).ogg
+assets/voice/Narrator/Generated Audio October 07, 2026 - 11_42PM.ogg
+assets/voice/README.txt
+assets/voice/Seby/Generated Audio October 07, 2026 - 11_44PM(1).ogg
+assets/voice/Seby/Generated Audio October 07, 2026 - 11_44PM(2).ogg
+assets/voice/Seby/Generated Audio October 07, 2026 - 11_44PM.ogg
+assets/voice/Seby/Generated Audio October 07, 2026 - 11_45PM.ogg
+assets/voice/VO_028.ogg
+assets/voice/VO_038.ogg
+assets/voice/VO_045.ogg
+assets/voice/VO_046.ogg
+assets/voice/VO_047.ogg
+assets/voice/VO_048.ogg
+assets/voice/VO_049.ogg
+assets/voice/VO_050.ogg
+assets/voice/VO_052.ogg
+assets/voice/VO_053.ogg
+assets/voice/VO_054.ogg
+assets/voice/VO_055.ogg
+assets/voice/VO_057.ogg
+assets/voice/VO_058.ogg
+assets/voice/VO_060.ogg
+assets/voice/VO_064.ogg
+assets/voice/VO_066.ogg
+assets/voice/VO_067.ogg
+assets/voice/VO_068.ogg
+assets/voice/VO_069.ogg
+assets/voice/VO_070.ogg
+assets/voice/VO_071.ogg
+assets/voice/VO_072.ogg
+assets/voice/VO_082.ogg
+assets/voice/VO_083.ogg
+assets/voice/VO_129.ogg
+assets/voice/VO_131.ogg
+assets/voice/VO_133.ogg
+assets/voice/VO_135.ogg
+assets/voice/VO_137.ogg
+assets/voice/VO_140.ogg
+assets/voice/VO_144.ogg
+assets/voice/VO_147.ogg
+assets/voice/VO_148.ogg
+assets/voice/VO_149.ogg
+assets/voice/VO_151.ogg
+assets/voice/VO_154.ogg
+assets/voice/VO_155.ogg
+assets/voice/VO_157.ogg
+assets/voice/VO_159.ogg
+assets/voice/VO_160.ogg
+assets/voice/VO_162.ogg
+assets/voice/VO_174.ogg
+assets/voice/VO_175.ogg
+assets/voice/VO_176.ogg
+assets/voice/VO_177.ogg
+assets/voice/VO_178.ogg
+assets/voice/VO_179.ogg
+assets/voice/VO_180.ogg
+assets/voice/VO_181.ogg
+assets/voice/VO_182.ogg
+assets/voice/VO_183.ogg
+assets/voice/VO_184.ogg
+assets/voice/VO_185.ogg
+assets/voice/VO_186.ogg
+assets/voice/VO_187.ogg
+assets/voice/VO_188.ogg
+assets/voice/VO_189.ogg
+assets/voice/VO_190.ogg
+assets/voice/VO_191.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_05PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_05PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_06PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_06PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_07PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_07PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_07PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_08PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_08PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_09PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_09PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_09PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_09PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_10PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_11PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_11PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_13PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_14PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_14PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_14PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_15PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_16PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_16PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_16PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_17PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_17PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_17PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_17PM(4).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_17PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_18PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_18PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_18PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_18PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_19PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_19PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_20PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_20PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_20PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_20PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_21PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_21PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_21PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_22PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_22PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_22PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_22PM(4).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_22PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_23PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_23PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_23PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_25PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_25PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_25PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_26PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_26PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_26PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_26PM(4).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_26PM(5).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_26PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_27PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_27PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_28PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_28PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_28PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_29PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM(4).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM(5).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM(6).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_31PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_32PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_32PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_32PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_32PM(4).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_32PM(5).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_32PM.ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_33PM(1).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_33PM(2).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_33PM(3).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_33PM(4).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_33PM(5).ogg
+assets/voice/Vasile/Generated Audio October 07, 2026 - 9_33PM.ogg
+assets/voice/balaceanu_matches.txt
+assets/voice/biribel_matches.txt
+assets/voice/darius_matches.txt
+assets/voice/gabi_matches.txt
+assets/voice/narrator_matches.txt
+assets/voice/seby_matches.txt
+assets/voice/vasile_matches.txt
+assets/voice/volkov_matches.txt
+build.bat
+docs/AUDIT_T1_CAPTURE_PIPELINE.md
+docs/AUDIT_T2_ASSETS_AND_REPLAYS.md
+docs/AUDIT_T3_ALL_CHECKPOINTS.md
+docs/AUDIT_T4_BOT_INPUTS.md
+docs/AUDIT_T5_STRING_ORIGINS.md
+docs/AUDIT_T6_TIMELINE_LOGIC.md
+docs/AUDIT_T7_ENEMY_SPAWNS.md
+docs/AUDIT_T8_STANDALONE_PLAN.md
+docs/DOCUMENTARY.md
+docs/KRAPNET_MULTIPLAYER.md
+docs/LORE.md
+docs/M5_FINALE_REBUILD_PLAN.md
+docs/M5_SHADOW_RECORDING_GUIDE.md
+docs/MASTER_ACTION_PLAN.md
+docs/MISSION3_KILL_ORDER.md
+docs/MISSION3_PLOT.md
+docs/MISSION4_PLOT.md
+docs/MISSION5_BUILD_PLAN.md
+docs/MISSION5_PLOT.md
+docs/MISSION6_PLOT.md
+docs/MISSION7_PLOT.md
+docs/MISSION8_PLOT.md
+docs/OIL_RIG_BOMBING_CUTSCENE.md
+docs/PLAN_1_CHOREOGRAPHY.md
+docs/PLAN_2_EDITOR.md
+docs/PLAN_3_AUDIO.md
+docs/PLAN_4_VISUALS.md
+docs/README_ENV_SETUP.md
+docs/TRAILER3D_PLAN.md
+docs/archive/M5_RETIRED_ENDING_SHOTS.json
+docs/engine/ADAPTERS.md
+docs/engine/AUDIT.md
+docs/engine/BUGS.md
+docs/engine/CHANGELOG.md
+docs/engine/ENGINE_MASTER_PROMPT.md
+docs/engine/STATUS.md
+docs/engine/adr/ADR-000-template.md
+docs/engine/adr/ADR-001-package-layout.md
+docs/engine/adr/ADR-002-ecs-lite.md
+docs/engine/adr/ADR-003-data-formats.md
+docs/engine/adr/ADR-004-fixed-timestep.md
+docs/engine/adr/ADR-005-frame-coherent-wall-clock.md
+docs/engine/adr/ADR-006-golden-tolerances.md
+docs/engine/adr/ADR-014-scene-stack-and-fsm-mirror.md
+docs/engine/adr/ADR-015-asset-ids-and-hashing.md
+docs/engine/audit/audit.json
+docs/engine/audit/cache_census.md
+docs/engine/audit/draw_census.md
+docs/engine/audit/duplication.md
+docs/engine/audit/hazards.md
+docs/engine/audit/hud_duplication.md
+docs/engine/audit/imports.md
+docs/engine/audit/inventory.md
+docs/engine/audit/star_imports.md
+docs/engine/audit/state_census.md
+docs/engine/evidence/m4_stable_seed/after_street.png
+docs/engine/evidence/m4_stable_seed/after_street_east.png
+docs/engine/evidence/m4_stable_seed/before_street.png
+docs/engine/evidence/m4_stable_seed/before_street_east.png
+docs/engine/evidence/m4_stable_seed/diff_street_east.png
+docs/engine/evidence/overlay_manifest.txt
+docs/engine/evidence/tierB/census.txt
+docs/engine/evidence/tierB/ci_tierB.txt
+docs/engine/evidence/tierB/m124_sprite_parity.txt
+docs/engine/evidence/tierB/m3_sprite_parity.txt
+docs/engine/reports/phase0.md
+docs/engine/reports/phase0_normalisation.txt
+docs/engine/reports/phase1.md
+docs/engine/reports/phase2.md
+docs/engine/reports/phase3.md
+docs/history/FIXES.md
+docs/history/IMPLEMENTED.md
+docs/history/MASTER_PROMPT.md
+docs/history/MISSION5_W1_README.txt
+docs/history/MISSION5_W2_README.txt
+docs/history/MISSION5_W3_README.txt
+docs/history/MISSION5_W4_README.txt
+docs/history/MISSION5_W5_README.txt
+docs/history/MISSION5_W6_README.txt
+docs/history/MISSION5_W7_README.txt
+docs/history/MULTIPLAYER_PATCH_README.txt
+docs/history/MULTIPLAYER_PATCH_SHA256.json
+docs/history/PATCH_INSTRUCTIONS.txt
+docs/history/PATCH_SHA256.txt
+docs/history/README.md
+docs/history/SETTINGS_PATCH_README.txt
+docs/history/TUNNEL_TEST_RESULTS.txt
+docs/history/manifest.json
+docs/manifest.json
+docs/prompts/M5_FINALE_MASTER_PROMPT.md
+docs/thumbnail_pick.json
+docs/worklog.md
+menu_theme.mp3
+pyproject.toml
+src/app.py
+src/art/__init__.py
+src/art/m5/__init__.py
+src/audio/__init__.py
+src/audio/audio.py
+src/audio/voice.py
+src/audio/voice_manifest.py
+src/core/__init__.py
+src/core/ambience.py
+src/core/appearance.py
+src/core/artpack.py
+src/core/camera.py
+src/core/config.py
+src/core/console.py
+src/core/cutscene_registry.py
+src/core/dev_jumps.py
+src/core/fixedstep.py
+src/core/fsm.py
+src/core/game_core.py
+src/core/hands.py
+src/core/interactions.py
+src/core/json_store.py
+src/core/level_editor.py
+src/core/lighting.py
+src/core/mapbuilder.py
+src/core/mission_meta.py
+src/core/outfits.py
+src/core/profile_store.py
+src/core/props.py
+src/core/render_util.py
+src/core/save_system.py
+src/core/scene_mirror.py
+src/core/settings_store.py
+src/core/state.py
+src/core/staticlayer.py
+src/core/surfaces.py
+src/core/user_settings.py
+src/cutscenes/__init__.py
+src/cutscenes/cast.py
+src/cutscenes/cast3d.py
+src/cutscenes/chair.py
+src/cutscenes/engine.py
+src/cutscenes/figure_kit.py
+src/cutscenes/k9.py
+src/cutscenes/m3broadcast.py
+src/cutscenes/m3cell.py
+src/cutscenes/m3cell_balaceanu_patch.py
+src/cutscenes/m3ending.py
+src/cutscenes/m3ko.py
+src/cutscenes/m3ops.py
+src/cutscenes/m4aftermath.py
+src/cutscenes/m5decal.py
+src/cutscenes/m5ending3d.py
+src/cutscenes/m5fx3d.py
+src/cutscenes/m5harbour_art.py
+src/cutscenes/m5martial.py
+src/cutscenes/m5martial3d.py
+src/cutscenes/m5mid3d.py
+src/cutscenes/m5shadow3d.py
+src/cutscenes/m5studio.py
+src/cutscenes/oil_rig_3d.py
+src/cutscenes/route12.py
+src/engine/__init__.py
+src/engine/anim/__init__.py
+src/engine/anim/figure_kit.py
+src/engine/anim/pose_cache.py
+src/engine/assets/__init__.py
+src/engine/assets/_artpack.py
+src/engine/assets/_sprites.py
+src/engine/assets/bake.py
+src/engine/assets/layerbake.py
+src/engine/assets/loaders.py
+src/engine/assets/manifest.py
+src/engine/assets/registry.py
+src/engine/assets/watch.py
+src/engine/core/__init__.py
+src/engine/core/app.py
+src/engine/core/clock.py
+src/engine/core/config.py
+src/engine/core/errors.py
+src/engine/core/events.py
+src/engine/core/log.py
+src/engine/core/mathx.py
+src/engine/core/profiling.py
+src/engine/core/rng.py
+src/engine/core/services.py
+src/engine/core/timebase.py
+src/engine/lighting/__init__.py
+src/engine/lighting/buffer.py
+src/engine/render2d/__init__.py
+src/engine/render2d/util.py
+src/engine/scene/__init__.py
+src/engine/scene/cutscene.py
+src/engine/scene/inspect.py
+src/engine/scene/scene.py
+src/engine/scene/stack.py
+src/engine3d/__init__.py
+src/engine3d/core.py
+src/engine3d/gl.py
+src/engine3d/rig.py
+src/entities/__init__.py
+src/entities/adornments.py
+src/entities/art_cache.py
+src/entities/corpse.py
+src/entities/death_anim.py
+src/entities/enemy_ai.py
+src/entities/fallen.py
+src/entities/player.py
+src/entities/sprite_lib.py
+src/entities/weapon_rig.py
+src/entities/weapons.py
+src/fx/__init__.py
+src/fx/effects.py
+src/game/__init__.py
+src/game/art/__init__.py
+src/game/art/_layers.py
+src/game/art/_pack.py
+src/game/art/m1/__init__.py
+src/game/art/m1/exfil_truck.py
+src/game/art/m1/molotov_icon.py
+src/game/art/m1/pickup_icon.py
+src/game/art/m1/world_static.py
+src/game/art/m2/__init__.py
+src/game/art/m2/nest_bits.py
+src/game/art/m2/prop_icon.py
+src/game/art/m2/world_static.py
+src/game/art/m3/__init__.py
+src/game/art/m3/archives_static.py
+src/game/art/m3/broadcast_static.py
+src/game/art/m3/camera_body.py
+src/game/art/m3/cell_details.py
+src/game/art/m3/cell_door_blown.py
+src/game/art/m3/cellblock_static.py
+src/game/art/m3/comms_static.py
+src/game/art/m3/door_tile.py
+src/game/art/m3/kitchen.py
+src/game/art/m3/ko_static.py
+src/game/art/m3/pickup_icon.py
+src/game/art/m3/wall_monitor.py
+src/game/art/m3/weapon_icon.py
+src/game/art/m4/__init__.py
+src/game/art/m4/mag_icon.py
+src/game/art/m4/world_static.py
+src/game/art/m5/__init__.py
+src/game/art/m5/_kit.py
+src/game/art/m5/armband.py
+src/game/art/m5/bale.py
+src/game/art/m5/calendar.py
+src/game/art/m5/district_map.py
+src/game/art/m5/guard_banner.py
+src/game/art/m5/guard_plate.py
+src/game/art/m5/hq_locker.py
+src/game/art/m5/inspect_art.py
+src/game/art/m5/m5_guard.py
+src/game/art/m5/mag.py
+src/game/art/m5/mag_icon.py
+src/game/art/m5/maru.py
+src/game/art/m5/plate.py
+src/game/art/m5/portrait_frame.py
+src/game/art/m5/posters.py
+src/game/art/m5/presidential_crest.py
+src/game/art/m5/press.py
+src/game/art/m5/printworks_sign.py
+src/game/art/m5/tram_wreck.py
+src/game/art/m5/wall_posters.py
+src/game/content/__init__.py
+src/game/content/m1/manifest.json
+src/game/content/m2/manifest.json
+src/game/content/m3/manifest.json
+src/game/content/m4/manifest.json
+src/game/content/m5/manifest.json
+src/game/content/m5/palette.json
+src/missions/__init__.py
+src/missions/arena.py
+src/missions/m1/__init__.py
+src/missions/m1/draw.py
+src/missions/m1/hotwire.py
+src/missions/m1/main.py
+src/missions/m1/map.py
+src/missions/m1/update.py
+src/missions/m2/__init__.py
+src/missions/m2/draw.py
+src/missions/m2/meta.py
+src/missions/m2/sniper.py
+src/missions/m2/sniper3d.py
+src/missions/m2/sniper3d_set.py
+src/missions/m2/starts.py
+src/missions/m2/update.py
+src/missions/m2/world.py
+src/missions/m3/__init__.py
+src/missions/m3/draw.py
+src/missions/m3/flow.py
+src/missions/m3/interrog.py
+src/missions/m3/maps.py
+src/missions/m3/meta.py
+src/missions/m3/sweep.py
+src/missions/m3/systems.py
+src/missions/m3/world.py
+src/missions/m4/__init__.py
+src/missions/m4/draw.py
+src/missions/m4/flow.py
+src/missions/m4/maps.py
+src/missions/m4/meta.py
+src/missions/m4/systems.py
+src/missions/m4/world.py
+src/missions/m5/__init__.py
+src/missions/m5/decor.py
+src/missions/m5/decor_interior.py
+src/missions/m5/decor_paint.py
+src/missions/m5/draw.py
+src/missions/m5/finale_audio.py
+src/missions/m5/finale_script.py
+src/missions/m5/flow.py
+src/missions/m5/inspect_art.py
+src/missions/m5/inspect_art_street.py
+src/missions/m5/inspect_fpv.py
+src/missions/m5/maps.py
+src/missions/m5/meta.py
+src/missions/m5/quarter.py
+src/missions/m5/systems.py
+src/missions/m5/tram_wreck.py
+src/missions/m5/water.py
+src/missions/m5/world.py
+src/missions/walking_attack3d.py
+src/missions/walking_sim.py
+src/net/__init__.py
+src/net/client.py
+src/net/discovery.py
+src/net/match.py
+src/net/portmap.py
+src/net/protocol.py
+src/net/roomcode.py
+src/net/tcp_tunnel.py
+src/tools/input_recorder.py
+src/tools/ko_playability_audit.py
+src/tools/trailer_bot.py
+src/ui/__init__.py
+src/ui/arena_view.py
+src/ui/hud.py
+src/ui/main.py
+src/ui/match_screen.py
+src/ui/mp.py
+src/ui/multiplayer_style.py
+src/ui/pixfont.py
+src/ui/radio.py
+src/ui/shop.py
+src/ui/system.py
+src/ui/upload_os.py
+src/ui/widgets.py
+tests/__init__.py
+tests/api/engine_api.json
+tests/data/m5_scene_trace.txt
+tests/golden/baseline_v0/gp.m1.desks.png
+tests/golden/baseline_v0/gp.m1.start.png
+tests/golden/baseline_v0/gp.m1.warehouse.png
+tests/golden/baseline_v0/gp.m2.checkpoint.png
+tests/golden/baseline_v0/gp.m2.garden.png
+tests/golden/baseline_v0/gp.m2.road_east.png
+tests/golden/baseline_v0/gp.m2.start.png
+tests/golden/baseline_v0/gp.m3.broadcast.png
+tests/golden/baseline_v0/gp.m3.cell_a.png
+tests/golden/baseline_v0/gp.m3.cell_b.png
+tests/golden/baseline_v0/gp.m3.cell_c.png
+tests/golden/baseline_v0/gp.m3.corridor.png
+tests/golden/baseline_v0/gp.m3.kill_order.png
+tests/golden/baseline_v0/gp.m3.kitchen.png
+tests/golden/baseline_v0/gp.m3.ko_dock.png
+tests/golden/baseline_v0/gp.m3.ko_van.png
+tests/golden/baseline_v0/gp.m3.maintenance.png
+tests/golden/baseline_v0/gp.m4.station.png
+tests/golden/baseline_v0/gp.m4.street.png
+tests/golden/baseline_v0/gp.m4.street_east.png
+tests/golden/baseline_v0/manifest.json
+tests/loop/baseline_v1/boot.json
+tests/loop/baseline_v1/m1.json
+tests/loop/baseline_v1/m2.json
+tests/loop/baseline_v1/m3.json
+tests/loop/baseline_v1/m4.json
+tests/loop/baseline_v1/m5.json
+tests/loop/baseline_v1/walk.json
+tests/loop/baseline_v2/boot.json
+tests/loop/baseline_v2/m1.json
+tests/loop/baseline_v2/m2.json
+tests/loop/baseline_v2/m3.json
+tests/loop/baseline_v2/m4.json
+tests/loop/baseline_v2/m5.json
+tests/loop/baseline_v2/walk.json
+tests/loop/baseline_v3/boot.json
+tests/loop/baseline_v3/m1.json
+tests/loop/baseline_v3/m2.json
+tests/loop/baseline_v3/m3.json
+tests/loop/baseline_v3/m4.json
+tests/loop/baseline_v3/m5.json
+tests/loop/baseline_v3/walk.json
+tests/loop/baseline_v4/boot.json
+tests/loop/baseline_v4/m1.json
+tests/loop/baseline_v4/m2.json
+tests/loop/baseline_v4/m3.json
+tests/loop/baseline_v4/m4.json
+tests/loop/baseline_v4/m5.json
+tests/loop/baseline_v4/walk.json
+tests/replay/baseline_v0/m1.fields.json
+tests/replay/baseline_v0/m1.json
+tests/replay/baseline_v0/m2.fields.json
+tests/replay/baseline_v0/m2.json
+tests/replay/baseline_v0/m3.fields.json
+tests/replay/baseline_v0/m3.json
+tests/replay/baseline_v0/m4.fields.json
+tests/replay/baseline_v0/m4.json
+tests/replay/baseline_v0/m5.fields.json
+tests/replay/baseline_v0/m5.json
+tests/unit/__init__.py
+tests/unit/_helpers.py
+tests/unit/test_app_boot_crash.py
+tests/unit/test_assets_registry.py
+tests/unit/test_clock.py
+tests/unit/test_engine_shims.py
+tests/unit/test_events_log_services.py
+tests/unit/test_mathx_profiling.py
+tests/unit/test_rng.py
+tests/unit/test_scene_mirror.py
+tests/unit/test_scene_stack.py
+tests/unit/test_scene_types.py
+tests/unit/test_voice_timing.py
+tools/.build_settings.json
+tools/_faces_smoke_err.txt
+tools/_faces_smoke_err2.txt
+tools/_faces_smoke_final.txt
+tools/_faces_smoke_final_err.txt
+tools/_faces_smoke_out.txt
+tools/_faces_smoke_out2.txt
+tools/_laser_fn.txt
+tools/_smoke_err.txt
+tools/_smoke_err2.txt
+tools/_smoke_out.txt
+tools/_smoke_out2.txt
+tools/_t2_a.txt
+tools/_t2_b.txt
+tools/_tmp_repl.json
+tools/ae_api_snapshot.py
+tools/ae_audit.py
+tools/ae_bake.py
+tools/ae_ci.py
+tools/ae_draw_audit.py
+tools/ae_golden.py
+tools/ae_hud_census.py
+tools/ae_import_check.py
+tools/ae_layer_parity.py
+tools/ae_layer_probe.py
+tools/ae_loop.py
+tools/ae_migrate_time.py
+tools/ae_normalize.py
+tools/ae_replay.py
+tools/ae_star_imports.py
+tools/assemble_final_trailer.py
+tools/bake_m5_sprites.py
+tools/build_all_sprites.py
+tools/build_code_pdf.py
+tools/build_code_txt.py
+tools/build_host_exe.bat
+tools/build_join_exe.bat
+tools/build_sfx_stem.py
+tools/build_windows.py
+tools/cast_lineup.py
+tools/cast_sheet.py
+tools/check_boundaries.py
+tools/convert_voice_ogg.py
+tools/debug_stem.py
+tools/dev_panel.py
+tools/download_bore.py
+tools/engine3d_check.py
+tools/export_m5_audio.py
+tools/finale_compare.py
+tools/finale_gait_check.py
+tools/finale_probe.py
+tools/golden.json
+tools/golden.py
+tools/join_lobby.bat
+tools/k9_pickup_check.py
+tools/m5_cinematic_polish_check.py
+tools/m5_contact_sheets.py
+tools/m5_cut_check.py
+tools/m5_draw_audit.py
+tools/m5_dump.py
+tools/m5_encounter_review.py
+tools/m5_ending_stage_check.py
+tools/m5_feedback_check.py
+tools/m5_finale_cut_check.py
+tools/m5_fx_check.py
+tools/m5_gauntlet_cycle.py
+tools/m5_gauntlet_sheet.py
+tools/m5_gauntlet_shots.py
+tools/m5_harbour_art_check.py
+tools/m5_laser_stair_check.py
+tools/m5_probe.py
+tools/m5_r2_check.py
+tools/m5_rifle_clearance.py
+tools/m5_shadow_check.py
+tools/m5_sheet.py
+tools/m5_shots.py
+tools/m5_sprite_review.py
+tools/m5_stair_room_check.py
+tools/m5_view_export.py
+tools/make_art_pack.py
+tools/make_short_branded.py
+tools/make_short_clean.py
+tools/make_station_sprites.py
+tools/mp_arena_duo.py
+tools/mp_bot.py
+tools/mp_choreo_probe.py
+tools/mp_host.py
+tools/mp_host_main.py
+tools/mp_join.py
+tools/mp_match.py
+tools/mp_remaster.py
+tools/mp_server.py
+tools/mp_trailer_assemble.py
+tools/mp_trailer_assemble_tiktok.py
+tools/mp_trailer_capture.py
+tools/oilrig_preview.py
+tools/overlay_cleanup.py
+tools/preflight_bot_test.py
+tools/record_fresh_action.py
+tools/render_ko_video.py
+tools/render_m4_ending.py
+tools/render_m5_ending.py
+tools/render_m5_shadow.py
+tools/render_m5_stair.py
+tools/render_trailer.py
+tools/render_trailer_v2.py
+tools/setup_env.ps1
+tools/shot_fail_screens.py
+tools/shot_m5x.py
+tools/shot_outfit.py
+tools/shot_radio.py
+tools/shot_weapon_grid.py
+tools/smoke_test.py
+tools/sprites/compare_shots.py
+tools/sprites/fx.py
+tools/sprites/inventory.py
+tools/sprites/kit.py
+tools/sprites/palette.py
+tools/sprites/portrait_refs.py
+tools/sprites/portraits.py
+tools/sprites/props.py
+tools/sprites/status.json
+tools/sprites/t7_probe.py
+tools/sprites/vehicles.py
+tools/test_multiplayer_ui.py
+tools/test_oilrig_collapse.py
+tools/test_tcp_tunnel.py
+tools/trailer3d/common.py
+tools/trailer3d/music_cut.py
+tools/trailer3d/props3d.py
+tools/trailer3d/render.py
+tools/trailer3d/sfx.py
+tools/trailer3d/shots.py
+tools/trailer3d/thumbnail.py
+tools/trailer3d/timeline.json
+tools/trailer3d/vertical.py
+tools/trailer3d/vo_mix.py
+tools/voice_audit.py
+tools/zip_project.py
+uv.lock
+validation/M5_harbour_graphics.md
+validation/compileall.txt
+validation/multiplayer_ui.txt
+validation/smoke_test.txt
+validation/smoke_test_initial_environment_failure.txt
+validation/sprite_inventory.md
+validation/tcp_tunnel.txt
+validation/voice_audit.csv
+validation/voice_audit.md
+validation/voice_audit_xlsx.csv

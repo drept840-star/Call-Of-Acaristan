@@ -1,0 +1,6320 @@
+{
+ "engine_version": "0.1.0",
+ "modules": {
+  "engine": {
+   "all": [
+    "__version__",
+    "ENGINE_NAME",
+    "LOG_PREFIX"
+   ],
+   "names": {
+    "ENGINE_NAME": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "LOG_PREFIX": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "__version__": {
+     "kind": "constant",
+     "type": "str"
+    }
+   }
+  },
+  "engine.anim": {
+   "all": [
+    "HEIGHT",
+    "KRAP_BLUE",
+    "KRAP_UNIFORM",
+    "REF_H",
+    "SPECS",
+    "draw_character",
+    "Pen",
+    "face",
+    "mix",
+    "dark",
+    "lite",
+    "STUBBLE",
+    "PoseCache",
+    "POSES",
+    "POSE_CAP"
+   ],
+   "names": {
+    "HEIGHT": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "KRAP_BLUE": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "KRAP_UNIFORM": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "POSES": {
+     "kind": "constant",
+     "type": "PoseCache"
+    },
+    "POSE_CAP": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "Pen": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surf, cx, foot, k, facing_right)",
+      "circ": "(self, col, x, y, r, width=0)",
+      "ell": "(self, col, x0, y0, x1, y1, width=0)",
+      "line": "(self, col, pts, width=1, light=False)",
+      "p": "(self, x, y, light=False)",
+      "poly": "(self, col, pts, light=False)",
+      "w": "(self, v)"
+     }
+    },
+    "PoseCache": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, key) -> 'bool'",
+      "__init__": "(self, cap: 'int' = 512) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "clear": "(self) -> 'None'",
+      "get": "(self, key, size, draw_cb)"
+     }
+    },
+    "REF_H": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "SPECS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "STUBBLE": {
+     "kind": "constant",
+     "type": "list"
+    },
+    "dark": {
+     "kind": "function",
+     "signature": "(c, t=0.3)"
+    },
+    "draw_character": {
+     "kind": "function",
+     "signature": "(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False, t=0, fear=0, smile=0, blink=0, look=None, moving=0, prop=None, prop_label=None, label_font=None, *, seated=False, reach=None, bow=0, wardrobe=None, arms=True)"
+    },
+    "face": {
+     "kind": "function",
+     "signature": "(pen, spec, hx, hy, *, fear=0, smile=0, look=0, blink=0, cig=True)"
+    },
+    "lite": {
+     "kind": "function",
+     "signature": "(c, t=0.25)"
+    },
+    "mix": {
+     "kind": "function",
+     "signature": "(a, b, t)"
+    }
+   }
+  },
+  "engine.anim.figure_kit": {
+   "all": [
+    "SPECS",
+    "HEIGHT",
+    "REF_H",
+    "KRAP_UNIFORM",
+    "KRAP_BLUE",
+    "draw_character"
+   ],
+   "names": {
+    "HEIGHT": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "KRAP_BLUE": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "KRAP_UNIFORM": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "REF_H": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "SPECS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "draw_character": {
+     "kind": "function",
+     "signature": "(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False, t=0, fear=0, smile=0, blink=0, look=None, moving=0, prop=None, prop_label=None, label_font=None, *, seated=False, reach=None, bow=0, wardrobe=None, arms=True)"
+    }
+   }
+  },
+  "engine.anim.pose_cache": {
+   "all": [
+    "PoseCache",
+    "POSES",
+    "POSE_CAP"
+   ],
+   "names": {
+    "POSES": {
+     "kind": "constant",
+     "type": "PoseCache"
+    },
+    "POSE_CAP": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "PoseCache": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, key) -> 'bool'",
+      "__init__": "(self, cap: 'int' = 512) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "clear": "(self) -> 'None'",
+      "get": "(self, key, size, draw_cb)"
+     }
+    }
+   }
+  },
+  "engine.assets": {
+   "all": [
+    "artpack",
+    "sprites",
+    "MANIFEST_SCHEMA",
+    "AssetDef",
+    "Manifest",
+    "load_manifest",
+    "AssetRegistry",
+    "AssetReloaded",
+    "PLACEHOLDER",
+    "AssetWatcher",
+    "BakeReport",
+    "LintReport",
+    "bake_pack",
+    "check_pack",
+    "lint_pack",
+    "contact_sheet",
+    "pixel_hash",
+    "source_hash",
+    "BakeSurface",
+    "bake_camera_layer",
+    "bake_chunk_layer",
+    "layer_bounds",
+    "probe_layer",
+    "screen_emulation",
+    "load_image",
+    "load_sound",
+    "load_music",
+    "configure_loaders"
+   ],
+   "names": {
+    "AssetDef": {
+     "attrs": {
+      "baked": "NoneType",
+      "fallback": "NoneType",
+      "module": "NoneType",
+      "path": "NoneType",
+      "pivot": "NoneType",
+      "size": "NoneType",
+      "strings": "tuple",
+      "tags": "tuple",
+      "variants": "int"
+     },
+     "bases": [],
+     "fields": [
+      "baked",
+      "extra",
+      "fallback",
+      "id",
+      "kind",
+      "module",
+      "pack",
+      "path",
+      "pivot",
+      "size",
+      "strings",
+      "tags",
+      "variants"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, id: 'str', kind: 'str', pack: 'str', module: 'str | None' = None, path: 'str | None' = None, variants: 'int' = 1, baked: 'str | None' = None, pivot: 'tuple[int, int] | None' = None, size: 'tuple[int, int] | None' = None, tags: 'tuple[str, ...]' = (), strings: 'tuple[str, ...]' = (), fallback: 'str | None' = None, extra: 'dict' = <factory>) -> None",
+      "baked_file": "(self, variant: 'int' = 0) -> 'str | None'",
+      "name": "property",
+      "rendered": "property"
+     }
+    },
+    "AssetRegistry": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, root: 'str', *, dev: 'bool' = True, log: 'Any' = None, bus: 'Any' = None) -> 'None'",
+      "acquire": "(self, pack: 'str', owner: 'object') -> 'None'",
+      "baked_path": "(self, asset_id: 'str', variant: 'int' = 0) -> 'str | None'",
+      "cache_size": "(self) -> 'int'",
+      "define": "(self, asset_id: 'str') -> 'AssetDef'",
+      "get": "(self, asset_id: 'str', variant: 'Any' = 0, scale: 'float' = 1, *, baked: 'bool' = True, default: 'Any' = PLACEHOLDER)",
+      "holders": "(self, pack: 'str') -> 'int'",
+      "ids": "(self, pack: 'str | None' = None, kind: 'str | None' = None) -> 'list[str]'",
+      "invalidate": "(self, asset_id: 'str | None' = None) -> 'int'",
+      "load_pack": "(self, manifest_path: 'str') -> 'Manifest'",
+      "module": "(self, asset_id: 'str')",
+      "release": "(self, owner: 'object') -> 'list[str]'",
+      "reload": "(self, asset_id: 'str', reason: 'str' = '') -> 'int'",
+      "unload_pack": "(self, pack: 'str', force: 'bool' = False) -> 'bool'",
+      "variant_index": "(self, asset_id: 'str', variant: 'Any') -> 'int'",
+      "variants": "(self, asset_id: 'str') -> 'int'",
+      "watched_files": "(self) -> 'dict[str, list[str]]'"
+     }
+    },
+    "AssetReloaded": {
+     "attrs": {
+      "id": "member_descriptor",
+      "reason": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, id: 'str', reason: 'str' = '') -> 'None'"
+     }
+    },
+    "AssetWatcher": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, registry: 'AssetRegistry', *, interval_ms: 'int' = 500) -> 'None'",
+      "poll": "(self, now_ms: 'int') -> 'list[str]'",
+      "rescan": "(self) -> 'int'",
+      "run_once": "(self) -> 'list[str]'"
+     }
+    },
+    "BakeReport": {
+     "attrs": {
+      "baked": "int",
+      "checked": "int",
+      "sampled": "int"
+     },
+     "bases": [],
+     "fields": [
+      "baked",
+      "checked",
+      "errors",
+      "mismatched",
+      "missing",
+      "pack",
+      "sampled",
+      "stale"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pack: 'str', baked: 'int' = 0, checked: 'int' = 0, sampled: 'int' = 0, stale: 'list[str]' = <factory>, missing: 'list[str]' = <factory>, mismatched: 'list[str]' = <factory>, errors: 'list[str]' = <factory>) -> None",
+      "ok": "property",
+      "summary": "(self) -> 'str'"
+     }
+    },
+    "BakeSurface": {
+     "attrs": {},
+     "bases": [
+      "Surface"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, size)",
+      "blit": "(self, source, dest, area=None, special_flags=0)",
+      "blits": "(self, blit_sequence, doreturn=True)",
+      "fill": "(self, color=(0, 0, 0), rect=None, special_flags=0)",
+      "set_at": "(self, pos, color)"
+     }
+    },
+    "LintReport": {
+     "attrs": {
+      "assets": "int"
+     },
+     "bases": [],
+     "fields": [
+      "assets",
+      "checks",
+      "pack",
+      "warnings"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pack: 'str', assets: 'int' = 0, warnings: 'list[str]' = <factory>, checks: 'dict' = <factory>) -> None",
+      "summary": "(self) -> 'str'"
+     }
+    },
+    "MANIFEST_SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Manifest": {
+     "attrs": {
+      "baked_dir": "NoneType",
+      "palette": "NoneType"
+     },
+     "bases": [],
+     "fields": [
+      "assets",
+      "baked_dir",
+      "pack",
+      "palette",
+      "path"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pack: 'str', path: 'Path', assets: 'dict[str, AssetDef]', baked_dir: 'str | None' = None, palette: 'str | None' = None) -> None",
+      "__iter__": "(self)",
+      "__len__": "(self) -> 'int'"
+     }
+    },
+    "PLACEHOLDER": {
+     "kind": "constant",
+     "type": "_Placeholder"
+    },
+    "artpack": {
+     "all": [
+      "configure",
+      "enabled",
+      "path",
+      "get",
+      "tile",
+      "wall",
+      "icon",
+      "light",
+      "blit",
+      "blit9slice",
+      "pose",
+      "sheet",
+      "frame",
+      "frame_anchor",
+      "blit_frame",
+      "vehicle",
+      "prop",
+      "fx",
+      "rebuild"
+     ],
+     "kind": "module",
+     "module": "engine.assets._artpack",
+     "names": {
+      "blit": {
+       "kind": "function",
+       "signature": "(surf, name, pos)"
+      },
+      "blit9slice": {
+       "kind": "function",
+       "signature": "(surf, name, rect)"
+      },
+      "blit_frame": {
+       "kind": "function",
+       "signature": "(surf, sheet_name, key, pos)"
+      },
+      "configure": {
+       "kind": "function",
+       "signature": "(resolve)"
+      },
+      "enabled": {
+       "kind": "function",
+       "signature": "()"
+      },
+      "frame": {
+       "kind": "function",
+       "signature": "(sheet_name, key)"
+      },
+      "frame_anchor": {
+       "kind": "function",
+       "signature": "(sheet_name, key)"
+      },
+      "fx": {
+       "kind": "function",
+       "signature": "(key)"
+      },
+      "get": {
+       "kind": "function",
+       "signature": "(name)"
+      },
+      "icon": {
+       "kind": "function",
+       "signature": "(name)"
+      },
+      "light": {
+       "kind": "function",
+       "signature": "(name)"
+      },
+      "path": {
+       "kind": "function",
+       "signature": "(name)"
+      },
+      "pose": {
+       "kind": "function",
+       "signature": "(key, size, draw_cb)"
+      },
+      "prop": {
+       "kind": "function",
+       "signature": "(key)"
+      },
+      "rebuild": {
+       "kind": "function",
+       "signature": "()"
+      },
+      "sheet": {
+       "kind": "function",
+       "signature": "(name)"
+      },
+      "tile": {
+       "kind": "function",
+       "signature": "(code, col, row)"
+      },
+      "vehicle": {
+       "kind": "function",
+       "signature": "(key)"
+      },
+      "wall": {
+       "kind": "function",
+       "signature": "(code, col, row)"
+      }
+     }
+    },
+    "bake_camera_layer": {
+     "kind": "function",
+     "signature": "(paint: 'Callable[[int, int], None]', *, size, origin, tile, redirect, stats=None) -> 'pygame.Surface'"
+    },
+    "bake_chunk_layer": {
+     "kind": "function",
+     "signature": "(bake_cb: 'Callable[[pygame.Surface, int, int], None]', *, world_size, chunk=512, fill=(0, 0, 0)) -> 'pygame.Surface'"
+    },
+    "bake_pack": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', *, only: 'set | None' = None, verbose=<built-in function print>) -> 'BakeReport'"
+    },
+    "check_pack": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', *, sample_every: 'int' = 10, verbose=None) -> 'BakeReport'"
+    },
+    "configure_loaders": {
+     "kind": "function",
+     "signature": "(resolve) -> 'None'"
+    },
+    "contact_sheet": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', out_path: 'str', *, cols: 'int' = 10, box: 'int' = 288) -> 'int'"
+    },
+    "layer_bounds": {
+     "kind": "function",
+     "signature": "(paint, *, world_rect, tile, redirect, pad=0)"
+    },
+    "lint_pack": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', *, surfaces=None) -> 'LintReport'"
+    },
+    "load_image": {
+     "kind": "function",
+     "signature": "(src: 'Any', *, convert: 'str | None' = None, resolve: 'bool' = False)"
+    },
+    "load_manifest": {
+     "kind": "function",
+     "signature": "(path: 'str | Path') -> 'Manifest'"
+    },
+    "load_music": {
+     "kind": "function",
+     "signature": "(src: 'Any', *, resolve: 'bool' = False) -> 'None'"
+    },
+    "load_sound": {
+     "kind": "function",
+     "signature": "(src: 'Any', *, resolve: 'bool' = False)"
+    },
+    "pixel_hash": {
+     "kind": "function",
+     "signature": "(surf) -> 'str'"
+    },
+    "probe_layer": {
+     "kind": "function",
+     "signature": "(paint, layer, origin, *, cams, tile, redirect, backgrounds=((0, 0, 0), (255, 255, 255), (97, 101, 109)))"
+    },
+    "screen_emulation": {
+     "kind": "function",
+     "signature": "(targets: 'Iterable[pygame.Surface]')"
+    },
+    "source_hash": {
+     "kind": "function",
+     "signature": "(a: 'AssetDef', root: 'str', palette: 'str | None' = None) -> 'tuple[str, list[str]]'"
+    },
+    "sprites": {
+     "all": [
+      "configure",
+      "sprite_path",
+      "get_sprite"
+     ],
+     "kind": "module",
+     "module": "engine.assets._sprites",
+     "names": {
+      "configure": {
+       "kind": "function",
+       "signature": "(resolve)"
+      },
+      "get_sprite": {
+       "kind": "function",
+       "signature": "(name)"
+      },
+      "sprite_path": {
+       "kind": "function",
+       "signature": "(name)"
+      }
+     }
+    }
+   }
+  },
+  "engine.assets.bake": {
+   "all": [
+    "TOOL_VERSION",
+    "BAKEINFO_SCHEMA",
+    "BakeReport",
+    "LintReport",
+    "source_hash",
+    "pixel_hash",
+    "bake_pack",
+    "check_pack",
+    "lint_pack",
+    "contact_sheet"
+   ],
+   "names": {
+    "BAKEINFO_SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "BakeReport": {
+     "attrs": {
+      "baked": "int",
+      "checked": "int",
+      "sampled": "int"
+     },
+     "bases": [],
+     "fields": [
+      "baked",
+      "checked",
+      "errors",
+      "mismatched",
+      "missing",
+      "pack",
+      "sampled",
+      "stale"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pack: 'str', baked: 'int' = 0, checked: 'int' = 0, sampled: 'int' = 0, stale: 'list[str]' = <factory>, missing: 'list[str]' = <factory>, mismatched: 'list[str]' = <factory>, errors: 'list[str]' = <factory>) -> None",
+      "ok": "property",
+      "summary": "(self) -> 'str'"
+     }
+    },
+    "LintReport": {
+     "attrs": {
+      "assets": "int"
+     },
+     "bases": [],
+     "fields": [
+      "assets",
+      "checks",
+      "pack",
+      "warnings"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pack: 'str', assets: 'int' = 0, warnings: 'list[str]' = <factory>, checks: 'dict' = <factory>) -> None",
+      "summary": "(self) -> 'str'"
+     }
+    },
+    "TOOL_VERSION": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "bake_pack": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', *, only: 'set | None' = None, verbose=<built-in function print>) -> 'BakeReport'"
+    },
+    "check_pack": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', *, sample_every: 'int' = 10, verbose=None) -> 'BakeReport'"
+    },
+    "contact_sheet": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', out_path: 'str', *, cols: 'int' = 10, box: 'int' = 288) -> 'int'"
+    },
+    "lint_pack": {
+     "kind": "function",
+     "signature": "(m: 'Manifest', root: 'str', *, surfaces=None) -> 'LintReport'"
+    },
+    "pixel_hash": {
+     "kind": "function",
+     "signature": "(surf) -> 'str'"
+    },
+    "source_hash": {
+     "kind": "function",
+     "signature": "(a: 'AssetDef', root: 'str', palette: 'str | None' = None) -> 'tuple[str, list[str]]'"
+    }
+   }
+  },
+  "engine.assets.layerbake": {
+   "all": [
+    "BakeSurface",
+    "screen_emulation",
+    "bake_camera_layer",
+    "bake_chunk_layer",
+    "probe_layer",
+    "layer_bounds"
+   ],
+   "names": {
+    "BakeSurface": {
+     "attrs": {},
+     "bases": [
+      "Surface"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, size)",
+      "blit": "(self, source, dest, area=None, special_flags=0)",
+      "blits": "(self, blit_sequence, doreturn=True)",
+      "fill": "(self, color=(0, 0, 0), rect=None, special_flags=0)",
+      "set_at": "(self, pos, color)"
+     }
+    },
+    "bake_camera_layer": {
+     "kind": "function",
+     "signature": "(paint: 'Callable[[int, int], None]', *, size, origin, tile, redirect, stats=None) -> 'pygame.Surface'"
+    },
+    "bake_chunk_layer": {
+     "kind": "function",
+     "signature": "(bake_cb: 'Callable[[pygame.Surface, int, int], None]', *, world_size, chunk=512, fill=(0, 0, 0)) -> 'pygame.Surface'"
+    },
+    "layer_bounds": {
+     "kind": "function",
+     "signature": "(paint, *, world_rect, tile, redirect, pad=0)"
+    },
+    "probe_layer": {
+     "kind": "function",
+     "signature": "(paint, layer, origin, *, cams, tile, redirect, backgrounds=((0, 0, 0), (255, 255, 255), (97, 101, 109)))"
+    },
+    "screen_emulation": {
+     "kind": "function",
+     "signature": "(targets: 'Iterable[pygame.Surface]')"
+    }
+   }
+  },
+  "engine.assets.loaders": {
+   "all": [
+    "load_image",
+    "load_sound",
+    "load_music"
+   ],
+   "names": {
+    "load_image": {
+     "kind": "function",
+     "signature": "(src: 'Any', *, convert: 'str | None' = None, resolve: 'bool' = False)"
+    },
+    "load_music": {
+     "kind": "function",
+     "signature": "(src: 'Any', *, resolve: 'bool' = False) -> 'None'"
+    },
+    "load_sound": {
+     "kind": "function",
+     "signature": "(src: 'Any', *, resolve: 'bool' = False)"
+    }
+   }
+  },
+  "engine.assets.manifest": {
+   "all": [
+    "SCHEMA",
+    "KINDS",
+    "AssetDef",
+    "Manifest",
+    "load_manifest"
+   ],
+   "names": {
+    "AssetDef": {
+     "attrs": {
+      "baked": "NoneType",
+      "fallback": "NoneType",
+      "module": "NoneType",
+      "path": "NoneType",
+      "pivot": "NoneType",
+      "size": "NoneType",
+      "strings": "tuple",
+      "tags": "tuple",
+      "variants": "int"
+     },
+     "bases": [],
+     "fields": [
+      "baked",
+      "extra",
+      "fallback",
+      "id",
+      "kind",
+      "module",
+      "pack",
+      "path",
+      "pivot",
+      "size",
+      "strings",
+      "tags",
+      "variants"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, id: 'str', kind: 'str', pack: 'str', module: 'str | None' = None, path: 'str | None' = None, variants: 'int' = 1, baked: 'str | None' = None, pivot: 'tuple[int, int] | None' = None, size: 'tuple[int, int] | None' = None, tags: 'tuple[str, ...]' = (), strings: 'tuple[str, ...]' = (), fallback: 'str | None' = None, extra: 'dict' = <factory>) -> None",
+      "baked_file": "(self, variant: 'int' = 0) -> 'str | None'",
+      "name": "property",
+      "rendered": "property"
+     }
+    },
+    "KINDS": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "Manifest": {
+     "attrs": {
+      "baked_dir": "NoneType",
+      "palette": "NoneType"
+     },
+     "bases": [],
+     "fields": [
+      "assets",
+      "baked_dir",
+      "pack",
+      "palette",
+      "path"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pack: 'str', path: 'Path', assets: 'dict[str, AssetDef]', baked_dir: 'str | None' = None, palette: 'str | None' = None) -> None",
+      "__iter__": "(self)",
+      "__len__": "(self) -> 'int'"
+     }
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "load_manifest": {
+     "kind": "function",
+     "signature": "(path: 'str | Path') -> 'Manifest'"
+    }
+   }
+  },
+  "engine.assets.registry": {
+   "all": [
+    "AssetRegistry",
+    "PLACEHOLDER",
+    "AssetReloaded"
+   ],
+   "names": {
+    "AssetRegistry": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, root: 'str', *, dev: 'bool' = True, log: 'Any' = None, bus: 'Any' = None) -> 'None'",
+      "acquire": "(self, pack: 'str', owner: 'object') -> 'None'",
+      "baked_path": "(self, asset_id: 'str', variant: 'int' = 0) -> 'str | None'",
+      "cache_size": "(self) -> 'int'",
+      "define": "(self, asset_id: 'str') -> 'AssetDef'",
+      "get": "(self, asset_id: 'str', variant: 'Any' = 0, scale: 'float' = 1, *, baked: 'bool' = True, default: 'Any' = PLACEHOLDER)",
+      "holders": "(self, pack: 'str') -> 'int'",
+      "ids": "(self, pack: 'str | None' = None, kind: 'str | None' = None) -> 'list[str]'",
+      "invalidate": "(self, asset_id: 'str | None' = None) -> 'int'",
+      "load_pack": "(self, manifest_path: 'str') -> 'Manifest'",
+      "module": "(self, asset_id: 'str')",
+      "release": "(self, owner: 'object') -> 'list[str]'",
+      "reload": "(self, asset_id: 'str', reason: 'str' = '') -> 'int'",
+      "unload_pack": "(self, pack: 'str', force: 'bool' = False) -> 'bool'",
+      "variant_index": "(self, asset_id: 'str', variant: 'Any') -> 'int'",
+      "variants": "(self, asset_id: 'str') -> 'int'",
+      "watched_files": "(self) -> 'dict[str, list[str]]'"
+     }
+    },
+    "AssetReloaded": {
+     "attrs": {
+      "id": "member_descriptor",
+      "reason": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, id: 'str', reason: 'str' = '') -> 'None'"
+     }
+    },
+    "PLACEHOLDER": {
+     "kind": "constant",
+     "type": "_Placeholder"
+    }
+   }
+  },
+  "engine.assets.watch": {
+   "all": [
+    "AssetWatcher"
+   ],
+   "names": {
+    "AssetWatcher": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, registry: 'AssetRegistry', *, interval_ms: 'int' = 500) -> 'None'",
+      "poll": "(self, now_ms: 'int') -> 'list[str]'",
+      "rescan": "(self) -> 'int'",
+      "run_once": "(self) -> 'list[str]'"
+     }
+    }
+   }
+  },
+  "engine.core": {
+   "all": [
+    "AEError",
+    "App",
+    "AssetError",
+    "CHANNELS",
+    "Clock",
+    "DEFAULTS",
+    "DEFAULT_HZ",
+    "DEFAULT_MAX_STEPS",
+    "ENV_MAP",
+    "EventBus",
+    "LEGACY",
+    "LEGACY_RNG",
+    "LEVELS",
+    "Log",
+    "Profiler",
+    "RngStreams",
+    "SchemaError",
+    "ServiceMissing",
+    "Services",
+    "Settings",
+    "Subscription",
+    "TimelineError",
+    "clamp",
+    "derive_seed",
+    "ease_in_out_cubic",
+    "ease_out_quad",
+    "get_log",
+    "inv_lerp",
+    "lerp",
+    "lerp_angle",
+    "now_ms",
+    "now_s",
+    "pin_wall",
+    "smoothstep",
+    "unpin_wall",
+    "write_crash_report"
+   ],
+   "names": {
+    "AEError": {
+     "attrs": {},
+     "bases": [
+      "Exception"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, message: 'str', **context: 'Any') -> 'None'"
+     }
+    },
+    "App": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, settings: 'Settings | None' = None) -> 'None'",
+      "boot": "(self, open_display: 'bool' = True, display_size: 'tuple[int, int] | None' = None, display_flags: 'int' = 0, force_mode: 'bool' = False) -> \"'App'\"",
+      "crash": "(self, exc: 'BaseException')",
+      "current": "static () -> \"'App | None'\"",
+      "quit": "(self, code: 'int' = 0) -> 'None'",
+      "run_frames": "(self, frame_dts: 'list[float]', fixed_update: \"Callable[['App', float], Any]\", draw: \"Callable[['App', float], Any] | None\" = None) -> 'int'",
+      "run_scene": "(self, scene: 'Any') -> 'int'",
+      "set_screen": "(self, surface) -> 'None'",
+      "shutdown": "(self) -> 'None'"
+     }
+    },
+    "AssetError": {
+     "attrs": {},
+     "bases": [
+      "AEError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "CHANNELS": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "Clock": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, step_hz: 'int' = 60, max_steps: 'int' = 5) -> 'None'",
+      "advance": "(self, real_dt: 'float') -> 'int'",
+      "alpha": "property",
+      "feed_wall": "(self, elapsed_ms: 'int') -> 'None'",
+      "reset": "(self) -> 'None'",
+      "set_wall_elapsed": "(self, elapsed_ms: 'float') -> 'None'",
+      "set_wall_origin": "(self, ms: 'int', epoch_s: 'float') -> 'None'",
+      "steps": "(self, real_dt: 'float')",
+      "tick": "(self) -> 'None'",
+      "ticks_ms": "property",
+      "wall_ms": "property",
+      "wall_s": "property"
+     }
+    },
+    "DEFAULTS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "DEFAULT_HZ": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "DEFAULT_MAX_STEPS": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "ENV_MAP": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "EventBus": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, history: 'int' = 256) -> 'None'",
+      "emit": "(self, event: 'Any') -> 'None'",
+      "emit_now": "(self, event: 'Any') -> 'None'",
+      "flush": "(self, max_events: 'int' = 10000) -> 'int'",
+      "pending": "(self) -> 'int'",
+      "subscribe": "(self, etype: 'type', fn: 'Callable[[Any], None]', scope: 'object | None' = None) -> 'Subscription'",
+      "tail": "(self, n: 'int' = 50) -> 'list'",
+      "unsubscribe": "(self, sub: 'Subscription') -> 'None'",
+      "unsubscribe_scope": "(self, scope: 'object') -> 'int'"
+     }
+    },
+    "LEGACY": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "LEGACY_RNG": {
+     "kind": "constant",
+     "type": "Random"
+    },
+    "LEVELS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "Log": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, capacity: 'int' = 200, echo_level: 'str' = 'warn', stream=None) -> 'None'",
+      "debug": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "error": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "info": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "log": "(self, channel: 'str', level: 'str', msg: 'str') -> 'None'",
+      "tail": "(self, n: 'int' = 50) -> 'list[str]'",
+      "warn": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "warn_once": "(self, channel: 'str', key: 'str', msg: 'str') -> 'bool'"
+     }
+    },
+    "Profiler": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "reset": "(self) -> 'None'",
+      "scope": "(self, name: 'str')",
+      "stats": "(self) -> 'dict[str, dict[str, float]]'"
+     }
+    },
+    "RngStreams": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, master_seed: 'int' = 0) -> 'None'",
+      "adopt": "(self, name: 'str', rnd: 'random.Random') -> 'random.Random'",
+      "names": "(self) -> 'list[str]'",
+      "reseed": "(self, master_seed: 'int') -> 'None'",
+      "restore": "(self, snap: 'dict') -> 'None'",
+      "snapshot": "(self) -> 'dict'",
+      "stream": "(self, name: 'str') -> 'random.Random'"
+     }
+    },
+    "SchemaError": {
+     "attrs": {},
+     "bases": [
+      "AEError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "ServiceMissing": {
+     "attrs": {},
+     "bases": [
+      "LookupError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "Services": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "get": "(self, name: 'str') -> 'Any'",
+      "has": "(self, name: 'str') -> 'bool'",
+      "names": "(self) -> 'list[str]'",
+      "register": "(self, name: 'str', obj: 'Any', replace: 'bool' = False) -> 'Any'"
+     }
+    },
+    "Settings": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__getitem__": "(self, key: 'str') -> 'Any'",
+      "__init__": "(self, values: 'dict[str, Any] | None' = None) -> 'None'",
+      "as_dict": "(self) -> 'dict[str, Any]'",
+      "get": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
+      "load": "class (cls, path: 'str | os.PathLike | None' = None, env: 'dict | None' = None, overrides: 'dict[str, Any] | None' = None) -> \"'Settings'\"",
+      "source": "(self, key: 'str') -> 'str'",
+      "update": "(self, values: 'dict[str, Any]', source: 'str') -> 'None'"
+     }
+    },
+    "Subscription": {
+     "attrs": {
+      "active": "member_descriptor",
+      "etype": "member_descriptor",
+      "fn": "member_descriptor",
+      "scope": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, etype: 'type', fn: 'Callable[[Any], None]', scope: 'object | None') -> 'None'"
+     }
+    },
+    "TimelineError": {
+     "attrs": {},
+     "bases": [
+      "AEError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "clamp": {
+     "kind": "function",
+     "signature": "(v: 'float', lo: 'float', hi: 'float') -> 'float'"
+    },
+    "derive_seed": {
+     "kind": "function",
+     "signature": "(master: 'int', name: 'str') -> 'int'"
+    },
+    "ease_in_out_cubic": {
+     "kind": "function",
+     "signature": "(t: 'float') -> 'float'"
+    },
+    "ease_out_quad": {
+     "kind": "function",
+     "signature": "(t: 'float') -> 'float'"
+    },
+    "get_log": {
+     "kind": "function",
+     "signature": "() -> 'Log'"
+    },
+    "inv_lerp": {
+     "kind": "function",
+     "signature": "(a: 'float', b: 'float', v: 'float') -> 'float'"
+    },
+    "lerp": {
+     "kind": "function",
+     "signature": "(a: 'float', b: 'float', t: 'float') -> 'float'"
+    },
+    "lerp_angle": {
+     "kind": "function",
+     "signature": "(a: 'float', b: 'float', t: 'float') -> 'float'"
+    },
+    "now_ms": {
+     "kind": "function",
+     "signature": "() -> 'int'"
+    },
+    "now_s": {
+     "kind": "function",
+     "signature": "() -> 'float'"
+    },
+    "pin_wall": {
+     "kind": "function",
+     "signature": "(ms=None, s=None) -> 'None'"
+    },
+    "smoothstep": {
+     "kind": "function",
+     "signature": "(t: 'float') -> 'float'"
+    },
+    "unpin_wall": {
+     "kind": "function",
+     "signature": "() -> 'None'"
+    },
+    "write_crash_report": {
+     "kind": "function",
+     "signature": "(directory: 'str | Path', exc: 'BaseException', *, log_lines: 'list[str] | None' = None, extra: 'dict[str, Any] | None' = None, screenshot=None, now: '_dt.datetime | None' = None) -> 'Path'"
+    }
+   }
+  },
+  "engine.core.app": {
+   "all": [
+    "App"
+   ],
+   "names": {
+    "App": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, settings: 'Settings | None' = None) -> 'None'",
+      "boot": "(self, open_display: 'bool' = True, display_size: 'tuple[int, int] | None' = None, display_flags: 'int' = 0, force_mode: 'bool' = False) -> \"'App'\"",
+      "crash": "(self, exc: 'BaseException')",
+      "current": "static () -> \"'App | None'\"",
+      "quit": "(self, code: 'int' = 0) -> 'None'",
+      "run_frames": "(self, frame_dts: 'list[float]', fixed_update: \"Callable[['App', float], Any]\", draw: \"Callable[['App', float], Any] | None\" = None) -> 'int'",
+      "run_scene": "(self, scene: 'Any') -> 'int'",
+      "set_screen": "(self, surface) -> 'None'",
+      "shutdown": "(self) -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.core.clock": {
+   "all": [
+    "Clock",
+    "DEFAULT_HZ",
+    "DEFAULT_MAX_STEPS"
+   ],
+   "names": {
+    "Clock": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, step_hz: 'int' = 60, max_steps: 'int' = 5) -> 'None'",
+      "advance": "(self, real_dt: 'float') -> 'int'",
+      "alpha": "property",
+      "feed_wall": "(self, elapsed_ms: 'int') -> 'None'",
+      "reset": "(self) -> 'None'",
+      "set_wall_elapsed": "(self, elapsed_ms: 'float') -> 'None'",
+      "set_wall_origin": "(self, ms: 'int', epoch_s: 'float') -> 'None'",
+      "steps": "(self, real_dt: 'float')",
+      "tick": "(self) -> 'None'",
+      "ticks_ms": "property",
+      "wall_ms": "property",
+      "wall_s": "property"
+     }
+    },
+    "DEFAULT_HZ": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "DEFAULT_MAX_STEPS": {
+     "kind": "constant",
+     "type": "int"
+    }
+   }
+  },
+  "engine.core.config": {
+   "all": [
+    "Settings",
+    "DEFAULTS",
+    "ENV_MAP"
+   ],
+   "names": {
+    "DEFAULTS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "ENV_MAP": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "Settings": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__getitem__": "(self, key: 'str') -> 'Any'",
+      "__init__": "(self, values: 'dict[str, Any] | None' = None) -> 'None'",
+      "as_dict": "(self) -> 'dict[str, Any]'",
+      "get": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
+      "load": "class (cls, path: 'str | os.PathLike | None' = None, env: 'dict | None' = None, overrides: 'dict[str, Any] | None' = None) -> \"'Settings'\"",
+      "source": "(self, key: 'str') -> 'str'",
+      "update": "(self, values: 'dict[str, Any]', source: 'str') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.core.errors": {
+   "all": [
+    "AEError",
+    "AssetError",
+    "TimelineError",
+    "SchemaError",
+    "write_crash_report"
+   ],
+   "names": {
+    "AEError": {
+     "attrs": {},
+     "bases": [
+      "Exception"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, message: 'str', **context: 'Any') -> 'None'"
+     }
+    },
+    "AssetError": {
+     "attrs": {},
+     "bases": [
+      "AEError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "SchemaError": {
+     "attrs": {},
+     "bases": [
+      "AEError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "TimelineError": {
+     "attrs": {},
+     "bases": [
+      "AEError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "write_crash_report": {
+     "kind": "function",
+     "signature": "(directory: 'str | Path', exc: 'BaseException', *, log_lines: 'list[str] | None' = None, extra: 'dict[str, Any] | None' = None, screenshot=None, now: '_dt.datetime | None' = None) -> 'Path'"
+    }
+   }
+  },
+  "engine.core.events": {
+   "all": [
+    "EventBus",
+    "Subscription"
+   ],
+   "names": {
+    "EventBus": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, history: 'int' = 256) -> 'None'",
+      "emit": "(self, event: 'Any') -> 'None'",
+      "emit_now": "(self, event: 'Any') -> 'None'",
+      "flush": "(self, max_events: 'int' = 10000) -> 'int'",
+      "pending": "(self) -> 'int'",
+      "subscribe": "(self, etype: 'type', fn: 'Callable[[Any], None]', scope: 'object | None' = None) -> 'Subscription'",
+      "tail": "(self, n: 'int' = 50) -> 'list'",
+      "unsubscribe": "(self, sub: 'Subscription') -> 'None'",
+      "unsubscribe_scope": "(self, scope: 'object') -> 'int'"
+     }
+    },
+    "Subscription": {
+     "attrs": {
+      "active": "member_descriptor",
+      "etype": "member_descriptor",
+      "fn": "member_descriptor",
+      "scope": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, etype: 'type', fn: 'Callable[[Any], None]', scope: 'object | None') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.core.log": {
+   "all": [
+    "CHANNELS",
+    "LEVELS",
+    "Log",
+    "get_log"
+   ],
+   "names": {
+    "CHANNELS": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "LEVELS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "Log": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, capacity: 'int' = 200, echo_level: 'str' = 'warn', stream=None) -> 'None'",
+      "debug": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "error": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "info": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "log": "(self, channel: 'str', level: 'str', msg: 'str') -> 'None'",
+      "tail": "(self, n: 'int' = 50) -> 'list[str]'",
+      "warn": "(self, channel: 'str', msg: 'str') -> 'None'",
+      "warn_once": "(self, channel: 'str', key: 'str', msg: 'str') -> 'bool'"
+     }
+    },
+    "get_log": {
+     "kind": "function",
+     "signature": "() -> 'Log'"
+    }
+   }
+  },
+  "engine.core.mathx": {
+   "all": [
+    "clamp",
+    "lerp",
+    "inv_lerp",
+    "lerp_angle",
+    "smoothstep",
+    "ease_in_out_cubic",
+    "ease_out_quad"
+   ],
+   "names": {
+    "clamp": {
+     "kind": "function",
+     "signature": "(v: 'float', lo: 'float', hi: 'float') -> 'float'"
+    },
+    "ease_in_out_cubic": {
+     "kind": "function",
+     "signature": "(t: 'float') -> 'float'"
+    },
+    "ease_out_quad": {
+     "kind": "function",
+     "signature": "(t: 'float') -> 'float'"
+    },
+    "inv_lerp": {
+     "kind": "function",
+     "signature": "(a: 'float', b: 'float', v: 'float') -> 'float'"
+    },
+    "lerp": {
+     "kind": "function",
+     "signature": "(a: 'float', b: 'float', t: 'float') -> 'float'"
+    },
+    "lerp_angle": {
+     "kind": "function",
+     "signature": "(a: 'float', b: 'float', t: 'float') -> 'float'"
+    },
+    "smoothstep": {
+     "kind": "function",
+     "signature": "(t: 'float') -> 'float'"
+    }
+   }
+  },
+  "engine.core.profiling": {
+   "all": [
+    "Profiler"
+   ],
+   "names": {
+    "Profiler": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "reset": "(self) -> 'None'",
+      "scope": "(self, name: 'str')",
+      "stats": "(self) -> 'dict[str, dict[str, float]]'"
+     }
+    }
+   }
+  },
+  "engine.core.rng": {
+   "all": [
+    "LEGACY",
+    "LEGACY_RNG",
+    "RngStreams",
+    "derive_seed"
+   ],
+   "names": {
+    "LEGACY": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "LEGACY_RNG": {
+     "kind": "constant",
+     "type": "Random"
+    },
+    "RngStreams": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, master_seed: 'int' = 0) -> 'None'",
+      "adopt": "(self, name: 'str', rnd: 'random.Random') -> 'random.Random'",
+      "names": "(self) -> 'list[str]'",
+      "reseed": "(self, master_seed: 'int') -> 'None'",
+      "restore": "(self, snap: 'dict') -> 'None'",
+      "snapshot": "(self) -> 'dict'",
+      "stream": "(self, name: 'str') -> 'random.Random'"
+     }
+    },
+    "derive_seed": {
+     "kind": "function",
+     "signature": "(master: 'int', name: 'str') -> 'int'"
+    }
+   }
+  },
+  "engine.core.services": {
+   "all": [
+    "Services",
+    "ServiceMissing"
+   ],
+   "names": {
+    "ServiceMissing": {
+     "attrs": {},
+     "bases": [
+      "LookupError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "Services": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "get": "(self, name: 'str') -> 'Any'",
+      "has": "(self, name: 'str') -> 'bool'",
+      "names": "(self) -> 'list[str]'",
+      "register": "(self, name: 'str', obj: 'Any', replace: 'bool' = False) -> 'Any'"
+     }
+    }
+   }
+  },
+  "engine.core.timebase": {
+   "all": [
+    "now_ms",
+    "now_s",
+    "pin_wall",
+    "unpin_wall"
+   ],
+   "names": {
+    "now_ms": {
+     "kind": "function",
+     "signature": "() -> 'int'"
+    },
+    "now_s": {
+     "kind": "function",
+     "signature": "() -> 'float'"
+    },
+    "pin_wall": {
+     "kind": "function",
+     "signature": "(ms=None, s=None) -> 'None'"
+    },
+    "unpin_wall": {
+     "kind": "function",
+     "signature": "() -> 'None'"
+    }
+   }
+  },
+  "engine.dialogue": {
+   "all": [
+    "SCHEMA",
+    "Dialogue",
+    "DialogueError",
+    "DialogueEnded",
+    "DialogueHost",
+    "DialogueLine",
+    "DialogueRunner",
+    "from_dict",
+    "load_dialogue",
+    "loads_dialogue",
+    "validate"
+   ],
+   "names": {
+    "Dialogue": {
+     "attrs": {
+      "id": "member_descriptor",
+      "metadata": "member_descriptor",
+      "nodes": "member_descriptor",
+      "source": "member_descriptor",
+      "speakers": "member_descriptor",
+      "start": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, node_id: 'str') -> 'bool'",
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "node": "(self, node_id: 'str') -> 'dict'"
+     }
+    },
+    "DialogueEnded": {
+     "attrs": {
+      "skipped": "bool",
+      "visited": "tuple"
+     },
+     "bases": [],
+     "fields": [
+      "dialogue_id",
+      "skipped",
+      "visited"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, dialogue_id: 'str', visited: 'tuple' = (), skipped: 'bool' = False) -> None"
+     }
+    },
+    "DialogueError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "DialogueHost": {
+     "attrs": {},
+     "bases": [
+      "Protocol"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *args, **kwargs)",
+      "emit": "(self, name: 'str', payload: 'Any' = None) -> 'None'",
+      "flag": "(self, name: 'str') -> 'bool'",
+      "resolve": "(self, node: 'dict') -> 'str'",
+      "set_var": "(self, name: 'str', value: 'Any') -> 'None'",
+      "speaker_meta": "(self, speaker: 'str | None') -> 'dict'",
+      "var": "(self, name: 'str') -> 'Any'"
+     }
+    },
+    "DialogueLine": {
+     "attrs": {},
+     "bases": [],
+     "fields": [
+      "choices",
+      "meta",
+      "node_id",
+      "speaker",
+      "text",
+      "timing"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, node_id: 'str', speaker: 'str | None', text: 'str', choices: 'list' = <factory>, timing: 'dict' = <factory>, meta: 'dict' = <factory>) -> None"
+     }
+    },
+    "DialogueRunner": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, dialogue: 'Dialogue', host: 'DialogueHost') -> 'None'",
+      "advance": "(self)",
+      "begin": "(self)",
+      "choose": "(self, index: 'int')",
+      "skip": "(self)"
+     }
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Dialogue'"
+    },
+    "load_dialogue": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Dialogue'"
+    },
+    "loads_dialogue": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Dialogue'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any', text_table: 'Mapping[str, str] | None' = None, max_chars: 'int' = 220) -> 'list[str]'"
+    }
+   }
+  },
+  "engine.dialogue.model": {
+   "all": [
+    "SCHEMA",
+    "DialogueError",
+    "Dialogue",
+    "validate",
+    "from_dict",
+    "loads_dialogue",
+    "load_dialogue"
+   ],
+   "names": {
+    "Dialogue": {
+     "attrs": {
+      "id": "member_descriptor",
+      "metadata": "member_descriptor",
+      "nodes": "member_descriptor",
+      "source": "member_descriptor",
+      "speakers": "member_descriptor",
+      "start": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, node_id: 'str') -> 'bool'",
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "node": "(self, node_id: 'str') -> 'dict'"
+     }
+    },
+    "DialogueError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Dialogue'"
+    },
+    "load_dialogue": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Dialogue'"
+    },
+    "loads_dialogue": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Dialogue'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any', text_table: 'Mapping[str, str] | None' = None, max_chars: 'int' = 220) -> 'list[str]'"
+    }
+   }
+  },
+  "engine.dialogue.runner": {
+   "all": [
+    "DialogueHost",
+    "DialogueLine",
+    "DialogueEnded",
+    "DialogueRunner"
+   ],
+   "names": {
+    "DialogueEnded": {
+     "attrs": {
+      "skipped": "bool",
+      "visited": "tuple"
+     },
+     "bases": [],
+     "fields": [
+      "dialogue_id",
+      "skipped",
+      "visited"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, dialogue_id: 'str', visited: 'tuple' = (), skipped: 'bool' = False) -> None"
+     }
+    },
+    "DialogueHost": {
+     "attrs": {},
+     "bases": [
+      "Protocol"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *args, **kwargs)",
+      "emit": "(self, name: 'str', payload: 'Any' = None) -> 'None'",
+      "flag": "(self, name: 'str') -> 'bool'",
+      "resolve": "(self, node: 'dict') -> 'str'",
+      "set_var": "(self, name: 'str', value: 'Any') -> 'None'",
+      "speaker_meta": "(self, speaker: 'str | None') -> 'dict'",
+      "var": "(self, name: 'str') -> 'Any'"
+     }
+    },
+    "DialogueLine": {
+     "attrs": {},
+     "bases": [],
+     "fields": [
+      "choices",
+      "meta",
+      "node_id",
+      "speaker",
+      "text",
+      "timing"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, node_id: 'str', speaker: 'str | None', text: 'str', choices: 'list' = <factory>, timing: 'dict' = <factory>, meta: 'dict' = <factory>) -> None"
+     }
+    },
+    "DialogueRunner": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, dialogue: 'Dialogue', host: 'DialogueHost') -> 'None'",
+      "advance": "(self)",
+      "begin": "(self)",
+      "choose": "(self, index: 'int')",
+      "skip": "(self)"
+     }
+    }
+   }
+  },
+  "engine.input": {
+   "all": [
+    "DEFAULT_ACTIONS",
+    "ActionMap",
+    "validate"
+   ],
+   "names": {
+    "ActionMap": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, bindings: 'Mapping | None' = None)",
+      "binding": "(self, action: 'str') -> 'str'",
+      "down": "(self, action: 'str', virtual_down) -> 'bool'",
+      "pad_down": "(self, axes, buttons, deadzone: 'float' = 0.35) -> 'set'",
+      "remap": "(self, physical_down: 'Iterable[str]') -> 'set'",
+      "set_binding": "(self, action: 'str', key_name: 'str') -> 'None'",
+      "to_bindings": "(self) -> 'dict'"
+     }
+    },
+    "DEFAULT_ACTIONS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(actions: 'Mapping') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.input.model": {
+   "all": [
+    "DEFAULT_ACTIONS",
+    "ActionMap",
+    "validate"
+   ],
+   "names": {
+    "ActionMap": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, bindings: 'Mapping | None' = None)",
+      "binding": "(self, action: 'str') -> 'str'",
+      "down": "(self, action: 'str', virtual_down) -> 'bool'",
+      "pad_down": "(self, axes, buttons, deadzone: 'float' = 0.35) -> 'set'",
+      "remap": "(self, physical_down: 'Iterable[str]') -> 'set'",
+      "set_binding": "(self, action: 'str', key_name: 'str') -> 'None'",
+      "to_bindings": "(self) -> 'dict'"
+     }
+    },
+    "DEFAULT_ACTIONS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(actions: 'Mapping') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.level": {
+   "all": [
+    "SCHEMA",
+    "Level",
+    "LevelError",
+    "TiledError",
+    "from_dict",
+    "from_tiled",
+    "load_level",
+    "loads_level",
+    "to_dict",
+    "validate"
+   ],
+   "names": {
+    "Level": {
+     "attrs": {
+      "decor": "member_descriptor",
+      "id": "member_descriptor",
+      "layers": "member_descriptor",
+      "lights": "member_descriptor",
+      "metadata": "member_descriptor",
+      "name": "member_descriptor",
+      "objects": "member_descriptor",
+      "paths": "member_descriptor",
+      "procedural_decor": "member_descriptor",
+      "source": "member_descriptor",
+      "tile_size": "member_descriptor",
+      "triggers": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'",
+      "grid": "(self, layer: 'str' = 'floor') -> 'list[str]'",
+      "objects_of": "(self, kind: 'str') -> 'list[dict]'",
+      "path": "(self, path_id: 'str') -> 'list[tuple[int, int]] | None'",
+      "size": "(self, layer: 'str' = 'floor') -> 'tuple[int, int]'",
+      "to_dict": "(self) -> 'dict'"
+     }
+    },
+    "LevelError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "TiledError": {
+     "attrs": {},
+     "bases": [
+      "LevelError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Level'"
+    },
+    "from_tiled": {
+     "kind": "function",
+     "signature": "(data: 'dict | str', gid_char: 'dict[int, str]', *, level_id: 'str' = '', tile_size: 'int | None' = None) -> 'Level'"
+    },
+    "load_level": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Level'"
+    },
+    "loads_level": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Level'"
+    },
+    "to_dict": {
+     "kind": "function",
+     "signature": "(level: 'Level') -> 'dict'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.level.model": {
+   "all": [
+    "SCHEMA",
+    "LevelError",
+    "Level",
+    "validate",
+    "from_dict",
+    "to_dict",
+    "loads_level",
+    "load_level"
+   ],
+   "names": {
+    "Level": {
+     "attrs": {
+      "decor": "member_descriptor",
+      "id": "member_descriptor",
+      "layers": "member_descriptor",
+      "lights": "member_descriptor",
+      "metadata": "member_descriptor",
+      "name": "member_descriptor",
+      "objects": "member_descriptor",
+      "paths": "member_descriptor",
+      "procedural_decor": "member_descriptor",
+      "source": "member_descriptor",
+      "tile_size": "member_descriptor",
+      "triggers": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'",
+      "grid": "(self, layer: 'str' = 'floor') -> 'list[str]'",
+      "objects_of": "(self, kind: 'str') -> 'list[dict]'",
+      "path": "(self, path_id: 'str') -> 'list[tuple[int, int]] | None'",
+      "size": "(self, layer: 'str' = 'floor') -> 'tuple[int, int]'",
+      "to_dict": "(self) -> 'dict'"
+     }
+    },
+    "LevelError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Level'"
+    },
+    "load_level": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Level'"
+    },
+    "loads_level": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Level'"
+    },
+    "to_dict": {
+     "kind": "function",
+     "signature": "(level: 'Level') -> 'dict'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.level.tiled": {
+   "all": [
+    "TiledError",
+    "from_tiled"
+   ],
+   "names": {
+    "TiledError": {
+     "attrs": {},
+     "bases": [
+      "LevelError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "from_tiled": {
+     "kind": "function",
+     "signature": "(data: 'dict | str', gid_char: 'dict[int, str]', *, level_id: 'str' = '', tile_size: 'int | None' = None) -> 'Level'"
+    }
+   }
+  },
+  "engine.lighting": {
+   "all": [
+    "LightBuffer",
+    "enabled",
+    "frozen",
+    "LightMap",
+    "LightMapDraw",
+    "bloom_sprite",
+    "falloff_sprite"
+   ],
+   "names": {
+    "LightBuffer": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, size)",
+      "begin_frame": "(self, wing, doors_sig=0)",
+      "composite": "(self, target, t, motes=True)",
+      "cone": "(self, sx, sy, angle, half_spread_deg, length, color, intensity=1.0, caster=None, cam=None, key=None)",
+      "flicker": "(self, key, t, base=1.0, depth=0.12, rate=11.0)",
+      "light": "(self, sx, sy, radius, color, intensity=1.0, caster=None, cam=None, key=None)",
+      "size": "property"
+     }
+    },
+    "LightMap": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "apply": "(self, target: 'pygame.Surface', ambient, lamps) -> 'pygame.Surface'",
+      "surface": "(self, size) -> 'pygame.Surface'"
+     }
+    },
+    "LightMapDraw": {
+     "attrs": {
+      "ambient": "member_descriptor",
+      "blooms": "member_descriptor",
+      "kind": "str",
+      "lamps": "member_descriptor",
+      "lightmap": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, ambient, lamps, blooms=(), *, lightmap: 'LightMap | None' = None) -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "bloom_sprite": {
+     "kind": "function",
+     "signature": "(radius, col)"
+    },
+    "enabled": {
+     "kind": "function",
+     "signature": "()"
+    },
+    "falloff_sprite": {
+     "kind": "function",
+     "signature": "(radius, col)"
+    },
+    "frozen": {
+     "kind": "function",
+     "signature": "()"
+    }
+   }
+  },
+  "engine.lighting.buffer": {
+   "all": [
+    "LightBuffer",
+    "enabled",
+    "frozen"
+   ],
+   "names": {
+    "LightBuffer": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, size)",
+      "begin_frame": "(self, wing, doors_sig=0)",
+      "composite": "(self, target, t, motes=True)",
+      "cone": "(self, sx, sy, angle, half_spread_deg, length, color, intensity=1.0, caster=None, cam=None, key=None)",
+      "flicker": "(self, key, t, base=1.0, depth=0.12, rate=11.0)",
+      "light": "(self, sx, sy, radius, color, intensity=1.0, caster=None, cam=None, key=None)",
+      "size": "property"
+     }
+    },
+    "enabled": {
+     "kind": "function",
+     "signature": "()"
+    },
+    "frozen": {
+     "kind": "function",
+     "signature": "()"
+    }
+   }
+  },
+  "engine.lighting.lightmap": {
+   "all": [
+    "LightMap",
+    "LightMapDraw",
+    "falloff_sprite",
+    "bloom_sprite"
+   ],
+   "names": {
+    "LightMap": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "apply": "(self, target: 'pygame.Surface', ambient, lamps) -> 'pygame.Surface'",
+      "surface": "(self, size) -> 'pygame.Surface'"
+     }
+    },
+    "LightMapDraw": {
+     "attrs": {
+      "ambient": "member_descriptor",
+      "blooms": "member_descriptor",
+      "kind": "str",
+      "lamps": "member_descriptor",
+      "lightmap": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, ambient, lamps, blooms=(), *, lightmap: 'LightMap | None' = None) -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "bloom_sprite": {
+     "kind": "function",
+     "signature": "(radius, col)"
+    },
+    "falloff_sprite": {
+     "kind": "function",
+     "signature": "(radius, col)"
+    }
+   }
+  },
+  "engine.render2d": {
+   "all": [
+    "Camera2D",
+    "clamp_top_left",
+    "deadzone_hold",
+    "ease_toward",
+    "legacy_shake",
+    "CircleDraw",
+    "CustomDraw",
+    "Drawable",
+    "FillDraw",
+    "LAYER_NAMES",
+    "Layer",
+    "LineDraw",
+    "OverlayDraw",
+    "PolyDraw",
+    "PostFX",
+    "RecordingPen",
+    "SurfacePen",
+    "pen_or_surface",
+    "RectDraw",
+    "EllipseDraw",
+    "ArcDraw",
+    "RenderQueue",
+    "RenderStats",
+    "RotatedSpriteDraw",
+    "RotationCache",
+    "SCREEN",
+    "SpriteDraw",
+    "StaticLayer",
+    "StaticLayerDraw",
+    "StaticLayers",
+    "SurfaceDraw",
+    "SurfaceBatchDraw",
+    "TextDraw",
+    "UiPassDraw",
+    "WORLD",
+    "Y_SORTED",
+    "add_radial",
+    "doors_anim_sig",
+    "push_lamps",
+    "screen_visible",
+    "soft_shadow",
+    "soft_shadow_surface",
+    "swap_screen"
+   ],
+   "names": {
+    "ArcDraw": {
+     "attrs": {
+      "kind": "str",
+      "start": "member_descriptor",
+      "stop": "member_descriptor"
+     },
+     "bases": [
+      "RectDraw"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, rect: 'Any', color: 'Any', start: 'float', stop: 'float', width: 'int' = 1, *, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "Camera2D": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, width: 'int', height: 'int', *, x: 'float' = 0.0, y: 'float' = 0.0, bounds: 'Any' = None, deadzone: 'tuple[float, float]' = (0.0, 0.0), ease: 'float' = 1.0, lookahead: 'float' = 0.0, zoom: 'float' = 1.0, shake_amp: 'float' = 8.0, trauma_decay: 'float' = 0.04, rng: 'Any' = None) -> 'None'",
+      "add_trauma": "(self, amount: 'float') -> 'None'",
+      "center": "(self) -> 'tuple[float, float]'",
+      "describe": "(self) -> 'dict[str, Any]'",
+      "follow": "(self, tx: 'float', ty: 'float', *, aim_angle: 'float | None' = None, ease: 'float | None' = None) -> 'None'",
+      "offset": "(self, alpha: 'float' = 1.0) -> 'tuple[int, int]'",
+      "screen_to_world": "(self, sx: 'float', sy: 'float', alpha: 'float' = 1.0) -> 'tuple[float, float]'",
+      "set_kick": "(self, kx: 'float', ky: 'float') -> 'None'",
+      "snap": "(self, cx: 'float', cy: 'float') -> 'None'",
+      "tick_shake": "(self) -> 'None'",
+      "visible_rect": "(self, alpha: 'float' = 1.0, margin: 'int' = 0) -> 'tuple[int, int, int, int]'",
+      "world_to_screen": "(self, wx: 'float', wy: 'float', alpha: 'float' = 1.0) -> 'tuple[int, int]'"
+     }
+    },
+    "CircleDraw": {
+     "attrs": {
+      "color": "member_descriptor",
+      "kind": "str",
+      "radius": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'tuple[float, float]', radius: 'float', color: 'Any', width: 'int' = 0, *, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "CustomDraw": {
+     "attrs": {
+      "fn": "member_descriptor",
+      "kind": "str",
+      "name": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[pygame.Surface, int, int], Any]', name: 'str' = '', *, pos: 'tuple[float, float]' = (0.0, 0.0), space: 'str' = 'world') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "Drawable": {
+     "attrs": {
+      "kind": "str",
+      "layer": "member_descriptor",
+      "pos": "member_descriptor",
+      "seq": "member_descriptor",
+      "sort_key": "member_descriptor",
+      "space": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'tuple[float, float]' = (0.0, 0.0), space: 'str' = 'world') -> 'None'",
+      "describe": "(self) -> 'dict[str, Any]'",
+      "draw": "(self, surface: 'pygame.Surface', cam_x: 'int', cam_y: 'int', ctx: \"'DrawContext | None'\" = None) -> 'int'",
+      "screen_pos": "(self, cam_x: 'int', cam_y: 'int') -> 'tuple[float, float]'",
+      "world_y": "(self) -> 'float'"
+     }
+    },
+    "EllipseDraw": {
+     "attrs": {
+      "kind": "str"
+     },
+     "bases": [
+      "RectDraw"
+     ],
+     "kind": "class",
+     "methods": {
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "FillDraw": {
+     "attrs": {
+      "color": "member_descriptor",
+      "kind": "str"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, color: 'Any') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "LAYER_NAMES": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "Layer": {
+     "attrs": {
+      "DEBUG": "Layer",
+      "DECALS_DYNAMIC": "Layer",
+      "DECOR_STATIC": "Layer",
+      "ENTITIES": "Layer",
+      "FLOOR": "Layer",
+      "FX_WORLD": "Layer",
+      "LIGHTING": "Layer",
+      "OVERLAY_WORLD": "Layer",
+      "SHADOWS": "Layer",
+      "UI": "Layer"
+     },
+     "bases": [
+      "IntEnum"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "LineDraw": {
+     "attrs": {
+      "closed": "member_descriptor",
+      "color": "member_descriptor",
+      "kind": "str",
+      "points": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, points: 'Sequence[Sequence[float]]', color: 'Any', width: 'int' = 1, *, closed: 'bool' = False, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "OverlayDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "kind": "str",
+      "surface": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surface: 'pygame.Surface', *, alpha: 'int | None' = None, pos: 'tuple[float, float]' = (0.0, 0.0)) -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "PolyDraw": {
+     "attrs": {
+      "color": "member_descriptor",
+      "kind": "str",
+      "points": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, points: 'Sequence[Sequence[float]]', color: 'Any', width: 'int' = 0, *, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'",
+      "world_y": "(self) -> 'float'"
+     }
+    },
+    "PostFX": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "clear": "(self) -> 'None'",
+      "color_grade": "(self, size, tint, alpha)",
+      "flash": "(self, size, color=(255, 255, 255))",
+      "get": "(self, kind: 'str', *args: 'Any', **kw: 'Any') -> 'pygame.Surface'",
+      "grain": "(self, size, seed, amount=18, density=0.5)",
+      "letterbox": "(self, size, bar_h, line_color=(40, 40, 40))",
+      "scanlines": "(self, size, band=None, spacing=4, alpha=18)",
+      "vignette": "(self, size, strength=130, band=None)"
+     }
+    },
+    "RecordingPen": {
+     "attrs": {
+      "items": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "arc": "(self, color, rect, start, stop, width=1)",
+      "blit": "(self, img, pos)",
+      "circle": "(self, color, center, radius, width=0)",
+      "ellipse": "(self, color, rect, width=0)",
+      "line": "(self, color, a, b, width=1)",
+      "lines": "(self, color, closed, points, width=1)",
+      "polygon": "(self, color, points, width=0)",
+      "rect": "(self, color, rect, width=0, border_radius=0)"
+     }
+    },
+    "RectDraw": {
+     "attrs": {
+      "border_radius": "member_descriptor",
+      "color": "member_descriptor",
+      "kind": "str",
+      "size": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, rect: 'Any', color: 'Any', width: 'int' = 0, *, border_radius: 'int' = 0, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'",
+      "world_y": "(self) -> 'float'"
+     }
+    },
+    "RenderQueue": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, resolver: 'Callable[..., Any] | None' = None, rotations: 'RotationCache | None' = None) -> 'None'",
+      "begin": "(self, cam_x: 'int' = 0, cam_y: 'int' = 0, *, clear: 'Any' = None, viewport: 'Any' = None) -> 'None'",
+      "describe": "(self) -> 'list[dict[str, Any]]'",
+      "flush": "(self, surface: 'pygame.Surface') -> 'RenderStats'",
+      "items": "(self, layer: 'int | Layer | None' = None) -> 'list[Drawable]'",
+      "pending": "(self) -> 'int'",
+      "submit": "(self, drawable: 'Drawable', layer: 'int | Layer' = <Layer.ENTITIES: 4>, sort_key: 'Any' = None) -> 'Drawable'",
+      "submit_many": "(self, drawables: 'Iterable[Drawable]', layer: 'int | Layer', sort_key: 'Any' = None) -> 'int'"
+     }
+    },
+    "RenderStats": {
+     "attrs": {
+      "blits": "member_descriptor",
+      "cache_hits": "member_descriptor",
+      "cache_misses": "member_descriptor",
+      "custom": "member_descriptor",
+      "custom_names": "member_descriptor",
+      "draws": "member_descriptor",
+      "frame": "member_descriptor",
+      "ms": "member_descriptor",
+      "ui_names": "member_descriptor",
+      "ui_passes": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "as_dict": "(self) -> 'dict[str, Any]'",
+      "lines": "(self) -> 'list[str]'",
+      "total_draws": "property"
+     }
+    },
+    "RotatedSpriteDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "anchor": "member_descriptor",
+      "angle": "member_descriptor",
+      "asset": "member_descriptor",
+      "base": "member_descriptor",
+      "buckets": "member_descriptor",
+      "key": "member_descriptor",
+      "kind": "str",
+      "variant": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'tuple[float, float]', angle: 'float', *, base: 'pygame.Surface | None' = None, asset: 'str | None' = None, variant: 'Any' = 0, buckets: 'int' = 64, anchor: 'Any' = 'center', alpha: 'int | None' = None, key: 'Any' = None, space: 'str' = 'world') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "RotationCache": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, limit: 'int' = 4096) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "bucket_of": "static (angle: 'float', buckets: 'int') -> 'int'",
+      "clear": "(self) -> 'None'",
+      "get": "(self, base: 'pygame.Surface', angle: 'float', buckets: 'int' = 64, key: 'Any' = None) -> 'pygame.Surface'"
+     }
+    },
+    "SCREEN": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SpriteDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "anchor": "member_descriptor",
+      "asset": "member_descriptor",
+      "flip": "member_descriptor",
+      "kind": "str",
+      "scale": "member_descriptor",
+      "tint": "member_descriptor",
+      "variant": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, asset: 'str', variant: 'Any', pos: 'tuple[float, float]', *, anchor: 'Any' = 'center', alpha: 'int | None' = None, tint: 'tuple[int, int, int] | None' = None, flip: 'tuple[bool, bool]' = (False, False), scale: 'float' = 1.0, space: 'str' = 'world') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'",
+      "resolve": "(self, ctx: 'DrawContext | None') -> 'pygame.Surface | None'"
+     }
+    },
+    "StaticLayer": {
+     "attrs": {
+      "built": "member_descriptor",
+      "chunk": "member_descriptor",
+      "chunks": "member_descriptor",
+      "fill": "member_descriptor",
+      "name": "member_descriptor",
+      "painter": "member_descriptor",
+      "signature": "member_descriptor",
+      "world_h": "member_descriptor",
+      "world_w": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str', painter: 'Painter', world_size: 'tuple[int, int]', signature: 'Any', fill: 'Any', chunk: 'int') -> 'None'",
+      "chunk_surface": "(self, cx: 'int', cy: 'int') -> 'pygame.Surface | None'"
+     }
+    },
+    "StaticLayerDraw": {
+     "attrs": {
+      "kind": "str",
+      "layers": "member_descriptor",
+      "name": "member_descriptor",
+      "viewport": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, layers: 'StaticLayers', name: 'str', viewport: 'tuple[int, int]') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "StaticLayers": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, chunk: 'int' = 1024) -> 'None'",
+      "blit": "(self, surface: 'pygame.Surface', name: 'str', cam_x: 'int', cam_y: 'int', viewport: 'tuple[int, int]') -> 'int'",
+      "define": "(self, name: 'str', *, painter: 'Painter', world_size: 'tuple[int, int]', signature: 'Any' = None, fill: 'Any' = None, chunk: 'int | None' = None) -> 'StaticLayer'",
+      "drop": "(self, name: 'str') -> 'None'",
+      "has": "(self, name: 'str') -> 'bool'",
+      "invalidate": "(self, name: 'str | None' = None) -> 'None'",
+      "layer": "(self, name: 'str') -> 'StaticLayer'",
+      "stats": "(self) -> 'dict[str, Any]'",
+      "visible_chunks": "(self, name: 'str', cam_x: 'int', cam_y: 'int', viewport: 'tuple[int, int]') -> 'list[tuple[int, int]]'"
+     }
+    },
+    "SurfaceBatchDraw": {
+     "attrs": {
+      "items": "member_descriptor",
+      "kind": "str"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, items, *, space: 'str' = 'screen') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "SurfaceDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "anchor": "member_descriptor",
+      "area": "member_descriptor",
+      "flags": "member_descriptor",
+      "kind": "str",
+      "surface": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surface: 'pygame.Surface', pos: 'tuple[float, float]', *, anchor: 'Any' = 'topleft', alpha: 'int | None' = None, space: 'str' = 'world', area: 'pygame.Rect | None' = None, flags: 'int' = 0) -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "SurfacePen": {
+     "attrs": {
+      "surface": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surface) -> 'None'",
+      "arc": "(self, color, rect, start, stop, width=1)",
+      "blit": "(self, img, pos)",
+      "circle": "(self, color, center, radius, width=0)",
+      "ellipse": "(self, color, rect, width=0)",
+      "line": "(self, color, a, b, width=1)",
+      "lines": "(self, color, closed, points, width=1)",
+      "polygon": "(self, color, points, width=0)",
+      "rect": "(self, color, rect, width=0, border_radius=0)"
+     }
+    },
+    "TextDraw": {
+     "attrs": {
+      "anchor": "member_descriptor",
+      "antialias": "member_descriptor",
+      "color": "member_descriptor",
+      "font": "member_descriptor",
+      "kind": "str",
+      "shadow": "member_descriptor",
+      "shadow_color": "member_descriptor",
+      "text": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, text: 'str', font: 'Any', pos: 'tuple[float, float]', color: 'Any' = (255, 255, 255), *, shadow: 'tuple[int, int] | None' = None, shadow_color: 'Any' = (0, 0, 0), anchor: 'Any' = 'topleft', antialias: 'bool' = True, space: 'str' = 'screen') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "UiPassDraw": {
+     "attrs": {
+      "fn": "member_descriptor",
+      "kind": "str",
+      "name": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[pygame.Surface], Any]', name: 'str' = '') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "WORLD": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Y_SORTED": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "add_radial": {
+     "kind": "function",
+     "signature": "(surf, cx, cy, radius, color, intensity=255)"
+    },
+    "clamp_top_left": {
+     "kind": "function",
+     "signature": "(x, y, world_w, world_h, view_w, view_h)"
+    },
+    "deadzone_hold": {
+     "kind": "function",
+     "signature": "(cur_x, cur_y, desired_x, desired_y, deadzone_px)"
+    },
+    "doors_anim_sig": {
+     "kind": "function",
+     "signature": "(doors)"
+    },
+    "ease_toward": {
+     "kind": "function",
+     "signature": "(cur_x, cur_y, desired_x, desired_y, ease)"
+    },
+    "legacy_shake": {
+     "kind": "function",
+     "signature": "(shake, rng)"
+    },
+    "pen_or_surface": {
+     "kind": "function",
+     "signature": "(pen, surface)"
+    },
+    "push_lamps": {
+     "kind": "function",
+     "signature": "(lb, lamps, cam_x, cam_y, t, caster, key_filter=None, base=0.3, radius_scale=0.8, key_fn=None)"
+    },
+    "screen_visible": {
+     "kind": "function",
+     "signature": "(sx, sy, w, h, margin=80, viewport=None)"
+    },
+    "soft_shadow": {
+     "kind": "function",
+     "signature": "(surf, rect, alpha=70)"
+    },
+    "soft_shadow_surface": {
+     "kind": "function",
+     "signature": "(rect, alpha=70)"
+    },
+    "swap_screen": {
+     "kind": "function",
+     "signature": "(module_namespace, surf, fn)"
+    }
+   }
+  },
+  "engine.render2d.camera": {
+   "all": [
+    "Camera2D",
+    "clamp_top_left",
+    "deadzone_hold",
+    "ease_toward",
+    "legacy_shake"
+   ],
+   "names": {
+    "Camera2D": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, width: 'int', height: 'int', *, x: 'float' = 0.0, y: 'float' = 0.0, bounds: 'Any' = None, deadzone: 'tuple[float, float]' = (0.0, 0.0), ease: 'float' = 1.0, lookahead: 'float' = 0.0, zoom: 'float' = 1.0, shake_amp: 'float' = 8.0, trauma_decay: 'float' = 0.04, rng: 'Any' = None) -> 'None'",
+      "add_trauma": "(self, amount: 'float') -> 'None'",
+      "center": "(self) -> 'tuple[float, float]'",
+      "describe": "(self) -> 'dict[str, Any]'",
+      "follow": "(self, tx: 'float', ty: 'float', *, aim_angle: 'float | None' = None, ease: 'float | None' = None) -> 'None'",
+      "offset": "(self, alpha: 'float' = 1.0) -> 'tuple[int, int]'",
+      "screen_to_world": "(self, sx: 'float', sy: 'float', alpha: 'float' = 1.0) -> 'tuple[float, float]'",
+      "set_kick": "(self, kx: 'float', ky: 'float') -> 'None'",
+      "snap": "(self, cx: 'float', cy: 'float') -> 'None'",
+      "tick_shake": "(self) -> 'None'",
+      "visible_rect": "(self, alpha: 'float' = 1.0, margin: 'int' = 0) -> 'tuple[int, int, int, int]'",
+      "world_to_screen": "(self, wx: 'float', wy: 'float', alpha: 'float' = 1.0) -> 'tuple[int, int]'"
+     }
+    },
+    "clamp_top_left": {
+     "kind": "function",
+     "signature": "(x, y, world_w, world_h, view_w, view_h)"
+    },
+    "deadzone_hold": {
+     "kind": "function",
+     "signature": "(cur_x, cur_y, desired_x, desired_y, deadzone_px)"
+    },
+    "ease_toward": {
+     "kind": "function",
+     "signature": "(cur_x, cur_y, desired_x, desired_y, ease)"
+    },
+    "legacy_shake": {
+     "kind": "function",
+     "signature": "(shake, rng)"
+    }
+   }
+  },
+  "engine.render2d.drawables": {
+   "all": [
+    "Drawable",
+    "SurfaceDraw",
+    "SpriteDraw",
+    "RotatedSpriteDraw",
+    "RotationCache",
+    "TextDraw",
+    "LineDraw",
+    "PolyDraw",
+    "SurfaceBatchDraw",
+    "CircleDraw",
+    "RectDraw",
+    "EllipseDraw",
+    "ArcDraw",
+    "FillDraw",
+    "CustomDraw",
+    "UiPassDraw",
+    "WORLD",
+    "SCREEN"
+   ],
+   "names": {
+    "ArcDraw": {
+     "attrs": {
+      "kind": "str",
+      "start": "member_descriptor",
+      "stop": "member_descriptor"
+     },
+     "bases": [
+      "RectDraw"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, rect: 'Any', color: 'Any', start: 'float', stop: 'float', width: 'int' = 1, *, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "CircleDraw": {
+     "attrs": {
+      "color": "member_descriptor",
+      "kind": "str",
+      "radius": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'tuple[float, float]', radius: 'float', color: 'Any', width: 'int' = 0, *, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "CustomDraw": {
+     "attrs": {
+      "fn": "member_descriptor",
+      "kind": "str",
+      "name": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[pygame.Surface, int, int], Any]', name: 'str' = '', *, pos: 'tuple[float, float]' = (0.0, 0.0), space: 'str' = 'world') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "Drawable": {
+     "attrs": {
+      "kind": "str",
+      "layer": "member_descriptor",
+      "pos": "member_descriptor",
+      "seq": "member_descriptor",
+      "sort_key": "member_descriptor",
+      "space": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'tuple[float, float]' = (0.0, 0.0), space: 'str' = 'world') -> 'None'",
+      "describe": "(self) -> 'dict[str, Any]'",
+      "draw": "(self, surface: 'pygame.Surface', cam_x: 'int', cam_y: 'int', ctx: \"'DrawContext | None'\" = None) -> 'int'",
+      "screen_pos": "(self, cam_x: 'int', cam_y: 'int') -> 'tuple[float, float]'",
+      "world_y": "(self) -> 'float'"
+     }
+    },
+    "EllipseDraw": {
+     "attrs": {
+      "kind": "str"
+     },
+     "bases": [
+      "RectDraw"
+     ],
+     "kind": "class",
+     "methods": {
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "FillDraw": {
+     "attrs": {
+      "color": "member_descriptor",
+      "kind": "str"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, color: 'Any') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "LineDraw": {
+     "attrs": {
+      "closed": "member_descriptor",
+      "color": "member_descriptor",
+      "kind": "str",
+      "points": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, points: 'Sequence[Sequence[float]]', color: 'Any', width: 'int' = 1, *, closed: 'bool' = False, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "PolyDraw": {
+     "attrs": {
+      "color": "member_descriptor",
+      "kind": "str",
+      "points": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, points: 'Sequence[Sequence[float]]', color: 'Any', width: 'int' = 0, *, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'",
+      "world_y": "(self) -> 'float'"
+     }
+    },
+    "RectDraw": {
+     "attrs": {
+      "border_radius": "member_descriptor",
+      "color": "member_descriptor",
+      "kind": "str",
+      "size": "member_descriptor",
+      "width": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, rect: 'Any', color: 'Any', width: 'int' = 0, *, border_radius: 'int' = 0, space: 'str' = 'world') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'",
+      "world_y": "(self) -> 'float'"
+     }
+    },
+    "RotatedSpriteDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "anchor": "member_descriptor",
+      "angle": "member_descriptor",
+      "asset": "member_descriptor",
+      "base": "member_descriptor",
+      "buckets": "member_descriptor",
+      "key": "member_descriptor",
+      "kind": "str",
+      "variant": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'tuple[float, float]', angle: 'float', *, base: 'pygame.Surface | None' = None, asset: 'str | None' = None, variant: 'Any' = 0, buckets: 'int' = 64, anchor: 'Any' = 'center', alpha: 'int | None' = None, key: 'Any' = None, space: 'str' = 'world') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "RotationCache": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, limit: 'int' = 4096) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "bucket_of": "static (angle: 'float', buckets: 'int') -> 'int'",
+      "clear": "(self) -> 'None'",
+      "get": "(self, base: 'pygame.Surface', angle: 'float', buckets: 'int' = 64, key: 'Any' = None) -> 'pygame.Surface'"
+     }
+    },
+    "SCREEN": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SpriteDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "anchor": "member_descriptor",
+      "asset": "member_descriptor",
+      "flip": "member_descriptor",
+      "kind": "str",
+      "scale": "member_descriptor",
+      "tint": "member_descriptor",
+      "variant": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, asset: 'str', variant: 'Any', pos: 'tuple[float, float]', *, anchor: 'Any' = 'center', alpha: 'int | None' = None, tint: 'tuple[int, int, int] | None' = None, flip: 'tuple[bool, bool]' = (False, False), scale: 'float' = 1.0, space: 'str' = 'world') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'",
+      "resolve": "(self, ctx: 'DrawContext | None') -> 'pygame.Surface | None'"
+     }
+    },
+    "SurfaceBatchDraw": {
+     "attrs": {
+      "items": "member_descriptor",
+      "kind": "str"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, items, *, space: 'str' = 'screen') -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "SurfaceDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "anchor": "member_descriptor",
+      "area": "member_descriptor",
+      "flags": "member_descriptor",
+      "kind": "str",
+      "surface": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surface: 'pygame.Surface', pos: 'tuple[float, float]', *, anchor: 'Any' = 'topleft', alpha: 'int | None' = None, space: 'str' = 'world', area: 'pygame.Rect | None' = None, flags: 'int' = 0) -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "TextDraw": {
+     "attrs": {
+      "anchor": "member_descriptor",
+      "antialias": "member_descriptor",
+      "color": "member_descriptor",
+      "font": "member_descriptor",
+      "kind": "str",
+      "shadow": "member_descriptor",
+      "shadow_color": "member_descriptor",
+      "text": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, text: 'str', font: 'Any', pos: 'tuple[float, float]', color: 'Any' = (255, 255, 255), *, shadow: 'tuple[int, int] | None' = None, shadow_color: 'Any' = (0, 0, 0), anchor: 'Any' = 'topleft', antialias: 'bool' = True, space: 'str' = 'screen') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "UiPassDraw": {
+     "attrs": {
+      "fn": "member_descriptor",
+      "kind": "str",
+      "name": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[pygame.Surface], Any]', name: 'str' = '') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "WORLD": {
+     "kind": "constant",
+     "type": "str"
+    }
+   }
+  },
+  "engine.render2d.pen": {
+   "all": [
+    "SurfacePen",
+    "RecordingPen",
+    "pen_or_surface"
+   ],
+   "names": {
+    "RecordingPen": {
+     "attrs": {
+      "items": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "arc": "(self, color, rect, start, stop, width=1)",
+      "blit": "(self, img, pos)",
+      "circle": "(self, color, center, radius, width=0)",
+      "ellipse": "(self, color, rect, width=0)",
+      "line": "(self, color, a, b, width=1)",
+      "lines": "(self, color, closed, points, width=1)",
+      "polygon": "(self, color, points, width=0)",
+      "rect": "(self, color, rect, width=0, border_radius=0)"
+     }
+    },
+    "SurfacePen": {
+     "attrs": {
+      "surface": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surface) -> 'None'",
+      "arc": "(self, color, rect, start, stop, width=1)",
+      "blit": "(self, img, pos)",
+      "circle": "(self, color, center, radius, width=0)",
+      "ellipse": "(self, color, rect, width=0)",
+      "line": "(self, color, a, b, width=1)",
+      "lines": "(self, color, closed, points, width=1)",
+      "polygon": "(self, color, points, width=0)",
+      "rect": "(self, color, rect, width=0, border_radius=0)"
+     }
+    },
+    "pen_or_surface": {
+     "kind": "function",
+     "signature": "(pen, surface)"
+    }
+   }
+  },
+  "engine.render2d.postfx": {
+   "all": [
+    "PostFX",
+    "OverlayDraw",
+    "vignette",
+    "scanlines",
+    "flash",
+    "letterbox",
+    "grain",
+    "color_grade"
+   ],
+   "names": {
+    "OverlayDraw": {
+     "attrs": {
+      "alpha": "member_descriptor",
+      "kind": "str",
+      "surface": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, surface: 'pygame.Surface', *, alpha: 'int | None' = None, pos: 'tuple[float, float]' = (0.0, 0.0)) -> 'None'",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "PostFX": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "clear": "(self) -> 'None'",
+      "color_grade": "(self, size, tint, alpha)",
+      "flash": "(self, size, color=(255, 255, 255))",
+      "get": "(self, kind: 'str', *args: 'Any', **kw: 'Any') -> 'pygame.Surface'",
+      "grain": "(self, size, seed, amount=18, density=0.5)",
+      "letterbox": "(self, size, bar_h, line_color=(40, 40, 40))",
+      "scanlines": "(self, size, band=None, spacing=4, alpha=18)",
+      "vignette": "(self, size, strength=130, band=None)"
+     }
+    },
+    "color_grade": {
+     "kind": "function",
+     "signature": "(size: 'tuple[int, int]', tint: 'tuple[int, int, int]', alpha: 'int') -> 'pygame.Surface'"
+    },
+    "flash": {
+     "kind": "function",
+     "signature": "(size: 'tuple[int, int]', color: 'Any' = (255, 255, 255)) -> 'pygame.Surface'"
+    },
+    "grain": {
+     "kind": "function",
+     "signature": "(size: 'tuple[int, int]', seed: 'int', amount: 'int' = 18, density: 'float' = 0.5) -> 'pygame.Surface'"
+    },
+    "letterbox": {
+     "kind": "function",
+     "signature": "(size: 'tuple[int, int]', bar_h: 'int', line_color: 'Any' = (40, 40, 40)) -> 'pygame.Surface'"
+    },
+    "scanlines": {
+     "kind": "function",
+     "signature": "(size: 'tuple[int, int]', band: 'tuple[int, int] | None' = None, spacing: 'int' = 4, alpha: 'int' = 18) -> 'pygame.Surface'"
+    },
+    "vignette": {
+     "kind": "function",
+     "signature": "(size: 'tuple[int, int]', strength: 'int' = 130, band: 'tuple[int, int] | None' = None, step: 'int' = 6) -> 'pygame.Surface'"
+    }
+   }
+  },
+  "engine.render2d.queue": {
+   "all": [
+    "Layer",
+    "LAYER_NAMES",
+    "Y_SORTED",
+    "RenderStats",
+    "RenderQueue"
+   ],
+   "names": {
+    "LAYER_NAMES": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "Layer": {
+     "attrs": {
+      "DEBUG": "Layer",
+      "DECALS_DYNAMIC": "Layer",
+      "DECOR_STATIC": "Layer",
+      "ENTITIES": "Layer",
+      "FLOOR": "Layer",
+      "FX_WORLD": "Layer",
+      "LIGHTING": "Layer",
+      "OVERLAY_WORLD": "Layer",
+      "SHADOWS": "Layer",
+      "UI": "Layer"
+     },
+     "bases": [
+      "IntEnum"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "RenderQueue": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, resolver: 'Callable[..., Any] | None' = None, rotations: 'RotationCache | None' = None) -> 'None'",
+      "begin": "(self, cam_x: 'int' = 0, cam_y: 'int' = 0, *, clear: 'Any' = None, viewport: 'Any' = None) -> 'None'",
+      "describe": "(self) -> 'list[dict[str, Any]]'",
+      "flush": "(self, surface: 'pygame.Surface') -> 'RenderStats'",
+      "items": "(self, layer: 'int | Layer | None' = None) -> 'list[Drawable]'",
+      "pending": "(self) -> 'int'",
+      "submit": "(self, drawable: 'Drawable', layer: 'int | Layer' = <Layer.ENTITIES: 4>, sort_key: 'Any' = None) -> 'Drawable'",
+      "submit_many": "(self, drawables: 'Iterable[Drawable]', layer: 'int | Layer', sort_key: 'Any' = None) -> 'int'"
+     }
+    },
+    "RenderStats": {
+     "attrs": {
+      "blits": "member_descriptor",
+      "cache_hits": "member_descriptor",
+      "cache_misses": "member_descriptor",
+      "custom": "member_descriptor",
+      "custom_names": "member_descriptor",
+      "draws": "member_descriptor",
+      "frame": "member_descriptor",
+      "ms": "member_descriptor",
+      "ui_names": "member_descriptor",
+      "ui_passes": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self) -> 'None'",
+      "as_dict": "(self) -> 'dict[str, Any]'",
+      "lines": "(self) -> 'list[str]'",
+      "total_draws": "property"
+     }
+    },
+    "Y_SORTED": {
+     "kind": "constant",
+     "type": "frozenset"
+    }
+   }
+  },
+  "engine.render2d.static": {
+   "all": [
+    "StaticLayers",
+    "StaticLayer",
+    "StaticLayerDraw"
+   ],
+   "names": {
+    "StaticLayer": {
+     "attrs": {
+      "built": "member_descriptor",
+      "chunk": "member_descriptor",
+      "chunks": "member_descriptor",
+      "fill": "member_descriptor",
+      "name": "member_descriptor",
+      "painter": "member_descriptor",
+      "signature": "member_descriptor",
+      "world_h": "member_descriptor",
+      "world_w": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str', painter: 'Painter', world_size: 'tuple[int, int]', signature: 'Any', fill: 'Any', chunk: 'int') -> 'None'",
+      "chunk_surface": "(self, cx: 'int', cy: 'int') -> 'pygame.Surface | None'"
+     }
+    },
+    "StaticLayerDraw": {
+     "attrs": {
+      "kind": "str",
+      "layers": "member_descriptor",
+      "name": "member_descriptor",
+      "viewport": "member_descriptor"
+     },
+     "bases": [
+      "Drawable"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, layers: 'StaticLayers', name: 'str', viewport: 'tuple[int, int]') -> 'None'",
+      "describe": "(self)",
+      "draw": "(self, surface, cam_x, cam_y, ctx=None) -> 'int'"
+     }
+    },
+    "StaticLayers": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, chunk: 'int' = 1024) -> 'None'",
+      "blit": "(self, surface: 'pygame.Surface', name: 'str', cam_x: 'int', cam_y: 'int', viewport: 'tuple[int, int]') -> 'int'",
+      "define": "(self, name: 'str', *, painter: 'Painter', world_size: 'tuple[int, int]', signature: 'Any' = None, fill: 'Any' = None, chunk: 'int | None' = None) -> 'StaticLayer'",
+      "drop": "(self, name: 'str') -> 'None'",
+      "has": "(self, name: 'str') -> 'bool'",
+      "invalidate": "(self, name: 'str | None' = None) -> 'None'",
+      "layer": "(self, name: 'str') -> 'StaticLayer'",
+      "stats": "(self) -> 'dict[str, Any]'",
+      "visible_chunks": "(self, name: 'str', cam_x: 'int', cam_y: 'int', viewport: 'tuple[int, int]') -> 'list[tuple[int, int]]'"
+     }
+    }
+   }
+  },
+  "engine.render2d.util": {
+   "all": [
+    "screen_visible",
+    "swap_screen",
+    "doors_anim_sig",
+    "push_lamps",
+    "soft_shadow",
+    "soft_shadow_surface",
+    "add_radial"
+   ],
+   "names": {
+    "add_radial": {
+     "kind": "function",
+     "signature": "(surf, cx, cy, radius, color, intensity=255)"
+    },
+    "doors_anim_sig": {
+     "kind": "function",
+     "signature": "(doors)"
+    },
+    "push_lamps": {
+     "kind": "function",
+     "signature": "(lb, lamps, cam_x, cam_y, t, caster, key_filter=None, base=0.3, radius_scale=0.8, key_fn=None)"
+    },
+    "screen_visible": {
+     "kind": "function",
+     "signature": "(sx, sy, w, h, margin=80, viewport=None)"
+    },
+    "soft_shadow": {
+     "kind": "function",
+     "signature": "(surf, rect, alpha=70)"
+    },
+    "soft_shadow_surface": {
+     "kind": "function",
+     "signature": "(rect, alpha=70)"
+    },
+    "swap_screen": {
+     "kind": "function",
+     "signature": "(module_namespace, surf, fn)"
+    }
+   }
+  },
+  "engine.render3d": {
+   "all": [
+    "SCHEMA",
+    "Scene3D",
+    "Set3DError",
+    "build",
+    "from_dict",
+    "load_set3d",
+    "loads_set3d",
+    "validate",
+    "PRESET_SCHEMA",
+    "PresetError",
+    "load_preset_library",
+    "resolve_lighting",
+    "blend_lighting"
+   ],
+   "names": {
+    "PRESET_SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PresetError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Scene3D": {
+     "attrs": {
+      "data": "member_descriptor",
+      "fog": "member_descriptor",
+      "id": "member_descriptor",
+      "light": "member_descriptor",
+      "metadata": "member_descriptor",
+      "nodes": "member_descriptor",
+      "source": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'"
+     }
+    },
+    "Set3DError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "blend_lighting": {
+     "kind": "function",
+     "signature": "(spec_a, spec_b, k: 'float', library: 'dict') -> 'dict'"
+    },
+    "build": {
+     "kind": "function",
+     "signature": "(data: 'Any', params: 'Mapping | None' = None, library: 'Mapping | None' = None, presets: 'Mapping | None' = None) -> 'list[dict]'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Scene3D'"
+    },
+    "load_preset_library": {
+     "kind": "function",
+     "signature": "(dirpath: 'str') -> 'dict'"
+    },
+    "load_set3d": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Scene3D'"
+    },
+    "loads_set3d": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Scene3D'"
+    },
+    "resolve_lighting": {
+     "kind": "function",
+     "signature": "(spec, library: 'dict') -> 'dict'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.render3d.presets": {
+   "all": [
+    "PRESET_SCHEMA",
+    "PresetError",
+    "from_dict",
+    "load_preset",
+    "load_library",
+    "resolve",
+    "blend"
+   ],
+   "names": {
+    "PRESET_SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PresetError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "blend": {
+     "kind": "function",
+     "signature": "(spec_a, spec_b, k: 'float', library: 'dict') -> 'dict'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'dict'"
+    },
+    "load_library": {
+     "kind": "function",
+     "signature": "(dirpath: 'str') -> 'dict'"
+    },
+    "load_preset": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'dict'"
+    },
+    "resolve": {
+     "kind": "function",
+     "signature": "(spec, library: 'dict') -> 'dict'"
+    }
+   }
+  },
+  "engine.render3d.scene3d": {
+   "all": [
+    "SCHEMA",
+    "Set3DError",
+    "Scene3D",
+    "validate",
+    "build",
+    "from_dict",
+    "loads_set3d",
+    "load_set3d"
+   ],
+   "names": {
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Scene3D": {
+     "attrs": {
+      "data": "member_descriptor",
+      "fog": "member_descriptor",
+      "id": "member_descriptor",
+      "light": "member_descriptor",
+      "metadata": "member_descriptor",
+      "nodes": "member_descriptor",
+      "source": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'"
+     }
+    },
+    "Set3DError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "build": {
+     "kind": "function",
+     "signature": "(data: 'Any', params: 'Mapping | None' = None, library: 'Mapping | None' = None, presets: 'Mapping | None' = None) -> 'list[dict]'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Scene3D'"
+    },
+    "load_set3d": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Scene3D'"
+    },
+    "loads_set3d": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Scene3D'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.save": {
+   "all": [
+    "QUANTUM",
+    "SCHEMA",
+    "SaveError",
+    "canonical",
+    "dumps",
+    "from_dict",
+    "loads",
+    "statehash",
+    "validate"
+   ],
+   "names": {
+    "QUANTUM": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SaveError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "canonical": {
+     "kind": "function",
+     "signature": "(value: 'Any')"
+    },
+    "dumps": {
+     "kind": "function",
+     "signature": "(data: 'dict') -> 'str'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'dict'"
+    },
+    "loads": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'dict'"
+    },
+    "statehash": {
+     "kind": "function",
+     "signature": "(world: 'Any') -> 'str'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.save.snapshot": {
+   "all": [
+    "SCHEMA",
+    "SaveError",
+    "validate",
+    "dumps",
+    "loads",
+    "from_dict"
+   ],
+   "names": {
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SaveError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "dumps": {
+     "kind": "function",
+     "signature": "(data: 'dict') -> 'str'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'dict'"
+    },
+    "loads": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'dict'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.save.statehash": {
+   "all": [
+    "QUANTUM",
+    "canonical",
+    "statehash"
+   ],
+   "names": {
+    "QUANTUM": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "canonical": {
+     "kind": "function",
+     "signature": "(value: 'Any')"
+    },
+    "statehash": {
+     "kind": "function",
+     "signature": "(world: 'Any') -> 'str'"
+    }
+   }
+  },
+  "engine.scene": {
+   "all": [
+    "CutsceneScene",
+    "InspectScene",
+    "Scene",
+    "SceneStack"
+   ],
+   "names": {
+    "CutsceneScene": {
+     "attrs": {
+      "skip_actions": "frozenset"
+     },
+     "bases": [
+      "Scene"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, take: 'str', shots: 'Sequence[Any]', renderer: 'Callable | None' = None, duration: 'Callable[[Any], float] | None' = None, on_end: 'Callable | None' = None, name: 'str | None' = None) -> 'None'",
+      "advance": "(self, dt_ms: 'float', ctx: 'Any' = None) -> 'None'",
+      "draw": "(self, ctx: 'Any', alpha: 'float') -> 'None'",
+      "from_timeline": "class (cls, timeline, renderer: 'Callable | None' = None, on_end: 'Callable | None' = None, name: 'str | None' = None)",
+      "handle": "(self, ctx: 'Any', action_events: 'Iterable[Any]') -> 'bool'",
+      "shot": "property",
+      "skip": "(self, ctx: 'Any' = None) -> 'None'",
+      "update": "(self, ctx: 'Any', dt_real: 'float') -> 'None'"
+     }
+    },
+    "InspectScene": {
+     "attrs": {
+      "overlay": "bool",
+      "passthrough_update": "bool",
+      "skip_actions": "frozenset"
+     },
+     "bases": [
+      "Scene"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, controller: 'Any', key: 'str', caption: 'str | None' = None, name: 'str | None' = None) -> 'None'",
+      "draw": "(self, ctx: 'Any', alpha: 'float') -> 'None'",
+      "handle": "(self, ctx: 'Any', action_events: 'Iterable[Any]') -> 'bool'",
+      "on_enter": "(self, ctx: 'Any') -> 'None'",
+      "update": "(self, ctx: 'Any', dt_real: 'float') -> 'None'"
+     }
+    },
+    "Scene": {
+     "attrs": {
+      "overlay": "bool",
+      "passthrough_update": "bool"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str | None' = None) -> 'None'",
+      "draw": "(self, ctx: 'Any', alpha: 'float') -> 'None'",
+      "fixed_update": "(self, ctx: 'Any', dt: 'float') -> 'None'",
+      "handle": "(self, ctx: 'Any', action_events: 'Iterable[Any]') -> 'bool'",
+      "on_enter": "(self, ctx: 'Any') -> 'None'",
+      "on_exit": "(self, ctx: 'Any') -> 'None'",
+      "on_pause": "(self, ctx: 'Any') -> 'None'",
+      "on_resume": "(self, ctx: 'Any') -> 'None'",
+      "update": "(self, ctx: 'Any', dt_real: 'float') -> 'None'"
+     }
+    },
+    "SceneStack": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, scene: 'object') -> 'bool'",
+      "__init__": "(self, ctx: 'Any' = None, log: 'Any' = None, trace_limit: 'int' = 4096) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "clear": "(self) -> 'None'",
+      "clear_to": "(self, scene: 'Scene', transition: 'Any' = None) -> 'None'",
+      "draw": "(self, alpha: 'float' = 1.0) -> 'None'",
+      "fixed_update": "(self, dt: 'float') -> 'None'",
+      "flush": "(self) -> 'int'",
+      "handle": "(self, action_events: 'Iterable[Any]') -> 'bool'",
+      "is_paused": "(self, scene: 'Scene') -> 'bool'",
+      "names": "(self) -> 'list[str]'",
+      "pending": "property",
+      "pop": "(self, transition: 'Any' = None) -> 'None'",
+      "push": "(self, scene: 'Scene', transition: 'Any' = None) -> 'None'",
+      "replace": "(self, scene: 'Scene', transition: 'Any' = None) -> 'None'",
+      "scenes": "property",
+      "top": "property",
+      "trace_text": "(self) -> 'str'",
+      "update": "(self, dt_real: 'float') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.scene.cutscene": {
+   "all": [
+    "CutsceneScene"
+   ],
+   "names": {
+    "CutsceneScene": {
+     "attrs": {
+      "skip_actions": "frozenset"
+     },
+     "bases": [
+      "Scene"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, take: 'str', shots: 'Sequence[Any]', renderer: 'Callable | None' = None, duration: 'Callable[[Any], float] | None' = None, on_end: 'Callable | None' = None, name: 'str | None' = None) -> 'None'",
+      "advance": "(self, dt_ms: 'float', ctx: 'Any' = None) -> 'None'",
+      "draw": "(self, ctx: 'Any', alpha: 'float') -> 'None'",
+      "from_timeline": "class (cls, timeline, renderer: 'Callable | None' = None, on_end: 'Callable | None' = None, name: 'str | None' = None)",
+      "handle": "(self, ctx: 'Any', action_events: 'Iterable[Any]') -> 'bool'",
+      "shot": "property",
+      "skip": "(self, ctx: 'Any' = None) -> 'None'",
+      "update": "(self, ctx: 'Any', dt_real: 'float') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.scene.inspect": {
+   "all": [
+    "InspectScene"
+   ],
+   "names": {
+    "InspectScene": {
+     "attrs": {
+      "overlay": "bool",
+      "passthrough_update": "bool",
+      "skip_actions": "frozenset"
+     },
+     "bases": [
+      "Scene"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, controller: 'Any', key: 'str', caption: 'str | None' = None, name: 'str | None' = None) -> 'None'",
+      "draw": "(self, ctx: 'Any', alpha: 'float') -> 'None'",
+      "handle": "(self, ctx: 'Any', action_events: 'Iterable[Any]') -> 'bool'",
+      "on_enter": "(self, ctx: 'Any') -> 'None'",
+      "update": "(self, ctx: 'Any', dt_real: 'float') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.scene.scene": {
+   "all": [
+    "Scene"
+   ],
+   "names": {
+    "Scene": {
+     "attrs": {
+      "overlay": "bool",
+      "passthrough_update": "bool"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str | None' = None) -> 'None'",
+      "draw": "(self, ctx: 'Any', alpha: 'float') -> 'None'",
+      "fixed_update": "(self, ctx: 'Any', dt: 'float') -> 'None'",
+      "handle": "(self, ctx: 'Any', action_events: 'Iterable[Any]') -> 'bool'",
+      "on_enter": "(self, ctx: 'Any') -> 'None'",
+      "on_exit": "(self, ctx: 'Any') -> 'None'",
+      "on_pause": "(self, ctx: 'Any') -> 'None'",
+      "on_resume": "(self, ctx: 'Any') -> 'None'",
+      "update": "(self, ctx: 'Any', dt_real: 'float') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.scene.stack": {
+   "all": [
+    "SceneStack"
+   ],
+   "names": {
+    "SceneStack": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, scene: 'object') -> 'bool'",
+      "__init__": "(self, ctx: 'Any' = None, log: 'Any' = None, trace_limit: 'int' = 4096) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "clear": "(self) -> 'None'",
+      "clear_to": "(self, scene: 'Scene', transition: 'Any' = None) -> 'None'",
+      "draw": "(self, alpha: 'float' = 1.0) -> 'None'",
+      "fixed_update": "(self, dt: 'float') -> 'None'",
+      "flush": "(self) -> 'int'",
+      "handle": "(self, action_events: 'Iterable[Any]') -> 'bool'",
+      "is_paused": "(self, scene: 'Scene') -> 'bool'",
+      "names": "(self) -> 'list[str]'",
+      "pending": "property",
+      "pop": "(self, transition: 'Any' = None) -> 'None'",
+      "push": "(self, scene: 'Scene', transition: 'Any' = None) -> 'None'",
+      "replace": "(self, scene: 'Scene', transition: 'Any' = None) -> 'None'",
+      "scenes": "property",
+      "top": "property",
+      "trace_text": "(self) -> 'str'",
+      "update": "(self, dt_real: 'float') -> 'None'"
+     }
+    }
+   }
+  },
+  "engine.settings": {
+   "all": [
+    "BOOL",
+    "ENUM",
+    "FLOAT",
+    "INT",
+    "STR",
+    "Field",
+    "Settings",
+    "coerce",
+    "env_layer",
+    "resolve"
+   ],
+   "names": {
+    "BOOL": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "ENUM": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "FLOAT": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Field": {
+     "attrs": {
+      "default": "member_descriptor",
+      "kind": "member_descriptor",
+      "maximum": "member_descriptor",
+      "minimum": "member_descriptor",
+      "name": "member_descriptor",
+      "section": "member_descriptor",
+      "values": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str', kind: 'str', default, section: 'str' = 'general', minimum=None, maximum=None, values=None)"
+     }
+    },
+    "INT": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "STR": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Settings": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, name)",
+      "__getitem__": "(self, name)",
+      "__init__": "(self, schema, *layers)",
+      "get": "(self, name, default=None)",
+      "set": "(self, name, value) -> 'bool'",
+      "subscribe": "(self, fn: 'Callable') -> 'Callable'",
+      "to_dict": "(self) -> 'dict'",
+      "update": "(self, layer: 'Mapping') -> 'list[str]'"
+     }
+    },
+    "coerce": {
+     "kind": "function",
+     "signature": "(field: 'Field', value)"
+    },
+    "env_layer": {
+     "kind": "function",
+     "signature": "(schema, environ: 'Mapping', prefix: 'str' = 'ACARISTAN_') -> 'dict'"
+    },
+    "resolve": {
+     "kind": "function",
+     "signature": "(schema, *layers, keep_unknown: 'bool' = True)"
+    }
+   }
+  },
+  "engine.settings.model": {
+   "all": [
+    "Field",
+    "Settings",
+    "coerce",
+    "resolve",
+    "env_layer",
+    "BOOL",
+    "INT",
+    "FLOAT",
+    "STR",
+    "ENUM"
+   ],
+   "names": {
+    "BOOL": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "ENUM": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "FLOAT": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Field": {
+     "attrs": {
+      "default": "member_descriptor",
+      "kind": "member_descriptor",
+      "maximum": "member_descriptor",
+      "minimum": "member_descriptor",
+      "name": "member_descriptor",
+      "section": "member_descriptor",
+      "values": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str', kind: 'str', default, section: 'str' = 'general', minimum=None, maximum=None, values=None)"
+     }
+    },
+    "INT": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "STR": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Settings": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, name)",
+      "__getitem__": "(self, name)",
+      "__init__": "(self, schema, *layers)",
+      "get": "(self, name, default=None)",
+      "set": "(self, name, value) -> 'bool'",
+      "subscribe": "(self, fn: 'Callable') -> 'Callable'",
+      "to_dict": "(self) -> 'dict'",
+      "update": "(self, layer: 'Mapping') -> 'list[str]'"
+     }
+    },
+    "coerce": {
+     "kind": "function",
+     "signature": "(field: 'Field', value)"
+    },
+    "env_layer": {
+     "kind": "function",
+     "signature": "(schema, environ: 'Mapping', prefix: 'str' = 'ACARISTAN_') -> 'dict'"
+    },
+    "resolve": {
+     "kind": "function",
+     "signature": "(schema, *layers, keep_unknown: 'bool' = True)"
+    }
+   }
+  },
+  "engine.text": {
+   "all": [
+    "DEFAULT_TABLE",
+    "T",
+    "load_strings",
+    "marker",
+    "missing_keys",
+    "reset_strings",
+    "table",
+    "FACES",
+    "PLEX_ONLY",
+    "font_dir",
+    "load_face",
+    "missing_glyphs",
+    "check_fit",
+    "draw_line",
+    "ellipsize",
+    "fits",
+    "measure",
+    "wrap_lines"
+   ],
+   "names": {
+    "DEFAULT_TABLE": {
+     "kind": "constant",
+     "type": "Path"
+    },
+    "FACES": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "PLEX_ONLY": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "T": {
+     "kind": "function",
+     "signature": "(key: 'str', *, default: 'str | None' = None, **fmt: 'object') -> 'str'"
+    },
+    "check_fit": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', width: 'int', height: 'int | None' = None, *, key: 'str | None' = None) -> 'bool'"
+    },
+    "draw_line": {
+     "kind": "function",
+     "signature": "(surf: 'pygame.Surface', font: 'pygame.font.Font', text: 'str', pos: 'tuple[int, int]', color: 'tuple[int, int, int]', *, width: 'int | None' = None, height: 'int | None' = None, key: 'str | None' = None, align: 'str' = 'left') -> 'pygame.Rect'"
+    },
+    "ellipsize": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', max_width: 'int', mark: 'str' = '\u2026') -> 'str'"
+    },
+    "fits": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', width: 'int', height: 'int | None' = None) -> 'bool'"
+    },
+    "font_dir": {
+     "kind": "function",
+     "signature": "(root: 'str | Path | None' = None) -> 'str'"
+    },
+    "load_face": {
+     "kind": "function",
+     "signature": "(source: 'str', size: 'int', fallback_family: 'str' = 'Consolas', bold: 'bool' = False, root: 'str | Path | None' = None) -> 'pygame.font.Font'"
+    },
+    "load_strings": {
+     "kind": "function",
+     "signature": "(path: 'str | Path | None' = None) -> 'int'"
+    },
+    "marker": {
+     "kind": "function",
+     "signature": "(key: 'str') -> 'str'"
+    },
+    "measure": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str') -> 'tuple[int, int]'"
+    },
+    "missing_glyphs": {
+     "kind": "function",
+     "signature": "(text: 'str', coverage: 'dict[str, set[int]] | None' = None, *, plex_only_ok: 'bool' = True) -> 'dict[int, list[str]]'"
+    },
+    "missing_keys": {
+     "kind": "function",
+     "signature": "() -> 'tuple[str, ...]'"
+    },
+    "reset_strings": {
+     "kind": "function",
+     "signature": "() -> 'None'"
+    },
+    "table": {
+     "kind": "function",
+     "signature": "() -> 'dict[str, str]'"
+    },
+    "wrap_lines": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', max_width: 'int') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.text.fonts": {
+   "all": [
+    "FACES",
+    "PLEX_ONLY",
+    "font_dir",
+    "load_face",
+    "missing_glyphs"
+   ],
+   "names": {
+    "FACES": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "PLEX_ONLY": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "font_dir": {
+     "kind": "function",
+     "signature": "(root: 'str | Path | None' = None) -> 'str'"
+    },
+    "load_face": {
+     "kind": "function",
+     "signature": "(source: 'str', size: 'int', fallback_family: 'str' = 'Consolas', bold: 'bool' = False, root: 'str | Path | None' = None) -> 'pygame.font.Font'"
+    },
+    "missing_glyphs": {
+     "kind": "function",
+     "signature": "(text: 'str', coverage: 'dict[str, set[int]] | None' = None, *, plex_only_ok: 'bool' = True) -> 'dict[int, list[str]]'"
+    }
+   }
+  },
+  "engine.text.layout": {
+   "all": [
+    "check_fit",
+    "draw_line",
+    "ellipsize",
+    "fits",
+    "measure",
+    "wrap_lines"
+   ],
+   "names": {
+    "check_fit": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', width: 'int', height: 'int | None' = None, *, key: 'str | None' = None) -> 'bool'"
+    },
+    "draw_line": {
+     "kind": "function",
+     "signature": "(surf: 'pygame.Surface', font: 'pygame.font.Font', text: 'str', pos: 'tuple[int, int]', color: 'tuple[int, int, int]', *, width: 'int | None' = None, height: 'int | None' = None, key: 'str | None' = None, align: 'str' = 'left') -> 'pygame.Rect'"
+    },
+    "ellipsize": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', max_width: 'int', mark: 'str' = '\u2026') -> 'str'"
+    },
+    "fits": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', width: 'int', height: 'int | None' = None) -> 'bool'"
+    },
+    "measure": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str') -> 'tuple[int, int]'"
+    },
+    "wrap_lines": {
+     "kind": "function",
+     "signature": "(font: 'pygame.font.Font', text: 'str', max_width: 'int') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.text.strings": {
+   "all": [
+    "DEFAULT_TABLE",
+    "T",
+    "load_strings",
+    "marker",
+    "missing_keys",
+    "reset_strings",
+    "table"
+   ],
+   "names": {
+    "DEFAULT_TABLE": {
+     "kind": "constant",
+     "type": "Path"
+    },
+    "T": {
+     "kind": "function",
+     "signature": "(key: 'str', *, default: 'str | None' = None, **fmt: 'object') -> 'str'"
+    },
+    "load_strings": {
+     "kind": "function",
+     "signature": "(path: 'str | Path | None' = None) -> 'int'"
+    },
+    "marker": {
+     "kind": "function",
+     "signature": "(key: 'str') -> 'str'"
+    },
+    "missing_keys": {
+     "kind": "function",
+     "signature": "() -> 'tuple[str, ...]'"
+    },
+    "reset_strings": {
+     "kind": "function",
+     "signature": "() -> 'None'"
+    },
+    "table": {
+     "kind": "function",
+     "signature": "() -> 'dict[str, str]'"
+    }
+   }
+  },
+  "engine.timeline": {
+   "all": [
+    "SCHEMA",
+    "ExprError",
+    "Sample",
+    "Timeline",
+    "TimelineError",
+    "TimelinePlayer",
+    "check_expr",
+    "evaluate",
+    "from_dict",
+    "load_timeline",
+    "loads_timeline",
+    "validate"
+   ],
+   "names": {
+    "ExprError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Sample": {
+     "attrs": {
+      "active": "member_descriptor",
+      "shot": "member_descriptor",
+      "shot_index": "member_descriptor",
+      "t": "member_descriptor",
+      "values": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, t, values, active, shot, shot_index)"
+     }
+    },
+    "Timeline": {
+     "attrs": {
+      "data": "member_descriptor",
+      "duration_ms": "member_descriptor",
+      "id": "member_descriptor",
+      "metadata": "member_descriptor",
+      "params": "member_descriptor",
+      "set": "member_descriptor",
+      "shots": "member_descriptor",
+      "source": "member_descriptor",
+      "tracks": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'",
+      "__len__": "(self) -> 'int'"
+     }
+    },
+    "TimelineError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "TimelinePlayer": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, timeline: 'Timeline') -> 'None'",
+      "events_between": "(self, t0: 'float', t1: 'float') -> 'list'",
+      "reset_events": "(self) -> 'None'",
+      "sample": "(self, t: 'float') -> 'Sample'",
+      "seek_events": "(self, t: 'float') -> 'list'",
+      "shot_at": "(self, t: 'float')"
+     }
+    },
+    "check_expr": {
+     "kind": "function",
+     "signature": "(expr, params: 'dict | None' = None) -> 'str | None'"
+    },
+    "evaluate": {
+     "kind": "function",
+     "signature": "(expr, params: 'dict | None' = None) -> 'float'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Timeline'"
+    },
+    "load_timeline": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Timeline'"
+    },
+    "loads_timeline": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Timeline'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.timeline.expr": {
+   "all": [
+    "ExprError",
+    "evaluate",
+    "check"
+   ],
+   "names": {
+    "ExprError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "check": {
+     "kind": "function",
+     "signature": "(expr, params: 'dict | None' = None) -> 'str | None'"
+    },
+    "evaluate": {
+     "kind": "function",
+     "signature": "(expr, params: 'dict | None' = None) -> 'float'"
+    }
+   }
+  },
+  "engine.timeline.model": {
+   "all": [
+    "SCHEMA",
+    "TimelineError",
+    "Timeline",
+    "validate",
+    "from_dict",
+    "loads_timeline",
+    "load_timeline"
+   ],
+   "names": {
+    "SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Timeline": {
+     "attrs": {
+      "data": "member_descriptor",
+      "duration_ms": "member_descriptor",
+      "id": "member_descriptor",
+      "metadata": "member_descriptor",
+      "params": "member_descriptor",
+      "set": "member_descriptor",
+      "shots": "member_descriptor",
+      "source": "member_descriptor",
+      "tracks": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, data: 'dict', source: 'str' = '') -> 'None'",
+      "__len__": "(self) -> 'int'"
+     }
+    },
+    "TimelineError": {
+     "attrs": {},
+     "bases": [
+      "ValueError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(data: 'dict', source: 'str' = '') -> 'Timeline'"
+    },
+    "load_timeline": {
+     "kind": "function",
+     "signature": "(path: 'str') -> 'Timeline'"
+    },
+    "loads_timeline": {
+     "kind": "function",
+     "signature": "(text: 'str', source: 'str' = '<string>') -> 'Timeline'"
+    },
+    "validate": {
+     "kind": "function",
+     "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.timeline.player": {
+   "all": [
+    "TimelinePlayer",
+    "Sample"
+   ],
+   "names": {
+    "Sample": {
+     "attrs": {
+      "active": "member_descriptor",
+      "shot": "member_descriptor",
+      "shot_index": "member_descriptor",
+      "t": "member_descriptor",
+      "values": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, t, values, active, shot, shot_index)"
+     }
+    },
+    "TimelinePlayer": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, timeline: 'Timeline') -> 'None'",
+      "events_between": "(self, t0: 'float', t1: 'float') -> 'list'",
+      "reset_events": "(self) -> 'None'",
+      "sample": "(self, t: 'float') -> 'Sample'",
+      "seek_events": "(self, t: 'float') -> 'list'",
+      "shot_at": "(self, t: 'float')"
+     }
+    }
+   }
+  },
+  "engine.ui": {
+   "all": [
+    "Theme",
+    "bottle_hud",
+    "crosshair",
+    "dialogue_box",
+    "health_bar",
+    "hostiles",
+    "minimap",
+    "objective_banner",
+    "prompt",
+    "std",
+    "weapon_panel"
+   ],
+   "names": {
+    "Theme": {
+     "attrs": {
+      "c_grey": "tuple",
+      "c_krap_blue": "tuple",
+      "c_krap_uniform": "tuple",
+      "c_orange": "tuple",
+      "c_terminal": "tuple",
+      "c_white": "tuple",
+      "font_btn": "NoneType",
+      "font_dialogue": "NoneType",
+      "font_location": "NoneType",
+      "font_location_sub": "NoneType",
+      "font_prompt": "NoneType",
+      "font_speaker": "NoneType",
+      "font_terminal": "NoneType",
+      "font_terminal_small": "NoneType",
+      "font_title": "NoneType",
+      "letter_h": "int",
+      "size": "tuple",
+      "tile_size": "int"
+     },
+     "bases": [],
+     "fields": [
+      "c_grey",
+      "c_krap_blue",
+      "c_krap_uniform",
+      "c_orange",
+      "c_terminal",
+      "c_white",
+      "extra",
+      "font_btn",
+      "font_dialogue",
+      "font_location",
+      "font_location_sub",
+      "font_prompt",
+      "font_speaker",
+      "font_terminal",
+      "font_terminal_small",
+      "font_title",
+      "letter_h",
+      "size",
+      "speaker_colors",
+      "tile_size"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, size: 'tuple[int, int]' = (1000, 700), letter_h: 'int' = 80, tile_size: 'int' = 64, font_prompt: 'object | None' = None, font_terminal: 'object | None' = None, font_terminal_small: 'object | None' = None, font_dialogue: 'object | None' = None, font_speaker: 'object | None' = None, font_title: 'object | None' = None, font_location: 'object | None' = None, font_location_sub: 'object | None' = None, font_btn: 'object | None' = None, c_white: 'tuple[int, int, int]' = (240, 240, 240), c_grey: 'tuple[int, int, int]' = (150, 150, 150), c_orange: 'tuple[int, int, int]' = (255, 120, 0), c_terminal: 'tuple[int, int, int]' = (50, 255, 150), c_krap_blue: 'tuple[int, int, int]' = (35, 65, 110), c_krap_uniform: 'tuple[int, int, int]' = (55, 65, 80), speaker_colors: 'dict' = <factory>, extra: 'dict' = <factory>) -> None",
+      "height": "property",
+      "speaker_accent": "(self, name: 'str') -> 'tuple[int, int, int]'",
+      "width": "property"
+     }
+    },
+    "bottle_hud": {
+     "all": [
+      "PANEL_H",
+      "PANEL_W",
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.bottle_hud",
+     "names": {
+      "PANEL_H": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "PANEL_W": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', bottles: 'int', *, panel_bg, icon, x: 'int', y: 'int', width: 'int' = 246, cap: 'int' = 4) -> 'None'"
+      }
+     }
+    },
+    "crosshair": {
+     "all": [
+      "COLORBLIND_COLORS",
+      "color_for",
+      "draw",
+      "draw_combat"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.crosshair",
+     "names": {
+      "COLORBLIND_COLORS": {
+       "kind": "constant",
+       "type": "dict"
+      },
+      "color_for": {
+       "kind": "function",
+       "signature": "(mode, *, default)"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color, kick: 'int' = 0) -> 'None'"
+      },
+      "draw_combat": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color) -> 'None'"
+      }
+     }
+    },
+    "dialogue_box": {
+     "all": [
+      "draw",
+      "reset_slide",
+      "slide"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.dialogue_box",
+     "names": {
+      "draw": {
+       "kind": "function",
+       "signature": "(surface, theme, speaker, text, char_idx, total_len, can_continue=True, show_speaker=False)"
+      },
+      "reset_slide": {
+       "kind": "function",
+       "signature": "() -> 'None'"
+      },
+      "slide": {
+       "kind": "function",
+       "signature": "() -> 'float'"
+      }
+     }
+    },
+    "health_bar": {
+     "all": [
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.health_bar",
+     "names": {
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', hp: 'float', max_hp: 'float', *, panel_bg, x: 'int' = 24, y: 'int | None' = None, bb: 'tuple[int, int, int, int]' = (6, 4, 234, 14), inset: 'int' = 20, panel: 'tuple[int, int]' = (246, 30), panel_off: 'tuple[int, int]' = (0, 0), label_dy: 'int' = 2) -> 'None'"
+      }
+     }
+    },
+    "hostiles": {
+     "all": [
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.hostiles",
+     "names": {
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', count: 'int', *, x: 'int' = 20, y: 'int' = 20, label: 'str | None' = None) -> 'None'"
+      }
+     }
+    },
+    "minimap": {
+     "all": [
+      "MiniMap"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.minimap",
+     "names": {
+      "MiniMap": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, map_data, tile_size=64, palette='m2', *, theme=None)",
+        "draw": "(self, surface, player, enemies, camera_x, camera_y, notebook_pos=None, exfil_pos=None, volkov_pos=None, commander_pos=None, ipa_truck_pos=None, tanker_pos=None, shelter_pos=None, service_door_pos=None, smg_pos=None)"
+       }
+      }
+     }
+    },
+    "objective_banner": {
+     "all": [
+      "DEFAULT_PANEL_HEIGHT",
+      "DEFAULT_PANEL_WIDTH",
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.objective_banner",
+     "names": {
+      "DEFAULT_PANEL_HEIGHT": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "DEFAULT_PANEL_WIDTH": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', text: 'object', theme: 'Theme', x: 'int' = 20, y: 'int | None' = None, *, label: 'str | None' = None) -> 'None'"
+      }
+     }
+    },
+    "prompt": {
+     "all": [
+      "draw",
+      "build"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.prompt",
+     "names": {
+      "build": {
+       "kind": "function",
+       "signature": "(size, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+      }
+     }
+    },
+    "std": {
+     "all": [
+      "bottle_hud",
+      "crosshair",
+      "dialogue_box",
+      "health_bar",
+      "hostiles",
+      "minimap",
+      "objective_banner",
+      "prompt",
+      "weapon_panel"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std",
+     "names": {
+      "bottle_hud": {
+       "all": [
+        "PANEL_H",
+        "PANEL_W",
+        "draw"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.bottle_hud",
+       "names": {
+        "PANEL_H": {
+         "kind": "constant",
+         "type": "int"
+        },
+        "PANEL_W": {
+         "kind": "constant",
+         "type": "int"
+        },
+        "draw": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', theme: 'Theme', bottles: 'int', *, panel_bg, icon, x: 'int', y: 'int', width: 'int' = 246, cap: 'int' = 4) -> 'None'"
+        }
+       }
+      },
+      "crosshair": {
+       "all": [
+        "COLORBLIND_COLORS",
+        "color_for",
+        "draw",
+        "draw_combat"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.crosshair",
+       "names": {
+        "COLORBLIND_COLORS": {
+         "kind": "constant",
+         "type": "dict"
+        },
+        "color_for": {
+         "kind": "function",
+         "signature": "(mode, *, default)"
+        },
+        "draw": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color, kick: 'int' = 0) -> 'None'"
+        },
+        "draw_combat": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color) -> 'None'"
+        }
+       }
+      },
+      "dialogue_box": {
+       "all": [
+        "draw",
+        "reset_slide",
+        "slide"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.dialogue_box",
+       "names": {
+        "draw": {
+         "kind": "function",
+         "signature": "(surface, theme, speaker, text, char_idx, total_len, can_continue=True, show_speaker=False)"
+        },
+        "reset_slide": {
+         "kind": "function",
+         "signature": "() -> 'None'"
+        },
+        "slide": {
+         "kind": "function",
+         "signature": "() -> 'float'"
+        }
+       }
+      },
+      "health_bar": {
+       "all": [
+        "draw"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.health_bar",
+       "names": {
+        "draw": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', theme: 'Theme', hp: 'float', max_hp: 'float', *, panel_bg, x: 'int' = 24, y: 'int | None' = None, bb: 'tuple[int, int, int, int]' = (6, 4, 234, 14), inset: 'int' = 20, panel: 'tuple[int, int]' = (246, 30), panel_off: 'tuple[int, int]' = (0, 0), label_dy: 'int' = 2) -> 'None'"
+        }
+       }
+      },
+      "hostiles": {
+       "all": [
+        "draw"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.hostiles",
+       "names": {
+        "draw": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', theme: 'Theme', count: 'int', *, x: 'int' = 20, y: 'int' = 20, label: 'str | None' = None) -> 'None'"
+        }
+       }
+      },
+      "minimap": {
+       "all": [
+        "MiniMap"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.minimap",
+       "names": {
+        "MiniMap": {
+         "attrs": {},
+         "bases": [],
+         "kind": "class",
+         "methods": {
+          "__init__": "(self, map_data, tile_size=64, palette='m2', *, theme=None)",
+          "draw": "(self, surface, player, enemies, camera_x, camera_y, notebook_pos=None, exfil_pos=None, volkov_pos=None, commander_pos=None, ipa_truck_pos=None, tanker_pos=None, shelter_pos=None, service_door_pos=None, smg_pos=None)"
+         }
+        }
+       }
+      },
+      "objective_banner": {
+       "all": [
+        "DEFAULT_PANEL_HEIGHT",
+        "DEFAULT_PANEL_WIDTH",
+        "draw"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.objective_banner",
+       "names": {
+        "DEFAULT_PANEL_HEIGHT": {
+         "kind": "constant",
+         "type": "int"
+        },
+        "DEFAULT_PANEL_WIDTH": {
+         "kind": "constant",
+         "type": "int"
+        },
+        "draw": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', text: 'object', theme: 'Theme', x: 'int' = 20, y: 'int | None' = None, *, label: 'str | None' = None) -> 'None'"
+        }
+       }
+      },
+      "prompt": {
+       "all": [
+        "draw",
+        "build"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.prompt",
+       "names": {
+        "build": {
+         "kind": "function",
+         "signature": "(size, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+        },
+        "draw": {
+         "kind": "function",
+         "signature": "(surface, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+        }
+       }
+      },
+      "weapon_panel": {
+       "all": [
+        "RELOAD_MS",
+        "WeaponInfo",
+        "draw"
+       ],
+       "kind": "module",
+       "module": "engine.ui.std.weapon_panel",
+       "names": {
+        "RELOAD_MS": {
+         "kind": "constant",
+         "type": "dict"
+        },
+        "WeaponInfo": {
+         "attrs": {
+          "ammo": "int",
+          "caliber": "str",
+          "cw": "str",
+          "kind": "str",
+          "label": "str",
+          "mag": "int",
+          "reload_timer": "int",
+          "reloading": "bool",
+          "spares": "int"
+         },
+         "bases": [],
+         "fields": [
+          "ammo",
+          "caliber",
+          "cw",
+          "kind",
+          "label",
+          "mag",
+          "reload_timer",
+          "reloading",
+          "spares"
+         ],
+         "kind": "class",
+         "methods": {
+          "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+          "from_state": "class (cls, state) -> \"'WeaponInfo'\""
+         }
+        },
+        "draw": {
+         "kind": "function",
+         "signature": "(surface: 'pygame.Surface', theme: 'Theme', info: 'WeaponInfo', *, panel_bg, mag_icon, x: 'int' = 24, y: 'int | None' = None, panel_h: 'int' = 84, reload_label_dx: 'int' = 0) -> 'None'"
+        }
+       }
+      }
+     }
+    },
+    "weapon_panel": {
+     "all": [
+      "RELOAD_MS",
+      "WeaponInfo",
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.weapon_panel",
+     "names": {
+      "RELOAD_MS": {
+       "kind": "constant",
+       "type": "dict"
+      },
+      "WeaponInfo": {
+       "attrs": {
+        "ammo": "int",
+        "caliber": "str",
+        "cw": "str",
+        "kind": "str",
+        "label": "str",
+        "mag": "int",
+        "reload_timer": "int",
+        "reloading": "bool",
+        "spares": "int"
+       },
+       "bases": [],
+       "fields": [
+        "ammo",
+        "caliber",
+        "cw",
+        "kind",
+        "label",
+        "mag",
+        "reload_timer",
+        "reloading",
+        "spares"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+        "from_state": "class (cls, state) -> \"'WeaponInfo'\""
+       }
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', info: 'WeaponInfo', *, panel_bg, mag_icon, x: 'int' = 24, y: 'int | None' = None, panel_h: 'int' = 84, reload_label_dx: 'int' = 0) -> 'None'"
+      }
+     }
+    }
+   }
+  },
+  "engine.ui.std": {
+   "all": [
+    "bottle_hud",
+    "crosshair",
+    "dialogue_box",
+    "health_bar",
+    "hostiles",
+    "minimap",
+    "objective_banner",
+    "prompt",
+    "weapon_panel"
+   ],
+   "names": {
+    "bottle_hud": {
+     "all": [
+      "PANEL_H",
+      "PANEL_W",
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.bottle_hud",
+     "names": {
+      "PANEL_H": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "PANEL_W": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', bottles: 'int', *, panel_bg, icon, x: 'int', y: 'int', width: 'int' = 246, cap: 'int' = 4) -> 'None'"
+      }
+     }
+    },
+    "crosshair": {
+     "all": [
+      "COLORBLIND_COLORS",
+      "color_for",
+      "draw",
+      "draw_combat"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.crosshair",
+     "names": {
+      "COLORBLIND_COLORS": {
+       "kind": "constant",
+       "type": "dict"
+      },
+      "color_for": {
+       "kind": "function",
+       "signature": "(mode, *, default)"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color, kick: 'int' = 0) -> 'None'"
+      },
+      "draw_combat": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color) -> 'None'"
+      }
+     }
+    },
+    "dialogue_box": {
+     "all": [
+      "draw",
+      "reset_slide",
+      "slide"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.dialogue_box",
+     "names": {
+      "draw": {
+       "kind": "function",
+       "signature": "(surface, theme, speaker, text, char_idx, total_len, can_continue=True, show_speaker=False)"
+      },
+      "reset_slide": {
+       "kind": "function",
+       "signature": "() -> 'None'"
+      },
+      "slide": {
+       "kind": "function",
+       "signature": "() -> 'float'"
+      }
+     }
+    },
+    "health_bar": {
+     "all": [
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.health_bar",
+     "names": {
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', hp: 'float', max_hp: 'float', *, panel_bg, x: 'int' = 24, y: 'int | None' = None, bb: 'tuple[int, int, int, int]' = (6, 4, 234, 14), inset: 'int' = 20, panel: 'tuple[int, int]' = (246, 30), panel_off: 'tuple[int, int]' = (0, 0), label_dy: 'int' = 2) -> 'None'"
+      }
+     }
+    },
+    "hostiles": {
+     "all": [
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.hostiles",
+     "names": {
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', count: 'int', *, x: 'int' = 20, y: 'int' = 20, label: 'str | None' = None) -> 'None'"
+      }
+     }
+    },
+    "minimap": {
+     "all": [
+      "MiniMap"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.minimap",
+     "names": {
+      "MiniMap": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, map_data, tile_size=64, palette='m2', *, theme=None)",
+        "draw": "(self, surface, player, enemies, camera_x, camera_y, notebook_pos=None, exfil_pos=None, volkov_pos=None, commander_pos=None, ipa_truck_pos=None, tanker_pos=None, shelter_pos=None, service_door_pos=None, smg_pos=None)"
+       }
+      }
+     }
+    },
+    "objective_banner": {
+     "all": [
+      "DEFAULT_PANEL_HEIGHT",
+      "DEFAULT_PANEL_WIDTH",
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.objective_banner",
+     "names": {
+      "DEFAULT_PANEL_HEIGHT": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "DEFAULT_PANEL_WIDTH": {
+       "kind": "constant",
+       "type": "int"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', text: 'object', theme: 'Theme', x: 'int' = 20, y: 'int | None' = None, *, label: 'str | None' = None) -> 'None'"
+      }
+     }
+    },
+    "prompt": {
+     "all": [
+      "draw",
+      "build"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.prompt",
+     "names": {
+      "build": {
+       "kind": "function",
+       "signature": "(size, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+      }
+     }
+    },
+    "weapon_panel": {
+     "all": [
+      "RELOAD_MS",
+      "WeaponInfo",
+      "draw"
+     ],
+     "kind": "module",
+     "module": "engine.ui.std.weapon_panel",
+     "names": {
+      "RELOAD_MS": {
+       "kind": "constant",
+       "type": "dict"
+      },
+      "WeaponInfo": {
+       "attrs": {
+        "ammo": "int",
+        "caliber": "str",
+        "cw": "str",
+        "kind": "str",
+        "label": "str",
+        "mag": "int",
+        "reload_timer": "int",
+        "reloading": "bool",
+        "spares": "int"
+       },
+       "bases": [],
+       "fields": [
+        "ammo",
+        "caliber",
+        "cw",
+        "kind",
+        "label",
+        "mag",
+        "reload_timer",
+        "reloading",
+        "spares"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+        "from_state": "class (cls, state) -> \"'WeaponInfo'\""
+       }
+      },
+      "draw": {
+       "kind": "function",
+       "signature": "(surface: 'pygame.Surface', theme: 'Theme', info: 'WeaponInfo', *, panel_bg, mag_icon, x: 'int' = 24, y: 'int | None' = None, panel_h: 'int' = 84, reload_label_dx: 'int' = 0) -> 'None'"
+      }
+     }
+    }
+   }
+  },
+  "engine.ui.std.bottle_hud": {
+   "all": [
+    "PANEL_H",
+    "PANEL_W",
+    "draw"
+   ],
+   "names": {
+    "PANEL_H": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "PANEL_W": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "draw": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', theme: 'Theme', bottles: 'int', *, panel_bg, icon, x: 'int', y: 'int', width: 'int' = 246, cap: 'int' = 4) -> 'None'"
+    }
+   }
+  },
+  "engine.ui.std.crosshair": {
+   "all": [
+    "COLORBLIND_COLORS",
+    "color_for",
+    "draw",
+    "draw_combat"
+   ],
+   "names": {
+    "COLORBLIND_COLORS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "color_for": {
+     "kind": "function",
+     "signature": "(mode, *, default)"
+    },
+    "draw": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color, kick: 'int' = 0) -> 'None'"
+    },
+    "draw_combat": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', cx: 'int', cy: 'int', *, size: 'int' = 6, color) -> 'None'"
+    }
+   }
+  },
+  "engine.ui.std.dialogue_box": {
+   "all": [
+    "draw",
+    "reset_slide",
+    "slide"
+   ],
+   "names": {
+    "draw": {
+     "kind": "function",
+     "signature": "(surface, theme, speaker, text, char_idx, total_len, can_continue=True, show_speaker=False)"
+    },
+    "reset_slide": {
+     "kind": "function",
+     "signature": "() -> 'None'"
+    },
+    "slide": {
+     "kind": "function",
+     "signature": "() -> 'float'"
+    }
+   }
+  },
+  "engine.ui.std.health_bar": {
+   "all": [
+    "draw"
+   ],
+   "names": {
+    "draw": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', theme: 'Theme', hp: 'float', max_hp: 'float', *, panel_bg, x: 'int' = 24, y: 'int | None' = None, bb: 'tuple[int, int, int, int]' = (6, 4, 234, 14), inset: 'int' = 20, panel: 'tuple[int, int]' = (246, 30), panel_off: 'tuple[int, int]' = (0, 0), label_dy: 'int' = 2) -> 'None'"
+    }
+   }
+  },
+  "engine.ui.std.hostiles": {
+   "all": [
+    "draw"
+   ],
+   "names": {
+    "draw": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', theme: 'Theme', count: 'int', *, x: 'int' = 20, y: 'int' = 20, label: 'str | None' = None) -> 'None'"
+    }
+   }
+  },
+  "engine.ui.std.minimap": {
+   "all": [
+    "MiniMap"
+   ],
+   "names": {
+    "MiniMap": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, map_data, tile_size=64, palette='m2', *, theme=None)",
+      "draw": "(self, surface, player, enemies, camera_x, camera_y, notebook_pos=None, exfil_pos=None, volkov_pos=None, commander_pos=None, ipa_truck_pos=None, tanker_pos=None, shelter_pos=None, service_door_pos=None, smg_pos=None)"
+     }
+    }
+   }
+  },
+  "engine.ui.std.objective_banner": {
+   "all": [
+    "DEFAULT_PANEL_HEIGHT",
+    "DEFAULT_PANEL_WIDTH",
+    "draw"
+   ],
+   "names": {
+    "DEFAULT_PANEL_HEIGHT": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "DEFAULT_PANEL_WIDTH": {
+     "kind": "constant",
+     "type": "int"
+    },
+    "draw": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', text: 'object', theme: 'Theme', x: 'int' = 20, y: 'int | None' = None, *, label: 'str | None' = None) -> 'None'"
+    }
+   }
+  },
+  "engine.ui.std.prompt": {
+   "all": [
+    "draw",
+    "build"
+   ],
+   "names": {
+    "build": {
+     "kind": "function",
+     "signature": "(size, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+    },
+    "draw": {
+     "kind": "function",
+     "signature": "(surface, sx, sy, text, col, *, font, y_off=-46, icon=None, fallback_font=None, fill=(8, 8, 12, 220), rim=None, radius=3, pad=(10, 5), clamp=True, max_label_w=None)"
+    }
+   }
+  },
+  "engine.ui.std.weapon_panel": {
+   "all": [
+    "RELOAD_MS",
+    "WeaponInfo",
+    "draw"
+   ],
+   "names": {
+    "RELOAD_MS": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "WeaponInfo": {
+     "attrs": {
+      "ammo": "int",
+      "caliber": "str",
+      "cw": "str",
+      "kind": "str",
+      "label": "str",
+      "mag": "int",
+      "reload_timer": "int",
+      "reloading": "bool",
+      "spares": "int"
+     },
+     "bases": [],
+     "fields": [
+      "ammo",
+      "caliber",
+      "cw",
+      "kind",
+      "label",
+      "mag",
+      "reload_timer",
+      "reloading",
+      "spares"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+      "from_state": "class (cls, state) -> \"'WeaponInfo'\""
+     }
+    },
+    "draw": {
+     "kind": "function",
+     "signature": "(surface: 'pygame.Surface', theme: 'Theme', info: 'WeaponInfo', *, panel_bg, mag_icon, x: 'int' = 24, y: 'int | None' = None, panel_h: 'int' = 84, reload_label_dx: 'int' = 0) -> 'None'"
+    }
+   }
+  },
+  "engine.ui.theme": {
+   "all": [
+    "Theme"
+   ],
+   "names": {
+    "Theme": {
+     "attrs": {
+      "c_grey": "tuple",
+      "c_krap_blue": "tuple",
+      "c_krap_uniform": "tuple",
+      "c_orange": "tuple",
+      "c_terminal": "tuple",
+      "c_white": "tuple",
+      "font_btn": "NoneType",
+      "font_dialogue": "NoneType",
+      "font_location": "NoneType",
+      "font_location_sub": "NoneType",
+      "font_prompt": "NoneType",
+      "font_speaker": "NoneType",
+      "font_terminal": "NoneType",
+      "font_terminal_small": "NoneType",
+      "font_title": "NoneType",
+      "letter_h": "int",
+      "size": "tuple",
+      "tile_size": "int"
+     },
+     "bases": [],
+     "fields": [
+      "c_grey",
+      "c_krap_blue",
+      "c_krap_uniform",
+      "c_orange",
+      "c_terminal",
+      "c_white",
+      "extra",
+      "font_btn",
+      "font_dialogue",
+      "font_location",
+      "font_location_sub",
+      "font_prompt",
+      "font_speaker",
+      "font_terminal",
+      "font_terminal_small",
+      "font_title",
+      "letter_h",
+      "size",
+      "speaker_colors",
+      "tile_size"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, size: 'tuple[int, int]' = (1000, 700), letter_h: 'int' = 80, tile_size: 'int' = 64, font_prompt: 'object | None' = None, font_terminal: 'object | None' = None, font_terminal_small: 'object | None' = None, font_dialogue: 'object | None' = None, font_speaker: 'object | None' = None, font_title: 'object | None' = None, font_location: 'object | None' = None, font_location_sub: 'object | None' = None, font_btn: 'object | None' = None, c_white: 'tuple[int, int, int]' = (240, 240, 240), c_grey: 'tuple[int, int, int]' = (150, 150, 150), c_orange: 'tuple[int, int, int]' = (255, 120, 0), c_terminal: 'tuple[int, int, int]' = (50, 255, 150), c_krap_blue: 'tuple[int, int, int]' = (35, 65, 110), c_krap_uniform: 'tuple[int, int, int]' = (55, 65, 80), speaker_colors: 'dict' = <factory>, extra: 'dict' = <factory>) -> None",
+      "height": "property",
+      "speaker_accent": "(self, name: 'str') -> 'tuple[int, int, int]'",
+      "width": "property"
+     }
+    }
+   }
+  },
+  "engine.world": {
+   "all": [
+    "EntityId",
+    "World",
+    "WorldError",
+    "component",
+    "component_type",
+    "component_types",
+    "fields_of",
+    "from_dict",
+    "is_component",
+    "schema",
+    "to_dict",
+    "PHASES",
+    "PRE",
+    "SIM",
+    "POST",
+    "RENDER_SUBMIT",
+    "System",
+    "FunctionSystem",
+    "Scheduler",
+    "PREFAB_SCHEMA",
+    "PrefabLibrary",
+    "load_prefabs",
+    "Transform",
+    "Velocity",
+    "Collider",
+    "Health",
+    "Faction",
+    "Tags",
+    "Label",
+    "Sprite",
+    "WalkCycle",
+    "HitFlash",
+    "AIBrain",
+    "Lifetime",
+    "LegacyRef"
+   ],
+   "names": {
+    "AIBrain": {
+     "attrs": {
+      "profile": "member_descriptor",
+      "state": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "profile",
+      "state"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, profile: 'str' = '', state: 'str' = 'IDLE') -> None"
+     }
+    },
+    "Collider": {
+     "attrs": {
+      "h": "member_descriptor",
+      "radius": "member_descriptor",
+      "solid": "member_descriptor",
+      "w": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "h",
+      "radius",
+      "solid",
+      "w"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, w: 'float' = 32.0, h: 'float' = 32.0, radius: 'float' = 0.0, solid: 'bool' = True) -> None"
+     }
+    },
+    "EntityId": {
+     "attrs": {
+      "denominator": "getset_descriptor",
+      "imag": "getset_descriptor",
+      "numerator": "getset_descriptor",
+      "real": "getset_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {}
+    },
+    "Faction": {
+     "attrs": {
+      "name": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "name"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str' = 'neutral') -> None"
+     }
+    },
+    "FunctionSystem": {
+     "attrs": {},
+     "bases": [
+      "System"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[World, Any, float], None]', *, name: 'str' = '', phase: 'str' = 'SIM', order: 'int' = 0, reads: 'Iterable[type]' = (), writes: 'Iterable[type]' = ()) -> 'None'",
+      "run": "(self, world: 'World', ctx: 'Any', dt: 'float') -> 'None'"
+     }
+    },
+    "Health": {
+     "attrs": {
+      "hp": "member_descriptor",
+      "max": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "hp",
+      "max"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, hp: 'float' = 100.0, max: 'float' = 100.0) -> None",
+      "alive": "property",
+      "fraction": "property"
+     }
+    },
+    "HitFlash": {
+     "attrs": {
+      "duration": "member_descriptor",
+      "t": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "duration",
+      "t"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, t: 'float' = 0.0, duration: 'float' = 0.12) -> None",
+      "active": "property"
+     }
+    },
+    "Label": {
+     "attrs": {
+      "kind": "member_descriptor",
+      "text": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "kind",
+      "text"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, text: 'str' = '', kind: 'str' = '') -> None"
+     }
+    },
+    "LegacyRef": {
+     "attrs": {
+      "kind": "member_descriptor",
+      "uid": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "kind",
+      "uid"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, uid: 'int' = 0, kind: 'str' = '') -> None"
+     }
+    },
+    "Lifetime": {
+     "attrs": {
+      "remaining": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "remaining"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, remaining: 'float' = 0.0) -> None",
+      "expired": "property"
+     }
+    },
+    "PHASES": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "POST": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PRE": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PREFAB_SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PrefabLibrary": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, pid: 'object') -> 'bool'",
+      "__init__": "(self, prefabs: 'Iterable[dict[str, Any]]' = ()) -> 'None'",
+      "add": "(self, prefab: 'dict[str, Any]') -> 'None'",
+      "build": "(self, pid: 'str', overrides: 'dict[str, dict[str, Any]] | None' = None) -> 'list[Any]'",
+      "chain": "(self, pid: 'str') -> 'list[str]'",
+      "diff": "(self, pid: 'str') -> 'dict[str, dict[str, Any]]'",
+      "ids": "(self) -> 'list[str]'",
+      "instantiate": "(self, world: 'World', pid: 'str', overrides: 'dict[str, dict[str, Any]] | None' = None, *extra: 'Any') -> 'EntityId'",
+      "raw": "(self, pid: 'str') -> 'dict[str, Any]'",
+      "resolve": "(self, pid: 'str', overrides: 'dict[str, dict[str, Any]] | None' = None) -> 'dict[str, dict[str, Any]]'"
+     }
+    },
+    "RENDER_SUBMIT": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SIM": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Scheduler": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, world: 'World', *, debug: 'bool' = False) -> 'None'",
+      "add": "(self, system: 'System') -> 'System'",
+      "describe": "(self) -> 'list[dict[str, Any]]'",
+      "find": "(self, name: 'str') -> 'System | None'",
+      "remove": "(self, system_or_name: 'System | str') -> 'bool'",
+      "run_phase": "(self, phase: 'str', ctx: 'Any' = None, dt: 'float' = 0.0) -> 'None'",
+      "step": "(self, ctx: 'Any' = None, dt: 'float' = 0.0, *, phases: 'Iterable[str]' = ('PRE', 'SIM', 'POST', 'RENDER_SUBMIT')) -> 'None'",
+      "systems": "(self, phase: 'str | None' = None) -> 'list[System]'"
+     }
+    },
+    "Sprite": {
+     "attrs": {
+      "asset": "member_descriptor",
+      "scale": "member_descriptor",
+      "variant": "member_descriptor",
+      "visible": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "asset",
+      "scale",
+      "variant",
+      "visible"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, asset: 'str' = '', variant: 'int' = 0, scale: 'float' = 1.0, visible: 'bool' = True) -> None"
+     }
+    },
+    "System": {
+     "attrs": {
+      "enabled": "bool",
+      "name": "str",
+      "order": "int",
+      "phase": "str",
+      "reads": "tuple",
+      "writes": "tuple"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "label": "(self) -> 'str'",
+      "run": "(self, world: 'World', ctx: 'Any', dt: 'float') -> 'None'"
+     }
+    },
+    "Tags": {
+     "attrs": {
+      "set": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "set"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, set: 'set' = <factory>) -> None",
+      "has": "(self, tag: 'str') -> 'bool'"
+     }
+    },
+    "Transform": {
+     "attrs": {
+      "angle": "member_descriptor",
+      "prev_x": "member_descriptor",
+      "prev_y": "member_descriptor",
+      "x": "member_descriptor",
+      "y": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "angle",
+      "prev_x",
+      "prev_y",
+      "x",
+      "y"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, x: 'float' = 0.0, y: 'float' = 0.0, angle: 'float' = 0.0, prev_x: 'float' = 0.0, prev_y: 'float' = 0.0) -> None",
+      "interp": "(self, alpha: 'float') -> 'tuple[float, float]'",
+      "remember": "(self) -> 'None'"
+     }
+    },
+    "Velocity": {
+     "attrs": {
+      "vx": "member_descriptor",
+      "vy": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "vx",
+      "vy"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, vx: 'float' = 0.0, vy: 'float' = 0.0) -> None",
+      "speed": "(self) -> 'float'"
+     }
+    },
+    "WalkCycle": {
+     "attrs": {
+      "last_x": "member_descriptor",
+      "last_y": "member_descriptor",
+      "moving": "member_descriptor",
+      "phase": "member_descriptor",
+      "primed": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "last_x",
+      "last_y",
+      "moving",
+      "phase",
+      "primed"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, phase: 'float' = 0.0, moving: 'bool' = False, last_x: 'float' = 0.0, last_y: 'float' = 0.0, primed: 'bool' = False) -> None",
+      "advance": "(self, x: 'float', y: 'float', threshold: 'float' = 0.4, rate: 'float' = 0.22) -> 'float'"
+     }
+    },
+    "World": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, eid: 'object') -> 'bool'",
+      "__init__": "(self) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "add": "(self, eid: 'EntityId', comp: 'Any', kind: 'type | None' = None) -> 'Any'",
+      "alive": "(self, eid: 'EntityId') -> 'bool'",
+      "by_name": "(self, name: 'str') -> 'type'",
+      "components": "(self, eid: 'EntityId') -> 'tuple[Any, ...]'",
+      "count": "(self, kind: 'type | None' = None) -> 'int'",
+      "despawn": "(self, eid: 'EntityId') -> 'None'",
+      "despawn_now": "(self, eid: 'EntityId') -> 'None'",
+      "dump": "(self) -> 'dict[str, Any]'",
+      "dump_entity": "(self, eid: 'EntityId') -> 'dict[str, Any]'",
+      "emit": "(self, event: 'Any') -> 'None'",
+      "entities": "(self) -> 'list[EntityId]'",
+      "first": "(self, *kinds: 'type') -> 'tuple[EntityId, tuple[Any, ...]] | None'",
+      "flush": "(self) -> 'int'",
+      "get": "(self, eid: 'EntityId', kind: 'type', default: 'Any' = None) -> 'Any'",
+      "has": "(self, eid: 'EntityId', *kinds: 'type') -> 'bool'",
+      "kinds": "(self, eid: 'EntityId') -> 'tuple[type, ...]'",
+      "pending_despawns": "(self) -> 'tuple[EntityId, ...]'",
+      "query": "(self, *kinds: 'type') -> 'Iterator[tuple[EntityId, tuple[Any, ...]]]'",
+      "readonly": "property",
+      "remove": "(self, eid: 'EntityId', kind: 'type') -> 'Any'",
+      "require": "(self, eid: 'EntityId', kind: 'type') -> 'Any'",
+      "set_readonly": "(self, flag: 'bool') -> 'None'",
+      "spawn": "(self, *comps: 'Any') -> 'EntityId'"
+     }
+    },
+    "WorldError": {
+     "attrs": {},
+     "bases": [
+      "SchemaError"
+     ],
+     "kind": "class",
+     "methods": {}
+    },
+    "component": {
+     "kind": "function",
+     "signature": "(cls=None, *, version: 'int' = 1)"
+    },
+    "component_type": {
+     "kind": "function",
+     "signature": "(name: 'str') -> 'type'"
+    },
+    "component_types": {
+     "kind": "function",
+     "signature": "() -> 'Iterator[type]'"
+    },
+    "fields_of": {
+     "kind": "function",
+     "signature": "(kind: 'type') -> 'tuple[dataclasses.Field, ...]'"
+    },
+    "from_dict": {
+     "kind": "function",
+     "signature": "(kind: 'type', data: 'dict[str, Any]')"
+    },
+    "is_component": {
+     "kind": "function",
+     "signature": "(kind: 'Any') -> 'bool'"
+    },
+    "load_prefabs": {
+     "kind": "function",
+     "signature": "(path: 'str', library: 'PrefabLibrary | None' = None) -> 'PrefabLibrary'"
+    },
+    "schema": {
+     "kind": "function",
+     "signature": "() -> 'dict[str, list[tuple[str, str]]]'"
+    },
+    "to_dict": {
+     "kind": "function",
+     "signature": "(comp: 'Any') -> 'dict[str, Any]'"
+    }
+   }
+  },
+  "engine.world.entity": {
+   "all": [
+    "EntityId",
+    "World",
+    "WorldError"
+   ],
+   "names": {
+    "EntityId": {
+     "attrs": {
+      "denominator": "getset_descriptor",
+      "imag": "getset_descriptor",
+      "numerator": "getset_descriptor",
+      "real": "getset_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {}
+    },
+    "World": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, eid: 'object') -> 'bool'",
+      "__init__": "(self) -> 'None'",
+      "__len__": "(self) -> 'int'",
+      "add": "(self, eid: 'EntityId', comp: 'Any', kind: 'type | None' = None) -> 'Any'",
+      "alive": "(self, eid: 'EntityId') -> 'bool'",
+      "by_name": "(self, name: 'str') -> 'type'",
+      "components": "(self, eid: 'EntityId') -> 'tuple[Any, ...]'",
+      "count": "(self, kind: 'type | None' = None) -> 'int'",
+      "despawn": "(self, eid: 'EntityId') -> 'None'",
+      "despawn_now": "(self, eid: 'EntityId') -> 'None'",
+      "dump": "(self) -> 'dict[str, Any]'",
+      "dump_entity": "(self, eid: 'EntityId') -> 'dict[str, Any]'",
+      "emit": "(self, event: 'Any') -> 'None'",
+      "entities": "(self) -> 'list[EntityId]'",
+      "first": "(self, *kinds: 'type') -> 'tuple[EntityId, tuple[Any, ...]] | None'",
+      "flush": "(self) -> 'int'",
+      "get": "(self, eid: 'EntityId', kind: 'type', default: 'Any' = None) -> 'Any'",
+      "has": "(self, eid: 'EntityId', *kinds: 'type') -> 'bool'",
+      "kinds": "(self, eid: 'EntityId') -> 'tuple[type, ...]'",
+      "pending_despawns": "(self) -> 'tuple[EntityId, ...]'",
+      "query": "(self, *kinds: 'type') -> 'Iterator[tuple[EntityId, tuple[Any, ...]]]'",
+      "readonly": "property",
+      "remove": "(self, eid: 'EntityId', kind: 'type') -> 'Any'",
+      "require": "(self, eid: 'EntityId', kind: 'type') -> 'Any'",
+      "set_readonly": "(self, flag: 'bool') -> 'None'",
+      "spawn": "(self, *comps: 'Any') -> 'EntityId'"
+     }
+    },
+    "WorldError": {
+     "attrs": {},
+     "bases": [
+      "SchemaError"
+     ],
+     "kind": "class",
+     "methods": {}
+    }
+   }
+  },
+  "engine.world.prefab": {
+   "all": [
+    "PREFAB_SCHEMA",
+    "PrefabLibrary",
+    "load_prefabs"
+   ],
+   "names": {
+    "PREFAB_SCHEMA": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PrefabLibrary": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__contains__": "(self, pid: 'object') -> 'bool'",
+      "__init__": "(self, prefabs: 'Iterable[dict[str, Any]]' = ()) -> 'None'",
+      "add": "(self, prefab: 'dict[str, Any]') -> 'None'",
+      "build": "(self, pid: 'str', overrides: 'dict[str, dict[str, Any]] | None' = None) -> 'list[Any]'",
+      "chain": "(self, pid: 'str') -> 'list[str]'",
+      "diff": "(self, pid: 'str') -> 'dict[str, dict[str, Any]]'",
+      "ids": "(self) -> 'list[str]'",
+      "instantiate": "(self, world: 'World', pid: 'str', overrides: 'dict[str, dict[str, Any]] | None' = None, *extra: 'Any') -> 'EntityId'",
+      "raw": "(self, pid: 'str') -> 'dict[str, Any]'",
+      "resolve": "(self, pid: 'str', overrides: 'dict[str, dict[str, Any]] | None' = None) -> 'dict[str, dict[str, Any]]'"
+     }
+    },
+    "load_prefabs": {
+     "kind": "function",
+     "signature": "(path: 'str', library: 'PrefabLibrary | None' = None) -> 'PrefabLibrary'"
+    }
+   }
+  },
+  "engine.world.std": {
+   "all": [
+    "Transform",
+    "Velocity",
+    "Collider",
+    "Health",
+    "Faction",
+    "Tags",
+    "Label",
+    "Sprite",
+    "WalkCycle",
+    "HitFlash",
+    "AIBrain",
+    "Lifetime",
+    "LegacyRef"
+   ],
+   "names": {
+    "AIBrain": {
+     "attrs": {
+      "profile": "member_descriptor",
+      "state": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "profile",
+      "state"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, profile: 'str' = '', state: 'str' = 'IDLE') -> None"
+     }
+    },
+    "Collider": {
+     "attrs": {
+      "h": "member_descriptor",
+      "radius": "member_descriptor",
+      "solid": "member_descriptor",
+      "w": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "h",
+      "radius",
+      "solid",
+      "w"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, w: 'float' = 32.0, h: 'float' = 32.0, radius: 'float' = 0.0, solid: 'bool' = True) -> None"
+     }
+    },
+    "Faction": {
+     "attrs": {
+      "name": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "name"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str' = 'neutral') -> None"
+     }
+    },
+    "Health": {
+     "attrs": {
+      "hp": "member_descriptor",
+      "max": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "hp",
+      "max"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, hp: 'float' = 100.0, max: 'float' = 100.0) -> None",
+      "alive": "property",
+      "fraction": "property"
+     }
+    },
+    "HitFlash": {
+     "attrs": {
+      "duration": "member_descriptor",
+      "t": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "duration",
+      "t"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, t: 'float' = 0.0, duration: 'float' = 0.12) -> None",
+      "active": "property"
+     }
+    },
+    "Label": {
+     "attrs": {
+      "kind": "member_descriptor",
+      "text": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "kind",
+      "text"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, text: 'str' = '', kind: 'str' = '') -> None"
+     }
+    },
+    "LegacyRef": {
+     "attrs": {
+      "kind": "member_descriptor",
+      "uid": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "kind",
+      "uid"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, uid: 'int' = 0, kind: 'str' = '') -> None"
+     }
+    },
+    "Lifetime": {
+     "attrs": {
+      "remaining": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "remaining"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, remaining: 'float' = 0.0) -> None",
+      "expired": "property"
+     }
+    },
+    "Sprite": {
+     "attrs": {
+      "asset": "member_descriptor",
+      "scale": "member_descriptor",
+      "variant": "member_descriptor",
+      "visible": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "asset",
+      "scale",
+      "variant",
+      "visible"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, asset: 'str' = '', variant: 'int' = 0, scale: 'float' = 1.0, visible: 'bool' = True) -> None"
+     }
+    },
+    "Tags": {
+     "attrs": {
+      "set": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "set"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, set: 'set' = <factory>) -> None",
+      "has": "(self, tag: 'str') -> 'bool'"
+     }
+    },
+    "Transform": {
+     "attrs": {
+      "angle": "member_descriptor",
+      "prev_x": "member_descriptor",
+      "prev_y": "member_descriptor",
+      "x": "member_descriptor",
+      "y": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "angle",
+      "prev_x",
+      "prev_y",
+      "x",
+      "y"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, x: 'float' = 0.0, y: 'float' = 0.0, angle: 'float' = 0.0, prev_x: 'float' = 0.0, prev_y: 'float' = 0.0) -> None",
+      "interp": "(self, alpha: 'float') -> 'tuple[float, float]'",
+      "remember": "(self) -> 'None'"
+     }
+    },
+    "Velocity": {
+     "attrs": {
+      "vx": "member_descriptor",
+      "vy": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "vx",
+      "vy"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, vx: 'float' = 0.0, vy: 'float' = 0.0) -> None",
+      "speed": "(self) -> 'float'"
+     }
+    },
+    "WalkCycle": {
+     "attrs": {
+      "last_x": "member_descriptor",
+      "last_y": "member_descriptor",
+      "moving": "member_descriptor",
+      "phase": "member_descriptor",
+      "primed": "member_descriptor"
+     },
+     "bases": [],
+     "fields": [
+      "last_x",
+      "last_y",
+      "moving",
+      "phase",
+      "primed"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, phase: 'float' = 0.0, moving: 'bool' = False, last_x: 'float' = 0.0, last_y: 'float' = 0.0, primed: 'bool' = False) -> None",
+      "advance": "(self, x: 'float', y: 'float', threshold: 'float' = 0.4, rate: 'float' = 0.22) -> 'float'"
+     }
+    }
+   }
+  },
+  "engine.world.system": {
+   "all": [
+    "PHASES",
+    "PRE",
+    "SIM",
+    "POST",
+    "RENDER_SUBMIT",
+    "System",
+    "Scheduler",
+    "FunctionSystem"
+   ],
+   "names": {
+    "FunctionSystem": {
+     "attrs": {},
+     "bases": [
+      "System"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[World, Any, float], None]', *, name: 'str' = '', phase: 'str' = 'SIM', order: 'int' = 0, reads: 'Iterable[type]' = (), writes: 'Iterable[type]' = ()) -> 'None'",
+      "run": "(self, world: 'World', ctx: 'Any', dt: 'float') -> 'None'"
+     }
+    },
+    "PHASES": {
+     "kind": "constant",
+     "type": "tuple"
+    },
+    "POST": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "PRE": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "RENDER_SUBMIT": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SIM": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Scheduler": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, world: 'World', *, debug: 'bool' = False) -> 'None'",
+      "add": "(self, system: 'System') -> 'System'",
+      "describe": "(self) -> 'list[dict[str, Any]]'",
+      "find": "(self, name: 'str') -> 'System | None'",
+      "remove": "(self, system_or_name: 'System | str') -> 'bool'",
+      "run_phase": "(self, phase: 'str', ctx: 'Any' = None, dt: 'float' = 0.0) -> 'None'",
+      "step": "(self, ctx: 'Any' = None, dt: 'float' = 0.0, *, phases: 'Iterable[str]' = ('PRE', 'SIM', 'POST', 'RENDER_SUBMIT')) -> 'None'",
+      "systems": "(self, phase: 'str | None' = None) -> 'list[System]'"
+     }
+    },
+    "System": {
+     "attrs": {
+      "enabled": "bool",
+      "name": "str",
+      "order": "int",
+      "phase": "str",
+      "reads": "tuple",
+      "writes": "tuple"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "label": "(self) -> 'str'",
+      "run": "(self, world: 'World', ctx: 'Any', dt: 'float') -> 'None'"
+     }
+    }
+   }
+  }
+ }
+}

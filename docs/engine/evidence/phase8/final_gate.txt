@@ -1,0 +1,35 @@
+Phase 8 final gate (sandbox, 2026-10-15)
+
+First ae_ci.py run: AE CI: FAIL - api snapshot row only (+2 from_timeline names, re-recorded deliberately).
+Rerun (below): AE CI: OK.
+
+AE CI SUMMARY
+compileall ............................ OK    [0s]
+boundary lint (enforce engine) ........ OK    0 engine violations, 75 engine modules; W1 shared->mission 48 (baseline 48, =)  [5s]
+import side effects (engine) .......... OK    engine 75 modules clean  [0s]
+import hygiene (no star re-exports) ... OK    0 star sites left  [4s]
+global names (no unresolved globals) .. OK    321 files, 0 with unresolved globals, 9 skipped for relative stars, 1 known non-modules  [2s]
+string tables + text fit .............. OK    table 488 keys, 0 missing, 0 unused, 21 fit slots  [7s]
+api snapshot (engine public surface) .. OK    72 modules, 491 public names; +0 -0 ~0, 0 errors  [0s]
+entity components (D4 grep gate) ...... OK    hard=0, remaining mission-prefixed sites=0, exit criterion met  [1s]
+render queue (D6 custom-draw ratchet) .. OK    custom draws: m1=1 m2=1 m3=1 m4=1 m5=0; direct draw sites: m1=288 m2=1226 m3=1912 m4=399 m5=275; exit criterion met  [5s]
+level data (data == generators) ....... OK    13 levels, data == legacy generators  [4s]
+dialogue data (validator + round-trip) .. OK    2 dialogues valid, data == legacy tables  [4s]
+timeline data (validator + round-trip) .. OK    22 timelines valid, data == legacy tables  [4s]
+set3d data (validator + build) ........ OK    1 sets valid, primitives build clean  [0s]
+unit tests ............................ OK    260 tests  [11s]
+asset bake check + lint ............... OK    packs=5 baked=0 checked=42 sampled=27 stale=0 missing=0 mismatched=0 errors=0 lint_warnings=9  [15s]
+smoke test ............................ OK    SMOKE TEST: OK  [87s]
+golden images ......................... OK    373 shots in 6.3s: 0 failures, 0 errors  [10s]
+replay determinism .................... OK    5 segments match  [11s]
+component dump (running M5 stage) ..... OK    segment m5 after 1s sim (60 steps) - 8 entities, 8 component types present, 18 registered  [4s]
+main loop parity ...................... OK    7/7 segments, 41s  [41s]
+frame budget bench (record only) ...... OK    m5-quarter/rain/6-guards/fire x240 frames: avg=8.99 ms p99=12.63 ms (budget 10 ms) - within budget  [6s]
+engine3d parity ....................... TODO (phase 6) 
+bench budgets ......................... TODO (phase 10) 
+mission 0 (zero engine diffs) ......... TODO (phase 10) 
+
+AE CI: OK (implemented gates)
+CI-EXIT:0
+AE TIMELINE: OK (22 timelines valid, data == legacy tables)
+AE SET3D: OK (1 sets valid, primitives build clean)

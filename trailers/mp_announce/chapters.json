@@ -1,0 +1,66 @@
+{
+ "browser_open": {
+  "frame": 30,
+  "sec": 0.5
+ },
+ "panel_open": {
+  "frame": 78,
+  "sec": 1.3
+ },
+ "callsign_typed": {
+  "frame": 222,
+  "sec": 3.7
+ },
+ "host_clicked": {
+  "frame": 251,
+  "sec": 4.183
+ },
+ "code_ready": {
+  "frame": 1049,
+  "sec": 17.483
+ },
+ "roster_2": {
+  "frame": 1143,
+  "sec": 19.05
+ },
+ "client_addr_focus": {
+  "frame": 25,
+  "sec": 0.417
+ },
+ "client_code_typed": {
+  "frame": 76,
+  "sec": 1.267
+ },
+ "join_clicked": {
+  "frame": 84,
+  "sec": 1.4
+ },
+ "client_connected": {
+  "frame": 141,
+  "sec": 2.35
+ },
+ "roster_full": {
+  "frame": 1405,
+  "sec": 23.417
+ },
+ "start_clicked": {
+  "frame": 1467,
+  "sec": 24.45
+ },
+ "go_moment": {
+  "frame": 1660,
+  "sec": 27.667
+ },
+ "go_moment_client": {
+  "frame": 467,
+  "sec": 7.783
+ },
+ "combat_end": {
+  "frame": 5296,
+  "sec": 88.267
+ },
+ "combat_end_client": {
+  "frame": 4103,
+  "sec": 68.383
+ }
+}

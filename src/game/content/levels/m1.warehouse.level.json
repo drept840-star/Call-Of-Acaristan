@@ -1,0 +1,139 @@
+{
+ "schema": "ae.level/1",
+ "id": "m1.warehouse",
+ "name": "Mission 1 - Warehouse",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "C..........................C",
+   "C..P.......................C",
+   "C..........................C",
+   "C....CC........CC..........C",
+   "C....CC........CC.....E....C",
+   "C..........................C",
+   "C......E........E..........C",
+   "C..........................C",
+   "C..........................C",
+   "CCCCCCCCDCCCCCCCCCCCCCCCCCCC",
+   "W..........E...............W",
+   "W..................E.......W",
+   "W....E.........E...........W",
+   "W.........K................W",
+   "WWWWWWWWWWWWWWDWWWWWWWWWWWWW",
+   "W..........................W",
+   "W..............V...........W",
+   "W..............N...........W",
+   "WWWWWWWWWWWWWWDDDWWWWWWWWWWW",
+   "C..........................C",
+   "C.....................X....C",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@3,2",
+   "kind": "spawn",
+   "tile": [
+    3,
+    2
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  },
+  {
+   "id": "spawn-enemy@22,5",
+   "kind": "spawn",
+   "tile": [
+    22,
+    5
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@7,7",
+   "kind": "spawn",
+   "tile": [
+    7,
+    7
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@16,7",
+   "kind": "spawn",
+   "tile": [
+    16,
+    7
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@11,11",
+   "kind": "spawn",
+   "tile": [
+    11,
+    11
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@19,12",
+   "kind": "spawn",
+   "tile": [
+    19,
+    12
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@5,13",
+   "kind": "spawn",
+   "tile": [
+    5,
+    13
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@15,13",
+   "kind": "spawn",
+   "tile": [
+    15,
+    13
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m1"
+ }
+}

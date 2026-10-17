@@ -1,0 +1,64 @@
+{
+ "schema": "ae.level/1",
+ "id": "m3.broadcast",
+ "name": "Mission 3 - Broadcast",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CgggggggggggCCCCCCCCgggggggggggC",
+   "CgggggggggggC..P...CgggggggggggC",
+   "CgggggggggggC......CgggggggggggC",
+   "CgggggggggggC......CgggggggggggC",
+   "CgggggggggggCCCDDCCCgggggggggggC",
+   "CggCCCCCCCCCCC....CCCCCCCCCCCggC",
+   "CggC.......C........C..C.C..CggC",
+   "CggC..B..B.D........D.......CggC",
+   "CggC.......C........CB.C.C.BCggC",
+   "CggCCCCCCCCCCC....CCCCCCCCCCCggC",
+   "CggggggggggggC....CggggggggggggC",
+   "CggggggggggggC....CggggggggggggC",
+   "CggggggggggggC....CggggggggggggC",
+   "CggggggggggggC....CggggggggggggC",
+   "CggggggggggggC....CggggggggggggC",
+   "CggCCCCCCCCCCCDDDDCCCCCCCCCCCggC",
+   "CggCEEEEEEEEEEEEEEEEEEEEEEEECggC",
+   "CggCEEEEEEEEEEEEEEEEEEEEEEEECggC",
+   "CggCEEEEEEEEBEEEEEEBEEEEEEEECggC",
+   "CggCEEEEEEEEEEEEEEEEEEEECCCCCggC",
+   "CggCEEEEEEEEEEEEEEEEEEECEEEECggC",
+   "CggCCCCCCEEEEEEEEEEEEEECEEEECggC",
+   "CggCEEEECEEEEEEEEEEEEEEDEEEECggC",
+   "CggCEEEECEEBEEEEEEEEBEECEEEECggC",
+   "CggCEEEECEEEEEEEEEEEEEECCDCCCggC",
+   "CggCEEEEDEEEEEEEEEEEEEECEEEECggC",
+   "CggCEEEECEEEEEEEEEEEEEECEEEECggC",
+   "CggCEEEECEEEEEEEEEEEEEECBEEBCggC",
+   "CggCCCCCCCCCCCCCCCCCCCCCCCCCCggC",
+   "CggggggggggggggggggggggggggggggC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@15,2",
+   "kind": "spawn",
+   "tile": [
+    15,
+    2
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m3"
+ }
+}

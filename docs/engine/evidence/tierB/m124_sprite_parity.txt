@@ -1,0 +1,22 @@
+molotov active=True                max 0 px 0
+molotov active=False               max 0 px 0
+abandoned nest                     max 0 px 0
+mag icon: 52 states checked, 0 differ
+WORST 0
+prop_icon: 156 (kind,colour,active,phase) combos, 0 differ, worst 0
+sprite lookups: [('prop_icon', 11)]
+exfil truck                        max 14 px 14
+  diff bbox x 53 59 y 4 15
+pickup mag @(120,90)               max 0 px 0
+pickup mag @(120.7,90.3)           max 0 px 0
+pickup mag @(119.2,91.9)           max 0 px 0
+pickup keycard @(120,90)           max 0 px 0
+pickup keycard @(120.7,90.3)       max 0 px 0
+pickup keycard @(119.2,91.9)       max 0 px 0
+pickup bandage @(120,90)           max 0 px 0
+pickup bandage @(120.7,90.3)       max 0 px 0
+pickup bandage @(119.2,91.9)       max 0 px 0
+pickup bottle @(120,90)            max 0 px 0
+pickup bottle @(120.7,90.3)        max 0 px 0
+pickup bottle @(119.2,91.9)        max 0 px 0
+exfil truck (headlights live)      max 0 px 0

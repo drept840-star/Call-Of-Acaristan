@@ -1,0 +1,30 @@
+RPE6 Phase 6 P6-M3/M5 full gate (sandbox_linux, 2026-10-15)
+golden 373/373, loop 7/7, replay OK, D4 OK, D6 ratchet OK (m5 custom=1), text OK, bake OK, units 240, smoke OK, dump OK
+
+== GOLDEN
+verified 373 shots in 6.8s: 0 failures, 0 errors
+AE GOLDEN: OK
+== LOOP
+AE LOOP: OK (7/7 segments, 42s)
+== REPLAY
+AE REPLAY: OK
+== D4
+AE D4: OK (hard=0, remaining mission-prefixed sites=0, exit criterion met)
+== D6
+AE D6: OK (custom draws: m1=1 m2=1 m3=1 m4=1 m5=1; direct draw sites: m1=288 m2=1226 m3=1912 m4=399 m5=275; exit criterion not met (m5 custom=1, others=4))
+== TEXT
+AE TEXT: OK (table 488 keys, 0 missing, 0 unused, 21 fit slots)
+== BAKE
+AE BAKE SUMMARY: packs=5 baked=0 checked=42 sampled=27 stale=0 missing=0 mismatched=0 errors=0 lint_warnings=9
+AE BAKE: OK
+== UNIT
+Ran 240 tests in 7.213s
+OK
+== SMOKE
+engine3d: GPU renderer unavailable, using software (OpenGL 3.3 unavailable: ModuleNotFoundError("No module named 'moderngl'"))
+engine3d_gl_backend: SKIP RuntimeError('no OpenGL 3.3 context: ModuleNotFoundError("No module named \'moderngl\'")')
+SMOKE TEST: OK
+== DUMP
+AE DUMP: segment m5 after 1s sim (60 steps) - 8 entities, 8 component types present, 18 registered
+AE DUMP: OK
+GATE_DONE

@@ -1,0 +1,28 @@
+compileall: OK
+boundary lint (enforce engine): OK
+import side effects (engine): OK
+api snapshot (engine public surface): OK
+unit tests: OK
+asset bake check + lint: OK
+smoke test: OK
+golden images: OK
+replay determinism: OK
+main loop parity: OK
+
+AE CI SUMMARY
+compileall ............................ OK    [0s]
+boundary lint (enforce engine) ........ OK    0 engine violations, 34 engine modules; W1 shared->mission 48 (baseline 48, =)  [6s]
+import side effects (engine) .......... OK    engine 34 modules clean  [0s]
+api snapshot (engine public surface) .. OK    32 modules, 181 public names; +0 -0 ~0, 0 errors  [0s]
+unit tests ............................ OK    92 tests  [5s]
+asset bake check + lint ............... OK    packs=5 baked=0 checked=42 sampled=27 stale=0 missing=0 mismatched=0 errors=0 lint_warnings=9  [19s]
+smoke test ............................ OK    SMOKE TEST: OK  [103s]
+golden images ......................... OK    373 shots in 7.9s: 0 failures, 0 errors  [13s]
+replay determinism .................... OK    5 segments match  [15s]
+main loop parity ...................... OK    7/7 segments, 49s  [49s]
+data validation ....................... TODO (phase 7) 
+engine3d parity ....................... TODO (phase 6) 
+bench budgets ......................... TODO (phase 10) 
+mission 0 (zero engine diffs) ......... TODO (phase 10) 
+
+AE CI: OK (implemented gates)

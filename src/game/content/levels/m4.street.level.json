@@ -1,0 +1,72 @@
+{
+ "schema": "ae.level/1",
+ "id": "m4.street",
+ "name": "Mission 4 - Street",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "C........P.............................C",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "C......................................C",
+   "C......................................C",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "C......................................C",
+   "C.................................CCCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC.CCCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC.CCCCCC",
+   "CddddddddddddddddMddddddddddddddddCCCCCC",
+   "C...........B...........B.........CFFFCC",
+   "C.R..R..R..EB.R..R..R..RB.RE.R..R.DFFFCC",
+   "C...........B...........B.........CFFFCC",
+   "CdddddddddddddddVdddddMddddddddddddddddC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "C......................................C",
+   "C......................................C",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "C......................................C",
+   "C......................................C",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "C......................................C",
+   "C......................................C",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCC..CCCC..CCCC..CCCC..CCCC..CCCC..CCCCC",
+   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player@9,4",
+   "kind": "spawn",
+   "tile": [
+    9,
+    4
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m4"
+ }
+}

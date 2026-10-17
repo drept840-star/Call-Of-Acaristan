@@ -1,0 +1,84 @@
+{
+ "schema": "ae.manifest/1",
+ "pack": "m1",
+ "baked_dir": "assets/baked/m1",
+ "notes": "Mission 1 baked world layers. world_static replaces the runtime core.staticlayer chunk cache (bake source = missions.m1.draw._bake_m1_static, still the live fallback).",
+ "assets": [
+  {
+   "id": "m1/world_static",
+   "kind": "layer",
+   "module": "game.art.m1.world_static",
+   "variants": 1,
+   "variant_names": [
+    "default"
+   ],
+   "origin": [
+    0,
+    0
+   ],
+   "size": [
+    2048,
+    1536
+   ],
+   "tags": [
+    "world",
+    "static"
+   ]
+  },
+  {
+   "id": "m1/molotov_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m1.molotov_icon",
+   "variants": 2,
+   "variant_names": [
+    "active",
+    "spent"
+   ],
+   "size": [
+    12,
+    36
+   ],
+   "tags": [
+    "hud",
+    "icon"
+   ]
+  },
+  {
+   "id": "m1/pickup_icon",
+   "kind": "sprite_def",
+   "module": "game.art.m1.pickup_icon",
+   "variants": 4,
+   "variant_names": [
+    "mag",
+    "keycard",
+    "bandage",
+    "bottle"
+   ],
+   "size": [
+    32,
+    32
+   ],
+   "tags": [
+    "world",
+    "icon"
+   ]
+  },
+  {
+   "id": "m1/exfil_truck",
+   "kind": "sprite_def",
+   "module": "game.art.m1.exfil_truck",
+   "variants": 1,
+   "variant_names": [
+    "parked"
+   ],
+   "size": [
+    136,
+    70
+   ],
+   "tags": [
+    "world",
+    "prop"
+   ]
+  }
+ ]
+}

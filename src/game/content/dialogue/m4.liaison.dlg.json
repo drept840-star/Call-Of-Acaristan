@@ -1,0 +1,56 @@
+{
+ "schema": "ae.dialogue/1",
+ "id": "m4.liaison",
+ "start": "liaison_1",
+ "speakers": {
+  "MARU": {},
+  "BIRIBEL": {}
+ },
+ "nodes": {
+  "liaison_1": {
+   "speaker": "MARU",
+   "text": "You got the file on air. Out here, that's not nothing.",
+   "next": "liaison_2"
+  },
+  "liaison_2": {
+   "speaker": "MARU",
+   "text": "His men have this block pinned. Hold the transmitter and let the arrest air.",
+   "next": "liaison_3"
+  },
+  "liaison_3": {
+   "speaker": "MARU",
+   "text": "One question before you bleed for this building - who are you fighting for?",
+   "next": "liaison_4"
+  },
+  "liaison_4_resp_1": {
+   "speaker": "BIRIBEL",
+   "text": "Then hold the line. Order is all that's between this city and the pit.",
+   "next": null
+  },
+  "liaison_4_resp_2": {
+   "speaker": "BIRIBEL",
+   "text": "Good answer. Tools get pointed at the people too - remember that.",
+   "next": null
+  },
+  "liaison_4": {
+   "speaker": "BIRIBEL",
+   "text": "The state, or the people inside it?",
+   "choices": [
+    {
+     "label": "The state. It outlasts every man who wears it.",
+     "next": "liaison_4_resp_1"
+    },
+    {
+     "label": "The people. The state is just the tool we point.",
+     "next": "liaison_4_resp_2"
+    }
+   ],
+   "next": null
+  }
+ },
+ "metadata": {
+  "mission": "m4",
+  "kind": "conversation",
+  "source": "missions/m4/flow.py _M4_LIAISON_BEATS"
+ }
+}

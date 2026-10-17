@@ -1,0 +1,25 @@
+# tools/ae_dump_components.py --seg m5 --seconds 3 — Phase 5 exit evidence (running M5 Lower Quarter stage; sandbox 2026-10-15, after P5-M6)
+AE DUMP: segment m5 after 3s sim (180 steps) - 8 entities, 8 component types present, 18 registered
+components (count / version / fields):
+  AIBrain         7  v1  profile, state
+  Collider        8  v1  w, h, radius, solid
+  Faction         8  v1  name
+  Health          8  v1  hp, max
+  LegacyRef       8  v1  uid, kind
+  M5Guard         7  v1  guard, kind, label, stage, counted, squad, face, passive, hunt_prev, hp0
+  Transform       8  v1  x, y, angle, prev_x, prev_y
+  WalkCycle       7  v1  phase, moving, last_x, last_y, primed
+legacy kinds: Enemy=7, Player=1 | roster spawned=8 despawned=0
+systems:
+  PRE           -100  legacy_roster      reads=[] writes=['LegacyRef', 'Transform', 'Health', 'AIBrain', 'Faction', 'Collider', 'Label', 'Lifetime', 'Tags', 'WalkCycle']
+  SIM              0  legacy_mission_update reads=[] writes=[]
+entity 1:
+  LegacyRef: {"uid": 0, "kind": "Enemy"}
+  Faction: {"name": "hostile"}
+  Collider: {"w": 32.0, "h": 32.0, "radius": 0.0, "solid": true}
+  WalkCycle: {"phase": 0.0, "moving": false, "last_x": 0.0, "last_y": 0.0, "primed": false}
+  Transform: {"x": 1001.0, "y": 352.0, "angle": 0.0, "prev_x": 1001.0, "prev_y": 352.0}
+  Health: {"hp": 95.0, "max": 95.0}
+  AIBrain: {"profile": "legacy", "state": "PATROL"}
+  M5Guard: {"guard": true, "kind": "guard", "label": "q_13_5", "stage": "quarter", "counted": false, "squad": false, "face": null, "passive": false, "hunt_prev": false, "hp0": null}
+AE DUMP: OK

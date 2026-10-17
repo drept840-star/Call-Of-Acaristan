@@ -1,0 +1,141 @@
+
+
+# ─────────────────────────────────────────────
+# Maru ammo resupply (ported from M3 Volkov - mission-scoped, not imported)
+# ─────────────────────────────────────────────
+# When Biribel runs completely dry in the raid or the tunnel, Maru throws two
+# magazines across. They fly on an authored arc, gently track the player and
+# grant +1 spare mag each on the catch. No cutscene, no pause.
+M5_MARU_THROW_RANGE = 640      # px - further than this and Maru can't reach
+
+_MARU_MAG_LINES = {
+    STAGE_RAID: (
+        "MARU: You're empty - catch!",
+        "MARU: Mag! Keep them off the stair!",
+        "MARU: Again?! Count your shots, Biribel!",
+    ),
+    STAGE_TUNNEL: (
+        "MARU: Catch - left hand, don't laugh.",
+        "MARU: Mag! Keep moving!",
+        "MARU: I'm running low too - make them count!",
+    ),
+}
+
+
+def _player_dry():
+    """True when the gun in hand has nothing in the mag and no spares."""
+    cw = getattr(STATE, "current_weapon", "pistol")
+    if cw == "k9_smg":
+        return (getattr(STATE, "k9_ammo_in_mag", 0) <= 0
+                and getattr(STATE, "k9_spare_mags", 0) <= 0)
+    if cw == "os12":
+        return (getattr(STATE, "os12_ammo_in_mag", 0) <= 0
+                and getattr(STATE, "os12_spare_mags", 0) <= 0)
+    if cw == "pistol":
+        return STATE.ammo_in_mag <= 0 and STATE.spare_mags <= 0
+    return False
+
+
+def _check_maru_ammo_resupply():
+    m = getattr(STATE, "m5_maru", None)
+    if not m or getattr(STATE, "m5_maru_dead", False) or STATE.player is None:
+        return False
+    if STATE.player_dead or getattr(STATE, "m5_dialogue_active", False):
+        return False
+    if getattr(STATE, "mission5_stage", None) not in (STAGE_RAID, STAGE_TUNNEL):
+        return False
+    if getattr(STATE, "m5_maru_mags", None):
+        return False  # already throwing
+    if not _player_dry():
+        return False
+    if _dist((m["x"], m["y"]), _player_pos()) > M5_MARU_THROW_RANGE:
+        return False
+    _trigger_maru_mags_throw()
+    return True
+
+
+def _trigger_maru_mags_throw():
+    m = getattr(STATE, "m5_maru", None)
+    if not m or STATE.player is None:
+        return
+    px, py = _player_pos()
+    mx, my = m["x"], m["y"]
+    dist = math.hypot(px - mx, py - my)
+    kind = "k9" if getattr(STATE, "current_weapon", "") == "k9_smg" else "pistol"
+    # Longer throws take a little longer and loft higher, so a cross-room
+    # toss still reads as a throw and not a teleport.
+    base_dur = 38 + int(min(dist, M5_MARU_THROW_RANGE) / 26)
+    mags = []
+    for i, (ox, oy) in enumerate([(-14, -10), (16, -8)]):
+        tx = px + random.randint(-20, 20)
+        ty = py + random.randint(-14, 14)
+        sx, sy = mx + ox, my + oy
+        dur = base_dur + i * 5
+        mags.append({
+            "x": sx, "y": sy, "start_x": sx, "start_y": sy,
+            "target_x": tx, "target_y": ty,
+            "life": dur + i * 6 + 60, "duration": dur, "delay": i * 6,
+            "arc_height": 70.0 + min(dist, 400) * 0.06 - i * 12.0,
+            "vx": 0.0, "vy": 0.0, "rot": random.uniform(-1.1, 1.1),
+            "age": 0, "kind": kind,
+        })
+    STATE.m5_maru_mags = mags
+    m["angle"] = math.atan2(py - my, px - mx)   # face the throw
+    m["throw_anim"] = 14
+
+    STATE.m5_maru_mags_thrown_count = getattr(STATE, "m5_maru_mags_thrown_count", 0) + 1
+    lines = _MARU_MAG_LINES.get(getattr(STATE, "mission5_stage", None),
+                                _MARU_MAG_LINES[STAGE_RAID])
+    n = STATE.m5_maru_mags_thrown_count
+    _radio(lines[min(n - 1, len(lines) - 1)], color=C_MARU, duration=200,
+           mark=None, priority=1)
+    _sfx("rifle_handle", 0.5)
+
+
+def _update_maru_mags():
+    """Step the magazines in flight; resolve each at its catch point."""
+    mags = getattr(STATE, "m5_maru_mags", None)
+    if not mags:
+        return
+    if STATE.player is None:
+        STATE.m5_maru_mags = []
+        return
+    m = getattr(STATE, "m5_maru", None)
+    if m and m.get("throw_anim", 0) > 0:
+        m["throw_anim"] -= 1
+    px, py = _player_pos()
+    remaining = []
+    for mag in mags:
+        mag["age"] += 1
+        mag["life"] -= 1
+        flight = max(0, mag["age"] - mag.get("delay", 0))
+        dur = max(1, mag.get("duration", 42))
+        if flight > 0:          # catch point eases after a moving player
+            mag["target_x"] += (px - mag["target_x"]) * 0.075
+            mag["target_y"] += (py - mag["target_y"]) * 0.075
+        t = max(0.0, min(1.0, flight / dur))
+        e = t * t * (3.0 - 2.0 * t)
+        ox, oy = mag["x"], mag["y"]
+        mag["x"] = mag["start_x"] + (mag["target_x"] - mag["start_x"]) * e
+        mag["y"] = (mag["start_y"] + (mag["target_y"] - mag["start_y"]) * e
+                    - math.sin(math.pi * t) * mag.get("arc_height", 76.0))
+        mag["vx"], mag["vy"] = mag["x"] - ox, mag["y"] - oy
+        if flight > 0:
+            mag["rot"] += 0.24
+        if flight >= dur or mag["life"] <= 0:
+            cw = getattr(STATE, "current_weapon", "pistol")
+            if cw == "k9_smg":
+                STATE.k9_spare_mags = getattr(STATE, "k9_spare_mags", 0) + 1
+                label = "+1 K-9 MAG"
+            elif cw == "os12":
+                STATE.os12_spare_mags = getattr(STATE, "os12_spare_mags", 0) + 1
+                label = "+1 OS-12 MAG"
+            else:
+                STATE.spare_mags += 1
+                label = "+1 9MM MAG"
+            STATE.floating_texts.append([mag["x"], mag["y"] - 18, label,
+                                         (140, 220, 160), 55])
+            _sfx("pickup", 0.65)
+            continue
+        remaining.append(mag)
+    STATE.m5_maru_mags = remaining

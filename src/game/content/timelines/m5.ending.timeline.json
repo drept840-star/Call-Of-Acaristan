@@ -1,0 +1,177 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m5.ending",
+ "shots": [
+  {
+   "scene": "m5_shadow_finale",
+   "speaker": "",
+   "text": "",
+   "lighting": [
+    10,
+    15,
+    21
+   ],
+   "hide_caption": true,
+   "quiet_ui": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "self_graded": true,
+   "cinematic_controls": true,
+   "min_ms": 42000,
+   "cues": [
+    [
+     600,
+     "m5_wet_step",
+     0.42
+    ],
+    [
+     1200,
+     "m5_wet_step",
+     0.39
+    ],
+    [
+     1850,
+     "m5_wet_step",
+     0.37
+    ],
+    [
+     2500,
+     "m5_wet_step",
+     0.34
+    ],
+    [
+     3200,
+     "m5_wet_step",
+     0.3
+    ],
+    [
+     3746,
+     "m5_door_open",
+     0.2
+    ],
+    [
+     3900,
+     "m5_wet_step",
+     0.25
+    ],
+    [
+     4600,
+     "m5_wet_step",
+     0.2
+    ],
+    [
+     5800,
+     "m5_wet_step",
+     0.15
+    ],
+    [
+     6200,
+     "m5_sling",
+     0.28
+    ],
+    [
+     6300,
+     "m5_wet_step",
+     0.12
+    ],
+    [
+     6416,
+     "m5_door",
+     0.23
+    ],
+    [
+     9600,
+     "m5_radio_open",
+     0.28
+    ],
+    [
+     28600,
+     "m5_sling",
+     0.3
+    ],
+    [
+     29600,
+     "m5_laser_switch",
+     0.24
+    ],
+    [
+     31200,
+     "m5_radio_close",
+     0.24
+    ],
+    [
+     31600,
+     "m5_sling",
+     0.18
+    ],
+    [
+     33100,
+     "m5_roof_step",
+     0.32
+    ],
+    [
+     33700,
+     "m5_roof_step",
+     0.26
+    ],
+    [
+     34300,
+     "m5_roof_step",
+     0.19
+    ],
+    [
+     35150,
+     "m5_radio_open",
+     0.32
+    ],
+    [
+     40200,
+     "m5_radio_close",
+     0.19
+    ]
+   ],
+   "dialogue_events": [
+    [
+     9800,
+     "UCILEV",
+     "Biribel. Y-3. Same intake. Same training.",
+     true
+    ],
+    [
+     14100,
+     "BIRIBEL",
+     "Then you know why I let Maru go.",
+     true
+    ],
+    [
+     18000,
+     "UCILEV",
+     "I know. You stopped following orders. I didn't.",
+     true
+    ],
+    [
+     23400,
+     "BIRIBEL",
+     "So why am I still standing?",
+     true
+    ],
+    [
+     27000,
+     "UCILEV",
+     "Not tonight. They haven't told me to yet.",
+     true
+    ],
+    [
+     35400,
+     "VASILE",
+     "Biribel, report. ...Never mind. I didn't hear anything. Neither did you.",
+     true
+    ]
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m5.meta.mission5_ending_shots"
+ }
+}

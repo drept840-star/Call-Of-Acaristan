@@ -1,0 +1,100 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "core.cutscene2",
+ "shots": [
+  {
+   "scene": "van_exterior",
+   "speaker": "NARRATOR",
+   "text": "The KRAP van cut east through the rain.\nInside, Captain Vasile finally opened the file.",
+   "lighting": [
+    10,
+    12,
+    18
+   ]
+  },
+  {
+   "scene": "van_interior",
+   "speaker": "CAPTAIN VASILE",
+   "text": "Welcome to Acaristan, Biribel.\nHope you enjoyed the scenery.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_volkov_photo",
+   "speaker": "CAPTAIN VASILE",
+   "text": "Sebastian Volkov. IPA affiliate.\nWe've been tracking him for six months.\nTonight he's making a handoff in the slum district.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_volkov_photo",
+   "speaker": "CAPTAIN VASILE",
+   "text": "Your job: get in, capture him alive, get out.\nHe knows names. We want those names.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_interior",
+   "speaker": "BIRIBEL",
+   "text": "And if he runs?",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_interior",
+   "speaker": "CAPTAIN VASILE",
+   "text": "He won't get far.\nBut if he does, bring back anything he leaves behind.\nPaper, drives, a notebook - anything.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_handoff_weapon",
+   "speaker": "CAPTAIN VASILE",
+   "text": "Here. Standard sidearm.\nKeep it holstered until you have no choice.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_handoff_molotovs",
+   "speaker": "CAPTAIN VASILE",
+   "text": "And take these: two molotovs.\nUgly tools, but they clear alleys fast.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  },
+  {
+   "scene": "van_interior",
+   "speaker": "CAPTAIN VASILE",
+   "text": "Comms on channel 4. Don't die.\nI hate paperwork.",
+   "lighting": [
+    15,
+    12,
+    14
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "cutscenes.engine.cutscene2_shots"
+ }
+}

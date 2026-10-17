@@ -1,0 +1,155 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m4.ending",
+ "shots": [
+  {
+   "scene": "m4_arrest_screen",
+   "speaker": "VASILE",
+   "text": "It's done. He's in a cell by his own guard's hands.",
+   "lighting": [
+    10,
+    6,
+    8
+   ],
+   "min_ms": 14800,
+   "caption_after_ms": 12400,
+   "quiet_ui": true,
+   "cues": [
+    [
+     0,
+     "m4_tension",
+     0.85
+    ],
+    [
+     2500,
+     "pa_mumble",
+     0.18
+    ],
+    [
+     4900,
+     "m4_breath",
+     0.75
+    ],
+    [
+     7200,
+     "rifle_handle",
+     0.16
+    ],
+    [
+     7900,
+     "m4_cuff_close",
+     0.95
+    ],
+    [
+     9600,
+     "footstep_walk",
+     0.36
+    ],
+    [
+     10150,
+     "footstep_walk",
+     0.32
+    ],
+    [
+     10700,
+     "footstep_walk",
+     0.28
+    ],
+    [
+     11250,
+     "footstep_walk",
+     0.24
+    ],
+    [
+     12200,
+     "door_creak",
+     0.26
+    ],
+    [
+     12400,
+     "m4_aftermath",
+     0.75
+    ],
+    [
+     13500,
+     "m4_crowd",
+     0.8
+    ]
+   ]
+  },
+  {
+   "scene": "m4_maru_silhouette",
+   "speaker": "MARU",
+   "text": "And the man on the screen smiles. The country is cheering\nthe wrong name tonight.",
+   "lighting": [
+    7,
+    12,
+    12
+   ],
+   "min_ms": 6400,
+   "caption_after_ms": 900,
+   "quiet_ui": true,
+   "cues": [
+    [
+     0,
+     "m4_aftermath",
+     0.45
+    ],
+    [
+     1300,
+     "m4_breath",
+     0.45
+    ]
+   ]
+  },
+  {
+   "scene": "m4_roof_dawn",
+   "speaker": "BIRIBEL",
+   "text": "Nobody asked us to do this. First time in my life -\nthat's how it's done right.",
+   "lighting": [
+    20,
+    18,
+    26
+   ],
+   "min_ms": 7200,
+   "caption_after_ms": 1600,
+   "quiet_ui": true,
+   "cues": [
+    [
+     1600,
+     "m4_breath",
+     0.35
+    ]
+   ]
+  },
+  {
+   "scene": "m4_roof_dawn",
+   "speaker": "BIRIBEL",
+   "text": "There's a border that doesn't care about my name.\nI'm not taking it. Not yet.",
+   "lighting": [
+    24,
+    20,
+    28
+   ],
+   "min_ms": 7000,
+   "scene_time_offset_ms": 7200,
+   "caption_after_ms": 1100,
+   "quiet_ui": true
+  },
+  {
+   "scene": "title_card",
+   "speaker": "",
+   "text": "THE AFTERMATH",
+   "lighting": [
+    5,
+    5,
+    8
+   ],
+   "min_ms": 2400
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m4.meta.mission4_ending_shots"
+ }
+}

@@ -1,0 +1,93 @@
+# ae_normalize APPLY
+scanned 1369 files, 472 text; crlf 74, mixed 2, bom 1, kept-crlf 5; changed 90 (46 .py); mojibake repaired: 241 comments, 4 docstrings
+
+crlf                         .env.example
+crlf                         .gitignore
+crlf                         AGENTS.md
+crlf                         IMPLEMENTED.md
+crlf                         MEMORY.md
+crlf                         acaristan.py
+crlf                         assets/voice/biribel_matches.txt
+crlf                         assets/voice/volkov_matches.txt
+crlf                         docs/AUDIT_T1_CAPTURE_PIPELINE.md
+crlf                         docs/AUDIT_T2_ASSETS_AND_REPLAYS.md
+crlf                         docs/AUDIT_T3_ALL_CHECKPOINTS.md
+crlf                         docs/AUDIT_T4_BOT_INPUTS.md
+crlf                         docs/AUDIT_T5_STRING_ORIGINS.md
+crlf                         docs/AUDIT_T6_TIMELINE_LOGIC.md
+crlf                         docs/AUDIT_T7_ENEMY_SPAWNS.md
+crlf                         docs/AUDIT_T8_STANDALONE_PLAN.md
+crlf                         docs/DOCUMENTARY.md
+crlf                         docs/MASTER_ACTION_PLAN.md
+crlf                         docs/MISSION3_KILL_ORDER.md
+crlf                         docs/MISSION3_PLOT.md
+crlf                         docs/MISSION4_PLOT.md
+crlf                         docs/PLAN_1_CHOREOGRAPHY.md
+crlf                         docs/PLAN_2_EDITOR.md
+crlf                         docs/PLAN_3_AUDIO.md
+crlf                         docs/PLAN_4_VISUALS.md
+crlf                         docs/README_ENV_SETUP.md
+crlf                         docs/manifest.json
+crlf                         docs/thumbnail_pick.json
+bom                          docs/worklog.md
+mixed                        handoff/_polish_notes.md
+crlf                         pyproject.toml
+crlf+mojibake c34/d0         src/app.py
+crlf                         src/audio/audio.py
+mojibake c2/d0               src/core/game_core.py
+mojibake c2/d0               src/cutscenes/chair.py
+crlf+mojibake c6/d0          src/cutscenes/engine.py
+mojibake c4/d0               src/cutscenes/m3cell.py
+mojibake c1/d0               src/cutscenes/m3ops.py
+mojibake c9/d0               src/cutscenes/route12.py
+crlf                         src/engine3d/rig.py
+mojibake c130/d2             src/missions/m2/draw.py
+mojibake c7/d0               src/missions/m2/meta.py
+mojibake c8/d1               src/missions/m2/sniper.py
+mojibake c3/d0               src/missions/m2/starts.py
+mojibake c22/d0              src/missions/m2/update.py
+mojibake c9/d1               src/missions/m2/world.py
+mojibake c2/d0               src/missions/m5/decor.py
+mojibake c2/d0               src/missions/m5/decor_paint.py
+mixed                        src/missions/m5/draw.py
+crlf                         src/missions/m5/finale_script.py
+crlf                         tools/_faces_smoke_err.txt
+crlf                         tools/_faces_smoke_err2.txt
+crlf                         tools/_faces_smoke_final.txt
+crlf                         tools/_faces_smoke_final_err.txt
+crlf                         tools/_faces_smoke_out.txt
+crlf                         tools/_faces_smoke_out2.txt
+crlf                         tools/_laser_fn.txt
+crlf                         tools/_smoke_err.txt
+crlf                         tools/_smoke_err2.txt
+crlf                         tools/_smoke_out.txt
+crlf                         tools/_smoke_out2.txt
+crlf                         tools/assemble_final_trailer.py
+crlf                         tools/build_code_pdf.py
+crlf                         tools/build_sfx_stem.py
+crlf                         tools/debug_stem.py
+crlf                         tools/dev_panel.py
+crlf                         tools/golden.py
+crlf                         tools/make_art_pack.py
+crlf                         tools/make_short_branded.py
+crlf                         tools/make_short_clean.py
+crlf                         tools/make_station_sprites.py
+crlf                         tools/mp_arena_duo.py
+crlf                         tools/mp_bot.py
+crlf                         tools/mp_choreo_probe.py
+crlf                         tools/mp_host_main.py
+crlf                         tools/mp_join.py
+crlf                         tools/mp_match.py
+crlf                         tools/mp_remaster.py
+crlf                         tools/mp_server.py
+crlf                         tools/mp_trailer_assemble.py
+crlf                         tools/mp_trailer_capture.py
+crlf                         tools/preflight_bot_test.py
+crlf                         tools/record_fresh_action.py
+crlf                         tools/render_ko_video.py
+crlf                         tools/render_trailer.py
+crlf                         tools/render_trailer_v2.py
+crlf                         tools/zip_project.py
+crlf                         validation/voice_audit.csv
+crlf                         validation/voice_audit.md
+crlf                         validation/voice_audit_xlsx.csv

@@ -1,0 +1,337 @@
+--- a/src/missions/walking_attack3d.py
++++ b/src/missions/walking_attack3d.py
+@@ -15,6 +15,7 @@
+ # Frames for the fold-down collapse once a rig is struck (~1.5s at 60fps), timed
+ # so the mass meets the water near the rig_water_splash cue (impact + ~68f).
+ COLLAPSE_FRAMES = 90
++WATER_CONTACT_FRAME = 68  # existing walking_sim rig_water_splash cue
+ FOG_COL = (44, 56, 72)
+ SEA_COL = (40, 66, 90)
+ _SCENE = None
+@@ -34,6 +35,106 @@
+         out.append((q[0] + pivot[0],
+                     q[1] + pivot[1] - drop - sink,
+                     q[2] + pivot[2]))
++    return out
++
++
++
++def _collapse_motion(since, index, reduced=False):
++    """Support gives way, mass accelerates into water, then the wreck settles."""
++    age = 600.0 if reduced else max(0.0, since)
++    p = clamp(age / COLLAPSE_FRAMES)
++    # Brief structural resistance, accelerating descent to the splash cue.
++    fall = (.72 * clamp((age - 12) / (WATER_CONTACT_FRAME - 12)) ** 2
++            + .28 * smooth((age - WATER_CONTACT_FRAME)
++                           / (COLLAPSE_FRAMES - WATER_CONTACT_FRAME)))
++    sink = min(.9, max(0.0, age - COLLAPSE_FRAMES) * .003)
++    flip = -1 if index == 2 else 1
++    roll = 24 * flip * smooth(p)
++    pitch = 4 * flip * smooth(p)
++    drop = (DECK_Y + .5 - WRECK_DECK_Y) * fall
++    return age, roll, pitch, drop, sink
++
++
++def _deck_pose(vertices, since, index, reduced=False):
++    _, roll, pitch, drop, sink = _collapse_motion(since, index, reduced)
++    return _hinge_part(Mesh(verts=vertices), (0, DECK_Y + .5, 0),
++                       roll, pitch, drop, sink)
++
++
++def _collapse_parts(parts, since, index, reduced=False):
++    """LOCAL geometry: pinned feet, bowed supports, attached deck and tower.
++
++    This is an authored deterministic deformation, not a physics simulation.
++    Each support's top follows the slab while its footing stays pinned; the
++    middle bows outward as the upper jacket folds. The tower inherits the
++    moving deck transform after folding at its own base joint.
++    """
++    age, roll, pitch, drop, sink = _collapse_motion(since, index, reduced)
++    legs, deck, derrick = parts
++    buckle = smooth((age - 8) / 60)
++    leg_verts = []
++    tops = _deck_pose([(vx, DECK_Y, vz) for vx, _, vz in legs.verts],
++                      since, index, reduced)
++    for (vx, vy, vz), top in zip(legs.verts, tops):
++        f = clamp(vy / DECK_Y)
++        # A nonlinear height field, with staggered side failure, preserves the
++        # footing and top attachment exactly and bends the subdivided beams.
++        bow = (1 - abs(2 * f - 1)) * buckle
++        side = -1 if vx < 0 else 1
++        stagger = .85 if side == (-1 if index == 2 else 1) else 1.0
++        leg_verts.append((lerp(vx, top[0], f) + side * 1.5 * bow * stagger,
++                          lerp(0.0, top[1], f),
++                          lerp(vz, top[2], f) + (1 if vz >= 0 else -1) * .5 * bow))
++    deck_verts = _deck_pose(deck.verts, since, index, reduced)
++    flip = -1 if index == 2 else 1
++    tower_roll = 88 * flip * smooth((age - 18) / 72)
++    relative = _hinge_part(derrick, (0, DECK_Y + .5, .4),
++                           tower_roll - roll, 0, 0, 0)
++    der_verts = _deck_pose(relative, since, index, reduced)
++    return (leg_verts, deck_verts, der_verts), sink
++
++
++def _rig_fire_anchors(since, index, reduced=False):
++    """Deck sockets transformed identically to the geometry, in WORLD space."""
++    local = [(0, DECK_Y + .7, -.5), (-2.3, DECK_Y + .9, .8),
++             (2.2, DECK_Y + .65, -1.5)]
++    return _rig_world_vertices(_deck_pose(local, since, index, reduced), index)
++
++
++def _water_contact(index):
++    flip = -1 if index == 2 else 1
++    edge = [(-flip * 4.2, DECK_Y, 0)]
++    p = _rig_world_vertices(_deck_pose(edge, WATER_CONTACT_FRAME, index), index)[0]
++    return (p[0], .28, p[2])
++
++
++def _rig_world_vertices(vertices, index):
++    """Use the same world origin as the baked standing rig and its effects."""
++    x, z = RIGS[index]
++    return [(vx + x, vy, vz + z) for vx, vy, vz in vertices]
++
++
++
++def _visible_wreck(mesh, vertices, water_y=.12):
++    """Clip submerged polygons for both backends (software layers lack depth).
++
++    The mean waterline is deliberately stable: the sea's small baked swell
++    should not cause the wreck silhouette to flicker from frame to frame.
++    """
++    out = Mesh()
++    for indices, col, layer, double, emissive in mesh.faces:
++        polygon = [vertices[j] for j in indices]
++        clipped = []
++        for a, b in zip(polygon, polygon[1:] + polygon[:1]):
++            a_in, b_in = a[1] >= water_y, b[1] >= water_y
++            if a_in:
++                clipped.append(a)
++            if a_in != b_in:
++                k = (water_y - a[1]) / (b[1] - a[1])
++                clipped.append((lerp(a[0], b[0], k), water_y,
++                                lerp(a[2], b[2], k)))
++        if len(clipped) >= 3:
++            out.face(clipped, col, layer, double, emissive)
+     return out
+ 
+ 
+@@ -62,7 +163,7 @@
+ 
+ # ── static world ────────────────────────────────────────────────────────
+ def _rig_local_parts():
+-    """Rig split into three independently-collapsible parts, in LOCAL coords
++    """Rig split into three hierarchically-collapsible parts, in LOCAL coords
+     (origin = rig base at the waterline). ``_rig_mesh`` composes them at world
+     position for the standing rig; the draw loop topples each part on its own
+     pivot when the rig is destroyed (see OilRigAttack3D.draw)."""
+@@ -73,18 +174,24 @@
+     for sx in (-1, 1):
+         for sz in (-1, 1):
+             px, pz = sx * 3.6, sz * 2.6
+-            legs.add(box(.52, DECK_Y, .52, steel, center=(px, DECK_Y / 2, pz), skip=("bottom",)))
++            legs.add(box(.52, DECK_Y, .52, steel, center=(px, DECK_Y / 2, pz), skip=("bottom",), seg=1.1))
+             legs.add(box(.9, .3, .9, brace, center=(px, .18, pz), skip=("bottom",)))
++    def jacket_beam(a, b, width, depth, color):
++        for j in range(3):
++            aa = tuple(lerp(a[k], b[k], j / 3) for k in range(3))
++            bb = tuple(lerp(a[k], b[k], (j + 1) / 3) for k in range(3))
++            _beam(legs, aa, bb, width, depth, color)
++
+     for sz in (-1, 1):
+         for y in (2.1, 4.3):
+-            _beam(legs, (-3.6, y, sz * 2.6), (3.6, y, sz * 2.6), .16, .16, brace)
+-        _beam(legs, (-3.6, .5, sz * 2.6), (3.6, DECK_Y - .4, sz * 2.6), .17, .15, steel)
+-        _beam(legs, (3.6, .5, sz * 2.6), (-3.6, DECK_Y - .4, sz * 2.6), .17, .15, steel)
++            jacket_beam((-3.6, y, sz * 2.6), (3.6, y, sz * 2.6), .16, .16, brace)
++        jacket_beam((-3.6, .5, sz * 2.6), (3.6, DECK_Y - .4, sz * 2.6), .17, .15, steel)
++        jacket_beam((3.6, .5, sz * 2.6), (-3.6, DECK_Y - .4, sz * 2.6), .17, .15, steel)
+     for sx in (-1, 1):
+         for y in (2.1, 4.3):
+-            _beam(legs, (sx * 3.6, y, -2.6), (sx * 3.6, y, 2.6), .16, .16, brace)
+-        _beam(legs, (sx * 3.6, .5, -2.6), (sx * 3.6, DECK_Y - .4, 2.6), .17, .15, steel)
+-        _beam(legs, (sx * 3.6, .5, 2.6), (sx * 3.6, DECK_Y - .4, -2.6), .17, .15, steel)
++            jacket_beam((sx * 3.6, y, -2.6), (sx * 3.6, y, 2.6), .16, .16, brace)
++        jacket_beam((sx * 3.6, .5, -2.6), (sx * 3.6, DECK_Y - .4, 2.6), .17, .15, steel)
++        jacket_beam((sx * 3.6, .5, 2.6), (sx * 3.6, DECK_Y - .4, -2.6), .17, .15, steel)
+     # ── deck: shadow girder + topside slab, railings, module/deckhouse, helipad,
+     #    pipe rack, flare-stack boom and deck crane (deck equipment folds with it).
+     deck.add(box(9.2, .34, 7.0, (66, 74, 78), center=(0, DECK_Y - .17, 0), skip=("bottom",)))
+@@ -355,6 +462,42 @@
+     return m
+ 
+ 
++
++def _water_entry_mesh(index, since):
++    """Expanding broken foam ring and ballistic spray at the actual low edge."""
++    m = Mesh()
++    age = since - WATER_CONTACT_FRAME
++    if age < 0 or age >= 128:
++        return m
++    x, _, z = _water_contact(index)
++    env = math.sin(math.pi * clamp(age / 128)) ** .6
++    radius = 2.1 + age * .065
++    width = .16 + .3 * env
++    for j in range(24):
++        if j % 5 == 0:
++            continue
++        a, b = j * math.tau / 24, (j + .72) * math.tau / 24
++        pts = [(x + math.cos(ang) * rr, .28, z + math.sin(ang) * rr * .72)
++               for ang, rr in ((a, radius), (b, radius),
++                               (b, radius + width), (a, radius + width))]
++        bright = int(45 + 115 * env)
++        m.face(pts, (bright, min(230, bright + 20), min(245, bright + 32)), 1, True)
++    # Small separate shards of spray stay near the contact edge, never a wall.
++    if age < 44:
++        for j in range(14):
++            flight = age - (j % 4) * 2
++            if flight <= 0:
++                continue
++            a = j * 2.399 + index
++            y = .28 + (.12 + .015 * (j % 3)) * flight - .004 * flight * flight
++            if y <= .28:
++                continue
++            rr = 1.3 + .055 * flight
++            sx, sz = x + math.cos(a) * rr, z + math.sin(a) * rr * .7
++            m.add(box(.08, .18, .08, (155, 186, 202), center=(sx, y, sz), layer=2))
++    return m
++
++
+ def _boat_mesh():
+     m = Mesh()
+     hull = (52, 60, 66)
+@@ -495,7 +638,7 @@
+     def draw(self, surface, state, impact_frames, force=False, shot_frames=(850, 1270, 1710, 2320)):
+         t = state.walk_attack_timer
+         w, h = surface.get_size()
+-        shake = max(0, int(state.screen_shake))
++        shake = 0 if getattr(state, "reduced_motion", False) else max(0, int(state.screen_shake))
+         if state.screen_shake:
+             state.screen_shake = max(0, state.screen_shake - 1)
+         cam = self._camera(t, shake, shot_frames)
+@@ -534,53 +677,49 @@
+                 since = max(0, t - impact_frames[i])
+                 heat = max(.55, 1.0 - since / 1400.0)
+                 reduced = getattr(state, "reduced_motion", False)
+-                # Fold-down collapse: the legs buckle into a low stub, the deck
+-                # pitches and settles at the waterline, and the derrick topples
+-                # about its base joint to lie flat across the sea - each part on
+-                # its own real hinge. The toppled rig IS the wreck (same geometry
+-                # and materials as the standing rig), so the fall flows straight
+-                # into the destroyed state with no mesh swap; it then keeps
+-                # sinking and slowly chars so it reads as a burning wreck over the
+-                # hold.
+-                p = 0.0 if reduced else clamp(since / COLLAPSE_FRAMES)
+-                sink = min(.9, max(0.0, since - COLLAPSE_FRAMES) * .003)
+-                legs, deck, derrick = self.rig_parts
++                # Shared local collapse pose; translate EVERY part to this rig.
++                # Keep geometry/materials continuous with the baked standing rig.
++                poses, sink = _collapse_parts(self.rig_parts, since, i, reduced)
+                 flip = -1 if i == 2 else 1
+-                sp = smooth(p)
+-                dp = smooth(min(1.0, p / 0.72))  # derrick leads the collapse
+-                fall = p * p  # ease-in: slow buckle, then the mass rushes down
+                 char_t = smooth(clamp((since - COLLAPSE_FRAMES) / 500.0))
+                 char_amt = 0.62 * char_t
+                 tint = ((40, 38, 36), char_amt) if char_amt > 0.02 else None
+-                hinge = DECK_Y + .5  # deck slab + derrick joint height
+-                drop_top = (hinge - WRECK_DECK_Y) * fall
+-                # Legs buckle about their footings: a short lean, top drops to
+-                # the waterline so the jacket reads as a broken stub.
+-                leg_verts = _hinge_part(legs, (0, 0, 0), 10 * flip * sp,
+-                                        3 * flip * sp, 4.0 * fall, sink)
+-                # Deck pitches about its own center and settles low, slab tilted
+-                # half in the water rather than swung out sideways.
+-                deck_verts = _hinge_part(deck, (0, hinge, 0), 32 * flip * sp,
+-                                         5 * flip * sp, drop_top, sink)
+-                # Derrick topples about its base joint and lies flat across the
+-                # sea surface - the readable spine of the wreck.
+-                der_verts = _hinge_part(derrick, (0, hinge, .4), 88 * flip * dp,
+-                                        4 * flip * dp, (hinge - WRECK_DECK_Y) * dp, sink)
+-                for mesh, verts in ((legs, leg_verts), (deck, deck_verts),
+-                                    (derrick, der_verts)):
+-                    r.add_dynamic(verts, [(f[0], f[1], f[2], f[3], None, f[4])
+-                                          for f in mesh.faces], tint=tint)
+-                # steam plume where the toppling mass meets the water.
+-                if not reduced and 40 <= since < COLLAPSE_FRAMES + 30:
+-                    r.add_sprite((x + flip * 6.0, .8, z + .5),
+-                                 _smoke_fn(i * 41 + 3, t, 1.6, drift=1.4,
+-                                           density=min(1.0, (since - 40) / 40.0)), layer=4)
+-                r.add_sprite((x, 1.6 - sink * .5, z), _flame_fn(i * 3 + 1, t, 1.9, heat), layer=5)
+-                r.add_sprite((x + flip * 5.0, 1.0 - sink * .5, z + .4), _flame_fn(i * 5 + 2, t, 1.5, heat * .8), layer=5)
+-                r.add_sprite((x - flip * 2.2, .9, z + 1.6), _flame_fn(i * 29 + 6, t, 1.2, heat * .75), layer=5)
+-                r.add_sprite((x + 1.2, 7.6, z), _smoke_fn(i * 7 + 1, t, 1.7, drift=1.2, density=heat), layer=5)
+-                r.add_sprite((x + 2.8, 11.6, z), _smoke_fn(i * 11 + 3, t, 1.9, drift=1.6, density=heat * .85), layer=5)
+-                r.add_sprite((x, .5, z), _reflection_fn(i * 13 + 5, t, heat), layer=1)
++                for mesh, verts in zip(self.rig_parts, poses):
++                    wreck = _visible_wreck(mesh, _rig_world_vertices(verts, i))
++                    r.add_dynamic(wreck.verts,
++                                  [(f[0], f[1], f[2], f[3], None, f[4])
++                                   for f in wreck.faces], tint=tint)
++                anchors = _rig_fire_anchors(since, i, reduced)
++                # Smaller flames reveal the collapse silhouette. Submerged
++                # sockets quench; the remaining oil fire sits on the water.
++                fx_t = impact_frames[i] + 600 if reduced else t
++                for j, anchor in enumerate(anchors):
++                    wet = smooth(clamp((.4 - anchor[1]) / 1.0))
++                    fire_pos = (anchor[0], max(.28, anchor[1]), anchor[2])
++                    r.add_sprite(fire_pos,
++                                 _flame_fn(i * 17 + j, fx_t, 1.05 - j * .15,
++                                           heat * (1 - wet * .55)), layer=5)
++                source = anchors[0]
++                smoke_age = 600 if reduced else since
++                smoke_build = .25 + .75 * smooth(smoke_age / 180)
++                for j in range(2):
++                    r.add_sprite((source[0] + .8 + j, max(.8, source[1]) + 2.4 + j * 2.7,
++                                  source[2] + .3),
++                                 _smoke_fn(i * 11 + j, fx_t, 1.05 + j * .25,
++                                           drift=1.0 + .3 * j,
++                                           density=heat * smoke_build * .65), layer=5)
++                # Splash starts on the existing +68f audio cue, steam follows.
++                if not reduced:
++                    add(_water_entry_mesh(i, since))
++                    water_age = since - WATER_CONTACT_FRAME
++                    if 0 <= water_age < 100:
++                        contact = _water_contact(i)
++                        density = math.sin(math.pi * water_age / 100) * .65
++                        r.add_sprite((contact[0], .6, contact[2]),
++                                     _smoke_fn(i * 41 + 3, t, 1.1, drift=.7,
++                                               density=density), layer=4)
++                r.add_sprite((source[0], .5, source[2]),
++                             _reflection_fn(i * 13 + 5, fx_t, heat * .75), layer=1)
+             else:
+                 r.add_sprite((x + 6.2, DECK_Y + 5.05, z - 3.6),
+                              _flame_fn(i * 17 + 7, t, .45, heat=.8), layer=5)
+@@ -607,15 +746,18 @@
+             dt = t - impact
+             if 0 <= dt < 145:
+                 x, z = RIGS[i]
+-                if dt < 14:
++                reduced = getattr(state, "reduced_motion", False)
++                origin = _rig_fire_anchors(dt, i, reduced)[0]
++                if dt < 14 and not reduced:
+                     r.add_sprite((x, DECK_Y + 1, z), _flash_fn(i, dt), layer=6)
+-                if dt < 60:
++                if dt < 60 and not reduced:
+                     grow = min(1.0, dt / 26.0)
+-                    r.add_sprite((x, DECK_Y - .5, z),
+-                                 _flame_fn(i * 23 + 9, t, 1.2 + 1.3 * grow, heat=1.0), layer=6)
++                    r.add_sprite(origin,
++                                 _flame_fn(i * 23 + 9, t, .6 + .5 * grow, heat=.9), layer=6)
+                     r.add_sprite((x, DECK_Y + 1.5, z), _sparks_fn(i * 31 + 4, dt), layer=6)
+-                elif dt < 145:
+-                    r.add_sprite((x, DECK_Y + 3.5, z), _smoke_fn(i * 37 + 2, t, 1.5, drift=.9), layer=5)
++                elif dt < 145 and not reduced:
++                    r.add_sprite((origin[0], max(.8, origin[1]) + 1.6, origin[2]),
++                                 _smoke_fn(i * 37 + 2, t, 1.0, drift=.9, density=.5), layer=5)
+ 
+         # rain falls straight down past the camera; two depths for parallax.
+         for i in range(64):
+@@ -636,7 +778,7 @@
+         oy = 0 if getattr(state, "reduced_motion", False) else int(math.cos(t * .7) * min(2, shake / 9))
+         surface.fill((0, 0, 0))
+         surface.blit(rendered, (ox, oy))
+-        if any(0 <= t - f < 12 for f in impact_frames):
++        if not getattr(state, "reduced_motion", False) and any(0 <= t - f < 12 for f in impact_frames):
+             flash = pygame.Surface((w, h), pygame.SRCALPHA)
+             flash.fill((255, 165, 78, max(0, 75 - min(t - f for f in impact_frames if 0 <= t - f < 12) * 6)))
+             surface.blit(flash, (0, 0))
