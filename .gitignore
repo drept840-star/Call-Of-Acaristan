@@ -72,6 +72,18 @@ trailers/short_actual_blur.mp4
 ko_phase5_preview.mp4
 kid_ingame*.png
 
+# Trailer render sets (2026-10-17): media is disk-only, source/QA/manifests stay tracked
+# (owner decision; top-level finals trailer_final_master.mp4 / short_*.mp4 stay tracked)
+trailers/*/*.mp4
+trailers/*/*.mov
+trailers/*/*.wav
+trailers/*/*.zip
+trailers/*/*.xz
+trailers/*/*.png
+trailers/*/*.jpg
+trailers/*/*.jpeg
+trailers/*/*.webp
+
 # Node (single unused dep removed 2026-09-27; nothing imports it)
 node_modules/
 
@@ -108,6 +120,7 @@ outputs/
 /tools/out/
 /handoff/
 /SKILLS/
+/previews/
 /game_source_*.txt
 /M5_3D_CUTSCENES_BUNDLE.txt
 /RESUME_PROMPT.txt

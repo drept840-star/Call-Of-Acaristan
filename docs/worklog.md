@@ -1065,3 +1065,20 @@ docs/engine/CHANGELOG.md for the evidence).
     `_inspect2.py`, icon*/wordmark files, M5_3D_CUTSCENES_BUNDLE.txt,
     RESUME_PROMPT.txt, .pixeldrain_last_id_slim, Notion export md).
 - Gates: tree-only change; compileall/smoke unaffected.
+
+## 2026-10-17 - Repo hygiene pass 2 (owner decisions)
+
+- `previews/` (3388 files, 416 MB of QA renders) untracked entirely -
+  NITPICKS.md and the proof sheets stay on disk; `/previews/` ignored.
+- `trailers/`: top-level finals stay tracked (trailer_final_master.mp4,
+  short_*.mp4, thumbnail.*); the five render sets (premium_campaign_20261011,
+  mp_announce, mp_announce_retake_04, fresh_action, tiktok_v2) are
+  media-on-disk-only - 58 media files / 506 MB untracked, source + QA files
+  (.py, *.json, QA.md, manifests) stay tracked.
+- README.md rewritten as a real project README (replaces the revert-kit note).
+- Deleted the 87 stale `refs/cline/checkpoints/*` from July; `git log --all` is
+  clean now.
+- `main` merged with `origin/main` (July Mission-3 PRs #1/#2; the only files
+  they touched - root mission3.py / cutscenes.py / acaristan.py / mission3.pyc -
+  were superseded by the src/missions refactor, resolved keep-ours) and pushed.
+- Gates: tree-only changes; smoke OK.
