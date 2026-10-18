@@ -88,3 +88,13 @@ boundaries OK (W1 49 =), API 79 modules / 535 names, gauntlet clean.
 First CI run caught one real defect (D4 grep hit in devtools M1
 code), fixed in code and re-run green — no re-baselining anywhere
 in this phase.
+
+## Mission 6 addendum (2026-10-17)
+
+Mission 6 adds one deliberate engine-side extension: `MiniMap` gains the
+`"m6"` palette (border-night floor/wall/door/barrier tiles sampled from
+`missions/m6/draw.py`). No other `src/engine/` file changed. Per this
+check's own instructions the pin is re-frozen to `7a71e955...` (83
+files); the Phase 10 `e26ff0bd...` value remains the historical
+zero-diff proof for Mission 0's construction. The M6 stage maps, films,
+stealth and train scene live entirely outside `src/engine/`.

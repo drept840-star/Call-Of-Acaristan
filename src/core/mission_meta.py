@@ -47,6 +47,12 @@ MISSION_META = {
         "fail_flavor": "GUARD NET: LOWER QUARTER SECURED. THE PRESSES GO QUIET.",
         "radio_channel": "GUARD NET // 168.10",
     },
+    "MISSION6": {
+        "operation": "THE BORDER - BLACK NOTEBOOK",
+        "fail_subtitle": "THE LAST SIGNAL GOES DARK",
+        "fail_flavor": "KRAPNET: FINAL LINK LOST. THE RECORD WILL BE BURIED.",
+        "radio_channel": "FINAL LINK // 171.60",
+    },
 }
 
 

@@ -8355,6 +8355,646 @@ def check_join_token_and_scanner_hardening():
         m._teardown()
 
 
+def check_mission6_vertical_slice():
+    """Mission 6 delivers what the plot doc promises.
+
+    User-outcome check, not a module-shape check: three authored maps validate
+    and stay distinct; every authored film scene is registered; the stage
+    ladder (customs -> no-man's-land -> rail -> boxcar film -> interactive
+    train -> ending film) runs through real game updates; floodlight exposure
+    latches the alarm and caps its waves; clicks during the train never reach
+    the top-down weapon; every checkpoint wrapper binds the right map; the
+    restart ladder picks the deepest flag; and the ending request latches.
+    """
+    from missions import m6
+    from missions.m6 import flow as _m6_flow
+    from missions.m6 import maps as _m6_maps
+    from missions.m6 import meta as _m6_meta
+    from missions.m6 import stealth as _m6_stealth
+    from missions.m6 import train3d as _m6_train
+    from core import save_system as _m6_save
+    from core import outfits as _m6_outfits
+    from core.cutscene_registry import scene_renderer as _scene_renderer
+    from core.state import STATE
+
+    _reset_save_store()
+    _save_system.select_slot(0)
+    _save_system.start_new_campaign(0)
+
+    # ── three authored, distinct, validated maps ────────────────────────
+    authored = {
+        "customs": m6.M6_CUSTOMS_MAP,
+        "noman": m6.M6_NOMAN_MAP,
+        "rail": m6.M6_RAIL_MAP,
+    }
+    sizes = set()
+    for name, grid in authored.items():
+        assert isinstance(grid, list) and grid, name
+        assert all(isinstance(row, str) for row in grid), name
+        assert len({len(row) for row in grid}) == 1, name
+        sizes.add((len(grid[0]), len(grid)))
+    assert len(sizes) == 3, "M6 needs three distinct playable spaces"
+    assert m6._validate() == [], m6._validate()
+
+    # ── films: authored shot dicts, doc scene ids, doc lines ────────────
+    from cutscenes import m6films
+    intro = list(_m6_meta.mission6_intro_shots)
+    boxcar = list(_m6_meta.M6_MID_CUTSCENES["boxcar"])
+    ending = list(_m6_meta.mission6_ending_shots)
+    assert all(isinstance(s, dict) and s.get("scene")
+               for s in intro + boxcar + ending)
+    assert [s["scene"] for s in intro] == [
+        "m6_insert_heli", "m6_insert_jump", "m6_insert_fall",
+        "m6_insert_ground", "title_card"]
+    assert [s["scene"] for s in ending] == [
+        "m6_customs_terminal", "m6_radio_vasile", "m6_radio_vasile",
+        "m6_radio_vasile", "m6_radio_vasile", "m6_radio_maru",
+        "m6_helicopter", "title_card"]
+    for scene in _m6_meta.M6_FILM_SCENES:
+        assert scene in m6films.M6_3D_SCENES, scene
+        assert _scene_renderer(scene) is not None, scene
+    ending_text = "\n".join(s.get("text", "") for s in ending)
+    for line in ("Route 12 went out on your code.",
+                 "...Three hundred men, Biribel. They'd have purged every one. I chose the many.",
+                 "Retardovici is at the mansion in two nights.",
+                 "Not tonight. Go to ground."):
+        assert line in ending_text, line
+    boxcar_text = "\n".join(s.get("text", "") for s in boxcar)
+    for line in ("You took this from me once. Read it this time.",
+                 "I just wanted to get out. Funny. You did too."):
+        assert line in boxcar_text, line
+
+    # ── boot: Guard black, K9, live customs map ─────────────────────────
+    m6.start_m6()
+    assert STATE.active_mission == "MISSION6"
+    assert STATE.active_mission_id == "MISSION_6"
+    assert _m6_save.mission_complete_record("MISSION6", "00:01")["mission_id"] == "MISSION_6"
+    assert _m6_outfits.gameplay_outfit(STATE) == _m6_outfits.OUTFIT_GUARD
+    assert STATE.current_weapon == "k9_smg"
+    assert m6.MISSION6_MAP is _m6_maps.M6_CUSTOMS_MAP
+    assert STATE.minimap._palette == "m6"
+    assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_CUSTOMS
+
+    # A few real simulation/render frames must be safe before interaction.
+    for _ in range(6):
+        m6.game_update(EmptyKeys())
+    m6.game_draw(STATE.camera_x, STATE.camera_y)
+
+    # ── stage ladder with live map rebinding ────────────────────────────
+    STATE.player.rect.center = _m6_flow._anchor_pos(m6.STAGE_CUSTOMS)
+    assert m6.interaction_prompt()
+    assert m6.handle_interact()
+    assert STATE.mission6_stage == m6.STAGE_NOMAN
+    assert STATE.m6_noman_checkpoint
+    assert m6.MISSION6_MAP is _m6_maps.M6_NOMAN_MAP
+    assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_NOMAN
+
+    STATE.player.rect.center = _m6_flow._anchor_pos(m6.STAGE_NOMAN)
+    assert m6.handle_interact()
+    assert STATE.mission6_stage == m6.STAGE_RAIL
+    assert STATE.m6_rail_checkpoint
+    assert m6.MISSION6_MAP is _m6_maps.M6_RAIL_MAP
+    assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_RAIL
+    assert len(_m6_stealth.lights()) == 2      # rail detectors
+
+    STATE.player.rect.center = _m6_flow._anchor_pos(m6.STAGE_RAIL)
+    assert m6.handle_interact()
+    assert STATE.mission6_stage == m6.STAGE_BOXCAR
+    assert STATE.request_m6_cutscene == "boxcar"
+    assert not STATE.m6_train_active
+    assert not STATE.m6_volkov_dead
+
+    # app.py calls this when the boxcar film ends (or is skipped).
+    assert _m6_flow.on_m6_cutscene_done("boxcar")
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+    assert STATE.m6_train_active and _m6_train.active()
+    assert STATE.m6_train_checkpoint_reached
+    assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_TRAIN
+
+    # ── interactive train ───────────────────────────────────────────────
+    # The train is now lethal (no 1-HP floor), so the no-input timeline probe
+    # gives Biribel enough health to reach the scripted beat and the death
+    # path its own unit coverage.
+    STATE.player.max_hp = 100000
+    STATE.player.hp = 100000
+    from entities import weapons as _m6_weapons
+    STATE.dt = 1.0 / 60.0
+    for _ in range(132):                       # ~2.2 s: control unlocked
+        m6.game_update(EmptyKeys())
+    assert _m6_train.scene().t >= 2.0
+    m6.game_draw(STATE.camera_x, STATE.camera_y)
+
+    # A click while the train is active must never reach the top-down
+    # weapon path (app routing sends it to TrainScene and returns).
+    shoot_calls = []
+    orig_shoot = _m6_weapons.handle_shoot
+    _m6_weapons.handle_shoot = lambda: shoot_calls.append(1)
+    try:
+        STATE.k9_ammo_in_mag = STATE.k9_mag_size
+        shots_before = STATE.shots_fired
+        assert _m6_train.handle_event(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1))
+        m6.game_update(EmptyKeys())
+        assert not shoot_calls, "train click leaked into handle_shoot"
+        assert STATE.k9_ammo_in_mag == STATE.k9_mag_size - 1
+        assert STATE.shots_fired == shots_before + 1
+        _m6_train.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1))
+    finally:
+        _m6_weapons.handle_shoot = orig_shoot
+
+    # Reload consumes a spare magazine.
+    spare = STATE.k9_spare_mags
+    assert _m6_train.handle_event(
+        pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
+    for _ in range(130):                       # > RELOAD_TIME (2.0 s)
+        m6.game_update(EmptyKeys())
+    assert STATE.k9_ammo_in_mag == STATE.k9_mag_size
+    assert STATE.k9_spare_mags == spare - 1
+
+    # The platform fight decides whether Volkov gets to the train.  With no
+    # input the squad stays up, cuts him down in the open, and the run is a
+    # failure/retry - never the ending film.
+    guard = 0
+    while not STATE.m6_volkov_dead and guard < 1200:
+        m6.game_update(EmptyKeys())
+        guard += 1
+    assert STATE.m6_volkov_dead, "Volkov never fell"
+    assert _m6_train.active()
+    assert STATE.player.hp >= 1, "return fire killed the player"
+
+    _sc = _m6_train.scene()
+    assert len({g.get("kind") for g in _sc.guards}) >= 4, \
+        "the train roster collapsed to one enemy type"
+    assert _sc.volkov_failed, "a squad-left run was not the failure branch"
+    assert STATE.m6_train_overrun, "ignoring the Guard handed them no kill"
+    assert STATE.m6_train_guards_left >= 2, "overrun with an empty platform"
+    assert _sc.volkov_delay > 0.0, "Volkov was never suppressed"
+    assert any(g.get("active") and abs(g["pos"][0] - g["home"][0]) > 0.50
+               for g in _sc.guards), "no Guard ever advanced from cover"
+    guard = 0
+    while not STATE.request_death_screen and guard < 200:
+        m6.game_update(EmptyKeys())
+        guard += 1
+    assert STATE.m6_train_result == "failed"
+    assert STATE.m6_train_death and STATE.request_death_screen
+    assert not STATE.request_mission6_ending
+    assert not STATE.m6_train_active
+    assert not _m6_train.force_finish("win"), \
+        "a failed escort handed off to the ending"
+    assert not _m6_flow.on_train_done("win"), \
+        "a failed escort handed off to the ending"
+
+    # Clean run: suppress the platform, Volkov reaches the train and Ucilev's
+    # unavoidable shot kills him there.  That is the canon ending.
+    gc.start_mission6_train_checkpoint()
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+    STATE.player.max_hp = 100000
+    STATE.player.hp = 100000
+    _sc = _m6_train.scene()
+    for g in _sc.guards:
+        g["spawn"] = 999.0
+        g["alive"] = False
+    guard = 0
+    # Ucilev's shot lands at HIT_AT (23.85 s) -> ~1431 frames; 1200 frames
+    # (20 s) could never reach it, so the budget has to clear the beat.
+    while not STATE.m6_volkov_dead and guard < 1700:
+        m6.game_update(EmptyKeys())
+        guard += 1
+    assert STATE.m6_volkov_dead
+    assert not _sc.volkov_failed
+    assert _sc.glints, "the signal-tower shot never fired"
+    guard = 0
+    # ...then the scene must run to DURATION (36.8 s) to request the ending.
+    while not STATE.request_mission6_ending and guard < 1100:
+        m6.game_update(EmptyKeys())
+        guard += 1
+    assert STATE.request_mission6_ending, "train never requested the ending"
+    assert _m6_train.result() == "win"
+    assert not STATE.m6_train_active and not _m6_train.active()
+    assert STATE.player is not None and STATE.player.hp > 0
+    assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_TRAIN
+    assert "reached the step" in STATE.active_mission_outcome
+    assert not _m6_train.force_finish("win"), "train handoff double-fired"
+
+    # Skip path: a checkpoint restart re-enters the scene, E skips it.
+    gc.start_mission6_train_checkpoint()
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+    for _ in range(125):
+        m6.game_update(EmptyKeys())
+    assert _m6_train.handle_event(
+        pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+    assert STATE.request_mission6_ending
+    assert _m6_train.result() == "skip"
+
+    # Exception path: a broken scene must fall through to the ending, never strand.
+    gc.start_mission6_train_checkpoint()
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+    orig_update = _m6_train.update
+    def _boom(*_a, **_k):
+        raise RuntimeError("m6 train probe")
+    _m6_train.update = _boom
+    try:
+        m6.game_update(EmptyKeys())
+    finally:
+        _m6_train.update = orig_update
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+    assert STATE.request_mission6_ending
+    assert _m6_train.result() == "fallback"
+    assert STATE.player is not None
+
+    # ── floodlights: exposure, alarm idempotence, wave cap, occlusion ───
+    m6.start_mission6_noman_checkpoint()
+    assert len(_m6_stealth.lights()) == 4      # four authored towers
+    probe = _m6_stealth.Floodlight((100.0, 100.0), 0.0, 0.0, 10.0,
+                                   half_angle=0.8, range_px=2000)
+    _m6_stealth._lights = (probe,)
+    STATE.player.rect.center = (200, 100)
+    _m6_stealth.update(0.2)
+    assert not STATE.m6_alarm and 0.19 <= STATE.m6_exposure <= 0.21
+    _m6_stealth.update(0.1)
+    _m6_stealth.update(0.1)
+    assert STATE.m6_alarm and STATE.m6_alarm_triggered
+    assert _m6_stealth.trigger_alarm() is False  # idempotent latch
+    living = sum(1 for e in STATE.enemies if getattr(e, "hp", 0) > 0)
+    assert 0 < living <= _m6_meta.MAX_ALARM_ENEMIES
+    assert STATE.m6_wave_count == living - 3      # 3 authored patrols existed
+    _m6_stealth.update(6.5)
+    _m6_stealth.update(6.0)
+    living = sum(1 for e in STATE.enemies if getattr(e, "hp", 0) > 0)
+    assert living <= _m6_meta.MAX_ALARM_ENEMIES, "alarm waves overran the cap"
+    assert STATE.m6_wave_count <= _m6_meta.MAX_ALARM_ENEMIES
+
+    # ── a wave walks in; it never pops into existence ───────────────────
+    from missions.m6 import world as _m6_world
+    import math as _math
+    m6.start_mission6_noman_checkpoint()
+    _m6_stealth._lights = (probe,)
+    STATE.player.rect.center = (200, 100)
+    _m6_stealth.update(0.2)
+    _m6_stealth.update(0.1)
+    _m6_stealth.update(0.1)
+    assert STATE.m6_alarm
+    seen = {e.uid for e in STATE.enemies}
+    _m6_stealth.update(2.5)
+    wave = [e for e in STATE.enemies if e.uid not in seen]
+    assert wave, "the first alarm wave never arrived"
+    for e in wave:
+        assert _m6_world.entering(e) > 0.0, "alarm Guard popped in with no walk-in"
+        start = e.rect.center
+        _m6_world.tick_entry(e, 1.0 / 60.0)
+        assert e.rect.center != start, "walking-in Guard never moved"
+    guard_e = wave[0]
+    for _ in range(90):
+        _m6_world.tick_entry(guard_e, 1.0 / 60.0)
+    assert _m6_world.entering(guard_e) == 0.0
+    assert guard_e.rect.center == (int(guard_e.m6_entry_to[0]),
+                                   int(guard_e.m6_entry_to[1])), \
+        "Guard never settled on his tile"
+    assert guard_e.state == "CHASE"
+    # Every authored entry tile must have a walk-in that stays on open floor.
+    for stage, tiles in _m6_meta.ALARM_SPAWN_TILES.items():
+        for tile in tiles:
+            tx, ty = _m6_world._tile_world(*tile)
+            origin = _m6_world.entry_origin(stage, tx, ty)
+            assert origin is not None, (stage, tile, "no entry origin")
+            assert _m6_world._floor_at(stage, origin[0], origin[1]), \
+                (stage, tile, "entry origin is inside a wall")
+            assert _m6_world._clear_line(stage, origin, (tx, ty)), \
+                (stage, tile, "entry path is blocked")
+            assert _math.hypot(origin[0] - tx, origin[1] - ty) >= 40.0, \
+                (stage, tile, "walk-in is too short to read")
+    # The alarm frame itself spawns nobody: siren first, boots after.
+    m6.start_mission6_noman_checkpoint()
+    patrols = len(STATE.enemies)
+    _m6_stealth.trigger_alarm()
+    assert len(STATE.enemies) == patrols, "guards spawned on the alarm frame"
+
+    # A concrete barrier blocks the cone: same distance, wall in between.
+    walled = _m6_stealth.Floodlight((1184.0, 352.0), 0.0, 0.0, 10.0,
+                                    half_angle=0.8, range_px=2000)
+    assert _m6_stealth.point_in_cone(walled, 1248, 352, 0.0)
+    assert not _m6_stealth.point_in_cone(walled, 1440, 352, 0.0)
+
+    # Stage entry resets exposure/alarm; the rail checkpoint is clean.
+    m6.start_mission6_rail_checkpoint()
+    assert STATE.m6_exposure == 0.0 and not STATE.m6_alarm
+    assert not STATE.m6_alarm_triggered
+
+    # ── restart ladder: the deepest reached checkpoint wins ─────────────
+    m6.start_m6()
+    STATE.m6_noman_checkpoint = True
+    STATE.m6_rail_checkpoint = True
+    gc.restart_current_mission()
+    assert STATE.mission6_stage == m6.STAGE_RAIL
+    assert m6.MISSION6_MAP is _m6_maps.M6_RAIL_MAP
+    STATE.m6_train_checkpoint_reached = True
+    gc.restart_current_mission()
+    assert STATE.mission6_stage == m6.STAGE_TRAIN
+
+    # ── shared combat/death path (moved off the old top-down train) ─────
+    from entities import death_anim as _m6_death
+    m6.start_mission6_rail_checkpoint()
+    target = STATE.enemies[0]
+    target.hp = 1
+    px, py = STATE.player.rect.center
+    target.rect.center = (px + 150, py)
+    STATE.player.angle = 0.0
+    STATE.k9_shot_cooldown = 0
+    hits_before = STATE.shots_hit
+    _m6_weapons.handle_shoot()
+    for _ in range(8):
+        m6.game_update(EmptyKeys())
+    assert STATE.shots_hit >= hits_before + 1 or target not in STATE.enemies
+    STATE.player.hp = 0
+    m6.game_update(EmptyKeys())
+    assert STATE.player_dead and _m6_death.should_skip_player_draw()
+
+    assert _save_system.save_mission_complete_record("MISSION6", "00:42")
+    completed = _save_system.get_slot(0)
+    assert completed["last_completed_mission"] == "MISSION_6"
+    assert completed["checkpoint"] == ""
+
+
+def check_m6_train_viewmodel():
+    """The shoulder-cam rifle must read as a rifle, on the correct side.
+
+    User-outcome check: the first-person K9 was a small dark stick on the
+    LEFT of the screen (the viewmodel used ``_right(yaw)``, which is the
+    negative of the renderer's camera right).  So: render the live frame with
+    and without the weapon, diff to get its exact pixel mask, and require it
+    to be a real presence on the right of the frame, separated from the night
+    behind it, and clear of the crosshair.
+    """
+    from core.state import STATE
+    from missions.m6 import train3d as T
+    import numpy as np
+
+    saved_dt = STATE.dt
+    T.reset()
+    try:
+        STATE.dt = 1.0 / 60.0
+        T.begin()
+        sc = T.scene()
+        assert sc is not None, "train scene never opened"
+        sc.t = 6.0
+        surf = pygame.Surface((T.WIDTH, T.HEIGHT))
+
+        sc.draw(surf)
+        with_gun = pygame.surfarray.array3d(surf).astype(int).copy()
+        real = sc._draw_viewmodel
+        sc._draw_viewmodel = lambda r: None
+        try:
+            sc.draw(surf)
+        finally:
+            sc._draw_viewmodel = real
+        bare = pygame.surfarray.array3d(surf).astype(int).copy()
+    finally:
+        STATE.dt = saved_dt
+        T.reset()
+
+    mask = abs(with_gun - bare).sum(axis=2) > 12
+    total = mask.shape[0] * mask.shape[1]
+    n = int(mask.sum())
+    assert n > total * 0.02, \
+        "viewmodel covers only %.2f%% of the frame - it is a stick again" % (
+            100.0 * n / total)
+
+    xs = np.nonzero(mask)[0]
+    ys = np.nonzero(mask)[1]
+    w, h = mask.shape
+    cx = float(xs.mean()) / w
+    assert cx > 0.55, \
+        "viewmodel centroid at %.2f of the width: a right-handed hold must " \
+        "sit on the right of the frame" % cx
+
+    lum = (0.299 * with_gun[:, :, 0] + 0.587 * with_gun[:, :, 1]
+           + 0.114 * with_gun[:, :, 2])
+    gun_luma = float(lum[mask].mean())
+    bg_luma = float(lum[~mask].mean())
+    assert gun_luma > bg_luma + 8.0, (
+        "viewmodel luma %.1f vs night %.1f - it is a black silhouette"
+        % (gun_luma, bg_luma))
+    assert float((lum[mask] < 18).mean()) < 0.35, \
+        "more than a third of the weapon is pure black"
+
+    # The muzzle must not sit on the reticle: the player has to be able to
+    # see what he is aiming at.
+    front = mask[:, :int(h * 0.70)]        # upper 70% of the frame
+    assert not front[int(w * 0.46):int(w * 0.54), int(h * 0.46):int(h * 0.54)].any(), \
+        "the barrel covers the crosshair"
+
+    # The authored K93D asset is the GL viewmodel (software keeps the K9).
+    # Validate the import output here so a missing/corrupt asset fails the
+    # gate instead of silently falling back to the procedural gun.
+    import json
+    import os
+    from game.render3d_bridge import MESHES_DIR
+    path = os.path.join(MESHES_DIR, "k93d.mesh.json")
+    assert os.path.isfile(path), "K93D asset missing: %s" % path
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data.get("schema") == "ae.mesh/1", "K93D asset schema"
+    assert 2000 <= int(data.get("tris", 0)) <= 8000, \
+        "K93D tri budget: %s" % data.get("tris")
+    meta = data.get("meta", {})
+    muzzle, sight = meta.get("muzzle"), meta.get("sight")
+    assert muzzle and muzzle[2] > 0.4, "K93D muzzle point missing"
+    assert sight and 0.1 < sight[1] < 0.3, "K93D sight point missing"
+    assert meta.get("glass_size"), "K93D sight aperture size missing"
+    assert meta.get("mag_faces"), "K93D magazine group missing"
+    reticle = Path(__file__).resolve().parent.parent / "assets" / "3D" / "K93D_reticle.png"
+    assert reticle.is_file(), "K93D reticle sprite missing: %s" % reticle
+
+
+def check_m6_train_ads_and_muzzle():
+    """RMB ADS puts the sight on the reticle; the flash leaves the muzzle.
+
+    The viewmodel owns the sight/muzzle points (GL: K93D nodes, software:
+    the K9), so assert the ADS pose places the sight at screen centre and
+    the flash sprite is spawned exactly at the resolved muzzle.
+    """
+    from core.state import STATE
+    from missions.m6 import train3d as T
+
+    saved_dt = STATE.dt
+    T.reset()
+    try:
+        STATE.dt = 1.0 / 60.0
+        T.begin()
+        sc = T.scene()
+        sc.t = 6.0
+        sc.aiming = True
+        sc.ads = 1.0
+        r = T._renderer()
+        sc._draw_camera(r, sc.t)
+        s = sc._vm_setup()
+        p = r.project(s["sight_world"])
+        assert p is not None, "ADS sight is behind the camera"
+        assert abs(p[0] - r.w * 0.5) < r.w * 0.02, \
+            "ADS sight x %.1f is off centre (%.1f)" % (p[0], r.w * 0.5)
+        assert abs(p[1] - r.h * 0.5) < r.h * 0.03, \
+            "ADS sight y %.1f is off centre (%.1f)" % (p[1], r.h * 0.5)
+
+        eye, _, _ = sc._eye()
+        ds = sum((a - b) ** 2 for a, b in zip(s["sight_world"], eye)) ** 0.5
+        dm = sum((a - b) ** 2 for a, b in zip(s["muzzle_world"], eye)) ** 0.5
+        assert dm > ds + 0.3, \
+            "muzzle (%.2f m) is not ahead of the sight (%.2f m)" % (dm, ds)
+
+        surf = pygame.Surface((T.WIDTH, T.HEIGHT))
+        sc.flash_t = sc.t
+        muzzle = sc._muzzle_world()
+        calls = []
+        real = r.add_sprite
+
+        def probe(pos, fn, layer=2, bias=0.0):
+            calls.append(pos)
+            return real(pos, fn, layer, bias)
+
+        r.add_sprite = probe
+        try:
+            sc.draw(surf)
+        finally:
+            r.add_sprite = real
+        assert any(sum((a - b) ** 2 for a, b in zip(pos, muzzle)) < 1e-10
+                   for pos in calls), "muzzle flash is not at the muzzle"
+    finally:
+        STATE.dt = saved_dt
+        T.reset()
+
+
+def check_m6_train_redeploy_after_death():
+    """Dying in the 3D train and redeploying must restart it, not pass it.
+
+    User-outcome check for a reported bug: die during the shootout, click
+    REDEPLOY, and the mission played its ending.  Two defects stacked:
+
+    * The train's subtitle widget is module-owned and driven by the scene
+      clock, which restarts at 0.  A finished radio line left in its history
+      was stamped with the dead run's time (e.g. 9000 ms), so the first frame
+      after the redeploy computed a negative age and an alpha far above 255 -
+      ``Surface.fill`` raised ``ValueError``.
+    * ``draw._draw_train`` turned that render error into
+      ``on_train_done("fallback")``, i.e. straight into the ending film.
+
+    So: the widget must survive a rewound clock, a redeploy must leave the
+    train live and unfinished, and a broken train frame must fail the RUN
+    (retry terminal), never the mission.
+    """
+    from core.state import STATE
+    from core import game_core as gc
+    from missions import m6
+    from missions.m6 import draw as _m6_draw
+    from missions.m6 import train3d as T
+    from ui import radio as R
+    from core.config import WIDTH, HEIGHT
+
+    # ── 1. the widget itself: a stale entry from a rewound clock ────────
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    stale = R.RadioTransmission()
+    stale.history = [{"speaker": "MARU", "body": "stale line from the dead run",
+                      "color": (150, 170, 190), "done_at": 9000}]
+    stale.draw(surf, live=None, allowed=True, clock=0)   # clock rewound to 0
+    assert stale.history, "the stale entry vanished - the guard never ran"
+
+    # ── 2. a real redeploy keeps the train running ──────────────────────
+    saved_dt = STATE.dt
+    T.reset()
+    try:
+        STATE.dt = 1.0 / 60.0
+        gc.start_mission6_train_checkpoint()
+        assert STATE.m6_train_active and T.active()
+        # The subtitle widget only syncs inside draw(), so render a couple of
+        # frames at points where a line has finished (the software 3D frame is
+        # too slow to render every frame here).
+        STATE.player.max_hp = 100000
+        STATE.player.hp = 100000
+        widget = T._radio_widget()
+        for _ in range(240):                 # ~4.0 s: VOLKOV's first line is up
+            m6.game_update(EmptyKeys())
+        m6.game_draw(STATE.camera_x, STATE.camera_y)
+        assert widget.cur is not None, "no radio line was live - precondition missing"
+        for _ in range(132):                 # ~6.2 s: that line is over
+            m6.game_update(EmptyKeys())
+        m6.game_draw(STATE.camera_x, STATE.camera_y)
+        assert widget.history, "no radio line finished - precondition missing"
+        sc = T.scene()
+        assert sc.t > 5.0, sc.t
+        for _ in range(220):                 # ~9.9 s: two lines behind us
+            m6.game_update(EmptyKeys())
+        m6.game_draw(STATE.camera_x, STATE.camera_y)
+        assert len(widget.history) >= 1
+
+        # The player goes down in the shootout (production death path).
+        sc._player_down()
+        assert STATE.player_dead and STATE.m6_train_result == "dead"
+        guard = 0
+        while not STATE.request_death_screen and guard < 400:
+            m6.game_update(EmptyKeys())
+            guard += 1
+        assert STATE.request_death_screen and STATE.m6_train_death
+        STATE.request_death_screen = False   # the DEATH state consumed it
+
+        # REDEPLOY (exactly what ui/system's death button calls).
+        gc.restart_current_mission()
+        assert STATE.mission6_stage == m6.STAGE_TRAIN
+        assert STATE.m6_train_active and T.active(), "train did not restart"
+        assert STATE.m6_train_result is None, STATE.m6_train_result
+        assert not STATE.m6_train_death
+        assert not STATE.request_mission6_ending, "redeploy passed the mission"
+        assert STATE.player is not None and STATE.player.hp > 0
+        assert not widget.history, "the dead run's radio log survived the restart"
+
+        # The first frame after a redeploy must draw without ending the run.
+        STATE.player.max_hp = 100000
+        STATE.player.hp = 100000
+        for _ in range(6):
+            m6.game_update(EmptyKeys())
+            m6.game_draw(STATE.camera_x, STATE.camera_y)
+        assert STATE.m6_train_active and T.active()
+        assert not STATE.request_mission6_ending, "a draw error passed the mission"
+        assert STATE.m6_train_result is None
+
+        # A redeploy must reset the combat clock too: the stale last_fire
+        # used to freeze the trigger for the entire next run.
+        sc = T.scene()
+        assert not sc.tracers, "the dead run's tracers survived the restart"
+        while sc.t < T.CONTROL_AT + 0.05:
+            m6.game_update(EmptyKeys())
+        before = STATE.k9_ammo_in_mag
+        sc.firing = True
+        m6.game_update(EmptyKeys())
+        sc.firing = False
+        assert before - STATE.k9_ammo_in_mag == 1, \
+            "the gun does not fire after a redeploy"
+
+        # ── 3. a train frame that cannot be drawn fails the RUN ─────────
+        real_draw = T.scene().draw
+
+        def _boom(_surface):
+            raise RuntimeError("probe draw failure")
+
+        T.scene().draw = _boom
+        try:
+            m6.game_draw(STATE.camera_x, STATE.camera_y)
+        finally:
+            T.scene().draw = real_draw
+        assert not STATE.request_mission6_ending, \
+            "an unrenderable train frame handed the mission to the ending"
+        assert not STATE.m6_train_active
+        assert STATE.m6_train_death and STATE.request_death_screen
+        assert STATE.m6_train_result in (None, "failed"), STATE.m6_train_result
+        # ...and the terminal still offers the train checkpoint.
+        gc.restart_current_mission()
+        assert STATE.m6_train_active and T.active()
+        assert not STATE.request_mission6_ending
+    finally:
+        STATE.dt = saved_dt
+        _m6_draw._train_draw_warned = False
+        T.reset()
+
+
 def main():
     _install_token_shim()
     assert config.screen is not None, "config.screen was not initialized"
@@ -8592,8 +9232,15 @@ def main():
                      ("voice_manifest_resolves", check_voice_manifest_resolves),
                      ("radio_widget_headless", check_radio_widget_headless),
                          ("depot_restage_timing", check_depot_restage_timing),
-                     ("sprite_pipeline", check_sprite_pipeline)]:
+                      ("sprite_pipeline", check_sprite_pipeline)]:
         ok = run_check(name, fn) and ok
+
+    print("\n=== Mission 6 checks ===")
+    ok = run_check("mission6_vertical_slice", check_mission6_vertical_slice) and ok
+    ok = run_check("m6_train_viewmodel", check_m6_train_viewmodel) and ok
+    ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
+    ok = run_check("m6_train_redeploy_after_death",
+                   check_m6_train_redeploy_after_death) and ok
 
     pygame.quit()
 
@@ -8607,4 +9254,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

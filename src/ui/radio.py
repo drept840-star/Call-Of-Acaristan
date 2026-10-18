@@ -466,7 +466,14 @@ class RadioTransmission:
         # letterbox: one line only, history would stack into the picture
         for h in (() if anchor == "letterbox" else reversed(self.history)):
             age = clock - h["done_at"]
-            a = int(150 * max(0.0, 1.0 - age / HISTORY_MS))
+            if age < 0:
+                # The clock ran backwards: this entry is stamped in a previous
+                # run's timebase (the M6 train drives this widget with its own
+                # scene clock, which restarts at 0).  It is stale, not "about
+                # to appear" - and 1 - age/HISTORY_MS would overflow the
+                # 0..255 alpha range below.
+                continue
+            a = int(150 * max(0.0, min(1.0, 1.0 - age / HISTORY_MS)))
             if a <= 6:
                 continue
             stack_y = self._draw_history(surface, h, x0, stack_y, m, a)

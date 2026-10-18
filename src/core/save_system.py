@@ -49,6 +49,13 @@ _MISSION_RECORDS = {
          "mission3_complete": True, "mission4_complete": True,
          "mission5_complete": True},
     ),
+    "MISSION6": (
+        "MISSION_6",
+        "Mission 6 - Black Notebook",
+        {"mission1_complete": True, "mission2_complete": True,
+         "mission3_complete": True, "mission4_complete": True,
+         "mission5_complete": True, "mission6_complete": True},
+    ),
 }
 
 
@@ -61,6 +68,7 @@ def _empty_slot(slot_index):
         "total_time": "00:00",
         "updated_at": 0,
         "progress": "",
+        "checkpoint": "",
         "stats": {},
         "flags": {},
     }
@@ -133,6 +141,7 @@ def start_new_campaign(slot_index=None):
         "last_completed_label": "Campaign started - Mission 1 in progress",
         "updated_at": int(time.time()),
         "progress": "walk",
+        "checkpoint": "",
         "stats": {},
         "flags": {"mission1_started": True},
     })
@@ -141,18 +150,30 @@ def start_new_campaign(slot_index=None):
     save_data(data)
 
 
-def set_slot_progress(progress, slot_index=None):
-    """Record the coarse campaign segment ('walk' / 'm1') for resume.
+def set_slot_progress(progress, slot_index=None, checkpoint=None):
+    """Record campaign progress and, optionally, its deepest checkpoint.
 
     No-op when the target slot is empty so headless/dev code paths can call
     mission-start functions without creating phantom saves.
+
+    ``checkpoint`` is deliberately a small mission-owned token rather than a
+    copy of runtime state.  It lets a fresh process resume a later mission at
+    its deepest reached phase without serializing pygame objects or mutable
+    combat state.
     """
     idx = _current_slot if slot_index is None else max(0, min(SLOT_COUNT - 1, int(slot_index)))
     data = load_data()
     slot = data["slots"][idx]
-    if not slot.get("occupied") or slot.get("progress") == progress:
+    if not slot.get("occupied"):
+        return
+    same_progress = slot.get("progress") == progress
+    if same_progress and checkpoint is None:
         return
     slot["progress"] = progress
+    if checkpoint is not None:
+        slot["checkpoint"] = str(checkpoint)
+    elif not same_progress:
+        slot["checkpoint"] = ""
     save_data(data)
 
 
@@ -204,6 +225,7 @@ def save_mission_complete(mission_id, label, total_time, stats=None, flags=None,
         "last_completed_label": label,
         "total_time": total_time,
         "updated_at": int(time.time()),
+        "checkpoint": "",
         "stats": merged_stats,
         "flags": merged_flags,
     })

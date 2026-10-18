@@ -139,3 +139,8 @@ outputs/
 /Fisherman = Milo.txt
 /Iapteus = Volkov.txt
 /Vasile = Gero.txt
+
+# Repo hygiene 2026-10-18: M6-session scratch + agent checkout (never tracked)
+/apollo-agent/
+/tests/golden/_verify/
+/tools/_*

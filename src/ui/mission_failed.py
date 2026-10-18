@@ -20,6 +20,7 @@ PROFILES = {
     "MISSION3": ((156, 198, 157), "THE STABILIZATION CENTER", "THE VOSTRAL", "BLOCK SURVEILLANCE", "ESCAPE TERMINATED", "cells"),
     "MISSION4": ((167, 187, 233), "THE CAPITAL", "48H CURFEW", "TRANSMITTER ARRAY", "CARRIER LOST", "tower"),
     "MISSION5": ((235, 125, 103), "THE CAPITAL", "EMERGENCY RULE", "PRINTWORKS CONTROL", "PUBLICATION HALTED", "press"),
+    "MISSION6": ((225, 180, 104), "KIM KIM BORDER", "BLACK NOTEBOOK", "FINAL TRANSMISSION", "SIGNAL LOST", "tower"),
 }
 INK = (235, 234, 225)
 MUTED = (164, 172, 177)
@@ -73,6 +74,7 @@ def checkpoint_label(state):
         "MISSION5": [("mission5_tunnel_checkpoint_reached", "TUNNEL"),
                      ("mission5_printworks_checkpoint_reached", "PRINTWORKS"),
                      ("mission5_quarter_checkpoint_reached", "LOWER QUARTER")],
+        "MISSION6": [("m6_train_checkpoint_reached", "TRAIN")],
     }
     for flag, label in ladders.get(key, []):
         if getattr(state, flag, False):
@@ -81,7 +83,12 @@ def checkpoint_label(state):
 
 
 def failure_copy(state):
-    if mission_meta.mission_key(state) == "MISSION5" and getattr(state, "m5_maru_dead", False):
+    key = mission_meta.mission_key(state)
+    if key == "MISSION6" and getattr(state, "m6_train_result", None) == "failed":
+        return ("VOLKOV NEVER REACHED THE TRAIN",
+                "VASILE: You didn't clear the platform. They cut him down "
+                "before the carriage.")
+    if key == "MISSION5" and getattr(state, "m5_maru_dead", False):
         return "MARU DID NOT MAKE IT OUT", "VASILE: ...Biribel? Tell me that wasn't Maru."
     return mission_meta.fail_text(state)
 
@@ -105,6 +112,10 @@ def stat_rows(state, now):
     elif key == "MISSION5":
         fourth = ("MARU", "LOST" if getattr(state, "m5_maru_dead", False) else
                   ("CONTACT MADE" if getattr(state, "m5_maru_found", False) else "NOT REACHED"))
+    elif key == "MISSION6":
+        recovered = (bool(getattr(state, "m6_volkov_dead", False))
+                     or getattr(state, "mission6_stage", None) in ("boxcar", "train"))
+        fourth = ("NOTEBOOK", "RECOVERED" if recovered else "NOT RECOVERED")
     return [("ELAPSED", f"{seconds // 60:02d}:{seconds % 60:02d}"),
             ("HOSTILES DOWN", str(getattr(state, "hostiles_killed", 0))),
             ("ACCURACY", f"{accuracy}%"), fourth]
@@ -209,7 +220,17 @@ def draw(surface, state, buttons, elapsed, now, mouse):
     key = mission_meta.mission_key(state)
     accent, location, operation, plate, status, kind = PROFILES[key]
     w, h = surface.get_size()
-    surface.fill((10, 14, 18))
+    train_death = (getattr(state, "m6_train_death", False)
+                   or (getattr(state, "m6_train_active", False)
+                       and getattr(state, "m6_train_result", None) == "dead"))
+    if train_death:
+        # Keep the frozen 3D death frame behind the terminal: the player just
+        # watched Biribel fall in-engine, so an opaque menu would cut away.
+        veil = pygame.Surface((w, h), pygame.SRCALPHA)
+        veil.fill((10, 14, 18, 198))
+        surface.blit(veil, (0, 0))
+    else:
+        surface.fill((10, 14, 18))
     # Restrained terminal framing, opaque enough to remove gameplay HUD bleed.
     pygame.draw.rect(surface, (15, 20, 25), (606, 97, 362, 400))
     pygame.draw.line(surface, (49, 58, 63), (32, 72), (w-32, 72))

@@ -26,7 +26,10 @@ import sys
 # engine.render3d: presets.py + facade exports + scene3d "lighting"),
 # justified in docs/engine/reports/phase11.md - the zero-diff proof
 # for Mission 0's own construction is the Phase 10 value above.
-ENGINE_TREE_SHA = "7069c19de99915e313d73efd0a1ceca1dbdf879c9f605d3a2657437d4ef331ec"  # P11 step 11: mesh node type (ADR-024)
+# Re-frozen again for Mission 6: engine.ui.std.minimap gains the "m6"
+# palette (border-night tiles), a deliberate engine-side widget extension
+# justified in docs/engine/reports/phase10.md ("Mission 6 addendum").
+ENGINE_TREE_SHA = "7a71e955fd9559bd1ca1d195ff22886c0210ec8deb7c0f0b9be655def017b59d"  # M6 minimap palette
 
 
 def engine_tree_sha(root):

@@ -264,7 +264,7 @@ def radio_blocker(state=None):
             return flag
     if getattr(STATE, "mission_phase", "") == "m3_interrogation":
         return "m3_interrogation"
-    if getattr(STATE, "mission2_flank_cutscene_timer", 0) > 0:
+    if (getattr(STATE, "mission2_flank_cutscene_timer", 0) or 0) > 0:
         return "mission2_flank_cutscene"
     if getattr(STATE, "player_dead", False):
         return "player_dead"

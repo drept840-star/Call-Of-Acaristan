@@ -32,7 +32,7 @@ Both endings are bittersweet. Neither is the "good" one.
 1. **Volkov is dead** at the Kim Kim border, one step from the train.
 2. **The notebook proves it:** Retardovici ordered Route 12; Vasile's codes
    carried it out.
-3. **Ucilev is Andrei Bogdan Velicu**, Biribel's own KRAP intake, officially
+3. **Ucilev is Bogdan Velicu**, Biribel's own KRAP intake, officially
    dead since Y-2.
 4. **Vasile confessed** — "I chose the many" — and offered to get Biribel into
    the mansion.
@@ -240,7 +240,7 @@ dies either way, but the game lets the player decide how much they needed.
 ```
 scene: m8r_radio          speaker: ALEX      "Biribel - the mansion, they were waiting for us. Maru's down. I'm sorry. I'm sorry-" (static)
 scene: m8r_tv             speaker: PRESIDENT "The terrorist Maru is dead. The traitor Biribel will be found."
-scene: m8r_ucilev         speaker: ANCHOR    "...appointed Commander of the Presidential Guard, Andrei Bogdan Velicu."
+scene: m8r_ucilev         speaker: ANCHOR    "...appointed Commander of the Presidential Guard, Bogdan Velicu."
 scene: m8r_bodi_truck     speaker: BODI      "Train leaves at six. I'll wait till it does."
 scene: m8r_border_train   speaker: ""        (The Kim Kim border. Night. The train Volkov never caught. Biribel on it. Bodi's truck on the road outside, headlights off.)
 scene: m8r_ucilev_photo   speaker: ""        (Ucilev at the border post, holding Biribel's photo. He watches the train go.)

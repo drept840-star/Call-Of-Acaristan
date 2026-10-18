@@ -25,7 +25,7 @@ DRIP_ZONES = {
     "MISSION3": [(4 * TILE, 4 * TILE, 20 * TILE, 20 * TILE)],
 }
 RAIN_MISSIONS = {"MISSION1", "MISSION2", "MISSION4"}
-GUST_MISSIONS = {"MISSION2", "MISSION4"}   # exterior only; indoors a gust reads as static
+GUST_MISSIONS = {"MISSION2", "MISSION4", "MISSION6"}   # exterior only; indoors a gust reads as static
 PA_STAGES = set()              # random PA removed: the prison PA only exists
                                # where the script puts it (see systems.py)
 _state = {

@@ -606,6 +606,27 @@ active_cutscene = None
 
 
 _M5_MID = {"key": None}   # key of the M5 mid-mission cutscene being played
+_M6_MID = {"key": None}   # key of the M6 mid-mission cutscene being played
+
+def _safe_m6_shots(shots):
+    """Only hand CutscenePlayer its dict shot contract; old M6 facades may
+    expose symbolic scene names until their timeline data is authored."""
+    return list(shots or ()) if all(isinstance(s, dict) for s in (shots or ())) else []
+
+def _start_m6_cutscene(shots, after_state):
+    safe = _safe_m6_shots(shots)
+    if safe:
+        start_cutscene(safe, after_state, use_fades=True)
+        trigger_transition("CUTSCENE")
+        return True
+    if after_state == "MISSION6":
+        gc.start_mission6(preserve_timer=True)
+        gsm.transition("GAME")
+        pygame.mouse.set_visible(False)
+    else:
+        gsm.transition("MISSION_COMPLETE")
+        pygame.mouse.set_visible(True)
+    return False
 
 
 def _m0_outro_pending():
@@ -625,6 +646,14 @@ def _m5_mid_cut_key():
     return key if key in M5_MID_CUTSCENES else None
 
 
+def _m6_mid_cut_key():
+    """Pending M6 mid-mission cutscene key (the boxcar conversation), or None."""
+    from core.state import STATE as _st6  # lazy: app keeps STATE access local
+    key = getattr(_st6, "request_m6_cutscene", None)
+    from missions.m6.meta import M6_MID_CUTSCENES  # lazy: M6-only data
+    return key if key in M6_MID_CUTSCENES else None
+
+
 def start_cutscene(shots, after_state, use_fades=True):
     global active_cutscene
     if active_cutscene and active_cutscene.finale_audio:
@@ -637,6 +666,9 @@ def start_cutscene(shots, after_state, use_fades=True):
     if any(s.get("scene") == "m5_shadow_finale" for s in shots):
         from missions.m5.finale_audio import FinaleAudio
         finale_audio = FinaleAudio(audio)
+    elif any(str(s.get("scene", "")).startswith("m6_") for s in shots):
+        from missions.m6.m6_audio import M6FilmAudio
+        finale_audio = M6FilmAudio(audio)
     for shot in shots:
         for _, name, _ in shot.get("cues", ()):
             audio.get_sound(name)
@@ -645,6 +677,9 @@ def start_cutscene(shots, after_state, use_fades=True):
         if shot.get("scene") == "m5_shadow_finale":
             from cutscenes.m5shadow3d import prepare
             prepare()
+        elif str(shot.get("scene", "")).startswith("m6_"):
+            from cutscenes import m6films  # lazy: M6 set warmup
+            m6films.prepare()
     # A live radio line must not talk over the scene: fade it (~120 ms),
     # squelch, drop its subtitle; critical queued lines are held for after.
     if finale_audio is not None:
@@ -1642,6 +1677,29 @@ def _apply_dev_args():
         start_cutscene(gc.mission5_ending_shots, "MISSION5_COMPLETE", use_fades=True)
         trigger_transition("CUTSCENE")
         pygame.mouse.set_visible(True)
+    elif "--dev-mission6" in args or "--m6" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission6(preserve_timer=True)
+        _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6"); pygame.mouse.set_visible(True)
+    elif "--dev-mission6-boxcar" in args or "--m6-boxcar" in args:
+        # Rail yard, standing at Volkov's boxcar: E starts the 3D conversation.
+        gc.start_mission6_rail_checkpoint(preserve_timer=True)
+        try:
+            from missions.m6 import meta as _m6m  # lazy: M6-only data
+            _c, _r = _m6m.STAGE_ANCHORS[_m6m.STAGE_RAIL]
+            if STATE.player:
+                STATE.player.rect.center = (_c * TILE_SIZE + TILE_SIZE // 2,
+                                            _r * TILE_SIZE + TILE_SIZE // 2)
+        except Exception:
+            pass
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif ("--dev-mission6-train" in args or "--m6-train" in args
+              or "--dev-mission6-3d" in args or "--m6-3d" in args
+              or "--dev-mission6-shootout" in args or "--m6-shootout" in args):
+        gc.start_mission6_train_checkpoint(preserve_timer=True); gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission6-ending" in args or "--m6-ending" in args:
+        gc.start_mission6_rail_checkpoint(preserve_timer=True)
+        _start_m6_cutscene(gc.mission6_ending_shots, "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
     elif "--dev-slot-select" in args:
         # Dev/screenshot jump: open the save-slot screen directly (skips
         # BOOT_INTRO). Pass `--continue` as well for the CONTINUE variant -
@@ -2210,10 +2268,28 @@ class _SlotSelectState(GameState):
                 gc.start_mission5(preserve_timer=True)
                 start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
                 trigger_transition("CUTSCENE")
-            elif last == "MISSION_5":
+            elif last == "MISSION_6":
                 menu_notice = "FULL CAMPAIGN COMPLETE - START A NEW CAMPAIGN"
-                menu_notice_timer = 200
-                gsm.transition("MENU")
+                menu_notice_timer = 200; gsm.transition("MENU")
+            elif progress == "m6":
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                resume_names = {
+                    "customs": "start_mission6_customs_checkpoint",
+                    "noman": "start_mission6_noman_checkpoint",
+                    "rail": "start_mission6_rail_checkpoint",
+                    "train": "start_mission6_train_checkpoint",
+                    # Old saves from the removed terminal/call stages resume at
+                    # the train, the last playable stage.
+                    "file": "start_mission6_train_checkpoint",
+                    "call": "start_mission6_train_checkpoint",
+                }
+                resume_name = resume_names.get(slot.get("checkpoint", ""), "start_mission6")
+                getattr(gc, resume_name)(preserve_timer=True)
+                gsm.transition("GAME"); pygame.mouse.set_visible(False)
+            elif last == "MISSION_5":
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                gc.start_mission6(preserve_timer=True)
+                _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6")
             elif progress == "m5":
                 # Mid-M5 save: resume at the tunnel escort if it was reached,
                 # else the print works, else the Lower Quarter.
@@ -2641,6 +2717,11 @@ class _CutsceneState(GameState):
             gc.start_mission5(preserve_timer=True)
             trigger_transition("GAME")
             pygame.mouse.set_visible(False)
+        elif after == "M6_RESUME":
+            from missions.m6 import flow as _m6_flow  # lazy: M6-only
+            _m6_flow.on_m6_cutscene_done(_M6_MID["key"])
+            trigger_transition("GAME")
+            pygame.mouse.set_visible(False)
         elif after == "M5_RESUME":
             from missions.m5 import flow as _m5_flow  # lazy: M5-only
             _m5_flow.on_m5_cutscene_done(_M5_MID["key"])
@@ -2651,6 +2732,10 @@ class _CutsceneState(GameState):
             mission_complete_timer = 0
             mission_complete_fade = 0
             pygame.mouse.set_visible(True)
+        elif after == "MISSION6":
+            gc.start_mission6(preserve_timer=True); trigger_transition("GAME"); pygame.mouse.set_visible(False)
+        elif after == "MISSION6_COMPLETE":
+            gsm.transition("MISSION_COMPLETE"); mission_complete_timer = 0; mission_complete_fade = 0; pygame.mouse.set_visible(True)
         elif after == "MISSION3_BROADCAST_FAIL":
             # Fail sequence over: rebuild the wing, reset the 22:00 clock and
             # drop the player back into Slice 6. Guarded so a double _handle_end
@@ -2981,6 +3066,13 @@ class _GameState_(GameState):
 
     def enter(self):
         _apply_equipped_look()
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION6" \
+                and getattr(STATE, "m6_train_active", False):
+            try:
+                from missions.m6 import train3d as _m6_train  # lazy: M6-only
+                _m6_train.set_paused(False)
+            except Exception:
+                pass
 
     def handle_event(self, event, mouse_x, mouse_y, keys):
         # Mission 3 interrogation phase
@@ -3036,6 +3128,25 @@ class _GameState_(GameState):
             except ImportError:
                 pass
             return
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION6":
+            if getattr(STATE, "m6_train_active", False):
+                # The interactive train owns the mouse and keyboard.  Route
+                # before the global shoot/interact block so clicks never leak
+                # into the top-down weapon.  ESC is the normal pause.
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    try:
+                        from missions.m6 import train3d as _m6_train  # lazy: M6-only
+                        _m6_train.set_paused(True)
+                    except ImportError:
+                        pass
+                    gsm.transition("PAUSED")
+                    return
+                try:
+                    from missions.m6 import train3d as _m6_train  # lazy: M6-only
+                    _m6_train.handle_event(event)
+                except Exception:
+                    pass
+                return
 
         # Mission 2 intel cards
         if getattr(gc, "active_mission", "MISSION1") == "MISSION2" and getattr(gc, "mission2_card", None):
@@ -3182,6 +3293,9 @@ class _GameState_(GameState):
                 mission_complete_timer = 0
                 mission_complete_fade = 0
             pygame.mouse.set_visible(True)
+        elif getattr(gc, "request_mission6_ending", False):
+            gc.request_mission6_ending = False
+            _start_m6_cutscene(gc.mission6_ending_shots, "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
         elif _m0_outro_pending():
             from missions import m0 as _m0mod  # lazy: see _m0_outro_pending
             start_cutscene(_m0mod.outro_shots(), "MISSION_COMPLETE", use_fades=True)
@@ -3193,6 +3307,13 @@ class _GameState_(GameState):
             from core.state import STATE as _st5  # lazy: see _m5_mid_cut_key
             _st5.request_m5_cutscene = None
             start_cutscene(M5_MID_CUTSCENES[_M5_MID["key"]], "M5_RESUME", use_fades=True)
+            trigger_transition("CUTSCENE")
+        elif _m6_mid_cut_key():
+            from missions.m6.meta import M6_MID_CUTSCENES  # lazy: M6-only data
+            _M6_MID["key"] = _m6_mid_cut_key()
+            from core.state import STATE as _st6  # lazy: see _m6_mid_cut_key
+            _st6.request_m6_cutscene = None
+            start_cutscene(M6_MID_CUTSCENES[_M6_MID["key"]], "M6_RESUME", use_fades=True)
             trigger_transition("CUTSCENE")
         elif getattr(gc, "request_seby_pickup_cutscene", False):
             gc.request_seby_pickup_cutscene = False
@@ -3297,6 +3418,8 @@ class _GameState_(GameState):
                 _set_ambience({"ambient_drone", "rain", "wind"})
             else:
                 _set_ambience({"ambient_drone"})
+        elif mission == "MISSION6":
+            _set_ambience({"ambient_drone", "wind"})
         else:
             _set_ambience(set())
 
@@ -3599,6 +3722,11 @@ class _MissionCompleteState(GameState):
                 start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
                 trigger_transition("CUTSCENE")
                 pygame.mouse.set_visible(True)
+            elif (getattr(gc, "active_mission", "MISSION1") == "MISSION5"
+                  and hasattr(gc, "start_mission6")):
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                gc.start_mission6(preserve_timer=True)
+                _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6"); pygame.mouse.set_visible(True)
             else:
                 # MISSION5 (and anything after): back to the menu. M5
                 # completing the campaign is the W4 behavior until a later
@@ -4205,4 +4333,3 @@ except Exception:
     pass
 pygame.quit()
 sys.exit()
-

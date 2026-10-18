@@ -23,7 +23,7 @@ class MiniMap:
     def __init__(self, map_data, tile_size=64, palette="m2", *, theme=None):
         self._theme = theme or Theme()
         self.tile_size = tile_size
-        self._palette = palette if palette in ("m1", "m2", "m3", "m4", "walk") else "m2"
+        self._palette = palette if palette in ("m1", "m2", "m3", "m4", "m6", "walk") else "m2"
         self.map_w = len(map_data[0])
         self.map_h = len(map_data)
         self.world_w = self.map_w * tile_size
@@ -109,6 +109,14 @@ class MiniMap:
             "C": (44, 46, 52), "B": (64, 58, 48), "S": (56, 84, 96),
         }
         _M4_DOOR = (52, 54, 62)
+        # m6: freezing border night. Sampled from missions/m6/draw.py's tile
+        # table: snow ground, concrete walls, rail steel and the platform edge.
+        _M6_BASE = {
+            ".": (26, 30, 36), "g": (39, 46, 55), "O": (46, 52, 59),
+            "K": (42, 52, 58), "L": (47, 51, 57), "Y": (92, 78, 50),
+            "M": (36, 46, 52), "E": (26, 30, 36), "S": (50, 68, 78),
+        }
+        _M6_DOOR = (78, 70, 54)
         _M1_WH = (43, 40, 36)
         _M1_SLUM = (31, 29, 28)
         _M1_CONTAINERS = ((80, 45, 39), (40, 55, 74),
@@ -123,12 +131,16 @@ class MiniMap:
                     return ("barrier", (60, 50, 40))
                 if pal == "m4":
                     return ("barrier", (64, 58, 48))
+                if pal == "m6":
+                    return ("barrier", (66, 58, 46))
                 return ("barrier", _M2_BARRIER)
             if tile == "D":
                 if pal == "m3":
                     return ("door", _M3_DOOR)
                 if pal == "m4":
                     return ("door", _M4_DOOR)
+                if pal == "m6":
+                    return ("door", _M6_DOOR)
                 if pal == "m2":
                     return ("door", _M2_DOOR)
                 return ("door", _M1_DOOR)
@@ -143,6 +155,8 @@ class MiniMap:
                     return ("wall", (54, 54, 52))
                 if pal == "m4":
                     return ("wall", (58, 60, 66))
+                if pal == "m6":
+                    return ("wall", (54, 61, 70) if tile == "C" else (64, 71, 79))
                 return ("wall", _M2_WALL)
             if pal == "m2":
                 # One slab for the whole corridor - ditch, service road and
@@ -159,6 +173,10 @@ class MiniMap:
                 if tile in ("P", "V", "N", "T", "J", "E", "M"):
                     return (".", _M4_BASE["."])
                 return (tile, _M4_BASE.get(tile, _M4_BASE["."]))
+            if pal == "m6":
+                if tile in ("P", "V", "N", "T", "J", "E", "X"):
+                    return (".", _M6_BASE["."])
+                return (tile, _M6_BASE.get(tile, _M6_BASE["."]))
             # m1 / walk floor: warehouse band vs slum (m1), slum (walk).
             # K/V/N/P/E/X spawn markers render as their ground band.
             if pal == "m1" and 11 <= row <= 20:

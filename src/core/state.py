@@ -78,9 +78,9 @@ class GameState:
         self.os12_shot_cooldown = 0             # separate cooldown for full-auto
         # Mission 3 armory reward: K-9 suppressed SMG / PDW.
         self.k9_unlocked = False
-        self.k9_ammo_in_mag = 24
-        self.k9_mag_size = 24
-        self.k9_spare_mags = 2
+        self.k9_ammo_in_mag = 30
+        self.k9_mag_size = 30
+        self.k9_spare_mags = 3
         self.k9_shot_cooldown = 0
         # Weapon swap animation
         self.weapon_swap_timer = 0              # counts down from weapon_swap_duration
@@ -256,6 +256,25 @@ class GameState:
         self.mission5_printworks_checkpoint_reached = False
         self.mission5_tunnel_checkpoint_reached = False
         self.m5_marks = set()
+        # ── Mission 6: campaign finale ──
+        self.mission6_stage = None
+        self.m6_train_checkpoint_reached = False
+        self.m6_customs_checkpoint = False
+        self.m6_noman_checkpoint = False
+        self.m6_rail_checkpoint = False
+        self.m6_volkov_dead = False
+        self.m6_alarm = False
+        self.m6_alarm_triggered = False     # latched once per stage (not reset by hiding)
+        self.m6_exposure = 0.0              # seconds inside a floodlight cone
+        self.m6_wave_count = 0              # alarm waves spawned this stage
+        self.request_m6_cutscene = None     # "boxcar" -> app plays the mid film
+        self.m6_train_active = False
+        self.m6_train_time = 0.0
+        self.m6_train_result = None         # "win" | "skip" | "fallback" | "dead" | "failed"
+        self.m6_train_overrun = False       # Guard still on the platform at the shot
+        self.m6_train_guards_left = 0       # living Guards when the scene hands off
+        self.m6_train_death = False         # failed train scene owns the frozen 3D frame
+        self.request_mission6_ending = False
         self.m5_office_done = False         # Vasile office dialogue (phase 2)
         self.m5_hq_npcs = []                # HQ walking-sim squadmates
         self.m5_mag_drops = 0              # drop-economy caps (m5 systems)

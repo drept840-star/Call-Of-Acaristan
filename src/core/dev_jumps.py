@@ -79,7 +79,12 @@ DEV_JUMPS = {
     "m5-tunnel": ("--dev-mission5-tunnel",
                   "Mission 5 basement tunnel escort (deepest resume point)"),
     "m5-ending": ("--dev-mission5-ending",
-                  "Mission 5 final cutscene (shadow finale at the river)"),
+                   "Mission 5 final cutscene (shadow finale at the river)"),
+    "m6": ("--dev-mission6", "Mission 6 intro cutscene"),
+    "m6-train": ("--dev-mission6-train", "Mission 6 train checkpoint"),
+    "m6-3d": ("--dev-mission6-3d", "Mission 6 interactive 3D train scene (shootout)"),
+    "m6-shootout": ("--dev-mission6-shootout", "Mission 6 interactive 3D train scene (shootout)"),
+    "m6-ending": ("--dev-mission6-ending", "Mission 6 ending cutscene"),
     # ── Trailer bot takes (AI 1 choreography) ──
     "trailer-m1": ("--dev-m1",
             "Trailer Act I warehouse take (bot: breach/molotov)"),

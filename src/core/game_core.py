@@ -24,6 +24,7 @@ from missions import m2
 from missions import m3
 from missions import m4
 from missions import m5
+from missions import m6
 from missions import m0
 from ui import hud
 from entities import weapons
@@ -41,6 +42,7 @@ _MODULES = [
     m3,
     m4,
     m5,
+    m6,
     hud,
     weapons,
     interactions,
@@ -77,6 +79,9 @@ def _is_mission4_active():
 
 def _is_mission5_active():
     return getattr(STATE, "active_mission", "MISSION1") == "MISSION5"
+
+def _is_mission6_active():
+    return getattr(STATE, "active_mission", "MISSION1") == "MISSION6"
 
 
 def _is_mission0_active():
@@ -186,6 +191,41 @@ def start_mission5_tunnel_checkpoint(preserve_timer=False):
     """Restart Mission 5 at the basement tunnel (escort Maru)."""
     return m5.start_mission5_tunnel_checkpoint(preserve_timer=preserve_timer)
 
+def start_mission6(preserve_timer=False):
+    return _call_m6(m6.start_m6, preserve_timer)
+
+def _call_m6(fn, preserve_timer=False):
+    """Call M6 entry points across old/new facade signatures safely."""
+    try:
+        return fn(preserve_timer=preserve_timer)
+    except TypeError as exc:
+        if "preserve_timer" not in str(exc):
+            raise
+        return fn()
+
+def _m6_checkpoint(name, preserve_timer=False):
+    fn = getattr(m6, name, None)
+    result = _call_m6(fn, preserve_timer) if fn else _call_m6(m6.start_m6, preserve_timer)
+    if name.endswith("train_checkpoint"):
+        STATE.m6_train_checkpoint_reached = True
+    return result
+
+def start_mission6_train_checkpoint(preserve_timer=False):
+    return _m6_checkpoint("start_mission6_train_checkpoint", preserve_timer)
+
+def start_mission6_customs_checkpoint(preserve_timer=False):
+    return _m6_checkpoint("start_mission6_customs_checkpoint", preserve_timer)
+
+def start_mission6_noman_checkpoint(preserve_timer=False):
+    return _m6_checkpoint("start_mission6_noman_checkpoint", preserve_timer)
+
+def start_mission6_rail_checkpoint(preserve_timer=False):
+    return _m6_checkpoint("start_mission6_rail_checkpoint", preserve_timer)
+
+
+def start_mission6_train_checkpoint(preserve_timer=False):
+    return _m6_checkpoint("start_mission6_train_checkpoint", preserve_timer)
+
 
 def restart_current_mission():
     """Restart whichever playable mission is currently active.
@@ -225,6 +265,16 @@ def restart_current_mission():
         if getattr(STATE, "mission3_breakout_checkpoint_reached", False):
             return m3.start_mission3_breakout_checkpoint(preserve_timer=False)
         return m3.start_mission3(preserve_timer=False)
+    if _is_mission6_active() and not _in_walking_sim():
+        # Deepest reached checkpoint wins (same rule as M5).  The train is a
+        # scene, not a top-down stage, but its checkpoint resumes the scene.
+        if getattr(STATE, "m6_train_checkpoint_reached", False):
+            return start_mission6_train_checkpoint(preserve_timer=False)
+        if getattr(STATE, "m6_rail_checkpoint", False):
+            return start_mission6_rail_checkpoint(preserve_timer=False)
+        if getattr(STATE, "m6_noman_checkpoint", False):
+            return start_mission6_noman_checkpoint(preserve_timer=False)
+        return start_mission6(preserve_timer=False)
     if _is_mission5_active() and not _in_walking_sim():
         # Deepest checkpoint wins: the tunnel escort is the hardest stretch
         # and Maru dying there must not cost the print-works raid as well.
@@ -276,6 +326,8 @@ def game_update(keys):
             return m0.game_update(keys)
         if _is_mission5_active():
             return m5.game_update(keys)
+        if _is_mission6_active():
+            return m6.game_update(keys)
         if _is_mission4_active():
             return m4.game_update(keys)
         if _is_mission3_active():
@@ -292,6 +344,8 @@ def _active_mission_tag():
         return "m0"
     if _is_mission5_active():
         return "m5"
+    if _is_mission6_active():
+        return "m6"
     if _is_mission4_active():
         return "m4"
     if _is_mission3_active():
@@ -311,6 +365,9 @@ def game_draw(fcx, fcy):
     if not _gw.installed():
         _gw.install(STATE)
     hook = _gw.render_submit
+    if _is_mission6_active():
+        _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m6.game_draw(x, y), name="m6.game_draw", submit_hook=hook)
+        return None
     if _is_mission5_active():
         # M5 submits its own drawables (Phase 6 peel-off); the facade attribute is looked up at call time.
         _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m5.game_draw(x, y), name="m5.game_draw",
@@ -337,6 +394,8 @@ def game_draw(fcx, fcy):
 def handle_interact():
     if _is_mission5_active():
         return m5.handle_interact()
+    if _is_mission6_active():
+        return m6.handle_interact()
     if _is_mission4_active():
         return m4.handle_interact()
     if _is_mission3_active():
@@ -347,7 +406,6 @@ def handle_interact():
     if _is_mission2_active():
         return m2.handle_interact()
     return interactions.handle_interact()
-
 
 def debug_jump_to_exfil():
     if _is_mission5_active():
@@ -422,6 +480,11 @@ _proxy.__dict__.update({
     "start_mission5_quarter_checkpoint": start_mission5_quarter_checkpoint,
     "start_mission5_printworks_checkpoint": start_mission5_printworks_checkpoint,
     "start_mission5_tunnel_checkpoint": start_mission5_tunnel_checkpoint,
+    "start_mission6": start_mission6,
+    "start_mission6_customs_checkpoint": start_mission6_customs_checkpoint,
+    "start_mission6_noman_checkpoint": start_mission6_noman_checkpoint,
+    "start_mission6_rail_checkpoint": start_mission6_rail_checkpoint,
+    "start_mission6_train_checkpoint": start_mission6_train_checkpoint,
     "restart_current_mission": restart_current_mission,
     "game_update": game_update,
     "game_draw": game_draw,

@@ -27,6 +27,7 @@ OUTFIT_GUARD = "guard"
 OUTFITS = (OUTFIT_KRAP, OUTFIT_GUARD)
 
 M5_MISSION_KEY = "MISSION5"       # mirrors missions.m5.meta.MISSION5_KEY
+M6_MISSION_KEY = "MISSION6"       # after the change: Guard black is his uniform
 
 # ── THE Guard kit palette (single source of truth; every view below reads it) ──
 # Neutral blacks on purpose: R≈G≈B. A blue-leaning "black" (the old gameplay
@@ -117,10 +118,14 @@ def biribel_2d(outfit):
 
 
 def gameplay_outfit(state):
-    """The outfit the player sprite should wear right now: Guard only while
-    Mission 5 is the active mission and the change has happened. Anything
-    else (other missions, menus, multiplayer) -> None = the saved look."""
-    if getattr(state, "active_mission", None) != M5_MISSION_KEY:
+    """The outfit the player sprite should wear right now.
+
+    Guard black from Mission 5's change onward (M5 and M6).  Anything else
+    (other missions, menus, multiplayer) -> None = the saved look."""
+    mission = getattr(state, "active_mission", None)
+    if mission == M6_MISSION_KEY:
+        return OUTFIT_GUARD
+    if mission != M5_MISSION_KEY:
         return None
     o = getattr(state, "m5_outfit", OUTFIT_KRAP)
     return o if o in GAMEPLAY_ROLES else None
