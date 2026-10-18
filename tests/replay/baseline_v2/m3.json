@@ -1,0 +1,598 @@
+{
+ "schema": "ae.replay.segment",
+ "version": 2,
+ "segment": "m3",
+ "label": "M3 comms checkpoint",
+ "checkpoint": "core.game_core.start_mission3_comms_checkpoint",
+ "seed": 4242,
+ "fps": 60,
+ "seconds": 30,
+ "input_stream": [
+  [
+   40,
+   "a",
+   671,
+   547,
+   0
+  ],
+  [
+   23,
+   "sa",
+   764,
+   342,
+   0
+  ],
+  [
+   73,
+   "sashift",
+   454,
+   444,
+   0
+  ],
+  [
+   71,
+   "sa",
+   756,
+   250,
+   0
+  ],
+  [
+   90,
+   "w",
+   138,
+   306,
+   0
+  ],
+  [
+   84,
+   "",
+   468,
+   211,
+   1
+  ],
+  [
+   72,
+   "sa",
+   355,
+   601,
+   1
+  ],
+  [
+   33,
+   "wa",
+   268,
+   613,
+   0
+  ],
+  [
+   50,
+   "sa",
+   711,
+   92,
+   0
+  ],
+  [
+   68,
+   "wd",
+   366,
+   121,
+   0
+  ],
+  [
+   47,
+   "sd",
+   490,
+   488,
+   0
+  ],
+  [
+   39,
+   "w",
+   899,
+   355,
+   0
+  ],
+  [
+   58,
+   "wshift",
+   701,
+   199,
+   0
+  ],
+  [
+   85,
+   "wd",
+   753,
+   410,
+   0
+  ],
+  [
+   57,
+   "wd",
+   364,
+   338,
+   1
+  ],
+  [
+   70,
+   "sd",
+   121,
+   567,
+   0
+  ],
+  [
+   34,
+   "sd",
+   427,
+   268,
+   1
+  ],
+  [
+   74,
+   "s",
+   523,
+   266,
+   1
+  ],
+  [
+   39,
+   "w",
+   528,
+   278,
+   0
+  ],
+  [
+   65,
+   "w",
+   775,
+   537,
+   0
+  ],
+  [
+   66,
+   "d",
+   624,
+   534,
+   0
+  ],
+  [
+   62,
+   "w",
+   517,
+   430,
+   0
+  ],
+  [
+   40,
+   "wd",
+   679,
+   128,
+   0
+  ],
+  [
+   61,
+   "sd",
+   638,
+   523,
+   0
+  ],
+  [
+   85,
+   "w",
+   164,
+   483,
+   0
+  ],
+  [
+   33,
+   "w",
+   687,
+   427,
+   0
+  ],
+  [
+   66,
+   "",
+   485,
+   95,
+   0
+  ],
+  [
+   63,
+   "",
+   300,
+   277,
+   1
+  ],
+  [
+   22,
+   "d",
+   680,
+   620,
+   0
+  ],
+  [
+   63,
+   "wa",
+   514,
+   457,
+   0
+  ],
+  [
+   56,
+   "sa",
+   115,
+   408,
+   0
+  ],
+  [
+   56,
+   "d",
+   366,
+   434,
+   0
+  ]
+ ],
+ "snapshots": [
+  {
+   "hash": "cbcd49d10af5d644",
+   "player_rect": [
+    256,
+    1592,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 1
+  },
+  {
+   "hash": "d8c6a5a209b0d3f7",
+   "player_rect": [
+    256,
+    1712,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 2
+  },
+  {
+   "hash": "3cd9dfc2b182c7dc",
+   "player_rect": [
+    256,
+    1760,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 3
+  },
+  {
+   "hash": "ccac317149ae2df6",
+   "player_rect": [
+    256,
+    1628,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 4
+  },
+  {
+   "hash": "1733420588b63a94",
+   "player_rect": [
+    256,
+    1400,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 5
+  },
+  {
+   "hash": "3ba7046a68687a4a",
+   "player_rect": [
+    256,
+    1400,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 6
+  },
+  {
+   "hash": "4db127ae227e19b3",
+   "player_rect": [
+    256,
+    1478,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 7
+  },
+  {
+   "hash": "3b937bec482b0f40",
+   "player_rect": [
+    256,
+    1463,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 8
+  },
+  {
+   "hash": "9c84d5ef44405c83",
+   "player_rect": [
+    264,
+    1533,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 9
+  },
+  {
+   "hash": "56022106a2d5a614",
+   "player_rect": [
+    384,
+    1353,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 10
+  },
+  {
+   "hash": "035644ed65a33a23",
+   "player_rect": [
+    486,
+    1399,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 11
+  },
+  {
+   "hash": "d146e714072ee75b",
+   "player_rect": [
+    486,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 12
+  },
+  {
+   "hash": "1d9fee908618d167",
+   "player_rect": [
+    550,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 13
+  },
+  {
+   "hash": "058440d398c0c500",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 14
+  },
+  {
+   "hash": "bd8d868e2bac46ff",
+   "player_rect": [
+    608,
+    1236,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 15
+  },
+  {
+   "hash": "6de7c39cd9cc2c12",
+   "player_rect": [
+    608,
+    1356,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 16
+  },
+  {
+   "hash": "99385f7b187f1357",
+   "player_rect": [
+    608,
+    1502,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 17
+  },
+  {
+   "hash": "a5e88615cd8ab30e",
+   "player_rect": [
+    608,
+    1598,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 18
+  },
+  {
+   "hash": "93c10d92a935c41d",
+   "player_rect": [
+    608,
+    1358,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 19
+  },
+  {
+   "hash": "08f201b18db5d6f1",
+   "player_rect": [
+    608,
+    1230,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 20
+  },
+  {
+   "hash": "825cbc4cb8eea480",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 21
+  },
+  {
+   "hash": "86bd70190c5ad6e3",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 22
+  },
+  {
+   "hash": "20f5883a4af01001",
+   "player_rect": [
+    608,
+    1296,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 23
+  },
+  {
+   "hash": "434ff23bdcb528f9",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 24
+  },
+  {
+   "hash": "f90294839f9d5749",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 25
+  },
+  {
+   "hash": "1e0e22e693cd84ab",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 26
+  },
+  {
+   "hash": "1a6e0b836d180c2a",
+   "player_rect": [
+    608,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 27
+  },
+  {
+   "hash": "b896c7526ae772bf",
+   "player_rect": [
+    578,
+    1216,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 28
+  },
+  {
+   "hash": "cf1004ab2aca7329",
+   "player_rect": [
+    398,
+    1230,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 29
+  },
+  {
+   "hash": "fcea70b259c592c2",
+   "player_rect": [
+    289,
+    1328,
+    32,
+    32
+   ],
+   "player_hp": 115,
+   "enemies": 8,
+   "t_s": 30
+  }
+ ]
+}

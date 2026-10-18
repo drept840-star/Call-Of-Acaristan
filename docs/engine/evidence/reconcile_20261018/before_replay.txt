@@ -1,0 +1,20 @@
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+[voice] BALACEANU: 13 files -> 12 of 13 lines matched; 1 extra file(s), 1 line(s) without audio - see balaceanu_matches.txt
+[voice] DARIUS: 1 files -> 1 of 1 lines matched; 0 extra file(s), 0 line(s) without audio - see darius_matches.txt
+[voice] GABI: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see gabi_matches.txt
+[voice] NARRATOR: 10 files -> 10 of 10 lines matched; 0 extra file(s), 0 line(s) without audio - see narrator_matches.txt
+[voice] folder 'OLD FISHERMAN' doesn't match a speaker tab - files there are ignored unless named VO_xxx
+[voice] SEBY: 4 files -> 4 of 4 lines matched; 0 extra file(s), 0 line(s) without audio - see seby_matches.txt
+[voice] folder 'TRAILER' doesn't match a speaker tab - files there are ignored unless named VO_xxx
+[voice] VASILE: 84 files -> 83 of 83 lines matched; 1 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+[SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+[CHECKPOINT] Respawned at shelter - evidence phase active
+m1: FAIL first divergence at t=1s (6c07cef9ed1704be != c6f0118ded8b3992); 30 of 30 snapshots differ  [0.6s]
+m2: FAIL first divergence at t=1s (6c4bafa541e6bbd6 != 35b14538f8b09c7f); 30 of 30 snapshots differ  [5.7s]
+m3: FAIL first divergence at t=1s (1b9ea5a533368e1d != cbcd49d10af5d644); 30 of 30 snapshots differ  [6.3s]
+m4: FAIL first divergence at t=1s (fab7c83399e63671 != 9c608506fc545b70); 30 of 30 snapshots differ  [0.4s]
+m5: FAIL first divergence at t=1s (0b135016e56651d0 != 74a4b674571e706e); 30 of 30 snapshots differ  [1.3s]
+AE REPLAY: FAIL
+
+E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)

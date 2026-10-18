@@ -1,0 +1,48 @@
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+[SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+[CHECKPOINT] Respawned at shelter - evidence phase active
+verified 373 shots in 31.2s: 81 failures, 0 errors; worst cut.m5.M5_MID_CUTSCENES.08_m5x_vasile_close.t25 {'max': 48, 'mean': 18.3583, 'pct_over': 58.9754, 'differing_px': 454147}
+  FAIL cut.m5.M5_MID_CUTSCENES.03_m5x_faces_release.t25: {'max': 132, 'mean': 0.2559, 'pct_over': 0.8194, 'differing_px': 20153}
+  FAIL cut.m5.M5_MID_CUTSCENES.03_m5x_faces_release.t50: {'max': 105, 'mean': 0.239, 'pct_over': 0.9253, 'differing_px': 18005}
+  FAIL cut.m5.M5_MID_CUTSCENES.04_m5x_pw_arrival_wide.t25: {'max': 120, 'mean': 0.153, 'pct_over': 0.6229, 'differing_px': 6708}
+  FAIL cut.m5.M5_MID_CUTSCENES.04_m5x_pw_arrival_wide.t75: {'max': 146, 'mean': 0.3161, 'pct_over': 0.9631, 'differing_px': 13380}
+  FAIL cut.m5.M5_MID_CUTSCENES.06_m5x_basement_descent.t25: {'max': 134, 'mean': 0.2528, 'pct_over': 0.7309, 'differing_px': 11644}
+  FAIL cut.m5.M5_MID_CUTSCENES.06_m5x_basement_descent.t50: {'max': 127, 'mean': 0.2775, 'pct_over': 0.8207, 'differing_px': 11896}
+  FAIL cut.m5.M5_MID_CUTSCENES.06_m5x_basement_descent.t75: {'max': 163, 'mean': 0.2048, 'pct_over': 0.5956, 'differing_px': 8696}
+  FAIL cut.m5.M5_MID_CUTSCENES.07_m5x_vasile_wide.t25: {'max': 154, 'mean': 11.3539, 'pct_over': 41.0766, 'differing_px': 426860}
+  FAIL cut.m5.M5_MID_CUTSCENES.07_m5x_vasile_wide.t50: {'max': 154, 'mean': 11.4866, 'pct_over': 42.0407, 'differing_px': 424766}
+  FAIL cut.m5.M5_MID_CUTSCENES.07_m5x_vasile_wide.t75: {'max': 154, 'mean': 11.6215, 'pct_over': 42.4744, 'differing_px': 425127}
+  FAIL cut.m5.M5_MID_CUTSCENES.08_m5x_vasile_close.t25: {'max': 48, 'mean': 18.3583, 'pct_over': 58.9754, 'differing_px': 454147}
+  FAIL cut.m5.M5_MID_CUTSCENES.08_m5x_vasile_close.t50: {'max': 48, 'mean': 18.3684, 'pct_over': 58.8346, 'differing_px': 452402}
+  FAIL cut.m5.M5_MID_CUTSCENES.08_m5x_vasile_close.t75: {'max': 48, 'mean': 18.3365, 'pct_over': 58.6413, 'differing_px': 452397}
+  FAIL cut.m5.M5_MID_CUTSCENES.09_m5x_vasile_close.t25: {'max': 48, 'mean': 18.3569, 'pct_over': 58.972, 'differing_px': 454103}
+  FAIL cut.m5.M5_MID_CUTSCENES.09_m5x_vasile_close.t50: {'max': 48, 'mean': 18.3664, 'pct_over': 58.83, 'differing_px': 452293}
+  FAIL cut.m5.M5_MID_CUTSCENES.09_m5x_vasile_close.t75: {'max': 48, 'mean': 18.3342, 'pct_over': 58.6374, 'differing_px': 452303}
+  FAIL cut.m5.M5_MID_CUTSCENES.10_m5x_vasile_biribel.t25: {'max': 102, 'mean': 7.338, 'pct_over': 16.3473, 'differing_px': 453266}
+  FAIL cut.m5.M5_MID_CUTSCENES.10_m5x_vasile_biribel.t50: {'max': 102, 'mean': 7.2938, 'pct_over': 16.487, 'differing_px': 453421}
+  FAIL cut.m5.M5_MID_CUTSCENES.10_m5x_vasile_biribel.t75: {'max': 102, 'mean': 7.3642, 'pct_over': 16.5726, 'differing_px': 453591}
+  FAIL cut.m5.M5_MID_CUTSCENES.11_m5x_vasile_lean.t25: {'max': 149, 'mean': 15.3822, 'pct_over': 56.6106, 'differing_px': 448535}
+  FAIL cut.m5.M5_MID_CUTSCENES.11_m5x_vasile_lean.t50: {'max': 149, 'mean': 14.4785, 'pct_over': 55.8241, 'differing_px': 448996}
+  FAIL cut.m5.M5_MID_CUTSCENES.11_m5x_vasile_lean.t75: {'max': 149, 'mean': 14.4954, 'pct_over': 55.9224, 'differing_px': 449156}
+  FAIL cut.m5.M5_MID_CUTSCENES.12_m5x_maru_two.t25: {'max': 79, 'mean': 7.7957, 'pct_over': 25.1363, 'differing_px': 212710}
+  FAIL cut.m5.M5_MID_CUTSCENES.12_m5x_maru_two.t50: {'max': 80, 'mean': 8.0384, 'pct_over': 25.7446, 'differing_px': 208889}
+  FAIL cut.m5.M5_MID_CUTSCENES.12_m5x_maru_two.t75: {'max': 80, 'mean': 8.1823, 'pct_over': 26.2313, 'differing_px': 205780}
+  FAIL cut.m5.M5_MID_CUTSCENES.13_m5x_maru_biribel.t25: {'max': 57, 'mean': 7.1593, 'pct_over': 18.24, 'differing_px': 308460}
+  FAIL cut.m5.M5_MID_CUTSCENES.13_m5x_maru_biribel.t50: {'max': 57, 'mean': 7.1849, 'pct_over': 18.2571, 'differing_px': 309800}
+  FAIL cut.m5.M5_MID_CUTSCENES.13_m5x_maru_biribel.t75: {'max': 57, 'mean': 7.1826, 'pct_over': 18.2707, 'differing_px': 308421}
+  FAIL cut.m5.M5_MID_CUTSCENES.14_m5x_maru_close.t25: {'max': 59, 'mean': 9.4528, 'pct_over': 47.785, 'differing_px': 445788}
+  FAIL cut.m5.M5_MID_CUTSCENES.14_m5x_maru_close.t50: {'max': 59, 'mean': 9.4734, 'pct_over': 47.8517, 'differing_px': 445081}
+  FAIL cut.m5.M5_MID_CUTSCENES.14_m5x_maru_close.t75: {'max': 59, 'mean': 9.4304, 'pct_over': 47.8043, 'differing_px': 444675}
+  FAIL cut.m5.M5_MID_CUTSCENES.15_m5x_maru_biribel.t25: {'max': 57, 'mean': 7.1593, 'pct_over': 18.24, 'differing_px': 308460}
+  FAIL cut.m5.M5_MID_CUTSCENES.15_m5x_maru_biribel.t50: {'max': 57, 'mean': 7.1849, 'pct_over': 18.2571, 'differing_px': 309800}
+  FAIL cut.m5.M5_MID_CUTSCENES.15_m5x_maru_biribel.t75: {'max': 57, 'mean': 7.1826, 'pct_over': 18.2707, 'differing_px': 308421}
+  FAIL cut.m5.M5_MID_CUTSCENES.16_m5x_maru_close.t25: {'max': 59, 'mean': 9.4526, 'pct_over': 47.7847, 'differing_px': 445797}
+  FAIL cut.m5.M5_MID_CUTSCENES.16_m5x_maru_close.t50: {'max': 59, 'mean': 9.4752, 'pct_over': 47.8517, 'differing_px': 445221}
+  FAIL cut.m5.M5_MID_CUTSCENES.16_m5x_maru_close.t75: {'max': 59, 'mean': 9.4323, 'pct_over': 47.8043, 'differing_px': 444808}
+  FAIL cut.m5.M5_MID_CUTSCENES.17_m5x_breach_lights.t25: {'max': 71, 'mean': 6.8592, 'pct_over': 43.3, 'differing_px': 378955}
+  FAIL cut.m5.M5_MID_CUTSCENES.17_m5x_breach_lights.t50: {'max': 75, 'mean': 7.052, 'pct_over': 43.279, 'differing_px': 379924}
+  FAIL cut.m5.M5_MID_CUTSCENES.17_m5x_breach_lights.t75: {'max': 68, 'mean': 6.4333, 'pct_over': 41.4754, 'differing_px': 378966}
+AE GOLDEN: FAIL
+
+E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)

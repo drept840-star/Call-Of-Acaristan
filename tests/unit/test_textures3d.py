@@ -49,7 +49,18 @@ class Textures(unittest.TestCase):
 
     def test_textured_face_renders_nearest(self):
         from engine3d import Renderer
-        r = Renderer(120, 90)
+        # Palette textures (P11 step 9) are a software-rasterizer feature ("nearest"
+        # sampling); the GL backend renders textured faces flat by design
+        # (render3d_bridge.push_textures "GL: flat"), so pin the backend here.
+        prev = os.environ.get("ACARISTAN_RENDERER")
+        os.environ["ACARISTAN_RENDERER"] = "software"
+        try:
+            r = Renderer(120, 90)
+        finally:
+            if prev is None:
+                os.environ.pop("ACARISTAN_RENDERER", None)
+            else:
+                os.environ["ACARISTAN_RENDERER"] = prev
         buf = pygame.Surface((120, 90))
         buf.fill((0, 0, 0))
         r.set_camera((0, 1.2, -2.2), (0, 0.4, 0), 55)

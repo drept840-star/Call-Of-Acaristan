@@ -9029,6 +9029,9 @@ def check_m6_train_redeploy_after_death():
         assert STATE.m6_train_active and T.active()
         assert not STATE.request_mission6_ending, "a draw error passed the mission"
         assert STATE.m6_train_result is None
+        renderer = T._cache.get("r")
+        assert renderer is not None and getattr(renderer, "objs", None), \
+            "M6 train static scene baked no geometry after redeploy"
 
         # A redeploy must reset the combat clock too: the stale last_fire
         # used to freeze the trigger for the entire next run.

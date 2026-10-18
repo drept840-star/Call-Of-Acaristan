@@ -32,6 +32,7 @@ from core.state import STATE
 from core.outfits import OUTFIT_GUARD
 from cutscenes import m5fx3d as _fx
 from cutscenes import m6world3d as _w
+from engine.assets import load_image
 from engine3d import (
     POSES, Renderer, blend, box, clamp, m_apply, pose_run, rot_x, rot_y, v_add,
 )
@@ -73,6 +74,44 @@ TOWER_EYE = (17.95, 8.05, 7.16)   # at the window: in front of the cabin (-z)
 # (``u_pl_pos[4]``); the software painter has eight.  Every rig in ``_light``
 # stays inside this budget so both backends render the same frame.
 LIGHT_CAP = 4
+
+# ── background / horizon ─────────────────────────────────────────────────
+# The distance fog (11,15,24) and the night backdrop are the SAME colour at
+# the horizon, so far geometry is lerped toward the sky it is supposed to
+# stand against.  The old yard albedo (21,24,31) came out of the bake light
+# at (11,12,16) - the fog colour exactly - and the background sat on screen
+# at 0.3-1.2 luma of contrast: drawn every frame, visible in none of them.
+# (tools/m6_bg_contrast.py prints the numbers for both cameras.)
+#
+# Three knobs, in order of effect:
+SKY_HORIZON = (24, 31, 50)     # night() bot: light pollution under the stars
+BG_FOG_END = 220.0             # was 120: at 120 a 55 m mass is 44% sky colour
+YARD_DARK = (4, 6, 10)         # albedo of the NEAREST far-yard mass
+YARD_HAZY = (13, 17, 26)       # ...and of the farthest: aerial perspective
+                               # lives in the albedo, not in the fog.
+
+# x, z, w, h, d, window rows, window columns.  Authored inside the yaw the
+# player can actually reach - BASE_YAW +- YAW_LIMIT behind a 100 deg
+# horizontal lens is yaw -17..153 - because four of the seven old masses sat
+# at yaw -21..-42, i.e. behind his left shoulder, and could never be seen.
+# The three west masses are kept for the post-shot cinematic, whose impact
+# and catch beats look back across the track.
+_YARD_MASSES = (
+    (-20.0, -31.0, 11.0, 9.0, 7.0, 2, 4),
+    (-6.0, -35.0, 9.0, 12.5, 6.0, 3, 3),
+    (7.5, -32.0, 13.0, 8.0, 7.0, 2, 5),
+    (20.0, -29.5, 9.5, 10.5, 6.0, 3, 3),
+    (31.0, -24.0, 10.0, 7.5, 6.0, 2, 4),
+    (41.0, -17.0, 8.5, 11.0, 5.5, 3, 3),
+    (47.0, -5.0, 7.0, 8.0, 5.0, 2, 3),
+    (50.0, 3.0, 9.0, 9.5, 6.0, 2, 3),
+    (42.0, 13.0, 8.0, 9.0, 6.0, 2, 3),
+    (-33.0, -22.0, 12.0, 7.0, 7.0, 2, 4),
+    (-43.0, -28.0, 9.0, 10.0, 6.0, 3, 3),
+)
+_YARD_STACKS = ((-29.0, -20.0, 15.0), (36.0, -26.0, 13.0), (3.0, -40.0, 17.0))
+_YARD_HAZE = ((-14.0, 5.0, -30.0), (10.0, 5.0, -30.0), (34.0, 5.0, -22.0))
+_YARD_RIDGE_R = 70.0           # radius of the horizon ridge, around the eye
 
 PLAYER_POS = (-13.0, 0.58, 6.8)
 PLAYER_EYE = 1.66
@@ -261,7 +300,7 @@ def _vdist(a, b):
 def _renderer():
     if _cache["r"] is None:
         _cache["r"] = Renderer(RW, RH, fog=(11, 15, 24), fog_start=16.0,
-                               fog_end=70.0)
+                               fog_end=BG_FOG_END)
     return _cache["r"]
 
 
@@ -518,7 +557,7 @@ def _reticle_image():
         return _RETICLE
     path = resource_path(os.path.join("assets", "3D", "K93D_reticle.png"))
     try:
-        img = pygame.image.load(path)
+        img = load_image(path)   # D5: the single raw-load chokepoint (engine.assets)
         try:
             img = img.convert_alpha()
         except Exception:
@@ -1013,6 +1052,18 @@ class TrainScene:
         # run starts with a clean log.
         try:
             _radio_widget().reset()
+        except Exception:
+            pass
+        # Drop the baked static set + renderer cache so a redeploy cannot
+        # inherit a stale/empty cache from the previous (possibly failed) run.
+        try:
+            _cache["r"] = None
+        except Exception:
+            pass
+        try:
+            _w._STATIC_SIG = None
+            _w._STATIC_BUILD["active"] = False
+            _w._STATIC_BUILD["rebuild"] = False
         except Exception:
             pass
 
@@ -1603,8 +1654,9 @@ class TrainScene:
                live_fwd if t < CUT_AT else None, t=t)
         self._draw_camera(r, t)
         r.surface.fill((6, 8, 14))
-        _w.night(r, r.surface, t * 1000.0, top=(4, 6, 13), bot=(15, 21, 35),
-                 stars=40, sodium=(42, 28, 18), seed=71, star_cut=0.62)
+        _w.night(r, r.surface, t * 1000.0, top=(4, 6, 13), bot=SKY_HORIZON,
+                 stars=90, moon=(112.0, 13.0), sodium=(42, 28, 18), seed=71,
+                 star_cut=0.62)
         r.begin()
         # The platform, station shell and dressing never move before the
         # catch cut, so bake them once: the old per-frame Python packing was
@@ -1613,6 +1665,7 @@ class TrainScene:
         static = t < CUT_AT
         normal_light = r.light
         rebuild = True
+        bake_ok = False
         if static:
             # Bake the shell with a little more ambient than the live action
             # light: the point-light pools are baked out of the static pass
@@ -1624,24 +1677,27 @@ class TrainScene:
             r.light = _Light(direction=(-0.46, 0.64, -0.36), ambient=0.41,
                              diffuse=0.64, sky=0.22, tint=(0.94, 0.95, 1.00))
             rebuild = _w.static_scene(r, "m6_train_static")
-        if rebuild or not static:
-            _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
-                             train_offset=self._train_offset())
-            self._draw_station(r, t)
-        else:
-            # Set geometry is cached in the renderer; only the animated light
-            # and snow sprites need to be re-queued each frame.
-            self._draw_static_lights(r, t)
-        if static:
-            _w.static_end(r)
-            r.light = normal_light
+        try:
+            if rebuild or not static:
+                _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
+                                 train_offset=self._train_offset())
+                self._draw_station(r, t)
+            else:
+                # Set geometry is cached in the renderer; only the animated light
+                # and snow sprites need to be re-queued each frame.
+                self._draw_static_lights(r, t)
+            bake_ok = True
+        finally:
+            if static:
+                _w.static_end(r, ok=bake_ok)
+                r.light = normal_light
         self._draw_train_door(r, t)
         self._draw_volkov(r, t)
         self._draw_guards(r, t)
         self._draw_ucilev(r, t)
         self._draw_biribel(r, t)
         self._draw_fx(r, t)
-        _w.snow3d(r, t * 1000.0, seed=72, n=110, spread=20, height=14, speed=1.4)
+        _w.snow3d(r, t * 1000.0, seed=72, n=55, spread=20, height=14, speed=1.4)
         r.flush(r.surface)
 
         if t < CUT_AT and not self.dying and not self.volkov_failed:
@@ -1980,10 +2036,88 @@ class TrainScene:
             add(box(0.16, 0.16, 9.2, (36, 40, 48), center=(gx, 6.25, -2.7)))
             add(box(0.50, 0.34, 0.30, (255, 228, 178), center=(gx, 6.02, -2.7),
                     emissive=True))
+        # layer 2, not 0: every box face in this scene is painter layer 2, so
+        # a layer-0 wire sorts behind the whole world - including the sky-side
+        # carriage it is strung over - and the gantry run read as bare masts.
         for wz in (-1.5, 1.5):
-            r.add_line3d((-30.0, 6.02, wz), (-7.0, 6.02, wz), (27, 29, 35), 1, layer=0)
-            r.add_line3d((-7.0, 6.02, wz), (13.0, 6.02, wz), (27, 29, 35), 1, layer=0)
-            r.add_line3d((13.0, 6.02, wz), (30.0, 6.02, wz), (27, 29, 35), 1, layer=0)
+            r.add_line3d((-30.0, 6.02, wz), (-7.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+            r.add_line3d((-7.0, 6.02, wz), (13.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+            r.add_line3d((13.0, 6.02, wz), (30.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+
+        # ── far yard silhouette ──────────────────────────────────────
+        # Read the SKY_HORIZON / YARD_DARK note at the top of the module
+        # before changing a colour down here.  Everything in this block is
+        # authored DARKER than the sky and lifts with distance: the fog
+        # colour is the sky colour, so a mass that is lighter than the
+        # backdrop can only converge to it.
+        def far_col(d):
+            k = clamp((d - 26.0) / 44.0, 0.0, 1.0)
+            return tuple(int(YARD_DARK[i] + (YARD_HAZY[i] - YARD_DARK[i]) * k)
+                         for i in range(3))
+
+        def far_dist(px, pz):
+            return math.hypot(px - PLAYER_POS[0], pz - PLAYER_POS[2])
+
+        # A ridge seals the horizon: between the masses the sky used to meet
+        # the ballast on a ruled, empty edge.  Axis-aligned blocks on a ring
+        # around the eye - no rotation, so no handedness to get wrong.
+        ridge_col = far_col(_YARD_RIDGE_R)
+        for i in range(0, 17, 2):  # every other ridge for performance
+            a = math.radians(-56.0 + i * 12.0)
+            rx = PLAYER_POS[0] + _YARD_RIDGE_R * math.sin(a)
+            rz = PLAYER_POS[2] - _YARD_RIDGE_R * math.cos(a)
+            rh = 3.0 + 1.1 * _vm_noise(rx, 0.0, rz, 3)
+            add(box(19.0, rh, 14.0, ridge_col,
+                    center=(rx, rh * 0.5 - 0.6, rz), skip=("bottom", "back")))
+
+        # Warehouses, sheds and silos across the yard.
+        # View cull: skip masses outside the player's reachable yaw range
+        base_yaw = BASE_YAW
+        yaw_limit = YAW_LIMIT + 10  # extra margin for safety
+        for sx, sz, sw, sh, sd, rows, cols in _YARD_MASSES:
+            # Check if mass is within view frustum
+            dx = sx - PLAYER_POS[0]
+            dz = sz - PLAYER_POS[2]
+            if abs(dx) + abs(dz) < 1e-6:
+                continue
+            mass_yaw = math.degrees(math.atan2(dx, -dz))
+            # Normalize yaw difference
+            dyaw = (mass_yaw - base_yaw + 180) % 360 - 180
+            if abs(dyaw) > yaw_limit:
+                continue  # mass is behind the player
+            add(box(sw, sh, sd, far_col(far_dist(sx, sz)),
+                    center=(sx, sh * 0.5, sz), skip=("bottom", "back")))
+            # Lit windows are the only thing out here allowed to be bright:
+            # emissive, so the distance fog is all that dims them, and large
+            # enough (0.66 m) to survive RES=0.80 plus the smoothscale.
+            face = sz + sd * 0.5 + 0.04
+            for ry in range(rows):
+                wy = sh * (0.30 + 0.22 * ry)
+                for ci in range(cols):
+                    wx = sx + sw * (-0.34 + 0.68 * ci / max(1, cols - 1))
+                    n = _vm_noise(wx, wy, sz, 5)
+                    if n < 0.58:  # higher threshold = fewer windows
+                        continue
+                    add(box(0.66, 0.46, 0.06,
+                            (236, 190, 124) if n > 0.62 else (150, 128, 96),
+                            center=(wx, wy, face), emissive=True))
+            if sh >= 9.0:
+                add(box(0.26, 0.26, 0.26, (228, 56, 42),
+                        center=(sx + sw * 0.34, sh + 0.18, sz), emissive=True))
+
+        # Chimney stacks: vertical breaks in a horizon of flat-topped boxes.
+        for cx_s, cz_s, ch in _YARD_STACKS:
+            add(box(0.9, ch, 0.9, far_col(far_dist(cx_s, cz_s)),
+                    center=(cx_s, ch * 0.5, cz_s), skip=("bottom", "back")))
+            add(box(0.30, 0.30, 0.30, (228, 56, 42),
+                    center=(cx_s, ch + 0.2, cz_s), emissive=True))
+
+        for fx, fz in ((-22.0, -14.0), (30.0, -13.0)):
+            add(box(0.14, 6.4, 0.14, (32, 36, 44), center=(fx, 3.2, fz)))
+            add(box(0.55, 0.24, 0.35, (255, 226, 176), center=(fx, 6.45, fz),
+                    emissive=True))
+
+        self._yard_sprites(r, t * 1000.0)
 
         # ── atmosphere: window spill, steam, a warming barrel ─────────
         r.add_sprite((5.6, G + 0.25, 6.15),
@@ -2029,6 +2163,34 @@ class TrainScene:
                      layer=_fx.FX_LAYER)
 
         _w.add(r, m)
+
+    def _yard_sprites(self, r, tm):
+        """Beacons and light pollution for the far yard.
+
+        Called from BOTH ``_draw_platform_dressing`` (the bake frame) and
+        ``_draw_static_lights`` (every other frame).  Geometry is cached by
+        ``static_scene``; sprites are not, so a sprite queued only in the
+        dressing pass exists on exactly one frame of the whole scene.
+        """
+        for sx, sz, sw, sh, _sd, _rows, _cols in _YARD_MASSES:
+            if sh < 9.0:
+                continue
+            r.add_sprite((sx + sw * 0.34, sh + 0.18, sz),
+                         _fx.glow((236, 64, 48), 0.9, tm, flicker=0.14,
+                                  seed=400 + int(sx), intensity=0.85),
+                         layer=_fx.FX_LAYER)
+        for cx_s, cz_s, ch in _YARD_STACKS:
+            r.add_sprite((cx_s, ch + 0.2, cz_s),
+                         _fx.glow((236, 64, 48), 1.0, tm, flicker=0.18,
+                                  seed=430 + int(cx_s), intensity=0.9),
+                         layer=_fx.FX_LAYER)
+        # A cold band over the yard.  It separates the silhouettes from the
+        # sky without lighting them - the masses must stay darker than it.
+        for hx, hy, hz in _YARD_HAZE:
+            r.add_sprite((hx, hy, hz),
+                         _fx.haze((104, 132, 182), 15.0, tm,
+                                  seed=460 + int(hx), intensity=0.085),
+                         layer=_fx.FX_LAYER)
 
     def _draw_static_lights(self, r, t):
         """Animated sprites for the baked set (lamps, window spill, snow).
@@ -2112,7 +2274,8 @@ class TrainScene:
                      _fx.window_glow((255, 172, 102), 2.0, 0.66, 0.26, tm,
                                      seed=171),
                      layer=_fx.FX_LAYER)
-        _w.snow3d(r, tm, seed=61, n=120, spread=22, height=16, speed=1.3)
+        self._yard_sprites(r, tm)
+        _w.snow3d(r, tm, seed=61, n=60, spread=22, height=16, speed=1.3)
 
     def _draw_train_door(self, r, t):
         tx = self._train_offset()

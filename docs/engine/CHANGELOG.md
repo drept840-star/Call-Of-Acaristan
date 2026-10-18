@@ -2,6 +2,52 @@
 
 Format: date · scope · what changed · why · evidence. Re-baselines of golden/replay/loop data must appear here with before/after evidence (R5, §9).
 
+## 2026-10-18 — reference-machine reconciliation 2: 6 red gates repaired, CI parallelised (396 s -> 238 s)
+
+First full `python tools/ae_ci.py` on the reference machine since the 2026-10-15
+merge: **AE CI: FAIL**, 6 of 25 gates red (unit, golden, replay, loop, bench,
+bench3d), 396 s wall. All six were content/harness drift, not live-code bugs.
+Repairs, with before/after evidence in `docs/engine/evidence/reconcile_20261018/`:
+
+- **unit**: `missions/m6/train3d.py`'s raw `pygame.image.load` moved to
+  `engine.assets.load_image` (D5 chokepoint, owner WIP), and
+  `tests/unit/test_textures3d.py` pins `ACARISTAN_RENDERER=software` for the
+  nearest-neighbour face test (GL paints textured faces flat by design; the test
+  asserts the software path). 357 tests, 0 failures.
+- **golden re-baseline (R5)**: `tests/golden/baseline_v0` - the sandbox-flavoured
+  re-export of 2026-10-16 (B-038, closed here) - re-exported on the reference
+  machine: `capture` 373 shots, 0 errors (35.1 s); `verify` 373/373 under both
+  gate interpreters. Before: 81/373 failures.
+- **replay re-baseline (R5)**: `tests/replay/baseline_v2` recorded on the
+  reference machine (v1 was pre-merge/sandbox: 0/5 segments matched). A scratch
+  record->check proved the tree reproduces itself first. After: 5/5 under both
+  interpreters; `tools/ae_replay.py` default bumped.
+- **loop re-baseline (R5)**: `tests/loop/baseline_v6` recorded on the reference
+  machine. First-diff frames vs v5: boot 120 (the new ENGINE_INTRO screen), m1
+  474, m2 5, m4 0, m5 0; m3 + walk byte-identical. After: 7/7 under both
+  interpreters; `tools/ae_loop.py` default bumped.
+- **bench caps (B-040)**: the §6.22 frame budgets are not met on the reference
+  machine (2D 15.3-26.9 ms vs 10 ms; office3d 46-108 ms vs 20 ms; depot3d
+  37-68 ms vs 12 ms) and no cap set had ever been recorded there.
+  `tools/bench_budgets.json` gains a `reference_win` set (measured load envelope
+  + ~20% headroom; avg decides, p99 is a loose hitch guard) that the CI enforces
+  by default; `ACA_BENCH_SET=owner` remains the raw-budget certification run.
+  Both benches gained `--runs=N` (best pass wins; every pass resets the scenario).
+- **CI speed + isolation (D10)**: `tools/ae_ci.py` runs the timing-sensitive
+  benches first and alone, then the remaining gates in a thread pool (`--jobs N`,
+  default 4; `--serial` keeps the old strict order), gives every gate its own
+  `ACA_SAVE_SUFFIX=_aeci_<gate>` scratch namespace (implements the B-027
+  recommendation) and takes a run lock so two runs cannot interleave. 396 s ->
+  **238 s** (a second consecutive green run: 261 s); no gate dropped or skipped
+  (the smoke test is the floor: 196 s in the pool).
+
+Separately, the owner's uncommitted M6 relight WIP was repaired: the shootout
+path crashed in `cutscenes/m6world3d.static_end()` (the call now carries an
+explicit `ok=` result - a failed shot clears the static signature and skips
+`add_static()`), `missions/m6/train3d.py` had merge-damaged encoding
+(`tools/ae_normalize.repair_python`), and the smoke test's train-redeploy check
+now asserts the static scene bakes geometry. Unrelated to the six red gates.
+
 ## 2026-10-16 — INCIDENT (Phase 10 opening): golden `baseline_v0` overwritten by sandbox renders
 
 `python tools/ae_golden.py capture` was run without `ACA_GOLDEN_SET=sandbox_linux`,

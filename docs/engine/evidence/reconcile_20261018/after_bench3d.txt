@@ -1,0 +1,17 @@
+pygame-ce 2.5.5 (SDL 2.32.6, Python 3.13.3)
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+AE BENCH3D: office3d avg=73.23 ms p99=120.21 ms (1 pass x 60 frames, software, quality 2)
+AE BENCH3D: depot3d avg=39.49 ms p99=53.66 ms (1 pass x 60 frames, software, quality 2)
+AE BENCH3D: office3d_q1 avg=74.15 ms p99=320.91 ms (1 pass x 60 frames, software, quality 1)
+AE BENCH3D: depot3d_q1 avg=24.22 ms p99=52.72 ms (1 pass x 60 frames, software, quality 1)
+AE BENCH3D: office3d_q0 avg=43.48 ms p99=126.73 ms (1 pass x 60 frames, software, quality 0)
+AE BENCH3D: depot3d_q0 avg=12.73 ms p99=36.95 ms (1 pass x 60 frames, software, quality 0)
+AE BENCH3D BUDGET office3d: OK (reference_win caps avg<=130.0 p99<=500.0; 6.22 budget 20.0 ms)
+AE BENCH3D BUDGET depot3d: OK (reference_win caps avg<=85.0 p99<=450.0; 6.22 budget 12.0 ms)
+AE BENCH3D BUDGET office3d_q1: OK (reference_win caps avg<=130.0 p99<=500.0; 6.22 budget 20.0 ms)
+AE BENCH3D BUDGET depot3d_q1: OK (reference_win caps avg<=60.0 p99<=250.0; 6.22 budget 12.0 ms)
+AE BENCH3D BUDGET office3d_q0: OK (reference_win caps avg<=80.0 p99<=300.0; 6.22 budget 20.0 ms)
+AE BENCH3D BUDGET depot3d_q0: OK (reference_win caps avg<=26.0 p99<=120.0; 6.22 budget 12.0 ms)
+
+E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)

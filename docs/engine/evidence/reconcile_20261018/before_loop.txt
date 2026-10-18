@@ -1,0 +1,14 @@
+         rng state first differs at frame 120
+  boot   DIFF first frame 120 of 420; states base: BOOT_INTRO@0 > MENU@120 | now: BOOT_INTRO@0 > ENGINE_INTRO@120 > MENU@151
+         rng state first differs at frame None
+  m1     DIFF first frame 474 of 600; states base: GAME@0 | now: GAME@0
+  walk   OK 600 frames match
+         rng state first differs at frame 356
+  m2     DIFF first frame 5 of 600; states base: GAME@0 | now: GAME@0
+  m3     OK 600 frames match
+         rng state first differs at frame None
+  m4     DIFF first frame 0 of 600; states base: GAME@0 | now: GAME@0
+         rng state first differs at frame None
+  m5     DIFF first frame 0 of 600; states base: GAME@0 | now: GAME@0
+AE LOOP: FAIL (2/7 segments, 46s)
+

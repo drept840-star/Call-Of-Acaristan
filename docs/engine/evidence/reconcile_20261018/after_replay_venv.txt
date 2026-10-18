@@ -1,0 +1,26 @@
+.venv\Scripts\python.exe : E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer 
+available
+At line:1 char:399
++ ... xt" -Force; .venv\Scripts\python.exe tools\ae_replay.py check 2>&1 |  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (E:\Code\Call of...derer available:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+[voice] BALACEANU: 13 files -> 12 of 13 lines matched; 1 extra file(s), 1 line(s) without audio - see balaceanu_matches.txt
+[voice] DARIUS: 1 files -> 1 of 1 lines matched; 0 extra file(s), 0 line(s) without audio - see darius_matches.txt
+[voice] GABI: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see gabi_matches.txt
+[voice] NARRATOR: 10 files -> 10 of 10 lines matched; 0 extra file(s), 0 line(s) without audio - see narrator_matches.txt
+[voice] folder 'OLD FISHERMAN' doesn't match a speaker tab - files there are ignored unless named VO_xxx
+[voice] SEBY: 4 files -> 4 of 4 lines matched; 0 extra file(s), 0 line(s) without audio - see seby_matches.txt
+[voice] folder 'TRAILER' doesn't match a speaker tab - files there are ignored unless named VO_xxx
+[voice] VASILE: 84 files -> 83 of 83 lines matched; 1 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+[SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+[CHECKPOINT] Respawned at shelter - evidence phase active
+m1: OK 30 snapshots match (final 8689419d63b71ef7)  [0.8s]
+m2: OK 30 snapshots match (final 63b386f9669e1f75)  [6.2s]
+m3: OK 30 snapshots match (final fcea70b259c592c2)  [7.7s]
+m4: OK 30 snapshots match (final b198e5390bebcd52)  [0.4s]
+m5: OK 30 snapshots match (final 5c625b763ad2315f)  [1.6s]
+AE REPLAY: OK

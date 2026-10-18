@@ -1,13 +1,21 @@
 """RPE6 replay baseline + determinism check (master prompt §6.17, Phase 0 item 9, D8).
 
-    python tools/ae_replay.py record [--set baseline_v1] [--only m3]   # write baselines
-    python tools/ae_replay.py check  [--set baseline_v1] [--only m3]   # replay + compare
+    python tools/ae_replay.py record [--set baseline_v2] [--only m3]   # write baselines
+    python tools/ae_replay.py check  [--set baseline_v2] [--only m3]   # replay + compare
 
 Snapshot version 2 (Phase 5): the hash also covers the declared components of every
 enemy's entity in game.world ("~world" field), so data migrated off the legacy objects
 stays under the oracle. baseline_v0 (version 1) is superseded: it hashed the ad hoc
 ``e.m5_*`` attributes that are now M5Guard components (proof of equivalence:
 tools/ae_d4_replay_compat.py, docs/engine/evidence/phase5/m4_replay_compat.txt).
+
+Baseline version note (2026-10-18, reference-machine reconciliation): baseline_v1 was
+recorded in the Linux sandbox from the pre-merge snapshot; the merged tree carries the
+owner's newer work (sprite pipeline + polish passes, snapshot 6ba9b81), so every segment
+diverged at t=1s. The current tree reproduces itself exactly (record -> check on a scratch
+set), i.e. content drift, not nondeterminism. Re-recorded as baseline_v2 on the reference
+machine with the system python (py 3.13, pygame-ce 2.5.5, SDL 2.32.6); the .venv (py 3.14,
+pygame-ce 2.5.7, SDL 2.32.10) produces identical hashes. baseline_v1 kept for history.
 
 One segment per mission: load a checkpoint, then drive the *legacy* sim
 (core.game_core.game_update) for SECONDS at a fixed 1/60 s dt with a scripted
@@ -230,7 +238,7 @@ def run_segment(seg: str, stream=None):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=("record", "check"))
-    ap.add_argument("--set", default="baseline_v1")
+    ap.add_argument("--set", default="baseline_v2")
     ap.add_argument("--only", default="")
     a = ap.parse_args()
     d = ROOT / "tests" / "replay" / a.set

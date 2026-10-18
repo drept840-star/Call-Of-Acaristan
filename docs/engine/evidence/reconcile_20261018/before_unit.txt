@@ -1,0 +1,74 @@
+pygame-ce 2.5.5 (SDL 2.32.6, Python 3.13.3)
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+AE TIMELINE EDIT: OK (camera[1].fov: 40 -> 30 at t=1000; sample 40 -> 30)
+[voice] VASILE: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+[voice] VASILE: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
+......[RPE6][core] ERROR: crash report written: C:\Users\BIRIBEL\AppData\Local\Temp\tmpo4197brp\20261018-204559-130201.txt
+...........F..................................E:\Code\Call of Acaristan\First try\tests\unit\test_devtools.py:93: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\BIRIBEL\\AppData\\Local\\Temp\\tmpp8b6bv2o\\m4.story_beats.timeline.json' mode='r' encoding='utf-8'>
+  data = json.load(open(os.path.join(tmp, "m4.story_beats.timeline.json"), encoding="utf-8"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..[RPE6][core] ERROR: crash report written: C:\Users\BIRIBEL\AppData\Local\Temp\tmpgzbs7gpa\20261018-204600-561776.txt
+...[RPE6][core] ERROR: crash report written: C:\Users\BIRIBEL\AppData\Local\Temp\tmp6tthkb5e\20261018-204600-571878.txt
+E:\Code\Call of Acaristan\First try\tests\unit\test_engine_core.py:162: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\BIRIBEL\\AppData\\Local\\Temp\\tmp6tthkb5e\\20261018-204600-571878.txt' mode='r' encoding='utf-8'>
+  txt = open(os.path.join(d, files[0]), encoding="utf-8").read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...........E:\Code\Call of Acaristan\First try\tests\unit\test_engine_core.py:137: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\BIRIBEL\\AppData\\Local\\Temp\\tmph467e4_k/s.json' mode='w' encoding='cp1252'>
+  open(p, "w").write('{"seed": 5, "width": 800}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+........................................................[RPE6][text] WARN: text overflow (136x19px in 200x1 box): 'wrapped words fit'
+.[RPE6][text] WARN: text overflow (4001x19px in 20xNone box): 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+.......[RPE6][text] WARN: string 'k' failed to format with []
+.[RPE6][text] WARN: missing string key 'absent' - showing the marker
+...[RPE6][text] WARN: missing string key 'anything' - showing the marker
+.[RPE6][text] WARN: missing string key 'm2.never.defined' - showing the marker
+.[RPE6][text] WARN: missing string key 'a' - showing the marker
+..............................................E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Bold.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-SemiBold.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\Oswald.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Regular.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..............................C:\Program Files\Python313\Lib\ast.py:54: ResourceWarning: unclosed file <_io.BufferedReader name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Regular.ttf'>
+  return compile(source, filename, mode, flags,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.................................................................................................................................F.............
+======================================================================
+FAIL: test_no_raw_loads_outside_engine_assets (tests.unit.test_assets_registry.TestD5AndShim.test_no_raw_loads_outside_engine_assets)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\Code\Call of Acaristan\First try\tests\unit\test_assets_registry.py", line 342, in test_no_raw_loads_outside_engine_assets
+    self.assertEqual(hits, [], "raw loads must go through engine.assets.load_image/load_sound")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['src/missions/m6/train3d.py:559'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'src/missions/m6/train3d.py:559'
+
+- ['src/missions/m6/train3d.py:559']
++ [] : raw loads must go through engine.assets.load_image/load_sound
+
+======================================================================
+FAIL: test_textured_face_renders_nearest (tests.unit.test_textures3d.Textures.test_textured_face_renders_nearest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\Code\Call of Acaristan\First try\tests\unit\test_textures3d.py", line 69, in test_textured_face_renders_nearest
+    self.assertTrue(len(colours) > 4,
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+                    f"textured box should show palette variety, got {colours}")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : textured box should show palette variety, got {(0, 0, 0), (99, 73, 42)}
+
+----------------------------------------------------------------------
+Ran 357 tests in 15.735s
+
+FAILED (failures=2)

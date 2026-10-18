@@ -1,0 +1,50 @@
+pygame-ce 2.5.5 (SDL 2.32.6, Python 3.13.3)
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+AE TIMELINE EDIT: OK (camera[1].fov: 40 -> 30 at t=1000; sample 40 -> 30)
+[voice] VASILE: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+[voice] VASILE: 3 files -> 3 of 3 lines matched; 0 extra file(s), 0 line(s) without audio - see vasile_matches.txt
+
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
+......[RPE6][core] ERROR: crash report written: C:\Users\BIRIBEL\AppData\Local\Temp\tmpsm3rfss2\20261018-213958-494733.txt
+..............................................E:\Code\Call of Acaristan\First try\tests\unit\test_devtools.py:93: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\BIRIBEL\\AppData\\Local\\Temp\\tmpqadxag33\\m4.story_beats.timeline.json' mode='r' encoding='utf-8'>
+  data = json.load(open(os.path.join(tmp, "m4.story_beats.timeline.json"), encoding="utf-8"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..[RPE6][core] ERROR: crash report written: C:\Users\BIRIBEL\AppData\Local\Temp\tmph_jd0fo0\20261018-214000-300089.txt
+...[RPE6][core] ERROR: crash report written: C:\Users\BIRIBEL\AppData\Local\Temp\tmpa9ap8mh2\20261018-214000-305984.txt
+E:\Code\Call of Acaristan\First try\tests\unit\test_engine_core.py:162: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\BIRIBEL\\AppData\\Local\\Temp\\tmpa9ap8mh2\\20261018-214000-305984.txt' mode='r' encoding='utf-8'>
+  txt = open(os.path.join(d, files[0]), encoding="utf-8").read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...........E:\Code\Call of Acaristan\First try\tests\unit\test_engine_core.py:137: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\BIRIBEL\\AppData\\Local\\Temp\\tmp5f9wr7dm/s.json' mode='w' encoding='cp1252'>
+  open(p, "w").write('{"seed": 5, "width": 800}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+........................................................[RPE6][text] WARN: text overflow (136x19px in 200x1 box): 'wrapped words fit'
+.[RPE6][text] WARN: text overflow (4001x19px in 20xNone box): 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+.......[RPE6][text] WARN: string 'k' failed to format with []
+.[RPE6][text] WARN: missing string key 'absent' - showing the marker
+...[RPE6][text] WARN: missing string key 'anything' - showing the marker
+.[RPE6][text] WARN: missing string key 'm2.never.defined' - showing the marker
+.[RPE6][text] WARN: missing string key 'a' - showing the marker
+..............................................E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-SemiBold.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\Oswald.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Regular.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E:\Code\Call of Acaristan\First try\tests\unit\..\..\src\engine3d\core.py:142: ResourceWarning: unclosed file <_io.FileIO name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Bold.ttf' mode='rb' closefd=True>
+  self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..............................C:\Program Files\Python313\Lib\ast.py:54: ResourceWarning: unclosed file <_io.BufferedReader name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Bold.ttf'>
+  return compile(source, filename, mode, flags,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+C:\Program Files\Python313\Lib\ast.py:54: ResourceWarning: unclosed file <_io.BufferedReader name='E:\\Code\\Call of Acaristan\\First try\\assets\\fonts\\IBMPlexMono-Regular.ttf'>
+  return compile(source, filename, mode, flags,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...............................................................................................................................................
+----------------------------------------------------------------------
+Ran 357 tests in 24.252s
+
+OK

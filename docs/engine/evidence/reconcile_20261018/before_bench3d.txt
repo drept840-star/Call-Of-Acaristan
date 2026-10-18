@@ -1,0 +1,5 @@
+# `3d frame budget` row of the old CI run (2026-10-18 20:45, wall 396 s).
+# The row failed because the raw 6.22 budget was the only verdict then (nothing
+# was recorded for this machine yet; BUGS B-040). Extracted from before_ae_ci.txt.
+3d frame budget (RPE6 P11): FAIL
+3d frame budget (RPE6 P11) ............ FAIL  avg=71.04 ms p99=131.79 ms (60 frames, software, quality 2)  [21s]

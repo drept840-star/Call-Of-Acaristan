@@ -23,7 +23,7 @@ Each segment runs in its own subprocess (app.py runs the game on import):
   * pygame.mixer replaced by a game-time fake (Channel.get_busy follows the
     sound length on the fake clock, not the SDL audio thread); silent
   * every flip: sha1 of the display surface + gsm.current_name
-Baselines: tests/loop/baseline_v5/<seg>.json (the previous set is kept for diffs; older ones are
+Baselines: tests/loop/baseline_v6/<seg>.json (the previous set is kept for diffs; older ones are
 removed by tools/slim_tree.py - their reasons stay in the notes below). No game file
 is modified by this tool.
 """
@@ -64,7 +64,15 @@ ROOT = Path(__file__).resolve().parents[1]
 #   machine; the .venv (py 3.14, pygame-ce 2.5.7, SDL 2.32.10) and the system python
 #   (py 3.13, pygame-ce 2.5.5, SDL 2.32.6) produce identical hashes, i.e. content
 #   drift, not machine drift. v4 kept for history.
-BASE = ROOT / "tests" / "loop" / os.environ.get("ACA_LOOP_SET", "baseline_v5")  # sandbox sets via env
+# baseline_v6 (2026-10-18, reference-machine reconciliation 2): v5 was recorded on the
+#   reference machine before the owner's post-sandbox work landed (snapshot 6ba9b81:
+#   sprite pipeline + polish passes + M6). boot/m1/m2/m4/m5 diverge (first pixel diffs
+#   at frames 120, 474, 5, 0, 0; boot's ENGINE_INTRO screen is new content - v5's
+#   BOOT_INTRO@0 > MENU@120 is now BOOT_INTRO@0 > ENGINE_INTRO@120 > MENU@151), while
+#   m3/walk are byte-identical to v5. Re-recorded on the reference machine with the
+#   system python (py 3.13, pygame-ce 2.5.5, SDL 2.32.6); the .venv (py 3.14,
+#   pygame-ce 2.5.7, SDL 2.32.10) produces identical hashes. v5 kept for history.
+BASE = ROOT / "tests" / "loop" / os.environ.get("ACA_LOOP_SET", "baseline_v6")  # sandbox sets via env
 BUILD = ROOT / "build" / "ae_loop"
 SEED = 1337
 FRAME_MS = 16

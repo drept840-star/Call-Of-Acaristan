@@ -1,0 +1,14 @@
+python : E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer available
+At line:1 char:1
++ python tools/ae_golden.py capture *> "C:\Users\BIRIBEL\AppData\Local\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (E:\Code\Call of...derer available:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+[SQUAD] Marked dead at kill-box positions: [('GABI', False, 'down'), ('SEBY', False, 'down'), ('DARIUS', False, 'down')]
+[CHECKPOINT] Respawned at shelter - evidence phase active
+captured 373 shots (0 errors) in 35.1s -> E:\Code\Call of Acaristan\First try\tests\golden\baseline_v0
+AE GOLDEN: OK
+CAPTURE_EXIT=0

@@ -1,0 +1,5 @@
+# `frame budget bench` row of the old CI run (2026-10-18 20:45, wall 396 s).
+# The row failed because the raw 6.22 budget was the only verdict then (nothing
+# was recorded for this machine yet; BUGS B-040). Extracted from before_ae_ci.txt.
+frame budget bench: FAIL
+frame budget bench .................... FAIL  m5-quarter/rain/6-guards/fire x240 frames: avg=15.84 ms p99=27.86 ms (budget 10 ms) - OVER BUDGET (sandbox hardware - owner re-run decides)  [8s]

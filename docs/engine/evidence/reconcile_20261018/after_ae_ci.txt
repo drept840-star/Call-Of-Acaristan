@@ -1,0 +1,59 @@
+frame budget bench: OK
+3d frame budget (RPE6 P11): OK
+compileall: OK
+import side effects (engine): OK
+global names (no unresolved globals): OK
+api snapshot (engine public surface): OK
+entity components (D4 grep gate): OK
+import hygiene (no star re-exports): OK
+boundary lint (enforce engine): OK
+level data (data == generators): OK
+render queue (D6 custom-draw ratchet): OK
+set3d data (validator + build): OK
+dialogue data (validator + round-trip): OK
+string tables + text fit: OK
+timeline data (validator + round-trip): OK
+unit tests: OK
+golden images: OK
+asset bake check + lint: OK
+save snapshots reproduce replay (RPE6 P9): OK
+flash-reduction luminance cap (RPE6 P9): OK
+component dump (running M5 stage): OK
+data validation (RPE6 P10): OK
+engine3d parity - software determinism (RPE6 P10): OK
+replay determinism: OK
+mission 0 zero-engine-diff (RPE6 P10): OK
+main loop parity: OK
+smoke test: OK
+
+AE CI SUMMARY
+compileall ............................ OK    [0s]
+boundary lint (enforce engine) ........ OK    0 engine violations, 83 engine modules; W1 shared->mission 50 (baseline 50, =)  [8s]
+import side effects (engine) .......... OK    engine 83 modules clean  [0s]
+import hygiene (no star re-exports) ... OK    0 star sites left  [6s]
+global names (no unresolved globals) .. OK    348 files, 0 with unresolved globals, 10 skipped for relative stars, 1 known non-modules  [3s]
+string tables + text fit .............. OK    table 492 keys, 0 missing, 0 unused, 21 fit slots  [13s]
+api snapshot (engine public surface) .. OK    80 modules, 547 public names; +0 -0 ~0, 0 errors  [0s]
+entity components (D4 grep gate) ...... OK    hard=0, remaining mission-prefixed sites=0, exit criterion met  [1s]
+render queue (D6 custom-draw ratchet) .. OK    custom draws: m1=1 m2=1 m3=1 m4=1 m5=0; direct draw sites: m1=288 m2=1226 m3=1912 m4=399 m5=275; exit criterion met  [7s]
+level data (data == generators) ....... OK    13 levels, data == legacy generators  [5s]
+dialogue data (validator + round-trip) .. OK    3 dialogues valid, data == legacy tables  [5s]
+timeline data (validator + round-trip) .. OK    23 timelines valid, data == legacy tables  [5s]
+set3d data (validator + build) ........ OK    3 sets valid, primitives build clean  [0s]
+unit tests ............................ OK    357 tests  [31s]
+asset bake check + lint ............... OK    packs=5 baked=0 checked=42 sampled=27 stale=0 missing=0 mismatched=0 errors=0 lint_warnings=9  [34s]
+smoke test ............................ OK    SMOKE TEST: OK  [196s]
+golden images ......................... OK    373 shots in 24.8s: 0 failures, 0 errors  [29s]
+replay determinism .................... OK    5 segments match  [46s]
+save snapshots reproduce replay (RPE6 P9) .. OK    OK  [9s]
+flash-reduction luminance cap (RPE6 P9) .. OK    OK  [8s]
+component dump (running M5 stage) ..... OK    segment m5 after 1s sim (60 steps) - 8 entities, 8 component types present, 18 registered  [14s]
+main loop parity ...................... OK    7/7 segments, 62s  [62s]
+frame budget bench .................... OK    m5-quarter/rain/6-guards/fire x240 frames: avg=17.17 ms p99=49.19 ms (budget 10 ms) - over 6.22 budget (caps decide in CI)  [8s]
+3d frame budget (RPE6 P11) ............ OK    avg=73.23 ms p99=120.21 ms (1 pass x 60 frames, software, quality 2)  [21s]
+data validation (RPE6 P10) ............ OK    64 files: 14 levels, 3 dialogues, 23 timelines, 3 sets  [0s]
+engine3d parity - software determinism (RPE6 P10) .. OK    software backend deterministic: M2 film x2 frames x2 instances + interleave, m0 depot set x2; GL diff = owner-machine run of tools/engine3d_check.py  [20s]
+mission 0 zero-engine-diff (RPE6 P10) .. OK    engine tree untouched: 83 files, sha 7a71e955fd95...; playthrough + 3 outro shots rendered  [21s]
+
+AE CI: OK (implemented gates)
+CI_EXIT=0

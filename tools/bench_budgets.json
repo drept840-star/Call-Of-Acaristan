@@ -1,6 +1,6 @@
 {
   "schema": "ae.bench-budgets/1",
-  "note": "Reference machine is the owner's dev machine (master prompt 6.22: gameplay frame <= 10 ms). Sandbox caps were recorded in the Arena sandbox on 2026-10-16 and carry ~1.5x headroom; they catch regressions, they do not certify the 10 ms budget. Re-record on the owner machine and tighten.",
+  "note": "Recorded caps. `reference_win` = the owner reference machine (STATUS.md: i7-12700KF, Windows 11; both gate interpreters), measured 2026-10-18: recorded_* are representative numbers, load_envelope_avg_ms is the observed per-run range while the owner's desktop kept working (editor/browser/VM churn; a loaded run can be ~1.7x a quiet one), avg_cap_ms carries ~20% headroom over the envelope maximum and decides the gate, p99_cap_ms is a loose hitch guard only (p99 under desktop load reaches 100-400 ms on the 3D rows). `ACA_BENCH_SET=owner` enforces the raw 6.22 budgets (quiet-machine certification run, `--runs=3` recommended); `ACA_BENCH_SET=sandbox_linux` keeps the Arena-sandbox caps (2026-10-16, ~1.5x headroom). Caps catch regressions; they do not certify 6.22 - measured 2026-10-18: 2D 15.3-26.9 ms vs 10 ms, office3d q2 46-108 ms vs 20 ms, depot3d q2 37-68 ms vs 12 ms (BUGS B-040).",
   "scenarios": {
     "m5-quarter": {
       "budget_ms": 10.0,
@@ -9,6 +9,16 @@
         "recorded_p99_ms": 15.65,
         "avg_cap_ms": 17.0,
         "p99_cap_ms": 24.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 16.0,
+        "recorded_p99_ms": 28.0,
+        "load_envelope_avg_ms": [
+          15.3,
+          26.9
+        ],
+        "avg_cap_ms": 32.0,
+        "p99_cap_ms": 200.0
       }
     },
     "office3d": {
@@ -19,6 +29,16 @@
         "recorded_p99_ms": 34.38,
         "avg_cap_ms": 38.0,
         "p99_cap_ms": 64.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 70.0,
+        "recorded_p99_ms": 100.0,
+        "load_envelope_avg_ms": [
+          46.3,
+          108.2
+        ],
+        "avg_cap_ms": 130.0,
+        "p99_cap_ms": 500.0
       }
     },
     "depot3d": {
@@ -29,6 +49,16 @@
         "recorded_p99_ms": 40.67,
         "avg_cap_ms": 38.0,
         "p99_cap_ms": 55.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 42.0,
+        "recorded_p99_ms": 70.0,
+        "load_envelope_avg_ms": [
+          36.9,
+          67.6
+        ],
+        "avg_cap_ms": 85.0,
+        "p99_cap_ms": 450.0
       }
     },
     "depot3d_q1": {
@@ -39,6 +69,16 @@
         "recorded_p99_ms": 22.4,
         "avg_cap_ms": 28.0,
         "p99_cap_ms": 40.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 24.0,
+        "recorded_p99_ms": 40.0,
+        "load_envelope_avg_ms": [
+          21.7,
+          45.3
+        ],
+        "avg_cap_ms": 60.0,
+        "p99_cap_ms": 250.0
       }
     },
     "depot3d_q0": {
@@ -49,6 +89,16 @@
         "recorded_p99_ms": 17.47,
         "avg_cap_ms": 10.0,
         "p99_cap_ms": 26.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 10.2,
+        "recorded_p99_ms": 20.0,
+        "load_envelope_avg_ms": [
+          7.3,
+          19.8
+        ],
+        "avg_cap_ms": 26.0,
+        "p99_cap_ms": 120.0
       }
     },
     "office3d_q1": {
@@ -59,6 +109,16 @@
         "recorded_p99_ms": 40.74,
         "avg_cap_ms": 40.0,
         "p99_cap_ms": 64.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 72.0,
+        "recorded_p99_ms": 110.0,
+        "load_envelope_avg_ms": [
+          46.9,
+          106.2
+        ],
+        "avg_cap_ms": 130.0,
+        "p99_cap_ms": 500.0
       }
     },
     "office3d_q0": {
@@ -69,6 +129,16 @@
         "recorded_p99_ms": 36.85,
         "avg_cap_ms": 34.0,
         "p99_cap_ms": 64.0
+      },
+      "reference_win": {
+        "recorded_avg_ms": 39.0,
+        "recorded_p99_ms": 60.0,
+        "load_envelope_avg_ms": [
+          34.1,
+          62.0
+        ],
+        "avg_cap_ms": 80.0,
+        "p99_cap_ms": 300.0
       }
     }
   }

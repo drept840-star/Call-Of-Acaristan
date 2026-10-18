@@ -1,0 +1,8 @@
+  boot   OK 420 frames match
+  m1     OK 600 frames match
+  walk   OK 600 frames match
+  m2     OK 600 frames match
+  m3     OK 600 frames match
+  m4     OK 600 frames match
+  m5     OK 600 frames match
+AE LOOP: OK (7/7 segments, 49s)

@@ -155,9 +155,23 @@ def static_scene(r, key):
     return True
 
 
-def static_end(r):
+def static_end(r, ok=True):
+    """Close a static batch opened by ``static_scene``.
+
+    ``ok=False`` means the set builder raised partway: the half-built batch
+    must not be committed, and the signature is cleared so the next frame
+    rebuilds the set in full instead of reusing the fragment.
+    """
+    global _STATIC_SIG
     _STATIC_BUILD["active"] = False
     _STATIC_BUILD["rebuild"] = False
+    if not ok:
+        _STATIC_SIG = None
+        r.objs.clear()
+        invalidate = getattr(r, "invalidate_static", None)
+        if invalidate:
+            invalidate()
+        return
     r.add_static()
 
 

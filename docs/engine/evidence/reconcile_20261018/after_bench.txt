@@ -1,0 +1,7 @@
+Loaded optional sound 'mission3_alarm_loop': E:\Code\Call of Acaristan\First try\assets\alarm.mp3
+AE BENCH: scenario m5-quarter/rain/6-guards/fire x240 frames: avg=17.17 ms p99=49.19 ms (budget 10 ms) - over 6.22 budget (caps decide in CI)
+AE BENCH: 1 pass; draw stats {'floor': 2, 'decor_static': 1, 'decals_dynamic': 1, 'shadows': 0, 'entities': 10, 'fx_world': 73, 'lighting': 0, 'overlay_world': 57, 'ui': 6, 'debug': 0} custom=0 ui_passes=3
+AE BENCH BUDGET: OK (reference_win caps avg<=32 ms p99<=200 ms; 6.22 budget 10 ms is the certification target)
+
+E:\Code\Call of Acaristan\First try\src\engine\core\app.py:66: Warning: no fast renderer available
+  self.screen = surf or pygame.display.set_mode(size, display_flags)
