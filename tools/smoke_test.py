@@ -8864,6 +8864,80 @@ def check_m6_train_ads_and_muzzle():
         T.reset()
 
 
+def check_m6_train_scope_sees_the_target():
+    """Ucilev's scope must actually show Volkov, and no rig may overrun the
+    four-light budget the GL backend uploads.
+
+    The scope beat used to render as a featureless grey disc: the camera sat
+    inside the signal-tower cabin, and a cabin face a few centimetres from the
+    lens is painter layer 2, so it won the sort against the whole scene.  The
+    A/B here is the same one that found it - draw the scope frame with and
+    without the subject and require a visible difference inside the scope disc.
+    """
+    from core.state import STATE
+    from missions.m6 import train3d as T
+
+    saved_dt = STATE.dt
+    T.reset()
+    try:
+        STATE.dt = 1.0 / 60.0
+        T.begin()
+        sc = T.scene()
+        sc.guards = []
+        sc.cine_pending_shot = True
+
+        # The eye has to stay outside the cabin box that rail_platform builds.
+        eye = T.TOWER_EYE
+        cabin = T.TOWER_CABIN_BOX          # x0 x1 y0 y1 z0 z1
+        inside = (cabin[0] <= eye[0] <= cabin[1] and cabin[2] <= eye[1] <= cabin[3]
+                  and cabin[4] <= eye[2] <= cabin[5])
+        assert not inside, "the scope eye is inside the tower cabin: %s" % (eye,)
+
+        # One rig per beat, every rig inside the GL light budget.
+        r = T._renderer()
+        beats = [T.CUT_AT + 0.1, T.SHOT_AT + T.CINE_TOWER_END * 0.5,
+                 T.SHOT_AT + T.CINE_SCOPE_END * 0.9,
+                 T.SHOT_AT + T.CINE_IMPACT_END + 0.2,
+                 T.SHOT_AT + T.CINE_CATCH_END + 0.2]
+        for t in beats:
+            T._light(r, None, None, t=t)
+            assert len(r.lights) <= T.LIGHT_CAP, \
+                "rig at t=%.1f queues %d lights, GL uploads %d" % (
+                    t, len(r.lights), T.LIGHT_CAP)
+
+        # The scope frame, with and without the man in it.
+        sc.t = T.SHOT_AT + T.CINE_SCOPE_END * 0.72
+        sc.guards = []
+        surf = pygame.Surface((T.WIDTH, T.HEIGHT))
+        sc.draw(surf)
+        with_target = pygame.surfarray.array3d(surf).copy()
+
+        real_volkov = sc._draw_volkov
+        sc._draw_volkov = lambda *a, **k: None
+        try:
+            sc.draw(surf)
+        finally:
+            sc._draw_volkov = real_volkov
+        without = pygame.surfarray.array3d(surf)
+
+        cx, cy, rad = T.WIDTH // 2, T.HEIGHT // 2, int(T.WIDTH * 0.24)
+        changed = 0
+        for y in range(cy - rad, cy + rad, 3):
+            for x in range(cx - rad, cx + rad, 3):
+                if (x - cx) ** 2 + (y - cy) ** 2 > rad * rad:
+                    continue
+                # array3d is [x][y], not [y][x]
+                a, b = with_target[x][y], without[x][y]
+                if abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2]) > 24:
+                    changed += 1
+        assert changed > 40, (
+            "nothing is visible in Ucilev's scope (subject changed %d px); "
+            "the camera is inside set geometry again" % changed)
+    finally:
+        STATE.dt = saved_dt
+        T.reset()
+
+
 def check_m6_train_redeploy_after_death():
     """Dying in the 3D train and redeploying must restart it, not pass it.
 
@@ -9239,6 +9313,7 @@ def main():
     ok = run_check("mission6_vertical_slice", check_mission6_vertical_slice) and ok
     ok = run_check("m6_train_viewmodel", check_m6_train_viewmodel) and ok
     ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
+    ok = run_check("m6_train_scope_subject", check_m6_train_scope_sees_the_target) and ok
     ok = run_check("m6_train_redeploy_after_death",
                    check_m6_train_redeploy_after_death) and ok
 

@@ -58,6 +58,22 @@ CINE_IMPACT_END = 5.2
 CINE_CATCH_END = 8.4
 CINE_DOORS_END = 11.0
 
+# The signal tower.  Ucilev kneels on the cabin roof; the SCOPE shot is taken
+# from the cabin window.  The eye MUST stay clear of TOWER_CABIN_BOX (the box
+# m6world3d.rail_platform builds for the cabin): every box
+# face is painter layer 2, so one that comes within a metre of the lens wins
+# the sort against the whole scene and paints the frame flat.  With the eye
+# inside the cabin that is exactly what the beat rendered - a featureless
+# grey disc with no Volkov, no track, nothing.
+TOWER_CABIN_BOX = (16.9, 19.1, 7.0, 8.6, 7.5, 9.5)   # x0 x1 y0 y1 z0 z1
+TOWER_KNEE = (18.0, 8.62, 8.50)   # where the rig stands (matches _draw_ucilev)
+TOWER_EYE = (17.95, 8.05, 7.16)   # at the window: in front of the cabin (-z)
+
+# Local lights per frame.  The GL backend has four slots in the shader
+# (``u_pl_pos[4]``); the software painter has eight.  Every rig in ``_light``
+# stays inside this budget so both backends render the same frame.
+LIGHT_CAP = 4
+
 PLAYER_POS = (-13.0, 0.58, 6.8)
 PLAYER_EYE = 1.66
 BASE_YAW = 68.0
@@ -258,56 +274,104 @@ def _hum(key):
 
 
 def _light(r, eye=None, fwd=None, t=None):
+    """Light rig for the frame.
+
+    Every rig here is authored to exactly ``LIGHT_CAP`` local lights.  The GL
+    backend uploads four (``u_pl_pos[4]``) and silently drops the rest, while
+    the software painter keeps eight - an over-budget rig looks right in the
+    CPU preview and wrong on the player's GPU, which is how the old rig lost
+    the viewmodel fill entirely on GL.
+    """
     from engine3d import Light
     final = t is not None and t >= CUT_AT
     if final:
-        # The close shot: one warm key on Volkov, a soft cool fill, no
-        # competing platform practicals.
-        r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.34,
-                        diffuse=0.55, sky=0.10, tint=(0.98, 0.94, 0.96))
-        lights = [
-            {"pos": (11.4, 1.5, 2.4), "color": (255, 206, 150),
-             "intensity": 0.95, "range": 3.8},
-            {"pos": (TRAIN_DOOR_X, 1.8, -2.1), "color": (255, 176, 96),
-             "intensity": 0.80, "range": 5.5},
-            {"pos": (9.4, 2.6, 5.6), "color": (150, 168, 200),
-             "intensity": 0.30, "range": 6.5},
-        ]
+        # Post-shot cinematic: one rig per beat, each lit by something the
+        # audience can already see in frame (the cabin window, the gantry work
+        # lamp, the carriage windows).
+        c = t - SHOT_AT
+        if c < CINE_TOWER_END:
+            # Tower establishing: the cabin window throws warm light up onto
+            # the roof, a cold sky fill separates the tower from the night
+            # instead of leaving it a black slab.
+            r.light = Light(direction=(-0.34, 0.76, -0.38), ambient=0.30,
+                            diffuse=0.58, sky=0.20, tint=(0.88, 0.93, 1.10))
+            lights = [
+                {"pos": (18.0, 7.55, 6.30), "color": (255, 196, 122),
+                 "intensity": 1.10, "range": 6.0},
+                {"pos": (12.0, 12.5, -1.5), "color": (142, 172, 222),
+                 "intensity": 0.62, "range": 24.0},
+                {"pos": (15.4, 3.2, 3.4), "color": (120, 150, 200),
+                 "intensity": 0.42, "range": 11.0},
+                {"pos": (10.9, 1.8, -2.1), "color": (255, 176, 96),
+                 "intensity": 0.55, "range": 6.0},
+            ]
+        elif c < CINE_SCOPE_END:
+            # Down the scope: the gantry work lamp is the key, the carriage
+            # windows rim him from behind, and a cold fill keeps him off the
+            # ballast.  Without these the subject is a black cut-out on grey.
+            r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.32,
+                            diffuse=0.56, sky=0.18, tint=(0.90, 0.94, 1.06))
+            lights = [
+                # The gantry work lamp over the track IS the key, and it has to
+                # reach: a 8 m range left the target sitting in its own shadow.
+                {"pos": (13.0, 5.80, 1.80), "color": (255, 214, 152),
+                 "intensity": 1.35, "range": 12.0},
+                # Platform edge behind him, so the run reads as a silhouette.
+                {"pos": (13.0, 3.20, 5.20), "color": (255, 190, 120),
+                 "intensity": 0.70, "range": 9.0},
+                {"pos": (10.8, 2.10, -3.30), "color": (255, 202, 142),
+                 "intensity": 0.80, "range": 9.5},
+                {"pos": (9.0, 5.40, -2.20), "color": (128, 158, 210),
+                 "intensity": 0.62, "range": 15.0},
+            ]
+        else:
+            # The close shot: one warm key on Volkov, a soft cool fill, no
+            # competing platform practicals.
+            r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.34,
+                            diffuse=0.55, sky=0.14, tint=(0.98, 0.94, 0.96))
+            lights = [
+                {"pos": (11.4, 1.5, 2.4), "color": (255, 206, 150),
+                 "intensity": 0.95, "range": 4.2},
+                {"pos": (TRAIN_DOOR_X, 1.8, -2.1), "color": (255, 176, 96),
+                 "intensity": 0.80, "range": 5.5},
+                {"pos": (9.4, 2.6, 5.6), "color": (150, 168, 200),
+                 "intensity": 0.30, "range": 6.5},
+                # Cold back-rim from the yard side: the body used to sit on
+                # the sleepers as one flat brown mass.
+                {"pos": (14.2, 3.10, -3.40), "color": (136, 166, 214),
+                 "intensity": 0.55, "range": 10.0},
+            ]
     else:
         # Action: deep night base, warm sodium pools, one cool rim.
-        r.light = Light(direction=(-0.46, 0.64, -0.36), ambient=0.30,
-                        diffuse=0.62, sky=0.12, tint=(0.86, 0.90, 1.08))
+        r.light = Light(direction=(-0.46, 0.64, -0.36), ambient=0.36,
+                        diffuse=0.62, sky=0.21, tint=(0.90, 0.93, 1.04))
         lights = [
-            {"pos": (-10.0, 4.2, 7.2), "color": (255, 195, 125),
-             "intensity": 0.95, "range": 12.5},
+            # Two sodium keys, not three: the third pool landed on top of the
+            # other two and the platform lost its shape.
             {"pos": (0.0, 4.2, 7.2), "color": (255, 195, 125),
-             "intensity": 0.95, "range": 12.5},
-            {"pos": (10.0, 4.2, 7.2), "color": (255, 210, 150),
-             "intensity": 1.10, "range": 13.5},
-            {"pos": (TRAIN_DOOR_X, 2.0, -2.1), "color": (255, 176, 96),
-             "intensity": 1.00, "range": 8.0},
-            {"pos": (6.0, 6.5, -6.0), "color": (110, 150, 220),
-             "intensity": 0.55, "range": 16.0},
+             "intensity": 1.25, "range": 13.5},
+            {"pos": (9.6, 4.2, 7.2), "color": (255, 208, 148),
+             "intensity": 1.20, "range": 13.0},
+            # Snow-side cold rim: the only thing that gives the Guard a lit
+            # edge against a warm platform.
+            {"pos": (4.0, 6.8, -5.6), "color": (118, 152, 214),
+             "intensity": 0.52, "range": 18.0},
         ]
-    if eye is not None and fwd is not None:
-        # Weapon fill: the viewmodel sits ~0.8 m from the lens, and with only
-        # the scene practicals behind it the receiver went to near-black.  A
-        # cool key just over the barrel plus a low warm bounce keeps the
-        # metal readable without making it look polished.  The key sits
-        # above and slightly left of the aim line (not coaxial): coaxial
-        # light hits every face of the gun at the same angle and the
-        # viewmodel reads as one flat grey slab.
-        rgt = (-fwd[2], 0.0, fwd[0])
-        lr = math.sqrt(rgt[0] * rgt[0] + rgt[2] * rgt[2]) or 1.0
-        rgt = (rgt[0] / lr, rgt[1] / lr, rgt[2] / lr)
-        lights.append({
-            "pos": (eye[0] + fwd[0] * 0.34 + rgt[0] * 0.10 + 0.55,
-                    eye[1] + 0.72, eye[2] + fwd[2] * 0.34 + rgt[2] * 0.10),
-            "color": (204, 212, 226), "intensity": 0.60, "range": 2.2})
-        lights.append({
-            "pos": (eye[0] + fwd[0] * 0.28 - rgt[0] * 0.42,
-                    eye[1] - 0.42, eye[2] + fwd[2] * 0.28 - rgt[2] * 0.42),
-            "color": (176, 150, 118), "intensity": 0.24, "range": 1.6})
+        if eye is not None and fwd is not None:
+            # Weapon fill: the viewmodel sits ~0.8 m from the lens, and with
+            # only the scene practicals behind it the receiver went to
+            # near-black.  A cool key just over the barrel keeps the metal
+            # readable without making it look polished.  The key sits above
+            # and slightly left of the aim line (not coaxial): coaxial light
+            # hits every face of the gun at the same angle and the viewmodel
+            # reads as one flat grey slab.
+            rgt = (-fwd[2], 0.0, fwd[0])
+            lr = math.sqrt(rgt[0] * rgt[0] + rgt[2] * rgt[2]) or 1.0
+            rgt = (rgt[0] / lr, rgt[1] / lr, rgt[2] / lr)
+            lights.append({
+                "pos": (eye[0] + fwd[0] * 0.34 + rgt[0] * 0.10 + 0.55,
+                        eye[1] + 0.72, eye[2] + fwd[2] * 0.34 + rgt[2] * 0.10),
+                "color": (204, 212, 226), "intensity": 0.60, "range": 2.2})
     r.set_lights(lights)
 
 
@@ -1517,9 +1581,10 @@ class TrainScene:
         if self.audio:
             self.audio.crack()
         self.shake = max(self.shake, 1.0)
-        self.glints.append((self.t, (18.0, 8.90, 8.50)))
+        self.glints.append((self.t, (TOWER_KNEE[0], TOWER_KNEE[1] + 0.28,
+                                      TOWER_KNEE[2])))
         vpos, _mode, _phase = _volkov_at(HIT_AT, self.volkov_delay)
-        src = (18.0, 8.86, 8.50)
+        src = (TOWER_KNEE[0], TOWER_KNEE[1] + 0.24, TOWER_KNEE[2])
         dst = (vpos[0], vpos[1] + 1.05, vpos[2])
         self.tracers.append((self.t, src, dst, (236, 242, 255)))
         self.sparks.append((self.t, (vpos[0], vpos[1] + 1.05, vpos[2]),
@@ -1549,13 +1614,15 @@ class TrainScene:
         normal_light = r.light
         rebuild = True
         if static:
-            # Bake the shell with a little more ambient and a warmer key than
-            # the live action light: the point-light pools are baked out of
-            # the static pass (they are replaced by floor sprites), so the
-            # wall/platform need the lift to match the actors.
+            # Bake the shell with a little more ambient than the live action
+            # light: the point-light pools are baked out of the static pass
+            # (they are replaced by floor sprites), so the wall/platform need
+            # the lift to match the actors.  Kept close to the action rig -
+            # a brighter, warmer bake used to leave the set reading warmer
+            # than the people standing in it.
             from engine3d import Light as _Light
-            r.light = _Light(direction=(-0.46, 0.64, -0.36), ambient=0.40,
-                             diffuse=0.66, sky=0.16, tint=(0.98, 0.94, 0.92))
+            r.light = _Light(direction=(-0.46, 0.64, -0.36), ambient=0.41,
+                             diffuse=0.64, sky=0.22, tint=(0.94, 0.95, 1.00))
             rebuild = _w.static_scene(r, "m6_train_static")
         if rebuild or not static:
             _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
@@ -1648,19 +1715,33 @@ class TrainScene:
         body = (vpos[0], max(0.72, vpos[1] + 0.80), vpos[2])
         tx = self._train_offset()
         if c < CINE_TOWER_END:
-            # Establish the signal tower and the sniper on it.
+            # Establish the signal tower and the sniper on it.  Framed on the
+            # roof line, not the cabin: at 38 deg he was a speck on a black
+            # slab, and the shot has to say who is holding the rifle.
             k = _smooth(0.0, CINE_TOWER_END, c)
-            eye = (5.2 + 0.8 * k, 1.85 + 0.25 * k, 4.6)
-            r.set_camera(eye, (18.0, 8.15, 8.5), 38)
+            eye = (7.4 + 0.9 * k, 1.95 + 0.30 * k, 4.9)
+            r.set_camera(eye, (TOWER_KNEE[0], TOWER_KNEE[1] + 0.55,
+                               TOWER_KNEE[2]), 30)
             return
         if c < CINE_SCOPE_END:
             # Down the scope: track Volkov's upper body.  Clamp tracking at
-            # HIT_AT so the scope freezes on the impact.
+            # HIT_AT so the scope freezes on the impact.  The eye sits at the
+            # cabin window: from inside the cabin, a cabin face wins the sort
+            # and the shot is a grey disc.
             vt = min(SHOT_AT + c, HIT_AT)
             vpos_live = _volkov_at(vt, self.volkov_delay)[0]
-            tgt = (vpos_live[0], vpos_live[1] + 1.15, vpos_live[2])
-            eye = (17.35, 8.95, 8.30)
-            r.set_camera(eye, tgt, 22)
+            # Chest height - and the same height the round arrives at, so the
+            # reticle sits on the point the story hits.
+            tgt = (vpos_live[0], vpos_live[1] + 1.12, vpos_live[2])
+            # A slow breath on the eye: the same man is holding the shot, not
+            # a locked-off tripod.
+            sway = (0.03 * math.sin((t - SHOT_AT) * 1.7),
+                    0.02 * math.sin((t - SHOT_AT) * 2.3 + 1.1))
+            eye = (TOWER_EYE[0] + sway[0], TOWER_EYE[1],
+                   TOWER_EYE[2] + sway[1])
+            # 16 deg is a real spotter's lens: at 22 the subject was a
+            # hand-sized figure on an empty bed of ballast.
+            r.set_camera(eye, tgt, 16)
             return
         if c < CINE_IMPACT_END:
             # Impact: side-on, close enough to read the hit.
@@ -1925,22 +2006,25 @@ class TrainScene:
 
         # Baked geometry loses the per-frame point-light pools, so put the
         # warm spill back as depth-masked floor sprites under each lamp.
-        for lx in (-10.0, 0.0, 10.0):
+        # These are ADDITIVE: the old rig stacked eleven overlapping pools and
+        # the platform came out one flat beige sheet with no dark between the
+        # lamps.  Fewer, tighter, dimmer - the pools have to read as pools.
+        for lx in (-13.0, -9.0, 0.0, 9.0):
             r.add_sprite((lx, G + 0.055, 6.10),
-                         _fx.window_glow((255, 184, 116), 3.4, 1.00, 0.34,
+                         _fx.window_glow((255, 184, 116), 3.0, 0.92, 0.36,
                                          t * 1000.0, seed=151 + int(lx)),
                          layer=_fx.FX_LAYER)
             r.add_sprite((lx, G + 0.05, 3.55),
-                         _fx.window_glow((255, 176, 108), 2.2, 0.62, 0.18,
+                         _fx.window_glow((255, 176, 108), 1.8, 0.54, 0.17,
                                          t * 1000.0, seed=181 + int(lx)),
                          layer=_fx.FX_LAYER)
-        for lx in (-11.0, -3.0, 5.0, 13.0):
+        for lx in (-6.0, 8.0):
             r.add_sprite((lx, G + 0.05, 7.0),
-                         _fx.window_glow((255, 190, 126), 1.9, 0.60, 0.22,
+                         _fx.window_glow((255, 190, 126), 1.7, 0.55, 0.20,
                                          t * 1000.0, seed=160 + int(lx)),
                          layer=_fx.FX_LAYER)
         r.add_sprite((10.9, G + 0.06, 3.2),
-                     _fx.window_glow((255, 172, 102), 2.3, 0.72, 0.24,
+                     _fx.window_glow((255, 172, 102), 2.0, 0.66, 0.26,
                                      t * 1000.0, seed=171),
                      layer=_fx.FX_LAYER)
 
@@ -2008,23 +2092,24 @@ class TrainScene:
                      _fx.cig_smoke(tm, seed=139, drift=(0.10, -0.42),
                                    intensity=0.16, life_ms=3200),
                      layer=_fx.FX_LAYER)
-        # floor spill (replaces the point lights lost to the static bake)
-        for lx in (-10.0, 0.0, 10.0):
+        # floor spill (replaces the point lights lost to the static bake) -
+        # must stay in step with _draw_platform_dressing
+        for lx in (-13.0, -9.0, 0.0, 9.0):
             r.add_sprite((lx, G + 0.055, 6.10),
-                         _fx.window_glow((255, 184, 116), 3.4, 1.00, 0.34,
+                         _fx.window_glow((255, 184, 116), 3.0, 0.92, 0.36,
                                          tm, seed=151 + int(lx)),
                          layer=_fx.FX_LAYER)
             r.add_sprite((lx, G + 0.05, 3.55),
-                         _fx.window_glow((255, 176, 108), 2.2, 0.62, 0.18,
+                         _fx.window_glow((255, 176, 108), 1.8, 0.54, 0.17,
                                          tm, seed=181 + int(lx)),
                          layer=_fx.FX_LAYER)
-        for lx in (-11.0, -3.0, 5.0, 13.0):
+        for lx in (-6.0, 8.0):
             r.add_sprite((lx, G + 0.05, 7.0),
-                         _fx.window_glow((255, 190, 126), 1.9, 0.60, 0.22,
+                         _fx.window_glow((255, 190, 126), 1.7, 0.55, 0.20,
                                          tm, seed=160 + int(lx)),
                          layer=_fx.FX_LAYER)
         r.add_sprite((10.9, G + 0.06, 3.2),
-                     _fx.window_glow((255, 172, 102), 2.3, 0.72, 0.24, tm,
+                     _fx.window_glow((255, 172, 102), 2.0, 0.66, 0.26, tm,
                                      seed=171),
                      layer=_fx.FX_LAYER)
         _w.snow3d(r, tm, seed=61, n=120, spread=22, height=16, speed=1.3)
@@ -2186,12 +2271,12 @@ class TrainScene:
         c = t - SHOT_AT
         if c < 0.0 or c >= CINE_TOWER_END:
             return
-        pos = (18.0, 8.62, 8.50)
+        pos = TOWER_KNEE
         yaw = _w.yaw_to(pos, (11.2, 1.0, 1.0))
         pose = dict(POSES["kneel"])
         _w.actor(r, "ucilev", pose, pos, yaw, int(t * 1000), seed=95,
                  amp=0.20, rifle_on=True)
-        r.add_sprite((18.0, 9.05, 8.50),
+        r.add_sprite((TOWER_KNEE[0], TOWER_KNEE[1] + 0.43, TOWER_KNEE[2]),
                      _fx.scope_glint(0.55 + 0.35 * math.sin(t * 4.0),
                                      col=(226, 236, 255)),
                      layer=_fx.FX_LAYER)
@@ -2431,11 +2516,13 @@ class TrainScene:
                 pygame.draw.circle(scope, (16, 16, 18, 235), (cx, cy),
                                    rad + 10, 20)
                 for rr in (36, 120, rad):
-                    pygame.draw.circle(scope, (120, 128, 138, 80),
+                    pygame.draw.circle(scope, (168, 176, 188, 105),
                                        (cx, cy), rr, 1)
-                pygame.draw.line(scope, (180, 188, 196, 110),
+                # Brighter than the old grey: the lit platform behind the
+                # target was swallowing the cross.
+                pygame.draw.line(scope, (226, 232, 240, 165),
                                  (cx - rad, cy), (cx + rad, cy), 1)
-                pygame.draw.line(scope, (180, 188, 196, 110),
+                pygame.draw.line(scope, (226, 232, 240, 165),
                                  (cx, cy - rad), (cx, cy + rad), 1)
                 for d in (10, 24, 44, 68):
                     pygame.draw.line(scope, (214, 220, 228, 150),
