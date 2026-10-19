@@ -34,7 +34,8 @@ from cutscenes import m5fx3d as _fx
 from cutscenes import m6world3d as _w
 from engine.assets import load_image
 from engine3d import (
-    POSES, Renderer, blend, box, clamp, m_apply, pose_run, rot_x, rot_y, v_add,
+    POSES, Renderer, blend, box, clamp, disc_xz, m_apply, pose_run, rot_x,
+    rot_y, v_add,
 )
 
 RES = 0.80                       # internal render scale, smooth upscale
@@ -54,10 +55,9 @@ PLAYER_HP_FLOOR = 0            # Biribel is not immortal: the train can kill him
 
 # Cinematic beats, relative to SHOT_AT.
 CINE_TOWER_END = 1.7
-CINE_SCOPE_END = 3.2
-CINE_IMPACT_END = 5.2
+CINE_SCOPE_END = 3.05
+CINE_IMPACT_END = 5.60
 CINE_CATCH_END = 8.4
-CINE_DOORS_END = 11.0
 
 # The signal tower.  Ucilev kneels on the cabin roof; the SCOPE shot is taken
 # from the cabin window.  The eye MUST stay clear of TOWER_CABIN_BOX (the box
@@ -255,7 +255,17 @@ _CRATES = (
     (9.8, 4.1, 0.55, 0.50, 1.42),
 )
 _SLOT_GROUND = 0.58
+_BALLAST_Y = 0.06          # top of the track bed (m6world3d.rail_platform)
 _ROOF_TOP = 2.40
+
+
+def _ground_at(z):
+    """Floor height for an actor at track depth ``z``.
+
+    The platform lip is a real 0.52 m drop at z=2.7; the old ramp returned 0
+    on the ballast, which buried every body 6 cm into the track bed.
+    """
+    return _BALLAST_Y + (_SLOT_GROUND - _BALLAST_Y) * _smooth(1.2, 2.95, z)
 
 # Volkov only, and only his two coffee lines: no callouts and no pin line in
 # this run by design.  Vasile is off the net as well - his only M6 dialogue is
@@ -288,6 +298,36 @@ def _ease(u):
     return 1 - (1 - u) ** 3
 
 
+def _grade_cine(surface):
+    """Cinematic contrast/saturation grade on the internal render buffer.
+
+    The old held rig + scanlines read grey because four warm-white sources
+    met a 0.5 ambient; this puts the colour back without lifting shadows the
+    way m6world3d.grade's gamma does.  Numpy is optional: skip cleanly.
+    """
+    try:
+        import numpy as np
+    except Exception:
+        return
+    lut = _cache.get("grade_lut")
+    if lut is None:
+        x = np.arange(256, dtype=np.float32) / 255.0
+        x = np.clip(0.44 + (x - 0.44) * 1.11, 0.0, 1.0)
+        lut = np.empty((3, 256), dtype=np.uint8)
+        for i, g in enumerate((1.04, 1.00, 0.96)):
+            v = 0.30 + (x - 0.30) * g
+            v = v - 0.10 * np.maximum(0.0, v - 0.86) ** 2
+            lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
+        _cache["grade_lut"] = lut
+    arr = pygame.surfarray.pixels3d(surface)
+    # Three vectorised channel lookups: contrast + warm/cool split tone.  The
+    # float luma/saturation pass cost ~40 ms on the 800x560 buffer; this keeps
+    # the grade cheap enough for the live scene on both backends.
+    for i in range(3):
+        arr[..., i] = lut[i][arr[..., i]]
+    del arr
+
+
 def _dist2(a, b):
     return math.hypot(a[0] - b[0], a[2] - b[2])
 
@@ -312,6 +352,15 @@ def _hum(key):
     return h
 
 
+def _spot(pos, target, color, intensity, range_, cone):
+    """Aimable local spot: dir points from the lamp toward the target."""
+    dx, dy, dz = (target[i] - pos[i] for i in range(3))
+    ln = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+    return {"pos": pos, "color": color, "intensity": intensity,
+            "range": range_, "kind": "spot",
+            "dir": (dx / ln, dy / ln, dz / ln), "cone": cone}
+
+
 def _light(r, eye=None, fwd=None, t=None):
     """Light rig for the frame.
 
@@ -332,11 +381,11 @@ def _light(r, eye=None, fwd=None, t=None):
             # Tower establishing: the cabin window throws warm light up onto
             # the roof, a cold sky fill separates the tower from the night
             # instead of leaving it a black slab.
-            r.light = Light(direction=(-0.34, 0.76, -0.38), ambient=0.30,
-                            diffuse=0.58, sky=0.20, tint=(0.88, 0.93, 1.10))
+            r.light = Light(direction=(-0.34, 0.76, -0.38), ambient=0.26,
+                            diffuse=0.62, sky=0.16, tint=(0.88, 0.93, 1.10))
             lights = [
                 {"pos": (18.0, 7.55, 6.30), "color": (255, 196, 122),
-                 "intensity": 1.10, "range": 6.0},
+                 "intensity": 1.25, "range": 6.0},
                 {"pos": (12.0, 12.5, -1.5), "color": (142, 172, 222),
                  "intensity": 0.62, "range": 24.0},
                 {"pos": (15.4, 3.2, 3.4), "color": (120, 150, 200),
@@ -345,40 +394,50 @@ def _light(r, eye=None, fwd=None, t=None):
                  "intensity": 0.55, "range": 6.0},
             ]
         elif c < CINE_SCOPE_END:
-            # Down the scope: the gantry work lamp is the key, the carriage
-            # windows rim him from behind, and a cold fill keeps him off the
-            # ballast.  Without these the subject is a black cut-out on grey.
-            r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.32,
-                            diffuse=0.56, sky=0.18, tint=(0.90, 0.94, 1.06))
+            # Down the scope: the gantry work lamp is a real spot on the
+            # target, not a 12 m flood that turned the platform floor neutral.
+            r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.18,
+                            diffuse=0.64, sky=0.10, tint=(0.94, 0.96, 1.05))
             lights = [
-                # The gantry work lamp over the track IS the key, and it has to
-                # reach: a 8 m range left the target sitting in its own shadow.
-                {"pos": (13.0, 5.80, 1.80), "color": (255, 214, 152),
-                 "intensity": 1.35, "range": 12.0},
-                # Platform edge behind him, so the run reads as a silhouette.
-                {"pos": (13.0, 3.20, 5.20), "color": (255, 190, 120),
-                 "intensity": 0.70, "range": 9.0},
-                {"pos": (10.8, 2.10, -3.30), "color": (255, 202, 142),
-                 "intensity": 0.80, "range": 9.5},
+                _spot((13.0, 5.80, 1.80), (11.25, 1.40, 0.90),
+                      (255, 200, 135), 2.60, 10.0, 0.96),
+                {"pos": (13.0, 3.20, 5.20), "color": (60, 105, 215),
+                 "intensity": 0.65, "range": 9.0},
+                {"pos": (10.8, 2.10, -3.30), "color": (255, 190, 120),
+                 "intensity": 0.55, "range": 9.5},
                 {"pos": (9.0, 5.40, -2.20), "color": (128, 158, 210),
-                 "intensity": 0.62, "range": 15.0},
+                 "intensity": 0.55, "range": 15.0},
+            ]
+        elif c < CINE_IMPACT_END:
+            # Impact/catch/lower: a low warm spot key shapes the faces and
+            # coat, a door bounce warms the ballast, and a cool fill/rim keeps
+            # the shadow side blue instead of grey.
+            r.light = Light(direction=(-0.32, 0.74, -0.36), ambient=0.30,
+                            diffuse=0.72, sky=0.12, tint=(1.01, 0.98, 0.95))
+            lights = [
+                _spot((9.90, 1.60, 1.20), (11.50, 0.72, 0.70),
+                      (255, 196, 140), 1.20, 5.0, 0.78),
+                {"pos": (10.90, 0.95, -1.70), "color": (255, 170, 105),
+                 "intensity": 0.55, "range": 4.6},
+                {"pos": (9.00, 1.15, 2.55), "color": (105, 140, 200),
+                 "intensity": 0.28, "range": 3.6},
+                {"pos": (13.60, 2.35, -1.90), "color": (124, 160, 218),
+                 "intensity": 0.50, "range": 7.5},
             ]
         else:
-            # The close shot: one warm key on Volkov, a soft cool fill, no
-            # competing platform practicals.
-            r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.34,
-                            diffuse=0.55, sky=0.14, tint=(0.98, 0.94, 0.96))
+            # Held side-vigil and reveal: same warm anchor; the carriage
+            # windows and door carry the background, not a white ring fill.
+            r.light = Light(direction=(-0.30, 0.75, -0.34), ambient=0.32,
+                            diffuse=0.72, sky=0.10, tint=(1.02, 0.98, 0.95))
             lights = [
-                {"pos": (11.4, 1.5, 2.4), "color": (255, 206, 150),
-                 "intensity": 0.95, "range": 4.2},
-                {"pos": (TRAIN_DOOR_X, 1.8, -2.1), "color": (255, 176, 96),
-                 "intensity": 0.80, "range": 5.5},
-                {"pos": (9.4, 2.6, 5.6), "color": (150, 168, 200),
-                 "intensity": 0.30, "range": 6.5},
-                # Cold back-rim from the yard side: the body used to sit on
-                # the sleepers as one flat brown mass.
-                {"pos": (14.2, 3.10, -3.40), "color": (136, 166, 214),
-                 "intensity": 0.55, "range": 10.0},
+                _spot((9.90, 1.60, 1.20), (11.50, 0.72, 0.70),
+                      (255, 196, 140), 1.55, 5.0, 0.78),
+                {"pos": (10.90, 0.95, -1.70), "color": (255, 170, 105),
+                 "intensity": 0.60, "range": 4.6},
+                {"pos": (9.00, 1.15, 2.55), "color": (105, 140, 200),
+                 "intensity": 0.30, "range": 3.6},
+                {"pos": (13.60, 2.35, -1.90), "color": (124, 160, 218),
+                 "intensity": 0.52, "range": 7.5},
             ]
     else:
         # Action: deep night base, warm sodium pools, one cool rim.
@@ -762,7 +821,7 @@ def _volkov_at(t, delay=0.0):
         u = _smooth(0, 1, (pt - t0) / max(1e-6, t1 - t0))
         x = x0 + (x1 - x0) * u
         z = z0 + (z1 - z0) * u
-    ground = _SLOT_GROUND * _smooth(1.2, 2.95, z)
+    ground = _ground_at(z)
     moving = (not at_end) and abs(x1 - x0) + abs(z1 - z0) > 0.4
     if t < 2.0:
         mode = "cover"
@@ -787,18 +846,196 @@ def _volkov_at(t, delay=0.0):
     return (x, ground, z), mode, phase
 
 
+# ── death choreography ───────────────────────────────────────────────────
+# One continuous track: recoil -> knee buckle -> caught/lowered -> supine
+# settle.  The old code jumped run -> mayday -> dead_front -> dead_side in
+# three cuts, snapped the yaw toward the player and let him fall through the
+# ballast.  Everything below is absolute-time driven so the camera, Biribel's
+# hands and the probe all read the same body.
+_VK_RECOIL = dict(spine=10, spine_r=-4, twist=4, head_p=-14, head_y=-4,
+                  lsh_p=6, lsh_r=18, lel=28, rsh_p=18, rsh_r=12, rel=42,
+                  lhip_p=6, lkn=16, rhip_p=-2, rkn=10, body_p=4, body_r=-2)
+_VK_BUCKLE = dict(spine=34, spine_r=-6, twist=8, head_p=24, head_y=-8,
+                  lsh_p=24, lsh_r=26, lel=52, rsh_p=38, rsh_r=20, rel=78,
+                  lhip_p=54, lkn=96, rhip_p=32, rkn=76, body_p=22, body_r=6)
+_VK_CONTACT = dict(spine=44, spine_r=6, twist=10, head_p=8, head_y=10,
+                   lsh_p=40, lsh_r=36, lel=48, rsh_p=44, rsh_r=24, rel=64,
+                   lhip_p=68, lkn=112, rhip_p=44, rkn=96, body_p=20, body_r=10)
+_VK_LOWER = dict(spine=6, head_p=-4, head_y=55,
+                 lsh_p=26, lsh_r=50, lel=28, rsh_p=20, rsh_r=44, rel=24,
+                 lhip_p=30, lhip_r=12, lkn=58, rhip_p=18, rkn=40,
+                 body_p=-52, body_r=10)
+_VK_SETTLED = dict(body_p=-84, body_r=6, spine=-2, head_p=-14, head_y=85,
+                   lsh_p=18, lsh_r=58, lel=18, rsh_p=12, rsh_r=62, rel=12,
+                   lhip_p=12, lhip_r=12, lkn=28, rhip_p=2, rhip_r=8, rkn=12)
+# The overrun death falls toward the train: a forward drop, not the catch.
+_VK_FAIL_LOWER = dict(body_p=58, spine=10, head_p=-6, head_y=-10,
+                      lsh_p=60, lsh_r=30, lel=30, rsh_p=50, rsh_r=24,
+                      rel=34, lhip_p=30, lkn=60, rhip_p=20, rkn=44)
+_VK_FAILED = dict(body_p=84, body_r=4, spine=-4, head_p=-8, head_y=-16,
+                  lsh_p=22, lsh_r=44, lel=36, rsh_p=12, rsh_r=32, rel=26,
+                  lhip_p=-4, lhip_r=6, lkn=8, rhip_p=4, rhip_r=10, rkn=12)
+
+_DEATH_D = DOWN_AT - HIT_AT
+_VSUP_START = 0.55          # hands take the weight
+_VSUP_FULL = _DEATH_D       # body is on the ballast
+
+
+def _keyed_pose(d, t):
+    """Canon death pose at ``d`` seconds after the hit."""
+    # Freeze the run exactly where the round lands: letting the run cycle keep
+    # ticking through the hit threw a 12 deg/frame knee pop on top of the
+    # reaction blend.
+    run = pose_run(HIT_AT * 8.4, lean=20)
+    if d <= 0.0:
+        return run
+    if d < 0.14:
+        return blend(run, _VK_RECOIL, _smooth(0.0, 0.14, d))
+    if d < 0.45:
+        return blend(_VK_RECOIL, _VK_BUCKLE, _smooth(0.14, 0.45, d))
+    if d < 0.70:
+        return blend(_VK_BUCKLE, _VK_CONTACT, _smooth(0.45, 0.70, d))
+    if d < 1.15:
+        return blend(_VK_CONTACT, _VK_LOWER, _smooth(0.70, 1.15, d))
+    if d < _DEATH_D:
+        return blend(_VK_LOWER, _VK_SETTLED, _smooth(1.15, _DEATH_D, d))
+    p = dict(_VK_SETTLED)
+    if 2.55 <= d <= 3.15:
+        # the one breath, timed with the audio cue
+        k = math.sin((d - 2.55) / 0.60 * math.pi)
+        p["spine"] = p.get("spine", 0.0) + 1.2 * k
+        p["head_p"] = p.get("head_p", 0.0) - 1.5 * k
+    return p
+
+
+def _fail_pose(d, t):
+    """Overrun death: same recoil/buckle, then a forward fall."""
+    # The overrun starts at the signal shot (SHOT_AT), not HIT_AT: freeze the
+    # run exactly where the last live frame left it.
+    run = pose_run(SHOT_AT * 8.4, lean=20)
+    if d <= 0.0:
+        return run
+    if d < 0.14:
+        return blend(run, _VK_RECOIL, _smooth(0.0, 0.14, d))
+    if d < 0.45:
+        return blend(_VK_RECOIL, _VK_BUCKLE, _smooth(0.14, 0.45, d))
+    if d < 0.90:
+        return blend(_VK_BUCKLE, _VK_FAIL_LOWER, _smooth(0.45, 0.90, d))
+    if d < _DEATH_D:
+        return blend(_VK_FAIL_LOWER, _VK_FAILED, _smooth(0.90, _DEATH_D, d))
+    return dict(_VK_FAILED)
+
+
+def _volkov_death_state(t, delay=0.0):
+    """(pos, pose, yaw, joints) for the canon death at absolute time ``t``.
+
+    The root drifts onto the ballast, the pose is continuous, and a support
+    lift keeps his chest at Biribel's hands until the body settles at
+    DOWN_AT.  The lift reaches exactly 0 at DOWN_AT, so there is no pop.
+    """
+    d = max(0.0, t - HIT_AT)
+    hit, _mode, phase = _volkov_at(HIT_AT, delay)
+    ahead, _m, _p = _volkov_at(min(HIT_AT + 0.25, DURATION), delay)
+    yaw0 = _w.yaw_to(hit, ahead)
+    catch_yaw = _w.yaw_to(hit, (12.0, 0.0, 1.25))
+    sup = _smooth(_VSUP_START, _VSUP_FULL, d)
+    yaw = _w.yaw_mix(yaw0, catch_yaw, 0.12 * sup)
+    x = hit[0] + 0.10 * sup
+    z = hit[2] + (0.20 - hit[2]) * sup
+    pos = (x, _ground_at(z), z)
+    pose = _keyed_pose(d, t)
+    hum = _hum("volkov")
+    _pl, j0, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
+    support = 1.05 - 0.45 * sup
+    want = support * (1.0 - sup) + j0["chest"][1] * sup
+    pose["lift"] = max(0.0, want - j0["chest"][1])
+    _pl, joints, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
+    return pos, pose, yaw, joints
+
+
+def _volkov_fail_state(d, t, fail_pos, fail_yaw, delay=0.0):
+    """(pos, pose, yaw, joints) for the overrun death, frozen at fail_pos."""
+    ahead, _m, _p = _volkov_at(min(SHOT_AT + 0.25, DURATION), delay)
+    run_yaw = _w.yaw_to(fail_pos, ahead)
+    yaw = _w.yaw_mix(run_yaw, fail_yaw, _smooth(0.0, 0.35, d))
+    pos = (fail_pos[0], _ground_at(fail_pos[2]), fail_pos[2])
+    pose = _fail_pose(d, t)
+    pose["lift"] = 0.0
+    hum = _hum("volkov")
+    _pl, joints, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
+    return pos, pose, yaw, joints
+
+
 def _volkov_pose(mode, phase, t):
     if mode == "cover":
         return dict(POSES["cover"])
     if mode == "run":
         return pose_run(phase, lean=20)
-    if mode == "hit":
-        k = _smooth(0, 0.22, t - HIT_AT)
-        return blend("mayday", dict(POSES["mayday"], body_p=30), k)
-    if mode == "fall":
-        k = _smooth(FALL_AT, DOWN_AT, t)
-        return blend("mayday", "dead_front", k)
-    return dict(POSES["dead_side"])
+    return _keyed_pose(max(0.0, t - HIT_AT), t)
+
+
+# ── Biribel's catch ──────────────────────────────────────────────────────
+_BIRI_BRACE = dict(POSES["kneel"], spine=34, head_p=18,
+                   lsh_p=52, lel=48, rsh_p=44, rel=52)
+_BIRI_HOLD = dict(POSES["kneel"], spine=34, head_p=-22,
+                  lhip_p=96, lkn=112, rhip_p=-10, rkn=108,
+                  lsh_p=40, lel=45, rsh_p=36, rel=50)
+
+
+def _look_angles(pos, yaw, target, twist_max=24.0, head_max=46.0, share=0.35):
+    rel = (_w.yaw_to(pos, target) - yaw + 180.0) % 360.0 - 180.0
+    tw = clamp(rel * share, -twist_max, twist_max)
+    return tw, clamp(rel - tw, -head_max, head_max)
+
+
+def _biribel_catch_state(t, vstate):
+    """Grounded approach, then a side vigil: beside the chest, not the head."""
+    c = t - SHOT_AT
+    if c < 2.55:
+        return None
+    vpos, _vpose, _vyaw, vj = vstate
+    hum = _hum(("biribel", OUTFIT_GUARD))
+    route = _cache.get("biri_route")
+    if route is None:
+        route = _w.path([(13.85, 1.18), (12.95, 0.85), (12.45, 0.62)],
+                        smooth=0.10)
+        _cache["biri_route"] = route
+    g = clamp((c - 2.55) / 0.80, 0.0, 1.0) * route.length
+    pose, pos, yaw = _w.walk(hum, route, g, 0.95, speed=2.2,
+                             ground=lambda x, z: _ground_at(z))
+    if c >= 3.20:
+        # settle at his chest, on the near side of the body
+        ks = _smooth(3.20, 3.65, c)
+        x = pos[0] + (12.20 - pos[0]) * ks
+        z = pos[2] + (0.55 - pos[2]) * ks
+        pos = (x, _ground_at(z), z)
+    chest_target = (vj["chest"][0], 0.0, vj["chest"][2])
+    if c >= 3.10:
+        k = _smooth(3.10, 3.45, c)
+        pose = blend(pose, _BIRI_BRACE, k)
+        yaw = _w.yaw_mix(yaw, _w.yaw_to(pos, chest_target), k)
+    if c >= 3.55:
+        pose = blend(pose, _BIRI_HOLD, _smooth(3.55, 4.35, c))
+    pos = (pos[0], _ground_at(pos[2]), pos[2])
+    if c >= 3.10:
+        k = _smooth(3.10, 3.50, c)
+        tw, hy = _look_angles(pos, yaw, vj["head"])
+        pose["twist"] = pose.get("twist", 0.0) + tw * k
+        pose["head_y"] = pose.get("head_y", 0.0) + hy * k
+        # head_p is authored in _BIRI_HOLD; do not pitch from the root
+    kr_r = _smooth(3.75, 4.25, c)
+    if kr_r > 0.0:
+        chest = vj["chest"]
+        r_target = (chest[0] + 0.22, chest[1] + 0.08, chest[2] + 0.12)
+        pr = _w.reach(hum, pose, "r", r_target, pos, yaw)
+        pose = blend(pose, pr, kr_r)
+    kr_l = _smooth(4.05, 4.55, c)
+    if kr_l > 0.0:
+        hand = vj["lhand"]
+        l_target = (hand[0] + 0.02, hand[1] + 0.02, hand[2] + 0.04)
+        pl = _w.reach(hum, pose, "l", l_target, pos, yaw)
+        pose = blend(pose, pl, kr_l)
+    return pos, yaw, pose
 
 
 def _ray_sphere(origin, d, centre, radius):
@@ -902,7 +1139,6 @@ class TrainScene:
         self.flash_t = -9.0
         self.tracers = []
         self.sparks = []
-        self.glints = []
         self.spawn_puffs = []
         self.guards = []
         self.audio = None
@@ -927,11 +1163,15 @@ class TrainScene:
         self.fail_t = 0.0
         self.fail_requested = False
         self.fail_pos = None
+        self.fail_yaw = BASE_YAW
         self.cine_pending_shot = False
         self.ucilev_fired = False
         self.ucilev_fire_t = -9.0
         self._clear_warned = False
         self._overrun_warned = False
+        self._vstate = None
+        self._bstate = None
+        self._fstate = None
 
     # ── lifecycle ──────────────────────────────────────────────────────
     def begin(self, stage_resume=False):
@@ -1017,7 +1257,6 @@ class TrainScene:
         self.pitch = BASE_PITCH
         self.tracers = []
         self.sparks = []
-        self.glints = []
         self.spawn_puffs = []
         self._frame = 0
         self._ev = set()
@@ -1040,11 +1279,15 @@ class TrainScene:
         self.fail_t = 0.0
         self.fail_requested = False
         self.fail_pos = None
+        self.fail_yaw = BASE_YAW
         self.cine_pending_shot = False
         self.ucilev_fired = False
         self.ucilev_fire_t = -9.0
         self._clear_warned = False
         self._overrun_warned = False
+        self._vstate = None
+        self._bstate = None
+        self._fstate = None
         # The subtitle widget is module-owned and driven by THIS scene's clock
         # (int(t * 1000)).  A redeploy rewinds t to 0, so any line left in the
         # widget's history is stamped in the dead run's timebase - a future
@@ -1252,7 +1495,6 @@ class TrainScene:
         self.tracers = [x for x in self.tracers if now - x[0] < 0.12]
         self.sparks = [x for x in self.sparks if now - x[0] < 0.5]
         self.spawn_puffs = [x for x in self.spawn_puffs if now - x[0] < 0.6]
-        self.glints = [x for x in self.glints if now - x[0] < 0.2]
 
     def _living(self):
         return sum(1 for g in self.guards
@@ -1603,6 +1845,7 @@ class TrainScene:
             fail_pos, _mode, _phase = _volkov_at(SHOT_AT, self.volkov_delay)
             self.fail_pos = tuple(fail_pos)
             threats.sort(key=lambda g: _dist2(g["pos"], fail_pos))
+            self.fail_yaw = _w.yaw_to(fail_pos, threats[0]["pos"])
             for i, g in enumerate(threats[:3]):
                 src = (g["pos"][0], g["pos"][1] + 1.38, g["pos"][2])
                 dst = (fail_pos[0] + 0.10 * (i - 1),
@@ -1632,8 +1875,6 @@ class TrainScene:
         if self.audio:
             self.audio.crack()
         self.shake = max(self.shake, 1.0)
-        self.glints.append((self.t, (TOWER_KNEE[0], TOWER_KNEE[1] + 0.28,
-                                      TOWER_KNEE[2])))
         vpos, _mode, _phase = _volkov_at(HIT_AT, self.volkov_delay)
         src = (TOWER_KNEE[0], TOWER_KNEE[1] + 0.24, TOWER_KNEE[2])
         dst = (vpos[0], vpos[1] + 1.05, vpos[2])
@@ -1647,6 +1888,20 @@ class TrainScene:
             return False
         r = _renderer()
         t = self.t
+        # Solve the death once: the camera, both actors and the death FX used
+        # to re-run the same pose/IK 3-4 times a frame and could drift apart.
+        self._vstate = None
+        self._bstate = None
+        self._fstate = None
+        if self.volkov_failed:
+            if self.fail_pos is not None:
+                self._fstate = _volkov_fail_state(
+                    self.fail_t, t, self.fail_pos, self.fail_yaw,
+                    self.volkov_delay)
+        elif t >= HIT_AT:
+            self._vstate = _volkov_death_state(t, self.volkov_delay)
+            if t - SHOT_AT >= 3.05:
+                self._bstate = _biribel_catch_state(t, self._vstate)
         eye, yaw, pitch = self._eye()
         live_eye = None if self.dying else eye
         live_fwd = None if self.dying else _forward(yaw, pitch)
@@ -1658,6 +1913,7 @@ class TrainScene:
                  stars=90, moon=(112.0, 13.0), sodium=(42, 28, 18), seed=71,
                  star_cut=0.62)
         r.begin()
+        del _w.LAST[:]          # probe reads only this frame's actors
         # The platform, station shell and dressing never move before the
         # catch cut, so bake them once: the old per-frame Python packing was
         # most of the frame budget, and the fight needs that budget for the
@@ -1697,6 +1953,7 @@ class TrainScene:
         self._draw_ucilev(r, t)
         self._draw_biribel(r, t)
         self._draw_fx(r, t)
+        self._draw_death_fx(r, t)
         _w.snow3d(r, t * 1000.0, seed=72, n=55, spread=20, height=14, speed=1.4)
         r.flush(r.surface)
 
@@ -1706,9 +1963,12 @@ class TrainScene:
             self._draw_viewmodel(r)
             r.flush(r.surface)
 
+        if t >= CUT_AT:
+            _grade_cine(r.surface)
         pygame.transform.smoothscale(r.surface, (WIDTH, HEIGHT), surface)
         draw_vignette(surface)
-        draw_scanlines(surface)
+        if t < CUT_AT:
+            draw_scanlines(surface)
         if self.dying:
             self._draw_death_overlay(surface)
         elif self.volkov_failed:
@@ -1767,9 +2027,6 @@ class TrainScene:
     def _draw_cine_camera(self, r, t):
         """Dedicated post-shot cinematic: tower, scope, impact, catch, doors."""
         c = t - SHOT_AT
-        vpos = _volkov_at(HIT_AT, self.volkov_delay)[0]
-        body = (vpos[0], max(0.72, vpos[1] + 0.80), vpos[2])
-        tx = self._train_offset()
         if c < CINE_TOWER_END:
             # Establish the signal tower and the sniper on it.  Framed on the
             # roof line, not the cabin: at 38 deg he was a speck on a black
@@ -1799,31 +2056,37 @@ class TrainScene:
             # hand-sized figure on an empty bed of ballast.
             r.set_camera(eye, tgt, 16)
             return
-        if c < CINE_IMPACT_END:
-            # Impact: side-on, close enough to read the hit.
-            k = _smooth(CINE_SCOPE_END, CINE_IMPACT_END, c)
-            eye = (13.9 - 0.3 * k, 1.82 + 0.05 * k, 5.4 - 0.25 * k)
-            tgt = (body[0], 1.02 - 0.10 * k, body[2])
-            r.set_camera(eye, tgt, 42, roll=1.2 * k)
-            return
+        # From here the camera stands on the track side of the platform lip,
+        # in front of the safety chain and clear of the gantry mast at
+        # (13, 1.8).  The old platform-side eye looked THROUGH that chain:
+        # a 3.9 m bar and a post crossed the body for the whole beat.
+        if t >= HIT_AT:
+            _vp, _vq, _vy, vj = _volkov_death_state(t, self.volkov_delay)
+            chest, head = vj["chest"], vj["head"]
+        else:
+            vp = _volkov_at(min(t, HIT_AT - 0.01), self.volkov_delay)[0]
+            chest = (vp[0], vp[1] + 1.0, vp[2])
+            head = (vp[0], vp[1] + 1.65, vp[2])
         if c < CINE_CATCH_END:
-            # Catch: high three-quarter, Biribel reaching the body.
-            k = _smooth(CINE_IMPACT_END, CINE_CATCH_END, c)
-            eye = (13.8 + 0.2 * k, 2.35 - 0.15 * k, 5.2 + 0.15 * k)
-            tgt = (11.45, 0.95 - 0.10 * k, 1.35)
-            r.set_camera(eye, tgt, 44)
+            # Held side-vigil: one continuous push-in from the track side.
+            k = _smooth(CINE_SCOPE_END, CINE_CATCH_END, c)
+            eye = (9.60 - 0.40 * k, 1.95 - 0.17 * k, 2.90 + 0.12 * k)
+            live = (0.5 * (chest[0] + head[0]),
+                    0.55 * chest[1] + 0.45 * head[1],
+                    0.5 * (chest[2] + head[2]))
+            k2 = _smooth(0.40, 5.00, c)
+            rest = (11.65, 0.75, 0.64)
+            tgt = tuple(live[i] * (1.0 - k2) + rest[i] * k2 for i in range(3))
+            roll = 1.2 * (1.0 - _smooth(0.0, 0.45, t - HIT_AT)) \
+                if t >= HIT_AT else 0.0
+            r.set_camera(eye, tgt, 44.0 + 3.0 * k, roll=roll)
             return
-        if c < CINE_DOORS_END:
-            # The doors cycle over the two of them.
-            eye = (16.0, 2.35, 6.8)
-            tgt = (10.9 + tx, 1.05, 0.20)
-            r.set_camera(eye, tgt, 50)
-            return
-        # Departure: let the carriage pull past the body.
-        k = _smooth(CINE_DOORS_END, DURATION - SHOT_AT, c)
-        eye = (16.0 + k * 3.0, 2.35 - k * 0.10, 6.8 + k * 1.2)
-        tgt = (10.9 + tx, 1.0, 0.10)
-        r.set_camera(eye, tgt, 54)
+        # Reveal: cut wide on the door close so the carriage, its detail and
+        # the window row are visible, then let it slide out behind the pair.
+        k = _smooth(CINE_CATCH_END, DURATION - SHOT_AT, c)
+        eye = (9.20 - 0.30 * k, 2.30 + 0.05 * k, 3.80 + 0.60 * k)
+        tgt = (12.30, 1.05, -0.20)
+        r.set_camera(eye, tgt, 60.0 + 4.0 * k)
 
     def _train_offset(self):
         if self.t <= DEPART_AT:
@@ -2200,11 +2463,21 @@ class TrainScene:
         """
         tm = t * 1000.0
         G = _SLOT_GROUND
-        # waiting-train windows
-        for x in range(-21, 22, 3):
+        # waiting-train windows: cluster glows, door spill, rear marker
+        for x in (-12.0, 0.0, 9.0, 15.0, 21.0):
             r.add_sprite((x, 2.45, -2.80),
-                         _fx.window_glow((255, 198, 128), 1.0, 1.2, 0.30),
+                         _fx.window_glow((255, 198, 128), 4.2, 1.2, 0.20),
                          layer=_fx.FX_LAYER)
+        for x in (6.0, 11.0, 16.0):
+            r.add_sprite((x, 0.10, -2.45),
+                         _fx.window_glow((255, 180, 110), 2.4, 0.6, 0.16),
+                         layer=_fx.FX_LAYER)
+        r.add_sprite((TRAIN_DOOR_X, 1.85, -2.80),
+                     _fx.window_glow((255, 196, 130), 1.2, 1.4, 0.22),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((-23.02, 2.0, -2.80),
+                     _fx.glow((228, 56, 42), 0.35, tm, intensity=0.55),
+                     layer=_fx.FX_LAYER)
         # floodlight masts
         for i, x in enumerate((-18.0, -6.0, 6.0, 18.0)):
             r.add_sprite((x, 8.0, 11.3),
@@ -2283,21 +2556,27 @@ class TrainScene:
         dx = TRAIN_DOOR_X + tx
         z = -2.83
         if closed < 0.98:
-            # warm carriage interior + the black gap of the doorway
-            _w.add(r, box(1.5, 1.65, 0.10, (28, 22, 16),
-                          center=(dx, 1.85, z - 0.04), emissive=True))
+            # The warm vestibule is real now; this is only the doorway spill.
             r.add_sprite((dx, 1.9, z + 0.02),
-                         _fx.window_glow((255, 196, 130), 1.1, 1.3, 0.34),
+                         _fx.window_glow((255, 196, 130), 1.15, 1.4, 0.24),
                          layer=_fx.FX_LAYER)
         if closed > 0.02:
             # two leaves meet at the seam; the last 20 cm lands with the clunk
             off = 0.72 * (1.0 - closed)
             for side in (-1, 1):
                 cx = dx + side * (0.36 + off)
-                _w.add(r, box(0.72, 1.75, 0.08, (46, 48, 54),
+                _w.add(r, box(0.78, 1.62, 0.06, (46, 48, 54),
                               center=(cx, 1.85, z + 0.01)))
-                _w.add(r, box(0.04, 1.55, 0.06, (28, 30, 34),
-                              center=(cx - side * 0.30, 1.85, z + 0.05)))
+                _w.add(r, box(0.26, 0.32, 0.03, (255, 214, 158),
+                              center=(cx, 2.32, z + 0.045), emissive=True))
+                _w.add(r, box(0.04, 0.88, 0.05, (28, 30, 34),
+                              center=(cx - side * 0.30, 1.62, z + 0.05)))
+                _w.add(r, box(0.03, 0.30, 0.05, (130, 130, 134),
+                              center=(cx - side * 0.31, 1.50, z + 0.06)))
+        # grab rails either side of the opening
+        for side in (-1, 1):
+            _w.add(r, box(0.035, 0.90, 0.035, (150, 150, 150),
+                          center=(dx + side * 0.86, 1.55, z + 0.04)))
         # the step Volkov never reaches
         _w.add(r, box(1.1, 0.16, 0.55, (72, 70, 66),
                       center=(dx, 0.30, z + 0.42)))
@@ -2307,34 +2586,24 @@ class TrainScene:
     def _draw_volkov(self, r, t):
         if self.volkov_failed:
             pos = self.fail_pos or _volkov_at(SHOT_AT, self.volkov_delay)[0]
-            x, y, z = pos
-            vt = HIT_AT + self.fail_t
-            _p, mode, phase = _volkov_at(vt, self.volkov_delay)
-            pose = _volkov_pose(mode, phase, vt)
-            yaw = _w.yaw_to((x, 0.0, z),
-                            (PLAYER_POS[0], 0.0, PLAYER_POS[2]))
-            try:
-                r.add_humanoid(_hum("volkov"), pose, (x, y, z), yaw,
-                               rifle_on=False)
-            except Exception:
-                pass
+            fstate = self._fstate or _volkov_fail_state(
+                self.fail_t, t, pos, self.fail_yaw, self.volkov_delay)
+            pos, pose, yaw, _j = fstate
+            _w.actor(r, "volkov", pose, pos, yaw, int(t * 1000),
+                     seed=91, amp=0.0, rifle_on=False, expression="sad")
+            return
+        if t >= HIT_AT:
+            vstate = self._vstate or _volkov_death_state(t, self.volkov_delay)
+            pos, pose, yaw, _j = vstate
+            expr = "surprised" if t - HIT_AT < 0.45 else "sad"
+            _w.actor(r, "volkov", pose, pos, yaw, int(t * 1000),
+                     seed=91, amp=0.0, rifle_on=False, expression=expr)
             return
         vt = t
         (x, y, z), mode, phase = _volkov_at(vt, self.volkov_delay)
         pose = _volkov_pose(mode, phase, vt)
         if self.volkov_pinned and mode == "cover":
             pose = dict(POSES["cover_tight"])
-        if mode in ("hit", "fall", "down"):
-            (nx, _ny, nz), _m, _p = _volkov_at(
-                min(vt + 0.2, DURATION), self.volkov_delay)
-            look = (nx, 0.0, nz) if mode == "hit" else (PLAYER_POS[0], 0.0, PLAYER_POS[2])
-            yaw = _w.yaw_to((x, 0.0, z), look)
-            try:
-                r.add_humanoid(_hum("volkov"), pose, (x, y, z), yaw,
-                               rifle_on=False)
-            except Exception:
-                pass
-            return
         (nx, _ny, nz), _m2, _p2 = _volkov_at(
             min(vt + 0.25, DURATION), self.volkov_delay)
         yaw = _w.yaw_to((x, 0.0, z), (nx, 0.0, nz)) if mode == "run" else \
@@ -2439,34 +2708,21 @@ class TrainScene:
         pose = dict(POSES["kneel"])
         _w.actor(r, "ucilev", pose, pos, yaw, int(t * 1000), seed=95,
                  amp=0.20, rifle_on=True)
-        r.add_sprite((TOWER_KNEE[0], TOWER_KNEE[1] + 0.43, TOWER_KNEE[2]),
-                     _fx.scope_glint(0.55 + 0.35 * math.sin(t * 4.0),
-                                     col=(226, 236, 255)),
-                     layer=_fx.FX_LAYER)
 
     def _draw_biribel(self, r, t):
         if self.dying or self.volkov_failed or t < SHOT_AT:
             return
         c = t - SHOT_AT
-        if c < 2.15:
+        if c < 3.05:
             return
-        if c < 2.95:
-            u = _smooth(2.15, 2.95, c)
-            pos = (14.5 + (11.9 - 14.5) * u, 0.58,
-                   1.65 + (1.00 - 1.65) * u)
-            yaw = _w.yaw_to(pos, (11.0, 0.0, 0.55))
-            _w.actor(r, ("biribel", OUTFIT_GUARD),
-                     pose_run(t * 11.0, lean=26), pos, yaw,
-                     int(t * 1000), seed=93, amp=0.25, expression="sad")
+        vstate = self._vstate or _volkov_death_state(t, self.volkov_delay)
+        state = self._bstate or _biribel_catch_state(t, vstate)
+        if state is None:
             return
-        hold = _smooth(2.95, 3.55, c)
-        pose = blend("kneel_over",
-                     dict(POSES["kneel"], spine=54, head_p=30,
-                          lsh_p=86, lel=28, rsh_p=80, rel=30), hold)
-        pos = (11.90, 0.58, 1.00)
-        yaw = _w.yaw_to(pos, (11.0, 0.0, 0.55))
+        pos, yaw, pose = state
+        expr = "worried" if c < 3.60 else "sad"
         _w.actor(r, ("biribel", OUTFIT_GUARD), pose, pos, yaw,
-                 int(t * 1000), seed=93, amp=0.25, expression="sad")
+                 int(t * 1000), seed=93, amp=0.0, expression=expr)
 
     def _vm_setup(self):
         """Resolve the held-weapon frame (GL: K93D asset, software: K9).
@@ -2629,10 +2885,80 @@ class TrainScene:
             if age < 0.45:
                 r.add_sprite(pos, _fx.sparks(17, int(age * 1000), col=col),
                              layer=_fx.FX_LAYER)
-        for t0, pos in self.glints:
-            age = t - t0
-            if age < 0.18:
-                r.add_sprite(pos, _fx.scope_glint(1.0), layer=_fx.FX_LAYER)
+
+    def _draw_death_fx(self, r, t):
+        """Contact shadow, ground puffs, stain and the last breath."""
+        if self.volkov_failed:
+            if not self.fail_pos:
+                return
+            d = self.fail_t
+            fstate = self._fstate or _volkov_fail_state(
+                d, t, self.fail_pos, self.fail_yaw, self.volkov_delay)
+            pos, pose, yaw, joints = fstate
+            failed = True
+        elif t >= HIT_AT:
+            vstate = self._vstate or _volkov_death_state(
+                t, self.volkov_delay)
+            pos, pose, yaw, joints = vstate
+            d = t - HIT_AT
+            failed = False
+        else:
+            return
+        head, pelvis = joints["head"], joints["pelvis"]
+        if d >= 0.45:
+            for i, k in enumerate((0.20, 0.50, 0.80)):
+                cx = head[0] + (pelvis[0] - head[0]) * k
+                cz = head[2] + (pelvis[2] - head[2]) * k
+                rad = 0.34 - 0.04 * abs(i - 1)
+                _w.add(r, disc_xz(cx, cz, rad, _BALLAST_Y + 0.003,
+                                  (32, 34, 40), n=10, layer=1))
+        if failed:
+            if _DEATH_D <= d <= _DEATH_D + 0.40:
+                r.add_sprite((pos[0], _BALLAST_Y + 0.10, pos[2]),
+                             _fx.dust_motes(t * 1000.0, seed=78, count=14,
+                                            spread_m=(0.7, 0.6),
+                                            col=(198, 208, 224)),
+                             layer=_fx.FX_LAYER)
+            return
+        if 0.42 <= d <= 0.90:
+            for knee in _w.knees(_hum("volkov"), pose, pos, yaw).values():
+                r.add_sprite((knee[0], knee[1] + 0.05, knee[2]),
+                             _fx.dust_motes(t * 1000.0, seed=77, count=10,
+                                            spread_m=(0.5, 0.4),
+                                            col=(190, 200, 214)),
+                             layer=_fx.FX_LAYER)
+        if _DEATH_D <= d <= _DEATH_D + 0.45:
+            r.add_sprite((pos[0], _BALLAST_Y + 0.10, pos[2]),
+                         _fx.dust_motes(t * 1000.0, seed=78, count=14,
+                                        spread_m=(0.7, 0.6),
+                                        col=(198, 208, 224)),
+                         layer=_fx.FX_LAYER)
+        if d >= _DEATH_D:
+            grow = _smooth(_DEATH_D, _DEATH_D + 0.60, d)
+            rad = 0.14 + 0.16 * grow
+            _w.add(r, disc_xz(pos[0], pos[2], rad, _BALLAST_Y + 0.012,
+                              (48, 16, 14), n=10, layer=1))
+            _w.add(r, disc_xz(pos[0], pos[2], rad * 0.55,
+                              _BALLAST_Y + 0.016, (30, 10, 10),
+                              n=9, layer=1))
+        for t0, t1, inten in ((2.45, 3.60, 0.24), (3.85, 4.25, 0.12)):
+            if t0 <= d <= t1:
+                r.add_sprite((head[0], head[1] + 0.05, head[2]),
+                             _w.breath(head, t * 1000.0, seed=93,
+                                       intensity=inten),
+                             layer=_fx.FX_LAYER)
+        if t >= SHOT_AT + 4.4:
+            bstate = self._bstate or _biribel_catch_state(
+                t, (pos, pose, yaw, joints))
+            if bstate is not None:
+                bpos, byaw, bpose = bstate
+                bj = _hum(("biribel", OUTFIT_GUARD)).pose_world(
+                    bpose, bpos, byaw)[1]
+                bh = bj["head"]
+                r.add_sprite((bh[0], bh[1] + 0.04, bh[2]),
+                             _w.breath(bh, t * 1000.0, seed=94,
+                                       intensity=0.10),
+                             layer=_fx.FX_LAYER)
 
     # ── HUD ────────────────────────────────────────────────────────────
     def _draw_hud(self, surface, t):

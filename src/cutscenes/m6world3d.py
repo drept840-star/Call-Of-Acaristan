@@ -796,18 +796,25 @@ def penetration(hum, pose, pos, yaw, boxes, parts=_BODY):
     return worst
 
 
-def head_stats(surface):
+def head_stats(surface, r=None, full=False):
     """Exposure of every face drawn in the last frame, read off the FINAL
     (graded) surface: [{key, mean, p95, facing, px}] with luma 0..255.
     ``facing`` is the cosine between the head's forward and the camera ray
-    (1 = full face to lens, < 0 = back of the head)."""
+    (1 = full face to lens, < 0 = back of the head).
+
+    ``r`` defaults to the film renderer; pass the train's renderer with
+    ``full=True`` to map the whole surface (no safe-area offset)."""
     import numpy as np
-    r = _cache.get("last_r")
+    if r is None:
+        r = _cache.get("last_r")
     if r is None:
         return []
     arr = pygame.surfarray.array3d(surface).astype(np.float32)
     luma = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
     sw, sh = luma.shape
+    top, bot = (0, sh) if full else (SAFE_TOP, SAFE_BOT)
+    xk = surface.get_width() / float(r.w)
+    yk = surface.get_height() / float(r.h)
     out = []
     for a in LAST:
         head = a["joints"].get("head")
@@ -815,12 +822,12 @@ def head_stats(surface):
         if q is None:
             continue
         scale = hum(a["key"])._scale
-        cx, cy = film_xy(q)
-        rad = 0.06 * scale * r.focal / q[2] * (WIDTH / float(RW))
+        cx, cy = (int(q[0] * xk), int(q[1] * yk)) if full else film_xy(q)
+        rad = 0.06 * scale * r.focal / q[2] * xk
         if rad < 3:
             continue
         x0, x1 = max(0, int(cx - rad)), min(sw, int(cx + rad) + 1)
-        y0, y1 = max(SAFE_TOP, int(cy - rad)), min(min(sh, SAFE_BOT), int(cy + rad) + 1)
+        y0, y1 = max(top, int(cy - rad)), min(min(sh, bot), int(cy + rad) + 1)
         if x1 <= x0 or y1 <= y0:
             continue
         xx, yy = np.mgrid[x0:x1, y0:y1]
@@ -1503,6 +1510,97 @@ def boxcar_interior(r, t, lantern=1.0, door_open=1.0, snow=1.0, glow=1.1):
 
 
 # ── rail platform / terminal / office ───────────────────────────────────
+def _train_detail_mesh():
+    """Cached local-space passenger train: body, real door hole, windows,
+    livery, underframe, roof, lit vestibule and markers.  Rail platform is
+    train-scene-only; the interactive scene rebuilds it every cinematic frame,
+    so the mesh is built once and translated by ``train_offset``."""
+    m = _cache.get("train_detail")
+    if m is not None:
+        return m
+    from engine3d.core import Mesh, box
+    m = Mesh()
+    add = m.add
+    BODY = (30, 35, 43)
+    SKIRT = (20, 23, 28)
+    STRIPE = (104, 86, 56)
+    ROOF = (40, 47, 58)
+    SEAM = (17, 19, 23)
+    FRAME = (16, 18, 22)
+    # Body split around a real 1.6 x 1.65 doorway at local x=10.9.
+    add(box(33.1, 3.1, 3.0, BODY, center=(-6.45, 1.85, -4.4), seg=8))
+    add(box(11.3, 3.1, 3.0, BODY, center=(17.35, 1.85, -4.4), seg=4))
+    add(box(1.6, 0.70, 3.0, BODY, center=(10.9, 3.05, -4.4)))
+    add(box(1.6, 0.75, 3.0, BODY, center=(10.9, 0.675, -4.4)))
+    add(box(46, 0.5, 3.2, (24, 28, 34), center=(0, 3.55, -4.4), seg=8))
+    # Livery, skirt and panel seams.
+    for x0, x1 in ((-23.0, 10.1), (11.7, 23.0)):
+        cx, w = (x0 + x1) * 0.5, x1 - x0
+        add(box(w, 0.10, 0.03, STRIPE, center=(cx, 1.45, -2.885)))
+        add(box(w, 0.30, 0.04, SKIRT, center=(cx, 0.45, -2.885)))
+        add(box(w, 0.02, 0.02, SEAM, center=(cx, 2.00, -2.895)))
+    for sx in (-22.5, -19.5, -16.5, -13.5, -10.5, -7.5, -4.5, -1.5,
+               1.5, 4.5, 7.5, 13.5, 16.5, 19.5):
+        add(box(0.03, 3.1, 0.02, SEAM, center=(sx, 1.85, -2.895)))
+    # Window row: frames, two panes, mullion, snow sill.  Skip x=12: the
+    # frame would overlap the doorway.  Warm/dim/cool panes vary by index.
+    for i, wx in enumerate(range(-21, 22, 3)):
+        if wx == 12:
+            continue
+        pane = ((232, 196, 144) if i % 5 else (154, 120, 88)) \
+            if i % 7 else (150, 176, 196)
+        add(box(1.56, 0.96, 0.05, FRAME, center=(wx, 2.45, -2.885)))
+        add(box(0.64, 0.78, 0.03, pane, center=(wx - 0.34, 2.45, -2.855),
+                emissive=True))
+        add(box(0.64, 0.78, 0.03, pane, center=(wx + 0.34, 2.45, -2.855),
+                emissive=True))
+        add(box(0.05, 0.82, 0.04, FRAME, center=(wx, 2.45, -2.848)))
+        add(box(1.70, 0.06, 0.12, (150, 162, 180),
+                center=(wx, 1.94, -2.842)))
+    # Door frame + vestibule.  The leaves themselves are animated in train3d.
+    add(box(1.60, 1.65, 0.06, (54, 38, 26), center=(10.9, 1.85, -3.28)))
+    add(box(1.20, 0.05, 0.10, (255, 214, 150),
+            center=(10.9, 2.72, -3.12), emissive=True))
+    for jx in (10.06, 11.74):
+        add(box(0.08, 1.65, 0.40, (30, 22, 18), center=(jx, 1.85, -3.06)))
+    add(box(1.80, 0.10, 0.10, (26, 28, 32), center=(10.9, 2.73, -2.92)))
+    for jx in (10.04, 11.76):
+        add(box(0.10, 1.75, 0.10, (26, 28, 32), center=(jx, 1.85, -2.92)))
+    add(box(1.80, 0.06, 0.55, (60, 58, 54), center=(10.9, 0.98, -2.65)))
+    # Underframe, bogies, wheels; the consist used to float 0.3 m up.
+    add(box(46, 0.22, 2.6, (14, 15, 18), center=(0, 0.19, -4.4)))
+    for bx in (-14.0, 0.0, 14.0):
+        add(box(2.4, 0.30, 2.0, (24, 26, 30), center=(bx, 0.35, -4.4)))
+        for wz in (-2.98, -5.82):
+            add(box(0.55, 0.55, 0.16, (18, 18, 20), center=(bx, 0.30, wz)))
+            add(box(0.20, 0.20, 0.03, (70, 66, 56),
+                    center=(bx, 0.30, wz + (0.08 if wz > -4.4 else -0.08))))
+    # Roof drip rail, snow lip and vents.
+    add(box(46, 0.08, 0.12, ROOF, center=(0, 3.82, -2.92)))
+    add(box(46, 0.05, 0.20, (150, 162, 180), center=(0, 3.86, -2.94)))
+    for vx in (-15.0, -5.0, 5.0, 15.0):
+        add(box(0.5, 0.12, 0.6, ROOF, center=(vx, 3.84, -4.4)))
+    # Tail lamp (rear) and white marker.
+    add(box(0.14, 0.14, 0.14, (228, 56, 42), center=(-23.02, 2.0, -2.90),
+            emissive=True))
+    add(box(0.12, 0.12, 0.12, (255, 240, 210), center=(23.02, 2.0, -2.90),
+            emissive=True))
+    _cache["train_detail"] = m
+    return m
+
+
+def _train_detail(r, tx):
+    m = _train_detail_mesh()
+    if abs(tx) < 1e-6:
+        add(r, m)
+        return
+    from engine3d.core import Mesh
+    shifted = Mesh()
+    shifted.verts = [(v[0] + tx, v[1], v[2]) for v in m.verts]
+    shifted.faces = list(m.faces)
+    add(r, shifted)
+
+
 def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
     from engine3d.core import box, quad_xz
     add(r, quad_xz(-40, -40, 40, 40, 0.0, (52, 60, 74), seg=12))
@@ -1515,25 +1613,55 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
     # platform
     add(r, box(42, 0.55, 5.0, (62, 66, 74), center=(0, 0.28, 5.2), seg=6))
     add(r, box(42, 0.06, 0.5, (110, 108, 96), center=(0, 0.58, 2.95)))
+    # broken snow patches on the catch-side ballast
+    for dx, dz, dw in ((8.6, 2.20, 0.9), (10.8, 2.35, 1.2),
+                       (12.6, 2.10, 0.8), (14.2, 2.40, 1.0)):
+        add(r, box(dw, 0.02, 0.5, (150, 162, 180),
+                   center=(dx, 0.068, dz)))
     if train:
-        # waiting passenger train, lit windows, rain-slick flank.  The
-        # interactive train scene slides the whole consist out with
-        # ``train_offset`` after the doors close; films keep offset 0.
+        # Waiting passenger train.  The body/detail mesh is cached and only
+        # translated by the departure offset; the glows stay sprites.
         tx = float(train_offset)
-        add(r, box(46, 3.1, 3.0, (32, 36, 42), center=(tx, 1.85, -4.4), seg=8))
-        add(r, box(46, 0.5, 3.2, (24, 28, 34), center=(tx, 3.55, -4.4), seg=8))
-        for i, x in enumerate(range(-21, 22, 3)):
-            add(r, box(1.4, 0.8, 0.06, (255, 216, 158),
-                       center=(tx + x, 2.45, -2.86), emissive=True))
-            r.add_sprite((tx + x, 2.45, -2.8), _fx.window_glow((255, 198, 128), 1.0,
-                                                              1.2, 0.30),
+        _train_detail(r, tx)
+        for cx in (-12.0, 0.0, 9.0, 15.0, 21.0):
+            r.add_sprite((tx + cx, 2.45, -2.80),
+                         _fx.window_glow((255, 198, 128), 4.2, 1.2, 0.20),
                          layer=_fx.FX_LAYER)
-        add(r, box(0.10, 2.6, 0.10, (18, 18, 20), center=(tx + 23, 1.6, -4.4)))
+        for sx in (6.0, 11.0, 16.0):
+            r.add_sprite((tx + sx, 0.10, -2.45),
+                         _fx.window_glow((255, 180, 110), 2.4, 0.6, 0.16),
+                         layer=_fx.FX_LAYER)
+        r.add_sprite((tx + 10.9, 1.85, -2.80),
+                     _fx.window_glow((255, 196, 130), 1.2, 1.4, 0.22),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((tx - 23.02, 2.0, -2.80),
+                     _fx.glow((228, 56, 42), 0.35, t, intensity=0.55),
+                     layer=_fx.FX_LAYER)
     # signal tower + floodlight masts
     add(r, box(1.2, 7.0, 1.2, (44, 46, 50), center=(18, 3.5, 8.5), seg=3))
     add(r, box(2.2, 1.6, 2.0, (54, 56, 60), center=(18, 7.8, 8.5), seg=3))
     add(r, box(1.2, 0.7, 0.06, (255, 206, 140), center=(18, 7.8, 7.45),
                emissive=True))
+    # Ladder up the near face, roof rail and a red beacon: without them the
+    # tower shot is a featureless box and the removed scope glint leaves
+    # nothing to read.
+    for ry in range(8):
+        add(r, box(0.50, 0.04, 0.04, (62, 66, 74),
+                   center=(18.0, 0.9 + ry * 0.78, 7.86)))
+    for rx in (17.78, 18.22):
+        add(r, box(0.04, 6.6, 0.04, (52, 56, 64),
+                   center=(rx, 3.6, 7.86)))
+    for px, pz in ((16.95, 7.55), (19.05, 7.55),
+                   (16.95, 9.45), (19.05, 9.45)):
+        add(r, box(0.05, 0.50, 0.05, (58, 62, 70),
+                   center=(px, 8.85, pz)))
+    add(r, box(2.20, 0.04, 0.04, (58, 62, 70), center=(18, 9.05, 7.55)))
+    add(r, box(2.20, 0.04, 0.04, (58, 62, 70), center=(18, 9.05, 9.45)))
+    add(r, box(0.12, 0.12, 0.12, (228, 56, 42),
+               center=(19.0, 8.72, 7.9), emissive=True))
+    r.add_sprite((19.0, 8.72, 7.9), _fx.glow((240, 70, 50), 0.45, t,
+                                             intensity=0.50),
+                 layer=_fx.FX_LAYER)
     for i, x in enumerate((-18, -6, 6, 18)):
         add(r, box(0.18, 8.0, 0.18, (38, 40, 46), center=(x, 4.0, 11.5)))
         add(r, box(0.7, 0.26, 0.5, (255, 226, 178), center=(x, 8.0, 11.4),

@@ -1,21 +1,24 @@
 """M6 3D film + interactive train stills.
 
-    python tools/m6_shots.py [OUT_DIR] [insertion|boxcar|ending|train|all] [--probe]
+    python tools/m6_shots.py [OUT_DIR] [insertion|boxcar|ending|train|train_fail|all] [--probe]
 
 Renders every authored M6 shot (each shot dict, so both boxcar exit shots and
 all four Vasile calls) at a few timestamps into OUT_DIR/<scene>_<n>_<t>.png
-plus a contact sheet OUT_DIR/_sheet.jpg, then steps the interactive
-TrainScene on its own clock and saves frames across the timeline.  Backend
-follows ACARISTAN_RENDERER (auto|gl|software); set ACARISTAN_CUTSCENE3D=0 to
-review the fallbacks.
+plus a contact sheet OUT_DIR/_sheet.jpg.  ``train`` steps the interactive
+TrainScene through the canon death beat (guards cleared) and ``train_fail``
+through the overrun branch; each gets its own OUT_DIR/_train*.jpg sheet.
+Backend follows ACARISTAN_RENDERER (auto|gl|software); set
+ACARISTAN_CUTSCENE3D=0 to review the fallbacks.
 
 ``--probe`` also prints, per frame: head-region luma (mean / p95) of every
 face on screen, and for staged sets the deepest body penetration into the
-set's registered solids.  Targets: mean 55..170, p95 < 235, penetration
+set's registered solids.  Train probes add Volkov/Biribel ground clearance and
+the catch hand distances.  Targets: mean 55..170, p95 < 235, penetration
 <= 0.02 m.
 
 This is a visual-review tool, not a CI gate.
 """
+import math
 import os
 import sys
 
@@ -47,8 +50,13 @@ GROUPS = {
 SET_OF = {"m6_boxcar": "boxcar", "m6_customs": "terminal", "m6_radio": "terminal"}
 FRACS = (0.08, 0.42, 0.72, 0.94)
 TW, TH = 320, 180
+COLS = 4
 
-TRAIN_AT = (1.0, 3.0, 7.5, 12.0, 16.7, 18.2, 20.0, 23.5)
+# Canon: scope hit, recoil, contact, lower, settle, held breath, doors, pull.
+TRAIN_AT = (2.0, 12.0, 20.0, 22.9, 23.7, 25.7, 25.95, 26.2, 26.55,
+            27.0, 27.45, 28.75, 29.5, 30.6, 31.6, 32.6, 34.8, 36.6, 38.2)
+# Overrun: the failure branch freezes t at SHOT_AT; these are fail-clock times.
+TRAIN_FAIL_AT = (22.9, 23.05, 23.25, 23.55, 23.95, 24.35, 24.7)
 
 
 def _set_key(scene):
@@ -95,10 +103,9 @@ def _probe(surface, scene, t, second=None):
     print("  %-22s %5d  %s" % (scene, t, "  ".join(parts) or "-"))
 
 
-def _films(surface, out, groups, probe=False):
+def _film_sheet(surface, out, groups, probe=False):
     shots = [s for g in groups for s in GROUPS[g]]
-    rows = len(shots) + (1 if "train" in groups else 0)
-    sheet = pygame.Surface((TW * len(FRACS), TH * rows))
+    sheet = pygame.Surface((TW * len(FRACS), TH * max(1, len(shots))))
     seen = {}
     for row, shot in enumerate(shots):
         scene = shot["scene"]
@@ -119,7 +126,70 @@ def _films(surface, out, groups, probe=False):
     return sheet, len(shots)
 
 
-def _train(surface, out, row, sheet):
+def _train_sheet(frames, out, name):
+    rows = max(1, (len(frames) + COLS - 1) // COLS)
+    sheet = pygame.Surface((TW * COLS, TH * rows))
+    font = pygame.font.Font(None, 22)
+    for i, (label, surf) in enumerate(frames):
+        tile = pygame.transform.smoothscale(surf, (TW, TH))
+        sheet.blit(tile, ((i % COLS) * TW, (i // COLS) * TH))
+        img = font.render(label, True, (236, 226, 198))
+        sheet.blit(img, ((i % COLS) * TW + 8, (i // COLS) * TH + 8))
+        pygame.image.save(surf, os.path.join(out, "%s_%s.png" % (name, label)))
+    pygame.image.save(sheet, os.path.join(out, "_%s.jpg" % name))
+
+
+def _train_probe(surface, scene, t, sc, death):
+    from missions.m6 import train3d as T
+    from cutscenes import m6world3d as W
+    import numpy as np
+    parts = []
+    for h in W.head_stats(surface, T._renderer(), full=True):
+        key = h["key"] if isinstance(h["key"], str) else h["key"][0]
+        flag = "" if 55 <= h["mean"] <= 170 and h["p95"] < 235 else " !!"
+        parts.append("%s face %.0f/%.0f f%.2f%s" % (
+            key, h["mean"], h["p95"], h["facing"], flag))
+    arr = pygame.surfarray.array3d(surface).astype(float)
+    pic = arr[:, 54:646]
+    lum = 0.299 * pic[..., 0] + 0.587 * pic[..., 1] + 0.114 * pic[..., 2]
+    ch = pic.max(axis=2) - pic.min(axis=2)
+    roi = arr[300:850, 120:620]
+    rlum = 0.299 * roi[..., 0] + 0.587 * roi[..., 1] + 0.114 * roi[..., 2]
+    rch = roi.max(axis=2) - roi.min(axis=2)
+    parts.append("pic p5/50/95 %.0f/%.0f/%.0f chroma %.1f roi %.0f/%.1f" % (
+        np.percentile(lum, 5), np.percentile(lum, 50),
+        np.percentile(lum, 95), ch.mean(), np.median(rlum), rch.mean()))
+    if death:
+        vpos, vpose, vyaw, vj = T._volkov_death_state(t, sc.volkov_delay)
+        low, _ = _lowest(W.hum("volkov"), vpose, vpos, vyaw)
+        parts.append("v_low %.3f chest %.2f" % (low, vj["chest"][1]))
+        b = T._biribel_catch_state(t, (vpos, vpose, vyaw, vj))
+        if b is not None:
+            bpos, byaw, bpose = b
+            blow, bj = _lowest(W.hum(("biribel", T.OUTFIT_GUARD)),
+                               bpose, bpos, byaw)
+            rt = (vj["chest"][0] + 0.22, vj["chest"][1] + 0.08,
+                  vj["chest"][2] + 0.12)
+            lt = (vj["lhand"][0] + 0.02, vj["lhand"][1] + 0.02,
+                  vj["lhand"][2] + 0.04)
+            planar = math.hypot(bj["pelvis"][0] - vj["head"][0],
+                                bj["pelvis"][2] - vj["head"][2])
+            parts.append("b_low %.3f hands sh%.2f hd%.2f sep%.2f" % (
+                blow, _dist(bj["rhand"], rt), _dist(bj["lhand"], lt),
+                planar))
+    print("  %-22s %5d  %s" % (scene, t, "  ".join(parts) or "-"))
+
+
+def _lowest(hum, pose, pos, yaw):
+    verts, _faces, joints = hum.build(pose, pos, yaw, rifle_on=False)
+    return min(v[1] for v in verts), joints
+
+
+def _dist(a, b):
+    return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
+
+
+def _train(surface, out, fail=False, probe=False):
     from missions import m6
     from missions.m6 import train3d
     import core.save_system as _save
@@ -129,17 +199,34 @@ def _train(surface, out, row, sheet):
     except Exception:
         pass
     m6.start_mission6_train_checkpoint()
-    for col, target in enumerate(TRAIN_AT):
+    sc = train3d.scene()
+    if STATE.player is not None:
+        STATE.player.max_hp = STATE.player.hp = 100000
+    if not fail:
+        sc.guards.clear()
+    targets = TRAIN_FAIL_AT if fail else TRAIN_AT
+    frames = []
+    for target in targets:
         guard = 0
-        while train3d.scene().t < target and guard < 4000:
+        while guard < 8000:
+            if fail:
+                clock = sc.t + sc.fail_t
+            else:
+                clock = sc.t
+            if clock >= target:
+                break
             STATE.dt = 1.0 / 60.0
             train3d.update(None, (WIDTH // 2, HEIGHT // 2))
             STATE.dt = 0.0
             guard += 1
         train3d.draw(surface)
-        pygame.image.save(surface, os.path.join(out, "train_%05.2f.png" % target))
-        sheet.blit(pygame.transform.smoothscale(surface, (TW, TH)),
-                   (col * TW, row * TH))
+        clock = sc.t + (sc.fail_t if fail else 0.0)
+        label = "%05.2f" % clock
+        if probe:
+            _train_probe(surface, "train_fail" if fail else "train",
+                         clock, sc, not fail and clock >= train3d.HIT_AT)
+        frames.append((label, surface.copy()))
+    _train_sheet(frames, out, "train_fail" if fail else "train")
     if train3d.active():
         train3d.force_finish("tool")
 
@@ -151,19 +238,24 @@ def main():
     which = args[1] if len(args) > 1 else "all"
     groups = list(GROUPS) + ["train"] if which == "all" else [which]
     for g in groups:
-        if g not in GROUPS and g != "train":
-            print("unknown group %r (use insertion|boxcar|ending|train|all)" % g)
+        if g not in GROUPS and g not in ("train", "train_fail"):
+            print("unknown group %r (use insertion|boxcar|ending|train|train_fail|all)" % g)
             return 1
     os.makedirs(out, exist_ok=True)
     surface = pygame.Surface((WIDTH, HEIGHT))
-    sheet, row = _films(surface, out, [g for g in groups if g in GROUPS], probe)
+    film_groups = [g for g in groups if g in GROUPS]
+    sheet = pygame.Surface((TW * COLS, TH))
+    row = 0
+    if film_groups:
+        sheet, row = _film_sheet(surface, out, film_groups, probe)
+        pygame.image.save(sheet, os.path.join(out, "_sheet.jpg"))
     if "train" in groups:
-        _train(surface, out, row, sheet)
-        row += 1
-    pygame.image.save(sheet, os.path.join(out, "_sheet.jpg"))
+        _train(surface, out, fail=False, probe=probe)
+    if "train_fail" in groups:
+        _train(surface, out, fail=True, probe=probe)
     if m6films._cache.get("failed"):
         print("3D FAILED:", repr(m6films._cache.get("err")))
-    print("wrote", out, "(%d rows)" % row)
+    print("wrote", out, "(%d film rows)" % row)
     return 0
 
 

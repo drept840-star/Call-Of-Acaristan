@@ -490,7 +490,7 @@ class TrainSceneTests(unittest.TestCase):
         self.assertFalse(STATE.m6_train_overrun)
         self.assertFalse(scene.volkov_failed)
         self.assertTrue(STATE.m6_volkov_dead)
-        self.assertTrue(scene.glints, "the signal-tower shot never fired")
+        self.assertTrue(scene.ucilev_fired, "the signal-tower shot never fired")
         scene.force_finish("win")
         self.assertIn("reached the step", STATE.active_mission_outcome)
 

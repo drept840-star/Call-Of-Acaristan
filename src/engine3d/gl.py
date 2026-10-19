@@ -398,9 +398,13 @@ class GLRenderer(SoftwareRenderer):
 
     def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None):
         places, joints, (px, py, pz) = hum.pose_world(pose, pos, yaw, rifle_on=rifle_on)
-        key = getattr(hum, "_gl_key", None)
-        if key is None:      # actors with the same spec share one GPU mesh
-            key = hum._gl_key = repr(sorted(hum.spec.items()))
+        spec_key = getattr(hum, "_gl_spec_key", None)
+        if spec_key is None:  # actors with the same spec share one GPU mesh
+            spec_key = hum._gl_spec_key = repr(sorted(hum.spec.items()))
+        # The face decal is baked into the rig template, so a mid-scene
+        # expression change needs its own template.  Mouth motion is left out
+        # of the key on purpose: talking would rebuild the VBO every frame.
+        key = (spec_key, getattr(hum, "_expression", "neutral"))
         entry = self._rigs.get(key)
         if entry is None:
             data = _rig_template(hum)

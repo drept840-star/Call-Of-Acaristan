@@ -8562,7 +8562,7 @@ def check_mission6_vertical_slice():
         guard += 1
     assert STATE.m6_volkov_dead
     assert not _sc.volkov_failed
-    assert _sc.glints, "the signal-tower shot never fired"
+    assert _sc.ucilev_fired, "the signal-tower shot never fired"
     guard = 0
     # ...then the scene must run to DURATION (36.8 s) to request the ending.
     while not STATE.request_mission6_ending and guard < 1100:
@@ -9072,6 +9072,215 @@ def check_m6_train_redeploy_after_death():
         T.reset()
 
 
+def check_m6_train_death_beat():
+    """Volkov's death is one continuous, grounded, caught beat.
+
+    Guards: no pose snap after the hit, the body stays on the ballast (not
+    through it or the rails), Biribel is on the ground with his hands on the
+    body, the two-shot exposes both faces, and the frame is deterministic.
+    """
+    import math
+
+    from core.state import STATE
+    from missions.m6 import train3d as T
+    from cutscenes import m6world3d as W
+
+    def dist(a, b):
+        return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
+
+    def lowest(hum, pose, pos, yaw):
+        verts, _faces, joints = hum.build(pose, pos, yaw, rifle_on=False)
+        return min(v[1] for v in verts), verts, joints
+
+    saved_dt = STATE.dt
+    old_env = os.environ.get("ACARISTAN_RENDERER")
+    T.reset()
+    try:
+        STATE.dt = 1.0 / 60.0
+        # ── pose track: continuous, grounded, clear of the rails ───────
+        prev = None
+        for i in range(-6, 300):
+            t = T.HIT_AT + i / 60.0
+            pos, pose, yaw, joints = T._volkov_death_state(t)
+            low, verts, _ = lowest(T._hum("volkov"), pose, pos, yaw)
+            d = t - T.HIT_AT
+            assert low >= 0.04, "Volkov under the ballast at d=%.2f (%.3f)" % (d, low)
+            if d >= T.DOWN_AT - T.HIT_AT:
+                assert 0.055 <= low <= 0.075, \
+                    "settled body not on the ballast: %.3f" % low
+                assert joints["head"][1] < 0.75, "head is not down"
+            for v in verts:
+                if v[1] < 0.26 and (abs(v[2] + 1.5) < 0.05
+                                    or abs(v[2] - 1.5) < 0.05):
+                    raise AssertionError("body in the rail at d=%.2f" % d)
+            if prev is not None:
+                _pp, pq, py, _pj = prev
+                for key, cap in (("body_p", 5.0), ("body_r", 2.0),
+                                 ("spine", 4.0), ("head_p", 5.0),
+                                 ("head_y", 5.0), ("lhip_p", 7.0),
+                                 ("rhip_p", 7.0)):
+                    dv = abs(pose.get(key, 0.0) - pq.get(key, 0.0))
+                    assert dv <= cap, "%s snapped %.2f deg at d=%.2f" % (
+                        key, dv, d)
+                knee_cap = 12.0 if d < 0.22 else 7.5
+                for key in ("lkn", "rkn"):
+                    dv = abs(pose.get(key, 0.0) - pq.get(key, 0.0))
+                    assert dv <= knee_cap, "%s popped %.2f deg at d=%.2f" % (
+                        key, dv, d)
+                dyaw = abs((yaw - py + 180.0) % 360.0 - 180.0)
+                assert dyaw <= 3.0, "yaw snapped %.2f deg at d=%.2f" % (dyaw, d)
+                root = math.hypot(pos[0] - _pp[0], pos[2] - _pp[2])
+                assert root <= 0.05, "root slid %.3f at d=%.2f" % (root, d)
+                lift = abs(pose.get("lift", 0.0) - pq.get("lift", 0.0))
+                assert lift <= 0.04, "support lift popped %.3f at d=%.2f" % (
+                    lift, d)
+            prev = (pos, pose, yaw, joints)
+
+        # ── Biribel: side vigil, grounded, hands on shoulder + hand ───
+        def planar(a, b):
+            return math.hypot(a[0] - b[0], a[2] - b[2])
+
+        for i in range(60, 241):
+            t = T.HIT_AT + i / 60.0
+            d = t - T.HIT_AT
+            pos, pose, yaw, joints = T._volkov_death_state(t)
+            state = T._biribel_catch_state(t, (pos, pose, yaw, joints))
+            assert state is not None, "no catch at t=%.2f" % t
+            bpos, byaw, bpose = state
+            blow, _bv, bj = lowest(
+                T._hum(("biribel", T.OUTFIT_GUARD)), bpose, bpos, byaw)
+            assert abs(blow - 0.06) <= 0.012, \
+                "Biribel floats at %.3f (d=%.2f)" % (blow, d)
+            vhead, vchest = joints["head"], joints["chest"]
+            rt = (vchest[0] + 0.22, vchest[1] + 0.08, vchest[2] + 0.12)
+            lt = (joints["lhand"][0] + 0.02, joints["lhand"][1] + 0.02,
+                  joints["lhand"][2] + 0.04)
+            dr = dist(bj["rhand"], rt)
+            dl = dist(bj["lhand"], lt)
+            if d >= 1.60:
+                assert dr <= 0.12, "shoulder hand %.2f off at d=%.2f" % (
+                    dr, d)
+                assert dl <= 0.10, "hand-hold %.2f off at d=%.2f" % (dl, d)
+            elif d >= 1.20:
+                assert min(dr, dl) <= 0.30, \
+                    "no hand closing at d=%.2f (%.2f/%.2f)" % (d, dr, dl)
+            if d >= T.DOWN_AT - T.HIT_AT:
+                # the side vigil: never over the head, never touching it
+                assert planar(bj["pelvis"], vhead) >= 0.55, \
+                    "Biribel's pelvis is over Volkov's head"
+                assert planar(bj["head"], vhead) >= 0.28, \
+                    "Biribel's head is over Volkov's head"
+                assert bj["head"][1] - vhead[1] >= 0.45
+                assert dist(bj["chest"], vhead) >= 0.55, \
+                    "Biribel's chest is over Volkov's head"
+                assert dist(bj["lhand"], vhead) >= 0.35, \
+                    "Biribel is holding Volkov's head"
+
+        # ── overrun branch shares the track ───────────────────────────
+        fp = T._volkov_at(T.SHOT_AT)[0]
+        prev = None
+        for i in range(0, 110):
+            d = i / 60.0
+            pos, pose, yaw, joints = T._volkov_fail_state(
+                d, T.SHOT_AT + d, fp, 90.0)
+            low, _verts, _ = lowest(T._hum("volkov"), pose, pos, yaw)
+            assert low >= 0.04, "overrun body under the ballast at %.2f" % d
+            if d >= T.DOWN_AT - T.HIT_AT:
+                assert 0.055 <= low <= 0.075
+            if prev is not None:
+                _pp, pq, py, _pj = prev
+                for key, cap in (("body_p", 6.0), ("body_r", 2.0),
+                                 ("head_y", 5.0)):
+                    dv = abs(pose.get(key, 0.0) - pq.get(key, 0.0))
+                    assert dv <= cap, "overrun %s snapped %.2f" % (key, dv)
+                knee_cap = 12.0 if d < 0.22 else 7.0
+                for key in ("lkn", "rkn"):
+                    dv = abs(pose.get(key, 0.0) - pq.get(key, 0.0))
+                    assert dv <= knee_cap, "overrun %s popped %.2f" % (key, dv)
+                dyaw = abs((yaw - py + 180.0) % 360.0 - 180.0)
+                assert dyaw <= 7.0, "overrun yaw snapped %.2f" % dyaw
+            prev = (pos, pose, yaw, joints)
+
+        # ── draw: both faces exposed, frame deterministic ─────────────
+        os.environ["ACARISTAN_RENDERER"] = "software"
+        T._cache["r"] = None
+        T.begin()
+        sc = T.scene()
+        sc.guards = []
+        surf = pygame.Surface((T.WIDTH, T.HEIGHT))
+        r = T._renderer()
+        for tt in (T.HIT_AT + 1.60, T.HIT_AT + 3.15):
+            sc.t = tt
+            T.draw(surf)
+            stats = W.head_stats(surf, r, full=True)
+            keys = [s["key"] if isinstance(s["key"], str) else s["key"][0]
+                    for s in stats]
+            assert "volkov" in keys and "biribel" in keys, \
+                "train probe lost an actor: %r" % (keys,)
+            for s in stats:
+                assert 55.0 <= s["mean"] <= 170.0, \
+                    "face %.0f outside the film bar at t=%.2f" % (s["mean"], tt)
+                assert s["p95"] < 235.0, \
+                    "face p95 %.0f clipped at t=%.2f" % (s["p95"], tt)
+                assert s["facing"] >= 0.15, \
+                    "face turned away (%.2f) at t=%.2f" % (s["facing"], tt)
+            if abs(tt - (T.HIT_AT + 3.15)) < 0.01:
+                import numpy as np
+                arr = pygame.surfarray.array3d(surf).astype(float)
+                pic = arr[:, 54:646]
+                lum = 0.299 * pic[..., 0] + 0.587 * pic[..., 1] \
+                    + 0.114 * pic[..., 2]
+                ch = pic.max(axis=2) - pic.min(axis=2)
+                p5 = float(np.percentile(lum, 5))
+                p95 = float(np.percentile(lum, 95))
+                pale = float(((lum > 95) & (lum < 170)
+                              & (ch < 12)).mean() * 100.0)
+                assert p5 <= 25.0, "frame is milky (p5 %.0f)" % p5
+                assert p95 >= 115.0, "frame is flat (p95 %.0f)" % p95
+                assert pale <= 2.5, "pale wash %.1f%%" % pale
+                roi = arr[300:850, 120:620]
+                rlum = 0.299 * roi[..., 0] + 0.587 * roi[..., 1] \
+                    + 0.114 * roi[..., 2]
+                rch = roi.max(axis=2) - roi.min(axis=2)
+                r50 = float(np.median(rlum))
+                rchroma = float(rch.mean())
+                assert 60.0 <= r50 <= 85.0, \
+                    "subject exposure %.0f outside 60..85" % r50
+                assert rchroma >= 24.0, \
+                    "subject chroma %.1f too grey" % rchroma
+            a = pygame.surfarray.array3d(surf).copy()
+            T.draw(surf)
+            b = pygame.surfarray.array3d(surf)
+            assert (a == b).all(), "train death frame is not deterministic"
+
+        # ── camera: clear of the set, subject in frame ────────────────
+        for tt in (T.HIT_AT + 0.35, T.HIT_AT + 1.15, T.HIT_AT + 3.15,
+                   T.HIT_AT + 5.35, T.HIT_AT + 8.35, T.HIT_AT + 10.35):
+            sc._draw_cine_camera(r, tt)
+            ex, ey, ez = r.cam
+            assert ey > 0.70, "camera under the set at t=%.2f" % tt
+            assert not (-23.0 <= ex <= 23.0 and 0.3 <= ey <= 4.2
+                        and -5.9 <= ez <= -2.9), "camera inside the train"
+            if -21.0 <= ex <= 21.0 and 2.7 <= ez <= 7.7:
+                assert ey > 0.70, "camera inside the platform"
+            _vp, _vq, _vy, vj = T._volkov_death_state(max(tt, T.HIT_AT))
+            assert dist(r.cam, vj["chest"]) > 1.0
+            q = r.project(vj["head"])
+            assert q is not None, "head behind the lens at t=%.2f" % tt
+            assert 0.03 * r.w <= q[0] <= 0.97 * r.w, \
+                "head out of frame horizontally at t=%.2f" % tt
+            assert 0.03 * r.h <= q[1] <= 0.97 * r.h, \
+                "head out of frame vertically at t=%.2f" % tt
+    finally:
+        STATE.dt = saved_dt
+        T._cache["r"] = None
+        if old_env is None:
+            os.environ.pop("ACARISTAN_RENDERER", None)
+        else:
+            os.environ["ACARISTAN_RENDERER"] = old_env
+        T.reset()
+
+
 def main():
     _install_token_shim()
     assert config.screen is not None, "config.screen was not initialized"
@@ -9317,6 +9526,7 @@ def main():
     ok = run_check("m6_train_viewmodel", check_m6_train_viewmodel) and ok
     ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
     ok = run_check("m6_train_scope_subject", check_m6_train_scope_sees_the_target) and ok
+    ok = run_check("m6_train_death_beat", check_m6_train_death_beat) and ok
     ok = run_check("m6_train_redeploy_after_death",
                    check_m6_train_redeploy_after_death) and ok
 
