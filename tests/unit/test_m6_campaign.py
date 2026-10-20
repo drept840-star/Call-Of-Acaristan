@@ -502,6 +502,28 @@ class TrainSceneTests(unittest.TestCase):
                                          "slot %d walks through (%.1f, %.1f)"
                                          % (i, x, z))
 
+    def test_yard_leaves_the_truck_road_clear(self):
+        # the truck body spans TRUCK_X +- 1.15 for its whole drive in
+        lo, hi = _train.TRUCK_X - 1.15, _train.TRUCK_X + 1.15
+        self.assertLess(_train.FREIGHT_END_X + 0.3, lo, "buffer stop on the road")
+        for cx, _kind, _col in _train._FREIGHT_CARS:
+            self.assertLess(cx + _train._FREIGHT_L * 0.5 + 0.4, lo)
+        self.assertLess(_train.SIGNAL_BOX[0] + 1.6, lo, "signal box on the road")
+
+    def test_torch_guards_walk_between_the_tracks_and_stop_short(self):
+        # strip between the carriage track's ballast and the siding's
+        z_lo = _train.FREIGHT_Z + 2.0
+        z_hi = _train.CARRIAGE_TRACK_Z - 2.0
+        for i, (a, b, _delay, _speed) in enumerate(_train._TORCH_GUARDS):
+            for x, z in (a, b):
+                self.assertTrue(z_lo < z < z_hi, "torch Guard %d off the strip" % i)
+            # the sleeper stack (x -3.6..-1.4) and rail pile (x 4..9) stay behind
+            self.assertGreater(min(a[0], b[0]), 9.5)
+            pose, pos, yaw, walking, _d = _train._torch_guard_state(
+                i, _train.DURATION)
+            self.assertFalse(walking, "torch Guard %d still walking at the end" % i)
+            self.assertAlmostEqual(pos[0], b[0], delta=0.3)
+
     def test_walk_on_guard_holds_fire_then_takes_cover(self):
         scene = self._fresh_scene()
         g = scene.guards[0]

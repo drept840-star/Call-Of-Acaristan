@@ -776,6 +776,201 @@ def _truck_mesh():
     return m
 
 
+# ── the yard behind the carriage ─────────────────────────────────────────
+# Revealed when the carriage pulls out: its own track, a freight siding with
+# a parked consist, a signal box and a lamp mast.  All baked into the set.
+CARRIAGE_TRACK_Z = -4.4
+FREIGHT_Z = -9.8
+FREIGHT_END_X = 21.4                   # buffer stop, west of the truck road
+_FREIGHT_CARS = (                      # (centre x, kind, body colour)
+    (14.4, "box", (58, 34, 28)),
+    (1.5, "tank", (30, 32, 36)),
+    (-11.4, "gondola", (44, 36, 30)),
+    (-24.3, "box", (40, 46, 44)),
+)
+_FREIGHT_L = 12.0
+_SNOW = (176, 186, 202)
+SIGNAL_BOX = (17.5, -14.6)
+YARD_MAST = (8.0, -13.2)
+
+
+def _darker(col, k=0.72):
+    return tuple(int(c * k) for c in col)
+
+
+def _yard_track(add, z, x0, x1):
+    """Snow-dusted ballast, ties and rails.  The rails sit at +-0.72, under
+    the wagon bodies: at the near track's +-1.5 they ran exactly along the
+    carriage's flanks and drew a bright bar across its skirt."""
+    add(box(x1 - x0, 0.06, 3.6, (52, 58, 70), center=((x0 + x1) * 0.5, 0.03, z),
+            seg=8))
+    for x in range(int(x0) + 1, int(x1), 2):
+        add(box(0.4, 0.08, 1.9, (52, 46, 38), center=(x, 0.10, z)))
+    for dz in (-0.72, 0.72):
+        add(box(x1 - x0, 0.10, 0.10, (86, 88, 92),
+                center=((x0 + x1) * 0.5, 0.16, z + dz), seg=8))
+
+
+def _freight_car(add, cx, kind, col, z=FREIGHT_Z):
+    """One snow-capped wagon, its +z flank toward the platform."""
+    L = _FREIGHT_L
+    dark = _darker(col)
+    face = z + 1.47
+    for bx in (cx - L * 0.33, cx + L * 0.33):
+        add(box(2.4, 0.55, 2.4, (20, 20, 22), center=(bx, 0.42, z)))
+    add(box(L, 0.25, 2.8, (22, 22, 24), center=(cx, 0.85, z), seg=3))
+    for side in (-1, 1):
+        add(box(0.5, 0.20, 0.30, (30, 30, 32),
+                center=(cx + side * (L * 0.5 + 0.2), 0.85, z)))
+    if kind == "box":
+        add(box(L - 0.3, 2.7, 2.9, col, center=(cx, 2.33, z), seg=4))
+        add(box(L - 0.2, 0.18, 3.0, dark, center=(cx, 3.77, z), seg=3))
+        add(box(L - 0.6, 0.05, 2.6, _SNOW, center=(cx, 3.89, z), seg=3))
+        add(box(2.4, 2.3, 0.06, dark, center=(cx + 0.6, 2.20, face)))
+        add(box(2.6, 0.08, 0.08, (24, 24, 26), center=(cx + 0.6, 3.40, face + 0.03)))
+        for i in range(-4, 5):
+            if abs(i * 1.2 - 0.6) < 1.4:
+                continue
+            add(box(0.06, 2.6, 0.04, dark, center=(cx + i * 1.2, 2.33, face)))
+        add(box(0.9, 0.30, 0.03, (150, 140, 110), center=(cx - 3.2, 2.9, face + 0.02)))
+    elif kind == "tank":
+        add(box(L - 1.2, 2.2, 2.4, col, center=(cx, 2.25, z), seg=4))
+        add(box(L - 1.2, 1.5, 2.8, col, center=(cx, 2.25, z), seg=4))
+        add(box(1.0, 0.40, 1.0, dark, center=(cx, 3.55, z)))
+        add(box(L - 1.6, 0.05, 1.7, _SNOW, center=(cx, 3.38, z), seg=3))
+        add(box(L - 0.4, 0.08, 3.0, (26, 26, 28), center=(cx, 1.10, z), seg=3))
+        add(box(2.0, 0.40, 0.03, (170, 150, 70), center=(cx + 2.5, 2.4, z + 1.42)))
+    else:
+        add(box(L - 0.3, 1.40, 2.9, col, center=(cx, 1.70, z), seg=4))
+        add(box(L - 1.0, 0.50, 2.4, (16, 16, 18), center=(cx, 2.55, z), seg=3))
+        add(box(L - 1.4, 0.04, 2.0, _SNOW, center=(cx, 2.82, z), seg=3))
+        for i in range(-4, 5):
+            add(box(0.08, 1.40, 0.04, dark, center=(cx + i * 1.3, 1.70, face)))
+    # a drift banked against the flank
+    add(box(L - 1.0, 0.12, 0.7, _SNOW, center=(cx, 0.06, z + 1.85), seg=2))
+
+
+def _yard_set(add):
+    """The static yard revealed behind the departing carriage."""
+    _yard_track(add, CARRIAGE_TRACK_Z, -40.0, 60.0)
+    _yard_track(add, FREIGHT_Z, -38.0, FREIGHT_END_X + 0.6)
+    add(box(3.0, 0.14, 4.4, (58, 50, 40), center=(TRUCK_X, 0.10, CARRIAGE_TRACK_Z)))
+    for cx, kind, col in _FREIGHT_CARS:
+        _freight_car(add, cx, kind, col)
+    # buffer stop at the siding's east end
+    bx = FREIGHT_END_X
+    add(box(0.6, 1.0, 3.0, (60, 40, 30), center=(bx, 0.60, FREIGHT_Z)))
+    add(box(0.3, 0.3, 2.4, (44, 30, 24), center=(bx - 0.4, 0.90, FREIGHT_Z)))
+    add(box(0.20, 0.20, 0.08, (230, 50, 36), center=(bx, 1.30, FREIGHT_Z + 1.52),
+            emissive=True))
+    # signal box: lit window and door toward the tracks, stove chimney
+    sx, sz = SIGNAL_BOX
+    add(box(3.2, 2.6, 2.6, (34, 30, 28), center=(sx, 1.30, sz), seg=2))
+    add(box(3.6, 0.25, 3.0, (26, 28, 32), center=(sx, 2.72, sz)))
+    add(box(3.4, 0.05, 2.8, _SNOW, center=(sx, 2.87, sz)))
+    add(box(1.4, 0.70, 0.04, (255, 200, 130), center=(sx - 0.5, 1.65, sz + 1.32),
+            emissive=True))
+    add(box(1.56, 0.86, 0.04, (22, 22, 24), center=(sx - 0.5, 1.65, sz + 1.33)))
+    add(box(0.8, 1.9, 0.05, (22, 20, 20), center=(sx + 1.0, 0.95, sz + 1.32)))
+    add(box(0.30, 0.90, 0.30, (40, 38, 36), center=(sx - 1.0, 3.25, sz - 0.4)))
+    for i, dx in enumerate((-2.2, -2.9, -2.55)):
+        add(box(0.58, 0.88, 0.58, (66, 40, 28) if i % 2 else (44, 48, 40),
+                center=(sx + dx, 0.44, sz + 0.9 - 0.5 * i)))
+        add(box(0.52, 0.03, 0.52, _SNOW, center=(sx + dx, 0.90, sz + 0.9 - 0.5 * i)))
+    # lamp mast over the siding
+    mx, mz = YARD_MAST
+    add(box(0.16, 6.0, 0.16, (34, 38, 44), center=(mx, 3.0, mz)))
+    add(box(0.12, 0.10, 0.8, (34, 38, 44), center=(mx, 5.95, mz + 0.4)))
+    add(box(0.50, 0.16, 0.36, (255, 222, 168), center=(mx, 5.86, mz + 0.75),
+            emissive=True))
+    # sleeper stack and a rail pile on the strip between the two tracks
+    for i in range(5):
+        add(box(2.2, 0.14, 0.9 - 0.06 * i, (54, 46, 34) if i % 2 else (44, 36, 28),
+                center=(-2.5, 0.07 + 0.14 * i, -7.2)))
+    add(box(2.1, 0.04, 0.6, _SNOW, center=(-2.5, 0.72, -7.2)))
+    for i, (dz, y) in enumerate(((-0.24, 0.05), (0.0, 0.05), (0.24, 0.05),
+                                  (-0.12, 0.15), (0.12, 0.15))):
+        add(box(5.0, 0.10, 0.10, (70, 68, 66), center=(6.5 + 0.1 * i, y, -7.1 + dz)))
+    add(box(4.6, 0.03, 0.5, _SNOW, center=(6.6, 0.215, -7.1)))
+
+
+# Two late Guards come out from behind the departing carriage with rifle
+# torches and walk the strip between the tracks toward the body: the threat
+# is not over, and the pull-back has somewhere to look.  (start, end, set off
+# relative to DEPART_AT, walking speed m/s)
+# Both start behind the carriage's tail (it clears x 20 about 1.2 s into the
+# departure) and stop before the fade.
+_TORCH_GUARDS = (
+    ((19.6, -7.0), (14.8, -7.1), 0.4, 1.25),
+    ((21.2, -7.7), (16.9, -7.5), 0.7, 1.2),
+)
+
+
+def _torch_guard_state(i, t):
+    """(pose, pos, yaw, walking, dir) for torch Guard ``i`` at time ``t``."""
+    a, b, delay, speed = _TORCH_GUARDS[i]
+    key = "torch_route_%d" % i
+    route = _cache.get(key)
+    if route is None:
+        route = _cache[key] = _w.path([a, b])
+    stride = _w.walk_stride(route.length, 0.60)
+    g0, g1 = _w.walk_span(route.length, stride)
+    g = g0 + max(0.0, t - DEPART_AT - delay) * speed
+    pose, pos, yaw = _w.walk(_hum(("guard", "rifle")), route, min(g, g1), stride,
+                             speed=speed)
+    # rifle up at the low ready, torch on the barrel
+    for k in ("lsh_p", "lsh_r", "lel", "rsh_p", "rsh_r", "rel", "rifle_p"):
+        pose[k] = POSES["ready"][k]
+    pose["head_p"] = pose.get("head_p", 0.0) + 6.0
+    d = math.hypot(b[0] - a[0], b[1] - a[1])
+    return pose, pos, yaw, g < g1, ((b[0] - a[0]) / d, (b[1] - a[1]) / d)
+
+
+def _yard_set_sprites(r, tm):
+    """Lights for ``_yard_set``: queued every frame (geometry is baked)."""
+    sx, sz = SIGNAL_BOX
+    r.add_sprite((sx - 0.5, 1.65, sz + 1.28),
+                 _fx.window_glow((255, 196, 126), 1.6, 0.9, 0.26),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((sx - 0.5, 0.05, sz + 2.4),
+                 _fx.window_glow((255, 190, 120), 2.2, 1.6, 0.14),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((sx - 1.0, 3.75, sz - 0.4),
+                 _smoke(tm, seed=411, drift=(0.16, -0.30),
+                        intensity=0.12, life_ms=3600),
+                 layer=_fx.FX_LAYER)
+    mx, mz = YARD_MAST
+    r.add_sprite((mx, 5.80, mz + 0.75),
+                 _fx.sodium_lamp(tm, seed=412, radius_m=3.0, intensity=0.60),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((mx, 3.9, FREIGHT_Z + 1.48),
+                 _fx.window_glow((255, 200, 140), 6.0, 2.4, 0.10),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((mx, 0.05, mz + 3.0),
+                 _fx.window_glow((255, 186, 118), 4.0, 2.6, 0.18),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((FREIGHT_END_X, 1.30, FREIGHT_Z + 1.56),
+                 _fx.glow((240, 60, 44), 0.30, tm, intensity=0.55),
+                 layer=_fx.FX_LAYER)
+
+
+def _smoke(tm, seed, drift, intensity, life_ms):
+    """``_fx.cig_smoke`` that skips an anchor far off screen.  A wisp level
+    with the camera plane projects at a depth near zero, and the puffs were
+    being scaled to a hundred thousand pixels for a frame nobody sees (the
+    truck's exhaust cost 600 ms on the vigil pull-back)."""
+    d = _fx.cig_smoke(tm, seed=seed, drift=drift, intensity=intensity,
+                      life_ms=life_ms)
+
+    def draw(s, sx, sy, scale, z):
+        w, h = s.get_size()
+        pad = 3.0 * scale
+        if scale > 2000.0 or not (-pad < sx < w + pad and -pad < sy < h + pad):
+            return
+        d(s, sx, sy, scale, z)
+    return draw
+
+
 def _swung(mesh, fn):
     mesh.verts = [fn(v) for v in mesh.verts]
     return mesh
@@ -2836,6 +3031,7 @@ class TrainScene:
                 r.light = normal_light
         self._draw_train_door(r, t)
         self._draw_entrances(r, t)
+        self._draw_yard_life(r, t)
         self._draw_volkov(r, t)
         self._draw_guards(r, t)
         self._draw_ucilev(r, t)
@@ -3302,7 +3498,8 @@ class TrainScene:
         add(box(3.0, 0.14, 4.4, (58, 50, 40), center=(TRUCK_X, 0.10, 0.0)))
 
         # ── the yard beyond the carriage: silhouettes, gantries, wires ─
-        add(box(2.0, 3.4, 1.6, (24, 27, 33), center=(26.0, 1.7, -9.2)))
+        # (relay hut moved east off the truck's service road)
+        add(box(2.0, 3.4, 1.6, (24, 27, 33), center=(28.8, 1.7, -9.6)))
         add(box(0.12, 5.2, 0.12, (30, 34, 40), center=(28.0, 2.6, -7.2)))
         add(box(0.52, 0.20, 0.52, (235, 60, 40), center=(28.0, 5.24, -7.2),
                 emissive=True))
@@ -3315,6 +3512,7 @@ class TrainScene:
             add(box(0.16, 0.16, 9.2, (36, 40, 48), center=(gx, 6.25, -2.7)))
             add(box(0.50, 0.34, 0.30, (255, 228, 178), center=(gx, 6.02, -2.7),
                     emissive=True))
+        _yard_set(add)
         # layer 2, not 0: every box face in this scene is painter layer 2, so
         # a layer-0 wire sorts behind the whole world - including the sky-side
         # carriage it is strung over - and the gantry run read as bare masts.
@@ -3467,6 +3665,11 @@ class TrainScene:
                          _fx.haze((104, 132, 182), 15.0, tm,
                                   seed=460 + int(hx), intensity=0.085),
                          layer=_fx.FX_LAYER)
+        # The siding behind the carriage is only seen once the cinematic
+        # starts (the carriage hides it from the player's post), so its
+        # lights cost nothing during the fight.
+        if tm >= CUT_AT * 1000.0:
+            _yard_set_sprites(r, tm)
 
     def _draw_yard_wires(self, r):
         """Gantry catenary over the yard, layer 2 so it sorts with the world."""
@@ -3676,6 +3879,11 @@ class TrainScene:
                      _fx.glow((255, 166, 48), 0.42, tm, intensity=0.35 + 0.6 * pulse),
                      layer=_fx.FX_LAYER)
         lamp = _smooth(TRUCK_STOP_T - 0.1, TRUCK_STOP_T + 0.15, t)
+        # idling: exhaust curling up beside the cab
+        r.add_sprite((TRUCK_X + 1.25, 0.55, z + TRUCK_HALF_L - 2.2),
+                     _smoke(tm, seed=403, drift=(0.22, -0.35),
+                            intensity=0.14, life_ms=2400),
+                     layer=_fx.FX_LAYER)
         if lamp > 0.0:
             r.add_sprite((TRUCK_X, TRUCK_BED_Y + 1.55, hz - 0.12),
                          _fx.sodium_lamp(tm, seed=402, radius_m=2.2,
@@ -3695,6 +3903,48 @@ class TrainScene:
         r.add_sprite((TRUCK_X, 0.03, front + 4.0),
                      _fx.window_glow((255, 232, 190), 2.6, 3.4, 0.20),
                      layer=_fx.FX_LAYER)
+
+    def _draw_yard_life(self, r, t):
+        """After the departure: the torch Guards and the haze the carriage
+        leaves hanging over its track."""
+        if t < DEPART_AT or self.volkov_failed or self.dying:
+            return
+        tm = t * 1000.0
+        # exhaust and kicked-up snow, thinning out as the train pulls away
+        fade = 1.0 - _smooth(DEPART_AT + 1.0, DEPART_AT + 6.0, t)
+        if fade > 0.0:
+            for i, hx in enumerate((6.0, 11.0, 16.0, 21.0)):
+                r.add_sprite((hx, 1.4, CARRIAGE_TRACK_Z),
+                             _fx.haze((150, 160, 176), 2.6, tm, seed=420 + i,
+                                      intensity=0.11 * fade * _smooth(
+                                          DEPART_AT, DEPART_AT + 0.8 + 0.25 * i, t)),
+                             layer=_fx.FX_LAYER)
+        for i in range(len(_TORCH_GUARDS)):
+            if t < DEPART_AT + _TORCH_GUARDS[i][2]:
+                continue
+            pose, pos, yaw, walking, (fx, fz) = _torch_guard_state(i, t)
+            if not walking:
+                # stopped: the torch sweeps the ballast ahead
+                pose["head_y"] = 18.0 * math.sin((t - DEPART_AT) * 1.3 + i)
+            joints = _w.actor(r, ("guard", "rifle"), pose, pos, yaw, int(tm),
+                              seed=440 + i, amp=0.4, rifle_on=True, hd=True,
+                              shadow=_shadow_for(pos[2]))
+            m = joints.get("muzzle")
+            if m is None:
+                continue
+            r.add_sprite(m, _fx.glow((226, 236, 255), 0.62, tm, flicker=0.05,
+                                     seed=450 + i, intensity=1.0),
+                         layer=_fx.FX_LAYER)
+            sweep = 0.0 if walking else 0.45 * math.sin((t - DEPART_AT) * 1.3 + i)
+            cs, sn = math.cos(sweep), math.sin(sweep)
+            dx, dz = fx * cs - fz * sn, fx * sn + fz * cs
+            r.add_sprite((pos[0] + dx * 3.2, 0.08, pos[2] + dz * 3.2),
+                         _fx.window_glow((206, 222, 255), 2.2, 1.5, 0.34),
+                         layer=_fx.FX_LAYER)
+            r.add_sprite((pos[0] + dx * 1.6, 1.1, pos[2] + dz * 1.6),
+                         _fx.haze((200, 214, 240), 1.3, tm, seed=460 + i,
+                                  intensity=0.10),
+                         layer=_fx.FX_LAYER)
 
     def _draw_volkov(self, r, t):
         if self.volkov_failed:
@@ -4361,9 +4611,9 @@ class TrainScene:
                                        flicker=0.25, seed=141, intensity=0.55),
                          layer=_fx.FX_LAYER)
             r.add_sprite((tip[0], tip[1] + 0.05, tip[2]),
-                         _fx.cig_smoke(t * 1000.0, seed=141,
-                                       drift=(0.10, -0.42), intensity=0.20,
-                                       life_ms=3600),
+                         _smoke(t * 1000.0, seed=141,
+                                drift=(0.10, -0.42), intensity=0.20,
+                                life_ms=3600),
                          layer=_fx.FX_LAYER)
 
     # ── HUD ────────────────────────────────────────────────────────────
