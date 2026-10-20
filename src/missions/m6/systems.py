@@ -224,7 +224,7 @@ def game_update(keys):
         except Exception:
             from . import yard3d as _yard
             _yard.force_finish("fallback")
-        return
+        return _update_camera()     # the app unpacks (cx, cy) every frame
 
     if _train_active():
         try:

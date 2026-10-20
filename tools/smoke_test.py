@@ -8574,7 +8574,9 @@ def check_mission6_vertical_slice():
     assert not STATE.request_mission6_ending
     from missions.m6 import yard3d as _m6_yard
     for _ in range(30):
-        m6.game_update(EmptyKeys())
+        cam = m6.game_update(EmptyKeys())
+        # the app unpacks (cx, cy) from every game_update
+        assert isinstance(cam, tuple) and len(cam) == 2, cam
     assert _m6_yard.active()
     assert _m6_yard.force_finish("win")
     assert STATE.request_mission6_ending, "yard never requested the ending"
