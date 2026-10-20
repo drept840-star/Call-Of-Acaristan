@@ -4008,6 +4008,18 @@ class TrainScene:
             joints = _w.actor(r, ("guard", "rifle"), pose, pos, yaw, int(tm),
                               seed=440 + i, amp=0.4, rifle_on=True, hd=True,
                               shadow=_shadow_for(pos[2]))
+            # the same red IFF strobe the platform squad wears: these two are
+            # the enemy, not more men in Biribel's borrowed uniform
+            ch = joints.get("chest", (pos[0], pos[1] + 1.3, pos[2]))
+            lamp = (ch[0], ch[1] + 0.20, ch[2])
+            blink = math.sin((t - DEPART_AT) * 7.0 + 1.7 * i) > -0.3
+            if blink:
+                _w.add(r, box(0.09, 0.09, 0.09, (255, 40, 30), center=lamp,
+                              emissive=True))
+            r.add_sprite(lamp, _fx.glow(_guard_profile("rifle")["lamp"], 0.40, tm,
+                                        flicker=0.08, seed=470 + i,
+                                        intensity=1.0 if blink else 0.3),
+                         layer=_fx.FX_LAYER)
             m = joints.get("muzzle")
             if m is None:
                 continue
