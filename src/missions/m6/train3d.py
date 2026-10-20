@@ -71,6 +71,9 @@ VIG_HAND_AT = 9.2
 VIG_BACK_AT = 10.0
 VIG_IMPACT_END = 4.6   # low impact angle, then the push-in picks up mid-move
 VIG_REVERSE_AT = 8.55  # over Biribel's shoulder, then the reverse onto him
+VIG_LOOK_END = 10.55   # past Biribel, up at Ucilev on the tower
+VIG_ANGRY_AT = 10.75   # on his face: grief turns to anger
+VIG_ANGRY_END = 11.15  # then the crane (the death-beat gate frames 11.2)
 BIRI_RUN_AT = 1.9      # Biribel breaks cover (off-screen) before the round lands
 BIRI_ARRIVE = 3.35     # ...and reaches the body
 
@@ -1901,6 +1904,8 @@ def _biribel_catch_state(t, vstate):
         pose["twist"] = pose.get("twist", 0.0) + tw * look
         pose["head_y"] = pose.get("head_y", 0.0) + (hy - pose.get("head_y", 0.0) * 0.0) * look
         pose["head_p"] = pose.get("head_p", 0.0) - 10.0 * look
+        # anger: the chin comes down into a glare at the tower
+        pose["head_p"] += 13.0 * _smooth(VIG_ANGRY_AT, VIG_ANGRY_AT + 0.25, c)
     return pos, yaw, pose
 
 
@@ -3265,7 +3270,7 @@ class TrainScene:
             vp = _volkov_at(min(t, HIT_AT - 0.01), self.volkov_delay)[0]
             chest = (vp[0], vp[1] + 1.0, vp[2])
             head = (vp[0], vp[1] + 1.65, vp[2])
-        if c < CINE_CATCH_END:
+        if c < VIG_ANGRY_END:
             self._vigil_camera(r, t, c, chest, head)
             return
         # Reveal: cut wide on the door close, then crane up and back as the
@@ -3335,10 +3340,18 @@ class TrainScene:
             self._cam(r, t, (10.95 + 0.1 * k, 1.18 - 0.04 * k, 1.30 + 0.05 * k),
                          (11.46, 0.50, 0.52), 34.0 - 2.0 * k, roll=0.6 * j)
             return
-        # Out and wide as he looks up toward the tower.
-        k = _smooth(VIG_BACK_AT, CINE_CATCH_END, c)
-        self._cam(r, t, (9.20 - 0.2 * k, 1.90 + 0.10 * k, 2.72),
-                     (11.90, 0.95, 0.50), 44.0 + 2.0 * k)
+        if c < VIG_LOOK_END:
+            # He looks up: low past his head, at Ucilev still kneeling on
+            # the tower roof with the rifle.
+            k = _smooth(VIG_BACK_AT, VIG_LOOK_END, c)
+            self._cam(r, t, (11.15, 0.92 - 0.04 * k, 0.18),
+                      (TOWER_KNEE[0], TOWER_KNEE[1] + 0.55, TOWER_KNEE[2]),
+                      19.0 - 2.0 * k, roll=0.4 * j)
+            return
+        # His face, low, from where he is looking: grief turns to anger.
+        k = _smooth(VIG_LOOK_END, VIG_ANGRY_END, c)
+        self._cam(r, t, (12.45 - 0.10 * k, 1.72 - 0.04 * k, 1.62 - 0.12 * k),
+                  (11.70, 1.16, 0.74), 30.0 - 3.0 * k, roll=0.3 * j)
 
     def _train_offset(self, t=None):
         t = self.t if t is None else t
@@ -4170,7 +4183,8 @@ class TrainScene:
     def _draw_ucilev(self, r, t):
         """The signal-tower sniper, visible for the establishing shot."""
         c = t - SHOT_AT
-        if c < 0.0 or c >= CINE_TOWER_END:
+        if c < 0.0 or (c >= CINE_TOWER_END
+                       and not VIG_BACK_AT <= c < VIG_LOOK_END):
             return
 
         pos = TOWER_KNEE
@@ -4216,7 +4230,8 @@ class TrainScene:
         if state is None:
             return
         pos, yaw, pose = state
-        expr = "worried" if c < 3.60 else "sad"
+        expr = ("worried" if c < 3.60 else
+                "angry" if c >= VIG_ANGRY_AT else "sad")
         # Biribel's gloves go red once his hand is on the wound.
         _w.actor(r, ("biribel", OUTFIT_GUARD), pose, pos, yaw,
                  int(t * 1000), seed=93, amp=0.0, expression=expr,
