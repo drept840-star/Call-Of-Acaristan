@@ -43,12 +43,17 @@ STEP_UP = 0.62                     # the platform edge is climbable
 EYE_H = 1.55                       # camera pivot above the feet
 # Far enough right that the K9's line to the crosshair clears his shoulder.
 BOOM = (2.40, 0.80, 0.06)          # back, right, up (hip)
-BOOM_ADS = (1.40, 0.70, 0.02)      # tight shoulder aim
-BLADE = 12.0                       # stance angle: the gun shoulder to the lens
+BOOM_ADS = (1.65, 0.56, 0.10)      # tight over the shoulder, the K9 into frame
+# Stance: the torso turned off the aim, support shoulder forward, so the
+# left hand reaches the handguard and the K9 clears his body for the lens.
+BLADE = 30.0
+# Strafe locomotion: the torso stays on the aim and only the hips turn into
+# the move (at most this far); a backpedal cycles the legs backward.
+HIP_TURN = 55.0
 # The third-person gun is seen from behind, its shadow side to the lens: more
 # of the viewmodel's cool lift, or the black anodising vanishes on the night.
 K9_TINT = ((150, 162, 182), 0.22)
-FOV, FOV_ADS = 62.0, 44.0
+FOV, FOV_ADS = 62.0, 48.0
 SENS = 0.12                        # degrees per mouse count
 PITCH_LIM = (-38.0, 32.0)
 MAG, RESERVE = 30, 120
@@ -117,6 +122,10 @@ def _screen_right(yaw):
     """The direction that is right on screen (``T._right`` is mirrored)."""
     r = T._right(yaw)
     return (-r[0], 0.0, -r[2])
+
+
+def _wrap(deg):
+    return (deg + 180.0) % 360.0 - 180.0
 
 
 def ground_y(x, z):
@@ -379,12 +388,20 @@ _AIM = dict(POSES["aim"])
 # real two-handed, shouldered hold instead of a pose with a gun near it.
 K9_GRIP = (0.012, -0.100, -0.105)     # right hand: pistol grip
 K9_FORE = (-0.006, 0.035, 0.195)      # left hand: angled foregrip
+K9_GUARD = (-0.006, 0.020, 0.070)     # left hand: rear of the handguard
 K9_MAGWELL = (0.0, -0.120, 0.060)     # left hand mid-reload
+ARM_REACH = 0.58                      # shoulder to hand, nearly straight
 K9_PORT = (0.045, 0.040, 0.030)       # ejection port
-K9_STOCK = 0.27                       # trigger ahead of the shoulder pocket
-# Patrol carry: muzzle down and out at the right hip, where the lens behind
-# his right shoulder can see it (across the chest it is hidden by his back).
-CARRY_PITCH, CARRY_YAW = -34.0, -12.0
+K9_SIGHT_Y = 0.181                    # optic line above the trigger
+K9_BUTT_Z = -0.437                    # butt plate behind the trigger
+# Shouldered, in gun axes from his head and right shoulder: the stock beside
+# the right cheek (the head box is 0.10 to a side), the optic line just under
+# the eye, the butt plate in the shoulder pocket.
+ADS_CHEEK, ADS_DROP, ADS_POCKET = 0.13, 0.03, 0.05
+# Low ready: muzzle down and a touch out, the butt tucked at the front of the
+# right shoulder, where the lens behind that shoulder can still see the gun.
+CARRY_PITCH, CARRY_YAW = -20.0, -8.0
+CARRY_OUT, CARRY_DROP, CARRY_POCKET = -0.04, 0.08, 0.08
 KICK_BACK, KICK_UP = 0.055, 5.0       # per shot: gun into the shoulder, muzzle rise
 CAM_KICK, CAM_SHAKE = 0.9, 0.030      # per shot: view punch (deg), lens shake (m)
 AIM_CLIMB = 0.30                      # per shot: how far the aim itself climbs
@@ -503,6 +520,9 @@ class YardScene:
         self.body_yaw = _w.yaw_to((0, 0, 0), T._forward(START_YAW, 0.0))
         self.vel = (0.0, 0.0)
         self.stride = 0.0
+        self.stride_dir = 1.0        # -1 on a backpedal
+        self.twist = 0.0             # torso back onto the aim from the hips
+        self.gun_up = 0.0            # 0 low ready .. 1 shouldered
         self.ads = 0.0
         self.aiming = False
         self.firing = False
@@ -623,9 +643,12 @@ class YardScene:
             if self.death_t >= 2.6:
                 self.restart()          # this fight only, from the body
             return
-        self._move(keys, dt)
         self.ads += ((1.0 if self.aiming and not self.reloading else 0.0)
                      - self.ads) * min(1.0, dt * 12.0)
+        up = (self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6)
+        up = 0.0 if (self.sprint or self.reloading or not up) else 1.0
+        self.gun_up += (up - self.gun_up) * min(1.0, dt * 16.0)
+        self._move(keys, dt)
         if self.reloading:
             self.reloading = max(0.0, self.reloading - dt)
             if not self.reloading:
@@ -696,14 +719,21 @@ class YardScene:
         self.pos = (x, y, z)
         sp = math.hypot(*self.vel)
         self.stride += sp * dt
-        # Facing: the aim when aiming or shooting, else the way he moves.
-        if self.ads > 0.2 or self.firing or self.t - self.last_fire < 0.6:
-            want_yaw = self._aim_body_yaw() + BLADE
-        elif sp > 0.4:
-            want_yaw = _w.yaw_to((0, 0, 0), (self.vel[0], 0, self.vel[1]))
-        else:
-            want_yaw = self._aim_body_yaw() + BLADE
-        self.body_yaw = _w.yaw_mix(self.body_yaw, want_yaw, min(1.0, dt * 12.0))
+        # Facing: the torso always on the aim (bladed when the gun is up), so
+        # the K9 never swings off his chest; the hips turn into a strafe and
+        # stay square on a backpedal, where the legs cycle backward.
+        aim = self._aim_body_yaw()
+        torso = aim + BLADE
+        hips = torso
+        if sp > 0.4:
+            rel = _wrap(_w.yaw_to((0, 0, 0), (self.vel[0], 0, self.vel[1])) - aim)
+            back = abs(rel) > 100.0
+            self.stride_dir = -1.0 if back else 1.0
+            if back:
+                rel = _wrap(rel - 180.0)
+            hips = torso + clamp(_wrap(rel - BLADE), -HIP_TURN, HIP_TURN)
+        self.body_yaw = _w.yaw_mix(self.body_yaw, hips, min(1.0, dt * 10.0))
+        self.twist = clamp(_wrap(torso - self.body_yaw), -70.0, 70.0)
 
     def _aim_body_yaw(self):
         f = T._forward(self.yaw, 0.0)
@@ -1043,14 +1073,11 @@ class YardScene:
                   - f[i] * 0.6 for i in range(3))
         self.brass.append((self.t, port, v, n))
 
-    def _gun_frame(self, chest, reload_p):
-        """(origin, basis) of the K9 this frame: shouldered on the aim, or at
-        low ready, with the recoil kick and the reload tilt on top."""
-        aiming = self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6
-        a = 0.0 if (self.sprint or reload_p is not None) else (1.0 if aiming else 0.0)
-        self._gun_aim = getattr(self, "_gun_aim", a)
-        self._gun_aim += (a - self._gun_aim) * 0.35
-        k = self._gun_aim
+    def _gun_frame(self, head, shoulder, reload_p):
+        """(origin, basis) of the K9 this frame, placed from his posed head
+        and right shoulder: shouldered on the aim or at low ready, with the
+        recoil kick and the reload tilt on top."""
+        k = self.gun_up
         carry = 1.0 - k
         tilt = 0.0
         if reload_p is not None:
@@ -1059,15 +1086,21 @@ class YardScene:
         pitch = (self.pitch * k + CARRY_PITCH * carry + KICK_UP * self.gun_kick
                  - 16.0 * tilt)
         B = _gun_basis(yaw, pitch, roll=-32.0 * tilt)
-        rgt_b = _screen_right(self.yaw)
-        pocket = (chest[0] + rgt_b[0] * 0.19, chest[1] + 0.17, chest[2] + rgt_b[2] * 0.19)
-        f = B[2]
-        back = K9_STOCK - KICK_BACK * self.gun_kick - 0.06 * tilt
-        # shouldered: up at the cheek, receiver over the shoulder line;
-        # carried: out and down by the right hip
-        O = (pocket[0] + f[0] * back + rgt_b[0] * 0.12 * carry,
-             pocket[1] + f[1] * back + 0.07 * k - 0.26 * carry - 0.05 * tilt,
-             pocket[2] + f[2] * back + rgt_b[2] * 0.12 * carry)
+
+        def dot(p, axis):
+            return p[0] * axis[0] + p[1] * axis[1] + p[2] * axis[2]
+
+        # gun-axis coordinates of the trigger
+        sh = [dot(shoulder, a) for a in B]
+        ads = (dot(head, B[0]) + ADS_CHEEK,
+               dot(head, B[1]) - ADS_DROP - K9_SIGHT_Y,
+               sh[2] + ADS_POCKET - K9_BUTT_Z)
+        low = (sh[0] + CARRY_OUT, sh[1] - CARRY_DROP,
+               sh[2] + CARRY_POCKET - K9_BUTT_Z)
+        c = [ads[i] * k + low[i] * carry for i in range(3)]
+        c[2] -= KICK_BACK * self.gun_kick + 0.06 * tilt
+        c[1] -= 0.05 * tilt
+        O = tuple(B[0][i] * c[0] + B[1][i] * c[1] + B[2][i] * c[2] for i in range(3))
         return O, B
 
     def _draw_player(self, r, tm):
@@ -1083,21 +1116,37 @@ class YardScene:
             self._gun = None
             return
         if sp > 0.5:
+            back = self.stride_dir < 0
             pose = pose_run(self.stride / (2.4 if self.sprint else 1.9) * 2.0
-                            * math.pi, lean=20 if self.sprint else 10)
+                            * math.pi * self.stride_dir,
+                            lean=20 if self.sprint else (-2 if back else 10))
         else:
             pose = dict(POSES["stand"])
-        # the torso and head of the aim, kicked by the shot
-        for key_ in ("spine", "head_p", "twist"):
-            pose[key_] = pose.get(key_, 0.0) + _AIM.get(key_, 0.0)
-        pose["spine"] = pose.get("spine", 0.0) - 3.0 * self.gun_kick
-        pose["head_p"] = pose.get("head_p", 0.0) - self.pitch * 0.6
-        _pl, j0, _root = h.pose_world(pose, self.pos, self.body_yaw, rifle_on=False)
+        # The torso turns back onto the aim from the hips and leans with the
+        # pitch; shouldered, the head dips and leans onto the stock.
+        k = self.gun_up
+        pose["twist"] = pose.get("twist", 0.0) + self.twist
+        pose["spine"] = (pose.get("spine", 3.0) + _AIM["spine"] * k
+                         - 0.35 * self.pitch - 3.0 * self.gun_kick)
+        pose["head_p"] = (pose.get("head_p", 0.0) + (_AIM["head_p"] + 4.0) * k
+                          - 0.55 * self.pitch)
+        pose["head_y"] = _wrap(self._aim_body_yaw() - self.body_yaw - self.twist)
+        pose["head_x"] = 0.03 * k
+        pl, j0, root = h.pose_world(pose, self.pos, self.body_yaw, rifle_on=False)
+        sh = {slot: (root[0] + o[0], root[1] + o[1], root[2] + o[2])
+              for slot, _k, _m, o, _g, _f in pl if slot in (4, 10)}
         reload_p = (1.0 - self.reloading / RELOAD_S) if self.reloading else None
-        O, B = self._gun_frame(j0["chest"], reload_p)
+        O, B = self._gun_frame(j0["head"], sh[10], reload_p)
         self._gun = (O, B)
         rt = _gun_pt(O, B, K9_GRIP)
         lt = _gun_pt(O, B, K9_FORE)
+        # the support hand slides back along the handguard rather than
+        # hanging off a straight arm short of the foregrip
+        guard = _gun_pt(O, B, K9_GUARD)
+        for _i in range(4):
+            if math.dist(sh[4], lt) <= ARM_REACH:
+                break
+            lt = tuple(lt[i] + (guard[i] - lt[i]) * 0.4 for i in range(3))
         if reload_p is not None:
             # the support hand drops to the mag well and comes back
             k = math.sin(math.pi * clamp((reload_p - 0.15) / 0.7, 0.0, 1.0))
