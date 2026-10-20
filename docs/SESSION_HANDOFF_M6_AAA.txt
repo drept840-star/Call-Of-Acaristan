@@ -1,0 +1,77 @@
+SESSION HANDOFF: Mission 6 train shootout + Volkov death, AAA pass
+Project: Call of Acaristan (pygame, in-house engine3d). Repo: E:\Code\Call of Acaristan\First try
+Date: 2026-10-20. Branch: main.
+
+GOAL
+User asked: "Make the death of Volkov and the entire 3D Shootout from Mision 6 AAA."
+Decisions: refine the in-house rigs (no imported meshes); gore is visceral; the vigil may be
+lengthened but canon holds ("No last words - just breath"); scope is everything (gun feel,
+enemy hits and deaths, environment and lighting, HUD and audio).
+Plan file: C:\Users\BIRIBEL\.claude\plans\make-the-death-of-robust-fiddle.md
+
+COMMITS (all on main)
+- bb5ab63  Phase A+C: HD rigs, relight, wordless vigil, slow-motion hit
+- 49af340  Phase B: gun feel, real impacts, guard deaths, feedback
+- e403d90  tone down the wound stain
+
+DONE
+Cinematic (src/missions/m6/train3d.py, src/cutscenes/m6world3d.py, src/engine3d/rig.py)
+- Opt-in local lights multiply surface colour (light_albedo/light_gain); 8 light slots on GL
+  via Renderer.light_cap (default 4, train uses 8). Fixes the brown wash.
+- Reworked _grade_cine LUT. Scope grey veil removed; muzzle bloom + red mist instead.
+- HD rig mode (spec["detail"]=="hd"): chamfered limbs, coat panels, hands, boots, face planes.
+  Wound stages 1-3, blood_hands, handprint and cig_dropped variants (separate cached rigs).
+- Slow-motion hit (_anim_t), exit spray, spatter, drag smear, camera jolt.
+- Biribel sprints in from cover (_biribel_catch_state, catch_right_target).
+- Vigil lengthened to 11 s: push-in, cigarette falls and smoulders, both faces, hand on wound
+  and print left behind, Biribel looks up at the tower. Three shrinking breaths.
+- Train departs to 72 m. New audio: tinnitus, distant report, body thud.
+- Fixed: ties double-added and flush in catch zone, vigil camera clipping, culling by camera.
+Gameplay (same file + src/missions/m6/m6_audio.py)
+- Recoil climb, spread bloom, muzzle and guard-flash lights, brass with bounce and tink.
+- _world_hit raycast: crate / platform / ballast / carriage impacts with per-material FX and
+  bullet-hole decals. Headshots (x2.5, nearest-sphere-centre classification).
+- Guards face their heading, stagger when hit, die on 3 tracks with frozen yaw, push, blood pool.
+- Damage arcs, radial hurt vignette, low-HP heartbeat, _grade_play, whiz/headshot/tink foley.
+Tools/tests
+- tools/m6_shots.py: --at=T1,T2 and --guards options. File labels are one frame off the time.
+- tools/smoke_test.py: new checks check_m6_train_impacts and check_m6_train_guard_death;
+  subject-chroma gate lowered 24 -> 20 (blue-black coats, cool ballast; comment explains).
+- tests/unit/test_m6_campaign.py: test_hitscan_flags_headshots_and_world_impacts.
+
+GATES (all green at last run)
+  python tools/smoke_test.py            -> SMOKE TEST: OK
+  python -m compileall -q src
+  python -m unittest tests.unit.test_m6_campaign   (40 OK)
+  python tools/ae_normalize.py
+  python tools/engine3d_check.py        (worst diff 3.18%, OK)
+Stills: python tools/m6_shots.py <out> train [--probe] [--at=T1,T2] [--guards]
+Force a backend with ACARISTAN_RENDERER=gl|software.
+
+NOT DONE / LEFTOVERS
+- A2c threshold bloom on the internal buffer (reuse src/cutscenes/post3d.py; measure cost first,
+  quarter-res if > ~4 ms).
+- Staged reload foley (mag out/in, bolt); viewmodel rotational climb and roll.
+- Environment: light shafts, wet-platform streaks, steam under the train.
+- Extra smoke checks: ties flush, catch-lift gate, frame-budget.
+- Polish: Volkov face decals, Biribel forearm crossing torso, thin exit spray, flat mist.
+- NOT VERIFIED: only stills were reviewed. No live playtest on GL. Do one (--dev-mission6-train)
+  covering full-auto bursts, reload, headshot, low HP, and both clear-lane and overrun branches.
+- Frame time vs clean HEAD looked equal but timings were noisy (machine ~2x slower than before).
+
+CONVENTIONS / GOTCHAS
+- Determinism: dt clock + seeded sine hashes only; no RNG, no wall clock.
+- Files must be LF/UTF-8. Python open(p,"w") on this box writes CRLF: use newline="\n" or
+  sed -i 's/\r$//', then check git ls-files --eol. The Edit tool is fine.
+- Platform slab is painter layer 2: shadows/decals on it need layer 3 or a bias.
+- Grades are per-channel LUTs; never a float pass.
+- Commit trailer: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+- PR body ends: Generated with Claude Code (claude.com/claude-code)
+- Mechanical work (searches, gate runs, renders) goes to Haiku subagents; design code stays on
+  the main model. CLAUDE_CODE_SUBAGENT_MODEL=haiku is set in .claude/settings.local.json (local).
+- Unrelated uncommitted files, not part of this work: .gitignore, AGENTS.md, .claude/, .codex/,
+  .cursor/, .wolf/, CLAUDE.md, GEMINI.md, docs/prompts/2D_CUTSCENES_MASTER_PROMPT.md.
+
+SUGGESTED NEXT STEP
+Playtest on GL and note problems, then pick leftovers (bloom first, then reload foley, then
+environment FX). Do not start leftovers unprompted.
