@@ -1885,12 +1885,18 @@ def _biribel_catch_state(t, vstate):
         pose["twist"] = pose.get("twist", 0.0) + tw * k
         pose["head_y"] = pose.get("head_y", 0.0) + hy * k
         # head_p is authored in _BIRI_HOLD; do not pitch from the root
-    kr_r = _smooth(3.75, 4.25, c)
+    # He sees Ucilev: lets go of the body and straightens onto his knees,
+    # so the glare is an upright head, not one rolled over the body.  (The
+    # death-beat gate's hand checks end long before this.)
+    rise = _smooth(VIG_BACK_AT + 0.25, VIG_ANGRY_AT + 0.15, c)
+    if rise > 0.0:
+        pose = blend(pose, POSES["kneel"], rise)
+    kr_r = _smooth(3.75, 4.25, c) * (1.0 - rise)
     if kr_r > 0.0:
         r_target = catch_right_target(vj["chest"], c)
         pr = _w.reach(hum, pose, "r", r_target, pos, yaw)
         pose = blend(pose, pr, kr_r)
-    kr_l = _smooth(4.05, 4.55, c)
+    kr_l = _smooth(4.05, 4.55, c) * (1.0 - rise)
     if kr_l > 0.0:
         hand = vj["lhand"]
         l_target = (hand[0] + 0.02, hand[1] + 0.02, hand[2] + 0.04)
@@ -3348,10 +3354,11 @@ class TrainScene:
                       (TOWER_KNEE[0], TOWER_KNEE[1] + 0.55, TOWER_KNEE[2]),
                       19.0 - 2.0 * k, roll=0.4 * j)
             return
-        # His face, low, from where he is looking: grief turns to anger.
+        # His face, straight on and level with his eyes, head and shoulders;
+        # his eyeline to the tower passes just beside the lens.  No roll.
         k = _smooth(VIG_LOOK_END, VIG_ANGRY_END, c)
-        self._cam(r, t, (12.45 - 0.10 * k, 1.72 - 0.04 * k, 1.62 - 0.12 * k),
-                  (11.70, 1.16, 0.74), 30.0 - 3.0 * k, roll=0.3 * j)
+        self._cam(r, t, (12.80 - 0.06 * k, 1.40, 1.98 - 0.10 * k),
+                  (12.02, 1.32, 0.64), 28.0)
 
     def _train_offset(self, t=None):
         t = self.t if t is None else t
