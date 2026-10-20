@@ -116,12 +116,89 @@ def add(r, m, bias=0.0):
         if _STATIC_BUILD["rebuild"]:
             r.bake(m)
         return
+    if _PACK_MEMO["on"]:
+        _memo_add(r, m, bias)
+        return
     faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
     r.add_dynamic(m.verts, faces, bias=bias)
 
 
 _STATIC_BUILD = {"active": False, "rebuild": False}
 _STATIC_SIG = None
+
+# Live (not baked) sets whose meshes repeat frame to frame: the per-face
+# Python packing, not the GPU, was the frame cost.  Rows are light-independent
+# (shading happens in the shader), so they are kept per ``add`` call slot and
+# re-packed only when that slot's mesh signature changes.
+_PACK_MEMO = {"on": False, "key": None, "i": 0, "rows": [], "chunk": None}
+
+
+def pack_memo(r, key):
+    """Begin a frame of live set geometry; pair with ``pack_memo_end``.
+    No-op on renderers without ``add_packed`` (software backend)."""
+    if not hasattr(r, "add_packed"):
+        return
+    k = (id(r), key)
+    if _PACK_MEMO["key"] != k:
+        _PACK_MEMO["key"] = k
+        _PACK_MEMO["rows"] = []
+        _PACK_MEMO["chunk"] = None
+    _PACK_MEMO["i"] = 0
+    _PACK_MEMO["on"] = True
+
+
+def pack_memo_end(ok=True):
+    """Close a memo frame.  A complete one is concatenated into ``chunk`` so
+    later frames can replay the whole set with one queue call."""
+    memo = _PACK_MEMO
+    memo["on"] = False
+    if not ok or not memo["rows"]:
+        memo["chunk"] = None
+        memo["key"] = None
+        return
+    rows = [r for _sig, r in memo["rows"] if r is not None]
+    if not rows:
+        memo["chunk"] = None
+        return
+    import numpy as np
+    memo["chunk"] = rows[0] if len(rows) == 1 else np.concatenate(rows)
+
+
+def pack_memo_ready(r, key):
+    """True when the set built under ``key`` can be replayed verbatim."""
+    return (hasattr(r, "add_packed") and _PACK_MEMO["key"] == (id(r), key)
+            and _PACK_MEMO["chunk"] is not None)
+
+
+def pack_memo_replay(r):
+    if _PACK_MEMO["chunk"] is not None:
+        r.add_packed(_PACK_MEMO["chunk"])
+
+
+def _mesh_sig(m, bias):
+    v, f = m.verts, m.faces
+    if not v or not f:
+        return (len(v), len(f), bias)
+    return (len(v), len(f), v[0], v[len(v) // 2], v[-1],
+            f[0][1], f[len(f) // 2][1], f[-1][1], bias)
+
+
+def _memo_add(r, m, bias):
+    memo = _PACK_MEMO
+    i = memo["i"]
+    memo["i"] = i + 1
+    rows = memo["rows"]
+    sig = _mesh_sig(m, bias)
+    if i < len(rows) and rows[i][0] == sig:
+        r.add_packed(rows[i][1])
+        return
+    faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
+    entry = (sig, r.pack(m.verts, faces, bias=bias))
+    if i < len(rows):
+        rows[i] = entry
+    else:
+        rows.append(entry)
+    r.add_packed(entry[1])
 
 
 def _light_sig(light):
@@ -225,22 +302,17 @@ def grade(surface, gamma=0.82, vig=0.40):
     band.blit(vmask, (0, 0), special_flags=pygame.BLEND_MULT)
 
 
-def finish(surface, seed, tag="", col=(120, 190, 220)):
+def finish(surface, seed, tag="", col=(120, 190, 220), t=0):
     grade(surface)
-    # Fine grain: a fixed pattern shifted by the clock, never global RNG.
-    if not _cache.get("noise"):
-        rng = random.Random(99)
-        n = pygame.Surface((WIDTH, FILM_H), pygame.SRCALPHA)
-        n.fill((0, 0, 0, 0))
-        for _ in range(1400):
-            x, y = rng.randrange(WIDTH), rng.randrange(FILM_H)
-            v = rng.randrange(10, 26)
-            n.set_at((x, y), (v, v, v, 255))
-        _cache["noise"] = n
+    # Fine grain: a signed luminance wobble over every pixel, re-seeded at
+    # film rate.  The old hard single-pixel black specks (full alpha, value
+    # 10..26) sat on faces and read as acne in every close-up.
     band = surface.subsurface((0, SAFE_TOP, WIDTH, FILM_H))
-    x = int((seed * 37) % WIDTH)
-    band.blit(_cache["noise"], (-x, 0))
-    band.blit(_cache["noise"], (WIDTH - x, 0))
+    try:
+        from cutscenes.post3d import apply_post  # lazy: numpy stack
+        apply_post(band, {"grain": 0.26}, int(t), "m6_film_%s" % seed)
+    except Exception:
+        pass
     if tag:
         surf = font_terminal_small.render(tag, True, col)
         plate = pygame.Surface((surf.get_width() + 20, surf.get_height() + 6),
@@ -895,6 +967,8 @@ def snow3d(r, t, seed=0, n=130, spread=18.0, height=14.0, speed=1.5,
     """World-lattice snow around the camera; deterministic, dt-free."""
     cx, cy, cz = r.cam
     a = t * 0.001 * speed
+    batch = getattr(r, "add_lines3d", None)
+    segs = [] if batch is not None else None
     for i in range(n):
         u, v, w = _u(i, seed, 1), _u(i, seed, 2), _u(i, seed, 3)
         x = cx + (u * 2 - 1) * spread
@@ -902,7 +976,13 @@ def snow3d(r, t, seed=0, n=130, spread=18.0, height=14.0, speed=1.5,
         y = cy + height * 0.55 - ((a * (0.45 + 0.9 * w) + v * height) % height)
         ln = 0.10 + 0.16 * w
         c = col if w > near else (int(col[0] * .6), int(col[1] * .65), int(col[2] * .7))
-        r.add_line3d((x, y, z), (x - 0.10 * ln, y - ln, z + 0.05 * ln), c, 1, layer=4)
+        if segs is not None:
+            segs.append(((x, y, z), (x - 0.10 * ln, y - ln, z + 0.05 * ln), c, 1))
+        else:
+            r.add_line3d((x, y, z), (x - 0.10 * ln, y - ln, z + 0.05 * ln), c, 1,
+                         layer=4)
+    if segs:
+        batch(segs, layer=4, depth_test=False)
 
 
 def breath(pos, t, seed=0, intensity=0.22):
@@ -936,6 +1016,7 @@ def breath(pos, t, seed=0, intensity=0.22):
             img.set_alpha(min(255, a))
             s.blit(img, (int(sx - rad), int(sy - rad * 1.2 - age * 10)))
 
+    draw.bounds_m = (0.32, 0.40)
     return draw
 
 
@@ -1628,8 +1709,26 @@ def _train_detail_mesh():
     return m
 
 
+def train_body(r, tx):
+    """The waiting carriage alone, shifted by ``tx``: the set memo excludes it
+    because it is the one part of the live station that moves."""
+    _train_detail(r, tx)
+
+
 def _train_detail(r, tx):
     m = _train_detail_mesh()
+    if hasattr(r, "add_packed") and not _STATIC_BUILD["active"]:
+        # GL: pack the cached mesh once, then only slide its x column.
+        ent = _cache.get("train_detail_rows")
+        if ent is None or ent[0] is not m:
+            faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
+            ent = _cache["train_detail_rows"] = (m, r.pack(m.verts, faces))
+        rows = ent[1]
+        if rows is not None and abs(tx) >= 1e-6:
+            rows = rows.copy()
+            rows[:, 0] += tx
+        r.add_packed(rows)
+        return
     if abs(tx) < 1e-6:
         add(r, m)
         return

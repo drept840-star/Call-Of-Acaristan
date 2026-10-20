@@ -560,6 +560,21 @@ def _decal_mesh(pos, n, kind, size=0.05):
                center=(pos[0] + n[0] * off, pos[1], pos[2]))
 
 
+def _pack_mesh(r, m):
+    """GL rows for a Mesh exactly as ``_w.add`` would queue it (bias 0)."""
+    return r.pack(m.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces])
+
+
+def _brass_rows(r, dims):
+    """One casing box packed at the origin; per frame it is only translated."""
+    rows = _cache.setdefault("brass_rows", {})
+    out = rows.get(dims)
+    if out is None:
+        out = rows[dims] = _pack_mesh(r, box(dims[0], dims[1], dims[2], _BRASS,
+                                             center=(0.0, 0.0, 0.0)))
+    return out
+
+
 def _brass_pos(b, t):
     """Ballistic casing with one bounce on the platform -> (pos, airborne)."""
     t0, p0, v, seed = b
@@ -914,6 +929,9 @@ def _vm_asset_hands(m):
 
 
 _VM_ASSET = None
+# A touch of cool lift so the black-anodised viewmodel still separates from
+# the night behind it.
+_VM_TINT = ((128, 142, 164), 0.12)
 _RETICLE = None
 
 
@@ -1510,6 +1528,13 @@ class TrainScene:
         self.hit_kind = "hit"       # hit-marker flavour: hit / kill / head
         self.brass = []
         self.decals = []
+        self._decal_sig = None      # GL: decals the packed chunk below holds
+        self._decal_pack = {}
+        self._decal_rows = None
+        self._vm_overlay_bounds = None
+        self._vm_cover = None
+        self._vm_cover_ads = None
+        self._vm_cover_reloading = False
         self.impacts = []
         self.dmg_marks = []         # (t, bearing deg) of rounds that hurt
         self.tinks = []             # clock times a casing first hits the deck
@@ -1598,6 +1623,41 @@ class TrainScene:
                 audio.get_sound(name)
         except Exception:
             pass
+        self._warm_up()
+
+    def _warm_up(self):
+        """Pay the first-draw bill while the stage is still loading: shaders
+        and FBO, the static set bake, every actor rig template, and the
+        post-cut live-set memo (the cut used to stall on that rebuild)."""
+        try:
+            r = _renderer()
+            scratch = _cache.get("warm_surface")
+            if scratch is None or scratch.get_size() != (WIDTH, HEIGHT):
+                scratch = _cache["warm_surface"] = pygame.Surface((WIDTH, HEIGHT))
+            self.t = 0.0
+            self.draw(scratch)
+            r.begin()
+            if hasattr(r, "add_packed"):
+                _w.pack_memo(r, "m6_train_live")
+                ok = False
+                try:
+                    _w.rail_platform(r, 0.0, train=True, snow=1.0,
+                                     train_offset=0.0)
+                    self._draw_station(r, 0.0)
+                    ok = True
+                finally:
+                    _w.pack_memo_end(ok=ok)
+            for hum in _cache["hum"].values():
+                if hum is not None:
+                    r.add_humanoid(hum, POSES["stand"],
+                                   (PLAYER_POS[0] + 2.0, 0.0, PLAYER_POS[2] + 2.0),
+                                   0.0, rifle_on=True)
+            r.begin()
+        except Exception:
+            try:
+                _renderer().begin()
+            except Exception:
+                pass
 
     def reset(self):
         if self.audio is not None:
@@ -1638,6 +1698,13 @@ class TrainScene:
         self.hit_kind = "hit"       # hit-marker flavour: hit / kill / head
         self.brass = []
         self.decals = []
+        self._decal_sig = None      # GL: decals the packed chunk below holds
+        self._decal_pack = {}
+        self._decal_rows = None
+        self._vm_overlay_bounds = None
+        self._vm_cover = None
+        self._vm_cover_ads = None
+        self._vm_cover_reloading = False
         self.impacts = []
         self.dmg_marks = []         # (t, bearing deg) of rounds that hurt
         self.tinks = []             # clock times a casing first hits the deck
@@ -2420,9 +2487,33 @@ class TrainScene:
             rebuild = _w.static_scene(r, "m6_train_static")
         try:
             if rebuild or not static:
-                _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
-                                 train_offset=self._train_offset(t))
-                self._draw_station(r, t)
+                if not static:
+                    # After the cut the set is drawn live (the cinematic rigs
+                    # light it).  Its geometry never changes, so after the
+                    # first live frame the packed chunk is replayed verbatim;
+                    # only the animated sprites, the departing carriage and
+                    # the yard wires need a per-frame pass.
+                    if _w.pack_memo_ready(r, "m6_train_live"):
+                        tx = self._train_offset(t)
+                        _w.pack_memo_replay(r)
+                        _w.train_body(r, tx)
+                        self._draw_yard_wires(r)
+                        self._draw_static_lights(r, t, train_offset=tx,
+                                                 snow_n=120, beacon=True)
+                    else:
+                        _w.pack_memo(r, "m6_train_live")
+                        ok = False
+                        try:
+                            _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
+                                             train_offset=self._train_offset(t))
+                            self._draw_station(r, t)
+                            ok = True
+                        finally:
+                            _w.pack_memo_end(ok=ok)
+                else:
+                    _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
+                                     train_offset=self._train_offset(t))
+                    self._draw_station(r, t)
             else:
                 # Set geometry is cached in the renderer; only the animated light
                 # and snow sprites need to be re-queued each frame.
@@ -2446,7 +2537,22 @@ class TrainScene:
             # second pass: viewmodel only, always on top of the world
             r.begin()
             self._draw_viewmodel(r)
-            r.flush(r.surface)
+            if hasattr(r, "flush_overlay"):
+                # transparent, region-limited readback (no surface upload)
+                cover, rect = r.flush_overlay(r.surface, self._vm_overlay_bounds)
+                if cover is None or rect is None:
+                    self._vm_cover = cover
+                else:
+                    x, y, rw, rh = rect
+                    if (cover[0] <= x + 1 or cover[1] <= y + 1
+                            or cover[0] + cover[2] >= x + rw - 1
+                            or cover[1] + cover[3] >= y + rh - 1):
+                        # the gun may have moved past the read box: widen
+                        self._vm_cover = None
+                    else:
+                        self._vm_cover = cover
+            else:
+                r.flush(r.surface)
 
         if t >= CUT_AT:
             _grade_cine(r.surface)
@@ -2875,10 +2981,7 @@ class TrainScene:
         # layer 2, not 0: every box face in this scene is painter layer 2, so
         # a layer-0 wire sorts behind the whole world - including the sky-side
         # carriage it is strung over - and the gantry run read as bare masts.
-        for wz in (-1.5, 1.5):
-            r.add_line3d((-30.0, 6.02, wz), (-7.0, 6.02, wz), (44, 48, 58), 1, layer=2)
-            r.add_line3d((-7.0, 6.02, wz), (13.0, 6.02, wz), (44, 48, 58), 1, layer=2)
-            r.add_line3d((13.0, 6.02, wz), (30.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+        self._draw_yard_wires(r)
 
         # ── far yard silhouette ──────────────────────────────────────
         # Read the SKY_HORIZON / YARD_DARK note at the top of the module
@@ -3028,29 +3131,45 @@ class TrainScene:
                                   seed=460 + int(hx), intensity=0.085),
                          layer=_fx.FX_LAYER)
 
-    def _draw_static_lights(self, r, t):
+    def _draw_yard_wires(self, r):
+        """Gantry catenary over the yard, layer 2 so it sorts with the world."""
+        for wz in (-1.5, 1.5):
+            r.add_line3d((-30.0, 6.02, wz), (-7.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+            r.add_line3d((-7.0, 6.02, wz), (13.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+            r.add_line3d((13.0, 6.02, wz), (30.0, 6.02, wz), (44, 48, 58), 1, layer=2)
+
+    def _draw_static_lights(self, r, t, train_offset=0.0, snow_n=60,
+                            beacon=False):
         """Animated sprites for the baked set (lamps, window spill, snow).
 
         Geometry is cached by ``static_scene``; these callbacks change with
-        the clock, so they are queued every frame.
+        the clock, so they are queued every frame.  ``train_offset``/``snow_n``/
+        ``beacon`` let the post-cut replay match the live set builder it
+        replaces (which queues 120 snow lines, a lit tower beacon and train
+        glows that slide with the departure).
         """
         tm = t * 1000.0
         G = _SLOT_GROUND
+        tx = float(train_offset)
         # waiting-train windows: cluster glows, door spill, rear marker
         for x in (-12.0, 0.0, 9.0, 15.0, 21.0):
-            r.add_sprite((x, 2.45, -2.80),
+            r.add_sprite((tx + x, 2.45, -2.80),
                          _fx.window_glow((255, 198, 128), 4.2, 1.2, 0.20),
                          layer=_fx.FX_LAYER)
         for x in (6.0, 11.0, 16.0):
-            r.add_sprite((x, 0.10, -2.45),
+            r.add_sprite((tx + x, 0.10, -2.45),
                          _fx.window_glow((255, 180, 110), 2.4, 0.6, 0.16),
                          layer=_fx.FX_LAYER)
-        r.add_sprite((TRAIN_DOOR_X, 1.85, -2.80),
+        r.add_sprite((tx + TRAIN_DOOR_X, 1.85, -2.80),
                      _fx.window_glow((255, 196, 130), 1.2, 1.4, 0.22),
                      layer=_fx.FX_LAYER)
-        r.add_sprite((-23.02, 2.0, -2.80),
+        r.add_sprite((tx - 23.02, 2.0, -2.80),
                      _fx.glow((228, 56, 42), 0.35, tm, intensity=0.55),
                      layer=_fx.FX_LAYER)
+        if beacon:
+            r.add_sprite((19.0, 8.72, 7.9),
+                         _fx.glow((240, 70, 50), 0.45, tm, intensity=0.50),
+                         layer=_fx.FX_LAYER)
         # floodlight masts
         for i, x in enumerate((-18.0, -6.0, 6.0, 18.0)):
             r.add_sprite((x, 8.0, 11.3),
@@ -3121,7 +3240,7 @@ class TrainScene:
                                      seed=171),
                      layer=_fx.FX_LAYER)
         self._yard_sprites(r, tm)
-        _w.snow3d(r, tm, seed=61, n=60, spread=22, height=16, speed=1.3)
+        _w.snow3d(r, tm, seed=61, n=snow_n, spread=22, height=16, speed=1.3)
 
     def _draw_train_door(self, r, t):
         tx = self._train_offset(t)
@@ -3147,6 +3266,22 @@ class TrainScene:
                 _w.add(r, box(0.03, 0.30, 0.05, (130, 130, 134),
                               center=(cx - side * 0.31, 1.50, z + 0.06)))
         # grab rails either side of the opening
+        if (closed <= 0.02 and abs(tx) < 1e-6 and hasattr(r, "add_packed")):
+            # the pre-cut doorway never changes: pack its rails and step once
+            rows = _cache.get("door_rows")
+            if rows is None:
+                from engine3d import Mesh
+                m = Mesh()
+                for side in (-1, 1):
+                    m.add(box(0.035, 0.90, 0.035, (150, 150, 150),
+                              center=(dx + side * 0.86, 1.55, z + 0.04)))
+                m.add(box(1.1, 0.16, 0.55, (72, 70, 66),
+                          center=(dx, 0.30, z + 0.42)))
+                m.add(box(1.1, 0.42, 0.12, (44, 44, 48),
+                          center=(dx, 0.12, z + 0.68)))
+                rows = _cache["door_rows"] = _pack_mesh(r, m)
+            r.add_packed(rows)
+            return
         for side in (-1, 1):
             _w.add(r, box(0.035, 0.90, 0.035, (150, 150, 150),
                           center=(dx + side * 0.86, 1.55, z + 0.04)))
@@ -3434,6 +3569,76 @@ class TrainScene:
         """World-space muzzle tip for the current held pose (tracers/flash)."""
         return self._vm_setup()["muzzle_world"]
 
+    def _vm_rows(self, r, s):
+        """GL viewmodel rows: the gun-space mesh is packed once, then only its
+        positions and normals are rotated into the held frame.  Re-packing
+        every vertex in Python was the single largest cost of a combat frame.
+        The hold is a proper rotation, so rotated face normals equal the ones
+        the packer would recompute; only mag-drop frames (faces bridging mag
+        and body stretch) recompute normals, vectorised, in gun space."""
+        import numpy as np
+        mesh, shift = s["mesh"], s["mag_shift"]
+        ent = _cache.get("vm_rows")
+        if ent is None or ent[0] is not mesh:
+            faces = [(i, c, l, d, None, e) for i, c, l, d, e in mesh.faces]
+            rows = r.pack(mesh.verts, faces, tint=_VM_TINT)
+            tri, tri3 = [], []
+            for idx, *_rest in mesh.faces:
+                for j in range(1, len(idx) - 1):
+                    tri.extend((idx[0], idx[j], idx[j + 1]))
+                    tri3.append(idx[:3])     # the packer's face-normal verts
+            sh = (np.asarray(shift, dtype=np.float32)[tri]
+                  if shift is not None else None)
+            ent = (mesh, rows, rows[:, 0:3].copy(), rows[:, 6:9].copy(), sh,
+                   np.asarray(mesh.verts, dtype=np.float64),
+                   None if shift is None else np.asarray(shift, dtype=np.float64),
+                   np.repeat(np.asarray(tri3, dtype=np.int64), 3, axis=0))
+            _cache["vm_rows"] = ent
+        _m, rows, pos, nrm, sh, verts, vshift, tri3 = ent
+        cw, sw = math.cos(s["yaw_vm"]), math.sin(s["yaw_vm"])
+        ca, sa = math.cos(s["cant"]), math.sin(s["cant"])
+        # gun space -> (right, up, fwd) offsets: yaw in xz, then cant in xy
+        loc = np.array(((cw * ca, -sa, -sw * ca),
+                        (cw * sa, ca, -sw * sa),
+                        (sw, 0.0, cw)))
+        rot = np.array((s["rgt"], s["up"], s["fwd"])).T @ loc
+        if sh is not None and s["mag_drop"]:
+            pos = pos.copy()
+            pos[:, 1] -= s["mag_drop"] * sh
+            v = verts.copy()
+            v[:, 1] -= s["mag_drop"] * vshift
+            a, b, c = v[tri3[:, 0]], v[tri3[:, 1]], v[tri3[:, 2]]
+            nrm = np.cross(b - a, c - a)
+            ln = np.linalg.norm(nrm, axis=1)
+            ln[ln == 0] = 1.0
+            nrm /= ln[:, None]
+        out = rows.copy()
+        out[:, 0:3] = (pos @ (rot * s["k"]).T) + np.asarray(s["origin"])
+        out[:, 6:9] = nrm @ rot.T
+        return out
+
+    @staticmethod
+    def _overlay_bounds(r, rows):
+        """Screen box of the gun geometry for the overlay readback.  The
+        reticle/flash are sprites and are drawn outside that box."""
+        import numpy as np
+        p = np.asarray(rows[:, 0:3], dtype=np.float64)
+        if not len(p):
+            return None
+        rel = p - np.asarray(r.cam, dtype=np.float64)
+        z = rel @ np.asarray(r.fwd, dtype=np.float64)
+        if (z <= float(r.NEAR)).any():
+            # a vertex at the lens: near-clipping can spread the polygon to
+            # the frame edge, so the box cannot be trusted
+            return None
+        x = rel @ np.asarray(r.right, dtype=np.float64)
+        y = rel @ np.asarray(r.up, dtype=np.float64)
+        sx = r.w * 0.5 + x / z * r.focal
+        sy = r.h * 0.5 - y / z * r.focal
+        x0, y0 = int(sx.min()) - 4, int(sy.min()) - 4
+        x1, y1 = int(sx.max()) + 5, int(sy.max()) + 5
+        return x0, y0, x1 - x0, y1 - y0
+
     def _draw_viewmodel(self, r):
         s = self._vm_setup()
         mesh, k = s["mesh"], s["k"]
@@ -3442,21 +3647,37 @@ class TrainScene:
         ca, sa = math.cos(s["cant"]), math.sin(s["cant"])
         shift, drop = s["mag_shift"], s["mag_drop"]
 
-        verts = []
-        for i, (vx, vy, vz) in enumerate(mesh.verts):
-            if shift is not None and drop:
-                vy -= drop * shift[i]
-            vx, vy, vz = vx * k, vy * k, vz * k
-            vx, vz = vx * cw - vz * sw, vx * sw + vz * cw
-            lx = vx * ca - vy * sa
-            ly = vx * sa + vy * ca
-            verts.append((origin[0] + rgt[0] * lx + up[0] * ly + fwd[0] * vz,
-                          origin[1] + rgt[1] * lx + up[1] * ly + fwd[1] * vz,
-                          origin[2] + rgt[2] * lx + up[2] * ly + fwd[2] * vz))
-        faces = [(i, c, l, d, None, e) for i, c, l, d, e in mesh.faces]
-        # A touch of cool lift so the black-anodised parts still separate from
-        # the night behind them.
-        r.add_dynamic(verts, faces, bias=0.0, tint=((128, 142, 164), 0.12))
+        if hasattr(r, "add_packed"):
+            rows = self._vm_rows(r, s)
+            r.add_packed(rows)
+            cover = self._vm_cover
+            if (cover is not None and self._vm_cover_ads is not None
+                    and abs(self.ads - self._vm_cover_ads) < 0.08
+                    and not self.reloading and not self._vm_cover_reloading):
+                # last frame's exact alpha box, grown for sway/recoil: the
+                # projected gun AABB is 4-10x larger (near-plane vertices)
+                bx, by, bw, bh = cover
+                pad = max(48, int(bw * 0.25), int(bh * 0.25))
+                bounds = (bx - pad, by - pad, bw + 2 * pad, bh + 2 * pad)
+            else:
+                bounds = self._overlay_bounds(r, rows)
+            self._vm_overlay_bounds = bounds
+            self._vm_cover_ads = self.ads
+            self._vm_cover_reloading = self.reloading
+        else:
+            verts = []
+            for i, (vx, vy, vz) in enumerate(mesh.verts):
+                if shift is not None and drop:
+                    vy -= drop * shift[i]
+                vx, vy, vz = vx * k, vy * k, vz * k
+                vx, vz = vx * cw - vz * sw, vx * sw + vz * cw
+                lx = vx * ca - vy * sa
+                ly = vx * sa + vy * ca
+                verts.append((origin[0] + rgt[0] * lx + up[0] * ly + fwd[0] * vz,
+                              origin[1] + rgt[1] * lx + up[1] * ly + fwd[1] * vz,
+                              origin[2] + rgt[2] * lx + up[2] * ly + fwd[2] * vz))
+            faces = [(i, c, l, d, None, e) for i, c, l, d, e in mesh.faces]
+            r.add_dynamic(verts, faces, bias=0.0, tint=_VM_TINT)
 
         # Holographic reticle: the imported optic has no glass pane (an opaque
         # teal slab read as a fake lens), so the asset's own projected ring is
@@ -3524,8 +3745,13 @@ class TrainScene:
             r.add_sprite(pos, _fx.dust_motes(ms, seed=seed, count=10,
                                              spread_m=(0.30, 0.26), col=col),
                          layer=_fx.FX_LAYER)
-        for pos, n, kind, size in self.decals:
-            _w.add(r, _decal_mesh(pos, n, kind, size))
+        packed = hasattr(r, "add_packed")
+        if packed:
+            r.add_packed(self._packed_decals(r))
+        else:
+            for pos, n, kind, size in self.decals:
+                _w.add(r, _decal_mesh(pos, n, kind, size))
+        casings = []
         for b in self.brass:
             bp, air = _brass_pos(b, t)
             ph = int((t - b[0]) * 16.0) + b[3]
@@ -3534,7 +3760,33 @@ class TrainScene:
                         (0.014, 0.045, 0.014))[ph % 3]
             else:
                 dims = (0.045, 0.013, 0.014) if b[3] % 2 else (0.014, 0.013, 0.045)
-            _w.add(r, box(dims[0], dims[1], dims[2], _BRASS, center=bp))
+            if packed:
+                rows = _brass_rows(r, dims)
+                if rows is not None:
+                    rows = rows.copy()
+                    rows[:, 0:3] += bp
+                    casings.append(rows)
+            else:
+                _w.add(r, box(dims[0], dims[1], dims[2], _BRASS, center=bp))
+        if casings:
+            import numpy as np
+            r.add_packed(np.concatenate(casings))
+
+    def _packed_decals(self, r):
+        """Every bullet scar as one GL chunk.  Scars never move, so each is
+        packed once and the chunk is only rebuilt when the set changes."""
+        if self._decal_sig != self.decals:
+            import numpy as np
+            fresh = {}
+            for d in self.decals:
+                if d not in fresh:
+                    rows = self._decal_pack.get(d)
+                    fresh[d] = rows if rows is not None else _pack_mesh(r, _decal_mesh(*d))
+            chunks = [fresh[d] for d in self.decals if fresh[d] is not None]
+            self._decal_pack = fresh
+            self._decal_rows = np.concatenate(chunks) if chunks else None
+            self._decal_sig = list(self.decals)
+        return self._decal_rows
 
     def _draw_death_fx(self, r, t):
         """Contact shadow, ground puffs, stain and the last breath."""

@@ -44,3 +44,8 @@
 - Locked numbers: the Vostral is **six years old** (a Y-6 whisper, press at Y-1); the campaign calendar is M1 Day 0, M2 Day 1, M3 Day 4, M4 Day 6, M5 Day ~8, M6 Day ~10, M7 Day ~11 (planned), M8 Day ~12 (planned). Missions 7 and 8 are **not implemented** — do not quote them as shipped.
 - A new spoken line needs a `VO_xxx` row in `src/audio/voice_manifest.py` plus a `KNOWN_MISSING_AUDIO` entry (caption-only until recorded) — and it must NOT go into `VOICE_ORDER`, which drives the unrenamed-file matcher and would steal an existing take. Never edit a line that already has a recorded take: fix the timeline instead.
 
+<!-- openwolf:begin -->
+# OpenWolf
+
+This project uses OpenWolf for context management. Read and follow .wolf/OPENWOLF.md at session start. Check .wolf/cerebrum.md before generating code. Grep .wolf/anatomy.md for a file's path before reading it (never read the whole index).
+<!-- openwolf:end -->

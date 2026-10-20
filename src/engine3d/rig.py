@@ -759,13 +759,12 @@ class Humanoid:
             head.append(box(0.25, 0.3, 0.27, s["hood"], center=(0, 0.15, -0.02),
                             cols={"back": (10, 10, 10)}))
         if hd and not s.get("hood") and not masked:
-            # face planes the side key can model: brow ridge, cheekbones, chin.
-            # All stay a hair off the decal plane (the decals carry a depth bias).
+            # Face planes the side key can model: brow ridge and chin, both a
+            # hair off the decal plane (the decals carry a depth bias).  The
+            # raised cheekbone boxes read as pale bumps on close-up faces,
+            # so the cheeks stay flush.
             sk_d = mix(skin, (0, 0, 0), .16)
             head.append(box(0.176 * hw, 0.02, 0.028, sk_d, center=(0, 0.206, 0.124)))
-            for sx_ in (-1, 1):
-                head.append(box(0.03, 0.04, 0.028, mix(skin, (255, 226, 205), .07),
-                                center=(sx_ * 0.076 * hw, 0.106, 0.122)))
             head.append(box(0.074 * hw, 0.03, 0.026, mix(skin, (0, 0, 0), .06),
                             center=(0, 0.028, 0.122)))
         P["head"] = head

@@ -320,9 +320,23 @@ def _face(pen, spec, hx, hy, *, fear=0, smile=0, look=0, blink=0, cig=True):
     L(_lite(skin, .3), [(-2, -5), (-4, 6)], 1)
     L(_mix(skin, (70, 30, 40), .45), [(-7, 14), (-11, 22)], 1)
     if spec.get("stubble"):
-        sc = _mix(skin, (12, 10, 10), .55)
-        for sx, sy in _STUBBLE:
-            pygame.draw.rect(pen.s, sc, (*pen.p(sx, sy), pen.w(1.6), pen.w(1.6)))
+        # Soft 5 o'clock shadow: two nested translucent jaw patches.  Dark
+        # stipple dots read as acne at cutscene scale, and one opaque wash
+        # left a hard beard-mask edge.
+        outer = [(-25, 8), (-23, 21), (-18, 28), (-10, 33), (lo(2), 35),
+                 (lo(13), 30), (21, 22), (24, 8), (16, 14), (5, 18),
+                 (-6, 18), (-16, 14)]
+        inner = [(-21, 14), (-18, 24), (-11, 30), (-3, 33), (lo(9), 29),
+                 (15, 22), (15, 12), (4, 17), (-7, 17)]
+        pts = [pen.p(x, y) for x, y in outer]
+        x0 = min(p[0] for p in pts); y0 = min(p[1] for p in pts)
+        x1 = max(p[0] for p in pts) + 1; y1 = max(p[1] for p in pts) + 1
+        ov = pygame.Surface((x1 - x0, y1 - y0), pygame.SRCALPHA)
+        for poly_, alpha in ((outer, 18), (inner, 20)):
+            pts_ = [pen.p(x, y) for x, y in poly_]
+            pygame.draw.polygon(ov, (30, 26, 26, alpha),
+                                [(px - x0, py - y0) for px, py in pts_])
+        pen.s.blit(ov, (x0, y0))
     if spec.get("beard"):
         P(spec["beard"], [(-24, 6), (-26, 18), (-14, 34), (0, 41), (14, 34), (25, 18), (24, 6),
                           (16, 17), (0, 21), (-16, 17)])

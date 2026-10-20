@@ -174,6 +174,8 @@ def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensit
         _add_at(s, _halo(_scale(col, k), rad), sx, sy)
         if core is not None and rad > 3:
             _add_at(s, _halo(_scale(core, k), max(2, rad * 0.22), 1.2), sx, sy)
+    draw.bounds_m = (radius_m, radius_m)
+    draw.bounds_cap_px = (min(max_px, 28), min(max_px, 28))
     return draw
 
 
@@ -191,6 +193,8 @@ def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0):
         if rx < 1.5 or ry < 1.5:
             return
         _add_at(s, _ellipse(_scale(col, k), min(260, rx), min(260, ry)), sx, sy)
+    draw.bounds_m = (w_m * 1.1, h_m * 1.1)
+    draw.bounds_cap_px = (260, 260)
     return draw
 
 
@@ -251,6 +255,7 @@ def dust_motes(t, seed=0, count=26, spread_m=(1.6, 1.4), col=(150, 140, 120)):
             y = sy + (((uy + 1.0 + t * 0.00004 * b) % 2.0) - 1.0) * ay
             tw = 0.55 + 0.45 * math.sin(t * 0.002 + ph * 3.0)
             _add_at(s, _halo(_scale(col, b * tw), max(2, scale * 0.012)), x, y)
+    draw.bounds_m = (spread_m[0] * 1.1 + 0.05, spread_m[1] * 1.1 + 0.05)
     return draw
 
 
@@ -277,6 +282,8 @@ def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420):
             return
         k = (1.0 - age_ms / dur_ms) ** 2 * flash_scale()   # RPE6 P9: flash reduction caps the peak
         _add_at(s, _halo(_scale(col, k), min(220, radius_m * scale * (0.6 + 0.6 * k))), sx, sy)
+    draw.bounds_m = (radius_m * 1.2, radius_m * 1.2)
+    draw.bounds_cap_px = (220, 220)
     return draw
 
 
@@ -335,6 +342,8 @@ def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16):
         k = intensity * (0.75 + 0.25 * math.sin(t * 0.0007 + seed * 1.9))
         rad = int(rad * (1.0 + 0.05 * math.sin(t * 0.0009 + seed)))
         _add_at(s, _halo(_scale(col, k), rad, 2.8), sx, sy)
+    draw.bounds_m = (radius_m * 1.06, radius_m * 1.06)
+    draw.bounds_cap_px = (220, 220)
     return draw
 
 
@@ -348,6 +357,8 @@ def glint(col, radius_m=0.35, t=0, seed=0, intensity=0.8, rate=1.0):
         k = intensity * (0.55 + 0.45 * math.sin(t * 0.004 * rate + seed * 2.2))
         _add_at(s, _halo(_scale(col, k * 0.6), rad * 2.0), sx, sy)
         _add_at(s, _halo(_scale(col, k), max(1.5, rad * 0.5), 1.3), sx, sy)
+    draw.bounds_m = (radius_m * 2.05, radius_m * 2.05)
+    draw.bounds_cap_px = (220, 220)
     return draw
 
 

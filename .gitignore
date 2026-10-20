@@ -144,3 +144,6 @@ outputs/
 /apollo-agent/
 /tests/golden/_verify/
 /tools/_*
+
+# Claude Code personal settings
+.claude/settings.local.json

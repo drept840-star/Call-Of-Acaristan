@@ -710,6 +710,9 @@ class SoftwareRenderer:
             disc = self._blob_disc(_w, _h, _s)
             surface.blit(disc, (int(_c[0] - _w / 2), int(_c[1] - _h / 2)))
 
+        # Exact pixel box the disc covers: lets the GL compositor depth-test
+        # just these pixels instead of the generic 3.5 m sprite reach.
+        _draw.bounds = (int(c[0] - wpx / 2), int(c[1] - hpx / 2), wpx, hpx)
         return _draw, c
 
     def add_blob_shadow(self, pos, rx, rz, strength=0.35, layer=None, bias=0.0):

@@ -401,6 +401,20 @@ class GLRenderer(SoftwareRenderer):
         if arr is not None:
             self._dyn.append(arr)
 
+    def add_packed(self, arr):
+        """Queue rows already in the dynamic vertex layout (see ``pack``).
+
+        For meshes that only move rigidly: pack once, then transform the
+        position/normal columns per frame instead of re-packing in Python."""
+        if arr is not None and len(arr):
+            self._dyn.append(arr)
+
+    @staticmethod
+    def pack(wverts, faces, bias=0.0, tint=None):
+        """``add_dynamic``'s packing step on its own -> float32 rows or None.
+        Columns 0:3 are positions, 6:9 the (unit) face normals."""
+        return _pack_faces(wverts, faces, prelit=False, bias=bias, tint=tint)
+
     def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None,
                      shadow=None):
         places, joints, (px, py, pz) = hum.pose_world(pose, pos, yaw, rifle_on=rifle_on)
@@ -465,6 +479,30 @@ class GLRenderer(SoftwareRenderer):
         scr = [(self.w / 2 + x / z * self.focal, self.h / 2 - y / z * self.focal) for x, y, z in pts]
         self._items.append((layer * 1e6, "line", (col, width, scr, layer)))
 
+    def add_lines3d(self, segs, layer=4, depth_test=True):
+        """Queue many world-space segments as one composite item.
+
+        Snow uses ~120 one-pixel lines a frame; compositing each as its own
+        item paid the depth test and surface-lock overhead per flake.
+        ``depth_test=False`` for scenery drawn above every world layer."""
+        from .core import _clip_near
+        out = []
+        for a, b, col, width in segs:
+            pa, pb = self.to_cam(a), self.to_cam(b)
+            if pa[2] < self.NEAR and pb[2] < self.NEAR:
+                continue
+            pts = _clip_near([pa, pb], self.NEAR, closed=False)
+            if len(pts) < 2:
+                continue
+            p0 = (self.w / 2 + pts[0][0] / pts[0][2] * self.focal,
+                  self.h / 2 - pts[0][1] / pts[0][2] * self.focal)
+            p1 = (self.w / 2 + pts[1][0] / pts[1][2] * self.focal,
+                  self.h / 2 - pts[1][1] / pts[1][2] * self.focal)
+            out.append((p0, p1, col, width))
+        if out:
+            self._items.append((layer * 1e6, "lines",
+                                (out, layer, depth_test)))
+
     # drawing ------------------------------------------------------------
     @property
     def _far(self):
@@ -500,6 +538,41 @@ class GLRenderer(SoftwareRenderer):
             if k in prog:
                 prog[k].value = v
 
+    def _draw_dyn(self):
+        """Upload + draw the queued packed rows; returns triangles drawn."""
+        if not self._dyn:
+            return 0
+        import moderngl
+        data = self._dyn[0] if len(self._dyn) == 1 else np.concatenate(self._dyn)
+        nbytes = data.nbytes
+        if nbytes > self._dyn_vbo.size:
+            # read the size BEFORE release: a released moderngl buffer is an
+            # InvalidObject and .size raised on the first oversized frame
+            grow = max(nbytes, self._dyn_vbo.size * 2)
+            self._dyn_vao.release()
+            self._dyn_vbo.release()
+            self._dyn_vbo = self.ctx.buffer(reserve=grow, dynamic=True)
+            self._dyn_vao = self._vao(self.progs.world, self._dyn_vbo, rig=False)
+        self._dyn_vbo.write(data.tobytes())
+        self._dyn_vao.render(moderngl.TRIANGLES, vertices=len(data))
+        return len(data) // 3
+
+    def _draw_rigs(self, split_mode=0, split=0.0):
+        if not self._rig_draws:
+            return 0
+        import moderngl
+        rig = self.progs.rig
+        self._set_uniforms(rig, split_mode, split)
+        bones = rig["u_bones"]
+        ntri = 0
+        for (hum, vbo, vao, n), bb, tint, bias in self._rig_draws:
+            bones.write(bb)
+            rig["u_rtint"].value = tint
+            rig["u_rbias"].value = bias
+            vao.render(moderngl.TRIANGLES, vertices=n)
+            ntri += n // 3
+        return ntri
+
     def _render(self, surface, split_mode=0, split=0.0, items=None):
         """Upload surface -> draw geometry -> read back -> composite sprites."""
         import moderngl
@@ -534,43 +607,93 @@ class GLRenderer(SoftwareRenderer):
                 if run_n:
                     self._static_vao.render(moderngl.TRIANGLES, vertices=run_n, first=run_a)
                     ntri += run_n // 3
-        if self._dyn:
-            data = self._dyn[0] if len(self._dyn) == 1 else np.concatenate(self._dyn)
-            nbytes = data.nbytes
-            if nbytes > self._dyn_vbo.size:
-                # read the size BEFORE release: a released moderngl buffer is an
-                # InvalidObject and .size raised on the first oversized frame
-                grow = max(nbytes, self._dyn_vbo.size * 2)
-                self._dyn_vao.release()
-                self._dyn_vbo.release()
-                self._dyn_vbo = ctx.buffer(reserve=grow, dynamic=True)
-                self._dyn_vao = self._vao(world, self._dyn_vbo, rig=False)
-            self._dyn_vbo.write(data.tobytes())
-            self._dyn_vao.render(moderngl.TRIANGLES, vertices=len(data))
-            ntri += len(data) // 3
-        if self._rig_draws:
-            rig = self.progs.rig
-            self._set_uniforms(rig, split_mode, split)
-            bones = rig["u_bones"]
-            for (hum, vbo, vao, n), bb, tint, bias in self._rig_draws:
-                bones.write(bb)
-                rig["u_rtint"].value = tint
-                rig["u_rbias"].value = bias
-                vao.render(moderngl.TRIANGLES, vertices=n)
-                ntri += n // 3
+        ntri += self._draw_dyn()
+        ntri += self._draw_rigs()
         # read back
         px = self._fbo.read(components=4, alignment=1)
-        img = pygame.image.frombytes(px, (w, h), "RGBA", True)
         if alpha:
+            img = pygame.image.frombytes(px, (w, h), "RGBA", True)
             surface.fill((0, 0, 0, 0))
             surface.blit(img, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
         else:
-            surface.blit(img, (0, 0))
+            # The shader writes alpha 1.0, so an opaque target is a plain copy;
+            # an RGBA source made pygame alpha-blend every pixel (~4 ms a pass).
+            surface.blit(pygame.image.frombytes(px, (w, h), "RGBX", True), (0, 0))
         items = self._items if items is None else items
         if items:
             depth = np.frombuffer(self._depth.read(alignment=1), dtype=np.float32).reshape(h, w)[::-1]
             self._composite(surface, items, depth, alpha)
         self.stats = {"tris": ntri, "items": len(items), "actors": len(self._rig_draws)}
+
+    def flush_overlay(self, surface, bounds=None):
+        """Flush a near overlay (the held viewmodel) over *surface*.
+
+        Unlike ``flush``, the target colour is never uploaded: the pass draws
+        on a transparent background and only ``bounds`` (screen x, y, w, h)
+        is read back, then alpha-blitted.  Its sprites (reticle, flash) are
+        drawn afterwards without a depth test; the viewmodel mesh is painter
+        layer 2 while those sprites sit above it, so the old second pass
+        never occluded them either.
+        """
+        import moderngl
+        w, h = self.w, self.h
+        self._fbo.use()
+        self._fbo.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
+        ctx = self.ctx
+        ctx.enable(moderngl.DEPTH_TEST)
+        ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
+        self._set_uniforms(self.progs.world, 0, 0.0)
+        ntri = self._draw_dyn() + self._draw_rigs()
+        rect = self._clamp_rect(bounds, w, h)
+        if rect is None:
+            px = self._fbo.read(components=4, alignment=1)
+            image = pygame.image.frombytes(px, (w, h), "RGBA", True)
+            cover = self._alpha_cover(px, w, h, 0, 0)
+            surface.blit(image, (0, 0))
+        else:
+            x, y, rw, rh = rect
+            # glReadPixels viewports are bottom-left origin
+            px = self._fbo.read(viewport=(x, h - y - rh, rw, rh),
+                                components=4, alignment=1)
+            image = pygame.image.frombytes(px, (rw, rh), "RGBA", True)
+            cover = self._alpha_cover(px, rw, rh, x, y)
+            surface.blit(image, (x, y))
+        items = sorted(self._items, key=lambda it: it[0])
+        for _key, kind, d in items:
+            if kind == "sprite":
+                fn, sx, sy, scale, _z = d[:5]
+                fn(surface, sx, sy, scale, _z)
+            elif kind == "lines":
+                for p0, p1, col, width in d[0]:
+                    pygame.draw.line(surface, col, p0, p1, width)
+            elif kind == "line":
+                col, width, scr, _layer = d
+                if len(scr) >= 2:
+                    pygame.draw.line(surface, col, scr[0], scr[1], width)
+        self.stats = {"tris": ntri, "items": len(items), "actors": len(self._rig_draws)}
+        self.begin()
+        return cover, rect
+
+    @staticmethod
+    def _alpha_cover(px, w, h, ox, oy):
+        """Screen box of the non-transparent overlay pixels (top-left origin)."""
+        a = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)[:, :, 3]
+        ys, xs = np.nonzero(a)
+        if not len(xs):
+            return None
+        return (ox + int(xs.min()), oy + int(h - 1 - ys.max()),
+                int(xs.max() - xs.min()) + 1, int(ys.max() - ys.min()) + 1)
+
+    @staticmethod
+    def _clamp_rect(bounds, w, h):
+        if bounds is None:
+            return None
+        x, y, rw, rh = (int(v) for v in bounds)
+        x0, y0 = max(0, x), max(0, y)
+        x1, y1 = min(w, x + rw), min(h, y + rh)
+        if x1 <= x0 or y1 <= y0:
+            return None
+        return x0, y0, x1 - x0, y1 - y0
 
     def _enc(self, layer, z):
         slot = min(7.0, max(0.0, float(int(layer + 0.5))))
@@ -591,10 +714,52 @@ class GLRenderer(SoftwareRenderer):
             if kind == "sprite":
                 fn, sx, sy, scale, z, layer, zeff = d
                 enc = self._enc(layer, zeff)
-                reach = int(min(300, max(8, scale * SPRITE_REACH_M)))
-                x0, y0 = int(sx) - reach, int(sy) - reach
-                x1, y1 = int(sx) + reach + 1, int(sy) + reach + 1
+                box = getattr(fn, "bounds", None)
+                if box is not None:
+                    # the callback declared its exact pixel box (blob shadows)
+                    x0, y0 = box[0] - 1, box[1] - 1
+                    x1, y1 = box[0] + box[2] + 1, box[1] + box[3] + 1
+                else:
+                    bm = getattr(fn, "bounds_m", None)
+                    if bm is not None:
+                        # callbacks that know their drawn size in metres: the
+                        # generic 3.5 m reach tests 4-20x too many pixels for
+                        # lamps, haze and motes.
+                        capx, capy = getattr(fn, "bounds_cap_px", (300, 300))
+                        rx = int(min(capx, max(2.0, scale * bm[0]))) + 2
+                        ry = int(min(capy, max(2.0, scale * bm[1]))) + 2
+                        x0, y0 = int(sx) - rx, int(sy) - ry
+                        x1, y1 = int(sx) + rx + 1, int(sy) + ry + 1
+                    else:
+                        reach = int(min(300, max(8, scale * SPRITE_REACH_M)))
+                        x0, y0 = int(sx) - reach, int(sy) - reach
+                        x1, y1 = int(sx) + reach + 1, int(sy) + reach + 1
                 draw = lambda s, fn=fn, sx=sx, sy=sy, scale=scale, z=z: fn(s, sx, sy, scale, z)
+            elif kind == "lines":
+                segs, layer, depth_test = d
+                enc = self._enc(layer, 0.0)
+                if not segs:
+                    continue
+                pad = 2
+                ax0 = ay0 = 1e9
+                ax1 = ay1 = -1e9
+                for p0, p1, _c, width in segs:
+                    if width + 2 > pad:
+                        pad = int(width) + 2
+                    for px, py in (p0, p1):
+                        if px < ax0: ax0 = px
+                        if px > ax1: ax1 = px
+                        if py < ay0: ay0 = py
+                        if py > ay1: ay1 = py
+                x0, x1 = int(ax0) - pad, int(ax1) + pad + 1
+                y0, y1 = int(ay0) - pad, int(ay1) + pad + 1
+
+                def draw(s, segs=segs):
+                    for p0, p1, col, width in segs:
+                        pygame.draw.line(s, col, p0, p1, width)
+                if not depth_test:
+                    draw(surface)
+                    continue
             else:
                 col, width, scr, layer = d
                 enc = self._enc(layer, 0.0)

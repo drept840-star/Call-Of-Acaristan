@@ -409,7 +409,7 @@ def _insert_heli(surface, t):
                  layer=_fx.FX_LAYER)
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, 6101, "RIDGE ABOVE KIM KIM // INSERTION")
+    _w.finish(surface, 6101, "RIDGE ABOVE KIM KIM // INSERTION", t=t)
 
 
 def _insert_jump(surface, t):
@@ -455,7 +455,7 @@ def _insert_jump(surface, t):
                                 intensity=0.20), layer=_fx.FX_LAYER)
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, 6102, "DOOR // 12 METRES")
+    _w.finish(surface, 6102, "DOOR // 12 METRES", t=t)
 
 
 def _insert_fall(surface, t):
@@ -504,7 +504,7 @@ def _insert_fall(surface, t):
                      1, layer=4)
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, 6103, "DROP")
+    _w.finish(surface, 6103, "DROP", t=t)
 
 
 def _insert_ground(surface, t):
@@ -543,7 +543,7 @@ def _insert_ground(surface, t):
                      layer=_fx.FX_LAYER)
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, 6104, "THE CROSSING // 02:40")
+    _w.finish(surface, 6104, "THE CROSSING // 02:40", t=t)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1034,7 +1034,7 @@ def _boxcar_scene(scene):
                              layer=_fx.FX_LAYER)
         r.flush(buf)
         _w.present(surface, buf)
-        _w.finish(surface, seed, tag)
+        _w.finish(surface, seed, tag, t=t)
     return draw
 
 
@@ -1198,7 +1198,7 @@ def _customs_terminal(surface, t):
     rect = _quad_rect(r, crt, 0.34, 0.24, -0.02)
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, 6301, "")
+    _w.finish(surface, 6301, "", t=t)
     if rect:
         _crt_panel(surface, rect, t)
 
@@ -1327,7 +1327,7 @@ def _radio_take(surface, t, variant, seed, tag):
         _draw_handset(r, hs, j, a["yaw"])
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, seed, tag)
+    _w.finish(surface, seed, tag, t=t)
 
 
 def _radio_vasile(surface, t):
@@ -1354,7 +1354,7 @@ def _radio_vasile(surface, t):
         _w.vasile_office(r, t)
         r.flush(buf)
         _w.present(surface, buf)
-        _w.finish(surface, 6304, "GUARD HQ // VASILE'S OFFICE")
+        _w.finish(surface, 6304, "GUARD HQ // VASILE'S OFFICE", t=t)
         return
     _radio_take(surface, t, variant, 6300 + variant, "")
 
@@ -1391,7 +1391,7 @@ def _helicopter(surface, t):
     _w.snow3d(r, t, seed=47, n=64, spread=22, height=15, speed=1.0)
     r.flush(buf)
     _w.present(surface, buf)
-    _w.finish(surface, 6307, "THE LAST SIGNAL")
+    _w.finish(surface, 6307, "THE LAST SIGNAL", t=t)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
