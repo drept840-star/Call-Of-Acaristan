@@ -41,10 +41,13 @@ WALK, SPRINT, AIM_WALK = 3.0, 5.2, 1.8
 BODY_R = 0.32                      # collision radius
 STEP_UP = 0.62                     # the platform edge is climbable
 EYE_H = 1.55                       # camera pivot above the feet
-BOOM = (2.5, 0.72, 0.22)           # back, right, up (hip)
-BOOM_ADS = (1.35, 0.58, 0.12)      # tight shoulder aim
-BLADE = 16.0                       # stance angle: the K9's flank to the lens
-_K9_COL, _K9_ACCENT = (82, 88, 98), (118, 124, 134)   # gunmetal, as the viewmodel
+# Far enough right that the K9's line to the crosshair clears his shoulder.
+BOOM = (2.40, 0.80, 0.06)          # back, right, up (hip)
+BOOM_ADS = (1.40, 0.70, 0.02)      # tight shoulder aim
+BLADE = 12.0                       # stance angle: the gun shoulder to the lens
+# The third-person gun is seen from behind, its shadow side to the lens: more
+# of the viewmodel's cool lift, or the black anodising vanishes on the night.
+K9_TINT = ((150, 162, 182), 0.22)
 FOV, FOV_ADS = 62.0, 44.0
 SENS = 0.12                        # degrees per mouse count
 PITCH_LIM = (-38.0, 32.0)
@@ -364,10 +367,124 @@ def _nav_path(a, b):
     return out[::-1]
 
 
-# High ready: the K9 up across his chest, muzzle a little low, so it shows
-# beside his shoulder from the boom (low ready hid it behind his back).
+# The aim's torso and head; the arms are IK'd onto the K9 itself.
 _AIM = dict(POSES["aim"])
-_CARRY = blend(POSES["ready"], POSES["aim"], 0.65)
+
+
+# ── the K9 in third person ────────────────────────────────────────────────
+# The authored K93D (the first-person asset) without the first-person gloves,
+# in gun space: +z muzzle, +y up, +x the shooter's right, origin at the
+# trigger.  It is mounted with the stock in Biribel's shoulder pocket and
+# aimed down the actual aim; both hands are IK'd onto it, so the hold is a
+# real two-handed, shouldered hold instead of a pose with a gun near it.
+K9_GRIP = (0.012, -0.100, -0.105)     # right hand: pistol grip
+K9_FORE = (-0.006, 0.035, 0.195)      # left hand: angled foregrip
+K9_MAGWELL = (0.0, -0.120, 0.060)     # left hand mid-reload
+K9_PORT = (0.045, 0.040, 0.030)       # ejection port
+K9_STOCK = 0.27                       # trigger ahead of the shoulder pocket
+# Patrol carry: muzzle down and out at the right hip, where the lens behind
+# his right shoulder can see it (across the chest it is hidden by his back).
+CARRY_PITCH, CARRY_YAW = -34.0, -12.0
+KICK_BACK, KICK_UP = 0.055, 5.0       # per shot: gun into the shoulder, muzzle rise
+CAM_KICK, CAM_SHAKE = 0.9, 0.030      # per shot: view punch (deg), lens shake (m)
+AIM_CLIMB = 0.30                      # per shot: how far the aim itself climbs
+_K9 = {}
+
+
+def _k9_asset():
+    """(mesh, muzzle) of the K93D without gloves; the procedural K9 (hands
+    and all) only if the authored asset is missing."""
+    if "mesh" in _K9:
+        return _K9["mesh"], _K9["muzzle"]
+    mesh, muzzle = None, (0.0, 0.035, T.VM_MUZZLE_Z)
+    try:
+        import json
+        import os
+        from engine3d.core import Mesh
+        from game.render3d_bridge import MESHES_DIR
+        with open(os.path.join(MESHES_DIR, "k93d.mesh.json"), encoding="utf-8") as fh:
+            data = json.load(fh)
+        m = Mesh()
+        m.verts = [tuple(float(c) for c in v) for v in data["verts"]]
+        m.faces = [(tuple(f[0]), tuple(f[1]), 2, True, False) for f in data["faces"]]
+        muzzle = tuple(float(c) for c in
+                       data.get("meta", {}).get("muzzle", (0.0, 0.083, 0.595)))
+        mesh = m
+    except Exception:
+        mesh = None
+    if mesh is None:
+        mesh = T._vm_mesh()
+    _K9["mesh"], _K9["muzzle"] = mesh, muzzle
+    return mesh, muzzle
+
+
+def _gun_pt(O, B, g):
+    """Gun-space point -> world, for origin O and basis rows B (right, up, fwd)."""
+    return tuple(O[i] + B[0][i] * g[0] + B[1][i] * g[1] + B[2][i] * g[2]
+                 for i in range(3))
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _gun_basis(yaw, pitch, roll=0.0):
+    """(right, up, fwd) for a gun aimed at (yaw, pitch), rolled about its bore."""
+    f = T._forward(yaw, pitch)
+    rgt = _screen_right(yaw)
+    up = _cross(f, rgt)
+    if roll:
+        c, sn = math.cos(math.radians(roll)), math.sin(math.radians(roll))
+        rgt, up = (tuple(rgt[i] * c + up[i] * sn for i in range(3)),
+                   tuple(up[i] * c - rgt[i] * sn for i in range(3)))
+    return (rgt, up, f)
+
+
+def _draw_k9(r, O, B):
+    mesh, _muzzle = _k9_asset()
+    if hasattr(r, "add_packed"):
+        import numpy as np
+        rows = _K9.get("rows")
+        if rows is None:
+            rows = _K9["rows"] = r.pack(
+                mesh.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in mesh.faces],
+                tint=K9_TINT)
+        if rows is None:
+            return
+        M = np.array(B, dtype=np.float32)
+        out = rows.copy()
+        out[:, 0:3] = rows[:, 0:3] @ M + np.array(O, dtype=np.float32)
+        out[:, 6:9] = rows[:, 6:9] @ M
+        r.add_packed(out)
+        return
+    from engine3d import Mesh
+    m = Mesh()
+    m.verts = [_gun_pt(O, B, v) for v in mesh.verts]
+    m.faces = list(mesh.faces)
+    _w.add(r, m)
+
+
+def _flash_mesh(O, B, muzzle, seed):
+    """A three-blade muzzle star at the muzzle, a new twist every shot."""
+    from engine3d import Mesh
+    m = Mesh()
+    tw = (seed * 37 % 90) * math.pi / 180.0
+    c, sn = math.cos(tw), math.sin(tw)
+    mz = muzzle[2] + 0.06
+    parts = [box(0.035, 0.035, 0.20, (255, 220, 150), center=(muzzle[0], muzzle[1], mz + 0.05),
+                 emissive=True)]
+    for w, h in ((0.22, 0.03), (0.03, 0.22)):
+        parts.append(box(w, h, 0.03, (255, 200, 120), center=(0.0, 0.0, 0.0),
+                         emissive=True))
+    for i, part in enumerate(parts):
+        if i:
+            part.verts = [(v[0] * c - v[1] * sn + muzzle[0],
+                           v[0] * sn + v[1] * c + muzzle[1], v[2] + mz)
+                          for v in part.verts]
+        part.verts = [_gun_pt(O, B, v) for v in part.verts]
+        m.add(part)
+    return m
 
 
 class YardScene:
@@ -395,6 +512,12 @@ class YardScene:
         self.reloading = 0.0
         self.last_fire = -9.0
         self.recoil = 0.0
+        self.gun_kick = 0.0          # 1 on a shot, springs back
+        self.cam_kick = 0.0          # view punch
+        self.shake = 0.0             # lens shake
+        self.shots = 0
+        self.brass = []              # (t0, pos, vel, seed)
+        self.impacts = []            # (t0, pos, kind)
         self.hurt = 0.0
         self.last_hurt = -9.0
         self.hit_mark = -9.0
@@ -512,6 +635,11 @@ class YardScene:
         if self.firing and not self.reloading:
             self._fire()
         self.recoil = max(0.0, self.recoil - dt * 6.0)
+        self.gun_kick = max(0.0, self.gun_kick - dt * 13.0)
+        self.cam_kick *= math.exp(-dt * 11.0)
+        self.shake = max(0.0, self.shake - dt * 4.5)
+        self.brass = [b for b in self.brass if self.t - b[0] < 4.0][-30:]
+        self.impacts = [x for x in self.impacts if self.t - x[0] < 0.6]
         self._update_guards(dt)
         self._update_waves()
         self._update_player_hp(dt)
@@ -600,12 +728,20 @@ class YardScene:
                 dist = max(0.35, hit - 0.2)
         eye = (shoulder[0] + d[0] * dist, max(y + 0.3, shoulder[1] + d[1] * dist),
                shoulder[2] + d[2] * dist)
-        tgt = (eye[0] + f[0] * 10.0, eye[1] + f[1] * 10.0, eye[2] + f[2] * 10.0)
+        if self.shake > 0.0:
+            k = CAM_SHAKE * self.shake
+            eye = (eye[0] + math.sin(self.t * 71.0) * k,
+                   eye[1] + math.sin(self.t * 59.0 + 1.3) * k,
+                   eye[2] + math.sin(self.t * 83.0 + 2.1) * k)
+        # the view punches up with each shot and settles
+        fv = T._forward(self.yaw, self.pitch + CAM_KICK * self.cam_kick)
+        tgt = (eye[0] + fv[0] * 10.0, eye[1] + fv[1] * 10.0, eye[2] + fv[2] * 10.0)
         if self.dying:
             k = clamp(self.death_t / 1.2, 0.0, 1.0)
             eye = (eye[0], eye[1] + 1.4 * k, eye[2])
             tgt = (x, y + 0.3, z)
-        return eye, tgt, FOV + (FOV_ADS - FOV) * self.ads, dist
+        fov = FOV + (FOV_ADS - FOV) * self.ads - 1.4 * self.cam_kick
+        return eye, tgt, fov, dist
 
     def _aim_ray(self):
         eye, _tgt, _fov, dist = self.camera()
@@ -633,7 +769,15 @@ class YardScene:
             return
         self.mag -= 1
         self.last_fire = self.t
+        self.shots += 1
         self.recoil = min(3.0, self.recoil + 0.55)
+        self.gun_kick = 1.0
+        self.cam_kick = min(2.2, self.cam_kick + 1.0)
+        self.shake = min(1.0, self.shake + 0.35)
+        # the aim itself climbs a little: hold it down on a long burst
+        self.pitch = clamp(self.pitch + AIM_CLIMB, *PITCH_LIM)
+        self.yaw = (self.yaw + 0.22 * math.sin(self.shots * 2.39)) % 360.0
+        self._eject()
         if self.audio:
             self.audio.shot(suppressed=True)
         o, d = self._aim_ray()
@@ -661,10 +805,12 @@ class YardScene:
         self.tracers.append((self.t, src, end, (255, 214, 150)))
         if best_g is None:
             self.sparks.append((self.t, end))
+            self.impacts.append((self.t, end, "dust"))
             if self.audio:
                 self.audio.impact(on_enemy=False)
             return
         g = best_g
+        self.impacts.append((self.t, end, "blood"))
         g["hp"] -= HIT_HEAD if head else HIT_BODY
         g["hit_t"] = self.t
         g["hit_dir"] = (d[0], d[2])
@@ -862,7 +1008,6 @@ class YardScene:
         self._draw_player(r, tm)
         self._draw_guards(r, tm)
         self._draw_fx(r, tm)
-        _w.snow3d(r, tm, seed=72, n=55, spread=20, height=14, speed=1.4)
         self._marker_screen = self._project(r, self._objective_point())
         r.flush(r.surface)
         T._grade_play(r.surface, self._wounded())
@@ -876,48 +1021,98 @@ class YardScene:
         return p is not None and p.hp < top * 0.35
 
     def _draw_volkov(self, r, set_t):
-        pos, pose, yaw, _j = T._volkov_death_state(T.DURATION)
+        st = _SET_CACHE.get("volkov")
+        if st is None:      # he does not move again: pose him once
+            st = _SET_CACHE["volkov"] = T._volkov_death_state(T.DURATION)
+        pos, pose, yaw, _j = st
         _w.actor(r, "volkov", pose, pos, yaw, int(set_t * 1000), seed=91,
                  amp=0.0, rifle_on=False, expression="sad", hd=True,
                  wound=T._wound_stage(T.DURATION - T.HIT_AT),
                  flags=T._volkov_flags(T.DURATION - T.HIT_AT))
 
-    def _armed_rig(self):
-        """Biribel's HD rig with the K9 in hand, the gun lifted off black."""
-        h = _w.hum(("biribel", OUTFIT_GUARD), True, 0, True, ("rifle",))
-        if not getattr(h, "_k9_lit", False):
-            from engine3d.rig import rifle_mesh
-            h._rifle = rifle_mesh(col=_K9_COL, accent=_K9_ACCENT)
-            h._k9_lit = True
-        return h
+    def _eject(self):
+        """A casing out of the port: right, up and a little back."""
+        if not getattr(self, "_gun", None):
+            return
+        O, B = self._gun
+        port = _gun_pt(O, B, K9_PORT)
+        n = self.shots
+        rgt, up, f = B
+        sp = 2.2 + 0.5 * math.sin(n * 1.7)
+        v = tuple(rgt[i] * sp + up[i] * (1.6 + 0.4 * math.sin(n * 2.3))
+                  - f[i] * 0.6 for i in range(3))
+        self.brass.append((self.t, port, v, n))
+
+    def _gun_frame(self, chest, reload_p):
+        """(origin, basis) of the K9 this frame: shouldered on the aim, or at
+        low ready, with the recoil kick and the reload tilt on top."""
+        aiming = self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6
+        a = 0.0 if (self.sprint or reload_p is not None) else (1.0 if aiming else 0.0)
+        self._gun_aim = getattr(self, "_gun_aim", a)
+        self._gun_aim += (a - self._gun_aim) * 0.35
+        k = self._gun_aim
+        carry = 1.0 - k
+        tilt = 0.0
+        if reload_p is not None:
+            tilt = math.sin(math.pi * clamp(reload_p, 0.0, 1.0))
+        yaw = self.yaw + CARRY_YAW * carry + 10.0 * tilt
+        pitch = (self.pitch * k + CARRY_PITCH * carry + KICK_UP * self.gun_kick
+                 - 16.0 * tilt)
+        B = _gun_basis(yaw, pitch, roll=-32.0 * tilt)
+        rgt_b = _screen_right(self.yaw)
+        pocket = (chest[0] + rgt_b[0] * 0.19, chest[1] + 0.17, chest[2] + rgt_b[2] * 0.19)
+        f = B[2]
+        back = K9_STOCK - KICK_BACK * self.gun_kick - 0.06 * tilt
+        # shouldered: up at the cheek, receiver over the shoulder line;
+        # carried: out and down by the right hip
+        O = (pocket[0] + f[0] * back + rgt_b[0] * 0.12 * carry,
+             pocket[1] + f[1] * back + 0.07 * k - 0.26 * carry - 0.05 * tilt,
+             pocket[2] + f[2] * back + rgt_b[2] * 0.12 * carry)
+        return O, B
 
     def _draw_player(self, r, tm):
-        self._armed_rig()
+        key = ("biribel", OUTFIT_GUARD)
+        h = _w.hum(key, True, 0, True)
         sp = math.hypot(*self.vel)
         if self.dying:
             k = clamp(self.death_t / 0.6, 0.0, 1.0)
             pose = blend("kneel", "dead_back", k)
-        elif sp > 0.5:
+            _w.actor(r, key, pose, self.pos, self.body_yaw, int(tm), seed=93,
+                     amp=0.0, rifle_on=False, hd=True, bloody=True,
+                     expression="angry", shadow=T._shadow_for(self.pos[2]))
+            self._gun = None
+            return
+        if sp > 0.5:
             pose = pose_run(self.stride / (2.4 if self.sprint else 1.9) * 2.0
-                            * math.pi, lean=22 if self.sprint else 12)
-            if not self.sprint:
-                arms = _AIM if (self.ads > 0.3 or self.firing) else _CARRY
-                for key in ("lsh_p", "lsh_r", "lel", "rsh_p", "rsh_r", "rel",
-                            "rifle_p"):
-                    pose[key] = arms[key]
+                            * math.pi, lean=20 if self.sprint else 10)
         else:
-            pose = dict(_AIM if (self.ads > 0.3 or self.firing
-                                 or self.t - self.last_fire < 0.6) else _CARRY)
-        if not self.dying:
-            # the rifle follows the aim's pitch
-            pose["rifle_p"] = pose.get("rifle_p", 0.0) - self.pitch * 0.8
-            pose["head_p"] = pose.get("head_p", 0.0) - self.pitch * 0.5
-        joints = _w.actor(r, ("biribel", OUTFIT_GUARD), pose, self.pos,
-                          self.body_yaw, int(tm), seed=93, amp=0.4,
-                          rifle_on=not self.dying, hd=True, bloody=True,
-                          expression="angry", flags=("rifle",),
-                          shadow=T._shadow_for(self.pos[2]))
-        self._muzzle = joints.get("muzzle") if joints else None
+            pose = dict(POSES["stand"])
+        # the torso and head of the aim, kicked by the shot
+        for key_ in ("spine", "head_p", "twist"):
+            pose[key_] = pose.get(key_, 0.0) + _AIM.get(key_, 0.0)
+        pose["spine"] = pose.get("spine", 0.0) - 3.0 * self.gun_kick
+        pose["head_p"] = pose.get("head_p", 0.0) - self.pitch * 0.6
+        _pl, j0, _root = h.pose_world(pose, self.pos, self.body_yaw, rifle_on=False)
+        reload_p = (1.0 - self.reloading / RELOAD_S) if self.reloading else None
+        O, B = self._gun_frame(j0["chest"], reload_p)
+        self._gun = (O, B)
+        rt = _gun_pt(O, B, K9_GRIP)
+        lt = _gun_pt(O, B, K9_FORE)
+        if reload_p is not None:
+            # the support hand drops to the mag well and comes back
+            k = math.sin(math.pi * clamp((reload_p - 0.15) / 0.7, 0.0, 1.0))
+            mw = _gun_pt(O, B, K9_MAGWELL)
+            lt = tuple(lt[i] + (mw[i] - lt[i]) * k for i in range(3))
+        pose = _w.reach(h, pose, "r", rt, self.pos, self.body_yaw)
+        pose = _w.reach(h, pose, "l", lt, self.pos, self.body_yaw)
+        _w.actor(r, key, pose, self.pos, self.body_yaw, int(tm), seed=93,
+                 amp=0.15, rifle_on=False, hd=True, bloody=True,
+                 expression="angry", shadow=T._shadow_for(self.pos[2]))
+        _draw_k9(r, O, B)
+        _mesh, muzzle = _k9_asset()
+        self._muzzle = _gun_pt(O, B, muzzle)
+        if self.t - self.last_fire < 0.035:
+            _w.add(r, _flash_mesh(O, B, muzzle, self.shots))
 
     def _draw_guards(self, r, tm):
         for g in self.guards:
@@ -970,16 +1165,51 @@ class YardScene:
                                  layer=_fx.FX_LAYER)
 
     def _draw_fx(self, r, tm):
+        now = self.t
         for t0, a, b, col in self.tracers:
-            r.add_line3d(a, b, col, 2, layer=3)
+            # a short streak that travels down the line, not a laser
+            k = (now - t0) / 0.06
+            head, tail = min(1.0, k), max(0.0, k - 0.35)
+            if tail < 1.0:
+                pa = tuple(a[i] + (b[i] - a[i]) * tail for i in range(3))
+                pb = tuple(a[i] + (b[i] - a[i]) * head for i in range(3))
+                r.add_line3d(pa, pb, col, 2, layer=3)
         for t0, p in self.sparks:
-            r.add_sprite(p, _fx.sparks(7, (self.t - t0) * 1000.0, n=10,
+            r.add_sprite(p, _fx.sparks(7, (now - t0) * 1000.0, n=10,
                                        speed_m=2.0, dur_ms=420),
                          layer=_fx.FX_LAYER)
-        if self.t - self.last_fire < 0.05 and self._muzzle:
-            r.add_sprite(self._muzzle, _fx.glow((255, 206, 130), 0.8, tm,
+        for t0, p, kind in self.impacts:
+            col = (150, 24, 20) if kind == "blood" else (150, 150, 156)
+            r.add_sprite(p, _fx.dust_motes(int((now - t0) * 1000.0), seed=int(t0 * 97),
+                                           count=12, spread_m=(0.45, 0.4), col=col),
+                         layer=_fx.FX_LAYER)
+        if self.brass and hasattr(r, "add_packed"):
+            rows = T._brass_rows(r, (0.012, 0.012, 0.030))
+            if rows is not None:
+                for t0, p0, v, _sd in self.brass:
+                    q = self._brass_at(p0, v, now - t0)
+                    out = rows.copy()
+                    out[:, 0] += q[0]
+                    out[:, 1] += q[1]
+                    out[:, 2] += q[2]
+                    r.add_packed(out)
+        if now - self.last_fire < 0.05 and self._muzzle:
+            r.add_sprite(self._muzzle, _fx.glow((255, 206, 130), 1.1, tm,
                                                 intensity=1.0),
                          layer=_fx.FX_LAYER)
+
+    def _brass_at(self, p0, v, a):
+        """A casing's flight: one arc, one small bounce, then it lies there."""
+        g = ground_y(p0[0], p0[2]) + 0.01
+        disc = v[1] * v[1] + 19.6 * max(0.0, p0[1] - g)
+        a1 = (v[1] + math.sqrt(disc)) / 9.8
+        if a < a1:
+            return (p0[0] + v[0] * a, p0[1] + v[1] * a - 4.9 * a * a, p0[2] + v[2] * a)
+        bt = a - a1
+        vy = (9.8 * a1 - v[1]) * 0.25
+        hop = max(0.0, vy * bt - 4.9 * bt * bt)
+        roll = min(bt, 0.3) * 0.3
+        return (p0[0] + v[0] * (a1 + roll), g + hop, p0[2] + v[2] * (a1 + roll))
 
     # ── guidance and HUD ───────────────────────────────────────────────
     def _objective_point(self):

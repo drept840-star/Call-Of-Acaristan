@@ -858,6 +858,29 @@ class YardSceneTests(unittest.TestCase):
         self.assertEqual(STATE.player.hp, STATE.player.max_hp)
         self.assertFalse(STATE.request_mission6_ending)
 
+    def test_a_shot_kicks_the_gun_the_view_and_the_aim(self):
+        sc = self.scene
+        sc.guards, sc.pending = [], []
+        sc._gun = ((0.0, 1.5, 0.0), ((1, 0, 0), (0, 1, 0), (0, 0, 1)))
+        pitch0 = sc.pitch
+        sc.firing = True
+        sc.update([False] * 512)
+        self.assertEqual(sc.mag, _yard.MAG - 1)
+        self.assertGreater(sc.gun_kick, 0.5)
+        self.assertGreater(sc.cam_kick, 0.5)
+        self.assertGreater(sc.shake, 0.1)
+        self.assertGreater(sc.pitch, pitch0, "the aim never climbed")
+        self.assertEqual(len(sc.brass), 1, "no casing out of the port")
+        sc.firing = False
+        for _ in range(60):
+            sc.update([False] * 512)
+        self.assertLess(sc.gun_kick, 0.01)
+        self.assertLess(sc.cam_kick, 0.01)
+        # a casing comes to rest on the ground
+        t0, p0, v, _sd = sc.brass[0]
+        q = sc._brass_at(p0, v, 3.0)
+        self.assertAlmostEqual(q[1], _yard.ground_y(q[0], q[2]) + 0.01, delta=0.02)
+
     def test_terminal_needs_the_box_cleared(self):
         sc = self.scene
         sc.pos = (_yard.TERMINAL[0], 0.04, _yard.TERMINAL[1])
