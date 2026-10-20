@@ -7,6 +7,8 @@ Pose keys (degrees unless noted) - anything missing falls back to NEUTRAL:
   rsh_p, rsh_r, rel          right ...
   lhip_p, lhip_r, lkn        left thigh raise fwd / out, knee bend
   rhip_p, rhip_r, rkn
+  lank, rank                 ankle point (+ = toes away from the shin); lying
+                             bodies need it or the heel props them off the floor
   body_p, body_r             whole-body pitch (+fwd, 90 = face down) / roll
   lift                       metres above auto ground contact (jumps/dives)
   rifle_p, rifle_y           rifle pitch (+ = muzzle down) / yaw vs body
@@ -23,7 +25,7 @@ __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
 NEUTRAL = dict(spine=3, spine_r=0, twist=0, head_p=0, head_y=0,
                lsh_p=8, lsh_r=8, lel=12, rsh_p=8, rsh_r=8, rel=12,
                lhip_p=0, lhip_r=2, lkn=2, rhip_p=0, rhip_r=2, rkn=2,
-               body_p=0, body_r=0, lift=0.0, rifle_p=60, rifle_y=0)
+               lank=0, rank=0, body_p=0, body_r=0, lift=0.0, rifle_p=60, rifle_y=0)
 
 POSES = {
     "stand": dict(),
@@ -49,14 +51,17 @@ POSES = {
                  lel=20, rsh_p=140, rel=30, lift=0.25, rifle_p=0),
     "prone": dict(body_p=88, spine=-6, head_p=-34, lhip_p=-4, lkn=6, rhip_p=4, rhip_r=12,
                   rkn=18, lsh_p=150, lsh_r=18, lel=70, rsh_p=140, rsh_r=24, rel=70, rifle_p=0),
-    "dead_back": dict(body_p=-88, spine=-4, head_p=-20, head_y=30, lsh_p=-10, lsh_r=62, lel=24,
-                      rsh_p=40, rsh_r=40, rel=50, lhip_p=8, lhip_r=10, lkn=18, rhip_p=-4,
-                      rhip_r=16, rkn=6),
-    "dead_front": dict(body_p=89, spine=-3, head_p=-26, head_y=70, lsh_p=20, lsh_r=70, lel=40,
+    # Lying poses are solved so the torso rests on the floor: a bent elbow or
+    # a heel under the body props it up and it reads as floating.
+    "dead_back": dict(body_p=-88, body_r=4, spine=0, head_p=-4, head_y=20, lsh_p=-18,
+                      lsh_r=62, lel=24, rsh_p=40, rsh_r=40, rel=50, lhip_p=10, lhip_r=10,
+                      lkn=18, rhip_p=4, rhip_r=16, rkn=10),
+    "dead_front": dict(body_p=89, spine=3, head_p=-26, head_y=70, lsh_p=-12, lsh_r=70, lel=44,
                        rsh_p=-20, rsh_r=24, rel=20, lhip_p=-6, lhip_r=12, lkn=30, rhip_p=4,
                        rhip_r=4, rkn=10),
-    "dead_side": dict(body_p=12, body_r=84, spine=20, head_p=10, lsh_p=60, lsh_r=10, lel=40,
-                      rsh_p=90, rsh_r=6, rel=20, lhip_p=50, lkn=80, rhip_p=30, rkn=60),
+    "dead_side": dict(body_p=12, body_r=84, spine=4, head_p=40, head_y=-30, lsh_p=6,
+                      lsh_r=175, lel=30, rsh_p=90, rsh_r=6, rel=20, lhip_p=30, lhip_r=0,
+                      lkn=80, rhip_p=30, rkn=60),
     "slump": dict(spine=70, head_p=40, lhip_p=96, lkn=150, rhip_p=96, rkn=150, lsh_p=10,
                   lsh_r=4, lel=20, rsh_p=8, rsh_r=6, rel=20, rifle_p=90),
     "reach_radio": dict(body_p=72, spine=-10, head_p=-40, lsh_p=170, lsh_r=10, lel=10,
@@ -905,7 +910,7 @@ class Humanoid:
             K = m_mul(T, rot_x(p[side + "kn"]))
             places.append((base + 4, "shin", K, kn, True, 0.0))
             an = v_add(kn, m_apply(K, (0, -0.45, 0)))
-            Fo = m_mul(K, rot_x(p[side + "hip_p"] - p[side + "kn"]))
+            Fo = m_mul(K, rot_x(p[side + "hip_p"] - p[side + "kn"] + p[side + "ank"]))
             places.append((base + 5, "foot", Fo, an, True, 0.0))
         rifle_m = None
         if self._rifle is not None and rifle_on:

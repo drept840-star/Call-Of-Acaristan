@@ -603,6 +603,57 @@ def _guard_death_pose(track, a):
     return blend(_G_BUCKLE, POSES["dead_front"], _smooth(0.38, 0.95, a))
 
 
+def _floor_at(x, z):
+    """Height a body lands on at (x, z): a crate top, else platform/ballast."""
+    for cx, cz, hw, hd, top in _CRATES:
+        if abs(x - cx) <= hw and abs(z - cz) <= hd:
+            return top + 0.04
+    return _ground_at(z)
+
+
+def _ankles_xz(hum, pose, yaw):
+    """Mid-ankle (x, z) relative to the root; skeleton only, no vertex scan."""
+    places = hum.placements(pose, rifle_on=False)[0]
+    feet = [org for _s, k, _M, org, _g, _fb in places if k == "foot"]
+    w = m_apply(rot_y(yaw), (sum(f[0] for f in feet) / len(feet), 0.0,
+                             sum(f[2] for f in feet) / len(feet)))
+    return (w[0], w[2])
+
+
+def _guard_landing(hum, track, pos, yaw0):
+    """Floor height under the chest once the body has finished falling."""
+    fp = _guard_death_pose(track, 1.2)
+    fyaw = yaw0 + (75.0 if track == 2 else 0.0)
+    ax0, az0 = _ankles_xz(hum, POSES["aim"], yaw0)
+    fx, fz = _ankles_xz(hum, fp, fyaw)
+    _pl, fj, _r = hum.pose_world(fp, (pos[0] + ax0 - fx, 0.0, pos[2] + az0 - fz),
+                                 fyaw, rifle_on=False)
+    return _floor_at(fj["chest"][0], fj["chest"][2])
+
+
+def _guard_body(hum, track, a, pos, yaw0, land=None):
+    """(pose, root, yaw, floor) for a guard ``a`` seconds after the kill.
+
+    The rig pitches about the pelvis, so a plain pose blend slides the feet
+    back while the body tips: the root is moved to keep the feet where he
+    stood.  ``land`` (see _guard_landing) is the floor under the chest at
+    rest, so a guard shot off a crate or the platform lip drops instead of
+    lying on air.
+    """
+    pose = _guard_death_pose(track, a)
+    yaw = yaw0
+    if track == 2:
+        yaw = _w.yaw_mix(yaw0, yaw0 + 75.0, _smooth(0.30, 0.95, a))
+    ax0, az0 = _ankles_xz(hum, POSES["aim"], yaw0)
+    ax, az = _ankles_xz(hum, pose, yaw)
+    floor = pos[1]
+    if land is not None and abs(land - pos[1]) > 0.05:
+        # off the edge once he has tipped past it, accelerating
+        k = _smooth(0.30, 0.85, a)
+        floor = pos[1] + (land - pos[1]) * k * k
+    return pose, (pos[0] + ax0 - ax, floor, pos[2] + az0 - az), yaw, floor
+
+
 def _spot(pos, target, color, intensity, range_, cone):
     """Aimable local spot: dir points from the lamp toward the target."""
     dx, dy, dz = (target[i] - pos[i] for i in range(3))
@@ -1108,34 +1159,36 @@ def _volkov_at(t, delay=0.0):
 
 
 # ── death choreography ───────────────────────────────────────────────────
-# One continuous track: recoil -> knee buckle -> caught/lowered -> supine
-# settle.  The old code jumped run -> mayday -> dead_front -> dead_side in
-# three cuts, snapped the yaw toward the player and let him fall through the
-# ballast.  Everything below is absolute-time driven so the camera, Biribel's
-# hands and the probe all read the same body.
+# One continuous track: recoil -> knees go -> sits back -> supine settle.
+# The body only ever tips backward and only ever goes down: the earlier keys
+# pitched him forward onto his knees and then back up and over, which read as
+# falling one way, then the other.  Everything below is absolute-time driven
+# so the camera, Biribel's hands and the probe all read the same body.
 _VK_RECOIL = dict(spine=10, spine_r=-4, twist=4, head_p=-14, head_y=-4,
                   lsh_p=6, lsh_r=18, lel=28, rsh_p=18, rsh_r=12, rel=42,
-                  lhip_p=6, lkn=16, rhip_p=-2, rkn=10, body_p=4, body_r=-2)
-_VK_BUCKLE = dict(spine=34, spine_r=-6, twist=8, head_p=24, head_y=-8,
+                  lhip_p=20, lkn=40, rhip_p=13, rkn=34, body_p=-3, body_r=-2)
+_VK_BUCKLE = dict(spine=30, spine_r=-6, twist=8, head_p=20, head_y=-8,
                   lsh_p=24, lsh_r=26, lel=52, rsh_p=38, rsh_r=20, rel=78,
-                  lhip_p=54, lkn=96, rhip_p=32, rkn=76, body_p=22, body_r=6)
-_VK_CONTACT = dict(spine=44, spine_r=6, twist=10, head_p=8, head_y=10,
+                  lhip_p=54, lkn=96, rhip_p=32, rkn=76, body_p=-8, body_r=2)
+_VK_CONTACT = dict(spine=30, spine_r=4, twist=10, head_p=10, head_y=10,
                    lsh_p=40, lsh_r=36, lel=48, rsh_p=44, rsh_r=24, rel=64,
-                   lhip_p=68, lkn=112, rhip_p=44, rkn=96, body_p=20, body_r=10)
+                   lhip_p=68, lkn=112, rhip_p=44, rkn=96, body_p=-24, body_r=6)
 _VK_LOWER = dict(spine=6, head_p=-4, head_y=55,
                  lsh_p=26, lsh_r=50, lel=28, rsh_p=20, rsh_r=44, rel=24,
-                 lhip_p=30, lhip_r=12, lkn=58, rhip_p=18, rkn=40,
-                 body_p=-52, body_r=10)
-_VK_SETTLED = dict(body_p=-84, body_r=6, spine=-2, head_p=-14, head_y=85,
-                   lsh_p=18, lsh_r=58, lel=18, rsh_p=12, rsh_r=62, rel=12,
-                   lhip_p=12, lhip_r=12, lkn=28, rhip_p=2, rhip_r=8, rkn=12)
+                 lhip_p=56, lhip_r=12, lkn=96, rhip_p=40, rkn=76,
+                 body_p=-52, body_r=6)
+# Solved so his back is on the ballast (a bent knee used to prop him 13 cm up).
+_VK_SETTLED = dict(body_p=-84, body_r=4, spine=-6, head_p=-14, head_y=85,
+                   lsh_p=18, lsh_r=58, lel=18, rsh_p=6, rsh_r=62, rel=12,
+                   lhip_p=12, lhip_r=12, lkn=16, rhip_p=10, rhip_r=8, rkn=12)
 # The overrun death falls toward the train: a forward drop, not the catch.
 _VK_FAIL_LOWER = dict(body_p=58, spine=10, head_p=-6, head_y=-10,
                       lsh_p=60, lsh_r=30, lel=30, rsh_p=50, rsh_r=24,
                       rel=34, lhip_p=30, lkn=60, rhip_p=20, rkn=44)
-_VK_FAILED = dict(body_p=84, body_r=4, spine=-4, head_p=-8, head_y=-16,
-                  lsh_p=22, lsh_r=44, lel=36, rsh_p=12, rsh_r=32, rel=26,
-                  lhip_p=-4, lhip_r=6, lkn=8, rhip_p=4, rhip_r=10, rkn=12)
+# Face turned aside and arms out of the way so the chest is on the ballast.
+_VK_FAILED = dict(body_p=84, body_r=-8, spine=11, head_p=-20, head_y=70,
+                  lsh_p=-6, lsh_r=44, lel=36, rsh_p=-2, rsh_r=32, rel=26,
+                  lhip_p=-4, lhip_r=6, lkn=8, rhip_p=-2, rhip_r=10, rkn=12)
 
 _DEATH_D = DOWN_AT - HIT_AT
 # (seconds after the hit, relative size): the last breath is barely a breath
@@ -1196,9 +1249,9 @@ def _fail_pose(d, t):
 def _volkov_death_state(t, delay=0.0):
     """(pos, pose, yaw, joints) for the canon death at absolute time ``t``.
 
-    The root drifts onto the ballast, the pose is continuous, and a support
-    lift keeps his chest at Biribel's hands until the body settles at
-    DOWN_AT.  The lift reaches exactly 0 at DOWN_AT, so there is no pop.
+    The root drifts onto the ballast and the pose is continuous.  There is
+    no support lift: it held the whole body, feet included, off the ground
+    while it fell, and Biribel's hands already follow the chest joint.
     """
     d = max(0.0, t - HIT_AT)
     hit, _mode, phase = _volkov_at(HIT_AT, delay)
@@ -1211,12 +1264,7 @@ def _volkov_death_state(t, delay=0.0):
     z = hit[2] + (0.20 - hit[2]) * sup
     pos = (x, _ground_at(z), z)
     pose = _keyed_pose(d, t)
-    hum = _hum("volkov")
-    _pl, j0, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
-    support = 1.05 - 0.45 * sup
-    want = support * (1.0 - sup) + j0["chest"][1] * sup
-    pose["lift"] = max(0.0, want - j0["chest"][1])
-    _pl, joints, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
+    _pl, joints, _root = _hum("volkov").pose_world(pose, pos, yaw, rifle_on=False)
     return pos, pose, yaw, joints
 
 
@@ -1244,7 +1292,8 @@ def _volkov_pose(mode, phase, t):
 # ── Biribel's catch ──────────────────────────────────────────────────────
 _BIRI_BRACE = dict(POSES["kneel"], spine=34, head_p=18,
                    lsh_p=52, lel=48, rsh_p=44, rel=52)
-_BIRI_HOLD = dict(POSES["kneel"], spine=34, head_p=-22,
+# Leans well over him: he lies flat on the ballast, not propped up.
+_BIRI_HOLD = dict(POSES["kneel"], spine=48, head_p=-30,
                   lhip_p=96, lkn=112, rhip_p=-10, rkn=108,
                   lsh_p=40, lel=45, rsh_p=36, rel=50)
 
@@ -2184,13 +2233,12 @@ class TrainScene:
             if g["hp"] <= 0:
                 g["alive"] = False
                 g["dead_t"] = now
+                g["dead_land"] = None
                 g["burst_left"] = 0
                 g["moving"] = False
                 g["track"] = 1 if head else (0 if _drip(g.get("slot", 0), seq) < 0.55 else 2)
                 g["dead_yaw"] = _w.yaw_to((g["pos"][0], 0.0, g["pos"][2]),
                                           (eye[0], 0.0, eye[2]))
-                push = (0.22 + 0.30 * _drip(seq, 8)) * (1.4 if head else 1.0)
-                g["dead_push"] = (g["hit_dir"][0] * push, g["hit_dir"][1] * push)
                 self.hit_kind = "head" if head else "kill"
                 self.kills += 1
                 STATE.hostiles_killed = getattr(STATE, "hostiles_killed", 0) + 1
@@ -3240,26 +3288,28 @@ class TrainScene:
             else:
                 a = t - g.get("dead_t", -9.0)
                 track = int(g.get("track", 0))
-                pose = _guard_death_pose(track, a)
                 # He falls where he stood, facing the way he was facing when
                 # the round landed: the yaw no longer tracks the player.
-                dyaw = g.get("dead_yaw", yaw)
-                if track == 2:
-                    dyaw = _w.yaw_mix(dyaw, dyaw + 75.0, _smooth(0.30, 0.95, a))
-                push = g.get("dead_push", (0.0, 0.0))
-                kp = _smooth(0.05, 0.90, a)
-                dx, dz = x + push[0] * kp, z + push[1] * kp
+                hum = _hum(key)
+                dyaw0 = g.get("dead_yaw", yaw)
+                if g.get("dead_land") is None:
+                    g["dead_land"] = _guard_landing(hum, track, (x, y, z), dyaw0)
+                pose, root, dyaw, floor = _guard_body(
+                    hum, track, a, (x, y, z), dyaw0, g["dead_land"])
                 try:
-                    r.add_humanoid(_hum(key), pose, (dx, y, dz), dyaw,
-                                   rifle_on=False, shadow=_shadow_for(dz))
+                    r.add_humanoid(hum, pose, root, dyaw,
+                                   rifle_on=False, shadow=_shadow_for(root[2]))
                 except Exception:
                     pass
                 pool = _smooth(0.40, 2.60, a)
                 if pool > 0.0:
+                    # under the chest, not the pelvis: that is where he bleeds
+                    _pl, dj, _r = hum.pose_world(pose, root, dyaw, rifle_on=False)
+                    cx, cz = dj["chest"][0], dj["chest"][2]
                     wob = (1.0, 0.85, 1.12, 0.92, 1.15, 0.88, 1.06, 0.95)
-                    _w.add(r, disc_xz(dx, dz, 0.08 + 0.26 * pool, y + 0.010,
+                    _w.add(r, disc_xz(cx, cz, 0.08 + 0.26 * pool, floor + 0.010,
                                       (58, 8, 12), n=8,
-                                      layer=3 if y > 0.3 else 1, wobble=wob))
+                                      layer=3 if floor > 0.3 else 1, wobble=wob))
 
     def _draw_ucilev(self, r, t):
         """The signal-tower sniper, visible for the establishing shot."""

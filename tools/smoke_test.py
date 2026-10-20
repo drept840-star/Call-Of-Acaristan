@@ -9108,8 +9108,32 @@ def check_m6_train_impacts():
             T.force_finish("tool")
 
 
+def _core_gap(hum, pose, yaw):
+    """Height of the torso/pelvis above the body's lowest grounded vertex.
+
+    A lying body with a gap here is propped on a heel or an elbow and reads
+    as floating even though some vertex touches the floor."""
+    from engine3d.rig import NEUTRAL, m_mul, rot_x, rot_y, rot_z
+
+    p = dict(NEUTRAL)
+    p.update(pose)
+    B = m_mul(rot_y(yaw), m_mul(rot_x(p["body_p"]), rot_z(p["body_r"])))
+    places = hum._placements(p, B, False)[0]
+    uniq = hum._unique_verts()
+    low = {}
+    for _s, key, M, org, ground, _fb in places:
+        if not ground:
+            continue
+        v = min(M[3] * x + M[4] * y + M[5] * z + org[1] for (x, y, z) in uniq[key])
+        low[key] = min(low.get(key, 9.0), v)
+    return min(low["torso"], low["pelvis"]) - min(low.values())
+
+
 def check_m6_train_guard_death():
-    """Guard deaths are continuous keyed tracks: no snaps, grounded poses."""
+    """Guard deaths are continuous keyed tracks: no snaps, grounded poses,
+    feet planted through the fall, the body flat on the floor at the end."""
+    import math
+
     from missions.m6 import train3d as T
 
     for track in (0, 1, 2):
@@ -9126,6 +9150,29 @@ def check_m6_train_guard_death():
         final = T._guard_death_pose(track, 1.2)
         assert abs(final.get("body_p", 0.0)) > 60.0 or abs(
             final.get("body_r", 0.0)) > 60.0,             "track %d does not end on the ground" % track
+        hum = T._hum(("guard", "rifle"))
+        gap = _core_gap(hum, final, 0.0)
+        # on its side the body rests on the lower arm: allow its thickness
+        cap = 0.10 if track == 2 else 0.03
+        assert gap <= cap, "track %d body floats %.3f off the floor" % (track, gap)
+        pos = (3.5, 0.58, 4.0)
+        feet0 = None
+        for i in range(0, 80, 4):
+            pose, root, yaw, _floor = T._guard_body(hum, track, i / 60.0, pos,
+                                                   90.0, 0.58)
+            pl, _j, r = hum.pose_world(pose, root, yaw, rifle_on=False)
+            feet = [(o[0] + r[0], o[2] + r[2]) for _s, k, _M, o, _g, _f in pl
+                    if k == "foot"]
+            mid = (sum(f[0] for f in feet) / 2, sum(f[1] for f in feet) / 2)
+            feet0 = feet0 or mid
+            slide = math.hypot(mid[0] - feet0[0], mid[1] - feet0[1])
+            assert slide <= 0.02, "track %d feet skate %.3f" % (track, slide)
+
+    # The marksman's crate is 1.1 m across: shot off it, he lands on the slab.
+    hum = T._hum(("guard", "marksman"))
+    for track in (0, 1, 2):
+        land = T._guard_landing(hum, track, (9.8, 1.46, 4.1), 90.0)
+        assert abs(land - 0.58) <= 0.03, "marksman lies on air at %.2f" % land
 
 
 def check_m6_train_death_beat():
@@ -9165,6 +9212,13 @@ def check_m6_train_death_beat():
                 assert 0.055 <= low <= 0.075, \
                     "settled body not on the ballast: %.3f" % low
                 assert joints["head"][1] < 0.75, "head is not down"
+                gap = _core_gap(T._hum("volkov"), pose, yaw)
+                assert gap <= 0.03, "settled body floats %.3f" % gap
+            if d >= 0.15:
+                # one way and only down: he never tips forward or rises again
+                assert pose.get("body_p", 0.0) <= 0.0,                     "Volkov tips forward at d=%.2f" % d
+                if prev is not None:
+                    assert joints["pelvis"][1] <= prev[3]["pelvis"][1] + 0.004,                         "Volkov rises at d=%.2f" % d
             for v in verts:
                 if v[1] < 0.26 and (abs(v[2] + 1.5) < 0.05
                                     or abs(v[2] - 1.5) < 0.05):
@@ -9243,6 +9297,8 @@ def check_m6_train_death_beat():
             assert low >= 0.04, "overrun body under the ballast at %.2f" % d
             if d >= T.DOWN_AT - T.HIT_AT:
                 assert 0.055 <= low <= 0.075
+                gap = _core_gap(T._hum("volkov"), pose, yaw)
+                assert gap <= 0.03, "overrun body floats %.3f" % gap
             if prev is not None:
                 _pp, pq, py, _pj = prev
                 for key, cap in (("body_p", 6.0), ("body_r", 2.0),
