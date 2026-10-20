@@ -321,7 +321,7 @@ def guard_spec(kind="rifle"):
     return fk, variant
 
 
-def _guard_humanoid(kind):
+def _guard_humanoid(kind, extra=None):
     from engine3d import Humanoid
     fk, variant = guard_spec(kind)
     out = spec3d(fk, rifle=variant["rifle"])
@@ -330,24 +330,58 @@ def _guard_humanoid(kind):
     for key in ("backpack", "coat_len", "long_coat", "pouches"):
         if key in variant.get("body", {}):
             out[key] = variant["body"][key]
+    if extra:
+        out.update(extra)
     return Humanoid(out)
 
 
-def hum(key):
-    h = _cache["hum"].get(key)
+# HD train cast (opt-in; the films keep the plain rigs): the coats are lifted a
+# few values and cooled so a warm key lights cloth, skin and ballast as three
+# different values instead of one brown.  Only colours that already exist in
+# the spec are touched.
+_HD_TINTS = {
+    "volkov": dict(jacket=(31, 35, 47), long_coat=(31, 35, 47), lapel=(20, 23, 32),
+                   pants=(24, 27, 36), glove=(24, 24, 30)),
+    "biribel": dict(jacket=(27, 31, 41), vest=(43, 47, 57), pants=(31, 35, 45)),
+}
+
+
+def _hd_extra(key, wound=0, bloody=False, flags=()):
+    """Spec overrides for the HD variant of ``key``."""
+    who = key[0] if isinstance(key, tuple) else key
+    extra = dict(detail="hd")
+    extra.update(_HD_TINTS.get(who, {}))
+    if wound:
+        extra["wound"] = int(wound)
+    if bloody:
+        extra["blood_hands"] = True
+    for f in flags:
+        extra[f] = True
+    return extra
+
+
+def hum(key, hd=False, wound=0, bloody=False, flags=()):
+    """Humanoid for ``key``.  ``hd`` selects the detailed train rig (optionally
+    with a wound stage 1-3 / bloody gloves); each variant is its own cached rig,
+    so switching stage costs one GPU template, never a per-frame rebuild."""
+    ck = ("hd", key, int(wound), bool(bloody), tuple(flags)) if hd else key
+    h = _cache["hum"].get(ck)
     if h is None:
+        extra = _hd_extra(key, wound, bloody, flags) if hd else {}
         if isinstance(key, tuple) and key[0] == "biribel":
-            h = humanoid3d("biribel", **biribel_3d(key[1]))
+            kw = dict(biribel_3d(key[1]))
+            kw.update(extra)
+            h = humanoid3d("biribel", **kw)
         elif isinstance(key, tuple) and key[0] == "guard":
-            h = _guard_humanoid(key[1])
+            h = _guard_humanoid(key[1], extra)
         elif key == "guard":
             from engine3d import Humanoid
-            h = Humanoid(spec3d(_base_guard_spec(), rifle="rifle"))
+            h = Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra))
         elif key == "ucilev":
-            h = humanoid3d("ucilev", rifle="sniper")
+            h = humanoid3d("ucilev", rifle="sniper", **extra)
         else:
-            h = humanoid3d(key)
-        _cache["hum"][key] = h
+            h = humanoid3d(key, **extra)
+        _cache["hum"][ck] = h
     return h
 
 
@@ -366,8 +400,9 @@ def life_pose(pose, t, amp=1.0, seed=0):
 
 
 def actor(r, key, pose, pos, yaw, t, seed=0, amp=1.0, rifle_on=False,
-          expression=None, mouth=None, bias=0.0):
-    h = hum(key)
+          expression=None, mouth=None, bias=0.0, hd=False, wound=0,
+          bloody=False, shadow=None, flags=()):
+    h = hum(key, hd, wound, bloody, flags)
     expr = expression or "neutral"
     if mouth is None:
         mouth = 0.0
@@ -381,7 +416,11 @@ def actor(r, key, pose, pos, yaw, t, seed=0, amp=1.0, rifle_on=False,
         h.set_expression(expr, mouth)
         h._m6_face = (expr, round(mouth, 2) if mouth else 0.0)
     p = life_pose(pose, t, amp, seed)
-    joints = r.add_humanoid(h, p, pos, yaw, rifle_on=rifle_on, bias=bias)
+    if shadow is not None:
+        joints = r.add_humanoid(h, p, pos, yaw, rifle_on=rifle_on, bias=bias,
+                                shadow=shadow)
+    else:
+        joints = r.add_humanoid(h, p, pos, yaw, rifle_on=rifle_on, bias=bias)
     if len(LAST) < 16:
         LAST.append({"key": key, "joints": joints, "pos": tuple(pos),
                      "yaw": yaw, "pose": p})
@@ -1608,7 +1647,14 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
     add(r, quad_xz(-30, -2.0, 30, 2.6, 0.06, (40, 40, 44), seg=8))
     for z in (-1.5, 1.5):
         add(r, box(60, 0.10, 0.10, (86, 88, 92), center=(0, 0.16, z)))
-        for x in range(-28, 29, 2):
+    # Ties: one set across both rails (this loop used to sit inside the rail
+    # loop and doubled every tie).  Under the catch (x 9.5..14.5) they are sunk
+    # flush with the ballast, so a kneeling pair and a lowered body rest on
+    # the bed instead of 8 cm inside a sleeper.
+    for x in range(-28, 29, 2):
+        if 9.5 <= x <= 14.5:
+            add(r, box(0.4, 0.012, 1.9, (46, 40, 34), center=(x, 0.066, 0)))
+        else:
             add(r, box(0.4, 0.08, 1.9, (58, 50, 40), center=(x, 0.10, 0)))
     # platform
     add(r, box(42, 0.55, 5.0, (62, 66, 74), center=(0, 0.28, 5.2), seg=6))

@@ -26,6 +26,7 @@ FOLEY = (
     "m6_heli_away", "m6_boxcar_door", "m6_breath", "m6_paper",
     "m6_page_turn", "m6_snow_step", "m6_notebook_close", "m6_terminal_beep",
     "m6_radio_static", "m6_rifle_crack", "m6_train_depart", "m6_doors_close",
+    "m6_tinnitus", "m6_report_far", "m6_body_thud",
 )
 
 # Scene -> looping stems.  Every film scene is listed; unlisted scenes (the
@@ -57,6 +58,7 @@ _FOLEY_GAIN = {
     "m6_page_turn": 0.5, "m6_snow_step": 0.5, "m6_notebook_close": 0.6,
     "m6_terminal_beep": 0.5, "m6_radio_static": 0.55,
     "m6_rifle_crack": 0.85, "m6_train_depart": 0.75, "m6_doors_close": 0.7,
+    "m6_tinnitus": 0.32, "m6_report_far": 0.7, "m6_body_thud": 0.8,
 }
 
 
@@ -268,6 +270,25 @@ def foley_pcm(name):
         hiss = _highpass(_noise(n, 191), 1600.0) * np.exp(-t * 2.6) * 0.4
         clunk = np.sin(2 * math.pi * 95 * t) * np.exp(-((t - 0.75) ** 2) / 0.004) * 0.7
         x = hiss + clunk
+    elif name == "m6_tinnitus":
+        # The ring after the round: two close high partials that beat, swelling
+        # in fast and bleeding off over about a second and a half.
+        n = int(1.8 * RATE); t = _t(n)
+        ring = np.sin(2 * math.pi * 6100 * t) * 0.20             + np.sin(2 * math.pi * 6350 * t) * 0.12
+        x = ring * np.clip(t / 0.05, 0.0, 1.0) * np.exp(-t * 1.5)
+    elif name == "m6_report_far":
+        # The rifle's report arriving late over the yard: dull, with a tail.
+        n = int(1.8 * RATE); t = _t(n)
+        body = _lowpass(_noise(n, 201), 1500.0) * np.exp(-t * 4.0)
+        boom = np.sin(2 * math.pi * (68 - t * 10) * t) * np.exp(-t * 5.0) * 0.5
+        x = body + boom
+        for delay, gain in ((0.23, 0.42), (0.51, 0.24), (0.86, 0.12)):
+            k = int(delay * RATE)
+            x[k:] += x[:-k] * gain
+    elif name == "m6_body_thud":
+        n = int(0.55 * RATE); t = _t(n)
+        thump = np.sin(2 * math.pi * (58 - t * 26) * t) * np.exp(-t * 11.0) * 0.8
+        x = _mix(thump, _crunch(211, 0.22, 0.45))
     else:
         raise ValueError("Unknown M6 foley: " + name)
 
@@ -464,6 +485,15 @@ class M6TrainAudio:
 
     def breath(self):
         self._one("m6_breath", 0.5)
+
+    def tinnitus(self):
+        self._one("m6_tinnitus", 0.55)
+
+    def report(self):
+        self._one("m6_report_far", 0.7)
+
+    def thud(self):
+        self._one("m6_body_thud", 0.7)
 
     def pause(self):
         if self.paused or self.closed:

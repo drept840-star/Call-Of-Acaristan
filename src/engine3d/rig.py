@@ -13,8 +13,8 @@ Pose keys (degrees unless noted) - anything missing falls back to NEUTRAL:
 """
 import math
 
-from .core import (M_IDENT, Mesh, box, lerp, m_apply, m_mul, rot_x, rot_y, rot_z,
-                   v_add)
+from .core import (M_IDENT, Mesh, _orient_outward, box, lerp, m_apply, m_mul,
+                   rot_x, rot_y, rot_z, v_add)
 
 __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
            "os12_mesh", "pose_run", "pose_drag", "pose_crawl", "SLOTS", "PART_FB",
@@ -210,6 +210,41 @@ def os12_mesh():
     return m
 
 
+def cbox(w, h, d, col, center=(0.0, 0.0, 0.0), cols=None, bevel=0.02, skip=(),
+         emissive=False, layer=2):
+    """Box with its four vertical edges chamfered: an octagonal prism along y.
+
+    Same side names as ``core.box`` (front = -z, back = +z, left = -x,
+    right = +x, top, bottom) plus ``chamfer`` for the four bevel facets.  The
+    bottom cap is exactly the box's bottom, so swapping a ``box`` for a
+    ``cbox`` never moves a part's lowest vertex (ground contact is unchanged).
+    """
+    cx, cy, cz = center
+    hx, hz = w / 2.0, d / 2.0
+    b = max(0.0, min(bevel, hx * 0.9, hz * 0.9))
+    cols = cols or {}
+    y0, y1 = cy - h / 2.0, cy + h / 2.0
+    prof = [(-hx + b, -hz), (hx - b, -hz), (hx, -hz + b), (hx, hz - b),
+            (hx - b, hz), (-hx + b, hz), (-hx, hz - b), (-hx, -hz + b)]
+    names = ("front", "chamfer", "right", "chamfer", "back", "chamfer",
+             "left", "chamfer")
+    m = Mesh()
+    for i, name in enumerate(names):
+        if name in skip:
+            continue
+        (xa, za), (xb, zb) = prof[i], prof[(i + 1) % 8]
+        m.face([(cx + xa, y0, cz + za), (cx + xb, y0, cz + zb),
+                (cx + xb, y1, cz + zb), (cx + xa, y1, cz + za)],
+               cols.get(name, col), layer, False, emissive)
+    if "top" not in skip:
+        m.face([(cx + x, y1, cz + z) for x, z in prof],
+               cols.get("top", col), layer, False, emissive)
+    if "bottom" not in skip:
+        m.face([(cx + x, y0, cz + z) for x, z in prof],
+               cols.get("bottom", col), layer, False, emissive)
+    return _orient_outward(m)
+
+
 class Humanoid:
     """spec keys: skin hair jacket vest pants boots accent glove
     extras: ponytail stubble beanie pack helmet ghillie rifle (None|'rifle'|'os12'|'sniper')
@@ -217,6 +252,9 @@ class Humanoid:
             bandana (head cloth w/ knot + tails) mask (lower-face cloth) armband glasses
             beret cap hat moustache beard eyes iris (adds sclera) ears scar cig
             head_w (head width scale)  scale (overall height, 1.0 = 258 2D units)
+            detail ('hd': chamfered limbs, split coat panels, hands, boots, brow/cheek/chin)
+            wound (1-3: exit wound on the chest + back entry, spreading stain)
+            blood_hands (True: red glove/wrist)
             bulk (torso width)  vest=None -> tailored chest: shirt lapel tie buttons
             medal epaulets  long_coat coat_len  belt (None = no belt) buckle pouches
             satchel cuff.  casual: hoodie strings backpack straps sleeves('short')
@@ -336,7 +374,7 @@ class Humanoid:
             st = mix(skin, hair, min(.3, s.get("stubble_t", .22)))
             face.append(box(0.17, 0.03, 0.003, st, center=(0, 0.022, 0.121), skip=flat))
             face.append(box(0.08, 0.016, 0.003, st, center=(0, 0.082, 0.121), skip=flat))
-        if s.get("cig"):
+        if s.get("cig") and not s.get("cig_dropped"):
             # Held in the mouth corner and pointing forward/down, so it reads as
             # *in* the lips from the front instead of floating beside the cheek.
             # Clamped in the mouth *corner* (mouth line spans x=+-0.035 at
@@ -393,31 +431,58 @@ class Humanoid:
         glove = s.get("glove") or skin
         acc = s.get("accent", vest)
         flat = ("front", "left", "right", "top", "bottom")   # decal: +z face only
+        hd = s.get("detail") == "hd"
+
+        def lb(w, h, d, col, center=(0.0, 0.0, 0.0), bv=0.03, **kw):
+            """Limb/body block: chamfered in HD, the plain box otherwise."""
+            if hd:
+                return cbox(w, h, d, col, center=center, bevel=bv, **kw)
+            return box(w, h, d, col, center=center, **kw)
+
         P = {}
         belt = s.get("belt", (20, 20, 22))
-        P["pelvis"] = [box(0.34, 0.18, 0.22, pants, center=(0, 0.0, 0))]
+        P["pelvis"] = [lb(0.34, 0.18, 0.22, pants, center=(0, 0.0, 0), bv=0.03)]
         if belt:
             P["pelvis"].append(box(0.36, 0.05, 0.24, belt, center=(0, 0.07, 0)))
             if s.get("buckle"):
                 P["pelvis"].append(box(0.05, 0.035, 0.01, s["buckle"], center=(0, 0.07, 0.123)))
         coat = s.get("long_coat")
         if coat:
-            P["pelvis"].append(box(0.37, 0.21, 0.25, coat, center=(0, 0.01, 0)))
+            P["pelvis"].append(lb(0.37, 0.21, 0.25, coat, center=(0, 0.01, 0), bv=0.045))
+            if hd:
+                # flap pockets on the coat front + a slim cloth belt seam
+                fl = mix(coat, (150, 168, 200), .10)
+                for sx_ in (-1, 1):
+                    P["pelvis"].append(box(0.10, 0.022, 0.012, fl, center=(sx_ * 0.1, -0.035, 0.128)))
+                    P["pelvis"].append(box(0.09, 0.05, 0.006, mix(coat, (0, 0, 0), .22),
+                                           center=(sx_ * 0.1, -0.065, 0.127)))
         if s.get("satchel"):
             sc_ = s["satchel"]
             P["pelvis"] += [box(0.07, 0.2, 0.24, sc_, center=(0.215, -0.04, 0.03)),
                             box(0.075, 0.07, 0.245, mix(sc_, (0, 0, 0), .25), center=(0.217, 0.03, 0.03))]
         nw = float(s.get("bulk", 0.9 if s.get("narrow") else 1.0))
         self._sh = 0.25 * nw
-        torso = [box(0.40 * nw, 0.52, 0.24, jac, center=(0, 0.30, 0))]
+        # HD: the shoulder line catches the key light - a cooler, lighter top face
+        sh_top = {"top": mix(jac, (150, 170, 205), .16)} if hd else None
+        torso = [lb(0.40 * nw, 0.52, 0.24, jac, center=(0, 0.30, 0), bv=0.035, cols=sh_top)]
         if suit:
-            torso.append(box(0.42 * nw, 0.40, 0.28, jac, center=(0, 0.36, 0.0)))
+            torso.append(lb(0.42 * nw, 0.40, 0.28, jac, center=(0, 0.36, 0.0), bv=0.04,
+                            cols=sh_top))
         else:
-            torso.append(box(0.44 * nw, 0.34, 0.30, vest, center=(0, 0.34, 0.0),
-                             cols={"back": vest}))
+            torso.append(lb(0.44 * nw, 0.34, 0.30, vest, center=(0, 0.34, 0.0), bv=0.04,
+                            cols={"back": vest}))
         if acc and not suit:
             torso.append(box(0.12, 0.08, 0.04, acc, center=(-0.1, 0.42, 0.16)))
         torso.append(box(0.11, 0.08, 0.11, skin, center=(0, 0.6, 0)))
+        if hd and (suit or coat):
+            # turned-up collar: a raised back panel and two front flaps
+            cl = mix(jac, (150, 170, 205), .10)
+            torso.append(box(0.24 * nw, 0.075, 0.07, cl, center=(0, 0.618, -0.085)))
+            for sx_ in (-1, 1):
+                cm_ = Mesh()
+                cm_.add(box(0.05, 0.1, 0.06, cl), m=rot_z(sx_ * -14),
+                        t=(sx_ * 0.085 * nw, 0.6, 0.07))
+                torso.append(cm_)
         if s.get("pouches") and not suit:
             pc = mix(vest, (0, 0, 0), .3)
             for px_ in (-0.09, 0.0, 0.09):
@@ -503,6 +568,54 @@ class Humanoid:
             for sx_ in (-1, 1):
                 deco(0.034, 0.44, s["straps"], (sx_ * 0.095 * nw, 0.36), fz + 0.0036, rz=sx_ * 4, lay=2)
                 deco(0.03, 0.02, (120, 120, 124), (sx_ * 0.097 * nw, 0.4), fz + 0.0048, lay=2)
+        wound = int(s.get("wound") or 0)
+        if wound:
+            # Exit wound on the chest (+z, the face that ends up skyward once he
+            # is down) and the entry on the back (-z).  Three discrete stages
+            # (each its own cached rig template), so the stain can spread
+            # without rebuilding anything per frame.
+            blood, clot, wet = (98, 10, 15), (48, 6, 10), (128, 24, 24)
+
+            def deco_back(w, h, col, c, z, lay=1):
+                m_ = Mesh()
+                m_.add(box(w, h, 0.004, col, skip=("back", "left", "right", "top", "bottom")),
+                       t=(c[0], c[1], -z))
+                chest[lay].append(m_)
+
+            bz = fz + 0.0036
+            if wound == 1:
+                deco(0.07, 0.08, blood, (0.045, 0.40), bz, rz=12, lay=1)
+                deco(0.032, 0.036, clot, (0.05, 0.395), bz + 0.0012, lay=2)
+                deco(0.014, 0.014, wet, (-0.02, 0.33), bz + 0.0012, lay=2)
+                deco_back(0.05, 0.05, blood, (-0.03, 0.45), bz, lay=1)
+                deco_back(0.02, 0.02, clot, (-0.03, 0.45), bz + 0.0012, lay=2)
+            elif wound == 2:
+                deco(0.13, 0.17, blood, (0.04, 0.37), bz, rz=8, lay=1)
+                deco(0.05, 0.06, clot, (0.05, 0.385), bz + 0.0012, lay=2)
+                for dx_, ln in ((-0.02, 0.09), (0.05, 0.12), (0.11, 0.07)):
+                    deco(0.016, ln, blood, (dx_, 0.28 - ln / 2), bz + 0.0012, lay=2)
+                deco(0.022, 0.022, wet, (0.01, 0.40), bz + 0.0024, lay=2)
+                deco_back(0.10, 0.11, blood, (-0.03, 0.44), bz, lay=1)
+                deco_back(0.028, 0.028, clot, (-0.03, 0.45), bz + 0.0012, lay=2)
+            else:
+                deco(0.21, 0.28, blood, (0.03, 0.34), bz, rz=6, lay=1)
+                deco(0.15, 0.20, mix(blood, clot, .35), (0.02, 0.19), bz + 0.0012, lay=1)
+                deco(0.07, 0.08, clot, (0.05, 0.39), bz + 0.0024, lay=2)
+                for dx_, ln in ((-0.06, 0.14), (0.0, 0.10), (0.08, 0.16), (0.13, 0.08)):
+                    deco(0.018, ln, blood, (dx_, 0.14 - ln / 2), bz + 0.0024, lay=2)
+                deco(0.026, 0.026, wet, (0.0, 0.42), bz + 0.0036, lay=2)
+                deco_back(0.16, 0.19, blood, (-0.02, 0.40), bz, lay=1)
+                deco_back(0.034, 0.034, clot, (-0.03, 0.45), bz + 0.0012, lay=2)
+            if s.get("handprint"):
+                # A bloody palm pressed on the coat beside the wound: palm, four
+                # fingers fanned up, a thumb out to the side.
+                hp = (150, 22, 24)
+                hz = bz + 0.0052
+                deco(0.07, 0.075, hp, (-0.075, 0.27), hz, rz=-14, lay=2)
+                for i_, (fx_, fl_) in enumerate(((-0.105, 0.05), (-0.088, 0.062),
+                                                 (-0.07, 0.066), (-0.052, 0.056))):
+                    deco(0.013, fl_, hp, (fx_, 0.305 + fl_ / 2), hz, rz=-14 + (i_ - 1.5) * 8, lay=2)
+                deco(0.014, 0.045, hp, (-0.035, 0.285), hz, rz=-60, lay=2)
         P["chest"], P["chest2"], P["chest3"] = chest
         face, face2, masked = self._face_parts()
         P["face"], P["face2"] = face, face2
@@ -640,13 +753,23 @@ class Humanoid:
         if s.get("hood"):
             head.append(box(0.25, 0.3, 0.27, s["hood"], center=(0, 0.15, -0.02),
                             cols={"back": (10, 10, 10)}))
+        if hd and not s.get("hood") and not masked:
+            # face planes the side key can model: brow ridge, cheekbones, chin.
+            # All stay a hair off the decal plane (the decals carry a depth bias).
+            sk_d = mix(skin, (0, 0, 0), .16)
+            head.append(box(0.176 * hw, 0.02, 0.028, sk_d, center=(0, 0.206, 0.124)))
+            for sx_ in (-1, 1):
+                head.append(box(0.03, 0.04, 0.028, mix(skin, (255, 226, 205), .07),
+                                center=(sx_ * 0.076 * hw, 0.106, 0.122)))
+            head.append(box(0.074 * hw, 0.03, 0.026, mix(skin, (0, 0, 0), .06),
+                            center=(0, 0.028, 0.122)))
         P["head"] = head
         short = s.get("sleeves") == "short"
         if short:
             P["uarm"] = [box(0.125, 0.16, 0.135, jac, center=(0, -0.075, 0)),
                          box(0.1, 0.17, 0.105, skin, center=(0, -0.22, 0))]
         else:
-            P["uarm"] = [box(0.115, 0.31, 0.125, jac, center=(0, -0.15, 0))]
+            P["uarm"] = [lb(0.115, 0.31, 0.125, jac, center=(0, -0.15, 0), bv=0.03)]
         if s.get("armband"):
             # cloth band hugging the sleeve (3 mm proud). The old 1.12x box stood
             # ~1 cm off every side and read as a floating red brick (M5 N10).
@@ -656,28 +779,66 @@ class Humanoid:
         else:
             P["uarm_acc"] = [box(0.12, 0.06, 0.13, acc or jac, center=(0, -0.08, 0))]
         cuff = s.get("cuff")
-        P["farm"] = [box(0.1, 0.27, 0.105, skin if short else jac, center=(0, -0.135, 0))]
+        P["farm"] = [lb(0.1, 0.27, 0.105, skin if short else jac, center=(0, -0.135, 0), bv=0.025)]
+        if s.get("blood_hands"):
+            glove = mix(glove, (96, 12, 14), .8)
         # M5 draws optional articulated palms at the wrist; legacy rigs and
         # GPU slots remain unchanged. Never draw two overlapping fists.
         if not s.get("articulated_hands"):
-            P["farm"].append(box(0.085, 0.09, 0.095, glove, center=(0, -0.31, 0.0)))
+            if hd:
+                # palm, curled fingers and a thumb; the fingers end where the
+                # old fist did, so a hand resting on the ground sits the same.
+                P["farm"] += [lb(0.082, 0.06, 0.095, glove, center=(0, -0.305, 0.0), bv=0.02),
+                              box(0.084, 0.036, 0.034, mix(glove, (255, 255, 255), .07),
+                                  center=(0, -0.337, 0.042)),
+                              box(0.026, 0.045, 0.04, glove, center=(0, -0.30, 0.05))]
+            else:
+                P["farm"].append(box(0.085, 0.09, 0.095, glove, center=(0, -0.31, 0.0)))
         if cuff:
             P["farm"].append(box(0.09, 0.02, 0.1, cuff, center=(0, -0.262, 0.0)))
-        P["thigh"] = [box(0.16, 0.45, 0.17, pants, center=(0, -0.225, 0))]
+        if s.get("blood_hands"):      # blood up the wrist
+            P["farm"].append(box(0.108, 0.05, 0.113, (88, 11, 14), center=(0, -0.245, 0.0)))
+        P["thigh"] = [lb(0.16, 0.45, 0.17, pants, center=(0, -0.225, 0), bv=0.035)]
         if coat:
             ln = float(s.get("coat_len", 0.42))
-            P["thigh"].append(box(0.19, ln, 0.2, coat, center=(0, -ln / 2 + 0.02, 0)))
-        P["shin"] = [box(0.135, 0.45, 0.145, pants, center=(0, -0.225, 0))]
+            if hd:
+                # front and back panels (the back flares past the hem) and a
+                # darker hem band: the skirt moves as two cloths, not one tube
+                hem = mix(coat, (0, 0, 0), .30)
+                P["thigh"] += [
+                    lb(0.19, ln, 0.11, coat, center=(0, -ln / 2 + 0.02, 0.045), bv=0.02),
+                    lb(0.2, ln + 0.026, 0.11, mix(coat, (0, 0, 0), .10),
+                       center=(0, (0.006 - ln) / 2, -0.045), bv=0.02),
+                    box(0.198, 0.022, 0.116, hem, center=(0, -ln + 0.031, 0.045)),
+                    box(0.208, 0.022, 0.116, hem, center=(0, -ln + 0.001, -0.045))]
+            else:
+                P["thigh"].append(box(0.19, ln, 0.2, coat, center=(0, -ln / 2 + 0.02, 0)))
+        P["shin"] = [lb(0.135, 0.45, 0.145, pants, center=(0, -0.225, 0), bv=0.03)]
         if s.get("boots_h"):          # rubber boots: shaft up the shin
             bh = 0.45 * float(s["boots_h"])
             P["shin"] += [box(0.15, bh, 0.16, boots, center=(0, -0.45 + bh / 2, 0)),
                           box(0.156, 0.02, 0.166, mix(boots, (255, 255, 255), .2), center=(0, -0.45 + bh, 0))]
+        elif hd:
+            # trouser break: the cuff falls over the top of the boot
+            P["shin"].append(box(0.148, 0.05, 0.158, mix(pants, (110, 120, 140), .07),
+                                 center=(0, -0.425, 0)))
         if s.get("rips"):             # worn-through knees
             P["shin"] += [box(0.07, 0.012, 0.004, s["rips"], center=(0, y_, 0.0745), skip=flat)
                           for y_ in (-0.03, -0.06, -0.15)]
-        P["foot"] = [box(0.125, 0.10, 0.26, boots, center=(0, -0.05, 0.05))]
-        if s.get("sole"):
-            P["foot"].append(box(0.13, 0.025, 0.265, s["sole"], center=(0, -0.088, 0.05)))
+        if hd:
+            # boot body (top flush with the old foot, bottom 1 cm up), a
+            # separate sole that owns the old lowest vertex, toe cap and heel
+            P["foot"] = [lb(0.125, 0.09, 0.26, boots, center=(0, -0.045, 0.05), bv=0.03),
+                         box(0.13, 0.022, 0.268, s.get("sole") or mix(boots, (0, 0, 0), .55),
+                             center=(0, -0.089, 0.05)),
+                         box(0.118, 0.05, 0.075, mix(boots, (95, 100, 112), .14),
+                             center=(0, -0.062, 0.155)),
+                         box(0.12, 0.05, 0.05, mix(boots, (0, 0, 0), .30),
+                             center=(0, -0.062, -0.07))]
+        else:
+            P["foot"] = [box(0.125, 0.10, 0.26, boots, center=(0, -0.05, 0.05))]
+            if s.get("sole"):
+                P["foot"].append(box(0.13, 0.025, 0.265, s["sole"], center=(0, -0.088, 0.05)))
         # flatten each part list into (verts, faces) templates
         self._parts = {k: self._flatten(meshes) for k, meshes in P.items()}
 

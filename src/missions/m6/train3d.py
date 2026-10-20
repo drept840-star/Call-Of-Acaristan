@@ -47,17 +47,30 @@ CUT_AT = SHOT_AT                  # the dedicated cinematic starts on the shot
 HIT_AT = SHOT_AT + 2.85           # Ucilev's round lands after the tower beat
 FALL_AT = HIT_AT + 0.30
 DOWN_AT = HIT_AT + 1.45
-DOORS_AT = SHOT_AT + 8.4          # doors start after the catch scene
-DEPART_AT = SHOT_AT + 11.0        # train moves at the departure cut
+DOORS_AT = SHOT_AT + 11.0         # doors start after the wordless vigil
+DEPART_AT = SHOT_AT + 13.6        # train moves at the departure cut
 FADE_AT = DEPART_AT + 3.2
-DURATION = FADE_AT + 1.4
+# The round lands in slow motion: animation time runs at SLOW_MIN x and eases
+# back to real time over SLOW_SPAN seconds, then stays SLOW_LAG behind the
+# clock for the rest of the cinematic (the scene is just that much longer).
+SLOW_MIN = 0.22
+SLOW_SPAN = 0.90
+SLOW_LAG = (1.0 - SLOW_MIN) * SLOW_SPAN * 0.5
+DURATION = FADE_AT + 1.4 + SLOW_LAG
 PLAYER_HP_FLOOR = 0            # Biribel is not immortal: the train can kill him
 
 # Cinematic beats, relative to SHOT_AT.
 CINE_TOWER_END = 1.7
-CINE_SCOPE_END = 3.05
+CINE_SCOPE_END = 3.30
 CINE_IMPACT_END = 5.60
-CINE_CATCH_END = 8.4
+CINE_CATCH_END = 11.0
+# Vigil cut points (cine seconds): cigarette, faces, hand, pull-back.
+VIG_CIG_AT = 6.4
+VIG_FACES_AT = 7.9
+VIG_HAND_AT = 9.2
+VIG_BACK_AT = 10.0
+BIRI_RUN_AT = 1.9      # Biribel breaks cover (off-screen) before the round lands
+BIRI_ARRIVE = 3.35     # ...and reaches the body
 
 # The signal tower.  Ucilev kneels on the cabin roof; the SCOPE shot is taken
 # from the cabin window.  The eye MUST stay clear of TOWER_CABIN_BOX (the box
@@ -70,10 +83,11 @@ TOWER_CABIN_BOX = (16.9, 19.1, 7.0, 8.6, 7.5, 9.5)   # x0 x1 y0 y1 z0 z1
 TOWER_KNEE = (18.0, 8.62, 8.50)   # where the rig stands (matches _draw_ucilev)
 TOWER_EYE = (17.95, 8.05, 7.16)   # at the window: in front of the cabin (-z)
 
-# Local lights per frame.  The GL backend has four slots in the shader
-# (``u_pl_pos[4]``); the software painter has eight.  Every rig in ``_light``
-# stays inside this budget so both backends render the same frame.
-LIGHT_CAP = 4
+# Local lights per frame.  The GL shader holds eight slots (``u_pl_pos[8]``)
+# but uploads only ``Renderer.light_cap`` of them, default four; the train opts
+# in to all eight in ``_renderer``.  Every rig in ``_light`` stays inside this
+# budget so both backends render the same frame.
+LIGHT_CAP = 8
 
 # ── background / horizon ─────────────────────────────────────────────────
 # The distance fog (11,15,24) and the night backdrop are the SAME colour at
@@ -288,6 +302,18 @@ def _radio_widget():
     return _radio_ui
 
 
+def _anim_t(t):
+    """Cinematic animation time for clock ``t``: real time up to the hit, then
+    a C1 slow-motion ramp (see SLOW_MIN) that ends SLOW_LAG behind the clock."""
+    d = t - HIT_AT
+    if d <= 0.0:
+        return t
+    if d >= SLOW_SPAN:
+        return t - SLOW_LAG
+    x = d / SLOW_SPAN
+    return HIT_AT + SLOW_MIN * d + (1.0 - SLOW_MIN) * SLOW_SPAN * (x ** 3 - 0.5 * x ** 4)
+
+
 def _smooth(a, b, x):
     x = clamp((x - a) / float(b - a), 0.0, 1.0)
     return x * x * (3 - 2 * x)
@@ -312,10 +338,18 @@ def _grade_cine(surface):
     lut = _cache.get("grade_lut")
     if lut is None:
         x = np.arange(256, dtype=np.float32) / 255.0
-        x = np.clip(0.44 + (x - 0.44) * 1.11, 0.0, 1.0)
+        # open the mids a little (the albedo-modulated rigs are dark by design),
+        # crush the toe (true blacks), then an S of contrast around the mids
+        x = x ** 0.74
+        x = np.clip((x - 0.05) / 0.95, 0.0, 1.0)
+        x = np.clip(0.42 + (x - 0.42) * 1.12, 0.0, 1.0)
+        sh, hi = (1.0 - x) ** 2, x ** 2
+        # split tone: shadows go blue-black, only the highlights stay warm
+        chan = (x - 0.010 * sh + 0.030 * hi,
+                x + 0.004 * sh + 0.004 * hi,
+                x + 0.026 * sh - 0.026 * hi)
         lut = np.empty((3, 256), dtype=np.uint8)
-        for i, g in enumerate((1.04, 1.00, 0.96)):
-            v = 0.30 + (x - 0.30) * g
+        for i, v in enumerate(chan):
             v = v - 0.10 * np.maximum(0.0, v - 0.86) ** 2
             lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
         _cache["grade_lut"] = lut
@@ -341,15 +375,97 @@ def _renderer():
     if _cache["r"] is None:
         _cache["r"] = Renderer(RW, RH, fog=(11, 15, 24), fog_start=16.0,
                                fog_end=BG_FOG_END)
+        _cache["r"].light_cap = LIGHT_CAP
     return _cache["r"]
 
 
-def _hum(key):
-    h = _cache["hum"].get(key)
+def _hum(key, wound=0, bloody=False, flags=()):
+    """The train's HD rig for ``key`` (optionally a wound stage / bloody gloves).
+
+    Same skeleton as the film rigs, so joints and ground contact agree with
+    what is drawn; the detailed geometry is train-only."""
+    ck = (key, int(wound), bool(bloody), tuple(flags))
+    h = _cache["hum"].get(ck)
     if h is None:
-        h = _w.hum(key)
-        _cache["hum"][key] = h
+        h = _w.hum(key, True, wound, bloody, flags)
+        _cache["hum"][ck] = h
     return h
+
+
+# Contact shadows for actors standing on the platform slab (painter layer 2):
+# the default layer-0 disc is hidden by the slab, so queue it on the slab's own
+# layer, nudged behind the actor's feet.
+_PLAT_SHADOW = (2, -0.30)
+
+
+def _shadow_for(z):
+    return _PLAT_SHADOW if z >= 2.7 else None
+
+
+def _volkov_flags(d):
+    """Rig variants over the vigil: the cigarette drops, then the print."""
+    if d >= _PRINT_D:
+        return ("cig_dropped", "handprint")
+    if d >= _CIG_D:
+        return ("cig_dropped",)
+    return ()
+
+
+def _wound_stage(d):
+    """Volkov's chest wound ``d`` seconds after the hit: 0 none, 1-3 spreading."""
+    if d < 0.0:
+        return 0
+    if d < _DEATH_D:
+        return 1
+    return 2 if d < 3.6 else 3
+
+
+def _blood_spray(seed, age_ms, ang=math.pi * 0.92, n=38, dur_ms=950):
+    """Exit spray: ballistic droplets thrown from the anchor, a few long fast
+    streaks and many short ones, fading as they fall.  Screen space like
+    ``_fx.sparks`` (depth-scaled), deterministic per seed."""
+    parts = []
+    for i in range(n):
+        h = math.sin(seed * 12.9898 + i * 78.233) * 43758.5453
+        u = h - math.floor(h)
+        h2 = math.sin(seed * 4.1414 + i * 39.346) * 24634.6345
+        v = h2 - math.floor(h2)
+        parts.append((ang + (u - 0.5) * 1.15, 1.2 + 4.6 * v * v, 1 + int(v * 2.4)))
+
+    def draw(s, sx, sy, scale, z):
+        if age_ms < 0 or age_ms > dur_ms:
+            return
+        a = age_ms / 1000.0
+        fade = 1.0 - age_ms / dur_ms
+        for an, sp, w in parts:
+            vx, vy = math.cos(an) * sp, math.sin(an) * sp - 0.8
+            x = sx + vx * a * scale
+            y = sy + (vy * a + 4.9 * a * a) * scale
+            tx, ty = x - vx * 0.035 * scale, y - (vy + 9.8 * a) * 0.035 * scale
+            col = (int(150 * fade + 40), int(14 * fade), int(18 * fade))
+            pygame.draw.line(s, col, (tx, ty), (x, y), w)
+    return draw
+
+
+def _drip(i, k):
+    """Deterministic 0..1 hash for the spatter layout."""
+    h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+    return h - math.floor(h)
+
+
+def _trail_points(delay):
+    """Where the chest-drag smear lands: the root path while he is lowered."""
+    key = ("trail", round(delay, 3))
+    pts = _cache.get(key)
+    if pts is None:
+        pts = []
+        d = 0.35
+        while d <= _DEATH_D + 1e-6:
+            pos, _pose, _yaw, j = _volkov_death_state(HIT_AT + d, delay)
+            pts.append((d, j["chest"][0], j["chest"][2]))
+            d += 0.12
+        _cache[key] = pts
+    return pts
 
 
 def _spot(pos, target, color, intensity, range_, cone):
@@ -372,72 +488,81 @@ def _light(r, eye=None, fwd=None, t=None):
     """
     from engine3d import Light
     final = t is not None and t >= CUT_AT
+    # The cinematic lights multiply the surface colour instead of adding their
+    # own: a near-black coat under a warm spot stays a dark coat that is warm on
+    # the lit side, instead of turning the same tan as the skin and the ballast.
+    r.light_albedo = bool(final)
+    r.light_gain = 2.2 if final else 1.0
     if final:
         # Post-shot cinematic: one rig per beat, each lit by something the
         # audience can already see in frame (the cabin window, the gantry work
-        # lamp, the carriage windows).
+        # lamp, the carriage windows) plus a hard cold rim that outlines the
+        # silhouettes against the carriage.
         c = t - SHOT_AT
         if c < CINE_TOWER_END:
             # Tower establishing: the cabin window throws warm light up onto
             # the roof, a cold sky fill separates the tower from the night
             # instead of leaving it a black slab.
-            r.light = Light(direction=(-0.34, 0.76, -0.38), ambient=0.26,
-                            diffuse=0.62, sky=0.16, tint=(0.88, 0.93, 1.10))
+            r.light = Light(direction=(-0.34, 0.76, -0.38), ambient=0.24,
+                            diffuse=0.58, sky=0.16, tint=(0.88, 0.93, 1.10))
             lights = [
                 {"pos": (18.0, 7.55, 6.30), "color": (255, 196, 122),
-                 "intensity": 1.25, "range": 6.0},
+                 "intensity": 1.45, "range": 6.5},
                 {"pos": (12.0, 12.5, -1.5), "color": (142, 172, 222),
-                 "intensity": 0.62, "range": 24.0},
+                 "intensity": 1.1, "range": 26.0},
                 {"pos": (15.4, 3.2, 3.4), "color": (120, 150, 200),
-                 "intensity": 0.42, "range": 11.0},
+                 "intensity": 0.8, "range": 12.0},
                 {"pos": (10.9, 1.8, -2.1), "color": (255, 176, 96),
-                 "intensity": 0.55, "range": 6.0},
+                 "intensity": 0.8, "range": 6.0},
+                # beacon red kisses the roof and the sniper's shoulder
+                {"pos": (19.0, 8.9, 7.7), "color": (255, 70, 52),
+                 "intensity": 0.6, "range": 3.6},
+                # cold moon rim from behind the tower
+                {"pos": (21.0, 11.0, 12.5), "color": (150, 182, 255),
+                 "intensity": 0.9, "range": 12.0},
             ]
         elif c < CINE_SCOPE_END:
             # Down the scope: the gantry work lamp is a real spot on the
             # target, not a 12 m flood that turned the platform floor neutral.
             r.light = Light(direction=(-0.30, 0.75, -0.35), ambient=0.18,
-                            diffuse=0.64, sky=0.10, tint=(0.94, 0.96, 1.05))
+                            diffuse=0.60, sky=0.10, tint=(0.94, 0.96, 1.05))
             lights = [
                 _spot((13.0, 5.80, 1.80), (11.25, 1.40, 0.90),
-                      (255, 200, 135), 2.60, 10.0, 0.96),
+                      (255, 206, 150), 3.1, 10.0, 0.96),
                 {"pos": (13.0, 3.20, 5.20), "color": (60, 105, 215),
-                 "intensity": 0.65, "range": 9.0},
+                 "intensity": 1.0, "range": 9.0},
                 {"pos": (10.8, 2.10, -3.30), "color": (255, 190, 120),
-                 "intensity": 0.55, "range": 9.5},
+                 "intensity": 1.0, "range": 9.5},
                 {"pos": (9.0, 5.40, -2.20), "color": (128, 158, 210),
-                 "intensity": 0.55, "range": 15.0},
-            ]
-        elif c < CINE_IMPACT_END:
-            # Impact/catch/lower: a low warm spot key shapes the faces and
-            # coat, a door bounce warms the ballast, and a cool fill/rim keeps
-            # the shadow side blue instead of grey.
-            r.light = Light(direction=(-0.32, 0.74, -0.36), ambient=0.30,
-                            diffuse=0.72, sky=0.12, tint=(1.01, 0.98, 0.95))
-            lights = [
-                _spot((9.90, 1.60, 1.20), (11.50, 0.72, 0.70),
-                      (255, 196, 140), 1.20, 5.0, 0.78),
-                {"pos": (10.90, 0.95, -1.70), "color": (255, 170, 105),
-                 "intensity": 0.55, "range": 4.6},
-                {"pos": (9.00, 1.15, 2.55), "color": (105, 140, 200),
-                 "intensity": 0.28, "range": 3.6},
-                {"pos": (13.60, 2.35, -1.90), "color": (124, 160, 218),
-                 "intensity": 0.50, "range": 7.5},
+                 "intensity": 1.0, "range": 15.0},
             ]
         else:
-            # Held side-vigil and reveal: same warm anchor; the carriage
-            # windows and door carry the background, not a white ring fill.
-            r.light = Light(direction=(-0.30, 0.75, -0.34), ambient=0.32,
-                            diffuse=0.72, sky=0.10, tint=(1.02, 0.98, 0.95))
+            # Impact, catch, lower and the held side vigil.  A less saturated,
+            # more frontal warm key models the faces and the coat; two hard
+            # cold rims behind the pair draw both silhouettes against the
+            # carriage; the open door bounces warm light up from the ballast and
+            # the windows spill onto the track.  The shadow side stays blue.
+            r.light = Light(direction=(-0.30, 0.75, -0.34), ambient=0.31,
+                            diffuse=0.58, sky=0.10, tint=(0.96, 0.98, 1.04))
+            key = 1.10 + 0.40 * _smooth(CINE_SCOPE_END, CINE_SCOPE_END + 3.0, c)
+            # The rims sit low (about chest height, 2-3 m behind the pair): they
+            # catch the bodies from behind and barely graze the ballast, so the
+            # floor stays dark and the silhouettes carry the cold edge.
             lights = [
-                _spot((9.90, 1.60, 1.20), (11.50, 0.72, 0.70),
-                      (255, 196, 140), 1.55, 5.0, 0.78),
+                _spot((9.40, 2.10, 1.90), (11.40, 0.50, 0.60),
+                      (255, 214, 172), key, 7.0, 0.82),
+                {"pos": (13.80, 1.10, -1.30), "color": (140, 178, 255),
+                 "intensity": 1.30, "range": 6.0},
+                {"pos": (9.20, 1.10, -1.50), "color": (122, 160, 244),
+                 "intensity": 0.95, "range": 5.5},
                 {"pos": (10.90, 0.95, -1.70), "color": (255, 170, 105),
-                 "intensity": 0.60, "range": 4.6},
-                {"pos": (9.00, 1.15, 2.55), "color": (105, 140, 200),
-                 "intensity": 0.30, "range": 3.6},
-                {"pos": (13.60, 2.35, -1.90), "color": (124, 160, 218),
-                 "intensity": 0.52, "range": 7.5},
+                 "intensity": 0.80, "range": 4.6},
+                {"pos": (11.40, 0.50, 3.60), "color": (98, 130, 192),
+                 "intensity": 0.25, "range": 4.0},
+                {"pos": (14.50, 1.50, -2.20), "color": (255, 196, 140),
+                 "intensity": 0.45, "range": 4.5},
+                {"pos": (7.50, 1.50, -2.20), "color": (255, 196, 140),
+                 "intensity": 0.35, "range": 4.5},
             ]
     else:
         # Action: deep night base, warm sodium pools, one cool rim.
@@ -877,6 +1002,11 @@ _VK_FAILED = dict(body_p=84, body_r=4, spine=-4, head_p=-8, head_y=-16,
                   lhip_p=-4, lhip_r=6, lkn=8, rhip_p=4, rhip_r=10, rkn=12)
 
 _DEATH_D = DOWN_AT - HIT_AT
+# (seconds after the hit, relative size): the last breath is barely a breath
+_BREATHS = ((2.30, 1.0), (3.95, 0.6), (5.60, 0.3))
+_CIG_D = 3.10               # the cigarette slips from his lips after breath one
+_SPRAY_O = (11.3, 0.8)    # x/z where the exit spray starts on the ballast
+_PRINT_D = 6.30             # Biribel lifts his hand: the print stays on the coat
 _VSUP_START = 0.55          # hands take the weight
 _VSUP_FULL = _DEATH_D       # body is on the ballast
 
@@ -900,11 +1030,12 @@ def _keyed_pose(d, t):
     if d < _DEATH_D:
         return blend(_VK_LOWER, _VK_SETTLED, _smooth(1.15, _DEATH_D, d))
     p = dict(_VK_SETTLED)
-    if 2.55 <= d <= 3.15:
-        # the one breath, timed with the audio cue
-        k = math.sin((d - 2.55) / 0.60 * math.pi)
-        p["spine"] = p.get("spine", 0.0) + 1.2 * k
-        p["head_p"] = p.get("head_p", 0.0) - 1.5 * k
+    # Wordless: three breaths, each smaller than the last, then nothing.
+    for d0, amp in _BREATHS:
+        if d0 <= d <= d0 + 0.60:
+            k = math.sin((d - d0) / 0.60 * math.pi) * amp
+            p["spine"] = p.get("spine", 0.0) + 1.2 * k
+            p["head_p"] = p.get("head_p", 0.0) - 1.5 * k
     return p
 
 
@@ -988,32 +1119,56 @@ def _look_angles(pos, yaw, target, twist_max=24.0, head_max=46.0, share=0.35):
     return tw, clamp(rel - tw, -head_max, head_max)
 
 
+def catch_right_target(chest, c):
+    """World target of Biribel's right hand ``c`` cine-seconds in: the
+    shoulder/chest grip, then pressed on the wound, then lifted away."""
+    r_target = (chest[0] + 0.22, chest[1] + 0.08, chest[2] + 0.12)
+    press = _smooth(5.2, 5.9, c) * (1.0 - _smooth(_PRINT_D + 2.55 - 0.4,
+                                                   _PRINT_D + 2.55 + 0.3, c))
+    if press > 0.0:
+        wound = (chest[0] + 0.12, chest[1] + 0.13, chest[2] + 0.07)
+        r_target = tuple(r_target[i] + (wound[i] - r_target[i]) * press
+                         for i in range(3))
+    lift = _smooth(_PRINT_D + 2.55 + 0.3, _PRINT_D + 2.55 + 0.9, c)
+    if lift > 0.0:
+        up = (chest[0] + 0.16, chest[1] + 0.40, chest[2] + 0.14)
+        r_target = tuple(r_target[i] + (up[i] - r_target[i]) * lift
+                         for i in range(3))
+    return r_target
+
+
 def _biribel_catch_state(t, vstate):
     """Grounded approach, then a side vigil: beside the chest, not the head."""
     c = t - SHOT_AT
-    if c < 2.55:
+    if c < BIRI_RUN_AT:
         return None
     vpos, _vpose, _vyaw, vj = vstate
     hum = _hum(("biribel", OUTFIT_GUARD))
     route = _cache.get("biri_route")
     if route is None:
-        route = _w.path([(13.85, 1.18), (12.95, 0.85), (12.45, 0.62)],
-                        smooth=0.10)
+        # From the carriage side of the lamp, along the platform lip: he is
+        # already running when the round lands, not standing beside the body.
+        route = _w.path([(16.4, 1.45), (14.7, 1.28), (13.85, 1.18),
+                         (12.95, 0.85), (12.45, 0.62)], smooth=0.10)
         _cache["biri_route"] = route
-    g = clamp((c - 2.55) / 0.80, 0.0, 1.0) * route.length
-    pose, pos, yaw = _w.walk(hum, route, g, 0.95, speed=2.2,
-                             ground=lambda x, z: _ground_at(z))
+    # A sprint that eases into the kneel: speed falls to zero at the body.
+    u = clamp((c - BIRI_RUN_AT) / (BIRI_ARRIVE - BIRI_RUN_AT), 0.0, 1.0)
+    dist = route.length * (1.0 - (1.0 - u) ** 1.6)
+    (rx, _ry, rz), yaw = route(dist)
+    pos = (rx, _ground_at(rz), rz)
+    pose = pose_run(dist / 2.1 * 2.0 * math.pi, lean=24 + 10 * u)
+    pose["rifle_p"] = 0.0
     if c >= 3.20:
         # settle at his chest, on the near side of the body
         ks = _smooth(3.20, 3.65, c)
         x = pos[0] + (12.20 - pos[0]) * ks
         z = pos[2] + (0.55 - pos[2]) * ks
         pos = (x, _ground_at(z), z)
-    chest_target = (vj["chest"][0], 0.0, vj["chest"][2])
     if c >= 3.10:
         k = _smooth(3.10, 3.45, c)
+        chest_t = (vj["chest"][0], 0.0, vj["chest"][2])
         pose = blend(pose, _BIRI_BRACE, k)
-        yaw = _w.yaw_mix(yaw, _w.yaw_to(pos, chest_target), k)
+        yaw = _w.yaw_mix(yaw, _w.yaw_to(pos, chest_t), k)
     if c >= 3.55:
         pose = blend(pose, _BIRI_HOLD, _smooth(3.55, 4.35, c))
     pos = (pos[0], _ground_at(pos[2]), pos[2])
@@ -1025,8 +1180,7 @@ def _biribel_catch_state(t, vstate):
         # head_p is authored in _BIRI_HOLD; do not pitch from the root
     kr_r = _smooth(3.75, 4.25, c)
     if kr_r > 0.0:
-        chest = vj["chest"]
-        r_target = (chest[0] + 0.22, chest[1] + 0.08, chest[2] + 0.12)
+        r_target = catch_right_target(vj["chest"], c)
         pr = _w.reach(hum, pose, "r", r_target, pos, yaw)
         pose = blend(pose, pr, kr_r)
     kr_l = _smooth(4.05, 4.55, c)
@@ -1035,6 +1189,14 @@ def _biribel_catch_state(t, vstate):
         l_target = (hand[0] + 0.02, hand[1] + 0.02, hand[2] + 0.04)
         pl = _w.reach(hum, pose, "l", l_target, pos, yaw)
         pose = blend(pose, pl, kr_l)
+    look = _smooth(VIG_BACK_AT, VIG_BACK_AT + 0.7, c)
+    if look > 0.0:
+        # Eyes up to the signal tower: the one thing he does with the silence.
+        tw, hy = _look_angles(pos, yaw, TOWER_KNEE, twist_max=20.0,
+                              head_max=60.0, share=0.45)
+        pose["twist"] = pose.get("twist", 0.0) + tw * look
+        pose["head_y"] = pose.get("head_y", 0.0) + (hy - pose.get("head_y", 0.0) * 0.0) * look
+        pose["head_p"] = pose.get("head_p", 0.0) - 10.0 * look
     return pos, yaw, pose
 
 
@@ -1473,15 +1635,23 @@ class TrainScene:
         if (self.cine_pending_shot and not self.ucilev_fired
                 and self.t >= HIT_AT):
             self._ucilev_fire()
-        if self.t >= DOORS_AT and "doors" not in self._ev:
+        # The shot's aftermath: ringing ears, the distant report, the body.
+        for ev, at, call in (("tinnitus", HIT_AT + 0.12, "tinnitus"),
+                             ("report", HIT_AT + 0.95, "report"),
+                             ("thud", DOWN_AT + SLOW_LAG - 0.05, "thud")):
+            if (self.ucilev_fired and self.t >= at and ev not in self._ev):
+                self._ev.add(ev)
+                if self.audio:
+                    getattr(self.audio, call)()
+        if self.t >= DOORS_AT + SLOW_LAG and "doors" not in self._ev:
             self._ev.add("doors")
             if self.audio:
                 self.audio.doors()
-        if self.t >= DEPART_AT and "depart" not in self._ev:
+        if self.t >= DEPART_AT + SLOW_LAG and "depart" not in self._ev:
             self._ev.add("depart")
             if self.audio:
                 self.audio.depart()
-        if self.t >= DOWN_AT + 1.15 and "breath" not in self._ev:
+        if self.t >= DOWN_AT + SLOW_LAG + 1.15 and "breath" not in self._ev:
             self._ev.add("breath")
             if self.audio:
                 self.audio.breath()
@@ -1888,6 +2058,8 @@ class TrainScene:
             return False
         r = _renderer()
         t = self.t
+        if t > HIT_AT and not self.volkov_failed and not self.dying:
+            t = _anim_t(t)
         # Solve the death once: the camera, both actors and the death FX used
         # to re-run the same pose/IK 3-4 times a frame and could drift apart.
         self._vstate = None
@@ -1936,7 +2108,7 @@ class TrainScene:
         try:
             if rebuild or not static:
                 _w.rail_platform(r, t * 1000.0, train=True, snow=1.0,
-                                 train_offset=self._train_offset())
+                                 train_offset=self._train_offset(t))
                 self._draw_station(r, t)
             else:
                 # Set geometry is cached in the renderer; only the animated light
@@ -1983,7 +2155,7 @@ class TrainScene:
         if t < 0.8:
             fade = 1.0 - t / 0.8
         elif t > FADE_AT:
-            fade = clamp((t - FADE_AT) / (DURATION - FADE_AT), 0.0, 1.0) ** 0.8
+            fade = clamp((t - FADE_AT) / (DURATION - SLOW_LAG - FADE_AT), 0.0, 1.0) ** 0.8
         if fade > 0:
             veil = pygame.Surface((WIDTH, HEIGHT))
             veil.fill((0, 0, 0))
@@ -2024,6 +2196,19 @@ class TrainScene:
             return
         self._draw_cine_camera(r, t)
 
+    def _cam(self, r, t, eye, tgt, fov, roll=0.0):
+        """set_camera + the cinematic's impact jolt and breathing.  Both are
+        deterministic sines of the dt clock and scale with reduced motion."""
+        c = t - SHOT_AT
+        tms = c * 1000.0
+        hit_ms = (HIT_AT - SHOT_AT) * 1000.0
+        dx, dy, sroll, _px = _fx.shake(tms, hit_ms, 520.0, 0.075)
+        hh = 0.0
+        if c >= CINE_SCOPE_END:
+            hh = 0.010
+        _fx.set_cam(r, tms, eye, tgt, fov, hh=hh, seed=7, roll=roll,
+                    shk=(dx, dy, sroll, 0))
+
     def _draw_cine_camera(self, r, t):
         """Dedicated post-shot cinematic: tower, scope, impact, catch, doors."""
         c = t - SHOT_AT
@@ -2032,9 +2217,12 @@ class TrainScene:
             # roof line, not the cabin: at 38 deg he was a speck on a black
             # slab, and the shot has to say who is holding the rifle.
             k = _smooth(0.0, CINE_TOWER_END, c)
-            eye = (7.4 + 0.9 * k, 1.95 + 0.30 * k, 4.9)
-            r.set_camera(eye, (TOWER_KNEE[0], TOWER_KNEE[1] + 0.55,
-                               TOWER_KNEE[2]), 30)
+            # Low and from the platform, looking UP at the cabin: the sniper
+            # reads against the sky with the lit window behind him, and the
+            # slow push-up-and-in makes the angle feel like a threat.
+            eye = (10.4 + 0.9 * k, 2.55 + 0.25 * k, 4.6)
+            self._cam(r, t, eye, (TOWER_KNEE[0] - 0.2 * k, TOWER_KNEE[1] + 0.40,
+                               TOWER_KNEE[2]), 26 - 3 * k)
             return
         if c < CINE_SCOPE_END:
             # Down the scope: track Volkov's upper body.  Clamp tracking at
@@ -2046,6 +2234,18 @@ class TrainScene:
             # Chest height - and the same height the round arrives at, so the
             # reticle sits on the point the story hits.
             tgt = (vpos_live[0], vpos_live[1] + 1.12, vpos_live[2])
+            dh = t - HIT_AT
+            if dh > 0.0:
+                # The rifle kicks the glass up and the body buckles under it:
+                # the view jumps, then drifts down after the falling chest
+                # instead of freezing on an empty point.
+                _p, _q, _y, vj = _volkov_death_state(t, self.volkov_delay)
+                ch = vj["chest"]
+                follow = _smooth(0.05, 0.30, dh)
+                kick = 0.34 * math.exp(-dh / 0.07) * (1.0 - math.exp(-dh / 0.012))
+                tgt = (tgt[0] + (ch[0] - tgt[0]) * follow,
+                       tgt[1] + (ch[1] - tgt[1]) * follow + kick,
+                       tgt[2] + (ch[2] - tgt[2]) * follow)
             # A slow breath on the eye: the same man is holding the shot, not
             # a locked-off tripod.
             sway = (0.03 * math.sin((t - SHOT_AT) * 1.7),
@@ -2054,7 +2254,7 @@ class TrainScene:
                    TOWER_EYE[2] + sway[1])
             # 16 deg is a real spotter's lens: at 22 the subject was a
             # hand-sized figure on an empty bed of ballast.
-            r.set_camera(eye, tgt, 16)
+            self._cam(r, t, eye, tgt, 16)
             return
         # From here the camera stands on the track side of the platform lip,
         # in front of the safety chain and clear of the gantry mast at
@@ -2068,30 +2268,63 @@ class TrainScene:
             chest = (vp[0], vp[1] + 1.0, vp[2])
             head = (vp[0], vp[1] + 1.65, vp[2])
         if c < CINE_CATCH_END:
-            # Held side-vigil: one continuous push-in from the track side.
-            k = _smooth(CINE_SCOPE_END, CINE_CATCH_END, c)
-            eye = (9.60 - 0.40 * k, 1.95 - 0.17 * k, 2.90 + 0.12 * k)
+            self._vigil_camera(r, t, c, chest, head)
+            return
+        # Reveal: cut wide on the door close so the carriage, its detail and
+        # the window row are visible, then let it slide out behind the pair.
+        k = _smooth(CINE_CATCH_END, DURATION - SHOT_AT, c)
+        eye = (9.00 - 0.30 * k, 2.25 + 0.05 * k, 2.72 + 0.12 * k)
+        tgt = (12.30, 1.05, -0.20)
+        self._cam(r, t, eye, tgt, 60.0 + 4.0 * k)
+
+    def _vigil_camera(self, r, t, c, chest, head):
+        """The wordless vigil as a short cut sequence: a push-in on the pair,
+        the cigarette in the snow, both faces, the bloody hand, then back out
+        as Biribel looks up toward the tower."""
+        if c < VIG_CIG_AT:
+            # One continuous push-in from the track side.
+            k = _smooth(CINE_SCOPE_END, VIG_CIG_AT, c)
+            eye = (9.60 - 0.40 * k, 1.95 - 0.17 * k, 2.66 + 0.14 * k)
             live = (0.5 * (chest[0] + head[0]),
                     0.55 * chest[1] + 0.45 * head[1],
                     0.5 * (chest[2] + head[2]))
             k2 = _smooth(0.40, 5.00, c)
             rest = (11.65, 0.75, 0.64)
             tgt = tuple(live[i] * (1.0 - k2) + rest[i] * k2 for i in range(3))
-            roll = 1.2 * (1.0 - _smooth(0.0, 0.45, t - HIT_AT)) \
-                if t >= HIT_AT else 0.0
-            r.set_camera(eye, tgt, 44.0 + 3.0 * k, roll=roll)
+            roll = 1.2 * (1.0 - _smooth(0.0, 0.45, t - HIT_AT))                 if t >= HIT_AT else 0.0
+            self._cam(r, t, eye, tgt, 44.0 + 3.0 * k, roll=roll)
             return
-        # Reveal: cut wide on the door close so the carriage, its detail and
-        # the window row are visible, then let it slide out behind the pair.
-        k = _smooth(CINE_CATCH_END, DURATION - SHOT_AT, c)
-        eye = (9.20 - 0.30 * k, 2.30 + 0.05 * k, 3.80 + 0.60 * k)
-        tgt = (12.30, 1.05, -0.20)
-        r.set_camera(eye, tgt, 60.0 + 4.0 * k)
+        j = 0.5 * math.sin(c * 0.9)      # a hand-held breath on every insert
+        if c < VIG_FACES_AT:
+            # Insert: the cigarette smouldering in the snow beside his head.
+            k = _smooth(VIG_CIG_AT, VIG_FACES_AT, c)
+            cp = (head[0] - 0.28, _BALLAST_Y + 0.05, head[2] + 0.02)
+            self._cam(r, t, (cp[0] - 0.75 + 0.12 * k, 0.36, cp[2] + 0.95),
+                         (cp[0] + 0.04, cp[1] + 0.06, cp[2]), 30.0,
+                         roll=0.8 * j)
+            return
+        if c < VIG_HAND_AT:
+            # Both faces, close: the side key models them, the rim cuts them.
+            k = _smooth(VIG_FACES_AT, VIG_HAND_AT, c)
+            self._cam(r, t, (9.60 + 0.25 * k, 1.05 - 0.04 * k, 2.62 - 0.12 * k),
+                         (11.72, 0.70, 0.78), 41.0 - 3.0 * k, roll=0.5 * j)
+            return
+        if c < VIG_BACK_AT:
+            # Insert: the hand on the wound, then lifted, the print left behind.
+            k = _smooth(VIG_HAND_AT, VIG_BACK_AT, c)
+            self._cam(r, t, (10.95 + 0.1 * k, 1.18 - 0.04 * k, 1.30 + 0.05 * k),
+                         (11.46, 0.50, 0.52), 34.0 - 2.0 * k, roll=0.6 * j)
+            return
+        # Out and wide as he looks up toward the tower.
+        k = _smooth(VIG_BACK_AT, CINE_CATCH_END, c)
+        self._cam(r, t, (9.20 - 0.2 * k, 1.90 + 0.10 * k, 2.72),
+                     (11.90, 0.95, 0.50), 44.0 + 2.0 * k)
 
-    def _train_offset(self):
-        if self.t <= DEPART_AT:
+    def _train_offset(self, t=None):
+        t = self.t if t is None else t
+        if t <= DEPART_AT:
             return 0.0
-        return _ease(clamp((self.t - DEPART_AT) / 4.6, 0.0, 1.0)) * 34.0
+        return _ease(clamp((t - DEPART_AT) / 4.6, 0.0, 1.0)) * 72.0
 
     def _draw_station(self, r, t):
         # Main depot building with recessed dark brickwork, roof trim, and pillars
@@ -2551,7 +2784,7 @@ class TrainScene:
         _w.snow3d(r, tm, seed=61, n=60, spread=22, height=16, speed=1.3)
 
     def _draw_train_door(self, r, t):
-        tx = self._train_offset()
+        tx = self._train_offset(t)
         closed = _smooth(DOORS_AT, DOORS_AT + 1.0, t)
         dx = TRAIN_DOOR_X + tx
         z = -2.83
@@ -2590,14 +2823,17 @@ class TrainScene:
                 self.fail_t, t, pos, self.fail_yaw, self.volkov_delay)
             pos, pose, yaw, _j = fstate
             _w.actor(r, "volkov", pose, pos, yaw, int(t * 1000),
-                     seed=91, amp=0.0, rifle_on=False, expression="sad")
+                     seed=91, amp=0.0, rifle_on=False, expression="sad",
+                     hd=True, wound=2 if self.fail_t >= 0.5 else 0)
             return
         if t >= HIT_AT:
             vstate = self._vstate or _volkov_death_state(t, self.volkov_delay)
             pos, pose, yaw, _j = vstate
             expr = "surprised" if t - HIT_AT < 0.45 else "sad"
             _w.actor(r, "volkov", pose, pos, yaw, int(t * 1000),
-                     seed=91, amp=0.0, rifle_on=False, expression=expr)
+                     seed=91, amp=0.0, rifle_on=False, expression=expr,
+                     hd=True, wound=_wound_stage(t - HIT_AT),
+                     flags=_volkov_flags(t - HIT_AT))
             return
         vt = t
         (x, y, z), mode, phase = _volkov_at(vt, self.volkov_delay)
@@ -2609,7 +2845,7 @@ class TrainScene:
         yaw = _w.yaw_to((x, 0.0, z), (nx, 0.0, nz)) if mode == "run" else \
             _w.yaw_to((x, 0.0, z), (TRAIN_DOOR_X, 0.0, -2.0))
         _w.actor(r, "volkov", pose, (x, y, z), yaw, int(vt * 1000),
-                 seed=91, amp=0.5)
+                 seed=91, amp=0.5, hd=True, shadow=_shadow_for(z))
         if t > 8.0:
             r.add_sprite((x, y + 1.58, z),
                          _w.breath((x, y, z), t * 1000, seed=92, intensity=0.18),
@@ -2650,7 +2886,8 @@ class TrainScene:
                                 head_p=pose.get("head_p", 6) + 10 * amp)
                 joints = _w.actor(r, key, pose, (x, y, z), yaw,
                                   int(t * 1000), seed=100 + g["slot"],
-                                  amp=0.4, rifle_on=True)
+                                  amp=0.4, rifle_on=True, hd=True,
+                                  shadow=_shadow_for(z))
                 # IFF strobe on the shoulder: the roster reads at distance
                 # even when every silhouette is a dark shape in the snow.
                 lamp = prof.get("lamp")
@@ -2694,7 +2931,7 @@ class TrainScene:
                 pose = blend("aim", "dead_front", k)
                 try:
                     r.add_humanoid(_hum(key), pose, (x, y, z), yaw,
-                                   rifle_on=False)
+                                   rifle_on=False, shadow=_shadow_for(z))
                 except Exception:
                     pass
 
@@ -2707,7 +2944,7 @@ class TrainScene:
         yaw = _w.yaw_to(pos, (11.2, 1.0, 1.0))
         pose = dict(POSES["kneel"])
         _w.actor(r, "ucilev", pose, pos, yaw, int(t * 1000), seed=95,
-                 amp=0.20, rifle_on=True)
+                 amp=0.20, rifle_on=True, hd=True)
 
     def _draw_biribel(self, r, t):
         if self.dying or self.volkov_failed or t < SHOT_AT:
@@ -2721,8 +2958,10 @@ class TrainScene:
             return
         pos, yaw, pose = state
         expr = "worried" if c < 3.60 else "sad"
+        # Biribel's gloves go red once his hand is on the wound.
         _w.actor(r, ("biribel", OUTFIT_GUARD), pose, pos, yaw,
-                 int(t * 1000), seed=93, amp=0.0, expression=expr)
+                 int(t * 1000), seed=93, amp=0.0, expression=expr,
+                 hd=True, bloody=c >= 4.3)
 
     def _vm_setup(self):
         """Resolve the held-weapon frame (GL: K93D asset, software: K9).
@@ -2912,6 +3151,8 @@ class TrainScene:
                 rad = 0.34 - 0.04 * abs(i - 1)
                 _w.add(r, disc_xz(cx, cz, rad, _BALLAST_Y + 0.003,
                                   (32, 34, 40), n=10, layer=1))
+        if not failed:
+            self._draw_exit_gore(r, t, d, joints)
         if failed:
             if _DEATH_D <= d <= _DEATH_D + 0.40:
                 r.add_sprite((pos[0], _BALLAST_Y + 0.10, pos[2]),
@@ -2934,15 +3175,19 @@ class TrainScene:
                                         col=(198, 208, 224)),
                          layer=_fx.FX_LAYER)
         if d >= _DEATH_D:
-            grow = _smooth(_DEATH_D, _DEATH_D + 0.60, d)
+            # The pool never stops widening, slowly, across the whole vigil.
+            grow = _smooth(_DEATH_D, _DEATH_D + 0.60, d) +                 0.9 * _smooth(_DEATH_D, _DEATH_D + 7.0, d)
             rad = 0.14 + 0.16 * grow
-            _w.add(r, disc_xz(pos[0], pos[2], rad, _BALLAST_Y + 0.012,
-                              (48, 16, 14), n=10, layer=1))
-            _w.add(r, disc_xz(pos[0], pos[2], rad * 0.55,
-                              _BALLAST_Y + 0.016, (30, 10, 10),
-                              n=9, layer=1))
-        for t0, t1, inten in ((2.45, 3.60, 0.24), (3.85, 4.25, 0.12)):
-            if t0 <= d <= t1:
+            wob = (1.0, 0.82, 1.12, 0.9, 1.18, 0.86, 1.05, 0.94, 1.14, 0.88)
+            _w.add(r, disc_xz(pos[0] + 0.05, pos[2] - 0.04, rad,
+                              _BALLAST_Y + 0.012, (62, 10, 12), n=10,
+                              layer=1, wobble=wob))
+            _w.add(r, disc_xz(pos[0] + 0.03, pos[2] - 0.02, rad * 0.58,
+                              _BALLAST_Y + 0.016, (38, 6, 9), n=10,
+                              layer=1, wobble=wob[::-1]))
+            self._draw_cigarette(r, t, d, head, pos)
+        for (t0, _a), inten in zip(_BREATHS, (0.24, 0.14, 0.06)):
+            if t0 + 0.1 <= d <= t0 + 1.2:
                 r.add_sprite((head[0], head[1] + 0.05, head[2]),
                              _w.breath(head, t * 1000.0, seed=93,
                                        intensity=inten),
@@ -2959,6 +3204,72 @@ class TrainScene:
                              _w.breath(bh, t * 1000.0, seed=94,
                                        intensity=0.10),
                              layer=_fx.FX_LAYER)
+
+    def _draw_exit_gore(self, r, t, d, joints):
+        """The round's exit: spray and mist at the hit, spatter on the
+        ballast ahead of him, a smear where he is lowered."""
+        chest = joints["chest"]
+        if 0.0 <= d < 1.0:
+            r.add_sprite((chest[0], chest[1] + 0.06, chest[2]),
+                         _blood_spray(5, d * 1000.0), layer=_fx.FX_LAYER)
+            fade = 1.0 - _smooth(0.05, 0.42, d)
+            if fade > 0.01:
+                r.add_sprite((chest[0], chest[1] + 0.04, chest[2]),
+                             _fx.glow((150, 20, 26), 0.55, t * 1000.0,
+                                      intensity=0.5 * fade),
+                             layer=_fx.FX_LAYER)
+        # spatter: throw direction is tower -> chest, i.e. away from the tower
+        for i in range(11):
+            land = 0.12 + 0.30 * _drip(i, 3)
+            if d < land:
+                continue
+            reach = 0.5 + 2.3 * _drip(i, 1)
+            ang = math.atan2(-7.6, -6.7) + (_drip(i, 2) - 0.5) * 0.9
+            sx = _SPRAY_O[0] + math.cos(ang) * reach
+            sz = _SPRAY_O[1] + math.sin(ang) * reach * 0.55
+            rad = (0.03 + 0.07 * _drip(i, 4)) * _smooth(land, land + 0.4, d)
+            if rad > 0.006:
+                wob = tuple(0.8 + 0.4 * _drip(i, 10 + k) for k in range(7))
+                _w.add(r, disc_xz(sx, sz, rad, _BALLAST_Y + 0.006 + 0.0004 * i,
+                                  (70, 8, 12), n=7, layer=1, wobble=wob))
+        # the drag: a smear that follows the chest down
+        if d >= 0.35:
+            for k, (ds, px, pz) in enumerate(_trail_points(self.volkov_delay)):
+                if ds > d:
+                    break
+                _w.add(r, disc_xz(px, pz, 0.07 + 0.015 * (k % 3),
+                                  _BALLAST_Y + 0.005 + 0.0003 * k,
+                                  (60, 8, 12), n=8, layer=1))
+
+    def _draw_cigarette(self, r, t, d, head, pos):
+        """The cigarette that left his lips: a short fall, then a thread of
+        smoke from the ember in the bloody snow."""
+        if d < _CIG_D:
+            return
+        lip = (head[0] + 0.07, head[1] + 0.01, head[2] + 0.10)
+        rest = (head[0] - 0.28, _BALLAST_Y + 0.012, head[2] + 0.02)
+        k = clamp((d - _CIG_D) / 0.34, 0.0, 1.0)
+        fall = k * k
+        cp = (lip[0] + (rest[0] - lip[0]) * k,
+              lip[1] + (rest[1] - lip[1]) * fall,
+              lip[2] + (rest[2] - lip[2]) * k)
+        m = box(0.012, 0.012, 0.075, (232, 228, 216), center=cp)
+        m.add(box(0.0125, 0.0125, 0.014, (196, 140, 80),
+                  center=(cp[0], cp[1], cp[2] - 0.040)))
+        ember = box(0.0125, 0.0125, 0.012, (255, 120, 48),
+                    center=(cp[0], cp[1], cp[2] + 0.040), emissive=True)
+        m.add(ember)
+        _w.add(r, m)
+        if k >= 1.0:
+            tip = (rest[0], rest[1] + 0.02, rest[2] + 0.04)
+            r.add_sprite(tip, _fx.glow((255, 130, 56), 0.5, t * 1000.0,
+                                       flicker=0.25, seed=141, intensity=0.55),
+                         layer=_fx.FX_LAYER)
+            r.add_sprite((tip[0], tip[1] + 0.05, tip[2]),
+                         _fx.cig_smoke(t * 1000.0, seed=141,
+                                       drift=(0.10, -0.42), intensity=0.20,
+                                       life_ms=3600),
+                         layer=_fx.FX_LAYER)
 
     # ── HUD ────────────────────────────────────────────────────────────
     def _draw_hud(self, surface, t):
@@ -2992,7 +3303,7 @@ class TrainScene:
             eyebrow = tag.render("SIGNAL TOWER  /  UCILEV", True,
                                  (198, 168, 104))
             surface.blit(eyebrow, (34, bar + 14))
-            sub = tag.render("400 M  /  ONE ROUND", True, (150, 156, 166))
+            sub = tag.render("ONE ROUND", True, (150, 156, 166))
             surface.blit(sub, (34, bar + 32))
             return
         if c < CINE_SCOPE_END:
@@ -3019,14 +3330,41 @@ class TrainScene:
                     pygame.draw.line(scope, (214, 220, 228, 150),
                                      (cx + 8, cy - 2), (cx + d, cy - 2), 2)
                 hudcache["scope"] = scope
-            surface.blit(scope, (0, 0))
             hit_rel = HIT_AT - SHOT_AT
-            if self.ucilev_fired and 0.0 <= c - hit_rel < 0.16:
-                a = int(220 * (1.0 - (c - hit_rel) / 0.16))
-                flash = pygame.Surface((WIDTH, HEIGHT))
-                flash.fill((235, 238, 245))
-                flash.set_alpha(max(0, a))
-                surface.blit(flash, (0, 0))
+            dh = c - hit_rel
+            if self.ucilev_fired and 0.0 <= dh < 0.45:
+                # Everything below is drawn UNDER the lens mask: a full-screen
+                # flash used to wash the black mask grey and read as a veil.
+                bloom = hudcache.get("scope_bloom")
+                if bloom is None:
+                    bloom = pygame.Surface((WIDTH, HEIGHT))
+                    cx, cy = WIDTH // 2, HEIGHT // 2
+                    for rr in range(238, 0, -6):
+                        v = int(150 * (1.0 - rr / 238.0) ** 1.6)
+                        pygame.draw.circle(bloom, (v, v - 6 if v > 6 else 0,
+                                                   v - 18 if v > 18 else 0),
+                                           (cx, cy), rr)
+                    hudcache["scope_bloom"] = bloom
+                # muzzle bloom: hot, instant, gone in ~0.12 s
+                k = math.exp(-dh / 0.045)
+                if k > 0.02:
+                    tmp = bloom.copy()
+                    tmp.fill((int(255 * k),) * 3, special_flags=pygame.BLEND_MULT)
+                    surface.blit(tmp, (0, 0), special_flags=pygame.BLEND_ADD)
+                # impact mist: a pink-red cloud blooming out of the chest
+                mist = _smooth(0.0, 0.12, dh) * (1.0 - _smooth(0.12, 0.45, dh))
+                if mist > 0.01:
+                    sp = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                    cx, cy = WIDTH // 2, HEIGHT // 2
+                    for i in range(11):
+                        a = i * 2.399
+                        rr = 16 + 150 * _smooth(0.0, 0.45, dh) * (0.45 + 0.1 * (i % 4))
+                        px = cx + int(math.cos(a) * rr * 0.9)
+                        py = cy + int(math.sin(a) * rr * 0.7) + int(10 * dh * 30 * (i % 3) / 3)
+                        pygame.draw.circle(sp, (150, 22, 28, int(70 * mist)),
+                                           (px, py), 14 + 9 * (i % 3))
+                    surface.blit(sp, (0, 0))
+            surface.blit(scope, (0, 0))
             eyebrow = tag.render("UCILEV  /  SIGNAL TOWER", True,
                                  (198, 168, 104))
             surface.blit(eyebrow, (34, bar + 14))

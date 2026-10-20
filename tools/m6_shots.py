@@ -1,6 +1,7 @@
 """M6 3D film + interactive train stills.
 
     python tools/m6_shots.py [OUT_DIR] [insertion|boxcar|ending|train|train_fail|all] [--probe]
+                             [--at=T1,T2,...] [--guards]
 
 Renders every authored M6 shot (each shot dict, so both boxcar exit shots and
 all four Vasile calls) at a few timestamps into OUT_DIR/<scene>_<n>_<t>.png
@@ -189,7 +190,9 @@ def _dist(a, b):
     return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
 
 
-def _train(surface, out, fail=False, probe=False):
+def _train(surface, out, fail=False, probe=False, at=None, guards=False):
+    """``at``: override the sampled clock times; ``guards``: keep the roster
+    alive (combat stills) instead of clearing the lane for the canon death."""
     from missions import m6
     from missions.m6 import train3d
     import core.save_system as _save
@@ -202,9 +205,9 @@ def _train(surface, out, fail=False, probe=False):
     sc = train3d.scene()
     if STATE.player is not None:
         STATE.player.max_hp = STATE.player.hp = 100000
-    if not fail:
+    if not fail and not guards:
         sc.guards.clear()
-    targets = TRAIN_FAIL_AT if fail else TRAIN_AT
+    targets = tuple(at) if at else (TRAIN_FAIL_AT if fail else TRAIN_AT)
     frames = []
     for target in targets:
         guard = 0
@@ -249,10 +252,15 @@ def main():
     if film_groups:
         sheet, row = _film_sheet(surface, out, film_groups, probe)
         pygame.image.save(sheet, os.path.join(out, "_sheet.jpg"))
+    at = None
+    for a in sys.argv[1:]:
+        if a.startswith("--at="):
+            at = [float(x) for x in a[5:].split(",") if x]
+    guards = "--guards" in sys.argv
     if "train" in groups:
-        _train(surface, out, fail=False, probe=probe)
+        _train(surface, out, fail=False, probe=probe, at=at, guards=guards)
     if "train_fail" in groups:
-        _train(surface, out, fail=True, probe=probe)
+        _train(surface, out, fail=True, probe=probe, at=at)
     if m6films._cache.get("failed"):
         print("3D FAILED:", repr(m6films._cache.get("err")))
     print("wrote", out, "(%d film rows)" % row)

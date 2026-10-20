@@ -120,10 +120,12 @@ uniform float u_fog_start, u_fog_end, u_far;
 uniform int u_split_mode;  // 0 all, 1 far only, 2 near only
 uniform float u_split;
 uniform bool u_dither;
-uniform vec4 u_pl_pos[4];  // xyz + range (Phase 11 step 2 local lights)
-uniform vec4 u_pl_col[4];  // rgb (0-255) + intensity
-uniform vec4 u_pl_dir[4];  // spot dir + cone cos in w (w < -0.5 = point)
+uniform vec4 u_pl_pos[8];  // xyz + range (Phase 11 step 2 local lights)
+uniform vec4 u_pl_col[8];  // rgb (0-255) + intensity
+uniform vec4 u_pl_dir[8];  // spot dir + cone cos in w (w < -0.5 = point)
 uniform int u_pl_n;
+uniform float u_pl_mod;    // 0 = add the light colour (legacy), 1 = light * surface albedo
+uniform float u_pl_gain;   // strength of the albedo-modulated mode
 out vec4 f_color;
 
 const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
@@ -140,7 +142,7 @@ void main() {
         vec3 n2 = facing > 0.0 ? n : -n;
         float k = u_amb + u_dif * max(0.0, dot(n2, u_ldir)) + u_sky * n2.y;
         col = min(vec3(255.0), floor(col * k * u_ltint));
-        for (int i = 0; i < 4; i++) {           // local point/spot lights
+        for (int i = 0; i < 8; i++) {           // local point/spot lights
             if (i >= u_pl_n) break;
             vec3 dv = u_pl_pos[i].xyz - v_world;
             float d = length(dv);
@@ -154,7 +156,10 @@ void main() {
             }
             float nd = dot(n2, dv / d);
             if (nd <= 0.0) continue;
-            col += u_pl_col[i].rgb * (fall * nd);
+            if (u_pl_mod > 0.5)
+                col += v_col * (u_pl_col[i].rgb / 255.0) * (fall * nd * u_pl_gain);
+            else
+                col += u_pl_col[i].rgb * (fall * nd);
         }
         col = min(vec3(255.0), col);
     }
@@ -396,7 +401,8 @@ class GLRenderer(SoftwareRenderer):
         if arr is not None:
             self._dyn.append(arr)
 
-    def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None):
+    def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None,
+                     shadow=None):
         places, joints, (px, py, pz) = hum.pose_world(pose, pos, yaw, rifle_on=rifle_on)
         spec_key = getattr(hum, "_gl_spec_key", None)
         if spec_key is None:  # actors with the same spec share one GPU mesh
@@ -421,7 +427,9 @@ class GLRenderer(SoftwareRenderer):
             b[3, 0], b[3, 1], b[3, 2], b[3, 3] = org[0] + px, org[1] + py, org[2] + pz, 1.0
         t = (0.0, 0.0, 0.0, 0.0) if tint is None else (*tint[0], float(tint[1]))
         self._rig_draws.append((entry, bones.tobytes(), t, float(bias)))
-        self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40)
+        sl, sb = shadow if shadow else (None, 0.0)
+        self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40,
+                             layer=sl, bias=sb)
         return joints
 
     def add_sprite(self, pos, draw_fn, layer=2, bias=0.0):
@@ -432,7 +440,7 @@ class GLRenderer(SoftwareRenderer):
         self._items.append((layer * 1e6 - z - bias, "sprite",
                             (draw_fn, sx, sy, self.focal / z, z, layer, z + bias)))
 
-    def add_blob_shadow(self, pos, rx, rz, strength=0.35):
+    def add_blob_shadow(self, pos, rx, rz, strength=0.35, layer=None, bias=0.0):
         # The software implementation queues a (key, callable, args) item,
         # which _composite cannot read; queue the same disc as a GL sprite
         # item (layer 1: just above ground) so it depth-composites like
@@ -442,8 +450,9 @@ class GLRenderer(SoftwareRenderer):
         if item is None:
             return
         draw, c = item
-        self._items.append((1e6 - c[2], "sprite",
-                            (draw, c[0], c[1], self.focal / c[2], c[2], 1, c[2])))
+        lay = 1 if layer is None else layer
+        self._items.append((lay * 1e6 - c[2], "sprite",
+                            (draw, c[0], c[1], self.focal / c[2], c[2], lay, c[2] + bias)))
 
     def add_line3d(self, a, b, col, width=1, layer=3):
         from .core import _clip_near
@@ -463,6 +472,11 @@ class GLRenderer(SoftwareRenderer):
 
     def _set_uniforms(self, prog, split_mode, split):
         L = self.light
+        # The shader holds 8 local lights; scenes opt in above the historic 4
+        # through ``light_cap`` (the train does), everyone else keeps 4.
+        cap = max(1, min(8, int(getattr(self, "light_cap", 4))))
+        lights = self.lights[:cap]
+        n_pl = len(lights)
         u = {
             "u_cam": self.cam, "u_right": self.right, "u_up": self.up, "u_fwd": self.fwd,
             "u_focal": self.focal, "u_hw": self.w / 2, "u_hh": self.h / 2,
@@ -471,14 +485,16 @@ class GLRenderer(SoftwareRenderer):
             "u_sky": L.sky, "u_fog": self.fog, "u_fog_start": self.fog_start,
             "u_fog_end": self.fog_end, "u_split_mode": split_mode, "u_split": float(split),
             "u_dither": bool(self.dither),
-            "u_pl_n": min(4, len(self.lights)),
+            "u_pl_n": n_pl,
+            "u_pl_mod": 1.0 if getattr(self, "light_albedo", False) else 0.0,
+            "u_pl_gain": float(getattr(self, "light_gain", 1.0)),
             "u_pl_pos": [tuple(L["pos"]) + (float(L.get("range", 6.0)),)
-                         for L in self.lights[:4]] + [(0.0, 0.0, 0.0, 1.0)] * (4 - min(4, len(self.lights))),
+                         for L in lights] + [(0.0, 0.0, 0.0, 1.0)] * (8 - n_pl),
             "u_pl_col": [tuple(float(c) for c in L["color"]) + (float(L.get("intensity", 1.0)),)
-                         for L in self.lights[:4]] + [(0.0, 0.0, 0.0, 0.0)] * (4 - min(4, len(self.lights))),
+                         for L in lights] + [(0.0, 0.0, 0.0, 0.0)] * (8 - n_pl),
             "u_pl_dir": [(tuple(L["dir"]) + (float(L.get("cone", 0.7)),)) if L.get("kind") == "spot"
-                         else (0.0, 0.0, 0.0, -1.0) for L in self.lights[:4]]
-                        + [(0.0, 0.0, 0.0, -1.0)] * (4 - min(4, len(self.lights))),
+                         else (0.0, 0.0, 0.0, -1.0) for L in lights]
+                        + [(0.0, 0.0, 0.0, -1.0)] * (8 - n_pl),
         }
         for k, v in u.items():
             if k in prog:

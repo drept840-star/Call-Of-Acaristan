@@ -9152,7 +9152,7 @@ def check_m6_train_death_beat():
             assert abs(blow - 0.06) <= 0.012, \
                 "Biribel floats at %.3f (d=%.2f)" % (blow, d)
             vhead, vchest = joints["head"], joints["chest"]
-            rt = (vchest[0] + 0.22, vchest[1] + 0.08, vchest[2] + 0.12)
+            rt = T.catch_right_target(vchest, t - T.SHOT_AT)
             lt = (joints["lhand"][0] + 0.02, joints["lhand"][1] + 0.02,
                   joints["lhand"][2] + 0.04)
             dr = dist(bj["rhand"], rt)
@@ -9246,7 +9246,11 @@ def check_m6_train_death_beat():
                 rchroma = float(rch.mean())
                 assert 60.0 <= r50 <= 85.0, \
                     "subject exposure %.0f outside 60..85" % r50
-                assert rchroma >= 24.0, \
+                # 24 -> 20: the albedo-lit blue-black coats and cool ballast
+                # carry less raw RGB spread than the old orange wash did (that
+                # wash scored 24+ by being brown, not by being readable).  The
+                # milky/pale/flat gates above still bound the grey failure.
+                assert rchroma >= 20.0, \
                     "subject chroma %.1f too grey" % rchroma
             a = pygame.surfarray.array3d(surf).copy()
             T.draw(surf)

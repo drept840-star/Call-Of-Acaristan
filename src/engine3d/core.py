@@ -415,6 +415,12 @@ class SoftwareRenderer:
         self.fog, self.fog_start, self.fog_end = fog, fog_start, fog_end
         self.light = Light()
         self.lights = []          # local point/spot lights (Phase 11 step 2)
+        self.light_cap = 4        # GL uploads this many (max 8); software keeps set_lights' cap
+        # Local lights normally ADD their colour to a face, so a warm spot turns
+        # a near-black coat tan.  ``light_albedo`` multiplies them by the surface
+        # colour instead (``light_gain`` scales it), both backends.  Off by default.
+        self.light_albedo = False
+        self.light_gain = 1.0
         self.blob_shadows = True  # soft contact shadows (Phase 11 step 3)
         self.textures = {}        # tex_id -> numpy (h, w, 3) (P11 step 9)
         self._blob_cache = {}
@@ -520,10 +526,13 @@ class SoftwareRenderer:
         ls = sorted(lights, key=lambda L: -float(L.get("intensity", 1.0)))
         self.lights = ls[:cap]
 
-    def _local_light(self, col, centre, n):
+    def _local_light(self, col, centre, n, base=None):
         """Add point/spot contributions at a face centre (software path:
-        per-face evaluation of the per-vertex model, §6.7 step 2)."""
+        per-face evaluation of the per-vertex model, §6.7 step 2).
+        ``base`` = the face albedo, used when ``light_albedo`` is on."""
         r_, g_, b_ = col
+        mod = base if (self.light_albedo and base is not None) else None
+        gain = self.light_gain
         for L in self.lights:
             lx, ly, lz = L["pos"]
             dx, dy, dz = lx - centre[0], ly - centre[1], lz - centre[2]
@@ -545,9 +554,15 @@ class SoftwareRenderer:
                 continue
             k = fall * nd
             lc = L["color"]
-            r_ += lc[0] * k
-            g_ += lc[1] * k
-            b_ += lc[2] * k
+            if mod is not None:
+                k *= gain / 255.0
+                r_ += lc[0] * mod[0] * k
+                g_ += lc[1] * mod[1] * k
+                b_ += lc[2] * mod[2] * k
+            else:
+                r_ += lc[0] * k
+                g_ += lc[1] * k
+                b_ += lc[2] * k
         return (min(255, int(r_)), min(255, int(g_)), min(255, int(b_)))
 
     def _emit(self, wverts, faces, dynamic_light=None, bias=0.0, tint=None):
@@ -591,7 +606,7 @@ class SoftwareRenderer:
                     centre = (sum(wverts[i][0] for i in idx) * inv,
                               sum(wverts[i][1] for i in idx) * inv,
                               sum(wverts[i][2] for i in idx) * inv)
-                    col = self._local_light(col, centre, n2)
+                    col = self._local_light(col, centre, n2, base_col)
             if tint is not None and not em:
                 col = mix_col(col, tint[0], tint[1])
             pts = [cv[i] for i in idx]
@@ -697,15 +712,21 @@ class SoftwareRenderer:
 
         return _draw, c
 
-    def add_blob_shadow(self, pos, rx, rz, strength=0.35):
+    def add_blob_shadow(self, pos, rx, rz, strength=0.35, layer=None, bias=0.0):
         """Soft contact shadow: a blurred dark ellipse on the floor under
         an object (Phase 11 step 3). Rides the sprite-item path, so the
-        GL backend composites it with depth like any sprite."""
+        GL backend composites it with depth like any sprite.
+
+        ``layer``/``bias`` are opt-in: a floor drawn on painter layer 2 (the
+        M6 platform slab) hides the default layer-0 disc, so a scene can queue
+        it on the floor's own layer. Defaults reproduce the historic disc."""
         item = self._blob_item(pos, rx, rz, strength)
         if item is None:
             return
         _draw, c = item
-        self._items.append((0 - c[2] + 0.5, _draw, (c[0], c[1], self.focal / c[2], c[2])))
+        lay = 0 if layer is None else layer
+        self._items.append((lay * 1e6 - c[2] + 0.5 + bias, _draw,
+                            (c[0], c[1], self.focal / c[2], c[2])))
 
     def add_sprite(self, pos, draw_fn, layer=2, bias=0.0):
         """draw_fn(surface, sx, sy, scale_px_per_m, z)."""
@@ -715,12 +736,18 @@ class SoftwareRenderer:
         sx, sy, z = p
         self._items.append((layer * 1e6 - z - bias, draw_fn, (sx, sy, self.focal / z, z)))
 
-    def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None):
+    def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None,
+                     shadow=None):
         """Pose + draw a rig.Humanoid. -> joints (world space). The GL backend
-        overrides this with GPU skinning; the result is the same."""
+        overrides this with GPU skinning; the result is the same.
+
+        ``shadow`` = ``(layer, bias)`` queues the contact shadow on that painter
+        layer (default: the historic floor disc)."""
         v, f, j = hum.build(pose, pos, yaw, rifle_on=rifle_on)
         self.add_dynamic(v, f, bias=bias, tint=tint)
-        self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40)
+        sl, sb = shadow if shadow else (None, 0.0)
+        self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40,
+                             layer=sl, bias=sb)
         return j
 
     def add_line3d(self, a, b, col, width=1, layer=3):
