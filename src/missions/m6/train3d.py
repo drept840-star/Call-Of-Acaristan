@@ -1677,8 +1677,42 @@ _VSUP_START = 0.55          # hands take the weight
 _VSUP_FULL = _DEATH_D       # body is on the ballast
 
 
+def _bump(d, a, peak, b):
+    """0 -> 1 -> 0 over [a, b], smooth, peaking at ``peak``."""
+    if d <= a or d >= b:
+        return 0.0
+    if d < peak:
+        return _smooth(a, peak, d)
+    return 1.0 - _smooth(peak, b, d)
+
+
 def _keyed_pose(d, t):
-    """Canon death pose at ``d`` seconds after the hit."""
+    """Canon death pose plus the overlap that keeps it from reading as five
+    blended keys: the head lags the recoil, the right hand goes out to
+    break the fall, and the arms and head settle limp after contact.  Only
+    arms, head_p and head_y move here, inside the death-beat gate's
+    per-frame caps; the trunk, hips and root are the keys' alone."""
+    p = dict(_keyed_pose_keys(d, t))
+    if d <= 0.0:
+        return p
+    # head lags the recoil, then catches up with the buckle
+    p["head_p"] = p.get("head_p", 0.0) - 9.0 * _bump(d, 0.02, 0.24, 0.62)
+    # the right hand thrown out at the ballast, then let go
+    reach = _bump(d, 0.38, 0.72, 1.40)
+    p["rsh_p"] = p.get("rsh_p", 0.0) + 52.0 * reach
+    p["rel"] = p.get("rel", 0.0) - 28.0 * reach
+    # contact: the arms flop and the head rolls once, then nothing
+    if d > 1.10:
+        u = d - 1.10
+        w = math.exp(-u / 0.32) * math.sin(u * 2.0 * math.pi * 1.6)
+        p["lel"] = p.get("lel", 0.0) + 10.0 * w
+        p["rel"] = p.get("rel", 0.0) + 12.0 * w
+        p["head_y"] = p.get("head_y", 0.0) + 5.0 * w
+    return p
+
+
+def _keyed_pose_keys(d, t):
+    """The canon death keys at ``d`` seconds after the hit."""
     # Freeze the run exactly where the round lands: letting the run cycle keep
     # ticking through the hit threw a 12 deg/frame knee pop on top of the
     # reaction blend.
@@ -1833,6 +1867,14 @@ def _biribel_catch_state(t, vstate):
         yaw = _w.yaw_mix(yaw, _w.yaw_to(pos, chest_t), k)
     if c >= 3.55:
         pose = blend(pose, _BIRI_HOLD, _smooth(3.55, 4.35, c))
+    if c >= 4.35:
+        # Grief in the shoulders: uneven breaths that catch.  Applied before
+        # the reaches, so the IK keeps both hands where they are.
+        k = _smooth(4.35, 5.2, c) * (1.0 - 0.6 * _smooth(VIG_BACK_AT,
+                                                         VIG_BACK_AT + 0.7, c))
+        heave = math.sin(c * 2.3) + 0.45 * math.sin(c * 5.3 + 1.1)
+        pose["spine"] = pose.get("spine", 0.0) + 2.4 * heave * k
+        pose["head_p"] = pose.get("head_p", 0.0) + 3.0 * heave * k
     pos = (pos[0], _ground_at(pos[2]), pos[2])
     if c >= 3.10:
         k = _smooth(3.10, 3.50, c)
