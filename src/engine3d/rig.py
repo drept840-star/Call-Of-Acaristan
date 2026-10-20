@@ -574,7 +574,7 @@ class Humanoid:
             # is down) and the entry on the back (-z).  Three discrete stages
             # (each its own cached rig template), so the stain can spread
             # without rebuilding anything per frame.
-            blood, clot, wet = (98, 10, 15), (48, 6, 10), (128, 24, 24)
+            blood, clot, wet = (82, 8, 13), (40, 5, 9), (112, 20, 22)
 
             def deco_back(w, h, col, c, z, lay=1):
                 m_ = Mesh()
@@ -598,8 +598,8 @@ class Humanoid:
                 deco_back(0.10, 0.11, blood, (-0.03, 0.44), bz, lay=1)
                 deco_back(0.028, 0.028, clot, (-0.03, 0.45), bz + 0.0012, lay=2)
             else:
-                deco(0.21, 0.28, blood, (0.03, 0.34), bz, rz=6, lay=1)
-                deco(0.15, 0.20, mix(blood, clot, .35), (0.02, 0.19), bz + 0.0012, lay=1)
+                deco(0.17, 0.23, blood, (0.03, 0.34), bz, rz=6, lay=1)
+                deco(0.12, 0.15, mix(blood, clot, .35), (0.02, 0.20), bz + 0.0012, lay=1)
                 deco(0.07, 0.08, clot, (0.05, 0.39), bz + 0.0024, lay=2)
                 for dx_, ln in ((-0.06, 0.14), (0.0, 0.10), (0.08, 0.16), (0.13, 0.08)):
                     deco(0.018, ln, blood, (dx_, 0.14 - ln / 2), bz + 0.0024, lay=2)
