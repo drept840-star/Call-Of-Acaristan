@@ -27,6 +27,7 @@ from core.outfits import OUTFIT_GUARD
 from core.state import STATE
 from engine3d import POSES, blend, box, clamp, pose_run
 
+from . import hud3d as H
 from . import train3d as T
 
 _w = T._w
@@ -40,8 +41,10 @@ WALK, SPRINT, AIM_WALK = 3.0, 5.2, 1.8
 BODY_R = 0.32                      # collision radius
 STEP_UP = 0.62                     # the platform edge is climbable
 EYE_H = 1.55                       # camera pivot above the feet
-BOOM = (2.6, 0.55, 0.22)           # back, right, up (hip)
-BOOM_ADS = (1.35, 0.48, 0.12)      # tight shoulder aim
+BOOM = (2.5, 0.72, 0.22)           # back, right, up (hip)
+BOOM_ADS = (1.35, 0.58, 0.12)      # tight shoulder aim
+BLADE = 16.0                       # stance angle: the K9's flank to the lens
+_K9_COL, _K9_ACCENT = (82, 88, 98), (118, 124, 134)   # gunmetal, as the viewmodel
 FOV, FOV_ADS = 62.0, 44.0
 SENS = 0.12                        # degrees per mouse count
 PITCH_LIM = (-38.0, 32.0)
@@ -54,9 +57,21 @@ HIT_BODY, HIT_HEAD = 22, 64
 # ── the terminal ──────────────────────────────────────────────────────────
 TERMINAL = (T.SIGNAL_BOX[0] + 1.0, T.SIGNAL_BOX[1] + 1.75)   # at the door
 TERMINAL_R = 1.6
+# The siding is a wall of wagons between him and the box: the marker leads
+# round its east end first.
+SIDING_END = (22.6, -6.6)
 
 # ── the world: walkable heights and blockers (x0, y0, z0, x1, y1, z1) ────
-BOUNDS = (-28.0, 29.0, -19.0, 8.6)
+# The yard is walled: west and south concrete, the station and two short
+# walls to the north, and to the east a pair of lowered booms where the
+# tracks leave.  The walls sit just outside BOUNDS.
+WALL_W, WALL_E, WALL_S, WALL_N = -28.8, 29.8, -19.8, 12.0
+BOUNDS = (-28.2, 29.2, -19.2, 8.6)
+ROAD_GATE = (T.TRUCK_X - 2.0, T.TRUCK_X + 2.2)      # x span of the road gates
+EAST_GAP = (-7.0, 3.4)                               # z span where tracks leave
+WEST_DOORS = (-12.4, -7.0)                           # z of the personnel doors
+LAMPS = ((-26.6, -17.6), (-26.6, -1.0), (-26.6, 9.0), (-8.0, -17.8),
+         (7.0, -17.8), (27.6, -17.6), (27.6, -9.6), (27.6, 7.0))
 
 
 def _blockers():
@@ -74,6 +89,11 @@ def _blockers():
          T.SIGNAL_BOX[0] - 1.9, 0.9, T.SIGNAL_BOX[1] + 1.2),  # oil drums
         (-3.6, 0.0, -7.65, -1.4, 0.75, -6.75),      # sleeper stack
         (27.8, 0.0, -10.4, 29.8, 3.4, -8.8),        # relay hut
+        # the walls: never reached on foot (BOUNDS stops him first), but
+        # they keep the camera boom inside the yard
+        (WALL_W - 0.4, 0.0, WALL_S - 0.4, WALL_W + 0.25, 2.6, WALL_N + 0.4),
+        (WALL_E - 0.25, 0.0, WALL_S - 0.4, WALL_E + 0.4, 2.6, WALL_N + 0.4),
+        (WALL_W - 0.4, 0.0, WALL_S - 0.4, WALL_E + 0.4, 2.6, WALL_S + 0.25),
     ]
     for gx in (-7.0, 13.0):                         # gantry posts
         for gz in (1.8, -7.2):
@@ -104,6 +124,110 @@ def ground_y(x, z):
     if 21.0 < x <= 22.5 and 5.2 <= z <= 6.6:
         return T._SLOT_GROUND * (1.0 - (x - 21.0) / 1.5)
     return 0.04
+
+
+_SET_CACHE = {}
+_WALL = (44, 47, 54)
+_POST = (34, 36, 42)
+_SNOW = (176, 186, 202)
+
+
+def _wall_run(add, x0, z0, x1, z1, h=2.6):
+    """An axis-aligned concrete run with posts every 4 m and a snow cap."""
+    along_x = abs(x1 - x0) >= abs(z1 - z0)
+    length = abs(x1 - x0) if along_x else abs(z1 - z0)
+    if length < 0.05:
+        return
+    cx, cz = (x0 + x1) * 0.5, (z0 + z1) * 0.5
+    w, d = (length, 0.4) if along_x else (0.4, length)
+    seg = max(1, int(length / 4.0))
+    add(box(w, h, d, _WALL, center=(cx, h * 0.5, cz), seg=seg))
+    add(box(w + 0.08, 0.08, d + 0.08, _SNOW, center=(cx, h + 0.04, cz), seg=seg))
+    add(box(w, 0.35, d + 0.5, _SNOW, center=(cx, 0.12, cz), seg=seg))
+    for i in range(seg + 1):
+        k = i / float(seg)
+        px = x0 + (x1 - x0) * k
+        pz = z0 + (z1 - z0) * k
+        add(box(0.5, h + 0.25, 0.5, _POST, center=(px, (h + 0.25) * 0.5, pz)))
+
+
+def _gate(add, x0, x1, z):
+    """A shut chain-link road gate across x0..x1 at z."""
+    for gx in (x0, x1):
+        add(box(0.22, 2.9, 0.22, _POST, center=(gx, 1.45, z)))
+    for gy in (0.25, 1.25, 2.25):
+        add(box(x1 - x0, 0.07, 0.07, (70, 74, 82), center=((x0 + x1) * 0.5, gy, z)))
+    n = int((x1 - x0) / 0.45)
+    for i in range(1, n):
+        add(box(0.03, 2.0, 0.03, (62, 66, 74),
+                center=(x0 + (x1 - x0) * i / n, 1.25, z)))
+    add(box(0.5, 0.35, 0.05, (176, 52, 40), center=((x0 + x1) * 0.5, 1.6, z - 0.06)))
+
+
+def _boom(add, x, z0, z1):
+    """A lowered red-and-white boom across the track gap."""
+    add(box(0.3, 1.2, 0.3, _POST, center=(x, 0.6, z0)))
+    n = 8
+    for i in range(n):
+        za = z0 + (z1 - z0) * i / n
+        zb = z0 + (z1 - z0) * (i + 1) / n
+        add(box(0.14, 0.14, abs(zb - za), (210, 40, 34) if i % 2 else (226, 222, 214),
+                center=(x, 1.0, (za + zb) * 0.5)))
+
+
+def _perimeter_mesh():
+    m = _SET_CACHE.get("perimeter")
+    if m is not None:
+        return m
+    from engine3d import Mesh
+    from engine3d.core import quad_xz
+    m = Mesh()
+    add = m.add
+    # ground out to the horizon: no edge of the world past the walls
+    add(quad_xz(-160, -160, 160, 160, -0.02, (46, 54, 68), seg=12))
+    g0, g1 = ROAD_GATE
+    # south: concrete, the road gate
+    _wall_run(add, WALL_W, WALL_S, g0, WALL_S)
+    _gate(add, g0, g1, WALL_S)
+    _wall_run(add, g1, WALL_S, WALL_E, WALL_S)
+    # west: concrete, two personnel doors the Guard comes through
+    _wall_run(add, WALL_W, WALL_S, WALL_W, WALL_N)
+    for dz in WEST_DOORS:
+        add(box(0.08, 2.1, 1.1, (26, 28, 32), center=(WALL_W + 0.24, 1.05, dz)))
+        add(box(0.10, 0.12, 1.3, _POST, center=(WALL_W + 0.25, 2.16, dz)))
+        add(box(0.06, 0.12, 0.3, (255, 214, 150), center=(WALL_W + 0.3, 2.45, dz),
+                emissive=True))
+    # east: concrete either side of the gap the tracks leave through
+    e0, e1 = EAST_GAP
+    _wall_run(add, WALL_E, WALL_S, WALL_E, e0)
+    _wall_run(add, WALL_E, e1, WALL_E, WALL_N)
+    _boom(add, WALL_E - 0.3, e0 + 0.2, -2.2)
+    _boom(add, WALL_E - 0.3, -2.0, e1 - 0.2)
+    # north: the station is the wall; short runs and the road gate fill in
+    _wall_run(add, WALL_W, WALL_N, -17.2, WALL_N)
+    _wall_run(add, 16.6, WALL_N, g0, WALL_N)
+    _gate(add, g0, g1, WALL_N)
+    _wall_run(add, g1, WALL_N, WALL_E, WALL_N)
+    # lamp masts inside the walls
+    for lx, lz in LAMPS:
+        add(box(0.16, 6.4, 0.16, (34, 38, 44), center=(lx, 3.2, lz)))
+        add(box(0.5, 0.16, 0.36, (255, 222, 168), center=(lx, 6.3, lz),
+                emissive=True))
+    _SET_CACHE["perimeter"] = m
+    return m
+
+
+def _perimeter_sprites(r, tm):
+    for i, (lx, lz) in enumerate(LAMPS):
+        r.add_sprite((lx, 6.2, lz), _fx.sodium_lamp(tm, seed=480 + i,
+                                                     radius_m=2.6, intensity=0.6),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((lx, 0.05, lz), _fx.window_glow((255, 186, 118), 3.6, 3.0, 0.16),
+                     layer=_fx.FX_LAYER)
+    for dz in WEST_DOORS:
+        r.add_sprite((WALL_W + 0.35, 2.45, dz),
+                     _fx.glow((255, 210, 150), 0.6, tm, intensity=0.7),
+                     layer=_fx.FX_LAYER)
 
 
 def _blocked(x, z, feet, r=BODY_R):
@@ -143,8 +267,8 @@ WAVES = (
     (   # the strip: the torch Guards, and a rifleman coming down it
         ("rifle", (14.8, 0.04, -7.1), ((14.6, 0.04, -7.3),), "cover", True, 0.0),
         ("rifle", (16.9, 0.04, -7.5), ((17.4, 0.04, -7.4),), "cover", True, 0.0),
-        ("rifle", (-1.0, 0.04, -7.0), ((4.2, 0.04, -7.0), (8.4, 0.04, -7.5)),
-         "cover", False, 4.0),
+        ("rifle", (-27.9, 0.04, -7.0), ((-6.0, 0.04, -6.3), (4.2, 0.04, -6.4),
+                                        (8.4, 0.04, -6.6)), "cover", False, 1.0),
     ),
     (   # the truck squad, in two drops off the tailgate
         ("rusher", _TRUCK_DROP, ((22.8, 0.04, 3.6), (19.5, 0.04, 2.4),
@@ -165,10 +289,10 @@ WAVES = (
          "cover", False, 0.7),
         ("rifle", _BOX_DOOR, ((19.8, 0.04, -12.2),), "cover", False, 1.4),
         ("heavy", _BOX_DOOR, ((16.2, 0.04, -12.3),), "stand", False, 2.2),
-        ("rifle", (-2.0, 0.04, -12.5), ((8.0, 0.04, -12.4), (12.6, 0.04, -12.4)),
-         "cover", False, 6.0),
-        ("rusher", (-3.0, 0.04, -12.4), ((10.0, 0.04, -12.3), (20.8, 0.04, -12.3)),
-         "crouch", False, 6.6),
+        ("rifle", (-27.9, 0.04, -12.4), ((8.0, 0.04, -12.4), (12.6, 0.04, -12.4)),
+         "cover", False, 2.0),
+        ("rusher", (-27.9, 0.04, -12.4), ((10.0, 0.04, -12.3), (20.8, 0.04, -12.3)),
+         "crouch", False, 3.0),
     ),
 )
 # Clear lanes across the yard (every edge was checked against BLOCKERS: the
@@ -240,6 +364,12 @@ def _nav_path(a, b):
     return out[::-1]
 
 
+# High ready: the K9 up across his chest, muzzle a little low, so it shows
+# beside his shoulder from the boom (low ready hid it behind his back).
+_AIM = dict(POSES["aim"])
+_CARRY = blend(POSES["ready"], POSES["aim"], 0.65)
+
+
 class YardScene:
     def __init__(self):
         self._active = False
@@ -280,6 +410,7 @@ class YardScene:
         self.done = False
         self.result = None
         self.near_terminal = False
+        self.route_stage = 0
         self._muzzle = None
         p = STATE.player
         if p is not None:
@@ -298,6 +429,11 @@ class YardScene:
             except Exception:
                 self.audio = None
         self._grab(True)
+        # pay the set build now, not on the first visible frame
+        try:
+            self.draw(pygame.Surface((WIDTH, HEIGHT)))
+        except Exception:
+            pass
 
     def active(self):
         return self._active
@@ -383,6 +519,10 @@ class YardScene:
         self.near_terminal = (self._all_clear()
                               and math.hypot(self.pos[0] - tx,
                                              self.pos[2] - tz) <= TERMINAL_R)
+        if self.route_stage == 0 and (
+                math.hypot(self.pos[0] - SIDING_END[0], self.pos[2] - SIDING_END[1]) < 3.0
+                or self.pos[2] < T.FREIGHT_Z - 1.6):
+            self.route_stage = 1
         now = self.t
         self.tracers = [x for x in self.tracers if now - x[0] < 0.10]
         self.sparks = [x for x in self.sparks if now - x[0] < 0.45]
@@ -430,11 +570,11 @@ class YardScene:
         self.stride += sp * dt
         # Facing: the aim when aiming or shooting, else the way he moves.
         if self.ads > 0.2 or self.firing or self.t - self.last_fire < 0.6:
-            want_yaw = self._aim_body_yaw()
+            want_yaw = self._aim_body_yaw() + BLADE
         elif sp > 0.4:
             want_yaw = _w.yaw_to((0, 0, 0), (self.vel[0], 0, self.vel[1]))
         else:
-            want_yaw = self.body_yaw
+            want_yaw = self._aim_body_yaw() + BLADE
         self.body_yaw = _w.yaw_mix(self.body_yaw, want_yaw, min(1.0, dt * 12.0))
 
     def _aim_body_yaw(self):
@@ -698,25 +838,32 @@ class YardScene:
         r.begin()
         del _w.LAST[:]
         far = 400.0                       # the carriage is long gone
-        if _w.pack_memo_ready(r, "m6_train_live"):
+        if _w.pack_memo_ready(r, "m6_yard_set"):
             _w.pack_memo_replay(r)
         else:
-            _w.pack_memo(r, "m6_train_live")
+            # The train's set, built for every side (no platform-view cull),
+            # inside the walled perimeter.
+            _w.pack_memo(r, "m6_yard_set")
             ok = False
+            T._FULL_SET = True
             try:
+                _w.add(r, _perimeter_mesh())
                 _w.rail_platform(r, tm, train=False, snow=1.0)
                 ts._draw_station(r, set_t)
                 ok = True
             finally:
+                T._FULL_SET = False
                 _w.pack_memo_end(ok=ok)
         ts._draw_yard_wires(r)
         ts._draw_static_lights(r, set_t, train_offset=far, snow_n=120, beacon=True)
+        _perimeter_sprites(r, tm)
         ts._draw_entrances(r, set_t)
         self._draw_volkov(r, set_t)
         self._draw_player(r, tm)
         self._draw_guards(r, tm)
         self._draw_fx(r, tm)
         _w.snow3d(r, tm, seed=72, n=55, spread=20, height=14, speed=1.4)
+        self._marker_screen = self._project(r, self._objective_point())
         r.flush(r.surface)
         T._grade_play(r.surface, self._wounded())
         pygame.transform.smoothscale(r.surface, (WIDTH, HEIGHT), surface)
@@ -735,7 +882,17 @@ class YardScene:
                  wound=T._wound_stage(T.DURATION - T.HIT_AT),
                  flags=T._volkov_flags(T.DURATION - T.HIT_AT))
 
+    def _armed_rig(self):
+        """Biribel's HD rig with the K9 in hand, the gun lifted off black."""
+        h = _w.hum(("biribel", OUTFIT_GUARD), True, 0, True, ("rifle",))
+        if not getattr(h, "_k9_lit", False):
+            from engine3d.rig import rifle_mesh
+            h._rifle = rifle_mesh(col=_K9_COL, accent=_K9_ACCENT)
+            h._k9_lit = True
+        return h
+
     def _draw_player(self, r, tm):
+        self._armed_rig()
         sp = math.hypot(*self.vel)
         if self.dying:
             k = clamp(self.death_t / 0.6, 0.0, 1.0)
@@ -744,14 +901,13 @@ class YardScene:
             pose = pose_run(self.stride / (2.4 if self.sprint else 1.9) * 2.0
                             * math.pi, lean=22 if self.sprint else 12)
             if not self.sprint:
+                arms = _AIM if (self.ads > 0.3 or self.firing) else _CARRY
                 for key in ("lsh_p", "lsh_r", "lel", "rsh_p", "rsh_r", "rel",
                             "rifle_p"):
-                    pose[key] = POSES["aim" if self.ads > 0.3 or self.firing
-                                      else "ready"][key]
+                    pose[key] = arms[key]
         else:
-            pose = dict(POSES["aim" if (self.ads > 0.3 or self.firing
-                                        or self.t - self.last_fire < 0.6)
-                              else "ready"])
+            pose = dict(_AIM if (self.ads > 0.3 or self.firing
+                                 or self.t - self.last_fire < 0.6) else _CARRY)
         if not self.dying:
             # the rifle follows the aim's pitch
             pose["rifle_p"] = pose.get("rifle_p", 0.0) - self.pitch * 0.8
@@ -759,7 +915,7 @@ class YardScene:
         joints = _w.actor(r, ("biribel", OUTFIT_GUARD), pose, self.pos,
                           self.body_yaw, int(tm), seed=93, amp=0.4,
                           rifle_on=not self.dying, hd=True, bloody=True,
-                          expression="angry",
+                          expression="angry", flags=("rifle",),
                           shadow=T._shadow_for(self.pos[2]))
         self._muzzle = joints.get("muzzle") if joints else None
 
@@ -825,13 +981,44 @@ class YardScene:
                                                 intensity=1.0),
                          layer=_fx.FX_LAYER)
 
-    # ── HUD ────────────────────────────────────────────────────────────
+    # ── guidance and HUD ───────────────────────────────────────────────
+    def _objective_point(self):
+        if self.route_stage == 0:
+            return (SIDING_END[0], 1.4, SIDING_END[1])
+        return (TERMINAL[0], 1.6, TERMINAL[1])
+
+    def _project(self, r, p):
+        """World point -> (x, y, in_front) in screen pixels."""
+        try:
+            x, y, z = r.to_cam(p)
+        except Exception:
+            return (WIDTH / 2.0, 0.0, False)
+        k = WIDTH / float(r.w)
+        if z <= 0.05:
+            return (WIDTH / 2.0 + x * 1000.0, HEIGHT / 2.0 - y * 1000.0, False)
+        return ((r.w / 2 + x / z * r.focal) * k, (r.h / 2 - y / z * r.focal) * k, True)
+
+    def _minimap_data(self):
+        rects = []
+        for x0, y0, z0, x1, y1, z1 in BLOCKERS:
+            if x1 - x0 > 50 or z1 - z0 > 25:
+                continue                # the walls are the frame
+            rects.append((x0, z0, x1, z1, (86, 92, 104)))
+        rects.insert(0, (-21.0, 2.7, 21.0, 7.7, (40, 46, 56)))     # platform
+        lines = [((-28, z), (29, z), (58, 62, 72))
+                 for z in (0.0, T.CARRIAGE_TRACK_Z, T.FREIGHT_Z)]
+        lines.append(((T.TRUCK_X, -19), (T.TRUCK_X, 8.6), (52, 56, 66)))
+        seen = [(g["pos"][0], g["pos"][2]) for g in self.guards
+                if g["alive"] and (self.t - g.get("last_seen", -9) < 0.6
+                                   or self.t - g["last_shot_t"] < 2.0)]
+        f = T._forward(self.yaw, 0.0)
+        return rects, lines, seen, (f[0], f[2])
+
     def _draw_hud(self, surface):
+        if self.hurt > 0.02:
+            surface.fill((int(60 * clamp(self.hurt, 0.0, 1.0)), 0, 0),
+                         special_flags=pygame.BLEND_RGB_ADD)
         cx, cy = WIDTH // 2, HEIGHT // 2
-        if self.hurt > 0.0:
-            veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            veil.fill((150, 10, 10, int(110 * clamp(self.hurt, 0.0, 1.0))))
-            surface.blit(veil, (0, 0))
         if self.dying:
             k = clamp(self.death_t / 2.2, 0.0, 1.0)
             veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -841,44 +1028,40 @@ class YardScene:
                                        True, (220, 200, 190))
             surface.blit(img, img.get_rect(center=(cx, cy)))
             return
-        # crosshair (tightens with the shoulder aim), hit marker
-        gap = int(9 - 4 * self.ads + 3 * self.recoil)
-        col = (236, 236, 236)
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            pygame.draw.line(surface, col, (cx + dx * gap, cy + dy * gap),
-                             (cx + dx * (gap + 7), cy + dy * (gap + 7)), 2)
-        if self.t - self.hit_mark < 0.18:
-            for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
-                pygame.draw.line(surface, (255, 90, 70), (cx + sx * 6, cy + sy * 6),
-                                 (cx + sx * 13, cy + sy * 13), 2)
-        for t0, bearing in self.dmg_marks:
-            a = math.radians(bearing)
-            k = 1.0 - (self.t - t0) / 0.9
-            px, py = cx + math.sin(a) * 120, cy - math.cos(a) * 120
-            pygame.draw.circle(surface, (220, 40, 30), (int(px), int(py)),
-                               int(5 + 4 * k))
-        # objective, vitals, ammo
-        left = self._living() + len(self.pending)
+        # objective, with the distance to the next point on the route
+        target = self._objective_point()
+        dist = math.hypot(target[0] - self.pos[0], target[2] - self.pos[2])
         if self.near_terminal:
-            obj = "[E]  GUARD TERMINAL  -  WHO WAS ON THAT TOWER"
+            head, sub = "[E] Use the Guard terminal", "Who was on that tower?"
         elif self._all_clear():
-            obj = "THE SIGNAL BOX IS CLEAR  -  GET TO THE TERMINAL"
+            head, sub = "Get to the Guard terminal", "The signal box is clear."
+        elif self.route_stage == 0:
+            head, sub = "Get round the freight siding", "The signal box is behind it."
         else:
-            obj = "WHO FIRED?  GET TO THE GUARD TERMINAL IN THE SIGNAL BOX"
-        img = font_prompt.render(obj, True, (226, 214, 190))
-        surface.blit(img, (28, 26))
-        img = font_terminal_small.render("GUARD %d" % left, True, (200, 120, 100))
-        surface.blit(img, (28, 26 + img.get_height() + 10))
+            head, sub = "Clear the signal box", "Who fired? The Guard terminal knows."
+        H.objective(surface, head, sub, dist=dist)
+        screen = getattr(self, "_marker_screen", None)
+        if screen is not None and not self.near_terminal:
+            H.marker(surface, screen, dist,
+                     "SIGNAL BOX" if self.route_stage else None)
+        rects, lines, seen, fwd = self._minimap_data()
+        H.minimap(surface, BOUNDS, rects, lines, (self.pos[0], self.pos[2]), fwd,
+                  objective=(target[0], target[2]), enemies=seen)
+        # crosshair, hits, damage
+        gap = int(8 - 3 * self.ads + 3 * self.recoil)
+        H.crosshair(surface, gap,
+                    reload_frac=(1.0 - self.reloading / RELOAD_S) if self.reloading else 0.0,
+                    hit_age=self.t - self.hit_mark, tight=self.ads > 0.5)
+        H.damage_arcs(surface, self.dmg_marks, self.t, life=0.9)
+        # vitals, the Guard, the weapon
         p = STATE.player
-        top = getattr(p, "max_hp", 115) or 115 if p else 115
-        hp = clamp((p.hp if p else 0) / float(top), 0.0, 1.0)
-        pygame.draw.rect(surface, (20, 22, 26), (28, HEIGHT - 44, 220, 12))
-        pygame.draw.rect(surface, (90, 200, 120) if hp > 0.35 else (220, 70, 60),
-                         (28, HEIGHT - 44, int(220 * hp), 12))
-        ammo = ("RELOADING" if self.reloading else
-                "K9  %d / %d" % (self.mag, self.reserve))
-        img = font_terminal.render(ammo, True, (226, 226, 226))
-        surface.blit(img, (WIDTH - img.get_width() - 28, HEIGHT - 52))
+        top = (getattr(p, "max_hp", 115) or 115) if p else 115
+        slots = (["alive" if g["alive"] else "down" for g in self.guards]
+                 + ["due"] * len(self.pending))
+        H.vitals(surface, p.hp if p else 0, top, wounded=self._wounded(),
+                 alive=self._living(), slots=slots)
+        H.ammo(surface, "K9", self.mag, MAG, "%d" % self.reserve,
+               reloading=(1.0 - self.reloading / RELOAD_S) if self.reloading else 0.0)
 
 
 _scene = YardScene()

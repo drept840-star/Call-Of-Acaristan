@@ -32,6 +32,7 @@ from core.state import STATE
 from core.outfits import OUTFIT_GUARD
 from cutscenes import m5fx3d as _fx
 from cutscenes import m6world3d as _w
+from . import hud3d as _hud
 from engine.assets import load_image
 from engine3d import (
     POSES, Renderer, blend, box, clamp, disc_xz, m_apply, pose_run, rot_x,
@@ -160,6 +161,9 @@ _YARD_MASSES = (
 _YARD_STACKS = ((-29.0, -20.0, 15.0), (36.0, -26.0, 13.0), (3.0, -40.0, 17.0))
 _YARD_HAZE = ((-14.0, 5.0, -30.0), (10.0, 5.0, -30.0), (34.0, 5.0, -22.0))
 _YARD_RIDGE_R = 70.0           # radius of the horizon ridge, around the eye
+# The yard fight (yard3d) sees the set from every side: it builds the dressing
+# with this on - no view cull, the whole ridge ring, back faces kept.
+_FULL_SET = False
 
 PLAYER_POS = (-13.0, 0.58, 6.8)
 PLAYER_EYE = 1.66
@@ -3622,13 +3626,15 @@ class TrainScene:
         # the ballast on a ruled, empty edge.  Axis-aligned blocks on a ring
         # around the eye - no rotation, so no handedness to get wrong.
         ridge_col = far_col(_YARD_RIDGE_R)
-        for i in range(0, 17, 2):  # every other ridge for performance
+        ring = range(0, 30) if _FULL_SET else range(0, 17, 2)
+        skip = () if _FULL_SET else ("bottom", "back")
+        for i in ring:  # the platform view: every other ridge, its arc only
             a = math.radians(-56.0 + i * 12.0)
             rx = PLAYER_POS[0] + _YARD_RIDGE_R * math.sin(a)
             rz = PLAYER_POS[2] - _YARD_RIDGE_R * math.cos(a)
             rh = 3.0 + 1.1 * _vm_noise(rx, 0.0, rz, 3)
             add(box(19.0, rh, 14.0, ridge_col,
-                    center=(rx, rh * 0.5 - 0.6, rz), skip=("bottom", "back")))
+                    center=(rx, rh * 0.5 - 0.6, rz), skip=skip))
 
         # Warehouses, sheds and silos across the yard.
         # View cull: skip masses outside the player's reachable yaw range
@@ -3643,10 +3649,10 @@ class TrainScene:
             mass_yaw = math.degrees(math.atan2(dx, -dz))
             # Normalize yaw difference
             dyaw = (mass_yaw - base_yaw + 180) % 360 - 180
-            if abs(dyaw) > yaw_limit:
+            if abs(dyaw) > yaw_limit and not _FULL_SET:
                 continue  # mass is behind the player
             add(box(sw, sh, sd, far_col(far_dist(sx, sz)),
-                    center=(sx, sh * 0.5, sz), skip=("bottom", "back")))
+                    center=(sx, sh * 0.5, sz), skip=skip))
             # Lit windows are the only thing out here allowed to be bright:
             # emissive, so the distance fog is all that dims them, and large
             # enough (0.66 m) to survive RES=0.80 plus the smoothscale.
@@ -3668,7 +3674,7 @@ class TrainScene:
         # Chimney stacks: vertical breaks in a horizon of flat-topped boxes.
         for cx_s, cz_s, ch in _YARD_STACKS:
             add(box(0.9, ch, 0.9, far_col(far_dist(cx_s, cz_s)),
-                    center=(cx_s, ch * 0.5, cz_s), skip=("bottom", "back")))
+                    center=(cx_s, ch * 0.5, cz_s), skip=skip))
             add(box(0.30, 0.30, 0.30, (228, 56, 42),
                     center=(cx_s, ch + 0.2, cz_s), emissive=True))
 
@@ -4884,153 +4890,71 @@ class TrainScene:
         done = t >= SHOT_AT
         cleared = self.cleared_t >= 0.0 and self._living() == 0
         if done:
-            head = "VOLKOV IS DOWN"
+            head = "Volkov is down"
             sub = ("He never reached the train. The Guard cut him down."
                    if self.volkov_failed else
                    "Ucilev's shot. The train is leaving.")
             accent = (176, 72, 58)
         elif self.volkov_pinned:
-            head = "COVER VOLKOV"
-            sub = "He is pinned. Clear the platform."
-            accent = (196, 112, 64)
+            head, sub, accent = ("Cover Volkov", "He is pinned. Clear the platform.",
+                                 (196, 112, 64))
         elif cleared:
-            head = "COVER VOLKOV"
-            sub = "Platform clear. Keep him moving."
-            accent = (112, 168, 118)
+            head, sub, accent = ("Cover Volkov", "Platform clear. Keep him moving.",
+                                 (112, 168, 118))
         else:
-            head = "COVER VOLKOV"
-            sub = "Clear the lane. Get him to the train."
-            accent = ACCENT
-        head_img = font_terminal.render(head, True, (232, 226, 210))
-        sub_img = font_terminal_small.render(sub, True, (154, 162, 176))
-        w = max(head_img.get_width(), sub_img.get_width()) + 34
-        pnl = panel(w, 58, accent)
-        pnl.blit(head_img, (16, 8))
-        pnl.blit(sub_img, (16, 34))
-        surface.blit(pnl, (26, 24))
+            head, sub, accent = ("Cover Volkov", "Clear the lane. Get him to the train.",
+                                 _hud.ACCENT)
+        self._hud_y = _hud.objective(surface, head, sub, accent=accent)
 
     def _draw_volkov_status(self, surface, t):
-        """Live read on the two things that decide the ending: how far Volkov
-        has left to run and how many Guards are still on the platform."""
+        """Volkov's run, one line under the objective: how far he has left
+        and whether he is moving.  (The Guard count is with the vitals.)"""
         if t < 1.0:
             return
         living = self._living()
         pos, _mode, _phase = _volkov_at(t, self.volkov_delay)
         prog = clamp((pos[0] + 9.9) / (11.4 + 9.9), 0.0, 1.0)
         if t >= SHOT_AT:
-            state = "DOWN"
-            scol = (204, 78, 64)
+            state, col = "DOWN", _hud.DANGER
         elif self.volkov_pinned:
-            state = "PINNED"
-            scol = (226, 120, 74)
+            state, col = "PINNED", (226, 120, 74)
         elif living == 0:
-            state = "CLEAR"
-            scol = (118, 184, 128)
+            state, col = "CLEAR", _hud.GOOD
         else:
-            state = "RUNNING"
-            scol = (198, 176, 120)
-        w, h = 244, 72
-        accent = (176, 72, 58) if self.overrun else ACCENT
-        pnl = panel(w, h, accent)
-        pnl.blit(font_terminal_small.render("VOLKOV", True, (198, 190, 172)), (12, 7))
-        st = font_terminal_small.render(state, True, scol)
-        pnl.blit(st, (w - st.get_width() - 12, 7))
-        pygame.draw.rect(pnl, (28, 30, 36), (12, 28, 188, 7))
-        pygame.draw.rect(pnl, (214, 176, 96) if not self.volkov_pinned else (196, 96, 60),
-                         (12, 28, int(188 * prog), 7))
-        # Guard pips: one per authored slot, red while alive, grey when down.
-        pnl.blit(font_terminal_small.render(f"GUARD {living}", True,
-                                            (158, 164, 178)), (12, 44))
-        x0 = 92
-        for i, g in enumerate(self.guards):
-            alive = bool(g.get("active") and g.get("alive"))
-            pending = not g.get("active")
-            c = (196, 74, 60) if alive else ((38, 42, 50) if pending else (58, 62, 68))
-            pygame.draw.rect(pnl, c, (x0 + i * 12, 46, 8, 8))
-        surface.blit(pnl, (WIDTH - w - 26, 24))
+            state, col = "RUNNING", _hud.ACCENT
+        _hud.status_line(surface, getattr(self, "_hud_y", 70) + 6, "VOLKOV",
+                         prog, state, col)
 
     def _draw_crosshair(self, surface, t):
         if t < CONTROL_AT or t >= CUT_AT:
             return
-        cx, cy = WIDTH // 2, HEIGHT // 2
+        hit_age = t - self.hit_mark
         if self.ads < 0.55:
-            gap = 7 + int(8 * self.kick)
-            col = (226, 228, 220)
-            pygame.draw.line(surface, col, (cx - gap - 10, cy), (cx - gap, cy), 2)
-            pygame.draw.line(surface, col, (cx + gap, cy), (cx + gap + 10, cy), 2)
-            pygame.draw.line(surface, col, (cx, cy - gap - 10), (cx, cy - gap), 2)
-            pygame.draw.line(surface, col, (cx, cy + gap), (cx, cy + gap + 10), 2)
-            if self.reloading:
-                p = self.reload_progress()
-                rect = pygame.Rect(cx - 22, cy - 22, 44, 44)
-                pygame.draw.circle(surface, (50, 52, 58), (cx, cy), 22, 2)
-                pygame.draw.arc(surface, (214, 176, 96), rect,
-                                math.pi / 2, math.pi / 2 + p * 2 * math.pi, 3)
-        if t - self.hit_mark < 0.20:
-            k = 1.0 - (t - self.hit_mark) / 0.20
-            r = int(10 + 4 * (1 - k))
-            mc = {"head": (246, 196, 84), "kill": (236, 70, 58)}.get(
-                self.hit_kind, (226, 228, 220))
-            if self.hit_kind in ("kill", "head"):
-                r = int(r * (1.0 + 0.55 * k))     # a scale pop on a kill
-            for sx in (-1, 1):
-                for sy in (-1, 1):
-                    pygame.draw.line(surface, mc, (cx + sx * r, cy + sy * r),
-                                     (cx + sx * (r + 7), cy + sy * (r + 7)), 2)
+            _hud.crosshair(surface, 7 + int(8 * self.kick),
+                           reload_frac=self.reload_progress() if self.reloading else 0.0,
+                           hit_age=hit_age, hit_kind=self.hit_kind)
+        else:
+            # down the sights: the iron sights are the reticle, hits only
+            _hud.crosshair(surface, 7, hit_age=hit_age, hit_kind=self.hit_kind,
+                           lines=False)
 
     def _draw_damage_arcs(self, surface, t):
         """Where the last hits came from: arcs around the crosshair."""
-        cx, cy = WIDTH // 2, HEIGHT // 2
-        for t0, bearing in self.dmg_marks:
-            k = 1.0 - (t - t0) / 0.85
-            if k <= 0.0:
-                continue
-            rad = 118
-            rect = pygame.Rect(cx - rad, cy - rad, rad * 2, rad * 2)
-            # bearing 0 = straight ahead, + = to the player's left
-            a = math.radians(90.0 + bearing)
-            w = 0.34
-            col = (int(210 * k + 30), int(36 * k), int(32 * k))
-            pygame.draw.arc(surface, col, rect, a - w, a + w, 5)
+        _hud.damage_arcs(surface, self.dmg_marks, t, life=0.85)
 
     def _draw_vitals(self, surface):
         p = STATE.player
         hp = p.hp if p is not None else 0
         mx = p.max_hp if p is not None else 100
-        frac = clamp(hp / float(max(1, mx)), 0.0, 1.0)
-
-        pnl = panel(250, 44)
-        name = "BIRIBEL  WOUNDED" if self.wounded else "BIRIBEL"
-        pnl.blit(font_terminal_small.render(name, True,
-                                            (214, 118, 94) if self.wounded
-                                            else (190, 196, 208)), (12, 5))
-        col = (188, 64, 54) if frac < 0.35 else (86, 168, 112)
-        pygame.draw.rect(pnl, (30, 32, 38), (12, 26, 180, 8))
-        pygame.draw.rect(pnl, col, (12, 26, int(180 * frac), 8))
-        num = font_terminal_small.render(str(int(hp)), True, (208, 210, 204))
-        pnl.blit(num, (204, 21))
-        surface.blit(pnl, (26, HEIGHT - 70))
-
+        slots = ["alive" if (g.get("active") and g.get("alive")) else
+                 ("due" if not g.get("active") else "down") for g in self.guards]
+        _hud.vitals(surface, hp, mx, wounded=self.wounded,
+                    alive=self._living(), slots=slots)
         ammo = getattr(STATE, "k9_ammo_in_mag", 0)
         size = getattr(STATE, "k9_mag_size", 30)
         mags = getattr(STATE, "k9_spare_mags", 0)
-        low = ammo <= size // 4
-        pnl = panel(220, 70)
-        pnl.blit(font_terminal_small.render("K9 SMG", True, (160, 166, 178)), (12, 6))
-        big = font_terminal.render(f"{ammo:02d}", True,
-                                   (188, 74, 64) if low else (232, 214, 170))
-        pnl.blit(big, (12, 24))
-        pnl.blit(font_terminal_small.render(f"/ {size}   x{mags}", True,
-                                            (148, 154, 166)),
-                   (16 + big.get_width(), 30))
-        pipw = max(2, (196 - size) // size) if size > 0 else 2
-        for i in range(size):
-            c = (214, 176, 96) if i < ammo else (44, 46, 52)
-            pygame.draw.rect(pnl, c, (12 + i * (pipw + 1), 56, pipw, 6))
-        surface.blit(pnl, (WIDTH - 246, HEIGHT - 96))
-        if low and not self.reloading and mags > 0 and ammo > 0:
-            hint = font_terminal_small.render("R  RELOAD", True, (228, 216, 178))
-            surface.blit(hint, (WIDTH - 246, HEIGHT - 118))
+        _hud.ammo(surface, "K9", ammo, size, "x%d" % mags,
+                  reloading=self.reload_progress() if self.reloading else 0.0)
 
     def _draw_subtitle(self, surface, t):
         start = end = who = text = None
