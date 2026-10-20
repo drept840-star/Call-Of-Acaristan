@@ -230,33 +230,75 @@ _GUARD_KINDS = {
                     idle="cover", move="run", label="OFFICER",
                     lamp=(224, 190, 96)),
 }
+# Nobody materialises on the platform.  The near squad comes out of the two
+# station doors, the far squad off the back of a truck that crosses the yard
+# behind the carriage and parks at the east ramp.  ``spawn`` is still the
+# moment a Guard reaches his cover, so the fight keeps its pacing: the
+# walk-on (``entry``: source + waypoints, home appended) starts that much
+# earlier.  Waypoints are (x, y, z); routes were walked around the crates,
+# bench, lamp posts and ticket machine by hand.
 _GUARD_SLOTS = (
     {"kind": "rifle", "pos": (3.5, 0.58, 3.2), "spawn": 3.6,
      "fire": (5.6, 9.4, 14.6, 20.0),
-     "advance": ((9.0, 2.4, 3.25),)},
+     "advance": ((9.0, 2.4, 3.25),),
+     "entry": ("west", ((4.3, 0.58, 6.8),))},
     {"kind": "marksman", "pos": (9.8, 1.46, 4.1), "spawn": 5.5,
-     "fire": (7.9, 15.9, 21.8)},
+     "fire": (7.9, 15.9, 21.8),
+     # out of the Guard door, then up onto the crate he shoots from
+     "entry": ("east", ((14.0, 0.58, 7.0), (10.6, 0.58, 4.4)))},
     {"kind": "rusher", "pos": (14.5, 0.58, 3.3), "spawn": 7.5,
      "fire": (8.8, 12.0, 15.4, 20.0),
-     "advance": ((8.4, 11.0, 3.3), (10.0, 7.4, 3.5), (11.6, 3.2, 3.4))},
+     "advance": ((8.4, 11.0, 3.3), (10.0, 7.4, 3.5), (11.6, 3.2, 3.4)),
+     "entry": ("truck", ((22.8, 0.0, 5.6), (21.0, 0.58, 5.9)))},
     {"kind": "heavy", "pos": (17.5, 0.58, 4.2), "spawn": 9.5,
      "fire": (10.9, 14.1, 20.5),
-     "advance": ((10.2, 13.2, 4.0), (12.8, 9.2, 5.1))},
+     "advance": ((10.2, 13.2, 4.0), (12.8, 9.2, 5.1)),
+     "entry": ("truck", ((22.8, 0.0, 5.6), (21.0, 0.58, 5.9)))},
     # Left flank stays, but out at ~12 m instead of appearing in the player's
     # lap: the old -10/3.2 and -2/6.8 spawns were 4-11 m away.
     {"kind": "officer", "pos": (-2.0, 0.58, 2.2), "spawn": 11.8,
      "fire": (13.2, 16.0, 19.4),
-     "advance": ((13.8, -1.6, 4.4),)},
+     "advance": ((13.8, -1.6, 4.4),),
+     "entry": ("west", ((4.3, 0.58, 6.8), (4.2, 0.58, 4.0),
+                        (-0.6, 0.58, 3.6)))},
     {"kind": "rifle", "pos": (-1.0, 0.58, 2.4), "spawn": 14.2,
      "fire": (16.0, 19.6, 21.6),
-     "advance": ((16.0, -7.0, 3.4),)},
+     "advance": ((16.0, -7.0, 3.4),),
+     "entry": ("west", ((4.3, 0.58, 6.8), (4.2, 0.58, 4.0),
+                        (0.0, 0.58, 3.5)))},
     {"kind": "rusher", "pos": (16.0, 0.58, 6.6), "spawn": 16.6,
      "fire": (19.0, 21.9),
-     "advance": ((18.4, 12.0, 4.6), (20.0, 8.0, 4.2))},
+     "advance": ((18.4, 12.0, 4.6), (20.0, 8.0, 4.2)),
+     "entry": ("truck", ((22.8, 0.0, 5.6), (21.0, 0.58, 5.9)))},
     {"kind": "officer", "pos": (6.5, 0.58, 7.4), "spawn": 18.8,
-     "fire": (20.6, 22.4)},
+     "fire": (20.6, 22.4),
+     "entry": ("west", ())},
 )
 MAX_LIVING = 4
+
+# ── entrances ────────────────────────────────────────────────────────────
+DOOR_X = {"west": 4.0, "east": 14.6}    # leaves on the station wall
+DOOR_Z = 8.96
+DOOR_STEP_Z = 8.72                      # where a Guard first stands, outside
+DOOR_OPEN_S = 0.50                      # leaf swing
+DOOR_HOLD_S = 1.40                      # open after he steps out
+# Seconds a Guard stands at his source before walking: in the doorway while
+# the leaf swings, or on the truck bed before he hops down.
+_ENTRY_PRE = {"door": 0.55, "truck": 0.45}
+# Walk-on speed (m/s): faster than the in-fight advance, they are running to
+# their posts, and the heavy still trudges.
+_ENTRY_SPEED = {"rifle": 2.8, "rusher": 4.2, "marksman": 2.4,
+                "heavy": 2.3, "officer": 3.3}
+# The troop truck: crosses the yard behind the carriage, over the level
+# crossing past its east end, and stops with the tailgate to the tracks.
+TRUCK_X = 24.6
+TRUCK_FROM_Z = -30.0                   # z of the truck centre at t=0
+TRUCK_STOP_Z = 8.2
+TRUCK_STOP_T = 3.2                     # parked
+TRUCK_GATE_T = (3.25, 3.60)            # tailgate drop
+TRUCK_HALF_L = 3.2                     # half length; the cab is at +z
+TRUCK_BED_Y = 1.12
+TRUCK_READY = TRUCK_GATE_T[1]
 
 # Suppression: two or more living Guards on the platform pin Volkov.  Every
 # pinned second costs him up to VOLKOV_DELAY_MAX of his run; if the squad is
@@ -286,7 +328,86 @@ def _make_guard(slot, spec):
         "reserve": bool(spec.get("reserve", False)),
         "burst_left": 0, "burst_next": 0.0, "last_shot_t": -9.0,
         "burst_damage": prof["damage"], "moving": False,
+        "entry": _entry_plan(spec, kind),
     }
+
+
+def _polyline_len(pts):
+    return sum(math.dist(pts[i], pts[i + 1]) for i in range(len(pts) - 1))
+
+
+def _entry_plan(spec, kind):
+    """Walk-on for one slot: source, route (source first, home last), speed,
+    the time the walk-on starts and the time he reaches cover.  None for a
+    slot without an ``entry`` (old pop-in, still used by bare test dicts)."""
+    entry = spec.get("entry")
+    if not entry:
+        return None
+    src, pts = entry
+    home = tuple(spec["pos"])
+    if src == "truck":
+        rear = TRUCK_STOP_Z - TRUCK_HALF_L
+        bed = (TRUCK_X, TRUCK_BED_Y, rear + 0.35)
+        start = (TRUCK_X, 0.0, rear - 0.55)
+        pre = _ENTRY_PRE["truck"]
+        ready = TRUCK_READY
+    else:
+        start = (DOOR_X[src], _SLOT_GROUND, DOOR_STEP_Z)
+        bed = start
+        pre = _ENTRY_PRE["door"]
+        ready = 0.0
+    route = (start,) + tuple(tuple(p) for p in pts) + (home,)
+    speed = _ENTRY_SPEED.get(kind, 2.8)
+    walk = _polyline_len(route) / speed
+    t0 = max(ready, float(spec["spawn"]) - pre - walk)
+    return {"src": src, "route": route, "bed": bed, "pre": pre,
+            "speed": speed, "t0": t0, "arrive": t0 + pre + walk}
+
+
+def _entry_at(plan, el):
+    """(pos, moving, done) ``el`` seconds into a walk-on."""
+    route = plan["route"]
+    pre = plan["pre"]
+    if el < pre:
+        if plan["src"] != "truck":
+            return route[0], False, False
+        # Over the tailgate: a short hop, down and out from the bed.
+        k = _smooth(0.0, pre, el)
+        b, s = plan["bed"], route[0]
+        lift = 0.22 * math.sin(math.pi * k)
+        return (b[0] + (s[0] - b[0]) * k,
+                b[1] + (s[1] - b[1]) * k * k + lift,
+                b[2] + (s[2] - b[2]) * k), False, False
+    dist = (el - pre) * plan["speed"]
+    for i in range(len(route) - 1):
+        a, b = route[i], route[i + 1]
+        seg = math.dist(a, b)
+        if dist <= seg and seg > 1e-6:
+            k = dist / seg
+            return tuple(a[j] + (b[j] - a[j]) * k for j in range(3)), True, False
+        dist -= seg
+    return route[-1], False, True
+
+
+def _door_open(guards, door, t):
+    """0 shut .. 1 open, from the walk-on schedule of every Guard using it."""
+    best = 0.0
+    for g in guards:
+        plan = g.get("entry")
+        if not plan or plan["src"] != door or not g.get("active"):
+            continue
+        t0 = g.get("entry_t0", plan["t0"])
+        k = _smooth(t0, t0 + DOOR_OPEN_S, t) * (
+            1.0 - _smooth(t0 + plan["pre"] + DOOR_HOLD_S,
+                          t0 + plan["pre"] + DOOR_HOLD_S + DOOR_OPEN_S, t))
+        best = max(best, k)
+    return best
+
+
+def _truck_z(t):
+    """Truck centre z: a hard ease-out from the yard to the ramp."""
+    k = _ease(t / TRUCK_STOP_T)
+    return TRUCK_FROM_Z + (TRUCK_STOP_Z - TRUCK_FROM_Z) * k
 
 # Crates/cover: (cx, cz, half_w, half_d, top).  Used for drawing and for the
 # hitscan blocker test (a shot that hits a crate never reaches a Guard).
@@ -592,6 +713,118 @@ def _decal_mesh(pos, n, kind, size=0.05):
 def _pack_mesh(r, m):
     """GL rows for a Mesh exactly as ``_w.add`` would queue it (bias 0)."""
     return r.pack(m.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces])
+
+
+def _add_moved(r, key, build, dx, dy, dz):
+    """A cached rigid mesh, translated: GL packs it once and only shifts the
+    position columns; the software path shifts a copy of the verts."""
+    m = _cache.get(key)
+    if m is None:
+        m = _cache[key] = build()
+    if hasattr(r, "add_packed"):
+        rows = _cache.get(key + "_rows")
+        if rows is None:
+            rows = _cache[key + "_rows"] = _pack_mesh(r, m)
+        if rows is not None:
+            rows = rows.copy()
+            rows[:, 0] += dx
+            rows[:, 1] += dy
+            rows[:, 2] += dz
+            r.add_packed(rows)
+        return
+    from engine3d import Mesh
+    s = Mesh()
+    s.verts = [(v[0] + dx, v[1] + dy, v[2] + dz) for v in m.verts]
+    s.faces = list(m.faces)
+    _w.add(r, s)
+
+
+def _truck_mesh():
+    """The troop truck in local space: centre on the ground, cab at +z."""
+    from engine3d import Mesh
+    m = Mesh()
+    add = m.add
+    # The canvas is a shade lighter than the cab: at 37 m, under the tower,
+    # it has to read as a truck and not a hole in the night.
+    OLIVE, DARK, CANVAS = (46, 52, 40), (22, 24, 26), (80, 84, 64)
+    L = TRUCK_HALF_L
+    add(box(2.2, 0.30, 2 * L, DARK, center=(0.0, 0.78, 0.0), seg=3))
+    for wz in (-L + 0.9, -L + 1.9, L - 1.0):
+        for side in (-1, 1):
+            add(box(0.32, 0.92, 0.92, (18, 18, 20),
+                    center=(side * 0.98, 0.46, wz)))
+    add(box(2.2, 1.50, 1.70, OLIVE, center=(0.0, 1.68, L - 1.15)))
+    add(box(2.1, 0.80, 0.60, OLIVE, center=(0.0, 1.33, L - 0.25)))
+    add(box(1.9, 0.55, 0.04, (30, 38, 48), center=(0.0, 2.05, L - 0.29)))
+    add(box(2.3, 0.18, 0.12, DARK, center=(0.0, 0.86, L + 0.04)))
+    for side in (-1, 1):
+        add(box(0.30, 0.22, 0.06, (255, 236, 190),
+                center=(side * 0.72, 1.20, L + 0.06), emissive=True))
+        add(box(0.16, 0.12, 0.04, (220, 40, 30),
+                center=(side * 0.95, 0.95, -L - 0.02), emissive=True))
+    bed_d = 2 * L - 2.1
+    bed_z = -L + bed_d * 0.5
+    add(box(2.3, 0.12, bed_d, DARK, center=(0.0, TRUCK_BED_Y - 0.06, bed_z)))
+    add(box(2.36, 1.55, bed_d - 0.2, CANVAS,
+            center=(0.0, TRUCK_BED_Y + 0.80, bed_z + 0.1), seg=3))
+    add(box(2.40, 0.08, bed_d - 0.16, (44, 48, 38),
+            center=(0.0, TRUCK_BED_Y + 0.35, bed_z + 0.1)))
+    # snow on the canvas and the cab roof
+    add(box(2.24, 0.04, bed_d - 0.4, (176, 186, 202),
+            center=(0.0, TRUCK_BED_Y + 1.59, bed_z + 0.1)))
+    add(box(2.06, 0.04, 1.5, (176, 186, 202), center=(0.0, 2.45, L - 1.15)))
+    return m
+
+
+def _swung(mesh, fn):
+    mesh.verts = [fn(v) for v in mesh.verts]
+    return mesh
+
+
+def _door_leaf_mesh(k):
+    """A Guard door leaf ``k`` open (0..1), hinge at the local origin: it
+    swings 105 deg out over the platform."""
+    from engine3d import Mesh
+    a = math.radians(105.0 * k)
+    ca, sa = math.cos(a), math.sin(a)
+
+    def swing(v):
+        lx, ly, lz = v
+        return (lx * ca + lz * sa, ly, -lx * sa + lz * ca)
+
+    G = _SLOT_GROUND
+    m = Mesh()
+    m.add(_swung(box(1.02, 1.62, 0.05, (44, 48, 56),
+                     center=(0.51, G + 0.81, 0.0)), swing))
+    m.add(_swung(box(0.46, 0.50, 0.02, (255, 205, 140),
+                     center=(0.51, G + 1.20, -0.03), emissive=True), swing))
+    return m
+
+
+def _tailgate_mesh(f):
+    """The truck tailgate ``f`` dropped (0 up .. 1 hanging), hinge at the
+    local origin on the bed edge."""
+    b = math.radians(180.0 * f)
+    cb, sb = math.cos(b), math.sin(b)
+
+    def gate(v):
+        lx, ly, lz = v
+        return (lx, ly * cb - lz * sb, -ly * sb + lz * cb)
+
+    return _swung(box(2.2, 0.55, 0.06, (46, 52, 40), center=(0.0, 0.275, 0.0)),
+                  gate)
+
+
+def _add_hinged(r, key, build, k, dx, dy, dz):
+    """At rest (k 0 or 1) a hinged part is a cached rigid mesh; only the
+    half-second it swings is packed live."""
+    if k <= 0.0 or k >= 1.0:
+        k = 1 if k >= 1.0 else 0
+        _add_moved(r, "%s_%d" % (key, k), lambda: build(k), dx, dy, dz)
+        return
+    m = build(k)
+    m.verts = [(v[0] + dx, v[1] + dy, v[2] + dz) for v in m.verts]
+    _w.add(r, m)
 
 
 def _brass_rows(r, dims):
@@ -1969,6 +2202,22 @@ class TrainScene:
                 self._ev.add(ev)
                 if self.audio:
                     getattr(self.audio, call)()
+        # The squad is heard before it is seen: the truck in the yard, its
+        # tailgate, and every station door as a Guard pushes it open.
+        if self.t < SHOT_AT:
+            for ev, at, call in (("truck", 0.05, "truck_arrive"),
+                                 ("tailgate", TRUCK_GATE_T[0], "tailgate")):
+                if self.t >= at and ev not in self._ev:
+                    self._ev.add(ev)
+                    if self.audio:
+                        getattr(self.audio, call)()
+            for g in self.guards:
+                plan = g.get("entry")
+                if (plan and plan["src"] != "truck" and g.get("entering")
+                        and ("door", g["slot"]) not in self._ev):
+                    self._ev.add(("door", g["slot"]))
+                    if self.audio:
+                        self.audio.door_creak()
         if self.t >= DOORS_AT + SLOW_LAG and "doors" not in self._ev:
             self._ev.add("doors")
             if self.audio:
@@ -2001,9 +2250,12 @@ class TrainScene:
         self.dmg_marks = [m for m in self.dmg_marks if now - m[0] < 0.85]
         self.spawn_puffs = [x for x in self.spawn_puffs if now - x[0] < 0.6]
 
-    def _living(self):
+    def _living(self, posted=False):
+        """Living Guards; ``posted`` leaves out the ones still walking on
+        (they cannot pin Volkov from a doorway or a truck bed)."""
         return sum(1 for g in self.guards
-                   if g.get("active") and g.get("alive"))
+                   if g.get("active") and g.get("alive")
+                   and not (posted and g.get("entering")))
 
     def _spawn_guards(self):
         now = self.t
@@ -2012,7 +2264,12 @@ class TrainScene:
             if g.get("active"):
                 continue
             spawn = float(g.get("spawn", 99.0))
-            if now < spawn:
+            plan = g.get("entry")
+            # A walk-on starts early enough to reach cover at ``spawn``;
+            # a test that pushes ``spawn`` out disarms the walk-on too.
+            start = spawn if not plan else (
+                plan["t0"] + max(0.0, spawn - plan["arrive"]))
+            if now < start:
                 continue
             # Reserves are the answer to a clean sweep: if the player has the
             # platform under control, the Guard commits its last two bodies so
@@ -2032,12 +2289,37 @@ class TrainScene:
             g["next_fire"] = 0
             g["burst_left"] = 0
             living += 1
-            self.spawn_puffs.append((now, g["pos"]))
+            if plan:
+                g["entering"] = True
+                g["entry_t0"] = now
+                g["pos"] = plan["bed"]
+                # the crouch-to-cover blend plays when he arrives
+                g["spawn_t"] = 1e9
+            else:
+                self.spawn_puffs.append((now, g["pos"]))
+
+    def _step_entry(self, g):
+        plan = g["entry"]
+        el = self.t - g.get("entry_t0", plan["t0"])
+        pos, moving, done = _entry_at(plan, el)
+        g["pos"] = pos
+        g["moving"] = moving
+        # Hidden in the doorway until the leaf has swung far enough to show
+        # him; on the truck he is visible from the moment he stands up.
+        g["hidden"] = plan["src"] != "truck" and el < plan["pre"] * 0.55
+        if done:
+            g["entering"] = False
+            g["hidden"] = False
+            g["moving"] = False
+            g["spawn_t"] = self.t
 
     def _update_guards(self, dt):
         for g in self.guards:
             g["flinch"] = max(0.0, float(g.get("flinch", 0.0)) - dt)
             if not (g.get("active") and g.get("alive")):
+                continue
+            if g.get("entering"):
+                self._step_entry(g)
                 continue
             prof = _guard_profile(g.get("kind"))
             path = g.get("path") or ()
@@ -2084,7 +2366,7 @@ class TrainScene:
         if self.t >= SHOT_AT:
             return
         for g in self.guards:
-            if not (g.get("active") and g.get("alive")):
+            if not (g.get("active") and g.get("alive")) or g.get("entering"):
                 continue
             prof = _guard_profile(g.get("kind"))
             fire = g.get("fire")
@@ -2175,7 +2457,7 @@ class TrainScene:
             self.volkov_pinned = False
             self.volkov_threats = 0
             return
-        living = self._living()
+        living = self._living(posted=True)
         self.volkov_threats = living
         self.volkov_pinned = living >= VOLKOV_PIN_THREAT
         if self.volkov_pinned:
@@ -2379,7 +2661,7 @@ class TrainScene:
         best = None
         zone = 0
         for g in self.guards:
-            if not (g.get("active") and g.get("alive")):
+            if not (g.get("active") and g.get("alive")) or g.get("hidden"):
                 continue
             base = g["pos"]
             big = g.get("kind") == "heavy"
@@ -2553,6 +2835,7 @@ class TrainScene:
                 _w.static_end(r, ok=bake_ok)
                 r.light = normal_light
         self._draw_train_door(r, t)
+        self._draw_entrances(r, t)
         self._draw_volkov(r, t)
         self._draw_guards(r, t)
         self._draw_ucilev(r, t)
@@ -2909,7 +3192,9 @@ class TrainScene:
                          layer=_fx.FX_LAYER)
 
         # ── station wall detail: windows, door, clock, posters, pipes ──
-        for wx in (0.4, 4.0, 7.6, 11.2):
+        # The platform runs on to the wall, so the doors open onto it.
+        add(box(19.0, 0.58, 1.34, (62, 66, 74), center=(7.0, 0.29, 8.34), seg=4))
+        for wx in (0.4, 7.6, 11.2):
             add(box(1.55, 0.82, 0.05, (38, 40, 46), center=(wx, 1.55, 8.98)))
             add(box(1.38, 0.66, 0.03, (255, 212, 158), center=(wx, 1.55, 8.94),
                     emissive=True))
@@ -2918,18 +3203,23 @@ class TrainScene:
             r.add_sprite((wx, 1.55, 8.90),
                          _fx.window_glow((255, 192, 128), 1.05, 0.82, 0.18),
                          layer=_fx.FX_LAYER)
-        # the Guard door and its gooseneck lamp
-        add(box(1.25, 2.05, 0.10, (30, 34, 40), center=(14.6, 1.03, 8.96)))
-        add(box(1.02, 1.76, 0.05, (44, 48, 56), center=(14.6, 0.98, 8.91)))
-        add(box(0.72, 1.40, 0.03, (255, 205, 140), center=(14.6, 1.02, 8.88),
-                emissive=True))
-        add(box(0.10, 0.10, 0.34, (36, 40, 48), center=(14.6, 2.26, 8.72)))
-        add(box(0.30, 0.08, 0.26, (255, 222, 168), center=(14.6, 2.18, 8.58),
-                emissive=True))
-        r.add_sprite((14.6, 2.15, 8.55),
-                     _fx.sodium_lamp(t * 1000.0, seed=133, radius_m=1.5,
-                                     intensity=0.55),
-                     layer=_fx.FX_LAYER)
+        # The two Guard doors and their gooseneck lamps.  Only the frame and
+        # the lit hallway behind the opening are set: the leaf swings live
+        # (``_draw_entrances``) when the squad comes out.
+        for di, dx in enumerate(sorted(DOOR_X.values())):
+            add(box(1.25, 1.72, 0.10, (30, 34, 40),
+                    center=(dx, _SLOT_GROUND + 0.86, 8.97)))
+            add(box(1.02, 1.62, 0.03, (255, 205, 140),
+                    center=(dx, _SLOT_GROUND + 0.81, 8.93), emissive=True))
+            add(box(1.40, 0.05, 0.40, (40, 42, 48),
+                    center=(dx, _SLOT_GROUND + 0.02, 8.70)))
+            add(box(0.10, 0.10, 0.34, (36, 40, 48), center=(dx, 2.48, 8.72)))
+            add(box(0.30, 0.08, 0.26, (255, 222, 168), center=(dx, 2.40, 8.58),
+                    emissive=True))
+            r.add_sprite((dx, 2.37, 8.55),
+                         _fx.sodium_lamp(t * 1000.0, seed=133 + di,
+                                         radius_m=1.5, intensity=0.55),
+                         layer=_fx.FX_LAYER)
         # station clock
         add(box(0.58, 0.58, 0.06, (18, 20, 24), center=(6.4, 2.06, 8.96)))
         add(box(0.46, 0.46, 0.03, (238, 230, 202), center=(6.4, 2.06, 8.92),
@@ -2992,6 +3282,24 @@ class TrainScene:
                     center=(18.2 - i * 0.10, G + 0.05 + i * 0.11, 5.9 + i * 0.06)))
         add(box(1.94, 0.03, 0.64, (174, 184, 200),
                 center=(17.9, G + 0.48, 6.1)))
+
+        # ── east ramp: steps off the platform end, the service road the
+        # troop truck comes up, and its level crossing past the carriage ─
+        for i in range(3):
+            top = G - 0.145 * (i + 1)
+            add(box(0.50, top, 1.40, (58, 62, 70),
+                    center=(21.25 + 0.5 * i, top * 0.5, 5.9)))
+            add(box(0.50, 0.02, 1.30, (170, 180, 196),
+                    center=(21.25 + 0.5 * i, top + 0.01, 5.9)))
+        add(box(3.4, 0.012, 46.0, (40, 44, 54), center=(TRUCK_X, 0.008, -9.0),
+                seg=6))
+        for side in (-1, 1):
+            # ploughed snow either side, broken where the road crosses the bed
+            for z0, z1 in ((-32.0, -6.4), (2.9, 14.0)):
+                add(box(0.45, 0.10, z1 - z0, (150, 160, 178),
+                        center=(TRUCK_X + side * 1.95, 0.05, (z0 + z1) * 0.5),
+                        seg=4))
+        add(box(3.0, 0.14, 4.4, (58, 50, 40), center=(TRUCK_X, 0.10, 0.0)))
 
         # ── the yard beyond the carriage: silhouettes, gantries, wires ─
         add(box(2.0, 3.4, 1.6, (24, 27, 33), center=(26.0, 1.7, -9.2)))
@@ -3222,7 +3530,7 @@ class TrainScene:
                                          radius_m=2.25, intensity=0.48),
                          layer=_fx.FX_LAYER)
         # station windows + left-wing windows
-        for wx in (0.4, 4.0, 7.6, 11.2):
+        for wx in (0.4, 7.6, 11.2):
             r.add_sprite((wx, 1.55, 8.90),
                          _fx.window_glow((255, 192, 128), 1.05, 0.82, 0.18),
                          layer=_fx.FX_LAYER)
@@ -3230,9 +3538,11 @@ class TrainScene:
             r.add_sprite((wx, 1.48, 9.74),
                          _fx.window_glow((255, 190, 122), 0.95, 0.60, 0.20),
                          layer=_fx.FX_LAYER)
-        r.add_sprite((14.6, 2.15, 8.55),
-                     _fx.sodium_lamp(tm, seed=133, radius_m=1.5, intensity=0.55),
-                     layer=_fx.FX_LAYER)
+        for di, dx in enumerate(sorted(DOOR_X.values())):
+            r.add_sprite((dx, 2.37, 8.55),
+                         _fx.sodium_lamp(tm, seed=133 + di, radius_m=1.5,
+                                         intensity=0.55),
+                         layer=_fx.FX_LAYER)
         r.add_sprite((28.0, 5.24, -7.2),
                      _fx.glow((240, 70, 50), 1.4, tm, intensity=0.75),
                      layer=_fx.FX_LAYER)
@@ -3320,6 +3630,72 @@ class TrainScene:
         _w.add(r, box(1.1, 0.42, 0.12, (44, 44, 48),
                       center=(dx, 0.12, z + 0.68)))
 
+    def _draw_entrances(self, r, t):
+        """The Guard doors' leaves and the troop truck.  Both are pure
+        functions of the clock and the roster, so stills and replays match."""
+        tm = t * 1000.0
+        for door, dx in DOOR_X.items():
+            k = _door_open(self.guards, door, t)
+            # Hinged on the left jamb, just proud of the lit opening.
+            _add_hinged(r, "door_leaf", _door_leaf_mesh, k, dx - 0.51, 0.0, 8.88)
+            G = _SLOT_GROUND
+            if k > 0.02:
+                # the hallway light pours out past him and onto the slab
+                r.add_sprite((dx, G + 0.95, 8.86),
+                             _fx.window_glow((255, 200, 135), 1.1, 1.7,
+                                             0.30 * k),
+                             layer=_fx.FX_LAYER)
+                r.add_sprite((dx, G + 0.03, 8.1),
+                             _fx.window_glow((255, 196, 128), 1.6, 0.9,
+                                             0.22 * k),
+                             layer=_fx.FX_LAYER)
+
+        # The truck: in from the yard behind the carriage, parked after.
+        z = _truck_z(t)
+        moving = t < TRUCK_STOP_T
+        bob = 0.025 * math.sin(t * 17.0) if moving else 0.006 * math.sin(t * 31.0)
+        _add_moved(r, "truck_mesh", _truck_mesh, TRUCK_X, bob, z)
+        # tailgate, hinged at the bed edge: up, then dropped to hang
+        hz = z - TRUCK_HALF_L
+        _add_hinged(r, "tailgate", _tailgate_mesh, _smooth(*TRUCK_GATE_T, t),
+                    TRUCK_X, TRUCK_BED_Y + bob, hz)
+        front = z + TRUCK_HALF_L + 0.08
+        for side in (-1, 1):
+            r.add_sprite((TRUCK_X + side * 0.72, 1.20 + bob, front),
+                         _fx.glow((255, 236, 196), 0.55, tm,
+                                  intensity=0.95),
+                         layer=_fx.FX_LAYER)
+            r.add_sprite((TRUCK_X + side * 0.95, 0.95 + bob, hz - 0.04),
+                         _fx.glow((230, 50, 36), 0.22, tm, intensity=0.6),
+                         layer=_fx.FX_LAYER)
+        # Amber beacon on the canvas, so the crossing reads from the far end
+        # of the platform; once parked, a work lamp over the tailgate lights
+        # the drop.
+        pulse = max(0.0, math.sin(t * 6.2)) ** 2
+        r.add_sprite((TRUCK_X + 0.7, TRUCK_BED_Y + 1.72 + bob, hz + 0.45),
+                     _fx.glow((255, 166, 48), 0.42, tm, intensity=0.35 + 0.6 * pulse),
+                     layer=_fx.FX_LAYER)
+        lamp = _smooth(TRUCK_STOP_T - 0.1, TRUCK_STOP_T + 0.15, t)
+        if lamp > 0.0:
+            r.add_sprite((TRUCK_X, TRUCK_BED_Y + 1.55, hz - 0.12),
+                         _fx.sodium_lamp(tm, seed=402, radius_m=2.2,
+                                         intensity=0.62 * lamp),
+                         layer=_fx.FX_LAYER)
+            r.add_sprite((TRUCK_X - 0.4, 0.03, hz - 1.3),
+                         _fx.window_glow((255, 214, 150), 3.0, 2.2, 0.22 * lamp),
+                         layer=_fx.FX_LAYER)
+        # the beams through the snow ahead of the cab, and their pool; parked,
+        # the beams point up the road behind the station and only the pool
+        # can show past the tower
+        if moving:
+            r.add_sprite((TRUCK_X, 1.0, front + 3.2),
+                         _fx.haze((255, 236, 196), 3.2, tm, seed=401,
+                                  intensity=0.20),
+                         layer=_fx.FX_LAYER)
+        r.add_sprite((TRUCK_X, 0.03, front + 4.0),
+                     _fx.window_glow((255, 232, 190), 2.6, 3.4, 0.20),
+                     layer=_fx.FX_LAYER)
+
     def _draw_volkov(self, r, t):
         if self.volkov_failed:
             pos = self.fail_pos or _volkov_at(SHOT_AT, self.volkov_delay)[0]
@@ -3360,7 +3736,7 @@ class TrainScene:
             return
         eye = self._eye()[0]
         for g in self.guards:
-            if not g.get("active"):
+            if not g.get("active") or g.get("hidden"):
                 continue
             x, y, z = g["pos"]
             yaw = _w.yaw_to((x, 0.0, z), (eye[0], 0.0, eye[2]))
@@ -3420,7 +3796,7 @@ class TrainScene:
                                           flicker=0.08, seed=210 + g["slot"],
                                           intensity=0.95),
                                  layer=_fx.FX_LAYER)
-                if 0.0 <= t - g.get("spawn_t", -9.0) < 0.5:
+                if not g.get("entry") and 0.0 <= t - g.get("spawn_t", -9.0) < 0.5:
                     r.add_sprite((x, y + 0.18, z),
                                  _fx.dust_motes(int((t - g["spawn_t"]) * 1000.0),
                                                 seed=300 + g["slot"], count=14,

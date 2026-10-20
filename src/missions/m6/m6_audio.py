@@ -28,6 +28,7 @@ FOLEY = (
     "m6_radio_static", "m6_rifle_crack", "m6_train_depart", "m6_doors_close",
     "m6_tinnitus", "m6_report_far", "m6_body_thud",
     "m6_whiz", "m6_headshot", "m6_tink",
+    "m6_door_creak", "m6_truck_arrive", "m6_tailgate",
 )
 
 # Scene -> looping stems.  Every film scene is listed; unlisted scenes (the
@@ -61,6 +62,7 @@ _FOLEY_GAIN = {
     "m6_rifle_crack": 0.85, "m6_train_depart": 0.75, "m6_doors_close": 0.7,
     "m6_tinnitus": 0.32, "m6_report_far": 0.7, "m6_body_thud": 0.8,
     "m6_whiz": 0.5, "m6_headshot": 0.6, "m6_tink": 0.35,
+    "m6_door_creak": 0.5, "m6_truck_arrive": 0.6, "m6_tailgate": 0.6,
 }
 
 
@@ -307,6 +309,34 @@ def foley_pcm(name):
         n = int(0.22 * RATE); t = _t(n)
         x = (np.sin(2 * math.pi * 4300 * t) * 0.35
              + np.sin(2 * math.pi * 5750 * t) * 0.22) * np.exp(-t * 34.0)
+    elif name == "m6_door_creak":
+        # A station door: the latch, a dry hinge sweep, the bar hitting stop.
+        n = int(0.9 * RATE); t = _t(n)
+        latch = _highpass(_noise(n, 211), 2200.0) * np.exp(-t * 60.0) * 0.6
+        f = 380 + 260 * np.sin(math.pi * np.clip(t / 0.55, 0.0, 1.0))
+        creak = (np.sign(np.sin(2 * math.pi * np.cumsum(f) / RATE)) * 0.12
+                 * np.exp(-((t - 0.30) ** 2) / 0.03))
+        stop = np.sin(2 * math.pi * 140 * t) * np.exp(-((t - 0.62) ** 2) / 0.002) * 0.5
+        x = latch + _lowpass(creak, 1800.0) + stop
+    elif name == "m6_truck_arrive":
+        # A diesel coming up out of the yard: engine swells in, gears down,
+        # air brakes hiss as it parks.
+        n = int(3.6 * RATE); t = _t(n)
+        rpm = 34 + 10 * np.clip(1.0 - t / 3.2, 0.0, 1.0)
+        ph = 2 * math.pi * np.cumsum(rpm) / RATE
+        engine = (np.sin(ph) + 0.5 * np.sin(2 * ph) + 0.25 * np.sin(3 * ph)) * 0.35
+        engine += _lowpass(_noise(n, 221), 300.0) * 0.5
+        engine *= np.clip(t / 1.6, 0.0, 1.0) ** 1.5
+        brake = (_highpass(_noise(n, 223), 2500.0)
+                 * np.exp(-np.maximum(t - 3.15, 0.0) * 4.0) * (t > 3.15) * 0.45)
+        x = engine + brake
+    elif name == "m6_tailgate":
+        # Pins pulled, the gate swings down and bangs on its chains.
+        n = int(0.8 * RATE); t = _t(n)
+        pins = _highpass(_noise(n, 231), 2600.0) * np.exp(-t * 40.0) * 0.4
+        bang = (np.sin(2 * math.pi * 120 * t) + 0.5 * np.sin(2 * math.pi * 330 * t))             * np.exp(-np.maximum(t - 0.32, 0.0) * 14.0) * (t > 0.32) * 0.7
+        chain = _highpass(_noise(n, 233), 3200.0) * np.exp(-np.maximum(t - 0.34, 0.0) * 9.0)             * (t > 0.34) * 0.25
+        x = pins + bang + chain
     else:
         raise ValueError("Unknown M6 foley: " + name)
 
@@ -500,6 +530,15 @@ class M6TrainAudio:
 
     def depart(self):
         self._one("m6_train_depart", 0.85)
+
+    def door_creak(self):
+        self._one("m6_door_creak", 0.5)
+
+    def truck_arrive(self):
+        self._one("m6_truck_arrive", 0.55)
+
+    def tailgate(self):
+        self._one("m6_tailgate", 0.5)
 
     def breath(self):
         self._one("m6_breath", 0.5)

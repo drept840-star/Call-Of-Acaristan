@@ -471,6 +471,51 @@ class TrainSceneTests(unittest.TestCase):
         self.assertTrue(scene.volkov_pinned)
         self.assertGreater(scene.volkov_delay, 0.0)
 
+    def test_every_guard_walks_on_and_reaches_cover_on_time(self):
+        for i, spec in enumerate(_train._GUARD_SLOTS):
+            plan = _train._make_guard(i, spec)["entry"]
+            self.assertIsNotNone(plan, "slot %d still pops in" % i)
+            self.assertAlmostEqual(plan["arrive"], spec["spawn"], delta=0.05,
+                                   msg="slot %d reaches cover late" % i)
+            if plan["src"] == "truck":
+                self.assertGreaterEqual(plan["t0"], _train.TRUCK_READY,
+                                        "slot %d jumps off a moving truck" % i)
+
+    def test_walk_on_routes_clear_the_cover_and_lamp_posts(self):
+        # crates, the bench, lamp posts, bin, ticket machine: (x0, z0, x1, z1)
+        blocks = [(cx - hw - 0.2, cz - hd - 0.2, cx + hw + 0.2, cz + hd + 0.2)
+                  for cx, cz, hw, hd, _top in _train._CRATES]
+        blocks += [(1.5, 6.55, 3.75, 7.15), (7.1, 6.55, 7.7, 7.1),
+                   (12.1, 8.1, 13.1, 8.75)]
+        blocks += [(x - 0.25, 7.25, x + 0.25, 7.75) for x in (-10.0, 0.0, 10.0)]
+        for i, spec in enumerate(_train._GUARD_SLOTS):
+            route = _train._make_guard(i, spec)["entry"]["route"]
+            # the marksman's last leg is the climb onto his own crate
+            legs = len(route) - 1 - (1 if spec["kind"] == "marksman" else 0)
+            for a, b in zip(route[:legs], route[1:legs + 1]):
+                for s in range(41):
+                    k = s / 40.0
+                    x = a[0] + (b[0] - a[0]) * k
+                    z = a[2] + (b[2] - a[2]) * k
+                    for x0, z0, x1, z1 in blocks:
+                        self.assertFalse(x0 < x < x1 and z0 < z < z1,
+                                         "slot %d walks through (%.1f, %.1f)"
+                                         % (i, x, z))
+
+    def test_walk_on_guard_holds_fire_then_takes_cover(self):
+        scene = self._fresh_scene()
+        g = scene.guards[0]
+        plan = g["entry"]
+        while scene.t < plan["t0"] + plan["pre"] + 0.2:
+            scene.update(mouse=self.mouse)
+        self.assertTrue(g["entering"])
+        self.assertGreater(_train._door_open(scene.guards, "west", scene.t), 0.5)
+        self.assertEqual(g.get("last_shot_t", -9.0), -9.0)
+        while scene.t < plan["arrive"] + 0.1:
+            scene.update(mouse=self.mouse)
+        self.assertFalse(g["entering"])
+        self.assertEqual(tuple(g["pos"]), tuple(g["home"]))
+
     def test_ignoring_the_guard_fails_the_escort(self):
         STATE.mission6_stage = _meta.STAGE_TRAIN
         scene = self._fresh_scene()
