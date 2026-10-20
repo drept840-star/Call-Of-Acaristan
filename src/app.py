@@ -3457,6 +3457,18 @@ class _EscapeCutsceneState(GameState):
             audio.play("rig_low_boom", volume=0.25)
         if escape_cutscene_timer == 310:
             audio.play("missile_launch", volume=0.32)
+        if escape_cutscene_timer == 392:
+            # Vasile takes the notebook over the radio (M6 plant - see
+            # missions/m1/draw.py, same frame, for the caption).
+            try:
+                from audio import voice
+                ms = voice.play_line("VASILE",
+                                     "Good. I've got it. Later. You need sleep.",
+                                     radio=True)
+                if not ms:
+                    audio.play("squelch_head", volume=0.25)
+            except Exception:
+                pass
         if escape_cutscene_timer == 650:
             audio.play("radio_static", volume=0.22)
         if escape_cutscene_timer == 735:

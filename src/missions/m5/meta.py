@@ -180,7 +180,7 @@ _VASILE_TAKES = ("m5x_vasile_wide", "m5x_vasile_close", "m5x_vasile_close",
 M5_MARU_LINES = [
     ("MARU", "Biribel. Vasile sent you. Of course he did.", "m5x_maru_two"),
     ("BIRIBEL", "He wants you brought in. Breathing, he says.", "m5x_maru_biribel"),
-    ("MARU", "Breathing in a Guard cell. Balaceanu was breathing too, last week.", "m5x_maru_close"),
+    ("MARU", "Breathing in a Guard cell. Balaceanu was breathing too, two days ago.", "m5x_maru_close"),
     ("BIRIBEL", "Then we don't go to the cell. Is there another way out?", "m5x_maru_biribel"),
     ("MARU", "Basement. The old tunnel runs to the river. If we live long enough to reach it.", "m5x_maru_close"),
 ]

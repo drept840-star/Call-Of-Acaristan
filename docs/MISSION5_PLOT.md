@@ -7,13 +7,17 @@
 
 ## Logline
 
-A week after the Vostral, the man the nation cheered shows what he bought with
+Four days after the Vostral, the man the nation cheered shows what he bought with
 it. President Retardovici declares emergency rule, dissolves parliament, and
 folds what's left of KRAP into a new **Presidential Guard** — with **Captain
 Vasile** as its commander. Vasile's first order to Biribel: bring in Maru.
 Biribel goes to the MAG safehouse to do it, and instead gets Maru out — straight
 through the Guard's raid, led by a calm, unhurried operator the state says died
 two years ago: **Ucilev Nadgob Ierdna.**
+
+> **Day:** four days after the Vostral — **Day ~8** (M3 is Day 4, M4 is Day 6).
+> The older "a week after the Vostral" wording put M5 after M6 on the calendar;
+> it is fixed here and in `src/missions/m5/__init__.py`.
 
 ---
 
@@ -129,12 +133,18 @@ VASILE   "Then somebody else goes. Somebody who doesn't care whether they breath
 
 ```
 scene: m5_river_gate        speaker: ""         (Maru through the gate. Biribel turns - a red dot on his chest.)
-scene: m5_ucilev_scope      speaker: UCILEV     "Biribel. Same intake as you, Y-3. You don't remember me. Nobody does - that's the job."
+scene: m5_ucilev_scope      speaker: UCILEV     "Biribel. Y-3. Same intake. Same training."
 scene: m5_ucilev_reveal     speaker: UCILEV     "Not tonight. They haven't told me to yet."
 scene: m5_ucilev_leaves     speaker: ""         (He lowers the rifle and walks away into the rain.)
 scene: m5_radio             speaker: VASILE     "Biribel, report. ...Never mind. I didn't hear anything. Neither did you."
 scene: title_card           speaker: ""         "MARTIAL LAW"
 ```
+
+> The Ucilev line above is the **shipped** text (`src/missions/m5/finale_script.py`,
+> VO_192-197). The earlier draft — *"You don't remember me. Nobody does - that's the
+> job."* — was never recorded and is gone; the shipped line is the canon.
+> Ucilev is the **other** man from the Y-3 / KRAP 4 intake, not the OLD SQUADMATE
+> Biribel meets in the Guard HQ ("Same squad, new colours… Y-3 intake").
 
 ---
 

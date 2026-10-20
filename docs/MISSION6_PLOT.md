@@ -15,6 +15,13 @@ proves two things: **Retardovici ordered Route 12, and Vasile's codes carried it
 out.** Then Ucilev's shot comes out of the dark, and a train leaves without its
 passenger. Biribel walks back with the truth and a choice.
 
+> **The notebook is the logbook, not a file.** Its bulk is the FuegoTech serial
+> registry (the oil-deal evidence the M1 evidence panel shows). Loose at the back
+> is a leaf: a **Route 12 corridor movement schedule** whose authorization column
+> is a KRAP relay code. Biribel's copy was water-damaged in the rainy M1 exfil,
+> so the leaf was illegible to him; Volkov's copy is dry. That is why the M6
+> read is a reveal and not a callback.
+
 ---
 
 ## Where We Pick Up (Recap from M5 Ending)
@@ -53,7 +60,8 @@ Everyone — the player included — thought Volkov was a black-market rat. He
 wasn't. He was an IPA logistics clerk who saw the Route 12 movement orders
 **before** the ambush, understood what they were, and tried to sell the proof to
 anyone who could stop it, to buy his family's way out of Acaristan. The warning
-was in the notebook.
+was in the leaf of the notebook — the same leaf the M2 auth chain had already
+shown the player under a KRAP liaison's name.
 
 ### The irony
 In **Mission 1**, Biribel intercepted the handoff and gave the notebook to

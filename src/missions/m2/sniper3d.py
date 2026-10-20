@@ -247,7 +247,11 @@ class SniperCinematic:
             return l
 
         T = {}
-        L1 = line("VASILE", "Form up at the barrier. Eyes up.", 1.1, radio=True)
+        # M6 plant (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit"): Vasile
+        # clears the lane himself.  The voice that says "I checked it myself"
+        # is the voice the convoy route went out on.
+        L0 = line("VASILE", "Route's clean. I checked it myself.", 0.35, radio=True)
+        L1 = line("VASILE", "Form up at the barrier. Eyes up.", L0.end + 0.45, radio=True)
         L2 = line("GABI", "Nobody likes this lane.", L1.end + 0.5)
         L3 = line("SEBY", "West side's clear. Just burned-out cars.", L2.end + 0.4)
         L4 = line("GABI", "Vasile, I have-", L3.end + 1.0)
@@ -273,7 +277,7 @@ class SniperCinematic:
         P3 = P2 + 1.9                          # FPV: raise + inspect
         END = P3 + 4.0
         T.update(P0=P0, P1=P1, P2=P2, P3=P3, G=G)
-        T.update(L1=L1, L2=L2, L3=L3, L4=L4, L5=L5, L6=L6, L7=L7, L8=L8, L9=L9, L10=L10, L11=L11,
+        T.update(L0=L0, L1=L1, L2=L2, L3=L3, L4=L4, L5=L5, L6=L6, L7=L7, L8=L8, L9=L9, L10=L10, L11=L11,
                  K1=K1, K2=K2, K3=K3, K4=K4, grab=grab, crawl0=crawl0, crawl1=crawl1, END=END,
                  glint=K1 + 3.4, dive=L5.start + 0.55, seby_go=L6.end + 0.12)
         T["seby_arrive"] = grab - 0.25
@@ -363,6 +367,11 @@ class SniperCinematic:
                     audio.play("squelch_head", volume=0.25)
         if self._once("static", prev, now, 0.6):
             audio.play("radio_static", volume=0.18)
+        # M6 plant: Vasile's channel dies for half a second in the gap before
+        # the first round lands.  The player hears the shooter on his
+        # frequency; in M6 they learn the convoy route went out on it too.
+        if self._once("vasile_dead_air", prev, now, T["L3"].end + 0.05):
+            audio.play("radio_static", volume=0.22)
         for who, k in (("gabi", "K1"), ("seby", "K2"), ("darius", "K3")):
             if self._once("scream_" + who, prev, now, T[k] + 0.06):
                 try:

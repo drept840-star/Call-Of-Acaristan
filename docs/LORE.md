@@ -2,6 +2,10 @@
 
 This document outlines the official political landscape, factions, key characters, and timeline of **Call of Acaristan** for ongoing development and reference.
 
+> **Campaign status (read this before quoting the dossier).**
+> Missions 1–6 are **shipped** (`src/missions/m1`…`m6`). Missions **7 and 8 are planned but not implemented** — every M7/M8 line below is design, not a shipped beat, and the day numbers for M7/M8 follow the offer chain in the shipped M6/M7 dialogue (*"the mansion in two nights"* → M7's *"tomorrow night"* → **Day 12**).
+> The last full consistency pass on this dossier is logged in `docs/FIXES_STORIES.md`.
+
 ---
 
 ## 🏛️ Political Leadership
@@ -13,7 +17,10 @@ This document outlines the official political landscape, factions, key character
 ### 💼 **Prime Minister: Balaceanu**
 * **Role:** Head of Government / Prime Minister of Acaristan
 * **Profile:** Extremely corrupt and manipulative, Prime Minister Balaceanu wields massive leverage over Acaristan's domestic police and infrastructure contracts. He holds a deep, virulent personal vendetta against **Biribel** (our KRAP operative protagonist) and hates him with everything he has, frequently maneuvering behind the scenes to put Biribel in extremely high-risk "stabilization" assignments in hopes of seeing him fail.
-* **The Vostral (Y-1):** The originating event of Balaceanu's personal hatred of Biribel. Biribel leaked a rumor through KRAP field channels alleging that Balaceanu's decorated military service — the entire foundation of his "tough man of Acaristan" political brand — was fabricated: that he never saw combat, that his medals were issued for political loyalty rather than valor, and that the war stories he tells at state dinners did not happen. The rumor spread into civilian press. Balaceanu cannot publicly deny it without producing his classified service record in open court, and cannot prosecute Biribel under military law without the same trial. He has been engineering Biribel's death in action ever since. Every "high-risk stabilization assignment" Biribel receives is a Balaceanu attempt. The Volkov handoff (Mission 1) was the latest.
+* **The Vostral (six years old; the press leak at Y-1):** The originating event of Balaceanu's personal hatred of Biribel. The rumor alleges that Balaceanu's decorated military service — the entire foundation of his "tough man of Acaristan" political brand — was fabricated: that he never saw combat, that his medals were issued for political loyalty rather than valor, and that the war stories he tells at state dinners did not happen.
+  * **The whisper is six years old.** When Balaceanu took the premiership at Y-6, Biribel — a serving soldier, three years before KRAP existed — said it out loud where the ranks could hear it. It stayed service gossip for five years.
+  * **The press leak is at Y-1.** It came out through KRAP field channels and reached the civilian press. Balaceanu cannot publicly deny it without producing his classified service record in open court, and cannot prosecute Biribel under military law without the same trial. He has been engineering Biribel's death in action ever since. Every "high-risk stabilization assignment" Biribel receives is a Balaceanu attempt. The Volkov handoff (Mission 1) was the latest.
+  * **Six years is the number of the hunt, not the age of the vendetta** (Balaceanu's own words in M3: *"Six years I have waited…"* / *"He spent six years trying to kill a rumor."*). The same six years are the age of the lie itself: the service record was assembled from blank forms in 2019, the year he became PM.
 
 ---
 
@@ -43,9 +50,12 @@ This document outlines the official political landscape, factions, key character
 * **Captain Vasile:** Biribel's rugged KRAP commanding officer. He operates the field communication networks, analyzes intercepted intel, and directs Biribel's missions from the KRAP command van.
   * **Hidden truth (revealed M6):** Vasile was President Retardovici's inside man in KRAP. He gave up the Route 12 convoy — Biribel's squad — in exchange for KRAP's survival and his own future in power. That is why he rushed the M1 notebook away with "no debrief", why he had IPA relay codes in M3, and why he kept Biribel away from Balaceanu in M4. *"I chose the many."* Never a cartoon: he believes it, and he is warm, funny and protective right up to the end.
 * **Sebastian Volkov:** An IPA logistics clerk everyone took for a black-market rat. He had six months of classified files to sell, and Biribel was deployed to intercept his handoff in the warehouse district.
+  * **The black notebook is a logbook with two halves.** The bulk is the **FuegoTech serial registry** (FT-7742…7745, IPA procurement #8841-8844) — the oil-deal evidence, the *"the fire burns both ways"* note. Loose at the back is a **leaf: a Route 12 corridor movement schedule** whose authorization column is a KRAP relay code. Volkov copied that leaf in during the last days before the ambush, because it was the one thing worth selling to anyone who could stop it.
+  * **M1 (Day 0) is the sale attempt.** Biribel takes the logbook in the rainy exfil; the leaf is water-damaged, so the schedule and the auth column are illegible to him. He hands the book to Vasile in the van. Vasile reads it, pockets it, and sends Biribel to Route 12 that same night. He already knew what was in it — his own code was on the leaf.
   * **Hidden truth (revealed M6):** Volkov saw the Route 12 movement orders *before* the ambush and was trying to sell the proof to anyone who could stop it, to buy his family's way out of Acaristan. In M1 Biribel took the notebook and handed it to Vasile — the man it named. Volkov always knew where it went and never told Biribel. He helped him anyway (M3), ran for Regatul Kim Kim (M4), and was killed by Ucilev in the border rail yard, one step from the train (M6). The most tragic figure in the story.
 * **Ucilev Nadgob Ierdna (introduced M5):** The Presidential Guard's lead operator and gunship pilot. Calm, polite, precise, never cruel — the one antagonist with honour. **Biribel's mirror:** what Biribel would have become if he had always followed orders. Real name **Bogdan Velicu** (his callsign is that name mirrored): same KRAP intake as Biribel (Y-3), top of the class, listed killed in action at Y-2 and moved into "special duties" — the regime's version of Maru's faked death. He respects Biribel, which makes him more dangerous than Balaceanu ever was.
   * **M5:** leads the MAG safehouse raid; has Biribel in his sights and lets him go — *"Not tonight. They haven't told me to yet."*
+  * **He is not the old squadmate.** Biribel meets an OLD SQUADMATE in the Guard HQ in M5 who talks about the Y-3 intake; that is a *different* man. Ucilev is the **other** face in the same **KRAP 4 / Y-3** cohort — the pinned intake photo in M5 and the personnel file in M6 are the same cohort, which is why his *"Biribel. Y-3. Same intake."* lands.
   * **M6:** kills Volkov at the Kim Kim border.
   * **M8 Duty:** shoots down Maru's helicopter, then shields Retardovici on the evacuation pad; Biribel must kill him first. Last words: *"Now you know what it's like to follow orders."*
   * **M8 Revenge:** never fights Biribel. Named Commander of the Presidential Guard; last seen at the border holding Biribel's photo.
@@ -64,13 +74,13 @@ This document outlines the official political landscape, factions, key character
 The IPA passes the legal framework allowing seizure of "strategic" private assets — pipelines, transit corridors, warehouses, energy fields — under the pretext of national rebuilding and security. Modeled on classic communist-era nationalization decrees: not a single dramatic event, but a slow legal mechanism that turns private property into state property, then state property into party property, then party property into the personal holdings of whoever currently has the right office. Every faction conflict in the game ultimately traces back to who controls what the Decree made seizabl
 
 **Y-6 — Balaceanu becomes Prime Minister**
-Rises on a law-and-order platform. Takes personal control of domestic police contracts and the Route 12 corridor logistics board.
+Rises on a law-and-order platform. Takes personal control of domestic police contracts and the Route 12 corridor logistics board. His service record — the one that will be called the Vostral — is assembled from blank forms this year. The same year, in the ranks, a serving soldier named Biribel says out loud that the medals are paper. Nobody writes it down. Everybody repeats it.
 
 **Y-4 — KRAP is formed**
 The Regional Coalition for Defense and Peace is chartered as a multinational "peacekeeper" force. Officially independent. Unofficially, a legitimizing mask for IPA pipeline security.
 
 **Y-3 — Biribel enlists in KRAP**
-Experienced operator. Assigned to Vasile's field team within six months.
+Experienced operator — he has been in uniform since before KRAP existed. Assigned to Vasile's field team within six months. The intake list is the Prime Minister's list; a corridor posting is not a promotion.
 
 **Y-2 — MAG emerges**
 Maru (real identity unknown) begins coordinated attacks on Route 12 checkpoints. The first MAG rocket-boat strike on an offshore energy field forces KRAP's permanent deployment to the corridor.
@@ -78,42 +88,43 @@ Maru (real identity unknown) begins coordinated attacks on Route 12 checkpoints.
 **Y-1.5 — KRAP deploys to Route 12**
 Vasile's team, including Biribel, ships out. The corridor is technically "stabilized" but is in practice a low-intensity war zone.
 
-**Y-1 — The Vostral**
-Biribel spreads a rumor through KRAP field channels that Prime Minister Balaceanu is a coward — that his decorated military career, his war stories, his whole "tough man of Acaristan" persona is fabricated. Not a bribe, not an affair, not a policy position: *he is a fake*. The rumor reaches civilian press. Balaceanu cannot publicly deny it without a trial that would force him to produce his service record on the stand, and cannot court-martial Biribel without that same trial. He resolves to have Biribel killed in action. Every "high-risk stabilization assignment" Biribel receives from this point forward is Balaceanu's attempt.
+**Y-1 — The Vostral reaches the press**
+The whisper Biribel started six years ago comes out through KRAP field channels and hits civilian press: Prime Minister Balaceanu is a coward — his decorated military career, his war stories, his whole "tough man of Acaristan" persona is fabricated. Not a bribe, not an affair, not a policy position: *he is a fake*. Balaceanu cannot publicly deny it without a trial that would force him to produce his service record on the stand, and cannot court-martial Biribel without that same trial. He resolves to have Biribel killed in action. Every "high-risk stabilization assignment" Biribel receives from this point forward is Balaceanu's attempt — and the hunt itself has been running for six years.
 
 **Y-0.5 — Volkov begins trading**
-Sebastian Volkov, an IPA logistics affiliate, starts selling classified security files on the black market. Vasile's intercept network picks up chatter about a handoff in the warehouse district.
+Sebastian Volkov, an IPA logistics affiliate, starts selling classified security files on the black market. What he is selling is the logbook the M1 evidence panel shows: the **FuegoTech serial registry** and the IPA procurement numbers behind it. Vasile's intercept network picks up chatter about a handoff in the warehouse district.
 
 ### The game (Y-0)
 
 **Mission 1 — Black Notebook (Day 0)**
-Biribel is deployed to intercept the Volkov handoff. He retrieves the notebook and extracts.
+Biribel is deployed to intercept the Volkov handoff. He retrieves the logbook — the FuegoTech serial registry, with one water-damaged loose leaf in it — and extracts in the rain.
 
 **Mission 1 → Mission 2 (Day 0, same evening)**
-Biribel hands the notebook to Vasile in the KRAP command van. Vasile reads it. Whatever is in it justifies immediate redeployment to Route 12 — no debrief, no analysis cycle, no weekend.
+Biribel hands the logbook to Vasile in the KRAP command van. Vasile reads it — and pockets it unread in front of Biribel: *"Good. I've got it. Later. You need sleep."* Whatever is in it justifies immediate redeployment to Route 12 — no debrief, no analysis cycle, no weekend. He was not reading it for the first time; the leaf carries his own code.
 
-**Mission 2 — Quiet on Route 12 (Day 1–3)**
-Vasile redeploys Biribel to investigate the MAG/KRAP/IPA triangle on the ground. Sniper cutscene, truck inspection, tanker — all of this happens over ~48 in-fiction hours.
+**Mission 2 — Quiet on Route 12 (Day 1)**
+Vasile redeploys Biribel to investigate the MAG/KRAP/IPA triangle on the ground. Sniper cutscene, truck inspection, tanker — all of this happens over ~48 in-fiction hours. The evidence Biribel uploads from the Route 12 control building is the auth chain: **Retardovici (Decree 47) → Balaceanu (counter-signs the frame) → Vasile, C. (KRAP liaison, signs the convoy movement order) → a forged MAG node.** The player has seen Vasile's name on a Route 12 order since M2; in M6 it is the proof.
 
 **Mission 3 — The Vostral (Day 4, a single night)**
-Balaceanu's vendetta goes live: Biribel wakes disarmed in a black site, breaks out, turns the regime's own weapon against it, and gets Balaceanu's fabricated service record onto a live state address before the Prime Minister can finish pinning Route 12 on him by name. The hunter becomes the exposé.
+Balaceanu's vendetta goes live: Biribel wakes disarmed in a black site, breaks out, turns the regime's own weapon against it, and gets Balaceanu's fabricated service record onto a live state address before the Prime Minister can finish pinning Route 12 on him by name. The hunter becomes the exposé. The same night, Volkov asks the question the player cannot answer yet: *"Your captain's code opened that IPA relay on the first try. Ask him where he got it."*
 
-**Mission 4 — The Aftermath (Day ~5–6, one night into dawn)**
-Hours after the broadcast, the capital is under a ~48h curfew and eating itself. Biribel and Vasile regroup what's left of KRAP, meet Maru in person at the state radio station, and hold the transmitter while President Retardovici orders Balaceanu's arrest live on the Prime Minister's own airwaves. Biribel never sees Balaceanu — the vendetta ends by being made irrelevant, not by a bullet. The nation cheers the wrong man; Volkov has already run to Regatul Kim Kim; Biribel chooses to stay and fight.
+**Mission 4 — The Aftermath (Day 6, one night into dawn Day 7)**
+Forty-eight hours after the broadcast, the capital is under a ~48h curfew and eating itself. Biribel and Vasile regroup what's left of KRAP, meet Maru in person at the state radio station, and hold the transmitter while President Retardovici orders Balaceanu's arrest live on the Prime Minister's own airwaves. Biribel never sees Balaceanu — the vendetta ends by being made irrelevant, not by a bullet. Vasile steers him away from the arrest: *"You don't need to see him. Trust me."* The nation cheers the wrong man; Volkov has already run to Regatul Kim Kim; Biribel chooses to stay and fight.
 
 **Mission 5 — Martial Law (Day ~8, one night)**
-Balaceanu is found dead in his cell. Retardovici declares emergency rule and folds KRAP into the Presidential Guard under Commander Vasile. Ordered to bring in Maru, Biribel gets Maru out instead, through a Guard raid led by Ucilev, who lets him live.
+Four days after the Vostral. Balaceanu is found dead in his cell. Retardovici declares emergency rule and folds KRAP into the Presidential Guard under Commander Vasile. Ordered to bring in Maru, Biribel gets Maru out instead, through a Guard raid led by Ucilev, who lets him live.
 
 **Mission 6 — Black Notebook (Day ~10, one night)**
-Volkov is trapped at the closed Kim Kim border with the last copy of the notebook. It proves Retardovici ordered Route 12 and Vasile's codes carried it out. Ucilev kills Volkov one step from the train. Vasile confesses by radio and offers to get Biribel into the mansion. Biribel doesn't answer; Maru sends him to ground.
+Volkov is trapped at the closed Kim Kim border with the last copy of the logbook — dry where Biribel's was water-damaged. The leaf reads: *"Route 12. Movement order. Authorization — that's Vasile's code."* It proves Retardovici ordered Route 12 and Vasile's codes carried it out. Ucilev kills Volkov one step from the train. Vasile confesses by radio and offers to get Biribel into the mansion. Biribel doesn't answer; Maru sends him to ground.
 
 **Mission 7 — Fallow Ground (Day ~11)**
-Biribel hides on Bodi's farm in the hills. Alex, MAG's runner, brings the mansion plan. A Guard sweep raids the farm and burns it; Bodi decides to come along. **The choice: Duty or Revenge.**
+*Planned — not yet implemented (`docs/MISSION7_PLOT.md`).* Biribel hides on Bodi's farm in the hills. Alex, MAG's runner, brings the mansion plan. A Guard sweep raids the farm and burns it; Bodi decides to come along. **The choice: Duty or Revenge.**
 
-**Mission 8 — The Call (Day ~13)**
-* **Duty — "Head of State":** mansion assault with Bodi and Alex, a door-gunner helicopter chase with Maru flying, shot down by Ucilev, sniper finale on the ridge. Biribel kills Ucilev, then Retardovici, after the President's last words about Vasile. Vasile becomes interim President. Maru survives.
-* **Revenge — "Old Friends":** Bodi drives Biribel out and Biribel meets Vasile at the Route 12 ambush site and kills him. Without Vasile's access, MAG's mansion attack fails and Maru is killed. Retardovici survives; Ucilev takes over the Guard. Biribel leaves on the Kim Kim train Volkov never caught.
+**Mission 8 — The Call (Day ~12)**
+*Planned — not yet implemented (`docs/MISSION8_PLOT.md`).* Vasile's offer stands for the night of Day 12, so the mansion falls on Day 12 and Day 13 is the border.
+  * **Duty — "Head of State":** mansion assault with Bodi and Alex, a door-gunner helicopter chase with Maru flying, shot down by Ucilev, sniper finale on the ridge. Biribel kills Ucilev, then Retardovici, after the President's last words about Vasile. Vasile becomes interim President. Maru survives.
+  * **Revenge — "Old Friends":** Bodi drives Biribel out and Biribel meets Vasile at the Route 12 ambush site and kills him. Without Vasile's access, MAG's mansion attack fails and Maru is killed. Retardovici survives; Ucilev takes over the Guard. Biribel leaves on the Kim Kim train Volkov never caught.
 
 ---
 
-*This dossier is maintained as a static lore reference file. Code remains entirely unmodified.*
+*This dossier is maintained as a static lore reference file. Where it disagrees with itself, `docs/FIXES_STORIES.md` records the fix and the reason; where it disagrees with the shipped game, the game wins and the dossier is corrected here.*

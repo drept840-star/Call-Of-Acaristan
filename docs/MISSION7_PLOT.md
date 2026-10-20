@@ -1,5 +1,9 @@
 # Mission 7 — "Fallow Ground"
 
+> **Status: PLANNED — not implemented.** There is no `src/missions/m7/` package
+> yet; the campaign ships through M6. Everything below is design. See
+> `docs/FIXES_STORIES.md` for the consistency pass applied to the plan.
+
 > *"I grow potatoes. I don't do politics. Politics came anyway."*
 > — Bodi
 

@@ -404,7 +404,7 @@ INFO_CONTENT = {
             "  mag_packet.draft    (1.4K)",
             "",
             "These files document the IPA conspiracy:",
-            "Retardovici -> Balaceanu -> MAG framing.",
+            "Retardovici -> Balaceanu -> KRAP liaison -> MAG framing.",
             "",
             "To upload, open ACARIZWORK and visit the",
             "Public Evidence Portal.",
@@ -573,24 +573,33 @@ EVIDENCE_DOCS = {
         "title": "auth_chain.log",
         "kind": "terminal",
         "header": "> ACCESSING AUTHORIZATION CHAIN...",
+        # Four nodes, in the order the order was actually given: the President
+        # signs the cover, the Prime Minister countersigns the frame, the KRAP
+        # liaison signs the convoy movement order, and the MAG node is forged.
+        # Vasile's name sits here from M2 on purpose - the M6 reveal ("Route 12
+        # went out on your code") pays this line back.
         "body_lines": [
             "> AUTH NODE 1: RETARDOVICI, S. - PRESIDENTIAL",
             "  > CLEARANCE: OMEGA - UNLIMITED",
             "  > AUTHORIZED: DECREE 47 SIGNATURE",
             "",
-            "> AUTH NODE 2: BALACEANU, V. - KRAP LIAISON",
-            "  > CLEARANCE: DELTA - REGIONAL",
-            "  > AUTHORIZED: ROUTE 12 OPERATIONS",
-            "  > NOTE: LOGISTICS COORDINATOR - NOT MAG",
+            "> AUTH NODE 2: BALACEANU, V. - PRIME MINISTER",
+            "  > CLEARANCE: DELTA - CABINET",
+            "  > AUTHORIZED: ROUTE 12 FRAME-UP (COUNTER-SIGNED)",
             "",
-            "> AUTH NODE 3: [REDACTED] - MAG FORWARD OPERATIONS",
+            "> AUTH NODE 3: VASILE, C. - KRAP LIAISON",
+            "  > CLEARANCE: GAMMA - CORRIDOR",
+            "  > AUTHORIZED: ROUTE 12 OPERATIONS",
+            "  > NOTE: CONVOY MOVEMENT ORDER - NOT MAG",
+            "",
+            "> AUTH NODE 4: [REDACTED] - MAG FORWARD OPERATIONS",
             "  > CLEARANCE: [REDACTED]",
             "  > AUTHORIZED: [REDACTED]",
             "  > WARNING: AUTH CHAIN FORGED - SEE DECREE 47",
             "",
             "> TRACE COMPLETE - CHAIN INTEGRITY: COMPROMISED",
         ],
-        "footer": "LOG ENDS - 3 NODES TRACED",
+        "footer": "LOG ENDS - 4 NODES TRACED",
     },
     "mag_packet": {
         "title": "mag_packet.draft",

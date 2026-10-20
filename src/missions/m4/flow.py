@@ -350,6 +350,8 @@ _M4_ARREST_BEATS = [
      "PA: All units. By order of the Presidency, garrison command is... recalibrated."),
     (1350, "arrest_order", C_RETARDOVICI, "pa_mumble",
      "PA: General Balaceanu is relieved of command and arrested. Escort him out."),
+    (1800, "arrest_steer", C_VASILE, "radio_static",
+     "VASILE: You don't need to see him. Trust me."),
     (2250, "arrest_confusion", C_BALACEANU, "radio_static",
      "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-"),
     (3150, "arrest_standdown", C_SYSTEM, "radio_static",

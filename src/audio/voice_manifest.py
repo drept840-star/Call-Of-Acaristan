@@ -204,6 +204,11 @@ VOICE_LINES = [
     ('VO_195', 'BIRIBEL', 'So why am I still standing?'),
     ('VO_196', 'UCILEV', "Not tonight. They haven't told me to yet."),
     ('VO_197', 'VASILE', "Biribel, report. ...Never mind. I didn't hear anything. Neither did you."),
+    # M6 foreshadowing retrofit (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit
+    # into M1-M4").  No takes yet; the captions carry the beat.
+    ('VO_198', 'VASILE', "Good. I've got it. Later. You need sleep."),
+    ('VO_199', 'VASILE', "Route's clean. I checked it myself."),
+    ('VO_200', 'VASILE', "You don't need to see him. Trust me."),
 ]
 
 
@@ -238,6 +243,7 @@ DEATH_AT = {}
 KNOWN_MISSING_AUDIO = frozenset({
     # New script has no recorded takes in this upload. Subtitles remain live.
     'VO_192', 'VO_193', 'VO_194', 'VO_195', 'VO_196', 'VO_197',
+    'VO_198', 'VO_199', 'VO_200',
     'VO_001',
     'VO_003',
     'VO_007',

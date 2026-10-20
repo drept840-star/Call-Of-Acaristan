@@ -2,6 +2,12 @@
 
 *An unauthorized, code-deep dive into a tactical stealth-shooter built in Pygame by a single obsessive hand. This is the story of the game, told through its own source.*
 
+> **Snapshot note (2026-10-20):** this piece describes an early build of the
+> campaign (three missions, single-file mission modules). The game now ships
+> six missions (`src/missions/m1`…`m6`); M7/M8 are planned. The story canon was
+> re-synced with the code in `docs/FIXES_STORIES.md` — the six-year Vostral
+> timeline below is the current one.
+
 ---
 
 ## ACT I — THE GAME YOU CAN'T QUITE CATEGORIZE
@@ -31,7 +37,7 @@ The factions (defined by faction colors in `config.py`):
 | **MAG** | Militia | Scapegoats; bomb IPA checkpoints out of personal grievance |
 | **CIV** | Civilians | Collateral, flavor, occasional payoff |
 
-The political engine is a decree-laced timeline: **Y-6** (Balaceanu becomes PM), **Y-12** (the National Stability Decree — the legal cover for domestic black sites), and **Y-1** — *The Vostral*.
+The political engine is a decree-laced timeline: **Y-6** (Balaceanu becomes PM, and the Vostral is born in the ranks), **Y-12** (the National Stability Decree — the legal cover for domestic black sites), and **Y-1** — *The Vostral reaches the press*.
 
 ---
 
@@ -39,7 +45,7 @@ The political engine is a decree-laced timeline: **Y-6** (Balaceanu becomes PM),
 
 **Biribel** (`C_BIRIBEL = (200, 200, 200)`, a grey ghost of a man) is a KRAP field operator. He is good at his job, and that is precisely the problem.
 
-**Prime Minister Balaceanu** is the antagonist — and the genius of the writing is *why* he hates Biribel. At **Y-1**, Biribel leaked a rumor (`LORE.md`, `MISSION3_PLOT.md`): that Balaceanu's entire decorated military career — his medals, his war stories, his "tough man of Acaristan" brand — is **fabricated**. The rumor reached the civilian press. Balaceanu *cannot* deny it without a trial that forces him to produce his classified service record; he *cannot* court-martial Biribel without that same trial. So he does the only thing left: he engineers Biribel's death in action, one "high-risk stabilization assignment" at a time.
+**Prime Minister Balaceanu** is the antagonist — and the genius of the writing is *why* he hates Biribel. The rumor is **six years old**: Biribel said it out loud in the ranks at **Y-6** (he was a serving soldier, years before KRAP existed), and it reached the civilian press at **Y-1**, where it became a capital charge: that Balaceanu's entire decorated military career — his medals, his war stories, his "tough man of Acaristan" brand — is **fabricated**. Balaceanu *cannot* deny it without a trial that forces him to produce his classified service record; he *cannot* court-martial Biribel without that same trial. So he does the only thing left: he engineers Biribel's death in action, one "high-risk stabilization assignment" at a time.
 
 The Volkov handoff in Mission 1? That was the latest such assignment. The whole trilogy is Balaceanu trying to kill a man he legally cannot touch.
 

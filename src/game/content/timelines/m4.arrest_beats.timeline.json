@@ -34,6 +34,18 @@
     "duration": 470
    },
    {
+    "t": 1800,
+    "name": "arrest_steer",
+    "text": "VASILE: You don't need to see him. Trust me.",
+    "color": [
+     110,
+     160,
+     220
+    ],
+    "sfx": "radio_static",
+    "duration": 470
+   },
+   {
     "t": 2250,
     "name": "arrest_confusion",
     "text": "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-",

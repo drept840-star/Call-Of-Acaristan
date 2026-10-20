@@ -1,5 +1,9 @@
 # Mission 8 — "The Call"
 
+> **Status: PLANNED — not implemented.** There is no `src/missions/m8/` package
+> yet; the campaign ships through M6. Everything below is design. See
+> `docs/FIXES_STORIES.md` for the consistency pass applied to the plan.
+
 > *"I chose the many. You chose the four."*
 > — Captain Vasile
 
@@ -256,15 +260,16 @@ scene: title_card         speaker: ""        "CALL OF ACARISTAN"
 Small additions that make the Vasile twist feel planned all along. None change
 gameplay.
 
-| Mission | Add | Pays off in |
-|---------|-----|-------------|
-| **M1** | Vasile pockets the notebook without reading it in front of Biribel: *"Later. You need sleep."* | M6 — he already knew what was in it. |
-| **M1** | Volkov, as he escapes: *"Read it before you hand it over!"* (sounds like a taunt) | M6 boxcar: "You took this from me once. Read it this time." |
-| **M2** | Half a second of radio static from Vasile's channel right before the sniper's first shot. | M6 — the convoy route went out on his channel. |
-| **M2** | Vasile's line before the kill-box: *"Route's clean. I checked it myself."* | M6 / M8. |
-| **M3** | Volkov: *"Your captain's code opened that IPA relay on the first try. Ask him where he got it."* | M6. |
-| **M4** | Vasile steers Biribel away from the arrest: *"You don't need to see him. Trust me."* | Balaceanu could have exposed Vasile. |
-| **M4** | Warm moments for Vasile in the command van and on the roof (a story about his daughter, a joke) — the player must **like** him. | Makes M8 hurt in both routes. |
+| Mission | Add | Pays off in | Shipped? |
+|---------|-----|-------------|----------|
+| **M1** | Vasile pockets the notebook without reading it in front of Biribel: *"Good. I've got it. Later. You need sleep."* | M6 — he already knew what was in it. | **Yes** — M1 escape cutscene (caption + radio VO, VO_198). |
+| **M1** | Volkov, as he escapes: *"Read it before you hand it over!"* (sounds like a taunt) | M6 boxcar: "You took this from me once. Read it this time." | **Yes** — `core/interactions.py`. |
+| **M2** | Half a second of radio static from Vasile's channel right before the sniper's first shot. | M6 — the convoy route went out on his channel. | **Yes** — the 3D kill-box film, dead air in the gap before the first round. |
+| **M2** | Vasile's line before the kill-box: *"Route's clean. I checked it myself."* | M6 / M8. | **Yes** — the film's opening radio line (VO_199). |
+| **M2** | *(new)* The upload OS auth chain carries **VASILE, C. — KRAP LIAISON** as the node that authorised Route 12 operations. | M6 — the player has seen his name on the order since M2. | **Yes** — `ui/upload_os.py`. |
+| **M3** | Volkov: *"Your captain's code opened that IPA relay on the first try. Ask him where he got it."* | M6. | **Yes** — `missions/m3/meta.py`. |
+| **M4** | Vasile steers Biribel away from the arrest: *"You don't need to see him. Trust me."* | Balaceanu could have exposed Vasile. | **Yes** — the arrest beat ladder (VO_200). |
+| **M4** | Warm moments for Vasile in the command van and on the roof (a story about his daughter, a joke) — the player must **like** him. | Makes M8 hurt in both routes. | Partly — the M4 roof/van warmth is shipped; the "daughter" story is not. |
 
 ---
 

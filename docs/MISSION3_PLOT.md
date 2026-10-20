@@ -39,7 +39,7 @@ M2 ended on three hard cuts:
 
 The trilogy's through-line is Balaceanu's vendetta. M1 was the artifact that *triggered* the redeployment. M2 was the *false-flag* that gave the regime its pretext. **M3 is the vendetta itself, face to face** — and its inversion.
 
-The Vostral (the rumor Biribel leaked at Y-1: that Balaceanu's entire decorated military career is fabricated) has never been confirmed on-screen. It's the one thing Balaceanu cannot kill his way out of, because the only copy of his service record that can prove it is **classified, and only the regime holds it.** M3's engine: get into the Archives, get the record, and get it onto the live broadcast before Balaceanu finishes his address. The hunter becomes the exposé.
+The Vostral (the rumor Biribel leaked **six years ago**, at Y-6, as a serving soldier — it reached the press at Y-1, which is what made it a capital charge: that Balaceanu's entire decorated military career is fabricated) has never been confirmed on-screen. It's the one thing Balaceanu cannot kill his way out of, because the only copy of his service record that can prove it is **classified, and only the regime holds it.** M3's engine: get into the Archives, get the record, and get it onto the live broadcast before Balaceanu finishes his address. The hunter becomes the exposé.
 
 ---
 
@@ -62,6 +62,7 @@ First physical appearance. Reveal: Maru is not a guerrilla warlord; Maru is a **
 
 ### President Retardovici
 Remains the public face, but M3 quietly demotes him: he's a cape Balaceanu hides behind. His TV address is the ticking clock, not the villain.
+> **M5 retcon (do not "fix" this back):** the cape reading is what the characters believe on the night. M5 reveals that the cape was the puppeteer all along — Retardovici gave the Route 12 order through Vasile and used Balaceanu as his attack dog for six years. M3 and M4 are written to be re-read, not to be corrected.
 
 ---
 

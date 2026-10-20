@@ -8,8 +8,9 @@
 ## Logline
 
 Hours after the Vostral went live, the capital is eating itself. Balaceanu's
-career is public record, Retardovici's puppet strings are cut, KRAP has "kind of
-dissolved," and Volkov has run for the border. Biribel and Vasile are what's
+career is public record, Retardovici's strings are cut (the read on the
+night — a cape without a handler), KRAP has "kind of dissolved," and Volkov
+has run for the border. Biribel and Vasile are what's
 left of the thread. The one transmitter still loyal to nobody but the truth is
 the state radio station — and Balaceanu's last loyalists intend to take it back.
 The job is not to kill anyone. The job is to **hold the mic open long enough for
@@ -29,10 +30,12 @@ M3 ended on the record beating:
 3. **Volkov is gone**, and **KRAP is under government review** — the organization
    neither dissolves cleanly nor survives intact.
 
-**M4 cold open: the same night, the capital.** No handler assigning targets, no
+**M4 cold open: two days later, the capital.** No handler assigning targets, no
 clean chain of command. The frame is no longer "mission assigned" — it is "what
 do we do now," and the answer Vasile gives is: keep one transmitter breathing
 until the state arrests its own head of government on air.
+> The shipped line is *"Forty-eight hours after the Vostral…"* (VO_078) — M4 is
+> **Day 6** (dawn Day 7), not the same night as the M3 broadcast.
 
 ---
 
@@ -61,9 +64,11 @@ proved the Vostral. **M4 inverts the payoff: Biribel does not kill Balaceanu,
 because the state does it for him, on live air, while he can only hear it.** The
 vendetta ends by being made *small* — a name in an arrest order read over a PA
 the hero is standing three rooms away from. The nation cheers the wrong man
-(Retardovici, the puppet who just ate his own handler), and Biribel — the one
-person who knows how the dominos actually fell — chooses to stay and keep
-fighting rather than take the border that would finally let him disappear.
+(Retardovici — read tonight as the puppet who just ate his own handler; **M5
+reveals he was the puppeteer and the handler was the one on the air**), and
+Biribel — the one person who knows how the dominos actually fell — chooses to
+stay and keep fighting rather than take the border that would finally let him
+disappear.
 
 ---
 
@@ -114,7 +119,7 @@ The runtime driver is `STATE.mission4_stage` (mirrors M3), owned by
 | 2 | **STAGE_KRAP_STATUS** | Cross the station interior to the transmitter hall; talk to Maru. | Door handoff swaps to the station map. Friendly NPCs (Maru, Vasile) drawn as faction-colored standing figures. |
 | 3 | **STAGE_MARU** (dialogue) | Hold the liaison meeting. | Typewriter dialogue (M3-interrogation cadence, ported) with a single choice beat; the chosen option records the tone on `STATE.m4_tone`. Movement locked during the meet. |
 | 4 | **STAGE_MARU** (jammer) | Install the jammer on the transmitter rack. | E-key interact (`rifle_handle` + `terminal_glitch`). Gates the siege; sets the tower checkpoint. |
-| 5 | **STAGE_COMMIT** | Hold the transmitter for `M4_HOLD_SECONDS` (90s). | **The clock, not a boss.** Loyalist fireteams stream from 3 insertion doors (≤6 concurrent), marksman laser telegraphs; a diegetic PA/arrest beat ladder narrates Retardovici's order over `pa_mumble` / `radio_static` / `footstep`. Spawns break off after the order airs. |
+| 5 | **STAGE_COMMIT** | Hold the transmitter for `M4_HOLD_SECONDS` (90s). | **The clock, not a boss.** Loyalist fireteams stream from 3 insertion doors (≤6 concurrent), marksman laser telegraphs; a diegetic PA/arrest beat ladder narrates Retardovici's order over `pa_mumble` / `radio_static` / `footstep`. Spawns break off after the order airs. Between the arrest order and the loyalist confusion, Vasile steers Biribel away from it — *"You don't need to see him. Trust me."* (M6 plant: he is protecting the man, or the secret.) |
 | 6 | **STAGE_DONE** | — | Hold completes → `_complete_m4()` → `request_mission4_ending`. |
 
 **Fail state:** death reloads the deepest checkpoint reached (tower → station →
@@ -153,8 +158,9 @@ scene: title_card           speaker: ""       "THE AFTERMATH"
 
 ## What It Leaves Open (For M5+)
 
-- **Retardovici on the throne** — the puppet who ate his handler is now the face
-  of a nation that cheered him. That is the reveal M5 inherits.
+- **Retardovici on the throne** — the cape who ate his handler is now the face
+  of a nation that cheered him. That is the read on the night; the reveal M5
+  inherits is that the cape was holding the strings.
 - **What "staying and fighting" means** with no KRAP, no orders, and one
   transmitter.
 

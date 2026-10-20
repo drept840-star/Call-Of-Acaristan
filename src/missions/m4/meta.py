@@ -3,12 +3,13 @@
 """Mission 4: The Aftermath (working title) - the world after the broadcast.
 
 Picks up hours after Mission 3's Vostral transmission. The regime is
-reeling: Balaceanu's career is public record, Retardovici's puppet strings
-are cut, and KRAP is left without clear direction. Volkov has vanished
-across the border to Regatul Kim Kim. Vasile and Biribel are the only
-ones left trying to figure out what comes next — KRAP doesn't fully
-dissolve but "kind of dissolves," its remnants allied with MAG, while
-Maru steps into physical presence for the first time.
+reeling: Balaceanu's career is public record, Retardovici's strings are
+cut (the read on the night - a cape without a handler; M5 shows the cape
+was the puppeteer all along), and KRAP is left without clear direction.
+Volkov has vanished across the border to Regatul Kim Kim. Vasile and
+Biribel are the only ones left trying to figure out what comes next — KRAP
+doesn't fully dissolve but "kind of dissolves," its remnants allied with
+MAG, while Maru steps into physical presence for the first time.
 
 The framing is no longer "mission assigned" but "what do we do now":
 KRAP's ambiguous status, Maru's reappearance, and Biribel's own path

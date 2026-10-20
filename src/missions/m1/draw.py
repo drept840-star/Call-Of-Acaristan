@@ -309,6 +309,14 @@ def draw_biribel_escape_cutscene(surface, timer):
         surface.blit(banner, (WIDTH//2 - banner.get_width()//2, LETTER_H + 29))
         if t < 372:
             _escape_subtitle(surface, "BIRIBEL", "Go, go, go!", 255)
+        # M6 plant (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit"): Vasile
+        # pockets the notebook without reading it in front of Biribel.  He
+        # already knew what was in it - in M6 the leaf in Volkov's copy says
+        # so, and the M2 auth chain already carried his name.
+        if 392 <= t < 470:
+            _escape_subtitle(surface, "VASILE",
+                             "Good. I've got it. Later. You need sleep.",
+                             min(255, (t - 392) * 5, (470 - t) * 6))
     else:
         # Clear rear-view escape: visible truck body, tail-lights, road, warehouse glow behind.
         prog = min(1.0, (t - 500) / 160.0)

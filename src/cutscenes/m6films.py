@@ -48,7 +48,7 @@ CRT_LINES = (
     ("KRAP BORDER CUSTOMS", "GUARD PERSONNEL // RESTRICTED"),
     ("ID", "4471-K"),
     ("NAME", "VELICU, B."),
-    ("INTAKE", "KRAP 3/7"),
+    ("INTAKE", "KRAP 4 // Y-3"),
     ("CLASS", "TOP OF CLASS"),
     ("STATUS", "KIA - Y-2"),
 )

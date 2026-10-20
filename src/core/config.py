@@ -93,7 +93,9 @@ SPEAKER_COLORS = {
     "FISHERMAN": C_FISHERMAN,
     "COMMANDER": C_ORANGE,
     "OLD SQUADMATE": (110, 150, 210),   # KRAP blue: a friend, whatever he wears now
-    "UCILEV": (110, 150, 210),   # same Y-3 squadmate as OLD SQUADMATE, now the M5 shadow
+    "UCILEV": (110, 150, 210),   # the OTHER man from that same Y-3 / KRAP 4 intake
+    #   (not the old squadmate: two different faces, one cohort - see
+    #   docs/FIXES_STORIES.md item 8).  Shared colour = shared KRAP-blue accent.
     "RADIO VOICE": C_COMMAND,
     "RADIO": C_COMMAND,
     "MARU": (110, 200, 140),

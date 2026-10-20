@@ -377,6 +377,11 @@ def draw_notebook_inspection():
         ("SERIALS", "FT-7742 FT-7743 FT-7744 FT-7745"),
         ("CROSS-REF", "IPA procurement #8841-8844"),
         ("MFG", "FuegoTech Ind., Kilemene Sector"),
+        # The loose leaf: the reason Volkov was selling this book, and the
+        # reason M6 lands.  Water-damaged in the rainy exfil, so the schedule
+        # and the auth column are unreadable here - the player only learns
+        # whose code it is when Volkov's dry copy is read in the boxcar.
+        ("INSERT", "1 loose leaf - R12 schedule, water-damaged"),
         ("STATUS", "RECOVERED"),
     ]
     for key, val in evidence:

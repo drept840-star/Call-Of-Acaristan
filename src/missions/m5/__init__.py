@@ -1,8 +1,8 @@
 """Mission 5: Martial Law - the capital under emergency rule.
 
-A week after the Vostral, Retardovici dissolves parliament and folds KRAP
-into the Presidential Guard under Commander Vasile. Vasile orders Biribel
-to bring Maru in; Biribel gets Maru out - through the Guard's raid on the
+Four days after the Vostral (Day ~8), Retardovici dissolves parliament and
+folds KRAP into the Presidential Guard under Commander Vasile. Vasile orders
+Biribel to bring Maru in; Biribel gets Maru out - through the Guard's raid on the
 MAG print works and down the tunnel to the river, where Ucilev Nadgob
 Ierdna has him in his sights and lowers the rifle.
 

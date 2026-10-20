@@ -65,7 +65,7 @@ MISSION3_LOCATION = "The Stabilization Center / IPA Black Site"
 MISSION3_PRIMARY_STYLE = "Cold open interrogation into prison break thriller"
 
 MISSION3_STORY_FLAGS = {
-    "vendetta": "Balaceanu's six year vendetta against Biribel for the Y-1 Vostral leak.",
+    "vendetta": "Balaceanu's six year hunt for the Vostral: the rumour is six years old, the Y-1 press leak is what made it a capital charge, and every assignment since is an attempt on Biribel's life.",
     "krap_status": "KRAP is still an organization, disavowed, under siege, fighting for survival and credibility.",
     "vostral": "The buried rumor that Balaceanu's decorated military career is fabricated. Only the regime holds the proof.",
     "maru_reveal": "Maru (MAG) is a former IPA archivist who faked their own death after refusing to forge seizure documents, the root of the trilogy's conflict.",
