@@ -69,6 +69,8 @@ VIG_CIG_AT = 6.4
 VIG_FACES_AT = 7.9
 VIG_HAND_AT = 9.2
 VIG_BACK_AT = 10.0
+VIG_IMPACT_END = 4.6   # low impact angle, then the push-in picks up mid-move
+VIG_REVERSE_AT = 8.55  # over Biribel's shoulder, then the reverse onto him
 BIRI_RUN_AT = 1.9      # Biribel breaks cover (off-screen) before the round lands
 BIRI_ARRIVE = 3.35     # ...and reaches the body
 
@@ -3224,19 +3226,34 @@ class TrainScene:
         if c < CINE_CATCH_END:
             self._vigil_camera(r, t, c, chest, head)
             return
-        # Reveal: cut wide on the door close so the carriage, its detail and
-        # the window row are visible, then let it slide out behind the pair.
-        k = _smooth(CINE_CATCH_END, DURATION - SHOT_AT, c)
-        eye = (9.00 - 0.30 * k, 2.25 + 0.05 * k, 2.72 + 0.12 * k)
-        tgt = (12.30, 1.05, -0.20)
-        self._cam(r, t, eye, tgt, 60.0 + 4.0 * k)
+        # Reveal: cut wide on the door close, then crane up and back as the
+        # carriage slides out, so the yard it leaves behind - the siding,
+        # the signal box, the torch Guards coming down the strip - opens up
+        # beyond the pair, who end small at the bottom of the frame.
+        k = _smooth(CINE_CATCH_END + 0.4, DURATION - SHOT_AT, c)
+        k = k * k * (3.0 - 2.0 * k)
+        eye = (9.00 - 4.0 * k, 2.25 + 4.95 * k, 2.72 + 4.68 * k)
+        tgt = (12.30 + 2.2 * k, 1.05 - 0.65 * k, -0.20 - 4.3 * k)
+        self._cam(r, t, eye, tgt, 60.0 - 8.0 * k)
 
     def _vigil_camera(self, r, t, c, chest, head):
         """The wordless vigil as a short cut sequence: a push-in on the pair,
         the cigarette in the snow, both faces, the bloody hand, then back out
         as Biribel looks up toward the tower."""
+        if c < VIG_IMPACT_END:
+            # Impact: low and close at hip height, same side of the line as
+            # the push-in, so the fall reads whole - knees, hands, chest -
+            # and Biribel slides into the frame beside him.
+            k = _smooth(CINE_SCOPE_END, VIG_IMPACT_END, c)
+            live = (0.5 * (chest[0] + head[0]),
+                    0.6 * chest[1] + 0.4 * head[1],
+                    0.5 * (chest[2] + head[2]))
+            roll = 1.6 * (1.0 - _smooth(0.0, 0.5, t - HIT_AT))                 if t >= HIT_AT else 0.0
+            self._cam(r, t, (9.85 + 0.15 * k, 1.25 - 0.05 * k, 2.60 - 0.10 * k),
+                      live, 46.0, roll=roll)
+            return
         if c < VIG_CIG_AT:
-            # One continuous push-in from the track side.
+            # One continuous push-in from the track side (cut in mid-move).
             k = _smooth(CINE_SCOPE_END, VIG_CIG_AT, c)
             eye = (9.60 - 0.40 * k, 1.95 - 0.17 * k, 2.66 + 0.14 * k)
             live = (0.5 * (chest[0] + head[0]),
@@ -3257,11 +3274,18 @@ class TrainScene:
                          (cp[0] + 0.04, cp[1] + 0.06, cp[2]), 30.0,
                          roll=0.8 * j)
             return
+        if c < VIG_REVERSE_AT:
+            # Over Biribel's shoulder, down onto Volkov's face.  The camera
+            # stays on the platform side of the line between the two heads.
+            k = _smooth(VIG_FACES_AT, VIG_REVERSE_AT, c)
+            self._cam(r, t, (10.55 - 0.05 * k, 2.05 - 0.06 * k, -0.60 + 0.05 * k),
+                      (11.45, 0.32, 0.80), 44.0 - 2.0 * k, roll=0.5 * j)
+            return
         if c < VIG_HAND_AT:
-            # Both faces, close: the side key models them, the rim cuts them.
-            k = _smooth(VIG_FACES_AT, VIG_HAND_AT, c)
-            self._cam(r, t, (9.60 + 0.25 * k, 1.05 - 0.04 * k, 2.62 - 0.12 * k),
-                         (11.72, 0.70, 0.78), 41.0 - 3.0 * k, roll=0.5 * j)
+            # The reverse: Biribel's face, over the body, from the platform.
+            k = _smooth(VIG_REVERSE_AT, VIG_HAND_AT, c)
+            self._cam(r, t, (10.60 + 0.05 * k, 1.35 - 0.03 * k, 1.95 - 0.08 * k),
+                      (11.70, 1.02, 0.62), 36.0 - 2.0 * k, roll=0.5 * j)
             return
         if c < VIG_BACK_AT:
             # Insert: the hand on the wound, then lifted, the print left behind.
