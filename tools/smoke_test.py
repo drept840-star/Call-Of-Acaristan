@@ -8564,7 +8564,7 @@ def check_mission6_vertical_slice():
     assert not _sc.volkov_failed
     assert _sc.ucilev_fired, "the signal-tower shot never fired"
     guard = 0
-    # ...then the scene must run to DURATION (36.8 s) to request the ending.
+    # ...then the scene must run to DURATION (about 41.6 s, slow-motion lag included) to request the ending.
     while not STATE.request_mission6_ending and guard < 1100:
         m6.game_update(EmptyKeys())
         guard += 1
@@ -9072,6 +9072,62 @@ def check_m6_train_redeploy_after_death():
         T.reset()
 
 
+def check_m6_train_impacts():
+    """Gameplay fire lands on real surfaces and the FX stores stay bounded."""
+    import math
+
+    from core.state import STATE
+    from missions.m6 import train3d as T
+
+    eye = (T.PLAYER_POS[0], T.PLAYER_POS[1] + T.PLAYER_EYE, T.PLAYER_POS[2])
+    cx, cz, hw, hd, top = T._CRATES[0]
+    d = (cx - eye[0], top - 0.2 - eye[1], cz - eye[2])
+    n = math.sqrt(sum(c * c for c in d))
+    hit = T._world_hit(eye, tuple(c / n for c in d))
+    assert hit is not None and hit[1] == "wood", "crate ray: %r" % (hit,)
+    hit = T._world_hit(eye, (0.0, -0.7, -0.7))
+    assert hit is not None and hit[1] == "snow" and hit[2] == (0.0, 1.0, 0.0)
+    hit = T._world_hit(eye, (0.0, 0.05, -1.0))
+    assert hit is not None and hit[1] == "metal", "carriage ray: %r" % (hit,)
+    assert T._world_hit(eye, (0.0, 1.0, 0.0)) is None, "sky ray hit something"
+    saved_dt = STATE.dt
+    T.reset()
+    try:
+        T.begin()
+        sc = T.scene()
+        for i in range(T._DECAL_CAP * 2):
+            sc._add_decal((float(i), 0.6, 5.0), (0.0, 1.0, 0.0), "snow")
+            sc._eject_brass(float(i), eye, 68.0, i)
+        assert len(sc.decals) == T._DECAL_CAP, "decal ring is unbounded"
+        assert len(sc.brass) == T._BRASS_CAP, "brass ring is unbounded"
+        bp, _air = T._brass_pos(sc.brass[-1], sc.brass[-1][0] + 3.0)
+        assert abs(bp[1] - (T._SLOT_GROUND + 0.012)) < 0.002,             "casing is not resting on the deck (%.3f)" % bp[1]
+    finally:
+        STATE.dt = saved_dt
+        if T.active():
+            T.force_finish("tool")
+
+
+def check_m6_train_guard_death():
+    """Guard deaths are continuous keyed tracks: no snaps, grounded poses."""
+    from missions.m6 import train3d as T
+
+    for track in (0, 1, 2):
+        prev = None
+        for i in range(0, 130):
+            a = i / 60.0
+            pose = T._guard_death_pose(track, a)
+            if prev is not None:
+                for key in ("body_p", "body_r", "spine", "lhip_p", "rhip_p"):
+                    dv = abs(pose.get(key, 0.0) - prev.get(key, 0.0))
+                    assert dv <= 8.0, "track %d %s snapped %.1f at %.2f" % (
+                        track, key, dv, a)
+            prev = pose
+        final = T._guard_death_pose(track, 1.2)
+        assert abs(final.get("body_p", 0.0)) > 60.0 or abs(
+            final.get("body_r", 0.0)) > 60.0,             "track %d does not end on the ground" % track
+
+
 def check_m6_train_death_beat():
     """Volkov's death is one continuous, grounded, caught beat.
 
@@ -9531,6 +9587,8 @@ def main():
     ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
     ok = run_check("m6_train_scope_subject", check_m6_train_scope_sees_the_target) and ok
     ok = run_check("m6_train_death_beat", check_m6_train_death_beat) and ok
+    ok = run_check("m6_train_impacts", check_m6_train_impacts) and ok
+    ok = run_check("m6_train_guard_death", check_m6_train_guard_death) and ok
     ok = run_check("m6_train_redeploy_after_death",
                    check_m6_train_redeploy_after_death) and ok
 

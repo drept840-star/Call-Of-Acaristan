@@ -368,6 +368,32 @@ class TrainSceneTests(unittest.TestCase):
         self.assertIsNone(self.scene._hitscan(
             eye, (-fwd[0], -fwd[1], -fwd[2])))
 
+    def test_hitscan_flags_headshots_and_world_impacts(self):
+        guard = self.scene.guards[0]
+        guard["active"] = True
+        guard["alive"] = True
+        eye = (_train.PLAYER_POS[0],
+               _train.PLAYER_POS[1] + _train.PLAYER_EYE,
+               _train.PLAYER_POS[2])
+
+        def aim(dy):
+            tgt = (guard["pos"][0], guard["pos"][1] + dy, guard["pos"][2])
+            d = tuple(tgt[i] - eye[i] for i in range(3))
+            n = math.sqrt(sum(c * c for c in d))
+            return tuple(c / n for c in d)
+
+        self.assertIsNotNone(self.scene._hitscan(eye, aim(1.60)))
+        self.assertTrue(self.scene.last_hit_head)
+        self.assertIsNotNone(self.scene._hitscan(eye, aim(1.20)))
+        self.assertFalse(self.scene.last_hit_head)
+        # misses land on a surface now, not 40 m out in mid-air
+        down = _train._world_hit(eye, (0.0, -0.6, -0.8))
+        self.assertIsNotNone(down)
+        self.assertEqual(down[1], "snow")
+        side = _train._world_hit(eye, (0.0, 0.0, -1.0))
+        self.assertIsNotNone(side)
+        self.assertEqual(side[1], "metal")
+
     def test_skip_and_handoff_are_idempotent(self):
         STATE.mission6_stage = _meta.STAGE_TRAIN
         STATE.m6_train_active = True

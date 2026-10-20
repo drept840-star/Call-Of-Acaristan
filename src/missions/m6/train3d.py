@@ -13,7 +13,7 @@ Design rules
       exactly once on success/skip/exception.  A failed run goes to the
       death/failure terminal instead and retries the train checkpoint.
     * Story-safe: Guard return fire is lethal (no 1-HP floor).  Volkov dies at
-      16.55 s in every successful run; the player's job is to get him to the
+      25.85 s in every successful run; the player's job is to get him to the
       train, not to save him.  If two or more Guards are still up he is cut
       down in the open and the run fails.
     * Headless: with no input the failure branch runs on its own.
@@ -362,6 +362,37 @@ def _grade_cine(surface):
     del arr
 
 
+def _grade_play(surface, wounded=False):
+    """Gameplay grade on the internal buffer: a deeper toe, cool shadows and a
+    sodium-warm highlight, as a per-channel LUT like ``_grade_cine`` (never a
+    float pass).  Wounded desaturates a little through the same table."""
+    try:
+        import numpy as np
+    except Exception:
+        return
+    key = "grade_play_lut_w" if wounded else "grade_play_lut"
+    lut = _cache.get(key)
+    if lut is None:
+        x = np.arange(256, dtype=np.float32) / 255.0
+        x = np.clip((x - 0.018) / 0.982, 0.0, 1.0)
+        x = np.clip(0.45 + (x - 0.45) * 1.07, 0.0, 1.0)
+        sh, hi = (1.0 - x) ** 2, x ** 2
+        chan = [x - 0.008 * sh + 0.022 * hi,
+                x + 0.003 * sh + 0.004 * hi,
+                x + 0.024 * sh - 0.020 * hi]
+        if wounded:
+            mean = (chan[0] + chan[1] + chan[2]) / 3.0
+            chan = [c * 0.72 + mean * 0.28 for c in chan]
+        lut = np.empty((3, 256), dtype=np.uint8)
+        for i, v in enumerate(chan):
+            lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
+        _cache[key] = lut
+    arr = pygame.surfarray.pixels3d(surface)
+    for i in range(3):
+        arr[..., i] = lut[i][arr[..., i]]
+    del arr
+
+
 def _dist2(a, b):
     return math.hypot(a[0] - b[0], a[2] - b[2])
 
@@ -468,6 +499,110 @@ def _trail_points(delay):
     return pts
 
 
+# ── world impacts, brass, guard death tracks ─────────────────────────────
+_TRAIN_FACE_Z = -2.83      # the carriage side plane the platform fire lands on
+_DECAL_CAP = 48
+_BRASS_CAP = 40
+_BRASS = (200, 160, 72)
+_DECAL_COL = {"wood": (22, 15, 10), "snow": (30, 33, 40),
+              "metal": (10, 10, 12), "flesh": (70, 8, 12)}
+
+
+def _world_hit(eye, fwd, tmax=90.0):
+    """First world surface along the ray -> (t, kind, normal) or None.
+
+    Crates (wood), the platform top and the ballast bed (snow), and the carriage
+    side (metal).  Misses used to spark 40 m out in mid-air; now they land."""
+    best = [None]
+
+    def take(t, kind, n):
+        if 0.05 < t < tmax and (best[0] is None or t < best[0][0]):
+            best[0] = (t, kind, n)
+
+    for cx, cz, hw, hd, top in _CRATES:
+        lo = (cx - hw, _SLOT_GROUND, cz - hd)
+        hi = (cx + hw, top, cz + hd)
+        t = _ray_aabb(eye, fwd, lo, hi)
+        if t is None:
+            continue
+        p = (eye[0] + fwd[0] * t, eye[1] + fwd[1] * t, eye[2] + fwd[2] * t)
+        c = ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
+        h = ((hi[0] - lo[0]) * 0.5, (hi[1] - lo[1]) * 0.5, (hi[2] - lo[2]) * 0.5)
+        off = [(p[i] - c[i]) / max(h[i], 1e-6) for i in range(3)]
+        ax = max(range(3), key=lambda i: abs(off[i]))
+        n = [0.0, 0.0, 0.0]
+        n[ax] = 1.0 if off[ax] > 0 else -1.0
+        take(t, "wood", tuple(n))
+    if fwd[1] < -1e-4:
+        t = (_SLOT_GROUND - eye[1]) / fwd[1]
+        if eye[2] + fwd[2] * t >= 2.7:
+            take(t, "snow", (0.0, 1.0, 0.0))
+        else:
+            take((_BALLAST_Y - eye[1]) / fwd[1], "snow", (0.0, 1.0, 0.0))
+    if fwd[2] < -1e-4:
+        t = (_TRAIN_FACE_Z - eye[2]) / fwd[2]
+        if 0.05 < eye[1] + fwd[1] * t < 3.4:
+            take(t, "metal", (0.0, 0.0, 1.0))
+    return best[0]
+
+
+def _decal_mesh(pos, n, kind, size=0.05):
+    """A bullet scar: a thin dark quad 3 mm off the surface it hit."""
+    col = _DECAL_COL.get(kind, (14, 14, 16))
+    off = 0.004
+    if n[1] > 0.5:
+        return disc_xz(pos[0], pos[2], size, pos[1] + off, col, n=7,
+                       layer=3 if pos[1] > 0.3 else 1)
+    if abs(n[2]) >= abs(n[0]):
+        return box(size * 1.6, size * 1.6, 0.004, col,
+                   center=(pos[0], pos[1], pos[2] + n[2] * off))
+    return box(0.004, size * 1.6, size * 1.6, col,
+               center=(pos[0] + n[0] * off, pos[1], pos[2]))
+
+
+def _brass_pos(b, t):
+    """Ballistic casing with one bounce on the platform -> (pos, airborne)."""
+    t0, p0, v, seed = b
+    a = max(0.0, t - t0)
+    g0 = _SLOT_GROUND + 0.012
+    a1 = (v[1] + math.sqrt(max(0.0, v[1] * v[1] + 19.6 * (p0[1] - g0)))) / 9.8
+    if a < a1:
+        return ((p0[0] + v[0] * a, p0[1] + v[1] * a - 4.9 * a * a,
+                 p0[2] + v[2] * a), True)
+    vy1 = (9.8 * a1 - v[1]) * 0.30
+    a2 = 2.0 * vy1 / 9.8
+    bt = a - a1
+    y = g0 + (vy1 * bt - 4.9 * bt * bt if bt < a2 else 0.0)
+    roll = min(bt, a2 + 0.35) * 0.35
+    return ((p0[0] + v[0] * (a1 + roll), y, p0[2] + v[2] * (a1 + roll)),
+            bt < a2)
+
+
+# Guard death tracks: continuous keyed falls on the same footing as the
+# Volkov death.  0 crumple, 1 backward fall (headshots), 2 spin-twist fall.
+_G_STAGGER = dict(POSES["aim"], spine=-14, head_p=-12, lsh_p=96, lsh_r=26, lel=18,
+                  rsh_p=90, rsh_r=40, rel=24, lhip_p=-4, lkn=14, rhip_p=6, rkn=22)
+_G_BUCKLE = dict(POSES["slump"], spine=44, head_p=26, lsh_p=40, lsh_r=18, rsh_p=34,
+                 rsh_r=16, rifle_p=60)
+
+
+def _guard_death_pose(track, a):
+    """Pose ``a`` seconds after a guard's last hit, for death track ``track``."""
+    aim = POSES["aim"]
+    if track == 1:
+        if a < 0.22:
+            return blend(aim, _G_STAGGER, _smooth(0.0, 0.22, a))
+        return blend(_G_STAGGER, POSES["dead_back"], _smooth(0.22, 0.85, a))
+    if track == 2:
+        if a < 0.30:
+            return blend(aim, POSES["slump"], _smooth(0.0, 0.30, a) * 0.5)
+        return blend(blend(aim, POSES["slump"], 0.5), POSES["dead_side"],
+                     _smooth(0.30, 0.95, a))
+    if a < 0.38:
+        return blend(aim, _G_BUCKLE, _smooth(0.0, 0.38, a))
+    return blend(_G_BUCKLE, POSES["dead_front"], _smooth(0.38, 0.95, a))
+
+
 def _spot(pos, target, color, intensity, range_, cone):
     """Aimable local spot: dir points from the lamp toward the target."""
     dx, dy, dz = (target[i] - pos[i] for i in range(3))
@@ -477,7 +612,7 @@ def _spot(pos, target, color, intensity, range_, cone):
             "dir": (dx / ln, dy / ln, dz / ln), "cone": cone}
 
 
-def _light(r, eye=None, fwd=None, t=None):
+def _light(r, eye=None, fwd=None, t=None, flashes=()):
     """Light rig for the frame.
 
     Every rig here is authored to exactly ``LIGHT_CAP`` local lights.  The GL
@@ -595,6 +730,7 @@ def _light(r, eye=None, fwd=None, t=None):
                 "pos": (eye[0] + fwd[0] * 0.34 + rgt[0] * 0.10 + 0.55,
                         eye[1] + 0.72, eye[2] + fwd[2] * 0.34 + rgt[2] * 0.10),
                 "color": (204, 212, 226), "intensity": 0.60, "range": 2.2})
+    lights.extend(flashes)
     r.set_lights(lights)
 
 
@@ -1263,14 +1399,31 @@ def panel(w, h, accent=None):
     return surf
 
 def hurtvignette():
+    """Pre-rendered radial red-black vignette (one gradient, cached)."""
     v = hudcache.get("hurt")
     if v is None:
         v = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        steps = 24
-        for i in range(steps):
-            a = int(110 * (1 - i / float(steps)))
-            pygame.draw.rect(v, (150, 18, 18, a),
-                             (i * 4, i * 4, WIDTH - i * 8, HEIGHT - i * 8), 4)
+        try:
+            import numpy as np
+            ys, xs = np.mgrid[0:HEIGHT, 0:WIDTH].astype(np.float32)
+            nx = (xs - WIDTH * 0.5) / (WIDTH * 0.5)
+            ny = (ys - HEIGHT * 0.5) / (HEIGHT * 0.5)
+            rr = np.sqrt(nx * nx * 0.80 + ny * ny * 1.05)
+            a = np.clip((rr - 0.42) / 0.78, 0.0, 1.0) ** 1.7
+            rgb = pygame.surfarray.pixels3d(v)
+            rgb[..., 0] = 128
+            rgb[..., 1] = 10
+            rgb[..., 2] = 12
+            del rgb
+            al = pygame.surfarray.pixels_alpha(v)
+            al[:] = (a.T * 205.0).astype(np.uint8)
+            del al
+        except Exception:
+            steps = 24
+            for i in range(steps):
+                al = int(110 * (1 - i / float(steps)))
+                pygame.draw.rect(v, (150, 18, 18, al),
+                                 (i * 4, i * 4, WIDTH - i * 8, HEIGHT - i * 8), 4)
         hudcache["hurt"] = v
     return v
 
@@ -1301,6 +1454,16 @@ class TrainScene:
         self.flash_t = -9.0
         self.tracers = []
         self.sparks = []
+        self.last_hit_head = False
+        self.recoil_p = 0.0         # view climb (deg) that recovers when firing stops
+        self.recoil_y = 0.0
+        self.spread = 0.0           # bloom (deg) over a sustained burst
+        self.hit_kind = "hit"       # hit-marker flavour: hit / kill / head
+        self.brass = []
+        self.decals = []
+        self.impacts = []
+        self.dmg_marks = []         # (t, bearing deg) of rounds that hurt
+        self.tinks = []             # clock times a casing first hits the deck
         self.spawn_puffs = []
         self.guards = []
         self.audio = None
@@ -1419,6 +1582,16 @@ class TrainScene:
         self.pitch = BASE_PITCH
         self.tracers = []
         self.sparks = []
+        self.last_hit_head = False
+        self.recoil_p = 0.0         # view climb (deg) that recovers when firing stops
+        self.recoil_y = 0.0
+        self.spread = 0.0           # bloom (deg) over a sustained burst
+        self.hit_kind = "hit"       # hit-marker flavour: hit / kill / head
+        self.brass = []
+        self.decals = []
+        self.impacts = []
+        self.dmg_marks = []         # (t, bearing deg) of rounds that hurt
+        self.tinks = []             # clock times a casing first hits the deck
         self.spawn_puffs = []
         self._frame = 0
         self._ev = set()
@@ -1621,6 +1794,14 @@ class TrainScene:
                 self._fire()
 
         self.kick = max(0.0, self.kick - dt * 5.5)
+        # Recoil recovers once the trigger lets go: fast at first, then easing
+        # (a burst climbs, then settles back toward the aim point).
+        idle = self.t - self.last_fire
+        if idle > 0.06:
+            rec = 9.0 * dt + self.recoil_p * 4.0 * dt
+            self.recoil_p = max(0.0, self.recoil_p - rec)
+            self.recoil_y -= self.recoil_y * min(1.0, 7.0 * dt)
+            self.spread = max(0.0, self.spread - 2.4 * dt)
         self.shake = max(0.0, self.shake - dt * 3.2)
         self.hurt = max(0.0, self.hurt - dt)
         self._update_reload(dt)
@@ -1664,6 +1845,15 @@ class TrainScene:
         now = self.t
         self.tracers = [x for x in self.tracers if now - x[0] < 0.12]
         self.sparks = [x for x in self.sparks if now - x[0] < 0.5]
+        self.impacts = [x for x in self.impacts if now - x[0] < 0.55]
+        self.brass = [b for b in self.brass if now - b[0] < 7.0]
+        if self.tinks:
+            due = [x for x in self.tinks if x <= now]
+            if due:
+                self.tinks = [x for x in self.tinks if x > now]
+                if self.audio:
+                    self.audio.tink()
+        self.dmg_marks = [m for m in self.dmg_marks if now - m[0] < 0.85]
         self.spawn_puffs = [x for x in self.spawn_puffs if now - x[0] < 0.6]
 
     def _living(self):
@@ -1785,6 +1975,8 @@ class TrainScene:
         g["burst_next"] = self.t + (gap if g["burst_left"] else 0.45)
         if self.audio:
             self.audio.guard_shot()
+            if _drip(self.t * 60.0, g["slot"]) < 0.45:
+                self.audio.whiz()
         col = (255, 208, 150) if g.get("kind") != "marksman" else (222, 236, 255)
         self.tracers.append((self.t, src, dst, col))
         p = STATE.player
@@ -1792,6 +1984,9 @@ class TrainScene:
             damage = int(g.get("burst_damage", _GUARD_DAMAGE))
             p.hp = max(PLAYER_HP_FLOOR, p.hp - damage)
             self.hurt = max(self.hurt, 0.20 + damage * 0.022)
+            _e, yaw_v, _pv = self._eye()
+            bearing = (_w.yaw_to(eye, g["pos"]) - yaw_v + 180.0) % 360.0 - 180.0
+            self.dmg_marks.append((self.t, bearing))
             self.shake = max(self.shake, 0.35 + damage * 0.035)
             if p.hp <= 0:
                 self._player_down()
@@ -1852,8 +2047,9 @@ class TrainScene:
 
     def _eye(self):
         sway = 1.65 if self.wounded else 1.0
-        yaw = self.yaw + 0.35 * math.sin(self.t * 1.3) * self._motion() * sway
-        pitch = (self.pitch + self.kick * (0.9 - 0.32 * self.ads)
+        yaw = (self.yaw + self.recoil_y
+               + 0.35 * math.sin(self.t * 1.3) * self._motion() * sway)
+        pitch = (self.pitch + self.recoil_p + self.kick * (0.9 - 0.32 * self.ads)
                  + 0.2 * math.sin(self.t * 1.7) * self._motion() * sway)
         eye = (PLAYER_POS[0], PLAYER_POS[1] + PLAYER_EYE, PLAYER_POS[2])
         shk = self.shake * 0.05
@@ -1938,58 +2134,126 @@ class TrainScene:
         self.last_fire = now
         STATE.k9_ammo_in_mag -= 1
         STATE.shots_fired = getattr(STATE, "shots_fired", 0) + 1
-        self.kick = 1.0 - 0.25 * self.ads
         self.flash_t = now
         if self.audio:
             self.audio.shot()
 
+        seq = int(getattr(STATE, "shots_fired", 0))
+        ads_k = 1.0 - 0.45 * self.ads
+        # The round leaves along the aim the player held, not the one the
+        # muzzle climbs to a frame later: kick after the ray is cast.
         eye, aim_yaw, aim_pitch = self._eye()
-        fwd = _forward(aim_yaw, aim_pitch)
+        self.kick = 1.0 - 0.25 * self.ads
+        # Bloom over a burst, tighter down the sights; deterministic per round.
+        sp = self.spread * (0.35 if self.ads > 0.5 else 1.0)
+        fwd = _forward(aim_yaw + (_drip(seq, 5) - 0.5) * 2.0 * sp,
+                       aim_pitch + (_drip(seq, 6) - 0.5) * 2.0 * sp)
+        # This round kicks the NEXT one: the muzzle climbs and zigs.
+        self.recoil_p = min(5.0, self.recoil_p + 0.55 * ads_k)
+        self.recoil_y += (_drip(seq, 7) - 0.5) * 0.36 * ads_k
+        self.spread = min(0.9, self.spread + 0.15)
+        self._eject_brass(now, eye, aim_yaw, seq)
         hit = self._hitscan(eye, fwd)
+        world = _world_hit(eye, fwd)
         muzzle = self._muzzle_world()
-        if hit is None:
-            end = (eye[0] + fwd[0] * 40.0, eye[1] + fwd[1] * 40.0,
-                   eye[2] + fwd[2] * 40.0)
-            self.sparks.append((now, end, (196, 206, 220)))
-            if self.audio:
-                self.audio.impact(False)
-        else:
+        if hit is not None and (world is None or hit[1] <= world[0] + 0.05):
             g, t_hit = hit
+            head = bool(self.last_hit_head)
             point = (eye[0] + fwd[0] * t_hit, eye[1] + fwd[1] * t_hit,
                      eye[2] + fwd[2] * t_hit)
             self.sparks.append((now, point, (176, 44, 44)))
+            self.impacts.append((now, point, "flesh", (-fwd[0], -fwd[1], -fwd[2])))
+            # Spatter on whatever stands behind him.
+            behind = _world_hit((point[0] + fwd[0] * 0.4, point[1] + fwd[1] * 0.4,
+                                 point[2] + fwd[2] * 0.4), fwd, tmax=7.0)
+            if behind is not None:
+                bp = tuple(point[i] + fwd[i] * (0.4 + behind[0]) for i in range(3))
+                self._add_decal(bp, behind[2], "flesh", 0.07 + 0.05 * _drip(seq, 9))
             self.hit_mark = now
-            g["hp"] -= HIT_DAMAGE
+            self.hit_kind = "head" if head else "hit"
+            g["hp"] -= HIT_DAMAGE * (2.5 if head else 1.0)
+            g["hit_t"] = now
+            fn = math.hypot(fwd[0], fwd[2]) or 1.0
+            g["hit_dir"] = (fwd[0] / fn, fwd[2] / fn)
             g["flinch"] = 0.24 * float(_guard_profile(g.get("kind")).get("flinch", 1.0))
             STATE.shots_hit = getattr(STATE, "shots_hit", 0) + 1
             if self.audio:
                 self.audio.impact(True)
+                if head:
+                    self.audio.headshot()
             if g["hp"] <= 0:
                 g["alive"] = False
                 g["dead_t"] = now
                 g["burst_left"] = 0
                 g["moving"] = False
+                g["track"] = 1 if head else (0 if _drip(g.get("slot", 0), seq) < 0.55 else 2)
+                g["dead_yaw"] = _w.yaw_to((g["pos"][0], 0.0, g["pos"][2]),
+                                          (eye[0], 0.0, eye[2]))
+                push = (0.22 + 0.30 * _drip(seq, 8)) * (1.4 if head else 1.0)
+                g["dead_push"] = (g["hit_dir"][0] * push, g["hit_dir"][1] * push)
+                self.hit_kind = "head" if head else "kill"
                 self.kills += 1
                 STATE.hostiles_killed = getattr(STATE, "hostiles_killed", 0) + 1
                 if self._living() == 0:
                     self.cleared_t = now
             end = point
+        elif world is not None:
+            tw, kind, n = world
+            end = (eye[0] + fwd[0] * tw, eye[1] + fwd[1] * tw, eye[2] + fwd[2] * tw)
+            self.impacts.append((now, end, kind, n))
+            self._add_decal(end, n, kind)
+            if self.audio:
+                self.audio.impact(False)
+        else:
+            end = (eye[0] + fwd[0] * 90.0, eye[1] + fwd[1] * 90.0,
+                   eye[2] + fwd[2] * 90.0)
         self.tracers.append((now, muzzle, end, (255, 226, 170)))
+
+    def _add_decal(self, pos, n, kind, size=0.05):
+        self.decals.append((pos, n, kind, size))
+        if len(self.decals) > _DECAL_CAP:
+            del self.decals[0]
+
+    def _eject_brass(self, now, eye, aim_yaw, seq):
+        """Throw a casing out of the ejection port: right, up and a little back."""
+        rgt = _right(aim_yaw)
+        fw = _forward(aim_yaw, 0.0)
+        o = (eye[0] + rgt[0] * 0.20 + fw[0] * 0.50,
+             eye[1] - 0.13,
+             eye[2] + rgt[2] * 0.20 + fw[2] * 0.50)
+        h1, h2, h3 = _drip(seq, 11), _drip(seq, 12), _drip(seq, 13)
+        v = (rgt[0] * (1.5 + 0.7 * h1) - fw[0] * 0.3,
+             1.5 + 0.7 * h2,
+             rgt[2] * (1.5 + 0.7 * h1) - fw[2] * 0.3 + (h3 - 0.5) * 0.4)
+        self.brass.append((now, o, v, seq))
+        a1 = (v[1] + math.sqrt(max(0.0, v[1] * v[1] + 19.6 * (o[1] - _SLOT_GROUND - 0.012)))) / 9.8
+        self.tinks.append(now + a1)
+        if len(self.brass) > _BRASS_CAP:
+            del self.brass[0]
 
     def _hitscan(self, eye, fwd):
         best = None
+        zone = 0
         for g in self.guards:
             if not (g.get("active") and g.get("alive")):
                 continue
             base = g["pos"]
             big = g.get("kind") == "heavy"
             radii = ((1.30, 0.42), (1.56, 0.36)) if big else ((1.32, 0.38), (1.60, 0.32))
-            for dy, rad in radii:
+            for zi, (dy, rad) in enumerate(radii):
                 hit = _ray_sphere(eye, fwd, (base[0], base[1] + dy, base[2]), rad)
                 if hit is not None and hit < 45.0 and (best is None or hit < best[1]):
                     best = (g, hit)
+                    zone = zi
         if best is None:
             return None
+        # The two spheres overlap: call it a headshot when the round arrives
+        # nearer the head's centre than the chest's, not by which sphere it
+        # entered first.
+        gb = best[0]["pos"]
+        big = best[0].get("kind") == "heavy"
+        py = eye[1] + fwd[1] * best[1] - gb[1]
+        self.last_hit_head = abs(py - (1.56 if big else 1.60)) < abs(py - (1.30 if big else 1.32))             and py > 1.42
         for cx, cz, hw, hd, top in _CRATES:
             lo = (cx - hw, _SLOT_GROUND, cz - hd)
             hi = (cx + hw, top, cz + hd)
@@ -2078,7 +2342,8 @@ class TrainScene:
         live_eye = None if self.dying else eye
         live_fwd = None if self.dying else _forward(yaw, pitch)
         _light(r, live_eye if t < CUT_AT else None,
-               live_fwd if t < CUT_AT else None, t=t)
+               live_fwd if t < CUT_AT else None, t=t,
+               flashes=self._flash_lights(t))
         self._draw_camera(r, t)
         r.surface.fill((6, 8, 14))
         _w.night(r, r.surface, t * 1000.0, top=(4, 6, 13), bot=SKY_HORIZON,
@@ -2137,6 +2402,8 @@ class TrainScene:
 
         if t >= CUT_AT:
             _grade_cine(r.surface)
+        elif not self.dying:
+            _grade_play(r.surface, self.wounded)
         pygame.transform.smoothscale(r.surface, (WIDTH, HEIGHT), surface)
         draw_vignette(surface)
         if t < CUT_AT:
@@ -2162,6 +2429,31 @@ class TrainScene:
             veil.set_alpha(int(255 * fade))
             surface.blit(veil, (0, 0))
         return True
+
+    def _flash_lights(self, t):
+        """Transient point lights for muzzle flashes: the player's round warms
+        the gun, hands and the crate in front of it; the freshest guard shot
+        shares one more slot.  Gameplay only (the cinematic rigs are authored)."""
+        if t >= CUT_AT or self.dying:
+            return ()
+        out = []
+        age = t - self.flash_t
+        if 0.0 <= age < 0.055:
+            k = 1.0 - age / 0.055
+            out.append({"pos": self._muzzle_world(), "color": (255, 198, 128),
+                        "intensity": 2.4 * k, "range": 4.2})
+        best = None
+        for g in self.guards:
+            if g.get("active") and g.get("alive"):
+                ga = t - g.get("last_shot_t", -9.0)
+                if 0.0 <= ga < 0.06 and (best is None or ga < best[0]):
+                    best = (ga, g)
+        if best is not None:
+            ga, g = best
+            x, y, z = g["pos"]
+            out.append({"pos": (x, y + 1.4, z + 0.3), "color": (255, 206, 150),
+                        "intensity": 1.8 * (1.0 - ga / 0.06), "range": 5.0})
+        return tuple(out)
 
     def _draw_camera(self, r, t):
         if self.dying:
@@ -2884,6 +3176,25 @@ class TrainScene:
                     amp = 1.0 if kind != "heavy" else 0.45
                     pose = dict(pose, spine=pose.get("spine", 8) + 14 * amp,
                                 head_p=pose.get("head_p", 6) + 10 * amp)
+                # Face where he is going while he runs, at the player while he
+                # holds or fires; the heading eases instead of snapping.
+                face = yaw
+                if g.get("moving") and int(g.get("burst_left", 0)) <= 0:
+                    px, pz = g.get("_dp", (x, z))
+                    if math.hypot(x - px, z - pz) > 1e-4:
+                        g["_mv"] = _w.yaw_to((px, 0.0, pz), (x, 0.0, z))
+                    face = g.get("_mv", yaw)
+                g["_dp"] = (x, z)
+                yaw = _w.yaw_mix(g.get("_yaw", face), face, 0.22)
+                g["_yaw"] = yaw
+                stag = max(0.0, 1.0 - (t - g.get("hit_t", -9.0)) / 0.32)
+                if stag > 0.0 and g.get("hit_dir"):
+                    amp = (0.5 if kind == "heavy" else 1.0) * stag
+                    pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * amp,
+                                head_p=pose.get("head_p", 6) - 8.0 * amp)
+                    bump = 0.10 * amp * math.sin(math.pi * (1.0 - stag))
+                    x += g["hit_dir"][0] * bump
+                    z += g["hit_dir"][1] * bump
                 joints = _w.actor(r, key, pose, (x, y, z), yaw,
                                   int(t * 1000), seed=100 + g["slot"],
                                   amp=0.4, rifle_on=True, hd=True,
@@ -2927,13 +3238,28 @@ class TrainScene:
                                                radius_m=0.30, dur_ms=60),
                                      layer=_fx.FX_LAYER)
             else:
-                k = clamp((t - g.get("dead_t", -9.0)) / 0.75, 0.0, 1.0)
-                pose = blend("aim", "dead_front", k)
+                a = t - g.get("dead_t", -9.0)
+                track = int(g.get("track", 0))
+                pose = _guard_death_pose(track, a)
+                # He falls where he stood, facing the way he was facing when
+                # the round landed: the yaw no longer tracks the player.
+                dyaw = g.get("dead_yaw", yaw)
+                if track == 2:
+                    dyaw = _w.yaw_mix(dyaw, dyaw + 75.0, _smooth(0.30, 0.95, a))
+                push = g.get("dead_push", (0.0, 0.0))
+                kp = _smooth(0.05, 0.90, a)
+                dx, dz = x + push[0] * kp, z + push[1] * kp
                 try:
-                    r.add_humanoid(_hum(key), pose, (x, y, z), yaw,
-                                   rifle_on=False, shadow=_shadow_for(z))
+                    r.add_humanoid(_hum(key), pose, (dx, y, dz), dyaw,
+                                   rifle_on=False, shadow=_shadow_for(dz))
                 except Exception:
                     pass
+                pool = _smooth(0.40, 2.60, a)
+                if pool > 0.0:
+                    wob = (1.0, 0.85, 1.12, 0.92, 1.15, 0.88, 1.06, 0.95)
+                    _w.add(r, disc_xz(dx, dz, 0.08 + 0.26 * pool, y + 0.010,
+                                      (58, 8, 12), n=8,
+                                      layer=3 if y > 0.3 else 1, wobble=wob))
 
     def _draw_ucilev(self, r, t):
         """The signal-tower sniper, visible for the establishing shot."""
@@ -3124,6 +3450,41 @@ class TrainScene:
             if age < 0.45:
                 r.add_sprite(pos, _fx.sparks(17, int(age * 1000), col=col),
                              layer=_fx.FX_LAYER)
+        for t0, pos, kind, _n in self.impacts:
+            ms = int((t - t0) * 1000)
+            seed = int(t0 * 97) & 0xFFF
+            if kind == "flesh":
+                r.add_sprite(pos, _blood_spray(seed, ms, ang=-1.57, n=16,
+                                               dur_ms=520), layer=_fx.FX_LAYER)
+                continue
+            if kind == "metal":
+                r.add_sprite(pos, _fx.sparks(seed, ms, col=(255, 206, 128), n=16,
+                                             speed_m=3.4, dur_ms=480),
+                             layer=_fx.FX_LAYER)
+                if ms < 70:
+                    r.add_sprite(pos, _fx.flash(ms, col=(255, 214, 150),
+                                                radius_m=0.18, dur_ms=70),
+                                 layer=_fx.FX_LAYER)
+                continue
+            col = (150, 112, 74) if kind == "wood" else (206, 214, 228)
+            if kind == "wood":
+                r.add_sprite(pos, _fx.sparks(seed, ms, col=(176, 136, 88), n=9,
+                                             speed_m=2.2, dur_ms=420),
+                             layer=_fx.FX_LAYER)
+            r.add_sprite(pos, _fx.dust_motes(ms, seed=seed, count=10,
+                                             spread_m=(0.30, 0.26), col=col),
+                         layer=_fx.FX_LAYER)
+        for pos, n, kind, size in self.decals:
+            _w.add(r, _decal_mesh(pos, n, kind, size))
+        for b in self.brass:
+            bp, air = _brass_pos(b, t)
+            ph = int((t - b[0]) * 16.0) + b[3]
+            if air:
+                dims = ((0.014, 0.014, 0.045), (0.045, 0.014, 0.014),
+                        (0.014, 0.045, 0.014))[ph % 3]
+            else:
+                dims = (0.045, 0.013, 0.014) if b[3] % 2 else (0.014, 0.013, 0.045)
+            _w.add(r, box(dims[0], dims[1], dims[2], _BRASS, center=bp))
 
     def _draw_death_fx(self, r, t):
         """Contact shadow, ground puffs, stain and the last breath."""
@@ -3277,6 +3638,7 @@ class TrainScene:
         self._draw_volkov_status(surface, t)
         self._draw_crosshair(surface, t)
         self._draw_vitals(surface)
+        self._draw_damage_arcs(surface, t)
         self._draw_subtitle(surface, t)
         if t < 6.0:
             font = font_prompt
@@ -3288,9 +3650,17 @@ class TrainScene:
         if t >= 2.0:
             img = font_terminal_small.render("[E] SKIP", True, (110, 116, 128))
             surface.blit(img, (WIDTH - img.get_width() - 30, HEIGHT - 140))
-        if self.hurt > 0:
+        base = 0.0
+        if self.wounded:
+            # a slow heartbeat: two beats, a rest
+            ph = (t * 1.25) % 1.0
+            beat = (math.exp(-((ph - 0.10) / 0.05) ** 2)
+                    + 0.6 * math.exp(-((ph - 0.30) / 0.06) ** 2))
+            base = 0.30 + 0.22 * beat
+        hv = max(base, clamp(self.hurt / 0.34, 0.0, 1.0))
+        if hv > 0.0:
             v = hurtvignette()
-            v.set_alpha(int(255 * clamp(self.hurt / 0.34, 0.0, 1.0)))
+            v.set_alpha(int(255 * hv))
             surface.blit(v, (0, 0))
 
     def _draw_cine_overlay(self, surface, t):
@@ -3515,11 +3885,29 @@ class TrainScene:
         if t - self.hit_mark < 0.20:
             k = 1.0 - (t - self.hit_mark) / 0.20
             r = int(10 + 4 * (1 - k))
-            mc = (214, 74, 64)
+            mc = {"head": (246, 196, 84), "kill": (236, 70, 58)}.get(
+                self.hit_kind, (226, 228, 220))
+            if self.hit_kind in ("kill", "head"):
+                r = int(r * (1.0 + 0.55 * k))     # a scale pop on a kill
             for sx in (-1, 1):
                 for sy in (-1, 1):
                     pygame.draw.line(surface, mc, (cx + sx * r, cy + sy * r),
                                      (cx + sx * (r + 7), cy + sy * (r + 7)), 2)
+
+    def _draw_damage_arcs(self, surface, t):
+        """Where the last hits came from: arcs around the crosshair."""
+        cx, cy = WIDTH // 2, HEIGHT // 2
+        for t0, bearing in self.dmg_marks:
+            k = 1.0 - (t - t0) / 0.85
+            if k <= 0.0:
+                continue
+            rad = 118
+            rect = pygame.Rect(cx - rad, cy - rad, rad * 2, rad * 2)
+            # bearing 0 = straight ahead, + = to the player's left
+            a = math.radians(90.0 + bearing)
+            w = 0.34
+            col = (int(210 * k + 30), int(36 * k), int(32 * k))
+            pygame.draw.arc(surface, col, rect, a - w, a + w, 5)
 
     def _draw_vitals(self, surface):
         p = STATE.player

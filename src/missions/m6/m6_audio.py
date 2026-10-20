@@ -27,6 +27,7 @@ FOLEY = (
     "m6_page_turn", "m6_snow_step", "m6_notebook_close", "m6_terminal_beep",
     "m6_radio_static", "m6_rifle_crack", "m6_train_depart", "m6_doors_close",
     "m6_tinnitus", "m6_report_far", "m6_body_thud",
+    "m6_whiz", "m6_headshot", "m6_tink",
 )
 
 # Scene -> looping stems.  Every film scene is listed; unlisted scenes (the
@@ -59,6 +60,7 @@ _FOLEY_GAIN = {
     "m6_terminal_beep": 0.5, "m6_radio_static": 0.55,
     "m6_rifle_crack": 0.85, "m6_train_depart": 0.75, "m6_doors_close": 0.7,
     "m6_tinnitus": 0.32, "m6_report_far": 0.7, "m6_body_thud": 0.8,
+    "m6_whiz": 0.5, "m6_headshot": 0.6, "m6_tink": 0.35,
 }
 
 
@@ -289,6 +291,22 @@ def foley_pcm(name):
         n = int(0.55 * RATE); t = _t(n)
         thump = np.sin(2 * math.pi * (58 - t * 26) * t) * np.exp(-t * 11.0) * 0.8
         x = _mix(thump, _crunch(211, 0.22, 0.45))
+    elif name == "m6_whiz":
+        # A round passing close: a fast rising-then-falling whistle with a snap.
+        n = int(0.28 * RATE); t = _t(n)
+        f = 3400 - 2200 * np.clip(t / 0.22, 0.0, 1.0)
+        x = np.sin(2 * math.pi * np.cumsum(f) / RATE) * 0.30 * np.exp(-t * 11.0)
+        x += _highpass(_noise(n, 221), 2200.0) * np.exp(-t * 26.0) * 0.5
+    elif name == "m6_headshot":
+        # A short bright tick for a head hit.
+        n = int(0.20 * RATE); t = _t(n)
+        x = np.sin(2 * math.pi * 1760 * t) * np.exp(-t * 28.0) * 0.5
+        x += np.sin(2 * math.pi * 2640 * t) * np.exp(-t * 36.0) * 0.3
+    elif name == "m6_tink":
+        # A brass casing on concrete.
+        n = int(0.22 * RATE); t = _t(n)
+        x = (np.sin(2 * math.pi * 4300 * t) * 0.35
+             + np.sin(2 * math.pi * 5750 * t) * 0.22) * np.exp(-t * 34.0)
     else:
         raise ValueError("Unknown M6 foley: " + name)
 
@@ -485,6 +503,15 @@ class M6TrainAudio:
 
     def breath(self):
         self._one("m6_breath", 0.5)
+
+    def whiz(self):
+        self._one("m6_whiz", 0.4)
+
+    def headshot(self):
+        self._one("m6_headshot", 0.5)
+
+    def tink(self):
+        self._one("m6_tink", 0.28)
 
     def tinnitus(self):
         self._one("m6_tinnitus", 0.55)
