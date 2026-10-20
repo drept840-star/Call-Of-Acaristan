@@ -217,6 +217,15 @@ def game_update(keys):
     _maps._last_keys = keys
     dt = float(getattr(STATE, "dt", 1.0 / 60.0))
 
+    if getattr(STATE, "m6_yard_active", False):
+        try:
+            from . import yard3d as _yard
+            _yard.update(keys)
+        except Exception:
+            from . import yard3d as _yard
+            _yard.force_finish("fallback")
+        return
+
     if _train_active():
         try:
             from . import train3d as _train

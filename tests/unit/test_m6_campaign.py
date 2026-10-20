@@ -29,6 +29,7 @@ from missions.m6 import meta as _meta
 from missions.m6 import stealth as _stealth
 from missions.m6 import train3d as _train
 from missions.m6 import world as _world
+from missions.m6 import yard3d as _yard
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -409,15 +410,24 @@ class TrainSceneTests(unittest.TestCase):
         self.assertEqual(STATE.m6_train_result, "skip")
         self.assertTrue(STATE.m6_volkov_dead)
         self.assertFalse(STATE.m6_train_active)
+        # skipping the cinematic lands in the yard fight, not the ending
+        self.assertTrue(STATE.m6_yard_active)
+        self.assertFalse(STATE.request_mission6_ending)
+        _yard.force_finish("win")
         self.assertTrue(STATE.request_mission6_ending)
 
-    def test_train_handoff_requests_the_ending_film(self):
+    def test_train_handoff_goes_through_the_yard_to_the_ending(self):
         STATE.mission6_stage = _meta.STAGE_TRAIN
         STATE.m6_train_active = True
         with patch.object(_world, "volkov", lambda: None):
             self.assertTrue(_flow.on_train_done("win"))
             self.assertFalse(_flow.on_train_done("win"))
         self.assertEqual(STATE.mission6_stage, _meta.STAGE_TRAIN)
+        self.assertTrue(STATE.m6_yard_active)
+        self.assertFalse(STATE.request_mission6_ending)
+        self.assertTrue(_yard.force_finish("win"))
+        self.assertFalse(_yard.force_finish("win"), "yard handoff double-fired")
+        self.assertFalse(STATE.m6_yard_active)
         self.assertTrue(STATE.request_mission6_ending)
 
     def test_mouse_look_is_not_inverted(self):
@@ -803,3 +813,111 @@ class StagingAndExposureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# "Who fired?" - the third-person yard fight
+# ───────────────────────────────────────────────────────────────────────────
+class YardSceneTests(unittest.TestCase):
+    def setUp(self):
+        STATE.reset()
+        STATE.player = SimpleNamespace(hp=100000, max_hp=100000)
+        STATE.dt = 1.0 / 60.0
+        STATE.mission6_stage = _meta.STAGE_TRAIN
+        self.scene = _yard.YardScene()
+        self.scene.begin()
+
+    def tearDown(self):
+        self.scene._active = False
+        STATE.reset()
+
+    def test_start_is_clear_and_on_the_ground(self):
+        x, y, z = _yard.START_POS
+        self.assertFalse(_yard._blocked(x, z, y))
+        self.assertAlmostEqual(y, _yard.ground_y(x, z), delta=0.05)
+
+    def test_walls_block_and_the_platform_edge_is_climbable(self):
+        # the first freight wagon's flank
+        self.assertTrue(_yard._blocked(14.4, _train.FREIGHT_Z + 1.3, 0.04))
+        # stepping up onto the platform from the near track
+        self.assertFalse(_yard._blocked(5.0, 3.0, 0.04))
+        self.assertTrue(_yard._blocked(6.0, 11.0, 0.58), "walked into the station")
+
+    def test_death_restarts_the_fight_from_the_body(self):
+        sc = self.scene
+        sc.pos = (20.0, 0.04, -4.0)
+        sc.update([False] * 512)
+        STATE.player.hp = 0
+        sc.dying = True
+        for _ in range(int(2.8 * 60)):
+            sc.update([False] * 512)
+        self.assertFalse(sc.dying)
+        self.assertTrue(sc.active())
+        self.assertEqual(tuple(sc.pos), _yard.START_POS)
+        self.assertEqual(sc.wave, 0)
+        self.assertEqual(STATE.player.hp, STATE.player.max_hp)
+        self.assertFalse(STATE.request_mission6_ending)
+
+    def test_terminal_needs_the_box_cleared(self):
+        sc = self.scene
+        sc.pos = (_yard.TERMINAL[0], 0.04, _yard.TERMINAL[1])
+        sc.update([False] * 512)
+        self.assertFalse(sc.near_terminal, "terminal open with the Guard alive")
+
+    def _key_state(self, sc, want):
+        keys = [False] * 512
+        if want is None:
+            return keys
+        f = _train._forward(sc.yaw, 0.0)
+        rg = _yard._screen_right(sc.yaw)
+        fw = f[0] * want[0] + f[2] * want[1]
+        sd = rg[0] * want[0] + rg[2] * want[1]
+        if fw > 0.3:
+            keys[pygame.K_w] = True
+        elif fw < -0.3:
+            keys[pygame.K_s] = True
+        if sd > 0.3:
+            keys[pygame.K_d] = True
+        elif sd < -0.3:
+            keys[pygame.K_a] = True
+        return keys
+
+    def test_a_bot_can_fight_through_to_the_terminal(self):
+        """Aim at the nearest Guard in sight, fire, walk the route round the
+        siding's east end to the signal box, use the terminal."""
+        sc = self.scene
+        route = [(22.6, -5.0), (22.6, -12.4), _yard.TERMINAL]
+        wp = 0
+        for _ in range(60 * 240):
+            if not sc.active():
+                break
+            chest = sc._player_chest()
+            seen = [g for g in sc.guards if g["alive"] and not _yard._sight_blocked(
+                (g["pos"][0], g["pos"][1] + 1.3, g["pos"][2]), chest)]
+            sc.firing = False
+            if seen:
+                g = min(seen, key=lambda g: math.dist(g["pos"], sc.pos))
+                for _i in range(2):
+                    o, _d = sc._aim_ray()
+                    tx, ty, tz = g["pos"][0], g["pos"][1] + 1.3, g["pos"][2]
+                    dx, dy, dz = tx - o[0], ty - o[1], tz - o[2]
+                    sc.yaw = math.degrees(math.atan2(dx, -dz)) % 360.0
+                    sc.pitch = math.degrees(math.atan2(dy, math.hypot(dx, dz)))
+                sc.firing = True
+            want = None
+            if wp < len(route):
+                tx, tz = route[wp]
+                dx, dz = tx - sc.pos[0], tz - sc.pos[2]
+                d = math.hypot(dx, dz)
+                if d < 0.5:
+                    wp += 1
+                else:
+                    want = (dx / d, dz / d)
+            if sc.near_terminal:
+                sc.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
+                break
+            sc.update(self._key_state(sc, want))
+        self.assertEqual(sc.wave, 2)
+        self.assertEqual(sc._living(), 0, "Guards left standing")
+        self.assertEqual(sc.result, "win")
+        self.assertTrue(STATE.request_mission6_ending)

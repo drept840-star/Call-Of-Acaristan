@@ -1697,6 +1697,17 @@ def _apply_dev_args():
               or "--dev-mission6-3d" in args or "--m6-3d" in args
               or "--dev-mission6-shootout" in args or "--m6-shootout" in args):
         gc.start_mission6_train_checkpoint(preserve_timer=True); gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission6-yard" in args or "--m6-yard" in args:
+        # Straight into the "Who fired?" fight (train scene skipped).
+        gc.start_mission6_train_checkpoint(preserve_timer=True)
+        try:
+            from missions.m6 import train3d as _m6_train, flow as _m6_flow
+            _m6_train.reset()           # no handoff: the ending must not start
+            STATE.m6_train_active = False
+            _m6_flow._enter_yard()
+        except Exception as exc:
+            print("dev yard start failed:", exc)
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-mission6-ending" in args or "--m6-ending" in args:
         gc.start_mission6_rail_checkpoint(preserve_timer=True)
         _start_m6_cutscene(gc.mission6_ending_shots, "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
@@ -3067,6 +3078,13 @@ class _GameState_(GameState):
     def enter(self):
         _apply_equipped_look()
         if getattr(gc, "active_mission", "MISSION1") == "MISSION6" \
+                and getattr(STATE, "m6_yard_active", False):
+            try:
+                from missions.m6 import yard3d as _m6_yard  # lazy: M6-only
+                _m6_yard.set_paused(False)
+            except Exception:
+                pass
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION6" \
                 and getattr(STATE, "m6_train_active", False):
             try:
                 from missions.m6 import train3d as _m6_train  # lazy: M6-only
@@ -3129,6 +3147,19 @@ class _GameState_(GameState):
                 pass
             return
         if getattr(gc, "active_mission", "MISSION1") == "MISSION6":
+            if getattr(STATE, "m6_yard_active", False):
+                # The yard fight owns the mouse and keyboard; ESC pauses.
+                from missions.m6 import yard3d as _m6_yard  # lazy: M6-only
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    _m6_yard.set_paused(True)
+                    gsm.transition("PAUSED")
+                    return
+                try:
+                    _m6_yard.handle_event(event)
+                except Exception:
+                    pass
+                return
+
             if getattr(STATE, "m6_train_active", False):
                 # The interactive train owns the mouse and keyboard.  Route
                 # before the global shoot/interact block so clicks never leak

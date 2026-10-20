@@ -8565,10 +8565,19 @@ def check_mission6_vertical_slice():
     assert _sc.ucilev_fired, "the signal-tower shot never fired"
     guard = 0
     # ...then the scene must run to DURATION (about 41.6 s, slow-motion lag included) to request the ending.
-    while not STATE.request_mission6_ending and guard < 1100:
+    while not getattr(STATE, "m6_yard_active", False) and guard < 1100:
         m6.game_update(EmptyKeys())
         guard += 1
-    assert STATE.request_mission6_ending, "train never requested the ending"
+    # The train hands off to the "Who fired?" yard fight; its terminal is
+    # what requests the ending film.
+    assert STATE.m6_yard_active, "train never handed off to the yard fight"
+    assert not STATE.request_mission6_ending
+    from missions.m6 import yard3d as _m6_yard
+    for _ in range(30):
+        m6.game_update(EmptyKeys())
+    assert _m6_yard.active()
+    assert _m6_yard.force_finish("win")
+    assert STATE.request_mission6_ending, "yard never requested the ending"
     assert _m6_train.result() == "win"
     assert not STATE.m6_train_active and not _m6_train.active()
     assert STATE.player is not None and STATE.player.hp > 0
@@ -8584,8 +8593,11 @@ def check_mission6_vertical_slice():
     assert _m6_train.handle_event(
         pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
     assert STATE.mission6_stage == m6.STAGE_TRAIN
-    assert STATE.request_mission6_ending
+    assert STATE.m6_yard_active and not STATE.request_mission6_ending
     assert _m6_train.result() == "skip"
+    from missions.m6 import yard3d as _m6_yard
+    _m6_yard.force_finish("win")
+    assert STATE.request_mission6_ending
 
     # Exception path: a broken scene must fall through to the ending, never strand.
     gc.start_mission6_train_checkpoint()

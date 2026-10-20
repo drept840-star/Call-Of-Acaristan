@@ -185,6 +185,8 @@ def _enter_train():
           "stage_train")
     STATE.m6_train_checkpoint_reached = True
     STATE.m6_train_result = None
+    STATE.m6_yard_active = False
+    STATE.m6_yard_result = None
     STATE.m6_train_active = True
     try:
         from . import train3d as _train
@@ -297,6 +299,9 @@ def on_train_done(result="win"):
         return False
     if getattr(STATE, "request_mission6_ending", False):
         return False
+    if (getattr(STATE, "m6_yard_active", False)
+            or getattr(STATE, "m6_yard_result", None) is not None):
+        return False            # already handed to the yard fight
     if (getattr(STATE, "player_dead", False)
             or getattr(STATE, "m6_train_death", False)
             or getattr(STATE, "m6_train_result", None) in ("dead", "failed")):
@@ -312,6 +317,33 @@ def on_train_done(result="win"):
     v = _world.volkov()
     if v:
         v["dead"] = True
+    if result in ("win", "skip"):
+        # skipping the cinematic never skips the fight after it
+        _enter_yard()
+    else:
+        _request_ending()
+    return True
+
+
+def _enter_yard():
+    """Volkov is dead: the third-person fight to the signal box terminal."""
+    _set_objective("Who fired? Get to the Guard terminal in the signal box.")
+    STATE.m6_yard_active = True
+    try:
+        from . import yard3d as _yard
+        _yard.begin()
+    except Exception:
+        # A broken scene must never strand the mission.
+        STATE.m6_yard_active = False
+        _request_ending()
+
+
+def on_yard_done(result="win"):
+    """Yard fight handoff: the terminal shot opens the ending film."""
+    if getattr(STATE, "request_mission6_ending", False):
+        return False
+    STATE.m6_yard_active = False
+    STATE.m6_yard_result = result
     _request_ending()
     return True
 

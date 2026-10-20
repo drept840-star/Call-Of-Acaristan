@@ -369,6 +369,17 @@ def game_draw(fcx=0, fcy=0, surface=None):
     if target is None:
         return
 
+    if getattr(STATE, "m6_yard_active", False):
+        try:
+            from . import yard3d as _yard
+            if _yard.active():
+                _yard.draw(target)
+                return
+        except Exception as exc:
+            print("M6 yard draw failed (%s: %s)" % (type(exc).__name__, exc))
+            from . import yard3d as _yard
+            _yard.force_finish("fallback")
+
     if ((getattr(STATE, "m6_train_active", False)
          or getattr(STATE, "m6_train_death", False))
             and _draw_train(target)):
