@@ -3,6 +3,7 @@
 Pose keys (degrees unless noted) - anything missing falls back to NEUTRAL:
   spine, spine_r, twist      torso lean fwd / side lean / twist
   head_p, head_y             nod down / turn
+  head_x                     lateral head shift (m, + = right): cheek welds
   lsh_p, lsh_r, lel          left shoulder raise fwd / out, elbow bend
   rsh_p, rsh_r, rel          right ...
   lhip_p, lhip_r, lkn        left thigh raise fwd / out, knee bend
@@ -22,7 +23,7 @@ __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
            "os12_mesh", "pose_run", "pose_drag", "pose_crawl", "SLOTS", "PART_FB",
            "solve_look", "mouth_flap"]
 
-NEUTRAL = dict(spine=3, spine_r=0, twist=0, head_p=0, head_y=0,
+NEUTRAL = dict(spine=3, spine_r=0, twist=0, head_p=0, head_y=0, head_x=0.0,
                lsh_p=8, lsh_r=8, lel=12, rsh_p=8, rsh_r=8, rel=12,
                lhip_p=0, lhip_r=2, lkn=2, rhip_p=0, rhip_r=2, rkn=2,
                lank=0, rank=0, body_p=0, body_r=0, lift=0.0, rifle_p=60, rifle_y=0)
@@ -866,7 +867,7 @@ class Humanoid:
             B = tuple(x * sc for x in B)
         S = m_mul(B, m_mul(rot_y(p["twist"]), m_mul(rot_x(p["spine"]), rot_z(p["spine_r"]))))
         H = m_mul(S, m_mul(rot_y(p["head_y"]), rot_x(p["head_p"])))
-        neck = m_apply(S, (0, 0.62, 0))
+        neck = m_apply(S, (p["head_x"], 0.62, 0))
         places = []
         joints = {}
         o = (0.0, 0.0, 0.0)

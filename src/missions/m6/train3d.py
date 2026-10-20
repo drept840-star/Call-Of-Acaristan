@@ -80,8 +80,37 @@ BIRI_ARRIVE = 3.35     # ...and reaches the body
 # inside the cabin that is exactly what the beat rendered - a featureless
 # grey disc with no Volkov, no track, nothing.
 TOWER_CABIN_BOX = (16.9, 19.1, 7.0, 8.6, 7.5, 9.5)   # x0 x1 y0 y1 z0 z1
-TOWER_KNEE = (18.0, 8.62, 8.50)   # where the rig stands (matches _draw_ucilev)
+TOWER_KNEE = (18.0, 8.62, 7.70)   # where the rig stands (matches _draw_ucilev)
 TOWER_EYE = (17.95, 8.05, 7.16)   # at the window: in front of the cabin (-z)
+
+# Train-only sniper hold. Do not change the shared sniper mesh or kneel pose.
+#
+# The sniper rifle is parented to the RIGHT HAND joint: the hand sits on the
+# grip and the stock reaches 0.34 m back, so the hand has to sit 0.34 m along
+# the aim in front of the shoulder pocket for the butt to touch the shoulder.
+# The rifle yaw brings the fore-end across the chest so the support hand can
+# reach it; the body yaw is compensated by the same amount (see _draw_ucilev)
+# so the muzzle still points at Volkov.  Angles solved against the actual rig
+# geometry (butt-in-shoulder 3 cm, support hand on the fore-end); train-local,
+# the shared M5/M6 sniper mesh and POSES["kneel"] stay untouched.
+_UCILEV_KNEEL_AIM = dict(
+    POSES["kneel"],
+    spine=20.0,
+    spine_r=6.0,
+    twist=16.0,
+    head_p=21.0,
+    head_y=0.0,
+    head_x=0.10,
+    rsh_p=15.0,
+    rsh_r=-45.0,
+    rel=95.0,
+    lsh_p=50.0,
+    lsh_r=-50.0,
+    lel=10.0,
+    rifle_p=40.0,
+    rifle_y=-8.0,
+)
+_UCILEV_AIM_YAW = _UCILEV_KNEEL_AIM["rifle_y"]
 
 # Local lights per frame.  The GL shader holds eight slots (``u_pl_pos[8]``)
 # but uploads only ``Renderer.light_cap`` of them, default four; the train opts
@@ -3451,11 +3480,38 @@ class TrainScene:
         c = t - SHOT_AT
         if c < 0.0 or c >= CINE_TOWER_END:
             return
+
         pos = TOWER_KNEE
-        yaw = _w.yaw_to(pos, (11.2, 1.0, 1.0))
-        pose = dict(POSES["kneel"])
-        _w.actor(r, "ucilev", pose, pos, yaw, int(t * 1000), seed=95,
-                 amp=0.20, rifle_on=True, hd=True)
+        vpos = _volkov_at(min(t, HIT_AT), self.volkov_delay)[0]
+        target = (vpos[0], vpos[1] + 1.05, vpos[2])
+        # The rifle is yawed across the chest; turn the body the other way so
+        # the muzzle azimuth still lands on Volkov.
+        bearing = _w.yaw_to(pos, target)
+        yaw = bearing - _UCILEV_AIM_YAW
+
+        hum = _hum("ucilev")
+        pose = dict(_UCILEV_KNEEL_AIM)
+        # Read the actual weapon hand after posing (rifle_p is body-relative,
+        # + = muzzle down).  The arms do not depend on the pitch.
+        _places, joints, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
+        hand = joints["rhand"]
+        proj = ((target[0] - hand[0]) * math.sin(math.radians(bearing))
+                + (target[2] - hand[2]) * math.cos(math.radians(bearing)))
+        pitch = math.degrees(math.atan2(hand[1] - target[1], max(0.1, proj)))
+        pose["rifle_p"] = pitch
+        # Cheek weld: the head follows the barrel (the spine is already
+        # pitched) and turns back against the torso twist, onto the stock.
+        pose["head_p"] = clamp(pitch - pose.get("spine", 0.0), -14.0, 30.0)
+        pose["head_y"] = clamp(_UCILEV_AIM_YAW - pose.get("twist", 0.0),
+                               -38.0, 38.0)
+
+        _w.actor(
+            r, "ucilev", pose, pos, yaw, int(t * 1000),
+            seed=95,
+            amp=0.0,
+            rifle_on=True,
+            hd=True,
+        )
 
     def _draw_biribel(self, r, t):
         if self.dying or self.volkov_failed or t < SHOT_AT:
