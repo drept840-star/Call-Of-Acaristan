@@ -5,6 +5,7 @@
     python tools/trailer_rpe6/shorts.py gameplay --sheet         one still per shot + _sheet_<name>.jpg
     python tools/trailer_rpe6/shorts.py gameplay                 MP4 with its own mix
     python tools/trailer_rpe6/shorts.py all
+    python tools/trailer_rpe6/shorts.py all --thumbs        1080x1920 covers -> shorts/cover_<name>.png
 
 Not a crop of the 16:9 film: every frame is rendered again by the engine at
 portrait size, with the same shot classes as render.py.  The engine's fov is
@@ -451,6 +452,86 @@ def stills(sh, times):
     return paths
 
 
+# ── covers: the trailer thumbnail's look (heavy type, red banner) at 9:16 ─
+# TikTok's grid crops a cover to the middle 3:4 (y 240..1680), so the type
+# keeps inside that band
+COVERS = {
+    # name: (pictures, lines, banner, sub, text top).  One picture is
+    # (time, (x, y, w)): punch in on that 9:16 window.  Several are
+    # (local time, strip top y) per camera, one sim instant stacked.
+    "gameplay": ([(18.4, (40, 330, 820))], ["100%", "IN-ENGINE"], "GAMEPLAY", "CALL OF ACARISTAN", 1200),
+    "engine": ([(8.05, (150, 260, 780))], ["I BUILT MY", "OWN GAME"], "ENGINE", "RPE6 // CALL OF ACARISTAN", 1200),
+    "replay": ([(1.2, 940), (None, 700), (None, 480)], ["SAME FIGHT"], "3 CAMERAS",
+               "CALL OF ACARISTAN", 1300),
+}
+
+
+def _heavy(txt, size, col=(255, 255, 255), stroke=7):
+    f = pygame.font.SysFont("arialblack", size)
+    body = f.render(txt, True, col)
+    edge = f.render(txt, True, (0, 0, 0))
+    out = pygame.Surface((body.get_width() + 2 * stroke + 8, body.get_height() + 2 * stroke + 8), pygame.SRCALPHA)
+    for a in range(0, 360, 20):
+        dx, dy = stroke * math.cos(math.radians(a)), stroke * math.sin(math.radians(a))
+        out.blit(edge, (stroke + dx + 6, stroke + dy + 8))          # drop shadow
+    for a in range(0, 360, 20):
+        dx, dy = stroke * math.cos(math.radians(a)), stroke * math.sin(math.radians(a))
+        out.blit(edge, (stroke + dx, stroke + dy))
+    out.blit(body, (stroke, stroke))
+    return out
+
+
+def _lift(surf, gain=1.18, gamma=0.82):
+    """Night frames read muddy at feed size: open the shadows a little."""
+    import numpy as np
+    a = pygame.surfarray.pixels3d(surf)
+    f = (a.astype(np.float32) / 255.0) ** gamma * gain
+    a[...] = np.clip(f * 255.0, 0, 255).astype(np.uint8)
+    del a
+
+
+def cover(name, sh):
+    pics, lines, banner, sub, y = COVERS[name]
+    quiet = Short(sh.name, sh.title, sh.shots, [], {}, sh.music, sh.total)
+    cut = Cutter(quiet)
+    cv = pygame.Surface((W, H))
+    if len(pics) == 1:
+        T, (x, y0, w) = pics[0]
+        img = cut.frame(T, int(T * FPS)).subsurface((x, y0, w, w * H // W))
+        pygame.transform.smoothscale(img, (W, H), cv)
+    else:                                    # one sim instant from each camera, stacked
+        lt = pics[0][0]
+        strip = (y - 60) // len(pics)
+        for i, (shot, (_t, cy)) in enumerate(zip(sh.shots, pics)):
+            T = shot.start + lt
+            img = cut.frame(T, int(T * FPS))
+            cv.blit(img, (0, i * strip), (0, cy - strip // 2, W, strip))
+            pygame.draw.rect(cv, (0, 0, 0), (0, i * strip - 4, W, 8))
+            tag_ = _heavy("CAM %d" % (i + 1), 44, ORANGE, 4)
+            cv.blit(tag_, (44, i * strip + 28))
+    _lift(cv)
+    shade = pygame.Surface((W, 760), pygame.SRCALPHA)       # a floor under the type
+    for j in range(760):
+        a = int(170 * max(0.0, math.sin(math.pi * j / 759)) ** 0.8)
+        pygame.draw.line(shade, (0, 0, 0, a), (0, j), (W, j))
+    cv.blit(shade, (0, y - 140))
+    for txt in lines:
+        img = _fit(_heavy(txt, 150), W - 70)
+        cv.blit(img, (W // 2 - img.get_width() // 2, y))
+        y += img.get_height() - 40
+    b = _fit(_heavy(banner, 112, stroke=3), W - 200)
+    bw, bh = b.get_width() + 60, b.get_height() - 4
+    pygame.draw.rect(cv, (206, 28, 28), (W // 2 - bw // 2, y + 18, bw, bh))
+    cv.blit(b, (W // 2 - b.get_width() // 2, y + 14))
+    s = _fit(_heavy(sub, 50, (255, 178, 74), 4), W - 120)
+    cv.blit(s, (W // 2 - s.get_width() // 2, y + bh + 44))
+    os.makedirs(OUT, exist_ok=True)
+    p = os.path.join(OUT, "cover_%s.png" % name)
+    pygame.image.save(cv, p)
+    pygame.image.save(cv, p[:-4] + ".jpg")
+    print("->", p, flush=True)
+
+
 def sheet(paths, out, cols=5, w=270):
     h = w * H // W
     rows = (len(paths) + cols - 1) // cols
@@ -469,6 +550,7 @@ def main():
     ap.add_argument("--at", type=float, nargs="*")
     ap.add_argument("--sheet", action="store_true")
     ap.add_argument("--noaudio", action="store_true")
+    ap.add_argument("--thumbs", action="store_true")
     a = ap.parse_args()
     if a.list or not a.name:
         for k, sh in S.items():
@@ -476,7 +558,9 @@ def main():
         return
     for k in (sorted(S) if a.name == "all" else [a.name]):
         sh = S[k]
-        if a.sheet:
+        if a.thumbs:
+            cover(k, sh)
+        elif a.sheet:
             times = [s.start + (s.end - s.start) * 0.55 for s in sh.shots]
             sheet(stills(sh, times), os.path.join(OUT, "_sheet_%s.jpg" % k))
         elif a.at:
