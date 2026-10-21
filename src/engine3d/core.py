@@ -425,6 +425,10 @@ class SoftwareRenderer:
         # colour instead (``light_gain`` scales it), both backends.  Off by default.
         self.light_albedo = False
         self.light_gain = 1.0
+        # Lamp pools (set_pools) and snow glitter (textures._GLITTER) light the
+        # baked faces; GL only, both off until a scene asks.
+        self.pools = []
+        self.glitter = 0.0
         self.blob_shadows = True  # soft contact shadows (Phase 11 step 3)
         self.textures = {}        # tex_id -> numpy (h, w, 3) (P11 step 9)
         self._blob_cache = {}
@@ -529,6 +533,15 @@ class SoftwareRenderer:
         The strongest ``cap`` win - the per-set light budget (§6.7 step 2)."""
         ls = sorted(lights, key=lambda L: -float(L.get("intensity", 1.0)))
         self.lights = ls[:cap]
+
+    def set_pools(self, pools, cap=32):
+        """Lamp pools for this frame: dicts with pos (the lamp head), range
+        (the pool's radius on the ground), color, intensity and an optional
+        hot (the colour at the pool's centre). Local lights only reach the
+        per-frame meshes; a pool lights the baked faces under a lamp, so the
+        ground, walls and drifts warm. The software backend ignores them
+        (scenes put a floor sprite there instead)."""
+        self.pools = list(pools)[:cap]
 
     def _local_light(self, col, centre, n, base=None):
         """Add point/spot contributions at a face centre (software path:

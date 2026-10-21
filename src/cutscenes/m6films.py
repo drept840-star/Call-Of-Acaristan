@@ -24,7 +24,7 @@ import pygame
 
 from core.config import HEIGHT, SCENE_BOT, SCENE_TOP, WIDTH, font_terminal_small
 from core.outfits import OUTFIT_GUARD
-from cutscenes import m5fx3d as _fx
+from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from core.cutscene_registry import register_scene_renderers as _register
 

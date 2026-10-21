@@ -19,6 +19,10 @@ the scene's exposure; ``tint=True`` keeps that colour outright, for painted
 surfaces where the texture only adds its pattern. A tinted face reads the
 texture's light and dark only (a greyscale copy of the layer): its hue
 multiplied over paint turned a yellow barrel's rust patches green.
+
+A texture can also glitter (``_GLITTER``): the GL shader flashes a few of its
+texels when they mirror the key or a lamp pool into the camera, scaled by the
+renderer's ``glitter``. Only snow does.
 """
 import os
 import sys
@@ -26,17 +30,22 @@ import sys
 import numpy as np
 import pygame
 
-__all__ = ["Tex", "tex", "version", "stack", "SIZE"]
+from engine.assets import load_image
+
+__all__ = ["Tex", "tex", "version", "stack", "glitter", "SIZE"]
 
 SIZE = 64
 DENSITY = 32.0                      # default texels per metre: a tile is 2 m
 # Textures drawn at another scale: snow at half the detail, so its drifts
 # still read across a yard instead of melting into mip grey.
 _DENSITY = {"snow": 16.0, "snow_trod": 16.0}
+# Glitter per texture: fresh snow sparkles, trodden snow a little.
+_GLITTER = {"snow": 1.0, "snow_trod": 0.35}
 
 _names = {}                         # name -> layer
 _layers = []                        # [(name, ratio float16 (SIZE, SIZE, 3), mean)]
 _uvk = []                           # layer -> density / SIZE (tiles per metre)
+_glit = []                          # layer -> glitter strength
 _version = 0
 
 
@@ -64,7 +73,7 @@ def _load(name, density, mono=False):
     path = os.path.join(_root(), name + ".png")
     if not os.path.exists(path):
         return None
-    img = pygame.image.load(path)
+    img = load_image(path)
     if img.get_size() != (SIZE, SIZE):
         img = pygame.transform.scale(img, (SIZE, SIZE))
     rgb = np.asarray(pygame.surfarray.array3d(img), dtype=np.float64).transpose(1, 0, 2)
@@ -76,6 +85,7 @@ def _load(name, density, mono=False):
     layer = len(_layers)
     _layers.append((key, (rgb / mean).astype(np.float16), tuple(mean)))
     _uvk.append(float(density) / SIZE)
+    _glit.append(_GLITTER.get(name, 0.0))
     _names[key] = layer
     _version += 1
     return layer
@@ -111,6 +121,11 @@ def tex(name, like=None, density=None, tint=False):
 def version():
     """Bumps whenever a texture is added: the GL backend re-uploads then."""
     return _version
+
+
+def glitter():
+    """Glitter strength per layer, in layer order."""
+    return tuple(_glit)
 
 
 def stack():

@@ -31,7 +31,7 @@ import pygame
 
 from core.config import HEIGHT, SCENE_TOP, WIDTH, font_terminal_small
 from core.outfits import OUTFIT_GUARD, biribel_3d
-from cutscenes import m5fx3d as _fx
+from cutscenes import m6fx3d as _fx
 from cutscenes.cast3d import humanoid3d, spec3d
 
 SAFE_TOP = SCENE_TOP + 6
@@ -43,8 +43,8 @@ RW, RH = int(WIDTH * RES), int(FILM_H * RES)
 SNOW = (176, 188, 206)
 SNOW_DARK = (44, 54, 70)
 NIGHT = (7, 10, 18)
-SODIUM = (255, 176, 96)
-WARM = (255, 208, 150)
+SODIUM = _fx.SODIUM
+WARM = _fx.SODIUM
 COLD = (120, 156, 206)
 
 _cache = {"r": {}, "hum": {}, "grade": {}, "puff": {}, "err": None}
@@ -1031,10 +1031,10 @@ def warm_lamp(r, pos, t, seed=0, radius_m=1.6, col=WARM, intensity=0.9):
     r.add_sprite(pos, _fx.glow(col, radius_m, t, flicker=0.05, seed=seed,
                                core=(255, 236, 200), intensity=intensity),
                  layer=_fx.FX_LAYER)
-    r.add_sprite(pos, _fx.haze((255, 190, 130), radius_m * 2.2, t, seed=seed,
+    r.add_sprite(pos, _fx.haze(_fx.SODIUM, radius_m * 2.2, t, seed=seed,
                                intensity=0.10), layer=_fx.FX_LAYER)
     k = min(1.0, radius_m / 1.1)
-    r.add_sprite(pos, _fx.light_shaft((255, 188, 120), 2.1 * k, 0.25, 0.9, t, seed,
+    r.add_sprite(pos, _fx.light_shaft(_fx.SODIUM, 2.1 * k, 0.25, 0.9, t, seed,
                                       intensity=0.12 * k), layer=_fx.FX_LAYER)
 
 
@@ -1143,7 +1143,7 @@ def terrain(r, t, lights=True):
                 z = 15.4
                 y = height_at(x, z)
                 add(r, box(0.08, 4.6, 0.08, (28, 30, 36), center=(x, y + 2.3, z)))
-                add(r, box(0.16, 0.2, 0.16, (255, 186, 110),
+                add(r, box(0.16, 0.2, 0.16, _fx.SODIUM_PALE,
                            center=(x, y + 4.5, z), emissive=True))
                 add(r, quad_xz(x - 2.2, z - 1.8, x + 2.2, z + 1.8, 0.04,
                                (92, 72, 48), seg=2))
@@ -1184,7 +1184,7 @@ def capital(r, t):
                 wy = gy + rng.uniform(0.18, 0.86) * h
                 warm = rng.random() < 0.7
                 add(r, box(0.45, 0.35, 0.10,
-                           (255, 208, 142) if warm else (190, 206, 230),
+                           _fx.SODIUM_PALE if warm else (190, 206, 230),
                            center=(wx, wy, z - d / 2 - 0.02), emissive=True))
     for i, (x, z, w, h, d) in enumerate(_CAP_BLOCKS):
         if h >= 21 and int(t // 650 + i) % 2 == 0:
@@ -1192,9 +1192,9 @@ def capital(r, t):
             r.add_sprite((x, gy + h + 0.4, z),
                          _fx.glow((255, 44, 36), 1.0, t, seed=i, intensity=0.9),
                          layer=_fx.FX_LAYER)
-    r.add_sprite((2, 10, 66), _fx.haze((255, 170, 100), 44.0, t, seed=3,
+    r.add_sprite((2, 10, 66), _fx.haze(_fx.SODIUM, 44.0, t, seed=3,
                                        intensity=0.20), layer=_fx.FX_LAYER)
-    r.add_sprite((0, 5, 62), _fx.window_glow((255, 176, 108), 36.0, 8.0, 0.10),
+    r.add_sprite((0, 5, 62), _fx.window_glow(_fx.SODIUM, 36.0, 8.0, 0.10),
                  layer=_fx.FX_LAYER)
 
 
@@ -1230,7 +1230,7 @@ def border_compound(r, t, warm=1.0):
         # guard hut with a lit window
         add(r, box(3.4, 2.5, 2.8, (52, 50, 48), center=(7.2, 1.25, 9.4), seg=4))
         add(r, box(3.0, 0.24, 3.1, (34, 34, 36), center=(7.2, 2.6, 9.4)))
-        add(r, box(0.9, 0.7, 0.06, (255, 206, 140), center=(6.2, 1.55, 8.0),
+        add(r, box(0.9, 0.7, 0.06, (255, 203, 109), center=(6.2, 1.55, 8.0),
                    emissive=True))
         # frozen queue: cars waiting since before the border closed
         for i, z in enumerate((11.6, 15.0, 18.4)):
@@ -1242,10 +1242,10 @@ def border_compound(r, t, warm=1.0):
         # work lamps
         for i, x in enumerate((-4.4, 4.4)):
             add(r, box(0.14, 5.6, 0.14, (40, 42, 48), center=(x, 2.8, 7.6)))
-            add(r, box(0.5, 0.22, 0.34, (255, 214, 156), center=(x, 5.62, 7.55),
+            add(r, box(0.5, 0.22, 0.34, _fx.SODIUM_PALE, center=(x, 5.62, 7.55),
                        emissive=True))
             add(r, quad_xz(x - 3.4, 9.0, x + 3.4, 13.0, 0.04, (84, 68, 48), seg=4))
-    r.add_sprite((6.2, 1.55, 7.9), _fx.window_glow((255, 196, 120), 0.8, 0.6,
+    r.add_sprite((6.2, 1.55, 7.9), _fx.window_glow(_fx.SODIUM, 0.8, 0.6,
                                                   intensity=0.55 * warm),
                  layer=_fx.FX_LAYER)
     for i, x in enumerate((-4.4, 4.4)):
@@ -1548,7 +1548,7 @@ def _boxcar_dressing(m, L, Wd, H):
     m.add(box(0.30, 0.04, 0.30, (74, 76, 80), center=(-1.32, 0.30, -2.60)))
     # A lantern bracket by the door and a boot scraper on the threshold.
     m.add(box(0.22, 0.03, 0.03, (40, 40, 44), center=(Wd / 2 - 0.15, 2.05, -1.30)))
-    m.add(box(0.12, 0.16, 0.12, (255, 206, 146), center=(Wd / 2 - 0.26, 1.96, -1.30),
+    m.add(box(0.12, 0.16, 0.12, _fx.SODIUM_PALE, center=(Wd / 2 - 0.26, 1.96, -1.30),
               emissive=True))
     m.add(box(0.44, 0.06, 0.16, (52, 54, 58), center=(Wd / 2 - 0.34, 0.03, 0.10)))
 
@@ -1587,7 +1587,7 @@ def boxcar_interior(r, t, lantern=1.0, door_open=1.0, snow=1.0, glow=1.1):
                       (54, 64, 82), seg=6))
         m.add(box(0.14, 4.2, 0.14, (34, 36, 42),
                   center=(Wd / 2 + 6.0, 2.1, 2.4)))
-        m.add(box(0.4, 0.18, 0.3, (255, 208, 150),
+        m.add(box(0.4, 0.18, 0.3, _fx.SODIUM_PALE,
                   center=(Wd / 2 + 6.0, 4.2, 2.35), emissive=True))
     # crates: Volkov's seat (lid overhangs the box) and a stack against the wall
     S = SOLIDS["boxcar"]
@@ -1604,7 +1604,7 @@ def boxcar_interior(r, t, lantern=1.0, door_open=1.0, snow=1.0, glow=1.1):
     lx, ly, lz = LANTERN
     m.add(box(0.02, 2.59 - (ly + 0.15), 0.02, (26, 26, 28),
               center=(lx, (2.59 + ly + 0.15) / 2, lz)))
-    m.add(box(0.20, 0.24, 0.20, (255, 214, 150), center=LANTERN, emissive=True))
+    m.add(box(0.20, 0.24, 0.20, _fx.SODIUM_PALE, center=LANTERN, emissive=True))
     m.add(box(0.24, 0.05, 0.24, (60, 50, 40), center=(lx, ly + 0.15, lz)))
     m.add(box(0.22, 0.04, 0.22, (60, 50, 40), center=(lx, ly - 0.13, lz)))
     add(r, m)
@@ -1669,7 +1669,7 @@ def _train_detail_mesh():
     for i, wx in enumerate(range(-21, 22, 3)):
         if wx == 12:
             continue
-        pane = ((232, 196, 144) if i % 5 else (154, 120, 88)) \
+        pane = ((255, 203, 109) if i % 5 else (154, 120, 88)) \
             if i % 7 else (150, 176, 196)
         add(box(1.56, 0.96, 0.05, FRAME, center=(wx, 2.45, -2.885)))
         add(box(0.64, 0.78, 0.03, pane, center=(wx - 0.34, 2.45, -2.855),
@@ -1681,7 +1681,7 @@ def _train_detail_mesh():
                 center=(wx, 1.94, -2.842)))
     # Door frame + vestibule.  The leaves themselves are animated in train3d.
     add(box(1.60, 1.65, 0.06, (54, 38, 26), center=(10.9, 1.85, -3.28)))
-    add(box(1.20, 0.05, 0.10, (255, 214, 150),
+    add(box(1.20, 0.05, 0.10, _fx.SODIUM_PALE,
             center=(10.9, 2.72, -3.12), emissive=True))
     for jx in (10.06, 11.74):
         add(box(0.08, 1.65, 0.40, (30, 22, 18), center=(jx, 1.85, -3.06)))
@@ -1777,14 +1777,14 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
         _train_detail(r, tx)
         for cx in (-12.0, 0.0, 9.0, 15.0, 21.0):
             r.add_sprite((tx + cx, 2.45, -2.80),
-                         _fx.window_glow((255, 198, 128), 4.2, 1.2, 0.20),
+                         _fx.window_glow(_fx.SODIUM, 4.2, 1.2, 0.20),
                          layer=_fx.FX_LAYER)
         for sx in (6.0, 11.0, 16.0):
             r.add_sprite((tx + sx, 0.10, -2.45),
-                         _fx.window_glow((255, 180, 110), 2.4, 0.6, 0.16),
+                         _fx.window_glow(_fx.SODIUM, 2.4, 0.6, 0.16),
                          layer=_fx.FX_LAYER)
         r.add_sprite((tx + 10.9, 1.85, -2.80),
-                     _fx.window_glow((255, 196, 130), 1.2, 1.4, 0.22),
+                     _fx.window_glow(_fx.SODIUM, 1.2, 1.4, 0.22),
                      layer=_fx.FX_LAYER)
         r.add_sprite((tx - 23.02, 2.0, -2.80),
                      _fx.glow((228, 56, 42), 0.35, t, intensity=0.55),
@@ -1794,7 +1794,7 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
                seg=3))
     add(r, box(2.2, 1.6, 2.0, tex("metal_rib", like=(54, 56, 60), tint=True),
                center=(18, 7.8, 8.5), seg=3))
-    add(r, box(1.2, 0.7, 0.06, (255, 206, 140), center=(18, 7.8, 7.45),
+    add(r, box(1.2, 0.7, 0.06, (255, 203, 109), center=(18, 7.8, 7.45),
                emissive=True))
     # Ladder up the near face, roof rail and a red beacon: without them the
     # tower shot is a featureless box and the removed scope glint leaves
@@ -1818,7 +1818,7 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
                  layer=_fx.FX_LAYER)
     for i, x in enumerate((-18, -6, 6, 18)):
         add(r, box(0.18, 8.0, 0.18, (38, 40, 46), center=(x, 4.0, 11.5)))
-        add(r, box(0.7, 0.26, 0.5, (255, 226, 178), center=(x, 8.0, 11.4),
+        add(r, box(0.7, 0.26, 0.5, _fx.SODIUM_PALE, center=(x, 8.0, 11.4),
                    emissive=True))
         r.add_sprite((x, 8.0, 11.3), _fx.sodium_lamp(t, seed=50 + i,
                                                      radius_m=3.6,
@@ -1945,7 +1945,7 @@ def terminal_office(r, t, lamp=1.0, radio=True, crt=True, handset=True, voice=0.
             _handset_rest(m)
     # desk lamp, far end of the desk
     m.add(box(0.06, 0.34, 0.06, (44, 42, 36), center=(-2.1, 1.02, 1.9)))
-    m.add(box(0.22, 0.10, 0.18, (255, 216, 158), center=(-2.1, 1.22, 1.9),
+    m.add(box(0.22, 0.10, 0.18, _fx.SODIUM_PALE, center=(-2.1, 1.22, 1.9),
                emissive=True))
     if lamp:
         warm_lamp(r, (-2.1, 1.20, 1.9), t, seed=8, radius_m=1.1,
@@ -1981,7 +1981,7 @@ def vasile_office(r, t):
     m.add(box(0.62, 1.05, 0.10, (26, 24, 24), center=(0.2, 1.02, -0.52)))
     m.add(box(0.10, 0.48, 0.10, (20, 20, 20), center=(0.2, 0.24, -0.2)))
     m.add(box(0.5, 0.9, 0.5, (30, 28, 26), center=(0.2, 0.95, -0.2)))
-    m.add(box(0.30, 0.06, 0.30, (255, 206, 150), center=(1.0, 0.90, 1.1),
+    m.add(box(0.30, 0.06, 0.30, _fx.SODIUM_PALE, center=(1.0, 0.90, 1.1),
                emissive=True))
     add(r, m)
     warm_lamp(r, (1.0, 0.93, 1.1), t, seed=12, radius_m=1.2, intensity=0.5)

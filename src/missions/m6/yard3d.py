@@ -110,6 +110,9 @@ EAST_GAP = (-7.0, 3.4)                               # z span where tracks leave
 WEST_DOORS = (-12.4, -7.0)                           # z of the personnel doors
 LAMPS = ((-26.6, -17.6), (-26.6, -1.0), (-26.6, 9.0), (-8.0, -17.8),
          (7.0, -17.8), (27.6, -17.6), (27.6, -9.6), (27.6, 7.0))
+# The masts' sodium pools on the snow (GL; train3d.SET_POOLS has the set's)
+LAMP_POOLS = [{"pos": (lx, 6.3, lz), "range": 8.5, "color": P.SODIUM,
+               "hot": P.SODIUM_PALE, "intensity": 1.3} for lx, lz in LAMPS]
 
 
 def _blockers():
@@ -295,7 +298,7 @@ def _perimeter_mesh():
     for dz in WEST_DOORS:
         add(box(0.08, 2.1, 1.1, (26, 28, 32), center=(WALL_W + 0.24, 1.05, dz)))
         add(box(0.10, 0.12, 1.3, _POST, center=(WALL_W + 0.25, 2.16, dz)))
-        add(box(0.06, 0.12, 0.3, (255, 214, 150), center=(WALL_W + 0.3, 2.45, dz),
+        add(box(0.06, 0.12, 0.3, P.SODIUM_PALE, center=(WALL_W + 0.3, 2.45, dz),
                 emissive=True))
     # east: concrete either side of the gap the tracks leave through
     e0, e1 = EAST_GAP
@@ -311,7 +314,7 @@ def _perimeter_mesh():
     # lamp masts inside the walls
     for lx, lz in LAMPS:
         add(box(0.16, 6.4, 0.16, (34, 38, 44), center=(lx, 3.2, lz)))
-        add(box(0.5, 0.16, 0.36, (255, 222, 168), center=(lx, 6.3, lz),
+        add(box(0.5, 0.16, 0.36, P.SODIUM_PALE, center=(lx, 6.3, lz),
                 emissive=True))
     D.dress(add, WALL_W, WALL_E, WALL_S, T.TRUCK_X)
     _SET_CACHE["perimeter"] = m
@@ -323,11 +326,12 @@ def _perimeter_sprites(r, tm):
         r.add_sprite((lx, 6.2, lz), _fx.sodium_lamp(tm, seed=480 + i,
                                                      radius_m=2.6, intensity=0.6),
                      layer=_fx.FX_LAYER)
-        r.add_sprite((lx, 0.05, lz), _fx.window_glow((255, 186, 118), 3.6, 3.0, 0.16),
-                     layer=_fx.FX_LAYER)
+        if r.backend != "gl":            # GL: LAMP_POOLS light the snow
+            r.add_sprite((lx, 0.05, lz), _fx.window_glow(P.SODIUM, 3.6, 3.0, 0.16),
+                         layer=_fx.FX_LAYER)
     for dz in WEST_DOORS:
         r.add_sprite((WALL_W + 0.35, 2.45, dz),
-                     _fx.glow((255, 210, 150), 0.6, tm, intensity=0.7),
+                     _fx.glow(P.SODIUM, 0.6, tm, intensity=0.7),
                      layer=_fx.FX_LAYER)
 
 
@@ -1268,7 +1272,7 @@ class YardScene:
             {"pos": (T.TRUCK_X, 2.6, T.TRUCK_STOP_Z - T.TRUCK_HALF_L - 0.3),
              "color": P.LAMP_WHITE, "intensity": 0.6, "range": 5.0},
         ]
-        T._light(r, flashes=flashes)
+        T._light(r, flashes=flashes, pools=LAMP_POOLS)
         r.set_camera(eye, tgt, fov)
         T._sky(r, tm)
         r.begin()

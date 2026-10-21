@@ -30,7 +30,7 @@ from core.config import (
 )
 from core.state import STATE
 from core.outfits import OUTFIT_GUARD
-from cutscenes import m5fx3d as _fx
+from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from . import hud3d as _hud
 from . import palette3d as P
@@ -611,6 +611,7 @@ def _renderer():
         _cache["r"] = Renderer(RW, RH, fog=FOG, fog_start=16.0,
                                fog_end=BG_FOG_END)
         _cache["r"].light_cap = LIGHT_CAP
+        _cache["r"].glitter = 1.0
     return _cache["r"]
 
 
@@ -821,7 +822,7 @@ def _truck_mesh():
     add(box(1.9, 0.55, 0.04, (30, 38, 48), center=(0.0, 2.05, L - 0.29)))
     add(box(2.3, 0.18, 0.12, DARK, center=(0.0, 0.86, L + 0.04)))
     for side in (-1, 1):
-        add(box(0.30, 0.22, 0.06, (255, 236, 190),
+        add(box(0.30, 0.22, 0.06, (P.LAMP_WHITE),
                 center=(side * 0.72, 1.20, L + 0.06), emissive=True))
         add(box(0.16, 0.12, 0.04, (220, 40, 30),
                 center=(side * 0.95, 0.95, -L - 0.02), emissive=True))
@@ -935,7 +936,7 @@ def _yard_set(add):
     add(box(3.6, 0.25, 3.0, tex("metal_rib", like=(26, 28, 32), tint=True),
             center=(sx, 2.72, sz)))
     add(box(3.4, 0.05, 2.8, _SNOW, center=(sx, 2.87, sz)))
-    add(box(1.4, 0.70, 0.04, (255, 200, 130), center=(sx - 0.5, 1.65, sz + 1.32),
+    add(box(1.4, 0.70, 0.04, (P.SODIUM_PALE), center=(sx - 0.5, 1.65, sz + 1.32),
             emissive=True))
     add(box(1.56, 0.86, 0.04, (22, 22, 24), center=(sx - 0.5, 1.65, sz + 1.33)))
     add(box(0.8, 1.9, 0.05, (22, 20, 20), center=(sx + 1.0, 0.95, sz + 1.32)))
@@ -949,7 +950,7 @@ def _yard_set(add):
     mx, mz = YARD_MAST
     add(box(0.16, 6.0, 0.16, (34, 38, 44), center=(mx, 3.0, mz)))
     add(box(0.12, 0.10, 0.8, (34, 38, 44), center=(mx, 5.95, mz + 0.4)))
-    add(box(0.50, 0.16, 0.36, (255, 222, 168), center=(mx, 5.86, mz + 0.75),
+    add(box(0.50, 0.16, 0.36, (P.SODIUM_PALE), center=(mx, 5.86, mz + 0.75),
             emissive=True))
     # sleeper stack and a rail pile on the strip between the two tracks
     for i in range(5):
@@ -999,11 +1000,12 @@ def _yard_set_sprites(r, tm):
     """Lights for ``_yard_set``: queued every frame (geometry is baked)."""
     sx, sz = SIGNAL_BOX
     r.add_sprite((sx - 0.5, 1.65, sz + 1.28),
-                 _fx.window_glow((255, 196, 126), 1.6, 0.9, 0.26),
+                 _fx.window_glow((P.SODIUM), 1.6, 0.9, 0.26),
                  layer=_fx.FX_LAYER)
-    r.add_sprite((sx - 0.5, 0.05, sz + 2.4),
-                 _fx.window_glow((255, 190, 120), 2.2, 1.6, 0.14),
-                 layer=_fx.FX_LAYER)
+    if r.backend != "gl":                # GL: lamp pools (SET_POOLS)
+        r.add_sprite((sx - 0.5, 0.05, sz + 2.4),
+                     _fx.window_glow((P.SODIUM), 2.2, 1.6, 0.14),
+                     layer=_fx.FX_LAYER)
     r.add_sprite((sx - 1.0, 3.75, sz - 0.4),
                  _smoke(tm, seed=411, drift=(0.16, -0.30),
                         intensity=0.12, life_ms=3600),
@@ -1012,12 +1014,13 @@ def _yard_set_sprites(r, tm):
     r.add_sprite((mx, 5.80, mz + 0.75),
                  _fx.sodium_lamp(tm, seed=412, radius_m=3.0, intensity=0.60),
                  layer=_fx.FX_LAYER)
-    r.add_sprite((mx, 3.9, FREIGHT_Z + 1.48),
-                 _fx.window_glow((255, 200, 140), 6.0, 2.4, 0.10),
-                 layer=_fx.FX_LAYER)
-    r.add_sprite((mx, 0.05, mz + 3.0),
-                 _fx.window_glow((255, 186, 118), 4.0, 2.6, 0.18),
-                 layer=_fx.FX_LAYER)
+    if r.backend != "gl":                # GL: lamp pools (SET_POOLS)
+        r.add_sprite((mx, 3.9, FREIGHT_Z + 1.48),
+                     _fx.window_glow((P.SODIUM), 6.0, 2.4, 0.10),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((mx, 0.05, mz + 3.0),
+                     _fx.window_glow((P.SODIUM), 4.0, 2.6, 0.18),
+                     layer=_fx.FX_LAYER)
     r.add_sprite((FREIGHT_END_X, 1.30, FREIGHT_Z + 1.56),
                  _fx.glow((240, 60, 44), 0.30, tm, intensity=0.55),
                  layer=_fx.FX_LAYER)
@@ -1060,7 +1063,7 @@ def _door_leaf_mesh(k):
     m = Mesh()
     m.add(_swung(box(1.02, 1.62, 0.05, (44, 48, 56),
                      center=(0.51, G + 0.81, 0.0)), swing))
-    m.add(_swung(box(0.46, 0.50, 0.02, (255, 205, 140),
+    m.add(_swung(box(0.46, 0.50, 0.02, (P.SODIUM_PALE),
                      center=(0.51, G + 1.20, -0.03), emissive=True), swing))
     return m
 
@@ -1204,7 +1207,21 @@ def _spot(pos, target, color, intensity, range_, cone):
             "dir": (dx / ln, dy / ln, dz / ln), "cone": cone}
 
 
-def _light(r, eye=None, fwd=None, t=None, flashes=()):
+# Lamp pools (GL): where each practical in the set throws its light on the
+# baked ground, walls and drifts - (lamp head, pool radius, intensity).  The
+# software backend keeps the old additive floor sprites instead.
+_POOLS = (
+    [((x, 3.50 + _SLOT_GROUND, 6.95), 6.0, 2.4) for x in (-10.0, 0.0, 10.0)]   # street lamps
+    + [((x, 3.42, 8.55), 3.8, 1.6) for x in (-15.0, -8.0, 0.0, 8.0, 16.0)]   # canopy lamps
+    + [((x, 8.0, 11.3), 10.0, 1.4) for x in (-18.0, -6.0, 6.0, 18.0)]        # floodlights
+    + [((dx, 2.37, 8.55), 2.6, 1.2) for dx in DOOR_X.values()]              # door lamps
+    + [((YARD_MAST[0], 5.86, YARD_MAST[1] + 0.75), 8.0, 2.0),                # siding mast
+       ((SIGNAL_BOX[0] - 0.5, 1.65, SIGNAL_BOX[1] + 1.28), 2.8, 1.0)])     # signal box
+SET_POOLS = [{"pos": p, "range": rg, "color": P.SODIUM, "hot": P.SODIUM_PALE,
+              "intensity": k * 0.6} for p, rg, k in _POOLS]
+
+
+def _light(r, eye=None, fwd=None, t=None, flashes=(), pools=()):
     """Light rig for the frame.
 
     Every rig here is authored to exactly ``LIGHT_CAP`` local lights.  The GL
@@ -1324,6 +1341,7 @@ def _light(r, eye=None, fwd=None, t=None, flashes=()):
                 "color": (204, 212, 226), "intensity": 0.60, "range": 2.2})
     lights.extend(flashes)
     r.set_lights(lights)
+    r.set_pools(SET_POOLS + list(pools))
 
 
 # ── first-person K9 ──────────────────────────────────────────────────────
@@ -3443,7 +3461,7 @@ class TrainScene:
         # Illuminated departure board with frame
         _w.add(r, box(4.4, 1.12, 0.14, (36, 40, 48), center=(-4.8, 2.0, 9.04)))
         _w.add(r, box(4.1, 0.92, 0.10, (14, 18, 24), center=(-4.8, 2.0, 8.98), emissive=True))
-        _w.add(r, box(3.6, 0.08, 0.08, (255, 190, 115), center=(-4.8, 2.28, 8.93), emissive=True))
+        _w.add(r, box(3.6, 0.08, 0.08, _fx.SODIUM, center=(-4.8, 2.28, 8.93), emissive=True))
         _w.add(r, box(2.4, 0.05, 0.08, (190, 210, 230), center=(-5.2, 1.95, 8.93), emissive=True))
 
         # Yellow tactile safety strip along the platform edge
@@ -3468,7 +3486,7 @@ class TrainScene:
             _w.add(r, box(0.22, 0.45, 0.22, (28, 30, 36), center=(x, 0.22 + _SLOT_GROUND, 7.5)))
             _w.add(r, box(0.10, 3.6, 0.10, (36, 40, 46), center=(x, 1.8 + _SLOT_GROUND, 7.5)))
             _w.add(r, box(0.12, 0.08, 0.70, (36, 40, 46), center=(x, 3.62 + _SLOT_GROUND, 7.20)))
-            _w.add(r, box(0.46, 0.14, 0.34, (255, 220, 165), center=(x, 3.56 + _SLOT_GROUND, 6.95), emissive=True))
+            _w.add(r, box(0.46, 0.14, 0.34, (P.SODIUM_PALE), center=(x, 3.56 + _SLOT_GROUND, 6.95), emissive=True))
             r.add_sprite((x, 3.50 + _SLOT_GROUND, 6.95),
                          _fx.sodium_lamp(t * 1000.0, seed=80 + int(x),
                                          radius_m=3.1, intensity=0.65),
@@ -3521,7 +3539,7 @@ class TrainScene:
         for x in (-15.0, -8.0, 0.0, 8.0, 16.0):
             add(box(0.14, 3.4, 0.14, (34, 38, 44), center=(x, 2.1, 10.35)))
             add(box(0.34, 0.10, 0.34, (46, 50, 58), center=(x, 3.52, 8.55)))
-            add(box(0.20, 0.06, 0.20, (255, 220, 165), center=(x, 3.45, 8.55),
+            add(box(0.20, 0.06, 0.20, (P.SODIUM_PALE), center=(x, 3.45, 8.55),
                     emissive=True))
             r.add_sprite((x, 3.42, 8.55),
                          _fx.sodium_lamp(t * 1000.0, seed=120 + int(x),
@@ -3534,11 +3552,11 @@ class TrainScene:
         add(box(15.5, 0.16, 2.0, tex("concrete", like=(42, 46, 54)),
                 center=(-9.6, 2.06, 10.7), seg=6))
         for wx in (-14.0, -10.5, -6.5):
-            add(box(1.45, 0.64, 0.05, (255, 205, 145), center=(wx, 1.48, 9.78),
+            add(box(1.45, 0.64, 0.05, (P.SODIUM_PALE), center=(wx, 1.48, 9.78),
                     emissive=True))
             add(box(1.62, 0.80, 0.04, (38, 40, 46), center=(wx, 1.48, 9.81)))
             r.add_sprite((wx, 1.48, 9.74),
-                         _fx.window_glow((255, 190, 122), 0.95, 0.60, 0.20),
+                         _fx.window_glow((P.SODIUM), 0.95, 0.60, 0.20),
                          layer=_fx.FX_LAYER)
 
         # ── station wall detail: windows, door, clock, posters, pipes ──
@@ -3547,12 +3565,12 @@ class TrainScene:
                 center=(7.0, 0.29, 8.34), seg=4))
         for wx in (0.4, 7.6, 11.2):
             add(box(1.55, 0.82, 0.05, (38, 40, 46), center=(wx, 1.55, 8.98)))
-            add(box(1.38, 0.66, 0.03, (255, 212, 158), center=(wx, 1.55, 8.94),
+            add(box(1.38, 0.66, 0.03, (P.SODIUM_PALE), center=(wx, 1.55, 8.94),
                     emissive=True))
             add(box(1.46, 0.06, 0.04, (20, 22, 26), center=(wx, 1.90, 8.93)))
             add(box(1.46, 0.06, 0.04, (20, 22, 26), center=(wx, 1.20, 8.93)))
             r.add_sprite((wx, 1.55, 8.90),
-                         _fx.window_glow((255, 192, 128), 1.05, 0.82, 0.18),
+                         _fx.window_glow((P.SODIUM), 1.05, 0.82, 0.18),
                          layer=_fx.FX_LAYER)
         # The two Guard doors and their gooseneck lamps.  Only the frame and
         # the lit hallway behind the opening are set: the leaf swings live
@@ -3560,12 +3578,12 @@ class TrainScene:
         for di, dx in enumerate(sorted(DOOR_X.values())):
             add(box(1.25, 1.72, 0.10, (30, 34, 40),
                     center=(dx, _SLOT_GROUND + 0.86, 8.97)))
-            add(box(1.02, 1.62, 0.03, (255, 205, 140),
+            add(box(1.02, 1.62, 0.03, (P.SODIUM_PALE),
                     center=(dx, _SLOT_GROUND + 0.81, 8.93), emissive=True))
             add(box(1.40, 0.05, 0.40, (40, 42, 48),
                     center=(dx, _SLOT_GROUND + 0.02, 8.70)))
             add(box(0.10, 0.10, 0.34, (36, 40, 48), center=(dx, 2.48, 8.72)))
-            add(box(0.30, 0.08, 0.26, (255, 222, 168), center=(dx, 2.40, 8.58),
+            add(box(0.30, 0.08, 0.26, (P.SODIUM_PALE), center=(dx, 2.40, 8.58),
                     emissive=True))
             r.add_sprite((dx, 2.37, 8.55),
                          _fx.sodium_lamp(t * 1000.0, seed=133 + di,
@@ -3667,7 +3685,7 @@ class TrainScene:
             add(box(0.18, 6.3, 0.18, (36, 40, 48), center=(gx, 3.15, 1.8)))
             add(box(0.18, 6.3, 0.18, (36, 40, 48), center=(gx, 3.15, -7.2)))
             add(box(0.16, 0.16, 9.2, (36, 40, 48), center=(gx, 6.25, -2.7)))
-            add(box(0.50, 0.34, 0.30, (255, 228, 178), center=(gx, 6.02, -2.7),
+            add(box(0.50, 0.34, 0.30, (P.SODIUM_PALE), center=(gx, 6.02, -2.7),
                     emissive=True))
         _yard_set(add)
         # layer 2, not 0: every box face in this scene is painter layer 2, so
@@ -3747,7 +3765,7 @@ class TrainScene:
 
         for fx, fz in ((-22.0, -14.0), (30.0, -13.0)):
             add(box(0.14, 6.4, 0.14, (32, 36, 44), center=(fx, 3.2, fz)))
-            add(box(0.55, 0.24, 0.35, (255, 226, 176), center=(fx, 6.45, fz),
+            add(box(0.55, 0.24, 0.35, (P.SODIUM_PALE), center=(fx, 6.45, fz),
                     emissive=True))
 
         self._yard_sprites(r, t * 1000.0)
@@ -3776,24 +3794,25 @@ class TrainScene:
         # These are ADDITIVE: the old rig stacked eleven overlapping pools and
         # the platform came out one flat beige sheet with no dark between the
         # lamps.  Fewer, tighter, dimmer - the pools have to read as pools.
-        for lx in (-13.0, -9.0, 0.0, 9.0):
-            r.add_sprite((lx, G + 0.055, 6.10),
-                         _fx.window_glow((255, 184, 116), 3.0, 0.92, 0.36,
-                                         t * 1000.0, seed=151 + int(lx)),
+        if r.backend != "gl":            # GL: lamp pools (SET_POOLS)
+            for lx in (-13.0, -9.0, 0.0, 9.0):
+                r.add_sprite((lx, G + 0.055, 6.10),
+                             _fx.window_glow((P.SODIUM), 3.0, 0.92, 0.36,
+                                             t * 1000.0, seed=151 + int(lx)),
+                             layer=_fx.FX_LAYER)
+                r.add_sprite((lx, G + 0.05, 3.55),
+                             _fx.window_glow((P.SODIUM), 1.8, 0.54, 0.17,
+                                             t * 1000.0, seed=181 + int(lx)),
+                             layer=_fx.FX_LAYER)
+            for lx in (-6.0, 8.0):
+                r.add_sprite((lx, G + 0.05, 7.0),
+                             _fx.window_glow((P.SODIUM), 1.7, 0.55, 0.20,
+                                             t * 1000.0, seed=160 + int(lx)),
+                             layer=_fx.FX_LAYER)
+            r.add_sprite((10.9, G + 0.06, 3.2),
+                         _fx.window_glow((P.SODIUM), 2.0, 0.66, 0.26,
+                                         t * 1000.0, seed=171),
                          layer=_fx.FX_LAYER)
-            r.add_sprite((lx, G + 0.05, 3.55),
-                         _fx.window_glow((255, 176, 108), 1.8, 0.54, 0.17,
-                                         t * 1000.0, seed=181 + int(lx)),
-                         layer=_fx.FX_LAYER)
-        for lx in (-6.0, 8.0):
-            r.add_sprite((lx, G + 0.05, 7.0),
-                         _fx.window_glow((255, 190, 126), 1.7, 0.55, 0.20,
-                                         t * 1000.0, seed=160 + int(lx)),
-                         layer=_fx.FX_LAYER)
-        r.add_sprite((10.9, G + 0.06, 3.2),
-                     _fx.window_glow((255, 172, 102), 2.0, 0.66, 0.26,
-                                     t * 1000.0, seed=171),
-                     layer=_fx.FX_LAYER)
 
         _w.add(r, m)
 
@@ -3853,14 +3872,14 @@ class TrainScene:
         # waiting-train windows: cluster glows, door spill, rear marker
         for x in (-12.0, 0.0, 9.0, 15.0, 21.0):
             r.add_sprite((tx + x, 2.45, -2.80),
-                         _fx.window_glow((255, 198, 128), 4.2, 1.2, 0.20),
+                         _fx.window_glow((P.SODIUM), 4.2, 1.2, 0.20),
                          layer=_fx.FX_LAYER)
         for x in (6.0, 11.0, 16.0):
             r.add_sprite((tx + x, 0.10, -2.45),
-                         _fx.window_glow((255, 180, 110), 2.4, 0.6, 0.16),
+                         _fx.window_glow((P.SODIUM), 2.4, 0.6, 0.16),
                          layer=_fx.FX_LAYER)
         r.add_sprite((tx + TRAIN_DOOR_X, 1.85, -2.80),
-                     _fx.window_glow((255, 196, 130), 1.2, 1.4, 0.22),
+                     _fx.window_glow((P.SODIUM), 1.2, 1.4, 0.22),
                      layer=_fx.FX_LAYER)
         r.add_sprite((tx - 23.02, 2.0, -2.80),
                      _fx.glow((228, 56, 42), 0.35, tm, intensity=0.55),
@@ -3894,11 +3913,11 @@ class TrainScene:
         # station windows + left-wing windows
         for wx in (0.4, 7.6, 11.2):
             r.add_sprite((wx, 1.55, 8.90),
-                         _fx.window_glow((255, 192, 128), 1.05, 0.82, 0.18),
+                         _fx.window_glow((P.SODIUM), 1.05, 0.82, 0.18),
                          layer=_fx.FX_LAYER)
         for wx in (-14.0, -10.5, -6.5):
             r.add_sprite((wx, 1.48, 9.74),
-                         _fx.window_glow((255, 190, 122), 0.95, 0.60, 0.20),
+                         _fx.window_glow((P.SODIUM), 0.95, 0.60, 0.20),
                          layer=_fx.FX_LAYER)
         for di, dx in enumerate(sorted(DOOR_X.values())):
             r.add_sprite((dx, 2.37, 8.55),
@@ -3922,24 +3941,25 @@ class TrainScene:
                      layer=_fx.FX_LAYER)
         # floor spill (replaces the point lights lost to the static bake) -
         # must stay in step with _draw_platform_dressing
-        for lx in (-13.0, -9.0, 0.0, 9.0):
-            r.add_sprite((lx, G + 0.055, 6.10),
-                         _fx.window_glow((255, 184, 116), 3.0, 0.92, 0.36,
-                                         tm, seed=151 + int(lx)),
+        if r.backend != "gl":            # GL: lamp pools (SET_POOLS)
+            for lx in (-13.0, -9.0, 0.0, 9.0):
+                r.add_sprite((lx, G + 0.055, 6.10),
+                             _fx.window_glow((P.SODIUM), 3.0, 0.92, 0.36,
+                                             tm, seed=151 + int(lx)),
+                             layer=_fx.FX_LAYER)
+                r.add_sprite((lx, G + 0.05, 3.55),
+                             _fx.window_glow((P.SODIUM), 1.8, 0.54, 0.17,
+                                             tm, seed=181 + int(lx)),
+                             layer=_fx.FX_LAYER)
+            for lx in (-6.0, 8.0):
+                r.add_sprite((lx, G + 0.05, 7.0),
+                             _fx.window_glow((P.SODIUM), 1.7, 0.55, 0.20,
+                                             tm, seed=160 + int(lx)),
+                             layer=_fx.FX_LAYER)
+            r.add_sprite((10.9, G + 0.06, 3.2),
+                         _fx.window_glow((P.SODIUM), 2.0, 0.66, 0.26, tm,
+                                         seed=171),
                          layer=_fx.FX_LAYER)
-            r.add_sprite((lx, G + 0.05, 3.55),
-                         _fx.window_glow((255, 176, 108), 1.8, 0.54, 0.17,
-                                         tm, seed=181 + int(lx)),
-                         layer=_fx.FX_LAYER)
-        for lx in (-6.0, 8.0):
-            r.add_sprite((lx, G + 0.05, 7.0),
-                         _fx.window_glow((255, 190, 126), 1.7, 0.55, 0.20,
-                                         tm, seed=160 + int(lx)),
-                         layer=_fx.FX_LAYER)
-        r.add_sprite((10.9, G + 0.06, 3.2),
-                     _fx.window_glow((255, 172, 102), 2.0, 0.66, 0.26, tm,
-                                     seed=171),
-                     layer=_fx.FX_LAYER)
         self._yard_sprites(r, tm)
         _w.snow3d(r, tm, seed=61, n=snow_n, spread=22, height=16, speed=1.3)
 
@@ -3951,7 +3971,7 @@ class TrainScene:
         if closed < 0.98:
             # The warm vestibule is real now; this is only the doorway spill.
             r.add_sprite((dx, 1.9, z + 0.02),
-                         _fx.window_glow((255, 196, 130), 1.15, 1.4, 0.24),
+                         _fx.window_glow((P.SODIUM), 1.15, 1.4, 0.24),
                          layer=_fx.FX_LAYER)
         if closed > 0.02:
             # two leaves meet at the seam; the last 20 cm lands with the clunk
@@ -3960,7 +3980,7 @@ class TrainScene:
                 cx = dx + side * (0.36 + off)
                 _w.add(r, box(0.78, 1.62, 0.06, (46, 48, 54),
                               center=(cx, 1.85, z + 0.01)))
-                _w.add(r, box(0.26, 0.32, 0.03, (255, 214, 158),
+                _w.add(r, box(0.26, 0.32, 0.03, (P.SODIUM_PALE),
                               center=(cx, 2.32, z + 0.045), emissive=True))
                 _w.add(r, box(0.04, 0.88, 0.05, (28, 30, 34),
                               center=(cx - side * 0.30, 1.62, z + 0.05)))
@@ -4004,11 +4024,11 @@ class TrainScene:
             if k > 0.02:
                 # the hallway light pours out past him and onto the slab
                 r.add_sprite((dx, G + 0.95, 8.86),
-                             _fx.window_glow((255, 200, 135), 1.1, 1.7,
+                             _fx.window_glow((P.SODIUM), 1.1, 1.7,
                                              0.30 * k),
                              layer=_fx.FX_LAYER)
                 r.add_sprite((dx, G + 0.03, 8.1),
-                             _fx.window_glow((255, 196, 128), 1.6, 0.9,
+                             _fx.window_glow((P.SODIUM), 1.6, 0.9,
                                              0.22 * k),
                              layer=_fx.FX_LAYER)
 
@@ -4024,7 +4044,7 @@ class TrainScene:
         front = z + TRUCK_HALF_L + 0.08
         for side in (-1, 1):
             r.add_sprite((TRUCK_X + side * 0.72, 1.20 + bob, front),
-                         _fx.glow((255, 236, 196), 0.55, tm,
+                         _fx.glow((P.LAMP_WHITE), 0.55, tm,
                                   intensity=0.95),
                          layer=_fx.FX_LAYER)
             r.add_sprite((TRUCK_X + side * 0.95, 0.95 + bob, hz - 0.04),
@@ -4035,7 +4055,7 @@ class TrainScene:
         # the drop.
         pulse = max(0.0, math.sin(t * 6.2)) ** 2
         r.add_sprite((TRUCK_X + 0.7, TRUCK_BED_Y + 1.72 + bob, hz + 0.45),
-                     _fx.glow((255, 166, 48), 0.42, tm, intensity=0.35 + 0.6 * pulse),
+                     _fx.glow((P.SODIUM), 0.42, tm, intensity=0.35 + 0.6 * pulse),
                      layer=_fx.FX_LAYER)
         lamp = _smooth(TRUCK_STOP_T - 0.1, TRUCK_STOP_T + 0.15, t)
         # idling: exhaust curling up beside the cab
@@ -4049,18 +4069,18 @@ class TrainScene:
                                          intensity=0.62 * lamp),
                          layer=_fx.FX_LAYER)
             r.add_sprite((TRUCK_X - 0.4, 0.03, hz - 1.3),
-                         _fx.window_glow((255, 214, 150), 3.0, 2.2, 0.22 * lamp),
+                         _fx.window_glow((P.SODIUM), 3.0, 2.2, 0.22 * lamp),
                          layer=_fx.FX_LAYER)
         # the beams through the snow ahead of the cab, and their pool; parked,
         # the beams point up the road behind the station and only the pool
         # can show past the tower
         if moving:
             r.add_sprite((TRUCK_X, 1.0, front + 3.2),
-                         _fx.haze((255, 236, 196), 3.2, tm, seed=401,
+                         _fx.haze((P.LAMP_WHITE), 3.2, tm, seed=401,
                                   intensity=0.20),
                          layer=_fx.FX_LAYER)
         r.add_sprite((TRUCK_X, 0.03, front + 4.0),
-                     _fx.window_glow((255, 232, 190), 2.6, 3.4, 0.20),
+                     _fx.window_glow((P.SODIUM), 2.6, 3.4, 0.20),
                      layer=_fx.FX_LAYER)
 
     def _draw_yard_life(self, r, t):

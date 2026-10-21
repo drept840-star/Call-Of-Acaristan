@@ -67,7 +67,7 @@ def skyline(add):
                 else:
                     pos, size = (cx + sgn * (w * 0.5 + 0.04), 2.2 + r * 3.2, cz + off), (0.06, 1.5, 1.2)
                 warm = _hash(i * 31 + r * 5 + c, 9)
-                col = (255, 206, 128) if warm < 0.7 else (176, 206, 255)
+                col = (255, 203, 109) if warm < 0.7 else (176, 206, 255)
                 add(box(*size, col, center=pos, emissive=True))
                 n += 1
                 if n > 380:
@@ -107,7 +107,7 @@ def _prop(add, kind, x, z, w, d, h):
             for wz in (-1.0, 1.0):
                 add(box(0.7, 0.7, 0.26, (22, 24, 28), center=(x + wx, 0.38, z + wz)))
         for lz in (-0.7, 0.7):
-            add(box(0.04, 0.22, 0.3, (255, 226, 170),
+            add(box(0.04, 0.22, 0.3, (255, 251, 206),
                     center=(x + w * 0.5 + 0.01, 0.9, z + lz), emissive=True))
         add(box(w * 0.55 + 0.1, 0.08, d * 0.92 + 0.1, _SNOW, center=(x - 0.6, 2.34, z)))
     elif kind == "crates":
@@ -148,7 +148,7 @@ def dress(add, wall_w, wall_e, wall_s, road_x):
     for i in range(14):
         add(box(0.1, 0.5, 0.18, _POST, center=(wall_w + 3.0 + i * 4.1, 1.82, wall_s + 0.5)))
     for lx in (-24.0, -6.0, 3.5, 11.0):
-        add(box(0.3, 0.14, 0.2, (255, 222, 168), center=(lx, 2.3, wall_s + 0.42), emissive=True))
+        add(box(0.3, 0.14, 0.2, (255, 236, 154), center=(lx, 2.3, wall_s + 0.42), emissive=True))
         add(box(0.1, 0.4, 0.1, _POST, center=(lx, 2.1, wall_s + 0.4)))
     for sx, sz, face in ((-12.0, wall_s + 0.24, 0), (9.0, wall_s + 0.24, 0),
                          (wall_w + 0.24, -5.0, 1), (wall_w + 0.24, 4.5, 1),

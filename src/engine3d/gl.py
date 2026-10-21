@@ -137,14 +137,29 @@ uniform vec4 u_pl_dir[8];  // spot dir + cone cos in w (w < -0.5 = point)
 uniform int u_pl_n;
 uniform float u_pl_mod;    // 0 = add the light colour (legacy), 1 = light * surface albedo
 uniform float u_pl_gain;   // strength of the albedo-modulated mode
+uniform vec4 u_pool_pos[32];  // lamp pools (set_pools): lamp head xyz + radius
+uniform vec4 u_pool_col[32];  // rim rgb (0-255) + intensity
+uniform vec3 u_pool_hot[32];  // rgb (0-255) at the pool's centre
+uniform int u_pool_n;
+uniform float u_glit[32];     // glitter per texture layer (textures.glitter)
+uniform float u_glit_k;       // the scene's glitter, 0 = none
 out vec4 f_color;
 
 const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
+const float TEX_SIZE = 64.0;  // textures.SIZE
+
+float hash12(vec2 p) {
+    vec3 p3 = fract(p.xyx * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
 
 void main() {
     // sampled before any discard or branch so the mip choice has its derivatives
     // (a half-mip bias toward the sharper level: PS2-crisp, still no sparkle)
     vec3 texel = texture(u_tex, vec3(v_uv, max(v_tex, 0.0)), -0.5).rgb;
+    vec2 tc = v_uv * TEX_SIZE;                      // texel coordinates
+    float tpp = max(fwidth(tc.x), fwidth(tc.y));    // texels under one pixel
     float layer = v_flags.w;
     if (u_split_mode == 1 && !(v_z > u_split || layer < 0.5)) discard;
     if (u_split_mode == 2 &&  (v_z > u_split || layer < 0.5)) discard;
@@ -153,8 +168,8 @@ void main() {
     if (facing <= 0.0 && v_flags.z < 0.5) discard;
     vec3 alb = v_tex >= 0.0 ? v_col * texel : v_col;
     vec3 col = alb;
+    vec3 n2 = facing > 0.0 ? n : -n;
     if (v_flags.x > 0.5) {                      // per-frame flat lighting (dynamic meshes)
-        vec3 n2 = facing > 0.0 ? n : -n;
         float k = u_amb + u_dif * max(0.0, dot(n2, u_ldir)) + u_sky * n2.y;
         col = min(vec3(255.0), floor(col * k * u_ltint));
         for (int i = 0; i < 8; i++) {           // local point/spot lights
@@ -177,6 +192,41 @@ void main() {
                 col += u_pl_col[i].rgb * (fall * nd);
         }
         col = min(vec3(255.0), col);
+    } else if (v_flags.y > 0.5 && (u_pool_n > 0 || u_glit_k > 0.0)) {
+        // Baked faces: lamp pools and snow glitter. A pool warms by the
+        // surface's brightness, not its hue, so blue-white snow under a
+        // sodium lamp goes cream at the centre and amber at the rim.
+        vec3 V = normalize(u_cam - v_world);
+        float lum = dot(alb, vec3(0.299, 0.587, 0.114)) / 255.0;
+        // Glitter: a few texels hold a tilted facet that flashes when it
+        // mirrors the key or a lamp into the lens. One or two pixels at the
+        // texel's centre, world-locked, gone where a pixel spans a texel.
+        vec3 fac = vec3(0.0);
+        float g = v_tex >= 0.0 ? u_glit[int(v_tex + 0.5)] * u_glit_k : 0.0;
+        if (g > 0.0 && n2.y > 0.5) {
+            vec2 cell = floor(tc);
+            if (hash12(cell) < 0.10 * g) {
+                vec2 sub = abs(fract(tc) - 0.5) / max(tpp, 1e-4);
+                float pt = step(max(sub.x, sub.y), 0.7) * clamp(2.2 - 1.6 * tpp, 0.0, 1.0);
+                fac = normalize(vec3(hash12(cell + 7.31) - 0.5, 0.6,
+                                     hash12(cell + 13.7) - 0.5)) * pt;
+            }
+        }
+        vec3 add = 200.0 * u_ltint * smoothstep(0.975, 0.995, dot(fac, normalize(u_ldir + V)));
+        for (int i = 0; i < 32; i++) {
+            if (i >= u_pool_n) break;
+            vec3 dv = u_pool_pos[i].xyz - v_world;
+            float f = 1.0 - length(dv.xz) / u_pool_pos[i].w;
+            if (f <= 0.0 || dv.y <= 0.0) continue;
+            vec3 L = normalize(dv);
+            float nd = dot(n2, L);
+            if (nd <= 0.0) continue;
+            float k = f * f * u_pool_col[i].w;
+            vec3 pc = mix(u_pool_col[i].rgb, u_pool_hot[i], f * f);
+            add += pc * (lum * k * nd);
+            add += pc * (min(1.0, 2.0 * k) * smoothstep(0.975, 0.995, dot(fac, normalize(L + V))));
+        }
+        col = min(vec3(255.0), col + add);
     }
     if (v_flags.y > 0.5) {                      // not emissive
         if (v_tint.w > 0.0) col = floor(col + (v_tint.rgb - col) * v_tint.w);
@@ -601,6 +651,8 @@ class GLRenderer(SoftwareRenderer):
         cap = max(1, min(8, int(getattr(self, "light_cap", 4))))
         lights = self.lights[:cap]
         n_pl = len(lights)
+        pools = self.pools[:32]
+        n_po = len(pools)
         u = {
             "u_cam": self.cam, "u_right": self.right, "u_up": self.up, "u_fwd": self.fwd,
             "u_focal": self.focal, "u_hw": self.w / 2, "u_hh": self.h / 2,
@@ -619,6 +671,15 @@ class GLRenderer(SoftwareRenderer):
             "u_pl_dir": [(tuple(L["dir"]) + (float(L.get("cone", 0.7)),)) if L.get("kind") == "spot"
                          else (0.0, 0.0, 0.0, -1.0) for L in lights]
                         + [(0.0, 0.0, 0.0, -1.0)] * (8 - n_pl),
+            "u_pool_n": n_po,
+            "u_pool_pos": [tuple(P["pos"]) + (float(P.get("range", 6.0)),) for P in pools]
+                          + [(0.0, 0.0, 0.0, 1.0)] * (32 - n_po),
+            "u_pool_col": [tuple(float(c) for c in P["color"]) + (float(P.get("intensity", 1.0)),)
+                           for P in pools] + [(0.0, 0.0, 0.0, 0.0)] * (32 - n_po),
+            "u_pool_hot": [tuple(float(c) for c in P.get("hot", P["color"])) for P in pools]
+                          + [(0.0, 0.0, 0.0)] * (32 - n_po),
+            "u_glit": (list(_tex.glitter()) + [0.0] * 32)[:32],
+            "u_glit_k": float(self.glitter),
         }
         for k, v in u.items():
             if k in prog:
