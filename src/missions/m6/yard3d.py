@@ -25,7 +25,7 @@ from core.config import (
 )
 from core.outfits import OUTFIT_GUARD
 from core.state import STATE
-from engine3d import POSES, blend, box, clamp, pose_run
+from engine3d import NEUTRAL, POSES, blend, box, clamp, pose_run
 
 from . import hud3d as H
 from . import train3d as T
@@ -67,10 +67,19 @@ HIT_BODY, HIT_HEAD = 22, 64
 # Dead Guards carry K9-compatible mags: walk over the body to take them.
 LOOT_R = 1.5                       # pickup radius, m
 LOOT_MAGS = {"heavy": 2, "officer": 2}   # everyone else carries one
-RESERVE_CAP = 240
+RESERVE_CAP = 4 * MAG              # four spare mags on him, the panel's MAGS: 4
 # Melee: a punch for whoever is in arm's reach (F or V; LMB when dry).
 MELEE_R, MELEE_CONE = 1.9, 0.55    # reach (m), min cos to the aim
-MELEE_DMG, MELEE_GAP, MELEE_S = 45, 0.65, 0.32   # damage, cooldown, swing time
+MELEE_DMG, MELEE_GAP, MELEE_S = 45, 0.65, 0.48   # damage, cooldown, swing time
+# The punch's beats as fractions of MELEE_S: the fist is cocked, it lands,
+# the hold ends.  The hit resolves on the landing frame, not the key press.
+PUNCH_COCK, PUNCH_LAND, PUNCH_HOLD = 0.26, 0.38, 0.52
+MELEE_HIT_S = PUNCH_LAND * MELEE_S
+PUNCH_TWIST = (14.0, 46.0)         # torso wound back / thrown through, deg
+PUNCH_LUNGE = 0.24                 # the body's drive into the punch, m
+PUNCH_CLOSE = (1.05, 3.5)          # he steps in to this range, at this speed
+HITSTOP_S, HITSTOP_RATE = 0.07, 0.15   # the world crawls a beat on contact
+SHOVE_M, SHOVE_S = 0.45, 0.18      # a punched Guard reels back this far
 # The yard's difficulty (the train's guard profiles stay as they are): they
 # hit harder and tougher, aim better and come back at him sooner.
 GUARD_HP, GUARD_DMG = 1.15, 1.55
@@ -524,9 +533,35 @@ def _gait(phase, v, ux, uz, scale):
     return pose
 
 
+def _smooth(x):
+    x = clamp(x, 0.0, 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def _punch_beats(u):
+    """The punch at ``u`` (0..1 of MELEE_S) -> (leg, k, coil, drive, gun).
+    ``leg`` is the fist's stretch of path (0 grip -> cocked, 1 cocked ->
+    landed, 2 held out, 3 back to the grip), ``k`` how far along it;
+    ``coil`` winds the torso back, ``drive`` throws it through and ``gun`` is
+    how far the K9 has gone over to the left hand."""
+    gun = _smooth(u / 0.16) if u < 0.6 else 1.0 - _smooth((u - 0.6) / 0.4)
+    if u < PUNCH_COCK:
+        a = _smooth(u / PUNCH_COCK)
+        return 0, a, a, 0.0, gun
+    if u < PUNCH_LAND:
+        k = 1.0 - (1.0 - (u - PUNCH_COCK) / (PUNCH_LAND - PUNCH_COCK)) ** 3
+        return 1, k, 1.0 - k, k, gun            # snaps out, slows into the face
+    if u < PUNCH_HOLD:
+        return 2, 1.0, 0.0, 1.0, gun
+    q = _smooth((u - PUNCH_HOLD) / (1.0 - PUNCH_HOLD))
+    return 3, q, 0.0, 1.0 - q, gun
+
+
 # Elbow poles in torso axes (+x outward from that side, +y up, +z forward):
 # the trigger elbow out and down, the support elbow down under the handguard.
 POLE_R, POLE_L = (0.8, -1.0, -0.1), (0.4, -1.0, 0.0)
+POLE_COCK, POLE_PUNCH = (0.35, -1.0, -0.3), (1.0, -0.45, 0.0)   # elbow tucked / out
+POLE_HANG = (0.1, -0.3, -1.0)          # the left arm with the K9 hung off it
 UARM, FARM = 0.30, 0.31                # rig shoulder->elbow, elbow->hand
 
 
@@ -686,6 +721,9 @@ class YardScene:
         self.near_terminal = False
         self.route_stage = 0
         self.melee_t = -9.0            # start of the last punch
+        self.melee_g = None            # who it was thrown at
+        self.melee_due = False         # the hit still to land
+        self.hitstop = 0.0
         self.toast = None              # (t, text) pickup / melee note
         self._muzzle = None
         p = STATE.player
@@ -772,6 +810,9 @@ class YardScene:
         if not self._active or self.paused:
             return
         dt = clamp(float(getattr(STATE, "dt", 1.0 / 60.0)), 0.0, 0.05)
+        if self.hitstop > 0.0:
+            self.hitstop -= dt
+            dt *= HITSTOP_RATE
         self.t += dt
         if self.dying:
             self.death_t += dt
@@ -781,7 +822,8 @@ class YardScene:
         self.ads += ((1.0 if self.aiming and not self.reloading else 0.0)
                      - self.ads) * min(1.0, dt * 12.0)
         up = (self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6)
-        up = 0.0 if (self.sprint or self.reloading or not up) else 1.0
+        punching = self.t - self.melee_t < MELEE_S * 0.8
+        up = 0.0 if (self.sprint or self.reloading or punching or not up) else 1.0
         self.gun_up += (up - self.gun_up) * min(1.0, dt * 16.0)
         self._move(keys, dt)
         if self.reloading:
@@ -793,8 +835,9 @@ class YardScene:
         if self.firing and not self.reloading:
             if self.mag <= 0 and self.reserve <= 0:
                 self._melee()          # dry: the fists
-            else:
+            elif not punching:
                 self._fire()
+        self._melee_tick(dt)
         self._loot()
         self.recoil = max(0.0, self.recoil - dt * 6.0)
         self.gun_kick = max(0.0, self.gun_kick - dt * 13.0)
@@ -803,6 +846,7 @@ class YardScene:
         self.brass = [b for b in self.brass if self.t - b[0] < 4.0][-30:]
         self.impacts = [x for x in self.impacts if self.t - x[0] < 0.6]
         self._update_guards(dt)
+        self._reel(dt)
         self._update_waves()
         self._update_player_hp(dt)
         tx, tz = TERMINAL
@@ -997,17 +1041,20 @@ class YardScene:
             g["mags"] = LOOT_MAGS.get(g["kind"], 1)
 
     def _loot(self):
-        """Take the mags off any body he walks over."""
-        if self.reserve >= RESERVE_CAP:
-            return
+        """Take the mags off any body he walks over, whole mags up to the
+        four spares he can carry; the rest stay on the body for later."""
         px, _py, pz = self.pos
         for g in self.guards:
+            room = RESERVE_CAP - self.reserve
+            if room <= 0:
+                return
             if g["alive"] or not g.get("mags"):
                 continue
             if math.hypot(g["pos"][0] - px, g["pos"][2] - pz) > LOOT_R:
                 continue
-            got = min(g["mags"] * MAG, RESERVE_CAP - self.reserve)
-            g["mags"] = 0
+            take = min(g["mags"], -(-room // MAG))
+            got = min(take * MAG, room)
+            g["mags"] -= take
             self.reserve += got
             self.toast = (self.t, "+%d K9 ROUNDS" % got)
             if self.audio:
@@ -1032,11 +1079,31 @@ class YardScene:
         return best, (fx, fz)
 
     def _melee(self):
+        """Throw a punch: it lands MELEE_HIT_S later (see _melee_tick)."""
         if self.t - self.melee_t < MELEE_GAP or self.reloading:
             return
         self.melee_t = self.t
         self.firing = False if (self.mag <= 0 and self.reserve <= 0) else self.firing
-        self.shake = min(1.0, self.shake + 0.25)
+        self.melee_g = self._melee_target()[0]
+        self.melee_due = True
+
+    def _melee_tick(self, dt):
+        """He steps in on the wind-up; the fist lands on its frame, on
+        whoever is still in reach then."""
+        since = self.t - self.melee_t
+        g = self.melee_g
+        if g is not None and g["alive"] and since < MELEE_HIT_S:
+            dx, dz = g["pos"][0] - self.pos[0], g["pos"][2] - self.pos[2]
+            d = math.hypot(dx, dz)
+            step = min(d - PUNCH_CLOSE[0], PUNCH_CLOSE[1] * dt)
+            if step > 0.0:
+                x, z = self.pos[0] + dx / d * step, self.pos[2] + dz / d * step
+                if not _blocked(x, z, self.pos[1]):
+                    self.pos = (x, self.pos[1], z)
+        if not self.melee_due or since < MELEE_HIT_S:
+            return
+        self.melee_due = False
+        self.shake = min(1.0, self.shake + 0.3)
         g, (fx, fz) = self._melee_target()
         if g is None:
             return
@@ -1044,13 +1111,33 @@ class YardScene:
         gx, gz = B._dir(g["yaw"])
         behind = (gx * fx + gz * fz) > 0.35
         dmg = g["hp"] if behind else MELEE_DMG
-        self.cam_kick = min(2.2, self.cam_kick + 0.8)
-        self.impacts.append((self.t, (g["pos"][0], g["pos"][1] + 1.35, g["pos"][2]), "blood"))
+        self.cam_kick = min(2.2, self.cam_kick + 1.1)
+        self.shake = min(1.0, self.shake + 0.45)
+        self.hitstop = HITSTOP_S
+        self.impacts.append((self.t, (g["pos"][0], g["pos"][1] + 1.6, g["pos"][2]), "blood"))
         if self.audio:
+            self.audio.thud()
             self.audio.impact(on_enemy=True)
         self._hurt_guard(g, dmg, (fx, fz))
+        g["punch_t"] = self.t
+        g["shove"] = (fx, fz)
         if not g["alive"]:
             self.toast = (self.t, "TAKEDOWN" if behind else "KNOCKED DOWN")
+
+    def _reel(self, dt):
+        """A punched Guard reels back a step (never into cover)."""
+        for g in self.guards:
+            sv = g.get("shove")
+            if sv is None:
+                continue
+            if self.t - g["punch_t"] > SHOVE_S:
+                g["shove"] = None
+                continue
+            k = 2.0 * (1.0 - (self.t - g["punch_t"]) / SHOVE_S)   # fast, then easing
+            x = g["pos"][0] + sv[0] * SHOVE_M / SHOVE_S * k * dt
+            z = g["pos"][2] + sv[1] * SHOVE_M / SHOVE_S * k * dt
+            if not _blocked(x, z, g["pos"][1]):
+                g["pos"] = (x, g["pos"][1], z)
 
     # ── the Guard ──────────────────────────────────────────────────────
     def _living(self, wave=None):
@@ -1261,6 +1348,53 @@ class YardScene:
         O = tuple(B[0][i] * c[0] + B[1][i] * c[1] + B[2][i] * c[2] for i in range(3))
         return O, B
 
+    def _gun_to_left(self, O, B, shoulder, w):
+        """The K9 handed over to the left hand for a punch: it swings on the
+        foregrip down to his left hip, muzzle to the snow ahead of him."""
+        f = T._forward(self.yaw, 0.0)
+        rgt = _screen_right(self.yaw)
+        hang = (shoulder[0] + f[0] * 0.12 - rgt[0] * 0.03, shoulder[1] - 0.54,
+                shoulder[2] + f[2] * 0.12 - rgt[2] * 0.03)
+        Bm = _gun_basis(self.yaw + 30.0, -64.0, roll=-25.0)
+        fwd = _unit(tuple(B[2][i] + (Bm[2][i] - B[2][i]) * w for i in range(3)))
+        up = tuple(B[1][i] + (Bm[1][i] - B[1][i]) * w for i in range(3))
+        d = sum(up[i] * fwd[i] for i in range(3))
+        up = _unit(tuple(up[i] - fwd[i] * d for i in range(3)))
+        Bw = (_cross(up, fwd), up, fwd)
+        F = _gun_pt(O, B, K9_FORE)
+        F = tuple(F[i] + (hang[i] - F[i]) * w for i in range(3))
+        O = tuple(F[i] - sum(Bw[j][i] * K9_FORE[j] for j in range(3)) for i in range(3))
+        return O, Bw
+
+    def _fist(self, beats, grip, shoulder):
+        """The punching (right) fist: cocked by the jaw, driven on a slight
+        hook into the Guard's face (or straight down the aim) and back."""
+        leg, k = beats[0], beats[1]
+        f = T._forward(self.yaw, 0.0)
+        rgt = _screen_right(self.yaw)
+        cock = (shoulder[0] + f[0] * 0.07 + rgt[0] * 0.10, shoulder[1] - 0.08,
+                shoulder[2] + f[2] * 0.07 + rgt[2] * 0.10)
+        if leg == 0:
+            return tuple(grip[i] + (cock[i] - grip[i]) * k for i in range(3))
+        g = self.melee_g
+        if g is not None and math.hypot(g["pos"][0] - shoulder[0],
+                                        g["pos"][2] - shoulder[2]) < MELEE_R + 0.4:
+            aim = (g["pos"][0], g["pos"][1] + 1.58, g["pos"][2])
+        else:
+            fp = T._forward(self.yaw, self.pitch * 0.5)
+            aim = (shoulder[0] + fp[0] - rgt[0] * 0.12, shoulder[1] + fp[1] - 0.04,
+                   shoulder[2] + fp[2] - rgt[2] * 0.12)
+        d = _unit(tuple(aim[i] - shoulder[i] for i in range(3)))
+        hit = tuple(shoulder[i] + d[i] * (UARM + FARM - 0.03) for i in range(3))
+        if leg == 1:
+            mid = [(cock[i] + hit[i]) * 0.5 + rgt[i] * 0.20 for i in range(3)]
+            mid[1] += 0.05
+            a, b = (1.0 - k) * (1.0 - k), 2.0 * k * (1.0 - k)
+            return tuple(cock[i] * a + mid[i] * b + hit[i] * k * k for i in range(3))
+        if leg == 2:
+            return hit
+        return tuple(hit[i] + (grip[i] - hit[i]) * k for i in range(3))
+
     def _draw_player(self, r, tm):
         key = ("biribel", OUTFIT_GUARD)
         h = _w.hum(key, True, 0, True)
@@ -1289,13 +1423,36 @@ class YardScene:
                          - 0.35 * self.pitch - 3.0 * self.gun_kick)
         pose["head_p"] = (pose.get("head_p", 0.0) + (_AIM["head_p"] + 4.0) * k
                           - 0.55 * self.pitch)
-        pose["head_y"] = _wrap(self._aim_body_yaw() - self.body_yaw - self.twist)
+        u = (self.t - self.melee_t) / MELEE_S
+        beats = _punch_beats(u) if 0.0 <= u < 1.0 else None
+        at, ptw = self.pos, 0.0
+        if beats:
+            # wind the torso back, then throw it through behind the fist:
+            # the lean and a step in carry the weight onto the front foot
+            _leg, _k, coil, drive, _g = beats
+            ptw = PUNCH_TWIST[0] * coil - PUNCH_TWIST[1] * drive
+            pose["twist"] += ptw
+            pose["spine"] += -5.0 * coil + 16.0 * drive
+            pose["head_p"] -= 4.0 * coil + 10.0 * drive
+            still = clamp(1.0 - sp / 2.0, 0.0, 1.0)
+            for jk, v in (("lhip_p", 6.0 * coil + 22.0 * drive),
+                          ("lkn", 8.0 * coil + 18.0 * drive),
+                          ("rhip_p", -4.0 * coil - 16.0 * drive),
+                          ("rkn", 16.0 * coil + 10.0 * drive),
+                          ("rank", 20.0 * drive)):
+                pose[jk] = pose.get(jk, NEUTRAL[jk]) + v * still
+            f = T._forward(self.yaw, 0.0)
+            lunge = PUNCH_LUNGE * drive - 0.05 * coil
+            at = (at[0] + f[0] * lunge, at[1], at[2] + f[2] * lunge)
+        pose["head_y"] = _wrap(self._aim_body_yaw() - self.body_yaw - self.twist - ptw)
         pose["head_x"] = 0.03 * k
-        pl, j0, root = h.pose_world(pose, self.pos, self.body_yaw, rifle_on=False)
+        pl, j0, root = h.pose_world(pose, at, self.body_yaw, rifle_on=False)
         sh = {slot: (root[0] + o[0], root[1] + o[1], root[2] + o[2])
               for slot, _k, _m, o, _g, _f in pl if slot in (4, 10)}
         reload_p = (1.0 - self.reloading / RELOAD_S) if self.reloading else None
         O, B = self._gun_frame(j0["head"], sh[10], reload_p)
+        if beats and beats[4] > 0.0:
+            O, B = self._gun_to_left(O, B, sh[4], beats[4])
         self._gun = (O, B)
         rt = _gun_pt(O, B, K9_GRIP)
         lt = _gun_pt(O, B, K9_FORE)
@@ -1311,17 +1468,20 @@ class YardScene:
             k = math.sin(math.pi * clamp((reload_p - 0.15) / 0.7, 0.0, 1.0))
             mw = _gun_pt(O, B, K9_MAGWELL)
             lt = tuple(lt[i] + (mw[i] - lt[i]) * k for i in range(3))
-        mk = (self.t - self.melee_t) / MELEE_S
-        if 0.0 <= mk < 1.0:
-            jab = math.sin(math.pi * mk)
-            f = T._forward(self.yaw, self.pitch * 0.5)
-            fist = (sh[10][0] + f[0] * ARM_REACH, sh[10][1] - 0.05 + f[1] * ARM_REACH,
-                    sh[10][2] + f[2] * ARM_REACH)
-            rt = tuple(rt[i] + (fist[i] - rt[i]) * jab for i in range(3))
-            pose["twist"] = pose.get("twist", 0.0) - 18.0 * jab
-        pose = _arm_ik(h, pose, "r", rt, self.pos, self.body_yaw, POLE_R)
-        pose = _arm_ik(h, pose, "l", lt, self.pos, self.body_yaw, POLE_L)
-        _w.actor(r, key, pose, self.pos, self.body_yaw, int(tm), seed=93,
+        pole = POLE_R
+        if beats:
+            rt = self._fist(beats, rt, sh[10])
+            # elbow tucked under the cocked fist, out behind the landed one
+            out = {0: beats[1] * 0.5, 1: 0.5 + 0.5 * beats[1], 2: 1.0}.get(beats[0], 1.0 - beats[1])
+            base = POLE_COCK if beats[0] < 3 else POLE_R
+            pole = tuple(base[i] + (POLE_PUNCH[i] - base[i]) * out for i in range(3))
+        pose = _arm_ik(h, pose, "r", rt, at, self.body_yaw, pole)
+        pole_l = POLE_L
+        if beats:
+            # the gun hand hangs: its elbow folds back, not out like a wing
+            pole_l = tuple(POLE_L[i] + (POLE_HANG[i] - POLE_L[i]) * beats[4] for i in range(3))
+        pose = _arm_ik(h, pose, "l", lt, at, self.body_yaw, pole_l)
+        _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93,
                  amp=0.15, rifle_on=False, hd=True, bloody=True,
                  expression="angry", shadow=T._shadow_for(self.pos[2]))
         _draw_k9(r, O, B)
@@ -1384,6 +1544,15 @@ class YardScene:
             stag = max(0.0, 1.0 - (self.t - g["hit_t"]) / 0.3)
             if stag > 0.0:
                 pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
+            rock = 1.0 - (self.t - g.get("punch_t", -9.0)) / 0.55
+            if 0.0 < rock <= 1.0:
+                rock = rock * rock * (3.0 - 2.0 * rock)
+                pose = dict(pose, spine=pose.get("spine", 8) - 14.0 * rock,
+                            head_p=pose.get("head_p", 0) - 34.0 * rock,
+                            head_y=pose.get("head_y", 0) + 22.0 * rock,
+                            twist=pose.get("twist", 0) + 16.0 * rock,
+                            lsh_r=pose.get("lsh_r", 8) + 24.0 * rock,
+                            rkn=pose.get("rkn", 2) + 18.0 * rock)
             joints = _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                               int(tm), seed=100 + g["slot"], amp=0.4,
                               rifle_on=True, hd=True, shadow=T._shadow_for(z))
