@@ -71,6 +71,12 @@ RESERVE_CAP = 4 * MAG              # four spare mags on him, the panel's MAGS: 4
 # Melee: a punch for whoever is in arm's reach (F or V; LMB when dry).
 MELEE_R, MELEE_CONE = 1.9, 0.55    # reach (m), min cos to the aim
 MELEE_DMG, MELEE_GAP, MELEE_S = 45, 0.65, 0.48   # damage, cooldown, swing time
+# A punch drops a Guard without killing him: he falls, lies stunned, gets
+# back up.  A second punch while he's down (or one from behind) finishes
+# him.  The heavies take punches on their feet, MELEE_DMG at a time.
+KNOCK_DMG = 12
+KNOCK_FALL, KNOCK_DOWN, KNOCK_RISE = 0.35, 3.0, 0.9   # s: falling, on the snow, up
+STURDY = ("heavy",)
 # The punch's beats as fractions of MELEE_S: the fist is cocked, it lands,
 # the hold ends.  The hit resolves on the landing frame, not the key press.
 PUNCH_COCK, PUNCH_LAND, PUNCH_HOLD = 0.26, 0.38, 0.52
@@ -1107,10 +1113,15 @@ class YardScene:
         g, (fx, fz) = self._melee_target()
         if g is None:
             return
-        # from behind (he faces away from Biribel) it is a takedown
+        # from behind (he faces away from Biribel) or on the snow: a takedown
         gx, gz = B._dir(g["yaw"])
-        behind = (gx * fx + gz * fz) > 0.35
-        dmg = g["hp"] if behind else MELEE_DMG
+        sturdy = g["kind"] in STURDY
+        down = self.t < g.get("down_until", -9.0)
+        behind = not sturdy and (gx * fx + gz * fz) > 0.35
+        if down or behind:
+            dmg = g["hp"]
+        else:
+            dmg = MELEE_DMG if sturdy else min(KNOCK_DMG, g["hp"] - 1)
         self.cam_kick = min(2.2, self.cam_kick + 1.1)
         self.shake = min(1.0, self.shake + 0.45)
         self.hitstop = HITSTOP_S
@@ -1122,7 +1133,13 @@ class YardScene:
         g["punch_t"] = self.t
         g["shove"] = (fx, fz)
         if not g["alive"]:
-            self.toast = (self.t, "TAKEDOWN" if behind else "KNOCKED DOWN")
+            self.toast = (self.t, "TAKEDOWN")
+        elif not sturdy:
+            g["fall_from"] = g.get("pose") or POSES["stand"]
+            g["down_t"] = self.t
+            g["up_at"] = self.t + KNOCK_FALL + KNOCK_DOWN
+            g["down_until"] = g["up_at"] + KNOCK_RISE
+            self.toast = (self.t, "KNOCKED DOWN")
 
     def _reel(self, dt):
         """A punched Guard reels back a step (never into cover)."""
@@ -1379,7 +1396,8 @@ class YardScene:
         g = self.melee_g
         if g is not None and math.hypot(g["pos"][0] - shoulder[0],
                                         g["pos"][2] - shoulder[2]) < MELEE_R + 0.4:
-            aim = (g["pos"][0], g["pos"][1] + 1.58, g["pos"][2])
+            low = self.melee_t < g.get("up_at", -9.0)      # down: hit him there
+            aim = (g["pos"][0], g["pos"][1] + (0.35 if low else 1.58), g["pos"][2])
         else:
             fp = T._forward(self.yaw, self.pitch * 0.5)
             aim = (shoulder[0] + fp[0] - rgt[0] * 0.12, shoulder[1] + fp[1] - 0.04,
@@ -1508,6 +1526,21 @@ class YardScene:
             pose = blend(pose, "aim", 0.75)
         return pose
 
+    def _knocked_pose(self, g, want):
+        """Punched off his feet: over on his back, a few dazed seconds on
+        the snow, then up through a kneel into what his brain wants."""
+        since = self.t - g["down_t"]
+        if since < KNOCK_FALL:
+            return blend(g["fall_from"], "dead_back", _smooth(since / KNOCK_FALL))
+        q = (self.t - g["up_at"]) / KNOCK_RISE
+        if q < 0.0:
+            roll = math.sin(self.t * 2.6 + g["slot"])
+            return dict(POSES["dead_back"], head_y=20.0 + 24.0 * roll,
+                        head_p=-4.0 - 10.0 * abs(roll))
+        if q < 0.55:
+            return blend(POSES["dead_back"], "kneel", _smooth(q / 0.55))
+        return blend(POSES["kneel"], want, _smooth((q - 0.55) / 0.45))
+
     def _draw_guards(self, r, tm):
         for g in self.guards:
             x, y, z = g["pos"]
@@ -1536,23 +1569,26 @@ class YardScene:
             want = self._guard_pose(g)
             dt = clamp(self.t - g.get("pose_t", self.t), 0.0, 0.1)
             g["pose_t"] = self.t
-            if g.get("pose") is None or (g["moving"] and g.get("stance") in ("run", "walk")):
-                pose = want
+            if self.t < g.get("down_until", -9.0):
+                pose = g["pose"] = self._knocked_pose(g, want)
             else:
-                pose = blend(g["pose"], want, min(1.0, dt * 14.0))
-            g["pose"] = pose
-            stag = max(0.0, 1.0 - (self.t - g["hit_t"]) / 0.3)
-            if stag > 0.0:
-                pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
-            rock = 1.0 - (self.t - g.get("punch_t", -9.0)) / 0.55
-            if 0.0 < rock <= 1.0:
-                rock = rock * rock * (3.0 - 2.0 * rock)
-                pose = dict(pose, spine=pose.get("spine", 8) - 14.0 * rock,
-                            head_p=pose.get("head_p", 0) - 34.0 * rock,
-                            head_y=pose.get("head_y", 0) + 22.0 * rock,
-                            twist=pose.get("twist", 0) + 16.0 * rock,
-                            lsh_r=pose.get("lsh_r", 8) + 24.0 * rock,
-                            rkn=pose.get("rkn", 2) + 18.0 * rock)
+                if g.get("pose") is None or (g["moving"] and g.get("stance") in ("run", "walk")):
+                    pose = want
+                else:
+                    pose = blend(g["pose"], want, min(1.0, dt * 14.0))
+                g["pose"] = pose
+                stag = max(0.0, 1.0 - (self.t - g["hit_t"]) / 0.3)
+                if stag > 0.0:
+                    pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
+                rock = 1.0 - (self.t - g.get("punch_t", -9.0)) / 0.55
+                if 0.0 < rock <= 1.0:
+                    rock = rock * rock * (3.0 - 2.0 * rock)
+                    pose = dict(pose, spine=pose.get("spine", 8) - 14.0 * rock,
+                                head_p=pose.get("head_p", 0) - 34.0 * rock,
+                                head_y=pose.get("head_y", 0) + 22.0 * rock,
+                                twist=pose.get("twist", 0) + 16.0 * rock,
+                                lsh_r=pose.get("lsh_r", 8) + 24.0 * rock,
+                                rkn=pose.get("rkn", 2) + 18.0 * rock)
             joints = _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                               int(tm), seed=100 + g["slot"], amp=0.4,
                               rifle_on=True, hd=True, shadow=T._shadow_for(z))

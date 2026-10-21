@@ -488,6 +488,8 @@ class Brain:
     def spheres(self, g):
         """(height, radius) of the chest and head hit spheres for his stance."""
         big = g["kind"] == "heavy"
+        if self.sc.t < g.get("up_at", -9.0) + 0.3:
+            return ((0.28, 0.45), (0.30, 0.0))     # flat on the snow
         if g.get("stance") == "hide_low":
             return ((0.66, 0.38 if big else 0.34), (0.92, 0.28 if big else 0.24))
         return ((1.30, 0.42 if big else 0.38), (1.58, 0.34 if big else 0.30))
@@ -545,6 +547,9 @@ class Brain:
                 continue
             if "bb" not in g:
                 self.adopt(g)
+            if t < g.get("down_until", -9.0):
+                g["moving"] = False        # punched down: on the snow, then up
+                continue
             if t < g["react"] - (0.0 if g["wave"] else 1.0):
                 continue
             g["moving"] = False
