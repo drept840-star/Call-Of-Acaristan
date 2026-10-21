@@ -451,6 +451,49 @@ def _unit(v):
     return (v[0] / n, v[1] / n, v[2] / n) if n > 1e-9 else (0.0, 0.0, 0.0)
 
 
+def _gait_cycle(v):
+    """Metres per gait cycle (two steps) at speed v: longer strides as he
+    speeds up, so the cadence runs about 2.4 steps/s walking to 3.8 sprinting."""
+    return clamp(0.75 + 0.38 * v, 1.0, 2.8)
+
+
+def _gait(phase, v, ux, uz, scale):
+    """Planted-foot legs at speed ``v`` (m/s) along the body-local unit
+    (ux, uz); ``phase`` counts cycles.  Each stance foot moves back under the
+    hips at exactly the body's speed, so it holds still on the ground, and
+    leg IK bends the knee to reach it.  Walk, jog and sprint differ only in
+    stance share, knee bend, foot lift and lean.  -> pose dict."""
+    k = clamp((v - 1.5) / 1.5, 0.0, 1.0)          # walk -> jog
+    s2 = clamp((v - 3.0) / 2.2, 0.0, 1.0)         # jog -> sprint
+    amp = clamp(v / 1.2, 0.0, 1.0)                # settles to a stand
+    beta = 0.60 - 0.18 * k - 0.07 * s2            # stance share of a cycle
+    drop = 0.05 + 0.05 * k + 0.03 * s2            # knee bend under load (rig)
+    lift = (0.07 + 0.08 * k + 0.10 * s2) * amp
+    half = beta * _gait_cycle(v) / 2.0 / scale * amp
+    stand_y = -(0.858 - drop)
+    pose = dict(spine=3.0 + 4.0 * k + 7.0 * s2, head_p=-2.0 * k)
+    for side, off, lat in (("l", 0.0, -1), ("r", 0.5, 1)):
+        ph = (phase + off) % 1.0
+        if ph < beta:
+            u = half * (1.0 - 2.0 * ph / beta)
+            fy = stand_y - 0.02 * math.sin(math.pi * ph / beta) * amp
+        else:
+            q = (ph - beta) / (1.0 - beta)
+            u = -half + 2.0 * half * q * q * (3.0 - 2.0 * q)
+            fy = stand_y + lift * math.sin(math.pi * q)
+        hip, knee = _w.leg_ik(uz * u, fy)
+        pose[side + "hip_p"], pose[side + "kn"] = hip, knee
+        out = clamp(ux * u * lat / 0.86, -0.12, 0.20)
+        pose[side + "hip_r"] = math.degrees(math.asin(out))
+        # the planted sole lies flat; in the air the toes hang a little
+        pose[side + "ank"] = (knee - hip) * (1.0 if ph < beta else 0.6)
+    # a short float between steps once he runs
+    f = phase % 0.5
+    if beta < 0.5 and f > beta:
+        pose["lift"] = (0.025 * k + 0.035 * s2) * math.sin(math.pi * (f - beta) / (0.5 - beta))
+    return pose
+
+
 # Elbow poles in torso axes (+x outward from that side, +y up, +z forward):
 # the trigger elbow out and down, the support elbow down under the handguard.
 POLE_R, POLE_L = (0.8, -1.0, -0.1), (0.4, -1.0, 0.0)
@@ -576,6 +619,7 @@ class YardScene:
         self.body_yaw = _w.yaw_to((0, 0, 0), T._forward(START_YAW, 0.0))
         self.vel = (0.0, 0.0)
         self.stride = 0.0
+        self.gait = 0.0              # gait cycles walked (see _gait)
         self.stride_dir = 1.0        # -1 on a backpedal
         self.twist = 0.0             # torso back onto the aim from the hips
         self.gun_up = 0.0            # 0 low ready .. 1 shouldered
@@ -775,6 +819,7 @@ class YardScene:
         self.pos = (x, y, z)
         sp = math.hypot(*self.vel)
         self.stride += sp * dt
+        self.gait += sp * dt / _gait_cycle(sp)
         # Facing: the torso always on the aim (bladed when the gun is up), so
         # the K9 never swings off his chest; the hips turn into a strafe and
         # stay square on a backpedal, where the legs cycle backward.
@@ -1171,11 +1216,12 @@ class YardScene:
                      expression="angry", shadow=T._shadow_for(self.pos[2]))
             self._gun = None
             return
-        if sp > 0.5:
-            back = self.stride_dir < 0
-            pose = pose_run(self.stride / (2.4 if self.sprint else 1.9) * 2.0
-                            * math.pi * self.stride_dir,
-                            lean=20 if self.sprint else (-2 if back else 10))
+        if sp > 0.05:
+            # the move direction in the hips' own axes
+            a = math.radians(self.body_yaw)
+            cy, sy = math.cos(a), math.sin(a)
+            vx, vz = self.vel[0] / sp, self.vel[1] / sp
+            pose = _gait(self.gait, sp, vx * cy - vz * sy, vx * sy + vz * cy, h._scale)
         else:
             pose = dict(POSES["stand"])
         # The torso turns back onto the aim from the hips and leans with the
