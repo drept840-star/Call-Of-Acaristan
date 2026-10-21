@@ -31,6 +31,7 @@ from engine3d import POSES, blend, box, clamp, pose_run
 from . import hud3d as H
 from . import train3d as T
 from . import yard_brain as B
+from . import yard_dress as D
 
 _w = T._w
 _fx = T._fx
@@ -61,8 +62,12 @@ PITCH_LIM = (-38.0, 32.0)
 MAG, RESERVE = 30, 120
 FIRE_GAP = 0.08                    # K9 cyclic, s
 RELOAD_S = 1.6
-HP_REGEN_DELAY, HP_REGEN = 4.0, 9.0
+HP_REGEN_DELAY, HP_REGEN = 6.5, 5.0
 HIT_BODY, HIT_HEAD = 22, 64
+# The yard's difficulty (the train's guard profiles stay as they are): they
+# hit harder and tougher, aim better and come back at him sooner.
+GUARD_HP, GUARD_DMG = 1.35, 2.3
+GUARD_AIM, GUARD_REST = 0.12, 0.70     # extra hit chance, burst-rest scale
 
 # ── the terminal ──────────────────────────────────────────────────────────
 TERMINAL = (T.SIGNAL_BOX[0] + 1.0, T.SIGNAL_BOX[1] + 1.75)   # at the door
@@ -105,6 +110,7 @@ def _blockers():
         (WALL_E - 0.25, 0.0, WALL_S - 0.4, WALL_E + 0.4, 2.6, WALL_N + 0.4),
         (WALL_W - 0.4, 0.0, WALL_S - 0.4, WALL_E + 0.4, 2.6, WALL_S + 0.25),
     ]
+    b.extend(D.blockers())                          # yard clutter
     for gx in (-7.0, 13.0):                         # gantry posts
         for gz in (1.8, -7.2):
             b.append((gx - 0.12, 0.0, gz - 0.12, gx + 0.12, 6.3, gz + 0.12))
@@ -118,6 +124,61 @@ def _blockers():
 
 
 BLOCKERS = _blockers()
+
+
+CAM_R = 0.24                       # the lens keeps this far off every surface
+
+
+def _box_gap(p, lo, hi):
+    """Distance from p to the box (0 inside)."""
+    g = 0.0
+    for i in range(3):
+        g = max(g, lo[i] - p[i], p[i] - hi[i])
+    return g
+
+
+def _boom_clear(o, d, want, floor):
+    """How far along d from o the lens can sit, up to ``want``, with CAM_R of
+    air to every blocker.  A box the origin already hugs shrinks its margin so
+    the start is never inside it."""
+    dist = want
+    for x0, y0, z0, x1, y1, z1 in BLOCKERS:
+        lo, hi = (x0, y0, z0), (x1, y1, z1)
+        gap = _box_gap(o, lo, hi)
+        if gap <= 0.0:
+            continue
+        m = min(CAM_R, gap * 0.5)
+        hit = T._ray_aabb(o, d, (x0 - m, y0 - m, z0 - m), (x1 + m, y1 + m, z1 + m))
+        if hit is not None and hit < dist:
+            dist = max(floor, hit)
+    return dist
+
+
+def _push_out(p):
+    """Last resort: nudge the lens out of any blocker (plus margin) along the
+    shortest axis, so a corner graze can never put it inside geometry."""
+    x, y, z = p
+    for _ in range(3):
+        moved = False
+        for x0, y0, z0, x1, y1, z1 in BLOCKERS:
+            m = CAM_R * 0.5
+            if not (x0 - m < x < x1 + m and y0 - m < y < y1 + m and z0 - m < z < z1 + m):
+                continue
+            opts = ((x - (x0 - m), 0, -1), (x1 + m - x, 0, 1),
+                    (z - (z0 - m), 2, -1), (z1 + m - z, 2, 1),
+                    (y1 + m - y, 1, 1))
+            _, ax, sg = min(opts)
+            if ax == 0:
+                x = x0 - m if sg < 0 else x1 + m
+            elif ax == 2:
+                z = z0 - m if sg < 0 else z1 + m
+            else:
+                y = y1 + m
+            moved = True
+        if not moved:
+            break
+    return (x, y, z)
+
 
 
 def _screen_right(yaw):
@@ -227,6 +288,7 @@ def _perimeter_mesh():
         add(box(0.16, 6.4, 0.16, (34, 38, 44), center=(lx, 3.2, lz)))
         add(box(0.5, 0.16, 0.36, (255, 222, 168), center=(lx, 6.3, lz),
                 emissive=True))
+    D.dress(add, WALL_W, WALL_E, WALL_S, T.TRUCK_X)
     _SET_CACHE["perimeter"] = m
     return m
 
@@ -283,6 +345,8 @@ WAVES = (
         ("rifle", (16.9, 0.04, -7.5), ((17.4, 0.04, -7.4),), "cover", True, 0.0),
         ("rifle", (-27.9, 0.04, -7.0), ((-6.0, 0.04, -6.3), (4.2, 0.04, -6.4),
                                         (8.4, 0.04, -6.6)), "cover", False, 1.0),
+        ("rusher", (29.0, 0.04, 1.0), ((24.0, 0.04, -2.0), (18.5, 0.04, -5.2)),
+         "crouch", False, 4.5),
     ),
     (   # the truck squad, in two drops off the tailgate
         ("rusher", _TRUCK_DROP, ((22.8, 0.04, 3.6), (19.5, 0.04, 2.4),
@@ -295,6 +359,8 @@ WAVES = (
                                   (22.3, 0.04, -7.6)), "cover", False, 9.0),
         ("rifle", _TRUCK_DROP, ((22.6, 0.04, 2.0), (22.6, 0.04, -3.2)),
          "crouch", False, 9.8),
+        ("rusher", _TRUCK_DROP, ((22.8, 0.04, 3.0), (17.0, 0.04, 0.6),
+                                 (12.5, 0.04, -2.0)), "crouch", False, 11.5),
     ),
     (   # the men holding the signal box, and two round the far side
         ("officer", _BOX_DOOR, ((T.SIGNAL_BOX[0] - 1.4, 0.04, -12.4),),
@@ -305,6 +371,8 @@ WAVES = (
         ("heavy", _BOX_DOOR, ((16.2, 0.04, -12.3),), "stand", False, 2.2),
         ("rifle", (-27.9, 0.04, -12.4), ((8.0, 0.04, -12.4), (12.6, 0.04, -12.4)),
          "cover", False, 2.0),
+        ("heavy", (-27.9, 0.04, -12.4), ((5.0, 0.04, -12.4), (9.5, 0.04, -12.3)),
+         "stand", False, 4.0),
         ("rusher", (-27.9, 0.04, -12.4), ((10.0, 0.04, -12.3), (20.8, 0.04, -12.3)),
          "crouch", False, 3.0),
     ),
@@ -321,7 +389,7 @@ def _make_guard(wave, i, spec, now):
     return {
         "kind": kind, "wave": wave, "slot": 10 * wave + i, "pos": tuple(start),
         "route": tuple(route), "wp": 0, "post_pose": post_pose,
-        "torch": torch, "hp": prof["hp"], "alive": True, "dead_t": -9.0,
+        "torch": torch, "hp": int(prof["hp"] * GUARD_HP), "alive": True, "dead_t": -9.0,
         "yaw": 0.0, "moving": False, "posted": False,
         "next_burst": now + 1.2 + 0.7 * i, "burst_left": 0, "burst_next": 0.0,
         "last_shot_t": -9.0, "hit_t": -9.0, "hit_dir": None,
@@ -806,15 +874,15 @@ class YardScene:
         pivot = (x, y + EYE_H + up, z)
         f = T._forward(self.yaw, self.pitch)
         rgt = _screen_right(self.yaw)
+        # two legs, each kept clear of every blocker: the head out to the
+        # shoulder, then the boom back from the shoulder
+        right = _boom_clear(pivot, (rgt[0], 0.0, rgt[2]), right, 0.0)
         shoulder = (pivot[0] + rgt[0] * right, pivot[1], pivot[2] + rgt[2] * right)
         d = (-f[0], -f[1], -f[2])
-        dist = back
-        for x0, y0, z0, x1, y1, z1 in BLOCKERS:
-            hit = T._ray_aabb(shoulder, d, (x0, y0, z0), (x1, y1, z1))
-            if hit is not None and hit < dist:
-                dist = max(0.35, hit - 0.2)
-        eye = (shoulder[0] + d[0] * dist, max(y + 0.3, shoulder[1] + d[1] * dist),
-               shoulder[2] + d[2] * dist)
+        dist = _boom_clear(shoulder, d, back, 0.35)
+        ex, ez = shoulder[0] + d[0] * dist, shoulder[2] + d[2] * dist
+        eye = (ex, max(ground_y(ex, ez) + 0.3, shoulder[1] + d[1] * dist), ez)
+        eye = _push_out(eye)
         if self.shake > 0.0:
             k = CAM_SHAKE * self.shake
             eye = (eye[0] + math.sin(self.t * 71.0) * k,
@@ -955,11 +1023,12 @@ class YardScene:
         gap = float(prof.get("gap", 0.1))
         g["burst_next"] = self.t + gap
         if g["burst_left"] <= 0:
-            g["next_burst"] = self.t + 1.5 + 0.9 * ((g["slot"] * 7 + int(self.t)) % 3)
+            g["next_burst"] = self.t + GUARD_REST * (
+                1.5 + 0.9 * ((g["slot"] * 7 + int(self.t)) % 3))
         dist = math.dist(src, chest)
         moving = math.hypot(*self.vel) > 1.0
-        p_hit = clamp(0.62 - dist * 0.016 - (0.22 if moving else 0.0)
-                      - (0.12 if self.sprint else 0.0), 0.12, 0.8)
+        p_hit = clamp(0.62 + GUARD_AIM - dist * 0.014 - (0.16 if moving else 0.0)
+                      - (0.08 if self.sprint else 0.0), 0.2, 0.9)
         roll = (math.sin(self.t * 91.7 + g["slot"] * 13.1) + 1.0) * 0.5
         hit = roll < p_hit
         wob = 0.0 if hit else 0.9
@@ -975,7 +1044,7 @@ class YardScene:
         p = STATE.player
         if p is None:
             return
-        dmg = int(prof["damage"] * 0.8) + 1
+        dmg = int(prof["damage"] * 0.8 * GUARD_DMG) + 1
         p.hp = max(0, p.hp - dmg)
         self.hurt = max(self.hurt, 0.25 + dmg * 0.025)
         self.last_hurt = self.t
