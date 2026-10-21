@@ -16,6 +16,7 @@ The set is the train scene's: the post-departure live set it already packed
 stays parked, and the carriage is long gone.
 """
 import math
+import sys
 
 import pygame
 
@@ -29,6 +30,7 @@ from engine3d import POSES, blend, box, clamp, pose_run
 
 from . import hud3d as H
 from . import train3d as T
+from . import yard_brain as B
 
 _w = T._w
 _fx = T._fx
@@ -307,25 +309,6 @@ WAVES = (
          "crouch", False, 3.0),
     ),
 )
-# Clear lanes across the yard (every edge was checked against BLOCKERS: the
-# Guard walk straight lines and do not collide).  A Guard who has not seen
-# Biribel for HUNT_AFTER seconds walks the lanes toward him.
-NAV = {
-    "body": (12.0, 0.04, -1.0), "cross": (22.6, 0.04, -1.0),
-    "road": (22.6, 0.04, -5.0), "box_e": (22.6, 0.04, -12.4),
-    "box": (18.5, 0.04, -12.6), "far": (12.6, 0.04, -12.4),
-    "far_w": (4.0, 0.04, -12.4), "far_ww": (-6.0, 0.04, -12.4),
-    "strip": (15.0, 0.04, -6.4), "strip_m": (8.4, 0.04, -6.4),
-    "strip_w": (-5.0, 0.04, -6.3), "track_e": (19.5, 0.04, 2.0),
-    "track_w": (5.0, 0.04, 1.6),
-}
-NAV_EDGES = (
-    ("body", "cross"), ("body", "strip"), ("body", "track_e"), ("body", "track_w"),
-    ("cross", "road"), ("cross", "track_e"), ("road", "box_e"), ("road", "strip"),
-    ("box_e", "box"), ("box", "far"), ("far", "far_w"), ("far_w", "far_ww"),
-    ("strip", "strip_m"), ("strip_m", "strip_w"), ("strip_m", "track_w"),
-)
-HUNT_AFTER = 5.0
 WAVE2_AT = 30.0                    # the truck comes even if he hides
 BOX_WAKE_R = 9.0                   # the box wakes when he gets this close
 ENTRY_SPEED = {"rifle": 2.8, "rusher": 4.2, "heavy": 1.9, "officer": 3.2,
@@ -346,34 +329,6 @@ def _make_guard(wave, i, spec, now):
         "spawn_at": now + delay,
         "last_seen": now + delay,
     }
-
-
-def _nav_near(p):
-    return min(NAV, key=lambda k: math.hypot(NAV[k][0] - p[0], NAV[k][2] - p[2]))
-
-
-def _nav_path(a, b):
-    """Breadth-first lane path between two nav nodes."""
-    nbr = {k: [] for k in NAV}
-    for u, v in NAV_EDGES:
-        nbr[u].append(v)
-        nbr[v].append(u)
-    prev, todo = {a: None}, [a]
-    while todo:
-        u = todo.pop(0)
-        if u == b:
-            break
-        for v in nbr[u]:
-            if v not in prev:
-                prev[v] = u
-                todo.append(v)
-    if b not in prev:
-        return []
-    out = []
-    while b is not None:
-        out.append(NAV[b])
-        b = prev[b]
-    return out[::-1]
 
 
 # The aim's torso and head; the arms are IK'd onto the K9 itself.
@@ -646,6 +601,7 @@ class YardScene:
         self.sparks = []
         self.guards = []
         self.pending = []
+        self.brain = B.Brain(self, sys.modules[__name__])
         self.wave = -1
         self._start_wave(0)
         self.dying = False
@@ -925,15 +881,14 @@ class YardScene:
             if not g["alive"]:
                 continue
             gx, gy0, gz = g["pos"]
-            big = g["kind"] == "heavy"
-            for zi, (dy, rad) in enumerate(((1.30, 0.42 if big else 0.38),
-                                            (1.58, 0.34 if big else 0.30))):
+            for zi, (dy, rad) in enumerate(self.brain.spheres(g)):
                 hit = T._ray_sphere(o, d, (gx, gy0 + dy, gz), rad)
                 if hit is not None and hit < best:
                     best, best_g, head = hit, g, zi == 1
         end = (o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best)
         src = self._muzzle or o
         self.tracers.append((self.t, src, end, (255, 214, 150)))
+        self.brain.suppress(o, end)
         if best_g is None:
             self.sparks.append((self.t, end))
             self.impacts.append((self.t, end, "dust"))
@@ -992,49 +947,7 @@ class YardScene:
         return (self.pos[0], self.pos[1] + 1.25, self.pos[2])
 
     def _update_guards(self, dt):
-        chest = self._player_chest()
-        for g in self.guards:
-            if not g["alive"] or self.t < g["react"] - (0.0 if g["wave"] else 1.0):
-                continue
-            prof = T._guard_profile(g["kind"])
-            route = g["route"]
-            g["moving"] = False
-            if g["wp"] < len(route):
-                tx, ty, tz = route[g["wp"]]
-                x, y, z = g["pos"]
-                dx, dz = tx - x, tz - z
-                dist = math.hypot(dx, dz)
-                speed = ENTRY_SPEED.get(g["kind"], 2.8)
-                if dist > 0.08 and self.t >= g["react"]:
-                    step = min(dist, speed * dt)
-                    k = step / dist
-                    g["pos"] = (x + dx * k, y + (ty - y) * k, z + dz * k)
-                    g["moving"] = True
-                elif dist <= 0.08:
-                    g["pos"] = (tx, ty, tz)
-                    g["wp"] += 1
-            else:
-                g["posted"] = True
-            gc = (g["pos"][0], g["pos"][1] + 1.38, g["pos"][2])
-            sees = not _sight_blocked(gc, chest)
-            if sees:
-                g["last_seen"] = self.t
-            elif g["posted"] and self.t - g["last_seen"] > HUNT_AFTER:
-                # hunt: walk the lanes to the node nearest him, then hold
-                path = _nav_path(_nav_near(g["pos"]), _nav_near(self.pos))
-                if len(path) > 1:
-                    g["route"] = tuple(path)
-                    g["wp"] = 0
-                    g["posted"] = False
-                g["last_seen"] = self.t
-            rusher = g["kind"] == "rusher"
-            if not (g["posted"] or rusher) or not sees:
-                continue
-            if g["burst_left"] <= 0 and self.t >= g["next_burst"]:
-                g["burst_left"] = int(prof["burst"])
-                g["burst_next"] = self.t + float(prof.get("telegraph", 0.3))
-            if g["burst_left"] > 0 and self.t >= g["burst_next"]:
-                self._guard_shot(g, prof, gc, chest)
+        self.brain.update(dt)          # yard_brain: senses, squad, the tree
 
     def _guard_shot(self, g, prof, src, chest):
         g["burst_left"] -= 1
@@ -1265,6 +1178,24 @@ class YardScene:
         if self.t - self.last_fire < 0.035:
             _w.add(r, _flash_mesh(O, B, muzzle, self.shots))
 
+    def _guard_pose(self, g):
+        """The pose his brain's stance asks for (see yard_brain)."""
+        kind, st = g["kind"], g.get("stance", "post")
+        if st in ("run", "walk") and g["moving"]:
+            rate = (9.0 if kind == "rusher" else 7.0) if st == "run" else 4.6
+            return pose_run(self.t * rate + g["slot"], lean=18 if st == "run" else 6)
+        if st == "hide_low":
+            return dict(POSES["cover_tight"])
+        if st == "hide_high":
+            pose = dict(POSES["ready"])
+        elif st == "aim":
+            pose = blend(POSES["stand"], "aim", 0.85)
+        else:
+            pose = dict(POSES.get(g["post_pose"], POSES["cover"]))
+        if g["burst_left"] > 0 or self.t - g["last_shot_t"] < 0.4:
+            pose = blend(pose, "aim", 0.75)
+        return pose
+
     def _draw_guards(self, r, tm):
         for g in self.guards:
             x, y, z = g["pos"]
@@ -1272,27 +1203,24 @@ class YardScene:
             prof = T._guard_profile(kind)
             if not g["alive"]:
                 k = clamp((self.t - g["dead_t"]) / 0.45, 0.0, 1.0)
-                pose = blend(POSES.get(g["post_pose"], POSES["stand"]),
-                             g.get("dead_pose", "dead_back"), k)
+                was = g.get("pose") or POSES.get(g["post_pose"], POSES["stand"])
+                pose = blend(was, g.get("dead_pose", "dead_back"), k)
                 _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                          int(tm), seed=100 + g["slot"], amp=0.0,
                          rifle_on=False, hd=True, shadow=T._shadow_for(z))
                 continue
-            face = _w.yaw_to((x, 0, z), (self.pos[0], 0, self.pos[2]))
-            if g["moving"]:
-                route = g["route"]
-                tx, _ty, tz = route[min(g["wp"], len(route) - 1)]
-                face = _w.yaw_to((x, 0, z), (tx, 0, tz))
-                pose = pose_run(self.t * (9.0 if kind == "rusher" else 7.0)
-                                + g["slot"], lean=18)
+            # ease between stances (a run cycle is already continuous)
+            want = self._guard_pose(g)
+            dt = clamp(self.t - g.get("pose_t", self.t), 0.0, 0.1)
+            g["pose_t"] = self.t
+            if g.get("pose") is None or (g["moving"] and g.get("stance") in ("run", "walk")):
+                pose = want
             else:
-                pose = dict(POSES.get(g["post_pose"], POSES["cover"]))
-                if g["burst_left"] > 0 or self.t - g["last_shot_t"] < 0.4:
-                    pose = blend(pose, "aim", 0.75)
+                pose = blend(g["pose"], want, min(1.0, dt * 14.0))
+            g["pose"] = pose
             stag = max(0.0, 1.0 - (self.t - g["hit_t"]) / 0.3)
             if stag > 0.0:
                 pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
-            g["yaw"] = _w.yaw_mix(g["yaw"], face, 0.25)
             joints = _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                               int(tm), seed=100 + g["slot"], amp=0.4,
                               rifle_on=True, hd=True, shadow=T._shadow_for(z))

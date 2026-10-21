@@ -947,6 +947,23 @@ class YardSceneTests(unittest.TestCase):
             keys[pygame.K_a] = True
         return keys
 
+    def test_guards_fight_from_cover_and_the_same_fight_replays(self):
+        """A player standing at the body: the Guards close in, cycle hide and
+        peek behind cover and land hits; a second run is identical."""
+        def run():
+            self.setUp()
+            sc, branches = self.scene, set()
+            for _ in range(60 * 20):
+                sc.update(self._key_state(sc, None))
+                branches.update(g["bb"]["_trace"] for g in sc.guards if g["alive"] and "bb" in g)
+            out = ([tuple(g["pos"]) for g in sc.guards], STATE.player.hp, branches)
+            self.tearDown()
+            return out
+        pos, hp, branches = run()
+        self.assertIn("fight > cover > cycle", branches)
+        self.assertLess(hp, 100000)
+        self.assertEqual(run()[:2], (pos, hp))
+
     def test_a_bot_can_fight_through_to_the_terminal(self):
         """Aim at the nearest Guard in sight, fire, walk the route round the
         siding's east end to the signal box, use the terminal."""
