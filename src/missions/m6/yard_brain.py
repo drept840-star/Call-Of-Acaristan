@@ -38,8 +38,8 @@ from . import train3d as T
 
 _w = T._w
 
-SIGHT = Sight(fov=140.0, range=45.0, near=3.0, react=(0.08, 0.55), forget=4.0)
-SHOOTERS = 4                   # Guards firing at once
+SIGHT = Sight(fov=140.0, range=45.0, near=3.0, react=(0.10, 0.70), forget=4.0)
+SHOOTERS = 3                   # Guards firing at once
 RADIO = 1.0                    # seconds before a sighting reaches the squad
 NOISE_SHOT = 16.0              # the K9, suppressed
 NOISE_GUARD_SHOT = 30.0

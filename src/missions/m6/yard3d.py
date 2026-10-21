@@ -62,12 +62,12 @@ PITCH_LIM = (-38.0, 32.0)
 MAG, RESERVE = 30, 120
 FIRE_GAP = 0.08                    # K9 cyclic, s
 RELOAD_S = 1.6
-HP_REGEN_DELAY, HP_REGEN = 6.5, 5.0
+HP_REGEN_DELAY, HP_REGEN = 5.0, 7.0
 HIT_BODY, HIT_HEAD = 22, 64
 # The yard's difficulty (the train's guard profiles stay as they are): they
 # hit harder and tougher, aim better and come back at him sooner.
-GUARD_HP, GUARD_DMG = 1.35, 2.3
-GUARD_AIM, GUARD_REST = 0.12, 0.70     # extra hit chance, burst-rest scale
+GUARD_HP, GUARD_DMG = 1.15, 1.55
+GUARD_AIM, GUARD_REST = 0.05, 0.85     # extra hit chance, burst-rest scale
 
 # ── the terminal ──────────────────────────────────────────────────────────
 TERMINAL = (T.SIGNAL_BOX[0] + 1.0, T.SIGNAL_BOX[1] + 1.75)   # at the door
