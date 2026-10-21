@@ -446,6 +446,62 @@ def _cross(a, b):
             a[0] * b[1] - a[1] * b[0])
 
 
+def _unit(v):
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    return (v[0] / n, v[1] / n, v[2] / n) if n > 1e-9 else (0.0, 0.0, 0.0)
+
+
+# Elbow poles in torso axes (+x outward from that side, +y up, +z forward):
+# the trigger elbow out and down, the support elbow down under the handguard.
+POLE_R, POLE_L = (0.8, -1.0, -0.1), (0.4, -1.0, 0.0)
+UARM, FARM = 0.30, 0.31                # rig shoulder->elbow, elbow->hand
+
+
+def _arm_ik(hum, pose, side, target, pos, yaw, pole):
+    """Two-bone arm IK onto a WORLD point with the elbow swung toward
+    ``pole``.  The rig's own solve keeps the elbow in one fixed plane, which
+    folds an arm reaching across the chest straight through the torso; here
+    the elbow goes round the body and the hand still lands on the target."""
+    p = dict(pose)
+    places, _j, root = hum.pose_world(p, pos, yaw, rifle_on=False)
+    S = next(m for slot, _k, m, _o, _g, _f in places if slot == 1)
+    sh = next(o for slot, _k, _m, o, _g, _f in places
+              if slot == (4 if side == "l" else 10))
+    sc2 = S[0] * S[0] + S[3] * S[3] + S[6] * S[6]
+    d = [target[i] - root[i] - sh[i] for i in range(3)]
+    t = [(S[i] * d[0] + S[3 + i] * d[1] + S[6 + i] * d[2]) / sc2 for i in range(3)]
+    th = _unit(t)
+    dist = clamp(math.sqrt(sum(x * x for x in t)), 0.05, UARM + FARM - 0.002)
+    t = [x * dist for x in th]
+    # the elbow circle about the shoulder->hand line, swung toward the pole
+    along = (UARM * UARM - FARM * FARM + dist * dist) / (2.0 * dist)
+    rho = math.sqrt(max(0.0, UARM * UARM - along * along))
+    sx = -1.0 if side == "l" else 1.0
+    n = (pole[0] * sx, pole[1], pole[2])
+    k = sum(n[i] * th[i] for i in range(3))
+    n = _unit([n[i] - k * th[i] for i in range(3)])
+    elbow = [th[i] * along + n[i] * rho for i in range(3)]
+    u = _unit(elbow)                                  # upper arm, down its length
+    v = _unit([t[i] - elbow[i] for i in range(3)])    # forearm
+    cu = sum(v[i] * u[i] for i in range(3))
+    w = [v[i] - cu * u[i] for i in range(3)]
+    sw = math.sqrt(sum(x * x for x in w))
+    w = _unit(w) if sw > 1e-5 else _unit([n[i] - sum(n[j] * u[j] for j in range(3)) * u[i]
+                                          for i in range(3)])
+    el = math.atan2(sw, cu)
+    # U = rot_z(sh_r * sx) . rot_x(-sh_p) . rot_y(sh_y) with U(-y) = u, U(+z) = w
+    a = math.atan2(u[0], -u[1])
+    b = math.asin(clamp(-u[2], -1.0, 1.0))
+    ca, sa = math.cos(a), math.sin(a)
+    wx, wy = ca * w[0] + sa * w[1], -sa * w[0] + ca * w[1]
+    g = math.atan2(wx, -math.sin(b) * wy + math.cos(b) * w[2])
+    p[side + "sh_r"] = math.degrees(a) * sx
+    p[side + "sh_p"] = -math.degrees(b)
+    p[side + "sh_y"] = math.degrees(g)
+    p[side + "el"] = math.degrees(el)
+    return p
+
+
 def _gun_basis(yaw, pitch, roll=0.0):
     """(right, up, fwd) for a gun aimed at (yaw, pitch), rolled about its bore."""
     f = T._forward(yaw, pitch)
@@ -1082,7 +1138,7 @@ class YardScene:
         tilt = 0.0
         if reload_p is not None:
             tilt = math.sin(math.pi * clamp(reload_p, 0.0, 1.0))
-        yaw = self.yaw + CARRY_YAW * carry + 10.0 * tilt
+        yaw = self.yaw + CARRY_YAW * carry - 4.0 * tilt
         pitch = (self.pitch * k + CARRY_PITCH * carry + KICK_UP * self.gun_kick
                  - 16.0 * tilt)
         B = _gun_basis(yaw, pitch, roll=-32.0 * tilt)
@@ -1098,7 +1154,7 @@ class YardScene:
         low = (sh[0] + CARRY_OUT, sh[1] - CARRY_DROP,
                sh[2] + CARRY_POCKET - K9_BUTT_Z)
         c = [ads[i] * k + low[i] * carry for i in range(3)]
-        c[2] -= KICK_BACK * self.gun_kick + 0.06 * tilt
+        c[2] -= KICK_BACK * self.gun_kick - 0.04 * tilt
         c[1] -= 0.05 * tilt
         O = tuple(B[0][i] * c[0] + B[1][i] * c[1] + B[2][i] * c[2] for i in range(3))
         return O, B
@@ -1152,8 +1208,8 @@ class YardScene:
             k = math.sin(math.pi * clamp((reload_p - 0.15) / 0.7, 0.0, 1.0))
             mw = _gun_pt(O, B, K9_MAGWELL)
             lt = tuple(lt[i] + (mw[i] - lt[i]) * k for i in range(3))
-        pose = _w.reach(h, pose, "r", rt, self.pos, self.body_yaw)
-        pose = _w.reach(h, pose, "l", lt, self.pos, self.body_yaw)
+        pose = _arm_ik(h, pose, "r", rt, self.pos, self.body_yaw, POLE_R)
+        pose = _arm_ik(h, pose, "l", lt, self.pos, self.body_yaw, POLE_L)
         _w.actor(r, key, pose, self.pos, self.body_yaw, int(tm), seed=93,
                  amp=0.15, rifle_on=False, hd=True, bloody=True,
                  expression="angry", shadow=T._shadow_for(self.pos[2]))

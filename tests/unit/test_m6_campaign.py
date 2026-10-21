@@ -881,6 +881,48 @@ class YardSceneTests(unittest.TestCase):
         q = sc._brass_at(p0, v, 3.0)
         self.assertAlmostEqual(q[1], _yard.ground_y(q[0], q[2]) + 0.01, delta=0.02)
 
+    def test_arms_wrap_round_the_body_onto_the_k9(self):
+        """Both hands land on their grip points across the chest, and
+        neither arm cuts through the torso to get there."""
+        h = _w3.hum(("biribel", OUTFIT_GUARD), True, 0, True)
+        pose, pos, yaw = dict(twist=30.0), (0.0, 0.0, 0.0), 0.0
+        places, _j, root = h.pose_world(pose, pos, yaw, rifle_on=False)
+        S = next(m for s, _k, m, _o, _g, _f in places if s == 1)
+        sc2 = S[0] * S[0] + S[3] * S[3] + S[6] * S[6]
+
+        def world(v):
+            return tuple(root[i] + S[i * 3] * v[0] + S[i * 3 + 1] * v[1]
+                         + S[i * 3 + 2] * v[2] for i in range(3))
+
+        def local(w):
+            d = [w[i] - root[i] for i in range(3)]
+            return [(S[i] * d[0] + S[3 + i] * d[1] + S[6 + i] * d[2]) / sc2
+                    for i in range(3)]
+
+        uniq = h._unique_verts()
+        # torso-local targets: the trigger hand in front of the right chest,
+        # the support hand reaching across to the handguard
+        for side, pole, tgt in (("r", _yard.POLE_R, (0.13, 0.42, 0.30)),
+                                ("r", _yard.POLE_R, (0.15, 0.30, 0.35)),
+                                ("l", _yard.POLE_L, (0.08, 0.45, 0.45)),
+                                ("l", _yard.POLE_L, (0.12, 0.30, 0.45))):
+            target = world(tgt)
+            p = _yard._arm_ik(h, pose, side, target, pos, yaw, pole)
+            pl, j, rt = h.pose_world(p, pos, yaw, rifle_on=False)
+            self.assertLess(math.dist(j[side + "hand"], target), 0.01,
+                            f"{side} hand missed {tgt}")
+            for slot, key, M, org, _g, _f in pl:
+                if key not in ("uarm", "farm") or (slot < 10) != (side == "l"):
+                    continue
+                for x, y, z in uniq[key]:
+                    w = [M[i * 3] * x + M[i * 3 + 1] * y + M[i * 3 + 2] * z
+                         + org[i] + rt[i] for i in range(3)]
+                    lx, ly, lz = local(w)
+                    inside = min(lx + 0.20, 0.20 - lx, ly - 0.04, 0.56 - ly,
+                                 lz + 0.12, 0.12 - lz)
+                    # the shoulder joint itself overlaps by ~2 cm
+                    self.assertLess(inside, 0.03, f"{side} {key} through the torso at {tgt}")
+
     def test_terminal_needs_the_box_cleared(self):
         sc = self.scene
         sc.pos = (_yard.TERMINAL[0], 0.04, _yard.TERMINAL[1])
