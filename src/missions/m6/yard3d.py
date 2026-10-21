@@ -64,6 +64,13 @@ FIRE_GAP = 0.08                    # K9 cyclic, s
 RELOAD_S = 1.6
 HP_REGEN_DELAY, HP_REGEN = 5.0, 7.0
 HIT_BODY, HIT_HEAD = 22, 64
+# Dead Guards carry K9-compatible mags: walk over the body to take them.
+LOOT_R = 1.5                       # pickup radius, m
+LOOT_MAGS = {"heavy": 2, "officer": 2}   # everyone else carries one
+RESERVE_CAP = 240
+# Melee: a punch for whoever is in arm's reach (F or V; LMB when dry).
+MELEE_R, MELEE_CONE = 1.9, 0.55    # reach (m), min cos to the aim
+MELEE_DMG, MELEE_GAP, MELEE_S = 45, 0.65, 0.32   # damage, cooldown, swing time
 # The yard's difficulty (the train's guard profiles stay as they are): they
 # hit harder and tougher, aim better and come back at him sooner.
 GUARD_HP, GUARD_DMG = 1.15, 1.55
@@ -678,6 +685,8 @@ class YardScene:
         self.result = None
         self.near_terminal = False
         self.route_stage = 0
+        self.melee_t = -9.0            # start of the last punch
+        self.toast = None              # (t, text) pickup / melee note
         self._muzzle = None
         p = STATE.player
         if p is not None:
@@ -753,6 +762,8 @@ class YardScene:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_r:
                 self._begin_reload()
+            elif event.key in (pygame.K_f, pygame.K_v) and not self.dying:
+                self._melee()
             elif event.key == pygame.K_e and self.near_terminal:
                 self.finish("win")
 
@@ -780,7 +791,11 @@ class YardScene:
                 self.mag += n
                 self.reserve -= n
         if self.firing and not self.reloading:
-            self._fire()
+            if self.mag <= 0 and self.reserve <= 0:
+                self._melee()          # dry: the fists
+            else:
+                self._fire()
+        self._loot()
         self.recoil = max(0.0, self.recoil - dt * 6.0)
         self.gun_kick = max(0.0, self.gun_kick - dt * 13.0)
         self.cam_kick *= math.exp(-dt * 11.0)
@@ -965,17 +980,77 @@ class YardScene:
             return
         g = best_g
         self.impacts.append((self.t, end, "blood"))
-        g["hp"] -= HIT_HEAD if head else HIT_BODY
-        g["hit_t"] = self.t
-        g["hit_dir"] = (d[0], d[2])
-        self.hit_mark = self.t
         if self.audio:
             (self.audio.headshot if head else
              (lambda: self.audio.impact(on_enemy=True)))()
+        self._hurt_guard(g, HIT_HEAD if head else HIT_BODY, (d[0], d[2]))
+
+    def _hurt_guard(self, g, dmg, hit_dir):
+        g["hp"] -= dmg
+        g["hit_t"] = self.t
+        g["hit_dir"] = hit_dir
+        self.hit_mark = self.t
         if g["hp"] <= 0:
             g["alive"] = False
             g["dead_t"] = self.t
             g["dead_pose"] = "dead_back" if (int(g["slot"]) % 2) else "dead_front"
+            g["mags"] = LOOT_MAGS.get(g["kind"], 1)
+
+    def _loot(self):
+        """Take the mags off any body he walks over."""
+        if self.reserve >= RESERVE_CAP:
+            return
+        px, _py, pz = self.pos
+        for g in self.guards:
+            if g["alive"] or not g.get("mags"):
+                continue
+            if math.hypot(g["pos"][0] - px, g["pos"][2] - pz) > LOOT_R:
+                continue
+            got = min(g["mags"] * MAG, RESERVE_CAP - self.reserve)
+            g["mags"] = 0
+            self.reserve += got
+            self.toast = (self.t, "+%d K9 ROUNDS" % got)
+            if self.audio:
+                self.audio.reload()
+            if self.mag <= 0:
+                self._begin_reload()
+
+    def _melee_target(self):
+        f = T._forward(self.yaw, 0.0)
+        fx, fz = f[0], f[2]
+        n = math.hypot(fx, fz) or 1.0
+        fx, fz = fx / n, fz / n
+        best, best_d = None, MELEE_R
+        for g in self.guards:
+            if not g["alive"]:
+                continue
+            dx, dz = g["pos"][0] - self.pos[0], g["pos"][2] - self.pos[2]
+            d = math.hypot(dx, dz)
+            if d < best_d and d > 1e-6 and (dx * fx + dz * fz) / d >= MELEE_CONE \
+                    and abs(g["pos"][1] - self.pos[1]) < 1.0:
+                best, best_d = g, d
+        return best, (fx, fz)
+
+    def _melee(self):
+        if self.t - self.melee_t < MELEE_GAP or self.reloading:
+            return
+        self.melee_t = self.t
+        self.firing = False if (self.mag <= 0 and self.reserve <= 0) else self.firing
+        self.shake = min(1.0, self.shake + 0.25)
+        g, (fx, fz) = self._melee_target()
+        if g is None:
+            return
+        # from behind (he faces away from Biribel) it is a takedown
+        gx, gz = B._dir(g["yaw"])
+        behind = (gx * fx + gz * fz) > 0.35
+        dmg = g["hp"] if behind else MELEE_DMG
+        self.cam_kick = min(2.2, self.cam_kick + 0.8)
+        self.impacts.append((self.t, (g["pos"][0], g["pos"][1] + 1.35, g["pos"][2]), "blood"))
+        if self.audio:
+            self.audio.impact(on_enemy=True)
+        self._hurt_guard(g, dmg, (fx, fz))
+        if not g["alive"]:
+            self.toast = (self.t, "TAKEDOWN" if behind else "KNOCKED DOWN")
 
     # ── the Guard ──────────────────────────────────────────────────────
     def _living(self, wave=None):
@@ -1236,6 +1311,14 @@ class YardScene:
             k = math.sin(math.pi * clamp((reload_p - 0.15) / 0.7, 0.0, 1.0))
             mw = _gun_pt(O, B, K9_MAGWELL)
             lt = tuple(lt[i] + (mw[i] - lt[i]) * k for i in range(3))
+        mk = (self.t - self.melee_t) / MELEE_S
+        if 0.0 <= mk < 1.0:
+            jab = math.sin(math.pi * mk)
+            f = T._forward(self.yaw, self.pitch * 0.5)
+            fist = (sh[10][0] + f[0] * ARM_REACH, sh[10][1] - 0.05 + f[1] * ARM_REACH,
+                    sh[10][2] + f[2] * ARM_REACH)
+            rt = tuple(rt[i] + (fist[i] - rt[i]) * jab for i in range(3))
+            pose["twist"] = pose.get("twist", 0.0) - 18.0 * jab
         pose = _arm_ik(h, pose, "r", rt, self.pos, self.body_yaw, POLE_R)
         pose = _arm_ik(h, pose, "l", lt, self.pos, self.body_yaw, POLE_L)
         _w.actor(r, key, pose, self.pos, self.body_yaw, int(tm), seed=93,
@@ -1277,6 +1360,17 @@ class YardScene:
                 _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                          int(tm), seed=100 + g["slot"], amp=0.0,
                          rifle_on=False, hd=True, shadow=T._shadow_for(z))
+                if g.get("mags") and k >= 1.0:
+                    gx, gz = B._dir(g["yaw"])
+                    mp = (x - gz * 0.45, y + 0.08, z + gx * 0.45)
+                    for i in range(g["mags"]):
+                        _w.add(r, box(0.07, 0.05, 0.2, (40, 44, 50),
+                                      center=(mp[0] + 0.1 * i, mp[1], mp[2])))
+                    pulse = 0.5 + 0.5 * math.sin(self.t * 4.0 + g["slot"])
+                    r.add_sprite((mp[0], mp[1] + 0.12, mp[2]),
+                                 _fx.glow((255, 214, 140), 0.28, tm,
+                                          intensity=0.35 + 0.35 * pulse),
+                                 layer=_fx.FX_LAYER)
                 continue
             # ease between stances (a run cycle is already continuous)
             want = self._guard_pose(g)
@@ -1438,6 +1532,16 @@ class YardScene:
                  + ["due"] * len(self.pending))
         H.vitals(surface, p.hp if p else 0, top, wounded=self._wounded(),
                  alive=self._living(), slots=slots)
+        hint = None
+        if self.toast and self.t - self.toast[0] < 1.6:
+            hint = self.toast[1]
+        elif self.mag <= 0 and self.reserve <= 0:
+            hint = "DRY  -  [F] MELEE  -  TAKE MAGS OFF THE BODIES"
+        elif self._melee_target()[0] is not None:
+            hint = "[F] MELEE"
+        if hint:
+            img = font_terminal_small.render(hint, True, (236, 214, 160))
+            surface.blit(img, img.get_rect(center=(cx, cy + 46)))
         H.ammo(surface, "K9", self.mag, MAG, "%d" % self.reserve,
                reloading=(1.0 - self.reloading / RELOAD_S) if self.reloading else 0.0)
 
