@@ -38,7 +38,7 @@ from engine.assets import load_image
 from engine3d import ik as _ik
 from engine3d import (
     POSES, Renderer, blend, box, clamp, disc_xz, m_apply, pose_run, rot_x,
-    rot_y, v_add,
+    rot_y, tex, v_add,
 )
 
 RES = 0.64                       # internal render scale: 640x448, the PS2 frame
@@ -865,10 +865,11 @@ def _yard_track(add, z, x0, x1):
     """Snow-dusted ballast, ties and rails.  The rails sit at +-0.72, under
     the wagon bodies: at the near track's +-1.5 they ran exactly along the
     carriage's flanks and drew a bright bar across its skirt."""
-    add(box(x1 - x0, 0.06, 3.6, (52, 58, 70), center=((x0 + x1) * 0.5, 0.03, z),
-            seg=8))
+    add(box(x1 - x0, 0.06, 3.6, tex("ballast", like=(52, 58, 70)),
+            center=((x0 + x1) * 0.5, 0.03, z), seg=8))
+    sleeper = tex("sleeper", like=(52, 46, 38))
     for x in range(int(x0) + 1, int(x1), 2):
-        add(box(0.4, 0.08, 1.9, (52, 46, 38), center=(x, 0.10, z)))
+        add(box(0.4, 0.08, 1.9, sleeper, center=(x, 0.10, z)))
     for dz in (-0.72, 0.72):
         add(box(x1 - x0, 0.10, 0.10, (86, 88, 92),
                 center=((x0 + x1) * 0.5, 0.16, z + dz), seg=8))
@@ -878,6 +879,7 @@ def _freight_car(add, cx, kind, col, z=FREIGHT_Z):
     """One snow-capped wagon, its +z flank toward the platform."""
     L = _FREIGHT_L
     dark = _darker(col)
+    body = tex({"box": "boxcar", "tank": "steel"}.get(kind, "rust"), like=col, tint=True)
     face = z + 1.47
     for bx in (cx - L * 0.33, cx + L * 0.33):
         add(box(2.4, 0.55, 2.4, (20, 20, 22), center=(bx, 0.42, z)))
@@ -886,7 +888,7 @@ def _freight_car(add, cx, kind, col, z=FREIGHT_Z):
         add(box(0.5, 0.20, 0.30, (30, 30, 32),
                 center=(cx + side * (L * 0.5 + 0.2), 0.85, z)))
     if kind == "box":
-        add(box(L - 0.3, 2.7, 2.9, col, center=(cx, 2.33, z), seg=4))
+        add(box(L - 0.3, 2.7, 2.9, body, center=(cx, 2.33, z), seg=4))
         add(box(L - 0.2, 0.18, 3.0, dark, center=(cx, 3.77, z), seg=3))
         add(box(L - 0.6, 0.05, 2.6, _SNOW, center=(cx, 3.89, z), seg=3))
         add(box(2.4, 2.3, 0.06, dark, center=(cx + 0.6, 2.20, face)))
@@ -897,14 +899,14 @@ def _freight_car(add, cx, kind, col, z=FREIGHT_Z):
             add(box(0.06, 2.6, 0.04, dark, center=(cx + i * 1.2, 2.33, face)))
         add(box(0.9, 0.30, 0.03, (150, 140, 110), center=(cx - 3.2, 2.9, face + 0.02)))
     elif kind == "tank":
-        add(box(L - 1.2, 2.2, 2.4, col, center=(cx, 2.25, z), seg=4))
-        add(box(L - 1.2, 1.5, 2.8, col, center=(cx, 2.25, z), seg=4))
+        add(box(L - 1.2, 2.2, 2.4, body, center=(cx, 2.25, z), seg=4))
+        add(box(L - 1.2, 1.5, 2.8, body, center=(cx, 2.25, z), seg=4))
         add(box(1.0, 0.40, 1.0, dark, center=(cx, 3.55, z)))
         add(box(L - 1.6, 0.05, 1.7, _SNOW, center=(cx, 3.38, z), seg=3))
         add(box(L - 0.4, 0.08, 3.0, (26, 26, 28), center=(cx, 1.10, z), seg=3))
         add(box(2.0, 0.40, 0.03, (170, 150, 70), center=(cx + 2.5, 2.4, z + 1.42)))
     else:
-        add(box(L - 0.3, 1.40, 2.9, col, center=(cx, 1.70, z), seg=4))
+        add(box(L - 0.3, 1.40, 2.9, body, center=(cx, 1.70, z), seg=4))
         add(box(L - 1.0, 0.50, 2.4, (16, 16, 18), center=(cx, 2.55, z), seg=3))
         add(box(L - 1.4, 0.04, 2.0, _SNOW, center=(cx, 2.82, z), seg=3))
         for i in range(-4, 5):
@@ -922,14 +924,16 @@ def _yard_set(add):
         _freight_car(add, cx, kind, col)
     # buffer stop at the siding's east end
     bx = FREIGHT_END_X
-    add(box(0.6, 1.0, 3.0, (60, 40, 30), center=(bx, 0.60, FREIGHT_Z)))
+    add(box(0.6, 1.0, 3.0, tex("rust", like=(60, 40, 30), tint=True),
+            center=(bx, 0.60, FREIGHT_Z)))
     add(box(0.3, 0.3, 2.4, (44, 30, 24), center=(bx - 0.4, 0.90, FREIGHT_Z)))
     add(box(0.20, 0.20, 0.08, (230, 50, 36), center=(bx, 1.30, FREIGHT_Z + 1.52),
             emissive=True))
     # signal box: lit window and door toward the tracks, stove chimney
     sx, sz = SIGNAL_BOX
-    add(box(3.2, 2.6, 2.6, (34, 30, 28), center=(sx, 1.30, sz), seg=2))
-    add(box(3.6, 0.25, 3.0, (26, 28, 32), center=(sx, 2.72, sz)))
+    add(box(3.2, 2.6, 2.6, tex("brick", like=(34, 30, 28)), center=(sx, 1.30, sz), seg=2))
+    add(box(3.6, 0.25, 3.0, tex("metal_rib", like=(26, 28, 32), tint=True),
+            center=(sx, 2.72, sz)))
     add(box(3.4, 0.05, 2.8, _SNOW, center=(sx, 2.87, sz)))
     add(box(1.4, 0.70, 0.04, (255, 200, 130), center=(sx - 0.5, 1.65, sz + 1.32),
             emissive=True))
@@ -937,7 +941,8 @@ def _yard_set(add):
     add(box(0.8, 1.9, 0.05, (22, 20, 20), center=(sx + 1.0, 0.95, sz + 1.32)))
     add(box(0.30, 0.90, 0.30, (40, 38, 36), center=(sx - 1.0, 3.25, sz - 0.4)))
     for i, dx in enumerate((-2.2, -2.9, -2.55)):
-        add(box(0.58, 0.88, 0.58, (66, 40, 28) if i % 2 else (44, 48, 40),
+        add(box(0.58, 0.88, 0.58,
+                tex("crate", like=(66, 40, 28) if i % 2 else (44, 48, 40), tint=True),
                 center=(sx + dx, 0.44, sz + 0.9 - 0.5 * i)))
         add(box(0.52, 0.03, 0.52, _SNOW, center=(sx + dx, 0.90, sz + 0.9 - 0.5 * i)))
     # lamp mast over the siding
@@ -948,7 +953,8 @@ def _yard_set(add):
             emissive=True))
     # sleeper stack and a rail pile on the strip between the two tracks
     for i in range(5):
-        add(box(2.2, 0.14, 0.9 - 0.06 * i, (54, 46, 34) if i % 2 else (44, 36, 28),
+        add(box(2.2, 0.14, 0.9 - 0.06 * i,
+                tex("sleeper", like=(54, 46, 34) if i % 2 else (44, 36, 28)),
                 center=(-2.5, 0.07 + 0.14 * i, -7.2)))
     add(box(2.1, 0.04, 0.6, _SNOW, center=(-2.5, 0.72, -7.2)))
     for i, (dz, y) in enumerate(((-0.24, 0.05), (0.0, 0.05), (0.24, 0.05),
@@ -3423,9 +3429,12 @@ class TrainScene:
 
     def _draw_station(self, r, t):
         # Main depot building with recessed dark brickwork, roof trim, and pillars
-        _w.add(r, box(19.0, 2.4, 3.2, (24, 27, 33), center=(7.0, 1.2, 10.6), seg=5))
-        _w.add(r, box(19.2, 0.35, 3.3, (18, 20, 25), center=(7.0, 0.2, 10.6), seg=4))
-        _w.add(r, box(19.8, 0.22, 3.9, (38, 42, 50), center=(7.0, 2.48, 10.4), seg=5))
+        _w.add(r, box(19.0, 2.4, 3.2, tex("brick", like=(24, 27, 33)),
+                      center=(7.0, 1.2, 10.6), seg=5))
+        _w.add(r, box(19.2, 0.35, 3.3, tex("concrete", like=(18, 20, 25)),
+                      center=(7.0, 0.2, 10.6), seg=4))
+        _w.add(r, box(19.8, 0.22, 3.9, tex("concrete", like=(38, 42, 50)),
+                      center=(7.0, 2.48, 10.4), seg=5))
 
         # Structural steel columns along the platform wall
         for px in (-1.5, 3.0, 7.5, 12.0, 15.5):
@@ -3472,7 +3481,8 @@ class TrainScene:
             _w.add(r, box(hw * 2 + 0.08, 0.10, hd * 2 + 0.08, (34, 28, 22),
                           center=(cx, _SLOT_GROUND + 0.05, cz)))
             # Crate body (alternating olive-drab military cases and dark wood)
-            body_col = (48, 52, 44) if idx % 2 == 0 else (56, 44, 34)
+            body_col = tex("crate", like=(48, 52, 44) if idx % 2 == 0 else (56, 44, 34),
+                           tint=True)
             trim_col = (68, 72, 62) if idx % 2 == 0 else (76, 60, 46)
             _w.add(r, box(hw * 1.94, h - 0.14, hd * 1.94, body_col,
                           center=(cx, _SLOT_GROUND + 0.10 + (h - 0.14) * 0.5, cz), seg=2))
@@ -3505,7 +3515,8 @@ class TrainScene:
         add(box(31.0, 0.04, 0.04, (48, 52, 60), center=(1.5, 2.72, 9.00)))
 
         # ── canopy over the wall side, with hanging work lamps ─────────
-        add(box(33.0, 0.20, 2.55, (28, 31, 38), center=(0.5, 4.05, 9.30), seg=8))
+        add(box(33.0, 0.20, 2.55, tex("metal_rib", like=(28, 31, 38), tint=True),
+                center=(0.5, 4.05, 9.30), seg=8))
         add(box(33.0, 0.04, 2.35, (168, 178, 194), center=(0.5, 4.16, 9.30), seg=8))
         for x in (-15.0, -8.0, 0.0, 8.0, 16.0):
             add(box(0.14, 3.4, 0.14, (34, 38, 44), center=(x, 2.1, 10.35)))
@@ -3518,8 +3529,10 @@ class TrainScene:
                          layer=_fx.FX_LAYER)
 
         # ── left wing of the station: the dark behind the player ───────
-        add(box(15.0, 2.0, 1.8, (22, 24, 30), center=(-9.6, 1.0, 10.7), seg=6))
-        add(box(15.5, 0.16, 2.0, (42, 46, 54), center=(-9.6, 2.06, 10.7), seg=6))
+        add(box(15.0, 2.0, 1.8, tex("brick", like=(22, 24, 30)), center=(-9.6, 1.0, 10.7),
+                seg=6))
+        add(box(15.5, 0.16, 2.0, tex("concrete", like=(42, 46, 54)),
+                center=(-9.6, 2.06, 10.7), seg=6))
         for wx in (-14.0, -10.5, -6.5):
             add(box(1.45, 0.64, 0.05, (255, 205, 145), center=(wx, 1.48, 9.78),
                     emissive=True))
@@ -3530,7 +3543,8 @@ class TrainScene:
 
         # ── station wall detail: windows, door, clock, posters, pipes ──
         # The platform runs on to the wall, so the doors open onto it.
-        add(box(19.0, 0.58, 1.34, (62, 66, 74), center=(7.0, 0.29, 8.34), seg=4))
+        add(box(19.0, 0.58, 1.34, tex("concrete", like=(62, 66, 74)),
+                center=(7.0, 0.29, 8.34), seg=4))
         for wx in (0.4, 7.6, 11.2):
             add(box(1.55, 0.82, 0.05, (38, 40, 46), center=(wx, 1.55, 8.98)))
             add(box(1.38, 0.66, 0.03, (255, 212, 158), center=(wx, 1.55, 8.94),
@@ -3611,11 +3625,12 @@ class TrainScene:
         for x in range(-14, 16, 4):
             add(box(3.88, 0.035, 0.035, (70, 72, 78), center=(x, G + 0.70, 3.0)))
         for i, x in enumerate((-19.0, -15.0, -11.0, -7.0, -3.0, 1.0, 5.0, 9.0, 13.0, 17.0)):
-            add(box(2.6, 0.14 + 0.03 * (i % 3), 0.52, (158, 168, 184),
+            add(box(2.6, 0.14 + 0.03 * (i % 3), 0.52, tex("snow", like=(158, 168, 184)),
                     center=(x, G + 0.07 + 0.015 * (i % 3), 2.92), seg=2))
         # stacked pallets / sleepers at the east end
         for i in range(4):
-            add(box(1.9, 0.10, 0.62, (44, 36, 28) if i % 2 else (54, 46, 34),
+            add(box(1.9, 0.10, 0.62,
+                    tex("sleeper", like=(44, 36, 28) if i % 2 else (54, 46, 34)),
                     center=(18.2 - i * 0.10, G + 0.05 + i * 0.11, 5.9 + i * 0.06)))
         add(box(1.94, 0.03, 0.64, (174, 184, 200),
                 center=(17.9, G + 0.48, 6.1)))
@@ -3624,23 +3639,24 @@ class TrainScene:
         # troop truck comes up, and its level crossing past the carriage ─
         for i in range(3):
             top = G - 0.145 * (i + 1)
-            add(box(0.50, top, 1.40, (58, 62, 70),
+            add(box(0.50, top, 1.40, tex("concrete", like=(58, 62, 70)),
                     center=(21.25 + 0.5 * i, top * 0.5, 5.9)))
             add(box(0.50, 0.02, 1.30, (170, 180, 196),
                     center=(21.25 + 0.5 * i, top + 0.01, 5.9)))
-        add(box(3.4, 0.012, 46.0, (40, 44, 54), center=(TRUCK_X, 0.008, -9.0),
-                seg=6))
+        add(box(3.4, 0.012, 46.0, tex("snow_trod", like=(40, 44, 54)),
+                center=(TRUCK_X, 0.008, -9.0), seg=6))
         for side in (-1, 1):
             # ploughed snow either side, broken where the road crosses the bed
             for z0, z1 in ((-32.0, -6.4), (2.9, 14.0)):
-                add(box(0.45, 0.10, z1 - z0, (150, 160, 178),
+                add(box(0.45, 0.10, z1 - z0, tex("snow", like=(150, 160, 178)),
                         center=(TRUCK_X + side * 1.95, 0.05, (z0 + z1) * 0.5),
                         seg=4))
         add(box(3.0, 0.14, 4.4, (58, 50, 40), center=(TRUCK_X, 0.10, 0.0)))
 
         # ── the yard beyond the carriage: silhouettes, gantries, wires ─
         # (relay hut moved east off the truck's service road)
-        add(box(2.0, 3.4, 1.6, (24, 27, 33), center=(28.8, 1.7, -9.6)))
+        add(box(2.0, 3.4, 1.6, tex("metal_rib", like=(24, 27, 33), tint=True),
+                center=(28.8, 1.7, -9.6)))
         add(box(0.12, 5.2, 0.12, (30, 34, 40), center=(28.0, 2.6, -7.2)))
         add(box(0.52, 0.20, 0.52, (235, 60, 40), center=(28.0, 5.24, -7.2),
                 emissive=True))

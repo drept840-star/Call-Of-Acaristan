@@ -25,7 +25,7 @@ from core.config import (
 )
 from core.outfits import OUTFIT_GUARD
 from core.state import STATE
-from engine3d import NEUTRAL, POSES, blend, box, clamp, pose_run
+from engine3d import NEUTRAL, POSES, blend, box, clamp, pose_run, tex
 
 from . import hud3d as H
 from . import palette3d as P
@@ -239,14 +239,16 @@ def _wall_run(add, x0, z0, x1, z1, h=2.6):
     cx, cz = (x0 + x1) * 0.5, (z0 + z1) * 0.5
     w, d = (length, 0.4) if along_x else (0.4, length)
     seg = max(1, int(length / 4.0))
-    add(box(w, h, d, _WALL, center=(cx, h * 0.5, cz), seg=seg))
-    add(box(w + 0.08, 0.08, d + 0.08, _SNOW, center=(cx, h + 0.04, cz), seg=seg))
-    add(box(w, 0.35, d + 0.5, _SNOW, center=(cx, 0.12, cz), seg=seg))
+    snow = tex("snow", like=_SNOW)
+    add(box(w, h, d, tex("concrete", like=_WALL), center=(cx, h * 0.5, cz), seg=seg))
+    add(box(w + 0.08, 0.08, d + 0.08, snow, center=(cx, h + 0.04, cz), seg=seg))
+    add(box(w, 0.35, d + 0.5, snow, center=(cx, 0.12, cz), seg=seg))
+    post = tex("concrete", like=_POST)
     for i in range(seg + 1):
         k = i / float(seg)
         px = x0 + (x1 - x0) * k
         pz = z0 + (z1 - z0) * k
-        add(box(0.5, h + 0.25, 0.5, _POST, center=(px, (h + 0.25) * 0.5, pz)))
+        add(box(0.5, h + 0.25, 0.5, post, center=(px, (h + 0.25) * 0.5, pz)))
 
 
 def _gate(add, x0, x1, z):
@@ -282,7 +284,7 @@ def _perimeter_mesh():
     m = Mesh()
     add = m.add
     # ground out to the horizon: no edge of the world past the walls
-    add(quad_xz(-160, -160, 160, 160, -0.02, (46, 54, 68), seg=12))
+    add(quad_xz(-160, -160, 160, 160, -0.02, tex("snow", like=(46, 54, 68)), seg=12))
     g0, g1 = ROAD_GATE
     # south: concrete, the road gate
     _wall_run(add, WALL_W, WALL_S, g0, WALL_S)

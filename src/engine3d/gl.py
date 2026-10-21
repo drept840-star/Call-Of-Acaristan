@@ -41,16 +41,19 @@ import sys
 import numpy as np
 import pygame
 
+from . import textures as _tex
 from .core import SoftwareRenderer
 from .rig import PART_FB, SLOTS
+from .textures import Tex
 
 __all__ = ["GLRenderer", "Renderer", "gl_available", "gl_info"]
 
 # Depth layering: layer L (0..7) maps to [(7-L)/8, (8-L)/8). Higher = nearer.
 _LAYER_SLOTS = 8.0
-_VERT_FLOATS = 18          # pos3 col3 nrm3 flags4(shade,fog,double,layer) dbias1 tint4
+_VERT_FLOATS = 21          # pos3 col3 nrm3 flags4(shade,fog,double,layer) dbias1 tint4 uv2 tex1
 _RIG_FLOATS = 15           # pos3 col3 nrm3 flags4 fb1 slot1
 _N_SLOTS = len(SLOTS)
+_TEX_UNIT = 7              # engine3d.textures layers (texture array); unit 0 is the colour target
 SPRITE_REACH_M = 3.5       # how far (metres) a sprite callback may paint from its anchor
 
 _VERT_COMMON = """
@@ -64,6 +67,8 @@ flat out vec3 v_nrm;
 flat out vec4 v_flags;
 flat out float v_dbias;
 flat out vec4 v_tint;
+out vec2 v_uv;             // texture tiles, world-space (textures.py)
+flat out float v_tex;      // texture layer, < 0 = untextured
 
 vec4 project(vec3 w) {
     vec3 d = w - u_cam;
@@ -83,8 +88,10 @@ vec4 project(vec3 w) {
 
 VERT_WORLD = "#version 330\n" + _VERT_COMMON + """
 in vec3 in_pos; in vec3 in_col; in vec3 in_nrm; in vec4 in_flags; in float in_dbias; in vec4 in_tint;
+in vec2 in_uv; in float in_tex;
 void main() {
     v_col = in_col; v_nrm = in_nrm; v_flags = in_flags; v_dbias = in_dbias; v_tint = in_tint;
+    v_uv = in_uv; v_tex = in_tex;
     gl_Position = project(in_pos);
 }
 """
@@ -98,6 +105,7 @@ void main() {
     mat4 B = u_bones[int(in_slot + 0.5)];
     vec3 w = (B * vec4(in_pos, 1.0)).xyz;
     v_col = in_col; v_flags = in_flags; v_tint = u_rtint;
+    v_uv = vec2(0.0); v_tex = -1.0;      // characters stay flat
     v_nrm = normalize(mat3(B) * in_nrm);   // bones may carry Humanoid scale
     v_dbias = u_rbias - in_fb;
     gl_Position = project(w);
@@ -112,6 +120,9 @@ flat in vec3 v_nrm;
 flat in vec4 v_flags;     // shade, fog, double_sided, layer
 flat in float v_dbias;
 flat in vec4 v_tint;
+in vec2 v_uv;
+flat in float v_tex;
+uniform sampler2DArray u_tex;   // texel / the texture's mean (textures.py)
 uniform vec3 u_cam;
 uniform vec3 u_ldir, u_ltint;
 uniform float u_amb, u_dif, u_sky;
@@ -131,13 +142,17 @@ out vec4 f_color;
 const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
 
 void main() {
+    // sampled before any discard or branch so the mip choice has its derivatives
+    // (a half-mip bias toward the sharper level: PS2-crisp, still no sparkle)
+    vec3 texel = texture(u_tex, vec3(v_uv, max(v_tex, 0.0)), -0.5).rgb;
     float layer = v_flags.w;
     if (u_split_mode == 1 && !(v_z > u_split || layer < 0.5)) discard;
     if (u_split_mode == 2 &&  (v_z > u_split || layer < 0.5)) discard;
     vec3 n = v_nrm;
     float facing = dot(n, u_cam - v_world);
     if (facing <= 0.0 && v_flags.z < 0.5) discard;
-    vec3 col = v_col;
+    vec3 alb = v_tex >= 0.0 ? v_col * texel : v_col;
+    vec3 col = alb;
     if (v_flags.x > 0.5) {                      // per-frame flat lighting (dynamic meshes)
         vec3 n2 = facing > 0.0 ? n : -n;
         float k = u_amb + u_dif * max(0.0, dot(n2, u_ldir)) + u_sky * n2.y;
@@ -157,7 +172,7 @@ void main() {
             float nd = dot(n2, dv / d);
             if (nd <= 0.0) continue;
             if (u_pl_mod > 0.5)
-                col += v_col * (u_pl_col[i].rgb / 255.0) * (fall * nd * u_pl_gain);
+                col += alb * (u_pl_col[i].rgb / 255.0) * (fall * nd * u_pl_gain);
             else
                 col += u_pl_col[i].rgb * (fall * nd);
         }
@@ -232,6 +247,27 @@ class _Programs:
         self.ctx = ctx
         self.world = ctx.program(vertex_shader=VERT_WORLD, fragment_shader=FRAG)
         self.rig = ctx.program(vertex_shader=VERT_RIG, fragment_shader=FRAG)
+        self._atlas = None
+        self._atlas_ver = -1
+
+    def atlas(self):
+        """engine3d.textures's layers as one texture array, re-uploaded when a
+        texture is added. Nearest texels, nearest mip: crisp up close, no
+        sparkle on far snow."""
+        ver = _tex.version()
+        if self._atlas is None or self._atlas_ver != ver:
+            import moderngl
+            arr = _tex.stack()
+            if arr is None:
+                arr = np.ones((1, 1, 1, 3), dtype=np.float16)
+            if self._atlas is not None:
+                self._atlas.release()
+            n, h, w, _ = arr.shape
+            t = self.ctx.texture_array((w, h, n), 3, np.ascontiguousarray(arr).tobytes(), dtype="f2")
+            t.build_mipmaps()
+            t.filter = (moderngl.NEAREST_MIPMAP_NEAREST, moderngl.NEAREST)
+            self._atlas, self._atlas_ver = t, ver
+        return self._atlas
 
 
 # ── geometry packing ────────────────────────────────────────────────────
@@ -249,6 +285,7 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
     f_ntri = np.empty(nf, dtype=np.int64)
     f_i3 = np.empty((nf, 3), dtype=np.int64)
     f_nrm = np.zeros((nf, 3)); has_n = np.zeros(nf, dtype=bool)
+    f_tex = np.full(nf, -1.0); f_uvk = np.zeros(nf)
     ext = tri.extend
     for k, face in enumerate(faces):
         idx = face[0]
@@ -258,7 +295,10 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
             ext((a, idx[j], idx[j + 1]))
         f_ntri[k] = n - 2
         f_i3[k] = idx[0], idx[1], idx[2]
-        f_col[k] = face[1]
+        col = f_col[k] = face[1]
+        if type(col) is Tex:
+            f_tex[k] = col.tex
+            f_uvk[k] = col.uvk
         em = face[5]
         f_flags[k] = (0.0 if (prelit or em) else 1.0, 0.0 if em else 1.0,
                       1.0 if face[3] else 0.0, float(face[2]))
@@ -289,7 +329,53 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
         out[:, 17] = tint[1]
     else:
         out[:, 14:18] = 0.0
+    out[:, 18:20] = 0.0
+    out[:, 20] = f_tex[rep]
+    sel = f_tex >= 0.0
+    if sel.any():
+        T, B = _tex_frame(V, f_i3, f_nrm, sel)
+        rows = sel[rep]
+        fr = rep[rows]
+        P = V[np.asarray(tri, dtype=np.int64)[rows]]
+        k = f_uvk[fr]
+        out[rows, 18] = np.einsum("ij,ij->i", P, T[fr]) * k
+        out[rows, 19] = -np.einsum("ij,ij->i", P, B[fr]) * k   # image top = up the wall
     return out
+
+
+def _tex_frame(V, f_i3, f_nrm, sel):
+    """Per-face tiling axes (T, B) for the faces in ``sel`` (zero elsewhere).
+
+    Walls and slopes: T runs level along the face, B up it, so bricks and
+    planks stay level whatever way the wall turns. Floors and ceilings follow
+    their first edge, snapped to a world axis when it is within ~14 degrees:
+    ground pieces line up with each other and a turned crate keeps its planks.
+    Every face of a plane gets the same axes, so a subdivided slab tiles
+    without seams."""
+    nf = len(f_nrm)
+    T = np.zeros((nf, 3)); B = np.zeros((nf, 3))
+    n = f_nrm[sel]
+    b = np.array([0.0, 1.0, 0.0]) - n * n[:, 1:2]
+    t = np.cross(n, b)
+    flat = np.abs(n[:, 1]) > 0.9
+    if flat.any():
+        i3 = f_i3[sel][flat]
+        e = V[i3[:, 1]] - V[i3[:, 0]]
+        e[:, 1] = 0.0
+        ln = np.linalg.norm(e, axis=1)
+        ln[ln == 0] = 1.0
+        e /= ln[:, None]
+        e[np.abs(e[:, 0]) > 0.97] = (1.0, 0.0, 0.0)
+        e[np.abs(e[:, 2]) > 0.97] = (0.0, 0.0, 1.0)
+        t[flat] = e
+        b[flat] = np.cross((0.0, 1.0, 0.0), e)
+    for a in (t, b):
+        ln = np.linalg.norm(a, axis=1)
+        ln[ln == 0] = 1.0
+        a /= ln[:, None]
+    T[sel] = t
+    B[sel] = b
+    return T, B
 
 
 def _rig_template(hum):
@@ -353,8 +439,8 @@ class GLRenderer(SoftwareRenderer):
             fmt = "3f 3f 3f 4f 1f 1f"
             names = ["in_pos", "in_col", "in_nrm", "in_flags", "in_fb", "in_slot"]
         else:
-            fmt = "3f 3f 3f 4f 1f 4f"
-            names = ["in_pos", "in_col", "in_nrm", "in_flags", "in_dbias", "in_tint"]
+            fmt = "3f 3f 3f 4f 1f 4f 2f 1f"
+            names = ["in_pos", "in_col", "in_nrm", "in_flags", "in_dbias", "in_tint", "in_uv", "in_tex"]
         return self.ctx.vertex_array(prog, [(vbo, fmt, *names)])
 
     # scene --------------------------------------------------------------
@@ -522,7 +608,7 @@ class GLRenderer(SoftwareRenderer):
             "u_ldir": L.dir, "u_ltint": L.tint, "u_amb": L.ambient, "u_dif": L.diffuse,
             "u_sky": L.sky, "u_fog": self.fog, "u_fog_start": self.fog_start,
             "u_fog_end": self.fog_end, "u_split_mode": split_mode, "u_split": float(split),
-            "u_dither": bool(self.dither),
+            "u_dither": bool(self.dither), "u_tex": _TEX_UNIT,
             "u_pl_n": n_pl,
             "u_pl_mod": 1.0 if getattr(self, "light_albedo", False) else 0.0,
             "u_pl_gain": float(getattr(self, "light_gain", 1.0)),
@@ -585,6 +671,7 @@ class GLRenderer(SoftwareRenderer):
         self._fbo.clear(depth=1.0)
         self._color.write(pygame.image.tobytes(surface, "RGBA", True))
         ctx.enable(moderngl.DEPTH_TEST)
+        self.progs.atlas().use(location=_TEX_UNIT)
         ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
         ntri = 0
         world = self.progs.world
@@ -641,6 +728,7 @@ class GLRenderer(SoftwareRenderer):
         self._fbo.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
         ctx = self.ctx
         ctx.enable(moderngl.DEPTH_TEST)
+        self.progs.atlas().use(location=_TEX_UNIT)
         ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
         self._set_uniforms(self.progs.world, 0, 0.0)
         ntri = self._draw_dyn() + self._draw_rigs()

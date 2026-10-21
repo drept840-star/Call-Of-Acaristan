@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 
+from engine3d import tex
 from engine3d.core import box, quad_xz
 
 # kind, x, z, w, d, h
@@ -77,25 +78,30 @@ def _prop(add, kind, x, z, w, d, h):
     if kind == "container":
         for lvl, col in enumerate(((126, 54, 44), (44, 86, 104))):
             cy = 1.3 + lvl * 2.65
-            add(box(w, 2.6, d, col, center=(x, cy, z), seg=3))
+            add(box(w, 2.6, d, tex("metal_rib", like=col, tint=True), center=(x, cy, z),
+                    seg=3))
             rib = tuple(int(c * 0.78) for c in col)
             for k in range(1, 9):
                 add(box(0.06, 2.4, d + 0.05, rib, center=(x - w * 0.5 + w * k / 9.0, cy, z)))
         add(box(w + 0.1, 0.08, d + 0.1, _SNOW, center=(x, h + 0.04, z)))
     elif kind == "pallets":
         for lvl in range(3):
-            add(box(w, 0.16, d, (112, 86, 56), center=(x, 0.1 + lvl * 0.42, z)))
+            add(box(w, 0.16, d, tex("crate", like=(112, 86, 56), tint=True),
+                    center=(x, 0.1 + lvl * 0.42, z)))
             add(box(w * 0.92, 0.26, d * 0.92, (130, 118, 92) if lvl % 2 else (92, 100, 108),
                     center=(x, 0.3 + lvl * 0.42, z)))
         add(box(w + 0.1, 0.1, d + 0.1, _SNOW, center=(x, 1.2, z)))
     elif kind == "barrels":
         for bx, bz, col in ((-0.35, -0.2, (170, 60, 40)), (0.3, -0.1, (60, 96, 140)),
                             (0.0, 0.25, (178, 150, 54))):
-            add(box(0.55, 0.95, 0.55, col, center=(x + bx, 0.48, z + bz)))
+            add(box(0.55, 0.95, 0.55, tex("rust", like=col, tint=True),
+                    center=(x + bx, 0.48, z + bz)))
             add(box(0.58, 0.06, 0.58, (30, 32, 38), center=(x + bx, 0.7, z + bz)))
     elif kind == "van":
-        add(box(w, 1.25, d, (186, 190, 196), center=(x, 0.95, z), seg=3))
-        add(box(w * 0.55, 0.75, d * 0.92, (170, 176, 184), center=(x - 0.6, 1.95, z)))
+        add(box(w, 1.25, d, tex("steel", like=(186, 190, 196), tint=True),
+                center=(x, 0.95, z), seg=3))
+        add(box(w * 0.55, 0.75, d * 0.92, tex("steel", like=(170, 176, 184), tint=True),
+                center=(x - 0.6, 1.95, z)))
         add(box(w * 0.28, 0.6, d * 0.94, (28, 36, 48), center=(x + w * 0.34, 1.35, z)))
         for wx in (-1.6, 1.7):
             for wz in (-1.0, 1.0):
@@ -105,8 +111,10 @@ def _prop(add, kind, x, z, w, d, h):
                     center=(x + w * 0.5 + 0.01, 0.9, z + lz), emissive=True))
         add(box(w * 0.55 + 0.1, 0.08, d * 0.92 + 0.1, _SNOW, center=(x - 0.6, 2.34, z)))
     elif kind == "crates":
-        add(box(w, 0.75, d, (124, 98, 60), center=(x, 0.38, z)))
-        add(box(w * 0.7, 0.75, d * 0.8, (108, 84, 52), center=(x + 0.2, 1.13, z)))
+        add(box(w, 0.75, d, tex("crate", like=(124, 98, 60), tint=True),
+                center=(x, 0.38, z)))
+        add(box(w * 0.7, 0.75, d * 0.8, tex("crate", like=(108, 84, 52), tint=True),
+                center=(x + 0.2, 1.13, z)))
         add(box(w * 0.7 + 0.08, 0.08, d * 0.8 + 0.08, _SNOW, center=(x + 0.2, 1.52, z)))
     elif kind == "tyres":
         for lvl in range(4):
@@ -115,12 +123,13 @@ def _prop(add, kind, x, z, w, d, h):
     elif kind == "drums":
         for dx in (-0.3, 0.3):
             for dz in (-0.3, 0.3):
-                add(box(0.5, 0.9, 0.5, (70, 96, 70), center=(x + dx, 0.45, z + dz)))
+                add(box(0.5, 0.9, 0.5, tex("rust", like=(70, 96, 70), tint=True),
+                        center=(x + dx, 0.45, z + dz)))
                 add(box(0.52, 0.05, 0.52, (28, 34, 30), center=(x + dx, 0.6, z + dz)))
     elif kind == "pipes":
         for row in range(3):
             for k in range(3 - row):
-                add(box(w - 0.2, 0.28, 0.28, _STEEL,
+                add(box(w - 0.2, 0.28, 0.28, tex("steel", like=_STEEL, tint=True),
                         center=(x, 0.16 + row * 0.27, z - d * 0.5 + 0.35 + k * 0.5 + row * 0.25)))
     elif kind == "sandbags":
         for row in range(2):
@@ -164,14 +173,15 @@ def dress(add, wall_w, wall_e, wall_s, road_x):
                     (70, 86, 112)))
     add(box(0.9, 0.04, 0.9, (30, 32, 38), center=(-4.0, 0.06, -3.4)))
     add(box(0.55, 0.045, 0.55, (46, 50, 58), center=(-4.0, 0.065, -3.4)))
+    snow = tex("snow", like=_SNOW)
     for i in range(34):
-        add(box(0.8 + 0.7 * _hash(i, 11), 0.10 + 0.10 * _hash(i, 12), 0.45, _SNOW,
+        add(box(0.8 + 0.7 * _hash(i, 11), 0.10 + 0.10 * _hash(i, 12), 0.45, snow,
                 center=(wall_w + 1.2 + i * 1.7, 0.07, wall_s + 0.55 + 0.2 * _hash(i, 13))))
     for i in range(14):
-        add(box(0.45, 0.10 + 0.10 * _hash(i, 14), 0.8 + 0.6 * _hash(i, 15), _SNOW,
+        add(box(0.45, 0.10 + 0.10 * _hash(i, 14), 0.8 + 0.6 * _hash(i, 15), snow,
                 center=(wall_w + 0.65, 0.07, wall_s + 1.0 + i * 1.6)))
     for i, (dx, dz) in enumerate(((-24.0, 7.0), (-9.0, -17.0), (-1.0, -15.5), (24.0, -18.0),
                                   (-16.0, -14.5), (12.0, -2.0), (-27.2, -10.0))):
         add(quad_xz(dx - 0.7 - _hash(i, 16) * 0.6, dz - 0.5, dx + 0.7 + _hash(i, 16) * 0.6,
-                    dz + 0.5, 0.06, (112, 124, 146)))
+                    dz + 0.5, 0.06, tex("snow_trod", like=(112, 124, 146))))
     skyline(add)

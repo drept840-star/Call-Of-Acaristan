@@ -1638,10 +1638,11 @@ def _train_detail_mesh():
     m = _cache.get("train_detail")
     if m is not None:
         return m
+    from engine3d import tex
     from engine3d.core import Mesh, box
     m = Mesh()
     add = m.add
-    BODY = (30, 35, 43)
+    BODY = tex("steel", like=(30, 35, 43), tint=True)
     SKIRT = (20, 23, 28)
     STRIPE = (104, 86, 56)
     ROOF = (40, 47, 58)
@@ -1652,7 +1653,8 @@ def _train_detail_mesh():
     add(box(11.3, 3.1, 3.0, BODY, center=(17.35, 1.85, -4.4), seg=4))
     add(box(1.6, 0.70, 3.0, BODY, center=(10.9, 3.05, -4.4)))
     add(box(1.6, 0.75, 3.0, BODY, center=(10.9, 0.675, -4.4)))
-    add(box(46, 0.5, 3.2, (24, 28, 34), center=(0, 3.55, -4.4), seg=8))
+    add(box(46, 0.5, 3.2, tex("metal_rib", like=(24, 28, 34), tint=True),
+            center=(0, 3.55, -4.4), seg=8))
     # Livery, skirt and panel seams.
     for x0, x1 in ((-23.0, 10.1), (11.7, 23.0)):
         cx, w = (x0 + x1) * 0.5, x1 - x0
@@ -1740,10 +1742,11 @@ def _train_detail(r, tx):
 
 
 def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
+    from engine3d import tex
     from engine3d.core import box, quad_xz
-    add(r, quad_xz(-40, -40, 40, 40, 0.0, (52, 60, 74), seg=12))
+    add(r, quad_xz(-40, -40, 40, 40, 0.0, tex("snow", like=(52, 60, 74)), seg=12))
     # ballast + rails
-    add(r, quad_xz(-30, -2.0, 30, 2.6, 0.06, (40, 40, 44), seg=8))
+    add(r, quad_xz(-30, -2.0, 30, 2.6, 0.06, tex("ballast", like=(40, 40, 44)), seg=8))
     for z in (-1.5, 1.5):
         add(r, box(60, 0.10, 0.10, (86, 88, 92), center=(0, 0.16, z)))
     # Ties: one set across both rails (this loop used to sit inside the rail
@@ -1752,16 +1755,20 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
     # the bed instead of 8 cm inside a sleeper.
     for x in range(-28, 29, 2):
         if 9.5 <= x <= 14.5:
-            add(r, box(0.4, 0.012, 1.9, (46, 40, 34), center=(x, 0.066, 0)))
+            add(r, box(0.4, 0.012, 1.9, tex("sleeper", like=(46, 40, 34)),
+                       center=(x, 0.066, 0)))
         else:
-            add(r, box(0.4, 0.08, 1.9, (58, 50, 40), center=(x, 0.10, 0)))
+            add(r, box(0.4, 0.08, 1.9, tex("sleeper", like=(58, 50, 40)),
+                       center=(x, 0.10, 0)))
     # platform
-    add(r, box(42, 0.55, 5.0, (62, 66, 74), center=(0, 0.28, 5.2), seg=6))
-    add(r, box(42, 0.06, 0.5, (110, 108, 96), center=(0, 0.58, 2.95)))
+    add(r, box(42, 0.55, 5.0, tex("concrete", like=(62, 66, 74)), center=(0, 0.28, 5.2),
+               seg=6))
+    add(r, box(42, 0.06, 0.5, tex("concrete", like=(110, 108, 96)),
+               center=(0, 0.58, 2.95)))
     # broken snow patches on the catch-side ballast
     for dx, dz, dw in ((8.6, 2.20, 0.9), (10.8, 2.35, 1.2),
                        (12.6, 2.10, 0.8), (14.2, 2.40, 1.0)):
-        add(r, box(dw, 0.02, 0.5, (150, 162, 180),
+        add(r, box(dw, 0.02, 0.5, tex("snow", like=(150, 162, 180)),
                    center=(dx, 0.068, dz)))
     if train:
         # Waiting passenger train.  The body/detail mesh is cached and only
@@ -1783,8 +1790,10 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
                      _fx.glow((228, 56, 42), 0.35, t, intensity=0.55),
                      layer=_fx.FX_LAYER)
     # signal tower + floodlight masts
-    add(r, box(1.2, 7.0, 1.2, (44, 46, 50), center=(18, 3.5, 8.5), seg=3))
-    add(r, box(2.2, 1.6, 2.0, (54, 56, 60), center=(18, 7.8, 8.5), seg=3))
+    add(r, box(1.2, 7.0, 1.2, tex("concrete", like=(44, 46, 50)), center=(18, 3.5, 8.5),
+               seg=3))
+    add(r, box(2.2, 1.6, 2.0, tex("metal_rib", like=(54, 56, 60), tint=True),
+               center=(18, 7.8, 8.5), seg=3))
     add(r, box(1.2, 0.7, 0.06, (255, 206, 140), center=(18, 7.8, 7.45),
                emissive=True))
     # Ladder up the near face, roof rail and a red beacon: without them the

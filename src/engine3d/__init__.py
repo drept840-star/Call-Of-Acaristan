@@ -10,4 +10,5 @@ buffer that is upscaled with nearest-neighbour for a chunky PS1 look.
 """
 from .core import *  # noqa: F401,F403
 from .rig import *   # noqa: F401,F403
+from .textures import Tex, tex  # noqa: F401  (pixel textures on world faces)
 from .gl import GLRenderer, Renderer, gl_available, gl_info  # noqa: F401  (GPU backend, auto-fallback)

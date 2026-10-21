@@ -9,6 +9,8 @@ import math
 
 import pygame
 
+from .textures import Tex
+
 __all__ = [
     "v_add", "v_sub", "v_mul", "v_dot", "v_cross", "v_len", "v_norm", "v_lerp",
     "m_mul", "m_apply", "rot_x", "rot_y", "rot_z", "M_IDENT",
@@ -379,6 +381,8 @@ class Obj:
             a, b, c = self.verts[idx[0]], self.verts[idx[1]], self.verts[idx[2]]
             nrm = v_norm(v_cross(v_sub(b, a), v_sub(c, a)))
             lit = col if em else light.shade(col, nrm)
+            if isinstance(col, Tex):
+                lit = col.with_rgb(lit)
             self.faces.append((idx, lit, layer, ds, nrm, em))
         if self.verts:
             xs = [v[0] for v in self.verts]; ys = [v[1] for v in self.verts]; zs = [v[2] for v in self.verts]
