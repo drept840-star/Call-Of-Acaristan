@@ -107,7 +107,7 @@ def skyline(add):
     for i, cx, cz, f, w, h, d in blocks:
         col = (26 + int(9 * _hash(i, 6)), 30 + int(7 * _hash(i, 7)),
                40 + int(7 * _hash(i, 6)))
-        B.panel_block(add, cx, cz, w, h, d, f, seed=i, col=col, lit=0.30, budget=30)
+        B.panel_block(add, cx, cz, w, h, d, f, seed=i, col=col, lit=0.30, budget=30, balconies=False)
     # 2. neon slogans on the block most directly south and the most north-west
     south = min(blocks, key=lambda b: (abs(b[1]), abs(b[2] + 40.0)))
     nw = min(blocks, key=lambda b: (b[1] + 45.0) ** 2 + (b[2] - 45.0) ** 2)
