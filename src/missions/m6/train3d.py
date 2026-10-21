@@ -32,6 +32,7 @@ from core.state import STATE
 from core.outfits import OUTFIT_GUARD
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
+from . import bloc3d as B
 from . import hud3d as _hud
 from . import palette3d as P
 from engine.assets import load_image
@@ -161,6 +162,50 @@ _YARD_MASSES = (
     (-43.0, -28.0, 9.0, 10.0, 6.0, 3, 3),
 )
 _YARD_STACKS = ((-29.0, -20.0, 15.0), (36.0, -26.0, 13.0), (3.0, -40.0, 17.0))
+# A panel-block row behind the masses (x, z, w, h): the town past the yard.
+# y is filled at build time; the depth is a constant 10 m.
+_YARD_BLOCS = ((-30.0, -96.0, 26.0, 30.0), (-8.0, -100.0, 24.0, 24.0),
+               (14.0, -92.0, 22.0, 20.0), (36.0, -98.0, 30.0, 18.0))
+# Lamps on the far smokestacks, mast and blocks, filled by the far-yard block
+# of ``_draw_platform_dressing`` and read by ``_yard_sprites`` every frame.
+_BLOC_BEACONS = []
+_RADIO_MAST = (-38.0, -46.0, 34.0)
+
+
+def _yaw_vis(x, z, limit=None):
+    """The platform view cull: is (x, z) inside the player's reachable yaw?"""
+    if _FULL_SET:
+        return True
+    dx = x - PLAYER_POS[0]
+    dz = z - PLAYER_POS[2]
+    if abs(dx) + abs(dz) < 1e-6:
+        return True
+    yaw = math.degrees(math.atan2(dx, -dz))
+    lim = YAW_LIMIT + 10 if limit is None else limit
+    return abs((yaw - BASE_YAW + 180) % 360 - 180) <= lim
+
+
+def _bloc_beacons():
+    """Lamp points of the far-Bloc silhouettes, without building any geometry.
+
+    The set is baked once and only its sprites are re-queued every frame; the
+    far yard (and so ``_BLOC_BEACONS``) is not drawn in a frame that reuses the
+    cache.  The builders report their lamps at fixed positions, so asking them
+    on a throwaway mesh fills the list without adding 190 golden windows - lit
+    or not - to the real set.
+    """
+    from engine3d import Mesh
+    sink = Mesh().add
+    pts = []
+    for cx, cz, ch in _YARD_STACKS:
+        if _yaw_vis(cx, cz):
+            pts.extend(B.smokestack(sink, cx, cz, ch, base=1.6, top=0.9))
+    mx, mz, mh = _RADIO_MAST
+    if _yaw_vis(mx, mz):
+        pts.extend(B.radio_mast(sink, mx, mz, mh))
+    _BLOC_BEACONS.extend(pts)
+
+
 _YARD_HAZE = ((-14.0, 5.0, -30.0), (10.0, 5.0, -30.0), (34.0, 5.0, -22.0))
 _YARD_RIDGE_R = 70.0           # radius of the horizon ridge, around the eye
 # The yard fight (yard3d) sees the set from every side: it builds the dressing
@@ -3156,7 +3201,11 @@ class TrainScene:
                     self._draw_station(r, t)
             else:
                 # Set geometry is cached in the renderer; only the animated light
-                # and snow sprites need to be re-queued each frame.
+                # and snow sprites need to be re-queued each frame.  Whichever
+                # path built the set filled _BLOC_BEACONS: the live pack is
+                # replayed verbatim, so this frame must not clear the list.
+                if not _BLOC_BEACONS:
+                    _bloc_beacons()
                 self._draw_static_lights(r, t)
             bake_ok = True
         finally:
@@ -3595,10 +3644,14 @@ class TrainScene:
                 emissive=True))
         add(box(0.035, 0.17, 0.02, (20, 22, 26), center=(6.4, 2.12, 8.90)))
         add(box(0.13, 0.035, 0.02, (20, 22, 26), center=(6.46, 2.06, 8.90)))
-        # faded printed notices
-        for px, pc in ((2.0, (122, 54, 46)), (10.8, (44, 72, 98))):
-            add(box(0.96, 0.66, 0.04, (36, 38, 44), center=(px, 1.28, 8.96)))
-            add(box(0.82, 0.54, 0.02, pc, center=(px, 1.28, 8.93)))
+        # faded painted notices on the platform side of the wall
+        for px, pc, text in ((2.0, (122, 54, 46), "БДИТЕЛЬНОСТЬ"),
+                             (10.8, (44, 72, 98), "СЛАВА ТРУДУ")):
+            B.board(add, text, (px, 1.28, 8.93), "+z", px=0.055, col=(196, 190, 174),
+                    bg=pc, margin=1)
+        # station name over the clock, on the same wall
+        B.board(add, "УЧИЛЕВ", (6.4, 2.62, 8.93), "+z", px=0.09,
+                col=B.LETTER_CREAM, bg=(30, 52, 86), margin=2)
         # conduits and wall pipes
         for px in (1.2, 9.4, 13.2):
             add(box(0.07, 1.78, 0.07, (48, 52, 60), center=(px, 1.32, 8.92)))
@@ -3726,15 +3779,7 @@ class TrainScene:
         base_yaw = BASE_YAW
         yaw_limit = YAW_LIMIT + 10  # extra margin for safety
         for sx, sz, sw, sh, sd, rows, cols in _YARD_MASSES:
-            # Check if mass is within view frustum
-            dx = sx - PLAYER_POS[0]
-            dz = sz - PLAYER_POS[2]
-            if abs(dx) + abs(dz) < 1e-6:
-                continue
-            mass_yaw = math.degrees(math.atan2(dx, -dz))
-            # Normalize yaw difference
-            dyaw = (mass_yaw - base_yaw + 180) % 360 - 180
-            if abs(dyaw) > yaw_limit and not _FULL_SET:
+            if not _yaw_vis(sx, sz, yaw_limit):
                 continue  # mass is behind the player
             add(box(sw, sh, sd, far_col(far_dist(sx, sz)),
                     center=(sx, sh * 0.5, sz), skip=skip))
@@ -3757,11 +3802,35 @@ class TrainScene:
                         center=(sx + sw * 0.34, sh + 0.18, sz), emissive=True))
 
         # Chimney stacks: vertical breaks in a horizon of flat-topped boxes.
+        # The smokestack tapers and carries its own red/pale bands and its
+        # lamps, so it is the only thing on the far skyline with an outline.
+        # _bloc_beacons() mirrors this cull for frames that reuse the cache.
+        _BLOC_BEACONS.clear()
         for cx_s, cz_s, ch in _YARD_STACKS:
-            add(box(0.9, ch, 0.9, far_col(far_dist(cx_s, cz_s)),
-                    center=(cx_s, ch * 0.5, cz_s), skip=skip))
-            add(box(0.30, 0.30, 0.30, (228, 56, 42),
-                    center=(cx_s, ch + 0.2, cz_s), emissive=True))
+            if not _yaw_vis(cx_s, cz_s, yaw_limit):
+                continue
+            body = far_col(far_dist(cx_s, cz_s))
+            band = tuple(min(255, c + int((255 - c) * 0.25)) for c in body)
+            _BLOC_BEACONS.extend(B.smokestack(add, cx_s, cz_s, ch, base=1.6, top=0.9,
+                                              body=body, band=band))
+
+        # The town behind the far masses: a second row of panel blocks, only
+        # the facades the player can see.  Same yaw cull as the masses.
+        for i, (bx, bz, bw, bh) in enumerate(_YARD_BLOCS):
+            if not _yaw_vis(bx, bz, yaw_limit):
+                continue
+            bd = 10.0
+            B.panel_block(add, bx, bz, bw, bh, bd, "+z", seed=500 + i,
+                          col=far_col(far_dist(bx, bz)), lit=0.22, budget=24,
+                          balconies=False)
+            if bh == max(h for _x, _z, _w, h in _YARD_BLOCS):
+                pos, face = B.roof_sign_pos(bx, bz, bw, bh, bd, "+z")
+                B.letters(add, "СЛАВА ТРУДУ", pos, face, px=0.5, col=B.NEON_RED,
+                          emissive=True)
+
+        # A radio mast on the north-west corner, inside the cull.
+        if _yaw_vis(*_RADIO_MAST[:2], yaw_limit):
+            _BLOC_BEACONS.extend(B.radio_mast(add, *_RADIO_MAST))
 
         for fx, fz in ((-22.0, -14.0), (30.0, -13.0)):
             add(box(0.14, 6.4, 0.14, (32, 36, 44), center=(fx, 3.2, fz)))
@@ -3831,10 +3900,10 @@ class TrainScene:
                          _fx.glow((236, 64, 48), 0.9, tm, flicker=0.14,
                                   seed=400 + int(sx), intensity=0.85),
                          layer=_fx.FX_LAYER)
-        for cx_s, cz_s, ch in _YARD_STACKS:
-            r.add_sprite((cx_s, ch + 0.2, cz_s),
-                         _fx.glow((236, 64, 48), 1.0, tm, flicker=0.18,
-                                  seed=430 + int(cx_s), intensity=0.9),
+        for i, (lx, ly, lz) in enumerate(_BLOC_BEACONS):
+            r.add_sprite((lx, ly, lz),
+                         _fx.glow((236, 64, 48), 0.8, tm, flicker=0.18,
+                                  seed=430 + i, intensity=0.9),
                          layer=_fx.FX_LAYER)
         # A cold band over the yard.  It separates the silhouettes from the
         # sky without lighting them - the masses must stay darker than it.

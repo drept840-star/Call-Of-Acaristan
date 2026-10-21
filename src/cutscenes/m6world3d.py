@@ -1170,22 +1170,25 @@ _CAP_BLOCKS = (
 
 
 def capital(r, t):
-    """Distant skyline: varied blocks, clustered lit windows, sodium dome and
+    """Distant skyline: panel blocks, a neon slogan, sodium dome and
     blinking aviation lights on the tall roofs."""
-    from engine3d.core import box
+    from engine3d.core import Mesh
+    from missions.m6 import bloc3d as B
     if not _static_skip():
         for i, (x, z, w, h, d) in enumerate(_CAP_BLOCKS):
             gy = height_at(x, z) - 0.5
-            add(r, box(w, h, d, (26 + i % 3, 28 + i % 3, 37 + i % 4),
-                       center=(x, gy + h / 2, z), seg=6))
-            rng = random.Random(70 + i)
-            for _ in range(rng.randint(7, 14)):
-                wx = x + rng.uniform(-w * 0.36, w * 0.36)
-                wy = gy + rng.uniform(0.18, 0.86) * h
-                warm = rng.random() < 0.7
-                add(r, box(0.45, 0.35, 0.10,
-                           _fx.SODIUM_PALE if warm else (190, 206, 230),
-                           center=(wx, wy, z - d / 2 - 0.02), emissive=True))
+            m = Mesh()
+            # Blocks sit on the valley floor, not y=0: build local, lift on add.
+            B.panel_block(m.add, 0.0, 0.0, w, h, d, "+z", seed=70 + i,
+                          col=(26 + i % 3, 28 + i % 3, 37 + i % 4), lit=0.3,
+                          budget=max(6, int(w * h * 0.06)))
+            add(r, m, bias=-gy)
+        tall = max(_CAP_BLOCKS, key=lambda b: b[3])
+        x, z, w, h, d = tall
+        gy = height_at(x, z) - 0.5
+        pos, face = B.roof_sign_pos(x, z, w, h, d, "+z")
+        B.letters(lambda mm: add(r, mm, bias=-gy), "АКАРИСТАН", pos, face, px=0.6,
+                  col=B.NEON_RED, emissive=True)
     for i, (x, z, w, h, d) in enumerate(_CAP_BLOCKS):
         if h >= 21 and int(t // 650 + i) % 2 == 0:
             gy = height_at(x, z) - 0.5

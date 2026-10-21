@@ -333,6 +333,17 @@ def _perimeter_sprites(r, tm):
         r.add_sprite((WALL_W + 0.35, 2.45, dz),
                      _fx.glow(P.SODIUM, 0.6, tm, intensity=0.7),
                      layer=_fx.FX_LAYER)
+    for i, p in enumerate(getattr(D, "BEACONS", ())):       # aviation lamps
+        k = 0.9 if ((tm * 0.001 + i * 0.23) % 1.6) < 0.45 else 0.18
+        r.add_sprite(p, _fx.glow((228, 56, 42), 1.1, tm, seed=600 + i, intensity=k),
+                     layer=_fx.FX_LAYER)
+    for i, p in enumerate(getattr(D, "SIGN_LAMPS", ())):
+        r.add_sprite(p, _fx.glow(P.SODIUM_PALE, 0.7, tm, seed=640 + i, intensity=0.6),
+                     layer=_fx.FX_LAYER)
+    for i, (p, _face) in enumerate(getattr(D, "SEARCHLIGHTS", ())):
+        r.add_sprite(p, _fx.glow(P.LAMP_WHITE, 1.4, tm, seed=660 + i, core=P.LAMP_WHITE,
+                                 intensity=0.8),
+                     layer=_fx.FX_LAYER)
 
 
 def _blocked(x, z, feet, r=BODY_R):

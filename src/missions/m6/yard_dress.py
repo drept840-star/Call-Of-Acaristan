@@ -4,6 +4,11 @@ Static meshes only (the yard bakes them once with the perimeter).  The solid
 props are data (``SOLIDS``) so ``yard3d`` can turn them into blockers: the
 camera boom, the Guards' nav grid and the player all respect them.  Kept off
 the Guards' routes, the truck road (x 22..27) and the lamp masts.
+
+Past the walls a Bloc town rings the yard: panel blocks, stacks, a mast, a
+water tower and watchtowers.  Their lamps are collected in ``BEACONS``,
+``SIGN_LAMPS`` and ``SEARCHLIGHTS`` so ``yard3d`` can hang halo sprites on
+them (sprites are not baked with the perimeter mesh).
 """
 from __future__ import annotations
 
@@ -11,6 +16,8 @@ import math
 
 from engine3d import tex
 from engine3d.core import box, quad_xz
+from missions.m6 import bloc3d as B
+from missions.m6 import palette3d as P
 
 # kind, x, z, w, d, h
 SOLIDS = (
@@ -31,6 +38,11 @@ _SNOW = (176, 186, 202)
 _POST = (34, 36, 42)
 _STEEL = (58, 66, 78)
 
+# Lamp points filled by ``skyline``: yard3d reads them every frame for halos.
+BEACONS = []        # (x, y, z) aviation lamps on stacks, masts and towers
+SIGN_LAMPS = []     # (x, y, z) sodium lamp heads over the lit signs
+SEARCHLIGHTS = []   # ((x, y, z), facing) watchtower lenses
+
 
 def blockers():
     return [(x - w * 0.5, 0.0, z - d * 0.5, x + w * 0.5, h, z + d * 0.5)
@@ -42,36 +54,76 @@ def _hash(i, k=1):
     return (math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1.0
 
 
+def _facing_to(cx, cz):
+    """The face normal whose axis best points from (cx, cz) at the yard centre."""
+    fx, fz = 0.5 - cx, -5.0 - cz
+    if abs(fx) >= abs(fz):
+        return "+x" if fx > 0 else "-x"
+    return "+z" if fz > 0 else "-z"
+
+
+def _ring_pt(i):
+    """Centre of ring block ``i``: an ellipse 62..88 m out around the yard."""
+    a = i / 14.0 * math.tau + 0.2
+    rad = 62.0 + 26.0 * _hash(i, 2)
+    return 0.5 + math.cos(a) * rad * 1.35, -5.0 + math.sin(a) * rad
+
+
+def _ring_block(i):
+    """(cx, cz, facing, w, h, d) of ring block ``i``, as ``skyline`` builds it."""
+    cx, cz = _ring_pt(i)
+    w, h, d = 18.0 + 18.0 * _hash(i, 3), 14.0 + 28.0 * _hash(i, 5), 10.0 + 4.0 * _hash(i, 4)
+    return cx, cz, _facing_to(cx, cz), w, h, d
+
+
+# Landmarks past the walls, in the ring's gaps: x, z, and how much ring to clear.
+_LANDMARKS = ((-44.0, -40.0, 22.0), (46.0, -38.0, 22.0),
+              (-62.0, 40.0, 26.0), (66.0, 30.0, 22.0))
+
+
+def _ring_blocks():
+    """The ring blocks ``skyline`` actually builds: (i, cx, cz, facing, w, h, d)."""
+    out = []
+    for i in range(14):
+        cx, cz = _ring_pt(i)
+        if any(abs(cx - lx) < clear and abs(cz - lz) < clear
+               for lx, lz, clear in _LANDMARKS):
+            continue
+        out.append((i, *_ring_block(i)))
+    return out
+
+
 def skyline(add):
-    """Lit blocks past the walls, so the yard sits in a town, not a void."""
-    n = 0
-    for i in range(26):
-        a = i / 26.0 * math.tau + 0.2
-        rad = 62.0 + 26.0 * _hash(i, 2)
-        cx, cz = 0.5 + math.cos(a) * rad * 1.35, -5.0 + math.sin(a) * rad
-        w, d = 9.0 + 9.0 * _hash(i, 3), 8.0 + 8.0 * _hash(i, 4)
-        h = 14.0 + 26.0 * _hash(i, 5)
-        add(box(w, h, d, (22 + int(10 * _hash(i, 6)), 26, 36), center=(cx, h * 0.5, cz)))
-        fx, fz = -math.cos(a), -math.sin(a)
-        face_z = abs(fz) >= abs(fx)            # window wall faces +-z, else +-x
-        sgn = (1.0 if fz > 0 else -1.0) if face_z else (1.0 if fx > 0 else -1.0)
-        span, rows = (w, d)[0 if face_z else 1], int(h // 3.2)
-        cols = int(span // 2.4)
-        for r in range(rows):
-            for c in range(cols):
-                if _hash(i * 97 + r * 7 + c, 8) < 0.62:
-                    continue
-                off = (c - (cols - 1) * 0.5) * 2.4
-                if face_z:
-                    pos, size = (cx + off, 2.2 + r * 3.2, cz + sgn * (d * 0.5 + 0.04)), (1.2, 1.5, 0.06)
-                else:
-                    pos, size = (cx + sgn * (w * 0.5 + 0.04), 2.2 + r * 3.2, cz + off), (0.06, 1.5, 1.2)
-                warm = _hash(i * 31 + r * 5 + c, 9)
-                col = (255, 203, 109) if warm < 0.7 else (176, 206, 255)
-                add(box(*size, col, center=pos, emissive=True))
-                n += 1
-                if n > 380:
-                    return
+    """The Bloc town past the walls, so the yard sits in a city, not a void.
+
+    Bodies stay darker than the night fog so they read as silhouettes; only
+    windows, neon and the aviation lamps are bright.  The ring has gaps where
+    the landmarks stand: stacks south-west and south-east, the mast north-west
+    and a water tower north-east.
+    """
+    del BEACONS[:], SIGN_LAMPS[:], SEARCHLIGHTS[:]
+    # 1. ring of panel blocks, each with its lit face turned to the yard
+    blocks = _ring_blocks()
+    for i, cx, cz, f, w, h, d in blocks:
+        col = (26 + int(9 * _hash(i, 6)), 30 + int(7 * _hash(i, 7)),
+               40 + int(7 * _hash(i, 6)))
+        B.panel_block(add, cx, cz, w, h, d, f, seed=i, col=col, lit=0.30, budget=30)
+    # 2. neon slogans on the block most directly south and the most north-west
+    south = min(blocks, key=lambda b: (abs(b[1]), abs(b[2] + 40.0)))
+    nw = min(blocks, key=lambda b: (b[1] + 45.0) ** 2 + (b[2] - 45.0) ** 2)
+    for b, text in ((south, "СЛАВА ТРУДУ"), (nw, "АКАРИСТАН")):
+        pos, fac = B.roof_sign_pos(b[1], b[2], b[4], b[5], b[6], b[3])
+        B.letters(add, text, pos, fac, px=0.55, col=B.NEON_RED, emissive=True)
+    # 3. landmarks past the walls, in the ring's gaps
+    BEACONS.extend(B.smokestack(add, -44.0, -40.0, 38.0, base=2.2, top=1.3))
+    BEACONS.extend(B.smokestack(add, 46.0, -38.0, 30.0, base=2.0, top=1.2))
+    BEACONS.extend(B.radio_mast(add, -62.0, 40.0, 46.0))
+    B.water_tower(add, 66.0, 30.0, h=14.0)
+    # 4. watchtowers just outside the south corners, lenses turned into the yard
+    for tx in (-31.5, 32.5):
+        SEARCHLIGHTS.append(B.watchtower(add, tx, -22.5, h=6.5, facing="+z"))
+    # 5. a billboard outside the south wall; its lamps get halo sprites
+    SIGN_LAMPS.extend(B.billboard(add, ["ВПЕРЁД", "К ПОБЕДЕ!"], (0.0, -25.0), "+z", top=8.0))
 
 
 def _prop(add, kind, x, z, w, d, h):
@@ -150,12 +202,16 @@ def dress(add, wall_w, wall_e, wall_s, road_x):
     for lx in (-24.0, -6.0, 3.5, 11.0):
         add(box(0.3, 0.14, 0.2, (255, 236, 154), center=(lx, 2.3, wall_s + 0.42), emissive=True))
         add(box(0.1, 0.4, 0.1, _POST, center=(lx, 2.1, wall_s + 0.4)))
-    for sx, sz, face in ((-12.0, wall_s + 0.24, 0), (9.0, wall_s + 0.24, 0),
-                         (wall_w + 0.24, -5.0, 1), (wall_w + 0.24, 4.5, 1),
-                         (wall_e - 0.24, -14.0, 1)):
-        w_, d_ = (0.9, 0.04) if face == 0 else (0.04, 0.9)
-        add(box(w_ + 0.08, 0.7, d_ + 0.08, (30, 32, 36), center=(sx, 1.5, sz)))
-        add(box(w_, 0.62, d_ + 0.02, (232, 186, 46), center=(sx, 1.5, sz), emissive=True))
+    for sx, sz, face, fac in ((-12.0, wall_s + 0.24, 0, "+z"), (9.0, wall_s + 0.24, 0, "+z"),
+                              (wall_w + 0.24, -5.0, 1, "+x"), (wall_w + 0.24, 4.5, 1, "+x"),
+                              (wall_e - 0.24, -14.0, 1, "-x")):
+        out = 0.02 if fac in ("+z", "+x") else -0.02     # the plate's front side
+        dx, dz = (out, 0.0) if face == 0 else (0.0, out)
+        B.letters(add, "СТОЙ!", (sx + dx, 1.5, sz + dz), fac, px=0.026,
+                  col=(20, 18, 14), emissive=False)
+    # two painted banners on the inside of the south wall, facing the yard
+    for bx, text in ((-18.0, "МИР"), (18.0, "ТРУД")):
+        B.banner(add, text, (bx, 3.6, wall_s + 0.06), "+z", px=0.10)
     # painted ground: the road's centre line, stop line and hazard bars at the
     # south gate, puddles, a manhole and the drifts piled against the walls
     for z0 in range(-19, 8, 3):
