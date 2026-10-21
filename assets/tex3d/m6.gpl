@@ -1,0 +1,40 @@
+GIMP Palette
+Name: Acaristan M6
+Columns: 8
+# The 2D top-down M6 palette, sampled from gameplay frames, dark to light.
+# Paint the 3D textures (assets/tex3d) from these.  Named ones match
+# src/missions/m6/palette3d.py.
+  7   8  11	ink
+  9  11  16	#090B10
+ 12  15  20	night
+ 17  14  15	#110E0F
+ 16  19  25	slate deep
+ 23  19  18	#171312
+ 20  24  30	#14181E
+ 29  25  24	#1D1918
+ 45  21  19	#2D1513
+ 23  29  39	slate
+ 33  32  33	#212021
+ 43  32  26	ember
+ 29  36  47	slate mid
+ 45  40  37	#2D2825
+ 36  43  55	#242B37
+ 66  37  26	#42251A
+ 53  49  48	#353130
+ 44  52  65	#2C3441
+ 64  49  37	#403125
+ 90  51  33	rust
+ 58  64  73	#3A4049
+ 70  62  54	#463E36
+ 62  76  97	slate hi
+111  68  41	rust hi
+ 89  79  68	#594F44
+ 89  99 114	steel
+144 102  46	#90662E
+131 120  94	#83785E
+120 128 136	#788088
+187 133  58	amber lamp
+174 161 105	lamp pale
+184 181 149	lamp core
+168 182 202	snow dim
+198 210 226	snow

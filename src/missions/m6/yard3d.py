@@ -28,6 +28,7 @@ from core.state import STATE
 from engine3d import NEUTRAL, POSES, blend, box, clamp, pose_run
 
 from . import hud3d as H
+from . import palette3d as P
 from . import train3d as T
 from . import yard_brain as B
 from . import yard_dress as D
@@ -1259,20 +1260,15 @@ class YardScene:
                             "intensity": 1.4, "range": 5.0})
         flashes += [
             {"pos": (T.YARD_MAST[0], 5.6, T.YARD_MAST[1] + 0.8),
-             "color": (255, 196, 126), "intensity": 0.9, "range": 11.0},
+             "color": P.SODIUM, "intensity": 0.9, "range": 11.0},
             {"pos": (T.SIGNAL_BOX[0] - 0.5, 1.7, T.SIGNAL_BOX[1] + 2.0),
-             "color": (255, 190, 120), "intensity": 0.6, "range": 5.0},
+             "color": P.SODIUM, "intensity": 0.6, "range": 5.0},
             {"pos": (T.TRUCK_X, 2.6, T.TRUCK_STOP_Z - T.TRUCK_HALF_L - 0.3),
-             "color": (255, 214, 150), "intensity": 0.6, "range": 5.0},
+             "color": P.LAMP_WHITE, "intensity": 0.6, "range": 5.0},
         ]
         T._light(r, flashes=flashes)
         r.set_camera(eye, tgt, fov)
-        # The GL pass starts from r.surface: repaint the sky every frame, or
-        # last frame's additive glows pile up wherever the sky shows.
-        r.surface.fill((6, 8, 14))
-        _w.night(r, r.surface, tm, top=(4, 6, 13), bot=T.SKY_HORIZON,
-                 stars=90, moon=(112.0, 13.0), sodium=(42, 28, 18), seed=71,
-                 star_cut=0.62)
+        T._sky(r, tm)
         r.begin()
         del _w.LAST[:]
         far = 400.0                       # the carriage is long gone
@@ -1303,7 +1299,7 @@ class YardScene:
         self._marker_screen = self._project(r, self._objective_point())
         r.flush(r.surface)
         T._grade_play(r.surface, self._wounded())
-        pygame.transform.smoothscale(r.surface, (WIDTH, HEIGHT), surface)
+        T._present(r.surface, surface)
         draw_vignette(surface)
         self._draw_hud(surface)
 

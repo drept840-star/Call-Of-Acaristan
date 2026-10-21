@@ -33,6 +33,7 @@ from core.outfits import OUTFIT_GUARD
 from cutscenes import m5fx3d as _fx
 from cutscenes import m6world3d as _w
 from . import hud3d as _hud
+from . import palette3d as P
 from engine.assets import load_image
 from engine3d import ik as _ik
 from engine3d import (
@@ -40,8 +41,9 @@ from engine3d import (
     rot_y, v_add,
 )
 
-RES = 0.80                       # internal render scale, smooth upscale
+RES = 0.64                       # internal render scale: 640x448, the PS2 frame
 RW, RH = int(WIDTH * RES), int(HEIGHT * RES)
+DITHER_STEP = 8                  # the grade's ordered dither: 15-bit, 32 levels
 
 CONTROL_AT = 2.0
 SHOT_AT = 23.0
@@ -119,7 +121,10 @@ _UCILEV_YAW_OFF = 36.0
 LIGHT_CAP = 8
 
 # ── background / horizon ─────────────────────────────────────────────────
-# The distance fog (11,15,24) and the night backdrop are the SAME colour at
+# Every colour here comes off the 2D game's slate night (``palette3d``): the
+# old purple-blue sky and fog were the loudest "stock 3D" tell.
+#
+# The distance fog (``FOG``) and the night backdrop are the SAME colour at
 # the horizon, so far geometry is lerped toward the sky it is supposed to
 # stand against.  The old yard albedo (21,24,31) came out of the bake light
 # at (11,12,16) - the fog colour exactly - and the background sat on screen
@@ -127,11 +132,14 @@ LIGHT_CAP = 8
 # (tools/m6_bg_contrast.py prints the numbers for both cameras.)
 #
 # Three knobs, in order of effect:
-SKY_HORIZON = (24, 31, 50)     # night() bot: light pollution under the stars
+SKY_HORIZON = P.SLATE         # night() bot: light pollution under the stars
 BG_FOG_END = 220.0             # was 120: at 120 a 55 m mass is 44% sky colour
-YARD_DARK = (4, 6, 10)         # albedo of the NEAREST far-yard mass
-YARD_HAZY = (13, 17, 26)       # ...and of the farthest: aerial perspective
+YARD_DARK = (5, 6, 8)          # albedo of the NEAREST far-yard mass
+YARD_HAZY = (14, 17, 22)       # ...and of the farthest: aerial perspective
                                # lives in the albedo, not in the fog.
+FOG = P.NIGHT                  # same luma as the old (11,15,24), less blue
+SKY_TOP = P.INK                # zenith, and the fill under the sky pass
+SKY_GLOW = P.EMBER             # night() sodium: the town's glow on the cloud
 
 # x, z, w, h, d, window rows, window columns.  Authored inside the yaw the
 # player can actually reach - BASE_YAW +- YAW_LIMIT behind a 100 deg
@@ -477,6 +485,57 @@ def _ease(u):
     return 1 - (1 - u) ** 3
 
 
+_BAYER4 = (0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5)
+
+
+def _dither_lut(chan, np):
+    """Grade curves -> per-channel tables, one row per 4x4 Bayer threshold:
+    the graded value, ordered-dithered down to DITHER_STEP levels.  This is
+    the PS2 16-bit framebuffer look, and it lands on the sky and the glow
+    sprites as well as the polygons, which the shader's dither never sees."""
+    off = (np.arange(16, dtype=np.float32) + 0.5) / 16.0 - 0.5
+    lut = np.empty((3, 16 * 256), dtype=np.uint8)
+    for i, v in enumerate(chan):
+        q = np.floor((v[None, :] * 255.0 + off[:, None] * DITHER_STEP)
+                     / DITHER_STEP + 0.5) * DITHER_STEP
+        lut[i] = np.clip(q, 0.0, 255.0).astype(np.uint8).ravel()
+    return lut
+
+
+def _ink(chan, np):
+    """Lift each graded channel onto the 2D game's black (``P.INK``): the 2D
+    never goes below (7,8,11), and the old crushed navy-black read as 3D."""
+    return [f + v * (1.0 - f) for f, v in
+            zip(np.array(P.INK, dtype=np.float32) / 255.0, chan)]
+
+
+def _apply_lut(surface, lut, np):
+    """Run a ``_dither_lut`` table over the buffer: one take per channel,
+    indexed by the pixel's Bayer row plus its value."""
+    w, h = surface.get_size()
+    cell = _cache.get(("bayer", w, h))
+    if cell is None:
+        b = np.array(_BAYER4, dtype=np.uint16).reshape(4, 4) * 256
+        cell = np.tile(b, (-(-h // 4), -(-w // 4)))[:h, :w].T.copy()
+        _cache[("bayer", w, h)] = cell
+    arr = pygame.surfarray.pixels3d(surface)
+    for i in range(3):
+        arr[..., i] = lut[i].take(cell + arr[..., i])
+    del arr
+
+
+def _present(src, dst):
+    """Hard-pixel upscale of the internal frame to the screen: nearest x2,
+    then a box filter down (sharp bilinear), so the 1.5625 ratio keeps every
+    pixel crisp and even instead of the old soft smoothscale."""
+    w, h = src.get_size()
+    mid = _cache.get("present_mid")
+    if mid is None or mid.get_size() != (w * 2, h * 2):
+        mid = _cache["present_mid"] = pygame.Surface((w * 2, h * 2))
+    pygame.transform.scale(src, (w * 2, h * 2), mid)
+    pygame.transform.smoothscale(mid, dst.get_size(), dst)
+
+
 def _grade_cine(surface):
     """Cinematic contrast/saturation grade on the internal render buffer.
 
@@ -493,26 +552,21 @@ def _grade_cine(surface):
         x = np.arange(256, dtype=np.float32) / 255.0
         # open the mids a little (the albedo-modulated rigs are dark by design),
         # crush the toe (true blacks), then an S of contrast around the mids
-        x = x ** 0.74
+        x = x ** 0.80
         x = np.clip((x - 0.05) / 0.95, 0.0, 1.0)
         x = np.clip(0.42 + (x - 0.42) * 1.12, 0.0, 1.0)
-        sh, hi = (1.0 - x) ** 2, x ** 2
-        # split tone: shadows go blue-black, only the highlights stay warm
-        chan = (x - 0.010 * sh + 0.030 * hi,
-                x + 0.004 * sh + 0.004 * hi,
-                x + 0.026 * sh - 0.026 * hi)
-        lut = np.empty((3, 256), dtype=np.uint8)
-        for i, v in enumerate(chan):
-            v = v - 0.10 * np.maximum(0.0, v - 0.86) ** 2
-            lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
+        sh, mid, hi = (1.0 - x) ** 2, 4.0 * x * (1.0 - x), x ** 2
+        # split tone: slate shadows, a touch of rust in the mids, warm highs
+        chan = (x - 0.006 * sh + 0.010 * mid + 0.030 * hi,
+                x + 0.003 * sh + 0.004 * hi,
+                x + 0.014 * sh - 0.012 * mid - 0.026 * hi)
+        lut = _dither_lut(_ink([v - 0.10 * np.maximum(0.0, v - 0.86) ** 2
+                                for v in chan], np), np)
         _cache["grade_lut"] = lut
-    arr = pygame.surfarray.pixels3d(surface)
     # Three vectorised channel lookups: contrast + warm/cool split tone.  The
     # float luma/saturation pass cost ~40 ms on the 800x560 buffer; this keeps
     # the grade cheap enough for the live scene on both backends.
-    for i in range(3):
-        arr[..., i] = lut[i][arr[..., i]]
-    del arr
+    _apply_lut(surface, lut, np)
 
 
 def _grade_play(surface, wounded=False):
@@ -529,21 +583,18 @@ def _grade_play(surface, wounded=False):
         x = np.arange(256, dtype=np.float32) / 255.0
         x = np.clip((x - 0.018) / 0.982, 0.0, 1.0)
         x = np.clip(0.45 + (x - 0.45) * 1.07, 0.0, 1.0)
-        sh, hi = (1.0 - x) ** 2, x ** 2
-        chan = [x - 0.008 * sh + 0.022 * hi,
-                x + 0.003 * sh + 0.004 * hi,
-                x + 0.024 * sh - 0.020 * hi]
+        x = x ** 1.12            # pays back the ink floor: the darks stay deep
+        sh, mid, hi = (1.0 - x) ** 2, 4.0 * x * (1.0 - x), x ** 2
+        # the 2D split: slate shadows (a little blue, not the old navy), rust
+        # mids, amber highs
+        chan = [x - 0.004 * sh + 0.016 * mid + 0.014 * hi,
+                x + 0.002 * sh + 0.002 * mid + 0.004 * hi,
+                x + 0.010 * sh - 0.020 * mid - 0.024 * hi]
         if wounded:
             mean = (chan[0] + chan[1] + chan[2]) / 3.0
             chan = [c * 0.72 + mean * 0.28 for c in chan]
-        lut = np.empty((3, 256), dtype=np.uint8)
-        for i, v in enumerate(chan):
-            lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
-        _cache[key] = lut
-    arr = pygame.surfarray.pixels3d(surface)
-    for i in range(3):
-        arr[..., i] = lut[i][arr[..., i]]
-    del arr
+        lut = _cache[key] = _dither_lut(_ink(chan, np), np)
+    _apply_lut(surface, lut, np)
 
 
 def _dist2(a, b):
@@ -557,10 +608,19 @@ def _vdist(a, b):
 # ── 3D plumbing ──────────────────────────────────────────────────────────
 def _renderer():
     if _cache["r"] is None:
-        _cache["r"] = Renderer(RW, RH, fog=(11, 15, 24), fog_start=16.0,
+        _cache["r"] = Renderer(RW, RH, fog=FOG, fog_start=16.0,
                                fog_end=BG_FOG_END)
         _cache["r"].light_cap = LIGHT_CAP
     return _cache["r"]
+
+
+def _sky(r, tm):
+    """The night behind both M6 scenes.  The GL pass starts from r.surface:
+    repaint the whole sky every frame, or last frame's additive glows pile up
+    wherever the sky shows."""
+    r.surface.fill(SKY_TOP)
+    _w.night(r, r.surface, tm, top=SKY_TOP, bot=SKY_HORIZON, stars=90,
+             moon=(112.0, 13.0), sodium=SKY_GLOW, seed=71, star_cut=0.62)
 
 
 def _hum(key, wound=0, bloody=False, flags=()):
@@ -1232,13 +1292,13 @@ def _light(r, eye=None, fwd=None, t=None, flashes=()):
         lights = [
             # Two sodium keys, not three: the third pool landed on top of the
             # other two and the platform lost its shape.
-            {"pos": (0.0, 4.2, 7.2), "color": (255, 195, 125),
+            {"pos": (0.0, 4.2, 7.2), "color": P.SODIUM,
              "intensity": 1.25, "range": 13.5},
-            {"pos": (9.6, 4.2, 7.2), "color": (255, 208, 148),
+            {"pos": (9.6, 4.2, 7.2), "color": P.SODIUM_PALE,
              "intensity": 1.20, "range": 13.0},
             # Snow-side cold rim: the only thing that gives the Guard a lit
             # edge against a warm platform.
-            {"pos": (4.0, 6.8, -5.6), "color": (118, 152, 214),
+            {"pos": (4.0, 6.8, -5.6), "color": P.COLD_RIM,
              "intensity": 0.52, "range": 18.0},
         ]
         if eye is not None and fwd is not None:
@@ -3019,10 +3079,7 @@ class TrainScene:
                live_fwd if t < CUT_AT else None, t=t,
                flashes=self._flash_lights(t))
         self._draw_camera(r, t)
-        r.surface.fill((6, 8, 14))
-        _w.night(r, r.surface, t * 1000.0, top=(4, 6, 13), bot=SKY_HORIZON,
-                 stars=90, moon=(112.0, 13.0), sodium=(42, 28, 18), seed=71,
-                 star_cut=0.62)
+        _sky(r, t * 1000.0)
         r.begin()
         del _w.LAST[:]          # probe reads only this frame's actors
         # The platform, station shell and dressing never move before the
@@ -3119,7 +3176,7 @@ class TrainScene:
             _grade_cine(r.surface)
         elif not self.dying:
             _grade_play(r.surface, self.wounded)
-        pygame.transform.smoothscale(r.surface, (WIDTH, HEIGHT), surface)
+        _present(r.surface, surface)
         draw_vignette(surface)
         if t < CUT_AT:
             draw_scanlines(surface)
@@ -3649,7 +3706,7 @@ class TrainScene:
                     center=(sx, sh * 0.5, sz), skip=skip))
             # Lit windows are the only thing out here allowed to be bright:
             # emissive, so the distance fog is all that dims them, and large
-            # enough (0.66 m) to survive RES=0.80 plus the smoothscale.
+            # enough (0.66 m) to survive the RES downscale.
             face = sz + sd * 0.5 + 0.04
             for ry in range(rows):
                 wy = sh * (0.30 + 0.22 * ry)
