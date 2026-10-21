@@ -22,7 +22,6 @@ import pygame
 
 from core.config import (
     HEIGHT, WIDTH, audio, draw_vignette, font_prompt, font_terminal,
-    font_terminal_small,
 )
 from core.outfits import OUTFIT_GUARD
 from core.state import STATE
@@ -32,6 +31,7 @@ from . import hud3d as H
 from . import train3d as T
 from . import yard_brain as B
 from . import yard_dress as D
+from . import yard_hud as U
 
 _w = T._w
 _fx = T._fx
@@ -1500,50 +1500,46 @@ class YardScene:
                                        True, (220, 200, 190))
             surface.blit(img, img.get_rect(center=(cx, cy)))
             return
-        # objective, with the distance to the next point on the route
+        # The top-down game's HUD (yard_hud): HOSTILES and OBJECTIVE top
+        # left, the tiled minimap top right, K-9 panel over the HP strip.
         target = self._objective_point()
         dist = math.hypot(target[0] - self.pos[0], target[2] - self.pos[2])
         if self.near_terminal:
-            head, sub = "[E] Use the Guard terminal", "Who was on that tower?"
+            head = "Use the Guard terminal - who was on that tower?"
         elif self._all_clear():
-            head, sub = "Get to the Guard terminal", "The signal box is clear."
+            head = "Get to the Guard terminal - the signal box is clear"
         elif self.route_stage == 0:
-            head, sub = "Get round the freight siding", "The signal box is behind it."
+            head = "Get round the freight siding - the signal box is behind it"
         else:
-            head, sub = "Clear the signal box", "Who fired? The Guard terminal knows."
-        H.objective(surface, head, sub, dist=dist)
+            head = "Clear the signal box - who fired? The Guard terminal knows"
+        U.hostiles(surface, self._living() + len(self.pending))
+        U.objective(surface, "%s (%d m)." % (head, int(round(dist))))
         screen = getattr(self, "_marker_screen", None)
         if screen is not None and not self.near_terminal:
-            H.marker(surface, screen, dist,
-                     "SIGNAL BOX" if self.route_stage else None)
-        rects, lines, seen, fwd = self._minimap_data()
-        H.minimap(surface, BOUNDS, rects, lines, (self.pos[0], self.pos[2]), fwd,
-                  objective=(target[0], target[2]), enemies=seen)
-        # crosshair, hits, damage
-        gap = int(8 - 3 * self.ads + 3 * self.recoil)
-        H.crosshair(surface, gap,
+            H.marker(surface, screen, dist, "SIGNAL BOX" if self.route_stage else None,
+                     col=U.OBJECTIVE_COL)
+        U.build_minimap(BOUNDS, BLOCKERS, (-21.0, 2.7, 21.0, 7.7),
+                        (0.0, T.CARRIAGE_TRACK_Z, T.FREIGHT_Z), T.TRUCK_X)
+        _rects, _lines, seen, fwd = self._minimap_data()
+        U.minimap(surface, (self.pos[0], self.pos[2]), fwd, seen, (target[0], target[2]))
+        # the reticle, hits, damage
+        U.reticle(surface, int(3 * self.recoil - 2 * self.ads))
+        H.crosshair(surface, 0, lines=False,
                     reload_frac=(1.0 - self.reloading / RELOAD_S) if self.reloading else 0.0,
-                    hit_age=self.t - self.hit_mark, tight=self.ads > 0.5)
+                    hit_age=self.t - self.hit_mark)
         H.damage_arcs(surface, self.dmg_marks, self.t, life=0.9)
-        # vitals, the Guard, the weapon
         p = STATE.player
         top = (getattr(p, "max_hp", 115) or 115) if p else 115
-        slots = (["alive" if g["alive"] else "down" for g in self.guards]
-                 + ["due"] * len(self.pending))
-        H.vitals(surface, p.hp if p else 0, top, wounded=self._wounded(),
-                 alive=self._living(), slots=slots)
-        hint = None
+        U.weapon(surface, p.hp if p else 0, top, self.mag, MAG, self.reserve,
+                 self.reloading, RELOAD_S)
         if self.toast and self.t - self.toast[0] < 1.6:
-            hint = self.toast[1]
+            U.prompt(surface, self.toast[1])
+        elif self.near_terminal:
+            U.prompt(surface, "Use the Guard terminal", "E")
         elif self.mag <= 0 and self.reserve <= 0:
-            hint = "DRY  -  [F] MELEE  -  TAKE MAGS OFF THE BODIES"
+            U.prompt(surface, "Dry - punch, or take mags off the bodies", "F")
         elif self._melee_target()[0] is not None:
-            hint = "[F] MELEE"
-        if hint:
-            img = font_terminal_small.render(hint, True, (236, 214, 160))
-            surface.blit(img, img.get_rect(center=(cx, cy + 46)))
-        H.ammo(surface, "K9", self.mag, MAG, "%d" % self.reserve,
-               reloading=(1.0 - self.reloading / RELOAD_S) if self.reloading else 0.0)
+            U.prompt(surface, "Melee", "F")
 
 
 _scene = YardScene()
