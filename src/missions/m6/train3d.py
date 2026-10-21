@@ -34,6 +34,7 @@ from cutscenes import m5fx3d as _fx
 from cutscenes import m6world3d as _w
 from . import hud3d as _hud
 from engine.assets import load_image
+from engine3d import ik as _ik
 from engine3d import (
     POSES, Renderer, blend, box, clamp, disc_xz, m_apply, pose_run, rot_x,
     rot_y, v_add,
@@ -91,32 +92,25 @@ TOWER_EYE = (17.95, 8.05, 7.16)   # at the window: in front of the cabin (-z)
 
 # Train-only sniper hold. Do not change the shared sniper mesh or kneel pose.
 #
-# The sniper rifle is parented to the RIGHT HAND joint: the hand sits on the
-# grip and the stock reaches 0.34 m back, so the hand has to sit 0.34 m along
-# the aim in front of the shoulder pocket for the butt to touch the shoulder.
-# The rifle yaw brings the fore-end across the chest so the support hand can
-# reach it; the body yaw is compensated by the same amount (see _draw_ucilev)
-# so the muzzle still points at Volkov.  Angles solved against the actual rig
-# geometry (butt-in-shoulder 3 cm, support hand on the fore-end); train-local,
-# the shared M5/M6 sniper mesh and POSES["kneel"] stay untouched.
+# Only the torso is authored here; engine3d.ik.solve_rifle_hold places the
+# rifle and both arms every frame: butt in the right shoulder pocket, barrel
+# on Volkov's chest, right hand on the grip, left hand on the fore-end.  The
+# target is 8.6 m below and 9.5 m out, so the cheek weld needs him to lean
+# into the parapet (body_p + spine) with the head tucked down onto the stock;
+# these values were searched against ik.rifle_hold_gaps (butt 0, support 0,
+# eye 1 cm off the sight line).  The body faces _UCILEV_YAW_OFF to the left
+# of the target bearing so the right shoulder blades back.
 _UCILEV_KNEEL_AIM = dict(
     POSES["kneel"],
-    spine=20.0,
-    spine_r=6.0,
-    twist=16.0,
-    head_p=21.0,
-    head_y=0.0,
-    head_x=0.10,
-    rsh_p=15.0,
-    rsh_r=-45.0,
-    rel=95.0,
-    lsh_p=50.0,
-    lsh_r=-50.0,
-    lel=10.0,
-    rifle_p=40.0,
-    rifle_y=-8.0,
+    body_p=15.0,
+    spine=50.0,
+    spine_r=20.0,
+    twist=22.5,
+    head_p=50.0,
+    head_y=-11.5,
+    head_x=0.03,
 )
-_UCILEV_AIM_YAW = _UCILEV_KNEEL_AIM["rifle_y"]
+_UCILEV_YAW_OFF = 36.0
 
 # Local lights per frame.  The GL shader holds eight slots (``u_pl_pos[8]``)
 # but uploads only ``Renderer.light_cap`` of them, default four; the train opts
@@ -4215,26 +4209,9 @@ class TrainScene:
         pos = TOWER_KNEE
         vpos = _volkov_at(min(t, HIT_AT), self.volkov_delay)[0]
         target = (vpos[0], vpos[1] + 1.05, vpos[2])
-        # The rifle is yawed across the chest; turn the body the other way so
-        # the muzzle azimuth still lands on Volkov.
-        bearing = _w.yaw_to(pos, target)
-        yaw = bearing - _UCILEV_AIM_YAW
-
-        hum = _hum("ucilev")
-        pose = dict(_UCILEV_KNEEL_AIM)
-        # Read the actual weapon hand after posing (rifle_p is body-relative,
-        # + = muzzle down).  The arms do not depend on the pitch.
-        _places, joints, _root = hum.pose_world(pose, pos, yaw, rifle_on=False)
-        hand = joints["rhand"]
-        proj = ((target[0] - hand[0]) * math.sin(math.radians(bearing))
-                + (target[2] - hand[2]) * math.cos(math.radians(bearing)))
-        pitch = math.degrees(math.atan2(hand[1] - target[1], max(0.1, proj)))
-        pose["rifle_p"] = pitch
-        # Cheek weld: the head follows the barrel (the spine is already
-        # pitched) and turns back against the torso twist, onto the stock.
-        pose["head_p"] = clamp(pitch - pose.get("spine", 0.0), -14.0, 30.0)
-        pose["head_y"] = clamp(_UCILEV_AIM_YAW - pose.get("twist", 0.0),
-                               -38.0, 38.0)
+        yaw = _w.yaw_to(pos, target) + _UCILEV_YAW_OFF
+        pose = _ik.solve_rifle_hold(_hum("ucilev"), _UCILEV_KNEEL_AIM, pos, yaw,
+                                    target, look=False)
 
         _w.actor(
             r, "ucilev", pose, pos, yaw, int(t * 1000),

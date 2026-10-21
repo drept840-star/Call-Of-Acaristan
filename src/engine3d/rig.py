@@ -5,7 +5,8 @@ Pose keys (degrees unless noted) - anything missing falls back to NEUTRAL:
   head_p, head_y             nod down / turn
   head_x                     lateral head shift (m, + = right): cheek welds
   lsh_p, lsh_r, lel          left shoulder raise fwd / out, elbow bend
-  rsh_p, rsh_r, rel          right ...
+  lsh_y                      left upper-arm roll (elbow swivel; engine3d.ik)
+  rsh_p, rsh_r, rsh_y, rel   right ...
   lhip_p, lhip_r, lkn        left thigh raise fwd / out, knee bend
   rhip_p, rhip_r, rkn
   lank, rank                 ankle point (+ = toes away from the shin); lying
@@ -24,7 +25,7 @@ __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
            "solve_look", "mouth_flap"]
 
 NEUTRAL = dict(spine=3, spine_r=0, twist=0, head_p=0, head_y=0, head_x=0.0,
-               lsh_p=8, lsh_r=8, lel=12, rsh_p=8, rsh_r=8, rel=12,
+               lsh_p=8, lsh_r=8, lel=12, rsh_p=8, rsh_r=8, rel=12, lsh_y=0, rsh_y=0,
                lhip_p=0, lhip_r=2, lkn=2, rhip_p=0, rhip_r=2, rkn=2,
                lank=0, rank=0, body_p=0, body_r=0, lift=0.0, rifle_p=60, rifle_y=0)
 
