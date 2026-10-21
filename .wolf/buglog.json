@@ -1,0 +1,597 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 4→5 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-001",
+      "timestamp": "2026-10-20T16:44:58.390Z",
+      "last_seen": "2026-10-20T16:44:58.390Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of core.py",
+      "file": "src/engine3d/core.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9→15 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-002",
+      "timestamp": "2026-10-20T16:45:22.451Z",
+      "last_seen": "2026-10-20T16:45:22.451Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of core.py",
+      "file": "src/engine3d/core.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 7→13 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-003",
+      "timestamp": "2026-10-20T16:45:25.752Z",
+      "last_seen": "2026-10-20T16:45:25.752Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of gl.py",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→4 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-004",
+      "timestamp": "2026-10-20T16:45:31.467Z",
+      "last_seen": "2026-10-20T16:45:31.467Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of rig.py",
+      "file": "src/engine3d/rig.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 6→9 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-005",
+      "timestamp": "2026-10-20T16:47:47.761Z",
+      "last_seen": "2026-10-20T16:47:47.761Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of rig.py",
+      "file": "src/engine3d/rig.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 22→60 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-006",
+      "timestamp": "2026-10-20T16:48:53.593Z",
+      "last_seen": "2026-10-20T16:48:53.593Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6world3d.py",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 28→60 lines (9 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-007",
+      "timestamp": "2026-10-20T16:49:33.663Z",
+      "last_seen": "2026-10-20T16:49:33.663Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6world3d.py",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→4 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-008",
+      "timestamp": "2026-10-20T16:49:35.426Z",
+      "last_seen": "2026-10-20T16:49:35.426Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 6→30 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-009",
+      "timestamp": "2026-10-20T16:49:53.314Z",
+      "last_seen": "2026-10-20T16:49:53.314Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of core.py",
+      "file": "src/engine3d/core.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-010",
+      "timestamp": "2026-10-20T16:51:10.812Z",
+      "last_seen": "2026-10-20T16:51:10.812Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 8→14 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-011",
+      "timestamp": "2026-10-20T16:52:07.527Z",
+      "last_seen": "2026-10-20T16:52:07.527Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6_shots.py",
+      "file": "tools/m6_shots.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 16→18 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-012",
+      "timestamp": "2026-10-20T16:52:40.497Z",
+      "last_seen": "2026-10-20T16:52:40.497Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6_shots.py",
+      "file": "tools/m6_shots.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→9 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-013",
+      "timestamp": "2026-10-20T16:52:42.232Z",
+      "last_seen": "2026-10-20T16:52:42.232Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 27→69 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-014",
+      "timestamp": "2026-10-20T21:34:25.584Z",
+      "last_seen": "2026-10-20T21:34:25.584Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 13→21 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-015",
+      "timestamp": "2026-10-20T21:34:56.320Z",
+      "last_seen": "2026-10-20T21:34:56.320Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "Had \"spawn_t\"",
+      "fix": "Changed to \"entry\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-016",
+      "timestamp": "2026-10-20T21:35:22.843Z",
+      "last_seen": "2026-10-20T21:35:22.843Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 12→17 lines (9 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-017",
+      "timestamp": "2026-10-20T21:35:56.712Z",
+      "last_seen": "2026-10-20T21:35:56.712Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-018",
+      "timestamp": "2026-10-20T21:36:28.850Z",
+      "last_seen": "2026-10-20T21:36:28.850Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _draw_volkov should be _draw_entrances",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "Used \"_draw_volkov\" instead of \"_draw_entrances\"",
+      "fix": "Changed _draw_volkov → _draw_entrances",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-019",
+      "timestamp": "2026-10-20T21:37:27.660Z",
+      "last_seen": "2026-10-20T21:37:27.660Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: 905 should be 88",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "Used \"905\" instead of \"88\"",
+      "fix": "Changed 905 → 88",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-020",
+      "timestamp": "2026-10-20T21:37:35.775Z",
+      "last_seen": "2026-10-20T21:37:35.775Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _draw_volkov should be _draw_yard_life",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "Used \"_draw_volkov\" instead of \"_draw_yard_life\"",
+      "fix": "Changed _draw_volkov → _draw_yard_life",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-021",
+      "timestamp": "2026-10-20T22:00:15.829Z",
+      "last_seen": "2026-10-20T22:00:15.829Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-022",
+      "timestamp": "2026-10-20T22:01:15.091Z",
+      "last_seen": "2026-10-20T22:01:15.091Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9→11 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-023",
+      "timestamp": "2026-10-20T22:14:52.559Z",
+      "last_seen": "2026-10-20T22:14:52.559Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→10 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-024",
+      "timestamp": "2026-10-20T22:28:57.088Z",
+      "last_seen": "2026-10-20T22:28:57.088Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in enter()",
+      "file": "src/app.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-025",
+      "timestamp": "2026-10-20T22:42:07.736Z",
+      "last_seen": "2026-10-20T22:42:07.736Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong condition in logic",
+      "file": "src/missions/m6/flow.py",
+      "root_cause": "Condition was: if (getattr(STATE, \"player_dead\", False)",
+      "fix": "Changed to: if (getattr(STATE, \"m6_yard_active\", False)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-026",
+      "timestamp": "2026-10-20T22:46:53.325Z",
+      "last_seen": "2026-10-20T22:46:53.325Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard3d.py",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→10 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-027",
+      "timestamp": "2026-10-20T23:33:11.175Z",
+      "last_seen": "2026-10-20T23:33:11.175Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard3d.py",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 8→15 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-028",
+      "timestamp": "2026-10-20T23:33:20.544Z",
+      "last_seen": "2026-10-20T23:33:20.544Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard3d.py",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 13→22 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-029",
+      "timestamp": "2026-10-20T23:33:48.889Z",
+      "last_seen": "2026-10-20T23:33:48.889Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong operator: == should be <=",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "Used \"==\" instead of \"<=\"",
+      "fix": "Changed operator == → <=",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-030",
+      "timestamp": "2026-10-20T23:37:06.878Z",
+      "last_seen": "2026-10-20T23:37:06.878Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "Had \", rt, self.pos, self.body_yaw)\n        pose = _w.",
+      "fix": "Changed to \", rt, self.pos, self.body_yaw, POLE_R)\n        po",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-031",
+      "timestamp": "2026-10-21T04:09:23.591Z",
+      "last_seen": "2026-10-21T04:09:23.591Z",
+      "occurrences": 1,
+      "related_bugs": []
+    }
+  ],
+  "applied_observations": {
+    "e020b797-29a4-4ce6-b083-7018e619098d": true,
+    "cf2877ee-3250-4f22-91c4-6dd28643f330": true,
+    "13045e8a-6de7-4b1a-8ded-baeca196247e": true,
+    "350c6fd6-093f-4d42-a321-fb168a47fa50": true,
+    "049d2d58-45cb-425d-b8d0-42bd300d43b1": true,
+    "07e4de2a-90ec-47c8-bc1b-8cd80ce9e5aa": true,
+    "b604ffc5-d91a-4036-a965-edb8aff9c1ad": true,
+    "fc299759-f11d-468a-8df9-ad476557b014": true,
+    "ebf9b059-3d89-43a4-9280-44fae6e120ce": true,
+    "5a786a52-be25-46df-b3c2-3d7866b1d75f": true,
+    "170ae301-8e65-401f-92c4-bc3db1bacf9e": true,
+    "c43f4083-3b1b-4bf0-bcd9-a6efb7e3d711": true,
+    "85c8266e-6072-444b-8dc2-1cea85f6992a": true,
+    "bc949c71-0173-4f47-9aeb-1429f9acc10f": true,
+    "8d64cd18-cba0-4581-b07e-061038baf93e": true,
+    "230914d2-87ea-4432-98d9-924be279ce4d": true,
+    "e47ee828-89e0-4733-ab7a-5c5249dd3309": true,
+    "a774353f-887b-432b-8978-88fc27335a30": true,
+    "015b417f-24fb-4b37-8652-2d139a574706": true,
+    "60f7762b-d2e1-434b-8942-1febcb5b2fc3": true,
+    "94968f8e-219c-413d-860c-6ebcc8234e41": true,
+    "ac6ae202-ef3b-4061-a336-821213f3dc4b": true,
+    "5b9b4856-0e9c-4b6e-b6bf-f6a939e77a53": true,
+    "ccea4080-218a-4042-9172-6ab6cad5879a": true,
+    "a8b31d9f-fc06-4b4b-9920-140861f278af": true,
+    "2a8baaaf-735a-49db-8162-d77dcecc002b": true,
+    "c7876c0e-a8b1-401e-97e9-aee7395aab0a": true,
+    "b6f3e221-9f25-48da-8120-cf946e2d9fd1": true,
+    "1296624a-1d13-4284-800a-918dfd059ff4": true,
+    "bb99a935-2e27-4969-8c05-11c33d756121": true,
+    "b2a66870-af25-4751-9198-8cb182ee9b06": true
+  },
+  "next_id": 32
+}
