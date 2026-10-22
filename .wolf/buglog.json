@@ -993,6 +993,60 @@
       "last_seen": "2026-10-22T18:35:53.939Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _panel_mag_icon()",
+      "file": "src/missions/m6/draw.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-056",
+      "timestamp": "2026-10-22T18:45:47.423Z",
+      "last_seen": "2026-10-22T18:45:47.423Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _draw_mag_icon should be _panel_mag_icon",
+      "file": "src/missions/m6/draw.py",
+      "root_cause": "Used \"_draw_mag_icon\" instead of \"_panel_mag_icon\"",
+      "fix": "Changed _draw_mag_icon → _panel_mag_icon",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-057",
+      "timestamp": "2026-10-22T18:45:49.154Z",
+      "last_seen": "2026-10-22T18:45:49.154Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard_hud.py",
+      "file": "src/missions/m6/yard_hud.py",
+      "root_cause": "18 lines replaced/restructured",
+      "fix": "Rewrote 19→4 lines (18 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-058",
+      "timestamp": "2026-10-22T18:45:53.151Z",
+      "last_seen": "2026-10-22T18:45:53.151Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -1050,7 +1104,10 @@
     "999f1998-7a14-4e67-81c8-259885bf609c": true,
     "cea1b737-209a-4d7f-9ae5-bfe7f4de2655": true,
     "8c1b26a2-0456-46a5-8556-4bab91757916": true,
-    "1e10adb3-c072-4176-9662-7e50f7697e6f": true
+    "1e10adb3-c072-4176-9662-7e50f7697e6f": true,
+    "75f0d471-ae01-42f9-95e0-168113c4ca0b": true,
+    "2857aff4-bfcf-432a-b65e-62b4c8bb8696": true,
+    "6ad34dbd-bf80-45a9-9989-5e67a36814e3": true
   },
-  "next_id": 56
+  "next_id": 59
 }

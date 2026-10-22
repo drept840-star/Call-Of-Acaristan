@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-22T18:35:59.987Z",
+    "lastScanned": "2026-10-22T18:48:36.358Z",
     "fileCount": 429,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "5c89f30e4023564b6759ff2961d4d8c8e165e202d3bdd9ce23b10a330b060ec7",
-    "storeUpdatedAt": "2026-10-22T18:35:59.998Z",
-    "rootHash": "5e734d454cd9ac61"
+    "renderedHash": "3f0717b4e775e795a824f426339735c236fd147101d2db3ef3d0956e15ec205c",
+    "storeUpdatedAt": "2026-10-22T18:48:36.369Z",
+    "rootHash": "fc778259e0d267a6"
   },
   "files": {
     ".gitattributes": {
@@ -62,13 +62,12 @@
     },
     "CLAUDE.md": {
       "description": "OpenWolf",
-      "tokens": 337,
-      "hash": "7c28dcecf2b4cfc2",
-      "size": 1345,
-      "mtimeMs": 1792597257560.0947,
-      "updatedAt": "2026-10-21T18:53:49.850Z",
-      "source": "scan",
-      "importance": 0.0598
+      "tokens": 1402,
+      "hash": "97c40c14990e9962",
+      "size": 5608,
+      "mtimeMs": 1792694916220.639,
+      "updatedAt": "2026-10-22T18:48:36.358Z",
+      "source": "hook"
     },
     "GEMINI.md": {
       "description": "OpenWolf",
@@ -24593,140 +24592,140 @@
     },
     "src/missions/m6/draw.py": {
       "description": "Mission 6 gameplay renderer.",
-      "tokens": 4682,
-      "hash": "c2a033947c9e2767",
-      "size": 17105,
-      "mtimeMs": 1792536085510.1316,
-      "updatedAt": "2026-10-21T18:53:50.226Z",
-      "source": "scan",
+      "tokens": 4969,
+      "hash": "0fd96a0b12f0be69",
+      "size": 18109,
+      "mtimeMs": 1792694748884.0046,
+      "updatedAt": "2026-10-22T18:45:49.120Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_kit_body",
           "kind": "fn",
           "startLine": 62,
-          "endLine": 82,
-          "tokens": 310
+          "endLine": 84,
+          "tokens": 311
         },
         {
           "name": "_guard_pose",
           "kind": "fn",
           "startLine": 85,
-          "endLine": 91,
-          "tokens": 102
+          "endLine": 93,
+          "tokens": 103
         },
         {
           "name": "_draw_guard",
           "kind": "fn",
           "startLine": 94,
-          "endLine": 117,
-          "tokens": 319
+          "endLine": 119,
+          "tokens": 320
         },
         {
           "name": "_entry_puff",
           "kind": "fn",
           "startLine": 120,
-          "endLine": 132,
+          "endLine": 134,
           "tokens": 151
         },
         {
           "name": "_volkov_pose",
           "kind": "fn",
           "startLine": 135,
-          "endLine": 138,
-          "tokens": 65
+          "endLine": 140,
+          "tokens": 66
         },
         {
           "name": "_draw_volkov",
           "kind": "fn",
           "startLine": 141,
-          "endLine": 149,
-          "tokens": 129
+          "endLine": 151,
+          "tokens": 130
         },
         {
           "name": "_scene_drawables",
           "kind": "fn",
           "startLine": 152,
-          "endLine": 189,
-          "tokens": 476
+          "endLine": 194,
+          "tokens": 508
         },
         {
           "name": "_objective_world_pos",
           "kind": "fn",
           "startLine": 195,
-          "endLine": 197,
+          "endLine": 199,
           "tokens": 36
         },
         {
           "name": "_draw_beacon",
           "kind": "fn",
           "startLine": 200,
-          "endLine": 212,
-          "tokens": 144
+          "endLine": 214,
+          "tokens": 145
         },
         {
           "name": "_draw_pickup",
           "kind": "fn",
           "startLine": 215,
-          "endLine": 230,
+          "endLine": 232,
           "tokens": 232
         },
         {
           "name": "_draw_world_effects",
           "kind": "fn",
           "startLine": 233,
-          "endLine": 254,
-          "tokens": 297
+          "endLine": 256,
+          "tokens": 298
         },
         {
           "name": "_draw_muzzle_flash",
           "kind": "fn",
           "startLine": 257,
-          "endLine": 267,
-          "tokens": 126
+          "endLine": 272,
+          "tokens": 156
         },
         {
           "name": "_draw_mag_icon",
           "kind": "fn",
           "startLine": 273,
-          "endLine": 283,
+          "endLine": 285,
           "tokens": 194
+        },
+        {
+          "name": "_panel_mag_icon",
+          "kind": "fn",
+          "startLine": 286,
+          "endLine": 308,
+          "tokens": 287
         },
         {
           "name": "_draw_hud",
           "kind": "fn",
-          "startLine": 286,
-          "endLine": 301,
-          "tokens": 238
+          "startLine": 309,
+          "endLine": 326,
+          "tokens": 239
         },
         {
           "name": "_draw_prompt",
           "kind": "fn",
-          "startLine": 304,
-          "endLine": 323,
-          "tokens": 234
+          "startLine": 327,
+          "endLine": 351,
+          "tokens": 265
         },
         {
           "name": "_draw_train",
           "kind": "fn",
-          "startLine": 329,
-          "endLine": 362,
-          "tokens": 449
+          "startLine": 352,
+          "endLine": 387,
+          "tokens": 450
         },
         {
           "name": "game_draw",
           "kind": "fn",
-          "startLine": 365,
-          "endLine": 411,
+          "startLine": 388,
+          "endLine": 435,
           "tokens": 460
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/__init__.py",
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "def _kit_body(who, wardrobe, right, headgear=True):\ndef _guard_pose(enemy):\ndef _draw_guard(surface, enemy, cam_x, cam_y):\ndef _entry_puff(surface, x, y, k, seed):\ndef _volkov_pose(right):\ndef _draw_volkov(surface, v, cam_x, cam_y):\ndef _scene_drawables(surface, cam_x, cam_y):\ndef _objective_world_pos():\ndef _draw_beacon(surface, cam_x, cam_y):\ndef _draw_pickup(surface, pu, cam_x, cam_y):\ndef _draw_world_effects(surface, cam_x, cam_y):\ndef _draw_muzzle_flash(surface, cam_x, cam_y):\ndef _draw_mag_icon(surface, mx, my, kind, rounds, capacity, active):\ndef _draw_hud(surface, cam_x, cam_y):\ndef _draw_prompt(surface):\ndef _draw_train(surface):\ndef game_draw(fcx=0, fcy=0, surface=None):"
+      ]
     },
     "src/missions/m6/flow.py": {
       "description": "Mission 6 - stage ladder, checkpoints and the ending handoff.",
@@ -26404,12 +26403,12 @@
     },
     "src/missions/m6/yard_hud.py": {
       "description": "Mission 6 yard - the 2D top-down game's HUD, brought into the 3D fight.",
-      "tokens": 2128,
-      "hash": "bde601972e5d321f",
-      "size": 7447,
-      "mtimeMs": 1792599154838.8704,
-      "updatedAt": "2026-10-21T18:53:50.241Z",
-      "source": "scan",
+      "tokens": 1929,
+      "hash": "0ae7fc8d8086fda0",
+      "size": 6750,
+      "mtimeMs": 1792694752994.5334,
+      "updatedAt": "2026-10-22T18:45:53.113Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_grid",
@@ -26464,32 +26463,31 @@
           "name": "_mag_icon",
           "kind": "fn",
           "startLine": 111,
-          "endLine": 131,
-          "tokens": 283
+          "endLine": 116,
+          "tokens": 84
         },
         {
           "name": "weapon",
           "kind": "fn",
-          "startLine": 132,
-          "endLine": 144,
+          "startLine": 117,
+          "endLine": 129,
           "tokens": 209
         },
         {
           "name": "reticle",
           "kind": "fn",
-          "startLine": 145,
-          "endLine": 160,
+          "startLine": 130,
+          "endLine": 145,
           "tokens": 173
         },
         {
           "name": "prompt",
           "kind": "fn",
-          "startLine": 161,
-          "endLine": 179,
+          "startLine": 146,
+          "endLine": 164,
           "tokens": 269
         }
-      ],
-      "importance": 0.0598
+      ]
     },
     "src/missions/m6/yard3d.py": {
       "description": "Mission 6 - \"Who fired?\": the third-person fight after Volkov's death.",

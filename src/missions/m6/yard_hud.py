@@ -109,24 +109,9 @@ def hostiles(surface, count):
 
 
 def _mag_icon(surface, mx, my, kind, rounds, capacity, active):
-    """The K-9 stick mag the 2D weapon panel was laid out for: M5's baked
-    shell with its 12 witness holes.  Without the art, M6's own top-down
-    painter, moved down into the panel (it draws centred, not from the top)."""
-    rounds, capacity = max(0, int(rounds)), max(1, int(capacity))
-    try:
-        from art import m5 as _art
-        shell = _art.get("mag_icon", 0 if rounds <= 0 else (1 if active else 2))
-    except Exception:
-        shell = None
-    if shell is None:
-        from .draw import _draw_mag_icon       # late: pulls in the 2D mission
-        _draw_mag_icon(surface, mx + 12, my + 26, kind, rounds, capacity, active)
-        return
-    surface.blit(shell, (mx, my - 3))
-    col = (220, 190, 70) if active else (150, 128, 58)
-    for row in range(min(12, int(round(rounds / capacity * 12)))):
-        for dx in (10, 14):
-            pygame.draw.circle(surface, col, (mx + dx, my + 44 - row * 3), 1)
+    """The same K-9 stick mag as the 2D weapon panel (draw._panel_mag_icon)."""
+    from .draw import _panel_mag_icon          # late: pulls in the 2D mission
+    _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active)
 
 
 def weapon(surface, hp, hp_max, mag, mag_size, reserve, reload_left, reload_s):

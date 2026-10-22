@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-22T18:35:59.987Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-22T18:48:36.358Z
 > Files: 429 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
@@ -14,7 +14,7 @@
 - `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~106 tok)
 - `AGENTS.md` — Agent workflow (read this first) (~2517 tok)
 - `build.bat` (~56 tok)
-- `CLAUDE.md` — OpenWolf (~337 tok)
+- `CLAUDE.md` — OpenWolf (~1402 tok)
 - `GEMINI.md` — OpenWolf (~75 tok)
 - `HANDOFF_CLAUDE.md` — Handoff — Claude (~1583 tok)
 - `MEMORY.md` — RULE: Split long tasks into Planning and Writing stages (~554 tok)
@@ -480,7 +480,7 @@
 
 - `__init__.py` — Mission 6: Black Notebook - re-export facade (load order = parts order). (~594 tok)
 - `decor.py` — Mission 6 - stage decor, ground art and night lighting. (~13324 tok)
-- `draw.py` — Mission 6 gameplay renderer. (~4682 tok)
+- `draw.py` — Mission 6 gameplay renderer. (~4969 tok)
 - `flow.py` — Mission 6 - stage ladder, checkpoints and the ending handoff. (~3453 tok)
 - `hud3d.py` — Mission 6 3D HUD: minimal tactical, shared by the train shootout and the (~3045 tok)
 - `m6_audio.py` — Mission 6 sound design: film stems, foley and the interactive-train bed. (~6215 tok)
@@ -493,7 +493,7 @@
 - `world.py` — Mission 6 - world construction, Guard spawns and shared helpers. (~3755 tok)
 - `yard_brain.py` — Mission 6 yard - the Guard brains (engine.ai on the "Who fired?" fight). (~6394 tok)
 - `yard_dress.py` — Mission 6 yard - the clutter that makes the walled yard look lived in. (~3450 tok)
-- `yard_hud.py` — Mission 6 yard - the 2D top-down game's HUD, brought into the 3D fight. (~2128 tok)
+- `yard_hud.py` — Mission 6 yard - the 2D top-down game's HUD, brought into the 3D fight. (~1929 tok)
 - `yard3d.py` — Mission 6 - "Who fired?": the third-person fight after Volkov's death. (~23145 tok)
 
 ## src/missions/m6/bloc3d/

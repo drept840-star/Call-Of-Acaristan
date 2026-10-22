@@ -283,6 +283,29 @@ def _draw_mag_icon(surface, mx, my, kind, rounds, capacity, active):
         pygame.draw.rect(surface, color, (mx - 4, my + 8 - filled, 8, filled))
 
 
+def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active):
+    """weapon_panel's mag slot: (mx, my) is the top left of a 25 x 56 cell.
+    The K-9 stick is M5's baked shell with its 12 witness holes, like the
+    M4/M5 panels; a box mag or missing art falls back to _draw_mag_icon,
+    which draws centred."""
+    rounds, capacity = max(0, int(rounds)), max(1, int(capacity))
+    shell = None
+    if kind == "stick":
+        try:
+            from art import m5 as _art
+            shell = _art.get("mag_icon", 0 if rounds <= 0 else (1 if active else 2))
+        except Exception:
+            shell = None
+    if shell is None:
+        _draw_mag_icon(surface, mx + 12, my + 26, kind, rounds, capacity, active)
+        return
+    surface.blit(shell, (mx, my - 3))
+    col = (220, 190, 70) if active else (150, 128, 58)
+    for row in range(min(12, int(round(rounds / capacity * 12)))):
+        for dx in (10, 14):
+            pygame.draw.circle(surface, col, (mx + dx, my + 44 - row * 3), 1)
+
+
 def _draw_hud(surface, cam_x, cam_y):
     draw_objective_panel(surface, _maps._objective)
     draw_pinned_radio(surface)
@@ -291,7 +314,7 @@ def _draw_hud(surface, cam_x, cam_y):
                              panel_bg=get_panel_bg)
         _hud_weapon_panel.draw(
             surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
-            panel_bg=get_panel_bg, mag_icon=_draw_mag_icon)
+            panel_bg=get_panel_bg, mag_icon=_panel_mag_icon)
         _hud_hostiles.draw(surface, THEME, _world.living_guards())
         if STATE.show_minimap and STATE.minimap:
             STATE.minimap.draw(surface, STATE.player,
