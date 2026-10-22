@@ -975,6 +975,24 @@
       "last_seen": "2026-10-22T17:05:25.027Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6world3d.py",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→8 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-055",
+      "timestamp": "2026-10-22T18:35:53.939Z",
+      "last_seen": "2026-10-22T18:35:53.939Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -1031,7 +1049,8 @@
     "9d17c8f6-a768-4a5b-b858-15dbf2b32eab": true,
     "999f1998-7a14-4e67-81c8-259885bf609c": true,
     "cea1b737-209a-4d7f-9ae5-bfe7f4de2655": true,
-    "8c1b26a2-0456-46a5-8556-4bab91757916": true
+    "8c1b26a2-0456-46a5-8556-4bab91757916": true,
+    "1e10adb3-c072-4176-9662-7e50f7697e6f": true
   },
-  "next_id": 55
+  "next_id": 56
 }

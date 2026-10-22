@@ -1507,7 +1507,7 @@ def heli_pilot():
                    if key in ("pelvis", "torso")
                    for x, y, z in uniq[key]) + root[2]
         seat_back = SOLIDS["heli"]["seat_back_r"][1][2]
-        d = _PILOT["v"] = (pose, (0.55, HELI_FLOOR_Y, seat_back + 0.01 - back))
+        d = _PILOT["v"] = (pose, (0.55, HELI_FLOOR_Y, seat_back + 0.03 - back))
     return d
 
 
@@ -1611,9 +1611,13 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
     body.add(box(1.50, 0.20, 0.02, (16, 52, 40), center=(0, 1.44, 2.91),
                  emissive=True))
     body.add(box(1.80, 0.05, 0.30, dark, center=(0, 1.59, 2.92)))
+    # seats skip the airframe's depth bias: the pilot sits within 0.4 m of
+    # the seat back, and a biased back lets her draw through it from the cabin
+    seats = Mesh()
     for side in ("l", "r"):
-        _mesh_solid(body, H["seat_pan_" + side], (40, 43, 37))
-        _mesh_solid(body, H["seat_back_" + side], (32, 35, 30))
+        _mesh_solid(seats, H["seat_pan_" + side], (40, 43, 37))
+        _mesh_solid(seats, H["seat_back_" + side], (32, 35, 30))
+    place(seats, bias=0.0)
 
     # transmission/engine cowling, intake, exhaust, mast
     _heli_loft(body, [(0.85, _heli_sec(0.52, 2.50, 2.62, 0.02, 0.06)),

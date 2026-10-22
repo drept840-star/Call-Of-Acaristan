@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-22T18:22:42.513Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-22T18:35:59.987Z
 > Files: 429 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
@@ -131,7 +131,7 @@
 - `m5studio.py` — m5studio.py - the state-TV studio shared by the M5 bulletin's 3D take (~2343 tok)
 - `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~31211 tok)
 - `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: m5fx3d with hard PS2 halos. (~2184 tok)
-- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~24441 tok)
+- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~28902 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
 - `route12.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~22720 tok)

@@ -457,3 +457,5 @@ description: chronological action log per session, consolidated weekly
 | 21:22 | Edited src/cutscenes/m6films.py | 3→5 lines | ~90 |
 <!-- session:MDI4YjI3OTMtMjkwYS00Zjc3LWIxYjgtMmM2MDBmZmE5YWJj -->
 | 2026-10-22T18:27:14.358Z | M6 cutscene anatomy pass: reach() now engine3d.ik.solve_arm with pole; outward elbow poles (_OUT/_CROSS) on boxcar, exit, door seat, Vasile handset; Vasile line 3 stays on the phone, free hand planted on desk (no 0.73 m pop); pilot hidden in insert_jump exterior (stray arm); train catch shoulder grip waits for Volkov's chest to land; m6_shots --clash probe added | src/cutscenes/m6films.py,src/cutscenes/m6world3d.py,src/missions/m6/train3d.py,tools/m6_shots.py,tools/smoke_test.py | smoke OK, test_m6_campaign OK, compileall OK, cutscene goldens 339/0; clash probe residue <=0.048 m (handoff contact) |
+| 21:35 | Edited src/cutscenes/m6world3d.py | modified in() | ~102 |
+| 21:36 | Edited src/cutscenes/m6world3d.py | 0.01 → 0.03 | ~8 |
