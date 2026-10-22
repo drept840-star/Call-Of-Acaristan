@@ -10,7 +10,7 @@ import mp_trailer_assemble as A
 print(f"import assembler: {time.time()-t0:.2f}s")
 
 # instrument: wrap FS functions after import inside render_foley_stem by
-# monkey-patching time around asset reads — simpler: just call and watch
+# monkey-patching time around asset reads - simpler: just call and watch
 from pathlib import Path
 import tempfile
 

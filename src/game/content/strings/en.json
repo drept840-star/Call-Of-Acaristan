@@ -55,7 +55,7 @@
   "hud.evidence_log": "[ EVIDENCE LOG ]",
   "hud.field_note": "FIELD NOTE",
   "hud.heat": "HEAT",
-  "hud.hint_last_3_7742": "HINT: LAST 3 — #7742",
+  "hud.hint_last_3_7742": "HINT: LAST 3, #7742",
   "hud.hold_timer": "{s}s",
   "hud.hold_transmitter": "HOLD THE TRANSMITTER",
   "hud.hostiles": "HOSTILES: {n}",

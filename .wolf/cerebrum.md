@@ -33,6 +33,14 @@ budget_tokens: 2000
   is excluded (moving part) and the animated sprites are replayed by
   `TrainScene._draw_static_lights(train_offset=, snow_n=, beacon=True)`.
   `prepare()` builds the memo during stage load so the cut does not stall.
+- **GL depth is painter-layer encoded, so layer-6 sprites need a physical
+  depth test.** `gl_FragDepth` mixes the painter slot with linear z; world
+  geometry can never be nearer than a layer-6 light. `gl._render` now packs
+  physical depth (0..64 m) into the colour target's unused alpha
+  (`u_depth_alpha`, opaque targets only) and `_composite` tests tagged
+  `fn.light` sprites against it. The 3×3 anchor gate is enough; the 5×5
+  version doubled the combat composite cost. Window glows/haze are
+  anchor-gated but `light_soft` (no per-pixel background copy).
 - **engine3d poses are dicts, so a hold can be composed from two of them.**
   `POSES["kneel"]` has no weapon hold (arms down, `rifle_p=40`), so a kneeling
   sniper looks unarmed. To shoulder a rifle on a kneel: start from

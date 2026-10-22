@@ -39,6 +39,11 @@ SAFE_BOT = HEIGHT - 158
 FILM_H = SAFE_BOT - SAFE_TOP
 RES = 0.6
 RW, RH = int(WIDTH * RES), int(FILM_H * RES)
+# The PS2 look (insertion films): the train's 0.64 buffer, ordered dither and
+# crisp present.  Opt-in per renderer through rend_ps2()/present_ps2().
+RES_PS2 = 0.64
+PW, PH = int(WIDTH * RES_PS2), int(FILM_H * RES_PS2)
+PS2_LIGHT_CAP = 8
 
 SNOW = (176, 188, 206)
 SNOW_DARK = (44, 54, 70)
@@ -54,12 +59,13 @@ LAST = []
 
 __all__ = [
     "SAFE_TOP", "SAFE_BOT", "FILM_H", "RW", "RH", "SNOW", "NIGHT", "WARM",
-    "COLD", "SODIUM", "rend", "present", "cam", "add", "film_xy", "project_xy",
+    "COLD", "SODIUM", "rend", "present", "rend_ps2", "present_ps2", "PW", "PH", "cam", "add", "film_xy", "project_xy",
     "grade", "finish", "hum", "actor", "air_actor", "life_pose", "yaw_to",
     "current_shot", "speaker", "talking", "snow3d", "breath", "hills",
-    "terrain", "height_at", "LZ", "LZ_Y", "border_compound", "helicopter",
+    "terrain", "height_at", "crossing_far", "LZ", "LZ_Y", "border_compound", "helicopter",
     "heli_xform", "heli_solids", "HELI_SILL_Y", "HELI_SKID_X", "HELI_SKID_Y",
-    "HELI_DOOR_Z", "HELI_ROTOR_R", "boxcar_interior", "rail_platform",
+    "HELI_DOOR_Z", "HELI_ROTOR_R", "HELI_BENCH_H", "HELI_FLOOR_Y",
+    "HELI_ROOF_Y", "heli_pilot", "boxcar_interior", "rail_platform",
     "terminal_office", "vasile_office", "night", "warm_lamp",
     "LAST", "STANCE", "ease5", "travel", "yaw_mix", "leg_ik", "path",
     "walk_stride", "walk_span", "walk", "walk_slip", "sit_pose", "ankles",
@@ -95,6 +101,22 @@ def present(surface, buf, x=0, w=WIDTH):
         except Exception:
             _cache["graded_buf"] = False
     surface.blit(pygame.transform.smoothscale(buf, (w, FILM_H)), (x, SAFE_TOP))
+
+
+def rend_ps2():
+    """The film renderer at the train's PS2 resolution, eight lights and
+    snow glitter.  Present it with ``present_ps2``."""
+    r, buf = rend(PW, PH)
+    r.light_cap = PS2_LIGHT_CAP
+    r.glitter = 1.0
+    return r, buf
+
+
+def present_ps2(surface, buf, x=0, w=WIDTH):
+    """Train grade (contrast curve, split tone, ink floor, Bayer dither) on
+    the small buffer, then a crisp nearest-x2 + box upscale into the film."""
+    _fx.grade_cine(buf)
+    _fx.present_crisp(buf, surface.subsurface((x, SAFE_TOP, w, FILM_H)))
 
 
 def film_xy(p, x0=0, w=WIDTH, rw=RW):
@@ -302,15 +324,15 @@ def grade(surface, gamma=0.82, vig=0.40):
     band.blit(vmask, (0, 0), special_flags=pygame.BLEND_MULT)
 
 
-def finish(surface, seed, tag="", col=(120, 190, 220), t=0):
-    grade(surface)
+def finish(surface, seed, tag="", col=(120, 190, 220), t=0, ps2=False):
+    grade(surface, gamma=1.0 if ps2 else 0.82, vig=0.30 if ps2 else 0.40)
     # Fine grain: a signed luminance wobble over every pixel, re-seeded at
     # film rate.  The old hard single-pixel black specks (full alpha, value
     # 10..26) sat on faces and read as acne in every close-up.
     band = surface.subsurface((0, SAFE_TOP, WIDTH, FILM_H))
     try:
         from cutscenes.post3d import apply_post  # lazy: numpy stack
-        apply_post(band, {"grain": 0.26}, int(t), "m6_film_%s" % seed)
+        apply_post(band, {"grain": 0.10 if ps2 else 0.26}, int(t), "m6_film_%s" % seed)
     except Exception:
         pass
     if tag:
@@ -798,16 +820,13 @@ def planted_pos(hum, pose, yaw, mid_xz, y=0.0):
             mid_xz[1] - 0.5 * (a["l"][2] + a["r"][2]))
 
 
-def reach(hum, pose, side, target, pos, yaw):
-    """Arm IK onto a WORLD point for an actor drawn at (pos, yaw)."""
-    from cutscenes.m5ending3d import solve_hand  # lazy: math + engine3d only
-    p = dict(pose)
-    p[side + "sh_y"] = 0.0
-    _pl, _j, root = hum.pose_world(p, pos, yaw)
-    dx, dy, dz = (target[i] - root[i] for i in range(3))
-    a = math.radians(yaw)
-    c, s = math.cos(a), math.sin(a)
-    return solve_hand(hum, p, side, (dx * c - dz * s, dy, dx * s + dz * c))
+def reach(hum, pose, side, target, pos, yaw, pole=None):
+    """Arm IK onto a WORLD point for an actor drawn at (pos, yaw).  The elbow
+    swivels toward ``pole`` (torso-local; default ik.solve_arm's relaxed out,
+    down and back) so a hand held in front of the chest keeps its forearm
+    outside the torso.  Reaches across the body want a forward, outward pole."""
+    from engine3d.ik import solve_arm
+    return solve_arm(hum, pose, pos, yaw, side, target, pole)
 
 
 # Blocking volumes per set, world AABBs ((x0, y0, z0), (x1, y1, z1)).  The set
@@ -838,20 +857,32 @@ SOLIDS = {
     },
     # Local-space airframe parts: transform with ``heli_solids`` at query time.
     "heli": {
-        "floor": ((-1.22, 0.50, -1.52), (1.22, 0.62, 1.92)),
-        "roof": ((-1.22, 1.86, -1.52), (1.22, 2.36, 1.92)),
-        "wall_l": ((-1.24, 0.58, -1.52), (-1.15, 2.02, 1.92)),
-        "wall_r_rear": ((1.15, 0.58, -1.52), (1.24, 2.02, 0.25)),
-        "wall_r_front": ((1.15, 0.58, 1.75), (1.24, 2.02, 1.92)),
-        "door_header": ((1.15, 1.78, 0.25), (1.24, 2.02, 1.75)),
-        "bulkhead_f": ((-1.22, 0.58, 1.84), (1.22, 1.94, 1.94)),
-        "bulkhead_r": ((-1.22, 0.58, -1.52), (1.22, 1.94, -1.42)),
-        "engine": ((-0.78, 2.22, -1.53), (0.78, 2.62, 0.63)),
-        "boom": ((-0.28, 1.45, -8.05), (0.28, 1.99, -1.50)),
-        "fin": ((-0.02, 1.52, -8.25), (0.52, 2.95, -7.85)),
+        "floor": ((-1.22, 0.42, -1.52), (1.22, 0.62, 1.92)),
+        "roof": ((-1.22, 2.20, -1.52), (1.22, 2.56, 1.92)),
+        "wall_l": ((-1.24, 0.58, -1.52), (-1.15, 2.20, 1.92)),
+        "wall_r_rear": ((1.15, 0.58, -1.52), (1.24, 2.20, 0.25)),
+        "wall_r_front": ((1.15, 0.58, 1.75), (1.24, 2.20, 1.92)),
+        "door_header": ((1.15, 2.02, 0.25), (1.24, 2.20, 1.75)),
+        "bulkhead_r": ((-1.22, 0.58, -1.52), (1.22, 2.20, -1.42)),
+        "seat_pan_l": ((-0.80, 0.94, 2.00), (-0.30, 1.02, 2.46)),
+        "seat_pan_r": ((0.30, 0.94, 2.00), (0.80, 1.02, 2.46)),
+        "seat_back_l": ((-0.80, 0.62, 1.92), (-0.30, 1.80, 2.00)),
+        "seat_back_r": ((0.30, 0.62, 1.92), (0.80, 1.80, 2.00)),
+        "engine": ((-0.74, 2.50, -1.75), (0.74, 2.98, 0.85)),
+        "boom": ((-0.50, 1.10, -7.95), (0.50, 2.50, -1.50)),
+        "fin": ((-0.05, 2.06, -8.40), (0.05, 3.28, -7.50)),
         "skid_r": ((1.22, 0.045, -1.45), (1.38, 0.135, 2.30)),
         "skid_l": ((-1.38, 0.045, -1.45), (-1.22, 0.135, 2.30)),
-        "door_panel": ((1.21, 0.60, -1.39), (1.27, 1.80, 0.07)),
+        "door_panel": ((1.22, 0.62, -1.39), (1.27, 2.02, 0.07)),
+        "bench_cushion": ((-1.08, 0.94, -0.30), (-0.60, 1.02, 1.00)),
+        "bench_skirt": ((-0.66, 0.62, -0.30), (-0.62, 0.94, 1.00)),
+        "bench_back": ((-1.15, 1.02, -0.30), (-1.08, 1.62, 1.00)),
+    },
+    # H2's fold-down seat by the door (airframe-local, not on the airframe).
+    "heli_cabin": {
+        "jump_cushion": ((0.60, 0.94, 0.15), (1.08, 1.02, 0.75)),
+        "jump_leg_f": ((0.62, 0.62, 0.18), (0.66, 0.94, 0.72)),
+        "jump_leg_b": ((1.02, 0.62, 0.18), (1.06, 0.94, 0.72)),
     },
 }
 
@@ -861,6 +892,11 @@ HELI_SKID_X = 1.30
 HELI_SKID_Y = 0.135
 HELI_DOOR_Z = 0.95
 HELI_ROTOR_R = 6.2
+HELI_FLOOR_Y = 0.62
+HELI_ROOF_Y = 2.20      # cabin ceiling
+HELI_HUB_Y = 3.30
+HELI_TR_Y = 2.96        # tail rotor hub, on the fin's left face
+HELI_BENCH_H = 0.40     # seat top above the cabin floor
 
 
 def solids(set_key):
@@ -933,7 +969,7 @@ def head_stats(surface, r=None, full=False):
         if q is None:
             continue
         scale = hum(a["key"])._scale
-        cx, cy = (int(q[0] * xk), int(q[1] * yk)) if full else film_xy(q)
+        cx, cy = (int(q[0] * xk), int(q[1] * yk)) if full else film_xy(q, rw=r.w)
         rad = 0.06 * scale * r.focal / q[2] * xk
         if rad < 3:
             continue
@@ -974,13 +1010,13 @@ def snow3d(r, t, seed=0, n=130, spread=18.0, height=14.0, speed=1.5,
         x = cx + (u * 2 - 1) * spread
         z = cz + (v * 2 - 1) * spread
         y = cy + height * 0.55 - ((a * (0.45 + 0.9 * w) + v * height) % height)
-        ln = 0.10 + 0.16 * w
+        ln = 0.045 + 0.06 * w            # a flake, not a streak
         c = col if w > near else (int(col[0] * .6), int(col[1] * .65), int(col[2] * .7))
+        tail = (x - 0.55 * ln, y - 0.8 * ln, z + 0.3 * ln)
         if segs is not None:
-            segs.append(((x, y, z), (x - 0.10 * ln, y - ln, z + 0.05 * ln), c, 1))
+            segs.append(((x, y, z), tail, c, 1))
         else:
-            r.add_line3d((x, y, z), (x - 0.10 * ln, y - ln, z + 0.05 * ln), c, 1,
-                         layer=4)
+            r.add_line3d((x, y, z), tail, c, 1, layer=4)
     if segs:
         batch(segs, layer=4, depth_test=False)
 
@@ -1028,14 +1064,15 @@ def night(r, buf, t, top=(5, 8, 15), bot=(18, 26, 42), stars=55, moon=False,
 
 
 def warm_lamp(r, pos, t, seed=0, radius_m=1.6, col=WARM, intensity=0.9):
+    """One practical = one core + one halo.  A little haze only when the set
+    is actually foggy; the old glow+haze+shaft stack read as three flat
+    shapes on every lamp."""
     r.add_sprite(pos, _fx.glow(col, radius_m, t, flicker=0.05, seed=seed,
                                core=(255, 236, 200), intensity=intensity),
                  layer=_fx.FX_LAYER)
-    r.add_sprite(pos, _fx.haze(_fx.SODIUM, radius_m * 2.2, t, seed=seed,
-                               intensity=0.10), layer=_fx.FX_LAYER)
-    k = min(1.0, radius_m / 1.1)
-    r.add_sprite(pos, _fx.light_shaft(_fx.SODIUM, 2.1 * k, 0.25, 0.9, t, seed,
-                                      intensity=0.12 * k), layer=_fx.FX_LAYER)
+    if getattr(r, "fog_end", 200.0) < 60.0:
+        r.add_sprite(pos, _fx.haze(_fx.SODIUM, radius_m * 1.8, t, seed=seed,
+                                   intensity=0.05), layer=_fx.FX_LAYER)
 
 
 # ── insertion sets ───────────────────────────────────────────────────────
@@ -1043,6 +1080,7 @@ LZ = (0.0, -48.0)
 LZ_Y = 17.0
 TERRAIN_HALF = 77.5
 TERRAIN_STEP = 155.0 / 28.0
+CROSSING_X = 42.0               # half-width of the levelled crossing apron
 
 
 def _s01(u):
@@ -1073,17 +1111,30 @@ def height_at(x, z):
     roll = (0.55 * math.sin(x * 0.17 + 1.3) * math.cos(z * 0.13)
             + 0.35 * math.sin(x * 0.07 - z * 0.11))
     flat = _s01((math.hypot(x * 0.8, z - 8.0) - 22.0) / 30.0)
-    return (ridge + north + side + roll) * flat
+    # the Kim Kim crossing sits on a levelled apron
+    apron = _s01(max(abs(x) - CROSSING_X, 24.0 - z, z - 56.0, 0.0) / 10.0)
+    return (ridge + north + side + roll) * flat * apron
 
 
 def _terrain_col(x, z, h, slope):
+    """Ground albedo on the 2D palette: slate snow low, pale snow up on the
+    ridge, trodden snow near the border road, bare rock on the steep faces.
+    ``tex`` keeps the brightness and takes the texture's hue; the software
+    backend draws the plain mean colour."""
+    from engine3d import tex
+    from missions.m6 import palette3d as P   # lazy: no missions.m6 at load
     lit = max(0.0, min(1.0, h / LZ_Y))
-    base = (38 + 22 * lit, 46 + 24 * lit, 62 + 28 * lit)
+    j = 1.0 + 0.05 * math.sin(x * 0.91 + z * 1.27)
+    like = tuple(int((P.SLATE_HI[i] * (0.62 + 0.38 * lit)
+                      + P.SNOW_DIM[i] * 0.22 * lit) * j) for i in range(3))
     if slope > 0.55:
         k = min(1.0, (slope - 0.55) / 0.35)
-        base = tuple(int(base[i] * (1 - k) + (28 + 3 * i) * k) for i in range(3))
-    j = int(3.0 * math.sin(x * 0.91 + z * 1.27)) - 1
-    return tuple(max(0, min(255, int(c) + j)) for c in base)
+        rock = (P.SLATE_MID[0] + 6, P.SLATE_MID[1] + 6, P.SLATE_MID[2] + 8)
+        like = tuple(int(like[i] * (1 - k) + rock[i] * k) for i in range(3))
+        return tex("concrete", like=like)
+    if h < 3.0 and abs(x) < 38.0 and -2.0 < z < 24.0:
+        return tex("snow_trod", like=tuple(int(c * 0.8) for c in like))
+    return tex("snow", like=like)
 
 
 def _static_skip():
@@ -1094,6 +1145,7 @@ def _static_skip():
 def terrain(r, t, lights=True):
     """Snow ridge above the border: one 28x28 heightfield, rock on the steep
     faces, sparse pines, the border road and its sodium lamps."""
+    from engine3d import tex
     from engine3d.core import Mesh, box, quad_xz
     if not _static_skip():
         m = Mesh()
@@ -1116,10 +1168,11 @@ def terrain(r, t, lights=True):
                 m.face([(xa, ha, za), (xa, hd, zb), (xb, hc, zb), (xb, hb, za)],
                        c, 0)
         add(r, m)
-        # pines on the ridge, clear of the landing shelf
+        # snow-capped pines on the ridge, clear of the landing shelf
         rng = random.Random(9)
-        pine = (17, 21, 27)
-        for k in range(48):
+        needle = (13, 19, 19)
+        capcol = tex("snow", like=(124, 136, 154))
+        for k in range(52):
             x = rng.uniform(-70, 70)
             z = rng.uniform(-75, -20)
             if math.hypot(x - LZ[0], z - LZ[1]) < 14.0:
@@ -1127,17 +1180,30 @@ def terrain(r, t, lights=True):
             gy = height_at(x, z)
             if gy < 5.0:
                 continue
-            hh = rng.uniform(2.4, 4.8)
-            rad = hh * rng.uniform(0.24, 0.31)
-            base = [(x + math.cos(a) * rad, gy - 0.15, z + math.sin(a) * rad)
-                    for a in (math.radians(90 + 72 * i) for i in range(5))]
-            tip = (x, gy + hh, z)
+            hh = rng.uniform(2.6, 5.0)
+            rad = hh * rng.uniform(0.27, 0.34)
             mm = Mesh()
-            for i in range(5):
-                mm.face([base[i], base[(i + 1) % 5], tip], pine, 2)
+            tiers = ((0.0, 0.46, 1.0), (0.26, 0.40, 0.76), (0.50, 0.34, 0.52))
+            for y0, hf, rf in tiers:
+                yb = gy - 0.15 + y0 * hh
+                rb = rad * rf
+                yt = yb + hf * hh * 1.5
+                ang = [math.radians(90 + 60 * i) for i in range(6)]
+                ring = [(x + math.cos(a_) * rb, yb, z + math.sin(a_) * rb)
+                        for a_ in ang]
+                tip = (x, yt, z)
+                cut = 0.52               # snow rides the upper half of the tier
+                rc = rb * (1.0 - cut) + 0.04
+                yc = yb + (yt - yb) * cut
+                cap = [(x + math.cos(a_) * rc, yc, z + math.sin(a_) * rc)
+                       for a_ in ang]
+                for i in range(6):
+                    mm.face([ring[i], ring[(i + 1) % 6], cap[(i + 1) % 6], cap[i]],
+                            needle, 2)
+                    mm.face([cap[i], cap[(i + 1) % 6], tip], capcol, 2)
             add(r, mm)
         # border road cut and sodium lamp posts
-        add(r, quad_xz(-34, 10, 34, 18, 0.03, (30, 33, 40), seg=8))
+        add(r, quad_xz(-34, 10, 34, 18, 0.03, tex("snow_trod", like=(34, 37, 45)), seg=8))
         if lights:
             for i, x in enumerate((-26, -13, 0, 13, 26)):
                 z = 15.4
@@ -1152,7 +1218,7 @@ def terrain(r, t, lights=True):
             z = 15.4
             y = height_at(x, z)
             r.add_sprite((x, y + 4.6, z),
-                         _fx.sodium_lamp(t, seed=i, radius_m=2.4, intensity=0.6),
+                         _fx.sodium_lamp(t, seed=i, radius_m=1.6, intensity=0.6),
                          layer=_fx.FX_LAYER)
     snow3d(r, t, seed=11, n=56, spread=26, height=18, speed=1.1)
 
@@ -1169,35 +1235,41 @@ _CAP_BLOCKS = (
 )
 
 
-def capital(r, t):
+def capital(r, t, dz=0.0, dx=0.0):
     """Distant skyline: panel blocks, a neon slogan, sodium dome and
-    blinking aviation lights on the tall roofs."""
+    blinking aviation lights on the tall roofs.  ``dx``/``dz`` slide the
+    whole skyline (a shot that needs it elsewhere on the horizon)."""
     from engine3d.core import Mesh
     from missions.m6 import bloc3d as B
+    blocks = tuple((x + dx, z + dz, w, h, d) for x, z, w, h, d in _CAP_BLOCKS)
     if not _static_skip():
-        for i, (x, z, w, h, d) in enumerate(_CAP_BLOCKS):
-            gy = height_at(x, z) - 0.5
+        def lifted(m, gy):
+            # panel_block builds on y = 0; ``add``'s bias is depth, not height
+            m.verts = [(vx, vy + gy, vz) for vx, vy, vz in m.verts]
+            add(r, m)
+
+        for i, (x, z, w, h, d) in enumerate(blocks):
             m = Mesh()
-            # Blocks sit on the valley floor, not y=0: build local, lift on add.
-            B.panel_block(m.add, 0.0, 0.0, w, h, d, "+z", seed=70 + i,
+            B.panel_block(m.add, x, z, w, h, d, "-z", seed=70 + i,
                           col=(26 + i % 3, 28 + i % 3, 37 + i % 4), lit=0.3,
                           budget=max(6, int(w * h * 0.06)))
-            add(r, m, bias=-gy)
-        tall = max(_CAP_BLOCKS, key=lambda b: b[3])
+            lifted(m, height_at(x, z) - 0.5)
+        tall = max(blocks, key=lambda b: b[3])
         x, z, w, h, d = tall
         gy = height_at(x, z) - 0.5
-        pos, face = B.roof_sign_pos(x, z, w, h, d, "+z")
-        B.letters(lambda mm: add(r, mm, bias=-gy), "АКАРИСТАН", pos, face, px=0.6,
+        pos, face = B.roof_sign_pos(x, z, w, h, d, "-z")
+        B.letters(lambda mm: lifted(mm, gy), "АКАРИСТАН", pos, face, px=0.6,
                   col=B.NEON_RED, emissive=True)
-    for i, (x, z, w, h, d) in enumerate(_CAP_BLOCKS):
-        if h >= 21 and int(t // 650 + i) % 2 == 0:
+    for i, (x, z, w, h, d) in enumerate(blocks):
+        if h >= 21:
             gy = height_at(x, z) - 0.5
             r.add_sprite((x, gy + h + 0.4, z),
-                         _fx.glow((255, 44, 36), 1.0, t, seed=i, intensity=0.9),
+                         _fx.beacon((255, 44, 36), 0.30, t, phase=0.37 * i),
                          layer=_fx.FX_LAYER)
-    r.add_sprite((2, 10, 66), _fx.haze(_fx.SODIUM, 44.0, t, seed=3,
-                                       intensity=0.20), layer=_fx.FX_LAYER)
-    r.add_sprite((0, 5, 62), _fx.window_glow(_fx.SODIUM, 36.0, 8.0, 0.10),
+    r.add_sprite((2 + dx, 10, 66 + dz), _fx.haze(_fx.SODIUM, 44.0, t, seed=3,
+                                                 intensity=0.20),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((dx, 5, 62 + dz), _fx.window_glow(_fx.SODIUM, 36.0, 8.0, 0.10),
                  layer=_fx.FX_LAYER)
 
 
@@ -1252,10 +1324,117 @@ def border_compound(r, t, warm=1.0):
                                                   intensity=0.55 * warm),
                  layer=_fx.FX_LAYER)
     for i, x in enumerate((-4.4, 4.4)):
-        r.add_sprite((x, 5.6, 7.5), _fx.sodium_lamp(t, seed=20 + i, radius_m=3.4,
+        r.add_sprite((x, 5.6, 7.5), _fx.sodium_lamp(t, seed=20 + i, radius_m=1.9,
                                                     intensity=0.85),
                      layer=_fx.FX_LAYER)
     snow3d(r, t, seed=21, n=64, spread=22, height=16, speed=1.4)
+
+
+def crossing_far(r, t, warm=1.0):
+    """Kim Kim seen from the ridge, north of the compound: customs line,
+    floodlit no-man's land between two gates, the rail yard with its lit
+    passenger train and boxcars, and a signal tower with a red lamp (the
+    one Ucilev will answer).  Low poly, built big enough to read at 80 m;
+    light is emissive geometry plus a few halos."""
+    from engine3d import tex
+    from engine3d.core import box, quad_xz
+    steel = (44, 49, 58)
+    lampx = (-34.0, -12.0, 12.0, 34.0)
+    if not _static_skip():
+        dark = (20, 23, 30)
+        # the floodlit strip: trodden snow the towers have turned amber
+        add(r, quad_xz(-CROSSING_X, 29.5, CROSSING_X, 41.5, 0.05,
+                       tex("snow_trod", like=(112, 92, 62)), seg=6))
+        # wire fences either side of it
+        for z in (29.0, 42.0):
+            for x in range(-40, 41, 4):
+                add(r, box(0.14, 2.6, 0.14, steel, center=(x, 1.3, z)))
+            for y in (0.6, 1.6, 2.5):
+                add(r, box(80, 0.07, 0.07, steel, center=(0, y, z)))
+        # both gates: posts, a lowered barrier striped red/white
+        for gz in (29.0, 42.0):
+            for gx in (-3.0, 3.0):
+                add(r, box(0.6, 3.4, 0.6, (70, 70, 74), center=(gx, 1.7, gz)))
+            add(r, box(5.4, 0.2, 0.2, (150, 40, 36), center=(0, 3.2, gz)))
+            for i in range(-2, 3):
+                add(r, box(0.5, 0.22, 0.22, (190, 190, 186),
+                           center=(i * 1.0, 3.2, gz - 0.02)))
+        # customs post: low block, a lit window, a flat snowed roof
+        add(r, box(9.0, 3.4, 5.0, tex("brick", like=(40, 38, 40)),
+                   center=(-14.0, 1.7, 25.0), seg=3))
+        add(r, box(9.6, 0.4, 5.6, dark, center=(-14.0, 3.6, 25.0)))
+        add(r, box(8.6, 0.10, 5.0, tex("snow", like=(150, 160, 176)),
+                   center=(-14.0, 3.85, 25.0)))
+        add(r, box(2.6, 1.3, 0.1, _fx.SODIUM_PALE, center=(-16.0, 2.0, 22.45),
+                   emissive=True))
+        add(r, box(2.2, 1.3, 0.1, _fx.SODIUM_PALE, center=(-11.0, 2.0, 22.45),
+                   emissive=True))
+        # floodlight towers along the strip, heads aimed in
+        for i, x in enumerate(lampx):
+            for z in (30.5, 40.5):
+                add(r, box(0.5, 10.0, 0.5, steel, center=(x, 5.0, z)))
+                add(r, box(1.9, 0.6, 0.9, _fx.SODIUM_PALE, center=(x, 10.2, z),
+                           emissive=True))
+        # the rail yard: two tracks, ballast and sleepers
+        for z in (47.0, 52.0):
+            add(r, box(84, 0.12, 3.2, tex("ballast", like=(46, 50, 60)),
+                       center=(0, 0.06, z), seg=6))
+            for x in range(-40, 41, 3):
+                add(r, box(0.5, 0.14, 2.4, tex("sleeper", like=(50, 44, 36)),
+                           center=(x, 0.13, z)))
+            for dz in (-0.72, 0.72):
+                add(r, box(84, 0.14, 0.12, (86, 88, 92), center=(0, 0.24, z + dz)))
+        # passenger train on the near track: a lit consist, locomotive west
+        x0 = -30.0
+        add(r, box(9.0, 3.6, 3.0, tex("steel", like=(30, 34, 42), tint=True),
+                   center=(x0 + 3.0, 2.0, 47.0), seg=3))
+        add(r, box(2.6, 1.0, 0.1, _fx.SODIUM_PALE, center=(x0 + 3.0, 3.0, 45.45),
+                   emissive=True))
+        for k in range(4):
+            cx = x0 + 11.5 + k * 13.0
+            add(r, box(12.4, 3.4, 3.0, tex("steel", like=(34, 40, 52), tint=True),
+                       center=(cx, 2.0, 47.0), seg=3))
+            add(r, box(12.0, 0.18, 3.2, tex("snow", like=(140, 150, 166)),
+                       center=(cx, 3.8, 47.0)))
+            for w in range(5):
+                add(r, box(1.6, 0.9, 0.06, (255, 206, 120) if (k + w) % 3 else
+                           (150, 118, 76), center=(cx - 4.8 + w * 2.4, 2.5, 45.47),
+                           emissive=True))
+        # boxcars standing dark on the siding
+        for i, cx in enumerate((-33.0, -19.0, -5.0, 9.0, 23.0)):
+            add(r, box(12.0, 3.2, 2.9, tex("boxcar", like=(34, 32, 30), tint=True),
+                       center=(cx, 1.9, 52.0), seg=3))
+            add(r, box(12.2, 0.14, 3.0, tex("snow", like=(120, 130, 146)),
+                       center=(cx, 3.6, 52.0)))
+        # signal tower: lattice mast, booth, red lamp on top
+        sx, sz = 31.0, 44.5
+        add(r, box(0.4, 9.0, 0.4, steel, center=(sx - 0.8, 4.5, sz - 0.8)))
+        add(r, box(0.4, 9.0, 0.4, steel, center=(sx + 0.8, 4.5, sz - 0.8)))
+        add(r, box(0.4, 9.0, 0.4, steel, center=(sx - 0.8, 4.5, sz + 0.8)))
+        add(r, box(0.4, 9.0, 0.4, steel, center=(sx + 0.8, 4.5, sz + 0.8)))
+        add(r, box(3.2, 2.0, 3.2, dark, center=(sx, 9.9, sz)))
+        add(r, box(1.4, 0.8, 0.1, _fx.SODIUM_PALE, center=(sx, 10.0, sz - 1.65),
+                   emissive=True))
+        add(r, box(0.5, 0.5, 0.5, (255, 54, 40), center=(sx, 11.2, sz),
+                   emissive=True))
+    for i, x in enumerate(lampx):
+        for j, z in enumerate((30.5, 40.5)):
+            r.add_sprite((x, 10.0, z),
+                         _fx.sodium_lamp(t, seed=60 + 2 * i + j, radius_m=4.2,
+                                         intensity=0.8 * warm),
+                         layer=_fx.FX_LAYER)
+    r.add_sprite((0, 3.0, 36.0), _fx.haze(_fx.SODIUM, 34.0, t, seed=5,
+                                          intensity=0.22 * warm),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((-14.0, 2.0, 22.4), _fx.window_glow(_fx.SODIUM, 7.0, 1.6, 0.4 * warm),
+                 layer=_fx.FX_LAYER)
+    for k in range(4):
+        r.add_sprite((-18.5 + k * 13.0, 2.5, 45.4),
+                     _fx.window_glow(_fx.SODIUM, 11.0, 1.2, 0.32 * warm),
+                     layer=_fx.FX_LAYER)
+    r.add_sprite((31.0, 11.2, 44.5), _fx.beacon((255, 54, 40), 0.55, t, phase=0.2),
+                 layer=_fx.FX_LAYER)
+    snow3d(r, t, seed=31, n=40, spread=30, height=20, speed=1.2)
 
 
 def heli_xform(pos, yaw, bank=0.0, pitch=0.0, scale=1.0):
@@ -1274,6 +1453,80 @@ def heli_xform(pos, yaw, bank=0.0, pitch=0.0, scale=1.0):
     return L
 
 
+def _heli_sec(hw, yb, yt, cb, ct):
+    """Chamfered airframe cross-section, counter-clockwise from the belly:
+    0 bottom, 1/7 lower chamfers, 2/6 sides, 3/5 upper chamfers, 4 top."""
+    return [(-hw + cb, yb), (hw - cb, yb), (hw, yb + cb), (hw, yt - ct),
+            (hw - ct, yt), (-hw + ct, yt), (-hw, yt - ct), (-hw, yb + cb)]
+
+
+def _heli_loft(m, rings, col, paint, skip, caps=False):
+    """Join [(z, section)] rings into a double-sided shell; ``paint`` maps
+    (ring, side) to a colour, ``skip`` leaves (ring, side) open."""
+    for k in range(len(rings) - 1):
+        za, pa = rings[k]
+        zb, pb = rings[k + 1]
+        for i in range(len(pa)):
+            if (k, i) in skip:
+                continue
+            j = (i + 1) % len(pa)
+            m.face([(pa[i][0], pa[i][1], za), (pa[j][0], pa[j][1], za),
+                    (pb[j][0], pb[j][1], zb), (pb[i][0], pb[i][1], zb)],
+                   paint.get((k, i), col), 2, True)
+    if caps:
+        for z, sec in (rings[0], rings[-1]):
+            m.face([(x, y, z) for x, y in sec], col, 2, True)
+
+
+def _heli_bar(m, a, b, w, col):
+    """Thin flat frame member from a to b (spread across x, or across y when
+    it runs along x)."""
+    off = (0.0, w, 0.0) if abs(a[0] - b[0]) > abs(a[2] - b[2]) else (w, 0.0, 0.0)
+    m.face([tuple(a[i] - off[i] for i in range(3)),
+            tuple(a[i] + off[i] for i in range(3)),
+            tuple(b[i] + off[i] for i in range(3)),
+            tuple(b[i] - off[i] for i in range(3))], col, 2, True)
+
+
+_PILOT = {}
+
+
+def heli_pilot():
+    """Maru in the right-hand seat -> (pose, airframe-local root): rear on
+    the pan, back against the seat back, hands forward on the controls."""
+    d = _PILOT.get("v")
+    if d is None:
+        h = hum("maru")
+        pose = sit_pose(h, HELI_BENCH_H,
+                        dict(spine=5, head_p=-3, lsh_p=34, lsh_r=4, lel=52,
+                             rsh_p=40, rsh_r=-4, rel=58))
+        places, _j, root = h.pose_world(pose, (0.0, HELI_FLOOR_Y, 0.0), 0.0)
+        uniq = h._unique_verts()
+        back = min(M[6] * x + M[7] * y + M[8] * z + org[2]
+                   for _s, key, M, org, _g, _fb in places
+                   if key in ("pelvis", "torso")
+                   for x, y, z in uniq[key]) + root[2]
+        seat_back = SOLIDS["heli"]["seat_back_r"][1][2]
+        d = _PILOT["v"] = (pose, (0.55, HELI_FLOOR_Y, seat_back + 0.01 - back))
+    return d
+
+
+def _heli_pilot(r, t, L, look):
+    """Built in airframe space and carried through ``L`` so she banks and
+    pitches with the cockpit instead of sliding out of it."""
+    pose, root = heli_pilot()
+    h = hum("maru")
+    if getattr(h, "_m6_face", None) != ("neutral", 0.0):
+        h.set_expression("neutral", 0.0)
+        h._m6_face = ("neutral", 0.0)
+    p = dict(pose)
+    if look is not True:
+        p["twist"], p["head_y"] = look
+    verts, faces, _j = h.build(life_pose(p, t, 0.15, 61), root, 0.0,
+                               rifle_on=False)
+    r.add_dynamic([L(*v) for v in verts], faces)
+
+
 def heli_solids(pos, yaw, bank=0.0, pitch=0.0, scale=1.0):
     """World AABBs of the airframe parts (SOLIDS["heli"] is local space)."""
     L = heli_xform(pos, yaw, bank, pitch, scale)
@@ -1287,10 +1540,12 @@ def heli_solids(pos, yaw, bank=0.0, pitch=0.0, scale=1.0):
 
 
 def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
-               door=True, bank=0.0, pitch=0.0, blur=1.0):
+               door=True, bank=0.0, pitch=0.0, blur=1.0, pilot=True):
     """Huey-like airframe: glazed nose, open right door, skids, tail boom and
     a translucent two-blade rotor blurred out to the blade radius.  ``blur``
     scales only the additive blur, so a distant airframe stays solid under it.
+    ``pilot``: True seats Maru at the controls looking ahead, a (twist,
+    head_y) pair turns her head, False leaves the cockpit empty.
     Returns world anchors: door_sill (point, outward normal), skid_top_r, hub,
     belly, nose, rotor_radius, blur_radius."""
     from engine3d.core import Mesh, box, m_apply, prism, rot_x, rot_y, rot_z
@@ -1301,58 +1556,95 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
         mesh.verts = [L(*v) for v in mesh.verts]
         add(r, mesh, bias=bias)
 
-    hull, hull_d, dark, glass = (34, 38, 43), (25, 29, 34), (15, 17, 21), (9, 15, 26)
+    hull, top, belly = (60, 68, 49), (72, 80, 59), (42, 48, 36)
+    dark, glass, cab = (17, 19, 17), (26, 38, 50), (36, 39, 34)
+    H = SOLIDS["heli"]
     body = Mesh()
-    # cabin shell: floor/sill, arched roof, walls with the open right door
-    body.add(box(2.44, 0.12, 3.44, hull_d), t=(0, 0.56, 0.20))
-    body.add(prism([(-1.22, 1.86), (-1.04, 2.18), (-0.55, 2.34), (0.55, 2.34),
-                    (1.04, 2.18), (1.22, 1.86)], 3.44, hull, seg=1.2),
-             t=(0, 0, -1.52))
-    body.add(box(0.09, 1.44, 3.44, hull), t=(-1.175, 1.30, 0.20))
-    body.add(box(0.09, 1.44, 1.77, hull), t=(1.175, 1.30, -0.685))
-    body.add(box(0.09, 1.44, 0.17, hull), t=(1.175, 1.30, 1.835))
-    body.add(box(0.09, 0.24, 1.50, hull), t=(1.175, 1.90, 1.00))
-    body.add(box(2.44, 1.30, 0.08, hull_d), t=(0, 1.24, -1.48))
-    body.add(box(2.44, 1.30, 0.08, hull_d), t=(0, 1.24, 1.88))
-    # seats along the left wall, visible through the door
-    body.add(box(0.46, 0.09, 1.30, (22, 24, 27)), t=(-0.72, 0.70, 0.35))
-    body.add(box(0.08, 0.50, 1.30, (20, 22, 25)), t=(-1.00, 0.98, 0.35))
+    # cabin pod: belly chamfer, floor, walls with the open right door, roof
+    body.add(prism([(-1.22, 0.62), (-1.02, 0.42), (1.02, 0.42), (1.22, 0.62)],
+                   3.44, belly, z0=-1.52))
+    body.add(box(2.36, 0.04, 4.60, cab, center=(0, 0.60, 0.78)))
+    _mesh_solid(body, H["wall_l"], hull)
+    _mesh_solid(body, H["wall_r_rear"], hull)
+    _mesh_solid(body, H["wall_r_front"], hull)
+    _mesh_solid(body, H["door_header"], hull)
+    _mesh_solid(body, H["bulkhead_r"], cab)
+    body.add(prism([(-1.24, HELI_ROOF_Y), (1.24, HELI_ROOF_Y), (0.88, 2.56),
+                    (-0.88, 2.56)], 3.44, top, z0=-1.52))
+    # bench along the left wall, visible through the door
+    _mesh_solid(body, H["bench_cushion"], (30, 33, 29))
+    _mesh_solid(body, H["bench_skirt"], (24, 27, 23))
+    _mesh_solid(body, H["bench_back"], (28, 31, 27))
     # cabin dome light: the red practical seen through the open door
-    body.add(box(0.13, 0.05, 0.13, (255, 66, 46), center=(0.0, 2.19, 0.55),
+    body.add(box(0.13, 0.04, 0.13, (255, 66, 46),
+                 center=(0.0, HELI_ROOF_Y - 0.03, 0.55), emissive=True))
+    # The right-hand door slides on its rail: 1 = open (leaf back over the
+    # wall), 0 = closed across the opening.  The old bool still works.
+    open_k = (1.0 if door is True else 0.0 if door is False
+              else max(0.0, min(1.0, float(door))))
+    leaf_z = -0.66 + (0.975 + 0.66) * (1.0 - open_k)
+    body.add(box(0.05, 1.40, 1.45, hull), t=(1.245, 1.32, leaf_z))
+    body.add(box(0.02, 0.50, 0.95, glass), t=(1.275, 1.62, leaf_z))
+    body.add(box(0.04, 0.10, 0.18, dark), t=(1.28, 1.12, leaf_z + 0.62))
+    body.add(box(0.04, 0.05, 2.80, dark), t=(1.25, 2.05, -0.10))
+    body.add(box(0.05, 0.04, 1.50, (80, 84, 76)), t=(1.23, 0.63, 1.00))
+
+    # nose: lofted sections taper from the cabin to the chin; the upper
+    # windscreen is left open so the pilot reads through it at night
+    rings = [(1.92, _heli_sec(1.22, 0.42, 2.56, 0.20, 0.36)),
+             (2.55, _heli_sec(1.18, 0.44, 2.46, 0.20, 0.40)),
+             (3.05, _heli_sec(1.04, 0.52, 2.00, 0.20, 0.34)),
+             (3.40, _heli_sec(0.80, 0.66, 1.46, 0.18, 0.24)),
+             (3.58, _heli_sec(0.46, 0.84, 1.12, 0.12, 0.14))]
+    open_ = {(1, 3), (1, 4), (1, 5), (2, 3), (2, 4), (2, 5)}
+    paint = {(k, i): top for k in range(4) for i in (3, 4, 5)}
+    paint.update({(k, i): belly for k in range(4) for i in (0, 1, 7)})
+    paint.update({(1, 2): glass, (1, 6): glass, (2, 1): glass, (2, 7): glass})
+    _heli_loft(body, rings, hull, paint, open_)
+    body.face([(x, y, 3.58) for x, y in rings[-1][1]], hull, 2, True)
+    # windscreen frame: centre post and the header bow
+    _heli_bar(body, (0, 2.48, 2.55), (0, 1.48, 3.38), 0.035, dark)
+    _heli_bar(body, (-1.10, 2.10, 2.55), (1.10, 2.10, 2.55), 0.04, dark)
+    # cockpit: pedestal, instrument panel with its green glow, seats
+    body.add(box(0.30, 0.46, 0.70, cab, center=(0, 0.85, 2.62)))
+    body.add(box(1.70, 0.30, 0.12, dark, center=(0, 1.42, 2.98)))
+    body.add(box(1.50, 0.20, 0.02, (16, 52, 40), center=(0, 1.44, 2.91),
                  emissive=True))
-    if door:
-        # the right-hand door slid back on its rail: dark pane, handle
-        body.add(box(0.05, 1.20, 1.45, hull), t=(1.235, 1.20, -0.66))
-        body.add(box(0.02, 0.50, 0.95, glass, emissive=True),
-                 t=(1.265, 1.44, -0.66))
-        body.add(box(0.04, 0.10, 0.18, dark), t=(1.27, 1.02, -0.02))
-        body.add(box(0.04, 0.05, 2.80, dark), t=(1.22, 1.82, -0.10))
-        body.add(box(0.05, 0.04, 1.50, (70, 74, 78)), t=(1.21, 0.63, 1.00))
-    # nose: hull, chin, glazed windscreen and cockpit side panes
-    body.add(box(2.06, 1.05, 1.05, hull), t=(0, 1.28, 2.38))
-    body.add(box(1.66, 0.36, 0.92, hull_d), t=(0, 0.83, 2.46))
-    body.add(box(2.00, 0.10, 1.05, hull), t=(0, 1.83, 2.38))
-    body.face([(-0.82, 1.24, 2.87), (-0.06, 1.26, 2.93), (0.06, 1.26, 2.93),
-               (0.82, 1.24, 2.87), (0.70, 1.78, 2.55), (-0.70, 1.78, 2.55)],
-              glass, 2, True, True)
-    body.add(box(0.05, 0.52, 0.06, dark), t=(0, 1.53, 2.76))
+    body.add(box(1.80, 0.05, 0.30, dark, center=(0, 1.59, 2.92)))
+    for side in ("l", "r"):
+        _mesh_solid(body, H["seat_pan_" + side], (40, 43, 37))
+        _mesh_solid(body, H["seat_back_" + side], (32, 35, 30))
+
+    # transmission/engine cowling, intake, exhaust, mast
+    _heli_loft(body, [(0.85, _heli_sec(0.52, 2.50, 2.62, 0.02, 0.06)),
+                      (0.55, _heli_sec(0.74, 2.50, 2.98, 0.02, 0.14)),
+                      (-1.30, _heli_sec(0.74, 2.50, 2.98, 0.02, 0.14)),
+                      (-1.75, _heli_sec(0.50, 2.40, 2.80, 0.02, 0.12))],
+               top, {}, (), caps=True)
+    body.add(box(0.86, 0.12, 0.05, dark), t=(0, 2.84, 0.57))
+    body.add(box(0.30, 0.24, 0.40, dark), m=rot_x(-20), t=(0.0, 2.86, -1.78))
+    body.add(box(0.18, 0.30, 0.18, dark), t=(0, 3.13, 0.15))
+    # tail boom: tapered, with the elevator, fin, red tip and tail skid
+    _heli_loft(body, [(-1.52, _heli_sec(0.50, 1.10, 2.50, 0.16, 0.18)),
+                      (-2.60, _heli_sec(0.36, 1.55, 2.36, 0.10, 0.12)),
+                      (-7.60, _heli_sec(0.16, 1.86, 2.16, 0.04, 0.05)),
+                      (-7.95, _heli_sec(0.14, 1.90, 2.12, 0.04, 0.04))],
+               hull, {(k, i): top for k in range(3) for i in (3, 4, 5)},
+               (), caps=True)
+    body.add(box(2.00, 0.05, 0.40, hull), t=(0, 1.96, -5.20))
     for sx in (-1, 1):
-        body.face([(sx * 1.035, 1.22, 2.10), (sx * 1.035, 1.22, 2.60),
-                   (sx * 1.035, 1.72, 2.52), (sx * 1.035, 1.72, 2.14)],
-                  glass, 2, True, True)
-    # engine cowling, intake, exhaust, mast
-    body.add(box(1.55, 0.40, 2.15, hull_d), t=(0, 2.42, -0.45))
-    body.add(box(1.10, 0.16, 0.06, dark), t=(0, 2.46, 0.64))
-    body.add(box(0.28, 0.26, 0.55, dark), t=(0.62, 2.36, -1.48))
-    body.add(box(0.18, 0.50, 0.18, dark), t=(0, 2.79, 0.15))
-    body.add(box(0.30, 0.18, 0.30, dark), t=(0, 3.02, 0.15))
-    # tail boom, fairing, stabiliser, swept fin
-    body.add(box(0.54, 0.54, 5.60, hull), t=(0, 1.72, -4.30))
-    body.add(box(0.38, 0.38, 1.00, hull_d), t=(0, 1.80, -7.55))
-    body.add(box(0.36, 0.10, 5.40, hull_d), t=(0, 2.02, -4.25))
-    body.add(box(1.70, 0.07, 0.46, dark), t=(0, 1.78, -7.05))
-    body.add(prism([(-0.02, 1.52), (0.30, 1.52), (0.52, 2.20), (0.34, 2.95),
-                    (-0.02, 2.90)], 0.40, hull_d), t=(0, 0, -8.25))
+        body.add(box(0.04, 0.22, 0.42, belly), t=(sx * 1.00, 1.96, -5.20))
+    fin = prism([(-7.50, 2.10), (-7.95, 2.06), (-8.40, 3.20), (-8.15, 3.28)],
+                0.10, hull, z0=-0.05)
+    body.add(fin, m=rot_y(-90))
+    body.add(box(0.11, 0.16, 0.30, (128, 38, 32)), t=(0, 3.18, -8.28))
+    body.add(box(0.05, 0.26, 0.05, dark), t=(0, 1.73, -7.70))
+    # stencils: a pale number block on the boom and a cabin panel line
+    for sx in (-1, 1):
+        body.add(box(0.01, 0.10, 0.56, (150, 150, 136)),
+                 t=(sx * 0.32, 2.02, -3.40))
+        body.add(box(0.01, 0.04, 0.80, (98, 104, 86)),
+                 t=(sx * 1.245, 1.86, -0.95))
     # skids: tubes with upturned toes, cross tubes and belly struts
     for sx in (-1, 1):
         body.add(box(0.09, 0.09, 3.60, dark), t=(sx * HELI_SKID_X, 0.09, 0.35))
@@ -1360,34 +1652,36 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
                  t=(sx * HELI_SKID_X, 0.13, 2.45))
         for zz in (-0.55, 0.95):
             body.add(box(0.07, 0.20, 0.07, dark), t=(sx * HELI_SKID_X, 0.235, zz))
-            body.add(box(0.07, 0.18, 0.07, dark), t=(sx * 0.95, 0.43, zz))
+            body.add(box(0.07, 0.10, 0.07, dark), t=(sx * 1.02, 0.39, zz))
     for zz in (-0.55, 0.95):
         body.add(box(2.72, 0.075, 0.075, dark), t=(0, 0.36, zz))
     place(body)
+    if pilot:
+        _heli_pilot(r, t, L, pilot)
 
     # main rotor: one bar = two blades of radius R, readable 140 deg/s
     spin = (t * 0.001 * 140.0 * rotor_speed) % 360.0
     rotor = Mesh()
-    rotor.add(box(2 * HELI_ROTOR_R, 0.045, 0.30, (13, 15, 18)),
-              m=rot_y(spin), t=(0, 3.03, 0.15))
-    rotor.add(box(0.20, 0.06, 0.34, (22, 24, 28)), m=rot_y(spin),
-              t=(HELI_ROTOR_R - 0.10, 3.03, 0.15))
-    rotor.add(box(0.20, 0.06, 0.34, (22, 24, 28)), m=rot_y(spin),
-              t=(-HELI_ROTOR_R + 0.10, 3.03, 0.15))
+    rotor.add(box(2 * HELI_ROTOR_R, 0.045, 0.30, (20, 22, 20)),
+              m=rot_y(spin), t=(0, HELI_HUB_Y, 0.15))
+    for sx in (-1, 1):
+        rotor.add(box(0.30, 0.05, 0.31, (150, 132, 52)), m=rot_y(spin),
+                  t=(sx * (HELI_ROTOR_R - 0.15), HELI_HUB_Y, 0.15))
+    rotor.add(box(0.36, 0.12, 0.36, dark), t=(0, HELI_HUB_Y, 0.15))
     place(rotor)
     tr_spin = (t * 0.001 * 620.0 * rotor_speed) % 360.0
     tail = Mesh()
-    tail.add(box(0.05, 2.30, 0.10, (14, 16, 20)), m=rot_x(tr_spin),
-             t=(-0.30, 2.20, -8.05))
-    tail.add(box(0.12, 0.14, 0.14, dark), t=(-0.30, 2.20, -8.05))
+    tail.add(box(0.05, 2.30, 0.10, (20, 22, 20)), m=rot_x(tr_spin),
+             t=(-0.16, HELI_TR_Y, -8.12))
+    tail.add(box(0.12, 0.14, 0.14, dark), t=(-0.12, HELI_TR_Y, -8.12))
     place(tail)
 
     # rotor blur: one inner disc at the hub, eight outer sectors at 0.78R, so
     # every sprite stays inside the GL depth-reach box of its anchor
-    hub = L(0.0, 3.03, 0.15)
+    hub = L(0.0, HELI_HUB_Y, 0.15)
 
     def rim(rad, a):
-        return L(math.cos(a) * rad, 3.03, 0.15 + math.sin(a) * rad)
+        return L(math.cos(a) * rad, HELI_HUB_Y, 0.15 + math.sin(a) * rad)
 
     def poly_img(pts, col):
         xs = [p[0] for p in pts]
@@ -1455,19 +1749,25 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
 
     if lit:
         for sx, col, seed in ((-1.0, (255, 46, 38), 3), (1.0, (42, 224, 96), 4)):
-            r.add_sprite(L(sx * 1.06, 1.28, 2.55),
-                         _fx.glow(col, 0.30, t, pulse=0.15, seed=seed,
-                                  intensity=0.85), layer=_fx.FX_LAYER)
-        r.add_sprite(L(0.30, 2.90, -8.05),
-                     _fx.glow((255, 248, 226), 0.22, t, seed=5, intensity=0.7),
+            r.add_sprite(L(sx * 1.10, 1.05, 2.95),
+                         _fx.beacon(col, 0.24, t, period_ms=1400.0,
+                                    phase=0.0 if seed == 3 else 0.5,
+                                    intensity=0.95),
+                         layer=_fx.FX_LAYER)
+        r.add_sprite(L(0.08, 3.30, -8.16),
+                     _fx.beacon((255, 248, 226), 0.20, t, period_ms=1200.0,
+                                phase=0.25, intensity=0.8),
                      layer=_fx.FX_LAYER)
-        if int(t // 700) % 2 == 0:
-            r.add_sprite(L(0.0, 2.98, -7.70),
-                         _fx.glow((255, 40, 32), 0.45, t, seed=6,
-                                  intensity=1.0), layer=_fx.FX_LAYER)
-        r.add_sprite(L(0.0, 2.18, 0.55),
+        r.add_sprite(L(0.0, 2.66, -1.62),
+                     _fx.beacon((255, 40, 32), 0.30, t, period_ms=1000.0,
+                                phase=0.75),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite(L(0.0, HELI_ROOF_Y - 0.04, 0.55),
                      _fx.glow((255, 70, 52), 0.30, t, seed=7, flicker=0.10,
                               intensity=0.55), layer=_fx.FX_LAYER)
+        r.add_sprite(L(0.0, 1.46, 2.86),
+                     _fx.glow((70, 190, 130), 0.28, t, seed=8,
+                              intensity=0.35), layer=_fx.FX_LAYER)
     normal = (m_apply(rot_y(yaw), m_apply(rot_z(bank),
               m_apply(rot_x(pitch), (1.0, 0.0, 0.0)))))
     return {
@@ -1475,7 +1775,7 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
         "skid_top_r": L(HELI_SKID_X, HELI_SKID_Y, HELI_DOOR_Z),
         "hub": hub,
         "belly": L(0.0, 0.46, 0.30),
-        "nose": L(0.0, 1.25, 2.92),
+        "nose": L(0.0, 1.00, 3.58),
         "rotor_radius": HELI_ROTOR_R * S,
         "blur_radius": blur_radius,
     }
@@ -1780,17 +2080,18 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
         _train_detail(r, tx)
         for cx in (-12.0, 0.0, 9.0, 15.0, 21.0):
             r.add_sprite((tx + cx, 2.45, -2.80),
-                         _fx.window_glow(_fx.SODIUM, 4.2, 1.2, 0.20),
+                         _fx.window_glow(_fx.SODIUM, 2.4, 0.9, 0.16),
                          layer=_fx.FX_LAYER)
-        for sx in (6.0, 11.0, 16.0):
-            r.add_sprite((tx + sx, 0.10, -2.45),
-                         _fx.window_glow(_fx.SODIUM, 2.4, 0.6, 0.16),
-                         layer=_fx.FX_LAYER)
+        if getattr(r, "backend", "") != "gl":   # GL: carriage pool, not a billboard
+            for sx in (6.0, 11.0, 16.0):
+                r.add_sprite((tx + sx, 0.10, -2.45),
+                             _fx.window_glow(_fx.SODIUM, 2.4, 0.6, 0.16),
+                             layer=_fx.FX_LAYER)
         r.add_sprite((tx + 10.9, 1.85, -2.80),
                      _fx.window_glow(_fx.SODIUM, 1.2, 1.4, 0.22),
                      layer=_fx.FX_LAYER)
         r.add_sprite((tx - 23.02, 2.0, -2.80),
-                     _fx.glow((228, 56, 42), 0.35, t, intensity=0.55),
+                     _fx.beacon((228, 56, 42), 0.22, t, phase=0.29),
                      layer=_fx.FX_LAYER)
     # signal tower + floodlight masts
     add(r, box(1.2, 7.0, 1.2, tex("concrete", like=(44, 46, 50)), center=(18, 3.5, 8.5),
@@ -1816,8 +2117,8 @@ def rail_platform(r, t, train=True, snow=1.0, train_offset=0.0):
     add(r, box(2.20, 0.04, 0.04, (58, 62, 70), center=(18, 9.05, 9.45)))
     add(r, box(0.12, 0.12, 0.12, (228, 56, 42),
                center=(19.0, 8.72, 7.9), emissive=True))
-    r.add_sprite((19.0, 8.72, 7.9), _fx.glow((240, 70, 50), 0.45, t,
-                                             intensity=0.50),
+    r.add_sprite((19.0, 8.72, 7.9), _fx.beacon((240, 70, 50), 0.25, t,
+                                              phase=0.55),
                  layer=_fx.FX_LAYER)
     for i, x in enumerate((-18, -6, 6, 18)):
         add(r, box(0.18, 8.0, 0.18, (38, 40, 46), center=(x, 4.0, 11.5)))

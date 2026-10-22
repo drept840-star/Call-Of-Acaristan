@@ -55,6 +55,22 @@ _RIG_FLOATS = 15           # pos3 col3 nrm3 flags4 fb1 slot1
 _N_SLOTS = len(SLOTS)
 _TEX_UNIT = 7              # engine3d.textures layers (texture array); unit 0 is the colour target
 SPRITE_REACH_M = 3.5       # how far (metres) a sprite callback may paint from its anchor
+# Light callbacks (fn.light) are world objects at their lamp's depth, not
+# painter-layer decals: they encode against the world layer so walls, the
+# carriage and actors occlude them per pixel.  ``_LIGHT_BIAS_M`` clears the
+# fixture's own emissive head without letting a wall 1 m in front pass.
+_WORLD_LAYER = 2
+_LIGHT_BIAS_M = 0.35
+_LIGHT_EASE_MS = 80.0
+
+
+def _now_ms():
+    """Game clock for light-visibility easing (0 if the engine is absent)."""
+    try:
+        from engine.core.timebase import now_ms
+        return int(now_ms())
+    except Exception:
+        return 0
 
 _VERT_COMMON = """
 uniform vec3 u_cam, u_right, u_up, u_fwd;
@@ -143,6 +159,7 @@ uniform vec3 u_pool_hot[32];  // rgb (0-255) at the pool's centre
 uniform int u_pool_n;
 uniform float u_glit[32];     // glitter per texture layer (textures.glitter)
 uniform float u_glit_k;       // the scene's glitter, 0 = none
+uniform float u_depth_alpha;  // 1 = pack physical depth into alpha (opaque target)
 out vec4 f_color;
 
 const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
@@ -242,7 +259,11 @@ void main() {
     float lin = clamp((v_z + v_dbias) / u_far, 0.0, 1.0) * 0.999;
     float slot = clamp(floor(layer + 0.5), 0.0, 7.0);
     gl_FragDepth = ((7.0 - slot) + lin) / 8.0;
-    f_color = vec4(col / 255.0, 1.0);
+    // Physical depth (0..64 m) goes in alpha when the colour target is
+    // opaque: it lets light sprites test against real distance instead of
+    // the painter-layer-encoded depth buffer.  Alpha targets keep 1.0.
+    float d8 = clamp((v_z + v_dbias) / 64.0, 0.0, 0.998);
+    f_color = vec4(col / 255.0, mix(1.0, d8, u_depth_alpha));
 }
 """
 
@@ -481,6 +502,10 @@ class GLRenderer(SoftwareRenderer):
         self._dyn_vbo = ctx.buffer(reserve=1 << 20, dynamic=True)
         self._dyn_vao = self._vao(self.progs.world, self._dyn_vbo, rig=False)
         self._rigs = {}                   # spec key -> (hum, vbo, vao, n)
+        self._light_vis = {}              # quantised anchor -> (eased v, ms)
+        self._light_tmp = {}              # (w, h) -> reusable additive buffer
+        self._light_mask = {}             # (w, h) -> reusable occlusion mask
+        self._vis_frame = 0
         self.stats = {}
         self.begin()
 
@@ -587,8 +612,10 @@ class GLRenderer(SoftwareRenderer):
         if p is None:
             return
         sx, sy, z = p
+        anchor = tuple(pos) if getattr(draw_fn, "light", False) else None
         self._items.append((layer * 1e6 - z - bias, "sprite",
-                            (draw_fn, sx, sy, self.focal / z, z, layer, z + bias)))
+                            (draw_fn, sx, sy, self.focal / z, z, layer,
+                             z + bias, anchor)))
 
     def add_blob_shadow(self, pos, rx, rz, strength=0.35, layer=None, bias=0.0):
         # The software implementation queues a (key, callable, args) item,
@@ -680,6 +707,7 @@ class GLRenderer(SoftwareRenderer):
                           + [(0.0, 0.0, 0.0)] * (32 - n_po),
             "u_glit": (list(_tex.glitter()) + [0.0] * 32)[:32],
             "u_glit_k": float(self.glitter),
+            "u_depth_alpha": float(getattr(self, "_depth_alpha", 0.0)),
         }
         for k, v in u.items():
             if k in prog:
@@ -728,6 +756,7 @@ class GLRenderer(SoftwareRenderer):
         if surface.get_size() != (w, h):
             raise ValueError("GLRenderer target must be %dx%d" % (w, h))
         alpha = bool(surface.get_flags() & pygame.SRCALPHA)
+        self._depth_alpha = 0.0 if alpha else 1.0
         self._fbo.use()
         self._fbo.clear(depth=1.0)
         self._color.write(pygame.image.tobytes(surface, "RGBA", True))
@@ -768,10 +797,14 @@ class GLRenderer(SoftwareRenderer):
             # an RGBA source made pygame alpha-blend every pixel (~4 ms a pass).
             surface.blit(pygame.image.frombytes(px, (w, h), "RGBX", True), (0, 0))
         items = self._items if items is None else items
+        self.stats = {"tris": ntri, "items": len(items), "actors": len(self._rig_draws)}
         if items:
             depth = np.frombuffer(self._depth.read(alignment=1), dtype=np.float32).reshape(h, w)[::-1]
-            self._composite(surface, items, depth, alpha)
-        self.stats = {"tris": ntri, "items": len(items), "actors": len(self._rig_draws)}
+            phys8 = None
+            if not alpha:
+                # alpha channel of the colour pass = physical depth 0..64 m
+                phys8 = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)[::-1, :, 3]
+            self._composite(surface, items, depth, alpha, phys8)
 
     def flush_overlay(self, surface, bounds=None):
         """Flush a near overlay (the held viewmodel) over *surface*.
@@ -787,6 +820,7 @@ class GLRenderer(SoftwareRenderer):
         w, h = self.w, self.h
         self._fbo.use()
         self._fbo.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
+        self._depth_alpha = 0.0       # overlay alpha is real transparency
         ctx = self.ctx
         ctx.enable(moderngl.DEPTH_TEST)
         self.progs.atlas().use(location=_TEX_UNIT)
@@ -849,10 +883,88 @@ class GLRenderer(SoftwareRenderer):
         lin = min(1.0, max(0.0, z / self._far)) * 0.999
         return ((7.0 - slot) + lin) / 8.0
 
-    def _composite(self, surface, items, depth, alpha):
+    def _light_bias(self):
+        return (_LIGHT_BIAS_M / self._far) * 0.999 / 8.0
+
+    def _light_anchor_vis(self, anchor, sx, sy, enc, depth):
+        """Visible fraction of a light's anchor (0..1), eased over ~80 ms.
+
+        A lamp behind a wall reads zero and is skipped entirely, so no halo
+        bleeds round a corner; one half-hidden by a pole dims instead of
+        popping.  The 0.35 m bias clears the fixture's own emissive box but
+        still lets a wall a metre nearer occlude it.
+        """
+        H, W = depth.shape
+        ix, iy = int(sx), int(sy)
+        limit = enc - self._light_bias()
+        seen = lit = 0
+        for dy in (-3, 0, 3):
+            y = iy + dy
+            if y < 0 or y >= H:
+                continue
+            for dx in (-3, 0, 3):
+                x = ix + dx
+                if 0 <= x < W:
+                    seen += 1
+                    if depth[y, x] >= limit:
+                        lit += 1
+        target = lit / float(seen) if seen else 1.0
+        if anchor is None:
+            return target
+        key = (int(round(anchor[0] * 2.0)), int(round(anchor[1] * 2.0)),
+               int(round(anchor[2] * 2.0)))
+        now = _now_ms()
+        prev = self._light_vis.get(key)
+        if prev is not None and now > 0 and 0 <= now - prev[1] < 400:
+            k = min(1.0, max(0.0, (now - prev[1]) / _LIGHT_EASE_MS))
+            target = prev[0] + (target - prev[0]) * k
+        self._light_vis[key] = (target, now)
+        self._vis_frame += 1
+        if self._vis_frame % 256 == 0:
+            cutoff = now - 400
+            self._light_vis = {k: v for k, v in self._light_vis.items()
+                               if v[1] >= cutoff}
+        return target
+
+    def _draw_scaled(self, surface, fn, sx, sy, scale, z, x0, y0, x1, y1, vis,
+                     occ=None):
+        """Draw an additive light into its own small box, mask the occluded
+        pixels, then add it to the frame.
+
+        Copying the background, drawing over it and restoring the occluded
+        pixels was 3-4 ms of the train frame; a reusable mask is one blit.
+        Only lights that actually cross geometry pay this.
+        """
+        w, h = max(1, x1 - x0), max(1, y1 - y0)
+        tmp = self._light_tmp.get((w, h))
+        if tmp is None:
+            tmp = self._light_tmp[(w, h)] = pygame.Surface((w, h))
+        tmp.fill((0, 0, 0))
+        fn(tmp, sx - x0, sy - y0, scale, z)
+        if vis < 0.999:
+            m = int(round(255 * max(0.0, min(1.0, vis))))
+            tmp.fill((m, m, m), special_flags=pygame.BLEND_RGB_MULT)
+        if occ is not None:
+            mask = self._light_mask.get((w, h))
+            if mask is None:
+                mask = self._light_mask[(w, h)] = pygame.Surface((w, h))
+            ma = pygame.surfarray.pixels3d(mask)
+            red = ma[:, :, 0]
+            np.copyto(red, 255)
+            red[occ.T] = 0
+            ma[:, :, 1] = red
+            ma[:, :, 2] = red
+            del red, ma
+            tmp.blit(mask, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+        surface.blit(tmp, (x0, y0), special_flags=pygame.BLEND_RGB_ADD)
+
+    def _composite(self, surface, items, depth, alpha, phys8=None):
         items = sorted(items, key=lambda it: it[0])
         W, H = self.w, self.h
+        n_light = n_gate = n_copy = n_scale = 0
         for _key, kind, d in items:
+            light, vis = False, 1.0
+            occ_depth, limit = depth, 0.0
             if callable(kind):
                 # Defensive: a software-format item (key, draw_fn, args)
                 # that leaked into the GL queue still draws, exactly as
@@ -861,8 +973,30 @@ class GLRenderer(SoftwareRenderer):
                 kind(surface, *d)
                 continue
             if kind == "sprite":
-                fn, sx, sy, scale, z, layer, zeff = d
-                enc = self._enc(layer, zeff)
+                fn, sx, sy, scale, z, layer, zeff = d[:7]
+                anchor = d[7] if len(d) > 7 else None
+                light = bool(getattr(fn, "light", False))
+                soft = light and bool(getattr(fn, "light_soft", False))
+                vis = 1.0
+                occ_depth, limit = depth, self._enc(layer, zeff) - 1e-6
+                if light:
+                    if phys8 is not None and zeff < 60.0:
+                        # physical depth: layer-independent, 64 m / 255 steps
+                        limit = int(max(0, min(254, round(
+                            (zeff - 0.45) * 255.0 / 64.0))))
+                        occ_depth = phys8
+                    else:
+                        # fallback: world-layer encoding (alpha targets / far)
+                        limit = (self._enc(_WORLD_LAYER, zeff)
+                                 - self._light_bias() - 1e-6)
+                    n_light += 1
+                    vis = self._light_anchor_vis(anchor, sx, sy, limit,
+                                                 occ_depth)
+                    if vis <= 0.06:
+                        n_gate += 1
+                        continue
+                    if vis >= 0.75:
+                        vis = 1.0
                 box = getattr(fn, "bounds", None)
                 if box is not None:
                     # the callback declared its exact pixel box (blob shadows)
@@ -887,6 +1021,7 @@ class GLRenderer(SoftwareRenderer):
             elif kind == "lines":
                 segs, layer, depth_test = d
                 enc = self._enc(layer, 0.0)
+                occ_depth, limit = depth, enc - 1e-6
                 if not segs:
                     continue
                 pad = 2
@@ -912,6 +1047,7 @@ class GLRenderer(SoftwareRenderer):
             else:
                 col, width, scr, layer = d
                 enc = self._enc(layer, 0.0)
+                occ_depth, limit = depth, enc - 1e-6
                 if len(scr) < 2:
                     continue          # degenerate line: nothing to draw
                 (ax, ay), (bx, by) = scr[0], scr[1]
@@ -924,9 +1060,33 @@ class GLRenderer(SoftwareRenderer):
             if x1 <= x0 or y1 <= y0:
                 draw(surface)                      # off-screen anchor: nothing to occlude
                 continue
-            occ = depth[y0:y1, x0:x1] < enc - 1e-6
-            if not occ.any():
+            # lights carry their own depth limit (physical, or the biased
+            # fallback); other sprites still test against the layer slot
+            if light and (soft or vis >= 0.999):
+                # The anchor gate already cleared the fixture's line of
+                # sight.  A fully visible light draws straight: per-pixel
+                # masking is kept for a light something is crossing (a
+                # guard past a lamp, a pole through a halo), which is the
+                # case the mask actually changes.
                 draw(surface)
+                continue
+            occ = occ_depth[y0:y1, x0:x1] < limit
+            frac = float(occ.mean()) if occ.size else 0.0
+            if frac <= 0.12:
+                # fully visible, or a couple of stray pixels: the restore
+                # copy costs more than the two-pixel bleed it would hide
+                if light and vis < 0.999:
+                    self._draw_scaled(surface, fn, sx, sy, scale, z,
+                                      x0, y0, x1, y1, vis)
+                else:
+                    draw(surface)
+                continue
+            if light:
+                n_copy += 1
+                if vis < 0.999:
+                    n_scale += 1
+                self._draw_scaled(surface, fn, sx, sy, scale, z,
+                                  x0, y0, x1, y1, vis, occ)
                 continue
             rect = pygame.Rect(x0, y0, x1 - x0, y1 - y0)
             before = surface.subsurface(rect).copy()
@@ -941,6 +1101,10 @@ class GLRenderer(SoftwareRenderer):
                 sa = pygame.surfarray.pixels_alpha(before)
                 da[x0:x1, y0:y1][occ_t] = sa[occ_t]
                 del da, sa
+        self.stats["lights"] = n_light
+        self.stats["lights_gated"] = n_gate
+        self.stats["light_copies"] = n_copy
+        self.stats["light_scaled"] = n_scale
 
     def flush(self, surface=None):
         surface = surface or self.surface

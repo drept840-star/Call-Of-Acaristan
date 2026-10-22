@@ -197,10 +197,11 @@ class ShotContractTests(unittest.TestCase):
     def test_ending_chain_matches_the_doc(self):
         shots = _meta.mission6_ending_shots
         self.assertEqual([s["scene"] for s in shots], [
-            "m6_customs_terminal",
+            "m6_customs_return", "m6_customs_terminal",
             "m6_radio_vasile", "m6_radio_vasile", "m6_radio_vasile",
             "m6_radio_vasile",
-            "m6_radio_maru", "m6_helicopter", "title_card"])
+            "m6_radio_silence", "m6_radio_maru", "m6_cut_line",
+            "m6_helicopter", "title_card"])
         text = "\n".join(s.get("text", "") for s in shots)
         for line in ("Route 12 went out on your code.",
                      "...Three hundred men, Biribel. They'd have purged every one. I chose the many.",
@@ -208,8 +209,13 @@ class ShotContractTests(unittest.TestCase):
                      "Retardovici is at the mansion in two nights.",
                      "Not tonight. Go to ground."):
             self.assertIn(line, text)
-        for shot in shots[1:6]:
-            self.assertTrue(shot["radio"])
+        for shot in shots:
+            if shot["scene"] in ("m6_radio_vasile", "m6_radio_maru"):
+                self.assertTrue(shot["radio"], shot["scene"])
+        self.assertTrue(shots[0]["auto_advance"])
+        self.assertTrue(shots[6]["auto_advance"])   # the silence
+        self.assertTrue(shots[8]["auto_advance"])   # the cut line
+        self.assertEqual(shots[9]["min_ms"], 12000)
 
     def test_boxcar_dialogue_is_verbatim(self):
         text = "\n".join(s.get("text", "")
@@ -235,14 +241,11 @@ class ShotContractTests(unittest.TestCase):
         self.assertIn("UCILEV", record)
         self.assertIn("KIA", record)
 
-    def test_fall_deploys_a_canopy(self):
-        self.assertEqual(m6films.chute_open(100), 0.0)
-        self.assertGreater(m6films.chute_open(1800), 0.95)
-        mesh, rim = m6films._chute_mesh((0.0, 10.0, 0.0), 1.6, 1.0)
-        self.assertTrue(mesh.verts)
-        self.assertEqual(len(rim), 12)
-        self.assertGreater(max(p[1] for p in rim), 10.0)
-        self.assertGreater(max(p[0] for p in rim) - min(p[0] for p in rim), 1.0)
+    def test_insertion_has_no_canopy_and_a_low_hover(self):
+        self.assertFalse(hasattr(m6films, "chute_open"))
+        hover_skid = m6films._HOVER_Y + 0.045
+        self.assertLess(hover_skid - m6films._LZ_GROUND, 2.1)
+        self.assertGreater(hover_skid - m6films._LZ_GROUND, 1.8)
 
     def test_representative_frames_render_on_the_software_backend(self):
         import core.config as cfg
@@ -265,7 +268,7 @@ class ShotContractTests(unittest.TestCase):
         with patch.dict(os.environ, {"ACARISTAN_RENDERER": "software",
                                      "ACARISTAN_CUTSCENE3D": "1"}):
             self.assertTrue(
-                m6films.draw_m6_scene_3d("m6_insert_heli", surface, 1200))
+                m6films.draw_m6_scene_3d("m6_insert_valley", surface, 1200))
             self.assertTrue(
                 m6films.draw_m6_scene_3d("m6_boxcar_wide", surface, 1500))
             self.assertTrue(
@@ -707,9 +710,9 @@ class StagingAndExposureTests(unittest.TestCase):
 
     def test_door_seat_clears_the_airframe(self):
         hum = _w3.hum(m6films._BIRI)
-        for t in range(0, 3200, 100):
+        for t in range(0, 5000, 100):
             pose, pos, yaw = m6films.seated_door(t)
-            boxes = _w3.heli_solids(*m6films.heli_at("m6_insert_heli", t))
+            boxes = _w3.heli_solids(*m6films.heli_at("m6_insert_valley", t))
             d, part, box = _w3.penetration(hum, pose, pos, yaw, boxes,
                                            parts=self.PARTS)
             self.assertLessEqual(d, 0.02, "door seat@%d: %s in %s by %.3f m"
@@ -727,7 +730,7 @@ class StagingAndExposureTests(unittest.TestCase):
         pose, _root = m6films.heli_seat()
         self.assertAlmostEqual(_w3._seat_contact(biri, pose),
                                _w3.HELI_SILL_Y - _w3.HELI_SKID_Y, delta=0.03)
-        pos, hyaw, hbank, hpitch = m6films.heli_at("m6_insert_heli", 0)
+        pos, hyaw, hbank, hpitch = m6films.heli_at("m6_insert_valley", 0)
         seat = m6films.seated_door(0)
         skid_top = _w3.heli_xform(pos, hyaw, hbank, hpitch)(
             _w3.HELI_SKID_X, _w3.HELI_SKID_Y, _w3.HELI_DOOR_Z)[1]
@@ -747,9 +750,10 @@ class StagingAndExposureTests(unittest.TestCase):
                                      "ACARISTAN_CUTSCENE3D": "1"}):
             _w3._cache["r"].clear()
             r, buf = _w3.rend()
-            _w3.cam(r, 0, (12.8, 26.0, -62.5), (-0.6, 22.8, -45.5), 44)
+            hp = m6films.heli_at("m6_insert_valley", 0)[0]
+            _w3.cam(r, 0, (hp[0] + 10.0, hp[1] + 3.0, hp[2] - 14.0), hp, 44)
             r.begin()
-            pos, yaw, bank, pitch = m6films.heli_at("m6_insert_heli", 0)
+            pos, yaw, bank, pitch = m6films.heli_at("m6_insert_valley", 0)
             anchors = _w3.helicopter(r, 0, pos, yaw=yaw, bank=bank,
                                      pitch=pitch)
             r.flush(buf)
@@ -758,19 +762,46 @@ class StagingAndExposureTests(unittest.TestCase):
                                anchors["rotor_radius"], places=5)
 
     def test_insertion_skids_stay_above_the_terrain(self):
-        for scene, dur in (("m6_insert_heli", 3200),
-                           ("m6_insert_jump", 2900),
-                           ("m6_insert_fall", 2900),
-                           ("m6_insert_ground", 3100)):
+        for scene, dur in (("m6_insert_cabin", 3800),
+                           ("m6_insert_valley", 5000),
+                           ("m6_insert_jump", 5000),
+                           ("m6_insert_ground", 6000)):
             for t in range(0, dur, 100):
                 boxes = _w3.heli_solids(*m6films.heli_at(scene, t))
                 for skid in ("skid_l", "skid_r"):
                     lo, hi = boxes[skid]
                     ground = _w3.height_at((lo[0] + hi[0]) / 2,
                                            (lo[2] + hi[2]) / 2)
+                    if scene == "m6_insert_cabin":
+                        continue
                     self.assertGreater(lo[1], ground + 0.02,
                                        "%s@%d %s: %.3f vs ground %.3f"
                                        % (scene, t, skid, lo[1], ground))
+
+    def test_jump_lands_knee_deep_without_clipping_the_airframe(self):
+        hum = _w3.hum(m6films._BIRI)
+        end = m6films._LAND_T + 600
+        pose, root, _yaw, _heli = m6films.jump_stage(end)
+        ground = _w3.height_at(*m6films._LAND)
+        self.assertAlmostEqual(
+            root[1], ground - m6films._ROOT_DROP - m6films._SINK, delta=0.02)
+        self.assertAlmostEqual(root[0], m6films._landed_root()[0], delta=0.02)
+        # the ground shot starts from the same pose and root
+        gpose, gpos, _gy = m6films.ground_stage(0)
+        self.assertAlmostEqual(gpos[1], root[1], delta=0.02)
+        for t in range(0, m6films._LEAVE + 1, 100):
+            pose, pos, yaw, heli = m6films.jump_stage(t)
+            boxes = _w3.heli_solids(*m6films.heli_at("m6_insert_jump", t))
+            d, part, box = _w3.penetration(hum, pose, pos, yaw, boxes,
+                                           parts=self.PARTS)
+            self.assertLessEqual(d, 0.02, "jump@%d: %s in %s by %.3f m"
+                                 % (t, part, box, d))
+
+    def test_valley_hover_continues_into_the_jump_shot(self):
+        a = m6films.heli_at("m6_insert_valley", m6films._APPROACH_MS)[0]
+        b = m6films.heli_at("m6_insert_jump", 0)[0]
+        for i in range(3):
+            self.assertAlmostEqual(a[i], b[i], delta=0.01)
 
     def test_face_exposure_is_readable_on_software_frames(self):
         import core.config as cfg
@@ -788,7 +819,12 @@ class StagingAndExposureTests(unittest.TestCase):
         radio_v1 = next(s for s in _meta.mission6_ending_shots
                         if s.get("scene") == "m6_radio_vasile"
                         and "Three hundred" in s.get("text", ""))
-        cases = (("m6_boxcar_volkov", 2772, None),
+        cabin = next(s for s in _meta.mission6_intro_shots
+                     if s.get("scene") == "m6_insert_cabin")
+        cases = (("m6_insert_cabin", 1500, cabin),
+                 ("m6_insert_jump", 2100, None),
+                 ("m6_insert_ground", 2520, None),
+                 ("m6_boxcar_volkov", 2772, None),
                  ("m6_boxcar_biribel", 2562, None),
                  ("m6_radio_vasile", 2772, radio_v1))
         seen = 0

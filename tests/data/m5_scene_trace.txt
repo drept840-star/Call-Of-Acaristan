@@ -1,4 +1,4 @@
-# RPE6 §6.2 acceptance trace — Mission 5 flow as mirrored from the legacy FSM (A-005).
+# RPE6 §6.2 acceptance trace - Mission 5 flow as mirrored from the legacy FSM (A-005).
 # Produced by tests/unit/test_scene_mirror.py through the real core.fsm.GameStateManager;
 # the sequence is the FSM path of a complete M5 run: boot, menu, slot select, briefing,
 # opening cutscene, gameplay with one pause and one notebook inspection, mid-mission

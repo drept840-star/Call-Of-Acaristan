@@ -1711,6 +1711,13 @@ def _apply_dev_args():
     elif "--dev-mission6-ending" in args or "--m6-ending" in args:
         gc.start_mission6_rail_checkpoint(preserve_timer=True)
         _start_m6_cutscene(gc.mission6_ending_shots, "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
+    elif "--dev-mission6-heli" in args or "--m6-heli" in args:
+        # Ending film from the helicopter pickup through the title card.
+        gc.start_mission6_rail_checkpoint(preserve_timer=True)
+        _shots = list(gc.mission6_ending_shots)
+        _i = next((i for i, s in enumerate(_shots)
+                   if isinstance(s, dict) and s.get("scene") == "m6_helicopter"), 0)
+        _start_m6_cutscene(_shots[_i:], "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
     elif "--dev-slot-select" in args:
         # Dev/screenshot jump: open the save-slot screen directly (skips
         # BOOT_INTRO). Pass `--continue` as well for the CONTINUE variant -

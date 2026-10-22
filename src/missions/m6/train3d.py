@@ -44,7 +44,7 @@ from engine3d import (
 
 RES = 0.64                       # internal render scale: 640x448, the PS2 frame
 RW, RH = int(WIDTH * RES), int(HEIGHT * RES)
-DITHER_STEP = 8                  # the grade's ordered dither: 15-bit, 32 levels
+DITHER_STEP = _fx.DITHER_STEP                  # the grade's ordered dither: 15-bit, 32 levels
 
 CONTROL_AT = 2.0
 SHOT_AT = 23.0
@@ -140,7 +140,8 @@ YARD_HAZY = (14, 17, 22)       # ...and of the farthest: aerial perspective
                                # lives in the albedo, not in the fog.
 FOG = P.NIGHT                  # same luma as the old (11,15,24), less blue
 SKY_TOP = P.INK                # zenith, and the fill under the sky pass
-SKY_GLOW = P.EMBER             # night() sodium: the town's glow on the cloud
+SKY_GLOW = (56, 38, 26)        # night() sodium: the town's glow on the cloud
+                               # (raised for B4; the yard haze disc is gone)
 
 # x, z, w, h, d, window rows, window columns.  Authored inside the yaw the
 # player can actually reach - BASE_YAW +- YAW_LIMIT behind a 100 deg
@@ -206,7 +207,6 @@ def _bloc_beacons():
     _BLOC_BEACONS.extend(pts)
 
 
-_YARD_HAZE = ((-14.0, 5.0, -30.0), (10.0, 5.0, -30.0), (34.0, 5.0, -22.0))
 _YARD_RIDGE_R = 70.0           # radius of the horizon ridge, around the eye
 # The yard fight (yard3d) sees the set from every side: it builds the dressing
 # with this on - no view cull, the whole ridge ring, back faces kept.
@@ -530,88 +530,12 @@ def _ease(u):
     return 1 - (1 - u) ** 3
 
 
-_BAYER4 = (0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5)
-
-
-def _dither_lut(chan, np):
-    """Grade curves -> per-channel tables, one row per 4x4 Bayer threshold:
-    the graded value, ordered-dithered down to DITHER_STEP levels.  This is
-    the PS2 16-bit framebuffer look, and it lands on the sky and the glow
-    sprites as well as the polygons, which the shader's dither never sees."""
-    off = (np.arange(16, dtype=np.float32) + 0.5) / 16.0 - 0.5
-    lut = np.empty((3, 16 * 256), dtype=np.uint8)
-    for i, v in enumerate(chan):
-        q = np.floor((v[None, :] * 255.0 + off[:, None] * DITHER_STEP)
-                     / DITHER_STEP + 0.5) * DITHER_STEP
-        lut[i] = np.clip(q, 0.0, 255.0).astype(np.uint8).ravel()
-    return lut
-
-
-def _ink(chan, np):
-    """Lift each graded channel onto the 2D game's black (``P.INK``): the 2D
-    never goes below (7,8,11), and the old crushed navy-black read as 3D."""
-    return [f + v * (1.0 - f) for f, v in
-            zip(np.array(P.INK, dtype=np.float32) / 255.0, chan)]
-
-
-def _apply_lut(surface, lut, np):
-    """Run a ``_dither_lut`` table over the buffer: one take per channel,
-    indexed by the pixel's Bayer row plus its value."""
-    w, h = surface.get_size()
-    cell = _cache.get(("bayer", w, h))
-    if cell is None:
-        b = np.array(_BAYER4, dtype=np.uint16).reshape(4, 4) * 256
-        cell = np.tile(b, (-(-h // 4), -(-w // 4)))[:h, :w].T.copy()
-        _cache[("bayer", w, h)] = cell
-    arr = pygame.surfarray.pixels3d(surface)
-    for i in range(3):
-        arr[..., i] = lut[i].take(cell + arr[..., i])
-    del arr
-
-
-def _present(src, dst):
-    """Hard-pixel upscale of the internal frame to the screen: nearest x2,
-    then a box filter down (sharp bilinear), so the 1.5625 ratio keeps every
-    pixel crisp and even instead of the old soft smoothscale."""
-    w, h = src.get_size()
-    mid = _cache.get("present_mid")
-    if mid is None or mid.get_size() != (w * 2, h * 2):
-        mid = _cache["present_mid"] = pygame.Surface((w * 2, h * 2))
-    pygame.transform.scale(src, (w * 2, h * 2), mid)
-    pygame.transform.smoothscale(mid, dst.get_size(), dst)
-
-
-def _grade_cine(surface):
-    """Cinematic contrast/saturation grade on the internal render buffer.
-
-    The old held rig + scanlines read grey because four warm-white sources
-    met a 0.5 ambient; this puts the colour back without lifting shadows the
-    way m6world3d.grade's gamma does.  Numpy is optional: skip cleanly.
-    """
-    try:
-        import numpy as np
-    except Exception:
-        return
-    lut = _cache.get("grade_lut")
-    if lut is None:
-        x = np.arange(256, dtype=np.float32) / 255.0
-        # open the mids a little (the albedo-modulated rigs are dark by design),
-        # crush the toe (true blacks), then an S of contrast around the mids
-        x = x ** 0.80
-        x = np.clip((x - 0.05) / 0.95, 0.0, 1.0)
-        x = np.clip(0.42 + (x - 0.42) * 1.12, 0.0, 1.0)
-        sh, mid, hi = (1.0 - x) ** 2, 4.0 * x * (1.0 - x), x ** 2
-        # split tone: slate shadows, a touch of rust in the mids, warm highs
-        chan = (x - 0.006 * sh + 0.010 * mid + 0.030 * hi,
-                x + 0.003 * sh + 0.004 * hi,
-                x + 0.014 * sh - 0.012 * mid - 0.026 * hi)
-        lut = _dither_lut(_ink([v - 0.10 * np.maximum(0.0, v - 0.86) ** 2
-                                for v in chan], np), np)
-        _cache["grade_lut"] = lut
-    # Three vectorised channel lookups: contrast + warm/cool split tone.  The
-    # float luma/saturation pass cost ~40 ms on the 800x560 buffer; this keeps
-    # the grade cheap enough for the live scene on both backends.
-    _apply_lut(surface, lut, np)
+_BAYER4 = _fx._BAYER4
+_dither_lut = _fx.dither_lut
+_ink = _fx.ink
+_apply_lut = _fx.apply_lut
+_present = _fx.present_crisp
+_grade_cine = _fx.grade_cine
 
 
 def _grade_play(surface, wounded=False):
@@ -1067,7 +991,8 @@ def _yard_set_sprites(r, tm):
                      _fx.window_glow((P.SODIUM), 4.0, 2.6, 0.18),
                      layer=_fx.FX_LAYER)
     r.add_sprite((FREIGHT_END_X, 1.30, FREIGHT_Z + 1.56),
-                 _fx.glow((240, 60, 44), 0.30, tm, intensity=0.55),
+                 _fx.beacon((240, 60, 44), 0.22, tm, phase=0.17,
+                            intensity=0.9),
                  layer=_fx.FX_LAYER)
 
 
@@ -1262,7 +1187,9 @@ _POOLS = (
     + [((dx, 2.37, 8.55), 2.6, 1.2) for dx in DOOR_X.values()]              # door lamps
     + [((YARD_MAST[0], 5.86, YARD_MAST[1] + 0.75), 8.0, 2.0),                # siding mast
        ((SIGNAL_BOX[0] - 0.5, 1.65, SIGNAL_BOX[1] + 1.28), 2.8, 1.0)])     # signal box
-SET_POOLS = [{"pos": p, "range": rg, "color": P.SODIUM, "hot": P.SODIUM_PALE,
+_POOL_HOT = (255, 210, 126)     # warm, not cream: the glow sprites no longer
+                                # stack on top of the pool centre
+SET_POOLS = [{"pos": p, "range": rg, "color": P.SODIUM, "hot": _POOL_HOT,
               "intensity": k * 0.6} for p, rg, k in _POOLS]
 
 
@@ -1341,15 +1268,15 @@ def _light(r, eye=None, fwd=None, t=None, flashes=(), pools=()):
                 _spot((9.40, 2.10, 1.90), (11.40, 0.50, 0.60),
                       (255, 214, 172), key, 7.0, 0.82),
                 {"pos": (13.80, 1.10, -1.30), "color": (140, 178, 255),
-                 "intensity": 1.30, "range": 6.0},
+                 "intensity": 1.80, "range": 6.0},
                 {"pos": (9.20, 1.10, -1.50), "color": (122, 160, 244),
-                 "intensity": 0.95, "range": 5.5},
+                 "intensity": 1.40, "range": 5.5},
                 {"pos": (10.90, 0.95, -1.70), "color": (255, 170, 105),
                  "intensity": 0.80, "range": 4.6},
                 {"pos": (11.40, 0.50, 3.60), "color": (98, 130, 192),
                  "intensity": 0.25, "range": 4.0},
-                {"pos": (14.50, 1.50, -2.20), "color": (255, 196, 140),
-                 "intensity": 0.45, "range": 4.5},
+                {"pos": (14.50, 1.50, -2.20), "color": (255, 180, 120),
+                 "intensity": 0.70, "range": 4.5},
                 {"pos": (7.50, 1.50, -2.20), "color": (255, 196, 140),
                  "intensity": 0.35, "range": 4.5},
             ]
@@ -1386,7 +1313,14 @@ def _light(r, eye=None, fwd=None, t=None, flashes=(), pools=()):
                 "color": (204, 212, 226), "intensity": 0.60, "range": 2.2})
     lights.extend(flashes)
     r.set_lights(lights)
-    r.set_pools(SET_POOLS + list(pools))
+    all_pools = SET_POOLS + list(pools)
+    if len(all_pools) > 32:
+        cam = getattr(r, "cam", None)
+        if cam is not None:
+            all_pools.sort(key=lambda P: sum((P["pos"][i] - cam[i]) ** 2
+                                             for i in range(3)))
+        all_pools = all_pools[:32]
+    r.set_pools(all_pools)
 
 
 # ── first-person K9 ──────────────────────────────────────────────────────
@@ -1985,9 +1919,11 @@ def _biribel_catch_state(t, vstate):
     pose = pose_run(dist / 2.1 * 2.0 * math.pi, lean=24 + 10 * u)
     pose["rifle_p"] = 0.0
     if c >= 3.20:
-        # settle at his chest, on the near side of the body
+        # settle at his chest, on the near side of the body; held 0.4 m off
+        # until the falling body is down, or it sweeps through his shoulders
         ks = _smooth(3.20, 3.65, c)
-        x = pos[0] + (12.20 - pos[0]) * ks
+        down = 1.0 - _smooth(0.35, 0.90, vj["chest"][1])
+        x = pos[0] + (12.20 + 0.40 * (1.0 - down) - pos[0]) * ks
         z = pos[2] + (0.55 - pos[2]) * ks
         pos = (x, _ground_at(z), z)
     if c >= 3.10:
@@ -2018,7 +1954,10 @@ def _biribel_catch_state(t, vstate):
     rise = _smooth(VIG_BACK_AT + 0.25, VIG_ANGRY_AT + 0.15, c)
     if rise > 0.0:
         pose = blend(pose, POSES["kneel"], rise)
-    kr_r = _smooth(3.75, 4.25, c) * (1.0 - rise)
+    # the shoulder grip waits for the body to land: a reach into a chest
+    # still tipping over runs the forearm through it
+    kr_r = _smooth(3.75, 4.25, c) * (1.0 - rise) * \
+        (1.0 - _smooth(0.32, 0.50, vj["chest"][1]))
     if kr_r > 0.0:
         r_target = catch_right_target(vj["chest"], c)
         pr = _w.reach(hum, pose, "r", r_target, pos, yaw)
@@ -3119,6 +3058,57 @@ class TrainScene:
         self.sparks.append((self.t, (vpos[0], vpos[1] + 1.05, vpos[2]),
                             (176, 44, 44)))
 
+    def _dynamic_pools(self, r, t):
+        """GL floor pools for the spills that move (A5).
+
+        The sprite versions stay on the software backend (painter order is
+        fine there); on GL a screen-facing glow at ground height painted up
+        the carriage side, which is the oval in the playtest screenshot.
+        """
+        if getattr(r, "backend", "") != "gl" or self.dying:
+            return ()
+        out = []
+        G = _SLOT_GROUND
+        # carriage window spill: follows the departing train
+        tx = self._train_offset(t)
+        for x in (6.0, 11.0, 16.0):
+            out.append({"pos": (tx + x, 0.08, -2.45), "range": 2.6,
+                        "color": P.SODIUM, "hot": _POOL_HOT,
+                        "intensity": 0.48})
+        # guard doors: hallway light on the slab while a leaf is open
+        for door, dx in DOOR_X.items():
+            k = _door_open(self.guards, door, t)
+            if k > 0.02:
+                out.append({"pos": (dx, G + 0.06, 8.1), "range": 2.4,
+                            "color": P.SODIUM, "hot": _POOL_HOT,
+                            "intensity": 0.60 * k})
+        # truck: moving beams, then the parked work lamp
+        z = _truck_z(t)
+        hz = z - TRUCK_HALF_L
+        lamp = _smooth(TRUCK_STOP_T - 0.1, TRUCK_STOP_T + 0.15, t)
+        if lamp > 0.0:
+            out.append({"pos": (TRUCK_X - 0.4, 0.10, hz - 1.3), "range": 3.2,
+                        "color": P.SODIUM, "hot": _POOL_HOT,
+                        "intensity": 0.50 * lamp})
+        if t < TRUCK_STOP_T:
+            out.append({"pos": (TRUCK_X, 0.10, z + TRUCK_HALF_L + 4.0),
+                        "range": 3.4, "color": P.LAMP_WHITE,
+                        "hot": (255, 238, 190), "intensity": 0.38})
+        # torch guards after the departure sweep the ballast
+        if t >= DEPART_AT and not self.volkov_failed:
+            for i in range(len(_TORCH_GUARDS)):
+                if t < DEPART_AT + _TORCH_GUARDS[i][2]:
+                    continue
+                _pose, pos, _yaw, walking, (fx, fz) = _torch_guard_state(i, t)
+                sweep = 0.0 if walking else 0.45 * math.sin(
+                    (t - DEPART_AT) * 1.3 + i)
+                cs, sn = math.cos(sweep), math.sin(sweep)
+                dx, dz = fx * cs - fz * sn, fx * sn + fz * cs
+                out.append({"pos": (pos[0] + dx * 3.2, 0.10, pos[2] + dz * 3.2),
+                            "range": 2.8, "color": (206, 222, 255),
+                            "hot": (232, 240, 255), "intensity": 0.55})
+        return out
+
     # ── draw ───────────────────────────────────────────────────────────
     def draw(self, surface):
         if not self.active():
@@ -3146,7 +3136,8 @@ class TrainScene:
         live_fwd = None if self.dying else _forward(yaw, pitch)
         _light(r, live_eye if t < CUT_AT else None,
                live_fwd if t < CUT_AT else None, t=t,
-               flashes=self._flash_lights(t))
+               flashes=self._flash_lights(t),
+               pools=self._dynamic_pools(r, t))
         self._draw_camera(r, t)
         _sky(r, t * 1000.0)
         r.begin()
@@ -3731,8 +3722,8 @@ class TrainScene:
         add(box(0.12, 5.2, 0.12, (30, 34, 40), center=(28.0, 2.6, -7.2)))
         add(box(0.52, 0.20, 0.52, (235, 60, 40), center=(28.0, 5.24, -7.2),
                 emissive=True))
-        r.add_sprite((28.0, 5.24, -7.2), _fx.glow((240, 70, 50), 1.4,
-                                                 t * 1000.0, intensity=0.75),
+        r.add_sprite((28.0, 5.24, -7.2), _fx.beacon((240, 70, 50), 0.35,
+                                                  t * 1000.0, phase=0.41),
                      layer=_fx.FX_LAYER)
         for gx in (-7.0, 13.0):
             add(box(0.18, 6.3, 0.18, (36, 40, 48), center=(gx, 3.15, 1.8)))
@@ -3897,21 +3888,16 @@ class TrainScene:
             if sh < 9.0:
                 continue
             r.add_sprite((sx + sw * 0.34, sh + 0.18, sz),
-                         _fx.glow((236, 64, 48), 0.9, tm, flicker=0.14,
-                                  seed=400 + int(sx), intensity=0.85),
+                         _fx.beacon((236, 64, 48), 0.28, tm,
+                                    phase=0.13 + (int(sx) % 7) * 0.11),
                          layer=_fx.FX_LAYER)
         for i, (lx, ly, lz) in enumerate(_BLOC_BEACONS):
             r.add_sprite((lx, ly, lz),
-                         _fx.glow((236, 64, 48), 0.8, tm, flicker=0.18,
-                                  seed=430 + i, intensity=0.9),
+                         _fx.beacon((236, 64, 48), 0.26, tm,
+                                    phase=0.37 * i),
                          layer=_fx.FX_LAYER)
-        # A cold band over the yard.  It separates the silhouettes from the
-        # sky without lighting them - the masses must stay darker than it.
-        for hx, hy, hz in _YARD_HAZE:
-            r.add_sprite((hx, hy, hz),
-                         _fx.haze((104, 132, 182), 15.0, tm,
-                                  seed=460 + int(hx), intensity=0.085),
-                         layer=_fx.FX_LAYER)
+        # The cold band over the yard now lives in the sky's sodium horizon
+        # tint (B4): a 15 m screen-facing haze disc stood up like a wall.
         # The siding behind the carriage is only seen once the cinematic
         # starts (the carriage hides it from the player's post), so its
         # lights cost nothing during the fight.
@@ -3941,43 +3927,51 @@ class TrainScene:
         # waiting-train windows: cluster glows, door spill, rear marker
         for x in (-12.0, 0.0, 9.0, 15.0, 21.0):
             r.add_sprite((tx + x, 2.45, -2.80),
-                         _fx.window_glow((P.SODIUM), 4.2, 1.2, 0.20),
+                         _fx.window_glow((P.SODIUM), 2.4, 0.9, 0.24),
                          layer=_fx.FX_LAYER)
-        for x in (6.0, 11.0, 16.0):
-            r.add_sprite((tx + x, 0.10, -2.45),
-                         _fx.window_glow((P.SODIUM), 2.4, 0.6, 0.16),
-                         layer=_fx.FX_LAYER)
+        if r.backend != "gl":            # GL: carriage spill via _dynamic_pools
+            for x in (6.0, 11.0, 16.0):
+                r.add_sprite((tx + x, 0.10, -2.45),
+                             _fx.window_glow((P.SODIUM), 2.4, 0.6, 0.16),
+                             layer=_fx.FX_LAYER)
         r.add_sprite((tx + TRAIN_DOOR_X, 1.85, -2.80),
                      _fx.window_glow((P.SODIUM), 1.2, 1.4, 0.22),
                      layer=_fx.FX_LAYER)
         r.add_sprite((tx - 23.02, 2.0, -2.80),
-                     _fx.glow((228, 56, 42), 0.35, tm, intensity=0.55),
+                     _fx.beacon((228, 56, 42), 0.22, tm, phase=0.29),
                      layer=_fx.FX_LAYER)
         if beacon:
             r.add_sprite((19.0, 8.72, 7.9),
-                         _fx.glow((240, 70, 50), 0.45, tm, intensity=0.50),
+                         _fx.beacon((240, 70, 50), 0.25, tm, phase=0.55),
                          layer=_fx.FX_LAYER)
         # floodlight masts
         for i, x in enumerate((-18.0, -6.0, 6.0, 18.0)):
             r.add_sprite((x, 8.0, 11.3),
-                         _fx.sodium_lamp(tm, seed=50 + i, radius_m=3.6,
+                         _fx.sodium_lamp(tm, seed=50 + i, radius_m=2.8,
                                          intensity=0.55),
                          layer=_fx.FX_LAYER)
             r.add_sprite((x, 0.6, 8.0),
                          _fx.haze((220, 210, 190), 4.0, tm, seed=50 + i,
                                   intensity=0.10),
                          layer=_fx.FX_LAYER)
-        # street lamps
+        # street lamps.  B6: a halo may not reach the ground the pool
+        # already lights; radius <= mast height * 0.35.
         for x in (-10.0, 0.0, 10.0):
             r.add_sprite((x, 3.50 + G, 6.95),
-                         _fx.sodium_lamp(tm, seed=80 + int(x), radius_m=3.1,
+                         _fx.sodium_lamp(tm, seed=80 + int(x), radius_m=1.4,
                                          intensity=0.65),
+                         layer=_fx.FX_LAYER)
+        # two hero lamps keep a tapered shaft; the rest are head + halo only
+        for hi, x in enumerate((0.0, 10.0)):
+            r.add_sprite((x, 3.50 + G, 6.95),
+                         _fx.light_shaft((255, 196, 120), 3.0, 0.34, 1.10,
+                                         tm, seed=90 + hi, intensity=0.10),
                          layer=_fx.FX_LAYER)
         # canopy work lamps
         for x in (-15.0, -8.0, 0.0, 8.0, 16.0):
             r.add_sprite((x, 3.42, 8.55),
                          _fx.sodium_lamp(tm, seed=120 + int(x),
-                                         radius_m=2.25, intensity=0.48),
+                                         radius_m=1.2, intensity=0.48),
                          layer=_fx.FX_LAYER)
         # station windows + left-wing windows
         for wx in (0.4, 7.6, 11.2):
@@ -3990,11 +3984,11 @@ class TrainScene:
                          layer=_fx.FX_LAYER)
         for di, dx in enumerate(sorted(DOOR_X.values())):
             r.add_sprite((dx, 2.37, 8.55),
-                         _fx.sodium_lamp(tm, seed=133 + di, radius_m=1.5,
+                         _fx.sodium_lamp(tm, seed=133 + di, radius_m=0.8,
                                          intensity=0.55),
                          layer=_fx.FX_LAYER)
         r.add_sprite((28.0, 5.24, -7.2),
-                     _fx.glow((240, 70, 50), 1.4, tm, intensity=0.75),
+                     _fx.beacon((240, 70, 50), 0.35, tm, phase=0.41),
                      layer=_fx.FX_LAYER)
         r.add_sprite((5.6, G + 0.25, 6.15),
                      _fx.haze((190, 200, 214), 1.9, tm, seed=137,
@@ -4096,10 +4090,11 @@ class TrainScene:
                              _fx.window_glow((P.SODIUM), 1.1, 1.7,
                                              0.30 * k),
                              layer=_fx.FX_LAYER)
-                r.add_sprite((dx, G + 0.03, 8.1),
-                             _fx.window_glow((P.SODIUM), 1.6, 0.9,
-                                             0.22 * k),
-                             layer=_fx.FX_LAYER)
+                if r.backend != "gl":    # GL: hallway pool via _dynamic_pools
+                    r.add_sprite((dx, G + 0.03, 8.1),
+                                 _fx.window_glow((P.SODIUM), 1.6, 0.9,
+                                                 0.22 * k),
+                                 layer=_fx.FX_LAYER)
 
         # The truck: in from the yard behind the carriage, parked after.
         z = _truck_z(t)
@@ -4134,12 +4129,13 @@ class TrainScene:
                      layer=_fx.FX_LAYER)
         if lamp > 0.0:
             r.add_sprite((TRUCK_X, TRUCK_BED_Y + 1.55, hz - 0.12),
-                         _fx.sodium_lamp(tm, seed=402, radius_m=2.2,
+                         _fx.sodium_lamp(tm, seed=402, radius_m=0.8,
                                          intensity=0.62 * lamp),
                          layer=_fx.FX_LAYER)
-            r.add_sprite((TRUCK_X - 0.4, 0.03, hz - 1.3),
-                         _fx.window_glow((P.SODIUM), 3.0, 2.2, 0.22 * lamp),
-                         layer=_fx.FX_LAYER)
+            if r.backend != "gl":        # GL: parked-lamp pool
+                r.add_sprite((TRUCK_X - 0.4, 0.03, hz - 1.3),
+                             _fx.window_glow((P.SODIUM), 3.0, 2.2, 0.22 * lamp),
+                             layer=_fx.FX_LAYER)
         # the beams through the snow ahead of the cab, and their pool; parked,
         # the beams point up the road behind the station and only the pool
         # can show past the tower
@@ -4148,9 +4144,10 @@ class TrainScene:
                          _fx.haze((P.LAMP_WHITE), 3.2, tm, seed=401,
                                   intensity=0.20),
                          layer=_fx.FX_LAYER)
-        r.add_sprite((TRUCK_X, 0.03, front + 4.0),
-                     _fx.window_glow((P.SODIUM), 2.6, 3.4, 0.20),
-                     layer=_fx.FX_LAYER)
+        if r.backend != "gl":            # GL: headlight pool, not a billboard
+            r.add_sprite((TRUCK_X, 0.03, front + 4.0),
+                         _fx.window_glow((P.SODIUM), 2.6, 3.4, 0.20),
+                         layer=_fx.FX_LAYER)
 
     def _draw_yard_life(self, r, t):
         """After the departure: the torch Guards and the haze the carriage
@@ -4198,9 +4195,10 @@ class TrainScene:
             sweep = 0.0 if walking else 0.45 * math.sin((t - DEPART_AT) * 1.3 + i)
             cs, sn = math.cos(sweep), math.sin(sweep)
             dx, dz = fx * cs - fz * sn, fx * sn + fz * cs
-            r.add_sprite((pos[0] + dx * 3.2, 0.08, pos[2] + dz * 3.2),
-                         _fx.window_glow((206, 222, 255), 2.2, 1.5, 0.34),
-                         layer=_fx.FX_LAYER)
+            if r.backend != "gl":        # GL: flashlight pool, not a billboard
+                r.add_sprite((pos[0] + dx * 3.2, 0.08, pos[2] + dz * 3.2),
+                             _fx.window_glow((206, 222, 255), 2.2, 1.5, 0.34),
+                             layer=_fx.FX_LAYER)
             r.add_sprite((pos[0] + dx * 1.6, 1.1, pos[2] + dz * 1.6),
                          _fx.haze((200, 214, 240), 1.3, tm, seed=460 + i,
                                   intensity=0.10),

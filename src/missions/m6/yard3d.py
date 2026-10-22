@@ -112,7 +112,7 @@ LAMPS = ((-26.6, -17.6), (-26.6, -1.0), (-26.6, 9.0), (-8.0, -17.8),
          (7.0, -17.8), (27.6, -17.6), (27.6, -9.6), (27.6, 7.0))
 # The masts' sodium pools on the snow (GL; train3d.SET_POOLS has the set's)
 LAMP_POOLS = [{"pos": (lx, 6.3, lz), "range": 8.5, "color": P.SODIUM,
-               "hot": P.SODIUM_PALE, "intensity": 1.3} for lx, lz in LAMPS]
+               "hot": (255, 210, 126), "intensity": 1.3} for lx, lz in LAMPS]
 
 
 def _blockers():
@@ -324,7 +324,7 @@ def _perimeter_mesh():
 def _perimeter_sprites(r, tm):
     for i, (lx, lz) in enumerate(LAMPS):
         r.add_sprite((lx, 6.2, lz), _fx.sodium_lamp(tm, seed=480 + i,
-                                                     radius_m=2.6, intensity=0.6),
+                                                     radius_m=2.1, intensity=0.6),
                      layer=_fx.FX_LAYER)
         if r.backend != "gl":            # GL: LAMP_POOLS light the snow
             r.add_sprite((lx, 0.05, lz), _fx.window_glow(P.SODIUM, 3.6, 3.0, 0.16),
@@ -334,8 +334,7 @@ def _perimeter_sprites(r, tm):
                      _fx.glow(P.SODIUM, 0.6, tm, intensity=0.7),
                      layer=_fx.FX_LAYER)
     for i, p in enumerate(getattr(D, "BEACONS", ())):       # aviation lamps
-        k = 0.9 if ((tm * 0.001 + i * 0.23) % 1.6) < 0.45 else 0.18
-        r.add_sprite(p, _fx.glow((228, 56, 42), 1.1, tm, seed=600 + i, intensity=k),
+        r.add_sprite(p, _fx.beacon((228, 56, 42), 0.30, tm, phase=0.23 * i),
                      layer=_fx.FX_LAYER)
     for i, p in enumerate(getattr(D, "SIGN_LAMPS", ())):
         r.add_sprite(p, _fx.glow(P.SODIUM_PALE, 0.7, tm, seed=640 + i, intensity=0.6),
@@ -690,6 +689,36 @@ def _flash_mesh(O, B, muzzle, seed):
         part.verts = [_gun_pt(O, B, v) for v in part.verts]
         m.add(part)
     return m
+
+
+def _guard_flash_mesh(m, d, seed):
+    """An irregular muzzle burst along the shot line d: a hot core spike and
+    six petals of uneven length.  Guards fire at the camera, so it has to read
+    end-on, as a star and not a disc."""
+    from engine3d import Mesh
+    n = math.sqrt(sum(c * c for c in d)) or 1.0
+    f = tuple(c / n for c in d)
+    up = (0.0, 1.0, 0.0) if abs(f[1]) < 0.95 else (1.0, 0.0, 0.0)
+    rx = (up[1] * f[2] - up[2] * f[1], up[2] * f[0] - up[0] * f[2],
+          up[0] * f[1] - up[1] * f[0])
+    ln = math.sqrt(sum(c * c for c in rx)) or 1.0
+    rx = tuple(c / ln for c in rx)
+    ry = (f[1] * rx[2] - f[2] * rx[1], f[2] * rx[0] - f[0] * rx[2],
+          f[0] * rx[1] - f[1] * rx[0])
+    parts = [box(0.05, 0.05, 0.34, (255, 235, 190), center=(0.0, 0.0, 0.17), emissive=True)]
+    for i in range(6):
+        ang = (seed * 29 % 60 + i * 60 + (i % 2) * 11) * math.pi / 180.0
+        pl = (0.30, 0.17, 0.38, 0.14, 0.26, 0.20)[(i + seed) % 6]
+        p = box(pl, 0.028, 0.02, (255, 176, 80), center=(pl * 0.5, 0.0, 0.03), emissive=True)
+        ca, sa = math.cos(ang), math.sin(ang)
+        p.verts = [(v[0] * ca - v[1] * sa, v[0] * sa + v[1] * ca, v[2]) for v in p.verts]
+        parts.append(p)
+    out = Mesh()
+    for part in parts:
+        part.verts = [tuple(m[k] + rx[k] * v[0] + ry[k] * v[1] + f[k] * v[2]
+                            for k in range(3)) for v in part.verts]
+        out.add(part)
+    return out
 
 
 class YardScene:
@@ -1232,6 +1261,7 @@ class YardScene:
         dst = (chest[0] + math.sin(self.t * 8.3 + g["slot"]) * wob,
                chest[1] + 0.2, chest[2] + math.cos(self.t * 6.1 + g["slot"]) * wob)
         self.tracers.append((self.t, src, dst, (255, 208, 150)))
+        g["shot_dir"] = tuple(dst[i] - src[i] for i in range(3))
         if self.audio:
             self.audio.guard_shot()
             if not hit:
@@ -1608,21 +1638,23 @@ class YardScene:
             ch = joints.get("chest", (x, y + 1.3, z))
             lamp = (ch[0], ch[1] + 0.20, ch[2])
             if math.sin(self.t * 7.0 + g["slot"]) > -0.3:
-                _w.add(r, box(0.09, 0.09, 0.09, (255, 40, 30), center=lamp,
+                _w.add(r, box(0.06, 0.06, 0.06, (255, 40, 30), center=lamp,
                               emissive=True))
-            r.add_sprite(lamp, _fx.glow(prof.get("lamp", (220, 50, 40)), 0.4,
-                                        tm, seed=470 + g["slot"]),
+            lc = prof.get("lamp", (220, 50, 40))
+            r.add_sprite(lamp, _fx.glow(lc, 0.12, tm, seed=470 + g["slot"],
+                                        core=lc, intensity=0.6),
                          layer=_fx.FX_LAYER)
             m = joints.get("muzzle")
             if m is not None:
                 if g["torch"]:
-                    r.add_sprite(m, _fx.glow((226, 236, 255), 0.62, tm,
-                                             seed=450 + g["slot"]),
+                    r.add_sprite(m, _fx.glow((226, 236, 255), 0.12, tm,
+                                             seed=450 + g["slot"], core=(226, 236, 255),
+                                             intensity=0.7),
                                  layer=_fx.FX_LAYER)
                 if self.t - g["last_shot_t"] < 0.05:
-                    r.add_sprite(m, _fx.glow((255, 200, 120), 0.9, tm,
-                                             seed=g["slot"], intensity=1.0),
-                                 layer=_fx.FX_LAYER)
+                    sd = g.get("shot_dir") or B._dir(g["yaw"])
+                    sd = sd if len(sd) == 3 else (sd[0], 0.0, sd[1])
+                    _w.add(r, _guard_flash_mesh(m, sd, g["slot"] + int(g["last_shot_t"] * 60)))
 
     def _draw_fx(self, r, tm):
         now = self.t

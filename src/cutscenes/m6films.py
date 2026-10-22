@@ -2,11 +2,12 @@
 
 Registered scene ids (exact contract from ``docs/MISSION6_PLOT.md``):
 
-    insertion   m6_insert_heli, m6_insert_jump, m6_insert_fall, m6_insert_ground
+    insertion   m6_insert_cabin, m6_insert_valley, m6_insert_jump, m6_insert_ground
     boxcar      m6_boxcar_wide, m6_boxcar_notebook, m6_boxcar_volkov,
                 m6_boxcar_biribel, m6_boxcar_exit
-    ending      m6_customs_terminal, m6_radio_vasile (four authored shots),
-                m6_radio_maru, m6_helicopter
+    ending      m6_customs_return, m6_customs_terminal,
+                m6_radio_vasile (four authored shots), m6_radio_silence,
+                m6_radio_maru, m6_cut_line, m6_helicopter
 
 ``cutscenes.engine`` resolves these through ``core.cutscene_registry``.  Each
 take draws the engine3d version and, when the 3D stack declines (backend
@@ -53,6 +54,8 @@ CRT_LINES = (
     ("STATUS", "KIA - Y-2"),
 )
 CRT_FOOT = "CALLSIGN: UCILEV NADGOB IERDNA"
+CRT_CALLSIGN = "ANDREI BOGDAN VELICU"
+_CRT_SOURCE = "UCILEV NADGOB IERDNA"
 
 def m6_3d_enabled():
     import os
@@ -73,7 +76,7 @@ def _mix(a, b, k):
 
 def _rig_insert(r, heli=None, cabin=0.0, amb=0.19, dif=0.46,
                 fill=(-0.30, 0.52, 0.60), bounce=None,
-                yaw=None, bank=None):
+                yaw=None, bank=None, extra=None):
     """Moonlit exterior: a camera-side cold key, plus the red cabin practical
     only when the lens is close enough to the door for it to model a face."""
     from engine3d.core import Light
@@ -90,6 +93,8 @@ def _rig_insert(r, heli=None, cabin=0.0, amb=0.19, dif=0.46,
             "range": 2.2})
     if bounce is not None:
         lights.append(bounce)
+    if extra:
+        lights.extend(extra)
     r.set_lights(lights)
 
 
@@ -106,21 +111,33 @@ def _shot_text():
 # insertion
 # ═══════════════════════════════════════════════════════════════════════════
 # Geography: the border compound sits on the valley floor (z 6..19); the
-# snow ridge climbs south of it and the LZ is its crest shelf (~16.6 m).
-# The Huey hovers nose-north on the shelf; Biribel sits in the open right
-# (east) door, soles on the skid, and drops north into the valley.
+# snow ridge climbs south of it and the LZ is its crest shelf (~16.7 m).
+# The Huey crests the ridge nose-north, settles to a ~2 m hover over the
+# shelf, and Biribel drops off the sill (open right/east door) into the
+# powder.  The crossing (m6world3d.crossing_far) lies 80-100 m north.
+_PICKUP_XZ = (-2.0, 15.5)
+_PICKUP_GROUND = _w.height_at(*_PICKUP_XZ)
+# Door toward the runner from the east, tail pointed back between the lot
+# lamps and the hut: the 6.2 m disc and the boom clear the compound.
+_PICKUP_YAW = -30.0
 _HOVER_XZ = (-1.0, -47.55)
 _LZ_GROUND = _w.height_at(*_HOVER_XZ)
-_HOVER_Y = _LZ_GROUND + 4.60
+_HOVER_Y = _LZ_GROUND + 1.96            # skid bottom (y + 0.045) ~2 m over the shelf
 _HELI_YAW = 0.0
 _HELI_BANK = 2.5
-_LAND = (0.55, -36.40)
+_SETTLE = 2.6                           # metres above the hover when the jump shot opens
+_APPROACH_MS = 5000                     # valley shot; the hover clock carries on from here
+_LAND = (1.55, -47.55)
+_SINK = 0.30                            # knee-deep in powder, on top of the 5 cm snow skin
+_ROOT_DROP = 0.05
+_PUSH, _LEAVE, _AIR = 2800, 3300, 600    # jump clock: push-off, feet leave, flight
+_LAND_T = _LEAVE + _AIR
 
 
 def hover_pos(t, climb=0.0, drift=(0.0, 0.0)):
-    """The same hover for shots 1-3; shot 4 passes climb/drift to leave.
-    The sway is deliberately larger than the rotor bob so a locked-off wide
-    shot reads as a helicopter holding station, not a parked prop."""
+    """The hover for the jump and ground shots; the ground shot passes
+    climb/drift to leave.  The sway is deliberately larger than the rotor bob
+    so a locked-off wide shot reads as a helicopter holding station."""
     bob = 0.18 * math.sin(t * 0.0016) + 0.06 * math.sin(t * 0.0029 + 1.3)
     sway_x = 0.55 * math.sin(t * 0.0011 + 0.4)
     sway_z = 0.38 * math.sin(t * 0.0009 + 2.0)
@@ -140,122 +157,85 @@ def hover_bank(t):
     return _HELI_BANK
 
 
+def _approach_e(t):
+    q = max(0.0, min(1.0, t / float(_APPROACH_MS)))
+    return 1.0 - (1.0 - q) * (1.0 - q)
+
+
+def approach_pos(t):
+    """Valley shot: the Huey crests the shelf edge from the south and flares
+    into the hover; the last frame equals the jump shot's first."""
+    e = _approach_e(t)
+    a = (-6.5, _HOVER_Y + _SETTLE + 7.5, -86.0)
+    b = hover_pos(t, climb=_SETTLE)
+    return tuple(a[i] + (b[i] - a[i]) * e for i in range(3))
+
+
+def jump_heli(t):
+    """The hover during the jump shot: it settles the last 2.6 m while he
+    shifts his weight, then holds."""
+    return hover_pos(_APPROACH_MS + t,
+                     climb=_SETTLE * (1.0 - _w.ease5(t, 0, 1700)))
+
+
+def cabin_pos(t):
+    """Cruise over the dark ridge for the briefing, door open."""
+    return (-6.0 + 0.4 * math.sin(t * 0.0011),
+            27.5 + 0.14 * math.sin(t * 0.0016),
+            -66.0 + t * 0.0035)
+
+
 _SEAT = {}
 
 
-def _chute_pack(r, pose, pos, yaw):
-    """Static-line parachute pack on his back; drawn in every insertion shot."""
-    from engine3d.core import Mesh, box, rot_y
-    chest = _joints(_BIRI, pose, pos, yaw)["chest"]
-    back = _local(chest, yaw, fwd=-0.19, up=0.07)
-    m = Mesh()
-    m.add(box(0.36, 0.40, 0.16, (52, 54, 44)))
-    m.add(box(0.30, 0.06, 0.17, (36, 38, 32)), t=(0, -0.12, 0))
-    for sx in (-1, 1):
-        m.add(box(0.05, 0.28, 0.17, (30, 32, 28)), t=(sx * 0.16, 0.02, 0))
-    out = Mesh()
-    out.add(m, m=rot_y(yaw), t=back)
-    _w.add(r, out)
-
-
-def _chute_mesh(center, radius, open_k=1.0, collapse=0.0, tilt=8.0):
-    """Low-poly round canopy -> (mesh, rim points). Collapse flattens it for
-    the landing pile; tilt leans it into the descent."""
-    from engine3d.core import Mesh
-    n = 12
-    rad = radius * max(0.05, open_k)
-    h = 0.62 * rad * (1.0 - 0.75 * collapse)
-    ang = math.radians(tilt)
-    rings = ((1.0, 0.0), (0.86, 0.34), (0.55, 0.68), (0.0, 0.92))
-    pts = []
-    for rf, yf in rings:
-        ring = []
-        for i in range(n):
-            a = 2 * math.pi * i / n
-            dx = math.cos(a) * rad * rf
-            dz = math.sin(a) * rad * rf
-            yy = h * yf
-            ring.append((center[0] + dx,
-                         center[1] + yy * math.cos(ang) - dz * math.sin(ang),
-                         center[2] + yy * math.sin(ang) + dz * math.cos(ang)))
-        pts.append(ring)
-    mesh = Mesh()
-    for ri in range(len(rings) - 1):
-        for i in range(n):
-            quad = [pts[ri][i], pts[ri][(i + 1) % n],
-                    pts[ri + 1][(i + 1) % n], pts[ri + 1][i]]
-            col = (_CHUTE_RED if i in (0, 6)
-                   else (_CHUTE_ALT if i % 2 else _CHUTE_TOP))
-            mesh.face(quad, col, 2, True, False)
-    return mesh, pts[0]
-
-
-_CHUTE_TOP = (64, 70, 56)
-_CHUTE_ALT = (78, 82, 66)
-_CHUTE_RED = (92, 38, 34)
-_CHUTE_LINE = (168, 176, 186)
-
-
-def _draw_chute(r, pose, pos, yaw, offset=(0.0, 2.35, 0.0), open_k=1.0,
-                collapse=0.0, tilt=8.0, lines=True):
-    chest = _joints(_BIRI, pose, pos, yaw)["chest"]
-    center = tuple(chest[i] + offset[i] for i in range(3))
-    mesh, rim = _chute_mesh(center, 1.62, open_k, collapse, tilt)
-    _w.add(r, mesh)
-    if lines and open_k > 0.3:
-        anchor = (chest[0], chest[1] + 0.24, chest[2])
-        for i in range(0, 12, 2):
-            r.add_line3d(rim[i], anchor, _CHUTE_LINE, 1, layer=4)
-
-
-def _draw_chute_ground(r, x, z):
-    """The canopy he just stepped out of, flat on the snow behind the LZ."""
-    from engine3d.core import box
-    gy = _w.height_at(x - 0.8, z - 1.1) + 0.05
-    mesh, _rim = _chute_mesh((x - 0.8, gy, z - 1.1), 1.45, 1.0,
-                             collapse=1.0, tilt=0.0)
-    _w.add(r, mesh)
-    for i in range(5):
-        u = _w._u(i, 71, 1)
-        v = _w._u(i, 71, 2)
-        _w.add(r, box(0.30 + 0.3 * u, 0.06, 0.22 + 0.2 * v,
-                      _CHUTE_ALT if i % 2 else _CHUTE_TOP,
-                      center=(x - 1.2 + u * 0.9, gy + 0.05,
-                              z - 1.7 + v * 1.1)))
+def _door_seat(key, upper, z=_w.HELI_DOOR_Z):
+    """Seated door pose + airframe-local root: pelvis over the sill, soles on
+    the skid, shins hanging outside the open door."""
+    h = _w.hum(key)
+    pose = _w.sit_pose(h, _w.HELI_SILL_Y - _w.HELI_SKID_Y, upper)
+    a = _w.ankles(h, pose, (0.0, _w.HELI_SKID_Y, 0.0), 90.0)
+    dx = 0.5 * (a["l"][0] + a["r"][0])
+    dz = 0.5 * (a["l"][2] + a["r"][2])
+    return pose, (_w.HELI_SKID_X - dx, _w.HELI_SKID_Y, z - dz)
 
 
 def heli_seat():
-    """Seated door pose + airframe-local root: pelvis over the sill, soles on
-    the skid, shins hanging outside the open door."""
     d = _SEAT.get("v")
     if d is None:
-        h = _w.hum(_BIRI)
-        pose = _w.sit_pose(h, _w.HELI_SILL_Y - _w.HELI_SKID_Y,
-                           dict(spine=7, head_p=1, lsh_p=12, lel=30,
-                                rsh_p=10, rsh_r=-5, rel=26))
-        a = _w.ankles(h, pose, (0.0, _w.HELI_SKID_Y, 0.0), 90.0)
-        dx = 0.5 * (a["l"][0] + a["r"][0])
-        dz = 0.5 * (a["l"][2] + a["r"][2])
-        d = _SEAT["v"] = (pose, (_w.HELI_SKID_X - dx, _w.HELI_SKID_Y,
-                                 _w.HELI_DOOR_Z - dz))
+        d = _SEAT["v"] = _door_seat(_BIRI, dict(spine=7, head_p=1, lsh_p=12,
+                                                lel=30, rsh_p=10, rsh_r=2,
+                                                rel=26))
     return d
 
 
 def seated_door(t):
-    """Biribel on the sill at the hover -> (pose, world pos, yaw)."""
+    """Biribel on the sill during the approach -> (pose, world pos, yaw)."""
     pose, root = heli_seat()
-    L = _w.heli_xform(hover_pos(t), hover_yaw(t), hover_bank(t))
-    return pose, L(*root), hover_yaw(t) + 90.0
+    hp, hy, hb, hpit = heli_at("m6_insert_valley", t)
+    return pose, _w.heli_xform(hp, hy, hb, hpit)(*root), hy + 90.0
+
+
+def _landed_pose():
+    return _mix("kneel_over", "kneel_over", 0.0)
+
+
+def _landed_root():
+    """Root that plants the crouch on ``_LAND``, knee-deep in the powder."""
+    pos = _w.planted_pos(_w.hum(_BIRI), _landed_pose(), 90.0, _LAND)
+    return (pos[0], _w.height_at(*_LAND) - _ROOT_DROP - _SINK, pos[2])
 
 
 def jump_stage(t):
-    """Weight shift on the sill, then a leg push out of the door at 2150 ms.
-    The feet do not move before the push, so nothing skates on the skid."""
+    """Weight shift on the sill, a leg push, a short ballistic drop and a
+    crouch into the powder -> (pose, root, yaw, heli).  The feet do not move
+    before the push, so nothing skates on the skid."""
     pose0, root = heli_seat()
-    heli = hover_pos(t)
-    wind = _w.ease5(t, 500, 900)
-    lean = _w.ease5(t, 1500, 560)
-    push = _w.ease5(t, 2150, 620)
+    heli = jump_heli(t)
+    L = _w.heli_xform(heli, hover_yaw(t), hover_bank(t))
+    yaw = hover_yaw(t) + 90.0
+    wind = _w.ease5(t, 1700, 700)
+    lean = _w.ease5(t, 2300, 500)
+    push = _w.ease5(t, _PUSH, 520)
     pose = dict(pose0)
     pose["spine"] = 7 + 5 * wind + 13 * lean + 8 * push
     pose["head_p"] = 1 - 2 * wind - 7 * lean + 4 * push
@@ -263,96 +243,119 @@ def jump_stage(t):
     pose["rsh_p"] = 10 + 18 * wind + 22 * push
     pose["lel"] = 30 + 18 * wind
     pose["rel"] = 26 + 14 * wind
+    leap = dict(pose, spine=24, head_p=-12,
+                lhip_p=-16, rhip_p=-8, lkn=58, rkn=46,
+                lsh_p=54, rsh_p=46, lel=22, rel=28)
     if push > 0.0:
-        leap = dict(pose, spine=24, head_p=-12,
-                    lhip_p=-16, rhip_p=-8, lkn=58, rkn=46,
-                    lsh_p=54, rsh_p=46, lel=22, rel=28)
         pose = _mix(pose, leap, push)
-    L = _w.heli_xform(heli, hover_yaw(t), hover_bank(t))
-    out = 0.82 * push
-    drop = 0.52 * push * push
-    return pose, L(root[0] + out, root[1] - drop, root[2]), \
-        hover_yaw(t) + 90.0, heli
-
-
-_FALL_A = (0.88, 20.86, -46.55)
-_FALL_B = (0.55, 9.85, -36.40)
-
-
-def fall_stage(t):
-    """Freefall, canopy opening, then a slow chute descent down the slope."""
-    q = max(0.0, min(1.0, (t - 100) / 2500.0))
-    # forward momentum is constant; vertical speed settles under the canopy
-    e = 0.30 * q + 0.70 * q * q
-    open_k = _w.ease5(t, 700, 900)
-    pos = (_FALL_A[0] + (_FALL_B[0] - _FALL_A[0]) * q,
-           _FALL_A[1] + (_FALL_B[1] - _FALL_A[1]) * e,
-           _FALL_A[2] + (_FALL_B[2] - _FALL_A[2]) * q)
-    sway = 2.4 * math.sin(t * 0.0011)
-    free = dict(body_p=18, spine=8, head_p=-8,
-                lhip_p=-18, rhip_p=10, lkn=40, rkn=26,
-                lsh_p=70, rsh_p=58, lel=34, rel=30)
-    chute = dict(body_p=10, spine=6, head_p=-2,
-                 twist=sway * 0.9, head_y=-sway * 0.6,
-                 lhip_p=-9, rhip_p=-7, lkn=20, rkn=17,
-                 lsh_p=104, rsh_p=100, lel=20, rel=22)
-    pose = _mix(free, chute, open_k)
-    return pose, pos, 74.0 + 8.0 * q + sway
-
-
-def chute_open(t):
-    """Canopy deployment 0..1 (also drives the fallback and the probe)."""
-    return _w.ease5(t, 700, 900)
+    if t <= _LEAVE:
+        out = 0.82 * min(1.0, push * 1.6)
+        sm = max(0.0, (push - 0.85) / 0.15)
+        drop = 0.52 * sm * sm
+        return pose, L(root[0] + out, root[1] - drop, root[2]), yaw, heli
+    _p, p0, _y, _h = jump_stage(_LEAVE)
+    q = min(1.0, (t - _LEAVE) / float(_AIR))
+    end = _landed_root()
+    land = _mix(leap, "kneel_over", _w.ease5(t, _LEAVE + 150, 450))
+    x = p0[0] + (end[0] - p0[0]) * q
+    z = p0[2] + (end[2] - p0[2]) * q
+    y = p0[1] + (end[1] + _SINK - p0[1]) * q * q + 0.22 * math.sin(math.pi * q)
+    y -= _SINK * _w.ease5(t, _LAND_T, 380)
+    return land, (x, y, z), yaw, heli
 
 
 _GROUND_ROUTE = {}
+_W0 = 3300
+_READY_KEYS = ("lsh_p", "lsh_r", "lel", "rsh_p", "rsh_r", "rel", "rifle_p")
 
 
 def ground_route():
     r = _GROUND_ROUTE.get("v")
     if r is None:
-        r = _GROUND_ROUTE["v"] = _w.path([_LAND, (0.35, -33.40)])
+        r = _GROUND_ROUTE["v"] = _w.path([_LAND, (_LAND[0] - 0.15, _LAND[1] + 2.6)])
     return r
 
 
 def ground_stage(t):
-    """Landing crouch -> planted rise -> four gait steps downhill north."""
+    """Rises out of the powder, checks the K9, turns north, walks a few steps."""
     hum = _w.hum(_BIRI)
-    rise = _w.ease5(t, 620, 900)
-    if t < 1520:
-        pose = _mix("kneel_over", "stand", rise)
-        pose["spine"] = pose.get("spine", 0) + 14 * math.sin(math.pi * rise)
-        pos = _w.planted_pos(hum, pose, 0.0, _LAND)
-        return pose, (pos[0], _w.height_at(pos[0], pos[2]) - 0.05, pos[2]), 0.0
+    rise = _w.ease5(t, 300, 1200)
+    yaw = _w.yaw_mix(90.0, 0.0, _w.ease5(t, 2300, 900))
+    chk = _w.ease5(t, 1500, 350) * (1.0 - _w.ease5(t, 2050, 350))
+    if t < _W0:
+        pose = _mix("kneel_over", "ready", rise)
+        pose["spine"] = pose.get("spine", 0) + 8 * math.sin(math.pi * rise)
+        pose["head_p"] = pose.get("head_p", 0) - 14 * chk
+        pose["lsh_p"] = pose.get("lsh_p", 0) + 12 * chk
+        pos = _w.planted_pos(hum, pose, yaw, _LAND)
+        sink = _SINK * (1.0 - rise)
+        return pose, (pos[0], _w.height_at(*_LAND) - _ROOT_DROP - sink, pos[2]), yaw
     route = ground_route()
     stride = _w.walk_stride(route.length, 0.56)
     g0, g1 = _w.walk_span(route.length, stride)
-    g = g0 + (g1 - g0) * _w.travel(t, 1500, 1550)
-    pose, pos, yaw = _w.walk(hum, route, g, stride, speed=1.05,
-                             ground=lambda x, z: _w.height_at(x, z) - 0.06)
+    g = g0 + (g1 - g0) * _w.travel(t, _W0, 2200)
+    pose, pos, wyaw = _w.walk(hum, route, g, stride, speed=1.05,
+                              ground=lambda x, z: _w.height_at(x, z) - _ROOT_DROP)
+    from engine3d.rig import POSES
+    for k in _READY_KEYS:
+        pose[k] = POSES["ready"][k]
     pose["head_p"] = pose.get("head_p", 0) - 2.0
-    return pose, pos, yaw
+    return pose, pos, wyaw
 
 
 def heli_depart(t):
-    """The hover climbs away south-east as he walks off -> (pos, yaw, bank,
-    pitch).  It stays in frame above the ridge line behind him."""
-    q = _w.travel(t, 0, 3100)
-    return (hover_pos(t, climb=8.0 * q, drift=(-10.0 * q, 8.0 * q)),
-            hover_yaw(t) + 64.0 * q, hover_bank(t) - 17.0 * q, -3.0 * q)
+    """The hover climbs away, lights out, and banks off south-west ->
+    (pos, yaw, bank, pitch)."""
+    q = _w.travel(t, 300, 3800)
+    return (hover_pos(_APPROACH_MS + 5000 + t, climb=12.0 * q,
+                      drift=(-12.0 * q, -9.0 * q)),
+            hover_yaw(t) - 58.0 * q, hover_bank(t) - 17.0 * q, -3.0 * q)
+
+
+def pickup_pos(t):
+    """The Huey coming down into the customs lot, then holding at the skid."""
+    k = _w.ease5(t, 0, 3200)
+    bob = 0.08 * math.sin(t * 0.0016) + 0.03 * math.sin(t * 0.0031 + 1.2)
+    sway = 0.25 * math.sin(t * 0.0011 + 0.4)
+    return (_PICKUP_XZ[0] + sway,
+            _PICKUP_GROUND + 0.75 + 8.5 * (1.0 - k) + bob,
+            _PICKUP_XZ[1] + 0.18 * math.sin(t * 0.0009 + 2.0))
 
 
 def heli_at(scene, t):
     """Airframe placement ``scene`` draws at ``t`` -> (pos, yaw, bank, pitch);
     None for sets without a helicopter.  The probe and tests read this."""
-    if scene in ("m6_insert_heli", "m6_insert_jump", "m6_insert_fall"):
-        return hover_pos(t), hover_yaw(t), hover_bank(t), 0.0
+    if scene == "m6_insert_cabin":
+        return cabin_pos(t), 0.0, 3.0, -2.0
+    if scene == "m6_insert_valley":
+        return approach_pos(t), 0.0, _HELI_BANK, 0.0
+    if scene == "m6_insert_jump":
+        return jump_heli(t), hover_yaw(t), hover_bank(t), 0.0
     if scene == "m6_insert_ground":
         return heli_depart(t)
     if scene == "m6_helicopter":
-        k = _w.travel(min(t, 5200), 0, 5200)
-        return ((10.0 + 5.0 * k, 16.2 + 3.1 * k, -9.0 - 2.0 * k),
-                4.0 + 100.0 * k, -18.0 * min(1.0, k * 1.3), -3.0)
+        t = min(t, 12000)
+        if t < 4600:
+            return pickup_pos(t), _PICKUP_YAW, 1.5, 0.0
+        if t < 8200:
+            k = _w.ease5(t, 4600, 650)
+            p = pickup_pos(4600)
+            # turn the open right door toward the capital (+z) for the cabin
+            return ((p[0], p[1] + 0.90 * k, p[2]),
+                    _PICKUP_YAW + (-90.0 - _PICKUP_YAW) * k, 1.5 - 3.0 * k,
+                    -1.0 * k)
+        # Lift off nose-west, then a right turn that ends flying north at
+        # the hills: the path is a quadratic curve from west to north.
+        q = _w.travel(t, 8200, 3800)
+        p = pickup_pos(4600)
+        base = (p[0], p[1] + 0.90, p[2])
+        s = q * q
+        k = 2.0 * s * (1.0 - s)
+        return ((base[0] - 9.0 * k - 12.0 * s * s,
+                 base[1] + 3.0 * k + 15.0 * s * s,
+                 base[2] - 32.0 * s * s),
+                -90.0 - 95.0 * _w.ease5(t, 8200, 3200),
+                1.5 + 17.0 * math.sin(math.pi * q), -4.0 * q)
     return None
 
 
@@ -370,180 +373,239 @@ def walk_metrics(scene, second=None):
     return None
 
 
-def _insert_heli(surface, t):
-    t = min(t, 3200)
-    r, buf = _w.rend()
-    r.fog, r.fog_start, r.fog_end = (11, 15, 24), 38.0, 190.0
-    heli = hover_pos(t)
-    pose, seat, yaw = seated_door(t)
+def _cabin_angle():
+    text = _shot_text()
+    if "Kim Kim" in text:
+        return 0            # the intercept: Biribel listening
+    if "notebook" in text:
+        return 1            # Maru glances back
+    return 2                # Biribel, close, answering
+
+
+def cabin_cam(ang, t, L):
+    """Eye/target (world) for one briefing angle; a slow push-in on all three."""
+    k = t / 3600.0
+    if ang == 0:
+        eye, tgt, fov = (-1.00 + 0.10 * k, 1.58, -1.45 + 0.15 * k), (0.28, 1.62, 0.45), 52
+    elif ang == 1:
+        eye, tgt, fov = (-0.95, 1.50, 0.50 + 0.12 * k), (0.50, 1.72, 2.20), 50
+    else:
+        eye, tgt, fov = (-1.00 + 0.08 * k, 1.50, -1.05 + 0.08 * k), (0.30, 1.70, 0.45), 46
+    return L(*eye), L(*tgt), fov
+
+
+def _insert_cabin(surface, t):
+    """Briefing: Biribel on the bench, the door open on the dark ridge, Maru
+    up front.  One renderer, three angles chosen by the line."""
+    t = min(t, 3800)
+    ang = _cabin_angle()
+    r, buf = _w.rend_ps2()
+    r.fog, r.fog_start, r.fog_end = (10, 14, 22), 20.0, 150.0
+    heli, hyaw, hbank, hpitch = heli_at("m6_insert_cabin", t)
+    L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    from engine3d.core import Light
+    r.light = Light(direction=(-0.55, 0.50, -0.30), ambient=0.30, diffuse=0.52,
+                    sky=0.06, tint=(0.86, 0.93, 1.08))
+    lights = [
+        {"pos": L(-0.75, 1.95, -0.25), "color": (170, 192, 226),
+         "intensity": 1.0, "range": 2.8},
+        {"pos": L(-0.2, 1.85, 0.4), "color": (255, 76, 50),
+         "intensity": 0.40, "range": 2.1},
+        {"pos": L(0.6, 1.25, -0.7), "color": (70, 190, 130),
+         "intensity": 0.26, "range": 1.6},
+    ]
+    if ang == 0:
+        flick = 0.7 + 0.3 * math.sin(t * 0.021)
+        lights.append({"pos": L(-0.85, 1.55, -0.45), "color": (120, 230, 150),
+                       "intensity": 0.45 * flick, "range": 1.5})
+    r.set_lights(lights)
+    pose, root = _bench_seat(
+        _BIRI, 0.28, 0.45, 0.62,
+        dict(spine=4, head_p=1, lsh_p=12, lel=26, rsh_p=10, rel=24), yaw=-90.0)
+    seat = L(*root)
+    yaw = hyaw - 90.0
+    _ppose, proot = _w.heli_pilot()
+    phead = L(proot[0], 1.92, proot[2] + 0.10)
+    if ang == 0:
+        target = L(-0.85, 1.35, -0.45)
+    elif ang == 1:
+        target = phead
+    else:
+        target = L(7.0, 1.3, 4.0) if t < 1100 else L(-2.0, 1.5, 0.5)
+    pose["twist"], pose["head_y"] = _look(seat, yaw, target)
+    pose["head_p"] = 3.0 if ang == 0 else -1.0
+    glance = _w.ease5(t, 300, 500) if ang == 1 else 0.0
+    tw, hy = _look(proot, 0.0, (root[0], 1.90, root[2]))
+    pilot = (tw * glance, hy * glance)
+    eye, tgt, fov = cabin_cam(ang, t, L)
+    _cam(r, t, eye, tgt, fov, hh=0.008, seed=20 + ang)
+    _w.night(r, buf, t, top=(5, 8, 16), bot=(18, 26, 44), stars=44,
+             moon=(-10, 9.0), sodium=(60, 40, 26), seed=21, star_cut=0.45)
+    _w.static_scene(r, "m6_insert_cabin")
+    r.begin()
+    _w.terrain(r, t, lights=False)
+    _w.crossing_far(r, t)
+    _w.static_end(r)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=0.85, bank=hbank,
+                  pitch=hpitch, door=1.0, blur=0.5, pilot=pilot)
+    _door_jump_seat(r, L)
+    _w.actor(r, _BIRI, pose, seat, yaw, t, seed=82, amp=0.22,
+             expression="stern" if ang != 1 else "neutral")
+    if ang == 0:
+        r.add_sprite(L(-0.85, 1.55, -0.45),
+                     _fx.glow((120, 230, 150), 0.07, t, seed=23, intensity=0.8),
+                     layer=_fx.FX_LAYER)
+    _w.snow3d(r, t, seed=84, n=20, spread=8, height=6, speed=1.2)
+    r.flush(buf)
+    _w.present_ps2(surface, buf)
+    _w.finish(surface, 6101, "", t=t, ps2=True)
+
+
+def _wash(r, heli, t, k, seed):
+    """Rotor wash on the powder under the hover: puffs and haze, no streaks."""
+    gy = _w.height_at(heli[0], heli[2]) + 0.25
+    at = (heli[0], gy, heli[2])
+    r.add_sprite(at, _fx.powder(t, seed, 4.8, 0.55 * k), layer=_fx.FX_LAYER)
+    r.add_sprite(at, _fx.powder(t + 700, seed + 1, 3.0, 0.45 * k),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((heli[0], gy + 0.2, heli[2]),
+                 _fx.haze((176, 190, 212), 6.5, t, seed=seed + 2,
+                          intensity=0.22 * k), layer=_fx.FX_LAYER)
+
+
+def _insert_valley(surface, t):
+    """Over his shoulder from the open door: the Huey crests the ridge and the
+    crossing lies lit below."""
+    t = min(t, _APPROACH_MS)
+    r, buf = _w.rend_ps2()
+    r.fog, r.fog_start, r.fog_end = (9, 13, 21), 40.0, 230.0
+    heli, hyaw, hbank, hpitch = heli_at("m6_insert_valley", t)
+    L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    pose, root = heli_seat()
+    pose = dict(pose)
+    seat = L(*root)
+    yaw = hyaw + 90.0
+    pose["twist"], pose["head_y"] = _look(seat, yaw, (0.0, 6.0, 36.0))
+    pose["head_p"] = 3.0
     head = _joints(_BIRI, pose, seat, yaw)["head"]
-    _rig_insert(r, heli, cabin=0.18, amb=0.25, fill=(0.50, 0.42, -0.45),
-                yaw=hover_yaw(t), bank=hover_bank(t),
-                bounce={"pos": (head[0] + 0.30, head[1] + 0.18, head[2] + 0.15),
-                        "color": (150, 170, 200), "intensity": 0.22,
-                        "range": 1.8})
-    _cam(r, t, (12.8, 26.0, -62.5), (-0.6, 22.8, -45.5), 44,
-         hh=0.03, seed=1, roll=0.12 * math.sin(t * 0.0007))
-    _w.night(r, buf, t, top=(5, 8, 16), bot=(18, 26, 44), stars=58,
+    _rig_insert(r, heli, cabin=0.22, amb=0.25, dif=0.46,
+                fill=(0.55, 0.50, -0.20), yaw=hyaw, bank=hbank,
+                extra=[{"pos": (head[0] + 1.6, head[1] + 0.5, head[2] - 0.9),
+                        "color": (170, 192, 226), "intensity": 0.9,
+                        "range": 4.0},
+                       {"pos": (head[0] - 0.6, head[1] + 0.3, head[2] + 1.6),
+                        "color": (255, 178, 104), "intensity": 0.55,
+                        "range": 3.2}])
+    _cam(r, t, L(3.6, 2.5, -1.6), L(0.8, 1.05, 5.5), 50, hh=0.02, seed=1,
+         roll=0.20 * math.sin(t * 0.0007))
+    _w.night(r, buf, t, top=(5, 8, 16), bot=(18, 26, 44), stars=52,
              moon=(28, 0.30), sodium=(70, 44, 26), seed=3)
-    _w.static_scene(r, "m6_insert_heli")
+    _w.static_scene(r, "m6_insert_valley")
     r.begin()
     _w.terrain(r, t)
-    _w.border_compound(r, t)
+    _w.crossing_far(r, t)
     _w.static_end(r)
-    _w.helicopter(r, t, heli, yaw=hover_yaw(t), rotor_speed=1.0,
-                  bank=hover_bank(t))
-    _w.actor(r, _BIRI, pose, seat, yaw, t, seed=2, amp=0.28,
-             expression="stern")
-    _chute_pack(r, pose, seat, yaw)
-    down = (heli[0], _LZ_GROUND + 0.45, heli[2])
-    r.add_sprite(down, _fx.haze((176, 190, 212), 8.5, t, seed=4,
-                                intensity=0.22), layer=_fx.FX_LAYER)
-    r.add_sprite(down, _fx.dust_motes(t, seed=4, count=46,
-                                      spread_m=(4.6, 1.0),
-                                      col=(176, 190, 208)),
-                 layer=_fx.FX_LAYER)
-    r.add_sprite((heli[0], _LZ_GROUND + 0.2, heli[2]),
-                 _fx.dust_motes(t, seed=5, count=30, spread_m=(2.2, 0.8),
-                                col=(210, 220, 236)),
-                 layer=_fx.FX_LAYER)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=1.0, bank=hbank,
+                  pitch=hpitch)
+    _w.actor(r, _BIRI, pose, seat, yaw, t, seed=2, amp=0.28, expression="stern")
+    _w.snow3d(r, t, seed=5, n=60, spread=16, height=10, speed=1.0)
     r.flush(buf)
-    _w.present(surface, buf)
-    _w.finish(surface, 6101, "RIDGE ABOVE KIM KIM // INSERTION", t=t)
+    _w.present_ps2(surface, buf)
+    _w.finish(surface, 6102, "KIM KIM BORDER // 02:40", t=t, ps2=True)
 
 
 def _insert_jump(surface, t):
-    t = min(t, 2900)
-    r, buf = _w.rend()
-    r.fog, r.fog_start, r.fog_end = (10, 13, 20), 14.0, 105.0
+    """One continuous low take: the hover settles, he drops into the powder."""
+    t = min(t, 5000)
+    r, buf = _w.rend_ps2()
+    r.fog, r.fog_start, r.fog_end = (10, 13, 20), 16.0, 120.0
     pose, seat, yaw, heli = jump_stage(t)
-    chest = _joints(_BIRI, pose, seat, yaw)["chest"]
-    shk = _fx.shake(t, 2150, 560, 0.022)
-    _rig_insert(r, heli, cabin=0.30, amb=0.20, dif=0.50,
-                fill=(0.62, 0.40, 0.30),
-                yaw=hover_yaw(t), bank=hover_bank(t))
-    _cam(r, t, (5.60, heli[1] + 1.62, -46.90),
-         (chest[0] + 0.10, chest[1] - 0.28, chest[2] - 0.14), 44,
-         hh=0.02, seed=7, roll=0.30 * math.sin(t * 0.0009), shk=shk)
+    joints = _joints(_BIRI, pose, seat, yaw)
+    chest = joints["chest"]
+    head = joints["head"]
+    shk = _fx.shake(t, _LAND_T, 420, 0.026)
+    _rig_insert(r, heli, cabin=0.0, amb=0.26, dif=0.46,
+                fill=(0.60, 0.42, 0.25), yaw=hover_yaw(t), bank=hover_bank(t),
+                extra=[{"pos": (head[0] + 2.2, head[1] + 0.4, head[2] - 1.0),
+                        "color": (172, 194, 228), "intensity": 1.1,
+                        "range": 4.6},
+                       {"pos": (heli[0], heli[1] + 0.9, heli[2] + 3.4),
+                        "kind": "spot", "dir": (0.0, -0.93, 0.36), "cone": 0.72,
+                        "color": (255, 240, 205), "intensity": 1.2,
+                        "range": 11.0}])
+    g = _w.height_at(*_HOVER_XZ)
+    aim = g + 1.0 + 0.5 * max(0.0, chest[1] - g)
+    _cam(r, t, (7.0, g + 0.9, -44.4), (chest[0] * 0.5 + 0.7, aim, chest[2]),
+         55, hh=0.02, seed=7, roll=0.25 * math.sin(t * 0.0009), shk=shk)
     _w.night(r, buf, t, top=(5, 8, 15), bot=(19, 27, 44), stars=44,
              moon=(24, 0.28), sodium=(54, 34, 22), seed=8)
     _w.static_scene(r, "m6_insert_jump")
     r.begin()
     _w.terrain(r, t, lights=False)
-    _w.border_compound(r, t, warm=0.8)
+    _w.crossing_far(r, t, warm=0.8)
     _w.static_end(r)
+    # pilot=False: from this low outside angle Maru's head stays under the
+    # roof and only her arm showed through the open windscreen
     _w.helicopter(r, t, heli, yaw=hover_yaw(t), rotor_speed=1.0,
-                  bank=hover_bank(t))
+                  bank=hover_bank(t), pilot=False)
     _w.actor(r, _BIRI, pose, seat, yaw, t, seed=9, amp=0.30,
-             expression="stern")
-    _chute_pack(r, pose, seat, yaw)
-    stream = _w.ease5(t, 2340, 520)
-    if stream > 0.01:
-        _draw_chute(r, pose, seat, yaw,
-                    offset=(0.35, 1.05 + 0.28 * stream, -0.55),
-                    open_k=0.12 + 0.20 * stream, tilt=20.0, lines=False)
-    # rotor wash: streaking snow swept down and out of the door
-    for i in range(18):
-        u, v = _w._u(i, 5, 1), _w._u(i, 5, 2)
-        x = seat[0] + 0.4 + u * 3.4
-        y = seat[1] - 1.9 + v * 1.6
-        z = seat[2] - 2.0 + ((v * 6.4 + t * 0.005) % 6.4)
-        r.add_line3d((x, y, z), (x + 0.55, y + 0.22, z + 0.9),
-                     (162, 176, 198), 1, layer=4)
-    down = (heli[0], _LZ_GROUND + 0.4, heli[2])
-    r.add_sprite(down, _fx.haze((176, 190, 212), 6.5, t, seed=10,
-                                intensity=0.20), layer=_fx.FX_LAYER)
+             expression="stern", rifle_on=t > _LEAVE)
+    k = 0.55 + 0.45 * (1.0 - (heli[1] - _HOVER_Y) / _SETTLE)
+    _wash(r, heli, t, max(0.4, min(1.0, k)), 10)
+    if t > _LAND_T:
+        age = (t - _LAND_T)
+        r.add_sprite((_LAND[0], g + 0.2, _LAND[1]),
+                     _fx.powder(age, 14, 1.8, 0.7 * max(0.0, 1.0 - age / 1100.0),
+                                puffs=9), layer=_fx.FX_LAYER)
+    _w.snow3d(r, t, seed=11, n=50, spread=14, height=9, speed=0.9)
     r.flush(buf)
-    _w.present(surface, buf)
-    _w.finish(surface, 6102, "DOOR // 12 METRES", t=t)
-
-
-def _insert_fall(surface, t):
-    t = min(t, 2900)
-    pose, pos, yaw = fall_stage(t)
-    r, buf = _w.rend()
-    r.fog, r.fog_start, r.fog_end = (8, 11, 20), 24.0, 150.0
-    heli = hover_pos(t)
-    chest = _joints(_BIRI, pose, pos, yaw)["chest"]
-    shk = _fx.shake(t, 0, 700, 0.020)
-    _rig_insert(r, heli, cabin=0.24, amb=0.20, dif=0.46,
-                fill=(0.40, 0.46, 0.30),
-                yaw=hover_yaw(t), bank=hover_bank(t),
-                bounce={"pos": (chest[0] + 0.5, chest[1] + 2.0, chest[2] + 0.6),
-                        "color": (150, 166, 192), "intensity": 0.36,
-                        "range": 5.5})
-    eye = (pos[0] + 8.50, pos[1] + 2.50, pos[2] + 5.00)
-    tgt = (pos[0], pos[1] + 2.00, pos[2])
-    _cam(r, t, eye, tgt, 56, hh=0.025, seed=12,
-         roll=0.30 * math.sin(t * 0.0012), shk=shk)
-    _w.night(r, buf, t, top=(4, 6, 12), bot=(16, 22, 38), stars=30,
-             sodium=(48, 30, 20), seed=13, star_cut=0.7)
-    _w.static_scene(r, "m6_insert_fall")
-    r.begin()
-    _w.terrain(r, t)
-    _w.border_compound(r, t)
-    _w.static_end(r)
-    _w.helicopter(r, t, heli, yaw=hover_yaw(t), rotor_speed=1.0,
-                  bank=hover_bank(t))
-    _w.air_actor(r, _BIRI, pose, pos, yaw, t, seed=14,
-                 expression="stern", mouth=0.2)
-    _chute_pack(r, pose, pos, yaw)
-    ok = chute_open(t)
-    if ok > 0.02:
-        _draw_chute(r, pose, pos, yaw,
-                    offset=(0.18, 0.25 + 2.10 * ok, 0.12),
-                    open_k=0.12 + 0.88 * ok, tilt=7.0,
-                    lines=ok > 0.30)
-    # fast snow streaks rising past the lens
-    for i in range(24):
-        u, v = _w._u(i, 15, 1), _w._u(i, 15, 2)
-        x = -4.0 + u * 12.0
-        z = -50.0 + v * 9.0
-        yy = (v * 18 + t * 0.014) % 18 + _LZ_GROUND - 4.0
-        r.add_line3d((x, yy, z), (x, yy + 1.6 + u * 1.2, z), (172, 186, 206),
-                     1, layer=4)
-    r.flush(buf)
-    _w.present(surface, buf)
-    _w.finish(surface, 6103, "DROP", t=t)
+    _w.present_ps2(surface, buf)
+    _w.finish(surface, 6103, "", t=t, ps2=True)
 
 
 def _insert_ground(surface, t):
-    t = min(t, 3100)
+    """He rises, checks the K9; the Huey climbs off dark; the camera swings
+    behind him onto the crossing's lights and holds."""
+    t = min(t, 6000)
     pose, pos, yaw = ground_stage(t)
-    r, buf = _w.rend()
-    r.fog, r.fog_start, r.fog_end = (12, 16, 26), 26.0, 130.0
-    shk = _fx.shake(t, 0, 420, 0.024)
-    _rig_insert(r, amb=0.22, dif=0.48, fill=(-0.12, 0.46, 0.70),
-                bounce={"pos": (pos[0] + 0.45, pos[1] + 0.40, pos[2] + 1.05),
-                        "color": (168, 186, 214), "intensity": 0.34,
-                        "range": 3.4})
-    eye = (pos[0] + 6.20, pos[1] + 1.75, pos[2] + 1.60)
-    _cam(r, t, eye, (pos[0], pos[1] + 0.95, pos[2]), 50,
-         hh=0.02, seed=16, shk=shk)
+    r, buf = _w.rend_ps2()
+    r.fog, r.fog_start, r.fog_end = (12, 16, 26), 30.0, 230.0
+    shk = _fx.shake(t, 0, 380, 0.020)
+    hpos, hyaw, hbank, hpitch = heli_depart(t)
+    _rig_insert(r, amb=0.26, dif=0.46, fill=(0.50, 0.46, -0.20),
+                extra=[{"pos": (pos[0] + 2.4, pos[1] + 1.9, pos[2] - 2.0),
+                        "color": (172, 194, 228), "intensity": 1.4,
+                        "range": 5.5},
+                       {"pos": (pos[0] + 0.5, pos[1] + 1.5, pos[2] + 3.4),
+                        "color": (255, 172, 98), "intensity": 0.85,
+                        "range": 5.5}])
+    g = _w.height_at(*_LAND)
+    sw = _w.ease5(t, 2400, 2400)
+    e0 = (6.4, g + 1.0, -45.6)
+    e1 = (pos[0] + 0.7, g + 1.75, pos[2] - 4.3)
+    t0 = (pos[0], pos[1] + 0.95, pos[2])
+    t1 = (pos[0] * 0.5, g + 0.3, pos[2] + 30.0)
+    eye = tuple(e0[i] + (e1[i] - e0[i]) * sw for i in range(3))
+    tgt = tuple(t0[i] + (t1[i] - t0[i]) * sw for i in range(3))
+    _cam(r, t, eye, tgt, 50, hh=0.02, seed=16, shk=shk)
     _w.night(r, buf, t, top=(6, 9, 17), bot=(19, 27, 44), stars=46,
              moon=(26, 0.26), sodium=(70, 46, 26), seed=17)
     _w.static_scene(r, "m6_insert_ground")
     r.begin()
     _w.terrain(r, t)
-    _w.border_compound(r, t)
+    _w.crossing_far(r, t)
     _w.static_end(r)
-    hpos, hyaw, hbank, hpitch = heli_depart(t)
     _w.helicopter(r, t, hpos, yaw=hyaw, rotor_speed=1.0, bank=hbank,
-                  pitch=hpitch)
+                  pitch=hpitch, lit=t < 600)
     _w.actor(r, _BIRI, pose, pos, yaw, t, seed=18, amp=0.45,
-             expression="stern")
-    _chute_pack(r, pose, pos, yaw)
-    _draw_chute_ground(r, *_LAND)
-    # the wash falls away as the Huey climbs
+             expression="stern", rifle_on=True)
     wash = max(0.0, 1.0 - _w.travel(t, 0, 2200))
-    if wash > 0.02:
-        down = (hpos[0], _LZ_GROUND + 0.45, hpos[2])
-        r.add_sprite(down, _fx.haze((200, 212, 232), 6.0, t, seed=19,
-                                    intensity=0.18 * wash),
-                     layer=_fx.FX_LAYER)
+    if wash > 0.03:
+        _wash(r, hpos, t + 2000, wash, 19)
+    _w.snow3d(r, t, seed=22, n=60, spread=16, height=10, speed=0.9)
     r.flush(buf)
-    _w.present(surface, buf)
-    _w.finish(surface, 6104, "THE CROSSING // 02:40", t=t)
+    _w.present_ps2(surface, buf)
+    _w.finish(surface, 6104, "", t=t, ps2=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -560,11 +622,13 @@ _B_MARK = (-0.30, 0.0, 0.20)
 _B_YAW = -12.0
 # Open notebook offered across the gap: spine across the two actors, pages
 # tilted toward the receiver, both of Volkov's hands under the outer edges.
-_OFFER_L = (-0.476, 1.16, 1.048)
-_OFFER_R = (-0.524, 1.16, 0.712)
+# Held 15 cm out toward Biribel: closer in, his leaning chest swallows the
+# left hand.
+_OFFER_L = (-0.416, 1.16, 0.908)
+_OFFER_R = (-0.464, 1.16, 0.572)
 _OFFER_YAW = -82.0
 _OFFER_PITCH = -28.0
-_TAKE = (-0.50, 1.10, 0.84)
+_TAKE = (-0.44, 1.10, 0.70)
 
 
 def _local(pos, yaw, right=0.0, up=0.0, fwd=0.0):
@@ -605,8 +669,15 @@ def _knee_grip(key, pose, pos, yaw, side, back=0.07, up=0.075):
     return (kn[0] - f[0] * back, kn[1] + up, kn[2] - f[1] * back)
 
 
-def _hand(key, pose, pos, yaw, side, target):
-    return _w.reach(_w.hum(key), pose, side, target, pos, yaw)
+def _hand(key, pose, pos, yaw, side, target, pole=None):
+    return _w.reach(_w.hum(key), pose, side, target, pos, yaw, pole)
+
+
+# Elbow pole for a hand crossing the body (torso-local): forward and out over
+# the reaching side, so the forearm passes in front of the chest, not through.
+# elbow poles that swing the elbow out past the ribs, not through them
+_OUT = {"l": (-1.0, -1.0, 0.0), "r": (1.0, -1.0, 0.0)}
+_CROSS = {"l": (-1.0, 0.0, 0.3), "r": (0.6, -0.3, 0.75)}
 
 
 def _b_head():
@@ -622,7 +693,7 @@ def _v_rest(spine=16.0, head=None, extra=None):
     p = _seated(up)
     for side in "lr":
         p = _hand("volkov", p, _V_SEAT, _V_YAW, side,
-                  _knee_grip("volkov", p, _V_SEAT, _V_YAW, side))
+                  _knee_grip("volkov", p, _V_SEAT, _V_YAW, side), _OUT[side])
     return p
 
 
@@ -668,13 +739,13 @@ def _stage_wide(t):
     both = _w.ease5(t, 4300, 800)
     open_k = _w.ease5(t, 5100, 500)
     bh = _b_head()
-    vp = _v_rest(16 + 9 * ext, _look(_V_SEAT, _V_YAW, bh))
+    vp = _v_rest(16 + 4 * ext, _look(_V_SEAT, _V_YAW, bh))
     knee_r = _knee_grip("volkov", vp, _V_SEAT, _V_YAW, "r")
     knee_l = _knee_grip("volkov", vp, _V_SEAT, _V_YAW, "l")
     vp = _hand("volkov", vp, _V_SEAT, _V_YAW, "r",
-               _lerp3(knee_r, _OFFER_R, ext))
+               _lerp3(knee_r, _OFFER_R, ext), _OUT["r"])
     vp = _hand("volkov", vp, _V_SEAT, _V_YAW, "l",
-               _lerp3(knee_l, _OFFER_L, ext))
+               _lerp3(knee_l, _OFFER_L, ext), _CROSS["l"])
 
     vhead = _joints("volkov", vp, _V_SEAT, _V_YAW)["head"]
     tw, hd = _look(_B_MARK, _B_YAW, vhead)
@@ -689,8 +760,9 @@ def _stage_wide(t):
     read_l = _local(nb_c, _B_YAW, right=-half, up=-0.02)
     read_r = _local(nb_c, _B_YAW, right=half, up=-0.02)
     lt = _lerp3(_lerp3(rest_l, _TAKE, take), read_l, read)
-    bp = _hand(_BIRI, bp, _B_MARK, _B_YAW, "l", lt)
-    bp = _hand(_BIRI, bp, _B_MARK, _B_YAW, "r", _lerp3(rest_r, read_r, both))
+    bp = _hand(_BIRI, bp, _B_MARK, _B_YAW, "l", lt, _OUT["l"])
+    bp = _hand(_BIRI, bp, _B_MARK, _B_YAW, "r", _lerp3(rest_r, read_r, both),
+               _OUT["r"])
     if t < 3300:
         nb = {"mode": "offer", "who": 0}
     elif both < 0.98:
@@ -804,7 +876,8 @@ def _v_exit1(t):
                 # hands ride the thighs until the knees straighten
                 pos = _w.planted_pos(vh, pose, _V_YAW, route.m0)
                 pose = _hand("volkov", pose, pos, _V_YAW, side,
-                             _knee_grip("volkov", pose, pos, _V_YAW, side))
+                             _knee_grip("volkov", pose, pos, _V_YAW, side),
+                             _OUT[side])
         pos = _w.planted_pos(vh, pose, _V_YAW, route.m0)
         return pose, pos, _V_YAW
     return _gait(route, t, 4900, 1400)
@@ -828,6 +901,11 @@ def _b_track(t, vfn, lag=260.0):
     return _look(_B_MARK, _B_YAW, head), head
 
 
+def _arc(a, b, k, bulge=0.14):
+    """a -> b bowed out in front of Biribel, so the forearm clears his coat."""
+    return _local(_lerp3(a, b, k), _B_YAW, fwd=bulge * math.sin(math.pi * k))
+
+
 def _stage_exit(t, second):
     if second:
         vpose, vpos, vyaw = _v_exit2(t)
@@ -849,15 +927,19 @@ def _stage_exit(t, second):
     nb_c = _low_point()
     bp["head_p"] = _pitch_to(bh, nb_c) * (1 - up) + _pitch_to(bh, vhead) * up
     half = 0.19 - 0.085 * close
+    # the closing notebook comes forward so the narrower grip clears his belly
+    nb_c = _local(nb_c, _B_YAW, fwd=0.12 * close, up=0.06 * close)
     rest_l = _rest_hand(_BIRI, bp, _B_MARK, _B_YAW, "l")
     rest_r = _rest_hand(_BIRI, bp, _B_MARK, _B_YAW, "r")
     edge_l = _local(nb_c, _B_YAW, right=-half, up=-0.02)
     edge_r = _local(nb_c, _B_YAW, right=half, up=-0.02)
-    coat = _local(_B_MARK, _B_YAW, right=-0.05, up=1.28, fwd=0.14)
+    coat = _local(_B_MARK, _B_YAW, right=-0.05, up=1.28, fwd=0.27)
+    drop = _w.ease5(t, 1000, 700)
     bp = _hand(_BIRI, bp, _B_MARK, _B_YAW, "l",
-               _lerp3(edge_l, rest_l, _w.ease5(t, 1000, 700)))
+               _arc(edge_l, rest_l, drop), _OUT["l"])
     bp = _hand(_BIRI, bp, _B_MARK, _B_YAW, "r",
-               _lerp3(_lerp3(edge_r, coat, tuck), rest_r, back))
+               _arc(_lerp3(edge_r, coat, tuck), rest_r, back),
+               _lerp3(_CROSS["r"], _OUT["r"], back))
     if t < 1000:
         nb = {"mode": "hands", "who": 1, "open": 1.0 - close}
     elif t < 2150:
@@ -1050,7 +1132,8 @@ _boxcar_exit = _boxcar_scene("m6_boxcar_exit")
 # ═══════════════════════════════════════════════════════════════════════════
 def _crt_panel(surface, rect, t, lines=CRT_LINES):
     """Diegetic personnel record, drawn at final resolution over the screen
-    quad: header, ID photo block, labelled rows, red KIA stamp, scanlines."""
+    quad: typed query, rows revealing in order, then the callsign anagram
+    sorting itself into the name it hides.  The reveal is the shot."""
     x, y, w, h = rect
     if w < 60 or h < 40:
         return
@@ -1061,19 +1144,25 @@ def _crt_panel(surface, rect, t, lines=CRT_LINES):
     f_head = _mono(font_h, True)
     f_body = _mono(max(6, font_h - 1), True)
     f_small = _mono(max(6, font_h - 2), False)
-    head_h = max(10, int(h * 0.17))
+    head_h = max(10, int(h * 0.155))
     pygame.draw.rect(panel, (14, 42, 25), (0, 0, w, head_h))
     title = f_head.render(lines[0][0], True, (150, 236, 176))
     panel.blit(title, (pad, max(1, head_h // 2 - title.get_height() // 2)))
-    tag = f_small.render("RESTRICTED", True, (84, 144, 106))
-    if pad + title.get_width() + tag.get_width() + pad * 2 < w:
-        panel.blit(tag, (w - pad - tag.get_width(),
-                         max(1, head_h // 2 - tag.get_height() // 2)))
     pygame.draw.line(panel, (46, 104, 66), (0, head_h), (w, head_h), 1)
 
-    body_y = head_h + max(3, int(h * 0.055))
-    pw = max(22, int(w * 0.20))
-    ph = max(20, int(h * 0.40))
+    # search field: the query is typed, then the record answers it
+    query = "UCILEV"
+    typed = max(0, min(len(query), int((t - 500) / 150)))
+    qy = head_h + 1
+    q = "> " + query[:typed] + ("_" if int(t // 300) % 2 == 0 and typed < len(query) else "")
+    panel.blit(f_small.render(q, True, (104, 200, 132)), (pad, qy))
+    if t >= 2400:
+        found = f_small.render("1 RECORD", True, (196, 168, 74))
+        panel.blit(found, (w - pad - found.get_width(), qy))
+
+    body_y = qy + f_small.get_height() + 2
+    pw = max(22, int(w * 0.19))
+    ph = max(20, int(h * 0.37))
     pr = pygame.Rect(pad, body_y, pw, ph)
     pygame.draw.rect(panel, (5, 13, 8), pr)
     pygame.draw.rect(panel, (40, 86, 56), pr, 1)
@@ -1097,17 +1186,26 @@ def _crt_panel(surface, rect, t, lines=CRT_LINES):
     fw = w - fx - pad
     label_w = max(f_small.size(label)[0] for label, _v in lines[1:]) + 3
     label_w = min(label_w, max(20, fw // 2))
-    row_h = max(8, int(h * 0.095))
-    reveal = max(0, int((t - 450) / 24))
+    row_h = max(8, int(h * 0.088))
+    reveal = max(0, int((t - 2600) / 20))
     used = 0
+    hi = _k(t, 6200, 700)
     for row, (label, value) in enumerate(lines[1:]):
         if used >= reveal:
             break
         yy = body_y + row * row_h
         if yy + row_h > h - 14:
             break
-        lab = f_small.render(label, True, (72, 126, 92))
-        panel.blit(lab, (fx, yy))
+        key_row = label in ("NAME", "STATUS")
+        if key_row and hi > 0.02:
+            band = pygame.Surface((fw + pad, row_h - 1), pygame.SRCALPHA)
+            band.fill((44, 120, 64, int(90 * hi)))
+            panel.blit(band, (fx - 2, yy - 1))
+            if int(t // 120) % 2 == 0 and hi > 0.6:
+                pygame.draw.rect(panel, (110, 220, 140),
+                                 (fx - 2, yy - 1, fw + pad, row_h - 1), 1)
+        lab_col = (150, 240, 176) if key_row and hi > 0.4 else (72, 126, 92)
+        panel.blit(f_small.render(label, True, lab_col), (fx, yy))
         used += len(label) + 2
         avail = max(0, reveal - used)
         if avail:
@@ -1115,7 +1213,9 @@ def _crt_panel(surface, rect, t, lines=CRT_LINES):
             maxw = fw - label_w
             while val and f_body.size(val)[0] > maxw:
                 val = val[:-1]
-            col = (212, 92, 74) if label == "STATUS" else (122, 230, 158)
+            col = (232, 102, 82) if label == "STATUS" else (122, 230, 158)
+            if key_row and hi > 0.4:
+                col = tuple(min(255, int(c + (255 - c) * 0.35 * hi)) for c in col)
             panel.blit(f_body.render(val, True, col), (fx + label_w, yy))
         used += len(value) + 4
         if label == "STATUS":
@@ -1123,14 +1223,47 @@ def _crt_panel(surface, rect, t, lines=CRT_LINES):
                              (fx + label_w, yy + row_h - 3),
                              (fx + label_w + f_body.size(value)[0],
                               yy + row_h - 3), 1)
+    # callsign: the anagram sorts into the dead man's name
+    fy = h - pad - f_small.get_height()
+    sort_k = _k(t, 4200, 2100)
+    prefix = "CALLSIGN: "
+    px = pad
+    panel.blit(f_small.render(prefix, True, (58, 112, 76)), (px, fy))
+    x0 = px + f_small.size(prefix)[0]
+    avail = max(24, w - x0 - pad - (58 if w > 260 else 6))
+    cell = max(3.0, min(float(f_small.size("M")[0] + 1),
+                        avail / float(len(_CRT_SOURCE))))
+    used_t = set()
+    target_idx = []
+    for ch in _CRT_SOURCE:
+        for i, tc in enumerate(CRT_CALLSIGN):
+            if i not in used_t and tc == ch:
+                used_t.add(i)
+                target_idx.append(i)
+                break
+        else:
+            target_idx.append(0)
+    for i, ch in enumerate(_CRT_SOURCE):
+        if ch == " ":
+            continue
+        xs = x0 + i * cell
+        xt = x0 + target_idx[i] * cell
+        k = sort_k
+        xx = xs + (xt - xs) * k
+        yy = fy - int(math.sin(math.pi * k) * 7)
+        col = (58 + int(140 * k), 112 + int(120 * k), 76 + int(90 * k))
+        panel.blit(f_small.render(ch, True, col), (int(xx), int(yy)))
+    if sort_k >= 0.999:
+        match = f_small.render("MATCH", True, (230, 210, 120))
+        mx = x0 + len(CRT_CALLSIGN) * cell + 6
+        if mx + match.get_width() < w - pad - 4:
+            panel.blit(match, (mx, fy))
     # moving scanline and the footer barcode
     sy = int((t * 0.035) % max(1, h))
     line = pygame.Surface((w, 1), pygame.SRCALPHA)
     line.fill((120, 230, 150, 26))
     panel.blit(line, (0, sy))
-    foot = f_small.render(CRT_FOOT, True, (58, 112, 76))
-    panel.blit(foot, (pad, h - pad - foot.get_height()))
-    if pad + foot.get_width() + 58 < w:
+    if pad + f_small.size(prefix)[0] + len(CRT_CALLSIGN) * cell + 64 < w:
         for i in range(16):
             bx = w - pad - 46 + i * 3
             bh = 4 + (i * 37) % max(4, h // 7)
@@ -1145,8 +1278,11 @@ def _crt_panel(surface, rect, t, lines=CRT_LINES):
     panel.blit(scan, (0, 0))
     if (int(t // 90) % 7) == 0:
         panel.fill((14, 34, 20), (0, 0, w, h), special_flags=pygame.BLEND_ADD)
+    clip = surface.get_clip()
+    surface.set_clip(pygame.Rect(0, _w.SAFE_TOP, WIDTH, _w.FILM_H))
     surface.blit(panel, (x, y))
     pygame.draw.rect(surface, (26, 58, 38), (x, y, w, h), 1)
+    surface.set_clip(clip)
 
 
 def _quad_rect(r, center, hw, hh, zoff=0.0):
@@ -1183,15 +1319,93 @@ def _rig_terminal(r, fill=(-0.55, 0.45, -0.70), amb=0.20, dif=0.48, lamp=0.45,
     ])
 
 
+_CUSTOMS_RETURN_ROUTE = {}
+
+
+def _customs_return_route():
+    route = _CUSTOMS_RETURN_ROUTE.get("v")
+    if route is None:
+        route = _CUSTOMS_RETURN_ROUTE["v"] = _w.path(
+            [(14.5, 18.5), (9.8, 9.6)])
+    return route
+
+
+def _customs_return_stage(t):
+    hum = _w.hum(_BIRI)
+    route = _customs_return_route()
+    stride = _w.walk_stride(route.length, 0.60)
+    g0, g1 = _w.walk_span(route.length, stride)
+    g = g0 + (g1 - g0) * _w.travel(t, 700, 3200)
+    pose, pos, yaw = _w.walk(
+        hum, route, g, stride, speed=1.05,
+        ground=lambda x, z: _w.height_at(x, z) - 0.04)
+    pose["head_p"] = -2.0 - 3.0 * _w.ease5(t, 3000, 900)
+    return pose, pos, yaw
+
+
+def _customs_return(surface, t):
+    """E1: the customs post at night, the frozen queue, Biribel walking back
+    alone with the notebook.  Answers where we are before the terminal."""
+    t = min(t, 4500)
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (10, 13, 18), 18.0, 110.0
+    from engine3d.core import Light
+    r.light = Light(direction=(-0.35, 0.70, -0.45), ambient=0.34,
+                    diffuse=0.64, sky=0.12, tint=(0.86, 0.92, 1.06))
+    r.set_lights([
+        {"pos": (6.2, 1.60, 8.0), "color": (255, 198, 122),
+         "intensity": 0.80, "range": 6.5},
+        {"pos": (-4.4, 5.5, 7.6), "color": (255, 196, 120),
+         "intensity": 0.65, "range": 9.0},
+        {"pos": (4.4, 5.5, 7.6), "color": (255, 196, 120),
+         "intensity": 0.65, "range": 9.0},
+        # camera-side cold rim so the lone walker reads against the snow
+        {"pos": (13.5, 3.0, 20.5), "color": (120, 150, 200),
+         "intensity": 0.80, "range": 11.0},
+    ])
+    k = _k(t, 0, 4300)
+    eye = (18.0 - 1.8 * k, 2.9 - 0.5 * k, 22.0 - 2.6 * k)
+    _cam(r, t, eye, (-2.0 + 10.0 * k, 1.30, 11.0), 54,
+         hh=0.010, seed=73)
+    _w.night(r, buf, t, top=(5, 8, 15), bot=(18, 26, 42), stars=60,
+             moon=(28, 0.30), sodium=(60, 40, 26), seed=73)
+    _w.static_scene(r, "m6_customs_return")
+    r.begin()
+    _w.terrain(r, t, lights=False)
+    _w.border_compound(r, t)
+    # the hut's lit doorway, on the side the camera can see
+    from engine3d.core import box as _box
+    _w.add(r, _box(0.07, 1.95, 0.95, (255, 203, 109),
+                   center=(8.92, 0.98, 9.4), emissive=True))
+    _w.add(r, _box(0.14, 0.16, 1.15, (40, 40, 42),
+                   center=(8.90, 2.03, 9.4)))
+    r.add_sprite((9.02, 1.25, 9.4),
+                 _fx.window_glow(_fx.SODIUM, 0.75, 0.9, 0.34),
+                 layer=_fx.FX_LAYER)
+    _w.static_end(r)
+    pose, pos, yaw = _customs_return_stage(t)
+    joints = _w.actor(r, _BIRI, pose, pos, yaw, t, seed=52, amp=0.35,
+                      expression="neutral")
+    hand = joints.get("lhand")
+    if hand is not None:
+        _notebook_prop(r, _local(hand, yaw, up=0.035), yaw, carry=True)
+    _w.snow3d(r, t, seed=74, n=90, spread=20, height=14, speed=1.2)
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6309, "KRAP BORDER CUSTOMS // 04:10", t=t)
+
+
 def _customs_terminal(surface, t):
-    t = min(t, 5200)
-    k = _k(t, 0, 4200)
+    t = min(t, 7500)
+    k = _k(t, 0, 6200)
     r, buf = _w.rend()
     r.fog, r.fog_start, r.fog_end = (10, 11, 10), 9.0, 26.0
     _rig_terminal(r, fill=(0.45, 0.50, -0.70), lamp=0.55)
-    eye = (2.6 - k * 2.2, 2.0 - k * 0.52, -2.6 + k * 1.7)
+    # push until the CRT is the frame, not a prop on a desk
+    eye = (2.6 + (0.28 - 2.6) * k, 2.0 + (1.44 - 2.0) * k,
+           -2.6 + (0.45 + 2.6) * k)
     tgt = (-0.9 + k * 0.1, 1.30, 1.35)
-    _cam(r, t, eye, tgt, 48 - k * 16, hh=0.006, seed=37)
+    _cam(r, t, eye, tgt, 48 - k * 12, hh=0.006, seed=37)
     buf.fill((9, 9, 9))
     r.begin()
     crt = _w.terminal_office(r, t)
@@ -1206,12 +1420,12 @@ def _customs_terminal(surface, t):
 def _radio_variant():
     text = _shot_text()
     if "Route 12" in text:
-        return 0
+        return 0           # Biribel, the leaf, the handset
     if "Three hundred" in text:
-        return 1
+        return 1           # Vasile at his window
     if "You'd have done" in text:
-        return 2
-    return 3
+        return 2           # Biribel, close, no answer
+    return 3               # Vasile turns to the desk map
 
 
 # Biribel stands off the front edge of the desk (z 1.15), the radio set at
@@ -1222,10 +1436,10 @@ _R_YAW = -118.0
 _R_JACK = (0.50, 1.00, 1.47)
 
 
-def _head_point(pose, pos, yaw, right=0.0, up=0.0, fwd=0.0):
+def _head_point(pose, pos, yaw, right=0.0, up=0.0, fwd=0.0, key=_BIRI):
     """Point fixed to the head (head-centre local offsets, metres x scale)."""
-    sc = _w.hum(_BIRI)._scale
-    head = _joints(_BIRI, pose, pos, yaw)["head"]
+    sc = _w.hum(key)._scale
+    head = _joints(key, pose, pos, yaw)["head"]
     pt = math.radians(pose.get("spine", 0.0) + pose.get("head_p", 0.0))
     u = (up * math.cos(pt) - fwd * math.sin(pt)) * sc
     f = (fwd * math.cos(pt) + up * math.sin(pt)) * sc
@@ -1233,18 +1447,26 @@ def _head_point(pose, pos, yaw, right=0.0, up=0.0, fwd=0.0):
     return _local(head, hy, right=right * sc, up=u, fwd=f)
 
 
-def _handset_pose(pose, pos, yaw):
+def _handset_pose_key(key, pose, pos, yaw, pole=None):
     """Right hand holding the handset to the right ear -> (pose, ear, mouth)."""
-    ear = _head_point(pose, pos, yaw, right=0.140, up=0.000, fwd=0.010)
-    mouth = _head_point(pose, pos, yaw, right=0.118, up=-0.125, fwd=0.095)
-    grip = _head_point(pose, pos, yaw, right=0.175, up=-0.055, fwd=0.045)
-    return _hand(_BIRI, pose, pos, yaw, "r", grip), ear, mouth
+    ear = _head_point(pose, pos, yaw, right=0.140, up=0.000, fwd=0.010, key=key)
+    mouth = _head_point(pose, pos, yaw, right=0.118, up=-0.125, fwd=0.095, key=key)
+    grip = _head_point(pose, pos, yaw, right=0.175, up=-0.055, fwd=0.045, key=key)
+    return _hand(key, pose, pos, yaw, "r", grip, pole), ear, mouth
+
+
+def _handset_pose(pose, pos, yaw):
+    return _handset_pose_key(_BIRI, pose, pos, yaw)
 
 
 def radio_stage(variant, t):
     """Biribel on the radio at the terminal desk -> ([cast], handset) for
-    ``m6_radio_vasile`` variants 0/1 and ``"maru"``."""
-    if variant == "maru":
+    ``m6_radio_vasile`` variants 0/2, ``"maru"`` and ``"silence"``."""
+    if variant == "silence":
+        k = _w.ease5(t, 400, 1500)
+        spine, head_p, look, expr, seed = 6 + 2 * k, 6 + 7 * k, \
+            (-0.7, 0.9, -1.3), "sad", 45
+    elif variant == "maru":
         k = _w.ease5(t, 1300, 1000)
         spine, head_p, look, expr, seed = 7 + 3 * k, 4 + 9 * k, (-0.9, 1.1, -1.4), \
             "worried", 44
@@ -1266,7 +1488,7 @@ def radio_stage(variant, t):
         {"ear": ear, "mouth": mouth, "hand": hand}
 
 
-def _draw_handset(r, hs, joints, yaw):
+def _draw_handset(r, hs, joints, yaw, jack=_R_JACK, cord=True):
     """Handset follows the drawn hand; a coiled cord sags to the set."""
     from engine3d.core import Mesh, box, m_mul, rot_x, rot_y
     d = [joints["rhand"][i] - hs["hand"][i] for i in range(3)]
@@ -1284,26 +1506,29 @@ def _draw_handset(r, hs, joints, yaw):
     out = Mesh()
     out.add(m, m=m_mul(rot_y(ya), rot_x(pa)), t=_lerp3(ear, mouth, 0.5))
     _w.add(r, out)
-    side = (math.cos(math.radians(yaw)), -math.sin(math.radians(yaw)))
-    n = 19
-    for i in range(1, n):
-        u = i / float(n)
-        p = _lerp3(mouth, _R_JACK, u)
-        bell = 4 * u * (1 - u)
-        c = (p[0] + side[0] * 0.09 * bell, p[1] - 0.17 * bell,
-             p[2] + side[1] * 0.09 * bell)
-        _w.add(r, box(0.0135, 0.0135, 0.0135, (16, 16, 18), center=c))
+    if cord:
+        side = (math.cos(math.radians(yaw)), -math.sin(math.radians(yaw)))
+        n = 19
+        for i in range(1, n):
+            u = i / float(n)
+            p = _lerp3(mouth, jack, u)
+            bell = 4 * u * (1 - u)
+            c = (p[0] + side[0] * 0.09 * bell, p[1] - 0.17 * bell,
+                 p[2] + side[1] * 0.09 * bell)
+            _w.add(r, box(0.0135, 0.0135, 0.0135, (16, 16, 18), center=c))
 
 
 _RADIO_CAMS = {
     0: ((-0.80, 1.74, -0.75), (0.47, 1.66, 0.82), 40, 0.006),
     1: ((-1.10, 1.52, -2.00), (0.45, 1.36, 0.95), 44, 0.008),
-    # the voice on the set: dial, jack, the cord climbing to his hand
-    2: ((1.30, 1.16, 1.00), (0.66, 1.03, 1.55), 42, 0.005),
+    # Biribel, close, on "You'd have done the same."
+    2: ((-1.02, 1.60, -1.22), (0.48, 1.52, 0.84), 38, 0.006),
+    "silence": ((-0.88, 1.60, -1.08), (0.48, 1.48, 0.84), 37, 0.005),
     "maru": ((-0.02, 1.66, -1.26), (0.47, 1.62, 0.85), 40, 0.007),
 }
 _RADIO_FILL = {0: (-0.62, 0.42, -0.66), 1: (-0.70, 0.40, -0.55),
-               2: (-0.40, 0.50, -0.75), "maru": (-0.30, 0.45, -0.85)}
+               2: (-0.40, 0.50, -0.75), "silence": (-0.35, 0.45, -0.80),
+               "maru": (-0.30, 0.45, -0.85)}
 
 
 def _radio_take(surface, t, variant, seed, tag):
@@ -1330,68 +1555,566 @@ def _radio_take(surface, t, variant, seed, tag):
     _w.finish(surface, seed, tag, t=t)
 
 
+def _route12_leaf(r, center, yaw=8.0, accent=(170, 42, 38)):
+    """The Route 12 movement order: a pale leaf with a red code block and a
+    circled authorization number.  Flat on the desk."""
+    from engine3d.core import Mesh, box, rot_y
+    m = Mesh()
+    m.add(box(0.30, 0.004, 0.21, (208, 203, 190)))
+    for i in range(4):
+        m.add(box(0.17, 0.003, 0.008, (126, 120, 108)),
+              t=(-0.03, 0.004, -0.062 + i * 0.034))
+    # the authorization block, circled
+    for dx, dz, w, d in ((0.06, -0.050, 0.11, 0.006),
+                         (0.06, 0.012, 0.11, 0.006),
+                         (0.010, -0.019, 0.006, 0.068),
+                         (0.112, -0.019, 0.006, 0.068)):
+        m.add(box(w, 0.005, d, accent), t=(dx, 0.005, dz))
+    m.add(box(0.085, 0.004, 0.022, (196, 64, 52)),
+          t=(0.06, 0.006, -0.019))
+    out = Mesh()
+    out.add(m, m=rot_y(yaw), t=center)
+    _w.add(r, out)
+
+
+def _notebook_prop(r, pos, yaw, cover=(26, 28, 32), carry=True):
+    """The black notebook; ``carry`` holds it flat in a hand, otherwise it
+    lies open at reading height."""
+    from engine3d.core import Mesh, box, m_mul, rot_x, rot_y
+    m = Mesh()
+    m.add(box(0.16, 0.022, 0.22, cover))
+    m.add(box(0.148, 0.006, 0.205, (198, 194, 182)), t=(0, 0.012, 0))
+    for i in range(3):
+        m.add(box(0.004, 0.002, 0.20, (120, 116, 106)),
+              t=(0.055, 0.016, 0))
+    m.add(box(0.014, 0.026, 0.225, (116, 30, 30)))
+    out = Mesh()
+    rot = m_mul(rot_y(yaw), rot_x(-62.0 if carry else -18.0))
+    out.add(m, m=rot, t=pos)
+    _w.add(r, out)
+
+
+def _desk_phone(r, center):
+    """Bakelite desk set in Vasile's office -> the cord jack position."""
+    from engine3d.core import Mesh, box
+    m = Mesh()
+    m.add(box(0.26, 0.09, 0.20, (34, 32, 30), center=center))
+    m.add(box(0.22, 0.025, 0.05, (52, 48, 42),
+              center=(center[0], center[1] + 0.06, center[2])))
+    for sx in (-1, 1):
+        m.add(box(0.05, 0.035, 0.06, (24, 22, 20),
+                  center=(center[0] + sx * 0.10, center[1] + 0.075, center[2])))
+    _w.add(r, m)
+    return (center[0] + 0.12, center[1] + 0.03, center[2] - 0.06)
+
+
+def _desk_map(r, t):
+    """Vasile's operations map; the mansion is circled from 4.5 s."""
+    from engine3d.core import Mesh, box
+    m = Mesh()
+    m.add(box(0.46, 0.004, 0.32, (196, 190, 172), center=(0.18, 0.906, 1.43)))
+    for i in range(5):
+        m.add(box(0.40, 0.003, 0.006, (140, 132, 118),
+                  center=(0.18, 0.910, 1.31 + i * 0.055)))
+    for i in range(3):
+        m.add(box(0.006, 0.003, 0.26, (140, 132, 118),
+                  center=(-0.01 + i * 0.18, 0.910, 1.43)))
+    _w.add(r, m)
+    if t >= 4500:
+        k = _w.ease5(t, 4500, 500)
+        rad = 0.035 + 0.015 * k
+        for dx, dz, w, d in ((rad, 0, 0.004, rad * 2),
+                             (-rad, 0, 0.004, rad * 2),
+                             (0, rad, rad * 2, 0.004),
+                             (0, -rad, rad * 2, 0.004)):
+            _w.add(r, box(max(0.004, w), 0.004, max(0.004, d),
+                          (204, 54, 42), center=(0.20 + dx, 0.914, 1.40 + dz)))
+
+
+def _vasile_office_pose(t, line):
+    h = _w.hum("vasile")
+    turn = _w.ease5(t, 2200, 1500) if line == 3 else 0.0
+    stand = (0.82, 0.0, 2.95)
+    desk = (0.32, 0.0, 2.34)
+    pos = tuple(stand[i] + (desk[i] - stand[i]) * turn for i in range(3))
+    # line 2: his back is to the window, his face to the lens
+    yaw_win = _w.yaw_to(pos, (0.2, 0.0, -2.0))
+    yaw_desk = _w.yaw_to(pos, (0.2, 0.0, 1.4))
+    yaw = yaw_win + (yaw_desk - yaw_win) * turn
+    pose = dict(spine=2 + 14 * turn, lsh_p=8, lsh_r=6, lel=14,
+                rsh_p=12, rsh_r=8, rel=18)
+    pose["head_p"] = -1.0 + 24.0 * turn
+    pose["head_y"] = -10.0 * turn
+    # still on the line: the handset stays at his ear while the free hand
+    # comes down flat on the desk by the near edge
+    # the phone elbow opens out as he leans, so it clears his chest
+    pose, ear, mouth = _handset_pose_key(
+        "vasile", pose, pos, yaw, _lerp3((0.45, -1.0, -0.35), _OUT["r"], turn))
+    if turn > 0.0:
+        rest = _joints("vasile", pose, pos, yaw)["lhand"]
+        pose = _hand("vasile", pose, pos, yaw, "l",
+                     _lerp3(rest, (0.46, 0.92, 1.98), turn), _OUT["l"])
+    joints = _joints("vasile", pose, pos, yaw)
+    hs = {"ear": ear, "mouth": mouth, "hand": joints["rhand"]}
+    return h, pose, pos, yaw, hs
+
+
+def _vasile_office_take(surface, t, line):
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (12, 11, 11), 10.0, 26.0
+    from engine3d.core import Light
+    r.light = Light(direction=(0.30, 0.55, 0.38), ambient=0.36, diffuse=0.85,
+                    tint=(1.12, 1.00, 0.84))
+    r.set_lights([
+        {"pos": (1.00, 1.00, 1.10), "color": (255, 190, 120),
+         "intensity": 0.85, "range": 4.6},
+        {"pos": (2.80, 1.80, 4.40), "color": (86, 110, 160),
+         "intensity": 0.65, "range": 7.0},
+        {"pos": (0.20, 1.30, -0.60), "color": (90, 112, 150),
+         "intensity": 0.50, "range": 2.2},
+        {"pos": (2.30, 1.55, -1.20), "color": (150, 168, 198),
+         "intensity": 0.40, "range": 3.2},
+    ])
+    turn = _w.ease5(t, 2200, 1500) if line == 3 else 0.0
+    eye = _lerp3((2.70, 1.72, -2.35), (2.60, 1.75, -2.20), turn)
+    tgt = _lerp3((0.25, 1.36, 2.85), (0.25, 1.30, 1.60), turn)
+    _cam(r, t, eye, tgt, 42 + 4 * turn, hh=0.008, seed=38)
+    buf.fill((8, 8, 8))
+    r.begin()
+    _w.vasile_office(r, t)
+    jack = _desk_phone(r, (1.38, 0.90, 1.28))
+    _desk_map(r, t)
+    h, pose, pos, yaw, hs = _vasile_office_pose(t, line)
+    joints = _w.actor(r, "vasile", pose, pos, yaw, t, seed=39, amp=0.22,
+                      expression="stern" if line == 1 else "neutral")
+    if hs is not None:
+        _draw_handset(r, hs, joints, yaw, jack=jack)
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6304 + line, "GUARD HQ // VASILE'S OFFICE", t=t)
+
+
+def _radio_insert(surface, t):
+    """E3 insert: the Route 12 leaf, the circled code, a hand lifting the
+    handset, the GUARD HQ channel lamp lighting."""
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (11, 12, 11), 10.0, 26.0
+    _rig_terminal(r, fill=(-0.58, 0.46, -0.68), lamp=0.65)
+    k = _k(t, 0, 1100)
+    eye = (1.45 - k * 0.10, 1.40 + k * 0.02, 0.80 - k * 0.05)
+    _cam(r, t, eye, (0.18, 0.98, 1.55), 36, hh=0.004, seed=46)
+    buf.fill((8, 9, 8))
+    r.begin()
+    _w.terminal_office(r, t, handset=True)
+    _route12_leaf(r, (0.08, 0.886, 1.55), yaw=6)
+    # the handset hand comes up over the first second
+    from engine3d.core import Mesh, box
+    hx = 0.60 - 0.04 * k
+    hy = 1.20 + 0.16 * k
+    hz = 1.60 - 0.14 * k
+    m = Mesh()
+    m.add(box(0.095, 0.055, 0.075, (128, 102, 84), center=(hx, hy, hz)))
+    m.add(box(0.11, 0.07, 0.09, (42, 44, 42),
+              center=(hx - 0.02, hy - 0.06, hz + 0.02)))
+    _w.add(r, m)
+    # channel lamps on the set: GUARD HQ red, OPEN dark
+    _w.add(r, box(0.036, 0.028, 0.012, (222, 82, 58),
+                  center=(0.60, 1.18, 1.482), emissive=True))
+    _w.add(r, box(0.036, 0.028, 0.012, (36, 52, 44),
+                  center=(0.90, 1.18, 1.482), emissive=False))
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6310, "THE CALL // ROUTE 12", t=t)
+
+
+def _maru_insert(surface, t):
+    """The second channel opens: OPEN CHANNEL lamp, needle jump."""
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (11, 12, 11), 10.0, 24.0
+    _rig_terminal(r, fill=(-0.45, 0.44, -0.78))
+    _cam(r, t, (1.32, 1.18, 1.02), (0.72, 1.04, 1.55), 34, hh=0.004, seed=47)
+    buf.fill((8, 9, 8))
+    r.begin()
+    from engine3d.core import box
+    _w.terminal_office(r, t, handset=True, voice=1.0)
+    _w.add(r, box(0.036, 0.028, 0.012, (222, 82, 58),
+                  center=(0.60, 1.18, 1.482), emissive=True))
+    on = t >= 250
+    if on:
+        col = (70, 218, 132) if (int(t // 110) % 5) else (36, 92, 60)
+    else:
+        col = (36, 52, 44)
+    _w.add(r, box(0.036, 0.028, 0.012, col,
+                  center=(0.90, 1.18, 1.482), emissive=on))
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6311, "MARU // OPEN CHANNEL", t=t)
+
+
 def _radio_vasile(surface, t):
     variant = _radio_variant()
-    if variant == 3:
-        from engine3d.core import Light
-        r, buf = _w.rend()
-        r.fog, r.fog_start, r.fog_end = (12, 11, 11), 10.0, 26.0
-        r.light = Light(direction=(0.30, 0.55, 0.38), ambient=0.30, diffuse=0.78,
-                        tint=(1.12, 1.00, 0.84))
-        r.set_lights([
-            {"pos": (1.00, 1.00, 1.10), "color": (255, 190, 120),
-             "intensity": 0.70, "range": 4.6},
-            {"pos": (2.80, 1.80, 4.40), "color": (86, 110, 160),
-             "intensity": 0.55, "range": 7.0},
-            {"pos": (0.20, 1.30, -0.60), "color": (90, 112, 150),
-             "intensity": 0.50, "range": 2.2},
-        ])
-        k = _k(t, 0, 6800)
-        _cam(r, t, (2.50 - k * 0.18, 1.62, -2.40 + k * 0.16),
-             (-0.30, 1.05, 2.60), 50, hh=0.008, seed=38)
-        buf.fill((9, 8, 8))
-        r.begin()
-        _w.vasile_office(r, t)
-        r.flush(buf)
-        _w.present(surface, buf)
-        _w.finish(surface, 6304, "GUARD HQ // VASILE'S OFFICE", t=t)
+    if variant == 0 and t < 1200:
+        _radio_insert(surface, t)
+        return
+    if variant in (1, 3):
+        _vasile_office_take(surface, t, variant)
         return
     _radio_take(surface, t, variant, 6300 + variant, "")
 
 
+def _radio_silence(surface, t):
+    """E7: he does not answer.  The silence is the beat."""
+    _radio_take(surface, t, "silence", 6308, "THE CALL // NO ANSWER")
+
+
 def _radio_maru(surface, t):
-    _radio_take(surface, t, "maru", 6306, "THE CALL // NOT TONIGHT")
+    """E8: the second channel opens, then Maru on the voice line."""
+    if t < 900:
+        _maru_insert(surface, t)
+        return
+    _radio_take(surface, t, "maru", 6306, "MARU // OPEN CHANNEL")
 
 
-def _helicopter(surface, t):
-    t = min(t, 5200)
+def _cut_line(surface, t):
+    """E9: the switch, the dead channel lamp, the notebook going inside the
+    coat.  The choice, on screen, with no line."""
+    if t < 1500:
+        r, buf = _w.rend()
+        r.fog, r.fog_start, r.fog_end = (11, 12, 11), 10.0, 24.0
+        _rig_terminal(r, fill=(-0.55, 0.44, -0.72))
+        _cam(r, t, (1.30, 1.20, 0.98), (0.70, 1.04, 1.55), 34,
+             hh=0.004, seed=48)
+        buf.fill((8, 9, 8))
+        r.begin()
+        from engine3d.core import Mesh, box
+        _w.terminal_office(r, t, handset=True, voice=0.0)
+        on = t < 650
+        _w.add(r, box(0.036, 0.028, 0.012,
+                      (222, 82, 58) if on else (34, 40, 38),
+                      center=(0.60, 1.18, 1.482), emissive=on))
+        _w.add(r, box(0.036, 0.028, 0.012, (36, 52, 44),
+                      center=(0.90, 1.18, 1.482), emissive=False))
+        push = _w.ease5(t, 320, 280)
+        m = Mesh()
+        m.add(box(0.055, 0.032, 0.048, (128, 102, 84),
+                  center=(0.51, 1.00 - 0.015 * push, 1.49)))
+        m.add(box(0.07, 0.05, 0.06, (42, 44, 42),
+                  center=(0.56, 0.96 - 0.015 * push, 1.49)))
+        _w.add(r, m)
+        r.flush(buf)
+        _w.present(surface, buf)
+        _w.finish(surface, 6312, "THE CALL // CUT", t=t)
+        return
     r, buf = _w.rend()
-    r.fog, r.fog_start, r.fog_end = (12, 14, 22), 55.0, 260.0
+    r.fog, r.fog_start, r.fog_end = (12, 12, 11), 10.0, 28.0
+    _rig_terminal(r, fill=(-0.60, 0.42, -0.70), lamp=0.45)
+    _cam(r, t, (-1.25, 1.62, -1.55), (0.42, 1.28, 0.88), 38,
+         hh=0.006, seed=49)
+    buf.fill((8, 8, 8))
+    r.begin()
+    _w.terminal_office(r, t, handset=False)
+    pose = _b_base(6)
+    pose["head_p"] = 12
+    nb = _local(_R_MARK, _R_YAW, up=1.12, fwd=0.30)
+    for side, sgn in (("l", -1), ("r", 1)):
+        pose = _hand(_BIRI, pose, _R_MARK, _R_YAW, side,
+                     _local(nb, _R_YAW, right=sgn * 0.072))
+    _w.actor(r, _BIRI, pose, _R_MARK, _R_YAW, t, seed=50, amp=0.25,
+             expression="sad")
+    _notebook_prop(r, nb, _R_YAW, carry=False)
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6313, "THE CALL // CUT", t=t)
+
+
+_PICKUP_ROUTE = {}
+_BENCH = {}
+
+
+def _pickup_route():
+    route = _PICKUP_ROUTE.get("v")
+    if route is None:
+        route = _PICKUP_ROUTE["v"] = _w.path([(9.5, 17.0), (-0.75, 17.3)])
+    return route
+
+
+def _bench_seat(key, x, z, floor_y, upper, yaw=90.0):
+    """Seated rig on a bench: soles on the cabin floor at (x, z), thighs on a
+    seat top ``HELI_BENCH_H`` above it."""
+    h = _w.hum(key)
+    pose = _w.sit_pose(h, _w.HELI_BENCH_H, upper)
+    a = _w.ankles(h, pose, (0.0, floor_y, 0.0), yaw)
+    dx = 0.5 * (a["l"][0] + a["r"][0])
+    dz = 0.5 * (a["l"][2] + a["r"][2])
+    return pose, (x - dx, floor_y, z - dz)
+
+
+def _door_jump_seat(r, L):
+    """Fold-down seat by the door for H2 only: the insertion's door sitter
+    would clip it, so the airframe does not carry it."""
+    from engine3d.core import Mesh
+    m = Mesh()
+    for name, lohi in _w.solids("heli_cabin").items():
+        _w._mesh_solid(m, lohi, (22, 24, 27) if "cushion" in name
+                       else (40, 43, 47))
+    m.verts = [L(*v) for v in m.verts]
+    _w.add(r, m, bias=0.4)
+
+
+def _north_ridge(r):
+    """The dark hills north of the border, on the away-turn."""
+    from engine3d.core import prism
+    for i, (x, z, w, h, d) in enumerate(((38, -44, 42, 21, 26),
+                                        (78, -54, 50, 28, 30),
+                                        (114, -40, 36, 18, 24))):
+        prof = [(x - w, 0.0), (x - w * 0.58, h * 0.30),
+                (x - w * 0.26, h * 0.66), (x - w * 0.04, h * 0.90),
+                (x + w * 0.14, h), (x + w * 0.42, h * 0.62),
+                (x + w * 0.74, h * 0.26), (x + w, 0.0)]
+        _w.add(r, prism(prof, d, (14 + i, 16 + i, 23 + i), z0=z - d / 2))
+
+
+def _turn_ridge(r):
+    """Soft dark hills north-west of the border for the away-turn."""
+    from engine3d.core import prism
+    for i, (x, z, w, h, d) in enumerate(((-30, -30, 38, 17, 24),
+                                        (-72, -36, 46, 24, 28),
+                                        (-112, -28, 34, 15, 22))):
+        n = 14
+        prof = []
+        for j in range(n + 1):
+            u = j / n
+            hh = h * math.sin(math.pi * u) ** 1.2 * (
+                0.78 + 0.22 * math.sin(u * 17.0 + i * 2.3))
+            prof.append((x - w + 2.0 * w * u, hh))
+        _w.add(r, prism(prof, d, (26 + 2 * i, 32 + 2 * i, 50 + 3 * i),
+                        z0=z - d / 2))
+
+
+def _heli_pickup(surface, t):
+    """H1: the Huey comes down into the lot; Biribel runs under the disc."""
+    t = min(t, 4600)
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (11, 14, 22), 24.0, 150.0
     heli, hyaw, hbank, hpitch = heli_at("m6_helicopter", t)
-    # camera-side moon key: the valley and the near faces of the capital read
-    # as volumes under the skyline instead of one black wall.  A warm local
-    # city light keeps the distant airframe solid under its rotor blur.
-    _rig_insert(r, amb=0.24, dif=0.52, fill=(-0.38, 0.60, -0.62),
+    L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    from engine3d.core import Light
+    r.light = Light(direction=(-0.30, 0.55, -0.55), ambient=0.23,
+                    diffuse=0.50, sky=0.08, tint=(0.80, 0.88, 1.06))
+    # Biribel runs west under the rotor; the camera trails him.
+    hum = _w.hum(_BIRI)
+    route = _pickup_route()
+    stride = _w.walk_stride(route.length, 0.92)
+    g0, g1 = _w.walk_span(route.length, stride)
+    run = _w.travel(t, 500, 3000)
+    g = g0 + (g1 - g0) * run
+    pose, pos, yaw = _w.walk(
+        hum, route, g, stride, speed=2.2,
+        ground=lambda x, z: _w.height_at(x, z) - 0.03)
+    pose["spine"] = 9 + 7 * run
+    pose["head_p"] = -4
+    climb = _w.ease5(t, 3600, 700)
+    if climb > 0.0:
+        pose["lhip_p"] = -20.0 * climb
+        pose["lkn"] = 58.0 * climb
+        pose["rsh_p"] = 64.0 * climb
+        pose["rel"] = 20.0
+        pose["spine"] = 9 + 5 * climb
+        pose["lift"] = 0.24 * climb
+    r.set_lights([
+        {"pos": (6.2, 1.60, 8.0), "color": (255, 198, 122),
+         "intensity": 0.60, "range": 6.0},
+        {"pos": (heli[0] + 1.2, heli[1] + 1.2, heli[2]),
+         "color": (255, 88, 60), "intensity": 0.45, "range": 2.4},
+        {"pos": (17.0, 4.0, 21.0), "color": (120, 150, 200),
+         "intensity": 0.60, "range": 14.0},
+        # moon rim on the airframe so it separates from the night
+        {"pos": (heli[0] - 5.0, heli[1] + 5.0, heli[2] - 4.0),
+         "color": (150, 180, 230), "intensity": 2.2, "range": 14.0},
+        # cold key and amber kicker on Biribel so the runner reads against
+        # the dark airframe
+        {"pos": (pos[0] + 2.2, pos[1] + 2.4, pos[2] + 3.0),
+         "color": (176, 200, 240), "intensity": 1.5, "range": 6.5},
+        {"pos": (pos[0] - 1.6, pos[1] + 1.4, pos[2] + 1.2),
+         "color": (255, 176, 104), "intensity": 0.8, "range": 4.0},
+        # nose light: a cold spot raking the snow under the disc
+        {"pos": L(0.0, 0.95, 3.40), "kind": "spot",
+         "dir": (0.0, -0.94, 0.34), "cone": 0.72,
+         "color": (255, 240, 200), "intensity": 1.4, "range": 13.0},
+    ])
+    descend = _w.ease5(t, 0, 3200)
+    eye = (16.0 - 2.0 * run, 2.8 - 0.4 * run, 23.0 - 1.0 * run)
+    tgt = (-1.0 + 0.5 * run, 1.3 + 6.6 * (1.0 - descend), 15.5)
+    _cam(r, t, eye, tgt, 60, hh=0.014, seed=74,
+         roll=0.35 * math.sin(t * 0.0011))
+    _w.night(r, buf, t, top=(5, 8, 15), bot=(20, 27, 44), stars=54,
+             moon=(26, 0.28), sodium=(62, 40, 26), seed=75, star_cut=0.42)
+    _w.static_scene(r, "m6_heli_pickup")
+    r.begin()
+    _w.terrain(r, t, lights=False)
+    _w.border_compound(r, t)
+    _w.static_end(r)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=0.95, bank=hbank,
+                  pitch=hpitch, blur=0.6)
+    r.add_sprite(L(0.0, 0.98, 3.52),
+                 _fx.glow((255, 242, 210), 0.42, t, seed=90,
+                          intensity=1.0), layer=_fx.FX_LAYER)
+    joints = _w.actor(r, _BIRI, pose, pos, yaw, t, seed=76, amp=0.32,
+                      expression="stern")
+    hand = joints.get("lhand")
+    if hand is not None:
+        _notebook_prop(r, _local(hand, yaw, up=0.035), yaw, carry=True)
+    # rotor wash on the snow: haze, motes and radial streaks
+    ground = _w.height_at(heli[0], heli[2]) + 0.35
+    down = (heli[0], ground, heli[2])
+    r.add_sprite(down, _fx.haze((176, 190, 212), 4.8, t, seed=78,
+                                intensity=0.20), layer=_fx.FX_LAYER)
+    r.add_sprite(down, _fx.dust_motes(t, seed=78, count=40,
+                                      spread_m=(4.2, 1.0),
+                                      col=(190, 202, 220)),
+                 layer=_fx.FX_LAYER)
+    for i in range(14):
+        u, v = _w._u(i, 78, 1), _w._u(i, 78, 2)
+        a = u * 6.283
+        rad = 0.5 + v * 4.6
+        x = heli[0] + math.cos(a) * rad
+        z = heli[2] + math.sin(a) * rad
+        r.add_line3d((x, ground + 0.15, z),
+                     (x + math.cos(a) * 0.9, ground + 0.45,
+                      z + math.sin(a) * 0.9), (92, 104, 128), 1, layer=4)
+    _w.snow3d(r, t, seed=79, n=58, spread=22, height=15, speed=0.9)
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6314, "KRAP BORDER CUSTOMS // 04:12", t=t)
+
+
+def _heli_cabin(surface, t):
+    """H2: inside the door. Biribel seated, the capital behind him, Maru
+    at the controls up front, the door sliding shut on the lights."""
+    t = min(t, 8200)
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (10, 12, 18), 18.0, 140.0
+    heli, hyaw, hbank, hpitch = heli_at("m6_helicopter", t)
+    L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    open_k = 1.0 - _w.ease5(t, 6600, 900)
+    from engine3d.core import Light
+    r.light = Light(direction=(0.42, 0.38, -0.55), ambient=0.32,
+                    diffuse=0.60, sky=0.05, tint=(1.02, 0.92, 0.84))
+    r.set_lights([
+        {"pos": L(-0.2, 1.85, 0.4), "color": (255, 76, 50),
+         "intensity": 0.55, "range": 2.1},
+        {"pos": L(0.6, 1.25, -0.7), "color": (70, 190, 130),
+         "intensity": 0.30, "range": 1.6},
+        {"pos": L(-0.9, 1.60, -0.8), "color": (140, 160, 190),
+         "intensity": 0.45, "range": 2.6},
+    ])
+    # Biribel has his back to the open door, so the capital's lights sit
+    # behind him; Maru flies from the right-hand seat ahead of him.
+    pose, root = _bench_seat(
+        _BIRI, 0.28, 0.45, 0.62,
+        dict(spine=4, head_p=1, lsh_p=12, lel=26, rsh_p=10, rel=24), yaw=-90.0)
+    seat = L(*root)
+    yaw = hyaw - 90.0
+    look_out = L(7.0, 1.3, 4.0)          # over his shoulder, out the door
+    look_front = L(-2.0, 1.5, 0.5)       # back toward the lens
+    _ppose, proot = _w.heli_pilot()
+    phead = (proot[0], 1.92, proot[2] + 0.10)
+    look_at = (look_out if 5600 < t < 6900
+               else (L(*phead) if t >= 6900 else look_front))
+    pose["twist"], pose["head_y"] = _look(seat, yaw, look_at)
+    pose["head_p"] = 1.0 if t > 6400 else -4.0
+    # she checks over her shoulder once the door is shut
+    glance = _w.ease5(t, 7000, 500)
+    tw, hy = _look(proot, 0.0, (root[0], 1.90, root[2]))
+    pilot = (tw * glance, hy * glance)
+    eye = L(-0.80, 1.86, -1.30)
+    tgt = L(0.30, 1.48, 1.30)
+    _cam(r, t, eye, tgt, 72, hh=0.008, seed=80)
+    _w.night(r, buf, t, top=(5, 7, 14), bot=(22, 24, 40), stars=40,
+             moon=(-8, 11.0), sodium=(96, 52, 28), seed=81, star_cut=0.45)
+    _w.static_scene(r, "m6_heli_cabin")
+    r.begin()
+    _w.capital(r, t)
+    _north_ridge(r)
+    _w.static_end(r)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=0.85, bank=hbank,
+                  pitch=hpitch, door=open_k, blur=0.5, pilot=pilot)
+    # the capital's lights, seen through the open door behind him
+    r.add_sprite(L(8.0, 1.1, 6.0),
+                 _fx.window_glow(_fx.SODIUM, 6.0, 2.2, 0.12),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite(L(10.0, 0.7, 8.0),
+                 _fx.window_glow(_fx.SODIUM, 9.0, 1.8, 0.08),
+                 layer=_fx.FX_LAYER)
+    for i in range(7):
+        r.add_sprite(L(12.0 + (i % 3) * 1.2, 0.7 + (i % 4) * 0.45,
+                       5.0 + (i * 1.7) % 6.0),
+                     _fx.glow(_fx.SODIUM_PALE, 0.22, t, seed=91 + i,
+                              intensity=0.45),
+                     layer=_fx.FX_LAYER)
+    _door_jump_seat(r, L)
+    _w.actor(r, _BIRI, pose, seat, yaw, t, seed=82, amp=0.22,
+             expression="sad" if t > 5200 else "neutral")
+    _notebook_prop(r, _local(seat, yaw, up=1.02, fwd=0.33), yaw,
+                   carry=False)
+    _w.snow3d(r, t, seed=84, n=30, spread=8, height=6, speed=1.2)
+    r.flush(buf)
+    _w.present(surface, buf)
+    _w.finish(surface, 6315, "EN ROUTE // KRAP BORDER", t=t)
+
+
+def _heli_turn(surface, t):
+    """H3: exterior from the east. Capital low on the left, dark hills on
+    the right; the nose swings from the one to the other and the lights
+    shrink into the dark."""
+    t = min(t, 12000)
+    r, buf = _w.rend()
+    r.fog, r.fog_start, r.fog_end = (11, 13, 21), 70.0, 260.0
+    heli, hyaw, hbank, hpitch = heli_at("m6_helicopter", t)
+    q = _w.travel(t, 8200, 3800)
+    lift = heli_at("m6_helicopter", 8200)[0]
+    _rig_insert(r, amb=0.26, dif=0.50, fill=(0.40, 0.55, -0.45),
                 bounce={"pos": (heli[0] + 3.0, heli[1] - 4.0, heli[2] + 4.0),
                         "color": (255, 176, 112), "intensity": 0.95,
                         "range": 20.0})
-    _cam(r, t, (-9.0, 21.8, -66.0), (6.0, 8.5, 40.0), 42,
-         hh=0.015, seed=45, roll=0.10 * math.sin(t * 0.0006))
+    eye = (lift[0] + 48.0, lift[1] + 7.0 + 3.0 * q, lift[2] + 11.0)
+    anchor = (lift[0] - 10.0, lift[1] + 6.0, lift[2] - 4.0)
+    f = 0.55
+    tgt = tuple(anchor[i] * (1.0 - f) + heli[i] * f for i in range(3))
+    _cam(r, t, eye, tgt, 50, hh=0.012, seed=45,
+         roll=-0.16 * math.sin(math.pi * q))
     _w.night(r, buf, t, top=(5, 7, 14), bot=(22, 24, 40), stars=64,
              moon=(-8, 11.0), sodium=(96, 52, 28), seed=46, star_cut=0.35)
-    _w.static_scene(r, "m6_helicopter")
+    _w.static_scene(r, "m6_heli_turn")
     r.begin()
-    _w.terrain(r, t)
-    _w.border_compound(r, t)
-    _w.dark_hills(r)
-    _w.capital(r, t)
+    _w.terrain(r, t, lights=False)
+    _w.border_compound(r, t, warm=0.35)
+    _w.capital(r, t, dx=-60.0, dz=-10.0)
     _w.static_end(r)
     _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=0.8,
                   bank=hbank, pitch=hpitch, blur=0.55)
-    _w.snow3d(r, t, seed=47, n=64, spread=22, height=15, speed=1.0)
+    # at this range the stock nav lights are sub-pixel: bigger strobes so
+    # the airframe still reads as it shrinks into the dark
+    L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    r.add_sprite(L(0.0, 2.66, -1.62),
+                 _fx.beacon((255, 40, 32), 0.9, t, period_ms=1000.0,
+                            phase=0.75, intensity=1.0), layer=_fx.FX_LAYER)
+    r.add_sprite(L(0.08, 3.30, -8.16),
+                 _fx.beacon((255, 248, 226), 0.7, t, period_ms=1200.0,
+                            phase=0.25, intensity=0.9), layer=_fx.FX_LAYER)
+    _w.snow3d(r, t, seed=47, n=56, spread=24, height=16, speed=1.0)
     r.flush(buf)
     _w.present(surface, buf)
     _w.finish(surface, 6307, "THE LAST SIGNAL", t=t)
+
+
+def _helicopter(surface, t):
+    if t < 4600:
+        _heli_pickup(surface, t)
+    elif t < 8200:
+        _heli_cabin(surface, t)
+    else:
+        _heli_turn(surface, t)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1500,65 +2223,38 @@ def _fb_rotor(surface, x, y, s, t):
 def _fb_insert(surface, t, mode):
     _fb_gradient(surface, (6, 9, 17), (22, 30, 46))
     _fb_hills(surface, 300, moon=False)
-    _fb_ridge(surface, 330)
-    if mode == "heli":
-        _fb_rotor(surface, 560 - t * 0.006, 214, 1.25, t)
-        _fb_heli(surface, 560 - t * 0.006, 236, 1.25, t)
-        _fb_snow(surface, t, 3)
-        _fb_tag(surface, "RIDGE ABOVE KIM KIM // INSERTION")
-        return
-    if mode == "jump":
+    if mode == "cabin":
         pygame.draw.rect(surface, (14, 17, 22), (170, 90, 660, 360))
         pygame.draw.rect(surface, (30, 35, 44), (250, 120, 500, 260))
         pygame.draw.rect(surface, (16, 20, 28), (700, 140, 130, 270))
-        for i in range(5):
-            pygame.draw.rect(surface, (226, 180, 116),
-                             (710, 180 + i * 40, 5, 5))
         pygame.draw.polygon(surface, (18, 20, 24),
-                            [(560, 260), (610, 250), (620, 400), (565, 415)])
-        for i in range(26):
-            rng = random.Random(40 + i)
-            x = 210 + rng.randrange(360)
-            y = SCENE_TOP + rng.randrange(_w.FILM_H)
-            pygame.draw.line(surface, (150, 164, 186), (x, y),
-                             (x - 16, y + 20), 1)
+                            [(360, 260), (410, 250), (420, 400), (365, 415)])
+        pygame.draw.circle(surface, (150, 40, 34), (520, 190), 7)
+        pygame.draw.circle(surface, (70, 170, 110), (560, 330), 5)
         _fb_snow(surface, t, 4, 80)
-        _fb_tag(surface, "DOOR // 12 METRES")
         return
-    if mode == "fall":
-        _fb_rotor(surface, 270, 120, 0.7, t)
-        pygame.draw.polygon(surface, (24, 28, 34),
-                            [(180, 136), (290, 122), (360, 146), (255, 168)])
-        pygame.draw.polygon(surface, (56, 62, 50),
-                            [(400, 176), (440, 150), (560, 150), (610, 178),
-                             (560, 206), (445, 206)])
-        pygame.draw.polygon(surface, (78, 82, 66),
-                            [(425, 168), (450, 158), (545, 158), (575, 170),
-                             (545, 190), (455, 190)])
-        pygame.draw.polygon(surface, (104, 42, 38),
-                            [(470, 156), (520, 156), (530, 184), (485, 190)])
-        for lx in (415, 450, 495, 540, 585):
-            pygame.draw.line(surface, (168, 176, 190), (lx, 205), (500, 262), 1)
-        pygame.draw.polygon(surface, (16, 18, 24),
-                            [(470, 250), (520, 270), (545, 360), (500, 390),
-                             (470, 340)])
-        for i in range(44):
-            rng = random.Random(i)
-            x, y = rng.randrange(WIDTH), SCENE_TOP + rng.randrange(_w.FILM_H)
-            pygame.draw.line(surface, (150, 164, 186), (x, y),
-                             (x, y - 16), 1)
-        _fb_tag(surface, "DROP")
+    _fb_ridge(surface, 330)
+    for i in range(8):
+        pygame.draw.rect(surface, (226, 178, 108), (180 + i * 34, 392, 5, 5))
+    if mode == "valley":
+        _fb_rotor(surface, 560 - t * 0.02, 214, 1.25, t)
+        _fb_heli(surface, 560 - t * 0.02, 236, 1.25, t)
+        _fb_snow(surface, t, 3)
+        _fb_tag(surface, "KIM KIM BORDER // 02:40")
+        return
+    if mode == "jump":
+        _fb_heli(surface, 700, 150, 1.0, t)
+        pygame.draw.polygon(surface, (18, 20, 26),
+                            [(350, 400 + min(60, t * 0.02)), (380, 370),
+                             (420, 365), (450, 395), (450, 540), (350, 540)])
+        _fb_snow(surface, t, 5)
         return
     pygame.draw.polygon(surface, (18, 20, 26),
                         [(350, 400), (380, 370), (420, 365), (450, 395),
                          (450, 540), (350, 540)])
     _fb_rotor(surface, 760, 150 - t * 0.004, 0.8, t)
     _fb_heli(surface, 760, 172 - t * 0.004, 0.75, t, tilt=0.2)
-    for i in range(8):
-        pygame.draw.rect(surface, (226, 178, 108),
-                         (180 + i * 34, 430, 5, 5))
     _fb_snow(surface, t, 6)
-    _fb_tag(surface, "THE CROSSING // 02:40")
 
 
 def _fb_tag(surface, text, col=(120, 190, 220)):
@@ -1617,38 +2313,171 @@ def _fb_terminal(surface, t):
     _fb_tag(surface, "SIGNAL OFFICE")
 
 
+def _fb_figure(surface, x, foot_y, s=1.0, coat=(18, 20, 24),
+               skin=(96, 74, 60), facing=1):
+    """Cheap 2D silhouette for the fallbacks: readable shape, not a blob."""
+    w = 26 * s
+    h = 150 * s
+    pygame.draw.polygon(surface, coat,
+                        [(x - w * 0.65, foot_y), (x - w * 0.5, foot_y - h * 0.72),
+                         (x + w * 0.5, foot_y - h * 0.72),
+                         (x + w * 0.65, foot_y)])
+    pygame.draw.rect(surface, coat,
+                     (x - w * 0.5, foot_y - h * 0.95, w, h * 0.28))
+    pygame.draw.circle(surface, skin, (int(x + facing * 3 * s),
+                                       int(foot_y - h * 1.04)), int(11 * s))
+
+
 def _fb_radio(surface, t, variant):
     pygame.draw.rect(surface, (18, 16, 15), (0, SCENE_TOP, WIDTH, _w.FILM_H))
     pygame.draw.rect(surface, (28, 26, 24), (0, 330, WIDTH, 290))
     pygame.draw.rect(surface, (12, 20, 34), (640, 120, 260, 210))
     _fb_snow(surface, t, 9, 34)
-    if variant == 3:
-        pygame.draw.rect(surface, (40, 30, 22), (300, 340, 420, 30))
-        pygame.draw.rect(surface, (26, 24, 22), (470, 300, 90, 150))
-        pygame.draw.rect(surface, (20, 20, 20), (500, 260, 30, 60))
-        pygame.draw.rect(surface, (120, 104, 74), (600, 110, 170, 160))
-        _fb_tag(surface, "GUARD HQ // EMPTY OFFICE")
+    if variant in (1, 3):
+        # Vasile's office: window blinds, a man at the glass, the desk below.
+        pygame.draw.rect(surface, (16, 18, 24), (620, 96, 300, 250))
+        for i in range(9):
+            pygame.draw.rect(surface, (120, 104, 74),
+                             (632, 108 + i * 25, 276, 5))
+        _fb_figure(surface, 760, 400, 1.05, coat=(14, 16, 20),
+                   skin=(110, 84, 66), facing=-1)
+        pygame.draw.rect(surface, (34, 28, 22), (120, 330, 430, 26))
+        pygame.draw.rect(surface, (24, 22, 20), (180, 356, 40, 90))
+        pygame.draw.rect(surface, (24, 22, 20), (450, 356, 40, 90))
+        if variant == 3 and t > 4200:
+            pygame.draw.rect(surface, (196, 190, 172), (200, 300, 250, 30))
+            pygame.draw.circle(surface, (210, 62, 48), (330, 315), 9)
+        _fb_tag(surface, "GUARD HQ // VASILE'S OFFICE")
         return
-    if variant == 2:
-        for i in range(8):
-            pygame.draw.rect(surface, (96, 86, 66), (250, 130 + i * 36, 460, 8))
-        _fb_snow(surface, t, 10, 90)
-        pygame.draw.rect(surface, (34, 32, 28), (380, 430, 140, 50))
-        pygame.draw.circle(surface, (255, 170, 90), (450, 440), 4)
-        _fb_tag(surface, "THE CALL")
+    if variant == "maru" and t < 900:
+        pygame.draw.rect(surface, (40, 38, 34), (360, 300, 280, 70))
+        pygame.draw.rect(surface, (22, 22, 20), (420, 270, 150, 40))
+        pygame.draw.circle(surface, (220, 82, 58), (450, 286), 4)
+        pygame.draw.circle(surface, (90, 220, 140) if t > 250 else (36, 52, 44),
+                           (520, 286), 4)
+        _fb_tag(surface, "MARU // OPEN CHANNEL")
         return
-    pygame.draw.polygon(surface, (18, 18, 20),
-                        [(250, 240), (310, 230), (330, 470), (255, 470)])
-    pygame.draw.circle(surface, (96, 74, 60), (282, 222), 24)
+    if variant == 0 and t < 1200:
+        pygame.draw.rect(surface, (58, 48, 38), (300, 340, 420, 40))
+        pygame.draw.rect(surface, (206, 202, 190), (400, 330, 190, 22))
+        pygame.draw.rect(surface, (172, 42, 38), (470, 334, 70, 14))
+        pygame.draw.circle(surface, (128, 102, 84), (580, 330), 14)
+        _fb_tag(surface, "THE CALL // ROUTE 12")
+        return
+    if variant in (2, "silence"):
+        _fb_figure(surface, 500, 470, 2.1, coat=(16, 18, 22),
+                   skin=(100, 78, 62), facing=1)
+        pygame.draw.rect(surface, (58, 60, 52), (474, 208, 16, 40))
+        _fb_tag(surface, "THE CALL // NO ANSWER" if variant == "silence"
+                else "THE CALL")
+        return
+    _fb_figure(surface, 330, 470, 1.35, facing=1)
     pygame.draw.rect(surface, (40, 38, 34), (620, 330, 180, 70))
     pygame.draw.circle(surface, (255, 160, 80), (700, 352), 4)
     _fb_tag(surface, "THE CALL" if variant else "WIRE // ROUTE 12")
 
 
+def _fb_silence(surface, t):
+    _fb_radio(surface, t, "silence")
+
+
+def _fb_cut_line(surface, t):
+    if t < 1500:
+        pygame.draw.rect(surface, (26, 24, 22), (0, SCENE_TOP, WIDTH, _w.FILM_H))
+        pygame.draw.rect(surface, (40, 38, 34), (340, 300, 320, 90))
+        pygame.draw.rect(surface, (22, 22, 20), (400, 260, 180, 46))
+        pygame.draw.circle(surface, (220, 82, 58) if t < 650 else (34, 40, 38),
+                           (460, 280), 5)
+        pygame.draw.circle(surface, (36, 52, 44), (540, 280), 5)
+        pygame.draw.circle(surface, (128, 102, 84),
+                           (480, 316 - int(6 * min(1.0, t / 600))), 12)
+        _fb_tag(surface, "THE CALL // CUT")
+        return
+    pygame.draw.rect(surface, (20, 18, 17), (0, SCENE_TOP, WIDTH, _w.FILM_H))
+    pygame.draw.rect(surface, (30, 28, 26), (0, 340, WIDTH, 280))
+    _fb_figure(surface, 520, 480, 1.9, coat=(14, 16, 20), facing=1)
+    pygame.draw.rect(surface, (30, 30, 34), (486, 322, 66, 30))
+    pygame.draw.rect(surface, (196, 192, 180), (492, 326, 54, 18))
+    _fb_tag(surface, "THE CALL // CUT")
+
+
+def _fb_customs_return(surface, t):
+    _fb_gradient(surface, (6, 9, 16), (24, 30, 44))
+    _fb_snow(surface, t, 20, 80)
+    pygame.draw.rect(surface, (46, 50, 58), (0, 360, WIDTH, 270))
+    # the frozen queue
+    for i, x in enumerate((60, 160, 260)):
+        pygame.draw.rect(surface, (30, 34, 40), (x, 360 - 52, 74, 52))
+        pygame.draw.rect(surface, (22, 26, 32), (x + 8, 360 - 78, 58, 30))
+        pygame.draw.rect(surface, (70, 80, 94), (x + 10, 360 - 76, 54, 8))
+    # fence, gate, hut with the lit window
+    pygame.draw.rect(surface, (52, 56, 62), (320, 300, 300, 5))
+    for x in range(320, 620, 24):
+        pygame.draw.rect(surface, (52, 56, 62), (x, 300, 4, 64))
+    pygame.draw.rect(surface, (52, 50, 48), (700, 250, 150, 120))
+    pygame.draw.rect(surface, (34, 34, 36), (694, 244, 162, 12))
+    pygame.draw.rect(surface, (255, 203, 109), (730, 290, 48, 30))
+    # work lamps
+    for x in (430, 610):
+        pygame.draw.rect(surface, (40, 42, 48), (x, 190, 5, 174))
+        pygame.draw.rect(surface, (255, 236, 154), (x - 3, 184, 12, 8))
+    # Biribel walks into frame with the notebook
+    k = min(1.0, max(0.0, (t - 500) / 3000.0))
+    x = 900 - 260 * (k * k * (3 - 2 * k))
+    _fb_figure(surface, x, 430, 1.0, coat=(20, 22, 28), facing=-1)
+    pygame.draw.rect(surface, (196, 192, 180), (x - 22, 360, 16, 22))
+    _fb_snow(surface, t, 21, 60)
+    _fb_tag(surface, "KRAP BORDER CUSTOMS // 04:10")
+
+
 def _fb_helicopter(surface, t):
+    """Three beats: the pickup, the cabin, the turn away from the capital."""
     _fb_gradient(surface, (6, 8, 15), (30, 28, 42))
-    # capital skyline beyond the dark hills
-    for i, x in enumerate(range(30, WIDTH, 84)):
+    if t < 4600:
+        # customs lot: hut, fence, queue, Huey coming down
+        pygame.draw.rect(surface, (44, 48, 56), (0, 380, WIDTH, 250))
+        pygame.draw.rect(surface, (52, 50, 48), (700, 270, 150, 110))
+        pygame.draw.rect(surface, (255, 203, 109), (730, 306, 46, 28))
+        for x in (430, 610):
+            pygame.draw.rect(surface, (40, 42, 48), (x, 190, 5, 190))
+            pygame.draw.rect(surface, (255, 236, 154), (x - 3, 184, 12, 8))
+        k = min(1.0, t / 3200.0)
+        s = 0.45 + 0.55 * k
+        hx, hy = 470, 70 + 210 * k
+        _fb_rotor(surface, hx, hy - 18 * s, s, t)
+        _fb_heli(surface, hx, hy, s, t, tilt=0.1)
+        pygame.draw.polygon(surface, (120, 132, 150),
+                            [(hx, hy + 16), (hx - 120 * s, 430),
+                             (hx + 30 * s, 430)])
+        run = min(1.0, max(0.0, (t - 400) / 3200.0))
+        _fb_figure(surface, 900 - 420 * run, 430, 1.0,
+                   coat=(20, 22, 28), facing=-1)
+        _fb_snow(surface, t, 20, 80)
+        _fb_tag(surface, "KRAP BORDER CUSTOMS // 04:12")
+        return
+    if t < 8200:
+        # cabin: dark interior, city through the open door, the door closing
+        pygame.draw.rect(surface, (10, 12, 16), (0, SCENE_TOP, WIDTH, _w.FILM_H))
+        pygame.draw.rect(surface, (22, 25, 30), (120, 70, 220, 420), 6)
+        pygame.draw.rect(surface, (18, 20, 26), (340, 60, 660, 440), 8)
+        win = pygame.Rect(540, 120, 300, 220)
+        pygame.draw.rect(surface, (8, 10, 18), win)
+        for i, x in enumerate(range(560, 830, 34)):
+            h = 40 + (i * 37) % 90
+            pygame.draw.rect(surface, (18 + i % 3, 20 + i % 3, 30 + i % 4),
+                             (x, 340 - h, 26, h))
+            pygame.draw.rect(surface, (222, 176, 106), (x + 5, 336 - h + 12, 3, 4))
+        shut = min(1.0, max(0.0, (t - 6600) / 900.0))
+        if shut > 0:
+            pygame.draw.rect(surface, (26, 28, 32),
+                             (win.x, win.y, int(win.w * shut), win.h))
+        _fb_figure(surface, 330, 470, 1.7, coat=(14, 16, 20), facing=1)
+        _fb_figure(surface, 780, 470, 1.5, coat=(18, 20, 24), facing=-1)
+        pygame.draw.circle(surface, (255, 70, 50), (470, 110), 4)
+        _fb_tag(surface, "EN ROUTE // KRAP BORDER")
+        return
+    # turn away: capital lights left, dark hills right
+    for i, x in enumerate(range(30, 640, 84)):
         h = 50 + (i * 41) % 120
         pygame.draw.rect(surface, (18 + i % 3, 20 + i % 3, 30 + i % 4),
                          (x, 330 - h, 66, h + 60))
@@ -1656,12 +2485,16 @@ def _fb_helicopter(surface, t):
             pygame.draw.rect(surface, (222, 176, 106) if j != 1 else (176, 194, 222),
                              (x + 10 + j * 19, 340 - h + 12 + (i * 7) % 30, 4, 5))
     pygame.draw.polygon(surface, (13, 15, 21),
-                        [(560, 340), (700, 270), (860, 320), (980, 250),
-                         (WIDTH, 300), (WIDTH, 340)])
-    pygame.draw.rect(surface, (24, 20, 30), (0, 330, WIDTH, 290))
-    s = 0.9 - 0.12 * (t / 5200.0)
-    _fb_rotor(surface, 640 + t * 0.016, 168 - t * 0.004, s, t)
-    _fb_heli(surface, 640 + t * 0.016, 192 - t * 0.004, s, t, tilt=0.35)
+                        [(600, 360), (700, 290), (820, 330), (930, 260),
+                         (WIDTH, 310), (WIDTH, 370)])
+    pygame.draw.rect(surface, (24, 20, 30), (0, 350, WIDTH, 280))
+    q = min(1.0, max(0.0, (t - 8200) / 3800.0))
+    hx = 300 + 440 * q
+    hy = 220 - 120 * q
+    _fb_rotor(surface, hx, hy - 18, 0.85, t)
+    _fb_heli(surface, hx, hy, 0.85, t, tilt=0.55 * math.sin(math.pi * q))
+    pygame.draw.circle(surface, (255, 70, 50), (int(hx + 60 * 0.85), int(hy + 2)), 2)
+    pygame.draw.circle(surface, (50, 220, 110), (int(hx - 40 * 0.85), int(hy + 14)), 2)
     _fb_snow(surface, t, 11, 60)
     _fb_tag(surface, "THE LAST SIGNAL")
 
@@ -1670,18 +2503,21 @@ def _fb_helicopter(surface, t):
 # dispatch / registration
 # ═══════════════════════════════════════════════════════════════════════════
 M6_3D_SCENES = {
-    "m6_insert_heli": _insert_heli,
+    "m6_insert_cabin": _insert_cabin,
+    "m6_insert_valley": _insert_valley,
     "m6_insert_jump": _insert_jump,
-    "m6_insert_fall": _insert_fall,
     "m6_insert_ground": _insert_ground,
     "m6_boxcar_wide": _boxcar_wide,
     "m6_boxcar_notebook": _boxcar_notebook,
     "m6_boxcar_volkov": _boxcar_volkov,
     "m6_boxcar_biribel": _boxcar_biribel,
     "m6_boxcar_exit": _boxcar_exit,
+    "m6_customs_return": _customs_return,
     "m6_customs_terminal": _customs_terminal,
     "m6_radio_vasile": _radio_vasile,
+    "m6_radio_silence": _radio_silence,
     "m6_radio_maru": _radio_maru,
+    "m6_cut_line": _cut_line,
     "m6_helicopter": _helicopter,
 }
 
@@ -1732,20 +2568,23 @@ def _boxcar_fb(mode):
 
 
 _register({
-    "m6_insert_heli": _take("m6_insert_heli", _insert_fb("heli")),
+    "m6_insert_cabin": _take("m6_insert_cabin", _insert_fb("cabin")),
+    "m6_insert_valley": _take("m6_insert_valley", _insert_fb("valley")),
     "m6_insert_jump": _take("m6_insert_jump", _insert_fb("jump")),
-    "m6_insert_fall": _take("m6_insert_fall", _insert_fb("fall")),
     "m6_insert_ground": _take("m6_insert_ground", _insert_fb("ground")),
     "m6_boxcar_wide": _take("m6_boxcar_wide", _boxcar_fb("wide")),
     "m6_boxcar_notebook": _take("m6_boxcar_notebook", _boxcar_fb("notebook")),
     "m6_boxcar_volkov": _take("m6_boxcar_volkov", _boxcar_fb("volkov")),
     "m6_boxcar_biribel": _take("m6_boxcar_biribel", _boxcar_fb("biribel")),
     "m6_boxcar_exit": _take("m6_boxcar_exit", _boxcar_fb("exit")),
+    "m6_customs_return": _take("m6_customs_return", _fb_customs_return),
     "m6_customs_terminal": _take("m6_customs_terminal", _fb_terminal),
     "m6_radio_vasile": _take("m6_radio_vasile",
                              lambda surface, t: _fb_radio(surface, t,
                                                           _radio_variant())),
+    "m6_radio_silence": _take("m6_radio_silence", _fb_silence),
     "m6_radio_maru": _take("m6_radio_maru",
-                           lambda surface, t: _fb_radio(surface, t, 1)),
+                           lambda surface, t: _fb_radio(surface, t, "maru")),
+    "m6_cut_line": _take("m6_cut_line", _fb_cut_line),
     "m6_helicopter": _take("m6_helicopter", _fb_helicopter),
 })

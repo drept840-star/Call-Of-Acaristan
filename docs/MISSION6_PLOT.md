@@ -107,7 +107,7 @@ silence and says only: *"Now you know what we've been fighting."*
 
 | # | Phase | Objective | Beat |
 |---|-------|-----------|------|
-| 1 | **Insertion** (cutscene) | — | Maru's helicopter drops Biribel in the hills above the crossing under a static-line canopy. 3D. |
+| 1 | **Insertion** (cutscene) | — | A cabin briefing over the radio (Volkov is the deserter at Kim Kim), then Maru's helicopter hovers low over the ridge and Biribel drops off the sill into the powder. No canopy. 3D, about 28 s. |
 | 2 | **The Customs Post** | Get through the abandoned post. | Top-down; Guard sweeps it. Find the frozen queue of cars — families who didn't make it. |
 | 3 | **No-Man's-Land** | Cross the floodlit strip. | Stealth: floodlight sweeps, a timed gap. Spotted = alarm, waves from both gates. |
 | 4 | **The Rail Yard** | Find Volkov before the Guard does. | Boxcar search while Guard teams close in. |
@@ -153,13 +153,16 @@ VOLKOV   "Kim Kim has terrible coffee, I hear. I'm going to drink all of it."
 ## Ending Cutscene Shot-List — "The Call"
 
 ```
-scene: m6_customs_terminal  speaker: ""        (Screen: VELICU, B. STATUS: KIA, Y-2. CALLSIGN: UCILEV NADGOB IERDNA.)
-scene: m6_radio_vasile      speaker: BIRIBEL   "Route 12 went out on your code."
-scene: m6_radio_vasile      speaker: VASILE    "...Three hundred men, Biribel. They'd have purged every one. I chose the many."
-scene: m6_radio_vasile      speaker: VASILE    "You'd have done the same."
-scene: m6_radio_vasile      speaker: VASILE    "Retardovici is at the mansion in two nights. I can get you inside. Let me make this right."
-scene: m6_radio_maru        speaker: MARU      "Not tonight. Go to ground."
-scene: m6_helicopter        speaker: ""        (Maru's helicopter turns away from the capital lights, toward the dark hills.)
+scene: m6_customs_return    speaker: ""        (Night, snow. Biribel walks back alone to the lit customs doorway.)
+scene: m6_customs_terminal  speaker: ""        (He types UCILEV. The file fills in; the callsign letters sort into ANDREI BOGDAN VELICU. NAME/STATUS highlight: VELICU, B. KIA - Y-2.)
+scene: m6_radio_vasile      speaker: BIRIBEL   "Route 12 went out on your code."   (insert: the leaf and Vasile's circled code)
+scene: m6_radio_vasile      speaker: VASILE    "...Three hundred men, Biribel. They'd have purged every one. I chose the many."   (Vasile at his window)
+scene: m6_radio_vasile      speaker: VASILE    "You'd have done the same."   (Biribel, close; he does not answer)
+scene: m6_radio_vasile      speaker: VASILE    "Retardovici is at the mansion in two nights. I can get you inside. Let me make this right."   (Vasile turns to the desk map, marks the mansion)
+scene: m6_radio_silence     speaker: ""        (The handset at his ear; static and Vasile's breathing. The silence is the answer.)
+scene: m6_radio_maru        speaker: MARU      "Not tonight. Go to ground."   (OPEN CHANNEL lamp; the needle jumps)
+scene: m6_cut_line          speaker: ""        (His thumb kills the GUARD HQ channel; the notebook goes inside the coat.)
+scene: m6_helicopter        speaker: ""        (Pickup in the customs lot; cabin, the capital through the door; the turn away toward the dark hills.)
 ```
 
 Biribel doesn't answer Vasile. The Duty / Revenge choice now happens at the
@@ -197,21 +200,30 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
   The terminal file and Vasile's call are ending-film beats, not top-down
   stages. Death restarts at the deepest checkpoint reached (train → rail →
   noman → customs).
-- **3D films:** thirteen `engine3d` scenes, registered in
+- **3D films:** sixteen `engine3d` scenes, registered in
   `core.cutscene_registry` and rendered by `cutscenes/m6films.py` on the
-  `cutscenes/m6world3d.py` sets: a four-shot ridge insertion (`m6_insert_*`),
-  the five-shot boxcar conversation (`m6_boxcar_*`), and the exact ending chain
-  (`m6_customs_terminal`, four `m6_radio_vasile` shots, `m6_radio_maru`,
+  `cutscenes/m6world3d.py` sets: a six-shot ridge insertion (`m6_insert_cabin` x3, `_valley`, `_jump`, `_ground`),
+  the five-shot boxcar conversation (`m6_boxcar_*`), and the ending chain
+  (`m6_customs_return`, `m6_customs_terminal`, four `m6_radio_vasile` shots,
+  `m6_radio_silence`, `m6_radio_maru`, `m6_cut_line`, the three-beat
   `m6_helicopter`, then the title card). Every scene has a hand-authored 2D
   fallback; a 3D failure permanently degrades the run to 2D, and
   `ACARISTAN_CUTSCENE3D=0` forces it. Exterior sets bake once per shot rig;
   the boxcar and office interiors pack as one merged mesh per frame, keeping
   the 3D cuts around 20–35 ms at the 600×273 internal buffer.
-- **Staging and motion:** insertion is a hover-drop over the ridge. The Huey
-  sways and bobs in the wide (`hover_pos`), with Biribel riding the open door
-  and his soles on the skid. He drops twelve metres into the border valley
-  under a static-line canopy, collapses it on landing and walks downhill while
-  the Huey climbs away. Volkov rises off the crate on planted feet and
+- **Light occlusion:** M6 light sprites are tagged (`fn.light`) and composited
+  against a 64 m physical-depth map packed into the colour target's unused
+  alpha channel; a lamp behind a wall is skipped, a pole/guard crossing a halo
+  masks it per pixel.  Halos are a hot core plus a dithered ~10-step falloff
+  with a sodium-to-amber rim.
+- **Staging and motion:** insertion is a low-hover drop. The cabin shots
+  (one renderer, angle chosen by the line) set up the story, the valley shot
+  crests the ridge with the crossing lit below, and the Huey settles to a ~2 m
+  hover (`hover_pos`). Biribel pushes off the sill, drops into knee-deep powder
+  and crouches in one continuous low take (`jump_stage`); the ground shot starts
+  from exactly that pose, rises, checks the K9, and walks as the Huey climbs
+  away. The insertion renders through the PS2 pipeline (`rend_ps2`,
+  `present_ps2`). Volkov rises off the crate on planted feet and
   walks out through the boxcar door, and offers the notebook open with both
   hands before Biribel takes it. `m6world3d` owns the motion kit
   (`sit_pose`, `planted_pos`, `walk`, `walk_slip`) and a `SOLIDS` registry of
@@ -259,3 +271,14 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
   stay above `height_at`, and three software frames hold head-region luma in
   the readable band. `tools/m6_shots.py --probe` prints face luma, solid
   penetration and walk slip per frame for visual review.
+
+### Opening shot-list (insertion)
+
+| # | scene | length | content |
+|---|-------|--------|---------|
+| 1a | `m6_insert_cabin` | 3.6 s, radio | GUARD (intercept): "All posts, Kim Kim crossing. High-value deserter in the rail yard. Hold the train." |
+| 1b | `m6_insert_cabin` | 3.0 s | MARU: "That's your notebook man. Volkov." |
+| 1c | `m6_insert_cabin` | 3.0 s | BIRIBEL: "Then I reach him first." |
+| 2 | `m6_insert_valley` | 5 s, auto | Over his shoulder from the open door: the Huey crests the ridge, the crossing lit below. Tag "KIM KIM BORDER // 02:40". |
+| 3 | `m6_insert_jump` | 5 s, auto | Low camera: the hover settles, wash blasts powder, he drops and crouches. |
+| 4 | `m6_insert_ground` | 6 s, auto | He rises, checks the K9; the Huey climbs off dark; the camera swings onto the crossing and holds. |

@@ -5375,6 +5375,11 @@ def check_font_glyph_coverage():
         if "__pycache__" in py.parts:
             continue
 
+        # bloc3d/font.py is a 5x7 bitmap glyph table (the neon signs), not a
+        # TTF text source: its "★" key is drawn as pixels, not by a Plex face.
+        if py.name == "font.py" and py.parent.name == "bloc3d":
+            continue
+
         try:
             tree = ast.parse(py.read_text(encoding="utf-8-sig"))
         except SyntaxError:
@@ -8404,11 +8409,14 @@ def check_mission6_vertical_slice():
     assert all(isinstance(s, dict) and s.get("scene")
                for s in intro + boxcar + ending)
     assert [s["scene"] for s in intro] == [
-        "m6_insert_heli", "m6_insert_jump", "m6_insert_fall",
+        "m6_insert_cabin", "m6_insert_cabin", "m6_insert_cabin",
+        "m6_insert_valley", "m6_insert_jump",
         "m6_insert_ground", "title_card"]
     assert [s["scene"] for s in ending] == [
-        "m6_customs_terminal", "m6_radio_vasile", "m6_radio_vasile",
-        "m6_radio_vasile", "m6_radio_vasile", "m6_radio_maru",
+        "m6_customs_return", "m6_customs_terminal",
+        "m6_radio_vasile", "m6_radio_vasile",
+        "m6_radio_vasile", "m6_radio_vasile",
+        "m6_radio_silence", "m6_radio_maru", "m6_cut_line",
         "m6_helicopter", "title_card"]
     for scene in _m6_meta.M6_FILM_SCENES:
         assert scene in m6films.M6_3D_SCENES, scene
@@ -9285,7 +9293,8 @@ def check_m6_train_death_beat():
                 assert dr <= 0.12, "shoulder hand %.2f off at d=%.2f" % (
                     dr, d)
                 assert dl <= 0.10, "hand-hold %.2f off at d=%.2f" % (dl, d)
-            elif d >= 1.20:
+            elif d >= 1.40:
+                # the grip waits for the body to land (chest down ~d 1.4)
                 assert min(dr, dl) <= 0.30, \
                     "no hand closing at d=%.2f (%.2f/%.2f)" % (d, dr, dl)
             if d >= T.DOWN_AT - T.HIT_AT:

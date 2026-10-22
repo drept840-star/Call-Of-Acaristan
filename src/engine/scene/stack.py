@@ -10,7 +10,7 @@ Semantics
   scene below is paused/resumed only if its state actually changes.
 * ``clear_to(scene)``: every scene exits (top first), then ``scene`` is pushed.
 
-Mutations requested from inside a hook (``handle``/``update``/``draw``/… —
+Mutations requested from inside a hook (``handle``/``update``/``draw``/… -
 the usual place for them) are **deferred** until the current dispatch
 finishes, so the frame that asked for the change completes against a stable
 stack. Outside a dispatch they apply immediately. ``flush()`` applies pending

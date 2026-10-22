@@ -7,13 +7,13 @@ reeling: Balaceanu's career is public record, Retardovici's strings are
 cut (the read on the night - a cape without a handler; M5 shows the cape
 was the puppeteer all along), and KRAP is left without clear direction.
 Volkov has vanished across the border to Regatul Kim Kim. Vasile and
-Biribel are the only ones left trying to figure out what comes next — KRAP
+Biribel are the only ones left trying to figure out what comes next - KRAP
 doesn't fully dissolve but "kind of dissolves," its remnants allied with
 MAG, while Maru steps into physical presence for the first time.
 
 The framing is no longer "mission assigned" but "what do we do now":
 KRAP's ambiguous status, Maru's reappearance, and Biribel's own path
-away from the soldier's life — without making him a fugitive.
+away from the soldier's life - without making him a fugitive.
 
 Slice-0 title-card stubs mirror the M3 convention so a dev jump can
 boot before scene art exists. Game integration (game_core.start_mission4,
@@ -28,10 +28,10 @@ MISSION4_PRIMARY_STYLE = "Post-broadcast realignment - no mission assigned"
 
 MISSION4_STORY_FLAGS = {
     "aftermath": "The Vostral is on every screen; Balaceanu's regime is off-balance.",
-    "retardovici": "Retardovici's cape is gone — the regime's survival is uncertain.",
+    "retardovici": "Retardovici's cape is gone, so the regime's survival is uncertain.",
     "krap_status": "KRAP kind of dissolves; its remnants ally with MAG, direction unclear.",
     "volkov_left": "Volkov has left Acaristan for Regatul Kim Kim, leaving a vacuum.",
-    "maru_present": "Maru now has physical presence — formerly a voice, now on the ground.",
+    "maru_present": "Maru now has physical presence: formerly a voice, now on the ground.",
     "vasile_biribel": "Vasile and Biribel are the only close ones left, figuring what's next.",
 }
 
@@ -207,13 +207,13 @@ OPENING_CINEMATIC = [
     if s.get("speaker")
 ]
 
-# Provisional phase table — narrative flow matching the new direction.
+# Provisional phase table - narrative flow matching the new direction.
 # Not the runtime driver - STATE.mission4_stage is (mirrors M3).
 MISSION_PHASES = [
     {"phase": 1, "name": "Aftermath", "objective": "Process the broadcast's fallout; Volkov is gone."},
     {"phase": 2, "name": "KRAP Status", "objective": "Determine if KRAP allies with MAG or dissolves further."},
     {"phase": 3, "name": "Maru Reappears", "objective": "Maru's first physical appearance; new assets available."},
-    {"phase": 4, "name": "New Direction", "objective": "Vasile and Biribel decide their own path — not a mission, their choice."},
+    {"phase": 4, "name": "New Direction", "objective": "Vasile and Biribel decide their own path. Not a mission, their choice."},
 ]
 
 # ─────────────────────────────────────────────

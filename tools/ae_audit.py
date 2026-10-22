@@ -444,13 +444,13 @@ def main() -> int:
     for g in dup_groups:
         L.append(f"### {g['kind']} · {g['stmts']} stmts · ×{len(g['members'])}")
         for m in g["members"]:
-            L.append(f"- `{m['name']}` — `{m['path']}:{m['line']}` ({m['owner']})")
+            L.append(f"- `{m['name']}` - `{m['path']}:{m['line']}` ({m['owner']})")
         L.append("")
     w("duplication.md", L)
 
     L = hdr + ["# Draw census (static count of draw/blit/fill call sites per function)", "",
                f"{summary['draw_functions']} functions, {summary['draw_calls_static']} call sites. "
-               "Static count — loops multiply real per-frame calls; use tools/m5_draw_audit.py for runtime counts.", "",
+               "Static count - loops multiply real per-frame calls; use tools/m5_draw_audit.py for runtime counts.", "",
                "| # | calls | function | where | owner | breakdown |", "|---:|---:|---|---|---|---|"]
     for i, (n, fn, path, line, owner, br) in enumerate(draws[:150], 1):
         L.append(f"| {i} | {n} | `{fn}` | `{path}:{line}` | {owner} | " + ", ".join(f"{k} {v}" for k, v in sorted(br.items())) + " |")
@@ -473,7 +473,7 @@ def main() -> int:
 
     L = hdr + ["# Hazards (rule violations to retire in later phases)", ""]
     for k, v in sorted(hz.items()):
-        L += [f"## {k} — {len(v)}", ""]
+        L += [f"## {k} - {len(v)}", ""]
         for path, line, d in sorted(v)[:400]:
             L.append(f"- `{path}:{line}` {d}")
         if len(v) > 400:

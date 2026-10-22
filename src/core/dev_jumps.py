@@ -85,6 +85,8 @@ DEV_JUMPS = {
     "m6-3d": ("--dev-mission6-3d", "Mission 6 interactive 3D train scene (shootout)"),
     "m6-shootout": ("--dev-mission6-shootout", "Mission 6 interactive 3D train scene (shootout)"),
     "m6-ending": ("--dev-mission6-ending", "Mission 6 ending cutscene"),
+    "m6-heli": ("--dev-mission6-heli",
+                "Mission 6 ending from the helicopter finale"),
     # ── Trailer bot takes (AI 1 choreography) ──
     "trailer-m1": ("--dev-m1",
             "Trailer Act I warehouse take (bot: breach/molotov)"),

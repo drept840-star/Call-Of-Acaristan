@@ -1,23 +1,23 @@
 """Scene: one screen of the game with an explicit lifecycle (§6.2).
 
 A scene is owned by exactly one :class:`SceneStack`. The stack calls the hooks
-below; a scene never calls them itself. All hooks receive ``ctx`` — whatever
-the host passes to the stack (the engine App, or a Services table) — so a
+below; a scene never calls them itself. All hooks receive ``ctx`` - whatever
+the host passes to the stack (the engine App, or a Services table) - so a
 scene has no hidden global dependency.
 
 Lifecycle (in the order the stack invokes it):
 
-* ``on_enter``  — pushed on the stack (resources may be acquired here).
-* ``on_pause``  — a *non-overlay* scene was pushed on top of this one.
-* ``on_resume`` — that scene was popped again.
-* ``on_exit``   — removed from the stack (release everything acquired in enter).
+* ``on_enter``  - pushed on the stack (resources may be acquired here).
+* ``on_pause``  - a *non-overlay* scene was pushed on top of this one.
+* ``on_resume`` - that scene was popped again.
+* ``on_exit``   - removed from the stack (release everything acquired in enter).
 
 Per frame, for the active scenes (see the stack's dispatch rules):
 
-* ``handle(ctx, action_events)`` — only the top scene; return True to consume.
-* ``fixed_update(ctx, dt)``       — simulation step, ``dt`` in sim seconds.
-* ``update(ctx, dt_real)``        — UI/animation that ignores time scale.
-* ``draw(ctx, alpha)``            — ``alpha`` is the interpolation fraction.
+* ``handle(ctx, action_events)`` - only the top scene; return True to consume.
+* ``fixed_update(ctx, dt)``       - simulation step, ``dt`` in sim seconds.
+* ``update(ctx, dt_real)``        - UI/animation that ignores time scale.
+* ``draw(ctx, alpha)``            - ``alpha`` is the interpolation fraction.
 
 ``overlay=True`` means the scene below keeps drawing underneath this scene;
 ``passthrough_update=True`` additionally lets the scenes below keep updating

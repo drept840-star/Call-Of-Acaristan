@@ -22,30 +22,34 @@ RATE = 22050
 
 STEMS = ("m6_wind_bed", "m6_heli_bed", "m6_train_idle", "m6_room_tone")
 FOLEY = (
-    "m6_rotor_away", "m6_jump", "m6_wind_gust", "m6_fall", "m6_land",
+    "m6_rotor_away", "m6_jump", "m6_wind_gust", "m6_land",
     "m6_heli_away", "m6_boxcar_door", "m6_breath", "m6_paper",
     "m6_page_turn", "m6_snow_step", "m6_notebook_close", "m6_terminal_beep",
     "m6_radio_static", "m6_rifle_crack", "m6_train_depart", "m6_doors_close",
     "m6_tinnitus", "m6_report_far", "m6_body_thud",
     "m6_whiz", "m6_headshot", "m6_tink",
     "m6_door_creak", "m6_truck_arrive", "m6_tailgate",
+    "m6_keyclick", "m6_switch_click", "m6_heli_land", "m6_heli_door",
 )
 
 # Scene -> looping stems.  Every film scene is listed; unlisted scenes (the
 # title card) stay silent.
 SCENE_STEMS = {
-    "m6_insert_heli": ("m6_heli_bed", "m6_wind_bed"),
+    "m6_insert_cabin": ("m6_heli_bed",),
+    "m6_insert_valley": ("m6_heli_bed", "m6_wind_bed"),
     "m6_insert_jump": ("m6_heli_bed", "m6_wind_bed"),
-    "m6_insert_fall": ("m6_wind_bed",),
     "m6_insert_ground": ("m6_wind_bed",),
     "m6_boxcar_wide": ("m6_room_tone",),
     "m6_boxcar_notebook": ("m6_room_tone",),
     "m6_boxcar_volkov": ("m6_room_tone",),
     "m6_boxcar_biribel": ("m6_room_tone",),
     "m6_boxcar_exit": ("m6_room_tone",),
+    "m6_customs_return": ("m6_wind_bed",),
     "m6_customs_terminal": ("m6_room_tone",),
     "m6_radio_vasile": ("m6_room_tone",),
+    "m6_radio_silence": ("m6_room_tone",),
     "m6_radio_maru": ("m6_room_tone",),
+    "m6_cut_line": ("m6_room_tone", "m6_wind_bed"),
     "m6_helicopter": ("m6_wind_bed", "m6_heli_bed"),
 }
 
@@ -55,7 +59,7 @@ _STEM_GAIN = {
 }
 _FOLEY_GAIN = {
     "m6_rotor_away": 0.7, "m6_jump": 0.65, "m6_wind_gust": 0.5,
-    "m6_fall": 0.55, "m6_land": 0.8, "m6_heli_away": 0.7,
+    "m6_land": 0.8, "m6_heli_away": 0.7,
     "m6_boxcar_door": 0.7, "m6_breath": 0.4, "m6_paper": 0.55,
     "m6_page_turn": 0.5, "m6_snow_step": 0.5, "m6_notebook_close": 0.6,
     "m6_terminal_beep": 0.5, "m6_radio_static": 0.55,
@@ -63,6 +67,8 @@ _FOLEY_GAIN = {
     "m6_tinnitus": 0.32, "m6_report_far": 0.7, "m6_body_thud": 0.8,
     "m6_whiz": 0.5, "m6_headshot": 0.6, "m6_tink": 0.35,
     "m6_door_creak": 0.5, "m6_truck_arrive": 0.6, "m6_tailgate": 0.6,
+    "m6_keyclick": 0.4, "m6_switch_click": 0.55,
+    "m6_heli_land": 0.7, "m6_heli_door": 0.65,
 }
 
 
@@ -211,9 +217,6 @@ def foley_pcm(name):
     elif name == "m6_wind_gust":
         n = int(1.6 * RATE); t = _t(n)
         x = _lowpass(_noise(n, 71), 520.0) * np.exp(-((t - 0.7) ** 2) / 0.16) * 1.1
-    elif name == "m6_fall":
-        n = int(1.4 * RATE); t = _t(n)
-        x = _lowpass(_noise(n, 81), 700.0) * (0.5 + 0.5 * t / 1.4) * 0.9
     elif name == "m6_land":
         n = int(0.5 * RATE); t = _t(n)
         thump = np.sin(2 * math.pi * (60 - t * 25) * t) * np.exp(-t * 9.0)
@@ -330,6 +333,43 @@ def foley_pcm(name):
         brake = (_highpass(_noise(n, 223), 2500.0)
                  * np.exp(-np.maximum(t - 3.15, 0.0) * 4.0) * (t > 3.15) * 0.45)
         x = engine + brake
+    elif name == "m6_keyclick":
+        # A terminal key: plastic down-click, a quieter release.
+        n = int(0.12 * RATE); t = _t(n)
+        down = _highpass(_noise(n, 241), 1800.0) * np.exp(-t * 90.0) * 0.7
+        ping = np.sin(2 * math.pi * 2400 * t) * np.exp(-t * 120.0) * 0.18
+        up = (_highpass(_noise(n, 243), 2400.0)
+              * np.exp(-np.maximum(t - 0.045, 0.0) * 140.0)
+              * (t > 0.045) * 0.25)
+        x = down + ping + up
+    elif name == "m6_switch_click":
+        # A toggle: hard click, then the smaller latch of the contact.
+        n = int(0.28 * RATE); t = _t(n)
+        a = (np.sin(2 * math.pi * 1750 * t)
+             + 0.5 * np.sin(2 * math.pi * 2900 * t)) * np.exp(-t * 80.0) * 0.6
+        b = (np.sin(2 * math.pi * 1200 * t)
+             + 0.4 * np.sin(2 * math.pi * 2100 * t))
+        b = b * np.exp(-np.maximum(t - 0.10, 0.0) * 70.0) * (t > 0.10) * 0.45
+        x = a + b + _highpass(_noise(n, 245), 2600.0) * np.exp(-t * 55.0) * 0.2
+    elif name == "m6_heli_land":
+        # Rotor wash closing on the camera: chop swelling out of the wind.
+        n = int(3.4 * RATE); t = _t(n)
+        chop = 0.35 + 0.65 * np.abs(np.sin(2 * math.pi * (8.0 + 3.0 * t) * t))
+        body = _lowpass(_noise(n, 251), 340.0) * chop
+        body += np.sin(2 * math.pi * (58 + 8 * t) * t) * 0.10
+        env = np.clip(t / 2.8, 0.0, 1.0) ** 1.6
+        x = body * env
+    elif name == "m6_heli_door":
+        # The cabin door: rail hiss, then the leaf slamming into its stop.
+        n = int(1.1 * RATE); t = _t(n)
+        rail = _highpass(_noise(n, 261), 1400.0) * np.exp(-t * 2.2) * 0.35
+        slam = (np.sin(2 * math.pi * 78 * t)
+                + 0.5 * np.sin(2 * math.pi * 150 * t))
+        slam = slam * np.exp(-np.maximum(t - 0.62, 0.0) * 22.0) * (t > 0.62) * 0.8
+        latch = (_highpass(_noise(n, 263), 2600.0)
+                 * np.exp(-np.maximum(t - 0.68, 0.0) * 90.0)
+                 * (t > 0.68) * 0.35)
+        x = rail + slam + latch
     elif name == "m6_tailgate":
         # Pins pulled, the gate swings down and bangs on its chains.
         n = int(0.8 * RATE); t = _t(n)

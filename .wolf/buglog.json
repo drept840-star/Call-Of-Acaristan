@@ -393,8 +393,8 @@
       "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
       "id": "bug-022",
       "timestamp": "2026-10-20T22:01:15.091Z",
-      "last_seen": "2026-10-20T22:01:15.091Z",
-      "occurrences": 1,
+      "last_seen": "2026-10-22T18:05:32.858Z",
+      "occurrences": 2,
       "related_bugs": []
     },
     {
@@ -558,6 +558,423 @@
       "last_seen": "2026-10-21T04:09:23.591Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: lhip_p should be lsh_y",
+      "file": "src/engine3d/rig.py",
+      "root_cause": "Used \"lhip_p\" instead of \"lsh_y\"",
+      "fix": "Changed lhip_p → lsh_y",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-032",
+      "timestamp": "2026-10-21T12:11:13.796Z",
+      "last_seen": "2026-10-21T12:11:13.796Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of test_ik.py",
+      "file": "tests/unit/test_ik.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-033",
+      "timestamp": "2026-10-21T12:18:18.976Z",
+      "last_seen": "2026-10-21T12:18:18.976Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _mag_icon()",
+      "file": "src/missions/m6/yard_hud.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-034",
+      "timestamp": "2026-10-21T16:12:35.012Z",
+      "last_seen": "2026-10-21T16:12:35.012Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard3d.py",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→10 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-035",
+      "timestamp": "2026-10-21T16:37:39.727Z",
+      "last_seen": "2026-10-21T16:37:39.727Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 9→3 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-036",
+      "timestamp": "2026-10-21T17:00:57.583Z",
+      "last_seen": "2026-10-21T17:00:57.583Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of tex3d_draw.py",
+      "file": "tools/tex3d_draw.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 10→13 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-037",
+      "timestamp": "2026-10-21T17:50:52.317Z",
+      "last_seen": "2026-10-21T17:50:52.317Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of stacks.py",
+      "file": "src/missions/m6/bloc3d/stacks.py",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 17→11 lines (9 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-038",
+      "timestamp": "2026-10-21T18:26:57.177Z",
+      "last_seen": "2026-10-21T18:26:57.177Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: dim_col should be dim",
+      "file": "src/missions/m6/bloc3d/stacks.py",
+      "root_cause": "Used \"dim_col\" instead of \"dim\"",
+      "fix": "Changed dim_col → dim",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-039",
+      "timestamp": "2026-10-21T18:27:10.526Z",
+      "last_seen": "2026-10-21T18:27:10.526Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m6/bloc3d/tower.py",
+      "root_cause": "Was returning: len(add.__self__.faces) - before if False else bef",
+      "fix": "Now returns: len(add.__self__.faces) - before",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-040",
+      "timestamp": "2026-10-21T18:30:12.555Z",
+      "last_seen": "2026-10-21T18:30:12.555Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard_dress.py",
+      "file": "src/missions/m6/yard_dress.py",
+      "root_cause": "26 lines replaced/restructured",
+      "fix": "Rewrote 31→52 lines (26 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-041",
+      "timestamp": "2026-10-21T18:35:38.790Z",
+      "last_seen": "2026-10-21T18:35:38.790Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard_dress.py",
+      "file": "src/missions/m6/yard_dress.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 6→13 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-042",
+      "timestamp": "2026-10-21T18:37:00.205Z",
+      "last_seen": "2026-10-21T18:37:00.205Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 7→35 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-043",
+      "timestamp": "2026-10-21T18:37:51.053Z",
+      "last_seen": "2026-10-21T18:37:51.053Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "tests/unit/test_bloc3d.py",
+      "root_cause": "Was returning: m, m.add",
+      "fix": "Now returns: m.add(mesh)",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-044",
+      "timestamp": "2026-10-21T18:38:54.988Z",
+      "last_seen": "2026-10-21T18:38:54.988Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _mesh should be calls",
+      "file": "tests/unit/test_bloc3d.py",
+      "root_cause": "Used \"_mesh\" instead of \"calls\"",
+      "fix": "Changed _mesh → calls",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-045",
+      "timestamp": "2026-10-21T18:39:13.516Z",
+      "last_seen": "2026-10-21T18:39:13.516Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m6/yard_dress.py",
+      "root_cause": "Was returning: (cx, cz), _facing_to(cx, cz), w, h, d",
+      "fix": "Now returns: cx, cz, _facing_to(cx, cz), w, h, d",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-046",
+      "timestamp": "2026-10-21T18:43:28.898Z",
+      "last_seen": "2026-10-21T18:43:28.898Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard_dress.py",
+      "file": "src/missions/m6/yard_dress.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 7→4 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-047",
+      "timestamp": "2026-10-21T18:43:44.921Z",
+      "last_seen": "2026-10-21T18:43:44.921Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 8→4 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-048",
+      "timestamp": "2026-10-21T18:43:56.457Z",
+      "last_seen": "2026-10-21T18:43:56.457Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 12→4 lines (9 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-049",
+      "timestamp": "2026-10-21T18:44:30.390Z",
+      "last_seen": "2026-10-21T18:44:30.390Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 7→3 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-050",
+      "timestamp": "2026-10-21T18:44:31.508Z",
+      "last_seen": "2026-10-21T18:44:31.508Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of train3d.py",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 4→8 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-051",
+      "timestamp": "2026-10-21T18:44:42.005Z",
+      "last_seen": "2026-10-21T18:44:42.005Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of yard3d.py",
+      "file": "src/missions/m6/yard3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-052",
+      "timestamp": "2026-10-21T22:08:19.650Z",
+      "last_seen": "2026-10-21T22:08:19.650Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "M6 lamp halos, beacons and window glows painted over walls/carriages on GL; stepped halos read as flat target rings",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "Light sprites composited with their queued FX_LAYER=6 depth encoding; no layer-2 world depth could ever be nearer. The 2a3be34 halo was 2-3 flat bands with a hard 28 px cap.",
+      "fix": "Tag light callbacks (fn.light); pack a 64 m physical-depth map into the colour target alpha; anchor-gate lights with a 3x3 kernel, per-pixel mask only partial lights, soft windows/haze; new hot-core + Bayer-dithered sodium ramp, distance-sized; ground spills to pools; beacon() for aviation lamps.",
+      "tags": [
+        "m6",
+        "engine3d",
+        "lighting",
+        "gl",
+        "regression",
+        "art"
+      ],
+      "status": "fixed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-053",
+      "timestamp": "2026-10-21T22:41:40.708102Z",
+      "last_seen": "2026-10-21T22:41:40.708102Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "tools/dev_panel.py",
+      "root_cause": "Had \"Mission 1\"",
+      "fix": "Changed to \"Mission 0\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-054",
+      "timestamp": "2026-10-22T17:05:25.027Z",
+      "last_seen": "2026-10-22T17:05:25.027Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -591,7 +1008,30 @@
     "b6f3e221-9f25-48da-8120-cf946e2d9fd1": true,
     "1296624a-1d13-4284-800a-918dfd059ff4": true,
     "bb99a935-2e27-4969-8c05-11c33d756121": true,
-    "b2a66870-af25-4751-9198-8cb182ee9b06": true
+    "b2a66870-af25-4751-9198-8cb182ee9b06": true,
+    "a45d1fbb-dfaf-4a66-8ac8-61b5b1dbb703": true,
+    "378f0aa5-c3e9-4184-a243-d8d35516b298": true,
+    "ac6d96c5-8f3d-4e38-92bc-d6e5a2e447c0": true,
+    "8f79d71d-ec0a-4dab-aeab-6840e0285978": true,
+    "ac6e3932-276d-42e5-b37d-67e7abfe8cf7": true,
+    "ecf92702-409d-4f69-b52f-ddad6eb7ede7": true,
+    "662f738b-7ad0-4e3c-9a1d-634263789a90": true,
+    "72d47745-627e-48f0-8ecc-dfd973880c9e": true,
+    "046f8883-6ad4-462a-bfde-392619636b2f": true,
+    "5842f381-4f76-4f56-ba8e-d4c35ec01994": true,
+    "ad4f04ba-af66-4198-af87-7882996f6d46": true,
+    "133cbeed-aace-4335-872a-389fb2ebc2cd": true,
+    "fe46fdd4-9b15-4f54-b95a-c635a2779ded": true,
+    "e1a0d844-c3db-4f6f-96df-f01e7535ee27": true,
+    "0f55fe28-29af-40e2-86ec-cd86af295d18": true,
+    "835ccdb5-7f7e-4cdc-ab3a-4ed015cfab58": true,
+    "f8b41ad9-ded5-4657-b9b0-819f770ae346": true,
+    "bbd5db64-6816-4215-b33c-92164c0a8e85": true,
+    "d7108090-af50-497d-aaef-10f0ecb5ad9d": true,
+    "9d17c8f6-a768-4a5b-b858-15dbf2b32eab": true,
+    "999f1998-7a14-4e67-81c8-259885bf609c": true,
+    "cea1b737-209a-4d7f-9ae5-bfe7f4de2655": true,
+    "8c1b26a2-0456-46a5-8556-4bab91757916": true
   },
-  "next_id": 32
+  "next_id": 55
 }

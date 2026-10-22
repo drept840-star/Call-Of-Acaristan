@@ -46,6 +46,7 @@ from core.dev_jumps import DEV_JUMPS
 # Order here is the panel's order. Keep in sync with DEV_JUMPS - the panel
 # warns (in the status line) about any entry that is missing or duplicated.
 GROUPS = [
+    ("Mission 0", ["m0"]),
     ("Mission 1", ["m1", "m1-safe"]),
     ("Walking sim", ["walk"]),
     ("Mission 2", ["m2", "m2-game", "m2-sniper", "m2-after-sniper",
@@ -57,6 +58,8 @@ GROUPS = [
     ("Mission 4", ["m4", "m4-game", "m4-station", "m4-tower"]),
     ("Mission 5", ["m5", "m5-hq", "m5-game", "m5-printworks",
                    "m5-tunnel", "m5-ending"]),
+    ("Mission 6", ["m6", "m6-train", "m6-3d", "m6-shootout",
+                   "m6-heli", "m6-ending"]),
     ("Trailer bot", ["trailer-m1", "trailer-m2-killbox", "trailer-m2-evidence",
                      "trailer-m3-breakout", "trailer-m3-comms"]),
     ("Misc", ["slot-select", "audio-parade"]),

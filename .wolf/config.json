@@ -15,9 +15,9 @@
           "grep_flood": "replace",
           "file_print": "replace",
           "git_show": "replace",
-          "test": "suggest",
-          "build": "suggest",
-          "unknown": "suggest"
+          "test": "off",
+          "build": "off",
+          "unknown": "off"
         }
       }
     },
@@ -70,7 +70,17 @@
         "archive",
         "crash_reports",
         "*.log",
-        "*.err"
+        "*.err",
+        "docs",
+        "validation",
+        "content",
+        "replay",
+        "loop",
+        "sprites",
+        "trailer3d",
+        "trailer_rpe6",
+        "apollo-agent",
+        "tools"
       ],
       "respect_gitignore": true
     },

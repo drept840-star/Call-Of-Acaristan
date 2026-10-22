@@ -1,7 +1,7 @@
 """M6 3D film + interactive train stills.
 
     python tools/m6_shots.py [OUT_DIR] [insertion|boxcar|ending|train|train_fail|all] [--probe]
-                             [--at=T1,T2,...] [--guards]
+                             [--at=T1,T2,...] [--guards] [--clash]
 
 Renders every authored M6 shot (each shot dict, so both boxcar exit shots and
 all four Vasile calls) at a few timestamps into OUT_DIR/<scene>_<n>_<t>.png
@@ -17,6 +17,10 @@ set's registered solids.  Train probes add Volkov/Biribel ground clearance and
 the catch hand distances.  Targets: mean 55..170, p95 < 235, penetration
 <= 0.02 m.
 
+``--clash`` renders no stills: it samples every film shot every 100 ms (the
+train every 0.1 s) and prints each body-on-body or limb-through-own-body
+overlap once, with its deepest depth and time span (!! over 0.05 m).
+
 This is a visual-review tool, not a CI gate.
 """
 import math
@@ -31,8 +35,10 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 import pygame  # noqa: E402
 
 pygame.init()
+if os.environ.get("ACARISTAN_RENDERER", "").strip().lower() == "gl":
+    pygame.display.set_mode((64, 64))
 from core.config import HEIGHT, WIDTH  # noqa: E402
-from core.cutscene_registry import set_current_shot  # noqa: E402
+from core.cutscene_registry import scene_renderer, set_current_shot  # noqa: E402
 from core.state import STATE  # noqa: E402
 from cutscenes import m6films  # noqa: E402
 from cutscenes import m6world3d as w  # noqa: E402
@@ -71,11 +77,95 @@ def _boxes(scene, t):
     """Registered blocking volumes the frame must clear: the set AABBs plus
     the airframe (local AABBs transformed with the shot's heli placement)."""
     base = scene.split("#")[0]
+    if scene in ("m6_radio_vasile#1", "m6_radio_vasile#3"):
+        return {}          # Vasile's office: no registered solids
     boxes = dict(w.solids(_set_key(base)) or {})
+    if base in ("m6_helicopter", "m6_insert_cabin"):
+        # The camera is inside / alongside the airframe for the pickup and
+        # cabin beats; its collision AABBs are the cabin the actors sit in,
+        # not obstacles.  Ground clearance is covered by the insertion tests.
+        return boxes
     heli = m6films.heli_at(base, t)
     if heli is not None:
         boxes.update(w.heli_solids(*heli))
     return boxes
+
+
+# Rig slots (engine3d.rig SLOTS): 0 pelvis 1 torso 2 head, then per side
+# (l base 4, r base 10) +0 uarm +2 farm +3 thigh +4 shin +5 foot.
+_PART = {0: "pelvis", 1: "torso", 2: "head", 4: "l_uarm", 6: "l_farm",
+         7: "l_thigh", 8: "l_shin", 9: "l_foot", 10: "r_uarm", 12: "r_farm",
+         13: "r_thigh", 14: "r_shin", 15: "r_foot"}
+# Same-body pairs that must not interpenetrate (joint neighbours excluded).
+_SELF = ((6, 1), (6, 2), (12, 1), (12, 2), (4, 2), (10, 2), (6, 12),
+         (6, 13), (12, 7), (7, 13), (8, 14), (9, 15), (8, 15), (14, 9))
+
+
+def _obbs(a):
+    """Posed part boxes of one LAST actor: {slot: (M, org, lo, hi, sc, verts)}."""
+    h = w.hum(a["key"])
+    places, _j, root = h.pose_world(a["pose"], a["pos"], a["yaw"])
+    uniq = h._unique_verts()
+    sc = h._scale
+    out = {}
+    for slot, key, M, org, _g, _fb in places:
+        if slot not in _PART or not uniq.get(key):
+            continue
+        vs = uniq[key]
+        lo = tuple(min(v[i] for v in vs) for i in range(3))
+        hi = tuple(max(v[i] for v in vs) for i in range(3))
+        o = (org[0] + root[0], org[1] + root[1], org[2] + root[2])
+        out[slot] = (M, o, lo, hi, sc, vs)
+    return out
+
+
+def _depth(src, dst):
+    """Deepest vertex of part ``src`` inside part box ``dst``, metres."""
+    M, o, _lo, _hi, _sc, vs = src
+    N, p, lo, hi, sc, _v = dst
+    k = 1.0 / (sc * sc)
+    best = 0.0
+    for x, y, z in vs:
+        dx = M[0] * x + M[1] * y + M[2] * z + o[0] - p[0]
+        dy = M[3] * x + M[4] * y + M[5] * z + o[1] - p[1]
+        dz = M[6] * x + M[7] * y + M[8] * z + o[2] - p[2]
+        lx = (N[0] * dx + N[3] * dy + N[6] * dz) * k
+        ly = (N[1] * dx + N[4] * dy + N[7] * dz) * k
+        lz = (N[2] * dx + N[5] * dy + N[8] * dz) * k
+        d = min(lx - lo[0], hi[0] - lx, ly - lo[1], hi[1] - ly,
+                lz - lo[2], hi[2] - lz) * sc
+        if d > best:
+            best = d
+    return best
+
+
+def clashes(actors=None, tol=0.02):
+    """Body-on-body and limb-through-own-body overlaps among this frame's
+    actors -> [(metres, "who part / who part")], deepest first."""
+    actors = w.LAST if actors is None else actors
+    boxes = [(_name(a), _obbs(a)) for a in actors]
+    hits = []
+    for name, ob in boxes:
+        for s1, s2 in _SELF:
+            if s1 in ob and s2 in ob:
+                d = max(_depth(ob[s1], ob[s2]), _depth(ob[s2], ob[s1]))
+                if d > tol:
+                    hits.append((d, "%s %s / %s" % (name, _PART[s1], _PART[s2])))
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            (na, oa), (nb, ob) = boxes[i], boxes[j]
+            for s1, b1 in oa.items():
+                for s2, b2 in ob.items():
+                    d = max(_depth(b1, b2), _depth(b2, b1))
+                    if d > tol:
+                        hits.append((d, "%s %s / %s %s" % (na, _PART[s1], nb,
+                                                           _PART[s2])))
+    hits.sort(reverse=True)
+    return hits
+
+
+def _name(a):
+    return a["key"] if isinstance(a["key"], str) else a["key"][0]
 
 
 def _probe(surface, scene, t, second=None):
@@ -104,6 +194,42 @@ def _probe(surface, scene, t, second=None):
     print("  %-22s %5d  %s" % (scene, t, "  ".join(parts) or "-"))
 
 
+def _report(scene, worst):
+    """worst: {label: (depth, t_first, t_last, t_deepest)} -> one line each."""
+    if not worst:
+        print("  %-22s clean" % scene)
+    for label, (d, t0, t1, tm) in sorted(worst.items(), key=lambda kv: -kv[1][0]):
+        print("  %-22s %.3f m  %-34s t %s..%s (max @%s)%s" % (
+            scene, d, label, t0, t1, tm, " !!" if d > 0.05 else ""))
+
+
+def _note(worst, t, hits):
+    for d, label in hits:
+        cur = worst.get(label)
+        if cur is None:
+            worst[label] = (d, t, t, t)
+        else:
+            worst[label] = (max(d, cur[0]), cur[1], t,
+                            t if d > cur[0] else cur[3])
+
+
+def _clash_films(surface, groups, step=100):
+    """Every shot sampled every ``step`` ms; prints each clashing pair once
+    with its depth and time span."""
+    seen = {}
+    for shot in (s for g in groups for s in GROUPS[g]):
+        scene = shot["scene"]
+        n = seen[scene] = seen.get(scene, -1) + 1
+        set_current_shot(shot)
+        fn = scene_renderer(scene) or m6films.M6_3D_SCENES[scene]
+        worst = {}
+        for t in range(0, shot.get("min_ms", 5000), step):
+            fn(surface, t)
+            _note(worst, t, clashes())
+        _report(scene + ("#%d" % n if n else ""), worst)
+    set_current_shot(None)
+
+
 def _film_sheet(surface, out, groups, probe=False):
     shots = [s for g in groups for s in GROUPS[g]]
     sheet = pygame.Surface((TW * len(FRACS), TH * max(1, len(shots))))
@@ -115,7 +241,8 @@ def _film_sheet(surface, out, groups, probe=False):
         dur = shot.get("min_ms", 5000)
         for col, f in enumerate(FRACS):
             t = int(dur * f)
-            m6films.M6_3D_SCENES[scene](surface, t)
+            fn = scene_renderer(scene) or m6films.M6_3D_SCENES[scene]
+            fn(surface, t)
             if probe:
                 _probe(surface, scene + ("#%d" % n if n else ""), t,
                        second=(n == 1) if scene == "m6_boxcar_exit" else None)
@@ -190,7 +317,8 @@ def _dist(a, b):
     return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
 
 
-def _train(surface, out, fail=False, probe=False, at=None, guards=False):
+def _train(surface, out, fail=False, probe=False, at=None, guards=False,
+           clash=None):
     """``at``: override the sampled clock times; ``guards``: keep the roster
     alive (combat stills) instead of clearing the lane for the canon death."""
     from missions import m6
@@ -224,12 +352,18 @@ def _train(surface, out, fail=False, probe=False, at=None, guards=False):
             guard += 1
         train3d.draw(surface)
         clock = sc.t + (sc.fail_t if fail else 0.0)
+        if clash is not None:
+            _note(clash, "%.2f" % clock, clashes())
+            continue
         label = "%05.2f" % clock
         if probe:
             _train_probe(surface, "train_fail" if fail else "train",
                          clock, sc, not fail and clock >= train3d.HIT_AT)
         frames.append((label, surface.copy()))
-    _train_sheet(frames, out, "train_fail" if fail else "train")
+    if clash is not None:
+        _report("train_fail" if fail else "train", clash)
+    else:
+        _train_sheet(frames, out, "train_fail" if fail else "train")
     if train3d.active():
         train3d.force_finish("tool")
 
@@ -247,6 +381,15 @@ def main():
     os.makedirs(out, exist_ok=True)
     surface = pygame.Surface((WIDTH, HEIGHT))
     film_groups = [g for g in groups if g in GROUPS]
+    if "--clash" in sys.argv:
+        _clash_films(surface, film_groups)
+        for g in ("train", "train_fail"):
+            if g in groups:
+                fail = g == "train_fail"
+                lo, hi = (22.9, 24.8) if fail else (1.0, 39.0)
+                ts = [round(lo + 0.1 * i, 2) for i in range(int((hi - lo) / 0.1) + 1)]
+                _train(surface, out, fail=fail, at=ts, clash={})
+        return 0
     sheet = pygame.Surface((TW * COLS, TH))
     row = 0
     if film_groups:
