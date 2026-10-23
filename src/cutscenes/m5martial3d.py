@@ -35,6 +35,7 @@ from core.outfits import OUTFIT_GUARD, biribel_3d, scene_outfit
 from cutscenes import m5fx3d as _fx
 from cutscenes import m5decal as _decal
 from cutscenes import m5ending3d as _ending
+from cutscenes import m6fx3d as _ps2
 
 # M5 Biribel rigs are keyed by outfit: ("biribel", outfit). Never use the bare
 # "biribel" key in M5 - that is his KRAP kit and would leak into post-change shots.
@@ -44,7 +45,7 @@ __all__ = ["draw_m5_scene_3d", "draw_m5_tv_bulletin_3d", "draw_m5_river_gate_3d"
            "m5_3d_enabled", "M5_3D_SCENES"]
 
 _FILM_H = SAFE_BOT - SAFE_TOP
-_RES = 0.6
+_RES = 0.64                           # the PS2 frame, same buffer as the M6 films
 _RW, _RH = int(WIDTH * _RES), int(_FILM_H * _RES)
 _LENS_RAD = _FILM_H // 2 - 2          # the optic fills the film height
 _cache = {"r": {}, "hum": {}, "sky": {}, "failed": False, "err": None,
@@ -66,7 +67,9 @@ def _rend(w=_RW, h=_RH):
     key = (w, h)
     if key not in _cache["r"]:
         from engine3d import Renderer  # lazy: 2D fallback if the 3D stack breaks
-        _cache["r"][key] = (Renderer(w, h), pygame.Surface((w, h)))
+        r = Renderer(w, h)
+        r.light_cap = 8
+        _cache["r"][key] = (r, pygame.Surface((w, h)))
     return _cache["r"][key]
 
 
@@ -150,7 +153,10 @@ def _k(t, start, length):
 
 
 def _present(surface, buf, x=0, w=WIDTH):
-    surface.blit(pygame.transform.smoothscale(buf, (w, _FILM_H)), (x, SAFE_TOP))
+    """PS2 frame: train grade (contrast, split tone, ink floor, Bayer dither)
+    on the small buffer, then the crisp nearest-x2 + box upscale."""
+    _ps2.grade_cine(buf)
+    _ps2.present_crisp(buf, surface.subsurface((x, SAFE_TOP, w, _FILM_H)))
 
 
 def _film_xy(p, x0=0, w=WIDTH, rw=_RW):
@@ -227,7 +233,7 @@ def _tag_left(surface, text, col):
 
 def _finish(surface, seed, tag, col=(120, 200, 220), grade=True):
     if grade:
-        _grade(surface)
+        _grade(surface, gamma=1.0, vig=0.30)    # grade_cine already set the tone
     _m3_noise(surface, seed, count=20, alpha=12)
     _ko_tint(surface)
     _tag_left(surface, tag, col)
@@ -547,7 +553,7 @@ def _bulletin(surface, t):
     r.flush(buf)
     surface.fill((0, 0, 0))
     _present(surface, buf)
-    _grade(surface, gamma=0.82, vig=0.62)       # set edges fall off into the dark
+    _grade(surface, gamma=1.0, vig=0.62)        # set edges fall off into the dark
     _chyron(surface, t, BULLETIN_CAPTION, (220, 90, 70))
     _live(surface, t)
     _finish(surface, 5151, "STATE TELEVISION // 21:58", grade=False)

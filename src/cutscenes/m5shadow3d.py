@@ -18,7 +18,7 @@ from core.outfits import biribel_3d, OUTFIT_GUARD
 from missions.m5.finale_script import LINES, CUTS, DURATION_MS
 
 TOP, BOT = 112, 588
-RW, RH = 1200, 572
+RW, RH = int(WIDTH * .64), int((BOT - TOP) * .64)   # the PS2 frame (M6 films)
 BIRI = (0.0, 0.0, 0.0)
 UC = (-2.0, 5.0, 26.4)
 _MARU_START = (-2.7, 0.0, -2.7)
@@ -875,7 +875,7 @@ def _renderer(software=False):
     if key not in _cache:
         cls=SoftwareRenderer if software else Renderer
         r=cls(RW,RH,fog=(26,38,44),fog_start=32,fog_end=100)
-        r.light=ENV_LIGHT
+        r.light=ENV_LIGHT;r.light_cap=8
         for i,mesh in enumerate(_scene_mesh()):r.bake(mesh,tag='shadow_set_'+str(i))
         from cutscenes.m5harbour_art import water_base, world_shell
         r.bake(water_base(),tag='shadow_water_base')
@@ -1082,7 +1082,7 @@ def _clip_seg(r,a,b):
 def _laser_sight(s,r,dot,muzzle,t,power=None):
     """A real sniper laser over the upscaled frame: beam + hot impact core.
 
-    Screen space AFTER the smoothscale (a centimetre-scale emissive patch alone
+    Screen space AFTER the upscale (a centimetre-scale emissive patch alone
     blurs into a stray pixel). The beam is the 3D muzzle->mark segment, near
     clipped, so it streaks in from off-frame when the shooter is behind the
     lens and lands right on near and far framings alike. Depth-scaled impact
@@ -1165,7 +1165,8 @@ def draw(s,t,force_software=False):
     r.flush(buf);r.fog=base_fog
     clip=s.get_clip();s.set_clip(clip.clip(pygame.Rect(0,SCENE_TOP,WIDTH,SCENE_BOT-SCENE_TOP)))
     try:
-        s.fill((0,0,0));s.blit(pygame.transform.smoothscale(buf,(WIDTH,BOT-TOP)),(0,TOP))
+        from cutscenes import m6fx3d as _ps2  # lazy: numpy grade
+        s.fill((0,0,0));_ps2.grade_cine(buf);_ps2.present_crisp(buf,s.subsurface((0,TOP,WIDTH,BOT-TOP)))
         if fl>0:
             veil=pygame.Surface((WIDTH,BOT-TOP),pygame.SRCALPHA)
             veil.fill((186,203,222,int(54*fl)));s.blit(veil,(0,TOP))

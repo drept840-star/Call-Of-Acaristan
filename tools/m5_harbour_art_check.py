@@ -37,7 +37,7 @@ def check():
     tree=ast.parse((ROOT/'src/cutscenes/m5shadow3d.py').read_text())
     actual={n.name:hashlib.sha256(ast.dump(n,include_attributes=False).encode()).hexdigest() for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in EXPECTED_MOTION}
     assert actual==EXPECTED_MOTION,'Choreography changed: '+', '.join(k for k in EXPECTED_MOTION if actual.get(k)!=EXPECTED_MOTION[k])+' (if intentional and m5_shadow_check passes, re-pin EXPECTED_MOTION; see module docstring)'
-    assert film.RW>=1000 and film.RH>=476,'Picture still undersampled'
+    assert (film.RW,film.RH)==(640,304),'Finale is off the PS2 frame (0.64 buffer, crisp present)'
     assert all(art.lettering(text,1)[0] for text in ('RIVER 03',))
     assert art.spill((-5.4,0,-2.7),(60,70,70))[0]>art.spill((8,0,2),(60,70,70))[0]+15,'No warm practical spill'
     assert art.water_mesh(0,False).verts==art.water_mesh(15000,False).verts,'Reduced-motion water still animates'
@@ -55,5 +55,5 @@ def check():
     for t in (1500,10700,19500,33800,37000):
         a=frame(t);assert a==frame(t),'Previous-frame light leaked into river'
         frame(15500);assert a==frame(t),'Out-of-order seek changed art'
-    print('M5 HARBOUR ART: OK (cubic bodies/faces and choreography unchanged; practical spill, water, meshes, supersampling, deterministic lighting)')
+    print('M5 HARBOUR ART: OK (cubic bodies/faces and choreography unchanged; practical spill, water, meshes, PS2 frame, deterministic lighting)')
 if __name__=='__main__':check()
