@@ -98,9 +98,9 @@ CHECKPOINT_FLAGS = {
 }
 
 STAGE_OBJECTIVES = {
-    STAGE_CUSTOMS: "Search the abandoned crossing, then take the north gate.",
-    STAGE_NOMAN: "Cross the floodlit strip. Use the dark between sweeps.",
-    STAGE_RAIL: "Find Volkov - the marked boxcar on the east freight line.",
+    STAGE_CUSTOMS: "Eliminate the customs guards, then take the north gate.",
+    STAGE_NOMAN: "Eliminate the crossing guards, then reach the rail yard.",
+    STAGE_RAIL: "Eliminate the yard guards, then reach Volkov's marked boxcar.",
     STAGE_BOXCAR: "Talk to Volkov.",
     STAGE_TRAIN: "Cover Volkov to the train.",
 }

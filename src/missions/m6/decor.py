@@ -17,6 +17,8 @@ import pygame
 from engine.core import now_s as _now_s
 import engine.lighting as _lighting
 
+from core import artpack
+
 from core.config import TILE_SIZE, WIDTH, HEIGHT
 from core.state import STATE
 
@@ -57,9 +59,9 @@ _PALETTE[STAGE_BOXCAR] = _PALETTE[STAGE_RAIL]
 _PALETTE[STAGE_TRAIN] = _PALETTE[STAGE_RAIL]
 
 _AMBIENT = {
-    STAGE_CUSTOMS: (54, 60, 74),
-    STAGE_NOMAN: (40, 48, 64),
-    STAGE_RAIL: (44, 50, 64),
+    STAGE_CUSTOMS: (86, 96, 124),
+    STAGE_NOMAN: (80, 92, 124),
+    STAGE_RAIL: (82, 92, 120),
 }
 _AMBIENT[STAGE_BOXCAR] = _AMBIENT[STAGE_RAIL]
 _AMBIENT[STAGE_TRAIN] = _AMBIENT[STAGE_RAIL]
@@ -130,61 +132,62 @@ def build_decor(stage_id):
 # ─────────────────────────────────────────────
 # Ground bake
 # ─────────────────────────────────────────────
+# House art tiles per floor code (``tools/make_art_pack.py``); M6 only adds
+# the frost and the snow that settles against walls.
+_ART_FLOOR = {".": ".", "g": "g", "L": "L"}
+_FROST = {
+    STAGE_CUSTOMS: (196, 208, 226, 34),
+    STAGE_NOMAN: (204, 216, 234, 46),
+    STAGE_RAIL: (190, 202, 220, 26),
+}
+_FROST[STAGE_BOXCAR] = _FROST[STAGE_RAIL]
+_FROST[STAGE_TRAIN] = _FROST[STAGE_RAIL]
+
+
 def _paint_floor(surf, stage_id, col, row, ch):
-    pal = _PALETTE[stage_id]["floor"]
-    base = pal.get(ch, pal["."])
-    n = (_h(col, row) % 11) - 5
     x, y = col * T, row * T
-    colour = _shift(base, n)
-    pygame.draw.rect(surf, colour, (x, y, T, T))
-    h = _h(col, row, 3)
-    # Broad tonal patches first: a uniform 64 px square repeated 500 times is
-    # what made the open yards read as flat cardboard.
-    if h % 3 == 0:
-        pygame.draw.rect(surf, _shift(colour, -5),
-                         (x + (h >> 5) % 22, y + (h >> 9) % 22, T // 2, T // 2))
-    elif h % 3 == 1:
-        pygame.draw.rect(surf, _shift(colour, 4),
-                         (x + (h >> 6) % 26, y + (h >> 11) % 26, T // 2, T // 2))
-    # Snow settles in patches, never a uniform white blanket: a few
-    # deterministic specks and one soft drift per ~5 tiles.
-    for i in range(8):
-        sx = x + 4 + ((h >> (i * 3)) % (T - 8))
-        sy = y + 4 + ((h >> (i * 3 + 5)) % (T - 8))
-        pygame.draw.circle(surf, _shift(colour, 8 + (h >> i) % 12),
-                           (sx, sy), 1 + (i % 2))
-    if h % 4 == 2:
-        # Scuffed grit / slush smear.
-        gw = 10 + (h >> 7) % 18
-        gh = 5 + (h >> 12) % 7
-        grit = pygame.Surface((gw, gh), pygame.SRCALPHA)
-        pygame.draw.ellipse(grit, (206, 216, 230, 30), (0, 0, gw, gh))
-        surf.blit(grit, (x + (h >> 3) % (T - gw), y + (h >> 15) % (T - gh)))
-    if h % 9 == 0:
-        rw = 16 + (h >> 4) % 22
-        drift = pygame.Surface((rw, 10), pygame.SRCALPHA)
-        pygame.draw.ellipse(drift, (198, 210, 224, 46), drift.get_rect())
-        surf.blit(drift, (x + 4, y + (h >> 8) % (T - 16)))
-    if h % 11 == 5:
-        # Hairline cracks / frost seams.
-        cx0 = x + 8 + (h >> 7) % (T - 24)
-        cy0 = y + 8 + (h >> 12) % (T - 24)
-        pygame.draw.line(surf, _shift(colour, -12), (cx0, cy0),
-                         (cx0 + 12 + (h % 9), cy0 + 6 + (h % 5)), 1)
-        pygame.draw.line(surf, _shift(colour, -12), (cx0 + 12, cy0 + 6),
-                         (cx0 + 18, cy0 + 3), 1)
-    if ch == "L":
-        pygame.draw.line(surf, _shift(colour, -9), (x, y), (x, y + T - 1), 1)
-        pygame.draw.line(surf, _shift(colour, -9), (x, y), (x + T - 1, y), 1)
-        # Paving joints so the platform does not read as one grey slab.
-        pygame.draw.line(surf, _shift(colour, -6), (x, y + T // 2),
-                         (x + T - 1, y + T // 2), 1)
-        pygame.draw.line(surf, _shift(colour, -6), (x + T // 2, y),
-                         (x + T // 2, y + T - 1), 1)
-    elif ch == "Y":
-        pygame.draw.rect(surf, _shift(colour, 18), (x, y + 4, T, T - 8))
-        pygame.draw.rect(surf, _shift(colour, -22), (x, y + 4, T, 1))
-        pygame.draw.rect(surf, _shift(colour, -22), (x, y + T - 5, T, 1))
+    art = artpack.tile(_ART_FLOOR[ch], col, row) if ch in _ART_FLOOR else None
+    if art is not None:
+        surf.blit(art, (x, y))
+    else:
+        pal = _PALETTE[stage_id]["floor"]
+        colour = _shift(pal.get(ch, pal["."]), (_h(col, row) % 5) - 2)
+        pygame.draw.rect(surf, colour, (x, y, T, T))
+    if ch == "Y":
+        colour = _PALETTE[stage_id]["floor"]["Y"]
+        pygame.draw.rect(surf, (36, 36, 34), (x, y, T, T))
+        pygame.draw.rect(surf, colour, (x, y + 6, T, T - 12))
+        for tx in range(x + 4, x + T, 8):
+            for ty in range(y + 10, y + T - 8, 8):
+                pygame.draw.rect(surf, _shift(colour, -26), (tx, ty, 2, 2))
+        pygame.draw.rect(surf, (20, 20, 20), (x, y + 6, T, 1))
+        pygame.draw.rect(surf, (20, 20, 20), (x, y + T - 7, T, 1))
+
+
+def _frost(surf, stage_id):
+    """One even frost wash: snow light, not snow noise."""
+    layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+    layer.fill(_FROST.get(stage_id, _FROST[STAGE_CUSTOMS]))
+    surf.blit(layer, (0, 0))
+
+
+def _wall_drifts(surf, grid):
+    """Hard-edged snow piled on the windward (north) and lee sides of walls."""
+    h, w = len(grid), len(grid[0])
+    for row in range(h):
+        for col in range(w):
+            if grid[row][col] in "CWBD":
+                continue
+            k = _h(col, row, 17)
+            x, y = col * T, row * T
+            if row > 0 and grid[row - 1][col] in "CW":
+                dh = 6 + k % 7
+                pygame.draw.rect(surf, _SNOW_DIM, (x, y, T, dh + 2))
+                pygame.draw.rect(surf, _SNOW, (x, y, T, dh))
+                if k % 3 == 0:
+                    pygame.draw.rect(surf, _SNOW, (x + 8 + k % 20, y + dh, 18 + k % 14, 3))
+            if row + 1 < h and grid[row + 1][col] in "CW" and k % 2 == 0:
+                pygame.draw.rect(surf, _SNOW_DIM, (x + 6, y + T - 4, T - 12 - k % 18, 4))
 
 
 def _paint_wall(surf, stage_id, col, row, ch):
@@ -192,9 +195,13 @@ def _paint_wall(surf, stage_id, col, row, ch):
     base = pal["wall"].get(ch, pal["wall"]["C"])
     x, y = col * T, row * T
     h = _h(col, row, 11)
-    pygame.draw.rect(surf, base, (x, y, T, T))
-    pygame.draw.line(surf, _shift(base, 16), (x, y), (x + T - 1, y), 3)
-    pygame.draw.line(surf, _shift(base, -14), (x, y + T - 3), (x + T - 1, y + T - 3), 3)
+    art = artpack.wall("C", col, row) if ch == "C" else None
+    if art is not None:
+        surf.blit(art, (x, y))
+    else:
+        pygame.draw.rect(surf, base, (x, y, T, T))
+        pygame.draw.line(surf, _shift(base, 16), (x, y), (x + T - 1, y), 3)
+        pygame.draw.line(surf, _shift(base, -14), (x, y + T - 3), (x + T - 1, y + T - 3), 3)
     # Snow sits on the crown of every wall: the border is what the player
     # reads first, so a bare concrete band made the map edge look unbuilt.
     cap = 4 + (h % 3)
@@ -214,7 +221,7 @@ def _paint_wall(surf, stage_id, col, row, ch):
         # Sagging wire between the posts.
         wy = y + cap + 9
         pygame.draw.line(surf, (52, 56, 62), (x + 2, wy), (x + T - 2, wy + 3), 1)
-    elif ch == "C":
+    elif ch == "C" and art is None:
         pygame.draw.line(surf, _shift(base, -9), (x + T - 2, y + cap + 2),
                          (x + T - 2, y + T - 2), 1)
         # Cast-in joints every tile, and the odd rusted rebar nub.
@@ -278,7 +285,7 @@ def _noman_detail(surf, grid):
         for x in range(17 * T, 24 * T, 22):
             pygame.draw.line(surf, (146, 126, 66), (x, y - 8), (x + 12, y + 8), 2)
     for x, y in ((2, 3), (2, 14), (37, 3), (37, 14)):
-        pygame.draw.ellipse(surf, (132, 144, 160), (x * T - 18, y * T, 2 * T + 36, 20))
+        _snow_bank(surf, x * T - 18, y * T, 2 * T + 36, 18, x + y)
 
 
 def _rail_detail(surf, grid):
@@ -298,7 +305,7 @@ def _rail_detail(surf, grid):
         if grid[gy // T][gx // T] in "g":
             pygame.draw.circle(surf, (54, 58, 64), (gx, gy), 1)
     for x, y in ((1, 8), (1, 20), (44, 8), (44, 20)):
-        pygame.draw.ellipse(surf, (128, 140, 156), (x * T - 14, y * T, 2 * T + 26, 22))
+        _snow_bank(surf, x * T - 14, y * T, 2 * T + 26, 18, x + y)
 
 
 # ─────────────────────────────────────────────
@@ -314,16 +321,22 @@ _SNOW_DIM = (168, 182, 202)
 
 
 def _snow_bank(surf, x, y, w, h, seed, a=52):
-    """Soft wind-blown drift: three offset ellipses, never a white blob."""
+    """Wind-blown drift: a ragged hard-edged crest over a flat base."""
     if w < 6 or h < 4:
         return
-    bank = pygame.Surface((w, h), pygame.SRCALPHA)
-    pygame.draw.ellipse(bank, (*_SNOW, a), (0, 0, w, h))
-    pygame.draw.ellipse(bank, (*_SNOW, a + 18),
-                        (w // 6, h // 4, max(4, w // 2), max(3, h // 2)))
-    pygame.draw.ellipse(bank, (*_SNOW_DIM, a - 14),
-                        (w // 3 + (seed % 5), h // 2, max(3, w // 3), max(2, h // 3)))
-    surf.blit(bank, (x, y))
+    n = max(4, w // 10)
+    top = []
+    for i in range(n + 1):
+        f = i / n
+        lift = math.sin(f * math.pi) ** 0.6
+        jag = (_h(i, seed, 5) % 5) - 2
+        top.append((x + int(f * w), y + h - int(lift * h) + jag))
+    base = [(x + w, y + h), (x, y + h)]
+    pygame.draw.polygon(surf, (22, 26, 34), [(px + 2, py + 3) for px, py in top + base])
+    pygame.draw.polygon(surf, _SNOW_DIM, top + base)
+    crest = [(px, py + 2) for px, py in top]
+    pygame.draw.polygon(surf, _SNOW, top + crest[::-1])
+    pygame.draw.lines(surf, (232, 238, 248), False, top, 1)
 
 
 def _wire_coils(surf, x0, y0, x1, y1, seed, col=(74, 78, 84)):
@@ -712,13 +725,17 @@ def _ground_surface(stage_id):
     surf = pygame.Surface((w * T, h * T))
     for row in range(h):
         for col in range(w):
+            if grid[row][col] not in "CWBD":
+                _paint_floor(surf, stage_id, col, row, grid[row][col])
+    _frost(surf, stage_id)
+    for row in range(h):
+        for col in range(w):
             ch = grid[row][col]
             if ch in "CWB":
                 _paint_wall(surf, stage_id, col, row, ch)
             elif ch == "D":
                 _paint_door(surf, stage_id, col, row)
-            else:
-                _paint_floor(surf, stage_id, col, row, ch)
+    _wall_drifts(surf, grid)
     if stage_id == STAGE_CUSTOMS:
         _customs_detail(surf, grid)
         _customs_dress(surf, grid)
@@ -729,6 +746,8 @@ def _ground_surface(stage_id):
         _rail_detail(surf, grid)
         _rail_dress(surf, grid)
     _ground_ao(surf, grid)
+    for row in _prop_rows(stage_id):
+        surf.blit(row["shadow"], (row["x"] + 7, row["bottom"] - row["fh"] + 9))
     _GROUND[stage_id] = surf
     return surf
 
@@ -945,10 +964,19 @@ def _prop_rows(stage_id):
     for comp in _components(stage_id):
         surf, over = _prop_surface(stage_id, comp)
         x0, y0, tw, th = comp
+        mask = pygame.mask.from_surface(surf, 40)
+        shadow = mask.to_surface(
+            setcolor=(4, 6, 10, 120), unsetcolor=(0, 0, 0, 0)).subsurface(
+            (0, over, surf.get_width(), th * T)).copy()
+        # A hard dark rim keeps props separate from the snow at night.
+        for comp_pts in mask.connected_components(8):
+            pts = comp_pts.outline(2)
+            if len(pts) > 2:
+                pygame.draw.lines(surf, (10, 12, 16), True, pts, 1)
         rows.append({
             "x": x0 * T, "y": y0 * T - over, "w": surf.get_width(),
             "h": surf.get_height(), "surf": surf,
-            "bottom": (y0 + th) * T,
+            "bottom": (y0 + th) * T, "fh": th * T, "shadow": shadow,
         })
     _PROPS[stage_id] = rows
     return rows
@@ -989,7 +1017,7 @@ def _lamp_on(kind, index):
 
 
 def _torch_colour():
-    return (156, 180, 212)
+    return (204, 214, 228)
 
 
 def _light_pass(stage_id, cam_x, cam_y, size):
@@ -1009,8 +1037,8 @@ def _light_pass(stage_id, cam_x, cam_y, size):
     if STATE.player is not None:
         px = STATE.player.rect.centerx - cam_x
         py = STATE.player.rect.centery - cam_y
-        lamps.append((_light(176, _torch_colour()), (int(px - 176), int(py - 176))))
-    return _lighting.LightMapDraw(_AMBIENT.get(stage_id, (52, 58, 72)), lamps, blooms)
+        lamps.append((_light(224, _torch_colour()), (int(px - 224), int(py - 224))))
+    return _lighting.LightMapDraw(_AMBIENT.get(stage_id, (108, 118, 140)), lamps, blooms)
 
 
 def _prop_fx(surface, cam_x, cam_y, stage_id):
@@ -1029,10 +1057,12 @@ def _prop_fx(surface, cam_x, cam_y, stage_id):
                          special_flags=pygame.BLEND_RGBA_ADD)
 
 
+_SNOW_FLAKE = pygame.Surface((3, 3), pygame.SRCALPHA)
+pygame.draw.circle(_SNOW_FLAKE, (224, 232, 244, 150), (1, 1), 1)
+
+
 def _snow(surface):
     t = _now_s()
-    flake = pygame.Surface((3, 3), pygame.SRCALPHA)
-    pygame.draw.circle(flake, (224, 232, 244, 150), (1, 1), 1)
     for i in range(118):
         h = _h(i, 29)
         speed = 26 + (h % 46)
@@ -1041,7 +1071,7 @@ def _snow(surface):
         y = ((h >> 9) % 900 + t * speed) % 840 - 50
         x = (x + t * 14) % (WIDTH + 40) - 20
         if -10 < x < WIDTH + 10:
-            surface.blit(flake, (int(x), int(y)))
+            surface.blit(_SNOW_FLAKE, (int(x), int(y)))
             if depth > 0.85:
                 pygame.draw.line(surface, (208, 220, 236), (int(x), int(y)),
                                  (int(x - 3), int(y) - 5), 1)

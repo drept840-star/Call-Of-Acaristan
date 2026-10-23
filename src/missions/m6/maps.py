@@ -147,7 +147,7 @@ _GRIDS = {
 # Bound runtime map (owner state; read through this module only).
 MISSION6_MAP = M6_CUSTOMS_MAP
 M6_STRUCTURE_MAP = _CUSTOMS_STRUCTURE
-_objective = "Search the abandoned crossing, then take the north gate."
+_objective = "Eliminate the customs guards, then take the north gate."
 _radio_marks = set()
 _last_keys = None
 

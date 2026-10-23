@@ -241,6 +241,14 @@ def _anchor_pos(stage):
     return _world._tile_world(c, r)
 
 
+def _exit_prompt(label):
+    remaining = _world.living_guards()
+    if remaining:
+        return "E  LOCKED - %d HOSTILE%s REMAIN" % (
+            remaining, "" if remaining == 1 else "S")
+    return "E  " + label
+
+
 def interaction_prompt():
     if getattr(STATE, "request_m6_cutscene", None):
         return None
@@ -248,11 +256,11 @@ def interaction_prompt():
         return None
     stage = getattr(STATE, "mission6_stage", None)
     if stage == STAGE_CUSTOMS and _world.near(_anchor_pos(STAGE_CUSTOMS), GATE_RADIUS):
-        return "E  NORTH GATE"
+        return _exit_prompt("NORTH GATE")
     if stage == STAGE_NOMAN and _world.near(_anchor_pos(STAGE_NOMAN), GATE_RADIUS):
-        return "E  RAIL YARD"
+        return _exit_prompt("RAIL YARD")
     if stage == STAGE_RAIL and _world.near(_anchor_pos(STAGE_RAIL), BOXCAR_RADIUS):
-        return "E  OPEN THE BOXCAR"
+        return _exit_prompt("OPEN THE BOXCAR")
     return None
 
 
@@ -264,6 +272,8 @@ def handle_interact():
     if getattr(STATE, "request_m6_cutscene", None):
         return False
     stage = getattr(STATE, "mission6_stage", None)
+    if stage in (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL) and _world.living_guards():
+        return False
     if stage == STAGE_CUSTOMS:
         if _world.near(_anchor_pos(STAGE_CUSTOMS), GATE_RADIUS):
             _enter_noman()

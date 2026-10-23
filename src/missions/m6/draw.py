@@ -1,9 +1,9 @@
 """Mission 6 gameplay renderer.
 
-The three maps share one painter: baked ground/props from ``decor``, Guards
-and Volkov as upright cast figures, floodlight cones over the finished world,
-then the same HUD grammar as M4/M5.  The train hands the whole frame to
-``train3d`` while it is active.
+The three maps share one painter: baked ground/props from ``decor``, the
+campaign's rotating top-down Guard sprite, Volkov as an upright cast figure,
+floodlight cones, then the same HUD grammar as M4/M5.  The train hands the
+whole frame to ``train3d`` while it is active.
 """
 import math
 
@@ -45,16 +45,6 @@ _KIT_SCALE = 0.232              # ~58 px tall (foot y+22 -> crown y-36)
 _ANCHOR = (42, 48)
 _POSE = (84, 84)
 
-# Guard troopers: Presidential Guard black + red armband (the ``ucilev`` cast
-# body), varied by skin/build so a squad does not read as clones.  The black
-# beret + cockade are painted over the kit's head.
-_GUARD_LOOKS = (
-    {},
-    {"skin": (196, 158, 128), "bulk": 1.02, "height": 254},
-    {"skin": (162, 124, 98), "bulk": 1.07, "height": 260, "hair": (26, 22, 20)},
-    {"skin": (206, 170, 140), "bulk": 0.97, "height": 250, "stubble": False},
-)
-
 
 # ─────────────────────────────────────────────
 # Actors
@@ -82,39 +72,46 @@ def _kit_body(who, wardrobe, right, headgear=True):
     return pygame.transform.smoothscale(big, _POSE)
 
 
-def _guard_pose(enemy):
-    idx = int(getattr(enemy, "uid", 0)) % len(_GUARD_LOOKS)
-    right = math.cos(getattr(enemy, "angle", 0.0)) >= 0
-    key = ("m6guard_v1", idx, bool(right))
-    return artpack.pose(key, _POSE,
-                        lambda s: s.blit(_kit_body("ucilev", _GUARD_LOOKS[idx], right),
-                                         (0, 0)))
-
-
 def _draw_guard(surface, enemy, cam_x, cam_y):
     x = int(enemy.rect.centerx - cam_x)
     y = int(enemy.rect.centery - cam_y)
     if not (-60 < x < WIDTH + 60 and -60 < y < HEIGHT + 60):
         return
+    from missions.m5.draw import _draw_m5_guard  # lazy: shared campaign Guard art
+    # Black kit on night snow vanished; a hard pale disc gives the silhouette
+    # something to read against even under the light multiply.
+    surface.blit(_GUARD_DISC, (x - 21, y - 21))
+    _draw_m5_guard(surface, enemy, cam_x, cam_y)
     left = _world.entering(enemy)
     if left > 0.0:
-        # Walk-in beat: he fades up out of the dark as he steps in, with the
-        # snow his boots are throwing up behind him.  No alert pip yet - he
-        # is not hunting until he is planted.
         total = float(getattr(enemy, "m6_entry_total", 1.0) or 1.0)
         k = 1.0 - max(0.0, min(1.0, left / total))
-        img = _guard_pose(enemy).copy()
-        img.set_alpha(int(70 + 185 * k))
-        surface.blit(img, (x - _ANCHOR[0], y - _ANCHOR[1]))
         if k < 0.9:
             _entry_puff(surface, x, y, k, getattr(enemy, "uid", 0))
         return
-    surface.blit(_guard_pose(enemy), (x - _ANCHOR[0], y - _ANCHOR[1]))
     if getattr(enemy, "alerted", False):
         t = _now_ms() / 1000.0
         a = 0.5 + 0.5 * math.sin(t * 7.0)
-        pygame.draw.circle(surface, (214, 90, 66),
-                           (x, y - 46), 2, max(1, int(1 + a)))
+        pygame.draw.circle(surface, (230, 96, 70),
+                           (x, y - 25), 2, max(1, int(1 + a)))
+
+
+_GUARD_DISC = pygame.Surface((42, 42), pygame.SRCALPHA)
+pygame.draw.circle(_GUARD_DISC, (206, 216, 232, 96), (21, 21), 20)
+pygame.draw.circle(_GUARD_DISC, (232, 238, 248, 150), (21, 21), 20, 2)
+
+
+def _draw_guard_marks(surface, cam_x, cam_y):
+    """Post-light hostile ring: drawn after the multiply so it stays crisp."""
+    for e in getattr(STATE, "enemies", []):
+        if e.hp <= 0 or _world.entering(e) > 0.0:
+            continue
+        x = int(e.rect.centerx - cam_x)
+        y = int(e.rect.centery - cam_y)
+        if not (-30 < x < WIDTH + 30 and -30 < y < HEIGHT + 30):
+            continue
+        col = (255, 92, 70) if getattr(e, "alerted", False) else (214, 64, 54)
+        pygame.draw.circle(surface, col, (x, y), 21, 2)
 
 
 def _entry_puff(surface, x, y, k, seed):
@@ -420,6 +417,7 @@ def game_draw(fcx=0, fcy=0, surface=None):
     draw_bullets(target, getattr(STATE, "bullets", []), cam_x, cam_y, with_glow=True)
 
     _decor.draw_over(target, cam_x, cam_y, stage)
+    _draw_guard_marks(target, cam_x, cam_y)
     _stealth.draw_cones(target, cam_x, cam_y)
 
     if STATE.player_dead:
