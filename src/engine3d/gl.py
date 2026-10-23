@@ -342,6 +342,24 @@ class _Programs:
 
 
 # ── geometry packing ────────────────────────────────────────────────────
+def _cross3(a, b):
+    """Row-wise cross product of (n, 3) arrays.  ``np.cross`` costs ~30 us of
+    axis bookkeeping per call, and the packers call it per mesh, every frame."""
+    out = np.empty_like(a)
+    out[:, 0] = a[:, 1] * b[:, 2] - a[:, 2] * b[:, 1]
+    out[:, 1] = a[:, 2] * b[:, 0] - a[:, 0] * b[:, 2]
+    out[:, 2] = a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]
+    return out
+
+
+def _unit(a):
+    """Normalise (n, 3) rows in place (zero rows stay zero)."""
+    ln = np.sqrt(np.einsum("ij,ij->i", a, a))
+    ln[ln == 0] = 1.0
+    a /= ln[:, None]
+    return a
+
+
 def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
     """(verts, faces) in engine3d format -> float32 [n_tri*3, _VERT_FLOATS].
 
@@ -383,10 +401,7 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
         return None
     if not has_n.all():
         a = V[f_i3[:, 0]]; b = V[f_i3[:, 1]]; c = V[f_i3[:, 2]]
-        cr = np.cross(b - a, c - a)
-        ln = np.linalg.norm(cr, axis=1)
-        ln[ln == 0] = 1.0
-        cr /= ln[:, None]
+        cr = _unit(_cross3(b - a, c - a))
         f_nrm[~has_n] = cr[~has_n]
     rep = np.repeat(np.arange(nf), f_ntri * 3)
     out = np.empty((len(tri), _VERT_FLOATS), dtype=np.float32)
@@ -427,23 +442,19 @@ def _tex_frame(V, f_i3, f_nrm, sel):
     T = np.zeros((nf, 3)); B = np.zeros((nf, 3))
     n = f_nrm[sel]
     b = np.array([0.0, 1.0, 0.0]) - n * n[:, 1:2]
-    t = np.cross(n, b)
+    t = _cross3(n, b)
     flat = np.abs(n[:, 1]) > 0.9
     if flat.any():
         i3 = f_i3[sel][flat]
         e = V[i3[:, 1]] - V[i3[:, 0]]
         e[:, 1] = 0.0
-        ln = np.linalg.norm(e, axis=1)
-        ln[ln == 0] = 1.0
-        e /= ln[:, None]
+        _unit(e)
         e[np.abs(e[:, 0]) > 0.97] = (1.0, 0.0, 0.0)
         e[np.abs(e[:, 2]) > 0.97] = (0.0, 0.0, 1.0)
         t[flat] = e
-        b[flat] = np.cross((0.0, 1.0, 0.0), e)
-    for a in (t, b):
-        ln = np.linalg.norm(a, axis=1)
-        ln[ln == 0] = 1.0
-        a /= ln[:, None]
+        b[flat] = np.stack((e[:, 2], np.zeros(len(e)), -e[:, 0]), axis=1)   # up x e
+    _unit(t)
+    _unit(b)
     T[sel] = t
     B[sel] = b
     return T, B

@@ -36,6 +36,7 @@ from cutscenes import m5fx3d as _fx
 from cutscenes import m5decal as _decal
 from cutscenes import m5ending3d as _ending
 from cutscenes import m6fx3d as _ps2
+from cutscenes import ps2mat as _mat
 
 # M5 Biribel rigs are keyed by outfit: ("biribel", outfit). Never use the bare
 # "biribel" key in M5 - that is his KRAP kit and would leak into post-change shots.
@@ -135,8 +136,32 @@ def _yaw_to(src, dst):
     return sgn * math.degrees(math.atan2(dst[0] - src[0], dst[2] - src[2]))
 
 
+_PACKED = [{}, {}]        # GL rows of set meshes by content: [current, previous]
+
+
 def _add(r, m):
-    r.add_dynamic(m.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces])
+    """Set geometry: larger flat-colour faces pick up a PS2 pixel texture.
+
+    The sets rebuild the same meshes every frame, so on GL the packed rows are
+    cached by mesh content; two generations let moving pieces age out."""
+    pack = getattr(r, "pack", None)
+    if pack is None:
+        r.add_dynamic(m.verts, [(f[0], f[1], f[2], f[3], None, f[4])
+                                for f in _mat.faces(m.verts, m.faces)])
+        return
+    key = (tuple(m.verts), tuple(m.faces))
+    cur = _PACKED[0]
+    arr = cur.get(key)
+    if arr is None:
+        arr = _PACKED[1].get(key)
+        if arr is None:
+            arr = pack(m.verts, [(f[0], f[1], f[2], f[3], None, f[4])
+                                 for f in _mat.faces(m.verts, m.faces)])
+        if len(cur) >= 4000:
+            _PACKED[:] = [{}, cur]
+            cur = _PACKED[0]
+        cur[key] = arr
+    r.add_packed(arr)
 
 
 def _dec(r, m, bias=0.8):

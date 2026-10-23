@@ -876,10 +876,11 @@ def _renderer(software=False):
         cls=SoftwareRenderer if software else Renderer
         r=cls(RW,RH,fog=(26,38,44),fog_start=32,fog_end=100)
         r.light=ENV_LIGHT;r.light_cap=8
-        for i,mesh in enumerate(_scene_mesh()):r.bake(mesh,tag='shadow_set_'+str(i))
+        from cutscenes.ps2mat import mesh as ps2
+        for i,mesh in enumerate(_scene_mesh()):r.bake(ps2(mesh),tag='shadow_set_'+str(i))
         from cutscenes.m5harbour_art import water_base, world_shell
         r.bake(water_base(),tag='shadow_water_base')
-        for i,wm in enumerate(world_shell()):r.bake(wm,tag='shadow_shell_'+str(i))
+        for i,wm in enumerate(world_shell()):r.bake(ps2(wm),tag='shadow_shell_'+str(i))
         _cache[key]=(r,pygame.Surface((RW,RH)))
     return _cache[key]
 
