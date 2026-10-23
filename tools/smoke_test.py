@@ -7393,7 +7393,7 @@ def check_mission4_boot_and_walk():
     pcol, prow = pcx // m4.TILE, pcy // m4.TILE
     assert grid[prow][pcol] not in m4.M4_SOLID_CHARS, "player spawned inside geometry"
 
-    assert m4._objective.startswith("Regroup with Vasile"), \
+    assert m4._objective.startswith("Pick up the KRAP comms cache"), \
         "opening objective missing: " + repr(m4._objective)
 
     # W2 content proof: the named curfew-zone table resolves to world rects
@@ -8367,7 +8367,7 @@ def check_mission6_vertical_slice():
     and stay distinct; every authored film scene is registered; the stage
     ladder (customs -> no-man's-land -> rail -> boxcar film -> interactive
     train -> ending film) runs through real game updates; floodlight exposure
-    latches the alarm and caps its waves; clicks during the train never reach
+    latches the alarm and the arena waves stay under the cap; clicks during the train never reach
     the top-down weapon; every checkpoint wrapper binds the right map; the
     restart ladder picks the deepest flag; and the ending request latches.
     """
@@ -8376,6 +8376,7 @@ def check_mission6_vertical_slice():
     from missions.m6 import maps as _m6_maps
     from missions.m6 import meta as _m6_meta
     from missions.m6 import stealth as _m6_stealth
+    from missions.m6 import combat as _m6_combat
     from missions.m6 import train3d as _m6_train
     from core import save_system as _m6_save
     from core import outfits as _m6_outfits
@@ -8450,6 +8451,11 @@ def check_mission6_vertical_slice():
 
     # ── stage ladder with live map rebinding ────────────────────────────
     STATE.player.rect.center = _m6_flow._anchor_pos(m6.STAGE_CUSTOMS)
+    assert "LOCKED" in m6.interaction_prompt()
+    assert not m6.handle_interact(), "living guards must block the customs exit"
+    STATE.enemies.clear()
+    assert not m6.handle_interact(), "pending waves must block the customs exit"
+    _m6_combat.spend_waves()
     assert m6.interaction_prompt()
     assert m6.handle_interact()
     assert STATE.mission6_stage == m6.STAGE_NOMAN
@@ -8458,6 +8464,9 @@ def check_mission6_vertical_slice():
     assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_NOMAN
 
     STATE.player.rect.center = _m6_flow._anchor_pos(m6.STAGE_NOMAN)
+    assert not m6.handle_interact(), "living guards must block the crossing exit"
+    STATE.enemies.clear()
+    _m6_combat.spend_waves()
     assert m6.handle_interact()
     assert STATE.mission6_stage == m6.STAGE_RAIL
     assert STATE.m6_rail_checkpoint
@@ -8466,6 +8475,9 @@ def check_mission6_vertical_slice():
     assert len(_m6_stealth.lights()) == 2      # rail detectors
 
     STATE.player.rect.center = _m6_flow._anchor_pos(m6.STAGE_RAIL)
+    assert not m6.handle_interact(), "living guards must block Volkov's boxcar"
+    STATE.enemies.clear()
+    _m6_combat.spend_waves()
     assert m6.handle_interact()
     assert STATE.mission6_stage == m6.STAGE_BOXCAR
     assert STATE.request_m6_cutscene == "boxcar"
@@ -8576,7 +8588,7 @@ def check_mission6_vertical_slice():
     while not getattr(STATE, "m6_yard_active", False) and guard < 1100:
         m6.game_update(EmptyKeys())
         guard += 1
-    # The train hands off to the "Who fired?" yard fight; its terminal is
+    # The train hands off to the "Who is Ucilev?" yard fight; its terminal is
     # what requests the ending film.
     assert STATE.m6_yard_active, "train never handed off to the yard fight"
     assert not STATE.request_mission6_ending
@@ -8592,7 +8604,7 @@ def check_mission6_vertical_slice():
     assert not STATE.m6_train_active and not _m6_train.active()
     assert STATE.player is not None and STATE.player.hp > 0
     assert _m6_save.get_slot(0)["checkpoint"] == m6.STAGE_TRAIN
-    assert "reached the step" in STATE.active_mission_outcome
+    assert "reached the train" in STATE.active_mission_outcome
     assert not _m6_train.force_finish("win"), "train handoff double-fired"
 
     # Skip path: a checkpoint restart re-enters the scene, E skips it.
@@ -8625,7 +8637,7 @@ def check_mission6_vertical_slice():
     assert _m6_train.result() == "fallback"
     assert STATE.player is not None
 
-    # ── floodlights: exposure, alarm idempotence, wave cap, occlusion ───
+    # ── searchlights: exposure, alarm idempotence, arena waves, occlusion
     m6.start_mission6_noman_checkpoint()
     assert len(_m6_stealth.lights()) == 4      # four authored towers
     probe = _m6_stealth.Floodlight((100.0, 100.0), 0.0, 0.0, 10.0,
@@ -8638,31 +8650,30 @@ def check_mission6_vertical_slice():
     _m6_stealth.update(0.1)
     assert STATE.m6_alarm and STATE.m6_alarm_triggered
     assert _m6_stealth.trigger_alarm() is False  # idempotent latch
-    living = sum(1 for e in STATE.enemies if getattr(e, "hp", 0) > 0)
-    assert 0 < living <= _m6_meta.MAX_ALARM_ENEMIES
-    assert STATE.m6_wave_count == living - 3      # 3 authored patrols existed
-    _m6_stealth.update(6.5)
-    _m6_stealth.update(6.0)
-    living = sum(1 for e in STATE.enemies if getattr(e, "hp", 0) > 0)
-    assert living <= _m6_meta.MAX_ALARM_ENEMIES, "alarm waves overran the cap"
-    assert STATE.m6_wave_count <= _m6_meta.MAX_ALARM_ENEMIES
+    assert _m6_combat.loud(), "the alarm never made the arena loud"
 
-    # ── a wave walks in; it never pops into existence ───────────────────
+    # A lamp head eats a player bullet and that light goes dark.
+    m6.start_mission6_noman_checkpoint()
+    tower = _m6_stealth.lights()[0]
+    assert _m6_stealth.shoot_lamp({"x": tower.head[0], "y": tower.head[1],
+                                   "owner": "player"})
+    assert len(_m6_stealth.lights()) == 3 and _m6_stealth.dead(tower)
+
+    # ── waves walk in, never pop, never overrun the cap ─────────────────
     from missions.m6 import world as _m6_world
     import math as _math
     m6.start_mission6_noman_checkpoint()
-    _m6_stealth._lights = (probe,)
-    STATE.player.rect.center = (200, 100)
-    _m6_stealth.update(0.2)
-    _m6_stealth.update(0.1)
-    _m6_stealth.update(0.1)
-    assert STATE.m6_alarm
-    seen = {e.uid for e in STATE.enemies}
-    _m6_stealth.update(2.5)
-    wave = [e for e in STATE.enemies if e.uid not in seen]
-    assert wave, "the first alarm wave never arrived"
+    patrols = len(STATE.enemies)
+    _m6_stealth.trigger_alarm()
+    assert len(STATE.enemies) == patrols, "guards spawned on the alarm frame"
+    STATE.enemies.clear()                      # squad down -> next wave
+    _m6_combat.update(1.0 / 60.0)
+    wave = list(STATE.enemies)
+    assert wave, "the first arena wave never arrived"
+    assert STATE.m6_wave_count == len(wave)
+    assert not _m6_combat.cleared(), "exit opened with a wave still to come"
     for e in wave:
-        assert _m6_world.entering(e) > 0.0, "alarm Guard popped in with no walk-in"
+        assert _m6_world.entering(e) > 0.0, "wave Guard popped in with no walk-in"
         start = e.rect.center
         _m6_world.tick_entry(e, 1.0 / 60.0)
         assert e.rect.center != start, "walking-in Guard never moved"
@@ -8674,6 +8685,13 @@ def check_mission6_vertical_slice():
                                    int(guard_e.m6_entry_to[1])), \
         "Guard never settled on his tile"
     assert guard_e.state == "CHASE"
+    for _ in range(120):                       # 60 s of loud clock
+        _m6_combat.update(0.5)
+        living = sum(1 for e in STATE.enemies if getattr(e, "hp", 0) > 0)
+        assert living <= _m6_meta.ARENA_MAX_LIVING, "arena waves overran the cap"
+    assert _m6_combat.wave_progress()[0] == _m6_combat.wave_progress()[1]
+    STATE.enemies.clear()
+    assert _m6_combat.cleared()
     # Every authored entry tile must have a walk-in that stays on open floor.
     for stage, tiles in _m6_meta.ALARM_SPAWN_TILES.items():
         for tile in tiles:
@@ -8686,17 +8704,12 @@ def check_mission6_vertical_slice():
                 (stage, tile, "entry path is blocked")
             assert _math.hypot(origin[0] - tx, origin[1] - ty) >= 40.0, \
                 (stage, tile, "walk-in is too short to read")
-    # The alarm frame itself spawns nobody: siren first, boots after.
-    m6.start_mission6_noman_checkpoint()
-    patrols = len(STATE.enemies)
-    _m6_stealth.trigger_alarm()
-    assert len(STATE.enemies) == patrols, "guards spawned on the alarm frame"
 
-    # A concrete barrier blocks the cone: same distance, wall in between.
-    walled = _m6_stealth.Floodlight((1184.0, 352.0), 0.0, 0.0, 10.0,
+    # A sandbag wall blocks the cone: same row, cover in between.
+    walled = _m6_stealth.Floodlight((864.0, 288.0), 0.0, 0.0, 10.0,
                                     half_angle=0.8, range_px=2000)
-    assert _m6_stealth.point_in_cone(walled, 1248, 352, 0.0)
-    assert not _m6_stealth.point_in_cone(walled, 1440, 352, 0.0)
+    assert _m6_stealth.point_in_cone(walled, 928, 288, 0.0)
+    assert not _m6_stealth.point_in_cone(walled, 1312, 288, 0.0)
 
     # Stage entry resets exposure/alarm; the rail checkpoint is clean.
     m6.start_mission6_rail_checkpoint()

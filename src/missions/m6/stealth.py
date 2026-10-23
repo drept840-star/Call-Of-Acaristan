@@ -1,14 +1,15 @@
-"""Mission 6 - floodlight stealth for no-man's-land and the rail yard.
+"""Mission 6 - tower searchlights for no-man's-land and the rail yard.
 
-Doc contract (``docs/MISSION6_PLOT.md``): the crossing is watched by
-sweeping floodlights; stand in a beam for 0.4 s and the Guard comes.  The
-lights are real geometry here - a tower position, a sweep clock, a cone
-test and a tile raycast so walls actually hide Biribel.
+The crossing is watched by sweeping searchlights with a gunner on each
+lamp.  Stand in a beam for 0.4 s and the alarm latches (the arena goes
+loud), and while the beam stays on Biribel that tower fires short bursts.
+Lamps are shootable: a hit on the lamp head kills the beam for the rest
+of the stage.  The lights are real geometry - a tower position, a sweep
+clock, a cone test and a tile raycast so walls actually hide Biribel.
 
 Determinism: the sweep clock is a dt accumulator owned by this module and
 reset on every stage entry (never the wall clock), so tests and paused
-frames agree.  Detection never kills or teleports the player; it latches
-an alarm once per stage and turns the stealth beat into a firefight.
+frames agree.
 """
 import math
 
@@ -20,25 +21,29 @@ from core.state import STATE
 from . import maps as _maps
 from .meta import (
     M6_SOLID_CHARS, STAGE_NOMAN, STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN,
-    NOMAN_TOWER_TILES, RAIL_DETECTOR_TILES, MAX_ALARM_ENEMIES,
-    ALARM_WAVE_DELAYS, ALARM_WAVE_SIZE, ALARM_FIRST_WAVE,
+    NOMAN_TOWER_TILES, RAIL_DETECTOR_TILES,
 )
 
 T = TILE_SIZE
 EXPOSURE_ALARM_S = 0.4
 EXPOSURE_DECAY = 2.5
 BODY_RADIUS = 10
+GUN_BURST = 3
+GUN_GAP_S = 0.11
+GUN_PAUSE_S = 0.9
+GUN_DAMAGE = 9
+LAMP_HIT_RADIUS = 30
 
 
 class Floodlight:
     """One sweeping searchlight.  ``angle0``/``amp`` are radians."""
 
     __slots__ = ("pos", "angle0", "amp", "period_s", "phase", "half_angle",
-                 "range_px", "tower_h", "label", "ignore")
+                 "range_px", "tower_h", "label", "ignore", "head")
 
     def __init__(self, pos, angle0, amp, period_s, phase=0.0,
                  half_angle=0.30, range_px=780, tower_h=230, label="",
-                 ignore=()):
+                 ignore=(), head=165):
         self.pos = (float(pos[0]), float(pos[1]))
         self.angle0 = float(angle0)
         self.amp = float(amp)
@@ -51,6 +56,9 @@ class Floodlight:
         # Solid tiles the lamp is bolted to; a ray must not be stopped by
         # the tower/shack it originates from.
         self.ignore = frozenset(ignore)
+        # Lamp head in world space: the drawn lamp sits ``head`` px above
+        # the tower base, which is where a player aims to shoot it out.
+        self.head = (self.pos[0], self.pos[1] - head)
 
     def angle_at(self, t):
         return self.angle0 + self.amp * math.sin(
@@ -87,11 +95,11 @@ _RAIL_LIGHTS = (
                math.pi / 2, 0.78, 12.0, 0.4, half_angle=0.26,
                range_px=11 * T, label="signal",
                ignore=frozenset((x, y) for x in range(39, 43)
-                                for y in range(7, 11))),
+                                for y in range(7, 11)), head=180),
     Floodlight((RAIL_DETECTOR_TILES[1][0] * T + T // 2,
                 RAIL_DETECTOR_TILES[1][1] * T),
                0.92, 0.72, 14.0, 2.6, half_angle=0.24,
-               range_px=9 * T, label="platform"),
+               range_px=9 * T, label="platform", head=120),
 )
 
 _LIGHTS = {STAGE_NOMAN: _NOMAN_LIGHTS, STAGE_RAIL: _RAIL_LIGHTS}
@@ -100,24 +108,20 @@ _t = 0.0
 _stage = None
 _lights = ()
 _last_visible = False
-_alarm_clock = 0.0
-_pending_waves = []
-_pending_sizes = []
-_cone_clock = 0.0
+_dead = set()
+_gun = {}               # label -> [shots left in burst, clock]
 
 _CONE_SURF = None
 
 
 def init_stage(stage):
     """Bind the stage, reset the sweep clock and clear the alarm."""
-    global _t, _stage, _lights, _last_visible, _alarm_clock, _pending_waves
-    global _pending_sizes
+    global _t, _stage, _lights, _last_visible
     _stage = stage
     _lights = _LIGHTS.get(stage, ())
     _t = 0.0
-    _alarm_clock = 0.0
-    _pending_waves = []
-    _pending_sizes = []
+    _dead.clear()
+    _gun.clear()
     _last_visible = False
     STATE.m6_exposure = 0.0
     STATE.m6_alarm = False
@@ -134,7 +138,39 @@ def clock():
 
 
 def lights():
+    """Live searchlights on this stage (shot-out lamps are gone)."""
+    return tuple(l for l in _lights if l.label not in _dead)
+
+
+def all_lights():
     return _lights
+
+
+def dead(light):
+    return light.label in _dead
+
+
+def shoot_lamp(bullet):
+    """A player bullet near a lamp head kills that beam.  True when hit."""
+    if bullet.get("owner") != "player":
+        return False
+    x, y = bullet.get("x", 0), bullet.get("y", 0)
+    for light in lights():
+        if math.hypot(x - light.head[0], y - light.head[1]) < LAMP_HIT_RADIUS:
+            _dead.add(light.label)
+            try:
+                from fx import effects
+                effects.burst(light.head[0], light.head[1], (255, 236, 196), 18,
+                              speed_mul=1.3)
+                effects.shake(4)
+            except Exception:
+                pass
+            from . import world as _world
+            _world.sfx("glass_shatter", 0.5)
+            _world.radio("MARU: Lamp's out. Keep going.", color=(146, 196, 206),
+                         duration=200, mark="m6_lamp_" + str(_stage), priority=1)
+            return True
+    return False
 
 
 def visible():
@@ -222,7 +258,7 @@ def in_cone(light, x, y, t, grid=None, body=BODY_RADIUS):
 def detected_at(x, y, t=None, grid=None):
     """Any current-stage light currently covers this world point."""
     t = _t if t is None else t
-    return any(in_cone(light, x, y, t, grid) for light in _lights)
+    return any(in_cone(light, x, y, t, grid) for light in lights())
 
 
 # ─────────────────────────────────────────────
@@ -235,46 +271,54 @@ def trigger_alarm():
     STATE.m6_alarm = True
     STATE.m6_alarm_triggered = True
     STATE.m6_exposure = EXPOSURE_ALARM_S
-    global _alarm_clock, _pending_waves, _pending_sizes
-    _alarm_clock = 0.0
-    delays = list(ALARM_WAVE_DELAYS.get(_stage, (2.5,)))
-    _pending_waves = delays
-    sizes = [ALARM_WAVE_SIZE.get(_stage, 2)] * len(delays)
-    if sizes:
-        sizes[0] = ALARM_FIRST_WAVE.get(_stage, sizes[0])
-    _pending_sizes = sizes
     from . import world as _world
     _world.on_alarm(_stage)
     _world.radio(
-        "MARU: Light caught you - they're coming from the gates. Move!",
+        "MARU: Light's on you - the tower's shooting. Kill the lamp!",
         color=(222, 120, 92), duration=420, mark="alarm_" + str(_stage),
         priority=1)
     _world.sfx("mission3_alarm_loop", 0.35)
     return True
 
 
-def _spawn_scheduled_wave():
-    if not _pending_waves:
-        return
-    _pending_waves.pop(0)
-    size = _pending_sizes.pop(0) if _pending_sizes else 2
-    living = sum(1 for e in getattr(STATE, "enemies", []) if getattr(e, "hp", 0) > 0)
-    if living >= MAX_ALARM_ENEMIES:
-        return
-    from . import world as _world
-    _world.spawn_alarm_wave(min(size, MAX_ALARM_ENEMIES - living))
+def _tower_fire(dt, px, py):
+    """Each beam that covers Biribel fires short bursts down it."""
+    for light in lights():
+        if not in_cone(light, px, py, _t):
+            _gun.pop(light.label, None)
+            continue
+        shots, clock = _gun.get(light.label, [GUN_BURST, 0.35])
+        clock -= dt
+        if clock <= 0:
+            ax, ay = light.pos
+            ang = math.atan2(py - ay, px - ax)
+            spread = ((len(STATE.bullets) * 37) % 9 - 4) * 0.02
+            STATE.bullets.append({
+                "x": ax + math.cos(ang) * 40, "y": ay + math.sin(ang) * 40,
+                "dx": math.cos(ang + spread) * 11.0,
+                "dy": math.sin(ang + spread) * 11.0,
+                "life": 90, "owner": "enemy", "damage": GUN_DAMAGE,
+            })
+            from . import world as _world
+            _world.sfx("gunshot_distant", 0.18)
+            shots -= 1
+            clock = GUN_GAP_S
+            if shots <= 0:
+                shots, clock = GUN_BURST, GUN_PAUSE_S
+        _gun[light.label] = [shots, clock]
 
 
 def update(dt):
     """Advance the sweep clock and exposure.  Returns 'detected' this frame."""
-    global _t, _alarm_clock, _last_visible
+    global _t, _last_visible
     stage = getattr(STATE, "mission6_stage", None)
     if stage != _stage:
         init_stage(stage)
     if not _lights:
         _last_visible = False
         return False
-    _t += max(0.0, float(dt))
+    dt = max(0.0, float(dt))
+    _t += dt
     p = getattr(STATE, "player", None)
     alive = bool(p) and not getattr(STATE, "player_dead", False)
     locked = (getattr(STATE, "request_m6_cutscene", None) is not None
@@ -284,16 +328,15 @@ def update(dt):
         seen = detected_at(p.rect.centerx, p.rect.centery, _t)
     _last_visible = seen
     if seen:
-        STATE.m6_exposure = min(EXPOSURE_ALARM_S + 0.2,
-                                exposure() + max(0.0, float(dt)))
+        STATE.m6_exposure = min(EXPOSURE_ALARM_S + 0.2, exposure() + dt)
     else:
-        STATE.m6_exposure = max(0.0, exposure() - EXPOSURE_DECAY * max(0.0, float(dt)))
+        STATE.m6_exposure = max(0.0, exposure() - EXPOSURE_DECAY * dt)
     if exposure() >= EXPOSURE_ALARM_S and not getattr(STATE, "m6_alarm_triggered", False):
         trigger_alarm()
-    if getattr(STATE, "m6_alarm", False):
-        _alarm_clock += max(0.0, float(dt))
-        while _pending_waves and _alarm_clock >= _pending_waves[0]:
-            _spawn_scheduled_wave()
+    if seen and exposure() >= EXPOSURE_ALARM_S and hasattr(STATE, "bullets"):
+        _tower_fire(dt, p.rect.centerx, p.rect.centery)
+    elif _gun:
+        _gun.clear()
     return seen
 
 
@@ -357,7 +400,7 @@ def draw_cones(surface, cam_x, cam_y):
         return
     overlay = _cone_overlay(surface.get_size())
     alarmed = alarm_active()
-    for light in _lights:
+    for light in lights():
         if (light.pos[0] - cam_x < -light.range_px
                 or light.pos[0] - cam_x > WIDTH + light.range_px
                 or light.pos[1] - cam_y < -light.range_px
@@ -373,7 +416,7 @@ def draw_hud(surface):
         return
     exp = exposure()
     alarmed = alarm_active()
-    if not alarmed and exp <= 0.005:
+    if exp <= 0.005 and not (alarmed and visible()):
         return
     w, h = 236, 44
     x = (WIDTH - w) // 2
@@ -382,7 +425,8 @@ def draw_hud(surface):
     panel.fill((8, 10, 14, 214))
     pygame.draw.rect(panel, (196, 128, 58) if not alarmed else (206, 74, 58),
                      panel.get_rect(), 1)
-    label = "ALARM - GUARD INBOUND" if alarmed else "IN THE LIGHT"
+    label = ("SEARCHLIGHT - TOWER GUNNER" if alarmed and visible()
+             else "IN THE LIGHT")
     col = (236, 148, 74) if not alarmed else (240, 96, 78)
     txt = font_terminal_small.render(label, True, col)
     panel.blit(txt, (10, 5))

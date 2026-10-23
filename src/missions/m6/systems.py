@@ -1,7 +1,8 @@
 """Mission 6 - per-frame gameplay pipeline.
 
 Order: i-frames -> corpses -> death -> player -> melee -> weapon timers ->
-shooting -> enemies -> bullets -> floodlights -> effects -> flow -> camera.
+shooting -> enemies -> bullets -> searchlights -> arena -> effects -> flow
+-> camera.
 The interactive train owns its own update/draw and is routed here first;
 an exception in the scene hands the mission straight to the file stage
 rather than looping or stranding it.
@@ -24,6 +25,7 @@ from . import maps as _maps
 from . import world as _world
 from . import flow as _flow
 from . import stealth as _stealth
+from . import combat as _combat
 from .meta import STAGE_TRAIN
 
 
@@ -183,6 +185,10 @@ def _update_bullets():
                     hit = True
                     break
         if not hit:
+            # Lamp heads, fuel drums and the tanker eat the bullet before
+            # the wall test (drums are solid rects in STATE.walls).
+            hit = _stealth.shoot_lamp(bullet) or _combat.bullet_hit(bullet)
+        if not hit:
             hit = collide_bullet_walls(bullet, solid)
         outside = not (-400 < bullet["x"] < width + 400
                        and -400 < bullet["y"] < height + 400)
@@ -266,6 +272,7 @@ def game_update(keys):
     _update_enemies()
     _update_bullets()
     _update_stealth(dt)
+    _combat.update(dt)
     _weapons.update_molotovs(_world.solid_walls())
     effects.update_casings(_world.solid_walls())
     effects.update_particles()

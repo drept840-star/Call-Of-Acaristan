@@ -15,7 +15,7 @@ MISSION6_ID = "MISSION_6"
 MISSION6_KEY = "MISSION6"
 MISSION6_TITLE = "Black Notebook"
 MISSION6_LOCATION = "Kim Kim Border / Frozen Rail Yard"
-MISSION6_PRIMARY_STYLE = "Freezing border stealth into a quiet betrayal"
+MISSION6_PRIMARY_STYLE = "Freezing border firefights into a quiet betrayal"
 
 STAGE_CUSTOMS = "customs"
 STAGE_NOMAN = "noman"
@@ -40,7 +40,7 @@ MISSION_PHASES = [
 
 # World-space tile centres.  Flow, draw and the smoke probe agree on these.
 STAGE_ANCHORS = {
-    STAGE_CUSTOMS: (16, 1),      # north gate out of the customs post
+    STAGE_CUSTOMS: (15, 1),      # north gate out of the customs post
     STAGE_NOMAN: (20, 1),        # north gate into the rail yard
     STAGE_RAIL: (25, 11),        # foot of Volkov's boxcar
     STAGE_BOXCAR: (25, 11),
@@ -48,7 +48,7 @@ STAGE_ANCHORS = {
 }
 
 STAGE_SPAWNS = {
-    STAGE_CUSTOMS: (14, 17),
+    STAGE_CUSTOMS: (15, 18),
     STAGE_NOMAN: (20, 16),
     STAGE_RAIL: (22, 24),
     STAGE_BOXCAR: (22, 24),
@@ -56,7 +56,7 @@ STAGE_SPAWNS = {
 }
 
 # Optional beats inside a stage (proximity barks / set dressing).
-QUEUE_ANCHOR = (4, 15)           # the frozen family cars, customs yard
+QUEUE_ANCHOR = (5, 16)           # the frozen queue and the tanker, customs yard
 QUEUE_RADIUS = 130
 GATE_RADIUS = 80
 BOXCAR_RADIUS = 90
@@ -65,10 +65,72 @@ VOLKOV_BOXCAR_TILE = (20, 9)     # the marked car in the rail yard
 NOMAN_TOWER_TILES = ((8, 4), (31, 4), (8, 10), (31, 10))
 RAIL_DETECTOR_TILES = ((41, 8), (4, 6))   # signal tower + platform lamp
 
-# Alarm-wave entry tiles.  Every tile is walkable floor in its stage map.
+# ── combat arenas ──────────────────────────────────────────────────────────
+# Each top-down stage is a firefight: an opening squad dug in behind cover
+# (the map's "E" markers), then scripted waves.  A wave comes when the living
+# count drops to ``living`` or ``after`` seconds after the previous beat once
+# the fight is loud, whichever is first.  The exit opens only when every wave
+# has come and nobody is left standing.
+SQUAD_KINDS = {
+    STAGE_CUSTOMS: {(11, 10): "marksman", (25, 12): "raider"},
+    STAGE_NOMAN: {(17, 3): "marksman", (23, 3): "marksman", (17, 7): "raider"},
+    STAGE_RAIL: {(38, 6): "marksman", (16, 7): "marksman", (35, 17): "raider"},
+}
+
+# hp / speed per Guard role (sprite variant comes from the M5 Guard art).
+M6_ROLE_TUNING = {
+    "guard": {"hp": 70, "speed": 1.75},
+    "marksman": {"hp": 55, "speed": 1.35},
+    "raider": {"hp": 115, "speed": 2.45},
+}
+
+ARENA_WAVES = {
+    STAGE_CUSTOMS: (
+        {"living": 2, "after": 22.0, "event": None,
+         "radio": ("MARU", "More of them in the post. North doors."),
+         "units": (("guard", 10, 3), ("guard", 20, 3), ("raider", 27, 4))},
+        {"living": 2, "after": 26.0, "event": "truck",
+         "radio": ("MARU", "Truck at the gate. They brought friends."),
+         "units": (("guard", 14, 1), ("guard", 16, 2), ("marksman", 22, 3),
+                   ("raider", 21, 2), ("guard", 18, 2))},
+    ),
+    STAGE_NOMAN: (
+        {"living": 2, "after": 24.0, "event": None,
+         "radio": ("MARU", "North gate's opening. Second squad."),
+         "units": (("guard", 19, 1), ("guard", 21, 1), ("raider", 14, 2))},
+        {"living": 2, "after": 28.0, "event": "flare",
+         "radio": ("MARU", "Flare! They're coming down both wire lines."),
+         "units": (("guard", 2, 8), ("guard", 37, 8), ("guard", 2, 3),
+                   ("raider", 37, 3))},
+    ),
+    STAGE_RAIL: (
+        {"living": 2, "after": 22.0, "event": None,
+         "radio": ("MARU", "Fence gaps, both sides. They're boxing you in."),
+         "units": (("guard", 2, 15), ("raider", 2, 16), ("guard", 43, 16))},
+        {"living": 2, "after": 26.0, "event": "train",
+         "radio": ("VASILE", "Guard stepping off the train. Watch the platform."),
+         "units": (("guard", 10, 5), ("marksman", 24, 5), ("guard", 36, 5),
+                   ("raider", 20, 5))},
+        {"living": 2, "after": 30.0, "event": None,
+         "radio": ("MARU", "Behind you - south fence!"),
+         "units": (("guard", 5, 24), ("raider", 26, 24), ("guard", 40, 24))},
+    ),
+}
+
+# Fuel drums: shoot one and everything near it burns.  Never on a wave tile.
+ARENA_DRUMS = {
+    STAGE_CUSTOMS: ((6, 13), (23, 2), (12, 8), (16, 13), (27, 11), (8, 17)),
+    STAGE_NOMAN: ((19, 8), (21, 3), (12, 12), (28, 12), (6, 3)),
+    STAGE_RAIL: ((14, 12), (19, 15), (33, 14), (27, 8), (9, 5), (35, 19)),
+}
+
+# Most Guards alive at once; a wave that would overrun it waits.
+ARENA_MAX_LIVING = 7
+
+# Wave entry tiles (every tile is walkable floor in its stage map).
 ALARM_SPAWN_TILES = {
-    STAGE_NOMAN: ((19, 2), (21, 2), (19, 15), (21, 15), (20, 3), (20, 14)),
-    STAGE_RAIL: ((18, 24), (26, 24), (2, 16), (43, 16), (5, 24), (42, 24)),
+    stage: tuple((c, r) for wave in waves for _kind, c, r in wave["units"])
+    for stage, waves in ARENA_WAVES.items()
 }
 MAX_ALARM_ENEMIES = 6
 
@@ -78,15 +140,6 @@ MAX_ALARM_ENEMIES = 6
 # frame he is on screen he is already moving through kicked-up snow.
 ALARM_ENTRY_DIST = 118.0
 ALARM_ENTRY_S = 0.62
-# Seconds after the alarm before each wave comes through the gates.  The
-# first beat is deliberately late: the siren and the radio line land first,
-# so the player reads the alarm before anyone is in the yard.
-ALARM_WAVE_DELAYS = {
-    STAGE_NOMAN: (2.4, 8.0, 13.5),
-    STAGE_RAIL: (2.2, 7.6, 13.0),
-}
-ALARM_WAVE_SIZE = {STAGE_NOMAN: 2, STAGE_RAIL: 2}
-ALARM_FIRST_WAVE = {STAGE_NOMAN: 3, STAGE_RAIL: 2}
 
 # Checkpoint save keys (the four playable stages before the interactive
 # train; the boxcar is a cutscene inside rail and is not a save point).
@@ -98,18 +151,18 @@ CHECKPOINT_FLAGS = {
 }
 
 STAGE_OBJECTIVES = {
-    STAGE_CUSTOMS: "Eliminate the customs guards, then take the north gate.",
-    STAGE_NOMAN: "Eliminate the crossing guards, then reach the rail yard.",
-    STAGE_RAIL: "Eliminate the yard guards, then reach Volkov's marked boxcar.",
+    STAGE_CUSTOMS: "Clear the customs post, then take the north gate.",
+    STAGE_NOMAN: "Fight across the strip. Shoot out the tower lamps.",
+    STAGE_RAIL: "Hold the yard, then reach Volkov's marked boxcar.",
     STAGE_BOXCAR: "Talk to Volkov.",
     STAGE_TRAIN: "Cover Volkov to the train.",
 }
 
 _STAGE_RADIO = {
     STAGE_CUSTOMS: ("MARU",
-                    "Border's closed. Customs is abandoned, not empty. Search it."),
+                    "Customs is full of Guard. No quiet way through - go loud."),
     STAGE_NOMAN: ("MARU",
-                  "Floodlights sweep east to west. Move when the yard goes dark."),
+                  "Every tower has a gunner on the lamp. Shoot the lights out."),
     STAGE_RAIL: ("VASILE",
                  "Guard traffic puts Volkov in the rail yard. Find him first."),
     STAGE_TRAIN: ("MARU",

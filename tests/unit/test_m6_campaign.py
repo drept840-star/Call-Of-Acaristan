@@ -23,6 +23,7 @@ from core.state import STATE
 from core.cutscene_registry import scene_renderer, set_current_shot
 from cutscenes import m6films
 from cutscenes import m6world3d as _w3
+from missions.m6 import combat as _combat
 from missions.m6 import flow as _flow
 from missions.m6 import maps as _maps
 from missions.m6 import meta as _meta
@@ -74,6 +75,30 @@ class M6MapTests(unittest.TestCase):
                 self.assertEqual(_maps._live_map_dims(), dims)
         finally:
             _maps.bind_stage(_meta.STAGE_CUSTOMS)
+
+
+class TopDownProgressionTests(unittest.TestCase):
+    def test_every_top_down_exit_requires_a_clear_area(self):
+        cases = (
+            (_meta.STAGE_CUSTOMS, _meta.STAGE_NOMAN),
+            (_meta.STAGE_NOMAN, _meta.STAGE_RAIL),
+            (_meta.STAGE_RAIL, _meta.STAGE_BOXCAR),
+        )
+        with patch.object(_flow, "_save_progress", lambda stage: None), \
+                patch.object(_world, "radio", lambda *a, **kw: True):
+            for stage, destination in cases:
+                _world.build_world(stage)
+                STATE.player.rect.center = _flow._anchor_pos(stage)
+                self.assertGreater(_world.living_guards(), 0)
+                self.assertIn("LOCKED", _flow.interaction_prompt())
+                self.assertFalse(_flow.handle_interact())
+                self.assertEqual(STATE.mission6_stage, stage)
+                STATE.enemies.clear()
+                self.assertIn("LOCKED", _flow.interaction_prompt())
+                _combat.spend_waves()
+                self.assertNotIn("LOCKED", _flow.interaction_prompt())
+                self.assertTrue(_flow.handle_interact())
+                self.assertEqual(STATE.mission6_stage, destination)
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -598,7 +623,7 @@ class TrainSceneTests(unittest.TestCase):
         self.assertTrue(STATE.m6_volkov_dead)
         self.assertTrue(scene.ucilev_fired, "the signal-tower shot never fired")
         scene.force_finish("win")
-        self.assertIn("reached the step", STATE.active_mission_outcome)
+        self.assertIn("reached the train", STATE.active_mission_outcome)
 
 
 # ───────────────────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ from . import decor as _decor
 from . import flow as _flow
 from . import maps as _maps
 from . import stealth as _stealth
+from . import combat as _combat
 from . import world as _world
 from .meta import (
     STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN,
@@ -150,6 +151,7 @@ def _scene_drawables(surface, cam_x, cam_y):
     """Static props + actors in one y-sorted list (tall props hide feet)."""
     stage = getattr(STATE, "mission6_stage", STAGE_CUSTOMS)
     out = _decor.tall_drawables(stage, cam_x, cam_y)
+    out.extend(_combat.drawables(cam_x, cam_y))
 
     for body in getattr(STATE, "corpses", []):
         out.append((body.y + 12,
@@ -312,13 +314,14 @@ def _draw_hud(surface, cam_x, cam_y):
         _hud_weapon_panel.draw(
             surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
             panel_bg=get_panel_bg, mag_icon=_panel_mag_icon)
-        _hud_hostiles.draw(surface, THEME, _world.living_guards())
+        _hud_hostiles.draw(surface, THEME, _combat.remaining())
         if STATE.show_minimap and STATE.minimap:
             STATE.minimap.draw(surface, STATE.player,
                                [e for e in STATE.enemies if e.hp > 0],
                                cam_x, cam_y,
                                notebook_pos=_objective_world_pos())
         _stealth.draw_hud(surface)
+        _combat.draw_hud(surface)
 
 
 def _draw_prompt(surface):
@@ -410,6 +413,7 @@ def game_draw(fcx=0, fcy=0, surface=None):
     target.fill(C_BG_GAME)
 
     _decor.draw_ground(target, cam_x, cam_y, stage)
+    _combat.draw_ground(target, cam_x, cam_y)
     _draw_beacon(target, cam_x, cam_y)
     _draw_world_effects(target, cam_x, cam_y)
     _scene_drawables(target, cam_x, cam_y)

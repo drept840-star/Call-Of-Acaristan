@@ -1,7 +1,7 @@
 """Mission 6: Black Notebook - re-export facade (load order = parts order).
 
 Parts: meta.py, maps.py, decor.py, stealth.py, world.py, flow.py, systems.py,
-draw.py (train3d/m6_audio are lazy mission-owned modules loaded on demand).
+draw.py; combat.py (arena waves/drums) is imported by its users, not starred. (train3d/m6_audio are lazy mission-owned modules loaded on demand).
 """
 from .meta import *  # noqa: F401,F403
 from .maps import *  # noqa: F401,F403
@@ -39,6 +39,7 @@ _LIVE_MODULES = (
     "missions.m6.world",
     "missions.m6.decor",
     "missions.m6.stealth",
+    "missions.m6.combat",
     "missions.m6.maps",
     "missions.m6.meta",
 )

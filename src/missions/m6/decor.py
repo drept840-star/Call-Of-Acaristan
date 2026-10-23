@@ -70,29 +70,37 @@ _AMBIENT[STAGE_TRAIN] = _AMBIENT[STAGE_RAIL]
 # little; everything else is a steady practical.
 _STAGE_LAMPS = {
     STAGE_CUSTOMS: (
-        (10.0, 6.5, 150, (255, 196, 128), "steady"),
-        (18.5, 6.5, 150, (255, 196, 128), "steady"),
-        (16.0, 12.0, 120, (172, 196, 220), "steady"),
-        (20.5, 9.0, 60, (120, 235, 160), "pulse"),
-        (13.0, 17.5, 120, (176, 198, 222), "steady"),
+        (15.5, 2.4, 160, (255, 196, 128), "steady"),
+        (10.5, 7.5, 150, (255, 196, 128), "steady"),
+        (19.0, 7.5, 150, (255, 196, 128), "steady"),
+        (19.5, 6.4, 60, (120, 235, 160), "pulse"),
+        (10.0, 14.6, 90, (255, 204, 140), "steady"),
+        (20.0, 14.6, 90, (255, 204, 140), "bad"),
+        (15.0, 16.5, 140, (176, 198, 222), "steady"),
+        (5.0, 10.5, 120, (176, 198, 222), "steady"),
+        (26.5, 10.5, 120, (176, 198, 222), "steady"),
     ),
     STAGE_NOMAN: (
-        (20.0, 2.0, 130, (255, 186, 116), "steady"),
-        (20.0, 15.0, 130, (255, 186, 116), "steady"),
-        (8.5, 5.5, 170, (184, 208, 236), "steady"),
-        (8.5, 11.5, 170, (184, 208, 236), "steady"),
-        (31.5, 5.5, 170, (184, 208, 236), "steady"),
-        (31.5, 11.5, 170, (184, 208, 236), "steady"),
+        (20.0, 2.0, 140, (255, 186, 116), "steady"),
+        (20.0, 15.6, 140, (255, 186, 116), "steady"),
+        (8.5, 5.5, 170, (184, 208, 236), "tower0"),
+        (31.5, 5.5, 170, (184, 208, 236), "tower1"),
+        (8.5, 11.5, 170, (184, 208, 236), "tower2"),
+        (31.5, 11.5, 170, (184, 208, 236), "tower3"),
+        (13.0, 2.4, 90, (255, 204, 140), "steady"),
+        (27.0, 2.4, 90, (255, 204, 140), "bad"),
     ),
     STAGE_RAIL: (
-        (4.0, 6.5, 150, (255, 198, 132), "steady"),
+        (4.5, 5.4, 160, (255, 198, 132), "tower1"),
         (12.0, 6.5, 150, (255, 198, 132), "steady"),
         (20.0, 6.5, 150, (255, 198, 132), "steady"),
         (28.0, 6.5, 150, (255, 198, 132), "steady"),
         (36.0, 6.5, 150, (255, 198, 132), "steady"),
         (41.0, 9.0, 110, (255, 96, 70), "bad"),
-        (25.0, 10.5, 100, (255, 190, 110), "steady"),
-        (2.5, 13.0, 150, (190, 210, 236), "steady"),
+        (25.0, 11.2, 80, (220, 170, 110), "steady"),
+        (2.5, 15.5, 150, (190, 210, 236), "steady"),
+        (22.0, 22.5, 150, (190, 210, 236), "steady"),
+        (40.0, 17.0, 130, (190, 210, 236), "steady"),
     ),
 }
 _STAGE_LAMPS[STAGE_BOXCAR] = _STAGE_LAMPS[STAGE_RAIL]
@@ -247,35 +255,25 @@ def _paint_door(surf, stage_id, col, row):
 
 
 def _customs_detail(surf, grid):
-    """Tyre ruts, border paint and the queue's long wait."""
-    for row in (13, 15):
-        y = row * T + T // 2
-        pygame.draw.line(surf, (31, 35, 41), (0, y - 9), (7 * T, y - 9), 3)
-        pygame.draw.line(surf, (31, 35, 41), (0, y + 9), (7 * T, y + 9), 3)
+    """Road paint: gate apron lane, stop line and the plaza lane."""
     y = 2 * T + T // 2
     for x in range(2 * T, 28 * T, 34):
         pygame.draw.line(surf, (128, 104, 52), (x, y), (x + 18, y), 2)
-    y = 18 * T
-    for x in range(2 * T, 28 * T, 34):
-        pygame.draw.line(surf, (110, 92, 50), (x, y), (x + 18, y), 2)
-    # Queue footprints (families stood here a long time).
-    for i in range(26):
-        fx = (3 * T) + (_h(i, 7) % (3 * T))
-        fy = (13 * T) + (_h(i, 9) % (3 * T))
-        pygame.draw.line(surf, (54, 60, 68), (fx, fy), (fx + 2, fy + 6), 1)
-    # Interior entrance mats.
-    pygame.draw.rect(surf, (48, 46, 42), (14 * T + 4, 11 * T + 2, 2 * T - 8, T - 4))
-    pygame.draw.rect(surf, (48, 46, 42), (16 * T + 2, 3 * T + 4, T - 4, T - 8))
+    for x in range(14 * T, 17 * T, 22):
+        pygame.draw.line(surf, (146, 126, 66), (x, T - 6), (x + 12, T + 10), 2)
+    pygame.draw.line(surf, (176, 172, 150), (7 * T, 12 * T + 10), (23 * T, 12 * T + 10), 3)
+    cx = 15 * T + T // 2
+    for yy in range(13 * T, 19 * T, 46):
+        pygame.draw.line(surf, (128, 104, 52), (cx, yy), (cx, yy + 22), 3)
+    pygame.draw.rect(surf, (48, 46, 42), (11 * T + 6, 11 * T + 6, T - 12, T - 12))
+    pygame.draw.rect(surf, (48, 46, 42), (18 * T + 6, 11 * T + 6, T - 12, T - 12))
 
 
 def _noman_detail(surf, grid):
-    """The crossing: lane paint, footprints, gate stripes and snow banks."""
+    """The crossing: lane paint, gate stripes and one set of boot prints."""
     cx = 20 * T + T // 2
-    for y in range(4 * T, 14 * T, 46):
+    for y in range(3 * T, 15 * T, 46):
         pygame.draw.line(surf, (122, 106, 60), (cx, y), (cx, y + 22), 2)
-    pygame.draw.line(surf, (86, 92, 100), (8 * T, 3 * T), (8 * T, 15 * T), 1)
-    pygame.draw.line(surf, (86, 92, 100), (32 * T, 3 * T), (32 * T, 15 * T), 1)
-    # A single set of boot prints from the south gate to the first gap.
     for i in range(22):
         y = 16 * T - i * 26
         x = cx + int(math.sin(i * 0.35) * 18) + (6 if i % 2 else -6)
@@ -284,8 +282,6 @@ def _noman_detail(surf, grid):
         y = row * T + T // 2
         for x in range(17 * T, 24 * T, 22):
             pygame.draw.line(surf, (146, 126, 66), (x, y - 8), (x + 12, y + 8), 2)
-    for x, y in ((2, 3), (2, 14), (37, 3), (37, 14)):
-        _snow_bank(surf, x * T - 18, y * T, 2 * T + 36, 18, x + y)
 
 
 def _rail_detail(surf, grid):
@@ -516,152 +512,100 @@ def _snow_line(surf, x0, y0, x1, y1, w=4):
     pygame.draw.line(surf, (204, 216, 230), (x0, y0 - 1), (x1, y1 - 1), max(1, w - 2))
 
 
+def _prop_foot_snow(surf, stage_id, skip=("tanker",)):
+    """Hard snow drift along the south foot of every outdoor prop."""
+    grid = _maps.grid_for(stage_id)
+    for kind, x, y, w, h in _maps.props_for(stage_id):
+        if kind in skip or kind in ("counter", "terminal", "cabinet", "crate"):
+            continue
+        if y + h < len(grid) and grid[y + h][x] in "CWB":
+            continue
+        _snow_bank(surf, x * T + 6, (y + h) * T - 4, w * T - 12, 14, x * 7 + y)
+
+
 def _customs_dress(surf, grid):
-    """The post's yard and offices: fences, frozen puddles, abandoned kit."""
-    h, w = len(grid), len(grid[0])
-    # Inner fence line along the west and east borders of the yard.
-    _fence_run(surf, T, 12 * T, T, 19 * T, 21)
+    """The post: frozen queue, ice, paperwork and the marks of a fight."""
+    _fence_run(surf, 1 * T, 12 * T, 1 * T, 19 * T, 21)
     _fence_run(surf, 29 * T - 2, 12 * T, 29 * T - 2, 19 * T, 23)
-    _fence_run(surf, 1 * T, 19 * T - 3, 29 * T, 19 * T - 3, 25)
-    # Frozen puddles where the queue idled.
     for i, (cx, cy, rw, rh) in enumerate((
-            (3.2, 13.4, 74, 34), (6.0, 15.6, 58, 26), (11.5, 14.2, 46, 22),
-            (26.5, 16.5, 66, 28), (23.0, 18.0, 52, 24))):
+            (8.6, 16.2, 74, 30), (20.4, 17.4, 66, 28), (2.6, 10.2, 58, 24),
+            (25.6, 4.4, 60, 24), (12.0, 2.0, 70, 26))):
         _ice_sheet(surf, int(cx * T), int(cy * T), rw, rh, i)
-    # Snow banked against the frozen cars and the gate posts.
-    for (cx, cy) in ((2, 12), (5, 14), (2, 16), (8, 13)):
-        _snow_bank(surf, cx * T - 6, cy * T + T - 10, T + 12, 18, cx + cy)
-    _snow_bank(surf, 13 * T, 11 * T + 8, 3 * T, 20, 41)
-    _snow_bank(surf, 16 * T, 2 * T + 10, 2 * T, 18, 43)
-    # Tyre ruts curving out of the queue into the open yard.
-    _tracks(surf, 7 * T, 12 * T, 10 * T, 26, gap=17)
-    _tracks(surf, 7 * T, 17 * T, 12 * T, -18, gap=17)
-    # Dropped paperwork + litter where people waited and where they ran.
-    _papers(surf, 4 * T, 14 * T, 46, 51)
-    _papers(surf, 12 * T, 12 * T, 38, 53)
-    _papers(surf, 19 * T, 9 * T, 40, 55)
-    _debris(surf, 11 * T, 17 * T, 60, 57)
-    _debris(surf, 25 * T, 13 * T, 54, 59)
-    _debris(surf, 9 * T, 5 * T, 44, 61)
-    # Sandbag nest watching the south doors.
-    _sandbags(surf, 12 * T + 4, 12 * T - 4, 2 * T - 8, 20, 63)
-    # Drain in the yard + one inside the processing hall.
-    _drain(surf, 17 * T + 10, 16 * T + 8, 65)
+    _tracks(surf, 1 * T, 2 * T + 30, 27 * T, 0, gap=17)
+    _tracks(surf, 15 * T + 30, 3 * T, 0.0, 90, gap=17)
+    _tracks(surf, 15 * T + 30, 12 * T, 6 * T, 90, gap=17)
+    _oil_stain(surf, int(3.5 * T), int(15.2 * T), 40, 31)
+    _oil_stain(surf, int(18.5 * T), int(1.9 * T), 34, 33)
+    _papers(surf, 4 * T, 16 * T, 46, 51)
+    _papers(surf, 12 * T, 13 * T, 38, 53)
+    _debris(surf, 4 * T, 18 * T, 52, 57)
+    _debris(surf, 25 * T, 15 * T, 54, 59)
+    _debris(surf, 14 * T, 14 * T, 44, 61)
+    _drain(surf, 17 * T + 10, 17 * T + 8, 65)
     _drain(surf, 21 * T + 12, 9 * T + 20, 67)
-    # A dark stain under the file cabinets (years of a leaking radiator).
-    _oil_stain(surf, 18 * T + 16, 7 * T + 12, 30, 69)
-    # ── inside the post ─────────────────────────────────────────────────
-    # The processing hall and file room are the emptiest floor in the
-    # mission; give the eye counters, chair marks and abandoned paperwork.
-    for i, (cx, cy) in enumerate((
-            (9.0, 4.6), (12.0, 4.6), (9.0, 9.4), (13.5, 9.4),
-            (19.0, 4.9), (20.5, 4.9), (18.5, 9.4), (21.0, 9.4))):
-        # Chair footprints pulled out from the counters.
-        _oil_stain(surf, int(cx * T), int(cy * T), 9, 71 + i)
+    # Inside the post: paperwork, chair marks, a wet patch under the files.
+    for i, (cx, cy) in enumerate(((9.5, 5.6), (12.0, 5.6), (17.5, 5.6), (21.0, 5.6),
+                                  (8.5, 9.4), (17.0, 9.4))):
         pygame.draw.circle(surf, (58, 54, 48), (int(cx * T), int(cy * T)), 7, 1)
-    for i, (cx, cy) in enumerate(((10.5, 6.0), (15.5, 6.6), (20.0, 6.2),
-                                  (12.0, 10.0), (18.0, 8.0), (21.5, 7.4))):
+    for i, (cx, cy) in enumerate(((10.5, 7.6), (14.0, 8.6), (19.5, 8.2),
+                                  (12.0, 10.0), (21.0, 7.0))):
         _papers(surf, int(cx * T), int(cy * T), 34, 81 + i)
-    # Water / oil on the hall floor and the drag marks of something heavy.
-    _ice_sheet(surf, int(9.5 * T), int(7.2 * T), 74, 30, 91)
-    _oil_stain(surf, int(16.5 * T), int(9.8 * T), 34, 93)
-    pygame.draw.line(surf, (38, 38, 40), (12 * T, 7 * T + 30), (18 * T, 6 * T + 18), 3)
-    pygame.draw.line(surf, (48, 48, 50), (12 * T, 7 * T + 33), (18 * T, 6 * T + 21), 2)
-    # Snow blown in through the two doorways.
-    _snow_bank(surf, 14 * T - 4, 11 * T + 6, 2 * T + 8, 20, 95)
-    _snow_bank(surf, 16 * T - 6, 3 * T + 4, T + 12, 16, 97)
-    # Scorch where the queue burned a fire to stay warm.
-    _oil_stain(surf, int(4.6 * T), int(17.2 * T), 24, 99)
-    _crater(surf, int(4.6 * T), int(17.2 * T), 16, 101)
-    _debris(surf, int(4.6 * T), int(17.2 * T), 40, 103, col=(52, 46, 42))
+    _oil_stain(surf, int(13.5 * T), int(10.2 * T), 28, 93)
+    _ice_sheet(surf, int(8.8 * T), int(7.4 * T), 70, 26, 91)
+    for x in (7, 8, 9):
+        _snow_bank(surf, x * T, 12 * T + 2, T, 12, 95 + x)
+    _snow_bank(surf, 21 * T, 12 * T + 2, 2 * T, 12, 99)
+    _prop_foot_snow(surf, STAGE_CUSTOMS)
 
 
 def _noman_dress(surf, grid):
-    """The crossing: wire, craters, blown snow and the marks of a watched strip."""
-    h, w = len(grid), len(grid[0])
-    # Razor wire lashed to both faces of every chicane.
-    for (cx, r0, r1) in ((7, 4, 9), (12, 9, 14), (20, 4, 7), (27, 10, 15), (32, 5, 9)):
-        _wire_coils(surf, cx * T - 8, r0 * T, cx * T - 8, r1 * T + T, cx)
-        _wire_coils(surf, cx * T + T + 8, r0 * T, cx * T + T + 8, r1 * T + T, cx + 100)
-    for (rx, c0, c1) in ((4, 13, 18), (12, 23, 29), (8, 29, 34)):
-        _wire_coils(surf, c0 * T, rx * T - 8, c1 * T + T, rx * T - 8, rx)
-        _wire_coils(surf, c0 * T, rx * T + T + 8, c1 * T + T, rx * T + T + 8, rx + 100)
-    # Snow banked against every barrier and tower base.
-    for (x, y) in ((15, 7), (24, 7), (9, 11), (35, 14)):
-        _snow_bank(surf, x * T - 8, y * T + T - 12, 2 * T + 16, 22, x + y)
-    for (x, y) in NOMAN_TOWER_TILES:
-        _snow_bank(surf, x * T - 14, y * T + 2 * T - 14, T + 28, 24, x * 3 + y)
-    # Craters and the tracked vehicle that came through before dawn.
-    _crater(surf, 15 * T, 10 * T, 34, 71)
-    _crater(surf, 29 * T, 6 * T, 26, 73)
-    _tracks(surf, 2 * T, 8 * T, 16 * T, 4, gap=22)
-    _tracks(surf, 22 * T, 12 * T, 17 * T, -7, gap=22)
-    # Drifts along the north and south aprons (the wind funnels there).
+    """The strip: wire lines, craters, tracks and drifts."""
+    for (y, segs) in ((3 * T - 10, ((1, 17), (24, 39))),):
+        for c0, c1 in segs:
+            _wire_coils(surf, c0 * T, y, c1 * T, y, c0)
+    for c0, c1 in ((1, 3), (7, 11), (14, 17), (19, 22), (24, 27), (30, 34), (37, 39)):
+        _wire_coils(surf, c0 * T, 14 * T + 12, c1 * T, 14 * T + 12, c0 + 50)
+    for (cx, cy, r, sd) in ((10.5, 9.4, 34, 71), (29.5, 6.3, 28, 73), (20.5, 11.5, 30, 75),
+                            (5.5, 4.8, 22, 77), (34.5, 9.7, 26, 79), (15.0, 6.4, 20, 81)):
+        _crater(surf, int(cx * T), int(cy * T), r, sd)
+    _tracks(surf, 1 * T + 10, 6 * T + 20, 9 * T, 0, gap=22)
+    _tracks(surf, 30 * T, 12 * T, 9 * T, 0, gap=22)
     for i in range(7):
-        _snow_bank(surf, int((3 + i * 5.2) * T), 3 * T - 6 + (i % 3) * 5,
-                   T + 26, 20, 80 + i)
-        _snow_bank(surf, int((2 + i * 5.4) * T), 13 * T + 20 + (i % 2) * 6,
-                   T + 22, 18, 90 + i)
-    # Footprints crisscrossing the strip: other people tried this.
-    for k in range(3):
-        _debris(surf, (8 + k * 11) * T, (7 + (k % 2) * 4) * T, 52, 101 + k,
-                col=(38, 44, 52))
-    _debris(surf, 18 * T, 6 * T, 60, 111, col=(38, 44, 52))
-    _debris(surf, 33 * T, 12 * T, 56, 113, col=(38, 44, 52))
-    # Dead scrub pushing through where the ground was never cleared.
+        _snow_bank(surf, int((2 + i * 5.4) * T), 3 * T - 2 + (i % 3) * 4, T + 26, 16, 80 + i)
+    for k, (cx, cy) in enumerate(((9, 7), (19, 10), (30, 8), (18, 5), (33, 12))):
+        _debris(surf, cx * T, cy * T, 56, 101 + k, col=(38, 44, 52))
     for (cx, cy, sd) in ((5, 12, 121), (36, 9, 123), (10, 6, 125),
                          (30, 14, 127), (25, 4, 129), (16, 12, 131)):
         _scrub(surf, cx * T + 20, cy * T + 24, sd)
-    # Hazard line and a drain at the gate thresholds.
     _snow_line(surf, 17 * T, 15 * T + T - 4, 24 * T, 15 * T + T - 4, 3)
     _drain(surf, 20 * T + 30, 16 * T + 14, 133)
+    _prop_foot_snow(surf, STAGE_NOMAN)
 
 
 def _rail_dress(surf, grid):
-    """Freight yard: oil, ice, cable, and the litter of a working platform."""
-    h, w = len(grid), len(grid[0])
-    # Snow piled along the whole platform edge and every boxcar flank.
+    """Freight yard: oil, ice, litter and snow along every car."""
     _snow_line(surf, 1 * T, 7 * T + 2, 45 * T, 7 * T + 2, 4)
     _snow_line(surf, 6 * T, 6 * T + 4, 42 * T, 6 * T + 4, 3)
-    for (x, y, bw, bh) in ((4, 10, 12, 2), (20, 9, 10, 2), (34, 12, 8, 2),
-                           (6, 17, 12, 2), (24, 18, 10, 2), (36, 20, 6, 2),
-                           (4, 21, 8, 2)):
-        _snow_line(surf, x * T, (y + bh) * T - 2, (x + bw) * T, (y + bh) * T - 2, 4)
-        _snow_bank(surf, x * T + 8, (y + bh) * T - 8, bw * T - 16, 16, x + y)
-    # Platform furniture marks: benches, a kiosk footprint, ticket litter.
     for i, cx in enumerate((5.0, 13.5, 22.0, 30.5, 38.0)):
-        _oil_stain(surf, int(cx * T), int(3.6 * T), 16, 141 + i)
         _debris(surf, int(cx * T), int(4.6 * T), 30, 151 + i, col=(52, 54, 58))
-    _papers(surf, 17 * T, 4 * T, 52, 161)
-    _papers(surf, 33 * T, 5 * T, 44, 163)
-    # Ice between the rails where the yard never drains.
+    _papers(surf, 19 * T, 4 * T, 52, 161)
+    _papers(surf, 34 * T, 5 * T, 44, 163)
     for i, (cx, cy, rw, rh) in enumerate((
-            (12.0, 8.4, 92, 30), (27.0, 13.6, 78, 26), (9.0, 15.2, 66, 24),
-            (33.0, 17.4, 84, 28), (18.0, 20.6, 72, 26), (39.0, 9.0, 60, 22))):
+            (8.0, 8.4, 92, 30), (27.0, 13.6, 78, 26), (9.0, 15.2, 66, 24),
+            (33.0, 17.4, 84, 28), (18.0, 20.6, 72, 26), (37.0, 9.0, 60, 22))):
         _ice_sheet(surf, int(cx * T), int(cy * T), rw, rh, 171 + i)
-    # Oil where engines stood, cable drums left flat, spill mats.
-    for i, (cx, cy) in enumerate(((7.0, 13.0), (21.0, 12.0), (37.0, 14.5),
-                                  (14.0, 20.0), (28.0, 21.0))):
+    for i, (cx, cy) in enumerate(((7.0, 13.0), (21.0, 12.0), (38.0, 15.0),
+                                  (15.0, 23.0), (28.0, 21.0))):
         _oil_stain(surf, int(cx * T), int(cy * T), 26 + i * 3, 181 + i)
-    for i, (cx, cy) in enumerate(((16.5, 13.4), (31.5, 16.8), (11.0, 19.4))):
-        pygame.draw.circle(surf, (46, 42, 36), (int(cx * T), int(cy * T)), 20)
-        pygame.draw.circle(surf, (30, 28, 24), (int(cx * T), int(cy * T)), 20, 2)
-        pygame.draw.circle(surf, (62, 56, 46), (int(cx * T), int(cy * T)), 8)
-        pygame.draw.line(surf, (58, 52, 44), (int(cx * T) - 18, int(cy * T)),
-                         (int(cx * T) + 18, int(cy * T)), 1)
-        _snow_bank(surf, int(cx * T) - 22, int(cy * T) + 14, 44, 12, 191 + i)
-    # Litter and shell cases near the crates and the signal office.
-    _debris(surf, 18 * T, 15 * T, 62, 201, col=(54, 56, 60))
+    _debris(surf, 18 * T, 16 * T + 40, 62, 201, col=(54, 56, 60))
     _debris(surf, 31 * T, 21 * T, 56, 203, col=(54, 56, 60))
-    _debris(surf, 14 * T, 8 * T, 48, 205, col=(54, 56, 60))
+    _debris(surf, 14 * T, 9 * T, 48, 205, col=(54, 56, 60))
     _debris(surf, 40 * T, 12 * T, 60, 207, col=(54, 56, 60))
-    # Drain grates along the platform.
     for i, (cx, cy) in enumerate(((9.0, 6.6), (24.0, 6.6), (40.0, 6.6))):
         _drain(surf, int(cx * T), int(cy * T), 211 + i)
-    # Perimeter fence inside the border walls, with a gate gap at the yard mouth.
     _fence_run(surf, 1 * T, 8 * T, 1 * T, 14 * T, 221)
     _fence_run(surf, 44 * T, 8 * T, 44 * T, 15 * T, 223)
-    _fence_run(surf, 1 * T, 23 * T, 44 * T, 23 * T, 225)
+    _prop_foot_snow(surf, STAGE_RAIL)
 
 
 # Contact shadow bands, baked once: a soft dark edge where the floor meets a
@@ -699,7 +643,7 @@ def _ground_ao(surf, grid):
     h, w = len(grid), len(grid[0])
 
     def solid(cx, cy):
-        return grid[cy][cx] in "CWB"
+        return grid[cy][cx] in "CW"
 
     for row in range(h):
         for col in range(w):
@@ -716,6 +660,17 @@ def _ground_ao(surf, grid):
                 surf.blit(_ao_band("w", T), (x - _AO_DEPTH, y))
 
 
+def _floor_under(grid, col, row):
+    """Floor code a prop stands on: the nearest open tile's."""
+    h, w = len(grid), len(grid[0])
+    for r in range(1, 5):
+        for dc, dr in ((0, r), (-r, 0), (r, 0), (0, -r)):
+            c, rr = col + dc, row + dr
+            if 0 <= c < w and 0 <= rr < h and grid[rr][c] in "._gLY":
+                return grid[rr][c]
+    return "g"
+
+
 def _ground_surface(stage_id):
     cached = _GROUND.get(stage_id)
     if cached is not None:
@@ -725,13 +680,16 @@ def _ground_surface(stage_id):
     surf = pygame.Surface((w * T, h * T))
     for row in range(h):
         for col in range(w):
-            if grid[row][col] not in "CWBD":
-                _paint_floor(surf, stage_id, col, row, grid[row][col])
+            ch = grid[row][col]
+            if ch == "B":
+                ch = _floor_under(grid, col, row)
+            if ch not in "CWD":
+                _paint_floor(surf, stage_id, col, row, ch)
     _frost(surf, stage_id)
     for row in range(h):
         for col in range(w):
             ch = grid[row][col]
-            if ch in "CWB":
+            if ch in "CW":
                 _paint_wall(surf, stage_id, col, row, ch)
             elif ch == "D":
                 _paint_door(surf, stage_id, col, row)
@@ -759,34 +717,17 @@ def draw_ground(surface, cam_x, cam_y, stage_id=None):
 
 
 # ─────────────────────────────────────────────
-# Static props (B-tile components)
+# Static props (authored in maps._PROP_LAYOUT, drawn by kind)
 # ─────────────────────────────────────────────
-def _components(stage_id):
-    grid = _maps.structure_for(stage_id)
-    h, w = len(grid), len(grid[0])
-    seen = set()
-    out = []
-    for row in range(h):
-        for col in range(w):
-            if grid[row][col] != "B" or (col, row) in seen:
-                continue
-            stack = [(col, row)]
-            seen.add((col, row))
-            xs, ys = [col], [row]
-            while stack:
-                cx, cy = stack.pop()
-                for nx, ny in ((cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)):
-                    if not (0 <= nx < w and 0 <= ny < h):
-                        continue
-                    if (nx, ny) in seen or grid[ny][nx] != "B":
-                        continue
-                    seen.add((nx, ny))
-                    xs.append(nx)
-                    ys.append(ny)
-                    stack.append((nx, ny))
-            x0, y0 = min(xs), min(ys)
-            out.append((x0, y0, max(xs) - x0 + 1, max(ys) - y0 + 1))
-    return sorted(out, key=lambda c: (c[1], c[0]))
+# Art-pack sprites where the house has them (vehicles, drums, crates, cable
+# drums); everything else is hard-edged pygame shapes in the same palette.
+# The tanker is skipped here: ``combat`` owns it (it can blow up).
+_PAINTS = ("faded_red", "sand", "teal", "dusty_white", "faded_blue", "rust_brown")
+_DYNAMIC_KINDS = frozenset(("tanker",))
+_STEEL = (64, 68, 74)
+_STEEL_HI = (96, 100, 108)
+_STEEL_LO = (34, 36, 40)
+_INK = (10, 12, 16)
 
 
 def _new_prop(w_px, h_px, over=0, side=0):
@@ -906,54 +847,185 @@ def _draw_crate(surf, x, y, w, h, seed):
     pygame.draw.rect(surf, (196, 206, 220), (x + 4, y + 6, w - 8, 4), border_radius=2)
 
 
-def _prop_surface(stage_id, comp):
-    x0, y0, tw, th = comp
-    w, h = tw * T, th * T
-    over = 0
-    if stage_id == STAGE_NOMAN and (x0, y0) in NOMAN_TOWER_TILES:
-        over = 240
-    elif stage_id in (STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN) and tw >= 6:
-        over = 24
-    elif stage_id in (STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN) and tw >= 4 and th >= 4:
-        over = 116
-    surf = pygame.Surface((w, h + over), pygame.SRCALPHA)
-    ox, oy = 0, over
-    seed = _h(x0, y0) % 97
-    if stage_id == STAGE_CUSTOMS:
-        inside = y0 < 11
-        if not inside:
-            if th > tw:
-                flat = pygame.Surface((h, w), pygame.SRCALPHA)
-                _draw_car(flat, 0, 0, h, w, seed)
-                surf.blit(pygame.transform.rotate(flat, 90), (0, oy))
-            else:
-                _draw_car(surf, 0, oy, w, h, seed)
-        elif tw >= 3:
-            _draw_counter(surf, 0, oy, w, h, warm=(x0, y0) == (19, 8))
-        elif th > 2:
-            _draw_cabinet(surf, 0, oy, w, h)
+def _blit_center(surf, img, w, h, oy, lift=0):
+    """Blit ``img`` centred in a w x h footprint, bottom-aligned."""
+    iw, ih = img.get_size()
+    surf.blit(img, ((w - iw) // 2, oy + h - ih - lift if ih <= h else oy + h - ih))
+
+
+def _art(name):
+    return artpack.get(name)
+
+
+def _vehicle_prop(kind, w, h, seed):
+    paint = _PAINTS[seed % len(_PAINTS)]
+    key = {
+        "car": "car_%s_126x46" % paint, "car_v": "car_%s_126x46" % paint,
+        "wreck": "burned_%s_126x46" % paint, "truck": "ipa_truck",
+        "truck_burnt": "ipa_truck_charred",
+    }[kind]
+    img = artpack.vehicle(key)
+    if img is not None and kind == "car_v":
+        img = pygame.transform.rotate(img, 90 if seed % 2 else -90)
+    return img
+
+
+def _draw_jersey(surf, x, y, w, h, seed):
+    """Concrete jersey barrier: sloped face, flat crown, hazard paint."""
+    top = y + h - 34
+    face = [(x + 2, y + h - 4), (x + 8, top + 10), (x + w - 8, top + 10), (x + w - 2, y + h - 4)]
+    pygame.draw.polygon(surf, (104, 102, 96), face)
+    pygame.draw.rect(surf, (138, 136, 128), (x + 8, top, w - 16, 11))
+    pygame.draw.rect(surf, (190, 202, 216), (x + 9, top, w - 18, 3))
+    for i, sx in enumerate(range(x + 12, x + w - 16, 18)):
+        col = (196, 64, 48) if i % 2 == 0 else (214, 210, 196)
+        pygame.draw.polygon(surf, col, [(sx, y + h - 8), (sx + 8, top + 14),
+                                        (sx + 16, top + 14), (sx + 8, y + h - 8)])
+    pygame.draw.line(surf, (72, 70, 66), (x + 4, y + h - 6), (x + w - 4, y + h - 6), 2)
+    for sx in (x + w // 3, x + 2 * w // 3):
+        pygame.draw.line(surf, (76, 74, 70), (sx, top + 1), (sx, y + h - 6), 1)
+
+
+def _draw_sandbag_wall(surf, x, y, w, h, seed):
+    """Three courses of bags, staggered, with a snow crown."""
+    bw, bh = 20, 10
+    base = y + h - 6
+    for r in range(3):
+        off = (bw // 2) if r % 2 else 0
+        by = base - (r + 1) * (bh - 1)
+        bx = x + 2 - off
+        c = 0
+        while bx < x + w - 4:
+            hh = _h(c, r, seed)
+            col = (100, 90, 66) if hh % 3 else (88, 80, 60)
+            rect = pygame.Rect(max(bx, x + 2), by, min(bw, x + w - 2 - max(bx, x + 2)), bh)
+            if rect.w > 6:
+                pygame.draw.rect(surf, _INK, rect.inflate(2, 2), border_radius=3)
+                pygame.draw.rect(surf, col, rect, border_radius=3)
+                pygame.draw.line(surf, _shift(col, 18), (rect.x + 2, rect.y + 2),
+                                 (rect.right - 3, rect.y + 2), 1)
+            bx += bw
+            c += 1
+    pygame.draw.rect(surf, _SNOW, (x + 6, base - 3 * (bh - 1) - 2, w - 12, 3))
+
+
+def _draw_booth(surf, x, y, w, h):
+    """Guard booth: block hut, lit window, flat roof under snow."""
+    body = pygame.Rect(x + 6, y + h - 70, w - 12, 64)
+    pygame.draw.rect(surf, _INK, body.inflate(2, 2))
+    pygame.draw.rect(surf, (78, 82, 76), body)
+    pygame.draw.rect(surf, (96, 100, 92), (body.x, body.y, body.w, 6))
+    win = pygame.Rect(body.x + 12, body.y + 18, body.w - 24, 18)
+    pygame.draw.rect(surf, (30, 34, 40), win)
+    pygame.draw.rect(surf, (214, 186, 120), win.inflate(-4, -4))
+    pygame.draw.line(surf, (60, 52, 40), (win.centerx, win.y), (win.centerx, win.bottom), 2)
+    pygame.draw.rect(surf, (44, 46, 44), (body.centerx - 10, body.bottom - 22, 20, 22))
+    roof = pygame.Rect(x + 2, y + h - 80, w - 4, 14)
+    pygame.draw.rect(surf, _INK, roof.inflate(2, 2))
+    pygame.draw.rect(surf, (58, 60, 58), roof)
+    pygame.draw.rect(surf, _SNOW, (roof.x, roof.y, roof.w, 6))
+    pygame.draw.rect(surf, (196, 64, 48), (body.x, body.bottom - 30, body.w, 4))
+
+
+def _draw_container(surf, x, y, w, h, seed):
+    """Shipping container: ribbed side, end doors, snow on the roof."""
+    cols = ((120, 62, 46), (52, 90, 96), (62, 74, 104), (112, 96, 60))
+    body = cols[seed % len(cols)]
+    roof = pygame.Rect(x + 2, y + 4, w - 4, h - 26)
+    side = pygame.Rect(x + 2, roof.bottom, w - 4, 20)
+    pygame.draw.rect(surf, _INK, roof.union(side).inflate(2, 2))
+    pygame.draw.rect(surf, _shift(body, 14), roof)
+    pygame.draw.rect(surf, _shift(body, -20), side)
+    for rx in range(side.x + 6, side.right - 4, 9):
+        pygame.draw.line(surf, _shift(body, -40), (rx, side.y + 2), (rx, side.bottom - 2), 2)
+    if roof.h > roof.w:
+        for ry in range(roof.y + 12, roof.bottom - 6, 12):
+            pygame.draw.line(surf, _shift(body, -10), (roof.x + 3, ry), (roof.right - 4, ry), 2)
+    else:
+        for rx in range(roof.x + 12, roof.right - 6, 12):
+            pygame.draw.line(surf, _shift(body, -10), (rx, roof.y + 3), (rx, roof.bottom - 4), 2)
+    pygame.draw.rect(surf, _SNOW_DIM, (roof.x + 4, roof.y + 3, roof.w - 8, 5))
+    for dx in (side.right - 22, side.right - 12):
+        pygame.draw.line(surf, (190, 186, 170), (dx, side.y + 3), (dx, side.bottom - 3), 2)
+
+
+def _draw_hedgehog(surf, x, y, w, h, seed):
+    """Czech hedgehog: three welded beams, rusted, snow on the joints."""
+    cx, cy = x + w // 2, y + h - 22
+    beams = (((-22, 14), (22, -14)), ((-22, -14), (22, 14)), ((0, -26), (0, 20)))
+    for (ax, ay), (bx, by) in beams:
+        pygame.draw.line(surf, _INK, (cx + ax, cy + ay), (cx + bx, cy + by), 8)
+    for i, ((ax, ay), (bx, by)) in enumerate(beams):
+        col = (96, 62, 44) if i != 2 else (110, 72, 50)
+        pygame.draw.line(surf, col, (cx + ax, cy + ay), (cx + bx, cy + by), 5)
+        pygame.draw.line(surf, _shift(col, 26), (cx + ax, cy + ay - 1), (cx + bx, cy + by - 1), 1)
+    pygame.draw.rect(surf, _SNOW, (cx - 6, cy - 4, 12, 4))
+    pygame.draw.line(surf, _INK, (cx - 18, y + h - 6), (cx + 18, y + h - 6), 3)
+
+
+def _draw_lamp_mast(surf, x, y, w, h):
+    cx, base = x + w // 2, y + h - 6
+    pygame.draw.rect(surf, _STEEL_LO, (cx - 7, base - 10, 14, 10))
+    pygame.draw.line(surf, _INK, (cx, base - 8), (cx, base - 118), 6)
+    pygame.draw.line(surf, _STEEL, (cx, base - 8), (cx, base - 118), 4)
+    pygame.draw.rect(surf, _INK, (cx - 12, base - 128, 24, 12))
+    pygame.draw.rect(surf, (246, 236, 196), (cx - 9, base - 126, 18, 7))
+
+
+def _draw_kind(kind, surf, oy, w, h, x0, y0, seed):
+    if kind in ("car", "car_v", "wreck", "truck", "truck_burnt"):
+        img = _vehicle_prop(kind, w, h, seed)
+        if img is not None:
+            _blit_center(surf, img, w, h, oy, lift=6)
         else:
-            _draw_counter(surf, 0, oy, w, h)
-    elif stage_id == STAGE_NOMAN:
-        if (x0, y0) in NOMAN_TOWER_TILES:
-            _draw_flood_tower(surf, 0, oy, w, h)
-        else:
-            _draw_barrier(surf, 0, oy, w, h)
-    elif stage_id in (STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN):
-        if tw >= 6:
-            volkov = (x0, y0) == VOLKOV_BOXCAR_TILE
-            _draw_boxcar(surf, 0, oy, w, h, seed, volkov)
-        elif tw >= 4 and th >= 4:
-            _draw_signal_shack(surf, 0, oy, w, h)
+            _draw_car(surf, 0, oy, w, h, seed)
+    elif kind in ("barrels", "crates", "crate", "coil"):
+        name = {"barrels": "prop_barrels", "crates": "prop_crate",
+                "crate": "prop_crate", "coil": "prop_coil"}[kind]
+        img = _art(name)
+        if img is not None and kind == "crate":
+            img = pygame.transform.scale(img, (60, 60))
+        if img is not None:
+            _blit_center(surf, img, w, h, oy, lift=4)
         else:
             _draw_crate(surf, 0, oy, w, h, seed)
-    else:
-        if tw >= 3:
-            _draw_counter(surf, 0, oy, w, h,
-                          warm=(x0, y0) in ((17, 3), (19, 8), (3, 3)))
-        else:
-            _draw_cabinet(surf, 0, oy, w, h)
-    return surf, oy
+    elif kind == "jersey":
+        _draw_jersey(surf, 0, oy, w, h, seed)
+    elif kind == "sandbag":
+        _draw_sandbag_wall(surf, 0, oy, w, h, seed)
+    elif kind == "booth":
+        _draw_booth(surf, 0, oy, w, h)
+    elif kind == "container":
+        _draw_container(surf, 0, oy, w, h, seed)
+    elif kind == "hedgehog":
+        _draw_hedgehog(surf, 0, oy, w, h, seed)
+    elif kind == "tower":
+        _draw_flood_tower(surf, 0, oy, w, h)
+    elif kind == "boxcar":
+        _draw_boxcar(surf, 0, oy, w, h, seed, (x0, y0) == VOLKOV_BOXCAR_TILE)
+    elif kind == "shack":
+        _draw_signal_shack(surf, 0, oy, w, h)
+    elif kind == "counter":
+        _draw_counter(surf, 0, oy, w, h)
+    elif kind == "terminal":
+        _draw_counter(surf, 0, oy, w, h, warm=True)
+    elif kind == "cabinet":
+        _draw_cabinet(surf, 0, oy, w, h)
+    elif kind == "mast":
+        _draw_lamp_mast(surf, 0, oy, w, h)
+
+
+_OVER = {"tower": 240, "shack": 116, "booth": 30, "boxcar": 24, "mast": 80,
+         "jersey": 6, "sandbag": 4, "hedgehog": 10, "container": 0}
+
+
+def _stage_props(stage_id):
+    props = [p for p in _maps.props_for(stage_id) if p[0] not in _DYNAMIC_KINDS]
+    if stage_id in (STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN):
+        # Platform lamp the second searchlight hangs from (no footprint).
+        c, r = RAIL_DETECTOR_TILES[1]
+        props.append(("mast", c, r - 1, 1, 1))
+    return props
 
 
 def _prop_rows(stage_id):
@@ -961,22 +1033,24 @@ def _prop_rows(stage_id):
     if cached is not None:
         return cached
     rows = []
-    for comp in _components(stage_id):
-        surf, over = _prop_surface(stage_id, comp)
-        x0, y0, tw, th = comp
+    for kind, x0, y0, tw, th in _stage_props(stage_id):
+        w, h = tw * T, th * T
+        over = _OVER.get(kind, 0)
+        surf = pygame.Surface((w, h + over), pygame.SRCALPHA)
+        _draw_kind(kind, surf, over, w, h, x0, y0, _h(x0, y0) % 97)
         mask = pygame.mask.from_surface(surf, 40)
         shadow = mask.to_surface(
             setcolor=(4, 6, 10, 120), unsetcolor=(0, 0, 0, 0)).subsurface(
-            (0, over, surf.get_width(), th * T)).copy()
+            (0, over, surf.get_width(), h)).copy()
         # A hard dark rim keeps props separate from the snow at night.
         for comp_pts in mask.connected_components(8):
             pts = comp_pts.outline(2)
             if len(pts) > 2:
-                pygame.draw.lines(surf, (10, 12, 16), True, pts, 1)
+                pygame.draw.lines(surf, _INK, True, pts, 1)
         rows.append({
-            "x": x0 * T, "y": y0 * T - over, "w": surf.get_width(),
+            "kind": kind, "x": x0 * T, "y": y0 * T - over, "w": surf.get_width(),
             "h": surf.get_height(), "surf": surf,
-            "bottom": (y0 + th) * T, "fh": th * T, "shadow": shadow,
+            "bottom": (y0 + th) * T, "fh": h, "shadow": shadow,
         })
     _PROPS[stage_id] = rows
     return rows
@@ -1016,6 +1090,12 @@ def _lamp_on(kind, index):
     return 0.92 + 0.08 * math.sin(t * 1.7 + index * 1.3)
 
 
+def _light_dead(index):
+    from . import stealth as _stealth
+    lights = _stealth.all_lights()
+    return index < len(lights) and _stealth.dead(lights[index])
+
+
 def _torch_colour():
     return (204, 214, 228)
 
@@ -1028,12 +1108,21 @@ def _light_pass(stage_id, cam_x, cam_y, size):
         sx, sy = x - cam_x, y - cam_y
         if not (-radius < sx < sw + radius and -radius < sy < sh + radius):
             continue
+        if kind.startswith("tower"):
+            if _light_dead(int(kind[5:])):
+                continue
+            kind = "steady"
         k = _lamp_on(kind, i)
         if k <= 0.2:
             continue
         lamps.append((_light(int(radius * k), colour), (int(sx - radius), int(sy - radius))))
         gr = max(20, radius // 4)
         blooms.append((_glow(gr, colour), (int(sx - gr), int(sy - gr))))
+    from . import combat as _combat
+    for x, y, radius, colour in _combat.extra_lamps():
+        sx, sy = x - cam_x, y - cam_y
+        if -radius < sx < sw + radius and -radius < sy < sh + radius:
+            lamps.append((_light(radius, colour), (int(sx - radius), int(sy - radius))))
     if STATE.player is not None:
         px = STATE.player.rect.centerx - cam_x
         py = STATE.player.rect.centery - cam_y
@@ -1041,20 +1130,33 @@ def _light_pass(stage_id, cam_x, cam_y, size):
     return _lighting.LightMapDraw(_AMBIENT.get(stage_id, (108, 118, 140)), lamps, blooms)
 
 
+def _dead_lamp(surface, cx, base, t, seed):
+    """Shot-out tower head: dark lenses, a dying spark now and then."""
+    if not (-60 < cx < WIDTH + 60 and -260 < base < HEIGHT + 260):
+        return
+    for dx in (-22, 22):
+        pygame.draw.rect(surface, (30, 32, 36), (cx + dx - 5, base - 228, 10, 7))
+        pygame.draw.line(surface, (70, 74, 80), (cx + dx - 4, base - 227),
+                         (cx + dx + 3, base - 223), 1)
+    pygame.draw.circle(surface, (40, 42, 46), (int(cx), int(base - 218)), 4)
+    if (int(t * 7) + seed * 3) % 11 == 0:
+        k = (t * 7) % 1.0
+        pygame.draw.circle(surface, (255, 196, 110),
+                           (int(cx + 18), int(base - 224 + k * 40)), 2)
+
+
 def _prop_fx(surface, cam_x, cam_y, stage_id):
     t = _now_s()
+    if stage_id == STAGE_NOMAN:
+        for i, (c, r) in enumerate(NOMAN_TOWER_TILES):
+            if _light_dead(i):
+                _dead_lamp(surface, c * T + T // 2 - cam_x, (r + 2) * T - 6 - cam_y, t, i)
     if stage_id in (STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN):
         sx, sy = 41.5 * T - cam_x, 7.0 * T - 116 - cam_y
-        if (int(t * 2) % 2) == 0 and -30 < sx < WIDTH + 30 and -30 < sy < HEIGHT + 30:
+        if (int(t * 2) % 2) == 0 and not _light_dead(0) \
+                and -30 < sx < WIDTH + 30 and -30 < sy < HEIGHT + 30:
             pygame.draw.circle(surface, (230, 70, 60), (int(sx), int(sy)), 6)
             pygame.draw.circle(surface, (255, 170, 140), (int(sx), int(sy)), 2)
-        gx, gy = 25.5 * T - cam_x, 10.1 * T - cam_y
-        if -60 < gx < WIDTH + 60 and -60 < gy < HEIGHT + 60:
-            glow = pygame.Surface((88, 88), pygame.SRCALPHA)
-            pygame.draw.circle(glow, (255, 190, 110, 34), (44, 44), 40)
-            pygame.draw.circle(glow, (255, 214, 150, 28), (44, 44), 24)
-            surface.blit(glow, (int(gx - 44), int(gy - 44)),
-                         special_flags=pygame.BLEND_RGBA_ADD)
 
 
 _SNOW_FLAKE = pygame.Surface((3, 3), pygame.SRCALPHA)

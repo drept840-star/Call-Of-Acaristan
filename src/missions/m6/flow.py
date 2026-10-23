@@ -15,6 +15,7 @@ from engine.core import now_ms as _now_ms
 from . import maps as _maps
 from . import decor as _decor
 from . import world as _world
+from . import combat as _combat
 from .meta import (
     MISSION6_ID, MISSION6_KEY, MISSION6_TITLE,
     STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN,
@@ -33,8 +34,8 @@ _SPEAKER_COLORS = {"SYSTEM": C_SYSTEM, "BIRIBEL": C_BIRIBEL,
                    "VOLKOV": (206, 176, 138)}
 
 _STAGE_RADIO = {
-    STAGE_NOMAN: ("MARU", "Floodlights sweep east to west. Move when the yard goes dark."),
-    STAGE_RAIL: ("VASILE", "Guard traffic puts Volkov in the rail yard. Find him first."),
+    STAGE_NOMAN: ("MARU", "Every tower has a gunner on the lamp. Shoot the lights out."),
+    STAGE_RAIL: ("VASILE", "Guard traffic puts Volkov in the rail yard. Hold it, then find him."),
 }
 
 
@@ -145,7 +146,7 @@ def _initialize_m6(preserve_timer=False):
 # ─────────────────────────────────────────────
 def _enter_customs():
     _bind(STAGE_CUSTOMS, STAGE_OBJECTIVES[STAGE_CUSTOMS],
-          ("MARU", "Border's closed. Customs is abandoned, not empty. Search it."),
+          ("MARU", "Customs is full of Guard. No quiet way through - go loud."),
           "stage_customs")
     STATE.m6_customs_checkpoint = True
 
@@ -242,7 +243,7 @@ def _anchor_pos(stage):
 
 
 def _exit_prompt(label):
-    remaining = _world.living_guards()
+    remaining = _combat.remaining()
     if remaining:
         return "E  LOCKED - %d HOSTILE%s REMAIN" % (
             remaining, "" if remaining == 1 else "S")
@@ -272,7 +273,7 @@ def handle_interact():
     if getattr(STATE, "request_m6_cutscene", None):
         return False
     stage = getattr(STATE, "mission6_stage", None)
-    if stage in (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL) and _world.living_guards():
+    if stage in (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL) and not _combat.cleared():
         return False
     if stage == STAGE_CUSTOMS:
         if _world.near(_anchor_pos(STAGE_CUSTOMS), GATE_RADIUS):
@@ -297,6 +298,12 @@ def on_m6_cutscene_done(key):
     if getattr(STATE, "mission6_stage", None) != STAGE_BOXCAR:
         return False
     _enter_train()
+    # One dry-leaf read after the pinned boxcar film: the copy Volkov carried
+    # was never wet, so he had kept a clean one to hand over.  The mark makes
+    # it once per run (``_radio_marks`` resets in ``_initialize_m6``).
+    _world.radio("BIRIBEL: The leaf's dry. He kept a clean copy.",
+                 color=_speaker_colour("BIRIBEL"), duration=400,
+                 mark="boxcar_dry_leaf")
     return True
 
 
@@ -321,7 +328,7 @@ def on_train_done(result="win"):
     STATE.m6_train_result = result
     if result == "win":
         STATE.active_mission_outcome = (
-            "Volkov reached the step  \u00b7  Last notebook recovered"
+            "Volkov reached the train  \u00b7  Last notebook recovered"
             "  \u00b7  Vasile named")
     STATE.m6_volkov_dead = True
     v = _world.volkov()
@@ -337,7 +344,7 @@ def on_train_done(result="win"):
 
 def _enter_yard():
     """Volkov is dead: the third-person fight to the signal box terminal."""
-    _set_objective("Who fired? Get to the Guard terminal in the signal box.")
+    _set_objective("Who is Ucilev? Get to the Guard terminal in the signal box.")
     STATE.m6_yard_active = True
     try:
         from . import yard3d as _yard

@@ -3,8 +3,8 @@
 Every stage binds its own authored grid through ``maps.bind_stage`` and
 rebuilds collision/spawns from it.  ``B`` props are solid tiles (their art
 lives in ``decor``), ``D`` is a walkable threshold, and ``E``/``V`` spawn a
-Guard or Volkov.  Alarm waves are spawned here too so stealth stays pure
-geometry + timing.
+Guard or Volkov.  The arena (waves, drums, tanker) lives in ``combat``;
+the spawn helpers it uses live here.
 """
 import math
 
@@ -21,12 +21,12 @@ from ui.hud import MiniMap
 from . import maps as _maps
 from . import decor as _decor
 from . import stealth as _stealth
+from . import combat as _combat
 from .meta import (
     M6_SOLID_CHARS, STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL, STAGE_BOXCAR,
     STAGE_TRAIN, STAGE_SPAWNS, STAGE_ANCHORS,
     QUEUE_ANCHOR, QUEUE_RADIUS, ALARM_SPAWN_TILES, MAX_ALARM_ENEMIES,
-    VOLKOV_BOXCAR_TILE, ALARM_ENTRY_DIST, ALARM_ENTRY_S, ALARM_WAVE_DELAYS,
-    ALARM_FIRST_WAVE,
+    VOLKOV_BOXCAR_TILE, ALARM_ENTRY_DIST, ALARM_ENTRY_S, SQUAD_KINDS,
 )
 
 audio = _config.audio
@@ -270,7 +270,8 @@ def _parse_grid(grid, stage):
             elif ch == "P":
                 STATE.player = Player(x + 16, y + 16, max_hp=PLAYER_MAX_HP)
             elif ch == "E":
-                _spawn_guard(x + T // 2, y + T // 2, stage, tile=(col, row))
+                e = _spawn_guard(x + T // 2, y + T // 2, stage, tile=(col, row))
+                _combat.apply_role(e, SQUAD_KINDS.get(stage, {}).get((col, row), "guard"))
     return STATE.player
 
 
@@ -308,6 +309,7 @@ def build_world(stage):
     _place_volkov(stage)
     _decor.build_decor(stage)
     _stealth.init_stage(stage)
+    _combat.init_stage(stage)
     return STATE.player
 
 
@@ -360,12 +362,12 @@ def spawn_alarm_wave(count, entry=True):
 
 
 def on_alarm(stage):
-    """Arm the yard: everyone converges, then the gates disgorge a wave.
+    """A searchlight caught Biribel: the arena goes loud.
 
-    Nothing spawns on the alarm frame itself - the siren, the radio line and
-    the alarm chip need a beat to land before the first boots are in the
-    yard.  ``stealth`` owns that schedule and calls ``spawn_alarm_wave``.
+    Nothing spawns on the alarm frame itself - ``combat`` owns the wave
+    schedule and only shortens it.
     """
+    _combat.go_loud()
     _arm_everyone()
 
 
@@ -395,7 +397,7 @@ def _rail_bark():
     if getattr(STATE, "mission6_stage", None) != STAGE_RAIL:
         return
     if _volkov and near((_volkov["x"], _volkov["y"]), 220):
-        radio("VASILE: The car with the red stripe. Volkov. Move quiet.",
+        radio("VASILE: The car with the red stripe. Volkov. Clear the yard first.",
               color=(212, 178, 120), duration=360, mark="rail_volkov_seen")
 
 
