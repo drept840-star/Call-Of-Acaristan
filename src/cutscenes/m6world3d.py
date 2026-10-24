@@ -39,6 +39,11 @@ SAFE_BOT = HEIGHT - 158
 FILM_H = SAFE_BOT - SAFE_TOP
 RES = 0.6
 RW, RH = int(WIDTH * RES), int(FILM_H * RES)
+# The PS2 look (insertion films): the train's 0.64 buffer, ordered dither and
+# crisp present.  Opt-in per renderer through rend_ps2()/present_ps2().
+RES_PS2 = 0.64
+PW, PH = int(WIDTH * RES_PS2), int(FILM_H * RES_PS2)
+PS2_LIGHT_CAP = 8
 
 SNOW = (176, 188, 206)
 SNOW_DARK = (44, 54, 70)
@@ -54,7 +59,7 @@ LAST = []
 
 __all__ = [
     "SAFE_TOP", "SAFE_BOT", "FILM_H", "RW", "RH", "SNOW", "NIGHT", "WARM",
-    "COLD", "SODIUM", "rend", "present", "cam", "add", "film_xy", "project_xy",
+    "COLD", "SODIUM", "rend", "present", "rend_ps2", "present_ps2", "PW", "PH", "cam", "add", "film_xy", "project_xy",
     "grade", "finish", "hum", "actor", "air_actor", "life_pose", "yaw_to",
     "current_shot", "speaker", "talking", "snow3d", "breath", "hills",
     "terrain", "height_at", "crossing_far", "LZ", "LZ_Y", "border_compound", "helicopter",
@@ -96,6 +101,22 @@ def present(surface, buf, x=0, w=WIDTH):
         except Exception:
             _cache["graded_buf"] = False
     surface.blit(pygame.transform.smoothscale(buf, (w, FILM_H)), (x, SAFE_TOP))
+
+
+def rend_ps2():
+    """The film renderer at the train's PS2 resolution, eight lights and
+    snow glitter.  Present it with ``present_ps2``."""
+    r, buf = rend(PW, PH)
+    r.light_cap = PS2_LIGHT_CAP
+    r.glitter = 1.0
+    return r, buf
+
+
+def present_ps2(surface, buf, x=0, w=WIDTH):
+    """Train grade (contrast curve, split tone, ink floor, Bayer dither) on
+    the small buffer, then a crisp nearest-x2 + box upscale into the film."""
+    _fx.grade_cine(buf)
+    _fx.present_crisp(buf, surface.subsurface((x, SAFE_TOP, w, FILM_H)))
 
 
 def film_xy(p, x0=0, w=WIDTH, rw=RW):
@@ -303,15 +324,15 @@ def grade(surface, gamma=0.82, vig=0.40):
     band.blit(vmask, (0, 0), special_flags=pygame.BLEND_MULT)
 
 
-def finish(surface, seed, tag="", col=(120, 190, 220), t=0):
-    grade(surface)
+def finish(surface, seed, tag="", col=(120, 190, 220), t=0, ps2=False):
+    grade(surface, gamma=1.0 if ps2 else 0.82, vig=0.30 if ps2 else 0.40)
     # Fine grain: a signed luminance wobble over every pixel, re-seeded at
     # film rate.  The old hard single-pixel black specks (full alpha, value
     # 10..26) sat on faces and read as acne in every close-up.
     band = surface.subsurface((0, SAFE_TOP, WIDTH, FILM_H))
     try:
         from cutscenes.post3d import apply_post  # lazy: numpy stack
-        apply_post(band, {"grain": 0.26}, int(t), "m6_film_%s" % seed)
+        apply_post(band, {"grain": 0.10 if ps2 else 0.26}, int(t), "m6_film_%s" % seed)
     except Exception:
         pass
     if tag:

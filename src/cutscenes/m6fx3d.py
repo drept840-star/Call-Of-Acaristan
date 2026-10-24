@@ -1,9 +1,13 @@
-"""m6fx3d.py - the Mission 6 FX kit: soft night light, smoke and haze.
+"""m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze.
 
-M6 shares m5fx3d's rain, sky, smoke, motes, sparks and camera.  Its practical
-halos use continuous falloff and depth-aware sprite compositing: the GL path
-hides light behind world geometry and drops it when the fixture is occluded,
-while the software backend paints the same sprites in layer order.
+M6 shares m5fx3d's rain, sky, smoke, motes, sparks and camera, but not its
+glows.  The M6 yard and train are drawn as a late PS2 game: a lamp's halo is
+a small hot core with a short, ordered-dithered falloff that cools toward the
+rim - never a soft bloom and never three flat target rings.  Every light
+sprite here (glow / sodium_lamp / window_glow / crt_bloom / flash / haze /
+light_shaft / beacon) carries ``draw.light = True``: the GL compositor hides
+it behind world geometry per pixel and drops it when the fixture itself is
+occluded.  The software backend keeps painting them in layer order.
 
 Colours are the 2D game's sodium amber (``missions.m6.palette3d``, copied
 here so this module stays as dependency-light as m5fx3d).  Time is in
@@ -34,6 +38,11 @@ _SOFT_PEAK = 1.0
 # halo from reading as a flat orange disc.
 _LAMP_RAMP = ((0.0, LAMP_WHITE), (0.24, SODIUM_PALE), (0.58, SODIUM),
               (1.0, AMBER))
+
+# 4x4 Bayer matrix, centred on 0 (-0.5..0.5 LSB).  It breaks the ~10
+# quantised falloff steps and the 8-bit colour into grain instead of rings.
+_BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+
 
 def __getattr__(name):
     return getattr(_m5, name)
@@ -68,14 +77,20 @@ def _stops_for(col, core, k):
     return ((0.0, sc(hot)), (0.30, sc(col)), (1.0, sc(col, 0.52)))
 
 
-def _halo_img(stops, rx, ry=None, power=2.0, peak=_LAMP_PEAK,
+def _halo_img(stops, rx, ry=None, power=2.0, levels=10, peak=_LAMP_PEAK,
               core=0.0, core_r=0.20, rim=False):
-    """Continuous additive halo with a soft core and coloured falloff."""
+    """Smooth, quantised, Bayer-dithered additive halo.
+
+    ``levels`` is the PS2 posterisation count (8-12); the dither is what
+    hides the steps.  ``core`` adds a hot centre inside ``core_r`` (a
+    fraction of the radius).  ``rim`` biases the energy to the edge, for a
+    window's bleed without a square billboard.
+    """
     ry = rx if ry is None else ry
     rx = max(1, min(260, _m5._bucket(rx)))
     ry = max(1, min(260, _m5._bucket(ry)))
     stops = tuple(stops)
-    key = ("halo", stops, rx, ry, power, round(peak, 3),
+    key = ("halo", stops, rx, ry, power, levels, round(peak, 3),
            round(core, 3), round(core_r, 3), bool(rim))
     s = _CACHE.get(key)
     if s is not None:
@@ -87,27 +102,33 @@ def _halo_img(stops, rx, ry=None, power=2.0, peak=_LAMP_PEAK,
         ax = (np.arange(w, dtype=np.float32) - (rx + 0.5)) / rx
         ay = (np.arange(h, dtype=np.float32) - (ry + 0.5)) / ry
         rr = (np.abs(ax)[:, None] ** power + np.abs(ay)[None, :] ** power) ** (1.0 / power)
+        bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
+        bay = np.tile(bay, (w // 4 + 1, h // 4 + 1))[:w, :h]
         if rim:
+            # low fill across the pane, a slightly stronger band at its edge
             edge = np.clip((1.06 - rr) / 0.22, 0.0, 1.0)
             fill = np.clip(rr / 0.88, 0.0, 1.0) ** 2
             inten = peak * edge * (0.45 + 0.55 * fill)
         else:
-            inten = peak * np.clip(1.0 - rr, 0.0, 1.0) ** power
+            f = np.clip(1.0 - rr, 0.0, 1.0)
+            inten = peak * f ** power
         if core > 0.0:
             inten = inten + core * np.clip(1.0 - rr / max(0.02, core_r), 0.0, 1.0) ** 1.5
+        q = np.floor(inten * levels + 0.5 + bay * 0.55) / levels
+        q = np.where(inten > 0.0, np.clip(q, 0.0, 1.0), 0.0)
         col = _ramp_colour(stops, rr)
-        arr = np.clip(np.round(np.clip(inten, 0.0, 1.0)[:, :, None] * col),
+        arr = np.clip(np.round(q[:, :, None] * col + bay[:, :, None] * 0.7),
                       0, 255).astype(np.uint8)
         s = pygame.Surface((w, h))
         sa.blit_array(s, arr)
-    except ImportError:
+    except ImportError:                       # numpy-less fallback: fine ellipses
         s = pygame.Surface((w, h))
         s.fill((0, 0, 0))
         rimcol = tuple(stops[-1][1])
-        for i in range(48, 0, -1):
-            f = i / 48.0
+        for i in range(24, 0, -1):
+            f = i / 24.0
             k = peak * (1.0 - f) ** power
-            if k <= 0.005:
+            if k <= 0.01:
                 continue
             c = tuple(min(255, int(v * k)) for v in rimcol)
             pygame.draw.ellipse(s, c, ((w - int(w * f)) // 2,
@@ -133,8 +154,9 @@ def _core_img(col, rad):
 # ── light sprites (draw(s, sx, sy, scale_px_per_m, z)) ──
 def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensity=1.0,
          max_px=36):
-    """A practical light's soft halo, sized by real distance.  Beyond ~60 m
-    only the core survives, so a far lamp is a pixel of light, not a disc."""
+    """A practical light's halo: a small hot core and a short dithered
+    falloff, sized by real distance.  Beyond ~60 m only the core survives,
+    so a far lamp is a pixel of light, not a target disc."""
     def draw(s, sx, sy, scale, z):
         k = intensity * _m5._flick(t, seed, flicker) * (1.0 + pulse * math.sin(t * 0.004 + seed))
         k = min(1.0, k)
@@ -145,15 +167,15 @@ def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensit
         rad = min(max_px, max(1.5, radius_m * scale))
         core_col = core or LAMP_WHITE
         if z <= 62.0 and air > 0.02:
-            kk = k * air
+            kk = round(k * air * 32.0) / 32.0
             if kk > 0.02:
                 stops = _stops_for(col, core_col, kk)
                 rx = rad * (0.55 + 0.45 * air)
-                _m5._add_at(s, _halo_img(stops, rx, rx, power=2.2,
+                _m5._add_at(s, _halo_img(stops, rx, rx, power=2.2, levels=11,
                                          peak=_LAMP_PEAK,
                                          core=0.38 if core else 0.0,
                                          core_r=0.14), sx, sy)
-        ck = k
+        ck = round(k * 32.0) / 32.0
         cr = max(1.0, min(5.0, rad * 0.14))
         _m5._add_at(s, _core_img(_m5._scale(core_col, ck), cr), sx, sy)
     _tag(draw)
@@ -171,9 +193,9 @@ def beacon(col, radius_m=0.35, t=0, period_ms=1500.0, phase=0.0,
         if not on:
             return
         rad = min(12.0, max(1.5, radius_m * scale))
-        k = intensity
+        k = round(intensity * 32.0) / 32.0
         stops = _stops_for(col, None, k)
-        _m5._add_at(s, _halo_img(stops, rad, rad, power=2.0,
+        _m5._add_at(s, _halo_img(stops, rad, rad, power=2.0, levels=9,
                                  peak=0.62), sx, sy)
         _m5._add_at(s, _core_img(_m5._scale(col, k), max(1.0, rad * 0.42)),
                     sx, sy)
@@ -197,6 +219,7 @@ def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0,
         k = intensity * _m5._flick(t, seed, flicker)
         if z > 40.0:
             k *= max(0.0, (40.0 - z) / 15.0)
+        k = round(k * 32.0) / 32.0
         if k <= 0.01:
             return
         rx, ry = w_m * scale * 1.05, h_m * scale * 1.05
@@ -205,7 +228,7 @@ def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0,
         stops = ((0.0, _m5._scale(col, k * 0.55)),
                  (1.0, _m5._scale(col, k)))
         _m5._add_at(s, _halo_img(stops, min(260, rx), min(260, ry),
-                                 power=3.0,
+                                 power=3.0, levels=9,
                                  peak=_SOFT_PEAK, rim=rim), sx, sy)
     _tag(draw)
     draw.light_soft = True      # a window's bleed, anchor-gated not per-pixel
@@ -221,7 +244,7 @@ def crt_bloom(t, col=(120, 160, 220), w_m=0.6, h_m=0.45, intensity=0.6, seed=0):
 
 
 def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420):
-    """Muzzle or blast flash: a hot soft burst that collapses fast."""
+    """Muzzle or blast flash: a hot dithered burst that collapses fast."""
     def draw(s, sx, sy, scale, z):
         if age_ms < 0 or age_ms > dur_ms:
             return
@@ -229,10 +252,10 @@ def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420):
         rad = min(90, max(1.5, radius_m * scale * (0.6 + 0.6 * k)))
         if rad < 1.5 or k <= 0.02:
             return
-        kk = k
+        kk = round(k * 32.0) / 32.0
         stops = ((0.0, LAMP_WHITE), (0.34, _m5._scale(col, kk)),
                  (1.0, _m5._scale(col, kk * 0.35)))
-        _m5._add_at(s, _halo_img(stops, rad, rad, power=2.0,
+        _m5._add_at(s, _halo_img(stops, rad, rad, power=2.0, levels=12,
                                  peak=_SOFT_PEAK, core=0.5, core_r=0.16), sx, sy)
     _tag(draw)
     draw.bounds_m = (radius_m * 1.2, radius_m * 1.2)
@@ -242,19 +265,19 @@ def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420):
 
 # ── volumetrics ──
 def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16):
-    """Low lit fog round a light: a big, very soft blob that breathes.
-    No hot core - haze does not glow, it scatters."""
+    """Low lit fog round a light: a big, very soft dithered blob that
+    breathes.  No hot core - haze does not glow, it scatters."""
     def draw(s, sx, sy, scale, z):
         rad = min(140, radius_m * scale)
         if rad < 3:
             return
         k = intensity * (0.75 + 0.25 * math.sin(t * 0.0007 + seed * 1.9))
         rad = int(rad * (1.0 + 0.05 * math.sin(t * 0.0009 + seed)))
-        kk = k * 0.5
+        kk = round(k * 0.5 * 32.0) / 32.0
         if kk <= 0.005:
             return
         stops = ((0.0, _m5._scale(col, kk)), (1.0, _m5._scale(col, kk * 0.30)))
-        _m5._add_at(s, _halo_img(stops, rad, rad, power=2.6,
+        _m5._add_at(s, _halo_img(stops, rad, rad, power=2.6, levels=8,
                                  peak=_SOFT_PEAK), sx, sy)
     _tag(draw)
     draw.light_soft = True          # fog scatters in front of geometry
@@ -264,9 +287,11 @@ def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16):
 
 
 def _shaft_img(col, wtop, wbot, h, k):
-    """One tapered quad of lit air with continuous lateral falloff."""
+    """One tapered quad of lit air, dithered down its length and across its
+    width.  A single surface, not a stack of flat discs."""
     wtop, wbot, h = max(1, min(260, wtop)), max(1, min(260, wbot)), max(2, min(400, h))
-    key = ("shaft", tuple(col), wtop, wbot, h, round(k, 4))
+    k = round(k * 24.0) / 24.0
+    key = ("shaft", tuple(col), wtop, wbot, h, k)
     img = _CACHE.get(key)
     if img is not None:
         return img
@@ -274,6 +299,8 @@ def _shaft_img(col, wtop, wbot, h, k):
     try:
         import numpy as np
         import pygame.surfarray as sa
+        bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
+        bay = np.tile(bay, (w // 4 + 1, h // 4 + 1))[:w, :h]
         ax = np.abs(np.arange(w, dtype=np.float32) - wbot) / np.maximum(
             1.0, wbot)
         ay = np.arange(h, dtype=np.float32) / max(1.0, h - 1)
@@ -281,8 +308,10 @@ def _shaft_img(col, wtop, wbot, h, k):
         across = np.clip(1.0 - ax[:, None] / np.maximum(0.02, halfw)[None, :],
                          0.0, 1.0) ** 1.5
         down = (1.0 - 0.45 * ay)[None, :]
-        inten = np.clip(k * across * down, 0.0, 1.0)
-        arr = np.clip(np.round(inten[:, :, None] * np.array(col)[None, None, :]), 0, 255)
+        inten = k * across * down
+        q = np.floor(inten * 10.0 + 0.5 + bay * 0.55) / 10.0
+        q = np.where(inten > 0.002, np.clip(q, 0.0, 1.0), 0.0)
+        arr = np.clip(np.round(q[:, :, None] * np.array(col)[None, None, :]), 0, 255)
         img = pygame.Surface((w, h))
         sa.blit_array(img, arr.astype(np.uint8))
     except ImportError:
@@ -299,9 +328,9 @@ def _shaft_img(col, wtop, wbot, h, k):
 
 def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0,
                 intensity=0.34, tilt=0.10):
-    """A practical's cone through the haze: one tapered quad hung screen-down
-    from the lamp, swaying with the wind.  For the two hero platform lamps
-    only - a shaft on every lamp was a wall of orange."""
+    """A practical's cone through the haze: one tapered, dithered quad hung
+    screen-down from the lamp, swaying with the wind.  For the two hero
+    platform lamps only - a shaft on every lamp was a wall of orange."""
     def draw(s, sx, sy, scale, z):
         h = int(height_m * scale)
         wtop, wbot = int(top_m * scale), int(bot_m * scale)
@@ -319,7 +348,7 @@ def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0,
 
 
 def powder(t, seed=0, spread_m=3.0, intensity=0.5, col=(188, 200, 220), puffs=14):
-    """Rotor wash on powder snow: soft puffs that roll outward along the
+    """Rotor wash on powder snow: dithered puffs that roll outward along the
     ground and lift, no streaks.  ``t`` is the wash clock in ms."""
     def draw(s, sx, sy, scale, z):
         for i in range(puffs):
@@ -332,14 +361,14 @@ def powder(t, seed=0, spread_m=3.0, intensity=0.5, col=(188, 200, 220), puffs=14
             if rad < 3:
                 continue
             k = intensity * (1.0 - life) ** 1.4
-            kk = k * 0.5
+            kk = round(k * 0.5 * 32.0) / 32.0
             if kk <= 0.01:
                 continue
             x = sx + math.cos(a) * rr
             y = sy + math.sin(a) * rr * 0.22 - life * 0.25 * spread_m * scale
             stops = ((0.0, _m5._scale(col, kk)), (1.0, _m5._scale(col, kk * 0.25)))
             _m5._add_at(s, _halo_img(stops, rad, int(rad * 0.7), power=2.4,
-                                     peak=_SOFT_PEAK), int(x), int(y))
+                                     levels=8, peak=_SOFT_PEAK), int(x), int(y))
     _tag(draw)
     draw.light_soft = True
     draw.bounds_m = (spread_m * 1.3, spread_m * 0.6)
@@ -347,7 +376,7 @@ def powder(t, seed=0, spread_m=3.0, intensity=0.5, col=(188, 200, 220), puffs=14
     return draw
 
 
-# -- M5's legacy PS2 frame helpers; M6 uses the smooth paths in its own scenes --
+# -- the PS2 frame: grade, dither, crisp present (shared by the train and films) --
 def _palette():
     from missions.m6 import palette3d   # lazy: the films never import missions.m6 at load
     return palette3d
