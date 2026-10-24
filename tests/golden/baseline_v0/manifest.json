@@ -1574,7 +1574,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "2afc1493e1e5ce3390dba095aa1546403a826c4da60e46451007862260416b9e",
+   "sha256": "2d14df6889d3bb44f7685bd6fe6b2360a270ca45842f7b1f30cba6e3baee9a0e",
    "source": "m3.broadcast_fail_shots[0] scene=m3_bcast_fail_studio",
    "t_ms": 375
   },
@@ -1588,7 +1588,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "af9686f38764fc267f5500a83530bb831856f20fa69a19d7f919cafeece04c73",
+   "sha256": "9e5901149370aad7aec449c4c6d2e7c41b723c6b1169c38d3d8fa9fcb2364c7f",
    "source": "m3.broadcast_fail_shots[0] scene=m3_bcast_fail_studio",
    "t_ms": 750
   },
@@ -1602,7 +1602,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "bcad653563fc8c8a5f24c99df72c344d2617635155b05ee9d9405072aaedd1e9",
+   "sha256": "747caf894771a3d439cd77b8f0a471e3e75225b23c946443fb12699a8fe556d7",
    "source": "m3.broadcast_fail_shots[0] scene=m3_bcast_fail_studio",
    "t_ms": 1125
   },
@@ -1616,7 +1616,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "29b46cf573c37a7bc9c08c26ab01467258969160d1dec028a9cb1dcd5d2ec837",
+   "sha256": "e08df814d17ec16bfc2320b6b52a9571e3e872c3384270c7f398fea734717205",
    "source": "m3.broadcast_fail_shots[1] scene=m3_bcast_fail_pa",
    "t_ms": 862
   },
@@ -1630,7 +1630,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "07a7b307b692c38992484619262da851f0f88f5e0b78af63dfb3e0a029d0de75",
+   "sha256": "69dd5b2c12ef3af4eef7e7be7600153b145bfcd64ce63f40e9516013e38e5915",
    "source": "m3.broadcast_fail_shots[1] scene=m3_bcast_fail_pa",
    "t_ms": 1724
   },
@@ -1644,7 +1644,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "b72a6e13ae08fc5289ba2dd9faad46df00e15195cb9e318f6e3690df6653cdaa",
+   "sha256": "9591cad5c50b5cb4db321fc0ab5b258a6858913b5d489062cfe47f3bc10cb0ed",
    "source": "m3.broadcast_fail_shots[1] scene=m3_bcast_fail_pa",
    "t_ms": 2586
   },
@@ -1784,7 +1784,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "99346de238e3658004f5bbd13a5cdfaf371bac1614dc7af262ee753f75dfbe71",
+   "sha256": "ec3e6c24e7cf65ea3f3c18e5c1aa5987cd3016043c23c30cb5618780ebd23874",
    "source": "m3.broadcast_transition_shots[2] scene=m3_bcast_mast",
    "t_ms": 1030
   },
@@ -1798,7 +1798,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "bb527bd8458d60edc54d59895aa53791927968a51501f2a5c2de0b05f90c6dd1",
+   "sha256": "1b813d4d591b3c4482b557b31aa3e6feac79a48976bc6a5cb40ff689858bdab2",
    "source": "m3.broadcast_transition_shots[2] scene=m3_bcast_mast",
    "t_ms": 2060
   },
@@ -1812,7 +1812,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "108f0e82e9ae165dc995186840dedc2284a9f910b63a2fa9e237c90c1259da34",
+   "sha256": "4ab50a04fa08c147edfbe9a2c261f6fb06b92ae285fbfff9fbe802bdf9dd627a",
    "source": "m3.broadcast_transition_shots[2] scene=m3_bcast_mast",
    "t_ms": 3090
   },
@@ -1826,7 +1826,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "11c99a28eca7846d82f8da7508a65d66887d8790a51c3a613867c475b1a8ebf9",
+   "sha256": "2a9538bdbe196ec2de7b3c69802c4229410b63567d19c8cea6f50aef6301ba63",
    "source": "m3.broadcast_transition_shots[3] scene=m3_bcast_onair",
    "t_ms": 946
   },
@@ -1840,7 +1840,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "1242d7f8aae306571073a59994f36afec984280511325a0df79393ddb04069d8",
+   "sha256": "2e26858b8f929f119a58f78aa8b3f1bd0adfee821be691bca24a60c1bdfae294",
    "source": "m3.broadcast_transition_shots[3] scene=m3_bcast_onair",
    "t_ms": 1892
   },
@@ -1854,9 +1854,51 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "cb6e6f47aecada301ddf5f9d243b9320f2729a4ca3a3843e48813086dfc382d3",
+   "sha256": "161c2660bc05006e1f09f764562c10aae211309c91c4b0fcc4a310c36ffd41d5",
    "source": "m3.broadcast_transition_shots[3] scene=m3_bcast_onair",
    "t_ms": 2838
+  },
+  "cut.m3.broadcast_transition_shots.04_m3_bcast_onair.t25": {
+   "id": "cut.m3.broadcast_transition_shots.04_m3_bcast_onair.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "c133e850b9c4771658d3d1931782b33016a0adb5cee461aa10dc41e319be098e",
+   "source": "m3.broadcast_transition_shots[4] scene=m3_bcast_onair",
+   "t_ms": 568
+  },
+  "cut.m3.broadcast_transition_shots.04_m3_bcast_onair.t50": {
+   "id": "cut.m3.broadcast_transition_shots.04_m3_bcast_onair.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "bf1da33ca5b53d9a8ef4e0786d376ef5eb6d6d8d01ed47ce98718d23a90378d3",
+   "source": "m3.broadcast_transition_shots[4] scene=m3_bcast_onair",
+   "t_ms": 1136
+  },
+  "cut.m3.broadcast_transition_shots.04_m3_bcast_onair.t75": {
+   "id": "cut.m3.broadcast_transition_shots.04_m3_bcast_onair.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "ee62e00ec6fa347893533e4671ec6d14accb8401d873dda610780c3b75615ce6",
+   "source": "m3.broadcast_transition_shots[4] scene=m3_bcast_onair",
+   "t_ms": 1704
   },
   "cut.m3.chair_break_shots.00_cb_strain.t25": {
    "id": "cut.m3.chair_break_shots.00_cb_strain.t25",
@@ -1994,7 +2036,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "cd3b1360c80ed1082307b83d2845220210024a0b52071af7f78fabe7c43e5185",
+   "sha256": "c95afbd00b2b4f9ee2a5a09a5b559f1099814b01e7b5aec64b6879413593b12e",
    "source": "m3.chair_break_shots[3] scene=cb_ready",
    "t_ms": 750
   },
@@ -2008,7 +2050,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "f3072b397e70e55086cd88ce232739345c785de8f99045c4c9dae194732c0460",
+   "sha256": "1215fd8d2e53727ec352ab28203714588046232d424e14a22e3f267c65d161c7",
    "source": "m3.chair_break_shots[3] scene=cb_ready",
    "t_ms": 1500
   },
@@ -2022,7 +2064,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "c4624d3db4a4b93de9e0ba6a954a7d7f6de903e220a9ad0abfdd299328fd509c",
+   "sha256": "d78aaf9e35f86793ed4a4840c81cf63f6c2c5351010f4312e3dfdb476e18b8a9",
    "source": "m3.chair_break_shots[3] scene=cb_ready",
    "t_ms": 2250
   },
@@ -2204,7 +2246,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "aa6c641c9f1fa430c1282b6956705a08c1a158d9af5ad1755d4ce73bcfb601ad",
+   "sha256": "9c43ed415162106a834946bd9020a8e2afcd36f91a56ac96ab8093dc3aa5b22b",
    "source": "m3.ko_transition_shots[1] scene=m3_ko_stairwell",
    "t_ms": 1065
   },
@@ -2218,7 +2260,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "4db264258d74efbf535d3abcbd8c569ede7dc361f02e90d3f27fb12e8fbae69c",
+   "sha256": "97c61c9e9082040322616c65af63e7f548b5d164c05eb33ad5af6562432d5e3e",
    "source": "m3.ko_transition_shots[1] scene=m3_ko_stairwell",
    "t_ms": 2130
   },
@@ -2232,7 +2274,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "cbba5d2929094021adb6de31f0563d37245138b5af50043d1c6adac3ec94bbcb",
+   "sha256": "78adfeaf8a7687bd1ab54f2b59055d5c5aa455cf6888dd666caa582e50e865db",
    "source": "m3.ko_transition_shots[1] scene=m3_ko_stairwell",
    "t_ms": 3195
   },
@@ -2246,7 +2288,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "8228c4aff0e094ab03fb4a7986ba4850563431278b90084b1ef375169a6cb5ef",
+   "sha256": "d9ced4e5e86e9ffc44ad7f81165537cf2bbc47f067fb5c98f2fa5c2ac96ab16a",
    "source": "m3.ko_transition_shots[2] scene=m3_ko_aperture",
    "t_ms": 1058
   },
@@ -2260,7 +2302,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "dde224e67b0a3934b5570e36084c3dd72f98caa54d76a845bc8f25fe4b2bd638",
+   "sha256": "8da2152bb57475adcfe02fcf07ac79ba12ebbf552efc8c5715869b99bfcc792b",
    "source": "m3.ko_transition_shots[2] scene=m3_ko_aperture",
    "t_ms": 2116
   },
@@ -2274,7 +2316,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "78620b06136c09f2bc5055dbc2a162c685c37e7c02dd57d8459a4ee2db82a7c7",
+   "sha256": "1ea2ed8431664a4877b8d03079e8be7d0127dbd504f3c83029687bf1068a9101",
    "source": "m3.ko_transition_shots[2] scene=m3_ko_aperture",
    "t_ms": 3174
   },
@@ -2330,7 +2372,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "93ed41c8de2ccd28946cee0caa5d5a91cec0021bdcb467ccb2d88741d3cc640a",
+   "sha256": "9950fabfc9af596a83031cd9922227cf908b08425525e537a880d017da1b6154",
    "source": "m3.mission3_ending_shots[0] scene=m3_end_studio",
    "t_ms": 900
   },
@@ -2344,7 +2386,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "ec2c9d879c3176bf43652040e3ad6641395754cb7c3761af8a62b359d7f3708f",
+   "sha256": "efc03abd234b5004bc5091d8212b811aba5af5fafec616bdcf380ce400f16f07",
    "source": "m3.mission3_ending_shots[0] scene=m3_end_studio",
    "t_ms": 1800
   },
@@ -2358,7 +2400,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "db572505b18d800ffabdef5dcfd47e4e7daf0abab43047fe9196377dcea1b3b3",
+   "sha256": "927cf1d36400f25f24c289f3c8ad4a8948382b2101e99340c80c836ed928f4f1",
    "source": "m3.mission3_ending_shots[0] scene=m3_end_studio",
    "t_ms": 2700
   },
@@ -2372,7 +2414,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "3b13ef7f345fe0f034e7ac2255b48dae4bf1eec0de924a6eb173f83e2794d00f",
+   "sha256": "5c9055a430b848c5d998e9fc031f41e54d4d93f21c0e8ad806b23711a562d713",
    "source": "m3.mission3_ending_shots[1] scene=m3_end_cut",
    "t_ms": 800
   },
@@ -2386,7 +2428,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "538e9c0a9f295a3fc5bbf41bc2337e7e478a8a9d7733354a73eabde4bc0c536e",
+   "sha256": "a7f76ba171c35c64d73677f541a3b4567a3dd650d3a82cf0003163865f4e391c",
    "source": "m3.mission3_ending_shots[1] scene=m3_end_cut",
    "t_ms": 1600
   },
@@ -2400,7 +2442,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "538e9c0a9f295a3fc5bbf41bc2337e7e478a8a9d7733354a73eabde4bc0c536e",
+   "sha256": "a7f76ba171c35c64d73677f541a3b4567a3dd650d3a82cf0003163865f4e391c",
    "source": "m3.mission3_ending_shots[1] scene=m3_end_cut",
    "t_ms": 2400
   },
@@ -2414,7 +2456,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "03f36a6475f157cab2e03c7f51e838522559ced69ebddf86dbaa05c76325e831",
+   "sha256": "012a3fcdad3ff65faefd054239b2f3a431011678b54ae15c064582abf3c27bda",
    "source": "m3.mission3_ending_shots[2] scene=m3_end_nation",
    "t_ms": 1050
   },
@@ -2428,7 +2470,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "2ac991dce13f6c53acf70f9ee4014b1a8f7a2df2209b2cc69b4367eeefe87a1e",
+   "sha256": "d730f51505c0ad28cc53d2e8d60e1358b968c5454cba16bf187e9f655acf14cc",
    "source": "m3.mission3_ending_shots[2] scene=m3_end_nation",
    "t_ms": 2100
   },
@@ -2442,7 +2484,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "dca8a280656455f4c55487f9e265d966da004329fc0ad6f901703ea5de61aaf9",
+   "sha256": "490e13c14f8e22e1e0c8c66592861b05323738576e175e18b51911ae5b7b5e66",
    "source": "m3.mission3_ending_shots[2] scene=m3_end_nation",
    "t_ms": 3150
   },
@@ -2456,7 +2498,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "a9cc768d8a8406d547723c8af91e491fbceaaf214e182b6957791601c243bb59",
+   "sha256": "5351973771933f53bd4b185cc54dcc9adf14fb9bf13757744e552715413223db",
    "source": "m3.mission3_ending_shots[3] scene=m3_end_booth_dark",
    "t_ms": 850
   },
@@ -2470,7 +2512,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "9fa55f9b763a9fdf9878d30f85e9338c5537528fdc0cbe4337d5f7ba6e9a18f6",
+   "sha256": "5700cba282171235c963214fead1191557a4c9d99f2a49124614f538852571dc",
    "source": "m3.mission3_ending_shots[3] scene=m3_end_booth_dark",
    "t_ms": 1700
   },
@@ -2484,7 +2526,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "afa9e9dfa080c6d72947fa75b21978922bcac60a94254f7cb30966df993e31e9",
+   "sha256": "c3a81dd8784344b545691e4679091720c87ea8fa0d57f2f26eb207252520d1d3",
    "source": "m3.mission3_ending_shots[3] scene=m3_end_booth_dark",
    "t_ms": 2550
   },
@@ -2624,9 +2666,9 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "e2fef4eecadc5332645a7f69b7bf0db7840d734e215446a77245d05635c55395",
+   "sha256": "7fc2ac8e4cbb1085393540ca83403ec3bd2ded19c0bde3231cf87334b588fb8e",
    "source": "m3.mission3_intro_shots[2] scene=interrogation_room",
-   "t_ms": 827
+   "t_ms": 550
   },
   "cut.m3.mission3_intro_shots.02_interrogation_room.t50": {
    "id": "cut.m3.mission3_intro_shots.02_interrogation_room.t50",
@@ -2638,9 +2680,9 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "fd8fa8919ded5ed6a0b42b7eb1ceb534bc6e83628f5ee63cca336aa0948b889c",
+   "sha256": "38e65f204e7e4370aa88d0a1eefeba25aed2d71df0e0d839f0167cdde3321f64",
    "source": "m3.mission3_intro_shots[2] scene=interrogation_room",
-   "t_ms": 1654
+   "t_ms": 1100
   },
   "cut.m3.mission3_intro_shots.02_interrogation_room.t75": {
    "id": "cut.m3.mission3_intro_shots.02_interrogation_room.t75",
@@ -2652,8 +2694,50 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "5402fee4f22844f9dc0a297ea4d7eaf08b703958105930844e1f1ec3d6bff888",
+   "sha256": "b763614a5e0c595b7a69502313fc320259d702359a4d0a26970261976fc33d7d",
    "source": "m3.mission3_intro_shots[2] scene=interrogation_room",
+   "t_ms": 1650
+  },
+  "cut.m3.mission3_intro_shots.03_interrogation_room.t25": {
+   "id": "cut.m3.mission3_intro_shots.03_interrogation_room.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "9f563e28290816a608571fe729f99eeab8047cda8d4d1f7851a61a92e01146f7",
+   "source": "m3.mission3_intro_shots[3] scene=interrogation_room",
+   "t_ms": 827
+  },
+  "cut.m3.mission3_intro_shots.03_interrogation_room.t50": {
+   "id": "cut.m3.mission3_intro_shots.03_interrogation_room.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "f245ef8893f44baae60fc15c060c3c88cc023c4a621f04e4bb4dab501201c7ee",
+   "source": "m3.mission3_intro_shots[3] scene=interrogation_room",
+   "t_ms": 1654
+  },
+  "cut.m3.mission3_intro_shots.03_interrogation_room.t75": {
+   "id": "cut.m3.mission3_intro_shots.03_interrogation_room.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "d13d70e2a468475cd0710ffd71a27bb718526c2250b17d295ec7c5d0e3c26873",
+   "source": "m3.mission3_intro_shots[3] scene=interrogation_room",
    "t_ms": 2481
   },
   "cut.m3.mission3_intro_shots.03_monitor_broadcast.t25": {
@@ -2740,6 +2824,90 @@
    "source": "m3.mission3_intro_shots[4] scene=interrogation_room",
    "t_ms": 2400
   },
+  "cut.m3.mission3_intro_shots.04_monitor_broadcast.t25": {
+   "id": "cut.m3.mission3_intro_shots.04_monitor_broadcast.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "4b7658e6d2814c793aff906c849bf388b999bbb96d67ab0112457249fab5ab18",
+   "source": "m3.mission3_intro_shots[4] scene=monitor_broadcast",
+   "t_ms": 800
+  },
+  "cut.m3.mission3_intro_shots.04_monitor_broadcast.t50": {
+   "id": "cut.m3.mission3_intro_shots.04_monitor_broadcast.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "076f248013c032f82ec7a79c3d9dd76bf0ea0cdd16e85f48c1425c4526d0aa11",
+   "source": "m3.mission3_intro_shots[4] scene=monitor_broadcast",
+   "t_ms": 1600
+  },
+  "cut.m3.mission3_intro_shots.04_monitor_broadcast.t75": {
+   "id": "cut.m3.mission3_intro_shots.04_monitor_broadcast.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "3762727a78aa551788a0227aa860accf04455090187d52088695668ba40dba73",
+   "source": "m3.mission3_intro_shots[4] scene=monitor_broadcast",
+   "t_ms": 2400
+  },
+  "cut.m3.mission3_intro_shots.05_interrogation_room.t25": {
+   "id": "cut.m3.mission3_intro_shots.05_interrogation_room.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "e9fe0874657b1f68689639019340c14108d29451df08b724cf886f2e4e0d7eb3",
+   "source": "m3.mission3_intro_shots[5] scene=interrogation_room",
+   "t_ms": 800
+  },
+  "cut.m3.mission3_intro_shots.05_interrogation_room.t50": {
+   "id": "cut.m3.mission3_intro_shots.05_interrogation_room.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "3565fec3aaccaa859ed6dfc51f0f84c70640ad274792fb5ce3b2d8f710ec04c7",
+   "source": "m3.mission3_intro_shots[5] scene=interrogation_room",
+   "t_ms": 1600
+  },
+  "cut.m3.mission3_intro_shots.05_interrogation_room.t75": {
+   "id": "cut.m3.mission3_intro_shots.05_interrogation_room.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "a37ea150740de30d74325062340e8e9e37b5f4a80fc5d8283d88157d59520a21",
+   "source": "m3.mission3_intro_shots[5] scene=interrogation_room",
+   "t_ms": 2400
+  },
   "cut.m3.mission3_intro_shots.05_title_card.t25": {
    "id": "cut.m3.mission3_intro_shots.05_title_card.t25",
    "kind": "cutscene",
@@ -2780,6 +2948,48 @@
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
    "sha256": "8c9b5f84a1a4d2c3769ce97ac0fb5d872d1a3fddab8b94ed4a59f727ea769c12",
    "source": "m3.mission3_intro_shots[5] scene=title_card",
+   "t_ms": 1350
+  },
+  "cut.m3.mission3_intro_shots.06_title_card.t25": {
+   "id": "cut.m3.mission3_intro_shots.06_title_card.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "cc02eccbd5f483d74b1aeb713536d6b93ae01d4d1d3d124c2fa22c85e00af550",
+   "source": "m3.mission3_intro_shots[6] scene=title_card",
+   "t_ms": 450
+  },
+  "cut.m3.mission3_intro_shots.06_title_card.t50": {
+   "id": "cut.m3.mission3_intro_shots.06_title_card.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "8c9b5f84a1a4d2c3769ce97ac0fb5d872d1a3fddab8b94ed4a59f727ea769c12",
+   "source": "m3.mission3_intro_shots[6] scene=title_card",
+   "t_ms": 900
+  },
+  "cut.m3.mission3_intro_shots.06_title_card.t75": {
+   "id": "cut.m3.mission3_intro_shots.06_title_card.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "8c9b5f84a1a4d2c3769ce97ac0fb5d872d1a3fddab8b94ed4a59f727ea769c12",
+   "source": "m3.mission3_intro_shots[6] scene=title_card",
    "t_ms": 1350
   },
   "cut.m3.service_transition_shots.00_m3_service_door_transition.t25": {
@@ -2834,7 +3044,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "820e93fc356f51411f6b8e9b009d452bf04fa92eff6b1af19f14b9f7d221a679",
+   "sha256": "3765f10bff92b072f5ac7d6d17aa10a247009479066fb18198a3bfb40706b95b",
    "source": "m3.service_transition_shots[1] scene=m3_volkov_radio_call",
    "t_ms": 687
   },
@@ -2848,7 +3058,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "930564736b2b476ade59bdfe8953a8a6a9b1d0454d6eba86f821bd48a471bdd1",
+   "sha256": "9abff2988785b9c20fc38529343fef22f8b52c1e64e73ea083e3bb69541af4b8",
    "source": "m3.service_transition_shots[1] scene=m3_volkov_radio_call",
    "t_ms": 1374
   },
@@ -2862,7 +3072,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "569875afa263e3e8c8edb0e3cb45c332e9b2c6522fe57ce2b45281ecea39e22f",
+   "sha256": "318ef391d5772d6aa79f437c1c3d583617a99a91578b0b5fa004931482a78b82",
    "source": "m3.service_transition_shots[1] scene=m3_volkov_radio_call",
    "t_ms": 2061
   },
@@ -3464,7 +3674,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "09b2dbf9b32b267bdf8a2927383b497f942b73ed2de51443796c6da3eca0983b",
+   "sha256": "f8e9e1398e76657d19954df58b7f7a1845b761ddbea3b98a26973cc5f73e4ba0",
    "source": "m4.mission4_intro_shots[0] scene=m3_end_nation",
    "t_ms": 950
   },
@@ -3478,7 +3688,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "c9af8e9617c110fcff1ba5efb6459907ab364d108f880529c50bfc39f86b5388",
+   "sha256": "5858f4818ebcba234953dcfabf6536079e1db5c5fc10dfd56cfaa7643b90f001",
    "source": "m4.mission4_intro_shots[0] scene=m3_end_nation",
    "t_ms": 1900
   },
@@ -3492,7 +3702,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "e333bf8fcf6792be21917c75f0be7e0e4e6a5668e4557ffc822ba023254a5b53",
+   "sha256": "c18ded755e55e3b7e4e49046e67a0840d997d81c5ce5abb053507d337546cc52",
    "source": "m4.mission4_intro_shots[0] scene=m3_end_nation",
    "t_ms": 2850
   },
@@ -5060,7 +5270,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "b804700d6a680acd834207b13a86b520674d1ab82872000da28e51a95876bcee",
+   "sha256": "5dbe90573dbb4237628bfcce0de83860968bb083e29c104d7bff9f91b9323bd1",
    "source": "ae_golden:m4.street",
    "t_ms": null
   },
@@ -5074,7 +5284,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "01a1169f607c01e6ece3b9e19970788a68343dfbd501d4848b18edb6a932e70f",
+   "sha256": "3cd2fd8329a9bc511c7aa51eb41fc7d60b91044aaaa37e23c6b1697af494fb6a",
    "source": "ae_golden:m4.street_east",
    "t_ms": null
   },
@@ -5102,7 +5312,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "ca598306eef9a1dd76231e5c2abc8141b6af748dda2b2dfa7a5a0a405fa7dc37",
+   "sha256": "eb2e98145ef3f8e8c88c6ab1483e945047898e468eecc4c985b6bea04aa52d03",
    "source": "m5 gauntlet td:hq_east",
    "t_ms": null
   },
@@ -5130,7 +5340,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "8551fb7919ef68ea462cea0efa0a57aa6942186b06c266a1d70c793ee060adfc",
+   "sha256": "51602454d61a88c0f2b74d52d8c09058f92f14e78dadc426d283c945d6b510ff",
    "source": "m5 gauntlet td:hq_west",
    "t_ms": null
   },
