@@ -10,10 +10,11 @@ State is module-owned and rebuilt on every ``init_stage`` so a checkpoint
 reload or stage retry always starts the arena fresh.
 """
 import math
+import random
 
 import pygame
 
-from core.config import TILE_SIZE, WIDTH, HEIGHT, font_terminal_small
+from core.config import TILE_SIZE, WIDTH, HEIGHT
 from core.state import STATE
 from core import artpack
 from fx import effects
@@ -28,8 +29,16 @@ DRUM_SIZE = 28
 DRUM_RADIUS = 120
 TANKER_RADIUS = 230
 TANKER_HITS = 6
-TANKER_RECT = (1, 12, 5, 3)          # customs tiles, matches the map footprint
+TANKER_RECT = (23, 12, 5, 3)         # customs tiles, matches the map footprint
 CHAIN_DELAY = 0.16
+
+# The burning pool a drum leaves behind is NOT the M2 molotov patch: a drum
+# is 30 litres of fuel going up, so it burns wide, hot and briefly, and the
+# tanker (a road tanker) burns much wider.  (radius px, life frames, damage
+# tick: near / far)
+DRUM_FIRE = (96, 210, (26, 13))
+TANKER_FIRE = (150, 300, (30, 15))
+TANKER_RING = 5          # satellite pools flung around a tanker blast
 
 _stage = None
 _waves = ()
@@ -39,15 +48,17 @@ _loud = False
 _drums = []
 _tanker = None
 _pending = []           # [delay_s, x, y, radius, power]
-_scorch = []            # (x, y, big)
+_scorch = []            # (x, y, radius, big)
 _events = set()
 _t = 0.0
+_peak = 0               # most hostiles seen at once: the plate's bar is 1 - left/peak
 
 
 def init_stage(stage):
     """Bind the arena: waves, drums (solid rects in STATE.walls), tanker."""
-    global _stage, _waves, _next, _clock, _loud, _tanker, _t
+    global _stage, _waves, _next, _clock, _loud, _tanker, _t, _peak
     _stage = stage
+    _peak = 0
     _waves = ARENA_WAVES.get(stage, ())
     _next = 0
     _clock = 0.0
@@ -265,12 +276,21 @@ def _explode(x, y, radius, power):
             _detonate_drum(d, CHAIN_DELAY)
     fires = getattr(STATE, "fire_zones", None)
     if fires is not None:
-        fires.append(FireZone(x, y))
+        radius_f, life_f, dmg_f = TANKER_FIRE if power > 1.5 else DRUM_FIRE
+        fires.append(FireZone(x, y, radius=radius_f, life=life_f, damage=dmg_f,
+                              outline=False))
         if power > 1.5:
-            for a in range(4):
-                ang = a * math.pi / 2 + 0.4
-                fires.append(FireZone(x + math.cos(ang) * 90, y + math.sin(ang) * 60))
-    _scorch.append((x, y, power > 1.5))
+            # Fuel thrown clear: pools around the tanker, sized off its own
+            # fire rather than M2's molotov spread, and nudged off the
+            # cardinal axes so it reads as a splash and not a plus sign.
+            step = radius_f * 0.62
+            for a in range(TANKER_RING):
+                ang = a * (math.pi * 2 / TANKER_RING) + 0.4
+                fires.append(FireZone(
+                    x + math.cos(ang) * step, y + math.sin(ang) * step * 0.72,
+                    radius=int(radius_f * 0.5), life=int(life_f * 0.62),
+                    damage=dmg_f, outline=False))
+    _scorch.append((x, y, radius, power > 1.5))
     effects.shake(14 if power > 1.5 else 8)
     effects.burst(x, y, (255, 168, 72), 26 if power > 1.5 else 16, speed_mul=1.6)
     effects.burst(x, y, (60, 56, 52), 12, speed_mul=0.9)
@@ -364,19 +384,15 @@ def drawables(cam_x, cam_y):
 
 
 def _tanker_drawable(cam_x, cam_y):
+    """The yard fuel tank, painted by ``decor`` (M6's own art, not M2's)."""
     r = _tanker["rect"]
-    key = "tanker" if _tanker["alive"] else "tanker_wreck"
-    img = artpack.vehicle(key)
+    from . import decor as _decor
+    img = _decor.fuel_tank_surface(r.w, r.h, alive=_tanker["alive"])
     flash = _tanker["flash"] > 0
 
     def draw(s):
-        if img is None:
-            pygame.draw.rect(s, (14, 14, 16), r.move(-cam_x, -cam_y))
-            pygame.draw.rect(s, (150, 150, 140) if _tanker["alive"] else (52, 46, 42),
-                             r.move(-cam_x, -cam_y).inflate(-4, -4))
-            return
-        w, h = img.get_size()
-        pos = (int(r.centerx - cam_x - w // 2), int(r.bottom - cam_y - h))
+        pos = (int(r.centerx - cam_x - img.get_width() // 2),
+               int(r.bottom - cam_y - img.get_height()))
         s.blit(img, pos)
         if flash:
             s.blit(img, pos, special_flags=pygame.BLEND_RGB_ADD)
@@ -386,26 +402,85 @@ def _tanker_drawable(cam_x, cam_y):
 _SCORCH_CACHE = {}
 
 
-def _scorch_surface(big):
-    if big in _SCORCH_CACHE:
-        return _SCORCH_CACHE[big]
-    img = artpack.fx("scorch")
+_MASK = {}
+
+
+def _radial_mask(size):
+    """Soft oval alpha falloff, cached per size."""
+    mask = _MASK.get(size)
+    if mask is not None:
+        return mask
+    w, h = size
+    mask = pygame.Surface(size, pygame.SRCALPHA)
+    cx, cy = w / 2.0, h / 2.0
+    steps = 18
+    for i in range(steps, 0, -1):
+        k = i / float(steps)
+        a = int(255 * (k ** 2.6))
+        rect = pygame.Rect(0, 0, int(w * k), int(h * k))
+        rect.center = (int(cx), int(cy))
+        pygame.draw.ellipse(mask, (255, 255, 255, a), rect)
+    _MASK[size] = mask
+    return mask
+
+
+SCORCH_SPAN = 2.4        # scorch width, in blast radii
+
+
+def _scorch_surface(radius, big):
+    """Burnt ground sized off the blast, not off the art it was cut from.
+
+    ``artpack.fx("scorch")`` is a full-screen M2 decal (1458 px, a dark oval
+    with its own rim).  Stamped at 1x under a drum whose damaging radius is
+    120 px it drew a burn four screen-widths across - which is what made a
+    drum going up read as an M2 molotov, not an M6 blast.  A drum's burn is
+    now drawn procedural at the blast radius: an irregular, feathered patch
+    with grit around it, in the same flat language as the rest of M6.
+    """
+    key = (int(radius) // 8, big)
+    img = _SCORCH_CACHE.get(key)
     if img is not None:
-        w, h = img.get_size()
-        k = 2.0 if big else 1.0
-        img = pygame.transform.scale(img, (int(w * k), int(h * k)))
-    else:
-        n = 180 if big else 96
-        img = pygame.Surface((n, n // 2), pygame.SRCALPHA)
-        pygame.draw.ellipse(img, (10, 10, 12, 170), img.get_rect())
-    _SCORCH_CACHE[big] = img
+        return img
+    span = max(48, int(radius * SCORCH_SPAN) // 8 * 8)
+    h = max(24, int(span * 0.62))
+    ss = 2                                   # build big, shrink once: soft edge
+    surf = pygame.Surface((span * ss, h * ss), pygame.SRCALPHA)
+    rng = random.Random((int(radius) * 31) ^ (1 if big else 0))
+    cx, cy = surf.get_width() / 2.0, surf.get_height() / 2.0
+    rx, ry = surf.get_width() * 0.46, surf.get_height() * 0.44
+
+    def blob(k):
+        pts = []
+        for i in range(22):
+            ang = i / 22.0 * math.pi * 2
+            j = 1.0 + rng.uniform(-0.22, 0.22)
+            pts.append((cx + math.cos(ang) * rx * k * j,
+                        cy + math.sin(ang) * ry * k * j))
+        return pts
+
+    for i in range(6):                       # nested low-alpha: soft edge
+        k = 1.0 - i * 0.09
+        pygame.draw.polygon(surf, (12, 11, 12, 22), blob(k))
+    pygame.draw.polygon(surf, (7, 6, 7, 30), blob(0.5))
+    for _ in range(26):                      # grit and embers thrown clear
+        ang = rng.uniform(0, math.pi * 2)
+        rr = rng.uniform(0.62, 0.96)
+        px = cx + math.cos(ang) * rx * rr
+        py = cy + math.sin(ang) * ry * rr
+        n = rng.choice((2, 2, 3, 4)) * ss
+        pygame.draw.rect(surf, (14, 12, 12, rng.randrange(90, 190)),
+                         (int(px), int(py), n, max(2, n // 2)))
+    surf.blit(_radial_mask(surf.get_size()), (0, 0),
+              special_flags=pygame.BLEND_RGBA_MULT)
+    img = pygame.transform.smoothscale(surf, (span, h))
+    _SCORCH_CACHE[key] = img
     return img
 
 
 def draw_ground(surface, cam_x, cam_y):
     """Blast scorches, under actors."""
-    for x, y, big in _scorch:
-        img = _scorch_surface(big)
+    for x, y, radius, big in _scorch:
+        img = _scorch_surface(radius, big)
         w, h = img.get_size()
         surface.blit(img, (int(x - cam_x - w // 2), int(y - cam_y - h // 2)))
 
@@ -430,25 +505,25 @@ def extra_lamps():
 
 
 def draw_hud(surface):
-    """Wave chip, top centre, only on arena stages."""
+    """Wave status in M5's status plate (top strip), only on arena stages."""
+    global _peak
     if not _waves:
         return
+    from missions.m5.draw import _draw_m5_plate  # lazy: the campaign's shared plate
     done, total = wave_progress()
     left = remaining()
+    _peak = max(_peak, left)
     if left <= 0:
-        label, col = "AREA CLEAR - MOVE", (150, 214, 150)
-    elif done == 0 and not _loud:
-        label, col = "SQUAD DUG IN  -  WAVE 0/%d" % total, (214, 196, 150)
+        title, col, fill, right, frac = ("AREA CLEAR  -  MOVE OUT", (150, 214, 150),
+                                         (96, 190, 120), "0", 1.0)
     else:
-        label, col = "WAVE %d/%d  -  HOSTILES %d" % (done, total, left), (236, 148, 74)
-    txt = font_terminal_small.render(label, True, col)
-    w, h = txt.get_width() + 20, 24
-    x, y = (WIDTH - w) // 2, 66
-    panel = pygame.Surface((w, h), pygame.SRCALPHA)
-    panel.fill((8, 10, 14, 214))
-    pygame.draw.rect(panel, col, panel.get_rect(), 1)
-    panel.blit(txt, (10, (h - txt.get_height()) // 2))
-    surface.blit(panel, (x, y))
+        if done == 0 and not _loud:
+            title, col = "SQUAD DUG IN  -  WAVE 0/%d" % total, (214, 196, 150)
+        else:
+            title, col = "WAVE %d/%d" % (done, total), (236, 148, 74)
+        fill, right = (220, 160, 40), str(left)
+        frac = 1.0 - left / float(max(1, _peak))
+    _draw_m5_plate(surface, title, col, frac, fill, right)
 
 
 ARENA_STAGES = (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL)

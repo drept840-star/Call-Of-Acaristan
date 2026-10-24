@@ -72,7 +72,7 @@ RAIL_DETECTOR_TILES = ((41, 8), (4, 6))   # signal tower + platform lamp
 # the fight is loud, whichever is first.  The exit opens only when every wave
 # has come and nobody is left standing.
 SQUAD_KINDS = {
-    STAGE_CUSTOMS: {(11, 10): "marksman", (25, 12): "raider"},
+    STAGE_CUSTOMS: {(10, 13): "marksman", (21, 16): "raider"},
     STAGE_NOMAN: {(17, 3): "marksman", (23, 3): "marksman", (17, 7): "raider"},
     STAGE_RAIL: {(38, 6): "marksman", (16, 7): "marksman", (35, 17): "raider"},
 }
@@ -92,7 +92,7 @@ ARENA_WAVES = {
         {"living": 2, "after": 26.0, "event": "truck",
          "radio": ("MARU", "Truck at the gate. They brought friends."),
          "units": (("guard", 14, 1), ("guard", 16, 2), ("marksman", 22, 3),
-                   ("raider", 21, 2), ("guard", 18, 2))},
+                   ("raider", 21, 2), ("guard", 18, 3))},
     ),
     STAGE_NOMAN: (
         {"living": 2, "after": 24.0, "event": None,
@@ -119,7 +119,7 @@ ARENA_WAVES = {
 
 # Fuel drums: shoot one and everything near it burns.  Never on a wave tile.
 ARENA_DRUMS = {
-    STAGE_CUSTOMS: ((6, 13), (23, 2), (12, 8), (16, 13), (27, 11), (8, 17)),
+    STAGE_CUSTOMS: ((6, 13), (23, 2), (12, 8), (16, 13), (24, 11), (8, 17)),
     STAGE_NOMAN: ((19, 8), (21, 3), (12, 12), (28, 12), (6, 3)),
     STAGE_RAIL: ((14, 12), (19, 15), (33, 14), (27, 8), (9, 5), (35, 19)),
 }

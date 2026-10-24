@@ -122,6 +122,11 @@ def _initialize_m6(preserve_timer=False):
 
     STATE.k9_unlocked = True
     STATE.current_weapon = "k9_smg"
+    # The melee enum the shared weapon helpers read: without it every M6 run
+    # (and every checkpoint, since STATE.reset() clears it) opened on the
+    # pistol butt - 18 frames, 78 damage - instead of the K-9 buttstroke the
+    # other missions play.  M5 sets the same value when it boots.
+    STATE.mission3_weapon = "k9_smg"
     STATE.k9_ammo_in_mag = STATE.k9_mag_size
     STATE.k9_spare_mags = 3
     STATE.player_disarmed = False

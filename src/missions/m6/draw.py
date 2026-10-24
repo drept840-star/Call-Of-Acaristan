@@ -79,9 +79,8 @@ def _draw_guard(surface, enemy, cam_x, cam_y):
     if not (-60 < x < WIDTH + 60 and -60 < y < HEIGHT + 60):
         return
     from missions.m5.draw import _draw_m5_guard  # lazy: shared campaign Guard art
-    # Black kit on night snow vanished; a hard pale disc gives the silhouette
-    # something to read against even under the light multiply.
-    surface.blit(_GUARD_DISC, (x - 21, y - 21))
+    # No halo and no hostile ring here: the Guard reads off his own contact
+    # shadow (drawn by the shared art) plus the snow, exactly like M4/M5.
     _draw_m5_guard(surface, enemy, cam_x, cam_y)
     left = _world.entering(enemy)
     if left > 0.0:
@@ -91,28 +90,12 @@ def _draw_guard(surface, enemy, cam_x, cam_y):
             _entry_puff(surface, x, y, k, getattr(enemy, "uid", 0))
         return
     if getattr(enemy, "alerted", False):
+        # Alerted is a state, not a bullseye: a small amber pip over the head,
+        # the same grammar the other missions use for a live contact.
         t = _now_ms() / 1000.0
-        a = 0.5 + 0.5 * math.sin(t * 7.0)
-        pygame.draw.circle(surface, (230, 96, 70),
-                           (x, y - 25), 2, max(1, int(1 + a)))
-
-
-_GUARD_DISC = pygame.Surface((42, 42), pygame.SRCALPHA)
-pygame.draw.circle(_GUARD_DISC, (206, 216, 232, 96), (21, 21), 20)
-pygame.draw.circle(_GUARD_DISC, (232, 238, 248, 150), (21, 21), 20, 2)
-
-
-def _draw_guard_marks(surface, cam_x, cam_y):
-    """Post-light hostile ring: drawn after the multiply so it stays crisp."""
-    for e in getattr(STATE, "enemies", []):
-        if e.hp <= 0 or _world.entering(e) > 0.0:
-            continue
-        x = int(e.rect.centerx - cam_x)
-        y = int(e.rect.centery - cam_y)
-        if not (-30 < x < WIDTH + 30 and -30 < y < HEIGHT + 30):
-            continue
-        col = (255, 92, 70) if getattr(e, "alerted", False) else (214, 64, 54)
-        pygame.draw.circle(surface, col, (x, y), 21, 2)
+        a = 0.55 + 0.45 * math.sin(t * 7.0)
+        pygame.draw.circle(surface, (236, 176, 84),
+                           (x, y - 27), max(1, int(round(1.2 + a))), 0)
 
 
 def _entry_puff(surface, x, y, k, seed):
@@ -145,6 +128,27 @@ def _draw_volkov(surface, v, cam_x, cam_y):
     surface.blit(_volkov_pose(right), (x - _ANCHOR[0], y - _ANCHOR[1]))
     tag = font_terminal_small.render("VOLKOV", True, (214, 188, 146))
     surface.blit(tag, (x - tag.get_width() // 2, y - 44 - tag.get_height()))
+
+
+def _melee_progress():
+    """0..1 swing progress from the real swing length, like M4/M5.
+
+    ``weapons.handle_melee`` already stores ``STATE.melee_duration`` (it picks
+    a different length for the K-9 buttstroke than for the pistol); M6 used to
+    pass no progress at all, so ``Player.draw`` held the arm at the swing's
+    first frame and the melee read as a frozen twitch instead of the
+    buttstroke the other missions play.
+    """
+    if not getattr(STATE, "melee_active", False) or getattr(STATE, "melee_timer", 0) <= 0:
+        return 0.0
+    dur = max(1.0, float(getattr(STATE, "melee_duration", 18)))
+    return max(0.0, min(1.0, 1.0 - STATE.melee_timer / dur))
+
+
+def _player_is_moving():
+    k = _maps._last_keys
+    return bool(k) and (k[pygame.K_w] or k[pygame.K_s] or k[pygame.K_a]
+                        or k[pygame.K_d]) and not _world._movement_locked()
 
 
 def _scene_drawables(surface, cam_x, cam_y):
@@ -181,6 +185,8 @@ def _scene_drawables(surface, cam_x, cam_y):
                             if getattr(STATE, "is_reloading", False) else 0.0,
                             no_gun=getattr(STATE, "player_disarmed", False),
                             melee_active=getattr(STATE, "melee_active", False),
+                            melee_progress=_melee_progress(),
+                            is_moving=_player_is_moving(),
                         )))
 
     out.sort(key=lambda item: item[0])
@@ -205,8 +211,19 @@ def _draw_beacon(surface, cam_x, cam_y):
     x, y = int(pos[0] - cam_x), int(pos[1] - cam_y)
     if not (-40 < x < WIDTH + 40 and -40 < y < HEIGHT + 40):
         return
+    if not _combat.cleared():
+        # Locked: a steady dim red ring and a padlock, no pulse.
+        red = (190, 66, 56)
+        pygame.draw.circle(surface, (10, 12, 16), (x, y), 15, 4)
+        pygame.draw.circle(surface, red, (x, y), 14, 2)
+        pygame.draw.rect(surface, (10, 12, 16), (x - 6, y - 1, 12, 9))
+        pygame.draw.rect(surface, red, (x - 5, y, 10, 7))
+        pygame.draw.lines(surface, red, False,
+                          [(x - 3, y), (x - 3, y - 5), (x + 3, y - 5), (x + 3, y)], 1)
+        return
     t = _now_ms() / 1000.0
     r = 13 + int(4 * (0.5 + 0.5 * math.sin(t * 3.2)))
+    pygame.draw.circle(surface, (10, 12, 16), (x, y), r + 1, 4)
     pygame.draw.circle(surface, (216, 182, 78), (x, y), r, 2)
     pygame.draw.circle(surface, (246, 222, 140), (x, y), 2)
 
@@ -216,17 +233,90 @@ def _draw_pickup(surface, pu, cam_x, cam_y):
     if not (-40 < x < WIDTH + 40 and -40 < y < HEIGHT + 40):
         return
     kind = pu[2] if len(pu) > 2 else "bandage"
+    ink = (10, 12, 16)
     if kind == "bandage":
+        pygame.draw.ellipse(surface, (6, 8, 12), (x - 10, y + 3, 22, 8))
+        pygame.draw.rect(surface, ink, (x - 10, y - 8, 20, 16), border_radius=4)
         pygame.draw.rect(surface, (222, 226, 224), (x - 9, y - 7, 18, 14),
                          border_radius=3)
         pygame.draw.rect(surface, (200, 70, 70), (x - 2, y - 6, 4, 12))
         pygame.draw.rect(surface, (200, 70, 70), (x - 6, y - 2, 12, 4))
         return
     body = pygame.Rect(x - 6, y - 12, 12, 24)
+    pygame.draw.ellipse(surface, (6, 8, 12), (x - 9, y + 7, 20, 8))
+    pygame.draw.rect(surface, ink, body.inflate(2, 2), border_radius=3)
     pygame.draw.rect(surface, (34, 40, 42), body, border_radius=2)
     pygame.draw.rect(surface, (96, 120, 116), body, 1, border_radius=2)
     for ri in range(4):
         pygame.draw.circle(surface, (210, 178, 70), (x, body.y + 4 + ri * 5), 2)
+
+
+def _draw_pickup_mark(surface, pu, cam_x, cam_y):
+    """Four hard corner ticks round a pickup, painted after the light pass so
+    a loot drop reads in the dark."""
+    x, y = int(pu[0] - cam_x), int(pu[1] - cam_y)
+    if not (-40 < x < WIDTH + 40 and -40 < y < HEIGHT + 40):
+        return
+    kind = pu[2] if len(pu) > 2 else "bandage"
+    col = (118, 226, 168) if kind == "bandage" else (240, 204, 92)
+    r = 15 + int((_now_ms() // 260) % 2)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            cx, cy = x + sx * r, y + sy * r
+            pygame.draw.line(surface, col, (cx, cy), (cx - sx * 4, cy), 1)
+            pygame.draw.line(surface, col, (cx, cy), (cx, cy - sy * 4), 1)
+
+
+def _draw_iff_lamps(surface, cam_x, cam_y, stage):
+    """The squad's red IFF lamp on every living Guard, painted after the light
+    pass: a Guard in the dark is still a red pin, not a dark smudge.  Skipped
+    when a tall prop is in front of him, so it never leaks a Guard through a
+    boxcar."""
+    for e in getattr(STATE, "enemies", []):
+        if e.hp <= 0 or _world.entering(e) > 0.0:
+            continue
+        x = int(e.rect.centerx - cam_x)
+        y = int(e.rect.centery - cam_y)
+        if not (-10 < x < WIDTH + 10 and -10 < y < HEIGHT + 10):
+            continue
+        if _decor.hides(stage, e.rect.centerx, e.rect.centery):
+            continue
+        px = x - int(math.cos(e.angle) * 7)
+        py = y - int(math.sin(e.angle) * 7) - 1
+        bright = int(_now_ms() / 600 + getattr(e, "uid", 0)) % 2 == 0
+        pygame.draw.circle(surface, (10, 12, 16), (px, py), 3)
+        pygame.draw.circle(surface, (232, 62, 52), (px, py), 2)
+        if bright:
+            pygame.draw.circle(surface, (255, 178, 150), (px, py), 1)
+
+
+def _draw_exit_lamps(surface, cam_x, cam_y, stage):
+    """Two status lamps on the exit's steel plate: red and blinking while
+    Guards remain, steady green once the way is open."""
+    if getattr(STATE, "m6_train_active", False):
+        return
+    pts = _decor.exit_lamps(stage)
+    if not pts:
+        return
+    opened = _combat.cleared()
+    col = (110, 232, 150) if opened else (232, 70, 58)
+    if not opened and int(_now_ms() / 420) % 2:
+        col = (96, 32, 28)
+    for wx, wy in pts:
+        x, y = int(wx - cam_x), int(wy - cam_y)
+        if -10 < x < WIDTH + 10 and -10 < y < HEIGHT + 10:
+            pygame.draw.circle(surface, (10, 12, 16), (x, y), 5)
+            pygame.draw.circle(surface, col, (x, y), 4)
+            pygame.draw.circle(surface, (255, 244, 230) if opened else (255, 150, 130),
+                               (x - 1, y - 1), 1)
+
+
+def _draw_emissives(surface, cam_x, cam_y, stage):
+    """Everything that glows on its own, after the light multiply."""
+    _draw_exit_lamps(surface, cam_x, cam_y, stage)
+    for pu in getattr(STATE, "pickups", []):
+        _draw_pickup_mark(surface, pu, cam_x, cam_y)
+    _draw_iff_lamps(surface, cam_x, cam_y, stage)
 
 
 def _draw_world_effects(surface, cam_x, cam_y):
@@ -410,26 +500,28 @@ def game_draw(fcx=0, fcy=0, surface=None):
 
     cam_x, cam_y = int(fcx), int(fcy)
     stage = getattr(STATE, "mission6_stage", STAGE_CUSTOMS)
-    target.fill(C_BG_GAME)
 
-    _decor.draw_ground(target, cam_x, cam_y, stage)
-    _combat.draw_ground(target, cam_x, cam_y)
-    _draw_beacon(target, cam_x, cam_y)
-    _draw_world_effects(target, cam_x, cam_y)
-    _scene_drawables(target, cam_x, cam_y)
-    _draw_muzzle_flash(target, cam_x, cam_y)
-    draw_bullets(target, getattr(STATE, "bullets", []), cam_x, cam_y, with_glow=True)
+    scene = target
+    scene.blit(_decor.void_surface(), (0, 0))
 
-    _decor.draw_over(target, cam_x, cam_y, stage)
-    _draw_guard_marks(target, cam_x, cam_y)
-    _stealth.draw_cones(target, cam_x, cam_y)
+    _decor.draw_ground(scene, cam_x, cam_y, stage)
+    _combat.draw_ground(scene, cam_x, cam_y)
+    _draw_beacon(scene, cam_x, cam_y)
+    _draw_world_effects(scene, cam_x, cam_y)
+    _scene_drawables(scene, cam_x, cam_y)
+    _draw_muzzle_flash(scene, cam_x, cam_y)
+    draw_bullets(scene, getattr(STATE, "bullets", []), cam_x, cam_y, with_glow=True)
+
+    _decor.draw_over(scene, cam_x, cam_y, stage)
+    _stealth.draw_cones(scene, cam_x, cam_y)
+    _draw_emissives(scene, cam_x, cam_y, stage)
 
     if STATE.player_dead:
         from entities import death_anim
-        death_anim.draw_death_overlay(target, cam_x, cam_y)
+        death_anim.draw_death_overlay(scene, cam_x, cam_y)
 
-    draw_vignette(target)
-    draw_scanlines(target)
+    draw_vignette(scene)
+    draw_scanlines(scene)
     _draw_hud(target, cam_x, cam_y)
     _draw_prompt(target)
     if STATE.player and not getattr(STATE, "m6_train_active", False):

@@ -49,11 +49,34 @@ budget_tokens: 2000
   then applies `life_pose` idle motion on top, so pass `amp=0.0` when the
   shoulder/optic contact must stay exact.
 
+- **M6 top-down dressing is baked, flat and gated by the grid.** Floor variety,
+  litter, steel plates and the exit thresholds live in `decor._floor_variety /
+  _litter / _flat_detail` and are painted into the cached ground surface (zero
+  per-frame cost). Litter only lands where `_open_spot` finds open floor, so a
+  flat item never reads as cover or collides. Per-frame additions (lamp
+  housings, IFF lamps, pickup ticks, exit lamps) draw after the light pass and
+  measured +1.1-1.4% frame time in an interleaved A/B (raw run-to-run noise on
+  this machine is +-30%, so never compare two separate bench runs).
+- **M6 Guards carry a red IFF lamp** (same as the 3D train Guards): drawn after
+  the light pass so a Guard in the dark stays a red pin; `decor.hides()` keeps it
+  from showing through a tall prop. The wave status uses M5's `_draw_m5_plate`
+  (slot x 214-554); the searchlight exposure chip sits right of it at x 562.
+
 ## Do-Not-Repeat
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
+- [2026-10-24] A "PS2 revert" request can already be undone: check
+  `git diff <pre-revert> HEAD` before restoring anything. 3260f70 dropped the 3D
+  PS2 path and 75294cd restored it; HEAD was byte-identical to 57acb6c.
+
 ## Decision Log
 
 <!-- Significant technical decisions with rationale. Why X was chosen over Y. -->
+
+- [2026-10-24] **3D PS2 kept, 2D PS2 dropped.** The 3D pipeline (engine3d, M5 3D
+  cutscenes + `cutscenes/ps2mat.py`, M6 yard3d/train3d/bloc3d, `m6films`,
+  `m6fx3d`, `m6world3d`) keeps the PS2 look. The top-down game never had a PS2
+  pipeline in history and must not get one: M6 top-down matches the house art
+  (art-pack tiles, hard edges, dark ambient), no pixel-art/affine/dither filter.

@@ -419,7 +419,7 @@ def draw_hud(surface):
     if exp <= 0.005 and not (alarmed and visible()):
         return
     w, h = 236, 44
-    x = (WIDTH - w) // 2
+    x = 562                      # right of the wave plate (x 214-554), left of the minimap
     y = 18
     panel = pygame.Surface((w, h), pygame.SRCALPHA)
     panel.fill((8, 10, 14, 214))
