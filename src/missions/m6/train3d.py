@@ -42,9 +42,8 @@ from engine3d import (
     rot_y, tex, v_add,
 )
 
-RES = 0.64                       # internal render scale: 640x448, the PS2 frame
+RES = 0.80                       # internal render scale, smooth upscale
 RW, RH = int(WIDTH * RES), int(HEIGHT * RES)
-DITHER_STEP = _fx.DITHER_STEP                  # the grade's ordered dither: 15-bit, 32 levels
 
 CONTROL_AT = 2.0
 SHOT_AT = 23.0
@@ -530,18 +529,43 @@ def _ease(u):
     return 1 - (1 - u) ** 3
 
 
-_BAYER4 = _fx._BAYER4
-_dither_lut = _fx.dither_lut
-_ink = _fx.ink
-_apply_lut = _fx.apply_lut
-_present = _fx.present_crisp
-_grade_cine = _fx.grade_cine
+def _present(src, dst):
+    pygame.transform.smoothscale(src, dst.get_size(), dst)
+
+
+def _grade_cine(surface):
+    """Cinematic contrast and split tone without quantising the frame."""
+    try:
+        import numpy as np
+    except Exception:
+        return
+    lut = _cache.get("grade_lut")
+    if lut is None:
+        x = np.arange(256, dtype=np.float32) / 255.0
+        x = x ** 0.74
+        x = np.clip((x - 0.05) / 0.95, 0.0, 1.0)
+        x = np.clip(0.42 + (x - 0.42) * 1.12, 0.0, 1.0)
+        sh, hi = (1.0 - x) ** 2, x ** 2
+        chan = (x - 0.010 * sh + 0.030 * hi,
+                x + 0.004 * sh + 0.004 * hi,
+                x + 0.026 * sh - 0.026 * hi)
+        lut = np.empty((3, 256), dtype=np.uint8)
+        for i, v in enumerate(chan):
+            v = v - 0.10 * np.maximum(0.0, v - 0.86) ** 2
+            lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
+        _cache["grade_lut"] = lut
+    arr = pygame.surfarray.pixels3d(surface)
+    for i in range(3):
+        arr[..., i] = lut[i][arr[..., i]]
+    f = arr.astype(np.float32)
+    luma = f @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+    arr[...] = np.clip(luma[..., None] + (f - luma[..., None]) * 1.35,
+                       0, 255).astype(np.uint8)
+    del arr
 
 
 def _grade_play(surface, wounded=False):
-    """Gameplay grade on the internal buffer: a deeper toe, cool shadows and a
-    sodium-warm highlight, as a per-channel LUT like ``_grade_cine`` (never a
-    float pass).  Wounded desaturates a little through the same table."""
+    """Gameplay contrast and split tone without quantising the frame."""
     try:
         import numpy as np
     except Exception:
@@ -552,18 +576,21 @@ def _grade_play(surface, wounded=False):
         x = np.arange(256, dtype=np.float32) / 255.0
         x = np.clip((x - 0.018) / 0.982, 0.0, 1.0)
         x = np.clip(0.45 + (x - 0.45) * 1.07, 0.0, 1.0)
-        x = x ** 1.12            # pays back the ink floor: the darks stay deep
-        sh, mid, hi = (1.0 - x) ** 2, 4.0 * x * (1.0 - x), x ** 2
-        # the 2D split: slate shadows (a little blue, not the old navy), rust
-        # mids, amber highs
-        chan = [x - 0.004 * sh + 0.016 * mid + 0.014 * hi,
-                x + 0.002 * sh + 0.002 * mid + 0.004 * hi,
-                x + 0.010 * sh - 0.020 * mid - 0.024 * hi]
+        sh, hi = (1.0 - x) ** 2, x ** 2
+        chan = [x - 0.008 * sh + 0.022 * hi,
+                x + 0.003 * sh + 0.004 * hi,
+                x + 0.024 * sh - 0.020 * hi]
         if wounded:
             mean = (chan[0] + chan[1] + chan[2]) / 3.0
             chan = [c * 0.72 + mean * 0.28 for c in chan]
-        lut = _cache[key] = _dither_lut(_ink(chan, np), np)
-    _apply_lut(surface, lut, np)
+        lut = np.empty((3, 256), dtype=np.uint8)
+        for i, v in enumerate(chan):
+            lut[i] = np.clip(v * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
+        _cache[key] = lut
+    arr = pygame.surfarray.pixels3d(surface)
+    for i in range(3):
+        arr[..., i] = lut[i][arr[..., i]]
+    del arr
 
 
 def _dist2(a, b):
@@ -580,7 +607,6 @@ def _renderer():
         _cache["r"] = Renderer(RW, RH, fog=FOG, fog_start=16.0,
                                fog_end=BG_FOG_END)
         _cache["r"].light_cap = LIGHT_CAP
-        _cache["r"].glitter = 1.0
     return _cache["r"]
 
 

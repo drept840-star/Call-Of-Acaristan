@@ -399,7 +399,7 @@ def _insert_cabin(surface, t):
     up front.  One renderer, three angles chosen by the line."""
     t = min(t, 3800)
     ang = _cabin_angle()
-    r, buf = _w.rend_ps2()
+    r, buf = _w.rend()
     r.fog, r.fog_start, r.fog_end = (10, 14, 22), 20.0, 150.0
     heli, hyaw, hbank, hpitch = heli_at("m6_insert_cabin", t)
     L = _w.heli_xform(heli, hyaw, hbank, hpitch)
@@ -457,8 +457,8 @@ def _insert_cabin(surface, t):
                      layer=_fx.FX_LAYER)
     _w.snow3d(r, t, seed=84, n=20, spread=8, height=6, speed=1.2)
     r.flush(buf)
-    _w.present_ps2(surface, buf)
-    _w.finish(surface, 6101, "", t=t, ps2=True)
+    _w.present(surface, buf)
+    _w.finish(surface, 6101, "", t=t)
 
 
 def _wash(r, heli, t, k, seed):
@@ -477,7 +477,7 @@ def _insert_valley(surface, t):
     """Over his shoulder from the open door: the Huey crests the ridge and the
     crossing lies lit below."""
     t = min(t, _APPROACH_MS)
-    r, buf = _w.rend_ps2()
+    r, buf = _w.rend()
     r.fog, r.fog_start, r.fog_end = (9, 13, 21), 40.0, 230.0
     heli, hyaw, hbank, hpitch = heli_at("m6_insert_valley", t)
     L = _w.heli_xform(heli, hyaw, hbank, hpitch)
@@ -510,14 +510,14 @@ def _insert_valley(surface, t):
     _w.actor(r, _BIRI, pose, seat, yaw, t, seed=2, amp=0.28, expression="stern")
     _w.snow3d(r, t, seed=5, n=60, spread=16, height=10, speed=1.0)
     r.flush(buf)
-    _w.present_ps2(surface, buf)
-    _w.finish(surface, 6102, "KIM KIM BORDER // 02:40", t=t, ps2=True)
+    _w.present(surface, buf)
+    _w.finish(surface, 6102, "KIM KIM BORDER // 02:40", t=t)
 
 
 def _insert_jump(surface, t):
     """One continuous low take: the hover settles, he drops into the powder."""
     t = min(t, 5000)
-    r, buf = _w.rend_ps2()
+    r, buf = _w.rend()
     r.fog, r.fog_start, r.fog_end = (10, 13, 20), 16.0, 120.0
     pose, seat, yaw, heli = jump_stage(t)
     joints = _joints(_BIRI, pose, seat, yaw)
@@ -559,8 +559,8 @@ def _insert_jump(surface, t):
                                 puffs=9), layer=_fx.FX_LAYER)
     _w.snow3d(r, t, seed=11, n=50, spread=14, height=9, speed=0.9)
     r.flush(buf)
-    _w.present_ps2(surface, buf)
-    _w.finish(surface, 6103, "", t=t, ps2=True)
+    _w.present(surface, buf)
+    _w.finish(surface, 6103, "", t=t)
 
 
 def _insert_ground(surface, t):
@@ -568,7 +568,7 @@ def _insert_ground(surface, t):
     behind him onto the crossing's lights and holds."""
     t = min(t, 6000)
     pose, pos, yaw = ground_stage(t)
-    r, buf = _w.rend_ps2()
+    r, buf = _w.rend()
     r.fog, r.fog_start, r.fog_end = (12, 16, 26), 30.0, 230.0
     shk = _fx.shake(t, 0, 380, 0.020)
     hpos, hyaw, hbank, hpitch = heli_depart(t)
@@ -604,8 +604,8 @@ def _insert_ground(surface, t):
         _wash(r, hpos, t + 2000, wash, 19)
     _w.snow3d(r, t, seed=22, n=60, spread=16, height=10, speed=0.9)
     r.flush(buf)
-    _w.present_ps2(surface, buf)
-    _w.finish(surface, 6104, "", t=t, ps2=True)
+    _w.present(surface, buf)
+    _w.finish(surface, 6104, "", t=t)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
