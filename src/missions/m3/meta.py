@@ -99,6 +99,16 @@ mission3_intro_shots = [
         "lighting": (5, 5, 7),
         "min_ms": 3000,
     },
+    # Cold-open slate: the interrogation footage we are about to see is an
+    # archive recording, not a live room - which is what makes Balaceanu's
+    # "This tape is one-way" line (VO_013) land later.
+    {
+        "scene": "interrogation_room",
+        "speaker": "SYSTEM",
+        "text": "STATE SECURITY ARCHIVE\nINTERROGATION RECORDING",
+        "lighting": (4, 3, 4),
+        "min_ms": 2200,
+    },
     {
         "scene": "interrogation_room",
         "speaker": "BALACEANU",
@@ -109,7 +119,7 @@ mission3_intro_shots = [
     {
         "scene": "monitor_broadcast",
         "speaker": "SYSTEM",
-        "text": "STATE ADDRESS, LIVE TONIGHT, 22:00\nSUBJECT: ROUTE 12 PERPETRATOR",
+        "text": "STATE ADDRESS, LIVE TONIGHT, 22:00\nPM BALACEANU - NAMING SLOT",
         "lighting": (3, 2, 3),
         "min_ms": 3200,
     },
@@ -313,6 +323,11 @@ broadcast_transition_shots = [
      "min_ms": 2400, "lighting": (7, 8, 9)},
     {"scene": "m3_bcast_onair", "speaker": "VASILE", "radio": True,
      "text": "Studio door. Two ways to do this, live on his camera, or quiet through my channel. Your call, operator.",
+     "min_ms": 2200, "lighting": (8, 9, 10)},
+    # VO_201 (caption-only until recorded): closes the "two ways" offer by
+    # killing the quiet channel, so the live camera is the only path left.
+    {"scene": "m3_bcast_onair", "speaker": "VASILE", "radio": True,
+     "text": "Quiet channel's dead.\nIt's the camera or nothing.",
      "min_ms": 2200, "lighting": (8, 9, 10)},
 ]
 broadcast_transition_shots = _timelines.shots("m3.broadcast_transition", broadcast_transition_shots)  # RPE6 P8: timeline data

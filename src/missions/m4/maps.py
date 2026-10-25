@@ -477,5 +477,5 @@ def zone_label(name):
 
 
 _last_keys = None
-_objective = "Regroup with Vasile."
+_objective = "Pick up the KRAP comms cache."
 _radio_marks = set()

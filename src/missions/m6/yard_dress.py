@@ -126,6 +126,44 @@ def skyline(add):
     SIGN_LAMPS.extend(B.billboard(add, ["ВПЕРЁД", "К ПОБЕДЕ!"], (0.0, -25.0), "+z", top=8.0))
 
 
+def _cable_reel(add, x, z, col=(88, 62, 38)):
+    """One timber cable drum: two cheek plates, a hub and a steel axle."""
+    add(box(1.05, 1.05, 0.14, col, center=(x, 0.55, z - 0.32)))
+    add(box(1.05, 1.05, 0.14, _dim(col), center=(x, 0.55, z + 0.32)))
+    add(box(0.48, 0.48, 0.62, (56, 50, 42), center=(x, 0.55, z)))
+    add(box(0.80, 0.06, 0.06, _STEEL, center=(x, 0.55, z)))
+    add(box(0.12, 0.22, 0.12, (30, 32, 36), center=(x, 0.12, z)))
+
+
+def _work_cart(add, x, z):
+    """A maintenance trolley left where the night shift stopped."""
+    add(box(1.65, 0.12, 0.78, (58, 58, 54), center=(x, 0.48, z)))
+    add(box(1.55, 0.42, 0.68, (72, 74, 68), center=(x, 0.25, z)))
+    for wx, wz in ((-0.68, -0.34), (0.68, -0.34),
+                   (-0.68, 0.34), (0.68, 0.34)):
+        add(box(0.20, 0.28, 0.16, (24, 25, 28),
+                center=(x + wx, 0.16, z + wz)))
+    add(box(0.06, 0.84, 0.06, _STEEL, center=(x - 0.82, 0.88, z)))
+    add(box(0.54, 0.05, 0.06, _STEEL, center=(x - 0.58, 1.26, z)))
+    add(box(0.42, 0.28, 0.36, (66, 48, 34), center=(x + 0.30, 0.68, z)))
+
+
+def _dead_tree(add, x, z, h=3.8):
+    """Wind-broken poplar beyond the wall: a vertical rhythm, no foliage."""
+    col = (32, 31, 30)
+    add(box(0.22, h, 0.22, col, center=(x, h * 0.5, z)))
+    for i, (dx, dz, yy, ln) in enumerate((
+            (-0.42, 0.10, 0.62, 1.35), (0.36, -0.14, 0.76, 1.05),
+            (-0.20, -0.26, 0.47, 0.85), (0.16, 0.22, 0.34, 0.72))):
+        add(box(ln, 0.10, 0.10, col,
+                center=(x + dx * ln, h * yy, z + dz * ln)))
+    add(box(0.08, 0.72, 0.08, col, center=(x + 0.18, h + 0.32, z - 0.08)))
+
+
+def _dim(col, k=0.72):
+    return tuple(int(c * k) for c in col)
+
+
 def _prop(add, kind, x, z, w, d, h):
     if kind == "container":
         for lvl, col in enumerate(((126, 54, 44), (44, 86, 104))):
@@ -194,6 +232,29 @@ def dress(add, wall_w, wall_e, wall_s, road_x):
     """Add every prop, sign, marking and drift to ``add`` (a Mesh.add)."""
     for kind, x, z, w, d, h in SOLIDS:
         _prop(add, kind, x, z, w, d, h)
+    # service clutter: drums, a trolley and a maintenance caddy against the
+    # walls, where it frames the lanes without narrowing them
+    for x, z in ((-25.9, -12.4), (-24.8, -13.1)):
+        _cable_reel(add, x, z)
+    _work_cart(add, 25.3, 3.2)
+    for i, (x, z, h) in enumerate(((-31.0, 6.0, 4.2), (-30.0, -8.0, 3.4),
+                                    (31.5, -11.0, 4.6))):
+        _dead_tree(add, x, z, h)
+    # smaller wall-side dressing: buckets, a coiled hose, spare sleepers
+    for i, (x, z, col) in enumerate(((-20.2, 8.2, (58, 62, 62)),
+                                     (-19.4, 8.4, (42, 48, 52)),
+                                     (21.8, -15.8, (72, 58, 40)))):
+        add(box(0.42, 0.46, 0.42, col, center=(x, 0.24, z)))
+        add(box(0.34, 0.06, 0.34, (168, 178, 194), center=(x, 0.50, z)))
+    for i in range(3):
+        add(box(1.8, 0.10, 0.34, (54, 46, 36),
+                center=(-22.8, 0.06 + i * 0.11, -8.4 + i * 0.06)))
+    # painted edge lines and an old oil stain around the service bay
+    for z0 in (-14.0, -8.0, -2.0, 4.0):
+        add(quad_xz(-20.5, z0, -15.2, z0 + 0.08, 0.058, (162, 140, 68)))
+    add(quad_xz(-19.6, -11.4, -15.6, -8.2, 0.052, (30, 34, 40)))
+    add(quad_xz(-19.0, -10.8, -16.2, -8.8, 0.055, (42, 48, 58)))
+
     # a pipe run and wall lamps along the south wall; warning signs
     add(box(wall_e - wall_w - 2.0, 0.16, 0.16, _STEEL,
             center=((wall_e + wall_w) * 0.5, 2.05, wall_s + 0.5), seg=8))

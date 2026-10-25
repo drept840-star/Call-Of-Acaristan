@@ -28,6 +28,7 @@ host must be able to run a whole match headlessly for tests.
 """
 
 import math
+from collections import deque
 
 import pygame
 
@@ -405,6 +406,7 @@ class Deathmatch(object):
         self.mode = mode if mode in MODES else MODE_FFA
         self.kills = {}          # player_id -> kills
         self.deaths = {}         # player_id -> deaths
+        self.suspended = set()   # disconnected IDs temporarily held for rejoin
         self.respawn = {}        # player_id -> tick at which they return
         self.spawned_at = {}     # player_id -> tick they spawned on
         self.teams = {}          # player_id -> TEAM_*
@@ -529,7 +531,8 @@ class Deathmatch(object):
         pts = self.spawns or [(TILE_SIZE, TILE_SIZE)]
         mine = self.team_of(player_id)
         live = [p for p in self.kills
-                if p != player_id and self.alive(p, tick)]
+                if p != player_id and p not in self.suspended
+                and self.alive(p, tick)]
         # Only OPPONENTS decide which spawn is safest. In team play, counting a
         # teammate made a player spawn in the open just because a friend was
         # nearby.
@@ -792,6 +795,12 @@ def step_move(x, y, mx, my, speed, walls, diagonal=0.707):
 # ── Host-side simulation ────────────────────────────────────────────────
 
 
+# Rewind is deliberately short: enough to cover the 100 ms render delay and
+# ordinary transit jitter, but not enough to let a client claim an old fight.
+MAX_REWIND_TICKS = 12
+POSITION_HISTORY_TICKS = MAX_REWIND_TICKS + 4
+
+
 class ArenaSim(object):
     """The authoritative match simulation. Host only, one instance.
 
@@ -818,7 +827,11 @@ class ArenaSim(object):
         # so a rifle can still be slower than a sprinting pistol.
         self.sprint_speed = float(sprint_speed)
         self.tick = 0
-        self.players = {}        # id -> lightweight state dict
+        self.players = {}        # active id -> lightweight state dict
+        self._position_history = deque(maxlen=POSITION_HISTORY_TICKS)
+        self.lag_compensated_shots = 0
+        self.rewind_ticks_total = 0
+        self.suspended_players = {}  # id -> state held during reconnect grace
         self.finished = False
         # Set by _shoot; None until the first shot in the match. Reading it
         # before any shot has happened would be an AttributeError, which is
@@ -893,8 +906,37 @@ class ArenaSim(object):
         self.players[player_id] = st
         return st
 
+    def suspend_player(self, player_id):
+        """Hide a briefly disconnected player while retaining their full state."""
+        st = self.players.pop(player_id, None)
+        if st is None:
+            return None
+        self.suspended_players[player_id] = st
+        self.rules.suspended.add(player_id)
+        return st
+
+    def resume_player(self, player_id):
+        """Restore a reserved player to the live world without resetting score."""
+        st = self.suspended_players.pop(player_id, None)
+        if st is None:
+            return None
+        self.rules.suspended.discard(player_id)
+        self.rules.register(player_id)
+        self.players[player_id] = st
+        return st
+
+    def expire_suspended_player(self, player_id):
+        """Finally remove a disconnected seat after its reconnect grace ends."""
+        if player_id not in self.suspended_players:
+            return False
+        self.suspended_players.pop(player_id, None)
+        self.remove_player(player_id)
+        return True
+
     def remove_player(self, player_id):
         self.players.pop(player_id, None)
+        self.suspended_players.pop(player_id, None)
+        self.rules.suspended.discard(player_id)
         self.rules.teams.pop(player_id, None)
         # A returning player is a new decision, not a carried-over one: they get
         # auto-seated again rather than landing on a side they never asked for
@@ -959,6 +1001,7 @@ class ArenaSim(object):
             self._step_pickups(st)
 
         self._step_round(t)
+        self._remember_positions(t)
         self.session.tick = t
         self.session.world = self.snapshot_entities()
         if self.session.is_host:
@@ -1141,7 +1184,48 @@ class ArenaSim(object):
             return
         if st["cooldown"] > 0:
             return
-        self._shoot(st, weapon_stats(st["weapon"]))
+        rewind_tick = self._bounded_rewind_tick(inp.get("rt") if inp else None)
+        self._shoot(st, weapon_stats(st["weapon"]), rewind_tick=rewind_tick)
+
+    def _remember_positions(self, tick):
+        """Keep a small authoritative record for fair, bounded hit checks."""
+        frame = {}
+        for pid, st in self.players.items():
+            frame[pid] = (float(st["x"]), float(st["y"]), bool(st["dead"]),
+                          st.get("team", TEAM_NONE),
+                          self.rules.spawned_at.get(pid, 0))
+        history = getattr(self, "_position_history", None)
+        if history is None:
+            self._position_history = deque(maxlen=POSITION_HISTORY_TICKS)
+            history = self._position_history
+        history.append((int(tick) & 0xFFFFFFFF, frame))
+
+    def _bounded_rewind_tick(self, requested):
+        """Validate client display time and cap it to a short recent window."""
+        if (not isinstance(requested, int) or isinstance(requested, bool)
+                or not 0 <= requested <= 0xFFFFFFFF):
+            return None
+        now = int(self.tick) & 0xFFFFFFFF
+        age = (now - requested) & 0xFFFFFFFF
+        # A future timestamp (including ambiguous wraparound) is treated as
+        # current time, never as permission to reach further into history.
+        if age >= 0x80000000:
+            return now
+        return (now - min(age, MAX_REWIND_TICKS)) & 0xFFFFFFFF
+
+    def _history_frame(self, tick):
+        """Return the closest recorded frame at or before ``tick``."""
+        history = getattr(self, "_position_history", ())
+        if not history:
+            return None
+        wanted = int(tick) & 0xFFFFFFFF
+        selected = None
+        best_age = 0x80000000
+        for frame_tick, frame in history:
+            age = (wanted - frame_tick) & 0xFFFFFFFF
+            if age < best_age:
+                selected, best_age = frame, age
+        return selected
 
     def _step_pickups(self, st):
         """Take any pickup the player is standing on."""
@@ -1174,7 +1258,7 @@ class ArenaSim(object):
             self.events.append([P.EV_PICKUP, st["id"], value, 0,
                                 pk["x"], pk["y"]])
 
-    def _shoot(self, st, stats):
+    def _shoot(self, st, stats, rewind_tick=None):
         """Trace this weapon's pellets and apply any damage.
 
         Every pellet is resolved independently against the same wall list, so
@@ -1194,10 +1278,25 @@ class ArenaSim(object):
             st["reload"] = stats["reload"]
 
         targets = []
+        history_frame = (self._history_frame(rewind_tick)
+                         if rewind_tick is not None else None)
+        target_lives = {}
         for other in self.players.values():
-            if other["id"] == st["id"] or other["dead"]:
+            oid = other["id"]
+            if oid == st["id"] or other["dead"]:
                 continue
-            targets.append((other["id"], other["x"], other["y"]))
+            x, y = other["x"], other["y"]
+            if history_frame is not None and oid in history_frame:
+                hx, hy, was_dead, _old_team, life = history_frame[oid]
+                if was_dead or life != self.rules.spawned_at.get(oid, 0):
+                    continue
+                x, y = hx, hy
+                target_lives[oid] = life
+            targets.append((oid, x, y))
+        if rewind_tick is not None:
+            self.lag_compensated_shots = getattr(self, "lag_compensated_shots", 0) + 1
+            self.rewind_ticks_total = getattr(self, "rewind_ticks_total", 0) + min(
+                (self.tick - rewind_tick) & 0xFFFFFFFF, MAX_REWIND_TICKS)
 
         # Team rules: a teammate is not a target. Firing through them is
         # still possible (the ray stops at the nearest body), but no damage
@@ -1231,6 +1330,9 @@ class ArenaSim(object):
                 continue
             victim = self.players.get(tid)
             if victim is None or victim["dead"]:
+                continue
+            if (tid in target_lives and target_lives[tid]
+                    != self.rules.spawned_at.get(tid, 0)):
                 continue
             if friendly and victim.get("team") == my_team:
                 # Friendly fire blocks the ray (nearest body wins) but deals
@@ -1356,6 +1458,8 @@ class ArenaSim(object):
         """
         out = {}
         for pid, at in self.rules.respawn.items():
+            if pid in self.rules.suspended:
+                continue
             left = (at - self.tick) / float(P.TICK_RATE)
             if left > 0.0:
                 out[str(pid)] = left
@@ -1368,6 +1472,12 @@ class ArenaSim(object):
         never has to guess at a rule the host owns.
         """
         rules = self.rules
+        # Suspended players remain on the board for their short reconnect
+        # grace period, so keep their name/loadout visible even though they
+        # are temporarily absent from the live entity snapshot.
+        suspended_players = getattr(self, "suspended_players", {})
+        roster_players = dict(self.players)
+        roster_players.update(suspended_players)
         remaining = max(0, ROUND_TICKS - (self.tick - self.round_started))
         return {
             "mode": rules.mode,
@@ -1387,9 +1497,9 @@ class ArenaSim(object):
             # weapon it has not picked up instead of pressing a key that
             # the host is going to refuse.
             "carry": {str(p): list(owned_weapons(st))
-                      for p, st in self.players.items()},
+                      for p, st in roster_players.items()},
             "ammo": {str(p): st.get("ammo", 0)
-                     for p, st in self.players.items()},
+                     for p, st in roster_players.items()},
             # First-to target for the KRAP-terminal scoreboard strip. The
             # client cannot infer it from kills alone, and the host owns it.
             "score_limit": rules.score_limit,
@@ -1398,13 +1508,13 @@ class ArenaSim(object):
             # have to invent a label -- which is exactly how eight anonymous
             # colour swatches ended up being the whole player list.
             "names": {str(pid): (st.get("nick") or P.default_name(pid))
-                      for pid, st in self.players.items()},
+                      for pid, st in roster_players.items()},
             # Who each slot LOOKS like. Rides with names because it answers the
             # same question the HUD asks every time it draws a sprite, and on
             # the same 2 Hz packet -- cosmetics cannot change mid-round, so
             # putting them on the 20 Hz snapshot would be dead weight.
             "looks": {str(pid): (st.get("look") or appearance.DEFAULT)
-                      for pid, st in self.players.items()},
+                      for pid, st in roster_players.items()},
             # Which session this state belongs to, so a client's payout log can
             # tell a new match from a host restart of an old one.
             "match_id": self.match_id,

@@ -38,12 +38,15 @@ Mercy tracking: `STATE.m5_guard_kills` (Lower Quarter kills only).
       complete -> M5 intro, `--dev-mission5*` flags, `core/dev_jumps.py`,
       save progress "m5", smoke checks boot/stages/checkpoints/Maru-fail.
 - [x] W5 Cutscenes: `cutscenes/m5martial.py` 2D scenes for bulletin,
-      safehouse TV, Retardovici TV, river gate/Ucilev; dispatch in engine.
+      safehouse TV and Retardovici TV. The older river-gate/Ucilev shots remain
+      as inactive art; the shipped finale is the single 42-second
+      `FINAL_SHOT` scene (`src/missions/m5/finale_script.py`).
 - [x] W6 Guard HQ walking-sim section + Vasile office scene (in m5/; fresh run
   opens at STAGE_HQ; restart ladder tunnel > printworks > quarter > hq;
   --dev-mission5-hq; smoke mission5_hq_walk). Full smoke: OK.
 - [x] W7 (optional) 3D versions of the bulletin / standoff via engine3d.
-      cutscenes/m5martial3d.py: ALL 8 M5 scenes have 3D takes (incl. a scope
-      POV with crosshair/mil dots). engine.py tries 3D first, 2D m5martial is
-      the fallback (ACARISTAN_CUTSCENE3D=0 or any 3D error). Smoke:
+      `cutscenes/m5martial3d.py` still has 3D takes for the retired river-gate /
+      scope chain, but the active finale is the single `FINAL_SHOT` scene; the
+      scope POV is not shipped. engine.py tries 3D first, 2D m5martial is the
+      fallback (ACARISTAN_CUTSCENE3D=0 or any 3D error). Smoke:
       mission5_cutscenes_3d.

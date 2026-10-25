@@ -32,22 +32,21 @@ _PROP_LAYOUT = {
     STAGE_CUSTOMS: (
         # north apron - the crossing itself: gate, booms, parked trucks
         ("guard_truck", 4, 1, 3, 1), ("boom", 12, 2, 1, 1), ("boom", 18, 2, 1, 1),
-        ("guard_truck", 8, 1, 3, 1), ("barrels", 27, 1, 2, 1),
+        ("guard_truck", 8, 1, 3, 1),
         ("pallet", 1, 4, 2, 1), ("pallet", 23, 4, 2, 1),
-        ("hedgehog", 1, 1, 1, 1), ("hedgehog", 28, 4, 1, 1),
         # the post: processing office (west, enterable) and cold store (east)
         ("counter", 4, 7, 3, 1), ("terminal", 8, 7, 2, 1),
         ("cabinet", 3, 10, 1, 1), ("crate", 9, 10, 1, 1),
         # inspection lane between the post and the store
         ("booth", 12, 6, 1, 2), ("booth", 18, 9, 1, 2),
-        ("crates", 26, 10, 2, 2),
         # south yard: the queue that froze here, and the fuel farm
-        ("guard_truck", 2, 13, 3, 1), ("guard_truck", 2, 16, 3, 1),
+        # (the fuel_tank footprint stays: combat draws the live tanker there
+        # and TANKER_RECT is checked against it by tools/m6_layout_probe.py)
+        ("guard_truck", 2, 13, 3, 1),
         ("plough", 19, 15, 3, 1), ("fuel_tank", 23, 12, 5, 3),
-        ("jersey", 10, 12, 2, 1), ("pallet", 18, 12, 2, 1),
-        ("barrels", 3, 18, 2, 1), ("snow_fence", 5, 18, 3, 1),
-        ("snow_fence", 21, 18, 3, 1), ("crates", 24, 17, 2, 2),
-        ("hedgehog", 11, 17, 1, 1), ("coil", 8, 11, 1, 1),
+        ("jersey", 10, 12, 2, 1),
+        ("snow_fence", 5, 18, 3, 1),
+        ("hedgehog", 11, 17, 1, 1),
     ),
     STAGE_NOMAN: (
         # floodlight towers (lights are data in stealth.py)

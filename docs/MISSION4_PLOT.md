@@ -7,7 +7,7 @@
 
 ## Logline
 
-Hours after the Vostral went live, the capital is eating itself. Balaceanu's
+Two days after the Vostral went live, the capital is eating itself. Balaceanu's
 career is public record, Retardovici's strings are cut (the read on the
 night — a cape without a handler), KRAP has "kind of dissolved," and Volkov
 has run for the border. Biribel and Vasile are what's
@@ -115,11 +115,11 @@ The runtime driver is `STATE.mission4_stage` (mirrors M3), owned by
 
 | # | Stage | Objective | Beat |
 |---|-------|-----------|------|
-| 1 | **STAGE_AFTERMATH** | Regroup with Vasile at the comms cache, then reach the station door. | Curfew-street ambience on a clock: timed radio story beats (Vasile's read on the collapse, the border intercept that Volkov ran, the PA performing calm), distant gunfire/static/PA on repeating timers. Guard + marksman patrols. |
+| 1 | **STAGE_AFTERMATH** | Pick up the KRAP comms cache, then meet Vasile at the station door. | Curfew-street ambience on a clock: timed radio story beats (Vasile's read on the collapse, the border intercept that Volkov ran, the PA performing calm), distant gunfire/static/PA on repeating timers. Guard + marksman patrols. |
 | 2 | **STAGE_KRAP_STATUS** | Cross the station interior to the transmitter hall; talk to Maru. | Door handoff swaps to the station map. Friendly NPCs (Maru, Vasile) drawn as faction-colored standing figures. |
-| 3 | **STAGE_MARU** (dialogue) | Hold the liaison meeting. | Typewriter dialogue (M3-interrogation cadence, ported) with a single choice beat; the chosen option records the tone on `STATE.m4_tone`. Movement locked during the meet. |
+| 3 | **STAGE_MARU** (dialogue) | Hold the liaison meeting. | Typewriter dialogue (M3-interrogation cadence, ported). Before the tone question, Biribel admits the chain carried Vasile's name — "There's an explanation." — and Maru answers, "There always is." The single choice records the tone on `STATE.m4_tone`; Biribel speaks the option, **Maru** speaks the follow-up (VO_076/077). Movement locked during the meet. |
 | 4 | **STAGE_MARU** (jammer) | Install the jammer on the transmitter rack. | E-key interact (`rifle_handle` + `terminal_glitch`). Gates the siege; sets the tower checkpoint. |
-| 5 | **STAGE_COMMIT** | Hold the transmitter for `M4_HOLD_SECONDS` (90s). | **The clock, not a boss.** Loyalist fireteams stream from 3 insertion doors (≤6 concurrent), marksman laser telegraphs; a diegetic PA/arrest beat ladder narrates Retardovici's order over `pa_mumble` / `radio_static` / `footstep`. Spawns break off after the order airs. Between the arrest order and the loyalist confusion, Vasile steers Biribel away from it — *"You don't need to see him. Trust me."* (M6 plant: he is protecting the man, or the secret.) |
+| 5 | **STAGE_COMMIT** | Hold the transmitter for `M4_HOLD_SECONDS` (90s). | **The clock, not a boss.** Loyalist fireteams stream from 3 insertion doors (≤6 concurrent), marksman laser telegraphs; a diegetic PA/arrest beat ladder narrates Retardovici's order over `pa_mumble` / `radio_static` / `footstep`. Spawns break off after the order airs. The ladder reports "They're taking the General" before the live cutscene cuffs him, so the radio no longer announces the cuffs ~37 seconds early. Between the arrest order and the loyalist confusion, Vasile steers Biribel away from it — *"You don't need to see him. Trust me."* (M6 plant: he is protecting the man, or the secret.) The completion card quotes Biribel's dawn line, *"Nobody asked us to do this..."* (VO_082), and the tone choice echoes on the M5 card. |
 | 6 | **STAGE_DONE** | — | Hold completes → `_complete_m4()` → `request_mission4_ending`. |
 
 **Fail state:** death reloads the deepest checkpoint reached (tower → station →

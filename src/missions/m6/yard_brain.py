@@ -1,4 +1,4 @@
-"""Mission 6 yard - the Guard brains (engine.ai on the "Who fired?" fight).
+"""Mission 6 yard - the Guard brains (engine.ai on the "Who is Ucilev?" fight).
 
 One behaviour tree runs every Guard; his state lives on his dict (``bb`` the
 tree's blackboard, ``mem`` what he knows about Biribel).  Each tick, before

@@ -372,11 +372,70 @@ def steel(rng):
     return img
 
 
+def bone(rng):
+    """Cracked bone (the safe-room demon's mask and horns), 32 texels/m:
+    mottled ivory plates, hairline cracks, dark pores."""
+    v = fbm(rng, [32, 16, 8, 4], [0.3, 0.3, 0.25, 0.15])
+    img = ramp(v, [WARM_GREY, TAUPE, DUN, DUN, KHAKI], dither=0.9)
+    for _ in range(6):                               # cracks walk down and wander
+        x, y = int(rng.integers(0, N)), int(rng.integers(0, N))
+        for _s in range(int(rng.integers(10, 26))):
+            put(img, x, y, WARM_BLACK)
+            if rng.random() < 0.3:
+                put(img, x + 1, y, WARM_DARK)
+            x += int(rng.integers(-1, 2))
+            y += int(rng.integers(0, 2))
+    img[rng.random((N, N)) < 0.012] = WARM_BLACK     # pores
+    return img
+
+
+def scorch(rng):
+    """Burned-in char (the marks cut into the safe-room wall), 32 texels/m:
+    black crust, ember light showing through the cracks, ash flecks."""
+    v = fbm(rng, [16, 8, 4], [0.5, 0.3, 0.2])
+    img = ramp(v, [INK, WARM_BLACK, WARM_DARK, BROWN_GREY, WARM_GREY], dither=0.9)
+    crack = np.abs(noise(rng, 16) - 0.5)             # iso-lines of a noise field
+    img[crack < 0.028] = RUST_DARK
+    img[crack < 0.012] = RUST
+    img[(crack < 0.005) & (rng.random((N, N)) < 0.5)] = EMBER
+    img[rng.random((N, N)) > 0.992] = WARM_GREY      # ash
+    return img
+
+
+def vault(rng):
+    """Riveted vault plate (the safe room), 32 texels/m: one-metre plates with
+    a dark groove and a lit lip, corner rivets, brushed streaks, rust weeping
+    down from the rivets."""
+    v = fbm(rng, [(64, 8), 16, (4, 32)], [0.4, 0.3, 0.3])
+    img = ramp(v, [SLATE_DEEP, SLATE, SLATE, BLUE_GREY, SLATE_MID], dither=0.8)
+    for s in (0, 32):                                # seams: groove, then lip
+        img[s % N, :] = INK
+        img[(s + 1) % N, :] = SLATE_HI
+        img[:, s % N] = INK
+        img[:, (s + 1) % N] = SLATE_HI
+    for py in (0, 32):
+        for px in (0, 32):
+            for ox, oy in ((5, 5), (26, 5), (5, 26), (26, 26)):
+                x, y = px + ox, py + oy
+                put(img, x, y, COOL_GREY)
+                put(img, x + 1, y, SLATE_MID)
+                put(img, x, y + 1, SLATE_MID)
+                put(img, x + 1, y + 1, INK)
+                if rng.random() < 0.6:               # rust weeping from the rivet
+                    for i in range(int(rng.integers(4, 13))):
+                        if BAYER[(y + 2 + i) % N, x % N] < 0.25:
+                            put(img, x, y + 2 + i, RUST_DARK if i % 3 else OXBLOOD)
+    sp = rng.random((N, N))
+    img[sp < 0.005] = RUST_DARK
+    return img
+
+
 TEXTURES = {
     "snow": (snow, 11), "snow_trod": (snow_trod, 12), "ballast": (ballast, 13),
     "sleeper": (sleeper, 14), "concrete": (concrete, 15), "brick": (brick, 16),
     "metal_rib": (metal_rib, 17), "boxcar": (boxcar, 18), "crate": (crate, 19),
     "rust": (rust, 20), "steel": (steel, 21),
+    "bone": (bone, 22), "scorch": (scorch, 23), "vault": (vault, 24),
 }
 
 

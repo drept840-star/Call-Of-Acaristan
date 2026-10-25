@@ -494,33 +494,18 @@ def cabin_cam(ang, t, L):
     return L(*eye), L(*tgt), fov
 
 
-def _cabin_snow(r, t, L, n=46, seed=0):
-    """Snow in the airframe's frame: streams aft past the door at speed and
-    a few flakes whip in over the sill and swirl in the cabin."""
-    segs = []
+def _cabin_snow(r, t, L, n=30, seed=0):
+    """Snow outside the airframe, in its frame: streams aft past the open door."""
     a = t * 0.001
     for i in range(n):
         u, v, w = _w._u(i, seed, 1), _w._u(i, seed, 2), _w._u(i, seed, 3)
-        inside = i % 3 == 0
-        if inside:
-            vel = (-1.4 - 0.8 * w, -0.3, -3.0 - 2.0 * u)
-            x = 1.6 - ((u * 1.9 + 1.4 * a * (1.0 + w)) % 1.9)
-            y = 0.75 + ((v * 1.3 + 0.2 * a) % 1.3)
-            z = 1.9 - ((w * 3.0 + (3.0 + 2.0 * u) * a) % 3.2)
-        else:
-            vel = (-0.4, -1.0, -24.0 - 6.0 * u)
-            x = 1.35 + u * 3.5
-            y = -0.8 + ((v * 4.0 - 0.6 * a) % 4.0)
-            z = 4.0 - ((w * 10.0 + 26.0 * a * (1.0 + 0.2 * u)) % 10.0)
+        vel = (-0.4, -1.0, -24.0 - 6.0 * u)
+        x = 1.35 + u * 3.5
+        y = -0.8 + ((v * 4.0 - 0.6 * a) % 4.0)
+        z = 4.0 - ((w * 10.0 + 26.0 * a * (1.0 + 0.2 * u)) % 10.0)
         p0 = L(x, y, z)
         p1 = L(x - vel[0] * 0.03, y - vel[1] * 0.03, z - vel[2] * 0.03)
-        segs.append((p0, p1, (196, 206, 224) if inside else (150, 162, 186), 1))
-    batch = getattr(r, "add_lines3d", None)
-    if batch is not None:
-        batch(segs, layer=4, depth_test=False)
-    else:
-        for p0, p1, c, wd in segs:
-            r.add_line3d(p0, p1, c, wd, layer=4)
+        _w.flake_sprite(r, p0, p1, (150, 162, 186))
 
 
 def _insert_cabin(surface, t):
@@ -575,8 +560,9 @@ def _insert_cabin(surface, t):
     _air_actor(r, "maru", dict(ppose, twist=tw, head_y=hy), proot, 0.0, t, L,
                seed=61, amp=0.15, expression="neutral", mouth=0.0)
     _bp, broot = heli_seat()
-    _air_actor(r, _BIRI, door_pose(t, ang), broot, 90.0, t, L, seed=34,
-               amp=0.22, rifle_on=True, mouth=0.0)
+    bpose, gun_o, gun_r = _k9_hold(door_pose(t, ang), broot, 90.0, t, ang)
+    _air_actor(r, _BIRI, bpose, broot, 90.0, t, L, seed=34, amp=0.22, mouth=0.0)
+    _k9_draw(r, L, gun_o, gun_r)
     _cabin_snow(r, t, L, seed=35)
     r.flush(buf)
     _w.present_ps2(surface, buf)
@@ -1216,6 +1202,72 @@ def _knee_grip(key, pose, pos, yaw, side, back=0.07, up=0.075):
 
 def _hand(key, pose, pos, yaw, side, target, pole=None):
     return _w.reach(_w.hum(key), pose, side, target, pos, yaw, pole)
+
+
+def _unit(v):
+    n = math.sqrt(sum(c * c for c in v))
+    return tuple(c / n for c in v)
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _k9_hold(pose, root, yaw, t, ang):
+    """Biribel's K-9 hold, built on his body: the grip in front of the chest
+    and both hands IK'd onto the gun; angle 2 raises it as he racks it.
+    The left hand takes the foregrip if his arm reaches, else slides back
+    along the handguard (as the yard hold does).
+    -> (pose, trigger origin O, gun axes R), airframe-local."""
+    from engine3d.core import m_apply, rot_y
+    from missions.m6.yard3d import ARM_REACH, K9_FORE, K9_GRIP, K9_GUARD
+    places, j, base = _w.hum(_BIRI).pose_world(pose, root, yaw, rifle_on=False)
+    fwd = m_apply(rot_y(yaw), (0.0, 0.0, 1.0))
+    side = m_apply(rot_y(yaw), (1.0, 0.0, 0.0))
+    chest = j["chest"]
+    if ang == 2:
+        k = _w.ease5(t, 150, 420)
+        grip = [chest[i] + 0.24 * fwd[i] for i in range(3)]
+        grip[1] += -0.10 + 0.06 * k
+        aim = (fwd[0], fwd[1] + 0.20, fwd[2])
+    else:
+        grip = [chest[i] + 0.20 * fwd[i] for i in range(3)]
+        grip[1] += -0.25
+        aim = (fwd[0], fwd[1] - 0.10, fwd[2])
+    grip = tuple(grip)
+    f = _unit(aim)
+    r = _unit(_cross((0.0, 1.0, 0.0), f))
+    u = _cross(f, r)
+    R = (r[0], u[0], f[0], r[1], u[1], f[1], r[2], u[2], f[2])
+    d = m_apply(R, K9_GRIP)
+    O = tuple(grip[i] - d[i] for i in range(3))
+
+    def on_gun(g):
+        d = m_apply(R, g)
+        return tuple(O[i] + d[i] for i in range(3))
+    pose = _hand(_BIRI, pose, root, yaw, "r", grip, _OUT["r"])
+    sh = next(o for slot, _k, _m, o, _g, _f in places if slot == 4)
+    sh = tuple(base[i] + sh[i] for i in range(3))
+    lt, guard = on_gun(K9_FORE), on_gun(K9_GUARD)
+    for _ in range(4):
+        if math.dist(sh, lt) <= ARM_REACH:
+            break
+        lt = tuple(lt[i] + (guard[i] - lt[i]) * 0.4 for i in range(3))
+    return _hand(_BIRI, pose, root, yaw, "l", lt, _OUT["l"]), O, R
+
+
+def _k9_draw(r, L, O, R):
+    """The K-9 with its trigger at O and gun axes R (airframe-local), via L."""
+    from engine3d.core import m_apply
+    from missions.m6.yard3d import K9_TINT, _k9_asset
+    mesh, _muzzle = _k9_asset()
+    faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in mesh.faces]
+    verts = []
+    for v in mesh.verts:
+        d = m_apply(R, v)
+        verts.append(L(O[0] + d[0], O[1] + d[1], O[2] + d[2]))
+    r.add_dynamic(verts, faces, tint=K9_TINT)
 
 
 # Elbow pole for a hand crossing the body (torso-local): forward and out over
@@ -2533,6 +2585,20 @@ def _heli_pickup(surface, t):
     _w.finish(surface, 6314, "KRAP BORDER CUSTOMS // 04:12", t=t)
 
 
+def _in_cabin(pos, yaw, bank, pitch):
+    """Test for world points inside the airframe's cabin pod, so snow never
+    draws indoors.  Inverts heli_xform: undo yaw, bank, then pitch."""
+    from engine3d.core import m_apply, rot_x, rot_y, rot_z
+
+    def inside(p):
+        v = m_apply(rot_y(-yaw), (p[0] - pos[0], p[1] - pos[1], p[2] - pos[2]))
+        v = m_apply(rot_z(-bank), v)
+        v = m_apply(rot_x(-pitch), v)
+        return (abs(v[0]) < 1.22 and _w.HELI_FLOOR_Y < v[1] < _w.HELI_ROOF_Y
+                and -1.52 < v[2] < 1.92)
+    return inside
+
+
 def _heli_cabin(surface, t):
     """H2: inside the door. Biribel seated, the capital behind him, Maru
     at the controls up front, the door sliding shut on the lights."""
@@ -2602,7 +2668,8 @@ def _heli_cabin(surface, t):
              expression="sad" if t > 5200 else "neutral")
     _notebook_prop(r, _local(seat, yaw, up=1.02, fwd=0.33), yaw,
                    carry=False)
-    _w.snow3d(r, t, seed=84, n=30, spread=8, height=6, speed=1.2)
+    _w.snow3d(r, t, seed=84, n=30, spread=8, height=6, speed=1.2,
+              skip=_in_cabin(heli, hyaw, hbank, hpitch), depth=True)
     r.flush(buf)
     _w.present(surface, buf)
     _w.finish(surface, 6315, "EN ROUTE // KRAP BORDER", t=t)

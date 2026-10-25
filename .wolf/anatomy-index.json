@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-22T18:48:36.358Z",
-    "fileCount": 429,
+    "lastScanned": "2026-10-25T22:54:39.919Z",
+    "fileCount": 446,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "3f0717b4e775e795a824f426339735c236fd147101d2db3ef3d0956e15ec205c",
-    "storeUpdatedAt": "2026-10-22T18:48:36.369Z",
-    "rootHash": "fc778259e0d267a6"
+    "renderedHash": "3dbf48ee7eb3a7a5133edeffd5ef158c5174078c71ebabeac258c3aabf5fc1a2",
+    "storeUpdatedAt": "2026-10-25T22:54:39.928Z",
+    "rootHash": "7c20ab6e9d1bf16a"
   },
   "files": {
     ".gitattributes": {
@@ -62,11 +62,11 @@
     },
     "CLAUDE.md": {
       "description": "OpenWolf",
-      "tokens": 1402,
-      "hash": "97c40c14990e9962",
-      "size": 5608,
-      "mtimeMs": 1792694916220.639,
-      "updatedAt": "2026-10-22T18:48:36.358Z",
+      "tokens": 1572,
+      "hash": "1c67f7a500af5c03",
+      "size": 6286,
+      "mtimeMs": 1792910923143.7612,
+      "updatedAt": "2026-10-25T06:48:43.267Z",
       "source": "hook"
     },
     "GEMINI.md": {
@@ -121,11 +121,11 @@
     },
     "src/app.py": {
       "description": "_input_recorder: handle_settings_event",
-      "tokens": 55737,
-      "hash": "5540cbaaad83b541",
-      "size": 197587,
-      "mtimeMs": 1792624453975.8826,
-      "updatedAt": "2026-10-21T23:14:14.130Z",
+      "tokens": 56258,
+      "hash": "15f7a4a7df314edc",
+      "size": 199411,
+      "mtimeMs": 1792793229242.5476,
+      "updatedAt": "2026-10-23T22:07:09.397Z",
       "source": "hook",
       "symbols": [
         {
@@ -328,15 +328,15 @@
           "name": "_apply_dev_args",
           "kind": "fn",
           "startLine": 1227,
-          "endLine": 1775,
-          "tokens": 7611
+          "endLine": 1787,
+          "tokens": 7834
         },
         {
           "name": "_BootIntroState",
           "kind": "class",
-          "startLine": 1776,
-          "endLine": 4386,
-          "tokens": 33410
+          "startLine": 1788,
+          "endLine": 4425,
+          "tokens": 33708
         }
       ]
     },
@@ -1353,37 +1353,42 @@
     },
     "src/core/ambience.py": {
       "description": "ambience.py - zone-driven world ambience layers.",
-      "tokens": 1358,
-      "hash": "c5a841032625d63d",
-      "size": 4775,
-      "mtimeMs": 1792245599269.04,
-      "updatedAt": "2026-10-21T18:53:49.873Z",
-      "source": "scan",
+      "tokens": 1552,
+      "hash": "894ecd461af69639",
+      "size": 5454,
+      "mtimeMs": 1792845779075.7412,
+      "updatedAt": "2026-10-24T12:42:59.210Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_in_any",
           "kind": "fn",
           "startLine": 44,
-          "endLine": 48,
-          "tokens": 50
+          "endLine": 50,
+          "tokens": 51
         },
         {
           "name": "_teardown",
           "kind": "fn",
           "startLine": 51,
-          "endLine": 59,
-          "tokens": 76
+          "endLine": 61,
+          "tokens": 77
+        },
+        {
+          "name": "prewarm",
+          "kind": "fn",
+          "startLine": 62,
+          "endLine": 82,
+          "tokens": 194
         },
         {
           "name": "update_ambience",
           "kind": "fn",
-          "startLine": 62,
-          "endLine": 127,
+          "startLine": 83,
+          "endLine": 149,
           "tokens": 806
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598
+      ]
     },
     "src/core/appearance.py": {
       "description": "Character appearance: the cosmetic catalog, the appearance value object,",
@@ -1941,24 +1946,13 @@
       "importance": 0.0598
     },
     "src/core/dev_jumps.py": {
-      "description": "dev_jumps.py - registry of dev jump targets.",
-      "tokens": 1678,
-      "hash": "7c17371fa3f57be2",
-      "size": 5953,
-      "mtimeMs": 1792271316143.5215,
-      "updatedAt": "2026-10-21T18:53:49.877Z",
-      "source": "scan",
-      "symbols": [
-        {
-          "name": "jump_flag",
-          "kind": "fn",
-          "startLine": 112,
-          "endLine": 115,
-          "tokens": 50
-        }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0632
+      "description": "",
+      "tokens": 1833,
+      "hash": "40211ea32eeb9a74",
+      "size": 6495,
+      "mtimeMs": 1792826542009.846,
+      "updatedAt": "2026-10-24T07:22:22.037Z",
+      "source": "hook"
     },
     "src/core/fixedstep.py": {
       "description": "Fixed-timestep accumulator, for making the simulation host-independent.",
@@ -6649,518 +6643,622 @@
     },
     "src/cutscenes/m6films.py": {
       "description": "m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film.",
-      "tokens": 31211,
-      "hash": "e08d719e1af14ad2",
-      "size": 110737,
-      "mtimeMs": 1792693362247.8186,
-      "updatedAt": "2026-10-22T18:22:42.512Z",
+      "tokens": 38572,
+      "hash": "a518dd2e8fba440a",
+      "size": 136516,
+      "mtimeMs": 1792934050681.25,
+      "updatedAt": "2026-10-25T13:14:10.817Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_mono",
           "kind": "fn",
-          "startLine": 40,
-          "endLine": 59,
+          "startLine": 41,
+          "endLine": 60,
           "tokens": 160
         },
         {
           "name": "m6_3d_enabled",
           "kind": "fn",
-          "startLine": 60,
-          "endLine": 66,
+          "startLine": 61,
+          "endLine": 67,
           "tokens": 45
         },
         {
           "name": "_k",
           "kind": "fn",
-          "startLine": 67,
-          "endLine": 71,
+          "startLine": 68,
+          "endLine": 72,
           "tokens": 38
         },
         {
           "name": "_mix",
           "kind": "fn",
-          "startLine": 72,
-          "endLine": 76,
+          "startLine": 73,
+          "endLine": 77,
           "tokens": 24
         },
         {
           "name": "_rig_insert",
           "kind": "fn",
-          "startLine": 77,
-          "endLine": 100,
+          "startLine": 78,
+          "endLine": 101,
           "tokens": 261
         },
         {
           "name": "_cam",
           "kind": "fn",
-          "startLine": 101,
-          "endLine": 104,
+          "startLine": 102,
+          "endLine": 105,
           "tokens": 42
         },
         {
           "name": "_shot_text",
           "kind": "fn",
-          "startLine": 105,
-          "endLine": 136,
-          "tokens": 418
+          "startLine": 106,
+          "endLine": 140,
+          "tokens": 492
         },
         {
           "name": "hover_pos",
           "kind": "fn",
-          "startLine": 137,
-          "endLine": 147,
+          "startLine": 141,
+          "endLine": 151,
           "tokens": 158
         },
         {
           "name": "hover_yaw",
           "kind": "fn",
-          "startLine": 148,
-          "endLine": 153,
+          "startLine": 152,
+          "endLine": 157,
           "tokens": 55
         },
         {
           "name": "hover_bank",
           "kind": "fn",
-          "startLine": 154,
-          "endLine": 159,
+          "startLine": 158,
+          "endLine": 163,
           "tokens": 56
         },
         {
           "name": "_approach_e",
           "kind": "fn",
-          "startLine": 160,
-          "endLine": 164,
+          "startLine": 164,
+          "endLine": 168,
           "tokens": 32
         },
         {
           "name": "approach_pos",
           "kind": "fn",
-          "startLine": 165,
-          "endLine": 173,
-          "tokens": 96
+          "startLine": 169,
+          "endLine": 177,
+          "tokens": 99
+        },
+        {
+          "name": "approach_yaw",
+          "kind": "fn",
+          "startLine": 178,
+          "endLine": 183,
+          "tokens": 59
+        },
+        {
+          "name": "approach_pitch",
+          "kind": "fn",
+          "startLine": 184,
+          "endLine": 189,
+          "tokens": 60
         },
         {
           "name": "jump_heli",
           "kind": "fn",
-          "startLine": 174,
-          "endLine": 180,
+          "startLine": 190,
+          "endLine": 196,
           "tokens": 68
         },
         {
-          "name": "cabin_pos",
+          "name": "cabin_heli",
           "kind": "fn",
-          "startLine": 181,
-          "endLine": 190,
-          "tokens": 65
+          "startLine": 197,
+          "endLine": 208,
+          "tokens": 101
         },
         {
           "name": "_door_seat",
           "kind": "fn",
-          "startLine": 191,
-          "endLine": 201,
+          "startLine": 209,
+          "endLine": 219,
           "tokens": 134
         },
         {
           "name": "heli_seat",
           "kind": "fn",
-          "startLine": 202,
-          "endLine": 210,
+          "startLine": 220,
+          "endLine": 228,
           "tokens": 81
         },
         {
           "name": "seated_door",
           "kind": "fn",
-          "startLine": 211,
-          "endLine": 217,
+          "startLine": 229,
+          "endLine": 235,
           "tokens": 71
         },
         {
           "name": "_landed_pose",
           "kind": "fn",
-          "startLine": 218,
-          "endLine": 221,
+          "startLine": 236,
+          "endLine": 239,
           "tokens": 20
         },
         {
           "name": "_landed_root",
           "kind": "fn",
-          "startLine": 222,
-          "endLine": 227,
-          "tokens": 68
+          "startLine": 240,
+          "endLine": 250,
+          "tokens": 124
         },
         {
           "name": "jump_stage",
           "kind": "fn",
-          "startLine": 228,
-          "endLine": 271,
-          "tokens": 487
+          "startLine": 251,
+          "endLine": 293,
+          "tokens": 499
         },
         {
           "name": "ground_route",
           "kind": "fn",
-          "startLine": 272,
-          "endLine": 278,
+          "startLine": 294,
+          "endLine": 300,
           "tokens": 48
+        },
+        {
+          "name": "ground_watch",
+          "kind": "fn",
+          "startLine": 301,
+          "endLine": 305,
+          "tokens": 45
         },
         {
           "name": "ground_stage",
           "kind": "fn",
-          "startLine": 279,
-          "endLine": 305,
-          "tokens": 345
+          "startLine": 306,
+          "endLine": 340,
+          "tokens": 450
         },
         {
           "name": "heli_depart",
           "kind": "fn",
-          "startLine": 306,
-          "endLine": 314,
-          "tokens": 98
+          "startLine": 341,
+          "endLine": 354,
+          "tokens": 157
         },
         {
           "name": "pickup_pos",
           "kind": "fn",
-          "startLine": 315,
-          "endLine": 324,
+          "startLine": 355,
+          "endLine": 364,
           "tokens": 116
         },
         {
           "name": "heli_at",
           "kind": "fn",
-          "startLine": 325,
-          "endLine": 361,
-          "tokens": 444
+          "startLine": 365,
+          "endLine": 403,
+          "tokens": 464
         },
         {
           "name": "walk_metrics",
           "kind": "fn",
-          "startLine": 362,
-          "endLine": 375,
+          "startLine": 404,
+          "endLine": 417,
           "tokens": 150
         },
         {
           "name": "_cabin_angle",
           "kind": "fn",
-          "startLine": 376,
-          "endLine": 384,
-          "tokens": 76
-        },
-        {
-          "name": "cabin_cam",
-          "kind": "fn",
-          "startLine": 385,
-          "endLine": 396,
-          "tokens": 134
-        },
-        {
-          "name": "_insert_cabin",
-          "kind": "fn",
-          "startLine": 397,
-          "endLine": 463,
-          "tokens": 821
-        },
-        {
-          "name": "_wash",
-          "kind": "fn",
-          "startLine": 464,
-          "endLine": 2591,
-          "tokens": 26156
+          "startLine": 418,
+          "endLine": 3214,
+          "tokens": 34010
         }
       ]
     },
     "src/cutscenes/m6fx3d.py": {
-      "description": "m6fx3d.py - the Mission 6 FX kit: m5fx3d with hard PS2 halos.",
-      "tokens": 2184,
-      "hash": "f4086dd50ee5f41f",
-      "size": 7658,
-      "mtimeMs": 1792605893900.4514,
-      "updatedAt": "2026-10-21T18:53:49.908Z",
-      "source": "scan",
+      "description": "m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze.",
+      "tokens": 6413,
+      "hash": "e90eb253343c54c5",
+      "size": 22461,
+      "mtimeMs": 1792846094143.125,
+      "updatedAt": "2026-10-24T12:48:14.323Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "__getattr__",
           "kind": "fn",
-          "startLine": 43,
-          "endLine": 46,
+          "startLine": 47,
+          "endLine": 50,
           "tokens": 16
         },
         {
-          "name": "_stepped",
+          "name": "_tag",
           "kind": "fn",
-          "startLine": 47,
-          "endLine": 86,
-          "tokens": 511
+          "startLine": 51,
+          "endLine": 55,
+          "tokens": 16
+        },
+        {
+          "name": "_ramp_colour",
+          "kind": "fn",
+          "startLine": 56,
+          "endLine": 66,
+          "tokens": 106
+        },
+        {
+          "name": "_stops_for",
+          "kind": "fn",
+          "startLine": 67,
+          "endLine": 79,
+          "tokens": 165
+        },
+        {
+          "name": "_halo_img",
+          "kind": "fn",
+          "startLine": 80,
+          "endLine": 160,
+          "tokens": 1048
+        },
+        {
+          "name": "_core_img",
+          "kind": "fn",
+          "startLine": 161,
+          "endLine": 174,
+          "tokens": 130
         },
         {
           "name": "glow",
           "kind": "fn",
-          "startLine": 87,
-          "endLine": 104,
-          "tokens": 228
+          "startLine": 175,
+          "endLine": 206,
+          "tokens": 425
+        },
+        {
+          "name": "beacon",
+          "kind": "fn",
+          "startLine": 207,
+          "endLine": 227,
+          "tokens": 241
         },
         {
           "name": "sodium_lamp",
           "kind": "fn",
-          "startLine": 105,
-          "endLine": 110,
+          "startLine": 228,
+          "endLine": 233,
           "tokens": 70
         },
         {
           "name": "window_glow",
           "kind": "fn",
-          "startLine": 111,
-          "endLine": 124,
-          "tokens": 170
+          "startLine": 234,
+          "endLine": 259,
+          "tokens": 305
         },
         {
           "name": "crt_bloom",
           "kind": "fn",
-          "startLine": 125,
-          "endLine": 130,
+          "startLine": 260,
+          "endLine": 265,
           "tokens": 85
         },
         {
           "name": "flash",
           "kind": "fn",
-          "startLine": 131,
-          "endLine": 146,
-          "tokens": 172
+          "startLine": 266,
+          "endLine": 286,
+          "tokens": 248
         },
         {
           "name": "haze",
           "kind": "fn",
-          "startLine": 147,
-          "endLine": 160,
-          "tokens": 164
+          "startLine": 287,
+          "endLine": 308,
+          "tokens": 269
+        },
+        {
+          "name": "_shaft_img",
+          "kind": "fn",
+          "startLine": 309,
+          "endLine": 348,
+          "tokens": 501
         },
         {
           "name": "light_shaft",
           "kind": "fn",
-          "startLine": 161,
-          "endLine": 182,
-          "tokens": 258
+          "startLine": 349,
+          "endLine": 369,
+          "tokens": 263
+        },
+        {
+          "name": "powder",
+          "kind": "fn",
+          "startLine": 370,
+          "endLine": 399,
+          "tokens": 410
+        },
+        {
+          "name": "_palette",
+          "kind": "fn",
+          "startLine": 400,
+          "endLine": 407,
+          "tokens": 56
+        },
+        {
+          "name": "dither_lut",
+          "kind": "fn",
+          "startLine": 408,
+          "endLine": 421,
+          "tokens": 196
+        },
+        {
+          "name": "ink",
+          "kind": "fn",
+          "startLine": 422,
+          "endLine": 431,
+          "tokens": 91
+        },
+        {
+          "name": "_lut_pool",
+          "kind": "fn",
+          "startLine": 432,
+          "endLine": 444,
+          "tokens": 135
+        },
+        {
+          "name": "_lut_channel",
+          "kind": "fn",
+          "startLine": 445,
+          "endLine": 451,
+          "tokens": 48
+        },
+        {
+          "name": "apply_lut",
+          "kind": "fn",
+          "startLine": 452,
+          "endLine": 486,
+          "tokens": 416
+        },
+        {
+          "name": "present_crisp",
+          "kind": "fn",
+          "startLine": 487,
+          "endLine": 498,
+          "tokens": 156
+        },
+        {
+          "name": "grade_cine",
+          "kind": "fn",
+          "startLine": 499,
+          "endLine": 530,
+          "tokens": 435
         }
-      ],
-      "importance": 0.0598
+      ]
     },
     "src/cutscenes/m6world3d.py": {
       "description": "m6world3d.py - engine3d sets and actor kit for the Mission 6 films.",
-      "tokens": 28902,
-      "hash": "e640fa1af2321d2d",
-      "size": 102307,
-      "mtimeMs": 1792694159853.2417,
-      "updatedAt": "2026-10-22T18:35:59.987Z",
+      "tokens": 31679,
+      "hash": "6b483a150846abb8",
+      "size": 112112,
+      "mtimeMs": 1792933625141.3135,
+      "updatedAt": "2026-10-25T13:07:05.315Z",
       "source": "hook",
       "symbols": [
         {
           "name": "rend",
           "kind": "fn",
-          "startLine": 78,
-          "endLine": 87,
-          "tokens": 93
+          "startLine": 79,
+          "endLine": 92,
+          "tokens": 142
         },
         {
           "name": "present",
           "kind": "fn",
-          "startLine": 88,
-          "endLine": 105,
+          "startLine": 93,
+          "endLine": 110,
           "tokens": 188
         },
         {
           "name": "rend_ps2",
           "kind": "fn",
-          "startLine": 106,
-          "endLine": 114,
+          "startLine": 111,
+          "endLine": 119,
           "tokens": 69
         },
         {
           "name": "present_ps2",
           "kind": "fn",
-          "startLine": 115,
-          "endLine": 121,
+          "startLine": 120,
+          "endLine": 126,
           "tokens": 85
         },
         {
           "name": "film_xy",
           "kind": "fn",
-          "startLine": 122,
-          "endLine": 126,
+          "startLine": 127,
+          "endLine": 131,
           "tokens": 34
         },
         {
           "name": "project_xy",
           "kind": "fn",
-          "startLine": 127,
-          "endLine": 131,
-          "tokens": 32
+          "startLine": 132,
+          "endLine": 136,
+          "tokens": 34
         },
         {
           "name": "cam",
           "kind": "fn",
-          "startLine": 132,
-          "endLine": 135,
+          "startLine": 137,
+          "endLine": 140,
           "tokens": 43
         },
         {
           "name": "add",
           "kind": "fn",
-          "startLine": 136,
-          "endLine": 157,
+          "startLine": 141,
+          "endLine": 162,
           "tokens": 215
+        },
+        {
+          "name": "drop_renderer_caches",
+          "kind": "fn",
+          "startLine": 163,
+          "endLine": 178,
+          "tokens": 150
         },
         {
           "name": "pack_memo",
           "kind": "fn",
-          "startLine": 158,
-          "endLine": 171,
+          "startLine": 179,
+          "endLine": 192,
           "tokens": 120
         },
         {
           "name": "pack_memo_end",
           "kind": "fn",
-          "startLine": 172,
-          "endLine": 188,
+          "startLine": 193,
+          "endLine": 209,
           "tokens": 154
         },
         {
           "name": "pack_memo_ready",
           "kind": "fn",
-          "startLine": 189,
-          "endLine": 194,
+          "startLine": 210,
+          "endLine": 215,
           "tokens": 66
         },
         {
           "name": "pack_memo_replay",
           "kind": "fn",
-          "startLine": 195,
-          "endLine": 199,
-          "tokens": 31
+          "startLine": 216,
+          "endLine": 221,
+          "tokens": 62
         },
         {
           "name": "_mesh_sig",
           "kind": "fn",
-          "startLine": 200,
-          "endLine": 207,
+          "startLine": 222,
+          "endLine": 229,
           "tokens": 65
         },
         {
           "name": "_memo_add",
           "kind": "fn",
-          "startLine": 208,
-          "endLine": 225,
+          "startLine": 230,
+          "endLine": 247,
           "tokens": 134
         },
         {
           "name": "_light_sig",
           "kind": "fn",
-          "startLine": 226,
-          "endLine": 234,
+          "startLine": 248,
+          "endLine": 256,
           "tokens": 86
         },
         {
           "name": "static_scene",
           "kind": "fn",
-          "startLine": 235,
-          "endLine": 256,
+          "startLine": 257,
+          "endLine": 278,
           "tokens": 205
         },
         {
           "name": "static_end",
           "kind": "fn",
-          "startLine": 257,
-          "endLine": 276,
+          "startLine": 279,
+          "endLine": 298,
           "tokens": 174
         },
         {
           "name": "yaw_to",
           "kind": "fn",
-          "startLine": 277,
-          "endLine": 283,
+          "startLine": 299,
+          "endLine": 305,
           "tokens": 80
         },
         {
           "name": "current_shot",
           "kind": "fn",
-          "startLine": 284,
-          "endLine": 291,
+          "startLine": 306,
+          "endLine": 313,
           "tokens": 46
         },
         {
           "name": "speaker",
           "kind": "fn",
-          "startLine": 292,
-          "endLine": 296,
+          "startLine": 314,
+          "endLine": 318,
           "tokens": 31
         },
         {
           "name": "talking",
           "kind": "fn",
-          "startLine": 297,
-          "endLine": 301,
+          "startLine": 319,
+          "endLine": 323,
           "tokens": 36
         },
         {
           "name": "grade",
           "kind": "fn",
-          "startLine": 302,
-          "endLine": 326,
+          "startLine": 324,
+          "endLine": 348,
           "tokens": 306
         },
         {
           "name": "finish",
           "kind": "fn",
-          "startLine": 327,
-          "endLine": 399,
+          "startLine": 349,
+          "endLine": 421,
           "tokens": 989
         },
         {
           "name": "_base_guard_spec",
           "kind": "fn",
-          "startLine": 400,
-          "endLine": 409,
+          "startLine": 422,
+          "endLine": 431,
           "tokens": 116
         },
         {
           "name": "guard_spec",
           "kind": "fn",
-          "startLine": 410,
-          "endLine": 417,
+          "startLine": 432,
+          "endLine": 439,
           "tokens": 76
         },
         {
           "name": "_guard_humanoid",
           "kind": "fn",
-          "startLine": 418,
-          "endLine": 442,
+          "startLine": 440,
+          "endLine": 464,
           "tokens": 273
         },
         {
           "name": "_hd_extra",
           "kind": "fn",
-          "startLine": 443,
-          "endLine": 456,
+          "startLine": 465,
+          "endLine": 478,
           "tokens": 113
+        },
+        {
+          "name": "_k9_rig_mesh",
+          "kind": "fn",
+          "startLine": 479,
+          "endLine": 490,
+          "tokens": 115
         },
         {
           "name": "hum",
           "kind": "fn",
-          "startLine": 457,
-          "endLine": 481,
-          "tokens": 316
-        },
-        {
-          "name": "life_pose",
-          "kind": "fn",
-          "startLine": 482,
-          "endLine": 495,
-          "tokens": 172
-        },
-        {
-          "name": "actor",
-          "kind": "fn",
-          "startLine": 496,
-          "endLine": 2299,
-          "tokens": 23585
+          "startLine": 491,
+          "endLine": 2530,
+          "tokens": 26483
         }
       ]
     },
@@ -12281,23 +12379,21 @@
     },
     "src/engine/ui/std/objective_banner.py": {
       "description": "ObjectiveBanner - the OBJECTIVE panel.",
-      "tokens": 777,
-      "hash": "ae9d1174554eb336",
-      "size": 2719,
-      "mtimeMs": 1792184373112.6682,
-      "updatedAt": "2026-10-21T18:53:49.967Z",
-      "source": "scan",
+      "tokens": 1014,
+      "hash": "e7f749ba7a8558a9",
+      "size": 3548,
+      "mtimeMs": 1792846278632.2231,
+      "updatedAt": "2026-10-24T12:51:18.764Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "draw",
           "kind": "fn",
-          "startLine": 22,
-          "endLine": 73,
-          "tokens": 596
+          "startLine": 28,
+          "endLine": 95,
+          "tokens": 747
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598
+      ]
     },
     "src/engine/ui/std/prompt.py": {
       "description": "prompt - the world-anchored interaction tag (\"[E] ...\") drawn over a spot.",
@@ -13323,85 +13419,105 @@
     },
     "src/engine3d/gl.py": {
       "description": "engine3d.gl - GPU backend for the low-poly renderer (ModernGL).",
-      "tokens": 12471,
-      "hash": "23017d75ad0e62df",
-      "size": 43992,
-      "mtimeMs": 1792606137332.4597,
-      "updatedAt": "2026-10-21T18:53:49.978Z",
-      "source": "scan",
+      "tokens": 16989,
+      "hash": "d32b992a7955ea92",
+      "size": 59804,
+      "mtimeMs": 1792845337151.7495,
+      "updatedAt": "2026-10-24T12:35:37.307Z",
+      "source": "hook",
       "symbols": [
+        {
+          "name": "_same",
+          "kind": "fn",
+          "startLine": 72,
+          "endLine": 80,
+          "tokens": 64
+        },
+        {
+          "name": "_now_ms",
+          "kind": "fn",
+          "startLine": 81,
+          "endLine": 288,
+          "tokens": 2529
+        },
         {
           "name": "_context",
           "kind": "fn",
-          "startLine": 254,
-          "endLine": 272,
+          "startLine": 289,
+          "endLine": 307,
           "tokens": 173
         },
         {
           "name": "gl_available",
           "kind": "fn",
-          "startLine": 273,
-          "endLine": 276,
+          "startLine": 308,
+          "endLine": 311,
           "tokens": 16
         },
         {
           "name": "gl_info",
           "kind": "fn",
-          "startLine": 277,
-          "endLine": 285,
+          "startLine": 312,
+          "endLine": 320,
           "tokens": 79
         },
         {
           "name": "_Programs",
           "kind": "class",
-          "startLine": 286,
-          "endLine": 323,
-          "tokens": 406
+          "startLine": 321,
+          "endLine": 374,
+          "tokens": 573
+        },
+        {
+          "name": "_cross3",
+          "kind": "fn",
+          "startLine": 375,
+          "endLine": 384,
+          "tokens": 110
+        },
+        {
+          "name": "_unit",
+          "kind": "fn",
+          "startLine": 385,
+          "endLine": 392,
+          "tokens": 52
         },
         {
           "name": "_pack_faces",
           "kind": "fn",
-          "startLine": 324,
-          "endLine": 395,
-          "tokens": 724
+          "startLine": 393,
+          "endLine": 461,
+          "tokens": 699
         },
         {
           "name": "_tex_frame",
           "kind": "fn",
-          "startLine": 396,
-          "endLine": 430,
-          "tokens": 355
+          "startLine": 462,
+          "endLine": 492,
+          "tokens": 320
         },
         {
           "name": "_rig_template",
           "kind": "fn",
-          "startLine": 431,
-          "endLine": 459,
+          "startLine": 493,
+          "endLine": 521,
           "tokens": 399
         },
         {
           "name": "GLRenderer",
           "kind": "class",
-          "startLine": 460,
-          "endLine": 989,
-          "tokens": 6986
+          "startLine": 522,
+          "endLine": 1337,
+          "tokens": 10846
         },
         {
           "name": "Renderer",
           "kind": "fn",
-          "startLine": 990,
-          "endLine": 1007,
+          "startLine": 1338,
+          "endLine": 1355,
           "tokens": 229
         }
-      ],
-      "symbolSource": "regex",
-      "imports": [
-        "src/engine3d/__init__.py",
-        "src/engine3d/core.py",
-        "src/engine3d/rig.py",
-        "src/engine3d/textures.py"
-      ],
-      "importance": 0.0759
+      ]
     },
     "src/engine3d/ik.py": {
       "description": "Analytic two-bone IK for the box rig (engine3d.rig.Humanoid).",
@@ -24364,575 +24480,603 @@
     },
     "src/missions/m6/decor.py": {
       "description": "Mission 6 - stage decor, ground art and night lighting.",
-      "tokens": 13324,
-      "hash": "f853664cf3c93905",
-      "size": 47454,
-      "mtimeMs": 1792274084321.2668,
-      "updatedAt": "2026-10-21T18:53:50.225Z",
-      "source": "scan",
+      "tokens": 31742,
+      "hash": "8c7566965aa44ba6",
+      "size": 112388,
+      "mtimeMs": 1792956126777.1094,
+      "updatedAt": "2026-10-25T19:22:06.977Z",
+      "source": "hook",
       "symbols": [
+        {
+          "name": "_load_tex",
+          "kind": "fn",
+          "startLine": 145,
+          "endLine": 171,
+          "tokens": 238
+        },
+        {
+          "name": "_tex_mean",
+          "kind": "fn",
+          "startLine": 172,
+          "endLine": 186,
+          "tokens": 108
+        },
+        {
+          "name": "_tint",
+          "kind": "fn",
+          "startLine": 187,
+          "endLine": 236,
+          "tokens": 526
+        },
+        {
+          "name": "_seamless_plate",
+          "kind": "fn",
+          "startLine": 237,
+          "endLine": 271,
+          "tokens": 406
+        },
+        {
+          "name": "_plate_period",
+          "kind": "fn",
+          "startLine": 272,
+          "endLine": 275,
+          "tokens": 22
+        },
+        {
+          "name": "material",
+          "kind": "fn",
+          "startLine": 276,
+          "endLine": 307,
+          "tokens": 326
+        },
+        {
+          "name": "material_tile",
+          "kind": "fn",
+          "startLine": 308,
+          "endLine": 320,
+          "tokens": 112
+        },
+        {
+          "name": "material_plate",
+          "kind": "fn",
+          "startLine": 321,
+          "endLine": 343,
+          "tokens": 279
+        },
+        {
+          "name": "material_at",
+          "kind": "fn",
+          "startLine": 344,
+          "endLine": 361,
+          "tokens": 179
+        },
         {
           "name": "stage",
           "kind": "fn",
-          "startLine": 104,
-          "endLine": 105,
-          "tokens": 9
+          "startLine": 362,
+          "endLine": 365,
+          "tokens": 10
         },
         {
           "name": "_h",
           "kind": "fn",
-          "startLine": 108,
-          "endLine": 109,
-          "tokens": 29
+          "startLine": 366,
+          "endLine": 369,
+          "tokens": 30
         },
         {
           "name": "_shift",
           "kind": "fn",
-          "startLine": 112,
-          "endLine": 113,
-          "tokens": 23
+          "startLine": 370,
+          "endLine": 373,
+          "tokens": 24
         },
         {
           "name": "reset_run",
           "kind": "fn",
-          "startLine": 116,
-          "endLine": 119,
-          "tokens": 36
+          "startLine": 374,
+          "endLine": 382,
+          "tokens": 56
         },
         {
           "name": "build_decor",
           "kind": "fn",
-          "startLine": 122,
-          "endLine": 127,
-          "tokens": 52
+          "startLine": 383,
+          "endLine": 396,
+          "tokens": 140
+        },
+        {
+          "name": "_floor_material",
+          "kind": "fn",
+          "startLine": 397,
+          "endLine": 409,
+          "tokens": 98
+        },
+        {
+          "name": "_snow_code",
+          "kind": "fn",
+          "startLine": 410,
+          "endLine": 418,
+          "tokens": 80
+        },
+        {
+          "name": "_ground_ch",
+          "kind": "fn",
+          "startLine": 419,
+          "endLine": 429,
+          "tokens": 86
+        },
+        {
+          "name": "_house_tile",
+          "kind": "fn",
+          "startLine": 430,
+          "endLine": 438,
+          "tokens": 82
         },
         {
           "name": "_paint_floor",
           "kind": "fn",
-          "startLine": 133,
-          "endLine": 187,
-          "tokens": 794
+          "startLine": 439,
+          "endLine": 467,
+          "tokens": 339
+        },
+        {
+          "name": "_bank",
+          "kind": "fn",
+          "startLine": 468,
+          "endLine": 498,
+          "tokens": 386
+        },
+        {
+          "name": "_snow_drifts",
+          "kind": "fn",
+          "startLine": 499,
+          "endLine": 522,
+          "tokens": 274
+        },
+        {
+          "name": "_snow_banks",
+          "kind": "fn",
+          "startLine": 523,
+          "endLine": 563,
+          "tokens": 518
+        },
+        {
+          "name": "_solid_tile",
+          "kind": "fn",
+          "startLine": 564,
+          "endLine": 577,
+          "tokens": 127
+        },
+        {
+          "name": "_outdoor_tiles",
+          "kind": "fn",
+          "startLine": 578,
+          "endLine": 588,
+          "tokens": 132
+        },
+        {
+          "name": "_wall_solid",
+          "kind": "fn",
+          "startLine": 589,
+          "endLine": 598,
+          "tokens": 91
+        },
+        {
+          "name": "_band_tile",
+          "kind": "fn",
+          "startLine": 599,
+          "endLine": 607,
+          "tokens": 84
+        },
+        {
+          "name": "_face_tile",
+          "kind": "fn",
+          "startLine": 608,
+          "endLine": 612,
+          "tokens": 45
+        },
+        {
+          "name": "_face_run",
+          "kind": "fn",
+          "startLine": 613,
+          "endLine": 631,
+          "tokens": 180
         },
         {
           "name": "_paint_wall",
           "kind": "fn",
-          "startLine": 190,
-          "endLine": 227,
-          "tokens": 581
+          "startLine": 632,
+          "endLine": 686,
+          "tokens": 742
         },
         {
-          "name": "_paint_door",
+          "name": "_paint_face",
           "kind": "fn",
-          "startLine": 230,
-          "endLine": 239,
-          "tokens": 167
-        },
-        {
-          "name": "_customs_detail",
-          "kind": "fn",
-          "startLine": 242,
-          "endLine": 261,
-          "tokens": 286
-        },
-        {
-          "name": "_noman_detail",
-          "kind": "fn",
-          "startLine": 264,
-          "endLine": 281,
-          "tokens": 280
-        },
-        {
-          "name": "_rail_detail",
-          "kind": "fn",
-          "startLine": 284,
-          "endLine": 301,
-          "tokens": 278
-        },
-        {
-          "name": "_snow_bank",
-          "kind": "fn",
-          "startLine": 316,
-          "endLine": 326,
-          "tokens": 159
-        },
-        {
-          "name": "_wire_coils",
-          "kind": "fn",
-          "startLine": 329,
-          "endLine": 350,
-          "tokens": 259
-        },
-        {
-          "name": "_fence_run",
-          "kind": "fn",
-          "startLine": 353,
-          "endLine": 373,
-          "tokens": 304
-        },
-        {
-          "name": "_sandbags",
-          "kind": "fn",
-          "startLine": 376,
-          "endLine": 396,
-          "tokens": 272
-        },
-        {
-          "name": "_ice_sheet",
-          "kind": "fn",
-          "startLine": 399,
-          "endLine": 411,
-          "tokens": 196
-        },
-        {
-          "name": "_tracks",
-          "kind": "fn",
-          "startLine": 414,
-          "endLine": 423,
-          "tokens": 126
-        },
-        {
-          "name": "_crater",
-          "kind": "fn",
-          "startLine": 426,
-          "endLine": 438,
-          "tokens": 196
-        },
-        {
-          "name": "_debris",
-          "kind": "fn",
-          "startLine": 441,
-          "endLine": 453,
-          "tokens": 152
-        },
-        {
-          "name": "_papers",
-          "kind": "fn",
-          "startLine": 456,
-          "endLine": 467,
-          "tokens": 150
-        },
-        {
-          "name": "_oil_stain",
-          "kind": "fn",
-          "startLine": 470,
-          "endLine": 474,
-          "tokens": 88
-        },
-        {
-          "name": "_scrub",
-          "kind": "fn",
-          "startLine": 477,
-          "endLine": 488,
-          "tokens": 155
-        },
-        {
-          "name": "_drain",
-          "kind": "fn",
-          "startLine": 491,
-          "endLine": 497,
-          "tokens": 107
-        },
-        {
-          "name": "_snow_line",
-          "kind": "fn",
-          "startLine": 500,
-          "endLine": 503,
-          "tokens": 74
-        },
-        {
-          "name": "_customs_dress",
-          "kind": "fn",
-          "startLine": 506,
-          "endLine": 563,
-          "tokens": 980
-        },
-        {
-          "name": "_noman_dress",
-          "kind": "fn",
-          "startLine": 566,
-          "endLine": 604,
-          "tokens": 663
-        },
-        {
-          "name": "_rail_dress",
-          "kind": "fn",
-          "startLine": 607,
-          "endLine": 651,
-          "tokens": 835
-        },
-        {
-          "name": "_ao_band",
-          "kind": "fn",
-          "startLine": 660,
-          "endLine": 681,
-          "tokens": 265
-        },
-        {
-          "name": "_ground_ao",
-          "kind": "fn",
-          "startLine": 684,
-          "endLine": 703,
-          "tokens": 234
-        },
-        {
-          "name": "_ground_surface",
-          "kind": "fn",
-          "startLine": 706,
-          "endLine": 733,
-          "tokens": 276
+          "startLine": 687,
+          "endLine": 2596,
+          "tokens": 24462
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/__init__.py",
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "def stage():\ndef _h(col, row, k=0):\ndef _shift(col, d):\ndef reset_run():\ndef build_decor(stage_id):\ndef _paint_floor(surf, stage_id, col, row, ch):\ndef _paint_wall(surf, stage_id, col, row, ch):\ndef _paint_door(surf, stage_id, col, row):\ndef _customs_detail(surf, grid):\ndef _noman_detail(surf, grid):\ndef _rail_detail(surf, grid):\ndef _snow_bank(surf, x, y, w, h, seed, a=52):\ndef _wire_coils(surf, x0, y0, x1, y1, seed, col=(74, 78, 84)):\ndef _fence_run(surf, x0, y0, x1, y1, seed, post=(48, 52, 58)):\ndef _sandbags(surf, x, y, w, h, seed):\ndef _ice_sheet(surf, x, y, w, h, seed):\ndef _tracks(surf, x, y, length, angle, gap=14, col=(28, 32, 38)):\ndef _crater(surf, x, y, r, seed):\ndef _debris(surf, x, y, r, seed, col=(58, 62, 68)):\ndef _papers(surf, x, y, r, seed):\ndef _oil_stain(surf, x, y, r, seed):\ndef _scrub(surf, x, y, seed, col=(56, 54, 44)):\ndef _drain(surf, x, y, seed):\ndef _snow_line(surf, x0, y0, x1, y1, w=4):\ndef _customs_dress(surf, grid):\ndef _noman_dress(surf, grid):\ndef _rail_dress(surf, grid):\ndef _ao_band(side, length):\ndef _ground_ao(surf, grid):\ndef _ground_surface(stage_id):"
+      ]
     },
     "src/missions/m6/draw.py": {
       "description": "Mission 6 gameplay renderer.",
-      "tokens": 4969,
-      "hash": "0fd96a0b12f0be69",
-      "size": 18109,
-      "mtimeMs": 1792694748884.0046,
-      "updatedAt": "2026-10-22T18:45:49.120Z",
+      "tokens": 6196,
+      "hash": "9e333b02a0aabd8c",
+      "size": 22404,
+      "mtimeMs": 1792835912965.5571,
+      "updatedAt": "2026-10-24T09:58:33.405Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_kit_body",
           "kind": "fn",
-          "startLine": 62,
-          "endLine": 84,
+          "startLine": 53,
+          "endLine": 75,
           "tokens": 311
-        },
-        {
-          "name": "_guard_pose",
-          "kind": "fn",
-          "startLine": 85,
-          "endLine": 93,
-          "tokens": 103
         },
         {
           "name": "_draw_guard",
           "kind": "fn",
-          "startLine": 94,
-          "endLine": 119,
-          "tokens": 320
+          "startLine": 76,
+          "endLine": 100,
+          "tokens": 329
         },
         {
           "name": "_entry_puff",
           "kind": "fn",
-          "startLine": 120,
-          "endLine": 134,
+          "startLine": 101,
+          "endLine": 115,
           "tokens": 151
         },
         {
           "name": "_volkov_pose",
           "kind": "fn",
-          "startLine": 135,
-          "endLine": 140,
+          "startLine": 116,
+          "endLine": 121,
           "tokens": 66
         },
         {
           "name": "_draw_volkov",
           "kind": "fn",
-          "startLine": 141,
-          "endLine": 151,
+          "startLine": 122,
+          "endLine": 132,
           "tokens": 130
+        },
+        {
+          "name": "_melee_progress",
+          "kind": "fn",
+          "startLine": 133,
+          "endLine": 147,
+          "tokens": 194
+        },
+        {
+          "name": "_player_is_moving",
+          "kind": "fn",
+          "startLine": 148,
+          "endLine": 153,
+          "tokens": 57
         },
         {
           "name": "_scene_drawables",
           "kind": "fn",
-          "startLine": 152,
-          "endLine": 194,
-          "tokens": 508
+          "startLine": 154,
+          "endLine": 199,
+          "tokens": 557
         },
         {
           "name": "_objective_world_pos",
           "kind": "fn",
-          "startLine": 195,
-          "endLine": 199,
+          "startLine": 200,
+          "endLine": 204,
           "tokens": 36
         },
         {
           "name": "_draw_beacon",
           "kind": "fn",
-          "startLine": 200,
-          "endLine": 214,
-          "tokens": 145
+          "startLine": 205,
+          "endLine": 230,
+          "tokens": 312
         },
         {
           "name": "_draw_pickup",
           "kind": "fn",
-          "startLine": 215,
-          "endLine": 232,
-          "tokens": 232
+          "startLine": 231,
+          "endLine": 253,
+          "tokens": 323
+        },
+        {
+          "name": "_draw_pickup_mark",
+          "kind": "fn",
+          "startLine": 254,
+          "endLine": 269,
+          "tokens": 198
+        },
+        {
+          "name": "_draw_iff_lamps",
+          "kind": "fn",
+          "startLine": 270,
+          "endLine": 292,
+          "tokens": 299
+        },
+        {
+          "name": "_draw_exit_lamps",
+          "kind": "fn",
+          "startLine": 293,
+          "endLine": 313,
+          "tokens": 247
+        },
+        {
+          "name": "_draw_emissives",
+          "kind": "fn",
+          "startLine": 314,
+          "endLine": 321,
+          "tokens": 92
         },
         {
           "name": "_draw_world_effects",
           "kind": "fn",
-          "startLine": 233,
-          "endLine": 256,
+          "startLine": 322,
+          "endLine": 345,
           "tokens": 298
         },
         {
           "name": "_draw_muzzle_flash",
           "kind": "fn",
-          "startLine": 257,
-          "endLine": 272,
+          "startLine": 346,
+          "endLine": 361,
           "tokens": 156
         },
         {
           "name": "_draw_mag_icon",
           "kind": "fn",
-          "startLine": 273,
-          "endLine": 285,
+          "startLine": 362,
+          "endLine": 374,
           "tokens": 194
         },
         {
           "name": "_panel_mag_icon",
           "kind": "fn",
-          "startLine": 286,
-          "endLine": 308,
+          "startLine": 375,
+          "endLine": 397,
           "tokens": 287
         },
         {
           "name": "_draw_hud",
           "kind": "fn",
-          "startLine": 309,
-          "endLine": 326,
-          "tokens": 239
+          "startLine": 398,
+          "endLine": 416,
+          "tokens": 248
         },
         {
           "name": "_draw_prompt",
           "kind": "fn",
-          "startLine": 327,
-          "endLine": 351,
+          "startLine": 417,
+          "endLine": 441,
           "tokens": 265
         },
         {
           "name": "_draw_train",
           "kind": "fn",
-          "startLine": 352,
-          "endLine": 387,
+          "startLine": 442,
+          "endLine": 477,
           "tokens": 450
         },
         {
           "name": "game_draw",
           "kind": "fn",
-          "startLine": 388,
-          "endLine": 435,
-          "tokens": 460
+          "startLine": 478,
+          "endLine": 529,
+          "tokens": 495
         }
       ]
     },
     "src/missions/m6/flow.py": {
       "description": "Mission 6 - stage ladder, checkpoints and the ending handoff.",
-      "tokens": 3453,
-      "hash": "44cfb1d6cae50b5e",
-      "size": 12984,
-      "mtimeMs": 1792536437147.1912,
-      "updatedAt": "2026-10-21T18:53:50.228Z",
-      "source": "scan",
+      "tokens": 3777,
+      "hash": "fe5dce1a3f2ae3f6",
+      "size": 14117,
+      "mtimeMs": 1792934834158.473,
+      "updatedAt": "2026-10-25T13:27:14.292Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_speaker_colour",
           "kind": "fn",
-          "startLine": 41,
-          "endLine": 42,
-          "tokens": 21
+          "startLine": 42,
+          "endLine": 48,
+          "tokens": 55
         },
         {
           "name": "_snap_camera_safe",
           "kind": "fn",
-          "startLine": 48,
-          "endLine": 54,
+          "startLine": 49,
+          "endLine": 57,
           "tokens": 74
         },
         {
           "name": "_save_progress",
           "kind": "fn",
-          "startLine": 57,
-          "endLine": 62,
-          "tokens": 50
+          "startLine": 58,
+          "endLine": 65,
+          "tokens": 51
         },
         {
           "name": "_bind",
           "kind": "fn",
-          "startLine": 65,
-          "endLine": 77,
-          "tokens": 147
+          "startLine": 66,
+          "endLine": 80,
+          "tokens": 148
         },
         {
           "name": "_set_objective",
           "kind": "fn",
-          "startLine": 80,
-          "endLine": 81,
-          "tokens": 16
+          "startLine": 81,
+          "endLine": 87,
+          "tokens": 51
         },
         {
           "name": "_initialize_m6",
           "kind": "fn",
-          "startLine": 87,
-          "endLine": 140,
-          "tokens": 549
+          "startLine": 88,
+          "endLine": 151,
+          "tokens": 674
         },
         {
           "name": "_enter_customs",
           "kind": "fn",
-          "startLine": 146,
-          "endLine": 150,
-          "tokens": 66
+          "startLine": 152,
+          "endLine": 158,
+          "tokens": 70
         },
         {
           "name": "_enter_noman",
           "kind": "fn",
-          "startLine": 153,
-          "endLine": 156,
+          "startLine": 159,
+          "endLine": 164,
           "tokens": 47
         },
         {
           "name": "_enter_rail",
           "kind": "fn",
-          "startLine": 159,
-          "endLine": 162,
-          "tokens": 45
+          "startLine": 165,
+          "endLine": 170,
+          "tokens": 46
         },
         {
           "name": "_enter_boxcar",
           "kind": "fn",
-          "startLine": 165,
-          "endLine": 173,
-          "tokens": 105
+          "startLine": 171,
+          "endLine": 181,
+          "tokens": 106
         },
         {
           "name": "_request_ending",
           "kind": "fn",
-          "startLine": 176,
-          "endLine": 178,
-          "tokens": 42
+          "startLine": 182,
+          "endLine": 186,
+          "tokens": 43
         },
         {
           "name": "_enter_train",
           "kind": "fn",
-          "startLine": 181,
-          "endLine": 199,
-          "tokens": 210
+          "startLine": 187,
+          "endLine": 210,
+          "tokens": 249
         },
         {
           "name": "start_m6",
           "kind": "fn",
-          "startLine": 205,
-          "endLine": 209,
+          "startLine": 211,
+          "endLine": 217,
           "tokens": 40
         },
         {
           "name": "_checkpoint",
           "kind": "fn",
-          "startLine": 212,
-          "endLine": 217,
-          "tokens": 52
+          "startLine": 218,
+          "endLine": 225,
+          "tokens": 53
         },
         {
           "name": "start_mission6_customs_checkpoint",
           "kind": "fn",
-          "startLine": 220,
-          "endLine": 221,
-          "tokens": 33
+          "startLine": 226,
+          "endLine": 229,
+          "tokens": 34
         },
         {
           "name": "start_mission6_noman_checkpoint",
           "kind": "fn",
-          "startLine": 224,
-          "endLine": 225,
-          "tokens": 32
+          "startLine": 230,
+          "endLine": 233,
+          "tokens": 33
         },
         {
           "name": "start_mission6_rail_checkpoint",
           "kind": "fn",
-          "startLine": 228,
-          "endLine": 229,
+          "startLine": 234,
+          "endLine": 237,
           "tokens": 32
         },
         {
           "name": "start_mission6_train_checkpoint",
           "kind": "fn",
-          "startLine": 232,
-          "endLine": 233,
-          "tokens": 32
+          "startLine": 238,
+          "endLine": 244,
+          "tokens": 67
         },
         {
           "name": "_anchor_pos",
           "kind": "fn",
-          "startLine": 239,
-          "endLine": 241,
-          "tokens": 36
+          "startLine": 245,
+          "endLine": 249,
+          "tokens": 37
+        },
+        {
+          "name": "_exit_prompt",
+          "kind": "fn",
+          "startLine": 250,
+          "endLine": 257,
+          "tokens": 61
         },
         {
           "name": "interaction_prompt",
           "kind": "fn",
-          "startLine": 244,
-          "endLine": 256,
-          "tokens": 168
+          "startLine": 258,
+          "endLine": 272,
+          "tokens": 178
         },
         {
           "name": "handle_interact",
           "kind": "fn",
-          "startLine": 259,
-          "endLine": 279,
-          "tokens": 212
+          "startLine": 273,
+          "endLine": 297,
+          "tokens": 243
         },
         {
           "name": "on_m6_cutscene_done",
           "kind": "fn",
-          "startLine": 282,
-          "endLine": 290,
-          "tokens": 85
+          "startLine": 298,
+          "endLine": 314,
+          "tokens": 200
         },
         {
           "name": "on_train_done",
           "kind": "fn",
-          "startLine": 293,
-          "endLine": 325,
-          "tokens": 377
+          "startLine": 315,
+          "endLine": 349,
+          "tokens": 378
         },
         {
           "name": "_enter_yard",
           "kind": "fn",
-          "startLine": 328,
-          "endLine": 338,
-          "tokens": 119
+          "startLine": 350,
+          "endLine": 362,
+          "tokens": 121
         },
         {
           "name": "on_yard_done",
           "kind": "fn",
-          "startLine": 341,
-          "endLine": 348,
-          "tokens": 82
+          "startLine": 363,
+          "endLine": 375,
+          "tokens": 88
         },
         {
           "name": "_recover_boxcar",
           "kind": "fn",
-          "startLine": 354,
-          "endLine": 366,
+          "startLine": 376,
+          "endLine": 390,
           "tokens": 130
         },
         {
           "name": "update_stage",
           "kind": "fn",
-          "startLine": 369,
-          "endLine": 373,
+          "startLine": 391,
+          "endLine": 396,
           "tokens": 41
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/__init__.py",
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "def _speaker_colour(who):\ndef _snap_camera_safe():\ndef _save_progress(stage):\ndef _bind(stage, objective, radio_line=None, radio_mark=None):\ndef _set_objective(text):\ndef _initialize_m6(preserve_timer=False):\ndef _enter_customs():\ndef _enter_noman():\ndef _enter_rail():\ndef _enter_boxcar():\ndef _request_ending():\ndef _enter_train():\ndef start_m6(preserve_timer=False):\ndef _checkpoint(enter, preserve_timer=False, fresh_decor=False):\ndef start_mission6_customs_checkpoint(preserve_timer=False):\ndef start_mission6_noman_checkpoint(preserve_timer=False):\ndef start_mission6_rail_checkpoint(preserve_timer=False):\ndef start_mission6_train_checkpoint(preserve_timer=False):\ndef _anchor_pos(stage):\ndef interaction_prompt():\ndef handle_interact():\ndef on_m6_cutscene_done(key):\ndef on_train_done(result=\"win\"):\ndef _enter_yard():\ndef on_yard_done(result=\"win\"):\ndef _recover_boxcar(dt):\ndef update_stage(dt=None):"
+      ]
     },
     "src/missions/m6/hud3d.py": {
       "description": "Mission 6 3D HUD: minimal tactical, shared by the train shootout and the",
@@ -25272,107 +25416,114 @@
     },
     "src/missions/m6/maps.py": {
       "description": "Authored map layer for Mission 6 - three distinct playable spaces.",
-      "tokens": 2240,
-      "hash": "b34a953c9942f30f",
-      "size": 7948,
-      "mtimeMs": 1792268301274.9526,
-      "updatedAt": "2026-10-21T18:53:50.232Z",
-      "source": "scan",
+      "tokens": 3514,
+      "hash": "cf762e2367192d49",
+      "size": 12524,
+      "mtimeMs": 1792934837560.9307,
+      "updatedAt": "2026-10-25T13:27:17.676Z",
+      "source": "hook",
       "symbols": [
+        {
+          "name": "props_for",
+          "kind": "fn",
+          "startLine": 99,
+          "endLine": 103,
+          "tokens": 38
+        },
+        {
+          "name": "_stamp_props",
+          "kind": "fn",
+          "startLine": 104,
+          "endLine": 110,
+          "tokens": 58
+        },
         {
           "name": "_customs",
           "kind": "fn",
-          "startLine": 23,
-          "endLine": 47,
-          "tokens": 312
+          "startLine": 111,
+          "endLine": 132,
+          "tokens": 364
         },
         {
           "name": "_noman",
           "kind": "fn",
-          "startLine": 50,
-          "endLine": 73,
-          "tokens": 256
+          "startLine": 133,
+          "endLine": 147,
+          "tokens": 201
         },
         {
           "name": "_rail",
           "kind": "fn",
-          "startLine": 76,
-          "endLine": 99,
-          "tokens": 243
+          "startLine": 148,
+          "endLine": 188,
+          "tokens": 418
         },
         {
           "name": "_bake_stage",
           "kind": "fn",
-          "startLine": 120,
-          "endLine": 124,
-          "tokens": 52
+          "startLine": 189,
+          "endLine": 223,
+          "tokens": 299
         },
         {
           "name": "grid_for",
           "kind": "fn",
-          "startLine": 155,
-          "endLine": 157,
-          "tokens": 38
+          "startLine": 224,
+          "endLine": 228,
+          "tokens": 39
         },
         {
           "name": "structure_for",
           "kind": "fn",
-          "startLine": 160,
-          "endLine": 162,
+          "startLine": 229,
+          "endLine": 233,
           "tokens": 43
         },
         {
           "name": "bind_stage",
           "kind": "fn",
-          "startLine": 165,
-          "endLine": 171,
-          "tokens": 84
+          "startLine": 234,
+          "endLine": 242,
+          "tokens": 85
         },
         {
           "name": "_live_map_dims",
           "kind": "fn",
-          "startLine": 174,
-          "endLine": 178,
-          "tokens": 48
+          "startLine": 243,
+          "endLine": 249,
+          "tokens": 49
         },
         {
           "name": "_reachable",
           "kind": "fn",
-          "startLine": 181,
-          "endLine": 194,
+          "startLine": 250,
+          "endLine": 265,
           "tokens": 141
         },
         {
           "name": "_stage_errors",
           "kind": "fn",
-          "startLine": 197,
-          "endLine": 219,
-          "tokens": 323
+          "startLine": 266,
+          "endLine": 290,
+          "tokens": 324
         },
         {
           "name": "_validate",
           "kind": "fn",
-          "startLine": 222,
-          "endLine": 227,
-          "tokens": 56
+          "startLine": 291,
+          "endLine": 297,
+          "tokens": 57
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "def _customs():\ndef _noman():\ndef _rail():\ndef _bake_stage(stage):\ndef grid_for(stage):\ndef structure_for(stage):\ndef bind_stage(stage):\ndef _live_map_dims():\ndef _reachable(grid, start, blocked=M6_SOLID_CHARS):\ndef _stage_errors(stage):\ndef _validate():"
+      ]
     },
     "src/missions/m6/meta.py": {
       "description": "Mission 6 metadata, stage constants and authored cutscene timelines.",
-      "tokens": 3000,
-      "hash": "728e359ec36a368e",
-      "size": 10625,
-      "mtimeMs": 1792273792776.0598,
-      "updatedAt": "2026-10-21T18:53:50.232Z",
-      "source": "scan",
-      "importance": 0.497
+      "tokens": 4333,
+      "hash": "d9f4113eb4f98679",
+      "size": 15410,
+      "mtimeMs": 1792934833194.242,
+      "updatedAt": "2026-10-25T13:27:13.326Z",
+      "source": "hook"
     },
     "src/missions/m6/palette3d.py": {
       "description": "The 2D top-down M6 palette, for the 3D yard and train.",
@@ -25385,755 +25536,741 @@
       "importance": 0.0598
     },
     "src/missions/m6/stealth.py": {
-      "description": "Mission 6 - floodlight stealth for no-man's-land and the rail yard.",
-      "tokens": 3989,
-      "hash": "5ae02d93d50f5f43",
-      "size": 14500,
-      "mtimeMs": 1792273830468.3574,
-      "updatedAt": "2026-10-21T18:53:50.234Z",
-      "source": "scan",
+      "description": "Mission 6 - tower searchlights for no-man's-land and the rail yard.",
+      "tokens": 4467,
+      "hash": "da4febda388ec691",
+      "size": 16174,
+      "mtimeMs": 1792955277129.619,
+      "updatedAt": "2026-10-25T19:07:57.290Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "Floodlight",
           "kind": "class",
-          "startLine": 33,
-          "endLine": 57,
-          "tokens": 294
-        },
-        {
-          "name": "Floodlight.__init__",
-          "kind": "method",
-          "startLine": 39,
-          "endLine": 53,
-          "tokens": 190
-        },
-        {
-          "name": "Floodlight.angle_at",
-          "kind": "method",
-          "startLine": 55,
-          "endLine": 57,
-          "tokens": 40
+          "startLine": 38,
+          "endLine": 67,
+          "tokens": 357
         },
         {
           "name": "_tower_center",
           "kind": "fn",
-          "startLine": 60,
-          "endLine": 61,
+          "startLine": 68,
+          "endLine": 71,
           "tokens": 22
         },
         {
           "name": "_tower_footprint",
           "kind": "fn",
-          "startLine": 64,
-          "endLine": 66,
-          "tokens": 25
+          "startLine": 72,
+          "endLine": 116,
+          "tokens": 500
         },
         {
           "name": "init_stage",
           "kind": "fn",
-          "startLine": 111,
-          "endLine": 125,
-          "tokens": 137
+          "startLine": 117,
+          "endLine": 131,
+          "tokens": 112
         },
         {
           "name": "reset",
           "kind": "fn",
-          "startLine": 128,
-          "endLine": 129,
-          "tokens": 10
+          "startLine": 132,
+          "endLine": 135,
+          "tokens": 11
         },
         {
           "name": "clock",
           "kind": "fn",
-          "startLine": 132,
-          "endLine": 133,
+          "startLine": 136,
+          "endLine": 139,
           "tokens": 8
         },
         {
           "name": "lights",
           "kind": "fn",
-          "startLine": 136,
-          "endLine": 137,
-          "tokens": 10
+          "startLine": 140,
+          "endLine": 144,
+          "tokens": 42
+        },
+        {
+          "name": "all_lights",
+          "kind": "fn",
+          "startLine": 145,
+          "endLine": 148,
+          "tokens": 11
+        },
+        {
+          "name": "dead",
+          "kind": "fn",
+          "startLine": 149,
+          "endLine": 152,
+          "tokens": 15
+        },
+        {
+          "name": "shoot_lamp",
+          "kind": "fn",
+          "startLine": 153,
+          "endLine": 175,
+          "tokens": 260
         },
         {
           "name": "visible",
           "kind": "fn",
-          "startLine": 140,
-          "endLine": 141,
+          "startLine": 176,
+          "endLine": 179,
           "tokens": 12
         },
         {
           "name": "alarm_active",
           "kind": "fn",
-          "startLine": 144,
-          "endLine": 145,
-          "tokens": 20
+          "startLine": 180,
+          "endLine": 183,
+          "tokens": 21
         },
         {
           "name": "exposure",
           "kind": "fn",
-          "startLine": 148,
-          "endLine": 149,
-          "tokens": 20
+          "startLine": 184,
+          "endLine": 190,
+          "tokens": 51
         },
         {
           "name": "_ang_diff",
           "kind": "fn",
-          "startLine": 155,
-          "endLine": 159,
-          "tokens": 33
+          "startLine": 191,
+          "endLine": 197,
+          "tokens": 34
         },
         {
           "name": "_blocked",
           "kind": "fn",
-          "startLine": 162,
-          "endLine": 176,
-          "tokens": 155
+          "startLine": 198,
+          "endLine": 214,
+          "tokens": 156
         },
         {
           "name": "clear_distance",
           "kind": "fn",
-          "startLine": 179,
-          "endLine": 193,
-          "tokens": 175
+          "startLine": 215,
+          "endLine": 231,
+          "tokens": 176
         },
         {
           "name": "point_in_cone",
           "kind": "fn",
-          "startLine": 196,
-          "endLine": 206,
-          "tokens": 136
+          "startLine": 232,
+          "endLine": 244,
+          "tokens": 137
         },
         {
           "name": "in_cone",
           "kind": "fn",
-          "startLine": 209,
-          "endLine": 219,
-          "tokens": 124
+          "startLine": 245,
+          "endLine": 257,
+          "tokens": 125
         },
         {
           "name": "detected_at",
           "kind": "fn",
-          "startLine": 222,
-          "endLine": 225,
-          "tokens": 60
+          "startLine": 258,
+          "endLine": 266,
+          "tokens": 96
         },
         {
           "name": "trigger_alarm",
           "kind": "fn",
-          "startLine": 231,
-          "endLine": 253,
-          "tokens": 256
+          "startLine": 267,
+          "endLine": 283,
+          "tokens": 164
         },
         {
-          "name": "_spawn_scheduled_wave",
+          "name": "_tower_fire",
           "kind": "fn",
-          "startLine": 256,
-          "endLine": 265,
-          "tokens": 112
+          "startLine": 284,
+          "endLine": 310,
+          "tokens": 299
         },
         {
           "name": "update",
           "kind": "fn",
-          "startLine": 268,
-          "endLine": 297,
-          "tokens": 361
+          "startLine": 311,
+          "endLine": 345,
+          "tokens": 367
         },
         {
           "name": "_cone_overlay",
           "kind": "fn",
-          "startLine": 303,
-          "endLine": 308,
+          "startLine": 346,
+          "endLine": 353,
           "tokens": 58
         },
         {
           "name": "_scale",
           "kind": "fn",
-          "startLine": 311,
-          "endLine": 314,
-          "tokens": 46
+          "startLine": 354,
+          "endLine": 359,
+          "tokens": 47
         },
         {
           "name": "_draw_beam",
           "kind": "fn",
-          "startLine": 317,
-          "endLine": 351,
-          "tokens": 511
+          "startLine": 360,
+          "endLine": 396,
+          "tokens": 517
         },
         {
           "name": "draw_cones",
           "kind": "fn",
-          "startLine": 354,
-          "endLine": 367,
+          "startLine": 397,
+          "endLine": 412,
           "tokens": 186
         },
         {
           "name": "draw_hud",
           "kind": "fn",
-          "startLine": 370,
-          "endLine": 396,
-          "tokens": 332
+          "startLine": 413,
+          "endLine": 441,
+          "tokens": 365
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/__init__.py",
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "class Floodlight:\n    def __init__(self, pos, angle0, amp, period_s, phase=0.0,\n    def angle_at(self, t):\ndef _tower_center(tile):\ndef _tower_footprint(tile):\ndef init_stage(stage):\ndef reset():\ndef clock():\ndef lights():\ndef visible():\ndef alarm_active():\ndef exposure():\ndef _ang_diff(a, b):\ndef _blocked(ax, ay, bx, by, grid, step=16, ignore=frozenset()):\ndef clear_distance(light, angle, grid=None):\ndef point_in_cone(light, x, y, t, grid=None):\ndef in_cone(light, x, y, t, grid=None, body=BODY_RADIUS):\ndef detected_at(x, y, t=None, grid=None):\ndef trigger_alarm():\ndef _spawn_scheduled_wave():\ndef update(dt):\ndef _cone_overlay(size):\ndef _scale(col, k):\ndef _draw_beam(overlay, light, cam_x, cam_y, alarmed):\ndef draw_cones(surface, cam_x, cam_y):\ndef draw_hud(surface):"
+      ]
     },
     "src/missions/m6/systems.py": {
       "description": "Mission 6 - per-frame gameplay pipeline.",
-      "tokens": 2860,
-      "hash": "d7241e751da48507",
-      "size": 10007,
-      "mtimeMs": 1792537020655.871,
-      "updatedAt": "2026-10-21T18:53:50.234Z",
-      "source": "scan",
+      "tokens": 3082,
+      "hash": "736f5b6d7a5ed072",
+      "size": 10784,
+      "mtimeMs": 1792934939293.3723,
+      "updatedAt": "2026-10-25T13:28:59.485Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_reload_frames",
           "kind": "fn",
-          "startLine": 30,
-          "endLine": 32,
+          "startLine": 34,
+          "endLine": 38,
           "tokens": 35
         },
         {
           "name": "_update_player",
           "kind": "fn",
-          "startLine": 35,
-          "endLine": 59,
-          "tokens": 227
+          "startLine": 39,
+          "endLine": 65,
+          "tokens": 228
         },
         {
           "name": "_update_weapon_timers",
           "kind": "fn",
-          "startLine": 62,
-          "endLine": 96,
+          "startLine": 66,
+          "endLine": 102,
           "tokens": 498
         },
         {
           "name": "_update_melee",
           "kind": "fn",
-          "startLine": 99,
-          "endLine": 110,
-          "tokens": 142
+          "startLine": 103,
+          "endLine": 116,
+          "tokens": 143
         },
         {
           "name": "_update_shooting",
           "kind": "fn",
-          "startLine": 113,
-          "endLine": 120,
-          "tokens": 110
+          "startLine": 117,
+          "endLine": 126,
+          "tokens": 111
         },
         {
           "name": "_update_enemies",
           "kind": "fn",
-          "startLine": 123,
-          "endLine": 141,
-          "tokens": 226
+          "startLine": 127,
+          "endLine": 156,
+          "tokens": 355
         },
         {
           "name": "_kill_enemy",
           "kind": "fn",
-          "startLine": 144,
-          "endLine": 149,
-          "tokens": 79
+          "startLine": 157,
+          "endLine": 164,
+          "tokens": 80
         },
         {
           "name": "_update_bullets",
           "kind": "fn",
-          "startLine": 152,
-          "endLine": 191,
-          "tokens": 507
+          "startLine": 165,
+          "endLine": 210,
+          "tokens": 576
         },
         {
           "name": "_update_stealth",
           "kind": "fn",
-          "startLine": 194,
-          "endLine": 200,
-          "tokens": 73
+          "startLine": 211,
+          "endLine": 219,
+          "tokens": 74
         },
         {
           "name": "_update_camera",
           "kind": "fn",
-          "startLine": 203,
-          "endLine": 209,
+          "startLine": 220,
+          "endLine": 228,
           "tokens": 97
         },
         {
           "name": "_train_active",
           "kind": "fn",
-          "startLine": 212,
-          "endLine": 213,
+          "startLine": 229,
+          "endLine": 232,
           "tokens": 23
         },
         {
           "name": "game_update",
           "kind": "fn",
-          "startLine": 216,
-          "endLine": 274,
-          "tokens": 588
+          "startLine": 233,
+          "endLine": 293,
+          "tokens": 595
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/__init__.py",
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "def _reload_frames():\ndef _update_player(keys):\ndef _update_weapon_timers():\ndef _update_melee():\ndef _update_shooting():\ndef _update_enemies():\ndef _kill_enemy(enemy):\ndef _update_bullets():\ndef _update_stealth(dt):\ndef _update_camera():\ndef _train_active():\ndef game_update(keys):"
+      ]
     },
     "src/missions/m6/train3d.py": {
       "description": "Mission 6 - the interactive 3D train scene (``docs/MISSION6_PLOT.md``).",
-      "tokens": 67119,
-      "hash": "79ab8cbab920a0fc",
-      "size": 236674,
-      "mtimeMs": 1792692446470.3308,
-      "updatedAt": "2026-10-22T18:07:26.650Z",
+      "tokens": 69544,
+      "hash": "8add23fe56b8bcf8",
+      "size": 245172,
+      "mtimeMs": 1792845781353.917,
+      "updatedAt": "2026-10-24T12:43:01.537Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_yaw_vis",
           "kind": "fn",
-          "startLine": 176,
-          "endLine": 188,
+          "startLine": 184,
+          "endLine": 196,
           "tokens": 118
         },
         {
           "name": "_bloc_beacons",
           "kind": "fn",
-          "startLine": 189,
-          "endLine": 368,
+          "startLine": 197,
+          "endLine": 376,
           "tokens": 2200
         },
         {
           "name": "_guard_profile",
           "kind": "fn",
-          "startLine": 369,
-          "endLine": 372,
+          "startLine": 377,
+          "endLine": 380,
           "tokens": 24
         },
         {
           "name": "_make_guard",
           "kind": "fn",
-          "startLine": 373,
-          "endLine": 390,
+          "startLine": 381,
+          "endLine": 398,
           "tokens": 212
         },
         {
           "name": "_polyline_len",
           "kind": "fn",
-          "startLine": 391,
-          "endLine": 394,
+          "startLine": 399,
+          "endLine": 402,
           "tokens": 29
         },
         {
           "name": "_entry_plan",
           "kind": "fn",
-          "startLine": 395,
-          "endLine": 422,
+          "startLine": 403,
+          "endLine": 430,
           "tokens": 305
         },
         {
           "name": "_entry_at",
           "kind": "fn",
-          "startLine": 423,
-          "endLine": 447,
+          "startLine": 431,
+          "endLine": 455,
           "tokens": 260
         },
         {
           "name": "_door_open",
           "kind": "fn",
-          "startLine": 448,
-          "endLine": 462,
+          "startLine": 456,
+          "endLine": 470,
           "tokens": 154
         },
         {
           "name": "_truck_z",
           "kind": "fn",
-          "startLine": 463,
-          "endLine": 481,
+          "startLine": 471,
+          "endLine": 489,
           "tokens": 180
         },
         {
           "name": "_ground_at",
           "kind": "fn",
-          "startLine": 482,
-          "endLine": 501,
+          "startLine": 490,
+          "endLine": 509,
           "tokens": 209
         },
         {
           "name": "_radio_widget",
           "kind": "fn",
-          "startLine": 502,
-          "endLine": 510,
+          "startLine": 510,
+          "endLine": 518,
           "tokens": 75
         },
         {
           "name": "_anim_t",
           "kind": "fn",
-          "startLine": 511,
-          "endLine": 522,
+          "startLine": 519,
+          "endLine": 530,
           "tokens": 113
         },
         {
           "name": "_smooth",
           "kind": "fn",
-          "startLine": 523,
-          "endLine": 527,
+          "startLine": 531,
+          "endLine": 535,
           "tokens": 30
         },
         {
           "name": "_ease",
           "kind": "fn",
-          "startLine": 528,
-          "endLine": 540,
+          "startLine": 536,
+          "endLine": 548,
           "tokens": 64
         },
         {
           "name": "_grade_play",
           "kind": "fn",
-          "startLine": 541,
-          "endLine": 568,
+          "startLine": 549,
+          "endLine": 576,
           "tokens": 363
         },
         {
           "name": "_dist2",
           "kind": "fn",
-          "startLine": 569,
-          "endLine": 572,
+          "startLine": 577,
+          "endLine": 580,
           "tokens": 20
         },
         {
           "name": "_vdist",
           "kind": "fn",
-          "startLine": 573,
-          "endLine": 577,
+          "startLine": 581,
+          "endLine": 585,
           "tokens": 46
+        },
+        {
+          "name": "buffer_size",
+          "kind": "fn",
+          "startLine": 586,
+          "endLine": 597,
+          "tokens": 120
         },
         {
           "name": "_renderer",
           "kind": "fn",
-          "startLine": 578,
-          "endLine": 586,
-          "tokens": 75
+          "startLine": 598,
+          "endLine": 625,
+          "tokens": 312
         },
         {
           "name": "_sky",
           "kind": "fn",
-          "startLine": 587,
-          "endLine": 595,
-          "tokens": 108
+          "startLine": 626,
+          "endLine": 638,
+          "tokens": 156
         },
         {
           "name": "_hum",
           "kind": "fn",
-          "startLine": 596,
-          "endLine": 614,
+          "startLine": 639,
+          "endLine": 657,
           "tokens": 198
         },
         {
           "name": "_shadow_for",
           "kind": "fn",
-          "startLine": 615,
-          "endLine": 618,
+          "startLine": 658,
+          "endLine": 661,
           "tokens": 20
         },
         {
           "name": "_volkov_flags",
           "kind": "fn",
-          "startLine": 619,
-          "endLine": 627,
+          "startLine": 662,
+          "endLine": 670,
           "tokens": 66
         },
         {
           "name": "_wound_stage",
           "kind": "fn",
-          "startLine": 628,
-          "endLine": 636,
+          "startLine": 671,
+          "endLine": 679,
           "tokens": 60
         },
         {
           "name": "_blood_spray",
           "kind": "fn",
-          "startLine": 637,
-          "endLine": 663,
+          "startLine": 680,
+          "endLine": 706,
           "tokens": 334
         },
         {
           "name": "_drip",
           "kind": "fn",
-          "startLine": 664,
-          "endLine": 669,
+          "startLine": 707,
+          "endLine": 712,
           "tokens": 46
         },
         {
           "name": "_trail_points",
           "kind": "fn",
-          "startLine": 670,
-          "endLine": 693,
+          "startLine": 713,
+          "endLine": 736,
           "tokens": 224
         },
         {
           "name": "_world_hit",
           "kind": "fn",
-          "startLine": 694,
-          "endLine": 731,
+          "startLine": 737,
+          "endLine": 774,
           "tokens": 432
         },
         {
           "name": "_decal_mesh",
           "kind": "fn",
-          "startLine": 732,
-          "endLine": 745,
+          "startLine": 775,
+          "endLine": 788,
           "tokens": 166
         },
         {
           "name": "_pack_mesh",
           "kind": "fn",
-          "startLine": 746,
-          "endLine": 750,
-          "tokens": 53
-        },
-        {
-          "name": "_add_moved",
-          "kind": "fn",
-          "startLine": 751,
-          "endLine": 5174,
-          "tokens": 58545
+          "startLine": 789,
+          "endLine": 5344,
+          "tokens": 60473
         }
       ]
     },
     "src/missions/m6/world.py": {
       "description": "Mission 6 - world construction, Guard spawns and shared helpers.",
-      "tokens": 3755,
-      "hash": "85907893c905cf32",
-      "size": 13141,
-      "mtimeMs": 1792274562334.3574,
-      "updatedAt": "2026-10-21T18:53:50.239Z",
-      "source": "scan",
+      "tokens": 3832,
+      "hash": "ae702dfb1023f7de",
+      "size": 13412,
+      "mtimeMs": 1792934842465.3071,
+      "updatedAt": "2026-10-25T13:27:22.602Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_tile_world",
           "kind": "fn",
-          "startLine": 57,
-          "endLine": 58,
+          "startLine": 64,
+          "endLine": 67,
           "tokens": 22
         },
         {
           "name": "_player_pos",
           "kind": "fn",
-          "startLine": 61,
-          "endLine": 64,
-          "tokens": 37
+          "startLine": 68,
+          "endLine": 73,
+          "tokens": 38
         },
         {
           "name": "_dist",
           "kind": "fn",
-          "startLine": 67,
-          "endLine": 68,
+          "startLine": 74,
+          "endLine": 77,
           "tokens": 19
         },
         {
           "name": "near",
           "kind": "fn",
-          "startLine": 71,
-          "endLine": 72,
+          "startLine": 78,
+          "endLine": 81,
           "tokens": 28
         },
         {
           "name": "near_tile",
           "kind": "fn",
-          "startLine": 75,
-          "endLine": 76,
+          "startLine": 82,
+          "endLine": 85,
           "tokens": 24
         },
         {
           "name": "solid_walls",
           "kind": "fn",
-          "startLine": 79,
-          "endLine": 80,
-          "tokens": 18
+          "startLine": 86,
+          "endLine": 89,
+          "tokens": 19
         },
         {
           "name": "_set_objective",
           "kind": "fn",
-          "startLine": 83,
-          "endLine": 84,
+          "startLine": 90,
+          "endLine": 93,
           "tokens": 16
         },
         {
           "name": "_movement_locked",
           "kind": "fn",
-          "startLine": 87,
-          "endLine": 94,
-          "tokens": 85
+          "startLine": 94,
+          "endLine": 103,
+          "tokens": 86
         },
         {
           "name": "radio",
           "kind": "fn",
-          "startLine": 97,
-          "endLine": 109,
-          "tokens": 145
+          "startLine": 104,
+          "endLine": 118,
+          "tokens": 146
         },
         {
           "name": "sfx",
           "kind": "fn",
-          "startLine": 112,
-          "endLine": 116,
+          "startLine": 119,
+          "endLine": 125,
           "tokens": 32
         },
         {
           "name": "volkov",
           "kind": "fn",
-          "startLine": 119,
-          "endLine": 120,
+          "startLine": 126,
+          "endLine": 129,
           "tokens": 10
         },
         {
           "name": "friendly_npcs",
           "kind": "fn",
-          "startLine": 123,
-          "endLine": 129,
+          "startLine": 130,
+          "endLine": 138,
           "tokens": 92
         },
         {
           "name": "_reset_world_lists",
           "kind": "fn",
-          "startLine": 132,
-          "endLine": 138,
+          "startLine": 139,
+          "endLine": 147,
           "tokens": 98
         },
         {
           "name": "_guard_patrol",
           "kind": "fn",
-          "startLine": 141,
-          "endLine": 142,
-          "tokens": 22
+          "startLine": 148,
+          "endLine": 151,
+          "tokens": 23
         },
         {
           "name": "_floor_at",
           "kind": "fn",
-          "startLine": 145,
-          "endLine": 151,
-          "tokens": 88
+          "startLine": 152,
+          "endLine": 160,
+          "tokens": 89
         },
         {
           "name": "_clear_line",
           "kind": "fn",
-          "startLine": 154,
-          "endLine": 160,
-          "tokens": 73
+          "startLine": 161,
+          "endLine": 176,
+          "tokens": 134
         },
         {
           "name": "entry_origin",
           "kind": "fn",
-          "startLine": 170,
-          "endLine": 196,
-          "tokens": 341
+          "startLine": 177,
+          "endLine": 205,
+          "tokens": 342
         },
         {
           "name": "_spawn_guard",
           "kind": "fn",
-          "startLine": 199,
-          "endLine": 233,
-          "tokens": 443
+          "startLine": 206,
+          "endLine": 242,
+          "tokens": 444
         },
         {
           "name": "entering",
           "kind": "fn",
-          "startLine": 236,
-          "endLine": 238,
-          "tokens": 43
+          "startLine": 243,
+          "endLine": 247,
+          "tokens": 44
         },
         {
           "name": "tick_entry",
           "kind": "fn",
-          "startLine": 241,
-          "endLine": 261,
+          "startLine": 248,
+          "endLine": 270,
           "tokens": 264
         },
         {
           "name": "_parse_grid",
           "kind": "fn",
-          "startLine": 264,
-          "endLine": 274,
-          "tokens": 136
+          "startLine": 271,
+          "endLine": 284,
+          "tokens": 163
         },
         {
           "name": "_place_volkov",
           "kind": "fn",
-          "startLine": 277,
-          "endLine": 288,
-          "tokens": 108
+          "startLine": 285,
+          "endLine": 298,
+          "tokens": 109
         },
         {
           "name": "build_world",
           "kind": "fn",
-          "startLine": 291,
-          "endLine": 311,
-          "tokens": 226
+          "startLine": 299,
+          "endLine": 322,
+          "tokens": 235
         },
         {
           "name": "alarm_spawn_tiles",
           "kind": "fn",
-          "startLine": 314,
-          "endLine": 316,
+          "startLine": 323,
+          "endLine": 327,
           "tokens": 40
         },
         {
           "name": "living_guards",
           "kind": "fn",
-          "startLine": 319,
-          "endLine": 321,
-          "tokens": 34
+          "startLine": 328,
+          "endLine": 332,
+          "tokens": 35
         },
         {
           "name": "spawn_alarm_wave",
           "kind": "fn",
-          "startLine": 324,
-          "endLine": 359,
+          "startLine": 333,
+          "endLine": 370,
           "tokens": 371
         },
         {
           "name": "on_alarm",
           "kind": "fn",
-          "startLine": 362,
-          "endLine": 369,
-          "tokens": 99
+          "startLine": 371,
+          "endLine": 380,
+          "tokens": 68
         },
         {
           "name": "_arm_everyone",
           "kind": "fn",
-          "startLine": 372,
-          "endLine": 383,
+          "startLine": 381,
+          "endLine": 394,
           "tokens": 102
         },
         {
           "name": "_queue_bark",
           "kind": "fn",
-          "startLine": 386,
-          "endLine": 391,
-          "tokens": 89
+          "startLine": 395,
+          "endLine": 402,
+          "tokens": 90
         },
         {
           "name": "_rail_bark",
           "kind": "fn",
-          "startLine": 394,
-          "endLine": 399,
-          "tokens": 87
+          "startLine": 403,
+          "endLine": 415,
+          "tokens": 127
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "src/missions/m6/__init__.py",
-        "src/missions/m6/meta.py"
-      ],
-      "importance": 0.1129,
-      "skeleton": "def _tile_world(col, row):\ndef _player_pos():\ndef _dist(a, b):\ndef near(pos, radius=80):\ndef near_tile(col, row, radius=80):\ndef solid_walls():\ndef _set_objective(text):\ndef _movement_locked():\ndef radio(text, color=(100, 160, 220), duration=340, mark=None, priority=1):\ndef sfx(name, volume=0.4):\ndef volkov():\ndef friendly_npcs():\ndef _reset_world_lists():\ndef _guard_patrol(stage, tile):\ndef _floor_at(stage, x, y):\ndef _clear_line(stage, a, b, samples=6):\ndef entry_origin(stage, x, y):\ndef _spawn_guard(x, y, stage, tile=None, aware=False, entry=False):\ndef entering(enemy):\ndef tick_entry(enemy, dt):\ndef _parse_grid(grid, stage):\ndef _place_volkov(stage):\ndef build_world(stage):\ndef alarm_spawn_tiles(stage=None):\ndef living_guards():\ndef spawn_alarm_wave(count, entry=True):\ndef on_alarm(stage):\ndef _arm_everyone():\ndef _queue_bark():\ndef _rail_bark():"
+      ]
     },
     "src/missions/m6/yard_brain.py": {
       "description": "Mission 6 yard - the Guard brains (engine.ai on the \"Who fired?\" fight).",
@@ -26490,222 +26627,222 @@
       ]
     },
     "src/missions/m6/yard3d.py": {
-      "description": "Mission 6 - \"Who fired?\": the third-person fight after Volkov's death.",
-      "tokens": 23145,
-      "hash": "deaa2d03445b59b7",
-      "size": 82273,
-      "mtimeMs": 1792620501219.6914,
-      "updatedAt": "2026-10-21T22:08:21.413Z",
+      "description": "Mission 6 - \"Who is Ucilev?\": the third-person fight after Volkov's death.",
+      "tokens": 24427,
+      "hash": "052088348e82cf26",
+      "size": 86759,
+      "mtimeMs": 1792845782985.5657,
+      "updatedAt": "2026-10-24T12:43:03.174Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_blockers",
           "kind": "fn",
-          "startLine": 118,
-          "endLine": 157,
+          "startLine": 119,
+          "endLine": 158,
           "tokens": 559
         },
         {
           "name": "_box_gap",
           "kind": "fn",
-          "startLine": 158,
-          "endLine": 165,
+          "startLine": 159,
+          "endLine": 166,
           "tokens": 49
         },
         {
           "name": "_boom_clear",
           "kind": "fn",
-          "startLine": 166,
-          "endLine": 182,
+          "startLine": 167,
+          "endLine": 183,
           "tokens": 179
         },
         {
           "name": "_push_out",
           "kind": "fn",
-          "startLine": 183,
-          "endLine": 209,
+          "startLine": 184,
+          "endLine": 210,
           "tokens": 258
         },
         {
           "name": "_screen_right",
           "kind": "fn",
-          "startLine": 210,
-          "endLine": 215,
+          "startLine": 211,
+          "endLine": 216,
           "tokens": 44
         },
         {
           "name": "_wrap",
           "kind": "fn",
-          "startLine": 216,
-          "endLine": 219,
+          "startLine": 217,
+          "endLine": 220,
           "tokens": 17
         },
         {
           "name": "ground_y",
           "kind": "fn",
-          "startLine": 220,
-          "endLine": 235,
+          "startLine": 221,
+          "endLine": 236,
           "tokens": 131
         },
         {
           "name": "_wall_run",
           "kind": "fn",
-          "startLine": 236,
-          "endLine": 256,
-          "tokens": 258
+          "startLine": 237,
+          "endLine": 283,
+          "tokens": 602
         },
         {
           "name": "_gate",
           "kind": "fn",
-          "startLine": 257,
-          "endLine": 269,
+          "startLine": 284,
+          "endLine": 296,
           "tokens": 155
         },
         {
           "name": "_boom",
           "kind": "fn",
-          "startLine": 270,
-          "endLine": 280,
+          "startLine": 297,
+          "endLine": 307,
           "tokens": 113
         },
         {
           "name": "_perimeter_mesh",
           "kind": "fn",
-          "startLine": 281,
-          "endLine": 323,
-          "tokens": 515
+          "startLine": 308,
+          "endLine": 367,
+          "tokens": 813
         },
         {
           "name": "_perimeter_sprites",
           "kind": "fn",
-          "startLine": 324,
-          "endLine": 347,
+          "startLine": 368,
+          "endLine": 391,
           "tokens": 365
         },
         {
           "name": "_blocked",
           "kind": "fn",
-          "startLine": 348,
-          "endLine": 360,
+          "startLine": 392,
+          "endLine": 404,
           "tokens": 116
         },
         {
           "name": "_sight_blocked",
           "kind": "fn",
-          "startLine": 361,
-          "endLine": 424,
+          "startLine": 405,
+          "endLine": 468,
           "tokens": 957
         },
         {
           "name": "_make_guard",
           "kind": "fn",
-          "startLine": 425,
-          "endLine": 472,
+          "startLine": 469,
+          "endLine": 516,
           "tokens": 726
         },
         {
           "name": "_k9_asset",
           "kind": "fn",
-          "startLine": 473,
-          "endLine": 499,
+          "startLine": 517,
+          "endLine": 543,
           "tokens": 285
         },
         {
           "name": "_gun_pt",
           "kind": "fn",
-          "startLine": 500,
-          "endLine": 505,
+          "startLine": 544,
+          "endLine": 549,
           "tokens": 62
         },
         {
           "name": "_cross",
           "kind": "fn",
-          "startLine": 506,
-          "endLine": 510,
+          "startLine": 550,
+          "endLine": 554,
           "tokens": 36
         },
         {
           "name": "_unit",
           "kind": "fn",
-          "startLine": 511,
-          "endLine": 515,
+          "startLine": 555,
+          "endLine": 559,
           "tokens": 43
         },
         {
           "name": "_gait_cycle",
           "kind": "fn",
-          "startLine": 516,
-          "endLine": 521,
+          "startLine": 560,
+          "endLine": 565,
           "tokens": 64
         },
         {
           "name": "_gait",
           "kind": "fn",
-          "startLine": 522,
-          "endLine": 558,
+          "startLine": 566,
+          "endLine": 602,
           "tokens": 552
         },
         {
           "name": "_smooth",
           "kind": "fn",
-          "startLine": 559,
-          "endLine": 563,
+          "startLine": 603,
+          "endLine": 607,
           "tokens": 23
         },
         {
           "name": "_punch_beats",
           "kind": "fn",
-          "startLine": 564,
-          "endLine": 590,
+          "startLine": 608,
+          "endLine": 634,
           "tokens": 376
         },
         {
           "name": "_arm_ik",
           "kind": "fn",
-          "startLine": 591,
-          "endLine": 635,
+          "startLine": 635,
+          "endLine": 679,
           "tokens": 663
         },
         {
           "name": "_gun_basis",
           "kind": "fn",
-          "startLine": 636,
-          "endLine": 647,
+          "startLine": 680,
+          "endLine": 691,
           "tokens": 131
         },
         {
           "name": "_draw_k9",
           "kind": "fn",
-          "startLine": 648,
-          "endLine": 671,
+          "startLine": 692,
+          "endLine": 715,
           "tokens": 212
         },
         {
           "name": "_flash_mesh",
           "kind": "fn",
-          "startLine": 672,
-          "endLine": 693,
+          "startLine": 716,
+          "endLine": 737,
           "tokens": 253
         },
         {
           "name": "_guard_flash_mesh",
           "kind": "fn",
-          "startLine": 694,
-          "endLine": 723,
-          "tokens": 380
+          "startLine": 738,
+          "endLine": 767,
+          "tokens": 412
         },
         {
           "name": "YardScene",
           "kind": "class",
-          "startLine": 724,
-          "endLine": 1798,
-          "tokens": 13839
+          "startLine": 768,
+          "endLine": 1878,
+          "tokens": 14442
         },
         {
           "name": "begin",
           "kind": "fn",
-          "startLine": 1799,
-          "endLine": 1829,
+          "startLine": 1879,
+          "endLine": 1909,
           "tokens": 120
         }
       ]
@@ -28138,236 +28275,135 @@
     },
     "src/ui/arena_view.py": {
       "description": "Renderer for multiplayer arena matches.",
-      "tokens": 25079,
-      "hash": "ac5241837f74cc72",
-      "size": 88111,
-      "mtimeMs": 1792184374628.428,
-      "updatedAt": "2026-10-21T18:53:50.255Z",
-      "source": "scan",
+      "tokens": 25138,
+      "hash": "7d9ed7784bf5451f",
+      "size": 88317,
+      "mtimeMs": 1792967816227.319,
+      "updatedAt": "2026-10-25T22:36:56.367Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "rig_for_weapon",
           "kind": "fn",
-          "startLine": 88,
-          "endLine": 90,
-          "tokens": 44
+          "startLine": 94,
+          "endLine": 107,
+          "tokens": 141
+        },
+        {
+          "name": "_rig_icon",
+          "kind": "fn",
+          "startLine": 108,
+          "endLine": 144,
+          "tokens": 483
+        },
+        {
+          "name": "_strip_plate",
+          "kind": "fn",
+          "startLine": 145,
+          "endLine": 154,
+          "tokens": 100
         },
         {
           "name": "reach_for_view",
           "kind": "fn",
-          "startLine": 93,
-          "endLine": 95,
-          "tokens": 49
+          "startLine": 155,
+          "endLine": 236,
+          "tokens": 984
         },
         {
           "name": "_pickup_shadow",
           "kind": "fn",
-          "startLine": 175,
-          "endLine": 183,
-          "tokens": 97
+          "startLine": 237,
+          "endLine": 247,
+          "tokens": 98
         },
         {
           "name": "_mix",
           "kind": "fn",
-          "startLine": 186,
-          "endLine": 190,
+          "startLine": 248,
+          "endLine": 254,
           "tokens": 59
         },
         {
           "name": "color_for",
           "kind": "fn",
-          "startLine": 193,
-          "endLine": 196,
-          "tokens": 43
+          "startLine": 255,
+          "endLine": 267,
+          "tokens": 127
         },
         {
           "name": "_fit",
           "kind": "fn",
-          "startLine": 206,
-          "endLine": 219,
+          "startLine": 268,
+          "endLine": 283,
           "tokens": 165
         },
         {
           "name": "_fit_px",
           "kind": "fn",
-          "startLine": 222,
-          "endLine": 239,
-          "tokens": 196
+          "startLine": 284,
+          "endLine": 304,
+          "tokens": 197
         },
         {
           "name": "_PoseMeta",
           "kind": "class",
-          "startLine": 243,
-          "endLine": 254,
+          "startLine": 305,
+          "endLine": 317,
           "tokens": 186
-        },
-        {
-          "name": "_PoseMeta.__init__",
-          "kind": "method",
-          "startLine": 248,
-          "endLine": 254,
-          "tokens": 107
         },
         {
           "name": "ArenaView",
           "kind": "class",
-          "startLine": 256,
-          "endLine": 1742,
-          "tokens": 21445
+          "startLine": 318,
+          "endLine": 1755,
+          "tokens": 20782
         },
         {
-          "name": "ArenaView.__init__",
-          "kind": "method",
-          "startLine": 259,
-          "endLine": 315,
-          "tokens": 893
+          "name": "_small_font",
+          "kind": "fn",
+          "startLine": 1756,
+          "endLine": 1766,
+          "tokens": 88
         },
         {
-          "name": "ArenaView.set_map",
-          "kind": "method",
-          "startLine": 317,
-          "endLine": 336,
-          "tokens": 273
+          "name": "_bold_font",
+          "kind": "fn",
+          "startLine": 1767,
+          "endLine": 1778,
+          "tokens": 103
         },
         {
-          "name": "ArenaView.update_camera",
-          "kind": "method",
-          "startLine": 338,
-          "endLine": 441,
-          "tokens": 1493
+          "name": "_term_font",
+          "kind": "fn",
+          "startLine": 1779,
+          "endLine": 1794,
+          "tokens": 157
         },
         {
-          "name": "ArenaView.apply_recoil_kick",
-          "kind": "method",
-          "startLine": 443,
-          "endLine": 455,
-          "tokens": 181
+          "name": "_term_font_bold",
+          "kind": "fn",
+          "startLine": 1795,
+          "endLine": 1805,
+          "tokens": 98
         },
         {
-          "name": "ArenaView._visible_tiles",
-          "kind": "method",
-          "startLine": 457,
-          "endLine": 463,
-          "tokens": 113
-        },
-        {
-          "name": "ArenaView.draw_tiles",
-          "kind": "method",
-          "startLine": 465,
-          "endLine": 495,
-          "tokens": 411
-        },
-        {
-          "name": "ArenaView.draw_pickups",
-          "kind": "method",
-          "startLine": 497,
-          "endLine": 529,
-          "tokens": 474
-        },
-        {
-          "name": "ArenaView._draw_crate",
-          "kind": "method",
-          "startLine": 538,
-          "endLine": 617,
-          "tokens": 1268
-        },
-        {
-          "name": "ArenaView._draw_crate_glyph",
-          "kind": "method",
-          "startLine": 619,
-          "endLine": 644,
-          "tokens": 428
-        },
-        {
-          "name": "ArenaView._draw_pickup_respawn",
-          "kind": "method",
-          "startLine": 646,
-          "endLine": 674,
-          "tokens": 438
-        },
-        {
-          "name": "ArenaView._pose",
-          "kind": "method",
-          "startLine": 678,
-          "endLine": 698,
-          "tokens": 236
-        },
-        {
-          "name": "ArenaView.name_for",
-          "kind": "method",
-          "startLine": 712,
-          "endLine": 725,
-          "tokens": 188
-        },
-        {
-          "name": "ArenaView.look_for",
-          "kind": "method",
-          "startLine": 727,
-          "endLine": 740,
-          "tokens": 191
-        },
-        {
-          "name": "ArenaView.confirm_hit",
-          "kind": "method",
-          "startLine": 742,
-          "endLine": 760,
-          "tokens": 273
-        },
-        {
-          "name": "ArenaView.on_local_kill",
-          "kind": "method",
-          "startLine": 762,
-          "endLine": 765,
-          "tokens": 58
-        },
-        {
-          "name": "ArenaView.on_local_death",
-          "kind": "method",
-          "startLine": 767,
-          "endLine": 770,
-          "tokens": 56
-        },
-        {
-          "name": "ArenaView.on_empty_click",
-          "kind": "method",
-          "startLine": 772,
-          "endLine": 775,
-          "tokens": 59
-        },
-        {
-          "name": "ArenaView.on_round_end",
-          "kind": "method",
-          "startLine": 777,
-          "endLine": 780,
-          "tokens": 60
-        },
-        {
-          "name": "ArenaView.spawn_damage_number",
-          "kind": "method",
-          "startLine": 782,
-          "endLine": 795,
-          "tokens": 214
-        },
-        {
-          "name": "ArenaView.on_pickup",
-          "kind": "method",
-          "startLine": 797,
-          "endLine": 803,
-          "tokens": 106
+          "name": "_weapon_slot_color",
+          "kind": "fn",
+          "startLine": 1806,
+          "endLine": 1820,
+          "tokens": 167
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "def rig_for_weapon(weapon):\ndef reach_for_view(v):\ndef _pickup_shadow(width):\ndef _mix(a, b, t):\ndef color_for(player_id, local_id):\ndef _fit(text, max_chars):\ndef _fit_px(text, font, max_w):\nclass _PoseMeta:\n    def __init__(self):\nclass ArenaView(object):\n    def __init__(self, map_name=\"yard\"):\n    def set_map(self, map_name):\n    def update_camera(self, world, local_id, view_w, view_h):\n    def apply_recoil_kick(self, aim_degrees, amount):\n    def _visible_tiles(self, view_w, view_h):\n    def draw_tiles(self, surface):\n    def draw_pickups(self, surface, live=None):\n    def _draw_crate(self, surface, cx, cy, col, kind, value,\n    def _draw_crate_glyph(self, surface, cx, cy, col, kind, value):\n    def _draw_pickup_respawn(self, surface, cx, cy, ready_at):\n    def _pose(self, pid):\n    def name_for(self, player_id):\n    def look_for(self, player_id):\n    def confirm_hit(self, wx, wy):\n    def on_local_kill(self):\n    def on_local_death(self):\n    def on_empty_click(self):\n    def on_round_end(self):\n    def spawn_damage_number(self, wx, wy, amount):\n    def on_pickup(self, wx, wy, value):"
+      ]
     },
     "src/ui/hud.py": {
       "description": "HUD overlays: minimap, safe keypad, notebook inspection, desk notes.",
-      "tokens": 16406,
-      "hash": "e1a576e4025dbbdf",
-      "size": 57713,
-      "mtimeMs": 1792449986284.1711,
-      "updatedAt": "2026-10-21T18:53:50.256Z",
-      "source": "scan",
+      "tokens": 17073,
+      "hash": "2f706158d663d134",
+      "size": 60047,
+      "mtimeMs": 1792793227170.7322,
+      "updatedAt": "2026-10-23T22:07:07.382Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "MiniMap",
@@ -28375,13 +28411,6 @@
           "startLine": 41,
           "endLine": 46,
           "tokens": 89
-        },
-        {
-          "name": "MiniMap.__init__",
-          "kind": "method",
-          "startLine": 45,
-          "endLine": 46,
-          "tokens": 37
         },
         {
           "name": "_draw_dirty_hand_text",
@@ -28415,8 +28444,8 @@
           "name": "draw_desk_note",
           "kind": "fn",
           "startLine": 193,
-          "endLine": 238,
-          "tokens": 546
+          "endLine": 239,
+          "tokens": 554
         },
         {
           "name": "reset_notebook_inspect",
@@ -28430,138 +28459,163 @@
           "kind": "fn",
           "startLine": 243,
           "endLine": 427,
-          "tokens": 2242
+          "tokens": 2245
         },
         {
           "name": "_safe_666_asset_candidates",
           "kind": "fn",
           "startLine": 428,
-          "endLine": 450,
-          "tokens": 278
+          "endLine": 452,
+          "tokens": 279
         },
         {
           "name": "_play_safe_666_demon_noise",
           "kind": "fn",
           "startLine": 453,
-          "endLine": 473,
-          "tokens": 210
+          "endLine": 476,
+          "tokens": 225
         },
         {
           "name": "_stop_safe_666_demon_noise",
           "kind": "fn",
-          "startLine": 476,
-          "endLine": 499,
-          "tokens": 177
+          "startLine": 477,
+          "endLine": 507,
+          "tokens": 236
+        },
+        {
+          "name": "safe_666_3d_live",
+          "kind": "fn",
+          "startLine": 508,
+          "endLine": 512,
+          "tokens": 57
+        },
+        {
+          "name": "_egg3d_begin",
+          "kind": "fn",
+          "startLine": 513,
+          "endLine": 524,
+          "tokens": 132
+        },
+        {
+          "name": "_egg3d_stop",
+          "kind": "fn",
+          "startLine": 525,
+          "endLine": 534,
+          "tokens": 57
+        },
+        {
+          "name": "_draw_safe_666_3d",
+          "kind": "fn",
+          "startLine": 535,
+          "endLine": 552,
+          "tokens": 170
         },
         {
           "name": "_safe_666_window_tamper",
           "kind": "fn",
-          "startLine": 502,
-          "endLine": 565,
+          "startLine": 553,
+          "endLine": 618,
           "tokens": 796
         },
         {
           "name": "_draw_safe_666_error_glyphs",
           "kind": "fn",
-          "startLine": 568,
-          "endLine": 592,
-          "tokens": 286
+          "startLine": 619,
+          "endLine": 645,
+          "tokens": 287
         },
         {
           "name": "_safe_666_fake_crash",
           "kind": "fn",
-          "startLine": 595,
-          "endLine": 643,
-          "tokens": 472
+          "startLine": 646,
+          "endLine": 697,
+          "tokens": 478
         },
         {
           "name": "_trigger_safe_666_easter_egg",
           "kind": "fn",
-          "startLine": 646,
-          "endLine": 690,
-          "tokens": 538
+          "startLine": 698,
+          "endLine": 728,
+          "tokens": 332
+        },
+        {
+          "name": "_safe_666_loud_open",
+          "kind": "fn",
+          "startLine": 729,
+          "endLine": 751,
+          "tokens": 287
         },
         {
           "name": "_submit_safe_keypad_code",
           "kind": "fn",
-          "startLine": 693,
-          "endLine": 701,
+          "startLine": 752,
+          "endLine": 762,
           "tokens": 113
         },
         {
           "name": "_draw_safe_666_easter_egg",
           "kind": "fn",
-          "startLine": 704,
-          "endLine": 988,
-          "tokens": 3865
+          "startLine": 763,
+          "endLine": 1058,
+          "tokens": 3958
         },
         {
           "name": "draw_safe_keypad",
           "kind": "fn",
-          "startLine": 991,
-          "endLine": 1112,
+          "startLine": 1059,
+          "endLine": 1180,
           "tokens": 1590
         },
         {
           "name": "handle_keypad_click",
           "kind": "fn",
-          "startLine": 1113,
-          "endLine": 1128,
+          "startLine": 1181,
+          "endLine": 1196,
           "tokens": 190
         },
         {
           "name": "handle_keypad_keypress",
           "kind": "fn",
-          "startLine": 1129,
-          "endLine": 1146,
-          "tokens": 218
+          "startLine": 1197,
+          "endLine": 1216,
+          "tokens": 219
         },
         {
           "name": "_crosshair_color",
           "kind": "fn",
-          "startLine": 1149,
-          "endLine": 1152,
-          "tokens": 61
+          "startLine": 1217,
+          "endLine": 1235,
+          "tokens": 268
         },
         {
           "name": "draw_crosshair",
           "kind": "fn",
-          "startLine": 1168,
-          "endLine": 1236,
-          "tokens": 794
+          "startLine": 1236,
+          "endLine": 1306,
+          "tokens": 795
         },
         {
           "name": "draw_gameplay_crosshair",
           "kind": "fn",
-          "startLine": 1239,
-          "endLine": 1246,
+          "startLine": 1307,
+          "endLine": 1316,
           "tokens": 106
         },
         {
           "name": "draw_combat_reticle",
           "kind": "fn",
-          "startLine": 1249,
-          "endLine": 1290,
-          "tokens": 487
+          "startLine": 1317,
+          "endLine": 1377,
+          "tokens": 751
         },
         {
           "name": "draw_objective_panel",
           "kind": "fn",
-          "startLine": 1310,
-          "endLine": 1316,
-          "tokens": 96
-        },
-        {
-          "name": "draw_pinned_radio",
-          "kind": "fn",
-          "startLine": 1319,
-          "endLine": 1329,
-          "tokens": 151
+          "startLine": 1378,
+          "endLine": 1398,
+          "tokens": 248
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "class MiniMap(_MiniMap):\n    def __init__(self, map_data, tile_size=64, palette=\"m2\"):\ndef _draw_dirty_hand_text(surface, text, x, y, font, color, seed=0, alpha=120, jitter=2, angle=0):\ndef _draw_crumpled_safe_scrap():\ndef _schedule_text_ticks(text, start_delay=0, step=2, volume=0.08, max_ticks=42):\ndef _play_ui_type_tick(volume=0.095):\ndef draw_desk_note():\ndef reset_notebook_inspect():\ndef draw_notebook_inspection():\ndef _safe_666_asset_candidates():\ndef _play_safe_666_demon_noise():\ndef _stop_safe_666_demon_noise():\ndef _safe_666_window_tamper(t, total_t):\ndef _draw_safe_666_error_glyphs(t, rng):\ndef _safe_666_fake_crash():\ndef _trigger_safe_666_easter_egg():\ndef _submit_safe_keypad_code():\ndef _draw_safe_666_easter_egg():\ndef draw_safe_keypad():\ndef handle_keypad_click(pos):\ndef handle_keypad_keypress(key):\ndef _crosshair_color():\ndef draw_crosshair(surface=None, state_name=None):\ndef draw_gameplay_crosshair(surface=None, state_name=\"GAME\"):\ndef draw_combat_reticle(surface=None, require_player=True):\ndef draw_objective_panel(surface, text, x=20, y=None):\ndef draw_pinned_radio(surface, pinned_texts=None, x=20):"
+      ]
     },
     "src/ui/main.py": {
       "description": "Split from menu.py - see menu.py (shim) for the map.",
@@ -28705,227 +28759,77 @@
     },
     "src/ui/match_screen.py": {
       "description": "The in-game arena match: entry panel plus the live match runtime.",
-      "tokens": 50757,
-      "hash": "de4e6e9bb6b74b44",
-      "size": 178299,
-      "mtimeMs": 1792184374650.6472,
-      "updatedAt": "2026-10-21T18:53:50.260Z",
-      "source": "scan",
+      "tokens": 60072,
+      "hash": "e22ee55f5192aaec",
+      "size": 210903,
+      "mtimeMs": 1792968879767.964,
+      "updatedAt": "2026-10-25T22:54:39.918Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_fit_to_font",
           "kind": "fn",
-          "startLine": 172,
-          "endLine": 184,
-          "tokens": 160
+          "startLine": 183,
+          "endLine": 221,
+          "tokens": 494
         },
         {
           "name": "Wire",
           "kind": "class",
-          "startLine": 211,
-          "endLine": 240,
-          "tokens": 252
+          "startLine": 222,
+          "endLine": 285,
+          "tokens": 706
         },
         {
-          "name": "Wire.__init__",
-          "kind": "method",
-          "startLine": 221,
-          "endLine": 224,
-          "tokens": 33
-        },
-        {
-          "name": "Wire._send",
-          "kind": "method",
-          "startLine": 226,
-          "endLine": 230,
-          "tokens": 44
-        },
-        {
-          "name": "Wire.flush",
-          "kind": "method",
-          "startLine": 232,
-          "endLine": 240,
-          "tokens": 66
+          "name": "_linger_close",
+          "kind": "fn",
+          "startLine": 286,
+          "endLine": 304,
+          "tokens": 138
         },
         {
           "name": "Peer",
           "kind": "class",
-          "startLine": 243,
-          "endLine": 279,
-          "tokens": 395
-        },
-        {
-          "name": "Peer.__init__",
-          "kind": "method",
-          "startLine": 257,
-          "endLine": 269,
-          "tokens": 157
-        },
-        {
-          "name": "Peer.close",
-          "kind": "method",
-          "startLine": 275,
-          "endLine": 279,
-          "tokens": 30
+          "startLine": 305,
+          "endLine": 355,
+          "tokens": 505
         },
         {
           "name": "aim_degrees",
           "kind": "fn",
-          "startLine": 282,
-          "endLine": 291,
-          "tokens": 141
+          "startLine": 356,
+          "endLine": 367,
+          "tokens": 142
         },
         {
           "name": "local_axes",
           "kind": "fn",
-          "startLine": 294,
-          "endLine": 305,
-          "tokens": 101
+          "startLine": 368,
+          "endLine": 391,
+          "tokens": 263
         },
         {
           "name": "mint_callsign",
           "kind": "fn",
-          "startLine": 318,
-          "endLine": 321,
+          "startLine": 392,
+          "endLine": 397,
           "tokens": 60
         },
         {
           "name": "parse_addr",
           "kind": "fn",
-          "startLine": 324,
-          "endLine": 339,
-          "tokens": 163
+          "startLine": 398,
+          "endLine": 415,
+          "tokens": 164
         },
         {
           "name": "MatchScreen",
           "kind": "class",
-          "startLine": 342,
-          "endLine": 3743,
-          "tokens": 46801
-        },
-        {
-          "name": "MatchScreen.__init__",
-          "kind": "method",
-          "startLine": 356,
-          "endLine": 501,
-          "tokens": 2162
-        },
-        {
-          "name": "MatchScreen.is_open",
-          "kind": "method",
-          "startLine": 505,
-          "endLine": 506,
-          "tokens": 17
-        },
-        {
-          "name": "MatchScreen.session_phase",
-          "kind": "method",
-          "startLine": 508,
-          "endLine": 514,
-          "tokens": 88
-        },
-        {
-          "name": "MatchScreen.waiting_for_player",
-          "kind": "method",
-          "startLine": 516,
-          "endLine": 518,
-          "tokens": 52
-        },
-        {
-          "name": "MatchScreen.wants_menu_cursor",
-          "kind": "method",
-          "startLine": 520,
-          "endLine": 537,
-          "tokens": 254
-        },
-        {
-          "name": "MatchScreen.in_match_lobby",
-          "kind": "method",
-          "startLine": 539,
-          "endLine": 542,
-          "tokens": 58
-        },
-        {
-          "name": "MatchScreen.input_frozen",
-          "kind": "method",
-          "startLine": 544,
-          "endLine": 547,
-          "tokens": 59
-        },
-        {
-          "name": "MatchScreen._arm_intro",
-          "kind": "method",
-          "startLine": 549,
-          "endLine": 558,
-          "tokens": 116
-        },
-        {
-          "name": "MatchScreen._begin_countdown",
-          "kind": "method",
-          "startLine": 560,
-          "endLine": 578,
-          "tokens": 211
-        },
-        {
-          "name": "MatchScreen._unstartable_reason",
-          "kind": "method",
-          "startLine": 580,
-          "endLine": 606,
-          "tokens": 348
-        },
-        {
-          "name": "MatchScreen._lobby_roster",
-          "kind": "method",
-          "startLine": 608,
-          "endLine": 613,
-          "tokens": 78
-        },
-        {
-          "name": "MatchScreen._local_slot",
-          "kind": "method",
-          "startLine": 617,
-          "endLine": 619,
-          "tokens": 44
-        },
-        {
-          "name": "MatchScreen._teams_table",
-          "kind": "method",
-          "startLine": 621,
-          "endLine": 636,
-          "tokens": 188
-        },
-        {
-          "name": "MatchScreen._team_play",
-          "kind": "method",
-          "startLine": 638,
-          "endLine": 647,
-          "tokens": 120
-        },
-        {
-          "name": "MatchScreen._apply_team_pick",
-          "kind": "method",
-          "startLine": 649,
-          "endLine": 665,
-          "tokens": 259
-        },
-        {
-          "name": "MatchScreen.request_team",
-          "kind": "method",
-          "startLine": 667,
-          "endLine": 687,
-          "tokens": 263
-        },
-        {
-          "name": "MatchScreen._move_player_to",
-          "kind": "method",
-          "startLine": 689,
-          "endLine": 691,
-          "tokens": 46
+          "startLine": 416,
+          "endLine": 4459,
+          "tokens": 55261
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0632,
-      "skeleton": "def _fit_to_font(font, text, max_w):\nclass Wire(object):\n    def __init__(self, sock):\n    def _send(self, obj):\n    def flush(self):\nclass Peer(object):\n    def __init__(self, sock, addr, player_id=None):\n    def close(self):\ndef aim_degrees(mouse, player_xy, cam_x, cam_y):\ndef local_axes(keys):\ndef mint_callsign():\ndef parse_addr(text):\nclass MatchScreen(object):\n    def __init__(self):\n    def is_open(self):\n    def session_phase(self):\n    def waiting_for_player(self):\n    def wants_menu_cursor(self):\n    def in_match_lobby(self):\n    def input_frozen(self):\n    def _arm_intro(self, seconds=INTRO_SECONDS):\n    def _begin_countdown(self):\n    def _unstartable_reason(self):\n    def _lobby_roster(self):\n    def _local_slot(self):\n    def _teams_table(self):\n    def _team_play(self):\n    def _apply_team_pick(self, player_id, team):\n    def request_team(self, team):\n    def _move_player_to(self, player_id, team):"
+      ]
     },
     "src/ui/mission_failed.py": {
       "description": "Mission-specific failure terminals with bespoke procedural illustrations.",
@@ -33831,230 +33735,84 @@
     },
     "tests/unit/test_m6_campaign.py": {
       "description": "Mission 6 campaign regressions. Run: python -m unittest tests.unit.test_m6_campaign -v.",
-      "tokens": 13379,
-      "hash": "d5dffbebef599482",
-      "size": 49002,
-      "mtimeMs": 1792586730116.9062,
-      "updatedAt": "2026-10-21T18:53:50.311Z",
-      "source": "scan",
+      "tokens": 14342,
+      "hash": "58f6cec84e1bcaf3",
+      "size": 52375,
+      "mtimeMs": 1792928654228.1243,
+      "updatedAt": "2026-10-25T11:44:14.356Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "M6MapTests",
           "kind": "class",
-          "startLine": 40,
-          "endLine": 76,
-          "tokens": 479
-        },
-        {
-          "name": "M6MapTests.test_three_maps_validate_and_are_distinct",
-          "kind": "method",
           "startLine": 41,
-          "endLine": 51,
-          "tokens": 173
+          "endLine": 79,
+          "tokens": 480
         },
         {
-          "name": "M6MapTests.test_anchors_spawns_and_markers_are_consistent",
-          "kind": "method",
-          "startLine": 53,
-          "endLine": 63,
-          "tokens": 169
-        },
-        {
-          "name": "M6MapTests.test_bind_stage_rebinds_the_live_grid",
-          "kind": "method",
-          "startLine": 65,
-          "endLine": 76,
-          "tokens": 126
+          "name": "TopDownProgressionTests",
+          "kind": "class",
+          "startLine": 80,
+          "endLine": 106,
+          "tokens": 388
         },
         {
           "name": "FloodlightGeometryTests",
           "kind": "class",
-          "startLine": 82,
-          "endLine": 110,
-          "tokens": 437
-        },
-        {
-          "name": "FloodlightGeometryTests.test_sweep_is_a_deterministic_sine",
-          "kind": "method",
-          "startLine": 83,
-          "endLine": 90,
-          "tokens": 145
-        },
-        {
-          "name": "FloodlightGeometryTests.test_cone_respects_angle_range_and_walls",
-          "kind": "method",
-          "startLine": 92,
-          "endLine": 110,
-          "tokens": 278
+          "startLine": 107,
+          "endLine": 137,
+          "tokens": 438
         },
         {
           "name": "ExposureAlarmTests",
           "kind": "class",
-          "startLine": 113,
-          "endLine": 183,
-          "tokens": 827
-        },
-        {
-          "name": "ExposureAlarmTests.setUp",
-          "kind": "method",
-          "startLine": 114,
-          "endLine": 132,
-          "tokens": 236
-        },
-        {
-          "name": "ExposureAlarmTests.tearDown",
-          "kind": "method",
-          "startLine": 134,
-          "endLine": 139,
-          "tokens": 49
-        },
-        {
-          "name": "ExposureAlarmTests.test_exposure_accumulates_and_latches_exactly_once",
-          "kind": "method",
-          "startLine": 141,
-          "endLine": 152,
-          "tokens": 159
-        },
-        {
-          "name": "ExposureAlarmTests.test_hidden_player_decays_and_never_latches",
-          "kind": "method",
-          "startLine": 154,
-          "endLine": 162,
-          "tokens": 119
-        },
-        {
-          "name": "ExposureAlarmTests.test_stage_entry_clears_exposure_and_alarm",
-          "kind": "method",
-          "startLine": 164,
-          "endLine": 171,
-          "tokens": 105
-        },
-        {
-          "name": "ExposureAlarmTests.test_alarm_waves_stay_under_the_cap",
-          "kind": "method",
-          "startLine": 173,
-          "endLine": 183,
-          "tokens": 147
+          "startLine": 138,
+          "endLine": 213,
+          "tokens": 874
         },
         {
           "name": "ShotContractTests",
           "kind": "class",
-          "startLine": 189,
-          "endLine": 273,
-          "tokens": 1248
-        },
-        {
-          "name": "ShotContractTests.test_every_authored_scene_is_registered",
-          "kind": "method",
-          "startLine": 190,
-          "endLine": 195,
-          "tokens": 93
-        },
-        {
-          "name": "ShotContractTests.test_ending_chain_matches_the_doc",
-          "kind": "method",
-          "startLine": 197,
-          "endLine": 212,
-          "tokens": 242
-        },
-        {
-          "name": "ShotContractTests.test_boxcar_dialogue_is_verbatim",
-          "kind": "method",
           "startLine": 214,
-          "endLine": 223,
-          "tokens": 205
-        },
-        {
-          "name": "ShotContractTests.test_3d_can_be_disabled_by_environment",
-          "kind": "method",
-          "startLine": 225,
-          "endLine": 228,
-          "tokens": 65
-        },
-        {
-          "name": "ShotContractTests.test_terminal_record_drops_the_first_name",
-          "kind": "method",
-          "startLine": 230,
-          "endLine": 236,
-          "tokens": 98
-        },
-        {
-          "name": "ShotContractTests.test_fall_deploys_a_canopy",
-          "kind": "method",
-          "startLine": 238,
-          "endLine": 245,
-          "tokens": 125
-        },
-        {
-          "name": "ShotContractTests.test_representative_frames_render_on_the_software_backend",
-          "kind": "method",
-          "startLine": 247,
-          "endLine": 273,
-          "tokens": 406
+          "endLine": 306,
+          "tokens": 1368
         },
         {
           "name": "TrainSceneTests",
           "kind": "class",
-          "startLine": 279,
-          "endLine": 598,
-          "tokens": 4398
+          "startLine": 307,
+          "endLine": 631,
+          "tokens": 4458
         },
         {
-          "name": "TrainSceneTests.setUp",
-          "kind": "method",
-          "startLine": 280,
-          "endLine": 292,
-          "tokens": 159
+          "name": "CheckpointAndOutfitTests",
+          "kind": "class",
+          "startLine": 632,
+          "endLine": 677,
+          "tokens": 687
         },
         {
-          "name": "TrainSceneTests.tearDown",
-          "kind": "method",
-          "startLine": 294,
-          "endLine": 295,
-          "tokens": 13
+          "name": "_lowest_vertex",
+          "kind": "fn",
+          "startLine": 678,
+          "endLine": 689,
+          "tokens": 103
         },
         {
-          "name": "TrainSceneTests._run_until",
-          "kind": "method",
-          "startLine": 297,
-          "endLine": 302,
-          "tokens": 68
+          "name": "StagingAndExposureTests",
+          "kind": "class",
+          "startLine": 690,
+          "endLine": 883,
+          "tokens": 2789
         },
         {
-          "name": "TrainSceneTests.test_scripted_shot_timing",
-          "kind": "method",
-          "startLine": 304,
-          "endLine": 316,
-          "tokens": 163
-        },
-        {
-          "name": "TrainSceneTests.test_guard_fire_can_kill_biribel",
-          "kind": "method",
-          "startLine": 318,
-          "endLine": 339,
-          "tokens": 329
-        },
-        {
-          "name": "TrainSceneTests.test_fire_and_reload_use_the_shared_k9",
-          "kind": "method",
-          "startLine": 341,
-          "endLine": 353,
-          "tokens": 180
-        },
-        {
-          "name": "TrainSceneTests.test_hitscan_selects_the_guards_chest",
-          "kind": "method",
-          "startLine": 355,
-          "endLine": 370,
-          "tokens": 202
+          "name": "YardSceneTests",
+          "kind": "class",
+          "startLine": 884,
+          "endLine": 1069,
+          "tokens": 2349
         }
-      ],
-      "symbolSource": "ts",
-      "imports": [
-        "tests/unit/__init__.py"
-      ],
-      "importance": 0.0598,
-      "skeleton": "class M6MapTests(unittest.TestCase):\n    def test_three_maps_validate_and_are_distinct(self):\n    def test_anchors_spawns_and_markers_are_consistent(self):\n    def test_bind_stage_rebinds_the_live_grid(self):\nclass FloodlightGeometryTests(unittest.TestCase):\n    def test_sweep_is_a_deterministic_sine(self):\n    def test_cone_respects_angle_range_and_walls(self):\nclass ExposureAlarmTests(unittest.TestCase):\n    def setUp(self):\n    def tearDown(self):\n    def test_exposure_accumulates_and_latches_exactly_once(self):\n    def test_hidden_player_decays_and_never_latches(self):\n    def test_stage_entry_clears_exposure_and_alarm(self):\n    def test_alarm_waves_stay_under_the_cap(self):\nclass ShotContractTests(unittest.TestCase):\n    def test_every_authored_scene_is_registered(self):\n    def test_ending_chain_matches_the_doc(self):\n    def test_boxcar_dialogue_is_verbatim(self):\n    def test_3d_can_be_disabled_by_environment(self):\n    def test_terminal_record_drops_the_first_name(self):\n    def test_fall_deploys_a_canopy(self):\n    def test_representative_frames_render_on_the_software_backend(self):\nclass TrainSceneTests(unittest.TestCase):\n    def setUp(self):\n    def tearDown(self):\n    def _run_until(self, t):\n    def test_scripted_shot_timing(self):\n    def test_guard_fire_can_kill_biribel(self):\n    def test_fire_and_reload_use_the_shared_k9(self):"
+      ]
     },
     "tests/unit/test_mathx_profiling.py": {
       "description": "engine.core.mathx and Profiler.",
@@ -35314,57 +35072,13 @@
       "source": "hook"
     },
     "tools/dev_panel.py": {
-      "description": "dev_panel.py - clickable dev control panel for jumping into missions.",
-      "tokens": 7838,
-      "hash": "2aedb7c8cf5a9ae2",
-      "size": 28553,
-      "mtimeMs": 1792688725758.1218,
-      "updatedAt": "2026-10-22T17:05:25.898Z",
-      "source": "hook",
-      "symbols": [
-        {
-          "name": "grouped_targets",
-          "kind": "fn",
-          "startLine": 103,
-          "endLine": 113,
-          "tokens": 116
-        },
-        {
-          "name": "build_launch_cmd",
-          "kind": "fn",
-          "startLine": 114,
-          "endLine": 128,
-          "tokens": 184
-        },
-        {
-          "name": "parse_extra_args",
-          "kind": "fn",
-          "startLine": 129,
-          "endLine": 133,
-          "tokens": 48
-        },
-        {
-          "name": "group_issues",
-          "kind": "fn",
-          "startLine": 134,
-          "endLine": 150,
-          "tokens": 214
-        },
-        {
-          "name": "DevPanel",
-          "kind": "class",
-          "startLine": 151,
-          "endLine": 660,
-          "tokens": 5896
-        },
-        {
-          "name": "main",
-          "kind": "fn",
-          "startLine": 661,
-          "endLine": 680,
-          "tokens": 167
-        }
-      ]
+      "description": "Declares to",
+      "tokens": 7861,
+      "hash": "e36df73cf449b286",
+      "size": 28633,
+      "mtimeMs": 1792826542010.8628,
+      "updatedAt": "2026-10-24T07:22:22.680Z",
+      "source": "hook"
     },
     "tools/m6_shots.py": {
       "description": "M6 3D film + interactive train stills.",
@@ -35510,6 +35224,1228 @@
       "size": 443217,
       "mtimeMs": 1792692762714.892,
       "updatedAt": "2026-10-22T18:12:43.005Z",
+      "source": "hook"
+    },
+    "src/cutscenes/ps2mat.py": {
+      "description": "ps2mat.py - PS2 pixel textures for sets authored in flat colour.",
+      "tokens": 1125,
+      "hash": "7bc3e0ce1fe3f192",
+      "size": 3936,
+      "mtimeMs": 1792727337952.9756,
+      "updatedAt": "2026-10-23T03:48:58.144Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_cross",
+          "kind": "fn",
+          "startLine": 24,
+          "endLine": 45,
+          "tokens": 277
+        },
+        {
+          "name": "_class",
+          "kind": "fn",
+          "startLine": 46,
+          "endLine": 63,
+          "tokens": 141
+        },
+        {
+          "name": "_material",
+          "kind": "fn",
+          "startLine": 64,
+          "endLine": 74,
+          "tokens": 109
+        },
+        {
+          "name": "faces",
+          "kind": "fn",
+          "startLine": 75,
+          "endLine": 95,
+          "tokens": 234
+        },
+        {
+          "name": "mesh",
+          "kind": "fn",
+          "startLine": 96,
+          "endLine": 99,
+          "tokens": 41
+        }
+      ]
+    },
+    "src/missions/m6/combat.py": {
+      "description": "Mission 6 - loud combat arenas for the three top-down stages.",
+      "tokens": 5224,
+      "hash": "1ba043791a400b2e",
+      "size": 18823,
+      "mtimeMs": 1792934960786.2534,
+      "updatedAt": "2026-10-25T13:29:20.932Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "init_stage",
+          "kind": "fn",
+          "startLine": 58,
+          "endLine": 86,
+          "tokens": 275
+        },
+        {
+          "name": "stage",
+          "kind": "fn",
+          "startLine": 87,
+          "endLine": 90,
+          "tokens": 10
+        },
+        {
+          "name": "loud",
+          "kind": "fn",
+          "startLine": 91,
+          "endLine": 94,
+          "tokens": 9
+        },
+        {
+          "name": "calm",
+          "kind": "fn",
+          "startLine": 95,
+          "endLine": 99,
+          "tokens": 28
+        },
+        {
+          "name": "go_loud",
+          "kind": "fn",
+          "startLine": 100,
+          "endLine": 112,
+          "tokens": 86
+        },
+        {
+          "name": "wave_progress",
+          "kind": "fn",
+          "startLine": 113,
+          "endLine": 117,
+          "tokens": 27
+        },
+        {
+          "name": "remaining",
+          "kind": "fn",
+          "startLine": 118,
+          "endLine": 124,
+          "tokens": 59
+        },
+        {
+          "name": "cleared",
+          "kind": "fn",
+          "startLine": 125,
+          "endLine": 128,
+          "tokens": 13
+        },
+        {
+          "name": "spend_waves",
+          "kind": "fn",
+          "startLine": 129,
+          "endLine": 134,
+          "tokens": 34
+        },
+        {
+          "name": "drums",
+          "kind": "fn",
+          "startLine": 135,
+          "endLine": 138,
+          "tokens": 17
+        },
+        {
+          "name": "events",
+          "kind": "fn",
+          "startLine": 139,
+          "endLine": 145,
+          "tokens": 43
+        },
+        {
+          "name": "_player_pos",
+          "kind": "fn",
+          "startLine": 146,
+          "endLine": 152,
+          "tokens": 46
+        },
+        {
+          "name": "apply_role",
+          "kind": "fn",
+          "startLine": 153,
+          "endLine": 168,
+          "tokens": 136
+        },
+        {
+          "name": "_spawn_wave",
+          "kind": "fn",
+          "startLine": 169,
+          "endLine": 197,
+          "tokens": 338
+        },
+        {
+          "name": "_update_waves",
+          "kind": "fn",
+          "startLine": 198,
+          "endLine": 214,
+          "tokens": 128
+        },
+        {
+          "name": "_check_loud",
+          "kind": "fn",
+          "startLine": 215,
+          "endLine": 231,
+          "tokens": 131
+        },
+        {
+          "name": "bullet_hit",
+          "kind": "fn",
+          "startLine": 232,
+          "endLine": 254,
+          "tokens": 274
+        },
+        {
+          "name": "_detonate_drum",
+          "kind": "fn",
+          "startLine": 255,
+          "endLine": 265,
+          "tokens": 74
+        },
+        {
+          "name": "_explode",
+          "kind": "fn",
+          "startLine": 266,
+          "endLine": 315,
+          "tokens": 639
+        },
+        {
+          "name": "_update_blasts",
+          "kind": "fn",
+          "startLine": 316,
+          "endLine": 330,
+          "tokens": 109
+        },
+        {
+          "name": "update",
+          "kind": "fn",
+          "startLine": 331,
+          "endLine": 349,
+          "tokens": 119
+        },
+        {
+          "name": "_drum_surface",
+          "kind": "fn",
+          "startLine": 350,
+          "endLine": 380,
+          "tokens": 385
+        },
+        {
+          "name": "drawables",
+          "kind": "fn",
+          "startLine": 381,
+          "endLine": 397,
+          "tokens": 168
+        },
+        {
+          "name": "_tanker_drawable",
+          "kind": "fn",
+          "startLine": 398,
+          "endLine": 419,
+          "tokens": 166
+        },
+        {
+          "name": "_radial_mask",
+          "kind": "fn",
+          "startLine": 420,
+          "endLine": 441,
+          "tokens": 175
+        },
+        {
+          "name": "_scorch_surface",
+          "kind": "fn",
+          "startLine": 442,
+          "endLine": 491,
+          "tokens": 636
+        },
+        {
+          "name": "draw_ground",
+          "kind": "fn",
+          "startLine": 492,
+          "endLine": 499,
+          "tokens": 78
+        },
+        {
+          "name": "extra_lamps",
+          "kind": "fn",
+          "startLine": 500,
+          "endLine": 518,
+          "tokens": 236
+        },
+        {
+          "name": "draw_hud",
+          "kind": "fn",
+          "startLine": 519,
+          "endLine": 542,
+          "tokens": 262
+        }
+      ]
+    },
+    "tools/tex3d_draw.py": {
+      "description": "Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette.",
+      "tokens": 5676,
+      "hash": "41fe0999e41ce6c8",
+      "size": 20116,
+      "mtimeMs": 1792790014343.1667,
+      "updatedAt": "2026-10-23T21:13:34.536Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_palette",
+          "kind": "fn",
+          "startLine": 28,
+          "endLine": 43,
+          "tokens": 123
+        },
+        {
+          "name": "c",
+          "kind": "fn",
+          "startLine": 44,
+          "endLine": 65,
+          "tokens": 310
+        },
+        {
+          "name": "noise",
+          "kind": "fn",
+          "startLine": 66,
+          "endLine": 85,
+          "tokens": 216
+        },
+        {
+          "name": "fbm",
+          "kind": "fn",
+          "startLine": 86,
+          "endLine": 91,
+          "tokens": 61
+        },
+        {
+          "name": "ramp",
+          "kind": "fn",
+          "startLine": 92,
+          "endLine": 98,
+          "tokens": 75
+        },
+        {
+          "name": "put",
+          "kind": "fn",
+          "startLine": 99,
+          "endLine": 102,
+          "tokens": 16
+        },
+        {
+          "name": "disc_mask",
+          "kind": "fn",
+          "startLine": 103,
+          "endLine": 114,
+          "tokens": 101
+        },
+        {
+          "name": "shade_step",
+          "kind": "fn",
+          "startLine": 115,
+          "endLine": 121,
+          "tokens": 77
+        },
+        {
+          "name": "snow",
+          "kind": "fn",
+          "startLine": 122,
+          "endLine": 139,
+          "tokens": 229
+        },
+        {
+          "name": "snow_trod",
+          "kind": "fn",
+          "startLine": 140,
+          "endLine": 161,
+          "tokens": 273
+        },
+        {
+          "name": "_stones",
+          "kind": "fn",
+          "startLine": 162,
+          "endLine": 186,
+          "tokens": 341
+        },
+        {
+          "name": "ballast",
+          "kind": "fn",
+          "startLine": 187,
+          "endLine": 202,
+          "tokens": 199
+        },
+        {
+          "name": "sleeper",
+          "kind": "fn",
+          "startLine": 203,
+          "endLine": 219,
+          "tokens": 209
+        },
+        {
+          "name": "concrete",
+          "kind": "fn",
+          "startLine": 220,
+          "endLine": 244,
+          "tokens": 360
+        },
+        {
+          "name": "brick",
+          "kind": "fn",
+          "startLine": 245,
+          "endLine": 270,
+          "tokens": 350
+        },
+        {
+          "name": "metal_rib",
+          "kind": "fn",
+          "startLine": 271,
+          "endLine": 299,
+          "tokens": 336
+        },
+        {
+          "name": "boxcar",
+          "kind": "fn",
+          "startLine": 300,
+          "endLine": 328,
+          "tokens": 379
+        },
+        {
+          "name": "crate",
+          "kind": "fn",
+          "startLine": 329,
+          "endLine": 353,
+          "tokens": 274
+        },
+        {
+          "name": "rust",
+          "kind": "fn",
+          "startLine": 354,
+          "endLine": 363,
+          "tokens": 112
+        },
+        {
+          "name": "steel",
+          "kind": "fn",
+          "startLine": 364,
+          "endLine": 374,
+          "tokens": 113
+        },
+        {
+          "name": "bone",
+          "kind": "fn",
+          "startLine": 375,
+          "endLine": 391,
+          "tokens": 214
+        },
+        {
+          "name": "scorch",
+          "kind": "fn",
+          "startLine": 392,
+          "endLine": 404,
+          "tokens": 166
+        },
+        {
+          "name": "vault",
+          "kind": "fn",
+          "startLine": 405,
+          "endLine": 441,
+          "tokens": 466
+        },
+        {
+          "name": "draw",
+          "kind": "fn",
+          "startLine": 442,
+          "endLine": 451,
+          "tokens": 86
+        },
+        {
+          "name": "save",
+          "kind": "fn",
+          "startLine": 452,
+          "endLine": 456,
+          "tokens": 41
+        },
+        {
+          "name": "sheet",
+          "kind": "fn",
+          "startLine": 457,
+          "endLine": 469,
+          "tokens": 143
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 470,
+          "endLine": 489,
+          "tokens": 137
+        }
+      ]
+    },
+    "src/ui/egg666_audio.py": {
+      "description": "egg666_audio.py - procedural sound for the 3D \"666\" scare.",
+      "tokens": 2740,
+      "hash": "dad7cf65bef7f1b7",
+      "size": 9589,
+      "mtimeMs": 1792792124460.1814,
+      "updatedAt": "2026-10-23T21:48:44.711Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_t",
+          "kind": "fn",
+          "startLine": 25,
+          "endLine": 28,
+          "tokens": 18
+        },
+        {
+          "name": "_noise",
+          "kind": "fn",
+          "startLine": 29,
+          "endLine": 32,
+          "tokens": 23
+        },
+        {
+          "name": "_shape",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 38,
+          "tokens": 37
+        },
+        {
+          "name": "_lowpass",
+          "kind": "fn",
+          "startLine": 39,
+          "endLine": 42,
+          "tokens": 31
+        },
+        {
+          "name": "_highpass",
+          "kind": "fn",
+          "startLine": 43,
+          "endLine": 46,
+          "tokens": 36
+        },
+        {
+          "name": "_band",
+          "kind": "fn",
+          "startLine": 47,
+          "endLine": 50,
+          "tokens": 26
+        },
+        {
+          "name": "_norm",
+          "kind": "fn",
+          "startLine": 51,
+          "endLine": 55,
+          "tokens": 25
+        },
+        {
+          "name": "_fade",
+          "kind": "fn",
+          "startLine": 56,
+          "endLine": 63,
+          "tokens": 52
+        },
+        {
+          "name": "_stereo",
+          "kind": "fn",
+          "startLine": 64,
+          "endLine": 70,
+          "tokens": 52
+        },
+        {
+          "name": "_wav",
+          "kind": "fn",
+          "startLine": 71,
+          "endLine": 80,
+          "tokens": 78
+        },
+        {
+          "name": "_phase",
+          "kind": "fn",
+          "startLine": 81,
+          "endLine": 85,
+          "tokens": 42
+        },
+        {
+          "name": "_buzz",
+          "kind": "fn",
+          "startLine": 86,
+          "endLine": 99,
+          "tokens": 183
+        },
+        {
+          "name": "_drone",
+          "kind": "fn",
+          "startLine": 100,
+          "endLine": 110,
+          "tokens": 138
+        },
+        {
+          "name": "_heart",
+          "kind": "fn",
+          "startLine": 111,
+          "endLine": 125,
+          "tokens": 156
+        },
+        {
+          "name": "_breath",
+          "kind": "fn",
+          "startLine": 126,
+          "endLine": 142,
+          "tokens": 158
+        },
+        {
+          "name": "_crack",
+          "kind": "fn",
+          "startLine": 143,
+          "endLine": 162,
+          "tokens": 291
+        },
+        {
+          "name": "_groan",
+          "kind": "fn",
+          "startLine": 163,
+          "endLine": 174,
+          "tokens": 146
+        },
+        {
+          "name": "_sting",
+          "kind": "fn",
+          "startLine": 175,
+          "endLine": 196,
+          "tokens": 316
+        },
+        {
+          "name": "_thud",
+          "kind": "fn",
+          "startLine": 197,
+          "endLine": 214,
+          "tokens": 189
+        },
+        {
+          "name": "_mgr",
+          "kind": "fn",
+          "startLine": 215,
+          "endLine": 219,
+          "tokens": 32
+        },
+        {
+          "name": "_lr",
+          "kind": "fn",
+          "startLine": 220,
+          "endLine": 224,
+          "tokens": 30
+        },
+        {
+          "name": "hush",
+          "kind": "fn",
+          "startLine": 225,
+          "endLine": 229,
+          "tokens": 32
+        },
+        {
+          "name": "begin",
+          "kind": "fn",
+          "startLine": 230,
+          "endLine": 240,
+          "tokens": 95
+        },
+        {
+          "name": "one_shot",
+          "kind": "fn",
+          "startLine": 241,
+          "endLine": 247,
+          "tokens": 41
+        },
+        {
+          "name": "bed",
+          "kind": "fn",
+          "startLine": 248,
+          "endLine": 262,
+          "tokens": 127
+        },
+        {
+          "name": "beat",
+          "kind": "fn",
+          "startLine": 263,
+          "endLine": 270,
+          "tokens": 84
+        },
+        {
+          "name": "stop",
+          "kind": "fn",
+          "startLine": 271,
+          "endLine": 279,
+          "tokens": 42
+        }
+      ]
+    },
+    "src/ui/egg666_build.py": {
+      "description": "egg666_build.py - geometry for the 3D \"666\" scare: the vault, the ritual",
+      "tokens": 4899,
+      "hash": "e36b1703acfa2e99",
+      "size": 17144,
+      "mtimeMs": 1792791875101.34,
+      "updatedAt": "2026-10-23T21:44:35.242Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "tx",
+          "kind": "fn",
+          "startLine": 31,
+          "endLine": 39,
+          "tokens": 74
+        },
+        {
+          "name": "rot",
+          "kind": "fn",
+          "startLine": 40,
+          "endLine": 44,
+          "tokens": 44
+        },
+        {
+          "name": "quad",
+          "kind": "fn",
+          "startLine": 45,
+          "endLine": 60,
+          "tokens": 208
+        },
+        {
+          "name": "glyph_rects",
+          "kind": "fn",
+          "startLine": 61,
+          "endLine": 74,
+          "tokens": 143
+        },
+        {
+          "name": "build_room",
+          "kind": "fn",
+          "startLine": 75,
+          "endLine": 112,
+          "tokens": 608
+        },
+        {
+          "name": "build_marks",
+          "kind": "fn",
+          "startLine": 113,
+          "endLine": 166,
+          "tokens": 768
+        },
+        {
+          "name": "build_lamp",
+          "kind": "fn",
+          "startLine": 167,
+          "endLine": 211,
+          "tokens": 762
+        },
+        {
+          "name": "_horn",
+          "kind": "fn",
+          "startLine": 212,
+          "endLine": 225,
+          "tokens": 169
+        },
+        {
+          "name": "_hand",
+          "kind": "fn",
+          "startLine": 226,
+          "endLine": 242,
+          "tokens": 252
+        },
+        {
+          "name": "build_demon",
+          "kind": "fn",
+          "startLine": 243,
+          "endLine": 321,
+          "tokens": 1335
+        },
+        {
+          "name": "pack_parts",
+          "kind": "fn",
+          "startLine": 322,
+          "endLine": 336,
+          "tokens": 172
+        },
+        {
+          "name": "pack_mesh",
+          "kind": "fn",
+          "startLine": 337,
+          "endLine": 341,
+          "tokens": 68
+        }
+      ]
+    },
+    "src/ui/egg666_post.py": {
+      "description": "egg666_post.py - screen effects for the 3D \"666\" scare.",
+      "tokens": 1364,
+      "hash": "40d55680981461e9",
+      "size": 4774,
+      "mtimeMs": 1792791966892.5176,
+      "updatedAt": "2026-10-23T21:46:07.046Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "Post",
+          "kind": "class",
+          "startLine": 13,
+          "endLine": 117,
+          "tokens": 1231
+        }
+      ]
+    },
+    "src/ui/egg666_dir.py": {
+      "description": "egg666_dir.py - the director of the 3D \"666\" scare: what happens at which frame.",
+      "tokens": 3842,
+      "hash": "b2e2349800b41c1c",
+      "size": 13447,
+      "mtimeMs": 1792792123873.0154,
+      "updatedAt": "2026-10-23T21:48:44.019Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "h01",
+          "kind": "fn",
+          "startLine": 51,
+          "endLine": 61,
+          "tokens": 88
+        },
+        {
+          "name": "sm",
+          "kind": "fn",
+          "startLine": 62,
+          "endLine": 66,
+          "tokens": 28
+        },
+        {
+          "name": "ramp",
+          "kind": "fn",
+          "startLine": 67,
+          "endLine": 70,
+          "tokens": 17
+        },
+        {
+          "name": "lerp",
+          "kind": "fn",
+          "startLine": 71,
+          "endLine": 74,
+          "tokens": 14
+        },
+        {
+          "name": "vnoise",
+          "kind": "fn",
+          "startLine": 75,
+          "endLine": 82,
+          "tokens": 76
+        },
+        {
+          "name": "Plan",
+          "kind": "class",
+          "startLine": 83,
+          "endLine": 86,
+          "tokens": 7
+        },
+        {
+          "name": "make_plan",
+          "kind": "fn",
+          "startLine": 87,
+          "endLine": 121,
+          "tokens": 335
+        },
+        {
+          "name": "station",
+          "kind": "fn",
+          "startLine": 122,
+          "endLine": 130,
+          "tokens": 59
+        },
+        {
+          "name": "lamp",
+          "kind": "fn",
+          "startLine": 131,
+          "endLine": 145,
+          "tokens": 165
+        },
+        {
+          "name": "lamp_swing",
+          "kind": "fn",
+          "startLine": 146,
+          "endLine": 150,
+          "tokens": 63
+        },
+        {
+          "name": "eyes",
+          "kind": "fn",
+          "startLine": 151,
+          "endLine": 165,
+          "tokens": 162
+        },
+        {
+          "name": "marks",
+          "kind": "fn",
+          "startLine": 166,
+          "endLine": 176,
+          "tokens": 84
+        },
+        {
+          "name": "flashlight",
+          "kind": "fn",
+          "startLine": 177,
+          "endLine": 189,
+          "tokens": 141
+        },
+        {
+          "name": "beat_frames",
+          "kind": "fn",
+          "startLine": 190,
+          "endLine": 200,
+          "tokens": 57
+        },
+        {
+          "name": "pulse",
+          "kind": "fn",
+          "startLine": 201,
+          "endLine": 209,
+          "tokens": 61
+        },
+        {
+          "name": "demon_bed_level",
+          "kind": "fn",
+          "startLine": 210,
+          "endLine": 217,
+          "tokens": 92
+        },
+        {
+          "name": "pose",
+          "kind": "fn",
+          "startLine": 218,
+          "endLine": 258,
+          "tokens": 513
+        },
+        {
+          "name": "camera",
+          "kind": "fn",
+          "startLine": 259,
+          "endLine": 288,
+          "tokens": 478
+        },
+        {
+          "name": "post",
+          "kind": "fn",
+          "startLine": 289,
+          "endLine": 318,
+          "tokens": 404
+        },
+        {
+          "name": "flash_rgb",
+          "kind": "fn",
+          "startLine": 319,
+          "endLine": 328,
+          "tokens": 116
+        }
+      ]
+    },
+    "src/ui/egg666_3d.py": {
+      "description": "egg666_3d.py - the Mission 1 safe-keypad \"666\" Easter egg as a lit 3D scene.",
+      "tokens": 4198,
+      "hash": "c1f9c0bae18e4d1b",
+      "size": 14693,
+      "mtimeMs": 1792793692849.5786,
+      "updatedAt": "2026-10-23T22:14:53.022Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "available",
+          "kind": "fn",
+          "startLine": 41,
+          "endLine": 52,
+          "tokens": 123
+        },
+        {
+          "name": "active",
+          "kind": "fn",
+          "startLine": 53,
+          "endLine": 56,
+          "tokens": 12
+        },
+        {
+          "name": "demon_bed_level",
+          "kind": "fn",
+          "startLine": 57,
+          "endLine": 60,
+          "tokens": 17
+        },
+        {
+          "name": "_Egg",
+          "kind": "class",
+          "startLine": 61,
+          "endLine": 171,
+          "tokens": 1444
+        },
+        {
+          "name": "_vec_sub",
+          "kind": "fn",
+          "startLine": 172,
+          "endLine": 175,
+          "tokens": 21
+        },
+        {
+          "name": "_norm",
+          "kind": "fn",
+          "startLine": 176,
+          "endLine": 180,
+          "tokens": 36
+        },
+        {
+          "name": "_lights",
+          "kind": "fn",
+          "startLine": 181,
+          "endLine": 201,
+          "tokens": 309
+        },
+        {
+          "name": "_sound",
+          "kind": "fn",
+          "startLine": 202,
+          "endLine": 243,
+          "tokens": 558
+        },
+        {
+          "name": "_frame",
+          "kind": "fn",
+          "startLine": 244,
+          "endLine": 320,
+          "tokens": 910
+        },
+        {
+          "name": "begin",
+          "kind": "fn",
+          "startLine": 321,
+          "endLine": 335,
+          "tokens": 114
+        },
+        {
+          "name": "frame",
+          "kind": "fn",
+          "startLine": 336,
+          "endLine": 349,
+          "tokens": 116
+        },
+        {
+          "name": "stop",
+          "kind": "fn",
+          "startLine": 350,
+          "endLine": 362,
+          "tokens": 78
+        }
+      ]
+    },
+    "tools/egg666_shots.py": {
+      "description": "Headless shots of the 3D \"666\" scare.",
+      "tokens": 971,
+      "hash": "cce7f96989f8abb6",
+      "size": 3396,
+      "mtimeMs": 1792792158112.7812,
+      "updatedAt": "2026-10-23T21:49:18.259Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 38,
+          "endLine": 86,
+          "tokens": 600
+        }
+      ]
+    },
+    "tests/unit/test_egg666.py": {
+      "description": "Tests for the 3D \"666\" safe-keypad scare (ui/egg666_*.py).",
+      "tokens": 1755,
+      "hash": "191853e078db0af9",
+      "size": 6140,
+      "mtimeMs": 1792792665217.4016,
+      "updatedAt": "2026-10-23T21:57:45.439Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "TestDirector",
+          "kind": "class",
+          "startLine": 30,
+          "endLine": 92,
+          "tokens": 851
+        },
+        {
+          "name": "TestSound",
+          "kind": "class",
+          "startLine": 93,
+          "endLine": 104,
+          "tokens": 126
+        },
+        {
+          "name": "TestSwitch",
+          "kind": "class",
+          "startLine": 105,
+          "endLine": 121,
+          "tokens": 180
+        },
+        {
+          "name": "TestRender",
+          "kind": "class",
+          "startLine": 122,
+          "endLine": 162,
+          "tokens": 347
+        }
+      ]
+    },
+    "src/ui/egg666_fx.py": {
+      "description": "egg666_fx.py - light halos, the PS2 grade and the crisp present for the 3D \"666\" scare.",
+      "tokens": 1776,
+      "hash": "000645614e43312d",
+      "size": 6213,
+      "mtimeMs": 1792793512724.0132,
+      "updatedAt": "2026-10-23T22:11:52.926Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "reduced_motion",
+          "kind": "fn",
+          "startLine": 26,
+          "endLine": 33,
+          "tokens": 65
+        },
+        {
+          "name": "flash_scale",
+          "kind": "fn",
+          "startLine": 34,
+          "endLine": 43,
+          "tokens": 100
+        },
+        {
+          "name": "_flick",
+          "kind": "fn",
+          "startLine": 44,
+          "endLine": 52,
+          "tokens": 97
+        },
+        {
+          "name": "_halo",
+          "kind": "fn",
+          "startLine": 53,
+          "endLine": 73,
+          "tokens": 307
+        },
+        {
+          "name": "glow",
+          "kind": "fn",
+          "startLine": 74,
+          "endLine": 95,
+          "tokens": 300
+        },
+        {
+          "name": "_make_lut",
+          "kind": "fn",
+          "startLine": 96,
+          "endLine": 114,
+          "tokens": 292
+        },
+        {
+          "name": "grade",
+          "kind": "fn",
+          "startLine": 115,
+          "endLine": 130,
+          "tokens": 175
+        },
+        {
+          "name": "present",
+          "kind": "fn",
+          "startLine": 131,
+          "endLine": 139,
+          "tokens": 111
+        }
+      ]
+    },
+    "tools/m6_topdown_shots.py": {
+      "description": "Top-down M6 review stills (customs / no-man's-land / rail yard).",
+      "tokens": 2041,
+      "hash": "0a271ec6a990b2f3",
+      "size": 7141,
+      "mtimeMs": 1792835936001.4326,
+      "updatedAt": "2026-10-24T09:58:56.176Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 39,
+          "endLine": 157,
+          "tokens": 1588
+        }
+      ]
+    },
+    "tools/build_radio_cache.py": {
+      "description": "Pre-build the radio-FX voice cache (assets/voice/_radio_cache).",
+      "tokens": 570,
+      "hash": "bc641755ab8b039c",
+      "size": 1992,
+      "mtimeMs": 1792846016640.5398,
+      "updatedAt": "2026-10-24T12:46:56.821Z",
+      "source": "hook"
+    },
+    "docs/M6_3D_PERF.md": {
+      "description": "M6 playable 3D scenes - performance pass (2026-10-24)",
+      "tokens": 3606,
+      "hash": "89afcc808f8209a3",
+      "size": 14424,
+      "mtimeMs": 1792846607111.4463,
+      "updatedAt": "2026-10-24T12:56:47.333Z",
+      "source": "hook"
+    },
+    "tools/m6_snow_probe.py": {
+      "description": "Customs snow probe (dev only, not a CI gate).",
+      "tokens": 1172,
+      "hash": "a758708c6f975961",
+      "size": 4102,
+      "mtimeMs": 1792950071664.5125,
+      "updatedAt": "2026-10-25T17:41:11.796Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_snow_px",
+          "kind": "fn",
+          "startLine": 26,
+          "endLine": 35,
+          "tokens": 86
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 36,
+          "endLine": 114,
+          "tokens": 870
+        }
+      ]
+    },
+    "docs/M6_TOPDOWN_GRAPHICS_MASTER_PROMPT.md": {
+      "description": "M6 top-down graphics - master prompt",
+      "tokens": 2376,
+      "hash": "8df2968c2f0a3962",
+      "size": 9501,
+      "mtimeMs": 1792951736281.0515,
+      "updatedAt": "2026-10-25T18:08:56.475Z",
+      "source": "hook"
+    },
+    "docs/M6_TOPDOWN_ART_BRIEF.md": {
+      "description": "M6 top-down art brief (Phase 0 diagnosis + Phase 1 brief)",
+      "tokens": 1882,
+      "hash": "b3c319dfae56eb9c",
+      "size": 7526,
+      "mtimeMs": 1792952160369.6482,
+      "updatedAt": "2026-10-25T18:16:00.534Z",
       "source": "hook"
     }
   },

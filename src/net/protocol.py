@@ -6,13 +6,11 @@ in-game client (``src/net/client.py``) and the standalone server
 (``tools/mp_server.py``) both import this, so the framing rules can never
 drift apart between the two ends.
 
-Framing is newline-delimited JSON over TCP. That is deliberately boring: it is
-trivially inspectable with ``netcat``/``telnet``, it survives partial reads
-(we buffer until a newline arrives), and it needs no third-party serializer.
-Payloads are tiny -- a server row is well under 200 bytes -- so the extra
-bytes from JSON text versus a packed binary struct are irrelevant at the
-request rates involved (a query every few seconds, chat messages at human
-speed).
+Reliable match control uses newline-delimited JSON over TCP. High-rate
+movement inputs and numbered world snapshots may instead travel as one bounded
+JSON object per authenticated UDP datagram. Both reuse the same strict message
+shapes: control/chat/actions stay reliable, while stale motion updates can be
+skipped instead of waiting behind a lost packet.
 """
 
 import json
@@ -71,6 +69,10 @@ def is_soft_error(msg):
 # so the existing chat/lobby protocol is unaffected.
 T_SNAPSHOT = "snap"
 T_INPUT = "in"
+T_ACTION = "act"          # reliable one-shot player action over control TCP
+T_UDP_HELLO = "udph"      # token-authenticated client -> host datagram probe
+T_UDP_ACK = "udpa"        # host -> client datagram-path confirmation
+T_UDP_FALLBACK = "udpf"  # client -> host, stop sending snapshots on UDP
 T_JOIN_MATCH = "joinmatch"
 # T_YOU is host -> client, sent once when a connection is accepted: it tells
 # the client which roster slot it owns. Without it a client had no way to
@@ -102,6 +104,14 @@ T_HOST_LEFT = "hostleft"
 # see the move, and friendly-fire suppression would disagree with the roster.
 # The answer comes back as the ordinary `teams` table on the next state packet.
 T_TEAM_PICK = "tpick"
+# Lightweight request/response heartbeat for client-observed RTT. It is
+# optional and additive: older hosts ignore pings, while the client's existing
+# silence watchdog remains the fallback. These are diagnostics, not auth.
+T_PING = "ping"
+T_PONG = "pong"
+# Client -> host, an intentional leave. Unlike a broken link this releases the
+# player's temporary reconnect reservation immediately.
+T_MATCH_LEAVE = "mleave"
 TEAM_PICK_IPA = 0
 TEAM_PICK_KRAP = 1
 TEAM_PICK_TEAMS = (TEAM_PICK_IPA, TEAM_PICK_KRAP)
@@ -557,7 +567,8 @@ def clean_appearance(raw):
     return out or None
 
 
-def make_join_match(map_name=None, name=None, appearance=None, token=None):
+def make_join_match(map_name=None, name=None, appearance=None, token=None,
+                    resume=None):
     """Client -> host: the FIRST packet a match client sends.
 
     A listening socket accepts anything that connects to it, and the host
@@ -594,6 +605,9 @@ def make_join_match(map_name=None, name=None, appearance=None, token=None):
     tok = clean_token(token)
     if tok:
         msg["k"] = tok
+    resume_tok = clean_token(resume)
+    if resume_tok:
+        msg["resume"] = resume_tok
     return msg
 
 
@@ -613,10 +627,17 @@ def clean_token(raw):
 
 
 def join_match_token(msg):
-    """The secret token a client presented in its join handshake, or ""."""
+    """The room token a client presented in its join handshake, or ""."""
     if not is_join_match(msg):
         return ""
     return clean_token(msg.get("k"))
+
+
+def join_match_resume(msg):
+    """A returning player's one-session resume token, or an empty string."""
+    if not is_join_match(msg):
+        return ""
+    return clean_token(msg.get("resume"))
 
 
 def is_join_match(msg):
@@ -693,6 +714,46 @@ def match_chat_author(msg):
     return sanitize_name(msg.get("by"))
 
 
+def make_ping(nonce):
+    """Build a client -> host heartbeat request with a uint32 nonce."""
+    return {"t": T_PING, "q": int(nonce) & 0xFFFFFFFF}
+
+
+def parse_ping(msg):
+    """Return a valid heartbeat nonce, or None for unrelated/malformed data."""
+    if not isinstance(msg, dict) or msg.get("t") != T_PING:
+        return None
+    nonce = msg.get("q")
+    if isinstance(nonce, bool) or not isinstance(nonce, int) or not 0 <= nonce <= 0xFFFFFFFF:
+        return None
+    return nonce
+
+
+def make_pong(nonce):
+    """Build a host -> client heartbeat response."""
+    return {"t": T_PONG, "q": int(nonce) & 0xFFFFFFFF}
+
+
+def parse_pong(msg):
+    """Return a valid heartbeat nonce, or None for unrelated/malformed data."""
+    if not isinstance(msg, dict) or msg.get("t") != T_PONG:
+        return None
+    nonce = msg.get("q")
+    if isinstance(nonce, bool) or not isinstance(nonce, int) or not 0 <= nonce <= 0xFFFFFFFF:
+        return None
+    return nonce
+
+
+def make_match_leave():
+    """Client -> host: this player is leaving intentionally, not reconnecting."""
+    return {"t": T_MATCH_LEAVE}
+
+
+def parse_match_leave(msg):
+    """Whether this is an explicit match-leave packet."""
+    return isinstance(msg, dict) and msg.get("t") == T_MATCH_LEAVE
+
+
 def make_team_pick(team):
     """Client -> host: ask to be seated on *team* (0 = IPA, 1 = KRAP)."""
     return {"t": T_TEAM_PICK, "team": int(team)}
@@ -741,7 +802,8 @@ def parse_kick(msg):
     return reason[:64] if isinstance(reason, str) else ""
 
 
-def make_assign(player_id, map_name=None, mode=None):
+def make_assign(player_id, map_name=None, mode=None, resume_token=None,
+                resumed=False, udp_token=None):
     """Host -> client: the roster slot this connection owns.
 
     Also carries the host's map name and game mode, because the client picks
@@ -754,6 +816,14 @@ def make_assign(player_id, map_name=None, mode=None):
         msg["map"] = map_name[:32]
     if isinstance(mode, str) and mode:
         msg["mode"] = mode[:8]
+    token = clean_token(resume_token)
+    if token:
+        msg["resume"] = token
+    datagram_token = clean_token(udp_token)
+    if datagram_token:
+        msg["udp"] = datagram_token
+    if resumed:
+        msg["resumed"] = 1
     return msg
 
 
@@ -765,6 +835,130 @@ def parse_assign(msg):
         return int(msg.get("id", -1)) & 0xFFFF
     except (TypeError, ValueError):
         return None
+
+
+def assign_resume_token(msg):
+    """One-player resume secret from a valid host assignment, if present."""
+    if not isinstance(msg, dict) or msg.get("t") != T_YOU:
+        return ""
+    return clean_token(msg.get("resume"))
+
+
+def assign_udp_token(msg):
+    """Private short-lived UDP authentication token, if supported."""
+    if not isinstance(msg, dict) or msg.get("t") != T_YOU:
+        return ""
+    return clean_token(msg.get("udp"))
+
+
+def make_udp_hello(token, nonce):
+    """Client -> host UDP path probe; the token is assigned over TCP."""
+    token = clean_token(token)
+    if not token:
+        return None
+    return {"t": T_UDP_HELLO, "u": token,
+            "n": int(nonce) & 0xFFFFFFFF}
+
+
+def parse_udp_hello(msg):
+    """Return (token, nonce) only for a well-formed datagram probe."""
+    if not isinstance(msg, dict) or msg.get("t") != T_UDP_HELLO:
+        return None
+    token = clean_token(msg.get("u"))
+    nonce = msg.get("n")
+    if (not token or not isinstance(nonce, int) or isinstance(nonce, bool)
+            or not 0 <= nonce <= 0xFFFFFFFF):
+        return None
+    return token, nonce
+
+
+def make_udp_fallback(token, nonce):
+    """Reliable control request to return a peer to TCP after UDP stalls."""
+    token = clean_token(token)
+    if not token:
+        return None
+    return {"t": T_UDP_FALLBACK, "u": token,
+            "n": int(nonce) & 0xFFFFFFFF}
+
+
+def parse_udp_fallback(msg):
+    """Validate a client's request to move snapshots back to TCP."""
+    if not isinstance(msg, dict) or msg.get("t") != T_UDP_FALLBACK:
+        return None
+    token = clean_token(msg.get("u"))
+    nonce = msg.get("n")
+    if (not token or not isinstance(nonce, int) or isinstance(nonce, bool)
+            or not 0 <= nonce <= 0xFFFFFFFF):
+        return None
+    return token, nonce
+
+
+def make_udp_ack(token, nonce, tick=0):
+    """Host -> client proof that the token-authenticated path is open."""
+    token = clean_token(token)
+    if not token:
+        return None
+    return {"t": T_UDP_ACK, "u": token,
+            "n": int(nonce) & 0xFFFFFFFF,
+            "k": int(tick) & 0xFFFFFFFF}
+
+
+def parse_udp_ack(msg, expected_token=None, expected_nonce=None):
+    """Validate a UDP confirmation and return its host tick."""
+    if not isinstance(msg, dict) or msg.get("t") != T_UDP_ACK:
+        return None
+    token = clean_token(msg.get("u"))
+    nonce, tick = msg.get("n"), msg.get("k", 0)
+    if (not token or (expected_token and token != clean_token(expected_token))
+            or not isinstance(nonce, int) or isinstance(nonce, bool)
+            or not 0 <= nonce <= 0xFFFFFFFF
+            or (expected_nonce is not None and nonce != expected_nonce)
+            or not isinstance(tick, int) or isinstance(tick, bool)
+            or not 0 <= tick <= 0xFFFFFFFF):
+        return None
+    return token, nonce, tick
+
+
+def make_action(seq, weapon=None, cycle=False):
+    """Reliable one-shot switch request, kept off the lossy input channel."""
+    msg = {"t": T_ACTION, "q": int(seq) & 0xFFFFFFFF}
+    if weapon is not None:
+        msg["w"] = int(weapon) & 0xFF
+    if cycle:
+        msg["c"] = 1
+    return msg if (weapon is not None or cycle) else None
+
+
+def parse_action(msg):
+    """Validate a reliable one-shot action from a seated match peer."""
+    if not isinstance(msg, dict) or msg.get("t") != T_ACTION:
+        return None
+    try:
+        seq = int(msg.get("q", -1))
+        if not 0 <= seq <= 0xFFFFFFFF:
+            return None
+    except (TypeError, ValueError):
+        return None
+    out = {"q": seq}
+    if "w" in msg:
+        try:
+            weapon = int(msg["w"])
+            if not 0 <= weapon <= 0xFF:
+                return None
+            out["w"] = weapon
+        except (TypeError, ValueError):
+            return None
+    if msg.get("c"):
+        out["wcycle"] = 1
+    return out if ("w" in out or out.get("wcycle")) else None
+
+
+def assign_resumed(msg):
+    """Whether the host restored an existing player's saved seat."""
+    if not isinstance(msg, dict) or msg.get("t") != T_YOU:
+        return False
+    value = msg.get("resumed")
+    return isinstance(value, int) and not isinstance(value, bool) and value == 1
 
 
 # ── Authoritative events ─────────────────────────────────────────────────
@@ -1236,7 +1430,8 @@ def assign_mode(msg):
     return name if isinstance(name, str) and name else None
 
 
-def make_input(seq, move_x, move_y, aim, buttons=0, weapon=None, cycle=False):
+def make_input(seq, move_x, move_y, aim, buttons=0, weapon=None, cycle=False,
+               render_tick=None):
     """Client -> host intent for one tick.
 
     ``move_x``/``move_y`` are -1/0/1 axes rather than pixels: the host
@@ -1264,6 +1459,11 @@ def make_input(seq, move_x, move_y, aim, buttons=0, weapon=None, cycle=False):
         msg["w"] = int(weapon) & 0xFF
     if cycle:
         msg["c"] = 1
+    # Optional client display time used only for bounded host-side hit
+    # rewind. Keep old packets byte-for-byte small when it is not supplied.
+    if (isinstance(render_tick, int) and not isinstance(render_tick, bool)
+            and 0 <= render_tick <= 0xFFFFFFFF):
+        msg["rt"] = render_tick
     return msg
 
 
@@ -1306,6 +1506,13 @@ def parse_input(msg):
             out["w"] = int(msg["w"]) & 0xFF
         except (TypeError, ValueError):
             pass
+    # A render tick is untrusted client timing data. Accept only a plain
+    # unsigned 32-bit integer; the host independently clamps its age before
+    # using it. Invalid timing is ignored so movement/firing still work.
+    render_tick = msg.get("rt")
+    if (isinstance(render_tick, int) and not isinstance(render_tick, bool)
+            and 0 <= render_tick <= 0xFFFFFFFF):
+        out["rt"] = render_tick
     # "c" is the cycle request (Q / mouse wheel). It has to survive
     # validation or a client's key press is silently dropped here and the
     # host -- which only ever sees the parsed dict -- never learns anyone

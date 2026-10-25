@@ -59,6 +59,27 @@ def _teardown():
     _state["elec_hum_on"] = False
 
 
+def prewarm(mission):
+    """Synthesize the sounds ``update_ambience`` will ask for in ``mission``.
+
+    They are built on first play, and the wind gust alone is ~50 ms of numpy:
+    a hitch eight seconds into a fight.  Call this from a loading step."""
+    names = ["room_tone", "debris_settle"]
+    if mission in RAIN_MISSIONS:
+        names.append("rain_inside")
+    if ELEC_ZONES.get(mission):
+        names.append("elec_hum")
+    if DRIP_ZONES.get(mission):
+        names.append("drip_echo")
+    if mission in GUST_MISSIONS:
+        names.append("wind_gust")
+    for name in names:
+        try:
+            audio.get_sound(name)
+        except Exception:
+            pass
+
+
 def update_ambience():
     mission = getattr(STATE, "active_mission", None)
     if mission != _state["mission"]:

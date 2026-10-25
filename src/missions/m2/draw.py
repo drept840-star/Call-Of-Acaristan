@@ -4318,7 +4318,7 @@ def _draw_evidence_cinematic(surface):
             (WIDTH // 2, HEIGHT // 2 - 100),         # mag_packet - top center
         ]
         names = ["RETARDOVICI", "BALACEANU", "MAG"]
-        tags = ["DECREE", "AUTH CHAIN", "FRAMED"]
+        tags = ["DECREE", "COUNTERSIGN", "FRAMED"]
 
         # The 210-frame shot is divided into 3 reveal phases (70 frames each):
         #   Phase 0 (0-70):   Line 1 draws (decree → balaceanu), RETARDOVICI appears
@@ -4356,6 +4356,12 @@ def _draw_evidence_cinematic(surface):
                 surface.blit(name_surf, (int(x1) - name_surf.get_width() // 2, int(y1) + 14))
                 tag_surf = font_terminal_small.render(tags[1], True, (180, 100, 100))
                 surface.blit(tag_surf, (int(x1) - tag_surf.get_width() // 2, int(y1) + 32))
+                # Sub-label: the KRAP liaison behind the countersign. Stays on
+                # the board from phase 1 onward (no extra 70-frame phase).
+                vasile_surf = font_terminal_small.render(
+                    "VASILE, C. - CONVOY ORDER", True, (200, 120, 120))
+                surface.blit(vasile_surf,
+                             (int(x1) - vasile_surf.get_width() // 2, int(y1) + 54))
         # Line 3: mag_packet → decree (left edge of triangle, completes the loop)
         # Node 2 (mag_packet / MAG + FRAMED tag)
         if phase >= 2:

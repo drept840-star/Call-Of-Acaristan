@@ -286,7 +286,7 @@ mindmap
       tram_wreck, water - burning tram, floodwater
       inspect_fpv, inspect_art, inspect_art_street - E look shots
       finale_script, finale_audio
-    m6 Black Notebook
+    m6 Whiteout
       meta, maps, world, flow, systems, draw, decor
       stealth - floodlight stealth
       train3d 5.2k - interactive 3D train TrainScene

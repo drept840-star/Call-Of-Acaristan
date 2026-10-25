@@ -1218,11 +1218,9 @@ def check_arena_hud_legibility():
         "a crate changed no pixel over 90 frames -- it is motionless"
 
     # ── the HUD must be able to draw a named match ──
-    # The name, name tag, kill feed, local chip and respawn plate are all new
-    # surfaces, and all of them index into tables that arrive from a peer.
-    # Rendering one pixel of each is the only thing that proves the indexes
-    # line up: a mismatched tuple or a None from a stubbed font raises here
-    # rather than on somebody's machine mid-match.
+    # Name tags, kill feed and respawn plate use tables received from a peer.
+    # Rendering them through one frame catches a mismatched tuple or missing
+    # font here rather than on somebody's machine mid-match.
     from core.config import WIDTH as _W, HEIGHT as _H
     hud = ArenaView("yard")
     hud._local_id = 0
@@ -6082,7 +6080,7 @@ def check_mission4_boot_and_walk():
     pcol, prow = pcx // m4.TILE, pcy // m4.TILE
     assert grid[prow][pcol] not in m4.M4_SOLID_CHARS, "player spawned inside geometry"
 
-    assert m4._objective.startswith("Regroup with Vasile"), \
+    assert m4._objective.startswith("Pick up the KRAP comms cache"), \
         "opening objective missing: " + repr(m4._objective)
 
     # W2 content proof: the named curfew-zone table resolves to world rects

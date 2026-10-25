@@ -209,6 +209,10 @@ VOICE_LINES = [
     ('VO_198', 'VASILE', "Good. I've got it. Later. You need sleep."),
     ('VO_199', 'VASILE', "Route's clean. I checked it myself."),
     ('VO_200', 'VASILE', "You don't need to see him. Trust me."),
+    ('VO_201', 'VASILE', "Quiet channel's dead. It's the camera or nothing."),
+    ('VO_202', 'BIRIBEL', "Vasile's name was on the chain. There's an explanation."),
+    ('VO_203', 'MARU', 'There always is.'),
+    ('VO_204', 'BIRIBEL', "The leaf's dry. He kept a clean copy."),
 ]
 
 
@@ -244,6 +248,7 @@ KNOWN_MISSING_AUDIO = frozenset({
     # New script has no recorded takes in this upload. Subtitles remain live.
     'VO_192', 'VO_193', 'VO_194', 'VO_195', 'VO_196', 'VO_197',
     'VO_198', 'VO_199', 'VO_200',
+    'VO_201', 'VO_202', 'VO_203', 'VO_204',
     'VO_001',
     'VO_003',
     'VO_007',

@@ -436,6 +436,26 @@ class SoftwareRenderer:
         self.set_camera((0, 2, -10), (0, 1, 0), 60)
         self._items = []
 
+    # resolution -----------------------------------------------------------
+    def resize(self, w, h):
+        """Re-target the frame buffer without touching anything was drawn.
+
+        The projection is resolution independent (``focal`` follows ``w``),
+        so a resolution change is a new surface plus new tan/focal constants:
+        no scene rebuild.  ``GLRenderer`` overrides this to also swap its
+        colour/depth textures.
+        """
+        w, h = int(w), int(h)
+        if (w, h) == (self.w, self.h):
+            return False
+        self.w, self.h = w, h
+        self.surface = pygame.Surface((w, h))
+        self.focal = (self.w / 2) / math.tan(math.radians(self.fov) / 2)
+        self.tan_h = (self.w / 2) / self.focal
+        self.tan_v = (self.h / 2) / self.focal
+        self._grid_cache = None
+        return True
+
     # camera -------------------------------------------------------------
     def set_camera(self, pos, target, fov, roll=0.0):
         self.cam = pos

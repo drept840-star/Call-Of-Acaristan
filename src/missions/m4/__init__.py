@@ -1,9 +1,10 @@
 
 """Mission 4: The Aftermath - the world after the broadcast.
 
-Picks up hours after Mission 3's Vostral transmission. The regime is
+Picks up two days after Mission 3's Vostral transmission. The regime is
 reeling: Balaceanu's career is public record, Retardovici's puppet
-strings are cut, and KRAP is left without clear direction. Volkov has
+strings are cut (the read on the night; M5 shows the puppeteer), and
+KRAP is left without clear direction. Volkov has
 vanished across the border to Regatul Kim Kim. Vasile and Biribel are
 the only ones left trying to figure out what comes next - KRAP doesn't
 fully dissolve but "kind of dissolves," its remnants allied with MAG,

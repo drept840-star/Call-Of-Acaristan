@@ -49,6 +49,18 @@
     9,
     10
    ]
+  },
+  {
+   "scene": "m3_bcast_onair",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Quiet channel's dead.\nIt's the camera or nothing.",
+   "min_ms": 2200,
+   "lighting": [
+    8,
+    9,
+    10
+   ]
   }
  ],
  "metadata": {

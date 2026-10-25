@@ -1,4 +1,4 @@
-"""Mission 6: Black Notebook - re-export facade (load order = parts order).
+"""Mission 6: Whiteout - re-export facade (load order = parts order).
 
 Parts: meta.py, maps.py, decor.py, stealth.py, world.py, flow.py, systems.py,
 draw.py; combat.py (arena waves/drums) is imported by its users, not starred. (train3d/m6_audio are lazy mission-owned modules loaded on demand).

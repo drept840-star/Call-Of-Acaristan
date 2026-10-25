@@ -51,7 +51,7 @@ _MISSION_RECORDS = {
     ),
     "MISSION6": (
         "MISSION_6",
-        "Mission 6 - Black Notebook",
+        "Mission 6 - Whiteout",
         {"mission1_complete": True, "mission2_complete": True,
          "mission3_complete": True, "mission4_complete": True,
          "mission5_complete": True, "mission6_complete": True},

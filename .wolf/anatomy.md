@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-22T18:48:36.358Z
-> Files: 429 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-25T22:54:39.919Z
+> Files: 446 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -14,7 +14,7 @@
 - `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~106 tok)
 - `AGENTS.md` — Agent workflow (read this first) (~2517 tok)
 - `build.bat` (~56 tok)
-- `CLAUDE.md` — OpenWolf (~1402 tok)
+- `CLAUDE.md` — OpenWolf (~1572 tok)
 - `GEMINI.md` — OpenWolf (~75 tok)
 - `HANDOFF_CLAUDE.md` — Handoff — Claude (~1583 tok)
 - `MEMORY.md` — RULE: Split long tasks into Planning and Writing stages (~554 tok)
@@ -27,12 +27,15 @@
 
 ## docs/
 
+- `M6_3D_PERF.md` — M6 playable 3D scenes - performance pass (2026-10-24) (~3606 tok)
 - `M6_HALOS_AND_ENDING_PLAN.md` — M6 plan - halos that stay behind walls, and an ending the player can follow (~5753 tok)
+- `M6_TOPDOWN_ART_BRIEF.md` — M6 top-down art brief (Phase 0 diagnosis + Phase 1 brief) (~1882 tok)
+- `M6_TOPDOWN_GRAPHICS_MASTER_PROMPT.md` — M6 top-down graphics - master prompt (~2376 tok)
 - `project-mindmap.md` — Call of Acaristan - project mind map (~5316 tok)
 
 ## src/
 
-- `app.py` — _input_recorder: handle_settings_event (~55737 tok)
+- `app.py` — _input_recorder: handle_settings_event (~56258 tok)
 
 ## src/art/
 
@@ -73,14 +76,14 @@
 ## src/core/
 
 - `__init__.py` — core package. (~6 tok)
-- `ambience.py` — ambience.py - zone-driven world ambience layers. (~1358 tok)
+- `ambience.py` — ambience.py - zone-driven world ambience layers. (~1552 tok)
 - `appearance.py` — Character appearance: the cosmetic catalog, the appearance value object, (~7120 tok)
 - `artpack.py` — core.artpack - deprecated path (RPE6 Phase 2, A-006). (~251 tok)
 - `camera.py` — Shared camera and bullet helpers. (~4512 tok)
 - `config.py` — URL patterns: 2 routes (~9537 tok)
 - `console.py` — Console: toggle, bind, handle_event, execute_command (~4163 tok)
 - `cutscene_registry.py` — Cutscene scene renderers registered by scene id (RPE6 D1, boundary rule 4). (~700 tok)
-- `dev_jumps.py` — dev_jumps.py - registry of dev jump targets. (~1678 tok)
+- `dev_jumps.py` (~1833 tok)
 - `fixedstep.py` — Fixed-timestep accumulator, for making the simulation host-independent. (~4752 tok)
 - `font_coverage.py` — Font glyph coverage - the fontTools half of §6.13 (dev/audit only). (~649 tok)
 - `fsm.py` — fsm.py - Finite State Machine infrastructure for Acaristan. (~1929 tok)
@@ -129,11 +132,12 @@
 - `m5mid3d.py` — m5mid3d.py - Mission 5 mid-mission cutscenes (round 2). (~30984 tok)
 - `m5shadow3d.py` — The rebuilt M5 finale: one fresh 3D set, actor clock and camera language. (~13104 tok)
 - `m5studio.py` — m5studio.py - the state-TV studio shared by the M5 bulletin's 3D take (~2343 tok)
-- `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~31211 tok)
-- `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: m5fx3d with hard PS2 halos. (~2184 tok)
-- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~28902 tok)
+- `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38572 tok)
+- `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~6413 tok)
+- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31679 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
+- `ps2mat.py` — ps2mat.py - PS2 pixel textures for sets authored in flat colour. (~1125 tok)
 - `route12.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~22720 tok)
 - `weather3d.py` — Data-driven weather & atmosphere for 3D sets (RPE6 Phase 11 step 6). (~1610 tok)
 
@@ -263,7 +267,7 @@
 - `health_bar.py` — HealthBar - the HP strip (panel + "HP" label + ratio bar). (~557 tok)
 - `hostiles.py` — Hostiles - the HOSTILES counter box. (~318 tok)
 - `minimap.py` — MiniMap - the corner minimap panel. (~6000 tok)
-- `objective_banner.py` — ObjectiveBanner - the OBJECTIVE panel. (~777 tok)
+- `objective_banner.py` — ObjectiveBanner - the OBJECTIVE panel. (~1014 tok)
 - `prompt.py` — prompt - the world-anchored interaction tag ("[E] ...") drawn over a spot. (~950 tok)
 - `weapon_panel.py` — WeaponPanel (MagIcons) - the 84px magazine-icon weapon panel. (~1316 tok)
 
@@ -280,7 +284,7 @@
 
 - `__init__.py` — engine3d - tiny flat-shaded low-poly software renderer for pygame. (~212 tok)
 - `core.py` — Core of the low-poly renderer: math, meshes, camera, painter renderer. (~10156 tok)
-- `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~12471 tok)
+- `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~16989 tok)
 - `ik.py` — Analytic two-bone IK for the box rig (engine3d.rig.Humanoid). (~3209 tok)
 - `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~15952 tok)
 - `textures.py` — engine3d.textures - pixel textures on world faces. (~1502 tok)
@@ -479,22 +483,23 @@
 ## src/missions/m6/
 
 - `__init__.py` — Mission 6: Black Notebook - re-export facade (load order = parts order). (~594 tok)
-- `decor.py` — Mission 6 - stage decor, ground art and night lighting. (~13324 tok)
-- `draw.py` — Mission 6 gameplay renderer. (~4969 tok)
-- `flow.py` — Mission 6 - stage ladder, checkpoints and the ending handoff. (~3453 tok)
+- `combat.py` — Mission 6 - loud combat arenas for the three top-down stages. (~5224 tok)
+- `decor.py` — Mission 6 - stage decor, ground art and night lighting. (~31742 tok)
+- `draw.py` — Mission 6 gameplay renderer. (~6196 tok)
+- `flow.py` — Mission 6 - stage ladder, checkpoints and the ending handoff. (~3777 tok)
 - `hud3d.py` — Mission 6 3D HUD: minimal tactical, shared by the train shootout and the (~3045 tok)
 - `m6_audio.py` — Mission 6 sound design: film stems, foley and the interactive-train bed. (~6215 tok)
-- `maps.py` — Authored map layer for Mission 6 - three distinct playable spaces. (~2240 tok)
-- `meta.py` — Mission 6 metadata, stage constants and authored cutscene timelines. (~3000 tok)
+- `maps.py` — Authored map layer for Mission 6 - three distinct playable spaces. (~3514 tok)
+- `meta.py` — Mission 6 metadata, stage constants and authored cutscene timelines. (~4333 tok)
 - `palette3d.py` — The 2D top-down M6 palette, for the 3D yard and train. (~463 tok)
-- `stealth.py` — Mission 6 - floodlight stealth for no-man's-land and the rail yard. (~3989 tok)
-- `systems.py` — Mission 6 - per-frame gameplay pipeline. (~2860 tok)
-- `train3d.py` — Mission 6 - the interactive 3D train scene (``docs/MISSION6_PLOT.md``). (~67119 tok)
-- `world.py` — Mission 6 - world construction, Guard spawns and shared helpers. (~3755 tok)
+- `stealth.py` — Mission 6 - tower searchlights for no-man's-land and the rail yard. (~4467 tok)
+- `systems.py` — Mission 6 - per-frame gameplay pipeline. (~3082 tok)
+- `train3d.py` — Mission 6 - the interactive 3D train scene (``docs/MISSION6_PLOT.md``). (~69544 tok)
+- `world.py` — Mission 6 - world construction, Guard spawns and shared helpers. (~3832 tok)
 - `yard_brain.py` — Mission 6 yard - the Guard brains (engine.ai on the "Who fired?" fight). (~6394 tok)
 - `yard_dress.py` — Mission 6 yard - the clutter that makes the walled yard look lived in. (~3450 tok)
 - `yard_hud.py` — Mission 6 yard - the 2D top-down game's HUD, brought into the 3D fight. (~1929 tok)
-- `yard3d.py` — Mission 6 - "Who fired?": the third-person fight after Volkov's death. (~23145 tok)
+- `yard3d.py` — Mission 6 - "Who is Ucilev?": the third-person fight after Volkov's death. (~24427 tok)
 
 ## src/missions/m6/bloc3d/
 
@@ -520,10 +525,16 @@
 ## src/ui/
 
 - `__init__.py` — Package ui - re-export facade. Parts: widgets.py, main.py, mp.py, system.py. (~1234 tok)
-- `arena_view.py` — Renderer for multiplayer arena matches. (~25079 tok)
-- `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~16406 tok)
+- `arena_view.py` — Renderer for multiplayer arena matches. (~25138 tok)
+- `egg666_3d.py` — egg666_3d.py - the Mission 1 safe-keypad "666" Easter egg as a lit 3D scene. (~4198 tok)
+- `egg666_audio.py` — egg666_audio.py - procedural sound for the 3D "666" scare. (~2740 tok)
+- `egg666_build.py` — egg666_build.py - geometry for the 3D "666" scare: the vault, the ritual (~4899 tok)
+- `egg666_dir.py` — egg666_dir.py - the director of the 3D "666" scare: what happens at which frame. (~3842 tok)
+- `egg666_fx.py` — egg666_fx.py - light halos, the PS2 grade and the crisp present for the 3D "666" scare. (~1776 tok)
+- `egg666_post.py` — egg666_post.py - screen effects for the 3D "666" scare. (~1364 tok)
+- `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~17073 tok)
 - `main.py` — Split from menu.py - see menu.py (shim) for the map. (~9349 tok)
-- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~50757 tok)
+- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~60072 tok)
 - `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~3971 tok)
 - `mp.py` — Split from menu.py - see menu.py (shim) for the map. (~25518 tok)
 - `multiplayer_style.py` — Read-only KRAPNET presentation. No sockets, timers or session mutations. (~4663 tok)
@@ -563,6 +574,7 @@
 - `test_cast_shadows.py` — Phase 11 step 7 (ADR-023): baked cast shadows - occluded faces darken, (~619 tok)
 - `test_clock.py` — engine.core.Clock: fixed-step semantics, identity with the legacy FixedStepClock (ADR-004). (~1940 tok)
 - `test_devtools.py` — RPE6 Phase 10 (§6.19): debug overlay / inspector data builders + console commands. (~1005 tok)
+- `test_egg666.py` — Tests for the 3D "666" safe-keypad scare (ui/egg666_*.py). (~1755 tok)
 - `test_engine_ai.py` — engine.ai: behaviour tree preemption and memory, sight reaction and (~3255 tok)
 - `test_engine_boot.py` — App.boot display ownership (ADAPTER A-001). (~626 tok)
 - `test_engine_collision.py` — engine.collision: box rays and segments agree with brute force, and grid (~1776 tok)
@@ -584,7 +596,7 @@
 - `test_ik.py` — engine3d.ik: analytic arm/leg IK and the shouldered rifle hold land on (~1570 tok)
 - `test_m5_ending.py` — M5 finale regressions. Run: python -m unittest tests.unit.test_m5_ending -v. (~2231 tok)
 - `test_m5_finale_audio.py` — Focused M5 sound/lifecycle regressions, without starting app or saves. (~3099 tok)
-- `test_m6_campaign.py` — Mission 6 campaign regressions. Run: python -m unittest tests.unit.test_m6_campaign -v. (~13379 tok)
+- `test_m6_campaign.py` — Mission 6 campaign regressions. Run: python -m unittest tests.unit.test_m6_campaign -v. (~14342 tok)
 - `test_mathx_profiling.py` — engine.core.mathx and Profiler. (~479 tok)
 - `test_mesh_import.py` — Phase 11 step 11 (ADR-024): the importer converts OBJ/glTF into (~1402 tok)
 - `test_phase1_rng_imports.py` — Phase 1 checks: legacy rng stream (R6) and m3 import side effects (B-010). (~641 tok)
@@ -603,6 +615,11 @@
 
 ## tools/
 
-- `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~7838 tok)
+- `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
+- `dev_panel.py` — Declares to (~7861 tok)
+- `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
+- `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
+- `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
 - `smoke_test.py` — Must be set before pygame/config import. (~126097 tok)
+- `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~5676 tok)

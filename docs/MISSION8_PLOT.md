@@ -5,7 +5,7 @@
 > `docs/FIXES_STORIES.md` for the consistency pass applied to the plan.
 
 > *"I chose the many. You chose the four."*
-> — Captain Vasile
+> — Commander Vasile
 
 ---
 
@@ -34,10 +34,10 @@ Both endings are bittersweet. Neither is the "good" one.
 ## Where We Pick Up (Recap from M6 + M7)
 
 1. **Volkov is dead** at the Kim Kim border, one step from the train.
-2. **The notebook proves it:** Retardovici ordered Route 12; Vasile's codes
-   carried it out.
-3. **Ucilev is Bogdan Velicu**, Biribel's own KRAP intake, officially
-   dead since Y-2.
+2. **The proof is split:** the M6 leaf and Vasile's confession carry the Route
+   12 convoy order; the M2 auth chain carries Retardovici's cover.
+3. **Ucilev is Andrei Bogdan Velicu** (file: VELICU, B.), Biribel's own KRAP
+   intake, officially dead since Y-2.
 4. **Vasile confessed** — "I chose the many" — and offered to get Biribel into
    the mansion.
 5. **Bodi's farm burned** (M7). The Guard raided it looking for Biribel. Bodi
@@ -52,7 +52,7 @@ Both endings are bittersweet. Neither is the "good" one.
 ### Biribel
 In both routes he finally chooses his own target, and in both he pays for it.
 
-### Captain Vasile
+### Commander Vasile
 Never a cartoon. He did sell the squad, and he did it to keep 300 men alive —
 and to keep himself in the room where power is. **Duty:** he survives and
 becomes President. **Revenge:** he dies without begging.
@@ -244,7 +244,7 @@ dies either way, but the game lets the player decide how much they needed.
 ```
 scene: m8r_radio          speaker: ALEX      "Biribel - the mansion, they were waiting for us. Maru's down. I'm sorry. I'm sorry-" (static)
 scene: m8r_tv             speaker: PRESIDENT "The terrorist Maru is dead. The traitor Biribel will be found."
-scene: m8r_ucilev         speaker: ANCHOR    "...appointed Commander of the Presidential Guard, Bogdan Velicu."
+scene: m8r_ucilev         speaker: ANCHOR    "...appointed Commander of the Presidential Guard, Andrei Bogdan Velicu."
 scene: m8r_bodi_truck     speaker: BODI      "Train leaves at six. I'll wait till it does."
 scene: m8r_border_train   speaker: ""        (The Kim Kim border. Night. The train Volkov never caught. Biribel on it. Bodi's truck on the road outside, headlights off.)
 scene: m8r_ucilev_photo   speaker: ""        (Ucilev at the border post, holding Biribel's photo. He watches the train go.)
@@ -262,7 +262,7 @@ gameplay.
 
 | Mission | Add | Pays off in | Shipped? |
 |---------|-----|-------------|----------|
-| **M1** | Vasile pockets the notebook without reading it in front of Biribel: *"Good. I've got it. Later. You need sleep."* | M6 — he already knew what was in it. | **Yes** — M1 escape cutscene (caption + radio VO, VO_198). |
+| **M1** | Vasile pockets the notebook without reading it in front of Biribel: *"Good. I've got it. Later. You need sleep."* | M6 — he already knew what was in it. | **Yes** — M1 escape cutscene (caption + radio cue; VO_198 is caption-only until a take is recorded). |
 | **M1** | Volkov, as he escapes: *"Read it before you hand it over!"* (sounds like a taunt) | M6 boxcar: "You took this from me once. Read it this time." | **Yes** — `core/interactions.py`. |
 | **M2** | Half a second of radio static from Vasile's channel right before the sniper's first shot. | M6 — the convoy route went out on his channel. | **Yes** — the 3D kill-box film, dead air in the gap before the first round. |
 | **M2** | Vasile's line before the kill-box: *"Route's clean. I checked it myself."* | M6 / M8. | **Yes** — the film's opening radio line (VO_199). |

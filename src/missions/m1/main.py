@@ -48,8 +48,8 @@ def start_mission(preserve_timer=False):
     STATE.active_mission_title = "Black Notebook"
     STATE.active_mission_operation = "WAREHOUSE RAID - BLACK NOTEBOOK"
     STATE.active_mission_outcome = "Target escaped  ·  Notebook recovered  ·  Questions remain"
-    STATE.active_mission_quote_attr = "Vasile, after a long pause:"
-    STATE.active_mission_quote = '"Bring it straight to me. Don\'t read it."'
+    STATE.active_mission_quote_attr = "Vasile, over the radio:"
+    STATE.active_mission_quote = '"Good. I\'ve got it. Later. You need sleep."'
     save_system.set_slot_progress("m1")
     STATE.player_dead = False
     STATE.death_timer = 0
@@ -188,9 +188,10 @@ def start_mission(preserve_timer=False):
             "y": 16 * TILE_SIZE + 32,
             "clue": (
                 "WEAPON SHIPMENT MANIFEST\n"
-                "FT-7742 / FT-7743 / FT-7744\n"
+                "FT-7742 / FT-7743 / FT-7744 / FT-7745\n"
                 "Recipient: IPA Regional Command\n"
-                "KRAP ref #8841 - filed 6 months ago.\n"
+                "IPA procurement #8841-8844 -\n"
+                "filed 6 months ago.\n"
                 "Courier: S. Volkov."
             ),
             "read": False,

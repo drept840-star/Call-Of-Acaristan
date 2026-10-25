@@ -21,7 +21,7 @@ from fx import effects
 
 from .meta import (
     STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL, ARENA_WAVES, ARENA_DRUMS,
-    ARENA_MAX_LIVING, M6_ROLE_TUNING,
+    ARENA_MAX_LIVING, M6_ROLE_TUNING, CUSTOMS_CALM_S,
 )
 
 T = TILE_SIZE
@@ -45,6 +45,7 @@ _waves = ()
 _next = 0
 _clock = 0.0
 _loud = False
+_calm = False           # customs opens quiet: patrols, no alert, until a shot/blast/timer
 _drums = []
 _tanker = None
 _pending = []           # [delay_s, x, y, radius, power]
@@ -56,13 +57,14 @@ _peak = 0               # most hostiles seen at once: the plate's bar is 1 - lef
 
 def init_stage(stage):
     """Bind the arena: waves, drums (solid rects in STATE.walls), tanker."""
-    global _stage, _waves, _next, _clock, _loud, _tanker, _t, _peak
+    global _stage, _waves, _next, _clock, _loud, _calm, _tanker, _t, _peak
     _stage = stage
     _peak = 0
     _waves = ARENA_WAVES.get(stage, ())
     _next = 0
     _clock = 0.0
     _loud = False
+    _calm = stage == STAGE_CUSTOMS
     _t = 0.0
     _pending.clear()
     _scorch.clear()
@@ -90,9 +92,15 @@ def loud():
     return _loud
 
 
+def calm():
+    """True while the opening patrol has not been broken yet."""
+    return _calm
+
+
 def go_loud():
     """The fight starts: every Guard converges and the wave clock runs."""
-    global _loud, _clock
+    global _loud, _clock, _calm
+    _calm = False
     if _loud or not _waves:
         _loud = True
         return
@@ -210,6 +218,8 @@ def _check_loud():
     if any(b.get("owner") == "player" for b in getattr(STATE, "bullets", [])):
         go_loud()
         return
+    if _calm:
+        return
     for e in getattr(STATE, "enemies", []):
         if getattr(e, "hp", 0) > 0 and getattr(e, "alerted", False):
             go_loud()
@@ -319,12 +329,14 @@ def _update_blasts(dt):
 
 
 def update(dt):
-    global _t
+    global _t, _calm
     if getattr(STATE, "mission6_stage", None) != _stage or not _stage:
         return
     dt = max(0.0, float(dt))
     _t += dt
     _update_blasts(dt)
+    if _calm and _t >= CUSTOMS_CALM_S:
+        _calm = False
     _check_loud()
     _update_waves(dt)
 

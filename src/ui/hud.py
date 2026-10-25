@@ -318,7 +318,7 @@ def draw_notebook_inspection():
         ("IPA safehouses", "7 marked", (200, 80, 80)),
         ("KRAP checkpoints", "12 marked", (80, 120, 200)),
         ("MAG supply routes", "sewers", (80, 160, 80)),
-        ("Volkov handoff", "WAREHOUSE DISTRICT", (220, 180, 60)),
+        ("Volkov handoff", "SLUM DIST. - WAREHOUSE ROW", (220, 180, 60)),
         ("Exfil route", "STAIR \u2192 BAY DOOR", (160, 140, 200)),
     ]
     for label, value, vcol in map_lines:
@@ -450,7 +450,7 @@ def _safe_666_asset_candidates():
     ]
 
 
-def _play_safe_666_demon_noise():
+def _play_safe_666_demon_noise(volume=1.0):
     """Loop demon.mp3 if present; fall back to procedural layers."""
     import os
     try:
@@ -462,6 +462,7 @@ def _play_safe_666_demon_noise():
         for path in _safe_666_asset_candidates():
             if path and os.path.exists(path):
                 snd = _load_sound(path)
+                snd.set_volume(volume)
                 ch = snd.play(loops=-1)
                 if ch:
                     ch.set_volume(1.0)
@@ -497,6 +498,56 @@ def _stop_safe_666_demon_noise():
         pass
     STATE.safe_666_demon_channel = None
     STATE.safe_666_demon_sound = None
+
+
+# The 3D version of the scare lives in ui/egg666_3d.py; this is its thin caller.
+# Without GL, or on any failure, the 2D scare below runs instead.
+_SAFE_666_3D = {"on": False, "mod": None, "bed": False}
+
+
+def safe_666_3d_live():
+    """True while the 3D 666 scare owns the screen (app.py freezes the world under it)."""
+    return _SAFE_666_3D["on"] and bool(getattr(STATE, "safe_666_active", False))
+
+
+def _egg3d_begin():
+    """Start the 3D scare; False leaves the 2D one to run."""
+    _SAFE_666_3D.update(on=False, mod=None, bed=False)
+    try:
+        from ui import egg666_3d  # lazy: GL/numpy stack, only the 3D scare needs it
+        if egg666_3d.begin(STATE.safe_666_seed, (WIDTH, HEIGHT)):
+            _SAFE_666_3D.update(on=True, mod=egg666_3d)
+    except Exception as e:
+        print(f"3D 666 scare unavailable: {e}")
+    return _SAFE_666_3D["on"]
+
+
+def _egg3d_stop():
+    mod = _SAFE_666_3D["mod"]
+    _SAFE_666_3D.update(on=False, mod=None)
+    if mod is not None:
+        try:
+            mod.stop()
+        except Exception:
+            pass
+
+
+def _draw_safe_666_3d(t):
+    """One frame of the 3D scare; False means it failed and the 2D scare takes over."""
+    mod = _SAFE_666_3D["mod"]
+    try:
+        if not mod.frame(screen, t):
+            return False
+    except Exception:
+        return False
+    lvl = mod.demon_bed_level(t)  # assets/demon.mp3 stays an optional bed under the scare
+    if lvl > 0 and not _SAFE_666_3D["bed"]:
+        _SAFE_666_3D["bed"] = True
+        _play_safe_666_demon_noise(0.0)
+    snd = getattr(STATE, "safe_666_demon_sound", None)
+    if snd is not None:
+        snd.set_volume(lvl)
+    return True
 
 
 def _safe_666_window_tamper(t, total_t):
@@ -600,6 +651,7 @@ def _safe_666_fake_crash():
     STATE.safe_666_active = False
     STATE.safe_666_timer = 0
     _stop_safe_666_demon_noise()
+    _egg3d_stop()
     try:
         pygame.display.set_caption("Call of Acaristan - Fatal Error")
     except Exception:
@@ -651,6 +703,8 @@ def _trigger_safe_666_easter_egg():
     # 6.5 seconds at 60fps: long enough to sit with the player before the fake crash.
     STATE.safe_666_timer = 390
     STATE.safe_666_seed = _rng_legacy.randint(1, 999999)
+    if _egg3d_begin():
+        STATE.safe_666_timer = _SAFE_666_3D["mod"].TOTAL  # 9 s: it opens in silence
     STATE.safe_666_total_timer = STATE.safe_666_timer
     STATE.safe_666_crashed = False
     try:
@@ -668,7 +722,12 @@ def _trigger_safe_666_easter_egg():
         except Exception:
             pass
     pygame.mouse.set_visible(False)
+    if not _SAFE_666_3D["on"]:
+        _safe_666_loud_open()
 
+
+def _safe_666_loud_open():
+    """The 2D scare's opening: demon.mp3 as the bed, loud procedural hits on top."""
     used_external = _play_safe_666_demon_noise()
 
     # Loud layered sting. demon.mp3 supplies the bed; procedural hits punctuate it.
@@ -715,6 +774,15 @@ def _draw_safe_666_easter_egg():
     t = total_t - timer
     rng = random.Random(getattr(STATE, "safe_666_seed", 666) + t // 2)
     _safe_666_window_tamper(t, total_t)
+
+    if _SAFE_666_3D["on"]:
+        if _draw_safe_666_3d(t):
+            return True
+        # The 3D scare failed mid-run: start the 2D one from its first frame.
+        _egg3d_stop()
+        STATE.safe_666_timer, STATE.safe_666_total_timer = 389, 390
+        timer, total_t, t = 390, 390, 0
+        _safe_666_loud_open()
 
     screen.fill((0, 0, 0))
     flash = max(0, 150 - t * 5)

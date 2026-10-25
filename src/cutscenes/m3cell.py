@@ -210,9 +210,10 @@ def _m3_draw_seated_biribel(surface, cx, seat_y, scale=1.0, rim=(130, 150, 155))
 
 def _m3_draw_balaceanu(surface, cx, foot_y, scale=1.0, facing_left=True):
     """Balaceanu, drawn by figure_kit so he matches the arrest scene exactly
-    (same face/suit as m4aftermath's general), holding the VOSTRAL folder."""
+    (same face/suit as m4aftermath's general), holding the VOSTRAL dossier
+    copy - the archive original never leaves the cold vault."""
     _fk_draw(surface, "balaceanu", cx, foot_y, scale, facing_right=not facing_left,
-             prop="folder", prop_label="VOSTRAL", label_font=font_terminal_small)
+             prop="folder", prop_label="VOSTRAL DOSSIER", label_font=font_terminal_small)
 
 
 def _draw_cell_ceiling(surface, t):
@@ -465,14 +466,19 @@ def _draw_interrogation_room(surface, t):
     render_util.soft_shadow(surface, (WIDTH // 2 - 250 + cam_x, table_y + 22, 500, 42), 92)
     pygame.draw.rect(surface, (30, 29, 27), (WIDTH // 2 - 220 + cam_x, table_y - 12, 440, 54), border_radius=8)
     pygame.draw.line(surface, (76, 70, 60), (WIDTH // 2 - 204 + cam_x, table_y - 6), (WIDTH // 2 + 204 + cam_x, table_y - 6), 2)
-    # Folder as visual hook for Vostral.
+    # Folder as visual hook for Vostral. It is a working dossier copy, not the
+    # sealed archive original (that one stays under glass in the cold vault), so
+    # the tag reads VOSTRAL / DOSSIER / COPY. The wording is inline here because
+    # en.json is shared content owned elsewhere; only this art reads it.
     folder = pygame.Rect(WIDTH // 2 + 46 + cam_x, table_y - 42, 122, 74)
     pygame.draw.rect(surface, (72, 54, 34), folder, border_radius=4)
     pygame.draw.rect(surface, (150, 45, 36), folder, 2, border_radius=4)
     tag = font_terminal.render(_T("m3cell.vostral"), True, (220, 174, 104))
-    surface.blit(tag, (folder.centerx - tag.get_width() // 2, folder.y + 20))
-    stamp = font_terminal_small.render(_T("m3cell.sealed"), True, (170, 45, 40))
-    surface.blit(stamp, (folder.centerx - stamp.get_width() // 2, folder.y + 48))
+    surface.blit(tag, (folder.centerx - tag.get_width() // 2, folder.y + 6))
+    tag_kind = font_terminal.render("DOSSIER", True, (220, 174, 104))
+    surface.blit(tag_kind, (folder.centerx - tag_kind.get_width() // 2, folder.y + 27))
+    stamp = font_terminal_small.render("COPY", True, (170, 45, 40))
+    surface.blit(stamp, (folder.centerx - stamp.get_width() // 2, folder.y + 51))
 
     # Biribel restrained left; Balaceanu right, standing too composed.
     _m3_draw_seated_biribel(surface, WIDTH // 2 - 270 + cam_x, SCENE_TOP + 342 + cam_y, scale=0.88, rim=(118, 142, 148))

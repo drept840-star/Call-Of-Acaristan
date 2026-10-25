@@ -271,7 +271,7 @@ class GameState:
         self.m6_train_active = False
         self.m6_train_time = 0.0
         self.m6_train_result = None         # "win" | "skip" | "fallback" | "dead" | "failed"
-        self.m6_yard_active = False         # the "Who fired?" fight owns the frame
+        self.m6_yard_active = False         # the "Who is Ucilev?" fight owns the frame
         self.m6_yard_result = None          # "win" | "fallback"
         self.m6_train_overrun = False       # Guard still on the platform at the shot
         self.m6_train_guards_left = 0       # living Guards when the scene hands off

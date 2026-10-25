@@ -64,12 +64,16 @@ class ForwardResult(object):
     ``guidance`` is a short, player-facing next step on failure.
     """
 
-    def __init__(self, ok, method=None, external_ip=None, error="", guidance=""):
+    def __init__(self, ok, method=None, external_ip=None, error="", guidance="",
+                 udp_ok=None):
         self.ok = ok
         self.method = method
         self.external_ip = external_ip
         self.error = error
         self.guidance = guidance
+        # None means the caller requested only TCP (legacy use); True/False
+        # reports whether the real-time datagram mapping was also installed.
+        self.udp_ok = udp_ok
 
     def __repr__(self):
         return ("ForwardResult(ok=%r, method=%r, external_ip=%r, error=%r)"
@@ -279,7 +283,7 @@ def _natpmp_request(sock, opcode, internal_port=0, external_port=0,
     byte order) and lifetime.
     """
     epoch = int(time.time()) - 1900
-    if opcode == OPCODE_MAP:
+    if opcode in (OPCODE_MAP, OPCODE_UDP_MAP):
         body = (struct.pack("!HH", internal_port, external_port)
                 + struct.pack("!I", lifetime))
     else:
@@ -304,7 +308,7 @@ def _natpmp_request(sock, opcode, internal_port=0, external_port=0,
         # the 4-byte IPv4 address. Requiring 16 silently discarded every
         # valid response and forced the host to rely on a separate STUN call.
         ext_ip = socket.inet_ntoa(data[8:12])
-    if opcode == OPCODE_MAP and len(data) >= 16:
+    if opcode in (OPCODE_MAP, OPCODE_UDP_MAP) and len(data) >= 16:
         # Response layout: 8-byte header, internal port, external port,
         # lifetime. The assigned external port is bytes 10..11.
         mapped = struct.unpack("!H", data[10:12])[0]
@@ -325,8 +329,8 @@ _NATPMP_ERRORS = {
 }
 
 
-def try_natpmp(internal_port, lifetime=3600):
-    """Attempt a NAT-PMP mapping through the OS default gateway. Never raises."""
+def try_natpmp(internal_port, lifetime=3600, protocol="TCP"):
+    """Attempt a NAT-PMP mapping through the default gateway. Never raises."""
     gateway = _default_gateway()
     if not gateway:
         return ForwardResult(False, error="default router could not be identified")
@@ -340,8 +344,9 @@ def try_natpmp(internal_port, lifetime=3600):
         if result != 0:
             return ForwardResult(False, error=_NATPMP_ERRORS.get(
                 result, "code %d" % result))
+        opcode = OPCODE_UDP_MAP if str(protocol).upper() == "UDP" else OPCODE_MAP
         result, _ip, _mapped = _natpmp_request(
-            sock, OPCODE_MAP, internal_port, internal_port, lifetime,
+            sock, opcode, internal_port, internal_port, lifetime,
             gateway=gateway)
         if result != 0:
             return ForwardResult(False, external_ip=ext_ip,
@@ -523,7 +528,7 @@ _UPNP_ERRORS = {
 
 
 def try_upnp(internal_port, external_port=None, lifetime=3600,
-             description="Call of Acaristan"):
+             description="Call of Acaristan", protocol="TCP"):
     """Attempt a UPnP IGD mapping. Never raises."""
     external_port = external_port or internal_port
     try:
@@ -551,7 +556,7 @@ def try_upnp(internal_port, external_port=None, lifetime=3600,
         args = [
             ("NewRemoteHost", ""),
             ("NewExternalPort", str(external_port)),
-            ("NewProtocol", "TCP"),
+            ("NewProtocol", "UDP" if str(protocol).upper() == "UDP" else "TCP"),
             ("NewInternalPort", str(internal_port)),
             ("NewInternalClient", _local_ip()),
             ("NewEnabled", "1"),
@@ -583,27 +588,39 @@ def try_upnp(internal_port, external_port=None, lifetime=3600,
 
 
 def open_port(internal_port, external_port=None, lifetime=3600,
-              description="Call of Acaristan"):
-    """Forward a port to this machine. Tries UPnP, then NAT-PMP.
+              description="Call of Acaristan", include_udp=False):
+    """Open the match port on TCP and optionally its same-numbered UDP port.
 
-    Returns a ForwardResult; never raises. On total failure the result
-    carries ``guidance`` telling the player exactly what to do by hand,
-    because plenty of routers have UPnP switched off.
+    TCP remains mandatory for joining/control and the compatibility fallback.
+    If the UDP mapping fails, the result still reports TCP success and sets
+    ``udp_ok=False`` so the game can keep working over TCP and explain why
+    the faster path is unavailable.
     """
     external_port = external_port or internal_port
-    upnp = try_upnp(internal_port, external_port, lifetime, description)
-    if upnp.ok:
-        return upnp
-    pmp = try_natpmp(internal_port, lifetime)
-    if pmp.ok:
-        return pmp
+    tcp = try_upnp(internal_port, external_port, lifetime, description,
+                   protocol="TCP")
+    if not tcp.ok:
+        tcp = try_natpmp(internal_port, lifetime, protocol="TCP")
+    if not tcp.ok:
+        error = tcp.error or "router mapping failed"
+        return ForwardResult(
+            False, error=error,
+            guidance=("Log into your router and forward TCP port %d to %s, then "
+                      "share your public IP. Or run tools/mp_host.py --relay."
+                      % (external_port, _local_ip())))
+    if not include_udp:
+        return tcp
+
+    udp = try_upnp(internal_port, external_port, lifetime, description,
+                   protocol="UDP")
+    if not udp.ok:
+        udp = try_natpmp(internal_port, lifetime, protocol="UDP")
     return ForwardResult(
-        False,
-        error="; ".join(x for x in (upnp.error, pmp.error) if x),
-        guidance=("Log into your router and forward TCP port %d to %s, then "
-                  "share your public IP. Or run tools/mp_host.py --relay."
-                  % (external_port, _local_ip())),
-    )
+        True, method=tcp.method,
+        external_ip=tcp.external_ip or udp.external_ip,
+        error="" if udp.ok else (udp.error or "UDP mapping unavailable"),
+        guidance=tcp.guidance,
+        udp_ok=bool(udp.ok))
 
 
 # ── STUN: what is my public address? ─────────────────────────────

@@ -141,8 +141,8 @@
       "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
       "id": "bug-008",
       "timestamp": "2026-10-20T16:49:35.426Z",
-      "last_seen": "2026-10-20T16:49:35.426Z",
-      "occurrences": 1,
+      "last_seen": "2026-10-25T12:54:06.603Z",
+      "occurrences": 3,
       "related_bugs": []
     },
     {
@@ -1047,6 +1047,726 @@
       "last_seen": "2026-10-22T18:45:53.151Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "Was returning: None if q is None else film_xy(q, x0, w)",
+      "fix": "Now returns: None if q is None else film_xy(q, x0, w, rw=r.w)",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-059",
+      "timestamp": "2026-10-22T21:53:40.417Z",
+      "last_seen": "2026-10-22T21:53:40.417Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in safe_666_3d_live()",
+      "file": "src/ui/hud.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-060",
+      "timestamp": "2026-10-23T21:56:29.956Z",
+      "last_seen": "2026-10-23T21:56:29.956Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _egg3d_live()",
+      "file": "src/app.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-061",
+      "timestamp": "2026-10-23T21:56:57.890Z",
+      "last_seen": "2026-10-23T21:56:57.890Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _build()",
+      "file": "src/ui/egg666_3d.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-062",
+      "timestamp": "2026-10-23T22:14:53.068Z",
+      "last_seen": "2026-10-23T22:14:53.068Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "tools/dev_panel.py",
+      "root_cause": "Had \"m6-train\"",
+      "fix": "Changed to \"m6-game\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-063",
+      "timestamp": "2026-10-24T07:22:22.724Z",
+      "last_seen": "2026-10-24T07:22:22.724Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: out should be mid",
+      "file": "tools/m6_topdown_shots.py",
+      "root_cause": "Used \"out\" instead of \"mid\"",
+      "fix": "Changed out → mid",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-064",
+      "timestamp": "2026-10-24T09:50:11.838Z",
+      "last_seen": "2026-10-24T09:50:11.838Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _ground_AO_PLACEHOLDER should be _ground_ao",
+      "file": "src/missions/m6/decor.py",
+      "root_cause": "Used \"_ground_AO_PLACEHOLDER\" instead of \"_ground_ao\"",
+      "fix": "Changed _ground_AO_PLACEHOLDER → _ground_ao",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-065",
+      "timestamp": "2026-10-24T09:55:46.030Z",
+      "last_seen": "2026-10-24T09:55:46.030Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _draw_beacon should be _draw_world_effects",
+      "file": "src/missions/m6/draw.py",
+      "root_cause": "Used \"_draw_beacon\" instead of \"_draw_world_effects\"",
+      "fix": "Changed _draw_beacon → _draw_world_effects",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-066",
+      "timestamp": "2026-10-24T09:56:14.599Z",
+      "last_seen": "2026-10-24T09:56:14.599Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _draw_world_effects should be _draw_beacon",
+      "file": "src/missions/m6/draw.py",
+      "root_cause": "Used \"_draw_world_effects\" instead of \"_draw_beacon\"",
+      "fix": "Changed _draw_world_effects → _draw_beacon",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-067",
+      "timestamp": "2026-10-24T09:58:33.453Z",
+      "last_seen": "2026-10-24T09:58:33.453Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/combat.py",
+      "root_cause": "Had \"AREA CLEAR\"",
+      "fix": "Changed to \"AREA CLEAR  -  MOVE OUT\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-068",
+      "timestamp": "2026-10-24T09:58:40.762Z",
+      "last_seen": "2026-10-24T09:58:40.762Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: out should be exit_",
+      "file": "tools/m6_topdown_shots.py",
+      "root_cause": "Used \"out\" instead of \"exit_\"",
+      "fix": "Changed out → exit_",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-069",
+      "timestamp": "2026-10-24T09:58:53.863Z",
+      "last_seen": "2026-10-24T09:58:53.863Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6fx3d.py",
+      "file": "src/cutscenes/m6fx3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 13→54 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-070",
+      "timestamp": "2026-10-24T12:13:04.872Z",
+      "last_seen": "2026-10-24T12:13:04.872Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "Was returning: 0",
+      "fix": "Now returns: ntri",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-071",
+      "timestamp": "2026-10-24T12:19:49.250Z",
+      "last_seen": "2026-10-24T12:19:49.250Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of gl.py",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-072",
+      "timestamp": "2026-10-24T12:21:51.543Z",
+      "last_seen": "2026-10-24T12:21:51.543Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _same()",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-073",
+      "timestamp": "2026-10-24T12:21:53.939Z",
+      "last_seen": "2026-10-24T12:21:53.939Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of gl.py",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-074",
+      "timestamp": "2026-10-24T12:25:08.249Z",
+      "last_seen": "2026-10-24T12:25:08.249Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "Had \"lights_gated\"",
+      "fix": "Changed to \"lights_culled\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-075",
+      "timestamp": "2026-10-24T12:25:18.041Z",
+      "last_seen": "2026-10-24T12:25:18.041Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6fx3d.py",
+      "file": "src/cutscenes/m6fx3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 27→47 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-076",
+      "timestamp": "2026-10-24T12:30:10.630Z",
+      "last_seen": "2026-10-24T12:30:10.630Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of gl.py",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 6→9 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-077",
+      "timestamp": "2026-10-24T12:35:37.363Z",
+      "last_seen": "2026-10-24T12:35:37.363Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in prewarm()",
+      "file": "src/core/ambience.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-078",
+      "timestamp": "2026-10-24T12:42:59.252Z",
+      "last_seen": "2026-10-24T12:42:59.252Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _prewarm_ambience()",
+      "file": "src/missions/m6/train3d.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-079",
+      "timestamp": "2026-10-24T12:43:01.579Z",
+      "last_seen": "2026-10-24T12:43:01.579Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "Was returning: L(-0.30 + 0.10 * k, 1.95, 1.26), L(10.0, 0.4, 1.45",
+      "fix": "Now returns: (L(0.05 + 0.08 * k, 1.98, 1.45 - 0.05 * k),",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-080",
+      "timestamp": "2026-10-25T11:24:19.545Z",
+      "last_seen": "2026-10-25T11:24:19.545Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6films.py",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "11 lines replaced/restructured",
+      "fix": "Rewrote 21→13 lines (11 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-081",
+      "timestamp": "2026-10-25T12:49:55.905Z",
+      "last_seen": "2026-10-25T12:49:55.905Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: False should be depth_test",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "Used \"False\" instead of \"depth_test\"",
+      "fix": "Changed False → depth_test",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-082",
+      "timestamp": "2026-10-25T12:54:07.476Z",
+      "last_seen": "2026-10-25T12:54:07.476Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6world3d.py",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→19 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-083",
+      "timestamp": "2026-10-25T12:57:45.223Z",
+      "last_seen": "2026-10-25T12:57:45.223Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: depth_test should be False",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "Used \"depth_test\" instead of \"False\"",
+      "fix": "Changed depth_test → False",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-084",
+      "timestamp": "2026-10-25T12:57:46.784Z",
+      "last_seen": "2026-10-25T12:57:46.784Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: depth_test should be depth",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "Used \"depth_test\" instead of \"depth\"",
+      "fix": "Changed depth_test → depth",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-085",
+      "timestamp": "2026-10-25T12:57:49.898Z",
+      "last_seen": "2026-10-25T12:57:49.898Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "Had \"rifle\"",
+      "fix": "Changed to \"os12\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-086",
+      "timestamp": "2026-10-25T13:01:47.050Z",
+      "last_seen": "2026-10-25T13:01:47.050Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6world3d.py",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→4 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-087",
+      "timestamp": "2026-10-25T13:07:03.705Z",
+      "last_seen": "2026-10-25T13:07:03.705Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6films.py",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "7 lines replaced/restructured",
+      "fix": "Rewrote 10→22 lines (7 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-088",
+      "timestamp": "2026-10-25T13:11:14.731Z",
+      "last_seen": "2026-10-25T13:11:14.731Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m6films.py",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "11 lines replaced/restructured",
+      "fix": "Rewrote 22→64 lines (11 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-089",
+      "timestamp": "2026-10-25T13:13:14.853Z",
+      "last_seen": "2026-10-25T13:13:14.853Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/meta.py",
+      "root_cause": "Had \"Customs is full of Guard. No quiet way through - ",
+      "fix": "Changed to \"Patrols walk a loop and nobody'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-090",
+      "timestamp": "2026-10-25T13:27:13.361Z",
+      "last_seen": "2026-10-25T13:27:13.361Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/flow.py",
+      "root_cause": "Had \"Customs is full of Guard. No quiet way through - ",
+      "fix": "Changed to \"Patrols walk a loop and nobody'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-091",
+      "timestamp": "2026-10-25T13:27:14.328Z",
+      "last_seen": "2026-10-25T13:27:14.328Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _drums should be _calm",
+      "file": "src/missions/m6/combat.py",
+      "root_cause": "Used \"_drums\" instead of \"_calm\"",
+      "fix": "Changed _drums → _calm",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-092",
+      "timestamp": "2026-10-25T13:27:24.227Z",
+      "last_seen": "2026-10-25T13:27:24.227Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of systems.py",
+      "file": "src/missions/m6/systems.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→12 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-093",
+      "timestamp": "2026-10-25T13:28:58.429Z",
+      "last_seen": "2026-10-25T13:28:58.429Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/decor.py",
+      "root_cause": "Had \"Two flat additive discs for customs: the halo has",
+      "fix": "Changed to \"Two flat additive discs: the halo has an edge, no",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-094",
+      "timestamp": "2026-10-25T19:07:46.731Z",
+      "last_seen": "2026-10-25T19:07:46.731Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m6/decor.py",
+      "root_cause": "Was returning: (204, 214, 228)",
+      "fix": "Now returns: tuple(min(255, b + (top - a) // 2) for b, a in zip",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-095",
+      "timestamp": "2026-10-25T19:07:50.257Z",
+      "last_seen": "2026-10-25T19:07:50.257Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of arena_view.py",
+      "file": "src/ui/arena_view.py",
+      "root_cause": "12 lines replaced/restructured",
+      "fix": "Rewrote 14→30 lines (12 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-096",
+      "timestamp": "2026-10-25T22:35:06.845Z",
+      "last_seen": "2026-10-25T22:35:06.845Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of arena_view.py",
+      "file": "src/ui/arena_view.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 12→17 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-097",
+      "timestamp": "2026-10-25T22:36:53.151Z",
+      "last_seen": "2026-10-25T22:36:53.151Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _linger_close()",
+      "file": "src/ui/match_screen.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-098",
+      "timestamp": "2026-10-25T22:54:34.091Z",
+      "last_seen": "2026-10-25T22:54:34.091Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -1107,7 +1827,49 @@
     "1e10adb3-c072-4176-9662-7e50f7697e6f": true,
     "75f0d471-ae01-42f9-95e0-168113c4ca0b": true,
     "2857aff4-bfcf-432a-b65e-62b4c8bb8696": true,
-    "6ad34dbd-bf80-45a9-9989-5e67a36814e3": true
+    "6ad34dbd-bf80-45a9-9989-5e67a36814e3": true,
+    "0a8c5ab8-ddec-45dc-9d4a-df824fe43e47": true,
+    "4123be22-c0de-472c-9d0e-8bced6434006": true,
+    "218bb9b3-835f-4c5f-aaa0-f3111f0c871b": true,
+    "6b6f9a8b-3504-48f1-a142-b13c656d61a4": true,
+    "03c018bf-3eff-46a0-ba9e-6778fbd2fd50": true,
+    "e0d6909d-9cf3-4411-84a1-7e81760b4fe5": true,
+    "14a97303-b872-4ab5-b7ea-700591eadb2d": true,
+    "c6f28d41-8ca4-42ed-8be9-3517a3c32560": true,
+    "12b8fc77-5abe-4962-91ba-ebd21eece01a": true,
+    "8b131206-5ef2-49be-b454-710db4fb8e39": true,
+    "1a8bdae5-8354-45a3-8b07-cdaf007954bf": true,
+    "ea319300-fcbf-475d-ac02-93ea912e95a0": true,
+    "f2910699-9fb7-4e5e-87e1-70a10388d36b": true,
+    "442a13b6-415e-421a-a190-cc2eaa50e18b": true,
+    "ad7ad039-9cac-43c7-a2a3-ad2a5699fb4b": true,
+    "a7ff6dd5-64ef-4b11-9432-b1941101936d": true,
+    "4901a2d4-9d8e-4308-9289-98d7716398dd": true,
+    "52b1c0e7-4b54-494b-888b-befb2be60da3": true,
+    "3176bf08-4815-4d83-bf4e-15c876dfb81a": true,
+    "77b8bed9-f5f9-40ff-8168-336eaf10823c": true,
+    "41cb1f73-7eac-41d2-87e2-ca967590ea47": true,
+    "471e8aec-f527-4c7d-b2a8-1c9bedf44f57": true,
+    "7dd17625-f042-48cb-ab94-77863c70aa40": true,
+    "53a4d63a-bdec-42d5-bb6a-7535b23aa686": true,
+    "d97ab07d-becc-47c1-83b7-12472c218b7c": true,
+    "b9725b6f-08bf-4a0d-a46d-dcfb8fea014b": true,
+    "5d7cc502-b6b4-4ec8-afcf-cf0fe3a725b3": true,
+    "1fdef083-40e4-4057-b547-9de37c064d74": true,
+    "3082e316-af7c-49f0-997a-2816a180dd9c": true,
+    "8b650d30-82f1-409b-ae6a-80de1a856667": true,
+    "553a7bcb-25f4-4085-8fc7-b3c334fb80b9": true,
+    "a06b9241-ff1c-409b-a41b-b2d9ebd1b284": true,
+    "5d4c4ea5-39f6-4ce8-91e8-615d57579275": true,
+    "b3c964c7-e3e3-4e1b-9c4a-9bf3582f4d7e": true,
+    "5e11e547-42fb-4db8-b80b-a2b7bdd84407": true,
+    "3317fe8b-3812-4997-b9df-93621222333c": true,
+    "d6563039-e018-4257-b8ef-8b0872b1b9c6": true,
+    "30a2aa56-5ff7-4f14-9d08-a47de7fb0ffa": true,
+    "36449ae6-6ad2-49e6-87ec-37d0c3ca4149": true,
+    "d3850a1b-8a32-475c-a035-6e3679b3f47f": true,
+    "016cd763-78bf-4f4e-b22b-431f94e0be5c": true,
+    "80b02330-6b2d-45e2-9d87-42daab2dc442": true
   },
-  "next_id": 59
+  "next_id": 99
 }

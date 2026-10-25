@@ -93,7 +93,7 @@ _M5_MARU_BEATS = [
     {"speaker": "BIRIBEL", "color": BIRIBEL_SPEAKER,
      "text": "He wants you brought in. Breathing, he says."},
     {"speaker": "MARU", "color": C_MARU,
-     "text": "Breathing in a Guard cell. Balaceanu was breathing too, last week."},
+     "text": "Breathing in a Guard cell. Balaceanu was breathing too, two days ago."},
     {"speaker": "BIRIBEL", "color": BIRIBEL_SPEAKER,
      "text": "Then we don't go to the cell. Is there another way out?"},
     {"speaker": "MARU", "color": C_MARU,
@@ -356,14 +356,25 @@ def _enter_tunnel():
 # ─────────────────────────────────────────────
 def start_m5(preserve_timer=False):
     """Begin Mission 5 gameplay at the Guard HQ walk (STAGE_HQ, phase 2)."""
+    # M4's tone choice (STATE.m4_tone, appended by m4.flow._resolve_choice;
+    # STATE.reset() does not touch it) echoes on this mission's completion
+    # card as Maru's reply to Biribel: option 0 (the state) is VO_076, the
+    # people / a skipped M4 is VO_077. Read before reset so the card keeps
+    # working even if reset ever starts clearing it.
+    _m4_tone = getattr(STATE, "m4_tone", None)
+    _m4_choice = _m4_tone[0] if _m4_tone else None
     STATE.reset()
     STATE.active_mission = MISSION5_KEY
     STATE.active_mission_id = MISSION5_ID
     STATE.active_mission_title = MISSION5_TITLE
     STATE.active_mission_operation = "THE CAPITAL - EMERGENCY RULE"
     STATE.active_mission_outcome = "Parliament dissolved  ·  KRAP folded into the Guard  ·  Maru is on the list"
-    STATE.active_mission_quote_attr = "Retardovici, on every channel:"
-    STATE.active_mission_quote = '"The Presidential Guard will finish the work the Vostral began."'
+    if _m4_choice == 0:
+        STATE.active_mission_quote_attr = "Maru, in the radio station:"
+        STATE.active_mission_quote = '"Then hold the line. Order is all that\'s between this city and the pit."'
+    else:
+        STATE.active_mission_quote_attr = "Maru, in the radio station:"
+        STATE.active_mission_quote = '"Good answer. Tools get pointed at the people too - remember that."'
 
     STATE.request_mission5_ending = False
     STATE.request_death_screen = False

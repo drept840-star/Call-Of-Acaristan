@@ -79,6 +79,8 @@ C_VASILE = (100, 160, 220)
 C_BIRIBEL = (200, 200, 200)
 C_VOLKOV = (255, 100, 60)
 C_FISHERMAN = (140, 140, 120)
+C_MARU = (110, 200, 140)          # liaison green (matches missions.m4/m5 meta)
+C_BALACEANU = (220, 90, 70)       # the antagonist - regime red
 # One speaker -> accent table for every dialogue surface (cutscene box,
 # radio widget ui/radio.py). Missions may still tint their own text, but the
 # speaker's identity colour comes from here so it reads the same everywhere.
@@ -98,8 +100,10 @@ SPEAKER_COLORS = {
     #   docs/FIXES_STORIES.md item 8).  Shared colour = shared KRAP-blue accent.
     "RADIO VOICE": C_COMMAND,
     "RADIO": C_COMMAND,
-    "MARU": (110, 200, 140),
-    "BALACEANU": (220, 90, 70),
+    "MARU": C_MARU,
+    "MARU (reply)": C_MARU,   # manifest label for the M4 choice follow-ups
+    "BALACEANU": C_BALACEANU,
+    "BALACEANU (PA)": C_BALACEANU,   # M3 PA broadcasts / kill-order radio
     "LOYALIST COMMS": (220, 90, 70),
     "PRESIDENT RETARDOVICI": (230, 200, 120),
     "RETARDOVICI": (230, 200, 120),

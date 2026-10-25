@@ -69,7 +69,7 @@ DESKTOP_ICONS = [
 # ── Evidence files (for the file picker) ─────────────────────────────
 EVIDENCE_FILES = [
     {"name": "decree_47.txt", "size": "2.1K", "desc": "Presidential Decree No. 47"},
-    {"name": "auth_chain.log", "size": "4.8K", "desc": "Balaceanu authorization trace"},
+    {"name": "auth_chain.log", "size": "4.8K", "desc": "Route 12 auth trace"},
     {"name": "mag_packet.draft", "size": "1.4K", "desc": "Pre-written MAG blame packet"},
 ]
 
@@ -104,7 +104,7 @@ M3_DESKTOP_ICONS = [
 ]
 
 M3_EVIDENCE_FILES = [
-    {"name": "service_record.txt", "size": "3.3K", "desc": "Balaceanu service record (forged)"},
+    {"name": "service_record.txt", "size": "3.3K", "desc": "proves forgery"},
     {"name": "feed_keys.log", "size": "1.9K", "desc": "Studio uplink cipher keys"},
     {"name": "route12_truth.draft", "size": "2.6K", "desc": "Route 12 blame-refuting packet"},
 ]
@@ -125,7 +125,7 @@ M3_INFO_CONTENT = {
     "evidence": {
         "title": "Vostral Package",
         "lines": [
-            "3 files carried out of the Archives:",
+            "Vostral package - 3 files (1 from the Archives, 2 assembled on site):",
             "",
             "  service_record.txt  (3.3K)",
             "  feed_keys.log       (1.9K)",
@@ -253,6 +253,7 @@ M3_BROWSER_PAGES = {
         "url": "acarizwork.net/news",
         "lines": [
             ("TONIGHT", "BALACEANU ADDRESSES THE NATION LIVE AT 22:00", CRT_BRIGHT),
+            ("", "PRESIDENT'S OFFICE: ROUTE 12 NAMING AT 22:00", CRT_GREEN),
             ("", "", None),
             ("", "ACARISTAN CITY - The Prime Minister takes to the", CRT_GREEN),
             ("", "state studio tonight to close, in his words, \"the", CRT_GREEN),
@@ -404,7 +405,7 @@ INFO_CONTENT = {
             "  mag_packet.draft    (1.4K)",
             "",
             "These files document the IPA conspiracy:",
-            "Retardovici -> Balaceanu -> KRAP liaison -> MAG framing.",
+            "Retardovici -> Balaceanu -> Vasile (KRAP liaison) -> forged MAG node.",
             "",
             "To upload, open ACARIZWORK and visit the",
             "Public Evidence Portal.",

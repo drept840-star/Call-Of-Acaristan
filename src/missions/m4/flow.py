@@ -155,6 +155,10 @@ _M4_LIAISON_BEATS = [
      "text": "You got the file on air. Out here, that's not nothing."},
     {"type": "line", "speaker": "MARU", "color": C_MARU,
      "text": "His men have this block pinned. Hold the transmitter and let the arrest air."},
+    {"type": "line", "speaker": "BIRIBEL", "color": BIRIBEL_SPEAKER,
+     "text": "Vasile's name was on the chain. There's an explanation."},
+    {"type": "line", "speaker": "MARU", "color": C_MARU,
+     "text": "There always is."},
     {"type": "line", "speaker": "MARU", "color": C_MARU,
      "text": "One question before you bleed for this building - who are you fighting for?"},
     {"type": "choice", "speaker": "BIRIBEL", "color": BIRIBEL_SPEAKER,
@@ -267,7 +271,7 @@ def _advance_beat():
 
 
 def _resolve_choice(chosen):
-    """Record the tone, splice in Biribel's spoken follow-up, advance."""
+    """Record the tone, splice in Maru's reply, advance."""
     beat = _current_beat()
     if beat is None:
         return
@@ -278,9 +282,11 @@ def _resolve_choice(chosen):
     if not isinstance(getattr(STATE, "m4_tone", None), list):
         STATE.m4_tone = []
     STATE.m4_tone.append(chosen)
-    # Insert Biribel's line right after the choice beat (m3 follow-up idiom).
+    # Insert Maru's reply right after the choice beat (m3 follow-up idiom;
+    # the option labels are Biribel's answers, the follow text is Maru
+    # answering them - VO_076/VO_077 are "MARU (reply)" takes).
     _m4_dlg["beats"].insert(_m4_dlg["index"] + 1, {
-        "type": "line", "speaker": "BIRIBEL", "color": BIRIBEL_SPEAKER,
+        "type": "line", "speaker": "MARU", "color": C_MARU,
         "text": follow})
     _sfx("type_tick", 0.12)
     _advance_beat()
@@ -355,7 +361,7 @@ _M4_ARREST_BEATS = [
     (2250, "arrest_confusion", C_BALACEANU, "radio_static",
      "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-"),
     (3150, "arrest_standdown", C_SYSTEM, "radio_static",
-     "SYSTEM: Guns down. That's the President on the wire. The General's in cuffs."),
+     "SYSTEM: Guns down. That's the President on the wire. They're taking the General."),
     (4050, "arrest_retreat", C_BALACEANU, "footstep",
      "LOYALIST COMMS: Fall back! Nobody dies for a man already in a cell. Break off!"),
 ]
@@ -396,8 +402,8 @@ def start_m4(preserve_timer=False):
     STATE.active_mission_title = MISSION4_TITLE
     STATE.active_mission_operation = "THE CAPITAL - 48H CURFEW"
     STATE.active_mission_outcome = "The Vostral is on air  ·  Balaceanu is cornered  ·  The capital burns"
-    STATE.active_mission_quote_attr = "Retardovici, on every channel:"
-    STATE.active_mission_quote = '"Citizens. Order will be maintained. Even if I have to maintain it alone."'
+    STATE.active_mission_quote_attr = "Biribel, on the studio roof at dawn:"
+    STATE.active_mission_quote = '"Nobody asked us to do this. First time in my life - that\'s how it\'s done right."'
 
     # Defensive double-reset (m3 idiom): STATE.reset() already cleared the
     # flags, but checkpoint/dev entry paths must never inherit a request.
@@ -464,7 +470,7 @@ def start_m4(preserve_timer=False):
     _build_m4_world()
     _snap_camera_safe()
 
-    _set_objective("Regroup with Vasile - pick up the KRAP comms cache (E) on the boulevard, south of here.")
+    _set_objective("Pick up the KRAP comms cache (E) on the boulevard, then meet Vasile at the station.")
     _radio("VASILE: Two days of curfew, the city's coming apart. Meet me at the cache.",
            color=C_VASILE, duration=380, mark="start_vasile")
     return STATE.player

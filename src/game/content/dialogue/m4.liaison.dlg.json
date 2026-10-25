@@ -15,6 +15,16 @@
   "liaison_2": {
    "speaker": "MARU",
    "text": "His men have this block pinned. Hold the transmitter and let the arrest air.",
+   "next": "liaison_trust_1"
+  },
+  "liaison_trust_1": {
+   "speaker": "BIRIBEL",
+   "text": "Vasile's name was on the chain. There's an explanation.",
+   "next": "liaison_trust_2"
+  },
+  "liaison_trust_2": {
+   "speaker": "MARU",
+   "text": "There always is.",
    "next": "liaison_3"
   },
   "liaison_3": {
@@ -23,12 +33,12 @@
    "next": "liaison_4"
   },
   "liaison_4_resp_1": {
-   "speaker": "BIRIBEL",
+   "speaker": "MARU",
    "text": "Then hold the line. Order is all that's between this city and the pit.",
    "next": null
   },
   "liaison_4_resp_2": {
-   "speaker": "BIRIBEL",
+   "speaker": "MARU",
    "text": "Good answer. Tools get pointed at the people too - remember that.",
    "next": null
   },

@@ -58,10 +58,10 @@ KRAP is STILL an organization — disavowed, under siege, fighting for its survi
 *Escaped* at the end of M1 and has been off-grid ever since. Reappears as the inside man: he's the one who got himself *arrested on purpose* to reach Biribel in the cells, because the IPA is about to disappear Biribel permanently and Volkov needs him alive to trade. An opportunist ally — his loyalty lasts exactly as long as his exit does.
 
 ### Maru (MAG)
-First physical appearance. Reveal: Maru is not a guerrilla warlord; Maru is a **former IPA archivist** who faked their own death at Y-2 after refusing to forge seizure documents — the reason MAG bombs IPA checkpoints is personal, and the reason MAG was such a convenient scapegoat for Route 12 is that the regime *knew* Maru would never publicly deny it (denying = surfacing). Maru becomes the third ally — the only person besides Balaceanu who knows where the real service record is kept, because **Maru is the one who was ordered to forge it.** This is the trilogy's buried root.
+Text/radio only in M3; Maru's first physical appearance is M4. Reveal: Maru is not a guerrilla warlord; Maru is a **former IPA archivist** who faked their own death at Y-2 after refusing to forge seizure documents — the reason MAG bombs IPA checkpoints is personal, and the reason MAG was such a convenient scapegoat for Route 12 is that the regime *knew* Maru would never publicly deny it (denying = surfacing). Maru becomes the third ally because, as a former archivist, he knows the vault's indexing and can point Biribel at the unforged record. He was ordered to forge seizure documents and refused; the Vostral itself is **Balaceanu's** forgery — the shipped line is "Balaceanu forged every medal."
 
 ### President Retardovici
-Remains the public face, but M3 quietly demotes him: he's a cape Balaceanu hides behind. His TV address is the ticking clock, not the villain.
+Remains the public face, but M3 quietly demotes him: he's a cape Balaceanu hides behind. **Balaceanu's** 22:00 address is the ticking clock; the President's office holds a naming slot in it, not a separate address.
 > **M5 retcon (do not "fix" this back):** the cape reading is what the characters believe on the night. M5 reveals that the cape was the puppeteer all along — Retardovici gave the Route 12 order through Vasile and used Balaceanu as his attack dog for six years. M3 and M4 are written to be re-read, not to be corrected.
 
 ---
@@ -70,43 +70,45 @@ Remains the public face, but M3 quietly demotes him: he's a cape Balaceanu hides
 
 | # | Phase | Objective | Beat |
 |---|-------|-----------|------|
-| 1 | **Cold Open / Interrogation** | Survive the room. | No weapon. Dialogue-driven interrogation; Balaceanu taunts about the Vostral on a monitor. Learn the broadcast is *tonight.* Volkov engineers the cell-block breach. |
+| 1 | **Cold Open / Interrogation** | Survive the room. | No weapon. Dialogue-driven interrogation, framed as a State Security Archive recording; Balaceanu taunts about the Vostral. Learn the broadcast is *tonight.* Volkov engineers the cell-block breach. |
 | 2 | **The Breakout** | Escape the cell block. | Stealth-first, improvised weapons (shank, taken sidearm). Re-establishes the M1 infiltration muscle but from inside-out. First IPA guards. |
 | 3 | **KRAP Re-Contact** | Reach comms. | Vasile comes back over a stolen relay — broken signal, feeding floor plans. KRAP mobilized as resistance, bringing real assets. Organizational trust tension. |
-| 4 | **The Archives** | Steal the Vostral file + the National Stability Decree originals. | The mission's "notebook" objective. Reveal that Maru forged the record → Maru makes contact here. Heist beat, light puzzle (reuse the M1 safe/keypad mechanics), no alarms. |
+| 4 | **The Archives** | Steal the Vostral file + the National Stability Decree originals. | The mission's "notebook" objective. Reveal that Balaceanu forged his own record; Maru the archivist knows the vault and makes contact here. Heist beat, light puzzle (reuse the M1 safe/keypad mechanics), no alarms. |
 | 5 | **The Kill Order** | Survive Balaceanu's personal security sweep. | Alarms trip. IPA sends the disciplined team (M2's sniper-kill-box discipline, now hunting you in corridors). Set-piece combat. Volkov's extraction window is closing — he may bail. |
-| 6 | **Live Broadcast** | Get the file onto the uplink before Balaceanu finishes his address. | Climax. Not a boss fight — a race against a countdown speech. Choose: interrupt the address on-air (max exposure, max risk), or slip the file to Vasile's off-book channel (safe, slower, may be spun). End-state branches on this choice. |
+| 6 | **Live Broadcast** | Get the file onto the uplink before Balaceanu finishes his address. | Climax. Not a boss fight — a race against a countdown speech. The shipped build implements the live interruption only; Vasile's "two ways" offer is closed by a new line: "Quiet channel's dead. It's the camera or nothing." The off-book Branch B below is unbuilt. |
 
 ---
 
 ## Intro Cutscene Shot-List
 
 ```
-scene: cell_ceiling         speaker: BIRIBEL    "Three days. Maybe four. Hard to count with the lights."
+scene: cell_ceiling         speaker: BIRIBEL    "Three days. Maybe four.\nHard to count with the lights."
+scene: cell_restraints      speaker: BIRIBEL    "Wrists raw. Chair bolted down.\nThey were ready for me before I woke up."
+scene: interrogation_room   speaker: SYSTEM     "STATE SECURITY ARCHIVE\nINTERROGATION RECORDING"
 scene: interrogation_room   speaker: BALACEANU  "You told them I was a coward, Biribel. A fake. Tonight I tell the nation what you are."
-scene: monitor_broadcast    speaker: SYSTEM     "STATE ADDRESS — LIVE TONIGHT — 22:00 — SUBJECT: ROUTE 12 PERPETRATOR"
-scene: volkov_in_cell       speaker: VOLKOV     "You shouldn't have let me run in that warehouse. Now you owe me one. Get up."
+scene: monitor_broadcast    speaker: SYSTEM     "STATE ADDRESS, LIVE TONIGHT, 22:00\nPM BALACEANU - NAMING SLOT"
+scene: interrogation_room   speaker: BALACEANU  "When the address ends, so do you. That is not a threat. That is a schedule."
 scene: title_card           speaker: ""         "MISSION 3\nTHE VOSTRAL"
 ```
 
-## Ending Cutscene Shot-Lists (Branches)
+The cold open is deliberately framed as an archive recording, which is what
+makes Balaceanu's "This tape is one-way" line land. The folder in the cell is a
+working `VOSTRAL DOSSIER / COPY`; the unforged record stays in the cold vault.
 
-### Branch A — On-Air Interruption (Exposure)
-
-```
-scene: broadcast_live       speaker: BIRIBEL    "This is the file Balaceanu won't show you. His medals are paper. His war never happened."
-scene: broadcast_cut        speaker: SYSTEM     "UPLINK SEVERED — RECORD REPLAYING ON THREE RELAYS"
-scene: route12_black        speaker: VASILE     "...Biribel. What did you just do."
-scene: biribel_gone         speaker: None        (Biribel already walking out the back; no reply)
-```
-
-### Branch B — Off-Book Handoff (Vasile's Channel)
+## Ending Cutscene Shot-List (Shipped)
 
 ```
-scene: dead_drop            speaker: VASILE     "I have it. All of it. It'll take time, but it'll hold."
-scene: cell_empty           speaker: BALACEANU  "...Where is he. Find him. FIND HIM."
-scene: route12_black        speaker: BIRIBEL    "He spent six years trying to kill a rumor. Now it's a record."
+scene: m3_end_studio        speaker: BIRIBEL    "Twenty-two hundred. He's already talking."
+scene: m3_end_cut           speaker: BALACEANU (PA) "What is this? Cut the feed. CUT THE FEED!"
+scene: m3_end_nation        speaker: NARRATOR   "By 22:07, every screen in Acaristan was reading the Vostral."
+scene: m3_end_booth_dark    speaker: VOLKOV     "Six years he spent building it. You read it in one minute."
+scene: title_card           speaker: BIRIBEL    "He spent six years trying to kill a rumor. Now it's a record."
 ```
+
+**Branch B — Off-Book Handoff (Vasile's channel) is not implemented.** The
+shipped mission only has the live interruption; the quiet channel is dead before
+the studio door. Do not quote the old `dead_drop` / `cell_empty` / `route12_black`
+shots as shipped.
 
 ---
 
@@ -121,7 +123,7 @@ scene: route12_black        speaker: BIRIBEL    "He spent six years trying to ki
 
 ## What It Leaves Open (For a Possible M4)
 
-- **Retardovici's fate** — he's a puppet; does the regime survive without its cape?
+- **Retardovici's fate** — the cape reading is wrong; M5 shows the puppeteer, and the regime survives under him.
 - **KRAP itself** — now under "government review" — does it dissolve, go fully underground, or mutiny?
 - **Biribel is now a fugitive**, not a soldier — the next game's frame is no longer "mission assigned," it's "war of his own choosing."
 
@@ -130,6 +132,6 @@ scene: route12_black        speaker: BIRIBEL    "He spent six years trying to ki
 ## Technical Notes
 
 - **Build strategy:** Incremental slices (Slice 0 = foundation, Slice 1 = interrogation dialogue, Slice 2 = breakout combat, etc.)
-- **Map style:** Procedural (M2-style `_generate_map()`) — `MAP_W=40, MAP_H=40`, interior corridors and rooms.
+- **Map style:** Procedural (M2-style `_generate_map()`) — `MAP_W=48, MAP_H=48`, interior corridors and rooms.
 - **Cinematic art deferred** to a dedicated later slice: `draw_balaceanu`, `draw_maru`, `draw_cell_interior`, `draw_interrogation_room`, `draw_archive_vault`, `draw_broadcast_studio` in `cutscenes.py`.
 - **Reused systems:** Player, Enemy, handle_shoot, resolve_melee, MiniMap, draw_objective_panel, update_camera, draw_bullets, effects.burst, trigger_radio_chatter, audio.play, STATE.reset(), save/menu/cutscene engine.

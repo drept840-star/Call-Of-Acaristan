@@ -64,6 +64,20 @@ _LIGHT_BIAS_M = 0.35
 _LIGHT_EASE_MS = 80.0
 
 
+_UNSET = object()
+_PROBE_DX = np.tile(np.array((-3, 0, 3), dtype=np.int64), 3)      # 3x3 light-anchor probe
+_PROBE_DY = np.repeat(np.array((-3, 0, 3), dtype=np.int64), 3)
+
+
+def _same(a, b):
+    """Uniform value unchanged?  Arrays compare element-wise and have no single
+    truth value, so they count as changed."""
+    try:
+        return bool(a == b)
+    except Exception:
+        return False
+
+
 def _now_ms():
     """Game clock for light-visibility easing (0 if the engine is absent)."""
     try:
@@ -320,6 +334,22 @@ class _Programs:
         self.rig = ctx.program(vertex_shader=VERT_RIG, fragment_shader=FRAG)
         self._atlas = None
         self._atlas_ver = -1
+        self._uni = {}
+
+    def uniforms(self, prog):
+        """``{name: [Uniform, last value]}`` for one program, built once:
+        ``name in prog`` walks every member and ``prog[name]`` makes a new
+        wrapper on each call, which was ~0.3 ms of every frame."""
+        d = self._uni.get(id(prog))
+        if d is None:
+            import moderngl
+            d = {}
+            for name in prog:
+                m = prog[name]
+                if isinstance(m, moderngl.Uniform):
+                    d[name] = [m, _UNSET]
+            self._uni[id(prog)] = d
+        return d
 
     def atlas(self):
         """engine3d.textures's layers as one texture array, re-uploaded when a
@@ -512,11 +542,13 @@ class GLRenderer(SoftwareRenderer):
         self._static_ranges = []
         self._dyn_vbo = ctx.buffer(reserve=1 << 20, dynamic=True)
         self._dyn_vao = self._vao(self.progs.world, self._dyn_vbo, rig=False)
+        self._dyn_cat = None              # staging array for _draw_dyn
         self._rigs = {}                   # spec key -> (hum, vbo, vao, n)
         self._light_vis = {}              # quantised anchor -> (eased v, ms)
         self._light_tmp = {}              # (w, h) -> reusable additive buffer
         self._light_mask = {}             # (w, h) -> reusable occlusion mask
         self._vis_frame = 0
+        self._res = {}                    # id(rows) -> (rows, vbo, vao, n): resident chunks
         self.stats = {}
         self.begin()
 
@@ -533,6 +565,36 @@ class GLRenderer(SoftwareRenderer):
     def invalidate_static(self):
         """Call after editing baked objects' geometry in place."""
         self._static_sig = None
+
+    def resize(self, w, h):
+        """Re-target the off-screen frame without touching the scene.
+
+        The projection is resolution independent (``focal`` follows ``w``), so
+        a resolution change is just new colour/depth textures: the static VBO,
+        the rig templates and every baked mesh stay valid.  Rebuilding the
+        renderer instead - which is what a scale change used to do - re-packs
+        the whole set (~150 ms) and risks the ``id()``-keyed bake caches.
+        """
+        w, h = int(w), int(h)
+        if not super().resize(w, h):
+            return False
+        old = (getattr(self, "_fbo", None), getattr(self, "_color", None),
+               getattr(self, "_depth", None))
+        self._color = self.ctx.texture((w, h), 4)
+        self._depth = self.ctx.depth_texture((w, h))
+        self._fbo = self.ctx.framebuffer(color_attachments=[self._color],
+                                         depth_attachment=self._depth)
+        for obj in old:          # release explicitly: no driver-side churn
+            try:
+                if obj is not None:
+                    obj.release()
+            except Exception:
+                pass
+        self._dyn_cat = None          # staging array is sized to the queue
+        self._light_vis.clear()
+        self._light_tmp.clear()
+        self._light_mask.clear()
+        return True
 
     def _sync_static(self):
         objs = self.objs
@@ -562,6 +624,7 @@ class GLRenderer(SoftwareRenderer):
     def begin(self):
         self._items = []          # sprites + lines: (key, kind, data)
         self._dyn = []            # packed float32 chunks
+        self._res_draw = []       # resident chunk entries queued this frame
         self._rig_draws = []      # (rig_entry, bones bytes, tint, bias)
         self._want_static = False
 
@@ -580,6 +643,25 @@ class GLRenderer(SoftwareRenderer):
         position/normal columns per frame instead of re-packing in Python."""
         if arr is not None and len(arr):
             self._dyn.append(arr)
+
+    def add_resident(self, arr):
+        """Queue packed rows that are identical every frame (the memoized live
+        set).  They go to a buffer of their own once and are only drawn
+        afterwards; ``add_packed`` would copy and re-send them each frame,
+        which is ~10 MB for the yard's set."""
+        if arr is None or not len(arr):
+            return
+        ent = self._res.get(id(arr))
+        if ent is None:
+            vbo = self.ctx.buffer(np.ascontiguousarray(arr, dtype=np.float32))
+            ent = (arr, vbo, self._vao(self.progs.world, vbo, rig=False), len(arr))
+            self._res[id(arr)] = ent
+            live = {id(e[0]) for e in self._res_draw}
+            for key in [k for k in self._res if k not in live][:-3]:
+                _a, old_vbo, old_vao, _n = self._res.pop(key)
+                old_vao.release()
+                old_vbo.release()
+        self._res_draw.append(ent)
 
     @staticmethod
     def pack(wverts, faces, bias=0.0, tint=None):
@@ -720,16 +802,40 @@ class GLRenderer(SoftwareRenderer):
             "u_glit_k": float(self.glitter),
             "u_depth_alpha": float(getattr(self, "_depth_alpha", 0.0)),
         }
+        cache = self.progs.uniforms(prog)
         for k, v in u.items():
-            if k in prog:
-                prog[k].value = v
+            ent = cache.get(k)
+            if ent is not None and not _same(ent[1], v):
+                ent[0].value = v
+                ent[1] = v
 
     def _draw_dyn(self):
         """Upload + draw the queued packed rows; returns triangles drawn."""
         if not self._dyn:
             return 0
         import moderngl
-        data = self._dyn[0] if len(self._dyn) == 1 else np.concatenate(self._dyn)
+        chunks = self._dyn
+        if len(chunks) == 1:
+            data = chunks[0]
+        else:
+            # Into one reusable staging array instead of ``np.concatenate``
+            # plus a ``tobytes`` copy: the scenes queue 30-80 small chunks a
+            # frame (actors, props, FX), and that was two full copies of the
+            # whole dynamic buffer per pass, twice a frame in the train scene.
+            rows = sum(c.shape[0] for c in chunks)
+            width = chunks[0].shape[1]
+            buf = self._dyn_cat
+            if buf is None or buf.shape[0] < rows or buf.shape[1] != width:
+                buf = np.empty((rows, width), dtype=np.float32)
+                self._dyn_cat = buf
+            off = 0
+            for c in chunks:
+                n = c.shape[0]
+                buf[off:off + n] = c
+                off += n
+            data = buf[:rows]
+        if not data.flags["C_CONTIGUOUS"]:
+            data = np.ascontiguousarray(data)
         nbytes = data.nbytes
         if nbytes > self._dyn_vbo.size:
             # read the size BEFORE release: a released moderngl buffer is an
@@ -739,9 +845,17 @@ class GLRenderer(SoftwareRenderer):
             self._dyn_vbo.release()
             self._dyn_vbo = self.ctx.buffer(reserve=grow, dynamic=True)
             self._dyn_vao = self._vao(self.progs.world, self._dyn_vbo, rig=False)
-        self._dyn_vbo.write(data.tobytes())
+        self._dyn_vbo.write(data)          # moderngl takes the array itself
         self._dyn_vao.render(moderngl.TRIANGLES, vertices=len(data))
         return len(data) // 3
+
+    def _draw_resident(self):
+        import moderngl
+        ntri = 0
+        for _rows, _vbo, vao, n in self._res_draw:
+            vao.render(moderngl.TRIANGLES, vertices=n)
+            ntri += n // 3
+        return ntri
 
     def _draw_rigs(self, split_mode=0, split=0.0):
         if not self._rig_draws:
@@ -795,6 +909,7 @@ class GLRenderer(SoftwareRenderer):
                 if run_n:
                     self._static_vao.render(moderngl.TRIANGLES, vertices=run_n, first=run_a)
                     ntri += run_n // 3
+        ntri += self._draw_resident()
         ntri += self._draw_dyn()
         ntri += self._draw_rigs()
         # read back
@@ -872,11 +987,14 @@ class GLRenderer(SoftwareRenderer):
     def _alpha_cover(px, w, h, ox, oy):
         """Screen box of the non-transparent overlay pixels (top-left origin)."""
         a = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)[:, :, 3]
-        ys, xs = np.nonzero(a)
-        if not len(xs):
+        # first/last set column and row: two short any() reductions, not an
+        # index array per lit pixel (np.nonzero was ~0.4 ms for a held gun)
+        cols = np.flatnonzero(a.any(axis=0))
+        if not len(cols):
             return None
-        return (ox + int(xs.min()), oy + int(h - 1 - ys.max()),
-                int(xs.max() - xs.min()) + 1, int(ys.max() - ys.min()) + 1)
+        rows = np.flatnonzero(a.any(axis=1))
+        x0, x1, y0, y1 = int(cols[0]), int(cols[-1]), int(rows[0]), int(rows[-1])
+        return ox + x0, oy + int(h - 1 - y1), x1 - x0 + 1, y1 - y0 + 1
 
     @staticmethod
     def _clamp_rect(bounds, w, h):
@@ -919,12 +1037,53 @@ class GLRenderer(SoftwareRenderer):
                     seen += 1
                     if depth[y, x] >= limit:
                         lit += 1
-        target = lit / float(seen) if seen else 1.0
+        return self._ease_light(anchor, lit / float(seen) if seen else 1.0)
+
+    def _light_targets(self, items, depth, phys8):
+        """Raw visible fraction of every light's anchor, keyed by item index:
+        the 3x3 depth probe of ``_light_anchor_vis`` for the whole frame in one
+        numpy pass per depth source (50 lights was ~0.6 ms of Python)."""
+        bias = self._light_bias()
+        groups = ([], [])                    # phys8 lights, float-depth lights
+        for n, (_key, kind, d) in enumerate(items):
+            if kind != "sprite" or not getattr(d[0], "light", False):
+                continue
+            zeff = d[6]
+            if phys8 is not None and zeff < 60.0:
+                lim = int(max(0, min(254, round((zeff - 0.45) * 255.0 / 64.0))))
+                groups[0].append((n, d[1], d[2], lim - bias))
+            else:
+                lim = self._enc(_WORLD_LAYER, zeff) - self._light_bias() - 1e-6
+                groups[1].append((n, d[1], d[2], lim - bias))
+        out = {}
+        for src, g in zip((phys8, depth), groups):
+            if not g:
+                continue
+            idx = [e[0] for e in g]
+            xs = np.array([e[1] for e in g]).astype(np.int64)
+            ys = np.array([e[2] for e in g]).astype(np.int64)
+            thr = np.array([e[3] for e in g])
+            if src.dtype == np.float32:
+                thr = thr.astype(np.float32)
+            H, W = src.shape
+            X = xs[:, None] + _PROBE_DX
+            Y = ys[:, None] + _PROBE_DY
+            ok = (X >= 0) & (X < W) & (Y >= 0) & (Y < H)
+            v = src[np.clip(Y, 0, H - 1), np.clip(X, 0, W - 1)]
+            lit = (ok & (v >= thr[:, None])).sum(axis=1)
+            seen = ok.sum(axis=1)
+            frac = np.where(seen > 0, lit / np.maximum(seen, 1), 1.0).tolist()
+            out.update(zip(idx, frac))
+        return out
+
+    def _ease_light(self, anchor, target, now=None):
+        """Ease a light's visible fraction over ~80 ms (keyed per anchor)."""
         if anchor is None:
             return target
         key = (int(round(anchor[0] * 2.0)), int(round(anchor[1] * 2.0)),
                int(round(anchor[2] * 2.0)))
-        now = _now_ms()
+        if now is None:
+            now = _now_ms()
         prev = self._light_vis.get(key)
         if prev is not None and now > 0 and 0 <= now - prev[1] < 400:
             k = min(1.0, max(0.0, (now - prev[1]) / _LIGHT_EASE_MS))
@@ -972,8 +1131,10 @@ class GLRenderer(SoftwareRenderer):
     def _composite(self, surface, items, depth, alpha, phys8=None):
         items = sorted(items, key=lambda it: it[0])
         W, H = self.w, self.h
-        n_light = n_gate = n_copy = n_scale = 0
-        for _key, kind, d in items:
+        n_light = n_gate = n_copy = n_scale = n_cull = 0
+        light_t = self._light_targets(items, depth, phys8)
+        now = _now_ms() if light_t else 0
+        for n, (_key, kind, d) in enumerate(items):
             light, vis = False, 1.0
             occ_depth, limit = depth, 0.0
             if callable(kind):
@@ -990,24 +1151,7 @@ class GLRenderer(SoftwareRenderer):
                 soft = light and bool(getattr(fn, "light_soft", False))
                 vis = 1.0
                 occ_depth, limit = depth, self._enc(layer, zeff) - 1e-6
-                if light:
-                    if phys8 is not None and zeff < 60.0:
-                        # physical depth: layer-independent, 64 m / 255 steps
-                        limit = int(max(0, min(254, round(
-                            (zeff - 0.45) * 255.0 / 64.0))))
-                        occ_depth = phys8
-                    else:
-                        # fallback: world-layer encoding (alpha targets / far)
-                        limit = (self._enc(_WORLD_LAYER, zeff)
-                                 - self._light_bias() - 1e-6)
-                    n_light += 1
-                    vis = self._light_anchor_vis(anchor, sx, sy, limit,
-                                                 occ_depth)
-                    if vis <= 0.06:
-                        n_gate += 1
-                        continue
-                    if vis >= 0.75:
-                        vis = 1.0
+                bm = None
                 box = getattr(fn, "bounds", None)
                 if box is not None:
                     # the callback declared its exact pixel box (blob shadows)
@@ -1028,6 +1172,31 @@ class GLRenderer(SoftwareRenderer):
                         reach = int(min(300, max(8, scale * SPRITE_REACH_M)))
                         x0, y0 = int(sx) - reach, int(sy) - reach
                         x1, y1 = int(sx) + reach + 1, int(sy) + reach + 1
+                if light:
+                    if bm is not None and (x1 <= 0 or x0 >= W or y1 <= 0 or y0 >= H):
+                        # a light whose declared box misses the frame paints
+                        # nothing: skip its probe, its halo build and the draw
+                        n_cull += 1
+                        continue
+                    if phys8 is not None and zeff < 60.0:
+                        # physical depth: layer-independent, 64 m / 255 steps
+                        limit = int(max(0, min(254, round(
+                            (zeff - 0.45) * 255.0 / 64.0))))
+                        occ_depth = phys8
+                    else:
+                        # fallback: world-layer encoding (alpha targets / far)
+                        limit = (self._enc(_WORLD_LAYER, zeff)
+                                 - self._light_bias() - 1e-6)
+                    n_light += 1
+                    tgt = light_t.get(n)
+                    vis = (self._ease_light(anchor, tgt, now) if tgt is not None
+                           else self._light_anchor_vis(anchor, sx, sy, limit,
+                                                       occ_depth))
+                    if vis <= 0.06:
+                        n_gate += 1
+                        continue
+                    if vis >= 0.75:
+                        vis = 1.0
                 draw = lambda s, fn=fn, sx=sx, sy=sy, scale=scale, z=z: fn(s, sx, sy, scale, z)
             elif kind == "lines":
                 segs, layer, depth_test = d
@@ -1113,6 +1282,7 @@ class GLRenderer(SoftwareRenderer):
                 da[x0:x1, y0:y1][occ_t] = sa[occ_t]
                 del da, sa
         self.stats["lights"] = n_light
+        self.stats["lights_culled"] = n_cull
         self.stats["lights_gated"] = n_gate
         self.stats["light_copies"] = n_copy
         self.stats["light_scaled"] = n_scale
@@ -1152,6 +1322,9 @@ class GLRenderer(SoftwareRenderer):
         for _h, vbo, vao, _n in self._rigs.values():
             vao.release(); vbo.release()
         self._rigs.clear()
+        for _rows, vbo, vao, _n in self._res.values():
+            vao.release(); vbo.release()
+        self._res.clear()
         for o in (self._static_vao, self._static_vbo, self._dyn_vao, self._dyn_vbo,
                   self._fbo, self._color, self._depth):
             if o is not None:

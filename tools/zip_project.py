@@ -51,7 +51,11 @@ Excludes: .git, .venv, __pycache__, *.pyc, build/, dist/, and .gitignore entries
 With --slim: also drops trailers/, previews/, outputs/, tests/, shot folders,
 tools/m5_r2_shots + tools/out, assets/voice/_radio_cache/ (auto-regenerated),
 assets/bin/bore.exe (re-fetch via tools/download_bore.py), nested zips,
-*.mp4/*.xz/*.txt dumps, logs and local save/settings state.
+*.mp4/*.xz/*.txt dumps, logs and local save/settings state,
+trailer-only media (sfx_wav/, assets/music/trailer, voice Trailer/ and Old
+Fisherman/), dev state (.wolf/, .qoder/, validation/, docs/engine evidence
+and audit), and every .wav that has an .ogg twin (the game plays the .ogg).
+The slim build fails if the bundle would unzip to more than 128 MiB.
 With --slim --with-tests: keeps tests/ complete (nothing inside it is slim-
 filtered) so the unpacked bundle can run the full gate.
 """
@@ -102,7 +106,17 @@ SLIM_EXCLUDE_DIRS = {
     "tools/m5_r2_shots", "tools/out",
     "assets/voice/_radio_cache",  # rebuilt by src/audio/voice.py::_load
     "assets/bin",  # bore.exe re-fetched via tools/download_bore.py
+    # Trailer-only media: never loaded in play ("Trailer" matches no speaker
+    # tab; every Old Fisherman line has a named VO_185-191 take).
+    "sfx_wav", "assets/music/trailer",
+    "assets/voice/Trailer", "assets/voice/Old Fisherman",
+    # Dev/agent state and evidence, not read by the game.
+    ".wolf", ".qoder", ".codex", ".claude", ".cursor", "apollo-agent",
+    "archive", "handoff", "SKILLS", "validation",
+    "docs/engine/evidence", "docs/engine/audit",
 }
+# Unzipped size cap for --slim (bytes). The build fails above it.
+SLIM_MAX_UNZIPPED = 128 * 1_048_576
 SLIM_EXCLUDE_FILES = {
     "*.mp4", "*.xz", "*.avi", "*.mov", "*.mkv", "*.mix.wav",
     "*.txt",  # patch readmes, voice *_matches.txt reports, console dumps (docs stay .md)
@@ -191,6 +205,10 @@ def iter_files(root: Path, patterns: list[str], include_venv: bool = False, slim
         # (e.g. a stray *.mp4 inside docs/ or tools/).
         if slim and path.is_file() and _matches_any(rel_posix, path.name, slim_files):
             continue
+        # A .wav with an .ogg twin never plays: voice._scan_files prefers the
+        # .ogg and folds both into one slot.
+        if slim and path.suffix.lower() == ".wav" and path.with_suffix(".ogg").is_file():
+            continue
         if path.is_file():
             yield path
 
@@ -210,16 +228,22 @@ def zip_project(output: Path | None, include_venv: bool = False, quiet: bool = F
         output.unlink()
 
     count = 0
+    unzipped = 0
     top_level: set[str] = set()
     with ZipFile(output, "w", ZIP_DEFLATED, compresslevel=9) as zf:
         for path in iter_files(PROJECT_ROOT, patterns, include_venv, slim, with_radio_cache, with_tests):
             rel = path.relative_to(PROJECT_ROOT)
             top_level.add(rel.parts[0])
             zf.write(path, rel)
+            unzipped += path.stat().st_size
             count += 1
     size_mib = output.stat().st_size / 1_048_576
+    if slim and unzipped > SLIM_MAX_UNZIPPED:
+        output.unlink()
+        raise RuntimeError(f"slim bundle unzips to {unzipped / 1_048_576:.1f} MiB, over the "
+                           f"{SLIM_MAX_UNZIPPED // 1_048_576} MiB cap - zip removed")
     if not quiet:
-        print(f"Zipped {count} files -> {output} ({size_mib:.2f} MiB)")
+        print(f"Zipped {count} files -> {output} ({size_mib:.2f} MiB, {unzipped / 1_048_576:.2f} MiB unzipped)")
         print("Included top level: " + ", ".join(sorted(top_level)))
     return output
 

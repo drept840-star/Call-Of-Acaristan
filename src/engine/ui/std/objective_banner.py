@@ -18,6 +18,12 @@ __all__ = ["DEFAULT_PANEL_HEIGHT", "DEFAULT_PANEL_WIDTH", "draw"]
 DEFAULT_PANEL_WIDTH = 520    # was OBJECTIVE_PANEL_WIDTH in src/ui/hud.py
 DEFAULT_PANEL_HEIGHT = 30    # was OBJECTIVE_PANEL_HEIGHT in src/ui/hud.py
 
+# The wrapped panel (backdrop + rendered lines) for the text last drawn: the
+# banner is redrawn every frame with the same words, and measuring them and
+# rebuilding the surfaces each time cost ~0.4 ms.  The surfaces are blitted in
+# the original order, so the pixels are unchanged.
+_PANELS: dict = {}
+
 
 def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
          y: int | None = None, *, label: str | None = None) -> None:
@@ -32,6 +38,15 @@ def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
     max_text_w = panel_w - pad_x * 2
 
     full = (label if label is not None else T("hud.objective")) + str(text)
+    key = (full, panel_w, id(font_prompt), font_prompt.get_height(),
+           tuple(theme.c_krap_blue), tuple(theme.c_white))
+    cached = _PANELS.get(key)
+    if cached is not None:
+        bg, line_surfs = cached
+        surface.blit(bg, (x, y))
+        for obj_surf, dy in line_surfs:
+            surface.blit(obj_surf, (x + pad_x, y + dy))
+        return
     words = full.split(" ")
     lines = []
     cur = ""
@@ -68,6 +83,12 @@ def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
     pygame.draw.line(bg, theme.c_krap_blue, (0, 0), (0, panel_h), 3)
     surface.blit(bg, (x, y))
 
+    line_surfs = []
     for i, line in enumerate(lines):
         obj_surf = font_prompt.render(line, True, theme.c_white)
-        surface.blit(obj_surf, (x + pad_x, y + 7 + i * (line_h + line_gap)))
+        dy = 7 + i * (line_h + line_gap)
+        surface.blit(obj_surf, (x + pad_x, y + dy))
+        line_surfs.append((obj_surf, dy))
+    if len(_PANELS) >= 16:
+        _PANELS.clear()
+    _PANELS[key] = (bg, line_surfs)

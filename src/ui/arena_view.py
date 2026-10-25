@@ -26,7 +26,10 @@ import math
 
 import pygame
 
-from core.config import TILE_SIZE, MUZZLE_FLASH, C_BULLET, bullet_glow
+from core.config import (
+    TILE_SIZE, MUZZLE_FLASH, C_BULLET, bullet_glow,
+    C_TERMINAL, C_KRAP_BLUE, font_terminal, font_terminal_small,
+)
 from core import appearance
 from core import artpack
 from core.state import STATE
@@ -35,6 +38,9 @@ from entities.player import Player
 from net import protocol as P
 from missions import arena as AR
 from engine.text import T as _T  # RPE6 Phase 4 text table
+from engine.ui import Theme as _Theme
+from engine.ui.std import health_bar as _health_bar
+from entities.art_cache import get_panel_bg as _get_panel_bg
 
 # ── shooting feel constants ──
 # Every arena gun carries its own kick/shake (see missions/arena.WEAPONS),
@@ -88,6 +94,62 @@ _REACH_BY_RIG = {"pistol": PISTOL_REACH_PX, "os12": 49.0, "k9_smg": 43.0}
 def rig_for_weapon(weapon):
     """Wire weapon id -> the sprite rig name Player.draw() branches on."""
     return _RIG_BY_WPN.get(weapon, _DEFAULT_RIG)
+
+
+_RIG_ICONS = {}
+# Weapon strip plate height: the OS-12 at 2x is the tallest thing in it
+# (40 px), plus a 4 px margin top and bottom.
+WEAPON_STRIP_H = 48
+# Locked guns are drawn as a flat silhouette in this colour: the shape says
+# what is out there to pick up, the lack of finish says you do not have it.
+_LOCKED_ICON_INK = (31, 35, 41)
+
+
+def _rig_icon(look, rig, locked):
+    """A gun for the weapon strip, drawn by the production rig at 2x.
+
+    Same reasoning as the Outfitter preview: the rig is the gun, so the strip
+    shows the player's own finish on the real silhouette instead of a stand-in.
+    The old strip used the campaign's magazine shells, which made the OS-12 and
+    the K-9 the same grey bar and the pistol a beige block. Doubled because at
+    1:1 the pistol is 28 px of dark finish on a dark plate.
+    """
+    key = (appearance.key_of(look), rig, locked)
+    icon = _RIG_ICONS.get(key)
+    if icon is None:
+        from entities import weapon_rig
+        roles = appearance.resolve(look)["rigs"]
+        canvas = pygame.Surface((64, 40), pygame.SRCALPHA)
+        ctx = {"grip_x": 24, "grip_y": 20, "arm_dx": 1.0, "arm_dy": 0.0,
+               "raise_factor": 0.0, "reload_active": False,
+               "reload_progress": 0.0}
+        weapon_rig.draw(canvas, rig, ctx, roles)
+        icon = pygame.transform.scale_by(
+            canvas.subsurface(canvas.get_bounding_rect()), 2)
+        if locked:
+            icon.fill(_LOCKED_ICON_INK + (0,), special_flags=pygame.BLEND_RGBA_MAX)
+            icon.fill(_LOCKED_ICON_INK + (255,), special_flags=pygame.BLEND_RGBA_MIN)
+        _RIG_ICONS[key] = icon
+    return icon
+
+
+_STRIP_PLATES = {}
+# Slot backing by state. Denser than the panel glass, because a gun over
+# visible floor tiles reads as part of the floor. Owned guns get the lighter
+# plates: the default finishes are dark, and on the locked plate's near-black
+# the pistol disappears.
+_STRIP_FILL = {"current": (40, 33, 22, 235), "owned": (26, 32, 34, 230),
+               "locked": (8, 9, 12, 228)}
+
+
+def _strip_plate(width, state):
+    """Backing for one weapon-strip slot, cached by width and state."""
+    plate = _STRIP_PLATES.get((width, state))
+    if plate is None:
+        plate = pygame.Surface((width, WEAPON_STRIP_H), pygame.SRCALPHA)
+        plate.fill(_STRIP_FILL[state])
+        _STRIP_PLATES[(width, state)] = plate
+    return plate
 
 
 def reach_for_view(v):
@@ -1339,9 +1401,9 @@ class ArenaView(object):
                    respawn_killer=None):
         """Scoreboard strip, round clock, kill feed, and the local loadout.
 
-        KRAP-terminal dossier readout (v2): 30px bar, left dossier text
-        with orange rule, center LIVE + clock/team plate, right fixed-width
-        score chips (no layout jitter), killfeed on backing plates below.
+        Campaign-style KRAP dossier: a roomier top score band, a center
+        clock/team plate, killfeed backing plates, and campaign-matched combat
+        cards at the bottom. Personal rank stays on the full leaderboard.
         Dead players render dimmed (read from ``world`` entity states).
 
         ``pickups`` is accepted and ignored here: draw() consumes it for the
@@ -1355,8 +1417,8 @@ class ArenaView(object):
         except Exception:
             return
         w = surface.get_width()
-        BAR_H = 30
-        pygame.draw.rect(surface, (12, 13, 17), (0, 0, w, BAR_H), 0)
+        BAR_H = 38
+        pygame.draw.rect(surface, (10, 12, 16), (0, 0, w, BAR_H), 0)
         pygame.draw.line(surface, (46, 50, 62), (0, BAR_H), (w, BAR_H))
         # -- left: dossier plate --
         mode_txt = bold.render(mode, True, (255, 150, 60))
@@ -1367,45 +1429,11 @@ class ArenaView(object):
             except (TypeError, ValueError):
                 pass
         rest_txt = font.render(rest, True, (150, 160, 180))
-        surface.blit(mode_txt, (10, 7))
-        surface.blit(rest_txt, (10 + mode_txt.get_width() + 8, 7))
-        pygame.draw.line(surface, (255, 150, 60), (10, 25),
+        surface.blit(mode_txt, (10, 11))
+        surface.blit(rest_txt, (10 + mode_txt.get_width() + 8, 11))
+        pygame.draw.line(surface, (255, 150, 60), (10, 31),
                          (10 + mode_txt.get_width() + 8 + rest_txt.get_width(),
-                          25), 1)
-        # Persistent squad plate. World tags vanish the moment a teammate
-        # walks off-camera; a TDM fight still needs to know who is on your
-        # side and which colour they wear.
-        if str(mode).upper() == AR.MODE_TDM and self._teams:
-            try:
-                raw_team = self._teams.get(str(local_id),
-                                           self._teams.get(local_id))
-                try:
-                    my_team = int(raw_team)
-                except (TypeError, ValueError):
-                    my_team = raw_team
-                if my_team not in (None, AR.TEAM_NONE):
-                    mates = []
-                    for key, team in self._teams.items():
-                        if str(key) == str(local_id):
-                            continue
-                        try:
-                            if int(team) != int(my_team):
-                                continue
-                            mates.append(self.name_for(int(key)))
-                        except (TypeError, ValueError):
-                            continue
-                    side = AR.TEAM_NAMES.get(my_team, "TEAM")
-                    body = "%s  ·  %s" % (self.name_for(local_id), side)
-                    if mates:
-                        body += "   with  " + " + ".join(mates)
-                    plate_txt = font.render(body, True, (230, 235, 245))
-                    pr = pygame.Rect(8, BAR_H + 6,
-                                     plate_txt.get_width() + 16, 20)
-                    pygame.draw.rect(surface, (12, 13, 17), pr)
-                    pygame.draw.rect(surface, (255, 150, 60), pr, 1)
-                    surface.blit(plate_txt, (pr.x + 8, pr.y + 3))
-            except Exception:
-                pass
+                          31), 1)
         # -- center: LIVE + clock/team plate --
         center_txt = None
         if team_scores:
@@ -1419,64 +1447,13 @@ class ArenaView(object):
                                      (200, 205, 220))
         if center_txt is not None:
             cw = center_txt.get_width()
-            plate = pygame.Rect(w // 2 - cw // 2 - 10, 4, cw + 20, 22)
+            plate = pygame.Rect(w // 2 - cw // 2 - 10, 7, cw + 20, 24)
             pygame.draw.rect(surface, (16, 19, 26), plate)
             pygame.draw.rect(surface, (46, 50, 62), plate, 1)
-            surface.blit(center_txt, (w // 2 - cw // 2, 7))
-        # -- right: the local player's own standing --
-        # This used to be a six-row rank column, right-aligned in the bar. A
-        # name on each row made it 54px wider, and at 1000px the column then
-        # overlapped BOTH the mode dossier on the left and the clock/team
-        # plate in the middle -- three pieces of information fighting over one
-        # 30px strip.
-        #
-        # So the bar keeps only the one number a player actually needs while
-        # fighting: how THEY are doing. The full ranked list is on the pause
-        # card, where there is room for it and where a player goes when they
-        # actually want to read the table.
-        #
-        # Falls back to the leader when the local player has no row yet (their
-        # first half-second in the match), so the slot is never blank while a
-        # number exists.
-        CHIP_W = 190
-        rows = list(scoreboard or [])
-        mine_row = None
-        rank = 0
-        for i, row in enumerate(rows):
-            try:
-                if row[0] == local_id:
-                    mine_row, rank = row, i
-                    break
-            except (IndexError, TypeError):
-                continue
-        if mine_row is None and rows:
-            mine_row, rank = rows[0], 0
-        if mine_row is not None:
-            chip = pygame.Rect(w - 10 - CHIP_W, 4, CHIP_W, 22)
-            col = color_for(local_id, local_id)
-            try:
-                ent = (world or {}).get(local_id)
-                dead = ent is not None and ent[6] == P.PS_DEAD
-            except (IndexError, TypeError):
-                dead = False
-            if dead:
-                col = (90, 95, 108)
-            pygame.draw.rect(surface, (16, 19, 26), chip)
-            pygame.draw.rect(surface, (46, 50, 62) if dead else col, chip, 1)
-            pre = font.render(_T("arena.you"), True, col)
-            kd = bold.render("%d-%d" % (mine_row[1], mine_row[2]), True, col)
-            place = font.render("%d/%d" % (rank + 1, len(rows)), True, col)
-            # Three fixed columns: YOU, then the name in whatever is left, then
-            # the rank and K-D pinned to the right. All measured BEFORE the
-            # name is clipped, so the name can never grow into them.
-            name_x = chip.x + 6 + pre.get_width() + 6
-            right_x = chip.right - 8 - kd.get_width() - 6 - place.get_width()
-            nm = font.render(_fit_px(self.name_for(local_id), font,
-                                     right_x - 6 - name_x), True, col)
-            surface.blit(pre, (chip.x + 6, 7))
-            surface.blit(nm, (name_x, 7))
-            surface.blit(place, (right_x + kd.get_width() + 6, 7))
-            surface.blit(kd, (chip.right - 8 - kd.get_width(), 7))
+            pygame.draw.line(surface, (255, 150, 60),
+                             (plate.x + 5, plate.bottom - 1),
+                             (plate.right - 5, plate.bottom - 1), 1)
+            surface.blit(center_txt, (w // 2 - cw // 2, 11))
         self._draw_killfeed(surface, killfeed, local_id, top=BAR_H + 10)
         # Drawn last so it is the last thing on the HUD: while you are dead
         # this is the only thing that matters, and it must never sit under a
@@ -1539,50 +1516,46 @@ class ArenaView(object):
         hint = term.render(_T("arena.enter_chat"), True, (110, 120, 134))
         surface.blit(hint, (cx - hint.get_width() // 2, plate.bottom - 22))
 
-    def _draw_weapon_strip(self, surface, x, y, weapon, carry):
-        """The number-key row above the loadout: what you can switch to.
+    def _draw_weapon_strip(self, surface, x, y, weapon, carry, width):
+        """Number-key weapon row: which guns you hold and which key arms them.
 
-        Switching only exists in a match if you know it exists, and the
-        honest answer changes constantly -- the shotgun is not yours until
-        you walk over it. So the strip shows every slot, dims the ones the
-        host would refuse, and marks the one you are holding.
+        Three flat plates spanning the loadout panel's width, so the row reads
+        as part of that panel. Each is just the key and the gun itself; the
+        panel below names the held gun. No ammo here either: the panel shows
+        the held magazine, and switching reloads, so a per-slot count would be
+        the same number twice or a number that does not exist.
         """
         try:
-            font = _small_font()
+            key_font = _term_font_bold()
         except Exception:
             return
-        owned = set(carry) if carry else None
+        owned = set(carry) if carry is not None else None
+        look = self.look_for(self._local_id)
         slots = ((1, P.WPN_PISTOL), (2, P.WPN_OS12), (3, P.WPN_K9))
-        cx = x + 2
-        for num, wid in slots:
-            name = AR.weapon_stats(wid)["name"]
-            label = "%d %s" % (num, name)
-            # Unknown carry (before the host's first packet) is shown as
-            # available rather than locked: a greyed-out pistol on frame one
-            # would look like a bug.
+        gap = 3
+        slot_w = (width - gap * (len(slots) - 1)) // len(slots)
+        for i, (num, wid) in enumerate(slots):
+            sx = x + i * (slot_w + gap)
             locked = owned is not None and wid not in owned
             current = wid == weapon
-            col = _weapon_slot_color(current, locked)
+            ink = _weapon_slot_color(current, locked)
+            edge = ((255, 158, 43) if current else
+                    (38, 43, 50) if locked else (58, 78, 72))
+            surface.blit(_strip_plate(slot_w, "current" if current else
+                                      "locked" if locked else "owned"), (sx, y))
+            pygame.draw.rect(surface, edge, (sx, y, slot_w, WEAPON_STRIP_H), 1)
             if current:
-                # The held weapon gets a lit plate and a bright, bold label:
-                # which gun you are actually firing must not depend on
-                # reading a colour, and must never look greyed out.
-                txt = _bold_font().render(label, True, col)
-                pad = pygame.Rect(cx - 3, y - 2, txt.get_width() + 6,
-                                  txt.get_height() + 4)
-                pygame.draw.rect(surface, (52, 39, 18), pad)
-                pygame.draw.rect(surface, (255, 150, 20), pad, 1)
-            else:
-                txt = font.render(label, True, col)
-            surface.blit(txt, (cx, y))
-            cx += txt.get_width() + 10
-        # The cycle key is only advertised once cycling would do anything.
-        if owned and len(owned) > 1:
-            hint = font.render(_T("arena.q"), True, (120, 128, 142))
-            surface.blit(hint, (cx, y))
-            pygame.draw.rect(surface, (58, 64, 76),
-                             (cx - 3, y - 2, hint.get_width() + 6,
-                              hint.get_height() + 4), 1)
+                pygame.draw.rect(surface, edge, (sx, y, slot_w, 2))
+            key_box = pygame.Rect(sx + 4, y + 4, 15, 15)
+            pygame.draw.rect(surface, edge, key_box, 1)
+            key_text = key_font.render(str(num), True, ink)
+            surface.blit(key_text, (key_box.centerx - key_text.get_width() // 2 + 1,
+                                    key_box.centery - key_text.get_height() // 2))
+            # Centred in the space right of the key cap; the OS-12 fills it.
+            icon = _rig_icon(look, rig_for_weapon(wid), locked)
+            left = sx + 21
+            surface.blit(icon, (left + (sx + slot_w - 2 - left - icon.get_width()) // 2,
+                                y + (WEAPON_STRIP_H - icon.get_height()) // 2))
 
     def _draw_killfeed(self, surface, rows, local_id=0, top=30):
         """Killfeed rows on backing plates, newest on top.
@@ -1648,37 +1621,69 @@ class ArenaView(object):
 
     def _draw_loadout(self, surface, weapon, ammo, armour, world, local_id,
                       carry=None):
-        """Bottom-left: weapon strip, weapon name, magazine, armour pip."""
-        if weapon is None:
-            return
+        """Bottom-left combat cards, matching the campaign's terminal HUD.
+
+        The old arena-only readout was a 176px text strip with a tiny health
+        bar. Reuse the campaign HP widget and the same smoked-glass panel,
+        accent rail, labels, and spacing so the two modes feel like one game.
+        """
+        sw, sh = surface.get_size()
+        theme = _Theme(size=(sw, sh), font_terminal=font_terminal,
+                       font_terminal_small=font_terminal_small,
+                       c_terminal=C_TERMINAL, c_krap_blue=C_KRAP_BLUE)
+        x = 24
+        panel_h = 84
+        panel_y = sh - 40 - panel_h - 2
+        # Keep the pickup-aware weapon row attached to the panel. It shows
+        # which number keys work, without forcing the player to open a menu.
+        panel_w = 316
+        if weapon is not None:
+            self._draw_weapon_strip(surface, x, panel_y - WEAPON_STRIP_H - 4,
+                                    weapon, carry, panel_w)
+        stats = AR.weapon_stats(weapon) if weapon is not None else None
+        surface.blit(_get_panel_bg(panel_w, panel_h), (x, panel_y))
+        pygame.draw.line(surface, C_KRAP_BLUE, (x, panel_y),
+                         (x, panel_y + panel_h), 3)
+        small = font_terminal_small
+        label = small.render("ACTIVE WEAPON", True, (115, 135, 128))
+        surface.blit(label, (x + 12, panel_y + 7))
+        name = stats["name"] if stats else "UNARMED"
+        name_surf = font_terminal.render(name, True, (205, 225, 213))
+        surface.blit(name_surf, (x + 12, panel_y + 25))
+        pygame.draw.line(surface, (49, 67, 60), (x + 12, panel_y + 53),
+                         (x + 304, panel_y + 53), 1)
+
+        capacity = stats["mag"] if stats else 0
         try:
-            font = _small_font()
-        except Exception:
-            return
-        stats = AR.weapon_stats(weapon)
-        sw, sh = surface.get_width(), surface.get_height()
-        x, y = 12, sh - 34
-        self._draw_weapon_strip(surface, x - 6, y - 30, weapon, carry)
-        pygame.draw.rect(surface, (12, 13, 17), (x - 6, y - 6, 176, 30))
-        name = font.render(stats["name"], True, (210, 215, 230))
-        surface.blit(name, (x, y))
-        if ammo is not None:
-            col = (255, 200, 90) if ammo == 0 else (170, 175, 195)
-            mag = font.render("%d/%d" % (ammo, stats["mag"]), True, col)
-            surface.blit(mag, (x + 74, y))
+            rounds = max(0, min(capacity, int(ammo or 0)))
+        except (TypeError, ValueError):
+            rounds = 0
+        ammo_color = ((220, 70, 62) if rounds == 0 else
+                      (255, 188, 75) if capacity and rounds <= max(2, capacity // 5)
+                      else C_TERMINAL)
+        ammo_surf = font_terminal.render("%02d / %02d" % (rounds, capacity),
+                                         True, ammo_color)
+        surface.blit(ammo_surf, (x + 198, panel_y + 25))
+        ammo_label = small.render("MAGAZINE", True, (115, 135, 128))
+        surface.blit(ammo_label, (x + 226, panel_y + 7))
+        # A twelve-segment magazine meter is readable at a glance and still
+        # indicates partial magazines without relying on colour alone.
+        meter_x, meter_y = x + 12, panel_y + 63
+        filled = int(round(12 * rounds / max(1, capacity))) if capacity else 0
+        for i in range(12):
+            seg = pygame.Rect(meter_x + i * 10, meter_y, 7, 8)
+            color = ammo_color if i < filled else (39, 48, 45)
+            pygame.draw.rect(surface, color, seg, border_radius=1)
         if armour:
-            pip = font.render("ARM %d" % armour, True, (110, 170, 255))
-            surface.blit(pip, (x + 74, y + 13))
+            armour_txt = small.render("ARM %d" % int(armour), True,
+                                      (120, 175, 220))
+            surface.blit(armour_txt, (x + 217, panel_y + 59))
+
         if world and local_id in world:
             hp = max(0, min(100, world[local_id][5]))
-            base = surface.get_height() - 26
-            pygame.draw.rect(surface, (12, 13, 17), (8, base, 150, 18))
-            fill = int(134 * hp / 100.0)
-            col = ((90, 230, 130) if hp > 50 else
-                   (240, 200, 80) if hp > 25 else (235, 90, 80))
-            pygame.draw.rect(surface, col, (11, base + 3, fill, 12))
-            lbl = font.render("HP %d" % hp, True, (230, 235, 245))
-            surface.blit(lbl, (16, base + 3))
+            _health_bar.draw(surface, theme, hp, 100,
+                             panel_bg=_get_panel_bg, x=x,
+                             panel=(panel_w, 30), bb=(6, 4, panel_w - 12, 14))
 
     def draw(self, surface, world, local_id, scoreboard=(), **hud):
         """One call draws the whole frame, keeping callers trivial.

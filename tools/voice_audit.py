@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-XLSX = ROOT / "Missing_voice_lines_by_character.xlsx"
+XLSX = ROOT / "validation" / "Missing_voice_lines_by_character.xlsx"
 OUT_MD = ROOT / "validation" / "voice_audit.md"
 OUT_CSV = ROOT / "validation" / "voice_audit.csv"
 sys.path.insert(0, str(SRC))

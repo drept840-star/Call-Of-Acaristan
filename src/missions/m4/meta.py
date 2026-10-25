@@ -2,7 +2,7 @@
 """Mission 4 - part module. See __init__.py for the package facade."""
 """Mission 4: The Aftermath (working title) - the world after the broadcast.
 
-Picks up hours after Mission 3's Vostral transmission. The regime is
+Picks up two days after Mission 3's Vostral transmission. The regime is
 reeling: Balaceanu's career is public record, Retardovici's strings are
 cut (the read on the night - a cape without a handler; M5 shows the cape
 was the puppeteer all along), and KRAP is left without clear direction.

@@ -66,14 +66,22 @@ def _player_has_firearm():
 
 
 class FireZone:
-    """Persistent ground fire created by a Molotov impact."""
-    def __init__(self, x, y):
+    """Persistent ground fire: a Molotov impact, or a burning fuel drum.
+
+    ``radius``/``life``/``damage`` are keyword-only and default to the
+    mission 2 molotov numbers, so every existing caller is unchanged.  M6
+    passes its own: a drum is a wide, hot, short-lived pool, not a bottle
+    splash, and the tanker is wider still.
+    """
+    def __init__(self, x, y, radius=48, life=420, damage=(15, 8), outline=True):
         self.x = x
         self.y = y
-        self.radius = 48
-        self.life = 420
-        self.max_life = 420
+        self.radius = radius
+        self.life = life
+        self.max_life = life
         self.damage_tick = 0
+        self.damage = damage
+        self.outline = outline     # M2 rims the patch; a fuel fire does not
     def update(self, enemies, player_rect, audio_sys):
         self.life -= 1
         self.damage_tick += 1
@@ -85,7 +93,7 @@ class FireZone:
                     continue
                 dist = math.hypot(e.rect.centerx - self.x, e.rect.centery - self.y)
                 if dist < self.radius:
-                    dmg = 15 if dist < self.radius * 0.4 else 8
+                    dmg = self.damage[0] if dist < self.radius * 0.4 else self.damage[1]
                     fire_mult = e.fire_weakness
                     e.hp -= dmg * fire_mult
                     e.alerted = True
@@ -123,8 +131,20 @@ class FireZone:
             ang = i / 18.0 * math.pi * 2
             rr = self.radius * rng.uniform(0.75, 1.25)
             points.append((cx + math.cos(ang) * rr, cy + math.sin(ang) * rr * 0.72))
-        pygame.draw.polygon(scorch, (10, 7, 5, int(115 * life_ratio)), points)
-        pygame.draw.polygon(scorch, (45, 22, 8, int(80 * life_ratio)), points, 2)
+        if self.outline:
+            pygame.draw.polygon(scorch, (10, 7, 5, int(115 * life_ratio)), points)
+            pygame.draw.polygon(scorch, (45, 22, 8, int(80 * life_ratio)), points, 2)
+        else:
+            # A fuel fire: the same irregular patch, but built up out of
+            # nested low-alpha copies instead of one flat fill.  A single
+            # hard-edged polygon at the bigger M6 radius read as a black
+            # donut around the flames; this feathers into the ground.
+            for i in range(7):
+                k = 1.0 - i * 0.10
+                ring = [(cx + (px - cx) * k, cy + (py - cy) * k) for px, py in points]
+                pygame.draw.polygon(scorch, (10, 7, 5, int(26 * life_ratio)), ring)
+            core = [(cx + (px - cx) * 0.45, cy + (py - cy) * 0.45) for px, py in points]
+            pygame.draw.polygon(scorch, (6, 5, 6, int(34 * life_ratio)), core)
         yield _SurfaceDraw(scorch, (sx - cx, sy - cy), space=_SCREEN)
         # Low orange glow, not a giant perfect circle
         glow = pygame.Surface((self.radius * 3, self.radius * 2), pygame.SRCALPHA)

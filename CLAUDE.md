@@ -21,7 +21,7 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
   - `game/art/m1`-`m5` - code-authored mission art. `src/art/m5` is a compatibility shim over `game/art/m5`; edit `game/art`.
 - `engine3d/` - 3D renderer: `core.py` (software), `gl.py` (ModernGL), `rig.py`, `ik.py`, `textures.py`. Use `engine3d.Renderer(...)`.
 - `missions/` - `m0` (enemy types), `m1`-`m6`, `arena.py` (multiplayer), `walking_sim.py`. Each mission package `__init__.py` is a re-export facade; load order = import order in it. Typical parts: `meta`, `maps`, `decor`, `world`, `flow`, `systems`, `draw`.
-  - `missions/m6/` - Black Notebook: yard (`yard3d`, `yard_brain`, `yard_dress`, `yard_hud`), `stealth`, `train3d` (last playable beat), `bloc3d/` (panel blocks, stacks, tower, Cyrillic neon), `hud3d`, `m6_audio`. The finale is cutscene-only.
+  - `missions/m6/` - Whiteout: yard (`yard3d`, `yard_brain`, `yard_dress`, `yard_hud`), `stealth`, `train3d` (last playable beat), `bloc3d/` (panel blocks, stacks, tower, Cyrillic neon), `hud3d`, `m6_audio`. The finale is cutscene-only.
   - Missions 7 and 8 are planned only (`docs/MISSION7_PLOT.md`, `MISSION8_PLOT.md`).
 - `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`), shared `figure_kit.py` (cast look `SPECS`), `cast3d.py`, `post3d.py`, `weather3d.py`.
 - `core/` - legacy runtime: `state.py` (`STATE`), `game_core.py`, `camera.py`, `mapbuilder.py` (dependency-free), `artpack.py` (sprite sheet access), `save_system.py`, `settings_store.py`, `lighting.py`, `dev_jumps.py`.
@@ -40,6 +40,14 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
 - `.wolf/` - OpenWolf state: `STATUS.md` (handoff), `cerebrum.md`, `buglog.json`, `anatomy.md`.
 
 Not project modules (skip them): `archive/`, `build/`, `dist/`, `previews/`, `shots/`, `_shots/`, `outputs/`, `handoff/`, `crash_reports/`, `trailers/`, `.venv/`, `.qoder/`, `.opencode/`, `.workbuddy-ai/`, `SKILLS/`, and the zips, logs (`*.log`, `*.err`) and scratch scripts at the root.
+
+# Code graph (graphify)
+
+A code-only knowledge graph of `src/` lives in `src/graphify-out/` (`graph.json`, `GRAPH_REPORT.md`, `graph.html`). For architecture questions (who calls X, what depends on Y, how A connects to B), query it before grepping the tree:
+- `graphify query "<question>" --graph src/graphify-out/graph.json`
+- `graphify explain "<node>"`, `graphify path "<A>" "<B>"`, `graphify affected "<node>"`, `graphify god-nodes` (all take the same `--graph`).
+- Skim `src/graphify-out/GRAPH_REPORT.md` for hubs and communities.
+Use plain Grep/Read for exact strings and for editing. The graph can go stale after big edits: refresh with `graphify update src` (no LLM needed).
 
 # Delegated work
 

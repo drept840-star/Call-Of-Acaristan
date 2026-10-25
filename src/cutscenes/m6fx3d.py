@@ -99,9 +99,15 @@ def _halo_img(stops, rx, ry=None, power=2.0, levels=10, peak=_LAMP_PEAK,
     try:
         import numpy as np
         import pygame.surfarray as sa
-        ax = (np.arange(w, dtype=np.float32) - (rx + 0.5)) / rx
-        ay = (np.arange(h, dtype=np.float32) - (ry + 0.5)) / ry
-        rr = (np.abs(ax)[:, None] ** power + np.abs(ay)[None, :] ** power) ** (1.0 / power)
+        # The halo is mirror-symmetric about both axes (w and h are even), so
+        # the radial maths - the pows and the colour ramp, ~3/4 of the build -
+        # runs on one quadrant only; the dither and the colour pass then walk
+        # the four quadrants through flipped views.  Identical pixels, ~3x
+        # faster: a 500 px halo used to cost ~20 ms on the frame that met it.
+        hw, hh = w // 2, h // 2
+        ax = np.abs((np.arange(hw, dtype=np.float32) - (rx + 0.5)) / rx)
+        ay = np.abs((np.arange(hh, dtype=np.float32) - (ry + 0.5)) / ry)
+        rr = (ax[:, None] ** power + ay[None, :] ** power) ** (1.0 / power)
         bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
         bay = np.tile(bay, (w // 4 + 1, h // 4 + 1))[:w, :h]
         if rim:
@@ -114,13 +120,27 @@ def _halo_img(stops, rx, ry=None, power=2.0, levels=10, peak=_LAMP_PEAK,
             inten = peak * f ** power
         if core > 0.0:
             inten = inten + core * np.clip(1.0 - rr / max(0.02, core_r), 0.0, 1.0) ** 1.5
-        q = np.floor(inten * levels + 0.5 + bay * 0.55) / levels
-        q = np.where(inten > 0.0, np.clip(q, 0.0, 1.0), 0.0)
         col = _ramp_colour(stops, rr)
-        arr = np.clip(np.round(q[:, :, None] * col + bay[:, :, None] * 0.7),
-                      0, 255).astype(np.uint8)
         s = pygame.Surface((w, h))
-        sa.blit_array(s, arr)
+        px = sa.pixels3d(s)
+        for fx in (False, True):
+            for fy in (False, True):
+                sx = slice(hw, w) if fx else slice(0, hw)
+                sy = slice(hh, h) if fy else slice(0, hh)
+                flip = (slice(None, None, -1) if fx else slice(None),
+                        slice(None, None, -1) if fy else slice(None))
+                iv = inten[flip]
+                bv = bay[sx, sy]
+                q = np.floor(iv * levels + 0.5 + bv * 0.55) / levels
+                q = np.where(iv > 0.0, np.clip(q, 0.0, 1.0), 0.0)
+                b07 = bv * 0.7
+                for c in range(3):
+                    t = q * col[flip][:, :, c]
+                    t += b07
+                    np.rint(t, out=t)
+                    np.clip(t, 0, 255, out=t)
+                    px[sx, sy, c] = t
+        del px
     except ImportError:                       # numpy-less fallback: fine ellipses
         s = pygame.Surface((w, h))
         s.fill((0, 0, 0))
@@ -406,19 +426,62 @@ def ink(chan, np):
             zip(np.array(_palette().INK, dtype=np.float32) / 255.0, chan)]
 
 
+_LUT_POOL = []
+
+
+def _lut_pool():
+    """Two helper threads for the per-channel lookups (numpy drops the GIL in
+    add / take / the strided store), or None on a machine too small to gain."""
+    if not _LUT_POOL:
+        import os
+        pool = None
+        if (os.cpu_count() or 1) >= 4:
+            from concurrent.futures import ThreadPoolExecutor
+            pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="lut")
+        _LUT_POOL.append(pool)
+    return _LUT_POOL[0]
+
+
+def _lut_channel(np, arr, lut, i, cell, idx, out):
+    ch = arr[..., i]
+    np.add(cell, ch, out=idx)
+    np.take(lut[i], idx, out=out, mode="clip")
+    ch[...] = out
+
+
 def apply_lut(surface, lut, np):
     """Run a ``dither_lut`` table over the buffer: one take per channel,
-    indexed by the pixel's Bayer row plus its value."""
+    indexed by the pixel's Bayer row plus its value.
+
+    Walks the pixels in memory order (rows contiguous) with intp indices and
+    runs the three channels side by side.  The old (w, h) walk strode a whole
+    row per pixel and cost 3.5-9 ms on the 640x448 frame; the output is
+    identical."""
     w, h = surface.get_size()
-    cell = _CACHE.get(("bayer", w, h))
-    if cell is None:
-        b = np.array(_BAYER4, dtype=np.uint16).reshape(4, 4) * 256
-        cell = np.tile(b, (-(-h // 4), -(-w // 4)))[:h, :w].T.copy()
-        _CACHE[("bayer", w, h)] = cell
-    arr = pygame.surfarray.pixels3d(surface)
-    for i in range(3):
-        arr[..., i] = lut[i].take(cell + arr[..., i])
-    del arr
+    st = _CACHE.get(("bayer_hw", w, h))
+    if st is None:
+        b = np.array(_BAYER4, dtype=np.intp).reshape(4, 4) * 256
+        cell = np.ascontiguousarray(np.tile(b, (-(-h // 4), -(-w // 4)))[:h, :w])
+        st = _CACHE[("bayer_hw", w, h)] = (
+            cell, [np.empty((h, w), dtype=np.intp) for _ in range(3)],
+            [np.empty((h, w), dtype=np.uint8) for _ in range(3)])
+    cell, idx, out = st
+    arr = pygame.surfarray.pixels3d(surface).transpose(1, 0, 2)
+    pool = _lut_pool()
+    try:
+        if pool is None:
+            for i in range(3):
+                _lut_channel(np, arr, lut, i, cell, idx[i], out[i])
+        else:
+            jobs = [pool.submit(_lut_channel, np, arr, lut, i, cell, idx[i], out[i])
+                    for i in (1, 2)]
+            try:
+                _lut_channel(np, arr, lut, 0, cell, idx[0], out[0])
+            finally:
+                for job in jobs:       # never leave a helper writing to the surface
+                    job.result()
+    finally:
+        del arr
 
 
 def present_crisp(src, dst):

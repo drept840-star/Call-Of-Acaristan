@@ -8,15 +8,17 @@ Opens a dark, terminal-styled window with one button per dev jump target -
 the same registry as ``acaristan.py --jump NAME`` (see
 ``src/core/dev_jumps.py``). Click a target to launch the game at that
 mission; its description sits next to the button so nothing needs hovering.
-Anything typed in the "extra args" field (e.g. ``--continue`` for slot-select)
-is forwarded to the game. Trailer-bot takes additionally get
+Anything typed in the "extra args" field (e.g. ``--continue`` for slot-select,
+``--no-upload`` / ``--with-tests`` for the packaging zips) is forwarded to
+whichever target launches. Trailer-bot takes additionally get
 ``--trailer-bot --trailer-act <act>`` appended automatically.
 
 Layout, top to bottom::
 
     header   title + live "visible/total targets · running" counts
     filter   type to narrow the list (matches target name or description)
-    body     scrollable, grouped target list in mission order
+    body     scrollable, grouped target list in mission order, plus a
+             "Packaging" group (full / slim zip via tools/zip_project.py)
     footer   extra args, Copy command, Stop all games, status line
 
 Keyboard: ↑/↓ walk the visible targets, Enter launches the selected one,
@@ -28,8 +30,13 @@ Structure notes:
       ``DEV_JUMPS`` entry is filed under exactly one group and reports any
       drift in the status line, so the registry and the panel cannot silently
       fall out of sync as new jumps are added.
-    * ``grouped_targets`` / ``build_launch_cmd`` / ``parse_extra_args`` are
-      pure and import-safe, so they can be exercised without a Tk root.
+    * ``TOOL_TARGETS`` (the "Packaging" group) are not dev jumps: they run
+      ``tools/zip_project.py`` with a fixed base argv instead of
+      ``acaristan.py --jump``. Extra args from the footer still append, so
+      ``--no-upload`` / ``--with-tests`` can be passed from the panel.
+    * ``grouped_targets`` / ``build_launch_cmd`` / ``build_tool_cmd`` /
+      ``parse_extra_args`` are pure and import-safe, so they can be exercised
+      without a Tk root.
 """
 import subprocess
 import sys
@@ -58,7 +65,8 @@ GROUPS = [
     ("Mission 4", ["m4", "m4-game", "m4-station", "m4-tower"]),
     ("Mission 5", ["m5", "m5-hq", "m5-game", "m5-printworks",
                    "m5-tunnel", "m5-ending"]),
-    ("Mission 6", ["m6", "m6-train", "m6-3d", "m6-shootout",
+    ("Mission 6", ["m6", "m6-game", "m6-crossing", "m6-rail", "m6-boxcar",
+                   "m6-train", "m6-3d", "m6-shootout", "m6-yard",
                    "m6-heli", "m6-ending"]),
     ("Trailer bot", ["trailer-m1", "trailer-m2-killbox", "trailer-m2-evidence",
                      "trailer-m3-breakout", "trailer-m3-comms"]),
@@ -77,6 +85,17 @@ TRAILER_ACTS = {
     "trailer-m2-evidence": "act2_evidence",
     "trailer-m3-breakout": "act3_breakout",
     "trailer-m3-comms": "act3_relay",
+}
+
+# ── Packager targets: full / slim zip via tools/zip_project.py ──
+# Rendered as their own "Packaging" group. Not DEV_JUMPS entries (they are
+# not missions), so they stay out of ``GROUPS`` and the drift check; the
+# base argv lives here and ``build_tool_cmd`` turns it into a launch line.
+ZIP_TOOL = "tools/zip_project.py"
+TOOL_TARGETS = {
+    "zip": ("Full project snapshot zip + Pixeldrain upload", []),
+    "zip-slim": ("Slim playable bundle (--slim): runtime essentials only",
+                 ["--slim"]),
 }
 THEME = {
     "app":        "#1a1815",
@@ -123,6 +142,20 @@ def build_launch_cmd(target, extra_args=()):
     act = TRAILER_ACTS.get(target)
     if act is not None and "--trailer-bot" not in cmd:
         cmd.extend(["--trailer-bot", "--trailer-act", act])
+    return cmd
+
+
+def build_tool_cmd(target, extra_args=()):
+    """Pure helper (headless-testable): argv to run a packaging tool target.
+
+    Same contract as :func:`build_launch_cmd` but for ``TOOL_TARGETS``:
+    the base argv from the table plus any extra args (``--no-upload``,
+    ``--with-tests``, ...) typed in the footer.
+    """
+    _desc, base_args = TOOL_TARGETS[target]
+    cmd = [sys.executable, str(ROOT / ZIP_TOOL)]
+    cmd.extend(base_args)
+    cmd.extend(a for a in extra_args if a != "--")
     return cmd
 
 
@@ -324,6 +357,11 @@ class DevPanel(tk.Tk):
 
         for label, targets in grouped_targets():
             self._add_group(label, targets)
+        # Packaging rows are not dev jumps, but they ride the same row /
+        # filter / keyboard machinery; ``launch`` dispatches them separately.
+        self._add_group("Packaging",
+                        [(name, desc) for name, (desc, _args) in
+                         TOOL_TARGETS.items()])
 
     def _add_group(self, label, targets):
         key = label
@@ -617,7 +655,10 @@ class DevPanel(tk.Tk):
             self.launch(target)
 
     def _copy_cmd(self, name):
-        cmd = " ".join(build_launch_cmd(name, self._extra_args()))
+        if name in TOOL_TARGETS:
+            cmd = " ".join(build_tool_cmd(name, self._extra_args()))
+        else:
+            cmd = " ".join(build_launch_cmd(name, self._extra_args()))
         self.clipboard_clear()
         self.clipboard_append(cmd)
         self._set_status(f"Copied: {cmd}", "ok")
@@ -629,9 +670,12 @@ class DevPanel(tk.Tk):
 
     def launch(self, target):
         self._last_target = target
+        if target in TOOL_TARGETS:
+            cmd = build_tool_cmd(target, self._extra_args())
+        else:
+            cmd = build_launch_cmd(target, self._extra_args())
         try:
-            proc = subprocess.Popen(build_launch_cmd(target, self._extra_args()),
-                                    cwd=str(ROOT))
+            proc = subprocess.Popen(cmd, cwd=str(ROOT))
         except Exception as exc:  # e.g. python not on PATH for the child
             self._set_status(f"Launch failed: {exc}", "err")
             return

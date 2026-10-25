@@ -131,7 +131,7 @@ def film_xy(p, x0=0, w=WIDTH, rw=RW):
 
 def project_xy(r, p, x0=0, w=WIDTH):
     q = r.project(p)
-    return None if q is None else film_xy(q, x0, w)
+    return None if q is None else film_xy(q, x0, w, rw=r.w)
 
 
 def cam(r, t, eye, tgt, fov, hh=0.0, seed=0, roll=0.0, shk=None):
@@ -158,6 +158,22 @@ _STATIC_SIG = None
 # (shading happens in the shader), so they are kept per ``add`` call slot and
 # re-packed only when that slot's mesh signature changes.
 _PACK_MEMO = {"on": False, "key": None, "i": 0, "rows": [], "chunk": None}
+
+
+def drop_renderer_caches():
+    """Forget the set bake and the pack memo (a renderer was replaced).
+
+    Both caches are keyed by ``id(renderer)``; a new renderer built after a
+    resolution change could in principle land on a recycled id and be handed
+    the old, empty batch.  Clearing them costs one rebuild and removes the
+    whole class of bug.
+    """
+    global _STATIC_SIG
+    _STATIC_SIG = None
+    _PACK_MEMO["on"] = False
+    _PACK_MEMO["key"] = None
+    _PACK_MEMO["chunk"] = None
+    _PACK_MEMO["rows"] = []
 
 
 def pack_memo(r, key):
@@ -199,7 +215,8 @@ def pack_memo_ready(r, key):
 
 def pack_memo_replay(r):
     if _PACK_MEMO["chunk"] is not None:
-        r.add_packed(_PACK_MEMO["chunk"])
+        # the chunk never changes: a GL renderer keeps it on the card
+        (getattr(r, "add_resident", None) or r.add_packed)(_PACK_MEMO["chunk"])
 
 
 def _mesh_sig(m, bias):
@@ -459,6 +476,18 @@ def _hd_extra(key, wound=0, bloody=False, flags=()):
     return extra
 
 
+def _k9_rig_mesh():
+    """The K-9 Biribel carries in the yard, as the rig's rifle: its pistol grip
+    at the hand joint, +z muzzle."""
+    from engine3d.core import Mesh
+    from missions.m6.yard3d import K9_GRIP, _k9_asset
+    src, _muzzle = _k9_asset()
+    m = Mesh()
+    m.verts = [(x - K9_GRIP[0], y - K9_GRIP[1], z - K9_GRIP[2]) for x, y, z in src.verts]
+    m.faces = src.faces
+    return m
+
+
 def hum(key, hd=False, wound=0, bloody=False, flags=()):
     """Humanoid for ``key``.  ``hd`` selects the detailed train rig (optionally
     with a wound stage 1-3 / bloody gloves); each variant is its own cached rig,
@@ -474,9 +503,9 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
         if isinstance(key, tuple) and key[0] == "biribel":
             kw = dict(biribel_3d(key[1]))
             kw.update(extra)
-            if "rifle" in flags and not hd:
-                kw["rifle"] = "rifle"
             h = humanoid3d("biribel", **kw)
+            if "rifle" in flags and not hd:
+                h._rifle = _k9_rig_mesh()
         elif isinstance(key, tuple) and key[0] == "guard":
             h = _guard_humanoid(key[1], extra)
         elif key == "guard":
@@ -1009,9 +1038,25 @@ def _u(i, seed, salt=0.0):
     return v - math.floor(v)
 
 
+def flake_sprite(r, p0, p1, col):
+    """Queue one flake streak p0 -> p1 as a sprite.  Line batches are not
+    depth-tested, so a streak behind a wall would draw over it; a sprite
+    takes its depth from the world, so walls and the airframe hide it."""
+    a, b = r.project(p0), r.project(p1)
+    if a is None or b is None:
+        return
+    dx, dy = b[0] - a[0], b[1] - a[1]
+
+    def draw(s, sx, sy, scale, z):
+        pygame.draw.line(s, col, (sx, sy), (sx + dx, sy + dy), 1)
+    r.add_sprite(p0, draw, layer=2)
+
+
 def snow3d(r, t, seed=0, n=130, spread=18.0, height=14.0, speed=1.5,
-           col=SNOW, near=0.0):
-    """World-lattice snow around the camera; deterministic, dt-free."""
+           col=SNOW, near=0.0, skip=None, depth=False):
+    """World-lattice snow around the camera; deterministic, dt-free.
+    ``skip(p)`` drops any flake it returns True for; ``depth`` queues the
+    flakes as depth-tested sprites (see ``flake_sprite``)."""
     cx, cy, cz = r.cam
     a = t * 0.001 * speed
     batch = getattr(r, "add_lines3d", None)
@@ -1021,10 +1066,14 @@ def snow3d(r, t, seed=0, n=130, spread=18.0, height=14.0, speed=1.5,
         x = cx + (u * 2 - 1) * spread
         z = cz + (v * 2 - 1) * spread
         y = cy + height * 0.55 - ((a * (0.45 + 0.9 * w) + v * height) % height)
+        if skip is not None and skip((x, y, z)):
+            continue
         ln = 0.045 + 0.06 * w            # a flake, not a streak
         c = col if w > near else (int(col[0] * .6), int(col[1] * .65), int(col[2] * .7))
         tail = (x - 0.55 * ln, y - 0.8 * ln, z + 0.3 * ln)
-        if segs is not None:
+        if depth:
+            flake_sprite(r, (x, y, z), tail, c)
+        elif segs is not None:
             segs.append(((x, y, z), tail, c, 1))
         else:
             r.add_line3d((x, y, z), tail, c, 1, layer=4)
@@ -2158,6 +2207,16 @@ def _train_detail_mesh():
         add(box(0.05, 0.82, 0.04, FRAME, center=(wx, 2.45, -2.848)))
         add(box(1.70, 0.06, 0.12, (150, 162, 180),
                 center=(wx, 1.94, -2.842)))
+        if i % 3:
+            add(box(0.20, 0.82, 0.012, (74, 44, 40) if i % 2 else (44, 54, 64),
+                    center=(wx - 0.50, 2.45, -2.835)))
+            add(box(0.10, 0.82, 0.014, (28, 26, 27),
+                    center=(wx + 0.52, 2.45, -2.834)))
+        if i in (2, 6, 9):
+            add(box(0.24, 0.56, 0.010, (24, 26, 30),
+                    center=(wx + 0.12, 2.36, -2.831)))
+            add(box(0.14, 0.16, 0.012, (38, 42, 48),
+                    center=(wx + 0.12, 2.62, -2.830)))
     # Door frame + vestibule.  The leaves themselves are animated in train3d.
     add(box(1.60, 1.65, 0.06, (54, 38, 26), center=(10.9, 1.85, -3.28)))
     add(box(1.20, 0.05, 0.10, _fx.SODIUM_PALE,

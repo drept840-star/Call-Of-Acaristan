@@ -38,6 +38,7 @@ import select
 import socket
 import threading
 import time
+from collections import deque
 
 import pygame
 
@@ -48,7 +49,9 @@ from net import protocol as P
 from net import roomcode
 from net import portmap
 from net import tcp_tunnel
+from net import udp_transport as UDP
 from net.match import Fanout, MatchSession, TICK_RATE
+from net.telemetry import NetworkTelemetry
 from missions import arena as AR
 from ui.arena_view import ArenaView
 from ui.widgets import clipboard_text
@@ -106,6 +109,14 @@ JOIN_TOKEN_BYTES = 4  # token_hex -> 8 chars
 # frozen arena forever, because a dead TCP peer that never sends RST simply
 # looks like an idle one. Long enough to ride out a hitch or an alt-tab.
 HOST_SILENCE_TIMEOUT = 8.0
+# During a temporary TCP failure the client keeps trying the same invite for
+# a short window. Rejoining is a fresh seat today, so round stats may reset.
+RECONNECT_WINDOW_SECONDS = 20.0
+RECONNECT_RETRY_SECONDS = 1.0
+RECONNECT_RESERVATION_SECONDS = 35.0
+# A peer that has not sent even a heartbeat/input for this long is assumed
+# disconnected; freeing the stale socket lets a reconnect claim a slot.
+PEER_SILENCE_TIMEOUT = 16.0
 # What a host sees where the room code will appear, while the address is
 # still being settled. Showing the half-minted code here meant hosts read a
 # code out loud that was about to be replaced by a better one.
@@ -209,35 +220,86 @@ HOST_HELP = tuple("%s  %-18s %s" % step for step in HOST_STEPS)
 
 
 class Wire(object):
-    """Newline-JSON framing over a socket.
+    """Bounded nonblocking newline-JSON output queue for the control socket.
 
-    Named _send, not send, because that is the contract
-    ``MatchSession._send()`` looks for. Naming it ``send`` means the
-    attribute lookup fails, every snapshot is silently dropped, and the
-    client renders an empty world -- which reads like a rendering bug
-    rather than a missing underscore.
+    TCP remains the reliable path for lobby/control messages and the fallback
+    gameplay route. Partial writes are retained correctly; a blocked socket
+    must not lose or truncate the remainder of a JSON line.
     """
+
+    MAX_QUEUED_BYTES = 256 * 1024
 
     def __init__(self, sock):
         self.sock = sock
-        self.out = b""
+        self.out = deque()       # [bytes, offset, message type]
+        self.queued_bytes = 0
         self.lock = threading.Lock()
 
     def _send(self, obj):
+        try:
+            data = P.encode(obj)
+        except (TypeError, ValueError, OverflowError):
+            return False
+        kind = obj.get("t") if isinstance(obj, dict) else None
         with self.lock:
-            self.out += P.encode(obj)
-            if len(self.out) > 16384:
-                self.flush()
+            # When a TCP-only peer falls behind, newer snapshots replace the
+            # last unsent snapshot instead of growing an ever-older backlog.
+            if kind == P.T_SNAPSHOT and self.out:
+                tail = self.out[-1]
+                if tail[2] == P.T_SNAPSHOT and tail[1] == 0:
+                    self.queued_bytes += len(data) - len(tail[0])
+                    self.out[-1] = [data, 0, kind]
+                    return self.queued_bytes <= self.MAX_QUEUED_BYTES
+            if self.queued_bytes + len(data) > self.MAX_QUEUED_BYTES:
+                # Never evict reliable control/chat. If the queue is full,
+                # reject the new item and let the transport watchdog recover.
+                return False
+            self.out.append([data, 0, kind])
+            self.queued_bytes += len(data)
+        return True
 
     def flush(self):
+        """Write as much as the nonblocking socket will accept."""
         with self.lock:
-            if not self.out:
-                return
-            data, self.out = self.out, b""
-        try:
-            self.sock.sendall(data)
-        except OSError:
-            pass
+            while self.out:
+                data, offset, kind = self.out[0]
+                try:
+                    sent = self.sock.send(data[offset:])
+                except (BlockingIOError, InterruptedError):
+                    return False
+                except OSError:
+                    self.out.clear()
+                    self.queued_bytes = 0
+                    return False
+                if sent <= 0:
+                    return False
+                self.queued_bytes -= sent
+                offset += sent
+                if offset == len(data):
+                    self.out.popleft()
+                else:
+                    self.out[0][1] = offset
+                    return False
+        return True
+
+
+def _linger_close(sock, timeout=2.0):
+    """Drain a half-closed socket until the far end closes, then close it."""
+    deadline = time.monotonic() + timeout
+    try:
+        sock.settimeout(0.2)
+        while time.monotonic() < deadline:
+            try:
+                if not sock.recv(65536):
+                    break
+            except socket.timeout:
+                continue
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
 
 
 class Peer(object):
@@ -263,10 +325,22 @@ class Peer(object):
         # relay has to attribute a line to a sender, and the sender is the
         # socket, not a player id.
         self.name = None
+        self.resume_token = ""
         self.wire = Wire(sock)
         self.buf = b""
         self.created = time.monotonic()
+        self.last_seen = self.created
         self.deferred = None
+        self.last_ping_at = 0.0
+        self.udp_sock = None
+        self.udp_token = ""
+        self.udp_addr = None
+        self.udp_ready = False
+        self.udp_last_seen = 0.0
+        self.udp_last_input = 0.0
+        self.udp_nonce = None
+        self.udp_retry_after = 0.0
+        self.udp_last_probe = 0.0
 
     @property
     def verified(self):
@@ -375,7 +449,12 @@ class MatchScreen(object):
         self.player_name = settings_store.player_name()
         self.status = ""
         self.srv = None
+        self.udp_srv = None
         self.peers = []
+        self._udp_peers_by_token = {}
+        # resume-token -> {player_id, expires_at}; ArenaSim holds the saved
+        # player state while a brief connection failure is being repaired.
+        self._reconnect_reservations = {}
         # Accepted-but-unverified connections. They become peers only when a
         # join handshake arrives (see _promote_pending_peer).
         self._pending_peers = []
@@ -393,6 +472,19 @@ class MatchScreen(object):
         self._intro_plate = None
         self.sock = None
         self.wire = None
+        self.udp_sock = None
+        self._udp_token = ""
+        self._udp_peer_addr = None
+        self._udp_active = False
+        self._udp_nonce = None
+        self._udp_pending_nonces = deque(maxlen=8)
+        self._udp_acked_nonce = None
+        self._udp_next_probe = 0.0
+        self._udp_last_rx = 0.0
+        self._udp_last_snapshot = 0.0
+        self._udp_started_at = 0.0
+        self._udp_probe_sent_at = 0.0
+        self._udp_fallback_until = 0.0
         self.sess = None
         self.sim = None
         self.view = None
@@ -404,6 +496,17 @@ class MatchScreen(object):
         self._latest_snap_tick = None
         self.buf = b""
         self.seq = 0
+        # Client-side connection diagnostics. These are kept separate from
+        # gameplay state so stale/late telemetry can never affect simulation.
+        self.net_telemetry = NetworkTelemetry()
+        self._net_warning = ""
+        self._reconnect_active = False
+        self._reconnect_target = None
+        self._reconnect_deadline = 0.0
+        self._reconnect_next_attempt = 0.0
+        self._reconnect_attempts = 0
+        self._reconnect_connecting = False
+        self._reconnect_restored = False
         self._tracer = None
         self._tracer_t = 0.0
         self._pending = []          # [(host, port)] to try next update
@@ -485,11 +588,13 @@ class MatchScreen(object):
         # they are reading it out (see net/roomcode.py PREFIX_POOL).
         self.room_code = ""
         self.join_token = ""
+        self._resume_token = ""
         self.code_prefix = None
         self.share_host = ""
         self.share_port = 0
         self.forwarded = False
         self.forward_note = ""
+        self._udp_public_ok = None
         self._tunnel_pending = False
         self._tunnel_active = False
         self._hamachi_active = False
@@ -609,8 +714,15 @@ class MatchScreen(object):
         """Return the authoritative player list in slot order."""
         if self.sim is None:
             return []
-        return [(pid, st.get("nick") or P.default_name(pid))
-                for pid, st in sorted(self.sim.players.items())]
+        players = dict(self.sim.players)
+        players.update(getattr(self.sim, "suspended_players", {}) or {})
+        rows = []
+        for pid, st in sorted(players.items()):
+            name = st.get("nick") or P.default_name(pid)
+            if pid in getattr(self.sim, "suspended_players", {}):
+                name += " (REJOINING)"
+            rows.append((pid, name))
+        return rows
 
     # ── team choice ─────────────────────────────────────────────────────
 
@@ -791,12 +903,21 @@ class MatchScreen(object):
         if text is not None:
             self.address = text
         # A room code is an address in disguise; try it first, then fall
-        # back to a raw host / host:port / tunnel URL.
+        # back to a raw host / host:port / tunnel URL. Preserve the private
+        # resume secret only when the player is reusing the same room invite.
         # An optional "@TOKEN" suffix is the host's join secret.
+        previous_room_token = getattr(self, "_join_token", None)
         addr_text, _, tok = (self.address or "").rpartition("@")
         if not addr_text:
             addr_text, tok = tok, ""
-        self._join_token = P.clean_token(tok) or None
+        new_room_token = P.clean_token(tok) or None
+        if new_room_token != previous_room_token:
+            self._resume_token = ""
+        self._join_token = new_room_token
+        self._reconnect_active = False
+        self._reconnect_connecting = False
+        self._reconnect_target = None
+        self._reconnect_deadline = 0.0
         decoded = roomcode.decode(addr_text)
         if decoded is not None:
             host, port = decoded
@@ -846,6 +967,19 @@ class MatchScreen(object):
     def _start_hosting(self, port):
         srv = self._bind_listener(port)
         self.srv = srv
+        bound_port = srv.getsockname()[1]
+        self.udp_srv = None
+        self._udp_peers_by_token = {}
+        try:
+            udp_srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_srv.bind(("0.0.0.0", bound_port))
+            udp_srv.setblocking(False)
+            self.udp_srv = udp_srv
+        except OSError:
+            try:
+                udp_srv.close()
+            except (OSError, UnboundLocalError):
+                pass
         # Fanout, not a single wire: the roster grows while the match runs,
         # so the session needs a live list of sockets, not one socket.
         self.sess = MatchSession(Fanout(lambda: self.peers), is_host=True,
@@ -869,6 +1003,7 @@ class MatchScreen(object):
         self._local_firing_prev = False
         self._remote_firing_prev = {}
         self._pending_peers = []
+        self._reconnect_reservations = {}
         self._match_started = False
         self._session_phase = "lobby"
         self._countdown_left = 0.0
@@ -883,6 +1018,7 @@ class MatchScreen(object):
         # once the router mapping is up. Skipped for port 0 (ephemeral),
         # which only tests use - we must not hit real routers from a test.
         bound = srv.getsockname()[1]
+        self._udp_public_ok = self.udp_srv is not None
         self.share_port = bound
         # One flavour for the whole session: the LAN code and the public code
         # this worker may replace it with must share a prefix, or the host
@@ -917,13 +1053,16 @@ class MatchScreen(object):
             self.room_code = code
             self._hamachi_active = True
             self.forwarded = False
+            self._udp_public_ok = getattr(self, "udp_srv", None) is not None
             self.forward_note = "Hamachi overlay ready."
             self._network_check_pending = False
             return
 
         try:
-            res = portmap.open_port(bound, bound, lifetime=7200,
-                                    description="Call of Acaristan arena")
+            res = portmap.open_port(
+                bound, bound, lifetime=7200,
+                description="Call of Acaristan arena",
+                include_udp=getattr(self, "udp_srv", None) is not None)
         except Exception as exc:
             res = None
             router_error = "port mapping failed: %s" % (exc,)
@@ -935,6 +1074,9 @@ class MatchScreen(object):
         if self._host_token is not host_token:
             return
         if res is not None and res.ok:
+            self._udp_public_ok = (getattr(res, "udp_ok", None)
+                                  if getattr(self, "udp_srv", None) is not None
+                                  else False)
             ext = res.external_ip
             if not ext or portmap.is_private(ext):
                 ext = portmap.public_ip()
@@ -944,6 +1086,9 @@ class MatchScreen(object):
                     self.share_host = ext
                     self.forwarded = True
                     self.room_code = code
+                    if self._udp_public_ok is False:
+                        self.forward_note = (
+                            "TCP port forwarded; UDP unavailable, using fallback")
                     self._network_check_pending = False
                     return
             router_error = (
@@ -970,6 +1115,7 @@ class MatchScreen(object):
             host, port = endpoint
             self._tunnel_active = True
             self.forwarded = True
+            self._udp_public_ok = False
             self.share_host = host
             self.share_port = port
             self.room_code = "%s:%d" % endpoint
@@ -1013,20 +1159,157 @@ class MatchScreen(object):
                     pass
         raise last
 
-    def _start_playing(self, host, port):
+    def _start_client_udp(self, token):
+        """Start probing the same host port over UDP; TCP stays as fallback."""
+        token = P.clean_token(token)
+        old = getattr(self, "udp_sock", None)
+        if old is not None:
+            try:
+                old.close()
+            except OSError:
+                pass
+        self.udp_sock = None
+        self._udp_token = token
+        self._udp_peer_addr = None
+        self._udp_active = False
+        self._udp_nonce = None
+        self._udp_pending_nonces = deque(maxlen=8)
+        self._udp_acked_nonce = None
+        self._udp_last_rx = 0.0
+        self._udp_last_snapshot = 0.0
+        self._udp_started_at = time.monotonic()
+        self._udp_probe_sent_at = 0.0
+        self._udp_fallback_until = 0.0
+        if not token or self.sock is None:
+            return False
+        try:
+            remote = self.sock.getpeername()
+            udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_sock.setblocking(False)
+            self.udp_sock = udp_sock
+            self._udp_peer_addr = (remote[0], int(self._peer_addr[1]))
+        except (OSError, TypeError, IndexError, ValueError):
+            if self.udp_sock is not None:
+                try:
+                    self.udp_sock.close()
+                except OSError:
+                    pass
+            self.udp_sock = None
+            self._udp_peer_addr = None
+            return False
+        self._send_udp_probe()
+        return True
+
+    def _send_udp_probe(self):
+        """Send a fresh token-authenticated path probe and remember its nonce."""
+        if (getattr(self, "udp_sock", None) is None
+                or not getattr(self, "_udp_token", "")
+                or self._udp_peer_addr is None):
+            return False
+        nonce = secrets.randbits(32)
+        packet = UDP.encode_datagram(P.make_udp_hello(self._udp_token, nonce))
+        if packet is None:
+            return False
+        try:
+            self.udp_sock.sendto(packet, self._udp_peer_addr)
+        except OSError:
+            return False
+        self._udp_nonce = nonce
+        self._udp_pending_nonces.append(nonce)
+        self._udp_probe_sent_at = time.monotonic()
+        self._udp_next_probe = self._udp_probe_sent_at + UDP.UDP_PROBE_INTERVAL
+        return True
+
+    def _request_udp_fallback(self):
+        """Tell the host reliably to resume TCP snapshots after UDP stalls."""
+        now = time.monotonic()
+        if (not self._udp_active and self._udp_fallback_until
+                and now < self._udp_fallback_until):
+            return
+        nonce = self._udp_acked_nonce or self._udp_nonce
+        if nonce is not None and self.wire is not None:
+            self.wire._send(P.make_udp_fallback(self._udp_token, nonce))
+        self._udp_active = False
+        self._udp_fallback_until = now + UDP.UDP_FALLBACK_RETRY
+        self._udp_next_probe = self._udp_fallback_until
+
+    def _pump_udp_client(self):
+        """Receive and authenticate host snapshots/probes without blocking."""
+        udp_sock = getattr(self, "udp_sock", None)
+        if udp_sock is None or not self._udp_token:
+            return
+        for _ in range(UDP.MAX_DATAGRAMS_PER_PUMP):
+            try:
+                data, address = udp_sock.recvfrom(UDP.MAX_DATAGRAM_BYTES + 1)
+            except (BlockingIOError, InterruptedError):
+                break
+            except OSError:
+                self._request_udp_fallback()
+                return
+            raw = UDP.decode_datagram(data)
+            if raw is None or address != self._udp_peer_addr:
+                continue
+            ack = P.parse_udp_ack(raw, expected_token=self._udp_token)
+            if ack is not None:
+                _token, nonce, _tick = ack
+                if nonce in self._udp_pending_nonces:
+                    self._udp_acked_nonce = nonce
+                    self._udp_pending_nonces = deque(
+                        (n for n in self._udp_pending_nonces
+                         if n != nonce), maxlen=8)
+                    self._udp_last_rx = time.monotonic()
+                    self._last_recv = self._udp_last_rx
+                continue
+            if not UDP.token_matches(raw.get("u"), self._udp_token):
+                continue
+            parsed = P.parse_snapshot(raw)
+            if parsed is None or self.sess is None:
+                continue
+            now = time.monotonic()
+            self._udp_last_rx = now
+            self._last_recv = now
+            if self.sess._accept_snapshot(raw):
+                self._udp_active = True
+                self._udp_fallback_until = 0.0
+                self._udp_last_snapshot = now
+                self._latest_snap_tick = parsed[0]
+                self.net_telemetry.note_snapshot(parsed[0])
+        now = time.monotonic()
+        if self._udp_active and now - self._udp_last_snapshot > UDP.UDP_STALE_SECONDS:
+            self._request_udp_fallback()
+        elif (not self._udp_active and self._udp_acked_nonce is not None
+              and now - self._udp_probe_sent_at > UDP.UDP_STALE_SECONDS
+              and not self._udp_fallback_until):
+            # The host heard us but no authenticated snapshot came back. Ask
+            # over TCP for compatibility mode rather than waiting frozen.
+            self._request_udp_fallback()
+        if self._udp_fallback_until:
+            if now >= self._udp_fallback_until:
+                self._udp_fallback_until = 0.0
+                self._send_udp_probe()
+        elif now >= self._udp_next_probe:
+            self._send_udp_probe()
+
+    def _start_playing(self, host, port, reconnecting=False):
         try:
             sock, used = self._connect_socket(host, port)
         except OSError as exc:
-            self.mode = "panel"
-            self.status = "could not connect to %s:%d (%s)" % (
-                host, port,
-                exc.strerror if getattr(exc, "strerror", None) else exc)
+            self.mode = "reconnecting" if reconnecting else "panel"
+            if reconnecting:
+                self.status = "Rejoining... (%s)" % (
+                    exc.strerror if getattr(exc, "strerror", None) else exc)
+            else:
+                self.status = "could not connect to %s:%d (%s)" % (
+                    host, port,
+                    exc.strerror if getattr(exc, "strerror", None) else exc)
             return False
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(False)
         self.sock = sock
         self.wire = Wire(sock)
         self.sess = MatchSession(self.wire, is_host=False, local_id=0)
+        self.net_telemetry = NetworkTelemetry()
+        self._net_warning = ""
         self.view = ArenaView(self.map_name)
         self._local_firing_prev = False
         self._remote_firing_prev = {}
@@ -1051,9 +1334,10 @@ class MatchScreen(object):
         # introduce itself later. So does the cosmetic loadout, for the same
         # reason -- nobody changes hats mid-round, and a peer that has to ask
         # twice is a peer that can be seated wearing nothing.
-        self.wire._send(P.make_join_match(self.map_name, self.play_name(),
-                                          profile_store.equipped(),
-                                          token=getattr(self, "_join_token", None)))
+        self.wire._send(P.make_join_match(
+            self.map_name, self.play_name(), profile_store.equipped(),
+            token=getattr(self, "_join_token", None),
+            resume=getattr(self, "_resume_token", None)))
         self.wire.flush()
         # Enter the live-match mode HERE. Without this the client stayed in
         # "panel", so update() never dispatched to _update_client and the
@@ -1061,7 +1345,9 @@ class MatchScreen(object):
         # the player gave up.
         self._peer_addr = (used, port)
         self.mode = "playing"
-        self.status = "connecting to %s:%d..." % (used, port)
+        self._reconnect_connecting = bool(reconnecting)
+        self.status = ("Rejoining match..." if reconnecting else
+                       "connecting to %s:%d..." % (used, port))
         # Arm the silence watchdog from the moment we are connected, so a
         # host that accepts us and then never speaks times out instead of
         # leaving us on "connecting..." forever.
@@ -1110,6 +1396,10 @@ class MatchScreen(object):
             self._update_host(keys, mouse, dt)
         elif self.mode == "playing":
             self._update_client(keys, mouse, dt)
+            if self.mode == "playing":
+                self._update_network_warning()
+        elif self.mode == "reconnecting":
+            self._update_reconnect()
         self._push_hud_tables()
 
     def _push_hud_tables(self):
@@ -1176,6 +1466,7 @@ class MatchScreen(object):
         tcp_tunnel.stop_process(proc)
         self._tunnel_active = False
         self.forwarded = False
+        self._udp_public_ok = getattr(self, "udp_srv", None) is not None
         self.share_host = portmap.local_ip()
         if self.srv is not None:
             self.share_port = self.srv.getsockname()[1]
@@ -1184,10 +1475,75 @@ class MatchScreen(object):
         self.forward_note = "public TCP tunnel lost (relay exited)"
         self.status = "internet tunnel lost - leave and host again for a new address"
 
+    def _pump_udp_host(self):
+        """Read bounded, authenticated client datagrams without blocking."""
+        udp_sock = getattr(self, "udp_srv", None)
+        if udp_sock is None:
+            return
+        for _ in range(UDP.MAX_DATAGRAMS_PER_PUMP):
+            try:
+                data, address = udp_sock.recvfrom(UDP.MAX_DATAGRAM_BYTES + 1)
+            except (BlockingIOError, InterruptedError):
+                break
+            except OSError:
+                break
+            raw = UDP.decode_datagram(data)
+            if raw is None:
+                continue
+            hello = P.parse_udp_hello(raw)
+            if hello is not None:
+                token, nonce = hello
+                peer = self._udp_peers_by_token.get(token)
+                if (peer is None or peer not in self.peers or
+                        not UDP.token_matches(token, peer.udp_token)):
+                    continue
+                # Authenticated NAT rebinding: the fresh outbound probe proves
+                # the new source port is controlled by this seated player.
+                now = time.monotonic()
+                if now - peer.udp_last_probe < 0.05:
+                    continue
+                peer.udp_last_probe = now
+                peer.udp_nonce = nonce
+                peer.udp_last_seen = now
+                if now >= peer.udp_retry_after:
+                    peer.udp_addr = address
+                    peer.udp_ready = True
+                ack = P.make_udp_ack(token, nonce,
+                                     self.sim.tick if self.sim is not None else 0)
+                packet = UDP.encode_datagram(ack) if ack else None
+                if packet is not None:
+                    try:
+                        udp_sock.sendto(packet, address)
+                    except OSError:
+                        pass
+                continue
+            token = P.clean_token(raw.get("u"))
+            peer = self._udp_peers_by_token.get(token)
+            if (peer is None or peer not in self.peers or not peer.udp_ready
+                    or peer.udp_addr != address
+                    or not UDP.token_matches(token, peer.udp_token)):
+                continue
+            if raw.get("t") != P.T_INPUT or self._session_phase != "playing":
+                continue
+            parsed = P.parse_input(raw)
+            if parsed is None:
+                continue
+            now = time.monotonic()
+            if now - peer.udp_last_input < 1.0 / UDP.MAX_INPUTS_PER_SECOND:
+                continue
+            peer.udp_last_input = now
+            peer.udp_last_seen = now
+            peer.last_seen = now
+            self.sess._accept_input(raw, peer_id=peer.player_id)
+
     def _update_host(self, keys, mouse, dt):
         srv = self.srv
         if srv is None:
             return
+        # Drain reliable control messages incrementally so partial nonblocking
+        # writes cannot lose framing or let a slow peer block this sim loop.
+        for peer in list(self.peers):
+            peer.wire.flush()
         self._check_tunnel_alive()
         # ── accept ──
         # An accepted socket is only a CANDIDATE. It gets a roster slot when
@@ -1221,13 +1577,17 @@ class MatchScreen(object):
         for peer in list(self._pending_peers) + list(self.peers):
             try:
                 if peer.sock.fileno() < 0:
-                    self._drop_peer(peer)
+                    self._drop_peer(peer, reserve=peer.verified)
             except (OSError, ValueError):
-                self._drop_peer(peer)
+                self._drop_peer(peer, reserve=peer.verified)
         # A candidate that never says anything is a stray connection, not a
         # slow player: a real client sends its handshake the moment connect()
         # returns. Without this the slot would be held forever.
         now = time.monotonic()
+        self._expire_reconnect_reservations(now)
+        for peer in list(self.peers):
+            if now - getattr(peer, "last_seen", now) > PEER_SILENCE_TIMEOUT:
+                self._drop_peer(peer, reserve=True)
         for peer in list(self._pending_peers):
             if getattr(peer, "deferred", None) is not None and \
                     peer in self._pending_peers:
@@ -1247,11 +1607,16 @@ class MatchScreen(object):
                     continue
                 try:
                     chunk = sock.recv(65536)
-                except (BlockingIOError, OSError):
+                except (BlockingIOError, InterruptedError):
+                    continue
+                except OSError:
+                    # Reset/aborted: readable forever, never yields data.
+                    self._drop_peer(peer, reserve=peer.verified)
                     continue
                 if chunk == b"":
-                    self._drop_peer(peer)
+                    self._drop_peer(peer, reserve=peer.verified)
                     continue
+                peer.last_seen = time.monotonic()
                 peer.buf += chunk
                 if len(peer.buf) > 1 << 20:
                     # A peer streaming without newlines must not eat RAM.
@@ -1276,6 +1641,32 @@ class MatchScreen(object):
                         if not self._promote_pending_peer(peer, raw):
                             break
                         continue
+                    # Heartbeats are optional diagnostics and never enter the
+                    # simulation input queue. Rate-limit replies so a peer
+                    # cannot turn the echo path into an amplification loop.
+                    ping = P.parse_ping(raw)
+                    if ping is not None:
+                        now_ping = time.monotonic()
+                        if now_ping - peer.last_ping_at >= 0.25:
+                            peer.last_ping_at = now_ping
+                            peer.wire._send(P.make_pong(ping))
+                            peer.wire.flush()
+                        continue
+                    fallback = P.parse_udp_fallback(raw)
+                    if fallback is not None:
+                        token, nonce = fallback
+                        if UDP.token_matches(token, peer.udp_token):
+                            # The request travels over the authenticated TCP
+                            # connection, so it is safe to accept even if an
+                            # intervening UDP probe updated the nonce.
+                            peer.udp_ready = False
+                            peer.udp_addr = None
+                            peer.udp_retry_after = (time.monotonic()
+                                                    + UDP.UDP_FALLBACK_RETRY)
+                        continue
+                    if P.parse_match_leave(raw):
+                        self._drop_peer(peer)
+                        continue
                     # Chat is read before input and is allowed in every phase,
                     # including the frozen lobby: talking to the people you
                     # are about to play with is most useful BEFORE the round
@@ -1297,8 +1688,13 @@ class MatchScreen(object):
                     # malicious/stale movement, reload, or weapon-switch packet
                     # sent during the lobby/countdown could execute on the very
                     # first live tick after GO.
+                    if P.parse_action(raw) is not None:
+                        if self._session_phase == "playing":
+                            self.sess._accept_action(raw, peer_id=peer.player_id)
+                        continue
                     if self._session_phase == "playing":
                         self.sess._accept_input(raw, peer_id=peer.player_id)
+        self._pump_udp_host()
         # The lobby is a real pre-game state, not an auto-start wait: accepted
         # players and their roster remain visible, but the simulation does not
         # consume input or advance until the host presses START MATCH.
@@ -1415,6 +1811,17 @@ class MatchScreen(object):
         self._advance_killfeed()
         self.view.update_feel()
 
+    def _expire_reconnect_reservations(self, now=None):
+        """Release saved player state after its reconnect grace expires."""
+        if now is None:
+            now = time.monotonic()
+        for token, entry in list(self._reconnect_reservations.items()):
+            if now < entry["expires_at"]:
+                continue
+            self._reconnect_reservations.pop(token, None)
+            if self.sim is not None:
+                self.sim.expire_suspended_player(entry["player_id"])
+
     def _promote_pending_peer(self, peer, raw):
         """Turn a candidate connection into a roster player, or drop it.
 
@@ -1433,40 +1840,64 @@ class MatchScreen(object):
                 want.encode("ascii", "replace")):
             self._drop_peer(peer)
             return False
+        # A valid personal resume token reclaims the exact suspended slot.
+        # The token is single-use: a fresh one is minted in the assignment
+        # below, so an old connection cannot race the returning player.
+        resume_token = P.join_match_resume(raw)
+        reservation = self._reconnect_reservations.get(resume_token)
+        pid = None
+        resumed_state = None
+        if reservation is not None and reservation["expires_at"] > time.monotonic():
+            pid = reservation["player_id"]
+            resumed_state = self.sim.resume_player(pid)
+            self._reconnect_reservations.pop(resume_token, None)
+            if resumed_state is None:
+                pid = None
         used = set(p.player_id for p in self.peers)
-        free = [i for i in range(1, self.players) if i not in used]
-        if not free:
-            # Authenticated but the room is momentarily full (often a
-            # reconnect racing the old socket's EOF). Park the handshake and
-            # retry each frame; the short pending timeout still bounds it.
-            if peer in self._pending_peers:
-                peer.deferred = raw
-            else:
-                self._drop_peer(peer)
-            return False
+        used.update(entry["player_id"]
+                    for entry in self._reconnect_reservations.values())
+        if pid is None:
+            free = [i for i in range(1, self.players) if i not in used]
+            if not free:
+                # Authenticated but full: park the handshake and retry each
+                # frame. A resumed player bypasses this path and can always
+                # reclaim their reserved slot.
+                if peer in self._pending_peers:
+                    peer.deferred = raw
+                else:
+                    self._drop_peer(peer)
+                return False
+            pid = free[0]
         peer.deferred = None
-        pid = free[0]
         peer.player_id = pid
+        peer.resume_token = secrets.token_hex(16).upper()
         if peer in self._pending_peers:
             self._pending_peers.remove(peer)
-        # The name the client sent in its handshake. Sanitized again here,
-        # because the host must not assume the peer ran the same helper as
-        # us -- this string is about to be drawn over a sprite and into the
-        # kill feed. A peer that named itself nothing gets its slot label,
-        # never an empty tag.
-        nick = P.join_match_name(raw) or P.default_name(pid)
+        if resumed_state is not None:
+            # Keep the old name, equipment, health, position, team and rules
+            # score; the resume token proves this is the same returning seat.
+            nick = resumed_state.get("nick") or P.default_name(pid)
+        else:
+            # Sanitize new identities at the host, never trust the client-side
+            # name helper at the point where the text enters the roster.
+            nick = P.join_match_name(raw) or P.default_name(pid)
+            self.sim.add_player(pid, nick, P.join_match_appearance(raw))
         peer.name = nick
-        # Tell the client which slot it owns, and which map, before any
-        # snapshot that refers to it. Without this the client assumed id 0
-        # (the host's player) and its own map choice.
-        peer.wire._send(P.make_assign(pid, self.map_name, self.mode_name))
+        # A private datagram secret authenticates this player's UDP input and
+        # snapshots. TCP tunnels simply never complete this probe and retain
+        # the reliable fallback without any special client configuration.
+        peer.udp_token = (secrets.token_hex(16).upper()
+                          if getattr(self, "udp_srv", None) is not None else "")
+        peer.udp_sock = getattr(self, "udp_srv", None)
+        if peer.udp_token:
+            self._udp_peers_by_token[peer.udp_token] = peer
+        # Every seat receives fresh private resume and UDP secrets.
+        peer.wire._send(P.make_assign(
+            pid, self.map_name, self.mode_name, peer.resume_token,
+            resumed=resumed_state is not None,
+            udp_token=peer.udp_token))
         peer.wire.flush()
         self.peers.append(peer)
-        # The loadout claimed in the handshake, bounded on the wire and
-        # resolved against the catalog inside add_player. A peer that claims
-        # an item it never bought is wearing a lie the whole match can see,
-        # so the claim is not what gets drawn -- the normalized version is.
-        self.sim.add_player(pid, nick, P.join_match_appearance(raw))
         # Joining updates the frozen room roster; it does NOT start the game.
         # Seed one static snapshot so the client can render the arena behind
         # its lobby immediately, then publish the roster/room phase now.
@@ -1475,8 +1906,8 @@ class MatchScreen(object):
         self._publish_room_state(force=True)
         return True
 
-    def _drop_peer(self, peer, graceful=False):
-        """Drop a connection, whether it ever earned a slot or not.
+    def _drop_peer(self, peer, graceful=False, reserve=False):
+        """Drop a connection, optionally holding its seat briefly for rejoin.
 
         ``graceful`` flushes queued output and half-closes before the close,
         so a last packet the peer needs to read actually arrives. Only worth
@@ -1485,13 +1916,29 @@ class MatchScreen(object):
         if peer in self._pending_peers:
             self._pending_peers.remove(peer)
         if peer in self.peers:
+            if peer.udp_token:
+                self._udp_peers_by_token.pop(peer.udp_token, None)
+            peer.udp_ready = False
+            peer.udp_addr = None
             if peer.player_id is not None:
-                if self.sim is not None:
+                suspended = None
+                if reserve and peer.resume_token and self.sim is not None:
+                    suspended = self.sim.suspend_player(peer.player_id)
+                    if suspended is not None:
+                        self._reconnect_reservations[peer.resume_token] = {
+                            "player_id": peer.player_id,
+                            "expires_at": (time.monotonic()
+                                            + RECONNECT_RESERVATION_SECONDS),
+                        }
+                if suspended is None and self.sim is not None:
                     self.sim.remove_player(peer.player_id)
                 if self.sess is not None:
                     self.sess.forget_peer(peer.player_id)
                 self._peer_chat_last.pop(peer.player_id, None)
             self.peers.remove(peer)
+            if self.sim is not None and self.sess is not None:
+                self.sess.world = self.sim.snapshot_entities()
+                self.sess.broadcast()
         if graceful:
             self._flush_and_close(peer)
         else:
@@ -1519,18 +1966,100 @@ class MatchScreen(object):
         if self.peers and self._session_phase != "playing":
             self._publish_room_state(force=True)
 
+    def _update_network_warning(self):
+        """Warn once when RTT is poor or live-match snapshots go stale."""
+        stats = self.net_telemetry.stats()
+        warning = ""
+        if stats["quality"] == "poor":
+            warning = "connection"
+        elif self.session_phase() == "playing" and \
+                stats["snapshot_age_ms"] is not None and \
+                stats["snapshot_age_ms"] > 1500:
+            warning = "updates"
+        if warning and warning != self._net_warning:
+            self._say("CONNECTION UNSTABLE" if warning == "connection"
+                      else "HOST UPDATES ARE DELAYED", 3.0)
+        elif self._net_warning and not warning:
+            self._say("CONNECTION BACK TO NORMAL", 2.0)
+        self._net_warning = warning
+
+    def _begin_reconnect(self, reason):
+        """Close the broken socket and retry its original invite briefly."""
+        target = self._reconnect_target or self._peer_addr
+        # The room token is required by the host. If this was an old/untokened
+        # invite, do not spin through retries that cannot be accepted.
+        if target is None or not getattr(self, "_join_token", None):
+            self.leave_match()
+            self.status = reason or "connection lost"
+            self._say("CONNECTION LOST - REJOIN MANUALLY", 3.0)
+            return False
+        now = time.monotonic()
+        if not self._reconnect_active:
+            self._reconnect_active = True
+            self._reconnect_target = target
+            self._reconnect_deadline = now + RECONNECT_WINDOW_SECONDS
+            self._reconnect_attempts = 0
+        self._reconnect_connecting = False
+        self._reconnect_next_attempt = now + 0.5
+        self._teardown(announce_leave=False)
+        self.mode = "reconnecting"
+        detail = (reason or "Connection interrupted").rstrip(".")
+        self.status = "%s. Trying to rejoin..." % detail
+        self._say("CONNECTION LOST - TRYING TO REJOIN", 3.0)
+        return True
+
+    def _update_reconnect(self):
+        """Retry the saved invite until it answers or the window expires."""
+        now = time.monotonic()
+        if not self._reconnect_active:
+            self.mode = "panel"
+            return
+        if now >= self._reconnect_deadline:
+            self._reconnect_active = False
+            self._reconnect_connecting = False
+            self._reconnect_target = None
+            self.mode = "panel"
+            self.status = "Could not rejoin. The match may have ended."
+            self._say("REJOIN FAILED - TRY JOIN MATCH AGAIN", 4.0)
+            return
+        if now < self._reconnect_next_attempt:
+            return
+        self._reconnect_next_attempt = now + RECONNECT_RETRY_SECONDS
+        self._reconnect_attempts += 1
+        host, port = self._reconnect_target
+        if not self._start_playing(host, port, reconnecting=True):
+            self.mode = "reconnecting"
+            self.status = "Still trying to rejoin... attempt %d" % (
+                self._reconnect_attempts + 1)
+
+    def _finish_reconnect(self):
+        """Stop retries once the host has assigned the returning player."""
+        if not self._reconnect_active:
+            return
+        self._reconnect_active = False
+        self._reconnect_connecting = False
+        self._reconnect_target = None
+        self._reconnect_deadline = 0.0
+        self._net_warning = ""
+        if self._reconnect_restored:
+            self._say("WELCOME BACK - YOUR PLACE AND SCORE ARE RESTORED", 3.0)
+        else:
+            self._say("REJOINED, BUT YOUR ROUND SCORE MAY HAVE RESET", 3.0)
+
     def _update_client(self, keys, mouse, dt):
         """Receive host state, submit gated input, and render-predict locally."""
         sock = self.sock
         if sock is None:
             return
+        self._pump_udp_client()
         # Watchdog: the host owns the match, so total silence means the
         # session is over even if the socket never reports it. A host that
         # loses power or its uplink never sends a FIN or an RST, so without
         # this the client waits in a frozen arena indefinitely.
         if self._last_recv is not None and time.monotonic() - self._last_recv \
                 > HOST_SILENCE_TIMEOUT:
-            self._end_session_remotely("host stopped responding")
+            self._end_session_remotely(
+                "Host stopped responding", reconnect=True)
             return
         try:
             chunk = sock.recv(65536)
@@ -1544,13 +2073,15 @@ class MatchScreen(object):
             # this in with BlockingIOError -- "nothing to read, carry on" --
             # left the client sitting in a dead match forever, which is
             # precisely the failure the host-left packet exists to prevent.
-            self._end_session_remotely("host closed the match")
+            self._end_session_remotely(
+                "Connection interrupted", reconnect=True)
             return
         if chunk == b"":
             # The socket closed without saying why. This is the fallback for
             # an older host that does not send the host-left packet; assume
             # the session is gone rather than sitting in it.
-            self._end_session_remotely("host closed the match")
+            self._end_session_remotely(
+                "Connection closed unexpectedly", reconnect=True)
             return
         if chunk:
             self._last_recv = time.monotonic()
@@ -1561,6 +2092,10 @@ class MatchScreen(object):
                     continue
                 raw = P.decode(line)
                 if not isinstance(raw, dict):
+                    continue
+                pong = P.parse_pong(raw)
+                if pong is not None:
+                    self.net_telemetry.accept_pong(pong)
                     continue
                 # A chat line from the host's relay. Read before the gameplay
                 # dispatch because it shares the socket with snapshots, and
@@ -1592,6 +2127,9 @@ class MatchScreen(object):
                 assigned = P.parse_assign(raw)
                 if assigned is not None:
                     self.sess.local_id = assigned
+                    self._resume_token = P.assign_resume_token(raw)
+                    self._reconnect_restored = P.assign_resumed(raw)
+                    self._start_client_udp(P.assign_udp_token(raw))
                     # Adopt the host's map: the client picks its own on the
                     # entry panel, and rendering the wrong geometry would put
                     # every player on the wrong tiles.
@@ -1612,10 +2150,12 @@ class MatchScreen(object):
                         self.mode_name = host_mode
                     if self.view is not None:
                         self.view._local_id = assigned
+                    self._finish_reconnect()
                     continue
                 msg = P.parse_snapshot(raw)
                 if msg is not None:
                     self.sess._accept_snapshot(P.make_snapshot(*msg))
+                    self.net_telemetry.note_snapshot(msg[0])
                     self._latest_snap_tick = msg[0]
                     # Lobby snapshots seed positions but do not start play; the
                     # only authority for that transition is the host's room
@@ -1638,6 +2178,14 @@ class MatchScreen(object):
                     self._sync_dead(state)
                     self._sync_respawn(state)
                     self._match_state.update(state)
+
+        # Measure client-observed round-trip time without tying diagnostics to
+        # simulation ticks. This runs in the frozen lobby too, which makes the
+        # connection indicator useful before the match starts.
+        ping_now = time.monotonic()
+        if self.net_telemetry.ping_due(ping_now):
+            nonce = self.net_telemetry.begin_ping(ping_now)
+            self.wire._send(P.make_ping(nonce))
 
         # Smooth client clock. Snapshots land in 3-tick steps (20 Hz), so
         # sampling at the newest snapshot tick made the interpolated world
@@ -1689,14 +2237,44 @@ class MatchScreen(object):
                 buttons |= P.F_SPRINTING
             if reloading:
                 buttons |= P.F_RELOAD
+            # Match the host's short rewind window to the world time this
+            # client actually renders (the same delayed clock used by the
+            # snapshot interpolator). The host still decides the allowed age.
+            with self.sess._buf_lock:
+                render_tick = self.sess._buf.render_tick(self.sess.tick)
             msg_in = {"t": P.T_INPUT, "q": self.seq,
                      "mx": ax, "my": ay, "a": angle,
-                     "b": buttons}
+                     "b": buttons,
+                     "rt": int(round(render_tick)) & 0xFFFFFFFF}
             if not frozen and self._want_weapon is not None:
                 msg_in["w"] = self._want_weapon
             if not frozen and self._want_cycle:
                 msg_in["c"] = 1
-            self.wire._send(msg_in)
+            if self._udp_active and self.udp_sock is not None:
+                datagram = dict(msg_in)
+                datagram.pop("w", None)
+                datagram.pop("c", None)
+                datagram["u"] = self._udp_token
+                encoded = UDP.encode_datagram(datagram)
+                sent_udp = False
+                if encoded is not None:
+                    try:
+                        self.udp_sock.sendto(encoded, self._udp_peer_addr)
+                        sent_udp = True
+                    except OSError:
+                        sent_udp = False
+                if not sent_udp:
+                    self._request_udp_fallback()
+                    self.wire._send(msg_in)
+                else:
+                    action = P.make_action(
+                        self.seq, weapon=self._want_weapon,
+                        cycle=self._want_cycle)
+                    if action is not None:
+                        self.wire._send(action)
+            else:
+                self.wire._send(msg_in)
+            self.net_telemetry.note_input()
             # Predict the same movement locally, immediately. The host will
             # arrive here in RTT/2; the player should not have to wait.
             if self._pred is not None:
@@ -2243,7 +2821,12 @@ class MatchScreen(object):
         # the browser's chat composer and address box underneath.
         if self.mode == "closed":
             return False
-        if self.mode in ("hosting", "playing"):
+        if self.mode == "reconnecting":
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.leave_match()
+                self.status = "Rejoin cancelled"
+            return True
+        if self.mode in ("hosting", "playing"): 
             # Tab is hold-to-view, so it needs both edges and it needs to be
             # read before anything else can claim the key. It also has to work
             # while paused -- opening the menu with Esc and then wanting the
@@ -2519,8 +3102,36 @@ class MatchScreen(object):
         """Draw whichever of the three things we currently are."""
         if self.mode == "hosting" or self.mode == "playing":
             self._draw_match(surface)
+        elif self.mode == "reconnecting":
+            self._draw_reconnecting(surface)
         elif self.mode == "panel":
             self.draw_panel(surface)
+
+    def _draw_reconnecting(self, surface):
+        """A calm, explicit screen while automatic rejoin attempts run."""
+        w, h = surface.get_size()
+        surface.fill((7, 12, 16))
+        pw, ph = min(620, w - 32), 230
+        x, y = (w - pw) // 2, (h - ph) // 2
+        panel = pygame.Rect(x, y, pw, ph)
+        pygame.draw.rect(surface, C_PANEL_BG, panel)
+        pygame.draw.rect(surface, C_ACCENT, (x, y, pw, 3))
+        pygame.draw.rect(surface, C_PANEL_EDGE, panel, 1)
+        remaining = max(0, int(self._reconnect_deadline - time.monotonic()))
+        self._blit(surface, w // 2, "TRYING TO REJOIN THE MATCH", y + 34,
+                   25, C_ACCENT, center=True, mono=True, bold=True)
+        self._blit(surface, w // 2,
+                   "The connection dropped. Trying again automatically.",
+                   y + 82, 16, C_TEXT, center=True)
+        self._blit(surface, w // 2,
+                   "We are holding your place and score for a short time.",
+                   y + 112, 14, C_DIM, center=True)
+        self._blit(surface, w // 2,
+                   "ATTEMPT %d  ·  %ds LEFT" %
+                   (self._reconnect_attempts + 1, remaining),
+                   y + 151, 13, C_CYAN, center=True, mono=True)
+        self._blit(surface, w // 2, "PRESS ESC TO STOP TRYING", y + 190,
+                   13, C_DIM, center=True, mono=True)
 
     def _hud_kwargs(self, local_id, world):
         """Everything the HUD needs that does not come from entity positions.
@@ -2779,6 +3390,58 @@ class MatchScreen(object):
             self._blit(surface, cx, "NEXT ROUND STARTING...", py + ph - 40,
                        12, C_DIM, center=True, mono=True)
 
+    def _draw_connection_card(self, surface):
+        """A legible campaign-style status card, anchored bottom-right."""
+        sw, sh = surface.get_size()
+        pw, ph = 224, 58
+        x, y = max(12, sw - pw - 14), max(12, sh - ph - 12)
+        card = pygame.Surface((pw, ph), pygame.SRCALPHA)
+        pygame.draw.rect(card, (5, 10, 14, 218), (0, 0, pw, ph),
+                         border_radius=5)
+        pygame.draw.rect(card, (55, 65, 75, 230), (0, 0, pw, ph), 1,
+                         border_radius=5)
+
+        if self.sim is not None:
+            count = len(self.peers) + 1
+            udp_ready = getattr(self, "udp_srv", None) is not None
+            quality = "good" if udp_ready else "fair"
+            title = "HOST STATUS"
+            route = "UDP LISTENING" if udp_ready else "TCP ONLY"
+            detail = "PLAYERS  %d / %d" % (count, self.players)
+        else:
+            stats = self.net_telemetry.stats()
+            quality = stats.get("quality", "unknown")
+            title = {
+                "good": "CONNECTION GOOD",
+                "fair": "CONNECTION FAIR",
+                "poor": "CONNECTION UNSTABLE",
+                "unknown": "CHECKING CONNECTION",
+            }.get(quality, "CHECKING CONNECTION")
+            ping = stats.get("rtt_ms")
+            ping_txt = "--" if ping is None else "%d ms" % int(ping)
+            route = "%s  /  %s" % (
+                "UDP" if getattr(self, "_udp_active", False) else "TCP",
+                ping_txt)
+            jitter = stats.get("jitter_ms")
+            jitter_txt = "--" if jitter is None else "%d ms" % int(jitter)
+            detail = "JITTER  %s   ·   GAPS  %d" % (
+                jitter_txt, stats.get("snapshot_gaps", 0))
+
+        accent = {
+            "good": (75, 205, 135),
+            "fair": (235, 185, 75),
+            "poor": (235, 95, 80),
+            "unknown": (145, 160, 175),
+        }.get(quality, (145, 160, 175))
+        pygame.draw.line(card, accent, (2, 9), (2, ph - 9), 3)
+        small = self._font(11, mono=True)
+        medium = self._font(15, mono=True, bold=True)
+        quiet = self._font(11, mono=True)
+        card.blit(small.render(title, True, accent), (12, 6))
+        card.blit(medium.render(route, True, (225, 232, 230)), (12, 20))
+        card.blit(quiet.render(detail, True, (145, 160, 164)), (12, 42))
+        surface.blit(card, (x, y))
+
     def _draw_match(self, surface):
         # Our own slot. The host is always 0; a client learns its slot from
         # the host's assign packet, so colour/tags and (on the client) the
@@ -2812,12 +3475,7 @@ class MatchScreen(object):
             self.view.draw(surface, world, local_id, self._match_state
                             .get("scoreboard", ()),
                             **self._hud_kwargs(local_id, world))
-        if self.sim is not None:
-            count = len(self.peers) + 1
-            self._blit(surface, 10, "PLAYERS %d/%d" % (count, self.players),
-                       26, 17, (170, 180, 200))
-        else:
-            self._blit(surface, 10, "CONNECTED", 26, 17, (150, 220, 160))
+        self._draw_connection_card(surface)
         # The round-end sting + card fire on the shared outcome, on the edge.
         # They used to key off sim.finished inside the host branch only, so
         # clients (sim is None) never saw or heard the result. Checking the
@@ -2903,10 +3561,13 @@ class MatchScreen(object):
             return ("Hamachi ready - same network; allow game in Windows Firewall.",
                     (120, 220, 150))
         if self._tunnel_active:
-            return ("Public TCP tunnel ready - share this address.",
+            return ("Public TCP tunnel ready - gameplay uses safe TCP mode.",
                     (120, 220, 150))
+        if self.forwarded and getattr(self, "_udp_public_ok", None) is False:
+            return ("TCP reachable; fast UDP path unavailable (TCP fallback).",
+                    (240, 200, 80))
         if self.forwarded:
-            return ("Router port opened - share the public room code.",
+            return ("TCP + UDP ports opened - share the public room code.",
                     (120, 220, 150))
         if self._tunnel_pending:
             return ("Router blocked; trying automatic internet tunnel...",
@@ -3574,16 +4235,17 @@ class MatchScreen(object):
         for p in list(self.peers):
             self._flush_and_close(p)
 
-    def _end_session_remotely(self, reason):
-        """The host ended the match we were playing in. Leave it.
+    def _end_session_remotely(self, reason, reconnect=False):
+        """Handle a host message or transport failure without conflating them.
 
-        Not "a player left": with no host there is no simulation, no
-        scoreboard and nobody to hand the match to, so the only correct
-        client behaviour is to close the session down and say why.
+        Explicit host-left/kick packets are terminal. A silent socket failure
+        gets a short automatic rejoin attempt using the original invite.
         """
+        if reconnect and self._begin_reconnect(reason):
+            return
         self.leave_match()
-        self.status = reason or "host ended the session"
-        self._say("HOST ENDED THE SESSION", 3.0)
+        self.status = reason or "match ended"
+        self._say((reason or "MATCH ENDED").upper(), 3.0)
 
     def _local_carry(self):
         """Weapon ids the local player is carrying, newest information first.
@@ -3645,11 +4307,33 @@ class MatchScreen(object):
         so a dropped host threw the player all the way back to the server
         browser instead of the panel the docstring promises.)
         """
+        self._reconnect_active = False
+        self._reconnect_connecting = False
+        self._reconnect_target = None
+        self._reconnect_deadline = 0.0
         self._teardown()
         self.mode = "panel"
         self.status = "left the match"
 
-    def _teardown(self):
+    def _teardown(self, announce_leave=True):
+        # Intentional exits tell the host to release the temporary seat; a
+        # transport failure opts out so the host can keep the player state.
+        if announce_leave and self.mode == "playing" and self.wire is not None \
+                and self.sess is not None and not self.sess.is_host:
+            try:
+                self.wire._send(P.make_match_leave())
+                self.wire.flush()
+                # Closing outright lets the host's next snapshot hit a dead
+                # socket; Windows answers with RST and the host's stack throws
+                # away the unread leave, so the seat was reserved as if the
+                # link had dropped. Half-close and keep reading until the host
+                # hangs up, off the UI thread.
+                sock, self.sock = self.sock, None
+                sock.shutdown(socket.SHUT_WR)
+                threading.Thread(target=_linger_close, args=(sock,),
+                                 name="mleave", daemon=True).start()
+            except Exception:
+                pass
         # Say goodbye BEFORE the sockets close. Every path that ends a
         # hosted session funnels through here, so announcing from here is
         # what guarantees a client is never simply abandoned: without it, a
@@ -3670,6 +4354,7 @@ class MatchScreen(object):
         for p in self._pending_peers:
             p.close()
         self._pending_peers = []
+        self._reconnect_reservations = {}
         self._match_started = False
         self._session_phase = "lobby"
         self._countdown_left = 0.0
@@ -3688,6 +4373,31 @@ class MatchScreen(object):
             except OSError:
                 pass
             self.srv = None
+        if getattr(self, "udp_srv", None) is not None:
+            try:
+                self.udp_srv.close()
+            except OSError:
+                pass
+            self.udp_srv = None
+        if getattr(self, "udp_sock", None) is not None:
+            try:
+                self.udp_sock.close()
+            except OSError:
+                pass
+            self.udp_sock = None
+        self._udp_peers_by_token = {}
+        self._udp_token = ""
+        self._udp_peer_addr = None
+        self._udp_active = False
+        self._udp_nonce = None
+        self._udp_pending_nonces = deque(maxlen=8)
+        self._udp_acked_nonce = None
+        self._udp_next_probe = 0.0
+        self._udp_last_rx = 0.0
+        self._udp_last_snapshot = 0.0
+        self._udp_started_at = 0.0
+        self._udp_probe_sent_at = 0.0
+        self._udp_fallback_until = 0.0
         self.sim = None
         self.view = None
         self.sess = None
@@ -3728,6 +4438,7 @@ class MatchScreen(object):
         self.share_port = 0
         self.forwarded = False
         self.forward_note = ""
+        self._udp_public_ok = None
         self._tunnel_pending = False
         self._tunnel_active = False
         self._hamachi_active = False
@@ -3738,6 +4449,10 @@ class MatchScreen(object):
 
     def close(self):
         """Leave the match and drop every socket."""
+        self._reconnect_active = False
+        self._reconnect_connecting = False
+        self._reconnect_target = None
+        self._reconnect_deadline = 0.0
         self._teardown()
         self.mode = "closed"
         self.status = ""

@@ -7,6 +7,7 @@ same district on every load.
 """
 from __future__ import annotations
 
+from engine3d import tex
 from engine3d.core import box
 
 from missions.m6 import palette3d as P
@@ -56,10 +57,12 @@ def panel_block(add, cx, cz, w, h, d, facing, seed=0, col=(30, 34, 44), lit=0.32
     flat = only(facing)                  # panes, seams: the front face only
     slab = only(facing, "top")           # balcony slabs catch the snow too
 
-    # 1. body
-    add(box(w, h, d, col, center=(cx, h / 2, cz), seg=12,
+    # 1. body, a concrete pour with a darker plinth and roof coping
+    add(box(w, h, d, tex("concrete", like=col), center=(cx, h / 2, cz), seg=12,
             cols={"top": P.SNOW_DIM}, skip=("bottom",)))
-    count += 1
+    add(box(w + 0.08, 0.55, d + 0.08, dim(col, 0.66),
+            center=(cx, 0.28, cz), skip=("top", "bottom")))
+    count += 2
 
     def on_face(s, y, off):
         """World centre of a box at lateral ``s``, height ``y``, pushed ``off`` out."""
@@ -89,26 +92,55 @@ def panel_block(add, cx, cz, w, h, d, facing, seed=0, col=(30, 34, 44), lit=0.32
                 seam, center=on_face(cols[i] + COL_W / 2, h / 2, 0.025), skip=flat))
         count += 1
 
-    # 3. windows, clustered per floor so some floors are mostly dark
+    # 3. windows, clustered per floor so some floors are mostly dark.  Unlit
+    # panes are still glazed dark, which gives the facade its grid at night.
     stair_col = COL_W / 2       # midway between two window columns
     n_win = 0
     for f in range(floors):
         y = f * FLOOR_H + FLOOR_H * 0.55
         fl = lit * (0.3 + 1.4 * _hash(seed * 31 + f, 7))
         for i, s in enumerate(cols):
-            if budget is not None and n_win >= budget:
-                continue
             k = seed * 97 + f * 13 + i
             r = _hash(k, 3)
+            if budget is not None and n_win >= budget:
+                if (i + f) % 2 == 0:
+                    pane(s, y, WIN_W, WIN_H, WIN_OUT * 0.45, WINDOW_DARK, False)
+                    count += 1
+                continue
             if r < fl * 0.75:
                 c, em = WINDOW_WARM, True
             elif r < fl:
                 c, em = WINDOW_COLD, True
             else:
-                continue        # an unlit pane is all but the wall's colour at night
+                if (i + f) % 2 == 0:
+                    pane(s, y, WIN_W, WIN_H, WIN_OUT * 0.45, WINDOW_DARK, False)
+                    count += 1
+                continue
             pane(s, y, WIN_W, WIN_H, WIN_OUT, c, em)
+            add(box(0.06, WIN_H + 0.16, 0.06, dim(col, 0.62),
+                    center=on_face(s - WIN_W * 0.58, y, 0.035), skip=flat))
+            add(box(0.06, WIN_H + 0.16, 0.06, dim(col, 0.62),
+                    center=on_face(s + WIN_W * 0.58, y, 0.035), skip=flat))
             n_win += 1
-            count += 1
+            count += 3
+
+    # Pilasters every other bay: a panel block has a vertical rhythm, not a
+    # single window-wallpaper pattern.
+    for i in range(0, len(cols) + 1, 2):
+        s = cols[i] - COL_W / 2 if i < len(cols) else cols[-1] + COL_W / 2
+        add(box(0.14, h - 0.55, 0.10, dim(col, 0.82),
+                center=on_face(s, (h - 0.55) / 2 + 0.55, 0.035), skip=flat))
+        count += 1
+
+    # Ground-floor entrance with a concrete canopy and one warm bulb.
+    if floors >= 2 and _hash(seed, 29) < 0.72:
+        ent = cols[len(cols) // 2] if cols else 0.0
+        pane(ent, 1.05, 1.25, 1.95, 0.05, (32, 34, 38), False, push=0.02)
+        add(box(2.25, 0.16, 0.72, dim(col, 0.72),
+                center=on_face(ent, 2.16, 0.36), skip=flat))
+        add(box(0.26, 0.12, 0.16, (255, 205, 126),
+                center=on_face(ent, 2.03, 0.54), emissive=True))
+        count += 3
 
     # 4. stairwell: a thin column of small lit windows on every floor
     stair_s = cols[0] + stair_col if len(cols) > 1 else stair_col
@@ -148,6 +180,13 @@ def panel_block(add, cx, cz, w, h, d, facing, seed=0, col=(30, 34, 44), lit=0.32
         add(box(lw, 1.6, ld, dim(col, 0.9), center=(sx, h + 0.8, cz)))
         add(box(lw + 0.2, 0.12, ld + 0.2, P.SNOW_DIM, center=(sx, h + 1.66, cz)))
         count += 2
+    if h > 15.0 and _hash(seed, 31) < 0.6:
+        ax = cx + lat[0] * (half_lat * 0.45)
+        az = cz + lat[1] * (half_lat * 0.45)
+        add(box(0.08, 3.0, 0.08, dim(col, 1.05), center=(ax, h + 1.5, az)))
+        add(box(1.4, 0.06, 0.06, dim(col, 1.05), center=(ax, h + 2.35, az)))
+        add(box(0.06, 0.06, 1.0, dim(col, 1.05), center=(ax, h + 2.05, az)))
+        count += 3
 
     return count
 

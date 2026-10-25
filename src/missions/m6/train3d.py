@@ -41,9 +41,17 @@ from engine3d import (
     POSES, Renderer, blend, box, clamp, disc_xz, m_apply, pose_run, rot_x,
     rot_y, tex, v_add,
 )
+from . import perf as _perf
 
 RES = 0.64                       # internal render scale: 640x448, the PS2 frame
 RW, RH = int(WIDTH * RES), int(HEIGHT * RES)
+# Every cost in this scene that scales with the buffer area - the readback of
+# the colour/depth targets, the sprite composite, the grade LUT, the present
+# upscale - is bought back by dropping the internal resolution, so the two
+# playable scenes run on a governor (see ``perf.py``).  These two are the
+# authored size; a tool that rebinds them (the trailer renders straight at
+# picture size) pins the buffer and the governor stands down.
+_RW_AUTHORED, _RH_AUTHORED = RW, RH
 DITHER_STEP = _fx.DITHER_STEP                  # the grade's ordered dither: 15-bit, 32 levels
 
 CONTROL_AT = 2.0
@@ -575,22 +583,57 @@ def _vdist(a, b):
 
 
 # ── 3D plumbing ──────────────────────────────────────────────────────────
+def buffer_size():
+    """The internal render buffer ``(w, h)`` for this frame.
+
+    The authored ``RW``/``RH`` are the ceiling; ``perf`` may have locked a
+    smaller one for this machine.  A tool that rebinds ``RW``/``RH`` (the
+    trailer) pins the size and the governor is not consulted.
+    """
+    if (RW, RH) != (_RW_AUTHORED, _RH_AUTHORED):
+        return RW, RH
+    return _perf.buffer_size((WIDTH, HEIGHT))
+
+
 def _renderer():
-    if _cache["r"] is None:
-        _cache["r"] = Renderer(RW, RH, fog=FOG, fog_start=16.0,
-                               fog_end=BG_FOG_END)
-        _cache["r"].light_cap = LIGHT_CAP
-        _cache["r"].glitter = 1.0
-    return _cache["r"]
+    size = buffer_size()
+    r = _cache["r"]
+    if r is None:
+        r = Renderer(size[0], size[1], fog=FOG, fog_start=16.0,
+                     fog_end=BG_FOG_END)
+        _w.drop_renderer_caches()
+    elif (r.w, r.h) != size:
+        # A governor tier change: re-target the off-screen frame in place.
+        # The projection is resolution independent, so the baked set and the
+        # rig templates survive - rebuilding the renderer here used to freeze
+        # a frame for ~150 ms right when the machine was already struggling.
+        resize = getattr(r, "resize", None)
+        if resize is not None:
+            resize(size[0], size[1])
+        else:
+            r = Renderer(size[0], size[1], fog=FOG, fog_start=16.0,
+                         fog_end=BG_FOG_END)
+            _w.drop_renderer_caches()
+    cap, glit = _perf.light_cap(LIGHT_CAP), (1.0 if _perf.detail() >= 0.8 else 0.5)
+    if getattr(r, "light_cap", None) != cap:
+        r.light_cap = cap
+    if getattr(r, "glitter", None) != glit:
+        r.glitter = glit
+    _cache["r"] = r
+    return r
 
 
 def _sky(r, tm):
     """The night behind both M6 scenes.  The GL pass starts from r.surface:
     repaint the whole sky every frame, or last frame's additive glows pile up
-    wherever the sky shows."""
+    wherever the sky shows.
+
+    (Not cached: the star field, the moon and the cloud bands are placed from
+    the camera's yaw, so a reused frame would lag the parallax during a pan.)
+    """
     r.surface.fill(SKY_TOP)
-    _w.night(r, r.surface, tm, top=SKY_TOP, bot=SKY_HORIZON, stars=90,
-             moon=(112.0, 13.0), sodium=SKY_GLOW, seed=71, star_cut=0.62)
+    _w.night(r, r.surface, tm, top=SKY_TOP, bot=SKY_HORIZON, stars=140,
+             moon=(118.0, 14.0), sodium=(78, 52, 32), seed=71, star_cut=0.58)
 
 
 def _hum(key, wound=0, bloody=False, flags=()):
@@ -905,10 +948,17 @@ def _yard_set(add):
     add(box(3.6, 0.25, 3.0, tex("metal_rib", like=(26, 28, 32), tint=True),
             center=(sx, 2.72, sz)))
     add(box(3.4, 0.05, 2.8, _SNOW, center=(sx, 2.87, sz)))
-    add(box(1.4, 0.70, 0.04, (P.SODIUM_PALE), center=(sx - 0.5, 1.65, sz + 1.32),
+    add(box(2.05, 0.78, 0.04, (P.SODIUM_PALE), center=(sx - 0.36, 1.70, sz + 1.32),
             emissive=True))
-    add(box(1.56, 0.86, 0.04, (22, 22, 24), center=(sx - 0.5, 1.65, sz + 1.33)))
+    add(box(2.22, 0.94, 0.04, (22, 22, 24), center=(sx - 0.36, 1.70, sz + 1.33)))
+    add(box(0.05, 0.74, 0.05, (20, 20, 22), center=(sx - 0.36, 1.70, sz + 1.29)))
     add(box(0.8, 1.9, 0.05, (22, 20, 20), center=(sx + 1.0, 0.95, sz + 1.32)))
+    add(box(0.42, 1.72, 0.04, (54, 38, 30), center=(sx + 1.0, 0.91, sz + 1.29)))
+    add(box(0.52, 0.10, 0.30, (P.SODIUM_PALE), center=(sx + 1.0, 2.14, sz + 1.26),
+            emissive=True))
+    add(box(2.8, 0.16, 0.28, (28, 30, 34), center=(sx - 0.3, 2.38, sz + 1.38)))
+    B.letters(add, "СИГНАЛ", (sx - 0.34, 2.68, sz + 1.36), "+z", px=0.042,
+              col=(255, 188, 96), emissive=True)
     add(box(0.30, 0.90, 0.30, (40, 38, 36), center=(sx - 1.0, 3.25, sz - 0.4)))
     for i, dx in enumerate((-2.2, -2.9, -2.55)):
         add(box(0.58, 0.88, 0.58,
@@ -968,12 +1018,18 @@ def _torch_guard_state(i, t):
 def _yard_set_sprites(r, tm):
     """Lights for ``_yard_set``: queued every frame (geometry is baked)."""
     sx, sz = SIGNAL_BOX
-    r.add_sprite((sx - 0.5, 1.65, sz + 1.28),
-                 _fx.window_glow((P.SODIUM), 1.6, 0.9, 0.26),
+    r.add_sprite((sx - 0.36, 1.70, sz + 1.28),
+                 _fx.window_glow((P.SODIUM), 2.1, 0.95, 0.30),
+                 layer=_fx.FX_LAYER)
+    r.add_sprite((sx + 1.0, 2.14, sz + 1.32),
+                 _fx.sodium_lamp(tm, seed=413, radius_m=1.2, intensity=0.50),
                  layer=_fx.FX_LAYER)
     if r.backend != "gl":                # GL: lamp pools (SET_POOLS)
-        r.add_sprite((sx - 0.5, 0.05, sz + 2.4),
-                     _fx.window_glow((P.SODIUM), 2.2, 1.6, 0.14),
+        r.add_sprite((sx - 0.36, 0.05, sz + 2.4),
+                     _fx.window_glow((P.SODIUM), 3.1, 1.9, 0.18),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((sx + 1.0, 0.06, sz + 2.1),
+                     _fx.window_glow((P.SODIUM), 1.8, 1.2, 0.15),
                      layer=_fx.FX_LAYER)
     r.add_sprite((sx - 1.0, 3.75, sz - 0.4),
                  _smoke(tm, seed=411, drift=(0.16, -0.30),
@@ -1281,20 +1337,22 @@ def _light(r, eye=None, fwd=None, t=None, flashes=(), pools=()):
                  "intensity": 0.35, "range": 4.5},
             ]
     else:
-        # Action: deep night base, warm sodium pools, one cool rim.
-        r.light = Light(direction=(-0.46, 0.64, -0.36), ambient=0.36,
-                        diffuse=0.62, sky=0.21, tint=(0.90, 0.93, 1.04))
+        # Action: deep night base, warm sodium keys and cold open-air fill.
+        r.light = Light(direction=(-0.42, 0.70, -0.40), ambient=0.31,
+                        diffuse=0.72, sky=0.26, tint=(0.88, 0.93, 1.08))
         lights = [
-            # Two sodium keys, not three: the third pool landed on top of the
-            # other two and the platform lost its shape.
             {"pos": (0.0, 4.2, 7.2), "color": P.SODIUM,
-             "intensity": 1.25, "range": 13.5},
+             "intensity": 1.35, "range": 14.0},
             {"pos": (9.6, 4.2, 7.2), "color": P.SODIUM_PALE,
-             "intensity": 1.20, "range": 13.0},
-            # Snow-side cold rim: the only thing that gives the Guard a lit
-            # edge against a warm platform.
+             "intensity": 1.25, "range": 13.5},
+            # Snow-side cold rim and a broad blue sky bounce give the platform
+            # an edge instead of one warm sheet.
             {"pos": (4.0, 6.8, -5.6), "color": P.COLD_RIM,
-             "intensity": 0.52, "range": 18.0},
+             "intensity": 0.70, "range": 20.0},
+            {"pos": (-2.0, 5.4, 1.0), "color": (94, 124, 178),
+             "intensity": 0.42, "range": 16.0},
+            {"pos": (7.5, 1.6, -3.0), "color": (255, 190, 110),
+             "intensity": 0.34, "range": 7.5},
         ]
         if eye is not None and fwd is not None:
             # Weapon fill: the viewmodel sits ~0.8 m from the lens, and with
@@ -2043,6 +2101,17 @@ def panel(w, h, accent=None):
         pygame.draw.rect(surf, accent, (0, 6, 3, h - 12))
     return surf
 
+def _prewarm_ambience():
+    """The world-ambience loops and gusts build on first play (a wind gust is
+    ~50 ms); make them at load, not mid-fight."""
+    try:
+        from core import ambience
+        from .meta import MISSION6_KEY
+        ambience.prewarm(MISSION6_KEY)
+    except Exception:
+        pass
+
+
 def hurtvignette():
     """Pre-rendered radial red-black vignette (one gradient, cached)."""
     v = hudcache.get("hurt")
@@ -2158,6 +2227,7 @@ class TrainScene:
         self.started = True
         self.done = False
         self.t = 0.0
+        _perf.watchdog_reset()
         STATE.m6_train_active = True
         STATE.m6_train_time = 0.0
         STATE.m6_train_result = None
@@ -2173,6 +2243,7 @@ class TrainScene:
             from .m6_audio import M6TrainAudio  # lazy: audio is mission-owned
             self.audio = M6TrainAudio(audio)
             self.audio.start()
+            self.audio.warm()          # synthesise the one-shots now, not mid-fight
         except Exception:
             self.audio = None
         try:
@@ -2188,6 +2259,7 @@ class TrainScene:
 
     def prepare(self):
         _renderer()
+        hurtvignette()          # built here, not on the frame of the first hit (~40 ms)
         _hum(("biribel", OUTFIT_GUARD))
         _hum("volkov")
         _hum("ucilev")
@@ -2201,6 +2273,7 @@ class TrainScene:
                 audio.get_sound(name)
         except Exception:
             pass
+        _prewarm_ambience()
         self._warm_up()
 
     def _warm_up(self):
@@ -2214,6 +2287,11 @@ class TrainScene:
                 scratch = _cache["warm_surface"] = pygame.Surface((WIDTH, HEIGHT))
             self.t = 0.0
             self.draw(scratch)
+            # Resolve the render scale here, never mid-fight: every step of the
+            # measurement re-bakes the set, and the fight cannot afford that
+            # hitch.  Locked for the rest of the scene.
+            _perf.plan("m6_train", lambda: self.draw(scratch))
+            r = _renderer()
             r.begin()
             if hasattr(r, "add_packed"):
                 _w.pack_memo(r, "m6_train_live")
@@ -2225,11 +2303,19 @@ class TrainScene:
                     ok = True
                 finally:
                     _w.pack_memo_end(ok=ok)
+            # Every rig, and every face the scene will switch to: a new
+            # (spec, expression) pair builds a GPU template (~3 ms) on the
+            # frame it first appears - which is exactly an emotional close-up
+            # or the death beat, where a hitch reads worst.
+            spot = (PLAYER_POS[0] + 2.0, 0.0, PLAYER_POS[2] + 2.0)
             for hum in _cache["hum"].values():
-                if hum is not None:
-                    r.add_humanoid(hum, POSES["stand"],
-                                   (PLAYER_POS[0] + 2.0, 0.0, PLAYER_POS[2] + 2.0),
-                                   0.0, rifle_on=True)
+                if hum is None:
+                    continue
+                keep = getattr(hum, "_expression", "neutral")
+                for expr in ("neutral", "sad", "surprised", "worried", "angry"):
+                    hum._expression = expr
+                    r.add_humanoid(hum, POSES["stand"], spot, 0.0, rifle_on=True)
+                hum._expression = keep
             r.begin()
         except Exception:
             try:
@@ -3113,6 +3199,7 @@ class TrainScene:
     def draw(self, surface):
         if not self.active():
             return False
+        self._snapshot_for_blend(surface)
         r = _renderer()
         t = self.t
         if t > HIT_AT and not self.volkov_failed and not self.dying:
@@ -3212,7 +3299,8 @@ class TrainScene:
         self._draw_biribel(r, t)
         self._draw_fx(r, t)
         self._draw_death_fx(r, t)
-        _w.snow3d(r, t * 1000.0, seed=72, n=55, spread=20, height=14, speed=1.4)
+        _w.snow3d(r, t * 1000.0, seed=72, n=max(16, int(55 * _perf.detail())),
+                  spread=20, height=14, speed=1.4)
         r.flush(r.surface)
 
         if t < CUT_AT and not self.dying and not self.volkov_failed:
@@ -3259,12 +3347,48 @@ class TrainScene:
             fade = 1.0 - t / 0.8
         elif t > FADE_AT:
             fade = clamp((t - FADE_AT) / (DURATION - SLOW_LAG - FADE_AT), 0.0, 1.0) ** 0.8
+        self._resolution_blend(surface)
         if fade > 0:
             veil = pygame.Surface((WIDTH, HEIGHT))
             veil.fill((0, 0, 0))
             veil.set_alpha(int(255 * fade))
             surface.blit(veil, (0, 0))
+        # Frame-time watchdog: drop a render tier if this machine is not
+        # holding the frame (perf.py).  The next frame rebuilds the renderer.
+        _perf.govern("m6_train", surface=surface)
         return True
+
+    def _resolution_blend(self, surface):
+        """Cross-fade the frame after a governor tier change.
+
+        Dropping the internal resolution mid-fight is otherwise a visible
+        pop: the upscale keeps every object in the same place but all edges
+        sharpen at once.  Two frames at 35 % / 70 % over the new frame read as
+        a lens adjustment instead.  ``_snapshot_for_blend`` (top of ``draw``)
+        grabs the pre-switch frame; both M6 scenes go through this.
+        """
+        n = _cache.get("blend") or 0
+        prev = _cache.get("blend_prev")
+        if n <= 0 or prev is None or prev.get_size() != surface.get_size():
+            _cache.pop("blend", None)
+            return
+        prev.set_alpha(int(255 * (0.35 if n >= 2 else 0.70)))
+        surface.blit(prev, (0, 0))
+        prev.set_alpha(None)
+        _cache["blend"] = n - 1
+
+    def _snapshot_for_blend(self, surface):
+        """Keep the last presented frame when the governor is about to change
+        the render scale (called at the top of ``draw``, where *surface* still
+        holds the previous frame)."""
+        r = _cache.get("r")
+        if r is None or (r.w, r.h) == buffer_size():
+            return
+        snap = _cache.get("blend_prev")
+        if snap is None or snap.get_size() != surface.get_size():
+            snap = _cache["blend_prev"] = pygame.Surface(surface.get_size())
+        snap.blit(surface, (0, 0))
+        _cache["blend"] = 2
 
     def _flash_lights(self, t):
         """Transient point lights for muzzle flashes: the player's round warms
@@ -3553,6 +3677,40 @@ class TrainScene:
             _w.add(r, box(hw * 1.85, 0.03, hd * 1.85, (185, 195, 210),
                           center=(cx, top + 0.02, cz)))
 
+        # Platform construction: poured slab joints, salt bloom, wet patches
+        # and the grime line along the coping.  Flat geometry reads at any
+        # resolution, unlike a single huge concrete face.
+        from engine3d import Mesh
+        from engine3d.core import quad_xz
+        detail = Mesh()
+        add = detail.add
+        for px in range(-19, 21, 4):
+            add(box(0.035, 0.006, 4.55, (38, 42, 50),
+                    center=(px, _SLOT_GROUND + 0.006, 5.25)))
+        for pz in (3.35, 5.15, 6.95):
+            add(box(40.8, 0.005, 0.03, (43, 47, 54),
+                    center=(0.0, _SLOT_GROUND + 0.006, pz)))
+        for i, (px, pz, pw, pd, col) in enumerate((
+                (-12.8, 4.25, 4.2, 1.15, (54, 61, 72)),
+                (-2.0, 5.85, 3.4, 0.92, (49, 58, 70)),
+                (7.7, 4.05, 4.6, 1.05, (52, 60, 71)),
+                (15.1, 6.15, 2.7, 0.85, (56, 63, 75)))):
+            add(quad_xz(px - pw * 0.5, pz - pd * 0.5, px + pw * 0.5,
+                        pz + pd * 0.5, _SLOT_GROUND + 0.008, col))
+            add(quad_xz(px - pw * 0.25, pz - pd * 0.18, px + pw * 0.2,
+                        pz + pd * 0.15, _SLOT_GROUND + 0.009,
+                        (78, 91, 112)))
+        add(box(40.0, 0.016, 0.07, (31, 34, 40),
+                center=(0.0, _SLOT_GROUND + 0.009, 3.24)))
+        # wall panel pilasters and a deeper plinth under the waiting room
+        for px in (-15.8, -11.8, -7.8, -3.8, 4.2, 8.2, 12.2, 16.2):
+            add(box(0.22, 2.05, 0.10, (30, 34, 41),
+                    center=(px, 1.08, 8.94)))
+            add(box(0.30, 0.08, 0.14, (57, 61, 69),
+                    center=(px, 2.12, 8.90)))
+        add(box(33.0, 0.20, 0.10, (25, 28, 34), center=(0.7, 0.09, 8.96)))
+        _w.add(r, detail)
+
         self._draw_platform_dressing(r, t)
 
     def _draw_platform_dressing(self, r, t):
@@ -3774,23 +3932,44 @@ class TrainScene:
                 continue  # mass is behind the player
             add(box(sw, sh, sd, far_col(far_dist(sx, sz)),
                     center=(sx, sh * 0.5, sz), skip=skip))
-            # Lit windows are the only thing out here allowed to be bright:
-            # emissive, so the distance fog is all that dims them, and large
-            # enough (0.66 m) to survive the RES downscale.
+            # A lit loading bay and roofline keep the biggest silhouettes from
+            # reading as unlit black walls at the yard's focal distance.
             face = sz + sd * 0.5 + 0.04
+            add(box(sw * 0.56, 0.34, 0.06, (236, 186, 116),
+                    center=(sx - sw * 0.08, 2.15, face + 0.01),
+                    emissive=True))
+            add(box(0.16, 0.22, 0.06, (255, 218, 154),
+                    center=(sx + sw * 0.27, 2.52, face + 0.02),
+                    emissive=True))
+            add(box(sw * 0.92, 0.07, 0.06, (44, 48, 56),
+                    center=(sx, sh - 0.45, face + 0.01)))
+            if sh >= 10.0:
+                add(box(sw * 0.35, 0.14, 0.06, (156, 84, 62),
+                        center=(sx + sw * 0.12, sh - 1.2, face + 0.02),
+                        emissive=True))
             for ry in range(rows):
                 wy = sh * (0.30 + 0.22 * ry)
                 for ci in range(cols):
                     wx = sx + sw * (-0.34 + 0.68 * ci / max(1, cols - 1))
                     n = _vm_noise(wx, wy, sz, 5)
-                    if n < 0.58:  # higher threshold = fewer windows
+                    if n < 0.50:
+                        add(box(0.74, 0.52, 0.04, (18, 21, 28),
+                                center=(wx, wy, face + 0.015)))
                         continue
-                    add(box(0.66, 0.46, 0.06,
-                            (236, 190, 124) if n > 0.62 else (150, 128, 96),
+                    add(box(0.76, 0.54, 0.06,
+                            (246, 202, 134) if n > 0.60 else (170, 146, 108),
                             center=(wx, wy, face), emissive=True))
+                    add(box(0.88, 0.06, 0.14, (36, 39, 46),
+                            center=(wx, wy - 0.33, face + 0.04)))
             if sh >= 9.0:
                 add(box(0.26, 0.26, 0.26, (228, 56, 42),
                         center=(sx + sw * 0.34, sh + 0.18, sz), emissive=True))
+            if (sx, sz) == (20.0, -29.5):
+                B.letters(add, "ЗАВОД", (sx, sh - 2.1, face + 0.03), "+z",
+                          px=0.27, col=(255, 108, 76), emissive=True)
+        r.add_sprite((20.0, 3.8, -26.4),
+                     _fx.haze((168, 176, 194), 8.0, t * 1000.0, seed=610,
+                              intensity=0.07), layer=_fx.FX_LAYER)
 
         # Chimney stacks: vertical breaks in a horizon of flat-topped boxes.
         # The smokestack tapers and carries its own red/pale bands and its
@@ -3911,7 +4090,7 @@ class TrainScene:
             r.add_line3d((-7.0, 6.02, wz), (13.0, 6.02, wz), (44, 48, 58), 1, layer=2)
             r.add_line3d((13.0, 6.02, wz), (30.0, 6.02, wz), (44, 48, 58), 1, layer=2)
 
-    def _draw_static_lights(self, r, t, train_offset=0.0, snow_n=60,
+    def _draw_static_lights(self, r, t, train_offset=0.0, snow_n=100,
                             beacon=False):
         """Animated sprites for the baked set (lamps, window spill, snow).
 
@@ -3964,8 +4143,13 @@ class TrainScene:
         # two hero lamps keep a tapered shaft; the rest are head + halo only
         for hi, x in enumerate((0.0, 10.0)):
             r.add_sprite((x, 3.50 + G, 6.95),
-                         _fx.light_shaft((255, 196, 120), 3.0, 0.34, 1.10,
-                                         tm, seed=90 + hi, intensity=0.10),
+                         _fx.light_shaft((255, 196, 120), 3.2, 0.34, 1.25,
+                                         tm, seed=90 + hi, intensity=0.16),
+                         layer=_fx.FX_LAYER)
+        for hi, x in enumerate((-18.0, 18.0)):
+            r.add_sprite((x, 8.0, 11.3),
+                         _fx.light_shaft((120, 154, 204), 6.0, 0.6, 2.0,
+                                         tm, seed=96 + hi, intensity=0.09),
                          layer=_fx.FX_LAYER)
         # canopy work lamps
         for x in (-15.0, -8.0, 0.0, 8.0, 16.0):
@@ -3994,6 +4178,13 @@ class TrainScene:
                      _fx.haze((190, 200, 214), 1.9, tm, seed=137,
                               intensity=0.10),
                      layer=_fx.FX_LAYER)
+        for i, (hx, hz, hr) in enumerate(((-12.0, 4.8, 3.4),
+                                          (2.0, 3.9, 2.8),
+                                          (14.0, 4.6, 3.2))):
+            r.add_sprite((hx, 0.42, hz),
+                         _fx.haze((172, 186, 208), hr, tm, seed=520 + i,
+                                  intensity=0.075),
+                         layer=_fx.FX_LAYER)
         r.add_sprite((-18.2, G + 1.05, 8.55),
                      _fx.glow((255, 140, 66), 1.7, tm, flicker=0.16,
                               seed=139, intensity=0.55),
@@ -4024,7 +4215,8 @@ class TrainScene:
                                          seed=171),
                          layer=_fx.FX_LAYER)
         self._yard_sprites(r, tm)
-        _w.snow3d(r, tm, seed=61, n=snow_n, spread=22, height=16, speed=1.3)
+        _w.snow3d(r, tm, seed=61, n=max(16, int(snow_n * _perf.detail())),
+                  spread=22, height=16, speed=1.3)
 
     def _draw_train_door(self, r, t):
         tx = self._train_offset(t)
@@ -4862,7 +5054,6 @@ class TrainScene:
     # ── HUD ────────────────────────────────────────────────────────────
     def _draw_hud(self, surface, t):
         self._draw_objective(surface, t)
-        self._draw_volkov_status(surface, t)
         self._draw_crosshair(surface, t)
         self._draw_vitals(surface)
         self._draw_damage_arcs(surface, t)
@@ -5024,74 +5215,53 @@ class TrainScene:
             surface.blit(img, ((WIDTH - img.get_width()) // 2, HEIGHT - 118))
 
     def _draw_objective(self, surface, t):
-        done = t >= SHOT_AT
+        from . import yard_hud as U
         cleared = self.cleared_t >= 0.0 and self._living() == 0
-        if done:
+        living = self._living()
+        if t >= SHOT_AT:
             head = "Volkov is down"
             sub = ("He never reached the train. The Guard cut him down."
                    if self.volkov_failed else
                    "Ucilev's shot. The train is leaving.")
-            accent = (176, 72, 58)
+            state = "DOWN"
         elif self.volkov_pinned:
-            head, sub, accent = ("Cover Volkov", "He is pinned. Clear the platform.",
-                                 (196, 112, 64))
+            head, sub, state = ("Cover Volkov",
+                                "He is pinned. Clear the platform.", "PINNED")
         elif cleared:
-            head, sub, accent = ("Cover Volkov", "Platform clear. Keep him moving.",
-                                 (112, 168, 118))
+            head, sub, state = ("Cover Volkov",
+                                "Platform clear. Keep him moving.", "CLEAR")
         else:
-            head, sub, accent = ("Cover Volkov", "Clear the lane. Get him to the train.",
-                                 _hud.ACCENT)
-        self._hud_y = _hud.objective(surface, head, sub, accent=accent)
-
-    def _draw_volkov_status(self, surface, t):
-        """Volkov's run, one line under the objective: how far he has left
-        and whether he is moving.  (The Guard count is with the vitals.)"""
-        if t < 1.0:
-            return
-        living = self._living()
-        pos, _mode, _phase = _volkov_at(t, self.volkov_delay)
-        prog = clamp((pos[0] + 9.9) / (11.4 + 9.9), 0.0, 1.0)
-        if t >= SHOT_AT:
-            state, col = "DOWN", _hud.DANGER
-        elif self.volkov_pinned:
-            state, col = "PINNED", (226, 120, 74)
-        elif living == 0:
-            state, col = "CLEAR", _hud.GOOD
-        else:
-            state, col = "RUNNING", _hud.ACCENT
-        _hud.status_line(surface, getattr(self, "_hud_y", 70) + 6, "VOLKOV",
-                         prog, state, col)
+            head, sub, state = ("Cover Volkov",
+                                "Clear the lane. Get him to the train.", "RUNNING")
+        U.hostiles(surface, living)
+        U.objective(surface, "%s - %s Volkov: %s." % (head, sub, state))
 
     def _draw_crosshair(self, surface, t):
         if t < CONTROL_AT or t >= CUT_AT:
             return
+        from . import yard_hud as U
         hit_age = t - self.hit_mark
         if self.ads < 0.55:
-            _hud.crosshair(surface, 7 + int(8 * self.kick),
-                           reload_frac=self.reload_progress() if self.reloading else 0.0,
-                           hit_age=hit_age, hit_kind=self.hit_kind)
-        else:
-            # down the sights: the iron sights are the reticle, hits only
-            _hud.crosshair(surface, 7, hit_age=hit_age, hit_kind=self.hit_kind,
-                           lines=False)
+            U.reticle(surface, int(3 * self.kick - 2 * self.ads))
+        _hud.crosshair(surface, 7 + int(8 * self.kick), lines=False,
+                       hit_age=hit_age, hit_kind=self.hit_kind,
+                       reload_frac=self.reload_progress() if self.reloading else 0.0)
 
     def _draw_damage_arcs(self, surface, t):
         """Where the last hits came from: arcs around the crosshair."""
         _hud.damage_arcs(surface, self.dmg_marks, t, life=0.85)
 
     def _draw_vitals(self, surface):
+        from . import yard_hud as U
         p = STATE.player
         hp = p.hp if p is not None else 0
         mx = p.max_hp if p is not None else 100
-        slots = ["alive" if (g.get("active") and g.get("alive")) else
-                 ("due" if not g.get("active") else "down") for g in self.guards]
-        _hud.vitals(surface, hp, mx, wounded=self.wounded,
-                    alive=self._living(), slots=slots)
         ammo = getattr(STATE, "k9_ammo_in_mag", 0)
         size = getattr(STATE, "k9_mag_size", 30)
         mags = getattr(STATE, "k9_spare_mags", 0)
-        _hud.ammo(surface, "K9", ammo, size, "x%d" % mags,
-                  reloading=self.reload_progress() if self.reloading else 0.0)
+        U.weapon(surface, hp, mx, ammo, size, mags * size,
+                 self.reload_t if self.reloading else 0.0,
+                 self.reload_total)
 
     def _draw_subtitle(self, surface, t):
         start = end = who = text = None

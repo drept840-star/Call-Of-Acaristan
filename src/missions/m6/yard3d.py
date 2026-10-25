@@ -1,11 +1,11 @@
-"""Mission 6 - "Who fired?": the third-person fight after Volkov's death.
+"""Mission 6 - "Who is Ucilev?": the third-person fight after Volkov's death.
 
-The train is gone.  Biribel stands up from the body with one question - who
-was on that tower - and the only place in the yard that can answer it is the
-Guard terminal in the signal box behind the freight siding.  Three waves stand
-between him and it: the two torch Guards already on the strip, the truck
-squad, and the men holding the box.  At the terminal the M6 ending film
-takes over; its first shot is that terminal reading Ucilev's file.
+The train is gone.  Biribel stands up from the body with one question -
+who Ucilev is - and the only place that can name him is the Guard terminal
+in the signal box behind the freight siding.  Three waves stand between him
+and it: the two torch Guards already on the strip, the truck squad, and the
+men holding the box.  At the terminal the M6 ending film takes over; its
+first shot is that terminal reading Ucilev's file.
 
 Over-the-shoulder camera, WASD + relative mouse look, RMB tightens the
 shoulder aim, LMB fires the K9, R reloads, Shift sprints, E uses the
@@ -25,10 +25,11 @@ from core.config import (
 )
 from core.outfits import OUTFIT_GUARD
 from core.state import STATE
-from engine3d import NEUTRAL, POSES, blend, box, clamp, pose_run, tex
+from engine3d import NEUTRAL, POSES, Light, blend, box, clamp, pose_run, tex
 
 from . import hud3d as H
 from . import palette3d as P
+from . import perf as _perf
 from . import train3d as T
 from . import yard_brain as B
 from . import yard_dress as D
@@ -228,13 +229,14 @@ def ground_y(x, z):
 
 
 _SET_CACHE = {}
-_WALL = (44, 47, 54)
-_POST = (34, 36, 42)
+_WALL = (54, 58, 68)
+_POST = (38, 41, 49)
 _SNOW = (176, 186, 202)
 
 
 def _wall_run(add, x0, z0, x1, z1, h=2.6):
-    """An axis-aligned concrete run with posts every 4 m and a snow cap."""
+    """An axis-aligned concrete run with poured panels, control joints and a
+    snow cap: the inside of the yard gets construction detail, not one slab."""
     along_x = abs(x1 - x0) >= abs(z1 - z0)
     length = abs(x1 - x0) if along_x else abs(z1 - z0)
     if length < 0.05:
@@ -246,12 +248,37 @@ def _wall_run(add, x0, z0, x1, z1, h=2.6):
     add(box(w, h, d, tex("concrete", like=_WALL), center=(cx, h * 0.5, cz), seg=seg))
     add(box(w + 0.08, 0.08, d + 0.08, snow, center=(cx, h + 0.04, cz), seg=seg))
     add(box(w, 0.35, d + 0.5, snow, center=(cx, 0.12, cz), seg=seg))
+    # dark base plinth and a horizontal shutter line
+    add(box(w + 0.06, 0.38, d + 0.06, _POST, center=(cx, 0.19, cz), seg=seg))
+    add(box(w + 0.03, 0.035, d + 0.03, (36, 39, 46),
+            center=(cx, h * 0.54, cz), seg=seg))
     post = tex("concrete", like=_POST)
     for i in range(seg + 1):
         k = i / float(seg)
         px = x0 + (x1 - x0) * k
         pz = z0 + (z1 - z0) * k
         add(box(0.5, h + 0.25, 0.5, post, center=(px, (h + 0.25) * 0.5, pz)))
+    # control joints every 2 m, plus two weather streaks on the yard face
+    for i in range(1, max(1, int(length / 2.0))):
+        t = i / float(max(1, int(length / 2.0)))
+        px = x0 + (x1 - x0) * t
+        pz = z0 + (z1 - z0) * t
+        if along_x:
+            add(box(0.045, h - 0.42, d + 0.02, (32, 35, 42),
+                    center=(px, h * 0.5, cz)))
+        else:
+            add(box(w + 0.02, h - 0.42, 0.045, (32, 35, 42),
+                    center=(cx, h * 0.5, pz)))
+    for i, t in enumerate((0.27, 0.62, 0.83)):
+        px = x0 + (x1 - x0) * t
+        pz = z0 + (z1 - z0) * t
+        stain = (28, 30, 35) if i % 2 else (43, 39, 34)
+        if along_x:
+            add(box(0.16, h * 0.58, d + 0.025, stain,
+                    center=(px, h * 0.30, cz)))
+        else:
+            add(box(w + 0.025, h * 0.58, 0.16, stain,
+                    center=(cx, h * 0.30, pz)))
 
 
 def _gate(add, x0, x1, z):
@@ -287,8 +314,25 @@ def _perimeter_mesh():
     m = Mesh()
     add = m.add
     # ground out to the horizon: no edge of the world past the walls
-    add(quad_xz(-160, -160, 160, 160, -0.02, tex("snow", like=(46, 54, 68)), seg=12))
+    add(quad_xz(-160, -160, 160, 160, -0.02, tex("snow", like=(56, 64, 78)), seg=12))
     g0, g1 = ROAD_GATE
+    # the gate road: trodden, gravelly snow inside the wall
+    add(quad_xz(g0 + 0.2, WALL_S, g1 - 0.2, WALL_N, 0.045,
+                tex("snow_trod", like=(64, 72, 86)), seg=4))
+    for i, (px, pz, pw, pd) in enumerate(((-18.0, -11.5, 5.5, 2.6),
+                                          (-6.0, -8.5, 4.2, 2.1),
+                                          (14.0, -11.0, 5.8, 2.4),
+                                          (22.0, 4.2, 3.0, 4.6))):
+        add(quad_xz(px - pw * 0.5, pz - pd * 0.5, px + pw * 0.5,
+                    pz + pd * 0.5, 0.04,
+                    tex("snow_trod", like=(70, 78, 94)), seg=2))
+    for i, (px, pz, pw, pd) in enumerate(((-23.0, -5.5, 4.8, 1.8),
+                                          (7.0, -14.0, 5.2, 2.0),
+                                          (-1.5, 0.5, 3.8, 1.5))):
+        add(quad_xz(px, pz, px + pw, pz + pd, 0.043, (52, 64, 82)))
+    for lane in (-0.55, 0.55):
+        add(quad_xz(g0 + 1.9 + lane, WALL_S + 1.0, g0 + 2.35 + lane,
+                    WALL_N - 1.0, 0.053, (84, 92, 106)))
     # south: concrete, the road gate
     _wall_run(add, WALL_W, WALL_S, g0, WALL_S)
     _gate(add, g0, g1, WALL_S)
@@ -787,18 +831,27 @@ class YardScene:
         self.restart()
         self._active = True
         self.paused = False
+        _perf.watchdog_reset()
         STATE.m6_yard_active = True
         STATE.m6_yard_result = None
         if self.audio is None:
             try:
                 from .m6_audio import M6TrainAudio
                 self.audio = M6TrainAudio(audio)
+                self.audio.warm()      # synth the one-shots at load, not mid-wave
             except Exception:
                 self.audio = None
+        T._prewarm_ambience()
         self._grab(True)
         # pay the set build now, not on the first visible frame
         try:
-            self.draw(pygame.Surface((WIDTH, HEIGHT)))
+            scratch = pygame.Surface((WIDTH, HEIGHT))
+            self.draw(scratch)
+            # The yard shares the train's renderer, so it inherits whatever
+            # scale was measured there; entering straight from a checkpoint
+            # measures here, still before the first visible frame (every step
+            # re-bakes the set, and the fight cannot afford that mid-wave).
+            _perf.plan("m6_yard", lambda: self.draw(scratch))
         except Exception:
             pass
 
@@ -1296,6 +1349,7 @@ class YardScene:
     def draw(self, surface):
         if not self._active:
             return
+        T.scene()._snapshot_for_blend(surface)
         r = T._renderer()
         ts = T.scene()
         set_t = T.DURATION + self.t       # the set's clock, after the cut
@@ -1307,13 +1361,17 @@ class YardScene:
                             "intensity": 1.4, "range": 5.0})
         flashes += [
             {"pos": (T.YARD_MAST[0], 5.6, T.YARD_MAST[1] + 0.8),
-             "color": P.SODIUM, "intensity": 0.9, "range": 11.0},
+             "color": P.SODIUM, "intensity": 1.05, "range": 13.0},
             {"pos": (T.SIGNAL_BOX[0] - 0.5, 1.7, T.SIGNAL_BOX[1] + 2.0),
-             "color": P.SODIUM, "intensity": 0.6, "range": 5.0},
+             "color": P.SODIUM, "intensity": 0.78, "range": 7.0},
             {"pos": (T.TRUCK_X, 2.6, T.TRUCK_STOP_Z - T.TRUCK_HALF_L - 0.3),
-             "color": P.LAMP_WHITE, "intensity": 0.6, "range": 5.0},
+             "color": P.LAMP_WHITE, "intensity": 0.72, "range": 6.0},
+            {"pos": (0.0, 3.4, 8.3), "color": P.SODIUM,
+             "intensity": 0.62, "range": 13.0},
         ]
         T._light(r, flashes=flashes, pools=LAMP_POOLS)
+        r.light = Light(direction=(-0.38, 0.68, -0.42), ambient=0.44,
+                        diffuse=0.70, sky=0.30, tint=(0.88, 0.93, 1.08))
         r.set_camera(eye, tgt, fov)
         T._sky(r, tm)
         r.begin()
@@ -1336,12 +1394,26 @@ class YardScene:
                 T._FULL_SET = False
                 _w.pack_memo_end(ok=ok)
         ts._draw_yard_wires(r)
-        ts._draw_static_lights(r, set_t, train_offset=far, snow_n=120, beacon=True)
+        ts._draw_static_lights(r, set_t, train_offset=far, snow_n=150, beacon=True)
         _perimeter_sprites(r, tm)
         ts._draw_entrances(r, set_t)
         self._draw_volkov(r, set_t)
         self._draw_player(r, tm)
         self._draw_guards(r, tm)
+        # Low air over the tracks and a cool haze behind the siding: the yard
+        # reads as a deep space instead of a flat backdrop.
+        for i, (hx, hz, hr, hc) in enumerate((
+                (-10.0, -3.0, 6.0, (150, 164, 190)),
+                (8.0, -5.0, 7.0, (146, 160, 188)),
+                (22.0, -9.0, 6.0, (132, 148, 176)))):
+            r.add_sprite((hx, 0.55, hz),
+                         _fx.haze(hc, hr, tm, seed=730 + i, intensity=0.085),
+                         layer=_fx.FX_LAYER)
+        for i, (lx, lz) in enumerate((LAMPS[0], LAMPS[4], LAMPS[6])):
+            r.add_sprite((lx, 6.1, lz),
+                         _fx.light_shaft((255, 188, 108), 5.8, 0.42, 1.9,
+                                         tm, seed=740 + i, intensity=0.10),
+                         layer=_fx.FX_LAYER)
         self._draw_fx(r, tm)
         self._marker_screen = self._project(r, self._objective_point())
         r.flush(r.surface)
@@ -1542,9 +1614,13 @@ class YardScene:
             # the gun hand hangs: its elbow folds back, not out like a wing
             pole_l = tuple(POLE_L[i] + (POLE_HANG[i] - POLE_L[i]) * beats[4] for i in range(3))
         pose = _arm_ik(h, pose, "l", lt, at, self.body_yaw, pole_l)
-        _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93,
-                 amp=0.15, rifle_on=False, hd=True, bloody=True,
-                 expression="angry", shadow=T._shadow_for(self.pos[2]))
+        joints = _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93,
+                          amp=0.15, rifle_on=False, hd=True, bloody=True,
+                          expression="angry", shadow=T._shadow_for(self.pos[2]))
+        head = joints.get("head")
+        if head is not None:
+            r.add_sprite(head, _w.breath(head, tm + 600, seed=93, intensity=0.10),
+                         layer=_fx.FX_LAYER)
         _draw_k9(r, O, B)
         _mesh, muzzle = _k9_asset()
         self._muzzle = _gun_pt(O, B, muzzle)
@@ -1790,6 +1866,11 @@ class YardScene:
             U.prompt(surface, "Dry - punch, or take mags off the bodies", "F")
         elif self._melee_target()[0] is not None:
             U.prompt(surface, "Melee", "F")
+        # Frame-time watchdog: drop a render tier if the fight is not holding
+        # the frame (see perf.py).  The next frame re-targets the off-screen
+        # frame at the new buffer size and cross-fades the step.
+        _perf.govern("m6_yard", surface=surface)
+        T.scene()._resolution_blend(surface)
 
 
 _scene = YardScene()

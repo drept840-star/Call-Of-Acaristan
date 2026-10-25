@@ -468,3 +468,722 @@ description: chronological action log per session, consolidated weekly
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
 | 21:48 | Edited CLAUDE.md | modified modules() | ~1261 |
+| 22:10 | Session end: 1 writes across 1 files (CLAUDE.md) | 0 reads | ~1351 tok |
+| 22:10 | Session end: 2 writes across 1 files (dev_panel.py) | 0 reads | ~71 tok |
+| 22:10 | Session end: 11 writes across 7 files (m6_shots.py, train3d.py, smoke_test.py, m6films.py, m6world3d.py) | 110 reads | ~1765 tok |
+
+## Session: 2026-10-22 00:02
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:08
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:13
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:13
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:13
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:14
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:14
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:14
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:25
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:33
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:33
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:33
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:45
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-22 00:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:53 | Edited src/cutscenes/m6world3d.py | inline fix | ~17 |
+| 03:10 | Session end: 1 writes across 1 files (m6world3d.py) | 9 reads | ~4208 tok |
+
+## Session: 2026-10-23 06:08
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 06:36 | Created src/cutscenes/ps2mat.py | — | ~831 |
+| 06:48 | Edited src/cutscenes/ps2mat.py | 2→3 lines | ~52 |
+| 06:59 | Session end: 2 writes across 1 files (ps2mat.py) | 1 reads | ~883 tok |
+<!-- session:ZmY2ODM2MWEtMWQwMS00NjcwLWI0YmQtOTFhNDE3OGM3NDJi -->
+| 2026-10-23T04:03:39.441Z | M5 3D cutscenes get PS2 pixel textures via new cutscenes/ps2mat.py; m5martial3d._add caches GL packed rows (135->42 ms); gl.py row-wise cross/unit helpers. Committed 060462f. | src/cutscenes/ps2mat.py,src/cutscenes/m5martial3d.py,src/cutscenes/m5shadow3d.py,src/engine3d/gl.py | smoke: only pre-existing mission6_vertical_slice; M6 GL frame pixel-identical |
+
+## Session: 2026-10-23 20:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-23 20:40
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-23 20:41
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:21 | Created src/missions/m6/combat.py | — | ~4147 |
+
+## Session: 2026-10-23 22:39
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-23 23:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-23 23:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-23 23:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:13 | Edited tools/tex3d_draw.py | modified bone() | ~845 |
+| 00:31 | Created src/ui/egg666_audio.py | — | ~2707 |
+| 00:44 | Created src/ui/egg666_build.py | — | ~4899 |
+| 00:45 | Edited src/ui/egg666_audio.py | 2→2 lines | ~28 |
+| 00:46 | Created src/ui/egg666_post.py | — | ~1364 |
+| 00:46 | Created src/ui/egg666_dir.py | — | ~3826 |
+| 00:48 | Created src/ui/egg666_3d.py | — | ~3894 |
+| 00:48 | Edited src/ui/egg666_dir.py | modified camera() | ~115 |
+| 00:48 | Edited src/ui/egg666_dir.py | inline fix | ~21 |
+| 00:48 | Edited src/ui/egg666_audio.py | modified hush() | ~57 |
+| 00:49 | Created tools/egg666_shots.py | — | ~971 |
+| 00:56 | Edited src/ui/hud.py | modified _play_safe_666_demon_noise() | ~145 |
+| 00:56 | Edited src/ui/hud.py | added error handling | ~468 |
+| 00:56 | Edited src/ui/hud.py | 4→5 lines | ~42 |
+| 00:56 | Edited src/ui/hud.py | modified _egg3d_begin() | ~73 |
+| 00:56 | Edited src/ui/hud.py | modified _safe_666_loud_open() | ~101 |
+| 00:56 | Edited src/ui/hud.py | modified _draw_safe_666_3d() | ~121 |
+| 00:56 | Edited src/app.py | added error handling | ~116 |
+| 00:56 | Edited src/app.py | modified handle_event() | ~59 |
+| 00:57 | Edited src/app.py | modified update() | ~68 |
+| 00:57 | Edited src/app.py | modified render() | ~65 |
+| 00:57 | Edited src/app.py | modified _egg3d_live() | ~18 |
+| 00:57 | Edited src/app.py | modified _egg3d_live() | ~24 |
+| 00:57 | Created tests/unit/test_egg666.py | — | ~1755 |
+| 01:04 | Edited src/app.py | getattr() → class() | ~136 |
+| 01:04 | Edited src/app.py | modified _egg3d_live() | ~32 |
+| 01:04 | Edited src/app.py | modified _egg3d_live() | ~27 |
+| 01:04 | Edited src/app.py | modified _egg3d_live() | ~31 |
+| 01:04 | Edited src/app.py | modified _egg3d_live() | ~21 |
+| 01:04 | Edited src/app.py | modified _egg3d_live() | ~21 |
+| 01:07 | Edited src/ui/hud.py | 2→2 lines | ~32 |
+| 01:07 | Edited src/ui/egg666_3d.py | 2→2 lines | ~31 |
+| 01:07 | Edited src/app.py | modified enter() | ~56 |
+| 01:11 | Created src/ui/egg666_fx.py | — | ~1776 |
+| 01:14 | Edited src/ui/egg666_3d.py | added error handling | ~102 |
+
+## Session: 2026-10-24 10:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:22 | Edited src/core/dev_jumps.py | — | ~189 |
+| 10:22 | Edited tools/dev_panel.py | — | ~53 |
+
+## Session: 2026-10-24 10:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:25
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-24 10:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:27 | Session end: 2 writes across 2 files (dev_jumps.py, dev_panel.py) | 0 reads | ~242 tok |
+| 12:42 | Session end: 35 writes across 11 files (tex3d_draw.py, egg666_audio.py, egg666_build.py, egg666_post.py, egg666_dir.py) | 31 reads | ~33036 tok |
+
+## Session: 2026-10-24 12:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:50 | Edited tools/m6_topdown_shots.py | expanded (+22 lines) | ~377 |
+| 12:50 | Edited tools/m6_topdown_shots.py | 2→3 lines | ~22 |
+| 12:50 | Edited tools/m6_topdown_shots.py | modified main() | ~47 |
+| 12:50 | Edited tools/m6_topdown_shots.py | inline fix | ~22 |
+| 12:50 | Edited tools/m6_topdown_shots.py | 2→4 lines | ~87 |
+| 12:55 | Edited src/missions/m6/decor.py | added 2 condition(s) | ~4056 |
+| 12:55 | Edited src/missions/m6/decor.py | 23 → 24 | ~13 |
+| 12:55 | Edited src/missions/m6/decor.py | modified range() | ~36 |
+| 12:55 | Edited src/missions/m6/decor.py | modified in() | ~132 |
+| 12:55 | Edited src/missions/m6/decor.py | inline fix | ~8 |
+| 12:55 | Edited src/missions/m6/decor.py | added 1 condition(s) | ~638 |
+| 12:55 | Edited src/missions/m6/decor.py | 2→3 lines | ~45 |
+| 12:56 | Edited src/missions/m6/draw.py | modified _draw_pickup() | ~1170 |
+| 12:56 | Edited src/missions/m6/draw.py | 3→2 lines | ~26 |
+| 12:56 | Edited src/missions/m6/draw.py | 2→3 lines | ~41 |
+| 12:56 | Edited src/missions/m6/combat.py | added 1 import(s) | ~247 |
+| 12:56 | Edited src/missions/m6/combat.py | modified init_stage() | ~90 |
+| 12:56 | Edited src/missions/m6/stealth.py | 3→3 lines | ~35 |
+| 12:56 | Edited src/missions/m6/combat.py | inline fix | ~14 |
+| 12:58 | Edited src/missions/m6/draw.py | modified _draw_exit_lamps() | ~309 |
+| 12:58 | Edited src/missions/m6/draw.py | 2→3 lines | ~37 |
+| 12:58 | Edited src/missions/m6/decor.py | modified exit_lamps() | ~155 |
+| 12:58 | Edited src/missions/m6/decor.py | 4→4 lines | ~52 |
+| 12:58 | Edited src/missions/m6/decor.py | modified _it_tarp() | ~119 |
+| 12:58 | Edited src/missions/m6/combat.py | 2→2 lines | ~44 |
+| 12:58 | Edited src/missions/m6/combat.py | inline fix | ~14 |
+| 12:58 | Edited tools/m6_topdown_shots.py | modified in() | ~468 |
+| 12:58 | Edited tools/m6_topdown_shots.py | 2→3 lines | ~21 |
+| 12:58 | Edited tools/m6_topdown_shots.py | inline fix | ~25 |
+| 12:58 | Edited tools/m6_topdown_shots.py | 1→4 lines | ~84 |
+| 13:08 | Edited src/missions/m6/decor.py | inline fix | ~19 |
+| 13:08 | Edited src/missions/m6/decor.py | added 1 import(s) | ~37 |
+
+## Session: 2026-10-24 14:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:13 | Edited src/cutscenes/m6fx3d.py | added 1 condition(s) | ~575 |
+| 15:19 | Edited src/engine3d/gl.py | 6→7 lines | ~115 |
+| 15:19 | Edited src/engine3d/gl.py | modified begin() | ~96 |
+| 15:19 | Edited src/engine3d/gl.py | modified add_resident() | ~303 |
+| 15:19 | Edited src/engine3d/gl.py | modified _draw_resident() | ~94 |
+| 15:19 | Edited src/engine3d/gl.py | 3→4 lines | ~36 |
+| 15:19 | Edited src/engine3d/gl.py | modified values() | ~83 |
+| 15:19 | Edited src/cutscenes/m6world3d.py | add_packed() → getattr() | ~59 |
+| 15:21 | Edited src/engine3d/gl.py | modified uniforms() | ~189 |
+| 15:21 | Edited src/engine3d/gl.py | modified items() | ~63 |
+| 15:21 | Edited src/engine3d/gl.py | added error handling | ~97 |
+| 15:24 | Edited src/engine3d/gl.py | modified _light_targets() | ~645 |
+| 15:24 | Edited src/engine3d/gl.py | modified _same() | ~55 |
+| 15:25 | Edited src/engine3d/gl.py | modified enumerate() | ~94 |
+| 15:25 | Edited src/engine3d/gl.py | modified and() | ~790 |
+| 15:25 | Edited src/engine3d/gl.py | 2→3 lines | ~37 |
+| 15:30 | Edited src/cutscenes/m6fx3d.py | modified in() | ~668 |
+| 15:32 | Edited src/missions/m6/train3d.py | modified prepare() | ~49 |
+| 15:35 | Edited src/engine3d/gl.py | modified len() | ~148 |
+| 15:42 | Edited src/core/ambience.py | added error handling | ~216 |
+| 15:43 | Edited src/missions/m6/train3d.py | 5→6 lines | ~55 |
+| 15:43 | Edited src/missions/m6/train3d.py | added error handling | ~116 |
+| 15:43 | Edited src/missions/m6/yard3d.py | 4→5 lines | ~58 |
+| 15:46 | Created tools/build_radio_cache.py | — | ~556 |
+| 15:46 | Edited tools/build_radio_cache.py | 2→4 lines | ~25 |
+| 15:48 | Edited src/cutscenes/m6fx3d.py | 7→9 lines | ~107 |
+| 15:48 | Edited src/cutscenes/m6world3d.py | inline fix | ~23 |
+| 15:51 | Edited src/engine/ui/std/objective_banner.py | modified draw() | ~394 |
+| 15:51 | Edited src/engine/ui/std/objective_banner.py | modified enumerate() | ~107 |
+| 15:56 | Edited docs/M6_3D_PERF.md | modified 4() | ~999 |
+
+## Session: 2026-10-25 08:44
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 08:48 | Edited CLAUDE.md | expanded (+8 lines) | ~187 |
+| 08:49 | Session end: 30 writes across 9 files (m6fx3d.py, gl.py, m6world3d.py, train3d.py, ambience.py) | 8 reads | ~14327 tok |
+| 08:49 | Session end: 32 writes across 5 files (m6_topdown_shots.py, decor.py, draw.py, combat.py, stealth.py) | 33 reads | ~8670 tok |
+| 08:50 | Session end: 1 writes across 1 files (CLAUDE.md) | 0 reads | ~200 tok |
+
+## Session: 2026-10-25 12:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:44 | Edited src/cutscenes/m6world3d.py | 3→7 lines | ~73 |
+| 12:44 | Edited src/cutscenes/m6world3d.py | modified run_x() | ~1692 |
+| 12:46 | Edited src/cutscenes/m6films.py | modified run_s() | ~3230 |
+| 12:58 | Edited src/cutscenes/m6films.py | removed 8 lines | ~6 |
+| 13:24 | Edited src/cutscenes/m6world3d.py | modified in() | ~67 |
+| 13:24 | Edited src/cutscenes/m6films.py | modified reveal_cam() | ~121 |
+| 13:24 | Edited src/cutscenes/m6films.py | 7→7 lines | ~78 |
+| 13:44 | Edited tests/unit/test_m6_campaign.py | modified test_door_seat_clears_the_airframe() | ~189 |
+
+## Session: 2026-10-25 13:44
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+<!-- session:YTkwNzhlODMtMGJhMS00ZjIwLTkzYmMtMzhjZmI4YmQ2ZGJi -->
+| 2026-10-25T11:56:52.875Z | Committed M6 intro rewrite (ce849fe) with intro-only hunks; older uncommitted work in the same files left in the tree | src/cutscenes/m6films.py,src/cutscenes/m6world3d.py,src/missions/m6/meta.py,src/missions/m6/m6_audio.py,tools/smoke_test.py,tools/m6_shots.py,tests/unit/test_m6_campaign.py,docs/MISSION6_PLOT.md | committed; staged tree verified in a HEAD worktree (56 M6 tests OK, intro frames pixel-identical; only reds pre-exist on HEAD) |
+
+## Session: 2026-10-25 14:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 14:44 | Edited src/cutscenes/m6films.py | 2→1 lines | ~19 |
+| 14:44 | Edited src/cutscenes/m6films.py | inline fix | ~15 |
+<!-- session:MTRkNjY2MGUtMmRmMi00YTZmLTg3ZjktYWJhMjE3ZWNiZTUy -->
+| 2026-10-25T12:47:14.965Z | M6 intro cabin shots: Maru and Biribel mouths forced closed (mouth=0.0 in _insert_cabin) instead of mouth_flap while speaking. Committed as c912785 on m6/train-polish. | src/cutscenes/m6films.py | smoke test OK, compileall OK; visual check in game not done |
+| 14:49 | Edited src/cutscenes/m6world3d.py | modified snow3d() | ~68 |
+| 14:49 | Edited src/cutscenes/m6world3d.py | 2→4 lines | ~62 |
+| 14:49 | Edited src/cutscenes/m6films.py | modified _cabin_snow() | ~167 |
+| 14:49 | Edited src/cutscenes/m6films.py | modified _in_cabin() | ~168 |
+| 14:49 | Edited src/cutscenes/m6films.py | 1→2 lines | ~35 |
+| 14:54 | Edited src/cutscenes/m6world3d.py | 3→4 lines | ~72 |
+| 14:54 | Edited src/cutscenes/m6world3d.py | 2→2 lines | ~19 |
+| 14:54 | Edited src/cutscenes/m6films.py | 4→4 lines | ~48 |
+| 14:54 | Edited src/cutscenes/m6films.py | inline fix | ~21 |
+| 14:57 | Edited src/cutscenes/m6world3d.py | modified flake_sprite() | ~243 |
+| 14:57 | Edited src/cutscenes/m6world3d.py | 2→4 lines | ~45 |
+| 14:57 | Edited src/cutscenes/m6world3d.py | 2→2 lines | ~17 |
+| 14:57 | Edited src/cutscenes/m6films.py | modified _cabin_snow() | ~163 |
+| 14:57 | Edited src/cutscenes/m6films.py | inline fix | ~20 |
+| 15:01 | Edited src/cutscenes/m6world3d.py | 2→2 lines | ~23 |
+| 15:02 | Edited src/cutscenes/m6world3d.py | 2→3 lines | ~45 |
+| 15:07 | Edited src/cutscenes/m6world3d.py | 5→4 lines | ~46 |
+| 15:07 | Edited src/cutscenes/m6world3d.py | modified _k9_rig_mesh() | ~131 |
+| 15:07 | Edited src/cutscenes/m6films.py | modified _hand() | ~203 |
+| 15:07 | Edited src/cutscenes/m6films.py | inline fix | ~27 |
+| 15:11 | Edited src/cutscenes/m6films.py | modified _k9_hold() | ~299 |
+| 15:13 | Edited src/cutscenes/m6films.py | modified _unit() | ~728 |
+| 15:13 | Edited src/cutscenes/m6films.py | 2→3 lines | ~54 |
+| 15:14 | Edited src/cutscenes/m6films.py | inline fix | ~17 |
+| 15:14 | Edited src/cutscenes/m6films.py | 2→2 lines | ~24 |
+| 15:27 | Edited src/missions/m6/meta.py | 2→2 lines | ~23 |
+| 15:27 | Edited src/missions/m6/meta.py | 3→7 lines | ~93 |
+| 15:27 | Edited src/missions/m6/meta.py | 2→2 lines | ~36 |
+| 15:27 | Edited src/missions/m6/flow.py | inline fix | ~28 |
+| 15:27 | Edited src/missions/m6/maps.py | 18→17 lines | ~263 |
+| 15:27 | Edited src/missions/m6/world.py | expanded (+7 lines) | ~74 |
+| 15:27 | Edited src/missions/m6/combat.py | 4→4 lines | ~42 |
+| 15:27 | Edited src/missions/m6/combat.py | 2→3 lines | ~34 |
+| 15:27 | Edited src/missions/m6/combat.py | 8→9 lines | ~70 |
+| 15:27 | Edited src/missions/m6/combat.py | modified loud() | ~100 |
+| 15:27 | Edited src/missions/m6/combat.py | modified _check_loud() | ~67 |
+| 15:27 | Edited src/missions/m6/combat.py | 3→5 lines | ~36 |
+| 15:27 | Edited src/missions/m6/systems.py | modified tick_entry() | ~211 |
+| 15:27 | Edited src/missions/m6/decor.py | 2→2 lines | ~13 |
+| 15:27 | Edited src/missions/m6/decor.py | 2→2 lines | ~14 |
+| 15:27 | Edited src/missions/m6/decor.py | modified _house_tile() | ~267 |
+| 15:27 | Edited src/missions/m6/decor.py | 3→5 lines | ~66 |
+| 15:27 | Edited src/missions/m6/decor.py | modified noise() | ~365 |
+| 15:28 | Edited src/missions/m6/decor.py | 6→6 lines | ~123 |
+| 15:28 | Edited src/missions/m6/decor.py | 2→3 lines | ~54 |
+| 15:28 | Edited src/missions/m6/decor.py | modified _glow() | ~178 |
+| 15:28 | Edited src/missions/m6/decor.py | modified _snow() | ~20 |
+| 15:28 | Edited src/missions/m6/decor.py | 4→5 lines | ~80 |
+| 15:28 | Edited src/missions/m6/systems.py | 9→12 lines | ~184 |
+| 15:28 | Edited src/missions/m6/systems.py | 2→4 lines | ~25 |
+| 15:29 | Edited src/missions/m6/combat.py | modified update() | ~31 |
+| 19:37 | Edited src/missions/m6/decor.py | inline fix | ~26 |
+| 19:40 | Created tools/m6_snow_probe.py | — | ~980 |
+| 19:41 | Edited tools/m6_snow_probe.py | added 2 condition(s) | ~226 |
+| 19:42 | Edited src/missions/m6/decor.py | modified range() | ~103 |
+
+## Session: 2026-10-25 20:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:08 | Created docs/M6_TOPDOWN_GRAPHICS_MASTER_PROMPT.md | — | ~2520 |
+| 20:08 | Edited docs/M6_TOPDOWN_GRAPHICS_MASTER_PROMPT.md | inline fix | ~64 |
+
+## Session: 2026-10-25 20:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:16 | Created docs/M6_TOPDOWN_ART_BRIEF.md | — | ~2007 |
+| 20:33 | Edited src/missions/m6/decor.py | 3→2 lines | ~7 |
+<!-- session:MzVlNjZkOWYtMDc4Yy00MjZjLTlmY2YtODExZTYwYzhiMmEy -->
+| 2026-10-25T18:39:33.031Z | M6 top-down snow redesign: art-pack snow tiles sn/st (added only), snow is the ground on g tiles, hard stepped banks/drifts, two-tone mounds, hard ice/oil/AO, square flakes, haze removed, neutral ambient (60,62,78) | src/missions/m6/decor.py,tools/make_art_pack.py,src/engine/assets/_artpack.py,assets/art/t_sn_*.png,assets/art/t_st_*.png | compileall, smoke, test_m6_campaign, goldens gameplay all OK; existing art-pack tiles untouched |
+| 21:07 | Edited src/missions/m6/decor.py | "Two flat additive discs f" → "Two flat additive discs: " | ~20 |
+| 21:07 | Edited src/missions/m6/decor.py | modified _torch_colour() | ~126 |
+| 21:07 | Edited src/missions/m6/decor.py | 2→1 lines | ~23 |
+| 21:07 | Edited src/missions/m6/decor.py | 1→2 lines | ~37 |
+| 21:07 | Edited src/missions/m6/stealth.py | 17→17 lines | ~224 |
+| 21:08 | Edited src/missions/m6/decor.py | — | ~0 |
+| 21:22 | Edited src/missions/m6/decor.py | 8→6 lines | ~70 |
+| 21:22 | Edited src/missions/m6/decor.py | modified range() | ~7 |
+
+## Session: 2026-10-25 00:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-25 00:32
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:35 | Edited src/ui/arena_view.py | modified _rig_icon() | ~397 |
+| 00:35 | Edited src/ui/arena_view.py | modified _draw_weapon_strip() | ~623 |
+| 00:35 | Edited src/ui/arena_view.py | 2→3 lines | ~48 |
+| 00:35 | Edited src/ui/arena_view.py | 2→5 lines | ~44 |
+| 00:36 | Edited src/ui/arena_view.py | modified _rig_icon() | ~233 |
+| 00:36 | Edited src/ui/arena_view.py | copy() → scale_by() | ~35 |
+| 00:36 | Edited src/ui/arena_view.py | _get_panel_bg() → _strip_plate() | ~598 |
+| 00:36 | Edited src/ui/arena_view.py | modified _strip_plate() | ~133 |
+| 00:36 | Edited src/ui/arena_view.py | inline fix | ~9 |
+| 00:36 | Edited src/ui/arena_view.py | modified _strip_plate() | ~210 |
+| 00:36 | Edited src/ui/arena_view.py | modified enumerate() | ~32 |
+| 00:36 | Edited src/ui/arena_view.py | 1→2 lines | ~44 |
+
+## Session: 2026-10-25 00:52
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:54 | Edited src/ui/match_screen.py | expanded (+9 lines) | ~214 |
+| 00:54 | Edited src/ui/match_screen.py | added error handling | ~160 |
+| 00:54 | Edited src/ui/match_screen.py | modified except() | ~130 |

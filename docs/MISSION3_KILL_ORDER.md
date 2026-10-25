@@ -286,7 +286,7 @@ render for any new FX; (5) settings interplay check (`particle_density`,
 - **Code/tests:** `game_core.start_mission3_kill_order_checkpoint()`.
 - **Tools:** `src/tools/ko_playability_audit.py` (7-check playability audit),
   `render_ko_video.py` at repo root (headless bot preview MP4),
-  `src/tools/smoke_test.py` (includes KO walk + wave-insertion checks).
+  `tools/smoke_test.py` (includes KO walk + wave-insertion checks).
 
 ## 8. Risks & mitigations
 

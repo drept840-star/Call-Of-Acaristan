@@ -1083,6 +1083,325 @@ docs/engine/CHANGELOG.md for the evidence).
   were superseded by the src/missions refactor, resolved keep-ours) and pushed.
 - Gates: tree-only changes; smoke OK.
 
+## 2026-10-23 - M6 top-down gameplay pass (art + melee + HUD)
+
+Feedback: "Remove that red circle around the enemies / The map is just
+recycled M2 Props / The melee isn't the same as in the other missions /
+The walls look terrible."
+
+- **Hostile rings gone.** `missions/m6/draw.py` no longer blits the pale
+  `_GUARD_DISC` halo under a Guard nor draws the 21 px hostile ring after
+  the light multiply (`_draw_guard_marks` deleted, so the render call went
+  with it). A Guard now reads off his own contact shadow and the snow, like
+  M4/M5; "alerted" is a small amber pip over the head instead of a bullseye.
+- **Melee parity.** Two independent drifts: (1) `draw._scene_drawables`
+  passed neither `melee_progress` nor `is_moving`, so `Player.draw` held the
+  swing at its first frame - a frozen twitch, and no walk bob; it now
+  computes progress from `STATE.melee_duration` (real swing length) and the
+  last key state. (2) `flow._initialize_m6` never set `mission3_weapon`, so
+  `weapons.handle_melee` fell through to the M1/M2 pistol butt (18 frames /
+  78 dmg) on every run and checkpoint; M6 now boots with `k9_smg` (20 / 62),
+  the same value M5 sets. New probe: `tools/m6_melee_strip.py`.
+- **Wall art.** `decor._paint_wall` treated every tile as a standalone block
+  (own base tone, own top highlight, own bottom shadow, own snow cap), so a
+  30-tile border read as 30 brick slabs. It is now neighbour-aware: a snow
+  crown and an end seam only where a run actually ends, one column-keyed tone
+  per run, a face gradient, and quiet weathering. Solid concrete blocks that
+  are fully surrounded are painted as *roofs* (`_paint_roofs`: tar seams,
+  vents, hatches, skylights, snow in the lee), which is what a customs post
+  and a cold store should look like from above. Thick `W` bands (the waiting
+  coach, platform canopy) are coach panels with lit window strips, not fence.
+  Ground `g` dropped to (33..35) so solid terrain separates from walls.
+- **M2 props gone.** `_vehicle_prop` / `_draw_car` (civilian cars, the IPA
+  truck and its charred variant out of `artpack.vehicle`, i.e. M2's street
+  kit) are deleted, and `combat._tanker_drawable` no longer loads M2's
+  `tanker`/`tanker_wreck` sprites. New M6-native kit in `decor`:
+  `boom`, `guard_truck`, `plough`, `snow_fence`, `pallet`, `sleeper_stack`,
+  `water_tower`, `gantry`, `apc`, `fuel_tank`.
+- **Map redesign** (`maps.py`): the customs post is now a post - crossing
+  apron with boom gates, an enterable processing office (two doors), a
+  sealed cold store shell, an inspection lane, a paved bay yard with the fuel
+  farm, the approach road under the player's spawn. No man's land is an open
+  strip with a central causeway, the trench line south, a burnt APC and truck
+  on the field. The rail yard puts the boxcars on three ballast lanes with a
+  water tower, sleeper stacks and a plough; the waiting coach reads as a
+  train. Squad/wave/drum/patrol tiles moved with the layout
+  (`meta.SQUAD_KINDS`, `meta.ARENA_WAVES`, `meta.ARENA_DRUMS`,
+  `combat.TANKER_RECT`, `world._PATROLS`), plus the new
+  `tools/m6_layout_probe.py` gate and a `--guards` mode on
+  `tools/m6_topdown_shots.py`.
+- Gates: `SMOKE TEST` unchanged except the pre-existing
+  `m6_train_viewmodel` luma failure (train 3D, untouched here);
+  `m6_layout_probe` OK; `mission6_vertical_slice` OK; compileall clean.
+
+## 2026-10-23 - M6 top-down gets the PS2 pipeline (surfaces + frame)
+
+Feedback: "the graphics still look a bit shit. the floor, and the others
+don't look too good. yk how the 3D has a PS2 Pipeline? can you make the
+same? also M1, M2, etc. has better graphics."
+
+The 3D films already run a late-PS2 pipeline (`cutscenes.m6fx3d`): 64 px
+pixel textures out of `assets/tex3d` tinted to the authored colour
+(`cutscenes.ps2mat`), a 0.64 internal buffer, a Bayer-dither quantise to 15
+bits, and a crisp present. The top-down had none of it: every floor tile was
+a flat `pygame.draw.rect`, every wall a flat band, and the frame went out at
+full resolution with no air in it. Two halves were missing, so both landed:
+
+- **Surfaces.** `decor` now has a PS2 material kit: `assets/tex3d` textures
+  (concrete, ballast, crate, sleeper, steel, rust, metal_rib, boxcar, snow)
+  mirror-tiled into a seamless 192 px plate, cut into four hashed 64 px
+  variants, mapped onto the authored palette colour by **luma only** (so a
+  rust-spotted source never leaks its hue into a clean yard), then
+  ordered-dithered to the same 32 levels as the 3D (`_quantise`). Floors
+  (`. g L Y` per stage), walls (`C`/`W`), roofs, coach panels, boxcars,
+  containers, crates and truck tilts all sample it. Pavement also gets a
+  per-slab tone (±2 steps) and a couple of aggregate chips, so the mirror
+  tiles don't read as one printed sheet - that is the fix for M2's "single
+  uniform slab" that AGENTS.md describes as shipped.
+- **Frame.** New `missions/m6/ps2frame.py`: the scene is painted at full
+  size, nearest-resampled to 640x448, given a distance haze on its far band
+  (a console's air; a top-down had none), dithered to 15 bits through the
+  same grade curve family as `grade_cine` (lifted onto the palette's INK,
+  opened mids, slate/rust/warm split tone), then nearest-scaled to the
+  window. The **HUD is drawn after the present**, so text keeps 1 px edges
+  while the world gets the bands and the pixel chunk. `draw.game_draw` routes
+  every top-down stage through it; the 3D yard/train paths return before it
+  ever runs. `ACARISTAN_M6_PS2=0` disables it; it also disables itself
+  without numpy.
+- **Budget.** Measured on the reference box: frame stage 4.1 ms, whole
+  `game_draw` 10.8 ms (was 7.0 before any of this work, 14.0 in the first
+  cut). The pipeline watches its own cost and sheds distance haze first,
+  then the dither, if it cannot hold `BUDGET_MS` - the 0.64 buffer and the
+  pixelated present always stay.
+- Out-of-map ground is now the darkest material instead of a flat fill, and
+  the ambient was lifted ~15% (the 2D is all ground; the films' ambient was
+  tuned for sky-facing surfaces).
+- Gates: `mission6_vertical_slice` OK, `m6_layout_probe` OK, melee strip OK,
+  compileall clean; smoke unchanged apart from the pre-existing
+  `m6_train_viewmodel` luma failure (train 3D, untouched).
+
+## 2026-10-23 (later) - floors connected, blasts sized for M6
+
+Feedback: "the floor textures are disconnected and when a barrel blows up the
+radius is the M2 one and it sucks."
+
+**Floor.** Both complaints were true and both had the same shape: an M6 thing
+was being drawn with a per-tile (or M2-era) constant.
+
+- The floor picked a *different* one of the four material variants per tile
+  (`material_tile` hashes the tile), so every 64 px cell was its own stamp
+  and the joins showed. Ground, walls, roofs and coach panels are continuous
+  surfaces, so they now sample the material **in world space**
+  (`material_at`): one tile of the seamless plate at the tile's world
+  position, offset wrapped at the plate's repeat period. `material_tile`
+  stays only for free-standing props, where variety is the point.
+- `_seamless_plate` was blitting 64 px pieces at 64 px spacing into a 3x3
+  block and then cutting windows out of it at offsets that did not align to
+  the period, which reintroduced a faint 64 px grid. It now builds a 2x2
+  mirrored block (a real period) and stores it one tile wider so any offset
+  in `0..period-1` can be cut; `material_at` wraps at that period.
+  Measured on a stitched 20-tile strip: mean step 1.32, step at tile joins
+  0.94 - the joins are now *smoother* than the texture, i.e. invisible.
+- The per-slab tone overlay (a translucent plate per tile, +-2 steps) is
+  gone; it drew the grid back on. Large-scale variation is now one continuous
+  damp/wear layer over the whole yard, generated small, blurred twice and
+  scaled up (and seeded from the stage name - it had been seeded with
+  `hash()`, which is salted per process, so the ground differed run to run).
+- The plate is also flattened half-way to its mean before quantising: a
+  photo's own big shapes repeated 40 times across a yard became wallpaper.
+
+**Barrel blast.** `_explode` was spawning `entities.weapons.FireZone(x, y)`
+with no arguments - literally the M2 molotov: radius 48, life 420 frames,
+M2's 15/8 damage tick. And `_scorch_surface` stamped `artpack.fx("scorch")`,
+a 1458 px full-screen M2 decal, at 1x under a drum whose damaging radius is
+120 - so the burn was four screens wide. Now:
+
+- `FireZone` takes keyword `radius`, `life`, `damage` and `outline` (all
+  defaulted to the old values, so M2's molotov is byte-identical).
+- M6 passes `DRUM_FIRE = (96, 210, (26, 13))` and
+  `TANKER_FIRE = (150, 300, (30, 15))`, with `outline=False`: a fuel fire is
+  built out of nested low-alpha polygons instead of one hard fill, so there
+  is no black ring around the flames at the bigger radius.
+- The scorch is drawn procedurally at `radius * 2.4`, irregular and
+  feathered, with grit thrown clear; the tanker gets `TANKER_RING = 5`
+  cleared pools at `0.5 * radius` instead of M2's four molotov blobs on the
+  cardinal axes.
+
+Gates: compileall clean, `m6_layout_probe` OK, smoke unchanged (only the
+pre-existing `m6_train_viewmodel`), `game_draw` 11.2 ms.
+
+## 2026-10-24 - M6 3D scenes: frame governor (train scene + yard fight)
+
+The two playable M6 scenes lagged on real hardware. Profiling (`tools/m6_phases.py`,
+`tools/m6_prof.py`, instrumented moderngl calls) showed the frame is buffer-area
+bound, not triangle bound: colour readback 57 ms, draws 13 ms, viewmodel overlay
+pass 10 ms, grade LUT 3.1 ms, present 2.5 ms - all proportional to the 640x448
+internal buffer - and that `quality_3d` was never read by either scene, so the
+player had no lever at all.
+
+- New `src/missions/m6/perf.py`: tier from `quality_3d` (0.64/0.56/0.48), a
+  one-off measurement in each scene's warm-up (steps down while the draw is over
+  12 ms, stops early when the smaller buffer buys nothing - the software backend
+  is polygon-bound), and a live frame-interval watchdog (median of 60 frames,
+  22 ms threshold, max 2 steps, one-way) for machines that only fall over once
+  the fight is on screen. `ACA_FREEZE=1` bypasses both, so goldens/parity/smoke
+  render at the setting's tier.
+- `train3d`: `buffer_size()`/`_renderer()` apply the scale and rebuild the
+  renderer on change; `RES`/`RW`/`RH` stay the authored ceiling so the trailer
+  (which rebinds them) still pins the buffer; snow counts follow the tier.
+- `yard3d`: measures in `begin()` before the first visible frame.
+- `m6world3d.drop_renderer_caches()`: a replaced renderer can no longer inherit
+  a bake/pack memo keyed on a recycled `id()`.
+- `engine3d/gl.py _draw_dyn()`: one reusable staging array into `Buffer.write`
+  instead of `np.concatenate(...).tobytes()` per pass.
+- New dev tools: `tools/m6_bench.py`, `tools/m6_phases.py`, `tools/m6_prof.py`.
+- Numbers (software-GL sandbox, train/8 guards): 94.6 ms at 0.64 -> 66.4 at
+  0.48 -> 55.0 at 0.40; yard 64.3 -> 46.2. Authored tier is byte-identical to
+  the unpatched tree (m6_shots train x3 frames + a 60-frame yard A/B).
+- Gates: smoke OK, compileall clean, engine3d parity OK (worst 3.3 %), ae_ci
+  rows unchanged (pre-existing reds only), 3D bench 34.4 -> 29.2 ms.
+
+## 2026-10-24 (later) - M6 3D: the stutter pass (hitches, not averages)
+
+"The average is fine now, but it still stutters" - a spike reads as a hitch at
+any frame rate, so this pass hunted one-off frame costs. Found four:
+
+- **The governor's own tier switch was the biggest hitch in the scene**: it
+  rebuilt the renderer, which re-packed the whole set (~150-165 ms, up to 3x a
+  run, right when the machine was already struggling). `GLRenderer.resize()` /
+  `SoftwareRenderer.resize()` re-target the off-screen frame in place - the
+  projection is resolution independent, so the baked set, the rig templates and
+  the VBOs survive. Switch frame 165 -> 67 ms (a normal frame), and the resized
+  frame is pixel-equal to running that tier from the start (mean 0.003).
+- **M6 sounds were synthesised at first play** (numpy, no shipped takes): 16 ms
+  for the truck arriving, 8 ms for the departure, 7 ms for a whiz, ~38 ms total
+  - each on the beat it happens. `M6TrainAudio.warm()` now pre-synthesises all
+  20 during the scene's load (both scenes).
+- **New (rig, expression) templates** (~3 ms) built on the exact frame of an
+  emotional close-up: `_warm_up` now builds every face the scene switches to.
+- A tier change popped visibly: two-frame 35/70 % cross-fade over the new
+  frame (`_snapshot_for_blend` / `_resolution_blend`).
+
+Ladder/watchdog: added a 0.34 tier and a third watchdog step (a weak machine
+ends at 340x238 instead of staying at 0.40 and slow).
+
+Diagnostics added: `tools/m6_diag.py` (one command: machine, GL string, tier,
+buffer, frame median/p95/p99, over-33/50/100 counts, per-phase table),
+`build/m6_hitches.log` (automatic: any frame over 3x the machine's median, with
+the phases live in it), `ACA_M6_HUD=1` (on-screen ms/fps strip),
+`tools/m6_hitch.py` and `tools/m6_loop_probe.py` (whole-game-loop frame probe).
+
+Gates: SMOKE TEST OK; engine3d_check OK (worst 3.3 %); authored-tier pixels
+byte-identical (train x3 frames + 60-frame yard A/B); hitch probe now reports
+0 spikes > 1.6x median (max/median 1.4) where it previously logged three
+95-105 ms tier-switch frames.
+
+## 2026-10-24 (pass 3) - M6 3D: my adaptive fix was the new hitch; made static
+
+Owner: "the lag spikes are even worse."  Correct, and it was the pass-2 design:
+the warm-up measurement, the frame-interval watchdog and the spike log all rode
+the frame path, and a watchdog step re-targets the GL framebuffer mid-fight.
+
+- `perf.py` is now inert by default: `plan()` just returns the `quality_3d`
+  tier (0.64/0.56/0.48), `govern()` returns before it even reads a clock, and
+  the hitch log needs `ACA_M6_HITCHLOG=1`. The adaptive path survives only
+  behind `ACA_M6_AUTO=1`, with a 90-frame window, a 6 s cooldown and max 2
+  steps.
+- `_renderer()` only touches `light_cap`/`glitter` when they change; the
+  settings read is memoised.
+- At `quality_3d=2` the M6 scenes are pixel-identical to the unpatched build
+  (verified against a fresh copy of the original zip: three train stills,
+  maxdiff 0) and the spike probe reports 0 frames over 1.6x median.
+- Found and fixed an unrelated per-frame allocator: `_present_frame()` copied a
+  1000x700 frame and allocated a window-sized scale target *every frame* when
+  the window was fullscreen/maximised (~15 MB/frame at 1440p). Both surfaces
+  are cached; output verified pixel-identical at 1000x700/1280x800/1920x1080/
+  2560x1440; 6.55 -> 4.02 ms per frame at 1440p.
+- `tools/m6_diag.py` now writes `m6_report.txt` (tee of its whole output), so
+  the owner can send one file instead of a screenshot.
+
+Gates: SMOKE TEST OK; compileall clean; M6 pixels identical to baseline at the
+authored tier; present path identical at four window sizes.
+
+## 2026-10-24 — M6 retitled: "Black Notebook" → "Whiteout"
+
+M6 shipped with M1's title. That is not a taste call: `core/mission_meta.py`
+states the rule ("a later mission can never fall back to Mission 1's BLACK
+NOTEBOOK copy"), `tools/smoke_test.py` asserts *only M1 may say BLACK
+NOTEBOOK* — but the fail-screen loop covered M1-M5, so M6 was never sampled
+and `ui/mission_failed.py` kept serving `"BLACK NOTEBOOK"` on its own death
+screen. The save list also carried two near-identical rows
+("Mission 1 - Black Notebook" / "Mission 6 - Black Notebook").
+
+M6 is now **Whiteout** (the closed crossing in the snow; the storm that erases
+the border the mission happens on). "Black Notebook" stays M1's alone.
+
+- `missions/m6/meta.py`: `MISSION6_TITLE`, module docstring, intro title card
+  (`MISSION 6 / WHITEOUT`) and ending card (`WHITEOUT / THE LAST SIGNAL`).
+- `missions/m6/flow.py`: operation string `THE BORDER - WHITEOUT` (+ the
+  `__init__` facade docstring).
+- `core/mission_meta.py`, `core/save_system.py`, `ui/mission_failed.py`:
+  operation row, save label and fail-screen profile.
+- Docs: `LORE.md`, `MISSION6_PLOT.md`, `M6_HALOS_AND_ENDING_PLAN.md`,
+  `project-mindmap.md`, `CLAUDE.md`. Worklog/trailer/audit history untouched
+  (they record what shipped, not what is true now).
+- `tools/smoke_test.py`: `check_fail_screen_text_per_mission` now includes
+  `MISSION6`, so the rule is enforced across all six missions instead of five.
+
+Not renamed: M6's `fail_subtitle` ("THE LAST SIGNAL GOES DARK") — now that the
+title is Whiteout it no longer collides with the ending card, and it is the
+line the KRAPNET channel plate was written for.
+
+Gates: compileall clean; `check_fail_screen_text_per_mission` OK with M6 in the
+loop; runtime probe (title / operation / fail text / save label / both title
+cards) as above. `check_m6_train_viewmodel` still fails — pre-existing on the
+untouched zip in this environment (software renderer: viewmodel luma 45.8 vs
+night 40.5), unrelated to the rename.
+
+## 2026-10-24 — M6 insertion: the briefing cabin actually shows people
+
+The insertion's three cabin shots were reviewed frame by frame against
+`head_stats`, `project()` and a before/after contact sheet. Three real defects,
+all pre-existing:
+
+1. **ang1 framed nobody.** The `m6_insert_cabin#1` camera (Maru glances back)
+   sat at `(-0.95, 1.50, 0.50)` aiming at `(0.50, 1.72, 2.20)`: about 100 deg
+   away from Biribel, who is behind the lens. `head_stats` reported "no face on
+   screen" for the whole 3 s shot — the player watched an empty cabin wall.
+2. **ang2's face was a silhouette.** `f0.78` (facing the lens) but head luma
+   33-39 against a 35 mean frame: readable as a shape, not as a face. The
+   cabin had no door key, so the man sitting against the open door was lit by
+   ambient alone.
+3. **`m6_insert_ground` lost the actor.** Measured against `project(head)`:
+   at t~3000 he was at x = -207 px of a 640 px buffer (fully off the left
+   edge), and from ~t4300 he slid under the bottom of the picture. The camera
+   lerped eye and target independently, so the aim swept across his body
+   faster than the lens travelled.
+
+Fixes in `cutscenes/m6films.py`:
+- `cabin_cam`: ang1 is now an over-the-shoulder onto the pilot seat
+  (`0.10, 1.98, -0.74` -> Maru), ang0 opens to a 46 deg three-quarter on
+  Biribel, ang2 moves to `(-0.30, 1.84, 0.02)` for a real close-up.
+- Door key light added (`_CABIN_KEY_INT` 0.55, range 3.2) plus a floor bounce
+  (`_CABIN_FLOOR_INT` 0.26). Head luma went 33-39 -> 131-138 (p95 174-181),
+  i.e. inside the 55..170 / p95 < 235 target, for all three angles.
+- `ground_cam()` extracted: an orbit that budgets from the actor's head
+  instead of lerping two fixed points. 19 sampled frames, 0 out of frame
+  (was 2 hard outs and a slow drift). The АКАРИСТАН neon now lands in frame at
+  the end of the move, which is what the shot was written for.
+
+Gates: compileall clean; `tools/m6_shots.py --clash` reports every insertion
+scene **clean**; all cutscene/m6 smoke checks pass except the pre-existing
+`check_m6_train_viewmodel` (fails identically on the untouched archive in
+software-render mode).
+
+Known, not fixed: in `m6_insert_ground` Biribel's right arm renders as a flat
+warm brown plank running shoulder-to-hip (visible before and after this pass).
+It is rig pose + lighting, not set dressing: the pixels vanish when `actor()`
+is stubbed out, and every skin-toned face is warm-lit by the LZ lamp. Fixing
+it properly means re-posing the arm in `POSES["ready"]`/the walk rig, which
+the jump and train shots share — out of scope for a camera pass.
+
 ## 2026-10-25 - M6 top-down art pass: one art source (signed off)
 
 Brief: `docs/M6_TOPDOWN_ART_BRIEF.md`. Goal: customs, noman and rail should look like the

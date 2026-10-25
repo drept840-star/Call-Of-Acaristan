@@ -24,8 +24,8 @@ two channels: **Duty or Revenge.**
 
 ## Where We Pick Up (Recap from M6 Ending)
 
-1. **Volkov is dead.** The notebook proves Retardovici ordered Route 12 and
-   Vasile's codes carried it out.
+1. **Volkov is dead.** The leaf proves Vasile's code carried the Route 12
+   convoy; the M2 auth chain proves Retardovici signed the cover.
 2. **Vasile confessed** by radio and offered to get Biribel into the mansion
    in two nights.
 3. **Biribel didn't answer him.** Maru: *"Not tonight. Go to ground."*
@@ -61,7 +61,7 @@ In the raid he's braver than he is good, and Biribel saves him once.
 Radio only. Sends Biribel to the farm and, at the end, opens the MAG channel
 for the choice.
 
-### Captain Vasile
+### Commander Vasile
 Radio only, at the end. Calm, patient, still on the other channel.
 
 ### The Guard sweep

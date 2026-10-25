@@ -1,6 +1,6 @@
 """Mission 6 metadata, stage constants and authored cutscene timelines.
 
-Mission 6 ("Black Notebook") is the campaign hinge.  The playable ladder is
+Mission 6 ("Whiteout") is the campaign hinge.  The playable ladder is
 five stages - customs, no-man's-land, rail yard, boxcar, interactive train -
 and the spectacle promised by ``docs/MISSION6_PLOT.md`` lives in three
 engine3d films (insertion, boxcar, ending) plus the shoulder-cam train scene
@@ -13,7 +13,7 @@ lines.  Runtime map state lives in ``maps.py``; the films themselves live in
 """
 MISSION6_ID = "MISSION_6"
 MISSION6_KEY = "MISSION6"
-MISSION6_TITLE = "Black Notebook"
+MISSION6_TITLE = "Whiteout"
 MISSION6_LOCATION = "Kim Kim Border / Frozen Rail Yard"
 MISSION6_PRIMARY_STYLE = "Freezing border firefights into a quiet betrayal"
 
@@ -72,7 +72,7 @@ RAIL_DETECTOR_TILES = ((41, 8), (4, 6))   # signal tower + platform lamp
 # the fight is loud, whichever is first.  The exit opens only when every wave
 # has come and nobody is left standing.
 SQUAD_KINDS = {
-    STAGE_CUSTOMS: {(10, 13): "marksman", (21, 16): "raider"},
+    STAGE_CUSTOMS: {(10, 15): "marksman", (20, 14): "raider"},
     STAGE_NOMAN: {(17, 3): "marksman", (23, 3): "marksman", (17, 7): "raider"},
     STAGE_RAIL: {(38, 6): "marksman", (16, 7): "marksman", (35, 17): "raider"},
 }
@@ -117,9 +117,13 @@ ARENA_WAVES = {
     ),
 }
 
+# Customs opens calm: the squad patrols on its loop and does not alert until
+# a player shot, an explosion or this timer runs out (combat.py owns it).
+CUSTOMS_CALM_S = 24.0
+
 # Fuel drums: shoot one and everything near it burns.  Never on a wave tile.
 ARENA_DRUMS = {
-    STAGE_CUSTOMS: ((6, 13), (23, 2), (12, 8), (16, 13), (24, 11), (8, 17)),
+    STAGE_CUSTOMS: ((6, 13), (12, 8), (16, 13), (24, 11)),
     STAGE_NOMAN: ((19, 8), (21, 3), (12, 12), (28, 12), (6, 3)),
     STAGE_RAIL: ((14, 12), (19, 15), (33, 14), (27, 8), (9, 5), (35, 19)),
 }
@@ -160,7 +164,7 @@ STAGE_OBJECTIVES = {
 
 _STAGE_RADIO = {
     STAGE_CUSTOMS: ("MARU",
-                    "Customs is full of Guard. No quiet way through - go loud."),
+                    "Patrols walk a loop and nobody's looking yet. One shot and the post wakes."),
     STAGE_NOMAN: ("MARU",
                   "Every tower has a gunner on the lamp. Shoot the lights out."),
     STAGE_RAIL: ("VASILE",
@@ -197,8 +201,8 @@ mission6_intro_shots = [
     {"scene": "m6_insert_ground", "speaker": "", "text": "",
      "lighting": (8, 12, 18), "min_ms": 6000, "auto_advance": True,
      "quiet_ui": True,
-     "cues": [(300, "m6_heli_away", 0.5), (3300, "m6_snow_step", 0.3)]},
-    {"scene": "title_card", "speaker": "", "text": "MISSION 6\nBLACK NOTEBOOK",
+     "cues": [(300, "m6_heli_away", 0.5), (3100, "m6_snow_step", 0.3)]},
+    {"scene": "title_card", "speaker": "", "text": "MISSION 6\nWHITEOUT",
      "lighting": (4, 6, 10), "min_ms": 1900},
 ]
 
@@ -290,7 +294,7 @@ mission6_ending_shots = [
               (3900, "m6_heli_door", 0.35), (6800, "m6_heli_door", 0.6),
               (10800, "m6_heli_away", 0.5)]},
     {"scene": "title_card", "speaker": "",
-     "text": "BLACK NOTEBOOK\nTHE LAST SIGNAL",
+     "text": "WHITEOUT\nTHE LAST SIGNAL",
      "lighting": (4, 6, 10), "min_ms": 2200},
 ]
 

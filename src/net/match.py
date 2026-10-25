@@ -33,8 +33,11 @@ tuple, so a reader can never see a half-written world.
 """
 
 import threading
+import time
+from collections import deque
 
 from net import protocol as P
+from net import udp_transport as UDP
 from core.fixedstep import SnapshotBuffer
 
 # Simulation rate. Must match core.fixedstep.DEFAULT_HZ.
@@ -50,6 +53,8 @@ SNAPSHOT_EVERY = max(1, TICK_RATE // SNAPSHOT_HZ)      # 3 ticks at 60Hz
 # Inputs older than this many are pruned. Without a bound, a flooding or
 # reconnecting peer grows the input history without limit.
 INPUT_HISTORY_TICKS = 12
+# A held movement/fire state must not survive a dead or silent datagram path.
+INPUT_STALE_SECONDS = 0.25
 
 # Client-side event queue depth. Events are drained once per rendered frame,
 # so this bounds roughly a second of a very busy firefight; beyond that the
@@ -74,21 +79,50 @@ class Fanout(object):
         self._peers = peers
 
     def _send(self, obj):
-        # Encode once, send many: with 7 players this runs 7x less JSON work.
-        data = P.encode(obj)
+        # Control messages remain ordered and reliable on each peer's TCP link.
         sent = 0
         for peer in list(self._peers()):
-            sock = getattr(peer, "sock", None)
-            if sock is None:
+            wire = getattr(peer, "wire", None)
+            if wire is None:
                 continue
             try:
-                sock.sendall(data)
+                wire._send(obj)
                 sent += 1
             except OSError:
                 # A peer that died mid-send is handled on the next read;
                 # dropping it here would race with the roster update.
                 pass
         return sent > 0
+
+    def _send_snapshot(self, obj):
+        """Prefer disposable UDP snapshots; retain TCP for unreachable peers."""
+        sent = 0
+        fallback = 0
+        for peer in list(self._peers()):
+            sock = getattr(peer, "udp_sock", None)
+            address = getattr(peer, "udp_addr", None)
+            token = getattr(peer, "udp_token", "")
+            if (getattr(peer, "udp_ready", False) and sock is not None
+                    and address is not None and token):
+                packet = dict(obj)
+                packet["u"] = token
+                data = UDP.encode_datagram(packet)
+                try:
+                    if data is not None:
+                        sock.sendto(data, address)
+                        sent += 1
+                        continue
+                except OSError:
+                    # If the datagram route breaks, immediately put the
+                    # snapshot on the reliable channel while the peer probes
+                    # for a new route.
+                    peer.udp_ready = False
+                    peer.udp_addr = None
+            wire = getattr(peer, "wire", None)
+            if wire is not None:
+                wire._send(obj)
+                fallback += 1
+        return bool(sent or fallback)
 
 
 class MatchSession(object):
@@ -113,6 +147,8 @@ class MatchSession(object):
         # history so a packet arriving a tick late still lands sensibly
         # instead of being thrown away.
         self._inputs = {}
+        self._latest_input_seq = {}
+        self._input_received_at = {}
         self._input_locks = {}
         # Switching is an edge-triggered action, not a held input. TCP can
         # batch a switch and the next (neutral) frame in one read; taking
@@ -120,6 +156,7 @@ class MatchSession(object):
         # if a frame advances multiple sim ticks, reusing that input would
         # cycle more than once and end up on the original gun.
         self._pending_switches = {}
+        self._switch_seen = {}
         self._buf = SnapshotBuffer(tick_rate, 0.100)
         self._buf_lock = threading.Lock()
         # Authoritative events from the host, drained by the render loop.
@@ -252,37 +289,67 @@ class MatchSession(object):
             del self._events[:]
             return out
 
-    def _accept_input(self, msg, peer_id=0):
-        """Validate and store an inbound input packet.
+    @staticmethod
+    def _seq_after(seq, previous):
+        """Wrap-safe ordering for 32-bit input sequence numbers."""
+        delta = (int(seq) - int(previous)) & 0xFFFFFFFF
+        return 0 < delta < 0x80000000
 
-        Takes the RAW wire dict -- the one that still carries ``"t"`` -- so
-        there is exactly one place that decides what a valid input is.
-        Parsing earlier in the call chain used to strip ``"t"`` before it
-        got here, and the validation below then rejected every remote
-        player's packet as "not an input": remote players could not move or
-        shoot, while the host's own keyboard input (built with ``t``
-        present) worked fine.
+    def _queue_switch_locked(self, peer_id, seq, parsed):
+        """Record one weapon switch at most once per input sequence."""
+        if "w" not in parsed and not parsed.get("wcycle"):
+            return
+        seen = self._switch_seen.setdefault(peer_id, deque(maxlen=64))
+        if seq in seen:
+            return
+        seen.append(seq)
+        pending = self._pending_switches.setdefault(peer_id, [])
+        pending.append((parsed.get("w"), bool(parsed.get("wcycle"))))
+        if len(pending) > INPUT_HISTORY_TICKS:
+            del pending[:-INPUT_HISTORY_TICKS]
+
+    def _accept_input(self, msg, peer_id=0):
+        """Validate and store the newest input state from a peer.
+
+        Inputs are latest-state updates, not a queue of actions. UDP can
+        reorder them, so an older datagram must never replace a newer one.
+        One-shot switches are retained separately and deduplicated by their
+        sequence number, which lets a delayed action arrive after newer motion.
         """
         parsed = P.parse_input(msg)
         if parsed is None:
             return False
         lock = self._input_locks.setdefault(peer_id, threading.Lock())
         with lock:
-            hist = self._inputs.setdefault(peer_id, {})
             seq = parsed["q"]
-            # Queue the one-shot action BEFORE the next packet can replace
-            # the latest movement sample. Ignore duplicate sequence numbers
-            # (e.g. a retransmitted input); a tap must never switch twice.
-            if seq not in hist and ("w" in parsed or parsed.get("wcycle")):
-                pending = self._pending_switches.setdefault(peer_id, [])
-                pending.append((parsed.get("w"), bool(parsed.get("wcycle"))))
-                if len(pending) > INPUT_HISTORY:
-                    del pending[:-INPUT_HISTORY]
+            self._queue_switch_locked(peer_id, seq, parsed)
+            latest = self._latest_input_seq.get(peer_id)
+            if latest is not None and seq == latest:
+                # A replay of the same datagram must not keep a held key alive
+                # past the input freshness window.
+                return True
+            if latest is not None and not self._seq_after(seq, latest):
+                # The action (if any) above is still honored once, but stale
+                # movement/fire state cannot roll the player backwards.
+                return True
+            hist = self._inputs.setdefault(peer_id, {})
             hist[seq] = parsed
-            if len(hist) > INPUT_HISTORY:
-                cutoff = sorted(hist)[-INPUT_HISTORY]
-                for k in [k for k in hist if k < cutoff]:
-                    del hist[k]
+            self._latest_input_seq[peer_id] = seq
+            self._input_received_at[peer_id] = time.monotonic()
+            for old_seq in list(hist):
+                age = (seq - old_seq) & 0xFFFFFFFF
+                if age >= 0x80000000 or age > INPUT_HISTORY_TICKS:
+                    hist.pop(old_seq, None)
+        return True
+
+    def _accept_action(self, msg, peer_id=0):
+        """Accept a reliable one-shot action from the control connection."""
+        parsed = P.parse_action(msg)
+        if parsed is None:
+            return False
+        lock = self._input_locks.setdefault(peer_id, threading.Lock())
+        with lock:
+            self._queue_switch_locked(peer_id, parsed["q"], parsed)
         return True
 
     # ── per-tick driver ─────────────────────────────────────────────────
@@ -295,11 +362,23 @@ class MatchSession(object):
         return self.tick
 
     def broadcast(self, entities=None):
-        """Host only: send the current world to every client."""
+        """Host only: publish a numbered world snapshot to every client.
+
+        Fanout uses authenticated UDP where available so a lost packet never
+        stalls later snapshots. Clients without a working datagram route keep
+        receiving the same snapshot over reliable TCP.
+        """
         if not self.is_host:
             return False
         ents = entities if entities is not None else self.world
-        return self._send(P.make_snapshot(self.tick, ents))
+        msg = P.make_snapshot(self.tick, ents)
+        send_snapshot = getattr(self._client, "_send_snapshot", None)
+        if send_snapshot is not None:
+            try:
+                return bool(send_snapshot(msg))
+            except Exception:
+                return False
+        return self._send(msg)
 
     def sample_world(self):
         """The world to draw, or None.
@@ -314,28 +393,28 @@ class MatchSession(object):
             return self._buf.sample(self.tick)
 
     def consume_input(self, peer_id=0):
-        """Host only: the newest input from a peer, or None.
-
-        Returning None means "no input this tick", which the host must read
-        as standing still. Re-applying the previous input would make a
-        client keep walking after it let go.
-        """
+        """Return the newest fresh state; one-shot actions survive packet loss."""
         lock = self._input_locks.get(peer_id)
         if lock is None:
             return None
         with lock:
             hist = self._inputs.get(peer_id) or {}
-            if not hist:
+            newest = self._latest_input_seq.get(peer_id)
+            inp = dict(hist[newest]) if newest in hist else None
+            received_at = self._input_received_at.get(peer_id, 0.0)
+            if received_at and time.monotonic() - received_at > INPUT_STALE_SECONDS:
+                # A lost route must not leave a player walking or firing on a
+                # stale held key. The next valid packet immediately resumes.
+                inp = None
+            pending = self._pending_switches.get(peer_id)
+            if inp is None and not pending:
                 return None
-            newest = max(hist)
-            self._peer_ticks[peer_id] = newest
-            # Motion/fire still use the latest sampled state as before, but
-            # the switch is consumed from the FIFO exactly once. Copy the
-            # packet so the history itself stays unchanged for diagnostics.
-            inp = dict(hist[newest])
+            if inp is None:
+                inp = {"q": newest if newest is not None else 0,
+                       "mx": 0, "my": 0, "a": 0.0, "b": 0}
+            self._peer_ticks[peer_id] = inp.get("q", 0)
             inp.pop("w", None)
             inp.pop("wcycle", None)
-            pending = self._pending_switches.get(peer_id)
             if pending:
                 weapon, cycle = pending.pop(0)
                 if weapon is not None:
@@ -356,6 +435,9 @@ class MatchSession(object):
                 self._inputs.pop(peer_id, None)
                 self._pending_switches.pop(peer_id, None)
                 self._peer_ticks.pop(peer_id, None)
+                self._latest_input_seq.pop(peer_id, None)
+                self._input_received_at.pop(peer_id, None)
+                self._switch_seen.pop(peer_id, None)
             self._input_locks.pop(peer_id, None)
 
     def stop(self):

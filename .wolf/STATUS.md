@@ -4,70 +4,53 @@ budget_tokens: 1000
 ---
 # STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-10-22
+> Read this FIRST when resuming. Last updated: 2026-10-25
 
 ---
 
-## Done (M6 cutscene anatomy pass, 2026-10-22)
+## Done (2026-10-25 M6 top-down art pass, user signed off, NOT committed)
 
-- `m6world3d.reach` now uses `engine3d.ik.solve_arm` with an optional elbow
-  pole; `m6films._OUT` (elbow out) / `_CROSS` (across body) poles on the
-  boxcar, exit, door seat and Vasile handset. Vasile line 3 stays on the
-  phone, free hand planted on the desk (was a 0.73 m hand pop). Pilot left
-  out of the `m6_insert_jump` exterior (only a stray arm showed). Train
-  catch: shoulder grip waits for Volkov's chest to land; smoke window d>=1.40.
-- Probe: `python tools/m6_shots.py x all --clash` (body/body OBB depth).
-  Residue <= 0.048 m: notebook handoff forearm contact, hidden-side 0.02-0.04.
-- Gates: smoke OK, `test_m6_campaign` OK, goldens 339/0, compileall clean.
+Customs, noman and rail now use the same art source as M4/M5. Brief: `docs/M6_TOPDOWN_ART_BRIEF.md`; detail is in `docs/worklog.md`.
+- All floors come from the art pack (new `sn`/`st` snow tiles). Walls are painted as blocks by `_paint_wall`.
+- No tex3d is left in floors, walls or roofs.
+- Light: hard blooms, an M5-style torch, two-step searchlights with a rim, and `_COLD` floodlights.
+- Gates: compile, smoke, 56 M6 tests and 34 gameplay goldens are green. Perf is within A/B noise.
+- Shots: `shots/m6_td_after/contact_sheet.png`.
+- Open: noman still reads paler and emptier than M5; new snow tiles plus watch posts would fix it, and that is the user's call. `_mat_fill` prop interiors still use tex3d.
 
-## Done (M6 lights + ending + heli pass, branch m6/train-polish)
+## Done (2026-10-25 M6 intro rewrite, committed ce849fe)
 
-- **GL lights respect walls.** `m6fx3d` light callbacks carry `fn.light`;
-  `gl._render` packs physical depth into the colour alpha and `_composite`
-  anchor-gates each light (3x3 kernel). Evidence: `tools/m6_halo_sheet.py`.
-- **Halo redesign.** Hot core + ~10-level Bayer-dithered sodium->amber
-  falloff, distance-sized; `beacon()` hard blink for aviation lights; ground
-  spills are GL pools (`train3d._dynamic_pools`).
-- **Ending E1-E11** incl. three-beat `m6_helicopter` (H1 pickup, H2 cabin,
-  H3 turn-away), audio in `m6_audio.py`, pins in `meta.py`, tests, smoke.
-- **`--m6-heli` visual pass.** H1: heli stays in frame, cold key + amber
-  kicker on Biribel, wash lines/snow toned down. H3 rebuilt: camera east of
-  lift-off, terrain-ridge hills, `capital(dx, dz)` skyline (windows/neon now
-  face -z), curved west->north path, bigger nav strobes. H2 unchanged.
-  Capital is on the right, hills on the left (plan doc said reverse; flip
-  needs the camera west). `_turn_ridge` in `m6films.py` is now dead code.
-- **Gates:** smoke OK; `test_m6_campaign` 53/53; cutscene goldens 339/0;
-  compileall clean; `AE NORMALIZE` OK (dry run).
+Six new insertion shots (`meta.mission6_intro_shots`, `cutscenes/m6films.py`). The user has not reviewed them in-game yet. Older uncommitted work stays in the same files: the Whiteout rename, train audio `warm()`, the renderer cache, yard docs and the M6 fail-screen check. A clean HEAD fails `mission4_boot_and_walk` and the M3 `02_interrogation_room` goldens without the uncommitted M3/M4 story work.
+
+## Earlier (details in `docs/worklog.md`, `docs/M6_3D_PERF.md`, `docs/FIXES_STORIES.md`)
+
+- 2026-10-24 M6 3D frame-rate pass: median 32 -> 17 ms. Compare only interleaved A/B runs; this PC swings ~2x between runs.
+- 2026-10-23 M6 top-down combat pass: exits lock until the Guards are dead, and Guards reuse M5 sprites.
+- 2026-10-23 story consistency pass (M1-M6): cutscene and dialogue edits must go in both the `.timeline.json`/`.dlg.json` and the Python fallbacks. VO_198-204 are caption-only.
+
+### Known pre-existing reds
+
+- `ae_replay.py check`: m1-m5 diverge at t=1s.
+- `ae_ci --quick`: the boundaries/api/d6/bake checks stay red; `GLRenderer.stats` composite tests error.
+- Smoke flaked once on 2026-10-25 and passed 4 reruns; the cause was not captured.
 
 ---
 
 ## Next phase
 
-User sign-off on the new heli look and on the halo look.
+1. Commit the M6 top-down art pass when the user asks: only `src/missions/m6/decor.py`, `stealth.py`, the art-pack tile additions and the docs.
+2. Optional noman identity pass: new snow tiles and border watch posts.
+3. User review of the M6 intro shots and the re-baked M3 cutscene frames.
+4. Optional: record VO_198-204.
 
-1. `python acaristan.py --m6-heli` (or `python tools/m6_shots.py shots/_ending_final ending --probe`).
-2. Halo sheet: `python tools/m6_halo_sheet.py` -> `shots/_m6_halo/sheet.png`.
-3. After sign-off: delete `_turn_ridge`; update `m6-3d-art-direction` memory
-   to "hot core + dithered smooth falloff, no rings".
+## Architecture (unchanged)
 
-### Known advisories
-- E1 probe flags head luma (face averted until E2); H2 flags heli interior
-  AABBs (not visual). ds-worker may fail with "CCR service did not come up";
-  then run gates directly.
-
----
-
-## Architecture
-
-Python 3.13 + pygame-ce, in-house engine3d (GL 3.3 via moderngl, software
-fallback). Scenes: `missions/m6/train3d.py`; sets `cutscenes/m6world3d.py`;
-ending `cutscenes/m6films.py`; GL `engine3d/gl.py`. See AGENTS.md.
+Python 3.13 + pygame-ce; in-house engine3d (GL 3.3 with software fallback). Runtime cutscene/dialogue data overrides the Python fallbacks (`ACA_TL_SRC=legacy` / `ACA_DLG_SRC=legacy`).
 
 ```bash
 python tools/smoke_test.py
 python -m unittest tests.unit.test_m6_campaign -q
-python tools/ae_golden.py verify --kinds cutscene
-python tools/ae_normalize.py
+python tools/ae_golden.py verify --kinds gameplay
 ```
 
 References: `.wolf/cerebrum.md`, `.wolf/anatomy.md`, `.wolf/buglog.json`.

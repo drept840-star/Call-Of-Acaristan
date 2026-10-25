@@ -28,6 +28,8 @@ from . import stealth as _stealth
 from . import combat as _combat
 from .meta import STAGE_TRAIN
 
+_CALM_BLIND = -100000.0
+
 
 def _reload_frames():
     return {"os12": 90, "k9_smg": 72}.get(
@@ -128,6 +130,7 @@ def _update_enemies():
         return
     solid = _world.solid_walls()
     dt = float(getattr(STATE, "dt", 1.0 / 60.0))
+    calm = _combat.calm()
     for enemy in STATE.enemies[:]:
         # A Guard walking in from a gate owns his feet until he is planted:
         # no aiming, no fire, no pathing - just the step and the snow.
@@ -136,7 +139,15 @@ def _update_enemies():
                 _kill_enemy(enemy)
             continue
         if enemy.hp > 0:
-            enemy.update(p.rect.centerx, p.rect.centery, solid, STATE.bullets,
+            px, py = p.rect.centerx, p.rect.centery
+            if calm:
+                # Opening calm: he keeps his patrol and cannot be alerted.  His
+                # update gets a point far off the map, so he never sees Biribel.
+                enemy.alerted = False
+                enemy.combat_alert_timer = 0
+                enemy.state = "PATROL" if getattr(enemy, "patrol_points", None) else "IDLE"
+                px = py = _CALM_BLIND
+            enemy.update(px, py, solid, STATE.bullets,
                          STATE.particles, STATE.enemies,
                          getattr(STATE, "fire_zones", []))
         if enemy.hp <= 0:

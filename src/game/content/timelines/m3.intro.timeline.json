@@ -26,6 +26,17 @@
   },
   {
    "scene": "interrogation_room",
+   "speaker": "SYSTEM",
+   "text": "STATE SECURITY ARCHIVE\nINTERROGATION RECORDING",
+   "lighting": [
+    4,
+    3,
+    4
+   ],
+   "min_ms": 2200
+  },
+  {
+   "scene": "interrogation_room",
    "speaker": "BALACEANU",
    "text": "You told them I was a coward, Biribel.\nA fake.\nTonight I tell the nation what you are.",
    "lighting": [
@@ -38,7 +49,7 @@
   {
    "scene": "monitor_broadcast",
    "speaker": "SYSTEM",
-   "text": "STATE ADDRESS, LIVE TONIGHT, 22:00\nSUBJECT: ROUTE 12 PERPETRATOR",
+   "text": "STATE ADDRESS, LIVE TONIGHT, 22:00\nPM BALACEANU - NAMING SLOT",
    "lighting": [
     3,
     2,

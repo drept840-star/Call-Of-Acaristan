@@ -89,7 +89,7 @@ Current chain (`src/missions/m6/meta.py` `mission6_ending_shots`, renderers in
 | 2-5 | `m6_radio_vasile` x4 | Biribel at the desk with a handset; only the 4th line cuts to Vasile's office | The player never sees the call being placed, never sees the evidence (the Route 12 leaf), and only meets Vasile on his last line. |
 | 6 | `m6_radio_maru` 4.2 s | same desk, another angle | Nothing shows that this is a second voice cutting in on a different channel, or that Biribel chooses Maru over Vasile. |
 | 7 | `m6_helicopter` 5.2 s | locked wide from 66 m: a small helicopter yawing 100 deg | Biribel is not shown boarding or aboard; the airframe is tiny; the "away from the capital, toward the hills" choice is not framed; it just ends. |
-| 8 | `title_card` | BLACK NOTEBOOK / THE LAST SIGNAL | fine |
+| 8 | `title_card` | WHITEOUT / THE LAST SIGNAL | fine |
 
 Plot intent (`docs/MISSION6_PLOT.md` "The Call"): Biribel walks back to the
 customs post, learns who shot Volkov, confronts Vasile, gets Vasile's offer,

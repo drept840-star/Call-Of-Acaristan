@@ -513,6 +513,16 @@ class M6TrainAudio:
 
     _LOOPS = (("m6_train_idle", 0.26), ("m6_wind_bed", 0.30))
 
+    # Every one-shot the train scene or the yard fight can fire.  They are
+    # synthesised on first use (numpy), so a name that is not warmed before
+    # the fight pops the frame it first plays - the truck arriving (16 ms),
+    # the train departing (8 ms), a round whizzing past (7 ms).
+    WARM = ("gunshot", "bullet_impact", "bullet_impact_enemy", "empty_click",
+            "reload", "m6_rifle_crack", "m6_breath", "m6_tink", "m6_whiz",
+            "m6_headshot", "m6_body_thud", "m6_truck_arrive", "m6_tailgate",
+            "m6_door_creak", "m6_tinnitus", "m6_report_far", "m6_doors_close",
+            "m6_train_depart", "m6_train_idle", "m6_wind_bed")
+
     def __init__(self, manager):
         self.manager = manager
         manager.register_lazy_generators(GENERATORS)
@@ -520,6 +530,15 @@ class M6TrainAudio:
         self.one_shots = []
         self.paused = False
         self.closed = False
+
+    def warm(self):
+        """Synthesise every sound this scene can play (called from the
+        scene's load-time warm-up, never during the fight)."""
+        for name in self.WARM:
+            try:
+                self.manager.get_sound(name)
+            except Exception:
+                pass
 
     def start(self):
         if self.closed:

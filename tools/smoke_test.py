@@ -318,7 +318,7 @@ def check_remote_input_is_applied():
         # A connection is only a CANDIDATE until it sends the join handshake;
         # without it the host must not create a player (see the phantom-peer
         # regression check).
-        conn.sendall(_P.encode(_P.make_join_match()))
+        conn.sendall(_P.encode(_P.make_join_match(token=m.join_token)))
         for _ in range(8):          # let the host accept
             m.update(keys, idle, 1.0 / 60.0)
         assert len(m.peers) == 1, "remote player never joined"
@@ -455,7 +455,7 @@ def check_lobby_relay_is_not_a_player():
         # A genuine client on the same listener still gets in, so the guard
         # did not simply break joining.
         good = _socket.create_connection(("127.0.0.1", port), timeout=5)
-        good.sendall(_P.encode(_P.make_join_match()))
+        good.sendall(_P.encode(_P.make_join_match(token=m.join_token)))
         for _ in range(8):
             m.update(keys, idle, 1.0 / 60.0)
         assert len(m.peers) == 1, "a real match client was rejected"
@@ -475,6 +475,141 @@ def check_lobby_relay_is_not_a_player():
         m.close()
 
 
+def check_network_telemetry_and_heartbeat_codec():
+    """Heartbeat packets and client telemetry reject bad/stale observations."""
+    from net import protocol as P
+    from net.telemetry import NetworkTelemetry
+
+    assert P.parse_ping(P.make_ping(0xFFFFFFFF)) == 0xFFFFFFFF
+    assert P.parse_pong(P.make_pong(17)) == 17
+    assert P.parse_ping({"t": P.T_PING, "q": True}) is None
+    assert P.parse_pong({"t": P.T_PONG, "q": -1}) is None
+    assert P.parse_ping({"t": "chat", "q": 1}) is None
+    resume = "A1" * 16
+    join = P.make_join_match("yard", "returning", token="ROOM1234",
+                             resume=resume)
+    assert P.join_match_resume(join) == resume
+    assigned = P.make_assign(2, "yard", "ffa", resume)
+    assert P.assign_resume_token(assigned) == resume
+    assert P.assign_resumed(P.make_assign(2, "yard", "ffa", resume,
+                                          resumed=True))
+    assert not P.assign_resumed(P.make_assign(2, "yard", "ffa", resume))
+    assert P.parse_match_leave(P.make_match_leave())
+
+    now = [10.0]
+    telemetry = NetworkTelemetry(clock=lambda: now[0])
+    assert telemetry.ping_due()
+    first = telemetry.begin_ping()
+    assert not telemetry.ping_due()
+    now[0] += 0.080
+    assert telemetry.accept_pong(first)
+    assert telemetry.stats()["rtt_ms"] == 80.0
+    second = telemetry.begin_ping(now[0] + 2.0)
+    assert telemetry.accept_pong(second, now[0] + 2.11)
+    assert telemetry.stats(now[0] + 2.11)["jitter_ms"] > 0
+
+    assert telemetry.note_snapshot(3, now[0])
+    assert telemetry.note_snapshot(6, now[0] + 0.05)
+    assert telemetry.note_snapshot(15, now[0] + 0.10)
+    assert telemetry.snapshot_gaps == 2
+    assert not telemetry.note_snapshot(15, now[0] + 0.15)  # duplicate
+    assert telemetry.stats(now[0] + 0.1)["snapshots_received"] == 3
+
+
+def check_client_auto_reconnects_after_socket_drop():
+    """Rejoining restores the original seat, team, score and player state."""
+    import time as _time
+    from ui.match_screen import MatchScreen
+    from missions import arena as _AR
+
+    host = MatchScreen()
+    client = MatchScreen()
+    keys = pygame.key.get_pressed()
+    idle = (500, 350, False)
+    try:
+        host.open_panel()
+        host.players = 2
+        host.mode_name = _AR.MODE_TDM
+        host.player_name = "REJOIN-HOST"
+        host.request_host(0)
+        host.update(keys, idle, 1.0 / 60.0)
+        assert host.mode == "hosting", "rejoin test host failed to start"
+
+        client.open_panel()
+        client.player_name = "REJOIN-CLIENT"
+        client.request_join(host.share_code())
+        for _ in range(300):
+            host.update(keys, idle, 1.0 / 60.0)
+            client.update(keys, idle, 1.0 / 60.0)
+            if client.sess is not None and client.sess.local_id == 1 \
+                    and host.peers:
+                break
+            _time.sleep(0.002)
+        assert host.peers and client.mode == "playing", \
+            "client did not establish initial match connection"
+
+        # Make the saved match state distinguishable, then simulate a broken
+        # link. The client should recover its exact seat, team and score.
+        old_team = host.sim.rules.team_of(1)
+        old_xy = (host.sim.players[1]["x"], host.sim.players[1]["y"])
+        host.sim.players[1]["hp"] = 43
+        host.sim.players[1]["ammo"] = 5
+        host.sim.rules.kills[1] = 7
+        host.sim.rules.deaths[1] = 2
+        old_resume = client._resume_token
+        assert old_resume, "host did not issue a private resume token"
+        host._drop_peer(host.peers[0], reserve=True)
+        assert 1 not in host.sim.players and 1 in host.sim.suspended_players, \
+            "dropped player state was not held aside for rejoin"
+        assert host.sim.scoreboard()[0] == (1, 7, 2), \
+            "scoreboard forgot a temporarily disconnected player"
+        client.update(keys, idle, 1.0 / 60.0)
+        assert client.mode == "reconnecting", \
+            "unexpected disconnect did not show rejoin screen"
+        client.draw(pygame.Surface((1000, 700)))
+        deadline = _time.monotonic() + 6.0
+        while _time.monotonic() < deadline:
+            host.update(keys, idle, 1.0 / 60.0)
+            client.update(keys, idle, 1.0 / 60.0)
+            if host.peers and client.sess is not None \
+                    and client.sess.local_id == 1 \
+                    and not client._reconnect_active:
+                break
+            _time.sleep(0.005)
+        assert len(host.peers) == 1, "client did not reclaim a match seat"
+        assert client.mode == "playing" and not client._reconnect_active, \
+            "automatic rejoin did not finish"
+        assert host.sim.rules.kills[1] == 7 and host.sim.rules.deaths[1] == 2, \
+            "rejoined player's round score was reset"
+        assert host.sim.rules.team_of(1) == old_team, \
+            "rejoined player was moved to a different team"
+        restored_xy = (host.sim.players[1]["x"], host.sim.players[1]["y"])
+        assert restored_xy == old_xy, "rejoined player lost their position"
+        assert host.sim.players[1]["hp"] == 43 \
+            and host.sim.players[1]["ammo"] == 5, \
+            "rejoined player lost health or ammunition"
+        assert client._resume_token and client._resume_token != old_resume, \
+            "resume secret was not rotated after use"
+        assert "PLACE AND SCORE ARE RESTORED" in client._toast, \
+            "client was not told its place and score were restored"
+
+        # A deliberate leave is not a network failure: release the restored
+        # seat and discard its score immediately rather than reserving it.
+        client.leave_match()
+        for _ in range(30):
+            host.update(keys, idle, 1.0 / 60.0)
+            if not host.peers:
+                break
+            _time.sleep(0.002)
+        assert not host.peers and 1 not in host.sim.suspended_players, \
+            "intentional leave incorrectly kept a reconnect reservation"
+        assert 1 not in host.sim.rules.kills, \
+            "intentional leave kept the player's score"
+    finally:
+        client.close()
+        host.close()
+
+
 def check_client_join_completes():
     """Clients join a lobby; only the host can start the frozen countdown.
 
@@ -483,7 +618,6 @@ def check_client_join_completes():
     start, synchronized 3/2/1/GO, and then the first live simulation tick.
     """
     from ui.match_screen import MatchScreen
-    from net import roomcode as _RC
 
     host = MatchScreen()
     host.open_panel()
@@ -504,7 +638,7 @@ def check_client_join_completes():
     client = MatchScreen()
     client.open_panel()
     client.player_name = "JOINER"
-    client.request_join(_RC.encode("127.0.0.1", port))
+    client.request_join(host.share_code())
     try:
         for _ in range(180):
             host.update(keys, idle, 1.0 / 60.0)
@@ -556,8 +690,11 @@ def check_client_join_completes():
             if host.session_phase() == "playing" and \
                     client.session_phase() == "playing":
                 break
-            assert host.sim.tick == 0, \
-                "host simulation ticked before the countdown finished"
+            # The reliable phase notice can arrive a frame after the host
+            # starts gameplay because snapshots now travel over UDP.
+            if host.session_phase() != "playing":
+                assert host.sim.tick == 0, \
+                    "host simulation ticked before the countdown finished"
             assert tuple(host.sim.players[1][k] for k in ("x", "y")) == frozen_pos, \
                 "remote player moved during the lobby/countdown"
             assert host.sim.players[1]["ammo"] == frozen_ammo, \
@@ -593,7 +730,6 @@ def check_host_left_ends_session():
     """
     import time as _time
     from ui.match_screen import MatchScreen, HOST_SILENCE_TIMEOUT
-    from net import roomcode as _RC
     from net import protocol as _P
 
     assert _P.parse_host_left(_P.make_host_left("gone")) == "gone", \
@@ -618,7 +754,7 @@ def check_host_left_ends_session():
     def _rejoin():
         """Join (or re-join) the host and wait until the slot is assigned."""
         client.open_panel()
-        client.request_join(_RC.encode("127.0.0.1", port))
+        client.request_join(host.share_code())
         for _ in range(180):
             host.update(keys, idle, 1.0 / 60.0)
             client.update(keys, idle, 1.0 / 60.0)
@@ -730,7 +866,7 @@ def check_switch_survives_batched_inputs():
     try:
         conn = socket.create_connection(("127.0.0.1",
                                          host.srv.getsockname()[1]), timeout=3)
-        conn.sendall(P.encode(P.make_join_match()))
+        conn.sendall(P.encode(P.make_join_match(token=host.join_token)))
         for _ in range(8):
             host.update(keys, idle, 1.0 / 60.0)
         assert len(host.peers) == 1, "host did not accept the real client"
@@ -1431,6 +1567,151 @@ def check_client_interpolation_smooth():
         host.close()
 
 
+def check_lag_compensation_uses_recent_display_position():
+    """A recent displayed target position counts; excessive rewind is capped."""
+    from net.match import MatchSession
+    from net import protocol as P
+    from missions import arena as AR
+
+    class _Sink:
+        def _send(self, obj):
+            return True
+
+    def build_sim():
+        sim = AR.ArenaSim(MatchSession(_Sink(), is_host=True), AR.ARENA_YARD,
+                          score_limit=99)
+        sim.walls = []  # keep this test about moving targets, not map cover
+        sim.add_player(0, "Shooter")
+        sim.add_player(1, "Runner")
+        shooter, target = sim.players[0], sim.players[1]
+        shooter.update(x=100.0, y=100.0, angle=0.0, ammo=9, reload=0,
+                       cooldown=0, spread=0.0, sprinting=False)
+        target.update(x=200.0, y=100.0, hp=100, armour=0)
+        sim.tick = 100
+        sim._remember_positions(95)  # where the client saw the runner
+        target["y"] = 200.0          # current host position has moved away
+        sim._remember_positions(100)
+        return sim, shooter, target
+
+    sim, shooter, target = build_sim()
+    assert sim.session._accept_input(
+        P.make_input(1, 0, 0, 0, P.F_FIRING, render_tick=95), peer_id=1)
+    queued = sim.session.consume_input(1)
+    assert queued is not None and queued.get("rt") == 95, \
+        f"host input queue lost render time: {queued}"
+    sim._step_player(shooter, {"b": P.F_FIRING, "a": 0.0, "rt": 95})
+    assert target["hp"] < 100,         "a runner at the recently displayed location should be hittable"
+    assert sim.lag_compensated_shots == 1, "rewound shot was not recorded"
+
+    current_only, shooter2, target2 = build_sim()
+    current_only._step_player(shooter2, {"b": P.F_FIRING, "a": 0.0})
+    assert target2["hp"] == 100,         "without a render time the host must use the current position"
+
+    assert sim._bounded_rewind_tick(1) == 88,         "an excessively old client timestamp must clamp to 12 ticks"
+    assert sim._bounded_rewind_tick(101) == 100,         "a future timestamp must not move the rewind further back"
+
+
+def check_lag_compensation_real_network_path():
+    """A delayed real client shot must reach the host and damage a mover."""
+    import subprocess
+
+    tool = Path(__file__).resolve().parent / "mp_net_soak.py"
+    result = subprocess.run(
+        [sys.executable, str(tool), "--lag-shot-check", "--seconds", "0.25",
+         "--latency-ms", "35", "--jitter-ms", "0", "--loss-percent", "0"],
+        cwd=str(tool.parent.parent), capture_output=True, text=True, timeout=45)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "LAG SHOT CHECK: PASS" in output, \
+        "delayed network hit test failed (exit %d):\n%s" % (
+            result.returncode, output[-5000:])
+
+
+def check_udp_transport_codecs_and_limits():
+    """Authenticate small datagrams and reject malformed/oversized messages."""
+    from net import protocol as P
+    from net import udp_transport as UDP
+
+    token = "0123456789ABCDEF0123456789ABCDEF"
+    assign = P.make_assign(3, "yard", "ffa", "RESUME1234",
+                           udp_token=token)
+    assert P.assign_udp_token(P.decode(P.encode(assign))) == token
+    hello = P.make_udp_hello(token, 123456)
+    assert P.parse_udp_hello(P.decode(P.encode(hello))) == (token, 123456)
+    ack = P.make_udp_ack(token, 123456, 7654)
+    assert P.parse_udp_ack(P.decode(P.encode(ack)), token, 123456) == (
+        token, 123456, 7654)
+    assert P.parse_udp_ack(P.decode(P.encode(ack)), "WRONG", 123456) is None
+    assert P.parse_udp_ack(P.decode(P.encode(ack)), token, 1) is None
+    fallback = P.make_udp_fallback(token, 123456)
+    assert P.parse_udp_fallback(P.decode(P.encode(fallback))) == (
+        token, 123456)
+    assert P.parse_udp_fallback({"t": P.T_UDP_FALLBACK, "u": "*bad", "n": 1}) is None
+
+    action = P.make_action(8, cycle=True)
+    assert P.parse_action(P.decode(P.encode(action))) == {
+        "q": 8, "wcycle": 1}
+    assert P.parse_action({"t": P.T_ACTION, "q": -1, "c": 1}) is None
+
+    small = UDP.encode_datagram(P.make_snapshot(9, []))
+    assert small is not None and UDP.decode_datagram(small) is not None
+    assert UDP.decode_datagram(b"x" * (UDP.MAX_DATAGRAM_BYTES + 1)) is None
+    assert UDP.encode_datagram({"t": "oversize", "x": "a" * 2000}) is None
+    assert UDP.token_matches(token.lower(), token)
+    assert not UDP.token_matches("wrong", token)
+
+
+def check_udp_inputs_ignore_replays_and_stale_motion():
+    """Reordered inputs cannot reverse motion; dead links release held keys."""
+    from net import match as M
+    from net import protocol as P
+
+    class _Sink:
+        def _send(self, obj):
+            return True
+
+    session = M.MatchSession(_Sink(), is_host=True)
+    session._accept_input(P.make_input(10, 1, 0, 0), peer_id=4)
+    session._accept_input(P.make_input(9, -1, 0, 0), peer_id=4)
+    assert session.consume_input(4)["mx"] == 1,         "a reordered old datagram replaced newer movement"
+    session._accept_input(P.make_input(10, -1, 0, 0), peer_id=4)
+    assert session.consume_input(4)["mx"] == 1,         "a duplicate sequence replay changed the held input"
+    session._input_received_at[4] -= M.INPUT_STALE_SECONDS + 0.05
+    assert session.consume_input(4) is None,         "a silent/lost route kept applying held movement indefinitely"
+
+    session._accept_action(P.make_action(11, cycle=True), peer_id=4)
+    session._accept_action(P.make_action(11, cycle=True), peer_id=4)
+    action = session.consume_input(4)
+    assert action is not None and action.get("wcycle") == 1, \
+        "the reliable one-shot action was lost or replayed"
+    again = session.consume_input(4)
+    assert again is None or not again.get("wcycle"), \
+        "the same action was applied more than once"
+
+    wrap = M.MatchSession(_Sink(), is_host=True)
+    wrap._accept_input(P.make_input(0xFFFFFFFE, 1, 0, 0), peer_id=1)
+    wrap._accept_input(P.make_input(1, 0, 1, 0), peer_id=1)
+    wrap._accept_input(P.make_input(0xFFFFFFFF, -1, 0, 0), peer_id=1)
+    got = wrap.consume_input(1)
+    assert got["q"] == 1 and got["my"] == 1, \
+        f"32-bit input wrap/reordering failed: {got}"
+
+
+def check_udp_blocked_channel_falls_back_to_tcp():
+    """A peer with no UDP route must keep receiving live world updates."""
+    import subprocess
+
+    tool = Path(__file__).resolve().parent / "mp_net_soak.py"
+    result = subprocess.run(
+        [sys.executable, str(tool), "--players", "2", "--seconds", "2",
+         "--latency-ms", "25", "--jitter-ms", "0", "--loss-percent", "0",
+         "--block-udp", "--require-tcp-fallback"],
+        cwd=str(tool.parent.parent), capture_output=True, text=True, timeout=45)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "TCP FALLBACK CHECK: PASS" in output, \
+        "blocked UDP did not retain playable TCP updates (exit %d):\n%s" % (
+            result.returncode, output[-5000:])
+
+
 def check_arena_weapons_and_pickups():
     """Weapons must differ, pickups must work, and guns must be OWNED.
 
@@ -1979,7 +2260,7 @@ def check_match_identity_and_comms():
     client = MatchScreen()
     client.open_panel()
     client.player_name = "JOINER"
-    client.request_join("127.0.0.1:%d" % host.srv.getsockname()[1])
+    client.request_join(host.share_code())
     try:
         for _ in range(180):
             host.update(keys, idle, 1.0 / 60.0)
@@ -2043,6 +2324,7 @@ def check_match_identity_and_comms():
         host._chat_input = "copy"
         host.send_match_chat()
         for _ in range(12):
+            host.update(keys, idle, 1.0 / 60.0)
             client.update(keys, idle, 1.0 / 60.0)
         assert "copy" in [row[2] for row in client._chat_messages], \
             "the host's own chat line never reached the client"
@@ -2123,7 +2405,7 @@ def check_match_screen_roster():
             c = _socket.create_connection(("127.0.0.1", port), timeout=5)
             c.setblocking(False)
             # Announce as a match client, or the host keeps it unverified.
-            c.sendall(_P.encode(_P.make_join_match()))
+            c.sendall(_P.encode(_P.make_join_match(token=m.join_token)))
             conns.append(c)
             # One update per accept: the host accepts at most one per frame.
             for _ in range(6):
@@ -2140,6 +2422,7 @@ def check_match_screen_roster():
         # Every peer must be sent its own slot (assign) and then snapshots it
         # can actually decode. Snapshots go out every third sim tick, so allow
         # a real interval rather than assuming one frame is enough.
+        resume_tokens = {}
         for i, c in enumerate(conns):
             c.settimeout(3.0)
             buf = b""
@@ -2156,6 +2439,8 @@ def check_match_screen_roster():
                     aid = _P.parse_assign(msg)
                     if aid is not None:
                         got_assign = aid
+                        resume_tokens[aid] = _P.assign_resume_token(msg)
+                        assert resume_tokens[aid], "host omitted resume token"
                         # The host's map must be announced with the slot.
                         assert _P.assign_map(msg) == m.map_name, \
                             "assign did not carry the host's map"
@@ -2168,24 +2453,25 @@ def check_match_screen_roster():
             assert got_assign == i + 1, (
                 f"client {i} assigned {got_assign}, expected {i + 1}")
 
-        # A disconnect must free exactly that player's slot. Shut down from
-        # the client end, which is what a real departure looks like: the
-        # host sees EOF on recv. Closing the host's own socket object is a
-        # different (also handled) path, tested separately.
+        # A broken connection removes the avatar from the world but holds the
+        # seat and score briefly. A returning client with that seat's private
+        # token must reclaim the exact ID instead of taking a fresh slot.
         victim = conns.pop(1)
         victim.shutdown(socket.SHUT_RDWR)
         victim.close()
         for _ in range(6):
             m.update(pygame.key.get_pressed(), (0, 0, False), 1.0 / 60.0)
         assert 2 not in m.sim.players, "disconnected player still simulated"
+        assert 2 in m.sim.suspended_players, "disconnected state was not held"
         assert len(m.peers) == 2, "peer not removed: %d" % len(m.peers)
-        # And the freed slot must be reusable by the next joiner.
         c = _socket.create_connection(("127.0.0.1", port), timeout=5)
-        c.sendall(_P.encode(_P.make_join_match()))
+        c.sendall(_P.encode(_P.make_join_match(
+            token=m.join_token, resume=resume_tokens[2])))
         conns.append(c)
-        for _ in range(6):
+        for _ in range(12):
             m.update(pygame.key.get_pressed(), (0, 0, False), 1.0 / 60.0)
-        assert 2 in m.sim.players, "freed slot was not reused"
+        assert 2 in m.sim.players and 2 not in m.sim.suspended_players, \
+            "returning player did not reclaim their saved seat"
     finally:
         for c in conns:
             try:
@@ -2426,7 +2712,8 @@ def _capture_death_screen_text():
 def check_fail_screen_text_per_mission():
     """Polish pass T9: every mission's Mission Failed screen shows its own
     operation copy from core/mission_meta.py; only M1 may say BLACK NOTEBOOK,
-    and an unknown mode gets the neutral fallback."""
+    and an unknown mode gets the neutral fallback. M6 used to be excluded here
+    and shipped M1's copy on its own fail screen; it is covered now."""
     from core.state import STATE
     from core import mission_meta
     starts = [
@@ -2435,6 +2722,7 @@ def check_fail_screen_text_per_mission():
         ("MISSION3", gc.start_mission3),
         ("MISSION4", gc.start_mission4),
         ("MISSION5", gc.start_mission5),
+        ("MISSION6", gc.start_mission6),
     ]
     for key, start in starts:
         start()
@@ -3984,6 +4272,75 @@ def check_mp_relay_ui_integration():
     _mp.relay_stop()
 
 
+def check_udp_router_mapping_keeps_tcp_fallback():
+    """Try both router transports while never sacrificing the TCP join path."""
+    from net import portmap as PM
+
+    calls = []
+    old_upnp, old_natpmp = PM.try_upnp, PM.try_natpmp
+
+    def upnp(internal, external, lifetime, description, protocol="TCP"):
+        calls.append(("upnp", protocol))
+        return PM.ForwardResult(protocol == "TCP", method="upnp",
+                                external_ip="203.0.113.10",
+                                error="UDP not mapped" if protocol == "UDP" else "")
+
+    def natpmp(internal, lifetime=3600, protocol="TCP"):
+        calls.append(("natpmp", protocol))
+        return PM.ForwardResult(protocol == "UDP", method="natpmp",
+                                external_ip="203.0.113.10",
+                                error="no UDP map")
+
+    PM.try_upnp, PM.try_natpmp = upnp, natpmp
+    try:
+        result = PM.open_port(27017, 27017, include_udp=True)
+    finally:
+        PM.try_upnp, PM.try_natpmp = old_upnp, old_natpmp
+    assert result.ok and result.udp_ok is True, \
+        "router helper did not report successful TCP+UDP mappings"
+    assert calls == [("upnp", "TCP"), ("upnp", "UDP"),
+                     ("natpmp", "UDP")], calls
+
+    # A router can allow TCP but deny UDP. This remains a usable host invite,
+    # with an explicit signal to keep the reliable fallback available.
+    old_upnp, old_natpmp = PM.try_upnp, PM.try_natpmp
+    PM.try_upnp = lambda *a, **kw: PM.ForwardResult(
+        kw.get("protocol", "TCP") == "TCP", method="upnp",
+        external_ip="203.0.113.10", error="UDP denied")
+    PM.try_natpmp = lambda *a, **kw: PM.ForwardResult(
+        False, error="UDP denied")
+    try:
+        fallback = PM.open_port(27017, 27017, include_udp=True)
+    finally:
+        PM.try_upnp, PM.try_natpmp = old_upnp, old_natpmp
+    assert fallback.ok and fallback.udp_ok is False, \
+        "UDP failure must not disable the TCP-compatible host"
+
+    # NAT-PMP uses a distinct opcode for UDP; both request and reply carry
+    # the same port fields even though TCP/UDP share the numeric port.
+    import struct
+
+    class _PmpSocket:
+        def __init__(self):
+            self.packet = None
+
+        def sendto(self, data, address):
+            self.packet = data
+
+        def settimeout(self, timeout):
+            pass
+
+        def recvfrom(self, size):
+            return (struct.pack("!BBHIHHI", 0, 0x81, 0, 7,
+                                1111, 2222, 60), ("192.168.1.1", 5351))
+
+    fake = _PmpSocket()
+    response = PM._natpmp_request(fake, PM.OPCODE_UDP_MAP, 1111, 2222,
+                                  60, gateway="192.168.1.1")
+    assert fake.packet[1] == PM.OPCODE_UDP_MAP and len(fake.packet) == 16
+    assert response == (0, None, 2222), response
+
+
 def check_mp_host_and_portmap():
     """Self-hosting path: address validation, host state, port-map helpers.
 
@@ -4609,6 +4966,17 @@ def check_mp_host_and_portmap():
     assert P2.parse_input(P2.decode(P2.encode(
         P2.make_input(7, 1, -1, 450, P2.F_FIRING)))) == {
             "q": 7, "mx": 1, "my": -1, "a": 90.0, "b": P2.F_FIRING}
+    timed = P2.parse_input(P2.decode(P2.encode(
+        P2.make_input(8, 0, 0, 0, render_tick=1234))))
+    assert timed["rt"] == 1234, f"render tick did not round-trip: {timed}"
+    for bad_tick in (True, -1, 0x100000000, "123"):
+        raw = P2.make_input(9, 0, 0, 0, render_tick=bad_tick)
+        assert "rt" not in raw, f"builder included invalid render tick: {raw}"
+        parsed = P2.parse_input({"t": P2.T_INPUT, "q": 9, "mx": 0,
+                                 "my": 0, "a": 0, "b": 0,
+                                 "rt": bad_tick})
+        assert parsed is not None and "rt" not in parsed, \
+            f"invalid render tick disrupted or entered input: {parsed}"
     for v, want in ((400, 1), (-99, -1), (1e300, 1), (0.9, 1), (-0.9, -1)):
         r = P2.parse_input({"t": P2.T_INPUT, "q": 1, "mx": v, "my": 0,
                             "a": 0, "b": 0})
@@ -8277,8 +8645,9 @@ def _install_token_shim():
     _orig_host = _MS.MatchScreen._start_hosting
     _orig_join = _MS.MatchScreen.request_join
 
-    def make(map_name=None, name=None, appearance=None, token=None):
-        return _orig_make(map_name, name, appearance, token or _LAST_JOIN_TOKEN[0])
+    def make(map_name=None, name=None, appearance=None, token=None, resume=None):
+        return _orig_make(map_name, name, appearance,
+                          token or _LAST_JOIN_TOKEN[0], resume=resume)
 
     def start_hosting(self, *a, **k):
         r = _orig_host(self, *a, **k)
@@ -9468,12 +9837,16 @@ def main():
          check_multiplayer_opens_on_server_browser),
         ("host_is_taught_how_to_host", check_host_is_taught_how_to_host),
         ("remote_input_is_applied", check_remote_input_is_applied),
+        ("network_telemetry_and_heartbeat_codec",
+         check_network_telemetry_and_heartbeat_codec),
         ("lobby_relay_is_not_a_player", check_lobby_relay_is_not_a_player),
         ("join_token_and_scanner_hardening", check_join_token_and_scanner_hardening),
         ("join_token_and_scanner_hardening", check_join_token_and_scanner_hardening),
         ("local_shot_kicks_camera", check_local_shot_kicks_camera),
         ("match_screen_roster", check_match_screen_roster),
         ("client_join_completes", check_client_join_completes),
+        ("client_auto_reconnects_after_socket_drop",
+         check_client_auto_reconnects_after_socket_drop),
         ("host_left_ends_session", check_host_left_ends_session),
         ("weapon_switching_in_match", check_weapon_switching_in_match),
         ("switch_survives_batched_inputs", check_switch_survives_batched_inputs),
@@ -9483,6 +9856,16 @@ def main():
         ("match_intro_transition", check_match_intro_transition),
         ("join_loopback_fallback", check_join_loopback_fallback),
         ("client_interpolation_smooth", check_client_interpolation_smooth),
+        ("lag_compensation_recent_display_position",
+         check_lag_compensation_uses_recent_display_position),
+        ("udp_transport_codecs_and_limits",
+         check_udp_transport_codecs_and_limits),
+        ("udp_inputs_ignore_replays_and_stale_motion",
+         check_udp_inputs_ignore_replays_and_stale_motion),
+        ("lag_compensation_real_network_path",
+         check_lag_compensation_real_network_path),
+        ("udp_blocked_channel_falls_back_to_tcp",
+         check_udp_blocked_channel_falls_back_to_tcp),
         ("arena_weapons_and_pickups", check_arena_weapons_and_pickups),
         ("arena_teams_and_rounds", check_arena_teams_and_rounds),
         ("client_prediction_is_authoritative",
@@ -9644,6 +10027,8 @@ def main():
         ("mp_relay_roundtrip", check_mp_relay_roundtrip),
         ("mp_relay_ui_integration", check_mp_relay_ui_integration),
         ("mp_host_and_portmap", check_mp_host_and_portmap),
+        ("udp_router_mapping_and_tcp_fallback",
+         check_udp_router_mapping_keeps_tcp_fallback),
     ]:
         ok = run_check(name, fn) and ok
 

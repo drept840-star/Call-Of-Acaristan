@@ -1,4 +1,4 @@
-# Mission 6 — "Black Notebook"
+# Mission 6 — "Whiteout"
 
 > *"I just wanted to get out. Funny. You did too."*
 > — Sebastian Volkov
@@ -10,10 +10,10 @@
 Volkov ran for Regatul Kim Kim and got as far as the border before it slammed
 shut. Now he's trapped in the no-man's-land rail yard between two countries,
 with the Presidential Guard closing in and the last copy of the notebook Biribel
-stole from him in Mission 1. Biribel gets there first — just. The notebook
-proves two things: **Retardovici ordered Route 12, and Vasile's codes carried it
-out.** Then Ucilev's shot comes out of the dark, and a train leaves without its
-passenger. Biribel walks back with the truth and a choice.
+stole from him in Mission 1. Biribel gets there first — just. The loose leaf
+proves **Vasile's code carried the Route 12 convoy**; the M2 auth chain proves
+**Retardovici signed the cover**, and Vasile's confession names him. Then
+Ucilev's shot comes out of the dark, and a train leaves without its passenger. Biribel walks back with the truth and a choice.
 
 > **The notebook is the logbook, not a file.** Its bulk is the FuegoTech serial
 > registry (the oil-deal evidence the M1 evidence panel shows). Loose at the back
@@ -88,18 +88,18 @@ catches him, and the train leaves.
 ### Ucilev Nadgob Ierdna
 Takes the shot from the signal tower: one round, professional, no gloating.
 Afterward, Biribel finds his file in the customs post's Guard terminal and
-learns the name behind the mirror: **Bogdan Velicu** — same KRAP intake
+learns the name behind the mirror: **Andrei Bogdan Velicu** — same KRAP intake
 as Biribel, top of the class, listed *killed in action* at Y-2. The state's
 version of Maru's faked death.
 
-### Captain Vasile
+### Commander Vasile
 Radio only. When Biribel asks him straight, Vasile doesn't lie well enough:
 *"I chose the many. You'd have done the same."* Then he makes the offer that
 sets up Missions 7 and 8.
 
 ### Maru (MAG)
-Flies Biribel in and out (sets up the helicopter in M8). Reads the notebook in
-silence and says only: *"Now you know what we've been fighting."*
+Flies Biribel in and out (sets up the helicopter in M8). After the call, Maru
+says only: *"Not tonight. Go to ground."*
 
 ---
 
@@ -112,9 +112,10 @@ silence and says only: *"Now you know what we've been fighting."*
 | 3 | **No-Man's-Land** | Cross the floodlit strip. | Stealth: floodlight sweeps, a timed gap. Spotted = alarm, waves from both gates. |
 | 4 | **The Rail Yard** | Find Volkov before the Guard does. | Boxcar search while Guard teams close in. |
 | 5 | **The Boxcar** (3D dialogue) | — | Volkov and Biribel talk as equals for the first time. The notebook. |
-| 6 | **The Train** (3D, interactive) | Get Volkov to the train. | Short in-engine escort: suppress the Guard on the platform. Clear the lane and he reaches the train — where Ucilev's shot kills him. Leave the squad up and they cut him down in the open; the run fails and retries. |
-| 7 | **The File** (ending film) | — | Ucilev's real identity, shown in the terminal insert. |
-| 8 | **The Call** (ending film) | — | Vasile confesses; makes the offer. Biribel doesn't answer. Maru sends him to ground (→ M7, Bodi's farm). |
+| 6 | **The Train** (3D, interactive) | Get Volkov to the train. | Short in-engine escort: suppress the Guard on the platform. Clear the lane and he reaches the train, where Ucilev's shot kills him before the carriage step. Leave the squad up and they cut him down in the open; the run fails and retries. |
+| 7 | **The Yard** (3D, playable) | Find out who Ucilev is. | Third-person fight from Volkov's body to the Guard terminal in the signal box. Three waves (torch Guards, truck squad, box holders); the terminal opens the ending film. Death restarts this fight only. |
+| 8 | **The File** (ending film) | — | Ucilev's real identity — Andrei Bogdan Velicu, VELICU, B., KRAP 4 // Y-3, KIA - Y-2 — shown in the terminal insert. |
+| 9 | **The Call** (ending film) | — | Vasile confesses; makes the offer. Biribel doesn't answer. Maru sends him to ground (→ M7, Bodi's farm). |
 
 **Fail state:** death reloads the latest phase checkpoint. Biribel is not
 immortal in the train: Guard return fire has no 1-HP floor, and going down
@@ -124,9 +125,9 @@ terminal screen, which respawns at the train checkpoint. Volkov dies in every
 run: the player's job is not to save him but to get him to the train. Clear
 the lane and Ucilev's single shot kills him at the train (the canon catch and
 ending). Leave two or more Guards up and they cut him down in the open; the
-mission fails and retries the train checkpoint instead of progressing. The
-last playable beat is the train; the file and the call are told by the ending
-film, so the finale never repeats as a second top-down errand.
+mission fails and retries the train checkpoint instead of progressing. After
+the train, the yard fight is still playable; the file and the call are told by
+the ending film, so the finale never repeats as a second top-down errand.
 
 ---
 
@@ -140,6 +141,10 @@ BIRIBEL  "You knew. In the warehouse. You knew where it would go."
 VOLKOV   "I knew who you'd give it to. I didn't know how to tell you without you shooting me."
 VOLKOV   "I just wanted to get out. Funny. You did too."
 ```
+
+After the boxcar, Biribel notes the dry leaf: *"The leaf's dry. He kept a clean
+copy."* (VO_204, caption-only). This is the in-game explanation for the second
+copy; the boxcar shot list is pinned and does not change.
 
 ## Key Scene — The Train (3D)
 
@@ -194,12 +199,12 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
   `validate()`: customs post 30×20, no-man's-land 40×18 and rail yard 46×26.
   `bind_stage()` rebinds the live `MISSION6_MAP` /
   `M6_STRUCTURE_MAP`, so collision, minimap and draw never read a stale grid.
-- **Flow:** five playable stages — customs → noman → rail → boxcar → train —
-  then the ending film. Boxcar is a non-saving mid-cutscene inside the rail
-  checkpoint; the train hands straight to `STATE.request_mission6_ending`.
-  The terminal file and Vasile's call are ending-film beats, not top-down
-  stages. Death restarts at the deepest checkpoint reached (train → rail →
-  noman → customs).
+- **Flow:** six playable stages — customs → noman → rail → boxcar → train →
+  yard — then the ending film. Boxcar is a non-saving mid-cutscene inside the
+  rail checkpoint; the train hands to the yard fight, and the yard terminal
+  hands to `STATE.request_mission6_ending`. The terminal file and Vasile's call
+  are ending-film beats, not top-down stages. Death restarts at the deepest
+  checkpoint reached (yard → train → rail → noman → customs).
 - **3D films:** seventeen `engine3d` scenes, registered in
   `core.cutscene_registry` and rendered by `cutscenes/m6films.py` on the
   `cutscenes/m6world3d.py` sets: a six-shot insertion (`m6_insert_chase`, `m6_insert_cabin` x2, `_valley`, `_jump`, `_ground`),

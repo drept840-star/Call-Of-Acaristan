@@ -260,6 +260,9 @@ def _apply_postprocess():
         screen.blit(_bright_light, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
 
 
+_PRESENT_CACHE = {}
+
+
 def _present_frame():
     """Present the fixed 1000x700 game frame to the actual OS window.
 
@@ -281,12 +284,25 @@ def _present_frame():
     if display_surf is render_surf and (dw, dh) == (WIDTH, HEIGHT):
         return
 
-    # Build/copy a clean logical frame. If render_surf is already the logical
-    # surface, copy it only when we're about to overwrite the display surface.
+    # Build/copy a clean logical frame.  Both scratch surfaces are cached:
+    # this path runs on every frame in a fullscreen/maximised window, and the
+    # old version allocated a 1000x700 copy plus a window-sized scale target
+    # per frame - 15+ MB of malloc/free churn on a 1440p monitor, which is
+    # exactly the kind of thing that shows up as a periodic hitch, not as a
+    # lower average frame rate.
+    cache = _PRESENT_CACHE
     if (rw, rh) == (WIDTH, HEIGHT):
-        frame = render_surf.copy() if display_surf is render_surf else render_surf
+        if display_surf is render_surf:
+            frame = cache.get("frame")
+            if frame is None or frame.get_size() != (WIDTH, HEIGHT):
+                frame = cache["frame"] = pygame.Surface((WIDTH, HEIGHT)).convert()
+            frame.blit(render_surf, (0, 0))
+        else:
+            frame = render_surf
     else:
-        frame = pygame.Surface((WIDTH, HEIGHT)).convert()
+        frame = cache.get("frame")
+        if frame is None or frame.get_size() != (WIDTH, HEIGHT):
+            frame = cache["frame"] = pygame.Surface((WIDTH, HEIGHT)).convert()
         frame.fill((0, 0, 0))
         src_rect = pygame.Rect(0, 0, min(WIDTH, rw), min(HEIGHT, rh))
         frame.blit(render_surf, (0, 0), src_rect)
@@ -302,8 +318,14 @@ def _present_frame():
     ox = (dw - scaled_w) // 2
     oy = (dh - scaled_h) // 2
 
-    display_surf.fill((0, 0, 0))
-    scaled = pygame.transform.scale(frame, (scaled_w, scaled_h))
+    if cache.get("target") != (dw, dh):
+        # the letterbox bars only need painting when the window changes
+        display_surf.fill((0, 0, 0))
+        cache["target"] = (dw, dh)
+    scaled = cache.get("scaled")
+    if scaled is None or scaled.get_size() != (scaled_w, scaled_h):
+        scaled = cache["scaled"] = pygame.Surface((scaled_w, scaled_h)).convert()
+    pygame.transform.scale(frame, (scaled_w, scaled_h), scaled)
     display_surf.blit(scaled, (ox, oy))
 
 
@@ -1681,6 +1703,18 @@ def _apply_dev_args():
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         gc.start_mission6(preserve_timer=True)
         _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6"); pygame.mouse.set_visible(True)
+    elif ("--dev-mission6-game" in args or "--m6-game" in args
+          or "--dev-mission6-crossing" in args or "--m6-crossing" in args
+          or "--dev-mission6-rail" in args or "--m6-rail" in args):
+        # Top-down gameplay, skipping the intro film: customs, crossing or yard.
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        if "--dev-mission6-crossing" in args or "--m6-crossing" in args:
+            gc.start_mission6_noman_checkpoint(preserve_timer=True)
+        elif "--dev-mission6-rail" in args or "--m6-rail" in args:
+            gc.start_mission6_rail_checkpoint(preserve_timer=True)
+        else:
+            gc.start_mission6_customs_checkpoint(preserve_timer=True)
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-mission6-boxcar" in args or "--m6-boxcar" in args:
         # Rail yard, standing at Volkov's boxcar: E starts the 3D conversation.
         gc.start_mission6_rail_checkpoint(preserve_timer=True)
@@ -1698,7 +1732,7 @@ def _apply_dev_args():
               or "--dev-mission6-shootout" in args or "--m6-shootout" in args):
         gc.start_mission6_train_checkpoint(preserve_timer=True); gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-mission6-yard" in args or "--m6-yard" in args:
-        # Straight into the "Who fired?" fight (train scene skipped).
+        # Straight into the "Who is Ucilev?" fight (train scene skipped).
         gc.start_mission6_train_checkpoint(preserve_timer=True)
         try:
             from missions.m6 import train3d as _m6_train, flow as _m6_flow
@@ -2399,7 +2433,7 @@ class _MultiplayerState(GameState):
         # live match it deliberately does NOT consume: gameplay keys must
         # fall through to the match's own per-frame input, which reads the
         # key state rather than events.
-        if _match_screen.mode in ("panel", "hosting", "playing"):
+        if _match_screen.mode in ("panel", "hosting", "playing", "reconnecting"):
             _match_screen.handle_event(event, (mouse_x, mouse_y))
             if _match_screen.mode == "closed":
                 mp_state = "browser"
@@ -2527,7 +2561,7 @@ class _MultiplayerState(GameState):
         # A live match owns the frame. The server browser underneath must
         # not animate or process its own state while players are shooting,
         # or leaving a match would reveal a browser that has drifted.
-        if _match_screen.mode in ("hosting", "playing", "panel"):
+        if _match_screen.mode in ("hosting", "playing", "panel", "reconnecting"):
             _match_screen.update(
                 pygame.key.get_pressed(),
                 (pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1],
@@ -2556,7 +2590,7 @@ class _MultiplayerState(GameState):
     def render(self, surface):
         # The match screen paints the whole frame on its own -- it is not an
         # overlay on the browser -- so the browser is skipped entirely.
-        if _match_screen.mode in ("hosting", "playing", "panel"):
+        if _match_screen.mode in ("hosting", "playing", "panel", "reconnecting"):
             _match_screen.draw(surface)
             return
         menu.draw_menu_background()
@@ -3082,6 +3116,18 @@ def _apply_equipped_look():
 class _GameState_(GameState):
     name = "GAME"
 
+    @staticmethod
+    def _egg3d_live():
+        """True while the 3D '666' safe scare owns the screen: the world is frozen under it.
+
+        Kept on the class (not module level) because tools/m5_finale_cut_check.py
+        builds _GameState_ from its AST alone."""
+        try:
+            from ui import hud  # lazy: hud loads after this class
+            return hud.safe_666_3d_live()
+        except Exception:
+            return False
+
     def enter(self):
         _apply_equipped_look()
         if getattr(gc, "active_mission", "MISSION1") == "MISSION6" \
@@ -3100,6 +3146,8 @@ class _GameState_(GameState):
                 pass
 
     def handle_event(self, event, mouse_x, mouse_y, keys):
+        if self._egg3d_live():
+            return  # the 666 scare owns the screen: no input reaches the world
         # Mission 3 interrogation phase
         if getattr(gc, "active_mission", "MISSION1") == "MISSION3":
             _m3_stage = getattr(gc, "mission3_stage", "interrogation")
@@ -3262,6 +3310,8 @@ class _GameState_(GameState):
     def update(self, dt):
         global _frozen_cx, _frozen_cy, mission_complete_timer, mission_complete_fade
 
+        if self._egg3d_live():
+            return  # the world holds still under the 666 scare
         if gc.request_death_screen:
             gc.request_death_screen = False
             if not gc.mission_end_time:
@@ -3462,6 +3512,9 @@ class _GameState_(GameState):
             _set_ambience(set())
 
     def render(self, surface):
+        if self._egg3d_live():
+            gc.draw_safe_keypad()  # the 3D scare replaces the whole picture
+            return
         gc.game_draw(_frozen_cx, _frozen_cy)
         _g = _advance_grain()
         if _g is not None:
@@ -3948,7 +4001,13 @@ class _MissionCompleteState(GameState):
 
         # Continue prompt
         if mission_complete_timer > 120 and (_now_ms() // 600) % 2 == 0:
-            next_prompt = "PRESS SPACE TO START MISSION 2" if getattr(gc, "active_mission", "MISSION1") == "MISSION1" else "PRESS SPACE TO RETURN TO MENU"
+            _active = getattr(gc, "active_mission", "MISSION1")
+            if _active == "MISSION1":
+                next_prompt = "PRESS SPACE TO START MISSION 2"
+            elif _active == "MISSION6":
+                next_prompt = "PRESS SPACE TO RETURN TO MENU"
+            else:
+                next_prompt = "PRESS SPACE TO CONTINUE"
             prompt = font_btn.render(next_prompt, True, C_ORANGE)
             prompt.set_alpha(mission_complete_fade)
             surface.blit(prompt,
@@ -4237,10 +4296,12 @@ def _legacy_frame():
             _eng_clock.tick()
 
     # ── Ambience dispatch ──
-    gsm.current.set_ambience()
+    if not _GameState_._egg3d_live():
+        gsm.current.set_ambience()
 
     # ── World ambience layers (zone-driven loops + scheduled foley) ──
-    ambience.update_ambience()
+    if not _GameState_._egg3d_live():
+        ambience.update_ambience()
     # Stream menu music on menu-family states
     music_state = gsm.next_state if gsm.transitioning and gsm.fade_speed > 0 else current_name
     _set_menu_music(music_state in MENU_MUSIC_STATES)

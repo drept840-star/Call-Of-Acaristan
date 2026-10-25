@@ -102,8 +102,8 @@ AUTH NODE 3: [REDACTED] - MAG FORWARD OPERATIONS (forged)
 
 while the M6 reveal says **Retardovici ordered Route 12 and Vasile's codes
 carried it out**. Two different answers, and node 2 was also nonsense on its
-face: the Prime Minister is not a *KRAP liaison* — that is Vasile's job, and
-the "V." initial is Vasile's.
+face: the Prime Minister is not a *KRAP liaison* — that is Vasile's job. The
+"V." initial belongs to Balaceanu (Balaceanu, V.); Vasile is C. (Vasile, C.).
 
 **Fixed by rebuilding the chain as four nodes, in the order the order was
 given.** The President signs the cover; the Prime Minister countersigns the
@@ -285,3 +285,81 @@ The voice check (`voice_manifest_resolves`) passes with the three new
 caption-only lines: they resolve through the matcher and are listed in
 `KNOWN_MISSING_AUDIO`, and the Vasile speaker folder still matches
 83 of 83 recorded lines with one surplus retake, exactly as before.
+
+---
+
+## 2026-10-23 follow-up — the residual copies
+
+The 2026-10-20 pass fixed several contradictions in one copy of a text and
+missed the copy that actually renders. This follow-up closed the duplicates.
+No recorded take was edited; the four new lines are caption-only.
+
+* **M1** — the optional desk manifest now matches the HUD notebook: four
+  serials `FT-7742..FT-7745`, `IPA procurement #8841-8844`. The HUD location
+  reads `SLUM DIST. - WAREHOUSE ROW` (the recorded briefing says "the slum
+  district"). The notebook note signs `- IPA Logistics Command`, not the
+  premature `- Cmdr.`. The completion card quotes the line actually spoken in
+  the escape cutscene: *"Good. I've got it. Later. You need sleep."* (VO_198;
+  `app.py` already plays it at the same frame).
+* **M2** — the in-world terminal, the red-string board and the upload OS now
+  agree on the four-node chain: Retardovici (Decree 47) → Balaceanu
+  (countersigns the frame-up) → **Vasile, C.** (KRAP liaison, convoy movement
+  order) → forged MAG node. The terminal timestamp is `03:12`, 35 minutes before
+  the 03:47 blast. The completion board now prints `VASILE, C. - CONVOY ORDER`
+  under the Balaceanu node; the upload summary says "forged MAG node" rather
+  than the ambiguous "MAG framing," and the picker labels the file a Route 12
+  auth trace.
+* **M3** — Balaceanu hosts the 22:00 address; the news slate and the monitor
+  caption announce a **presidential naming slot**, which is what his recorded
+  "the President names you" line means. The cold open is framed as a State
+  Security Archive interrogation recording, so "This tape is one-way" is
+  coherent with the drawn room. The cell folder is relabelled `VOSTRAL
+  DOSSIER / COPY`; the unforged record stays in the cold vault. Vasile's
+  recorded "two ways" offer is closed by a new caption-only line: *"Quiet
+  channel's dead. It's the camera or nothing."* (VO_201) — the live camera is
+  the only path, and Branch B remains unbuilt.
+* **M4** — the chosen follow-up is Maru's reply, credited to **MARU** (VO_076/
+  VO_077), not Biribel. A new trust exchange makes Biribel's continued trust
+  explicit: *"Vasile's name was on the chain. There's an explanation."* /
+  *"There always is."* (VO_202/VO_203). The cache objective now says the
+  regroup is at the station; the arrest ladder says "They're taking the
+  General" before the cutscene cuffs him; the completion card quotes Biribel's
+  dawn line (VO_082). The choice now echoes on the M5 card.
+* **M5** — "last week" is gone from both the flow table and the dialogue JSON
+  (it is "two days ago" everywhere). The stale "Presidential Guard will finish
+  the work the Vostral began" card quote is replaced by Maru's reply to the M4
+  choice: tone 0 → *"Then hold the line. Order is all that's between this city
+  and the pit."*; otherwise → *"Good answer. Tools get pointed at the people
+  too - remember that."* The active finale remains the single `FINAL_SHOT`
+  scene; the old river-gate/scope/reveal chain and its "LISTED DEAD" card are
+  not shipped. The KIA - Y-2 file is the M6 reveal.
+* **M6** — the train outcome reads "Volkov reached the train" (he is hit before
+  the carriage step). The playable run continues into the yard fight, now
+  framed as *"Who is Ucilev?"* rather than the already-answered "Who fired?".
+  After the boxcar, Biribel notes the dry leaf: *"The leaf's dry. He kept a
+  clean copy."* (VO_204). The notebook-proof wording is split: the leaf proves
+  Vasile's code carried the convoy; the M2 auth chain proves Retardovici signed
+  the cover.
+* **Voice** — VO_201-204 are registered in `VOICE_LINES` and
+  `KNOWN_MISSING_AUDIO`, and deliberately kept out of `VOICE_ORDER`.
+* **Docs** — `LORE.md`, this file, `MISSION3..8_PLOT.md`, `DOCUMENTARY.md`,
+  `MISSION3_KILL_ORDER.md` and `MISSION5_BUILD_PLAN.md` were re-synced to the
+  shipped build: the Y-6/Y-4 arithmetic, the read/pocket wording, the
+  notebook-proof split, Maru's refusal (Balaceanu forged his own record),
+  Ucilev's full name, the retired M5 ending, and the M6 yard stage.
+
+### Verification
+
+```
+python tools/smoke_test.py              ->  SMOKE TEST: OK
+python -m compileall -q src             ->  clean
+python tools/ae_timeline_check.py       ->  AE TIMELINE: OK
+python tools/ae_dialogue_check.py       ->  AE DIALOGUE: OK
+python tools/ae_text_check.py           ->  AE TEXT: OK
+python tools/ae_golden.py verify --kinds cutscene  ->  AE GOLDEN: OK (345 shots)
+python -m unittest tests.unit.test_m6_campaign -q   ->  OK (55 tests)
+```
+
+The replay gate remains red at t=1s on m1-m5, the same pre-existing
+first-divergence failure recorded in the project memory; it is not caused by
+this pass.

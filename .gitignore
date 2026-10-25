@@ -42,6 +42,7 @@ _tmp_step.txt
 .kilo/
 .workbuddy-ai/
 .freebuff/
+.qoder/
 .vscode/ipch/
 
 # Generated debug screenshots (dedupe: keep cbimg/ only)

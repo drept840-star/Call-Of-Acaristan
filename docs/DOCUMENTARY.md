@@ -6,7 +6,9 @@
 > campaign (three missions, single-file mission modules). The game now ships
 > six missions (`src/missions/m1`…`m6`); M7/M8 are planned. The story canon was
 > re-synced with the code in `docs/FIXES_STORIES.md` — the six-year Vostral
-> timeline below is the current one.
+> timeline below is the current one. Module paths and file sizes below are the
+> pre-restructure names; current code lives under `src/` (for example
+> `src/missions/m2`, `src/missions/m3`, `src/core/fsm.py`, `src/ui/hud.py`).
 
 ---
 
@@ -33,8 +35,8 @@ The factions (defined by faction colors in `config.py`):
 | Faction | Meaning | Role |
 |---|---|---|
 | **KRAP** | The protagonist's military/intelligence force | Biribel's side; "off-book" resistance |
-| **IPA** | Interior Protection Agency | The regime's domestic enforcers; the visible enemy |
-| **MAG** | Militia | Scapegoats; bomb IPA checkpoints out of personal grievance |
+| **IPA** | Independent Party Acaristan | The ruling party and its state enforcers; the visible enemy |
+| **MAG** | Maru's Anarchy Group | Scapegoats; bomb IPA checkpoints out of personal grievance |
 | **CIV** | Civilians | Collateral, flavor, occasional payoff |
 
 The political engine is a decree-laced timeline: **Y-6** (Balaceanu becomes PM, and the Vostral is born in the ranks), **Y-12** (the National Stability Decree — the legal cover for domestic black sites), and **Y-1** — *The Vostral reaches the press*.
@@ -49,7 +51,7 @@ The political engine is a decree-laced timeline: **Y-6** (Balaceanu becomes PM, 
 
 The Volkov handoff in Mission 1? That was the latest such assignment. The whole trilogy is Balaceanu trying to kill a man he legally cannot touch.
 
-**Sebastian Volkov** is the wildcard — an IPA affiliate who is "tracking" Biribel, escapes every mission, throws Biribel a radio mid-breakout, and may or may not be on anyone's side. **Captain Vasile** is the KRAP handler, the voice on the radio who keeps coming back "under fire." **Maru** (revealed in M3) is a former IPA archivist who faked their own death rather than forge seizure documents — and who *actually forged Balaceanu's record*. The trilogy's buried root.
+**Sebastian Volkov** is the wildcard — an IPA logistics coordinator who is "tracking" Biribel, throws him a radio mid-breakout, and dies at the Kim Kim border in M6; his motives stay ambiguous until the boxcar. **Captain Vasile** is the KRAP handler, the voice on the radio who keeps coming back "under fire." **Maru** (revealed in M3) is a former IPA archivist who faked their own death rather than forge seizure documents; the Vostral itself is Balaceanu's forgery. The trilogy's buried root.
 
 ---
 

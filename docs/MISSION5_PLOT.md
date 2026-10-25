@@ -9,11 +9,11 @@
 
 Four days after the Vostral, the man the nation cheered shows what he bought with
 it. President Retardovici declares emergency rule, dissolves parliament, and
-folds what's left of KRAP into a new **Presidential Guard** — with **Captain
-Vasile** as its commander. Vasile's first order to Biribel: bring in Maru.
-Biribel goes to the MAG safehouse to do it, and instead gets Maru out — straight
-through the Guard's raid, led by a calm, unhurried operator the state says died
-two years ago: **Ucilev Nadgob Ierdna.**
+folds what's left of KRAP into a new **Presidential Guard** — with **Vasile**,
+newly promoted **Commander**, as its head. Vasile's first order to Biribel:
+bring in Maru. Biribel goes to the MAG safehouse to do it, and instead gets Maru
+out — straight through the Guard's raid, led by a calm, unhurried operator named
+**Ucilev Nadgob Ierdna**. The state's KIA file on him is the M6 reveal.
 
 > **Day:** four days after the Vostral — **Day ~8** (M3 is Day 4, M4 is Day 6).
 > The older "a week after the Vostral" wording put M5 after M6 on the calendar;
@@ -24,13 +24,16 @@ two years ago: **Ucilev Nadgob Ierdna.**
 ## Where We Pick Up (Recap from M4 Ending)
 
 1. **Balaceanu is in a cell**, arrested live on his own airwaves.
-2. **The nation cheered the wrong man** — Retardovici, the puppet who ate his
-   handler.
+2. **The nation cheered the wrong man** — Retardovici, the man who ate his
+   handler. The M4 read on the night is "puppet"; M5 shows the puppeteer.
 3. **Biribel stayed.** The border was open. He didn't take it.
 
 **M5 cold open: Day ~8.** A state TV bulletin: *"Former Prime Minister Balaceanu
 was found dead in his cell this morning. Preliminary findings: suicide."* Cut to
 Biribel watching it in the old-town safehouse. Nobody in the room believes it.
+Maru's line is the fixed "two days ago" (the old "last week" is gone from both
+the flow table and the dialogue JSON). The completion card quotes Maru's reply
+to the M4 choice, not the retired Retardovici line.
 
 ---
 
@@ -70,7 +73,7 @@ Ends M5 having disobeyed a direct order for the first time — not from Vasile
 as a rebel commander, but from Vasile as the state. He doesn't know yet that
 it's the same man it always was.
 
-### Captain Vasile
+### Commander Vasile
 Promoted to **Commander of the Presidential Guard**. Warm as ever with
 Biribel; tired, joking, protective. He orders Maru's arrest "for Maru's own
 safety — they'll be shot otherwise." When Biribel lets Maru go, Vasile covers
@@ -115,7 +118,7 @@ On every screen, never in the room. Speeches about unity, stability and
 ```
 scene: m5_tv_bulletin      speaker: ANCHOR     "Former Prime Minister Balaceanu was found dead in his cell this morning. Preliminary findings: suicide."
 scene: m5_safehouse_tv     speaker: BIRIBEL    "Suicide. He didn't have the spine for it."
-scene: m5_retardovici_tv   speaker: PRESIDENT  "Parliament is suspended until order is restored. The Presidential Guard will finish the work the Vostral began."
+scene: m5_retardovici_tv   speaker: PRESIDENT  "Parliament is suspended. KRAP is dissolved into my Presidential Guard - every one of you now answers to me."
 scene: title_card          speaker: ""         "MISSION 5\nMARTIAL LAW"
 ```
 
@@ -129,34 +132,42 @@ BIRIBEL  "And if I say no?"
 VASILE   "Then somebody else goes. Somebody who doesn't care whether they breathe."
 ```
 
-## Ending Cutscene Shot-List (3D)
+## Ending Cutscene Shot-List (Shipped, 3D)
+
+The active finale is one 42-second scene, `m5_shadow_finale` (`FINAL_SHOT` in
+`src/missions/m5/finale_script.py`), with six timed lines:
 
 ```
-scene: m5_river_gate        speaker: ""         (Maru through the gate. Biribel turns - a red dot on his chest.)
-scene: m5_ucilev_scope      speaker: UCILEV     "Biribel. Y-3. Same intake. Same training."
-scene: m5_ucilev_reveal     speaker: UCILEV     "Not tonight. They haven't told me to yet."
-scene: m5_ucilev_leaves     speaker: ""         (He lowers the rifle and walks away into the rain.)
-scene: m5_radio             speaker: VASILE     "Biribel, report. ...Never mind. I didn't hear anything. Neither did you."
-scene: title_card           speaker: ""         "MARTIAL LAW"
+UCILEV   "Biribel. Y-3. Same intake. Same training."
+BIRIBEL  "Then you know why I let Maru go."
+UCILEV   "I know. You stopped following orders. I didn't."
+BIRIBEL  "So why am I still standing?"
+UCILEV   "Not tonight. They haven't told me to yet."
+VASILE   "Biribel, report. ...Never mind. I didn't hear anything. Neither did you."
 ```
 
-> The Ucilev line above is the **shipped** text (`src/missions/m5/finale_script.py`,
-> VO_192-197). The earlier draft — *"You don't remember me. Nobody does - that's the
-> job."* — was never recorded and is gone; the shipped line is the canon.
-> Ucilev is the **other** man from the Y-3 / KRAP 4 intake, not the OLD SQUADMATE
-> Biribel meets in the Guard HQ ("Same squad, new colours… Y-3 intake").
+> These six lines are the **shipped** text (VO_192-197). The earlier
+> river-gate / scope / reveal / leaves chain is **inactive**; its
+> "UCILEV NADGOB IERDNA // LISTED DEAD" card is not shipped. The state's KIA -
+> Y-2 file is the M6 reveal. Ucilev is the **other** man from the Y-3 / KRAP 4
+> intake, not the OLD SQUADMATE Biribel meets in the Guard HQ ("Same squad, new
+> colours… Y-3 intake").
 
 ---
 
 ## What This Resolves
 
 - Retardovici's true nature: not a puppet who broke free — the puppeteer.
-- Balaceanu's end: silenced by the man who used him.
+- Balaceanu's end: the state calls it suicide; the man who used him is the only
+  one who benefits. M5 shows the claim and the power grab; the M2 chain and M6
+  confession carry the order.
 - Biribel's position: officially loyal, secretly protecting MAG.
 
 ## What It Leaves Open (For M6)
 
-- Who is Ucilev, and why does the state list him as dead?
+- Who is Ucilev, and why does the state list him as dead? The M6 terminal file
+  answers it: VELICU, B., KRAP 4 // Y-3, KIA - Y-2, callsign anagram ANDREI
+  BOGDAN VELICU.
 - Why is Vasile never surprised?
 - Volkov is still out there — and still has a copy of the notebook.
 

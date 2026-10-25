@@ -91,7 +91,7 @@ def _initialize_m6(preserve_timer=False):
     STATE.active_mission = MISSION6_KEY
     STATE.active_mission_id = MISSION6_ID
     STATE.active_mission_title = MISSION6_TITLE
-    STATE.active_mission_operation = "THE BORDER - BLACK NOTEBOOK"
+    STATE.active_mission_operation = "THE BORDER - WHITEOUT"
     STATE.active_mission_outcome = (
         "Volkov trapped  \u00b7  Last notebook recovered  \u00b7  Vasile named")
     STATE.active_mission_quote_attr = "Volkov, at the boxcar:"
@@ -151,7 +151,7 @@ def _initialize_m6(preserve_timer=False):
 # ─────────────────────────────────────────────
 def _enter_customs():
     _bind(STAGE_CUSTOMS, STAGE_OBJECTIVES[STAGE_CUSTOMS],
-          ("MARU", "Customs is full of Guard. No quiet way through - go loud."),
+          ("MARU", "Patrols walk a loop and nobody's looking yet. One shot and the post wakes."),
           "stage_customs")
     STATE.m6_customs_checkpoint = True
 
