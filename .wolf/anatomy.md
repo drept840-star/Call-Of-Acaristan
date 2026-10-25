@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-25T22:54:39.919Z
-> Files: 446 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-25T23:23:08.937Z
+> Files: 449 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -35,7 +35,7 @@
 
 ## src/
 
-- `app.py` — _input_recorder: handle_settings_event (~56258 tok)
+- `app.py` — Declares _input_recorder (~56565 tok)
 
 ## src/art/
 
@@ -615,6 +615,7 @@
 
 ## tools/
 
+- `build_ost.py` — Render the Call of Acaristan OST (tools/ost/album.py). (~643 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
 - `dev_panel.py` — Declares to (~7861 tok)
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
@@ -623,3 +624,8 @@
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
 - `smoke_test.py` — Must be set before pygame/config import. (~126097 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~5676 tok)
+
+## tools/ost/
+
+- `album.py` — Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film. (~7624 tok)
+- `synth.py` — Small numpy synth for the Call of Acaristan OST. (~5953 tok)

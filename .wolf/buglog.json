@@ -1767,6 +1767,60 @@
       "last_seen": "2026-10-25T22:54:34.091Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "tools/ost/synth.py",
+      "root_cause": "Was returning: master(hp(self.dry + wet, 28), self.target_db)",
+      "fix": "Now returns: master(mix + 0.5 * hp(mix, 4500), self.target_db)",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-099",
+      "timestamp": "2026-10-25T23:19:22.403Z",
+      "last_seen": "2026-10-25T23:19:22.403Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/app.py",
+      "root_cause": "Had \"menu_theme.mp3\"",
+      "fix": "Changed to \"assets\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-100",
+      "timestamp": "2026-10-25T23:20:59.976Z",
+      "last_seen": "2026-10-25T23:20:59.976Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/app.py",
+      "root_cause": "Had \"assets\"",
+      "fix": "Changed to \"assets/music/ost/01_call_of_acaristan.mp3\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-101",
+      "timestamp": "2026-10-25T23:23:08.969Z",
+      "last_seen": "2026-10-25T23:23:08.969Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -1869,7 +1923,10 @@
     "36449ae6-6ad2-49e6-87ec-37d0c3ca4149": true,
     "d3850a1b-8a32-475c-a035-6e3679b3f47f": true,
     "016cd763-78bf-4f4e-b22b-431f94e0be5c": true,
-    "80b02330-6b2d-45e2-9d87-42daab2dc442": true
+    "80b02330-6b2d-45e2-9d87-42daab2dc442": true,
+    "bfcd3c58-52f1-42cd-8ca3-9fa8f299919a": true,
+    "399f9aee-1cfd-413a-9b48-3d0555cde2cd": true,
+    "db8e79dd-242e-44d3-b41e-f770fba75615": true
   },
-  "next_id": 99
+  "next_id": 102
 }

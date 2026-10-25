@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-25T22:54:39.919Z",
-    "fileCount": 446,
+    "lastScanned": "2026-10-25T23:23:08.937Z",
+    "fileCount": 449,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "3dbf48ee7eb3a7a5133edeffd5ef158c5174078c71ebabeac258c3aabf5fc1a2",
-    "storeUpdatedAt": "2026-10-25T22:54:39.928Z",
-    "rootHash": "7c20ab6e9d1bf16a"
+    "renderedHash": "f3f708e960685e823c6ed89a5d2e358662354efe44600de01fd29dca46d3e3a7",
+    "storeUpdatedAt": "2026-10-25T23:23:08.946Z",
+    "rootHash": "c2b358c8c619a409"
   },
   "files": {
     ".gitattributes": {
@@ -120,12 +120,12 @@
       "importance": 0.0598
     },
     "src/app.py": {
-      "description": "_input_recorder: handle_settings_event",
-      "tokens": 56258,
-      "hash": "15f7a4a7df314edc",
-      "size": 199411,
-      "mtimeMs": 1792793229242.5476,
-      "updatedAt": "2026-10-23T22:07:09.397Z",
+      "description": "Declares _input_recorder",
+      "tokens": 56565,
+      "hash": "0de3272ad1e4518b",
+      "size": 200483,
+      "mtimeMs": 1792970588806.9426,
+      "updatedAt": "2026-10-25T23:23:08.937Z",
       "source": "hook",
       "symbols": [
         {
@@ -181,162 +181,162 @@
           "name": "_apply_postprocess",
           "kind": "fn",
           "startLine": 249,
-          "endLine": 262,
-          "tokens": 116
+          "endLine": 265,
+          "tokens": 123
         },
         {
           "name": "_present_frame",
           "kind": "fn",
-          "startLine": 263,
-          "endLine": 309,
-          "tokens": 515
+          "startLine": 266,
+          "endLine": 331,
+          "tokens": 793
         },
         {
           "name": "handle_settings_event",
           "kind": "fn",
-          "startLine": 310,
-          "endLine": 518,
+          "startLine": 332,
+          "endLine": 540,
           "tokens": 2872
         },
         {
           "name": "trigger_transition",
           "kind": "fn",
-          "startLine": 519,
-          "endLine": 542,
+          "startLine": 541,
+          "endLine": 564,
           "tokens": 292
         },
         {
           "name": "CutscenePlayer",
           "kind": "class",
-          "startLine": 543,
-          "endLine": 610,
+          "startLine": 565,
+          "endLine": 632,
           "tokens": 596
         },
         {
           "name": "_safe_m6_shots",
           "kind": "fn",
-          "startLine": 611,
-          "endLine": 615,
+          "startLine": 633,
+          "endLine": 637,
           "tokens": 76
         },
         {
           "name": "_start_m6_cutscene",
           "kind": "fn",
-          "startLine": 616,
-          "endLine": 631,
+          "startLine": 638,
+          "endLine": 653,
           "tokens": 134
         },
         {
           "name": "_m0_outro_pending",
           "kind": "fn",
-          "startLine": 632,
-          "endLine": 640,
+          "startLine": 654,
+          "endLine": 662,
           "tokens": 66
         },
         {
           "name": "_m5_mid_cut_key",
           "kind": "fn",
-          "startLine": 641,
-          "endLine": 648,
+          "startLine": 663,
+          "endLine": 670,
           "tokens": 99
         },
         {
           "name": "_m6_mid_cut_key",
           "kind": "fn",
-          "startLine": 649,
-          "endLine": 656,
+          "startLine": 671,
+          "endLine": 678,
           "tokens": 104
         },
         {
           "name": "start_cutscene",
           "kind": "fn",
-          "startLine": 657,
-          "endLine": 703,
-          "tokens": 609
+          "startLine": 679,
+          "endLine": 725,
+          "tokens": 617
         },
         {
           "name": "_set_menu_music",
           "kind": "fn",
-          "startLine": 704,
-          "endLine": 715,
+          "startLine": 726,
+          "endLine": 737,
           "tokens": 120
         },
         {
           "name": "_play_typewriter_tick",
           "kind": "fn",
-          "startLine": 716,
-          "endLine": 729,
+          "startLine": 738,
+          "endLine": 751,
           "tokens": 76
         },
         {
           "name": "_set_ambience",
           "kind": "fn",
-          "startLine": 730,
-          "endLine": 751,
+          "startLine": 752,
+          "endLine": 773,
           "tokens": 198
         },
         {
           "name": "apply_display_mode",
           "kind": "fn",
-          "startLine": 752,
-          "endLine": 800,
+          "startLine": 774,
+          "endLine": 822,
           "tokens": 490
         },
         {
           "name": "_mission_report_data",
           "kind": "fn",
-          "startLine": 801,
-          "endLine": 860,
+          "startLine": 823,
+          "endLine": 882,
           "tokens": 575
         },
         {
           "name": "draw_slot_select_screen",
           "kind": "fn",
-          "startLine": 861,
-          "endLine": 1090,
+          "startLine": 883,
+          "endLine": 1112,
           "tokens": 3300
         },
         {
           "name": "start_briefing",
           "kind": "fn",
-          "startLine": 1091,
-          "endLine": 1099,
+          "startLine": 1113,
+          "endLine": 1121,
           "tokens": 80
         },
         {
           "name": "finish_briefing",
           "kind": "fn",
-          "startLine": 1100,
-          "endLine": 1106,
+          "startLine": 1122,
+          "endLine": 1128,
           "tokens": 51
         },
         {
           "name": "draw_briefing_screen",
           "kind": "fn",
-          "startLine": 1107,
-          "endLine": 1216,
+          "startLine": 1129,
+          "endLine": 1238,
           "tokens": 1537
         },
         {
           "name": "_dev_flag_value",
           "kind": "fn",
-          "startLine": 1217,
-          "endLine": 1226,
+          "startLine": 1239,
+          "endLine": 1248,
           "tokens": 95
         },
         {
           "name": "_apply_dev_args",
           "kind": "fn",
-          "startLine": 1227,
-          "endLine": 1787,
+          "startLine": 1249,
+          "endLine": 1809,
           "tokens": 7834
         },
         {
           "name": "_BootIntroState",
           "kind": "class",
-          "startLine": 1788,
-          "endLine": 4425,
-          "tokens": 33708
+          "startLine": 1810,
+          "endLine": 4447,
+          "tokens": 33722
         }
       ]
     },
@@ -36447,6 +36447,403 @@
       "mtimeMs": 1792952160369.6482,
       "updatedAt": "2026-10-25T18:16:00.534Z",
       "source": "hook"
+    },
+    "tools/ost/synth.py": {
+      "description": "Small numpy synth for the Call of Acaristan OST.",
+      "tokens": 5953,
+      "hash": "21777af63992f6a6",
+      "size": 20833,
+      "mtimeMs": 1792970362219.172,
+      "updatedAt": "2026-10-25T23:19:22.363Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "midi",
+          "kind": "fn",
+          "startLine": 24,
+          "endLine": 29,
+          "tokens": 36
+        },
+        {
+          "name": "hz",
+          "kind": "fn",
+          "startLine": 30,
+          "endLine": 33,
+          "tokens": 17
+        },
+        {
+          "name": "chord",
+          "kind": "fn",
+          "startLine": 34,
+          "endLine": 40,
+          "tokens": 74
+        },
+        {
+          "name": "_rng",
+          "kind": "fn",
+          "startLine": 41,
+          "endLine": 47,
+          "tokens": 53
+        },
+        {
+          "name": "_sos",
+          "kind": "fn",
+          "startLine": 48,
+          "endLine": 53,
+          "tokens": 66
+        },
+        {
+          "name": "_clampf",
+          "kind": "fn",
+          "startLine": 54,
+          "endLine": 57,
+          "tokens": 19
+        },
+        {
+          "name": "lp",
+          "kind": "fn",
+          "startLine": 58,
+          "endLine": 61,
+          "tokens": 26
+        },
+        {
+          "name": "hp",
+          "kind": "fn",
+          "startLine": 62,
+          "endLine": 65,
+          "tokens": 26
+        },
+        {
+          "name": "bp",
+          "kind": "fn",
+          "startLine": 66,
+          "endLine": 69,
+          "tokens": 30
+        },
+        {
+          "name": "lp_sweep",
+          "kind": "fn",
+          "startLine": 70,
+          "endLine": 82,
+          "tokens": 138
+        },
+        {
+          "name": "_t",
+          "kind": "fn",
+          "startLine": 83,
+          "endLine": 86,
+          "tokens": 12
+        },
+        {
+          "name": "_phase",
+          "kind": "fn",
+          "startLine": 87,
+          "endLine": 90,
+          "tokens": 28
+        },
+        {
+          "name": "sine",
+          "kind": "fn",
+          "startLine": 91,
+          "endLine": 94,
+          "tokens": 24
+        },
+        {
+          "name": "saw",
+          "kind": "fn",
+          "startLine": 95,
+          "endLine": 108,
+          "tokens": 94
+        },
+        {
+          "name": "square",
+          "kind": "fn",
+          "startLine": 109,
+          "endLine": 112,
+          "tokens": 26
+        },
+        {
+          "name": "noise",
+          "kind": "fn",
+          "startLine": 113,
+          "endLine": 116,
+          "tokens": 16
+        },
+        {
+          "name": "smooth_random",
+          "kind": "fn",
+          "startLine": 117,
+          "endLine": 123,
+          "tokens": 73
+        },
+        {
+          "name": "vibrato",
+          "kind": "fn",
+          "startLine": 124,
+          "endLine": 131,
+          "tokens": 74
+        },
+        {
+          "name": "env",
+          "kind": "fn",
+          "startLine": 132,
+          "endLine": 143,
+          "tokens": 117
+        },
+        {
+          "name": "decay",
+          "kind": "fn",
+          "startLine": 144,
+          "endLine": 148,
+          "tokens": 27
+        },
+        {
+          "name": "fade",
+          "kind": "fn",
+          "startLine": 149,
+          "endLine": 160,
+          "tokens": 82
+        },
+        {
+          "name": "norm",
+          "kind": "fn",
+          "startLine": 161,
+          "endLine": 168,
+          "tokens": 54
+        },
+        {
+          "name": "cimbalom",
+          "kind": "fn",
+          "startLine": 169,
+          "endLine": 189,
+          "tokens": 236
+        },
+        {
+          "name": "musicbox",
+          "kind": "fn",
+          "startLine": 190,
+          "endLine": 201,
+          "tokens": 150
+        },
+        {
+          "name": "epiano",
+          "kind": "fn",
+          "startLine": 202,
+          "endLine": 212,
+          "tokens": 110
+        },
+        {
+          "name": "pad",
+          "kind": "fn",
+          "startLine": 213,
+          "endLine": 225,
+          "tokens": 136
+        },
+        {
+          "name": "strings",
+          "kind": "fn",
+          "startLine": 226,
+          "endLine": 242,
+          "tokens": 191
+        },
+        {
+          "name": "brass",
+          "kind": "fn",
+          "startLine": 243,
+          "endLine": 254,
+          "tokens": 123
+        },
+        {
+          "name": "choir",
+          "kind": "fn",
+          "startLine": 255,
+          "endLine": 272,
+          "tokens": 217
+        },
+        {
+          "name": "organ",
+          "kind": "fn",
+          "startLine": 273,
+          "endLine": 633,
+          "tokens": 3422
+        }
+      ]
+    },
+    "tools/ost/album.py": {
+      "description": "Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film.",
+      "tokens": 7624,
+      "hash": "fe553017ab1e801d",
+      "size": 26682,
+      "mtimeMs": 1792970124281.713,
+      "updatedAt": "2026-10-25T23:15:24.412Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "mirror",
+          "kind": "fn",
+          "startLine": 20,
+          "endLine": 37,
+          "tokens": 226
+        },
+        {
+          "name": "motif",
+          "kind": "fn",
+          "startLine": 38,
+          "endLine": 46,
+          "tokens": 102
+        },
+        {
+          "name": "pads",
+          "kind": "fn",
+          "startLine": 47,
+          "endLine": 59,
+          "tokens": 134
+        },
+        {
+          "name": "arp",
+          "kind": "fn",
+          "startLine": 60,
+          "endLine": 69,
+          "tokens": 139
+        },
+        {
+          "name": "bassline",
+          "kind": "fn",
+          "startLine": 70,
+          "endLine": 76,
+          "tokens": 85
+        },
+        {
+          "name": "groove",
+          "kind": "fn",
+          "startLine": 77,
+          "endLine": 87,
+          "tokens": 129
+        },
+        {
+          "name": "radio_take",
+          "kind": "fn",
+          "startLine": 88,
+          "endLine": 94,
+          "tokens": 73
+        },
+        {
+          "name": "hymn",
+          "kind": "fn",
+          "startLine": 95,
+          "endLine": 103,
+          "tokens": 141
+        },
+        {
+          "name": "bass_long",
+          "kind": "fn",
+          "startLine": 104,
+          "endLine": 107,
+          "tokens": 16
+        },
+        {
+          "name": "low_taiko",
+          "kind": "fn",
+          "startLine": 108,
+          "endLine": 111,
+          "tokens": 13
+        },
+        {
+          "name": "high_taiko",
+          "kind": "fn",
+          "startLine": 112,
+          "endLine": 115,
+          "tokens": 14
+        },
+        {
+          "name": "heartbeat",
+          "kind": "fn",
+          "startLine": 116,
+          "endLine": 123,
+          "tokens": 90
+        },
+        {
+          "name": "t1_call_of_acaristan",
+          "kind": "fn",
+          "startLine": 124,
+          "endLine": 182,
+          "tokens": 828
+        },
+        {
+          "name": "t2_black_notebook",
+          "kind": "fn",
+          "startLine": 183,
+          "endLine": 222,
+          "tokens": 586
+        },
+        {
+          "name": "t3_quiet_on_route_12",
+          "kind": "fn",
+          "startLine": 223,
+          "endLine": 271,
+          "tokens": 667
+        },
+        {
+          "name": "t4_the_vostral",
+          "kind": "fn",
+          "startLine": 272,
+          "endLine": 328,
+          "tokens": 866
+        },
+        {
+          "name": "t5_curfew_dawn",
+          "kind": "fn",
+          "startLine": 329,
+          "endLine": 370,
+          "tokens": 627
+        },
+        {
+          "name": "t6_not_tonight",
+          "kind": "fn",
+          "startLine": 371,
+          "endLine": 424,
+          "tokens": 845
+        },
+        {
+          "name": "t7_whiteout",
+          "kind": "fn",
+          "startLine": 425,
+          "endLine": 490,
+          "tokens": 906
+        },
+        {
+          "name": "t8_i_chose_the_many",
+          "kind": "fn",
+          "startLine": 491,
+          "endLine": 549,
+          "tokens": 824
+        }
+      ]
+    },
+    "tools/build_ost.py": {
+      "description": "Render the Call of Acaristan OST (tools/ost/album.py).",
+      "tokens": 643,
+      "hash": "49623ab06a9ef570",
+      "size": 2248,
+      "mtimeMs": 1792970177569.6055,
+      "updatedAt": "2026-10-25T23:16:17.708Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "slug",
+          "kind": "fn",
+          "startLine": 29,
+          "endLine": 32,
+          "tokens": 24
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 63,
+          "tokens": 392
+        }
+      ]
     }
   },
   "preamble": [
