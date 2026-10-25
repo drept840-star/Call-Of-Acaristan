@@ -292,6 +292,43 @@ def reed(f, dur=1.0, a=0.07, r=0.3):
     return norm(y) * env(n, a, 0.15, 0.9, r)
 
 
+@lru_cache(maxsize=2048)
+def oud(f, dur=0.4, bright=1.0):
+    """Fretless lute: plucked double course, pitch settling after the pick, body resonance."""
+    n = int((dur + 0.6) * SR)
+    t = _t(n)
+    ph = _phase(f * (1 + 0.004 * np.exp(-t / 0.02)), n)
+    y = np.zeros(n)
+    for course, det in enumerate((1.0, 1.0025)):
+        for k in range(1, 25):
+            if f * k > 9000:
+                break
+            amp = abs(np.sin(np.pi * k * 0.13)) / k * (bright if k > 4 else 1.0)
+            y += amp * np.exp(-t / (1.4 / (1 + 0.35 * k))) * np.sin(2 * np.pi * k * det * ph + course * k)
+    y += 0.5 * bp(y, 180, 420)
+    off = int(dur * SR)
+    if off < n:
+        y[off:] *= np.exp(-np.arange(n - off) / (0.08 * SR))
+    h = int(0.006 * SR)
+    y[:h] += 0.4 * bp(noise(h, _rng("pick", f)), 1500, 6000) * np.linspace(1, 0, h)
+    return norm(y * np.clip(t / 0.001, 0, 1))
+
+
+@lru_cache(maxsize=1024)
+def ney(f, dur=1.0, a=0.12, r=0.35):
+    """End-blown reed flute: soft scoop, slow vibrato, nearly as much breath as tone."""
+    n = int((dur + r) * SR)
+    t = _t(n)
+    rng = _rng("ney", f, dur)
+    scoop = 2 ** (-0.8 / 12 * np.exp(-t / 0.08))
+    ph = _phase(f * scoop * vibrato(n, 4.6, 0.007, 0.35), n)
+    tone = np.sin(2 * np.pi * ph) + 0.25 * np.sin(4 * np.pi * ph) + 0.12 * np.sin(6 * np.pi * ph)
+    tone *= 1 + 0.15 * smooth_random(n, 6.0, rng)
+    air = 4.0 * bp(noise(n, rng), f * 0.85, f * 1.2) + 0.15 * bp(noise(n, rng), 1500, 6000)
+    chiff = 0.5 * bp(noise(n, rng), 2000, 5000) * np.exp(-t / 0.04)
+    return norm(tone + air + chiff) * env(n, a, 0.2, 0.85, r)
+
+
 @lru_cache(maxsize=1024)
 def bass(f, dur=1.0):
     n = int((dur + 0.1) * SR)
@@ -402,6 +439,45 @@ def clack(v=0):
     rng = _rng("clack", v)
     y = sine(105 * rng.uniform(0.95, 1.05), n) * np.exp(-t / 0.05)
     y += 1.2 * bp(noise(n, rng), 400, 2500) * np.exp(-t / 0.02)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def doum(v=0):
+    """Darbuka bass stroke, struck in the centre of the head."""
+    n = int(0.7 * SR)
+    t = _t(n)
+    rng = _rng("doum", v)
+    f0 = 92 * rng.uniform(0.98, 1.02)
+    y = np.sin(2 * np.pi * _phase(f0 * (1 + 0.35 * np.exp(-t / 0.015)), n)) * np.exp(-t / 0.32)
+    y += 0.25 * sine(f0 * 2.3, n) * np.exp(-t / 0.08)
+    y += 0.5 * lp(noise(n, rng), 700) * np.exp(-t / 0.02)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def tek(v=0):
+    """Darbuka rim stroke: dry crack over the head's high modes."""
+    n = int(0.3 * SR)
+    t = _t(n)
+    rng = _rng("tek", v)
+    y = 1.6 * bp(noise(n, rng), 1800, 9000) * np.exp(-t / 0.007)
+    for m, tau in ((610, 0.05), (1180, 0.035), (1730, 0.025), (2390, 0.018)):
+        y += 0.5 * sine(m * rng.uniform(0.98, 1.02), n) * np.exp(-t / tau)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def riq(v=0):
+    """Frame drum with zils: skin tap, then a shimmer of brass jingles."""
+    n = int(0.35 * SR)
+    t = _t(n)
+    rng = _rng("riq", v)
+    y = 0.5 * bp(noise(n, rng), 700, 2500) * np.exp(-t / 0.01)
+    for _ in range(8):
+        s = int(rng.uniform(0, 0.008) * SR)
+        y[s:] += 0.35 * sine(rng.uniform(4200, 9500), n - s) * np.exp(-t[:n - s] / rng.uniform(0.04, 0.12))
+    y += 0.6 * hp(noise(n, rng), 6000) * np.exp(-t / 0.05)
     return norm(y)
 
 

@@ -1821,6 +1821,42 @@
       "last_seen": "2026-10-25T23:23:08.969Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of album.py",
+      "file": "tools/ost/album.py",
+      "root_cause": "14 lines replaced/restructured",
+      "fix": "Rewrote 28→43 lines (14 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-102",
+      "timestamp": "2026-10-25T23:33:37.397Z",
+      "last_seen": "2026-10-25T23:33:37.397Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of album.py",
+      "file": "tools/ost/album.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 9→14 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-103",
+      "timestamp": "2026-10-25T23:33:45.742Z",
+      "last_seen": "2026-10-25T23:33:45.742Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -1926,7 +1962,9 @@
     "80b02330-6b2d-45e2-9d87-42daab2dc442": true,
     "bfcd3c58-52f1-42cd-8ca3-9fa8f299919a": true,
     "399f9aee-1cfd-413a-9b48-3d0555cde2cd": true,
-    "db8e79dd-242e-44d3-b41e-f770fba75615": true
+    "db8e79dd-242e-44d3-b41e-f770fba75615": true,
+    "e0c6cc27-b780-4491-b41a-3d8160a02a92": true,
+    "28b81b5d-2083-4a7a-8c67-962913076bb1": true
   },
-  "next_id": 102
+  "next_id": 104
 }

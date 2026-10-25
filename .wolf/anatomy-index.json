@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-25T23:23:08.937Z",
+    "lastScanned": "2026-10-25T23:33:45.703Z",
     "fileCount": 449,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "f3f708e960685e823c6ed89a5d2e358662354efe44600de01fd29dca46d3e3a7",
-    "storeUpdatedAt": "2026-10-25T23:23:08.946Z",
-    "rootHash": "c2b358c8c619a409"
+    "renderedHash": "20cfa97e58d44a4db15889f65642b05b39159931bce143464e28cfab09cdd526",
+    "storeUpdatedAt": "2026-10-25T23:33:45.713Z",
+    "rootHash": "be3d7c2a24d58523"
   },
   "files": {
     ".gitattributes": {
@@ -36450,11 +36450,11 @@
     },
     "tools/ost/synth.py": {
       "description": "Small numpy synth for the Call of Acaristan OST.",
-      "tokens": 5953,
-      "hash": "21777af63992f6a6",
-      "size": 20833,
-      "mtimeMs": 1792970362219.172,
-      "updatedAt": "2026-10-25T23:19:22.363Z",
+      "tokens": 6785,
+      "hash": "01b7e04c45c7a0b0",
+      "size": 23747,
+      "mtimeMs": 1792971177383.8691,
+      "updatedAt": "2026-10-25T23:32:57.522Z",
       "source": "hook",
       "symbols": [
         {
@@ -36664,159 +36664,180 @@
           "name": "organ",
           "kind": "fn",
           "startLine": 273,
-          "endLine": 633,
-          "tokens": 3422
+          "endLine": 709,
+          "tokens": 4254
         }
       ]
     },
     "tools/ost/album.py": {
       "description": "Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film.",
-      "tokens": 7624,
-      "hash": "fe553017ab1e801d",
-      "size": 26682,
-      "mtimeMs": 1792970124281.713,
-      "updatedAt": "2026-10-25T23:15:24.412Z",
+      "tokens": 8364,
+      "hash": "08b288946f6b6ac4",
+      "size": 29274,
+      "mtimeMs": 1792971225555.0676,
+      "updatedAt": "2026-10-25T23:33:45.703Z",
       "source": "hook",
       "symbols": [
         {
           "name": "mirror",
           "kind": "fn",
-          "startLine": 20,
-          "endLine": 37,
-          "tokens": 226
+          "startLine": 22,
+          "endLine": 40,
+          "tokens": 221
+        },
+        {
+          "name": "modal",
+          "kind": "fn",
+          "startLine": 41,
+          "endLine": 58,
+          "tokens": 212
         },
         {
           "name": "motif",
           "kind": "fn",
-          "startLine": 38,
-          "endLine": 46,
+          "startLine": 59,
+          "endLine": 67,
           "tokens": 102
         },
         {
           "name": "pads",
           "kind": "fn",
-          "startLine": 47,
-          "endLine": 59,
+          "startLine": 68,
+          "endLine": 80,
           "tokens": 134
         },
         {
           "name": "arp",
           "kind": "fn",
-          "startLine": 60,
-          "endLine": 69,
+          "startLine": 81,
+          "endLine": 90,
           "tokens": 139
         },
         {
           "name": "bassline",
           "kind": "fn",
-          "startLine": 70,
-          "endLine": 76,
+          "startLine": 91,
+          "endLine": 97,
           "tokens": 85
         },
         {
           "name": "groove",
           "kind": "fn",
-          "startLine": 77,
-          "endLine": 87,
+          "startLine": 98,
+          "endLine": 108,
           "tokens": 129
         },
         {
           "name": "radio_take",
           "kind": "fn",
-          "startLine": 88,
-          "endLine": 94,
+          "startLine": 109,
+          "endLine": 115,
           "tokens": 73
         },
         {
           "name": "hymn",
           "kind": "fn",
-          "startLine": 95,
-          "endLine": 103,
+          "startLine": 116,
+          "endLine": 124,
           "tokens": 141
         },
         {
           "name": "bass_long",
           "kind": "fn",
-          "startLine": 104,
-          "endLine": 107,
+          "startLine": 125,
+          "endLine": 128,
           "tokens": 16
         },
         {
           "name": "low_taiko",
           "kind": "fn",
-          "startLine": 108,
-          "endLine": 111,
+          "startLine": 129,
+          "endLine": 132,
           "tokens": 13
         },
         {
           "name": "high_taiko",
           "kind": "fn",
-          "startLine": 112,
-          "endLine": 115,
+          "startLine": 133,
+          "endLine": 136,
           "tokens": 14
         },
         {
           "name": "heartbeat",
           "kind": "fn",
-          "startLine": 116,
-          "endLine": 123,
-          "tokens": 90
+          "startLine": 137,
+          "endLine": 142,
+          "tokens": 61
+        },
+        {
+          "name": "oud_riff",
+          "kind": "fn",
+          "startLine": 143,
+          "endLine": 149,
+          "tokens": 80
+        },
+        {
+          "name": "qanun_run",
+          "kind": "fn",
+          "startLine": 150,
+          "endLine": 158,
+          "tokens": 119
         },
         {
           "name": "t1_call_of_acaristan",
           "kind": "fn",
-          "startLine": 124,
-          "endLine": 182,
+          "startLine": 159,
+          "endLine": 217,
           "tokens": 828
         },
         {
           "name": "t2_black_notebook",
           "kind": "fn",
-          "startLine": 183,
-          "endLine": 222,
+          "startLine": 218,
+          "endLine": 257,
           "tokens": 586
         },
         {
           "name": "t3_quiet_on_route_12",
           "kind": "fn",
-          "startLine": 223,
-          "endLine": 271,
+          "startLine": 258,
+          "endLine": 306,
           "tokens": 667
         },
         {
           "name": "t4_the_vostral",
           "kind": "fn",
-          "startLine": 272,
-          "endLine": 328,
-          "tokens": 866
+          "startLine": 307,
+          "endLine": 383,
+          "tokens": 1228
         },
         {
           "name": "t5_curfew_dawn",
           "kind": "fn",
-          "startLine": 329,
-          "endLine": 370,
-          "tokens": 627
+          "startLine": 384,
+          "endLine": 425,
+          "tokens": 630
         },
         {
           "name": "t6_not_tonight",
           "kind": "fn",
-          "startLine": 371,
-          "endLine": 424,
-          "tokens": 845
+          "startLine": 426,
+          "endLine": 475,
+          "tokens": 808
         },
         {
           "name": "t7_whiteout",
           "kind": "fn",
-          "startLine": 425,
-          "endLine": 490,
+          "startLine": 476,
+          "endLine": 541,
           "tokens": 906
         },
         {
           "name": "t8_i_chose_the_many",
           "kind": "fn",
-          "startLine": 491,
-          "endLine": 549,
-          "tokens": 824
+          "startLine": 542,
+          "endLine": 600,
+          "tokens": 825
         }
       ]
     },

@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-25T23:23:08.937Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-25T23:33:45.703Z
 > Files: 449 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
@@ -627,5 +627,5 @@
 
 ## tools/ost/
 
-- `album.py` — Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film. (~7624 tok)
-- `synth.py` — Small numpy synth for the Call of Acaristan OST. (~5953 tok)
+- `album.py` — Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film. (~8364 tok)
+- `synth.py` — Small numpy synth for the Call of Acaristan OST. (~6785 tok)

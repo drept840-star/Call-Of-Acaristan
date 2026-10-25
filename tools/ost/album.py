@@ -5,11 +5,13 @@ Leitmotifs (offsets in semitones from the track root, lengths in beats):
 - Ucilev: Biribel's CALL inverted - the mirror, like his callsign.
 - Vasile: a warm F-major hymn. Played straight as the state anthem; soured at the end.
 - Volkov: a falling music-box figure that loses its last notes once the leaf gets wet.
+
+The Vostral re-voices Biribel's phrases in maqam Hijaz, degree for degree (see `modal`).
 """
-from .synth import (Track, SR, boom, brass, chirp, chord, choir, cimbalom, clack, crowd, drone, epiano,
-                    fade, glass, hat, horn, hum, hz, kick, metal, midi, musicbox, organ, pad, pulse, radio,
-                    rain, reed, rim, riser, rotor, shot, snare, squelch, static, strings, taiko, timpani,
-                    wind, sine, env)
+from .synth import (Track, SR, boom, brass, chirp, chord, choir, cimbalom, clack, crowd, doum, drone, epiano,
+                    fade, glass, hat, horn, hum, hz, kick, metal, midi, musicbox, ney, organ, oud, pad, pulse,
+                    radio, rain, reed, rim, riq, riser, rotor, shot, snare, squelch, static, strings, taiko,
+                    tek, timpani, wind, sine, env)
 
 CALL = [(0, 1), (7, 1), (6, .5), (7, .5), (3, 1), (2, .5), (3, .5), (0, 3)]
 ANSWER = [(7, 1), (10, 1), (9, .5), (7, .5), (6, 1), (7, 4)]
@@ -31,6 +33,25 @@ VOLKOV = [(7, .5), (3, .5), (2, .5), (0, .5), (2, .5), (-2, .5), (0, 1)]
 
 PROG_A = ["Dm", "Dm", "Bb", "A", "Dm", "Gm", "Bb", "A"]
 ARP = ("R", "5", "R", "9", "3", "9", "R", "5")
+
+ROMANIAN = (0, 2, 3, 6, 7, 9, 10)
+HIJAZ = (0, 1, 4, 5, 7, 8, 10)
+
+
+def modal(m, src=ROMANIAN, dst=HIJAZ):
+    """Move a motif into another mode, scale degree for scale degree; octaves kept."""
+    out = []
+    for o, l in m:
+        q, r = divmod(o, 12)
+        out.append((12 * q + dst[src.index(r)] if r in src else o, l))
+    return out
+
+
+HIJAZ_CALL, HIJAZ_ANSWER, HIJAZ_HOME = modal(CALL), modal(ANSWER), modal(HOME)
+TAQSIM = ([(7, 3), (8, .25), (7, .25), (5, .5), (4, 1), (5, .5), (4, .5), (1, 1), (0, 5)],
+          [(0, .5), (1, .5), (4, 1.5), (5, .5), (7, 2), (10, .5), (8, .5), (7, .5), (8, .25), (7, .25), (5, 1),
+           (4, .5), (1, .5), (0, 4)])
+OUD_RIFF = (0, 12, 1, 0, 4, 0, 1, 0, 5, 4, 1, 4, 1, 0, -2, 0)
 
 
 # ---------------------------------------------------------------- score helpers
@@ -117,6 +138,20 @@ def heartbeat(T, bar, bars, gain=0.35, beats=(0, 0.33)):
     for b in range(bar, bar + bars):
         T.add(kick(1), T.t(b, beats[0]), gain, 0, 0.1)
         T.add(kick(2), T.t(b, beats[1]), gain * 0.6, 0, 0.1)
+
+
+def oud_riff(T, bar, bars, gain, root="E3", riff=OUD_RIFF):
+    r = midi(root)
+    for b in range(bar, bar + bars):
+        for k, off in enumerate(riff):
+            T.add(oud(hz(r + off), T.dur(0.4)), T.t(b, k * 0.25), gain * (1.0 if k % 4 == 0 else 0.7), -0.25, 0.25, 0.004)
+
+
+def qanun_run(T, root, bar, n=15, step=0.125, gain=0.12, pan=0.3):
+    """Hijaz scale run that lands on the next downbeat."""
+    r, beat = midi(root), T.beats - n * step
+    for i in range(n):
+        T.add(cimbalom(hz(r + 12 * (i // 7) + HIJAZ[i % 7]), 0.25), T.t(bar, beat + i * step), gain, pan, 0.4, 0.002)
 
 
 # ---------------------------------------------------------------- 1. Call of Acaristan (main theme)
@@ -270,33 +305,48 @@ def t3_quiet_on_route_12():
 # ---------------------------------------------------------------- 4. The Vostral (M3, Day 4)
 
 def t4_the_vostral():
+    """Maqam Hijaz on E: oud and darbuka under the factory noise, the state hymn on the radio."""
     T = Track(64, 124, seed=44, verb_s=2.4, damp=4500, tail=5.0)
-    V = ["Em", "Em", "C", "B"]
-    V2 = ["Em", "Am", "C", "B"]
+    V = ["E", "E", "F", "E"]
+    V2 = ["Am", "Dm", "F", "E"]
+    riq8 = (riq, [(k * 0.5, 1.0 if k % 2 == 0 else 0.55) for k in range(8)], 0.06, -0.35, 0.15)
     T.add(fade(static(int(T.t(8) * SR), T.rng), 1, 2), 0, 0.05, verb=0)
     T.add(drone(hz("E2"), T.t(40)), 0, 0.22, verb=0.3)
     for bar, beat, v in ((1, 2, 0), (3, 0.5, 1), (5, 3, 2), (6, 1, 3), (7, 2.5, 4)):
-        T.add(metal(v), T.t(bar, beat), 0.3, (v - 2) * 0.3, 0.7)
-    bassline(T, pulse, ["Em"] * 4, 4, 0.28, hits=[(k, 0.6) for k in range(4)], cutoff=400.0)
+        T.add(metal(v), T.t(bar, beat), 0.22, (v - 2) * 0.3, 0.7)
+    motif(T, ney, TAQSIM[0], "E4", 1, gain=0.4, verb=0.55, human=0.02)
+    motif(T, ney, TAQSIM[1], "E4", 4, beat=2, gain=0.4, verb=0.55, human=0.02)
+    bassline(T, pulse, ["E"] * 4, 4, 0.28, hits=[(k, 0.6) for k in range(4)], cutoff=400.0)
+    groove(T, 4, 2, [(doum, [0], 0.35, 0, 0.3)])
+    groove(T, 6, 2, [(doum, [0, 2], 0.35, 0, 0.2), (tek, [0.5, 1.5, 3], 0.2, 0.15, 0.2)])
+    oud_riff(T, 6, 2, 0.08)
 
     oct16 = [(k * 0.25, 0.2) for k in range(16)]
-    bassline(T, pulse, ["Em"] * 16 + V * 2 + V2 * 2, 8, 0.28, hits=oct16, cutoff=700.0)
-    groove(T, 8, 32, [(kick, [0, 2, 2.5], 0.55, 0, 0.1), (snare, [1, 3], 0.35, 0, 0.25),
-                      (metal, [1.5, 3.75], 0.14, 0.4, 0.4),
-                      (hat, [(k * 0.25, 1.0 if k % 2 == 0 else 0.5) for k in range(16)], 0.05, -0.3, 0.1)])
+    bassline(T, pulse, ["E"] * 16 + V * 2 + V2 * 2, 8, 0.28, hits=oct16, cutoff=700.0)
+    groove(T, 8, 16, [(kick, [0, 2, 2.5], 0.45, 0, 0.1), (doum, [0, 2], 0.42, 0, 0.15),
+                      (tek, [0.5, 1.5, 3, (3.5, 0.5)], 0.36, 0.15, 0.15), (metal, [1.5, 3.75], 0.12, 0.4, 0.4), riq8])
+    oud_riff(T, 8, 16, 0.14)
     for b in range(12, 24):
-        tone = "E5" if b % 2 == 0 else "C5"
-        T.add(brass(hz(tone), T.dur(4), bright=1400.0), T.t(b), 0.06, 0.5, 0.5)
+        tone = "E5" if b % 2 == 0 else "F5"
+        T.add(strings(hz(tone), T.dur(4), a=0.4), T.t(b), 0.07, 0.5, 0.5)
     for b, sym in enumerate(V * 2):
         for beat in (0, 1.5):
             for m in chord(sym, 52):
                 T.add(strings(hz(m), 0.3, a=0.01, r=0.2), T.t(16 + b, beat), 0.08, 0, 0.3)
+    for bar in (15, 19, 23):
+        qanun_run(T, "E4", bar)
 
-    for i, m in enumerate((CALL, ANSWER, CALL, HOME) * 2):
-        motif(T, brass, m, "E3", 24 + 2 * i, gain=0.45, verb=0.3)
-        motif(T, reed, m, "E4", 24 + 2 * i, gain=0.3, pan=0.15, verb=0.35)
+    groove(T, 24, 16, [(kick, [0, 2, 2.5], 0.45, 0, 0.1), (doum, [0, 1.5, 2], 0.42, 0, 0.15),
+                       (tek, [0.5, 3, (3.5, 0.5)], 0.36, 0.15, 0.15), (snare, [1, 3], 0.22, 0, 0.25),
+                       (metal, [1.5, 3.75], 0.12, 0.4, 0.4), riq8, (low_taiko, [0, 2], 0.4, 0, 0.4)])
+    oud_riff(T, 24, 16, 0.14)
+    for i, m in enumerate((HIJAZ_CALL, HIJAZ_ANSWER, HIJAZ_CALL, HIJAZ_HOME) * 2):
+        motif(T, brass, m, "E3", 24 + 2 * i, gain=0.3, verb=0.3)
+        motif(T, strings, m, "E4", 24 + 2 * i, gain=0.3, verb=0.35, a=0.04, r=0.3)
+        motif(T, ney, m, "E4", 24 + 2 * i, gain=0.36, pan=0.15, verb=0.4)
     pads(T, choir, V2 * 2, 32, 0.28, base=52)
-    groove(T, 24, 16, [(low_taiko, [0, 2], 0.4, 0, 0.4)])
+    for bar in (31, 39):
+        qanun_run(T, "E4", bar)
 
     heartbeat(T, 40, 8, 0.35)
     T.add(fade(static(int(T.t(8) * SR), T.rng), 0.5, 1), T.t(40), 0.05, verb=0)
@@ -308,14 +358,19 @@ def t4_the_vostral():
 
     T.add(boom(3), T.t(48), 0.7, 0, 0.5)
     bassline(T, pulse, (V + V2) * 2, 48, 0.3, hits=oct16, cutoff=900.0)
-    groove(T, 48, 16, [(kick, [0, 1, 2, 2.5, 3], 0.55, 0, 0.1), (snare, [1, 3], 0.35, 0, 0.25),
-                       (low_taiko, [0, 0.75, 1.5, 2.5, 3], 0.4, 0, 0.35),
-                       (lambda v: hat(v, True), [0.5, 1.5, 2.5, 3.5], 0.06, 0.4, 0.1)])
+    groove(T, 48, 16, [(kick, [0, 1, 2, 2.5, 3], 0.5, 0, 0.1), (snare, [1, 3], 0.32, 0, 0.25),
+                       (doum, [0, 2], 0.45, 0, 0.15),
+                       (tek, [0.5, (1, 0.45), 1.5, (2.5, 0.5), 3, (3.5, 0.6), (3.75, 0.45)], 0.36, 0.15, 0.15),
+                       (low_taiko, [0, 0.75, 1.5, 2.5, 3], 0.35, 0, 0.35), riq8])
+    oud_riff(T, 48, 16, 0.15)
     pads(T, choir, (V + V2) * 2, 48, 0.3, base=52)
     pads(T, strings, (V + V2) * 2, 48, 0.22, trem=12.0)
-    for i, m in enumerate((CALL, ANSWER, CALL, HOME) * 2):
-        motif(T, brass, m, "E3", 48 + 2 * i, gain=0.5, verb=0.3)
-        motif(T, reed, m, "E5", 48 + 2 * i, gain=0.35, pan=0.15, verb=0.35)
+    for i, m in enumerate((HIJAZ_CALL, HIJAZ_ANSWER, HIJAZ_CALL, HIJAZ_HOME) * 2):
+        motif(T, brass, m, "E3", 48 + 2 * i, gain=0.36, verb=0.3)
+        motif(T, strings, m, "E5", 48 + 2 * i, gain=0.28, verb=0.35, a=0.04, r=0.3)
+        motif(T, ney, m, "E5", 48 + 2 * i, gain=0.38, pan=0.15, verb=0.4)
+    for bar in (55, 63):
+        qanun_run(T, "E4", bar)
 
     T.add(boom(4), T.t(64), 0.8, 0, 0.6)
     T.add(fade(static(int(4 * SR), T.rng), 0, 2), T.t(64), 0.06, verb=0)
