@@ -280,6 +280,46 @@ def floor_tile(code, vi):
     return s
 
 
+# M6 snow ground.  Two-character codes so they can never collide with a
+# single-character map code another mission uses.  Same rules as floor_tile:
+# one base colour for every variant, micro-detail only, and each variant its
+# own set of marks (no motif stamped into all four).  The detail is hard:
+# 1 px wind ridges (a lit crest over a hollow), a few grit pixels, no noise.
+SNOW = {"sn": (140, 142, 146), "st": (104, 106, 110)}
+
+
+def snow_tile(code, vi):
+    s = O(T, T)
+    base = SNOW[code]
+    s.fill(base + (255,))
+    rnd = random.Random((sum(map(ord, code)) * 2654435761 + vi * 40503) & 0xFFFFFFFF)
+    crest = lit(base, 0.16)
+    hollow = shade(base, 0.82)
+    grit = shade(base, 0.58)
+    for k in range(24):
+        x, y = rnd.randrange(T), rnd.randrange(T)
+        d = 2 if k % 2 else -2
+        s.set_at((x, y), tuple(max(0, min(255, c + d)) for c in base))
+    if code == "sn":
+        # Wind ridges: short, horizontal, kept off the tile edge.
+        for _ in range(2 + vi % 2):
+            ln = 8 + rnd.randrange(14)
+            x, y = rnd.randrange(3, T - ln - 5), rnd.randrange(4, T - 6)
+            pygame.draw.line(s, crest, (x, y), (x + ln, y))
+            pygame.draw.line(s, hollow, (x + 2, y + 1), (x + ln + 2, y + 1))
+        for _ in range(2 + (vi + 1) % 2):
+            s.set_at((rnd.randrange(4, T - 4), rnd.randrange(4, T - 4)), grit)
+    else:
+        # Trodden: packed tread dashes and more grit.
+        for _ in range(3 + vi % 2):
+            x, y = rnd.randrange(4, T - 12), rnd.randrange(4, T - 6)
+            pygame.draw.line(s, hollow, (x, y), (x + 5, y))
+            pygame.draw.line(s, crest, (x, y + 1), (x + 5, y + 1))
+        for _ in range(4 + vi % 3):
+            s.set_at((rnd.randrange(3, T - 3), rnd.randrange(3, T - 3)), grit)
+    return s
+
+
 def checker_tile(code, ab):
     s = O(T, T)
     a, b, edge = CHK[code]
@@ -1152,6 +1192,9 @@ def main():
         for vi in range(4):
             name = "t_%s_%d" % ("dot" if code == "." else code, vi)
             save(name, floor_tile(code, vi)); n += 1
+    for code in SNOW:
+        for vi in range(4):
+            save("t_%s_%d" % (code, vi), snow_tile(code, vi)); n += 1
     for code in "KLYM":
         for ab in "ab":
             save("t_%s_%s" % (code, ab), checker_tile(code, ab)); n += 1

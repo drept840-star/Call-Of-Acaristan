@@ -367,23 +367,23 @@ def _draw_beam(overlay, light, cam_x, cam_y, alarmed):
     for i in range(spread + 1):
         a = ang - light.half_angle + (2 * light.half_angle) * (i / spread)
         rays.append((a, clear_distance(light, a)))
-    for frac, strength in ((1.0, 0.070), (0.66, 0.105), (0.33, 0.165)):
-        pts = [origin]
-        for a, d in rays:
-            r = min(d, light.range_px * frac)
-            pts.append((origin[0] + math.cos(a) * r,
-                        origin[1] + math.sin(a) * r))
-        if len(pts) >= 3:
-            pygame.draw.polygon(overlay, _scale(base, strength * pulse), pts)
+    # Two flat steps and a 1 px rim: the wedge has an edge, no ramp.
+    outer = [origin]
+    for a, d in rays:
+        r = min(d, light.range_px)
+        outer.append((origin[0] + math.cos(a) * r,
+                       origin[1] + math.sin(a) * r))
+    pygame.draw.polygon(overlay, _scale(base, 0.075 * pulse), outer)
     # Hot core near the tower.
     core = []
     for a, d in rays:
-        if abs(_ang_diff(a, ang)) <= light.half_angle * 0.38:
-            r = min(d, light.range_px * 0.5)
+        if abs(_ang_diff(a, ang)) <= light.half_angle * 0.5:
+            r = min(d, light.range_px * 0.55)
             core.append((origin[0] + math.cos(a) * r,
                          origin[1] + math.sin(a) * r))
     if len(core) >= 2:
-        pygame.draw.polygon(overlay, _scale(base, 0.19 * pulse), [origin] + core)
+        pygame.draw.polygon(overlay, _scale(base, 0.075 * pulse), [origin] + core)
+    pygame.draw.lines(overlay, _scale(base, 0.20 * pulse), True, outer, 1)
     pool = (origin[0] + math.cos(ang) * min(light.range_px * 0.92,
                                              clear_distance(light, ang)),
             origin[1] + math.sin(ang) * min(light.range_px * 0.92,

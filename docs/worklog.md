@@ -1082,3 +1082,38 @@ docs/engine/CHANGELOG.md for the evidence).
   they touched - root mission3.py / cutscenes.py / acaristan.py / mission3.pyc -
   were superseded by the src/missions refactor, resolved keep-ours) and pushed.
 - Gates: tree-only changes; smoke OK.
+
+## 2026-10-25 - M6 top-down art pass: one art source (signed off)
+
+Brief: `docs/M6_TOPDOWN_ART_BRIEF.md`. Goal: customs, noman and rail should look like the
+M4 street and the M5 quarter/HQ. All changes are in `src/missions/m6/decor.py` unless noted.
+
+- Snow: added art-pack tiles `sn`/`st` (`tools/make_art_pack.py`, `_artpack._TILE_VARIANTS`),
+  with hard banks and drifts. The haze is gone, and all three stages share one neutral
+  ambient (60,62,78).
+- Blocks: `_paint_wall` paints each C/W run as one block. The crown is coping around snow,
+  and the face is the art-pack `w_C` wall with one snow cap, a pilaster every third tile and
+  a plate on a fixed rhythm. `_wall_shadows` bakes a hard east shadow.
+- Floors: `_house_tile` serves every floor code from the art pack on every stage.
+  `_floor_variety` (alpha patches, pale blue lift) was removed. The rail W band, coach
+  panels and roofs are flat house fills, so floors and walls no longer use tex3d.
+- Light: `_hard_bloom` runs on all stages, and the soft `_glow` was removed. The torch is
+  white-balanced against the ambient as in M5 (`_TORCH` (120,120,114), r200; was a blue
+  (204,214,228) at r224). Searchlights (`stealth._draw_beam`) are two flat steps plus a 1 px
+  rim instead of four stacked blue layers. Cold floodlights use `_COLD` (120,134,152), so the
+  pool peaks near 1.4x and does not clip the snow to white.
+
+Metrics on the mid frames (crop y 170-570):
+- rail soft% 34.8 -> 28.1
+- noman 46.5 -> 42.4
+- customs blue cast +5.7 -> +2
+
+Gates: compile, smoke, `test_m6_campaign` (56) and gameplay goldens (34/0) are green. The
+smoke test failed once and passed 4 reruns, so treat it as a flake (cause not captured).
+Interleaved top-down A/B: the per-frame delta stays inside the ±4.5% run noise, and the mean
+is about 0. Shots: `shots/m6_td_before/`, `shots/m6_td_after/` (`contact_sheet.png`).
+
+Open:
+- noman still reads paler and emptier than M5. Closing that needs new snow tiles and
+  authored watch posts, which is an identity change for the user to decide.
+- Prop interiors (`_mat_fill`: boxcars, crates, truck beds) still sample tex3d.

@@ -80,3 +80,10 @@ budget_tokens: 2000
   `m6fx3d`, `m6world3d`) keeps the PS2 look. The top-down game never had a PS2
   pipeline in history and must not get one: M6 top-down matches the house art
   (art-pack tiles, hard edges, dark ambient), no pixel-art/affine/dither filter.
+- [2026-10-25] **One art source for the top-down game.** M6 floors and walls come
+  only from the art pack (`artpack.tile` / `artpack.wall`, `tools/make_art_pack.py`),
+  never from `assets/tex3d` (that set is for the 3D side). New looks are added as
+  new tile codes (`sn`/`st`); existing tile bytes stay fixed because M3-M5 goldens
+  depend on them. Light follows M5: falloff pools, a white-balanced torch, hard
+  bloom discs. A lamp on pale snow must stay under ~1.4x (`_COLD`), or it clips
+  to a white blob. Signed off by the user.

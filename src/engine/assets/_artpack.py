@@ -79,7 +79,9 @@ def get(name):
 # here, which silently sent those two 23x15-tile regions down the flat
 # pygame.draw.rect fallback in m2/draw.py - hence the hard-edged untextured
 # slabs in the overview.
-_TILE_VARIANTS = {".": 4, "g": 4, "O": 4, "d": 4, "s": 4}
+# "sn"/"st" are Mission 6's snow and trodden snow; two-character codes so
+# they never collide with a map code.
+_TILE_VARIANTS = {".": 4, "g": 4, "O": 4, "d": 4, "s": 4, "sn": 4, "st": 4}
 _CHECKER_CODES = ("K", "L", "Y", "M")
 
 
