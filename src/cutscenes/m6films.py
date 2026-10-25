@@ -573,11 +573,10 @@ def _insert_cabin(surface, t):
     ppose, proot = _w.heli_pilot()
     tw, hy = maru_look(t, ang)
     _air_actor(r, "maru", dict(ppose, twist=tw, head_y=hy), proot, 0.0, t, L,
-               seed=61, amp=0.15, expression="neutral",
-               mouth=None if ang == 1 else 0.0)
+               seed=61, amp=0.15, expression="neutral", mouth=0.0)
     _bp, broot = heli_seat()
     _air_actor(r, _BIRI, door_pose(t, ang), broot, 90.0, t, L, seed=34,
-               amp=0.22, rifle_on=True, mouth=None if ang == 2 else 0.0)
+               amp=0.22, rifle_on=True, mouth=0.0)
     _cabin_snow(r, t, L, seed=35)
     r.flush(buf)
     _w.present_ps2(surface, buf)
