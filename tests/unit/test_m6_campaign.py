@@ -734,14 +734,16 @@ class StagingAndExposureTests(unittest.TestCase):
                                    "m6_radio_vasile[%s]@%d" % (variant, t))
 
     def test_door_seat_clears_the_airframe(self):
+        # He rides through the airframe transform (``_air_actor``), rigid with
+        # the Huey through the pitch and the pedal turn, so the seat is checked
+        # in airframe space: world AABBs of a turned airframe would inflate.
         hum = _w3.hum(m6films._BIRI)
-        for t in range(0, 5000, 100):
-            pose, pos, yaw = m6films.seated_door(t)
-            boxes = _w3.heli_solids(*m6films.heli_at("m6_insert_valley", t))
-            d, part, box = _w3.penetration(hum, pose, pos, yaw, boxes,
-                                           parts=self.PARTS)
-            self.assertLessEqual(d, 0.02, "door seat@%d: %s in %s by %.3f m"
-                                 % (t, part, box, d))
+        pose, root = m6films.heli_seat()
+        boxes = _w3.heli_solids((0.0, 0.0, 0.0), 0.0)
+        d, part, box = _w3.penetration(hum, pose, root, 90.0, boxes,
+                                       parts=self.PARTS)
+        self.assertLessEqual(d, 0.02, "door seat: %s in %s by %.3f m"
+                             % (part, box, d))
 
     def test_seated_pelvis_and_feet_meet_the_seat_and_skid(self):
         volkov = _w3.hum("volkov")

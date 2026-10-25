@@ -107,7 +107,7 @@ silence and says only: *"Now you know what we've been fighting."*
 
 | # | Phase | Objective | Beat |
 |---|-------|-----------|------|
-| 1 | **Insertion** (cutscene) | — | A cabin briefing over the radio (Volkov is the deserter at Kim Kim), then Maru's helicopter hovers low over the ridge and Biribel drops off the sill into the powder. No canopy. 3D, about 28 s. |
+| 1 | **Insertion** (cutscene) | — | The Huey runs low up the frozen river under the Guard intercept (Volkov is the deserter at Kim Kim); Maru names him from the cockpit, Biribel answers from the open door; the pedal turn swings the lit crossing into the doorway; he drops off the skid into the downwash and walks for the floodlights alone. No canopy. 3D, about 27 s. |
 | 2 | **The Customs Post** | Get through the abandoned post. | Top-down; Guard sweeps it. Find the frozen queue of cars — families who didn't make it. |
 | 3 | **No-Man's-Land** | Cross the floodlit strip. | Stealth: floodlight sweeps, a timed gap. Spotted = alarm, waves from both gates. |
 | 4 | **The Rail Yard** | Find Volkov before the Guard does. | Boxcar search while Guard teams close in. |
@@ -200,9 +200,9 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
   The terminal file and Vasile's call are ending-film beats, not top-down
   stages. Death restarts at the deepest checkpoint reached (train → rail →
   noman → customs).
-- **3D films:** sixteen `engine3d` scenes, registered in
+- **3D films:** seventeen `engine3d` scenes, registered in
   `core.cutscene_registry` and rendered by `cutscenes/m6films.py` on the
-  `cutscenes/m6world3d.py` sets: a six-shot ridge insertion (`m6_insert_cabin` x3, `_valley`, `_jump`, `_ground`),
+  `cutscenes/m6world3d.py` sets: a six-shot insertion (`m6_insert_chase`, `m6_insert_cabin` x2, `_valley`, `_jump`, `_ground`),
   the five-shot boxcar conversation (`m6_boxcar_*`), and the ending chain
   (`m6_customs_return`, `m6_customs_terminal`, four `m6_radio_vasile` shots,
   `m6_radio_silence`, `m6_radio_maru`, `m6_cut_line`, the three-beat
@@ -216,14 +216,21 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
   alpha channel; a lamp behind a wall is skipped, a pole/guard crossing a halo
   masks it per pixel.  Halos are a hot core plus a dithered ~10-step falloff
   with a sodium-to-amber rim.
-- **Staging and motion:** insertion is a low-hover drop. The cabin shots
-  (one renderer, angle chosen by the line) set up the story, the valley shot
-  crests the ridge with the crossing lit below, and the Huey settles to a ~2 m
-  hover (`hover_pos`). Biribel pushes off the sill, drops into knee-deep powder
-  and crouches in one continuous low take (`jump_stage`); the ground shot starts
-  from exactly that pose, rises, checks the K9, and walks as the Huey climbs
-  away. The insertion renders through the PS2 pipeline (`rend_ps2`,
-  `present_ps2`). Volkov rises off the crate on planted feet and
+- **Staging and motion:** insertion is an action run into a low-hover drop.
+  The chase flies a camera ship alongside the Huey up the frozen river
+  (`run_heli`); the two cabin shots (one renderer, angle chosen by the line)
+  are Maru through the open windscreen and Biribel's profile at the door. The
+  valley shot rides over his shoulder as the Huey comes up nose-north and
+  pedal-turns nose-west (`approach_yaw`), swinging the door onto the crossing:
+  floodlight towers sweeping (`searchlight_hits`), gates, the lit train, no
+  city. The Huey settles to a ~2 m hover (`hover_pos`); Biribel pushes off the
+  sill at port arms, drops into knee-deep powder and crouches in one
+  continuous take (`jump_stage`) under the landing light, the downwash veil
+  (`_veil`) thickening and the landing powder hitting the lens. The ground shot
+  starts from exactly that pose: he rises, watches the Huey climb away dark
+  (`heli_depart`), and the camera orbits behind him as he walks for the
+  floodlights. The insertion renders through the PS2 pipeline (`rend_ps2`,
+  `present_ps2`); valley, jump and ground share one ridge bake (`_RIDGE_SET`). Volkov rises off the crate on planted feet and
   walks out through the boxcar door, and offers the notebook open with both
   hands before Biribel takes it. `m6world3d` owns the motion kit
   (`sit_pose`, `planted_pos`, `walk`, `walk_slip`) and a `SOLIDS` registry of
@@ -276,9 +283,9 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
 
 | # | scene | length | content |
 |---|-------|--------|---------|
-| 1a | `m6_insert_cabin` | 3.6 s, radio | GUARD (intercept): "All posts, Kim Kim crossing. High-value deserter in the rail yard. Hold the train." |
-| 1b | `m6_insert_cabin` | 3.0 s | MARU: "That's your notebook man. Volkov." |
-| 1c | `m6_insert_cabin` | 3.0 s | BIRIBEL: "Then I reach him first." |
-| 2 | `m6_insert_valley` | 5 s, auto | Over his shoulder from the open door: the Huey crests the ridge, the crossing lit below. Tag "KIM KIM BORDER // 02:40". |
-| 3 | `m6_insert_jump` | 5 s, auto | Low camera: the hover settles, wash blasts powder, he drops and crouches. |
-| 4 | `m6_insert_ground` | 6 s, auto | He rises, checks the K9; the Huey climbs off dark; the camera swings onto the crossing and holds. |
+| 1 | `m6_insert_chase` | 3.6 s, radio | EXT: the Huey screams low up the frozen river, the camera flying alongside, rotor strobing, nav lights blinking. GUARD (intercept): "All posts, Kim Kim crossing. High-value deserter in the rail yard. Hold the train." |
+| 2 | `m6_insert_cabin` | 3.0 s | INT cockpit: Maru lit green by the instruments, Biribel at the open door behind her. MARU: "That's your notebook man. Volkov." |
+| 3 | `m6_insert_cabin` | 3.0 s | INT door: Biribel in profile, snow whipping in, moon rim; he chambers the rifle. BIRIBEL: "Then I reach him first." |
+| 4 | `m6_insert_valley` | 5 s, auto | Over his shoulder: the pedal turn swings the door onto the crossing below, floodlights sweeping, gates, the lit train. No city. Tag "KIM KIM BORDER // 02:40". |
+| 5 | `m6_insert_jump` | 4.4 s, auto | Off the shelf lip: low hover in the downwash, the landing light's cone on the snow; he drops off the skid and the powder hits the lens. |
+| 6 | `m6_insert_ground` | 6 s, auto | The Huey climbs into the dark and the snow settles; he rises, watches it go and walks for the floodlights. Then the title card. |

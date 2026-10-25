@@ -8410,7 +8410,7 @@ def check_mission6_vertical_slice():
     assert all(isinstance(s, dict) and s.get("scene")
                for s in intro + boxcar + ending)
     assert [s["scene"] for s in intro] == [
-        "m6_insert_cabin", "m6_insert_cabin", "m6_insert_cabin",
+        "m6_insert_chase", "m6_insert_cabin", "m6_insert_cabin",
         "m6_insert_valley", "m6_insert_jump",
         "m6_insert_ground", "title_card"]
     assert [s["scene"] for s in ending] == [

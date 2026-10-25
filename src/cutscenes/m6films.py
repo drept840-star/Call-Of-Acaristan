@@ -2,7 +2,8 @@
 
 Registered scene ids (exact contract from ``docs/MISSION6_PLOT.md``):
 
-    insertion   m6_insert_cabin, m6_insert_valley, m6_insert_jump, m6_insert_ground
+    insertion   m6_insert_chase, m6_insert_cabin, m6_insert_valley,
+                m6_insert_jump, m6_insert_ground
     boxcar      m6_boxcar_wide, m6_boxcar_notebook, m6_boxcar_volkov,
                 m6_boxcar_biribel, m6_boxcar_exit
     ending      m6_customs_return, m6_customs_terminal,
@@ -112,9 +113,10 @@ def _shot_text():
 # ═══════════════════════════════════════════════════════════════════════════
 # Geography: the border compound sits on the valley floor (z 6..19); the
 # snow ridge climbs south of it and the LZ is its crest shelf (~16.7 m).
-# The Huey crests the ridge nose-north, settles to a ~2 m hover over the
-# shelf, and Biribel drops off the sill (open right/east door) into the
-# powder.  The crossing (m6world3d.crossing_far) lies 80-100 m north.
+# The Huey comes up the ridge nose-north with the open right door to the
+# east, pedal-turns nose-west over the shelf so the door faces the crossing
+# (m6world3d.crossing_far, 80-100 m north) and settles to a ~2 m hover;
+# Biribel drops off the sill into the powder and walks north.
 _PICKUP_XZ = (-2.0, 15.5)
 _PICKUP_GROUND = _w.height_at(*_PICKUP_XZ)
 # Door toward the runner from the east, tail pointed back between the lot
@@ -123,14 +125,16 @@ _PICKUP_YAW = -30.0
 _HOVER_XZ = (-1.0, -47.55)
 _LZ_GROUND = _w.height_at(*_HOVER_XZ)
 _HOVER_Y = _LZ_GROUND + 1.96            # skid bottom (y + 0.045) ~2 m over the shelf
-_HELI_YAW = 0.0
+_HELI_YAW = -90.0                       # the hover: nose west, door to the crossing
 _HELI_BANK = 2.5
 _SETTLE = 2.6                           # metres above the hover when the jump shot opens
-_APPROACH_MS = 5000                     # valley shot; the hover clock carries on from here
-_LAND = (1.55, -47.55)
+_APPROACH_MS = 5000                     # reveal shot; the hover clock carries on from here
+_TURN0, _TURN_MS = 1200, 2600           # the reveal's pedal turn
+_JUMP_MS = 4400
+_LAND = (_HOVER_XZ[0] - _w.HELI_DOOR_Z, _HOVER_XZ[1] + 2.55)
 _SINK = 0.30                            # knee-deep in powder, on top of the 5 cm snow skin
 _ROOT_DROP = 0.05
-_PUSH, _LEAVE, _AIR = 2800, 3300, 600    # jump clock: push-off, feet leave, flight
+_PUSH, _LEAVE, _AIR = 1900, 2350, 600    # jump clock: push-off, feet leave, flight
 _LAND_T = _LEAVE + _AIR
 
 
@@ -163,26 +167,40 @@ def _approach_e(t):
 
 
 def approach_pos(t):
-    """Valley shot: the Huey crests the shelf edge from the south and flares
+    """Reveal shot: the Huey comes up the ridge from the south and flares
     into the hover; the last frame equals the jump shot's first."""
     e = _approach_e(t)
-    a = (-6.5, _HOVER_Y + _SETTLE + 7.5, -86.0)
+    a = (_HOVER_XZ[0] - 3.0, _HOVER_Y + _SETTLE + 6.0, -72.0)
     b = hover_pos(t, climb=_SETTLE)
     return tuple(a[i] + (b[i] - a[i]) * e for i in range(3))
+
+
+def approach_yaw(t):
+    """Nose north up the ridge, then a pedal turn to nose west that swings
+    the open door off the slope onto the crossing."""
+    return _HELI_YAW * _w.ease5(t, _TURN0, _TURN_MS)
+
+
+def approach_pitch(t):
+    # nose down for the climb, a flare as it slows, level in the hover
+    return (4.0 * (1.0 - _w.ease5(t, 0, 2200))
+            - 3.0 * math.sin(math.pi * _w.ease5(t, 1800, 3200)))
 
 
 def jump_heli(t):
     """The hover during the jump shot: it settles the last 2.6 m while he
     shifts his weight, then holds."""
     return hover_pos(_APPROACH_MS + t,
-                     climb=_SETTLE * (1.0 - _w.ease5(t, 0, 1700)))
+                     climb=_SETTLE * (1.0 - _w.ease5(t, 0, 1500)))
 
 
-def cabin_pos(t):
-    """Cruise over the dark ridge for the briefing, door open."""
-    return (-6.0 + 0.4 * math.sin(t * 0.0011),
-            27.5 + 0.14 * math.sin(t * 0.0016),
-            -66.0 + t * 0.0035)
+def cabin_heli(t, ang=None):
+    """The briefing flies the chase's river run, further up the valley, with
+    the bank eased so the cabin holds still enough to talk in."""
+    if ang is None:
+        ang = _cabin_angle()
+    p, yaw, bank, _pitch = run_heli(_CABIN_T0 + (3600.0 if ang == 2 else 0.0) + t)
+    return p, yaw, 0.4 * bank, 2.5
 
 
 _SEAT = {}
@@ -221,31 +239,34 @@ def _landed_pose():
 
 def _landed_root():
     """Root that plants the crouch on ``_LAND``, knee-deep in the powder."""
-    pos = _w.planted_pos(_w.hum(_BIRI), _landed_pose(), 90.0, _LAND)
+    pos = _w.planted_pos(_w.hum(_BIRI), _landed_pose(), _HELI_YAW + 90.0, _LAND)
     return (pos[0], _w.height_at(*_LAND) - _ROOT_DROP - _SINK, pos[2])
+
+
+# the rifle at port arms, as the rack in the briefing leaves it
+_PORT_ARMS = dict(rsh_p=48, rsh_r=10, rel=78, lsh_p=58, lsh_r=4, lel=54,
+                  rifle_y=-28, rifle_p=-22)
 
 
 def jump_stage(t):
     """Weight shift on the sill, a leg push, a short ballistic drop and a
     crouch into the powder -> (pose, root, yaw, heli).  The feet do not move
-    before the push, so nothing skates on the skid."""
+    before the push, so nothing skates on the skid; the rifle stays at port
+    arms all the way down."""
     pose0, root = heli_seat()
     heli = jump_heli(t)
     L = _w.heli_xform(heli, hover_yaw(t), hover_bank(t))
     yaw = hover_yaw(t) + 90.0
-    wind = _w.ease5(t, 1700, 700)
-    lean = _w.ease5(t, 2300, 500)
-    push = _w.ease5(t, _PUSH, 520)
-    pose = dict(pose0)
+    wind = _w.ease5(t, 900, 600)
+    lean = _w.ease5(t, 1400, 450)
+    push = _w.ease5(t, _PUSH, 450)
+    pose = dict(pose0, **_PORT_ARMS)
     pose["spine"] = 7 + 5 * wind + 13 * lean + 8 * push
-    pose["head_p"] = 1 - 2 * wind - 7 * lean + 4 * push
-    pose["lsh_p"] = 12 + 22 * wind + 26 * push
-    pose["rsh_p"] = 10 + 18 * wind + 22 * push
-    pose["lel"] = 30 + 18 * wind
-    pose["rel"] = 26 + 14 * wind
-    leap = dict(pose, spine=24, head_p=-12,
-                lhip_p=-16, rhip_p=-8, lkn=58, rkn=46,
-                lsh_p=54, rsh_p=46, lel=22, rel=28)
+    pose["head_p"] = 6 - 4 * wind - 7 * lean + 4 * push
+    pose["rsh_p"] = _PORT_ARMS["rsh_p"] - 6 * lean
+    pose["lsh_p"] = _PORT_ARMS["lsh_p"] - 8 * lean
+    leap = dict(pose, spine=24, head_p=-6,
+                lhip_p=-16, rhip_p=-8, lkn=58, rkn=46)
     if push > 0.0:
         pose = _mix(pose, leap, push)
     if t <= _LEAVE:
@@ -265,35 +286,49 @@ def jump_stage(t):
 
 
 _GROUND_ROUTE = {}
-_W0 = 3300
+_W0 = 3100
+_WALK_MS = 4200                 # longer than the shot: he is still walking at the cut
 _READY_KEYS = ("lsh_p", "lsh_r", "lel", "rsh_p", "rsh_r", "rel", "rifle_p")
 
 
 def ground_route():
     r = _GROUND_ROUTE.get("v")
     if r is None:
-        r = _GROUND_ROUTE["v"] = _w.path([_LAND, (_LAND[0] - 0.15, _LAND[1] + 2.6)])
+        r = _GROUND_ROUTE["v"] = _w.path([_LAND, (_LAND[0] - 0.15, _LAND[1] + 4.2)])
     return r
 
 
+def ground_watch(t):
+    """0..1: how far he has turned to watch the Huey climb away."""
+    return _w.ease5(t, 1300, 700) * (1.0 - _w.ease5(t, 2450, 600))
+
+
 def ground_stage(t):
-    """Rises out of the powder, checks the K9, turns north, walks a few steps."""
+    """Rises out of the powder facing the crossing, turns to watch the Huey
+    climb away, faces north again and walks toward the floodlights."""
     hum = _w.hum(_BIRI)
-    rise = _w.ease5(t, 300, 1200)
-    yaw = _w.yaw_mix(90.0, 0.0, _w.ease5(t, 2300, 900))
-    chk = _w.ease5(t, 1500, 350) * (1.0 - _w.ease5(t, 2050, 350))
+    rise = _w.ease5(t, 200, 1100)
     if t < _W0:
+        watch = ground_watch(t)
+        yaw = _HELI_YAW + 90.0 + 35.0 * watch
         pose = _mix("kneel_over", "ready", rise)
         pose["spine"] = pose.get("spine", 0) + 8 * math.sin(math.pi * rise)
-        pose["head_p"] = pose.get("head_p", 0) - 14 * chk
-        pose["lsh_p"] = pose.get("lsh_p", 0) + 12 * chk
         pos = _w.planted_pos(hum, pose, yaw, _LAND)
         sink = _SINK * (1.0 - rise)
-        return pose, (pos[0], _w.height_at(*_LAND) - _ROOT_DROP - sink, pos[2]), yaw
+        root = (pos[0], _w.height_at(*_LAND) - _ROOT_DROP - sink, pos[2])
+        if watch > 0.0:
+            hp = heli_depart(t)[0]
+            tw, hy = _look(root, yaw, hp, twist_max=25.0, head_max=45.0,
+                           share=0.4)
+            up = max(-30.0, _pitch_to((root[0], root[1] + 1.6, root[2]), hp))
+            pose["twist"] = pose.get("twist", 0) + tw * watch
+            pose["head_y"] = pose.get("head_y", 0) + hy * watch
+            pose["head_p"] = pose.get("head_p", 0) + up * watch
+        return pose, root, yaw
     route = ground_route()
     stride = _w.walk_stride(route.length, 0.56)
     g0, g1 = _w.walk_span(route.length, stride)
-    g = g0 + (g1 - g0) * _w.travel(t, _W0, 2200)
+    g = g0 + (g1 - g0) * _w.travel(t, _W0, _WALK_MS)
     pose, pos, wyaw = _w.walk(hum, route, g, stride, speed=1.05,
                               ground=lambda x, z: _w.height_at(x, z) - _ROOT_DROP)
     from engine3d.rig import POSES
@@ -304,12 +339,17 @@ def ground_stage(t):
 
 
 def heli_depart(t):
-    """The hover climbs away, lights out, and banks off south-west ->
+    """The hover lifts, pedal-turns nose south-south-east and climbs away
+    back over the ridge, gathering speed, lights out ->
     (pos, yaw, bank, pitch)."""
-    q = _w.travel(t, 300, 3800)
-    return (hover_pos(_APPROACH_MS + 5000 + t, climb=12.0 * q,
-                      drift=(-12.0 * q, -9.0 * q)),
-            hover_yaw(t) - 58.0 * q, hover_bank(t) - 17.0 * q, -3.0 * q)
+    q = max(0.0, (t - 300) / 5700.0)
+    q2 = q * q
+    turn = _w.ease5(t, 700, 2400)
+    return (hover_pos(_APPROACH_MS + _JUMP_MS + t,
+                      climb=3.0 * _w.ease5(t, 300, 1600) + 26.0 * q2,
+                      drift=(10.0 * q2, -38.0 * q2)),
+            _HELI_YAW - 105.0 * turn,
+            _HELI_BANK - 6.0 * math.sin(math.pi * turn), 9.0 * q2)
 
 
 def pickup_pos(t):
@@ -325,10 +365,12 @@ def pickup_pos(t):
 def heli_at(scene, t):
     """Airframe placement ``scene`` draws at ``t`` -> (pos, yaw, bank, pitch);
     None for sets without a helicopter.  The probe and tests read this."""
+    if scene == "m6_insert_chase":
+        return run_heli(t)
     if scene == "m6_insert_cabin":
-        return cabin_pos(t), 0.0, 3.0, -2.0
+        return cabin_heli(t)
     if scene == "m6_insert_valley":
-        return approach_pos(t), 0.0, _HELI_BANK, 0.0
+        return approach_pos(t), approach_yaw(t), _HELI_BANK, approach_pitch(t)
     if scene == "m6_insert_jump":
         return jump_heli(t), hover_yaw(t), hover_bank(t), 0.0
     if scene == "m6_insert_ground":
@@ -374,88 +416,169 @@ def walk_metrics(scene, second=None):
 
 
 def _cabin_angle():
-    text = _shot_text()
-    if "Kim Kim" in text:
-        return 0            # the intercept: Biribel listening
-    if "notebook" in text:
-        return 1            # Maru glances back
-    return 2                # Biribel, close, answering
+    """1: Maru turns from the controls; 2: Biribel at the door answers."""
+    return 1 if "notebook" in _shot_text() else 2
+
+
+_CABIN_T0 = 9000.0              # run clock the briefing starts on
+_GREEN = (80, 236, 150)         # instrument light
+_MOON = (150, 184, 236)
+_RACK_MS = 900
+
+
+def _strobe(t, hz=7.0, depth=0.38):
+    """Moonlight chopped by the rotor: 1 between blades, 1 - depth under one.
+    Calmer under the reduced-flash setting, steady with reduced motion."""
+    if _fx.reduced_motion():
+        return 1.0
+    ph = (t * hz / 1000.0) % 1.0
+    return 1.0 - depth * _fx.flash_scale() * (1.0 if ph < 0.22 else 0.0)
+
+
+def _run_light():
+    """The run's moon key.  Chase and briefing share it, so the valley bakes
+    once for the three shots."""
+    from engine3d.core import Light
+    return Light(direction=(0.70, 0.42, 0.58), ambient=0.24, diffuse=0.78,
+                 sky=0.10, tint=(0.80, 0.89, 1.10))
+
+
+def maru_look(t, ang):
+    """Maru's turn from the windscreen to the man at the door ->
+    (twist, head_y) in the pilot rig's frame."""
+    if ang != 1:
+        return 0.0, 0.0
+    _pp, proot = _w.heli_pilot()
+    _bp, broot = heli_seat()
+    tw, hy = _look(proot, 0.0, (broot[0] + 0.2, 1.4, broot[2]),
+                   twist_max=20.0, head_max=40.0, share=0.4)
+    k = _w.ease5(t, 250, 650)
+    return tw * k, hy * k
+
+
+def door_pose(t, ang):
+    """Biribel on the sill with the rifle: across his knees while Maru
+    talks; raised and racked as he answers (rack at ``_RACK_MS``)."""
+    pose, _root = heli_seat()
+    p = dict(pose)
+    p.update(rsh_p=34, rsh_r=10, rel=70, lsh_p=40, lsh_r=4, lel=72,
+             rifle_y=-58, rifle_p=8, head_p=6)
+    if ang != 2:
+        p["head_y"], p["twist"] = 22.0, 6.0
+        return p
+    up = _w.ease5(t, 150, 420)
+    pull = _w.ease5(t, _RACK_MS, 90) * (1.0 - _w.ease5(t, _RACK_MS + 130, 110))
+    p.update(rsh_p=34 + 14 * up - 8 * pull, rel=70 + 8 * up + 22 * pull,
+             rifle_y=-58 + 30 * up, rifle_p=8 - 30 * up - 6 * pull,
+             lsh_p=40 + 18 * up, lel=72 - 18 * up,
+             head_p=6 + 6 * up - 4 * _w.ease5(t, 1300, 500),
+             head_y=-6 + 10 * _w.ease5(t, 1300, 500))
+    return p
 
 
 def cabin_cam(ang, t, L):
-    """Eye/target (world) for one briefing angle; a slow push-in on all three."""
-    k = t / 3600.0
-    if ang == 0:
-        eye, tgt, fov = (-1.00 + 0.10 * k, 1.58, -1.45 + 0.15 * k), (0.28, 1.62, 0.45), 52
-    elif ang == 1:
-        eye, tgt, fov = (-0.95, 1.50, 0.50 + 0.12 * k), (0.50, 1.72, 2.20), 50
+    """Eye/target (world) for one briefing angle, rigid with the airframe."""
+    k = min(1.0, t / 3200.0)
+    if ang == 1:
+        # in the open windscreen, right of her: her face over the coaming,
+        # the man at the door past her shoulder, clear of her seat back
+        eye = (0.96 - 0.03 * k, 2.02, 3.40 - 0.12 * k)
+        tgt = (0.72, 1.75, 1.92)
+        fov = 58.0
     else:
-        eye, tgt, fov = (-1.00 + 0.08 * k, 1.50, -1.05 + 0.08 * k), (0.30, 1.70, 0.45), 46
+        # in the slipstream ahead of the door, looking aft along the skin:
+        # his profile against the dark cabin, the snow streaming past
+        eye = (1.98 - 0.05 * k, 1.64, 2.60 - 0.12 * k)
+        tgt = (1.12, 1.40, 0.92)
+        fov = 50.0
     return L(*eye), L(*tgt), fov
 
 
+def _cabin_snow(r, t, L, n=46, seed=0):
+    """Snow in the airframe's frame: streams aft past the door at speed and
+    a few flakes whip in over the sill and swirl in the cabin."""
+    segs = []
+    a = t * 0.001
+    for i in range(n):
+        u, v, w = _w._u(i, seed, 1), _w._u(i, seed, 2), _w._u(i, seed, 3)
+        inside = i % 3 == 0
+        if inside:
+            vel = (-1.4 - 0.8 * w, -0.3, -3.0 - 2.0 * u)
+            x = 1.6 - ((u * 1.9 + 1.4 * a * (1.0 + w)) % 1.9)
+            y = 0.75 + ((v * 1.3 + 0.2 * a) % 1.3)
+            z = 1.9 - ((w * 3.0 + (3.0 + 2.0 * u) * a) % 3.2)
+        else:
+            vel = (-0.4, -1.0, -24.0 - 6.0 * u)
+            x = 1.35 + u * 3.5
+            y = -0.8 + ((v * 4.0 - 0.6 * a) % 4.0)
+            z = 4.0 - ((w * 10.0 + 26.0 * a * (1.0 + 0.2 * u)) % 10.0)
+        p0 = L(x, y, z)
+        p1 = L(x - vel[0] * 0.03, y - vel[1] * 0.03, z - vel[2] * 0.03)
+        segs.append((p0, p1, (196, 206, 224) if inside else (150, 162, 186), 1))
+    batch = getattr(r, "add_lines3d", None)
+    if batch is not None:
+        batch(segs, layer=4, depth_test=False)
+    else:
+        for p0, p1, c, wd in segs:
+            r.add_line3d(p0, p1, c, wd, layer=4)
+
+
 def _insert_cabin(surface, t):
-    """Briefing: Biribel on the bench, the door open on the dark ridge, Maru
-    up front.  One renderer, three angles chosen by the line."""
-    t = min(t, 3800)
+    """INT. Huey, the briefing on the run.  Angle 1: Maru, lit green by the
+    instruments, turns from the controls; Biribel sits at the open door
+    behind her.  Angle 2: Biribel in profile against the door, the moon
+    chopped by the rotor, snow streaming past; he racks the rifle."""
+    t = min(t, 6000)
     ang = _cabin_angle()
     r, buf = _w.rend_ps2()
-    r.fog, r.fog_start, r.fog_end = (10, 14, 22), 20.0, 150.0
-    heli, hyaw, hbank, hpitch = heli_at("m6_insert_cabin", t)
+    r.fog, r.fog_start, r.fog_end = (12, 16, 26), 40.0, 175.0
+    heli, hyaw, hbank, hpitch = cabin_heli(t, ang)
     L = _w.heli_xform(heli, hyaw, hbank, hpitch)
-    from engine3d.core import Light
-    r.light = Light(direction=(-0.55, 0.50, -0.30), ambient=0.30, diffuse=0.52,
-                    sky=0.06, tint=(0.86, 0.93, 1.08))
+    _lamp, hit = _lamp_ray(L, hyaw, hpitch)
+    r.light = _run_light()
+    moon = _strobe(t)
     lights = [
-        {"pos": L(-0.75, 1.95, -0.25), "color": (170, 192, 226),
-         "intensity": 1.0, "range": 2.8},
-        {"pos": L(-0.2, 1.85, 0.4), "color": (255, 76, 50),
-         "intensity": 0.40, "range": 2.1},
-        {"pos": L(0.6, 1.25, -0.7), "color": (70, 190, 130),
-         "intensity": 0.26, "range": 1.6},
+        {"pos": L(0.52, 1.36, 2.80), "color": _GREEN, "intensity": 0.80,
+         "range": 1.25},
+        {"pos": L(0.36, 2.02, 0.42), "color": (255, 84, 58),
+         "intensity": 0.55, "range": 2.2},
     ]
-    if ang == 0:
-        flick = 0.7 + 0.3 * math.sin(t * 0.021)
-        lights.append({"pos": L(-0.85, 1.55, -0.45), "color": (120, 230, 150),
-                       "intensity": 0.45 * flick, "range": 1.5})
-    r.set_lights(lights)
-    pose, root = _bench_seat(
-        _BIRI, 0.28, 0.45, 0.62,
-        dict(spine=4, head_p=1, lsh_p=12, lel=26, rsh_p=10, rel=24), yaw=-90.0)
-    seat = L(*root)
-    yaw = hyaw - 90.0
-    _ppose, proot = _w.heli_pilot()
-    phead = L(proot[0], 1.92, proot[2] + 0.10)
-    if ang == 0:
-        target = L(-0.85, 1.35, -0.45)
-    elif ang == 1:
-        target = phead
+    if ang == 1:
+        lights.append({"pos": L(2.3, 2.2, 1.1), "color": _MOON,
+                       "intensity": 0.85 * moon, "range": 4.0})
     else:
-        target = L(7.0, 1.3, 4.0) if t < 1100 else L(-2.0, 1.5, 0.5)
-    pose["twist"], pose["head_y"] = _look(seat, yaw, target)
-    pose["head_p"] = 3.0 if ang == 0 else -1.0
-    glance = _w.ease5(t, 300, 500) if ang == 1 else 0.0
-    tw, hy = _look(proot, 0.0, (root[0], 1.90, root[2]))
-    pilot = (tw * glance, hy * glance)
+        # the rim: moon behind him, outside and aft of the door; the
+        # cockpit's green on the side of his face that the lens sees
+        lights.append({"pos": L(2.5, 2.4, -0.9), "color": _MOON,
+                       "intensity": 1.2 * moon, "range": 4.2})
+        lights.append({"pos": L(0.45, 1.35, 2.30), "color": _GREEN,
+                       "intensity": 0.7, "range": 2.2})
+    r.set_lights(lights)
+    r.set_pools([{"pos": (hit[0], hit[1] + 5.0, hit[2]), "range": 6.0,
+                  "color": (230, 206, 160), "hot": (255, 250, 236),
+                  "intensity": 2.6}])
     eye, tgt, fov = cabin_cam(ang, t, L)
-    _cam(r, t, eye, tgt, fov, hh=0.008, seed=20 + ang)
-    _w.night(r, buf, t, top=(5, 8, 16), bot=(18, 26, 44), stars=44,
-             moon=(-10, 9.0), sodium=(60, 40, 26), seed=21, star_cut=0.45)
-    _w.static_scene(r, "m6_insert_cabin")
+    shk = None
+    if ang == 2 and t >= _RACK_MS and not _fx.reduced_motion():
+        shk = _fx.shake(t, _RACK_MS + 60, 260, 0.010 * _fx.shake_scale())
+    _cam(r, t, eye, tgt, fov, hh=0.006, seed=20 + ang, shk=shk)
+    _w.night(r, buf, t, top=(5, 8, 17), bot=(20, 28, 46), stars=60,
+             moon=(50, 25.0), sodium=None, seed=33, star_cut=0.25)
+    _w.static_scene(r, _RUN_SET)
     r.begin()
-    _w.terrain(r, t, lights=False)
-    _w.crossing_far(r, t)
+    _w.run_valley(r, t)
     _w.static_end(r)
-    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=0.85, bank=hbank,
-                  pitch=hpitch, door=1.0, blur=0.5, pilot=pilot)
-    _door_jump_seat(r, L)
-    _w.actor(r, _BIRI, pose, seat, yaw, t, seed=82, amp=0.22,
-             expression="stern" if ang != 1 else "neutral")
-    if ang == 0:
-        r.add_sprite(L(-0.85, 1.55, -0.45),
-                     _fx.glow((120, 230, 150), 0.07, t, seed=23, intensity=0.8),
-                     layer=_fx.FX_LAYER)
-    _w.snow3d(r, t, seed=84, n=20, spread=8, height=6, speed=1.2)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=1.0, bank=hbank,
+                  pitch=hpitch, door=1.0, blur=0.5, pilot=False)
+    ppose, proot = _w.heli_pilot()
+    tw, hy = maru_look(t, ang)
+    _air_actor(r, "maru", dict(ppose, twist=tw, head_y=hy), proot, 0.0, t, L,
+               seed=61, amp=0.15, expression="neutral",
+               mouth=None if ang == 1 else 0.0)
+    _bp, broot = heli_seat()
+    _air_actor(r, _BIRI, door_pose(t, ang), broot, 90.0, t, L, seed=34,
+               amp=0.22, rifle_on=True, mouth=None if ang == 2 else 0.0)
+    _cabin_snow(r, t, L, seed=35)
     r.flush(buf)
     _w.present_ps2(surface, buf)
     _w.finish(surface, 6101, "", t=t, ps2=True)
@@ -473,137 +596,560 @@ def _wash(r, heli, t, k, seed):
                           intensity=0.22 * k), layer=_fx.FX_LAYER)
 
 
-def _insert_valley(surface, t):
-    """Over his shoulder from the open door: the Huey crests the ridge and the
-    crossing lies lit below."""
-    t = min(t, _APPROACH_MS)
+# ── chase: the Huey up the frozen river ──
+# The run valley (m6world3d.run_valley) repeats every RUN_P metres, so the
+# airframe and the camera ride ``s = s0 + v t (mod RUN_P)`` together and the
+# radio line can hold the shot as long as it likes.
+_RUN_V = 0.028                  # m/ms along the river, ~100 km/h
+_RUN_ALT = 7.0                  # skids over the ice, rotor level with the pines
+_RUN_S0 = 26.0
+_RUN_BANK = 400.0               # deg of bank per rad/m of turn (~10 deg peak)
+_RUN_PITCH = 4.0                # cruise nose-down
+_LAMP_DOWN = 0.44               # landing light's tilt below the nose line
+_LAMP_COL = (255, 238, 204)
+_RUN_SET = "m6_run"             # static key: chase and briefing share the bake
+
+
+def run_s(t):
+    return (_RUN_S0 + t * _RUN_V) % _w.RUN_P
+
+
+def run_frame(z):
+    """(forward, right) unit vectors of the river at ``z``."""
+    d = _w.run_dx(z)
+    n = math.hypot(d, 1.0)
+    return (d / n, 0.0, 1.0 / n), (1.0 / n, 0.0, -d / n)
+
+
+def run_heli(t, s=None):
+    """The Huey on the river -> (pos, yaw, bank, pitch): yaw from the
+    tangent, bank into the bends, a slow rotor bob."""
+    z = run_s(t) if s is None else s
+    d = _w.run_dx(z)
+    turn = _w.run_ddx(z) / (1.0 + d * d)
+    bob = 0.22 * math.sin(t * 0.0013) + 0.07 * math.sin(t * 0.0031 + 0.7)
+    return ((_w.run_x(z), _RUN_ALT + bob, z), math.degrees(math.atan2(d, 1.0)),
+            max(-11.0, min(11.0, -turn * _RUN_BANK)), _RUN_PITCH)
+
+
+def chase_cam(t):
+    """The camera ship: it opens low on the east bank ahead of the Huey,
+    lets it roar past and climbs into a 3/4 rear chase with the landing
+    light's pool sliding over the ice in frame -> (eye, tgt, fov)."""
+    s = run_s(t)
+    heli, yaw, _bank, pitch = run_heli(t, s)
+    f, rt = run_frame(s)
+    u = _w.ease5(t, 0, 3000)
+    k = _w.ease5(t, 2400, 1800)
+    dx = 12.0 + 6.5 * u + 0.9 * k * math.sin(t * 0.00061)
+    dz = 22.0 - 30.0 * u + 1.6 * k * math.sin(t * 0.00047 + 2.0)
+    ex, ez = heli[0] + rt[0] * dx + f[0] * dz, heli[2] + rt[2] * dx + f[2] * dz
+    ey = 2.4 + 8.4 * u + 0.5 * k * math.sin(t * 0.00093 + 1.0)
+    ey = max(ey, _w.run_height(ex, ez) + 1.8)
+    _lamp, hit = _lamp_ray(_w.heli_xform(heli, yaw, 0.0, pitch), yaw, pitch)
+    c = (heli[0], heli[1] + 1.4, heli[2])
+    m = 0.30 + 0.14 * u
+    tgt = tuple(c[i] + (hit[i] - c[i]) * m for i in range(3))
+    return (ex, ey, ez), tgt, 58.0 - 6.0 * u
+
+
+def _run_ground(x, z):
+    return _w.run_height(x, z) if _w.RUN_Z0 < z < _w.RUN_Z1 else 0.0
+
+
+def _lamp_ray(L, yaw, pitch, down=_LAMP_DOWN, ground=_run_ground):
+    """Landing light under the chin -> (lamp, ground hit) in world space;
+    ``down`` tilts it below the nose line, ``ground`` is the set's floor."""
+    lamp = L(0.0, 0.52, 3.30)
+    a, p = math.radians(yaw), math.radians(pitch) + down
+    d = (math.sin(a) * math.cos(p), -math.sin(p), math.cos(a) * math.cos(p))
+    hit = lamp
+    for _i in range(3):
+        g = ground(hit[0], hit[2])
+        k = (lamp[1] - g) / max(0.05, -d[1])
+        hit = (lamp[0] + d[0] * k, g, lamp[2] + d[2] * k)
+    return lamp, hit
+
+
+def _beam(r, a, b, w0, w1, col, k, steps=4, segs=6):
+    """A cone of lit air from ``a`` to ``b``: tapered quads projected now,
+    posterised in ``steps`` bands across and fading over ``segs`` lengths,
+    added to the frame.  A per-pixel light, so the airframe in front of it
+    masks it."""
+    if k <= 0.02:
+        return
+    pts = []
+    for j in range(segs + 1):
+        q = j / float(segs)
+        p = r.project(tuple(a[i] + (b[i] - a[i]) * q for i in range(3)))
+        if p is None:
+            return
+        pts.append((p[0], p[1], (w0 + (w1 - w0) * q) * r.focal / p[2]))
+    rad = max(p[2] for p in pts)
+    x0 = int(min(p[0] for p in pts) - rad) - 2
+    y0 = int(min(p[1] for p in pts) - rad) - 2
+    x1 = int(max(p[0] for p in pts) + rad) + 2
+    y1 = int(max(p[1] for p in pts) + rad) + 2
+    if x1 - x0 > 2000 or y1 - y0 > 2000 or x1 - x0 < 3:
+        return
+    size = (x1 - x0, y1 - y0)
+    img = pygame.Surface(size)
+    img.fill((0, 0, 0))
+    layer = pygame.Surface(size)
+    for j in range(segs):
+        (ax, ay, ra), (bx, by, rb) = pts[j], pts[j + 1]
+        n = math.hypot(bx - ax, by - ay)
+        if n < 0.5:
+            continue
+        nx, ny = -(by - ay) / n, (bx - ax) / n
+        fade = 1.0 - 0.75 * j / float(segs)
+        for i in range(steps):
+            w = 1.0 - i / float(steps)
+            c = tuple(int(v * k * fade / steps) for v in col)
+            layer.fill((0, 0, 0))
+            pygame.draw.polygon(layer, c, [
+                (ax + nx * ra * w - x0, ay + ny * ra * w - y0),
+                (bx + nx * rb * w - x0, by + ny * rb * w - y0),
+                (bx - nx * rb * w - x0, by - ny * rb * w - y0),
+                (ax - nx * ra * w - x0, ay - ny * ra * w - y0)])
+            img.blit(layer, (0, 0), special_flags=pygame.BLEND_ADD)
+
+    def draw(s, sx, sy, scale, z):
+        s.blit(img, (x0, y0), special_flags=pygame.BLEND_ADD)
+    draw.light = True
+    draw.bounds = (x0, y0, size[0], size[1])
+    mid = tuple(a[i] + (b[i] - a[i]) * 0.35 for i in range(3))
+    r.add_sprite(mid, draw, layer=_fx.FX_LAYER)
+
+
+def _ground_glow(r, at, radius_m, col, k):
+    """Software stand-in for a GL pool: a flat ellipse on the ground,
+    squashed by the view's grazing angle."""
+    if getattr(r, "backend", "") == "gl" or k <= 0.02:
+        return
+    cam = r.cam
+    dist = math.dist(cam, at) or 1.0
+    flat = max(0.12, min(1.0, abs(cam[1] - at[1]) / dist))
+
+    def draw(s, sx, sy, scale, z):
+        rx = min(300, radius_m * scale)
+        if rx < 2:
+            return
+        ry = max(1.5, rx * flat)
+        kk = round(k * 32.0) / 32.0
+        stops = ((0.0, _fx._m5._scale(col, kk)),
+                 (1.0, _fx._m5._scale(col, kk * 0.2)))
+        _fx._m5._add_at(s, _fx._halo_img(stops, rx, ry, power=2.2, levels=9,
+                                     peak=1.0), sx, sy)
+    draw.bounds_m = (radius_m, radius_m)
+    draw.bounds_cap_px = (300, 300)
+    r.add_sprite(at, draw, layer=_fx.FX_LAYER)
+
+
+def _streak_snow(r, t, vel, seed=0, n=150, spread=14.0, height=9.0,
+                 exposure=0.035, col=(150, 160, 182), lamp=None):
+    """World-anchored flakes wrapped round the lens, each drawn as the path
+    it makes across the shutter: at chase speed they stream past as
+    streaks.  ``vel`` is the camera's velocity (m/s).  ``spread`` should
+    divide RUN_P / 2 so a wrap of the run is invisible.  ``lamp`` =
+    (pos, dir, cos_cone) lights the flakes inside the landing-light cone."""
+    cx, cy, cz = r.cam
+    span = 2.0 * spread
+    a = t * 0.001
+    segs = []
+    for i in range(n):
+        u, v, w = _w._u(i, seed, 1), _w._u(i, seed, 2), _w._u(i, seed, 3)
+        fall = 1.1 + 0.9 * w
+        x = cx + ((u * span + 0.6 * a - cx + spread) % span) - spread
+        z = cz + ((v * span - cz + spread) % span) - spread
+        y = cy + ((((w * 37.0) % 1.0) * height - fall * a - cy + height / 2)
+                  % height) - height / 2
+        rel = (0.6 - vel[0], -fall - vel[1], -vel[2])
+        tail = (x - rel[0] * exposure, y - rel[1] * exposure, z - rel[2] * exposure)
+        c = col
+        if lamp is not None:
+            lp, ld, cone = lamp
+            dv = (x - lp[0], y - lp[1], z - lp[2])
+            dn = math.sqrt(dv[0] ** 2 + dv[1] ** 2 + dv[2] ** 2) or 1.0
+            ca = (dv[0] * ld[0] + dv[1] * ld[1] + dv[2] * ld[2]) / dn
+            if ca > cone and dn < 26.0:
+                c = (236, 230, 214)
+        segs.append(((x, y, z), tail, c, 1))
+    batch = getattr(r, "add_lines3d", None)
+    if batch is not None:
+        batch(segs, layer=4, depth_test=False)
+    else:
+        for p0, p1, c, wd in segs:
+            r.add_line3d(p0, p1, c, wd, layer=4)
+
+
+def _insert_chase(surface, t):
+    """EXT: the Huey screams low up the frozen river under the moon, the
+    camera ship alongside; the Guard intercept plays over it."""
     r, buf = _w.rend_ps2()
-    r.fog, r.fog_start, r.fog_end = (9, 13, 21), 40.0, 230.0
-    heli, hyaw, hbank, hpitch = heli_at("m6_insert_valley", t)
+    r.fog, r.fog_start, r.fog_end = (12, 16, 26), 40.0, 175.0
+    s = run_s(t)
+    heli, hyaw, hbank, hpitch = run_heli(t, s)
     L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    f, rt = run_frame(s)
+    lamp, hit = _lamp_ray(L, hyaw, hpitch)
+    # the moon rides behind the camera ship's shoulder (north-east): the
+    # west wall and the ice take the key, the door side catches it
+    r.light = _run_light()
+    r.set_lights([
+        {"pos": L(0.72, 1.62, 0.86), "color": (255, 92, 64), "intensity": 0.75,
+         "range": 2.6},
+        {"pos": (heli[0] + rt[0] * 7.0, heli[1] + 3.5, heli[2] + rt[2] * 7.0),
+         "color": (150, 178, 226), "intensity": 0.55, "range": 13.0},
+        {"pos": (hit[0], hit[1] + 1.5, hit[2]), "color": _LAMP_COL,
+         "intensity": 0.7, "range": 8.0},
+    ])
+    gy = hit[1]
+    # the pool lands on dark ice: it needs ~3x a lamp pool's gain to read
+    r.set_pools([{"pos": (hit[0], gy + 5.0, hit[2]), "range": 6.0,
+                  "color": (230, 206, 160), "hot": (255, 250, 236),
+                  "intensity": 2.6}])
+    eye, tgt, fov = chase_cam(t)
+    e0, _t0, _f0 = chase_cam(t - 40.0)
+    vel = tuple((eye[i] - e0[i]) / 0.040 for i in range(3))
+    _cam(r, t, eye, tgt, fov, hh=0.03, seed=31, roll=0.25 * hbank)
+    _w.night(r, buf, t, top=(5, 8, 17), bot=(20, 28, 46), stars=60,
+             moon=(50, 25.0), sodium=None, seed=33, star_cut=0.25)
+    _w.static_scene(r, _RUN_SET)
+    r.begin()
+    _w.run_valley(r, t)
+    _w.static_end(r)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=1.0, bank=hbank,
+                  pitch=hpitch, blur=0.8)
     pose, root = heli_seat()
-    pose = dict(pose)
-    seat = L(*root)
-    yaw = hyaw + 90.0
-    pose["twist"], pose["head_y"] = _look(seat, yaw, (0.0, 6.0, 36.0))
-    pose["head_p"] = 3.0
-    head = _joints(_BIRI, pose, seat, yaw)["head"]
-    _rig_insert(r, heli, cabin=0.22, amb=0.25, dif=0.46,
-                fill=(0.55, 0.50, -0.20), yaw=hyaw, bank=hbank,
-                extra=[{"pos": (head[0] + 1.6, head[1] + 0.5, head[2] - 0.9),
-                        "color": (170, 192, 226), "intensity": 0.9,
-                        "range": 4.0},
-                       {"pos": (head[0] - 0.6, head[1] + 0.3, head[2] + 1.6),
-                        "color": (255, 178, 104), "intensity": 0.55,
-                        "range": 3.2}])
-    _cam(r, t, L(3.6, 2.5, -1.6), L(0.8, 1.05, 5.5), 50, hh=0.02, seed=1,
-         roll=0.20 * math.sin(t * 0.0007))
-    _w.night(r, buf, t, top=(5, 8, 16), bot=(18, 26, 44), stars=52,
-             moon=(28, 0.30), sodium=(70, 44, 26), seed=3)
-    _w.static_scene(r, "m6_insert_valley")
+    _air_actor(r, _BIRI, dict(pose, head_p=4.0), root, 90.0, t, L, seed=34,
+               amp=0.3)
+    r.add_sprite(lamp, _fx.glow(_LAMP_COL, 0.9, core=_LAMP_COL, max_px=26),
+                 layer=_fx.FX_LAYER)
+    _beam(r, lamp, hit, 0.14, 0.16 * math.dist(lamp, hit), _LAMP_COL, 0.26)
+    _ground_glow(r, hit, 6.0, (230, 214, 180), 0.55)
+    # downwash: powder kicked off the ice behind the Huey, world-anchored
+    step = 8.0
+    base = math.floor(s / step) * step
+    for i in range(6):
+        sz = base - i * step
+        age = (s - sz) / _RUN_V
+        k = 0.42 * math.exp(-age / 900.0)
+        if k < 0.03:
+            continue
+        r.add_sprite((_w.run_x(sz), 1.0, sz),
+                     _fx.powder(age, 40 + int(sz // step) % 7, 4.0 + age * 0.003,
+                                k, puffs=8), layer=_fx.FX_LAYER)
+    ld = tuple((hit[i] - lamp[i]) / (math.dist(hit, lamp) or 1.0) for i in range(3))
+    _streak_snow(r, t, vel, seed=35, lamp=(lamp, ld, 0.96))
+    r.flush(buf)
+    _w.present_ps2(surface, buf)
+    _w.finish(surface, 6100, "", t=t, ps2=True)
+
+
+def _air_actor(r, key, pose, root, yaw, t, L, seed=0, amp=0.2,
+               expression="stern", mouth=None, rifle_on=False):
+    """An actor built in airframe space and carried through ``L``, so he
+    banks and pitches with the Huey.  Logged in ``LAST`` with world joints
+    for the exposure checks.  ``rifle_on`` arms Biribel's rig."""
+    h = _w.hum(key, flags=("rifle",) if rifle_on and key == _BIRI else ())
+    if mouth is None:
+        mouth = 0.0
+        if _w.talking(str(key).upper() if not isinstance(key, tuple) else "BIRIBEL"):
+            from engine3d.rig import mouth_flap
+            mouth = mouth_flap(int(t), seed)
+    face = (expression, round(mouth, 2))
+    if getattr(h, "_m6_face", None) != face:
+        h.set_expression(expression, mouth)
+        h._m6_face = face
+    p = _w.life_pose(pose, t, amp, seed)
+    verts, faces, joints = h.build(p, root, yaw, rifle_on=rifle_on)
+    r.add_dynamic([L(*v) for v in verts], faces)
+    world = {k: L(*v) for k, v in joints.items() if v is not None and len(v) == 3}
+    if len(_w.LAST) < 16:
+        a0, a1 = L(0.0, 0.0, 0.0), L(math.sin(math.radians(yaw)), 0.0,
+                                     math.cos(math.radians(yaw)))
+        wyaw = math.degrees(math.atan2(a1[0] - a0[0], a1[2] - a0[2]))
+        _w.LAST.append({"key": key, "joints": world, "pos": L(*root),
+                        "yaw": wyaw, "pose": p})
+    return world
+
+
+# ── the ridge: reveal, drop, alone ──
+# One static set and one moon key for the three shots, so the ridge bakes
+# once.  The moon stands north-north-east over the crossing: the door side
+# of the hover and his face as he drops take the key, and from behind him on
+# the walk it rims him against the floodlights.
+_RIDGE_SET = "m6_ridge"
+_RIDGE_FOG = ((10, 14, 22), 40.0, 230.0)
+_SEARCH_COL = (236, 240, 255)
+
+
+def _ridge_light():
+    from engine3d.core import Light
+    return Light(direction=(0.37, 0.50, 0.78), ambient=0.25, diffuse=0.62,
+                 sky=0.08, tint=(0.78, 0.87, 1.07))
+
+
+def _ridge(r, buf, t, seed):
+    """Night sky and the shared ridge set: snow, pines, the border road, the
+    crossing and the hills beyond it; no capital."""
+    _w.night(r, buf, t, top=(5, 8, 16), bot=(18, 26, 44), stars=56,
+             moon=(25, 24.0), sodium=(54, 36, 24), seed=seed, star_cut=0.3)
+    _w.static_scene(r, _RIDGE_SET)
     r.begin()
     _w.terrain(r, t)
     _w.crossing_far(r, t)
+    _w.dark_hills(r)
     _w.static_end(r)
+
+
+def searchlight_hits(t):
+    """Near-row floodlight towers sweeping the approach south of the strip,
+    each on its own slow figure -> [(head, ground hit)].  ``t`` is the
+    insertion clock, so the sweep carries across the cuts."""
+    out = []
+    for i, x in enumerate((-34.0, -12.0, 12.0, 34.0)):
+        hx = x * 0.7 + 13.0 * math.sin(t * 0.00038 + 1.7 * i)
+        hz = 19.0 + 8.0 * math.sin(t * 0.00027 + 3.4 * i)
+        out.append(((x, 10.6, 30.0), (hx, _w.height_at(hx, hz), hz)))
+    return out
+
+
+def _searchlights(r, t, k=1.0):
+    """Cold search beams off the towers -> their ground pools."""
+    pools = []
+    for i, (head, hit) in enumerate(searchlight_hits(t)):
+        r.add_sprite(head, _fx.glow(_SEARCH_COL, 0.8, t, seed=70 + i,
+                                    core=(255, 255, 255), intensity=0.9 * k,
+                                    max_px=18), layer=_fx.FX_LAYER)
+        _beam(r, head, hit, 0.35, 0.12 * math.dist(head, hit), _SEARCH_COL,
+              0.22 * k)
+        pools.append({"pos": (hit[0], hit[1] + 6.0, hit[2]), "range": 4.5,
+                      "color": (200, 212, 236), "hot": (250, 252, 255),
+                      "intensity": 1.6 * k})
+        _ground_glow(r, hit, 4.5, (190, 200, 224), 0.5 * k)
+    return pools
+
+
+_VEIL = {}
+
+
+def _veil(buf, k, col=(176, 188, 210)):
+    """Downwash whiteout over the frame: powder thickest at the bottom,
+    ``k`` 0..1 at the floor of the picture."""
+    if k <= 0.01:
+        return
+    w, h = buf.get_size()
+    ramp = _VEIL.get((w, h))
+    if ramp is None:
+        ramp = pygame.Surface((w, h))
+        for y in range(h):
+            v = int(255 * (0.35 + 0.65 * (y / float(h - 1)) ** 1.4))
+            pygame.draw.line(ramp, (v, v, v), (0, y), (w, y))
+        _VEIL[(w, h)] = ramp
+    k = min(1.0, k)
+    kr = ramp.copy()
+    kr.fill((int(255 * k),) * 3, special_flags=pygame.BLEND_RGB_MULT)
+    keep = pygame.Surface((w, h))
+    keep.fill((255, 255, 255))
+    keep.blit(kr, (0, 0), special_flags=pygame.BLEND_RGB_SUB)
+    buf.blit(keep, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+    kr.fill(col, special_flags=pygame.BLEND_RGB_MULT)
+    buf.blit(kr, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+
+
+def reveal_cam(t, L):
+    """Over his left shoulder from inside the cabin, rigid with the airframe:
+    down at the ridge streaming under the skid, then the pedal turn pans the
+    door onto the crossing as the lens tilts up to it."""
+    k = min(1.0, t / float(_APPROACH_MS))
+    up = _w.ease5(t, _TURN0 + 300, 2800)
+    return (L(0.05 + 0.08 * k, 1.98, 1.45 - 0.05 * k),
+            L(10.0, -5.0 + 3.6 * up, -1.0 - 0.8 * up), 56.0)
+
+
+def reveal_look(t, seat, yaw):
+    """He turns his head onto the crossing before the airframe gets there
+    -> (twist, head_y)."""
+    tw, hy = _look(seat, yaw, (0.0, 3.0, 36.0), twist_max=20.0, head_max=40.0,
+                   share=0.4)
+    k = _w.ease5(t, _TURN0 + 600, 1400)
+    return tw * k, hy * k
+
+
+def _insert_valley(surface, t):
+    """EXT/INT: over his shoulder at the open door as the Huey comes up the
+    ridge and pedal-turns; the crossing swings into the doorway below, the
+    floodlights sweeping, the lit train in the yard."""
+    t = min(t, _APPROACH_MS)
+    r, buf = _w.rend_ps2()
+    r.fog, r.fog_start, r.fog_end = _RIDGE_FOG
+    heli, hyaw, hbank, hpitch = heli_at("m6_insert_valley", t)
+    L = _w.heli_xform(heli, hyaw, hbank, hpitch)
+    pose, root = heli_seat()
+    pose = dict(pose, **_PORT_ARMS)
+    pose["head_p"] = 8.0
+    pose["twist"], pose["head_y"] = reveal_look(t, L(*root), hyaw + 90.0)
+    r.light = _ridge_light()
+    r.set_lights([
+        {"pos": L(0.36, 2.02, 0.42), "color": (255, 84, 58),
+         "intensity": 0.28 * (1.0 - 0.6 * _w.ease5(t, _TURN0, 2000)),
+         "range": 2.0},
+        {"pos": L(3.0, 2.6, 1.6), "color": _MOON,
+         "intensity": 1.0 * _strobe(t), "range": 4.5},
+    ])
+    eye, tgt, fov = reveal_cam(t, L)
+    h0 = heli_at("m6_insert_valley", max(0.0, t - 40.0))
+    e0, _t0, _f0 = reveal_cam(t, _w.heli_xform(*h0))
+    vel = tuple((eye[i] - e0[i]) / 0.040 for i in range(3))
+    _cam(r, t, eye, tgt, fov, hh=0.012, seed=1)
+    _ridge(r, buf, t, seed=3)
+    r.set_pools(_searchlights(r, t))
     _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=1.0, bank=hbank,
-                  pitch=hpitch)
-    _w.actor(r, _BIRI, pose, seat, yaw, t, seed=2, amp=0.28, expression="stern")
-    _w.snow3d(r, t, seed=5, n=60, spread=16, height=10, speed=1.0)
+                  pitch=hpitch, door=1.0, blur=0.5)
+    _air_actor(r, _BIRI, pose, root, 90.0, t, L, seed=2, amp=0.22,
+               rifle_on=True)
+    _streak_snow(r, t, vel, seed=5, n=110, spread=12.0, height=8.0)
     r.flush(buf)
     _w.present_ps2(surface, buf)
     _w.finish(surface, 6102, "KIM KIM BORDER // 02:40", t=t, ps2=True)
 
 
+def drop_cam(t):
+    """Off the lip of the shelf north of the door, at the height of the
+    snow he lands in: up at the man on the sill against the airframe, then
+    down onto the powder -> (eye, target, fov)."""
+    u = _w.ease5(t, 0, _JUMP_MS)
+    g = _w.height_at(*_LAND)
+    ex, ez = _LAND[0] - 1.5 + 0.3 * u, _LAND[1] + 6.4 - 0.5 * u
+    eye = (ex, max(_w.height_at(ex, ez) + 0.5, g + 1.25 + 0.2 * u), ez)
+    a = (_LAND[0] - 0.4, g + 3.0, _LAND[1] - 1.6)
+    b = (_LAND[0] + 0.3, g + 0.9, _LAND[1] - 0.4)
+    k = _w.ease5(t, _LEAVE - 100, 700)
+    return eye, tuple(a[i] + (b[i] - a[i]) * k for i in range(3)), 64.0
+
+
+def _drop_veil(t, heli):
+    """Whiteout strength: a base off the downwash that thickens as the hover
+    settles, and a burst when he hits the powder."""
+    low = 1.0 - max(0.0, min(1.0, (heli[1] - _HOVER_Y) / _SETTLE))
+    k = 0.06 + 0.07 * low + 0.02 * math.sin(t * 0.0021)
+    if t > _LAND_T:
+        k += 0.62 * _fx.flash_scale() * math.exp(-(t - _LAND_T) / 380.0)
+    return k
+
+
 def _insert_jump(surface, t):
-    """One continuous low take: the hover settles, he drops into the powder."""
-    t = min(t, 5000)
+    """EXT: low hover in the downwash, the landing light's cone on the
+    snow; he drops off the skid and the powder hits the lens."""
+    t = min(t, _JUMP_MS)
     r, buf = _w.rend_ps2()
-    r.fog, r.fog_start, r.fog_end = (10, 13, 20), 16.0, 120.0
+    r.fog, r.fog_start, r.fog_end = _RIDGE_FOG
     pose, seat, yaw, heli = jump_stage(t)
-    joints = _joints(_BIRI, pose, seat, yaw)
-    chest = joints["chest"]
-    head = joints["head"]
-    shk = _fx.shake(t, _LAND_T, 420, 0.026)
-    _rig_insert(r, heli, cabin=0.0, amb=0.26, dif=0.46,
-                fill=(0.60, 0.42, 0.25), yaw=hover_yaw(t), bank=hover_bank(t),
-                extra=[{"pos": (head[0] + 2.2, head[1] + 0.4, head[2] - 1.0),
-                        "color": (172, 194, 228), "intensity": 1.1,
-                        "range": 4.6},
-                       {"pos": (heli[0], heli[1] + 0.9, heli[2] + 3.4),
-                        "kind": "spot", "dir": (0.0, -0.93, 0.36), "cone": 0.72,
-                        "color": (255, 240, 205), "intensity": 1.2,
-                        "range": 11.0}])
-    g = _w.height_at(*_HOVER_XZ)
-    aim = g + 1.0 + 0.5 * max(0.0, chest[1] - g)
-    _cam(r, t, (7.0, g + 0.9, -44.4), (chest[0] * 0.5 + 0.7, aim, chest[2]),
-         55, hh=0.02, seed=7, roll=0.25 * math.sin(t * 0.0009), shk=shk)
-    _w.night(r, buf, t, top=(5, 8, 15), bot=(19, 27, 44), stars=44,
-             moon=(24, 0.28), sodium=(54, 34, 22), seed=8)
-    _w.static_scene(r, "m6_insert_jump")
-    r.begin()
-    _w.terrain(r, t, lights=False)
-    _w.crossing_far(r, t, warm=0.8)
-    _w.static_end(r)
-    # pilot=False: from this low outside angle Maru's head stays under the
-    # roof and only her arm showed through the open windscreen
-    _w.helicopter(r, t, heli, yaw=hover_yaw(t), rotor_speed=1.0,
-                  bank=hover_bank(t), pilot=False)
+    hyaw, hbank = hover_yaw(t), hover_bank(t)
+    L = _w.heli_xform(heli, hyaw, hbank)
+    lamp, hit = _lamp_ray(L, hyaw, 0.0, down=1.05, ground=_w.height_at)
+    head = _joints(_BIRI, pose, seat, yaw)["head"]
+    r.light = _ridge_light()
+    r.set_lights([
+        {"pos": (head[0] + 0.8, head[1] + 0.6, head[2] + 2.4), "color": _MOON,
+         "intensity": 0.9, "range": 4.6},
+        {"pos": L(0.36, 2.02, 0.42), "color": (255, 84, 58),
+         "intensity": 0.55, "range": 2.4},
+        {"pos": (hit[0], hit[1] + 1.2, hit[2]), "color": _LAMP_COL,
+         "intensity": 0.8, "range": 5.0},
+    ])
+    eye, tgt, fov = drop_cam(t)
+    shk = None
+    if not _fx.reduced_motion():
+        shk = _fx.shake(t, _LAND_T, 420, 0.026 * _fx.shake_scale())
+    _cam(r, t, eye, tgt, fov, hh=0.03, seed=7, shk=shk)
+    _ridge(r, buf, t, seed=8)
+    pools = _searchlights(r, _APPROACH_MS + t)
+    pools.append({"pos": (hit[0], hit[1] + 4.0, hit[2]), "range": 3.2,
+                  "color": (230, 206, 160), "hot": (255, 250, 236),
+                  "intensity": 2.2})
+    r.set_pools(pools)
+    _w.helicopter(r, t, heli, yaw=hyaw, rotor_speed=1.0, bank=hbank,
+                  door=1.0, pilot=False)
     _w.actor(r, _BIRI, pose, seat, yaw, t, seed=9, amp=0.30,
-             expression="stern", rifle_on=t > _LEAVE)
+             expression="stern", rifle_on=True, flags=("rifle",))
+    r.add_sprite(lamp, _fx.glow(_LAMP_COL, 0.7, core=_LAMP_COL, max_px=30),
+                 layer=_fx.FX_LAYER)
+    _beam(r, lamp, hit, 0.12, 0.30 * math.dist(lamp, hit), _LAMP_COL, 0.34)
+    _ground_glow(r, hit, 1.8, (230, 214, 180), 0.6)
     k = 0.55 + 0.45 * (1.0 - (heli[1] - _HOVER_Y) / _SETTLE)
     _wash(r, heli, t, max(0.4, min(1.0, k)), 10)
+    g = _w.height_at(*_LAND)
     if t > _LAND_T:
-        age = (t - _LAND_T)
+        age = t - _LAND_T
+        fade = max(0.0, 1.0 - age / 1100.0)
         r.add_sprite((_LAND[0], g + 0.2, _LAND[1]),
-                     _fx.powder(age, 14, 1.8, 0.7 * max(0.0, 1.0 - age / 1100.0),
-                                puffs=9), layer=_fx.FX_LAYER)
-    _w.snow3d(r, t, seed=11, n=50, spread=14, height=9, speed=0.9)
+                     _fx.powder(age, 14, 1.8, 0.7 * fade, puffs=9),
+                     layer=_fx.FX_LAYER)
+        # the burst the downwash throws at the lens
+        f = tuple(tgt[i] - eye[i] for i in range(3))
+        n = math.sqrt(sum(c * c for c in f)) or 1.0
+        near = tuple(eye[i] + f[i] / n * 1.6 for i in range(3))
+        r.add_sprite(near, _fx.powder(age, 15, 1.4, 0.55 * fade * fade,
+                                      puffs=10), layer=_fx.FX_LAYER)
+    _streak_snow(r, t, (2.0, -1.5, 3.5), seed=11, n=120, spread=9.0,
+                 height=7.0, exposure=0.05, col=(168, 178, 198))
     r.flush(buf)
+    _veil(buf, _drop_veil(t, heli))
     _w.present_ps2(surface, buf)
     _w.finish(surface, 6103, "", t=t, ps2=True)
 
 
+def ground_cam(t, pos):
+    """Orbits him clockwise from just off his front, round his right side as
+    he watches the Huey go, to behind him over the crossing as he walks
+    -> (eye, target, fov)."""
+    u = _w.ease5(t, 500, 5300)
+    g = _w.height_at(*_LAND)
+    hx, hy, hz = pos[0], pos[1] + 1.5, pos[2]
+    ang = math.radians(-20.0 + 200.0 * u)
+    rad = 5.0 + 2.4 * u
+    ex, ez = hx + rad * math.sin(ang), hz + rad * math.cos(ang)
+    ey = max(_w.height_at(ex, ez) + 0.8, g + 1.0 + 1.2 * u)
+    up = 0.7 * (1.0 - _w.ease5(t, 600, 2200))       # the Huey over him
+    lead = 5.0 * _w.ease5(t, 2800, 3000)            # then the crossing ahead
+    return (ex, ey, ez), (hx, hy - 0.3 + up, hz + lead), 52.0
+
+
 def _insert_ground(surface, t):
-    """He rises, checks the K9; the Huey climbs off dark; the camera swings
-    behind him onto the crossing's lights and holds."""
+    """EXT: the Huey lifts off him and climbs away dark over the ridge; the
+    snow settles; he rises, watches it go and walks for the floodlights."""
     t = min(t, 6000)
     pose, pos, yaw = ground_stage(t)
-    r, buf = _w.rend_ps2()
-    r.fog, r.fog_start, r.fog_end = (12, 16, 26), 30.0, 230.0
-    shk = _fx.shake(t, 0, 380, 0.020)
     hpos, hyaw, hbank, hpitch = heli_depart(t)
-    _rig_insert(r, amb=0.26, dif=0.46, fill=(0.50, 0.46, -0.20),
-                extra=[{"pos": (pos[0] + 2.4, pos[1] + 1.9, pos[2] - 2.0),
-                        "color": (172, 194, 228), "intensity": 1.4,
-                        "range": 5.5},
-                       {"pos": (pos[0] + 0.5, pos[1] + 1.5, pos[2] + 3.4),
-                        "color": (255, 172, 98), "intensity": 0.85,
-                        "range": 5.5}])
-    g = _w.height_at(*_LAND)
-    sw = _w.ease5(t, 2400, 2400)
-    e0 = (6.4, g + 1.0, -45.6)
-    e1 = (pos[0] + 0.7, g + 1.75, pos[2] - 4.3)
-    t0 = (pos[0], pos[1] + 0.95, pos[2])
-    t1 = (pos[0] * 0.5, g + 0.3, pos[2] + 30.0)
-    eye = tuple(e0[i] + (e1[i] - e0[i]) * sw for i in range(3))
-    tgt = tuple(t0[i] + (t1[i] - t0[i]) * sw for i in range(3))
-    _cam(r, t, eye, tgt, 50, hh=0.02, seed=16, shk=shk)
-    _w.night(r, buf, t, top=(6, 9, 17), bot=(19, 27, 44), stars=46,
-             moon=(26, 0.26), sodium=(70, 46, 26), seed=17)
-    _w.static_scene(r, "m6_insert_ground")
-    r.begin()
-    _w.terrain(r, t)
-    _w.crossing_far(r, t)
-    _w.static_end(r)
+    r, buf = _w.rend_ps2()
+    r.fog, r.fog_start, r.fog_end = _RIDGE_FOG
+    r.light = _ridge_light()
+    head = _joints(_BIRI, pose, pos, yaw)["head"]
+    r.set_lights([
+        {"pos": (head[0] + 1.6, head[1] + 0.8, head[2] + 2.2), "color": _MOON,
+         "intensity": 0.95, "range": 5.0},
+        {"pos": (head[0] - 0.6, head[1] + 0.4, head[2] + 3.6),
+         "color": (255, 196, 128), "intensity": 0.45, "range": 5.0},
+    ])
+    eye, tgt, fov = ground_cam(t, pos)
+    shk = None
+    if not _fx.reduced_motion():
+        shk = _fx.shake(t, 0, 380, 0.020 * _fx.shake_scale())
+    _cam(r, t, eye, tgt, fov, hh=0.02, seed=16, shk=shk)
+    _ridge(r, buf, t, seed=17)
+    r.set_pools(_searchlights(r, _APPROACH_MS + _JUMP_MS + t))
     _w.helicopter(r, t, hpos, yaw=hyaw, rotor_speed=1.0, bank=hbank,
-                  pitch=hpitch, lit=t < 600)
+                  pitch=hpitch, door=1.0, lit=t < 1500, pilot=False)
     _w.actor(r, _BIRI, pose, pos, yaw, t, seed=18, amp=0.45,
-             expression="stern", rifle_on=True)
-    wash = max(0.0, 1.0 - _w.travel(t, 0, 2200))
+             expression="stern", rifle_on=True, flags=("rifle",))
+    wash = max(0.0, 1.0 - _w.travel(t, 0, 2600))
     if wash > 0.03:
         _wash(r, hpos, t + 2000, wash, 19)
-    _w.snow3d(r, t, seed=22, n=60, spread=16, height=10, speed=0.9)
     r.flush(buf)
+    _veil(buf, 0.16 * wash)
     _w.present_ps2(surface, buf)
     _w.finish(surface, 6104, "", t=t, ps2=True)
 
@@ -2233,6 +2779,15 @@ def _fb_insert(surface, t, mode):
         pygame.draw.circle(surface, (70, 170, 110), (560, 330), 5)
         _fb_snow(surface, t, 4, 80)
         return
+    if mode == "chase":
+        x = 300 + 260 * _w.ease5(t, 0, 2800)
+        _fb_rotor(surface, x, 250, 1.1, t)
+        _fb_heli(surface, x, 272, 1.1, t, tilt=-0.08)
+        pygame.draw.polygon(surface, (226, 214, 180),
+                            [(x + 48, 300), (x + 64, 300), (x + 190, 452),
+                             (x + 90, 452)])
+        _fb_snow(surface, t, 9, 120)
+        return
     _fb_ridge(surface, 330)
     for i in range(8):
         pygame.draw.rect(surface, (226, 178, 108), (180 + i * 34, 392, 5, 5))
@@ -2503,6 +3058,7 @@ def _fb_helicopter(surface, t):
 # dispatch / registration
 # ═══════════════════════════════════════════════════════════════════════════
 M6_3D_SCENES = {
+    "m6_insert_chase": _insert_chase,
     "m6_insert_cabin": _insert_cabin,
     "m6_insert_valley": _insert_valley,
     "m6_insert_jump": _insert_jump,
@@ -2568,6 +3124,7 @@ def _boxcar_fb(mode):
 
 
 _register({
+    "m6_insert_chase": _take("m6_insert_chase", _insert_fb("chase")),
     "m6_insert_cabin": _take("m6_insert_cabin", _insert_fb("cabin")),
     "m6_insert_valley": _take("m6_insert_valley", _insert_fb("valley")),
     "m6_insert_jump": _take("m6_insert_jump", _insert_fb("jump")),

@@ -80,10 +80,11 @@ def _boxes(scene, t):
     if scene in ("m6_radio_vasile#1", "m6_radio_vasile#3"):
         return {}          # Vasile's office: no registered solids
     boxes = dict(w.solids(_set_key(base)) or {})
-    if base in ("m6_helicopter", "m6_insert_cabin"):
-        # The camera is inside / alongside the airframe for the pickup and
-        # cabin beats; its collision AABBs are the cabin the actors sit in,
-        # not obstacles.  Ground clearance is covered by the insertion tests.
+    if base in ("m6_helicopter", "m6_insert_cabin", "m6_insert_valley"):
+        # The camera is inside / alongside the airframe for the pickup,
+        # cabin and reveal beats; its collision AABBs are the cabin the actors
+        # sit in, not obstacles.  Ground clearance is covered by the
+        # insertion tests.
         return boxes
     heli = m6films.heli_at(base, t)
     if heli is not None:

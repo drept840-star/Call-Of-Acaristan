@@ -170,10 +170,12 @@ _STAGE_RADIO = {
 }
 
 # ── 3D films ─────────────────────────────────────────────────────────────
-# Insertion.  ``auto_advance`` because there is no dialogue to click through;
-# the final title card holds long enough to read.
+# Insertion: the chase up the river under the Guard intercept, the cockpit,
+# the door, the pedal turn onto the crossing, the drop, alone on the snow.
+# ``auto_advance`` where there is no dialogue to click through; the final
+# title card holds long enough to read.
 mission6_intro_shots = [
-    {"scene": "m6_insert_cabin", "speaker": "GUARD",
+    {"scene": "m6_insert_chase", "speaker": "GUARD",
      "text": "All posts, Kim Kim crossing. High-value deserter in the rail yard. Hold the train.",
      "lighting": (5, 8, 14), "min_ms": 3600, "radio": True,
      "cues": [(100, "m6_heli_bed", 0.45), (300, "m6_radio_static", 0.45)]},
@@ -182,15 +184,16 @@ mission6_intro_shots = [
      "lighting": (5, 8, 14), "min_ms": 3000, "radio": False, "cues": []},
     {"scene": "m6_insert_cabin", "speaker": "BIRIBEL",
      "text": "Then I reach him first.",
-     "lighting": (5, 8, 14), "min_ms": 3000, "radio": False, "cues": []},
+     "lighting": (5, 8, 14), "min_ms": 3000, "radio": False,
+     "cues": [(900, "m6_rifle_rack", 0.5)]},
     {"scene": "m6_insert_valley", "speaker": "", "text": "",
      "lighting": (6, 9, 15), "min_ms": 5000, "auto_advance": True,
      "quiet_ui": True,
-     "cues": [(300, "m6_heli_bed", 0.5), (3200, "m6_wind_gust", 0.4)]},
+     "cues": [(300, "m6_heli_bed", 0.5), (2000, "m6_wind_gust", 0.4)]},
     {"scene": "m6_insert_jump", "speaker": "", "text": "",
-     "lighting": (7, 10, 16), "min_ms": 5000, "auto_advance": True,
+     "lighting": (7, 10, 16), "min_ms": 4400, "auto_advance": True,
      "quiet_ui": True,
-     "cues": [(2800, "m6_jump", 0.55), (3900, "m6_land", 0.7)]},
+     "cues": [(1900, "m6_jump", 0.55), (2950, "m6_land", 0.7)]},
     {"scene": "m6_insert_ground", "speaker": "", "text": "",
      "lighting": (8, 12, 18), "min_ms": 6000, "auto_advance": True,
      "quiet_ui": True,

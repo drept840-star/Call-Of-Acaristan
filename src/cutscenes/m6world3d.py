@@ -70,7 +70,8 @@ __all__ = [
     "LAST", "STANCE", "ease5", "travel", "yaw_mix", "leg_ik", "path",
     "walk_stride", "walk_span", "walk", "walk_slip", "sit_pose", "ankles",
     "planted_pos", "reach", "SOLIDS", "solids", "penetration", "LANTERN",
-    "knees", "head_stats",
+    "knees", "head_stats", "RUN_P", "run_x", "run_dx", "run_ddx",
+    "run_height", "run_valley",
 ]
 
 
@@ -81,7 +82,11 @@ def rend(w=RW, h=RH):
         from engine3d import Renderer  # lazy: the 2D fallback owns import errors
         _cache["r"][key] = (Renderer(key[0], key[1]), pygame.Surface(key))
     del LAST[:]
-    _cache["last_r"] = _cache["r"][key][0]
+    r = _cache["r"][key][0]
+    # pools persist on the renderer and the films share it: a shot that
+    # lights the snow must not leave its pools on the next shot's set
+    r.pools = []
+    _cache["last_r"] = r
     return _cache["r"][key]
 
 
@@ -457,14 +462,20 @@ def _hd_extra(key, wound=0, bloody=False, flags=()):
 def hum(key, hd=False, wound=0, bloody=False, flags=()):
     """Humanoid for ``key``.  ``hd`` selects the detailed train rig (optionally
     with a wound stage 1-3 / bloody gloves); each variant is its own cached rig,
-    so switching stage costs one GPU template, never a per-frame rebuild."""
-    ck = ("hd", key, int(wound), bool(bloody), tuple(flags)) if hd else key
+    so switching stage costs one GPU template, never a per-frame rebuild.
+    Outside ``hd``, ``flags`` = ("rifle",) arms Biribel's film rig."""
+    if hd:
+        ck = ("hd", key, int(wound), bool(bloody), tuple(flags))
+    else:
+        ck = (key, tuple(flags)) if flags else key
     h = _cache["hum"].get(ck)
     if h is None:
         extra = _hd_extra(key, wound, bloody, flags) if hd else {}
         if isinstance(key, tuple) and key[0] == "biribel":
             kw = dict(biribel_3d(key[1]))
             kw.update(extra)
+            if "rifle" in flags and not hd:
+                kw["rifle"] = "rifle"
             h = humanoid3d("biribel", **kw)
         elif isinstance(key, tuple) and key[0] == "guard":
             h = _guard_humanoid(key[1], extra)
@@ -1437,6 +1448,144 @@ def crossing_far(r, t, warm=1.0):
     snow3d(r, t, seed=31, n=40, spread=30, height=20, speed=1.2)
 
 
+# ── the valley run (intro chase) ─────────────────────────────────────────
+# Its own space, not the insertion terrain: a frozen river the Huey follows
+# north at treetop height.  Everything in it is periodic in z with RUN_P, so
+# a shot can wrap its distance along the river (s mod RUN_P) and run for any
+# length without a visible jump.  Lateral offsets (``lat``) are measured from
+# the river's centreline, + to the east.
+RUN_P = 112.0
+RUN_Z0, RUN_Z1 = -150.0, RUN_P + 190.0
+_RUN_K = 2.0 * math.pi / RUN_P
+_RUN_LATS = (-78, -62, -50, -40, -32, -25, -19, -14, -10, -7, -5, -3.2,
+             3.2, 5, 7, 10, 14, 19, 25, 32, 40, 50, 62, 78)
+
+
+def run_x(z):
+    """River centreline x at ``z``."""
+    return 3.0 * math.sin(_RUN_K * z) + 1.2 * math.sin(2 * _RUN_K * z + 0.9)
+
+
+def run_dx(z):
+    """dx/dz of the centreline."""
+    return _RUN_K * (3.0 * math.cos(_RUN_K * z)
+                     + 2.4 * math.cos(2 * _RUN_K * z + 0.9))
+
+
+def run_ddx(z):
+    return -_RUN_K * _RUN_K * (3.0 * math.sin(_RUN_K * z)
+                               + 4.8 * math.sin(2 * _RUN_K * z + 0.9))
+
+
+def run_height(x, z):
+    """Valley floor: river ice at 0, low snow banks, walls climbing to a
+    ~34 m moorland either side, with periodic folds so the walls never read
+    as a straight cut."""
+    lat = x - run_x(z)
+    a = abs(lat)
+    side = 1.0 if lat > 0 else -1.0
+    bank = 0.6 * _s01((a - 3.2) / 4.5)
+    wall = 26.0 * _s01((a - 15.0) / 40.0) + 0.32 * max(0.0, a - 55.0)
+    fold = (1.6 * math.sin(3 * _RUN_K * z + 0.8 * side + 0.05 * lat)
+            + 0.9 * math.sin(5 * _RUN_K * z + 0.11 * lat + 2.0))
+    return bank + wall + fold * _s01((a - 9.0) / 16.0)
+
+
+def _run_col(lat, h, slope):
+    from engine3d import tex
+    from missions.m6 import palette3d as P   # lazy: no missions.m6 at load
+    up = max(0.0, min(1.0, h / 30.0))
+    j = 1.0 + 0.05 * math.sin(lat * 0.91 + h * 1.27)
+    like = tuple(int((P.SLATE_HI[i] * (0.66 + 0.34 * up)
+                      + P.SNOW_DIM[i] * 0.24 * up) * j) for i in range(3))
+    if slope > 0.62:
+        k = min(1.0, (slope - 0.62) / 0.3)
+        rock = (P.SLATE_MID[0] + 4, P.SLATE_MID[1] + 4, P.SLATE_MID[2] + 6)
+        like = tuple(int(like[i] * (1 - k) + rock[i] * k) for i in range(3))
+        return tex("concrete", like=like)
+    return tex("snow", like=like)
+
+
+def _run_pine(m, x, z, gy, hh, needle, capcol):
+    rad = hh * 0.30
+    for y0, hf, rf in ((0.0, 0.46, 1.0), (0.28, 0.40, 0.74), (0.52, 0.34, 0.50)):
+        yb = gy - 0.2 + y0 * hh
+        rb = rad * rf
+        yt = yb + hf * hh * 1.5
+        ang = [math.radians(90 + 60 * i) for i in range(6)]
+        ring = [(x + math.cos(a_) * rb, yb, z + math.sin(a_) * rb) for a_ in ang]
+        rc = rb * 0.48 + 0.04
+        yc = yb + (yt - yb) * 0.52
+        cap = [(x + math.cos(a_) * rc, yc, z + math.sin(a_) * rc) for a_ in ang]
+        for i in range(6):
+            m.face([ring[i], ring[(i + 1) % 6], cap[(i + 1) % 6], cap[i]], needle, 2)
+            m.face([cap[i], cap[(i + 1) % 6], (x, yt, z)], capcol, 2)
+
+
+def run_valley(r, t):
+    """The frozen river valley: a curvilinear heightfield that follows the
+    river, an ice ribbon down its middle, bank boulders and snow-capped pines.
+    Pines and rocks repeat every RUN_P; the east bank keeps a clear lane for
+    the chase camera (lat 3..23)."""
+    from engine3d import tex
+    from engine3d.core import Mesh, box, rot_y
+    if _static_skip():
+        return
+    m = Mesh()
+    zs = [RUN_Z0 + 4.0 * i for i in range(int((RUN_Z1 - RUN_Z0) / 4.0) + 1)]
+    rows = []
+    for z in zs:
+        cx = run_x(z)
+        rows.append([(cx + lat, run_height(cx + lat, z), z) for lat in _RUN_LATS])
+    ice = tex("snow_trod", like=(54, 66, 86))
+    for j in range(len(zs) - 1):
+        ra, rb = rows[j], rows[j + 1]
+        for i in range(len(_RUN_LATS) - 1):
+            a, b, c, d = ra[i], ra[i + 1], rb[i + 1], rb[i]
+            lat = 0.5 * (_RUN_LATS[i] + _RUN_LATS[i + 1])
+            if abs(lat) < 1.0:
+                m.face([a, d, c, b], ice, 0)
+                continue
+            w = math.hypot(b[0] - a[0], b[2] - a[2]) or 1.0
+            slope = max(abs(b[1] - a[1]) / w, abs(d[1] - a[1]) / 4.0)
+            m.face([a, d, c, b], _run_col(lat, (a[1] + b[1] + c[1] + d[1]) / 4,
+                                          slope), 0)
+    add(r, m)
+    rng = random.Random(23)
+    needle = (13, 19, 19)
+    capcol = tex("snow", like=(124, 136, 154))
+    pines = []
+    for k in range(46):
+        z = rng.uniform(0.0, RUN_P)
+        if rng.random() < 0.55:
+            lat = -rng.uniform(7.0, 60.0)
+        else:
+            lat = rng.uniform(24.0, 62.0)
+        pines.append((z, lat, rng.uniform(3.6, 7.4)))
+    rocks = [(rng.uniform(0.0, RUN_P), rng.choice((-1, 1)) * rng.uniform(3.6, 6.5),
+              rng.uniform(0.5, 1.3), rng.uniform(0, 90)) for _k in range(12)]
+    reps = range(int(math.floor(RUN_Z0 / RUN_P)), int(math.ceil(RUN_Z1 / RUN_P)) + 1)
+    for n in reps:
+        mm = Mesh()
+        for z0, lat, hh in pines:
+            z = z0 + n * RUN_P
+            if not (RUN_Z0 + 4.0 < z < RUN_Z1 - 4.0):
+                continue
+            x = run_x(z) + lat
+            _run_pine(mm, x, z, run_height(x, z), hh, needle, capcol)
+        for z0, lat, s, ang in rocks:
+            z = z0 + n * RUN_P
+            if not (RUN_Z0 < z < RUN_Z1):
+                continue
+            x = run_x(z) + lat
+            gy = run_height(x, z)
+            mm.add(box(s * 1.3, s * 0.7, s, (34, 38, 46)), m=rot_y(ang),
+                   t=(x, gy + s * 0.22, z))
+            mm.add(box(s * 1.1, 0.12, s * 0.85, tex("snow", like=(150, 160, 178))),
+                   m=rot_y(ang), t=(x, gy + s * 0.60, z))
+        add(r, mm)
+
+
 def heli_xform(pos, yaw, bank=0.0, pitch=0.0, scale=1.0):
     """Local airframe point -> world.  Pitch tips the nose, bank rolls about
     the long axis, yaw turns; scale is applied first."""
@@ -1575,6 +1724,29 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
     _mesh_solid(body, H["bench_cushion"], (30, 33, 29))
     _mesh_solid(body, H["bench_skirt"], (24, 27, 23))
     _mesh_solid(body, H["bench_back"], (28, 31, 27))
+    # cabin construction: insulated wall panels, exposed ribs, floor treads,
+    # belts and a stowed extinguisher.  These read in the close briefing shot
+    # and give the green cabin wall a scale it did not have.
+    for i, pz in enumerate((-1.05, -0.28, 0.49, 1.24)):
+        for sx in (-1.17, 1.17):
+            if sx > 0 and 0.25 < pz < 1.75:
+                continue                    # no rib across the open door
+            body.add(box(0.035, 1.18, 0.08, (47, 50, 42)
+                         if sx < 0 else (50, 53, 45),
+                         center=(sx, 1.32, pz)))
+        body.add(box(1.20, 0.045, 0.055, (38, 41, 35),
+                     center=(0, 2.13, pz)))
+    for i, pz in enumerate((-1.25, -0.55, 0.15, 0.85, 1.55)):
+        body.add(box(2.26, 0.018, 0.12, (25, 27, 25),
+                     center=(0, 0.625, pz)))
+    for i, pz in enumerate((-0.85, -0.05, 0.75)):
+        for sx in (-0.78, 0.18):
+            body.add(box(0.045, 0.60, 0.035, (82, 72, 54),
+                         center=(sx, 1.32, pz)))
+    body.add(box(0.24, 0.48, 0.18, (88, 38, 32),
+                 center=(-0.82, 0.92, 1.58)))
+    body.add(box(0.10, 0.06, 0.06, (25, 24, 22),
+                 center=(-0.82, 1.20, 1.58)))
     # cabin dome light: the red practical seen through the open door
     body.add(box(0.13, 0.04, 0.13, (255, 66, 46),
                  center=(0.0, HELI_ROOF_Y - 0.03, 0.55), emissive=True))

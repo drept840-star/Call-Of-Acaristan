@@ -30,11 +30,13 @@ FOLEY = (
     "m6_whiz", "m6_headshot", "m6_tink",
     "m6_door_creak", "m6_truck_arrive", "m6_tailgate",
     "m6_keyclick", "m6_switch_click", "m6_heli_land", "m6_heli_door",
+    "m6_rifle_rack",
 )
 
 # Scene -> looping stems.  Every film scene is listed; unlisted scenes (the
 # title card) stay silent.
 SCENE_STEMS = {
+    "m6_insert_chase": ("m6_heli_bed", "m6_wind_bed"),
     "m6_insert_cabin": ("m6_heli_bed",),
     "m6_insert_valley": ("m6_heli_bed", "m6_wind_bed"),
     "m6_insert_jump": ("m6_heli_bed", "m6_wind_bed"),
@@ -68,7 +70,7 @@ _FOLEY_GAIN = {
     "m6_whiz": 0.5, "m6_headshot": 0.6, "m6_tink": 0.35,
     "m6_door_creak": 0.5, "m6_truck_arrive": 0.6, "m6_tailgate": 0.6,
     "m6_keyclick": 0.4, "m6_switch_click": 0.55,
-    "m6_heli_land": 0.7, "m6_heli_door": 0.65,
+    "m6_heli_land": 0.7, "m6_heli_door": 0.65, "m6_rifle_rack": 0.6,
 }
 
 
@@ -370,6 +372,16 @@ def foley_pcm(name):
                  * np.exp(-np.maximum(t - 0.68, 0.0) * 90.0)
                  * (t > 0.68) * 0.35)
         x = rail + slam + latch
+    elif name == "m6_rifle_rack":
+        # The charging handle: steel back on its spring, then home.
+        n = int(0.35 * RATE); t = _t(n)
+        back = (_highpass(_noise(n, 271), 2200.0)
+                * np.exp(-t * 60.0) * 0.6)
+        home = (_highpass(_noise(n, 273), 1600.0)
+                * np.exp(-np.maximum(t - 0.16, 0.0) * 70.0) * (t > 0.16) * 0.8)
+        ring = (np.sin(2 * math.pi * 2350 * t) * 0.18
+                * np.exp(-np.maximum(t - 0.16, 0.0) * 40.0) * (t > 0.16))
+        x = back + home + ring
     elif name == "m6_tailgate":
         # Pins pulled, the gate swings down and bangs on its chains.
         n = int(0.8 * RATE); t = _t(n)
