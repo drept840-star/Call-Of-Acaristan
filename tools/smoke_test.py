@@ -4596,6 +4596,111 @@ def check_m1_exfil_van():
     print("  [ok] van line once, 3 drops at 40-frame spacing")
 
 
+def check_m1_lighting_hard():
+    """WP8: a street lamp's pool is flat steps (no gradient) across its radius; only
+    wh_e and dk_a flicker, every other lamp holds a steady level."""
+    from core.config import TILE_SIZE
+    from missions.m1 import draw as D
+    lamps = {k: (tx, ty, r) for tx, ty, r, _c, k in D._M1_LAMPS}
+    tx, ty, r = lamps["sl_d"]
+    wx, wy = tx * TILE_SIZE, ty * TILE_SIZE
+    surf = pygame.Surface((config.WIDTH, config.HEIGHT))
+    surf.fill((0, 0, 0))
+    D._draw_m1_hard_lights(surf, wx - config.WIDTH // 2, wy - config.HEIGHT // 2, 0.0)
+    radius = int(r * D._M1_LAMP_SCALE)
+    cx, cy = config.WIDTH // 2, config.HEIGHT // 2
+    steps = {tuple(surf.get_at((x, cy))[:3]) for x in range(cx - radius - 4, cx + radius + 4)}
+    assert 2 <= len(steps) <= 4, "lamp pool is a gradient: %d tones" % len(steps)
+    for key in lamps:
+        if key not in D._M1_FLICKER_KEYS:
+            assert all(D._m1_lamp_level(key, i * 0.05) == 1.0 for i in range(400)), key
+    if os.environ.get("ACA_FREEZE") != "1":
+        for key in D._M1_FLICKER_KEYS:
+            seq = [D._m1_lamp_level(key, i / 60) for i in range(360)]   # 6 s sweep
+            assert set(seq) == {1.0, 0.3}, (key, set(seq))
+            dips = sum(1 for a, b in zip(seq, seq[1:]) if a == 1.0 and b == 0.3)
+            assert 2 <= dips <= 6, (key, dips)
+            assert seq == [D._m1_lamp_level(key, i / 60) for i in range(360)], "flicker not deterministic"
+        assert {D._m1_lamp_level("sl_d", i / 60) for i in range(360)} == {1.0}
+    print("  [ok] street pool %d flat tones; only %s flicker" % (len(steps), ", ".join(D._M1_FLICKER_KEYS)))
+
+
+def check_m1_ambience_bands():
+    """WP8: street band -> rain + wind loops and gusts, no roof rain; inside ->
+    rain_inside, elec_hum by the gate console (13,25), drips in the stockroom."""
+    from unittest.mock import patch
+    from core import ambience as A
+    from missions.m1.map import _tc
+    street, inside = _tc(5, 5), _tc(10, 15)
+    assert A.exterior_bed("MISSION1", street[1]) == {"rain", "wind"}
+    assert A.exterior_bed("MISSION1", inside[1]) == set()
+    assert not A.outdoors("MISSION2", 0), "street band leaked to another mission"
+    assert A._in_any(A.ELEC_ZONES["MISSION1"], *_tc(13, 25))
+    assert not A._in_any(A.ELEC_ZONES["MISSION1"], *inside, pad=340)
+    assert A._in_any(A.DRIP_ZONES["MISSION1"], *inside)
+    assert not A._in_any(A.DRIP_ZONES["MISSION1"], *street)
+
+    STATE, _m1u = _m1_fresh()
+    prev_mission = STATE.active_mission
+    prev_state = dict(A._state)
+    STATE.active_mission = "MISSION1"
+    p = STATE.player
+    try:
+        # Hermetic: check_settings_preserve_omitted_keys leaves ambience_layers=False
+        # in the settings file, which update_ambience reads on a mission change.
+        from core import settings_store
+        with patch.object(A, "audio") as au, \
+                patch.object(settings_store, "load", return_value={"ambience_layers": True}):
+            A._state.update(mission=None, room_tone_on=False, rain_inside_on=False,
+                            elec_hum_on=False, shake_seen=0, debris_cooldown=0)
+            A._state.pop("layers_on", None)
+            p.rect.center = street
+            A.update_ambience()
+            played = [c.args[0] for c in au.play.call_args_list]
+            assert "rain_inside" not in played and not A._state["rain_inside_on"]
+            p.rect.center = inside
+            A.update_ambience()
+            assert A._state["rain_inside_on"], "no roof rain inside"
+            p.rect.center = street
+            A.update_ambience()
+            assert not A._state["rain_inside_on"]
+            assert any(c.args[0] == "rain_inside" for c in au.stop.call_args_list)
+    finally:
+        A._state.clear()
+        A._state.update(prev_state)
+        A._state["mission"] = None
+        STATE.active_mission = prev_mission
+    print("  [ok] street {rain, wind}; inside rain_inside + console hum + stockroom drips")
+
+
+def check_m1_music_hook_silent_and_crossfade():
+    """WP8: without the music files the hook is a silent no-op; the infiltrate ->
+    combat crossfade is linear over 1.5 s (90 steps at 60 Hz) and reverses."""
+    from unittest.mock import patch
+    from missions.m1 import m1_audio as MA
+    missing = ("assets/music/__no_m1_a.ogg", "assets/music/__no_m1_b.ogg")
+    try:
+        with patch.object(MA, "TRACKS", missing):
+            MA._m["checked"] = False
+            MA.update_m1_music()
+            MA.watchdog()
+            assert MA._m["sounds"] is None and MA._m["chans"] == [None, None]
+    finally:
+        MA._m["checked"] = False
+    lv, n = (1.0, 0.0), 0
+    while lv != (0.0, 1.0):
+        lv = MA.m1_music_targets(True, lv, 1 / 60)
+        n += 1
+        assert n <= 100, "crossfade never settles"
+    assert 90 <= n <= 91, n
+    mid = (1.0, 0.0)
+    for _ in range(45):
+        mid = MA.m1_music_targets(True, mid, 1 / 60)
+    assert abs(mid[0] - 0.5) < 0.02 and abs(mid[1] - 0.5) < 0.02, mid
+    assert MA.m1_music_targets(False, (0.0, 1.0), 1.5) == (1.0, 0.0)
+    print("  [ok] silent without files; crossfade %d steps" % n)
+
+
 def check_volkov_foreshadowing():
     from unittest.mock import patch
     from core import interactions as I
@@ -11022,7 +11127,10 @@ def main():
                       ("m1_ciocan_charge_stun", check_m1_ciocan_charge_stun),
                       ("m1_hotwire_damage_closes", check_m1_hotwire_damage_closes),
                       ("m1_alarm_keeps_escape", check_m1_alarm_keeps_escape),
-                      ("m1_exfil_van", check_m1_exfil_van)]:
+                      ("m1_exfil_van", check_m1_exfil_van),
+                      ("m1_lighting_hard", check_m1_lighting_hard),
+                      ("m1_ambience_bands", check_m1_ambience_bands),
+                      ("m1_music_hook_silent_and_crossfade", check_m1_music_hook_silent_and_crossfade)]:
         ok = run_check(name, fn) and ok
 
     print("\n=== Mission 6 checks ===")

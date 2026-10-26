@@ -39,6 +39,7 @@ from missions.m1.roles import role_of, role_step, spawn_role_enemy, spawn_ciocan
 from missions.m1.main import _init_mission_specials, _trigger_civilian_payoff
 from missions.m1.hotwire import _reset_hotwire_minigame
 from missions.m1.stealth import stealth_update, takedown_target, do_takedown, update_bricks
+from missions.m1.m1_audio import update_m1_music
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 def debug_jump_to_exfil():
@@ -342,6 +343,7 @@ def _standoff_update():
 def game_update(keys):
     global _last_keys
     _last_keys = keys
+    update_m1_music()   # WP8: optional infiltrate/combat stems; no-op without the files
     # AEGIS Pass E: advance player i-frame timer + sprite blink every frame.
     # Must run BEFORE the death-trigger check below so the timer ticks down
     # even on the frame the player dies (otherwise a freshly-set i-frame

@@ -295,8 +295,10 @@ def draw_cityscape(surface, ground_y, palette, time_ticks, parallax=0.0):
             pygame.draw.circle(halo, (200, 180, 100, alpha), (30, 20), r)
         surface.blit(halo, (lx_offset - 42, ground_y - 136))
         pygame.draw.circle(surface, (220, 200, 130), (lx_offset - 6, ground_y - 122), 4)
-def draw_rain(surface, drops, speed_mul=1.0):
+def draw_rain(surface, drops, speed_mul=1.0, rng=None):
+    """``rng``: respawn stream (default the global legacy RNG); M1 passes its seeded one."""
     from core import artpack  # lazy: config is imported by artpack
+    rng = rng or _rng_legacy
     for i, (x, y, spd) in enumerate(drops):
         ex = x - int(spd * 0.4)
         ey = y + int(spd * speed_mul)
@@ -309,8 +311,8 @@ def draw_rain(surface, drops, speed_mul=1.0):
         drops[i] = (x - 1, ey, spd)
         if ey > SCENE_BOT:
             drops[i] = (
-                _rng_legacy.randint(0, WIDTH),
-                SCENE_TOP - _rng_legacy.randint(0, 40),
+                rng.randint(0, WIDTH),
+                SCENE_TOP - rng.randint(0, 40),
                 spd,
             )
 def rain_drawables(drops, speed_mul=1.0):

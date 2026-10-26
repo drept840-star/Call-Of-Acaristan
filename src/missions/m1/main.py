@@ -1,6 +1,7 @@
 """Split from mission.py - see mission.py (shim) for the map."""
 """Mission 1B gameplay: warehouse infiltrate/firefight/escape."""
 import math
+import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import time
 import pygame
@@ -35,14 +36,24 @@ from missions.m1.stealth import reset_stealth
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 _walk_footstep_timer = 0
-rain_drops = [
-    (
-        _rng_legacy.randint(0, WIDTH),
-        _rng_legacy.randint(SCENE_TOP, SCENE_BOT),
-        _rng_legacy.randint(10, 20),
-    )
-    for _ in range(200)
-]
+# Rain is drawn from its own fixed-seed streams (not the global legacy RNG, unseeded at
+# import), so a fresh M1 start is reproducible: the drops and the respawns in draw_rain.
+_M1_RAIN_SEED = 0x4D31
+
+
+def _m1_rain_drops():
+    rng = random.Random(_M1_RAIN_SEED)
+    return [
+        (
+            rng.randint(0, WIDTH),
+            rng.randint(SCENE_TOP, SCENE_BOT),
+            rng.randint(10, 20),
+        )
+        for _ in range(200)
+    ]
+
+
+rain_drops = _m1_rain_drops()
 
 def start_mission(preserve_timer=False):
     STATE.active_mission = "MISSION1"
@@ -59,7 +70,8 @@ def start_mission(preserve_timer=False):
     STATE.request_escape_cutscene = False
     STATE.notebook_collected = False
     STATE.exfil_reached = False
-    STATE.rain_drops = list(rain_drops)
+    STATE.rain_drops = _m1_rain_drops()
+    STATE._m1_rain_rng = random.Random(_M1_RAIN_SEED + 1)   # respawns (draw.py _submit_m1_rain)
     STATE.mission_phase = "infiltrate"
     STATE.firefight_triggered = False
     STATE.volkov_escape_timer = 0

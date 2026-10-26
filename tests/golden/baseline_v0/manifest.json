@@ -4976,8 +4976,148 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "52c449d4b017dd1785dc2c329c641f31e30c16ffe96bdf528a0edd9deb244d57",
+   "sha256": "3133bcac275047780de3c6ff8167d6db241d6ce7c516cabbeeb6b4e31b85e1be",
    "source": "ae_golden:m1.desks",
+   "t_ms": null
+  },
+  "gp.m1.dropoff.00.t25": {
+   "id": "gp.m1.dropoff.00.t25",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "1289524952f1b1f8c0d5ea483e4c7bea431461be1209012cc29e21cbb37d4680",
+   "source": "m1.dropoff[0] scene=m1_dropoff",
+   "t_ms": 1075
+  },
+  "gp.m1.dropoff.00.t50": {
+   "id": "gp.m1.dropoff.00.t50",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "ff454fc147f2d6f553722ef61e0af80d6393e035dd52ad86960ce88ac062a94e",
+   "source": "m1.dropoff[0] scene=m1_dropoff",
+   "t_ms": 2150
+  },
+  "gp.m1.dropoff.00.t75": {
+   "id": "gp.m1.dropoff.00.t75",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "1c82baa681a9f19ebdfd4052eee6c1060c1cff6a024f9156cbc0e2e5bc24794b",
+   "source": "m1.dropoff[0] scene=m1_dropoff",
+   "t_ms": 3225
+  },
+  "gp.m1.dropoff.01.t25": {
+   "id": "gp.m1.dropoff.01.t25",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "29faa0d68828bdc3ae81694c7bb3f30ea2328196f71814aa966645f326eef1ef",
+   "source": "m1.dropoff[1] scene=m1_dropoff",
+   "t_ms": 575
+  },
+  "gp.m1.dropoff.01.t50": {
+   "id": "gp.m1.dropoff.01.t50",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "102ea0332198cf7c304e60155ff0ec1a59a889f4fa1107c52200c022e5f238ee",
+   "source": "m1.dropoff[1] scene=m1_dropoff",
+   "t_ms": 1150
+  },
+  "gp.m1.dropoff.01.t75": {
+   "id": "gp.m1.dropoff.01.t75",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "6eb96d4c6dc180d211915bcb2b8892eb5f642c27bcc7c3ba833992b93b004a38",
+   "source": "m1.dropoff[1] scene=m1_dropoff",
+   "t_ms": 1725
+  },
+  "gp.m1.dropoff.02.t25": {
+   "id": "gp.m1.dropoff.02.t25",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "b62cf470f06f0cb5c3f11922b1b2828d6c69f2470f271f9d5cd285923188851d",
+   "source": "m1.dropoff[2] scene=m1_dropoff",
+   "t_ms": 625
+  },
+  "gp.m1.dropoff.02.t50": {
+   "id": "gp.m1.dropoff.02.t50",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "3d10b186bdeac46c5afedf431aec733647d2c7b0637150e6abcb90262c967c0b",
+   "source": "m1.dropoff[2] scene=m1_dropoff",
+   "t_ms": 1250
+  },
+  "gp.m1.dropoff.02.t75": {
+   "id": "gp.m1.dropoff.02.t75",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "3d10b186bdeac46c5afedf431aec733647d2c7b0637150e6abcb90262c967c0b",
+   "source": "m1.dropoff[2] scene=m1_dropoff",
+   "t_ms": 1875
+  },
+  "gp.m1.shutter": {
+   "id": "gp.m1.shutter",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "459c116037bd44ff3aa3e62131a6fe4a7c0b8c95e23aaee0bfa39af90231da87",
+   "source": "ae_golden:m1.shutter",
    "t_ms": null
   },
   "gp.m1.start": {
@@ -4990,8 +5130,22 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "b88c9c3d4131b9d12e115d509dbd1deb481ece7c21f6d4bc234c5b18f9ff5071",
+   "sha256": "45be5cf3a257d23188ffa8ed523273debc42562d122044295c051bdd9c69ec77",
    "source": "ae_golden:m1.start",
+   "t_ms": null
+  },
+  "gp.m1.street": {
+   "id": "gp.m1.street",
+   "kind": "gameplay",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "c62716e3e00a8cbfb32e0d3ef8eef914986ba877144e7495331a0e0c3ba10126",
+   "source": "ae_golden:m1.street",
    "t_ms": null
   },
   "gp.m1.warehouse": {
@@ -5004,7 +5158,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "c4cb03261eb25d49e62397c756f8228efc8d6fdb2b45dab332a73cda6610ee6a",
+   "sha256": "ce637eb0e5bb622f52cc8c110b8d5ede7b785936c1a19c1a5ea4c7afd6d508ec",
    "source": "ae_golden:m1.warehouse",
    "t_ms": null
   },
