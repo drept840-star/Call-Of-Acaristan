@@ -3007,6 +3007,187 @@ def check_m1_street_art():
         artpack.rebuild()
 
 
+def _m1_stealth_setup(enemy_tile, angle, player_tile):
+    """Fresh M1 run with one guard at enemy_tile facing angle and Biribel at player_tile."""
+    from core.state import STATE
+    from entities.enemy_ai import Enemy
+    from missions.m1.map import _tc
+    gc.start_mission(preserve_timer=True)
+    STATE.dt = 1 / 60
+    STATE.enemies.clear()
+    e = Enemy(0, 0)
+    e.rect.center = _tc(*enemy_tile)
+    e.angle = angle
+    STATE.enemies.append(e)
+    STATE.player.rect.center = _tc(*player_tile)
+    return STATE, e
+
+
+def check_m1_stealth_suspicion():
+    """WP5: fill/decay numbers, sight through the chain-link fence, and the
+    UNAWARE -> SUSPICIOUS -> SEARCHING -> (2 s seen radio call) -> alarm ladder;
+    a broken LOS during the call gives no alarm and the guard calms down."""
+    import math
+    from missions.m1 import stealth as S
+    near = lambda a, b: abs(a - b) < 1e-6
+    assert near(S.fill_rate(100, True, True), 3.0), S.fill_rate(100, True, True)
+    assert near(S.fill_rate(350, False, False), 1.25 * 0.4 * 0.55 * 0.7)
+    assert near(S.dist_k(235), 1.0) and near(S.dist_k(120), 1.6) and near(S.dist_k(400), 0.4)
+
+    # Guard at (3,5) facing south; Biribel at (3,8) behind the fence row 7.
+    STATE, e = _m1_stealth_setup((3, 5), math.pi / 2, (3, 8))
+    px, py = STATE.player.rect.center
+    sight = list(STATE._m1_sight_walls)
+    assert any(w.collidepoint(3 * 64 + 32, 7 * 64 + 32) for w in STATE.walls), "fence tile not solid"
+    assert S.sees(e, px, py, sight), "guard cannot see through the chain-link fence"
+    assert not S.sees(e, px, py, STATE.walls), "solid walls should block that sight line"
+    lit = S.in_light(px, py)
+    want = S.fill_rate(math.hypot(px - e.rect.centerx, py - e.rect.centery), lit, False)
+    S.stealth_update(0.1, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    assert near(m["s"], want * 0.1) and m["state"] == S.UNAWARE, m
+
+    # Fill to SUSPICIOUS, then SEARCHING with a radio call.
+    for _ in range(600):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+        if m["state"] != S.UNAWARE:
+            break
+    assert m["state"] == S.SUSPICIOUS and m["s"] >= S.SUSPICIOUS_AT, m
+    for _ in range(600):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+        if m["state"] == S.SEARCHING:
+            break
+    assert m["state"] == S.SEARCHING and e.alerted and near(m["call_t"], S.RADIO_CALL_S), m
+    assert not STATE.firefight_triggered, "alarm before the radio call finished"
+    for _ in range(int(S.RADIO_CALL_S * 60) + 2):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert STATE.firefight_triggered, "seen radio call did not latch the alarm"
+
+    # Decay: 1.5 s hold, then 0.25/s.
+    STATE, e = _m1_stealth_setup((3, 5), -math.pi / 2, (3, 8))   # facing away
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    m["s"], m["state"], m["hold"] = 0.3, S.UNAWARE, 0.0
+    for _ in range(80):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert near(m["s"], 0.3), ("decayed inside the hold", m["s"])
+    for _ in range(60):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert 0.3 - 0.25 - 0.02 < m["s"] < 0.3 - 0.25 + 0.06, m["s"]
+
+    # Broken LOS during the call: no alarm, then the 6 s search ends calm.
+    STATE, e = _m1_stealth_setup((3, 5), math.pi / 2, (3, 8))
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    m["s"] = 1.0
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.SEARCHING and m["call_t"] > 0, m
+    STATE.player.rect.center = (12 * 64 + 32, 12 * 64 + 32)       # behind the street wall
+    for _ in range(int(S.RADIO_CALL_S * 60) + 5):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert not STATE.firefight_triggered, "radio call latched with the LOS broken"
+    for _ in range(int(S.SEARCH_S * 60) + 5):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.UNAWARE and not e.alerted and not STATE.firefight_triggered, m
+
+    # A dead caller cancels the call.
+    STATE, e = _m1_stealth_setup((3, 5), math.pi / 2, (3, 8))
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    S.mind_of(e)["s"] = 1.0
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    STATE.enemies.clear()
+    for _ in range(int(S.RADIO_CALL_S * 60) + 5):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert not STATE.firefight_triggered, "a dead guard's radio call still latched"
+
+    # A heard shot sends a guard straight to SEARCHING (radio call applies), even mid-walk
+    # to a suspicious point.
+    from entities.enemy_ai import enemy_hear_shot
+    STATE, e = _m1_stealth_setup((3, 5), -math.pi / 2, (3, 8))
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    m["s"], m["point"] = 0.5, (e.rect.centerx + 64, e.rect.centery)
+    for _ in range(60):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.SUSPICIOUS and e.state == "SEARCH", (m, e.state)
+    enemy_hear_shot(e.rect.centerx + 100, e.rect.centery, STATE.enemies, STATE.walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.SEARCHING and m["call_t"] > 0, m
+    print("  [ok] fence sight, fill/decay, 2 s radio call, broken-LOS and dead-caller cancel, shot heard")
+
+
+def check_m1_takedown_silent():
+    """WP5: V from the rear arc on an unaware guard kills instantly, with no alarm, no
+    alert for the guard next door, a corpse, and a short movement lock; from the front
+    it is a normal melee."""
+    from entities.enemy_ai import Enemy
+    from missions.m1 import stealth as S
+    from missions.m1 import update as m1u
+    STATE, e = _m1_stealth_setup((10, 12), 0.0, (10, 12))         # facing east
+    STATE.player.rect.center = (e.rect.centerx - 40, e.rect.centery)
+    assert S.takedown_target(STATE.player, STATE.enemies, STATE.walls) is e
+    STATE.player.rect.center = (e.rect.centerx + 40, e.rect.centery)
+    assert S.takedown_target(STATE.player, STATE.enemies, STATE.walls) is None, "front takedown"
+    STATE.player.rect.center = (e.rect.centerx - 40, e.rect.centery)
+    other = Enemy(0, 0)
+    other.rect.center = (e.rect.centerx + 4 * 64, e.rect.centery + 64)
+    other.angle = 0.0
+    STATE.enemies.append(other)
+    corpses = len(STATE.corpses)
+    STATE.melee_active, STATE.melee_timer, STATE.melee_hit_done = True, 11, False
+    m1u.game_update(EmptyKeys())
+    assert e not in STATE.enemies, "takedown did not kill"
+    assert len(STATE.corpses) == corpses + 1, "no corpse from the takedown"
+    assert not STATE.firefight_triggered and not other.alerted, "takedown was not silent"
+    assert STATE._m1_takedown_lock > 0, "no takedown lock"
+    x0 = STATE.player.rect.x
+
+    class _D(EmptyKeys):
+        def __getitem__(self, k):
+            return k == pygame.K_d
+    m1u.game_update(_D())
+    assert STATE.player.rect.x == x0, "moved during the takedown lock"
+    print("  [ok] rear takedown silent + corpse + lock; front is not a takedown")
+
+
+def check_m1_brick_noise():
+    """WP5: piles give 2 bricks (cap 3); a landed brick makes no fire and pulls a calm guard
+    within 250 px to SUSPICIOUS at the impact for 6 s, with no radio call."""
+    import math
+    from entities import weapons
+    from missions.m1 import stealth as S
+    from missions.m1.map import _tc
+    STATE, e = _m1_stealth_setup((9, 4), -math.pi / 2, (5, 5))    # guard looks north
+    far = type(e)(0, 0)
+    far.rect.center = _tc(24, 2)
+    far.angle = -math.pi / 2
+    STATE.enemies.append(far)
+    S.update_bricks()
+    assert STATE._m1_bricks == 2, STATE._m1_bricks
+    STATE.player.rect.center = _tc(12, 9)
+    S.update_bricks()
+    assert STATE._m1_bricks == S.BRICK_CAP, "carry cap"
+    fires = len(STATE.fire_zones)
+    ix, iy = _tc(10, 5)
+    STATE.thrown_bottles.append({"x": ix, "y": iy, "start_x": ix, "start_y": iy, "tx": ix, "ty": iy,
+                                 "t": 0.99, "speed": 0.035, "spin": 0.0, "brick": True})
+    weapons.update_molotovs(STATE.walls)
+    assert len(STATE.fire_zones) == fires and not STATE.thrown_bottles, "brick lit a fire"
+    assert STATE._m1_brick_impacts == [(ix, iy)], STATE._m1_brick_impacts
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    assert m["state"] == S.SUSPICIOUS and m["point"] == (ix, iy), m
+    assert m["call_t"] == 0 and abs(m["noise_t"] - S.NOISE_S) < 0.05, m
+    assert S.mind_of(far)["state"] == S.UNAWARE, "a guard 250+ px away heard the brick"
+    assert not STATE.firefight_triggered
+    print("  [ok] pile pickup + cap, no fire, noise -> SUSPICIOUS at impact, far guard deaf")
+
+
 def check_m1_dropoff():
     """WP4c: m1.dropoff is three radio lines in dlg order, 8-10 s on one clock, and the
     briefing hands off to it (CUTSCENE, then GAME) before gameplay."""
@@ -10161,7 +10342,10 @@ def main():
                          ("depot_restage_timing", check_depot_restage_timing),
                       ("sprite_pipeline", check_sprite_pipeline),
                       ("m1_street_art", check_m1_street_art),
-                      ("m1_dropoff", check_m1_dropoff)]:
+                      ("m1_dropoff", check_m1_dropoff),
+                      ("m1_stealth_suspicion", check_m1_stealth_suspicion),
+                      ("m1_takedown_silent", check_m1_takedown_silent),
+                      ("m1_brick_noise", check_m1_brick_noise)]:
         ok = run_check(name, fn) and ok
 
     print("\n=== Mission 6 checks ===")

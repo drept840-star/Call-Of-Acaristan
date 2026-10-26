@@ -43,6 +43,7 @@ from core.camera import update_camera, reset_camera_state, collide_bullet_walls,
 
 from missions.m1.map import _lerp, mission1_map, MAP_W, MAP_H, M1_STREET_ROW, M1_PLAYER_FACING, M1_SPAWN_POS
 from missions.m1 import update as _m1_update
+from missions.m1 import stealth as _m1_stealth
 from missions.m1.hotwire import _hotwire_wire_nodes, HOTWIRE_TARGET_PAIRS, HOTWIRE_WIRES
 from engine.core import now_ms as _now_ms, now_s as _now_s  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
@@ -1482,10 +1483,12 @@ def _draw_m1_actors(surface, cam_x, cam_y):
                 draw_commander(
                     surface, int(kx), int(ky), scale=0.35, facing_right=facing
                 )
+    _m1_stealth.draw_brick_piles(surface, cam_x, cam_y)
     # Fallen enemy bodies - under the living enemies, over the floor decals.
     corpse.draw_corpses(surface, cam_x, cam_y)
     for e in STATE.enemies:
         e.draw(surface, cam_x, cam_y)
+    _m1_stealth.draw_meters(surface, cam_x, cam_y)
     reload_progress = 0.0
     if STATE.is_reloading and STATE.reload_timer > 0:
         reload_progress = 1.0 - STATE.reload_timer / 60.0
@@ -1962,6 +1965,12 @@ def _draw_m1_hud(surface, cam_x, cam_y):
         _hud_bottle_hud.draw(surface, THEME, STATE.player_bottles,
                              panel_bg=_m1_panel_140, icon=_draw_molotov_icon,
                              x=ammo_x - 6, y=ammo_y - 42, width=246, cap=4)
+        if getattr(STATE, "_m1_bricks", 0) > 0:
+            surface.blit(
+                font_terminal_small.render(f"BRICKS {STATE._m1_bricks}/{_m1_stealth.BRICK_CAP}  [Q]",
+                                           True, (200, 150, 120)),
+                (ammo_x, ammo_y - 62),
+            )
 
         _hud_hostiles.draw(surface, THEME, len(STATE.enemies))
 

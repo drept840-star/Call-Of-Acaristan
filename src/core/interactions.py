@@ -124,14 +124,9 @@ def handle_interact():
                     "BREACH IN PROGRESS!", (255, 100, 30), 90,
                 ])
                 return
-            nearby = [
-                e for e in STATE.enemies
-                if math.hypot(
-                    e.rect.centerx - STATE.NOTEBOOK_POS[0],
-                    e.rect.centery - STATE.NOTEBOOK_POS[1],
-                ) < 300
-            ]
-            if not nearby:
+            # M1 rework WP5: the safe opens unless a guard can see you right now
+            # (missions.m1.stealth sets the flag every frame).
+            if not getattr(STATE, "_m1_player_seen", False):
                 STATE.safe_keypad_active = True
                 STATE.safe_keypad_code = ""
                 STATE.safe_keypad_target = "742"
@@ -141,7 +136,7 @@ def handle_interact():
             else:
                 STATE.floating_texts.append([
                     STATE.NOTEBOOK_POS[0], STATE.NOTEBOOK_POS[1] - 20,
-                    "CLEAR HOSTILES FIRST", (220, 60, 60), 90,
+                    "THEY CAN SEE YOU", (220, 60, 60), 90,
                 ])
             return
     interact_door()

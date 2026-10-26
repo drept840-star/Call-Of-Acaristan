@@ -36,6 +36,7 @@ from core.camera import tick_camera_fx, follow_gameplay
 from missions.m1.map import _tc, MAP_W, MAP_H
 from missions.m1.main import _init_mission_specials, _trigger_civilian_payoff
 from missions.m1.hotwire import _reset_hotwire_minigame
+from missions.m1.stealth import stealth_update, takedown_target, do_takedown, update_bricks
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 def debug_jump_to_exfil():
@@ -109,11 +110,8 @@ def game_update(keys):
     if STATE.NOTEBOOK_POS is None:
         _init_mission_specials()
     if STATE.player and not STATE.firefight_triggered:
-        # Combat only starts from enemy detection - no position trigger
-        for e in STATE.enemies:
-            if e.alerted:
-                trigger_alarm_early()
-                break
+        # Combat only starts from the stealth layer's completed radio call
+        # (missions.m1.stealth -> trigger_alarm_early); no position trigger.
         # ── Civilian payoff line (once, on warehouse entry) ──
         if (STATE.player.rect.centery > 21 * TILE_SIZE
                 and not STATE.civilian_payoff_done):
@@ -327,9 +325,11 @@ def game_update(keys):
             STATE.volkov_escaped = True
             STATE.commander_escaped = True
     solid_walls = STATE.walls[:]
+    sight_walls = list(getattr(STATE, "_m1_sight_walls", STATE.walls))
     for d in STATE.doors:
         if d.collision_rect:
             solid_walls.append(d.collision_rect)
+            sight_walls.append(d.collision_rect)
     gate_locked = any(d.locked for d in STATE.doors if getattr(d, "is_gate", False))
     if gate_locked and STATE.player:
         dist_to_console = math.hypot(
@@ -446,9 +446,12 @@ def game_update(keys):
             STATE._death_logic_ticks = ticks
         if not STATE.player_dead:
             STATE._death_logic_ticks = 1
+        is_moving = False
+        if getattr(STATE, "_m1_takedown_lock", 0) > 0:
+            STATE._m1_takedown_lock -= 1     # pinned for the takedown
         if not STATE.player_dead:
             dx, dy = 0, 0
-            if not STATE.truck_hotwiring:
+            if not STATE.truck_hotwiring and not getattr(STATE, "_m1_takedown_lock", 0):
                 # Delta-time aware: speed is in px/frame (e.g. 5), so
                 # multiply by (60 * dt) to get px this frame at any FPS.
                 # At 60 FPS dt=1/60, so 60*dt = 1 → identical to old behavior.
@@ -509,7 +512,11 @@ def game_update(keys):
         STATE.melee_timer -= 1
         if not STATE.melee_hit_done and STATE.melee_timer <= 10:
             STATE.melee_hit_done = True
-            if STATE.player and not STATE.player_dead:
+            silent = (takedown_target(STATE.player, STATE.enemies, solid_walls)
+                      if STATE.player and not STATE.player_dead else None)
+            if silent is not None:
+                do_takedown(silent)          # WP5: rear arc, unaware -> instant, silent
+            elif STATE.player and not STATE.player_dead:
                 # Shared melee resolver: range, cone, LOS, damage, particles,
                 # shake are all defined in player.resolve_melee.
                 nearest = resolve_melee(
@@ -615,7 +622,7 @@ def game_update(keys):
         # Same fix as mission2.py: entity hits take priority over wall hits
         # so bullets that reach the player aren't absorbed by cover rects.
         if not hit:
-            hit = collide_bullet_walls(b, solid_walls)
+            hit = collide_bullet_walls(b, sight_walls)   # rounds pass chain-link
             if hit:
                 effects.burst(b["x"], b["y"], (200, 180, 140), 5, jitter=2)
                 effects.play_impact("bullet_impact", (b["x"], b["y"]), base_volume=0.4)
@@ -625,6 +632,9 @@ def game_update(keys):
             or not (-1000 < b["x"] < 3000 and -1000 < b["y"] < 3000)
         ):
             STATE.bullets.remove(b)
+    if STATE.player:
+        stealth_update(STATE.dt, is_moving, sight_walls, solid_walls)
+        update_bricks()
     for e in STATE.enemies[:]:
         if STATE.player and not STATE.player_dead:
             # Breach-wave discipline: keep converging on Biribel during the
@@ -649,6 +659,8 @@ def game_update(keys):
                 STATE.particles,
                 STATE.enemies,
                 STATE.fire_zones,
+                sight_walls=sight_walls,
+                stealth=not STATE.firefight_triggered,
             )
         if e.hp <= 0:
             # Enemy death burst unified with M2 (was 25 raw Particle()).

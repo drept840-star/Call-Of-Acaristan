@@ -31,6 +31,7 @@ from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
 from missions.m1.map import mission1_map, MAP_W, MAP_H, M1_BAY_ROW, M1_GATE_ROW, M1_STREET_ROW, M1_PLAYER_FACING
+from missions.m1.stealth import reset_stealth
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 _walk_footstep_timer = 0
@@ -88,6 +89,8 @@ def start_mission(preserve_timer=False):
     STATE.casings = []
     STATE.doors = []
     STATE.warehouse_walls_set = set()
+    STATE._m1_sight_walls = []       # walls minus chain-link fence: what guards see past (WP5)
+    reset_stealth()
     STATE.melee_active = False
     STATE.melee_timer = 0
     STATE.melee_hit_done = False
@@ -205,9 +208,12 @@ def start_mission(preserve_timer=False):
             x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
             if tile == "W":
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+                STATE._m1_sight_walls.append(STATE.walls[-1])
                 STATE.warehouse_walls_set.add((col_idx, row_idx))
             elif tile in ("C", "T", "f", "S"):
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+                if tile != "f":      # chain-link: blocks the body, not the eye
+                    STATE._m1_sight_walls.append(STATE.walls[-1])
             elif tile in ("D", "d"):
                 is_bay = row_idx == M1_BAY_ROW
                 is_gate = row_idx == M1_GATE_ROW

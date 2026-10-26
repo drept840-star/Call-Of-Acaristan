@@ -1,7 +1,8 @@
 
-"""Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py, meta.py."""
+"""Package missions/m1 - re-export facade. Parts: map.py, stealth.py, main.py, hotwire.py, update.py, draw.py, meta.py."""
 """Mission 1B gameplay: warehouse infiltrate/firefight/escape."""
 from .map import *  # noqa: F401,F403
+from .stealth import *  # noqa: F401,F403
 from .main import *  # noqa: F401,F403
 from .hotwire import *  # noqa: F401,F403
 from .update import *  # noqa: F401,F403

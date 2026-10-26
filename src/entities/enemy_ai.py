@@ -248,7 +248,10 @@ class Enemy:
             if len(points) == 4:
                 break
         return points
-    def update(self, px, py, walls, bullets, particles, enemies=None, fire_zones=None):
+    def update(self, px, py, walls, bullets, particles, enemies=None, fire_zones=None,
+               sight_walls=None, stealth=False):
+        # M1 stealth (WP5): ``sight_walls`` (walls minus see-through fences) feed the
+        # LOS test; ``stealth`` hands calm detection to missions.m1.stealth.
         ox, oy = self.rect.centerx, self.rect.centery
         # Delta-time multiplier: speed values in this module are in px/frame,
         # so multiply by (60 * dt) to get px this frame at any FPS.
@@ -270,7 +273,9 @@ class Enemy:
         self._prev_state = self.state
         if self.flinch_timer > 0:
             self.flinch_timer -= 1
-        can_see = self._can_see(px, py, walls)
+        can_see = self._can_see(px, py, walls if sight_walls is None else sight_walls)
+        if can_see and stealth and not self.alerted:
+            can_see = False              # the suspicion meter decides, not one glimpse
         if can_see:
             self.last_seen_pos = (px, py)
             self.lost_sight_timer = 0
@@ -283,7 +288,7 @@ class Enemy:
         cone_half = math.radians(80) if self.alerted else math.radians(45)
         dist_to_player = math.hypot(px - self.rect.centerx, py - self.rect.centery)
         detect_range = ENEMY_DETECT_RANGE * (2 if self.alerted else 1)
-        if not self.alerted and dist_to_player < detect_range:
+        if not self.alerted and not stealth and dist_to_player < detect_range:
             in_sight_cone = False
             if dist_to_player < 115 and can_see:
                 # Close-range peripheral awareness. Stops enemies being blind when

@@ -3301,7 +3301,11 @@ class _GameState_(GameState):
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 gc.start_reload()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                gc.switch_weapon()
+                if getattr(STATE, "active_mission", "") == "MISSION1":
+                    from missions.m1.stealth import throw_brick  # lazy: M1 only
+                    throw_brick()
+                else:
+                    gc.switch_weapon()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                 if gc.truck_hotwiring:
                     gc.handle_hotwire_press()

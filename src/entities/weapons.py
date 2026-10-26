@@ -606,7 +606,11 @@ def update_molotovs(solid_walls, player_damage_allowed=True):
                 hit_wall = True
                 break
         if b["t"] >= 1.0 or hit_wall:
-            spawn_molotov_fire(impact_x, impact_y, solid_walls)
+            if b.get("brick"):
+                # M1 brick: no fire, a noise the M1 stealth layer consumes.
+                STATE._m1_brick_impacts.append((impact_x, impact_y))
+            else:
+                spawn_molotov_fire(impact_x, impact_y, solid_walls)
             STATE.thrown_bottles.remove(b)
         else:
             b["x"] = new_x
@@ -718,6 +722,13 @@ def draw_thrown_bottles(surface, cam_x, cam_y):
                 by + lx * sin_r + ly * cos_r,
             )
 
+        if b.get("brick"):
+            # M1 brick: a hard tumbling block, no wick or flame.
+            brick_pts = [_rot(-6, -4), _rot(6, -4), _rot(6, 4), _rot(-6, 4)]
+            pygame.draw.polygon(surface, (120, 62, 44), brick_pts)
+            pygame.draw.polygon(surface, (60, 32, 24), brick_pts, 1)
+            pygame.draw.line(surface, (160, 92, 66), _rot(-5, -3), _rot(5, -3), 1)
+            continue
         # Molotov bottle silhouette
         bottle_pts = [
             _rot(-2.5, -12), _rot(2.5, -12),
