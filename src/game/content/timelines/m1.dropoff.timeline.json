@@ -1,0 +1,49 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m1.dropoff",
+ "shots": [
+  {
+   "scene": "m1_dropoff",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Channel 4. You're on the street. / Two at the shutter, one walking the fence.",
+   "min_ms": 4300,
+   "scene_time_offset_ms": 0,
+   "lighting": [
+    5,
+    7,
+    10
+   ]
+  },
+  {
+   "scene": "m1_dropoff",
+   "speaker": "BIRIBEL",
+   "radio": true,
+   "text": "Side door's dark.",
+   "min_ms": 2300,
+   "scene_time_offset_ms": 4300,
+   "lighting": [
+    5,
+    7,
+    10
+   ]
+  },
+  {
+   "scene": "m1_dropoff",
+   "speaker": "VASILE",
+   "radio": true,
+   "text": "Then use it. Volkov's inside with the book.",
+   "min_ms": 2500,
+   "scene_time_offset_ms": 6600,
+   "lighting": [
+    5,
+    7,
+    10
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m1.meta.dropoff_shots"
+ }
+}

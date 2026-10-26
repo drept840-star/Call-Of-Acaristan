@@ -1119,7 +1119,8 @@ def start_briefing(kind="warehouse"):
 def finish_briefing():
     if briefing_kind == "warehouse":
         gc.start_mission(preserve_timer=True)
-        gsm.transition("GAME")
+        start_cutscene(gc.dropoff_shots, "GAME", use_fades=True)
+        trigger_transition("CUTSCENE")
         pygame.mouse.set_visible(False)
 
 
@@ -2965,7 +2966,7 @@ class _CutsceneState(GameState):
                        "route12_checkpoint", "route12_tanker", "route12_aftermath",
                        "seby_pickup_body", "seby_pickup_reach", "seby_pickup_raise",
                        "m1_escape_dashboard", "m1_escape_closeup",
-                       "m1_escape_truck", "m1_escape_rear"}
+                       "m1_escape_truck", "m1_escape_rear", "m1_dropoff"}
         amb = {"ambient_drone"}
         if shot["scene"] == "m5_shadow_finale":
             # Dedicated stereo river/rain stem replaces the generic loops.
@@ -3002,7 +3003,7 @@ class _CutsceneState(GameState):
             gc.draw_typewriter_title(surface, lines, cp.char_idx)
         else:
             outdoor_rain = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy",
-                            "route12_checkpoint", "route12_tanker", "route12_aftermath"}
+                            "route12_checkpoint", "route12_tanker", "route12_aftermath", "m1_dropoff"}
             if shot["scene"] in outdoor_rain:
                 draw_rain(surface, gc.rain_drops, speed_mul=1.0)
                 surface.blit(_cutscene_fog, (0, 0))

@@ -15,6 +15,7 @@ global frame counter left to read.
 from __future__ import annotations
 
 import game.timelines as _timelines  # RPE6 P8: timeline data access
+import game.dialogues as _dialogues  # WP4c: radio text is the m1.radio dlg node
 
 ESCAPE_FPS = 60
 ESCAPE_FRAMES = 1080        # the old ESCAPE_CUTSCENE_DURATION, now a sanity bound
@@ -69,3 +70,20 @@ escape_shots = [
               (_at(820, 500), "menu_click", 0.34))},
 ]
 escape_shots = _timelines.shots("m1.escape", escape_shots)  # WP2: timeline data
+
+# m1.dropoff: the beat after the briefing. The van pulls away down the street while
+# Vasile and Biribel talk on the radio. One painter (m1_dropoff) runs all three
+# shots on one clock. min_ms covers each line's subtitle hold (subtitle_ms).
+dropoff_shots = [
+    {"scene": "m1_dropoff", "speaker": "VASILE", "radio": True,
+     "text": _dialogues.line("m1.radio", "dropoff_1",
+                             "Channel 4. You're on the street. / Two at the shutter, one walking the fence."),
+     "min_ms": 4300, "scene_time_offset_ms": 0, "lighting": (5, 7, 10)},
+    {"scene": "m1_dropoff", "speaker": "BIRIBEL", "radio": True,
+     "text": _dialogues.line("m1.radio", "dropoff_2", "Side door's dark."),
+     "min_ms": 2300, "scene_time_offset_ms": 4300, "lighting": (5, 7, 10)},
+    {"scene": "m1_dropoff", "speaker": "VASILE", "radio": True,
+     "text": _dialogues.line("m1.radio", "dropoff_3", "Then use it. Volkov's inside with the book."),
+     "min_ms": 2500, "scene_time_offset_ms": 6600, "lighting": (5, 7, 10)},
+]
+dropoff_shots = _timelines.shots("m1.dropoff", dropoff_shots)  # WP4c: timeline data

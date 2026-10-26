@@ -508,6 +508,33 @@ _register_takes({
 })
 
 
+# The m1.dropoff cut: the real street from the camera, the delivery van pulling away
+# east, Biribel on the pavement. One clock over the three radio shots (9100 ms).
+_DROPOFF_MS = 9100
+_DROPOFF_CAM = (256, 0)
+
+
+def _draw_dropoff_street(surface, t):
+    cam_x, cam_y = _DROPOFF_CAM
+    _bake_m1_static(surface, cam_x, cam_y)
+    prog = max(0.0, min(1.0, t / _DROPOFF_MS))
+    vx = 260 + int(prog * 900)
+    vy = 8 * TILE_SIZE + TILE_SIZE // 2 - cam_y
+    img = artpack.frame("spr_m1_street", "van_delivery")
+    if img is not None:
+        rear = vx - img.get_width() // 2
+        surface.blit(img, (rear, vy - img.get_height() // 2))
+    else:
+        rear = vx - 90
+        pygame.draw.rect(surface, (44, 46, 52), (rear, vy - 42, 180, 84))
+    for ty in (vy - 20, vy + 8):
+        pygame.draw.rect(surface, (210, 28, 28), (rear + 3, ty, 5, 6))
+    draw_biribel(surface, 150, 9 * TILE_SIZE + 40 - cam_y, scale=0.85, facing_right=True)
+
+
+_register_takes({"m1_dropoff": _draw_dropoff_street})
+
+
 # ── Static bake + lighting fixtures (Mission 3 pipeline, Mission 1 wiring) ──
 # Mission 1 re-rendered its whole tile grid, walls and desk bodies every
 # frame. The static half (floors, walls, desk bodies, bay label, dressing)

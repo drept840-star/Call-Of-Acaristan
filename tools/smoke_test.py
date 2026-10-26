@@ -2987,7 +2987,8 @@ def check_m1_street_art():
         assert D._m1_street_art(), "street floor tiles missing"
         surf = pygame.Surface((config.WIDTH, config.HEIGHT))
         done = D._draw_m1_street_walls(surf, 0, 0)
-        assert {(22, 10), (23, 10), (24, 10), (8, 3), (10, 4), (22, 6), (25, 6), (6, 7)} <= done,             "street walls not painted from the art pack"
+        painted = {(22, 10), (23, 10), (24, 10), (8, 3), (10, 4), (22, 6), (25, 6), (6, 7)}
+        assert painted <= done, "street walls not painted from the art pack"
         class _Queue:
             n = 0
 
@@ -3004,6 +3005,43 @@ def check_m1_street_art():
         if prev_art is not None:
             os.environ["ACA_ART"] = prev_art
         artpack.rebuild()
+
+
+def check_m1_dropoff():
+    """WP4c: m1.dropoff is three radio lines in dlg order, 8-10 s on one clock, and the
+    briefing hands off to it (CUTSCENE, then GAME) before gameplay."""
+    import ast as _ast
+    from types import SimpleNamespace
+    from game import dialogues as _dl
+    from game import timelines as _tl
+    shots = gc.dropoff_shots
+    assert len(shots) == 3, "m1.dropoff is not three radio shots"
+    assert all(s.get("radio") for s in shots), "m1.dropoff line is not flagged radio"
+    want = [("VASILE", "dropoff_1"), ("BIRIBEL", "dropoff_2"), ("VASILE", "dropoff_3")]
+    dlg_text = [(sp, _dl.dialogue("m1.radio").node(node).get("text")) for sp, node in want]
+    assert [(s["speaker"], s["text"]) for s in shots] == dlg_text, "m1.dropoff text is not the m1.radio dlg nodes"
+    total = sum(int(s["min_ms"]) for s in shots)
+    assert 8000 <= total <= 10000, f"m1.dropoff is {total} ms"
+    for s in shots:
+        assert int(s["min_ms"]) >= max(2200, 55 * len(s["text"])), ("subtitle hold", s["text"])
+    assert len(_tl.timeline("m1.dropoff").shots) == 3, "m1.dropoff timeline file is stale"
+    source_path = Path(__file__).resolve().parent.parent / "src" / "app.py"
+    tree = _ast.parse(source_path.read_text(encoding="utf-8-sig"), filename=str(source_path))
+    nodes = [n for n in tree.body if isinstance(n, _ast.FunctionDef) and n.name == "finish_briefing"]
+    assert len(nodes) == 1, "finish_briefing missing"
+    calls = []
+    namespace = {
+        "briefing_kind": "warehouse",
+        "gc": SimpleNamespace(start_mission=lambda preserve_timer=False: calls.append("start"),
+                              dropoff_shots=shots),
+        "start_cutscene": lambda shots_, after, use_fades=True: calls.append(("cut", shots_, after)),
+        "trigger_transition": lambda target: calls.append(("transition", target)),
+        "gsm": SimpleNamespace(transition=lambda target: calls.append(("gsm", target))),
+        "pygame": SimpleNamespace(mouse=SimpleNamespace(set_visible=lambda _v: None)),
+    }
+    exec(compile(_ast.Module(body=nodes, type_ignores=[]), str(source_path), "exec"), namespace)
+    namespace["finish_briefing"]()
+    assert calls == ["start", ("cut", shots, "GAME"), ("transition", "CUTSCENE")], calls
 
 
 def check_depot_restage_timing():
@@ -10122,7 +10160,8 @@ def main():
                      ("radio_widget_headless", check_radio_widget_headless),
                          ("depot_restage_timing", check_depot_restage_timing),
                       ("sprite_pipeline", check_sprite_pipeline),
-                      ("m1_street_art", check_m1_street_art)]:
+                      ("m1_street_art", check_m1_street_art),
+                      ("m1_dropoff", check_m1_dropoff)]:
         ok = run_check(name, fn) and ok
 
     print("\n=== Mission 6 checks ===")
