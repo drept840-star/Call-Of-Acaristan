@@ -1,3 +1,5 @@
+STATUS (2026-10-26): WP0-WP9 done on m1/rework; WP9b pending commit. Current handoff, commit list, known reds and open items: .wolf/STATUS.md.
+
 Resume the Mission 1 "Black Notebook" rework in Call of Acaristan.
 
 WHERE

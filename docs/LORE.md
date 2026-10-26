@@ -98,6 +98,12 @@ Sebastian Volkov, an IPA logistics affiliate, starts selling classified security
 
 **Mission 1 — Black Notebook (Day 0)**
 Biribel is deployed to intercept the Volkov handoff. He retrieves the logbook — the FuegoTech serial registry, with one water-damaged loose leaf in it — and extracts in the rain.
+- *Approach.* Vasile's van drops him at the end of the street and pulls away in the rain. The warehouse street has a walking patrol and a floodlight over the loading shutter; the way in is the side door, not the shutter.
+- *Stealth.* Guards go down to silent takedowns. Each guard carries a suspicion meter; a guard who fills it reaches for his radio, and a finished radio call raises the alarm.
+- *Volkov.* Biribel finds Volkov in the warehouse with the logbook. It is a standoff, not a kill: Volkov always gets away, and the dry copy of the leaf he keeps is the one that matters in M6. On the quiet route K raises the alarm as Volkov runs, so every run ends in a fight.
+- *The leaf.* The loose leaf in Biribel's logbook is water-damaged and only partly readable in the notebook inspect; the code on it cannot be made out yet.
+- *The breach.* The alarm brings the breach in three waves. CIOCAN, the miniboss, arrives with the second ("The clerk's new friend? Let's see.") and fights with shoulder charges.
+- *Exfil.* An enemy van brings a last squad to the corridor while Biribel hotwires the truck at the bay, the warehouse fire's smoke closing in on him; the escape cutscene drives him out through the rain.
 
 **Mission 1 → Mission 2 (Day 0, same evening)**
 Biribel hands the logbook to Vasile in the KRAP command van. Vasile takes it and pockets it without opening it in front of Biribel: *"Good. I've got it. Later. You need sleep."* Whatever is in it justifies immediate redeployment to Route 12 — no debrief, no analysis cycle, no weekend. He was not reading it for the first time; the leaf carries his own code.

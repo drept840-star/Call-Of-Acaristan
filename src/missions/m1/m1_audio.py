@@ -42,7 +42,8 @@ def _load():
         import pygame
         if not pygame.mixer.get_init():
             return
-        sounds = [pygame.mixer.Sound(p) if ok else None for p, ok in zip(TRACKS, present)]
+        from engine.assets import load_sound  # RPE6 D5: raw loads via engine.assets
+        sounds = [load_sound(p) if ok else None for p, ok in zip(TRACKS, present)]
     except Exception:
         return
     if any(s is not None for s in sounds):
