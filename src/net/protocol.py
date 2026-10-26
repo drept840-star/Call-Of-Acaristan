@@ -568,7 +568,7 @@ def clean_appearance(raw):
 
 
 def make_join_match(map_name=None, name=None, appearance=None, token=None,
-                    resume=None):
+                    resume=None, version=None, build=None):
     """Client -> host: the FIRST packet a match client sends.
 
     A listening socket accepts anything that connects to it, and the host
@@ -608,6 +608,15 @@ def make_join_match(map_name=None, name=None, appearance=None, token=None,
     resume_tok = clean_token(resume)
     if resume_tok:
         msg["resume"] = resume_tok
+    # The game build rides along for the same reason as the loadout: it is
+    # part of "who I am" as a peer, never changes mid-session, and the host
+    # needs it BEFORE seating anyone. Absence is tolerated so handshakes
+    # from before this field existed (and in-mission probes) still join; a
+    # STATED mismatch is what the host refuses (see join_match_version).
+    if isinstance(version, str) and version.strip():
+        msg["v"] = version.strip()[:16]
+    if isinstance(build, str) and build.strip():
+        msg["b"] = build.strip()[:16]
     return msg
 
 
@@ -643,6 +652,27 @@ def join_match_resume(msg):
 def is_join_match(msg):
     """True if this is a match join handshake."""
     return isinstance(msg, dict) and msg.get("t") == T_JOIN_MATCH
+
+
+def join_match_version(msg):
+    """The game build version announced at join, or "" (absent = unstated).
+
+    Absence is NOT a mismatch: a peer that predates the field (or a probe)
+    still joins, same rule as the appearance key. Only a stated version can
+    be compared, and the host compares it against its own build.
+    """
+    if not is_join_match(msg):
+        return ""
+    v = msg.get("v")
+    return v.strip()[:16] if isinstance(v, str) else ""
+
+
+def join_match_build(msg):
+    """The build number announced at join, or "" (absent = unstated)."""
+    if not is_join_match(msg):
+        return ""
+    b = msg.get("b")
+    return b.strip()[:16] if isinstance(b, str) else ""
 
 
 def join_match_name(msg):

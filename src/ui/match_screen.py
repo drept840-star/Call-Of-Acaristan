@@ -32,6 +32,7 @@ Esc always steps back out; it never quits the game.
 
 import hmac
 import math
+import os
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import secrets
 import select
@@ -39,6 +40,7 @@ import socket
 import threading
 import time
 from collections import deque
+from pathlib import Path as _Path
 
 import pygame
 
@@ -58,6 +60,38 @@ from ui.widgets import clipboard_text
 from ui import multiplayer_style as _mp_style
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
+
+
+def _mp_local_build():
+    """(version, build) of this running game, announced in the join packet.
+
+    Cached after the first read (version.json does not change mid-session).
+    Falls back to the engine version in a bare checkout, and to ("", "") if
+    even that is unavailable -- an empty version is simply not announced, and
+    an unannounced version is never treated as a mismatch (see the host gate
+    in _promote_pending_peer).
+    """
+    global _MP_LOCAL_BUILD
+    if _MP_LOCAL_BUILD is not None:
+        return _MP_LOCAL_BUILD
+    version, build = "", ""
+    try:
+        from launcher import load_local_version
+        lv = load_local_version(_Path(__file__).resolve().parents[2])
+        version, build = str(lv.version), str(lv.build)
+    except Exception:
+        pass
+    if not version:
+        try:
+            import engine
+            version = getattr(engine, "__version__", "") or ""
+        except Exception:
+            version = ""
+    _MP_LOCAL_BUILD = (version, build)
+    return _MP_LOCAL_BUILD
+
+
+_MP_LOCAL_BUILD = None
 
 STEP = 1.0 / TICK_RATE
 SCORE_LIMIT = 15
@@ -458,6 +492,10 @@ class MatchScreen(object):
         # Accepted-but-unverified connections. They become peers only when a
         # join handshake arrives (see _promote_pending_peer).
         self._pending_peers = []
+        # This build's announced identity, sent in the join packet and compared
+        # on the host side. Per-instance so a test (or a forked build) can
+        # state a different version than the one on disk.
+        self._mp_build = _mp_local_build()
         self._match_started = False
         # Host session phases: lobby -> countdown -> playing. Clients read the
         # same phase from host match-state packets; no join ever starts play.
@@ -1337,7 +1375,8 @@ class MatchScreen(object):
         self.wire._send(P.make_join_match(
             self.map_name, self.play_name(), profile_store.equipped(),
             token=getattr(self, "_join_token", None),
-            resume=getattr(self, "_resume_token", None)))
+            resume=getattr(self, "_resume_token", None),
+            version=self._mp_build[0], build=self._mp_build[1]))
         self.wire.flush()
         # Enter the live-match mode HERE. Without this the client stayed in
         # "panel", so update() never dispatched to _update_client and the
@@ -1840,6 +1879,23 @@ class MatchScreen(object):
                 want.encode("ascii", "replace")):
             self._drop_peer(peer)
             return False
+        # Version gate. A stale client in a newer host (or the reverse) still
+        # parses on the wire -- then the two sims disagree about weapons,
+        # geometry or rules and the match desyncs with no error anywhere.
+        # The join packet states the sender's build; a stated mismatch is
+        # refused with a reason the joiner can act on, BEFORE any slot is
+        # touched. Absence is tolerated, same rule as the appearance key, so
+        # in-mission probes and pre-field handshakes still join. Set
+        # ACA_MP_ALLOW_SKEW=1 to seat mixed builds anyway (dev only).
+        if not os.environ.get("ACA_MP_ALLOW_SKEW"):
+            cver, cbuild = P.join_match_version(raw), P.join_match_build(raw)
+            if cver and (cver, cbuild) != self._mp_build:
+                mine = "v%s b%s" % self._mp_build if self._mp_build[1] else "v%s" % self._mp_build[0]
+                theirs = "v%s b%s" % (cver, cbuild) if cbuild else "v%s" % cver
+                peer.wire._send(P.make_kick(
+                    "VERSION MISMATCH: HOST %s YOU %s" % (mine, theirs)))
+                self._drop_peer(peer, graceful=True)
+                return False
         # A valid personal resume token reclaims the exact suspended slot.
         # The token is single-use: a fresh one is minted in the assignment
         # below, so an old connection cannot race the returning player.
