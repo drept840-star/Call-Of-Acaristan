@@ -508,28 +508,92 @@ _register_takes({
 })
 
 
-# The m1.dropoff cut: the real street from the camera, the delivery van pulling away
-# east, Biribel on the pavement. One clock over the three radio shots (9100 ms).
+# The m1.dropoff cut: the real street from a gameplay-scale camera. The delivery van
+# stands at the south curb, Biribel steps out onto the pavement by the fence gap, the
+# van pulls out and away east while the camera follows it to the shutter and its
+# guards; then Biribel crosses the forecourt to the dark side door. One clock over
+# the three radio shots (9100 ms); shots 2-3 hold one west camera.
 _DROPOFF_MS = 9100
-_DROPOFF_CAM = (256, 0)
+_DROPOFF_VAN_REAR = 362                     # parked: passenger door lines up with the gap
+_DROPOFF_VAN_Y = (400, 336)                 # south lane at the curb -> pulled out
+_DROPOFF_WALK = ((4300, 480, 470), (5200, 480, 560), (6600, 320, 590), (7700, 240, 600))
+
+
+def _ease(u):
+    u = max(0.0, min(1.0, u))
+    return u * u * (3.0 - 2.0 * u)
+
+
+def _dropoff_cam(t):
+    if t < 4300:
+        u = _ease((t - 1800) / 2500.0)
+        return int(40 + 720 * u), int(120 + 70 * u)
+    return 0, 190
+
+
+def _dropoff_van(t):
+    """World (rear x, centre y) of the van, or None once it has left."""
+    if t >= 4300:
+        return None
+    d = max(0.0, t - 1500.0)
+    x = _DROPOFF_VAN_REAR + 0.00012 * d * d
+    y = _DROPOFF_VAN_Y[0] + (_DROPOFF_VAN_Y[1] - _DROPOFF_VAN_Y[0]) * _ease(d / 900.0)
+    return x, y
+
+
+def _dropoff_biribel(t):
+    """World (x, y, facing, moving, under_van) for the player figure."""
+    if t < 1300:
+        u = _ease((t - 300) / 1000.0)
+        return 480, 420 + 50 * u, math.pi / 2, 300 < t < 1300, True
+    if t < 4300:
+        return 480, 470, (0.0 if t > 1700 else math.pi / 2), False, False
+    pts = _DROPOFF_WALK
+    for (t0, x0, y0), (t1, x1, y1) in zip(pts, pts[1:]):
+        if t < t1:
+            u = (t - t0) / float(t1 - t0)
+            return x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, math.atan2(y1 - y0, x1 - x0), True, False
+    return pts[-1][1], pts[-1][2], math.pi / 2, False, False
+
+
+def _draw_dropoff_player(surface, cam_x, cam_y, x, y, facing, moving):
+    p = STATE.player
+    if p is None:
+        return
+    keep = p.rect.center, p.angle
+    p.rect.center = (int(x), int(y))
+    p.angle = facing
+    try:
+        p.draw(surface, cam_x, cam_y, is_moving=moving)
+    finally:
+        p.rect.center, p.angle = keep
 
 
 def _draw_dropoff_street(surface, t):
-    cam_x, cam_y = _DROPOFF_CAM
+    t = max(0, min(_DROPOFF_MS, int(t)))
+    cam_x, cam_y = _dropoff_cam(t)
+    surface.fill((0, 0, 0))
     _bake_m1_static(surface, cam_x, cam_y)
-    prog = max(0.0, min(1.0, t / _DROPOFF_MS))
-    vx = 260 + int(prog * 900)
-    vy = 8 * TILE_SIZE + TILE_SIZE // 2 - cam_y
+    for e in getattr(STATE, "enemies", ()):
+        if e.rect.centery < M1_STREET_ROW * TILE_SIZE:
+            e.draw(surface, cam_x, cam_y)
+    for d in getattr(STATE, "doors", ()):
+        if not d.is_bay and d.rect.y < (M1_STREET_ROW + 1) * TILE_SIZE:
+            surface.blit(DOOR_TILE, (d.rect.x - cam_x, d.rect.y - cam_y))
+    bx, by, facing, moving, under_van = _dropoff_biribel(t)
+    if under_van:
+        _draw_dropoff_player(surface, cam_x, cam_y, bx, by, facing, moving)
+    van = _dropoff_van(t)
     img = artpack.frame("spr_m1_street", "van_delivery")
-    if img is not None:
-        rear = vx - img.get_width() // 2
-        surface.blit(img, (rear, vy - img.get_height() // 2))
-    else:
-        rear = vx - 90
-        pygame.draw.rect(surface, (44, 46, 52), (rear, vy - 42, 180, 84))
-    for ty in (vy - 20, vy + 8):
-        pygame.draw.rect(surface, (210, 28, 28), (rear + 3, ty, 5, 6))
-    draw_biribel(surface, 150, 9 * TILE_SIZE + 40 - cam_y, scale=0.85, facing_right=True)
+    if van is not None and img is not None:
+        rear, vy = van[0] - cam_x, van[1] - cam_y
+        top = vy - img.get_height() // 2
+        surface.blit(img, (int(rear) - 14, int(top)))
+        if t > 1500:                         # brake lights as it pulls out
+            for ty in (vy - 23, vy + 19):
+                surface.fill((230, 40, 32), (int(rear) - 1, int(ty), 3, 5))
+    if not under_van:
+        _draw_dropoff_player(surface, cam_x, cam_y, bx, by, facing, moving)
 
 
 _register_takes({"m1_dropoff": _draw_dropoff_street})
@@ -671,19 +735,111 @@ def _m1_glyph(col, row):
     return ""
 
 
-def _blit_m1_street_floor(target, cam_x, cam_y):
-    """Street band rows 0-9: 64-px art-pack floor tiles."""
-    for row in range(max(0, int(cam_y // TILE_SIZE) - 1),
-                     min(M1_STREET_ROW, int((cam_y + HEIGHT) // TILE_SIZE) + 2)):
-        for col in range(int(cam_x // TILE_SIZE) - 1, int((cam_x + WIDTH) // TILE_SIZE) + 2):
-            tile = artpack.tile(".", col, row)
+# Street band cross-section in world y (north to south): far pavement, road, near
+# pavement under the fence, the warehouse forecourt. Curbs sit on the two edges.
+_M1_PAVE_N = (1 * TILE_SIZE, 2 * TILE_SIZE - 8)
+_M1_ROAD = (2 * TILE_SIZE - 8, 7 * TILE_SIZE - 16)
+_M1_PAVE_S = (7 * TILE_SIZE - 16, 8 * TILE_SIZE)
+_M1_YARD = (8 * TILE_SIZE, M1_STREET_ROW * TILE_SIZE)
+_M1_LANE_Y = 4 * TILE_SIZE + 32          # dashed centre line
+_M1_CURB = ((92, 92, 88), (66, 66, 64), (20, 20, 22))   # crown, face, gutter
+# Hard-edged puddles on the road (world px, w, h); clear of the parked vehicles.
+_M1_PUDDLES = ((300, 236, 58, 14), (820, 396, 70, 16), (1170, 180, 46, 12),
+               (1330, 330, 64, 14), (1560, 214, 52, 12), (560, 352, 40, 10))
+
+
+def _m1_road_tile(col, row):
+    # t_g_3 carries a soft stain; the road keeps to the three clean variants.
+    return artpack.get("t_g_%d" % _m1_hash(col, row, 3))
+
+
+def _fill_m1_band(target, cam_x, cam_y, band, tile_fn):
+    y0, y1 = band
+    clip = target.get_clip()
+    target.set_clip(clip.clip(pygame.Rect(0, y0 - cam_y, target.get_width(), y1 - y0)))
+    for row in range(y0 // TILE_SIZE, (y1 - 1) // TILE_SIZE + 1):
+        for col in range(int(cam_x // TILE_SIZE) - 1, int((cam_x + target.get_width()) // TILE_SIZE) + 2):
+            tile = tile_fn(col, row)
             if tile is not None:
                 target.blit(tile, (col * TILE_SIZE - cam_x, row * TILE_SIZE - cam_y))
+    target.set_clip(clip)
+
+
+def _m1_curb(target, x0, x1, y, facing_down):
+    """6 px stepped curb: lit crown on the pavement side, dark gutter on the road side."""
+    crown, face, gutter = _M1_CURB
+    w = x1 - x0
+    if facing_down:
+        target.fill(crown, (x0, y - 6, w, 2))
+        target.fill(face, (x0, y - 4, w, 3))
+        target.fill(gutter, (x0, y - 1, w, 2))
+    else:
+        target.fill(gutter, (x0, y - 1, w, 2))
+        target.fill(face, (x0, y + 1, w, 3))
+        target.fill(crown, (x0, y + 4, w, 2))
+
+
+def _m1_hard_pool(target, sx, sy, radius, col):
+    """Two flat additive discs: a lit pool with an edge, no falloff (M6 house light)."""
+    pool = pygame.Surface((radius * 2, radius * 2))
+    pool.fill((0, 0, 0))
+    pygame.draw.circle(pool, tuple(int(v * 0.05) for v in col), (radius, radius), radius)
+    pygame.draw.circle(pool, tuple(int(v * 0.09) for v in col), (radius, radius), radius * 3 // 5)
+    target.blit(pool, (int(sx - radius), int(sy - radius)), special_flags=pygame.BLEND_RGB_ADD)
+
+
+def _blit_m1_street_floor(target, cam_x, cam_y):
+    """Street band rows 0-9: art-pack pavement, asphalt and forecourt slabs, curbs,
+    lane paint, hard-edged puddles and the lamps' stepped floor pools."""
+    _fill_m1_band(target, cam_x, cam_y, _M1_PAVE_N, lambda c, r: artpack.tile("s", c, r))
+    _fill_m1_band(target, cam_x, cam_y, _M1_ROAD, _m1_road_tile)
+    _fill_m1_band(target, cam_x, cam_y, _M1_PAVE_S, lambda c, r: artpack.tile("s", c, r))
+    _fill_m1_band(target, cam_x, cam_y, _M1_YARD, lambda c, r: artpack.tile("O", c, r))
+    x0, x1 = TILE_SIZE - cam_x, (MAP_W - 1) * TILE_SIZE - cam_x
+    _m1_curb(target, x0, x1, _M1_ROAD[0] - cam_y, False)
+    _m1_curb(target, x0, x1, _M1_ROAD[1] - cam_y, True)
+    # Forecourt edge: one dark joint where the pavement meets the yard slabs.
+    target.fill((24, 28, 30), (x0, _M1_YARD[0] - cam_y, x1 - x0, 2))
+    # Worn lane paint: 40 px dashes, 24 px gaps, two tones.
+    ly = _M1_LANE_Y - cam_y
+    for wx in range(TILE_SIZE + 12, (MAP_W - 1) * TILE_SIZE - 40, 64):
+        target.fill((112, 108, 86), (wx - cam_x, ly - 2, 40, 4))
+        target.fill((84, 82, 68), (wx - cam_x, ly + 1, 40, 1))
+    # Edge lines a stride off each curb.
+    for ey in (_M1_ROAD[0] + 14, _M1_ROAD[1] - 16):
+        target.fill((70, 70, 66), (x0, ey - cam_y, x1 - x0, 2))
+    for px, py, w, h in _M1_PUDDLES:
+        sx, sy = px - cam_x, py - cam_y
+        # Stepped oval in flat tones: body, a 1-px deeper lip, two sky glints.
+        target.fill((36, 40, 50), (sx + 10, sy - 4, w - 22, h + 8))
+        target.fill((36, 40, 50), (sx + 4, sy - 2, w - 8, h + 4))
+        target.fill((36, 40, 50), (sx, sy, w, h))
+        target.fill((30, 33, 42), (sx + 10, sy + h + 3, w - 22, 1))
+        target.fill((74, 84, 102), (sx + 12, sy - 2, w // 3, 1))
+        target.fill((58, 66, 82), (sx + w // 2, sy + 3, w // 4, 1))
+    for tx, ty, _r, col, key in _M1_LAMPS:
+        if key in ("sl_d", "sl_e"):
+            _m1_hard_pool(target, tx * TILE_SIZE + 32 - cam_x, ty * TILE_SIZE + 40 - cam_y, 92, col)
+        elif key == "fl_a":
+            _m1_flood_pool(target, tx * TILE_SIZE + 32 - cam_x, M1_STREET_ROW * TILE_SIZE - cam_y, col)
+
+
+def _m1_flood_pool(target, sx, wall_y, col):
+    """Shutter floodlight: a two-step trapezoid thrown north from the wall, hard edges."""
+    w = 3 * TILE_SIZE + 64
+    h = 150
+    beam = pygame.Surface((w, h))
+    beam.fill((0, 0, 0))
+    cx = w // 2
+    pygame.draw.polygon(beam, tuple(int(v * 0.06) for v in col),
+                        [(cx - 80, h), (cx + 80, h), (w - 1, 0), (0, 0)])
+    pygame.draw.polygon(beam, tuple(int(v * 0.11) for v in col),
+                        [(cx - 60, h), (cx + 60, h), (cx + 110, h - 90), (cx - 110, h - 90)])
+    target.blit(beam, (int(sx - cx), int(wall_y - h)), special_flags=pygame.BLEND_RGB_ADD)
 
 
 # Vehicle blocks of the street band, keyed by (w, h) of the T run.
-_M1_VEHICLE_BLOCKS = {(3, 2): ("spr_m1_street", "van_delivery"), (4, 1): ("spr_vehicles", "ipa_truck")}
-_M1_ASPHALT = (28, 28, 31)
+_M1_VEHICLE_BLOCKS = {(3, 2): ("spr_vehicles", "car_rust_brown_126x48"), (4, 1): ("spr_vehicles", "ipa_truck")}
 
 
 def _m1_run_size(col, row, ch):
@@ -700,10 +856,22 @@ def _blit_m1_vehicle_block(target, w, h, x, y):
     img = artpack.frame(*spec) if spec else None
     if img is None:
         return False
-    pygame.draw.rect(target, _M1_ASPHALT, (x, y, w * TILE_SIZE, h * TILE_SIZE))
     target.blit(img, (x + (w * TILE_SIZE - img.get_width()) // 2,
                       y + (h * TILE_SIZE - img.get_height()) // 2))
     return True
+
+
+def _m1_facade_detail(target, col, row, x, y):
+    """Hard-edged windows on the street facades (north block and warehouse front)."""
+    if row not in (0, M1_STREET_ROW) or not 0 < col < MAP_W - 1 or _m1_hash(col, row, 3) == 0:
+        return
+    lit = _m1_hash(col + 5, row, 7) == 0
+    wx, wy = x + 20, y + 22
+    target.fill((14, 15, 18), (wx - 1, wy - 1, 26, 22))
+    target.fill((92, 74, 44) if lit else (26, 30, 38), (wx, wy, 24, 20))
+    target.fill((56, 58, 60), (wx, wy + 9, 24, 2))
+    target.fill((56, 58, 60), (wx + 11, wy, 2, 20))
+    target.fill((52, 54, 56), (wx - 2, wy + 20, 28, 2))         # sill
 
 
 def _draw_m1_street_walls(target, cam_x, cam_y):
@@ -716,7 +884,13 @@ def _draw_m1_street_walls(target, cam_x, cam_y):
         for col in range(MAP_W):
             ch = _m1_glyph(col, row)
             x, y = col * TILE_SIZE - cam_x, row * TILE_SIZE - cam_y
-            if ch == "f":
+            if ch == "C":
+                house = artpack.wall("C", col, row)
+                if house is not None:
+                    target.blit(house, (x, y))
+                    _m1_facade_detail(target, col, row, x, y)
+                    done.add((col, row))
+            elif ch == "f":
                 key = "fence_post" if col % 2 == 0 else "fence_mesh"
                 if artpack.blit_frame(target, "spr_m1_street", key, (x, y)):
                     done.add((col, row))
@@ -872,6 +1046,17 @@ def _draw_m1_street_post(target, sx, sy):
     pygame.draw.rect(target, (200, 215, 255), (int(sx + 10), int(sy - 52), 8, 5))
 
 
+def _draw_m1_road_lamp(target, sx, tile_top):
+    """Street lamp planted on the north pavement, arm reaching south over the road
+    (the art-pack lamp flipped); its light is the floor pool, no halo."""
+    img = artpack.frame("spr_m1_street", "lamp_post")
+    if img is None:
+        return
+    img = pygame.transform.flip(img, False, True)
+    # Flipped anchor: base centre at (32, 12); the base stands on the pavement.
+    target.blit(img, (int(sx - 32), int(tile_top - 40)))
+
+
 def _draw_m1_bulkhead(target, sx, sy):
     """Wall-mounted gate bulkhead light + warm glow."""
     halo = get_glow(18, (255, 236, 200), 90)
@@ -914,6 +1099,8 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
     gy1 = int((cam_y + HEIGHT) // FLOOR_TILE_SIZE) + 2
     for grow in range(gy0, gy1):
         for gcol in range(gx0, gx1):
+            if grow * FLOOR_TILE_SIZE < (M1_STREET_ROW + 1) * TILE_SIZE:
+                continue        # the street band carries its own art; no blobs there
             h = _m1_hash(gcol, grow, 100)
             bx = gcol * FLOOR_TILE_SIZE - cam_x
             by = grow * FLOOR_TILE_SIZE - cam_y
@@ -1016,6 +1203,8 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
         if fam == "wh":
             _draw_m1_hall_fixture(target, sx, sy)
             render_util.add_radial(target, sx, sy, 34, (255, 225, 175), 24)
+        elif key in ("sl_d", "sl_e"):
+            _draw_m1_road_lamp(target, sx, ty * TILE_SIZE - cam_y)
         elif fam == "sl":
             _draw_m1_street_post(target, sx, sy)
         elif fam == "fl":
