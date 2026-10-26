@@ -1436,3 +1436,38 @@ Open:
 - noman still reads paler and emptier than M5. Closing that needs new snow tiles and
   authored watch posts, which is an identity change for the user to decide.
 - Prop interiors (`_mat_fill`: boxcars, crates, truck beds) still sample tex3d.
+
+## 2026-10-27 - M1 rework completed here: WP8/WP9 merged from m1/rework
+
+`First try` (`cutscene-holds`) had the M1 rework only through WP7 (merge `3070c96`).
+The `m1/rework` worktree had gone on to finish the plan, so the missing three commits
+were merged in (merge `ef9302b`, no conflicts, no fix-up needed):
+
+- WP8 `294628a`: hard-edged lamp pools / shutter flood cone / bay moonlight cone as a
+  new `m1.hard_lights` pass on LIGHTING (`m1/draw.py`), replacing the soft
+  `LightBuffer` lamp pushes (the composite stays as a grade); fixture halos are the
+  M6 two-step recipe. Ambience bands (`core/ambience.py`): street rows 0-9 play the
+  exterior rain+wind bed and stop `rain_inside`/gusts; inside plays `rain_inside`,
+  elec hum by the gate console (13,25) and stockroom drips. Music hook
+  `missions/m1/m1_audio.py`: two looped stems crossfaded over 1.5 s on
+  `firefight_triggered`, silent no-op until the user supplies
+  `assets/music/m1_infiltrate.ogg` / `m1_combat.ogg`; watchdog stops it off-mission.
+- WP9a `4a9d983`: M1 rain re-seeded (`_M1_RAIN_SEED`, own respawn RNG passed via
+  `draw_rain(..., rng=)`), 13 new/re-baked m1 goldens (dropoff t25/50/75 x3,
+  `gp.m1.shutter`, `gp.m1.street`).
+- WP9b `1c9e8ac`: re-recorded m1 replay/loop/bake/D6 baselines, `m1_audio` loads via
+  `engine.assets`, docs (LORE, BUGS B-004/B-034, handoff, STATUS).
+
+Gates on the merged tree: compileall OK; smoke `SMOKE TEST: OK` (incl. the three new
+WP8 checks `m1_lighting_hard`, `m1_ambience_bands`, `m1_music_hook_silent_and_crossfade`);
+`ae_level_check` OK; golden verify 390/390 (m1 reds gone); replay m1 OK (30/30);
+loop m1 OK (600/600); bake m1 OK. `ae_ci` reds are all pre-existing, verified by
+re-running them at the pre-merge commit (fresh detached worktree) and at the
+`m1/rework` tip: unit tests 3 `GLRenderer.stats` errors, api snapshot +210,
+boundary lint 18, bake m2/m3 stale, replay m2-m5 divergence, loop parity 1/7,
+mission0 engine-tree hash. M1 caused no new red.
+
+Open (user decisions, unchanged from the branch handoff): street patrol route +
+shutter guards facing each other; faint calm-guard suspicion meter; Volkov escape
+figure; CIOCAN speaker color; Q-brick binding; `files_already` timing; stockroom
+outer-wall tiles; the two music files; playtest + merge-to-main sign-off.

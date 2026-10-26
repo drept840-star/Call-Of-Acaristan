@@ -2,74 +2,55 @@
 description: session handoff, regenerate with /handoff when a quest finishes
 budget_tokens: 1000
 ---
-# STATUS - first-try
+# STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-10-26
+> Read this FIRST when resuming. Last updated: 2026-10-27
 
 ---
 
-## Done
+## Done (2026-10-27 M1 rework complete on this branch)
 
-M1 rework WP0-WP9a committed on branch `m1/rework` (not pushed). Plan:
-`docs/MISSION1_REWORK_PLAN.md`; resume brief: `docs/M1_REWORK_HANDOFF.md`.
-- Recent commits: WP6 88eb583 + fix 367e625, WP7 c4e082d, WP8 294628a, WP9a goldens
-  4a9d983. Also an unrequested docs/tools commit ee93cdf.
-- WP9b prepared, NOT committed:
-  - Staged: `tests/replay/baseline_v2/m1.json`, `tests/replay/baseline_v2/m1.fields.json`,
-    `tests/loop/baseline_v6/m1.json`, `assets/baked/m1/.bakeinfo.json`,
-    `assets/baked/m1/world_static_0.png`, `docs/engine/evidence/phase6/d6_baseline.json`
-    (m1 draw_sites 262 -> 309).
-  - Unstaged: `src/missions/m1/m1_audio.py` (loads via `engine.assets.load_sound`),
-    `docs/LORE.md`, `docs/engine/BUGS.md` (B-004, B-034), `.wolf/STATUS.md`,
-    `docs/M1_REWORK_HANDOFF.md`.
-- Clean-copy gate on that state: compileall OK, smoke OK, ae_level_check OK, golden verify
-  390/0, replay m1 OK (30 snapshots), bake m1 OK.
+Branch `cutscene-holds`, merge `ef9302b`: WP8+WP9a+WP9b merged in from `m1/rework`
+(its tip `1c9e8ac` is now fully contained here; that worktree has no further M1 work).
+The M1 rework plan (`docs/MISSION1_REWORK_PLAN.md`) is executed WP0-WP9.
 
-## Next quest
+- What landed here with this merge: WP8 hard lights (`m1.hard_lights` LIGHTING pass,
+  halos, flood/bay cones; soft lamp pushes removed from `LightBuffer`, grade kept),
+  ambience bands (street rain+wind vs inside rain_inside/console hum/stockroom drips),
+  `m1_audio` music hook (silent without `assets/music/m1_{infiltrate,combat}.ogg`);
+  WP9a seeded rain + 13 m1 goldens; WP9b replay/loop/bake/D6 baselines + docs.
+- Gates on the merge: compileall OK, smoke OK (3 new WP8 checks green),
+  ae_level_check OK, golden 390/390, replay m1 OK, loop m1 OK, bake m1 OK.
+- ae_ci reds are ALL pre-existing — proven by rerunning them at pre-merge `63839e2`
+  (detached temp worktree) and at `m1/rework` tip: unit `test_gl_composite` 3x
+  `GLRenderer.stats`, api snapshot +210, boundary lint 18, bake m2/m3 stale,
+  replay m2-m5 divergence at t=1s, loop parity 1/7 (m1 is the 1), mission0
+  engine-tree hash (91 files, fails on the branch too).
+- Earlier on this branch: letterboxed presentation (`63839e2`, 1000x700 canvas +
+  `present()`), MP version-skew refusal (`a5e5c98`), launcher/updater (`d1a833e`),
+  M6 train viewmodel tint (`39b168d`), M6 top-down art pass (uncommitted work
+  committed before the WP0-WP7 merge).
 
-1. Haiku is comparing `ae_ci` at base 6a8379c vs `m1/rework` HEAD to tell whether these
-   reds are ours: api snapshot (+210 names), `tests.unit.test_gl_composite` (3 errors,
-   `GLRenderer.stats`), replay m2-m5 divergence, main loop parity 1/7, mission0
-   zero-engine-diff (91 files). Expected: pre-existing, not ours.
-2. If only known/baseline reds: commit WP9b as "M1 rework WP9b: ..." with trailer
-   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Stage only the intended
-   files; NOT `assets/voice/*_matches.txt`, `tools/dev_panel.py`, `tools/zip_project.py`,
-   `HANDOFF.md`, `save_dataverify.json*`, `shots_wp*`.
-   - Known reds, not ours: mission4_stage_transitions, mission4_cinematic_arrest,
-     mission5_shadow_finale, mission5_harbour_art, boundaries lint, bake m2 stale.
-3. User plays the real flow once (cd to `m1-rework`; `python acaristan.py`, or
-   `--jump m1`; F9 exfil) and decides the merge to main. Nothing is pushed.
+## Next
 
-Open items for the user:
-- Far/dark/still detection takes 5.2 s vs plan 3.6 s (formula kept).
-- Calm-guard suspicion meter is faint on dark asphalt.
-- Street patrol route and the shutter guards facing each other: not done.
-- Q throws a brick in M1.
-- `files_already` radio line plays after NOTEBOOK_INSPECT.
-- House `w_C` stains are baked in; stockroom outer walls (row 11+) still use container panels.
-- Volkov's escape still uses the large `draw_commander` figure.
-- CIOCAN `SPEAKER_COLORS` is a placeholder (205,75,60).
-- Bay-fire visual is unrendered in preview.
-- Walking sim did not finish in a headless run holding D (cause unknown).
-- Music `assets/music/m1_infiltrate.ogg` and `m1_combat.ogg` must be supplied by the user.
-- BUGS B-034 has a stale sentence ("m1.inspect is no M1 pass") that conflicts with the
-  new rework sentence.
-- Files carry CRLF at HEAD (core.autocrlf); pre-existing.
+1. User plays the M1 flow once here (`python acaristan.py` or `--jump m1`; F9 exfil)
+   and decides the merge to main. Nothing is pushed anywhere.
+2. Optional M1 polish (user calls, all listed in `docs/M1_REWORK_HANDOFF.md`):
+   street patrol + shutter guards facing each other; suspicion meter visibility;
+   Volkov escape figure; CIOCAN speaker color; Q-brick binding; `files_already`
+   timing; stockroom outer walls; supply the two music files.
+3. M6 leftovers (see 2026-10-25 worklog): noman identity pass; `_mat_fill` tex3d;
+   user review of the M6 intro shots.
+4. Known pre-existing reds to sweep some day: ae_ci list above, smoke MP flakes
+   (rerun once), `GLRenderer.stats` test errors.
 
 ## Context
 
-- Worktree `E:/Code/Call of Acaristan/m1-rework`, branch `m1/rework` cut from 6a8379c.
-- Main checkout `First try` (branch `cutscene-holds`) must not be touched.
-- Gates run only in detached temp worktrees.
-- Opus edits only; Haiku does reads, gates and commits. Haiku won't write the Opus
-  trailer, so the main session amends/commits those.
-- Older M6 work (top-down art pass uncommitted, intro rewrite ce849fe) lives in the main
-  checkout; see `docs/worklog.md`.
-
-```bash
-python tools/smoke_test.py
-python -m compileall -q src
-python tools/ae_golden.py verify --kinds gameplay
-```
+- Main checkout `E:/Code/Call of Acaristan/First try` = `cutscene-holds` (this file).
+  `E:/Code/Call of Acaristan/m1-rework` = `m1/rework`, tip fully merged; its
+  untracked shots/saves/handoff noise stays untracked.
+- Files carry CRLF at HEAD (core.autocrlf); pre-existing.
+- Gates: `python tools/smoke_test.py` -> `SMOKE TEST: OK`; `python -m compileall -q src`;
+  `python tools/ae_golden.py verify`; `python tools/ae_replay.py check --only m1`.
 
 References: `.wolf/cerebrum.md`, `.wolf/anatomy.md`, `.wolf/buglog.json`.
