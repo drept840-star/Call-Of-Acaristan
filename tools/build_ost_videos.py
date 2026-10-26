@@ -1,13 +1,16 @@
 """Render the OST music videos: one seamless 3D loop per album track.
 
-    python tools/build_ost_videos.py            # all 8 -> build/ost/video/NN_slug.mp4
+    python tools/build_ost_videos.py            # all 8, full song -> build/ost/video/NN_slug.mp4
+    python tools/build_ost_videos.py --loop     # seamless loop only -> build/ost/video/NN_slug_loop.mp4
     python tools/build_ost_videos.py 3 4        # only tracks 3 and 4
     python tools/build_ost_videos.py --stills   # contact sheets -> shots/ost_mv/NN_slug.png
     python tools/build_ost_videos.py --thumbs   # 1280x720 thumbnails -> build/ost/video/NN_slug.png
 
 Needs the WAV masters from tools/build_ost.py (build/ost/NN_slug.wav), ffmpeg
-and the GL backend. The loop is whole bars of one section (tools/ost/mv.py
-LOOPS); its audio tail is crossfaded into its head so the MP4 loops cleanly.
+and the GL backend. The scenes are periodic over whole bars of one section
+(tools/ost/mv.py LOOPS). The full-song video runs that cycle phase-locked to the
+song's bars, with light driven by the whole track's envelopes, and fades in and
+out. --loop renders just the section, its audio tail crossfaded into its head.
 """
 import os
 import re
@@ -148,13 +151,19 @@ def thumbnail(num):
     print(f"thumbnail -> {out}")
 
 
-def render(num, stills=False):
+FADE = 1.5
+
+
+def render(num, stills=False, loop=False):
     from ost import mv
     title, start, loop_s, spb = track_info(num)
     name = f"{num:02d}_{slug(title)}"
     x, sr = read_wav(os.path.join(WAV_DIR, name + ".wav"))
-    seg = loop_audio(x, sr, start, loop_s)
-    n = int(round(loop_s * FPS))
+    if loop or stills:
+        seg, dur, off = loop_audio(x, sr, start, loop_s), loop_s, 0.0
+    else:
+        seg, dur, off = x, len(x) / sr, start
+    n = int(round(dur * FPS))
     feats = features(seg, sr, n)
     scene = mv.SCENES[num](f"{num:02d}  {title}")
     surf = pygame.Surface((mv.W, mv.H))
@@ -162,7 +171,7 @@ def render(num, stills=False):
         picks = [int(n * (k + 0.5) / 12) for k in range(12)]
         sheet = pygame.Surface((mv.W // 2 * 4, mv.H // 2 * 3))
         for c, i in enumerate(picks):
-            scene.draw(surf, mv.Frame(i * loop_s / n, loop_s, spb, feats[i]))
+            scene.draw(surf, mv.Frame(i * dur / n, loop_s, spb, feats[i]))
             sheet.blit(pygame.transform.smoothscale(surf, (mv.W // 2, mv.H // 2)),
                        ((c % 4) * mv.W // 2, (c // 4) * mv.H // 2))
         os.makedirs(STILL_DIR, exist_ok=True)
@@ -172,25 +181,29 @@ def render(num, stills=False):
         print(f"{name}: {loop_s:.2f}s, {n} frames, sheet {out}")
         return
     os.makedirs(OUT_DIR, exist_ok=True)
-    wav = os.path.join(OUT_DIR, name + "_loop.wav")
+    wav = os.path.join(OUT_DIR, name + "_tmp.wav")
     write_wav(wav, seg, sr)
-    out = os.path.join(OUT_DIR, name + ".mp4")
-    rate = f"{n * 1000}/{int(round(loop_s * 1000))}"
+    out = os.path.join(OUT_DIR, name + ("_loop.mp4" if loop else ".mp4"))
+    rate = f"{n * 1000}/{int(round(dur * 1000))}"
+    vf, af = "scale=1280:720:flags=neighbor", []
+    if not loop:
+        vf += f",fade=in:d={FADE},fade=out:st={dur - FADE:.3f}:d={FADE}"
+        af = ["-af", f"afade=in:d=0.05,afade=out:st={dur - FADE:.3f}:d={FADE}"]
     cmd = [ffmpeg(), "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{mv.W}x{mv.H}", "-framerate", rate, "-i", "-",
-           "-i", wav, "-vf", "scale=1280:720:flags=neighbor", "-c:v", "libx264", "-crf", "18",
+           "-i", wav, "-vf", vf, *af, "-c:v", "libx264", "-crf", "18",
            "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
            "-movflags", "+faststart", out]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for i in range(n):
-        scene.draw(surf, mv.Frame(i * loop_s / n, loop_s, spb, feats[i]))
+        scene.draw(surf, mv.Frame((i * dur / n - off) % loop_s, loop_s, spb, feats[i]))
         p.stdin.write(pygame.image.tobytes(surf, "RGB"))
     p.stdin.close()
     if p.wait():
         sys.exit(f"ffmpeg failed on {name}")
     scene.release()
     os.remove(wav)
-    print(f"{name}: {loop_s:.2f}s, {n} frames -> {out}")
+    print(f"{name}: {dur:.2f}s, {n} frames -> {out}")
 
 
 def main(argv):
@@ -201,7 +214,7 @@ def main(argv):
         if "--thumbs" in argv:
             thumbnail(num)
         else:
-            render(num, stills)
+            render(num, stills, "--loop" in argv)
 
 
 if __name__ == "__main__":
