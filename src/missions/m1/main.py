@@ -122,6 +122,23 @@ def start_mission(preserve_timer=False):
     STATE.truck_hotwire_progress = 0.0
     STATE.escape_reinforcement_timer = 0
     STATE.escape_reinforcement_count = 0
+    STATE.m1_wave = 0                      # WP7: wave director (missions.m1.update)
+    STATE.m1_wave_timer = 0
+    STATE.m1_wave_loud = False
+    STATE.m1_ciocan_spawned = False        # CIOCAN arrives with wave 2 (missions.m1.roles)
+    STATE.m1_ciocan_mode = ""
+    STATE.m1_ciocan_timer = 0
+    STATE.m1_ciocan_cooldown = 0
+    STATE.m1_ciocan_dir = (0.0, 0.0)
+    STATE.m1_ciocan_dash_left = 0.0
+    STATE.m1_ciocan_last_hp = 0
+    STATE.m1_exfil_van_triggered = False
+    STATE.exfil_van_arrived = False
+    STATE.m1_fire_spread = 0
+    STATE.m1_fire_timer = 0
+    STATE.m1_hotwire_open_frames = 0
+    STATE.m1_smoke_tick = 0
+    STATE.m1_smoke_said = False
     STATE.active_read_note = None
     STATE.stealth_failed = False
     STATE.quiet_entry = True
@@ -133,7 +150,8 @@ def start_mission(preserve_timer=False):
     STATE.volkov_display_pos = None
     STATE._m1_standoff = None              # WP6: quiet-route standoff (dict while it plays)
     STATE._m1_standoff_done = False
-    STATE._m1_standoff_said = False        # standoff spoke "Read it..."; the alarm skips it
+    STATE._m1_standoff_scripted = False    # WP7: K's scripted alarm keeps the waves quiet
+    STATE._m1_standoff_said = False       # standoff spoke "Read it..."; the alarm skips it
     STATE._m1_leaf_line_pending = False    # notebook_leaf + files_already after the inspect
     STATE.civilian_payoff_done = False
     STATE.breach_stage = 0
@@ -288,11 +306,6 @@ def start_mission(preserve_timer=False):
                 (e.rect.centerx, e.rect.centery),
                 (e.rect.centerx + 4 * TILE_SIZE, e.rect.centery),
             ]
-    miniboss = Enemy(10 * TILE_SIZE + 16, 27 * TILE_SIZE + 16)
-    miniboss.hp = 400
-    miniboss.is_miniboss = True
-    miniboss.speed = 1.8
-    STATE.enemies.append(miniboss)
     STATE.NOTEBOOK_POS = None
     STATE.EXFIL_POS = None
 def _init_mission_specials():

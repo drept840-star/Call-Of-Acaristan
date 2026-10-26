@@ -1523,6 +1523,28 @@ def _draw_volkov_topdown(surface, sx, sy, angle, moving, t):
         pygame.draw.circle(surface, skin, (int(ex), int(ey)), 1)
 
 
+def _draw_m1_van(surface, cam_x, cam_y):
+    """WP7 exfil van at (27,31), nose west: hard-edged dark blocks, no soft shading."""
+    cx = 27 * TILE_SIZE + 32 - 20 - cam_x
+    cy = 31 * TILE_SIZE + 32 - 16 - cam_y
+    if not (-150 < cx < WIDTH + 150 and -150 < cy < HEIGHT + 150):
+        return
+    x, y = int(cx) - 60, int(cy) - 29
+    for wx in (x + 16, x + 84):                                   # wheels
+        pygame.draw.rect(surface, (14, 14, 16), (wx, y - 4, 20, 6))
+        pygame.draw.rect(surface, (14, 14, 16), (wx, y + 56, 20, 6))
+    pygame.draw.rect(surface, (34, 36, 40), (x, y, 120, 58))        # body
+    pygame.draw.rect(surface, (22, 23, 26), (x, y, 120, 58), 2)
+    pygame.draw.rect(surface, (44, 47, 52), (x + 34, y + 6, 80, 46))  # roof
+    pygame.draw.line(surface, (26, 27, 30), (x + 74, y + 6), (x + 74, y + 51), 2)
+    pygame.draw.rect(surface, (58, 72, 84), (x + 14, y + 8, 16, 42))  # windshield (west)
+    pygame.draw.rect(surface, (20, 22, 26), (x + 14, y + 8, 16, 42), 1)
+    pygame.draw.rect(surface, (230, 214, 150), (x, y + 6, 4, 8))      # headlights
+    pygame.draw.rect(surface, (230, 214, 150), (x, y + 44, 4, 8))
+    pygame.draw.rect(surface, (120, 26, 22), (x + 116, y + 6, 4, 6))  # tail lights
+    pygame.draw.rect(surface, (120, 26, 22), (x + 116, y + 46, 4, 6))
+
+
 def _draw_m1_actors(surface, cam_x, cam_y):
     """Bottles in flight + escape run + corpses + living actors (authored order)."""
     draw_thrown_bottles(surface, cam_x, cam_y)
@@ -1556,6 +1578,8 @@ def _draw_m1_actors(surface, cam_x, cam_y):
                 draw_commander(
                     surface, int(kx), int(ky), scale=0.35, facing_right=facing
                 )
+    if getattr(STATE, "exfil_van_arrived", False):
+        _draw_m1_van(surface, cam_x, cam_y)
     _m1_stealth.draw_brick_piles(surface, cam_x, cam_y)
     # Fallen enemy bodies - under the living enemies, over the floor decals.
     corpse.draw_corpses(surface, cam_x, cam_y)

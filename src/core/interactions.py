@@ -509,7 +509,10 @@ def trigger_alarm_early():
         return
     STATE.stealth_failed = True
     STATE.firefight_triggered = True
-    STATE.mission_phase = "firefight"
+    # An alarm after the safe opened must not undo "escape": the truck
+    # hotwire and MISSION_COMPLETE only run in that phase.
+    if STATE.mission_phase != "escape":
+        STATE.mission_phase = "firefight"
     STATE.quiet_entry = False
     # Cancel any active sighting
     if STATE.volkov_sighting_timer > 0:

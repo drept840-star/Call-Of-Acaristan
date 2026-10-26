@@ -19,6 +19,7 @@ from core.interactions import (
 )
 import game.dialogues as _dialogues  # RPE6 P7: radio line text from m1.radio
 from entities.weapons import (
+    FireZone,
     update_molotovs,
     spawn_molotov_fire as _spawn_molotov_fire,
     _wall_blocks_line,
@@ -33,7 +34,8 @@ from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 from core.camera import tick_camera_fx, follow_gameplay
 
-from missions.m1.map import _tc, MAP_W, MAP_H, M1_TRIGGERS
+from missions.m1.map import _tc, MAP_W, MAP_H, M1_TRIGGERS, M1_BAY_ROW
+from missions.m1.roles import role_of, role_step, spawn_role_enemy, spawn_ciocan, ciocan_step
 from missions.m1.main import _init_mission_specials, _trigger_civilian_payoff
 from missions.m1.hotwire import _reset_hotwire_minigame
 from missions.m1.stealth import stealth_update, takedown_target, do_takedown, update_bricks
@@ -83,19 +85,176 @@ _STANDOFF_SPOT_FRAMES = 36    # K spots them (~0.6 s), then the alarm
 _STANDOFF_CAM_EASE = 0.08     # per-frame lerp, settles in ~0.6 s
 
 
-def _standoff_rect():
-    """volkov_standoff zone from M1_TRIGGERS as tile (x, y, w, h), or None."""
+def _trigger_rect(trigger_id):
+    """A zone from M1_TRIGGERS as tile (x, y, w, h), or None."""
     trig = M1_TRIGGERS
     rows = trig.items() if isinstance(trig, dict) else (
         (t.get("id", t.get("name")), t) for t in trig)
     for name, t in rows:
-        if name != "volkov_standoff":
+        if name != trigger_id:
             continue
         r = t.get("rect", t.get("zone")) if isinstance(t, dict) else t
         if isinstance(r, dict):
             r = r.get("rect")
         return tuple(r) if r else None
     return None
+
+
+def _standoff_rect():
+    """volkov_standoff zone from M1_TRIGGERS as tile (x, y, w, h), or None."""
+    return _trigger_rect("volkov_standoff")
+
+
+def _in_trigger(trigger_id, rect):
+    r = _trigger_rect(trigger_id)
+    col, row = rect.centerx // TILE_SIZE, rect.centery // TILE_SIZE
+    return bool(r) and r[0] <= col < r[0] + r[2] and r[1] <= row < r[1] + r[3]
+
+
+# ── WP7: breach waves, CIOCAN, exfil van, bay-door fire, truck smoke ──
+# Per wave: spawn tiles and role order; quiet runs take the first 5 / 4 / 0.
+_WAVE_SPAWNS = {
+    1: ((13, 30), (14, 30), (15, 30), (16, 30), (17, 30), (15, 31)),
+    2: ((12, 24), (13, 24), (15, 24), (16, 24)),      # behind the gate (row 25 is wall but col 14)
+    3: ((10, 21), (18, 21), (10, 23), (15, 23)),
+}
+_WAVE_ROLES = {
+    1: ("rusher", "cover", "flanker", "cover", "rusher", "cover"),
+    2: ("rusher", "cover", "flanker", "cover"),
+    3: ("cover", "flanker", "cover", "flanker"),
+}
+_WAVE_QUIET_COUNT = {1: 5, 2: 4, 3: 0}
+_WAVE_NEXT_ALIVE = {1: 2, 2: 1}     # next wave when this many (or fewer) are left
+_WAVE_NEXT_FRAMES = 840             # ... or after 14 s
+_CIOCAN_TILE = (14, 25)
+_VAN_TILE = (27, 31)
+_VAN_DROPS = (((25, 30), "rusher"), ((25, 31), "cover"), ((24, 30), "cover"))
+_VAN_DROP_FRAMES = 40
+_FIRE_SPREAD_FRAMES = 180           # one tile per side every 3 s
+_SMOKE_START_FRAMES = 25 * 60
+_SMOKE_DPS = 4
+_SMOKE_RADIUS = 2 * TILE_SIZE
+
+
+def _spawn_wave(n):
+    if n == 1:
+        # The standoff's scripted alarm is still a quiet entry (plan section e).
+        STATE.m1_wave_loud = bool(
+            (STATE.stealth_failed or not STATE.quiet_entry)
+            and not getattr(STATE, "_m1_standoff_scripted", False))
+    STATE.m1_wave = n
+    STATE.m1_wave_timer = 0
+    count = len(_WAVE_SPAWNS[n]) if STATE.m1_wave_loud else _WAVE_QUIET_COUNT[n]
+    for (col, row), kind in list(zip(_WAVE_SPAWNS[n], _WAVE_ROLES[n]))[:count]:
+        mx, my = _tc(col, row)
+        STATE.enemies.append(spawn_role_enemy(mx, my, kind, n))
+        for _ in range(15):
+            STATE.particles.append(Particle(mx, my, (150, 150, 150)))
+    if n == 2 and not STATE.m1_ciocan_spawned:
+        STATE.m1_ciocan_spawned = True
+        STATE.enemies.append(spawn_ciocan(*_tc(*_CIOCAN_TILE)))
+        STATE.floating_texts.append([
+            15 * TILE_SIZE + 32, 25 * TILE_SIZE, "CONTACTS FROM BEHIND!", (255, 70, 40), 120,
+        ])
+        trigger_radio_chatter(
+            'CIOCAN: "{}"'.format(_dialogues.line("m1.radio", "ciocan_entrance", "The clerk's new friend? Let's see.")),
+            color=SPEAKER_COLORS.get("CIOCAN", (205, 75, 60)), priority=1,
+        )
+
+
+def _wave_alive(n):
+    """Living wave-n enemies, CIOCAN not counted."""
+    roles = (role_of(e) for e in STATE.enemies if e.hp > 0)
+    return sum(1 for r in roles if r is not None and r.wave == n and r.kind != "ciocan")
+
+
+def _wave_director():
+    w = STATE.m1_wave
+    if not 1 <= w < 3:
+        return
+    STATE.m1_wave_timer += 1
+    if _wave_alive(w) > _WAVE_NEXT_ALIVE[w] and STATE.m1_wave_timer < _WAVE_NEXT_FRAMES:
+        return
+    if w == 2 and not STATE.m1_wave_loud:
+        STATE.m1_wave = 3                   # quiet runs skip wave 3
+        return
+    _spawn_wave(w + 1)
+
+
+def _fire_spread_update():
+    """Bay-door fire grows west and east along row 29 once wave 1 is in."""
+    if STATE.m1_wave < 1 or STATE.m1_fire_spread >= 13:
+        return
+    STATE.m1_fire_timer += 1
+    if STATE.m1_fire_timer < _FIRE_SPREAD_FRAMES and STATE.m1_fire_spread:
+        return
+    STATE.m1_fire_timer = 0
+    k = STATE.m1_fire_spread
+    STATE.m1_fire_spread += 1
+    for col in (13 - k, 17 + k):
+        if 1 <= col <= 26:
+            x, y = _tc(col, M1_BAY_ROW)
+            STATE.fire_zones.append(FireZone(x, y, radius=36, life=36000,
+                                             damage=(6, 3), outline=False))
+
+
+def _exfil_van_update():
+    """First entry into exfil_van (notebook in hand): VASILE's line, then the van
+    pulls up at (27,31) and drops 1 rusher + 2 cover, one every 40 frames."""
+    p = STATE.player
+    if (not STATE.m1_exfil_van_triggered and p is not None and STATE.notebook_collected
+            and _in_trigger("exfil_van", p.rect)):
+        STATE.m1_exfil_van_triggered = True
+        STATE.exfil_van_arrived = True
+        STATE.escape_reinforcement_timer = 0
+        STATE.escape_reinforcement_count = 0
+        trigger_radio_chatter(
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_van", "Company on the east road. Move.")),
+            priority=1,
+        )
+        audio.play("door_rattle", volume=0.6)
+    if not STATE.exfil_van_arrived or STATE.escape_reinforcement_count >= len(_VAN_DROPS):
+        return
+    STATE.escape_reinforcement_timer += 1
+    if STATE.escape_reinforcement_timer < _VAN_DROP_FRAMES:
+        return
+    STATE.escape_reinforcement_timer = 0
+    (col, row), kind = _VAN_DROPS[STATE.escape_reinforcement_count]
+    STATE.escape_reinforcement_count += 1
+    mx, my = _tc(col, row)
+    STATE.enemies.append(spawn_role_enemy(mx, my, kind, 4))
+    audio.play("door_open", volume=0.4)
+
+
+def _hotwire_smoke_update():
+    """25 s after the hotwire panel first opens, the truck smoke burns 4 hp/s.
+    Direct hp loss, not take_damage: it must not close the panel."""
+    if STATE.m1_hotwire_open_frames <= 0 or STATE.player is None or STATE.player_dead:
+        return
+    STATE.m1_hotwire_open_frames += 1
+    if STATE.m1_hotwire_open_frames < _SMOKE_START_FRAMES:
+        return
+    if not STATE.m1_smoke_said:
+        STATE.m1_smoke_said = True
+        trigger_radio_chatter(
+            'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "hotwire_smoke", "Come on. Come on.")),
+            color=C_BIRIBEL, priority=1,
+        )
+    p = STATE.player
+    if math.hypot(p.rect.centerx - STATE.EXFIL_POS[0], p.rect.centery - STATE.EXFIL_POS[1]) > _SMOKE_RADIUS:
+        return
+    STATE.m1_smoke_tick += 1
+    if STATE.m1_smoke_tick >= 60:
+        STATE.m1_smoke_tick = 0
+        p.hp = max(0, p.hp - _SMOKE_DPS)
+        STATE.floating_texts.append([p.rect.centerx, p.rect.centery - 30,
+                                     "-{} SMOKE".format(_SMOKE_DPS), (170, 170, 170), 40])
+
+
+def _hostiles_pending():
+    """Waves or van drops still to come: the truck stays shut until they are in."""
+    return (1 <= STATE.m1_wave < 3) or (
+        STATE.exfil_van_arrived and STATE.escape_reinforcement_count < len(_VAN_DROPS))
 
 
 def _standoff_beats():
@@ -174,6 +333,7 @@ def _standoff_update():
         if so["spot"] >= _STANDOFF_SPOT_FRAMES:
             STATE._m1_standoff = None
             STATE._m1_standoff_done = True
+            STATE._m1_standoff_scripted = True     # WP7: waves still count this as quiet
             trigger_alarm_early()
             return False
     return True
@@ -322,80 +482,10 @@ def game_update(keys):
                     d.collision_disabled = True
                     d.manual_timer = 9999
             # ═══════════════════════════════════════
-            # 8 ENEMIES FROM BAY DOORS (south side, row 20-21)
+            # WAVE 1 FROM THE BAY CORRIDOR (waves 2-3 and CIOCAN follow
+            # from _wave_director)
             # ═══════════════════════════════════════
-            bay_spawns = [
-                _tc(13, 30), _tc(14, 30), _tc(15, 30), _tc(16, 30),
-                _tc(17, 30), _tc(14, 31), _tc(15, 31), _tc(16, 31),
-            ]
-            bay_targets = [
-                _tc(12, 28), _tc(14, 28), _tc(16, 28), _tc(18, 28),
-                _tc(13, 27), _tc(15, 27), _tc(17, 27), _tc(15, 26),
-            ]
-            for i, (mx, my) in enumerate(bay_spawns):
-                new_e = Enemy(mx, my)
-                new_e.alerted = True
-                new_e.state = "CHASE"
-                # Ambush discipline: hunt Biribel's actual position on entry,
-                # not a fixed waypoint across the map - otherwise the breach
-                # wave marches to mid-warehouse while the player exfils.
-                if STATE.player is not None:
-                    ppx, ppy = STATE.player.rect.centerx, STATE.player.rect.centery
-                    new_e.last_seen_pos = (
-                        ppx + _rng_legacy.randint(-24, 24),
-                        ppy + _rng_legacy.randint(-24, 24))
-                else:
-                    tx, ty = bay_targets[i % len(bay_targets)]
-                    new_e.last_seen_pos = (tx, ty)
-                new_e.combat_alert_timer = 420
-                new_e.is_ambush_enemy = True
-                new_e.is_breach_enemy = True
-                new_e.fire_weakness = 1.15
-                new_e.hp = 115
-                new_e.fire_cooldown = 40 + i * 15 + _rng_legacy.randint(0, 30)
-                new_e.speed = _rng_legacy.uniform(2.0, 2.7)
-                STATE.enemies.append(new_e)
-                for _ in range(20):
-                    STATE.particles.append(Particle(mx, my, (150, 150, 150)))
-                for _ in range(10):
-                    STATE.particles.append(Particle(mx, my, (255, 120, 30)))
-            # ═══════════════════════════════════════
-            # 6 ENEMIES FROM COMMANDER ROOM (rows 11-14)
-            # ═══════════════════════════════════════
-            rear_spawns = [
-                _tc(10, 21), _tc(18, 21),
-                _tc(6,  22), _tc(20, 22),
-                _tc(10, 23), _tc(15, 23),
-            ]
-            rear_targets = [
-                _tc(10, 27), _tc(18, 27),
-                _tc(8,  26), _tc(20, 26),
-                _tc(12, 28), _tc(16, 28),
-            ]
-            for i, (mx, my) in enumerate(rear_spawns):
-                new_e = Enemy(mx, my)
-                new_e.alerted = True
-                new_e.state = "CHASE"
-                # Same ambush discipline as the bay wave: converge on the
-                # player, not on stale mid-map waypoints.
-                if STATE.player is not None:
-                    ppx, ppy = STATE.player.rect.centerx, STATE.player.rect.centery
-                    new_e.last_seen_pos = (
-                        ppx + _rng_legacy.randint(-32, 32),
-                        ppy + _rng_legacy.randint(-32, 32))
-                else:
-                    tx, ty = rear_targets[i % len(rear_targets)]
-                    new_e.last_seen_pos = (tx, ty)
-                new_e.combat_alert_timer = 420
-                new_e.is_ambush_enemy = True
-                new_e.is_breach_enemy = True
-                new_e.fire_weakness = 1.15
-                new_e.hp = 115
-                new_e.fire_cooldown = 60 + i * 18 + _rng_legacy.randint(0, 25)
-                new_e.speed = _rng_legacy.uniform(1.8, 2.4)
-                STATE.enemies.append(new_e)
-                for _ in range(15):
-                    STATE.particles.append(Particle(mx, my, (200, 200, 200)))
+            _spawn_wave(1)
             # ═══════════════════════════════════════
             # EFFECTS
             # ═══════════════════════════════════════
@@ -405,11 +495,6 @@ def game_update(keys):
                 15 * TILE_SIZE + 32, 29 * TILE_SIZE,
                 "BAY DOOR BREACH!",
                 (255, 100, 30), 120,
-            ])
-            STATE.floating_texts.append([
-                15 * TILE_SIZE + 32, 25 * TILE_SIZE,
-                "CONTACTS FROM BEHIND!",
-                (255, 70, 40), 120,
             ])
             trigger_radio_chatter(
                 'VASILE: "{}"'.format(_dialogues.line("m1.radio", "breach_both_sides", "They're coming from both sides! Get to the truck NOW!")),
@@ -446,6 +531,9 @@ def game_update(keys):
         if STATE.volkov_escape_timer == 0:
             STATE.volkov_escaped = True
             STATE.commander_escaped = True
+    _wave_director()
+    _fire_spread_update()
+    _exfil_van_update()
     solid_walls = STATE.walls[:]
     sight_walls = list(getattr(STATE, "_m1_sight_walls", STATE.walls))
     for d in STATE.doors:
@@ -518,13 +606,14 @@ def game_update(keys):
     # the arc, the embers and the damage all read identically everywhere.
     if update_molotovs(solid_walls):
         player_hit_this_frame = True
-    if STATE.mission_phase == "escape" and STATE.player:
+    if STATE.player and (STATE.mission_phase == "escape" or (
+            STATE.mission_phase == "firefight" and STATE.notebook_collected)):
         dist_to_truck = math.hypot(
             STATE.player.rect.centerx - STATE.EXFIL_POS[0],
             STATE.player.rect.centery - STATE.EXFIL_POS[1],
         )
         if dist_to_truck < 80:
-            if STATE.enemies:
+            if STATE.enemies or _hostiles_pending():
                 if keys[pygame.K_e] and not STATE.hotwire_radio_said:
                     STATE.hotwire_radio_said = True
                     trigger_radio_chatter('VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_truck_not_clear", "Not yet. Clear the yard before you put your head under that dash.")))
@@ -534,6 +623,7 @@ def game_update(keys):
                 if keys[pygame.K_e]:
                     STATE.truck_hotwiring = True
                     _reset_hotwire_minigame()
+                    STATE.m1_hotwire_open_frames = max(1, STATE.m1_hotwire_open_frames)
                     audio.play("door_creak", volume=0.35)
                     if not STATE.hotwire_radio_said:
                         STATE.hotwire_radio_said = True
@@ -549,6 +639,7 @@ def game_update(keys):
             STATE.hotwire_panel_timer = 0
         if STATE.hotwire_fail_flash > 0:
             STATE.hotwire_fail_flash -= 1
+        _hotwire_smoke_update()
     if STATE.player:
         if STATE.player.hp <= 0 and not STATE.player_dead:
             # Death animation (Option B - Standard) handles the full sequence:
@@ -773,17 +864,25 @@ def game_update(keys):
                     if getattr(e, "state", "") == "SEARCH":
                         e.state = "CHASE"
                         e.search_timer = 0
-            e.update(
-                STATE.player.rect.centerx,
-                STATE.player.rect.centery,
-                solid_walls,
-                STATE.bullets,
-                STATE.particles,
-                STATE.enemies,
-                STATE.fire_zones,
-                sight_walls=sight_walls,
-                stealth=not STATE.firefight_triggered,
-            )
+            r = role_of(e)
+            if r is not None and r.kind == "ciocan":
+                handled, charged = ciocan_step(e, solid_walls, sight_walls)
+                player_hit_this_frame = player_hit_this_frame or charged
+            else:
+                handled = role_step(e, STATE.player.rect.centerx, STATE.player.rect.centery,
+                                    solid_walls)
+            if not handled:
+                e.update(
+                    STATE.player.rect.centerx,
+                    STATE.player.rect.centery,
+                    solid_walls,
+                    STATE.bullets,
+                    STATE.particles,
+                    STATE.enemies,
+                    STATE.fire_zones,
+                    sight_walls=sight_walls,
+                    stealth=not STATE.firefight_triggered,
+                )
         if e.hp <= 0:
             # Enemy death burst unified with M2 (was 25 raw Particle()).
             effects.burst(e.rect.centerx, e.rect.centery, C_BLOOD, 24)
@@ -814,6 +913,15 @@ def game_update(keys):
                         (100, 220, 100),
                         120,
                     ]
+                )
+            elif getattr(e, "is_miniboss", False):
+                # CIOCAN: bandage + 2 mags, always.
+                STATE.pickups.append([e.rect.centerx, e.rect.centery, "bandage"])
+                STATE.pickups.append([e.rect.centerx - 20, e.rect.centery + 10, "mag"])
+                STATE.pickups.append([e.rect.centerx + 20, e.rect.centery + 10, "mag"])
+                STATE.m1_ciocan_mode = ""
+                STATE.floating_texts.append(
+                    [e.rect.centerx, e.rect.centery - 20, "CIOCAN DOWN", (255, 200, 100), 120]
                 )
             else:
                 is_warehouse_enemy = e.rect.centery > 21 * TILE_SIZE
