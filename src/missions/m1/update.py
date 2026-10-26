@@ -94,6 +94,14 @@ def game_update(keys):
         if not STATE.mission_end_time:
             STATE.mission_end_time = _now_ms()
         return tick_camera_fx(MAP_W, MAP_H)
+    if STATE.player_dead:
+        # B-004: once the death transition has fired nothing else in the sim
+        # may run - advance only the death animation (slow-mo, ragdoll,
+        # camera collapse, tinnitus) and keep the camera where it fell, so the
+        # headless sim stops mutating world state.
+        from entities import death_anim
+        STATE._death_logic_ticks = death_anim.update_death_anim()
+        return tick_camera_fx(MAP_W, MAP_H)
     if STATE.active_read_note or STATE.safe_keypad_active:
         return tick_camera_fx(MAP_W, MAP_H)
     player_hit_this_frame = False

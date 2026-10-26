@@ -2,7 +2,7 @@
 import math
 import pygame
 from core.config import (
-    TILE_SIZE, audio, Particle, C_BIRIBEL, C_VOLKOV,
+    TILE_SIZE, audio, C_BIRIBEL, C_VOLKOV,
     DOOR_INTERACT_RANGE, DOOR_MANUAL_OVERRIDE, DOOR_OPEN_RANGE,
 )
 from core.state import STATE
@@ -536,49 +536,4 @@ def trigger_alarm_early():
     STATE.radio_chatter_stage = 1
     trigger_radio_chatter(
         'VASILE: "Biribel, they spotted you! Alarm is active!"'
-    )
-def trigger_mag_ambush():
-    """Execute the actual breach - spawn MAG enemies, blow bay doors."""
-    from entities.enemy_ai import Enemy
-    STATE.radio_chatter_stage = 6
-    shake(28)
-    audio.play("explosion", volume=0.8)
-    audio.play("breach", volume=0.7)
-    # Block the stairs
-    STATE.walls.append(pygame.Rect(
-        2 * TILE_SIZE, 23 * TILE_SIZE, TILE_SIZE, TILE_SIZE))
-    STATE.walls.append(pygame.Rect(
-        3 * TILE_SIZE, 23 * TILE_SIZE, TILE_SIZE, TILE_SIZE))
-    # Force bay doors open
-    for d in STATE.doors:
-        if d.is_bay:
-            d.locked = False
-            d.target_open = True
-            d.anim_progress = 1.0
-            d.collision_disabled = True
-            d.manual_timer = 9999
-    # Spawn MAG enemies
-    spawns = [
-        (14 * TILE_SIZE + 16, 25 * TILE_SIZE + 16),
-        (16 * TILE_SIZE + 16, 25 * TILE_SIZE + 16),
-    ]
-    # Stealth penalty: extra enemy if alarm was triggered early
-    if not STATE.quiet_entry:
-        spawns.append((15 * TILE_SIZE + 16, 25 * TILE_SIZE + 16))
-    for mx, my in spawns:
-        e = Enemy(mx, my)
-        e.alerted = True
-        e.state = "CHASE"
-        e.last_seen_pos = (14 * TILE_SIZE + 32, 22 * TILE_SIZE + 32)
-        e.is_ambush_enemy = True
-        e.hp = 80
-        e.fire_cooldown = 90
-        STATE.enemies.append(e)
-        for _ in range(25):
-            STATE.particles.append(Particle(mx, my, (180, 180, 180)))
-        for _ in range(15):
-            STATE.particles.append(Particle(mx, my, (255, 120, 30)))
-        STATE.breach_markers.append([mx, my, 180])
-    trigger_radio_chatter(
-        'VASILE: "They blocked the stairs! Hotwire the delivery truck!"'
     )
