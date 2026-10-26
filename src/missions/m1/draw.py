@@ -1468,6 +1468,14 @@ def _submit_ground_decor(q, cam_x, cam_y):
 def _draw_m1_actors(surface, cam_x, cam_y):
     """Bottles in flight + escape run + corpses + living actors (authored order)."""
     draw_thrown_bottles(surface, cam_x, cam_y)
+    # Volkov stands at his post until the run starts; same foot-y/scale as the run.
+    vpos = getattr(STATE, "volkov_pos", None)
+    if vpos and not STATE.volkov_escape_timer and not STATE.volkov_escaped:
+        vx = vpos[0] - cam_x
+        vy = vpos[1] - cam_y + 30
+        if -100 < vx < WIDTH + 100 and -100 < vy < HEIGHT + 100:
+            facing = bool(STATE.player) and STATE.player.rect.centerx > vpos[0]
+            draw_volkov(surface, int(vx), int(vy), scale=0.35, facing_right=facing)
     if STATE.firefight_triggered and STATE.volkov_escape_timer > 0:
         if STATE.volkov_escape_pos and not STATE.volkov_escaped:
             vx = STATE.volkov_escape_pos[0] - cam_x
@@ -1488,7 +1496,8 @@ def _draw_m1_actors(surface, cam_x, cam_y):
     corpse.draw_corpses(surface, cam_x, cam_y)
     for e in STATE.enemies:
         e.draw(surface, cam_x, cam_y)
-    _m1_stealth.draw_meters(surface, cam_x, cam_y)
+    if not getattr(STATE, "_m1_standoff", None):     # WP6: no meters in the standoff
+        _m1_stealth.draw_meters(surface, cam_x, cam_y)
     reload_progress = 0.0
     if STATE.is_reloading and STATE.reload_timer > 0:
         reload_progress = 1.0 - STATE.reload_timer / 60.0
@@ -1796,11 +1805,12 @@ def _submit_overlay(q, cam_x, cam_y, ch_x, ch_y):
         txt = font_terminal_small.render(ft[2], True, ft[3])
         q.submit(_SurfaceDraw(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y), space=_SCREEN),
                  _L.OVERLAY_WORLD, sort_key=(0, i))
-    # Shared radio transmission widget (ui.radio, polish pass T6).
-    q.submit(_UiPassDraw(lambda s: draw_pinned_radio(s), "m1.dialogue"),
-             _L.OVERLAY_WORLD, sort_key=(1, 0))
-    q.submit(_UiPassDraw(lambda s: _draw_m1_reticle(s, ch_x, ch_y), "m1.reticle"),
-             _L.OVERLAY_WORLD, sort_key=(2, 0))
+    if not getattr(STATE, "_m1_standoff", None):     # WP6: standoff owns the screen
+        # Shared radio transmission widget (ui.radio, polish pass T6).
+        q.submit(_UiPassDraw(lambda s: draw_pinned_radio(s), "m1.dialogue"),
+                 _L.OVERLAY_WORLD, sort_key=(1, 0))
+        q.submit(_UiPassDraw(lambda s: _draw_m1_reticle(s, ch_x, ch_y), "m1.reticle"),
+                 _L.OVERLAY_WORLD, sort_key=(2, 0))
     if STATE.muzzle_flash_timer > 0:
         if STATE.player:
             if hasattr(STATE.player, "barrel_tip"):
@@ -1988,6 +1998,44 @@ def _draw_m1_hud(surface, cam_x, cam_y):
         )
 
 
+STANDOFF_BAR_H = 24
+
+
+def _draw_m1_standoff(surface, cam_x, cam_y):
+    """WP6 standoff: hard 24 px letterbox, the current beat as an in-person
+    subtitle above the lower bar, and K's red '!' on the spot beat."""
+    so = getattr(STATE, "_m1_standoff", None)
+    if not so:
+        return
+    bar = STANDOFF_BAR_H
+    pygame.draw.rect(surface, (0, 0, 0), (0, 0, WIDTH, bar))
+    pygame.draw.rect(surface, (0, 0, 0), (0, HEIGHT - bar, WIDTH, bar))
+    beats, i = so["beats"], so["idx"]
+    if 0 <= i < len(beats):
+        b = beats[i]
+        col = tuple(b.get("color") or C_WHITE)
+        parts = [(font_speaker, b["speaker"], col), (font_dialogue, b["text"], C_WHITE)]
+        rendered = [(f.render(t, False, c), f.render(t, False, (0, 0, 0))) for f, t, c in parts]
+        gap = 12
+        w = sum(s.get_width() for s, _ in rendered) + gap
+        h = max(s.get_height() for s, _ in rendered)
+        x = WIDTH // 2 - w // 2
+        y = HEIGHT - bar - 8 - h
+        for s, shadow in rendered:
+            sy = y + h - s.get_height()
+            surface.blit(shadow, (x + 2, sy + 2))
+            surface.blit(s, (x, sy))
+            x += s.get_width() + gap
+    if so.get("spot"):
+        k = _m1_update.standoff_commander()
+        if k is not None:
+            kx = int(k.rect.centerx - cam_x)
+            ky = int(k.rect.top - cam_y) - 30
+            pygame.draw.rect(surface, (0, 0, 0), (kx - 4, ky - 2, 8, 24))
+            pygame.draw.rect(surface, (230, 40, 40), (kx - 2, ky, 4, 12))
+            pygame.draw.rect(surface, (230, 40, 40), (kx - 2, ky + 16, 4, 4))
+
+
 def _composite_m1_lighting(surface):
     _push_m1_lights(_M1_CAM[0], _M1_CAM[1], _now_s())
     lighting.buffer().composite(surface, _now_s())
@@ -2030,7 +2078,13 @@ def submit_frame(q, fcx, fcy):
     ch_x, ch_y = get_scaled_mouse()
     _submit_overlay(q, fcx, fcy, ch_x, ch_y)
     _submit_m1_rain(q, fcy)
-    q.submit(_UiPassDraw(lambda s: _draw_m1_hud(s, fcx, fcy), "m1.hud"), _L.UI, sort_key=0)
+    if getattr(STATE, "_m1_standoff", None):
+        # WP6: letterbox + in-person subtitle over the lighting grade (DEBUG is
+        # the only slot above it), so the bars stay hard black.
+        q.submit(_UiPassDraw(lambda s: _draw_m1_standoff(s, fcx, fcy), "m1.standoff"),
+                 _L.DEBUG, sort_key=1)
+    else:
+        q.submit(_UiPassDraw(lambda s: _draw_m1_hud(s, fcx, fcy), "m1.hud"), _L.UI, sort_key=0)
     # ── Death animation: camera tilt ──
     # Apply at the very end of the frame so the entire rendered scene
     # (world + HUD + minimap) rotates together. No-op when alive.

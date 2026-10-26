@@ -103,6 +103,8 @@ def interact_door():
 def handle_interact():
     if not STATE.player or STATE.player_dead:
         return
+    if getattr(STATE, "_m1_standoff", None):      # M1 WP6: frozen standoff
+        return
     for desk in STATE.desks:
         if math.hypot(
             STATE.player.rect.centerx - desk["x"],
@@ -155,10 +157,10 @@ def _on_safe_opened(success):
             if d.is_bay:
                 d.locked = True
                 d.target_open = False
-        # Subtle twist
-        trigger_radio_chatter(
-            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "files_already", "\u2026Some of this was already in our files."))
-        )
+        # Subtle twist. M1 WP6: Biribel's leaf line (notebook_leaf) then
+        # files_already are queued by missions.m1.update once NOTEBOOK_INSPECT
+        # closes - that state blocks the radio and cut or dropped them here.
+        STATE._m1_leaf_line_pending = True
         # Start staged breach (not instant - builds over ~6 seconds)
         STATE.breach_stage = 1
         STATE.breach_stage_timer = 0
@@ -242,6 +244,7 @@ _CUTSCENE_REQUEST_FLAGS = (
 _DIALOGUE_FLAGS = (
     "walk_dialogue_active", "m4_dialogue_active", "m5_dialogue_active",
     "mission2_evidence_cinematic_active",
+    "_m1_standoff",
 )
 
 
@@ -353,6 +356,8 @@ def clear_radio():
     """Drop queued transmissions (mission start / restart / death)."""
     global _radio_live_until, _radio_live
     _radio_queue.clear()
+    # A quit mid-standoff must not leave the M1 WP6 radio block standing.
+    STATE._m1_standoff = None
     _radio_live = None
     _radio_live_until = _radio_clock
     _remove_radio_pins()
@@ -513,10 +518,12 @@ def trigger_alarm_early():
     if not STATE.volkov_escaped and STATE.volkov_pos:
         STATE.volkov_escape_pos = list(STATE.volkov_pos)
         STATE.volkov_escape_timer = 90
-        trigger_radio_chatter(
-            'VOLKOV: "{}"'.format(_dialogues.line("m1.radio", "alarm_volkov", "Read it before you hand it over!")),
-            color=C_VOLKOV, priority=1,
-        )
+        # M1 WP6: the quiet-route standoff already spoke this line in person.
+        if not getattr(STATE, "_m1_standoff_said", False):
+            trigger_radio_chatter(
+                'VOLKOV: "{}"'.format(_dialogues.line("m1.radio", "alarm_volkov", "Read it before you hand it over!")),
+                color=C_VOLKOV, priority=1,
+            )
     STATE.volkov_escaped = False
     STATE.commander_escaped = False
     shake(12)

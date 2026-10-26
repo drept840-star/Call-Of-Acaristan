@@ -5,7 +5,7 @@ import math
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import time
 import pygame
-from core.config import (C_BLOOD, C_TERMINAL, ENEMY_DAMAGE, HEIGHT, Particle, TILE_SIZE, WIDTH, audio, get_scaled_mouse)
+from core.config import (C_BIRIBEL, C_BLOOD, C_TERMINAL, ENEMY_DAMAGE, HEIGHT, Particle, SPEAKER_COLORS, TILE_SIZE, WIDTH, audio, get_scaled_mouse)
 from entities.art_cache import get_blood_decal, get_glow, get_shadow
 from entities.enemy_ai import Enemy, enemy_hear_shot
 from entities import corpse
@@ -33,7 +33,7 @@ from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 from core.camera import tick_camera_fx, follow_gameplay
 
-from missions.m1.map import _tc, MAP_W, MAP_H
+from missions.m1.map import _tc, MAP_W, MAP_H, M1_TRIGGERS
 from missions.m1.main import _init_mission_specials, _trigger_civilian_payoff
 from missions.m1.hotwire import _reset_hotwire_minigame
 from missions.m1.stealth import stealth_update, takedown_target, do_takedown, update_bricks
@@ -69,6 +69,115 @@ def debug_jump_to_exfil():
     ])
     audio.play("terminal_glitch", volume=0.2)
 _last_keys = ()
+
+# ── WP6: Volkov standoff (quiet route, section c beat 7) ──
+# Legacy fallback for m1.standoff; the dialogue file wins when it loads.
+_STANDOFF_LINES = (
+    ("VOLKOV", "Easy. I'm a clerk. I count crates."),
+    ("BIRIBEL", "Then count to three and walk with me."),
+    ("VOLKOV", "Read it before you hand it over!"),
+    ("VOLKOV", "The loose page. Read it."),
+)
+_STANDOFF_SAID_IDX = 2        # standoff_3 speaks the alarm warning (VO_218)
+_STANDOFF_SPOT_FRAMES = 36    # K spots them (~0.6 s), then the alarm
+_STANDOFF_CAM_EASE = 0.08     # per-frame lerp, settles in ~0.6 s
+
+
+def _standoff_rect():
+    """volkov_standoff zone from M1_TRIGGERS as tile (x, y, w, h), or None."""
+    trig = M1_TRIGGERS
+    rows = trig.items() if isinstance(trig, dict) else (
+        (t.get("id", t.get("name")), t) for t in trig)
+    for name, t in rows:
+        if name != "volkov_standoff":
+            continue
+        r = t.get("rect", t.get("zone")) if isinstance(t, dict) else t
+        if isinstance(r, dict):
+            r = r.get("rect")
+        return tuple(r) if r else None
+    return None
+
+
+def _standoff_beats():
+    colors = dict(SPEAKER_COLORS)
+    colors.setdefault("BIRIBEL", C_BIRIBEL)
+    legacy = [{"speaker": sp, "color": colors.get(sp, (220, 220, 220)), "text": tx}
+              for sp, tx in _STANDOFF_LINES]
+    return list(_dialogues.beats("m1.standoff", legacy, colors)) or legacy
+
+
+def _standoff_vo(beat):
+    """In-person VO for one beat (VO_211/212/218/213 via the voice manifest); ms, 0 if none."""
+    try:
+        from audio import voice
+        return int(voice.play_line(None, '{}: "{}"'.format(beat["speaker"], beat["text"]),
+                                   radio=False) or 0)
+    except Exception:
+        return 0
+
+
+def standoff_commander():
+    """Commander K (the scripted spotter), or None once he is down."""
+    return next((e for e in STATE.enemies if getattr(e, "is_commander", False)), None)
+
+
+def _standoff_update():
+    """Starts when Biribel steps into volkov_standoff with no alarm latched; while
+    it plays it owns the frame (True = gameplay frozen). Ends with K spotting
+    them -> trigger_alarm_early(), which starts Volkov's existing 90-frame run."""
+    global _last_keys
+    so = getattr(STATE, "_m1_standoff", None)
+    p = STATE.player
+    if so is None:
+        if (getattr(STATE, "_m1_standoff_done", False) or STATE.stealth_failed
+                or not STATE.quiet_entry or STATE.volkov_escaped
+                or not STATE.volkov_pos or p is None):
+            return False
+        r = _standoff_rect()
+        col, row = p.rect.centerx // TILE_SIZE, p.rect.centery // TILE_SIZE
+        if not r or not (r[0] <= col < r[0] + r[2] and r[1] <= row < r[1] + r[3]):
+            return False
+        so = STATE._m1_standoff = {"t": 0, "next": 0, "idx": -1, "spot": 0,
+                                   "beats": _standoff_beats()}
+    if STATE.stealth_failed:
+        # Alarm latched some other way mid-play: drop out cleanly; the run is
+        # already going and trigger_alarm_early skipped the warning if
+        # standoff_3 had spoken it.
+        STATE._m1_standoff = None
+        STATE._m1_standoff_done = True
+        return False
+    _last_keys = ()
+    STATE.shot_cooldown = max(STATE.shot_cooldown, 2)     # no firing while frozen
+    beats = so["beats"]
+    if so["idx"] < len(beats) and so["t"] >= so["next"]:
+        so["idx"] += 1
+        if so["idx"] < len(beats):
+            b = beats[so["idx"]]
+            ms = max(2200, 55 * len(b["text"]), _standoff_vo(b) + 350)
+            so["next"] = so["t"] + ms * 60 // 1000
+            if so["idx"] == _STANDOFF_SAID_IDX:
+                STATE._m1_standoff_said = True
+    so["t"] += 1
+    vx, vy = STATE.volkov_pos
+    px, py = p.rect.centerx, p.rect.centery
+    p.angle = math.atan2(vy - py, vx - px)
+    # Camera eases to frame both; follow_gameplay eases it back afterwards.
+    tx = max(0, min(max(0, MAP_W * TILE_SIZE - WIDTH), (px + vx) / 2 - WIDTH / 2))
+    ty = max(0, min(max(0, MAP_H * TILE_SIZE - HEIGHT), (py + vy) / 2 - HEIGHT / 2))
+    STATE.camera_x += (tx - STATE.camera_x) * _STANDOFF_CAM_EASE
+    STATE.camera_y += (ty - STATE.camera_y) * _STANDOFF_CAM_EASE
+    if so["idx"] >= len(beats):
+        so["spot"] += 1
+        k = standoff_commander()
+        if k is not None:
+            k.angle = math.atan2(py - k.rect.centery, px - k.rect.centerx)
+        if so["spot"] >= _STANDOFF_SPOT_FRAMES:
+            STATE._m1_standoff = None
+            STATE._m1_standoff_done = True
+            trigger_alarm_early()
+            return False
+    return True
+
 
 def game_update(keys):
     global _last_keys
@@ -106,6 +215,19 @@ def game_update(keys):
         return tick_camera_fx(MAP_W, MAP_H)
     if STATE.active_read_note or STATE.safe_keypad_active:
         return tick_camera_fx(MAP_W, MAP_H)
+    if _standoff_update():
+        return tick_camera_fx(MAP_W, MAP_H)
+    if getattr(STATE, "_m1_leaf_line_pending", False) and not STATE.request_notebook_inspect:
+        # WP6 beat 8: queued once NOTEBOOK_INSPECT has closed (that state blocks
+        # the radio and would cut or drop both lines).
+        STATE._m1_leaf_line_pending = False
+        trigger_radio_chatter(
+            'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "notebook_leaf", "Half of it's gone. Route twelve.")),
+            color=C_BIRIBEL, priority=1,
+        )
+        trigger_radio_chatter(
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "files_already", "…Some of this was already in our files."))
+        )
     player_hit_this_frame = False
     if STATE.NOTEBOOK_POS is None:
         _init_mission_specials()

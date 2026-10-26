@@ -236,6 +236,96 @@ def draw_desk_note():
             prompt,
             (panel_x + panel_w // 2 - prompt.get_width() // 2, panel_y + panel_h - 28),
         )
+_LEAF_SIZE = (360, 92)
+_LEAF_PAPER = (196, 184, 150)
+_LEAF_TIDE = (172, 159, 122)
+_LEAF_TIDE_EDGE = (146, 133, 98)
+_LEAF_BORDER = (120, 106, 76)
+_LEAF_INK = (40, 38, 62)
+_LEAF_INK_MID = (98, 94, 118)
+_LEAF_CELL = 3
+# Hand-authored smear over the relay code's "?" (d dark ink, m mid ink).
+_LEAF_SMEAR = (
+    ".mm.",
+    "mddm",
+    "mdm.",
+    ".mdm",
+    "..m.",
+    "..m.",
+)
+
+
+def _leaf_bleed(surf, x0, y0, x_end, rng):
+    """One bled-ink line: word-sized clusters of hard 3 px cells, dark core on
+    a mid-ink halo, with a few drips running down. No alpha, no blur."""
+    c = _LEAF_CELL
+    x = x0
+    while x < x_end:
+        word = rng.randint(6, 18)
+        for cx in range(word):
+            px = x + cx * c
+            if px >= x_end:
+                break
+            for cy in range(4):
+                core = cy in (1, 2)
+                r = rng.random()
+                if core and r < 0.55:
+                    col = _LEAF_INK
+                elif r < (0.8 if core else 0.4):
+                    col = _LEAF_INK_MID
+                else:
+                    continue
+                surf.fill(col, (px, y0 + cy * c, c, c))
+            if rng.random() < 0.12:
+                for dy in range(rng.randint(1, 3)):
+                    surf.fill(_LEAF_INK_MID, (px, y0 + (4 + dy) * c, c, c))
+        x += (word + rng.randint(2, 4)) * c
+
+
+def build_notebook_leaf(font):
+    """The water-damaged loose leaf (M1 WP6). Only "ROUTE 12" and the smeared
+    relay code "V-?7" survive; every other line is bled ink. Deterministic,
+    hard 2-tone cells, no blur or alpha; the caller caches the surface."""
+    w, h = _LEAF_SIZE
+    leaf = pygame.Surface((w, h))
+    leaf.fill(_LEAF_PAPER)
+    rng = random.Random(7742)
+    # Tide line: the soaked lower-right corner, a hard stepped edge.
+    prev_top = None
+    for x in range(0, w, 6):
+        i = x // 6
+        top = h - min(h - 8, 26 + i + ((i * 7) % 5) * 2)
+        leaf.fill(_LEAF_TIDE, (x, top, 6, h - top))
+        leaf.fill(_LEAF_TIDE_EDGE, (x, top, 6, 2))
+        if prev_top is not None and prev_top != top:
+            leaf.fill(_LEAF_TIDE_EDGE, (x, min(top, prev_top), 2, abs(top - prev_top) + 2))
+        prev_top = top
+    # Line 1: the route survives, the rest of the line has run.
+    route = font.render("ROUTE 12", False, _LEAF_INK)
+    leaf.blit(route, (12, 6))
+    _leaf_bleed(leaf, 12 + route.get_width() + 14, 8, w - 30, rng)
+    # Line 2: relay code, the middle digit smeared away.
+    relay = font.render("RELAY V-", False, _LEAF_INK)
+    leaf.blit(relay, (12, 26))
+    qx = 12 + relay.get_width() + 1
+    q = font.render("?", False, _LEAF_INK_MID)
+    leaf.blit(q, (qx, 26))
+    sx = qx + q.get_width() // 2 - 2 * _LEAF_CELL
+    for row, cells in enumerate(_LEAF_SMEAR):
+        for col, ch in enumerate(cells):
+            if ch != ".":
+                leaf.fill(_LEAF_INK if ch == "d" else _LEAF_INK_MID,
+                          (sx + col * _LEAF_CELL, 25 + row * _LEAF_CELL, _LEAF_CELL, _LEAF_CELL))
+    seven = font.render("7", False, _LEAF_INK)
+    leaf.blit(seven, (qx + q.get_width() + 2, 26))
+    _leaf_bleed(leaf, qx + q.get_width() + seven.get_width() + 16, 28, w - 60, rng)
+    # Lines 3-5: gone.
+    for y, x_end in ((46, w - 48), (62, w - 92), (76, w - 20)):
+        _leaf_bleed(leaf, 12, y, x_end, rng)
+    pygame.draw.rect(leaf, _LEAF_BORDER, leaf.get_rect(), 1)
+    return leaf
+
+
 _notebook_inspect_timer = 0
 def reset_notebook_inspect():
     global _notebook_inspect_timer
@@ -381,7 +471,7 @@ def draw_notebook_inspection():
         # reason M6 lands.  Water-damaged in the rainy exfil, so the schedule
         # and the auth column are unreadable here - the player only learns
         # whose code it is when Volkov's dry copy is read in the boxcar.
-        ("INSERT", "1 loose leaf - R12 schedule, water-damaged"),
+        ("INSERT", "1 loose leaf - water-damaged, ROUTE 12 legible"),
         ("STATUS", "RECOVERED"),
     ]
     for key, val in evidence:
@@ -403,6 +493,14 @@ def draw_notebook_inspection():
     q2 = font_terminal_small.render(_T("hud.cmdr"), True, (110, 95, 60))
     screen.blit(q1, (rx + 8, ry))
     screen.blit(q2, (rx + 8, ry + 18))
+    # ── Loose leaf (M1 WP6): lands on the page once it has slid in ──
+    if _notebook_inspect_timer >= 24:
+        leaf = getattr(draw_notebook_inspection, "_leaf", None)
+        if leaf is None:
+            leaf = draw_notebook_inspection._leaf = build_notebook_leaf(font_terminal_small)
+        lfx, lfy = panel_x + 40, panel_y + 392
+        pygame.draw.rect(screen, (10, 8, 6), (lfx + 3, lfy + 3, leaf.get_width(), leaf.get_height()))
+        screen.blit(leaf, (lfx, lfy))
     pygame.draw.line(
         screen,
         (55, 45, 28),

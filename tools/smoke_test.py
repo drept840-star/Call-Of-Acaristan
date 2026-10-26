@@ -4124,6 +4124,139 @@ def check_mission3_broadcast_fail_shots_render():
             assert sd > 3.0, f"{scene} frame t={t} is a flat wash (std-dev={sd:.1f})"
 
 
+def check_m1_volkov_escapes_both_routes():
+    """WP6: quiet route - the standoff freezes play, speaks its 4 beats in order, K
+    spots them and latches the alarm, the radio never repeats the warning, Volkov
+    runs and VO_094 plays once, no re-trigger. Loud route - no standoff, warning
+    once, Volkov escapes, VO_094 once. The water-damaged leaf builds headless."""
+    from unittest.mock import patch
+    from core import interactions as I
+    from core.state import STATE
+    from entities.enemy_ai import Enemy
+    from missions.m1 import update as m1u
+    from missions.m1.map import _tc
+    from ui import hud
+
+    warning = 'VOLKOV: "Read it before you hand it over!"'
+    want = [("VOLKOV", "Easy. I'm a clerk. I count crates."),
+            ("BIRIBEL", "Then count to three and walk with me."),
+            ("VOLKOV", "Read it before you hand it over!"),
+            ("VOLKOV", "The loose page. Read it.")]
+
+    class _HoldD:
+        def __getitem__(self, key):
+            return key == pygame.K_d
+
+    def _fresh():
+        gc.start_mission(preserve_timer=True)
+        STATE.dt = 1 / 60
+        STATE.enemies.clear()
+        if STATE.NOTEBOOK_POS is None:
+            m1u._init_mission_specials()
+        assert STATE.volkov_pos, "Volkov not placed"
+
+    def _texts(*mocks):
+        return [c.args[0] for m in mocks for c in m.call_args_list]
+
+    # Quiet route.
+    _fresh()
+    k = Enemy(0, 0)
+    k.rect.center = _tc(10, 24)
+    k.is_commander = True
+    k.angle = 0.0
+    STATE.enemies.append(k)
+    STATE.player.rect.center = _tc(13, 27)
+    start = tuple(STATE.player.rect.center)
+    with patch.object(I, "trigger_radio_chatter", wraps=I.trigger_radio_chatter) as ic, \
+            patch.object(m1u, "trigger_radio_chatter", wraps=m1u.trigger_radio_chatter) as uc:
+        m1u.game_update(_HoldD())
+        assert STATE._m1_standoff is not None, "standoff did not start in volkov_standoff"
+        from missions.m1 import draw as m1d
+        vx, vy = STATE.volkov_pos
+        surf = pygame.Surface((m1d.WIDTH, m1d.HEIGHT))
+        with patch.object(m1d, "draw_volkov") as dv:
+            m1d._draw_m1_actors(surf, int(vx - m1d.WIDTH // 2), int(vy - m1d.HEIGHT // 2))
+        assert dv.call_count == 1, "static Volkov not drawn before the alarm"
+        want_right = STATE.player.rect.centerx > vx
+        assert dv.call_args.kwargs.get("facing_right") == want_right, dv.call_args
+        seen, spotted = [], False
+        for _ in range(1500):
+            so = STATE._m1_standoff
+            if so is None:
+                break
+            if 0 <= so["idx"] < len(so["beats"]):
+                b = so["beats"][so["idx"]]
+                if not seen or seen[-1] != (b["speaker"], b["text"]):
+                    seen.append((b["speaker"], b["text"]))
+            spotted = spotted or bool(so.get("spot"))
+            assert not STATE.stealth_failed, "alarm latched before K spotted them"
+            m1u.game_update(_HoldD())
+            if STATE._m1_standoff is not None:
+                assert tuple(STATE.player.rect.center) == start, "player moved during the standoff"
+        assert STATE._m1_standoff is None and STATE._m1_standoff_done, "standoff never ended"
+        assert seen == want, seen
+        assert spotted, "no scripted K beat"
+        assert STATE.stealth_failed and STATE.firefight_triggered and not STATE.quiet_entry
+        assert STATE.volkov_escape_timer > 0, "Volkov's run did not start"
+        STATE.enemies.clear()
+        STATE.bullets.clear()
+        for _ in range(95):
+            m1u.game_update(EmptyKeys())
+        assert STATE.volkov_escape_timer == 0 and STATE.volkov_escaped
+        texts = _texts(ic, uc)
+        assert texts.count(warning) == 0, "warning radioed after the standoff spoke it"
+        assert sum("Volkov escaped" in t for t in texts) == 1, texts
+        STATE.player.rect.center = _tc(13, 27)
+        for _ in range(3):
+            m1u.game_update(EmptyKeys())
+        assert STATE._m1_standoff is None, "standoff re-triggered"
+
+    # Loud route.
+    _fresh()
+    with patch.object(I, "trigger_radio_chatter", wraps=I.trigger_radio_chatter) as ic, \
+            patch.object(m1u, "trigger_radio_chatter", wraps=m1u.trigger_radio_chatter) as uc:
+        I.trigger_alarm_early()
+        STATE.player.rect.center = _tc(13, 27)
+        for _ in range(95):
+            m1u.game_update(EmptyKeys())
+            assert STATE._m1_standoff is None, "standoff started on the loud route"
+        assert STATE.volkov_escaped and not STATE._m1_standoff_done
+        texts = _texts(ic, uc)
+        assert texts.count(warning) == 1, texts
+        assert sum("Volkov escaped" in t for t in texts) == 1, texts
+
+    # Leaf: builds headless, stable, hard colours, ROUTE 12 legible, no Vasile.
+    rendered = []
+
+    class _SpyFont:
+        def __init__(self, real):
+            self.real = real
+
+        def render(self, text, *a, **k):
+            rendered.append(text)
+            return self.real.render(text, *a, **k)
+
+        def __getattr__(self, name):
+            return getattr(self.real, name)
+
+    a = hud.build_notebook_leaf(_SpyFont(config.font_terminal_small))
+    b = hud.build_notebook_leaf(config.font_terminal_small)
+    to_bytes = getattr(pygame.image, "tobytes", None) or pygame.image.tostring
+    raw = to_bytes(a, "RGB")
+    assert raw == to_bytes(b, "RGB"), "leaf not deterministic"
+    colours = {raw[i:i + 3] for i in range(0, len(raw), 3)}
+    assert len(colours) <= 8, f"leaf has {len(colours)} colours (soft edges?)"
+    assert "ROUTE 12" in rendered, rendered
+    assert not any("VASILE" in t.upper() for t in rendered), rendered
+    if hasattr(hud.draw_notebook_inspection, "_leaf"):
+        del hud.draw_notebook_inspection._leaf
+    hud.reset_notebook_inspect()
+    for _ in range(40):
+        hud.draw_notebook_inspection()
+    hud.reset_notebook_inspect()
+    print("  [ok] quiet standoff -> K alarm -> run, loud route, leaf")
+
+
 def check_volkov_foreshadowing():
     from unittest.mock import patch
     from core import interactions as I
@@ -10345,7 +10478,8 @@ def main():
                       ("m1_dropoff", check_m1_dropoff),
                       ("m1_stealth_suspicion", check_m1_stealth_suspicion),
                       ("m1_takedown_silent", check_m1_takedown_silent),
-                      ("m1_brick_noise", check_m1_brick_noise)]:
+                      ("m1_brick_noise", check_m1_brick_noise),
+                      ("m1_volkov_escapes_both_routes", check_m1_volkov_escapes_both_routes)]:
         ok = run_check(name, fn) and ok
 
     print("\n=== Mission 6 checks ===")

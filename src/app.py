@@ -3287,6 +3287,12 @@ class _GameState_(GameState):
                     pygame.mouse.set_visible(False)
                 else:
                     gc.handle_keypad_keypress(event.key)
+        elif getattr(STATE, "_m1_standoff", None):
+            # WP6 standoff freeze: no actions, only minimap and pause.
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                gc.show_minimap = not gc.show_minimap
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                gsm.transition("PAUSED")
         else:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if gc.truck_hotwiring:
