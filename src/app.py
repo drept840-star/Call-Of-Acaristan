@@ -4,7 +4,7 @@ from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng
 import sys
 import math
 import pygame
-from core.config import (C_KRAP_BLUE, C_ORANGE, C_VASILE, GRAIN_VARIANTS, HEIGHT, LETTER_H, TILE_SIZE, WIDTH, audio, clock, draw_letterbox, draw_rain, draw_scanlines, draw_vignette, font_btn, font_dialogue, font_location, font_prompt, font_terminal, font_terminal_small, font_title, get_scaled_mouse, grain_frame, grain_idx, screen)
+from core.config import (C_KRAP_BLUE, C_ORANGE, C_VASILE, GRAIN_VARIANTS, HEIGHT, LETTER_H, TILE_SIZE, WIDTH, audio, clock, draw_letterbox, draw_rain, draw_scanlines, draw_vignette, font_btn, font_dialogue, font_location, font_prompt, font_terminal, font_terminal_small, font_title, get_scaled_mouse, grain_frame, grain_idx, present, screen)
 from audio import voice  # VO stop/pause on skip, pause menu, quit
 from core.state import STATE
 import ui as menu
@@ -257,73 +257,15 @@ def _apply_postprocess():
         screen.blit(_bright_light, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
 
 
-_PRESENT_CACHE = {}
-
-
 def _present_frame():
-    """Present the fixed 1000x700 game frame to the actual OS window.
+    """Present the 1000x700 canvas to the OS window, aspect locked.
 
-    Normally pygame.SCALED does this for us. On some Windows/SDL paths,
-    toggling F11 from fullscreen to windowed and then maximizing the window
-    leaves the display surface at the physical window size, so the game draws
-    only into the top-left 1000x700 area and the rest stays black. This helper
-    detects that fallback path and scales/centers the logical frame manually.
+    Thin wrapper: the letterbox math, the cached scale target and the bar
+    repaint live in core.config.present(), one implementation shared with
+    get_scaled_mouse() so the pointer and the picture agree everywhere --
+    this loop, and the mission-local debug loops that present directly.
     """
-    display_surf = pygame.display.get_surface()
-    if display_surf is None:
-        return
-
-    render_surf = screen
-    dw, dh = display_surf.get_size()
-    rw, rh = render_surf.get_size()
-
-    # Fast path: normal pygame.SCALED logical surface.
-    if display_surf is render_surf and (dw, dh) == (WIDTH, HEIGHT):
-        return
-
-    # Build/copy a clean logical frame.  Both scratch surfaces are cached:
-    # this path runs on every frame in a fullscreen/maximised window, and the
-    # old version allocated a 1000x700 copy plus a window-sized scale target
-    # per frame - 15+ MB of malloc/free churn on a 1440p monitor, which is
-    # exactly the kind of thing that shows up as a periodic hitch, not as a
-    # lower average frame rate.
-    cache = _PRESENT_CACHE
-    if (rw, rh) == (WIDTH, HEIGHT):
-        if display_surf is render_surf:
-            frame = cache.get("frame")
-            if frame is None or frame.get_size() != (WIDTH, HEIGHT):
-                frame = cache["frame"] = pygame.Surface((WIDTH, HEIGHT)).convert()
-            frame.blit(render_surf, (0, 0))
-        else:
-            frame = render_surf
-    else:
-        frame = cache.get("frame")
-        if frame is None or frame.get_size() != (WIDTH, HEIGHT):
-            frame = cache["frame"] = pygame.Surface((WIDTH, HEIGHT)).convert()
-        frame.fill((0, 0, 0))
-        src_rect = pygame.Rect(0, 0, min(WIDTH, rw), min(HEIGHT, rh))
-        frame.blit(render_surf, (0, 0), src_rect)
-
-    if (dw, dh) == (WIDTH, HEIGHT):
-        if display_surf is not frame:
-            display_surf.blit(frame, (0, 0))
-        return
-
-    scale = min(dw / WIDTH, dh / HEIGHT) if WIDTH and HEIGHT else 1.0
-    scaled_w = max(1, int(WIDTH * scale))
-    scaled_h = max(1, int(HEIGHT * scale))
-    ox = (dw - scaled_w) // 2
-    oy = (dh - scaled_h) // 2
-
-    if cache.get("target") != (dw, dh):
-        # the letterbox bars only need painting when the window changes
-        display_surf.fill((0, 0, 0))
-        cache["target"] = (dw, dh)
-    scaled = cache.get("scaled")
-    if scaled is None or scaled.get_size() != (scaled_w, scaled_h):
-        scaled = cache["scaled"] = pygame.Surface((scaled_w, scaled_h)).convert()
-    pygame.transform.scale(frame, (scaled_w, scaled_h), scaled)
-    display_surf.blit(scaled, (ox, oy))
+    present()
 
 
 def handle_settings_event(event):
@@ -769,43 +711,36 @@ _applied_display_mode = 0
 
 
 def apply_display_mode(mode, resolution_str=None):
-    global display_mode, _applied_display_mode, screen
+    global display_mode, _applied_display_mode
     if mode == _applied_display_mode:
         display_mode = mode
         return True
 
-    flags = pygame.SCALED | pygame.RESIZABLE
+    # `screen` is a fixed offscreen canvas (config.present() letterboxes it
+    # onto the window), so a display-mode switch never invalidates any
+    # module's `screen` reference -- the old rebinding dance is gone.
+    from core import config
     if mode == 1:
-        flags = pygame.SCALED | pygame.FULLSCREEN
+        # Borderless at the desktop size; the presenter pillarboxes the
+        # 1000x700 canvas inside it. Info() reports the desktop size while
+        # the window is open, which is exactly what borderless takes.
+        info = pygame.display.Info()
+        size, flags = (info.current_w, info.current_h), pygame.FULLSCREEN
+    else:
+        size, flags = (WIDTH, HEIGHT), pygame.RESIZABLE
 
     try:
-        pygame.display.set_mode((WIDTH, HEIGHT), flags)
-        from core import config
-        from core import game_core
-        import ui as m
-        new_surf = pygame.display.get_surface()
-        config.screen = new_surf
-        config._engine_app.set_screen(new_surf)  # RPE6 A-001
-        game_core.screen = new_surf
-        m.screen = new_surf
-        screen = new_surf
+        pygame.display.set_mode(size, flags)
         display_mode = mode
         _applied_display_mode = mode
+        config.reset_present_cache()   # bars must repaint on the new surface
         print(f"Display set to: {['Windowed', 'Fullscreen'][mode]}")
         return True
     except Exception as e:
         print(f"Display mode change failed ({e}), falling back to Windowed")
         try:
-            pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
-            from core import config
-            from core import game_core
-            import ui as m
-            new_surf = pygame.display.get_surface()
-            config.screen = new_surf
-            config._engine_app.set_screen(new_surf)  # RPE6 A-001
-            game_core.screen = new_surf
-            m.screen = new_surf
-            screen = new_surf
+            pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+            config.reset_present_cache()
             display_mode = 0
             _applied_display_mode = 0
         except Exception as e2:
@@ -2562,7 +2497,7 @@ class _MultiplayerState(GameState):
         if _match_screen.mode in ("hosting", "playing", "panel", "reconnecting"):
             _match_screen.update(
                 pygame.key.get_pressed(),
-                (pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1],
+                (get_scaled_mouse()[0], get_scaled_mouse()[1],
                  pygame.mouse.get_pressed()[0]),
                 dt)
             if _match_screen.mode == "closed":

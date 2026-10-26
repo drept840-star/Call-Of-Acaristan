@@ -1135,7 +1135,7 @@ def game_update(keys):
     # frozen black screen with scanlines.
     from ui import upload_os
     if upload_os.is_upload_os_active():
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = get_scaled_mouse()
         upload_os.update_upload_os(keys, mouse_pos)
         # ── Vasile radio warning at ~50% upload progress ──
         # Fires once, when the upload crosses 50%. Uses _vasile_warning_played

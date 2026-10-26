@@ -713,6 +713,80 @@ def check_client_join_completes():
         host.close()
 
 
+def check_join_rejects_version_skew():
+    """A join that states a different build is refused; same-build still seats.
+
+    A stale client in a newer host still parses on the wire -- then the two
+    sims disagree about weapons, geometry or rules and the match desyncs with
+    no error anywhere. The join gate refuses a STATED mismatch with a reason
+    the joiner can act on; absence is tolerated so probes still join.
+    """
+    from net import protocol as P
+    from ui.match_screen import MatchScreen
+
+    # Wire fields round-trip, and are simply absent when not announced.
+    j = P.make_join_match("yard", "Nika", version="0.2.0", build="4510")
+    assert P.join_match_version(j) == "0.2.0" and P.join_match_build(j) == "4510"
+    bare = P.make_join_match()
+    assert P.join_match_version(bare) == "" and P.join_match_build(bare) == ""
+    assert P.join_match_version("not a dict") == ""
+
+    host = MatchScreen()
+    host.open_panel()
+    host.players = 2
+    host.request_host(0)
+    keys = pygame.key.get_pressed()
+    idle = (500, 350, False)
+    host.update(keys, idle, 1.0 / 60.0)
+    assert host.mode == "hosting", "host did not start: " + host.status
+    port = host.srv.getsockname()[1]
+
+    stale = MatchScreen()
+    stale.open_panel()
+    stale.player_name = "OLDCLIENT"
+    stale._mp_build = ("9.9.9", "9999")     # pretend to be a stale build
+    stale.request_join(host.share_code())
+    refused = False
+    try:
+        for _ in range(180):
+            host.update(keys, idle, 1.0 / 60.0)
+            stale.update(keys, idle, 1.0 / 60.0)
+            if "VERSION MISMATCH" in (stale.status or ""):
+                refused = True
+                break
+            if stale.sess is not None:
+                assert stale.sess.local_id == 0, \
+                    "version-skewed client was seated: %r" % (stale.sess.local_id,)
+        assert refused, "client never saw the version refusal: %r" % (stale.status,)
+        assert "9.9.9" in stale.status, "reason did not name the joiner's build"
+        assert "HOST" in stale.status, "reason did not name the host's build"
+        assert not host.peers, "host seated a version-skewed peer"
+        assert host.sim is None or host.sim.tick == 0, \
+            "host simulation advanced for a refused peer"
+    finally:
+        stale.close()
+
+    # The same host must still seat a peer that announces the same build.
+    fresh = MatchScreen()
+    fresh.open_panel()
+    fresh.player_name = "FRESH"
+    fresh.request_join(host.share_code())
+    try:
+        seated = False
+        for _ in range(180):
+            host.update(keys, idle, 1.0 / 60.0)
+            fresh.update(keys, idle, 1.0 / 60.0)
+            if fresh.sess is not None and fresh.sess.local_id == 1:
+                seated = True
+                break
+        assert seated, "same-build client never seated after a refusal: %r" % (
+            fresh.status,)
+        assert len(host.peers) == 1, "host roster wrong after fresh join"
+    finally:
+        fresh.close()
+        host.close()
+
+
 def check_host_left_ends_session():
     """A host that leaves must end the session for every client in it.
 
@@ -9328,9 +9402,11 @@ def _install_token_shim():
     _orig_host = _MS.MatchScreen._start_hosting
     _orig_join = _MS.MatchScreen.request_join
 
-    def make(map_name=None, name=None, appearance=None, token=None, resume=None):
+    def make(map_name=None, name=None, appearance=None, token=None, resume=None,
+             version=None, build=None):
         return _orig_make(map_name, name, appearance,
-                          token or _LAST_JOIN_TOKEN[0], resume=resume)
+                          token or _LAST_JOIN_TOKEN[0], resume=resume,
+                          version=version, build=build)
 
     def start_hosting(self, *a, **k):
         r = _orig_host(self, *a, **k)
@@ -10485,6 +10561,200 @@ def check_m6_train_death_beat():
         T.reset()
 
 
+def check_launcher_updater():
+    """Launcher/updater contract: trust, protection, rollback, gate, scaling.
+
+    Each assertion pins one failure mode that was previously silent:
+    plain-HTTP feeds, an unverified manifest digest, a protected local file
+    being clobbered, a half-applied patch surviving a crash, PLAY skipping a
+    pending patch, and mouse coordinates drifting after the window scales.
+    """
+    import json
+    import shutil
+    import tempfile
+
+    from launcher import (  # noqa: F401
+        DEFAULT_PROTECT,
+        L_HEIGHT,
+        L_WIDTH,
+        InsecureTransport,
+        STAGING_DIR_NAME,
+        UpdateCheckResult,
+        ensure_trusted_url,
+        is_downgrade,
+        play_requires_update,
+    )
+    from launcher import updater as U
+
+    # ── 1. transport policy: HTTPS or an allow-listed local/dev host only ──
+    assert ensure_trusted_url("https://example.test/v.json", {})
+    assert ensure_trusted_url("http://127.0.0.1:8000/v.json", {})
+    try:
+        ensure_trusted_url("http://evil.test/v.json", {})
+        raise AssertionError("plain-HTTP feed was not refused")
+    except InsecureTransport:
+        pass
+    assert ensure_trusted_url("http://mirror.lan/v.json",
+                              {"allow_insecure_hosts": ["*.lan"]})
+
+    # ── 2. protection patterns (.aca_skip + config protect) ──
+    root = Path(tempfile.mkdtemp(prefix="aca_launch_"))
+    try:
+        (root / "launcher_config.json").write_text(
+            json.dumps({"protect": ["src/game/**"]}), encoding="utf-8")
+        (root / ".aca_skip").write_text(
+            "# hotfixes\nsrc/missions/m6/train3d.py\nbuild/\n", encoding="utf-8")
+        pats = U.load_protected_patterns(root, U.load_launcher_config(root))
+        preserve = {"settings.json"}
+        assert U._is_protected("src/missions/m6/train3d.py", pats, preserve)
+        assert U._is_protected("src/game/x.py", pats, preserve)
+        assert U._is_protected("build/out.bin", pats, preserve)
+        assert U._is_protected("save_data.json", pats, preserve)
+        assert not U._is_protected("src/core/state.py", pats, preserve)
+        # A manifest entry for a protected path must never be patched.
+        changed, _mod, prot = U._compute_changed_files(
+            root, [U.RemoteFileEntry("save_data.json", "0" * 64, 1)], preserve, pats)
+        assert changed == [] and "save_data.json" in prot
+
+        # ── 3. atomic swap + journal rollback ──
+        inst = root / "install"
+        (inst / "src").mkdir(parents=True)
+        (inst / "version.json").write_text("{}", encoding="utf-8")
+        (inst / "src" / "a.py").write_text("OLD-A", encoding="utf-8")
+        stage = inst / STAGING_DIR_NAME
+        (stage / "files" / "src").mkdir(parents=True)
+        (stage / "backup").mkdir(parents=True)
+        journal = U._InstallJournal(stage, inst)
+        for name, body in (("a.py", "NEW-A"), ("new.py", "NEW-NEW")):
+            src = stage / "files" / "src" / name
+            src.write_text(body, encoding="utf-8")
+            U._swap_journaled(journal, src, inst / "src" / name)
+        assert (inst / "src" / "a.py").read_text(encoding="utf-8") == "NEW-A"
+        # Simulate a crash: forget in-memory state, recover from the journal on disk.
+        status = U.recover_interrupted_update(inst)
+        assert status == "rolled_back", status
+        assert (inst / "src" / "a.py").read_text(encoding="utf-8") == "OLD-A", \
+            "existing file was not restored"
+        assert not (inst / "src" / "new.py").exists(), "newly added file not removed"
+        assert not stage.exists(), "staging directory left behind"
+
+        # ── 4. downgrade is not treated as an update ──
+        assert is_downgrade("0.0.9", "", "0.1.0", "")
+        assert not is_downgrade("0.2.0", "", "0.1.0", "")
+
+        # ── 5. PLAY is gated on a pending update by default ──
+        pending = UpdateCheckResult(
+            status="update_available", local=U.LocalVersion(),
+            remote=U.RemoteUpdateInfo(version="0.2.0"))
+        assert play_requires_update(pending, {})
+        assert not play_requires_update(pending, {"gate_play_on_update": False})
+        assert not play_requires_update(
+            UpdateCheckResult(status="up_to_date", local=U.LocalVersion()), {})
+
+        # ── 5b. itch-managed installs are recognised (launcher defers to the app) ──
+        assert U.itch_receipt_path(root) is None
+        (root / ".itch").mkdir()
+        (root / ".itch" / "receipt.json").write_text("{}", encoding="utf-8")
+        assert U.itch_receipt_path(root) == root / ".itch" / "receipt.json"
+        (root / ".itch" / "receipt.json").unlink()
+        (root / ".itch").rmdir()
+        assert U.itch_receipt_path(root) is None
+
+        # ── 6. window: canvas scaling keeps mouse coordinates 1:1 ──
+        # Tested on a bare stand-in (no set_mode) so the shared game display is
+        # never resized out from under the checks that run after this one.
+        import launcher.window as _lwin
+
+        class _FakeApp:
+            pass
+
+        fake = _FakeApp()
+        fake.screen = pygame.Surface((L_WIDTH, L_HEIGHT))
+        fake.display = pygame.Surface((L_WIDTH * 2, L_HEIGHT * 2))
+        fake._scaled = None
+        _lwin.LauncherApp.present(fake)          # scaled path must not raise
+        assert fake._scaled.get_size() == (L_WIDTH * 2, L_HEIGHT * 2)
+        real_get_pos = pygame.mouse.get_pos
+        try:
+            pygame.mouse.get_pos = lambda: (600, 520)    # 2x of canvas (300, 260)
+            assert _lwin.LauncherApp.logical_mouse(fake) == (300, 260), \
+                _lwin.LauncherApp.logical_mouse(fake)
+            # Letterboxed window: the offset is subtracted before scaling.
+            fake.display = pygame.Surface((1000, 600))
+            fake._scaled = None
+            scale = min(1000 / L_WIDTH, 600 / L_HEIGHT)
+            ox = (1000 - int(L_WIDTH * scale)) // 2
+            pygame.mouse.get_pos = lambda: (ox + int(300 * scale), int(260 * scale))
+            got = _lwin.LauncherApp.logical_mouse(fake)
+            assert abs(got[0] - 300) <= 1 and abs(got[1] - 260) <= 1, got
+        finally:
+            pygame.mouse.get_pos = real_get_pos
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def check_display_letterbox():
+    """Fullscreen/resize letterboxes the 1000x700 canvas -- never stretches.
+
+    The canvas is fixed; config.present() scales it by min(dw/W, dh/H) and
+    centres it, and get_scaled_mouse() inverts exactly that mapping. A 16:9
+    window must get pillarbox bars, a tall window letterbox bars, and the
+    pointer must agree with the pixels. This is the contract the SCALED path
+    broke (it stretched 10:7 onto any wider window, distorting every glyph).
+    """
+    from core import config
+
+    assert config.screen.get_size() == (config.WIDTH, config.HEIGHT)
+    assert config.screen is not pygame.display.get_surface(), \
+        "screen must be the offscreen canvas, not the display surface"
+
+    real_get_pos = pygame.mouse.get_pos
+    saved = pygame.display.get_surface()
+    saved_size = saved.get_size() if saved is not None else None
+    try:
+        # 16:9 window: pillarbox, bars black, canvas drawn edge to centre.
+        pygame.display.set_mode((1920, 1080), pygame.RESIZABLE)
+        config.reset_present_cache()
+        disp = pygame.display.get_surface()
+        x, y, w, h = config.letterbox_rect(1920, 1080)
+        assert (w, h) == (1542, 1080) and x == 189 and y == 0, (x, y, w, h)
+        config.screen.fill((200, 100, 50))
+        config.present()
+        assert disp.get_at((10, 540))[:3] == (0, 0, 0), "left bar not black"
+        assert disp.get_at((960, 540))[:3] == (200, 100, 50), "canvas not drawn"
+        assert disp.get_at((x + 3, 540))[:3] == (200, 100, 50), "bar misaligned"
+
+        # Mouse inverts the SAME rect; a pointer in the bar clamps to the edge.
+        pygame.mouse.get_pos = lambda: (960, 540)
+        config._scaled_mouse_raw = None
+        assert config.get_scaled_mouse() == (500, 350)
+        pygame.mouse.get_pos = lambda: (50, 540)
+        config._scaled_mouse_raw = None
+        assert config.get_scaled_mouse()[0] == 0, "bar pointer went negative"
+
+        # Tall window: the bars go top/bottom instead (700x489 canvas area).
+        pygame.display.set_mode((700, 1000), pygame.RESIZABLE)
+        config.reset_present_cache()
+        x2, y2, w2, h2 = config.letterbox_rect(700, 1000)
+        assert (w2, h2) == (700, 489) and y2 == 255, (x2, y2, w2, h2)
+        config.screen.fill((200, 100, 50))
+        config.present()
+        assert disp.get_at((350, 10))[:3] == (0, 0, 0), "top bar not black"
+        assert disp.get_at((350, 500))[:3] == (200, 100, 50), "canvas not drawn"
+
+        # Bars repaint only when the window size changes, not every frame.
+        disp = pygame.display.get_surface()
+        disp.set_at((2, 2), (1, 1, 1))
+        config.present()
+        assert disp.get_at((2, 2))[:3] == (1, 1, 1), "bars repainted needlessly"
+    finally:
+        pygame.mouse.get_pos = real_get_pos
+        if saved_size is not None:
+            pygame.display.set_mode(saved_size, pygame.RESIZABLE)
+            config.reset_present_cache()
+        config._scaled_mouse_raw = None   # later checks start with a clean cache
+
+
 def main():
     _install_token_shim()
     assert config.screen is not None, "config.screen was not initialized"
@@ -10509,6 +10779,8 @@ def main():
         ("draw_pause_menu", check_pause_draw),
         ("draw_death_screen", check_death_draw),
         ("draw_match_panel", check_match_panel_draw),
+        ("launcher_updater", check_launcher_updater),
+        ("display_letterbox", check_display_letterbox),
     ]
 
     for name, fn in ui_checks:
@@ -10528,6 +10800,7 @@ def main():
         ("local_shot_kicks_camera", check_local_shot_kicks_camera),
         ("match_screen_roster", check_match_screen_roster),
         ("client_join_completes", check_client_join_completes),
+        ("join_rejects_version_skew", check_join_rejects_version_skew),
         ("client_auto_reconnects_after_socket_drop",
          check_client_auto_reconnects_after_socket_drop),
         ("host_left_ends_session", check_host_left_ends_session),

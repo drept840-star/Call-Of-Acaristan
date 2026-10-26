@@ -203,6 +203,8 @@ def run_check(name, fn, required=True):
         pygame.event.pump()
 
         if pygame.display.get_surface() is not None:
+            from core import config  # lazy: present() lives with the display setup
+            config.present()
             pygame.display.flip()
 
     except Exception as e:
@@ -2655,6 +2657,8 @@ def check_mission3_chair_break_shots_render():
         STATE.mission3_chair_break_anim = t
         gc.game_draw(fcx, fcy)
         pygame.event.pump()
+        from core import config  # lazy: same presenter the main loop uses
+        config.present()
         pygame.display.flip()
     # Restore quiescent state.
     STATE.mission3_chair_break_anim = -1

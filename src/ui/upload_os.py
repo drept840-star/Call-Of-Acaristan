@@ -16,7 +16,7 @@ import math
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
 
-from core.config import WIDTH, HEIGHT, C_TERMINAL, audio
+from core.config import WIDTH, HEIGHT, C_TERMINAL, audio, get_scaled_mouse
 from core.state import STATE
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
@@ -951,7 +951,7 @@ def _draw_custom_cursor(surface):
     The system cursor is hidden (set in start_upload_os). This draws a
     retro 1-bit arrow with a phosphor glow, matching the OS aesthetic.
     """
-    mx, my = pygame.mouse.get_pos()
+    mx, my = get_scaled_mouse()
     # Arrow outline (pixel art style - each pixel is 2x2 for visibility).
     p = 2  # pixel size
     # Arrow shape (1 = filled, 0 = empty):
@@ -1676,7 +1676,7 @@ def _draw_taskbar(surface, font_small):
     pygame.draw.line(surface, CRT_DIM_GREEN, (0, tb_y), (WIDTH, tb_y), 1)
     # Start button.
     start_rect = pygame.Rect(4, tb_y + 4, 80, 28)
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     start_hovered = start_rect.collidepoint(mouse_pos)
     start_bg = (15, 60, 30) if start_hovered else (8, 40, 20)
     _draw_rounded_rect(surface, start_bg, start_rect, radius=4)
@@ -1963,7 +1963,7 @@ def _draw_desktop(surface):
     font = pygame.font.SysFont("Arial", 13, bold=True)
     font_small = pygame.font.SysFont("Arial", 11)
     _draw_ipa_wallpaper(surface)
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     icon_rects = _get_desktop_icon_click_rects()
     icon_draw_rects = _get_desktop_icon_rects()
     for i, icon in enumerate(DESKTOP_ICONS):
@@ -2019,7 +2019,7 @@ def _draw_desktop(surface):
 
 def _draw_start_menu(surface, font, font_small):
     """Classic Win-95 style Start menu with cascading submenus."""
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     sm_x = 4
     sm_y = HEIGHT - 36 - 280
     sm_w = 200
@@ -2123,7 +2123,7 @@ def _draw_run_dialog(surface, font, font_small):
     # OK + Cancel buttons.
     ok_rect = pygame.Rect(body_rect.right - 180, body_rect.bottom - 32, 80, 24)
     cancel_rect = pygame.Rect(body_rect.right - 90, body_rect.bottom - 32, 80, 24)
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     _draw_xp_button(surface, ok_rect, "OK", font_small, hovered=ok_rect.collidepoint(mouse_pos))
     _draw_xp_button(surface, cancel_rect, "Cancel", font_small, hovered=cancel_rect.collidepoint(mouse_pos))
     # ESC/ENTER hint.
@@ -2141,7 +2141,7 @@ def _draw_browser(surface):
     body_rect = _draw_xp_window(surface, win_rect, "Acarizwork Browser", font, font_small)
     # Toolbar (URL bar + nav buttons).
     tb_y = body_rect.y + 8
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     back_rect = pygame.Rect(body_rect.x + 10, tb_y, 50, 24)
     _draw_xp_button(surface, back_rect, "< Back", font_small, hovered=back_rect.collidepoint(mouse_pos))
     fwd_rect = pygame.Rect(body_rect.x + 66, tb_y, 50, 24)
@@ -2198,7 +2198,7 @@ def _draw_browser_home(surface, rect, font_big, font, font_small):
         site_txt = font.render(site, True, CRT_GREEN)
         surface.blit(site_txt, (rect.x + 36, rect.y + 142 + i * 22))
     link_rect = pygame.Rect(rect.centerx - 120, rect.y + 240, 240, 32)
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     _draw_xp_button(surface, link_rect, ">> VISIT UPLOAD PORTAL <<", font_small,
                      hovered=link_rect.collidepoint(mouse_pos), color=CRT_BRIGHT)
 
@@ -2230,7 +2230,7 @@ def _draw_browser_upload(surface, rect, font_big, font, font_small):
     warn_text2 = font_small.render(_T("os.proceeding_will_mark_you_as_a_ho"), True, CRT_AMBER)
     surface.blit(warn_text2, (warn_rect.centerx - warn_text2.get_width() // 2, warn_rect.y + 26))
     attach_rect = pygame.Rect(rect.centerx - 80, rect.y + 180, 160, 34)
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     _draw_xp_button(surface, attach_rect, "[ATTACH FILES]", font,
                      hovered=attach_rect.collidepoint(mouse_pos), color=CRT_BRIGHT)
 
@@ -2281,7 +2281,7 @@ def _draw_file_picker(surface):
                                 font, font_small)
     instr = font_small.render(_T("os.select_all_files", n=len(_file_picker_selected)), True, CRT_GREEN)
     surface.blit(instr, (body_rect.x + 12, body_rect.y + 10))
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     for i, file in enumerate(EVIDENCE_FILES):
         row_y = body_rect.y + 40 + i * 40
         row_rect = pygame.Rect(body_rect.x + 12, row_y, body_rect.w - 24, 32)
@@ -2526,7 +2526,7 @@ def _draw_info(surface):
     # Back button (when in a sub-view).
     if _info_sub is not None:
         back_rect = pygame.Rect(win_x + 12, win_y + win_h - 38, 80, 28)
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = get_scaled_mouse()
         _draw_xp_button(surface, back_rect, "< BACK", font_small,
                         hovered=back_rect.collidepoint(mouse_pos))
 
@@ -2560,7 +2560,7 @@ def _get_info_title():
 
 def _draw_evidence_file_manager(surface, body_rect, font, font_small):
     """Win-95 style file manager: tree pane (left) + file list (right)."""
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     # ── Left pane: folder tree ──
     tree_x = body_rect.x + 8
     tree_y = body_rect.y + 8
@@ -2817,7 +2817,7 @@ def _draw_doc_draft(surface, doc, x, y, w, h, font, font_small):
 
 def _draw_control_panel_grid(surface, body_rect, font, font_small):
     """Grid of clickable control panel icons."""
-    mouse_pos = pygame.mouse.get_pos()
+    mouse_pos = get_scaled_mouse()
     # Grid of 5 icons (3 columns x 2 rows, last row has 2).
     grid_x = body_rect.x + 40
     grid_y = body_rect.y + 30

@@ -1697,7 +1697,7 @@ def game_update(keys):
     # session IS the upload gameplay. On DONE, hand off to the ending.
     from ui import upload_os  # lazy: ui package
     if upload_os.is_upload_os_active():
-        upload_os.update_upload_os(keys, pygame.mouse.get_pos())
+        upload_os.update_upload_os(keys, get_scaled_mouse())
         if upload_os.is_upload_complete():
             upload_os.deactivate_upload_os()
             from missions.m3.flow import _complete_mission3  # lazy: breaks systems<->flow cycle

@@ -17,28 +17,36 @@ pygame.init()
 from audio.audio import AudioManager
 audio = AudioManager()
 WIDTH, HEIGHT = 1000, 700
-# ── Display setup ──
-# `screen` IS the display surface, always at 1000x700. We use pygame.SCALED
-# which makes pygame handle the upscaling to the physical window size via
-# the GPU - this is the fast path (the manual transform.scale approach we
-# tried earlier was software-only and caused severe lag at high resolutions).
+# --- Display setup ---
+# The OS window opens at 1000x700 physical pixels; the user can resize it or
+# fullscreen it (F11) to anything. `screen` is the game's FIXED 1000x700
+# offscreen canvas: every draw call is authored in these coordinates, and
+# `present()` letterboxes the canvas onto the window with the aspect ratio
+# (10:7) preserved. The earlier pygame.SCALED path rendered the same logical
+# surface but STRETCHED it to the window's aspect ratio -- on a 16:9
+# fullscreen every glyph came out ~25% too wide, and a resized window
+# distorted sprites the same way.
 #
-# With SCALED, the display surface stays at 1000x700 logical pixels no matter
-# what physical size the window is. All game code draws to it using the
-# hardcoded WIDTH x HEIGHT bounds. The OS window can be resized freely by
-# the user (RESIZABLE flag) and pygame re-scales automatically.
+# Manual software scaling was retired once before for lag, but that version
+# allocated its scale target every frame; the cached-intermediate presenter
+# below (letterbox_rect/present) is what the old comment asked for.
+# letterbox_rect() is the single source of the mapping, shared by present()
+# and get_scaled_mouse(), so the pointer and the picture can never disagree.
 #
-# The Resolution setting in Settings → Display controls the FULLSCREEN
-# physical resolution (passed to set_mode when mode=1). In windowed mode,
-# the window starts at 1000x700 and the user can resize it by dragging.
-# RPE6 ADAPTER A-001: the engine App owns pygame init + the display. Same
-# set_mode size/flags/caption as before; still runs at import time until the
-# 51 `from core.config import *` consumers stop copying `screen`.
+# The Display setting selects WINDOWED/FULLSCREEN; fullscreen is borderless
+# at the desktop size and the presenter pillarboxes the canvas inside it.
+# RPE6 ADAPTER A-001: the engine App owns pygame init + the display. The
+# set_mode size/caption are as before; the flags drop SCALED by design, and
+# the engine's screen service is re-pointed at the canvas (game code, engine
+# included, draws on the canvas -- the display surface belongs to present()).
 from engine.core import App as _EngineApp
 _engine_app = _EngineApp().boot(display_size=(WIDTH, HEIGHT),
-                                display_flags=pygame.SCALED | pygame.RESIZABLE,
+                                display_flags=pygame.RESIZABLE,
                                 force_mode=True)
-screen = _engine_app.screen
+# Same object identity forever: consumers that copied `screen` at import stay
+# valid across every set_mode (display-mode switches no longer rebind it).
+screen = pygame.Surface((WIDTH, HEIGHT)).convert()
+_engine_app.set_screen(screen)   # RPE6 A-001: engine draws on the canvas
 clock = pygame.time.Clock()
 LETTER_H = 80
 SCENE_TOP = LETTER_H
@@ -783,24 +791,75 @@ pygame.draw.rect(bay_door_shadow, (0, 0, 0, 80), (4, 4, TILE_SIZE * 3, TILE_SIZE
 player_shadow = pygame.Surface((36, 18), pygame.SRCALPHA)
 pygame.draw.ellipse(player_shadow, (0, 0, 0, 100), (0, 0, 36, 18))
 
-# Per-frame cache for get_scaled_mouse(). With pygame.SCALED, pygame already
-# maps mouse coordinates to the logical 1000x700 render space for us, so
-# get_scaled_mouse() is essentially just pygame.mouse.get_pos(). We keep the
-# function for backward compatibility (it's called from ~20 sites) and cache
-# the result per-frame for the hover-check hot path.
+# Per-frame cache for get_scaled_mouse(): the pointer is reported in window
+# pixels, the game draws in 1000x700 canvas pixels, and the mapping between
+# them (letterbox_rect) is inverted here. Cached per (pos, window size) for
+# the hover-check hot path.
 _scaled_mouse_cache = None
 _scaled_mouse_raw = None
 
 
-def get_scaled_mouse():
-    """Return mouse position in the 1000x700 logical render space.
+def letterbox_rect(window_w, window_h):
+    """Where the 1000x700 canvas lands in a window of this size: (x, y, w, h).
 
-    Normally pygame.SCALED already returns logical coordinates. Some Windows /
-    SDL paths lose that logical scaling after F11 -> windowed -> maximize; then
-    the display surface becomes the physical window size while the game still
-    draws a 1000x700 frame in the top-left. acaristan._present_frame() rescales
-    that frame at presentation time, and this function mirrors the same
-    letterbox math for mouse input.
+    Scale by min(dw/WIDTH, dh/HEIGHT) and centre: aspect preserved, black bars
+    on the overflow axis. present() blits exactly here and get_scaled_mouse()
+    inverts exactly this mapping, so the pointer and the picture can never
+    disagree about where anything is.
+    """
+    scale = min(window_w / WIDTH, window_h / HEIGHT) if WIDTH and HEIGHT else 1.0
+    sw = max(1, int(WIDTH * scale))
+    sh = max(1, int(HEIGHT * scale))
+    return ((window_w - sw) // 2, (window_h - sh) // 2, sw, sh)
+
+
+# Letterbox presentation state. present() runs once per frame: the scaled
+# intermediate is cached per window size (a per-frame allocation here was a
+# measured hitch source), and the bars are repainted only when the window
+# changes size.
+_PRESENT_CACHE = {"target": None, "scaled": None}
+
+
+def reset_present_cache():
+    """Drop cached presentation state (after any set_mode/display change)."""
+    _PRESENT_CACHE["target"] = None
+    _PRESENT_CACHE["scaled"] = None
+
+
+def present(source=None):
+    """Blit the 1000x700 game canvas onto the OS window, aspect locked.
+
+    Call right before pygame.display.flip(). The display surface is the real
+    window at whatever size the user chose; the canvas is scaled into
+    letterbox_rect() -- nearest-neighbour, which stays crisp and cheap -- and
+    centred, so a 16:9 fullscreen gets pillarbox bars instead of fat text and
+    a tall window gets letterbox bars instead of stretched sprites.
+    """
+    display_surf = pygame.display.get_surface()
+    if display_surf is None:
+        return
+    source = screen if source is None else source
+    dw, dh = display_surf.get_size()
+    if (dw, dh) == (WIDTH, HEIGHT):
+        display_surf.blit(source, (0, 0))
+        return
+    ox, oy, sw, sh = letterbox_rect(dw, dh)
+    if _PRESENT_CACHE["target"] != (dw, dh):
+        display_surf.fill((0, 0, 0))
+        _PRESENT_CACHE["target"] = (dw, dh)
+    scaled = _PRESENT_CACHE["scaled"]
+    if scaled is None or scaled.get_size() != (sw, sh):
+        scaled = _PRESENT_CACHE["scaled"] = pygame.Surface((sw, sh)).convert()
+    pygame.transform.scale(source, (sw, sh), scaled)
+    display_surf.blit(scaled, (ox, oy))
+
+
+def get_scaled_mouse():
+    """Return the mouse position in the 1000x700 canvas space the game draws in.
+
+    pygame reports window pixels; the canvas is letterboxed inside the window
+    (letterbox_rect), so this inverts that mapping. A pointer in the black
+    bars clamps to the nearest canvas edge, which is what UI hit-tests want.
     """
     global _scaled_mouse_cache, _scaled_mouse_raw
     raw_pos = pygame.mouse.get_pos()
@@ -811,12 +870,8 @@ def get_scaled_mouse():
         return _scaled_mouse_cache
 
     if display_size != (WIDTH, HEIGHT):
-        dw, dh = display_size
-        scale = min(dw / WIDTH, dh / HEIGHT) if WIDTH and HEIGHT else 1.0
-        scaled_w = int(WIDTH * scale)
-        scaled_h = int(HEIGHT * scale)
-        ox = (dw - scaled_w) // 2
-        oy = (dh - scaled_h) // 2
+        ox, oy, sw, sh = letterbox_rect(*display_size)
+        scale = sw / WIDTH if WIDTH else 1.0
         if scale > 0:
             lx = int((raw_pos[0] - ox) / scale)
             ly = int((raw_pos[1] - oy) / scale)

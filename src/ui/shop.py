@@ -27,7 +27,7 @@ import pygame
 from core import appearance, artpack, profile_store
 from core.config import (
     WIDTH, C_ORANGE, font_speaker, font_terminal, font_terminal_small,
-    font_prompt,
+    font_prompt, get_scaled_mouse,
 )
 from entities import weapon_rig
 from entities.player import Player
@@ -340,7 +340,7 @@ class ShopScreen(object):
     def draw(self, surface):
         if self.mode != "open":
             return
-        mouse = pygame.mouse.get_pos()
+        mouse = get_scaled_mouse()   # hover must track the letterboxed canvas, not window pixels
         dim = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 168))
         surface.blit(dim, (0, 0))

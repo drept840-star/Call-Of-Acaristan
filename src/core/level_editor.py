@@ -2,7 +2,7 @@
 import pygame
 import os
 import math
-from core.config import TILE_SIZE, WIDTH, HEIGHT
+from core.config import TILE_SIZE, WIDTH, HEIGHT, get_scaled_mouse
 from core.state import STATE
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
@@ -52,7 +52,7 @@ class LevelEditor:
     def handle_event(self, event):
         if not self.active or self.map_data is None:
             return False
-        mx, my = pygame.mouse.get_pos()
+        mx, my = get_scaled_mouse()
         cam_x = getattr(STATE, "camera_x", 0)
         cam_y = getattr(STATE, "camera_y", 0)
         world_x = mx + cam_x
