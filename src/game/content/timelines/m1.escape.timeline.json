@@ -1,0 +1,122 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m1.escape",
+ "shots": [
+  {
+   "scene": "m1_escape_dashboard",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "self_graded": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 2250,
+   "scene_time_offset_ms": 0,
+   "lighting": [
+    5,
+    7,
+    10
+   ],
+   "cues": [
+    [
+     300,
+     "door_open",
+     0.45
+    ],
+    [
+     633,
+     "rig_low_boom",
+     0.25
+    ]
+   ]
+  },
+  {
+   "scene": "m1_escape_closeup",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "self_graded": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 2750,
+   "scene_time_offset_ms": 2250,
+   "lighting": [
+    5,
+    7,
+    10
+   ]
+  },
+  {
+   "scene": "m1_escape_truck",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "self_graded": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 3333,
+   "scene_time_offset_ms": 5000,
+   "lighting": [
+    5,
+    7,
+    10
+   ],
+   "cues": [
+    [
+     167,
+     "missile_launch",
+     0.32
+    ]
+   ],
+   "dialogue_events": [
+    [
+     1533,
+     "VASILE",
+     "Good. I've got it. Later. You need sleep.",
+     true
+    ]
+   ]
+  },
+  {
+   "scene": "m1_escape_rear",
+   "speaker": null,
+   "text": null,
+   "hide_caption": true,
+   "quiet_ui": true,
+   "self_graded": true,
+   "auto_advance": true,
+   "hard_cut": true,
+   "min_ms": 9667,
+   "scene_time_offset_ms": 8333,
+   "lighting": [
+    5,
+    7,
+    10
+   ],
+   "cues": [
+    [
+     2500,
+     "radio_static",
+     0.22
+    ],
+    [
+     3917,
+     "terminal_glitch",
+     0.24
+    ],
+    [
+     5334,
+     "menu_click",
+     0.34
+    ]
+   ]
+  }
+ ],
+ "metadata": {
+  "kind": "cutscene_shots",
+  "source": "missions.m1.meta.escape_shots"
+ }
+}

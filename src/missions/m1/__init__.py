@@ -1,11 +1,12 @@
 
-"""Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py."""
+"""Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py, meta.py."""
 """Mission 1B gameplay: warehouse infiltrate/firefight/escape."""
 from .map import *  # noqa: F401,F403
 from .main import *  # noqa: F401,F403
 from .hotwire import *  # noqa: F401,F403
 from .update import *  # noqa: F401,F403
 from .draw import *  # noqa: F401,F403
+from .meta import *  # noqa: F401,F403
 from .map import _tc, _lerp  # noqa: F401
 from .main import _walk_footstep_timer, _init_mission_specials, _trigger_civilian_payoff  # noqa: F401
 from .hotwire import _hotwire_wire_nodes, _reset_hotwire_minigame  # noqa: F401

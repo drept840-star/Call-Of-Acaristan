@@ -23,6 +23,7 @@ OUT_DIR = os.path.join(ROOT, "src", "game", "content", "timelines")
 SPECS = [
     ("core.cutscene1", "cutscenes.engine", "cutscene1_shots"),
     ("core.cutscene2", "cutscenes.engine", "cutscene2_shots"),
+    ("m1.escape", "missions.m1.meta", "escape_shots"),
     ("m2.intro", "missions.m2.meta", "mission2_intro_shots"),
     ("m2.ending", "missions.m2.meta", "mission2_ending_shots"),
     ("m2.seby_pickup", "missions.m2.meta", "seby_pickup_shots"),

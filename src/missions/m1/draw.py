@@ -3,6 +3,7 @@
 import math
 import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
+from core.cutscene_registry import register_scene_renderers as _register_takes  # WP2: cutscene takes
 import time
 import pygame
 from core.config import (BAY_DOOR_FRAME_3W, BAY_DOOR_TILE_3W, CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_BG_GAME, C_BULLET, C_KRAP_BLUE, C_ORANGE, C_TERMINAL, C_WHITE, DOOR_FRAME_TILE, DOOR_INTERACT_RANGE, DOOR_TILE, FLOOR_TILE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, MUZZLE_FLASH, SLUM_FLOOR, TILE_SIZE, WAREHOUSE_WALL, WIDTH, bay_door_shadow, bullet_glow as _bullet_glow, draw_letterbox, draw_scanlines, draw_vignette, font_dialogue, font_location_sub, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen, wall_shadow)
@@ -184,9 +185,23 @@ def _draw_escape_truck(surface, x, y, scale=1.0, angle=0.0, headlights=True):
         surface.blit(beam, (int(x + 58*s), int(y - 48*s)))
         pygame.draw.rect(surface, (245, 220, 130), (int(x + 62*s), int(y - 18*s), int(8*s), int(10*s)))
         pygame.draw.rect(surface, (245, 220, 130), (int(x + 62*s), int(y + 8*s), int(8*s), int(10*s)))
-def draw_biribel_escape_cutscene(surface, timer):
-    """Cinematic escape cutscene after the real hotwire minigame."""
-    t = int(timer)
+# ── Escape cut (WP2): one timeline shot per painter phase ────────────────
+# The old ESCAPE_CUTSCENE state counted 1080 frames and picked the phase
+# from that counter. The cut is a timeline now (m1.escape): each shot names
+# one of these scenes and the painter receives the shot's own clock in ms,
+# like every other take. _escape_frame converts that back to the cut's
+# 60 fps frame clock, and each scene pins its phase window so a shot
+# boundary that lands a frame late can never paint the neighbouring phase.
+_ESCAPE_FPS = 60
+
+
+def _escape_frame(t_ms):
+    """Timeline milliseconds -> the escape cut's own 60 fps frame clock."""
+    return int(round(t_ms * _ESCAPE_FPS / 1000.0))
+
+
+def _escape_sky(surface, t):
+    """Rainy night base: fill, vertical gradient and the rain streaks."""
     # base rainy night road/warehouse palette
     surface.fill((5, 7, 10))
     for y in range(HEIGHT):
@@ -198,184 +213,196 @@ def draw_biribel_escape_cutscene(surface, timer):
         rx = (rng_r.randint(0, WIDTH) + t * 3) % WIDTH
         ry = (rng_r.randint(LETTER_H, HEIGHT - LETTER_H) + t * 7) % (HEIGHT - LETTER_H) + LETTER_H
         pygame.draw.line(surface, (110, 130, 160, 55), (rx, ry), (rx - 5, ry + 18), 1)
-    if t < 135:
-        # dashboard / wire close-up
-        dash_y = HEIGHT // 2 + 80
-        pygame.draw.rect(surface, (8, 10, 12), (0, dash_y, WIDTH, HEIGHT - dash_y))
-        pygame.draw.rect(surface, (28, 34, 32), (160, dash_y - 80, WIDTH - 320, 105), border_radius=10)
-        pygame.draw.rect(surface, (58, 70, 62), (160, dash_y - 80, WIDTH - 320, 105), 2, border_radius=10)
-        for i, col in enumerate([(215,55,45), (225,190,55), (60,130,220), (70,185,95)]):
-            y = dash_y - 54 + i * 20
-            pygame.draw.line(surface, col, (235, y), (WIDTH//2 - 30, y + math.sin(t*.12+i)*8), 5)
-            pygame.draw.circle(surface, (220, 140, 70), (WIDTH//2 - 25, int(y + math.sin(t*.12+i)*8)), 7)
-        if t > 30 and (t // 5) % 2 == 0:
-            for _ in range(10):
-                sx = WIDTH//2 + _rng_legacy.randint(-20, 18)
-                sy = dash_y - 25 + _rng_legacy.randint(-28, 18)
-                pygame.draw.line(surface, (255, 220, 90), (sx, sy), (sx+_rng_legacy.randint(-24,24), sy+_rng_legacy.randint(-18,18)), 1)
-        wheel_r = 92 + int(math.sin(t*.08)*2)
-        pygame.draw.circle(surface, (12, 13, 14), (WIDTH//2 + 190, dash_y - 16), wheel_r, 12)
-        _escape_subtitle(surface, "ENGINE", "starter catches...", min(255, t*6))
-    elif t < 300:
-        # Biribel close-up, soldier not suit.
-        # windshield frame
-        pygame.draw.rect(surface, (8, 10, 12), (80, LETTER_H + 20, WIDTH - 160, HEIGHT - 2*LETTER_H - 40), 6)
-        for lx in (180, WIDTH-180):
-            pygame.draw.line(surface, (20, 24, 28), (lx, LETTER_H+28), (lx-70, HEIGHT-LETTER_H-30), 5)
-        _draw_biribel_soldier_closeup(surface, WIDTH//2, HEIGHT//2 - 20, t, scale=1.1)
-        # windshield rain highlights
-        for i in range(18):
-            x = 120 + i * 47 + int(math.sin(t*.03+i)*8)
-            pygame.draw.line(surface, (130, 150, 175, 45), (x, LETTER_H+40), (x-40, HEIGHT-LETTER_H-50), 1)
-        _escape_subtitle(surface, "BIRIBEL", "Hold on.", 255)
-    elif t < 500:
-        # Clear readable side-view escape: truck starts, bursts through service gate, drives right.
-        prog = (t - 300) / 200.0
-        ease = 1 - (1 - max(0.0, min(1.0, prog))) ** 3
-        ground_y = HEIGHT - LETTER_H - 118
-        scroll = int(ease * 260)
-        # Sky / rain / warehouse exterior.
-        pygame.draw.rect(surface, (13, 15, 20), (0, LETTER_H, WIDTH, ground_y - LETTER_H))
-        pygame.draw.rect(surface, (34, 31, 28), (-scroll, LETTER_H + 42, WIDTH + 340, ground_y - LETTER_H - 42))
-        # Warehouse panels and grime.
-        for x in range(-scroll - 80, WIDTH + 260, 110):
-            pygame.draw.rect(surface, (27, 25, 23), (x, LETTER_H + 42, 104, ground_y - LETTER_H - 42), 1)
-            pygame.draw.line(surface, (45, 38, 32), (x + 104, LETTER_H + 42), (x + 104, ground_y), 1)
-        # Service gate behind truck, clearly breaking open.
-        gate_x = 90 - scroll
-        gate_y = LETTER_H + 92
-        gate_w, gate_h = 260, 185
-        pygame.draw.rect(surface, (8, 9, 10), (gate_x, gate_y, gate_w, gate_h))
-        pygame.draw.rect(surface, (90, 72, 54), (gate_x, gate_y, gate_w, gate_h), 4)
-        for i in range(8):
-            gx = gate_x + i * (gate_w // 8)
-            bend = int(ease * (20 if i % 2 == 0 else -14))
-            pygame.draw.line(surface, (82, 68, 52), (gx, gate_y), (gx + bend, gate_y + gate_h), 3)
-        gate_lbl = font_terminal_small.render(_T("m1.service_gate"), True, (135, 120, 95))
-        surface.blit(gate_lbl, (gate_x + gate_w//2 - gate_lbl.get_width()//2, gate_y - 24))
-        # Ground / wet road.
-        pygame.draw.rect(surface, (10, 12, 14), (0, ground_y, WIDTH, HEIGHT - LETTER_H - ground_y))
-        for y in range(ground_y + 12, HEIGHT - LETTER_H, 28):
-            pygame.draw.line(surface, (30, 40, 50), (0, y), (WIDTH, y), 1)
-        # Puddles and reflections.
-        rng_p = random.Random(77)
-        for i in range(12):
-            px = (rng_p.randint(0, WIDTH + 260) - scroll * 2) % (WIDTH + 220) - 110
-            py = ground_y + rng_p.randint(18, 86)
-            pygame.draw.ellipse(surface, (20, 28, 38, 130), (px, py, rng_p.randint(45, 100), rng_p.randint(8, 18)))
-        # Big readable side-view truck.
-        # Drive fully off-screen by the end of the shot; previously it lingered in frame.
-        truck_x = int(_lerp(140, WIDTH + 235, ease))
-        truck_y = ground_y - 28 + int(math.sin(t * 0.19) * 2)
-        # Headlight beam
-        beam = pygame.Surface((330, 135), pygame.SRCALPHA)
-        pygame.draw.polygon(beam, (255, 225, 145, 48), [(0, 48), (325, 6), (325, 126), (0, 82)])
-        surface.blit(beam, (truck_x + 104, truck_y - 74))
-        # Motion / rain spray trail
-        for i in range(22):
-            mx = truck_x - 25 - i * int(28 + 18 * ease)
-            my = truck_y + 38 + random.Random(i + t // 2).randint(-16, 24)
-            pygame.draw.line(surface, (100, 128, 150, 80), (mx, my), (mx - 44, my + 5), 2)
-        # Truck shadow
-        render_util.soft_shadow(surface, (truck_x - 112, truck_y + 46, 245, 38), 120)
-        # Cargo body
-        pygame.draw.rect(surface, (28, 39, 28), (truck_x - 106, truck_y - 32, 156, 72), border_radius=5)
-        pygame.draw.rect(surface, (72, 84, 62), (truck_x - 106, truck_y - 32, 156, 72), 3, border_radius=5)
-        pygame.draw.rect(surface, (18, 25, 18), (truck_x - 92, truck_y - 19, 96, 43), border_radius=3)
-        pygame.draw.line(surface, C_KRAP_BLUE, (truck_x - 88, truck_y - 8), (truck_x - 2, truck_y - 8), 5)
-        pygame.draw.line(surface, (210, 210, 205), (truck_x - 88, truck_y - 1), (truck_x - 2, truck_y - 1), 1)
-        # Cab
-        cab_pts = [(truck_x + 45, truck_y - 32), (truck_x + 93, truck_y - 28), (truck_x + 116, truck_y + 0), (truck_x + 106, truck_y + 40), (truck_x + 46, truck_y + 40)]
-        pygame.draw.polygon(surface, (36, 50, 36), cab_pts)
-        pygame.draw.polygon(surface, (80, 94, 70), cab_pts, 2)
-        pygame.draw.polygon(surface, (24, 42, 52), [(truck_x + 58, truck_y - 20), (truck_x + 88, truck_y - 17), (truck_x + 101, truck_y + 0), (truck_x + 60, truck_y + 0)])
-        # Headlights / tail lights
-        pygame.draw.rect(surface, (245, 220, 130), (truck_x + 108, truck_y + 6, 9, 10))
-        pygame.draw.rect(surface, (180, 35, 28), (truck_x - 111, truck_y - 16, 6, 12))
-        pygame.draw.rect(surface, (180, 35, 28), (truck_x - 111, truck_y + 19, 6, 12))
-        # Wheels, very obvious.
-        for wx in (truck_x - 70, truck_x - 10, truck_x + 76):
-            pygame.draw.circle(surface, (5, 6, 7), (wx, truck_y + 44), 23)
-            pygame.draw.circle(surface, (46, 50, 50), (wx, truck_y + 44), 12)
-            spoke_ang = t * 0.22
-            for sp in range(4):
-                a = spoke_ang + sp * math.pi / 2
-                pygame.draw.line(surface, (85, 88, 84), (wx, truck_y + 44), (wx + math.cos(a)*11, truck_y + 44 + math.sin(a)*11), 2)
-        # Shards from gate
-        if t < 390:
-            rng_s = random.Random(800 + t // 3)
-            for i in range(20):
-                sx = gate_x + gate_w - 30 + rng_s.randint(-15, 70) + int((t-300)*1.4)
-                sy = gate_y + rng_s.randint(10, gate_h - 8) + int((t-300)*0.25)
-                pygame.draw.rect(surface, (95, 78, 56), (sx, sy, rng_s.randint(4, 12), rng_s.randint(2, 7)))
-        # Clear text overlay for readability.
-        banner = font_terminal.render(_T("m1.escape_truck_moving"), True, (255, 180, 70))
-        bg = pygame.Surface((banner.get_width()+28, banner.get_height()+10), pygame.SRCALPHA)
-        bg.fill((0, 0, 0, 150))
-        pygame.draw.rect(bg, (255, 180, 70, 120), bg.get_rect(), 1)
-        surface.blit(bg, (WIDTH//2 - bg.get_width()//2, LETTER_H + 24))
-        surface.blit(banner, (WIDTH//2 - banner.get_width()//2, LETTER_H + 29))
-        if t < 372:
-            _escape_subtitle(surface, "BIRIBEL", "Go, go, go!", 255)
-        # M6 plant (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit"): Vasile
-        # pockets the notebook without reading it in front of Biribel.  He
-        # already knew what was in it - in M6 the leaf in Volkov's copy says
-        # so, and the M2 auth chain already carried his name.
-        if 392 <= t < 470:
-            _escape_subtitle(surface, "VASILE",
-                             "Good. I've got it. Later. You need sleep.",
-                             min(255, (t - 392) * 5, (470 - t) * 6))
-    else:
-        # Clear rear-view escape: visible truck body, tail-lights, road, warehouse glow behind.
-        prog = min(1.0, (t - 500) / 160.0)
-        horizon = LETTER_H + 120
-        road_bot = HEIGHT - LETTER_H
-        pygame.draw.rect(surface, (6, 8, 12), (0, LETTER_H, WIDTH, HEIGHT - 2*LETTER_H))
-        # Distant warehouse / fire glow behind.
-        pygame.draw.rect(surface, (24, 21, 19), (0, horizon - 52, WIDTH, 70))
-        for i, x in enumerate((110, 210, 805, 900)):
-            glow = pygame.Surface((170, 120), pygame.SRCALPHA)
-            a = 30 + int(22 * math.sin(t*0.04 + i))
-            pygame.draw.ellipse(glow, (255, 105, 30, max(12, a)), glow.get_rect())
-            surface.blit(glow, (x, horizon - 82))
-        # Road in perspective.
-        road = [(WIDTH//2-78, horizon), (WIDTH//2+78, horizon), (WIDTH+180, road_bot), (-180, road_bot)]
-        pygame.draw.polygon(surface, (10, 12, 16), road)
-        for i in range(8):
-            frac = i / 7
-            y = int(horizon + frac*frac*(road_bot-horizon))
-            pygame.draw.line(surface, (32, 42, 52), (0, y), (WIDTH, y), 1)
-        pygame.draw.line(surface, (82, 82, 70), (WIDTH//2, horizon), (WIDTH//2-150, road_bot), 2)
-        pygame.draw.line(surface, (82, 82, 70), (WIDTH//2, horizon), (WIDTH//2+150, road_bot), 2)
-        # Draw visible rear truck shrinking into distance.
-        # Stay locked to the perspective road centerline; only tiny suspension sway.
-        tx = int(WIDTH // 2 + math.sin(t * 0.045) * (5 * (1.0 - prog)))
-        ty = int(_lerp(road_bot - 88, horizon + 38, prog))
-        sc = _lerp(1.12, 0.36, prog)
-        tw = int(122 * sc)
-        th = int(76 * sc)
-        render_util.soft_shadow(surface, (tx - tw//2, ty + int(th*0.38), tw, max(8, int(22*sc))), 120)
-        pygame.draw.rect(surface, (24, 35, 25), (tx - tw//2, ty - th//2, tw, th), border_radius=max(2, int(5*sc)))
-        pygame.draw.rect(surface, (70, 84, 62), (tx - tw//2, ty - th//2, tw, th), max(1, int(2*sc)), border_radius=max(2, int(5*sc)))
-        pygame.draw.rect(surface, (15, 22, 18), (tx - int(42*sc), ty - int(24*sc), int(84*sc), int(36*sc)), border_radius=max(1, int(3*sc)))
-        # Rear windows/tail lights
-        pygame.draw.rect(surface, (18, 28, 36), (tx - int(28*sc), ty - int(18*sc), int(18*sc), int(16*sc)))
-        pygame.draw.rect(surface, (18, 28, 36), (tx + int(10*sc), ty - int(18*sc), int(18*sc), int(16*sc)))
-        for side in (-1, 1):
-            lx = tx + side * int(43*sc)
-            ly = ty + int(20*sc)
-            pygame.draw.rect(surface, (220, 35, 28), (lx - int(6*sc), ly - int(5*sc), max(3, int(12*sc)), max(3, int(10*sc))))
-            refl = pygame.Surface((max(8, int(45*sc)), max(18, int(130*sc))), pygame.SRCALPHA)
-            pygame.draw.ellipse(refl, (220, 35, 28, int(85*(1-prog))), refl.get_rect())
-            surface.blit(refl, (lx - refl.get_width()//2, ly + int(7*sc)))
-        fog = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        fog.fill((18, 24, 32, int(70 * prog)))
-        surface.blit(fog, (0, 0))
-        loc = font_location_sub.render(_T("m1.kilemeno_harbor_road_03_17"), True, (165, 165, 150))
-        loc.set_alpha(min(255, max(0, (t-520)*4)))
-        surface.blit(loc, (WIDTH//2 - loc.get_width()//2, LETTER_H + 34))
-        if t > 570:
-            _escape_subtitle(surface, "RADIO", "Signal clear. They're away.", min(255, (t-570)*5))
+
+
+def _draw_escape_dashboard(surface, t):
+    """Shot 1 (frames 0-134): hotwire dashboard, starter catches."""
+    # dashboard / wire close-up
+    dash_y = HEIGHT // 2 + 80
+    pygame.draw.rect(surface, (8, 10, 12), (0, dash_y, WIDTH, HEIGHT - dash_y))
+    pygame.draw.rect(surface, (28, 34, 32), (160, dash_y - 80, WIDTH - 320, 105), border_radius=10)
+    pygame.draw.rect(surface, (58, 70, 62), (160, dash_y - 80, WIDTH - 320, 105), 2, border_radius=10)
+    for i, col in enumerate([(215,55,45), (225,190,55), (60,130,220), (70,185,95)]):
+        y = dash_y - 54 + i * 20
+        pygame.draw.line(surface, col, (235, y), (WIDTH//2 - 30, y + math.sin(t*.12+i)*8), 5)
+        pygame.draw.circle(surface, (220, 140, 70), (WIDTH//2 - 25, int(y + math.sin(t*.12+i)*8)), 7)
+    if t > 30 and (t // 5) % 2 == 0:
+        for _ in range(10):
+            sx = WIDTH//2 + _rng_legacy.randint(-20, 18)
+            sy = dash_y - 25 + _rng_legacy.randint(-28, 18)
+            pygame.draw.line(surface, (255, 220, 90), (sx, sy), (sx+_rng_legacy.randint(-24,24), sy+_rng_legacy.randint(-18,18)), 1)
+    wheel_r = 92 + int(math.sin(t*.08)*2)
+    pygame.draw.circle(surface, (12, 13, 14), (WIDTH//2 + 190, dash_y - 16), wheel_r, 12)
+    _escape_subtitle(surface, "ENGINE", "starter catches...", min(255, t*6))
+
+
+def _draw_escape_closeup(surface, t):
+    """Shot 2 (frames 135-299): Biribel at the wheel, windshield rain."""
+    # Biribel close-up, soldier not suit.
+    # windshield frame
+    pygame.draw.rect(surface, (8, 10, 12), (80, LETTER_H + 20, WIDTH - 160, HEIGHT - 2*LETTER_H - 40), 6)
+    for lx in (180, WIDTH-180):
+        pygame.draw.line(surface, (20, 24, 28), (lx, LETTER_H+28), (lx-70, HEIGHT-LETTER_H-30), 5)
+    _draw_biribel_soldier_closeup(surface, WIDTH//2, HEIGHT//2 - 20, t, scale=1.1)
+    # windshield rain highlights
+    for i in range(18):
+        x = 120 + i * 47 + int(math.sin(t*.03+i)*8)
+        pygame.draw.line(surface, (130, 150, 175, 45), (x, LETTER_H+40), (x-40, HEIGHT-LETTER_H-50), 1)
+    _escape_subtitle(surface, "BIRIBEL", "Hold on.", 255)
+
+
+def _draw_escape_truck_side(surface, t):
+    """Shot 3 (frames 300-499): side view, the truck bursts the service gate."""
+    # Clear readable side-view escape: truck starts, bursts through service gate, drives right.
+    prog = (t - 300) / 200.0
+    ease = 1 - (1 - max(0.0, min(1.0, prog))) ** 3
+    ground_y = HEIGHT - LETTER_H - 118
+    scroll = int(ease * 260)
+    # Sky / rain / warehouse exterior.
+    pygame.draw.rect(surface, (13, 15, 20), (0, LETTER_H, WIDTH, ground_y - LETTER_H))
+    pygame.draw.rect(surface, (34, 31, 28), (-scroll, LETTER_H + 42, WIDTH + 340, ground_y - LETTER_H - 42))
+    # Warehouse panels and grime.
+    for x in range(-scroll - 80, WIDTH + 260, 110):
+        pygame.draw.rect(surface, (27, 25, 23), (x, LETTER_H + 42, 104, ground_y - LETTER_H - 42), 1)
+        pygame.draw.line(surface, (45, 38, 32), (x + 104, LETTER_H + 42), (x + 104, ground_y), 1)
+    # Service gate behind truck, clearly breaking open.
+    gate_x = 90 - scroll
+    gate_y = LETTER_H + 92
+    gate_w, gate_h = 260, 185
+    pygame.draw.rect(surface, (8, 9, 10), (gate_x, gate_y, gate_w, gate_h))
+    pygame.draw.rect(surface, (90, 72, 54), (gate_x, gate_y, gate_w, gate_h), 4)
+    for i in range(8):
+        gx = gate_x + i * (gate_w // 8)
+        bend = int(ease * (20 if i % 2 == 0 else -14))
+        pygame.draw.line(surface, (82, 68, 52), (gx, gate_y), (gx + bend, gate_y + gate_h), 3)
+    gate_lbl = font_terminal_small.render(_T("m1.service_gate"), True, (135, 120, 95))
+    surface.blit(gate_lbl, (gate_x + gate_w//2 - gate_lbl.get_width()//2, gate_y - 24))
+    # Ground / wet road.
+    pygame.draw.rect(surface, (10, 12, 14), (0, ground_y, WIDTH, HEIGHT - LETTER_H - ground_y))
+    for y in range(ground_y + 12, HEIGHT - LETTER_H, 28):
+        pygame.draw.line(surface, (30, 40, 50), (0, y), (WIDTH, y), 1)
+    # Puddles and reflections.
+    rng_p = random.Random(77)
+    for i in range(12):
+        px = (rng_p.randint(0, WIDTH + 260) - scroll * 2) % (WIDTH + 220) - 110
+        py = ground_y + rng_p.randint(18, 86)
+        pygame.draw.ellipse(surface, (20, 28, 38, 130), (px, py, rng_p.randint(45, 100), rng_p.randint(8, 18)))
+    # Big readable side-view truck.
+    # Drive fully off-screen by the end of the shot; previously it lingered in frame.
+    truck_x = int(_lerp(140, WIDTH + 235, ease))
+    truck_y = ground_y - 28 + int(math.sin(t * 0.19) * 2)
+    # Headlight beam
+    beam = pygame.Surface((330, 135), pygame.SRCALPHA)
+    pygame.draw.polygon(beam, (255, 225, 145, 48), [(0, 48), (325, 6), (325, 126), (0, 82)])
+    surface.blit(beam, (truck_x + 104, truck_y - 74))
+    # Motion / rain spray trail
+    for i in range(22):
+        mx = truck_x - 25 - i * int(28 + 18 * ease)
+        my = truck_y + 38 + random.Random(i + t // 2).randint(-16, 24)
+        pygame.draw.line(surface, (100, 128, 150, 80), (mx, my), (mx - 44, my + 5), 2)
+    # Truck shadow
+    render_util.soft_shadow(surface, (truck_x - 112, truck_y + 46, 245, 38), 120)
+    # Cargo body
+    pygame.draw.rect(surface, (28, 39, 28), (truck_x - 106, truck_y - 32, 156, 72), border_radius=5)
+    pygame.draw.rect(surface, (72, 84, 62), (truck_x - 106, truck_y - 32, 156, 72), 3, border_radius=5)
+    pygame.draw.rect(surface, (18, 25, 18), (truck_x - 92, truck_y - 19, 96, 43), border_radius=3)
+    pygame.draw.line(surface, C_KRAP_BLUE, (truck_x - 88, truck_y - 8), (truck_x - 2, truck_y - 8), 5)
+    pygame.draw.line(surface, (210, 210, 205), (truck_x - 88, truck_y - 1), (truck_x - 2, truck_y - 1), 1)
+    # Cab
+    cab_pts = [(truck_x + 45, truck_y - 32), (truck_x + 93, truck_y - 28), (truck_x + 116, truck_y + 0), (truck_x + 106, truck_y + 40), (truck_x + 46, truck_y + 40)]
+    pygame.draw.polygon(surface, (36, 50, 36), cab_pts)
+    pygame.draw.polygon(surface, (80, 94, 70), cab_pts, 2)
+    pygame.draw.polygon(surface, (24, 42, 52), [(truck_x + 58, truck_y - 20), (truck_x + 88, truck_y - 17), (truck_x + 101, truck_y + 0), (truck_x + 60, truck_y + 0)])
+    # Headlights / tail lights
+    pygame.draw.rect(surface, (245, 220, 130), (truck_x + 108, truck_y + 6, 9, 10))
+    pygame.draw.rect(surface, (180, 35, 28), (truck_x - 111, truck_y - 16, 6, 12))
+    pygame.draw.rect(surface, (180, 35, 28), (truck_x - 111, truck_y + 19, 6, 12))
+    # Wheels, very obvious.
+    for wx in (truck_x - 70, truck_x - 10, truck_x + 76):
+        pygame.draw.circle(surface, (5, 6, 7), (wx, truck_y + 44), 23)
+        pygame.draw.circle(surface, (46, 50, 50), (wx, truck_y + 44), 12)
+        spoke_ang = t * 0.22
+        for sp in range(4):
+            a = spoke_ang + sp * math.pi / 2
+            pygame.draw.line(surface, (85, 88, 84), (wx, truck_y + 44), (wx + math.cos(a)*11, truck_y + 44 + math.sin(a)*11), 2)
+    # Shards from gate
+    if t < 390:
+        rng_s = random.Random(800 + t // 3)
+        for i in range(20):
+            sx = gate_x + gate_w - 30 + rng_s.randint(-15, 70) + int((t-300)*1.4)
+            sy = gate_y + rng_s.randint(10, gate_h - 8) + int((t-300)*0.25)
+            pygame.draw.rect(surface, (95, 78, 56), (sx, sy, rng_s.randint(4, 12), rng_s.randint(2, 7)))
+    # Clear text overlay for readability.
+    banner = font_terminal.render(_T("m1.escape_truck_moving"), True, (255, 180, 70))
+    bg = pygame.Surface((banner.get_width()+28, banner.get_height()+10), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, 150))
+    pygame.draw.rect(bg, (255, 180, 70, 120), bg.get_rect(), 1)
+    surface.blit(bg, (WIDTH//2 - bg.get_width()//2, LETTER_H + 24))
+    surface.blit(banner, (WIDTH//2 - banner.get_width()//2, LETTER_H + 29))
+    if t < 372:
+        _escape_subtitle(surface, "BIRIBEL", "Go, go, go!", 255)
+    # M6 plant (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit"): Vasile
+    # pockets the notebook without reading it in front of Biribel.  He
+    # already knew what was in it - in M6 the leaf in Volkov's copy says
+    # so, and the M2 auth chain already carried his name.
+    if 392 <= t < 470:
+        _escape_subtitle(surface, "VASILE",
+                         "Good. I've got it. Later. You need sleep.",
+                         min(255, (t - 392) * 5, (470 - t) * 6))
+
+
+def _draw_escape_rear(surface, t):
+    """Shot 4 (frames 500-1079): rear view, radio handoff and the report card."""
+    # Clear rear-view escape: visible truck body, tail-lights, road, warehouse glow behind.
+    prog = min(1.0, (t - 500) / 160.0)
+    horizon = LETTER_H + 120
+    road_bot = HEIGHT - LETTER_H
+    pygame.draw.rect(surface, (6, 8, 12), (0, LETTER_H, WIDTH, HEIGHT - 2*LETTER_H))
+    # Distant warehouse / fire glow behind.
+    pygame.draw.rect(surface, (24, 21, 19), (0, horizon - 52, WIDTH, 70))
+    for i, x in enumerate((110, 210, 805, 900)):
+        glow = pygame.Surface((170, 120), pygame.SRCALPHA)
+        a = 30 + int(22 * math.sin(t*0.04 + i))
+        pygame.draw.ellipse(glow, (255, 105, 30, max(12, a)), glow.get_rect())
+        surface.blit(glow, (x, horizon - 82))
+    # Road in perspective.
+    road = [(WIDTH//2-78, horizon), (WIDTH//2+78, horizon), (WIDTH+180, road_bot), (-180, road_bot)]
+    pygame.draw.polygon(surface, (10, 12, 16), road)
+    for i in range(8):
+        frac = i / 7
+        y = int(horizon + frac*frac*(road_bot-horizon))
+        pygame.draw.line(surface, (32, 42, 52), (0, y), (WIDTH, y), 1)
+    pygame.draw.line(surface, (82, 82, 70), (WIDTH//2, horizon), (WIDTH//2-150, road_bot), 2)
+    pygame.draw.line(surface, (82, 82, 70), (WIDTH//2, horizon), (WIDTH//2+150, road_bot), 2)
+    # Draw visible rear truck shrinking into distance.
+    # Stay locked to the perspective road centerline; only tiny suspension sway.
+    tx = int(WIDTH // 2 + math.sin(t * 0.045) * (5 * (1.0 - prog)))
+    ty = int(_lerp(road_bot - 88, horizon + 38, prog))
+    sc = _lerp(1.12, 0.36, prog)
+    tw = int(122 * sc)
+    th = int(76 * sc)
+    render_util.soft_shadow(surface, (tx - tw//2, ty + int(th*0.38), tw, max(8, int(22*sc))), 120)
+    pygame.draw.rect(surface, (24, 35, 25), (tx - tw//2, ty - th//2, tw, th), border_radius=max(2, int(5*sc)))
+    pygame.draw.rect(surface, (70, 84, 62), (tx - tw//2, ty - th//2, tw, th), max(1, int(2*sc)), border_radius=max(2, int(5*sc)))
+    pygame.draw.rect(surface, (15, 22, 18), (tx - int(42*sc), ty - int(24*sc), int(84*sc), int(36*sc)), border_radius=max(1, int(3*sc)))
+    # Rear windows/tail lights
+    pygame.draw.rect(surface, (18, 28, 36), (tx - int(28*sc), ty - int(18*sc), int(18*sc), int(16*sc)))
+    pygame.draw.rect(surface, (18, 28, 36), (tx + int(10*sc), ty - int(18*sc), int(18*sc), int(16*sc)))
+    for side in (-1, 1):
+        lx = tx + side * int(43*sc)
+        ly = ty + int(20*sc)
+        pygame.draw.rect(surface, (220, 35, 28), (lx - int(6*sc), ly - int(5*sc), max(3, int(12*sc)), max(3, int(10*sc))))
+        refl = pygame.Surface((max(8, int(45*sc)), max(18, int(130*sc))), pygame.SRCALPHA)
+        pygame.draw.ellipse(refl, (220, 35, 28, int(85*(1-prog))), refl.get_rect())
+        surface.blit(refl, (lx - refl.get_width()//2, ly + int(7*sc)))
+    fog = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    fog.fill((18, 24, 32, int(70 * prog)))
+    surface.blit(fog, (0, 0))
+    loc = font_location_sub.render(_T("m1.kilemeno_harbor_road_03_17"), True, (165, 165, 150))
+    loc.set_alpha(min(255, max(0, (t-520)*4)))
+    surface.blit(loc, (WIDTH//2 - loc.get_width()//2, LETTER_H + 34))
+    if t > 570:
+        _escape_subtitle(surface, "RADIO", "Signal clear. They're away.", min(255, (t-570)*5))
     # Polished handoff to the results screen:
     # 1) long radio acquisition hold, 2) slower signal corruption, 3) readable report boot card.
     if t > 620:
@@ -452,9 +479,34 @@ def draw_biribel_escape_cutscene(surface, timer):
                 ready_alpha = min(255, (t - 1025) * 7)
                 ready = font_terminal_small.render(_T("m1.report_ready"), True, C_ORANGE)
                 _fade_text(ready, card_x + card_w // 2 - ready.get_width() // 2, card_y + 202, ready_alpha)
+
+
+def _escape_grade(surface):
+    """The cut's own post stack (its timeline shots are `self_graded`)."""
     draw_vignette(surface, strength=185)
     draw_scanlines(surface)
     draw_letterbox(surface)
+
+
+def _escape_scene(start, end, phase):
+    """Take factory: paint one phase of the cut from a shot-local ms clock."""
+    def _draw(surface, t_ms):
+        t = max(start, min(_escape_frame(t_ms), end - 1))
+        _escape_sky(surface, t)
+        phase(surface, t)
+        _escape_grade(surface)
+    return _draw
+
+
+# The four shots of m1.escape (content/timelines/m1.escape.timeline.json).
+_register_takes({
+    "m1_escape_dashboard": _escape_scene(0, 135, _draw_escape_dashboard),
+    "m1_escape_closeup": _escape_scene(135, 300, _draw_escape_closeup),
+    "m1_escape_truck": _escape_scene(300, 500, _draw_escape_truck_side),
+    "m1_escape_rear": _escape_scene(500, 1080, _draw_escape_rear),
+})
+
+
 # ── Static bake + lighting fixtures (Mission 3 pipeline, Mission 1 wiring) ──
 # Mission 1 re-rendered its whole tile grid, walls and desk bodies every
 # frame. The static half (floors, walls, desk bodies, bay label, dressing)

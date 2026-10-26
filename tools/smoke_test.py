@@ -3927,6 +3927,34 @@ def check_volkov_foreshadowing():
             assert "On your six. Move." in shot["text"]
             assert shots.index(shot) < next(i for i, s in enumerate(shots) if s.get("speaker") == "VASILE")
             assert not I.radio_allowed("CUTSCENE")
+
+        # WP2: the M1 escape cut is the m1.escape timeline now (it was the
+        # ESCAPE_CUTSCENE frame counter). The M6 plant - Vasile pockets the
+        # notebook unread, VO_198 - must stay the last spoken line of the cut,
+        # as a radio line, and the cut must still run its 1080 frames.
+        from game import timelines as _tl
+        from missions.m1 import meta as _m1m
+        assert gc.escape_shots is not None and len(gc.escape_shots) == 4, \
+            "gc.escape_shots is not the M1 escape shot list"
+        data = _tl.timeline("m1.escape")
+        assert [s["scene"] for s in data.shots] == [
+            "m1_escape_dashboard", "m1_escape_closeup",
+            "m1_escape_truck", "m1_escape_rear",
+        ], "m1.escape changed its shot cuts"
+        total_ms = sum(int(s.get("min_ms", 0)) for s in _m1m.escape_shots)
+        want_ms = _m1m.ESCAPE_FRAMES * 1000 // _m1m.ESCAPE_FPS
+        assert abs(total_ms - want_ms) <= want_ms // 20, \
+            f"escape cut is {total_ms} ms, expected {want_ms} +-5%"
+        speaking = [s for s in _m1m.escape_shots if s.get("dialogue_events")]
+        assert speaking and speaking[-1] is _m1m.escape_shots[2], \
+            "the notebook line must stay on the last speaking shot (the truck)"
+        events = speaking[-1]["dialogue_events"]
+        assert any(sp == "VASILE" and text == _m1m.ESCAPE_VO_NOTEBOOK and radio
+                   for _ms, sp, text, radio in events), "VO_198 missing from m1.escape"
+        # Audio stays keyed by shot + ms offset inside it (no global frame counter).
+        for _shot in _m1m.escape_shots:
+            for ms, name, _vol in _shot.get("cues", ()):
+                assert 0 <= ms < int(_shot["min_ms"]), (_shot["scene"], ms, name)
     finally:
         I.clear_radio()
 
