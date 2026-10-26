@@ -9,7 +9,7 @@ import pygame
 from core.config import (BAY_DOOR_FRAME_3W, BAY_DOOR_TILE_3W, CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_BG_GAME, C_BULLET, C_KRAP_BLUE, C_ORANGE, C_TERMINAL, C_WHITE, DOOR_FRAME_TILE, DOOR_INTERACT_RANGE, DOOR_TILE, FLOOR_TILE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, MUZZLE_FLASH, SLUM_FLOOR, TILE_SIZE, WAREHOUSE_WALL, WIDTH, bay_door_shadow, bullet_glow as _bullet_glow, draw_letterbox, draw_scanlines, draw_vignette, font_dialogue, font_location_sub, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen, wall_shadow)
 from entities.art_cache import get_blood_decal, get_glow, get_panel_bg
 from entities import corpse
-from entities.enemy_ai import Enemy, enemy_hear_shot
+from entities.enemy_ai import Enemy, enemy_hear_shot, _enemy_shadow
 from core.state import STATE
 from game.art import m1 as _m1art
 from ui.hud import THEME, MiniMap, draw_objective_panel, draw_pinned_radio
@@ -32,7 +32,7 @@ from entities.weapons import (
     MOLOTOV_ENEMY_DAMAGE,
     MOLOTOV_PLAYER_DAMAGE,
 )
-from cutscenes import draw_volkov, draw_commander, draw_biribel
+from cutscenes import draw_commander, draw_biribel
 from missions import walking_sim
 from core import artpack, lighting, staticlayer
 from core import render_util
@@ -1465,24 +1465,89 @@ def _submit_ground_decor(q, cam_x, cam_y):
             STATE.blood_decals.remove(decal)
 
 
+def _volkov_turn(target):
+    """Turn the drawn angle toward target by at most 0.25 rad per draw (shortest arc)."""
+    prev = getattr(STATE, "volkov_draw_angle", None)
+    if prev is None:
+        ang = target
+    else:
+        diff = (target - prev + math.pi) % (2 * math.pi) - math.pi
+        ang = prev + max(-0.25, min(0.25, diff))
+    STATE.volkov_draw_angle = ang
+    return ang
+
+
+def _draw_volkov_topdown(surface, sx, sy, angle, moving, t):
+    """Volkov built like Enemy.draw (centre-based, guard footprint * 1.05), unarmed."""
+    d_x, d_y = math.cos(angle), math.sin(angle)
+    p_x, p_y = -d_y, d_x
+    ph = t * 0.018
+    swing = math.sin(ph) * 4.0 if moving else 0.0
+    sway = math.sin(ph) * 1.6 if moving else math.sin(ph * 0.25) * 0.5
+    sx += p_x * sway
+    sy += p_y * sway
+    surface.blit(_enemy_shadow, (int(sx - 17), int(sy - 5)))
+
+    def pt(f, s):
+        return (sx + d_x * f + p_x * s, sy + d_y * f + p_y * s)
+
+    coat, coat_ol, coat_hi = (46, 46, 60), (14, 14, 20), (66, 66, 84)
+    skin, hair, scarf = (170, 135, 110), (14, 12, 14), (190, 50, 40)
+    glove = (10, 10, 14)
+    hw, hh = 10.5, 6.8                  # guard torso 20x13 * 1.05
+    torso = [pt(-hw, -hh), pt(hw, -hh), pt(hw, hh), pt(-hw, hh)]
+    pygame.draw.polygon(surface, coat, torso)
+    pygame.draw.polygon(surface, coat_ol, torso, 1)
+    pygame.draw.line(surface, coat_hi, pt(-4, 0), pt(4, 0), 2)
+    # Guard arms (shoulder at +-11, width 5), small gloved hands r3, no gun;
+    # they swing opposite each other on the run.
+    for side, sw in ((11, swing), (-11, -swing)):
+        hand = pt(12 + sw, side * 0.55)
+        pygame.draw.line(surface, coat, pt(0, side), hand, 5)
+        pygame.draw.circle(surface, glove, (int(hand[0]), int(hand[1])), 3)
+    if not moving:
+        cig = pt(19, 6)
+        pygame.draw.line(surface, (220, 215, 200), pt(15, 6), cig, 1)
+        pygame.draw.circle(surface, (255, 130, 60), (int(cig[0]), int(cig[1])), 1)
+    # Red scarf mark: short line at the back of the neck, behind the head.
+    pygame.draw.line(surface, scarf, pt(-7, -3), pt(-7, 3), 2)
+    # Head = guard head (r8 at +2), seen from above as slicked-back hair with
+    # a small face patch on the front third and 1px ear slivers.
+    head_r = 8
+    hx, hy = pt(2, 0)
+    pygame.draw.circle(surface, hair, (int(hx), int(hy)), head_r)
+    fx, fy = pt(2 + head_r * 0.45, 0)
+    pygame.draw.circle(surface, skin, (int(fx), int(fy)), 3)
+    for side in (head_r - 1, -(head_r - 1)):
+        ex, ey = pt(2 + 1, side)
+        pygame.draw.circle(surface, skin, (int(ex), int(ey)), 1)
+
+
 def _draw_m1_actors(surface, cam_x, cam_y):
     """Bottles in flight + escape run + corpses + living actors (authored order)."""
     draw_thrown_bottles(surface, cam_x, cam_y)
-    # Volkov stands at his post until the run starts; same foot-y/scale as the run.
+    # Volkov stands at his post until the run starts; same body/scale as the run.
+    # Body is centre-based like Enemy.draw (world centre minus camera).
     vpos = getattr(STATE, "volkov_pos", None)
     if vpos and not STATE.volkov_escape_timer and not STATE.volkov_escaped:
         vx = vpos[0] - cam_x
-        vy = vpos[1] - cam_y + 30
+        vy = vpos[1] - cam_y
         if -100 < vx < WIDTH + 100 and -100 < vy < HEIGHT + 100:
-            facing = bool(STATE.player) and STATE.player.rect.centerx > vpos[0]
-            draw_volkov(surface, int(vx), int(vy), scale=0.35, facing_right=facing)
+            if STATE.player:
+                ang = math.atan2(STATE.player.rect.centery - vpos[1],
+                                 STATE.player.rect.centerx - vpos[0])
+            else:
+                ang = math.pi * 0.75    # down/left
+            _draw_volkov_topdown(surface, vx, vy, _volkov_turn(ang), False, _now_ms())
     if STATE.firefight_triggered and STATE.volkov_escape_timer > 0:
         if STATE.volkov_escape_pos and not STATE.volkov_escaped:
             vx = STATE.volkov_escape_pos[0] - cam_x
-            vy = STATE.volkov_escape_pos[1] - cam_y + 30
+            vy = STATE.volkov_escape_pos[1] - cam_y
             if -100 < vx < WIDTH + 100 and -100 < vy < HEIGHT + 100:
-                facing = STATE.volkov_escape_pos[0] < (15 * TILE_SIZE + 32)
-                draw_volkov(surface, int(vx), int(vy), scale=0.35, facing_right=facing)
+                # Same target as the escape update: the bay door.
+                ang = math.atan2(29 * TILE_SIZE + 32 - STATE.volkov_escape_pos[1],
+                                 15 * TILE_SIZE + 32 - STATE.volkov_escape_pos[0])
+                _draw_volkov_topdown(surface, vx, vy, _volkov_turn(ang), True, _now_ms())
         if STATE.commander_escape_pos and not STATE.commander_escaped:
             kx = STATE.commander_escape_pos[0] - cam_x
             ky = STATE.commander_escape_pos[1] - cam_y + 30

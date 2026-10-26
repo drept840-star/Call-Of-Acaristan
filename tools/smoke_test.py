@@ -4129,6 +4129,7 @@ def check_m1_volkov_escapes_both_routes():
     spots them and latches the alarm, the radio never repeats the warning, Volkov
     runs and VO_094 plays once, no re-trigger. Loud route - no standoff, warning
     once, Volkov escapes, VO_094 once. The water-damaged leaf builds headless."""
+    import math
     from unittest.mock import patch
     from core import interactions as I
     from core.state import STATE
@@ -4174,11 +4175,13 @@ def check_m1_volkov_escapes_both_routes():
         from missions.m1 import draw as m1d
         vx, vy = STATE.volkov_pos
         surf = pygame.Surface((m1d.WIDTH, m1d.HEIGHT))
-        with patch.object(m1d, "draw_volkov") as dv:
+        STATE.volkov_draw_angle = None       # no turn carried over from earlier checks
+        with patch.object(m1d, "_draw_volkov_topdown") as dv:
             m1d._draw_m1_actors(surf, int(vx - m1d.WIDTH // 2), int(vy - m1d.HEIGHT // 2))
         assert dv.call_count == 1, "static Volkov not drawn before the alarm"
-        want_right = STATE.player.rect.centerx > vx
-        assert dv.call_args.kwargs.get("facing_right") == want_right, dv.call_args
+        _s, _sx, _sy, ang, moving, _t = dv.call_args.args
+        to_p = math.atan2(STATE.player.rect.centery - vy, STATE.player.rect.centerx - vx)
+        assert not moving and abs(math.remainder(ang - to_p, math.tau)) < 1e-6, dv.call_args
         seen, spotted = [], False
         for _ in range(1500):
             so = STATE._m1_standoff
