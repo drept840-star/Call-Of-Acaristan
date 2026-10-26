@@ -44,7 +44,7 @@ def _row_str(r) -> str:
     return r if isinstance(r, str) else "".join(r)      # some generators return list-of-chars rows
 
 
-def build_level(level_id: str, name: str, grid) -> dict:
+def build_level(level_id: str, name: str, grid, triggers=(), lights=()) -> dict:
     rows = [_row_str(r) for r in grid]
     markers = _MARKERS_BY_MISSION.get(level_id.split(".")[0], {"P": _MARKERS["P"]})
     objects = []
@@ -56,7 +56,8 @@ def build_level(level_id: str, name: str, grid) -> dict:
                                 "props": dict(props, marker=ch)})
     mission = level_id.split(".")[0]
     return {"schema": "ae.level/1", "id": level_id, "name": name, "tile_size": 64,
-            "layers": {"floor": rows}, "objects": objects, "triggers": [], "paths": [], "lights": [],
+            "layers": {"floor": rows}, "objects": objects, "triggers": list(triggers), "paths": [],
+            "lights": list(lights),
             "decor": [], "procedural_decor": [], "metadata": {"mission": mission}}
 
 
@@ -75,7 +76,9 @@ def export_all(dry_run: bool = False) -> list[str]:
     for level_id, mod_name, attr, name in SPECS:
         mod = importlib.import_module(mod_name)
         grid = getattr(mod, attr)
-        data = build_level(level_id, name, grid)
+        prefix = level_id.split(".")[0].upper()     # M1_TRIGGERS / M1_LIGHTS, else none
+        data = build_level(level_id, name, grid, getattr(mod, prefix + "_TRIGGERS", ()),
+                           getattr(mod, prefix + "_LIGHTS", ()))
         text = json.dumps(data, indent=1, sort_keys=False) + "\n"
         path = os.path.join(OUT_DIR, level_id + ".level.json")
         if dry_run:

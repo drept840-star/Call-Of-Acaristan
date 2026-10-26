@@ -2,12 +2,13 @@
 import math
 import pygame
 from core.config import (
-    TILE_SIZE, audio, Particle, C_BIRIBEL, C_VOLKOV,
+    TILE_SIZE, audio, C_BIRIBEL, C_VOLKOV,
     DOOR_INTERACT_RANGE, DOOR_MANUAL_OVERRIDE, DOOR_OPEN_RANGE,
 )
 from core.state import STATE
 from fx.effects import shake
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
+import game.dialogues as _dialogues  # RPE6 P7: radio line text from m1.radio
 class Door:
     def __init__(self, x, y, is_bay=False):
         self.rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
@@ -102,6 +103,8 @@ def interact_door():
 def handle_interact():
     if not STATE.player or STATE.player_dead:
         return
+    if getattr(STATE, "_m1_standoff", None):      # M1 WP6: frozen standoff
+        return
     for desk in STATE.desks:
         if math.hypot(
             STATE.player.rect.centerx - desk["x"],
@@ -123,14 +126,9 @@ def handle_interact():
                     "BREACH IN PROGRESS!", (255, 100, 30), 90,
                 ])
                 return
-            nearby = [
-                e for e in STATE.enemies
-                if math.hypot(
-                    e.rect.centerx - STATE.NOTEBOOK_POS[0],
-                    e.rect.centery - STATE.NOTEBOOK_POS[1],
-                ) < 300
-            ]
-            if not nearby:
+            # M1 rework WP5: the safe opens unless a guard can see you right now
+            # (missions.m1.stealth sets the flag every frame).
+            if not getattr(STATE, "_m1_player_seen", False):
                 STATE.safe_keypad_active = True
                 STATE.safe_keypad_code = ""
                 STATE.safe_keypad_target = "742"
@@ -140,7 +138,7 @@ def handle_interact():
             else:
                 STATE.floating_texts.append([
                     STATE.NOTEBOOK_POS[0], STATE.NOTEBOOK_POS[1] - 20,
-                    "CLEAR HOSTILES FIRST", (220, 60, 60), 90,
+                    "THEY CAN SEE YOU", (220, 60, 60), 90,
                 ])
             return
     interact_door()
@@ -159,10 +157,10 @@ def _on_safe_opened(success):
             if d.is_bay:
                 d.locked = True
                 d.target_open = False
-        # Subtle twist
-        trigger_radio_chatter(
-            'VASILE: "\u2026Some of this was already in our files."'
-        )
+        # Subtle twist. M1 WP6: Biribel's leaf line (notebook_leaf) then
+        # files_already are queued by missions.m1.update once NOTEBOOK_INSPECT
+        # closes - that state blocks the radio and cut or dropped them here.
+        STATE._m1_leaf_line_pending = True
         # Start staged breach (not instant - builds over ~6 seconds)
         STATE.breach_stage = 1
         STATE.breach_stage_timer = 0
@@ -186,11 +184,11 @@ def _on_safe_opened(success):
             getattr(STATE, "safe_keypad_wrong_attempts", 0) + 1)
         n = STATE.safe_keypad_wrong_attempts
         if n == 1:
-            line = 'VASILE: "The memos said something about a shipment number\u2026"'
+            line = 'VASILE: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_1", "The memos said something about a shipment number\u2026"))
         elif n == 2:
-            line = 'BIRIBEL: "Shipment 7742. Only the last three digits."'
+            line = 'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_2", "Shipment 7742. Only the last three digits."))
         else:
-            line = 'BIRIBEL: "7\u2026 4\u2026 2. Has to be."'
+            line = 'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_3", "7\u2026 4\u2026 2. Has to be."))
         trigger_radio_chatter(line, color=C_BIRIBEL, duration=300, priority=1)
 # ── Radio director ────────────────────────────────────────────────
 # Transmissions enqueue instead of firing instantly. The per-frame pump
@@ -246,6 +244,7 @@ _CUTSCENE_REQUEST_FLAGS = (
 _DIALOGUE_FLAGS = (
     "walk_dialogue_active", "m4_dialogue_active", "m5_dialogue_active",
     "mission2_evidence_cinematic_active",
+    "_m1_standoff",
 )
 
 
@@ -357,6 +356,8 @@ def clear_radio():
     """Drop queued transmissions (mission start / restart / death)."""
     global _radio_live_until, _radio_live
     _radio_queue.clear()
+    # A quit mid-standoff must not leave the M1 WP6 radio block standing.
+    STATE._m1_standoff = None
     _radio_live = None
     _radio_live_until = _radio_clock
     _remove_radio_pins()
@@ -508,7 +509,10 @@ def trigger_alarm_early():
         return
     STATE.stealth_failed = True
     STATE.firefight_triggered = True
-    STATE.mission_phase = "firefight"
+    # An alarm after the safe opened must not undo "escape": the truck
+    # hotwire and MISSION_COMPLETE only run in that phase.
+    if STATE.mission_phase != "escape":
+        STATE.mission_phase = "firefight"
     STATE.quiet_entry = False
     # Cancel any active sighting
     if STATE.volkov_sighting_timer > 0:
@@ -517,10 +521,12 @@ def trigger_alarm_early():
     if not STATE.volkov_escaped and STATE.volkov_pos:
         STATE.volkov_escape_pos = list(STATE.volkov_pos)
         STATE.volkov_escape_timer = 90
-        trigger_radio_chatter(
-            'VOLKOV: "Read it before you hand it over!"',
-            color=C_VOLKOV, priority=1,
-        )
+        # M1 WP6: the quiet-route standoff already spoke this line in person.
+        if not getattr(STATE, "_m1_standoff_said", False):
+            trigger_radio_chatter(
+                'VOLKOV: "{}"'.format(_dialogues.line("m1.radio", "alarm_volkov", "Read it before you hand it over!")),
+                color=C_VOLKOV, priority=1,
+            )
     STATE.volkov_escaped = False
     STATE.commander_escaped = False
     shake(12)
@@ -535,50 +541,5 @@ def trigger_alarm_early():
     ])
     STATE.radio_chatter_stage = 1
     trigger_radio_chatter(
-        'VASILE: "Biribel, they spotted you! Alarm is active!"'
-    )
-def trigger_mag_ambush():
-    """Execute the actual breach - spawn MAG enemies, blow bay doors."""
-    from entities.enemy_ai import Enemy
-    STATE.radio_chatter_stage = 6
-    shake(28)
-    audio.play("explosion", volume=0.8)
-    audio.play("breach", volume=0.7)
-    # Block the stairs
-    STATE.walls.append(pygame.Rect(
-        2 * TILE_SIZE, 23 * TILE_SIZE, TILE_SIZE, TILE_SIZE))
-    STATE.walls.append(pygame.Rect(
-        3 * TILE_SIZE, 23 * TILE_SIZE, TILE_SIZE, TILE_SIZE))
-    # Force bay doors open
-    for d in STATE.doors:
-        if d.is_bay:
-            d.locked = False
-            d.target_open = True
-            d.anim_progress = 1.0
-            d.collision_disabled = True
-            d.manual_timer = 9999
-    # Spawn MAG enemies
-    spawns = [
-        (14 * TILE_SIZE + 16, 25 * TILE_SIZE + 16),
-        (16 * TILE_SIZE + 16, 25 * TILE_SIZE + 16),
-    ]
-    # Stealth penalty: extra enemy if alarm was triggered early
-    if not STATE.quiet_entry:
-        spawns.append((15 * TILE_SIZE + 16, 25 * TILE_SIZE + 16))
-    for mx, my in spawns:
-        e = Enemy(mx, my)
-        e.alerted = True
-        e.state = "CHASE"
-        e.last_seen_pos = (14 * TILE_SIZE + 32, 22 * TILE_SIZE + 32)
-        e.is_ambush_enemy = True
-        e.hp = 80
-        e.fire_cooldown = 90
-        STATE.enemies.append(e)
-        for _ in range(25):
-            STATE.particles.append(Particle(mx, my, (180, 180, 180)))
-        for _ in range(15):
-            STATE.particles.append(Particle(mx, my, (255, 120, 30)))
-        STATE.breach_markers.append([mx, my, 180])
-    trigger_radio_chatter(
-        'VASILE: "They blocked the stairs! Hotwire the delivery truck!"'
+        'VASILE: "{}"'.format(_dialogues.line("m1.radio", "alarm_vasile", "Biribel, they spotted you! Alarm is active!"))
     )

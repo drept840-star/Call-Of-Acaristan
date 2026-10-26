@@ -3,6 +3,7 @@
 Usage:
     py zip_project.py [--output <name.zip>] [--timestamp] [--include-venv] [--no-upload]
     py zip_project.py --slim [--with-tests] [--output <name.zip>] [--no-upload]
+    py zip_project.py --handoff [--output <name.zip>] [--no-upload]
 
 The zip is ALWAYS written to disk (default: ``<project-dir-name>.zip`` next to
 this file, overwritten each run). The zip is then uploaded to Pixeldrain via
@@ -36,6 +37,15 @@ traces) and never slim-filters inside it. All-or-nothing on purpose: a bundle
 with tests can run the full gate (``python tools/ae_ci.py``) and the
 replay-parity oracle after unpacking; without them it is play-only and the
 baseline rows would fail on missing oracles.
+
+``--handoff`` builds a review bundle from the CURRENT working tree (uncommitted
+edits included; ``.git`` is never packed - ship a ``git bundle`` alongside it):
+``--slim --with-tests`` plus ``.wolf/`` (agent state), minus
+``tests/golden/_verify/`` (the previous ``ae_golden.py verify`` run's diff/now
+frames, rewritten on demand). Every committed test baseline survives, so
+``python tools/ae_ci.py`` still runs right after unpacking. Output is
+``<project-dir-name>-handoff.zip`` with its own Pixeldrain tracker and the same
+128 MiB cap. ``--no-upload`` skips the upload.
 
 Pixeldrain requires an API key (anonymous upload is not supported). Provide it
 via ``--api-key`` or the ``PIXELDRAIN_API_KEY`` env var. Get one at
@@ -81,9 +91,12 @@ PIXELDRAIN_API = "https://pixeldrain.com/api"
 # upload, never the full snapshot link (and vice versa).
 LAST_ID_FILE = PROJECT_ROOT / ".pixeldrain_last_id"
 LAST_ID_FILE_SLIM = PROJECT_ROOT / ".pixeldrain_last_id_slim"
+LAST_ID_FILE_HANDOFF = PROJECT_ROOT / ".pixeldrain_last_id_handoff"
 
 
-def last_id_file(slim: bool) -> Path:
+def last_id_file(slim: bool, handoff: bool = False) -> Path:
+    if handoff:
+        return LAST_ID_FILE_HANDOFF
     return LAST_ID_FILE_SLIM if slim else LAST_ID_FILE
 # Remembers the API key so --api-key only has to be passed once.
 API_KEY_FILE = PROJECT_ROOT / ".pixeldrain_api_key"
@@ -95,7 +108,7 @@ ALWAYS_EXCLUDE_DIRS = {
     "_cut_frames", "room_audit_shots", "prop_audit",
 }
 ALWAYS_EXCLUDE_FILES = {"*.py[cod]", "*$py.class", ".pixeldrain_api_key", ".pixeldrain_last_id",
-                        ".pixeldrain_last_id_slim"}
+                        ".pixeldrain_last_id_slim", ".pixeldrain_last_id_handoff"}
 
 # Extra excludes applied ONLY with --slim (playable bundle, not dev snapshot).
 # These are regenerable outputs, dev evidence, or files the game rebuilds /
@@ -124,6 +137,11 @@ SLIM_EXCLUDE_FILES = {
     "save_data.json*", "settings.json*", "profile*.json*",
     "*.xlsx", "*.patch", "tools/tools.zip",
 }
+# Extra excludes applied ONLY with --handoff (review bundle). Golden verify
+# output is rewritten by every ``ae_golden.py verify`` run, so shipping the last
+# run's diff/now frames (~62 MiB) would blow the 128 MiB cap without pinning
+# anything the committed baselines do not already pin.
+HANDOFF_EXCLUDE_DIRS = {"tests/golden/_verify"}
 
 
 def load_gitignore(root: Path) -> list[str]:
@@ -166,9 +184,11 @@ def _matches_any(rel_posix: str, name: str, patterns: set[str]) -> bool:
 
 
 def iter_files(root: Path, patterns: list[str], include_venv: bool = False, slim: bool = False,
-               with_radio_cache: bool = False, with_tests: bool = False):
+               with_radio_cache: bool = False, with_tests: bool = False, handoff: bool = False):
     slim_dirs = set(SLIM_EXCLUDE_DIRS)
     slim_files = set(SLIM_EXCLUDE_FILES)
+    if handoff:
+        slim_dirs.discard(".wolf")  # reviewers need the agent handoff state
     if slim and with_radio_cache:
         # Keep the pre-rendered radio FX cache (~28 MiB): faster first
         # mission load, fully offline. Still drops the bore binary.
@@ -192,6 +212,10 @@ def iter_files(root: Path, patterns: list[str], include_venv: bool = False, slim
             pass
         elif is_excluded(rel_posix, path.name, path.is_dir(), patterns):
             continue
+        # --handoff keeps the committed test baselines but not the previous
+        # verify run's diff/now frames (tools/ae_golden.py rewrites them).
+        if handoff and _matches_any(rel_posix, path.name, HANDOFF_EXCLUDE_DIRS):
+            continue
         # With --with-tests nothing inside tests/ is slim-filtered: the oracle
         # inputs are *.txt (scene traces), *.json (manifests, api snapshot)
         # and *.png (golden frames) and all of them must survive.
@@ -213,17 +237,22 @@ def iter_files(root: Path, patterns: list[str], include_venv: bool = False, slim
             yield path
 
 
-def default_output(slim: bool = False) -> Path:
-    suffix = "-slim" if slim else ""
-    return PROJECT_ROOT / f"{PROJECT_ROOT.name}{suffix}.zip"
+def variant_suffix(slim: bool, handoff: bool) -> str:
+    if handoff:
+        return "-handoff"
+    return "-slim" if slim else ""
+
+
+def default_output(slim: bool = False, handoff: bool = False) -> Path:
+    return PROJECT_ROOT / f"{PROJECT_ROOT.name}{variant_suffix(slim, handoff)}.zip"
 
 
 def zip_project(output: Path | None, include_venv: bool = False, quiet: bool = False,
                 slim: bool = False, with_radio_cache: bool = False,
-                with_tests: bool = False) -> Path:
+                with_tests: bool = False, handoff: bool = False) -> Path:
     patterns = load_gitignore(PROJECT_ROOT)
     if output is None:
-        output = default_output(slim)
+        output = default_output(slim, handoff)
     if output.exists():
         output.unlink()
 
@@ -231,7 +260,7 @@ def zip_project(output: Path | None, include_venv: bool = False, quiet: bool = F
     unzipped = 0
     top_level: set[str] = set()
     with ZipFile(output, "w", ZIP_DEFLATED, compresslevel=9) as zf:
-        for path in iter_files(PROJECT_ROOT, patterns, include_venv, slim, with_radio_cache, with_tests):
+        for path in iter_files(PROJECT_ROOT, patterns, include_venv, slim, with_radio_cache, with_tests, handoff):
             rel = path.relative_to(PROJECT_ROOT)
             top_level.add(rel.parts[0])
             zf.write(path, rel)
@@ -368,6 +397,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="With --slim: keep tests/ whole (~40 MiB: unit tests, api snapshot, golden/loop/"
                          "replay baselines, scene traces) so the unpacked bundle can run the full gate "
                          "(tools/ae_ci.py) and the replay-parity oracle. Ignored without --slim.")
+    ap.add_argument("--handoff", action="store_true",
+                    help="Review bundle from the current working tree (uncommitted edits included): --slim "
+                         "with --with-tests, plus .wolf/ agent state, minus tests/golden/_verify/ scratch "
+                         "frames. Own output name (<dir>-handoff.zip) and Pixeldrain tracker; same 128 MiB cap.")
     ap.add_argument("--no-upload", action="store_true", help="Only build the zip, skip the Pixeldrain upload.")
     ap.add_argument("--api-key", default=None, help="Pixeldrain API key (saved to .pixeldrain_api_key for future runs).")
     ap.add_argument(
@@ -391,24 +424,25 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Saved Pixeldrain API key to {saved} (future runs need no --api-key).")
             return 0
 
+        slim = args.slim or args.handoff
         if args.output:
             output = Path(args.output).resolve()
         elif args.timestamp:
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            suffix = "-slim" if args.slim else ""
-            output = PROJECT_ROOT / f"{PROJECT_ROOT.name}{suffix}_{stamp}.zip"
+            output = PROJECT_ROOT / f"{PROJECT_ROOT.name}{variant_suffix(slim, args.handoff)}_{stamp}.zip"
         else:
             output = None  # zip_project() falls back to the stable default name
 
         zip_path = zip_project(output, include_venv=args.include_venv, quiet=not verbose and not args.no_upload,
-                               slim=args.slim, with_radio_cache=args.with_radio_cache, with_tests=args.with_tests)
+                               slim=slim, with_radio_cache=args.with_radio_cache,
+                               with_tests=args.with_tests or args.handoff, handoff=args.handoff)
         if not args.no_upload:
             if (args.api_key or "").strip() and not args.no_save_api_key:
                 saved = save_api_key(args.api_key)
                 if verbose:
                     print(f"Saved Pixeldrain API key to {saved} (future runs need no --api-key).")
             api_key = get_api_key(args.api_key)
-            id_file = last_id_file(args.slim)
+            id_file = last_id_file(slim, args.handoff)
             old_id = id_file.read_text(encoding="utf-8").strip() if id_file.is_file() else ""
             info = upload_pixeldrain(zip_path, api_key)
             file_id = info["id"]

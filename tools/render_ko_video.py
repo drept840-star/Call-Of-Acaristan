@@ -280,7 +280,7 @@ def capture(router, ticks, label):
 
 
 print("TRAILER SCENES (60 ticks = 1s; preroll ticks are UNFED dead-time kills):")
-print("  A      M1 warehouse shootout   goals [(6,5),(10,11),(14,12),(18,11)]  capture 360 ticks (6.0s)")
+print("  A      M1 warehouse shootout   goals [(6,15),(10,21),(14,22),(18,21)]  capture 360 ticks (6.0s)")
 print("  CARD   ACT I - BLACK NOTEBOOK (1.8s)")
 print("  B      M3 cell breakout/shiv   goals [(32,10),(33,12),(35,13),(38,13),(40,14),(41,15)]  capture 360 ticks (6.0s)")
 print("  CARD   ACT III - THE BREAKOUT (1.8s)")
@@ -291,7 +291,7 @@ print("  OUTRO  CALL OF ACARISTAN / M1-M3 / wishlist (3.0s)")
 from missions.m1 import map as m1map  # lazy: after game boot imports
 gc.start_mission()
 screen = pygame.display.get_surface()
-ra = Router([(6, 5), (10, 11), (14, 12), (18, 11)],
+ra = Router([(6, 15), (10, 21), (14, 22), (18, 21)],
             grid=_grid_from_chars(m1map.mission1_map, ("C", "W")))
 preroll_until_contact(ra, "A")
 capture(ra, 360, "A")

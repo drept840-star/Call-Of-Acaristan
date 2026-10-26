@@ -18,7 +18,7 @@ import os
 
 from engine.dialogue import load_dialogue
 
-__all__ = ["DIALOGUES_DIR", "use_legacy", "dialogue", "beats"]
+__all__ = ["DIALOGUES_DIR", "use_legacy", "dialogue", "beats", "line"]
 
 DIALOGUES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "content", "dialogue")
 
@@ -71,3 +71,14 @@ def beats(dialogue_id: str, legacy_beats, colors, typed: bool = False):
         out.append(beat)
         node_id = node.get("next")
     return out
+
+
+def line(dialogue_id: str, node_id: str, legacy_text: str) -> str:
+    """Text of one node, or ``legacy_text`` in legacy mode or when the node is missing."""
+    if use_legacy():
+        return legacy_text
+    try:
+        text = dialogue(dialogue_id).node(node_id).get("text")
+    except KeyError:
+        return legacy_text
+    return text or legacy_text

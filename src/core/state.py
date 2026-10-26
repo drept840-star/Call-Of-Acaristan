@@ -386,6 +386,24 @@ class GameState:
         self.mission_end_time = 0
         self.escape_reinforcement_timer = 0
         self.escape_reinforcement_count = 0
+        # M1 WP7: breach waves, CIOCAN's charge, exfil van, bay-door fire, truck smoke
+        self.m1_wave = 0                    # last wave spawned (0 = before the breach, 3 = done)
+        self.m1_wave_timer = 0              # frames since that wave spawned
+        self.m1_wave_loud = False           # alarm latched at the breach: 6-man wave 1, wave 3 on
+        self.m1_ciocan_spawned = False
+        self.m1_ciocan_mode = ""            # "" / windup / dash / stun
+        self.m1_ciocan_timer = 0
+        self.m1_ciocan_cooldown = 0
+        self.m1_ciocan_dir = (0.0, 0.0)
+        self.m1_ciocan_dash_left = 0.0
+        self.m1_ciocan_last_hp = 0
+        self.m1_exfil_van_triggered = False
+        self.exfil_van_arrived = False
+        self.m1_fire_spread = 0             # bay-door fire tiles grown per side
+        self.m1_fire_timer = 0
+        self.m1_hotwire_open_frames = 0     # frames since the hotwire panel first opened
+        self.m1_smoke_tick = 0
+        self.m1_smoke_said = False
         self.active_read_note = None
         # ─── Stats ────────────────────────────────────────────────────
         self.hostiles_killed = 0

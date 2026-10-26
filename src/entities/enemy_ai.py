@@ -134,6 +134,10 @@ class Enemy:
     is_breach_enemy = False   # breach wave: extra fire sparks / ignition chance
     fire_weakness = 1.0       # molotov damage multiplier
     sight_mul = 1.0           # per-guard sight scale (M5 night quarter)
+    is_miniboss = False       # M1 CIOCAN (missions.m1.roles)
+    attack_range = None       # CHASE -> ATTACK distance; None = ENEMY_ATTACK_RANGE (M1 roles)
+    hold_range = None         # ATTACK (min, max) hold band; None = 0.5-0.8 x attack range
+    body_tint = None          # uniform colour override (M1 CIOCAN + his charge flash)
     _dt_mul = 1.0             # per-frame dt multiplier cached by update() for _apply_move
 
     def __init__(self, x, y):
@@ -248,7 +252,10 @@ class Enemy:
             if len(points) == 4:
                 break
         return points
-    def update(self, px, py, walls, bullets, particles, enemies=None, fire_zones=None):
+    def update(self, px, py, walls, bullets, particles, enemies=None, fire_zones=None,
+               sight_walls=None, stealth=False):
+        # M1 stealth (WP5): ``sight_walls`` (walls minus see-through fences) feed the
+        # LOS test; ``stealth`` hands calm detection to missions.m1.stealth.
         ox, oy = self.rect.centerx, self.rect.centery
         # Delta-time multiplier: speed values in this module are in px/frame,
         # so multiply by (60 * dt) to get px this frame at any FPS.
@@ -270,7 +277,9 @@ class Enemy:
         self._prev_state = self.state
         if self.flinch_timer > 0:
             self.flinch_timer -= 1
-        can_see = self._can_see(px, py, walls)
+        can_see = self._can_see(px, py, walls if sight_walls is None else sight_walls)
+        if can_see and stealth and not self.alerted:
+            can_see = False              # the suspicion meter decides, not one glimpse
         if can_see:
             self.last_seen_pos = (px, py)
             self.lost_sight_timer = 0
@@ -283,7 +292,7 @@ class Enemy:
         cone_half = math.radians(80) if self.alerted else math.radians(45)
         dist_to_player = math.hypot(px - self.rect.centerx, py - self.rect.centery)
         detect_range = ENEMY_DETECT_RANGE * (2 if self.alerted else 1)
-        if not self.alerted and dist_to_player < detect_range:
+        if not self.alerted and not stealth and dist_to_player < detect_range:
             in_sight_cone = False
             if dist_to_player < 115 and can_see:
                 # Close-range peripheral awareness. Stops enemies being blind when
@@ -453,7 +462,7 @@ class Enemy:
                 tx, ty = self.last_seen_pos
                 self._update_pathfinding(tx, ty, walls)
                 dist_to_last = math.hypot(tx - self.rect.centerx, ty - self.rect.centery)
-                if can_see and dist_to_player <= ENEMY_ATTACK_RANGE:
+                if can_see and dist_to_player <= (self.attack_range or ENEMY_ATTACK_RANGE):
                     self.state = "ATTACK"
                     self.path = []
                 elif dist_to_last < 32 and not can_see and self.lost_sight_timer > 45:
@@ -481,10 +490,10 @@ class Enemy:
                     flinch_jitter = math.sin(_now_ms() * 0.2) * 0.15
                     target_a += flinch_jitter
                 self._ease_toward_angle(target_a, 0.10)
-                optimal_min = ENEMY_ATTACK_RANGE * 0.50
-                optimal_max = ENEMY_ATTACK_RANGE * 0.80
+                optimal_min, optimal_max = self.hold_range or (
+                    ENEMY_ATTACK_RANGE * 0.50, ENEMY_ATTACK_RANGE * 0.80)
                 # Use a larger threshold before going back to CHASE
-                out_of_range = dist_to_player > ENEMY_ATTACK_RANGE * 1.5
+                out_of_range = dist_to_player > (self.attack_range or ENEMY_ATTACK_RANGE) * 1.5
                 if out_of_range:
                     self.state = "CHASE"
                 else:
@@ -898,6 +907,8 @@ class Enemy:
         else:
             uniform_col = C_IPA_UNIFORM
             skin_col = C_ENEMY_SKIN
+        if self.body_tint is not None:
+            uniform_col = self.body_tint
         body_w, body_h = 20, 13
         cos_b, sin_b = math.cos(a), math.sin(a)
         torso_pts = []

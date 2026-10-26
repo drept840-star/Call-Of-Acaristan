@@ -1,0 +1,149 @@
+{
+ "family": "m1_street",
+ "frames": {
+  "fence_mesh": {
+   "anchor": [
+    0,
+    0
+   ],
+   "blocks": "move_only",
+   "rect": [
+    0,
+    0,
+    64,
+    64
+   ]
+  },
+  "fence_post": {
+   "anchor": [
+    0,
+    0
+   ],
+   "blocks": "move_only",
+   "rect": [
+    66,
+    0,
+    64,
+    64
+   ]
+  },
+  "lamp_post": {
+   "anchor": [
+    32,
+    76
+   ],
+   "rect": [
+    132,
+    0,
+    64,
+    88
+   ],
+   "state": "on"
+  },
+  "lamp_post_off": {
+   "anchor": [
+    32,
+    76
+   ],
+   "rect": [
+    198,
+    0,
+    64,
+    88
+   ],
+   "state": "off"
+  },
+  "rubble_0": {
+   "anchor": [
+    32,
+    42
+   ],
+   "pickup": "brick",
+   "rect": [
+    264,
+    0,
+    64,
+    64
+   ],
+   "variant": 0
+  },
+  "rubble_1": {
+   "anchor": [
+    32,
+    42
+   ],
+   "pickup": "brick",
+   "rect": [
+    330,
+    0,
+    64,
+    64
+   ],
+   "variant": 1
+  },
+  "shutter_3w": {
+   "anchor": [
+    0,
+    0
+   ],
+   "rect": [
+    396,
+    0,
+    192,
+    64
+   ],
+   "tiles_wide": 3
+  },
+  "van_delivery": {
+   "anchor": [
+    14,
+    14
+   ],
+   "facing": "east",
+   "rect": [
+    590,
+    0,
+    180,
+    84
+   ],
+   "rect_size": [
+    152,
+    56
+   ]
+  }
+ },
+ "image": "spr_m1_street.png",
+ "meta": {
+  "anchor": "fence/lamp/rubble = world pos, shutter = tile top-left, van = collision-rect top-left",
+  "fence": {
+   "blocks": "movement only - sight passes; draw over the floor",
+   "frame": "64x64, alpha",
+   "run": "alternate fence_post / fence_mesh so posts land every other tile"
+  },
+  "lamp_post": {
+   "anchor": "base centre",
+   "lens": "sodium",
+   "reach_px": 62
+  },
+  "missing_floor": "wet asphalt is the art-pack tile . (t_dot_0..3) / s (t_s_0..3)",
+  "shutter_3w": {
+   "draw_at": "col * 64, row * 64",
+   "tiles_wide": 3
+  },
+  "tile": 64,
+  "van_delivery": {
+   "facing": "east",
+   "rect_size": [
+    152,
+    56
+   ]
+  }
+ },
+ "scale": 1,
+ "sheet": "spr_m1_street",
+ "size": [
+  770,
+  88
+ ],
+ "tile_size": 64
+}

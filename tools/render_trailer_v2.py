@@ -507,11 +507,11 @@ def mux_1080p_trailer_mix(silent_mp4, bed_wav, sfx_wav, vo_wav, out_mp4):
 # char-grids list "D" in solids, so A* can never route through (unlocked,
 # auto-opening) doors - every cross-door goal degrades to a beeline and the
 # bot shuffles against the door. Strip "D" (locked doors are still sealed at
-# runtime by overlay_rects/locked collision rects - verified: M1 gate (14,15),
+# runtime by overlay_rects/locked collision rects - verified: M1 gate (14,25),
 # archives vault (24-25,6)/(36,8-9)).
 # New m1/m3arch goals push through the mission instead of looping spawn:
-#   m1: south-first breach through the row-10 door into the mid-room fight
-#       (E cluster + commander) - breach ~t=4, ends dueling at (18,11).
+#   m1: south-first breach through the row-20 door into the mid-room fight
+#       (E cluster + commander) - breach ~t=4, ends dueling at (18,21).
 #   m3arch: foyer -> row-38 doors -> corridor (atrium guard contact ~t=1) ->
 #       west door -> catalog stacks aisle -> (12,22). Zero jitter events.
 rt.TOURS = {
@@ -520,7 +520,7 @@ rt.TOURS = {
 }
 rt.TOURS = dict(rt.TOURS, **{
     "m1": [tuple(s for s in rt.TOURS["m1"][0]), "m1",
-           [(8, 2), (8, 6), (8, 9), (9, 12), (14, 12), (18, 11)]],
+           [(8, 12), (8, 16), (8, 19), (9, 22), (14, 22), (18, 21)]],
     "m3break": [tuple(s for s in rt.TOURS["m3break"][0]), "cell",
                 [(32, 10), (33, 12), (35, 13), (38, 13), (40, 14), (41, 15)]],
     "m3arch": [tuple(s for s in rt.TOURS["m3arch"][0]), "archives",

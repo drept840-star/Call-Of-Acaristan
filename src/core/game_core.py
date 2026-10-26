@@ -373,6 +373,11 @@ def game_draw(fcx, fcy):
         _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m5.game_draw(x, y), name="m5.game_draw",
                   submit_hook=hook)
         return None
+    if _active_mission_tag() == "m1":
+        # M1 submits its own drawables (Phase 6 peel-off, WP1); the facade attribute is looked up at call time.
+        _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m1.game_draw(x, y), name="m1.game_draw",
+                  submit_hook=hook)
+        return None
     result = []
 
     def _mission_draw(surface, cam_x, cam_y):

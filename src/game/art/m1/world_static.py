@@ -7,7 +7,7 @@ from game.art._layers import render_callback_layer, scaled
 VARIANTS = 1
 VARIANT_NAMES = ("default",)
 ORIGIN = (0, 0)
-BAKE_DEPS = ("missions.m1.draw",)
+BAKE_DEPS = ("missions.m1.draw", "missions.m1.map")
 BAKED_ONLY = True
 
 

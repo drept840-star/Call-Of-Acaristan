@@ -71,9 +71,6 @@ briefing_timer = 0
 briefing_kind = "warehouse"
 BRIEFING_DURATION = 360
 
-escape_cutscene_timer = 0
-ESCAPE_CUTSCENE_DURATION = 1080
-
 # Multiplayer easter egg
 mp_state = "browser"
 mp_timer = 0
@@ -1122,7 +1119,8 @@ def start_briefing(kind="warehouse"):
 def finish_briefing():
     if briefing_kind == "warehouse":
         gc.start_mission(preserve_timer=True)
-        gsm.transition("GAME")
+        start_cutscene(gc.dropoff_shots, "GAME", use_fades=True)
+        trigger_transition("CUTSCENE")
         pygame.mouse.set_visible(False)
 
 
@@ -2745,6 +2743,15 @@ class _CutsceneState(GameState):
             mission_complete_timer = 0
             mission_complete_fade = 0
             pygame.mouse.set_visible(True)
+        elif after == "MISSION_COMPLETE":
+            # M1 escape cut (m1.escape) over: the results card, whose SPACE
+            # handler starts the M2 intro - the same hand-off the old
+            # ESCAPE_CUTSCENE state did.
+            gc.mission_end_time = _now_ms()
+            gsm.transition("MISSION_COMPLETE")
+            mission_complete_timer = 0
+            mission_complete_fade = 0
+            pygame.mouse.set_visible(True)
         elif after == "MISSION3_COMPLETE":
             gsm.transition("MISSION_COMPLETE")
             mission_complete_timer = 0
@@ -2957,7 +2964,9 @@ class _CutsceneState(GameState):
             return
         rain_scenes = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy",
                        "route12_checkpoint", "route12_tanker", "route12_aftermath",
-                       "seby_pickup_body", "seby_pickup_reach", "seby_pickup_raise"}
+                       "seby_pickup_body", "seby_pickup_reach", "seby_pickup_raise",
+                       "m1_escape_dashboard", "m1_escape_closeup",
+                       "m1_escape_truck", "m1_escape_rear", "m1_dropoff"}
         amb = {"ambient_drone"}
         if shot["scene"] == "m5_shadow_finale":
             # Dedicated stereo river/rain stem replaces the generic loops.
@@ -2994,7 +3003,7 @@ class _CutsceneState(GameState):
             gc.draw_typewriter_title(surface, lines, cp.char_idx)
         else:
             outdoor_rain = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy",
-                            "route12_checkpoint", "route12_tanker", "route12_aftermath"}
+                            "route12_checkpoint", "route12_tanker", "route12_aftermath", "m1_dropoff"}
             if shot["scene"] in outdoor_rain:
                 draw_rain(surface, gc.rain_drops, speed_mul=1.0)
                 surface.blit(_cutscene_fog, (0, 0))
@@ -3278,6 +3287,12 @@ class _GameState_(GameState):
                     pygame.mouse.set_visible(False)
                 else:
                     gc.handle_keypad_keypress(event.key)
+        elif getattr(STATE, "_m1_standoff", None):
+            # WP6 standoff freeze: no actions, only minimap and pause.
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                gc.show_minimap = not gc.show_minimap
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                gsm.transition("PAUSED")
         else:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if gc.truck_hotwiring:
@@ -3292,7 +3307,11 @@ class _GameState_(GameState):
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 gc.start_reload()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                gc.switch_weapon()
+                if getattr(STATE, "active_mission", "") == "MISSION1":
+                    from missions.m1.stealth import throw_brick  # lazy: M1 only
+                    throw_brick()
+                else:
+                    gc.switch_weapon()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                 if gc.truck_hotwiring:
                     gc.handle_hotwire_press()
@@ -3430,9 +3449,10 @@ class _GameState_(GameState):
             pygame.mouse.set_visible(True)
         elif getattr(gc, "request_escape_cutscene", False):
             gc.request_escape_cutscene = False
-            gsm.transition("ESCAPE_CUTSCENE")
-            global escape_cutscene_timer
-            escape_cutscene_timer = 0
+            # WP2: the M1 escape cut is a timeline (m1.escape), not a frame
+            # counter. It ends on the results screen, which chains the M2 intro.
+            start_cutscene(gc.escape_shots, "MISSION_COMPLETE", use_fades=False)
+            gsm.transition("CUTSCENE")
             pygame.mouse.set_visible(False)
         elif getattr(gc, "request_chair_break_cutscene", False):
             gc.request_chair_break_cutscene = False
@@ -3525,59 +3545,6 @@ class _GameState_(GameState):
         # (hud.draw_crosshair, right after the state render pass) so it also
         # survives pause/settings/death/report. Drawing it here as well would
         # double-blit it and double-decay STATE.crosshair_kick.
-
-
-class _EscapeCutsceneState(GameState):
-    name = "ESCAPE_CUTSCENE"
-
-    def handle_event(self, event, mouse_x, mouse_y, keys):
-        global mission_complete_timer, mission_complete_fade
-        if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
-            gc.mission_end_time = _now_ms()
-            gsm.transition("MISSION_COMPLETE")
-            mission_complete_timer = 0
-            mission_complete_fade = 0
-            pygame.mouse.set_visible(True)
-
-    def update(self, dt):
-        global escape_cutscene_timer, mission_complete_timer, mission_complete_fade
-        escape_cutscene_timer += 1
-        if escape_cutscene_timer == 18:
-            audio.play("door_open", volume=0.45)
-        if escape_cutscene_timer == 38:
-            audio.play("rig_low_boom", volume=0.25)
-        if escape_cutscene_timer == 310:
-            audio.play("missile_launch", volume=0.32)
-        if escape_cutscene_timer == 392:
-            # Vasile takes the notebook over the radio (M6 plant - see
-            # missions/m1/draw.py, same frame, for the caption).
-            try:
-                from audio import voice
-                ms = voice.play_line("VASILE",
-                                     "Good. I've got it. Later. You need sleep.",
-                                     radio=True)
-                if not ms:
-                    audio.play("squelch_head", volume=0.25)
-            except Exception:
-                pass
-        if escape_cutscene_timer == 650:
-            audio.play("radio_static", volume=0.22)
-        if escape_cutscene_timer == 735:
-            audio.play("terminal_glitch", volume=0.24)
-        if escape_cutscene_timer == 820:
-            audio.play("menu_click", volume=0.34)
-        if escape_cutscene_timer >= ESCAPE_CUTSCENE_DURATION:
-            gc.mission_end_time = _now_ms()
-            gsm.transition("MISSION_COMPLETE")
-            mission_complete_timer = 0
-            mission_complete_fade = 0
-            pygame.mouse.set_visible(True)
-
-    def set_ambience(self):
-        _set_ambience({"rain", "wind", "ambient_drone"})
-
-    def render(self, surface):
-        gc.draw_biribel_escape_cutscene(surface, escape_cutscene_timer)
 
 
 class _NotebookInspectState(GameState):
@@ -4024,7 +3991,7 @@ for _state_cls in (
     _MenuState, _SlotSelectState, _MultiplayerState, _SettingsState,
     _ShopState,
     _CutsceneState, _BriefingState, _WalkState, _GameState_,
-    _EscapeCutsceneState, _NotebookInspectState, _PausedState,
+    _NotebookInspectState, _PausedState,
     _DeathState, _MissionCompleteState,
 ):
     gsm.add(_state_cls())

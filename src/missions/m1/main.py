@@ -16,6 +16,7 @@ from core.interactions import (
     trigger_alarm_early,
     trigger_radio_chatter,
 )
+import game.dialogues as _dialogues  # RPE6 P7: radio line text from m1.radio
 from entities.weapons import (
     spawn_molotov_fire as _spawn_molotov_fire,
     _wall_blocks_line,
@@ -29,7 +30,8 @@ from missions import walking_sim
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
-from missions.m1.map import mission1_map, MAP_W, MAP_H
+from missions.m1.map import mission1_map, MAP_W, MAP_H, M1_BAY_ROW, M1_GATE_ROW, M1_STREET_ROW, M1_PLAYER_FACING
+from missions.m1.stealth import reset_stealth
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 _walk_footstep_timer = 0
@@ -57,6 +59,7 @@ def start_mission(preserve_timer=False):
     STATE.request_escape_cutscene = False
     STATE.notebook_collected = False
     STATE.exfil_reached = False
+    STATE.rain_drops = list(rain_drops)
     STATE.mission_phase = "infiltrate"
     STATE.firefight_triggered = False
     STATE.volkov_escape_timer = 0
@@ -86,6 +89,8 @@ def start_mission(preserve_timer=False):
     STATE.casings = []
     STATE.doors = []
     STATE.warehouse_walls_set = set()
+    STATE._m1_sight_walls = []       # walls minus chain-link fence: what guards see past (WP5)
+    reset_stealth()
     STATE.melee_active = False
     STATE.melee_timer = 0
     STATE.melee_hit_done = False
@@ -117,6 +122,23 @@ def start_mission(preserve_timer=False):
     STATE.truck_hotwire_progress = 0.0
     STATE.escape_reinforcement_timer = 0
     STATE.escape_reinforcement_count = 0
+    STATE.m1_wave = 0                      # WP7: wave director (missions.m1.update)
+    STATE.m1_wave_timer = 0
+    STATE.m1_wave_loud = False
+    STATE.m1_ciocan_spawned = False        # CIOCAN arrives with wave 2 (missions.m1.roles)
+    STATE.m1_ciocan_mode = ""
+    STATE.m1_ciocan_timer = 0
+    STATE.m1_ciocan_cooldown = 0
+    STATE.m1_ciocan_dir = (0.0, 0.0)
+    STATE.m1_ciocan_dash_left = 0.0
+    STATE.m1_ciocan_last_hp = 0
+    STATE.m1_exfil_van_triggered = False
+    STATE.exfil_van_arrived = False
+    STATE.m1_fire_spread = 0
+    STATE.m1_fire_timer = 0
+    STATE.m1_hotwire_open_frames = 0
+    STATE.m1_smoke_tick = 0
+    STATE.m1_smoke_said = False
     STATE.active_read_note = None
     STATE.stealth_failed = False
     STATE.quiet_entry = True
@@ -126,6 +148,11 @@ def start_mission(preserve_timer=False):
     STATE.volkov_sighted = False
     STATE.volkov_visible = False
     STATE.volkov_display_pos = None
+    STATE._m1_standoff = None              # WP6: quiet-route standoff (dict while it plays)
+    STATE._m1_standoff_done = False
+    STATE._m1_standoff_scripted = False    # WP7: K's scripted alarm keeps the waves quiet
+    STATE._m1_standoff_said = False       # standoff spoke "Read it..."; the alarm skips it
+    STATE._m1_leaf_line_pending = False    # notebook_leaf + files_already after the inspect
     STATE.civilian_payoff_done = False
     STATE.breach_stage = 0
     STATE.breach_stage_timer = 0
@@ -137,7 +164,7 @@ def start_mission(preserve_timer=False):
     STATE.fire_zones = []
     STATE.floating_texts.append([
         7 * TILE_SIZE + 32,
-        3 * TILE_SIZE + 32,
+        13 * TILE_SIZE + 32,
         "[G] or RIGHT-CLICK to throw a molotov - burns an area",
         (140, 200, 150),
         360,
@@ -145,7 +172,7 @@ def start_mission(preserve_timer=False):
     STATE.desks = [
         {
             "x": 13 * TILE_SIZE + 32,
-            "y": 12 * TILE_SIZE + 32,
+            "y": 22 * TILE_SIZE + 32,
             "clue": (
                 "GUARD ROTATION MEMO:\n"
                 "Commander holds the gate keycard.\n"
@@ -156,7 +183,7 @@ def start_mission(preserve_timer=False):
         },
         {
             "x": 20 * TILE_SIZE + 32,
-            "y": 12 * TILE_SIZE + 32,
+            "y": 22 * TILE_SIZE + 32,
             "clue": (
                 "LOGISTICS LOG:\n"
                 "Shipment #7742 cleared by IPA command.\n"
@@ -167,7 +194,7 @@ def start_mission(preserve_timer=False):
         },
         {
             "x": 6 * TILE_SIZE + 32,
-            "y": 17 * TILE_SIZE + 32,
+            "y": 27 * TILE_SIZE + 32,
             "clue": (
                 "OFFICER MEMO:\n"
                 "Codes rotated this month.\n"
@@ -178,14 +205,14 @@ def start_mission(preserve_timer=False):
         },
         {
             "x": 22 * TILE_SIZE + 32,
-            "y": 18 * TILE_SIZE + 32,
+            "y": 28 * TILE_SIZE + 32,
             "clue": "__CRUMPLED_SAFE_SCRAP__",
             "read": False,
         },
         # Optional lore desk (inner warehouse corner)
         {
             "x": 24 * TILE_SIZE + 32,
-            "y": 16 * TILE_SIZE + 32,
+            "y": 26 * TILE_SIZE + 32,
             "clue": (
                 "WEAPON SHIPMENT MANIFEST\n"
                 "FT-7742 / FT-7743 / FT-7744 / FT-7745\n"
@@ -203,18 +230,22 @@ def start_mission(preserve_timer=False):
             x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
             if tile == "W":
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+                STATE._m1_sight_walls.append(STATE.walls[-1])
                 STATE.warehouse_walls_set.add((col_idx, row_idx))
-            elif tile == "C":
+            elif tile in ("C", "T", "f", "S"):
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
-            elif tile == "D":
-                is_bay = row_idx == 19
-                is_gate = row_idx == 15
+                if tile != "f":      # chain-link: blocks the body, not the eye
+                    STATE._m1_sight_walls.append(STATE.walls[-1])
+            elif tile in ("D", "d"):
+                is_bay = row_idx == M1_BAY_ROW
+                is_gate = row_idx == M1_GATE_ROW
                 new_door = Door(x, y, is_bay)
                 new_door.is_gate = is_gate
                 new_door.locked = is_gate
                 STATE.doors.append(new_door)
             elif tile == "P":
                 STATE.player = Player(x + 16, y + 16, max_hp=100 + walking_sim.warehouse_hp_bonus)
+                STATE.player.angle = M1_PLAYER_FACING  # the dropoff's final pose
             elif tile == "E":
                 STATE.enemies.append(Enemy(x + 16, y + 16))
             elif tile == "V":
@@ -229,32 +260,34 @@ def start_mission(preserve_timer=False):
     for e in STATE.enemies:
         col = e.rect.centerx // TILE_SIZE
         row = e.rect.centery // TILE_SIZE
-        if row < 11:
+        if row < M1_STREET_ROW:
+            continue
+        if row < 21:
             e.state = "PATROL"
             e.speed = 1.5
             if col == 6:
                 e.patrol_points = [
-                    (6 * TILE_SIZE + 32, 7 * TILE_SIZE + 32),
-                    (12 * TILE_SIZE + 32, 7 * TILE_SIZE + 32),
+                    (6 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
+                    (12 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
                 ]
             elif col == 15:
                 e.patrol_points = [
-                    (15 * TILE_SIZE + 32, 7 * TILE_SIZE + 32),
-                    (15 * TILE_SIZE + 32, 3 * TILE_SIZE + 32),
+                    (15 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
+                    (15 * TILE_SIZE + 32, 13 * TILE_SIZE + 32),
                 ]
             elif col == 22:
                 e.patrol_points = [
-                    (22 * TILE_SIZE + 32, 5 * TILE_SIZE + 32),
-                    (22 * TILE_SIZE + 32, 9 * TILE_SIZE + 32),
+                    (22 * TILE_SIZE + 32, 15 * TILE_SIZE + 32),
+                    (22 * TILE_SIZE + 32, 19 * TILE_SIZE + 32),
                 ]
-        elif 11 <= row <= 14:
+        elif 21 <= row <= 24:
             e.state = "PATROL"
             e.speed = 1.5
             if e.is_commander:
                 e.patrol_points = [
-                    (9 * TILE_SIZE + 32, 18 * TILE_SIZE + 32),
-                    (14 * TILE_SIZE + 32, 18 * TILE_SIZE + 32),
-                    (14 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
+                    (9 * TILE_SIZE + 32, 28 * TILE_SIZE + 32),
+                    (14 * TILE_SIZE + 32, 28 * TILE_SIZE + 32),
+                    (14 * TILE_SIZE + 32, 27 * TILE_SIZE + 32),
                 ]
             elif col <= 12:
                 e.patrol_points = [
@@ -266,18 +299,13 @@ def start_mission(preserve_timer=False):
                     (e.rect.centerx, e.rect.centery),
                     (e.rect.centerx - 5 * TILE_SIZE, e.rect.centery),
                 ]
-        elif 16 <= row <= 18:
+        elif 26 <= row <= 28:
             e.state = "PATROL"
             e.speed = 1.5
             e.patrol_points = [
                 (e.rect.centerx, e.rect.centery),
                 (e.rect.centerx + 4 * TILE_SIZE, e.rect.centery),
             ]
-    miniboss = Enemy(10 * TILE_SIZE + 16, 17 * TILE_SIZE + 16)
-    miniboss.hp = 400
-    miniboss.is_miniboss = True
-    miniboss.speed = 1.8
-    STATE.enemies.append(miniboss)
     STATE.NOTEBOOK_POS = None
     STATE.EXFIL_POS = None
 def _init_mission_specials():
@@ -302,11 +330,11 @@ def _trigger_civilian_payoff():
     )
     if kid_helped:
         trigger_radio_chatter(
-            'VASILE: "Where\'d you get the plate? Keep it on."'
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "civilian_kevlar", "Where'd you get the plate? Keep it on."))
         )
     elif woman_helped:
         trigger_radio_chatter(
-            'VASILE: "If that civilian was right, the code\'s already in your head."'
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "civilian_intel", "If that civilian was right, the code's already in your head."))
         )
     else:
-        trigger_radio_chatter('VASILE: "No local help. Search the desks."')
+        trigger_radio_chatter('VASILE: "{}"'.format(_dialogues.line("m1.radio", "civilian_none", "No local help. Search the desks.")))

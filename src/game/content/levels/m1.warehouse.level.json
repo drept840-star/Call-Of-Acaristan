@@ -7,7 +7,17 @@
   "floor": [
    "CCCCCCCCCCCCCCCCCCCCCCCCCCCC",
    "C..........................C",
-   "C..P.......................C",
+   "C.....L........L...........C",
+   "C.......TTT................C",
+   "C.......TTT........E.......C",
+   "C....r.....................C",
+   "C.....................TTTT.C",
+   "Cffffff.ffffffffffffff.ffffC",
+   "C......................E.E.C",
+   "C..P........r..........F...C",
+   "CCCdCCCCCCCCCCCCCCCCCCSSSCCC",
+   "C..........................C",
+   "C..........................C",
    "C..........................C",
    "C....CC........CC..........C",
    "C....CC........CC.....E....C",
@@ -32,11 +42,47 @@
  },
  "objects": [
   {
-   "id": "spawn-player@3,2",
+   "id": "spawn-enemy@19,4",
+   "kind": "spawn",
+   "tile": [
+    19,
+    4
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@23,8",
+   "kind": "spawn",
+   "tile": [
+    23,
+    8
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-enemy@25,8",
+   "kind": "spawn",
+   "tile": [
+    25,
+    8
+   ],
+   "props": {
+    "who": "enemy",
+    "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-player@3,9",
    "kind": "spawn",
    "tile": [
     3,
-    2
+    9
    ],
    "props": {
     "who": "player",
@@ -44,11 +90,11 @@
    }
   },
   {
-   "id": "spawn-enemy@22,5",
+   "id": "spawn-enemy@22,15",
    "kind": "spawn",
    "tile": [
     22,
-    5
+    15
    ],
    "props": {
     "who": "enemy",
@@ -56,11 +102,11 @@
    }
   },
   {
-   "id": "spawn-enemy@7,7",
+   "id": "spawn-enemy@7,17",
    "kind": "spawn",
    "tile": [
     7,
-    7
+    17
    ],
    "props": {
     "who": "enemy",
@@ -68,11 +114,11 @@
    }
   },
   {
-   "id": "spawn-enemy@16,7",
+   "id": "spawn-enemy@16,17",
    "kind": "spawn",
    "tile": [
     16,
-    7
+    17
    ],
    "props": {
     "who": "enemy",
@@ -80,11 +126,11 @@
    }
   },
   {
-   "id": "spawn-enemy@11,11",
+   "id": "spawn-enemy@11,21",
    "kind": "spawn",
    "tile": [
     11,
-    11
+    21
    ],
    "props": {
     "who": "enemy",
@@ -92,11 +138,11 @@
    }
   },
   {
-   "id": "spawn-enemy@19,12",
+   "id": "spawn-enemy@19,22",
    "kind": "spawn",
    "tile": [
     19,
-    12
+    22
    ],
    "props": {
     "who": "enemy",
@@ -104,11 +150,11 @@
    }
   },
   {
-   "id": "spawn-enemy@5,13",
+   "id": "spawn-enemy@5,23",
    "kind": "spawn",
    "tile": [
     5,
-    13
+    23
    ],
    "props": {
     "who": "enemy",
@@ -116,11 +162,11 @@
    }
   },
   {
-   "id": "spawn-enemy@15,13",
+   "id": "spawn-enemy@15,23",
    "kind": "spawn",
    "tile": [
     15,
-    13
+    23
    ],
    "props": {
     "who": "enemy",
@@ -128,9 +174,83 @@
    }
   }
  ],
- "triggers": [],
+ "triggers": [
+  {
+   "id": "street_exit",
+   "kind": "zone",
+   "rect": [
+    0,
+    10,
+    28,
+    2
+   ]
+  },
+  {
+   "id": "volkov_standoff",
+   "kind": "zone",
+   "rect": [
+    11,
+    26,
+    9,
+    3
+   ]
+  },
+  {
+   "id": "exfil_van",
+   "kind": "zone",
+   "rect": [
+    18,
+    30,
+    9,
+    2
+   ]
+  }
+ ],
  "paths": [],
- "lights": [],
+ "lights": [
+  {
+   "id": "street_lamp_a",
+   "kind": "street_lamp",
+   "tile": [
+    6,
+    2
+   ],
+   "radius": 150,
+   "color": [
+    190,
+    210,
+    255
+   ]
+  },
+  {
+   "id": "street_lamp_b",
+   "kind": "street_lamp",
+   "tile": [
+    15,
+    2
+   ],
+   "radius": 150,
+   "color": [
+    190,
+    210,
+    255
+   ]
+  },
+  {
+   "id": "shutter_floodlight",
+   "kind": "floodlight",
+   "tile": [
+    23,
+    9
+   ],
+   "radius": 120,
+   "color": [
+    225,
+    235,
+    255
+   ]
+  }
+ ],
  "decor": [],
  "procedural_decor": [],
  "metadata": {

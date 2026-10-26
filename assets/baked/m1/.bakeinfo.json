@@ -11,7 +11,7 @@
      ]
     }
    },
-   "source": "ce43457fe366d7f47fc13295e9571603fb3903a131396b210f234ff8ec71dcde",
+   "source": "c073b97c110144db5d6be796009fc814e3ea017dc95d87696e64366569c0822b",
    "variants": 1
   },
   "m1/molotov_icon": {
@@ -33,7 +33,7 @@
      ]
     }
    },
-   "source": "afad1fc094b08c901ad581cefe03bc425f546a55fbf1aea5599ad9c6b99bb056",
+   "source": "6e21ee52268eb22ceb173543f822506734aef3e65135898824159dcb7f98113d",
    "variants": 2
   },
   "m1/pickup_icon": {
@@ -71,21 +71,21 @@
      ]
     }
    },
-   "source": "da59f3fa01d361dadb2084bf4d36581770bf24a7398ae19198816beb62f32a09",
+   "source": "90ba7c2c179133e07b3fd5e1c1d3e16e9b5a40f6565851d380acbbf936f0f023",
    "variants": 4
   },
   "m1/world_static": {
    "files": {
     "0": {
      "file": "world_static_0.png",
-     "pixels": "96eea6545d039af72377e23734ed943c9719a41a990fc397fc725bddf941d25d",
+     "pixels": "ff8b899a89e9a46344694a2bc5a63923d4371f48c03c0c9421eda727461bfc40",
      "size": [
       2048,
-      1536
+      2560
      ]
     }
    },
-   "source": "3d99ffc2a40376e5b89a03a6ff28cb37b4943243c85ca8a7084a32177cb5158c",
+   "source": "4182885e7168d69442df3669bc629af9771edc2f60c80dc030d5b2dc079dea51",
    "variants": 1
   }
  },

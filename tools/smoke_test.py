@@ -2900,14 +2900,17 @@ def check_sprite_pipeline():
     from missions.m2 import draw as m2d
     root = Path(__file__).resolve().parent.parent
     art = root / "assets" / "art"
-    sheets = ("spr_vehicles", "spr_props_m2", "spr_fx_scorch", "spr_fx_m2", "spr_portraits", "spr_mission_failed")
+    sheets = ("spr_vehicles", "spr_props_m2", "spr_fx_scorch", "spr_fx_m2", "spr_portraits", "spr_mission_failed",
+              "spr_m1_street")
     probes = ((artpack.vehicle, "car_teal_118x44"), (artpack.vehicle, "tanker"),
               (lambda k: artpack.frame("spr_portraits", k), "vasile"),
               (lambda k: artpack.frame("spr_portraits", k), "unknown"),
               *((lambda k: artpack.frame("spr_mission_failed", k), key)
                 for key in ("notebook", "route", "cells", "tower", "press", "maru_lost")),
               (artpack.prop, "cone"), (artpack.prop, "upload_pc_3_1"),
-              (artpack.fx, "scorch"), (artpack.fx, "wreck_hull"), (artpack.fx, "spot_14_0"))
+              (artpack.fx, "scorch"), (artpack.fx, "wreck_hull"), (artpack.fx, "spot_14_0"),
+              *((lambda k: artpack.frame("spr_m1_street", k), key)
+                for key in ("fence_post", "lamp_post", "rubble_0", "shutter_3w", "van_delivery")))
     # 1. JSON <-> PNG agreement, every frame rect inside the sheet.
     for name in sheets:
         meta = _json.loads((art / (name + ".json")).read_text(encoding="utf-8"))
@@ -2954,7 +2957,7 @@ def check_sprite_pipeline():
     # 4. Determinism: two clean rebuilds produce identical bytes, matching
     #    the committed sheets.
     def _build(dst):
-        for fam in ("vehicles", "props", "fx", "portraits", "mission_failed"):
+        for fam in ("vehicles", "props", "fx", "portraits", "mission_failed", "m1_street"):
             subprocess.run([sys.executable, str(root / "tools" / "sprites" / (fam + ".py")),
                             "--out", str(dst)], check=True, cwd=str(root),
                            stdout=subprocess.DEVNULL,
@@ -2966,6 +2969,260 @@ def check_sprite_pipeline():
     assert a == b, "sprite generators are not deterministic"
     committed = {n: hashlib.sha1((art / n).read_bytes()).hexdigest() for n in a}
     assert committed == a, "assets/art sheets are stale - run tools/build_all_sprites.py"
+
+
+def check_m1_street_art():
+    """WP4b: the M1 street band resolves its art-pack frames, the fence/shutter/vehicle
+    cells are the ones painted, and M1 rain submits only while the street is on-screen."""
+    from core import artpack
+    from core.state import STATE
+    from missions.m1 import draw as D
+    prev_art = os.environ.pop("ACA_ART", None)
+    prev_rain = getattr(STATE, "rain_drops", None)
+    try:
+        artpack.rebuild()
+        for key in ("fence_post", "fence_mesh", "shutter_3w", "van_delivery", "rubble_0", "lamp_post"):
+            assert artpack.frame("spr_m1_street", key) is not None, key
+        assert artpack.frame("spr_vehicles", "ipa_truck") is not None
+        assert D._m1_street_art(), "street floor tiles missing"
+        surf = pygame.Surface((config.WIDTH, config.HEIGHT))
+        done = D._draw_m1_street_walls(surf, 0, 0)
+        painted = {(22, 10), (23, 10), (24, 10), (8, 3), (10, 4), (22, 6), (25, 6), (6, 7)}
+        assert painted <= done, "street walls not painted from the art pack"
+        class _Queue:
+            n = 0
+
+            def submit(self, *_a, **_k):
+                self.n += 1
+        STATE.rain_drops = [(10, 10, 12)]
+        q = _Queue()
+        D._submit_m1_rain(q, 2000)
+        assert q.n == 0, "M1 rain drawn with the street off-screen"
+        D._submit_m1_rain(q, 0)
+        assert q.n == 1, "M1 street rain not submitted"
+    finally:
+        STATE.rain_drops = prev_rain
+        if prev_art is not None:
+            os.environ["ACA_ART"] = prev_art
+        artpack.rebuild()
+
+
+def _m1_stealth_setup(enemy_tile, angle, player_tile):
+    """Fresh M1 run with one guard at enemy_tile facing angle and Biribel at player_tile."""
+    from core.state import STATE
+    from entities.enemy_ai import Enemy
+    from missions.m1.map import _tc
+    gc.start_mission(preserve_timer=True)
+    STATE.dt = 1 / 60
+    STATE.enemies.clear()
+    e = Enemy(0, 0)
+    e.rect.center = _tc(*enemy_tile)
+    e.angle = angle
+    STATE.enemies.append(e)
+    STATE.player.rect.center = _tc(*player_tile)
+    return STATE, e
+
+
+def check_m1_stealth_suspicion():
+    """WP5: fill/decay numbers, sight through the chain-link fence, and the
+    UNAWARE -> SUSPICIOUS -> SEARCHING -> (2 s seen radio call) -> alarm ladder;
+    a broken LOS during the call gives no alarm and the guard calms down."""
+    import math
+    from missions.m1 import stealth as S
+    near = lambda a, b: abs(a - b) < 1e-6
+    assert near(S.fill_rate(100, True, True), 3.0), S.fill_rate(100, True, True)
+    assert near(S.fill_rate(350, False, False), 1.25 * 0.4 * 0.55 * 0.7)
+    assert near(S.dist_k(235), 1.0) and near(S.dist_k(120), 1.6) and near(S.dist_k(400), 0.4)
+
+    # Guard at (3,5) facing south; Biribel at (3,8) behind the fence row 7.
+    STATE, e = _m1_stealth_setup((3, 5), math.pi / 2, (3, 8))
+    px, py = STATE.player.rect.center
+    sight = list(STATE._m1_sight_walls)
+    assert any(w.collidepoint(3 * 64 + 32, 7 * 64 + 32) for w in STATE.walls), "fence tile not solid"
+    assert S.sees(e, px, py, sight), "guard cannot see through the chain-link fence"
+    assert not S.sees(e, px, py, STATE.walls), "solid walls should block that sight line"
+    lit = S.in_light(px, py)
+    want = S.fill_rate(math.hypot(px - e.rect.centerx, py - e.rect.centery), lit, False)
+    S.stealth_update(0.1, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    assert near(m["s"], want * 0.1) and m["state"] == S.UNAWARE, m
+
+    # Fill to SUSPICIOUS, then SEARCHING with a radio call.
+    for _ in range(600):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+        if m["state"] != S.UNAWARE:
+            break
+    assert m["state"] == S.SUSPICIOUS and m["s"] >= S.SUSPICIOUS_AT, m
+    for _ in range(600):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+        if m["state"] == S.SEARCHING:
+            break
+    assert m["state"] == S.SEARCHING and e.alerted and near(m["call_t"], S.RADIO_CALL_S), m
+    assert not STATE.firefight_triggered, "alarm before the radio call finished"
+    for _ in range(int(S.RADIO_CALL_S * 60) + 2):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert STATE.firefight_triggered, "seen radio call did not latch the alarm"
+
+    # Decay: 1.5 s hold, then 0.25/s.
+    STATE, e = _m1_stealth_setup((3, 5), -math.pi / 2, (3, 8))   # facing away
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    m["s"], m["state"], m["hold"] = 0.3, S.UNAWARE, 0.0
+    for _ in range(80):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert near(m["s"], 0.3), ("decayed inside the hold", m["s"])
+    for _ in range(60):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert 0.3 - 0.25 - 0.02 < m["s"] < 0.3 - 0.25 + 0.06, m["s"]
+
+    # Broken LOS during the call: no alarm, then the 6 s search ends calm.
+    STATE, e = _m1_stealth_setup((3, 5), math.pi / 2, (3, 8))
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    m["s"] = 1.0
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.SEARCHING and m["call_t"] > 0, m
+    STATE.player.rect.center = (12 * 64 + 32, 12 * 64 + 32)       # behind the street wall
+    for _ in range(int(S.RADIO_CALL_S * 60) + 5):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert not STATE.firefight_triggered, "radio call latched with the LOS broken"
+    for _ in range(int(S.SEARCH_S * 60) + 5):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.UNAWARE and not e.alerted and not STATE.firefight_triggered, m
+
+    # A dead caller cancels the call.
+    STATE, e = _m1_stealth_setup((3, 5), math.pi / 2, (3, 8))
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    S.mind_of(e)["s"] = 1.0
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    STATE.enemies.clear()
+    for _ in range(int(S.RADIO_CALL_S * 60) + 5):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert not STATE.firefight_triggered, "a dead guard's radio call still latched"
+
+    # A heard shot sends a guard straight to SEARCHING (radio call applies), even mid-walk
+    # to a suspicious point.
+    from entities.enemy_ai import enemy_hear_shot
+    STATE, e = _m1_stealth_setup((3, 5), -math.pi / 2, (3, 8))
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    m["s"], m["point"] = 0.5, (e.rect.centerx + 64, e.rect.centery)
+    for _ in range(60):
+        S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.SUSPICIOUS and e.state == "SEARCH", (m, e.state)
+    enemy_hear_shot(e.rect.centerx + 100, e.rect.centery, STATE.enemies, STATE.walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    assert m["state"] == S.SEARCHING and m["call_t"] > 0, m
+    print("  [ok] fence sight, fill/decay, 2 s radio call, broken-LOS and dead-caller cancel, shot heard")
+
+
+def check_m1_takedown_silent():
+    """WP5: V from the rear arc on an unaware guard kills instantly, with no alarm, no
+    alert for the guard next door, a corpse, and a short movement lock; from the front
+    it is a normal melee."""
+    from entities.enemy_ai import Enemy
+    from missions.m1 import stealth as S
+    from missions.m1 import update as m1u
+    STATE, e = _m1_stealth_setup((10, 12), 0.0, (10, 12))         # facing east
+    STATE.player.rect.center = (e.rect.centerx - 40, e.rect.centery)
+    assert S.takedown_target(STATE.player, STATE.enemies, STATE.walls) is e
+    STATE.player.rect.center = (e.rect.centerx + 40, e.rect.centery)
+    assert S.takedown_target(STATE.player, STATE.enemies, STATE.walls) is None, "front takedown"
+    STATE.player.rect.center = (e.rect.centerx - 40, e.rect.centery)
+    other = Enemy(0, 0)
+    other.rect.center = (e.rect.centerx + 4 * 64, e.rect.centery + 64)
+    other.angle = 0.0
+    STATE.enemies.append(other)
+    corpses = len(STATE.corpses)
+    STATE.melee_active, STATE.melee_timer, STATE.melee_hit_done = True, 11, False
+    m1u.game_update(EmptyKeys())
+    assert e not in STATE.enemies, "takedown did not kill"
+    assert len(STATE.corpses) == corpses + 1, "no corpse from the takedown"
+    assert not STATE.firefight_triggered and not other.alerted, "takedown was not silent"
+    assert STATE._m1_takedown_lock > 0, "no takedown lock"
+    x0 = STATE.player.rect.x
+
+    class _D(EmptyKeys):
+        def __getitem__(self, k):
+            return k == pygame.K_d
+    m1u.game_update(_D())
+    assert STATE.player.rect.x == x0, "moved during the takedown lock"
+    print("  [ok] rear takedown silent + corpse + lock; front is not a takedown")
+
+
+def check_m1_brick_noise():
+    """WP5: piles give 2 bricks (cap 3); a landed brick makes no fire and pulls a calm guard
+    within 250 px to SUSPICIOUS at the impact for 6 s, with no radio call."""
+    import math
+    from entities import weapons
+    from missions.m1 import stealth as S
+    from missions.m1.map import _tc
+    STATE, e = _m1_stealth_setup((9, 4), -math.pi / 2, (5, 5))    # guard looks north
+    far = type(e)(0, 0)
+    far.rect.center = _tc(24, 2)
+    far.angle = -math.pi / 2
+    STATE.enemies.append(far)
+    S.update_bricks()
+    assert STATE._m1_bricks == 2, STATE._m1_bricks
+    STATE.player.rect.center = _tc(12, 9)
+    S.update_bricks()
+    assert STATE._m1_bricks == S.BRICK_CAP, "carry cap"
+    fires = len(STATE.fire_zones)
+    ix, iy = _tc(10, 5)
+    STATE.thrown_bottles.append({"x": ix, "y": iy, "start_x": ix, "start_y": iy, "tx": ix, "ty": iy,
+                                 "t": 0.99, "speed": 0.035, "spin": 0.0, "brick": True})
+    weapons.update_molotovs(STATE.walls)
+    assert len(STATE.fire_zones) == fires and not STATE.thrown_bottles, "brick lit a fire"
+    assert STATE._m1_brick_impacts == [(ix, iy)], STATE._m1_brick_impacts
+    sight = list(STATE._m1_sight_walls)
+    S.stealth_update(1 / 60, False, sight, STATE.walls)
+    m = S.mind_of(e)
+    assert m["state"] == S.SUSPICIOUS and m["point"] == (ix, iy), m
+    assert m["call_t"] == 0 and abs(m["noise_t"] - S.NOISE_S) < 0.05, m
+    assert S.mind_of(far)["state"] == S.UNAWARE, "a guard 250+ px away heard the brick"
+    assert not STATE.firefight_triggered
+    print("  [ok] pile pickup + cap, no fire, noise -> SUSPICIOUS at impact, far guard deaf")
+
+
+def check_m1_dropoff():
+    """WP4c: m1.dropoff is three radio lines in dlg order, 8-10 s on one clock, and the
+    briefing hands off to it (CUTSCENE, then GAME) before gameplay."""
+    import ast as _ast
+    from types import SimpleNamespace
+    from game import dialogues as _dl
+    from game import timelines as _tl
+    shots = gc.dropoff_shots
+    assert len(shots) == 3, "m1.dropoff is not three radio shots"
+    assert all(s.get("radio") for s in shots), "m1.dropoff line is not flagged radio"
+    want = [("VASILE", "dropoff_1"), ("BIRIBEL", "dropoff_2"), ("VASILE", "dropoff_3")]
+    dlg_text = [(sp, _dl.dialogue("m1.radio").node(node).get("text")) for sp, node in want]
+    assert [(s["speaker"], s["text"]) for s in shots] == dlg_text, "m1.dropoff text is not the m1.radio dlg nodes"
+    total = sum(int(s["min_ms"]) for s in shots)
+    assert 8000 <= total <= 10000, f"m1.dropoff is {total} ms"
+    for s in shots:
+        assert int(s["min_ms"]) >= max(2200, 55 * len(s["text"])), ("subtitle hold", s["text"])
+    assert len(_tl.timeline("m1.dropoff").shots) == 3, "m1.dropoff timeline file is stale"
+    source_path = Path(__file__).resolve().parent.parent / "src" / "app.py"
+    tree = _ast.parse(source_path.read_text(encoding="utf-8-sig"), filename=str(source_path))
+    nodes = [n for n in tree.body if isinstance(n, _ast.FunctionDef) and n.name == "finish_briefing"]
+    assert len(nodes) == 1, "finish_briefing missing"
+    calls = []
+    namespace = {
+        "briefing_kind": "warehouse",
+        "gc": SimpleNamespace(start_mission=lambda preserve_timer=False: calls.append("start"),
+                              dropoff_shots=shots),
+        "start_cutscene": lambda shots_, after, use_fades=True: calls.append(("cut", shots_, after)),
+        "trigger_transition": lambda target: calls.append(("transition", target)),
+        "gsm": SimpleNamespace(transition=lambda target: calls.append(("gsm", target))),
+        "pygame": SimpleNamespace(mouse=SimpleNamespace(set_visible=lambda _v: None)),
+    }
+    exec(compile(_ast.Module(body=nodes, type_ignores=[]), str(source_path), "exec"), namespace)
+    namespace["finish_briefing"]()
+    assert calls == ["start", ("cut", shots, "GAME"), ("transition", "CUTSCENE")], calls
 
 
 def check_depot_restage_timing():
@@ -3867,6 +4124,404 @@ def check_mission3_broadcast_fail_shots_render():
             assert sd > 3.0, f"{scene} frame t={t} is a flat wash (std-dev={sd:.1f})"
 
 
+def check_m1_volkov_escapes_both_routes():
+    """WP6: quiet route - the standoff freezes play, speaks its 4 beats in order, K
+    spots them and latches the alarm, the radio never repeats the warning, Volkov
+    runs and VO_094 plays once, no re-trigger. Loud route - no standoff, warning
+    once, Volkov escapes, VO_094 once. The water-damaged leaf builds headless."""
+    import math
+    from unittest.mock import patch
+    from core import interactions as I
+    from core.state import STATE
+    from entities.enemy_ai import Enemy
+    from missions.m1 import update as m1u
+    from missions.m1.map import _tc
+    from ui import hud
+
+    warning = 'VOLKOV: "Read it before you hand it over!"'
+    want = [("VOLKOV", "Easy. I'm a clerk. I count crates."),
+            ("BIRIBEL", "Then count to three and walk with me."),
+            ("VOLKOV", "Read it before you hand it over!"),
+            ("VOLKOV", "The loose page. Read it.")]
+
+    class _HoldD:
+        def __getitem__(self, key):
+            return key == pygame.K_d
+
+    def _fresh():
+        gc.start_mission(preserve_timer=True)
+        STATE.dt = 1 / 60
+        STATE.enemies.clear()
+        if STATE.NOTEBOOK_POS is None:
+            m1u._init_mission_specials()
+        assert STATE.volkov_pos, "Volkov not placed"
+
+    def _texts(*mocks):
+        return [c.args[0] for m in mocks for c in m.call_args_list]
+
+    # Quiet route.
+    _fresh()
+    k = Enemy(0, 0)
+    k.rect.center = _tc(10, 24)
+    k.is_commander = True
+    k.angle = 0.0
+    STATE.enemies.append(k)
+    STATE.player.rect.center = _tc(13, 27)
+    start = tuple(STATE.player.rect.center)
+    with patch.object(I, "trigger_radio_chatter", wraps=I.trigger_radio_chatter) as ic, \
+            patch.object(m1u, "trigger_radio_chatter", wraps=m1u.trigger_radio_chatter) as uc:
+        m1u.game_update(_HoldD())
+        assert STATE._m1_standoff is not None, "standoff did not start in volkov_standoff"
+        from missions.m1 import draw as m1d
+        vx, vy = STATE.volkov_pos
+        surf = pygame.Surface((m1d.WIDTH, m1d.HEIGHT))
+        STATE.volkov_draw_angle = None       # no turn carried over from earlier checks
+        with patch.object(m1d, "_draw_volkov_topdown") as dv:
+            m1d._draw_m1_actors(surf, int(vx - m1d.WIDTH // 2), int(vy - m1d.HEIGHT // 2))
+        assert dv.call_count == 1, "static Volkov not drawn before the alarm"
+        _s, _sx, _sy, ang, moving, _t = dv.call_args.args
+        to_p = math.atan2(STATE.player.rect.centery - vy, STATE.player.rect.centerx - vx)
+        assert not moving and abs(math.remainder(ang - to_p, math.tau)) < 1e-6, dv.call_args
+        seen, spotted = [], False
+        for _ in range(1500):
+            so = STATE._m1_standoff
+            if so is None:
+                break
+            if 0 <= so["idx"] < len(so["beats"]):
+                b = so["beats"][so["idx"]]
+                if not seen or seen[-1] != (b["speaker"], b["text"]):
+                    seen.append((b["speaker"], b["text"]))
+            spotted = spotted or bool(so.get("spot"))
+            assert not STATE.stealth_failed, "alarm latched before K spotted them"
+            m1u.game_update(_HoldD())
+            if STATE._m1_standoff is not None:
+                assert tuple(STATE.player.rect.center) == start, "player moved during the standoff"
+        assert STATE._m1_standoff is None and STATE._m1_standoff_done, "standoff never ended"
+        assert seen == want, seen
+        assert spotted, "no scripted K beat"
+        assert STATE.stealth_failed and STATE.firefight_triggered and not STATE.quiet_entry
+        assert STATE.volkov_escape_timer > 0, "Volkov's run did not start"
+        STATE.enemies.clear()
+        STATE.bullets.clear()
+        for _ in range(95):
+            m1u.game_update(EmptyKeys())
+        assert STATE.volkov_escape_timer == 0 and STATE.volkov_escaped
+        texts = _texts(ic, uc)
+        assert texts.count(warning) == 0, "warning radioed after the standoff spoke it"
+        assert sum("Volkov escaped" in t for t in texts) == 1, texts
+        STATE.player.rect.center = _tc(13, 27)
+        for _ in range(3):
+            m1u.game_update(EmptyKeys())
+        assert STATE._m1_standoff is None, "standoff re-triggered"
+
+    # Loud route.
+    _fresh()
+    with patch.object(I, "trigger_radio_chatter", wraps=I.trigger_radio_chatter) as ic, \
+            patch.object(m1u, "trigger_radio_chatter", wraps=m1u.trigger_radio_chatter) as uc:
+        I.trigger_alarm_early()
+        STATE.player.rect.center = _tc(13, 27)
+        for _ in range(95):
+            m1u.game_update(EmptyKeys())
+            assert STATE._m1_standoff is None, "standoff started on the loud route"
+        assert STATE.volkov_escaped and not STATE._m1_standoff_done
+        texts = _texts(ic, uc)
+        assert texts.count(warning) == 1, texts
+        assert sum("Volkov escaped" in t for t in texts) == 1, texts
+
+    # Leaf: builds headless, stable, hard colours, ROUTE 12 legible, no Vasile.
+    rendered = []
+
+    class _SpyFont:
+        def __init__(self, real):
+            self.real = real
+
+        def render(self, text, *a, **k):
+            rendered.append(text)
+            return self.real.render(text, *a, **k)
+
+        def __getattr__(self, name):
+            return getattr(self.real, name)
+
+    a = hud.build_notebook_leaf(_SpyFont(config.font_terminal_small))
+    b = hud.build_notebook_leaf(config.font_terminal_small)
+    to_bytes = getattr(pygame.image, "tobytes", None) or pygame.image.tostring
+    raw = to_bytes(a, "RGB")
+    assert raw == to_bytes(b, "RGB"), "leaf not deterministic"
+    colours = {raw[i:i + 3] for i in range(0, len(raw), 3)}
+    assert len(colours) <= 8, f"leaf has {len(colours)} colours (soft edges?)"
+    assert "ROUTE 12" in rendered, rendered
+    assert not any("VASILE" in t.upper() for t in rendered), rendered
+    if hasattr(hud.draw_notebook_inspection, "_leaf"):
+        del hud.draw_notebook_inspection._leaf
+    hud.reset_notebook_inspect()
+    for _ in range(40):
+        hud.draw_notebook_inspection()
+    hud.reset_notebook_inspect()
+    print("  [ok] quiet standoff -> K alarm -> run, loud route, leaf")
+
+
+def _m1_fresh():
+    from core.state import STATE
+    from missions.m1 import update as m1u
+    gc.start_mission(preserve_timer=True)
+    STATE.dt = 1 / 60
+    STATE.enemies.clear()
+    STATE.bullets.clear()
+    if STATE.NOTEBOOK_POS is None:
+        m1u._init_mission_specials()
+    return STATE, m1u
+
+
+def check_m1_waves_quiet_vs_loud():
+    """WP7: the breach flash spawns wave 1 (5 quiet / 6 loud) with roles; wave 2 + CIOCAN
+    follow on 'W1 <= 2 alive' or 14 s; wave 3 (4) only when loud. K's scripted standoff
+    alarm still counts as quiet. No fixed miniboss at mission start."""
+    from core import interactions as I
+    from missions.m1.roles import role_of
+
+    def _wave(state, n):
+        return [role_of(e) for e in state.enemies
+                if role_of(e) is not None and role_of(e).wave == n and role_of(e).kind != "ciocan"]
+
+    def _breach(state, m1u):
+        state.breach_stage = 5
+        m1u.game_update(EmptyKeys())
+        assert state.breach_stage == 6 and state.m1_wave == 1, (state.breach_stage, state.m1_wave)
+
+    STATE, m1u = _m1_fresh()
+    gc.start_mission(preserve_timer=True)
+    assert not any(getattr(e, "is_miniboss", False) for e in STATE.enemies), "miniboss still placed at start"
+
+    # Quiet: 5 / 4 + CIOCAN / skipped.
+    STATE, m1u = _m1_fresh()
+    _breach(STATE, m1u)
+    w1 = _wave(STATE, 1)
+    assert len(w1) == 5 and not STATE.m1_wave_loud, len(w1)
+    assert [r.kind for r in w1].count("rusher") == 2 and [r.kind for r in w1].count("flanker") == 1
+    for e in STATE.enemies:
+        # game_update already ticked every live enemy once, and the AI clock
+        # decrements combat_alert_timer at the top of its update - so a wave
+        # enemy spawned during that same frame reads 419, not the raw 420.
+        assert (e.hp == 115 and e.state == "CHASE" and e.is_breach_enemy
+                and e.combat_alert_timer in (419, 420)), (
+                    e.hp, e.state, e.is_breach_enemy, e.combat_alert_timer)
+        if role_of(e).kind == "rusher":
+            assert e.speed == 2.6
+    STATE.m1_wave_timer = m1u._WAVE_NEXT_FRAMES - 1
+    m1u._wave_director()
+    assert STATE.m1_wave == 2 and len(_wave(STATE, 2)) == 4, (STATE.m1_wave, len(_wave(STATE, 2)))
+    bosses = [e for e in STATE.enemies if getattr(e, "is_miniboss", False)]
+    assert len(bosses) == 1 and bosses[0].hp == 400 and role_of(bosses[0]).kind == "ciocan"
+    STATE.m1_wave_timer = m1u._WAVE_NEXT_FRAMES - 1
+    m1u._wave_director()
+    assert STATE.m1_wave == 3 and not _wave(STATE, 3), "wave 3 spawned on a quiet run"
+
+    # Loud: 6 / 4 + CIOCAN (on W1 <= 2 alive) / 4.
+    STATE, m1u = _m1_fresh()
+    I.trigger_alarm_early()
+    STATE.enemies.clear()
+    _breach(STATE, m1u)
+    assert len(_wave(STATE, 1)) == 6 and STATE.m1_wave_loud
+    m1u._wave_director()
+    assert STATE.m1_wave == 1, "wave 2 came early"
+    for e in [e for e in STATE.enemies if role_of(e) and role_of(e).wave == 1][:4]:
+        e.hp = 0
+    m1u._wave_director()
+    assert STATE.m1_wave == 2 and len(_wave(STATE, 2)) == 4 and STATE.m1_ciocan_spawned
+    for e in STATE.enemies:
+        if role_of(e).wave == 2 and role_of(e).kind != "ciocan":
+            e.hp = 0
+    m1u._wave_director()
+    w3 = _wave(STATE, 3)
+    assert STATE.m1_wave == 3 and len(w3) == 4, len(w3)
+    assert sorted(r.kind for r in w3) == ["cover", "cover", "flanker", "flanker"]
+
+    # Scripted standoff alarm keeps the quiet sizes.
+    STATE, m1u = _m1_fresh()
+    I.trigger_alarm_early()
+    STATE._m1_standoff_scripted = True
+    STATE.enemies.clear()
+    m1u._spawn_wave(1)
+    assert not STATE.m1_wave_loud and len(_wave(STATE, 1)) == 5
+    print("  [ok] quiet 5/4+C/0, loud 6/4+C/4, scripted alarm stays quiet")
+
+
+def check_m1_ciocan_charge_stun():
+    """WP7: CIOCAN winds up 0.8 s (red blinks, 'Hah!'), dashes 9 px/frame; a wall bump
+    stuns him 1.5 s at 2x damage taken; a body hit does 30 and knocks the player back."""
+    from missions.m1 import roles as R
+
+    STATE, m1u = _m1_fresh()
+    p = STATE.player
+    wall = pygame.Rect(700, 900, 20, 200)
+
+    def _setup(walls):
+        STATE.enemies.clear()
+        c = R.spawn_ciocan(500, 1000)
+        STATE.enemies.append(c)
+        p.rect.center = (800, 1000)
+        p.invincible_timer = 0
+        p.hp = 100
+        STATE.m1_ciocan_cooldown = 1
+        R.ciocan_step(c, walls, [])
+        assert STATE.m1_ciocan_mode == "windup", STATE.m1_ciocan_mode
+        assert any(ft[2] == "Hah!" for ft in STATE.floating_texts), "no Hah! caption"
+        tints = set()
+        for _ in range(R.CHARGE_WINDUP):
+            handled, _hit = R.ciocan_step(c, walls, [])
+            assert handled
+            tints.add(c.body_tint)
+        assert STATE.m1_ciocan_mode == "dash", STATE.m1_ciocan_mode
+        assert R.CIOCAN_FLASH in tints and R.CIOCAN_TINT in tints, tints
+        return c
+
+    # Wall bump -> stun, 2x damage, recovers after 90 frames.
+    c = _setup([wall])
+    for _ in range(40):
+        R.ciocan_step(c, [wall], [])
+        if STATE.m1_ciocan_mode != "dash":
+            break
+    assert STATE.m1_ciocan_mode == "stun" and c.rect.right <= wall.left, (STATE.m1_ciocan_mode, c.rect)
+    assert p.hp == 100, "wall charge hurt the player"
+    hp0 = c.hp
+    c.hp -= 10
+    R.ciocan_step(c, [wall], [])
+    assert c.hp == hp0 - 20, (hp0, c.hp)
+    for _ in range(R.STUN_FRAMES):
+        R.ciocan_step(c, [wall], [])
+    assert STATE.m1_ciocan_mode == "" and STATE.m1_ciocan_cooldown >= R.CHARGE_COOLDOWN[0] - 2
+
+    # Body hit: 30 damage + knockback, charge ends.
+    c = _setup([])
+    x0 = p.rect.centerx
+    hit = False
+    for _ in range(60):
+        _h, hit = R.ciocan_step(c, [], [])
+        if hit:
+            break
+    assert hit and p.hp == 70, (hit, p.hp)
+    assert p.rect.centerx - x0 >= R.CHARGE_KNOCKBACK - 4, (x0, p.rect.centerx)
+    assert STATE.m1_ciocan_mode == ""
+
+    # Death drop: bandage + 2 mags.
+    STATE.pickups.clear()
+    c.hp = 0
+    m1u.game_update(EmptyKeys())
+    kinds = sorted(pu[2] for pu in STATE.pickups)
+    assert kinds == ["bandage", "mag", "mag"], kinds
+    print("  [ok] windup blink, wall stun 2x, body hit 30 + knockback, drops")
+
+
+def check_m1_hotwire_damage_closes():
+    """WP7: the world keeps ticking while the hotwire panel is open; a hit closes it;
+    25 s in, the truck smoke burns 4 hp/s (and BIRIBEL's line plays) without closing it."""
+    from unittest.mock import patch
+
+    class _HoldE:
+        def __getitem__(self, key):
+            return key == pygame.K_e
+
+    STATE, m1u = _m1_fresh()
+    m1u.debug_jump_to_exfil()
+    STATE.m1_exfil_van_triggered = True       # keep the van out of this check
+    p = STATE.player
+    m1u.game_update(_HoldE())
+    assert STATE.truck_hotwiring, "panel did not open"
+    assert STATE.m1_hotwire_open_frames >= 1
+
+    # Smoke: 25 s after first open, 4 hp per second, panel stays open.
+    p.hp = 100
+    STATE.m1_hotwire_open_frames = m1u._SMOKE_START_FRAMES - 1
+    with patch.object(m1u, "trigger_radio_chatter", wraps=m1u.trigger_radio_chatter) as rc:
+        for _ in range(62):
+            m1u.game_update(EmptyKeys())
+    assert STATE.truck_hotwiring, "smoke closed the panel"
+    assert p.hp == 96, p.hp
+    assert STATE.m1_smoke_said and any("Come on" in c.args[0] for c in rc.call_args_list)
+
+    # World ticks: an enemy round flies in while the panel is open and closes it.
+    p.invincible_timer = 0
+    hp0 = p.hp
+    STATE.bullets.append({"x": p.rect.centerx - 40, "y": p.rect.centery, "dx": 2, "dy": 0,
+                          "life": 60, "owner": "enemy", "damage": 8})
+    m1u.game_update(EmptyKeys())
+    assert STATE.bullets and STATE.bullets[0]["x"] > p.rect.centerx - 40, "world paused under the panel"
+    for _ in range(30):
+        if not STATE.truck_hotwiring:
+            break
+        m1u.game_update(EmptyKeys())
+    assert not STATE.truck_hotwiring, "hit did not close the panel"
+    assert p.hp < hp0 and any(ft[2] == "INTERRUPTED!" for ft in STATE.floating_texts)
+    print("  [ok] world ticks, smoke 4 hp/s keeps panel, hit closes it")
+
+
+def check_m1_alarm_keeps_escape():
+    """An alarm after the safe opened keeps phase "escape" (no downgrade to
+    "firefight"), so the truck hotwire still opens; a "firefight" phase with the
+    notebook in hand opens it too."""
+    from core import interactions as I
+
+    class _HoldE:
+        def __getitem__(self, key):
+            return key == pygame.K_e
+
+    STATE, m1u = _m1_fresh()
+    m1u.debug_jump_to_exfil()
+    STATE.m1_exfil_van_triggered = True       # keep the van out of this check
+    STATE.stealth_failed = False
+    STATE.quiet_entry = True
+    I.trigger_alarm_early()
+    assert STATE.mission_phase == "escape", STATE.mission_phase
+    assert STATE.stealth_failed and STATE.firefight_triggered and not STATE.quiet_entry
+    STATE.enemies.clear()
+    m1u.game_update(_HoldE())
+    assert STATE.truck_hotwiring, "hotwire unreachable after the alarm"
+
+    STATE.truck_hotwiring = False
+    STATE.mission_phase = "firefight"
+    m1u.game_update(_HoldE())
+    assert STATE.truck_hotwiring, "hotwire unreachable in firefight with the notebook"
+    print("  [ok] alarm during escape keeps escape, hotwire opens")
+
+
+def check_m1_exfil_van():
+    """WP7: first entry into exfil_van (notebook in hand) plays VASILE's line once,
+    the van arrives and drops 1 rusher + 2 cover, one per 40 frames; no re-trigger."""
+    from unittest.mock import patch
+    from missions.m1.map import _tc
+    from missions.m1.roles import role_of
+
+    STATE, m1u = _m1_fresh()
+    STATE.notebook_collected = True
+    STATE.mission_phase = "escape"
+    STATE.firefight_triggered = True
+    p = STATE.player
+
+    def _van():
+        return [role_of(e).kind for e in STATE.enemies if role_of(e) and role_of(e).wave == 4]
+
+    p.rect.center = _tc(20, 30)
+    with patch.object(m1u, "trigger_radio_chatter", wraps=m1u.trigger_radio_chatter) as rc:
+        m1u.game_update(EmptyKeys())
+        assert STATE.m1_exfil_van_triggered and STATE.exfil_van_arrived
+        assert m1u._hostiles_pending(), "truck open before the van dropped"
+        counts = []
+        for f in range(1, 200):
+            p.hp = 100
+            m1u.game_update(EmptyKeys())
+            if f % 40 == 0:
+                counts.append(len(_van()))
+        p.rect.center = _tc(3, 27)
+        m1u.game_update(EmptyKeys())
+        p.rect.center = _tc(20, 30)
+        m1u.game_update(EmptyKeys())
+    assert counts[:3] == [1, 2, 3] and counts[-1] == 3, counts
+    assert sorted(_van()) == ["cover", "cover", "rusher"], _van()
+    assert not m1u._hostiles_pending()
+    assert sum("east road" in c.args[0] for c in rc.call_args_list) == 1
+    print("  [ok] van line once, 3 drops at 40-frame spacing")
+
+
 def check_volkov_foreshadowing():
     from unittest.mock import patch
     from core import interactions as I
@@ -3927,6 +4582,34 @@ def check_volkov_foreshadowing():
             assert "On your six. Move." in shot["text"]
             assert shots.index(shot) < next(i for i, s in enumerate(shots) if s.get("speaker") == "VASILE")
             assert not I.radio_allowed("CUTSCENE")
+
+        # WP2: the M1 escape cut is the m1.escape timeline now (it was the
+        # ESCAPE_CUTSCENE frame counter). The M6 plant - Vasile pockets the
+        # notebook unread, VO_198 - must stay the last spoken line of the cut,
+        # as a radio line, and the cut must still run its 1080 frames.
+        from game import timelines as _tl
+        from missions.m1 import meta as _m1m
+        assert gc.escape_shots is not None and len(gc.escape_shots) == 4, \
+            "gc.escape_shots is not the M1 escape shot list"
+        data = _tl.timeline("m1.escape")
+        assert [s["scene"] for s in data.shots] == [
+            "m1_escape_dashboard", "m1_escape_closeup",
+            "m1_escape_truck", "m1_escape_rear",
+        ], "m1.escape changed its shot cuts"
+        total_ms = sum(int(s.get("min_ms", 0)) for s in _m1m.escape_shots)
+        want_ms = _m1m.ESCAPE_FRAMES * 1000 // _m1m.ESCAPE_FPS
+        assert abs(total_ms - want_ms) <= want_ms // 20, \
+            f"escape cut is {total_ms} ms, expected {want_ms} +-5%"
+        speaking = [s for s in _m1m.escape_shots if s.get("dialogue_events")]
+        assert speaking and speaking[-1] is _m1m.escape_shots[2], \
+            "the notebook line must stay on the last speaking shot (the truck)"
+        events = speaking[-1]["dialogue_events"]
+        assert any(sp == "VASILE" and text == _m1m.ESCAPE_VO_NOTEBOOK and radio
+                   for _ms, sp, text, radio in events), "VO_198 missing from m1.escape"
+        # Audio stays keyed by shot + ms offset inside it (no global frame counter).
+        for _shot in _m1m.escape_shots:
+            for ms, name, _vol in _shot.get("cues", ()):
+                assert 0 <= ms < int(_shot["min_ms"]), (_shot["scene"], ms, name)
     finally:
         I.clear_radio()
 
@@ -10055,7 +10738,18 @@ def main():
                      ("voice_manifest_resolves", check_voice_manifest_resolves),
                      ("radio_widget_headless", check_radio_widget_headless),
                          ("depot_restage_timing", check_depot_restage_timing),
-                      ("sprite_pipeline", check_sprite_pipeline)]:
+                      ("sprite_pipeline", check_sprite_pipeline),
+                      ("m1_street_art", check_m1_street_art),
+                      ("m1_dropoff", check_m1_dropoff),
+                      ("m1_stealth_suspicion", check_m1_stealth_suspicion),
+                      ("m1_takedown_silent", check_m1_takedown_silent),
+                      ("m1_brick_noise", check_m1_brick_noise),
+                      ("m1_volkov_escapes_both_routes", check_m1_volkov_escapes_both_routes),
+                      ("m1_waves_quiet_vs_loud", check_m1_waves_quiet_vs_loud),
+                      ("m1_ciocan_charge_stun", check_m1_ciocan_charge_stun),
+                      ("m1_hotwire_damage_closes", check_m1_hotwire_damage_closes),
+                      ("m1_alarm_keeps_escape", check_m1_alarm_keeps_escape),
+                      ("m1_exfil_van", check_m1_exfil_van)]:
         ok = run_check(name, fn) and ok
 
     print("\n=== Mission 6 checks ===")
