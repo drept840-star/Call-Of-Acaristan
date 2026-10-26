@@ -237,17 +237,17 @@
    ]
   },
   {
-   "id": "fire_barrel",
-   "kind": "fire_barrel",
+   "id": "shutter_floodlight",
+   "kind": "floodlight",
    "tile": [
     23,
     9
    ],
    "radius": 120,
    "color": [
-    255,
-    170,
-    90
+    225,
+    235,
+    255
    ]
   }
  ],

@@ -58,6 +58,7 @@ def start_mission(preserve_timer=False):
     STATE.request_escape_cutscene = False
     STATE.notebook_collected = False
     STATE.exfil_reached = False
+    STATE.rain_drops = list(rain_drops)
     STATE.mission_phase = "infiltrate"
     STATE.firefight_triggered = False
     STATE.volkov_escape_timer = 0

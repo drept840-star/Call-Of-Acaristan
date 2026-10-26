@@ -91,7 +91,7 @@ M1_TRIGGERS = [
 M1_LIGHTS = [
     {"id": "street_lamp_a", "kind": "street_lamp", "tile": [6, 2], "radius": 150, "color": [190, 210, 255]},
     {"id": "street_lamp_b", "kind": "street_lamp", "tile": [15, 2], "radius": 150, "color": [190, 210, 255]},
-    {"id": "fire_barrel", "kind": "fire_barrel", "tile": [23, 9], "radius": 120, "color": [255, 170, 90]},
+    {"id": "shutter_floodlight", "kind": "floodlight", "tile": [23, 9], "radius": 120, "color": [225, 235, 255]},
 ]
 
 # Street band rows 0-9 and the stockroom's north wall row 10. Glyphs: C wall,

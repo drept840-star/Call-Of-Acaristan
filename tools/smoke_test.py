@@ -2971,6 +2971,41 @@ def check_sprite_pipeline():
     assert committed == a, "assets/art sheets are stale - run tools/build_all_sprites.py"
 
 
+def check_m1_street_art():
+    """WP4b: the M1 street band resolves its art-pack frames, the fence/shutter/vehicle
+    cells are the ones painted, and M1 rain submits only while the street is on-screen."""
+    from core import artpack
+    from core.state import STATE
+    from missions.m1 import draw as D
+    prev_art = os.environ.pop("ACA_ART", None)
+    prev_rain = getattr(STATE, "rain_drops", None)
+    try:
+        artpack.rebuild()
+        for key in ("fence_post", "fence_mesh", "shutter_3w", "van_delivery", "rubble_0", "lamp_post"):
+            assert artpack.frame("spr_m1_street", key) is not None, key
+        assert artpack.frame("spr_vehicles", "ipa_truck") is not None
+        assert D._m1_street_art(), "street floor tiles missing"
+        surf = pygame.Surface((config.WIDTH, config.HEIGHT))
+        done = D._draw_m1_street_walls(surf, 0, 0)
+        assert {(22, 10), (23, 10), (24, 10), (8, 3), (10, 4), (22, 6), (25, 6), (6, 7)} <= done,             "street walls not painted from the art pack"
+        class _Queue:
+            n = 0
+
+            def submit(self, *_a, **_k):
+                self.n += 1
+        STATE.rain_drops = [(10, 10, 12)]
+        q = _Queue()
+        D._submit_m1_rain(q, 2000)
+        assert q.n == 0, "M1 rain drawn with the street off-screen"
+        D._submit_m1_rain(q, 0)
+        assert q.n == 1, "M1 street rain not submitted"
+    finally:
+        STATE.rain_drops = prev_rain
+        if prev_art is not None:
+            os.environ["ACA_ART"] = prev_art
+        artpack.rebuild()
+
+
 def check_depot_restage_timing():
     """Polish Task 2: the KRAP depot beats are paced to their typed lines (no
     frozen frame while text is still coming in), the change shot's min_ms
@@ -10086,7 +10121,8 @@ def main():
                      ("voice_manifest_resolves", check_voice_manifest_resolves),
                      ("radio_widget_headless", check_radio_widget_headless),
                          ("depot_restage_timing", check_depot_restage_timing),
-                      ("sprite_pipeline", check_sprite_pipeline)]:
+                      ("sprite_pipeline", check_sprite_pipeline),
+                      ("m1_street_art", check_m1_street_art)]:
         ok = run_check(name, fn) and ok
 
     print("\n=== Mission 6 checks ===")

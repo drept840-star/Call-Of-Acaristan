@@ -37,10 +37,11 @@ from missions import walking_sim
 from core import artpack, lighting, staticlayer
 from core import render_util
 from core import props as _props
+from core.config import draw_rain as _draw_rain_streaks
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
-from missions.m1.map import _lerp, mission1_map, MAP_W, MAP_H
+from missions.m1.map import _lerp, mission1_map, MAP_W, MAP_H, M1_STREET_ROW
 from missions.m1 import update as _m1_update
 from missions.m1.hotwire import _hotwire_wire_nodes, HOTWIRE_TARGET_PAIRS, HOTWIRE_WIRES
 from engine.core import now_ms as _now_ms, now_s as _now_s  # RPE6 B-001 timebase
@@ -602,8 +603,8 @@ _M1_LAMPS = (
     (21, 17, 150, (190, 210, 255), "sl_c"),
     (6, 2, 150, (190, 210, 255), "sl_d"),
     (15, 2, 150, (190, 210, 255), "sl_e"),
-    # Fire barrel by the shutter - warm.
-    (23, 9, 120, (255, 170, 90), "fb_a"),
+    # Shutter floodlight over the apron - cold white.
+    (23, 9, 120, (225, 235, 255), "fl_a"),
     # Exfil tripod work-light.
     (21, 31, 140, (235, 245, 225), "ex_a"),
 )
@@ -632,12 +633,85 @@ def _push_m1_lights(cam_x, cam_y, t):
                      caster=_m1_solid_world, cam=(cam_x, cam_y), key="baypool")
 
 
+def _m1_street_art():
+    """True when the art pack supplies the street floor (64-px tiles)."""
+    return artpack.enabled() and artpack.tile(".", 0, 0) is not None
+
+
+def _m1_glyph(col, row):
+    if 0 <= row < len(mission1_map) and 0 <= col < len(mission1_map[row]):
+        return mission1_map[row][col]
+    return ""
+
+
+def _blit_m1_street_floor(target, cam_x, cam_y):
+    """Street band rows 0-9: 64-px art-pack floor tiles."""
+    for row in range(max(0, int(cam_y // TILE_SIZE) - 1),
+                     min(M1_STREET_ROW, int((cam_y + HEIGHT) // TILE_SIZE) + 2)):
+        for col in range(int(cam_x // TILE_SIZE) - 1, int((cam_x + WIDTH) // TILE_SIZE) + 2):
+            tile = artpack.tile(".", col, row)
+            if tile is not None:
+                target.blit(tile, (col * TILE_SIZE - cam_x, row * TILE_SIZE - cam_y))
+
+
+# Vehicle blocks of the street band, keyed by (w, h) of the T run.
+_M1_VEHICLE_BLOCKS = {(3, 2): ("spr_m1_street", "van_delivery"), (4, 1): ("spr_vehicles", "ipa_truck")}
+_M1_ASPHALT = (28, 28, 31)
+
+
+def _m1_run_size(col, row, ch):
+    w = h = 1
+    while _m1_glyph(col + w, row) == ch:
+        w += 1
+    while _m1_glyph(col, row + h) == ch:
+        h += 1
+    return w, h
+
+
+def _blit_m1_vehicle_block(target, w, h, x, y):
+    spec = _M1_VEHICLE_BLOCKS.get((w, h))
+    img = artpack.frame(*spec) if spec else None
+    if img is None:
+        return False
+    pygame.draw.rect(target, _M1_ASPHALT, (x, y, w * TILE_SIZE, h * TILE_SIZE))
+    target.blit(img, (x + (w * TILE_SIZE - img.get_width()) // 2,
+                      y + (h * TILE_SIZE - img.get_height()) // 2))
+    return True
+
+
+def _draw_m1_street_walls(target, cam_x, cam_y):
+    """Street-band fence posts/mesh, shutter and vehicle blocks from the art pack.
+    Returns the wall cells it painted; the container pass skips them."""
+    done = set()
+    if not artpack.enabled():
+        return done
+    for row in range(M1_STREET_ROW + 1):
+        for col in range(MAP_W):
+            ch = _m1_glyph(col, row)
+            x, y = col * TILE_SIZE - cam_x, row * TILE_SIZE - cam_y
+            if ch == "f":
+                key = "fence_post" if col % 2 == 0 else "fence_mesh"
+                if artpack.blit_frame(target, "spr_m1_street", key, (x, y)):
+                    done.add((col, row))
+            elif ch in ("S", "T") and _m1_glyph(col - 1, row) != ch and _m1_glyph(col, row - 1) != ch:
+                w, h = _m1_run_size(col, row, ch)
+                if ch == "S":
+                    ok = (w, h) == (3, 1) and artpack.blit_frame(target, "spr_m1_street", "shutter_3w", (x, y))
+                else:
+                    ok = _blit_m1_vehicle_block(target, w, h, x, y)
+                if ok:
+                    done.update((col + i, row + j) for i in range(w) for j in range(h))
+    return done
+
+
 def _render_m1_bg(target, cam_x, cam_y):
     """Static tilemap pass: floor grid, container/warehouse walls, desk bodies."""
     start_tx = int(cam_x // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
     start_ty = int(cam_y // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
     warehouse_y_start = 21 * TILE_SIZE
     warehouse_y_end = 30 * TILE_SIZE
+    street_art = _m1_street_art()
+    street_end = M1_STREET_ROW * TILE_SIZE
     for tx in range(
         start_tx - FLOOR_TILE_SIZE,
         int(cam_x + WIDTH + FLOOR_TILE_SIZE * 2),
@@ -648,12 +722,17 @@ def _render_m1_bg(target, cam_x, cam_y):
             int(cam_y + HEIGHT + FLOOR_TILE_SIZE * 2),
             FLOOR_TILE_SIZE,
         ):
+            if street_art and ty + FLOOR_TILE_SIZE <= street_end:
+                continue
             tile = (
                 FLOOR_TILE
                 if (warehouse_y_start <= ty <= warehouse_y_end)
                 else SLUM_FLOOR
             )
             target.blit(tile, (tx - cam_x, ty - cam_y))
+    if street_art:
+        _blit_m1_street_floor(target, cam_x, cam_y)
+    handled = _draw_m1_street_walls(target, cam_x, cam_y)
     container_tiles = [
         CONTAINER_TILE_RED,
         CONTAINER_TILE_BLUE,
@@ -662,9 +741,11 @@ def _render_m1_bg(target, cam_x, cam_y):
     ]
     for wall in STATE.walls:
         dr = pygame.Rect(wall.x - cam_x, wall.y - cam_y, TILE_SIZE, TILE_SIZE)
-        target.blit(wall_shadow, (dr.x - 4, dr.y - 4))
         col = wall.x // TILE_SIZE
         row = wall.y // TILE_SIZE
+        if (col, row) in handled:
+            continue
+        target.blit(wall_shadow, (dr.x - 4, dr.y - 4))
         if (col, row) in STATE.warehouse_walls_set:
             target.blit(WAREHOUSE_WALL, (dr.x, dr.y))
         else:
@@ -892,6 +973,12 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
                     prev = (cxp, cyp)
                 else:
                     prev = None
+    # ── Street rubble ──
+    for (rtx, rty), key in (((5, 5), "rubble_0"), ((12, 9), "rubble_1")):
+        rx = rtx * TILE_SIZE + TILE_SIZE // 2 - cam_x
+        ry = rty * TILE_SIZE + TILE_SIZE // 2 - cam_y
+        if render_util.screen_visible(rx - 40, ry - 40, 80, 80):
+            artpack.blit_frame(target, "spr_m1_street", key, (rx, ry))
     # ── Lamp fixtures + floor light pools ──
     for tx, ty, _r, _col, key in _M1_LAMPS:
         fam = key.split("_")[0]
@@ -904,6 +991,8 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
             render_util.add_radial(target, sx, sy, 34, (255, 225, 175), 24)
         elif fam == "sl":
             _draw_m1_street_post(target, sx, sy)
+        elif fam == "fl":
+            artpack.blit_frame(target, "spr_m1_street", "lamp_post", (sx, sy + 26))
         elif fam == "gate":
             _draw_m1_bulkhead(target, sx, sy)
         elif fam == "ex":
@@ -1666,6 +1755,17 @@ def _composite_m1_lighting(surface):
     lighting.buffer().composite(surface, _now_s())
 
 
+def _submit_m1_rain(q, fcy):
+    """Rain over the street band only (rows 0-9); nothing once the band is off-screen."""
+    drops = getattr(STATE, "rain_drops", None)
+    clip_h = min(HEIGHT, M1_STREET_ROW * TILE_SIZE - fcy)
+    if not drops or clip_h <= 0:
+        return
+    def paint(s):
+        _draw_rain_streaks(s.subsurface((0, 0, WIDTH, clip_h)), drops)
+    q.submit(_UiPassDraw(paint, "m1.rain"), _L.UI, sort_key=-1)
+
+
 def submit_frame(q, fcx, fcy):
     """Submit one Mission 1 frame (draw order is the legacy painter's, ADR-017)."""
     fcx, fcy = round(fcx), round(fcy)
@@ -1691,6 +1791,7 @@ def submit_frame(q, fcx, fcy):
                  _L.FX_WORLD, sort_key=(5, 0))
     ch_x, ch_y = get_scaled_mouse()
     _submit_overlay(q, fcx, fcy, ch_x, ch_y)
+    _submit_m1_rain(q, fcy)
     q.submit(_UiPassDraw(lambda s: _draw_m1_hud(s, fcx, fcy), "m1.hud"), _L.UI, sort_key=0)
     # ── Death animation: camera tilt ──
     # Apply at the very end of the frame so the entire rendered scene
