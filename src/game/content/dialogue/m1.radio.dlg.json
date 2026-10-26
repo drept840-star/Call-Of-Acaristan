@@ -1,0 +1,204 @@
+{
+ "schema": "ae.dialogue/1",
+ "id": "m1.radio",
+ "start": "dropoff_1",
+ "speakers": {
+  "VASILE": {},
+  "BIRIBEL": {},
+  "VOLKOV": {},
+  "ENEMY": {},
+  "CIOCAN": {}
+ },
+ "nodes": {
+  "dropoff_1": {
+   "speaker": "VASILE",
+   "text": "Channel 4. You're on the street. / Two at the shutter, one walking the fence.",
+   "next": "dropoff_2"
+  },
+  "dropoff_2": {
+   "speaker": "BIRIBEL",
+   "text": "Side door's dark.",
+   "next": "dropoff_3"
+  },
+  "dropoff_3": {
+   "speaker": "VASILE",
+   "text": "Then use it. Volkov's inside with the book.",
+   "next": "bark_suspicious"
+  },
+  "bark_suspicious": {
+   "speaker": "ENEMY",
+   "text": "Hm? Who's there?",
+   "next": "bark_search"
+  },
+  "bark_search": {
+   "speaker": "ENEMY",
+   "text": "Check the corner.",
+   "next": "alarm_volkov"
+  },
+  "alarm_volkov": {
+   "speaker": "VOLKOV",
+   "text": "Read it before you hand it over!",
+   "next": "alarm_vasile"
+  },
+  "alarm_vasile": {
+   "speaker": "VASILE",
+   "text": "Biribel, they spotted you! Alarm is active!",
+   "next": "inside_quiet"
+  },
+  "inside_quiet": {
+   "speaker": "VASILE",
+   "text": "Clean so far. Keep it that way.",
+   "next": "civilian_kevlar"
+  },
+  "civilian_kevlar": {
+   "speaker": "VASILE",
+   "text": "Where'd you get the plate? Keep it on.",
+   "next": "civilian_intel"
+  },
+  "civilian_intel": {
+   "speaker": "VASILE",
+   "text": "If that civilian was right, the code's already in your head.",
+   "next": "civilian_none"
+  },
+  "civilian_none": {
+   "speaker": "VASILE",
+   "text": "No local help. Search the desks.",
+   "next": "gate_open"
+  },
+  "gate_open": {
+   "speaker": "VASILE",
+   "text": "Gate is open. Signatures ahead, watch the corners.",
+   "next": "safe_locked"
+  },
+  "safe_locked": {
+   "speaker": "VASILE",
+   "text": "Safe is locked. Look for notes on desks for the code.",
+   "next": "keypad_hint_1"
+  },
+  "keypad_hint_1": {
+   "speaker": "VASILE",
+   "text": "The memos said something about a shipment number…",
+   "next": "keypad_hint_2"
+  },
+  "keypad_hint_2": {
+   "speaker": "BIRIBEL",
+   "text": "Shipment 7742. Only the last three digits.",
+   "next": "keypad_hint_3"
+  },
+  "keypad_hint_3": {
+   "speaker": "BIRIBEL",
+   "text": "7… 4… 2. Has to be.",
+   "next": "notebook_leaf"
+  },
+  "notebook_leaf": {
+   "speaker": "BIRIBEL",
+   "text": "Half of it's gone. Route twelve.",
+   "next": "files_already"
+  },
+  "files_already": {
+   "speaker": "VASILE",
+   "text": "…Some of this was already in our files.",
+   "next": "breach_brace"
+  },
+  "breach_brace": {
+   "speaker": "VASILE",
+   "text": "BRACE! They're breaching the bay doors!",
+   "next": "breach_both_sides"
+  },
+  "breach_both_sides": {
+   "speaker": "VASILE",
+   "text": "They're coming from both sides! Get to the truck NOW!",
+   "next": "volkov_escaped"
+  },
+  "volkov_escaped": {
+   "speaker": "VASILE",
+   "text": "Volkov escaped! Get that notebook and get out.",
+   "next": "ciocan_entrance"
+  },
+  "ciocan_entrance": {
+   "speaker": "CIOCAN",
+   "text": "The clerk's new friend? Let's see.",
+   "next": "exfil_van"
+  },
+  "exfil_van": {
+   "speaker": "VASILE",
+   "text": "Company on the east road. Move.",
+   "next": "exfil_truck_not_clear"
+  },
+  "exfil_truck_not_clear": {
+   "speaker": "VASILE",
+   "text": "Not yet. Clear the yard before you put your head under that dash.",
+   "next": "hotwire_tutorial"
+  },
+  "hotwire_tutorial": {
+   "speaker": "VASILE",
+   "text": "Open the panel. Red feeds yellow. Blue wakes green. Black bites white.",
+   "next": "hotwire_smoke"
+  },
+  "hotwire_smoke": {
+   "speaker": "BIRIBEL",
+   "text": "Come on. Come on.",
+   "next": null
+  }
+ },
+ "metadata": {
+  "mission": "m1",
+  "kind": "radio",
+  "source": "docs/MISSION1_REWORK_PLAN.md (c) beat sheet; inline fallbacks in core/interactions.py, missions/m1/update.py, missions/m1/main.py",
+  "addressing": "the runtime addresses one node by beat id (game.dialogues.dialogue('m1.radio').node(<id>)); the next links give one linear reading order and satisfy the engine.dialogue reachability check, they are not a single conversation",
+  "vo": {
+   "dropoff_1": "VO_205",
+   "dropoff_2": "VO_206",
+   "dropoff_3": "VO_207",
+   "bark_suspicious": "VO_208",
+   "bark_search": "VO_209",
+   "alarm_vasile": "VO_085",
+   "inside_quiet": "VO_210",
+   "civilian_kevlar": "VO_087",
+   "civilian_intel": "VO_088",
+   "civilian_none": "VO_089",
+   "gate_open": "VO_090",
+   "safe_locked": "VO_091",
+   "keypad_hint_1": "VO_174",
+   "keypad_hint_2": "VO_175",
+   "keypad_hint_3": "VO_176",
+   "notebook_leaf": "VO_214",
+   "files_already": "VO_084",
+   "breach_brace": "VO_092",
+   "breach_both_sides": "VO_093",
+   "volkov_escaped": "VO_094",
+   "ciocan_entrance": "VO_215",
+   "exfil_van": "VO_216",
+   "exfil_truck_not_clear": "VO_095",
+   "hotwire_tutorial": "VO_096",
+   "hotwire_smoke": "VO_217"
+  },
+  "vo_notes": {
+   "alarm_volkov": "shipped inline shout ('Read it before you hand it over!'); it has no voice_manifest row (caption-only), so no id here"
+  },
+  "variants": {
+   "civilian_payoff": ["civilian_kevlar", "civilian_intel", "civilian_none"]
+  },
+  "beats": {
+   "dropoff_1": "m1.dropoff timeline",
+   "bark_suspicious": "first enemy reaches SUSPICIOUS",
+   "bark_search": "first enemy reaches SEARCHING",
+   "alarm_volkov": "alarm latch (loud route)",
+   "inside_quiet": "quiet entry, entering row 11 (row 21 after WP4)",
+   "civilian_payoff": "walking_sim reward: kevlar / intel / none",
+   "gate_open": "firefight, player past row 15 (row 25 after WP4)",
+   "safe_locked": "within 120 px of the notebook, safe still locked",
+   "keypad_hint_1..3": "wrong safe codes 1, 2, 3+",
+   "notebook_leaf": "NOTEBOOK_INSPECT",
+   "files_already": "safe opened",
+   "breach_brace": "breach stage 2",
+   "breach_both_sides": "breach stage 5",
+   "volkov_escaped": "Volkov reaches the bay door",
+   "ciocan_entrance": "wave 2 arrives with CIOCAN",
+   "exfil_van": "trigger exfil_van, first time",
+   "exfil_truck_not_clear": "hotwire attempted with enemies alive",
+   "hotwire_tutorial": "hotwire panel first opened",
+   "hotwire_smoke": "smoke reaches the truck at 25 s"
+  }
+ }
+}

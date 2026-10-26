@@ -213,6 +213,22 @@ VOICE_LINES = [
     ('VO_202', 'BIRIBEL', "Vasile's name was on the chain. There's an explanation."),
     ('VO_203', 'MARU', 'There always is.'),
     ('VO_204', 'BIRIBEL', "The leaf's dry. He kept a clean copy."),
+    # M1 "Black Notebook" rework (docs/MISSION1_REWORK_PLAN.md section c).
+    # New spoken lines, no takes yet: caption-only until recorded, so they are
+    # listed in KNOWN_MISSING_AUDIO below and never in VOICE_ORDER (AGENTS.md:53).
+    ('VO_205', 'VASILE', "Channel 4. You're on the street. / Two at the shutter, one walking the fence."),
+    ('VO_206', 'BIRIBEL', "Side door's dark."),
+    ('VO_207', 'VASILE', "Then use it. Volkov's inside with the book."),
+    ('VO_208', 'ENEMY', "Hm? Who's there?"),
+    ('VO_209', 'ENEMY', 'Check the corner.'),
+    ('VO_210', 'VASILE', 'Clean so far. Keep it that way.'),
+    ('VO_211', 'VOLKOV', "Easy. I'm a clerk. I count crates."),
+    ('VO_212', 'BIRIBEL', 'Then count to three and walk with me.'),
+    ('VO_213', 'VOLKOV', 'The loose page. Read it.'),
+    ('VO_214', 'BIRIBEL', "Half of it's gone. Route twelve."),
+    ('VO_215', 'CIOCAN', "The clerk's new friend? Let's see."),
+    ('VO_216', 'VASILE', 'Company on the east road. Move.'),
+    ('VO_217', 'BIRIBEL', 'Come on. Come on.'),
 ]
 
 
@@ -267,4 +283,7 @@ KNOWN_MISSING_AUDIO = frozenset({
     'VO_164',
     'VO_171',
     'VO_173',
+    # M1 rework section c (docs/MISSION1_REWORK_PLAN.md): new beats, no takes.
+    'VO_205', 'VO_206', 'VO_207', 'VO_208', 'VO_209', 'VO_210', 'VO_211',
+    'VO_212', 'VO_213', 'VO_214', 'VO_215', 'VO_216', 'VO_217',
 })

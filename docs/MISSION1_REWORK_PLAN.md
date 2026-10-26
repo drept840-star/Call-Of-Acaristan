@@ -47,28 +47,28 @@ New / shifted positions:
 - Level JSON `m1.warehouse.level.json`: regenerate floor rows + spawn objects from the builder; add `lights[]` for the new lamps and `triggers[]` for: `street_exit` (rows 10-11), `volkov_standoff` (rect cols 11-19, rows 26-28), `exfil_van` (rect cols 18-26, rows 30-31).
 
 ## (c) Beat sheet and lines
-IDs: next free after the current max VO row. Placeholder ids below are `VO_M1_nn`; assign real numbers in order. All new rows go to `KNOWN_MISSING_AUDIO`. Inline lines that move unchanged keep their text exactly.
+IDs: assigned in order after the old max row (VO_204): `VO_205`..`VO_217`. All new rows are in `KNOWN_MISSING_AUDIO` and not in `VOICE_ORDER`. Inline lines that move unchanged keep their text exactly.
 
 0. Drop-off timeline `m1.dropoff` (in-engine, ~7 s): van tail-lights leave east, rain.
-   - VASILE (radio): "Channel 4. You're on the street. / Two at the shutter, one walking the fence." (VO_M1_01)
-   - BIRIBEL: "Side door's dark." (VO_M1_02)
-   - VASILE: "Then use it. Volkov's inside with the book." (VO_M1_03)
+   - VASILE (radio): "Channel 4. You're on the street. / Two at the shutter, one walking the fence." (VO_205)
+   - BIRIBEL: "Side door's dark." (VO_206)
+   - VASILE: "Then use it. Volkov's inside with the book." (VO_207)
 1. First fence gap reached, unseen: no line (silence is the reward).
 2. Brick tutorial (first pickup): hint text only, "Q - throw brick (noise)".
 3. Takedown tutorial (first enemy within 2 tiles, from behind, unaware): hint text "E - takedown".
-4. Enemy suspicious (first time): ENEMY "Hm? Who's there?" (VO_M1_04, bark); searching: ENEMY "Check the corner." (VO_M1_05, bark).
+4. Enemy suspicious (first time): ENEMY "Hm? Who's there?" (VO_208, bark); searching: ENEMY "Check the corner." (VO_209, bark).
 5. Alarm latched: existing pair stays (`VOLKOV` "Read it before you hand it over!" moves to beat 7 on the quiet route; on the loud route it stays here), `VASILE` "Biribel, they spotted you! Alarm is active!".
-6. Inside, quiet: VASILE "Clean so far. Keep it that way." (VO_M1_06), on entering row 11.
+6. Inside, quiet: VASILE "Clean so far. Keep it that way." (VO_210), on entering row 11.
 7. Volkov standoff (quiet route only; trigger `volkov_standoff`, alarm not raised). Gameplay freezes, camera eases to frame both, letterbox 24 px, ~9 s:
-   - VOLKOV: "Easy. I'm a clerk. I count crates." (VO_M1_07)
-   - BIRIBEL: "Then count to three and walk with me." (VO_M1_08)
-   - VOLKOV: "Read it before you hand it over! / The loose page. Read it." (existing inline line + new second beat VO_M1_09)
+   - VOLKOV: "Easy. I'm a clerk. I count crates." (VO_211)
+   - BIRIBEL: "Then count to three and walk with me." (VO_212)
+   - VOLKOV: "Read it before you hand it over! / The loose page. Read it." (existing inline line + new second beat VO_213)
    - commander K spots them (scripted) -> alarm; Volkov runs out the bay door (existing 90-frame run), VASILE `VO_094`.
    Loud route: no freeze; when the alarm fires Volkov shouts the existing line and runs; `VO_094` plays when he exits.
-8. Notebook keypad (code 742, hints unchanged), then NOTEBOOK_INSPECT shows: registry page (FT-7742..7745, IPA #8841-8844) and the loose leaf rendered water-damaged: "ROUTE 12" legible, a smeared relay code "V-?7", the rest bled ink. BIRIBEL: "Half of it's gone. Route twelve." (VO_M1_10)
-9. Breach (existing 6 s staged breach), then waves (section e). CIOCAN entrance: "The clerk's new friend? Let's see." (VO_M1_11). Charge windup bark: "Hah!" (caption only, no row).
-10. Exfil van arrives (trigger `exfil_van`, first time): VASILE "Company on the east road. Move." (VO_M1_12).
-11. Hotwire: existing tutorial lines. Smoke reaches the truck at 25 s: BIRIBEL "Come on... break." reuse `VO_045` if it fits the take, else new row "Come on. Come on." (VO_M1_13).
+8. Notebook keypad (code 742, hints unchanged), then NOTEBOOK_INSPECT shows: registry page (FT-7742..7745, IPA #8841-8844) and the loose leaf rendered water-damaged: "ROUTE 12" legible, a smeared relay code "V-?7", the rest bled ink. BIRIBEL: "Half of it's gone. Route twelve." (VO_214)
+9. Breach (existing 6 s staged breach), then waves (section e). CIOCAN entrance: "The clerk's new friend? Let's see." (VO_215). Charge windup bark: "Hah!" (caption only, no row).
+10. Exfil van arrives (trigger `exfil_van`, first time): VASILE "Company on the east road. Move." (VO_216).
+11. Hotwire: existing tutorial lines. Smoke reaches the truck at 25 s: BIRIBEL "Come on... break." reuse `VO_045` if it fits the take, else new row "Come on. Come on." (VO_217).
 12. Escape timeline `m1.escape` (port of the current 1080-frame cut, same shots and subtitles, `VO_198` at the end).
 
 All M1 gameplay lines live in `src/game/content/dialogue/m1.radio.dlg.json` (radio/barks keyed by beat id) and `m1.standoff.dlg.json`; loaded via `game/dialogues.py` with the inline strings as `legacy` fallback.
@@ -78,14 +78,14 @@ Per enemy `suspicion` 0..1, states: UNAWARE (<0.35), SUSPICIOUS (0.35-<1.0), SEA
 - Sight test: existing `enemy_ai` cone (+-45 deg calm / +-80 alerted, `ENEMY_DETECT_RANGE` 350 px, LOS through `T`/walls blocked, fences `f` not blocking).
 - Fill per second while seen: `base 1.25 * dist_k * light_k * move_k`. `dist_k` = 1.6 at <=120 px falling linearly to 0.4 at 350 px. `light_k` = 1.5 if the player stands in a lamp radius, 0.55 in dark. `move_k` = 1.3 sprinting, 1.0 walking, 0.7 still. Close + lit + walking fills in ~0.35 s; far + dark + still ~3.6 s.
 - Decay 0.25/s when not seen, after a 1.5 s hold.
-- SUSPICIOUS: stop patrol, turn to the last seen point, walk there at speed 1.2 after 0.8 s. Bark VO_M1_04 once per enemy.
+- SUSPICIOUS: stop patrol, turn to the last seen point, walk there at speed 1.2 after 0.8 s. Bark VO_208 once per enemy.
 - SEARCHING (1.0): existing `SEARCH` state for 6 s around the last seen point, `alerted=True` for that enemy only. Starts a 2.0 s radio call (small red "!" over the head). If the enemy dies or loses all sight for the whole 2.0 s, no alarm. Else `trigger_alarm_early()` (existing).
 - Noise: unsuppressed pistol shot -> existing `enemy_hear_shot` (300 px) -> those enemies go straight to SEARCHING (radio call still applies). Brick impact -> enemies within 250 px with LOS-or-wall-thin path go SUSPICIOUS and walk to the impact (6 s), no radio call.
 - Bodies: an enemy that sees a corpse within 250 px -> SEARCHING.
 - Takedown: melee input on an enemy in UNAWARE/SUSPICIOUS state, within `MELEE_RANGE` 52 px, with the player inside the enemy's rear 120 deg arc -> instant silent kill (no hear event, 0.4 s lock, corpse). Otherwise normal `resolve_melee`.
 - HUD: per-enemy arc meter over the head (hard-edged 2 px pixel arc, white -> amber -> red), no screen-wide overlay.
 - Notebook: drop the "no enemy within 300 px" rule; keypad entry is allowed whenever the player is not in an enemy's sight.
-- `quiet_entry`: true while no alarm has latched. Pays out: wave 3 skipped, wave sizes in section e, VASILE VO_M1_06 inside, standoff beat.
+- `quiet_entry`: true while no alarm has latched. Pays out: wave 3 skipped, wave sizes in section e, VASILE VO_210 inside, standoff beat.
 
 ## (e) Breach and exfil
 `missions/m1/roles.py`: `@component M1Role(kind: str)` with kinds `rusher` (speed 2.6, no cover, closes to 120 px), `cover` (existing cover sweeps, holds 200-280 px), `flanker` (paths to a point 90 deg around the player at 260 px, then CHASE). Waves spawn with hp 115 (unchanged).

@@ -1,0 +1,49 @@
+{
+ "schema": "ae.dialogue/1",
+ "id": "m1.standoff",
+ "start": "standoff_1",
+ "speakers": {
+  "VOLKOV": {},
+  "BIRIBEL": {}
+ },
+ "nodes": {
+  "standoff_1": {
+   "speaker": "VOLKOV",
+   "text": "Easy. I'm a clerk. I count crates.",
+   "next": "standoff_2"
+  },
+  "standoff_2": {
+   "speaker": "BIRIBEL",
+   "text": "Then count to three and walk with me.",
+   "next": "standoff_3"
+  },
+  "standoff_3": {
+   "speaker": "VOLKOV",
+   "text": "Read it before you hand it over!",
+   "next": "standoff_4"
+  },
+  "standoff_4": {
+   "speaker": "VOLKOV",
+   "text": "The loose page. Read it.",
+   "next": null
+  }
+ },
+ "metadata": {
+  "mission": "m1",
+  "kind": "beat",
+  "trigger": "volkov_standoff",
+  "source": "docs/MISSION1_REWORK_PLAN.md (c) beat 7",
+  "vo": {
+   "standoff_1": "VO_211",
+   "standoff_2": "VO_212",
+   "standoff_4": "VO_213"
+  },
+  "vo_notes": {
+   "standoff_3": "shipped inline shout (core/interactions.py trigger_alarm_early); it has no voice_manifest row (caption-only), so no id here"
+  },
+  "routes": {
+   "quiet": "quiet_entry, alarm not raised: gameplay freezes, camera eases to frame both, 24 px letterbox, ~9 s. Commander K spots them afterwards (scripted alarm), Volkov runs out the bay door, VASILE VO_094 (m1.radio volkov_escaped).",
+   "loud": "no freeze: when the alarm fires Volkov shouts standoff_3 and runs; VO_094 plays when he exits."
+  }
+ }
+}
