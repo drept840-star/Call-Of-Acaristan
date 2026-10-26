@@ -40,7 +40,7 @@
    "files": {
     "0": {
      "file": "pickup_icon_0.png",
-     "pixels": "85242780724dff90cc2b7be55020e4a1f5889f8d56c45cd1586e9add43af2f51",
+     "pixels": "24ee24185ab2bd55b278a2243f979c6f8d11a84aec1b20086857aad9b6e17d41",
      "size": [
       32,
       32
@@ -78,7 +78,7 @@
    "files": {
     "0": {
      "file": "world_static_0.png",
-     "pixels": "560b388bf62ce04156c4b10b28691a82957c0d01360c3aed9aab5526e2005c19",
+     "pixels": "dbb46557fae4d194792dd2e20a3c888a17ec57d1b951d8330c3ce0536eae55e2",
      "size": [
       2048,
       2560
