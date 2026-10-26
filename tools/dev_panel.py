@@ -18,7 +18,7 @@ Layout, top to bottom::
     header   title + live "visible/total targets · running" counts
     filter   type to narrow the list (matches target name or description)
     body     scrollable, grouped target list in mission order, plus a
-             "Packaging" group (full / slim zip via tools/zip_project.py)
+             "Packaging" group (full / slim / handoff zip via tools/zip_project.py)
     footer   extra args, Copy command, Stop all games, status line
 
 Keyboard: ↑/↓ walk the visible targets, Enter launches the selected one,
@@ -96,6 +96,8 @@ TOOL_TARGETS = {
     "zip": ("Full project snapshot zip + Pixeldrain upload", []),
     "zip-slim": ("Slim playable bundle (--slim): runtime essentials only",
                  ["--slim"]),
+    "zip-handoff": ("Handoff zip (--handoff): tests + .wolf + plan, for review",
+                    ["--handoff"]),
 }
 THEME = {
     "app":        "#1a1815",
