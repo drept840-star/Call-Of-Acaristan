@@ -10,9 +10,10 @@ Runs, in order, and stops on the first failure (non-zero exit):
   5. tools/sprites/fx.py           spr_fx_scorch + spr_fx_m2 (blast aftermath)
   6. tools/sprites/portraits.py    spr_portraits  (radio caller-ID busts, T6b)
   7. tools/sprites/mission_failed.py spr_mission_failed (bespoke procedural failure scenes)
+  8. tools/sprites/m1_street.py    spr_m1_street  (M1 street band: fence, lamp, rubble, shutter, van)
 
 --preview     also write previews/sprites/<family>.png (light + dark, 2x)
---skip-legacy only run the tools/sprites/* family generators (3-7)
+--skip-legacy only run the tools/sprites/* family generators (3-8)
 
 Every generator is deterministic (fixed seeds, sorted JSON), so a clean
 rebuild produces byte-identical PNG/JSON; the smoke test checks that.
@@ -25,7 +26,8 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEGACY = ("tools/make_art_pack.py", "tools/bake_m5_sprites.py")   # bake_m5_sprites -> ae_bake --pack m5
 FAMILIES = ("tools/sprites/vehicles.py", "tools/sprites/props.py", "tools/sprites/fx.py",
-            "tools/sprites/portraits.py", "tools/sprites/mission_failed.py")
+            "tools/sprites/portraits.py", "tools/sprites/mission_failed.py",
+            "tools/sprites/m1_street.py")
 
 
 def _run(rel, extra):

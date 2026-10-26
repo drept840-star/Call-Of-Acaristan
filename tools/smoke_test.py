@@ -2900,14 +2900,17 @@ def check_sprite_pipeline():
     from missions.m2 import draw as m2d
     root = Path(__file__).resolve().parent.parent
     art = root / "assets" / "art"
-    sheets = ("spr_vehicles", "spr_props_m2", "spr_fx_scorch", "spr_fx_m2", "spr_portraits", "spr_mission_failed")
+    sheets = ("spr_vehicles", "spr_props_m2", "spr_fx_scorch", "spr_fx_m2", "spr_portraits", "spr_mission_failed",
+              "spr_m1_street")
     probes = ((artpack.vehicle, "car_teal_118x44"), (artpack.vehicle, "tanker"),
               (lambda k: artpack.frame("spr_portraits", k), "vasile"),
               (lambda k: artpack.frame("spr_portraits", k), "unknown"),
               *((lambda k: artpack.frame("spr_mission_failed", k), key)
                 for key in ("notebook", "route", "cells", "tower", "press", "maru_lost")),
               (artpack.prop, "cone"), (artpack.prop, "upload_pc_3_1"),
-              (artpack.fx, "scorch"), (artpack.fx, "wreck_hull"), (artpack.fx, "spot_14_0"))
+              (artpack.fx, "scorch"), (artpack.fx, "wreck_hull"), (artpack.fx, "spot_14_0"),
+              *((lambda k: artpack.frame("spr_m1_street", k), key)
+                for key in ("fence_post", "lamp_post", "rubble_0", "shutter_3w", "van_delivery")))
     # 1. JSON <-> PNG agreement, every frame rect inside the sheet.
     for name in sheets:
         meta = _json.loads((art / (name + ".json")).read_text(encoding="utf-8"))
@@ -2954,7 +2957,7 @@ def check_sprite_pipeline():
     # 4. Determinism: two clean rebuilds produce identical bytes, matching
     #    the committed sheets.
     def _build(dst):
-        for fam in ("vehicles", "props", "fx", "portraits", "mission_failed"):
+        for fam in ("vehicles", "props", "fx", "portraits", "mission_failed", "m1_street"):
             subprocess.run([sys.executable, str(root / "tools" / "sprites" / (fam + ".py")),
                             "--out", str(dst)], check=True, cwd=str(root),
                            stdout=subprocess.DEVNULL,
