@@ -6,7 +6,7 @@
  "layers": {
   "floor": [
    "CCCCCCCCCCCCCCCCCCCCCCCCCCCC",
-   "CP.........................C",
+   "C..........................C",
    "C.....L........L...........C",
    "C.......TTT................C",
    "C.......TTT........E.......C",
@@ -14,7 +14,7 @@
    "C.....................TTTT.C",
    "Cffffff.ffffffffffffff.ffffC",
    "C......................E.E.C",
-   "C...........r..........F...C",
+   "C..P........r..........F...C",
    "CCCdCCCCCCCCCCCCCCCCCCSSSCCC",
    "C..........................C",
    "C..........................C",
@@ -41,18 +41,6 @@
   ]
  },
  "objects": [
-  {
-   "id": "spawn-player@1,1",
-   "kind": "spawn",
-   "tile": [
-    1,
-    1
-   ],
-   "props": {
-    "who": "player",
-    "marker": "P"
-   }
-  },
   {
    "id": "spawn-enemy@19,4",
    "kind": "spawn",
@@ -87,6 +75,18 @@
    "props": {
     "who": "enemy",
     "marker": "E"
+   }
+  },
+  {
+   "id": "spawn-player@3,9",
+   "kind": "spawn",
+   "tile": [
+    3,
+    9
+   ],
+   "props": {
+    "who": "player",
+    "marker": "P"
    }
   },
   {

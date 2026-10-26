@@ -30,7 +30,7 @@ from missions import walking_sim
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
-from missions.m1.map import mission1_map, MAP_W, MAP_H, M1_BAY_ROW, M1_GATE_ROW, M1_STREET_ROW
+from missions.m1.map import mission1_map, MAP_W, MAP_H, M1_BAY_ROW, M1_GATE_ROW, M1_STREET_ROW, M1_PLAYER_FACING
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 _walk_footstep_timer = 0
@@ -217,6 +217,7 @@ def start_mission(preserve_timer=False):
                 STATE.doors.append(new_door)
             elif tile == "P":
                 STATE.player = Player(x + 16, y + 16, max_hp=100 + walking_sim.warehouse_hp_bonus)
+                STATE.player.angle = M1_PLAYER_FACING  # the dropoff's final pose
             elif tile == "E":
                 STATE.enemies.append(Enemy(x + 16, y + 16))
             elif tile == "V":

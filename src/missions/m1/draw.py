@@ -41,7 +41,7 @@ from core.config import draw_rain as _draw_rain_streaks
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
-from missions.m1.map import _lerp, mission1_map, MAP_W, MAP_H, M1_STREET_ROW
+from missions.m1.map import _lerp, mission1_map, MAP_W, MAP_H, M1_STREET_ROW, M1_PLAYER_FACING, M1_SPAWN_POS
 from missions.m1 import update as _m1_update
 from missions.m1.hotwire import _hotwire_wire_nodes, HOTWIRE_TARGET_PAIRS, HOTWIRE_WIRES
 from engine.core import now_ms as _now_ms, now_s as _now_s  # RPE6 B-001 timebase
@@ -516,7 +516,8 @@ _register_takes({
 _DROPOFF_MS = 9100
 _DROPOFF_VAN_REAR = 362                     # parked: passenger door lines up with the gap
 _DROPOFF_VAN_Y = (400, 336)                 # south lane at the curb -> pulled out
-_DROPOFF_WALK = ((4300, 480, 470), (5200, 480, 560), (6600, 320, 590), (7700, 240, 600))
+# Ends on the gameplay spawn, so the cut into GAME does not jump.
+_DROPOFF_WALK = ((4300, 480, 470), (5200, 480, 560), (6600, 320, 590), (7700,) + M1_SPAWN_POS)
 
 
 def _ease(u):
@@ -524,11 +525,23 @@ def _ease(u):
     return u * u * (3.0 - 2.0 * u)
 
 
+def _dropoff_hold_cam():
+    """The west hold = the gameplay follow camera's first-frame snap on the spawn
+    (centred, aim lookahead along M1_PLAYER_FACING, clamped to the map)."""
+    from core.camera import aim_lookahead  # lazy: keep the import list as it was
+    lx, ly = aim_lookahead(M1_PLAYER_FACING) or (0.0, 0.0)
+    x = M1_SPAWN_POS[0] - WIDTH // 2 + lx
+    y = M1_SPAWN_POS[1] - HEIGHT // 2 + ly
+    x = max(0, min(MAP_W * TILE_SIZE - WIDTH, x))
+    y = max(0, min(MAP_H * TILE_SIZE - HEIGHT, y))
+    return int(x), int(y)
+
+
 def _dropoff_cam(t):
     if t < 4300:
         u = _ease((t - 1800) / 2500.0)
         return int(40 + 720 * u), int(120 + 70 * u)
-    return 0, 190
+    return _dropoff_hold_cam()
 
 
 def _dropoff_van(t):
@@ -553,7 +566,7 @@ def _dropoff_biribel(t):
         if t < t1:
             u = (t - t0) / float(t1 - t0)
             return x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, math.atan2(y1 - y0, x1 - x0), True, False
-    return pts[-1][1], pts[-1][2], math.pi / 2, False, False
+    return pts[-1][1], pts[-1][2], M1_PLAYER_FACING, False, False
 
 
 def _draw_dropoff_player(surface, cam_x, cam_y, x, y, facing, moving):

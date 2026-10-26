@@ -55,7 +55,12 @@ M1_GATE_ROW = 25
 M1_BAY_ROW = 29
 
 # -- Split layer 1: entity markers (char, col, row) ------------------
-M1_PLAYER_SPAWN = ("P", 1, 1)
+# The m1.dropoff cut ends with Biribel on this tile outside the side door (3,10),
+# facing it; gameplay starts here too (draw.py _DROPOFF_WALK ends on M1_SPAWN_POS).
+M1_PLAYER_SPAWN = ("P", 3, 9)
+M1_PLAYER_FACING = math.pi / 2      # radians, atan2 convention: south, at the door
+M1_SPAWN_POS = (M1_PLAYER_SPAWN[1] * TILE_SIZE + TILE_SIZE // 2,
+                M1_PLAYER_SPAWN[2] * TILE_SIZE + TILE_SIZE // 2)
 M1_STREET_ENEMY_SPAWNS = [
     ("E", 19, 4),
     ("E", 23, 8),
@@ -99,7 +104,7 @@ M1_LIGHTS = [
 # P and E are spawn markers, overlaid from M1_SPAWNS (floor in the structure).
 _M1_STREET_ROWS = (
     "CCCCCCCCCCCCCCCCCCCCCCCCCCCC",
-    "CP.........................C",
+    "C..........................C",
     "C.....L........L...........C",
     "C.......TTT................C",
     "C.......TTT........E.......C",
