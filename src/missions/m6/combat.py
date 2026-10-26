@@ -18,6 +18,7 @@ from core.config import TILE_SIZE, WIDTH, HEIGHT
 from core.state import STATE
 from core import artpack
 from fx import effects
+from entities.weapons import FireZone
 
 from .meta import (
     STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL, ARENA_WAVES, ARENA_DRUMS,
@@ -50,6 +51,11 @@ _drums = []
 _tanker = None
 _pending = []           # [delay_s, x, y, radius, power]
 _scorch = []            # (x, y, radius, big)
+_blasts = []            # live fireballs: {x, y, r, kind, t0, life, seed}
+_smoke = []             # puffs: {x, y, r, vx, vy, t0, life, shade}
+_emitters = []          # wrecks that keep smoking: {x, y, acc}
+_debris = []            # flying chunks (y-sorted drawables)
+_bits = []              # chunks that landed: permanent ground clutter
 _events = set()
 _t = 0.0
 _peak = 0               # most hostiles seen at once: the plate's bar is 1 - left/peak
@@ -68,6 +74,11 @@ def init_stage(stage):
     _t = 0.0
     _pending.clear()
     _scorch.clear()
+    _blasts.clear()
+    _smoke.clear()
+    _emitters.clear()
+    _debris.clear()
+    _bits.clear()
     _events.clear()
     _drums.clear()
     for c, r in ARENA_DRUMS.get(stage, ()):
@@ -245,6 +256,9 @@ def bullet_hit(bullet):
             _tanker["alive"] = False
             cx, cy = _tanker["rect"].center
             _pending.append([0.0, cx, cy, TANKER_RADIUS, 2.2])
+            for i, (dx, delay) in enumerate(((-0.28, 0.35), (0.3, 0.7), (-0.05, 1.1))):
+                _pending.append([delay, cx + dx * _tanker["rect"].w,
+                                 cy + (i - 1) * 10, 70, 0.6])
             from . import world as _world
             _world.radio("MARU: The tanker! Get down!", color=(222, 120, 92),
                          duration=260, mark="m6_tanker", priority=1)
@@ -264,7 +278,9 @@ def _detonate_drum(d, delay):
 
 
 def _explode(x, y, radius, power):
-    from entities.weapons import FireZone
+    big = power > 1.5
+    pop = power < 0.8
+    kind = "big" if big else ("pop" if pop else "drum")
     for e in getattr(STATE, "enemies", []):
         if e.hp <= 0:
             continue
@@ -286,31 +302,192 @@ def _explode(x, y, radius, power):
             _detonate_drum(d, CHAIN_DELAY)
     fires = getattr(STATE, "fire_zones", None)
     if fires is not None:
-        radius_f, life_f, dmg_f = TANKER_FIRE if power > 1.5 else DRUM_FIRE
-        fires.append(FireZone(x, y, radius=radius_f, life=life_f, damage=dmg_f,
-                              outline=False))
-        if power > 1.5:
+        radius_f, life_f, dmg_f = TANKER_FIRE if big else DRUM_FIRE
+        if pop:
+            radius_f, life_f = int(radius_f * 0.55), int(life_f * 0.6)
+        fires.append(_FuelFire(x, y, radius=radius_f, life=life_f, damage=dmg_f,
+                               outline=False))
+        if big:
             # Fuel thrown clear: pools around the tanker, sized off its own
             # fire rather than M2's molotov spread, and nudged off the
             # cardinal axes so it reads as a splash and not a plus sign.
             step = radius_f * 0.62
             for a in range(TANKER_RING):
                 ang = a * (math.pi * 2 / TANKER_RING) + 0.4
-                fires.append(FireZone(
+                fires.append(_FuelFire(
                     x + math.cos(ang) * step, y + math.sin(ang) * step * 0.72,
                     radius=int(radius_f * 0.5), life=int(life_f * 0.62),
                     damage=dmg_f, outline=False))
-    _scorch.append((x, y, radius, power > 1.5))
-    effects.shake(14 if power > 1.5 else 8)
-    effects.burst(x, y, (255, 168, 72), 26 if power > 1.5 else 16, speed_mul=1.6)
-    effects.burst(x, y, (60, 56, 52), 12, speed_mul=0.9)
+    _scorch.append((x, y, radius, big))
+    _spawn_blast(x, y, radius, kind)
+    effects.shake(14 if big else (4 if pop else 8))
+    if big:
+        effects.flash(6)
+        effects.hit_stop(0.08)
+    effects.burst(x, y, (255, 168, 72), 12 if big else (3 if pop else 6), speed_mul=1.6)
+    effects.burst(x, y, (255, 238, 170), 10 if big else 5, speed_mul=2.2,
+                  life_min=10, life_max=26)
     try:
         from core import config as _config
         _config.audio.play_3d("explosion", (x, y), _player_pos(),
-                              base_volume=0.9 if power > 1.5 else 0.6)
+                              base_volume=0.9 if big else (0.35 if pop else 0.6))
     except Exception:
         pass
     go_loud()
+
+
+# ─────────────────────────────────────────────
+# Fireball, smoke, debris
+# ─────────────────────────────────────────────
+BLAST_LIFE = {"big": 1.0, "drum": 0.6, "pop": 0.45}
+BLAST_SCALE = {"big": 0.55, "drum": 0.55, "pop": 0.6}     # fireball peak / blast radius
+GRAVITY = 520.0
+SMOKE_CAP = 150
+BITS_CAP = 140
+_blast_n = 0
+
+
+def _spawn_blast(x, y, radius, kind):
+    global _blast_n
+    _blast_n += 1
+    _blasts.append({"x": x, "y": y, "r": radius, "kind": kind, "t0": _t,
+                    "life": BLAST_LIFE[kind], "seed": _blast_n % 4})
+    rng = random.Random(_blast_n * 7919)
+    if kind == "big":
+        _debris_burst(x, y, rng, 16, 120, 380, (200, 420), "tank", 8, 18)
+        for _ in range(9):
+            _puff(x + rng.uniform(-60, 60), y + rng.uniform(-30, 30), rng, 20, 34, 5.0)
+        _emitters.append({"x": x, "y": y, "acc": 0.0})
+    elif kind == "drum":
+        _debris_burst(x, y, rng, 4, 90, 220, (160, 320), "drum", 5, 10)
+        _debris_burst(x, y, rng, 1, 70, 140, (240, 340), "lid", 9, 9)
+        for _ in range(7):
+            _puff(x + rng.uniform(-18, 18), y + rng.uniform(-10, 10), rng, 12, 20, 3.0)
+    else:
+        _debris_burst(x, y, rng, 3, 80, 200, (140, 260), "tank", 5, 10)
+        for _ in range(3):
+            _puff(x + rng.uniform(-12, 12), y + rng.uniform(-8, 8), rng, 10, 16, 2.5)
+
+
+def _puff(x, y, rng, r_lo, r_hi, life):
+    if len(_smoke) >= SMOKE_CAP:
+        del _smoke[0]
+    _smoke.append({"x": x, "y": y, "r": rng.uniform(r_lo, r_hi),
+                   "vx": rng.uniform(14, 34), "vy": -rng.uniform(16, 34),
+                   "t0": _t, "life": life * rng.uniform(0.8, 1.15),
+                   "shade": rng.randrange(2)})
+
+
+_DEBRIS_COL = {
+    "tank": ((122, 124, 118), (58, 52, 48), (34, 34, 38)),
+    "drum": ((168, 52, 40), (84, 36, 30), (40, 36, 34)),
+    "lid": ((120, 122, 126),),
+}
+
+
+def _debris_burst(x, y, rng, n, sp_lo, sp_hi, vz_range, kind, s_lo, s_hi):
+    for _ in range(n):
+        ang = rng.uniform(0, math.pi * 2)
+        sp = rng.uniform(sp_lo, sp_hi)
+        w = rng.randint(s_lo, s_hi)
+        _debris.append({
+            "x": x, "y": y, "z": rng.uniform(4, 14),
+            "vx": math.cos(ang) * sp, "vy": math.sin(ang) * sp * 0.7,
+            "vz": rng.uniform(*vz_range), "rot": rng.uniform(0, math.pi),
+            "vr": rng.uniform(-9, 9), "w": w, "h": max(3, w // 2 + rng.randint(-1, 2)),
+            "col": rng.choice(_DEBRIS_COL[kind])})
+
+
+def _update_fx(dt):
+    now = _t
+    if _blasts:
+        _blasts[:] = [b for b in _blasts if now - b["t0"] < b["life"]]
+    if _smoke:
+        for p in _smoke:
+            p["x"] += p["vx"] * dt
+            p["y"] += p["vy"] * dt
+            p["vx"] *= (1.0 - 0.3 * dt)
+            p["vy"] *= (1.0 - 0.4 * dt)
+        _smoke[:] = [p for p in _smoke if now - p["t0"] < p["life"]]
+    for em in _emitters:
+        em["acc"] += dt
+        if em["acc"] >= 0.28:
+            em["acc"] = 0.0
+            rng = random.Random(int(now * 100) ^ int(em["x"]))
+            _puff(em["x"] + rng.uniform(-70, 70), em["y"] + rng.uniform(-14, 14),
+                  rng, 14, 24, 4.5)
+    if _debris:
+        landed = []
+        for c in _debris:
+            c["x"] += c["vx"] * dt
+            c["y"] += c["vy"] * dt
+            c["z"] += c["vz"] * dt
+            c["vz"] -= GRAVITY * dt
+            c["rot"] += c["vr"] * dt
+            if c["z"] <= 0 and c["vz"] < 0:
+                landed.append(c)
+        for c in landed:
+            _debris.remove(c)
+            _bits.append((c["x"], c["y"], c["rot"], c["w"], c["h"], c["col"]))
+        if len(_bits) > BITS_CAP:
+            del _bits[:len(_bits) - BITS_CAP]
+
+
+class _Cb(object):
+    """Adapts a closure to the ``.draw(surface, cx, cy)`` drawable protocol."""
+    __slots__ = ("fn",)
+
+    def __init__(self, fn):
+        self.fn = fn
+
+    def draw(self, surface, _cx, _cy):
+        self.fn(surface)
+
+
+class _FuelFire(FireZone):
+    """M6 fuel fire: hard-edged flame tongues, no ground blob (the scorch
+    decal already is the burn).  Damage and life run on FireZone unchanged."""
+    _FLICKER = (1.0, 0.8, 1.15, 0.9)
+
+    def __init__(self, *a, **kw):
+        FireZone.__init__(self, *a, **kw)
+        rng = random.Random(int(self.x * 13 + self.y * 7))
+        self._spots = [(rng.uniform(0, math.pi * 2), math.sqrt(rng.random()),
+                        rng.random()) for _ in range(26)]
+
+    def drawables(self, cam_x, cam_y):
+        sx, sy = int(self.x - cam_x), int(self.y - cam_y)
+        r = self.radius
+        if not (-r - 40 < sx < WIDTH + r + 40 and -r - 40 < sy < HEIGHT + r + 40):
+            return []
+        k = max(0.0, self.life / float(self.max_life or 1))
+        n = max(3, int(len(self._spots) * (0.3 + 0.7 * k) * min(1.0, r / 110.0 + 0.3)))
+        spots = self._spots[:n]
+        t = _t
+        flicker = self._FLICKER
+
+        def paint(surface):
+            pts = []
+            for ang, rr, ph in spots:
+                pts.append((sy + math.sin(ang) * rr * r * 0.55, ang, rr, ph))
+            pts.sort()
+            for fy, ang, rr, ph in pts:
+                fx = sx + math.cos(ang) * rr * r * 0.9
+                fr = int(t * 8 + ph * 4) % 4
+                h = (13 + 11 * (1.0 - rr) + 5 * ph) * (0.5 + 0.5 * k) * flicker[fr]
+                w = max(3, int(h * 0.38))
+                lean = (-2, 0, 2, 0)[fr]
+                for scale, col in ((1.0, (206, 66, 32)), (0.7, (255, 150, 60)),
+                                   (0.4, (255, 226, 140))):
+                    hh, ww = h * scale, w * scale
+                    pygame.draw.polygon(surface, col, [
+                        (fx + lean * scale, fy - hh), (fx + ww * 0.5, fy - hh * 0.4),
+                        (fx + ww, fy), (fx - ww, fy), (fx - ww * 0.5, fy - hh * 0.4)])
+            for ang, rr, ph in spots[::3]:
+                ey = sy + math.sin(ang) * rr * r * 0.55 - ((t * 34 + ph * 50) % 46)
+                ex = sx + math.cos(ang) * rr * r * 0.9 + math.sin(t * 3 + ph * 9) * 3
+                surface.fill((255, 190, 90), (int(ex), int(ey), 2, 2))
+        return [_Cb(paint)]
 
 
 def _update_blasts(dt):
@@ -335,6 +512,7 @@ def update(dt):
     dt = max(0.0, float(dt))
     _t += dt
     _update_blasts(dt)
+    _update_fx(dt)
     if _calm and _t >= CUSTOMS_CALM_S:
         _calm = False
     _check_loud()
@@ -351,8 +529,11 @@ def _drum_surface(charred=False):
     key = "charred" if charred else "fuel"
     if key in _DRUM_ART:
         return _DRUM_ART[key]
-    surf = artpack.prop("barrel_charred" if charred else "barrel")
-    if surf is not None and not charred:
+    if charred:
+        _DRUM_ART[key] = _drum_stub()
+        return _DRUM_ART[key]
+    surf = artpack.prop("barrel")
+    if surf is not None:
         surf = surf.copy()
         tint = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
         tint.fill((255, 118, 92, 255))
@@ -367,14 +548,31 @@ def _drum_surface(charred=False):
                     surf.set_at((x, y), (230, 196, 64) if stripe else (28, 24, 20))
     if surf is None:
         surf = pygame.Surface((30, 36), pygame.SRCALPHA)
-        body = (60, 52, 46) if charred else (168, 52, 40)
+        body = (168, 52, 40)
         pygame.draw.rect(surf, (14, 12, 12), (1, 3, 28, 32))
         pygame.draw.rect(surf, body, (2, 4, 26, 30))
         pygame.draw.ellipse(surf, (14, 12, 12), (1, 0, 28, 10))
-        pygame.draw.ellipse(surf, (90, 34, 28) if not charred else (40, 36, 34), (2, 1, 26, 8))
-        if not charred:
-            pygame.draw.rect(surf, (230, 196, 64), (2, 17, 26, 5))
+        pygame.draw.ellipse(surf, (90, 34, 28), (2, 1, 26, 8))
+        pygame.draw.rect(surf, (230, 196, 64), (2, 17, 26, 5))
     _DRUM_ART[key] = surf
+    return surf
+
+
+def _drum_stub():
+    """Burst drum: short body, torn jagged top, black inside, charred red."""
+    surf = pygame.Surface((32, 24), pygame.SRCALPHA)
+    ink, red, char = (14, 12, 12), (96, 40, 32), (38, 34, 34)
+    top = [(2, 9), (6, 4), (9, 8), (13, 2), (17, 7), (21, 3), (25, 8), (30, 5), (30, 22), (2, 22)]
+    pygame.draw.polygon(surf, ink, [(x + (-1 if x < 16 else 1), y + (-1 if y < 10 else 1))
+                                    for x, y in top])
+    pygame.draw.polygon(surf, red, top)
+    pygame.draw.rect(surf, char, (2, 15, 28, 7))
+    pygame.draw.polygon(surf, (8, 7, 8), [(5, 10), (9, 8), (13, 6), (17, 8), (21, 6), (27, 9),
+                                          (25, 13), (7, 13)])
+    pygame.draw.polygon(surf, (150, 74, 52), [(9, 8), (13, 2), (14, 6)])
+    pygame.draw.polygon(surf, (150, 74, 52), [(21, 3), (25, 8), (22, 8)])
+    for sx in (7, 14, 23):
+        pygame.draw.line(surf, char, (sx, 13), (sx + 1, 21), 2)
     return surf
 
 
@@ -392,7 +590,107 @@ def drawables(cam_x, cam_y):
                     lambda s, i=img, p=pos: s.blit(i, p)))
     if _tanker:
         out.append(_tanker_drawable(cam_x, cam_y))
+    for c in _debris:
+        sx, sy = c["x"] - cam_x, c["y"] - cam_y
+        if -40 < sx < WIDTH + 40 and -80 < sy < HEIGHT + 40:
+            out.append((c["y"], lambda s, c=c, sx=sx, sy=sy: _draw_chunk(s, c, sx, sy)))
     return out
+
+
+def _chunk_points(x, y, rot, w, h):
+    c, s = math.cos(rot), math.sin(rot)
+    hw, hh = w / 2.0, h / 2.0
+    return [(x + px * c - py * s, y + px * s + py * c)
+            for px, py in ((-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh))]
+
+
+def _draw_chunk(surface, c, sx, sy):
+    pygame.draw.ellipse(surface, (10, 10, 12),
+                        (int(sx) - c["w"] // 2, int(sy) - 1, c["w"], max(2, c["w"] // 3)))
+    pygame.draw.polygon(surface, c["col"], _chunk_points(sx, sy - c["z"], c["rot"], c["w"], c["h"]))
+
+
+def draw_smoke(surface, cam_x, cam_y):
+    """Drifting smoke, over actors; decor's light pass darkens it afterwards."""
+    for p in _smoke:
+        age = (_t - p["t0"]) / p["life"]
+        sx, sy = int(p["x"] - cam_x), int(p["y"] - cam_y)
+        r = int((p["r"] * (1.0 + 0.9 * age)) // 4 * 4)
+        if r < 4 or not (-r < sx < WIDTH + r and -r < sy < HEIGHT + r):
+            continue
+        step = 0 if age < 0.4 else (1 if age < 0.75 else 2)
+        img = _smoke_surface(r, p["shade"], step)
+        surface.blit(img, (sx - r, sy - r))
+
+
+_SMOKE_ART = {}
+
+
+def _smoke_surface(r, shade, step):
+    key = (r, shade, step)
+    img = _SMOKE_ART.get(key)
+    if img is None:
+        a = (210, 150, 90)[step]
+        outer, inner = ((44, 42, 46), (64, 62, 66)) if shade == 0 else ((32, 31, 34), (52, 50, 54))
+        img = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(img, outer + (a,), (r, r), r)
+        pygame.draw.circle(img, inner + (a,), (r - r // 4, r - r // 4), max(2, int(r * 0.6)))
+        _SMOKE_ART[key] = img
+    return img
+
+
+_FIRE_BANDS = ((196, 64, 36), (255, 150, 60), (255, 236, 150))
+_SMOKE_RIM = (70, 58, 52)
+_FB_ART = {}
+# per-frame (outer radius, orange, yellow) as fractions of the fireball peak
+_FB_FRAMES = ((0.55, 0.35, 0.2), (0.8, 0.58, 0.34), (1.0, 0.72, 0.45),
+              (1.0, 0.62, 0.3), (0.85, 0.42, 0.14), (0.6, 0.0, 0.0))
+
+
+def _fireball_surface(kind, seed, frame, peak):
+    key = (kind, seed, frame, peak)
+    img = _FB_ART.get(key)
+    if img is not None:
+        return img
+    fo, fm, fi = _FB_FRAMES[frame]
+    size = int(peak * 2.5)
+    img = pygame.Surface((size, size), pygame.SRCALPHA)
+    rng = random.Random(seed * 101 + peak)
+    jit = [rng.uniform(0.82, 1.16) for _ in range(14)]
+    c = size / 2.0
+    for k, col in ((fo, _SMOKE_RIM if frame >= 4 else _FIRE_BANDS[0]),
+                   (fm, _FIRE_BANDS[1]), (fi, _FIRE_BANDS[2])):
+        if k <= 0:
+            continue
+        pts = [(c + math.cos(i / 14.0 * math.tau) * peak * k * jit[i],
+                c + math.sin(i / 14.0 * math.tau) * peak * k * jit[i] * 0.88)
+               for i in range(14)]
+        pygame.draw.polygon(img, col, pts)
+    _FB_ART[key] = img
+    return img
+
+
+def draw_blasts(surface, cam_x, cam_y):
+    """Flash, stepped fireball and shockwave ring.  Emissive: after the light pass."""
+    for b in _blasts:
+        age = _t - b["t0"]
+        u = age / b["life"]
+        sx, sy = int(b["x"] - cam_x), int(b["y"] - cam_y)
+        peak = int(b["r"] * BLAST_SCALE[b["kind"]]) // 4 * 4
+        if not (-peak * 2 < sx < WIDTH + peak * 2 and -peak * 2 < sy < HEIGHT + peak * 2):
+            continue
+        if age < 0.06:
+            pygame.draw.circle(surface, (255, 252, 226), (sx, sy), int(peak * 0.9))
+            pygame.draw.circle(surface, (255, 255, 255), (sx, sy), int(peak * 1.25), 2)
+        elif u < 1.0:
+            frame = min(5, int(u * 6))
+            img = _fireball_surface(b["kind"], b["seed"], frame, peak)
+            surface.blit(img, (sx - img.get_width() // 2, sy - img.get_height() // 2 - peak // 6))
+        if age < 0.25:
+            k = age / 0.25
+            col = ((255, 240, 200), (200, 170, 120), (120, 100, 80))[min(2, int(k * 3))]
+            pygame.draw.circle(surface, col, (sx, sy), max(2, int(b["r"] * k)),
+                               2 if k < 0.5 else 1)
 
 
 def _tanker_drawable(cam_x, cam_y):
@@ -495,6 +793,10 @@ def draw_ground(surface, cam_x, cam_y):
         img = _scorch_surface(radius, big)
         w, h = img.get_size()
         surface.blit(img, (int(x - cam_x - w // 2), int(y - cam_y - h // 2)))
+    for x, y, rot, w, h, col in _bits:
+        sx, sy = x - cam_x, y - cam_y
+        if -20 < sx < WIDTH + 20 and -20 < sy < HEIGHT + 20:
+            pygame.draw.polygon(surface, col, _chunk_points(sx, sy, rot, w, h))
 
 
 def extra_lamps():
@@ -509,6 +811,11 @@ def extra_lamps():
     if "train" in _events:
         for c in (6, 14, 22, 30, 38):
             out.append((c * T, 4.6 * T, 170, (255, 214, 150)))
+    for b in _blasts:
+        k = 1.0 - (_t - b["t0"]) / b["life"]
+        if k > 0.05:
+            out.append((b["x"], b["y"], max(40, int(b["r"] * 2 * (0.4 + 0.6 * k)) // 20 * 20),
+                        (255, 200, 120)))
     for fire in getattr(STATE, "fire_zones", [])[-10:]:
         k = max(0.0, min(1.0, fire.life / float(fire.max_life or 1)))
         if k > 0.05:

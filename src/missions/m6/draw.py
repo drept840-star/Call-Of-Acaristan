@@ -317,6 +317,7 @@ def _draw_emissives(surface, cam_x, cam_y, stage):
     for pu in getattr(STATE, "pickups", []):
         _draw_pickup_mark(surface, pu, cam_x, cam_y)
     _draw_iff_lamps(surface, cam_x, cam_y, stage)
+    _combat.draw_blasts(surface, cam_x, cam_y)
 
 
 def _draw_world_effects(surface, cam_x, cam_y):
@@ -509,6 +510,7 @@ def game_draw(fcx=0, fcy=0, surface=None):
     _draw_beacon(scene, cam_x, cam_y)
     _draw_world_effects(scene, cam_x, cam_y)
     _scene_drawables(scene, cam_x, cam_y)
+    _combat.draw_smoke(scene, cam_x, cam_y)
     _draw_muzzle_flash(scene, cam_x, cam_y)
     draw_bullets(scene, getattr(STATE, "bullets", []), cam_x, cam_y, with_glow=True)
 
