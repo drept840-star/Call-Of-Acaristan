@@ -1513,7 +1513,7 @@ def _vm_asset_hands(m):
 _VM_ASSET = None
 # A touch of cool lift so the black-anodised viewmodel still separates from
 # the night behind it.
-_VM_TINT = ((128, 142, 164), 0.12)
+_VM_TINT = ((128, 142, 164), 0.20)
 _RETICLE = None
 
 
