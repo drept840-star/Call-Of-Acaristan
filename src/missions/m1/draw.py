@@ -513,7 +513,7 @@ _register_takes({
 # is baked into chunked offscreen surfaces once; only animated state
 # (breach markers, doors, desk indicator dots, blood, actors) draws live.
 _M1_CAM = [0, 0]
-_M1_SOLID_TILES = ("C", "W", "D")
+_M1_SOLID_TILES = ("C", "W", "D", "d", "T", "f", "S")
 
 
 # RPE6 Phase 6 (WP1): the tile grid + static dressing are one static layer. The art pack's
@@ -557,7 +557,7 @@ def _m1_wing_name():
     p = STATE.player
     if not p:
         return "slums"
-    if 11 * TILE_SIZE <= p.rect.centery < 21 * TILE_SIZE:
+    if 21 * TILE_SIZE <= p.rect.centery < 31 * TILE_SIZE:
         return "warehouse"
     return "slums"
 
@@ -581,27 +581,31 @@ def _m1_light_sig():
 # Lamp fixtures in tile coords: (col, row, radius, color, key).
 _M1_LAMPS = (
     # Warehouse hall - warm tungsten ceiling rows.
-    (5, 12, 170, (255, 232, 190), "wh_a"),
-    (11, 12, 170, (255, 232, 190), "wh_b"),
-    (17, 12, 170, (255, 232, 190), "wh_c"),
-    (22, 12, 160, (255, 232, 190), "wh_d"),
-    (8, 14, 150, (255, 232, 190), "wh_e"),
-    (15, 14, 150, (255, 232, 190), "wh_f"),
-    (8, 17, 160, (255, 232, 190), "wh_g"),
-    (15, 17, 160, (255, 232, 190), "wh_h"),
-    (21, 17, 150, (255, 232, 190), "wh_i"),
+    (5, 22, 170, (255, 232, 190), "wh_a"),
+    (11, 22, 170, (255, 232, 190), "wh_b"),
+    (17, 22, 170, (255, 232, 190), "wh_c"),
+    (22, 22, 160, (255, 232, 190), "wh_d"),
+    (8, 24, 150, (255, 232, 190), "wh_e"),
+    (15, 24, 150, (255, 232, 190), "wh_f"),
+    (8, 27, 160, (255, 232, 190), "wh_g"),
+    (15, 27, 160, (255, 232, 190), "wh_h"),
+    (21, 27, 150, (255, 232, 190), "wh_i"),
     # Office desk accents - cool monitor spill.
-    (13, 12, 90, (150, 200, 220), "dk_a"),
-    (20, 12, 90, (150, 200, 220), "dk_b"),
+    (13, 22, 90, (150, 200, 220), "dk_a"),
+    (20, 22, 90, (150, 200, 220), "dk_b"),
     # Gate bulkheads.
-    (8, 11, 120, (255, 236, 200), "gate_a"),
-    (14, 16, 120, (255, 236, 200), "gate_b"),
+    (8, 21, 120, (255, 236, 200), "gate_a"),
+    (14, 26, 120, (255, 236, 200), "gate_b"),
     # Slum street lamps - cool night.
-    (5, 3, 150, (190, 210, 255), "sl_a"),
-    (13, 6, 150, (190, 210, 255), "sl_b"),
-    (21, 7, 150, (190, 210, 255), "sl_c"),
+    (5, 13, 150, (190, 210, 255), "sl_a"),
+    (13, 16, 150, (190, 210, 255), "sl_b"),
+    (21, 17, 150, (190, 210, 255), "sl_c"),
+    (6, 2, 150, (190, 210, 255), "sl_d"),
+    (15, 2, 150, (190, 210, 255), "sl_e"),
+    # Fire barrel by the shutter - warm.
+    (23, 9, 120, (255, 170, 90), "fb_a"),
     # Exfil tripod work-light.
-    (21, 21, 140, (235, 245, 225), "ex_a"),
+    (21, 31, 140, (235, 245, 225), "ex_a"),
 )
 
 
@@ -619,7 +623,7 @@ def _push_m1_lights(cam_x, cam_y, t):
             bay_open = max(bay_open, getattr(d, "anim_progress", 0.0))
     if bay_open > 0.02:
         bx = 14 * TILE_SIZE + 32 - cam_x
-        by = 20 * TILE_SIZE - cam_y
+        by = 30 * TILE_SIZE - cam_y
         if render_util.screen_visible(bx, by, 1, 1):
             lb.cone(bx, by, math.radians(90), 26, 230, (200, 220, 255),
                     0.35 * bay_open, caster=_m1_solid_world,
@@ -632,8 +636,8 @@ def _render_m1_bg(target, cam_x, cam_y):
     """Static tilemap pass: floor grid, container/warehouse walls, desk bodies."""
     start_tx = int(cam_x // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
     start_ty = int(cam_y // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
-    warehouse_y_start = 11 * TILE_SIZE
-    warehouse_y_end = 20 * TILE_SIZE
+    warehouse_y_start = 21 * TILE_SIZE
+    warehouse_y_end = 30 * TILE_SIZE
     for tx in range(
         start_tx - FLOOR_TILE_SIZE,
         int(cam_x + WIDTH + FLOOR_TILE_SIZE * 2),
@@ -672,7 +676,7 @@ def _render_m1_bg(target, cam_x, cam_y):
         if -50 < dx < WIDTH + 50 and -50 < dy < HEIGHT + 50:
             _draw_m1_desk_body(target, dx, dy)
     bay_x = 15 * TILE_SIZE + 32 - cam_x
-    bay_y = 19 * TILE_SIZE + 32 - cam_y
+    bay_y = 29 * TILE_SIZE + 32 - cam_y
     if -50 < bay_x < WIDTH + 50 and -50 < bay_y < HEIGHT + 50:
         label = font_terminal_small.render(_T("m1.bay_door"), True, (150, 140, 120))
         target.blit(label, (bay_x - label.get_width() // 2, bay_y - 40))
@@ -735,11 +739,11 @@ def _m1_prop_overlaps_solid(kind, tx, ty, arg):
 
 # Hand-authored dressing anchors: (kind, tile_col, tile_row, arg).
 _M1_DRESSING_PROPS = (
-    ("crates", 4, 13, 1.0),
-    ("crates", 23, 12, 0.85),
-    ("barrels", 25, 17, 3),
-    ("barrels", 2, 8, 2),
-    ("coil", 10, 13, 1.0),
+    ("crates", 4, 23, 1.0),
+    ("crates", 23, 22, 0.85),
+    ("barrels", 25, 27, 3),
+    ("barrels", 2, 18, 2),
+    ("coil", 10, 23, 1.0),
 )
 
 
@@ -781,8 +785,8 @@ def _draw_m1_tripod(target, sx, sy):
 def _draw_m1_static_dressing(target, cam_x, cam_y):
     """Baked set-dressing pass: joints, grime, props, pipes, fixtures, tracks."""
     # ── Concrete expansion joints across the warehouse floor band ──
-    y0 = 11 * TILE_SIZE - cam_y
-    y1 = 21 * TILE_SIZE - cam_y
+    y0 = 21 * TILE_SIZE - cam_y
+    y1 = 31 * TILE_SIZE - cam_y
     if y1 >= 0 and y0 <= HEIGHT:
         for gx in range(0, MAP_W * TILE_SIZE + 1, FLOOR_TILE_SIZE):
             sx = gx - cam_x
@@ -790,7 +794,7 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
                 pygame.draw.line(target, (36, 34, 30),
                                  (int(sx), int(max(0, y0))), (int(sx), int(min(HEIGHT, y1))), 1)
         for k in range(6):
-            sy = 11 * TILE_SIZE + k * FLOOR_TILE_SIZE - cam_y
+            sy = 21 * TILE_SIZE + k * FLOOR_TILE_SIZE - cam_y
             if -2 < sy < HEIGHT + 2:
                 pygame.draw.line(target, (36, 34, 30),
                                  (int(max(0, TILE_SIZE - cam_x)), int(sy)),
@@ -836,18 +840,18 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
         elif kind == "coil":
             _props.cable_coil(target, ax, ay)
     # ── Wall pipes (utility runs along solid walls) ──
-    _props.wall_pipe(target, 32 - cam_x, 11 * TILE_SIZE + 20 - cam_y,
-                     32 - cam_x, 14 * TILE_SIZE + 44 - cam_y)
-    _props.wall_pipe(target, 10 * TILE_SIZE - cam_x, 10 * TILE_SIZE + 50 - cam_y,
-                     18 * TILE_SIZE - cam_x, 10 * TILE_SIZE + 50 - cam_y)
-    _props.wall_pipe(target, 2 * TILE_SIZE - cam_x, 15 * TILE_SIZE + 50 - cam_y,
-                     13 * TILE_SIZE - cam_x, 15 * TILE_SIZE + 50 - cam_y)
+    _props.wall_pipe(target, 32 - cam_x, 21 * TILE_SIZE + 20 - cam_y,
+                     32 - cam_x, 24 * TILE_SIZE + 44 - cam_y)
+    _props.wall_pipe(target, 10 * TILE_SIZE - cam_x, 20 * TILE_SIZE + 50 - cam_y,
+                     18 * TILE_SIZE - cam_x, 20 * TILE_SIZE + 50 - cam_y)
+    _props.wall_pipe(target, 2 * TILE_SIZE - cam_x, 25 * TILE_SIZE + 50 - cam_y,
+                     13 * TILE_SIZE - cam_x, 25 * TILE_SIZE + 50 - cam_y)
     # ── Oil stain by the miniboss + scattered papers near desks ──
-    ox, oy = 10 * TILE_SIZE + 32 - cam_x, 17 * TILE_SIZE + 40 - cam_y
+    ox, oy = 10 * TILE_SIZE + 32 - cam_x, 27 * TILE_SIZE + 40 - cam_y
     if render_util.screen_visible(ox - 40, oy - 20, 80, 40):
         pygame.draw.ellipse(target, (22, 21, 20), (int(ox - 34), int(oy - 14), 68, 28))
         pygame.draw.ellipse(target, (30, 28, 26), (int(ox - 20), int(oy - 8), 40, 16))
-    for ptx, pty in ((12, 12), (19, 13), (7, 17)):
+    for ptx, pty in ((12, 22), (19, 23), (7, 27)):
         px = ptx * TILE_SIZE + 20 - cam_x
         py = pty * TILE_SIZE + 44 - cam_y
         if render_util.screen_visible(px, py, 20, 14):
@@ -856,20 +860,20 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
     # ── Bay chevrons + stencil on the apron ──
     for i in range(6):
         cx0 = (11 + i) * TILE_SIZE - cam_x
-        cy0 = 20 * TILE_SIZE + 8 - cam_y
+        cy0 = 30 * TILE_SIZE + 8 - cam_y
         if render_util.screen_visible(cx0, cy0, TILE_SIZE, 20):
             col = (170, 140, 40) if i % 2 == 0 else (25, 25, 25)
             pygame.draw.polygon(target, col, [
                 (int(cx0 + 8), int(cy0)), (int(cx0 + 24), int(cy0)),
                 (int(cx0 + 12), int(cy0 + 18)), (int(cx0 - 4), int(cy0 + 18))])
     stencil = font_terminal_small.render(_T("m1.bay_03"), True, (170, 150, 90))
-    stx, sty = 14 * TILE_SIZE + 32 - cam_x, 20 * TILE_SIZE + 40 - cam_y
+    stx, sty = 14 * TILE_SIZE + 32 - cam_x, 30 * TILE_SIZE + 40 - cam_y
     if render_util.screen_visible(stx - 40, sty, 80, 16):
         stencil.set_alpha(160)
         target.blit(stencil, (int(stx - stencil.get_width() // 2), int(sty)))
     # ── Tire tracks: bay apron curving to the exfil ──
-    x0, y0 = 14 * TILE_SIZE + 32 - cam_x, 20 * TILE_SIZE + 32 - cam_y
-    x1, y1 = 21 * TILE_SIZE + 32 - cam_x, 21 * TILE_SIZE + 32 - cam_y
+    x0, y0 = 14 * TILE_SIZE + 32 - cam_x, 30 * TILE_SIZE + 32 - cam_y
+    x1, y1 = 21 * TILE_SIZE + 32 - cam_x, 31 * TILE_SIZE + 32 - cam_y
     if render_util.screen_visible(min(x0, x1) - 20, min(y0, y1) - 20,
                                   abs(x1 - x0) + 40, abs(y1 - y0) + 40):
         dx, dy = x1 - x0, y1 - y0

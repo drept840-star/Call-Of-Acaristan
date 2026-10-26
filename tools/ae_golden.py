@@ -272,8 +272,8 @@ def gameplay_specs():
             px, py = STATE.player.rect.center
             return int(px - WIDTH // 2), int(py - HEIGHT // 2)
         yield _still("m1", "start", start)
-        yield _still("m1", "desks", lambda: _cam_at(14, 9))
-        yield _still("m1", "warehouse", lambda: _cam_at(30, 14))
+        yield _still("m1", "desks", lambda: _cam_at(14, 19))
+        yield _still("m1", "warehouse", lambda: _cam_at(30, 24))
 
     def m2_seq():
         from core import game_core as gc

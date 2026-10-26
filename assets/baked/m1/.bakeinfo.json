@@ -11,14 +11,14 @@
      ]
     }
    },
-   "source": "ce43457fe366d7f47fc13295e9571603fb3903a131396b210f234ff8ec71dcde",
+   "source": "17a55c5350c8665b70f8e1e1c0d7515f76f893f8174ab855459a548919f9cc56",
    "variants": 1
   },
   "m1/molotov_icon": {
    "files": {
     "0": {
      "file": "molotov_icon_0.png",
-     "pixels": "b34044369ca0cbc515db3154cc695fe028ee80377fd6b2f1518bc97693f60cde",
+     "pixels": "d1aad63fc655467639cb0b4573bd74a60e11b90f00b4625a17ecd9e19f92a1ec",
      "size": [
       12,
       36
@@ -33,14 +33,14 @@
      ]
     }
    },
-   "source": "afad1fc094b08c901ad581cefe03bc425f546a55fbf1aea5599ad9c6b99bb056",
+   "source": "6926ae86deb4c053512097d709d8c19fb38f2091732ee9bd26930696f30fe2d7",
    "variants": 2
   },
   "m1/pickup_icon": {
    "files": {
     "0": {
      "file": "pickup_icon_0.png",
-     "pixels": "24ee24185ab2bd55b278a2243f979c6f8d11a84aec1b20086857aad9b6e17d41",
+     "pixels": "85242780724dff90cc2b7be55020e4a1f5889f8d56c45cd1586e9add43af2f51",
      "size": [
       32,
       32
@@ -71,21 +71,21 @@
      ]
     }
    },
-   "source": "da59f3fa01d361dadb2084bf4d36581770bf24a7398ae19198816beb62f32a09",
+   "source": "3abfbd3aa8187f86feee3a2a81f62c5fda4828ce974777b12ab2fc4dcc942013",
    "variants": 4
   },
   "m1/world_static": {
    "files": {
     "0": {
      "file": "world_static_0.png",
-     "pixels": "96eea6545d039af72377e23734ed943c9719a41a990fc397fc725bddf941d25d",
+     "pixels": "560b388bf62ce04156c4b10b28691a82957c0d01360c3aed9aab5526e2005c19",
      "size": [
       2048,
-      1536
+      2560
      ]
     }
    },
-   "source": "3d99ffc2a40376e5b89a03a6ff28cb37b4943243c85ca8a7084a32177cb5158c",
+   "source": "80cae726a9feccfb52d33cfe9680fdcf47b83c2c09036b2725436309daa09018",
    "variants": 1
   }
  },

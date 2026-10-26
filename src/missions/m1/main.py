@@ -30,7 +30,7 @@ from missions import walking_sim
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
-from missions.m1.map import mission1_map, MAP_W, MAP_H
+from missions.m1.map import mission1_map, MAP_W, MAP_H, M1_BAY_ROW, M1_GATE_ROW, M1_STREET_ROW
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 _walk_footstep_timer = 0
@@ -138,7 +138,7 @@ def start_mission(preserve_timer=False):
     STATE.fire_zones = []
     STATE.floating_texts.append([
         7 * TILE_SIZE + 32,
-        3 * TILE_SIZE + 32,
+        13 * TILE_SIZE + 32,
         "[G] or RIGHT-CLICK to throw a molotov - burns an area",
         (140, 200, 150),
         360,
@@ -146,7 +146,7 @@ def start_mission(preserve_timer=False):
     STATE.desks = [
         {
             "x": 13 * TILE_SIZE + 32,
-            "y": 12 * TILE_SIZE + 32,
+            "y": 22 * TILE_SIZE + 32,
             "clue": (
                 "GUARD ROTATION MEMO:\n"
                 "Commander holds the gate keycard.\n"
@@ -157,7 +157,7 @@ def start_mission(preserve_timer=False):
         },
         {
             "x": 20 * TILE_SIZE + 32,
-            "y": 12 * TILE_SIZE + 32,
+            "y": 22 * TILE_SIZE + 32,
             "clue": (
                 "LOGISTICS LOG:\n"
                 "Shipment #7742 cleared by IPA command.\n"
@@ -168,7 +168,7 @@ def start_mission(preserve_timer=False):
         },
         {
             "x": 6 * TILE_SIZE + 32,
-            "y": 17 * TILE_SIZE + 32,
+            "y": 27 * TILE_SIZE + 32,
             "clue": (
                 "OFFICER MEMO:\n"
                 "Codes rotated this month.\n"
@@ -179,14 +179,14 @@ def start_mission(preserve_timer=False):
         },
         {
             "x": 22 * TILE_SIZE + 32,
-            "y": 18 * TILE_SIZE + 32,
+            "y": 28 * TILE_SIZE + 32,
             "clue": "__CRUMPLED_SAFE_SCRAP__",
             "read": False,
         },
         # Optional lore desk (inner warehouse corner)
         {
             "x": 24 * TILE_SIZE + 32,
-            "y": 16 * TILE_SIZE + 32,
+            "y": 26 * TILE_SIZE + 32,
             "clue": (
                 "WEAPON SHIPMENT MANIFEST\n"
                 "FT-7742 / FT-7743 / FT-7744 / FT-7745\n"
@@ -205,11 +205,11 @@ def start_mission(preserve_timer=False):
             if tile == "W":
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
                 STATE.warehouse_walls_set.add((col_idx, row_idx))
-            elif tile == "C":
+            elif tile in ("C", "T", "f", "S"):
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
-            elif tile == "D":
-                is_bay = row_idx == 19
-                is_gate = row_idx == 15
+            elif tile in ("D", "d"):
+                is_bay = row_idx == M1_BAY_ROW
+                is_gate = row_idx == M1_GATE_ROW
                 new_door = Door(x, y, is_bay)
                 new_door.is_gate = is_gate
                 new_door.locked = is_gate
@@ -230,32 +230,34 @@ def start_mission(preserve_timer=False):
     for e in STATE.enemies:
         col = e.rect.centerx // TILE_SIZE
         row = e.rect.centery // TILE_SIZE
-        if row < 11:
+        if row < M1_STREET_ROW:
+            continue
+        if row < 21:
             e.state = "PATROL"
             e.speed = 1.5
             if col == 6:
                 e.patrol_points = [
-                    (6 * TILE_SIZE + 32, 7 * TILE_SIZE + 32),
-                    (12 * TILE_SIZE + 32, 7 * TILE_SIZE + 32),
+                    (6 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
+                    (12 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
                 ]
             elif col == 15:
                 e.patrol_points = [
-                    (15 * TILE_SIZE + 32, 7 * TILE_SIZE + 32),
-                    (15 * TILE_SIZE + 32, 3 * TILE_SIZE + 32),
+                    (15 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
+                    (15 * TILE_SIZE + 32, 13 * TILE_SIZE + 32),
                 ]
             elif col == 22:
                 e.patrol_points = [
-                    (22 * TILE_SIZE + 32, 5 * TILE_SIZE + 32),
-                    (22 * TILE_SIZE + 32, 9 * TILE_SIZE + 32),
+                    (22 * TILE_SIZE + 32, 15 * TILE_SIZE + 32),
+                    (22 * TILE_SIZE + 32, 19 * TILE_SIZE + 32),
                 ]
-        elif 11 <= row <= 14:
+        elif 21 <= row <= 24:
             e.state = "PATROL"
             e.speed = 1.5
             if e.is_commander:
                 e.patrol_points = [
-                    (9 * TILE_SIZE + 32, 18 * TILE_SIZE + 32),
-                    (14 * TILE_SIZE + 32, 18 * TILE_SIZE + 32),
-                    (14 * TILE_SIZE + 32, 17 * TILE_SIZE + 32),
+                    (9 * TILE_SIZE + 32, 28 * TILE_SIZE + 32),
+                    (14 * TILE_SIZE + 32, 28 * TILE_SIZE + 32),
+                    (14 * TILE_SIZE + 32, 27 * TILE_SIZE + 32),
                 ]
             elif col <= 12:
                 e.patrol_points = [
@@ -267,14 +269,14 @@ def start_mission(preserve_timer=False):
                     (e.rect.centerx, e.rect.centery),
                     (e.rect.centerx - 5 * TILE_SIZE, e.rect.centery),
                 ]
-        elif 16 <= row <= 18:
+        elif 26 <= row <= 28:
             e.state = "PATROL"
             e.speed = 1.5
             e.patrol_points = [
                 (e.rect.centerx, e.rect.centery),
                 (e.rect.centerx + 4 * TILE_SIZE, e.rect.centery),
             ]
-    miniboss = Enemy(10 * TILE_SIZE + 16, 17 * TILE_SIZE + 16)
+    miniboss = Enemy(10 * TILE_SIZE + 16, 27 * TILE_SIZE + 16)
     miniboss.hp = 400
     miniboss.is_miniboss = True
     miniboss.speed = 1.8

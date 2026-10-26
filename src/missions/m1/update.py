@@ -115,12 +115,12 @@ def game_update(keys):
                 trigger_alarm_early()
                 break
         # ── Civilian payoff line (once, on warehouse entry) ──
-        if (STATE.player.rect.centery > 11 * TILE_SIZE
+        if (STATE.player.rect.centery > 21 * TILE_SIZE
                 and not STATE.civilian_payoff_done):
             STATE.civilian_payoff_done = True
             _trigger_civilian_payoff()
     if STATE.firefight_triggered:
-        if STATE.radio_chatter_stage == 1 and STATE.player.rect.centery > 15 * TILE_SIZE:
+        if STATE.radio_chatter_stage == 1 and STATE.player.rect.centery > 25 * TILE_SIZE:
             STATE.radio_chatter_stage = 2
             trigger_radio_chatter(
                 'VASILE: "{}"'.format(_dialogues.line("m1.radio", "gate_open", "Gate is open. Signatures ahead, watch the corners."))
@@ -167,7 +167,7 @@ def game_update(keys):
             if STATE.breach_stage_timer % 6 == 0 and STATE.player:
                 for _ in range(2):
                     px = 15 * TILE_SIZE + _rng_legacy.randint(-3 * TILE_SIZE, 3 * TILE_SIZE)
-                    py = 19 * TILE_SIZE + _rng_legacy.randint(-TILE_SIZE, 0)
+                    py = 29 * TILE_SIZE + _rng_legacy.randint(-TILE_SIZE, 0)
                     p = Particle(px, py, _rng_legacy.choice([(120, 110, 90), (90, 85, 70)]))
                     p.life = _rng_legacy.randint(30, 60)
                     p.dy = _rng_legacy.uniform(-0.5, 0.5)
@@ -205,12 +205,12 @@ def game_update(keys):
             # 8 ENEMIES FROM BAY DOORS (south side, row 20-21)
             # ═══════════════════════════════════════
             bay_spawns = [
-                _tc(13, 20), _tc(14, 20), _tc(15, 20), _tc(16, 20),
-                _tc(17, 20), _tc(14, 21), _tc(15, 21), _tc(16, 21),
+                _tc(13, 30), _tc(14, 30), _tc(15, 30), _tc(16, 30),
+                _tc(17, 30), _tc(14, 31), _tc(15, 31), _tc(16, 31),
             ]
             bay_targets = [
-                _tc(12, 18), _tc(14, 18), _tc(16, 18), _tc(18, 18),
-                _tc(13, 17), _tc(15, 17), _tc(17, 17), _tc(15, 16),
+                _tc(12, 28), _tc(14, 28), _tc(16, 28), _tc(18, 28),
+                _tc(13, 27), _tc(15, 27), _tc(17, 27), _tc(15, 26),
             ]
             for i, (mx, my) in enumerate(bay_spawns):
                 new_e = Enemy(mx, my)
@@ -243,14 +243,14 @@ def game_update(keys):
             # 6 ENEMIES FROM COMMANDER ROOM (rows 11-14)
             # ═══════════════════════════════════════
             rear_spawns = [
-                _tc(10, 11), _tc(18, 11),
-                _tc(6,  12), _tc(20, 12),
-                _tc(10, 13), _tc(15, 13),
+                _tc(10, 21), _tc(18, 21),
+                _tc(6,  22), _tc(20, 22),
+                _tc(10, 23), _tc(15, 23),
             ]
             rear_targets = [
-                _tc(10, 17), _tc(18, 17),
-                _tc(8,  16), _tc(20, 16),
-                _tc(12, 18), _tc(16, 18),
+                _tc(10, 27), _tc(18, 27),
+                _tc(8,  26), _tc(20, 26),
+                _tc(12, 28), _tc(16, 28),
             ]
             for i, (mx, my) in enumerate(rear_spawns):
                 new_e = Enemy(mx, my)
@@ -282,12 +282,12 @@ def game_update(keys):
             audio.play("breach", volume=0.9)
             audio.play("explosion", volume=0.7)
             STATE.floating_texts.append([
-                15 * TILE_SIZE + 32, 19 * TILE_SIZE,
+                15 * TILE_SIZE + 32, 29 * TILE_SIZE,
                 "BAY DOOR BREACH!",
                 (255, 100, 30), 120,
             ])
             STATE.floating_texts.append([
-                15 * TILE_SIZE + 32, 15 * TILE_SIZE,
+                15 * TILE_SIZE + 32, 25 * TILE_SIZE,
                 "CONTACTS FROM BEHIND!",
                 (255, 70, 40), 120,
             ])
@@ -300,7 +300,7 @@ def game_update(keys):
     # ── Volkov escape animation ──
     if STATE.volkov_escape_timer > 0:
         STATE.volkov_escape_timer -= 1
-        bay_door_y = 19 * TILE_SIZE + 32
+        bay_door_y = 29 * TILE_SIZE + 32
         if STATE.volkov_escape_pos and not STATE.volkov_escaped:
             dx = 15 * TILE_SIZE + 32 - STATE.volkov_escape_pos[0]
             dy = bay_door_y - STATE.volkov_escape_pos[1]
@@ -334,7 +334,7 @@ def game_update(keys):
     if gate_locked and STATE.player:
         dist_to_console = math.hypot(
             STATE.player.rect.centerx - (13 * TILE_SIZE + 32),
-            STATE.player.rect.centery - (15 * TILE_SIZE + 32),
+            STATE.player.rect.centery - (25 * TILE_SIZE + 32),
         )
         if dist_to_console < 80:
             if STATE.has_keycard:
@@ -682,7 +682,7 @@ def game_update(keys):
                     ]
                 )
             else:
-                is_warehouse_enemy = e.rect.centery > 11 * TILE_SIZE
+                is_warehouse_enemy = e.rect.centery > 21 * TILE_SIZE
                 roll = _rng_legacy.random()
                 if is_warehouse_enemy:
                     if roll < 0.30:

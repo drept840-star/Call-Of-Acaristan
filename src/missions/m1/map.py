@@ -46,62 +46,106 @@ from missions import walking_sim
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
-M1_W, M1_H = 28, 23
+M1_W, M1_H = 28, 33
+
+# Row anchors. Rows 0-9 are the street band; row 10 is the stockroom north wall.
+M1_STREET_ROW = 10
+M1_STOCK_DOOR_ROW = 20
+M1_GATE_ROW = 25
+M1_BAY_ROW = 29
 
 # -- Split layer 1: entity markers (char, col, row) ------------------
-# Positions are byte-identical to the legacy hand-drawn strings.
-M1_PLAYER_SPAWN = ("P", 3, 2)
-M1_ENEMY_SPAWNS = [
-    ("E", 22, 5),
-    ("E", 7, 7),
-    ("E", 16, 7),
-    ("E", 11, 11),
-    ("E", 19, 12),
-    ("E", 5, 13),
-    ("E", 15, 13),
+M1_PLAYER_SPAWN = ("P", 1, 1)
+M1_STREET_ENEMY_SPAWNS = [
+    ("E", 19, 4),
+    ("E", 23, 8),
+    ("E", 25, 8),
 ]
-M1_COMMANDER_SPAWN = ("K", 10, 14)
-M1_VOLKOV_SPAWN = ("V", 15, 17)
-M1_NOTEBOOK_SPAWN = ("N", 15, 18)
-M1_EXFIL_SPAWN = ("X", 22, 21)
+M1_ENEMY_SPAWNS = [
+    ("E", 22, 15),
+    ("E", 7, 17),
+    ("E", 16, 17),
+    ("E", 11, 21),
+    ("E", 19, 22),
+    ("E", 5, 23),
+    ("E", 15, 23),
+]
+M1_COMMANDER_SPAWN = ("K", 10, 24)
+M1_VOLKOV_SPAWN = ("V", 15, 27)
+M1_NOTEBOOK_SPAWN = ("N", 15, 28)
+M1_EXFIL_SPAWN = ("X", 22, 31)
 
 M1_SPAWNS = (
     [M1_PLAYER_SPAWN]
+    + M1_STREET_ENEMY_SPAWNS
     + M1_ENEMY_SPAWNS
     + [M1_COMMANDER_SPAWN, M1_VOLKOV_SPAWN, M1_NOTEBOOK_SPAWN, M1_EXFIL_SPAWN]
 )
 
+# Level-data extras, read by tools/ae_level_export.py (pure data).
+M1_TRIGGERS = [
+    {"id": "street_exit", "kind": "zone", "rect": [0, 10, 28, 2]},
+    {"id": "volkov_standoff", "kind": "zone", "rect": [11, 26, 9, 3]},
+    {"id": "exfil_van", "kind": "zone", "rect": [18, 30, 9, 2]},
+]
+M1_LIGHTS = [
+    {"id": "street_lamp_a", "kind": "street_lamp", "tile": [6, 2], "radius": 150, "color": [190, 210, 255]},
+    {"id": "street_lamp_b", "kind": "street_lamp", "tile": [15, 2], "radius": 150, "color": [190, 210, 255]},
+    {"id": "fire_barrel", "kind": "fire_barrel", "tile": [23, 9], "radius": 120, "color": [255, 170, 90]},
+]
+
+# Street band rows 0-9 and the stockroom's north wall row 10. Glyphs: C wall,
+# L lamp, T truck, f fence, r rubble, F fire barrel, d side door, S shutter.
+# P and E are spawn markers, overlaid from M1_SPAWNS (floor in the structure).
+_M1_STREET_ROWS = (
+    "CCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    "CP.........................C",
+    "C.....L........L...........C",
+    "C.......TTT................C",
+    "C.......TTT........E.......C",
+    "C....r.....................C",
+    "C.....................TTTT.C",
+    "Cffffff.ffffffffffffff.ffffC",
+    "C......................E.E.C",
+    "C...........r..........F...C",
+    "CCCdCCCCCCCCCCCCCCCCCCSSSCCC",
+)
+
 
 def _build_m1_structure():
-    """Collision/visual layer: warehouse in three horizontal bands.
+    """Collision/visual layer, top to bottom.
 
-    Rows 0-10   north stockroom  (C shell, 2x2 CC shelving blocks)
-    Rows 11-15  middle warehouse (W shell, gate door row 15 col 14)
-    Rows 16-22  south yard + exfil (W shell, bay doors row 19 cols 14-16)
+    Rows 0-9    street band (C outer wall, props, open apron)
+    Rows 10-20  north stockroom (C shell, 2x2 CC shelving, door row 20 col 8)
+    Rows 21-25  middle warehouse (W shell, gate door row 25 col 14)
+    Rows 26-29  south yard (W shell, bay doors row 29 cols 14-16)
+    Rows 30-32  exfil corridor (C side walls, solid cap)
     """
     b = MapBuilder(M1_W, M1_H, fill=".")
 
-    # North stockroom shell: C walls, door punched at col 8 of row 10.
-    b.room(0, 0, M1_W, 11, wall="C", floor=".", doors=[(8, 10)])
-    # Shelving blocks (2x2 CC pillars at cols 5-6 and 15-16, rows 4-5).
-    b.block(5, 4)
-    b.block(15, 4)
+    # Stockroom shell rows 10-20: C walls, south door at relative (8, 10).
+    b.room(0, M1_STREET_ROW, M1_W, 11, wall="C", floor=".", doors=[(8, 10)])
+    for r, line in enumerate(_M1_STREET_ROWS):
+        for c, ch in enumerate(line):
+            b.set(c, r, "." if ch in "PE" else ch)
+    # Shelving blocks (2x2 CC pillars at cols 5-6 and 15-16, rows 14-15).
+    b.block(5, 14)
+    b.block(15, 14)
 
-    # Middle warehouse shell rows 11-15 (W walls, gate door row 15 col 14).
-    b.rect(0, 11, 1, 4, "W")          # west wall rows 11-14
-    b.rect(M1_W - 1, 11, 1, 4, "W")   # east wall rows 11-14
-    b.h_wall(0, 15, M1_W, wall="W", doors=(14,))
+    # Middle warehouse shell rows 21-25 (W walls, gate door row 25 col 14).
+    b.rect(0, 21, 1, 4, "W")          # west wall rows 21-24
+    b.rect(M1_W - 1, 21, 1, 4, "W")   # east wall rows 21-24
+    b.h_wall(0, M1_GATE_ROW, M1_W, wall="W", doors=(14,))
 
-    # South shell rows 16-19 (W walls, triple bay doors row 19).
-    b.rect(0, 16, 1, 3, "W")          # west wall rows 16-18
-    b.rect(M1_W - 1, 16, 1, 3, "W")   # east wall rows 16-18
-    b.h_wall(0, 19, M1_W, wall="W", doors=(14, 15, 16))
+    # South shell rows 26-29 (W walls, triple bay doors row 29).
+    b.rect(0, 26, 1, 3, "W")          # west wall rows 26-28
+    b.rect(M1_W - 1, 26, 1, 3, "W")   # east wall rows 26-28
+    b.h_wall(0, M1_BAY_ROW, M1_W, wall="W", doors=(14, 15, 16))
 
-    # Exfil corridor rows 20-22: open hallway with C side walls, solid cap.
-    # Legacy row 20/21 are "C..........................C" (X at 22,21).
-    b.rect(0, 20, 1, 2, "C")
-    b.rect(M1_W - 1, 20, 1, 2, "C")
-    b.rect(0, 22, M1_W, 1, "C")
+    # Exfil corridor rows 30-32: open hallway with C side walls, solid cap.
+    b.rect(0, 30, 1, 2, "C")
+    b.rect(M1_W - 1, 30, 1, 2, "C")
+    b.rect(0, 32, M1_W, 1, "C")
 
     return b
 

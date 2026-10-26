@@ -139,6 +139,6 @@ class MapBuilder:
                 ch = self.g[r][c]
                 if ch in SPAWN_CHARS:
                     pass  # marker present; walkability checked by caller
-                elif ch not in SOLID_CHARS and ch not in DOOR_CHARS and ch not in (".", "g", "O", "K", "L", "Y", "M", "E", "S"):
+                elif ch not in SOLID_CHARS and ch not in DOOR_CHARS and ch not in (".", "g", "O", "K", "L", "Y", "M", "E", "S", "T", "f", "r", "F", "d"):
                     errors.append("unknown tile %r at (%d,%d)" % (ch, c, r))
         return errors
