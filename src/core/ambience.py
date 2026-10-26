@@ -16,16 +16,21 @@ TILE = 64
 # World rects where hardware hum lives (relay / server / generator rooms).
 ELEC_ZONES = {
     "MISSION3": [(36 * TILE, 32 * TILE, 46 * TILE, 42 * TILE)],
-    "MISSION1": [(12 * TILE, 20 * TILE, 20 * TILE, 26 * TILE)],
+    "MISSION1": [(13 * TILE, 25 * TILE, 14 * TILE, 26 * TILE)],   # gate console (13,25)
 }
 # Corridors where tiled drips echo.
 # Drips belong to the cell block's wet plumbing ONLY. A drip echoing in the
 # comms wing or archives reads as a random unexplained noise.
 DRIP_ZONES = {
     "MISSION3": [(4 * TILE, 4 * TILE, 20 * TILE, 20 * TILE)],
+    "MISSION1": [(1 * TILE, 11 * TILE, 27 * TILE, 20 * TILE)],    # leaking stockroom roof
 }
 RAIN_MISSIONS = {"MISSION1", "MISSION2", "MISSION4"}
-GUST_MISSIONS = {"MISSION2", "MISSION4", "MISSION6"}   # exterior only; indoors a gust reads as static
+GUST_MISSIONS = {"MISSION1", "MISSION2", "MISSION4", "MISSION6"}   # exterior only; indoors a gust reads as static
+# Missions with an open-air street band: world y below this is outdoors. There the
+# exterior loops (app.py set_ambience) play and the roof-rain layer stops; inside,
+# gusts stop and rain_inside plays.
+STREET_BANDS = {"MISSION1": 10 * TILE}
 PA_STAGES = set()              # random PA removed: the prison PA only exists
                                # where the script puts it (see systems.py)
 _state = {
@@ -46,6 +51,27 @@ def _in_any(zones, x, y, pad=0):
         if x0 - pad <= x <= x1 + pad and y0 - pad <= y <= y1 + pad:
             return True
     return False
+
+
+def outdoors(mission, py):
+    """True when world y ``py`` is in ``mission``'s open-air street band."""
+    band = STREET_BANDS.get(mission)
+    return band is not None and py < band
+
+
+def exterior_bed(mission, py):
+    """Looped exterior bed for a street-band mission: rain + wind outdoors, none inside."""
+    return {"rain", "wind"} if outdoors(mission, py) else set()
+
+
+def _m1_music_watchdog():
+    import sys
+    m = sys.modules.get("missions.m1.m1_audio")
+    if m is not None:
+        try:
+            m.watchdog()
+        except Exception:
+            pass
 
 
 def _teardown():
@@ -81,6 +107,7 @@ def prewarm(mission):
 
 
 def update_ambience():
+    _m1_music_watchdog()
     mission = getattr(STATE, "active_mission", None)
     if mission != _state["mission"]:
         _state["mission"] = mission
@@ -100,6 +127,7 @@ def update_ambience():
         return
     px, py = player.rect.centerx, player.rect.centery
     layers = _state.get("layers_on", True)
+    out = outdoors(mission, py)
 
     # 1 ── interior bed: the room is alive
     if layers and not _state["room_tone_on"]:
@@ -107,9 +135,13 @@ def update_ambience():
         _state["room_tone_on"] = True
 
     # 2 ── rain heard through the roof, layered under the exterior loop
-    if layers and mission in RAIN_MISSIONS and not _state["rain_inside_on"]:
+    #      (street-band missions: inside only; the street has the full rain loop)
+    if layers and mission in RAIN_MISSIONS and not out and not _state["rain_inside_on"]:
         audio.play("rain_inside", volume=0.4, loops=-1)
         _state["rain_inside_on"] = True
+    elif _state["rain_inside_on"] and out:
+        audio.stop("rain_inside")
+        _state["rain_inside_on"] = False
 
     # 3 ── electrical hum near relay/server hardware (hysteresis: 260 in / 340 out)
     zones = ELEC_ZONES.get(mission, ())
@@ -131,7 +163,7 @@ def update_ambience():
         _state["drip_timer"] = _rng_legacy.randint(360, 720)
 
     # 5 ── wind gusts through broken glass
-    if layers and mission in GUST_MISSIONS:
+    if layers and mission in GUST_MISSIONS and (mission not in STREET_BANDS or out):
         _state["gust_timer"] -= 1
         if _state["gust_timer"] <= 0:
             audio.play("wind_gust", volume=0.10)

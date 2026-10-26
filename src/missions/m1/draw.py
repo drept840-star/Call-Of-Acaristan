@@ -5,6 +5,7 @@ import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 from core.cutscene_registry import register_scene_renderers as _register_takes  # WP2: cutscene takes
 import time
+import zlib
 import pygame
 from core.config import (BAY_DOOR_FRAME_3W, BAY_DOOR_TILE_3W, CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_BG_GAME, C_BULLET, C_KRAP_BLUE, C_ORANGE, C_TERMINAL, C_WHITE, DOOR_FRAME_TILE, DOOR_INTERACT_RANGE, DOOR_TILE, FLOOR_TILE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, MUZZLE_FLASH, SLUM_FLOOR, TILE_SIZE, WAREHOUSE_WALL, WIDTH, bay_door_shadow, bullet_glow as _bullet_glow, draw_letterbox, draw_scanlines, draw_vignette, font_dialogue, font_location_sub, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen, wall_shadow)
 from entities.art_cache import get_blood_decal, get_glow, get_panel_bg
@@ -702,10 +703,12 @@ _M1_LAMPS = (
     # Gate bulkheads.
     (8, 21, 120, (255, 236, 200), "gate_a"),
     (14, 26, 120, (255, 236, 200), "gate_b"),
-    # Slum street lamps - cool night.
+    # Stockroom lamps (rows 11-19, floor tiles clear of the shelving) - cool,
+    # keyed "sl" for the post fixture art.
     (5, 13, 150, (190, 210, 255), "sl_a"),
     (13, 16, 150, (190, 210, 255), "sl_b"),
     (21, 17, 150, (190, 210, 255), "sl_c"),
+    # Street lamps on the north pavement - cool night.
     (6, 2, 150, (190, 210, 255), "sl_d"),
     (15, 2, 150, (190, 210, 255), "sl_e"),
     # Shutter floodlight over the apron - cold white.
@@ -715,27 +718,135 @@ _M1_LAMPS = (
 )
 
 
-def _push_m1_lights(cam_x, cam_y, t):
-    lb = lighting.buffer()
-    render_util.push_lamps(
-        lb,
-        ((tx * TILE_SIZE, ty * TILE_SIZE, r, col, key)
-         for tx, ty, r, col, key in _M1_LAMPS),
-        cam_x, cam_y, t, _m1_solid_world)
-    # Bay-door moonlight spill - grows as the doors roll open.
+# WP8 hard lighting. Every lamp is two flat additive steps clipped by a hard
+# visibility polygon, drawn on the LIGHTING layer (under the HUD); no lamp goes
+# through the soft LightBuffer any more. Pools sit where stealth.in_light reads
+# them: the lamp's tile corner, radius * LAMP_RADIUS_SCALE.
+_M1_LAMP_SCALE = 0.8
+_M1_FLICKER_KEYS = ("wh_e", "dk_a")
+_M1_STREET_KEYS = ("sl_d", "sl_e")
+_M1_STREET_DARK = (150, 156, 172)      # flat multiply over street rows 0-9
+_M1_BAY_COL = (200, 220, 255)
+_M1_POOLS = {}
+
+
+def _m1_lamp_level(key, t):
+    """1.0 for steady lamps; wh_e / dk_a cut hard to 0.3 for one 125 ms tick per
+    2 s cycle, at a (key, cycle)-hashed offset: gaps 0.6-3.4 s, no RNG state."""
+    if key not in _M1_FLICKER_KEYS or lighting.frozen():
+        return 1.0
+    tick = int(t * 8) + zlib.crc32(key.encode()) % 16 * 7   # per-lamp phase: no lockstep
+    cycle, pos = divmod(tick, 16)
+    dip = 2 + zlib.crc32(("%s:%d" % (key, cycle)).encode()) % 12
+    return 0.3 if pos == dip else 1.0
+
+
+def _m1_vis_mask(wx, wy, radius):
+    """White hard-edged visibility polygon on black, (2r x 2r), full res."""
+    rays, step = 64, 12.0
+    pts = [(radius, radius)]
+    for i in range(rays):
+        a = i * (2 * math.pi / rays)
+        ca, sa = math.cos(a), math.sin(a)
+        hit = float(radius)
+        d = step
+        while d < radius:
+            if _m1_solid_world(wx + ca * d, wy + sa * d):
+                hit = d
+                break
+            d += step
+        pts.append((radius + ca * hit, radius + sa * hit))
+    m = pygame.Surface((radius * 2, radius * 2))
+    m.fill((0, 0, 0))
+    pygame.draw.polygon(m, (255, 255, 255), pts)
+    return m
+
+
+def _m1_lamp_pool(key, wx, wy, radius, col, level, lo, hi):
+    """Cached opaque pool: two flat discs (lo at radius, hi at 11/20 radius) * level,
+    cut by the lamp's visibility polygon."""
+    ck = (key, radius, level, _m1_light_sig())
+    s = _M1_POOLS.get(ck)
+    if s is None:
+        s = pygame.Surface((radius * 2, radius * 2))
+        s.fill((0, 0, 0))
+        pygame.draw.circle(s, tuple(int(v * lo * level) for v in col), (radius, radius), radius)
+        pygame.draw.circle(s, tuple(int(v * hi * level) for v in col), (radius, radius), radius * 11 // 20)
+        s.blit(_m1_vis_mask(wx, wy, radius), (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+        if len(_M1_POOLS) > 96:
+            _M1_POOLS.clear()
+        _M1_POOLS[ck] = s
+    return s
+
+
+def _m1_flood_cone(col):
+    """Shutter floodlight thrown north from the wall: two-step trapezoid, hard edges."""
+    ck = ("fl_cone", col)
+    s = _M1_POOLS.get(ck)
+    if s is None:
+        s = pygame.Surface((3 * TILE_SIZE + 64, 150))
+        s.fill((0, 0, 0))
+        _m1_flood_pool(s, s.get_width() // 2, s.get_height(), col)
+        _M1_POOLS[ck] = s
+    return s
+
+
+def _m1_bay_open():
     bay_open = 0.0
     for d in getattr(STATE, "doors", ()):
         if getattr(d, "is_bay", False):
             bay_open = max(bay_open, getattr(d, "anim_progress", 0.0))
+    return bay_open
+
+
+def _draw_m1_bay_cone(surface, cam_x, cam_y, t, bay_open):
+    """Bay-door moonlight: a two-step trapezoid south through the open doors, rain
+    streaks inside the inner step. Flat tones scaled by how far the doors are open."""
+    cx = 15 * TILE_SIZE + 32 - cam_x
+    top = 30 * TILE_SIZE - cam_y
+    h = 2 * TILE_SIZE
+    if not render_util.screen_visible(cx - 160, top, 320, h):
+        return
+    outer = tuple(int(v * 0.10 * bay_open) for v in _M1_BAY_COL)
+    inner = tuple(int(v * 0.18 * bay_open) for v in _M1_BAY_COL)
+    cone = pygame.Surface((320, h))
+    cone.fill((0, 0, 0))
+    pygame.draw.polygon(cone, outer, [(64, 0), (256, 0), (310, h), (10, h)])
+    pygame.draw.polygon(cone, inner, [(100, 0), (220, 0), (250, h - 30), (70, h - 30)])
+    streak = tuple(int(v * 0.22 * bay_open) for v in _M1_BAY_COL)
+    for i in range(14):
+        sx = 90 + (i * 47) % 140
+        sy = int(i * 29 + t * 520) % (h - 40)
+        pygame.draw.line(cone, streak, (sx, sy), (sx - 2, sy + 9))
+    surface.blit(cone, (int(cx - 160), int(top)), special_flags=pygame.BLEND_RGB_ADD)
+
+
+def _draw_m1_hard_lights(surface, cam_x, cam_y, t):
+    """Street darkness (flat multiply over rows 0-9) then every lamp pool, the shutter
+    flood cone and the bay moonlight, all additive flat steps."""
+    street_bottom = M1_STREET_ROW * TILE_SIZE - cam_y
+    if street_bottom > 0:
+        surface.fill(_M1_STREET_DARK, (0, 0, surface.get_width(), min(surface.get_height(), street_bottom)),
+                     special_flags=pygame.BLEND_RGB_MULT)
+    for tx, ty, r, col, key in _M1_LAMPS:
+        wx, wy = tx * TILE_SIZE, ty * TILE_SIZE
+        if key == "fl_a":
+            cone = _m1_flood_cone(col)
+            sx = wx + 32 - cam_x - cone.get_width() // 2
+            sy = M1_STREET_ROW * TILE_SIZE - cam_y - cone.get_height()
+            if render_util.screen_visible(sx, sy, cone.get_width(), cone.get_height()):
+                surface.blit(cone, (int(sx), int(sy)), special_flags=pygame.BLEND_RGB_ADD)
+            continue
+        radius = int(r * _M1_LAMP_SCALE)
+        sx, sy = wx - cam_x, wy - cam_y
+        if not render_util.screen_visible(sx - radius, sy - radius, radius * 2, radius * 2):
+            continue
+        lo, hi = (0.12, 0.22) if key in _M1_STREET_KEYS else (0.07, 0.13)
+        pool = _m1_lamp_pool(key, wx, wy, radius, col, _m1_lamp_level(key, t), lo, hi)
+        surface.blit(pool, (int(sx - radius), int(sy - radius)), special_flags=pygame.BLEND_RGB_ADD)
+    bay_open = _m1_bay_open()
     if bay_open > 0.02:
-        bx = 14 * TILE_SIZE + 32 - cam_x
-        by = 30 * TILE_SIZE - cam_y
-        if render_util.screen_visible(bx, by, 1, 1):
-            lb.cone(bx, by, math.radians(90), 26, 230, (200, 220, 255),
-                    0.35 * bay_open, caster=_m1_solid_world,
-                    cam=(cam_x, cam_y), key="bayspill")
-            lb.light(bx, by + 60, 150, (200, 220, 255), 0.30 * bay_open,
-                     caster=_m1_solid_world, cam=(cam_x, cam_y), key="baypool")
+        _draw_m1_bay_cone(surface, cam_x, cam_y, t, bay_open)
 
 
 def _m1_street_art():
@@ -793,18 +904,26 @@ def _m1_curb(target, x0, x1, y, facing_down):
         target.fill(crown, (x0, y + 4, w, 2))
 
 
-def _m1_hard_pool(target, sx, sy, radius, col):
-    """Two flat additive discs: a lit pool with an edge, no falloff (M6 house light)."""
-    pool = pygame.Surface((radius * 2, radius * 2))
-    pool.fill((0, 0, 0))
-    pygame.draw.circle(pool, tuple(int(v * 0.05) for v in col), (radius, radius), radius)
-    pygame.draw.circle(pool, tuple(int(v * 0.09) for v in col), (radius, radius), radius * 3 // 5)
-    target.blit(pool, (int(sx - radius), int(sy - radius)), special_flags=pygame.BLEND_RGB_ADD)
+_M1_HALOS = {}
+
+
+def _m1_hard_halo(target, sx, sy, radius, col):
+    """Fixture halo: two flat additive discs (0.16 at radius, 0.30 at radius // 2),
+    the M6 hard-bloom recipe; no falloff."""
+    ck = (radius, col)
+    s = _M1_HALOS.get(ck)
+    if s is None:
+        s = pygame.Surface((radius * 2, radius * 2))
+        s.fill((0, 0, 0))
+        pygame.draw.circle(s, tuple(int(v * 0.16) for v in col), (radius, radius), radius)
+        pygame.draw.circle(s, tuple(int(v * 0.30) for v in col), (radius, radius), radius // 2)
+        _M1_HALOS[ck] = s
+    target.blit(s, (int(sx - radius), int(sy - radius)), special_flags=pygame.BLEND_RGB_ADD)
 
 
 def _blit_m1_street_floor(target, cam_x, cam_y):
     """Street band rows 0-9: art-pack pavement, asphalt and forecourt slabs, curbs,
-    lane paint, hard-edged puddles and the lamps' stepped floor pools."""
+    lane paint and hard-edged puddles."""
     _fill_m1_band(target, cam_x, cam_y, _M1_PAVE_N, lambda c, r: artpack.tile("s", c, r))
     _fill_m1_band(target, cam_x, cam_y, _M1_ROAD, _m1_road_tile)
     _fill_m1_band(target, cam_x, cam_y, _M1_PAVE_S, lambda c, r: artpack.tile("s", c, r))
@@ -831,11 +950,7 @@ def _blit_m1_street_floor(target, cam_x, cam_y):
         target.fill((30, 33, 42), (sx + 10, sy + h + 3, w - 22, 1))
         target.fill((74, 84, 102), (sx + 12, sy - 2, w // 3, 1))
         target.fill((58, 66, 82), (sx + w // 2, sy + 3, w // 4, 1))
-    for tx, ty, _r, col, key in _M1_LAMPS:
-        if key in ("sl_d", "sl_e"):
-            _m1_hard_pool(target, tx * TILE_SIZE + 32 - cam_x, ty * TILE_SIZE + 40 - cam_y, 92, col)
-        elif key == "fl_a":
-            _m1_flood_pool(target, tx * TILE_SIZE + 32 - cam_x, M1_STREET_ROW * TILE_SIZE - cam_y, col)
+    # Lamp pools are dynamic now (_draw_m1_hard_lights), drawn over the street darkness.
 
 
 def _m1_flood_pool(target, sx, wall_y, col):
@@ -1045,16 +1160,14 @@ _M1_DRESSING_PROPS = (
 
 def _draw_m1_hall_fixture(target, sx, sy):
     """Ceiling lamp housing + glowing tube (top-down) with halo."""
-    halo = get_glow(26, (255, 232, 190), 90)
-    target.blit(halo, (int(sx - 26), int(sy - 26)))
+    _m1_hard_halo(target, sx, sy, 26, (255, 232, 190))
     pygame.draw.rect(target, (30, 30, 32), (int(sx - 26), int(sy - 6), 52, 12))
     pygame.draw.rect(target, (255, 240, 210), (int(sx - 22), int(sy - 3), 44, 6))
 
 
 def _draw_m1_street_post(target, sx, sy):
     """Slum lamp post: pole, arm, head + cool halo."""
-    halo = get_glow(24, (190, 210, 255), 90)
-    target.blit(halo, (int(sx - 24), int(sy - 52)))
+    _m1_hard_halo(target, sx + 14, sy - 50, 18, (190, 210, 255))
     pygame.draw.rect(target, (25, 27, 30), (int(sx - 2), int(sy - 46), 4, 46))
     pygame.draw.rect(target, (25, 27, 30), (int(sx - 2), int(sy - 50), 16, 4))
     pygame.draw.rect(target, (200, 215, 255), (int(sx + 10), int(sy - 52), 8, 5))
@@ -1073,16 +1186,14 @@ def _draw_m1_road_lamp(target, sx, tile_top):
 
 def _draw_m1_bulkhead(target, sx, sy):
     """Wall-mounted gate bulkhead light + warm glow."""
-    halo = get_glow(18, (255, 236, 200), 90)
-    target.blit(halo, (int(sx - 18), int(sy - 18)))
+    _m1_hard_halo(target, sx, sy, 18, (255, 236, 200))
     pygame.draw.rect(target, (35, 33, 30), (int(sx - 10), int(sy - 6), 20, 12))
     pygame.draw.rect(target, (255, 240, 205), (int(sx - 7), int(sy - 3), 14, 6))
 
 
 def _draw_m1_tripod(target, sx, sy):
     """Exfil tripod work-light + halo."""
-    halo = get_glow(24, (235, 245, 225), 110)
-    target.blit(halo, (int(sx - 24), int(sy - 58)))
+    _m1_hard_halo(target, sx, sy - 48, 20, (235, 245, 225))
     for dx in (-10, 0, 10):
         pygame.draw.line(target, (40, 42, 44), (int(sx), int(sy - 44)), (int(sx + dx), int(sy)), 2)
     pygame.draw.rect(target, (60, 62, 64), (int(sx - 8), int(sy - 52), 16, 8))
@@ -1216,7 +1327,6 @@ def _draw_m1_static_dressing(target, cam_x, cam_y):
             continue
         if fam == "wh":
             _draw_m1_hall_fixture(target, sx, sy)
-            render_util.add_radial(target, sx, sy, 34, (255, 225, 175), 24)
         elif key in ("sl_d", "sl_e"):
             _draw_m1_road_lamp(target, sx, ty * TILE_SIZE - cam_y)
         elif fam == "sl":
@@ -2126,7 +2236,7 @@ def _draw_m1_standoff(surface, cam_x, cam_y):
 
 
 def _composite_m1_lighting(surface):
-    _push_m1_lights(_M1_CAM[0], _M1_CAM[1], _now_s())
+    # Grade only: the lamps are hard pools on the LIGHTING layer, the add buffer stays black.
     lighting.buffer().composite(surface, _now_s())
 
 
@@ -2164,6 +2274,9 @@ def submit_frame(q, fcx, fcy):
     if STATE.truck_hotwiring:
         q.submit(_UiPassDraw(lambda s: _draw_m1_hotwire(s), "m1.hotwire"),
                  _L.FX_WORLD, sort_key=(5, 0))
+    if artpack.enabled():
+        q.submit(_UiPassDraw(lambda s: _draw_m1_hard_lights(s, fcx, fcy, _now_s()), "m1.hard_lights"),
+                 _L.LIGHTING, sort_key=0)
     ch_x, ch_y = get_scaled_mouse()
     _submit_overlay(q, fcx, fcy, ch_x, ch_y)
     _submit_m1_rain(q, fcy)

@@ -3528,6 +3528,12 @@ class _GameState_(GameState):
                 _set_ambience({"ambient_drone"})
         elif mission == "MISSION6":
             _set_ambience({"ambient_drone", "wind"})
+        elif mission == "MISSION1":
+            # Street band (rows 0-9): the exterior rain + wind loops. Inside, the
+            # per-frame layers in core.ambience carry rain_inside / elec_hum / drips.
+            # _set_ambience() is diff-based, so crossing the wall line swaps cleanly.
+            p = STATE.player
+            _set_ambience(ambience.exterior_bed(mission, p.rect.centery) if p else set())
         else:
             _set_ambience(set())
 
