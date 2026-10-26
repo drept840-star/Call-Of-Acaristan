@@ -275,6 +275,34 @@ def gameplay_specs():
         yield _still("m1", "desks", lambda: _cam_at(14, 19))
         yield _still("m1", "warehouse", lambda: _cam_at(30, 24))
 
+        # Street band (rows 0-9, rain + lamps) from a fresh start, camera clamped to the
+        # map like the follow camera. The m1.dropoff cut paints the real street from
+        # STATE (player, guards), so it renders here after a start, not in cutscene_specs.
+        from missions.m1.map import MAP_W, MAP_H
+        from missions.m1.meta import dropoff_shots
+
+        def street_cam(tx, ty):
+            def f():
+                gc.start_mission(preserve_timer=True)
+                x, y = _cam_at(tx, ty)
+                return (max(0, min(MAP_W * T - WIDTH, x)), max(0, min(MAP_H * T - HEIGHT, y)))
+            return f
+        yield _still("m1", "street", street_cam(7, 4))        # by lamp (6,2)
+        yield _still("m1", "shutter", street_cam(21, 9))      # shutter floodlight cone (23,9)
+
+        gc.start_mission(preserve_timer=True)
+        for i, s in enumerate(dropoff_shots):
+            d = duration(s)
+            for f in FRACTIONS:
+                t = int(d * f)
+
+                def render(surf, s=s, t=t):
+                    from cutscenes import engine as eng
+                    eng.reset_dialogue_slide()
+                    composite(surf, s, t)
+                yield {"id": f"gp.m1.dropoff.{i:02d}.t{int(f * 100):02d}", "kind": "gameplay",
+                       "source": f"m1.dropoff[{i}] scene={s['scene']}", "t_ms": t, "render": render}
+
     def m2_seq():
         from core import game_core as gc
 

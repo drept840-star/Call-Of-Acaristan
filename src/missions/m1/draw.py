@@ -2247,7 +2247,8 @@ def _submit_m1_rain(q, fcy):
     if not drops or clip_h <= 0:
         return
     def paint(s):
-        _draw_rain_streaks(s.subsurface((0, 0, WIDTH, clip_h)), drops)
+        _draw_rain_streaks(s.subsurface((0, 0, WIDTH, clip_h)), drops,
+                           rng=getattr(STATE, "_m1_rain_rng", None))
     q.submit(_UiPassDraw(paint, "m1.rain"), _L.UI, sort_key=-1)
 
 
