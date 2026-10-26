@@ -229,6 +229,7 @@ VOICE_LINES = [
     ('VO_215', 'CIOCAN', "The clerk's new friend? Let's see."),
     ('VO_216', 'VASILE', 'Company on the east road. Move.'),
     ('VO_217', 'BIRIBEL', 'Come on. Come on.'),
+    ('VO_218', 'VOLKOV', 'Read it before you hand it over!'),
 ]
 
 
@@ -286,4 +287,5 @@ KNOWN_MISSING_AUDIO = frozenset({
     # M1 rework section c (docs/MISSION1_REWORK_PLAN.md): new beats, no takes.
     'VO_205', 'VO_206', 'VO_207', 'VO_208', 'VO_209', 'VO_210', 'VO_211',
     'VO_212', 'VO_213', 'VO_214', 'VO_215', 'VO_216', 'VO_217',
+    'VO_218',
 })

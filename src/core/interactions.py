@@ -8,6 +8,7 @@ from core.config import (
 from core.state import STATE
 from fx.effects import shake
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
+import game.dialogues as _dialogues  # RPE6 P7: radio line text from m1.radio
 class Door:
     def __init__(self, x, y, is_bay=False):
         self.rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
@@ -161,7 +162,7 @@ def _on_safe_opened(success):
                 d.target_open = False
         # Subtle twist
         trigger_radio_chatter(
-            'VASILE: "\u2026Some of this was already in our files."'
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "files_already", "\u2026Some of this was already in our files."))
         )
         # Start staged breach (not instant - builds over ~6 seconds)
         STATE.breach_stage = 1
@@ -186,11 +187,11 @@ def _on_safe_opened(success):
             getattr(STATE, "safe_keypad_wrong_attempts", 0) + 1)
         n = STATE.safe_keypad_wrong_attempts
         if n == 1:
-            line = 'VASILE: "The memos said something about a shipment number\u2026"'
+            line = 'VASILE: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_1", "The memos said something about a shipment number\u2026"))
         elif n == 2:
-            line = 'BIRIBEL: "Shipment 7742. Only the last three digits."'
+            line = 'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_2", "Shipment 7742. Only the last three digits."))
         else:
-            line = 'BIRIBEL: "7\u2026 4\u2026 2. Has to be."'
+            line = 'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_3", "7\u2026 4\u2026 2. Has to be."))
         trigger_radio_chatter(line, color=C_BIRIBEL, duration=300, priority=1)
 # ── Radio director ────────────────────────────────────────────────
 # Transmissions enqueue instead of firing instantly. The per-frame pump
@@ -518,7 +519,7 @@ def trigger_alarm_early():
         STATE.volkov_escape_pos = list(STATE.volkov_pos)
         STATE.volkov_escape_timer = 90
         trigger_radio_chatter(
-            'VOLKOV: "Read it before you hand it over!"',
+            'VOLKOV: "{}"'.format(_dialogues.line("m1.radio", "alarm_volkov", "Read it before you hand it over!")),
             color=C_VOLKOV, priority=1,
         )
     STATE.volkov_escaped = False
@@ -535,5 +536,5 @@ def trigger_alarm_early():
     ])
     STATE.radio_chatter_stage = 1
     trigger_radio_chatter(
-        'VASILE: "Biribel, they spotted you! Alarm is active!"'
+        'VASILE: "{}"'.format(_dialogues.line("m1.radio", "alarm_vasile", "Biribel, they spotted you! Alarm is active!"))
     )

@@ -17,6 +17,7 @@ from core.interactions import (
     trigger_alarm_early,
     trigger_radio_chatter,
 )
+import game.dialogues as _dialogues  # RPE6 P7: radio line text from m1.radio
 from entities.weapons import (
     update_molotovs,
     spawn_molotov_fire as _spawn_molotov_fire,
@@ -122,7 +123,7 @@ def game_update(keys):
         if STATE.radio_chatter_stage == 1 and STATE.player.rect.centery > 15 * TILE_SIZE:
             STATE.radio_chatter_stage = 2
             trigger_radio_chatter(
-                'VASILE: "Gate is open. Signatures ahead, watch the corners."'
+                'VASILE: "{}"'.format(_dialogues.line("m1.radio", "gate_open", "Gate is open. Signatures ahead, watch the corners."))
             )
         if STATE.radio_chatter_stage == 2 and STATE.NOTEBOOK_POS:
             if (
@@ -134,7 +135,7 @@ def game_update(keys):
             ):
                 STATE.radio_chatter_stage = 3
                 trigger_radio_chatter(
-                    'VASILE: "Safe is locked. Look for notes on desks for the code."'
+                    'VASILE: "{}"'.format(_dialogues.line("m1.radio", "safe_locked", "Safe is locked. Look for notes on desks for the code."))
                 )
     # ── Staged breach (after notebook acquisition) ──
     if STATE.breach_stage > 0 and STATE.breach_stage < 6:
@@ -149,7 +150,7 @@ def game_update(keys):
         elif STATE.breach_stage == 2:
             if STATE.breach_stage_timer == 1:
                 trigger_radio_chatter(
-                    'VASILE: "BRACE! They\'re breaching the bay doors!"'
+                    'VASILE: "{}"'.format(_dialogues.line("m1.radio", "breach_brace", "BRACE! They're breaching the bay doors!"))
                 )
             if STATE.breach_stage_timer >= 90:
                 STATE.breach_stage = 3
@@ -291,7 +292,7 @@ def game_update(keys):
                 (255, 70, 40), 120,
             ])
             trigger_radio_chatter(
-                'VASILE: "They\'re coming from both sides! Get to the truck NOW!"',
+                'VASILE: "{}"'.format(_dialogues.line("m1.radio", "breach_both_sides", "They're coming from both sides! Get to the truck NOW!")),
                 color=(220, 80, 60),
                 duration=240,
             )
@@ -320,7 +321,7 @@ def game_update(keys):
                 STATE.commander_escaped = True
         if STATE.volkov_escape_timer == 30:
             trigger_radio_chatter(
-                'VASILE: "Volkov escaped! Get that notebook and get out."'
+                'VASILE: "{}"'.format(_dialogues.line("m1.radio", "volkov_escaped", "Volkov escaped! Get that notebook and get out."))
             )
         if STATE.volkov_escape_timer == 0:
             STATE.volkov_escaped = True
@@ -404,7 +405,7 @@ def game_update(keys):
             if STATE.enemies:
                 if keys[pygame.K_e] and not STATE.hotwire_radio_said:
                     STATE.hotwire_radio_said = True
-                    trigger_radio_chatter('VASILE: "Not yet. Clear the yard before you put your head under that dash."')
+                    trigger_radio_chatter('VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_truck_not_clear", "Not yet. Clear the yard before you put your head under that dash.")))
                 STATE.truck_hotwiring = False
                 STATE.hotwire_selected_wire = None
             elif not STATE.truck_hotwiring:
@@ -414,7 +415,7 @@ def game_update(keys):
                     audio.play("door_creak", volume=0.35)
                     if not STATE.hotwire_radio_said:
                         STATE.hotwire_radio_said = True
-                        trigger_radio_chatter('VASILE: "Open the panel. Red feeds yellow. Blue wakes green. Black bites white."')
+                        trigger_radio_chatter('VASILE: "{}"'.format(_dialogues.line("m1.radio", "hotwire_tutorial", "Open the panel. Red feeds yellow. Blue wakes green. Black bites white.")))
             else:
                 STATE.hotwire_panel_timer = min(60, STATE.hotwire_panel_timer + 1)
                 if STATE.hotwire_spark_timer > 0:

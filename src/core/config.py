@@ -119,6 +119,8 @@ SPEAKER_COLORS = {
     "DARIUS": (205, 170, 110),
     "OLD WOMAN": (165, 145, 125),
     "HUNGRY KID": (160, 150, 130),
+    "ENEMY": (205, 75, 60),
+    "CIOCAN": (205, 75, 60),  # placeholder, hostile red
 }
 # ── Tile / world ──
 TILE_SIZE = 64

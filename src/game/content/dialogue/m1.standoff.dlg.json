@@ -36,10 +36,8 @@
   "vo": {
    "standoff_1": "VO_211",
    "standoff_2": "VO_212",
+   "standoff_3": "VO_218",
    "standoff_4": "VO_213"
-  },
-  "vo_notes": {
-   "standoff_3": "shipped inline shout (core/interactions.py trigger_alarm_early); it has no voice_manifest row (caption-only), so no id here"
   },
   "routes": {
    "quiet": "quiet_entry, alarm not raised: gameplay freezes, camera eases to frame both, 24 px letterbox, ~9 s. Commander K spots them afterwards (scripted alarm), Volkov runs out the bay door, VASILE VO_094 (m1.radio volkov_escaped).",

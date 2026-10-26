@@ -16,6 +16,7 @@ from core.interactions import (
     trigger_alarm_early,
     trigger_radio_chatter,
 )
+import game.dialogues as _dialogues  # RPE6 P7: radio line text from m1.radio
 from entities.weapons import (
     spawn_molotov_fire as _spawn_molotov_fire,
     _wall_blocks_line,
@@ -302,11 +303,11 @@ def _trigger_civilian_payoff():
     )
     if kid_helped:
         trigger_radio_chatter(
-            'VASILE: "Where\'d you get the plate? Keep it on."'
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "civilian_kevlar", "Where'd you get the plate? Keep it on."))
         )
     elif woman_helped:
         trigger_radio_chatter(
-            'VASILE: "If that civilian was right, the code\'s already in your head."'
+            'VASILE: "{}"'.format(_dialogues.line("m1.radio", "civilian_intel", "If that civilian was right, the code's already in your head."))
         )
     else:
-        trigger_radio_chatter('VASILE: "No local help. Search the desks."')
+        trigger_radio_chatter('VASILE: "{}"'.format(_dialogues.line("m1.radio", "civilian_none", "No local help. Search the desks.")))

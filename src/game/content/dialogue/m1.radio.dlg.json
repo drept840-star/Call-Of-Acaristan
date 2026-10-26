@@ -152,6 +152,7 @@
    "dropoff_3": "VO_207",
    "bark_suspicious": "VO_208",
    "bark_search": "VO_209",
+   "alarm_volkov": "VO_218",
    "alarm_vasile": "VO_085",
    "inside_quiet": "VO_210",
    "civilian_kevlar": "VO_087",
@@ -172,9 +173,6 @@
    "exfil_truck_not_clear": "VO_095",
    "hotwire_tutorial": "VO_096",
    "hotwire_smoke": "VO_217"
-  },
-  "vo_notes": {
-   "alarm_volkov": "shipped inline shout ('Read it before you hand it over!'); it has no voice_manifest row (caption-only), so no id here"
   },
   "variants": {
    "civilian_payoff": ["civilian_kevlar", "civilian_intel", "civilian_none"]
