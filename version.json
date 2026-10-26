@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "build": "4471",
+  "channel": "stable",
+  "engine": "Retardovici Pulse Engine 6 Gold 0.1.0",
+  "released_at": "2026-10-26",
+  "headline": "Call of Acaristan — Initial Operations Build",
+  "notes": [
+    "Campaign Missions 1–6 playable with 3D cutscene renderer",
+    "Authoritative multiplayer with UDP fast-path & lag compensation",
+    "KRAPNET Terminal main menu, radio UI, and Outfitter"
+  ]
+}

@@ -13,6 +13,22 @@ from ui.widgets import ModernButton, buttons, consume_hover, _menu_overlay, _btn
 from ui.system import _footer_font  # SYSTEM's copy: original file redefines it later, readers see the final object
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
+from pathlib import Path as _Path
+
+
+def _resolve_menu_version_override() -> str:
+    try:
+        from launcher import load_local_version
+        lv = load_local_version(_Path(__file__).resolve().parents[2])
+        if (lv.version, lv.build) != ("0.1.0", "4471"):
+            return f"v{lv.version}  \u00b7  BUILD {lv.build}"
+    except Exception:
+        pass
+    return ""
+
+
+_menu_version_override = _resolve_menu_version_override()
+
 
 def draw_menu_background():
 
@@ -177,8 +193,11 @@ def draw_menu():
     pygame.draw.line(screen, (40, 30, 15), (30, HEIGHT - 50), (470, HEIGHT - 50), 1)
 
     # ── Footer ──
+    footer_ver_str = _T("menu.v0_1_0_build_4471")
+    if _menu_version_override:
+        footer_ver_str = _menu_version_override
     footer_left = _footer_font.render(
-        _T("menu.v0_1_0_build_4471"), True, (90, 90, 95)
+        footer_ver_str, True, (90, 90, 95)
     )
     screen.blit(footer_left, (30, HEIGHT - 38))
 

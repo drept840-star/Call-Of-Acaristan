@@ -1,0 +1,18 @@
+{
+  "update_url": "",
+  "github_repo": "",
+  "check_on_startup": true,
+  "timeout_seconds": 4.0,
+  "gate_play_on_update": true,
+  "allow_downgrade": false,
+  "allow_insecure_hosts": [],
+  "protect": [],
+  "preserve_files": [
+    "save_data.json",
+    "settings.json",
+    "profile.json",
+    "profile_p1.json",
+    "profile_p2.json",
+    "launcher_config.json"
+  ]
+}

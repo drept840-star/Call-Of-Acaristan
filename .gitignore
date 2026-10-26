@@ -146,5 +146,16 @@ outputs/
 /tests/golden/_verify/
 /tools/_*
 
+# Session 2026-10-26: launcher/update delivery work (never tracked)
+# - graphify regenerates the whole code graph: src/graphify-out/ (10 MB)
+/src/graphify-out/
+# - local run captures (smoke/unit/hold evidence), not source
+validation/*hold*
+validation/*_hold*
+# - launcher window design scratch (mock page), not runtime code
+/launcher_preview/
+# - local agent hook scratch
+/.claude/hooks/
+
 # Claude Code personal settings
 .claude/settings.local.json

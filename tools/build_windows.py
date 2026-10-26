@@ -57,8 +57,17 @@ def main(argv):
     if not found:
         print("BUILD CHECK FAILED: bore.exe not bundled")
         return 1
+    for cfg_name in ("version.json", "launcher_config.json"):
+        src_cfg = os.path.join(ROOT, cfg_name)
+        if os.path.isfile(src_cfg):
+            import shutil
+            shutil.copy2(src_cfg, os.path.join(out, cfg_name))
+    launcher_bat = os.path.join(out, "Call of Acaristan Launcher.bat")
+    with open(launcher_bat, "w", encoding="utf-8", newline="\r\n") as fh:
+        fh.write('@echo off\r\ncd /d "%~dp0"\r\nstart "" "%~dp0Call of Acaristan.exe" --launcher\r\n')
     print("bundled:", *found, sep="\n  ")
     print("Build complete:", os.path.join(out, NAME + ".exe"))
+    print("Launcher entry:", launcher_bat)
     return 0
 
 
