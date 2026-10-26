@@ -96,16 +96,17 @@ def _boxes(scene, t):
 # (l base 4, r base 10) +0 uarm +2 farm +3 thigh +4 shin +5 foot.
 _PART = {0: "pelvis", 1: "torso", 2: "head", 4: "l_uarm", 6: "l_farm",
          7: "l_thigh", 8: "l_shin", 9: "l_foot", 10: "r_uarm", 12: "r_farm",
-         13: "r_thigh", 14: "r_shin", 15: "r_foot"}
+         13: "r_thigh", 14: "r_shin", 15: "r_foot", 16: "rifle"}
 # Same-body pairs that must not interpenetrate (joint neighbours excluded).
 _SELF = ((6, 1), (6, 2), (12, 1), (12, 2), (4, 2), (10, 2), (6, 12),
-         (6, 13), (12, 7), (7, 13), (8, 14), (9, 15), (8, 15), (14, 9))
+         (6, 13), (12, 7), (7, 13), (8, 14), (9, 15), (8, 15), (14, 9), (16, 2))
 
 
 def _obbs(a):
     """Posed part boxes of one LAST actor: {slot: (M, org, lo, hi, sc, verts)}."""
-    h = w.hum(a["key"])
-    places, _j, root = h.pose_world(a["pose"], a["pos"], a["yaw"])
+    h = w.hum(a["key"], a.get("hd", False), flags=a.get("flags", ()))
+    places, _j, root = h.pose_world(a["pose"], a["pos"], a["yaw"],
+                                    rifle_on=a.get("rifle", False))
     uniq = h._unique_verts()
     sc = h._scale
     out = {}
@@ -179,7 +180,7 @@ def _probe(surface, scene, t, second=None):
     boxes = _boxes(scene, t)
     if boxes:
         for a in w.LAST:
-            d, part, box = w.penetration(w.hum(a["key"]), a["pose"], a["pos"],
+            d, part, box = w.penetration(w.hum(a["key"], a.get("hd", False), flags=a.get("flags", ())), a["pose"], a["pos"],
                                          a["yaw"], boxes)
             if d > 0.004:
                 name = a["key"] if isinstance(a["key"], str) else a["key"][0]

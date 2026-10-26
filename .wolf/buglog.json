@@ -1767,6 +1767,132 @@
       "last_seen": "2026-10-25T22:54:34.091Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of hold.py",
+      "file": "src/engine3d/hold.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-099",
+      "timestamp": "2026-10-26T11:03:35.819Z",
+      "last_seen": "2026-10-26T11:03:35.819Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "Was returning: pose, L(root[0] + out, root[1] - drop, root[2]), y",
+      "fix": "Now returns: _k9_stance(pose, rt, yaw, \"port\"), rt, yaw, heli",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-100",
+      "timestamp": "2026-10-26T11:06:20.231Z",
+      "last_seen": "2026-10-26T11:06:20.231Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "Was returning: land, (x, y, z), yaw, heli",
+      "fix": "Now returns: _k9_stance(land, (x, y, z), yaw, \"port\"), (x, y, z",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-101",
+      "timestamp": "2026-10-26T11:06:22.393Z",
+      "last_seen": "2026-10-26T11:06:22.393Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: elif should be h",
+      "file": "src/cutscenes/m6world3d.py",
+      "root_cause": "Used \"elif\" instead of \"h\"",
+      "fix": "Changed elif → h",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-102",
+      "timestamp": "2026-10-26T11:06:53.098Z",
+      "last_seen": "2026-10-26T11:06:53.098Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/cutscenes/m6films.py",
+      "root_cause": "Was returning: pose, root, yaw",
+      "fix": "Now returns: _k9_stance(pose, root, yaw, \"ready\"), root, yaw",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-103",
+      "timestamp": "2026-10-26T11:08:18.082Z",
+      "last_seen": "2026-10-26T11:08:18.082Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of hold.py",
+      "file": "src/engine3d/hold.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 15→20 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-104",
+      "timestamp": "2026-10-26T11:14:37.962Z",
+      "last_seen": "2026-10-26T11:14:37.962Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": ".claude/hooks/haiku-reads.js",
+      "root_cause": "Had 'File search is Haiku-only (CLAUDE.md). Delegate t",
+      "fix": "Changed to 'File search is delegated (CLAUDE.md). Run it thro",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-105",
+      "timestamp": "2026-10-26T11:17:18.250Z",
+      "last_seen": "2026-10-26T11:17:18.250Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -1869,7 +1995,14 @@
     "36449ae6-6ad2-49e6-87ec-37d0c3ca4149": true,
     "d3850a1b-8a32-475c-a035-6e3679b3f47f": true,
     "016cd763-78bf-4f4e-b22b-431f94e0be5c": true,
-    "80b02330-6b2d-45e2-9d87-42daab2dc442": true
+    "80b02330-6b2d-45e2-9d87-42daab2dc442": true,
+    "dd9e937d-78a3-48ad-a331-234decd02509": true,
+    "00ab6643-2f1f-4cab-a969-2f01cf7df0d6": true,
+    "3a57dcdb-f55d-4851-96c2-b35accdaa0d6": true,
+    "8101f058-e2b2-4d66-bafe-377433141486": true,
+    "cbaf1013-b4ee-4b42-8673-8da244a3ba55": true,
+    "244fe2b0-cf44-44ca-8bfe-4c9f4a2e13fc": true,
+    "bce146e4-9c65-4cba-828b-6a7e02c77171": true
   },
-  "next_id": 99
+  "next_id": 106
 }

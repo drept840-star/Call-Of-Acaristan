@@ -92,6 +92,8 @@ GATES = [
      r"AE ENGINE3D PARITY: OK", r"AE ENGINE3D PARITY: OK \((.*)\)", True),
     ("mission 0 zero-engine-diff (RPE6 P10)", "mission0", [PY, "tools/ae_mission0_check.py"],
      r"AE MISSION0: OK", r"AE MISSION0: OK \((.*)\)", True),
+    ("3D cutscene weapon holds (engine3d.hold)", "holds", [PY, "tools/ae_hold_check.py"],
+     r"AE HOLD: OK", None, True),
 ]
 TODO = []
 

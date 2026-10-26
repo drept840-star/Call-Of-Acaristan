@@ -18,6 +18,7 @@ Design rules
       down in the open and the run fails.
     * Headless: with no input the failure branch runs on its own.
 """
+from engine3d.hold import hold_cached as _hold_cached
 import math
 import os
 
@@ -4483,6 +4484,8 @@ class TrainScene:
                     bump = 0.10 * amp * math.sin(math.pi * (1.0 - stag))
                     x += g["hit_dir"][0] * bump
                     z += g["hit_dir"][1] * bump
+                if not g.get("moving"):
+                    pose = _hold_cached(_w.hum(key, True), pose, "rifle", "ready", key=key)
                 joints = _w.actor(r, key, pose, (x, y, z), yaw,
                                   int(t * 1000), seed=100 + g["slot"],
                                   amp=0.4, rifle_on=True, hd=True,

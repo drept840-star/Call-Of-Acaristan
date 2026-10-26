@@ -273,7 +273,8 @@ def jump_stage(t):
         out = 0.82 * min(1.0, push * 1.6)
         sm = max(0.0, (push - 0.85) / 0.15)
         drop = 0.52 * sm * sm
-        return pose, L(root[0] + out, root[1] - drop, root[2]), yaw, heli
+        rt = L(root[0] + out, root[1] - drop, root[2])
+        return _k9_stance(pose, rt, yaw, "port"), rt, yaw, heli
     _p, p0, _y, _h = jump_stage(_LEAVE)
     q = min(1.0, (t - _LEAVE) / float(_AIR))
     end = _landed_root()
@@ -282,13 +283,18 @@ def jump_stage(t):
     z = p0[2] + (end[2] - p0[2]) * q
     y = p0[1] + (end[1] + _SINK - p0[1]) * q * q + 0.22 * math.sin(math.pi * q)
     y -= _SINK * _w.ease5(t, _LAND_T, 380)
-    return land, (x, y, z), yaw, heli
+    return _k9_stance(land, (x, y, z), yaw, "port"), (x, y, z), yaw, heli
 
 
 _GROUND_ROUTE = {}
 _W0 = 3100
 _WALK_MS = 4200                 # longer than the shot: he is still walking at the cut
-_READY_KEYS = ("lsh_p", "lsh_r", "lel", "rsh_p", "rsh_r", "rel", "rifle_p")
+
+
+def _k9_stance(pose, pos, yaw, mode):
+    """Both hands on Biribel's K-9 for ``mode`` (engine3d.hold), body as authored."""
+    from engine3d import hold
+    return hold.hold_weapon(_w.hum(_BIRI, flags=("rifle",)), pose, pos, yaw, "k9", mode)
 
 
 def ground_route():
@@ -324,18 +330,15 @@ def ground_stage(t):
             pose["twist"] = pose.get("twist", 0) + tw * watch
             pose["head_y"] = pose.get("head_y", 0) + hy * watch
             pose["head_p"] = pose.get("head_p", 0) + up * watch
-        return pose, root, yaw
+        return _k9_stance(pose, root, yaw, "ready"), root, yaw
     route = ground_route()
     stride = _w.walk_stride(route.length, 0.56)
     g0, g1 = _w.walk_span(route.length, stride)
     g = g0 + (g1 - g0) * _w.travel(t, _W0, _WALK_MS)
     pose, pos, wyaw = _w.walk(hum, route, g, stride, speed=1.05,
                               ground=lambda x, z: _w.height_at(x, z) - _ROOT_DROP)
-    from engine3d.rig import POSES
-    for k in _READY_KEYS:
-        pose[k] = POSES["ready"][k]
     pose["head_p"] = pose.get("head_p", 0) - 2.0
-    return pose, pos, wyaw
+    return _k9_stance(pose, pos, wyaw, "ready"), pos, wyaw
 
 
 def heli_depart(t):
@@ -856,7 +859,8 @@ def _air_actor(r, key, pose, root, yaw, t, L, seed=0, amp=0.2,
                                      math.cos(math.radians(yaw)))
         wyaw = math.degrees(math.atan2(a1[0] - a0[0], a1[2] - a0[2]))
         _w.LAST.append({"key": key, "joints": world, "pos": L(*root),
-                        "yaw": wyaw, "pose": p})
+                        "yaw": wyaw, "pose": p, "rifle": rifle_on,
+                        "flags": ("rifle",) if rifle_on and key == _BIRI else ()})
     return world
 
 
@@ -976,6 +980,7 @@ def _insert_valley(surface, t):
     pose = dict(pose, **_PORT_ARMS)
     pose["head_p"] = 8.0
     pose["twist"], pose["head_y"] = reveal_look(t, L(*root), hyaw + 90.0)
+    pose = _k9_stance(pose, root, 90.0, "port")
     r.light = _ridge_light()
     r.set_lights([
         {"pos": L(0.36, 2.02, 0.42), "color": (255, 84, 58),

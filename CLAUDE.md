@@ -51,4 +51,4 @@ Use plain Grep/Read for exact strings and for editing. The graph can go stale af
 
 # Delegated work
 
-Send mechanical work (searches, gate runs, renders, sweeps) to subagents through the Agent tool. They run on Haiku 5.5 (`claude-haiku-5-5`, set by `CLAUDE_CODE_SUBAGENT_MODEL` in `.claude/settings.local.json`). Write each task as an exact, self-contained brief with the commands to run, and spot-check its claims (counts, pass/fail) before relying on them. Design and code stay on the main model. The DeepSeek worker (`ds-worker.mjs`) is retired for this project: it was unreliable.
+Send mechanical work (searches, reads, gate runs, renders, sweeps) to Haiku 5.5 Agent subagents (`searcher` for read-only work, `implementer` for planned edits). Every subagent runs on Haiku 5.5 (`CLAUDE_CODE_SUBAGENT_MODEL` in `~/.claude/settings.json`). The DeepSeek/OpenCode proxy workers are retired: do not launch `ds-worker.mjs` or `/delegate`. Write each task as an exact, self-contained brief with the commands to run, and spot-check its claims (counts, pass/fail) before relying on them. Design and code stay on the main model.

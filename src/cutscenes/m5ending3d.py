@@ -92,23 +92,12 @@ def stride(d, amp=1.0):
 
 
 def solve_hand(hum, pose, side, target):
-    """Analytic two-link IK in the rig's placement coordinates (no draw calls)."""
-    places, joints, _, _ = hum.placements(pose, rifle_on=False)
-    shoulder = next(o for slot, key, m, o, ground, fb in places if slot == (4 if side == 'l' else 10))
-    S = next(m for slot, key, m, o, ground, fb in places if slot == 1)
-    sc2 = sum(S[i] ** 2 for i in (0, 3, 6))
-    delta = tuple(a - b for a, b in zip(target, shoulder))
-    x, y, z = (sum(S[j * 3 + i] * delta[j] for j in range(3)) / sc2 for i in range(3))
-    ln2 = x*x + y*y + z*z
-    elbow = math.acos(max(-0.985, min(0.999, (ln2 - .30**2 - .31**2) / (2*.30*.31))))
-    # Right trigger hand can rise above the shoulder with the elbow below it.
-    # Choose that folded branch rather than rotating the whole arm upside-down.
-    q = -math.hypot(x, y) if y > 0 else math.hypot(x, y)
-    pitch = math.atan2(z, q) - math.atan2(.31*math.sin(elbow), .30+.31*math.cos(elbow))
-    roll = math.atan2(-x, -y) if q >= 0 else math.atan2(x, y)
-    roll *= -1 if side == 'r' else 1
-    return dict(pose, **{side+'sh_p': math.degrees(pitch), side+'sh_r': math.degrees(roll),
-                         side+'el': math.degrees(elbow)})
+    """Two-link arm IK onto a placement-space point (no draw calls); the elbow
+    swivel and the torso push-out come from engine3d.hold."""
+    from engine3d import hold
+    root = hum.pose_world(pose, (0.0, 0.0, 0.0), 0.0, rifle_on=False)[2]
+    world = tuple(a + b for a, b in zip(target, root))
+    return hold.solve_arm_safe(hum, pose, (0.0, 0.0, 0.0), 0.0, side, world)
 
 
 def rifle_pose(hum, pitch, d=0.0, moving=0.0, t=None):
@@ -127,7 +116,7 @@ def rifle_pose(hum, pitch, d=0.0, moving=0.0, t=None):
     k = max(0.0, min(1.0, (pitch-AIM_PITCH)/(52-AIM_PITCH)))
     pose = dict(stride(d, moving), twist=55, head_y=-55, head_p=4, rifle_p=pitch + hold_p,
                 rifle_y=hold_y)
-    trigger = (.20, .56-.25*k, .38)
+    trigger = (.28, .56-.25*k, .26)   # clear of the twisted chest (tools/ae_hold_check.py)
     pose = solve_hand(hum, pose, 'r', trigger)
     _, joints, R, _ = hum.placements(pose)
     target = tuple(a+b for a,b in zip(joints['rhand'], m_apply(R, (0, -.025, .24))))
@@ -173,6 +162,8 @@ def reveal_pose(hum, t):
     pose['head_p'] = pose.get('head_p', 0) * (1 - look) - 7 * look
     pose['head_y'] = pose.get('head_y', 0) * (1 - away) + 26 * away
     _, joints, R, _ = hum.placements(pose)
+    # the blend of two clean holds can fold the trigger elbow into the vest
+    pose = solve_hand(hum, pose, 'r', joints['rhand'])
     grip = (0, -.025 - .005 * fold, .24 + .10 * fold)
     target = tuple(a+b for a,b in zip(joints['rhand'], m_apply(R, grip)))
     return solve_hand(hum, pose, 'l', target)

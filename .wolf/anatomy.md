@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-25T22:54:39.919Z
-> Files: 446 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-26T11:17:18.199Z
+> Files: 450 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -14,7 +14,7 @@
 - `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~106 tok)
 - `AGENTS.md` — Agent workflow (read this first) (~2517 tok)
 - `build.bat` (~56 tok)
-- `CLAUDE.md` — OpenWolf (~1572 tok)
+- `CLAUDE.md` — OpenWolf (~1659 tok)
 - `GEMINI.md` — OpenWolf (~75 tok)
 - `HANDOFF_CLAUDE.md` — Handoff — Claude (~1583 tok)
 - `MEMORY.md` — RULE: Split long tasks into Planning and Writing stages (~554 tok)
@@ -24,6 +24,10 @@
 ## .claude/
 
 - `launch.json` (~97 tok)
+
+## .claude/hooks/
+
+- `haiku-reads.js` — Soft guard for the "file reading is Haiku-only" rule in CLAUDE.md. (~258 tok)
 
 ## docs/
 
@@ -132,9 +136,9 @@
 - `m5mid3d.py` — m5mid3d.py - Mission 5 mid-mission cutscenes (round 2). (~30984 tok)
 - `m5shadow3d.py` — The rebuilt M5 finale: one fresh 3D set, actor clock and camera language. (~13104 tok)
 - `m5studio.py` — m5studio.py - the state-TV studio shared by the M5 bulletin's 3D take (~2343 tok)
-- `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38572 tok)
+- `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38648 tok)
 - `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~6413 tok)
-- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31679 tok)
+- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31688 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
 - `ps2mat.py` — ps2mat.py - PS2 pixel textures for sets authored in flat colour. (~1125 tok)
@@ -285,6 +289,7 @@
 - `__init__.py` — engine3d - tiny flat-shaded low-poly software renderer for pygame. (~212 tok)
 - `core.py` — Core of the low-poly renderer: math, meshes, camera, painter renderer. (~10156 tok)
 - `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~16989 tok)
+- `hold.py` — Weapon holds and arm-vs-body safety for the box rig (engine3d.rig.Humanoid). (~3251 tok)
 - `ik.py` — Analytic two-bone IK for the box rig (engine3d.rig.Humanoid). (~3209 tok)
 - `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~15952 tok)
 - `textures.py` — engine3d.textures - pixel textures on world faces. (~1502 tok)
@@ -593,6 +598,7 @@
 - `test_game_dialogues.py` — game.dialogues converter: node chain -> legacy beat dicts (RPE6 Phase 7). (~814 tok)
 - `test_game_world_bridge.py` — game.world bridge (RPE6 Phase 5, D4): ensure/get, roster reset + removed-tag policy, WalkCycle.advance. (~2622 tok)
 - `test_gl_composite.py` — GL renderer item-queue regression (owner-hardware crash, M5 finale). (~1311 tok)
+- `test_hold.py` — HoldTests: test_push_out_clears_torso, test_pole_choice_for_target_in_front_of_chest, test_modes_rea (~799 tok)
 - `test_ik.py` — engine3d.ik: analytic arm/leg IK and the shouldered rifle hold land on (~1570 tok)
 - `test_m5_ending.py` — M5 finale regressions. Run: python -m unittest tests.unit.test_m5_ending -v. (~2231 tok)
 - `test_m5_finale_audio.py` — Focused M5 sound/lifecycle regressions, without starting app or saves. (~3099 tok)
@@ -615,6 +621,7 @@
 
 ## tools/
 
+- `ae_hold_check.py` — Weapon hold + arm self-collision gate for the 3D cutscenes. (~1381 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
 - `dev_panel.py` — Declares to (~7861 tok)
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)

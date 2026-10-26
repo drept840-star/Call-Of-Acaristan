@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-25T22:54:39.919Z",
-    "fileCount": 446,
+    "lastScanned": "2026-10-26T11:17:18.199Z",
+    "fileCount": 450,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "3dbf48ee7eb3a7a5133edeffd5ef158c5174078c71ebabeac258c3aabf5fc1a2",
-    "storeUpdatedAt": "2026-10-25T22:54:39.928Z",
-    "rootHash": "7c20ab6e9d1bf16a"
+    "renderedHash": "bb25940844f3a28fa2841b4fd98cf395a71a57e1b3a31d6a797599b8f958b4aa",
+    "storeUpdatedAt": "2026-10-26T11:17:18.212Z",
+    "rootHash": "8acdbc0ed4a2fb69"
   },
   "files": {
     ".gitattributes": {
@@ -62,11 +62,11 @@
     },
     "CLAUDE.md": {
       "description": "OpenWolf",
-      "tokens": 1572,
-      "hash": "1c67f7a500af5c03",
-      "size": 6286,
-      "mtimeMs": 1792910923143.7612,
-      "updatedAt": "2026-10-25T06:48:43.267Z",
+      "tokens": 1659,
+      "hash": "97d9c9d3da70007d",
+      "size": 6635,
+      "mtimeMs": 1793013437356.8525,
+      "updatedAt": "2026-10-26T11:17:17.525Z",
       "source": "hook"
     },
     "GEMINI.md": {
@@ -6643,11 +6643,11 @@
     },
     "src/cutscenes/m6films.py": {
       "description": "m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film.",
-      "tokens": 38572,
-      "hash": "a518dd2e8fba440a",
-      "size": 136516,
-      "mtimeMs": 1792934050681.25,
-      "updatedAt": "2026-10-25T13:14:10.817Z",
+      "tokens": 38648,
+      "hash": "524334d91d8d997e",
+      "size": 136781,
+      "mtimeMs": 1793012897900.6326,
+      "updatedAt": "2026-10-26T11:08:18.037Z",
       "source": "hook",
       "symbols": [
         {
@@ -6802,63 +6802,63 @@
           "kind": "fn",
           "startLine": 251,
           "endLine": 293,
-          "tokens": 499
+          "tokens": 500
+        },
+        {
+          "name": "_k9_stance",
+          "kind": "fn",
+          "startLine": 294,
+          "endLine": 299,
+          "tokens": 70
         },
         {
           "name": "ground_route",
           "kind": "fn",
-          "startLine": 294,
-          "endLine": 300,
+          "startLine": 300,
+          "endLine": 306,
           "tokens": 48
         },
         {
           "name": "ground_watch",
           "kind": "fn",
-          "startLine": 301,
-          "endLine": 305,
+          "startLine": 307,
+          "endLine": 311,
           "tokens": 45
         },
         {
           "name": "ground_stage",
           "kind": "fn",
-          "startLine": 306,
-          "endLine": 340,
-          "tokens": 450
+          "startLine": 312,
+          "endLine": 343,
+          "tokens": 441
         },
         {
           "name": "heli_depart",
           "kind": "fn",
-          "startLine": 341,
-          "endLine": 354,
+          "startLine": 344,
+          "endLine": 357,
           "tokens": 157
         },
         {
           "name": "pickup_pos",
           "kind": "fn",
-          "startLine": 355,
-          "endLine": 364,
+          "startLine": 358,
+          "endLine": 367,
           "tokens": 116
         },
         {
           "name": "heli_at",
           "kind": "fn",
-          "startLine": 365,
-          "endLine": 403,
+          "startLine": 368,
+          "endLine": 406,
           "tokens": 464
         },
         {
           "name": "walk_metrics",
           "kind": "fn",
-          "startLine": 404,
-          "endLine": 417,
-          "tokens": 150
-        },
-        {
-          "name": "_cabin_angle",
-          "kind": "fn",
-          "startLine": 418,
-          "endLine": 3214,
-          "tokens": 34010
+          "startLine": 407,
+          "endLine": 3218,
+          "tokens": 34173
         }
       ]
     },
@@ -7043,11 +7043,11 @@
     },
     "src/cutscenes/m6world3d.py": {
       "description": "m6world3d.py - engine3d sets and actor kit for the Mission 6 films.",
-      "tokens": 31679,
-      "hash": "6b483a150846abb8",
-      "size": 112112,
-      "mtimeMs": 1792933625141.3135,
-      "updatedAt": "2026-10-25T13:07:05.315Z",
+      "tokens": 31688,
+      "hash": "6f160acb1b97e12c",
+      "size": 112145,
+      "mtimeMs": 1793012812933.8628,
+      "updatedAt": "2026-10-26T11:06:53.065Z",
       "source": "hook",
       "symbols": [
         {
@@ -7257,8 +7257,8 @@
           "name": "hum",
           "kind": "fn",
           "startLine": 491,
-          "endLine": 2530,
-          "tokens": 26483
+          "endLine": 2531,
+          "tokens": 26493
         }
       ]
     },
@@ -36446,6 +36446,223 @@
       "size": 7526,
       "mtimeMs": 1792952160369.6482,
       "updatedAt": "2026-10-25T18:16:00.534Z",
+      "source": "hook"
+    },
+    "src/engine3d/hold.py": {
+      "description": "Weapon holds and arm-vs-body safety for the box rig (engine3d.rig.Humanoid).",
+      "tokens": 3251,
+      "hash": "4687634242da2be8",
+      "size": 11376,
+      "mtimeMs": 1793013277768.939,
+      "updatedAt": "2026-10-26T11:14:37.895Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_lerp",
+          "kind": "fn",
+          "startLine": 64,
+          "endLine": 67,
+          "tokens": 32
+        },
+        {
+          "name": "_depth",
+          "kind": "fn",
+          "startLine": 68,
+          "endLine": 74,
+          "tokens": 74
+        },
+        {
+          "name": "_state",
+          "kind": "fn",
+          "startLine": 75,
+          "endLine": 80,
+          "tokens": 54
+        },
+        {
+          "name": "_volumes",
+          "kind": "fn",
+          "startLine": 81,
+          "endLine": 99,
+          "tokens": 214
+        },
+        {
+          "name": "body_volumes",
+          "kind": "fn",
+          "startLine": 100,
+          "endLine": 104,
+          "tokens": 48
+        },
+        {
+          "name": "push_out",
+          "kind": "fn",
+          "startLine": 105,
+          "endLine": 119,
+          "tokens": 160
+        },
+        {
+          "name": "_arm_points",
+          "kind": "fn",
+          "startLine": 120,
+          "endLine": 128,
+          "tokens": 102
+        },
+        {
+          "name": "_clash",
+          "kind": "fn",
+          "startLine": 129,
+          "endLine": 132,
+          "tokens": 30
+        },
+        {
+          "name": "arm_clash",
+          "kind": "fn",
+          "startLine": 133,
+          "endLine": 141,
+          "tokens": 93
+        },
+        {
+          "name": "solve_arm_safe",
+          "kind": "fn",
+          "startLine": 142,
+          "endLine": 169,
+          "tokens": 365
+        },
+        {
+          "name": "weapon_of",
+          "kind": "fn",
+          "startLine": 170,
+          "endLine": 175,
+          "tokens": 60
+        },
+        {
+          "name": "_grips",
+          "kind": "fn",
+          "startLine": 176,
+          "endLine": 182,
+          "tokens": 46
+        },
+        {
+          "name": "hold_frame",
+          "kind": "fn",
+          "startLine": 183,
+          "endLine": 231,
+          "tokens": 624
+        },
+        {
+          "name": "hold_weapon",
+          "kind": "fn",
+          "startLine": 232,
+          "endLine": 236,
+          "tokens": 66
+        },
+        {
+          "name": "_seg_dist",
+          "kind": "fn",
+          "startLine": 237,
+          "endLine": 242,
+          "tokens": 49
+        },
+        {
+          "name": "hold_report",
+          "kind": "fn",
+          "startLine": 243,
+          "endLine": 262,
+          "tokens": 291
+        }
+      ]
+    },
+    "tests/unit/test_hold.py": {
+      "description": "HoldTests: test_push_out_clears_torso, test_pole_choice_for_target_in_front_of_chest, test_modes_rea",
+      "tokens": 799,
+      "hash": "86ea4e52df2dea33",
+      "size": 2795,
+      "mtimeMs": 1793012557220.2192,
+      "updatedAt": "2026-10-26T11:02:37.362Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_hum",
+          "kind": "fn",
+          "startLine": 15,
+          "endLine": 18,
+          "tokens": 13
+        },
+        {
+          "name": "_local",
+          "kind": "fn",
+          "startLine": 19,
+          "endLine": 24,
+          "tokens": 46
+        },
+        {
+          "name": "HoldTests",
+          "kind": "class",
+          "startLine": 25,
+          "endLine": 72,
+          "tokens": 625
+        }
+      ]
+    },
+    "tools/ae_hold_check.py": {
+      "description": "Weapon hold + arm self-collision gate for the 3D cutscenes.",
+      "tokens": 1381,
+      "hash": "873f31e68f86373c",
+      "size": 4833,
+      "mtimeMs": 1793012864051.84,
+      "updatedAt": "2026-10-26T11:07:44.201Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_record",
+          "kind": "fn",
+          "startLine": 32,
+          "endLine": 38,
+          "tokens": 75
+        },
+        {
+          "name": "_install",
+          "kind": "fn",
+          "startLine": 39,
+          "endLine": 56,
+          "tokens": 141
+        },
+        {
+          "name": "_check",
+          "kind": "fn",
+          "startLine": 57,
+          "endLine": 71,
+          "tokens": 161
+        },
+        {
+          "name": "_m6",
+          "kind": "fn",
+          "startLine": 72,
+          "endLine": 90,
+          "tokens": 195
+        },
+        {
+          "name": "_m5",
+          "kind": "fn",
+          "startLine": 91,
+          "endLine": 103,
+          "tokens": 124
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 104,
+          "endLine": 140,
+          "tokens": 393
+        }
+      ]
+    },
+    ".claude/hooks/haiku-reads.js": {
+      "description": "Soft guard for the \"file reading is Haiku-only\" rule in CLAUDE.md.",
+      "tokens": 258,
+      "hash": "f7c8b6b4418d5f1b",
+      "size": 900,
+      "mtimeMs": 1793013437959.1704,
+      "updatedAt": "2026-10-26T11:17:18.198Z",
       "source": "hook"
     }
   },

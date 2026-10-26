@@ -506,6 +506,7 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
             h = humanoid3d("biribel", **kw)
             if "rifle" in flags and not hd:
                 h._rifle = _k9_rig_mesh()
+                h._weapon = "k9"
         elif isinstance(key, tuple) and key[0] == "guard":
             h = _guard_humanoid(key[1], extra)
         elif key == "guard":
@@ -557,7 +558,8 @@ def actor(r, key, pose, pos, yaw, t, seed=0, amp=1.0, rifle_on=False,
         joints = r.add_humanoid(h, p, pos, yaw, rifle_on=rifle_on, bias=bias)
     if len(LAST) < 16:
         LAST.append({"key": key, "joints": joints, "pos": tuple(pos),
-                     "yaw": yaw, "pose": p})
+                     "yaw": yaw, "pose": p, "hd": hd, "flags": tuple(flags),
+                     "rifle": rifle_on})
     return joints
 
 
@@ -865,8 +867,10 @@ def reach(hum, pose, side, target, pos, yaw, pole=None):
     swivels toward ``pole`` (torso-local; default ik.solve_arm's relaxed out,
     down and back) so a hand held in front of the chest keeps its forearm
     outside the torso.  Reaches across the body want a forward, outward pole."""
-    from engine3d.ik import solve_arm
-    return solve_arm(hum, pose, pos, yaw, side, target, pole)
+    from engine3d.hold import POLES, solve_arm_safe
+    sx = -1 if side == "l" else 1
+    poles = POLES if pole is None else ((pole[0] * sx, pole[1], pole[2]),) + POLES
+    return solve_arm_safe(hum, pose, pos, yaw, side, target, poles)
 
 
 # Blocking volumes per set, world AABBs ((x0, y0, z0), (x1, y1, z1)).  The set

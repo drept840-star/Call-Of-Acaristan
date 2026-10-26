@@ -4570,7 +4570,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "1d9ce777754495f3d54feab4674be28d2eb37c9c0cc57b053bcb9d7229077c81",
+   "sha256": "6b6dd782202085b2492f3934b8c66273dc2d4b26502cd946e2d7f1ef3ac49f3e",
    "source": "m5.M5_MID_CUTSCENES[18] scene=m5x_breach",
    "t_ms": 1900
   },
@@ -4584,7 +4584,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "baa9a957dbe14ccf031de37546bd98c1f88cb8cfaa90e6c6c67821ddaf56fc1d",
+   "sha256": "0a0026a585ccaf92a2797df88ab5d2e1a1038a3299082e5533d8d263988ff67c",
    "source": "m5.M5_MID_CUTSCENES[18] scene=m5x_breach",
    "t_ms": 2850
   },
@@ -4654,7 +4654,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "ee445e308382020d54a1046cb47ce832911a40bb4d8c0f3e9b4d217e37a0972a",
+   "sha256": "4ec9825976809839a76c27dd1db7b83a611f560f86d4363b5b56a4539bdfb68f",
    "source": "m5.mission5_intro_shots[0] scene=m5_tv_bulletin",
    "t_ms": 2100
   },
@@ -4668,7 +4668,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "37c320cddae03d5d24d2207c7108494e5fd8ee5b3d0715892147acd81544d4b7",
+   "sha256": "7c5711459d49c5bc04a56c534e0db7ea28bbee5d6eeb00050a5ced65cad2a556",
    "source": "m5.mission5_intro_shots[0] scene=m5_tv_bulletin",
    "t_ms": 3150
   },
@@ -4808,7 +4808,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "2a9240c2235349efe6ca511af36dbe1b209224aa463b9feae08634d280f654d7",
+   "sha256": "b401d888f347695fb4bce2962e6634fdf3fc21d93a2ccce5673fabdd039415be",
    "source": "m5.mission5_intro_shots[4] scene=m5x_squadmate",
    "t_ms": 1050
   },
@@ -4822,7 +4822,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "71a3f63bbf889e26bcd30f09eed558be398b636dc4806fb68abbbc53f020257a",
+   "sha256": "19a179336e9b3a507aea89d22013faea31ba468bac245eb3eb7b2e297d1244e5",
    "source": "m5.mission5_intro_shots[4] scene=m5x_squadmate",
    "t_ms": 2100
   },
@@ -4836,7 +4836,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "2fff60e33c85c0c291c18bb96ed468e0d5700ef2a4ea46ab5f421e8898ee95bc",
+   "sha256": "ecd6648184ba6ab2c0fcfc93f9803898a97beac5f8261003622f9171c8266573",
    "source": "m5.mission5_intro_shots[4] scene=m5x_squadmate",
    "t_ms": 3150
   },

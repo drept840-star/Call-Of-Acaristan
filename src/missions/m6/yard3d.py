@@ -15,6 +15,7 @@ The set is the train scene's: the post-departure live set it already packed
 (platform, station, the yard and its lights) is replayed verbatim, the truck
 stays parked, and the carriage is long gone.
 """
+from engine3d.hold import hold_cached as _hold_cached
 import math
 import sys
 
@@ -1708,6 +1709,9 @@ class YardScene:
                                 twist=pose.get("twist", 0) + 16.0 * rock,
                                 lsh_r=pose.get("lsh_r", 8) + 24.0 * rock,
                                 rkn=pose.get("rkn", 2) + 18.0 * rock)
+            if not (g["moving"] and g.get("stance") in ("run", "walk")):
+                pose = _hold_cached(_w.hum(("guard", kind), True), pose, "rifle", "ready",
+                                    key=("guard", kind))
             joints = _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                               int(tm), seed=100 + g["slot"], amp=0.4,
                               rifle_on=True, hd=True, shadow=T._shadow_for(z))

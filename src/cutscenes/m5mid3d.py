@@ -925,45 +925,19 @@ def _decree(surface, t):
 
 
 def _reach(hum, pose, pos, yaw, target, side="r", w=1.0, lim=None):
-    """Arm IK: blend ``side``'s arm (sh_p, sh_r, el) from the authored pose
-    toward the angles that put that hand on ``target``. Coordinate descent
-    with ``Humanoid.pose_world`` as the FK oracle - skeleton only, nothing is
-    drawn while probing (the old solver probed with r.add_humanoid and left
-    100-300 ghost bodies in every frame). ``w`` 0..1 = how far along the
-    reach is, so the arm travels instead of snapping."""
+    """Arm IK: blend ``side``'s arm from the authored pose toward the safe
+    solve (engine3d.hold: elbow swivel, no torso clash) that puts that hand on
+    ``target``. ``w`` 0..1 = how far along the reach is, so the arm travels
+    instead of snapping. ``lim`` is kept for callers and ignored."""
     if w <= 0.0:
         return pose
-    from engine3d.core import v_sub, v_len  # lazy: see _m3d._rend
-    ks = (side + "sh_p", side + "sh_r", side + "el")
-    src = [pose.get(ks[0], 8), pose.get(ks[1], 8), pose.get(ks[2], 12)]
-    hand = side + "hand"
-
-    # ``lim`` = ((lo, hi) sh_p, (lo, hi) sh_r, (lo, hi) el): keeps the solver
-    # out of anatomically wrong minima (shoulder winging up/out behind the hand)
-    lim = lim or ((-180.0, 180.0), (-180.0, 180.0), (0.0, 150.0))
-    src = [max(lo, min(hi, v)) for v, (lo, hi) in zip(src, lim)]
-
-    def err(a):
-        if any(not (lo <= v <= hi) for v, (lo, hi) in zip(a, lim)):
-            return 1e9
-        p = dict(pose, **{ks[0]: a[0], ks[1]: a[1], ks[2]: a[2]})
-        return v_len(v_sub(hum.pose_world(p, pos, yaw, rifle_on=False)[1][hand], target))
-
-    cur, best, step = list(src), err(src), 12.0
-    while step > 0.75:
-        improved = True
-        while improved:
-            improved = False
-            for i in range(3):
-                for s in (step, -step):
-                    cand = list(cur)
-                    cand[i] += s
-                    e = err(cand)
-                    if e < best:
-                        cur, best, improved = cand, e, True
-        step /= 2
-    cur[2] = max(0.0, min(150.0, cur[2]))
-    return dict(pose, **{k: lerp(a, b, w) for k, a, b in zip(ks, src, cur)})
+    from engine3d.hold import solve_arm_safe
+    solved = solve_arm_safe(hum, pose, pos, yaw, side, target)
+    out = dict(pose)
+    for k in ("sh_p", "sh_r", "sh_y", "el"):
+        a = pose.get(side + k, {"sh_p": 8, "sh_r": 8, "sh_y": 0, "el": 12}[k])
+        out[side + k] = lerp(a, solved[side + k], w)
+    return out
 
 
 def _grip(r, clasp, yaw, skin_a, skin_b, s=1.0):
@@ -1643,8 +1617,10 @@ def _breach(surface, t):
             _spr(r, (-0.6, 1.2, 3.8), _fx.sparks(41, t - 520, n=22, speed_m=5.0))
             _spr(r, (0.7, 1.7, 3.8), _fx.sparks(42, t - 560, n=14, speed_m=4.0))
         if blow > 0.5 and with_u[0]:       # Ucilev: helmeted, masked, lost in the backlight
-            r.add_humanoid(_sil_hum(), dict(spine=4, rsh_p=30, rel=60, lsh_p=40, lel=80),
-                           upos, _yaw_to(upos, (-1.9, 0, -2.2)), rifle_on=True)
+            from engine3d import hold
+            uyaw = _yaw_to(upos, (-1.9, 0, -2.2))
+            upose = hold.hold_weapon(_sil_hum(), dict(spine=4), upos, uyaw, "sniper", "ready")
+            r.add_humanoid(_sil_hum(), upose, upos, uyaw, rifle_on=True)
     upos = (0.45, 0, 3.9 - 0.5 * _k(t, 900, 2600))
     cam, tgt, fov = (-1.9, 1.45, -2.2), (0.0, 1.62, 4.0), 56
     r, buf = _m3d._rend()
