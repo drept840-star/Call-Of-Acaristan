@@ -4,9 +4,23 @@ budget_tokens: 1000
 ---
 # STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-10-25
+> Read this FIRST when resuming. Last updated: 2026-10-26
 
 ---
+
+## Done (2026-10-26 M1 rework WP1: painter peel-off)
+
+Branch `m1/rework`. `missions/m1/draw.py:submit_frame` now submits every M1 layer
+(`m1.tiles` static bake on FLOOR, decor/doors/blood on DECALS_DYNAMIC, one
+`CustomDraw` `m1.game_draw` for the actor block on ENTITIES, FX on FX_WORLD, HUD
+`m1.hud`/overlays, light grade `m1.lighting` on DEBUG); `core/game_core.py` hosts M1
+through the submitter path like M5. Pixel-equal: golden 379/379 (M1 subset 3/3) and a
+9-state sha256 parity probe (start/desks/warehouse/combat/hotwire/death/alarm/exfil/
+notebook). `ae_d6_gate`: m1 custom=1, direct draw sites 288 -> 262. B-034 updated.
+Two parity-forced deviations from `docs/MISSION1_REWORK_PLAN.md` WP1 are recorded in
+B-034: pre-actor FX and the hotwire panel stay below the floating text, and the light
+composite stays above the UI (it grades the HUD too).
+- Next: WP2 (escape cutscene as timeline) in the same plan; WP3+ follow.
 
 ## Done (2026-10-25 M6 top-down art pass, user signed off, NOT committed)
 

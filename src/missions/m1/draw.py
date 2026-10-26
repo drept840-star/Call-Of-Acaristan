@@ -5,7 +5,7 @@ import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import time
 import pygame
-from core.config import (BAY_DOOR_FRAME_3W, BAY_DOOR_TILE_3W, CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_BG_GAME, C_KRAP_BLUE, C_ORANGE, C_TERMINAL, C_WHITE, DOOR_FRAME_TILE, DOOR_INTERACT_RANGE, DOOR_TILE, FLOOR_TILE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, MUZZLE_FLASH, SLUM_FLOOR, TILE_SIZE, WAREHOUSE_WALL, WIDTH, bay_door_shadow, draw_letterbox, draw_scanlines, draw_vignette, font_dialogue, font_location_sub, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen, wall_shadow)
+from core.config import (BAY_DOOR_FRAME_3W, BAY_DOOR_TILE_3W, CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_BG_GAME, C_BULLET, C_KRAP_BLUE, C_ORANGE, C_TERMINAL, C_WHITE, DOOR_FRAME_TILE, DOOR_INTERACT_RANGE, DOOR_TILE, FLOOR_TILE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, MUZZLE_FLASH, SLUM_FLOOR, TILE_SIZE, WAREHOUSE_WALL, WIDTH, bay_door_shadow, bullet_glow as _bullet_glow, draw_letterbox, draw_scanlines, draw_vignette, font_dialogue, font_location_sub, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen, wall_shadow)
 from entities.art_cache import get_blood_decal, get_glow, get_panel_bg
 from entities import corpse
 from entities.enemy_ai import Enemy, enemy_hear_shot
@@ -44,6 +44,14 @@ from missions.m1 import update as _m1_update
 from missions.m1.hotwire import _hotwire_wire_nodes, HOTWIRE_TARGET_PAIRS, HOTWIRE_WIRES
 from engine.core import now_ms as _now_ms, now_s as _now_s  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
+import game.world as _gw  # RPE6 Phase 5: standalone frames sync the world roster
+import game.render as _gr  # RPE6 Phase 6: the frame is submitted to the render queue
+from game.render import adapters as _adapt  # RPE6 Phase 6: drawable builders for shared legacy classes
+from engine.render2d import (CircleDraw as _CircleDraw, CustomDraw as _CustomDraw,
+                             EllipseDraw as _EllipseDraw, FillDraw as _FillDraw, Layer as _L,
+                             LineDraw as _LineDraw, RectDraw as _RectDraw, SCREEN as _SCREEN,
+                             StaticLayerDraw as _StaticLayerDraw, SurfaceDraw as _SurfaceDraw,
+                             UiPassDraw as _UiPassDraw)
 
 def _draw_molotov_icon(surface, cx, cy, active=True):
     """Small chunky pixel-art Molotov icon for the HUD (baked sprite game.art.m1.molotov_icon,
@@ -456,9 +464,40 @@ _M1_CAM = [0, 0]
 _M1_SOLID_TILES = ("C", "W", "D")
 
 
-def _m1_static_layer():
-    sig = (id(mission1_map), id(STATE.walls), id(STATE.desks))
-    return staticlayer.get_layer("m1", sig, MAP_W * TILE_SIZE, MAP_H * TILE_SIZE)
+# RPE6 Phase 6 (WP1): the tile grid + static dressing are one static layer. The art pack's
+# baked `world_static` is generated from the same callback, so the runtime chunks and the
+# PNG compose identically; the callback stays the bake source / live fallback.
+_M1_TILE_CHUNK = 512
+
+
+def _m1_tiles_signature():
+    return (id(mission1_map), id(STATE.walls), id(STATE.desks))
+
+
+def _paint_m1_tiles_chunk(target, ox, oy, w, h):
+    _bake_m1_static(target, ox, oy)
+
+
+def _paint_m1_tiles_direct(surface, cam_x, cam_y):
+    _render_m1_bg(surface, cam_x, cam_y)
+    _draw_m1_static_dressing(surface, cam_x, cam_y)
+
+
+def _m1_tiles_world_size():
+    """The baked PNG and the legacy chunk cache both pad the world up to whole chunks
+    (``engine.assets.bake_chunk_layer``), so the edge chunks are full 512 squares painted
+    past the map border. Declaring the raw map size instead clips that edge chunk and the
+    padding would show as bare background (pixel diff at the map border)."""
+    c = _M1_TILE_CHUNK
+    return (-(-(MAP_W * TILE_SIZE) // c) * c, -(-(MAP_H * TILE_SIZE) // c) * c)
+
+
+def _submit_tiles(q, key):
+    layers = _gr.static_layers()
+    layers.define("m1.tiles", painter=_paint_m1_tiles_chunk,
+                  world_size=_m1_tiles_world_size(),
+                  signature=_m1_tiles_signature(), fill=(0, 0, 0), chunk=_M1_TILE_CHUNK)
+    q.submit(_StaticLayerDraw(layers, "m1.tiles", (WIDTH, HEIGHT)), _L.FLOOR, sort_key=key)
 
 
 def _m1_wing_name():
@@ -616,21 +655,6 @@ def _draw_m1_desk_body(target, dx, dy):
     pygame.draw.circle(target, (42, 32, 24), (dx + 22, dy + 12), 7)
     pygame.draw.circle(target, (58, 44, 30), (dx + 22, dy + 12), 7, 1)
     pygame.draw.circle(target, (80, 55, 20), (dx + 22, dy + 12), 4)  # coffee inside
-
-
-def _draw_m1_desk_overlays(cam_x, cam_y):
-    """Per-frame desk state: read/unread indicator dot + label."""
-    for desk in STATE.desks:
-        dx = desk["x"] - cam_x
-        dy = desk["y"] - cam_y
-        if -50 < dx < WIDTH + 50 and -50 < dy < HEIGHT + 50:
-            # ── Unread/read indicator dot ──
-            dot_col = (100, 220, 100) if desk["read"] else (240, 190, 50)
-            glow2 = get_glow(7, dot_col, 70)
-            screen.blit(glow2, (dx - 3, dy - 21))
-            pygame.draw.circle(screen, dot_col, (dx, dy - 14), 4)
-            label = font_terminal_small.render(_T("m1.desk"), True, (150, 140, 120))
-            screen.blit(label, (dx - label.get_width() // 2, dy + 28))
 
 
 def _m1_hash(col, row, n):
@@ -836,12 +860,16 @@ def _bake_m1_static(surf, ox, oy):
 
 
 def game_draw(fcx: float, fcy: float) -> None:
-    if artpack.enabled():
-        lighting.buffer().begin_frame(_m1_wing_name(), _m1_light_sig())
-    _game_draw_inner(fcx, fcy)
-    if artpack.enabled():
-        _push_m1_lights(_M1_CAM[0], _M1_CAM[1], _now_s())
-        lighting.buffer().composite(screen, _now_s())
+    """Paint one Mission 1 frame. Hosted by ``core.game_core`` through the render queue
+    (WP1 peel-off, M5 recipe); callable on its own - then it runs a whole queue frame itself."""
+    if not _gr.installed():
+        _gr.install(WIDTH, HEIGHT)
+    if _gr.in_frame():                       # hosted: the frame is open, just submit
+        submit_frame(_gr.queue(), fcx, fcy)
+        return
+    if not _gw.installed():
+        _gw.install(STATE)
+    _gr.frame(screen, fcx, fcy, submitter=submit_frame, name="m1.game_draw", submit_hook=_gw.render_submit)
 
 
 _M1_PICKUP_VARIANTS = {"mag": 0, "keycard": 1, "bandage": 2, "bottle": 3}
@@ -962,40 +990,40 @@ def _m1_panel_140(w, h):
     return get_panel_bg(w, h, alpha=140)
 
 
-def _game_draw_inner(fcx: float, fcy: float) -> None:
-    screen.fill(C_BG_GAME)
-    # Render from an integer camera (like M2/M3). This removes the tile/prop
-    # seam shimmer that happens when the camera scrolls by fractional pixels.
-    fcx, fcy = round(fcx), round(fcy)
-    _M1_CAM[0], _M1_CAM[1] = fcx, fcy
-    if staticlayer.enabled():
-        if not _m1art.blit_layer(screen, "world_static", fcx, fcy):
-            _m1_static_layer().blit(screen, fcx, fcy, _bake_m1_static)
-    else:
-        _render_m1_bg(screen, fcx, fcy)
-        _draw_m1_static_dressing(screen, fcx, fcy)
-    _draw_m1_desk_overlays(fcx, fcy)
+def _submit_ground_decor(q, cam_x, cam_y):
+    """Desk state dots, breach markers, doors and fading blood - below every actor."""
+    for desk in STATE.desks:
+        dx = desk["x"] - cam_x
+        dy = desk["y"] - cam_y
+        if -50 < dx < WIDTH + 50 and -50 < dy < HEIGHT + 50:
+            # ── Unread/read indicator dot ──
+            dot_col = (100, 220, 100) if desk["read"] else (240, 190, 50)
+            glow2 = get_glow(7, dot_col, 70)
+            q.submit(_SurfaceDraw(glow2, (dx - 3, dy - 21), space=_SCREEN), _L.DECALS_DYNAMIC, sort_key=0)
+            q.submit(_CircleDraw((dx, dy - 14), 4, dot_col, space=_SCREEN), _L.DECALS_DYNAMIC, sort_key=0)
+            label = font_terminal_small.render(_T("m1.desk"), True, (150, 140, 120))
+            q.submit(_SurfaceDraw(label, (dx - label.get_width() // 2, dy + 28), space=_SCREEN),
+                     _L.DECALS_DYNAMIC, sort_key=0)
     for marker in STATE.breach_markers[:]:
         mx, my, timer = marker
-        mx -= fcx
-        my -= fcy
+        mx -= cam_x
+        my -= cam_y
         if -50 < mx < WIDTH + 50 and -50 < my < HEIGHT + 50:
             alpha = min(255, timer * 2)
             for i in range(3):
                 radius = 8 + i * 4
                 s = get_glow(radius, (255, 80, 20), 255)
-                s.set_alpha(alpha // (i + 1))
-                screen.blit(s, (mx - radius, my - radius))
+                q.submit(_SurfaceDraw(s, (mx - radius, my - radius), alpha=alpha // (i + 1), space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=1)
         marker[2] -= 1
         if marker[2] <= 0:
             STATE.breach_markers.remove(marker)
-    # (Static desk bodies + bay label are baked; overlays drawn above.)
     left_bay = None
     for d in STATE.doors:
         if d.is_bay and (left_bay is None or d.rect.x < left_bay.rect.x):
             left_bay = d
     for d in STATE.doors:
-        dr = pygame.Rect(d.rect.x - fcx, d.rect.y - fcy, TILE_SIZE, TILE_SIZE)
+        dr = pygame.Rect(d.rect.x - cam_x, d.rect.y - cam_y, TILE_SIZE, TILE_SIZE)
         if d.is_bay:
             if d is not left_bay:
                 if STATE.player and not STATE.player_dead:
@@ -1005,23 +1033,22 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                     )
                     if pdist <= DOOR_INTERACT_RANGE:
                         prompt = font_terminal_small.render(_T("m1.e"), True, C_TERMINAL)
-                        screen.blit(
-                            prompt,
-                            (
-                                dr.x + TILE_SIZE // 2 - prompt.get_width() // 2,
-                                dr.y - 18,
-                            ),
-                        )
+                        q.submit(_SurfaceDraw(prompt, (dr.x + TILE_SIZE // 2 - prompt.get_width() // 2,
+                                                      dr.y - 18), space=_SCREEN),
+                                 _L.DECALS_DYNAMIC, sort_key=2)
                 continue
             bw = TILE_SIZE * 3
-            bdr = pygame.Rect(d.rect.x - fcx, d.rect.y - fcy, bw, TILE_SIZE)
+            bdr = pygame.Rect(d.rect.x - cam_x, d.rect.y - cam_y, bw, TILE_SIZE)
             if d.anim_progress < 1.0:
                 draw_h = int(TILE_SIZE * (1.0 - d.anim_progress))
                 src = pygame.Rect(0, 0, bw, draw_h)
-                screen.blit(bay_door_shadow, (bdr.x - 4, bdr.y - 4))
-                screen.blit(BAY_DOOR_TILE_3W, (bdr.x, bdr.y), src)
+                q.submit(_SurfaceDraw(bay_door_shadow, (bdr.x - 4, bdr.y - 4), space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=2)
+                q.submit(_SurfaceDraw(BAY_DOOR_TILE_3W, (bdr.x, bdr.y), area=src, space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=2)
             else:
-                screen.blit(BAY_DOOR_FRAME_3W, (bdr.x, bdr.y))
+                q.submit(_SurfaceDraw(BAY_DOOR_FRAME_3W, (bdr.x, bdr.y), space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=2)
             if STATE.player and not STATE.player_dead:
                 pdist = math.hypot(
                     STATE.player.rect.centerx - d.rect.centerx,
@@ -1029,19 +1056,21 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                 )
                 if pdist <= DOOR_INTERACT_RANGE:
                     prompt = font_terminal_small.render(_T("m1.e"), True, C_TERMINAL)
-                    screen.blit(
-                        prompt, (bdr.x + bw // 2 - prompt.get_width() // 2, bdr.y - 18)
-                    )
+                    q.submit(_SurfaceDraw(prompt, (bdr.x + bw // 2 - prompt.get_width() // 2, bdr.y - 18),
+                                          space=_SCREEN), _L.DECALS_DYNAMIC, sort_key=2)
         else:
             door_tile = DOOR_TILE
             door_frame = DOOR_FRAME_TILE
             if d.anim_progress < 1.0:
                 draw_h = int(TILE_SIZE * (1.0 - d.anim_progress))
                 src = pygame.Rect(0, 0, TILE_SIZE, draw_h)
-                screen.blit(wall_shadow, (dr.x - 4, dr.y - 4))
-                screen.blit(door_tile, (dr.x, dr.y), src)
+                q.submit(_SurfaceDraw(wall_shadow, (dr.x - 4, dr.y - 4), space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=2)
+                q.submit(_SurfaceDraw(door_tile, (dr.x, dr.y), area=src, space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=2)
             else:
-                screen.blit(door_frame, (dr.x, dr.y))
+                q.submit(_SurfaceDraw(door_frame, (dr.x, dr.y), space=_SCREEN),
+                         _L.DECALS_DYNAMIC, sort_key=2)
             if STATE.player and not STATE.player_dead:
                 pdist = math.hypot(
                     STATE.player.rect.centerx - d.rect.centerx,
@@ -1049,43 +1078,40 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                 )
                 if pdist <= DOOR_INTERACT_RANGE:
                     prompt = font_terminal_small.render(_T("m1.e"), True, C_TERMINAL)
-                    screen.blit(
-                        prompt,
-                        (dr.x + TILE_SIZE // 2 - prompt.get_width() // 2, dr.y - 18),
-                    )
+                    q.submit(_SurfaceDraw(prompt, (dr.x + TILE_SIZE // 2 - prompt.get_width() // 2,
+                                                  dr.y - 18), space=_SCREEN),
+                             _L.DECALS_DYNAMIC, sort_key=2)
     for decal in STATE.blood_decals[:]:
         d_surf = get_blood_decal(decal[3])
-        d_surf.set_alpha(int(decal[2]))
-        screen.blit(d_surf, (decal[0] - decal[3] - fcx, decal[1] - decal[3] - fcy))
+        q.submit(_SurfaceDraw(d_surf, (decal[0] - decal[3] - cam_x, decal[1] - decal[3] - cam_y),
+                              alpha=int(decal[2]), space=_SCREEN), _L.DECALS_DYNAMIC, sort_key=3)
         decal[2] -= 0.5
         if decal[2] <= 0:
             STATE.blood_decals.remove(decal)
-    # Draw fire zones
-    for fz in STATE.fire_zones:
-        fz.draw(screen, fcx, fcy)
-    # Shared bullet renderer (glow + sharp core + motion trail).
-    draw_bullets(screen, STATE.bullets, fcx, fcy, with_glow=True)
-    # ── Thrown bottles (in flight) - shared renderer ──
-    draw_thrown_bottles(screen, fcx, fcy)
+
+
+def _draw_m1_actors(surface, cam_x, cam_y):
+    """Bottles in flight + escape run + corpses + living actors (authored order)."""
+    draw_thrown_bottles(surface, cam_x, cam_y)
     if STATE.firefight_triggered and STATE.volkov_escape_timer > 0:
         if STATE.volkov_escape_pos and not STATE.volkov_escaped:
-            vx = STATE.volkov_escape_pos[0] - fcx
-            vy = STATE.volkov_escape_pos[1] - fcy + 30
+            vx = STATE.volkov_escape_pos[0] - cam_x
+            vy = STATE.volkov_escape_pos[1] - cam_y + 30
             if -100 < vx < WIDTH + 100 and -100 < vy < HEIGHT + 100:
                 facing = STATE.volkov_escape_pos[0] < (15 * TILE_SIZE + 32)
-                draw_volkov(screen, int(vx), int(vy), scale=0.35, facing_right=facing)
+                draw_volkov(surface, int(vx), int(vy), scale=0.35, facing_right=facing)
         if STATE.commander_escape_pos and not STATE.commander_escaped:
-            kx = STATE.commander_escape_pos[0] - fcx
-            ky = STATE.commander_escape_pos[1] - fcy + 30
+            kx = STATE.commander_escape_pos[0] - cam_x
+            ky = STATE.commander_escape_pos[1] - cam_y + 30
             if -100 < kx < WIDTH + 100 and -100 < ky < HEIGHT + 100:
                 facing = STATE.commander_escape_pos[0] < (15 * TILE_SIZE + 32)
                 draw_commander(
-                    screen, int(kx), int(ky), scale=0.35, facing_right=facing
+                    surface, int(kx), int(ky), scale=0.35, facing_right=facing
                 )
     # Fallen enemy bodies - under the living enemies, over the floor decals.
-    corpse.draw_corpses(screen, fcx, fcy)
+    corpse.draw_corpses(surface, cam_x, cam_y)
     for e in STATE.enemies:
-        e.draw(screen, fcx, fcy)
+        e.draw(surface, cam_x, cam_y)
     reload_progress = 0.0
     if STATE.is_reloading and STATE.reload_timer > 0:
         reload_progress = 1.0 - STATE.reload_timer / 60.0
@@ -1098,9 +1124,9 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
         from entities import death_anim
         if not death_anim.should_skip_player_draw():
             STATE.player.draw(
-                screen,
-                fcx,
-                fcy,
+                surface,
+                cam_x,
+                cam_y,
                 STATE.walls,
                 STATE.is_reloading,
                 reload_progress,
@@ -1113,13 +1139,174 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                     )
                 ),
             )
-    for p in STATE.particles:
-        p.draw(screen, fcx, fcy)
-    for c in STATE.casings:
-        c.draw(screen, fcx, fcy)
+
+
+def _draw_m1_hotwire(surface):
+    """First-person-ish ignition panel overlay with a short open animation."""
+    open_t = min(1.0, getattr(STATE, "hotwire_panel_timer", 0) / 34.0)
+    ease = 1 - (1 - open_t) ** 3
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, int(112 * ease)))
+    surface.blit(overlay, (0, 0))
+    panel_w, panel_h = 640, 410
+    panel_x = WIDTH // 2 - panel_w // 2
+    panel_y = int(HEIGHT // 2 - panel_h // 2 + (1.0 - ease) * 90)
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    panel.fill((10, 12, 15, 236))
+    pygame.draw.rect(panel, (80, 82, 78), panel.get_rect(), 2)
+    pygame.draw.rect(panel, C_KRAP_BLUE, (0, 0, 5, panel_h))
+    # scratched metal plate
+    rng_panel = random.Random(74)
+    for _ in range(34):
+        x1 = rng_panel.randint(24, panel_w - 24)
+        y1 = rng_panel.randint(58, panel_h - 20)
+        pygame.draw.line(panel, (30, 34, 38, 100), (x1, y1), (x1 + rng_panel.randint(8, 40), y1 + rng_panel.randint(-2, 2)), 1)
+    surface.blit(panel, (panel_x, panel_y))
+    title = font_terminal.render(_T("m1.van_ignition_panel"), True, (180, 205, 210))
+    surface.blit(title, (panel_x + 26, panel_y + 18))
+    sub = font_terminal_small.render(_T("m1.bridge_the_correct_exposed_wires"), True, (150, 150, 135))
+    surface.blit(sub, (panel_x + 28, panel_y + 48))
+    nodes = _hotwire_wire_nodes()
+    used = {w for pair in STATE.hotwire_connections for w in pair}
+    # Draw loose wire tails from side openings.
+    for name, data in nodes.items():
+        x, y = data["pos"]
+        col = data["color"]
+        side = data["side"]
+        start_x = panel_x + 36 if side == "L" else panel_x + panel_w - 36
+        mid_x = x - 34 if side == "L" else x + 34
+        pygame.draw.line(surface, (18, 18, 20), (start_x, y + 3), (mid_x, y + 3), 7)
+        pygame.draw.line(surface, col, (start_x, y), (mid_x, y), 5)
+        pygame.draw.line(surface, col, (mid_x, y), (x, y), 4)
+        # copper exposed tip
+        pygame.draw.circle(surface, (210, 135, 70), (x, y), 9)
+        pygame.draw.circle(surface, (40, 24, 12), (x, y), 9, 1)
+        if name == STATE.hotwire_selected_wire:
+            glow = pygame.Surface((58, 58), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (*col, 85), (29, 29), 26)
+            surface.blit(glow, (x - 29, y - 29))
+        if name in used:
+            pygame.draw.circle(surface, (100, 255, 150), (x, y), 14, 2)
+        label = font_terminal_small.render(name, True, col if name != "BLACK" else (120, 120, 125))
+        lx = x - label.get_width() - 18 if side == "L" else x + 18
+        surface.blit(label, (lx, y - 8))
+    # Draw completed bridges.
+    for pair in STATE.hotwire_connections:
+        a, b = pair
+        ax, ay = nodes[a]["pos"]
+        bx, by = nodes[b]["pos"]
+        col = (95, 240, 145)
+        # cable curve with three segments
+        mid_y = (ay + by) // 2 - 24
+        pygame.draw.line(surface, (18, 35, 24), (ax, ay), (WIDTH // 2, mid_y), 8)
+        pygame.draw.line(surface, (18, 35, 24), (WIDTH // 2, mid_y), (bx, by), 8)
+        pygame.draw.line(surface, col, (ax, ay), (WIDTH // 2, mid_y), 4)
+        pygame.draw.line(surface, col, (WIDTH // 2, mid_y), (bx, by), 4)
+    # Status lights.
+    statuses = ["POWER", "IGNITION", "STARTER"]
+    connected = {HOTWIRE_TARGET_PAIRS.get(frozenset(pair)) for pair in STATE.hotwire_connections}
+    for i, st in enumerate(statuses):
+        sx = panel_x + 128 + i * 150
+        sy = panel_y + panel_h - 76
+        live = st in connected
+        pygame.draw.circle(surface, (70, 240, 120) if live else (50, 55, 55), (sx, sy), 9)
+        pygame.draw.circle(surface, (10, 15, 12), (sx, sy), 9, 1)
+        stxt = font_terminal_small.render(st, True, (160, 220, 170) if live else (90, 95, 95))
+        surface.blit(stxt, (sx + 16, sy - 8))
+    # Sparks on wrong pair / fresh connection.
+    if STATE.hotwire_spark_timer > 0:
+        rng_s = random.Random(_now_ms() // 20)
+        center = nodes.get(STATE.hotwire_selected_wire or "RED", {"pos": (WIDTH // 2, HEIGHT // 2)})["pos"]
+        for _ in range(18 if STATE.hotwire_fail_flash > 0 else 8):
+            ang = rng_s.random() * math.tau
+            dist = rng_s.randint(8, 46)
+            sx = center[0] + math.cos(ang) * dist
+            sy = center[1] + math.sin(ang) * dist
+            pygame.draw.line(surface, (255, 210, 90), center, (sx, sy), 1)
+    if STATE.hotwire_fail_flash > 0:
+        flash = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        flash.fill((255, 55, 35, min(95, STATE.hotwire_fail_flash * 8)))
+        surface.blit(flash, (panel_x, panel_y))
+    msg_col = (220, 90, 70) if STATE.hotwire_fail_flash > 0 else (180, 215, 190)
+    msg = font_prompt.render(STATE.hotwire_message or "Click a wire endpoint", True, msg_col)
+    surface.blit(msg, (WIDTH // 2 - msg.get_width() // 2, panel_y + panel_h - 34))
+    hint = font_terminal_small.render(_T("m1.vasile_s_hint_red_feeds_yellow_b"), True, (115, 125, 120))
+    surface.blit(hint, (WIDTH // 2 - hint.get_width() // 2, panel_y + panel_h + 10))
+
+
+def _draw_m1_reticle(surface, ch_x, ch_y):
+    # Honor the Gameplay → Crosshair setting. The shared
+    # ui_hud.draw_gameplay_crosshair() (called from acaristan.py) already
+    # respects SETTINGS.show_crosshair, but this mission also draws its OWN
+    # combat reticle below - gate it on the same setting so the user's
+    # "Crosshair: Off" preference actually applies during gameplay.
+    try:
+        from core.user_settings import SETTINGS
+        _show_ch = SETTINGS.show_crosshair
+    except Exception:
+        _show_ch = True
+    if STATE.truck_hotwiring:
+        # Compact pointing-hand cursor. The ACTUAL click/contact point is the
+        # fingertip at (ch_x, ch_y), so it no longer feels offset.
+        skin = (218, 178, 136)
+        skin_hi = (238, 205, 165)
+        outline = (54, 36, 24)
+        glove_shadow = (120, 82, 55)
+        cuff_col = (56, 68, 50)
+        # soft shadow
+        pygame.draw.polygon(
+            surface, (0, 0, 0, 95),
+            [(ch_x + 2, ch_y + 3), (ch_x - 7, ch_y + 13), (ch_x - 4, ch_y + 39),
+             (ch_x - 19, ch_y + 47), (ch_x - 9, ch_y + 66), (ch_x + 22, ch_y + 62),
+             (ch_x + 26, ch_y + 40), (ch_x + 10, ch_y + 34), (ch_x + 8, ch_y + 12)],
+        )
+        # reference-anatomy pointing hand; fingertip is the contact point
+        from core.hands import point_hand
+        point_hand(surface, (ch_x + 10, ch_y + 35), angle=0.0, mirror=-1, sc=0.52,
+                   pal={"skin": skin, "hi": skin_hi, "mid": (170, 128, 92),
+                        "sh": glove_shadow, "nail": (205, 165, 130),
+                        "nail_edge": (150, 110, 80), "nail_tip": (246, 222, 192)})
+        # sleeve/cuff
+        pygame.draw.rect(surface, outline, (ch_x - 13, ch_y + 59, 31, 16), border_radius=4)
+        pygame.draw.rect(surface, cuff_col, (ch_x - 10, ch_y + 60, 26, 14), border_radius=3)
+        pygame.draw.line(surface, (34, 42, 30), (ch_x - 8, ch_y + 64), (ch_x + 14, ch_y + 64), 1)
+        # exact contact point marker on top of the fingertip
+        pygame.draw.circle(surface, C_ORANGE, (ch_x, ch_y), 3, 1)
+    else:
+        # Combat reticle. Gated on SETTINGS.show_crosshair so the user's
+        # "Crosshair: Off" preference is honored. Respects crosshair_size
+        # (3=small, 6=medium, 10=large) and colorblind_mode (recolors the
+        # reticle for accessibility) - same logic as the shared
+        # ui_hud.draw_gameplay_crosshair(), so the two renderers match.
+        if _show_ch:
+            from core.user_settings import SETTINGS
+            cb = SETTINGS.colorblind_mode
+            col = _hud_crosshair.color_for(cb, default=C_ORANGE)
+            size = max(3, int(SETTINGS.crosshair_size))
+            _hud_crosshair.draw_combat(surface, ch_x, ch_y, size=size, color=col)
+
+
+def _draw_m1_breach_wash(surface):
+    # ── Breach stage flicker + alarm wash ──
+    if STATE.breach_stage in (3, 4):
+        wash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        wash.fill((180, 30, 20, 26 + _rng_legacy.randint(0, 22)))
+        surface.blit(wash, (0, 0))
+        if (_now_ms() // 80) % 3 == 0:
+            flicker = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            flicker.fill((0, 0, 0, _rng_legacy.randint(40, 120)))
+            surface.blit(flicker, (0, 0))
+
+
+def _submit_post_actors(q, cam_x, cam_y):
+    """Particles/casings/pickups/notebook/exfil sit over the actors (old frame order)."""
+    for d in _adapt.particle_drawables(STATE.particles, cam_x, cam_y):
+        q.submit(d, _L.FX_WORLD, sort_key=(0, 0))
+    for d in _adapt.casing_drawables(STATE.casings, cam_x, cam_y):
+        q.submit(d, _L.FX_WORLD, sort_key=(1, 0))
     for pu in STATE.pickups:
-        px = pu[0] - fcx
-        py = pu[1] - fcy + math.sin(_now_s() * 3 + pu[0]) * 3
+        px = pu[0] - cam_x
+        py = pu[1] - cam_y + math.sin(_now_s() * 3 + pu[0]) * 3
         if pu[2] == "bandage":
             glow_col = (100, 255, 100)
         elif pu[2] == "bottle":
@@ -1127,25 +1314,31 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
         else:
             glow_col = (255, 210, 40)
         glow = get_glow(16, glow_col, 40)
-        screen.blit(glow, (int(px - 16), int(py - 16)))
+        q.submit(_SurfaceDraw(glow, (int(px - 16), int(py - 16)), space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(2, 0))
         # RPE6 Phase 3: the icon is a baked sprite (game.art.m1.pickup_icon, 32 x 32 centred;
         # pygame truncates the float draw coordinates, hence int()); the bob + glow stay live and
         # _paint_m1_pickup_icon is the fallback / bake source.
         _spr = _m1art.get("pickup_icon", _M1_PICKUP_VARIANTS.get(pu[2], -1)) if pu[2] in _M1_PICKUP_VARIANTS else None
         if _spr is not None:
-            screen.blit(_spr, (int(px) - 16, int(py) - 16))
+            q.submit(_SurfaceDraw(_spr, (int(px) - 16, int(py) - 16), space=_SCREEN),
+                     _L.FX_WORLD, sort_key=(2, 0))
         else:
-            _paint_m1_pickup_icon(screen, pu[2], px, py)
+            q.submit(_UiPassDraw(lambda s, kind=pu[2], px=px, py=py: _paint_m1_pickup_icon(s, kind, px, py),
+                                 "m1.pickups"), _L.FX_WORLD, sort_key=(2, 0))
     if STATE.firefight_triggered and not STATE.notebook_collected and STATE.NOTEBOOK_POS:
-        nx = STATE.NOTEBOOK_POS[0] - fcx
-        ny = STATE.NOTEBOOK_POS[1] - fcy + math.sin(_now_s() * 2) * 3
+        nx = STATE.NOTEBOOK_POS[0] - cam_x
+        ny = STATE.NOTEBOOK_POS[1] - cam_y + math.sin(_now_s() * 2) * 3
         glow = get_glow(18, (255, 220, 100))
         pulse = int(60 + math.sin(_now_s() * 4) * 30)
-        glow.set_alpha(pulse)
-        screen.blit(glow, (int(nx - 20), int(ny - 20)))
-        pygame.draw.rect(screen, (15, 15, 15), (nx - 8, ny - 10, 16, 20))
-        pygame.draw.rect(screen, (40, 40, 40), (nx - 8, ny - 10, 16, 20), 1)
-        pygame.draw.line(screen, (40, 40, 40), (nx, ny - 10), (nx, ny + 10), 1)
+        q.submit(_SurfaceDraw(glow, (int(nx - 20), int(ny - 20)), alpha=pulse, space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(3, 0))
+        q.submit(_RectDraw((nx - 8, ny - 10, 16, 20), (15, 15, 15), space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(3, 0))
+        q.submit(_RectDraw((nx - 8, ny - 10, 16, 20), (40, 40, 40), 1, space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(3, 0))
+        q.submit(_LineDraw([(nx, ny - 10), (nx, ny + 10)], (40, 40, 40), 1, space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(3, 0))
         if (
             STATE.player
             and math.hypot(
@@ -1166,28 +1359,39 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                 txt = font_prompt.render(_T("m1.walk_over_to_collect"), True, (255, 220, 100))
             else:
                 txt = font_prompt.render(_T("m1.clear_hostiles_first"), True, (220, 60, 60))
-            screen.blit(txt, (int(nx) - txt.get_width() // 2, int(ny) - 35))
+            q.submit(_SurfaceDraw(txt, (int(nx) - txt.get_width() // 2, int(ny) - 35), space=_SCREEN),
+                     _L.FX_WORLD, sort_key=(3, 0))
     if STATE.notebook_collected and STATE.EXFIL_POS:
-        ex = STATE.EXFIL_POS[0] - fcx
-        ey = STATE.EXFIL_POS[1] - fcy
+        ex = STATE.EXFIL_POS[0] - cam_x
+        ey = STATE.EXFIL_POS[1] - cam_y
         # ──── Top-down exfil truck (KRAP flatbed, faces right) ────
         # Soft ground shadow, offset SE so the body sits on the floor plane.
         # RPE6 Phase 3: the parked truck is a baked sprite (game.art.m1.exfil_truck, 136 x 70 at
         # ex - 60, ey - 34); _paint_m1_exfil_truck is the fallback / bake source.
         spr = _m1art.get("exfil_truck", 0)
         if spr is not None:
-            screen.blit(spr, (int(ex) - 60, int(ey) - 34))
-            _paint_m1_exfil_headlights(screen, ex, ey)
+            q.submit(_SurfaceDraw(spr, (int(ex) - 60, int(ey) - 34), space=_SCREEN),
+                     _L.FX_WORLD, sort_key=(4, 0))
+            cab_x = int(ex + 18)
+            for hy in (int(ey - 14), int(ey + 8)):
+                glow = get_glow(9, (255, 230, 150), 70)
+                q.submit(_SurfaceDraw(glow, (cab_x + 32, hy - 6), space=_SCREEN),
+                         _L.FX_WORLD, sort_key=(4, 0))
+                q.submit(_EllipseDraw((cab_x + 38, hy, 8, 6), (245, 225, 150), space=_SCREEN),
+                         _L.FX_WORLD, sort_key=(4, 0))
         else:
-            _paint_m1_exfil_truck(screen, ex, ey)
+            q.submit(_UiPassDraw(lambda s: _paint_m1_exfil_truck(s, ex, ey), "m1.exfil"),
+                     _L.FX_WORLD, sort_key=(4, 0))
         # ──── Exfil pulsing ring and label (above truck) ────
         pulse = int(80 + math.sin(_now_s() * 3) * 40)
         circle_surf = pygame.Surface((100, 100), pygame.SRCALPHA)
         pygame.draw.circle(circle_surf, (50, 200, 100, pulse), (50, 50), 40, 3)
         pygame.draw.circle(circle_surf, (50, 200, 100, pulse // 2), (50, 50), 30, 2)
-        screen.blit(circle_surf, (int(ex - 50), int(ey - 50)))
+        q.submit(_SurfaceDraw(circle_surf, (int(ex - 50), int(ey - 50)), space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(4, 0))
         ext = font_prompt.render(_T("m1.exfil"), True, (50, 200, 100))
-        screen.blit(ext, (int(ex) - ext.get_width() // 2, int(ey) - 72))
+        q.submit(_SurfaceDraw(ext, (int(ex) - ext.get_width() // 2, int(ey) - 72), space=_SCREEN),
+                 _L.FX_WORLD, sort_key=(4, 0))
         if (
             STATE.player
             and math.hypot(
@@ -1204,160 +1408,22 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                     prompt_txt = font_prompt.render(
                         _T("m1.e_open_ignition_panel"), True, (100, 255, 100)
                     )
-                screen.blit(
-                    prompt_txt, (int(ex) - prompt_txt.get_width() // 2, int(ey) - 85)
-                )
-    if STATE.truck_hotwiring:
-        # First-person-ish ignition panel overlay with a short open animation.
-        open_t = min(1.0, getattr(STATE, "hotwire_panel_timer", 0) / 34.0)
-        ease = 1 - (1 - open_t) ** 3
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, int(112 * ease)))
-        screen.blit(overlay, (0, 0))
-        panel_w, panel_h = 640, 410
-        panel_x = WIDTH // 2 - panel_w // 2
-        panel_y = int(HEIGHT // 2 - panel_h // 2 + (1.0 - ease) * 90)
-        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        panel.fill((10, 12, 15, 236))
-        pygame.draw.rect(panel, (80, 82, 78), panel.get_rect(), 2)
-        pygame.draw.rect(panel, C_KRAP_BLUE, (0, 0, 5, panel_h))
-        # scratched metal plate
-        rng_panel = random.Random(74)
-        for _ in range(34):
-            x1 = rng_panel.randint(24, panel_w - 24)
-            y1 = rng_panel.randint(58, panel_h - 20)
-            pygame.draw.line(panel, (30, 34, 38, 100), (x1, y1), (x1 + rng_panel.randint(8, 40), y1 + rng_panel.randint(-2, 2)), 1)
-        screen.blit(panel, (panel_x, panel_y))
-        title = font_terminal.render(_T("m1.van_ignition_panel"), True, (180, 205, 210))
-        screen.blit(title, (panel_x + 26, panel_y + 18))
-        sub = font_terminal_small.render(_T("m1.bridge_the_correct_exposed_wires"), True, (150, 150, 135))
-        screen.blit(sub, (panel_x + 28, panel_y + 48))
-        nodes = _hotwire_wire_nodes()
-        used = {w for pair in STATE.hotwire_connections for w in pair}
-        # Draw loose wire tails from side openings.
-        for name, data in nodes.items():
-            x, y = data["pos"]
-            col = data["color"]
-            side = data["side"]
-            start_x = panel_x + 36 if side == "L" else panel_x + panel_w - 36
-            mid_x = x - 34 if side == "L" else x + 34
-            pygame.draw.line(screen, (18, 18, 20), (start_x, y + 3), (mid_x, y + 3), 7)
-            pygame.draw.line(screen, col, (start_x, y), (mid_x, y), 5)
-            pygame.draw.line(screen, col, (mid_x, y), (x, y), 4)
-            # copper exposed tip
-            pygame.draw.circle(screen, (210, 135, 70), (x, y), 9)
-            pygame.draw.circle(screen, (40, 24, 12), (x, y), 9, 1)
-            if name == STATE.hotwire_selected_wire:
-                glow = pygame.Surface((58, 58), pygame.SRCALPHA)
-                pygame.draw.circle(glow, (*col, 85), (29, 29), 26)
-                screen.blit(glow, (x - 29, y - 29))
-            if name in used:
-                pygame.draw.circle(screen, (100, 255, 150), (x, y), 14, 2)
-            label = font_terminal_small.render(name, True, col if name != "BLACK" else (120, 120, 125))
-            lx = x - label.get_width() - 18 if side == "L" else x + 18
-            screen.blit(label, (lx, y - 8))
-        # Draw completed bridges.
-        for pair in STATE.hotwire_connections:
-            a, b = pair
-            ax, ay = nodes[a]["pos"]
-            bx, by = nodes[b]["pos"]
-            pair_key = frozenset(pair)
-            purpose = HOTWIRE_TARGET_PAIRS.get(pair_key, "")
-            col = (95, 240, 145)
-            # cable curve with three segments
-            mid_y = (ay + by) // 2 - 24
-            pygame.draw.line(screen, (18, 35, 24), (ax, ay), (WIDTH // 2, mid_y), 8)
-            pygame.draw.line(screen, (18, 35, 24), (WIDTH // 2, mid_y), (bx, by), 8)
-            pygame.draw.line(screen, col, (ax, ay), (WIDTH // 2, mid_y), 4)
-            pygame.draw.line(screen, col, (WIDTH // 2, mid_y), (bx, by), 4)
-            # Purpose text is shown in the status lights below; avoid center overlap.
-        # Status lights.
-        statuses = ["POWER", "IGNITION", "STARTER"]
-        connected = {HOTWIRE_TARGET_PAIRS.get(frozenset(pair)) for pair in STATE.hotwire_connections}
-        for i, st in enumerate(statuses):
-            sx = panel_x + 128 + i * 150
-            sy = panel_y + panel_h - 76
-            live = st in connected
-            pygame.draw.circle(screen, (70, 240, 120) if live else (50, 55, 55), (sx, sy), 9)
-            pygame.draw.circle(screen, (10, 15, 12), (sx, sy), 9, 1)
-            stxt = font_terminal_small.render(st, True, (160, 220, 170) if live else (90, 95, 95))
-            screen.blit(stxt, (sx + 16, sy - 8))
-        # Sparks on wrong pair / fresh connection.
-        if STATE.hotwire_spark_timer > 0:
-            rng_s = random.Random(_now_ms() // 20)
-            center = nodes.get(STATE.hotwire_selected_wire or "RED", {"pos": (WIDTH // 2, HEIGHT // 2)})["pos"]
-            for _ in range(18 if STATE.hotwire_fail_flash > 0 else 8):
-                ang = rng_s.random() * math.tau
-                dist = rng_s.randint(8, 46)
-                sx = center[0] + math.cos(ang) * dist
-                sy = center[1] + math.sin(ang) * dist
-                pygame.draw.line(screen, (255, 210, 90), center, (sx, sy), 1)
-        if STATE.hotwire_fail_flash > 0:
-            flash = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-            flash.fill((255, 55, 35, min(95, STATE.hotwire_fail_flash * 8)))
-            screen.blit(flash, (panel_x, panel_y))
-        msg_col = (220, 90, 70) if STATE.hotwire_fail_flash > 0 else (180, 215, 190)
-        msg = font_prompt.render(STATE.hotwire_message or "Click a wire endpoint", True, msg_col)
-        screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, panel_y + panel_h - 34))
-        hint = font_terminal_small.render(_T("m1.vasile_s_hint_red_feeds_yellow_b"), True, (115, 125, 120))
-        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, panel_y + panel_h + 10))
-    unpinned = [ft for ft in STATE.floating_texts if not (len(ft) >= 6 and ft[5] == "pin")]
-    for ft in unpinned:
-        txt = font_terminal_small.render(ft[2], True, ft[3])
-        screen.blit(txt, (ft[0] - fcx - txt.get_width() // 2, ft[1] - fcy))
-    # Shared radio transmission widget (ui.radio, polish pass T6).
-    draw_pinned_radio(screen)
-    # Honor the Gameplay → Crosshair setting. The shared
-    # ui_hud.draw_gameplay_crosshair() (called from acaristan.py) already
-    # respects SETTINGS.show_crosshair, but this mission also draws its OWN
-    # combat reticle below - gate it on the same setting so the user's
-    # "Crosshair: Off" preference actually applies during gameplay.
-    try:
-        from core.user_settings import SETTINGS
-        _show_ch = SETTINGS.show_crosshair
-    except Exception:
-        _show_ch = True
-    ch_x, ch_y = get_scaled_mouse()
-    if STATE.truck_hotwiring:
-        # Compact pointing-hand cursor. The ACTUAL click/contact point is the
-        # fingertip at (ch_x, ch_y), so it no longer feels offset.
-        skin = (218, 178, 136)
-        skin_hi = (238, 205, 165)
-        outline = (54, 36, 24)
-        glove_shadow = (120, 82, 55)
-        cuff_col = (56, 68, 50)
-        # soft shadow
-        pygame.draw.polygon(
-            screen, (0, 0, 0, 95),
-            [(ch_x + 2, ch_y + 3), (ch_x - 7, ch_y + 13), (ch_x - 4, ch_y + 39),
-             (ch_x - 19, ch_y + 47), (ch_x - 9, ch_y + 66), (ch_x + 22, ch_y + 62),
-             (ch_x + 26, ch_y + 40), (ch_x + 10, ch_y + 34), (ch_x + 8, ch_y + 12)],
-        )
-        # reference-anatomy pointing hand; fingertip is the contact point
-        from core.hands import point_hand
-        point_hand(screen, (ch_x + 10, ch_y + 35), angle=0.0, mirror=-1, sc=0.52,
-                   pal={"skin": skin, "hi": skin_hi, "mid": (170, 128, 92),
-                        "sh": glove_shadow, "nail": (205, 165, 130),
-                        "nail_edge": (150, 110, 80), "nail_tip": (246, 222, 192)})
-        # sleeve/cuff
-        pygame.draw.rect(screen, outline, (ch_x - 13, ch_y + 59, 31, 16), border_radius=4)
-        pygame.draw.rect(screen, cuff_col, (ch_x - 10, ch_y + 60, 26, 14), border_radius=3)
-        pygame.draw.line(screen, (34, 42, 30), (ch_x - 8, ch_y + 64), (ch_x + 14, ch_y + 64), 1)
-        # exact contact point marker on top of the fingertip
-        pygame.draw.circle(screen, C_ORANGE, (ch_x, ch_y), 3, 1)
-    else:
-        # Combat reticle. Gated on SETTINGS.show_crosshair so the user's
-        # "Crosshair: Off" preference is honored. Respects crosshair_size
-        # (3=small, 6=medium, 10=large) and colorblind_mode (recolors the
-        # reticle for accessibility) - same logic as the shared
-        # ui_hud.draw_gameplay_crosshair(), so the two renderers match.
-        if _show_ch:
-            from core.user_settings import SETTINGS
-            cb = SETTINGS.colorblind_mode
-            col = _hud_crosshair.color_for(cb, default=C_ORANGE)
-            size = max(3, int(SETTINGS.crosshair_size))
-            _hud_crosshair.draw_combat(screen, ch_x, ch_y, size=size, color=col)
+                q.submit(_SurfaceDraw(prompt_txt, (int(ex) - prompt_txt.get_width() // 2, int(ey) - 85),
+                                      space=_SCREEN), _L.FX_WORLD, sort_key=(4, 0))
 
+
+def _submit_overlay(q, cam_x, cam_y, ch_x, ch_y):
+    """Screen-space world overlays, death/flash passes, then scanlines + vignette."""
+    unpinned = [ft for ft in STATE.floating_texts if not (len(ft) >= 6 and ft[5] == "pin")]
+    for i, ft in enumerate(unpinned):
+        txt = font_terminal_small.render(ft[2], True, ft[3])
+        q.submit(_SurfaceDraw(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y), space=_SCREEN),
+                 _L.OVERLAY_WORLD, sort_key=(0, i))
+    # Shared radio transmission widget (ui.radio, polish pass T6).
+    q.submit(_UiPassDraw(lambda s: draw_pinned_radio(s), "m1.dialogue"),
+             _L.OVERLAY_WORLD, sort_key=(1, 0))
+    q.submit(_UiPassDraw(lambda s: _draw_m1_reticle(s, ch_x, ch_y), "m1.reticle"),
+             _L.OVERLAY_WORLD, sort_key=(2, 0))
     if STATE.muzzle_flash_timer > 0:
         if STATE.player:
             if hasattr(STATE.player, "barrel_tip"):
@@ -1365,11 +1431,12 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
             else:
                 tip_x = STATE.player.rect.centerx + math.cos(STATE.player.angle) * 39
                 tip_y = STATE.player.rect.centery + math.sin(STATE.player.angle) * 39
-            flash_x = tip_x - fcx
-            flash_y = tip_y - fcy
+            flash_x = tip_x - cam_x
+            flash_y = tip_y - cam_y
         else:
             flash_x, flash_y = ch_x, ch_y
-        screen.blit(MUZZLE_FLASH, (int(flash_x - 40), int(flash_y - 40)))
+        q.submit(_SurfaceDraw(MUZZLE_FLASH, (int(flash_x - 40), int(flash_y - 40)), space=_SCREEN),
+                 _L.OVERLAY_WORLD, sort_key=(3, 0))
         if artpack.enabled():
             lighting.buffer().light(flash_x, flash_y, 240, (255, 190, 110), 0.9)
         STATE.muzzle_flash_timer -= 1
@@ -1378,25 +1445,22 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
         # tinnitus. The camera tilt is applied at the very end of the frame
         # (after HUD) so the entire screen rotates including UI.
         from entities import death_anim
-        death_anim.draw_death_overlay(screen, fcx, fcy)
+        q.submit(_UiPassDraw(lambda s: death_anim.draw_death_overlay(s, cam_x, cam_y), "m1.death"),
+                 _L.OVERLAY_WORLD, sort_key=(4, 0))
     if STATE.gc_flash_timer > 0 and not getattr(STATE, "reduced_motion", False):
         flash_surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         flash_surf.fill((255, 255, 255, min(255, STATE.gc_flash_timer * 22)))
-        screen.blit(flash_surf, (0, 0))
-    # ── Breach stage flicker + alarm wash ──
+        q.submit(_SurfaceDraw(flash_surf, (0, 0), space=_SCREEN), _L.OVERLAY_WORLD, sort_key=(5, 0))
     if STATE.breach_stage in (3, 4):
-        wash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        wash.fill((180, 30, 20, 26 + _rng_legacy.randint(0, 22)))
-        screen.blit(wash, (0, 0))
-        if (_now_ms() // 80) % 3 == 0:
-            flicker = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            flicker.fill((0, 0, 0, _rng_legacy.randint(40, 120)))
-            screen.blit(flicker, (0, 0))
-    draw_scanlines(screen)
-    draw_vignette(screen)
+        q.submit(_UiPassDraw(_draw_m1_breach_wash, "m1.wash"), _L.OVERLAY_WORLD, sort_key=(6, 0))
+    q.submit(_UiPassDraw(lambda s: draw_scanlines(s), "m1.scanlines"), _L.OVERLAY_WORLD, sort_key=(7, 0))
+    q.submit(_UiPassDraw(lambda s: draw_vignette(s), "m1.vignette"), _L.OVERLAY_WORLD, sort_key=(8, 0))
+
+
+def _draw_m1_hud(surface, cam_x, cam_y):
     if STATE.player and not STATE.truck_hotwiring:
         # HP bar - shared engine.ui.std widget in M1's compact layout (Phase 4).
-        _hud_health_bar.draw(screen, THEME, STATE.player.hp, STATE.player.max_hp,
+        _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
                              panel_bg=_m1_hp_panel, x=30, y=HEIGHT - 50,
                              bb=(0, 0, 160, 14), inset=0, panel=(180, 42),
                              panel_off=(-10, -16), label_dy=-14)
@@ -1413,7 +1477,7 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                 obj_text = "Recover the notebook"
         elif STATE.mission_phase == "escape":
             obj_text = "Reach exfil zone"
-        draw_objective_panel(screen, obj_text)
+        draw_objective_panel(surface, obj_text)
         # Ammo panel sits 96 px above the HP strip anchor (Phase 4: the strip
         # is the shared widget now, so its anchor is spelled out here).
         ammo_x, ammo_y = 30, (HEIGHT - 50) - 96
@@ -1421,7 +1485,7 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
         bg = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
         pygame.draw.rect(bg, (0, 0, 0, 140), (0, 0, bg_w, bg_h), border_radius=4)
         pygame.draw.rect(bg, (40, 42, 38), (0, 0, bg_w, bg_h), 1, border_radius=4)
-        screen.blit(bg, (ammo_x - 6, ammo_y))
+        surface.blit(bg, (ammo_x - 6, ammo_y))
         for i in range(4):
             mx = ammo_x + 8 + i * 36
             my = ammo_y + 8
@@ -1452,9 +1516,9 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                 base = (72, 68, 62)
                 hl = (92, 88, 80)
                 rim = (60, 56, 50)
-            pygame.draw.polygon(screen, base, body_pts)
+            pygame.draw.polygon(surface, base, body_pts)
             pygame.draw.polygon(
-                screen,
+                surface,
                 hl,
                 [
                     (mx + 1, my + 2),
@@ -1466,23 +1530,23 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
             outline = (
                 C_TERMINAL if is_active else (rim if not is_empty else (55, 50, 45))
             )
-            pygame.draw.polygon(screen, outline, body_pts, 1)
+            pygame.draw.polygon(surface, outline, body_pts, 1)
             bullet_y = my + 8
             gold = (220, 185, 45)
             dark = (55, 52, 48) if not is_empty else (40, 38, 35)
             for bi in range(12):
                 col = gold if bi < bullets_fill else dark
-                pygame.draw.circle(screen, col, (mx + top_w // 2, bullet_y + bi * 3), 2)
+                pygame.draw.circle(surface, col, (mx + top_w // 2, bullet_y + bi * 3), 2)
             if is_empty:
                 pygame.draw.line(
-                    screen,
+                    surface,
                     (90, 55, 55),
                     (mx + 2, my + 2),
                     (mx + top_w - 2, my + h - 2),
                     1,
                 )
                 pygame.draw.line(
-                    screen,
+                    surface,
                     (90, 55, 55),
                     (mx + top_w - 2, my + 2),
                     (mx + 2, my + h - 2),
@@ -1490,11 +1554,11 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                 )
         ammo_text = f"{STATE.ammo_in_mag}/{STATE.mag_size}"
         text_col = C_TERMINAL if STATE.ammo_in_mag > 0 else (220, 60, 60)
-        screen.blit(
+        surface.blit(
             font_terminal_small.render(ammo_text, True, text_col),
             (ammo_x + 154, ammo_y + 8),
         )
-        screen.blit(
+        surface.blit(
             font_terminal_small.render(_T("m1.9mm"), True, (100, 110, 100)),
             (ammo_x + 154, ammo_y + 26),
         )
@@ -1503,45 +1567,83 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
             bar_w, bar_h = 80, 8
             progress = 1.0 - STATE.reload_timer / 60.0
             pygame.draw.rect(
-                screen, (50, 50, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=2
+                surface, (50, 50, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=2
             )
             pygame.draw.rect(
-                screen,
+                surface,
                 (220, 160, 40),
                 (bar_x, bar_y, int(bar_w * progress), bar_h),
                 border_radius=2,
             )
             reload_lbl = font_terminal_small.render(_T("m1.reloading"), True, (220, 160, 40))
-            screen.blit(reload_lbl, (ammo_x + 150, ammo_y + 58))
+            surface.blit(reload_lbl, (ammo_x + 150, ammo_y + 58))
         else:
             mag_label = f"MAGS: {STATE.spare_mags}"
-            screen.blit(
+            surface.blit(
                 font_terminal_small.render(mag_label, True, (140, 150, 130)),
                 (ammo_x + 154, ammo_y + 44),
             )
         # ── Bottle HUD ──
         # Bottle HUD - shared engine.ui.std strip (M1's 140-alpha panel).
-        _hud_bottle_hud.draw(screen, THEME, STATE.player_bottles,
+        _hud_bottle_hud.draw(surface, THEME, STATE.player_bottles,
                              panel_bg=_m1_panel_140, icon=_draw_molotov_icon,
                              x=ammo_x - 6, y=ammo_y - 42, width=246, cap=4)
 
-        _hud_hostiles.draw(screen, THEME, len(STATE.enemies))
+        _hud_hostiles.draw(surface, THEME, len(STATE.enemies))
 
     if STATE.show_minimap and STATE.minimap:
         STATE.minimap.draw(
-            screen,
+            surface,
             STATE.player,
             STATE.enemies,
-            fcx,
-            fcy,
+            cam_x,
+            cam_y,
             STATE.NOTEBOOK_POS,
             STATE.EXFIL_POS,
             STATE.volkov_pos,
             STATE.commander_pos,
         )
+
+
+def _composite_m1_lighting(surface):
+    _push_m1_lights(_M1_CAM[0], _M1_CAM[1], _now_s())
+    lighting.buffer().composite(surface, _now_s())
+
+
+def submit_frame(q, fcx, fcy):
+    """Submit one Mission 1 frame (draw order is the legacy painter's, ADR-017)."""
+    fcx, fcy = round(fcx), round(fcy)
+    _M1_CAM[0], _M1_CAM[1] = fcx, fcy
+    if artpack.enabled():
+        lighting.buffer().begin_frame(_m1_wing_name(), _m1_light_sig())
+    q.submit(_FillDraw(C_BG_GAME), _L.FLOOR, sort_key=-1)
+    if staticlayer.enabled():
+        _submit_tiles(q, 0)
+    else:
+        q.submit(_UiPassDraw(lambda s: _paint_m1_tiles_direct(s, fcx, fcy), "m1.tiles"),
+                 _L.FLOOR, sort_key=0)
+    _submit_ground_decor(q, fcx, fcy)
+    for fz in STATE.fire_zones:
+        for d in fz.drawables(fcx, fcy):
+            q.submit(d, _L.DECALS_DYNAMIC, sort_key=4)
+    for d in _adapt.bullet_drawables(STATE.bullets, fcx, fcy, _bullet_glow, C_BULLET):
+        q.submit(d, _L.DECALS_DYNAMIC, sort_key=5)
+    q.submit(_CustomDraw(_draw_m1_actors, "m1.game_draw"), _L.ENTITIES, sort_key=(0, 0))
+    _submit_post_actors(q, fcx, fcy)
+    if STATE.truck_hotwiring:
+        q.submit(_UiPassDraw(lambda s: _draw_m1_hotwire(s), "m1.hotwire"),
+                 _L.FX_WORLD, sort_key=(5, 0))
+    ch_x, ch_y = get_scaled_mouse()
+    _submit_overlay(q, fcx, fcy, ch_x, ch_y)
+    q.submit(_UiPassDraw(lambda s: _draw_m1_hud(s, fcx, fcy), "m1.hud"), _L.UI, sort_key=0)
     # ── Death animation: camera tilt ──
     # Apply at the very end of the frame so the entire rendered scene
     # (world + HUD + minimap) rotates together. No-op when alive.
     if STATE.player_dead:
         from entities import death_anim
-        death_anim.apply_camera_tilt(screen)
+        q.submit(_UiPassDraw(death_anim.apply_camera_tilt, "m1.death_tilt"), _L.UI, sort_key=1)
+    if artpack.enabled():
+        # The legacy composite is a full-frame grade: it also tints the HUD, so it stays
+        # after the UI layer (DEBUG is the only slot above UI); it cannot move to LIGHTING
+        # without changing pixels.
+        q.submit(_UiPassDraw(_composite_m1_lighting, "m1.lighting"), _L.DEBUG, sort_key=0)

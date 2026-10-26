@@ -24,7 +24,7 @@
  "schema": "ae.d6/1",
  "static": {
   "m1": {
-   "draw_sites": 288,
+   "draw_sites": 262,
    "painter_sites": 0
   },
   "m2": {

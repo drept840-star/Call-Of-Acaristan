@@ -62,6 +62,19 @@ budget_tokens: 2000
   from showing through a tall prop. The wave status uses M5's `_draw_m5_plate`
   (slot x 214-554); the searchlight exposure chip sits right of it at x 562.
 
+- **A peeled mission submits for real, never through the whole-painter host.** A
+  mission's `game_draw` that calls `submit_frame` from *inside* a hosted
+  `CustomDraw` flush submits after its FLOOR/DECAL layers were already drawn, so
+  the world vanishes while the HUD (a later layer) still paints. `core.game_core`
+  must call `_gr.frame(..., submitter=lambda q, x, y: mN.game_draw(x, y))` for
+  that mission - nested submit is only a safety net for tools.
+- **`engine.render2d` static layers must declare the bake's padded world.** The
+  baked world PNG and `core.staticlayer` both pad the map up to whole chunks
+  (`engine.assets.bake_chunk_layer`: 1792x1472 M1 map -> 2048x1536), and the
+  callback paints floor past the map border. `StaticLayers.define(world_size=)`
+  with the raw map size clips that edge chunk to 256 px, so the border strip
+  renders as bare background (M1 golden: 7 % px, max diff 24).
+
 ## Do-Not-Repeat
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
@@ -70,6 +83,12 @@ budget_tokens: 2000
 - [2026-10-24] A "PS2 revert" request can already be undone: check
   `git diff <pre-revert> HEAD` before restoring anything. 3260f70 dropped the 3D
   PS2 path and 75294cd restored it; HEAD was byte-identical to 57acb6c.
+- [2026-10-26] Do not judge a mission peel by "the frame draws": if the world
+  disappears but the HUD stays, the mission is still hosted as a whole painter
+  (nested submit after its layer's flush). Check `_gr.queue().pending()` after a
+  frame and `_gr.static_layers().stats()` for `built: 0`. Also diff only the
+  golden tail - `ae_golden --only m1` renders 54 shots, so read the reported
+  failure ids, not the count.
 
 ## Decision Log
 
