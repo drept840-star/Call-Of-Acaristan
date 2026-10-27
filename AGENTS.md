@@ -49,7 +49,7 @@
 ## Story canon (read before writing dialogue)
 - `docs/LORE.md` is the reference dossier; `docs/MISSION3..8_PLOT.md` are the per-mission plans. The **shipped game wins** when they disagree, and the doc is corrected to match.
 - `docs/FIXES_STORIES.md` logs the 2026-10-20 consistency pass: the eight contradictions it fixed and the two gaps it closed. Do not "repair" anything back to a pre-pass reading — e.g. the M5 reveal (Retardovici is the puppeteer, not Balaceanu's puppet) is a deliberate re-read of M3/M4, and the M2 auth chain naming `VASILE, C.` is a plant for M6.
-- Locked numbers: the Vostral is **six years old** (a Y-6 whisper, press at Y-1); the campaign calendar is M1 Day 0, M2 Day 1, M3 Day 4, M4 Day 6, M5 Day ~8, M6 Day ~10, M7 Day ~11 (planned), M8 Day ~12 (planned). Missions 7 and 8 are **not implemented** — do not quote them as shipped.
+- Locked numbers: the Vostral is **six years old** (a Y-6 whisper, press at Y-1); the campaign calendar is M1 Day 0, M2 Day 1, M3 Day 4, M4 Day 6, M5 Day ~8, M6 Day ~10, M7 Day ~11, M8 Day ~12 (planned). Mission 7 is implemented (`src/missions/m7/`); Mission 8 is **not implemented** — do not quote it as shipped.
 - A new spoken line needs a `VO_xxx` row in `src/audio/voice_manifest.py` plus a `KNOWN_MISSING_AUDIO` entry (caption-only until recorded) — and it must NOT go into `VOICE_ORDER`, which drives the unrenamed-file matcher and would steal an existing take. Never edit a line that already has a recorded take: fix the timeline instead.
 
 <!-- openwolf:begin -->

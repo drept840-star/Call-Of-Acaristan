@@ -56,6 +56,14 @@ _MISSION_RECORDS = {
          "mission3_complete": True, "mission4_complete": True,
          "mission5_complete": True, "mission6_complete": True},
     ),
+    "MISSION7": (
+        "MISSION_7",
+        "Mission 7 - Fallow Ground",
+        {"mission1_complete": True, "mission2_complete": True,
+         "mission3_complete": True, "mission4_complete": True,
+         "mission5_complete": True, "mission6_complete": True,
+         "mission7_complete": True},
+    ),
 }
 
 

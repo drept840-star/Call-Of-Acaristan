@@ -53,6 +53,12 @@ MISSION_META = {
         "fail_flavor": "KRAPNET: FINAL LINK LOST. THE RECORD WILL BE BURIED.",
         "radio_channel": "FINAL LINK // 171.60",
     },
+    "MISSION7": {
+        "operation": "FALLOW GROUND",
+        "fail_subtitle": "THE FARM WAS LOST",
+        "fail_flavor": "KRAPNET: FARM LINK LOST. NOBODY IS COMING UP THE VALLEY.",
+        "radio_channel": "FINAL LINK // 171.60",
+    },
 }
 
 

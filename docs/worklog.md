@@ -1471,3 +1471,56 @@ Open (user decisions, unchanged from the branch handoff): street patrol route +
 shutter guards facing each other; faint calm-guard suspicion meter; Volkov escape
 figure; CIOCAN speaker color; Q-brick binding; `files_already` timing; stockroom
 outer-wall tiles; the two music files; playtest + merge-to-main sign-off.
+
+## 2026-10-28 - Mission 7 "Fallow Ground": all seven beats, with a playable 3D raid
+
+Branch `m7/fallow-ground`, cut from `cutscene-holds`. Nothing is committed yet. The plot doc
+(`docs/MISSION7_PLOT.md`, with new implementation notes at its end) is now playable from the
+M6 ending through the radio choice to an end card.
+
+- **Package** `src/missions/m7/`: `meta` (ids, stage ladder, film tables), `flow` (stage
+  machine, outro request, preps survive only a raid restart), `systems`/`draw` (per-stage
+  dispatch), `maps` + `farmyard` (top-down chores and the pick-2-of-3 prep on
+  `m7.farm.level.json`), `raid3d` + `raid_world` + `raid_brain` + `raid_hud` (the 3D raid),
+  `choice` (beat 7). Films: `cutscenes/m7world3d.py` (shared farm builder), `m7films.py`
+  (drop-off and burning-farm finale), `m7runner.py` (2D Alex arrival); timelines
+  `m7.arrival/runner/finale/outro`.
+- **Raid**: third-person over-the-shoulder, built on the M6 yard's shape but self-contained (no
+  `train3d`/`yard3d` imports, no M6 edits). Three waves, checkpoints after waves 1 and 2
+  reloaded inside the scene, player death or Bodi down 20 s reloads, hold E frees Alex or
+  revives Bodi, barn fire spreads and blocks the barn. Preps: tractor blocks the track mouth,
+  fuel shed leaves a shootable tank, hayloft gives Bodi a ledge. `app.py` routes ESC/pause and
+  mouse grab the same way as the M6 yard. A scene fault falls through to the finale
+  (`force_finish("fallback")`) instead of stranding the mission.
+- **Choice**: no default channel, no timer, ENTER only after tuning; writes
+  `STATE.m8_route` (`duty` / `revenge`), fades, then the `m7.outro` film.
+- **Voice**: `VO_219`..`VO_227` (Bodi x5, Alex x4) added to `voice_manifest.py` and
+  `KNOWN_MISSING_AUDIO`, not to `VOICE_ORDER`. `SPEAKER_COLORS` gets BODI and ALEX. The raid
+  callouts use the manifest text verbatim.
+- **Wiring**: `core/game_core.py`, `core/save_system.py`, `core/mission_meta.py`,
+  `core/state.py` (`mission7_stage`, `m7_preps`, `m7_raid_cp`, `m8_route`, ...),
+  `core/dev_jumps.py`, `ui/mission_failed.py`, `app.py` (resume, chain, pause, events).
+  `tools/check_boundaries.py` W1 baseline 50 -> 51 for the one `core.game_core -> missions.m7`
+  edge every mission has. `engine/` untouched (mission0 engine-tree hash OK).
+- **Tests added**: `tests/unit/test_m7_campaign.py` (22 tests) and
+  `check_mission7_vertical_slice` in `tools/smoke_test.py`.
+- **Cleanup**: the scaffolder's placeholder `m7.farm.depot` level/set, `m7.farm.briefing`
+  dialogue, `m7.farm.outro` timeline and `enemy_types.json` were deleted (nothing used them).
+
+Gates: `compileall` OK; `smoke_test` `SMOKE TEST: OK` (including `mission7_vertical_slice`);
+unit suite 479 OK; `ae_validate` OK; `ae_text_check` OK; `ae_hold_check` OK;
+`ae_mission0_check` OK; `check_boundaries` OK; `voice_audit` exits 0. `ae_ci` is red on
+bake, replay and loop only, and none of the four known independent failures appeared.
+
+Baselines, deliberately not re-recorded: the replay segments now differ by the eight new
+`m7_*`/`m8_route`/`mission7_stage`/`request_m7_cutscene` STATE fields (hash is over the whole
+`STATE`), but m1 and m2 also differ in `camera_x`, `player` and death fields from the
+uncommitted M1/camera work already in this tree, so a re-record would bake those in. Re-record
+after that work settles (`ae_replay.py record`, `ae_loop.py`, bake). The `bake` red is m1 source
+hashes (`exfil_truck`, `molotov_icon`, `pickup_icon`, `world_static`), unrelated to M7.
+
+Open: Bodi/Alex takes; `m7_preps` and the raid checkpoint are not persisted across
+save/resume; the "RELOADING" label overlaps the HP bar (M6 helper, shared); `ae_hold_check`
+does not cover the M7 films; `ACA_TL_SRC=legacy` gives empty M7 film shot lists. Doc
+conflicts to settle are listed at the end of `docs/MISSION7_PLOT.md` ("Tomorrow night" vs
+M8 "at dawn", Vasile Captain vs Commander).

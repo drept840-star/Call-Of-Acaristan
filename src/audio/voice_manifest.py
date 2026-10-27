@@ -230,6 +230,16 @@ VOICE_LINES = [
     ('VO_216', 'VASILE', 'Company on the east road. Move.'),
     ('VO_217', 'BIRIBEL', 'Come on. Come on.'),
     ('VO_218', 'VOLKOV', 'Read it before you hand it over!'),
+    # M7 Fallow Ground (docs/MISSION7_PLOT.md voice table): Bodi and Alex have no takes yet.
+    ('VO_219', 'BODI', "You're the one Maru called about. Boots off in the kitchen."),
+    ('VO_220', 'BODI', 'The generator kicks. Hit it like you mean it.'),
+    ('VO_221', 'BODI', "I grow potatoes. I don't do politics."),
+    ('VO_222', 'BODI', "That's my barn."),
+    ('VO_223', 'BODI', "They'll come back. There's nothing left to come back to. I'm coming with you."),
+    ('VO_224', 'ALEX', "Biribel! THE Biribel! Maru said you'd be taller."),
+    ('VO_225', 'ALEX', "Mansion plan. Guard rotations, cameras, the lot. Don't lose it, I nearly died for it. Twice."),
+    ('VO_226', 'ALEX', 'Trucks! Two of them - no, three!'),
+    ('VO_227', 'ALEX', "I'm pinned! Biribel, I'm pinned!"),
 ]
 
 
@@ -288,4 +298,6 @@ KNOWN_MISSING_AUDIO = frozenset({
     'VO_205', 'VO_206', 'VO_207', 'VO_208', 'VO_209', 'VO_210', 'VO_211',
     'VO_212', 'VO_213', 'VO_214', 'VO_215', 'VO_216', 'VO_217',
     'VO_218',
+    # M7 Fallow Ground: Bodi and Alex lines, no takes yet.
+    'VO_219', 'VO_220', 'VO_221', 'VO_222', 'VO_223', 'VO_224', 'VO_225', 'VO_226', 'VO_227',
 })

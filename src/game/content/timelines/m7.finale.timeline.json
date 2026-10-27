@@ -1,0 +1,57 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m7.finale",
+ "shots": [
+  {
+   "scene": "m7_burn_wide",
+   "speaker": "",
+   "text": "Night. The farmhouse and the barn burn.",
+   "min_ms": 4600,
+   "quiet_ui": true,
+   "lighting": [
+    18,
+    10,
+    10
+   ]
+  },
+  {
+   "scene": "m7_burn_tractor",
+   "speaker": "",
+   "text": "The barn roof falls in. Bodi sits on the tractor seat, rifle across his knees.",
+   "min_ms": 4600,
+   "quiet_ui": true,
+   "lighting": [
+    18,
+    10,
+    10
+   ]
+  },
+  {
+   "scene": "m7_burn_bodi",
+   "speaker": "BODI",
+   "text": "They'll come back. There's nothing left to come back to.",
+   "min_ms": 4200,
+   "lighting": [
+    18,
+    10,
+    10
+   ]
+  },
+  {
+   "scene": "m7_burn_face",
+   "speaker": "BODI",
+   "text": "I'm coming with you.",
+   "min_ms": 3000,
+   "lighting": [
+    18,
+    10,
+    10
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m7 beat 6, fallow ground"
+ }
+}

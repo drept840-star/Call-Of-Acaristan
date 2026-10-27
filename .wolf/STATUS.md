@@ -8,6 +8,23 @@ budget_tokens: 1000
 
 ---
 
+## Mission 7 "Fallow Ground" (2026-10-28, branch `m7/fallow-ground`, uncommitted)
+
+All seven beats are implemented and headless-tested: 3D drop-off film, top-down chores and
+prep, 2D runner film, playable 3D raid (`src/missions/m7/raid3d.py` + `raid_*`), 3D burning-farm
+finale, radio choice writing `STATE.m8_route`, outro. Details: `docs/worklog.md` (2026-10-28) and
+the implementation notes at the end of `docs/MISSION7_PLOT.md`.
+
+Gates green: compileall, smoke (`mission7_vertical_slice`), unit 479, ae_validate/text/hold/
+mission0, boundaries (W1 baseline now 51). `ae_ci` red only on bake/replay/loop: replay hashes
+all of `STATE`, so the new M7 fields shift every segment, and m1/m2 also differ in camera/player
+from the uncommitted M1 work, so baselines were NOT re-recorded.
+
+Next: playtest the raid by hand (dev jumps `m7*`); record Bodi/Alex takes (`VO_219`-`VO_227`);
+persist `m7_preps`/raid checkpoint; settle the doc conflicts ("Tomorrow night" vs M8 "at dawn").
+
+---
+
 ## Done (2026-10-27 M1 rework complete on this branch)
 
 Branch `cutscene-holds`, merge `ef9302b`: WP8+WP9a+WP9b merged in from `m1/rework`

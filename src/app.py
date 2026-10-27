@@ -568,6 +568,7 @@ active_cutscene = None
 
 _M5_MID = {"key": None}   # key of the M5 mid-mission cutscene being played
 _M6_MID = {"key": None}   # key of the M6 mid-mission cutscene being played
+_M7_MID = {"key": None}   # stage token of the M7 stage film being played
 
 def _safe_m6_shots(shots):
     """Only hand CutscenePlayer its dict shot contract; old M6 facades may
@@ -599,6 +600,18 @@ def _m0_outro_pending():
         return False
 
 
+def _m7_outro_pending():
+    """Mission 7 exit reached -> play its outro timeline."""
+    try:
+        from core.state import STATE as _st7o  # lazy: app keeps STATE access local
+        if getattr(_st7o, "active_mission", "") != "MISSION7":
+            return False
+        from missions import m7 as _m7
+        return _m7.take_outro_request()
+    except Exception:
+        return False
+
+
 def _m5_mid_cut_key():
     """Pending M5 mid-mission cutscene key (round 2), or None."""
     from core.state import STATE as _st5  # lazy: app keeps STATE access local
@@ -613,6 +626,19 @@ def _m6_mid_cut_key():
     key = getattr(_st6, "request_m6_cutscene", None)
     from missions.m6.meta import M6_MID_CUTSCENES  # lazy: M6-only data
     return key if key in M6_MID_CUTSCENES else None
+
+
+def _m7_film_pending():
+    """Pending M7 stage film (arrival / finale), one-shot; stores its token in _M7_MID."""
+    from core.state import STATE as _st7  # lazy: app keeps STATE access local
+    if getattr(_st7, "active_mission", "") != "MISSION7":
+        return False
+    from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
+    key = _m7mod.take_cutscene_request()
+    if key is None:
+        return False
+    _M7_MID["key"] = key
+    return True
 
 
 def start_cutscene(shots, after_state, use_fades=True):
@@ -1685,6 +1711,40 @@ def _apply_dev_args():
         _i = next((i for i, s in enumerate(_shots)
                    if isinstance(s, dict) and s.get("scene") == "m6_helicopter"), 0)
         _start_m6_cutscene(_shots[_i:], "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
+    elif "--dev-mission7" in args or "--m7" in args:
+        # Mission 7 placeholder: no intro film yet, straight into gameplay.
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7(preserve_timer=True)
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-arrival" in args:
+        # Mission 7 stage jumps (dev_jumps m7-<stage>); tokens match missions.m7.meta.STAGES.
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("arrival")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-chores" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("chores")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-runner" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("runner")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-prep" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("prep")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-raid" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("raid")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-finale" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("finale")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-choice" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_stage("choice")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-slot-select" in args:
         # Dev/screenshot jump: open the save-slot screen directly (skips
         # BOOT_INTRO). Pass `--continue` as well for the CONTINUE variant -
@@ -2253,9 +2313,26 @@ class _SlotSelectState(GameState):
                 gc.start_mission5(preserve_timer=True)
                 start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
                 trigger_transition("CUTSCENE")
-            elif last == "MISSION_6":
+            elif last == "MISSION_7":
                 menu_notice = "FULL CAMPAIGN COMPLETE - START A NEW CAMPAIGN"
                 menu_notice_timer = 200; gsm.transition("MENU")
+            elif progress == "m7":
+                # Above the MISSION_6 branch (a mid-M7 save also has
+                # last == "MISSION_6") and below MISSION_7 (progress is not
+                # cleared on completion).
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                m7_stage = slot.get("checkpoint", "")
+                if m7_stage:
+                    gc.start_mission7_stage(m7_stage)
+                else:
+                    gc.start_mission7(preserve_timer=True)
+                gsm.transition("GAME"); pygame.mouse.set_visible(False)
+            elif last == "MISSION_6":
+                # M6 done -> Mission 7 is the next chapter. No M7 intro film
+                # yet, so drop straight into its gameplay.
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                gc.start_mission7(preserve_timer=True)
+                gsm.transition("GAME"); pygame.mouse.set_visible(False)
             elif progress == "m6":
                 gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
                 resume_names = {
@@ -2730,6 +2807,15 @@ class _CutsceneState(GameState):
             gc.start_mission6(preserve_timer=True); trigger_transition("GAME"); pygame.mouse.set_visible(False)
         elif after == "MISSION6_COMPLETE":
             gsm.transition("MISSION_COMPLETE"); mission_complete_timer = 0; mission_complete_fade = 0; pygame.mouse.set_visible(True)
+        elif after == "MISSION7":
+            gc.start_mission7(preserve_timer=True); trigger_transition("GAME"); pygame.mouse.set_visible(False)
+        elif after == "MISSION7_COMPLETE":
+            gsm.transition("MISSION_COMPLETE"); mission_complete_timer = 0; mission_complete_fade = 0; pygame.mouse.set_visible(True)
+        elif after == "M7_RESUME":
+            from missions import m7 as _m7mod  # lazy: M7-only
+            _m7mod.on_cutscene_done(_M7_MID["key"])
+            trigger_transition("GAME")
+            pygame.mouse.set_visible(False)
         elif after == "MISSION3_BROADCAST_FAIL":
             # Fail sequence over: rebuild the wing, reset the 22:00 clock and
             # drop the player back into Slice 6. Guarded so a double _handle_end
@@ -3088,6 +3174,13 @@ class _GameState_(GameState):
                 _m6_train.set_paused(False)
             except Exception:
                 pass
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION7" \
+                and getattr(STATE, "m7_raid_active", False):
+            try:
+                from missions.m7 import raid3d as _m7_raid  # lazy: M7-only
+                _m7_raid.set_paused(False)
+            except Exception:
+                pass
 
     def handle_event(self, event, mouse_x, mouse_y, keys):
         if self._egg3d_live():
@@ -3143,6 +3236,19 @@ class _GameState_(GameState):
                 from missions import m5
                 m5.handle_dialogue_event(event)
             except ImportError:
+                pass
+            return
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION7" \
+                and getattr(STATE, "m7_raid_active", False):
+            # The raid owns the mouse and keyboard; ESC pauses.
+            from missions.m7 import raid3d as _m7_raid  # lazy: M7-only
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                _m7_raid.set_paused(True)
+                gsm.transition("PAUSED")
+                return
+            try:
+                _m7_raid.handle_event(event)
+            except Exception:
                 pass
             return
         if getattr(gc, "active_mission", "MISSION1") == "MISSION6":
@@ -3343,6 +3449,13 @@ class _GameState_(GameState):
             start_cutscene(_m0mod.outro_shots(), "MISSION_COMPLETE", use_fades=True)
             trigger_transition("CUTSCENE")
             pygame.mouse.set_visible(True)
+        elif _m7_outro_pending():
+            from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
+            _start_m6_cutscene(_m7mod.outro_shots(), "MISSION7_COMPLETE"); pygame.mouse.set_visible(True)
+        elif _m7_film_pending():
+            from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
+            start_cutscene(_m7mod.film_shots(_M7_MID["key"]), "M7_RESUME", use_fades=True)
+            trigger_transition("CUTSCENE")
         elif _m5_mid_cut_key():
             from missions.m5.meta import M5_MID_CUTSCENES  # lazy: M5-only data
             _M5_MID["key"] = _m5_mid_cut_key()
@@ -3462,6 +3575,8 @@ class _GameState_(GameState):
             else:
                 _set_ambience({"ambient_drone"})
         elif mission == "MISSION6":
+            _set_ambience({"ambient_drone", "wind"})
+        elif mission == "MISSION7":
             _set_ambience({"ambient_drone", "wind"})
         elif mission == "MISSION1":
             # Street band (rows 0-9): the exterior rain + wind loops. Inside, the
@@ -3738,6 +3853,13 @@ class _MissionCompleteState(GameState):
                 gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
                 gc.start_mission6(preserve_timer=True)
                 _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6"); pygame.mouse.set_visible(True)
+            elif (getattr(gc, "active_mission", "MISSION1") == "MISSION6"
+                  and hasattr(gc, "start_mission7")):
+                # M6 -> M7 chain (mirrors the M5 -> M6 idiom). No M7 intro film
+                # yet, so the player drops straight into Mission 7 gameplay.
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                gc.start_mission7(preserve_timer=True)
+                trigger_transition("GAME"); pygame.mouse.set_visible(False)
             else:
                 # MISSION5 (and anything after): back to the menu. M5
                 # completing the campaign is the W4 behavior until a later
@@ -3912,7 +4034,7 @@ class _MissionCompleteState(GameState):
             _active = getattr(gc, "active_mission", "MISSION1")
             if _active == "MISSION1":
                 next_prompt = "PRESS SPACE TO START MISSION 2"
-            elif _active == "MISSION6":
+            elif _active == "MISSION7":
                 next_prompt = "PRESS SPACE TO RETURN TO MENU"
             else:
                 next_prompt = "PRESS SPACE TO CONTINUE"

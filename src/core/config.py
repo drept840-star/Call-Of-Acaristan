@@ -110,6 +110,8 @@ SPEAKER_COLORS = {
     "RADIO": C_COMMAND,
     "MARU": C_MARU,
     "MARU (reply)": C_MARU,   # manifest label for the M4 choice follow-ups
+    "BODI": (226, 170, 98),   # M7 farmer: warm amber
+    "ALEX": (122, 198, 234),  # M7 runner: cool sky blue
     "BALACEANU": C_BALACEANU,
     "BALACEANU (PA)": C_BALACEANU,   # M3 PA broadcasts / kill-order radio
     "LOYALIST COMMS": (220, 90, 70),

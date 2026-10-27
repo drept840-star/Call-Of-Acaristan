@@ -68,6 +68,8 @@ GROUPS = [
     ("Mission 6", ["m6", "m6-game", "m6-crossing", "m6-rail", "m6-boxcar",
                    "m6-train", "m6-3d", "m6-shootout", "m6-yard",
                    "m6-heli", "m6-ending"]),
+    ("Mission 7", ["m7", "m7-arrival", "m7-chores", "m7-runner", "m7-prep",
+                   "m7-raid", "m7-finale", "m7-choice"]),
     ("Trailer bot", ["trailer-m1", "trailer-m2-killbox", "trailer-m2-evidence",
                      "trailer-m3-breakout", "trailer-m3-comms"]),
     ("Misc", ["slot-select", "audio-parade"]),

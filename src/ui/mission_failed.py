@@ -21,7 +21,11 @@ PROFILES = {
     "MISSION4": ((167, 187, 233), "THE CAPITAL", "48H CURFEW", "TRANSMITTER ARRAY", "CARRIER LOST", "tower"),
     "MISSION5": ((235, 125, 103), "THE CAPITAL", "EMERGENCY RULE", "PRINTWORKS CONTROL", "PUBLICATION HALTED", "press"),
     "MISSION6": ((225, 180, 104), "KIM KIM BORDER", "WHITEOUT", "FINAL TRANSMISSION", "SIGNAL LOST", "tower"),
+    "MISSION7": ((150, 190, 110), "VALEA SEACA HILLS", "FALLOW GROUND", "FARMHOUSE LINK", "YOU WENT DOWN", "route"),
 }
+# Mission 7 checkpoint labels by stage token (mirrors missions.m7.meta.STAGE_LABELS).
+_M7_CHECKPOINTS = {"arrival": "ARRIVAL", "chores": "CHORES", "runner": "RUNNER", "prep": "PREP",
+                   "raid": "RAID", "finale": "FINALE", "choice": "CHOICE"}
 INK = (235, 234, 225)
 MUTED = (164, 172, 177)
 ERROR = (242, 113, 101)
@@ -64,6 +68,8 @@ def _paragraph(surf, text, x, y, width, size=16, color=MUTED):
 def checkpoint_label(state):
     """Mirror restart_current_mission's deepest-checkpoint priority."""
     key = mission_meta.mission_key(state)
+    if key == "MISSION7":
+        return _M7_CHECKPOINTS.get(getattr(state, "mission7_stage", ""), "ARRIVAL")
     ladders = {
         "MISSION2": [("mission2_checkpoint_reached", "ROUTE 12 CHECKPOINT")],
         "MISSION3": [("mission3_" + part + "_checkpoint_reached", label) for part, label in
@@ -219,6 +225,8 @@ def _diagram(s, kind, a, t):
 def draw(surface, state, buttons, elapsed, now, mouse):
     key = mission_meta.mission_key(state)
     accent, location, operation, plate, status, kind = PROFILES[key]
+    if key == "MISSION7" and getattr(state, "m7_raid_active", False):
+        status = "BODI WENT DOWN"
     w, h = surface.get_size()
     train_death = (getattr(state, "m6_train_death", False)
                    or (getattr(state, "m6_train_active", False)

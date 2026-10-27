@@ -1,0 +1,46 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m7.arrival",
+ "shots": [
+  {
+   "scene": "m7_dropoff_lift",
+   "speaker": "",
+   "text": "Day 11. Dawn. Maru's helicopter sets Biribel down above Valea Seaca, and leaves.",
+   "min_ms": 4200,
+   "quiet_ui": true,
+   "lighting": [
+    18,
+    20,
+    26
+   ]
+  },
+  {
+   "scene": "m7_dropoff_field",
+   "speaker": "",
+   "text": "Mist. A boy in rubber boots at the fence, with a feed bucket.",
+   "min_ms": 4200,
+   "quiet_ui": true,
+   "lighting": [
+    18,
+    20,
+    26
+   ]
+  },
+  {
+   "scene": "m7_dropoff_fence",
+   "speaker": "BODI",
+   "text": "You're the one Maru called about. Boots off in the kitchen.",
+   "min_ms": 3600,
+   "lighting": [
+    18,
+    20,
+    26
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m7 beat 1, drop-off"
+ }
+}

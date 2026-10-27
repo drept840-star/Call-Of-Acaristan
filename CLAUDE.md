@@ -22,7 +22,8 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
 - `engine3d/` - 3D renderer: `core.py` (software), `gl.py` (ModernGL), `rig.py`, `ik.py`, `textures.py`. Use `engine3d.Renderer(...)`.
 - `missions/` - `m0` (enemy types), `m1`-`m6`, `arena.py` (multiplayer), `walking_sim.py`. Each mission package `__init__.py` is a re-export facade; load order = import order in it. Typical parts: `meta`, `maps`, `decor`, `world`, `flow`, `systems`, `draw`.
   - `missions/m6/` - Whiteout: yard (`yard3d`, `yard_brain`, `yard_dress`, `yard_hud`), `stealth`, `train3d` (last playable beat), `bloc3d/` (panel blocks, stacks, tower, Cyrillic neon), `hud3d`, `m6_audio`. The finale is cutscene-only.
-  - Missions 7 and 8 are planned only (`docs/MISSION7_PLOT.md`, `MISSION8_PLOT.md`).
+  - `missions/m7/` - Fallow Ground (all 7 beats): `farmyard` (top-down chores and prep), `raid3d` + `raid_brain` + `raid_world` + `raid_hud` (playable 3D raid), `choice` (radio choice, writes `STATE.m8_route`), `flow`/`systems`/`draw`. Films live in `cutscenes/m7*`. Notes at the end of `docs/MISSION7_PLOT.md`.
+  - Mission 8 is planned only (`docs/MISSION8_PLOT.md`).
 - `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`), shared `figure_kit.py` (cast look `SPECS`), `cast3d.py`, `post3d.py`, `weather3d.py`.
 - `core/` - legacy runtime: `state.py` (`STATE`), `game_core.py`, `camera.py`, `mapbuilder.py` (dependency-free), `artpack.py` (sprite sheet access), `save_system.py`, `settings_store.py`, `lighting.py`, `dev_jumps.py`.
 - `entities/` - player, `enemy_ai.py`, weapons, weapon rig, corpses, death anims.

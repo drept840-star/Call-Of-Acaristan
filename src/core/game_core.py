@@ -25,6 +25,7 @@ from missions import m3
 from missions import m4
 from missions import m5
 from missions import m6
+from missions import m7
 from missions import m0
 from ui import hud
 from entities import weapons
@@ -43,6 +44,7 @@ _MODULES = [
     m4,
     m5,
     m6,
+    m7,
     hud,
     weapons,
     interactions,
@@ -82,6 +84,10 @@ def _is_mission5_active():
 
 def _is_mission6_active():
     return getattr(STATE, "active_mission", "MISSION1") == "MISSION6"
+
+
+def _is_mission7_active():
+    return getattr(STATE, "active_mission", "MISSION1") == "MISSION7"
 
 
 def _is_mission0_active():
@@ -227,6 +233,15 @@ def start_mission6_train_checkpoint(preserve_timer=False):
     return _m6_checkpoint("start_mission6_train_checkpoint", preserve_timer)
 
 
+def start_mission7(preserve_timer=False):
+    return m7.start_m7(preserve_timer=preserve_timer)
+
+
+def start_mission7_stage(stage):
+    """Start Mission 7 at a stage token (see missions.m7.meta.STAGES)."""
+    return m7.start_m7(stage=stage)
+
+
 def restart_current_mission():
     """Restart whichever playable mission is currently active.
 
@@ -265,6 +280,8 @@ def restart_current_mission():
         if getattr(STATE, "mission3_breakout_checkpoint_reached", False):
             return m3.start_mission3_breakout_checkpoint(preserve_timer=False)
         return m3.start_mission3(preserve_timer=False)
+    if _is_mission7_active() and not _in_walking_sim():
+        return start_mission7_stage(getattr(STATE, "mission7_stage", None))
     if _is_mission6_active() and not _in_walking_sim():
         # Deepest reached checkpoint wins (same rule as M5).  The train is a
         # scene, not a top-down stage, but its checkpoint resumes the scene.
@@ -326,6 +343,8 @@ def game_update(keys):
             return m0.game_update(keys)
         if _is_mission5_active():
             return m5.game_update(keys)
+        if _is_mission7_active():
+            return m7.game_update(keys)
         if _is_mission6_active():
             return m6.game_update(keys)
         if _is_mission4_active():
@@ -344,6 +363,8 @@ def _active_mission_tag():
         return "m0"
     if _is_mission5_active():
         return "m5"
+    if _is_mission7_active():
+        return "m7"
     if _is_mission6_active():
         return "m6"
     if _is_mission4_active():
@@ -365,6 +386,9 @@ def game_draw(fcx, fcy):
     if not _gw.installed():
         _gw.install(STATE)
     hook = _gw.render_submit
+    if _is_mission7_active():
+        _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m7.game_draw(_cfg.screen, x, y), name="m7.game_draw", submit_hook=hook)
+        return None
     if _is_mission6_active():
         _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m6.game_draw(x, y), name="m6.game_draw", submit_hook=hook)
         return None
@@ -399,6 +423,8 @@ def game_draw(fcx, fcy):
 def handle_interact():
     if _is_mission5_active():
         return m5.handle_interact()
+    if _is_mission7_active():
+        return m7.handle_interact()
     if _is_mission6_active():
         return m6.handle_interact()
     if _is_mission4_active():
@@ -490,6 +516,8 @@ _proxy.__dict__.update({
     "start_mission6_noman_checkpoint": start_mission6_noman_checkpoint,
     "start_mission6_rail_checkpoint": start_mission6_rail_checkpoint,
     "start_mission6_train_checkpoint": start_mission6_train_checkpoint,
+    "start_mission7": start_mission7,
+    "start_mission7_stage": start_mission7_stage,
     "restart_current_mission": restart_current_mission,
     "game_update": game_update,
     "game_draw": game_draw,

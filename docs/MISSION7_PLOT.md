@@ -192,3 +192,45 @@ bright, cracks when he's scared.
   / `("alex")` (3D). Already in the cast sheet (`python tools/cast_sheet.py`).
 - **New state:** `STATE.m7_preps` (the 2 chosen preparations),
   `STATE.m8_route` (set by the choice).
+
+---
+
+## Implementation Notes (2026-10-27, branch `m7/fallow-ground`)
+
+All seven beats are playable end to end: `python acaristan.py`, or jump in with the
+`m7*` dev jumps in `core/dev_jumps.py`. The stage ladder is `arrival, chores, runner,
+prep, raid, finale, choice` (`missions/m7/meta.py`); M7 completion now takes over the
+"FULL CAMPAIGN COMPLETE" end that used to sit on M6.
+
+| Beat | Stage | Built as |
+|---|---|---|
+| 1 Drop-off | `arrival` | 3D film `m7.arrival` (`cutscenes/m7films.py`, farm builder `cutscenes/m7world3d.py`) |
+| 2 Chores | `chores` | top-down farm (`missions/m7/farmyard.py`, level `m7.farm.level.json`): generator, water, feed |
+| 3 The Runner | `runner` | 2D film `m7.runner` (`cutscenes/m7runner.py`) |
+| 4 Prep | `prep` | same farm, pick 2 of tractor / fuel shed / hayloft, stored in `STATE.m7_preps` |
+| 5 The Raid | `raid` | playable 3D scene (`raid3d.py`, `raid_brain.py`, `raid_world.py`, `raid_hud.py`) |
+| 6 Fallow Ground | `finale` | 3D film `m7.finale`, burning farm at night |
+| 7 Two Channels | `choice` | radio screen (`choice.py`), writes `STATE.m8_route`, then the `m7.outro` film |
+
+**Raid as built.** Third-person over-the-shoulder 3D scene in the shape of the M6 yard, not
+the M4 ally system: Bodi and Alex are AI allies on `engine.ai`. Three waves (orchard, trucks,
+north with the barn on fire and Alex pinned at the well). Checkpoints after wave 1 and 2 are
+reloaded inside the scene. The player dying, or Bodi staying down 20 s, reloads the last
+checkpoint. Holding E frees Alex or revives Bodi. Preps change the fight: the tractor blocks
+the track mouth, the fuel shed leaves a shootable fuel tank that explodes, and
+the hayloft gives Bodi a high ledge with sight over the yard.
+
+**Doc conflicts left for the author (nothing was changed to hide them):**
+
+- Vasile says "Tomorrow night" here. The M8 Revenge route says the meeting is "at dawn".
+  M7 text is kept; fix whichever side is wrong.
+- Vasile is "Captain" in `LORE.md` and "Commander" in this file. The game only shows `VASILE`.
+- Alex shouts "Trucks! Two of them - no, three!" (kept verbatim; the miscount is the joke).
+- The raid's time of day and start trigger are not defined in this doc. Night was chosen.
+- The choice labels follow the doc: "Answer Vasile" is `duty`, "Meet Vasile alone" is
+  `revenge`. Neither is marked as right.
+
+**Known gaps.** Bodi and Alex have no recorded takes yet: `VO_219` to `VO_227` are manifest
+rows listed in `KNOWN_MISSING_AUDIO`, and the lines show as captions. Only `progress="m7"` and
+the stage token are saved; `m7_preps` and the raid checkpoint are not, so resuming a save at
+`raid` starts the fight with no preps.

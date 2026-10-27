@@ -1,0 +1,23 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m7.outro",
+ "shots": [
+  {
+   "scene": "m7_endcard",
+   "speaker": "",
+   "text": "MISSION 7\nFALLOW GROUND",
+   "min_ms": 4200,
+   "quiet_ui": true,
+   "lighting": [
+    6,
+    8,
+    12
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m7 end card"
+ }
+}

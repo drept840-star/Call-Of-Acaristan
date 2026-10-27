@@ -97,6 +97,15 @@ DEV_JUMPS = {
     "m6-ending": ("--dev-mission6-ending", "Mission 6 ending cutscene"),
     "m6-heli": ("--dev-mission6-heli",
                 "Mission 6 ending from the helicopter finale"),
+    # ── Mission 7 ──
+    "m7": ("--dev-mission7", "Mission 7 Fallow Ground from the arrival stage"),
+    "m7-arrival": ("--dev-mission7-arrival", "Mission 7 arrival stage"),
+    "m7-chores": ("--dev-mission7-chores", "Mission 7 chores stage"),
+    "m7-runner": ("--dev-mission7-runner", "Mission 7 runner stage"),
+    "m7-prep": ("--dev-mission7-prep", "Mission 7 prep stage"),
+    "m7-raid": ("--dev-mission7-raid", "Mission 7 raid stage"),
+    "m7-finale": ("--dev-mission7-finale", "Mission 7 finale stage"),
+    "m7-choice": ("--dev-mission7-choice", "Mission 7 choice stage"),
     # ── Trailer bot takes (AI 1 choreography) ──
     "trailer-m1": ("--dev-m1",
             "Trailer Act I warehouse take (bot: breach/molotov)"),

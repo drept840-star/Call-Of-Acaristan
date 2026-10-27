@@ -1,0 +1,45 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m7.runner",
+ "shots": [
+  {
+   "scene": "m7_runner_ride",
+   "speaker": "",
+   "text": "Past noon. Something is coming up the track, much too fast.",
+   "min_ms": 4400,
+   "quiet_ui": true,
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_runner_meet",
+   "speaker": "ALEX",
+   "text": "Biribel! THE Biribel! Maru said you'd be taller.",
+   "min_ms": 3600,
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_runner_folder",
+   "speaker": "ALEX",
+   "text": "Mansion plan. Guard rotations, cameras, the lot. Don't lose it, I nearly died for it. Twice.",
+   "min_ms": 4600,
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m7 beat 3, runner"
+ }
+}

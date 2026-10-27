@@ -1,0 +1,104 @@
+"""Mission 7 - stage ladder, checkpoints and the outro handoff (skeleton).
+
+``set_stage`` records the stage on STATE and in the save slot.
+``advance_stage`` steps the ladder; past the last stage it raises
+``STATE.m7_outro`` for app.py to consume through ``take_outro_request``.
+"""
+from core.state import STATE
+from engine.core import now_ms as _now_ms
+from entities.player import Player
+
+from . import choice as _choice
+from . import farmyard as _farmyard
+from . import raid3d as _raid
+from .meta import (
+    FILM_TIMELINES, MISSION7_ID, MISSION7_KEY, MISSION7_TITLE, STAGES, STAGE_ARRIVAL,
+    STAGE_CHOICE, STAGE_RAID)
+
+
+def _save_progress(stage):
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m7", checkpoint=stage)
+    except Exception:
+        pass
+
+
+def _initialize_m7(preserve_timer=False):
+    old_start = getattr(STATE, "mission_start_time", 0)
+    _raid.abort()
+    STATE.reset()
+    STATE.active_mission = MISSION7_KEY
+    STATE.active_mission_id = MISSION7_ID
+    STATE.active_mission_title = MISSION7_TITLE
+    STATE.active_mission_operation = "FALLOW GROUND"
+    STATE.mission_start_time = (
+        old_start if (preserve_timer and old_start) else _now_ms())
+    STATE.mission_end_time = 0
+
+
+def set_stage(token):
+    STATE.mission7_stage = token
+    STATE.mission_phase = "m7_" + token
+    STATE.request_m7_cutscene = token if token in FILM_TIMELINES else None
+    _save_progress(token)
+    if token in _farmyard.FARM_STAGES:
+        _farmyard.begin(token, advance_stage)
+    elif token == STAGE_RAID:
+        STATE.m7_raid_cp = 0
+        _raid.begin()
+    elif token == STAGE_CHOICE:
+        _choice.begin(advance_stage)
+
+
+def on_raid_done(result):
+    """The raid ended (win, or a scene fault that must not lock the mission): move on."""
+    if getattr(STATE, "mission7_stage", "") == STAGE_RAID:
+        advance_stage()
+    return True
+
+
+def take_cutscene_request():
+    """Stage token of the film waiting to play, once (app.py starts it)."""
+    key = getattr(STATE, "request_m7_cutscene", None)
+    STATE.request_m7_cutscene = None
+    return key
+
+
+def on_cutscene_done(key):
+    """A stage film ended: step past its stage."""
+    if getattr(STATE, "mission7_stage", "") == key:
+        advance_stage()
+
+
+def advance_stage():
+    """Step to the next stage; the last stage requests the outro instead."""
+    stage = getattr(STATE, "mission7_stage", "") or STAGE_ARRIVAL
+    index = STAGES.index(stage)
+    if index + 1 < len(STAGES):
+        set_stage(STAGES[index + 1])
+    else:
+        STATE.m7_outro = True
+
+
+def take_outro_request() -> bool:
+    """True once after the mission finishes (app.py starts the outro)."""
+    if getattr(STATE, "m7_outro", False):
+        STATE.m7_outro = False
+        return True
+    return False
+
+
+def handle_interact():
+    if getattr(STATE, "mission7_stage", "") in _farmyard.FARM_STAGES:
+        return _farmyard.interact()
+    return False
+
+
+def start_m7(stage=None, preserve_timer=False):
+    preps = list(getattr(STATE, "m7_preps", None) or []) if stage == STAGE_RAID else []
+    _initialize_m7(preserve_timer)
+    STATE.m7_preps = preps
+    STATE.player = Player(64, 64)
+    set_stage(stage or STAGE_ARRIVAL)
+    return STATE.player

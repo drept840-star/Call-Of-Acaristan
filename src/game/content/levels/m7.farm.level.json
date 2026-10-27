@@ -1,0 +1,42 @@
+{
+ "schema": "ae.level/1",
+ "id": "m7.farm",
+ "name": "Fallow Ground",
+ "tile_size": 64,
+ "layers": {
+  "floor": [
+   "#########BBBBB#",
+   "#.HHHH...B...B#",
+   "#.HHHH...B...B#",
+   "#.HHHH...BB.BB#",
+   "#.......N...TT#",
+   "#......W......#",
+   "#........fffff#",
+   "#sss.....f....#",
+   "#....G........#",
+   "######:::######"
+  ]
+ },
+ "objects": [
+  {
+   "id": "spawn-player",
+   "kind": "spawn",
+   "tile": [
+    4,
+    4
+   ],
+   "props": {
+    "who": "player"
+   }
+  }
+ ],
+ "triggers": [],
+ "paths": [],
+ "lights": [],
+ "decor": [],
+ "procedural_decor": [],
+ "metadata": {
+  "mission": "m7.farm",
+  "solid": "#HBWGTNsf"
+ }
+}

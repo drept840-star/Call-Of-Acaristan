@@ -2797,6 +2797,7 @@ def check_fail_screen_text_per_mission():
         ("MISSION4", gc.start_mission4),
         ("MISSION5", gc.start_mission5),
         ("MISSION6", gc.start_mission6),
+        ("MISSION7", gc.start_mission7),
     ]
     for key, start in starts:
         start()
@@ -9984,6 +9985,136 @@ def check_mission6_vertical_slice():
     assert completed["checkpoint"] == ""
 
 
+def check_mission7_vertical_slice():
+    """Mission 7 delivers what the plot doc promises.
+
+    User-outcome check: the seven-stage ladder, every film scene registered,
+    the dispatch of game_update/game_draw per stage, the 3D raid (prep flags,
+    pause, death reload, win hand-off, a broken scene never strands the
+    mission), the radio choice writing m8_route, restart keeping the preps,
+    and the completion record.
+    """
+    from missions import m7
+    from missions.m7 import choice as _m7_choice
+    from missions.m7 import meta as _m7_meta
+    from missions.m7 import raid3d as _m7_raid
+    from core import save_system as _m7_save
+    from core.cutscene_registry import scene_renderer as _scene_renderer
+    from core.state import STATE
+
+    _reset_save_store()
+    _save_system.select_slot(0)
+    _save_system.start_new_campaign(0)
+
+    # ── ladder, films, voice ────────────────────────────────────────────
+    assert _m7_meta.STAGES == ("arrival", "chores", "runner", "prep",
+                               "raid", "finale", "choice")
+    for scene in _m7_meta.M7_SCENES:
+        assert _scene_renderer(scene) is not None, scene
+    for stage in _m7_meta.FILM_TIMELINES:
+        assert _m7_meta.film_shots(stage), stage
+    assert _m7_meta.outro_shots()
+
+    # ── boot through the game_core wrapper ──────────────────────────────
+    gc.start_mission7()
+    assert STATE.active_mission == "MISSION7"
+    assert STATE.active_mission_id == "MISSION_7"
+    assert STATE.mission7_stage == "arrival"
+    assert STATE.request_m7_cutscene == "arrival"
+    assert _m7_save.mission_complete_record("MISSION7", "00:01")["mission_id"] == "MISSION_7"
+    assert _m7_save.get_slot(0)["checkpoint"] == "arrival"
+    for stage in ("chores", "prep"):
+        m7.start_m7(stage)
+        assert STATE.mission7_stage == stage
+        for _ in range(6):
+            cam = m7.game_update(EmptyKeys())
+            assert isinstance(cam, tuple) and len(cam) == 2, cam
+        m7.game_draw(config.screen, 0, 0)
+        assert _m7_save.get_slot(0)["checkpoint"] == stage
+
+    # ── the 3D raid ─────────────────────────────────────────────────────
+    STATE.m7_preps = ["tractor", "loft"]
+    m7.start_m7("raid")
+    assert STATE.mission7_stage == "raid" and STATE.m7_raid_active
+    assert _m7_raid.active()
+    sc = _m7_raid.scene()
+    assert sc.flags == {"tractor": True, "shed": False, "loft": True}, sc.flags
+    assert _m7_save.get_slot(0)["checkpoint"] == "raid"
+    for _ in range(90):
+        cam = m7.game_update(EmptyKeys())
+        assert isinstance(cam, tuple) and len(cam) == 2, cam
+    assert sc.t > 1.4, "raid clock never advanced through game_update"
+    m7.game_draw(config.screen, 0, 0)
+    sc.set_paused(True)
+    t0 = sc.t
+    m7.game_update(EmptyKeys())
+    assert sc.t == t0, "pause did not freeze the raid"
+    sc.set_paused(False)
+
+    # Death reloads the phase inside the scene; the mission stays on "raid".
+    STATE.player.hp = 5
+    sc.hurt_player(40, (sc.px + 5, sc.pz))
+    assert sc.dying
+    for _ in range(300):
+        m7.game_update(EmptyKeys())
+    assert not sc.dying and sc.hp() > 0 and STATE.mission7_stage == "raid"
+
+    # A checkpoint restart rebuilds the fight and keeps the preps.
+    gc.restart_current_mission()
+    assert _m7_raid.active() and _m7_raid.scene().t < 0.1
+    assert _m7_raid.scene().flags["tractor"] and _m7_raid.scene().flags["loft"]
+
+    # Win hands off to the finale film exactly once.
+    assert _m7_raid.force_finish("win")
+    assert STATE.mission7_stage == "finale" and not _m7_raid.active()
+    assert STATE.request_m7_cutscene == "finale"
+    assert not _m7_raid.force_finish("win"), "raid hand-off double-fired"
+
+    # Exception path: a broken scene falls through to the finale, never strands.
+    m7.start_m7("raid")
+    orig_update = _m7_raid.update
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("m7 raid probe")
+    _m7_raid.update = _boom
+    try:
+        m7.game_update(EmptyKeys())
+    finally:
+        _m7_raid.update = orig_update
+    assert STATE.mission7_stage == "finale" and not _m7_raid.active()
+
+    # ── radio choice: nothing selected by default, either channel ends it
+    class _Pressed(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    for key, route in ((pygame.K_1, "duty"), (pygame.K_2, "revenge")):
+        m7.start_m7("choice")
+        STATE.m8_route = ""
+        m7.game_update(EmptyKeys())
+        _m7_choice._S["t0"] -= 60000
+        m7.game_update(EmptyKeys())
+        m7.game_update(_Pressed({pygame.K_RETURN: True}))
+        m7.game_update(EmptyKeys())
+        assert STATE.m8_route == "" and not _m7_choice._S["done_at"], \
+            "ENTER with no channel tuned must do nothing"
+        m7.game_update(_Pressed({key: True}))
+        m7.game_update(EmptyKeys())
+        m7.game_update(_Pressed({pygame.K_RETURN: True}))
+        m7.game_update(EmptyKeys())
+        assert STATE.m8_route == route, (route, STATE.m8_route)
+        m7.game_draw(config.screen, 0, 0)
+        _m7_choice._S["done_at"] -= 5000
+        m7.game_update(EmptyKeys())
+        assert m7.take_outro_request(), route
+        assert not m7.take_outro_request()
+
+    assert _save_system.save_mission_complete_record("MISSION7", "00:42")
+    completed = _save_system.get_slot(0)
+    assert completed["last_completed_mission"] == "MISSION_7"
+    assert completed["checkpoint"] == ""
+
+
 def check_m6_train_viewmodel():
     """The shoulder-cam rifle must read as a rifle, on the correct side.
 
@@ -11135,6 +11266,8 @@ def main():
 
     print("\n=== Mission 6 checks ===")
     ok = run_check("mission6_vertical_slice", check_mission6_vertical_slice) and ok
+    print("\n=== Mission 7 checks ===")
+    ok = run_check("mission7_vertical_slice", check_mission7_vertical_slice) and ok
     ok = run_check("m6_train_viewmodel", check_m6_train_viewmodel) and ok
     ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
     ok = run_check("m6_train_scope_subject", check_m6_train_scope_sees_the_target) and ok

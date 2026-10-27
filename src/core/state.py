@@ -268,6 +268,8 @@ class GameState:
         self.m6_exposure = 0.0              # seconds inside a floodlight cone
         self.m6_wave_count = 0              # alarm waves spawned this stage
         self.request_m6_cutscene = None     # "boxcar" -> app plays the mid film
+        self.request_m7_cutscene = None     # "arrival" / "finale" -> app plays the M7 stage film
+        self.m7_crate = False               # beat 2: the hidden barn crate was found
         self.m6_train_active = False
         self.m6_train_time = 0.0
         self.m6_train_result = None         # "win" | "skip" | "fallback" | "dead" | "failed"
@@ -284,6 +286,13 @@ class GameState:
         self.m5_maru_mags = []             # Maru's thrown resupply mags in flight (m5 world)
         self.m5_maru_mags_thrown_count = 0
         self.m5_outfit = "krap"            # core.outfits: "guard" once forced into the black (M5 only)
+        # ── Mission 7: Fallow Ground (skeleton) ──
+        self.mission7_stage = ""            # stage token (missions.m7.meta STAGES)
+        self.m7_preps = []                  # prep items (placeholder)
+        self.m8_route = ""                  # placeholder: M8 route set by the M7 choice
+        self.m7_raid_active = False         # the raid owns the frame
+        self.m7_raid_cp = 0                 # raid checkpoint: 0 start, 1 orchard cleared, 2 trucks cleared
+        self.m7_outro = False               # one-shot: app.py takes it via m7.take_outro_request()
         # ── Death animation (Option B - Standard) ──
         # When HP hits 0, death_anim.trigger_death() populates these and
         # death_anim.update_death_anim() advances them every frame. The
