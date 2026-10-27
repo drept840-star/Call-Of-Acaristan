@@ -244,6 +244,52 @@ class M7ChoiceTests(unittest.TestCase):
             self.assertTrue(_flow.take_outro_request(), route)
 
 
+class M7DevJumpTests(unittest.TestCase):
+    def setUp(self):
+        self._save = patch.object(_flow, "_save_progress", lambda stage: None)
+        self._save.start()
+        self.addCleanup(self._save.stop)
+        self.addCleanup(_raid.abort)
+
+    def test_raid_jump_takes_preps_and_a_checkpoint(self):
+        m7.start_m7_dev_raid(["tractor", "shed"], 2)
+        s = _raid.scene()
+        self.assertTrue(_raid.active())
+        self.assertEqual(s.flags, {"tractor": True, "shed": True, "loft": False})
+        self.assertEqual((s.cp, s.phase, s.next_wave[0]), (2, "gap", 3))
+
+    def test_raid_jump_clamps_the_checkpoint(self):
+        m7.start_m7_dev_raid((), 9)
+        self.assertEqual(_raid.scene().cp, 2)
+        m7.start_m7_dev_raid((), 0)
+        self.assertEqual((_raid.scene().cp, _raid.scene().phase), (0, "intro"))
+
+    def test_outro_jump_requests_the_film_with_a_route(self):
+        m7.start_m7_dev_outro()
+        self.assertEqual(STATE.m8_route, "duty")
+        self.assertTrue(_flow.take_outro_request())
+
+    def test_every_m7_jump_flag_has_an_app_branch(self):
+        from pathlib import Path
+        from core.dev_jumps import DEV_JUMPS
+        app_src = (Path(__file__).resolve().parents[2] / "src" / "app.py").read_text(
+            encoding="utf-8")
+        for name, (flag, _desc) in DEV_JUMPS.items():
+            if name.startswith("m7"):
+                self.assertIn('"%s"' % flag, app_src, name)
+
+    def test_every_gc_m7_call_in_app_resolves_through_the_proxy(self):
+        import re
+        from pathlib import Path
+        from core import game_core as gc
+        app_src = (Path(__file__).resolve().parents[2] / "src" / "app.py").read_text(
+            encoding="utf-8")
+        names = set(re.findall(r"\bgc\.(start_mission7\w*)", app_src))
+        self.assertTrue(names)
+        for name in names:
+            self.assertTrue(callable(getattr(gc, name)), name)
+
+
 class M7VoiceTests(unittest.TestCase):
     BODI_ALEX = {
         "VO_219": ("BODI", "You're the one Maru called about. Boots off in the kitchen."),

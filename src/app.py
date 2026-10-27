@@ -1712,7 +1712,7 @@ def _apply_dev_args():
                    if isinstance(s, dict) and s.get("scene") == "m6_helicopter"), 0)
         _start_m6_cutscene(_shots[_i:], "MISSION6_COMPLETE"); pygame.mouse.set_visible(True)
     elif "--dev-mission7" in args or "--m7" in args:
-        # Mission 7 placeholder: no intro film yet, straight into gameplay.
+        # Mission 7 from the top: the arrival film, then the chores.
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         gc.start_mission7(preserve_timer=True)
         gsm.transition("GAME"); pygame.mouse.set_visible(False)
@@ -1733,9 +1733,20 @@ def _apply_dev_args():
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         gc.start_mission7_stage("prep")
         gsm.transition("GAME"); pygame.mouse.set_visible(False)
-    elif "--dev-mission7-raid" in args:
+    elif ("--dev-mission7-raid" in args or "--dev-mission7-raid-prepped" in args
+          or "--dev-mission7-raid-w2" in args or "--dev-mission7-raid-w3" in args):
+        # Raid jumps. The plain one takes --m7-preps=tractor,shed,loft and --m7-cp=1|2.
+        _o = dict(a[2:].split("=", 1) for a in raw if a.startswith("--m7-") and "=" in a)
+        _preps = [p for p in _o.get("m7-preps", "").split(",") if p]
+        _cp = int(_o["m7-cp"]) if _o.get("m7-cp", "").isdigit() else 0
+        if "--dev-mission7-raid-prepped" in args:
+            _preps = ["tractor", "shed", "loft"]
+        elif "--dev-mission7-raid-w2" in args:
+            _cp = 1
+        elif "--dev-mission7-raid-w3" in args:
+            _cp = 2
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
-        gc.start_mission7_stage("raid")
+        gc.start_mission7_raid(_preps, _cp)
         gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-mission7-finale" in args:
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
@@ -1744,6 +1755,10 @@ def _apply_dev_args():
     elif "--dev-mission7-choice" in args:
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         gc.start_mission7_stage("choice")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif "--dev-mission7-outro" in args:
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        gc.start_mission7_outro()
         gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-slot-select" in args:
         # Dev/screenshot jump: open the save-slot screen directly (skips

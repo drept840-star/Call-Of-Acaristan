@@ -242,6 +242,16 @@ def start_mission7_stage(stage):
     return m7.start_m7(stage=stage)
 
 
+def start_mission7_raid(preps=(), cp=0):
+    """Dev jump into the Mission 7 raid with preps and an optional wave checkpoint."""
+    return m7.start_m7_dev_raid(preps, cp)
+
+
+def start_mission7_outro():
+    """Dev jump straight to the Mission 7 outro film."""
+    return m7.start_m7_dev_outro()
+
+
 def restart_current_mission():
     """Restart whichever playable mission is currently active.
 
@@ -518,6 +528,8 @@ _proxy.__dict__.update({
     "start_mission6_train_checkpoint": start_mission6_train_checkpoint,
     "start_mission7": start_mission7,
     "start_mission7_stage": start_mission7_stage,
+    "start_mission7_raid": start_mission7_raid,
+    "start_mission7_outro": start_mission7_outro,
     "restart_current_mission": restart_current_mission,
     "game_update": game_update,
     "game_draw": game_draw,

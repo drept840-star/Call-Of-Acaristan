@@ -102,3 +102,22 @@ def start_m7(stage=None, preserve_timer=False):
     STATE.player = Player(64, 64)
     set_stage(stage or STAGE_ARRIVAL)
     return STATE.player
+
+
+def start_m7_dev_raid(preps=(), cp=0):
+    """Dev jump: the raid with the given preps, optionally already past wave ``cp`` (1 or 2)."""
+    STATE.m7_preps = list(preps)
+    player = start_m7(STAGE_RAID)
+    cp = max(0, min(2, int(cp)))
+    if cp:
+        STATE.m7_raid_cp = cp
+        _raid.begin()
+    return player
+
+
+def start_m7_dev_outro():
+    """Dev jump: skip the radio and play the outro film (the route defaults to duty)."""
+    player = start_m7(STAGE_CHOICE)
+    STATE.m8_route = STATE.m8_route or "duty"
+    STATE.m7_outro = True
+    return player

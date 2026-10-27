@@ -202,6 +202,12 @@ All seven beats are playable end to end: `python acaristan.py`, or jump in with 
 prep, raid, finale, choice` (`missions/m7/meta.py`); M7 completion now takes over the
 "FULL CAMPAIGN COMPLETE" end that used to sit on M6.
 
+Dev jumps (run from the repo root; `python acaristan.py --list-jumps` prints them all, and
+`tools/dev_panel.py` lists them under "Mission 7"): `--jump m7`, `m7-arrival`, `m7-chores`,
+`m7-runner`, `m7-prep`, `m7-raid`, `m7-raid-prepped` (all three preps), `m7-raid-w2` and
+`m7-raid-w3` (raid checkpoints 1 and 2), `m7-finale`, `m7-choice` and `m7-outro`. The plain
+`m7-raid` jump also reads `--m7-preps=tractor,shed,loft` and `--m7-cp=1|2`.
+
 | Beat | Stage | Built as |
 |---|---|---|
 | 1 Drop-off | `arrival` | 3D film `m7.arrival` (`cutscenes/m7films.py`, farm builder `cutscenes/m7world3d.py`) |
