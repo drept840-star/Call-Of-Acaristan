@@ -158,7 +158,7 @@
    "files": {
     "0": {
      "file": "inspect_art_0.png",
-     "pixels": "87ad81de553bd9eae6e80588981d109b92681b13b4fc6bed20e4eaccc3af5c9b",
+     "pixels": "1f5d6c5355ebb3453a7dc572a4dd8e555584f3136300b410717bb7448e4e4b4a",
      "size": [
       1300,
       910
@@ -198,7 +198,7 @@
     },
     "5": {
      "file": "inspect_art_5.png",
-     "pixels": "25cdd15c0d15c750d759a401414305882ec29957db49835ec1004dfbb2574fc9",
+     "pixels": "37d5566e2f85dd8fd721fe3efdcdcc119e9d43b22ae2c011e661e50f2faea159",
      "size": [
       1300,
       910
@@ -309,10 +309,34 @@
       25,
       47
      ]
+    },
+    "6": {
+     "file": "mag_icon_6.png",
+     "pixels": "eada235196b009280de788eea78f9927bf7ab72f40a7faa8982b8d5e86e41cab",
+     "size": [
+      26,
+      55
+     ]
+    },
+    "7": {
+     "file": "mag_icon_7.png",
+     "pixels": "4e91e209610ad1a672d63acc3b1c6b1c6413727c044f117214e4dd25150a7a17",
+     "size": [
+      26,
+      55
+     ]
+    },
+    "8": {
+     "file": "mag_icon_8.png",
+     "pixels": "db1b0683c0389b3d68b59a67e09e594bb0cd20c05cfbd97498f8326bb9ad0e11",
+     "size": [
+      26,
+      55
+     ]
     }
    },
-   "source": "957478e81c6a2011d84af8a7538f4c95619d1669ef3b0a84f3ef89f3de63b819",
-   "variants": 6
+   "source": "69faef8424c0efc0b4d9b1700cbb5b2fa69bdf0b9fc400d395fc49cc67ca6ab5",
+   "variants": 9
   },
   "m5/maru": {
    "files": {
@@ -1048,7 +1072,7 @@
    "files": {
     "0": {
      "file": "tram_wreck_0.png",
-     "pixels": "4d197637e8071f87758d257404e412f5777c0d5e27ec5fa3e717c601f5138780",
+     "pixels": "552c62109089ca56dcd762d8a3c1d6abd8fc3b5940c85049443ca96aeaa9e9d3",
      "size": [
       297,
       115

@@ -8534,7 +8534,7 @@ def check_mission5_sprites():
             else:
                 assert pygame.mask.from_surface(got).count() > 0, (name, v, "empty sprite")
             n += 1
-    assert n == sum(reg.variants(a) for a in reg.ids("m5")) == 125, n
+    assert n == sum(reg.variants(a) for a in reg.ids("m5")) == 128, n
     assert reg.stats["placeholder"] == 0 and reg.stats["fallback"] == 0, reg.stats
     # the shim and the owner are the same objects (A-008)
     import art.m5 as shim
