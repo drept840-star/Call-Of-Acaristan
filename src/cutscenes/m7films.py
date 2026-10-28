@@ -110,8 +110,10 @@ def _burn(t, eye, tgt, fov, seed, grow=1.0, fall=0.0, boost=0.0, hh=0.008, extra
 
 def _bodi_seated(r, t, face_to, **kw):
     yaw = _face(F.SEAT_BURN, face_to)
-    pos = (F.SEAT_BURN[0], F.SEAT_BURN[1] - 0.05, F.SEAT_BURN[2])
-    _w.actor(r, _BODI, F.sit_pose(**kw), pos, yaw, t, seed=61, amp=0.20, rifle_on=True,
+    # Soles on the footplate; the leg solve rests the thighs on the cushion.
+    pos = (F.SEAT_BURN[0], F.SEAT_BURN[1] - F.SEAT_H, F.SEAT_BURN[2])
+    pose = _w.sit_pose(_w.hum(_BODI), F.SEAT_H, F.sit_pose(**kw))
+    _w.actor(r, _BODI, pose, pos, yaw, t, seed=61, amp=0.20, rifle_on=True,
              expression="neutral")
 
 

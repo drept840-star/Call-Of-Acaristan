@@ -79,6 +79,8 @@ TRACTOR_AT = {False: (-16.0, -3.0), True: (2.0, -3.0)}
 TRACTOR_YAW = {False: -90, True: -54}
 # World position of the tractor seat in the burning look (Bodi sits here).
 SEAT_BURN = (1.62, 1.51, -3.53)
+# Seat top above the footplate (tractor_m7 mesh: cushion top 1.51, deck 1.03).
+SEAT_H = 0.48
 
 LOOKS = {
     "dawn": dict(

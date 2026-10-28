@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-28T23:01:45.138Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-28T23:18:58.818Z
 > Files: 481 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
@@ -141,10 +141,10 @@
 - `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38648 tok)
 - `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~6413 tok)
 - `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31888 tok)
-- `m7films.py` — Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6) (~2734 tok)
+- `m7films.py` — Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6) (~3194 tok)
 - `m7palette3d.py` — The 2D top-down M7 farm palette, for the 3D farm (raid and films). (~846 tok)
 - `m7runner.py` — Mission 7 beat 3: Alex rides in with the mansion plan (2D cutscene scenes). (~4971 tok)
-- `m7world3d.py` — Mission 7 farm: one shared 3D builder for the drop-off and finale films and (~23961 tok)
+- `m7world3d.py` — Mission 7 farm: one shared 3D builder for the drop-off and finale films and (~25906 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
 - `ps2mat.py` — ps2mat.py - PS2 pixel textures for sets authored in flat colour. (~1125 tok)
