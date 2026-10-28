@@ -9,7 +9,7 @@ camera.  Layout (metres, yard centre at the origin):
     shed    (-11, -9)   fuel shed, tank on a stand
     well    (  1,  4)
     track   x -3..3, runs south from the yard mouth at z -16 to z -90
-    orchard x 24..44, z -10..20 (east of the yard)
+    orchard x 26..41, z -8..16 (east of the yard); the old orchard x 52..73
     field   x -64..-26, z -12..34 (stubble; the helicopter lands here)
 
 Looks: "dawn" (cold mist), "night" (dark), "burn" (night, barn and house burning).
@@ -18,7 +18,7 @@ import math
 
 import pygame
 
-from engine3d.core import Light, Mesh, box, prism, quad_xz, rot_y, rot_z
+from engine3d.core import Light, Mesh, box, prism, quad_xz, rot_x, rot_y, rot_z
 from engine3d.rig import POSES
 from engine3d.textures import Tex, tex
 from cutscenes import m6fx3d as _fx
@@ -142,15 +142,20 @@ def _gable_z(w, d, y0, rise, roof, wall, oh=0.3, slopes=("l", "r")):
     return m
 
 
-def _bipyr(cx, cy, cz, r, up, dn, col, col2=None, n=6):
+def _bipyr(cx, cy, cz, r, up, dn, col, col2=None, n=6, moon=False):
+    """Bipyramid.  ``moon``: side faces turned toward the raid moon get a +12 shade."""
     m = Mesh()
     ring = [(cx + r * math.cos(2 * math.pi * i / n),
              cy, cz + r * math.sin(2 * math.pi * i / n)) for i in range(n)]
     top, bot = (cx, cy + up, cz), (cx, cy - dn, cz)
     for i in range(n):
         a, b = ring[i], ring[(i + 1) % n]
-        m.face([a, b, top], col, 2, True)
-        m.face([b, a, bot], col2 or _v(col, -22), 2, True)
+        k = 0
+        if moon:
+            ang = 2 * math.pi * (i + 0.5) / n
+            k = 12 if math.cos(ang) * -0.504 + math.sin(ang) * -0.864 > 0.2 else 0
+        m.face([a, b, top], _v(col, k), 2, True)
+        m.face([b, a, bot], _v(col2 or _v(col, -22), k), 2, True)
     return m
 
 
@@ -208,18 +213,50 @@ def _hill_h(a, ring=0):
 
 
 def hills():
+    """Faceted hills with a valley opening along the southern road."""
     m = Mesh()
     n = 60
+    south = 1.5 * math.pi
+    cut = math.radians(5.0)
+    shoulder = math.radians(14.0)
+
     for ring, col in enumerate((HILL_N, HILL_F)):
         rad = HILL_RAD[ring]
-        pts = []
-        for i in range(n + 1):
-            a = 2 * math.pi * i / n
-            pts.append((rad * math.cos(a), rad * math.sin(a), _hill_h(a, ring)))
-        for i in range(n):
-            (x0, z0, h0), (x1, z1, h1) = pts[i], pts[i + 1]
-            m.face([(x0, -1, z0), (x1, -1, z1), (x1, h1, z1), (x0, h0, z0)],
-                   col, 0, True)
+
+        # Add exact vertices at the edges of the road opening.
+        angles = [math.tau * i / n for i in range(n + 1)]
+        angles.extend((south - cut, south + cut))
+        angles.sort()
+
+        rows = []
+        for a in angles:
+            da = abs((a - south + math.pi) % math.tau - math.pi)
+            u = max(0.0, min(1.0, (da - cut) / (shoulder - cut)))
+            u = u * u * (3.0 - 2.0 * u)
+
+            h = _hill_h(a, ring) * u
+            c, s = math.cos(a), math.sin(a)
+            rows.append((
+                ((rad - 9.0) * c, -0.5, (rad - 9.0) * s),
+                ((rad - 4.0) * c, h * 0.43, (rad - 4.0) * s),
+                (rad * c, h, rad * s),
+            ))
+
+        for i in range(len(angles) - 1):
+            a = (angles[i] + angles[i + 1]) * 0.5
+            da = abs((a - south + math.pi) % math.tau - math.pi)
+            if da < cut:
+                continue
+
+            lo0, mid0, top0 = rows[i]
+            lo1, mid1, top1 = rows[i + 1]
+            shade = (((i * 73) ^ (i * 131 + ring * 17)) & 7) - 3
+
+            m.face([lo0, lo1, mid1], _v(col, shade - 3), 0, True)
+            m.face([lo0, mid1, mid0], _v(col, shade - 1), 0, True)
+            m.face([mid0, mid1, top1], _v(col, shade + 1), 0, True)
+            m.face([mid0, top1, top0], _v(col, shade + 3), 0, True)
+
     return m
 
 
@@ -360,11 +397,77 @@ def tree(seed=0):
 
 def orchard():
     m = Mesh()
+    bark = _t("bark", TRUNK)
+    soil = _t("dirt", FURROW)
+    root_soil = _v(soil, -8)
+    furrow = _t("furrow", P.TRACK_D)
+    leaf = _t("leaf", LEAF)
     i = 0
+
     for x in (26, 31, 36, 41):
+        m.add(quad_xz(
+            x - 1.35, -10, x + 1.35, 19, 0.028,
+            soil, layer=1, seg=6))
+
+        # Narrow worked edges make the planting rows read at a distance.
+        for dx in (-1.0, 1.0):
+            m.add(quad_xz(
+                x + dx - 0.08, -10, x + dx + 0.08, 19, 0.033,
+                furrow, layer=1, seg=3))
+
         for z in (-8, -2, 4, 10, 16):
-            m.add(tree(i), t=(x + ((i * 13) % 5) * 0.2 - 0.4, 0, z + ((i * 7) % 5) * 0.2 - 0.4))
+            # Must remain identical to raid_world._orchard().
+            tx = x + ((i * 13) % 5) * 0.2 - 0.4
+            tz = z + ((i * 7) % 5) * 0.2 - 0.4
+            s = 0.90 + 0.04 * ((i * 37) % 7)
+
+            m.add(quad_xz(
+                tx - 0.38, tz - 0.38, tx + 0.38, tz + 0.38, 0.036,
+                root_soil, layer=1, seg=1))
+
+            t = Mesh()
+            t.add(box(0.26, 1.7, 0.26, bark, center=(0, 0.85, 0)))
+
+            # Forked branches show beneath the pruned crowns.
+            for side in (-1, 1):
+                t.add(
+                    box(0.10, 0.82, 0.10, bark),
+                    rot_z(-side * 38),
+                    t=(side * 0.25, 1.96, 0))
+
+            crown = _v(leaf, (i % 5 - 2) * 5)
+            t.add(_bipyr(
+                0, 2.50, 0, 1.30 * s, 0.95 * s, 0.80,
+                crown, n=6))
+            t.add(_bipyr(
+                0.50 * s, 2.90, 0.12 * s,
+                0.82 * s, 0.72 * s, 0.60,
+                _v(crown, 8), n=5))
+            t.add(_bipyr(
+                -0.47 * s, 2.75, -0.10 * s,
+                0.75 * s, 0.64 * s, 0.55,
+                _v(crown, -7), n=5))
+
+            # Fruit sits on the flat north and south faces of some crowns.
+            if i % 3 == 0:
+                for side in (-1, 1):
+                    for fx in (-0.42, 0.42):
+                        fruit = (180, 74, 40) if (i + side) % 2 else (196, 98, 45)
+                        t.add(box(
+                            0.12, 0.12, 0.12, fruit,
+                            center=(fx * s, 2.50, side * 1.14 * s)))
+
+            m.add(t, rot_y((i * 47) % 360), t=(tx, 0, tz))
             i += 1
+
+    # East-west access lane and turning headland.
+    m.add(quad_xz(
+        18, -1.15, 48, 1.15, 0.055,
+        _t("track", TRACK), layer=1, seg=8))
+    m.add(quad_xz(
+        43.7, -10, 46.5, 20, 0.038,
+        _t("track", TRACK), layer=1, seg=6))
+
     return m
 
 
@@ -639,6 +742,735 @@ def mist_ring():
     return m
 
 
+def _shelter_tree(seed=0):
+    """Taller windbreak trees; distinct from the small orchard trees."""
+    m = Mesh()
+    s = 0.90 + 0.09 * (seed % 5)
+    bark = _t("bark", TRUNK)
+    leaf = _t("leaf", _v(LEAF, (seed % 3 - 1) * 6))
+
+    m.add(box(0.34, 3.2 * s, 0.34, bark,
+              center=(0, 1.6 * s, 0)))
+
+    if seed % 4 == 0:
+        # Narrow poplar-like silhouette.
+        m.add(_bipyr(
+            0, 4.7 * s, 0,
+            1.05 * s, 3.0 * s, 2.1 * s,
+            leaf, n=5))
+    else:
+        # Offset crowns avoid a repeated row of identical diamonds.
+        m.add(_bipyr(
+            -0.40 * s, 4.1 * s, 0,
+            2.0 * s, 1.9 * s, 1.2 * s,
+            leaf, n=6))
+        m.add(_bipyr(
+            0.70 * s, 5.0 * s, 0.25 * s,
+            1.55 * s, 1.4 * s, 0.9 * s,
+            _v(leaf, 8), n=5))
+    return m
+
+
+def _hedgerow(x0, z0, x1, z1, seed=0):
+    """Faceted earth bank with an uneven, hard-edged hedge on top."""
+    m = Mesh()
+    dx, dz = x1 - x0, z1 - z0
+    length = math.hypot(dx, dz)
+    if length < 0.01:
+        return m
+
+    nx, nz = -dz / length, dx / length
+    width, crest = 1.10, 0.42
+    grass = _t("grass", GRASS)
+    leaf = _t("leaf", _v(LEAF, (seed % 3 - 1) * 5))
+
+    a0 = (x0 + nx * width, 0.025, z0 + nz * width)
+    a1 = (x1 + nx * width, 0.025, z1 + nz * width)
+    b0 = (x0 - nx * width, 0.025, z0 - nz * width)
+    b1 = (x1 - nx * width, 0.025, z1 - nz * width)
+    r0, r1 = (x0, crest, z0), (x1, crest, z1)
+
+    m.face([a0, a1, r1, r0], grass, 2, True)
+    m.face([r0, r1, b1, b0], _v(grass, -8), 2, True)
+    m.face([b0, a0, r0], grass, 2, True)
+    m.face([a1, b1, r1], grass, 2, True)
+
+    n = max(2, int(length / 1.7))
+    for i in range(n):
+        u = (i + 0.5) / n
+        h = (i * 37 + seed * 19) % 17
+        sideways = (h % 5 - 2) * 0.09
+        x = x0 + dx * u + nx * sideways
+        z = z0 + dz * u + nz * sideways
+        cy = 0.98 + 0.05 * (h % 3)
+
+        m.add(_bipyr(
+            x, cy, z,
+            0.85 + 0.08 * (h % 4),
+            0.72 + 0.10 * (h % 5),
+            cy - 0.40,
+            _v(leaf, (h % 3 - 1) * 5),
+            n=5))
+    return m
+
+
+def outer_dressing():
+    """Working landscape around the farm, clear of the main approaches."""
+    m = Mesh()
+    track = _t("track", TRACK)
+    loam = _t("dirt", FURROW)
+    stone = _t("stone", STONE)
+    plank = _t("plank", WOOD)
+
+    # --- North: a working lane between divided fields ---------------------
+
+    # Continues through the existing north fence opening.
+    m.add(quad_xz(
+        -1.4, 22, 1.4, 70, 0.035,
+        track, layer=1, seg=10))
+
+    # Broad cultivated strips, rather than tiny ground-colour noise.
+    # All are north of the helicopter field.
+    for x in (-46, -41, -36, -31, 11, 16, 21):
+        m.add(quad_xz(
+            x, 40, x + 2.1, 56, 0.026,
+            _t("furrow", P.TRACK_D), layer=1, seg=4))
+
+    hedge_runs = (
+        # Rear paddocks: retain the generous central approach.
+        (-27, 36, -10, 36),
+        (10, 36, 27, 36),
+        (-58, 57, -11, 59),
+        (11, 59, 58, 56),
+
+        # Orchard boundary: leave the east approach open around z=0.
+        (48, -17, 48, -5),
+        (48, 5, 48, 25),
+
+        # Roadside hedges, interrupted by field entrances.
+        (-9.5, -80, -9.5, -61),
+        (-9.5, -48, -9.5, -29),
+        (9, -79, 9, -58),
+    )
+    for i, run in enumerate(hedge_runs):
+        m.add(_hedgerow(*run, seed=20 + i))
+
+    # Uneven groves, not another evenly spaced tree grid.
+    tree_sites = (
+        # Behind the farm.
+        (-27, 39), (-24, 42), (-20, 38), (-16, 43), (-11, 40),
+        (11, 41), (15, 38), (20, 43), (25, 40), (31, 44),
+
+        # Beyond the orchard.
+        (51, -13), (55, -10), (52, 12),
+        (56, 17), (51, 27), (57, 29),
+
+        # Along the valley road.
+        (-13, -38), (-16, -43), (-12, -63), (-16, -68),
+        (13, -50), (17, -54), (12, -73), (16, -78),
+    )
+    for i, (x, z) in enumerate(tree_sites):
+        m.add(_shelter_tree(i), rot_y((i * 57) % 360),
+              t=(x, 0, z))
+
+    # A modest equipment store gives the rear landscape a purpose.
+    store = Mesh()
+    boards = _t("plank", P.WOOD_GREY)
+    store.add(box(5.0, 2.4, 3.6, boards, center=(0, 1.2, 0)))
+    store.add(_gable_z(
+        5.0, 3.6, 2.4, 0.9,
+        _t("tin", ROOF_METAL), boards))
+    store.add(box(
+        1.5, 1.9, 0.08, _t("plank", WOOD_D),
+        center=(0, 0.95, -1.84)))
+    m.add(store, t=(32, 0, 34))
+
+    m.add(hay(6), t=(-20, 0, 30))
+    m.add(hay(4), t=(28, 0, 24.6))
+
+    # Picking crates beyond the orchard's eastern turning headland.
+    for i in range(4):
+        m.add(box(
+            0.75, 0.55, 0.65, _v(plank, (i % 3 - 1) * 8),
+            center=(45.8 + 0.85 * (i % 2),
+                    0.275,
+                    13.0 + 0.85 * (i // 2))))
+
+    # --- South: a used road with shoulders and drainage -------------------
+
+    # Wheel ruts over the existing track surface.
+    for x in (-1.10, 1.10):
+        m.add(quad_xz(
+            x - 0.25, -92, x + 0.25, -27, 0.052,
+            _t("dirt", P.TRACK_D), layer=1, seg=12))
+
+    # Broken grass growing between the ruts.
+    for z in range(-87, -31, 9):
+        m.add(quad_xz(
+            -0.28, z, 0.28, z + 5, 0.055,
+            _t("grass", GRASS), layer=1, seg=1))
+
+    # Dark drainage strips sit outside the usable road.
+    for x0, x1 in ((-5.5, -4.2), (4.2, 5.5)):
+        m.add(quad_xz(
+            x0, -82, x1, -29, 0.025,
+            loam, layer=1, seg=9))
+
+    # Culvert headwalls: masonry at the shoulders, not across the lane.
+    for x in (-4.7, 4.7):
+        m.add(box(
+            1.1, 0.52, 1.9, stone,
+            center=(x, 0.26, -36)))
+        m.add(box(
+            1.25, 0.12, 2.1, P.STONE_D,
+            center=(x, 0.58, -36)))
+        m.add(box(
+            0.55, 0.24, 0.025, WOOD_D,
+            center=(x, 0.22, -36.965)))
+
+    # Sparse pale marker bands make the approach readable at night.
+    for z in (-31, -46, -63, -77):
+        m.add(box(
+            0.15, 0.65, 0.15, WOOD_D,
+            center=(4.0, 0.325, z)))
+        m.add(box(
+            0.20, 0.12, 0.20, TRIM,
+            center=(4.0, 0.49, z)))
+
+    return m
+
+
+def _landscape_water_tower():
+    """A distant, timber-framed landmark behind the western fields."""
+    m = Mesh()
+    wood = _t("plank", WOOD_D)
+    tank = _t("plank", P.WOOD_GREY)
+    tin = _t("tin", ROOF_METAL)
+
+    for x in (-1.2, 1.2):
+        for z in (-1.2, 1.2):
+            m.add(box(0.18, 6.5, 0.18, wood, center=(x, 3.25, z)))
+
+    m.add(box(3.5, 0.18, 3.5, wood, center=(0, 6.5, 0)))
+
+    # Cross-bracing on all four sides.
+    braces = Mesh()
+    length = math.hypot(2.4, 4.8)
+    angle = math.degrees(math.atan2(2.4, 4.8))
+    for z in (-1.2, 1.2):
+        for a in (-angle, angle):
+            braces.add(
+                box(0.11, length, 0.11, wood),
+                rot_z(a), t=(0, 3.55, z))
+    m.add(braces)
+    m.add(braces, rot_y(90))
+
+    n = 8
+    ring = [
+        (1.55 * math.cos(math.tau * i / n),
+         1.55 * math.sin(math.tau * i / n))
+        for i in range(n)
+    ]
+    for i in range(n):
+        x0, z0 = ring[i]
+        x1, z1 = ring[(i + 1) % n]
+
+        m.face([
+            (x0, 6.6, z0), (x1, 6.6, z1),
+            (x1, 9.7, z1), (x0, 9.7, z0),
+        ], _v(tank, 4 if i % 2 else -3), 2, True)
+
+        m.face([
+            (x0, 9.7, z0), (x1, 9.7, z1), (0, 10.7, 0),
+        ], _v(tin, 5 if i % 2 else -5), 2, True)
+
+        for y in (6.85, 9.45):
+            m.face([
+                (x0 * 1.01, y, z0 * 1.01),
+                (x1 * 1.01, y, z1 * 1.01),
+                (x1 * 1.01, y + 0.06, z1 * 1.01),
+                (x0 * 1.01, y + 0.06, z0 * 1.01),
+            ], METAL, 2, True)
+
+    return m
+
+
+def _landscape_hut(lit):
+    """A small occupied field hut, visible between the windbreak trees."""
+    m = Mesh()
+    w, d, h = 4.4, 3.2, 2.2
+    boards = _t("plank", P.WOOD_GREY)
+    stone = _t("stone", P.STONE_D)
+
+    m.add(box(w, h, d, boards, center=(0, h / 2.0, 0)))
+    m.add(box(w + 0.1, 0.22, d + 0.1, stone, center=(0, 0.11, 0)))
+    m.add(_gable_z(w, d, h, 0.9, _t("tin", ROOF_METAL), boards))
+    m.add(box(0.35, 0.8, 0.35, stone, center=(1.3, 2.85, 0.3)))
+
+    zf = -d / 2.0 - 0.03
+    m.add(box(0.85, 1.8, 0.08, _t("plank", WOOD_D),
+              center=(-0.9, 0.9, zf)))
+    m.add(box(0.85, 0.7, 0.06, TRIM, center=(0.9, 1.3, zf)))
+    m.add(box(0.65, 0.5, 0.08, WIN_LIT if lit else WIN,
+              center=(0.9, 1.3, zf - 0.02), emissive=lit))
+    return m
+
+
+def landscape_dressing(look):
+    """Static background depth, kept clear of the raid approaches and landing field."""
+    m = Mesh()
+
+    # Large, quiet colour shapes behind the farm. Existing furrows and the
+    # north footpath sit slightly higher and remain visible.
+    patches = (
+        (-70, 35, -49, 56, "stubble", P.HAY_DD),
+        (-48, 35, -28, 56, "grass", P.GRASS_DRY),
+        (-24, 37, -4, 57, "grass", P.GRASS_DRY),
+        (4, 37, 20, 57, "stubble", P.HAY_D),
+        (26, 38, 44, 60, "stubble", P.HAY_DD),
+        (45, 36, 64, 58, "grass", P.GRASS_DRY),
+        (-55, 62, -8, 70, "stubble", P.HAY_DD),
+        (8, 62, 54, 70, "grass", P.GRASS_D),
+        (-70, -90, -15, -54, "grass", P.GRASS_DRY),
+        (15, -90, 70, -54, "stubble", P.HAY_DD),
+    )
+    for x0, z0, x1, z1, name, col in patches:
+        m.add(quad_xz(
+            x0, z0, x1, z1, 0.020,
+            _t(name, col), layer=1, seg=4))
+
+    furrow = _t("furrow", P.TRACK_D)
+    for x in (-67, -64, -61, -58, -55, -52):
+        m.add(quad_xz(x, 37, x + 0.32, 54, 0.031,
+                      furrow, layer=1, seg=2))
+    for z in (40, 43, 46, 49, 52, 55, 58):
+        m.add(quad_xz(27, z, 43, z + 0.32, 0.031,
+                      furrow, layer=1, seg=2))
+
+    # Continue the orchard access lane beyond the playable orchard.
+    track = _t("track", TRACK)
+    m.add(quad_xz(48, -1.15, 72, 1.15, 0.055,
+                  track, layer=1, seg=4))
+    for z in (-0.5, 0.5):
+        m.add(quad_xz(21, z - 0.09, 72, z + 0.09, 0.060,
+                      _t("dirt", P.TRACK_D), layer=1, seg=6))
+
+    # Broken verge strips frame the truck road without narrowing it.
+    for z0, z1 in ((-96, -86), (-80, -68), (-61, -50), (-43, -29)):
+        for x0, x1 in ((-4.1, -3.3), (3.3, 4.1)):
+            m.add(quad_xz(x0, z0, x1, z1, 0.020,
+                          _t("grass", P.GRASS_DRY), layer=1, seg=3))
+
+    # An uneven second windbreak gives the orchard and rear fields depth.
+    sites = (
+        (-66, 44), (-62, 52), (-57, 60), (-47, 62),
+        (-39, 65), (-31, 66), (-22, 64), (-13, 65),
+        (12, 65), (21, 66), (30, 65), (40, 62),
+        (49, 59), (57, 52),
+        (60, -23), (65, -16), (68, -10),
+        (69, 10), (65, 17), (63, 24), (59, 33), (57, 40),
+        (-16, -86), (-19, -80), (16, -87), (19, -81),
+    )
+    for i, (x, z) in enumerate(sites):
+        m.add(_shelter_tree(200 + i * 7),
+              rot_y((i * 61) % 360), t=(x, 0, z))
+
+    # Farm silhouettes between the foreground buildings and the village.
+    m.add(_landscape_water_tower(), t=(-32, 0, 53))
+    m.add(_landscape_hut(look != "dawn"), t=(-53, 0, 51))
+
+    for i, (x, z) in enumerate((
+            (-61, 41), (-52, 45), (-42, 51), (-17, 51),
+            (18, 49), (38, 52), (58, 44))):
+        m.add(hay(1), rot_y((i * 37) % 180), t=(x, 0, z))
+
+    m.add(_fence(-45, 46, -35, 46, h=0.9, every=3.5, col=P.WOOD_GREY))
+    m.add(_fence(30, 46, 42, 46, h=0.9, every=3.5, col=P.WOOD_GREY))
+
+    # Roadside reflectors and an old direction board, outside the road width.
+    for z in (-39, -55, -71, -87):
+        m.add(box(0.15, 0.85, 0.15, WOOD_D, center=(-4.05, 0.425, z)))
+        m.add(box(0.18, 0.13, 0.18, TRIM, center=(-4.05, 0.70, z)))
+
+    sign_z = -49.0
+    m.add(box(0.14, 2.05, 0.14, WOOD_D, center=(-6.1, 1.025, sign_z)))
+    m.add(box(1.5, 0.42, 0.10, _t("plank", P.WOOD_GREY),
+              center=(-6.1, 1.80, sign_z)))
+    for side in (-1, 1):
+        z = sign_z + side * 0.061
+        m.add(box(0.90, 0.06, 0.012, TRIM, center=(-6.1, 1.85, z)))
+        m.add(box(0.58, 0.05, 0.012, TRIM, center=(-6.1, 1.70, z)))
+
+    m.add(_fence(-9.5, -98, -9.5, -84, h=1.05, every=4.0,
+                 col=P.WOOD_GREY))
+    m.add(_fence(9.0, -98, 9.0, -84, h=1.05, every=4.0,
+                 col=P.WOOD_GREY))
+
+    return m
+
+
+# Backdrop albedos: dead crops, beehives and the furthest ridge.
+STALK = (108, 98, 56)           # dead sunflower stalks, toward the dry grass
+SEEDHEAD = (70, 58, 40)
+HIVE = (112, 116, 104)
+FAR_RIDGE = (34, 40, 50)        # third ridge: nearly the fog
+CREST_N = (22, 28, 27)          # woods on the near crest (HILL_N, darker)
+CREST_F = (34, 41, 47)
+
+_SOUTH = 1.5 * math.pi
+
+
+def _gap_u(a, cut=5.0, shoulder=14.0):
+    """0 inside the southern road gap, 1 clear of its shoulders (as ``hills``)."""
+    da = abs((a - _SOUTH + math.pi) % math.tau - math.pi)
+    cut, shoulder = math.radians(cut), math.radians(shoulder)
+    u = max(0.0, min(1.0, (da - cut) / (shoulder - cut)))
+    return u * u * (3.0 - 2.0 * u)
+
+
+def _hill_y(a, r, ring=0):
+    """Height of hill ring ``ring``'s inner face at angle ``a``, radius ``r``."""
+    h = _hill_h(a, ring) * _gap_u(a)
+    rad = HILL_RAD[ring]
+    if r <= rad - 9.0:
+        return 0.0
+    if r <= rad - 4.0:
+        return -0.5 + (h * 0.43 + 0.5) * (r - rad + 9.0) / 5.0
+    return h * 0.43 + h * 0.57 * min(1.0, (r - rad + 4.0) / 4.0)
+
+
+def _old_tree(seed):
+    """Gnarled old fruit tree: live, leaning, dead (bare fork) or a stump."""
+    m = Mesh()
+    kind = (seed * 7) % 11
+    s = 1.15 + 0.07 * (seed % 5)
+    bark = _t("bark", TRUNK)
+    if kind == 0:
+        m.add(box(0.55, 0.42, 0.55, bark, center=(0, 0.21, 0)))
+        m.add(box(0.30, 0.30, 2.1, _t("bark", P.WOOD_GREY)), rot_y(30 + seed * 13),
+              t=(0.9, 0.15, 0.4))
+        return m
+    m.add(box(0.44, 1.5 * s, 0.44, bark, center=(0, 0.75 * s, 0)))
+    if kind in (1, 5):
+        grey = _t("bark", P.WOOD_GREY)
+        for k, (ang, ln) in enumerate(((34, 1.9), (-28, 2.3), (52, 1.4))):
+            sn, cs = math.sin(math.radians(ang)), math.cos(math.radians(ang))
+            b = Mesh()
+            b.add(box(0.16, ln * s, 0.16, grey), rot_z(ang),
+                  t=(-sn * ln * s / 2.0, (1.4 + cs * ln / 2.0) * s, 0))
+            b.add(box(0.09, 0.9 * s, 0.09, grey), rot_z(-ang * 0.4),
+                  t=(-sn * ln * s * 0.85, (1.4 + cs * ln * 0.85 + 0.4) * s, 0))
+            m.add(b, rot_y(k * 125 + seed * 17))
+        return m
+    for side in (-1, 1):
+        m.add(box(0.18, 1.3 * s, 0.18, bark), rot_z(-side * 32), t=(side * 0.34 * s, 1.85 * s, 0))
+    crown = _t("leaf", _v(LEAF, (seed % 5 - 2) * 4 - 4))
+    m.add(_bipyr(0.15 * s, 2.9 * s, 0, 1.75 * s, 1.0 * s, 0.85 * s, crown, n=6))
+    m.add(_bipyr(0.85 * s, 3.25 * s, 0.35 * s, 1.05 * s, 0.85 * s, 0.55 * s,
+                 _v(crown, 9), n=5))
+    if kind in (2, 8):
+        lean = Mesh()
+        lean.add(m, rot_z(13 if seed % 2 else -11))
+        return lean
+    return m
+
+
+# Existing beyond-orchard trees the old rows grow round.
+_OLD_SKIP = ((51, -13), (55, -10), (52, 12), (56, 17), (51, 27), (57, 29), (60, -23),
+             (65, -16), (68, -10), (69, 10), (65, 17), (63, 24), (59, 33), (57, 40),
+             (48, 26), (51, 15), (50, -13))
+
+
+def old_orchard():
+    """The farm's old orchard east of the hedge: irregular rows of big gnarled
+    trees, long grass, a stone wall, and the bee and picking clutter."""
+    m = Mesh()
+    mown = _t("grass", P.GRASS_D)
+    rough = _t("grass", P.GRASS_DRY)
+    plank = _t("plank", WOOD)
+    i = 0
+    for row, x in enumerate((53.0, 58.5, 64.0, 69.0)):
+        m.add(quad_xz(x - 1.4, -27, x + 1.4, 36, 0.03, mown, layer=1, seg=6))
+        m.add(quad_xz(x + 2.0, -27, x + 3.5, 36, 0.032, rough, layer=1, seg=6))
+        for k in range(11):
+            z = -25.0 + 5.8 * k + (row % 2) * 2.4
+            if abs(z) < 3.0:
+                continue
+            h = (i * 37 + row * 11) % 13
+            tx, tz = x + (h % 5 - 2) * 0.35, z + (h % 3 - 1) * 0.6
+            i += 1
+            if any(math.hypot(tx - ox, tz - oz) < 3.4 for ox, oz in _OLD_SKIP) or h == 6:
+                continue
+            m.add(_old_tree(i), rot_y((i * 53) % 360), t=(tx, 0, tz))
+
+    # Dry-stone wall along the far edge, a gap for the lane.
+    stone = _t("stone", P.STONE_D)
+    for k in range(36):
+        z = -30.0 + 2.0 * k
+        if abs(z + 1.0) < 2.0:
+            continue
+        hh = 0.78 + 0.07 * ((k * 5) % 4)
+        y0 = _hill_y(math.atan2(z + 1.0, 73.0), math.hypot(73.0, z + 1.0)) - 0.2
+        m.add(box(0.7, hh, 2.04, _v(stone, ((k * 3) % 5 - 2) * 4),
+                  center=(73.0, y0 + hh / 2.0, z + 1.0)))
+    for z in (-1.9, 1.9):
+        m.add(box(0.8, 1.35, 0.8, _t("stone", STONE), center=(73.0, 0.67, z)))
+
+    # Beehives on the headland, past the boundary hedge.
+    for k, z in enumerate((18.5, 20.0, 21.6, 23.0)):
+        x = 50.2 + 0.25 * (k % 2)
+        m.add(box(0.62, 0.32, 0.52, WOOD_D, center=(x, 0.16, z)))
+        m.add(box(0.5, 0.6, 0.44, _v(HIVE, (k % 3 - 1) * 8), center=(x, 0.62, z)))
+        m.add(box(0.64, 0.08, 0.58, P.GALV_D, center=(x, 0.96, z)))
+    # Picking crates stacked by the lane.
+    for k, (dx, dy, dz) in enumerate(((0, 0, 0), (0.8, 0, 0.1), (0.4, 0.55, 0.05),
+                                      (0, 0, 0.75), (0.1, 0.55, 0.7))):
+        m.add(box(0.75, 0.55, 0.65, _v(plank, (k % 3 - 1) * 9),
+                  center=(49.6 + dx, 0.275 + dy, -3.6 - dz)))
+    # A ladder left against the nearest live tree.
+    lad = Mesh()
+    pale = _t("plank", P.WOOD_GREY)
+    for sx in (-0.24, 0.24):
+        lad.add(box(0.07, 3.2, 0.07, pale, center=(sx, 1.6, 0)))
+    for y in (0.5, 1.1, 1.7, 2.3, 2.9):
+        lad.add(box(0.5, 0.05, 0.05, pale, center=(0, y, 0)))
+    lean = Mesh()
+    lean.add(lad, rot_z(-17))
+    m.add(lean, rot_y(90), t=(53.0, 0, -6.4))
+    # A collapsed lean-to: back wall, one post standing, one down, roof slid off.
+    m.add(box(3.2, 1.2, 0.14, _t("plank", P.WOOD_GREY), center=(51.6, 0.6, 7.4)))
+    m.add(box(0.14, 1.5, 0.14, plank, center=(50.2, 0.75, 5.6)))
+    m.add(box(0.14, 0.14, 1.6, plank), rot_y(35), t=(52.8, 0.07, 5.4))
+    m.face([(50.0, 1.25, 7.3), (53.2, 1.0, 7.3), (53.4, 0.05, 5.2), (50.1, 0.55, 5.4)],
+           _t("tin", ROOF_METAL), 2, True)
+    return m
+
+
+def _poplar(seed, h):
+    m = Mesh()
+    leaf = _t("leaf", _v(LEAF, (seed % 3 - 1) * 5 - 6))
+    m.add(box(0.36, h * 0.3, 0.36, _t("bark", TRUNK), center=(0, h * 0.15, 0)))
+    w = 1.25 + 0.12 * (seed % 4)
+    m.add(_bipyr(0, h * 0.42, 0, w, h * 0.58, h * 0.24, leaf, n=5, moon=True))
+    m.add(_bipyr(0.3, h * 0.66, 0.2, w * 0.7, h * 0.26, h * 0.2, _v(leaf, 8), n=4, moon=True))
+    return m
+
+
+def poplars():
+    """A windbreak of tall poplars on the hill foot, east to north-east: the
+    raid opens facing them, so they carry the eastern skyline."""
+    m = Mesh()
+    a, k = math.radians(-38.0), 0
+    while a < math.radians(56.0):
+        h = 11.0 + 1.2 * ((k * 5) % 7) + (2.5 if k % 9 == 4 else 0.0)
+        r = 77.0 + 1.6 * ((k * 3) % 3)
+        y = _hill_y(a, r) - 0.3
+        if k % 11 != 7:     # a gap where one has come down
+            m.add(_poplar(k, h), rot_y((k * 71) % 360),
+                  t=(r * math.cos(a), y, r * math.sin(a)))
+        a += math.radians((2.6, 4.2, 3.4, 5.0, 2.9)[k % 5])
+        k += 1
+    return m
+
+
+def crest_woods():
+    """Blocky woods along both hill crests (sparse clumps near, denser far)
+    and a third, faint ridge; the road valley stays open."""
+    m = Mesh()
+    church = (_CHURCH_A - 0.36, _CHURCH_A + 0.36)
+    for ring, (step, rad, col, keep) in enumerate(((2.1, 83.2, CREST_N, 5),
+                                                   (2.4, 117.0, CREST_F, 8))):
+        n = int(360 / step)
+        for i in range(n):
+            a = math.radians(i * step + ((i * 13) % 5) * 0.3)
+            if _gap_u(a, 5.0, 17.0) < 1.0 or (ring == 0 and church[0] < a < church[1]):
+                continue
+            # Woods in clumps with open crest between, ragged at their edges.
+            if (i // 6 * 7) % 11 >= keep or (i * 5) % 7 == 0:
+                continue
+            # Far woods only where the far crest clears the near one.
+            if ring and _hill_h(a, 1) / 118.0 < _hill_h(a, 0) / 84.0 + 0.012:
+                continue
+            h = (i * 29 + ring * 5) % 7
+            x, z = rad * math.cos(a), rad * math.sin(a)
+            y = _hill_y(a, rad, ring) - 0.4
+            c = _v(col, (h % 3 - 1) * 2)
+            tall = (3.2 if ring == 0 else 5.0) + 0.45 * h
+            if h % 3 == 0:
+                m.add(_bipyr(x, y + tall * 0.25, z, 1.0 + 0.1 * h, tall * 0.8, tall * 0.3, c,
+                             _v(c, -3), n=4, moon=True))
+            else:
+                m.add(_bipyr(x, y + tall * 0.32, z, 1.9 + 0.2 * h, tall * 0.5, tall * 0.4, c,
+                             _v(c, -3), n=5, moon=True))
+    # Third ridge, near the fog: a saddle where the road crosses.
+    n, rad = 72, 140.0
+    rows = []
+    for i in range(n + 1):
+        a = math.tau * i / n
+        u = _gap_u(a, 7.0, 22.0)
+        h = 7.0 + (19.0 + 4.0 * math.sin(2 * a + 0.7) + 2.5 * math.sin(5 * a + 2.1) - 7.0) * u
+        c, s = math.cos(a), math.sin(a)
+        rows.append((((rad - 13.0) * c, 2.4 * (1.0 - u) - u, (rad - 13.0) * s),
+                     (rad * c, h, rad * s)))
+    for i in range(n):
+        (lo0, top0), (lo1, top1) = rows[i], rows[i + 1]
+        shade = ((i * 73) & 3) - 1
+        m.face([lo0, lo1, top1], _v(FAR_RIDGE, shade - 1), 0, True)
+        m.face([lo0, top1, top0], _v(FAR_RIDGE, shade + 1), 0, True)
+    return m
+
+
+def _valley_y(z):
+    u = max(0.0, min(1.0, (-100.0 - z) / 28.0))
+    return 2.4 * u * u * (3.0 - 2.0 * u)
+
+
+def _walnut(seed):
+    m = Mesh()
+    leaf = _t("leaf", _v(LEAF, (seed % 3 - 1) * 5 - 2))
+    m.add(box(0.4, 2.3, 0.4, _t("bark", TRUNK), center=(0, 1.15, 0)))
+    m.add(box(0.16, 1.4, 0.16, _t("bark", TRUNK)), rot_z(40), t=(-0.45, 2.4, 0))
+    m.add(_bipyr(0.2, 3.5, 0, 2.5, 1.3, 1.0, leaf, n=6))
+    m.add(_bipyr(-0.9, 3.9, 0.5, 1.5, 0.9, 0.5, _v(leaf, 8), n=5))
+    return m
+
+
+# Wayside shrine lamp and far farmstead windows (raid halos).
+SHRINE_AT = (6.5, -44.5)
+SHRINE_LAMP = (6.12, 1.74, -44.5)
+
+
+def _farmsteads():
+    """(x, y, z, window x, window z) for three far farms on the hills."""
+    out = []
+    # On the near ring's inner face: hills draw as background (layer 0), so
+    # anything behind a crest would show through it.
+    for deg, ring, r in ((-72.0, 0, 79.5), (250.0, 0, 79.0), (151.0, 0, 80.0)):
+        a = math.radians(deg)
+        x, z = r * math.cos(a), r * math.sin(a)
+        if abs(x) > abs(z):
+            wx, wz = x - math.copysign(2.04, x), z
+        else:
+            wx, wz = x, z - math.copysign(1.79, z)
+        out.append((x, _hill_y(a, r, ring) - 0.3, z, wx, wz))
+    return out
+
+
+def road_dressing(lit):
+    """The truck road's country: dead sunflowers and a ploughed field either
+    side, a walnut line, the wayside shrine, a culvert plank bridge, a broken
+    cart, and the road climbing the valley to the pass."""
+    m = Mesh()
+    # Valley floor beyond the ground plane, rising to the third ridge's saddle.
+    grass = _t("grass", _v(P.GRASS_D, 12))
+    track = _t("track", TRACK)
+    zs = [-99.5 - 4.0 * k for k in range(8)]
+    for z0, z1 in zip(zs[:-1], zs[1:]):
+        y0, y1 = _valley_y(z0), _valley_y(z1)
+        for x0 in range(-60, 60, 20):
+            m.face([(x0, y0, z0), (x0 + 20, y0, z0), (x0 + 20, y1, z1), (x0, y1, z1)],
+                   grass, 0, True)
+        m.face([(-3.2, y0 + 0.06, z0), (3.2, y0 + 0.06, z0), (3.2, y1 + 0.06, z1),
+                (-3.2, y1 + 0.06, z1)], track, 1, True)
+    m.face([(-3.0, 2.52, zs[-1]), (3.0, 2.52, zs[-1]), (2.6, 7.15, -140.5),
+            (-2.6, 7.15, -140.5)], track, 1, True)
+
+    # Dead sunflowers on the east verge: thin stalks, heavy drooping heads.
+    stalk = _t("grass", STALK, tint=True)
+    disc = [(0.25 * math.cos(math.tau * k / 6), 0.25 * math.sin(math.tau * k / 6))
+            for k in range(6)]
+    for row in range(6):
+        x = 7.2 + 1.9 * row
+        for k in range(10):
+            h = (row * 31 + k * 17) % 13
+            if h in (4, 9):
+                continue
+            z = -46.5 + 1.7 * k + (row % 2) * 0.7
+            tall = 1.85 + 0.06 * (h % 7)
+            p = Mesh()
+            p.face([(-0.05, 0, 0), (0.05, 0, 0), (0.04, tall, 0), (-0.04, tall, 0)], stalk, 2, True)
+            p.face([(0, 0, -0.05), (0, 0, 0.05), (0, tall, 0.04), (0, tall, -0.04)], stalk, 2, True)
+            p.face([(0, tall * 0.55, 0), (0.42, tall * 0.42, 0.05), (0.36, tall * 0.38, -0.08)],
+                   _v(stalk, -10), 2, True)
+            head = Mesh()
+            head.add(prism(disc, 0.11, _v(SEEDHEAD, (h % 3 - 1) * 5), z0=-0.055),
+                     rot_x(34 + 5 * (h % 4)))
+            p.add(head, rot_y(90), t=(0.16, tall - 0.12, 0))
+            m.add(p, rot_y((h * 41) % 360), t=(x + (h % 3 - 1) * 0.15, 0, z))
+    m.add(_hedgerow(18.6, -48.5, 18.6, -28.5, seed=61))
+    m.add(_hedgerow(7.0, -48.6, 18.0, -48.6, seed=62))
+
+    # Ploughed field west of the tree line, its own hedge between.
+    m.add(quad_xz(-34, -52, -19.5, -26, 0.024, _t("dirt", FURROW), layer=1, seg=6))
+    furrow = _t("furrow", P.TRACK_D)
+    for k in range(17):
+        x = -33.6 + 0.85 * k
+        m.add(quad_xz(x, -51.6, x + 0.38, -26.4, 0.034, furrow, layer=1, seg=4))
+    m.add(_hedgerow(-18.6, -52.5, -18.6, -26.0, seed=63))
+
+    # Walnut line down the east verge, south of the sunflowers.
+    for k, z in enumerate((-62.0, -70.5, -79.0, -88.0, -96.5)):
+        m.add(_walnut(k), rot_y((k * 83) % 360), t=(6.9 + 0.3 * (k % 2), 0, z))
+
+    # Wayside shrine: post, niche, little tin roof, cross; a lamp for the road.
+    sx, sz = SHRINE_AT
+    grey = _t("plank", P.WOOD_GREY)
+    m.add(box(0.16, 1.5, 0.16, WOOD_D, center=(sx, 0.75, sz)))
+    m.add(box(0.46, 0.62, 0.62, grey, center=(sx, 1.78, sz)))
+    m.add(box(0.03, 0.44, 0.42, P.INK, center=(sx - 0.235, 1.76, sz)))
+    roof = Mesh()
+    roof.add(_gable_z(0.62, 0.82, 0.0, 0.32, _t("tin", ROOF_METAL), grey, oh=0.12), rot_y(90))
+    m.add(roof, t=(sx, 2.09, sz))
+    m.add(box(0.06, 0.55, 0.06, WOOD_D, center=(sx, 2.66, sz)))
+    m.add(box(0.06, 0.06, 0.32, WOOD_D, center=(sx, 2.76, sz)))
+    m.add(box(0.1, 0.14, 0.1, P.LAMP_WARM if lit else P.GLASS, center=SHRINE_LAMP,
+              emissive=lit))
+    m.add(box(0.7, 0.12, 0.9, _t("stone", P.STONE_D), center=(sx, 0.06, sz)))
+
+    # Plank bridges over both drains at the field entrances.
+    for x0, x1, z in ((4.0, 5.7, -53.0), (-5.7, -4.0, -54.5)):
+        cx = (x0 + x1) / 2.0
+        m.add(box(x1 - x0, 0.12, 2.4, _t("plank", P.WOOD_GREY), center=(cx, 0.14, z)))
+        for dz in (-1.15, 1.15):
+            m.add(box(x1 - x0 + 0.3, 0.16, 0.16, _t("plank", WOOD_D), center=(cx, 0.26, z + dz)))
+        out = x1 + 4.2 if x0 > 0 else x0 - 4.2
+        m.add(quad_xz(min(x1, out), z - 1.1, max(x0, out), z + 1.1, 0.045,
+                      _t("track", P.TRACK_D), layer=1, seg=2))
+
+    # A broken cart in the west verge: bed down on one corner, a wheel off.
+    cart = Mesh()
+    cart.add(box(2.6, 0.18, 1.4, _t("plank", P.WOOD_GREY), center=(0, 0, 0)))
+    for z in (-0.66, 0.66):
+        cart.add(box(2.6, 0.4, 0.07, _t("plank", WOOD_D), center=(0, 0.28, z)))
+    cart.add(box(1.6, 0.08, 0.08, WOOD_D, center=(1.9, -0.1, 0.3)))
+    tilt = Mesh()
+    tilt.add(cart, rot_z(12))
+    m.add(tilt, rot_y(74), t=(-7.4, 0.42, -67.0))
+    prof = [(0.48 * math.cos(math.pi / 8 + k * math.pi / 4),
+             0.48 + 0.48 * math.sin(math.pi / 8 + k * math.pi / 4)) for k in range(8)]
+    wheel = Mesh()
+    wheel.add(prism(prof, 0.1, WOOD_D, z0=-0.05))
+    m.add(wheel, rot_y(74), t=(-6.95, 0, -66.0))
+    flat = Mesh()
+    flat.add(prism(prof, 0.1, _v(WOOD_D, -8), z0=-0.05), rot_z(90))
+    m.add(flat, rot_y(20), t=(-8.6, 0.05, -69.2))
+
+    # Far farmsteads on the hills, a lamplit window each.
+    roof_c = (8, 9, 12)
+    wall = (92, 94, 90)             # limewash: the house shape against the hill
+    win = WIN_LIT if lit else SKYLINE
+    for x, y, z, wx, wz in _farmsteads():
+        m.add(box(4.0, 2.6, 3.4, wall, center=(x, y + 1.3, z)))
+        g = Mesh()
+        g.add(_gable_z(3.4, 4.0, 2.6, 1.4, roof_c, wall), rot_y(90))
+        m.add(g, t=(x, y, z))
+        m.add(box(2.4, 1.6, 2.2, _v(wall, -6), center=(x + 2.9, y + 0.8, z + 0.8)))
+        sideways = abs(wx - x) > 0.1
+        m.add(box(0.08 if sideways else 0.45, 0.4, 0.45 if sideways else 0.08, win,
+                  center=(wx, y + 1.5, wz), emissive=lit))
+    return m
+
+
 def build_static(r, look, park=None):
     """Everything that never moves, added through the static-scene bake.
     ``park`` = (x, z, rot_y degrees) overrides the tractor's default spot."""
@@ -647,8 +1479,14 @@ def build_static(r, look, park=None):
         add(r, q)
     add(r, hills())
     add(r, field_dressing())
+    add(r, outer_dressing())       # new
+    add(r, landscape_dressing(look))
     lit = look != "dawn"
     burn = look == "burn"
+    add(r, old_orchard())
+    add(r, poplars())
+    add(r, crest_woods())
+    add(r, road_dressing(lit))
     add(r, skyline(lit))
     add(r, poles())
     add(r, yard_dressing())
@@ -709,8 +1547,11 @@ def sky(r, buf, t, look, seed=0):
 # cloud rather than a soft band.  The ones near the moon get a lit top rim.
 _CLOUDS = ((-170.0, 9.0, 26.0, 3), (-128.0, 17.0, 18.0, 2), (-96.0, 7.0, 30.0, 3),
            (-40.0, 12.0, 22.0, 2), (10.0, 6.5, 34.0, 3), (64.0, 15.0, 20.0, 2),
-           (118.0, 8.0, 28.0, 3), (158.0, 19.0, 16.0, 2))
-_CLOUD = (9, 10, 13)            # added to the sky behind: a thin lit veil
+           (118.0, 8.0, 28.0, 3), (158.0, 19.0, 16.0, 2),
+           # Low broken bank over the south road and the eastern poplars.
+           (178.0, 9.5, 42.0, 2), (-142.0, 10.0, 24.0, 2), (136.0, 9.0, 30.0, 2),
+           (92.0, 11.0, 40.0, 2), (52.0, 9.5, 24.0, 2))
+_CLOUD = (16, 18, 24)           # added to the sky behind: a thin lit veil
 _CLOUD_RIM = (34, 36, 40)
 
 
@@ -760,7 +1601,7 @@ def _raid_sky(r, buf, t, moon):
         if cx + cw < 0 or cx - cw > w:
             continue
         rh = max(2, int(px_deg * 0.7))
-        lit = abs(((az - maz + 180) % 360) - 180) < 40
+        lit = abs(((az - maz + 180) % 360) - 180) < 60
         for k in range(rows):
             ww = int(cw * (1.0 - 0.3 * k))
             x0 = int(cx - ww / 2 + (k * 7 % 5 - 2) * px_deg)
@@ -770,7 +1611,7 @@ def _raid_sky(r, buf, t, moon):
             for a, b in ((x0, x0 + cut - rh), (x0 + cut + rh, x0 + ww)):
                 if b - a > 1:
                     buf.fill(_CLOUD, (a, y0, b - a, rh), special_flags=pygame.BLEND_ADD)
-                    if lit and k == rows - 1 - (rows > 2):
+                    if lit:
                         buf.fill(_CLOUD_RIM, (a + 1, y0, b - a - 2, 1),
                                  special_flags=pygame.BLEND_ADD)
 
@@ -806,6 +1647,13 @@ def raid_fx(r, t, lit=True):
                 r.add_sprite((vx, vy + 1.9, vz), _fx.glow(P.WINDOW, 0.9, t, seed=30 + i,
                                                           intensity=0.55, max_px=6),
                              layer=_fx.FX_LAYER)
+        for i, (_x, y, _z, wx, wz) in enumerate(_farmsteads()):
+            r.add_sprite((wx, y + 1.5, wz), _fx.glow(P.WINDOW, 1.0, t, seed=50 + i,
+                                                     intensity=0.6, max_px=6),
+                         layer=_fx.FX_LAYER)
+        r.add_sprite(SHRINE_LAMP, _fx.glow(P.LAMP_WARM, 0.8, t, flicker=0.12, seed=57,
+                                           core=(255, 232, 196), intensity=0.7, max_px=10),
+                     layer=_fx.FX_LAYER)
     cx, cy, cz = CHIMNEY_TOP
     for i in range(3):
         u = ((t * 0.00018) + i / 3.0) % 1.0
