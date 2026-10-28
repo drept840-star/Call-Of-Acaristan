@@ -1,0 +1,65 @@
+GIMP Palette
+Name: Acaristan M7
+Columns: 8
+# The 2D top-down M7 farm palette, sampled from the farmyard frames,
+# dark to light.  Names match src/cutscenes/m7palette3d.py.
+  9  10   9	ink deep
+ 34  18  15	barn ink
+ 22  26  22	sky edge
+ 30  24  22	ink
+ 25  33  19	grass ink
+ 26  32  30	hill near
+ 46  24  21	barn dd
+ 36  30  26	wood black
+ 40  48  29	grass dd
+ 44  38  36	wood dark
+ 60  34  30	brick d
+ 70  40  24	rust d
+ 40  48  54	hill far
+ 66  50  36	loam
+ 52  52  56	steel d
+ 36  78  50	tractor d
+ 84  44  38	barn d
+ 76  52  38	wood d
+ 56  71  43	moss
+ 62  82  48	grass d
+116  48  36	roof d
+ 88  66  46	track d
+ 76  66  58	wood grey
+ 86  68  48	wood dun
+120  60  28	rust
+ 96  74  50	wood mid
+112  60  52	barn
+104  72  50	wood
+ 52 112  70	tractor
+ 78  98  60	grass
+107  87  43	hay dd
+104  80  56	dirt d
+ 96  98  58	grass dry
+ 52  88 116	water
+ 60  86 112	glass
+ 88  88  84	stone d
+112  88  62	track
+150  66  48	roof
+ 84  88  94	galv d
+118  92  64	pendirt
+140  80  66	barn l
+ 98 118  72	grass hi
+127 107  59	hay d
+126 100  70	dirt
+136  98  68	wood l
+130 104  76	track hi
+186  98  42	generator
+148 120  60	hay shade
+178  90  62	roof l
+148 122  88	dirt hi
+124 124 118	stone
+166 136  70	hay side
+122 126 130	galv
+176 148  82	hay mid
+200 170  96	hay
+200 156 116	lamp
+200 172 104	hay hi
+176 164 138	plaster shade
+206 190 156	plaster
+226 220 206	plaster l

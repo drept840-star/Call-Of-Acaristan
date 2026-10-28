@@ -2,14 +2,15 @@
 
 The static farm comes from ``cutscenes.m7world3d``; this module holds the blocking
 boxes that match it, the fire that spreads in front of the barn, and the meshes
-for the two things the films never show (the trucks and the dog).
+for the raid's trucks and dog (the films borrow both: the convoy lights far
+up the valley in the raid-in, and the orchard vanguard).
 
 Axes: x east, y up, z north.  Yaw 0 faces +z and turns clockwise seen from above.
 """
 import math
 import random
 
-from engine3d.core import Mesh, box, rot_y
+from engine3d.core import Mesh, box, rot_x, rot_y
 from cutscenes import m6fx3d as _fx
 from cutscenes import m7world3d as F
 
@@ -55,6 +56,13 @@ STATIC = [
     (-20.15, -16.0, -19.85, 22.0, 0.9),     # fence, west
     (19.85, -16.0, 20.15, -3.0, 0.9),       # fence, east
     (19.85, 3.0, 20.15, 22.0, 0.9),
+    (-17.6, 8.1, -16.5, 11.9, 1.2),     # woodpile on the house's west gable
+    (-18.55, 2.65, -17.55, 4.75, 1.8),  # crate stack
+    (-14.75, -13.65, -13.4, -12.25, 0.95),  # oil drums
+    (15.4, -9.85, 17.6, -9.15, 0.6),    # stock trough
+    (12.8, -13.7, 15.2, -11.9, 1.1),    # tarped pile
+    (-18.7, -13.7, -18.3, -13.3, 8.0),  # telephone poles
+    (-5.7, -21.2, -5.3, -20.8, 8.0),
 ] + _orchard()
 
 
@@ -215,13 +223,16 @@ class Fire:
         for n, ((i, j), t0) in enumerate(self.cells.items()):
             size = min(1.0, 0.35 + (now - t0) / 4.0) * (1.1 + 0.2 * (n % 3))
             F.fire(r, (FIRE_COLS[i], 0.05, FIRE_ROWS[j]), t, seed=n * 5 + 2, size=size,
-                   smoky=n % 3 == 0)
+                   smoky=n % 3 == 0, layer=2)
         g = self.grow(now)
-        for n, (dx, dy, dz, sz) in enumerate(((-3.6, 5.0, 10.0, 2.3), (-0.5, 5.4, 12.0, 2.7),
-                                              (2.8, 5.0, 14.0, 2.4), (4.2, 5.1, 10.5, 2.0),
-                                              (-2.0, 1.4, 6.9, 1.7), (2.2, 1.6, 6.9, 1.5))):
-            F.fire(r, (13.0 + dx, dy, dz), t, seed=40 + n * 3, size=sz * (0.45 + 0.55 * g),
-                   smoky=n % 2 == 0)
+        for n, (dx, dy, dz, sz) in enumerate(((-3.6, 4.7, 10.0, 1.05), (-0.5, 4.9, 12.0, 1.2),
+                                              (2.8, 4.7, 14.0, 1.0), (4.2, 4.8, 10.5, 0.95),
+                                              (-2.0, 1.4, 6.9, 0.85), (2.2, 1.6, 6.9, 0.8))):
+            # Keep the barn tongues just in front of its south facade. The
+            # raid's world-depth layer then lets Bodi/Alex/guards correctly
+            # occlude the flames when they cross in front of them.
+            F.fire(r, (13.0 + dx, dy, 6.35), t, seed=40 + n * 3,
+                   size=sz * (0.45 + 0.55 * g), smoky=n % 2 == 0, layer=2)
 
     def lights(self, t, now):
         if not self.lit:
@@ -283,6 +294,21 @@ def dog(frame):
             s = swing if k in (0, 3) else -swing
             m.add(box(0.1, 0.42, 0.1, FUR_D, center=(lx + s, 0.21, sz)))
         _DOG[frame] = m
+    return m
+
+
+_FALL = {}
+
+
+def dog_fall(angle):
+    """Guard dog rolled onto its side by ``angle`` degrees (0 standing, 90 down)."""
+    step = int(round(angle / 5.0))
+    m = _FALL.get(step)
+    if m is None:
+        deg = 5.0 * step
+        m = Mesh()
+        m.add(dog(0), rot_x(deg), t=(0.0, 0.16 * math.sin(math.radians(deg)), 0.0))
+        _FALL[step] = m
     return m
 
 

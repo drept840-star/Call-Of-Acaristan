@@ -1,7 +1,8 @@
 """Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night.
 
 Over-the-shoulder camera, WASD + relative mouse look, RMB tightens the aim, LMB
-fires the K9, R reloads, Shift sprints, hold E to free Alex or pull Bodi up.
+fires the Fallow 12, R reloads, Shift sprints, hold E to free Alex or pull Bodi
+up.
 
 Three waves: riflemen and a dog through the orchard gate, two trucks up the
 track, then the north sweep while the barn burns and Alex lies pinned at the
@@ -35,16 +36,27 @@ BOOM_ADS = (2.1, 0.62, 0.14)
 FOV, FOV_ADS = 62.0, 48.0
 SENS = 0.12
 PITCH_LIM = (-38.0, 32.0)
-MAG, RESERVE0, RESERVE_CAP = 30, 90, 150
-FIRE_GAP = 0.085
-RELOAD_S = 1.6
+MAG, RESERVE0, RESERVE_CAP = 6, 24, 36
+FIRE_GAP = 0.95
+RELOAD_S = 2.2
+PELLETS = 8
+# (yaw, pitch) offsets in degrees around the crosshair: a centre lane and a ring of seven.
+PELLET_FAN = ((0.0, 0.0), (2.5, 0.0), (1.6, 1.9), (-0.5, 2.4), (-2.2, 1.1), (-2.2, -1.1),
+              (-0.5, -2.4), (1.6, -1.9))
+PELLET_BODY, PELLET_HEAD = 10, 24
+# Impact flecks and the muzzle flash: short hard lines from the point, in metres.
+FLECK_ARMS = ((0.10, 0.06, 0.02), (-0.08, 0.09, -0.03), (0.02, -0.07, 0.09))
+FLASH_ARMS = ((0.22, 0.05, 0.0), (-0.12, 0.20, 0.05), (0.0, -0.10, -0.22))
+PUMP_S = 0.32
+SHELL_AT = (0.35, 1.0, 1.65)
 HP_REGEN_DELAY, HP_REGEN = 5.0, 7.0
-HIT_BODY, HIT_HEAD = 22, 64
 LOOT_R = 1.5
 HOLD_S = {"alex": 1.6, "bodi": 2.4}
 CP_STATE = {1: (4.0, 2.0, 180.0), 2: (0.0, -2.0, 0.0)}
 TANK_BLAST_R = 8.0
 GUARD_VIEW = ("rifle", "rusher", "rifle", "officer")
+GUARD_FALL_S, GUARD_PUSH_M = 0.55, 0.5
+DOG_FALL_S, DOG_PUSH_M = 0.4, 0.35
 
 
 def _wrap(deg):
@@ -68,6 +80,10 @@ def _right(yaw):
 
 def _lerp(a, b, k):
     return a + (b - a) * k
+
+
+def _ease(k):
+    return k * k * (3.0 - 2.0 * k)
 
 
 class RaidScene:
@@ -97,15 +113,21 @@ class RaidScene:
         self._active = True
         self.paused = False
         STATE.m7_raid_active = True
-        if self.audio is None:
-            try:
-                from missions.m6.m6_audio import M6TrainAudio
-                self.audio = M6TrainAudio(audio)
-                self.audio.warm()
-            except Exception:
-                self.audio = None
+        try:
+            from . import m7_audio as _m7_audio
+            self.audio = _m7_audio.instance(audio)
+            self.audio.warm()
+        except Exception:
+            self.audio = None
         self._setup(int(getattr(STATE, "m7_raid_cp", 0) or 0))
         self._grab(True)
+        try:
+            hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
+            for mode in ("ready", "aim"):
+                _hold_cached(hum, dict(POSES["ready"]), "shotgun", mode,
+                             key=("m7player", mode))
+        except Exception:
+            pass
         try:
             scratch = pygame.Surface((WIDTH, HEIGHT))
             self.draw(scratch)
@@ -126,6 +148,14 @@ class RaidScene:
     def set_paused(self, paused):
         self.paused = bool(paused)
         self._grab(self._active and not self.paused)
+        if self.audio is not None:
+            try:
+                if self.paused:
+                    self.audio.pause()
+                else:
+                    self.audio.resume()
+            except Exception:
+                pass
 
     def finish(self, result="win"):
         if self.done:
@@ -135,6 +165,11 @@ class RaidScene:
         self._active = False
         STATE.m7_raid_active = False
         self._grab(False)
+        if self.audio is not None:
+            try:
+                self.audio.stop_loops()
+            except Exception:
+                pass
         from . import flow as _flow
         return _flow.on_raid_done(result)
 
@@ -165,6 +200,9 @@ class RaidScene:
         self.ads = 0.0
         self.gun_up = 0.0
         self.reloading = 0.0
+        self._shell_i = 0
+        self.pump_at = -9.0
+        self.pump_snd_at = 1e9
         self.last_fire = -9.0
         self.recoil = 0.0
         self.cam_kick = 0.0
@@ -302,10 +340,19 @@ class RaidScene:
         self._move(k, dt)
         if self.reloading:
             self.reloading = max(0.0, self.reloading - dt)
+            elapsed = RELOAD_S - self.reloading
+            while self._shell_i < len(SHELL_AT) and elapsed >= SHELL_AT[self._shell_i]:
+                self._shell_i += 1
+                self._snd("shell_in")
             if not self.reloading:
                 n = min(MAG - self.mag, self.reserve)
                 self.mag += n
                 self.reserve -= n
+                if n:
+                    self._snd("pump")
+        if self.t >= self.pump_snd_at:
+            self.pump_snd_at = 1e9
+            self._snd("pump")
         if self.firing and not self.reloading:
             self._fire()
         self._loot()
@@ -382,13 +429,14 @@ class RaidScene:
 
     def _aim_ray(self):
         eye, _tgt, _fov, dist = self.camera()
-        f = _fwd(self.yaw + self.recoil * 0.3, self.pitch + self.recoil)
+        f = _fwd(self.yaw, self.pitch + 1.6 * self.cam_kick)   # the crosshair ray, as the camera looks
         return (eye[0] + f[0] * dist, eye[1] + f[1] * dist, eye[2] + f[2] * dist), f
 
     def _begin_reload(self):
         if self.reloading or self.mag >= MAG or self.reserve <= 0:
             return
         self.reloading = RELOAD_S
+        self._shell_i = 0
         self._snd("reload")
 
     def _fire(self):
@@ -402,41 +450,67 @@ class RaidScene:
             return
         self.mag -= 1
         self.last_fire = self.t
-        self.recoil = min(3.0, self.recoil + 0.55)
-        self.cam_kick = min(2.2, self.cam_kick + 1.0)
-        self.pitch = clamp(self.pitch + 0.18, *PITCH_LIM)
+        self.pump_at = self.t
+        self.pump_snd_at = self.t + PUMP_S
+        o, d = self._aim_ray()      # the shot leaves along the sight as it was, before the kick
+        look_pitch = self.pitch + 1.6 * self.cam_kick
+        self.recoil = min(3.0, self.recoil + 1.4)
+        self.cam_kick = min(2.6, self.cam_kick + 2.0)
+        self.pitch = clamp(self.pitch + 0.55, *PITCH_LIM)
         self._snd("shot", True)
-        o, d = self._aim_ray()
-        best = self.world.ray_hit(o, d, 70.0)
-        tank = W._ray_box(o, d, W.STATIC[3])
-        hit_e, head = None, False
-        for e in self.brain.enemies:
-            if not e["alive"] or not e["live"]:
-                continue
-            for c, rad, is_head in self.brain.spheres(e):
-                h = B._ray_sphere(o, d, c, rad)
-                if h is not None and h < best:
-                    best, hit_e, head = h, e, is_head
-        end = (o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best)
-        src = self._muzzle or o
-        self.tracers.append((self.t, src, end, (255, 214, 150)))
-        self.flashes.append((self.t, src))
-        if hit_e is None:
-            if (self.flags["shed"] and self.tank_blown is None and tank is not None
-                    and abs(tank - best) < 1e-3):
+        if self.flags["shed"] and self.tank_blown is None:
+            tank = W._ray_box(o, d, W.STATIC[3])
+            if tank is not None and tank < self.world.ray_hit(o, d, 70.0) + 1e-3:
                 self._blow_tank()
                 return
-            self.sparks.append((self.t, end))
-            self.impacts.append((self.t, end, "dust"))
-            self._snd("impact", False)
-            return
-        self.impacts.append((self.t, end, "blood"))
-        self.hit_mark = self.t
-        if head:
-            self._snd("headshot")
+        cone = 0.65 if self.ads > 0.5 else 1.0
+        src = self._muzzle or o
+        hits = {}
+        impact_pts = []
+        lanes = []
+        farthest = 0.0
+        any_enemy = False
+        any_head = False
+        for dy, dp in PELLET_FAN:
+            dd = _fwd(self.yaw + dy * cone, look_pitch + dp * cone)
+            best = self.world.ray_hit(o, dd, 70.0)
+            hit_e, head = None, False
+            for e in self.brain.enemies:
+                if not e["alive"] or not e["live"]:
+                    continue
+                for c, rad, is_head in self.brain.spheres(e):
+                    h = B._ray_sphere(o, dd, c, rad)
+                    if h is not None and h < best:
+                        best, hit_e, head = h, e, is_head
+            end = (o[0] + dd[0] * best, o[1] + dd[1] * best, o[2] + dd[2] * best)
+            lanes.append(end)
+            farthest = max(farthest, best)
+            if hit_e is None:
+                impact_pts.append((end, "dust"))
+            else:
+                any_enemy = True
+                any_head = any_head or head
+                rec = hits.get(id(hit_e))
+                if rec is None:
+                    hits[id(hit_e)] = [hit_e, 0.0]
+                    rec = hits[id(hit_e)]
+                rec[1] += PELLET_HEAD if head else PELLET_BODY
+                impact_pts.append((end, "blood"))
+        for end in lanes:
+            self.tracers.append((self.t, src, end, (255, 226, 160)))
+        self.flashes.append((self.t, src))
+        for end, kind in impact_pts:
+            self.impacts.append((self.t, end, kind))
+        ld = _fwd(self.yaw, look_pitch)
+        self.sparks.append((self.t, (o[0] + ld[0] * farthest, o[1] + ld[1] * farthest,
+                                     o[2] + ld[2] * farthest)))
+        for e, dmg in hits.values():
+            self.brain.hurt_enemy(e, dmg, (o[0], o[2]))
+        if any_enemy:
+            self.hit_mark = self.t
+            self._snd("headshot" if any_head else "impact", True)
         else:
-            self._snd("impact", True)
-        self.brain.hurt_enemy(hit_e, HIT_HEAD if head else HIT_BODY)
+            self._snd("impact", False)
 
     def _blow_tank(self):
         self.tank_blown = self.t
@@ -461,10 +535,10 @@ class RaidScene:
                 continue
             if math.hypot(e["x"] - self.px, e["z"] - self.pz) > LOOT_R:
                 continue
-            got = min(e["mags"] * MAG, room)
+            got = min(MAG, room)
             e["mags"] = 0
             self.reserve += got
-            self.toast = (self.t, "+%d K9 ROUNDS" % got)
+            self.toast = (self.t, "+%d SHELLS" % got)
             self._snd("reload")
             if self.mag <= 0:
                 self._begin_reload()
@@ -522,7 +596,7 @@ class RaidScene:
         self.phase = "gap"
         self.cp = n
         self.cp_state = dict(px=self.px, pz=self.pz, yaw=self.yaw, mag=self.mag,
-                             reserve=max(self.reserve, 60))
+                             reserve=max(self.reserve, RESERVE0))
         STATE.m7_raid_cp = n
         self.cp_toast = self.t
         p = STATE.player
@@ -589,8 +663,8 @@ class RaidScene:
             if t["state"] != "wait" and t["z"] > -46.0:
                 out.append({"pos": (t["x"], 1.5, t["z"] + 3.2), "color": (255, 240, 210),
                             "intensity": 0.9, "range": 14.0})
-        out.append({"pos": (-8.0, 2.8, 6.0), "color": (255, 190, 110), "intensity": 0.7, "range": 10.0})
-        out.append({"pos": (10.0, 3.2, 5.4), "color": (255, 180, 100), "intensity": 0.5, "range": 9.0})
+        out.append({"pos": F.PORCH_LAMP, "color": (255, 190, 110), "intensity": 0.7, "range": 10.0})
+        out.append({"pos": F.BARN_LAMP, "color": (255, 180, 100), "intensity": 0.6, "range": 9.0})
         return out[:8]
 
     def _project(self, r, p):
@@ -612,6 +686,8 @@ class RaidScene:
         r, buf = F.stage("raid", tm, eye, tgt, fov, self._lights(tm), hh=0.0, seed=7,
                          size=RES, park=park)
         del _w.LAST[:]
+        r.set_pools(F.raid_pools(self.fire.lights(tm, self.t)))
+        F.raid_fx(r, tm)
         if self._truck is None:
             self._truck = W.truck()
             self._ledge = W.ledge()
@@ -633,6 +709,7 @@ class RaidScene:
         tx, tz = self.objective_point()
         self.marker_screen = self._project(r, (tx, 1.6, tz)) if tx is not None else None
         r.flush(buf)
+        F.grade_raid(buf)
         _fx.present_crisp(buf, surface)
         draw_vignette(surface)
         HUD.draw(surface, self)
@@ -664,11 +741,21 @@ class RaidScene:
         if self.dying:
             kk = clamp(self.death_t / 0.6, 0.0, 1.0)
             _w.actor(r, key, blend("kneel", "dead_back", kk), at, self.body_yaw, int(tm), seed=93,
-                     amp=0.0, rifle_on=False, flags=("rifle",), expression="angry")
+                     amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry")
             self._muzzle = None
             return
-        joints = _w.actor(r, key, self._player_pose(), at, self.body_yaw, int(tm), seed=93,
-                          amp=0.12, rifle_on=True, flags=("rifle",), expression="angry")
+        hum = _w.hum(key, flags=("shotgun",))
+        pose = self._player_pose()
+        pump = 0.0
+        if 0.0 <= self.t - self.pump_at < 0.45:
+            pump = math.sin(math.pi * clamp((self.t - self.pump_at) / 0.45, 0.0, 1.0))
+        mode = "aim" if (self.ads > 0.5 or self.t - self.last_fire < 0.4) else "ready"
+        pose = _hold_cached(hum, pose, "shotgun", mode, key=("m7player", mode))
+        if pump > 0.0:
+            pose = dict(pose, lel=pose.get("lel", 12) + 16.0 * pump,
+                        lsh_p=pose.get("lsh_p", 8) - 5.0 * pump)
+        joints = _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93,
+                          amp=0.12, rifle_on=True, flags=("shotgun",), expression="angry")
         m = joints.get("muzzle") if joints else None
         if m is None:
             f, rg = _fwd(self.yaw, 0.0), _right(self.yaw)
@@ -688,10 +775,15 @@ class RaidScene:
 
     def _draw_allies(self, r, tm):
         b = self.brain
-        for key, a in (("bodi", b.bodi), ("alex", b.alex)):
-            _w.actor(r, key, self._ally_pose(a), (a["x"], a["y"], a["z"]), a["yaw"], int(tm),
-                     seed=61 if key == "bodi" else 62, amp=0.3, rifle_on=True)
-            if a["state"] == "down" and key == "bodi":
+        for name, a in (("bodi", b.bodi), ("alex", b.alex)):
+            key = ("ally", name)
+            pose = self._ally_pose(a)
+            if not a["moving"] and a["state"] != "down":
+                pose = _hold_cached(_w.hum(key), pose, "rifle", "ready", key=key)
+            joints = _w.actor(r, key, pose, (a["x"], a["y"], a["z"]), a["yaw"], int(tm),
+                              seed=61 if name == "bodi" else 62, amp=0.3, rifle_on=True, mouth=0.0)
+            a["muzzle"] = joints.get("muzzle") if joints else None
+            if a["state"] == "down" and name == "bodi":
                 r.add_sprite((a["x"], 1.6, a["z"]), _fx.glow((255, 90, 70), 0.3, tm, intensity=0.8,
                                                               core=(255, 160, 140), flicker=0.3),
                              layer=_fx.FX_LAYER)
@@ -709,7 +801,11 @@ class RaidScene:
                 continue
             x, y, z = e["x"], e["y"], e["z"]
             if e["kind"] == "dog":
-                if not e["alive"] and self.t - e["dead_t"] > 0.8:
+                if not e["alive"]:
+                    k = _ease(clamp((self.t - e["dead_t"]) / DOG_FALL_S, 0.0, 1.0))
+                    ux, uz = e.get("fall_dir", (0.0, 0.0))
+                    _w.add(r, W.placed(W.dog_fall(90.0 * k), x + ux * DOG_PUSH_M * k, 0.0,
+                                       z + uz * DOG_PUSH_M * k, e["yaw"]))
                     continue
                 fr = int(e["gait"] * 3.0) % 4 if e["moving"] else 0
                 _w.add(r, W.placed(W.dog(fr), x, 0.0, z, e["yaw"]))
@@ -717,11 +813,12 @@ class RaidScene:
             kind = "heavy" if e["kind"] == "gunner" else GUARD_VIEW[e["slot"] % len(GUARD_VIEW)]
             gk = ("guard", kind)
             if not e["alive"]:
-                k = clamp((self.t - e["dead_t"]) / 0.45, 0.0, 1.0)
+                k = _ease(clamp((self.t - e["dead_t"]) / GUARD_FALL_S, 0.0, 1.0))
                 was = e.get("pose") or POSES["stand"]
                 pose = blend(was, e.get("dead_pose", "dead_back"), k)
-                _w.actor(r, gk, pose, (x, y, z), e["yaw"], int(tm), seed=100 + e["slot"], amp=0.0,
-                         rifle_on=False, hd=True)
+                ux, uz = e.get("fall_dir", (0.0, 0.0))
+                _w.actor(r, gk, pose, (x + ux * GUARD_PUSH_M * k, y, z + uz * GUARD_PUSH_M * k),
+                         e["yaw"], int(tm), seed=100 + e["slot"], amp=0.0, rifle_on=False, hd=True)
                 if e["mags"] and k >= 1.0:
                     r.add_sprite((x, y + 0.2, z), _fx.glow((255, 214, 140), 0.28, tm,
                                                            intensity=0.35 + 0.35 * math.sin(self.t * 4.0 + e["slot"]) ** 2),
@@ -754,13 +851,15 @@ class RaidScene:
             r.add_sprite(p, _fx.sparks(7, (now - t0) * 1000.0, n=10, speed_m=2.0, dur_ms=420),
                          layer=_fx.FX_LAYER)
         for t0, p, kind in self.impacts:
-            col = (150, 24, 20) if kind == "blood" else (150, 150, 156)
-            r.add_sprite(p, _fx.dust_motes(int((now - t0) * 1000.0), seed=int(t0 * 97), count=12,
-                                           spread_m=(0.45, 0.4), col=col), layer=_fx.FX_LAYER)
+            if now - t0 < 0.22:
+                col = (176, 26, 22) if kind == "blood" else (238, 226, 176)
+                for ax, ay, az in FLECK_ARMS:
+                    r.add_line3d(p, (p[0] + ax, p[1] + ay, p[2] + az), col, 1, layer=3)
         for t0, pos in self.flashes:
             if now - t0 < 0.06:
-                r.add_sprite(pos, _fx.glow((255, 206, 130), 0.9, tm, intensity=1.0,
-                                           core=(255, 240, 200), max_px=34), layer=_fx.FX_LAYER)
+                for ax, ay, az in FLASH_ARMS:
+                    r.add_line3d(pos, (pos[0] + ax, pos[1] + ay, pos[2] + az), (255, 238, 190), 2,
+                                 layer=3)
 
 
 _SCENE = None
@@ -805,6 +904,11 @@ def abort():
         _SCENE.paused = False
         STATE.m7_raid_active = False
         _SCENE._grab(False)
+        if _SCENE.audio is not None:
+            try:
+                _SCENE.audio.stop_loops()
+            except Exception:
+                pass
 
 
 def force_finish(reason="fallback"):
