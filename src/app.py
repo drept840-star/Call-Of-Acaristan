@@ -641,6 +641,54 @@ def _m7_film_pending():
     return True
 
 
+# ─────────────────────────────────────────────
+# Cutscene trace (ACA_CUTSCENE_TRACE=1): appends one line per cutscene-relevant
+# event to build/cutscene_trace.log. Diagnosis only; zero cost when unset.
+# ─────────────────────────────────────────────
+def _cut_trace(event, **fields):
+    import os as _os_t
+    if _os_t.environ.get("ACA_CUTSCENE_TRACE", "").strip() != "1":
+        return
+    try:
+        import os as _os_t
+        if _os_t.environ.get("ACA_CUTSCENE_TRACE", "").strip() != "1":
+            return
+        parts = [event]
+        for k, v in fields.items():
+            parts.append(f"{k}={v}")
+        line = f"{_now_ms()} f{gsm_frame_count} " + " ".join(parts) + "\n"
+        path = _os_t.path.join(_os_t.path.dirname(_os_t.path.dirname(_os_t.path.abspath(__file__))),
+                               "build", "cutscene_trace.log")
+        _os_t.makedirs(_os_t.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(line)
+    except Exception:
+        pass
+
+
+gsm_frame_count = 0
+
+_cut_watch_state = [None, None, None]   # (player id, shot_idx, completed)
+
+
+def _cut_watch():
+    """Per-frame diff of the cutscene player: traces player replacement (a
+    restart shows up as a new player on the same shots), shot advances and
+    cutscene ends. Runs every frame; a tuple compare when tracing is off."""
+    cp = active_cutscene
+    key = (id(cp), cp.shot_idx if cp else None, cp.completed if cp else None)
+    if key == tuple(_cut_watch_state):
+        return
+    prev = _cut_watch_state[0]
+    _cut_watch_state[:] = [id(cp), cp.shot_idx if cp else None, cp.completed if cp else None]
+    if cp is None and prev is None:
+        return
+    _cut_trace("player_state", idx=cp.shot_idx if cp else None,
+               scene=(cp.current_shot or {}).get("scene") if cp else None,
+               start=getattr(cp, "start_time", None), completed=cp.completed if cp else None,
+               new_player=(prev is not None and cp is not None and id(cp) != prev))
+
+
 def start_cutscene(shots, after_state, use_fades=True):
     global active_cutscene
     if active_cutscene and active_cutscene.finale_audio:
@@ -675,6 +723,8 @@ def start_cutscene(shots, after_state, use_fades=True):
     active_cutscene = CutscenePlayer(shots, after_state, use_fades)
     active_cutscene.finale_audio = finale_audio
     gc.reset_dialogue_slide()
+    _cut_trace("start_cutscene", scenes=",".join(str(s.get("scene")) for s in (shots or ())[:4]),
+               after=after_state, nshots=len(shots) if shots else 0)
 
 
 # ─────────────────────────────────────────────
@@ -694,6 +744,8 @@ def _set_menu_music(should_play):
         if not _menu_music_active and not _menu_music_failed:
             _menu_music_active = bool(audio.play_music(MENU_MUSIC_FILE, volume=0.48))
             _menu_music_failed = not _menu_music_active
+        if _menu_music_failed and audio.music_name():
+            audio.fade_out_music(800)    # no menu theme: a mission score must not carry on
     else:
         if _menu_music_active:
             audio.stop_music()
@@ -753,7 +805,7 @@ def apply_display_mode(mode, resolution_str=None):
         info = pygame.display.Info()
         size, flags = (info.current_w, info.current_h), pygame.FULLSCREEN
     else:
-        size, flags = (WIDTH, HEIGHT), pygame.RESIZABLE
+        size, flags = config.windowed_size(), pygame.RESIZABLE
 
     try:
         pygame.display.set_mode(size, flags)
@@ -1236,8 +1288,19 @@ def _apply_dev_args():
             sys.exit(2)
         args.add(_flag)
     if "--dev-m1" in args or "--m1" in args:
-        # Jump into Mission 1 from the start, playable
-        # (--dev-safe goes to the safe keypad instead).
+        # Jump into Mission 1 through its opening handoff, like the briefing
+        # screen's finish_briefing(): mission live, then the m1.dropoff radio
+        # cut (van pulls away, three radio lines), then gameplay.
+        # (--dev-safe goes to the safe keypad instead; --dev-m1-game skips
+        # the cutscene entirely, which the trailer bot's act1 expects.)
+        gc.mission_start_time = _now_ms()
+        gc.mission_end_time = 0
+        gc.start_mission(preserve_timer=True)
+        start_cutscene(gc.dropoff_shots, "GAME", use_fades=True)
+        trigger_transition("CUTSCENE")
+        pygame.mouse.set_visible(False)
+    elif "--dev-m1-game" in args or "--m1-game" in args:
+        # Mission 1 gameplay from the start, no dropoff cutscene.
         gc.mission_start_time = _now_ms()
         gc.mission_end_time = 0
         gc.start_mission(preserve_timer=True)
@@ -3002,8 +3065,12 @@ class _CutsceneState(GameState):
                        "route12_checkpoint", "route12_tanker", "route12_aftermath",
                        "seby_pickup_body", "seby_pickup_reach", "seby_pickup_raise",
                        "m1_escape_dashboard", "m1_escape_closeup",
-                       "m1_escape_truck", "m1_escape_rear", "m1_dropoff"}
+                       "m1_escape_truck", "m1_escape_rear", "m1_dropoff", "m1_dropoff_follow",
+                       "m1_dropoff_entry"}
         amb = {"ambient_drone"}
+        if cp.after_state in ("M7_RESUME", "MISSION7_COMPLETE"):
+            from missions.m7 import flow as _m7_flow  # lazy: M7-only
+            _m7_flow.film_music(_M7_MID["key"] if cp.after_state == "M7_RESUME" else "outro")
         if shot["scene"] == "m5_shadow_finale":
             # Dedicated stereo river/rain stem replaces the generic loops.
             _set_ambience(set() if cp.finale_audio else
@@ -3039,7 +3106,8 @@ class _CutsceneState(GameState):
             gc.draw_typewriter_title(surface, lines, cp.char_idx)
         else:
             outdoor_rain = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy",
-                            "route12_checkpoint", "route12_tanker", "route12_aftermath", "m1_dropoff"}
+                            "route12_checkpoint", "route12_tanker", "route12_aftermath", "m1_dropoff", "m1_dropoff_follow",
+                            "m1_dropoff_entry"}
             if shot["scene"] in outdoor_rain:
                 draw_rain(surface, gc.rain_drops, speed_mul=1.0)
                 surface.blit(_cutscene_fog, (0, 0))
@@ -3051,16 +3119,8 @@ class _CutsceneState(GameState):
             if not shot.get("quiet_ui"):
                 draw_scanlines(surface)
             draw_letterbox(surface)
-            can_continue = t_ms >= shot.get("min_ms", 0)
             if t_ms >= shot.get("caption_after_ms", 0) and not shot.get("hide_caption") and (shot["text"] or shot.get("speaker")):
-                gc.draw_dialogue_box(
-                    surface,
-                    shot["speaker"],
-                    shot["text"],
-                    cp.char_idx,
-                    len(shot["text"]),
-                    can_continue,
-                )
+                gc.draw_film_caption(surface, shot["speaker"], shot["text"])
             if not shot.get("self_graded"):
                 _g = _advance_grain()
                 if _g is not None:
@@ -3592,7 +3652,14 @@ class _GameState_(GameState):
         elif mission == "MISSION6":
             _set_ambience({"ambient_drone", "wind"})
         elif mission == "MISSION7":
-            _set_ambience({"ambient_drone", "wind"})
+            # Daylight farm stages carry the score (m7 flow.STAGE_MUSIC); the
+            # drone is a night/raid bed and reads gloomy under it.
+            from missions.m7 import flow as _m7_flow  # lazy: M7-only
+            _m7_flow.music_tick()
+            if getattr(STATE, "mission7_stage", "") in ("chores", "prep"):
+                _set_ambience({"wind"})
+            else:
+                _set_ambience({"ambient_drone", "wind"})
         elif mission == "MISSION1":
             # Street band (rows 0-9): the exterior rain + wind loops. Inside, the
             # per-frame layers in core.ambience carry rain_inside / elec_hum / drips.
@@ -4197,10 +4264,12 @@ running = True
 # under the old module-level `while running:` loop.
 def _legacy_frame():
     global CURSOR_ARROW_STATES, _frame_ms, _hud, _mp_live, _s, _sim_step, current_name, dt, event, keys, mouse_visible, mouse_x, mouse_y, music_state, new_mode, running, upload_os
-    global _dev_sim_ms, _dev_draw_ms
+    global _dev_sim_ms, _dev_draw_ms, gsm_frame_count
     import time as _dev_time
     _dev_t0 = _dev_time.perf_counter()
     _frame_ms = clock.tick(60)
+    gsm_frame_count += 1
+    _cut_watch()
     _devtools.frames.push(_frame_ms, _dev_sim_ms, _dev_draw_ms)   # RPE6 P10
     dt = min(_frame_ms / 1000.0, MAX_DT)
     STATE.dt = dt

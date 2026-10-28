@@ -478,6 +478,63 @@ def _gen_gunshot_distant():
     """Muffled distant version: high-frequencies stripped, bass thuds enhanced."""
     return _gen_gunshot_core(volume=0.5, lowpass_strength=0.075)
 
+def _gen_shotgun_blast():
+    """Twelve-bore: deeper and slower than the rifle, with a long yard tail."""
+    dur = 1.15
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    crack = _noise(int(SAMPLE_RATE * 0.0015), 1.0)
+    _mix(buf, crack)
+    blast = _noise(int(SAMPLE_RATE * 0.16), 0.95)
+    _resonant_filter(blast, 520, 0.28, "low")
+    _env_exp(blast, 1.0, 0.001, 16.0)
+    _offset_mix(buf, blast, int(SAMPLE_RATE * 0.0015))
+    thump = _fm(int(SAMPLE_RATE * 0.55), 38, 1.0, 76, 2.2, decay_rate=5.0)
+    _env_exp(thump, 1.0, 0.001, 4.5)
+    _offset_mix(buf, thump, int(SAMPLE_RATE * 0.002))
+    mid = _noise(int(SAMPLE_RATE * 0.28), 0.55)
+    _resonant_filter(mid, 1500, 0.18, "low")
+    _env_exp(mid, 1.0, 0.001, 9.0)
+    _offset_mix(buf, mid, int(SAMPLE_RATE * 0.003))
+    _apply_delay(buf, 150, feedback=0.3, wet=0.22)
+    _soft_clip(buf, 1.6)
+    _env_exp(buf, 1.0, 0.001, 1.6)
+    return _wav(buf)
+
+def _gen_shotgun_pump():
+    """The pump cycle: fore-end back, spring ring, fore-end home."""
+    dur = 0.55
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    back = _noise(int(SAMPLE_RATE * 0.05), 0.8)
+    _resonant_filter(back, 1900, 0.3, "low")
+    _env_exp(back, 1.0, 0.001, 70.0)
+    _offset_mix(buf, back, 0)
+    ring = _fm(int(SAMPLE_RATE * 0.18), 2400, 0.22, 3700, 2.5, decay_rate=22.0)
+    _env_exp(ring, 1.0, 0.001, 20.0)
+    _offset_mix(buf, ring, int(SAMPLE_RATE * 0.02))
+    home = _noise(int(SAMPLE_RATE * 0.06), 0.85)
+    _resonant_filter(home, 1500, 0.35, "low")
+    _env_exp(home, 1.0, 0.001, 55.0)
+    _offset_mix(buf, home, int(SAMPLE_RATE * 0.24))
+    _soft_clip(buf, 1.2)
+    _env_exp(buf, 1.0, 0.001, 3.0)
+    return _wav(buf)
+
+def _gen_shell_insert():
+    """A shell sliding into the tube and seating on the spring."""
+    dur = 0.3
+    n = int(SAMPLE_RATE * dur)
+    buf = _arr(n)
+    slide = _noise(int(SAMPLE_RATE * 0.05), 0.5)
+    _resonant_filter(slide, 2600, 0.2, "low")
+    _env_exp(slide, 1.0, 0.001, 60.0)
+    _offset_mix(buf, slide, 0)
+    thunk = _fm(int(SAMPLE_RATE * 0.12), 210, 0.5, 105, 0.8, decay_rate=30.0)
+    _env_exp(thunk, 1.0, 0.001, 26.0)
+    _offset_mix(buf, thunk, int(SAMPLE_RATE * 0.06))
+    return _wav(buf)
+
 
 def _gen_sniper_crack():
     """High-powered distant sniper rifle: supersonic snap + delayed heavy report."""
@@ -2874,6 +2931,9 @@ class AudioManager:
         gens = [
             ("gunshot", _gen_gunshot),
             ("gunshot_distant", _gen_gunshot_distant),
+            ("shotgun_blast", _gen_shotgun_blast),
+            ("shotgun_pump", _gen_shotgun_pump),
+            ("shell_insert", _gen_shell_insert),
             ("sniper_crack", _gen_sniper_crack),
             ("bullet_snap", _gen_bullet_snap),
             ("concrete_impact", _gen_concrete_impact),
@@ -3120,9 +3180,27 @@ class AudioManager:
         except Exception:
             pass
         
-    def play_music(self, filename, volume=0.5):
-        """Loads and streams an MP3 music track in the background."""
+    def play_music(self, filename, volume=0.5, fade_ms=0):
+        """Loads and streams an MP3 music track in the background (looped).
+
+        Asking again for the track already loaded only updates its volume
+        (and resumes it if pause_music() held it), so per-frame cue code can
+        call this freely without restarting the track. fade_ms fades a
+        newly started track in."""
         import os
+        if filename == getattr(self, "_music_name", None):
+            try:
+                if getattr(self, "_music_paused", False):
+                    self.unpause_music()
+                alive = (pygame.mixer.music.get_busy()
+                         or getattr(self, "_music_paused", False)
+                         or getattr(self, "_music_muted", False))
+            except Exception:
+                alive = False
+            if alive:
+                if volume != getattr(self, "_current_music_vol", None):
+                    self.set_music_volume(volume)
+                return True
         filepath = os.path.join(os.path.dirname(__file__), filename)
         if not os.path.exists(filepath):
             filepath = filename
@@ -3133,7 +3211,9 @@ class AudioManager:
             _load_music(filepath)
             self._current_music_vol = volume
             pygame.mixer.music.set_volume(self.master_volume * volume)
-            pygame.mixer.music.play(loops=-1)
+            pygame.mixer.music.play(loops=-1, fade_ms=max(0, int(fade_ms)))
+            self._music_name = filename
+            self._music_paused = False
             return True
         except Exception as e:
             print(f"Failed to play music: {e}")
@@ -3141,10 +3221,58 @@ class AudioManager:
 
     def stop_music(self):
         """Stops the streaming background music."""
+        self._music_name = None
+        self._music_paused = False
         try:
             pygame.mixer.music.stop()
         except Exception:
             pass
+
+    def fade_out_music(self, ms=1500):
+        """Fades the streaming music out over ms; a paused track just stops."""
+        paused = getattr(self, "_music_paused", False)
+        self._music_name = None
+        self._music_paused = False
+        try:
+            if paused or int(ms) <= 0:
+                pygame.mixer.music.stop()
+            else:
+                pygame.mixer.music.fadeout(int(ms))
+        except Exception:
+            pass
+
+    def pause_music(self):
+        """Holds the streaming track (e.g. a 3D scene's pause menu)."""
+        if getattr(self, "_music_name", None) is None:
+            return
+        self._music_paused = True
+        try:
+            pygame.mixer.music.pause()
+        except Exception:
+            pass
+
+    def unpause_music(self):
+        """Releases pause_music(); stays silent while focus-muted."""
+        if not getattr(self, "_music_paused", False):
+            return
+        self._music_paused = False
+        if getattr(self, "_music_muted", False):
+            return
+        try:
+            pygame.mixer.music.unpause()
+        except Exception:
+            pass
+
+    def music_name(self):
+        """Filename of the track play_music() last started, or None."""
+        return getattr(self, "_music_name", None)
+
+    def music_busy(self):
+        """True while any streaming music is audible (including a fade-out)."""
+        try:
+            return bool(pygame.mixer.music.get_busy())
+        except Exception:
+            return False
 
     def set_music_volume(self, volume):
         """Adjusts the streaming music volume dynamically."""
@@ -3177,14 +3305,17 @@ class AudioManager:
         try:
             pygame.mixer.pause()
             pygame.mixer.music.pause()
+            self._music_muted = True
         except Exception:
             pass
 
     def unmute_all(self):
         """Resume everything paused by mute_all()."""
+        self._music_muted = False
         try:
             pygame.mixer.unpause()
-            pygame.mixer.music.unpause()
+            if not getattr(self, "_music_paused", False):   # pause_music() still holds it
+                pygame.mixer.music.unpause()
         except Exception:
             pass
         
