@@ -324,9 +324,12 @@ def ledge():
     m = Mesh()
     m.add(box(2.2, 0.14, 1.2, F.WOOD, center=(LOFT_AT[0], LOFT_AT[1] - 0.07, LOFT_AT[2])))
     for sx in (-0.9, 0.9):
-        m.add(box(0.1, 0.1, 0.95, F.WOOD_D, center=(LOFT_AT[0] + sx, LOFT_AT[1] - 0.45,
+        m.add(box(0.1, 0.3, 0.95, F.WOOD_D, center=(LOFT_AT[0] + sx, LOFT_AT[1] - 0.2,
                                                     LOFT_AT[2] + 0.15)))
     m.add(box(2.2, 0.06, 0.06, F.WOOD, center=(LOFT_AT[0], LOFT_AT[1] + 0.9, LOFT_AT[2] - 0.55)))
+    for sx in (-1.05, 1.05):
+        m.add(box(0.06, 0.9, 0.06, F.WOOD_D, center=(LOFT_AT[0] + sx, LOFT_AT[1] + 0.45,
+                                                      LOFT_AT[2] - 0.55)))
     return m
 
 

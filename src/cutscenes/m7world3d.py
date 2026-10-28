@@ -195,7 +195,7 @@ def ground():
     # One flat colour per surface (a per-face tint read as diagonal bands);
     # the pixel textures carry the variation.  Half the field is ploughed.
     return [
-        quad_xz(-100, -100, 100, 100, 0.0, _t("grass", GRASS), layer=0, seg=40),
+        quad_xz(-400, -400, 400, 400, 0.0, _t("grass", GRASS), layer=0, seg=40),
         quad_xz(-46, -12, -26, 34, 0.02, _t("stubble", STUBBLE), layer=1, seg=12),
         quad_xz(-64, -12, -46, 34, 0.02, _t("furrow", P.TRACK_D), layer=1, seg=12),
         quad_xz(-20, -16, 20, 22, 0.02, _t("dirt", DIRT), layer=1, seg=8),
@@ -478,10 +478,10 @@ def tractor(lit=False):
     def wheel(x, z, rad, wid):
         prof = [(rad * math.cos(math.pi / 8 + k * math.pi / 4),
                  rad + rad * math.sin(math.pi / 8 + k * math.pi / 4)) for k in range(8)]
-        m.add(prism(prof, wid, RUB, z0=z - wid / 2.0), t=(x, 0, 0))
+        m.add(prism(prof, wid, RUB, z0=z - wid / 2.0), t=(x, -0.04, 0))
         hp = [(0.45 * rad * math.cos(math.pi / 8 + k * math.pi / 4),
                rad + 0.45 * rad * math.sin(math.pi / 8 + k * math.pi / 4)) for k in range(8)]
-        m.add(prism(hp, wid + 0.05, HUB, z0=z - (wid + 0.05) / 2.0), t=(x, 0, 0))
+        m.add(prism(hp, wid + 0.05, HUB, z0=z - (wid + 0.05) / 2.0), t=(x, -0.04, 0))
 
     for sz in (-0.78, 0.78):
         wheel(-0.7, sz, 0.75, 0.34)
@@ -532,7 +532,7 @@ def _farm_silo():
                     (ring[i][0] * 1.012, yy + 0.055, ring[i][1] * 1.012)],
                    (72, 83, 84), 2, True)
     m.add(box(0.75, 1.55, 0.08, WOOD_D, center=(0.0, 0.78, -1.59)))
-    m.add(box(1.9, 0.16, 1.9, METAL, center=(0.0, 0.18, 0.0)))
+    m.add(box(1.9, 0.16, 1.9, METAL, center=(0.0, 0.08, 0.0)))
     return m
 
 
@@ -543,8 +543,8 @@ def _farm_windpump():
     m.add(box(0.22, 6.0, 0.22, metal, center=(0, 3.0, 0)))
     leg_l = box(0.13, 3.3, 0.13, WOOD_D)
     leg_r = box(0.13, 3.3, 0.13, WOOD_D)
-    m.add(leg_l, rot_z(-24), t=(-0.72, 1.65, 0))
-    m.add(leg_r, rot_z(24), t=(0.72, 1.65, 0))
+    m.add(leg_l, rot_z(-24), t=(-0.72, 1.51, 0))
+    m.add(leg_r, rot_z(24), t=(0.72, 1.51, 0))
     m.add(box(2.8, 0.13, 0.12, metal, center=(0, 5.65, -0.15)))
     m.add(box(0.12, 2.8, 0.12, metal, center=(0, 5.65, -0.15)))
     for ang in (45, -45):
@@ -552,8 +552,8 @@ def _farm_windpump():
         m.add(blade, rot_z(ang), t=(0, 5.65, -0.22))
     m.add(box(0.42, 0.42, 0.30, RUST, center=(0, 5.65, -0.34)))
     # Water trough beneath the pump catches a little of the warm practical light.
-    m.add(box(1.5, 0.32, 0.72, WOOD_D, center=(1.2, 0.22, -0.2)))
-    m.add(box(1.32, 0.06, 0.54, (42, 68, 70), center=(1.2, 0.39, -0.2)))
+    m.add(box(1.5, 0.32, 0.72, WOOD_D, center=(1.2, 0.16, -0.2)))
+    m.add(box(1.32, 0.06, 0.54, (42, 68, 70), center=(1.2, 0.33, -0.2)))
     return m
 
 
@@ -700,6 +700,8 @@ def skyline(lit):
     roof = (8, 9, 12)
     win = WIN_LIT if lit else SKYLINE
     for x, z, y, sides in _village():
+        if y > 0.1:
+            m.add(box(5.0, y, 4.0, SKYLINE, center=(x, y / 2.0, z)))
         m.add(box(5.0, 3.2, 4.0, SKYLINE, center=(x, y + 1.6, z)))
         g = Mesh()
         g.add(_gable_z(4.0, 5.0, 3.2, 1.8, roof, SKYLINE), rot_y(90))
@@ -710,6 +712,9 @@ def skyline(lit):
             m.add(box(w, 0.7, d, win, center=(x + ox, y + 1.9, z + oz), emissive=lit))
     cx, cz = 100.0 * math.cos(_CHURCH_A), 100.0 * math.sin(_CHURCH_A)
     y = _hill_h(_CHURCH_A) - 0.8
+    if y > 0.1:
+        m.add(box(10.0, y, 6.0, SKYLINE, center=(cx, y / 2.0, cz)))
+        m.add(box(3.2, y, 3.2, SKYLINE, center=(cx + 6.4, y / 2.0, cz)))
     m.add(box(10.0, 6.0, 6.0, SKYLINE, center=(cx, y + 3.0, cz)))
     g = Mesh()
     g.add(_gable_z(6.0, 10.0, 6.0, 2.6, roof, SKYLINE), rot_y(90))
@@ -754,15 +759,16 @@ def _shelter_tree(seed=0):
 
     if seed % 4 == 0:
         # Narrow poplar-like silhouette.
+        # Lower cone runs down to the ground: the trunk is too dark to show at range.
         m.add(_bipyr(
             0, 4.7 * s, 0,
-            1.05 * s, 3.0 * s, 2.1 * s,
+            1.05 * s, 3.0 * s, 4.7 * s,
             leaf, n=5))
     else:
         # Offset crowns avoid a repeated row of identical diamonds.
         m.add(_bipyr(
             -0.40 * s, 4.1 * s, 0,
-            2.0 * s, 1.9 * s, 1.2 * s,
+            2.0 * s, 1.9 * s, 4.1 * s,
             leaf, n=6))
         m.add(_bipyr(
             0.70 * s, 5.0 * s, 0.25 * s,
@@ -1264,7 +1270,7 @@ def poplars():
     while a < math.radians(56.0):
         h = 11.0 + 1.2 * ((k * 5) % 7) + (2.5 if k % 9 == 4 else 0.0)
         r = 77.0 + 1.6 * ((k * 3) % 3)
-        y = _hill_y(a, r) - 0.3
+        y = _hill_y(a, r) - 0.18 * h - 0.2     # lower bipyramid tip sits on the slope
         if k % 11 != 7:     # a gap where one has come down
             m.add(_poplar(k, h), rot_y((k * 71) % 360),
                   t=(r * math.cos(a), y, r * math.sin(a)))
@@ -1337,7 +1343,7 @@ def _walnut(seed):
 
 # Wayside shrine lamp and far farmstead windows (raid halos).
 SHRINE_AT = (6.5, -44.5)
-SHRINE_LAMP = (6.12, 1.74, -44.5)
+SHRINE_LAMP = (6.22, 1.74, -44.5)
 
 
 def _farmsteads():
@@ -1430,9 +1436,9 @@ def road_dressing(lit):
     # Plank bridges over both drains at the field entrances.
     for x0, x1, z in ((4.0, 5.7, -53.0), (-5.7, -4.0, -54.5)):
         cx = (x0 + x1) / 2.0
-        m.add(box(x1 - x0, 0.12, 2.4, _t("plank", P.WOOD_GREY), center=(cx, 0.14, z)))
+        m.add(box(x1 - x0, 0.12, 2.4, _t("plank", P.WOOD_GREY), center=(cx, 0.06, z)))
         for dz in (-1.15, 1.15):
-            m.add(box(x1 - x0 + 0.3, 0.16, 0.16, _t("plank", WOOD_D), center=(cx, 0.26, z + dz)))
+            m.add(box(x1 - x0 + 0.3, 0.16, 0.16, _t("plank", WOOD_D), center=(cx, 0.2, z + dz)))
         out = x1 + 4.2 if x0 > 0 else x0 - 4.2
         m.add(quad_xz(min(x1, out), z - 1.1, max(x0, out), z + 1.1, 0.045,
                       _t("track", P.TRACK_D), layer=1, seg=2))
@@ -1445,12 +1451,12 @@ def road_dressing(lit):
     cart.add(box(1.6, 0.08, 0.08, WOOD_D, center=(1.9, -0.1, 0.3)))
     tilt = Mesh()
     tilt.add(cart, rot_z(12))
-    m.add(tilt, rot_y(74), t=(-7.4, 0.42, -67.0))
+    m.add(tilt, rot_y(74), t=(-7.4, 0.36, -67.0))
     prof = [(0.48 * math.cos(math.pi / 8 + k * math.pi / 4),
              0.48 + 0.48 * math.sin(math.pi / 8 + k * math.pi / 4)) for k in range(8)]
     wheel = Mesh()
     wheel.add(prism(prof, 0.1, WOOD_D, z0=-0.05))
-    m.add(wheel, rot_y(74), t=(-6.95, 0, -66.0))
+    m.add(wheel, rot_y(74), t=(-6.95, -0.04, -66.0))
     flat = Mesh()
     flat.add(prism(prof, 0.1, _v(WOOD_D, -8), z0=-0.05), rot_z(90))
     m.add(flat, rot_y(20), t=(-8.6, 0.05, -69.2))
