@@ -1,4 +1,3 @@
-
 """Split from mission2.py - see mission2.py (shim) for the map."""
 # missions.m2 package
 # ------------------------------------------------------------
@@ -1030,8 +1029,9 @@ def _update_camera():
         deadzone = CAM_DEADZONE_PX
         if STATE.player and not STATE.player_dead:
             _a = STATE.player.angle
-            lookahead = (math.cos(_a) * CAM_LOOKAHEAD_PX,
-                         math.sin(_a) * CAM_LOOKAHEAD_PX)
+            from core.camera import mouse_lookahead
+            lookahead = mouse_lookahead() or (math.cos(_a) * CAM_LOOKAHEAD_PX,
+                                              math.sin(_a) * CAM_LOOKAHEAD_PX)
 
     handheld = (getattr(STATE, "mission2_sniper_phase_timer", 0)
                 if in_sniper else None)

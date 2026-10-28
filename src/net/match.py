@@ -1,4 +1,3 @@
-
 """A multiplayer match session: authoritative host + interpolating clients.
 
 This is the layer that turns the snapshot codec (net/protocol.py) and the

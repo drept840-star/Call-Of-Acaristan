@@ -1,4 +1,3 @@
-
 """lighting.buffer - half-res light buffer: grade, motivated pools, dust (engine side).
 
 The house style ("dark vector compositions, motivated lighting") was faked

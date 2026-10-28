@@ -1,4 +1,3 @@
-
 """Split from mission3.py - see mission3.py (shim) for the map."""
 """Mission 3: The Vostral - dialogue-driven cold open into action.
 

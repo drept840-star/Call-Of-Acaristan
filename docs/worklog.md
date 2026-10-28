@@ -1472,6 +1472,24 @@ shutter guards facing each other; faint calm-guard suspicion meter; Volkov escap
 figure; CIOCAN speaker color; Q-brick binding; `files_already` timing; stockroom
 outer-wall tiles; the two music files; playtest + merge-to-main sign-off.
 
+## 2026-10-27 - M1: Volkov is the cast man, not a blob
+
+User: "in M1, Volkov is drawn uglily". He was: `_draw_volkov_topdown` built him like
+`Enemy.draw` (rotated coat polygon + hair circle + face patch + a cigarette splinter),
+so the named courier read as a diamond in the lamp pool while every other mission draws
+him from `cutscenes.figure_kit`.
+
+- `src/missions/m1/draw.py`: `_draw_volkov_topdown` now blits the cached figure_kit body
+  (`_volkov_body`, the M4/M5/M6 recipe: 3x supersample, smoothscale to 84x84,
+  `artpack.pose` per facing, `_KIT_SCALE 0.232`), feet planted on his post/run line over
+  the guard contact shadow, walk bob on the body only. `_volkov_turn` and its
+  `STATE.volkov_draw_angle` are gone (two facings need no smoothing); the smoke check's
+  stale reset line went with it.
+- Look verified in real frames: `shots/m1_volkov/` (at post, standoff, mid-run, two full
+  frames, cast reference). Scale matches the M4/M5/M6 named cast on 64 px tiles.
+- Gates: compileall OK; smoke `SMOKE TEST: OK`. No golden includes Volkov's post (the
+  `gp.m1.desks/warehouse/start/street/shutter` cameras all miss tile 15,27), so no rebake.
+
 ## 2026-10-28 - Mission 7 "Fallow Ground": all seven beats, with a playable 3D raid
 
 Branch `m7/fallow-ground`, cut from `cutscene-holds`. Nothing is committed yet. The plot doc
@@ -1524,3 +1542,43 @@ save/resume; the "RELOADING" label overlaps the HP bar (M6 helper, shared); `ae_
 does not cover the M7 films; `ACA_TL_SRC=legacy` gives empty M7 film shot lists. Doc
 conflicts to settle are listed at the end of `docs/MISSION7_PLOT.md` ("Tomorrow night" vs
 M8 "at dawn", Vasile Captain vs Commander).
+
+## 2026-10-28 - Mission 7 second pass: farm audio, two minigames, the Fallow 12, the receiver
+
+Branch `m7/fallow-ground`, on top of the all-beats build. The owner's play test found the
+top-down farm silent, the tractor a scripted slide, the note handoff weak and the ending a
+text dump; he asked for a shotgun handed over by an NPC and for Biribel to hold it properly.
+
+- **Audio.** New `missions/m7/m7_audio.py`: 29 numpy sounds (farm day/night beds, choice hum,
+  wildlife, footsteps, well/pour/grain/hay, generator pull/cough/backfire/catch/idle, tractor
+  idle/move/rev/stall/off/chock, receiver tune/lock), with `m7_shotgun_blast`-style shared
+  shotgun sounds in `audio/audio.py` (`shotgun_blast`, `shotgun_pump`, `shell_insert`).
+  Farm footsteps, dialogue ticks, wildlife and every interaction are wired; `M7Audio` owns its
+  loops and stops them on stage change, pause, mission reset and quit. `core/ambience.py`
+  skips the indoor `room_tone` over the open farm (OPEN_AIR_MISSIONS) and adds M7 gusts.
+- **Generator.** The four E-taps became prime (3 taps) -> choke (timed) -> three pull strokes
+  in a moving band, with coughs/backfires and a compression meter. Misses retry; the chores
+  set and objective text are unchanged.
+- **Tractor.** The tween became a five-leg timed-steering route, clean/sloppy input, stalls
+  that replay, and a 16-frame pre-rendered rotation. `_picked("tractor")` and the blocking
+  collider now happen only when the tractor is parked.
+- **Fallow 12.** Alex gives it with the plan. Raid: 6 shells, 8 pellets (10 body / 24 head),
+  0.95 s pump, 2.2 s reload, shell pickups, new HUD; the K-9 is gone from M7. Multiplayer:
+  `WPN_SHOTGUN = 4`, crates on all three maps, key 4, a fourth loadout slot, a 2D rig sharing
+  the OS-12 finish (the 32-entry catalog is untouched). The 3D hold solves both hands onto the
+  gun (support gap 0, arm depth 2.2 cm); the 2D grid grip error matches the other guns (4 px).
+  `_clear`'s reserve refill was lowered from 60 to RESERVE0 so the 36-shell cap holds.
+- **Runner film.** Wrist-parented folder props + a scene tween + `m7_runner_plan` insert; new
+  `m7_runner_shotgun` + `m7_runner_gun` beats; `VO_228` (Alex) added to the manifest and
+  `KNOWN_MISSING_AUDIO`, not `VOICE_ORDER`.
+- **Ending.** `choice.py` is now the real `RadioTransmission` widget centred, two physical
+  channel cards, blinking standby LEDs, TX lamp, live from frame 1, no DUTY/REVENGE on screen;
+  the `_S["t0"]`/`done_at` smoke contract is unchanged.
+- **Tests.** Eight new smoke checks: `m7_audio_design`, `m7_generator_minigame`,
+  `m7_tractor_minigame`, `m7_shotgun_raid`, `m7_shotgun_hold`, `m7_choice_radio`,
+  `m7_runner_handoff`, `arena_shotgun`. The unit M7 voice test now covers `VO_228`.
+
+Gates: `compileall` OK; `SMOKE TEST: OK`; `ae_hold_check` OK; `engine3d_check` OK. Not
+committed. Open: Bodi/Alex takes (including `VO_228`); `m7_preps` and the raid checkpoint
+across save/resume; the choice has no mouse input; `ae_hold_check` still does not sample the
+M7 films (the new smoke hold check covers the raid poses).

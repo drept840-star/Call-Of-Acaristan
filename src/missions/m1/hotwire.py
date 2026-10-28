@@ -1,4 +1,3 @@
-
 """Split from mission.py - see mission.py (shim) for the map."""
 """Mission 1B gameplay: warehouse infiltrate/firefight/escape."""
 import math

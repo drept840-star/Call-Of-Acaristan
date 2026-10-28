@@ -15,6 +15,7 @@ camera.  Layout (metres, yard centre at the origin):
 Looks: "dawn" (cold mist), "night" (dark), "burn" (night, barn and house burning).
 """
 import math
+from functools import lru_cache
 
 import pygame
 
@@ -34,6 +35,7 @@ TRACK = P.TRACK
 WOOD = P.WOOD_MID
 WOOD_D = P.WOOD_D
 PLASTER = P.PLASTER
+PLASTER_N = (158, 136, 102)      # limewash at raid hour: warm daub, not grey
 PLASTER_B = (88, 80, 72)        # burnt render (finale)
 TILE = P.ROOF
 TILE_B = (52, 40, 36)           # burnt tile
@@ -43,9 +45,9 @@ TRIM = P.PLASTER
 ROOF_METAL = P.GALV_D
 STONE = P.STONE
 HAY = P.HAY
-LEAF = P.GRASS_D
-LEAF2 = P.GRASS
-TRUNK = P.WOOD_D
+LEAF = (74, 96, 58)             # canopy keeps a green read under the moon
+LEAF2 = P.GRASS_HI
+TRUNK = (96, 78, 58)            # moonlit bark: dark, but not a black pole
 WIN = (28, 36, 48)
 WIN_LIT = P.WINDOW
 EMBER = (255, 120, 40)
@@ -55,9 +57,10 @@ RUB = P.INK
 HUB = P.HAY_MID
 METAL = P.GALV_D
 RUST = P.RUST
-HILL_N = P.HILL_NEAR
-HILL_F = P.HILL_FAR
-SKYLINE = (22, 26, 32)          # far village and church: a silhouette albedo
+HILL_N = (36, 46, 38)           # the near slope keeps its grass hue
+HILL_F = (48, 58, 70)
+SKYLINE = (22, 26, 32)          # unlit far windows
+FAR_WALL = (136, 112, 82)      # far limewash reads as warm clay, not grey
 
 # M7 textures (tools/tex3d_draw_m7.py): ground at 16 texels/m, the rest 32.
 _GROUND_TEX = ("grass", "stubble", "furrow", "dirt", "track")
@@ -95,12 +98,13 @@ LOOKS = {
     # fronts catch it and read as silhouettes against a lighter horizon.  The
     # sky's foot IS the fog colour: far geometry fades into the sky it stands
     # against instead of into a seam.  Aerial perspective lives in the far
-    # albedos (HILL_N / HILL_F / SKYLINE), not in a short fog.
+    # albedos (HILL_N / HILL_F), not in a short fog.  A dark night blue, not
+    # a grey: the far farms and village keep their plaster and tile hues.
     "raid": dict(
-        fog=(44, 52, 66), fog_start=18.0, fog_end=175.0,
-        light=dict(direction=(-0.42, 0.50, -0.72), ambient=0.40, diffuse=0.66,
-                   sky=0.12, tint=(0.70, 0.80, 0.98)),
-        sky_top=(7, 10, 18), sky_bot=(44, 52, 66), sodium=None,
+        fog=(22, 29, 46), fog_start=34.0, fog_end=250.0,
+        light=dict(direction=(-0.42, 0.50, -0.72), ambient=0.36, diffuse=0.72,
+                   sky=0.12, tint=(0.72, 0.83, 1.0)),
+        sky_top=(6, 9, 18), sky_bot=(30, 40, 64), sodium=None,
         stars=90, moon=(-150.0, 15.0)),
     "burn": dict(
         fog=(26, 16, 16), fog_start=8.0, fog_end=96.0,
@@ -213,14 +217,17 @@ def _hill_h(a, ring=0):
 
 
 def hills():
-    """Faceted hills with a valley opening along the southern road."""
+    """Faceted hills with a valley opening along the southern road.  World
+    layer, not background: woods, farms and the village stand on these
+    slopes and behind their crests, and only a depth test hides the parts
+    inside the hill (a background hill let them show through and slide)."""
     m = Mesh()
     n = 60
     south = 1.5 * math.pi
     cut = math.radians(5.0)
     shoulder = math.radians(14.0)
 
-    for ring, col in enumerate((HILL_N, HILL_F)):
+    for ring, col in enumerate((_t("grass", HILL_N), _t("grass", HILL_F))):
         rad = HILL_RAD[ring]
 
         # Add exact vertices at the edges of the road opening.
@@ -240,6 +247,7 @@ def hills():
                 ((rad - 9.0) * c, -0.5, (rad - 9.0) * s),
                 ((rad - 4.0) * c, h * 0.43, (rad - 4.0) * s),
                 (rad * c, h, rad * s),
+                ((rad + 8.0) * c, -0.5, (rad + 8.0) * s),
             ))
 
         for i in range(len(angles) - 1):
@@ -248,14 +256,16 @@ def hills():
             if da < cut:
                 continue
 
-            lo0, mid0, top0 = rows[i]
-            lo1, mid1, top1 = rows[i + 1]
+            lo0, mid0, top0, back0 = rows[i]
+            lo1, mid1, top1, back1 = rows[i + 1]
             shade = (((i * 73) ^ (i * 131 + ring * 17)) & 7) - 3
 
-            m.face([lo0, lo1, mid1], _v(col, shade - 3), 0, True)
-            m.face([lo0, mid1, mid0], _v(col, shade - 1), 0, True)
-            m.face([mid0, mid1, top1], _v(col, shade + 1), 0, True)
-            m.face([mid0, top1, top0], _v(col, shade + 3), 0, True)
+            m.face([lo0, lo1, mid1], _v(col, shade - 3), 2, True)
+            m.face([lo0, mid1, mid0], _v(col, shade - 1), 2, True)
+            m.face([mid0, mid1, top1], _v(col, shade + 1), 2, True)
+            m.face([mid0, top1, top0], _v(col, shade + 3), 2, True)
+            # Back slope: closes the crest so the woods on it stay rooted.
+            m.face([top0, top1, back1, back0], _v(col, shade - 6), 2, True)
 
     return m
 
@@ -263,7 +273,9 @@ def hills():
 def house(lit=False, burn=False):
     m = Mesh()
     W, D, H = 9.0, 6.0, 3.0
-    wall = PLASTER_B if burn else _t("plaster", PLASTER)
+    # At night the limewash is a shade down: full white under the moon read
+    # brighter than the lit windows.
+    wall = PLASTER_B if burn else _t("plaster", PLASTER_N if lit else PLASTER)
     plank = _t("plank", WOOD)
     m.add(box(W, H, D, wall, center=(0, H / 2.0, 0)))
     m.add(box(W + 0.08, 0.42, D + 0.08, _t("stone", P.STONE_D), center=(0, 0.21, 0)))
@@ -275,8 +287,10 @@ def house(lit=False, burn=False):
     shutter = _t("plank", P.TRACTOR_D, tint=True)
     for x in (-3.0, -0.8, 3.6):
         m.add(box(1.25, 1.15, 0.06, TRIM, center=(x, 1.75, zf)))
-        m.add(box(0.95, 0.85, 0.08, WIN_LIT if lit else WIN,
-                  center=(x, 1.75, zf - 0.02), emissive=lit))
+        # The pane stands proud of its frame: a full-box trim behind it would
+        # hide the lit glass and the window read as a grey plaster square.
+        m.add(box(0.95, 0.85, 0.06, WIN_LIT if lit else WIN,
+                  center=(x, 1.75, zf - 0.06), emissive=lit))
         m.add(box(1.4, 0.08, 0.2, plank, center=(x, 1.13, zf - 0.08)))
         for sx in (-0.76, 0.76):
             m.add(box(0.26, 1.15, 0.05, shutter, center=(x + sx, 1.75, zf - 0.03)))
@@ -324,13 +338,15 @@ def barn(burn=False, lamp=False):
         for sx in (-1.25, 1.25):
             for ang in (40, -40):
                 brace = Mesh()
-                brace.add(box(0.14, 4.1, 0.05, TRIM, center=(0, 0, 0)), rot_z(ang))
+                brace.add(box(0.14, 4.1, 0.05, _t("plank", P.WOOD_L),
+                              center=(0, 0, 0)), rot_z(ang))
                 m.add(brace, t=(sx, 1.8, zf - 0.03))
         for x in (-2.6, 2.6):
-            m.add(box(0.2, 3.7, 0.12, TRIM, center=(x, 1.85, zf - 0.02)))
-        m.add(box(5.4, 0.2, 0.12, TRIM, center=(0, 3.7, zf - 0.02)))
+            m.add(box(0.2, 3.7, 0.12, _t("plank", P.WOOD_L), center=(x, 1.85, zf - 0.02)))
+        m.add(box(5.4, 0.2, 0.12, _t("plank", P.WOOD_L), center=(0, 3.7, zf - 0.02)))
         m.add(box(1.6, 1.6, 0.1, door, center=(0, H + 1.1, zf)))
-        m.add(box(1.9, 0.16, 0.12, TRIM, center=(0, H + 1.95, zf - 0.02)))
+        m.add(box(1.9, 0.16, 0.12, _t("plank", P.WOOD_L),
+                  center=(0, H + 1.95, zf - 0.02)))
         m.add(_gable_z(W, D, H, 3.0, _t("tin", P.GALV), side))
         if lamp:
             # Yard lamp on a bracket over the west door leaf: an enamel shade
@@ -389,9 +405,21 @@ def well():
 def tree(seed=0):
     m = Mesh()
     s = 0.9 + 0.2 * ((seed * 37) % 7) / 7.0
-    m.add(box(0.26, 1.7, 0.26, _t("bark", TRUNK), center=(0, 0.85, 0)))
+    bark = _t("bark", TRUNK)
+    m.add(contact(1.6))
+    m.add(box(0.58, 0.14, 0.58, _v(bark, -22), center=(0, 0.07, 0)))
+    m.add(box(0.30, 1.8, 0.30, bark, center=(0, 0.9, 0)))
     m.add(_bipyr(0, 2.3 * s, 0, 1.35 * s, 1.0 * s, 0.75 * s, _t("leaf", LEAF)))
     m.add(_bipyr(0.1, 3.1 * s, 0.05, 0.9 * s, 0.8 * s, 0.3 * s, _t("leaf", LEAF2)))
+    return m
+
+
+def contact(size, col=None):
+    """A baked contact shadow at a tree's foot: without it a night canopy
+    reads as a crown hanging over the field."""
+    m = Mesh()
+    m.add(quad_xz(-size / 2.0, -size / 2.0, size / 2.0, size / 2.0, 0.046,
+                  col or _v(LEAF, -26), layer=1, seg=1))
     return m
 
 
@@ -426,7 +454,9 @@ def orchard():
                 root_soil, layer=1, seg=1))
 
             t = Mesh()
-            t.add(box(0.26, 1.7, 0.26, bark, center=(0, 0.85, 0)))
+            t.add(contact(1.4))
+            t.add(box(0.58, 0.14, 0.58, _v(bark, -22), center=(0, 0.07, 0)))
+            t.add(box(0.30, 1.7, 0.30, bark, center=(0, 0.85, 0)))
 
             # Forked branches show beneath the pruned crowns.
             for side in (-1, 1):
@@ -437,16 +467,16 @@ def orchard():
 
             crown = _v(leaf, (i % 5 - 2) * 5)
             t.add(_bipyr(
-                0, 2.50, 0, 1.30 * s, 0.95 * s, 0.80,
-                crown, n=6))
+                0, 2.50, 0, 1.30 * s, 0.95 * s, 1.15,
+                crown, n=6, moon=True))
             t.add(_bipyr(
                 0.50 * s, 2.90, 0.12 * s,
                 0.82 * s, 0.72 * s, 0.60,
-                _v(crown, 8), n=5))
+                _v(crown, 8), n=5, moon=True))
             t.add(_bipyr(
                 -0.47 * s, 2.75, -0.10 * s,
                 0.75 * s, 0.64 * s, 0.55,
-                _v(crown, -7), n=5))
+                _v(crown, -7), n=5, moon=True))
 
             # Fruit sits on the flat north and south faces of some crowns.
             if i % 3 == 0:
@@ -471,17 +501,85 @@ def orchard():
     return m
 
 
+@lru_cache(maxsize=1)
+def _tractor_asset():
+    """(verts, faces) of the imported TractorM7.glb (tools/ae_import_tractor.py),
+    or None when the mesh file is missing."""
+    try:
+        from game.render3d_bridge import load_mesh_asset
+        return load_mesh_asset("tractor_m7")
+    except (OSError, ValueError):
+        return None
+
+
 def tractor(lit=False):
+    """Local forward = +x.  The authored asset; the procedural one if it is missing."""
+    asset = _tractor_asset()
+    if asset is None:
+        return _tractor_blocks(lit)
+    verts, faces = asset
+    m = Mesh()
+    m.verts = [tuple(v) for v in verts]
+    m.faces = [(tuple(f[0]), WIN_LIT if lit and f[2] == 1 else tuple(f[1]),
+                2, True, lit and f[2] > 0) for f in faces]
+    return m
+
+
+def _tractor_blocks(lit=False):
     """Local forward = +x.  Rear wheels at x -0.7, front at +1.0."""
     m = Mesh()
 
     def wheel(x, z, rad, wid):
-        prof = [(rad * math.cos(math.pi / 8 + k * math.pi / 4),
-                 rad + rad * math.sin(math.pi / 8 + k * math.pi / 4)) for k in range(8)]
-        m.add(prism(prof, wid, RUB, z0=z - wid / 2.0), t=(x, -0.04, 0))
-        hp = [(0.45 * rad * math.cos(math.pi / 8 + k * math.pi / 4),
-               rad + 0.45 * rad * math.sin(math.pi / 8 + k * math.pi / 4)) for k in range(8)]
-        m.add(prism(hp, wid + 0.05, HUB, z0=z - (wid + 0.05) / 2.0), t=(x, -0.04, 0))
+        """Low-poly tyre with an integral tread, sidewall and recessed rim.
+
+        Every side is built as non-overlapping concentric bands rather than
+        stacking cylinders. This also keeps the software painter from drawing
+        a hub through the tyre when viewed from an angle.
+        """
+        n = 16
+        cy = rad * math.cos(math.pi / n) - 0.025
+        angles = [math.tau * k / n + math.pi / n for k in range(n)]
+
+        def ring(radius):
+            return [(x + radius * math.cos(a), cy + radius * math.sin(a)) for a in angles]
+
+        outer = ring(rad)
+        shoulder = ring(rad * 0.86)
+        bead = ring(rad * 0.51)
+        rim = ring(rad * 0.42)
+        hub = ring(rad * 0.18)
+        z0, z1 = z - wid / 2, z + wid / 2
+
+        # Integrated alternating tread strips: all are on the tyre surface,
+        # rather than separate blocks sticking out of it.
+        for k in range(n):
+            j = (k + 1) % n
+            for strip in range(3):
+                za = z0 + wid * strip / 3.0
+                zb = z0 + wid * (strip + 1) / 3.0
+                shade = (12 if (k + strip) % 2 == 0 else 3)
+                m.face([(outer[k][0], outer[k][1], za),
+                        (outer[j][0], outer[j][1], za),
+                        (outer[j][0], outer[j][1], zb),
+                        (outer[k][0], outer[k][1], zb)], _v(RUB, shade), 2, True)
+
+        # Each side is tiled edge-to-edge. A dark bead separates the rubber
+        # from the metal rim, with a smaller, shaded centre cap.
+        for side in (-1, 1):
+            zz = z + side * wid / 2
+            for k in range(n):
+                j = (k + 1) % n
+                for outside, inside, colour in (
+                    (outer, shoulder, _v(RUB, 10 if k % 2 else 6)),
+                    (shoulder, bead, _v(RUB, 4)),
+                    (bead, rim, _v(RUB, -7)),
+                    (rim, hub, _v(HUB, 6 if k % 2 else -4)),
+                ):
+                    m.face([(outside[k][0], outside[k][1], zz),
+                            (outside[j][0], outside[j][1], zz),
+                            (inside[j][0], inside[j][1], zz),
+                            (inside[k][0], inside[k][1], zz)], colour, 2, True)
+            m.face([(px, py, zz) for px, py in hub], _v(HUB, -18), 2, True)
 
     for sz in (-0.78, 0.78):
         wheel(-0.7, sz, 0.75, 0.34)
@@ -495,11 +593,54 @@ def tractor(lit=False):
     m.add(box(0.5, 0.12, 0.5, RUB, center=(-0.65, 1.45, 0)))
     m.add(box(0.1, 0.5, 0.5, RUB, center=(-0.92, 1.72, 0)))
     m.add(box(0.06, 0.5, 0.06, METAL, center=(0.15, 1.65, 0)))
-    m.add(box(0.4, 0.04, 0.4, RUB, center=(0.1, 1.9, 0)))
+    # Eight-sided steering rim, spokes and column, kept clear of the seat.
+    steer_r = 0.23
+    for k in range(8):
+        a = math.tau * k / 8
+        b = math.tau * (k + 1) / 8
+        ax, az = 0.1 + steer_r * math.cos(a), steer_r * math.sin(a)
+        bx, bz = 0.1 + steer_r * math.cos(b), steer_r * math.sin(b)
+        dx, dz = bx - ax, bz - az
+        m.add(box(math.hypot(dx, dz), 0.035, 0.035, RUB),
+              rot_y(-math.degrees(math.atan2(dz, dx))),
+              t=((ax + bx) / 2, 1.92, (az + bz) / 2))
+    m.add(box(0.36, 0.03, 0.035, METAL, center=(0.1, 1.91, 0)))
+    m.add(box(0.035, 0.03, 0.36, METAL, center=(0.1, 1.91, 0)))
     m.add(box(0.1, 0.9, 0.1, METAL, center=(1.0, 2.0, 0.22)))
+    # Raised grille surround and horizontal cooling slats.
+    m.add(box(0.045, 0.48, 0.48, RUB, center=(1.565, 1.30, 0)))
+    for yy in (1.12, 1.21, 1.30, 1.39, 1.48):
+        m.add(box(0.025, 0.025, 0.44, METAL, center=(1.60, yy, 0)))
     for sz in (-0.28, 0.28):
-        m.add(box(0.08, 0.14, 0.2, WIN_LIT if lit else METAL,
-                  center=(1.56, 1.38, sz), emissive=lit))
+        m.add(box(0.10, 0.18, 0.22, RUB, center=(1.57, 1.44, sz)))
+        m.add(box(0.035, 0.12, 0.16, WIN_LIT if lit else METAL,
+                  center=(1.63, 1.44, sz), emissive=lit))
+    # Hood seams, engine vents and steps add readable mechanical detail.
+    for sz in (-0.36, 0.36):
+        m.add(box(1.05, 0.05, 0.035, _v(TRACT, 16), center=(0.83, 1.69, sz)))
+        for xx in (0.55, 0.70, 0.85, 1.00):
+            m.add(box(0.065, 0.26, 0.025, TRACT_D, center=(xx, 1.28, sz)))
+        m.add(box(0.48, 0.08, 0.30, METAL, center=(-0.42, 0.72, sz * 1.8)))
+    m.add(box(0.17, 0.07, 0.17, RUB, center=(1.0, 2.48, 0.22)))
+    m.add(box(0.22, 0.12, 0.32, METAL, center=(-1.28, 0.55, 0)))  # tow hitch
+    # Mudguard lips, rear lamps and stamped panel lines.
+    for side in (-1, 1):
+        z = side * 0.82
+        m.add(box(1.20, 0.045, 0.06, _v(TRACT, 14),
+                  center=(-0.7, 1.615, z + side * 0.22)))
+        m.add(box(0.055, 0.13, 0.18, (140, 52, 38),
+                  center=(-1.36, 1.47, z)))
+        # Angled braces support the rear mudguards above the large wheels.
+        m.add(box(0.08, 0.37, 0.08, TRACT_D), rot_z(-24),
+              t=(-0.35, 1.34, z - side * 0.16))
+    # Distinct fuel cap, engine lower rails and rear drawbar.
+    m.add(box(0.16, 0.06, 0.16, METAL, center=(0.48, 1.705, -0.12)))
+    for z in (-0.37, 0.37):
+        m.add(box(1.08, 0.08, 0.05, TRACT_D, center=(0.78, 0.98, z)))
+    m.add(box(0.43, 0.08, 0.09, METAL, center=(-1.36, 0.51, 0)))
+    # Gear lever rises beside the driver's seat.
+    m.add(box(0.045, 0.45, 0.045, METAL), rot_z(12), t=(-0.30, 1.52, -0.25))
+    m.add(box(0.09, 0.09, 0.09, RUB, center=(-0.34, 1.76, -0.25)))
     return m
 
 
@@ -572,7 +713,7 @@ def field_dressing():
                                  (-28, 39), (-20, 43), (-18, 31), (-12, 35),
                                  (-6, 33), (7, 35), (14, 32), (20, 39), (28, 43),
                                  (48, 26), (51, 15), (50, -13), (31, -23))):
-        m.add(tree(70 + i), t=(x, 0, z))
+        m.add(tree(70 + i), t=(x, _ground_y(x, z), z))
     # A patchwork of distant pasture and crop strips gives the yard a real
     # agricultural horizon instead of a bare green plane.
     for x0, z0, x1, z1, name, col in (
@@ -613,7 +754,8 @@ def field_dressing():
 
 # Telephone line: up the track's west verge from the valley, then across to a
 # yard pole and a service wire into the house gable.  (x, z); tops at POLE_H.
-POLES = [(-5.5, -21.0 - 16.0 * i) for i in range(10)][::-1] + [(-18.5, -13.5)]
+# The line ends at the pass: a pole behind the third ridge would draw over it.
+POLES = [(-5.5, -21.0 - 16.0 * i) for i in range(8)][::-1] + [(-18.5, -13.5)]
 HOUSE_DROP = (-16.55, 4.2, 10.0)
 POLE_H = 7.6
 
@@ -628,11 +770,19 @@ def _pole():
     return m
 
 
+def _pole_y(z):
+    """Ground under a pole: the farm plain, the valley floor, then the climb
+    to the pass (the road's last face, ``road_dressing``)."""
+    if z >= -128.0:
+        return _valley_y(z)
+    return 2.52 + (7.15 - 2.52) * min(1.0, (-128.0 - z) / 12.5)
+
+
 def poles():
     m = Mesh()
     p = _pole()
     for x, z in POLES:
-        m.add(p, t=(x, 0.0, z))
+        m.add(p, t=(x, _pole_y(z), z))
     return m
 
 
@@ -678,72 +828,56 @@ def yard_dressing():
 
 
 _CHURCH_A = math.atan2(96.0, -30.0)
+VILLAGE_R = 79.0
 
 
 def _village():
-    """Far houses round the church: (x, z, base y, lit sides).  On the far
-    side of the near hill ring, so their windows show over its crest."""
+    """Far houses round the church: (x, z, base y, lit sides).  On the near
+    hill ring's inner face, like the far farms: hills draw as background, so
+    a house behind the crest would show whole, floating over it.  Each sits
+    at the slope height under its front wall and digs into the hill behind."""
     out = []
-    for i, (da, rad) in enumerate(((-0.20, 97.0), (-0.14, 101.0), (-0.08, 95.0),
-                                   (0.07, 99.0), (0.12, 94.0), (0.17, 103.0),
-                                   (0.24, 97.0), (0.30, 101.0))):
+    for i, (da, dr) in enumerate(((-0.34, -1.0), (-0.26, 0.5), (-0.18, -1.5), (0.11, 0.0),
+                                  (0.18, -1.5), (0.25, 0.5), (0.32, -1.0), (0.40, 0.0))):
         a = _CHURCH_A + da
-        out.append((rad * math.cos(a), rad * math.sin(a), _hill_h(a) - 0.6,
+        rad = VILLAGE_R + dr
+        out.append((rad * math.cos(a), rad * math.sin(a), _hill_y(a, rad - 2.0),
                     tuple(k for k in range(4) if (i * 5 + k * 3) % 7 < 3)))
     return out
 
 
 def skyline(lit):
-    """A village and its onion-domed church on the northern skyline: dark
-    silhouettes with a few lamplit windows, beyond the near hills."""
+    """A village and its onion-domed church on the northern hillside: the
+    farm's limewash and clay tile, a few lamplit windows."""
     m = Mesh()
-    roof = (8, 9, 12)
+    wall = _t("plaster", FAR_WALL)
+    roof = _t("tile", _v(TILE, -18))
     win = WIN_LIT if lit else SKYLINE
     for x, z, y, sides in _village():
-        if y > 0.1:
-            m.add(box(5.0, y, 4.0, SKYLINE, center=(x, y / 2.0, z)))
-        m.add(box(5.0, 3.2, 4.0, SKYLINE, center=(x, y + 1.6, z)))
         g = Mesh()
-        g.add(_gable_z(4.0, 5.0, 3.2, 1.8, roof, SKYLINE), rot_y(90))
+        g.add(box(4.2, 2.8 + 2.0, 3.4, wall, center=(0, 0.4, 0)))
+        g.add(box(4.3, 1.6, 3.5, _t("stone", P.STONE_D), center=(0, -0.55, 0)))
+        g.add(_gable_z(3.4, 4.2, 2.8, 1.6, roof, wall), rot_y(90))
         m.add(g, t=(x, y, z))
         for k in sides:
-            ox, oz = ((0, -2.04), (2.54, 0), (0, 2.04), (-2.54, 0))[k]
-            w, d = (0.7, 0.06) if k % 2 == 0 else (0.06, 0.7)
-            m.add(box(w, 0.7, d, win, center=(x + ox, y + 1.9, z + oz), emissive=lit))
-    cx, cz = 100.0 * math.cos(_CHURCH_A), 100.0 * math.sin(_CHURCH_A)
-    y = _hill_h(_CHURCH_A) - 0.8
-    if y > 0.1:
-        m.add(box(10.0, y, 6.0, SKYLINE, center=(cx, y / 2.0, cz)))
-        m.add(box(3.2, y, 3.2, SKYLINE, center=(cx + 6.4, y / 2.0, cz)))
-    m.add(box(10.0, 6.0, 6.0, SKYLINE, center=(cx, y + 3.0, cz)))
+            ox, oz = ((0, -1.74), (2.14, 0), (0, 1.74), (-2.14, 0))[k]
+            w, d = (0.6, 0.06) if k % 2 == 0 else (0.06, 0.6)
+            m.add(box(w, 0.6, d, win, center=(x + ox, y + 1.6, z + oz), emissive=lit))
+    rad = VILLAGE_R + 3.0
+    cx, cz = rad * math.cos(_CHURCH_A), rad * math.sin(_CHURCH_A)
+    y = _hill_y(_CHURCH_A, rad - 3.0)
+    dome = _t("tin", P.GALV_D)
+    m.add(box(10.0, 6.0 + 3.0, 6.0, wall, center=(cx, y + 1.5, cz)))
     g = Mesh()
-    g.add(_gable_z(6.0, 10.0, 6.0, 2.6, roof, SKYLINE), rot_y(90))
+    g.add(_gable_z(6.0, 10.0, 6.0, 2.6, roof, wall), rot_y(90))
     m.add(g, t=(cx, y, cz))
     tx = cx + 6.4
-    m.add(box(3.2, 13.0, 3.2, SKYLINE, center=(tx, y + 6.5, cz)))
-    m.add(box(3.6, 0.4, 3.6, roof, center=(tx, y + 13.2, cz)))
-    m.add(_bipyr(tx, y + 14.2, cz, 1.9, 2.3, 0.8, roof, SKYLINE, n=8))
-    m.add(box(0.2, 2.4, 0.2, roof, center=(tx, y + 17.6, cz)))
-    m.add(box(1.0, 0.18, 0.18, roof, center=(tx, y + 18.2, cz)))
+    m.add(box(3.2, 13.0 + 3.0, 3.2, wall, center=(tx, y + 5.0, cz)))
+    m.add(box(3.6, 0.4, 3.6, dome, center=(tx, y + 13.2, cz)))
+    m.add(_bipyr(tx, y + 14.2, cz, 1.9, 2.3, 0.8, dome, _v(dome, -20), n=8))
+    m.add(box(0.2, 2.4, 0.2, P.GALV, center=(tx, y + 17.6, cz)))
+    m.add(box(1.0, 0.18, 0.18, P.GALV, center=(tx, y + 18.2, cz)))
     m.add(box(0.5, 1.2, 0.06, win, center=(tx, y + 9.5, cz - 1.63), emissive=lit))
-    return m
-
-
-def mist_ring():
-    """Ground mist lying in the valley: two hard-topped bands at the foot of
-    the hills, pale against them, stepped like late-PS2 fog cards (no soft
-    sprites).  Unlit; the distance fog blends them further."""
-    m = Mesh()
-    n = 72
-    for k, (rad, h0, amp, col) in enumerate(((60.0, 0.9, 0.9, (64, 72, 86)),
-                                             (72.0, 1.8, 1.5, (56, 64, 78)))):
-        for i in range(n):
-            a0, a1 = 2 * math.pi * i / n, 2 * math.pi * (i + 1) / n
-            h = h0 + amp * (((i * 7919 + k * 31) % 13) / 12.0)
-            x0, z0 = rad * math.cos(a0), rad * math.sin(a0)
-            x1, z1 = rad * math.cos(a1), rad * math.sin(a1)
-            m.face([(x0, -0.5, z0), (x1, -0.5, z1), (x1, h, z1), (x0, h, z0)],
-                   col, 0, True, True)
     return m
 
 
@@ -754,6 +888,8 @@ def _shelter_tree(seed=0):
     bark = _t("bark", TRUNK)
     leaf = _t("leaf", _v(LEAF, (seed % 3 - 1) * 6))
 
+    m.add(contact(1.9))
+    m.add(box(0.72, 0.16, 0.72, _v(bark, -20), center=(0, 0.08, 0)))
     m.add(box(0.34, 3.2 * s, 0.34, bark,
               center=(0, 1.6 * s, 0)))
 
@@ -877,7 +1013,7 @@ def outer_dressing():
     )
     for i, (x, z) in enumerate(tree_sites):
         m.add(_shelter_tree(i), rot_y((i * 57) % 360),
-              t=(x, 0, z))
+              t=(x, _ground_y(x, z), z))
 
     # A modest equipment store gives the rear landscape a purpose.
     store = Mesh()
@@ -1017,8 +1153,8 @@ def _landscape_hut(lit):
     m.add(box(0.85, 1.8, 0.08, _t("plank", WOOD_D),
               center=(-0.9, 0.9, zf)))
     m.add(box(0.85, 0.7, 0.06, TRIM, center=(0.9, 1.3, zf)))
-    m.add(box(0.65, 0.5, 0.08, WIN_LIT if lit else WIN,
-              center=(0.9, 1.3, zf - 0.02), emissive=lit))
+    m.add(box(0.65, 0.5, 0.06, WIN_LIT if lit else WIN,
+              center=(0.9, 1.3, zf - 0.06), emissive=lit))
     return m
 
 
@@ -1079,7 +1215,7 @@ def landscape_dressing(look):
     )
     for i, (x, z) in enumerate(sites):
         m.add(_shelter_tree(200 + i * 7),
-              rot_y((i * 61) % 360), t=(x, 0, z))
+              rot_y((i * 61) % 360), t=(x, _ground_y(x, z), z))
 
     # Farm silhouettes between the foreground buildings and the village.
     m.add(_landscape_water_tower(), t=(-32, 0, 53))
@@ -1134,15 +1270,58 @@ def _gap_u(a, cut=5.0, shoulder=14.0):
     return u * u * (3.0 - 2.0 * u)
 
 
-def _hill_y(a, r, ring=0):
-    """Height of hill ring ``ring``'s inner face at angle ``a``, radius ``r``."""
-    h = _hill_h(a, ring) * _gap_u(a)
+@lru_cache(maxsize=2)
+def _hill_surface_triangles(ring):
+    """The same projected triangles as hills(), for accurate tree placement."""
     rad = HILL_RAD[ring]
-    if r <= rad - 9.0:
-        return 0.0
-    if r <= rad - 4.0:
-        return -0.5 + (h * 0.43 + 0.5) * (r - rad + 9.0) / 5.0
-    return h * 0.43 + h * 0.57 * min(1.0, (r - rad + 4.0) / 4.0)
+    south, cut = 1.5 * math.pi, math.radians(5.0)
+    angles = [math.tau * i / 60 for i in range(61)]
+    angles.extend((south - cut, south + cut))
+    angles.sort()
+    rows = []
+    for a in angles:
+        h = _hill_h(a, ring) * _gap_u(a)
+        c, s = math.cos(a), math.sin(a)
+        rows.append(tuple((rr * c, yy, rr * s) for rr, yy in (
+            (rad - 9.0, -0.5), (rad - 4.0, h * 0.43),
+            (rad, h), (rad + 8.0, -0.5))))
+    triangles = []
+    for i in range(len(angles) - 1):
+        a = (angles[i] + angles[i + 1]) * 0.5
+        if abs((a - south + math.pi) % math.tau - math.pi) < cut:
+            continue
+        lo0, mid0, top0, back0 = rows[i]
+        lo1, mid1, top1, back1 = rows[i + 1]
+        triangles.extend(((lo0, lo1, mid1), (lo0, mid1, mid0),
+                          (mid0, mid1, top1), (mid0, top1, top0),
+                          (top0, top1, back1), (top0, back1, back0)))
+    return triangles
+
+
+def _hill_y(a, r, ring=0):
+    """Sample the actual faceted hill mesh, not its ideal radial profile.
+
+    The crest is a polygon, not a circle; the analytic profile can put a
+    tree metres above the visible slope between vertices.
+    """
+    x, z = r * math.cos(a), r * math.sin(a)
+    height = 0.0  # the flat field covers the buried parts of the hill
+    for p, q, t in _hill_surface_triangles(ring):
+        den = (q[2] - t[2]) * (p[0] - t[0]) + (t[0] - q[0]) * (p[2] - t[2])
+        if abs(den) < 1e-10:
+            continue
+        u = ((q[2] - t[2]) * (x - t[0]) + (t[0] - q[0]) * (z - t[2])) / den
+        v = ((t[2] - p[2]) * (x - t[0]) + (p[0] - t[0]) * (z - t[2])) / den
+        w = 1.0 - u - v
+        if min(u, v, w) >= -1e-8:
+            height = max(height, u * p[1] + v * q[1] + w * t[1])
+    return height
+
+
+def _ground_y(x, z):
+    """Place the trunk base just below the visible ground at its centre."""
+    a, r = math.atan2(z, x), math.hypot(x, z)
+    return max(_hill_y(a, r, ring) for ring in range(len(HILL_RAD))) - 0.08
 
 
 def _old_tree(seed):
@@ -1207,7 +1386,7 @@ def old_orchard():
             i += 1
             if any(math.hypot(tx - ox, tz - oz) < 3.4 for ox, oz in _OLD_SKIP) or h == 6:
                 continue
-            m.add(_old_tree(i), rot_y((i * 53) % 360), t=(tx, 0, tz))
+            m.add(_old_tree(i), rot_y((i * 53) % 360), t=(tx, _ground_y(tx, tz), tz))
 
     # Dry-stone wall along the far edge, a gap for the lane.
     stone = _t("stone", P.STONE_D)
@@ -1270,7 +1449,7 @@ def poplars():
     while a < math.radians(56.0):
         h = 11.0 + 1.2 * ((k * 5) % 7) + (2.5 if k % 9 == 4 else 0.0)
         r = 77.0 + 1.6 * ((k * 3) % 3)
-        y = _hill_y(a, r) - 0.18 * h - 0.2     # lower bipyramid tip sits on the slope
+        y = _hill_y(a, r) - 0.15  # root the trunk in the actual slope
         if k % 11 != 7:     # a gap where one has come down
             m.add(_poplar(k, h), rot_y((k * 71) % 360),
                   t=(r * math.cos(a), y, r * math.sin(a)))
@@ -1299,14 +1478,19 @@ def crest_woods():
                 continue
             h = (i * 29 + ring * 5) % 7
             x, z = rad * math.cos(a), rad * math.sin(a)
-            y = _hill_y(a, rad, ring) - 0.4
+            y = _hill_y(a, rad, ring) - 0.15
             c = _v(col, (h % 3 - 1) * 2)
             tall = (3.2 if ring == 0 else 5.0) + 0.45 * h
+            # Visible trunks connect the crowns to the surface; keep the
+            # foliage above the root rather than piercing the hill face.
+            trunk_h = tall * 0.38
+            m.add(box(0.30, trunk_h, 0.30, _v(c, -4),
+                      center=(x, y + trunk_h / 2.0, z)))
             if h % 3 == 0:
-                m.add(_bipyr(x, y + tall * 0.25, z, 1.0 + 0.1 * h, tall * 0.8, tall * 0.3, c,
+                m.add(_bipyr(x, y + trunk_h + tall * 0.22, z, 1.0 + 0.1 * h, tall * 0.8, tall * 0.3, c,
                              _v(c, -3), n=4, moon=True))
             else:
-                m.add(_bipyr(x, y + tall * 0.32, z, 1.9 + 0.2 * h, tall * 0.5, tall * 0.4, c,
+                m.add(_bipyr(x, y + trunk_h + tall * 0.30, z, 1.9 + 0.2 * h, tall * 0.5, tall * 0.4, c,
                              _v(c, -3), n=5, moon=True))
     # Third ridge, near the fog: a saddle where the road crosses.
     n, rad = 72, 140.0
@@ -1458,21 +1642,23 @@ def road_dressing(lit):
     wheel.add(prism(prof, 0.1, WOOD_D, z0=-0.05))
     m.add(wheel, rot_y(74), t=(-6.95, -0.04, -66.0))
     flat = Mesh()
-    flat.add(prism(prof, 0.1, _v(WOOD_D, -8), z0=-0.05), rot_z(90))
+    flat.add(prism(prof, 0.1, _v(WOOD_D, -8), z0=-0.05), rot_x(90))
     m.add(flat, rot_y(20), t=(-8.6, 0.05, -69.2))
 
     # Far farmsteads on the hills, a lamplit window each.
-    roof_c = (8, 9, 12)
-    wall = (92, 94, 90)             # limewash: the house shape against the hill
+    roof_c = _t("tile", _v(TILE, -18))
+    wall = _t("plaster", FAR_WALL)
     win = WIN_LIT if lit else SKYLINE
     for x, y, z, wx, wz in _farmsteads():
         m.add(box(4.0, 2.6, 3.4, wall, center=(x, y + 1.3, z)))
         g = Mesh()
         g.add(_gable_z(3.4, 4.0, 2.6, 1.4, roof_c, wall), rot_y(90))
         m.add(g, t=(x, y, z))
+        # Stone footing dug into the slope: the house sits in the hill, not on it.
+        m.add(box(4.3, 1.6, 3.7, _t("stone", P.STONE_D), center=(x, y - 0.55, z)))
         m.add(box(2.4, 1.6, 2.2, _v(wall, -6), center=(x + 2.9, y + 0.8, z + 0.8)))
         sideways = abs(wx - x) > 0.1
-        m.add(box(0.08 if sideways else 0.45, 0.4, 0.45 if sideways else 0.08, win,
+        m.add(box(0.08 if sideways else 0.62, 0.5, 0.62 if sideways else 0.08, win,
                   center=(wx, y + 1.5, wz), emissive=lit))
     return m
 
@@ -1496,8 +1682,6 @@ def build_static(r, look, park=None):
     add(r, skyline(lit))
     add(r, poles())
     add(r, yard_dressing())
-    if look == "raid":
-        add(r, mist_ring())
     h = Mesh()
     h.add(house(lit=lit, burn=burn), t=(-12, 0, 10))
     add(r, h)
@@ -1557,8 +1741,8 @@ _CLOUDS = ((-170.0, 9.0, 26.0, 3), (-128.0, 17.0, 18.0, 2), (-96.0, 7.0, 30.0, 3
            # Low broken bank over the south road and the eastern poplars.
            (178.0, 9.5, 42.0, 2), (-142.0, 10.0, 24.0, 2), (136.0, 9.0, 30.0, 2),
            (92.0, 11.0, 40.0, 2), (52.0, 9.5, 24.0, 2))
-_CLOUD = (16, 18, 24)           # added to the sky behind: a thin lit veil
-_CLOUD_RIM = (34, 36, 40)
+_CLOUD = (5, 6, 11)             # added to the sky behind: a thin lit veil
+_CLOUD_RIM = (13, 14, 21)
 
 
 def _ring_img(rad, col):
@@ -1627,6 +1811,48 @@ def _raid_sky(r, buf, t, moon):
 HOUSE_WINDOWS = ((-15.0, 1.75, 6.88), (-12.8, 1.75, 6.88), (-8.4, 1.75, 6.88))
 CHIMNEY_TOP = (-9.4, 5.2, 10.5)
 
+_POOL_CACHE = {}
+
+
+def _pool_img(rx, ry, col, k):
+    key = (rx, ry, tuple(col), k)
+    img = _POOL_CACHE.get(key)
+    if img is None:
+        img = pygame.Surface((rx * 2 + 2, ry * 2 + 2))
+        img.fill((0, 0, 0))
+        n = 24
+        for i in range(n, 0, -1):
+            f = i / float(n)
+            b = k * (0.10 + 0.90 * (1.0 - f) ** 2)
+            c = tuple(min(255, int(ch * b)) for ch in col)
+            pygame.draw.ellipse(img, c, (rx + 1 - rx * f, ry + 1 - ry * f,
+                                         rx * 2 * f + 1, ry * 2 * f + 1))
+        if len(_POOL_CACHE) > 160:
+            _POOL_CACHE.clear()
+        _POOL_CACHE[key] = img
+    return img
+
+
+def pool(col, radius_m, intensity=0.3, squash=0.5):
+    """A lamp's pool on the ground: a flattened radial wash that reads as lit
+    earth on both backends (GL pools do not exist on the software path)."""
+    def draw(s, sx, sy, scale, z):
+        rx = int(min(240, radius_m * scale))
+        if rx < 3:
+            return
+        ry = max(2, int(min(160, rx * squash)))
+        k = int(round(intensity * 24.0)) / 24.0
+        if k <= 0.02:
+            return
+        img = _pool_img(rx, ry, col, k)
+        s.blit(img, (int(sx) - img.get_width() // 2, int(sy) - img.get_height() // 2),
+               special_flags=pygame.BLEND_ADD)
+    draw.light = True
+    draw.light_soft = True
+    draw.bounds_m = (radius_m, radius_m * squash)
+    draw.bounds_cap_px = (240, 160)
+    return draw
+
 
 def raid_fx(r, t, lit=True):
     """Per-frame dressing for the raid look: hard halos, the barn lamp's shaft,
@@ -1643,10 +1869,27 @@ def raid_fx(r, t, lit=True):
         r.add_sprite(PORCH_LAMP, _fx.glow(P.LAMP_WARM, 1.6, t, flicker=0.05, seed=5,
                                           core=(255, 240, 214), intensity=0.8),
                      layer=_fx.FX_LAYER)
+        # Warm wash on the wall behind each bulb and a pool on the yard: the
+        # practicals have to read as lighting the set, not as floating dots.
+        r.add_sprite((PORCH_LAMP[0], PORCH_LAMP[1] - 0.35, PORCH_LAMP[2] + 0.22),
+                     pool((255, 168, 92), 2.1, intensity=0.55, squash=0.8),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((BARN_LAMP[0], BARN_LAMP[1] - 0.3, BARN_LAMP[2] + 0.24),
+                     pool((255, 170, 96), 1.6, intensity=0.45, squash=0.8),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((PORCH_LAMP[0], 0.05, PORCH_LAMP[2] - 1.3),
+                     pool((255, 196, 132), 3.2, intensity=0.34, squash=0.5),
+                     layer=_fx.FX_LAYER)
+        r.add_sprite((BARN_LAMP[0] + 1.6, 0.05, BARN_LAMP[2] - 1.2),
+                     pool((255, 192, 128), 3.4, intensity=0.28, squash=0.5),
+                     layer=_fx.FX_LAYER)
         for i, pos in enumerate(HOUSE_WINDOWS):
             r.add_sprite((pos[0], pos[1], pos[2] - 0.05),
-                         _fx.window_glow(P.WINDOW, 0.9, 0.85, intensity=0.42, t=t,
-                                         flicker=0.03, seed=11 + i, rim=True),
+                         _fx.window_glow(P.WINDOW, 0.9, 0.85, intensity=0.36, t=t,
+                                         flicker=0.03, seed=11 + i),
+                         layer=_fx.FX_LAYER)
+            r.add_sprite((pos[0], 0.05, pos[2] - 0.95),
+                         pool((255, 206, 138), 1.5, intensity=0.20, squash=0.55),
                          layer=_fx.FX_LAYER)
         for i, (vx, vz, vy, sides) in enumerate(_village()):
             if sides:
@@ -1684,8 +1927,9 @@ def wires(r):
     col = (20, 22, 26)
     y = POLE_H - 0.02
     for (x0, z0), (x1, z1) in zip(POLES[:-1], POLES[1:]):
+        y0, y1 = y + _pole_y(z0), y + _pole_y(z1)
         for sx in (-0.7, 0.7):
-            _sag(r, (x0 + sx, y, z0), (x1 + sx, y, z1), col)
+            _sag(r, (x0 + sx, y0, z0), (x1 + sx, y1, z1), col)
     # Lines draw over the world on both backends (no depth test), so the
     # service wire is skipped where the house would hide it.
     ex, _ey, ez = r.cam
@@ -1699,9 +1943,12 @@ def raid_pools(extra=()):
     pools = [
         {"pos": BARN_LAMP, "range": 7.5, "color": P.LAMP_WARM,
          "hot": (255, 236, 206), "intensity": 1.6},
-        {"pos": PORCH_LAMP, "range": 5.0, "color": P.LAMP_WARM,
-         "hot": (255, 236, 206), "intensity": 1.2},
+        {"pos": PORCH_LAMP, "range": 6.0, "color": P.LAMP_WARM,
+         "hot": (255, 236, 206), "intensity": 1.7},
     ]
+    # Window spill: a warm patch on the yard in front of each lit pane.
+    pools += [{"pos": (x, y + 0.2, z - 0.9), "range": 2.6, "color": P.WINDOW,
+               "hot": (255, 232, 180), "intensity": 1.1} for x, y, z in HOUSE_WINDOWS]
     return pools + list(extra)
 
 
@@ -1815,7 +2062,7 @@ def smoke(t, seed=0, size_m=2.0):
             return
         for i in range(7):
             ph = ((t * 0.00022 + i / 7.0 + seed * 0.13) % 1.0)
-            rad = max(2, int(size_m * scale * (0.34 + ph * 0.76)) )
+            rad = min(80, max(2, int(size_m * scale * (0.34 + ph * 0.76))))
             ox = sx + math.sin(ph * 5 + seed + i) * size_m * scale * 0.5 + ph * size_m * scale * 0.9
             oy = sy - ph * size_m * scale * 4.6
             a = int(78 * (1.0 - ph))
@@ -1845,16 +2092,16 @@ def fire(r, pos, t, seed=0, size=1.0, smoky=True, layer=_fx.FX_LAYER):
 BARN_AT = (13.0, 12.0)
 
 
-def burn_fx(r, t, grow=1.0):
+def burn_fx(r, t, grow=1.0, layer=_fx.FX_LAYER):
     """The burning barn and house: flames, smoke, window glow.  ``grow`` 0..1
     scales the flames up from a young fire to a roaring one."""
     g = 0.55 + 0.45 * grow
     for i, (dx, dy, dz, sz) in enumerate(((-3.6, 5.0, 10.0, 2.3), (-0.5, 5.4, 12.0, 2.7),
                                           (2.8, 5.0, 14.0, 2.4), (-2.0, 1.2, 6.2, 1.8),
                                           (2.2, 1.5, 6.3, 1.5), (4.2, 5.1, 10.5, 2.0))):
-        fire(r, (13 + dx, dy, dz), t, seed=i * 3, size=sz * g, smoky=i % 2 == 0)
+        fire(r, (13 + dx, dy, dz), t, seed=i * 3, size=sz * g, smoky=i % 2 == 0, layer=layer)
     for i, (x, y, sz) in enumerate(((-14.2, 4.5, 1.7), (-9.6, 4.3, 1.4))):
-        fire(r, (x, y, 10.0), t, seed=20 + i, size=sz * g, smoky=i == 0)
+        fire(r, (x, y, 10.0), t, seed=20 + i, size=sz * g, smoky=i == 0, layer=layer)
     for i, x in enumerate((-15.0, -12.8, -8.4)):
         r.add_sprite((x, 1.75, 6.9), _fx.window_glow((255, 150, 70), 1.2, 1.1, 0.8, t,
                                                      flicker=0.2, seed=i), layer=_fx.FX_LAYER)

@@ -1,12 +1,13 @@
 {
   "version": "0.1.0",
-  "build": "4471",
+  "build": "4472",
   "channel": "stable",
   "engine": "Retardovici Pulse Engine 6 Gold 0.1.0",
-  "released_at": "2026-10-26",
-  "headline": "Call of Acaristan — Initial Operations Build",
+  "released_at": "2026-10-28",
+  "headline": "Call of Acaristan — Fallow Ground Update",
   "notes": [
-    "Campaign Missions 1–6 playable with 3D cutscene renderer",
+    "Campaign Missions 1–7 playable with 3D cutscene renderer",
+    "Fallow 12 pump-action shotgun in Mission 7 and multiplayer",
     "Authoritative multiplayer with UDP fast-path & lag compensation",
     "KRAPNET Terminal main menu, radio UI, and Outfitter"
   ]

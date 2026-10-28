@@ -1,4 +1,3 @@
-
 import pygame
 from engine.assets import load_music as _load_music, load_sound as _load_sound  # RPE6 D5
 import math
@@ -3374,4 +3373,3 @@ class AudioManager:
     def fadeout(self, channel, fade_ms=500):
         if channel in _channels:
             _channels[channel].fadeout(fade_ms)
-

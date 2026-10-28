@@ -81,7 +81,7 @@ def _same(a, b):
 def _now_ms():
     """Game clock for light-visibility easing (0 if the engine is absent)."""
     try:
-        from engine.core.timebase import now_ms
+        from engine.core import now_ms
         return int(now_ms())
     except Exception:
         return 0

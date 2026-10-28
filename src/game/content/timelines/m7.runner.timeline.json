@@ -35,6 +35,72 @@
     34,
     28
    ]
+  },
+  {
+   "scene": "m7_runner_plan",
+   "speaker": "",
+   "text": "",
+   "min_ms": 2000,
+   "quiet_ui": true,
+   "cues": [
+    [
+     0,
+     "m6_paper",
+     0.5
+    ],
+    [
+     1200,
+     "m6_page_turn",
+     0.4
+    ]
+   ],
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_runner_shotgun",
+   "speaker": "ALEX",
+   "text": "Maru sent this too. Farm gun. It barks louder than it looks.",
+   "min_ms": 5200,
+   "cues": [
+    [
+     0,
+     "m6_rifle_rack",
+     0.6
+    ]
+   ],
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_runner_gun",
+   "speaker": "",
+   "text": "",
+   "min_ms": 2000,
+   "quiet_ui": true,
+   "cues": [
+    [
+     200,
+     "shotgun_pump",
+     0.5
+    ],
+    [
+     900,
+     "shell_insert",
+     0.35
+    ]
+   ],
+   "lighting": [
+    40,
+    34,
+    28
+   ]
   }
  ],
  "tracks": {},

@@ -1,0 +1,31 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m7.raidin",
+ "shots": [
+  {
+   "scene": "m7_raidin_road",
+   "speaker": "",
+   "text": "Two Guard trucks come up the valley track. Lights on.",
+   "min_ms": 4200,
+   "quiet_ui": true
+  },
+  {
+   "scene": "m7_raidin_yard",
+   "speaker": "ALEX",
+   "text": "Trucks! Two of them - no, three!",
+   "min_ms": 3800,
+   "cues": [
+    [
+     2600,
+     "shotgun_pump",
+     0.5
+    ]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m7 beat 5 lead-in, fallow ground"
+ }
+}

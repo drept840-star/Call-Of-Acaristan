@@ -4250,7 +4250,6 @@ def check_m1_volkov_escapes_both_routes():
         from missions.m1 import draw as m1d
         vx, vy = STATE.volkov_pos
         surf = pygame.Surface((m1d.WIDTH, m1d.HEIGHT))
-        STATE.volkov_draw_angle = None       # no turn carried over from earlier checks
         with patch.object(m1d, "_draw_volkov_topdown") as dv:
             m1d._draw_m1_actors(surf, int(vx - m1d.WIDTH // 2), int(vy - m1d.HEIGHT // 2))
         assert dv.call_count == 1, "static Volkov not drawn before the alarm"
@@ -9178,7 +9177,7 @@ def check_mission4_cinematic_arrest():
         fake_gc = SimpleNamespace(
             reset_dialogue_slide=lambda: resets.append(clock[0]),
             draw_cutscene_scene=lambda *args: None,
-            draw_dialogue_box=lambda *args: captions.append(args[1:]),
+            draw_film_caption=lambda *args: captions.append(args[1:]),
             draw_typewriter_title=lambda *args: None,
         )
         namespace = {
@@ -9269,8 +9268,7 @@ def check_mission4_cinematic_arrest():
             assert not captions, "SPACE exposed captions before their scheduled time"
             clock[0] = cp.start_time + delay
             player_state.render(canvas)
-            assert captions == [(shot["speaker"], shot["text"], len(shot["text"]),
-                                  len(shot["text"]), False)], "wrong delayed caption/text length"
+            assert captions == [(shot["speaker"], shot["text"])], "wrong delayed caption text"
             assert vignettes == [80, 80] and not scans, "quiet finale received legacy heavy UI"
 
         cp = fresh()
@@ -9310,9 +9308,8 @@ def check_mission4_cinematic_arrest():
         assert not captions, "old shot caption survived the shot switch"
         tick(cp, 900, frames=4)
         player_state.render(canvas)
-        assert captions[-1] == (cp.current_shot["speaker"], cp.current_shot["text"],
-                                1, len(cp.current_shot["text"]), False), \
-            "adjacent shot inherited the old text length/typewriter position"
+        assert captions[-1] == (cp.current_shot["speaker"], cp.current_shot["text"]), \
+            "adjacent shot caption text is wrong"
 
         # Drive the whole real list without fades, including adjacent roof shots
         # and the final completion route, rather than testing hand-made stand-ins.
@@ -10008,7 +10005,7 @@ def check_mission7_vertical_slice():
 
     # ── ladder, films, voice ────────────────────────────────────────────
     assert _m7_meta.STAGES == ("arrival", "chores", "runner", "prep",
-                               "raid", "finale", "choice")
+                               "raidin", "raid", "finale", "choice")
     for scene in _m7_meta.M7_SCENES:
         assert _scene_renderer(scene) is not None, scene
     for stage in _m7_meta.FILM_TIMELINES:
@@ -10113,6 +10110,311 @@ def check_mission7_vertical_slice():
     completed = _save_system.get_slot(0)
     assert completed["last_completed_mission"] == "MISSION_7"
     assert completed["checkpoint"] == ""
+
+
+def check_m7_audio_design():
+    """Mission 7 owns a real sound set, and every loop can be torn down.
+
+    User outcome: the farm went from silent (with an indoor room tone over it)
+    to a scored place; a loop that cannot stop would follow the player to the
+    menu, so stop() must leave no channels.
+    """
+    import numpy as np
+    from missions.m7 import m7_audio as A
+    from core.config import audio
+
+    names = [n for n, _ in A.GENERATORS]
+    assert len(names) == len(set(names)), "duplicate M7 generator name"
+    assert len(names) >= 20, "M7 sound set is too thin: %d" % len(names)
+    for name in A.LOOPS:
+        pcm = A.loop_pcm(name)
+        assert pcm.shape[0] > A.RATE, name
+        assert float(np.max(np.abs(pcm))) > 0.02, name
+    for name in A.FOLEY:
+        pcm = A.foley_pcm(name)
+        assert pcm.shape[0] > 400, name
+    m = A.M7Audio(audio)
+    m.warm()
+    m.start_loop("m7_farm_bed", 0.2)
+    m.start_loop("m7_gen_idle", 0.2)
+    m.pause()
+    m.resume()
+    m.stop_loops()
+    m.stop()
+    assert not m.loops and m.closed
+    assert A.instance(audio) is not m, "a stopped audio owner must be replaced"
+
+
+def check_m7_generator_minigame():
+    """Prime -> choke -> three timed pulls starts the generator; a miss retries."""
+    from missions.m7 import farmyard as FY
+    from missions.m7 import minigames as G
+    from missions import m7
+    from engine.core import pin_wall, unpin_wall
+
+    p = G.GenPuzzle(0)
+    p.press(10), p.press(20), p.press(30)
+    assert p.phase == "choke", p.phase
+    lo, hi = p.band()
+    p.press(p.t + int(((lo + hi) / 2.0) / 2.0 * G.GenPuzzle.CHOKE_MS))
+    assert p.phase == "pull", p.phase
+    for _ in range(G.GenPuzzle.PULLS):
+        lo, hi = p.band()
+        p.press(p.t + int(((lo + hi) / 2.0) / 2.0 * G.GenPuzzle.PULL_MS))
+    assert p.done and p.phase == "run" and p.comp >= 1.0
+    q = G.GenPuzzle(0)
+    q.press(0), q.press(0), q.press(0)
+    q.press(q.t + int(0.5 * G.GenPuzzle.CHOKE_MS))
+    assert q.phase == "choke" and q.tries == 1, "a miss must retry, never lock"
+
+    class _Keys(dict):
+        def __missing__(self, key):
+            return False
+
+    E, N = _Keys({pygame.K_e: True}), _Keys()
+    clock = [50000]
+    pin_wall(ms=lambda: clock[0])
+    try:
+        m7.start_m7("chores")
+        FY._S["gen_hint"] = True
+        FY._S["lines"] = []
+        FY._h_generator()
+        assert FY._S["genplay"] is not None
+        for _ in range(3):
+            clock[0] += 40
+            m7.game_update(N)
+            clock[0] += 40
+            m7.game_update(E)
+        assert FY._S["genplay"].phase == "choke"
+        for _ in range(1 + G.GenPuzzle.PULLS):
+            clock[0] += 16
+            m7.game_update(N)
+            pz = FY._S["genplay"]
+            lo, hi = pz.band()
+            u = ((lo + hi) / 2.0) / 2.0
+            period = pz.CHOKE_MS if pz.phase == "choke" else pz.PULL_MS
+            clock[0] = pz.t + int(u * period)
+            m7.game_update(E)
+            clock[0] += 16
+            m7.game_update(N)
+        assert FY._S["gen_on"] and "generator" in FY._S["done"]
+    finally:
+        unpin_wall()
+
+
+def check_m7_tractor_minigame():
+    """The tractor follows a prompted route and only then blocks the track."""
+    from missions.m7 import farmyard as FY
+    from missions.m7 import maps as M
+    from missions.m7 import minigames as G
+    from missions import m7
+    from engine.core import pin_wall, unpin_wall
+    from core.state import STATE
+
+    p = G.TractorPuzzle(M.tractor_route_px(), 0)
+    t = 0
+    for i in range(len(p.route)):
+        assert p.state == "prompt", (i, p.state)
+        p.update(t + 40)
+        p.press(t + 100, p.step()[6])
+        assert p.state == "drive", (i, p.state)
+        t += 100 + p.duration + 10
+        p.update(t)
+    assert p.done and p.state == "done"
+    x, y, _ang = p.pose(t)
+    assert abs(x - (M.TRACTOR_PARK[0] + M.TILE)) <= 2, x
+    assert abs(y - (M.TRACTOR_PARK[1] + M.TILE // 2)) <= 2, y
+    waiting = G.TractorPuzzle(M.tractor_route_px(), 0)
+    waiting.update(60000)
+    assert waiting.state == "prompt", "steering prompts must not time out"
+    waiting.press(60000, waiting.step()[6])
+    assert waiting.state == "drive"
+    q = G.TractorPuzzle(M.tractor_route_px(), 0)
+    q.press(50, "d")
+    assert q.state == "stall" and q.i == 0 and q.tries == 1
+    q.update(50 + G.TractorPuzzle.STALL_MS + 10)
+    assert q.state == "prompt", "a stall must replay the prompt"
+
+    class _Keys(dict):
+        def __missing__(self, key):
+            return False
+
+    N = _Keys()
+    keymap = {"w": pygame.K_w, "a": pygame.K_a, "s": pygame.K_s, "d": pygame.K_d}
+    clock = [20000]
+    pin_wall(ms=lambda: clock[0])
+    try:
+        m7.start_m7("prep")
+        FY._S["lines"] = []
+        FY._S["after"] = None
+        FY._h_tractor()
+        pz = FY._S["drive"]
+        assert pz is not None and "tractor" not in FY._S["preps"]
+        for _ in range(len(pz.route)):
+            clock[0] += 60
+            m7.game_update(N)
+            clock[0] += 60
+            m7.game_update(_Keys({keymap[pz.step()[6]]: True}))
+            clock[0] += pz.duration + 60
+            m7.game_update(N)
+        assert not FY._S.get("drive")
+        assert not any(STATE.player.rect.colliderect(w) for w in STATE.walls), "unsafe dismount"
+        assert "tractor" in FY._S["preps"] and "tractor" in STATE.m7_preps
+        assert any(w.w == 3 * M.TILE and w.h == 44 for w in STATE.walls), \
+            "the parked tractor must block the track"
+    finally:
+        unpin_wall()
+
+
+def check_m7_shotgun_raid():
+    """The raid carries the Fallow 12: six shells, eight pellets, one per pull."""
+    from missions.m7 import raid3d as R
+    from missions import m7
+    from engine.ui.std import weapon_panel as WP
+    from core.state import STATE
+
+    assert (R.MAG, R.RESERVE0, R.RESERVE_CAP) == (6, 24, 36)
+    assert R.PELLETS == 8 and len(R.PELLET_FAN) == 8
+    assert R.PELLET_HEAD > R.PELLET_BODY
+    assert R.FIRE_GAP >= 0.9, "a pump gun must not fire like an SMG"
+    assert R.RELOAD_S >= 2.0
+    assert WP.RELOAD_MS["fallow12"] == 132
+    class _Keys(dict):
+        def __missing__(self, key):
+            return False
+    m7.start_m7("raid")
+    sc = R.scene()
+    sc.firing = True
+    for _ in range(2):
+        STATE.dt = 1.0 / 60.0
+        m7.game_update(_Keys())
+    assert sc.mag == 5, ("one shell per trigger pull", sc.mag)
+    assert sc.pump_at >= 0.0 and sc.pump_snd_at > sc.pump_at
+
+
+def check_m7_shotgun_hold():
+    """Both hands sit on the Fallow 12, and the muzzle is at its barrel end."""
+    import math
+    from cutscenes import m6world3d as W
+    from core.outfits import OUTFIT_GUARD
+    from engine3d import POSES
+    from engine3d.hold import hold_report, hold_weapon
+
+    hum = W.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
+    assert hum._weapon == "shotgun" and hum._rifle is not None
+    for mode in ("ready", "aim"):
+        pose = hold_weapon(hum, dict(POSES["ready"]), (0, 0, 0), 0.0, "shotgun", mode)
+        rep = hold_report(hum, pose, (0, 0, 0), 0.0, "shotgun")
+        assert rep["support"] is not None and rep["support"] < 0.015, (mode, rep)
+        assert rep["arm"] < 0.03, (mode, rep)
+        assert rep["rifle"] < 0.03, (mode, rep)
+    _places, joints, _root = hum.pose_world(dict(POSES["ready"]), (0, 0, 0), 0.0,
+                                            rifle_on=True)
+    d = math.dist(joints["rhand"], joints["muzzle"])
+    assert 0.68 < d < 0.72, ("muzzle must sit at the shotgun barrel", d)
+
+
+def check_arena_shotgun():
+    """The Fallow 12 is a real fourth arena gun, not a renamed pistol."""
+    from missions import arena as AR
+    from net import protocol as P
+    from net.match import MatchSession
+    from entities.player import Player
+    from ui.arena_view import rig_for_weapon
+
+    s = AR.WEAPONS[P.WPN_SHOTGUN]
+    for key in ("damage", "pellets", "cooldown", "mag", "reload", "range",
+                "spread", "move_mul", "kick", "shake"):
+        assert key in s, key
+    assert s["pellets"] == 8 and s["damage"] * s["pellets"] >= 80
+    assert s["cooldown"] > AR.WEAPONS[P.WPN_OS12]["cooldown"]
+    assert rig_for_weapon(P.WPN_SHOTGUN) == "shotgun"
+    p = Player(0, 0)
+    p.rig_weapon = "shotgun"
+    p.angle = 0.0
+    tip = p.barrel_tip()[0]
+    p.rig_weapon = "os12"
+    assert tip > p.barrel_tip()[0], "the shotgun must reach past the rifle"
+    for name, rows in AR.ARENAS.items():
+        assert any(item[3] == P.WPN_SHOTGUN for item in AR.pickups(rows)), name
+
+    class _FC(object):
+        def _send(self, obj):
+            return True
+
+    lane = 11 * 64 + 32
+    cs = MatchSession(_FC(), is_host=True, local_id=0)
+    sim = AR.ArenaSim(cs, AR.ARENA_YARD, score_limit=99)
+    sim.add_player(0, "A")
+    sim.add_player(1, "B")
+    sim.players[0]["x"], sim.players[0]["y"] = 600.0, lane
+    sim.players[1]["x"], sim.players[1]["y"] = 460.0, lane
+    sim.rules.spawned_at[0] = sim.rules.spawned_at[1] = -(10 ** 6)
+    shooter, target = sim.players[1], sim.players[0]
+    AR._grant(shooter, P.WPN_SHOTGUN)
+    shooter["ammo"] = 6
+    hp0 = target["hp"]
+    cs._accept_input(P.make_input(0, 0, 0, 0.0, P.F_FIRING,
+                                  weapon=P.WPN_SHOTGUN), peer_id=1)
+    sim.step()
+    assert shooter["ammo"] == 5, ("one round per pull", shooter["ammo"])
+    assert target["hp"] < hp0, "a point-blank blast did no damage"
+
+
+def check_m7_choice_radio():
+    """The ending is a field receiver, and it never prints the route."""
+    from missions.m7 import choice as C
+    from missions import m7
+    from core import config
+
+    src = open(C.__file__, encoding="utf-8").read()
+    assert "DUTY" not in src and "REVENGE" not in src, \
+        "the option labels leak which ending is which"
+    assert [o[1] for o in C.OPTIONS] == ["duty", "revenge"]
+    m7.start_m7("choice")
+    m7.game_update(EmptyKeys())
+    C._select(0)
+    _S = C._S
+    assert _S["sel"] == 0 and _S["line_i"] == 0
+    m7.game_draw(config.screen, 0, 0)
+    edge = config.screen.get_at((171, 431))[:3]
+    assert sum(edge) > 380, ("the tuned channel card must light up", edge)
+
+
+def check_runner_handoff():
+    """The folder is wrist-parented, and the runner film now shows the gun."""
+    from missions.m7 import meta
+    from cutscenes import m7runner as R
+    from engine.anim import draw_character, draw_prop
+    from audio import voice_manifest as VM
+    from core import config
+
+    for scene in ("m7_runner_plan", "m7_runner_shotgun", "m7_runner_gun"):
+        assert scene in meta.M7_SCENES, scene
+    scenes = [s["scene"] for s in meta.film_shots("runner")]
+    assert scenes[-3:] == ["m7_runner_plan", "m7_runner_shotgun", "m7_runner_gun"], scenes
+    rows = dict((r[0], r) for r in VM.VOICE_LINES)
+    assert "VO_228" in rows and rows["VO_228"][1] == "ALEX"
+    assert "VO_228" in VM.KNOWN_MISSING_AUDIO
+    assert "VO_228" not in VM.VOICE_ORDER, "unrecorded lines must not steal a take"
+
+    surf = pygame.Surface((320, 260))
+    surf.fill((20, 24, 30))
+    draw_prop(surf, "folder", 160, 120, 2.0)
+    assert surf.get_at((160, 120))[:3] == (216, 190, 136), \
+        "draw_prop must put the folder where it is asked"
+    surf.fill((20, 24, 30))
+    draw_character(surf, "alex", 90, 240, 1.0, True, prop="folder",
+                   reach=((40, -80),))
+    box = pygame.Rect(120, 130, 60, 60)
+    manila = sum(1 for x in range(box.left, box.right, 2)
+                 for y in range(box.top, box.bottom, 2)
+                 if surf.get_at((x, y))[:3] in ((216, 190, 136), (198, 170, 116)))
+    assert manila > 12, ("the folder must follow the hand", manila)
+    R.folder(config.screen, 2300)
+    R.plan_insert(config.screen, 1000)
+    R.shotgun_handover(config.screen, 600)
+    R.gun_insert(config.screen, 1200)
 
 
 def check_m6_train_viewmodel():
@@ -11268,6 +11570,15 @@ def main():
     ok = run_check("mission6_vertical_slice", check_mission6_vertical_slice) and ok
     print("\n=== Mission 7 checks ===")
     ok = run_check("mission7_vertical_slice", check_mission7_vertical_slice) and ok
+    for name, fn in (("m7_audio_design", check_m7_audio_design),
+                     ("m7_generator_minigame", check_m7_generator_minigame),
+                     ("m7_tractor_minigame", check_m7_tractor_minigame),
+                     ("m7_shotgun_raid", check_m7_shotgun_raid),
+                     ("m7_shotgun_hold", check_m7_shotgun_hold),
+                     ("m7_choice_radio", check_m7_choice_radio),
+                     ("m7_runner_handoff", check_runner_handoff),
+                     ("arena_shotgun", check_arena_shotgun)):
+        ok = run_check(name, fn) and ok
     ok = run_check("m6_train_viewmodel", check_m6_train_viewmodel) and ok
     ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
     ok = run_check("m6_train_scope_subject", check_m6_train_scope_sees_the_target) and ok

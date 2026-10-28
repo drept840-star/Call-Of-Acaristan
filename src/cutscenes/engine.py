@@ -7,7 +7,7 @@ import math
 import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
-from core.config import (C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_WHITE, HEIGHT, LETTER_H, SCENE_BOT, SCENE_TOP, WIDTH, draw_sky_gradient, font_dialogue, font_speaker, font_terminal, font_terminal_small, font_title)
+from core.config import (C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_WHITE, HEIGHT, LETTER_H, SCENE_BOT, SCENE_TOP, WIDTH, draw_sky_gradient, font_dialogue, font_prompt, font_speaker, font_terminal, font_terminal_small, font_title)
 
 from cutscenes.cast import draw_biribel, draw_civilian
 from cutscenes.route12 import draw_biribel_blackout, draw_factory, draw_ipa_radio_chatter, draw_krap_door_kickin, draw_mag_graffiti, draw_oil_rig, draw_propaganda_poster, draw_route12_aftermath, draw_route12_black, draw_route12_broadcast, draw_route12_checkpoint, draw_route12_files, draw_route12_mag_alert, draw_route12_tanker, draw_van_exterior, draw_van_handoff, draw_van_interior, GROUND_Y, _draw_vertical_gradient, _draw_light_cone
@@ -474,6 +474,37 @@ def draw_cinematic_subtitle(surface, speaker, text, char_idx=None,
         if part:
             surface.blit(body_font.render(part, True, (240, 242, 240)), (x, y))
         y += line_h
+
+
+def draw_film_caption(surface, speaker, text):
+    """Film caption in the M2 sniper style (missions/m2/sniper3d._draw_bars).
+
+    Speaker tag over centred, word-wrapped text. No typewriter, no prompt.
+    Draw AFTER draw_letterbox.
+    """
+    lines = []
+    for para in text.split("\n"):
+        cur = ""
+        for word in para.split(" "):
+            test = (cur + " " + word) if cur else word
+            if font_dialogue.size(test)[0] <= WIDTH - 120 or not cur:
+                cur = test
+            else:
+                lines.append(cur)
+                cur = word
+        lines.append(cur)
+    tag = speaker.upper() if speaker else ""
+    tag_h = font_prompt.get_linesize() if tag else 0
+    text_h = font_dialogue.get_linesize()
+    y = HEIGHT - LETTER_H + max(2, (LETTER_H - tag_h - len(lines) * text_h) // 2)
+    if tag:
+        nm = font_prompt.render(tag, True, SPEAKER_COLORS.get(tag, C_ORANGE))
+        surface.blit(nm, ((WIDTH - nm.get_width()) // 2, y))
+        y += tag_h
+    for line in lines:
+        tx = font_dialogue.render(line, True, (236, 234, 226))
+        surface.blit(tx, ((WIDTH - tx.get_width()) // 2, y))
+        y += text_h
 
 
 def draw_volkov_dossier_overlay(surface, t):

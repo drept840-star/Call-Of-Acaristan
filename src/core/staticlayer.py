@@ -1,4 +1,3 @@
-
 """staticlayer.py - chunked bake of the static world (phase 0).
 
 Mission 3 re-executed ~1,100 procedural draw calls every frame for geometry

@@ -1,4 +1,3 @@
-
 import pygame
 from engine.assets import load_image as _load_image  # RPE6 D5: raw loads via engine.assets
 import math
@@ -17,8 +16,21 @@ pygame.init()
 from audio.audio import AudioManager
 audio = AudioManager()
 WIDTH, HEIGHT = 1000, 700
+
+
+def windowed_size():
+    """Largest 10:7 window that fits 85% of the desktop, never below the canvas."""
+    info = pygame.display.Info()
+    dw, dh = info.current_w, info.current_h
+    if dw <= 0 or dh <= 0:
+        return (WIDTH, HEIGHT)
+    scale = max(1.0, min(dw * 0.85 / WIDTH, dh * 0.85 / HEIGHT))
+    return (int(WIDTH * scale), int(HEIGHT * scale))
+
+
 # --- Display setup ---
-# The OS window opens at 1000x700 physical pixels; the user can resize it or
+# The OS window opens at windowed_size() physical pixels (1000x700 on small
+# desktops, larger on 2K/4K); the user can resize it or
 # fullscreen it (F11) to anything. `screen` is the game's FIXED 1000x700
 # offscreen canvas: every draw call is authored in these coordinates, and
 # `present()` letterboxes the canvas onto the window with the aspect ratio
@@ -40,7 +52,7 @@ WIDTH, HEIGHT = 1000, 700
 # the engine's screen service is re-pointed at the canvas (game code, engine
 # included, draws on the canvas -- the display surface belongs to present()).
 from engine.core import App as _EngineApp
-_engine_app = _EngineApp().boot(display_size=(WIDTH, HEIGHT),
+_engine_app = _EngineApp().boot(display_size=windowed_size(),
                                 display_flags=pygame.RESIZABLE,
                                 force_mode=True)
 # Same object identity forever: consumers that copied `screen` at import stay

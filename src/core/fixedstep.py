@@ -1,4 +1,3 @@
-
 """Fixed-timestep accumulator, for making the simulation host-independent.
 
 Why this exists

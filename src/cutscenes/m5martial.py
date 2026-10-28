@@ -1,4 +1,3 @@
-
 """m5martial.py - Mission 5 intro + ending cutscene art (Martial Law).
 
 Eight bespoke shots replace the W4 lit-black stubs:

@@ -1,8 +1,7 @@
-
 """Trailer bot - deterministic operator driver for cinematic capture.
 
 Usage (after the app.py hook lands):
-  python acaristan.py --jump m1 --trailer-bot --trailer-act act1
+  python acaristan.py --jump m1-game --trailer-bot --trailer-act act1
   python acaristan.py --jump m2-game --trailer-bot --trailer-act act2_killbox
   python acaristan.py --jump m3-game --trailer-bot --trailer-act act3_breakout
   python acaristan.py --jump m3-comms --trailer-bot --trailer-act act3_relay

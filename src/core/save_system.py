@@ -1,4 +1,3 @@
-
 """3-slot JSON save system for campaign progress.
 
 Files live at the project root (not the CWD) and are written atomically via

@@ -1,4 +1,3 @@
-
 """Character appearance: the cosmetic catalog, the appearance value object,
 and the single validator that both the save file and the network use.
 

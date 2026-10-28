@@ -1,19 +1,26 @@
 """HUD magazine-icon shells (weapon panel). The shell art is static per kind
 and state, so it is baked; only the live round count (witness holes / round
-stack) is overlaid at runtime by draw._draw_m5_mag_icon.
+stack / shell ports) is overlaid at runtime by draw._draw_m5_mag_icon and
+missions/m6/draw._panel_mag_icon.
 
 Variant = kind * 3 + state, kind 0 = stick (K-9 / OS-12), 1 = tapered box
-mag; state 0 = empty, 1 = active, 2 = idle.
+mag, 2 = Fallow 12 shell tube; state 0 = empty, 1 = active, 2 = idle.
 Stick sprite: 26 x 55, blit at (mx, my - 3). Box sprite: 25 x 47 at (mx, my).
-Key light upper-left: lit left flank strip on both kinds."""
+Shell sprite: 26 x 55, blit at (mx, my - 3); six shell ports at (12, 8 + i*5),
+filled bottom-up by the runtime overlay.
+Key light upper-left: lit left flank strip on every kind."""
 import pygame
 
 from game.art.m5 import _kit as K
 
-VARIANTS = 6
+VARIANTS = 9
+VARIANT_NAMES = {"stick.empty": 0, "stick.active": 1, "stick.idle": 2,
+                 "box.empty": 3, "box.active": 4, "box.idle": 5,
+                 "shell.empty": 6, "shell.active": 7, "shell.idle": 8}
 C_TERMINAL = (50, 255, 150)
 STICK_OFFSET = (0, -3)
 BOX_OFFSET = (0, 0)
+SHELL_OFFSET = (0, -3)
 
 
 def _stick(state):
@@ -61,6 +68,45 @@ def _box(state):
     return s
 
 
+def _shell(state):
+    """The Fallow 12's shell tube: blued steel over a walnut fore-end band,
+    six 12-gauge ports the runtime overlay seats bottom-up (m6/draw.py)."""
+    s = K.new(26, 55)
+    bx, by, mw = 6, 2, 13
+    bottom = by + 48
+    if state == 0:
+        base, rim, hi = (26, 29, 34), (56, 64, 74), (40, 46, 54)
+    elif state == 1:
+        base, rim, hi = (36, 48, 56), (120, 230, 180), (70, 92, 104)
+    else:
+        base, rim, hi = (31, 36, 43), (88, 104, 118), (54, 66, 76)
+    poly = [(bx + 2, by), (bx + mw - 2, by), (bx + mw - 1, by + 6),
+            (bx + mw - 1, bottom), (bx + 1, bottom), (bx + 1, by + 6)]
+    pygame.draw.polygon(s, base, poly)
+    pygame.draw.polygon(s, rim if state == 1 else (66, 74, 82), poly, 1)
+    pygame.draw.line(s, hi, (bx + 3, by + 7), (bx + 3, bottom - 14), 1)
+    pygame.draw.rect(s, (84, 92, 100), (bx, by - 2, mw, 4), border_radius=1)      # muzzle cap
+    pygame.draw.rect(s, (92, 62, 38), (bx + 1, bottom - 12, mw - 2, 9),
+                     border_radius=1)                                             # walnut band
+    pygame.draw.line(s, (66, 44, 28), (bx + 4, bottom - 10), (bx + 4, bottom - 5), 1)
+    pygame.draw.line(s, (112, 78, 48), (bx + 8, bottom - 11), (bx + 8, bottom - 4), 1)
+    pygame.draw.rect(s, (20, 22, 26), (bx + 1, bottom - 2, mw - 2, 4),
+                     border_radius=1)                                             # base plate
+    for i in range(6):                          # empty shell ports
+        pygame.draw.circle(s, (16, 18, 20), (12, 8 + i * 5), 2)
+        pygame.draw.circle(s, (60, 54, 42), (12, 8 + i * 5), 2, 1)
+    if state == 1:
+        pygame.draw.line(s, (120, 230, 180), (bx + mw + 3, by + 4),
+                         (bx + mw + 3, bottom - 4), 2)
+    return s
+
+
 def render(variant=0, scale=1):
     kind, state = divmod(int(variant) % VARIANTS, 3)
-    return K.scaled(_stick(state) if kind == 0 else _box(state), scale)
+    if kind == 0:
+        art = _stick(state)
+    elif kind == 1:
+        art = _box(state)
+    else:
+        art = _shell(state)
+    return K.scaled(art, scale)

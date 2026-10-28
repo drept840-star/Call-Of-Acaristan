@@ -1,6 +1,6 @@
 """Mission 7 metadata and stage constants: Fallow Ground (skeleton).
 
-Stages run in order: arrival, chores, runner, prep, raid, finale, choice.
+Stages run in order: arrival, chores, runner, prep, raidin, raid, finale, choice.
 This module owns identity and the stage ladder only; stage content lands
 per stage later.
 """
@@ -13,17 +13,19 @@ STAGE_ARRIVAL = "arrival"
 STAGE_CHORES = "chores"
 STAGE_RUNNER = "runner"
 STAGE_PREP = "prep"
+STAGE_RAIDIN = "raidin"
 STAGE_RAID = "raid"
 STAGE_FINALE = "finale"
 STAGE_CHOICE = "choice"
 STAGES = (STAGE_ARRIVAL, STAGE_CHORES, STAGE_RUNNER, STAGE_PREP,
-          STAGE_RAID, STAGE_FINALE, STAGE_CHOICE)
+          STAGE_RAIDIN, STAGE_RAID, STAGE_FINALE, STAGE_CHOICE)
 
 STAGE_LABELS = {
     STAGE_ARRIVAL: "ARRIVAL",
     STAGE_CHORES: "CHORES",
     STAGE_RUNNER: "RUNNER",
     STAGE_PREP: "PREP",
+    STAGE_RAIDIN: "RAID-IN",
     STAGE_RAID: "RAID",
     STAGE_FINALE: "FINALE",
     STAGE_CHOICE: "CHOICE",
@@ -33,6 +35,7 @@ STAGE_LABELS = {
 FILM_TIMELINES = {
     STAGE_ARRIVAL: "m7.arrival",
     STAGE_RUNNER: "m7.runner",
+    STAGE_RAIDIN: "m7.raidin",
     STAGE_FINALE: "m7.finale",
 }
 OUTRO_TIMELINE = "m7.outro"
@@ -46,6 +49,11 @@ M7_SCENES = {
     "m7_runner_ride": ("m7runner", "ride"),
     "m7_runner_meet": ("m7runner", "meet"),
     "m7_runner_folder": ("m7runner", "folder"),
+    "m7_runner_plan": ("m7runner", "plan_insert"),
+    "m7_runner_shotgun": ("m7runner", "shotgun_handover"),
+    "m7_runner_gun": ("m7runner", "gun_insert"),
+    "m7_raidin_road": ("m7films", "raidin_road"),
+    "m7_raidin_yard": ("m7films", "raidin_yard"),
     "m7_burn_wide": ("m7films", "burn_wide"),
     "m7_burn_tractor": ("m7films", "burn_tractor"),
     "m7_burn_bodi": ("m7films", "burn_bodi"),

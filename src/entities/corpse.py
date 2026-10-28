@@ -1,4 +1,3 @@
-
 """Enemy death corpses - bodies that fall instead of vanishing.
 
 Previously every mission's ``if e.hp <= 0:`` funnel did burst + decal +

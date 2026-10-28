@@ -21,8 +21,8 @@ from .core import (M_IDENT, Mesh, _orient_outward, box, lerp, m_apply, m_mul,
                    rot_x, rot_y, rot_z, v_add)
 
 __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
-           "os12_mesh", "pose_run", "pose_drag", "pose_crawl", "SLOTS", "PART_FB",
-           "solve_look", "mouth_flap"]
+           "os12_mesh", "shotgun_mesh", "pose_run", "pose_drag", "pose_crawl", "SLOTS",
+           "PART_FB", "solve_look", "mouth_flap"]
 
 NEUTRAL = dict(spine=3, spine_r=0, twist=0, head_p=0, head_y=0, head_x=0.0,
                lsh_p=8, lsh_r=8, lel=12, rsh_p=8, rsh_r=8, rel=12, lsh_y=0, rsh_y=0,
@@ -217,6 +217,63 @@ def os12_mesh():
     return m
 
 
+def shotgun_mesh():
+    """Fallow 12, with a continuous walnut stock and octagonal steel tubes.
+
+    +z is the muzzle; origin is the trigger hand, not the receiver centre.
+    """
+    from .core import Mesh
+    m = Mesh()
+    steel, dark = (70, 75, 82), (25, 28, 33)
+    wood, grain = (124, 77, 43), (77, 46, 28)
+
+    def ob(w, h, d, col, c):
+        m.add(box(w, h, d, col), t=c)
+
+    def tube(radius, z0, z1, y):
+        for i in range(8):
+            a, b = i * math.pi / 4, (i + 1) * math.pi / 4
+            xa, ya = radius * math.cos(a), y + radius * math.sin(a)
+            xb, yb = radius * math.cos(b), y + radius * math.sin(b)
+            m.face([(xa, ya, z0), (xb, yb, z0), (xb, yb, z1), (xa, ya, z1)],
+                   steel if i < 4 else dark, 2)
+        # Recessed dark bore and a visible steel muzzle rim.
+        ring = [(radius * math.cos(i * math.pi / 4),
+                 y + radius * math.sin(i * math.pi / 4), z1) for i in range(8)]
+        inner = [(x * 0.66, y + (yy - y) * 0.66, z1 + 0.001) for x, yy, _ in ring]
+        for i in range(8):
+            j = (i + 1) % 8
+            m.face([ring[i], ring[j], inner[j], inner[i]], steel, 2, True)
+        m.face(inner, (8, 9, 12), 2, True)
+
+    ob(0.057, 0.075, 0.23, steel, (0, 0.065, 0.075))
+    ob(0.003, 0.026, 0.095, dark, (0.030, 0.076, 0.09))
+    ob(0.011, 0.012, 0.038, steel, (0.036, 0.052, 0.055))
+    tube(0.017, 0.18, 0.70, 0.090)
+    tube(0.014, 0.18, 0.57, 0.046)
+    ob(0.038, 0.045, 0.015, dark, (0, 0.065, 0.54))
+    ob(0.006, 0.009, 0.009, (206, 172, 95), (0, 0.112, 0.675))
+    ob(0.066, 0.060, 0.18, wood, (0, 0.032, 0.33))
+    for i in range(7):
+        ob(0.068, 0.062, 0.005, grain, (0, 0.032, 0.253 + i * 0.025))
+    # Open trigger bow: two legs and a bottom, not a solid block.
+    for z in (0.005, 0.079):
+        ob(0.010, 0.033, 0.009, dark, (0, -0.005, z))
+    ob(0.010, 0.008, 0.081, dark, (0, -0.025, 0.042))
+    ob(0.008, 0.024, 0.008, steel, (0, 0.004, 0.040))
+    # One continuous swept stock profile, wrist through to broad butt.
+    profile = [(-0.015, 0.065), (-0.10, 0.092), (-0.37, 0.080),
+               (-0.40, -0.090), (-0.29, -0.080), (-0.10, -0.025), (-0.04, -0.055)]
+    for side in (-1, 1):
+        m.face([(side * 0.027, y, z) for z, y in profile], wood, 2, True)
+    for i, (z, y) in enumerate(profile):
+        zz, yy = profile[(i + 1) % len(profile)]
+        m.face([(-0.027, y, z), (0.027, y, z), (0.027, yy, zz), (-0.027, yy, zz)],
+               grain if i > 2 else wood, 2, True)
+    ob(0.060, 0.17, 0.022, dark, (0, -0.005, -0.40))
+    return m
+
+
 def cbox(w, h, d, col, center=(0.0, 0.0, 0.0), cols=None, bevel=0.02, skip=(),
          emissive=False, layer=2):
     """Box with its four vertical edges chamfered: an octagonal prism along y.
@@ -275,6 +332,7 @@ class Humanoid:
         self._mouth_open = float(spec.get("mouth_open", 0.0) or 0.0)
         self._parts = None
         self._rifle = None
+        self._muzzle_z = 0.78
         if spec.get("rifle"):
             kind = spec["rifle"]
             if kind == "sniper":
@@ -282,6 +340,10 @@ class Humanoid:
                 m = rifle_mesh(scope=True)
                 m.add(box(0.03, 0.03, 0.55, (14, 14, 16), center=(0, 0.015, 0.95)))
                 self._rifle = m
+                self._muzzle_z = 0.78
+            elif kind == "shotgun":
+                self._rifle = shotgun_mesh()
+                self._muzzle_z = 0.70
             else:
                 self._rifle = os12_mesh() if kind == "os12" else rifle_mesh()
         self._build_parts()
@@ -918,7 +980,7 @@ class Humanoid:
             R = m_mul(B0, m_mul(rot_y(p["rifle_y"]), rot_x(p["rifle_p"])))
             hand = joints["rhand"]
             places.append((16, "rifle", R, hand, False, 0.0))
-            joints["muzzle"] = v_add(hand, m_apply(R, (0, 0.015, 0.78)))
+            joints["muzzle"] = v_add(hand, m_apply(R, (0, 0.015, self._muzzle_z)))
             rifle_m = R
         return places, joints, rifle_m, p["lift"]
 

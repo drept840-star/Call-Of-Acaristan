@@ -1,4 +1,3 @@
-
 """Player character: movement, drawing, weapon rig."""
 import math
 import os
@@ -237,6 +236,11 @@ class Player:
             grip_offset = 4
             gun_len = 18
             muzzle_extra = 5  # compact suppressor
+        elif current_weapon == "shotgun":
+            arm_len = 16
+            grip_offset = 4
+            gun_len = 32
+            muzzle_extra = 4
         else:
             arm_len = 16
             grip_offset = 4

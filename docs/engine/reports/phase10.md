@@ -98,3 +98,24 @@ check's own instructions the pin is re-frozen to `7a71e955...` (83
 files); the Phase 10 `e26ff0bd...` value remains the historical
 zero-diff proof for Mission 0's construction. The M6 stage maps, films,
 stealth and train scene live entirely outside `src/engine/`.
+
+## 2026-10-27 addendum
+
+The pin was re-frozen again, to `356f0326...` (91 files), for three
+deliberate engine-side changes that landed after the 2026-10-18 freeze
+and tripped the mission-0 gate only because it had not been re-run:
+
+- `engine.ai` + `engine.collision` subsystems (e527451, 2026-10-21):
+  behaviour trees, senses, squads, cover, `BoxWorld`, `GridNav` - the
+  M6 yard guards' brains. New modules, no edits to existing ones.
+- MP/HUD/M6 sweep (6a8379c, 2026-10-26): `engine.anim.figure_kit`,
+  `engine.assets._artpack`, `engine.scene` (scene/stack),
+  `engine.ui.std.objective_banner`.
+- `engine.ai` facade re-exports (2026-10-27, CI sweep): the package
+  `__init__` now re-exports the bt/cover/senses/squad public names so
+  game code satisfies boundary rule E4 at two levels; no module bodies
+  changed beyond that and the call-site re-pointing in
+  `missions/m6/yard_brain.py`, `missions/m6/yard_hud.py`,
+  `ui/arena_view.py`, `engine3d/gl.py`.
+
+Mission 0 itself is untouched and the playthrough proof still passes.

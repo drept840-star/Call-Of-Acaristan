@@ -1,4 +1,3 @@
-
 """Split from menu.py - see menu.py (shim) for the map."""
 import math
 import pygame

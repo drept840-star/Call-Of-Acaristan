@@ -46,7 +46,8 @@ import pygame
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 # RPE6 Phase 2 (A-006): moved verbatim from cutscenes/figure_kit.py except for the injection points marked RPE6.
-__all__ = ["SPECS", "HEIGHT", "REF_H", "KRAP_UNIFORM", "KRAP_BLUE", "draw_character"]
+__all__ = ["SPECS", "HEIGHT", "REF_H", "KRAP_UNIFORM", "KRAP_BLUE", "draw_character",
+           "draw_prop"]
 
 # RPE6: the KRAP palette used to be read from core.config (C_KRAP_UNIFORM / C_KRAP_BLUE);
 # the engine copy owns the values and tests/unit/test_engine_shims.py pins them to config.
@@ -493,7 +494,145 @@ def _casual_front(pen, spec, X, hy, top, hem, flare):
             pen.line(_dark(coat, .35), [(X(side * 12), hy + 33), (X(side * 17), hy + 58)], 1)
 
 
-def _body(pen, spec, t, moving, prop, prop_label, label_font, seated=False, reach=None, arms=True):
+def _folder_shapes(fx, fy):
+    """A manila plan folder centred on (fx, fy), arrest units."""
+    return {
+        "back": [(fx - 20, fy - 28), (fx + 20, fy - 28), (fx + 20, fy + 28), (fx - 20, fy + 28)],
+        "front": [(fx - 18, fy - 26), (fx + 18, fy - 26), (fx + 18, fy + 26), (fx - 18, fy + 26)],
+        "crease": (fx - 6, fy - 26, fx - 6, fy + 26),
+        "band": [(fx - 18, fy + 4), (fx + 18, fy + 4), (fx + 18, fy + 10), (fx - 18, fy + 10)],
+        "stamp": [(fx + 4, fy - 20), (fx + 14, fy - 20), (fx + 14, fy - 12), (fx + 4, fy - 12)],
+        "rules": ((fx - 12, fy - 14, fx + 10, fy - 14),
+                  (fx - 12, fy - 6, fx + 10, fy - 6),
+                  (fx - 12, fy + 16, fx + 10, fy + 16)),
+        "corner": [(fx + 18, fy - 26), (fx + 8, fy - 26), (fx + 18, fy - 16)],
+    }
+
+
+def _folder_art(pen, fx, fy):
+    s = _folder_shapes(fx, fy)
+    pen.poly((198, 170, 116), s["back"])
+    pen.poly((216, 190, 136), s["front"])
+    pen.line((170, 140, 92), [s["crease"][:2], s["crease"][2:]], 2)
+    pen.poly((66, 52, 38), s["band"])
+    pen.poly((156, 52, 44), s["stamp"])
+    for a, b, c, d in s["rules"]:
+        pen.line((120, 96, 64), [(a, b), (c, d)], 1)
+    pen.poly((176, 150, 100), s["corner"])
+    pen.line((126, 98, 62), s["back"] + [s["back"][0]], 2)
+
+
+def _shotgun_art(pen, grip, fore):
+    """A pump gun along the grip -> fore line; both hands sit on it."""
+    gx, gy = grip
+    dx, dy = fore[0] - gx, fore[1] - gy
+    ln = math.hypot(dx, dy) or 1.0
+    ux, uy = dx / ln, dy / ln
+    px, py = -uy, ux
+
+    def P(a, b):
+        return (gx + ux * a + px * b, gy + uy * a + py * b)
+
+    steel, dark, edge = (65, 72, 78), (25, 29, 33), (138, 148, 152)
+    wood, wood_d = (139, 87, 47), (83, 49, 29)
+    L = ln
+
+    def shape(col, pts):
+        pen.poly(col, [P(a, b) for a, b in pts])
+
+    def line(col, pts, width=1):
+        pen.line(col, [P(a, b) for a, b in pts], width)
+
+    # Long swept comb, narrow wrist, broad heel: recognisable sporting stock.
+    shape(dark, [(-3,-6),(-15,-8),(-47,-5),(-49,12),(-41,14),(-18,6),(-5,7)])
+    shape(wood, [(-5,-4),(-16,-6),(-45,-3),(-46,10),(-41,11),(-18,4),(-6,5)])
+    shape(wood_d, [(-44,5),(-20,1),(-7,3),(-18,6),(-43,11)])
+    line((182,121,67), [(-42,-1),(-22,-3),(-12,-2)])
+    shape(dark, [(-49,-5),(-46,-5),(-47,11),(-50,12)])
+    # Receiver ends well before the pump; it no longer fills the whole gun.
+    shape(dark, [(-7,-8),(L*.44,-8),(L*.48,2),(2,5),(-7,4)])
+    shape(steel, [(-5,-6),(L*.43,-6),(L*.43,1),(1,3),(-5,2)])
+    line(edge, [(-4,-6),(L*.40,-6)])
+    shape((18,21,24), [(3,-4),(L*.32,-4),(L*.32,-1),(3,-1)])
+    pen.circ(edge,*P(L*.31,1),1)
+    # Open trigger bow with a wood wrist behind it.
+    line(dark, [(0,4),(12,4),(11,11),(3,11),(0,4)],1.5)
+    line(steel, [(6,4),(5,8)],1)
+    shape(wood, [(-6,2),(-1,4),(-3,13),(-9,12)])
+    # Parallel tubes separated by daylight; narrow barrel highlight and bead.
+    shape(dark, [(L*.40,-7),(L+43,-7),(L+44,-3),(L*.40,-3)])
+    line(edge, [(L*.42,-6),(L+41,-6)])
+    shape(steel, [(L*.44,0),(L+28,0),(L+28,3),(L*.44,3)])
+    line(dark, [(L+28,0),(L+28,3)],2)
+    line(dark, [(L+43,-7),(L+43,-3)],2)
+    pen.circ((210,176,101), *P(L+39,-9),0.8)
+    shape(dark, [(L-13,-3),(L+11,-3),(L+12,6),(L-12,7)])
+    shape(wood, [(L-12,-2),(L+10,-2),(L+10,5),(L-11,6)])
+    line((181,118,65), [(L-11,-1),(L+9,-1)])
+    for i in range(-8,10,3):
+        line(wood_d, [(L+i,0),(L+i,5)])
+
+
+def _shotgun_hand(pen, skin, grip, fore, support=False, sleeve=None):
+    """Small wrapped grip silhouette in the same gun frame as the furniture."""
+    gx, gy = grip
+    dx, dy = fore[0]-gx, fore[1]-gy
+    length = math.hypot(dx,dy) or 1.0
+    ux, uy = dx/length, dy/length
+    px, py = -uy, ux
+    at = fore if support else grip
+
+    def P(a,b):
+        return at[0]+ux*a+px*b, at[1]+uy*a+py*b
+
+    def shape(col, pts):
+        pen.poly(col,[P(a,b) for a,b in pts])
+
+    shadow, light = _dark(skin,.27), _lite(skin,.12)
+    # Sleeved forearm enters the wrist, so the insert has no floating palms.
+    if sleeve:
+        shape(_dark(sleeve,.25), [(-6,11),(6,12),(15,110),(-13,110)])
+        shape(sleeve,[(-4,12),(5,12),(12,110),(-11,110)])
+        shape(_dark(sleeve,.45),[(-5,10),(6,10),(7,16),(-6,16)])
+    shape(shadow,[(-5,1),(-2,-2),(4,-2),(7,2),(6,12),(2,16),(-4,12),(-6,6)])
+    shape(skin,[(-4,2),(-1,0),(4,0),(5,3),(4,11),(1,13),(-3,10),(-4,6)])
+    # Short curled finger pads below the fore-end, not long rake-like lines.
+    for i in range(3):
+        b=5+i*2.3
+        pen.line(shadow,[P(-2,b),P(3,b+1)],0.65)
+    shape(light,[(-5,2),(-3,-1),(1,-1),(3,1),(1,3),(-2,4)])
+
+
+def draw_prop(surface, kind, x, y, scale, facing_right=True, angle=0):
+    """Draw a prop on its own (in transit, or at insert-shot scale).
+
+    ``kind`` is "folder" or "shotgun"; ``angle`` is clockwise degrees.  The
+    prop is rendered at ``scale`` into a scratch surface, rotated nearest-
+    neighbour and centred on (x, y).
+    """
+    ext_w, ext_h = (44, 60) if kind == "folder" else (150, 44)
+    pad = 8
+    w = max(64, int(ext_w * scale) + pad * 2)
+    h = max(64, int(ext_h * scale) + pad * 2)
+    tmp = pygame.Surface((w, h), pygame.SRCALPHA)
+    pen = _Pen(tmp, w // 2, h // 2, max(0.05, scale), facing_right)
+    if kind == "folder":
+        _folder_art(pen, 0, 0)
+    elif kind == "shotgun":
+        _shotgun_art(pen, (-32, 2), (34, -2))
+    else:
+        return
+    bbox = tmp.get_bounding_rect()
+    if bbox.w <= 0 or bbox.h <= 0:
+        return
+    img = tmp.subsurface(bbox).copy()
+    if angle:
+        img = pygame.transform.rotate(img, -angle)
+    surface.blit(img, img.get_rect(center=(int(x), int(y))))
+
+
+def _body(pen, spec, t, moving, prop, prop_label, label_font, seated=False, reach=None, arms=True,
+          prop_at=None, prop_offset=(10, -8)):
     bulk = spec["bulk"]
     X = lambda x: x * bulk
     step = math.sin(t * .009) * moving
@@ -577,6 +716,15 @@ def _body(pen, spec, t, moving, prop, prop_label, label_font, seated=False, reac
     # arms: 2-bone limbs, lit outer edge, cuff, hand
     glove = spec.get("glove")
     targets = _reach_units(pen, reach)
+    prop_pt = None
+    if prop_at is not None:
+        prop_pt = (prop_at[0] * pen.f / pen.k, prop_at[1] / pen.k - pen.oy)
+    elif prop == "folder":
+        wr = targets.get(1, (X(70), -150))
+        prop_pt = (wr[0] + prop_offset[0] * bulk, wr[1] + prop_offset[1] * bulk)
+    elif prop == "shotgun":
+        targets.setdefault(1, (X(22), -156))
+        targets.setdefault(-1, (X(64), -136))
     for side in (-1, 1) if arms else ():
         sh, el = (X(side * 40), hy + 51), (X(side * 50), -171)
         wr = (X(side * 44), -145)
@@ -622,15 +770,20 @@ def _body(pen, spec, t, moving, prop, prop_label, label_font, seated=False, reac
             pen.line(_lite(stc, .25), [(X(side * 24) - 2, hy + 40), (X(side * 27) - 2, hy + 80)], 1, light=True)
             pen.poly((120, 120, 124), [(X(side * 27) - 4, hy + 92), (X(side * 27) + 4, hy + 92),
                                         (X(side * 27) + 4, hy + 98), (X(side * 27) - 4, hy + 98)])
-    if prop == "folder":
-        fx, fy = X(80), -158
-        pen.poly((68, 52, 36), [(fx - 18, fy - 36), (fx + 18, fy - 36), (fx + 18, fy + 38), (fx - 18, fy + 38)])
-        pen.line((130, 42, 36), [(fx - 18, fy - 36), (fx + 18, fy - 36), (fx + 18, fy + 38), (fx - 18, fy + 38), (fx - 18, fy - 36)], 2)
+    if prop == "shotgun":
+        _shotgun_art(pen, targets[1], targets[-1])
+        _shotgun_hand(pen, glove or skin, targets[1], targets[-1])
+        _shotgun_hand(pen, glove or skin, targets[1], targets[-1], support=True)
+    elif prop == "folder" and prop_pt is not None:
+        _folder_art(pen, prop_pt[0], prop_pt[1])
         if prop_label and label_font:
-            lab = label_font.render(prop_label, True, (205, 170, 120))
-            lab = pygame.transform.smoothscale(lab, (max(1, round(lab.get_width() * .65 * pen.k)), max(1, round(lab.get_height() * .65 * pen.k))))
-            pen.s.blit(lab, (pen.p(fx, fy - 24)[0] - lab.get_width() // 2, pen.p(fx, fy - 24)[1]))
-        _hand(pen, skin, glove, X(70), -150, 1)
+            lab = label_font.render(prop_label, True, (78, 56, 30))
+            s = max(0.35, min(1.2, 0.65 * pen.k))
+            lab = pygame.transform.scale_by(lab, s)
+            lp = pen.p(prop_pt[0], prop_pt[1] - 18)
+            pen.s.blit(lab, (lp[0] - lab.get_width() // 2, lp[1] - lab.get_height() // 2))
+        wr = targets.get(1, (X(70), -150))
+        _hand(pen, skin, glove, wr[0], wr[1], 1)
     pen.oy = 0.0
     return hy + (_SEAT_DROP if seated else 0)
 
@@ -638,7 +791,7 @@ def _body(pen, spec, t, moving, prop, prop_label, label_font, seated=False, reac
 def draw_character(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False,
                    t=0, fear=0, smile=0, blink=0, look=None, moving=0,
                    prop=None, prop_label=None, label_font=None, *, seated=False, reach=None,
-                   bow=0, wardrobe=None, arms=True):
+                   bow=0, wardrobe=None, arms=True, prop_at=None, prop_offset=(10, -8)):
     spec = SPECS[who]
     if wardrobe:
         spec = {**spec, **wardrobe}
@@ -651,7 +804,8 @@ def draw_character(surface, who, cx, foot_y, scale=1.0, facing_right=True, silho
         tmp = pygame.Surface((w, h), pygame.SRCALPHA)
         draw_character(tmp, who, w // 2, h - 12, scale, facing_right, False, t, fear, smile, blink,
                        look, moving, prop, prop_label, label_font, seated=seated, reach=reach,
-                       bow=bow, wardrobe=wardrobe, arms=arms)
+                       bow=bow, wardrobe=wardrobe, arms=arms, prop_at=prop_at,
+                       prop_offset=prop_offset)
         tmp.fill((16, 18, 24, 255), special_flags=pygame.BLEND_RGBA_MULT)
         surface.blit(tmp, (int(cx - w // 2), int(foot_y - h + 12)))
         return
@@ -661,7 +815,8 @@ def draw_character(surface, who, cx, foot_y, scale=1.0, facing_right=True, silho
     sh_s = pygame.Surface((sw, sh), pygame.SRCALPHA)
     pygame.draw.ellipse(sh_s, (0, 0, 0, 80), (0, 0, sw, sh))
     surface.blit(sh_s, (int(cx - sw / 2), int(foot_y - sh * .6)))
-    hy = _body(pen, spec, t, moving, prop, prop_label, label_font, seated=seated, reach=reach, arms=arms)
+    hy = _body(pen, spec, t, moving, prop, prop_label, label_font, seated=seated, reach=reach,
+               arms=arms, prop_at=prop_at, prop_offset=prop_offset)
     if look is None:
         look = 1 if facing_right else -1
     lean = 0

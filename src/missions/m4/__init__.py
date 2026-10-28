@@ -1,4 +1,3 @@
-
 """Mission 4: The Aftermath - the world after the broadcast.
 
 Picks up two days after Mission 3's Vostral transmission. The regime is

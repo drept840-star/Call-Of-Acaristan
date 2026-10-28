@@ -240,6 +240,12 @@ VOICE_LINES = [
     ('VO_225', 'ALEX', "Mansion plan. Guard rotations, cameras, the lot. Don't lose it, I nearly died for it. Twice."),
     ('VO_226', 'ALEX', 'Trucks! Two of them - no, three!'),
     ('VO_227', 'ALEX', "I'm pinned! Biribel, I'm pinned!"),
+    ('VO_228', 'ALEX', 'Maru sent this too. Farm gun. It barks louder than it looks.'),
+    # M7 raid-in film fix: the bridge film had Alex call the trucks (VO_226)
+    # before the raid, but they only come up the track in wave 2 - where the
+    # call now plays alone.  The film keeps the convoy far up the valley and
+    # shows the wave-1 vanguard instead; Bodi captions it.  No take yet.
+    ('VO_229', 'BODI', 'Eyes on the trees, not the track. First knock comes on foot.'),
 ]
 
 
@@ -300,4 +306,5 @@ KNOWN_MISSING_AUDIO = frozenset({
     'VO_218',
     # M7 Fallow Ground: Bodi and Alex lines, no takes yet.
     'VO_219', 'VO_220', 'VO_221', 'VO_222', 'VO_223', 'VO_224', 'VO_225', 'VO_226', 'VO_227',
+    'VO_228', 'VO_229',
 })

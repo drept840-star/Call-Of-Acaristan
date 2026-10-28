@@ -142,4 +142,3 @@ for name, fn in (("station_battery_backup.png", battery_backup),
     pygame.image.save(surf, path)
     print(f"wrote {os.path.normpath(path)}  {surf.get_width()}x{surf.get_height()}  "
           f"{os.path.getsize(path)} bytes")
-

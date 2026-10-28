@@ -1,4 +1,3 @@
-
 """Settings store - persistent JSON-backed user preferences.
 
 Expanded from the original 6-field store to a full settings schema covering

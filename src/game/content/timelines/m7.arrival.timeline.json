@@ -6,7 +6,8 @@
    "scene": "m7_dropoff_lift",
    "speaker": "",
    "text": "Day 11. Dawn. Maru's helicopter sets Biribel down above Valea Seaca, and leaves.",
-   "min_ms": 4200,
+   "min_ms": 8200,
+   "auto_advance": true,
    "quiet_ui": true,
    "lighting": [
     18,

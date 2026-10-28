@@ -1,4 +1,3 @@
-
 """Mission 3 - Kill Order -> Broadcast transition cinematic (Slice 5 -> 6).
 
 Illustrated cutscene language, same family as the KO transition

@@ -19,10 +19,10 @@ from types import SimpleNamespace
 import pygame
 
 from core.config import HEIGHT, WIDTH, font_prompt, font_terminal_small
+from engine.ui import crosshair as _reticle
 from engine.ui import health_bar as _health_bar
 from engine.ui import hostiles as _hostiles
 from engine.ui import weapon_panel as _weapon_panel
-from engine.ui.std import crosshair as _reticle
 from entities.art_cache import get_panel_bg
 from ui.hud import THEME, MiniMap, draw_objective_panel, draw_pinned_radio
 
@@ -114,13 +114,14 @@ def _mag_icon(surface, mx, my, kind, rounds, capacity, active):
     _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active)
 
 
-def weapon(surface, hp, hp_max, mag, mag_size, reserve, reload_left, reload_s):
-    """HP strip and the K-9 panel.  ``reload_left`` seconds of the reload to
+def weapon(surface, hp, hp_max, mag, mag_size, reserve, reload_left, reload_s,
+           cw="k9_smg", label="K-9 SMG", caliber="9MM-S", kind="stick", reload_ms=None):
+    """HP strip and the weapon panel.  ``reload_left`` seconds of the reload to
     go (0 when not reloading); the panel's bar runs on 2D frames."""
     _health_bar.draw(surface, THEME, hp, hp_max, panel_bg=get_panel_bg)
-    dur = _weapon_panel.RELOAD_MS["k9_smg"]
+    dur = reload_ms if reload_ms is not None else _weapon_panel.RELOAD_MS.get(cw, 60)
     info = _weapon_panel.WeaponInfo(
-        cw="k9_smg", label="K-9 SMG", caliber="9MM-S", kind="stick",
+        cw=cw, label=label, caliber=caliber, kind=kind,
         ammo=mag, mag=mag_size, spares=-(-reserve // mag_size),
         reloading=reload_left > 0.0,
         reload_timer=int(round(dur * reload_left / reload_s)) if reload_left > 0.0 else 0)

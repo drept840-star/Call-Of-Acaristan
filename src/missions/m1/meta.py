@@ -72,17 +72,18 @@ escape_shots = [
 escape_shots = _timelines.shots("m1.escape", escape_shots)  # WP2: timeline data
 
 # m1.dropoff: the beat after the briefing. The van pulls away down the street while
-# Vasile and Biribel talk on the radio. One painter (m1_dropoff) runs all three
-# shots on one clock. min_ms covers each line's subtitle hold (subtitle_ms).
+# Vasile and Biribel talk on the radio. Beat 2 tracks Biribel in closer and beat 3 cuts
+# tighter onto the side door; scene_time_offset_ms keeps all three views on the same
+# continuous action clock. min_ms covers each line's subtitle hold (subtitle_ms).
 dropoff_shots = [
     {"scene": "m1_dropoff", "speaker": "VASILE", "radio": True,
      "text": _dialogues.line("m1.radio", "dropoff_1",
                              "Channel 4. You're on the street. / Two at the shutter, one walking the fence."),
      "min_ms": 4300, "scene_time_offset_ms": 0, "lighting": (5, 7, 10)},
-    {"scene": "m1_dropoff", "speaker": "BIRIBEL", "radio": True,
+    {"scene": "m1_dropoff_follow", "speaker": "BIRIBEL", "radio": True,
      "text": _dialogues.line("m1.radio", "dropoff_2", "Side door's dark."),
      "min_ms": 2300, "scene_time_offset_ms": 4300, "lighting": (5, 7, 10)},
-    {"scene": "m1_dropoff", "speaker": "VASILE", "radio": True,
+    {"scene": "m1_dropoff_entry", "speaker": "VASILE", "radio": True,
      "text": _dialogues.line("m1.radio", "dropoff_3", "Then use it. Volkov's inside with the book."),
      "min_ms": 2500, "scene_time_offset_ms": 6600, "lighting": (5, 7, 10)},
 ]

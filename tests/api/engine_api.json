@@ -22,6 +22,915 @@
     }
    }
   },
+  "engine.ai": {
+   "all": [
+    "bt",
+    "cover",
+    "senses",
+    "squad",
+    "SUCCESS",
+    "FAILURE",
+    "RUNNING",
+    "Ctx",
+    "Node",
+    "Selector",
+    "Sequence",
+    "Action",
+    "Condition",
+    "Wait",
+    "If",
+    "Invert",
+    "Cooldown",
+    "Timeout",
+    "Tree",
+    "HIDE_EYE_LOW",
+    "HIDE_EYE_HIGH",
+    "SHOOT_EYE",
+    "Spot",
+    "build_spots",
+    "hides",
+    "peek_point",
+    "can_peek",
+    "pick",
+    "NoiseBus",
+    "Sight",
+    "new_memory",
+    "give_lead",
+    "drop_lead",
+    "on_hit",
+    "Squad"
+   ],
+   "names": {
+    "Action": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[Ctx], Any]', halt: 'Callable[[Ctx], None] | None' = None, name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Condition": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[Ctx], Any]', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Cooldown": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, child: 'Node', secs: 'float', name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Ctx": {
+     "attrs": {
+      "agent": "member_descriptor",
+      "bb": "member_descriptor",
+      "dt": "member_descriptor",
+      "fresh": "member_descriptor",
+      "t": "member_descriptor",
+      "trace": "member_descriptor",
+      "world": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, agent: 'Any', bb: 'dict', t: 'float', dt: 'float', world: 'Any' = None) -> 'None'"
+     }
+    },
+    "FAILURE": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "HIDE_EYE_HIGH": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "HIDE_EYE_LOW": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "If": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[Ctx], Any]', child: 'Node', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Invert": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Node": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "mem": "(self, ctx: 'Ctx') -> 'dict'",
+      "run": "(self, ctx: 'Ctx') -> 'str'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "NoiseBus": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, keep: 'float' = 1.5, muffle: 'float' = 0.5) -> 'None'",
+      "emit": "(self, t: 'float', pos: 'Vec3', radius: 'float', kind: 'str' = '') -> 'None'",
+      "listen": "(self, mem: 'dict', t: 'float', ear: 'Vec3', blocked: 'Callable[[Vec3, Vec3], bool] | None' = None) -> 'tuple | None'",
+      "prune": "(self, t: 'float') -> 'None'"
+     }
+    },
+    "RUNNING": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SHOOT_EYE": {
+     "kind": "constant",
+     "type": "float"
+    },
+    "SUCCESS": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Selector": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *children: 'Node', name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Sequence": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *children: 'Node', name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Sight": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fov: 'float' = 120.0, range: 'float' = 40.0, near: 'float' = 3.0, react: 'tuple[float, float]' = (0.15, 1.2), forget: 'float' = 6.0) -> 'None'",
+      "in_view": "(self, eye: 'Vec3', facing: 'Sequence[float]', target: 'Vec3') -> 'bool'",
+      "update": "(self, mem: 'dict', t: 'float', dt: 'float', visible: 'bool', target: 'Vec3', dist: 'float', boost: 'float' = 1.0) -> 'bool'"
+     }
+    },
+    "Spot": {
+     "attrs": {
+      "box": "member_descriptor",
+      "edge": "member_descriptor",
+      "id": "member_descriptor",
+      "low": "member_descriptor",
+      "nx": "member_descriptor",
+      "nz": "member_descriptor",
+      "tx": "member_descriptor",
+      "tz": "member_descriptor",
+      "x": "member_descriptor",
+      "y": "member_descriptor",
+      "z": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, id, x, y, z, nx, nz, tx, tz, edge, box, low) -> 'None'",
+      "pos": "property"
+     }
+    },
+    "Squad": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, shooters: 'int' = 2, radio: 'float' = 1.0) -> 'None'",
+      "claim": "(self, key: 'Hashable', who: 'Any') -> 'bool'",
+      "claimed": "(self, key: 'Hashable', by_other_than: 'Any' = None) -> 'bool'",
+      "claims": "(self) -> 'dict[Hashable, Any]'",
+      "fire_token": "(self, t: 'float', who: 'Any', hold: 'float') -> 'bool'",
+      "forget": "(self, who: 'Any') -> 'None'",
+      "has_token": "(self, t: 'float', who: 'Any') -> 'bool'",
+      "intel": "(self, t: 'float', me: 'Any' = None) -> 'tuple[tuple[float, ...], float] | None'",
+      "release": "(self, who: 'Any') -> 'None'",
+      "report": "(self, t: 'float', pos: 'Sequence[float]', by: 'Any' = None, instant: 'bool' = False) -> 'None'",
+      "unclaim": "(self, who: 'Any') -> 'None'"
+     }
+    },
+    "Timeout": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, child: 'Node', secs: 'float', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Tree": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, root: 'Node') -> 'None'",
+      "reset": "(self, bb: 'dict') -> 'None'",
+      "tick": "(self, agent: 'Any', bb: 'dict', t: 'float', dt: 'float', world: 'Any' = None) -> 'Ctx'"
+     }
+    },
+    "Wait": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, secs: 'float | Callable[[Ctx], float]', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "bt": {
+     "all": [
+      "SUCCESS",
+      "FAILURE",
+      "RUNNING",
+      "Ctx",
+      "Node",
+      "Selector",
+      "Sequence",
+      "Action",
+      "Condition",
+      "If",
+      "Wait",
+      "Cooldown",
+      "Timeout",
+      "Invert",
+      "Tree"
+     ],
+     "kind": "module",
+     "module": "engine.ai.bt",
+     "names": {
+      "Action": {
+       "attrs": {},
+       "bases": [
+        "Node"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, fn: 'Callable[[Ctx], Any]', halt: 'Callable[[Ctx], None] | None' = None, name: 'str' = '') -> 'None'",
+        "halt": "(self, ctx: 'Ctx') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Condition": {
+       "attrs": {},
+       "bases": [
+        "Node"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, fn: 'Callable[[Ctx], Any]', name: 'str' = '') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Cooldown": {
+       "attrs": {},
+       "bases": [
+        "_Decorator"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, child: 'Node', secs: 'float', name: 'str' = '') -> 'None'",
+        "halt": "(self, ctx: 'Ctx') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Ctx": {
+       "attrs": {
+        "agent": "member_descriptor",
+        "bb": "member_descriptor",
+        "dt": "member_descriptor",
+        "fresh": "member_descriptor",
+        "t": "member_descriptor",
+        "trace": "member_descriptor",
+        "world": "member_descriptor"
+       },
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, agent: 'Any', bb: 'dict', t: 'float', dt: 'float', world: 'Any' = None) -> 'None'"
+       }
+      },
+      "FAILURE": {
+       "kind": "constant",
+       "type": "str"
+      },
+      "If": {
+       "attrs": {},
+       "bases": [
+        "_Decorator"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, fn: 'Callable[[Ctx], Any]', child: 'Node', name: 'str' = '') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Invert": {
+       "attrs": {},
+       "bases": [
+        "_Decorator"
+       ],
+       "kind": "class",
+       "methods": {
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Node": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, name: 'str' = '') -> 'None'",
+        "halt": "(self, ctx: 'Ctx') -> 'None'",
+        "mem": "(self, ctx: 'Ctx') -> 'dict'",
+        "run": "(self, ctx: 'Ctx') -> 'str'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "RUNNING": {
+       "kind": "constant",
+       "type": "str"
+      },
+      "SUCCESS": {
+       "kind": "constant",
+       "type": "str"
+      },
+      "Selector": {
+       "attrs": {},
+       "bases": [
+        "Node"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, *children: 'Node', name: 'str' = '') -> 'None'",
+        "halt": "(self, ctx: 'Ctx') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Sequence": {
+       "attrs": {},
+       "bases": [
+        "Node"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, *children: 'Node', name: 'str' = '') -> 'None'",
+        "halt": "(self, ctx: 'Ctx') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Timeout": {
+       "attrs": {},
+       "bases": [
+        "_Decorator"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, child: 'Node', secs: 'float', name: 'str' = '') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      },
+      "Tree": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, root: 'Node') -> 'None'",
+        "reset": "(self, bb: 'dict') -> 'None'",
+        "tick": "(self, agent: 'Any', bb: 'dict', t: 'float', dt: 'float', world: 'Any' = None) -> 'Ctx'"
+       }
+      },
+      "Wait": {
+       "attrs": {},
+       "bases": [
+        "Node"
+       ],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, secs: 'float | Callable[[Ctx], float]', name: 'str' = '') -> 'None'",
+        "tick": "(self, ctx: 'Ctx') -> 'str'"
+       }
+      }
+     }
+    },
+    "build_spots": {
+     "kind": "function",
+     "signature": "(world: 'BoxWorld', walkable: 'Callable[[float, float], bool]', floor: 'Callable[[float, float], float]', spacing: 'float' = 1.0, offset: 'float' = 0.6, min_h: 'float' = 0.7, low_h: 'float' = 1.35, corner: 'float' = 1.2) -> 'list[Spot]'"
+    },
+    "can_peek": {
+     "kind": "function",
+     "signature": "(spot: 'Spot', threat: 'Vec3', world: 'BoxWorld') -> 'bool'"
+    },
+    "cover": {
+     "all": [
+      "Spot",
+      "build_spots",
+      "hides",
+      "peek_point",
+      "can_peek",
+      "pick"
+     ],
+     "kind": "module",
+     "module": "engine.ai.cover",
+     "names": {
+      "Spot": {
+       "attrs": {
+        "box": "member_descriptor",
+        "edge": "member_descriptor",
+        "id": "member_descriptor",
+        "low": "member_descriptor",
+        "nx": "member_descriptor",
+        "nz": "member_descriptor",
+        "tx": "member_descriptor",
+        "tz": "member_descriptor",
+        "x": "member_descriptor",
+        "y": "member_descriptor",
+        "z": "member_descriptor"
+       },
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, id, x, y, z, nx, nz, tx, tz, edge, box, low) -> 'None'",
+        "pos": "property"
+       }
+      },
+      "build_spots": {
+       "kind": "function",
+       "signature": "(world: 'BoxWorld', walkable: 'Callable[[float, float], bool]', floor: 'Callable[[float, float], float]', spacing: 'float' = 1.0, offset: 'float' = 0.6, min_h: 'float' = 0.7, low_h: 'float' = 1.35, corner: 'float' = 1.2) -> 'list[Spot]'"
+      },
+      "can_peek": {
+       "kind": "function",
+       "signature": "(spot: 'Spot', threat: 'Vec3', world: 'BoxWorld') -> 'bool'"
+      },
+      "hides": {
+       "kind": "function",
+       "signature": "(spot: 'Spot', threat: 'Vec3', world: 'BoxWorld') -> 'bool'"
+      },
+      "peek_point": {
+       "kind": "function",
+       "signature": "(spot: 'Spot') -> 'tuple[float, float, float]'"
+      },
+      "pick": {
+       "kind": "function",
+       "signature": "(spots: 'Iterable[Spot]', me: 'Vec3', threat: 'Vec3', world: 'BoxWorld', *, band: 'tuple[float, float]' = (4.0, 30.0), ideal: 'float' = 14.0, max_travel: 'float' = 16.0, taken: 'Callable[[Spot], bool] | None' = None, mates: 'Sequence[Vec3]' = (), spread: 'float' = 3.5, need_peek: 'bool' = True, corner: 'float' = 1.2, reachable: 'Callable[[Spot], bool] | None' = None, tries: 'int' = 6) -> 'Spot | None'"
+      }
+     }
+    },
+    "drop_lead": {
+     "kind": "function",
+     "signature": "(mem: 'dict') -> 'None'"
+    },
+    "give_lead": {
+     "kind": "function",
+     "signature": "(mem: 'dict', t: 'float', pos: 'Vec3', kind: 'str') -> 'None'"
+    },
+    "hides": {
+     "kind": "function",
+     "signature": "(spot: 'Spot', threat: 'Vec3', world: 'BoxWorld') -> 'bool'"
+    },
+    "new_memory": {
+     "kind": "function",
+     "signature": "() -> 'dict'"
+    },
+    "on_hit": {
+     "kind": "function",
+     "signature": "(mem: 'dict', t: 'float', from_pos: 'Vec3') -> 'None'"
+    },
+    "peek_point": {
+     "kind": "function",
+     "signature": "(spot: 'Spot') -> 'tuple[float, float, float]'"
+    },
+    "pick": {
+     "kind": "function",
+     "signature": "(spots: 'Iterable[Spot]', me: 'Vec3', threat: 'Vec3', world: 'BoxWorld', *, band: 'tuple[float, float]' = (4.0, 30.0), ideal: 'float' = 14.0, max_travel: 'float' = 16.0, taken: 'Callable[[Spot], bool] | None' = None, mates: 'Sequence[Vec3]' = (), spread: 'float' = 3.5, need_peek: 'bool' = True, corner: 'float' = 1.2, reachable: 'Callable[[Spot], bool] | None' = None, tries: 'int' = 6) -> 'Spot | None'"
+    },
+    "senses": {
+     "all": [
+      "new_memory",
+      "Sight",
+      "NoiseBus",
+      "on_hit",
+      "give_lead",
+      "drop_lead"
+     ],
+     "kind": "module",
+     "module": "engine.ai.senses",
+     "names": {
+      "NoiseBus": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, keep: 'float' = 1.5, muffle: 'float' = 0.5) -> 'None'",
+        "emit": "(self, t: 'float', pos: 'Vec3', radius: 'float', kind: 'str' = '') -> 'None'",
+        "listen": "(self, mem: 'dict', t: 'float', ear: 'Vec3', blocked: 'Callable[[Vec3, Vec3], bool] | None' = None) -> 'tuple | None'",
+        "prune": "(self, t: 'float') -> 'None'"
+       }
+      },
+      "Sight": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, fov: 'float' = 120.0, range: 'float' = 40.0, near: 'float' = 3.0, react: 'tuple[float, float]' = (0.15, 1.2), forget: 'float' = 6.0) -> 'None'",
+        "in_view": "(self, eye: 'Vec3', facing: 'Sequence[float]', target: 'Vec3') -> 'bool'",
+        "update": "(self, mem: 'dict', t: 'float', dt: 'float', visible: 'bool', target: 'Vec3', dist: 'float', boost: 'float' = 1.0) -> 'bool'"
+       }
+      },
+      "drop_lead": {
+       "kind": "function",
+       "signature": "(mem: 'dict') -> 'None'"
+      },
+      "give_lead": {
+       "kind": "function",
+       "signature": "(mem: 'dict', t: 'float', pos: 'Vec3', kind: 'str') -> 'None'"
+      },
+      "new_memory": {
+       "kind": "function",
+       "signature": "() -> 'dict'"
+      },
+      "on_hit": {
+       "kind": "function",
+       "signature": "(mem: 'dict', t: 'float', from_pos: 'Vec3') -> 'None'"
+      }
+     }
+    },
+    "squad": {
+     "all": [
+      "Squad"
+     ],
+     "kind": "module",
+     "module": "engine.ai.squad",
+     "names": {
+      "Squad": {
+       "attrs": {},
+       "bases": [],
+       "kind": "class",
+       "methods": {
+        "__init__": "(self, shooters: 'int' = 2, radio: 'float' = 1.0) -> 'None'",
+        "claim": "(self, key: 'Hashable', who: 'Any') -> 'bool'",
+        "claimed": "(self, key: 'Hashable', by_other_than: 'Any' = None) -> 'bool'",
+        "claims": "(self) -> 'dict[Hashable, Any]'",
+        "fire_token": "(self, t: 'float', who: 'Any', hold: 'float') -> 'bool'",
+        "forget": "(self, who: 'Any') -> 'None'",
+        "has_token": "(self, t: 'float', who: 'Any') -> 'bool'",
+        "intel": "(self, t: 'float', me: 'Any' = None) -> 'tuple[tuple[float, ...], float] | None'",
+        "release": "(self, who: 'Any') -> 'None'",
+        "report": "(self, t: 'float', pos: 'Sequence[float]', by: 'Any' = None, instant: 'bool' = False) -> 'None'",
+        "unclaim": "(self, who: 'Any') -> 'None'"
+       }
+      }
+     }
+    }
+   }
+  },
+  "engine.ai.bt": {
+   "all": [
+    "SUCCESS",
+    "FAILURE",
+    "RUNNING",
+    "Ctx",
+    "Node",
+    "Selector",
+    "Sequence",
+    "Action",
+    "Condition",
+    "If",
+    "Wait",
+    "Cooldown",
+    "Timeout",
+    "Invert",
+    "Tree"
+   ],
+   "names": {
+    "Action": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[Ctx], Any]', halt: 'Callable[[Ctx], None] | None' = None, name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Condition": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[Ctx], Any]', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Cooldown": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, child: 'Node', secs: 'float', name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Ctx": {
+     "attrs": {
+      "agent": "member_descriptor",
+      "bb": "member_descriptor",
+      "dt": "member_descriptor",
+      "fresh": "member_descriptor",
+      "t": "member_descriptor",
+      "trace": "member_descriptor",
+      "world": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, agent: 'Any', bb: 'dict', t: 'float', dt: 'float', world: 'Any' = None) -> 'None'"
+     }
+    },
+    "FAILURE": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "If": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fn: 'Callable[[Ctx], Any]', child: 'Node', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Invert": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Node": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "mem": "(self, ctx: 'Ctx') -> 'dict'",
+      "run": "(self, ctx: 'Ctx') -> 'str'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "RUNNING": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "SUCCESS": {
+     "kind": "constant",
+     "type": "str"
+    },
+    "Selector": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *children: 'Node', name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Sequence": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *children: 'Node', name: 'str' = '') -> 'None'",
+      "halt": "(self, ctx: 'Ctx') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Timeout": {
+     "attrs": {},
+     "bases": [
+      "_Decorator"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, child: 'Node', secs: 'float', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    },
+    "Tree": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, root: 'Node') -> 'None'",
+      "reset": "(self, bb: 'dict') -> 'None'",
+      "tick": "(self, agent: 'Any', bb: 'dict', t: 'float', dt: 'float', world: 'Any' = None) -> 'Ctx'"
+     }
+    },
+    "Wait": {
+     "attrs": {},
+     "bases": [
+      "Node"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, secs: 'float | Callable[[Ctx], float]', name: 'str' = '') -> 'None'",
+      "tick": "(self, ctx: 'Ctx') -> 'str'"
+     }
+    }
+   }
+  },
+  "engine.ai.cover": {
+   "all": [
+    "Spot",
+    "build_spots",
+    "hides",
+    "peek_point",
+    "can_peek",
+    "pick"
+   ],
+   "names": {
+    "Spot": {
+     "attrs": {
+      "box": "member_descriptor",
+      "edge": "member_descriptor",
+      "id": "member_descriptor",
+      "low": "member_descriptor",
+      "nx": "member_descriptor",
+      "nz": "member_descriptor",
+      "tx": "member_descriptor",
+      "tz": "member_descriptor",
+      "x": "member_descriptor",
+      "y": "member_descriptor",
+      "z": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, id, x, y, z, nx, nz, tx, tz, edge, box, low) -> 'None'",
+      "pos": "property"
+     }
+    },
+    "build_spots": {
+     "kind": "function",
+     "signature": "(world: 'BoxWorld', walkable: 'Callable[[float, float], bool]', floor: 'Callable[[float, float], float]', spacing: 'float' = 1.0, offset: 'float' = 0.6, min_h: 'float' = 0.7, low_h: 'float' = 1.35, corner: 'float' = 1.2) -> 'list[Spot]'"
+    },
+    "can_peek": {
+     "kind": "function",
+     "signature": "(spot: 'Spot', threat: 'Vec3', world: 'BoxWorld') -> 'bool'"
+    },
+    "hides": {
+     "kind": "function",
+     "signature": "(spot: 'Spot', threat: 'Vec3', world: 'BoxWorld') -> 'bool'"
+    },
+    "peek_point": {
+     "kind": "function",
+     "signature": "(spot: 'Spot') -> 'tuple[float, float, float]'"
+    },
+    "pick": {
+     "kind": "function",
+     "signature": "(spots: 'Iterable[Spot]', me: 'Vec3', threat: 'Vec3', world: 'BoxWorld', *, band: 'tuple[float, float]' = (4.0, 30.0), ideal: 'float' = 14.0, max_travel: 'float' = 16.0, taken: 'Callable[[Spot], bool] | None' = None, mates: 'Sequence[Vec3]' = (), spread: 'float' = 3.5, need_peek: 'bool' = True, corner: 'float' = 1.2, reachable: 'Callable[[Spot], bool] | None' = None, tries: 'int' = 6) -> 'Spot | None'"
+    }
+   }
+  },
+  "engine.ai.senses": {
+   "all": [
+    "new_memory",
+    "Sight",
+    "NoiseBus",
+    "on_hit",
+    "give_lead",
+    "drop_lead"
+   ],
+   "names": {
+    "NoiseBus": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, keep: 'float' = 1.5, muffle: 'float' = 0.5) -> 'None'",
+      "emit": "(self, t: 'float', pos: 'Vec3', radius: 'float', kind: 'str' = '') -> 'None'",
+      "listen": "(self, mem: 'dict', t: 'float', ear: 'Vec3', blocked: 'Callable[[Vec3, Vec3], bool] | None' = None) -> 'tuple | None'",
+      "prune": "(self, t: 'float') -> 'None'"
+     }
+    },
+    "Sight": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, fov: 'float' = 120.0, range: 'float' = 40.0, near: 'float' = 3.0, react: 'tuple[float, float]' = (0.15, 1.2), forget: 'float' = 6.0) -> 'None'",
+      "in_view": "(self, eye: 'Vec3', facing: 'Sequence[float]', target: 'Vec3') -> 'bool'",
+      "update": "(self, mem: 'dict', t: 'float', dt: 'float', visible: 'bool', target: 'Vec3', dist: 'float', boost: 'float' = 1.0) -> 'bool'"
+     }
+    },
+    "drop_lead": {
+     "kind": "function",
+     "signature": "(mem: 'dict') -> 'None'"
+    },
+    "give_lead": {
+     "kind": "function",
+     "signature": "(mem: 'dict', t: 'float', pos: 'Vec3', kind: 'str') -> 'None'"
+    },
+    "new_memory": {
+     "kind": "function",
+     "signature": "() -> 'dict'"
+    },
+    "on_hit": {
+     "kind": "function",
+     "signature": "(mem: 'dict', t: 'float', from_pos: 'Vec3') -> 'None'"
+    }
+   }
+  },
+  "engine.ai.squad": {
+   "all": [
+    "Squad"
+   ],
+   "names": {
+    "Squad": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, shooters: 'int' = 2, radio: 'float' = 1.0) -> 'None'",
+      "claim": "(self, key: 'Hashable', who: 'Any') -> 'bool'",
+      "claimed": "(self, key: 'Hashable', by_other_than: 'Any' = None) -> 'bool'",
+      "claims": "(self) -> 'dict[Hashable, Any]'",
+      "fire_token": "(self, t: 'float', who: 'Any', hold: 'float') -> 'bool'",
+      "forget": "(self, who: 'Any') -> 'None'",
+      "has_token": "(self, t: 'float', who: 'Any') -> 'bool'",
+      "intel": "(self, t: 'float', me: 'Any' = None) -> 'tuple[tuple[float, ...], float] | None'",
+      "release": "(self, who: 'Any') -> 'None'",
+      "report": "(self, t: 'float', pos: 'Sequence[float]', by: 'Any' = None, instant: 'bool' = False) -> 'None'",
+      "unclaim": "(self, who: 'Any') -> 'None'"
+     }
+    }
+   }
+  },
   "engine.anim": {
    "all": [
     "HEIGHT",
@@ -872,6 +1781,92 @@
       "poll": "(self, now_ms: 'int') -> 'list[str]'",
       "rescan": "(self) -> 'int'",
       "run_once": "(self) -> 'list[str]'"
+     }
+    }
+   }
+  },
+  "engine.collision": {
+   "all": [
+    "BoxWorld",
+    "GridNav",
+    "ray_aabb"
+   ],
+   "names": {
+    "BoxWorld": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, boxes: 'Iterable[Box]', cell: 'float' = 4.0) -> 'None'",
+      "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "near": "(self, x0: 'float', z0: 'float', x1: 'float', z1: 'float') -> 'list[int]'",
+      "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'tuple[float, int] | None'",
+      "segment_blocked": "(self, a: 'Vec3', b: 'Vec3', slack: 'float' = 0.2) -> 'bool'"
+     }
+    },
+    "GridNav": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, bounds: 'Sequence[float]', cell: 'float', walkable: 'Callable[[float, float], bool]', height: 'Callable[[float, float], float] | None' = None, step: 'float' = inf, max_nodes: 'int' = 40000, cache_size: 'int' = 64) -> 'None'",
+      "cell_at": "(self, x: 'float', z: 'float') -> 'tuple[int, int] | None'",
+      "center": "(self, c: 'int', r: 'int') -> 'tuple[float, float]'",
+      "floor": "(self, x: 'float', z: 'float') -> 'float'",
+      "is_walkable": "(self, x: 'float', z: 'float') -> 'bool'",
+      "nearest": "(self, x: 'float', z: 'float', reach: 'int' = 6) -> 'tuple[int, int] | None'",
+      "path": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'list[tuple[float, float, float]]'",
+      "walk_clear": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'bool'"
+     }
+    },
+    "ray_aabb": {
+     "kind": "function",
+     "signature": "(o: 'Vec3', d: 'Vec3', lo: 'Vec3', hi: 'Vec3') -> 'float | None'"
+    }
+   }
+  },
+  "engine.collision.boxes": {
+   "all": [
+    "BoxWorld",
+    "ray_aabb"
+   ],
+   "names": {
+    "BoxWorld": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, boxes: 'Iterable[Box]', cell: 'float' = 4.0) -> 'None'",
+      "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "near": "(self, x0: 'float', z0: 'float', x1: 'float', z1: 'float') -> 'list[int]'",
+      "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'tuple[float, int] | None'",
+      "segment_blocked": "(self, a: 'Vec3', b: 'Vec3', slack: 'float' = 0.2) -> 'bool'"
+     }
+    },
+    "ray_aabb": {
+     "kind": "function",
+     "signature": "(o: 'Vec3', d: 'Vec3', lo: 'Vec3', hi: 'Vec3') -> 'float | None'"
+    }
+   }
+  },
+  "engine.collision.nav": {
+   "all": [
+    "GridNav"
+   ],
+   "names": {
+    "GridNav": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, bounds: 'Sequence[float]', cell: 'float', walkable: 'Callable[[float, float], bool]', height: 'Callable[[float, float], float] | None' = None, step: 'float' = inf, max_nodes: 'int' = 40000, cache_size: 'int' = 64) -> 'None'",
+      "cell_at": "(self, x: 'float', z: 'float') -> 'tuple[int, int] | None'",
+      "center": "(self, c: 'int', r: 'int') -> 'tuple[float, float]'",
+      "floor": "(self, x: 'float', z: 'float') -> 'float'",
+      "is_walkable": "(self, x: 'float', z: 'float') -> 'bool'",
+      "nearest": "(self, x: 'float', z: 'float', reach: 'int' = 6) -> 'tuple[int, int] | None'",
+      "path": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'list[tuple[float, float, float]]'",
+      "walk_clear": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'bool'"
      }
     }
    }

@@ -1,4 +1,3 @@
-
 """Mission 1 map - authored with core.MapBuilder, baked to list[str].
 
 Authoring layers (edit these, not the baked strings):

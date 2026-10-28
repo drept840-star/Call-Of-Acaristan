@@ -1,4 +1,3 @@
-
 """Short, game-branded room codes for direct arena matches.
 
 A room code is the host's address in disguise. It packs the IPv4 and port

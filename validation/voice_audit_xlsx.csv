@@ -1,7 +1,7 @@
 sheet,sheet_id,character,mission,text,status,audit_ids,where,notes
-Missing lines,NEW_001,Biribel,1,The memos said something about a shipment number…,OK,VO_174,src/core/interactions.py:189,
-Missing lines,NEW_002,Biribel,1,Shipment 7742. Only the last three digits.,OK,VO_175,src/core/interactions.py:191,
-Missing lines,NEW_003,Biribel,1,7… 4… 2. Has to be.,OK,VO_176,src/core/interactions.py:193,
+Missing lines,NEW_001,Biribel,1,The memos said something about a shipment number…,REMOVED,,-,line no longer spoken anywhere in src/ (sheet said src/core/interactions.py:189)
+Missing lines,NEW_002,Biribel,1,Shipment 7742. Only the last three digits.,REMOVED,,-,line no longer spoken anywhere in src/ (sheet said src/core/interactions.py:191)
+Missing lines,NEW_003,Biribel,1,7… 4… 2. Has to be.,REMOVED,,-,line no longer spoken anywhere in src/ (sheet said src/core/interactions.py:193)
 Missing lines,NEW_004,Vasile,2,Route 12 opens into the checkpoint corridor. Stay slow.,OK,,src/missions/m2/meta.py:582,text-only system line by design.
 Missing lines,NEW_005,Gabi,2,Blast pattern is too clean for a panic bombing.,OK,,src/missions/m2/meta.py:594,text-only system line by design.
 Missing lines,NEW_006,Darius,2,Static is pooling down here. Something jammed the channel.,OK,,src/missions/m2/meta.py:606,text-only system line by design.
@@ -80,13 +80,13 @@ Text-only review,TEXT_002,Hungry Kid,1,"Thanks for the food, sir! Be careful, th
 Text-only review,TEXT_003,Old Woman,1,"They took everything... even the well water is contaminated. / A dry throat and an empty stomach, that's our reward.",MISSING AUDIO,,src/missions/walking_sim.py:256,"no VO id: add to VOICE_LINES, then record."
 Text-only review,TEXT_004,Old Woman,1,"Bless you, soldier. Listen closely... / The guards at the warehouse safe use a security passcode. / I saw them write it down on notes: 7 - 4 - 2. / Remember it well.",MISSING AUDIO,,src/missions/walking_sim.py:260,"no VO id: add to VOICE_LINES, then record."
 Text-only review,TEXT_005,Old Woman,1,"Remember, the code to the notebook safe is 742.",MISSING AUDIO,,src/missions/walking_sim.py:266,"no VO id: add to VOICE_LINES, then record."
-Text-only review,TEXT_006,Old Fisherman,1,Hear that engine? / Too fast for a fishing boat.,OK,VO_185,src/missions/walking_sim.py:1438,
-Text-only review,TEXT_007,Old Fisherman,1,They come in low during the rain. / The rigs never see them until the first rocket.,OK,VO_186,src/missions/walking_sim.py:1450,
-Text-only review,TEXT_008,Old Fisherman,1,There. Center rig's folding.,OK,VO_187,src/missions/walking_sim.py:1480,
-Text-only review,TEXT_009,Old Fisherman,1,Left rig's falling into the sea.,OK,VO_188,src/missions/walking_sim.py:1486,
-Text-only review,TEXT_010,Old Fisherman,1,Now the last one burns. / Three fires on the horizon.,OK,VO_189,src/missions/walking_sim.py:1492,
-Text-only review,TEXT_011,Old Fisherman,1,Third time this month. / KRAP watches until the oil stops moving.,OK,VO_190,src/missions/walking_sim.py:1466,
-Text-only review,TEXT_012,Old Fisherman,1,You're new. / You'll learn.,OK,VO_191,src/missions/walking_sim.py:1473,
+Text-only review,TEXT_006,Old Fisherman,1,Hear that engine? / Too fast for a fishing boat.,OK,VO_185,src/missions/walking_sim.py:1442,
+Text-only review,TEXT_007,Old Fisherman,1,They come in low during the rain. / The rigs never see them until the first rocket.,OK,VO_186,src/missions/walking_sim.py:1454,
+Text-only review,TEXT_008,Old Fisherman,1,There. Center rig's folding.,OK,VO_187,src/missions/walking_sim.py:1484,
+Text-only review,TEXT_009,Old Fisherman,1,Left rig's falling into the sea.,OK,VO_188,src/missions/walking_sim.py:1490,
+Text-only review,TEXT_010,Old Fisherman,1,Now the last one burns. / Three fires on the horizon.,OK,VO_189,src/missions/walking_sim.py:1496,
+Text-only review,TEXT_011,Old Fisherman,1,Third time this month. / KRAP watches until the oil stops moving.,OK,VO_190,src/missions/walking_sim.py:1470,
+Text-only review,TEXT_012,Old Fisherman,1,You're new. / You'll learn.,OK,VO_191,src/missions/walking_sim.py:1477,
 Text-only review,TEXT_013,System,2,IPA cleanup team in control sector.,OK,,src/missions/m2/sniper.py:1351,text-only system line by design.
 Text-only review,TEXT_014,System,2,Evidence transmitted. Move to extraction.,OK,,src/missions/m2/world.py:443,text-only system line by design.
 Text-only review,TEXT_015,System,2,IPA {SECOND / FINAL} WAVE INBOUND - {hostile count} HOSTILES,OK,,src/missions/m2/sniper.py:1438,text-only system line by design. formatted at runtime.

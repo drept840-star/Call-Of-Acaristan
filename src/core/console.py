@@ -1,4 +1,3 @@
-
 import pygame
 from core.config import WIDTH, HEIGHT, font_terminal_small, C_TERMINAL
 from core.state import STATE

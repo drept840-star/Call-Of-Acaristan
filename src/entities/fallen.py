@@ -1,4 +1,3 @@
-
 """A fallen body for a player, drawn in the same visual language as enemies.
 
 entities/corpse.py already solves this properly for guards: the body is not a
@@ -303,7 +302,7 @@ class FallenBody:
         table = roles.get("rigs")
         table = table if isinstance(table, dict) else {}
         colors = table.get({"os12": "os12", "k9_smg": "k9",
-                            "pistol": "pistol"}.get(rig, "pistol")) or {}
+                            "pistol": "pistol", "shotgun": "os12"}.get(rig, "pistol")) or {}
         if not isinstance(colors, dict):
             colors = {}
         body = colors.get("receiver") or colors.get("frame") or (38, 36, 32)
@@ -311,6 +310,8 @@ class FallenBody:
         accent = colors.get("wood") or colors.get("can") or body
         if rig == "os12":
             length, thick = 34, 4
+        elif rig == "shotgun":
+            length, thick = 36, 4
         elif rig == "k9_smg":
             length, thick = 22, 4
         else:

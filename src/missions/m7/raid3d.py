@@ -18,6 +18,7 @@ import pygame
 from core.config import HEIGHT, WIDTH, audio, draw_vignette
 from core.outfits import OUTFIT_GUARD
 from core.state import STATE
+from cutscenes import death3d as D
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as F
@@ -55,7 +56,8 @@ HOLD_S = {"alex": 1.6, "bodi": 2.4}
 CP_STATE = {1: (4.0, 2.0, 180.0), 2: (0.0, -2.0, 0.0)}
 TANK_BLAST_R = 8.0
 GUARD_VIEW = ("rifle", "rusher", "rifle", "officer")
-GUARD_FALL_S, GUARD_PUSH_M = 0.55, 0.5
+GUARD_PUSH_M = 0.35
+BED_TOP = 1.3
 DOG_FALL_S, DOG_PUSH_M = 0.4, 0.35
 
 
@@ -533,7 +535,8 @@ class RaidScene:
                 return
             if e["alive"] or not e["mags"] or e["kind"] == "dog":
                 continue
-            if math.hypot(e["x"] - self.px, e["z"] - self.pz) > LOOT_R:
+            bx, bz = e.get("rest", (e["x"], e["z"]))
+            if math.hypot(bx - self.px, bz - self.pz) > LOOT_R:
                 continue
             got = min(MAG, room)
             e["mags"] = 0
@@ -659,13 +662,31 @@ class RaidScene:
             out.append({"pos": W.TANK_AT, "color": (255, 150, 60), "intensity": 1.8 * k,
                         "range": 16.0})
         out += self.fire.lights(tm, now)
+        # Headlights: the beam itself is a road pool (``_beam_pools``); this is
+        # its bounce, low in front, so the grille and the men in the beam catch
+        # light while the truck's body stays moonlit.
         for t in self.brain.trucks[:2]:
             if t["state"] != "wait" and t["z"] > -46.0:
-                out.append({"pos": (t["x"], 1.5, t["z"] + 3.2), "color": (255, 240, 210),
-                            "intensity": 0.9, "range": 14.0})
-        out.append({"pos": F.PORCH_LAMP, "color": (255, 190, 110), "intensity": 0.7, "range": 10.0})
-        out.append({"pos": F.BARN_LAMP, "color": (255, 180, 100), "intensity": 0.6, "range": 9.0})
+                out.append({"pos": (t["x"], 0.9, t["z"] + 6.0), "color": (255, 232, 192),
+                            "intensity": 1.15, "range": 14.0})
+        out.append({"pos": F.PORCH_LAMP, "color": (255, 190, 110), "intensity": 1.15,
+                    "range": 13.0})
+        out.append({"pos": F.BARN_LAMP, "color": (255, 180, 100), "intensity": 1.05,
+                    "range": 12.0})
         return out[:8]
+
+    def _beam_pools(self):
+        """The headlight beams on the baked road: two pools ahead of each
+        moving truck, the far one wider and dimmer."""
+        out = []
+        for t in self.brain.trucks:
+            if t["state"] != "wait":
+                x, z = t["x"], t["z"]
+                out.append({"pos": (x, 1.3, z + 6.0), "range": 3.8, "color": (255, 226, 178),
+                            "hot": (255, 244, 214), "intensity": 3.0})
+                out.append({"pos": (x, 1.3, z + 11.0), "range": 5.0, "color": (216, 194, 158),
+                            "hot": (255, 236, 208), "intensity": 1.8})
+        return out
 
     def _project(self, r, p):
         try:
@@ -686,7 +707,7 @@ class RaidScene:
         r, buf = F.stage("raid", tm, eye, tgt, fov, self._lights(tm), hh=0.0, seed=7,
                          size=RES, park=park)
         del _w.LAST[:]
-        r.set_pools(F.raid_pools(self.fire.lights(tm, self.t)))
+        r.set_pools(F.raid_pools(self.fire.lights(tm, self.t) + self._beam_pools()))
         F.raid_fx(r, tm)
         if self._truck is None:
             self._truck = W.truck()
@@ -697,9 +718,19 @@ class RaidScene:
             if t["state"] != "wait":
                 _w.add(r, W.placed(self._truck, t["x"], 0.0, t["z"], 0.0))
                 for sx in (-0.7, 0.7):
-                    r.add_sprite((t["x"] + sx, 1.35, t["z"] + 2.85),
-                                 _fx.glow((255, 236, 200), 0.5, tm, core=(255, 248, 230),
-                                          intensity=0.9, max_px=40), layer=_fx.FX_LAYER)
+                    r.add_sprite((t["x"] + sx, 1.36, t["z"] + 2.85),
+                                 _fx.glow((255, 236, 200), 0.55, tm, core=(255, 250, 236),
+                                          intensity=1.15, max_px=34), layer=_fx.FX_LAYER)
+                # Two warm pools on the road and a low glare between them: the
+                # beam has to land on the track, not just sit in the lamps.
+                seed = int(t["x"] * 7.0) + 11
+                for dz, rad, k in ((6.0, 3.6, 0.26), (11.0, 4.8, 0.14)):
+                    r.add_sprite((t["x"], 0.05, t["z"] + dz),
+                                 F.pool((255, 228, 184), rad, intensity=k, squash=0.5),
+                                 layer=_fx.FX_LAYER)
+                r.add_sprite((t["x"], 1.05, t["z"] + 4.4),
+                             _fx.haze((255, 232, 196), 2.1, tm, seed=seed, intensity=0.12),
+                             layer=_fx.FX_LAYER)
         self._draw_player(r, tm)
         self._draw_allies(r, tm)
         self._draw_enemies(r, tm)
@@ -795,6 +826,13 @@ class RaidScene:
             return blend(POSES["stand"], "aim", 0.85)
         return dict(POSES["ready"])
 
+    def _floor(self, x, z):
+        """Height a body lands on: a truck bed, else the ground."""
+        for t in self.brain.trucks:
+            if t["state"] != "wait" and abs(x - t["x"]) <= 1.15 and abs(z - t["z"]) <= 2.7:
+                return BED_TOP
+        return 0.0
+
     def _draw_enemies(self, r, tm):
         for e in self.brain.enemies:
             if not e["live"] and e["alive"]:
@@ -813,15 +851,21 @@ class RaidScene:
             kind = "heavy" if e["kind"] == "gunner" else GUARD_VIEW[e["slot"] % len(GUARD_VIEW)]
             gk = ("guard", kind)
             if not e["alive"]:
-                k = _ease(clamp((self.t - e["dead_t"]) / GUARD_FALL_S, 0.0, 1.0))
-                was = e.get("pose") or POSES["stand"]
-                pose = blend(was, e.get("dead_pose", "dead_back"), k)
-                ux, uz = e.get("fall_dir", (0.0, 0.0))
-                _w.actor(r, gk, pose, (x + ux * GUARD_PUSH_M * k, y, z + uz * GUARD_PUSH_M * k),
-                         e["yaw"], int(tm), seed=100 + e["slot"], amp=0.0, rifle_on=False, hd=True)
-                if e["mags"] and k >= 1.0:
-                    r.add_sprite((x, y + 0.2, z), _fx.glow((255, 214, 140), 0.28, tm,
-                                                           intensity=0.35 + 0.35 * math.sin(self.t * 4.0 + e["slot"]) ** 2),
+                fall = e.get("fall")
+                if fall is None:
+                    ux, uz = e.get("fall_dir", (0.0, 0.0))
+                    track = D.track_for(e.get("dead_pose") == "dead_back", e["slot"])
+                    fall = e["fall"] = D.Fall(_w.hum(gk, True), e.get("pose") or POSES["stand"],
+                                              track, (x, y, z), e["yaw"],
+                                              (ux * GUARD_PUSH_M, uz * GUARD_PUSH_M), e["slot"])
+                pose, root, yaw = fall.at(self.t - e["dead_t"], self._floor)
+                _w.actor(r, gk, pose, root, yaw, int(tm), seed=100 + e["slot"], amp=0.0,
+                         rifle_on=False, hd=True)
+                e["rest"] = fall.chest
+                if e["mags"] and fall.rest is not None:
+                    r.add_sprite((fall.chest[0], root[1] + 0.2, fall.chest[1]),
+                                 _fx.glow((255, 214, 140), 0.28, tm,
+                                          intensity=0.35 + 0.35 * math.sin(self.t * 4.0 + e["slot"]) ** 2),
                                  layer=_fx.FX_LAYER)
                 continue
             pose = self._guard_pose(e)

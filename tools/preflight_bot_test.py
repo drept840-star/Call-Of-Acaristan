@@ -66,4 +66,3 @@ print("hp:", {p: s["hp"] for p, s in sim.players.items()})
 assert shots > 20, "bots never fired"
 assert kills >= 1, "no kills - fight not lethal enough"
 print("PREFLIGHT OK")
-

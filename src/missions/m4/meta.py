@@ -1,4 +1,3 @@
-
 """Mission 4 - part module. See __init__.py for the package facade."""
 """Mission 4: The Aftermath (working title) - the world after the broadcast.
 

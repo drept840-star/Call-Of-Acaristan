@@ -1,4 +1,3 @@
-
 """Slice 5b-5d: the Kill Order sweep director, overwatch pin, Volkov
 extraction window and dock holdout.
 

@@ -1,4 +1,3 @@
-
 """Split from mission4.py - see __init__.py for the package facade.
 
 World construction + shared position/objective helpers for Mission 4.

@@ -1,4 +1,3 @@
-
 """Thin launcher — run with `python acaristan.py` from the repo root.
 
 Game lives in src/app.py (runs on import). Keep CWD at repo root so
@@ -18,4 +17,3 @@ if "--launcher" in sys.argv and os.environ.get("ACA_FROM_LAUNCHER") != "1":
     raise SystemExit(run_launcher(ROOT, demo_update=("--demo-update" in sys.argv)))
 
 import app  # noqa: F401  (runs the game on import)
-

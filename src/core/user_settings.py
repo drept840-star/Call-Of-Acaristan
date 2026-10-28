@@ -1,4 +1,3 @@
-
 """Live user settings - shared across all gameplay modules.
 
 acaristan.py owns the authoritative variables (loaded from settings_store) and

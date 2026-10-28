@@ -26,12 +26,9 @@ from __future__ import annotations
 
 import math
 
-from engine.ai import cover as C
-from engine.ai.bt import (
-    FAILURE, RUNNING, SUCCESS, Action, If, Selector, Tree,
-)
-from engine.ai.senses import NoiseBus, Sight, drop_lead, give_lead, new_memory, on_hit
-from engine.ai.squad import Squad
+from engine.ai import (FAILURE, RUNNING, SUCCESS, Action, If, NoiseBus,
+                       Selector, Sight, Squad, Tree, build_spots, drop_lead,
+                       give_lead, hides, new_memory, on_hit, peek_point, pick)
 from engine.collision import BoxWorld, GridNav
 
 from . import train3d as T
@@ -64,7 +61,7 @@ def _geometry(Y):
                       lambda x, z: not Y._blocked(x, z, Y.ground_y(x, z),
                                                   r=Y.BODY_R + 0.15),
                       height=Y.ground_y, step=Y.STEP_UP)
-        spots = C.build_spots(boxes, nav.is_walkable, nav.floor)
+        spots = build_spots(boxes, nav.is_walkable, nav.floor)
         _NAV[key] = (nav, boxes, spots)
     return _NAV[key]
 
@@ -239,7 +236,7 @@ def _cover_ok(ctx):
         return False
     if br.wants_fall_back(g):
         return False
-    if C.hides(s, _threat(g), br.boxes):
+    if hides(s, _threat(g), br.boxes):
         g["bb"]["exposed_t"] = None
         return True
     since = g["bb"].get("exposed_t")
@@ -255,7 +252,7 @@ def _take_cover(ctx):
     s = g["cover"]
     threat = _threat(g)
     retreat = br.wants_fall_back(g) and not g["bb"].get("retreating")
-    if ctx.fresh or s is None or retreat or not C.hides(s, threat, br.boxes):
+    if ctx.fresh or s is None or retreat or not hides(s, threat, br.boxes):
         s = br.pick_cover(g)
         if s is None:
             return FAILURE
@@ -305,7 +302,7 @@ def _cover_cycle(ctx):
         bb["fired"] = False
         g["next_burst"] = min(g["next_burst"], t)
     if bb["cphase"] == "peek":
-        out = C.peek_point(s)
+        out = peek_point(s)
         there = _go(br, g, out, 2.6, dt, stop=0.05) is not False
         g["stance"] = "aim"
         if not there:
@@ -463,11 +460,11 @@ class Brain:
             return s.id in bad or self.squad.claimed(s.id, g["slot"])
 
         def reachable(s):
-            if not s.low and not self.nav.walk_clear(s.pos, C.peek_point(s)):
+            if not s.low and not self.nav.walk_clear(s.pos, peek_point(s)):
                 return False
             return bool(self.nav.path(g["pos"], s.pos)) or _d2(g["pos"], s.pos) < 0.5
 
-        s = C.pick(self.spots, g["pos"], threat, self.boxes, band=band, ideal=ideal,
+        s = pick(self.spots, g["pos"], threat, self.boxes, band=band, ideal=ideal,
                    max_travel=travel, taken=taken, mates=mates, reachable=reachable)
         if s is None and retreat:
             g["fell_back"] = True                 # nowhere to go: fight it out

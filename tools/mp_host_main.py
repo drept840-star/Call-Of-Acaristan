@@ -21,4 +21,3 @@ if __name__ == "__main__":
     # When frozen, argparse must not try to read PyInstaller's own argv.
     argv = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv[1:]
     raise SystemExit(mp_host.main(argv))
-

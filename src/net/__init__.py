@@ -1,4 +1,3 @@
-
 """net - multiplayer relay client. Parts: protocol.py, client.py.
 
 Load order (top-down) is the import order. ``protocol`` must precede

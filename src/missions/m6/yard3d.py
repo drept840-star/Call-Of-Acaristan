@@ -26,6 +26,7 @@ from core.config import (
 )
 from core.outfits import OUTFIT_GUARD
 from core.state import STATE
+from cutscenes import death3d as _death
 from engine3d import NEUTRAL, POSES, Light, blend, box, clamp, pose_run, tex
 
 from . import hud3d as H
@@ -1667,13 +1668,21 @@ class YardScene:
             kind = g["kind"]
             prof = T._guard_profile(kind)
             if not g["alive"]:
-                k = clamp((self.t - g["dead_t"]) / 0.45, 0.0, 1.0)
-                was = g.get("pose") or POSES.get(g["post_pose"], POSES["stand"])
-                pose = blend(was, g.get("dead_pose", "dead_back"), k)
-                _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
+                fall = g.get("fall")
+                if fall is None:
+                    was = g.get("pose") or POSES.get(g["post_pose"], POSES["stand"])
+                    hx, hz = g.get("hit_dir") or (0.0, 0.0)
+                    hl = math.hypot(hx, hz) or 1.0
+                    fx, fz = B._dir(g["yaw"])
+                    track = _death.track_for(fx * hx + fz * hz < 0.0, int(g["slot"]))
+                    fall = g["fall"] = _death.Fall(_w.hum(("guard", kind), True), was, track,
+                                              (x, y, z), g["yaw"],
+                                              (hx / hl * 0.3, hz / hl * 0.3), int(g["slot"]))
+                pose, (x, y, z), yaw = fall.at(self.t - g["dead_t"], ground_y)
+                _w.actor(r, ("guard", kind), pose, (x, y, z), yaw,
                          int(tm), seed=100 + g["slot"], amp=0.0,
                          rifle_on=False, hd=True, shadow=T._shadow_for(z))
-                if g.get("mags") and k >= 1.0:
+                if g.get("mags") and fall.rest is not None:
                     gx, gz = B._dir(g["yaw"])
                     mp = (x - gz * 0.45, y + 0.08, z + gx * 0.45)
                     for i in range(g["mags"]):

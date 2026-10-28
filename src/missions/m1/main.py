@@ -33,6 +33,7 @@ from core.camera import update_camera, reset_camera_state, collide_bullet_walls,
 
 from missions.m1.map import mission1_map, MAP_W, MAP_H, M1_BAY_ROW, M1_GATE_ROW, M1_STREET_ROW, M1_PLAYER_FACING
 from missions.m1.stealth import reset_stealth
+from entities import death_anim  # respawn hygiene: see death_anim.reset_stale_visuals()
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 
 _walk_footstep_timer = 0
@@ -67,6 +68,14 @@ def start_mission(preserve_timer=False):
     STATE.player_dead = False
     STATE.death_timer = 0
     STATE.request_death_screen = False
+    # Respawn hygiene: unlike the other missions, start_mission() does not
+    # call STATE.reset() - it hand-rolls the reset and covers player_dead /
+    # death_timer / request_death_screen but NOT the death_anim_* fields. A
+    # death then restart here (death screen "Retry") left death_anim_phase=2
+    # + camera tilt armed: game_update() early-returned every frame and the
+    # standing player was never drawn - the world rendered frozen while the
+    # DEATH state rendered normally.
+    death_anim.reset_stale_visuals()
     STATE.request_escape_cutscene = False
     STATE.notebook_collected = False
     STATE.exfil_reached = False

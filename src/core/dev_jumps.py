@@ -1,4 +1,3 @@
-
 """dev_jumps.py - registry of dev jump targets.
 
 Side-effect free on purpose: imported by ``app._apply_dev_args`` (for
@@ -14,7 +13,9 @@ DEV_JUMPS = {
            "Mission 0 - Depot (tutorial mission, playable)"),
     # ── Mission 1 ──
     "m1": ("--dev-m1",
-           "Mission 1 warehouse from the start (playable)"),
+           "Mission 1 opening handoff (dropoff radio cut, then playable)"),
+    "m1-game": ("--dev-m1-game",
+                "Mission 1 warehouse from the start (playable, no cutscene)"),
     "m1-safe": ("--dev-safe",
                 "Mission 1 at the notebook safe keypad (code 742)"),
     # ── Walking sim ──
@@ -115,7 +116,7 @@ DEV_JUMPS = {
     "m7-choice": ("--dev-mission7-choice", "Mission 7 radio choice (sets the Mission 8 route)"),
     "m7-outro": ("--dev-mission7-outro", "Mission 7 outro film, route defaults to duty"),
     # ── Trailer bot takes (AI 1 choreography) ──
-    "trailer-m1": ("--dev-m1",
+    "trailer-m1": ("--dev-m1-game",
             "Trailer Act I warehouse take (bot: breach/molotov)"),
     "trailer-m2-killbox": ("--dev-mission2-game",
             "Trailer Act II killbox take (bot: OS-12 hold + flank)"),

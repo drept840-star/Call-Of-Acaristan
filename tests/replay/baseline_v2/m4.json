@@ -235,7 +235,7 @@
  ],
  "snapshots": [
   {
-   "hash": "9c608506fc545b70",
+   "hash": "de8d34fc2cdffc1d",
    "player_rect": [
     648,
     1096,
@@ -247,7 +247,7 @@
    "t_s": 1
   },
   {
-   "hash": "ad4d5b5edc6f13c6",
+   "hash": "da539b9801aa861a",
    "player_rect": [
     730,
     902,
@@ -259,7 +259,7 @@
    "t_s": 2
   },
   {
-   "hash": "98a23958a9081972",
+   "hash": "b05b47969331fb4b",
    "player_rect": [
     730,
     662,
@@ -271,7 +271,7 @@
    "t_s": 3
   },
   {
-   "hash": "d5749e134967d454",
+   "hash": "0118b8dd34ee8408",
    "player_rect": [
     730,
     422,
@@ -283,7 +283,7 @@
    "t_s": 4
   },
   {
-   "hash": "be66d6ed50f6ded7",
+   "hash": "dd13f7af295a3d3d",
    "player_rect": [
     814,
     483,
@@ -295,7 +295,7 @@
    "t_s": 5
   },
   {
-   "hash": "891dd0b74f5e63c1",
+   "hash": "e67402c137e75c69",
    "player_rect": [
     832,
     442,
@@ -307,7 +307,7 @@
    "t_s": 6
   },
   {
-   "hash": "5992d261e75ef8b5",
+   "hash": "60df3f8d5ea305f7",
    "player_rect": [
     988,
     463,
@@ -319,7 +319,7 @@
    "t_s": 7
   },
   {
-   "hash": "a7763d18170ce948",
+   "hash": "3b724c75ad7f09b6",
    "player_rect": [
     1108,
     523,
@@ -331,7 +331,7 @@
    "t_s": 8
   },
   {
-   "hash": "d1b2629ff2a6d176",
+   "hash": "055cf3735c23109e",
    "player_rect": [
     1288,
     523,
@@ -343,7 +343,7 @@
    "t_s": 9
   },
   {
-   "hash": "4f647b56be21ebb3",
+   "hash": "539a792773268d8c",
    "player_rect": [
     1312,
     523,
@@ -355,7 +355,7 @@
    "t_s": 10
   },
   {
-   "hash": "b6f47a52b19a87a3",
+   "hash": "87df5264c0529f0e",
    "player_rect": [
     1312,
     371,
@@ -367,7 +367,7 @@
    "t_s": 11
   },
   {
-   "hash": "07ec90d5ee7611e5",
+   "hash": "49e3f4101437ecb4",
    "player_rect": [
     1312,
     131,
@@ -379,7 +379,7 @@
    "t_s": 12
   },
   {
-   "hash": "959189fc2202a08b",
+   "hash": "4ec9133a26779c32",
    "player_rect": [
     1312,
     128,
@@ -391,7 +391,7 @@
    "t_s": 13
   },
   {
-   "hash": "898844818a5eddef",
+   "hash": "f21041af4204d75d",
    "player_rect": [
     1312,
     128,
@@ -403,7 +403,7 @@
    "t_s": 14
   },
   {
-   "hash": "c78bfa4a1162d8fc",
+   "hash": "583596622bb0bad3",
    "player_rect": [
     1303,
     134,
@@ -415,7 +415,7 @@
    "t_s": 15
   },
   {
-   "hash": "6c38eb501e793e77",
+   "hash": "3042b74cb2a9e53e",
    "player_rect": [
     1162,
     176,
@@ -427,7 +427,7 @@
    "t_s": 16
   },
   {
-   "hash": "6cfda85af21680f1",
+   "hash": "e23486de504a51a0",
    "player_rect": [
     1162,
     128,
@@ -439,7 +439,7 @@
    "t_s": 17
   },
   {
-   "hash": "8ef30c9ef60e5fe6",
+   "hash": "434c0931cf0f1aac",
    "player_rect": [
     1260,
     128,
@@ -451,7 +451,7 @@
    "t_s": 18
   },
   {
-   "hash": "0ab0212a72851f06",
+   "hash": "a0af099046272917",
    "player_rect": [
     1312,
     128,
@@ -463,7 +463,7 @@
    "t_s": 19
   },
   {
-   "hash": "5ade411fc20522fe",
+   "hash": "301c5ed481180a97",
    "player_rect": [
     1232,
     128,
@@ -475,7 +475,7 @@
    "t_s": 20
   },
   {
-   "hash": "eb64389d23603593",
+   "hash": "3b7734e808ffcb49",
    "player_rect": [
     1012,
     128,
@@ -487,7 +487,7 @@
    "t_s": 21
   },
   {
-   "hash": "96d1cd3ab1f14f59",
+   "hash": "d89e9e9302f54507",
    "player_rect": [
     894,
     155,
@@ -499,7 +499,7 @@
    "t_s": 22
   },
   {
-   "hash": "9726aaef62f3c6fe",
+   "hash": "e801c3fe3b3acc98",
    "player_rect": [
     894,
     188,
@@ -511,7 +511,7 @@
    "t_s": 23
   },
   {
-   "hash": "62f7c241d4b37103",
+   "hash": "f70d844688842074",
    "player_rect": [
     894,
     288,
@@ -523,7 +523,7 @@
    "t_s": 24
   },
   {
-   "hash": "147bfe5a6d312c63",
+   "hash": "9144b44e015eabf6",
    "player_rect": [
     964,
     288,
@@ -535,7 +535,7 @@
    "t_s": 25
   },
   {
-   "hash": "d12d2c8cc3238224",
+   "hash": "b6998cd37bc2e2a2",
    "player_rect": [
     1099,
     320,
@@ -547,7 +547,7 @@
    "t_s": 26
   },
   {
-   "hash": "7f303926034a1a44",
+   "hash": "449ca123edf032eb",
    "player_rect": [
     1230,
     320,
@@ -559,7 +559,7 @@
    "t_s": 27
   },
   {
-   "hash": "658e8f9a491b49a8",
+   "hash": "0a30cc62b3284051",
    "player_rect": [
     1024,
     320,
@@ -571,7 +571,7 @@
    "t_s": 28
   },
   {
-   "hash": "8606141ad7f993c8",
+   "hash": "02bd52dad86d4ad6",
    "player_rect": [
     928,
     191,
@@ -583,7 +583,7 @@
    "t_s": 29
   },
   {
-   "hash": "b198e5390bebcd52",
+   "hash": "f06c0a068c66ce64",
    "player_rect": [
     894,
     128,

@@ -1,4 +1,3 @@
-
 """The three weapon rigs, as drawable-on-call functions.
 
 Lifted verbatim out of Player.draw(). Body geometry is untouched - the only
@@ -310,6 +309,70 @@ def draw_k9(pen, ctx, g):
                          (mag_attach_x, mag_attach_y), (mag_tip_x, mag_tip_y), 1)
 
 
+def draw_shotgun(pen, ctx, g):
+    """Fallow 12: wooden stock, long barrel over a tube, ribbed pump fore-end."""
+    grip_x = ctx["grip_x"]
+    grip_y = ctx["grip_y"]
+    arm_dx = ctx["arm_dx"]
+    arm_dy = ctx["arm_dy"]
+    raise_factor = ctx["raise_factor"]
+    reload_active = ctx["reload_active"]
+    reload_progress = ctx["reload_progress"]
+
+    length = int(30.0 * (1.0 - raise_factor * 0.35))
+    sx = grip_x + arm_dx * 2
+    sy = grip_y + arm_dy * 2
+    ex = grip_x + arm_dx * length
+    ey = grip_y + arm_dy * length
+    pdx = -arm_dy
+    pdy = arm_dx
+
+    # stock behind the grip, with the butt pad
+    bx = grip_x - arm_dx * 10
+    by = grip_y - arm_dy * 10
+    pen.polygon(g["wood"], quad(sx, sy, bx, by, 3.0, 3.7, pdx, pdy))
+    pen.polygon(g["wood_edge"], quad(sx, sy, bx, by, 3.0, 3.7, pdx, pdy), 1)
+    pen.polygon(g["muzzle"], quad(bx, by, bx - arm_dx * 1.6, by - arm_dy * 1.6,
+                                  3.7, 3.4, pdx, pdy))
+
+    # receiver
+    rx = sx + arm_dx * 9
+    ry = sy + arm_dy * 9
+    pen.polygon(g["receiver"], quad(sx, sy, rx, ry, 3.4, 2.8, pdx, pdy))
+    pen.polygon(g["cover_edge"], quad(sx, sy, rx, ry, 3.4, 2.8, pdx, pdy), 1)
+
+    # barrel over the tube magazine
+    pen.line(g["barrel"], (rx, ry), (ex, ey), 3)
+    pen.line(g["groove"], (rx - pdx * 1.9, ry - pdy * 1.9),
+             (ex - pdx * 1.9, ey - pdy * 1.9), 2)
+    pen.line(g["muzzle"], (ex, ey), (ex + arm_dx * 2, ey + arm_dy * 2), 4)
+    pen.circle(g["bore"], (int(ex + arm_dx * 2.6), int(ey + arm_dy * 2.6)), 1)
+
+    # pump fore-end, sliding back while the reload runs
+    off = 0.0
+    if reload_active and 0.2 < reload_progress < 0.72:
+        off = math.sin(math.pi * (reload_progress - 0.2) / 0.52) * 4.0
+    px0 = rx + arm_dx * (3.2 - off)
+    py0 = ry + arm_dy * (3.2 - off)
+    px1 = px0 + arm_dx * 8
+    py1 = py0 + arm_dy * 8
+    pen.polygon(g["wood"], quad(px0, py0, px1, py1, 3.2, 3.0, pdx, pdy))
+    pen.polygon(g["wood_edge"], quad(px0, py0, px1, py1, 3.2, 3.0, pdx, pdy), 1)
+    for i in range(3):
+        cx = px0 + arm_dx * (1.6 + i * 2.2)
+        cy = py0 + arm_dy * (1.6 + i * 2.2)
+        pen.line(g["groove"], (cx + pdx * 2.6, cy + pdy * 2.6),
+                 (cx - pdx * 2.6, cy - pdy * 2.6), 1)
+
+    # trigger guard + grip
+    pen.line(g["cover_edge"], (sx + pdx * 3.2, sy + pdy * 3.2),
+             (sx + arm_dx * 4 + pdx * 3.2, sy + arm_dy * 4 + pdy * 3.2), 1)
+    pen.line(g["wood"], (sx, sy), (sx - arm_dx * 3.2, sy - arm_dy * 3.2), 4)
+
+    # bead sight
+    pen.circle(g["front_sight"], (int(ex - arm_dx * 3), int(ey - arm_dy * 3)), 1)
+
+
 def draw_pistol(pen, ctx, g):
     """The original service pistol."""
     grip_x = ctx["grip_x"]
@@ -378,6 +441,7 @@ RIGS = {
     "os12": (draw_os12, "os12"),
     "k9_smg": (draw_k9, "k9"),
     "pistol": (draw_pistol, "pistol"),
+    "shotgun": (draw_shotgun, "os12"),
 }
 
 

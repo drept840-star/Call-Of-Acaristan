@@ -1,4 +1,3 @@
-
 """Walking sim section: slum exploration, NPCs, firefight overlook panorama."""
 import math
 import random
@@ -362,6 +361,10 @@ def update_walking_sim(keys):
         else:
             _t_look_x = 0.0
             _t_look_y = 0.0
+        from core.camera import mouse_lookahead
+        _ml = mouse_lookahead()
+        if _ml is not None:
+            _t_look_x, _t_look_y = _ml
         walk_look_x += (_t_look_x - walk_look_x) * 0.1
         walk_look_y += (_t_look_y - walk_look_y) * 0.1
         _desired_x = walk_player.rect.centerx - WIDTH // 2 + walk_look_x

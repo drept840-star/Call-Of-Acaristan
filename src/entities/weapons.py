@@ -1,4 +1,3 @@
-
 """Player weapons: pistol, melee, molotov cocktails, fire zones."""
 import math
 import random

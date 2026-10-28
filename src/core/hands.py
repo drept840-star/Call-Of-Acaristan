@@ -1,4 +1,3 @@
-
 """Canonical hand renderers - the reference-anatomy model (dorsal view).
 
 Every hand in the game that is large enough to read (>= ~8 px) should be drawn

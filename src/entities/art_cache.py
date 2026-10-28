@@ -1,4 +1,3 @@
-
 """art_cache.py - Centralized procedural surface cache for Call of Acaristan.
 
 Pre-renders procedural surfaces once and returns cached ``pygame.Surface``

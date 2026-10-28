@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-26T11:17:18.199Z
-> Files: 450 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-28T22:20:27.343Z
+> Files: 480 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -35,11 +35,12 @@
 - `M6_HALOS_AND_ENDING_PLAN.md` — M6 plan - halos that stay behind walls, and an ending the player can follow (~5753 tok)
 - `M6_TOPDOWN_ART_BRIEF.md` — M6 top-down art brief (Phase 0 diagnosis + Phase 1 brief) (~1882 tok)
 - `M6_TOPDOWN_GRAPHICS_MASTER_PROMPT.md` — M6 top-down graphics - master prompt (~2376 tok)
+- `MISSION7_PLOT.md` — Mission 7 — "Fallow Ground" (~3022 tok)
 - `project-mindmap.md` — Call of Acaristan - project mind map (~5316 tok)
 
 ## src/
 
-- `app.py` — _input_recorder: handle_settings_event (~56258 tok)
+- `app.py` — _input_recorder: handle_settings_event (~58569 tok)
 
 ## src/art/
 
@@ -74,7 +75,7 @@
 
 - `__init__.py` — audio package. (~7 tok)
 - `audio.py` (~33059 tok)
-- `voice_manifest.py` — Generated from voice_lines.xlsx - (VO ID, speaker, line) for every voiced line. (~6300 tok)
+- `voice_manifest.py` — Generated from voice_lines.xlsx - (VO ID, speaker, line) for every voiced line. (~7039 tok)
 - `voice.py` — Voice-over playback for Call of Acaristan. (~8837 tok)
 
 ## src/core/
@@ -83,30 +84,30 @@
 - `ambience.py` — ambience.py - zone-driven world ambience layers. (~1552 tok)
 - `appearance.py` — Character appearance: the cosmetic catalog, the appearance value object, (~7120 tok)
 - `artpack.py` — core.artpack - deprecated path (RPE6 Phase 2, A-006). (~251 tok)
-- `camera.py` — Shared camera and bullet helpers. (~4512 tok)
-- `config.py` — URL patterns: 2 routes (~9537 tok)
+- `camera.py` — Shared camera and bullet helpers. (~4739 tok)
+- `config.py` — resource_path, windowed_size, make_grain, draw_sky_gradient (~10522 tok)
 - `console.py` — Console: toggle, bind, handle_event, execute_command (~4163 tok)
 - `cutscene_registry.py` — Cutscene scene renderers registered by scene id (RPE6 D1, boundary rule 4). (~700 tok)
-- `dev_jumps.py` (~1833 tok)
+- `dev_jumps.py` — dev_jumps.py - registry of dev jump targets. (~2222 tok)
 - `fixedstep.py` — Fixed-timestep accumulator, for making the simulation host-independent. (~4752 tok)
 - `font_coverage.py` — Font glyph coverage - the fontTools half of §6.13 (dev/audit only). (~649 tok)
 - `fsm.py` — fsm.py - Finite State Machine infrastructure for Acaristan. (~1929 tok)
-- `game_core.py` — game_core.py - Proxy facade that delegates to split modules. (~5830 tok)
+- `game_core.py` — game_core.py - Proxy facade that delegates to split modules. (~6310 tok)
 - `hands.py` — Canonical hand renderers - the reference-anatomy model (dorsal view). (~4371 tok)
 - `interactions.py` — Player interactions with the world: doors, safe, NPCs, alarms. (~6462 tok)
 - `json_store.py` — Shared atomic JSON persistence helpers for save_data.json / settings.json. (~413 tok)
 - `level_editor.py` — LevelEditor: set_map, toggle, handle_event, rebuild_world + 3 more (~2564 tok)
 - `lighting.py` — core.lighting - deprecated path (RPE6 Phase 2, A-006). (~180 tok)
 - `mapbuilder.py` — Shared tilemap authoring helper (pure python, no pygame). (~1659 tok)
-- `mission_meta.py` — Per-mission display metadata (operation name + failure-screen copy). (~1041 tok)
+- `mission_meta.py` — Per-mission display metadata (operation name + failure-screen copy). (~1107 tok)
 - `outfits.py` — outfits.py - Biribel's Mission 5 kit, as data (one source of truth). (~2055 tok)
 - `profile_store.py` — The global profile: Acaribucks wallet, owned cosmetics, equipped loadout. (~2364 tok)
 - `props.py` — props.py - shared set-dressing prop painters. (~5054 tok)
 - `render_util.py` — core.render_util - deprecated path (RPE6 Phase 2, A-006). (~223 tok)
-- `save_system.py` — 3-slot JSON save system for campaign progress. (~2212 tok)
+- `save_system.py` — 3-slot JSON save system for campaign progress. (~2299 tok)
 - `scene_mirror.py` — RPE6 ADAPTER A-005: mirror the legacy GameStateManager onto an engine SceneStack. (~856 tok)
 - `settings_store.py` — Settings store - persistent JSON-backed user preferences. (~1856 tok)
-- `state.py` — Central game state singleton. (~6475 tok)
+- `state.py` — Central game state singleton. (~6980 tok)
 - `staticlayer.py` — staticlayer.py - chunked bake of the static world (phase 0). (~1035 tok)
 - `surfaces.py` — surfaces.py - floor-material zones for footstep timbre selection. (~536 tok)
 - `user_settings.py` — Live user settings - shared across all gameplay modules. (~1320 tok)
@@ -117,7 +118,8 @@
 - `cast.py` — cast.py - cutscene cast sprites. (~1275 tok)
 - `cast3d.py` — cast3d.py - 3D (engine3d.Humanoid) looks derived from the 2D cast sheet. (~1028 tok)
 - `chair.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~17099 tok)
-- `engine.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~8428 tok)
+- `death3d.py` — Gameplay death falls for 3D guards (Mission 7 raid, Mission 6 yard). (~1443 tok)
+- `engine.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~8763 tok)
 - `figure_kit.py` — cutscenes.figure_kit - deprecated path (RPE6 Phase 2, A-006): the kit is ``engine.anim``. (~176 tok)
 - `k9.py` — K-9 armory pickup: one continuous, deterministic, software-safe take. (~5003 tok)
 - `m3broadcast.py` — Mission 3 - Kill Order -> Broadcast transition cinematic (Slice 5 -> 6). (~10591 tok)
@@ -138,7 +140,11 @@
 - `m5studio.py` — m5studio.py - the state-TV studio shared by the M5 bulletin's 3D take (~2343 tok)
 - `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38648 tok)
 - `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~6413 tok)
-- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31688 tok)
+- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31888 tok)
+- `m7films.py` — Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6) (~2734 tok)
+- `m7palette3d.py` — The 2D top-down M7 farm palette, for the 3D farm (raid and films). (~846 tok)
+- `m7runner.py` — Mission 7 beat 3: Alex rides in with the mansion plan (2D cutscene scenes). (~4971 tok)
+- `m7world3d.py` — Mission 7 farm: one shared 3D builder for the drop-off and finale films and (~23961 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
 - `ps2mat.py` — ps2mat.py - PS2 pixel textures for sets authored in flat colour. (~1125 tok)
@@ -160,7 +166,7 @@
 ## src/engine/anim/
 
 - `__init__.py` — engine.anim - animation (RPE6). Phase 2 holds the generic 2D figure kit (``draw_character`` and the (~252 tok)
-- `figure_kit.py` — figure_kit.py - one cast renderer in the "Balaceanu Arrest" house style. (~10926 tok)
+- `figure_kit.py` — figure_kit.py - one cast renderer in the "Balaceanu Arrest" house style. (~12731 tok)
 - `pose_cache.py` — Pose cache: render-once surfaces for parameterised procedural bodies. (~414 tok)
 
 ## src/engine/collision/
@@ -393,6 +399,19 @@
 - `tram_wreck.py` — Burnt-out tram on the quarter junction (static decor). One variant at the (~212 tok)
 - `wall_posters.py` — Top-down wall posters for the gameplay maps (the wall is seen as its front band). (~680 tok)
 
+## src/game/content/levels/
+
+- `m7.farm.level.json` (~182 tok)
+
+## src/game/content/timelines/
+
+- `m1.dropoff.timeline.json` (~248 tok)
+- `m7.arrival.timeline.json` (~239 tok)
+- `m7.finale.timeline.json` (~268 tok)
+- `m7.outro.timeline.json` (~90 tok)
+- `m7.raidin.timeline.json` (~150 tok)
+- `m7.runner.timeline.json` (~225 tok)
+
 ## src/game/render/
 
 - `__init__.py` — game.render - the game's ``engine.render2d`` instance: queue + static layers + post-FX + camera (RPE6 Phase 6). (~604 tok)
@@ -409,7 +428,7 @@
 - `__init__.py` — missions package. (~8 tok)
 - `arena.py` — Multiplayer arena maps and the deathmatch rules. (~19521 tok)
 - `walking_attack3d.py` — True 3D oil-rig strike cinematic, rendered by the game's engine3d. (~12032 tok)
-- `walking_sim.py` — Walking sim section: slum exploration, NPCs, firefight overlook panorama. (~42130 tok)
+- `walking_sim.py` — Walking sim section: slum exploration, NPCs, firefight overlook panorama. (~42172 tok)
 
 ## src/missions/m0/
 
@@ -419,10 +438,11 @@
 ## src/missions/m1/
 
 - `__init__.py` — Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py. (~428 tok)
-- `draw.py` — Split from mission.py - see mission.py (shim) for the map. (~22703 tok)
+- `draw.py` — Split from mission.py - see mission.py (shim) for the map. (~33772 tok)
 - `hotwire.py` — Split from mission.py - see mission.py (shim) for the map. (~1741 tok)
 - `main.py` — Split from mission.py - see mission.py (shim) for the map. (~3223 tok)
 - `map.py` — Mission 1 map - authored with core.MapBuilder, baked to list[str]. (~1303 tok)
+- `meta.py` — Mission 1 cutscene data (RPE6 Phase 8 + WP2: the cut as ae.timeline/1). (~1393 tok)
 - `update.py` — Split from mission.py - see mission.py (shim) for the map. (~10459 tok)
 
 ## src/missions/m2/
@@ -435,7 +455,7 @@
 - `sniper3d_set.py` — Route 12 toll plaza, built for the low-poly sniper cinematic. (~3732 tok)
 - `sniper3d.py` — Mission 2 - "Route 12 Kill-Box": the sniper ambush as a low-poly 3D film. (~16640 tok)
 - `starts.py` — Split from mission2.py - see mission2.py (shim) for the map. (~7939 tok)
-- `update.py` — Split from mission2.py - see mission2.py (shim) for the map. (~17464 tok)
+- `update.py` — Split from mission2.py - see mission2.py (shim) for the map. (~17490 tok)
 - `world.py` — Split from mission2.py - see mission2.py (shim) for the map. (~11402 tok)
 
 ## src/missions/m3/
@@ -516,6 +536,21 @@
 - `stacks.py` — Industrial silhouettes on the skyline: chimneys, a radio mast, a water tower. (~1515 tok)
 - `tower.py` — Watchtowers and wire fences for the Bloc yards. (~1758 tok)
 
+## src/missions/m7/
+
+- `__init__.py` — Mission 7: Fallow Ground - re-export facade (load order = parts order). (~92 tok)
+- `choice.py` — Mission 7 beat 7 - Two Channels: Vasile's offer, Maru's reply, then the choice. (~1345 tok)
+- `draw.py` — Mission 7 - placeholder frame: title, stage label and the advance hint. (~400 tok)
+- `farmyard.py` — Mission 7 top-down farmyard: beat 2 (chores); beat 4 (prep) reuses the map. (~11649 tok)
+- `flow.py` — Mission 7 - stage ladder, checkpoints and the outro handoff (skeleton). (~1205 tok)
+- `maps.py` — Mission 7 top-down farm: tile grid, palette and interaction points (beats 2 and 4). (~816 tok)
+- `meta.py` — Mission 7 metadata and stage constants: Fallow Ground (skeleton). (~846 tok)
+- `raid_brain.py` — Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks, (~6203 tok)
+- `raid_hud.py` — Mission 7 raid HUD: the top-down game's panels (via the M6 yard HUD helpers), a (~1618 tok)
+- `raid_world.py` — Mission 7 raid world: collision boxes, line of sight, the barn fire and the props. (~3405 tok)
+- `raid3d.py` — Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night. (~10134 tok)
+- `systems.py` — Mission 7 - per-frame update, dispatched by stage (placeholder stages: ENTER advances). (~281 tok)
+
 ## src/net/
 
 - `__init__.py` — net - multiplayer relay client. Parts: protocol.py, client.py. (~285 tok)
@@ -540,7 +575,7 @@
 - `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~17073 tok)
 - `main.py` — Split from menu.py - see menu.py (shim) for the map. (~9349 tok)
 - `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~60072 tok)
-- `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~3971 tok)
+- `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~4138 tok)
 - `mp.py` — Split from menu.py - see menu.py (shim) for the map. (~25518 tok)
 - `multiplayer_style.py` — Read-only KRAPNET presentation. No sockets, timers or session mutations. (~4663 tok)
 - `pixfont.py` — Pixel bitmap fonts for the radio UI (polish pass T6b). (~3560 tok)
@@ -603,6 +638,7 @@
 - `test_m5_ending.py` — M5 finale regressions. Run: python -m unittest tests.unit.test_m5_ending -v. (~2231 tok)
 - `test_m5_finale_audio.py` — Focused M5 sound/lifecycle regressions, without starting app or saves. (~3099 tok)
 - `test_m6_campaign.py` — Mission 6 campaign regressions. Run: python -m unittest tests.unit.test_m6_campaign -v. (~14342 tok)
+- `test_m7_campaign.py` — Mission 7 campaign regressions. Run: python -m unittest tests.unit.test_m7_campaign -v. (~3549 tok)
 - `test_mathx_profiling.py` — engine.core.mathx and Profiler. (~479 tok)
 - `test_mesh_import.py` — Phase 11 step 11 (ADR-024): the importer converts OBJ/glTF into (~1402 tok)
 - `test_phase1_rng_imports.py` — Phase 1 checks: legacy rng stream (R6) and m3 import side effects (B-010). (~641 tok)
@@ -622,11 +658,14 @@
 ## tools/
 
 - `ae_hold_check.py` — Weapon hold + arm self-collision gate for the 3D cutscenes. (~1381 tok)
+- `ae_import_tractor.py` — AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb). (~1146 tok)
+- `build_code_txt.py` — find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files (~2979 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
-- `dev_panel.py` — Declares to (~7861 tok)
+- `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~10792 tok)
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
-- `smoke_test.py` — Must be set before pygame/config import. (~126097 tok)
+- `smoke_test.py` — Must be set before pygame/config import. (~154153 tok)
+- `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~5676 tok)

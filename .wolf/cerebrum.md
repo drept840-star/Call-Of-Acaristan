@@ -90,6 +90,8 @@ budget_tokens: 2000
   golden tail - `ae_golden --only m1` renders 54 shots, so read the reported
   failure ids, not the count.
 
+- [2026-10-28] M7 raid shots: take the aim ray before recoil and camera kick, or the shot lands above the crosshair. The over-the-shoulder camera sits ~0.85 m right of the body centreline, so test targets must sit on `_aim_ray()`, not on the player's centre.
+
 ## Decision Log
 
 <!-- Significant technical decisions with rationale. Why X was chosen over Y. -->
@@ -106,3 +108,9 @@ budget_tokens: 2000
   depend on them. Light follows M5: falloff pools, a white-balanced torch, hard
   bloom discs. A lamp on pale snow must stay under ~1.4x (`_COLD`), or it clips
   to a white blob. Signed off by the user.
+- engine3d painter layers: a higher layer ALWAYS paints over a lower one (both
+  backends; GL gives each layer its own depth slice). Terrain on layer 0 cannot
+  hide layer-2 props: anything buried in it or behind a crest shows through and
+  slides with parallax. Terrain that props stand on or behind (M7 hill rings)
+  must be layer 2 and closed (back slope). Flat ground can stay layer 0 if no
+  prop goes below y=0.

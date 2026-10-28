@@ -4990,7 +4990,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "1289524952f1b1f8c0d5ea483e4c7bea431461be1209012cc29e21cbb37d4680",
+   "sha256": "9497bcb5099568632df58697b41a9dfa21316aa8932ee0ab9c24639734b1ca5f",
    "source": "m1.dropoff[0] scene=m1_dropoff",
    "t_ms": 1075
   },
@@ -5004,7 +5004,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "ff454fc147f2d6f553722ef61e0af80d6393e035dd52ad86960ce88ac062a94e",
+   "sha256": "382e10cc2771868b09b4dd4629aeffa906891c3623b9f33fcbaead3d82655e9b",
    "source": "m1.dropoff[0] scene=m1_dropoff",
    "t_ms": 2150
   },
@@ -5018,7 +5018,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "1c82baa681a9f19ebdfd4052eee6c1060c1cff6a024f9156cbc0e2e5bc24794b",
+   "sha256": "4919b80f1efd230a53028f5c0704f0f685869cb90f0dbb4e6674e9f64069eb83",
    "source": "m1.dropoff[0] scene=m1_dropoff",
    "t_ms": 3225
   },
@@ -5032,8 +5032,8 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "29faa0d68828bdc3ae81694c7bb3f30ea2328196f71814aa966645f326eef1ef",
-   "source": "m1.dropoff[1] scene=m1_dropoff",
+   "sha256": "7dd354b59fbd3720c08389380de88ebcf13a010603ac5e759a72be2e0790530c",
+   "source": "m1.dropoff[1] scene=m1_dropoff_follow",
    "t_ms": 575
   },
   "gp.m1.dropoff.01.t50": {
@@ -5046,8 +5046,8 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "102ea0332198cf7c304e60155ff0ec1a59a889f4fa1107c52200c022e5f238ee",
-   "source": "m1.dropoff[1] scene=m1_dropoff",
+   "sha256": "b7e2a0ce90bcb308f8ed97091c79a8ecc2b05a385038191c1def0189535839ee",
+   "source": "m1.dropoff[1] scene=m1_dropoff_follow",
    "t_ms": 1150
   },
   "gp.m1.dropoff.01.t75": {
@@ -5060,8 +5060,8 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "6eb96d4c6dc180d211915bcb2b8892eb5f642c27bcc7c3ba833992b93b004a38",
-   "source": "m1.dropoff[1] scene=m1_dropoff",
+   "sha256": "b5d65267369a85aba1ecc7782dbcc001f000fdfb7d8f96d59b8a671d0f70b83a",
+   "source": "m1.dropoff[1] scene=m1_dropoff_follow",
    "t_ms": 1725
   },
   "gp.m1.dropoff.02.t25": {
@@ -5074,8 +5074,8 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "b62cf470f06f0cb5c3f11922b1b2828d6c69f2470f271f9d5cd285923188851d",
-   "source": "m1.dropoff[2] scene=m1_dropoff",
+   "sha256": "46484e89d2247b5ae505e1e406cae4dc74c65fb102dd66e5837b63cf5913b72a",
+   "source": "m1.dropoff[2] scene=m1_dropoff_entry",
    "t_ms": 625
   },
   "gp.m1.dropoff.02.t50": {
@@ -5088,8 +5088,8 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "3d10b186bdeac46c5afedf431aec733647d2c7b0637150e6abcb90262c967c0b",
-   "source": "m1.dropoff[2] scene=m1_dropoff",
+   "sha256": "7bbdb789afe266e14b9d9a6ba404f9a5658341c015bdb64e90fc339128c01f4b",
+   "source": "m1.dropoff[2] scene=m1_dropoff_entry",
    "t_ms": 1250
   },
   "gp.m1.dropoff.02.t75": {
@@ -5102,8 +5102,8 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "3d10b186bdeac46c5afedf431aec733647d2c7b0637150e6abcb90262c967c0b",
-   "source": "m1.dropoff[2] scene=m1_dropoff",
+   "sha256": "a7d03ca910168d380e082203e1cb6667f771a67d1e0e757a10abba4dfa8f0d15",
+   "source": "m1.dropoff[2] scene=m1_dropoff_entry",
    "t_ms": 1875
   },
   "gp.m1.shutter": {

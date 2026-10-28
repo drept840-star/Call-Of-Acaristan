@@ -366,6 +366,12 @@ def _draw_mag_icon(surface, mx, my, kind, rounds, capacity, active):
         pygame.draw.rect(surface, color, (mx - 4, my - 14, 8, 28), 1)
         filled = int(24 * max(0, min(1.0, rounds / max(1, capacity))))
         pygame.draw.rect(surface, color, (mx - 3, my + 10 - filled, 6, filled))
+    elif kind == "shell":
+        # Fallow 12 shell tube: six 12-gauge rounds, seated bottom-up.
+        pygame.draw.rect(surface, color, (mx - 4, my - 16, 9, 32), 1)
+        filled = int(6 * max(0, min(1.0, rounds / max(1, capacity))))
+        for i in range(filled):
+            pygame.draw.circle(surface, color, (mx, my + 11 - i * 5), 2)
     else:
         pygame.draw.rect(surface, color, (mx - 5, my - 10, 10, 20), 1)
         filled = int(16 * max(0, min(1.0, rounds / max(1, capacity))))
@@ -374,15 +380,17 @@ def _draw_mag_icon(surface, mx, my, kind, rounds, capacity, active):
 
 def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active):
     """weapon_panel's mag slot: (mx, my) is the top left of a 25 x 56 cell.
-    The K-9 stick is M5's baked shell with its 12 witness holes, like the
-    M4/M5 panels; a box mag or missing art falls back to _draw_mag_icon,
-    which draws centred."""
+    The K-9 stick (12 witness holes) and the Fallow 12 shell tube (6 shell
+    ports) are M5's baked shells, like the M4/M5 panels; a box mag or missing
+    art falls back to _draw_mag_icon, which draws centred."""
     rounds, capacity = max(0, int(rounds)), max(1, int(capacity))
+    state = 0 if rounds <= 0 else (1 if active else 2)
+    base = {"stick": 0, "shell": 6}.get(kind)     # mag_icon variant = kind*3 + state
     shell = None
-    if kind == "stick":
+    if base is not None:
         try:
             from art import m5 as _art
-            shell = _art.get("mag_icon", 0 if rounds <= 0 else (1 if active else 2))
+            shell = _art.get("mag_icon", base + state)
         except Exception:
             shell = None
     if shell is None:
@@ -390,6 +398,11 @@ def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active):
         return
     surface.blit(shell, (mx, my - 3))
     col = (220, 190, 70) if active else (150, 128, 58)
+    if kind == "shell":
+        rows = min(6, int(round(rounds / capacity * 6)))
+        for row in range(rows):                   # shells seat bottom-up
+            pygame.draw.circle(surface, col, (mx + 12, my + 5 + (5 - row) * 5), 2)
+        return
     for row in range(min(12, int(round(rounds / capacity * 12)))):
         for dx in (10, 14):
             pygame.draw.circle(surface, col, (mx + dx, my + 44 - row * 3), 1)

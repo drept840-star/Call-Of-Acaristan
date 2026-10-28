@@ -1,4 +1,3 @@
-
 """The in-game arena match: entry panel plus the live match runtime.
 
 Extracted from tools/mp_match.py so the menu and the CLI tool can drive the
@@ -110,6 +109,7 @@ WEAPON_KEYS = {
     pygame.K_1: P.WPN_PISTOL,
     pygame.K_2: P.WPN_OS12,
     pygame.K_3: P.WPN_K9,
+    pygame.K_4: P.WPN_SHOTGUN,
 }
 # Q, and the mouse wheel, step to the NEXT weapon carried. Numbers pick one
 # outright; cycling is what you actually use mid-fight, because it never

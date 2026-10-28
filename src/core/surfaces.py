@@ -1,4 +1,3 @@
-
 """surfaces.py - floor-material zones for footstep timbre selection.
 
 Deliberately tiny and data-only: a list of world-space rects per mission and a

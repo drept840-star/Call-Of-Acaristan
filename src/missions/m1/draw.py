@@ -539,10 +539,17 @@ def _dropoff_hold_cam():
     return int(x), int(y)
 
 
+_DROPOFF_ARRIVE_MS = 1100                   # van rolls in from the west and brakes
+_DROPOFF_LEAVE_MS = 2400                    # van pulls out east
+
+
 def _dropoff_cam(t):
     if t < 4300:
-        u = _ease((t - 1800) / 2500.0)
-        return int(40 + 720 * u), int(120 + 70 * u)
+        # low handheld drift on the curb while the van arrives, then a sweep east
+        # to the shutter and its guards as the van leaves
+        sway = 0.0 if t > 2700 else 3.0 * math.sin(t * 0.004)
+        u = _ease((t - 2700) / 1600.0)
+        return int(40 + 720 * u + sway), int(120 + 70 * u + sway * 0.6)
     return _dropoff_hold_cam()
 
 
@@ -550,7 +557,10 @@ def _dropoff_van(t):
     """World (rear x, centre y) of the van, or None once it has left."""
     if t >= 4300:
         return None
-    d = max(0.0, t - 1500.0)
+    if t < _DROPOFF_ARRIVE_MS:
+        k = 1.0 - t / float(_DROPOFF_ARRIVE_MS)
+        return -110 + (_DROPOFF_VAN_REAR + 110) * (1.0 - k * k), _DROPOFF_VAN_Y[0]
+    d = max(0.0, t - _DROPOFF_LEAVE_MS)
     x = _DROPOFF_VAN_REAR + 0.00012 * d * d
     y = _DROPOFF_VAN_Y[0] + (_DROPOFF_VAN_Y[1] - _DROPOFF_VAN_Y[0]) * _ease(d / 900.0)
     return x, y
@@ -558,11 +568,13 @@ def _dropoff_van(t):
 
 def _dropoff_biribel(t):
     """World (x, y, facing, moving, under_van) for the player figure."""
-    if t < 1300:
-        u = _ease((t - 300) / 1000.0)
-        return 480, 420 + 50 * u, math.pi / 2, 300 < t < 1300, True
+    if t < 1000:
+        return 480, 420, math.pi / 2, False, True
+    if t < 1900:
+        u = _ease((t - 1000) / 900.0)
+        return 480, 420 + 50 * u, math.pi / 2, True, True
     if t < 4300:
-        return 480, 470, (0.0 if t > 1700 else math.pi / 2), False, False
+        return 480, 470, (0.0 if t > 2300 else math.pi / 2), False, False
     pts = _DROPOFF_WALK
     for (t0, x0, y0), (t1, x1, y1) in zip(pts, pts[1:]):
         if t < t1:
@@ -604,14 +616,95 @@ def _draw_dropoff_street(surface, t):
         rear, vy = van[0] - cam_x, van[1] - cam_y
         top = vy - img.get_height() // 2
         surface.blit(img, (int(rear) - 14, int(top)))
-        if t > 1500:                         # brake lights as it pulls out
-            for ty in (vy - 23, vy + 19):
-                surface.fill((230, 40, 32), (int(rear) - 1, int(ty), 3, 5))
+        for ty in (vy - 23, vy + 19):        # tail lights: bright on the brake, dim at idle
+            hot = t < _DROPOFF_ARRIVE_MS + 300 or t > _DROPOFF_LEAVE_MS
+            surface.fill((230, 40, 32) if hot else (120, 24, 20), (int(rear) - 1, int(ty), 3, 5))
+        _dropoff_headlights(surface, rear + img.get_width() - 18, vy)
     if not under_van:
         _draw_dropoff_player(surface, cam_x, cam_y, bx, by, facing, moving)
 
 
-_register_takes({"m1_dropoff": _draw_dropoff_street})
+def _dropoff_headlights(surface, nose_x, cy):
+    """Two warm beams cast east from the van nose, additive over the street."""
+    w, h = surface.get_size()
+    beam = pygame.Surface((w, h))
+    for k in range(5):                       # stacked cones fake a soft falloff
+        spread, grey = 34 - k * 6, 9
+        for dy in (-15, 15):
+            pts = [(nose_x, cy + dy), (nose_x + 340 - k * 40, cy + dy * 3.2 - spread),
+                   (nose_x + 340 - k * 40, cy + dy * 3.2 + spread)]
+            pygame.draw.polygon(beam, (grey * (k + 2) // 2, grey * (k + 2) // 2 - 2, grey * (k + 2) // 3), pts)
+    surface.blit(beam, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+
+
+def _dropoff_post(surface, t):
+    """Night-rain finish for every drop-off shot: diagonal rain, vignette, letterbox bars
+    that open into gameplay over the last 600 ms, and a fade up from black."""
+    w, h = surface.get_size()
+    if not getattr(STATE, "reduced_motion", False):
+        for i in range(70):
+            x = (i * 97 + t * 0.22 + i * i * 3) % (w + 60) - 30
+            y = (i * 211 + t * 0.9 + i * 31) % (h + 40) - 20
+            pygame.draw.line(surface, (150, 170, 200), (int(x), int(y)), (int(x - 5), int(y + 14)), 1)
+    edge = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(edge, (0, 0, 0, 70), (0, 0, w, h), 28)
+    surface.blit(edge, (0, 0))
+    bar = int(38 * (1.0 - _ease((t - (_DROPOFF_MS - 600)) / 600.0)))
+    if bar > 0:
+        surface.fill((0, 0, 0), (0, 0, w, bar))
+        surface.fill((0, 0, 0), (0, h - bar, w, bar))
+    if t < 600:
+        fade = pygame.Surface((w, h))
+        fade.set_alpha(int(255 * (1.0 - t / 600.0)))
+        surface.blit(fade, (0, 0))
+
+
+_DROPOFF_ZOOM_SURFACE = None
+
+
+def _draw_dropoff_zoom(surface, t, zoom, locked=False):
+    """Punch-in onto Biribel at `zoom`: the full street is drawn, then cropped to his frame."""
+    global _DROPOFF_ZOOM_SURFACE
+    if _DROPOFF_ZOOM_SURFACE is None or _DROPOFF_ZOOM_SURFACE.get_size() != surface.get_size():
+        _DROPOFF_ZOOM_SURFACE = pygame.Surface(surface.get_size())
+    t = max(0, min(_DROPOFF_MS, int(t)))
+    _draw_dropoff_street(_DROPOFF_ZOOM_SURFACE, t)
+
+    x, y, _facing, _moving, _under_van = _dropoff_biribel(t)
+    if locked:                               # static frame: he walks into it
+        x, y = M1_SPAWN_POS
+    cam_x, cam_y = _dropoff_cam(t)
+    focus_x, focus_y = x - cam_x, y - cam_y
+    crop_w = max(1, int(surface.get_width() / zoom))
+    crop_h = max(1, int(surface.get_height() / zoom))
+    crop_x = max(0, min(surface.get_width() - crop_w, int(focus_x - crop_w / 2)))
+    crop_y = max(0, min(surface.get_height() - crop_h, int(focus_y - crop_h / 2)))
+    crop = _DROPOFF_ZOOM_SURFACE.subsurface((crop_x, crop_y, crop_w, crop_h))
+    pygame.transform.scale(crop, surface.get_size(), surface)
+
+
+def _draw_dropoff_follow(surface, t):
+    """Beat 2: medium frame on Biribel as he walks toward the side door."""
+    _draw_dropoff_zoom(surface, t, 1.5)
+
+
+def _draw_dropoff_entry(surface, t):
+    """Beat 3: close-up on Biribel at the side entrance, tracked to the gameplay spawn."""
+    _draw_dropoff_zoom(surface, t, 2.1, locked=True)
+
+
+def _dropoff_take(fn):
+    def _draw(surface, t):
+        fn(surface, t)
+        _dropoff_post(surface, max(0, min(_DROPOFF_MS, int(t))))
+    return _draw
+
+
+_register_takes({
+    "m1_dropoff": _dropoff_take(_draw_dropoff_street),
+    "m1_dropoff_follow": _dropoff_take(_draw_dropoff_follow),
+    "m1_dropoff_entry": _dropoff_take(_draw_dropoff_entry),
+})
 
 
 # ── Static bake + lighting fixtures (Mission 3 pipeline, Mission 1 wiring) ──
@@ -1575,62 +1668,35 @@ def _submit_ground_decor(q, cam_x, cam_y):
             STATE.blood_decals.remove(decal)
 
 
-def _volkov_turn(target):
-    """Turn the drawn angle toward target by at most 0.25 rad per draw (shortest arc)."""
-    prev = getattr(STATE, "volkov_draw_angle", None)
-    if prev is None:
-        ang = target
-    else:
-        diff = (target - prev + math.pi) % (2 * math.pi) - math.pi
-        ang = prev + max(-0.25, min(0.25, diff))
-    STATE.volkov_draw_angle = ang
-    return ang
+# Named cast bodies are supersampled 3x and cached once per facing - the same
+# recipe M4/M5/M6 use, so Volkov in the warehouse is the cutscene/3D man.
+_M1_KIT_SS = 3
+_M1_KIT_SCALE = 0.232              # ~58 px tall (foot y+22 -> crown y-36)
+_M1_KIT_POSE = (84, 84)
+_M1_KIT_ANCHOR = (42, 48)
+
+
+def _volkov_body(right):
+    from cutscenes.figure_kit import draw_character  # lazy: cutscene module, heavy
+
+    def _bake(s):
+        big = pygame.Surface((_M1_KIT_POSE[0] * _M1_KIT_SS, _M1_KIT_POSE[1] * _M1_KIT_SS),
+                             pygame.SRCALPHA)
+        draw_character(big, "volkov", _M1_KIT_ANCHOR[0] * _M1_KIT_SS,
+                       (_M1_KIT_ANCHOR[1] + 22) * _M1_KIT_SS,
+                       _M1_KIT_SCALE * _M1_KIT_SS, right)
+        s.blit(pygame.transform.smoothscale(big, _M1_KIT_POSE), (0, 0))
+
+    return artpack.pose(("m1volkov_v1", bool(right)), _M1_KIT_POSE, _bake)
 
 
 def _draw_volkov_topdown(surface, sx, sy, angle, moving, t):
-    """Volkov built like Enemy.draw (centre-based, guard footprint * 1.05), unarmed."""
-    d_x, d_y = math.cos(angle), math.sin(angle)
-    p_x, p_y = -d_y, d_x
+    """Volkov as the figure_kit cast body, feet planted on his post/run line."""
     ph = t * 0.018
-    swing = math.sin(ph) * 4.0 if moving else 0.0
-    sway = math.sin(ph) * 1.6 if moving else math.sin(ph * 0.25) * 0.5
-    sx += p_x * sway
-    sy += p_y * sway
-    surface.blit(_enemy_shadow, (int(sx - 17), int(sy - 5)))
-
-    def pt(f, s):
-        return (sx + d_x * f + p_x * s, sy + d_y * f + p_y * s)
-
-    coat, coat_ol, coat_hi = (46, 46, 60), (14, 14, 20), (66, 66, 84)
-    skin, hair, scarf = (170, 135, 110), (14, 12, 14), (190, 50, 40)
-    glove = (10, 10, 14)
-    hw, hh = 10.5, 6.8                  # guard torso 20x13 * 1.05
-    torso = [pt(-hw, -hh), pt(hw, -hh), pt(hw, hh), pt(-hw, hh)]
-    pygame.draw.polygon(surface, coat, torso)
-    pygame.draw.polygon(surface, coat_ol, torso, 1)
-    pygame.draw.line(surface, coat_hi, pt(-4, 0), pt(4, 0), 2)
-    # Guard arms (shoulder at +-11, width 5), small gloved hands r3, no gun;
-    # they swing opposite each other on the run.
-    for side, sw in ((11, swing), (-11, -swing)):
-        hand = pt(12 + sw, side * 0.55)
-        pygame.draw.line(surface, coat, pt(0, side), hand, 5)
-        pygame.draw.circle(surface, glove, (int(hand[0]), int(hand[1])), 3)
-    if not moving:
-        cig = pt(19, 6)
-        pygame.draw.line(surface, (220, 215, 200), pt(15, 6), cig, 1)
-        pygame.draw.circle(surface, (255, 130, 60), (int(cig[0]), int(cig[1])), 1)
-    # Red scarf mark: short line at the back of the neck, behind the head.
-    pygame.draw.line(surface, scarf, pt(-7, -3), pt(-7, 3), 2)
-    # Head = guard head (r8 at +2), seen from above as slicked-back hair with
-    # a small face patch on the front third and 1px ear slivers.
-    head_r = 8
-    hx, hy = pt(2, 0)
-    pygame.draw.circle(surface, hair, (int(hx), int(hy)), head_r)
-    fx, fy = pt(2 + head_r * 0.45, 0)
-    pygame.draw.circle(surface, skin, (int(fx), int(fy)), 3)
-    for side in (head_r - 1, -(head_r - 1)):
-        ex, ey = pt(2 + 1, side)
-        pygame.draw.circle(surface, skin, (int(ex), int(ey)), 1)
+    bob = math.sin(ph) * 1.2 if moving else math.sin(ph * 0.25) * 0.5
+    surface.blit(_enemy_shadow, (int(sx - 17), int(sy - 4)))
+    surface.blit(_volkov_body(math.cos(angle) >= 0),
+                 (int(sx - _M1_KIT_ANCHOR[0]), int(sy + 4 + bob - 70)))
 
 
 def _draw_m1_van(surface, cam_x, cam_y):
@@ -1670,7 +1736,7 @@ def _draw_m1_actors(surface, cam_x, cam_y):
                                  STATE.player.rect.centerx - vpos[0])
             else:
                 ang = math.pi * 0.75    # down/left
-            _draw_volkov_topdown(surface, vx, vy, _volkov_turn(ang), False, _now_ms())
+            _draw_volkov_topdown(surface, vx, vy, ang, False, _now_ms())
     if STATE.firefight_triggered and STATE.volkov_escape_timer > 0:
         if STATE.volkov_escape_pos and not STATE.volkov_escaped:
             vx = STATE.volkov_escape_pos[0] - cam_x
@@ -1679,7 +1745,7 @@ def _draw_m1_actors(surface, cam_x, cam_y):
                 # Same target as the escape update: the bay door.
                 ang = math.atan2(29 * TILE_SIZE + 32 - STATE.volkov_escape_pos[1],
                                  15 * TILE_SIZE + 32 - STATE.volkov_escape_pos[0])
-                _draw_volkov_topdown(surface, vx, vy, _volkov_turn(ang), True, _now_ms())
+                _draw_volkov_topdown(surface, vx, vy, ang, True, _now_ms())
         if STATE.commander_escape_pos and not STATE.commander_escaped:
             kx = STATE.commander_escape_pos[0] - cam_x
             ky = STATE.commander_escape_pos[1] - cam_y + 30

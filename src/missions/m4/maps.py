@@ -1,4 +1,3 @@
-
 """Split from mission4.py - see __init__.py for the package facade.
 
 Owner module for the Mission 4 runtime map state: MISSION4_MAP (the

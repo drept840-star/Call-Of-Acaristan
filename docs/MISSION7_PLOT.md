@@ -233,10 +233,51 @@ the hayloft gives Bodi a high ledge with sight over the yard.
 - Vasile is "Captain" in `LORE.md` and "Commander" in this file. The game only shows `VASILE`.
 - Alex shouts "Trucks! Two of them - no, three!" (kept verbatim; the miscount is the joke).
 - The raid's time of day and start trigger are not defined in this doc. Night was chosen.
-- The choice labels follow the doc: "Answer Vasile" is `duty`, "Meet Vasile alone" is
-  `revenge`. Neither is marked as right.
+- The choice actions follow the doc: "Answer Vasile" is `duty`, "Meet Vasile alone" is
+  `revenge`. The screen prints only the action and the speaker, never the route word, so
+  neither channel is marked as right.
 
-**Known gaps.** Bodi and Alex have no recorded takes yet: `VO_219` to `VO_227` are manifest
+**Known gaps.** Bodi and Alex have no recorded takes yet: `VO_219` to `VO_228` are manifest
 rows listed in `KNOWN_MISSING_AUDIO`, and the lines show as captions. Only `progress="m7"` and
 the stage token are saved; `m7_preps` and the raid checkpoint are not, so resuming a save at
 `raid` starts the fight with no preps.
+
+## Second pass (2026-10-28): sound, farm work, the Fallow 12, the receiver
+
+The owner's play test found the farm silent, the tractor a cutscene, the note handoff weak and
+the ending a text dump. This pass fixes those, and adds the shotgun.
+
+- **Audio.** New `src/missions/m7/m7_audio.py`: 29 synthesised sounds (day farm bed, night bed,
+  choice hum, wildlife, footsteps, well/pour/grain/hay, generator pull/cough/backfire/catch/
+  idle, tractor idle/move/rev/stall/off/chock, receiver tune/lock), plus the shared
+  `shotgun_blast`/`shotgun_pump`/`shell_insert` in `audio/audio.py`. Farm footsteps, dialogue
+  ticks, wildlife and every interaction are wired; `M7Audio` owns its loops and stops them on
+  stage change, pause, mission reset and quit. `core/ambience.py` no longer plays the indoor
+  `room_tone` over the open farm and now adds M7 to the gust set.
+- **Generator.** Four E-taps became prime (3 taps) -> choke (timed) -> three pull strokes in a
+  moving band, with coughs/backfires and a compression meter. Misses retry; the chores set and
+  the objective text are unchanged.
+- **Tractor.** The 1.8 s tween became a five-leg driven route (reverse, hard left, down the
+  lane, swing right, set it down) with timed steering prompts, clean/sloppy input, stalls that
+  replay, and a 16-frame pre-rendered rotation. Preps and the blocking collider only change
+  when the tractor is actually parked.
+- **Fallow 12.** Pump shotgun, given by Alex with the plan. In the raid it replaces the K-9:
+  6 shells, 8 pellets (10 body / 24 head), 0.95 s pump, 2.2 s reload, shell pickups, new HUD.
+  In multiplayer it is `WPN_SHOTGUN = 4`, a crate pickup on all three maps, key 4, a fourth
+  loadout slot, and its own 2D rig (`RIGS["shotgun"]`, sharing the OS-12 finish so the
+  32-entry cosmetic catalog is untouched). Biribel's 3D hold is solved onto grip and fore-end
+  (`hold_report` support gap 0, arm depth 2.2 cm); the 2D hold passes
+  `tools/shot_weapon_grid.py` at the same 4 px grip error as the other guns.
+- **The runner film.** The folder is wrist-parented, tweened between the two figures, and given
+  its own close-up insert (`m7_runner_plan`). A new `m7_runner_shotgun` + `m7_runner_gun` pair
+  shows Alex setting the Fallow 12 into Biribel's hands (`VO_228`).
+- **The ending.** `choice.py` is now a field receiver: the real `RadioTransmission` widget
+  (portrait, typewriter, static) centred, with two physical channel cards, blinking standby
+  LEDs, a TX lamp and no route words. It is live from frame 1 (the old six-second wait is
+  gone), `1`/`2` or `A`/`D` tune, Enter transmits, and the `_S["t0"]`/`done_at` contract the
+  smoke test drives is unchanged.
+- **Gates.** `SMOKE TEST: OK` including eight new M7/arena checks; `compileall` OK;
+  `ae_hold_check` OK; `engine3d_check` OK. The unit voice test covers `VO_228`.
+
+**Still open.** Bodi/Alex takes (including `VO_228`); `m7_preps` and the raid checkpoint across
+save/resume; the choice still has no mouse input; the farm paint is unchanged by request.

@@ -1,4 +1,3 @@
-
 """Visual effects: particles, casings, breach markers, blood decals."""
 import math
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream

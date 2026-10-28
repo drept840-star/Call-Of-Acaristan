@@ -1,4 +1,3 @@
-
 """render2d.util - shared gameplay-render helpers (engine side).
 
 Promoted from missions/m3/draw.py during the Mission 1/2 graphics upgrade.

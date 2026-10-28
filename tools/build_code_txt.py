@@ -1,6 +1,6 @@
 """
 build_code_txt.py
-Selective TXT code bundle: pick files, pick folder, get TXT only (no PDF).
+Selective TXT code bundle (.py, .bat, .json, .md, configs...): pick files, pick folder, get TXT only (no PDF).
 
 Usage:
   python tools/build_code_txt.py                  (tkinter picker GUI)
@@ -14,24 +14,39 @@ import subprocess
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT_DIR = PROJECT_ROOT / "archive" / "TXTs"
+INCLUDE_EXTS = {
+    ".py", ".bat", ".cmd", ".ps1", ".sh", ".json", ".md", ".mdc", ".toml",
+    ".txt", ".csv", ".js", ".cfg", ".ini", ".yaml", ".yml", ".example",
+}
+INCLUDE_NAMES = {".gitignore", ".gitattributes"}
+MAX_BYTES = 512 * 1024
 SKIP_DIRS = {
-    "__pycache__", ".git", ".venv", "venv", "env",
+    "__pycache__", ".git", ".venv", "venv", "env", "node_modules",
     "build", "dist", ".pytest_cache", ".mypy_cache", "PDFs", "TXTs",
-    "archive",
+    "archive", "assets", "shots", "_shots", "previews", "outputs",
+    "trailers", "handoff", "crash_reports", "graphify-out",
+    ".qoder", ".opencode", ".workbuddy-ai", "SKILLS", ".wolf",
 }
 SKIP_FILES = {"build_code_pdf.py", "build_code_txt.py"}
 
 
-def find_py_files(root: Path):
+def find_source_files(root: Path):
     found = []
-    for path in root.rglob("*.py"):
+    skip_names = {s.lower() for s in SKIP_FILES}
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in INCLUDE_EXTS and path.name not in INCLUDE_NAMES:
+            continue
         try:
             rel = path.relative_to(root)
         except ValueError:
             continue
         if any(part in SKIP_DIRS for part in rel.parts):
             continue
-        if path.name.lower() in {s.lower() for s in SKIP_FILES}:
+        if path.name.lower() in skip_names:
+            continue
+        if path.stat().st_size > MAX_BYTES:
             continue
         found.append(rel)
     return sorted(found, key=lambda p: str(p).replace("\\", "/").lower())
@@ -42,7 +57,7 @@ def write_files_to_txt(files, txt_path: Path):
     for filepath in files:
         abs_path = PROJECT_ROOT / filepath
         try:
-            code = abs_path.read_text(encoding="utf-8")
+            code = abs_path.read_text(encoding="utf-8", errors="replace")
         except Exception as e:
             lines.extend([f"# {'-' * 60}", f"# {filepath} (UNREADABLE: {e})", "", ""])
             continue
@@ -91,7 +106,7 @@ def resolve_cli_files(args):
             i += 1
     if "--all" in rest or not [r for r in rest if r != "--all"]:
         if "--all" in rest and len([r for r in rest if r != "--all"]) == 0:
-            return find_py_files(PROJECT_ROOT), out_dir
+            return find_source_files(PROJECT_ROOT), out_dir
         if not [r for r in rest if r != "--all"]:
             return None, out_dir  # signal: nothing picked
     files = []
@@ -126,7 +141,7 @@ def run_gui():
     import tkinter as tk
     from tkinter import filedialog, messagebox
 
-    files = find_py_files(PROJECT_ROOT)
+    files = find_source_files(PROJECT_ROOT)
     display = [str(f).replace("\\", "/") for f in files]
 
     root = tk.Tk()
@@ -209,7 +224,7 @@ def run_gui():
     name_var = tk.StringVar(value="selected_source.txt")
     tk.Entry(name_row, textvariable=name_var, width=30).pack(side=tk.LEFT, padx=6)
 
-    status_var = tk.StringVar(value=f"{len(files)} .py files found")
+    status_var = tk.StringVar(value=f"{len(files)} files found")
     tk.Label(root, textvariable=status_var).pack(padx=10, pady=2)
 
     def do_build():

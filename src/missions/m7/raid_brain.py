@@ -22,6 +22,7 @@ TRUCK_SPEED = 12.0
 TRUCK_START_Z = -80.0
 ALEX_HP, BODI_HP = 80, 100
 ALEX_UP_S, BODI_DOWN_S = 8.0, 20.0
+ALEX_LEASH = 13.0                 # Alex fights within this many metres of Biribel
 
 # kind, x, z, route, delay (s)
 ORCHARD = [
@@ -61,6 +62,17 @@ def _clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
 
 
+def _fall_from(e, src):
+    """Push direction away from the shooter, and whether he was shot from the front."""
+    yaw = math.radians(e["yaw"])
+    fx, fz = math.sin(yaw), math.cos(yaw)
+    if src is None:
+        return -fx, -fz, True
+    dx, dz = e["x"] - src[0], e["z"] - src[1]
+    d = math.hypot(dx, dz) or 1.0
+    return dx / d, dz / d, fx * -dx + fz * -dz > 0.0
+
+
 class Brain:
     def __init__(self, scene):
         self.s = scene
@@ -76,7 +88,8 @@ class Brain:
                          state="up", down_at=0.0, loft=loft, moving=False, next=2.0, aim=-9.0,
                          goal=None, revive=0.0)
         self.alex = dict(x=-3.4, z=-1.0, y=0.0, yaw=0.0, hp=ALEX_HP, state="up", up_at=0.0,
-                         pinned=False, moving=False, next=2.5, aim=-9.0, pull=0.0)
+                         pinned=False, moving=False, next=2.5, aim=-9.0, pull=0.0, burst=0,
+                         spot=None, replan=0.0, target_slot=None, follow_goal=None, follow_at=0.0)
 
     # --- waves -----------------------------------------------------------------
 
@@ -193,7 +206,9 @@ class Brain:
             e["alive"] = False
             e["dead_t"] = self.s.t
             e["mags"] = 1
-            e["dead_pose"] = "dead_back" if e["slot"] % 2 else "dead_front"
+            ux, uz, front = _fall_from(e, src)
+            e["fall_dir"] = (ux, uz)
+            e["dead_pose"] = "dead_back" if front else "dead_front"
             self.s.kills += 1
             return True
         return False
@@ -202,7 +217,7 @@ class Brain:
         x, y, z = e["x"], e["y"], e["z"]
         if e["kind"] == "dog":
             return [((x, y + 0.6, z), 0.5, False)]
-        return [((x, y + 1.1, z), 0.42, False), ((x, y + 1.62, z), 0.2, True)]
+        return [((x, y + 1.1, z), 0.5, False), ((x, y + 1.62, z), 0.25, True)]
 
     def _shoot(self, e, tgt, now):
         s = self.s
@@ -388,20 +403,20 @@ class Brain:
         return best, bd
 
     def _ally_shot(self, a, e, d, dmg, acc, now, y):
-        muzzle = (a["x"], a["y"] + 1.35, a["z"])
+        muzzle = a.get("muzzle") or (a["x"], a["y"] + 1.35, a["z"])
         a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
         a["aim"] = now
         ty = e["y"] + 1.1
         if self.rng.random() < _clamp(acc - d * 0.008, 0.2, 0.9):
             end = (e["x"], ty, e["z"])
-            self.hurt_enemy(e, dmg)
+            self.hurt_enemy(e, dmg, (a["x"], a["z"]))
         else:
             end = (e["x"] + (self.rng.random() - 0.5) * 2.0, ty, e["z"] + (self.rng.random() - 0.5) * 2.0)
         self.s.tracer(muzzle, end)
         self.s.flash(muzzle)
 
     def _alex_update(self, dt, now):
-        a, s = self.alex, self.s
+        a = self.alex
         a["moving"] = False
         if a["state"] == "down":
             if now >= a["up_at"]:
@@ -411,19 +426,80 @@ class Brain:
         if a["pinned"]:
             self._walk(a, W.WELL_PIN[0], W.WELL_PIN[1], 4.0, dt, 0.3)
             return
-        sy = math.radians(s.yaw)
-        fx, fz = math.sin(sy), math.cos(sy)
-        rx, rz = math.cos(sy), -math.sin(sy)
-        gx, gz = s.px + fx * 1.2 - rx * 2.8, s.pz + fz * 1.2 - rz * 2.8     # ahead-left, out of the boom
-        d = math.hypot(gx - a["x"], gz - a["z"])
         e, ed = self._target_for_ally(a["x"], a["z"], 32.0)
-        if d > 2.0:
-            self._walk(a, gx, gz, 5.0 if d > 9.0 else 3.6, dt, 0.32)
-        if e is not None and now >= a["next"] and not a["moving"]:
-            self._ally_shot(a, e, ed, 12, 0.66, now, 1.2)
-            a["next"] = now + 0.8 + 0.4 * self.rng.random()
-        elif e is not None and not a["moving"]:
+        if e is None:
+            a["target_slot"], a["spot"] = None, None
+            self._alex_near_player(a, dt)
+            return
+        # Pick a firing position once per target.  Re-solving every 2.5 seconds
+        # made Alex chase a moving optimum around the player instead of holding
+        # a useful lane.  Keep the chosen position until the target changes.
+        if a["spot"] is None or a["target_slot"] != e["slot"]:
+            a["target_slot"] = e["slot"]
+            a["spot"] = self._alex_spot(a, e)
+        if a["spot"] is None:
+            self._alex_near_player(a, dt)
+            return
+        sx, sz = a["spot"]
+        if math.hypot(sx - a["x"], sz - a["z"]) > 0.55:
+            self._walk(a, sx, sz, 3.8, dt, 0.32)
+        if a["moving"]:
+            return
+        if now < a["next"]:
             a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
+            return
+        if a["burst"] <= 0:
+            a["burst"] = 3
+        self._ally_shot(a, e, ed, 12, 0.66, now, 1.2)
+        a["burst"] -= 1
+        a["next"] = now + (0.42 if a["burst"] else 1.1 + 0.4 * self.rng.random())
+
+    def _alex_near_player(self, a, dt):
+        """Hold a calm trailing position; only close distance when genuinely left behind."""
+        s = self.s
+        d_player = math.hypot(s.px - a["x"], s.pz - a["z"])
+        # Do not orbit around Biribel to maintain an exact moving formation point.
+        # Refresh the trailing point occasionally, and only pursue outside a wide leash.
+        if d_player < 6.0:
+            a["follow_goal"] = None
+            return
+        if a["follow_goal"] is None or s.t >= a["follow_at"]:
+            sy = math.radians(s.yaw)
+            fx, fz = math.sin(sy), math.cos(sy)
+            rx, rz = math.cos(sy), -math.sin(sy)
+            a["follow_goal"] = (s.px - fx * 2.0 - rx * 2.0,
+                                s.pz - fz * 2.0 - rz * 2.0)
+            a["follow_at"] = s.t + 1.6
+        gx, gz = a["follow_goal"]
+        if math.hypot(gx - a["x"], gz - a["z"]) > 1.2:
+            self._walk(a, gx, gz, 4.0, dt, 0.32)
+
+    def _alex_spot(self, a, e):
+        """A spot Alex can shoot from: a few metres off, inside the leash on Biribel, next to
+        cover when it can be, and off Biribel's line to the target when it can be (a flank)."""
+        s = self.s
+        bearing = _yaw(e["x"] - s.px, e["z"] - s.pz)
+        best, best_score = None, None
+        for k in range(16):
+            ang = math.tau * k / 16.0
+            for r in (3.0, 5.5, 8.0):
+                x, z = a["x"] + math.cos(ang) * r, a["z"] + math.sin(ang) * r
+                if math.hypot(x - s.px, z - s.pz) > ALEX_LEASH:
+                    continue
+                if math.hypot(x - e["x"], z - e["z"]) < 6.0 or s.world.blocked(x, z):
+                    continue
+                if any(s.world.blocked(a["x"] + (x - a["x"]) * k / 6.0, a["z"] + (z - a["z"]) * k / 6.0)
+                       for k in range(1, 6)):
+                    continue
+                if not s.world.los((x, z), (e["x"], e["z"]), dyn=e["truck"] is None):
+                    continue
+                off = abs((_yaw(x - s.px, z - s.pz) - bearing + 180.0) % 360.0 - 180.0)
+                near = any(s.world.blocked(x + ox, z + oz, 0.2)
+                           for ox, oz in ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)))
+                score = -r + (4.0 if off > 35.0 else 0.0) + (2.0 if near else 0.0)
+                if best_score is None or score > best_score:
+                    best, best_score = (x, z), score
+        return best
 
     def _bodi_update(self, dt, now):
         b = self.bodi

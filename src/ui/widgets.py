@@ -1,4 +1,3 @@
-
 """Split from menu.py - see menu.py (shim) for the map."""
 import math
 import pygame
@@ -313,52 +312,3 @@ def _lerp_dt(current, target, speed_per_sec, dt):
     # Equivalent to applying `* k` per-frame where k = 1 - exp(-speed * dt).
     k = 1.0 - math.exp(-speed_per_sec * dt)
     return current + (target - current) * k
-
-# ------------------------------------------------------------
-# tools\assemble_final_trailer.py
-# ------------------------------------------------------------
-
-"""assemble_final_trailer.py - Post-production assembler for CALL OF ACARISTAN.
-
-Takes the three clean combat acts captured by Terminal 8
-(``trailers/fresh_action/act{1,2,3}.mp4``), splices the game's own title /
-divider / stamp / end cards between them, and mixes a trailer audio bed
-against the in-repo SFX + radio bank.
-
-Design notes
-------------
-* Title cards are NOT re-implemented. They are rendered headless through the
-  game's existing card renderer (``tools/render_trailer_v2.card`` for the
-  PLAN_2 title/divider/stamp finish, ``tools/render_trailer.end_card`` for the
-  AI-4 CTA lockup), so the cards match the in-game look (Oswald / IBM Plex
-  Mono, 255,120,0 accent, vignette, fade finish) instead of being an ffmpeg
-  re-creation that drifts.
-* The picture is assembled with ffmpeg's ``concat`` *filter* (not the demuxer)
-  so a timebase mismatch in the acts cannot silently desync A/V. Every row is
-  normalised to 1000x700 @ 30 fps CFR yuv420p and trimmed to its EDL duration
-  before the join.
-* Final grade follows ``docs/PLAN_3_AUDIO.md`` §5: 1000x700 blur-padded into
-  1920x1080 over a darkened blurred background, audio loudnorm'd to
-  -14 LUFS / -2 dBTP.
-* Audio arrangement follows ``docs/PLAN_3_AUDIO.md`` §1 (arrangement),
-  §2.2 (radio filters), §3 (hit stacks) and §4 (beat-sync map), retimed onto
-  this assembly's EDL. 100 BPM grid = 0.6 s; every cut lands on the grid.
-* **Gunshots are foley-driven, never hand-placed.** The acts are silent -
-  ``tools/record_fresh_action.py`` captures with ``SDL_AUDIODRIVER=dummy`` and
-  ``set_master_volume(0)``, so it logs every live shot to an
-  ``act<N>.foley.json`` sidecar instead of an audio track. Guessing shot times
-  here (the old ``4.2 + i*1.4`` loops) put reports on empty picture and left
-  real muzzle flashes dry. ``tools/build_sfx_stem.py`` re-renders the real
-  ``sfx_wav/`` stacks at the logged ticks; this script calls it with this EDL's
-  act offsets and mixes the result as the diegetic stem.
-
-Usage
------
-    python assemble_final_trailer.py
-    python assemble_final_trailer.py --probe          # print the EDL only
-    python assemble_final_trailer.py --keep-stems     # keep intermediate wavs
-
-Output
-------
-    trailer_final_master.mp4
-"""

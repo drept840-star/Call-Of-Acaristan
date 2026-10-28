@@ -624,4 +624,3 @@ if __name__ == "__main__":
         editor_main()
     else:
         rt.main()
-

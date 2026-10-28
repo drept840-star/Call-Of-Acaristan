@@ -1,4 +1,4 @@
-"""Mission 7 films: the dawn drop-off (beat 1) and the burning farm (beat 6).
+"""Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6).
 
 Scene renderers take ``(surface, t_ms)``.  They are registered lazily from
 ``missions/m7/meta.py`` (``M7_SCENES`` maps scene id -> module and function), so
@@ -10,6 +10,7 @@ import pygame
 
 from core.outfits import OUTFIT_GUARD
 from engine3d.core import Mesh, box
+from engine3d.hold import hold_cached as _hold_cached
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as F
@@ -38,10 +39,16 @@ def dropoff_lift(surface, t):
     F.mist(r, t, seed=11)
     F.sun(r, t, (96.0, 9.0, 40.0))
     lift = F.k(t, 700, 3300)
-    hp = (FIELD_PAD[0] - 26.0 * lift ** 1.5, 20.0 * lift ** 1.7, FIELD_PAD[2] + 5.0 * lift)
+    # departure: keeps the lift's heading, gathers speed, noses down and climbs out of frame
+    dep = F.k(t, 3600, 4400)
+    go = dep * dep
+    hp = (FIELD_PAD[0] - 26.0 * lift ** 1.5 - 150.0 * go,
+          20.0 * lift ** 1.7 + 25.0 * dep,
+          FIELD_PAD[2] + 5.0 * lift + 21.0 * go)
     yaw = _face(FIELD_PAD, (-95.0, 0.0, 22.0))
-    _w.helicopter(r, t, hp, yaw=yaw, rotor_speed=0.95, pitch=7.0 * lift, bank=-5.0 * lift,
-                  blur=0.9)
+    if dep < 1.0:
+        _w.helicopter(r, t, hp, yaw=yaw, rotor_speed=0.95, pitch=7.0 * lift + 8.0 * dep,
+                      bank=-5.0 * lift * (1.0 - dep), blur=0.9)
     wash = max(0.0, 1.0 - lift * 1.15)
     if wash > 0.02:
         r.add_sprite((FIELD_PAD[0], 0.4, FIELD_PAD[2]),
@@ -96,7 +103,7 @@ def dropoff_fence(surface, t):
 def _burn(t, eye, tgt, fov, seed, grow=1.0, fall=0.0, boost=0.0, hh=0.008, extra=()):
     r, buf = F.stage("burn", t, eye, tgt, fov, lights=F.burn_lights(t, boost) + list(extra),
                      hh=hh, seed=seed)
-    F.burn_fx(r, t, grow)
+    F.burn_fx(r, t, grow, layer=2)
     F.burn_roof(r, fall)
     return r, buf
 
@@ -176,3 +183,67 @@ def endcard(surface, t):
         a = int(190 * (1.0 - age))
         if 0 <= x < w and 0 <= y < h and a > 20:
             surface.fill((a, int(a * 0.5), int(a * 0.18)), (x, y, 2, 2))
+
+
+def _raidin_convoy(r, t):
+    """The Guard convoy, still far up the valley: three trucks crawling north
+    from the far end of the track, headlights small through the night fog.
+    They never reach the yard in this film - in the raid the trucks come up
+    the track only in wave 2, and that is when Alex calls them (VO_226)."""
+    from missions.m7 import raid_world as RW  # lazy: the raid meshes, loaded on first draw
+    z = -84.0 + 6.0 * F.k(t, 0, 4200)          # ~1.5 m/s crawl; the lead ends near wave 2's start
+    truck = RW.truck()
+    for dz in (0.0, -7.5, -15.0):
+        zz = z + dz
+        _w.add(r, RW.placed(truck, 0.0, 0.0, zz, 0.0))
+        for sx in (-0.7, 0.7):
+            r.add_sprite((sx, 1.35, zz + 2.85),
+                         _fx.glow((255, 236, 200), 0.5, t, core=(255, 248, 230), intensity=0.7,
+                                  max_px=18), layer=_fx.FX_LAYER)
+
+
+def _ally(r, name, pos, face, t, seed):
+    key = ("ally", name)
+    pose = _hold_cached(_w.hum(key), _pose(), "rifle", "ready", key=("m7film", name))
+    _w.actor(r, key, pose, pos, _face(pos, face), t, seed=seed, amp=0.2, rifle_on=True, mouth=0.0)
+
+
+def raidin_road(surface, t):
+    """Night. Far up the valley the Guard convoy crawls, headlights on; the
+    track below the yard stays empty.  The trucks are wave 2's problem."""
+    eye = (2.6, 2.4, 2.0)
+    tgt = (0.0, 1.1, -40.0)
+    r, buf = F.stage("raid", t, eye, tgt, 40, hh=0.006, seed=47)
+    _raidin_convoy(r, t)
+    F.finish(surface, r, buf, 47, "M7", t)
+
+
+def raidin_yard(surface, t):
+    """'Eyes on the trees, not the track.' Biribel, Bodi and Alex at the east
+    gate: raid wave 1's vanguard - the dog, then two riflemen - works in from
+    the orchard treeline while the convoy lights stay far up the valley."""
+    from missions.m7 import raid_world as RW  # lazy: the raid meshes, loaded on first draw
+    me, bodi, alex = (17.2, 0.0, 0.3), (15.2, 0.0, 2.2), (16.8, 0.0, -1.9)
+    orch = (34.0, 0.0, 2.0)
+    eye, tgt = (-5.4, 2.05, 7.6), (24.0, 1.25, 1.2)
+    r, buf = F.stage("raid", t, eye, tgt, 46, hh=0.006, seed=53)
+    # the vanguard, staged like raid_brain.ORCHARD: the dog trots in first,
+    # two riflemen thread the trees behind it (east -> the gate at x 20).
+    du = F.k(t, 200, 3600)
+    d = F.mix((37.5, 0.0, 5.5), (26.0, 0.0, 1.4), du)
+    gait = du * 12.2                            # metres walked so far
+    _w.add(r, RW.placed(RW.dog(int(gait * 3.0) % 4), d[0], 0.0, d[2],   # raid_brain
+                        _face(d, (20.0, 0.0, 0.4))))                     # frames the trot the same way
+    for seed, a, b, delay in ((71, (42.5, 0.0, 9.0), (33.5, 0.0, 5.0), 0),
+                              (72, (44.0, 0.0, -4.5), (36.5, 0.0, -1.5), 500)):
+        g = F.mix(a, b, F.k(t, delay, 3800))
+        _w.actor(r, ("guard", "rifle"), F.walk_pose(t + delay, 0.75), g,
+                 _face(g, (20.0, 0.0, 0.0)), t, seed=seed, amp=0.25, rifle_on=True,
+                 hd=True, mouth=0.0, expression="neutral")
+    gun = _hold_cached(_w.hum(_BIRI, flags=("shotgun",)), _pose(), "shotgun", "ready",
+                       key=("m7film", "biribel"))
+    _w.actor(r, _BIRI, gun, me, _face(me, orch), t, seed=52, amp=0.2, rifle_on=True,
+             flags=("shotgun",), expression="neutral")
+    _ally(r, "bodi", bodi, orch, t, 61)
+    _ally(r, "alex", alex, orch, t, 62)
+    F.finish(surface, r, buf, 53, "M7", t)

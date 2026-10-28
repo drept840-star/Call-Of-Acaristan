@@ -1,4 +1,3 @@
-
 """fsm.py - Finite State Machine infrastructure for Acaristan.
 
 AEGIS-Pygame standard: game flow is governed by a strict FSM with

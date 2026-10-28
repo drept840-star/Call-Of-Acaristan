@@ -121,7 +121,7 @@ def _act_table():
     from missions.m3 import maps as m3maps
     return [
         dict(n=1, key="act1", label="ACT I - BLACK NOTEBOOK",
-             starter="gc.start_mission(preserve_timer=True)", cli="--dev-m1",
+             starter="gc.start_mission(preserve_timer=True)", cli="--dev-m1-game",
              boot=lambda: gc.start_mission(preserve_timer=True),
              tmap=mission1_map, solids=("C", "W")),
         dict(n=2, key="act2", label="ACT II - QUIET ON ROUTE 12",
@@ -1005,4 +1005,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -1,4 +1,3 @@
-
 """Death animation - Option B (Standard).
 
 Fires when player HP hits 0. Plays a 2-second cinematic sequence before
@@ -262,6 +261,29 @@ def should_skip_player_draw():
     instead, so the standing player sprite doesn't show through the rotation.
     """
     return STATE.death_anim_phase >= 1
+
+
+def reset_stale_visuals():
+    """Clear death-anim visuals a mission start may inherit from a death.
+
+    STATE.reset() (core/state.py) already clears these, so every start path
+    that calls it is safe. m1.start_mission() instead hand-rolls its reset
+    (main.py) and covers player_dead/death_timer/request_death_screen but
+    NOT the death_anim_* fields. After a death the stale leftovers are:
+
+      death_anim_phase == 2 + death_time_scale/accumulator
+        -> game_update() returns early forever: the "invisible player" bug
+           (world renders frozen, player never drawn, DEATH-state render).
+      death_camera_tilt/y_offset (12deg/+35) -> every M1/M2/M3 frame stays
+        rotated and shifted via apply_camera_tilt.
+
+    Cheap, safe to call from every mission start path.
+    """
+    STATE.death_anim_phase = 0
+    STATE.death_time_scale = 1.0
+    STATE._death_frame_accumulator = 0.0
+    STATE.death_camera_tilt = 0.0
+    STATE.death_camera_y_offset = 0.0
 
 
 def draw_death_overlay(surface, fcx, fcy):

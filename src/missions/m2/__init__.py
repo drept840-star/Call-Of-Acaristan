@@ -1,4 +1,3 @@
-
 """Package missions/m2 - re-export facade. Parts: meta.py, world.py, starts.py, sniper.py, update.py, draw.py."""
 """Mission 2: Quiet on Route 12 - clean cinematic vertical slice.
 

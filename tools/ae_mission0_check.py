@@ -29,7 +29,15 @@ import sys
 # Re-frozen again for Mission 6: engine.ui.std.minimap gains the "m6"
 # palette (border-night tiles), a deliberate engine-side widget extension
 # justified in docs/engine/reports/phase10.md ("Mission 6 addendum").
-ENGINE_TREE_SHA = "7a71e955fd9559bd1ca1d195ff22886c0210ec8deb7c0f0b9be655def017b59d"  # M6 minimap palette
+# Re-frozen 2026-10-27 (91 files): the Oct 21 engine.ai + engine.collision
+# subsystems (enemy brains, BoxWorld/GridNav for the M6 yard guards,
+# e527451), the Oct 26 MP/HUD/M6 sweep (6a8379c: figure_kit, _artpack,
+# scene/stack, objective_banner), and the 2026-10-27 engine.ai facade
+# re-exports that satisfy boundary rule E4 - all deliberate engine-side
+# work, summarised in docs/engine/reports/phase10.md ("2026-10-27
+# addendum"). The Phase 10 e26ff0bd... value remains the historical
+# zero-diff proof for Mission 0's own construction.
+ENGINE_TREE_SHA = "356f0326601f3841b9f283c80cdd106c6464117b0de701951ee6f74c4774dfcb"  # 2026-10-27 ai+collision subsystems, MP/HUD sweep, ai facade
 
 
 def engine_tree_sha(root):

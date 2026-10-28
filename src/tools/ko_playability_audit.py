@@ -1,4 +1,3 @@
-
 """Kill Order (Mission 3 Phase 5) playability audit - headless.
 
 Answers "is the map REALLY 100% playable?" with nine checks:

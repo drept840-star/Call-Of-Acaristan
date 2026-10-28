@@ -19,8 +19,8 @@ FARM_GRID = [
     "#.HHHH...B...B#",
     "#.HHHH...B...B#",
     "#.HHHH...BB.BB#",
-    "#.......N...TT#",
-    "#......W......#",
+    "#...........TT#",
+    "#.......W.N...#",
     "#........fffff#",
     "#sss.....f....#",
     "#....G........#",
@@ -31,8 +31,8 @@ SOLID = frozenset("#HBWGTNsf")
 PLAYER_TILE = (4.5, 4.5)
 BODI_TILE = (6.5, 4.5)
 LOFT_TILE = (10.5, 1.4)     # beat 4: Bodi in the hayloft
-ALEX_TILE = (7.5, 7.0)      # beat 4: Alex waits by his bike
-BIKE_AT = (8.5, 7.6)
+ALEX_TILE = (9.5, 8.5)      # beat 4: Alex waits by his bike
+BIKE_AT = (10.5, 8.5)
 # Beat 4: the tractor parks across the track mouth (pixel top-left of its sprite).
 TRACTOR_PARK = (int(6.5 * TILE), 8 * TILE)
 
@@ -43,11 +43,29 @@ PEN = (10, 7, 4, 2)
 TROUGH = (11, 7)            # col, row of the first of its two tiles
 TRACTOR_AT = (12, 4)        # col, row of its two tiles
 
+# A clear reversing lane, followed by low-speed stationary steering manoeuvres.
+# The feed bin and well stand south of this lane, not across it.
+TRACTOR_ROUTE = (
+    ((13.0, 4.5), (7.0, 4.5), 0.0, 0.0, "s", "REVERSE ALONG THE YARD"),
+    ((7.0, 4.5), (7.0, 4.5), 0.0, -90.0, "a", "TURN THE WHEELS LEFT"),
+    ((7.0, 4.5), (7.0, 7.0), -90.0, -90.0, "s", "BACK DOWN THE LANE"),
+    ((7.0, 7.0), (7.0, 7.0), -90.0, -180.0, "a", "TURN TOWARD THE TRACK"),
+    ((7.0, 7.0), (7.5, 7.0), -180.0, -180.0, "s", "BACK INTO POSITION"),
+    ((7.5, 7.0), (7.5, 7.0), -180.0, -90.0, "d", "STRAIGHTEN FOR THE TRACK"),
+    ((7.5, 7.0), (7.5, 8.5), -90.0, -90.0, "s", "BACK TO THE GATE"),
+    ((7.5, 8.5), (7.5, 8.5), -90.0, 0.0, "d", "BLOCK THE TRACK"),
+)
+
+
+def tractor_route_px():
+    return tuple((a[0] * TILE, a[1] * TILE, b[0] * TILE, b[1] * TILE, h0, h1, key, label)
+                 for a, b, h0, h1, key, label in TRACTOR_ROUTE)
+
 # Interaction points: tile-centre coordinates and reach in pixels.
 POINTS = {
     "generator": {"at": (5.5, 8.5), "reach": 84},
-    "well": {"at": (7.5, 5.5), "reach": 92},
-    "bin": {"at": (8.5, 4.5), "reach": 86},
+    "well": {"at": (8.5, 5.5), "reach": 92},
+    "bin": {"at": (10.5, 5.5), "reach": 86},
     "trough": {"at": (12.0, 7.5), "reach": 92},
     "hay": {"at": (12.5, 1.5), "reach": 80},
     "porch": {"at": (3.0, 4.5), "reach": 52},

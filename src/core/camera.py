@@ -1,4 +1,3 @@
-
 """Shared camera and bullet helpers.
 
 This module exists to stop mission.py and mission2.py from each rolling their
@@ -21,7 +20,7 @@ import engine.render2d as _cam2d  # RPE6 P6-M4: follow/clamp/shake math is engin
 
 import pygame
 
-from core.config import WIDTH, HEIGHT, TILE_SIZE, C_BULLET, bullet_glow
+from core.config import WIDTH, HEIGHT, TILE_SIZE, C_BULLET, bullet_glow, get_scaled_mouse
 from core.state import STATE
 from core.user_settings import SETTINGS  # RPE6 P9: live accessibility values
 
@@ -37,7 +36,9 @@ CAM_EASE_M3_BREACH_TRACK = 0.22  # M3 Volkov-breach tight track
 CAM_DEADZONE_PX = 16.0     # follow deadzone half-size (gameplay follow only -
                            # focus pulls and sniper anchors need exact arrival)
 CAM_LOOKAHEAD_PX = 48.0    # aim-direction lookahead for shooter missions
-CAM_LOOKAHEAD_WALK_PX = 40.0  # movement-direction lookahead for the walk sim
+CAM_MOUSE_LEAN_MAX_PX = 170.0  # max camera lean toward the mouse cursor
+CAM_MOUSE_LEAN_GAIN = 0.40     # fraction of cursor-from-centre offset applied
+CAM_LOOKAHEAD_WALK_PX = 40.0 # movement-direction lookahead for the walk sim
 CAM_SHAKE_DECAY = 1        # shake amplitude decay per frame
 CAM_KICK_DECAY = 0.82      # recoil kick exponential decay per frame
 
@@ -217,6 +218,22 @@ def aim_lookahead(aim_angle, lookahead_px=CAM_LOOKAHEAD_PX):
     return (math.cos(aim_angle) * lookahead_px, math.sin(aim_angle) * lookahead_px)
 
 
+def mouse_lookahead(max_px=CAM_MOUSE_LEAN_MAX_PX, gain=CAM_MOUSE_LEAN_GAIN):
+    """World-space camera lean toward the mouse cursor: the offset of the
+    cursor from the screen centre, scaled and capped, so the view slides
+    toward whatever the player points at. None when the cursor is unavailable."""
+    try:
+        mx, my = get_scaled_mouse()
+    except Exception:
+        return None
+    ox = (mx - WIDTH / 2) * gain
+    oy = (my - HEIGHT / 2) * gain
+    d = math.hypot(ox, oy)
+    if d > max_px:
+        ox, oy = ox * max_px / d, oy * max_px / d
+    return (ox, oy)
+
+
 def follow_step(cur_x, cur_y, desired_x, desired_y, *, ease=CAM_EASE_GAMEPLAY,
                 deadzone_px=CAM_DEADZONE_PX, who="follow_step"):
     """One frame of deadzone + ease toward a desired top-left. Pure math for
@@ -246,8 +263,8 @@ def follow_gameplay(target, map_w=None, map_h=None, *, aim_angle=None,
     stage swaps don't lurch. Returns update_camera's render position.
     """
     _count(who)
-    if lookahead is None:
-        lookahead = aim_lookahead(aim_angle, lookahead_px)
+    if lookahead is None and aim_angle is not None:
+        lookahead = mouse_lookahead() or aim_lookahead(aim_angle, lookahead_px)
     return update_camera(target, map_w=map_w, map_h=map_h, focus_factor=ease,
                          deadzone_px=deadzone_px, lookahead=lookahead, **overrides)
 

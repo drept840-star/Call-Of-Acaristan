@@ -1,4 +1,3 @@
-
 """sprite_lib.py - tiny cached PNG loader with graceful fallback.
 
 The game is fully procedural by default; a handful of hero interactables

@@ -507,8 +507,17 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
             if "rifle" in flags and not hd:
                 h._rifle = _k9_rig_mesh()
                 h._weapon = "k9"
+            elif "shotgun" in flags and not hd:
+                from engine3d.rig import shotgun_mesh
+                h._rifle = shotgun_mesh()
+                h._weapon = "shotgun"
+                h._muzzle_z = 0.70
+                # GL caches rig VBOs by spec repr; the shotgun needs its own.
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|shotgun"
         elif isinstance(key, tuple) and key[0] == "guard":
             h = _guard_humanoid(key[1], extra)
+        elif isinstance(key, tuple) and key[0] == "ally":
+            h = humanoid3d(key[1], rifle="rifle", **extra)
         elif key == "guard":
             from engine3d import Humanoid
             h = Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra))

@@ -322,4 +322,3 @@ card(["CALL OF ACARISTAN",
 proc.stdin.close()
 proc.wait()
 print("saved", OUT, os.path.getsize(OUT) // 1024, "KB")
-

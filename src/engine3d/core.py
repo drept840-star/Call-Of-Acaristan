@@ -435,6 +435,12 @@ class SoftwareRenderer:
         self.objs = []
         self.set_camera((0, 2, -10), (0, 1, 0), 60)
         self._items = []
+        # Per-frame stats dict, shared API with GLRenderer (which re-creates
+        # it in its own __init__ and replaces it wholesale in _render; the
+        # composite layer writes light counters into it).  Living here keeps
+        # context-free GLRenderer test construction (object.__new__ +
+        # SoftwareRenderer.__init__) attribute-complete.
+        self.stats = {}
 
     # resolution -----------------------------------------------------------
     def resize(self, w, h):

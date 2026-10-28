@@ -108,7 +108,9 @@ SEGMENTS = {
                         (150, 154, "key", "K_ESCAPE"), (200, 204, "key", "K_DOWN"),
                         (240, 244, "key", "K_UP"), (300, 304, "key", "K_DOWN"),
                         (330, 334, "key", "K_DOWN"), (360, 364, "key", "K_UP")]},
-    "m1":   {"args": ["--dev-m1"], "script": _MOVE},
+    # --dev-m1-game (not --dev-m1, which now plays the m1.dropoff opening cut
+    # before gameplay; the scripted-input oracle needs the mission live at f0).
+    "m1":   {"args": ["--dev-m1-game"], "script": _MOVE},
     "walk": {"args": ["--dev-walk"], "script": _MOVE},
     "m2":   {"args": ["--dev-mission2-game"], "script": _MOVE},
     "m3":   {"args": ["--dev-mission3-game"], "script": _MOVE},

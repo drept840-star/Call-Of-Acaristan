@@ -1,4 +1,3 @@
-
 """Renderer for multiplayer arena matches.
 
 Separate from ``missions/arena.py`` on purpose. That module is the
@@ -39,7 +38,7 @@ from net import protocol as P
 from missions import arena as AR
 from engine.text import T as _T  # RPE6 Phase 4 text table
 from engine.ui import Theme as _Theme
-from engine.ui.std import health_bar as _health_bar
+from engine.ui import health_bar as _health_bar
 from entities.art_cache import get_panel_bg as _get_panel_bg
 
 # ── shooting feel constants ──
@@ -83,12 +82,12 @@ PISTOL_REACH_PX = 39.0
 # The wire carries a small weapon id; the shared Player sprite branches on
 # one of "pistol"/"os12"/"k9_smg". Anything unrecognised falls back to the
 # pistol, so a hostile or newer id can never leave a player gun-less.
-_RIG_BY_WPN = {P.WPN_OS12: "os12", P.WPN_K9: "k9_smg"}
+_RIG_BY_WPN = {P.WPN_OS12: "os12", P.WPN_K9: "k9_smg", P.WPN_SHOTGUN: "shotgun"}
 _DEFAULT_RIG = "pistol"
 # Reach per rig, mirroring Player.barrel_tip()'s arm+grip+gun+muzzle sum:
-# pistol 16+4+17+2, OS-12 16+4+26+3, K-9 16+4+18+5. Used to put the muzzle
-# flash and the start of a bolt at the end of THIS player's gun.
-_REACH_BY_RIG = {"pistol": PISTOL_REACH_PX, "os12": 49.0, "k9_smg": 43.0}
+# pistol 16+4+17+2, OS-12 16+4+26+3, K-9 16+4+18+5, Fallow 16+4+32+4. Used to
+# put the muzzle flash and the start of a bolt at the end of THIS player's gun.
+_REACH_BY_RIG = {"pistol": PISTOL_REACH_PX, "os12": 49.0, "k9_smg": 43.0, "shotgun": 56.0}
 
 
 def rig_for_weapon(weapon):
@@ -586,7 +585,8 @@ class ArenaView(object):
                 col = (110, 170, 255)
             else:
                 col = {P.WPN_OS12: (235, 150, 70),
-                       P.WPN_K9: (200, 120, 235)}.get(value, (200, 200, 200))
+                       P.WPN_K9: (200, 120, 235),
+                       P.WPN_SHOTGUN: (176, 200, 112)}.get(value, (200, 200, 200))
             self._draw_crate(surface, x, y, col, kind, value,
                                wx=px, wy=py)
 
@@ -696,7 +696,13 @@ class ArenaView(object):
                                  (cx - 5, cy + 1)])
             return
         # Weapon crates get a silhouette, sized to the gun inside: long for
-        # the rifle, short and thin for the SMG.
+        # the rifle, short and thin for the SMG, twin-tube for the shotgun.
+        if value == P.WPN_SHOTGUN:
+            pygame.draw.rect(surface, (222, 228, 238), (cx - 7, cy - 3, 14, 2))
+            pygame.draw.rect(surface, (222, 228, 238), (cx - 5, cy, 5, 3))
+            pygame.draw.rect(surface, (222, 228, 238), (cx - 9, cy - 2, 3, 5))
+            pygame.draw.rect(surface, col, (cx + 6, cy - 4, 2, 2))
+            return
         barrel = 11 if value == P.WPN_OS12 else 8
         pygame.draw.rect(surface, (222, 228, 238),
                          (cx - barrel // 2, cy - 3, barrel, 3))
@@ -876,15 +882,15 @@ class ArenaView(object):
         from core.config import Casing, audio
         from fx.effects import shake, spawn_particles
         rad = math.radians(angle_deg)
+        stats = AR.weapon_stats(weapon) if weapon is not None else None
 
         # Gunshot, at the same level as the M1 pistol. The arena previously
         # fired in total silence, which is most of why it did not feel like
-        # the campaign.
-        audio.play("gunshot", volume=GUNSHOT_VOLUME)
+        # the campaign. A weapon may name its own report.
+        audio.play((stats or {}).get("sound", "gunshot"), volume=GUNSHOT_VOLUME)
 
         # Camera kick and screen shake for THIS gun, from the same table the
         # sim uses. Aiming right kicks the view left, which sells the weight.
-        stats = AR.weapon_stats(weapon) if weapon is not None else None
         kick = stats["kick"] if stats else RECOIL_KICK_PX
         shake_amount = stats["shake"] if stats else SHAKE_AMOUNT
         self.apply_recoil_kick(angle_deg, kick)
@@ -1531,7 +1537,7 @@ class ArenaView(object):
             return
         owned = set(carry) if carry is not None else None
         look = self.look_for(self._local_id)
-        slots = ((1, P.WPN_PISTOL), (2, P.WPN_OS12), (3, P.WPN_K9))
+        slots = ((1, P.WPN_PISTOL), (2, P.WPN_OS12), (3, P.WPN_K9), (4, P.WPN_SHOTGUN))
         gap = 3
         slot_w = (width - gap * (len(slots) - 1)) // len(slots)
         for i, (num, wid) in enumerate(slots):
@@ -1636,7 +1642,7 @@ class ArenaView(object):
         panel_y = sh - 40 - panel_h - 2
         # Keep the pickup-aware weapon row attached to the panel. It shows
         # which number keys work, without forcing the player to open a menu.
-        panel_w = 316
+        panel_w = 480
         if weapon is not None:
             self._draw_weapon_strip(surface, x, panel_y - WEAPON_STRIP_H - 4,
                                     weapon, carry, panel_w)
@@ -1651,7 +1657,7 @@ class ArenaView(object):
         name_surf = font_terminal.render(name, True, (205, 225, 213))
         surface.blit(name_surf, (x + 12, panel_y + 25))
         pygame.draw.line(surface, (49, 67, 60), (x + 12, panel_y + 53),
-                         (x + 304, panel_y + 53), 1)
+                         (x + 468, panel_y + 53), 1)
 
         capacity = stats["mag"] if stats else 0
         try:

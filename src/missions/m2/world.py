@@ -1,4 +1,3 @@
-
 """Split from mission2.py - see mission2.py (shim) for the map."""
 # missions.m2 package
 # ------------------------------------------------------------

@@ -1306,3 +1306,477 @@ description: chronological action log per session, consolidated weekly
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-10-27 16:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:58 | Edited src/missions/m1/draw.py | _draw_dropoff_entry() → _draw_dropoff_zoom() | ~171 |
+| 16:58 | Edited src/missions/m1/draw.py | modified _draw_dropoff_follow() | ~178 |
+| 16:58 | Edited src/game/content/timelines/m1.dropoff.timeline.json | 2→2 lines | ~17 |
+| 16:58 | Edited src/missions/m1/meta.py | 9→9 lines | ~185 |
+| 16:58 | Edited src/app.py | 1→2 lines | ~40 |
+| 16:58 | Edited src/app.py | 1→2 lines | ~41 |
+
+## Session: 2026-10-27 20:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:20 | Edited src/core/camera.py | added error handling | ~188 |
+| 20:20 | Edited src/core/camera.py | 3→3 lines | ~60 |
+| 20:20 | Edited src/core/camera.py | 1→3 lines | ~52 |
+| 20:20 | Edited src/core/camera.py | inline fix | ~26 |
+| 20:20 | Edited src/missions/m2/update.py | added 1 import(s) | ~70 |
+| 20:20 | Edited src/missions/walking_sim.py | 1→5 lines | ~58 |
+| 20:21 | Edited src/missions/m1/draw.py | modified _dropoff_cam() | ~396 |
+| 20:21 | Edited src/missions/m1/draw.py | modified _dropoff_headlights() | ~546 |
+| 20:21 | Edited src/missions/m1/draw.py | modified _dropoff_take() | ~102 |
+| 20:24 | Edited src/missions/m1/draw.py | modified range() | ~147 |
+| 20:28 | Edited src/missions/m1/draw.py | inline fix | ~17 |
+| 20:28 | Edited src/missions/m1/draw.py | inline fix | ~17 |
+| 20:28 | Edited src/missions/m1/draw.py | modified _dropoff_track_zoom() | ~86 |
+| 20:36 | Edited src/missions/m1/draw.py | 2→4 lines | ~58 |
+| 20:36 | Edited src/missions/m1/draw.py | inline fix | ~16 |
+| 20:36 | Edited src/missions/m1/draw.py | removed 7 lines | ~11 |
+| 20:36 | Edited src/missions/m1/draw.py | modified _draw_dropoff_entry() | ~23 |
+| 20:36 | Edited src/missions/m1/draw.py | inline fix | ~15 |
+
+## Session: 2026-10-27 21:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-27 21:47
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-27 21:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:10 | Edited src/app.py | 2→7 lines | ~125 |
+| 22:10 | Edited src/app.py | modified _m0_outro_pending() | ~128 |
+| 22:10 | Edited src/app.py | expanded (+17 lines) | ~337 |
+| 22:10 | Edited src/app.py | 3→7 lines | ~143 |
+| 22:10 | Edited src/app.py | modified _m7_outro_pending() | ~71 |
+| 22:10 | Edited src/app.py | 3→5 lines | ~51 |
+| 22:10 | Edited src/app.py | added 1 condition(s) | ~166 |
+| 22:10 | Edited src/app.py | 2→2 lines | ~29 |
+| 22:11 | Created src/missions/m7/meta.py | — | ~247 |
+| 22:11 | Created src/missions/m7/flow.py | — | ~559 |
+| 22:11 | Created src/missions/m7/systems.py | — | ~102 |
+| 22:11 | Created src/missions/m7/draw.py | — | ~252 |
+| 22:11 | Created src/missions/m7/__init__.py | — | ~92 |
+| 22:11 | Edited src/core/game_core.py | added 1 import(s) | ~21 |
+| 22:11 | Edited src/core/game_core.py | 3→4 lines | ~8 |
+| 22:11 | Edited src/core/game_core.py | modified _is_mission7_active() | ~49 |
+| 22:11 | Edited src/core/game_core.py | modified start_mission7() | ~96 |
+| 22:11 | Edited src/core/game_core.py | modified _in_walking_sim() | ~71 |
+| 22:11 | Edited src/core/game_core.py | modified _is_mission7_active() | ~42 |
+| 22:11 | Edited src/core/game_core.py | modified _is_mission7_active() | ~29 |
+| 22:11 | Edited src/core/game_core.py | modified _is_mission7_active() | ~104 |
+| 22:11 | Edited src/core/game_core.py | modified _is_mission7_active() | ~38 |
+| 22:11 | Edited src/core/game_core.py | 2→4 lines | ~46 |
+| 22:11 | Edited src/core/save_system.py | expanded (+8 lines) | ~109 |
+| 22:11 | Edited src/core/mission_meta.py | expanded (+6 lines) | ~86 |
+| 22:11 | Edited src/ui/mission_failed.py | 2→6 lines | ~140 |
+| 22:11 | Edited src/ui/mission_failed.py | 2→4 lines | ~48 |
+| 22:11 | Edited src/ui/mission_failed.py | modified getattr() | ~58 |
+| 22:11 | Edited src/core/state.py | expanded (+6 lines) | ~149 |
+| 22:11 | Edited src/core/dev_jumps.py | expanded (+9 lines) | ~196 |
+| 22:11 | Edited tools/dev_panel.py | 2→4 lines | ~52 |
+| 22:11 | Edited tools/smoke_test.py | 2→3 lines | ~25 |
+| 22:14 | Edited src/app.py | expanded (+29 lines) | ~498 |
+<!-- session:OWE4OGE1YWUtMGM5YS00N2VjLWJiOTktMTQ0M2RlN2I5ODVh -->
+| 2026-10-27T20:18:09.097Z | M7 milestone A: branch m7/fallow-ground; placeholder-stage missions/m7 package (arrival..choice, ENTER advances); wired game_core, state, save_system, mission_meta, mission_failed, dev_jumps, dev_panel, smoke_test, app.py (M6->M7 chain, M7 owns FULL CAMPAIGN COMPLETE dead end, resume, outro, --dev-mission7[-stage] flags) | src/missions/m7/,src/app.py,src/core/game_core.py,src/core/state.py,src/core/save_system.py,src/core/mission_meta.py,src/ui/mission_failed.py,src/core/dev_jumps.py,tools/dev_panel.py,tools/smoke_test.py | compileall ok, SMOKE TEST: OK, ae_validate/text/mission0 OK |
+| 22:38 | Created src/cutscenes/m7world3d.py | — | ~5440 |
+| 22:40 | Edited src/cutscenes/m7world3d.py | removed 2 lines | ~4 |
+| 22:40 | Created src/game/content/timelines/m7.arrival.timeline.json | — | ~232 |
+| 22:41 | Created src/game/content/timelines/m7.finale.timeline.json | — | ~268 |
+| 22:44 | Edited src/cutscenes/m7world3d.py | added error handling | ~58 |
+| 22:45 | Created src/game/content/timelines/m7.outro.timeline.json | — | ~90 |
+| 22:45 | Edited src/missions/m7/meta.py | modified name() | ~447 |
+| 22:45 | Edited src/missions/m7/flow.py | 1→2 lines | ~30 |
+| 22:45 | Edited src/missions/m7/flow.py | modified set_stage() | ~162 |
+| 22:46 | Edited src/core/state.py | 1→2 lines | ~51 |
+| 22:46 | Edited src/cutscenes/m7world3d.py | 3→3 lines | ~38 |
+| 22:46 | Edited src/cutscenes/m7world3d.py | inline fix | ~6 |
+| 22:46 | Edited src/cutscenes/m7world3d.py | expanded (+7 lines) | ~102 |
+| 22:47 | Edited src/app.py | 1→2 lines | ~43 |
+| 22:47 | Edited src/app.py | modified _m7_film_pending() | ~169 |
+| 22:48 | Edited src/app.py | modified _m7_film_pending() | ~100 |
+| 22:48 | Edited src/app.py | 2→7 lines | ~117 |
+| 22:49 | Edited src/cutscenes/m7world3d.py | 4→2 lines | ~21 |
+| 22:49 | Edited src/cutscenes/m7world3d.py | modified burn_fx() | ~962 |
+| 22:50 | Created src/cutscenes/m7films.py | — | ~2003 |
+| 22:50 | Edited src/cutscenes/m7films.py | removed 3 lines | ~4 |
+| 22:50 | Edited src/cutscenes/m7films.py | added 1 import(s) | ~32 |
+| 22:50 | Edited src/cutscenes/m7films.py | — | ~0 |
+| 22:50 | Edited src/missions/m7/meta.py | 1→2 lines | ~19 |
+| 22:50 | Edited src/game/content/timelines/m7.finale.timeline.json | 4→4 lines | ~26 |
+| 22:51 | Edited src/cutscenes/m7films.py | 2→2 lines | ~38 |
+| 22:51 | Edited src/cutscenes/m7films.py | 2→2 lines | ~18 |
+| 22:51 | Edited src/cutscenes/m7films.py | 3→3 lines | ~44 |
+| 22:51 | Edited src/cutscenes/m7films.py | modified _burn() | ~62 |
+| 22:51 | Edited src/cutscenes/m7films.py | 2→2 lines | ~43 |
+| 22:51 | Edited src/cutscenes/m7films.py | 2→2 lines | ~40 |
+| 22:51 | Edited src/cutscenes/m7films.py | 2→2 lines | ~41 |
+| 22:51 | Edited src/cutscenes/m7films.py | 1→4 lines | ~61 |
+| 22:51 | Edited src/cutscenes/m7world3d.py | inline fix | ~17 |
+| 22:53 | Edited src/cutscenes/m7films.py | 2→2 lines | ~18 |
+| 22:53 | Edited src/cutscenes/m7films.py | 1→2 lines | ~37 |
+| 22:53 | Edited src/cutscenes/m7films.py | inline fix | ~17 |
+| 22:54 | Edited src/cutscenes/m7films.py | 1→3 lines | ~80 |
+| 22:54 | Edited src/cutscenes/m7films.py | inline fix | ~17 |
+| 22:55 | Edited src/app.py | 2→5 lines | ~72 |
+| 23:00 | Created src/missions/m7/maps.py | — | ~697 |
+| 23:00 | Created src/game/content/levels/m7.farm.level.json | — | ~182 |
+| 23:01 | Edited src/missions/m7/maps.py | "#.......N..TT.#" → "#.......N...TT#" | ~7 |
+| 23:01 | Edited src/game/content/levels/m7.farm.level.json | "#.......N..TT.#" → "#.......N...TT#" | ~6 |
+| 23:01 | Edited src/missions/m7/maps.py | 1→2 lines | ~36 |
+| 23:02 | Created src/missions/m7/farmyard.py | — | ~6218 |
+| 23:02 | Edited src/missions/m7/flow.py | added 1 import(s) | ~41 |
+| 23:02 | Edited src/missions/m7/flow.py | 2→4 lines | ~53 |
+| 23:02 | Edited src/missions/m7/flow.py | modified handle_interact() | ~42 |
+| 23:02 | Created src/missions/m7/systems.py | — | ~157 |
+| 23:02 | Edited src/missions/m7/draw.py | 2→5 lines | ~47 |
+| 23:02 | Edited src/missions/m7/draw.py | added 1 import(s) | ~28 |
+| 23:02 | Edited src/core/state.py | 1→2 lines | ~53 |
+| 23:03 | Edited src/missions/m7/maps.py | "#.........ffff#" → "#........fffff#" | ~7 |
+| 23:03 | Edited src/game/content/levels/m7.farm.level.json | "#.........ffff#" → "#........fffff#" | ~6 |
+| 23:03 | Edited src/missions/m7/farmyard.py | 2→4 lines | ~43 |
+| 23:08 | Created src/cutscenes/m7runner.py | — | ~2650 |
+| 23:09 | Created src/game/content/timelines/m7.runner.timeline.json | — | ~225 |
+| 23:09 | Edited src/missions/m7/meta.py | m7films() → import_module() | ~359 |
+| 23:09 | Edited src/cutscenes/m7films.py | inline fix | ~23 |
+| 23:11 | Edited src/cutscenes/m7runner.py | 2→2 lines | ~45 |
+| 23:11 | Edited src/cutscenes/m7runner.py | modified _meet_set() | ~391 |
+| 23:12 | Edited src/cutscenes/m7runner.py | inline fix | ~29 |
+| 23:12 | Edited src/cutscenes/m7runner.py | 70 → 78 | ~14 |
+| 23:14 | Edited src/missions/m7/maps.py | 2→7 lines | ~90 |
+| 23:14 | Edited src/missions/m7/maps.py | 2→4 lines | ~41 |
+| 23:14 | Edited src/missions/m7/farmyard.py | 3→7 lines | ~52 |
+| 23:14 | Edited src/missions/m7/farmyard.py | 3→5 lines | ~98 |
+| 23:14 | Edited src/missions/m7/farmyard.py | modified _tractor() | ~27 |
+| 23:14 | Edited src/missions/m7/farmyard.py | modified _bike() | ~197 |
+| 23:14 | Edited src/missions/m7/farmyard.py | _tractor() → _bike() | ~30 |
+| 23:14 | Edited src/missions/m7/farmyard.py | modified _bodi_tile() | ~503 |
+| 23:15 | Edited src/missions/m7/farmyard.py | modified _point_px() | ~419 |
+| 23:15 | Edited src/missions/m7/farmyard.py | modified _picked() | ~497 |
+| 23:15 | Edited src/missions/m7/farmyard.py | 2→3 lines | ~30 |
+| 23:15 | Edited src/missions/m7/farmyard.py | modified _draw_tractor() | ~416 |
+| 23:15 | Edited src/missions/m7/farmyard.py | modified _face_to() | ~240 |
+| 23:16 | Edited src/missions/m7/farmyard.py | "PARK THE TRACTOR ON THE T" → "BLOCK THE TRACK" | ~5 |
+| 23:27 | Created src/missions/m7/raid_world.py | — | ~3041 |
+| 23:28 | Edited src/missions/m7/raid_world.py | 3→2 lines | ~10 |
+| 23:28 | Edited src/missions/m7/raid_world.py | modified los() | ~115 |
+| 23:30 | Created src/missions/m7/raid_brain.py | — | ~5424 |
+| 23:30 | Edited src/missions/m7/raid_brain.py | 3→1 lines | ~10 |
+| 23:30 | Edited src/missions/m7/raid_brain.py | 2→3 lines | ~41 |
+| 23:30 | Edited src/missions/m7/raid_brain.py | 4→3 lines | ~27 |
+| 23:30 | Edited src/missions/m7/raid_brain.py | modified bodi_climb_down() | ~69 |
+| 23:30 | Edited src/cutscenes/m7world3d.py | modified build_static() | ~55 |
+| 23:30 | Edited src/cutscenes/m7world3d.py | tractor() → globals() | ~53 |
+| 23:30 | Edited src/cutscenes/m7world3d.py | modified build_static() | ~54 |
+| 23:30 | Edited src/cutscenes/m7world3d.py | globals() → tractor() | ~49 |
+| 23:30 | Edited src/cutscenes/m7world3d.py | modified stage() | ~170 |
+| 23:32 | Edited src/cutscenes/m7world3d.py | expanded (+7 lines) | ~123 |
+| 23:36 | Created src/missions/m7/raid_hud.py | — | ~1618 |
+| 23:40 | Created src/missions/m7/raid3d.py | — | ~8887 |
+| 23:42 | Edited src/core/state.py | 1→2 lines | ~51 |
+| 23:42 | Edited src/missions/m7/flow.py | added 1 import(s) | ~54 |
+| 23:42 | Edited src/missions/m7/flow.py | modified _initialize_m7() | ~38 |
+| 23:42 | Edited src/missions/m7/flow.py | modified on_raid_done() | ~118 |
+| 23:42 | Edited src/missions/m7/flow.py | modified start_m7() | ~77 |
+| 23:43 | Edited src/missions/m7/systems.py | added error handling | ~162 |
+| 23:43 | Edited src/missions/m7/draw.py | added 1 import(s) | ~40 |
+| 23:43 | Edited src/missions/m7/draw.py | added error handling | ~85 |
+| 23:43 | Edited src/missions/m7/raid3d.py | modified abort() | ~86 |
+| 23:43 | Created src/missions/m7/choice.py | — | ~1345 |
+| 23:44 | Edited src/missions/m7/flow.py | added 1 import(s) | ~67 |
+| 23:44 | Edited src/missions/m7/flow.py | 3→5 lines | ~35 |
+| 23:44 | Edited src/missions/m7/systems.py | added 1 import(s) | ~48 |
+| 23:44 | Edited src/missions/m7/systems.py | 2→4 lines | ~30 |
+| 23:44 | Edited src/missions/m7/draw.py | added 1 import(s) | ~53 |
+| 23:44 | Edited src/missions/m7/draw.py | 2→5 lines | ~29 |
+| 23:44 | Edited src/app.py | modified handle_event() | ~200 |
+| 23:44 | Edited src/app.py | added error handling | ~207 |
+| 23:45 | Edited src/missions/m7/raid3d.py | _lerp() → blend() | ~107 |
+| 23:48 | Edited src/missions/m7/raid_brain.py | 6→6 lines | ~93 |
+| 23:48 | Edited src/missions/m7/raid3d.py | 2→2 lines | ~26 |
+| 23:48 | Edited src/missions/m7/raid3d.py | inline fix | ~25 |
+| 23:49 | Edited src/missions/m7/choice.py | inline fix | ~17 |
+| 23:50 | Edited src/audio/voice_manifest.py | modified Ground() | ~241 |
+| 23:50 | Edited src/audio/voice_manifest.py | 2→4 lines | ~49 |
+| 23:50 | Edited src/core/config.py | 1→3 lines | ~54 |
+| 23:50 | Edited src/missions/m7/raid3d.py | inline fix | ~20 |
+| 23:50 | Edited src/missions/m7/raid3d.py | 2→2 lines | ~35 |
+| 23:53 | Created tests/unit/test_m7_campaign.py | — | ~2852 |
+| 23:55 | Edited tools/smoke_test.py | modified check_mission7_vertical_slice() | ~1550 |
+| 23:55 | Edited tools/smoke_test.py | 1→3 lines | ~60 |
+| 23:58 | Session end: 18 writes across 4 files (camera.py, update.py, walking_sim.py, draw.py) | 19 reads | ~2136 tok |
+| 23:58 | Session end: 6 writes across 4 files (draw.py, m1.dropoff.timeline.json, meta.py, app.py) | 7 reads | ~632 tok |
+| 00:19 | Edited src/missions/m7/flow.py | modified start_m7_dev_raid() | ~179 |
+| 00:19 | Edited src/core/game_core.py | modified start_mission7_raid() | ~95 |
+| 00:19 | Edited src/app.py | inline fix | ~20 |
+| 00:19 | Edited src/app.py | added 1 condition(s) | ~255 |
+| 00:19 | Edited src/app.py | 3→7 lines | ~100 |
+| 00:19 | Edited src/core/dev_jumps.py | expanded (+8 lines) | ~344 |
+| 00:19 | Edited tools/dev_panel.py | 2→3 lines | ~61 |
+| 00:20 | Edited tests/unit/test_m7_campaign.py | modified setUp() | ~421 |
+| 00:20 | Edited docs/MISSION7_PLOT.md | modified jumps() | ~132 |
+| 00:26 | Edited src/core/game_core.py | 2→4 lines | ~43 |
+| 00:26 | Edited tests/unit/test_m7_campaign.py | modified test_every_gc_m7_call_in_app_resolves_through_the_proxy() | ~179 |
+| 00:39 | Session end: 169 writes across 33 files (app.py, meta.py, flow.py, systems.py, draw.py) | 102 reads | ~132890 tok |
+
+## Session: 2026-10-28 12:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:31 | Edited src/engine/anim/figure_kit.py | 2→2 lines | ~26 |
+| 12:31 | Edited src/cutscenes/m7runner.py | inline fix | ~14 |
+| 12:32 | Edited src/core/config.py | modified windowed_size() | ~156 |
+| 12:32 | Edited src/core/config.py | inline fix | ~10 |
+| 12:32 | Edited src/app.py | 3→3 lines | ~21 |
+
+## Session: 2026-10-28 12:35
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 12:36
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:47 | Edited src/cutscenes/engine.py | inline fix | ~66 |
+| 12:47 | Edited src/cutscenes/engine.py | modified draw_film_caption() | ~215 |
+| 12:47 | Edited src/app.py | reduced (-8 lines) | ~60 |
+| 12:55 | Edited tools/smoke_test.py | inline fix | ~20 |
+| 12:55 | Edited tools/smoke_test.py | 2→1 lines | ~27 |
+| 12:55 | Edited tools/smoke_test.py | 3→2 lines | ~40 |
+<!-- session:N2FlYTgxMzgtNzk0Mi00YjY5LWE3MjktMTdkZTUyNjM2YmI4 -->
+| 2026-10-28T10:58:15.684Z | 3D film captions now use the M2 sniper bar style: speaker tag over centred text, no typewriter or continue prompt. New draw_film_caption in cutscenes/engine.py; app.py render calls it instead of gc.draw_dialogue_box. Smoke test fake gc and two caption asserts updated to (speaker, text). M5 finale keeps its own draw_cinematic_subtitle. | src/cutscenes/engine.py,src/app.py,tools/smoke_test.py | smoke_test.py SMOKE TEST: OK (EXIT=0); compileall OK; visual check not done |
+| 12:59 | Edited src/cutscenes/engine.py | modified draw_film_caption() | ~331 |
+| 13:02 | Edited src/game/content/timelines/m7.arrival.timeline.json | 2→3 lines | ~40 |
+| 13:09 | Session end: 8 writes across 4 files (engine.py, app.py, smoke_test.py, m7.arrival.timeline.json) | 20 reads | ~4415 tok |
+
+## Session: 2026-10-28 13:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:15 | Edited src/cutscenes/m7films.py | expanded (+6 lines) | ~154 |
+| 13:15 | Edited src/game/content/timelines/m7.arrival.timeline.json | 2→2 lines | ~8 |
+
+## Session: 2026-10-28 13:20
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:33 | Edited src/missions/m7/raid3d.py | 3→8 lines | ~144 |
+| 13:33 | Edited src/missions/m7/raid3d.py | 2→4 lines | ~37 |
+| 13:33 | Edited src/missions/m7/raid3d.py | modified _lerp() | ~28 |
+| 13:33 | Edited src/missions/m7/raid3d.py | modified _aim_ray() | ~74 |
+| 13:33 | Edited src/missions/m7/raid3d.py | modified spheres() | ~550 |
+| 13:33 | Edited src/missions/m7/raid3d.py | 14→19 lines | ~340 |
+| 13:33 | Edited src/missions/m7/raid3d.py | 8→10 lines | ~154 |
+| 13:33 | Edited src/missions/m7/raid_world.py | inline fix | ~14 |
+| 13:34 | Edited src/missions/m7/raid_world.py | modified dog_fall() | ~125 |
+| 13:34 | Edited src/missions/m7/raid_brain.py | modified _clamp() | ~127 |
+| 13:34 | Edited src/missions/m7/raid_brain.py | 6→8 lines | ~86 |
+| 13:34 | Edited src/missions/m7/raid_brain.py | inline fix | ~23 |
+| 13:36 | Edited src/missions/m7/raid_brain.py | 2→3 lines | ~34 |
+| 13:36 | Edited src/missions/m7/raid_brain.py | 1→2 lines | ~40 |
+| 13:36 | Edited src/missions/m7/raid_brain.py | modified _ally_shot() | ~111 |
+| 13:36 | Edited src/missions/m7/raid_brain.py | modified _alex_update() | ~839 |
+| 13:36 | Edited src/missions/m7/raid3d.py | 4→9 lines | ~167 |
+| 13:36 | Edited src/cutscenes/m6world3d.py | 3→5 lines | ~64 |
+| 13:37 | Edited src/cutscenes/m7world3d.py | modified ground() | ~170 |
+| 13:37 | Edited src/cutscenes/m7world3d.py | 3→7 lines | ~118 |
+| 13:37 | Edited src/cutscenes/m7world3d.py | 3→3 lines | ~34 |
+| 13:38 | Edited src/missions/m7/meta.py | inline fix | ~24 |
+| 13:38 | Edited src/missions/m7/meta.py | 6→7 lines | ~69 |
+| 13:38 | Edited src/missions/m7/meta.py | 2→3 lines | ~16 |
+| 13:38 | Edited src/missions/m7/meta.py | 5→6 lines | ~42 |
+| 13:38 | Edited src/missions/m7/meta.py | 2→4 lines | ~43 |
+| 13:38 | Edited src/missions/m7/flow.py | 3→3 lines | ~43 |
+| 13:38 | Edited src/missions/m7/flow.py | 1→2 lines | ~34 |
+| 13:38 | Edited src/cutscenes/m7films.py | inline fix | ~30 |
+| 13:38 | Edited src/cutscenes/m7films.py | added 1 import(s) | ~26 |
+| 13:39 | Edited src/cutscenes/m7films.py | modified _raidin_trucks() | ~589 |
+| 13:39 | Created src/game/content/timelines/m7.raidin.timeline.json | — | ~150 |
+| 13:39 | Edited tests/unit/test_m7_campaign.py | modified test_ladder_order_matches_the_doc() | ~208 |
+| 13:39 | Edited src/cutscenes/m7films.py | 3→3 lines | ~55 |
+| 13:41 | Edited src/missions/m7/raid3d.py | 10→11 lines | ~152 |
+| 13:41 | Edited src/missions/m7/raid3d.py | 3→2 lines | ~23 |
+| 13:42 | Edited src/missions/m7/raid_brain.py | modified blocked() | ~84 |
+| 13:43 | Edited tools/smoke_test.py | 2→2 lines | ~40 |
+<!-- session:ZGIzOTdiMDUtZjVkNC00ODk3LTk1YTItODNiZWNlNDUyZTY2 -->
+| 2026-10-28T11:51:21.040Z | M7 playtest fixes: shots aim along the crosshair taken before the kick, 8-lane pellets with a centre lane, hard pellet FX; allies get a rifle and Alex picks firing spots with a 13 m leash; guards fall and dogs roll and stay; raid ground, sky and hills cleaned; new raidin stage and film between prep and raid; smoke ladder updated. | src/missions/m7/raid3d.py,src/missions/m7/raid_brain.py,src/missions/m7/raid_world.py,src/missions/m7/meta.py,src/missions/m7/flow.py,src/cutscenes/m7films.py,src/cutscenes/m7world3d.py,src/cutscenes/m6world3d.py,src/game/content/timelines/m7.raidin.timeline.json,tests/unit/test_m7_campaign.py,tools/smoke_test.py | smoke OK, compileall OK, unit 485 OK, golden 390/390 OK, ae_ci 20/26 green; red: boundary (m7runner private figure_kit import, M7 code), api snapshot, asset bake, replay, loop parity, mission0 diff (uncommitted engine/asset/baseline edits) |
+| 13:53 | Edited src/cutscenes/m7runner.py | 2→2 lines | ~35 |
+| 13:53 | Edited src/cutscenes/m7runner.py | _Pen() → Pen() | ~118 |
+| 13:53 | Edited src/cutscenes/m7runner.py | modified _shotgun_art() | ~957 |
+| 14:36 | Session end: 2 writes across 2 files (m7films.py, m7.arrival.timeline.json) | 7 reads | ~9731 tok |
+
+## Session: 2026-10-28 16:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 17:03
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:10 | Edited src/missions/m7/farmyard.py | modified p() | ~133 |
+| 17:11 | Edited src/missions/m7/farmyard.py | modified get() | ~227 |
+<!-- session:MjZjMTk4YzgtMDlkYi00MzAzLThlYWMtZDRiMjAxOThlNmQx -->
+| 2026-10-28T15:27:25.464Z | M7 farmyard figures and goats rebuilt as cached 2x pixel sprites (outline, shading, stepped walk, idle breathe/blink); M7 now plays OST: 05 curfew_dawn farm, 06 not_tonight raid, 08 i_chose_the_many outro, 03 quiet_on_route_12 arrival/finale films, silence on radio choice; play_music gained fade/pause/same-track keep | src/missions/m7/farmyard.py,src/missions/m7/m7_audio.py,src/missions/m7/flow.py,src/audio/audio.py,src/app.py | compileall OK, SMOKE TEST: OK, OST CHECK: OK |
+
+## Session: 2026-10-28 18:13
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:14 | Edited tools/build_code_txt.py | modified find_source_files() | ~380 |
+| 18:14 | Edited tools/build_code_txt.py | inline fix | ~17 |
+| 18:14 | Edited tools/build_code_txt.py | inline fix | ~13 |
+| 18:14 | Edited tools/build_code_txt.py | inline fix | ~21 |
+| 18:14 | Edited tools/build_code_txt.py | "{len(files)} .py files fo" → "{len(files)} files found" | ~8 |
+| 18:14 | Edited tools/build_code_txt.py | inline fix | ~32 |
+| 18:15 | Edited tools/build_code_txt.py | 2→2 lines | ~19 |
+| 18:20 | Edited tools/dev_panel.py | inline fix | ~19 |
+| 18:20 | Edited tools/dev_panel.py | inline fix | ~24 |
+| 18:20 | Edited tools/dev_panel.py | inline fix | ~13 |
+| 18:20 | Edited tools/dev_panel.py | inline fix | ~19 |
+| 18:20 | Edited tools/dev_panel.py | inline fix | ~24 |
+
+## Session: 2026-10-28 18:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:58 | Created src/cutscenes/m7palette3d.py | — | ~846 |
+| 18:59 | Created tools/tex3d_draw_m7.py | — | ~4450 |
+| 19:02 | Edited src/cutscenes/m7world3d.py | 7→12 lines | ~218 |
+<!-- session:M2VhMjQzZWItMzIyNS00ZWNhLWJiYjUtNjdhNjM1NDNmMWNm -->
+| 2026-10-28T17:27:52.014Z | M7 raid art pass: sampled palette, 14 pixel textures, raid grade, sky=fog + moon/clouds/mist, lamp/window halos, house/yard dressing, poles, village skyline, 7 collision boxes | src/cutscenes/m7world3d.py,src/cutscenes/m7palette3d.py,src/missions/m7/raid3d.py,src/missions/m7/raid_world.py,tools/tex3d_draw_m7.py,assets/tex3d/m7_*.png | compileall clean; smoke FAILED only on pre-existing mission5_sprites + sprite_pipeline (CRLF in m5/sprite sources); GL path and M7 films not checked |
+| 19:37 | Edited tools/smoke_test.py | 125 → 128 | ~10 |
+
+## Session: 2026-10-28 19:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:35 | Session end: 41 writes across 12 files (raid3d.py, raid_world.py, raid_brain.py, m6world3d.py, m7world3d.py) | 44 reads | ~21276 tok |
+| 20:35 | Session end: 2 writes across 1 files (farmyard.py) | 5 reads | ~10210 tok |
+| 20:35 | Session end: 5 writes across 4 files (figure_kit.py, m7runner.py, config.py, app.py) | 0 reads | ~227 tok |
+| 20:35 | Session end: 12 writes across 2 files (build_code_txt.py, dev_panel.py) | 2 reads | ~3568 tok |
+| 20:35 | Session end: 4 writes across 4 files (m7palette3d.py, tex3d_draw_m7.py, m7world3d.py, smoke_test.py) | 4 reads | ~5524 tok |
+
+## Session: 2026-10-28 20:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 21:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:17 | Edited src/cutscenes/m7world3d.py | added 1 condition(s) | ~4434 |
+| 21:17 | Edited src/cutscenes/m7world3d.py | 6→8 lines | ~145 |
+| 21:18 | Edited src/cutscenes/m7world3d.py | 3→2 lines | ~9 |
+| 21:18 | Edited src/cutscenes/m7world3d.py | 3→7 lines | ~55 |
+| 21:18 | Edited src/cutscenes/m7world3d.py | expanded (+7 lines) | ~228 |
+| 21:18 | Edited src/cutscenes/m7world3d.py | 1→4 lines | ~77 |
+| 21:18 | Edited src/cutscenes/m7world3d.py | inline fix | ~22 |
+| 21:18 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~36 |
+| 21:19 | Edited src/cutscenes/m7world3d.py | modified range() | ~274 |
+| 21:19 | Edited src/cutscenes/m7world3d.py | modified radians() | ~122 |
+| 21:19 | Edited src/cutscenes/m7world3d.py | inline fix | ~24 |
+| 21:19 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~40 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | inline fix | ~22 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | modified range() | ~24 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~29 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | modified _bipyr() | ~202 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~50 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | 5→5 lines | ~92 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | removed 4 lines | ~7 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~29 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | modified range() | ~15 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~21 |
+| 21:27 | Edited src/cutscenes/m7world3d.py | modified _farmsteads() | ~129 |
+<!-- session:Mjk2MmYwYzItMTdjZi00M2Q1LWFlYTctNTU4ZDU4NmU3YjA1 -->
+| 2026-10-28T19:30:29.854Z | M7 farm backdrop: pass 1 added old orchard, poplars, crest woods, far ridge, road dressing; pass 2 tuned clouds, sunflower/valley tones, farmstead walls, moon-side rim shading, trimmed old-tree crowns | src/cutscenes/m7world3d.py | compileall clean; SMOKE TEST: OK; M7 ROUTE: OK (808 sampled poses; collision-free dismount); added triangles 6828 (target ~6k, not met) |
+<!-- session:Mjk2MmYwYzItMTdjZi00M2Q1LWFlYTctNTU4ZDU4NmU3YjA1 -->
+| 2026-10-28T19:30:33.263Z | M7 farm backdrop: pass 2 tuned clouds, sunflower/valley tones, farmstead walls, moon-side rim shading, trimmed old-tree crowns | src/cutscenes/m7world3d.py | compileall clean; SMOKE TEST: OK; M7 ROUTE: OK; added triangles 6828 (target ~6k, not met) |
+
+## Session: 2026-10-28 21:37
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:39 | Edited src/cutscenes/m7world3d.py | inline fix | ~18 |
+| 21:39 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~28 |
+| 21:39 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~40 |
+| 21:45 | Edited src/missions/m7/raid_world.py | modified in() | ~137 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | inline fix | ~21 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | inline fix | ~25 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | modified in() | ~62 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | inline fix | ~14 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | inline fix | ~15 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | 6.12 → 6.22 | ~10 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | modified _village() | ~56 |
+| 21:45 | Edited src/cutscenes/m7world3d.py | 2→5 lines | ~73 |
+| 22:02 | Edited src/cutscenes/m7world3d.py | inline fix | ~23 |
+| 22:03 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~32 |
+| 22:04 | Edited src/cutscenes/m7world3d.py | 4→5 lines | ~57 |
+| 22:04 | Edited src/cutscenes/m7world3d.py | 4→4 lines | ~34 |
+
+## Session: 2026-10-28 22:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:10 | Edited src/cutscenes/m7world3d.py | inline fix | ~22 |
+
+## Session: 2026-10-28 22:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 22:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:38 | Edited src/cutscenes/m7world3d.py | inline fix | ~20 |
+
+## Session: 2026-10-28 23:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 23:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 23:25 | Edited src/cutscenes/m7world3d.py | modified _hill_y() | ~226 |
+| 23:25 | Edited src/cutscenes/m7world3d.py | inline fix | ~16 |
+| 23:25 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~28 |
+| 23:25 | Edited src/cutscenes/m7world3d.py | inline fix | ~18 |
+| 23:25 | Edited src/cutscenes/m7world3d.py | inline fix | ~25 |
+
+## Session: 2026-10-28 00:04
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:06 | Created tools/ae_import_tractor.py | — | ~1146 |
+
+## Session: 2026-10-28 00:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 00:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-10-28 00:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:20 | Created src/cutscenes/death3d.py | — | ~1443 |

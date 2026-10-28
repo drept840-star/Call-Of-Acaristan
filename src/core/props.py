@@ -1,4 +1,3 @@
-
 """props.py - shared set-dressing prop painters.
 
 Promoted from missions/m3/draw.py during the Mission 1/2 graphics upgrade.

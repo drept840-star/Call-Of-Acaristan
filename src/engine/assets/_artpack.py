@@ -1,4 +1,3 @@
-
 """artpack.py - loaded-sprite registry with procedural fallback.
 
 Phase 1/2/4 of the graphics rework ride on one contract, inherited from

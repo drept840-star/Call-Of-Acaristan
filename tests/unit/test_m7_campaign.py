@@ -45,8 +45,18 @@ class M7StageTests(unittest.TestCase):
 
     def test_ladder_order_matches_the_doc(self):
         self.assertEqual(_meta.STAGES, ("arrival", "chores", "runner", "prep",
-                                        "raid", "finale", "choice"))
-        self.assertEqual(set(_meta.FILM_TIMELINES), {"arrival", "runner", "finale"})
+                                        "raidin", "raid", "finale", "choice"))
+        self.assertEqual(set(_meta.FILM_TIMELINES), {"arrival", "runner", "raidin", "finale"})
+
+    def test_prep_hands_off_to_the_raid_film_before_the_fight(self):
+        _start("prep")
+        _flow.advance_stage()
+        self.assertEqual(STATE.mission7_stage, "raidin")
+        self.assertEqual(_flow.take_cutscene_request(), "raidin")
+        self.assertFalse(_raid.active())
+        _flow.on_cutscene_done("raidin")
+        self.assertEqual(STATE.mission7_stage, "raid")
+        self.assertTrue(_raid.active())
 
     def test_every_film_scene_is_registered(self):
         for scene_id in _meta.M7_SCENES:
@@ -297,6 +307,7 @@ class M7VoiceTests(unittest.TestCase):
         "VO_224": ("ALEX", "Biribel! THE Biribel! Maru said you'd be taller."),
         "VO_226": ("ALEX", "Trucks! Two of them - no, three!"),
         "VO_227": ("ALEX", "I'm pinned! Biribel, I'm pinned!"),
+        "VO_228": ("ALEX", "Maru sent this too. Farm gun. It barks louder than it looks."),
     }
 
     def test_rows_exist_and_are_marked_missing(self):
@@ -305,7 +316,7 @@ class M7VoiceTests(unittest.TestCase):
             self.assertIn(vid, rows)
             self.assertEqual((rows[vid][1], rows[vid][2]), (speaker, text))
             self.assertIn(vid, _vm.KNOWN_MISSING_AUDIO)
-        for n in range(219, 228):
+        for n in range(219, 229):
             self.assertIn("VO_%d" % n, rows)
             self.assertNotIn("VO_%d" % n, _vm.VOICE_ORDER)
 

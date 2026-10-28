@@ -1,4 +1,3 @@
-
 """LAN auto-discovery for the master server.
 
 A separate module from the client because discovery is a fire-and-forget

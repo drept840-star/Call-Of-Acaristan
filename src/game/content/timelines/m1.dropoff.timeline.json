@@ -16,7 +16,7 @@
    ]
   },
   {
-   "scene": "m1_dropoff",
+   "scene": "m1_dropoff_follow",
    "speaker": "BIRIBEL",
    "radio": true,
    "text": "Side door's dark.",
@@ -29,7 +29,7 @@
    ]
   },
   {
-   "scene": "m1_dropoff",
+   "scene": "m1_dropoff_entry",
    "speaker": "VASILE",
    "radio": true,
    "text": "Then use it. Volkov's inside with the book.",

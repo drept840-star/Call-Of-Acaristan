@@ -1,4 +1,3 @@
-
 """Split from menu.py - see menu.py (shim) for the map."""
 import pygame
 from core.config import (C_ORANGE, C_TERMINAL, C_WHITE, HEIGHT, WIDTH, audio, font_btn, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen)

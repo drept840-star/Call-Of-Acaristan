@@ -1,4 +1,3 @@
-
 """Shared tilemap authoring helper (pure python, no pygame).
 
 Runtime contract is unchanged: every mission still exposes

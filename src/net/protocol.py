@@ -1,4 +1,3 @@
-
 """Wire protocol for the Acaristan multiplayer master server.
 
 Deliberately dependency-free: stdlib only, no pygame, no game modules. The
@@ -139,8 +138,11 @@ WPN_PISTOL = 0
 WPN_OS12 = 1
 WPN_K9 = 2
 WPN_NONE = 3
-WPN_BY_NAME = {"pistol": WPN_PISTOL, "os12": WPN_OS12, "k9": WPN_K9}
-WPN_NAMES = {WPN_PISTOL: "pistol", WPN_OS12: "os12", WPN_K9: "k9", WPN_NONE: "none"}
+WPN_SHOTGUN = 4
+WPN_BY_NAME = {"pistol": WPN_PISTOL, "os12": WPN_OS12, "k9": WPN_K9,
+               "shotgun": WPN_SHOTGUN}
+WPN_NAMES = {WPN_PISTOL: "pistol", WPN_OS12: "os12", WPN_K9: "k9", WPN_NONE: "none",
+             WPN_SHOTGUN: "shotgun"}
 
 
 

@@ -1,4 +1,3 @@
-
 """M5 rebuilt finale: immutable script/timing shared by renderer and player.
 No pygame, game state, or renderer imports here; safe during meta loading.
 """
@@ -42,4 +41,3 @@ FINAL_SHOT = {
     'min_ms': DURATION_MS, 'cues': CUES,
     'dialogue_events': tuple((on, who, text, True) for on,off,who,text in LINES),
 }
-

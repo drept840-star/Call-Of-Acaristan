@@ -1,4 +1,3 @@
-
 """ambience.py - zone-driven world ambience layers.
 
 Pumped once per frame from the main loop. Uses only existing AudioManager
@@ -26,7 +25,10 @@ DRIP_ZONES = {
     "MISSION1": [(1 * TILE, 11 * TILE, 27 * TILE, 20 * TILE)],    # leaking stockroom roof
 }
 RAIN_MISSIONS = {"MISSION1", "MISSION2", "MISSION4"}
-GUST_MISSIONS = {"MISSION1", "MISSION2", "MISSION4", "MISSION6"}   # exterior only; indoors a gust reads as static
+GUST_MISSIONS = {"MISSION1", "MISSION2", "MISSION4", "MISSION6", "MISSION7"}   # exterior only; indoors a gust reads as static
+# Missions whose whole play space is open air: the indoor room tone would read
+# as a radiator hum in a field, so it is skipped and the mission's own bed plays.
+OPEN_AIR_MISSIONS = {"MISSION7"}
 # Missions with an open-air street band: world y below this is outdoors. There the
 # exterior loops (app.py set_ambience) play and the roof-rain layer stops; inside,
 # gusts stop and rain_inside plays.
@@ -75,7 +77,8 @@ def _m1_music_watchdog():
 
 
 def _teardown():
-    for name in ("room_tone", "rain_inside", "elec_hum"):
+    for name in ("room_tone", "rain_inside", "elec_hum", "m7_farm_bed", "m7_night_bed",
+                 "m7_choice_hum", "m7_gen_idle", "m7_trac_idle", "m7_trac_move"):
         try:
             audio.stop(name)
         except Exception:
@@ -130,7 +133,7 @@ def update_ambience():
     out = outdoors(mission, py)
 
     # 1 ── interior bed: the room is alive
-    if layers and not _state["room_tone_on"]:
+    if layers and mission not in OPEN_AIR_MISSIONS and not _state["room_tone_on"]:
         audio.play("room_tone", volume=0.35, loops=-1)
         _state["room_tone_on"] = True
 

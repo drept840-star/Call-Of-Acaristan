@@ -1,4 +1,3 @@
-
 """m3ending.py - Mission 3 finale cutscene (the Vostral read live on air).
 
 Four bespoke shots replace the old single title card:

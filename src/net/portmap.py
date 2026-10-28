@@ -1,4 +1,3 @@
-
 """Automatic router port forwarding (UPnP IGD + NAT-PMP), stdlib only.
 
 Why this module exists

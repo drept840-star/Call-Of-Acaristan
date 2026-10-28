@@ -1,4 +1,3 @@
-
 """Shared atomic JSON persistence helpers for save_data.json / settings.json.
 
 Writes go to a temp file first, the previous file is kept as ``.bak``, and the

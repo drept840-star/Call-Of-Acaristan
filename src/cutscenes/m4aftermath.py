@@ -1,4 +1,3 @@
-
 """m4aftermath.py - Mission 4 finale + intro cutscene art (The Aftermath).
 
 Bespoke shots replace the Slice-0 title-card stubs:

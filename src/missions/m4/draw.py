@@ -1,4 +1,3 @@
-
 """Split from mission4.py - see __init__.py for the package facade.
 
 Render pipeline for Mission 4 (game_draw). Z-order mirrors

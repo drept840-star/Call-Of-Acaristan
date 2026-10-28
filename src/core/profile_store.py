@@ -1,4 +1,3 @@
-
 """The global profile: Acaribucks wallet, owned cosmetics, equipped loadout.
 
 One profile for the whole install, deliberately NOT tied to a save slot. A

@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-26T11:17:18.199Z",
-    "fileCount": 450,
+    "lastScanned": "2026-10-28T22:20:27.343Z",
+    "fileCount": 480,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "bb25940844f3a28fa2841b4fd98cf395a71a57e1b3a31d6a797599b8f958b4aa",
-    "storeUpdatedAt": "2026-10-26T11:17:18.212Z",
-    "rootHash": "8acdbc0ed4a2fb69"
+    "renderedHash": "bd9393ec5a32a363cad9cba44d88db26b2382fbd52750d51b784288df86076df",
+    "storeUpdatedAt": "2026-10-28T22:20:27.354Z",
+    "rootHash": "33b598d98d2dcccf"
   },
   "files": {
     ".gitattributes": {
@@ -121,222 +121,222 @@
     },
     "src/app.py": {
       "description": "_input_recorder: handle_settings_event",
-      "tokens": 56258,
-      "hash": "15f7a4a7df314edc",
-      "size": 199411,
-      "mtimeMs": 1792793229242.5476,
-      "updatedAt": "2026-10-23T22:07:09.397Z",
+      "tokens": 58569,
+      "hash": "d572749645974b91",
+      "size": 207678,
+      "mtimeMs": 1793184435560.0283,
+      "updatedAt": "2026-10-28T10:47:16.017Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_text_speed_interval",
           "kind": "fn",
-          "startLine": 99,
-          "endLine": 161,
+          "startLine": 96,
+          "endLine": 158,
           "tokens": 726
         },
         {
           "name": "_current_settings_dict",
           "kind": "fn",
-          "startLine": 162,
-          "endLine": 191,
+          "startLine": 159,
+          "endLine": 188,
           "tokens": 312
         },
         {
           "name": "_apply_audio_settings",
           "kind": "fn",
-          "startLine": 192,
-          "endLine": 197,
+          "startLine": 189,
+          "endLine": 194,
           "tokens": 48
         },
         {
           "name": "_push_live_settings",
           "kind": "fn",
-          "startLine": 198,
-          "endLine": 204,
+          "startLine": 195,
+          "endLine": 201,
           "tokens": 58
         },
         {
           "name": "_persist_settings",
           "kind": "fn",
-          "startLine": 205,
-          "endLine": 220,
+          "startLine": 202,
+          "endLine": 217,
           "tokens": 152
         },
         {
           "name": "_preview_settings",
           "kind": "fn",
-          "startLine": 221,
-          "endLine": 237,
+          "startLine": 218,
+          "endLine": 234,
           "tokens": 148
         },
         {
           "name": "_advance_grain",
           "kind": "fn",
-          "startLine": 238,
-          "endLine": 248,
+          "startLine": 235,
+          "endLine": 245,
           "tokens": 79
         },
         {
           "name": "_apply_postprocess",
           "kind": "fn",
-          "startLine": 249,
-          "endLine": 262,
+          "startLine": 246,
+          "endLine": 259,
           "tokens": 116
         },
         {
           "name": "_present_frame",
           "kind": "fn",
-          "startLine": 263,
-          "endLine": 309,
-          "tokens": 515
+          "startLine": 260,
+          "endLine": 270,
+          "tokens": 117
         },
         {
           "name": "handle_settings_event",
           "kind": "fn",
-          "startLine": 310,
-          "endLine": 518,
+          "startLine": 271,
+          "endLine": 479,
           "tokens": 2872
         },
         {
           "name": "trigger_transition",
           "kind": "fn",
-          "startLine": 519,
-          "endLine": 542,
+          "startLine": 480,
+          "endLine": 503,
           "tokens": 292
         },
         {
           "name": "CutscenePlayer",
           "kind": "class",
-          "startLine": 543,
-          "endLine": 610,
-          "tokens": 596
+          "startLine": 504,
+          "endLine": 572,
+          "tokens": 617
         },
         {
           "name": "_safe_m6_shots",
           "kind": "fn",
-          "startLine": 611,
-          "endLine": 615,
+          "startLine": 573,
+          "endLine": 577,
           "tokens": 76
         },
         {
           "name": "_start_m6_cutscene",
           "kind": "fn",
-          "startLine": 616,
-          "endLine": 631,
+          "startLine": 578,
+          "endLine": 593,
           "tokens": 134
         },
         {
           "name": "_m0_outro_pending",
           "kind": "fn",
-          "startLine": 632,
-          "endLine": 640,
+          "startLine": 594,
+          "endLine": 602,
           "tokens": 66
+        },
+        {
+          "name": "_m7_outro_pending",
+          "kind": "fn",
+          "startLine": 603,
+          "endLine": 614,
+          "tokens": 112
         },
         {
           "name": "_m5_mid_cut_key",
           "kind": "fn",
-          "startLine": 641,
-          "endLine": 648,
+          "startLine": 615,
+          "endLine": 622,
           "tokens": 99
         },
         {
           "name": "_m6_mid_cut_key",
           "kind": "fn",
-          "startLine": 649,
-          "endLine": 656,
+          "startLine": 623,
+          "endLine": 630,
           "tokens": 104
+        },
+        {
+          "name": "_m7_film_pending",
+          "kind": "fn",
+          "startLine": 631,
+          "endLine": 647,
+          "tokens": 205
+        },
+        {
+          "name": "_cut_trace",
+          "kind": "fn",
+          "startLine": 648,
+          "endLine": 673,
+          "tokens": 251
+        },
+        {
+          "name": "_cut_watch",
+          "kind": "fn",
+          "startLine": 674,
+          "endLine": 691,
+          "tokens": 256
         },
         {
           "name": "start_cutscene",
           "kind": "fn",
-          "startLine": 657,
-          "endLine": 703,
-          "tokens": 609
+          "startLine": 692,
+          "endLine": 740,
+          "tokens": 657
         },
         {
           "name": "_set_menu_music",
           "kind": "fn",
-          "startLine": 704,
-          "endLine": 715,
+          "startLine": 741,
+          "endLine": 752,
           "tokens": 120
         },
         {
           "name": "_play_typewriter_tick",
           "kind": "fn",
-          "startLine": 716,
-          "endLine": 729,
+          "startLine": 753,
+          "endLine": 766,
           "tokens": 76
         },
         {
           "name": "_set_ambience",
           "kind": "fn",
-          "startLine": 730,
-          "endLine": 751,
+          "startLine": 767,
+          "endLine": 788,
           "tokens": 198
         },
         {
           "name": "apply_display_mode",
           "kind": "fn",
-          "startLine": 752,
-          "endLine": 800,
-          "tokens": 490
+          "startLine": 789,
+          "endLine": 830,
+          "tokens": 476
         },
         {
           "name": "_mission_report_data",
           "kind": "fn",
-          "startLine": 801,
-          "endLine": 860,
+          "startLine": 831,
+          "endLine": 890,
           "tokens": 575
         },
         {
           "name": "draw_slot_select_screen",
           "kind": "fn",
-          "startLine": 861,
-          "endLine": 1090,
+          "startLine": 891,
+          "endLine": 1120,
           "tokens": 3300
         },
         {
           "name": "start_briefing",
           "kind": "fn",
-          "startLine": 1091,
-          "endLine": 1099,
+          "startLine": 1121,
+          "endLine": 1129,
           "tokens": 80
         },
         {
           "name": "finish_briefing",
           "kind": "fn",
-          "startLine": 1100,
-          "endLine": 1106,
-          "tokens": 51
-        },
-        {
-          "name": "draw_briefing_screen",
-          "kind": "fn",
-          "startLine": 1107,
-          "endLine": 1216,
-          "tokens": 1537
-        },
-        {
-          "name": "_dev_flag_value",
-          "kind": "fn",
-          "startLine": 1217,
-          "endLine": 1226,
-          "tokens": 95
-        },
-        {
-          "name": "_apply_dev_args",
-          "kind": "fn",
-          "startLine": 1227,
-          "endLine": 1787,
-          "tokens": 7834
-        },
-        {
-          "name": "_BootIntroState",
-          "kind": "class",
-          "startLine": 1788,
-          "endLine": 4425,
-          "tokens": 33708
+          "startLine": 1130,
+          "endLine": 4549,
+          "tokens": 45067
         }
       ]
     },
@@ -1109,13 +1109,12 @@
     },
     "src/audio/voice_manifest.py": {
       "description": "Generated from voice_lines.xlsx - (VO ID, speaker, line) for every voiced line.",
-      "tokens": 6300,
-      "hash": "602f77705a0c832a",
-      "size": 22053,
-      "mtimeMs": 1792449986276.6592,
-      "updatedAt": "2026-10-21T18:53:49.871Z",
-      "source": "scan",
-      "importance": 0.0598
+      "tokens": 7039,
+      "hash": "8452e9f347c76854",
+      "size": 24641,
+      "mtimeMs": 1793137821863.7126,
+      "updatedAt": "2026-10-27T21:50:21.987Z",
+      "source": "hook"
     },
     "src/audio/voice.py": {
       "description": "Voice-over playback for Call of Acaristan.",
@@ -1500,311 +1499,291 @@
     },
     "src/core/camera.py": {
       "description": "Shared camera and bullet helpers.",
-      "tokens": 4512,
-      "hash": "9aa89c62b035750c",
-      "size": 15956,
-      "mtimeMs": 1792184372306.2136,
-      "updatedAt": "2026-10-21T18:53:49.875Z",
-      "source": "scan",
+      "tokens": 4739,
+      "hash": "5ed6474216d1671d",
+      "size": 16750,
+      "mtimeMs": 1793125229722.5002,
+      "updatedAt": "2026-10-27T18:20:29.845Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_decay_shake_kick",
           "kind": "fn",
-          "startLine": 45,
-          "endLine": 67,
-          "tokens": 292
+          "startLine": 47,
+          "endLine": 71,
+          "tokens": 293
         },
         {
           "name": "_clamp_to_map",
           "kind": "fn",
-          "startLine": 70,
-          "endLine": 74,
+          "startLine": 72,
+          "endLine": 78,
           "tokens": 85
         },
         {
           "name": "update_camera",
           "kind": "fn",
-          "startLine": 77,
-          "endLine": 200,
-          "tokens": 1936
+          "startLine": 79,
+          "endLine": 210,
+          "tokens": 2003
         },
         {
           "name": "_count",
           "kind": "fn",
-          "startLine": 209,
-          "endLine": 210,
-          "tokens": 20
+          "startLine": 211,
+          "endLine": 214,
+          "tokens": 21
         },
         {
           "name": "aim_lookahead",
           "kind": "fn",
-          "startLine": 213,
-          "endLine": 217,
-          "tokens": 83
+          "startLine": 215,
+          "endLine": 221,
+          "tokens": 84
+        },
+        {
+          "name": "mouse_lookahead",
+          "kind": "fn",
+          "startLine": 222,
+          "endLine": 237,
+          "tokens": 165
         },
         {
           "name": "follow_step",
           "kind": "fn",
-          "startLine": 220,
-          "endLine": 227,
-          "tokens": 162
+          "startLine": 238,
+          "endLine": 247,
+          "tokens": 163
         },
         {
           "name": "follow_gameplay",
           "kind": "fn",
-          "startLine": 230,
-          "endLine": 252,
-          "tokens": 370
+          "startLine": 248,
+          "endLine": 272,
+          "tokens": 384
         },
         {
           "name": "snap_gameplay",
           "kind": "fn",
-          "startLine": 255,
-          "endLine": 259,
+          "startLine": 273,
+          "endLine": 279,
           "tokens": 100
         },
         {
           "name": "tick_camera_fx",
           "kind": "fn",
-          "startLine": 262,
-          "endLine": 273,
-          "tokens": 176
+          "startLine": 280,
+          "endLine": 293,
+          "tokens": 177
         },
         {
           "name": "reset_camera_state",
           "kind": "fn",
-          "startLine": 276,
-          "endLine": 280,
+          "startLine": 294,
+          "endLine": 300,
           "tokens": 56
         },
         {
           "name": "collide_bullet_walls",
           "kind": "fn",
-          "startLine": 283,
-          "endLine": 303,
+          "startLine": 301,
+          "endLine": 323,
           "tokens": 318
         },
         {
           "name": "draw_bullets",
           "kind": "fn",
-          "startLine": 306,
-          "endLine": 324,
-          "tokens": 237
+          "startLine": 324,
+          "endLine": 343,
+          "tokens": 238
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "def _decay_shake_kick():\ndef _clamp_to_map(x, y, map_w, map_h):\ndef update_camera(target, map_w=None, map_h=None, focus_factor=None,\ndef _count(who):\ndef aim_lookahead(aim_angle, lookahead_px=CAM_LOOKAHEAD_PX):\ndef follow_step(cur_x, cur_y, desired_x, desired_y, *, ease=CAM_EASE_GAMEPLAY,\ndef follow_gameplay(target, map_w=None, map_h=None, *, aim_angle=None,\ndef snap_gameplay(target, map_w=None, map_h=None, *, aim_angle=None, who=\"snap\", **kw):\ndef tick_camera_fx(map_w=None, map_h=None):\ndef reset_camera_state():\ndef collide_bullet_walls(b, solid_walls):\ndef draw_bullets(surface, bullets, cam_x, cam_y, with_glow=True):"
+      ]
     },
     "src/core/config.py": {
-      "description": "URL patterns: 2 routes",
-      "tokens": 9537,
-      "hash": "3efc795acbfedeb3",
-      "size": 33472,
-      "mtimeMs": 1792449986277.1694,
-      "updatedAt": "2026-10-21T18:53:49.876Z",
-      "source": "scan",
+      "description": "resource_path, windowed_size, make_grain, draw_sky_gradient",
+      "tokens": 10522,
+      "hash": "3e7d6bdbc3c72d1b",
+      "size": 36910,
+      "mtimeMs": 1793183546706.1382,
+      "updatedAt": "2026-10-28T10:32:27.073Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "resource_path",
           "kind": "fn",
           "startLine": 10,
-          "endLine": 15,
-          "tokens": 56
+          "endLine": 21,
+          "tokens": 85
+        },
+        {
+          "name": "windowed_size",
+          "kind": "fn",
+          "startLine": 22,
+          "endLine": 171,
+          "tokens": 1767
         },
         {
           "name": "_load_font",
           "kind": "fn",
-          "startLine": 143,
-          "endLine": 147,
-          "tokens": 93
+          "startLine": 172,
+          "endLine": 204,
+          "tokens": 460
         },
         {
           "name": "make_grain",
           "kind": "fn",
-          "startLine": 176,
-          "endLine": 187,
-          "tokens": 122
+          "startLine": 205,
+          "endLine": 221,
+          "tokens": 172
         },
         {
           "name": "draw_sky_gradient",
           "kind": "fn",
-          "startLine": 193,
-          "endLine": 201,
+          "startLine": 222,
+          "endLine": 230,
           "tokens": 129
         },
         {
           "name": "draw_building",
           "kind": "fn",
-          "startLine": 202,
-          "endLine": 233,
+          "startLine": 231,
+          "endLine": 262,
           "tokens": 362
         },
         {
           "name": "draw_cityscape",
           "kind": "fn",
-          "startLine": 234,
-          "endLine": 283,
+          "startLine": 263,
+          "endLine": 312,
           "tokens": 870
         },
         {
           "name": "draw_rain",
           "kind": "fn",
-          "startLine": 284,
-          "endLine": 301,
-          "tokens": 213
+          "startLine": 313,
+          "endLine": 332,
+          "tokens": 246
         },
         {
           "name": "rain_drawables",
           "kind": "fn",
-          "startLine": 302,
-          "endLine": 322,
+          "startLine": 333,
+          "endLine": 353,
           "tokens": 305
         },
         {
           "name": "_make_vignette",
           "kind": "fn",
-          "startLine": 323,
-          "endLine": 336,
-          "tokens": 152
+          "startLine": 354,
+          "endLine": 368,
+          "tokens": 160
         },
         {
           "name": "draw_vignette",
           "kind": "fn",
-          "startLine": 338,
-          "endLine": 339,
+          "startLine": 369,
+          "endLine": 370,
           "tokens": 22
         },
         {
           "name": "draw_letterbox",
           "kind": "fn",
-          "startLine": 340,
-          "endLine": 346,
+          "startLine": 371,
+          "endLine": 377,
           "tokens": 106
         },
         {
           "name": "_make_scanlines",
           "kind": "fn",
-          "startLine": 347,
-          "endLine": 351,
-          "tokens": 58
+          "startLine": 378,
+          "endLine": 383,
+          "tokens": 67
         },
         {
           "name": "draw_scanlines",
           "kind": "fn",
-          "startLine": 353,
-          "endLine": 364,
+          "startLine": 384,
+          "endLine": 395,
           "tokens": 149
         },
         {
           "name": "_make_floor_texture",
           "kind": "fn",
-          "startLine": 365,
-          "endLine": 411,
-          "tokens": 461
+          "startLine": 396,
+          "endLine": 444,
+          "tokens": 477
         },
         {
           "name": "_make_slum_floor",
           "kind": "fn",
-          "startLine": 414,
-          "endLine": 448,
-          "tokens": 325
+          "startLine": 445,
+          "endLine": 480,
+          "tokens": 334
         },
         {
           "name": "_make_container_tile",
           "kind": "fn",
-          "startLine": 450,
-          "endLine": 492,
+          "startLine": 481,
+          "endLine": 523,
           "tokens": 390
         },
         {
           "name": "_make_warehouse_wall",
           "kind": "fn",
-          "startLine": 493,
-          "endLine": 515,
-          "tokens": 237
+          "startLine": 524,
+          "endLine": 551,
+          "tokens": 311
         },
         {
           "name": "_make_muzzle_flash",
           "kind": "fn",
-          "startLine": 521,
-          "endLine": 533,
-          "tokens": 140
+          "startLine": 552,
+          "endLine": 565,
+          "tokens": 150
         },
         {
           "name": "Particle",
           "kind": "class",
-          "startLine": 535,
-          "endLine": 558,
+          "startLine": 566,
+          "endLine": 589,
           "tokens": 235
-        },
-        {
-          "name": "Particle.__init__",
-          "kind": "method",
-          "startLine": 536,
-          "endLine": 544,
-          "tokens": 105
-        },
-        {
-          "name": "Particle.update",
-          "kind": "method",
-          "startLine": 545,
-          "endLine": 551,
-          "tokens": 54
-        },
-        {
-          "name": "Particle.draw",
-          "kind": "method",
-          "startLine": 552,
-          "endLine": 558,
-          "tokens": 72
         },
         {
           "name": "Casing",
           "kind": "class",
-          "startLine": 559,
-          "endLine": 643,
-          "tokens": 877
+          "startLine": 590,
+          "endLine": 818,
+          "tokens": 2657
         },
         {
-          "name": "Casing.__init__",
-          "kind": "method",
-          "startLine": 562,
-          "endLine": 571,
-          "tokens": 129
+          "name": "letterbox_rect",
+          "kind": "fn",
+          "startLine": 819,
+          "endLine": 839,
+          "tokens": 260
         },
         {
-          "name": "Casing.rect",
-          "kind": "method",
-          "startLine": 572,
-          "endLine": 578,
-          "tokens": 56
+          "name": "reset_present_cache",
+          "kind": "fn",
+          "startLine": 840,
+          "endLine": 845,
+          "tokens": 51
         },
         {
-          "name": "Casing.update",
-          "kind": "method",
-          "startLine": 579,
-          "endLine": 627,
-          "tokens": 493
-        },
-        {
-          "name": "Casing.draw",
-          "kind": "method",
-          "startLine": 628,
-          "endLine": 643,
-          "tokens": 181
+          "name": "present",
+          "kind": "fn",
+          "startLine": 846,
+          "endLine": 873,
+          "tokens": 340
         },
         {
           "name": "get_scaled_mouse",
           "kind": "fn",
-          "startLine": 789,
-          "endLine": 828,
-          "tokens": 442
+          "startLine": 874,
+          "endLine": 907,
+          "tokens": 348
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0632,
-      "skeleton": "def resource_path(relative_path):\ndef _load_font(path, size, fallback_family, bold=False):\ndef make_grain(w, h, rng=None):\ndef draw_sky_gradient(\ndef draw_building(surface, x, ground_y, w, h, base_col, win_col, win_lit_col, seed=0):\ndef draw_cityscape(surface, ground_y, palette, time_ticks, parallax=0.0):\ndef draw_rain(surface, drops, speed_mul=1.0):\ndef rain_drawables(drops, speed_mul=1.0):\ndef _make_vignette(strength=130):\ndef draw_vignette(surface, strength=130):\ndef draw_letterbox(surface):\ndef _make_scanlines():\ndef draw_scanlines(surface):\ndef _make_floor_texture():\ndef _make_slum_floor():\ndef _make_container_tile(r_or_color=65, g=55, b=50):\ndef _make_warehouse_wall():\ndef _make_muzzle_flash():\nclass Particle:\n    def __init__(self, x, y, color):\n    def update(self):\n    def draw(self, surface, offset_x, offset_y):\nclass Casing:\n    def __init__(self, x, y, eject_angle):\n    def rect(self):\n    def update(self, walls=()):\n    def draw(self, surface, offset_x, offset_y):\ndef get_scaled_mouse():"
+      ]
     },
     "src/core/console.py": {
       "description": "Console: toggle, bind, handle_event, execute_command",
@@ -1946,13 +1925,22 @@
       "importance": 0.0598
     },
     "src/core/dev_jumps.py": {
-      "description": "",
-      "tokens": 1833,
-      "hash": "40211ea32eeb9a74",
-      "size": 6495,
-      "mtimeMs": 1792826542009.846,
-      "updatedAt": "2026-10-24T07:22:22.037Z",
-      "source": "hook"
+      "description": "dev_jumps.py - registry of dev jump targets.",
+      "tokens": 2222,
+      "hash": "836c0b49361ab38d",
+      "size": 7862,
+      "mtimeMs": 1793139584599.971,
+      "updatedAt": "2026-10-27T22:19:44.748Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "jump_flag",
+          "kind": "fn",
+          "startLine": 143,
+          "endLine": 147,
+          "tokens": 49
+        }
+      ]
     },
     "src/core/fixedstep.py": {
       "description": "Fixed-timestep accumulator, for making the simulation host-independent.",
@@ -2269,227 +2257,224 @@
     },
     "src/core/game_core.py": {
       "description": "game_core.py - Proxy facade that delegates to split modules.",
-      "tokens": 5830,
-      "hash": "3850f404b40b0b90",
-      "size": 20583,
-      "mtimeMs": 1792268234721.2493,
-      "updatedAt": "2026-10-21T18:53:49.879Z",
-      "source": "scan",
+      "tokens": 6310,
+      "hash": "ca213ce0d7d0fcc0",
+      "size": 22263,
+      "mtimeMs": 1793140012706.9373,
+      "updatedAt": "2026-10-27T22:26:52.841Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_is_mission2_active",
           "kind": "fn",
-          "startLine": 68,
-          "endLine": 69,
+          "startLine": 70,
+          "endLine": 73,
           "tokens": 28
         },
         {
           "name": "_is_mission3_active",
           "kind": "fn",
-          "startLine": 72,
-          "endLine": 73,
+          "startLine": 74,
+          "endLine": 77,
           "tokens": 28
         },
         {
           "name": "_is_mission4_active",
           "kind": "fn",
-          "startLine": 76,
-          "endLine": 77,
+          "startLine": 78,
+          "endLine": 81,
           "tokens": 28
         },
         {
           "name": "_is_mission5_active",
           "kind": "fn",
-          "startLine": 80,
-          "endLine": 81,
+          "startLine": 82,
+          "endLine": 84,
           "tokens": 28
         },
         {
           "name": "_is_mission6_active",
           "kind": "fn",
-          "startLine": 83,
-          "endLine": 84,
+          "startLine": 85,
+          "endLine": 88,
+          "tokens": 28
+        },
+        {
+          "name": "_is_mission7_active",
+          "kind": "fn",
+          "startLine": 89,
+          "endLine": 92,
           "tokens": 28
         },
         {
           "name": "_is_mission0_active",
           "kind": "fn",
-          "startLine": 87,
-          "endLine": 89,
-          "tokens": 50
+          "startLine": 93,
+          "endLine": 100,
+          "tokens": 90
         },
         {
           "name": "start_mission0",
           "kind": "fn",
-          "startLine": 95,
-          "endLine": 97,
-          "tokens": 48
+          "startLine": 101,
+          "endLine": 105,
+          "tokens": 49
         },
         {
           "name": "start_mission",
           "kind": "fn",
-          "startLine": 100,
-          "endLine": 102,
-          "tokens": 36
+          "startLine": 106,
+          "endLine": 110,
+          "tokens": 37
         },
         {
           "name": "start_mission2",
           "kind": "fn",
-          "startLine": 105,
-          "endLine": 107,
-          "tokens": 42
+          "startLine": 111,
+          "endLine": 115,
+          "tokens": 43
         },
         {
           "name": "start_mission2_sniper",
           "kind": "fn",
-          "startLine": 110,
-          "endLine": 112,
+          "startLine": 116,
+          "endLine": 120,
           "tokens": 48
         },
         {
           "name": "start_mission2_checkpoint",
           "kind": "fn",
-          "startLine": 115,
-          "endLine": 122,
-          "tokens": 107
+          "startLine": 121,
+          "endLine": 130,
+          "tokens": 108
         },
         {
           "name": "start_mission3",
           "kind": "fn",
-          "startLine": 125,
-          "endLine": 127,
-          "tokens": 42
+          "startLine": 131,
+          "endLine": 135,
+          "tokens": 43
         },
         {
           "name": "start_mission3_breakout_checkpoint",
           "kind": "fn",
-          "startLine": 130,
-          "endLine": 132,
+          "startLine": 136,
+          "endLine": 140,
           "tokens": 58
         },
         {
           "name": "start_mission3_comms_checkpoint",
           "kind": "fn",
-          "startLine": 135,
-          "endLine": 137,
-          "tokens": 52
+          "startLine": 141,
+          "endLine": 145,
+          "tokens": 53
         },
         {
           "name": "start_mission3_archives_checkpoint",
           "kind": "fn",
-          "startLine": 140,
-          "endLine": 142,
+          "startLine": 146,
+          "endLine": 150,
           "tokens": 58
         },
         {
           "name": "start_mission3_kill_order_checkpoint",
           "kind": "fn",
-          "startLine": 145,
-          "endLine": 147,
+          "startLine": 151,
+          "endLine": 155,
           "tokens": 62
         },
         {
           "name": "start_mission3_broadcast_checkpoint",
           "kind": "fn",
-          "startLine": 150,
-          "endLine": 152,
+          "startLine": 156,
+          "endLine": 160,
           "tokens": 59
         },
         {
           "name": "start_mission4",
           "kind": "fn",
-          "startLine": 155,
-          "endLine": 157,
+          "startLine": 161,
+          "endLine": 165,
           "tokens": 40
         },
         {
           "name": "start_mission4_station_checkpoint",
           "kind": "fn",
-          "startLine": 160,
-          "endLine": 162,
-          "tokens": 60
+          "startLine": 166,
+          "endLine": 170,
+          "tokens": 61
         },
         {
           "name": "start_mission4_tower_checkpoint",
           "kind": "fn",
-          "startLine": 165,
-          "endLine": 167,
+          "startLine": 171,
+          "endLine": 175,
           "tokens": 60
         },
         {
           "name": "start_mission5",
           "kind": "fn",
-          "startLine": 170,
-          "endLine": 172,
-          "tokens": 49
+          "startLine": 176,
+          "endLine": 180,
+          "tokens": 50
         },
         {
           "name": "start_mission5_hq_checkpoint",
           "kind": "fn",
-          "startLine": 175,
-          "endLine": 177,
+          "startLine": 181,
+          "endLine": 185,
           "tokens": 60
         },
         {
           "name": "start_mission5_quarter_checkpoint",
           "kind": "fn",
-          "startLine": 180,
-          "endLine": 182,
+          "startLine": 186,
+          "endLine": 190,
           "tokens": 63
         },
         {
           "name": "start_mission5_printworks_checkpoint",
           "kind": "fn",
-          "startLine": 185,
-          "endLine": 187,
-          "tokens": 61
+          "startLine": 191,
+          "endLine": 195,
+          "tokens": 62
         },
         {
           "name": "start_mission5_tunnel_checkpoint",
           "kind": "fn",
-          "startLine": 190,
-          "endLine": 192,
-          "tokens": 58
+          "startLine": 196,
+          "endLine": 199,
+          "tokens": 59
         },
         {
           "name": "start_mission6",
           "kind": "fn",
-          "startLine": 194,
-          "endLine": 195,
+          "startLine": 200,
+          "endLine": 202,
           "tokens": 26
         },
         {
           "name": "_call_m6",
           "kind": "fn",
-          "startLine": 197,
-          "endLine": 204,
+          "startLine": 203,
+          "endLine": 211,
           "tokens": 81
         },
         {
           "name": "_m6_checkpoint",
           "kind": "fn",
-          "startLine": 206,
-          "endLine": 211,
-          "tokens": 80
+          "startLine": 212,
+          "endLine": 218,
+          "tokens": 81
         },
         {
           "name": "start_mission6_train_checkpoint",
           "kind": "fn",
-          "startLine": 213,
-          "endLine": 214,
-          "tokens": 39
-        },
-        {
-          "name": "start_mission6_customs_checkpoint",
-          "kind": "fn",
-          "startLine": 216,
-          "endLine": 217,
-          "tokens": 40
+          "startLine": 219,
+          "endLine": 561,
+          "tokens": 4300
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "def _is_mission2_active():\ndef _is_mission3_active():\ndef _is_mission4_active():\ndef _is_mission5_active():\ndef _is_mission6_active():\ndef _is_mission0_active():\ndef start_mission0(preserve_timer=False):\ndef start_mission(preserve_timer=False):\ndef start_mission2(preserve_timer=False):\ndef start_mission2_sniper(preserve_timer=False):\ndef start_mission2_checkpoint(preserve_timer=False):\ndef start_mission3(preserve_timer=False):\ndef start_mission3_breakout_checkpoint(preserve_timer=False):\ndef start_mission3_comms_checkpoint(preserve_timer=False):\ndef start_mission3_archives_checkpoint(preserve_timer=False):\ndef start_mission3_kill_order_checkpoint(preserve_timer=False):\ndef start_mission3_broadcast_checkpoint(preserve_timer=False):\ndef start_mission4(preserve_timer=False):\ndef start_mission4_station_checkpoint(preserve_timer=False):\ndef start_mission4_tower_checkpoint(preserve_timer=False):\ndef start_mission5(preserve_timer=False):\ndef start_mission5_hq_checkpoint(preserve_timer=False):\ndef start_mission5_quarter_checkpoint(preserve_timer=False):\ndef start_mission5_printworks_checkpoint(preserve_timer=False):\ndef start_mission5_tunnel_checkpoint(preserve_timer=False):\ndef start_mission6(preserve_timer=False):\ndef _call_m6(fn, preserve_timer=False):\ndef _m6_checkpoint(name, preserve_timer=False):\ndef start_mission6_train_checkpoint(preserve_timer=False):"
+      ]
     },
     "src/core/hands.py": {
       "description": "Canonical hand renderers - the reference-anatomy model (dorsal view).",
@@ -2974,51 +2959,49 @@
     },
     "src/core/mission_meta.py": {
       "description": "Per-mission display metadata (operation name + failure-screen copy).",
-      "tokens": 1041,
-      "hash": "ac64f5fd2c3863b8",
-      "size": 3642,
-      "mtimeMs": 1792246206267.856,
-      "updatedAt": "2026-10-21T18:53:49.882Z",
-      "source": "scan",
+      "tokens": 1107,
+      "hash": "219753436f40d0e3",
+      "size": 3873,
+      "mtimeMs": 1793131910187.9526,
+      "updatedAt": "2026-10-27T20:11:50.338Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "mission_key",
           "kind": "fn",
-          "startLine": 59,
-          "endLine": 62,
-          "tokens": 56
+          "startLine": 65,
+          "endLine": 70,
+          "tokens": 57
         },
         {
           "name": "meta_for",
           "kind": "fn",
-          "startLine": 65,
-          "endLine": 68,
-          "tokens": 50
+          "startLine": 71,
+          "endLine": 76,
+          "tokens": 51
         },
         {
           "name": "operation_name",
           "kind": "fn",
-          "startLine": 71,
-          "endLine": 77,
-          "tokens": 79
+          "startLine": 77,
+          "endLine": 88,
+          "tokens": 91
         },
         {
           "name": "radio_channel",
           "kind": "fn",
-          "startLine": 83,
-          "endLine": 85,
+          "startLine": 89,
+          "endLine": 93,
           "tokens": 51
         },
         {
           "name": "fail_text",
           "kind": "fn",
-          "startLine": 88,
-          "endLine": 94,
+          "startLine": 94,
+          "endLine": 101,
           "tokens": 88
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598
+      ]
     },
     "src/core/outfits.py": {
       "description": "outfits.py - Biribel's Mission 5 kit, as data (one source of truth).",
@@ -3291,115 +3274,112 @@
     },
     "src/core/save_system.py": {
       "description": "3-slot JSON save system for campaign progress.",
-      "tokens": 2212,
-      "hash": "562c9408db94ef8f",
-      "size": 7744,
-      "mtimeMs": 1792248859548.2444,
-      "updatedAt": "2026-10-21T18:53:49.885Z",
-      "source": "scan",
+      "tokens": 2299,
+      "hash": "ec6e572c34cdfad5",
+      "size": 8047,
+      "mtimeMs": 1793131909286.235,
+      "updatedAt": "2026-10-27T20:11:49.432Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_empty_slot",
           "kind": "fn",
-          "startLine": 62,
-          "endLine": 74,
-          "tokens": 99
+          "startLine": 70,
+          "endLine": 84,
+          "tokens": 100
         },
         {
           "name": "_default_data",
           "kind": "fn",
-          "startLine": 77,
-          "endLine": 82,
-          "tokens": 43
+          "startLine": 85,
+          "endLine": 92,
+          "tokens": 44
         },
         {
           "name": "load_data",
           "kind": "fn",
-          "startLine": 85,
-          "endLine": 103,
-          "tokens": 181
+          "startLine": 93,
+          "endLine": 113,
+          "tokens": 182
         },
         {
           "name": "save_data",
           "kind": "fn",
-          "startLine": 106,
-          "endLine": 110,
-          "tokens": 40
+          "startLine": 114,
+          "endLine": 120,
+          "tokens": 41
         },
         {
           "name": "select_slot",
           "kind": "fn",
-          "startLine": 113,
-          "endLine": 120,
-          "tokens": 73
+          "startLine": 121,
+          "endLine": 130,
+          "tokens": 74
         },
         {
           "name": "current_slot_index",
           "kind": "fn",
-          "startLine": 123,
-          "endLine": 124,
+          "startLine": 131,
+          "endLine": 134,
           "tokens": 15
         },
         {
           "name": "get_slot",
           "kind": "fn",
-          "startLine": 127,
-          "endLine": 129,
-          "tokens": 47
+          "startLine": 135,
+          "endLine": 139,
+          "tokens": 48
         },
         {
           "name": "start_new_campaign",
           "kind": "fn",
-          "startLine": 132,
-          "endLine": 150,
+          "startLine": 140,
+          "endLine": 160,
           "tokens": 184
         },
         {
           "name": "set_slot_progress",
           "kind": "fn",
-          "startLine": 153,
-          "endLine": 177,
-          "tokens": 295
+          "startLine": 161,
+          "endLine": 187,
+          "tokens": 296
         },
         {
           "name": "mission_complete_record",
           "kind": "fn",
-          "startLine": 180,
-          "endLine": 193,
-          "tokens": 148
+          "startLine": 188,
+          "endLine": 203,
+          "tokens": 149
         },
         {
           "name": "save_mission_complete_record",
           "kind": "fn",
-          "startLine": 196,
-          "endLine": 209,
+          "startLine": 204,
+          "endLine": 219,
           "tokens": 142
         },
         {
           "name": "save_mission_complete",
           "kind": "fn",
-          "startLine": 212,
-          "endLine": 234,
-          "tokens": 247
+          "startLine": 220,
+          "endLine": 244,
+          "tokens": 248
         },
         {
           "name": "format_timestamp",
           "kind": "fn",
-          "startLine": 237,
-          "endLine": 243,
+          "startLine": 245,
+          "endLine": 253,
           "tokens": 54
         },
         {
           "name": "has_any_save",
           "kind": "fn",
-          "startLine": 246,
-          "endLine": 247,
-          "tokens": 30
+          "startLine": 254,
+          "endLine": 263,
+          "tokens": 82
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "def _empty_slot(slot_index):\ndef _default_data():\ndef load_data():\ndef save_data(data):\ndef select_slot(slot_index):\ndef current_slot_index():\ndef get_slot(slot_index=None):\ndef start_new_campaign(slot_index=None):\ndef set_slot_progress(progress, slot_index=None, checkpoint=None):\ndef mission_complete_record(active_mission, total_time, stats=None):\ndef save_mission_complete_record(active_mission, total_time, stats=None, slot_index=None):\ndef save_mission_complete(mission_id, label, total_time, stats=None, flags=None, slot_index=None):\ndef format_timestamp(ts):\ndef has_any_save():"
+      ]
     },
     "src/core/scene_mirror.py": {
       "description": "RPE6 ADAPTER A-005: mirror the legacy GameStateManager onto an engine SceneStack.",
@@ -3513,38 +3493,21 @@
     },
     "src/core/state.py": {
       "description": "Central game state singleton.",
-      "tokens": 6475,
-      "hash": "a61aed71de64ecfa",
-      "size": 23509,
-      "mtimeMs": 1792536437145.681,
-      "updatedAt": "2026-10-21T18:53:49.887Z",
-      "source": "scan",
+      "tokens": 6980,
+      "hash": "1d7dba23dc65421a",
+      "size": 25285,
+      "mtimeMs": 1793137370457.2844,
+      "updatedAt": "2026-10-27T21:42:50.620Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "GameState",
           "kind": "class",
           "startLine": 9,
-          "endLine": 424,
-          "tokens": 6387
-        },
-        {
-          "name": "GameState.__init__",
-          "kind": "method",
-          "startLine": 10,
-          "endLine": 23,
-          "tokens": 168
-        },
-        {
-          "name": "GameState.reset",
-          "kind": "method",
-          "startLine": 24,
-          "endLine": 424,
-          "tokens": 6214
+          "endLine": 454,
+          "tokens": 6905
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0632,
-      "skeleton": "class GameState:\n    def __init__(self):\n    def reset(self):"
+      ]
     },
     "src/core/staticlayer.py": {
       "description": "staticlayer.py - chunked bake of the static world (phase 0).",
@@ -4101,39 +4064,39 @@
     },
     "src/cutscenes/engine.py": {
       "description": "Split from cutscenes.py - see cutscenes.py (shim) for the map.",
-      "tokens": 8428,
-      "hash": "ca670fe1ebfe4f57",
-      "size": 29868,
-      "mtimeMs": 1792184372493.898,
-      "updatedAt": "2026-10-21T18:53:49.892Z",
-      "source": "scan",
+      "tokens": 8763,
+      "hash": "7ba2123fde848cd6",
+      "size": 31042,
+      "mtimeMs": 1793185166791.4485,
+      "updatedAt": "2026-10-28T10:59:26.915Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_draw_cutscene_scene_raw",
           "kind": "fn",
           "startLine": 21,
-          "endLine": 348,
-          "tokens": 4221
+          "endLine": 349,
+          "tokens": 4222
         },
         {
           "name": "draw_cutscene_scene",
           "kind": "fn",
           "startLine": 350,
-          "endLine": 359,
+          "endLine": 360,
           "tokens": 154
         },
         {
           "name": "draw_typewriter_title",
           "kind": "fn",
           "startLine": 361,
-          "endLine": 402,
-          "tokens": 465
+          "endLine": 411,
+          "tokens": 582
         },
         {
           "name": "reset_dialogue_slide",
           "kind": "fn",
           "startLine": 412,
-          "endLine": 414,
+          "endLine": 416,
           "tokens": 41
         },
         {
@@ -4147,20 +4110,24 @@
           "name": "draw_cinematic_subtitle",
           "kind": "fn",
           "startLine": 426,
-          "endLine": 476,
-          "tokens": 625
+          "endLine": 478,
+          "tokens": 626
+        },
+        {
+          "name": "draw_film_caption",
+          "kind": "fn",
+          "startLine": 479,
+          "endLine": 509,
+          "tokens": 332
         },
         {
           "name": "draw_volkov_dossier_overlay",
           "kind": "fn",
-          "startLine": 479,
-          "endLine": 556,
-          "tokens": 1039
+          "startLine": 510,
+          "endLine": 701,
+          "tokens": 2242
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.07,
-      "skeleton": "def _draw_cutscene_scene_raw(surface, shot, t):\ndef draw_cutscene_scene(surface, shot, t):\ndef draw_typewriter_title(surface, lines, char_idx_total):\ndef reset_dialogue_slide():\ndef draw_dialogue_box(surface, speaker, text, char_idx, total_len, can_continue=True,\ndef draw_cinematic_subtitle(surface, speaker, text, char_idx=None,\ndef draw_volkov_dossier_overlay(surface, t):"
+      ]
     },
     "src/cutscenes/figure_kit.py": {
       "description": "cutscenes.figure_kit - deprecated path (RPE6 Phase 2, A-006): the kit is ``engine.anim``.",
@@ -7043,11 +7010,11 @@
     },
     "src/cutscenes/m6world3d.py": {
       "description": "m6world3d.py - engine3d sets and actor kit for the Mission 6 films.",
-      "tokens": 31688,
-      "hash": "6f160acb1b97e12c",
-      "size": 112145,
-      "mtimeMs": 1793012812933.8628,
-      "updatedAt": "2026-10-26T11:06:53.065Z",
+      "tokens": 31888,
+      "hash": "2a76c4dc9e6063ee",
+      "size": 112842,
+      "mtimeMs": 1793187379108.8838,
+      "updatedAt": "2026-10-28T11:36:19.243Z",
       "source": "hook",
       "symbols": [
         {
@@ -7257,8 +7224,8 @@
           "name": "hum",
           "kind": "fn",
           "startLine": 491,
-          "endLine": 2531,
-          "tokens": 26493
+          "endLine": 2543,
+          "tokens": 26692
         }
       ]
     },
@@ -8174,150 +8141,133 @@
     },
     "src/engine/anim/figure_kit.py": {
       "description": "figure_kit.py - one cast renderer in the \"Balaceanu Arrest\" house style.",
-      "tokens": 10926,
-      "hash": "edacba441cf4fc8d",
-      "size": 38749,
-      "mtimeMs": 1792519644875.5789,
-      "updatedAt": "2026-10-21T18:53:49.920Z",
-      "source": "scan",
+      "tokens": 12731,
+      "hash": "fe4df47b3aabb7e6",
+      "size": 45066,
+      "mtimeMs": 1793183470504.557,
+      "updatedAt": "2026-10-28T10:31:10.687Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_mix",
           "kind": "fn",
-          "startLine": 60,
-          "endLine": 61,
-          "tokens": 30
+          "startLine": 61,
+          "endLine": 64,
+          "tokens": 31
         },
         {
           "name": "_dark",
           "kind": "fn",
-          "startLine": 64,
-          "endLine": 65,
+          "startLine": 65,
+          "endLine": 68,
           "tokens": 16
         },
         {
           "name": "_lite",
           "kind": "fn",
-          "startLine": 68,
-          "endLine": 69,
-          "tokens": 17
+          "startLine": 69,
+          "endLine": 178,
+          "tokens": 1984
         },
         {
           "name": "_Pen",
           "kind": "class",
-          "startLine": 178,
-          "endLine": 208,
-          "tokens": 382
-        },
-        {
-          "name": "_Pen.__init__",
-          "kind": "method",
-          "startLine": 183,
-          "endLine": 186,
-          "tokens": 55
-        },
-        {
-          "name": "_Pen.p",
-          "kind": "method",
-          "startLine": 188,
-          "endLine": 191,
-          "tokens": 54
-        },
-        {
-          "name": "_Pen.w",
-          "kind": "method",
-          "startLine": 193,
-          "endLine": 194,
-          "tokens": 18
-        },
-        {
-          "name": "_Pen.poly",
-          "kind": "method",
-          "startLine": 196,
-          "endLine": 197,
-          "tokens": 35
-        },
-        {
-          "name": "_Pen.line",
-          "kind": "method",
-          "startLine": 199,
-          "endLine": 200,
-          "tokens": 44
-        },
-        {
-          "name": "_Pen.ell",
-          "kind": "method",
-          "startLine": 202,
-          "endLine": 205,
-          "tokens": 73
-        },
-        {
-          "name": "_Pen.circ",
-          "kind": "method",
-          "startLine": 207,
-          "endLine": 208,
-          "tokens": 33
+          "startLine": 179,
+          "endLine": 216,
+          "tokens": 458
         },
         {
           "name": "_face",
           "kind": "fn",
-          "startLine": 216,
-          "endLine": 383,
-          "tokens": 2840
+          "startLine": 217,
+          "endLine": 387,
+          "tokens": 2862
         },
         {
           "name": "_hand",
           "kind": "fn",
-          "startLine": 387,
-          "endLine": 391,
-          "tokens": 81
+          "startLine": 388,
+          "endLine": 397,
+          "tokens": 103
         },
         {
           "name": "_reach_units",
           "kind": "fn",
-          "startLine": 397,
-          "endLine": 406,
-          "tokens": 87
+          "startLine": 398,
+          "endLine": 409,
+          "tokens": 88
         },
         {
           "name": "_torso_x",
           "kind": "fn",
-          "startLine": 409,
-          "endLine": 413,
+          "startLine": 410,
+          "endLine": 416,
           "tokens": 74
         },
         {
           "name": "_print",
           "kind": "fn",
-          "startLine": 416,
-          "endLine": 445,
+          "startLine": 417,
+          "endLine": 448,
           "tokens": 454
         },
         {
           "name": "_casual_front",
           "kind": "fn",
-          "startLine": 448,
-          "endLine": 493,
-          "tokens": 862
+          "startLine": 449,
+          "endLine": 496,
+          "tokens": 863
+        },
+        {
+          "name": "_folder_shapes",
+          "kind": "fn",
+          "startLine": 497,
+          "endLine": 511,
+          "tokens": 230
+        },
+        {
+          "name": "_folder_art",
+          "kind": "fn",
+          "startLine": 512,
+          "endLine": 524,
+          "tokens": 138
+        },
+        {
+          "name": "_shotgun_art",
+          "kind": "fn",
+          "startLine": 525,
+          "endLine": 575,
+          "tokens": 610
+        },
+        {
+          "name": "_shotgun_hand",
+          "kind": "fn",
+          "startLine": 576,
+          "endLine": 605,
+          "tokens": 339
+        },
+        {
+          "name": "draw_prop",
+          "kind": "fn",
+          "startLine": 606,
+          "endLine": 633,
+          "tokens": 294
         },
         {
           "name": "_body",
           "kind": "fn",
-          "startLine": 496,
-          "endLine": 635,
-          "tokens": 2582
+          "startLine": 634,
+          "endLine": 790,
+          "tokens": 2726
         },
         {
           "name": "draw_character",
           "kind": "fn",
-          "startLine": 638,
-          "endLine": 672,
-          "tokens": 532
+          "startLine": 791,
+          "endLine": 828,
+          "tokens": 577
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0852,
-      "skeleton": "def _mix(a, b, t):\ndef _dark(c, t=.3):\ndef _lite(c, t=.25):\nclass _Pen:\n    def __init__(self, surf, cx, foot, k, facing_right):\n    def p(self, x, y, light=False):\n    def w(self, v):\n    def poly(self, col, pts, light=False):\n    def line(self, col, pts, width=1, light=False):\n    def ell(self, col, x0, y0, x1, y1, width=0):\n    def circ(self, col, x, y, r, width=0):\ndef _face(pen, spec, hx, hy, *, fear=0, smile=0, look=0, blink=0, cig=True):\ndef _hand(pen, skin, glove, x, y, dirx):\ndef _reach_units(pen, reach):\ndef _torso_x(X, hy, y, hem, flare, side):\ndef _print(pen, spec, X, hy, half):\ndef _casual_front(pen, spec, X, hy, top, hem, flare):\ndef _body(pen, spec, t, moving, prop, prop_label, label_font, seated=False, reach=None, arms=True):\ndef draw_character(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False,"
+      ]
     },
     "src/engine/anim/pose_cache.py": {
       "description": "Pose cache: render-once surfaces for parameterised procedural bodies.",
@@ -17758,220 +17708,224 @@
     },
     "src/missions/m1/draw.py": {
       "description": "Split from mission.py - see mission.py (shim) for the map.",
-      "tokens": 22703,
-      "hash": "c097d7e70a9d594a",
-      "size": 79716,
-      "mtimeMs": 1792449986279.1907,
-      "updatedAt": "2026-10-21T18:53:50.073Z",
-      "source": "scan",
+      "tokens": 33772,
+      "hash": "c8cc0ede99bc313d",
+      "size": 118492,
+      "mtimeMs": 1793126209387.6567,
+      "updatedAt": "2026-10-27T18:36:49.509Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_draw_molotov_icon",
           "kind": "fn",
-          "startLine": 48,
-          "endLine": 55,
+          "startLine": 60,
+          "endLine": 69,
           "tokens": 116
         },
         {
           "name": "_paint_molotov_icon",
           "kind": "fn",
-          "startLine": 58,
-          "endLine": 98,
+          "startLine": 70,
+          "endLine": 110,
           "tokens": 419
         },
         {
           "name": "_escape_subtitle",
           "kind": "fn",
-          "startLine": 99,
-          "endLine": 113,
+          "startLine": 111,
+          "endLine": 125,
           "tokens": 199
         },
         {
           "name": "_draw_biribel_soldier_closeup",
           "kind": "fn",
-          "startLine": 114,
-          "endLine": 136,
+          "startLine": 126,
+          "endLine": 148,
           "tokens": 383
         },
         {
           "name": "_draw_escape_truck",
           "kind": "fn",
-          "startLine": 137,
-          "endLine": 178,
-          "tokens": 828
+          "startLine": 149,
+          "endLine": 200,
+          "tokens": 981
         },
         {
-          "name": "draw_biribel_escape_cutscene",
+          "name": "_escape_frame",
           "kind": "fn",
-          "startLine": 179,
-          "endLine": 449,
-          "tokens": 5011
+          "startLine": 201,
+          "endLine": 205,
+          "tokens": 44
         },
         {
-          "name": "_m1_static_layer",
+          "name": "_escape_sky",
           "kind": "fn",
-          "startLine": 459,
-          "endLine": 461,
-          "tokens": 48
+          "startLine": 206,
+          "endLine": 220,
+          "tokens": 183
         },
         {
-          "name": "_m1_wing_name",
+          "name": "_draw_escape_dashboard",
           "kind": "fn",
-          "startLine": 464,
-          "endLine": 471,
-          "tokens": 75
+          "startLine": 221,
+          "endLine": 241,
+          "tokens": 370
         },
         {
-          "name": "_m1_solid_world",
+          "name": "_draw_escape_closeup",
           "kind": "fn",
-          "startLine": 474,
-          "endLine": 483,
-          "tokens": 95
+          "startLine": 242,
+          "endLine": 256,
+          "tokens": 220
         },
         {
-          "name": "_m1_light_sig",
+          "name": "_draw_escape_truck_side",
           "kind": "fn",
-          "startLine": 486,
-          "endLine": 487,
+          "startLine": 257,
+          "endLine": 356,
+          "tokens": 1739
+        },
+        {
+          "name": "_draw_escape_rear",
+          "kind": "fn",
+          "startLine": 357,
+          "endLine": 486,
+          "tokens": 2380
+        },
+        {
+          "name": "_escape_grade",
+          "kind": "fn",
+          "startLine": 487,
+          "endLine": 493,
+          "tokens": 58
+        },
+        {
+          "name": "_escape_scene",
+          "kind": "fn",
+          "startLine": 494,
+          "endLine": 524,
+          "tokens": 416
+        },
+        {
+          "name": "_ease",
+          "kind": "fn",
+          "startLine": 525,
+          "endLine": 529,
+          "tokens": 23
+        },
+        {
+          "name": "_dropoff_hold_cam",
+          "kind": "fn",
+          "startLine": 530,
+          "endLine": 545,
+          "tokens": 197
+        },
+        {
+          "name": "_dropoff_cam",
+          "kind": "fn",
+          "startLine": 546,
+          "endLine": 555,
+          "tokens": 110
+        },
+        {
+          "name": "_dropoff_van",
+          "kind": "fn",
+          "startLine": 556,
+          "endLine": 568,
+          "tokens": 138
+        },
+        {
+          "name": "_dropoff_biribel",
+          "kind": "fn",
+          "startLine": 569,
+          "endLine": 585,
+          "tokens": 194
+        },
+        {
+          "name": "_draw_dropoff_player",
+          "kind": "fn",
+          "startLine": 586,
+          "endLine": 598,
+          "tokens": 96
+        },
+        {
+          "name": "_draw_dropoff_street",
+          "kind": "fn",
+          "startLine": 599,
+          "endLine": 626,
+          "tokens": 392
+        },
+        {
+          "name": "_dropoff_headlights",
+          "kind": "fn",
+          "startLine": 627,
+          "endLine": 639,
+          "tokens": 192
+        },
+        {
+          "name": "_dropoff_post",
+          "kind": "fn",
+          "startLine": 640,
+          "endLine": 664,
+          "tokens": 298
+        },
+        {
+          "name": "_draw_dropoff_zoom",
+          "kind": "fn",
+          "startLine": 665,
+          "endLine": 685,
+          "tokens": 315
+        },
+        {
+          "name": "_draw_dropoff_follow",
+          "kind": "fn",
+          "startLine": 686,
+          "endLine": 690,
+          "tokens": 45
+        },
+        {
+          "name": "_draw_dropoff_entry",
+          "kind": "fn",
+          "startLine": 691,
+          "endLine": 695,
+          "tokens": 52
+        },
+        {
+          "name": "_dropoff_take",
+          "kind": "fn",
+          "startLine": 696,
+          "endLine": 724,
+          "tokens": 310
+        },
+        {
+          "name": "_m1_tiles_signature",
+          "kind": "fn",
+          "startLine": 725,
+          "endLine": 728,
+          "tokens": 27
+        },
+        {
+          "name": "_paint_m1_tiles_chunk",
+          "kind": "fn",
+          "startLine": 729,
+          "endLine": 732,
           "tokens": 25
         },
         {
-          "name": "_push_m1_lights",
+          "name": "_paint_m1_tiles_direct",
           "kind": "fn",
-          "startLine": 517,
-          "endLine": 537,
-          "tokens": 280
+          "startLine": 733,
+          "endLine": 737,
+          "tokens": 42
         },
         {
-          "name": "_render_m1_bg",
+          "name": "_m1_tiles_world_size",
           "kind": "fn",
-          "startLine": 540,
-          "endLine": 587,
-          "tokens": 554
-        },
-        {
-          "name": "_draw_m1_desk_body",
-          "kind": "fn",
-          "startLine": 590,
-          "endLine": 618,
-          "tokens": 512
-        },
-        {
-          "name": "_draw_m1_desk_overlays",
-          "kind": "fn",
-          "startLine": 621,
-          "endLine": 633,
-          "tokens": 200
-        },
-        {
-          "name": "_m1_hash",
-          "kind": "fn",
-          "startLine": 636,
-          "endLine": 640,
-          "tokens": 64
-        },
-        {
-          "name": "_m1_prop_overlaps_solid",
-          "kind": "fn",
-          "startLine": 643,
-          "endLine": 657,
-          "tokens": 222
-        },
-        {
-          "name": "_draw_m1_hall_fixture",
-          "kind": "fn",
-          "startLine": 670,
-          "endLine": 675,
-          "tokens": 106
-        },
-        {
-          "name": "_draw_m1_street_post",
-          "kind": "fn",
-          "startLine": 678,
-          "endLine": 684,
-          "tokens": 124
-        },
-        {
-          "name": "_draw_m1_bulkhead",
-          "kind": "fn",
-          "startLine": 687,
-          "endLine": 692,
-          "tokens": 101
-        },
-        {
-          "name": "_draw_m1_tripod",
-          "kind": "fn",
-          "startLine": 695,
-          "endLine": 702,
-          "tokens": 133
-        },
-        {
-          "name": "_draw_m1_static_dressing",
-          "kind": "fn",
-          "startLine": 705,
-          "endLine": 830,
-          "tokens": 1899
-        },
-        {
-          "name": "_bake_m1_static",
-          "kind": "fn",
-          "startLine": 833,
-          "endLine": 835,
-          "tokens": 32
-        },
-        {
-          "name": "game_draw",
-          "kind": "fn",
-          "startLine": 838,
-          "endLine": 844,
-          "tokens": 90
-        },
-        {
-          "name": "_paint_m1_pickup_icon",
-          "kind": "fn",
-          "startLine": 850,
-          "endLine": 884,
-          "tokens": 522
-        },
-        {
-          "name": "_paint_m1_exfil_headlights",
-          "kind": "fn",
-          "startLine": 887,
-          "endLine": 895,
-          "tokens": 163
-        },
-        {
-          "name": "_paint_m1_exfil_truck",
-          "kind": "fn",
-          "startLine": 898,
-          "endLine": 950,
-          "tokens": 1099
-        },
-        {
-          "name": "_m1_hp_panel",
-          "kind": "fn",
-          "startLine": 953,
-          "endLine": 957,
-          "tokens": 65
-        },
-        {
-          "name": "_m1_panel_140",
-          "kind": "fn",
-          "startLine": 960,
-          "endLine": 962,
-          "tokens": 46
-        },
-        {
-          "name": "_game_draw_inner",
-          "kind": "fn",
-          "startLine": 965,
-          "endLine": 1547,
-          "tokens": 8109
+          "startLine": 738,
+          "endLine": 2395,
+          "tokens": 22852
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.07,
-      "skeleton": "def _draw_molotov_icon(surface, cx, cy, active=True):\ndef _paint_molotov_icon(surface, cx, cy, active=True):\ndef _escape_subtitle(surface, speaker, text, alpha=255):\ndef _draw_biribel_soldier_closeup(surface, cx, cy, t, scale=1.0):\ndef _draw_escape_truck(surface, x, y, scale=1.0, angle=0.0, headlights=True):\ndef draw_biribel_escape_cutscene(surface, timer):\ndef _m1_static_layer():\ndef _m1_wing_name():\ndef _m1_solid_world(wx, wy):\ndef _m1_light_sig():\ndef _push_m1_lights(cam_x, cam_y, t):\ndef _render_m1_bg(target, cam_x, cam_y):\ndef _draw_m1_desk_body(target, dx, dy):\ndef _draw_m1_desk_overlays(cam_x, cam_y):\ndef _m1_hash(col, row, n):\ndef _m1_prop_overlaps_solid(kind, tx, ty, arg):\ndef _draw_m1_hall_fixture(target, sx, sy):\ndef _draw_m1_street_post(target, sx, sy):\ndef _draw_m1_bulkhead(target, sx, sy):\ndef _draw_m1_tripod(target, sx, sy):\ndef _draw_m1_static_dressing(target, cam_x, cam_y):\ndef _bake_m1_static(surf, ox, oy):\ndef game_draw(fcx: float, fcy: float) -> None:\ndef _paint_m1_pickup_icon(surface, kind, px, py):\ndef _paint_m1_exfil_headlights(surface, ex, ey):\ndef _paint_m1_exfil_truck(surface, ex, ey, headlights=True):\ndef _m1_hp_panel(w, h):\ndef _m1_panel_140(w, h):\ndef _game_draw_inner(fcx: float, fcy: float) -> None:"
+      ]
     },
     "src/missions/m1/hotwire.py": {
       "description": "Split from mission.py - see mission.py (shim) for the map.",
@@ -19012,122 +18966,119 @@
     },
     "src/missions/m2/update.py": {
       "description": "Split from mission2.py - see mission2.py (shim) for the map.",
-      "tokens": 17464,
-      "hash": "fe14795e2b275014",
-      "size": 62283,
-      "mtimeMs": 1792184374293.629,
-      "updatedAt": "2026-10-21T18:53:50.139Z",
-      "source": "scan",
+      "tokens": 17490,
+      "hash": "f78986b1f7ef605c",
+      "size": 62373,
+      "mtimeMs": 1793125232986.9097,
+      "updatedAt": "2026-10-27T18:20:33.113Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_m2g",
           "kind": "fn",
           "startLine": 54,
-          "endLine": 56,
+          "endLine": 58,
           "tokens": 38
         },
         {
           "name": "handle_interact",
           "kind": "fn",
           "startLine": 59,
-          "endLine": 137,
-          "tokens": 1184
+          "endLine": 139,
+          "tokens": 1185
         },
         {
           "name": "blocks_player_actions",
           "kind": "fn",
           "startLine": 140,
-          "endLine": 148,
+          "endLine": 150,
           "tokens": 105
         },
         {
           "name": "debug_jump_to_evidence",
           "kind": "fn",
           "startLine": 151,
-          "endLine": 161,
-          "tokens": 116
+          "endLine": 166,
+          "tokens": 149
         },
         {
           "name": "_movement_locked",
           "kind": "fn",
           "startLine": 167,
-          "endLine": 172,
+          "endLine": 174,
           "tokens": 60
         },
         {
           "name": "_update_stage",
           "kind": "fn",
           "startLine": 175,
-          "endLine": 328,
-          "tokens": 2299
+          "endLine": 333,
+          "tokens": 2334
         },
         {
           "name": "_update_player",
           "kind": "fn",
           "startLine": 334,
-          "endLine": 368,
-          "tokens": 379
+          "endLine": 371,
+          "tokens": 380
         },
         {
           "name": "_update_weapon_timers",
           "kind": "fn",
           "startLine": 372,
-          "endLine": 435,
+          "endLine": 437,
           "tokens": 834
         },
         {
           "name": "_update_molotovs",
           "kind": "fn",
           "startLine": 438,
-          "endLine": 530,
-          "tokens": 1338
+          "endLine": 532,
+          "tokens": 1339
         },
         {
           "name": "_update_sniper_enemy",
           "kind": "fn",
           "startLine": 533,
-          "endLine": 561,
-          "tokens": 326
+          "endLine": 563,
+          "tokens": 327
         },
         {
           "name": "_update_bullets_enemies",
           "kind": "fn",
           "startLine": 564,
-          "endLine": 682,
+          "endLine": 684,
           "tokens": 1884
         },
         {
           "name": "_update_pickups",
           "kind": "fn",
           "startLine": 685,
-          "endLine": 700,
-          "tokens": 219
+          "endLine": 702,
+          "tokens": 220
         },
         {
           "name": "_update_particles_texts",
           "kind": "fn",
           "startLine": 703,
-          "endLine": 983,
+          "endLine": 985,
           "tokens": 4238
         },
         {
           "name": "_update_camera",
           "kind": "fn",
           "startLine": 986,
-          "endLine": 1050,
-          "tokens": 842
+          "endLine": 1053,
+          "tokens": 870
         },
         {
           "name": "game_update",
           "kind": "fn",
-          "startLine": 1053,
-          "endLine": 1230,
-          "tokens": 2693
+          "startLine": 1054,
+          "endLine": 1240,
+          "tokens": 2793
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0683,
-      "skeleton": "def _m2g(e):\ndef handle_interact():\ndef blocks_player_actions():\ndef debug_jump_to_evidence():\ndef _movement_locked():\ndef _update_stage(keys):\ndef _update_player(keys, solid_walls):\ndef _update_weapon_timers():\ndef _update_molotovs(solid_walls):\ndef _update_sniper_enemy(e, solid_walls):\ndef _update_bullets_enemies(solid_walls):\ndef _update_pickups():\ndef _update_particles_texts(solid_walls):\ndef _update_camera():\ndef game_update(keys):"
+      ]
     },
     "src/missions/m2/world.py": {
       "description": "Split from mission2.py - see mission2.py (shim) for the map.",
@@ -27073,12 +27024,12 @@
     },
     "src/missions/walking_sim.py": {
       "description": "Walking sim section: slum exploration, NPCs, firefight overlook panorama.",
-      "tokens": 42130,
-      "hash": "ee3322f78f0a5249",
-      "size": 149213,
-      "mtimeMs": 1792184374192.0686,
-      "updatedAt": "2026-10-21T18:53:50.246Z",
-      "source": "scan",
+      "tokens": 42172,
+      "hash": "78364e1a808e2e52",
+      "size": 149360,
+      "mtimeMs": 1793125236316.8496,
+      "updatedAt": "2026-10-27T18:20:36.450Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_play_walk_type_tick",
@@ -27091,8 +27042,8 @@
           "name": "clear_walk_dialogue",
           "kind": "fn",
           "startLine": 40,
-          "endLine": 52,
-          "tokens": 140
+          "endLine": 146,
+          "tokens": 968
         },
         {
           "name": "_clamp_walk_camera",
@@ -27119,181 +27070,178 @@
           "name": "update_walking_sim",
           "kind": "fn",
           "startLine": 313,
-          "endLine": 449,
-          "tokens": 1866
+          "endLine": 453,
+          "tokens": 1908
         },
         {
           "name": "_ease_out_cubic",
           "kind": "fn",
-          "startLine": 450,
-          "endLine": 452,
+          "startLine": 454,
+          "endLine": 456,
           "tokens": 24
         },
         {
           "name": "_lerp",
           "kind": "fn",
-          "startLine": 453,
-          "endLine": 454,
+          "startLine": 457,
+          "endLine": 458,
           "tokens": 14
         },
         {
           "name": "_start_walk_fp_cutscene",
           "kind": "fn",
-          "startLine": 455,
-          "endLine": 477,
+          "startLine": 459,
+          "endLine": 481,
           "tokens": 192
         },
         {
           "name": "_finish_walk_fp_cutscene",
           "kind": "fn",
-          "startLine": 478,
-          "endLine": 518,
+          "startLine": 482,
+          "endLine": 522,
           "tokens": 475
         },
         {
           "name": "_update_walk_fp_cutscene",
           "kind": "fn",
-          "startLine": 519,
-          "endLine": 525,
+          "startLine": 523,
+          "endLine": 529,
           "tokens": 80
         },
         {
           "name": "_draw_fp_hands",
           "kind": "fn",
-          "startLine": 526,
-          "endLine": 543,
+          "startLine": 530,
+          "endLine": 547,
           "tokens": 228
         },
         {
           "name": "_draw_fp_kevlar",
           "kind": "fn",
-          "startLine": 544,
-          "endLine": 573,
+          "startLine": 548,
+          "endLine": 577,
           "tokens": 401
         },
         {
           "name": "_draw_fp_mag",
           "kind": "fn",
-          "startLine": 574,
-          "endLine": 589,
+          "startLine": 578,
+          "endLine": 593,
           "tokens": 169
         },
         {
           "name": "_draw_fp_crate",
           "kind": "fn",
-          "startLine": 590,
-          "endLine": 625,
+          "startLine": 594,
+          "endLine": 629,
           "tokens": 599
         },
         {
           "name": "_draw_walk_fp_cutscene",
           "kind": "fn",
-          "startLine": 626,
-          "endLine": 979,
+          "startLine": 630,
+          "endLine": 983,
           "tokens": 5270
         },
         {
           "name": "handle_walk_interact",
           "kind": "fn",
-          "startLine": 980,
-          "endLine": 1047,
+          "startLine": 984,
+          "endLine": 1051,
           "tokens": 728
         },
         {
           "name": "_draw_walk_poster",
           "kind": "fn",
-          "startLine": 1048,
-          "endLine": 1061,
+          "startLine": 1052,
+          "endLine": 1065,
           "tokens": 166
         },
         {
           "name": "_draw_walk_laundry",
           "kind": "fn",
-          "startLine": 1062,
-          "endLine": 1075,
+          "startLine": 1066,
+          "endLine": 1079,
           "tokens": 157
         },
         {
           "name": "_draw_walk_checkpoint",
           "kind": "fn",
-          "startLine": 1076,
-          "endLine": 1091,
+          "startLine": 1080,
+          "endLine": 1095,
           "tokens": 271
         },
         {
           "name": "_draw_walk_fish",
           "kind": "fn",
-          "startLine": 1092,
-          "endLine": 1119,
+          "startLine": 1096,
+          "endLine": 1123,
           "tokens": 307
         },
         {
           "name": "_draw_walk_old_woman_marker",
           "kind": "fn",
-          "startLine": 1120,
-          "endLine": 1134,
+          "startLine": 1124,
+          "endLine": 1138,
           "tokens": 107
         },
         {
           "name": "_draw_walk_overlook",
           "kind": "fn",
-          "startLine": 1135,
-          "endLine": 1141,
-          "tokens": 120
+          "startLine": 1139,
+          "endLine": 1153,
+          "tokens": 191
         },
         {
           "name": "_gen_walk_props",
           "kind": "fn",
-          "startLine": 1150,
-          "endLine": 1215,
-          "tokens": 711
+          "startLine": 1154,
+          "endLine": 1228,
+          "tokens": 768
         },
         {
           "name": "_walk_soft_shadow",
           "kind": "fn",
-          "startLine": 1225,
-          "endLine": 1234,
-          "tokens": 139
+          "startLine": 1229,
+          "endLine": 1240,
+          "tokens": 140
         },
         {
           "name": "_draw_prop_lamp_pole",
           "kind": "fn",
-          "startLine": 1237,
-          "endLine": 1246,
+          "startLine": 1241,
+          "endLine": 1250,
           "tokens": 146
         },
         {
           "name": "_draw_prop_drum",
           "kind": "fn",
-          "startLine": 1247,
-          "endLine": 1255,
+          "startLine": 1251,
+          "endLine": 1259,
           "tokens": 134
         },
         {
           "name": "_draw_prop_trash",
           "kind": "fn",
-          "startLine": 1256,
-          "endLine": 1266,
+          "startLine": 1260,
+          "endLine": 1270,
           "tokens": 178
         },
         {
           "name": "_draw_prop_pallet",
           "kind": "fn",
-          "startLine": 1267,
-          "endLine": 1277,
+          "startLine": 1271,
+          "endLine": 1281,
           "tokens": 152
         },
         {
           "name": "_draw_prop_puddle",
           "kind": "fn",
-          "startLine": 1278,
-          "endLine": 1285,
-          "tokens": 110
+          "startLine": 1282,
+          "endLine": 3152,
+          "tokens": 26016
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "def _play_walk_type_tick(ch, idx, volume=0.095):\ndef clear_walk_dialogue():\ndef _clamp_walk_camera():\ndef _walk_update_render():\ndef start_walking_sim():\ndef update_walking_sim(keys):\ndef _ease_out_cubic(t):\ndef _lerp(a, b, t):\ndef _start_walk_fp_cutscene(scene, reward, npc=None, stash=None):\ndef _finish_walk_fp_cutscene():\ndef _update_walk_fp_cutscene():\ndef _draw_fp_hands(surface, reach=0.0):\ndef _draw_fp_kevlar(surface, x, y, scale=1.0):\ndef _draw_fp_mag(surface, x, y, rot=0):\ndef _draw_fp_crate(surface, cx, cy, open_t, contents=\"ammo\"):\ndef _draw_walk_fp_cutscene(surface):\ndef handle_walk_interact():\ndef _draw_walk_poster(surface, x, y):\ndef _draw_walk_laundry(surface, x, y):\ndef _draw_walk_checkpoint(surface, x, y):\ndef _draw_walk_fish(surface, x, y):\ndef _draw_walk_old_woman_marker(surface, x, y):\ndef _draw_walk_overlook(surface, x, y):\ndef _gen_walk_props():\ndef _walk_soft_shadow(surface, rect, alpha):\ndef _draw_prop_lamp_pole(surface, x, y, fcx, fcy):\ndef _draw_prop_drum(surface, x, y, fcx, fcy):\ndef _draw_prop_trash(surface, x, y, fcx, fcy):\ndef _draw_prop_pallet(surface, x, y, fcx, fcy):\ndef _draw_prop_puddle(surface, x, y, fcx, fcy):"
+      ]
     },
     "src/net/__init__.py": {
       "description": "net - multiplayer relay client. Parts: protocol.py, client.py.",
@@ -28833,94 +28781,91 @@
     },
     "src/ui/mission_failed.py": {
       "description": "Mission-specific failure terminals with bespoke procedural illustrations.",
-      "tokens": 3971,
-      "hash": "4c90b20e517bd54e",
-      "size": 13897,
-      "mtimeMs": 1792280041528.7676,
-      "updatedAt": "2026-10-21T18:53:50.260Z",
-      "source": "scan",
+      "tokens": 4138,
+      "hash": "c9ce3179a25ae80c",
+      "size": 14480,
+      "mtimeMs": 1793131913019.253,
+      "updatedAt": "2026-10-27T20:11:53.161Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_font",
           "kind": "fn",
-          "startLine": 31,
-          "endLine": 36,
+          "startLine": 35,
+          "endLine": 42,
           "tokens": 106
         },
         {
           "name": "_text",
           "kind": "fn",
-          "startLine": 39,
-          "endLine": 42,
-          "tokens": 62
+          "startLine": 43,
+          "endLine": 48,
+          "tokens": 63
         },
         {
           "name": "_wrap",
           "kind": "fn",
-          "startLine": 45,
-          "endLine": 54,
-          "tokens": 93
+          "startLine": 49,
+          "endLine": 60,
+          "tokens": 94
         },
         {
           "name": "_paragraph",
           "kind": "fn",
-          "startLine": 57,
-          "endLine": 61,
-          "tokens": 53
+          "startLine": 61,
+          "endLine": 67,
+          "tokens": 54
         },
         {
           "name": "checkpoint_label",
           "kind": "fn",
-          "startLine": 64,
-          "endLine": 82,
-          "tokens": 325
+          "startLine": 68,
+          "endLine": 90,
+          "tokens": 357
         },
         {
           "name": "failure_copy",
           "kind": "fn",
-          "startLine": 85,
-          "endLine": 93,
-          "tokens": 147
+          "startLine": 91,
+          "endLine": 101,
+          "tokens": 148
         },
         {
           "name": "stat_rows",
           "kind": "fn",
-          "startLine": 96,
-          "endLine": 121,
-          "tokens": 436
+          "startLine": 102,
+          "endLine": 129,
+          "tokens": 437
         },
         {
           "name": "_cross",
           "kind": "fn",
-          "startLine": 124,
-          "endLine": 126,
-          "tokens": 39
+          "startLine": 130,
+          "endLine": 134,
+          "tokens": 40
         },
         {
           "name": "_illustrated_art",
           "kind": "fn",
-          "startLine": 129,
-          "endLine": 137,
-          "tokens": 129
+          "startLine": 135,
+          "endLine": 145,
+          "tokens": 130
         },
         {
           "name": "_diagram",
           "kind": "fn",
-          "startLine": 140,
-          "endLine": 216,
+          "startLine": 146,
+          "endLine": 224,
           "tokens": 1110
         },
         {
           "name": "draw",
           "kind": "fn",
-          "startLine": 219,
-          "endLine": 292,
-          "tokens": 1070
+          "startLine": 225,
+          "endLine": 301,
+          "tokens": 1100
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0598,
-      "skeleton": "def _font(size, display=False, bold=False):\ndef _text(surf, text, x, y, size=14, color=INK, display=False, bold=False):\ndef _wrap(text, width, size=16):\ndef _paragraph(surf, text, x, y, width, size=16, color=MUTED):\ndef checkpoint_label(state):\ndef failure_copy(state):\ndef stat_rows(state, now):\ndef _cross(s, x, y, c, r=8):\ndef _illustrated_art(surface, state, kind):\ndef _diagram(s, kind, a, t):\ndef draw(surface, state, buttons, elapsed, now, mouse):"
+      ]
     },
     "src/ui/mp.py": {
       "description": "Split from menu.py - see menu.py (shim) for the map.",
@@ -35072,13 +35017,127 @@
       "source": "hook"
     },
     "tools/dev_panel.py": {
-      "description": "Declares to",
-      "tokens": 7861,
-      "hash": "e36df73cf449b286",
-      "size": 28633,
-      "mtimeMs": 1792826542010.8628,
-      "updatedAt": "2026-10-24T07:22:22.680Z",
-      "source": "hook"
+      "description": "dev_panel.py - clickable dev control panel for jumping into missions.",
+      "tokens": 10792,
+      "hash": "e65b8098d9869b32",
+      "size": 38928,
+      "mtimeMs": 1793204415537.6365,
+      "updatedAt": "2026-10-28T16:20:15.753Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "grouped_targets",
+          "kind": "fn",
+          "startLine": 151,
+          "endLine": 161,
+          "tokens": 116
+        },
+        {
+          "name": "build_launch_cmd",
+          "kind": "fn",
+          "startLine": 162,
+          "endLine": 176,
+          "tokens": 184
+        },
+        {
+          "name": "build_tool_cmd",
+          "kind": "fn",
+          "startLine": 177,
+          "endLine": 190,
+          "tokens": 145
+        },
+        {
+          "name": "parse_extra_args",
+          "kind": "fn",
+          "startLine": 191,
+          "endLine": 195,
+          "tokens": 48
+        },
+        {
+          "name": "group_issues",
+          "kind": "fn",
+          "startLine": 196,
+          "endLine": 210,
+          "tokens": 189
+        },
+        {
+          "name": "build_source_txt_cmd",
+          "kind": "fn",
+          "startLine": 211,
+          "endLine": 222,
+          "tokens": 133
+        },
+        {
+          "name": "source_dir_files",
+          "kind": "fn",
+          "startLine": 223,
+          "endLine": 243,
+          "tokens": 258
+        },
+        {
+          "name": "_format_size",
+          "kind": "fn",
+          "startLine": 244,
+          "endLine": 255,
+          "tokens": 95
+        },
+        {
+          "name": "_count_files",
+          "kind": "fn",
+          "startLine": 256,
+          "endLine": 260,
+          "tokens": 39
+        },
+        {
+          "name": "_walk_tree",
+          "kind": "fn",
+          "startLine": 261,
+          "endLine": 278,
+          "tokens": 250
+        },
+        {
+          "name": "render_dir_listing",
+          "kind": "fn",
+          "startLine": 279,
+          "endLine": 322,
+          "tokens": 511
+        },
+        {
+          "name": "write_source_dir_txt",
+          "kind": "fn",
+          "startLine": 323,
+          "endLine": 332,
+          "tokens": 123
+        },
+        {
+          "name": "source_txt_action",
+          "kind": "fn",
+          "startLine": 333,
+          "endLine": 347,
+          "tokens": 188
+        },
+        {
+          "name": "source_dir_action",
+          "kind": "fn",
+          "startLine": 348,
+          "endLine": 361,
+          "tokens": 149
+        },
+        {
+          "name": "DevPanel",
+          "kind": "class",
+          "startLine": 362,
+          "endLine": 899,
+          "tokens": 6235
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 900,
+          "endLine": 919,
+          "tokens": 167
+        }
+      ]
     },
     "tools/m6_shots.py": {
       "description": "M6 3D film + interactive train stills.",
@@ -35219,11 +35278,11 @@
     },
     "tools/smoke_test.py": {
       "description": "Must be set before pygame/config import.",
-      "tokens": 126097,
-      "hash": "5235ce119b3a6d1b",
-      "size": 443217,
-      "mtimeMs": 1792692762714.892,
-      "updatedAt": "2026-10-22T18:12:43.005Z",
+      "tokens": 154153,
+      "hash": "cb60a08286bc3fc4",
+      "size": 541727,
+      "mtimeMs": 1793209064079.568,
+      "updatedAt": "2026-10-28T17:37:44.223Z",
       "source": "hook"
     },
     "src/cutscenes/ps2mat.py": {
@@ -36664,6 +36723,1777 @@
       "mtimeMs": 1793013437959.1704,
       "updatedAt": "2026-10-26T11:17:18.198Z",
       "source": "hook"
+    },
+    "src/game/content/timelines/m1.dropoff.timeline.json": {
+      "description": "",
+      "tokens": 248,
+      "hash": "fbf076f1b693d210",
+      "size": 868,
+      "mtimeMs": 1793113097091.6218,
+      "updatedAt": "2026-10-27T14:58:17.223Z",
+      "source": "hook"
+    },
+    "src/missions/m1/meta.py": {
+      "description": "Mission 1 cutscene data (RPE6 Phase 8 + WP2: the cut as ae.timeline/1).",
+      "tokens": 1393,
+      "hash": "ff9ba56947e53456",
+      "size": 4874,
+      "mtimeMs": 1793113101023.2935,
+      "updatedAt": "2026-10-27T14:58:21.135Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_ms",
+          "kind": "fn",
+          "startLine": 25,
+          "endLine": 29,
+          "tokens": 40
+        },
+        {
+          "name": "_at",
+          "kind": "fn",
+          "startLine": 30,
+          "endLine": 91,
+          "tokens": 1015
+        }
+      ]
+    },
+    "src/missions/m7/meta.py": {
+      "description": "Mission 7 metadata and stage constants: Fallow Ground (skeleton).",
+      "tokens": 846,
+      "hash": "1f35fd54c85ad9ab",
+      "size": 2960,
+      "mtimeMs": 1793187520088.758,
+      "updatedAt": "2026-10-28T11:38:40.226Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_lazy_scene",
+          "kind": "fn",
+          "startLine": 65,
+          "endLine": 72,
+          "tokens": 61
+        },
+        {
+          "name": "_register_scenes",
+          "kind": "fn",
+          "startLine": 73,
+          "endLine": 81,
+          "tokens": 73
+        },
+        {
+          "name": "film_shots",
+          "kind": "fn",
+          "startLine": 82,
+          "endLine": 90,
+          "tokens": 78
+        },
+        {
+          "name": "outro_shots",
+          "kind": "fn",
+          "startLine": 91,
+          "endLine": 94,
+          "tokens": 32
+        }
+      ]
+    },
+    "src/missions/m7/flow.py": {
+      "description": "Mission 7 - stage ladder, checkpoints and the outro handoff (skeleton).",
+      "tokens": 1205,
+      "hash": "131071d688a56546",
+      "size": 4217,
+      "mtimeMs": 1793187525531.3418,
+      "updatedAt": "2026-10-28T11:38:45.756Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_save_progress",
+          "kind": "fn",
+          "startLine": 21,
+          "endLine": 28,
+          "tokens": 51
+        },
+        {
+          "name": "_initialize_m7",
+          "kind": "fn",
+          "startLine": 29,
+          "endLine": 43,
+          "tokens": 148
+        },
+        {
+          "name": "set_stage",
+          "kind": "fn",
+          "startLine": 44,
+          "endLine": 62,
+          "tokens": 172
+        },
+        {
+          "name": "on_raid_done",
+          "kind": "fn",
+          "startLine": 63,
+          "endLine": 69,
+          "tokens": 62
+        },
+        {
+          "name": "take_cutscene_request",
+          "kind": "fn",
+          "startLine": 70,
+          "endLine": 76,
+          "tokens": 61
+        },
+        {
+          "name": "on_cutscene_done",
+          "kind": "fn",
+          "startLine": 77,
+          "endLine": 82,
+          "tokens": 45
+        },
+        {
+          "name": "advance_stage",
+          "kind": "fn",
+          "startLine": 83,
+          "endLine": 92,
+          "tokens": 88
+        },
+        {
+          "name": "take_outro_request",
+          "kind": "fn",
+          "startLine": 93,
+          "endLine": 100,
+          "tokens": 63
+        },
+        {
+          "name": "handle_interact",
+          "kind": "fn",
+          "startLine": 101,
+          "endLine": 106,
+          "tokens": 42
+        },
+        {
+          "name": "start_m7",
+          "kind": "fn",
+          "startLine": 107,
+          "endLine": 117,
+          "tokens": 107
+        },
+        {
+          "name": "start_m7_dev_raid",
+          "kind": "fn",
+          "startLine": 118,
+          "endLine": 128,
+          "tokens": 91
+        },
+        {
+          "name": "start_m7_dev_outro",
+          "kind": "fn",
+          "startLine": 129,
+          "endLine": 135,
+          "tokens": 69
+        }
+      ]
+    },
+    "src/missions/m7/systems.py": {
+      "description": "Mission 7 - per-frame update, dispatched by stage (placeholder stages: ENTER advances).",
+      "tokens": 281,
+      "hash": "ff3a5ccd07a94321",
+      "size": 983,
+      "mtimeMs": 1793137447756.6917,
+      "updatedAt": "2026-10-27T21:44:07.916Z",
+      "source": "hook"
+    },
+    "src/missions/m7/draw.py": {
+      "description": "Mission 7 - placeholder frame: title, stage label and the advance hint.",
+      "tokens": 400,
+      "hash": "8dfc056ca070dffd",
+      "size": 1400,
+      "mtimeMs": 1793137450026.5876,
+      "updatedAt": "2026-10-27T21:44:10.304Z",
+      "source": "hook"
+    },
+    "src/missions/m7/__init__.py": {
+      "description": "Mission 7: Fallow Ground - re-export facade (load order = parts order).",
+      "tokens": 92,
+      "hash": "10b0caddb85511e5",
+      "size": 319,
+      "mtimeMs": 1793131893242.5823,
+      "updatedAt": "2026-10-27T20:11:33.396Z",
+      "source": "hook"
+    },
+    "src/cutscenes/m7world3d.py": {
+      "description": "Mission 7 farm: one shared 3D builder for the drop-off and finale films and",
+      "tokens": 23961,
+      "hash": "822033d606908950",
+      "size": 83862,
+      "mtimeMs": 1793222708032.2314,
+      "updatedAt": "2026-10-28T21:25:08.270Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_t",
+          "kind": "fn",
+          "startLine": 68,
+          "endLine": 116,
+          "tokens": 687
+        },
+        {
+          "name": "_v",
+          "kind": "fn",
+          "startLine": 117,
+          "endLine": 121,
+          "tokens": 40
+        },
+        {
+          "name": "_vary",
+          "kind": "fn",
+          "startLine": 122,
+          "endLine": 128,
+          "tokens": 42
+        },
+        {
+          "name": "_gable_z",
+          "kind": "fn",
+          "startLine": 129,
+          "endLine": 147,
+          "tokens": 211
+        },
+        {
+          "name": "_bipyr",
+          "kind": "fn",
+          "startLine": 148,
+          "endLine": 164,
+          "tokens": 202
+        },
+        {
+          "name": "_fence",
+          "kind": "fn",
+          "startLine": 165,
+          "endLine": 196,
+          "tokens": 302
+        },
+        {
+          "name": "ground",
+          "kind": "fn",
+          "startLine": 197,
+          "endLine": 212,
+          "tokens": 198
+        },
+        {
+          "name": "_hill_h",
+          "kind": "fn",
+          "startLine": 213,
+          "endLine": 217,
+          "tokens": 58
+        },
+        {
+          "name": "hills",
+          "kind": "fn",
+          "startLine": 218,
+          "endLine": 271,
+          "tokens": 595
+        },
+        {
+          "name": "house",
+          "kind": "fn",
+          "startLine": 272,
+          "endLine": 323,
+          "tokens": 798
+        },
+        {
+          "name": "barn",
+          "kind": "fn",
+          "startLine": 324,
+          "endLine": 359,
+          "tokens": 499
+        },
+        {
+          "name": "hay",
+          "kind": "fn",
+          "startLine": 360,
+          "endLine": 367,
+          "tokens": 52
+        },
+        {
+          "name": "shed",
+          "kind": "fn",
+          "startLine": 368,
+          "endLine": 383,
+          "tokens": 197
+        },
+        {
+          "name": "well",
+          "kind": "fn",
+          "startLine": 384,
+          "endLine": 403,
+          "tokens": 238
+        },
+        {
+          "name": "tree",
+          "kind": "fn",
+          "startLine": 404,
+          "endLine": 415,
+          "tokens": 125
+        },
+        {
+          "name": "contact",
+          "kind": "fn",
+          "startLine": 416,
+          "endLine": 424,
+          "tokens": 90
+        },
+        {
+          "name": "orchard",
+          "kind": "fn",
+          "startLine": 425,
+          "endLine": 502,
+          "tokens": 758
+        },
+        {
+          "name": "tractor",
+          "kind": "fn",
+          "startLine": 503,
+          "endLine": 534,
+          "tokens": 427
+        },
+        {
+          "name": "_farm_silo",
+          "kind": "fn",
+          "startLine": 535,
+          "endLine": 567,
+          "tokens": 466
+        },
+        {
+          "name": "_farm_windpump",
+          "kind": "fn",
+          "startLine": 568,
+          "endLine": 588,
+          "tokens": 267
+        },
+        {
+          "name": "field_dressing",
+          "kind": "fn",
+          "startLine": 589,
+          "endLine": 650,
+          "tokens": 1022
+        },
+        {
+          "name": "_pole",
+          "kind": "fn",
+          "startLine": 651,
+          "endLine": 660,
+          "tokens": 100
+        },
+        {
+          "name": "_pole_y",
+          "kind": "fn",
+          "startLine": 661,
+          "endLine": 668,
+          "tokens": 77
+        },
+        {
+          "name": "poles",
+          "kind": "fn",
+          "startLine": 669,
+          "endLine": 676,
+          "tokens": 35
+        },
+        {
+          "name": "yard_dressing",
+          "kind": "fn",
+          "startLine": 677,
+          "endLine": 721,
+          "tokens": 617
+        },
+        {
+          "name": "_village",
+          "kind": "fn",
+          "startLine": 722,
+          "endLine": 736,
+          "tokens": 214
+        },
+        {
+          "name": "skyline",
+          "kind": "fn",
+          "startLine": 737,
+          "endLine": 771,
+          "tokens": 462
+        },
+        {
+          "name": "_shelter_tree",
+          "kind": "fn",
+          "startLine": 772,
+          "endLine": 803,
+          "tokens": 290
+        },
+        {
+          "name": "_hedgerow",
+          "kind": "fn",
+          "startLine": 804,
+          "endLine": 846,
+          "tokens": 370
+        },
+        {
+          "name": "outer_dressing",
+          "kind": "fn",
+          "startLine": 847,
+          "endLine": 2043,
+          "tokens": 13867
+        }
+      ]
+    },
+    "src/game/content/timelines/m7.arrival.timeline.json": {
+      "description": "",
+      "tokens": 239,
+      "hash": "fa4df07b61f53297",
+      "size": 834,
+      "mtimeMs": 1793186143426.4343,
+      "updatedAt": "2026-10-28T11:15:43.544Z",
+      "source": "hook"
+    },
+    "src/game/content/timelines/m7.finale.timeline.json": {
+      "description": "",
+      "tokens": 268,
+      "hash": "9f268724a517570a",
+      "size": 936,
+      "mtimeMs": 1793134218934.7803,
+      "updatedAt": "2026-10-27T20:50:19.107Z",
+      "source": "hook"
+    },
+    "src/game/content/timelines/m7.outro.timeline.json": {
+      "description": "",
+      "tokens": 90,
+      "hash": "590e5c22a09e322f",
+      "size": 315,
+      "mtimeMs": 1793133906849.946,
+      "updatedAt": "2026-10-27T20:45:06.982Z",
+      "source": "hook"
+    },
+    "src/cutscenes/m7films.py": {
+      "description": "Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6)",
+      "tokens": 2734,
+      "hash": "7a657b40471fcb88",
+      "size": 9567,
+      "mtimeMs": 1793187582450.3428,
+      "updatedAt": "2026-10-28T11:39:42.602Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_pose",
+          "kind": "fn",
+          "startLine": 25,
+          "endLine": 28,
+          "tokens": 14
+        },
+        {
+          "name": "_face",
+          "kind": "fn",
+          "startLine": 29,
+          "endLine": 32,
+          "tokens": 13
+        },
+        {
+          "name": "dropoff_lift",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 64,
+          "tokens": 442
+        },
+        {
+          "name": "dropoff_field",
+          "kind": "fn",
+          "startLine": 65,
+          "endLine": 79,
+          "tokens": 171
+        },
+        {
+          "name": "dropoff_fence",
+          "kind": "fn",
+          "startLine": 80,
+          "endLine": 102,
+          "tokens": 301
+        },
+        {
+          "name": "_burn",
+          "kind": "fn",
+          "startLine": 103,
+          "endLine": 110,
+          "tokens": 83
+        },
+        {
+          "name": "_bodi_seated",
+          "kind": "fn",
+          "startLine": 111,
+          "endLine": 117,
+          "tokens": 77
+        },
+        {
+          "name": "burn_wide",
+          "kind": "fn",
+          "startLine": 118,
+          "endLine": 125,
+          "tokens": 80
+        },
+        {
+          "name": "burn_tractor",
+          "kind": "fn",
+          "startLine": 126,
+          "endLine": 144,
+          "tokens": 258
+        },
+        {
+          "name": "burn_bodi",
+          "kind": "fn",
+          "startLine": 145,
+          "endLine": 153,
+          "tokens": 111
+        },
+        {
+          "name": "burn_face",
+          "kind": "fn",
+          "startLine": 154,
+          "endLine": 172,
+          "tokens": 258
+        },
+        {
+          "name": "endcard",
+          "kind": "fn",
+          "startLine": 173,
+          "endLine": 187,
+          "tokens": 170
+        },
+        {
+          "name": "_raidin_trucks",
+          "kind": "fn",
+          "startLine": 188,
+          "endLine": 200,
+          "tokens": 175
+        },
+        {
+          "name": "_ally",
+          "kind": "fn",
+          "startLine": 201,
+          "endLine": 206,
+          "tokens": 72
+        },
+        {
+          "name": "raidin_road",
+          "kind": "fn",
+          "startLine": 207,
+          "endLine": 215,
+          "tokens": 88
+        },
+        {
+          "name": "raidin_yard",
+          "kind": "fn",
+          "startLine": 216,
+          "endLine": 229,
+          "tokens": 219
+        }
+      ]
+    },
+    "src/missions/m7/maps.py": {
+      "description": "Mission 7 top-down farm: tile grid, palette and interaction points (beats 2 and 4).",
+      "tokens": 816,
+      "hash": "f571970417e0064c",
+      "size": 2853,
+      "mtimeMs": 1793135662994.6963,
+      "updatedAt": "2026-10-27T21:14:23.121Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "farm_grid",
+          "kind": "fn",
+          "startLine": 84,
+          "endLine": 87,
+          "tokens": 18
+        },
+        {
+          "name": "tile_px",
+          "kind": "fn",
+          "startLine": 88,
+          "endLine": 91,
+          "tokens": 36
+        }
+      ]
+    },
+    "src/game/content/levels/m7.farm.level.json": {
+      "description": "",
+      "tokens": 182,
+      "hash": "b64f60faaef65dea",
+      "size": 636,
+      "mtimeMs": 1793135005223.072,
+      "updatedAt": "2026-10-27T21:03:25.341Z",
+      "source": "hook"
+    },
+    "src/missions/m7/farmyard.py": {
+      "description": "Mission 7 top-down farmyard: beat 2 (chores); beat 4 (prep) reuses the map.",
+      "tokens": 11649,
+      "hash": "9f5250c55b5f28e2",
+      "size": 40771,
+      "mtimeMs": 1793200260814.837,
+      "updatedAt": "2026-10-28T15:11:00.954Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_snd",
+          "kind": "fn",
+          "startLine": 36,
+          "endLine": 55,
+          "tokens": 230
+        },
+        {
+          "name": "_rng",
+          "kind": "fn",
+          "startLine": 56,
+          "endLine": 62,
+          "tokens": 38
+        },
+        {
+          "name": "_inside",
+          "kind": "fn",
+          "startLine": 63,
+          "endLine": 66,
+          "tokens": 29
+        },
+        {
+          "name": "_ground_kind",
+          "kind": "fn",
+          "startLine": 67,
+          "endLine": 81,
+          "tokens": 121
+        },
+        {
+          "name": "_ground_tile",
+          "kind": "fn",
+          "startLine": 82,
+          "endLine": 105,
+          "tokens": 223
+        },
+        {
+          "name": "_shadow",
+          "kind": "fn",
+          "startLine": 106,
+          "endLine": 111,
+          "tokens": 45
+        },
+        {
+          "name": "_fence",
+          "kind": "fn",
+          "startLine": 112,
+          "endLine": 133,
+          "tokens": 213
+        },
+        {
+          "name": "_house",
+          "kind": "fn",
+          "startLine": 134,
+          "endLine": 161,
+          "tokens": 360
+        },
+        {
+          "name": "_barn",
+          "kind": "fn",
+          "startLine": 162,
+          "endLine": 185,
+          "tokens": 284
+        },
+        {
+          "name": "_well",
+          "kind": "fn",
+          "startLine": 186,
+          "endLine": 197,
+          "tokens": 136
+        },
+        {
+          "name": "_tractor_surface",
+          "kind": "fn",
+          "startLine": 198,
+          "endLine": 214,
+          "tokens": 203
+        },
+        {
+          "name": "_tractor_draw",
+          "kind": "fn",
+          "startLine": 215,
+          "endLine": 229,
+          "tokens": 165
+        },
+        {
+          "name": "_shed",
+          "kind": "fn",
+          "startLine": 230,
+          "endLine": 243,
+          "tokens": 153
+        },
+        {
+          "name": "_bin",
+          "kind": "fn",
+          "startLine": 244,
+          "endLine": 255,
+          "tokens": 125
+        },
+        {
+          "name": "_bike",
+          "kind": "fn",
+          "startLine": 256,
+          "endLine": 270,
+          "tokens": 173
+        },
+        {
+          "name": "_build_static",
+          "kind": "fn",
+          "startLine": 271,
+          "endLine": 292,
+          "tokens": 183
+        },
+        {
+          "name": "_bodi_tile",
+          "kind": "fn",
+          "startLine": 293,
+          "endLine": 296,
+          "tokens": 36
+        },
+        {
+          "name": "_make_walls",
+          "kind": "fn",
+          "startLine": 297,
+          "endLine": 313,
+          "tokens": 192
+        },
+        {
+          "name": "begin",
+          "kind": "fn",
+          "startLine": 314,
+          "endLine": 336,
+          "tokens": 321
+        },
+        {
+          "name": "active",
+          "kind": "fn",
+          "startLine": 337,
+          "endLine": 340,
+          "tokens": 10
+        },
+        {
+          "name": "_toast",
+          "kind": "fn",
+          "startLine": 341,
+          "endLine": 344,
+          "tokens": 20
+        },
+        {
+          "name": "_say",
+          "kind": "fn",
+          "startLine": 345,
+          "endLine": 351,
+          "tokens": 39
+        },
+        {
+          "name": "_advance_line",
+          "kind": "fn",
+          "startLine": 352,
+          "endLine": 366,
+          "tokens": 106
+        },
+        {
+          "name": "_finish",
+          "kind": "fn",
+          "startLine": 367,
+          "endLine": 371,
+          "tokens": 18
+        },
+        {
+          "name": "_chores_done",
+          "kind": "fn",
+          "startLine": 372,
+          "endLine": 377,
+          "tokens": 45
+        },
+        {
+          "name": "_point_px",
+          "kind": "fn",
+          "startLine": 378,
+          "endLine": 385,
+          "tokens": 53
+        },
+        {
+          "name": "_reach",
+          "kind": "fn",
+          "startLine": 386,
+          "endLine": 389,
+          "tokens": 25
+        },
+        {
+          "name": "_preps_open",
+          "kind": "fn",
+          "startLine": 390,
+          "endLine": 396,
+          "tokens": 61
+        },
+        {
+          "name": "_available",
+          "kind": "fn",
+          "startLine": 397,
+          "endLine": 423,
+          "tokens": 277
+        },
+        {
+          "name": "_nearest",
+          "kind": "fn",
+          "startLine": 424,
+          "endLine": 1195,
+          "tokens": 7524
+        }
+      ]
+    },
+    "src/cutscenes/m7runner.py": {
+      "description": "Mission 7 beat 3: Alex rides in with the mansion plan (2D cutscene scenes).",
+      "tokens": 4971,
+      "hash": "c20e35f78f50cb60",
+      "size": 17398,
+      "mtimeMs": 1793188391356.6296,
+      "updatedAt": "2026-10-28T11:53:11.516Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_ease_out",
+          "kind": "fn",
+          "startLine": 24,
+          "endLine": 28,
+          "tokens": 24
+        },
+        {
+          "name": "_k",
+          "kind": "fn",
+          "startLine": 29,
+          "endLine": 33,
+          "tokens": 34
+        },
+        {
+          "name": "_rng",
+          "kind": "fn",
+          "startLine": 34,
+          "endLine": 40,
+          "tokens": 38
+        },
+        {
+          "name": "_ridge",
+          "kind": "fn",
+          "startLine": 41,
+          "endLine": 49,
+          "tokens": 94
+        },
+        {
+          "name": "_backdrop",
+          "kind": "fn",
+          "startLine": 50,
+          "endLine": 76,
+          "tokens": 371
+        },
+        {
+          "name": "_farm_far",
+          "kind": "fn",
+          "startLine": 77,
+          "endLine": 83,
+          "tokens": 101
+        },
+        {
+          "name": "_fence",
+          "kind": "fn",
+          "startLine": 84,
+          "endLine": 90,
+          "tokens": 70
+        },
+        {
+          "name": "_dust",
+          "kind": "fn",
+          "startLine": 91,
+          "endLine": 102,
+          "tokens": 113
+        },
+        {
+          "name": "_line",
+          "kind": "fn",
+          "startLine": 103,
+          "endLine": 106,
+          "tokens": 27
+        },
+        {
+          "name": "_bike",
+          "kind": "fn",
+          "startLine": 107,
+          "endLine": 151,
+          "tokens": 820
+        },
+        {
+          "name": "_bike_x",
+          "kind": "fn",
+          "startLine": 152,
+          "endLine": 155,
+          "tokens": 20
+        },
+        {
+          "name": "_puffs",
+          "kind": "fn",
+          "startLine": 156,
+          "endLine": 166,
+          "tokens": 85
+        },
+        {
+          "name": "ride",
+          "kind": "fn",
+          "startLine": 167,
+          "endLine": 188,
+          "tokens": 264
+        },
+        {
+          "name": "_bike_front_overlay",
+          "kind": "fn",
+          "startLine": 189,
+          "endLine": 201,
+          "tokens": 161
+        },
+        {
+          "name": "_lerp",
+          "kind": "fn",
+          "startLine": 202,
+          "endLine": 205,
+          "tokens": 14
+        },
+        {
+          "name": "_meet_set",
+          "kind": "fn",
+          "startLine": 206,
+          "endLine": 236,
+          "tokens": 449
+        },
+        {
+          "name": "meet",
+          "kind": "fn",
+          "startLine": 237,
+          "endLine": 241,
+          "tokens": 46
+        },
+        {
+          "name": "folder",
+          "kind": "fn",
+          "startLine": 242,
+          "endLine": 247,
+          "tokens": 54
+        },
+        {
+          "name": "plan_insert",
+          "kind": "fn",
+          "startLine": 248,
+          "endLine": 280,
+          "tokens": 458
+        },
+        {
+          "name": "shotgun_handover",
+          "kind": "fn",
+          "startLine": 281,
+          "endLine": 300,
+          "tokens": 258
+        },
+        {
+          "name": "_shotgun_art",
+          "kind": "fn",
+          "startLine": 301,
+          "endLine": 351,
+          "tokens": 610
+        },
+        {
+          "name": "_shotgun_hand",
+          "kind": "fn",
+          "startLine": 352,
+          "endLine": 381,
+          "tokens": 339
+        },
+        {
+          "name": "gun_insert",
+          "kind": "fn",
+          "startLine": 382,
+          "endLine": 406,
+          "tokens": 334
+        }
+      ]
+    },
+    "src/game/content/timelines/m7.runner.timeline.json": {
+      "description": "",
+      "tokens": 225,
+      "hash": "95cd0f3b1df9579f",
+      "size": 785,
+      "mtimeMs": 1793135377652.8274,
+      "updatedAt": "2026-10-27T21:09:37.778Z",
+      "source": "hook"
+    },
+    "src/missions/m7/raid_world.py": {
+      "description": "Mission 7 raid world: collision boxes, line of sight, the barn fire and the props.",
+      "tokens": 3405,
+      "hash": "493e93b9c193c6a2",
+      "size": 11916,
+      "mtimeMs": 1793216724241.433,
+      "updatedAt": "2026-10-28T19:45:24.375Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_orchard",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 68,
+          "tokens": 399
+        },
+        {
+          "name": "tractor_box",
+          "kind": "fn",
+          "startLine": 69,
+          "endLine": 73,
+          "tokens": 35
+        },
+        {
+          "name": "seg_box",
+          "kind": "fn",
+          "startLine": 74,
+          "endLine": 92,
+          "tokens": 160
+        },
+        {
+          "name": "World",
+          "kind": "class",
+          "startLine": 93,
+          "endLine": 152,
+          "tokens": 560
+        },
+        {
+          "name": "_hit",
+          "kind": "fn",
+          "startLine": 153,
+          "endLine": 158,
+          "tokens": 40
+        },
+        {
+          "name": "_ray_box",
+          "kind": "fn",
+          "startLine": 159,
+          "endLine": 183,
+          "tokens": 192
+        },
+        {
+          "name": "Fire",
+          "kind": "class",
+          "startLine": 184,
+          "endLine": 256,
+          "tokens": 761
+        },
+        {
+          "name": "truck",
+          "kind": "fn",
+          "startLine": 257,
+          "endLine": 280,
+          "tokens": 277
+        },
+        {
+          "name": "dog",
+          "kind": "fn",
+          "startLine": 281,
+          "endLine": 302,
+          "tokens": 241
+        },
+        {
+          "name": "dog_fall",
+          "kind": "fn",
+          "startLine": 303,
+          "endLine": 314,
+          "tokens": 100
+        },
+        {
+          "name": "placed",
+          "kind": "fn",
+          "startLine": 315,
+          "endLine": 321,
+          "tokens": 56
+        },
+        {
+          "name": "ledge",
+          "kind": "fn",
+          "startLine": 322,
+          "endLine": 335,
+          "tokens": 196
+        },
+        {
+          "name": "tank_glow",
+          "kind": "fn",
+          "startLine": 336,
+          "endLine": 339,
+          "tokens": 57
+        }
+      ]
+    },
+    "src/missions/m7/raid_brain.py": {
+      "description": "Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks,",
+      "tokens": 6203,
+      "hash": "648108ab3d8f99a8",
+      "size": 21709,
+      "mtimeMs": 1793187752663.561,
+      "updatedAt": "2026-10-28T11:42:32.795Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_ray_sphere",
+          "kind": "fn",
+          "startLine": 46,
+          "endLine": 56,
+          "tokens": 85
+        },
+        {
+          "name": "_yaw",
+          "kind": "fn",
+          "startLine": 57,
+          "endLine": 60,
+          "tokens": 18
+        },
+        {
+          "name": "_clamp",
+          "kind": "fn",
+          "startLine": 61,
+          "endLine": 64,
+          "tokens": 21
+        },
+        {
+          "name": "_fall_from",
+          "kind": "fn",
+          "startLine": 65,
+          "endLine": 75,
+          "tokens": 106
+        },
+        {
+          "name": "Brain",
+          "kind": "class",
+          "startLine": 76,
+          "endLine": 554,
+          "tokens": 5455
+        }
+      ]
+    },
+    "src/missions/m7/raid_hud.py": {
+      "description": "Mission 7 raid HUD: the top-down game's panels (via the M6 yard HUD helpers), a",
+      "tokens": 1618,
+      "hash": "30ab25bc09262a66",
+      "size": 5663,
+      "mtimeMs": 1793137017075.0903,
+      "updatedAt": "2026-10-27T21:36:57.237Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_mp",
+          "kind": "fn",
+          "startLine": 27,
+          "endLine": 31,
+          "tokens": 50
+        },
+        {
+          "name": "_base_map",
+          "kind": "fn",
+          "startLine": 32,
+          "endLine": 51,
+          "tokens": 187
+        },
+        {
+          "name": "minimap",
+          "kind": "fn",
+          "startLine": 52,
+          "endLine": 76,
+          "tokens": 337
+        },
+        {
+          "name": "callouts",
+          "kind": "fn",
+          "startLine": 77,
+          "endLine": 88,
+          "tokens": 153
+        },
+        {
+          "name": "bodi_clock",
+          "kind": "fn",
+          "startLine": 89,
+          "endLine": 99,
+          "tokens": 128
+        },
+        {
+          "name": "hold_bar",
+          "kind": "fn",
+          "startLine": 100,
+          "endLine": 105,
+          "tokens": 61
+        },
+        {
+          "name": "draw",
+          "kind": "fn",
+          "startLine": 106,
+          "endLine": 142,
+          "tokens": 492
+        }
+      ]
+    },
+    "src/missions/m7/raid3d.py": {
+      "description": "Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night.",
+      "tokens": 10134,
+      "hash": "09d51567f5ac6e67",
+      "size": 35466,
+      "mtimeMs": 1793187672793.2446,
+      "updatedAt": "2026-10-28T11:41:12.924Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_wrap",
+          "kind": "fn",
+          "startLine": 62,
+          "endLine": 65,
+          "tokens": 17
+        },
+        {
+          "name": "_yaw",
+          "kind": "fn",
+          "startLine": 66,
+          "endLine": 69,
+          "tokens": 18
+        },
+        {
+          "name": "_fwd",
+          "kind": "fn",
+          "startLine": 70,
+          "endLine": 75,
+          "tokens": 45
+        },
+        {
+          "name": "_right",
+          "kind": "fn",
+          "startLine": 76,
+          "endLine": 80,
+          "tokens": 26
+        },
+        {
+          "name": "_lerp",
+          "kind": "fn",
+          "startLine": 81,
+          "endLine": 84,
+          "tokens": 14
+        },
+        {
+          "name": "_ease",
+          "kind": "fn",
+          "startLine": 85,
+          "endLine": 88,
+          "tokens": 15
+        },
+        {
+          "name": "RaidScene",
+          "kind": "class",
+          "startLine": 89,
+          "endLine": 864,
+          "tokens": 9056
+        },
+        {
+          "name": "scene",
+          "kind": "fn",
+          "startLine": 865,
+          "endLine": 871,
+          "tokens": 30
+        },
+        {
+          "name": "begin",
+          "kind": "fn",
+          "startLine": 872,
+          "endLine": 875,
+          "tokens": 12
+        },
+        {
+          "name": "active",
+          "kind": "fn",
+          "startLine": 876,
+          "endLine": 879,
+          "tokens": 19
+        },
+        {
+          "name": "update",
+          "kind": "fn",
+          "startLine": 880,
+          "endLine": 883,
+          "tokens": 16
+        },
+        {
+          "name": "draw",
+          "kind": "fn",
+          "startLine": 884,
+          "endLine": 887,
+          "tokens": 16
+        },
+        {
+          "name": "handle_event",
+          "kind": "fn",
+          "startLine": 888,
+          "endLine": 891,
+          "tokens": 19
+        },
+        {
+          "name": "set_paused",
+          "kind": "fn",
+          "startLine": 892,
+          "endLine": 896,
+          "tokens": 25
+        },
+        {
+          "name": "abort",
+          "kind": "fn",
+          "startLine": 897,
+          "endLine": 910,
+          "tokens": 118
+        },
+        {
+          "name": "force_finish",
+          "kind": "fn",
+          "startLine": 911,
+          "endLine": 915,
+          "tokens": 34
+        }
+      ]
+    },
+    "src/missions/m7/choice.py": {
+      "description": "Mission 7 beat 7 - Two Channels: Vasile's offer, Maru's reply, then the choice.",
+      "tokens": 1345,
+      "hash": "fc7c95c27d1fbc03",
+      "size": 4706,
+      "mtimeMs": 1793137785454.608,
+      "updatedAt": "2026-10-27T21:49:45.615Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "begin",
+          "kind": "fn",
+          "startLine": 34,
+          "endLine": 37,
+          "tokens": 27
+        },
+        {
+          "name": "_line_times",
+          "kind": "fn",
+          "startLine": 38,
+          "endLine": 46,
+          "tokens": 74
+        },
+        {
+          "name": "_pressed",
+          "kind": "fn",
+          "startLine": 47,
+          "endLine": 53,
+          "tokens": 36
+        },
+        {
+          "name": "update",
+          "kind": "fn",
+          "startLine": 54,
+          "endLine": 85,
+          "tokens": 318
+        },
+        {
+          "name": "_text",
+          "kind": "fn",
+          "startLine": 86,
+          "endLine": 90,
+          "tokens": 44
+        },
+        {
+          "name": "_channel",
+          "kind": "fn",
+          "startLine": 91,
+          "endLine": 101,
+          "tokens": 164
+        },
+        {
+          "name": "draw",
+          "kind": "fn",
+          "startLine": 102,
+          "endLine": 130,
+          "tokens": 368
+        }
+      ]
+    },
+    "tests/unit/test_m7_campaign.py": {
+      "description": "Mission 7 campaign regressions. Run: python -m unittest tests.unit.test_m7_campaign -v.",
+      "tokens": 3549,
+      "hash": "fda98e39b07fe40b",
+      "size": 12419,
+      "mtimeMs": 1793187552503.8738,
+      "updatedAt": "2026-10-28T11:39:12.626Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_Keys",
+          "kind": "class",
+          "startLine": 25,
+          "endLine": 32,
+          "tokens": 29
+        },
+        {
+          "name": "_start",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 38,
+          "tokens": 30
+        },
+        {
+          "name": "M7StageTests",
+          "kind": "class",
+          "startLine": 39,
+          "endLine": 103,
+          "tokens": 771
+        },
+        {
+          "name": "M7RaidTests",
+          "kind": "class",
+          "startLine": 104,
+          "endLine": 221,
+          "tokens": 1202
+        },
+        {
+          "name": "M7ChoiceTests",
+          "kind": "class",
+          "startLine": 222,
+          "endLine": 256,
+          "tokens": 343
+        },
+        {
+          "name": "M7DevJumpTests",
+          "kind": "class",
+          "startLine": 257,
+          "endLine": 302,
+          "tokens": 544
+        },
+        {
+          "name": "M7VoiceTests",
+          "kind": "class",
+          "startLine": 303,
+          "endLine": 334,
+          "tokens": 396
+        }
+      ]
+    },
+    "docs/MISSION7_PLOT.md": {
+      "description": "Mission 7 — \"Fallow Ground\"",
+      "tokens": 3022,
+      "hash": "e647c93c2b24bbfd",
+      "size": 12119,
+      "mtimeMs": 1793139622180.8374,
+      "updatedAt": "2026-10-27T22:20:22.299Z",
+      "source": "hook"
+    },
+    "src/game/content/timelines/m7.raidin.timeline.json": {
+      "description": "",
+      "tokens": 150,
+      "hash": "b1aa3dbb8807a231",
+      "size": 524,
+      "mtimeMs": 1793187546324.3555,
+      "updatedAt": "2026-10-28T11:39:06.439Z",
+      "source": "hook"
+    },
+    "tools/build_code_txt.py": {
+      "description": "find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files",
+      "tokens": 2979,
+      "hash": "da6976d6679dbd98",
+      "size": 10425,
+      "mtimeMs": 1793204139481.3467,
+      "updatedAt": "2026-10-28T16:15:39.647Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "find_source_files",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 54,
+          "tokens": 201
+        },
+        {
+          "name": "write_files_to_txt",
+          "kind": "fn",
+          "startLine": 55,
+          "endLine": 77,
+          "tokens": 203
+        },
+        {
+          "name": "write_individual_txts",
+          "kind": "fn",
+          "startLine": 78,
+          "endLine": 89,
+          "tokens": 146
+        },
+        {
+          "name": "resolve_cli_files",
+          "kind": "fn",
+          "startLine": 90,
+          "endLine": 129,
+          "tokens": 390
+        },
+        {
+          "name": "build_selection",
+          "kind": "fn",
+          "startLine": 130,
+          "endLine": 139,
+          "tokens": 104
+        },
+        {
+          "name": "run_gui",
+          "kind": "fn",
+          "startLine": 140,
+          "endLine": 265,
+          "tokens": 1417
+        },
+        {
+          "name": "open_folder_cli",
+          "kind": "fn",
+          "startLine": 266,
+          "endLine": 286,
+          "tokens": 189
+        }
+      ]
+    },
+    "src/cutscenes/m7palette3d.py": {
+      "description": "The 2D top-down M7 farm palette, for the 3D farm (raid and films).",
+      "tokens": 846,
+      "hash": "1749f040e54f5292",
+      "size": 2960,
+      "mtimeMs": 1793206732270.2222,
+      "updatedAt": "2026-10-28T16:58:52.413Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "full",
+          "kind": "fn",
+          "startLine": 84,
+          "endLine": 92,
+          "tokens": 91
+        }
+      ]
+    },
+    "tools/tex3d_draw_m7.py": {
+      "description": "Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the",
+      "tokens": 4450,
+      "hash": "0287f19e97822e3c",
+      "size": 15769,
+      "mtimeMs": 1793206795286.3604,
+      "updatedAt": "2026-10-28T16:59:55.431Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_palette",
+          "kind": "fn",
+          "startLine": 37,
+          "endLine": 49,
+          "tokens": 80
+        },
+        {
+          "name": "_clumps",
+          "kind": "fn",
+          "startLine": 50,
+          "endLine": 73,
+          "tokens": 294
+        },
+        {
+          "name": "grass",
+          "kind": "fn",
+          "startLine": 74,
+          "endLine": 91,
+          "tokens": 210
+        },
+        {
+          "name": "stubble",
+          "kind": "fn",
+          "startLine": 92,
+          "endLine": 118,
+          "tokens": 314
+        },
+        {
+          "name": "furrow",
+          "kind": "fn",
+          "startLine": 119,
+          "endLine": 136,
+          "tokens": 191
+        },
+        {
+          "name": "dirt",
+          "kind": "fn",
+          "startLine": 137,
+          "endLine": 153,
+          "tokens": 202
+        },
+        {
+          "name": "track",
+          "kind": "fn",
+          "startLine": 154,
+          "endLine": 178,
+          "tokens": 337
+        },
+        {
+          "name": "plank",
+          "kind": "fn",
+          "startLine": 179,
+          "endLine": 204,
+          "tokens": 306
+        },
+        {
+          "name": "barnboard",
+          "kind": "fn",
+          "startLine": 205,
+          "endLine": 232,
+          "tokens": 335
+        },
+        {
+          "name": "plaster",
+          "kind": "fn",
+          "startLine": 233,
+          "endLine": 257,
+          "tokens": 313
+        },
+        {
+          "name": "tile",
+          "kind": "fn",
+          "startLine": 258,
+          "endLine": 279,
+          "tokens": 272
+        },
+        {
+          "name": "tin",
+          "kind": "fn",
+          "startLine": 280,
+          "endLine": 302,
+          "tokens": 253
+        },
+        {
+          "name": "hay",
+          "kind": "fn",
+          "startLine": 303,
+          "endLine": 317,
+          "tokens": 141
+        },
+        {
+          "name": "stone",
+          "kind": "fn",
+          "startLine": 318,
+          "endLine": 327,
+          "tokens": 104
+        },
+        {
+          "name": "bark",
+          "kind": "fn",
+          "startLine": 328,
+          "endLine": 335,
+          "tokens": 84
+        },
+        {
+          "name": "leaf",
+          "kind": "fn",
+          "startLine": 336,
+          "endLine": 356,
+          "tokens": 244
+        },
+        {
+          "name": "draw",
+          "kind": "fn",
+          "startLine": 357,
+          "endLine": 366,
+          "tokens": 91
+        },
+        {
+          "name": "write_gpl",
+          "kind": "fn",
+          "startLine": 367,
+          "endLine": 376,
+          "tokens": 144
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 377,
+          "endLine": 398,
+          "tokens": 153
+        }
+      ]
+    },
+    "tools/ae_import_tractor.py": {
+      "description": "AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb).",
+      "tokens": 1146,
+      "hash": "7a5eefa8f1b22b25",
+      "size": 4010,
+      "mtimeMs": 1793225178301.521,
+      "updatedAt": "2026-10-28T22:06:18.532Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_srgb",
+          "kind": "fn",
+          "startLine": 31,
+          "endLine": 35,
+          "tokens": 35
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 36,
+          "endLine": 104,
+          "tokens": 794
+        }
+      ]
+    },
+    "src/cutscenes/death3d.py": {
+      "description": "Gameplay death falls for 3D guards (Mission 7 raid, Mission 6 yard).",
+      "tokens": 1443,
+      "hash": "6aa6566e6f3524f0",
+      "size": 5048,
+      "mtimeMs": 1793226027173.9817,
+      "updatedAt": "2026-10-28T22:20:27.342Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_s",
+          "kind": "fn",
+          "startLine": 28,
+          "endLine": 32,
+          "tokens": 28
+        },
+        {
+          "name": "track_for",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 40,
+          "tokens": 72
+        },
+        {
+          "name": "death_pose",
+          "kind": "fn",
+          "startLine": 41,
+          "endLine": 61,
+          "tokens": 250
+        },
+        {
+          "name": "_flop",
+          "kind": "fn",
+          "startLine": 62,
+          "endLine": 71,
+          "tokens": 107
+        },
+        {
+          "name": "_ankles",
+          "kind": "fn",
+          "startLine": 72,
+          "endLine": 80,
+          "tokens": 106
+        },
+        {
+          "name": "Fall",
+          "kind": "class",
+          "startLine": 81,
+          "endLine": 125,
+          "tokens": 535
+        }
+      ]
     }
   },
   "preamble": [

@@ -22,7 +22,7 @@ __all__ = ["RELOAD_MS", "WeaponInfo", "draw"]
 
 PANEL_W = 246
 PANEL_H = 84
-RELOAD_MS = {"k9_smg": 72, "os12": 90}      # anything else (sidearm) = 60
+RELOAD_MS = {"k9_smg": 72, "os12": 90, "fallow12": 132}      # anything else (sidearm) = 60
 
 
 @dataclass

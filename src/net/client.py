@@ -1,4 +1,3 @@
-
 """Game-side client for the KRAPNET master server.
 
 Threading model

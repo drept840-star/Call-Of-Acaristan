@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>3D AK-47 Model</title>
+  <style>
+    /* 3D effect CSS */
+    canvas {
+      width: 300px;
+      height: 300px;
+      border: 1px solid #000;
+    }
+
+    .front {
+      transform: rotateX(-30deg) rotateY(30deg) rotateZ(0deg);
+    }
+
+    .side1 {
+      transform: rotateX(30deg) rotateY(30deg) rotateZ(0deg);
+    }
+
+    .side2 {
+      transform: rotateX(30deg) rotateY(-30deg) rotateZ(0deg);
+    }
+
+    .top {
+      transform: rotateX(0deg) rotateY(30deg) rotateZ(0deg);
+    }
+
+    .bottom {
+      transform: rotateX(0deg) rotateY(-30deg) rotateZ(0deg);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="ak47" width="300" height="300"></canvas>
+  <script>
+    // 3D model data
+    const modelData = {
+      front: [
+        [-10, -10, 0],
+        [10, -10, 0],
+        [10, 10, 0],
+        [-10, 10, 0],
+        [-10, -10, 0]
+      ],
+      side1: [
+        [-10, 0, 10],
+        [10, 0, 10],
+        [10, 10, 10],
+        [-10, 10, 10],
+        [-10, 0, 10]
+      ],
+      side2: [
+        [-10, 0, -10],
+        [10, 0, -10],
+        [10, -10, -10],
+        [-10, -10, -10],
+        [-10, 0, -10]
+      ],
+      top: [
+        [-10, 10, 10],
+        [10, 10, 10],
+        [10, 10, 20],
+        [-10, 10, 20],
+        [-10, 10, 10]
+      ],
+      bottom: [
+        [-10, 0, 20],
+        [10, 0, 20],
+        [10, -10, 20],
+        [-10, -10, 20],
+        [-10, 0, 20]
+      ]
+    };
+
+    // 3D rotation variables
+    let angleX = 30;
+    let angleY = 30;
+    let angleZ = 0;
+
+    // 3D model canvas
+    const ctx = document.getElementById('ak47').getContext('2d');
+
+    // Draw 3D model
+    function drawModel() {
+      // Clear canvas
+      ctx.clearRect(0, 0, 300, 300);
+
+      // Draw front side
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.rotate(angleX * Math.PI / 180, angleY * Math.PI / 180, angleZ * Math.PI / 180);
+      ctx.beginPath();
+      ctx.moveTo(150, 150); // Front side point
+      ctx.lineTo(180, 150); // Front side point
+      ctx.lineTo(150, 150); // Front side point
+      ctx.lineTo(150, 180); // Front side point
+      ctx.close();
+      ctx.fillStyle = 'red';
+      ctx.fill();
+      ctx.restore();
+
+      // Draw top side
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.rotate(0, angleY * Math.PI / 180, 0);
+      ctx.beginPath();
+      ctx.moveTo(150, 150); // Top side point
+      ctx.lineTo(180, 150); // Top side point
+      ctx.lineTo(150, 180); // Top side point
+      ctx.lineTo(150, 150); // Top side point
+      ctx.close();
+      ctx.fillStyle = 'blue';
+      ctx.fill();
+      ctx.restore();
+
+      // Draw bottom side
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.rotate(0, angleY * Math.PI / 180, 0);
+      ctx.beginPath();
+      ctx.moveTo(150, 120); // Bottom side point
+      ctx.lineTo(180, 120); // Bottom side point
+      ctx.lineTo(150, 180); // Bottom side point
+      ctx.lineTo(150, 120); // Bottom side point
+      ctx.close();
+      ctx.fillStyle = 'yellow';
+      ctx.fill();
+      ctx.restore();
+
+      // Draw side 1
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.rotate(angleX * Math.PI / 180, 0, 0);
+      ctx.beginPath();
+      ctx.moveTo(150, 120); // Side 1 point
+      ctx.lineTo(180, 120); // Side 1 point
+      ctx.lineTo(150, 150); // Side 1 point
+      ctx.lineTo(150, 180); // Side 1 point
+      ctx.close();
+      ctx.fillStyle = 'green';
+      ctx.fill();
+      ctx.restore();
+
+      // Draw side 2
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.rotate(-angleX * Math.PI / 180, 0, 0);
+      ctx.beginPath();
+      ctx.moveTo(150, 180); // Side 2 point
+      ctx.lineTo(180, 180); // Side 2 point
+      ctx.lineTo(150, 120); // Side 2 point
+      ctx.lineTo(150, 180); // Side 2 point
+      ctx.close();
+      ctx.fillStyle = 'purple';
+      ctx.fill();
+      ctx.restore();
+
+      // Update angle variables
+      angleX = (angleX + 0.5) % 360;
+      angleY = (angleY + 0.5) % 360;
+      angleZ = (angleZ + 0.5) % 360;
+      setTimeout(drawModel, 16); // 16ms = 60FPS
+    }
+
+    // Start drawing model
+    drawModel();
+  </script>
+</body>
+</html>

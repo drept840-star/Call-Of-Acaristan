@@ -20,7 +20,7 @@ LOS_MIN_H = 1.15                        # lower boxes do not stop bullets
 
 # Tractor parked across the track mouth (prep "block the track").
 TRACTOR_BLOCK = (-0.3, -15.0, 0)
-TRACTOR_YAW_BOX = {0: (-1.5, 1.6, -0.95, 0.95), -90: (-0.95, 0.95, -1.5, 1.6)}
+TRACTOR_YAW_BOX = {0: (-1.7, 2.3, -1.3, 1.3), -90: (-1.3, 1.3, -1.7, 2.3)}
 
 LOFT_AT = (13.0, 4.7, 6.45)             # Bodi's ledge below the hayloft door
 BODI_GROUND = (8.2, 2.2)
@@ -257,10 +257,36 @@ FUR_D = (42, 36, 30)
 def truck():
     """Olive cargo truck, local forward +x, 5.4 long and 2.3 wide."""
     m = Mesh()
+    # Continuous wheels: the sidewall and rim are tiled together so neither
+    # the software renderer nor GL has overlapping, protruding hub pieces.
+    def wheel(x, z):
+        n, rad, wid, cy = 12, 0.48, 0.30, 0.48 * math.cos(math.pi / 12) - 0.02
+        angles = [math.tau * k / n + math.pi / n for k in range(n)]
+        def ring(r):
+            return [(x + r * math.cos(a), cy + r * math.sin(a)) for a in angles]
+        outer, shoulder, bead, rim, hub = (ring(rad * f) for f in (1, 0.85, 0.52, 0.43, 0.18))
+        for k in range(n):
+            j = (k + 1) % n
+            for band in range(3):
+                za, zb = z - wid / 2 + wid * band / 3, z - wid / 2 + wid * (band + 1) / 3
+                m.face([(outer[k][0], outer[k][1], za), (outer[j][0], outer[j][1], za),
+                        (outer[j][0], outer[j][1], zb), (outer[k][0], outer[k][1], zb)],
+                       F._v(F.RUB, 10 if (k + band) % 2 else 3), 2, True)
+        for side in (-1, 1):
+            zz = z + side * wid / 2
+            for k in range(n):
+                j = (k + 1) % n
+                for out, inside, col in ((outer, shoulder, F._v(F.RUB, 8)),
+                                          (shoulder, bead, F.RUB),
+                                          (bead, rim, F._v(F.RUB, -6)),
+                                          (rim, hub, F._v(OLIVE, 10 if k % 2 else -3))):
+                    m.face([(out[k][0], out[k][1], zz), (out[j][0], out[j][1], zz),
+                            (inside[j][0], inside[j][1], zz), (inside[k][0], inside[k][1], zz)],
+                           col, 2, True)
+            m.face([(px, py, zz) for px, py in hub], OLIVE_D, 2, True)
     for x in (-1.6, 1.55):
-        for sz in (-1.05, 1.05):
-            m.add(box(0.95, 0.95, 0.3, F.RUB, center=(x, 0.48, sz)))
-            m.add(box(0.35, 0.35, 0.34, F.HUB, center=(x, 0.48, sz)))
+        for z in (-1.05, 1.05):
+            wheel(x, z)
     m.add(box(5.2, 0.45, 2.0, OLIVE_D, center=(0, 0.95, 0)))
     m.add(box(1.7, 1.4, 2.2, OLIVE, center=(1.75, 1.85, 0)))
     m.add(box(0.06, 0.6, 1.8, GLASS, center=(2.62, 2.15, 0)))
@@ -271,7 +297,51 @@ def truck():
     m.add(box(0.1, 0.62, 2.3, OLIVE, center=(0.72, 1.62, 0)))
     m.add(box(0.2, 0.3, 2.2, F.RUB, center=(2.75, 0.75, 0)))
     for sz in (-0.7, 0.7):
-        m.add(box(0.1, 0.2, 0.36, F.WIN_LIT, center=(2.74, 1.35, sz), emissive=True))
+        m.add(box(0.12, 0.22, 0.52, F.RUB, center=(2.72, 1.36, sz)))
+        m.add(box(0.10, 0.18, 0.44, (255, 238, 198), center=(2.79, 1.36, sz),
+                  emissive=True))
+    # Cab roof, split windscreen, doors and mirrors.  Keep the cargo bed
+    # open: the raid and films stage passengers and the gunner inside it.
+    m.add(box(1.82, 0.12, 2.24, OLIVE_D, center=(1.75, 2.60, 0)))
+    m.add(box(0.07, 0.64, 0.075, OLIVE_D, center=(2.66, 2.15, 0)))
+    for side in (-1, 1):
+        z = side * 1.115
+        m.add(box(1.05, 0.58, 0.035, GLASS, center=(1.65, 2.19, z)))
+        m.add(box(0.06, 0.70, 0.045, OLIVE_D, center=(1.65, 2.17, z * 1.01)))
+        m.add(box(0.66, 0.035, 0.035, OLIVE_D, center=(1.65, 1.82, z * 1.01)))
+        m.add(box(0.19, 0.045, 0.045, F.HUB, center=(1.28, 1.72, z * 1.02)))
+        m.add(box(0.35, 0.05, 0.05, OLIVE_D, center=(2.14, 2.20, side * 1.22)))
+        m.add(box(0.10, 0.26, 0.12, GLASS, center=(2.29, 2.20, side * 1.22)))
+        # Cargo side stakes and horizontal plank seams.
+        for xx in (-2.25, -1.5, -0.75, 0.0, 0.55):
+            m.add(box(0.065, 0.65, 0.06, OLIVE_D, center=(xx, 1.62, side * 1.18)))
+        m.add(box(3.12, 0.035, 0.035, OLIVE_D, center=(-0.85, 1.62, side * 1.18)))
+        m.add(box(0.84, 0.12, 0.40, OLIVE_D, center=(1.55, 1.05, side * 0.99)))
+        m.add(box(0.20, 0.13, 0.22, (140, 43, 30), center=(-2.48, 1.23, side * 0.86)))
+    # Radiator grille and guard, inside the existing front bumper envelope.
+    m.add(box(0.045, 0.52, 0.92, OLIVE_D, center=(2.64, 1.53, 0)))
+    for z in (-0.36, -0.24, -0.12, 0, 0.12, 0.24, 0.36):
+        m.add(box(0.035, 0.46, 0.035, F.HUB, center=(2.67, 1.53, z)))
+    # Open cargo box: narrow top rails, inner bench ledges and tailgate braces.
+    for side in (-1, 1):
+        z = side * 1.12
+        m.add(box(3.2, 0.055, 0.12, F._v(OLIVE, 12), center=(-0.85, 1.96, z)))
+        m.add(box(2.75, 0.075, 0.23, F.WOOD_D, center=(-0.85, 1.47, side * 0.88)))
+        m.add(box(0.36, 0.08, 0.30, OLIVE_D, center=(0.95, 0.77, side * 1.02)))
+        # Fender lips span the wheel without cutting into the wheel mesh.
+        for xx in (-1.6, 1.55):
+            m.add(box(1.0, 0.09, 0.32, OLIVE_D, center=(xx, 1.05, side * 1.02)))
+        m.add(box(0.10, 0.24, 0.19, (110, 42, 31), center=(-2.49, 1.42, side * 0.86)))
+        m.add(box(0.38, 0.05, 0.045, F.HUB, center=(0.99, 1.70, side * 1.135)))
+    for z in (-0.82, 0.0, 0.82):
+        m.add(box(0.05, 0.58, 0.07, OLIVE_D, center=(-2.46, 1.63, z)))
+    m.add(box(0.055, 0.04, 2.18, OLIVE_D, center=(-2.46, 1.64, 0)))
+    # Windscreen wipers and a small protective bar across the grille.
+    for z in (-0.45, 0.45):
+        m.add(box(0.035, 0.035, 0.64, OLIVE_D, center=(2.665, 1.92, z)))
+    m.add(box(0.06, 0.06, 1.05, OLIVE_D, center=(2.70, 1.30, 0)))
+    # Tail hitch stays within the body footprint and doesn't affect collision.
+    m.add(box(0.18, 0.13, 0.30, F.RUB, center=(-2.50, 0.75, 0)))
     return m
 
 

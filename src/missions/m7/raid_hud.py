@@ -126,7 +126,8 @@ def draw(surface, s):
                 reload_frac=(1.0 - s.reloading / s.RELOAD_S) if s.reloading else 0.0,
                 hit_age=s.t - s.hit_mark)
     H.damage_arcs(surface, s.dmg_marks, s.t, life=0.9)
-    U.weapon(surface, s.hp(), s.hp_max(), s.mag, s.MAG, s.reserve, s.reloading, s.RELOAD_S)
+    U.weapon(surface, s.hp(), s.hp_max(), s.mag, s.MAG, s.reserve, s.reloading, s.RELOAD_S,
+             cw="fallow12", label="FALLOW 12", caliber="12GA", kind="shell", reload_ms=132)
     bodi_clock(surface, s)
     callouts(surface, s)
     if s.cp_toast and s.t - s.cp_toast < 2.6:

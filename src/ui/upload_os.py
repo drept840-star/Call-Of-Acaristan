@@ -1,4 +1,3 @@
-
 """Upload OS - a retro CRT terminal operating system for the evidence upload.
 
 Replaces the old "hold [E] to upload" mechanic with a full interactive OS:

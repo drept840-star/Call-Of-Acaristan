@@ -452,6 +452,9 @@ class RadioTransmission:
             x0 = (sw - m["panel_w"]) // 2
             one = self.panel_height(m, 1)
             bottom = sh - max(4, (bar_h - one) // 2)
+        elif anchor == "center":
+            x0 = (sw - m["panel_w"]) // 2
+            bottom = (sh + self.panel_height(m, 1)) // 2
         else:
             x0 = int(HUD_ANCHOR_X * scale)
             bottom = sh - int(HUD_ANCHOR_BOTTOM * scale)
@@ -677,6 +680,48 @@ class RadioTransmission:
         s.set_alpha(int(255 * alpha))
         surface.blit(s, (x0 + int(slide), bottom - panel_h))
         return pygame.Rect(x0, bottom - panel_h, panel_w, panel_h)
+
+
+def draw_channel_card(surface, rect, speaker, freq, selected, clock, key="1", accent=None):
+    """A physical channel button for the ending receiver.
+
+    Reuses the chassis bevel, the caller-ID bust and the pixfont so the ending
+    reads as the same device as every other radio in the game.  No route words:
+    the plot requires that neither channel looks like the right answer.
+    """
+    m = RadioTransmission.metrics(surface)
+    u = m["u"]
+    acc = accent or accent_for(speaker)
+    rect = pygame.Rect(rect)
+    card = pygame.Surface(rect.size, pygame.SRCALPHA)
+    _bevel_box(card, card.get_rect(), CASE, CASE_HI, CASE_LO, u)
+    win = pygame.Rect(2 * u, 2 * u, rect.w - 4 * u, rect.h - 4 * u)
+    _bevel_box(card, win, GLASS, CASE_LO, CASE_HI, u, inset=True)
+    size = 24 * u
+    card.blit(_portrait(speaker, size, acc), (win.x + 3 * u, win.y + 3 * u))
+    head = pixfont.font("R7", u)
+    lab = pixfont.font("R5", u)
+    head.draw(card, speaker, (win.x + size + 6 * u, win.y + 3 * u),
+              acc if selected else BODY_RGB)
+    lab.draw(card, "CHANNEL " + key, (win.x + size + 6 * u, win.y + 5 * u + head.cap * u),
+             (150, 170, 160) if selected else (100, 112, 108))
+    lab.draw(card, freq, (win.x + 3 * u, win.bottom - 10 * u),
+             AMBER if selected else (120, 132, 126))
+    seg_y = win.y + 5 * u + head.cap * u + 6 * u
+    for i in range(6):
+        card.fill(acc if selected else LED_OFF,
+                  (win.x + size + 6 * u + i * 3 * u, seg_y, 2 * u, 2 * u))
+    led = LED_GREEN if selected else (AMBER if (clock // 650) % 2 == 0 else LED_OFF)
+    pygame.draw.circle(card, led, (rect.w - 8 * u, 8 * u), 3 * u)
+    cap = pygame.Rect(win.right - 8 * u, win.y + 3 * u, 5 * u, 5 * u)
+    pygame.draw.rect(card, (24, 26, 24), cap)
+    pygame.draw.rect(card, (150, 152, 140), cap, 1)
+    kw, kh = head.size(key)
+    head.draw(card, key, (cap.centerx - kw // 2, cap.centery - kh // 2), (232, 226, 200))
+    surface.blit(card, rect.topleft)
+    if selected:
+        pygame.draw.rect(surface, AMBER, rect, 2)
+        pygame.draw.rect(surface, (255, 226, 150), rect.inflate(-4, -4), 1)
 
 
 TRANSMISSION = RadioTransmission()

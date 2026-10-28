@@ -1,4 +1,3 @@
-
 """Multiplayer arena maps and the deathmatch rules.
 
 An arena is deliberately NOT a mission. Missions carry scripted timelines
@@ -22,6 +21,7 @@ Tile legend
   B  armour pickup
   W  OS-12 assault-rifle pickup
   M  K-9 SMG pickup
+  S  Fallow 12 shotgun pickup
 
 The module holds no drawing code: it is the authoritative rules, and the
 host must be able to run a whole match headlessly for tests.
@@ -45,7 +45,7 @@ ARENA_YARD = [
     "####################",
     "#....#.......#.....#",
     "#.1..#...3...#..2..#",
-    "#....#..M....#.....#",
+    "#....#..M....#..S..#",
     "#....#..R....#..W..#",
     "#.........#........#",
     "#...####..#...####.#",
@@ -72,7 +72,7 @@ ARENA_CROSSFIRE = [
     "################",
     "#1............2#",
     "#..............#",
-    "#...##....##...#",
+    "#..S##....##S..#",
     "#...##....##...#",
     "#.R...M..M...R.#",
     "#.B...W..W...B.#",
@@ -97,7 +97,7 @@ ARENA_FOUNDRY = [
     "#....+...#..#...+......#",
     "#....#...#..#...#......#",
     "#....#...####...#......#",
-    "#..R......W......M.....#",
+    "#..R......W....S.M.....#",
     "#....#...####...#......#",
     "#....+...#..#...+...B..#",
     "#....#...#..#...#......#",
@@ -202,6 +202,7 @@ PICKUP_TILES = {
     "B": ("armour", 60),
     "W": ("weapon", P.WPN_OS12),
     "M": ("weapon", P.WPN_K9),
+    "S": ("weapon", P.WPN_SHOTGUN),
 }
 
 
@@ -677,6 +678,15 @@ WEAPONS = {
         "name": "K-9", "damage": 17, "pellets": 1, "cooldown": 7,
         "mag": 30, "reload": 60, "range": 470.0, "spread": 2.6,
         "move_mul": 0.94, "kick": 13.0, "shake": 11,
+    },
+    P.WPN_SHOTGUN: {
+        # The Fallow 12: the first arena gun that actually uses the pellet
+        # fan. 88 damage if all eight land, at a 330 px reach and 0.73 s
+        # between pumps; walk backwards and it is a very loud pistol.
+        "name": "FALLOW 12", "damage": 11, "pellets": 8, "cooldown": 44,
+        "mag": 6, "reload": 150, "range": 330.0, "spread": 8.0,
+        "move_mul": 0.86, "kick": 34.0, "shake": 30,
+        "sound": "shotgun_blast",
     },
 }
 # The weapon everyone spawns holding. The others have to be walked over.

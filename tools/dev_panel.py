@@ -19,7 +19,10 @@ Layout, top to bottom::
     filter   type to narrow the list (matches target name or description)
     body     scrollable, grouped target list in mission order, plus a
              "Packaging" group (full / slim / handoff zip via tools/zip_project.py)
-    footer   extra args, Copy command, Stop all games, status line
+             and a "Source" group (build all source .py -> TXT via
+             tools/build_code_txt.py --all, plus a directory-tree TXT listing
+             every project file, any type (source_dir.txt)
+     footer   extra args, Copy command, Stop all games, status line
 
 Keyboard: ↑/↓ walk the visible targets, Enter launches the selected one,
 Ctrl+F jumps to the filter, and Esc clears the filter plus the selection.
@@ -41,7 +44,9 @@ Structure notes:
 import subprocess
 import sys
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
+from textwrap import wrap
 from tkinter import ttk
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -102,22 +107,48 @@ TOOL_TARGETS = {
     "zip-handoff": ("Handoff zip (--handoff): tests + .wolf + plan, for review",
                     ["--handoff"]),
 }
+
+# ── Source-code bundle actions: all source .py -> one TXT, plus directory tree ──
+SOURCE_TXT_TOOL = "tools/build_code_txt.py"
+SOURCE_TXT_TARGET = "source-txt"
+SOURCE_TXT_DESC = (
+    "Build all source code files into a TXT "
+    "(tools/build_code_txt.py --all), plus the full directory tree")
+SOURCE_DIR_TXT_TARGET = "source-dir-txt"
+SOURCE_DIR_TXT_DESC = "Write a TXT tree of every project file (any type, with sizes)"
+SOURCE_DIR_TXT_OUT = ROOT / "archive" / "TXTs" / "source_dir.txt"
+SOURCE_DIR_SKIP_DIRS = frozenset({
+    "__pycache__", ".git", ".venv", "venv", "env",
+    "build", "dist", ".pytest_cache", ".mypy_cache", "PDFs", "TXTs", "archive",
+    "graphify-out",  # gitignored 32 MB code-graph cache, not project content
+})
+# Machine-local trackers, not part of the project's file set.
+SOURCE_DIR_SKIP_FILES = frozenset({
+    ".pixeldrain_last_id", ".pixeldrain_last_id_slim", ".pixeldrain_last_id_handoff",
+})
 THEME = {
-    "app":        "#1a1815",
-    "header":     "#232019",
-    "panel":      "#272319",
-    "button":     "#2f2a20",
-    "button_hover": "#3d3628",
-    "border":     "#3d372e",
-    "text":       "#e8e2d8",
-    "muted":      "#9a9186",
-    "accent":     "#32ff96",
-    "accent_hover": "#6dffb4",
-    "on_accent":  "#0b1a12",
-    "danger":     "#ff6b5e",
-    "danger_hover": "#ff8d82",
-    "amber":      "#ffbe4d",
-    "warn":       "#ffc266",
+    "app":          "#090d0b",
+    "header":       "#0d1410",
+    "panel":        "#111914",
+    "panel_alt":    "#141e18",
+    "panel_hover":  "#19271f",
+    "button":       "#17231b",
+    "button_hover": "#22352a",
+    "border":       "#24342a",
+    "border_hot":   "#3f7053",
+    "text":         "#e7f4eb",
+    "muted":        "#83948a",
+    "dim":          "#4d5e54",
+    "accent":       "#44ff9a",
+    "accent_soft":  "#a0ffc8",
+    "accent_dark":  "#123523",
+    "accent_hover": "#1d4c32",
+    "cyan":         "#6ec8ff",
+    "on_accent":    "#06110a",
+    "danger":       "#ff6b66",
+    "danger_hover": "#3a2020",
+    "amber":        "#ffc45c",
+    "warn":         "#ffc45c",
 }
 
 
@@ -183,26 +214,188 @@ def group_issues():
     return missing, duplicated, unknown
 
 
+# ── Source-code bundle: all source .py -> one TXT, plus full directory tree ──
+def build_source_txt_cmd(extra_args=()):
+    """Pure helper (headless-testable): argv that builds all source .py -> one TXT.
+
+    Runs ``tools/build_code_txt.py --all``: every source file the builder finds
+    gets bundled into the combined TXT (plus per-file TXTs) under
+    ``archive/TXTs/``.
+    """
+    cmd = [sys.executable, str(ROOT / SOURCE_TXT_TOOL), "--all"]
+    cmd.extend(a for a in extra_args if a != "--" and not a.startswith("-"))
+    return cmd
+
+
+def source_dir_files(root=ROOT):
+    """Sorted project-relative paths of every project file (junk pruned).
+
+    Unlike the code bundle (``.py`` only) this keeps every file type - audio,
+    video, art, maps, docs - so the tree shows what else lives in the repo.
+    Dotted *directories* (.git, .venv, .wolf, ...) are always skipped; dotted
+    files such as ``.gitignore`` or ``assets/baked/*/.bakeinfo.json`` are kept.
+    """
+    found = []
+    for path in root.rglob("*"):
+        rel = path.relative_to(root)
+        if any(part in SOURCE_DIR_SKIP_DIRS for part in rel.parts[:-1]):
+            continue
+        if any(part.startswith(".") for part in rel.parts[:-1]):
+            continue
+        if not path.is_file() or path.name in SOURCE_DIR_SKIP_FILES:
+            continue
+        found.append(rel)
+    return sorted(found, key=lambda p: str(p).replace("\\", "/").lower())
+
+
+def _format_size(size):
+    """Human-readable file size (1.2 MiB, 940 KiB, 12 B)."""
+    if size < 1024:
+        return f"{size} B"
+    value = float(size)
+    for unit in ("KiB", "MiB", "GiB"):
+        value /= 1024
+        if value < 1024 or unit == "GiB":
+            return f"{value:.1f} {unit}"
+    return f"{value:.1f} GiB"
+
+
+def _count_files(node):
+    return sum(1 if children is None else _count_files(children)
+               for children in node.values())
+
+
+def _walk_tree(node, rel, prefix, sizes, lines):
+    """Append (label, info) tree rows depth-first: directories before files."""
+    entries = sorted(node.items(), key=lambda kv: (kv[1] is None, kv[0].lower()))
+    for index, (name, children) in enumerate(entries):
+        last = index == len(entries) - 1
+        connector = "└── " if last else "├── "
+        child_rel = f"{rel}/{name}" if rel else name
+        if children is None:
+            info = _format_size(sizes.get(child_rel, 0))
+            lines.append((f"{prefix}{connector}{name}", info))
+        else:
+            count = _count_files(children)
+            info = f"{count:,} file" if count == 1 else f"{count:,} files"
+            lines.append((f"{prefix}{connector}{name}/", info))
+            _walk_tree(children, child_rel, prefix + ("    " if last else "│   "),
+                       sizes, lines)
+
+
+def render_dir_listing(paths, root=ROOT):
+    """Render relative paths as a header + aligned directory tree (text)."""
+    tree = {}
+    sizes = {}
+    for rel in paths:
+        parts = Path(rel).parts
+        node = tree
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = None
+        try:
+            sizes[Path(rel).as_posix()] = (root / rel).stat().st_size
+        except OSError:
+            pass
+
+    rows = []
+    _walk_tree(tree, "", "", sizes, rows)
+    # Cap the name column: a handful of very deep paths would otherwise push
+    # every other row's size info half a screen to the right.
+    width = min(max((len(label) for label, _info in rows), default=0), 72)
+
+    total_files = len(paths)
+    total_size = _format_size(sum(sizes.values()))
+    # Dotted dirs are covered by the note below, so list only the named ones.
+    pruned = " ".join(sorted((d for d in SOURCE_DIR_SKIP_DIRS
+                              if not d.startswith(".")), key=str.lower))
+    rule = "# " + "=" * 74
+    header = [
+        rule,
+        "# PROJECT DIRECTORY LISTING - every project file, any type",
+        f"# Root   : {Path(root).as_posix()}",
+        f"# Files  : {total_files:,}   Total: {total_size}   "
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "# Legend : directory/ -> files inside | file -> size on disk",
+    ]
+    for index, chunk in enumerate(wrap(
+            f"Pruned : {pruned} (plus every dotted directory: .git, .venv, .wolf, ...)",
+            width=71, subsequent_indent="         ")):
+        header.append("# " + chunk)
+    header.extend([rule, "", f"{Path(root).name}/"])
+    body = [f"{label.ljust(width)}  {info}" for label, info in rows]
+    return "\n".join(header + body) + "\n"
+
+
+def write_source_dir_txt(txt_path=SOURCE_DIR_TXT_OUT, files=None, root=ROOT):
+    """Write a TXT directory tree of every project file, every type."""
+    paths = source_dir_files(root) if files is None else files
+    txt_path = Path(txt_path)
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
+    txt_path.write_text(render_dir_listing(paths, root), encoding="utf-8")
+    print(f"Written: {txt_path}")
+    return txt_path
+
+
+def source_txt_action(extra_args=()):
+    """Dev-panel action: build all source code files into a single TXT,
+    plus the full project directory tree (source-dir-txt content) appended at
+    the end."""
+    cmd = build_source_txt_cmd(extra_args)
+    subprocess.Popen(cmd, cwd=str(ROOT)).wait()
+    combined = ROOT / "archive" / "TXTs" / "selected_source.txt"
+    listing = write_source_dir_txt()
+    with combined.open("a", encoding="utf-8") as fh:
+        fh.write("\n\n")
+        fh.write(listing.read_text(encoding="utf-8"))
+    return ("Built source code txt: all source files + full directory tree -> "
+            "archive/TXTs/selected_source.txt")
+
+
+def source_dir_action(extra_args=()):
+    """Dev-panel action: write a TXT that is just the directory listing."""
+    return f"Directory listing written: {write_source_dir_txt(SOURCE_DIR_TXT_OUT)}"
+
+
+SOURCE_ACTIONS = {
+    SOURCE_TXT_TARGET: (SOURCE_TXT_DESC, source_txt_action),
+    SOURCE_DIR_TXT_TARGET: (SOURCE_DIR_TXT_DESC, source_dir_action),
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Panel
 # ─────────────────────────────────────────────────────────────────────────────
 class DevPanel(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Acaristan - Dev Panel")
-        self.minsize(720, 460)
-        self.geometry("880x680")
+        self.title("Acaristan // Mission Control")
+        self.minsize(760, 520)
+        self.geometry("960x740")
 
-        self._procs = []          # launched game processes (for Stop all games)
-        self._entries = []        # one dict per target row (for filtering)
-        self._group_widgets = {}  # group key -> header/frame/label widgets
-        self._last_target = None  # last hovered/launched target (for Copy)
-        self._selected = None     # keyboard-selected target name (↑/↓ + Enter)
+        self._procs = []
+        self._entries = []
+        self._group_widgets = {}
+        self._last_target = None
+        self._selected = None
+        self._pulse_phase = False
 
-        self.font_title = ("Consolas", 13, "bold")
-        self.font_group = ("Consolas", 10, "bold")
-        self.font_mono = ("Consolas", 10)
-        self.font_ui = ("Segoe UI", 9)
+        mono = {
+            "win32": "Cascadia Mono",
+            "darwin": "SF Mono",
+        }.get(sys.platform, "DejaVu Sans Mono")
+        ui = {
+            "win32": "Segoe UI",
+            "darwin": "SF Pro Display",
+        }.get(sys.platform, "DejaVu Sans")
+
+        self.font_title = (mono, 20, "bold")
+        self.font_group = (mono, 10, "bold")
+        self.font_mono = (mono, 10)
+        self.font_button = (mono, 9, "bold")
+        self.font_metric = (mono, 10, "bold")
+        self.font_ui = (ui, 9)
+        self.font_small = (ui, 8)
 
         self._apply_theme()
         self._build_header()
@@ -217,6 +410,7 @@ class DevPanel(tk.Tk):
         self._set_status(self._default_status())
         self._bind_keys()
         self.after(10, self._enable_dark_titlebar)
+        self.after(650, self._pulse_live)
         self.after(1000, self._reap)
 
     def _enable_dark_titlebar(self):
@@ -245,45 +439,96 @@ class DevPanel(tk.Tk):
     # ── theme ──────────────────────────────────────────────────────────────
     def _apply_theme(self):
         self.configure(bg=THEME["app"])
+        self.option_add("*selectBackground", THEME["accent"])
+        self.option_add("*selectForeground", THEME["on_accent"])
+
         style = ttk.Style(self)
         try:
-            style.theme_use("clam")  # clam honours explicit scrollbar colours
+            style.theme_use("clam")
         except tk.TclError:
             pass
+
         style.configure(
             "Dev.Vertical.TScrollbar",
             gripcount=0,
-            background=THEME["border"], troughcolor=THEME["app"],
-            bordercolor=THEME["app"], arrowcolor=THEME["muted"],
-            darkcolor=THEME["border"], lightcolor=THEME["border"],
+            background=THEME["border"],
+            troughcolor=THEME["panel"],
+            bordercolor=THEME["app"],
+            arrowcolor=THEME["muted"],
+            darkcolor=THEME["border"],
+            lightcolor=THEME["border"],
             relief="flat",
         )
-        style.map("Dev.Vertical.TScrollbar",
-                  background=[("active", THEME["button_hover"])])
-        # Arrowless track+thumb - cleaner than clam's default stepper arrows.
+        style.map(
+            "Dev.Vertical.TScrollbar",
+            background=[("active", THEME["border_hot"])],
+        )
         style.layout("Dev.Vertical.TScrollbar", [
             ("Vertical.Scrollbar.trough", {
                 "sticky": "ns",
-                "children": [("Vertical.Scrollbar.thumb",
-                              {"expand": "1", "sticky": "nswe"})],
+                "children": [
+                    ("Vertical.Scrollbar.thumb",
+                     {"expand": "1", "sticky": "nswe"})
+                ],
             }),
         ])
 
     def _flat_button(self, parent, text, command, fg=None, bg=None,
                      hover=None, width=None):
-        """A consistently styled flat button (classic tk = reliably themable)."""
         fg = fg or THEME["text"]
         bg = bg or THEME["button"]
         hover = hover or THEME["button_hover"]
+
         btn = tk.Button(
-            parent, text=text, command=command, font=self.font_mono,
-            width=width, bd=0, relief="flat", highlightthickness=0,
-            bg=bg, fg=fg, activebackground=hover, activeforeground=fg,
-            padx=10, pady=4, cursor="hand2", anchor="center",
+            parent,
+            text=text,
+            command=command,
+            font=self.font_button,
+            width=width,
+            bd=0,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
+            highlightcolor=THEME["accent"],
+            bg=bg,
+            fg=fg,
+            activebackground=hover,
+            activeforeground=fg,
+            padx=10,
+            pady=5,
+            cursor="hand2",
+            anchor="center",
+            takefocus=0,
         )
-        btn.bind("<Enter>", lambda _e: btn.configure(bg=hover))
-        btn.bind("<Leave>", lambda _e: btn.configure(bg=bg))
+
+        def enter(_event):
+            btn.configure(
+                bg=hover,
+                highlightbackground=THEME["border_hot"],
+            )
+
+        def leave(_event):
+            btn.configure(
+                bg=bg,
+                highlightbackground=THEME["border"],
+            )
+
+        btn.bind("<Enter>", enter)
+        btn.bind("<Leave>", leave)
         return btn
+
+    def _keycap(self, parent, text):
+        return tk.Label(
+            parent,
+            text=text,
+            font=self.font_small,
+            bg=THEME["button"],
+            fg=THEME["muted"],
+            padx=6,
+            pady=2,
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
+        )
 
     # ── sections ───────────────────────────────────────────────────────────
     def _build_header(self):
@@ -291,49 +536,169 @@ class DevPanel(tk.Tk):
         head.grid(row=0, column=0, sticky="ew")
         head.columnconfigure(0, weight=1)
 
-        tk.Label(head, text="ACARISTAN - DEV PANEL", bg=THEME["header"],
-                 fg=THEME["accent"], font=self.font_title).grid(
-            row=0, column=0, sticky="w", padx=14, pady=(10, 0))
+        tk.Frame(head, bg=THEME["accent"], height=3).grid(
+            row=0, column=0, sticky="ew"
+        )
+
+        content = tk.Frame(head, bg=THEME["header"])
+        content.grid(row=1, column=0, sticky="ew", padx=16, pady=(13, 12))
+        content.columnconfigure(0, weight=1)
+
         tk.Label(
-            head,
-            text="Click a target to launch it. Right-click copies the command. "
-                 "↑/↓ then Enter to pick.",
-            bg=THEME["header"], fg=THEME["muted"], font=self.font_ui,
-        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 10))
+            content,
+            text="ACARISTAN SYSTEMS  /  INTERNAL OPERATIONS",
+            bg=THEME["header"],
+            fg=THEME["cyan"],
+            font=self.font_small,
+        ).grid(row=0, column=0, sticky="w")
 
-        self.counts = tk.Label(head, text="", bg=THEME["header"],
-                               fg=THEME["muted"], font=self.font_ui)
-        self.counts.grid(row=0, column=1, rowspan=2, sticky="e", padx=14)
+        tk.Label(
+            content,
+            text="MISSION CONTROL",
+            bg=THEME["header"],
+            fg=THEME["text"],
+            font=self.font_title,
+        ).grid(row=1, column=0, sticky="w", pady=(1, 0))
 
-        tk.Frame(self, bg=THEME["border"], height=1).grid(
-            row=0, column=0, sticky="sew")
+        tk.Label(
+            content,
+            text="Select a jump target, tool operation, or source export.",
+            bg=THEME["header"],
+            fg=THEME["muted"],
+            font=self.font_ui,
+        ).grid(row=2, column=0, sticky="w", pady=(0, 8))
+
+        shortcuts = tk.Frame(content, bg=THEME["header"])
+        shortcuts.grid(row=3, column=0, sticky="w")
+
+        tk.Label(
+            shortcuts,
+            text="NAV",
+            bg=THEME["header"],
+            fg=THEME["dim"],
+            font=self.font_small,
+        ).pack(side="left", padx=(0, 7))
+
+        for key in ("↑ ↓", "ENTER", "CTRL F", "ESC"):
+            self._keycap(shortcuts, key).pack(side="left", padx=(0, 5))
+
+        metrics = tk.Frame(
+            content,
+            bg=THEME["panel"],
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
+        )
+        metrics.grid(
+            row=0, column=1, rowspan=4,
+            sticky="nse", padx=(24, 0)
+        )
+
+        state = tk.Frame(metrics, bg=THEME["panel"])
+        state.grid(row=0, column=0, sticky="ew", padx=12, pady=(9, 7))
+
+        self.live_dot = tk.Label(
+            state,
+            text="●",
+            bg=THEME["panel"],
+            fg=THEME["dim"],
+            font=self.font_mono,
+        )
+        self.live_dot.pack(side="left")
+
+        self.live_state = tk.Label(
+            state,
+            text="SYSTEM READY",
+            bg=THEME["panel"],
+            fg=THEME["muted"],
+            font=self.font_small,
+        )
+        self.live_state.pack(side="left", padx=(6, 0))
+
+        tk.Frame(metrics, bg=THEME["border"], height=1).grid(
+            row=1, column=0, sticky="ew"
+        )
+
+        self.counts = tk.Label(
+            metrics,
+            text="",
+            bg=THEME["panel"],
+            fg=THEME["accent"],
+            font=self.font_metric,
+            justify="right",
+            anchor="e",
+        )
+        self.counts.grid(
+            row=2, column=0, sticky="ew",
+            padx=14, pady=(9, 10)
+        )
+
+        tk.Frame(head, bg=THEME["border"], height=1).grid(
+            row=2, column=0, sticky="ew"
+        )
 
     def _build_filter(self):
         bar = tk.Frame(self, bg=THEME["app"])
-        bar.grid(row=1, column=0, sticky="ew", padx=12, pady=(10, 6))
-        bar.columnconfigure(1, weight=1)
+        bar.grid(row=1, column=0, sticky="ew", padx=12, pady=(10, 7))
+        bar.columnconfigure(0, weight=1)
 
-        tk.Label(bar, text="Filter", bg=THEME["app"], fg=THEME["muted"],
-                 font=self.font_ui).grid(row=0, column=0, sticky="w")
+        shell = tk.Frame(bar, bg=THEME["border"], padx=1, pady=1)
+        shell.grid(row=0, column=0, sticky="ew")
+        shell.columnconfigure(0, weight=1)
+
+        inner = tk.Frame(shell, bg=THEME["panel"])
+        inner.grid(row=0, column=0, sticky="ew")
+        inner.columnconfigure(1, weight=1)
+
+        tk.Label(
+            inner,
+            text="⌕  FILTER TARGETS",
+            bg=THEME["panel"],
+            fg=THEME["cyan"],
+            font=self.font_button,
+        ).grid(row=0, column=0, sticky="w", padx=(11, 8), pady=8)
 
         self.filter_var = tk.StringVar()
         self.filter_var.trace_add("write", lambda *_: self._apply_filter())
+
         self.filter_entry = tk.Entry(
-            bar, textvariable=self.filter_var, font=self.font_mono,
-            bg=THEME["button"], fg=THEME["text"], relief="flat",
-            insertbackground=THEME["accent"], highlightthickness=1,
+            inner,
+            textvariable=self.filter_var,
+            font=self.font_mono,
+            bg=THEME["button"],
+            fg=THEME["text"],
+            relief="flat",
+            insertbackground=THEME["accent"],
+            selectbackground=THEME["accent"],
+            selectforeground=THEME["on_accent"],
+            highlightthickness=1,
             highlightbackground=THEME["border"],
             highlightcolor=THEME["accent"],
         )
-        self.filter_entry.grid(row=0, column=1, sticky="ew", padx=8, ipady=4)
+        self.filter_entry.grid(
+            row=0, column=1, sticky="ew",
+            padx=(0, 8), pady=7, ipady=4
+        )
         self.filter_entry.bind("<Return>", self._launch_first_visible)
         self.filter_entry.bind("<Escape>", self._on_escape)
 
-        self._flat_button(bar, "Clear", lambda: self.filter_var.set(""),
-                          width=6).grid(row=0, column=2, sticky="e")
+        self._keycap(inner, "CTRL F").grid(
+            row=0, column=2, padx=(0, 8)
+        )
+
+        self._flat_button(
+            inner,
+            "CLEAR ×",
+            lambda: self.filter_var.set(""),
+            width=7,
+        ).grid(row=0, column=3, padx=(0, 7), pady=6)
 
     def _build_body(self):
-        wrap = tk.Frame(self, bg=THEME["app"])
+        wrap = tk.Frame(
+            self,
+            bg=THEME["border"],
+            padx=1,
+            pady=1,
+        )
         wrap.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 8))
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
@@ -347,7 +712,12 @@ class DevPanel(tk.Tk):
         bar.grid(row=0, column=1, sticky="ns")
         self.canvas.configure(yscrollcommand=bar.set)
 
-        inner = tk.Frame(self.canvas, bg=THEME["app"])
+        inner = tk.Frame(
+            self.canvas,
+            bg=THEME["app"],
+            padx=10,
+            pady=6,
+        )
         inner.columnconfigure(0, weight=1)
         self._inner = inner
         self._body_row = 0
@@ -367,56 +737,164 @@ class DevPanel(tk.Tk):
         self._add_group("Packaging",
                         [(name, desc) for name, (desc, _args) in
                          TOOL_TARGETS.items()])
+        self._add_group("Source", [
+            (SOURCE_TXT_TARGET, SOURCE_TXT_DESC),
+            (SOURCE_DIR_TXT_TARGET, SOURCE_DIR_TXT_DESC),
+        ])
+
+    def _group_heading(self, index, label, shown, total, filtered=False):
+        count = f"{shown:02}/{total:02}" if filtered else f"{total:02}"
+        return f"◆  {index:02} // {label.upper()}    [{count}]"
 
     def _add_group(self, label, targets):
         key = label
+        index = len(self._group_widgets) + 1
+
         header = tk.Label(
-            self._inner, text=f"{label.upper()}   ·   {len(targets)}",
-            bg=THEME["app"], fg=THEME["amber"], font=self.font_group,
+            self._inner,
+            text=self._group_heading(
+                index, label, len(targets), len(targets)
+            ),
+            bg=THEME["app"],
+            fg=THEME["cyan"],
+            font=self.font_group,
             anchor="w",
         )
-        header.grid(row=self._body_row, column=0, sticky="ew", pady=(10, 3))
+        header.grid(
+            row=self._body_row,
+            column=0,
+            sticky="ew",
+            pady=(12, 4),
+        )
         self._body_row += 1
 
-        frame = tk.Frame(self._inner, bg=THEME["panel"])
+        frame = tk.Frame(
+            self._inner,
+            bg=THEME["panel"],
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
+        )
         frame.grid(row=self._body_row, column=0, sticky="ew")
         frame.columnconfigure(0, weight=1)
         self._body_row += 1
 
-        for index, (name, desc) in enumerate(targets):
-            self._add_target_row(frame, index, key, name, desc)
+        for row_index, (name, desc) in enumerate(targets):
+            self._add_target_row(frame, row_index, key, name, desc)
 
         self._group_widgets[key] = {
-            "header": header, "frame": frame, "label": label,
+            "header": header,
+            "frame": frame,
+            "label": label,
             "total": len(targets),
+            "index": index,
         }
 
     def _add_target_row(self, parent, index, group_key, name, desc):
-        row = tk.Frame(parent, bg=THEME["panel"])
-        row.grid(row=index, column=0, sticky="ew", pady=0, padx=1)
-        row.columnconfigure(1, weight=1)
+        base_bg = THEME["panel_alt"] if index % 2 else THEME["panel"]
+
+        row = tk.Frame(parent, bg=base_bg, cursor="hand2")
+        row.grid(row=index, column=0, sticky="ew")
+        row.columnconfigure(2, weight=1)
+
+        marker = tk.Frame(row, bg=THEME["border"], width=3)
+        marker.grid(row=0, column=0, sticky="ns")
 
         button = tk.Button(
-            row, text=name, width=21, anchor="w", font=self.font_mono,
-            bd=0, relief="flat", highlightthickness=0, cursor="hand2",
-            bg=THEME["button"], fg=THEME["accent"],
+            row,
+            text=name,
+            width=21,
+            anchor="w",
+            font=self.font_mono,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            cursor="hand2",
+            bg=THEME["button"],
+            fg=THEME["accent"],
             activebackground=THEME["accent"],
             activeforeground=THEME["on_accent"],
-            padx=10, pady=3, command=lambda n=name: self.launch(n),
+            padx=10,
+            pady=5,
+            command=lambda n=name: self.launch(n),
         )
-        button.grid(row=0, column=0, sticky="w", padx=(6, 0), pady=2)
+        button.grid(
+            row=0, column=1,
+            sticky="w",
+            padx=(7, 0),
+            pady=4,
+        )
 
-        label = tk.Label(row, text=desc, bg=THEME["panel"], fg=THEME["muted"],
-                         font=self.font_ui, anchor="w", justify="left")
-        label.grid(row=0, column=1, sticky="ew", padx=(12, 10))
+        label = tk.Label(
+            row,
+            text=desc,
+            bg=base_bg,
+            fg=THEME["muted"],
+            font=self.font_ui,
+            anchor="w",
+            justify="left",
+            cursor="hand2",
+        )
+        label.grid(
+            row=0, column=2,
+            sticky="ew",
+            padx=(13, 10),
+        )
 
-        entry = {"name": name, "desc": desc, "row": row, "button": button,
-                 "label": label, "group": group_key, "visible": True,
-                 "hovered": False}
-        for widget in (row, button, label):
-            widget.bind("<Enter>", lambda _e, en=entry: self._hover(en, True))
-            widget.bind("<Leave>", lambda _e, en=entry: self._hover(en, False))
-            widget.bind("<Button-3>", lambda _e, n=name: self._copy_cmd(n))
+        action = tk.Label(
+            row,
+            text="RUN   ▶",
+            width=10,
+            bg=base_bg,
+            fg=THEME["dim"],
+            font=self.font_button,
+            anchor="e",
+            cursor="hand2",
+        )
+        action.grid(row=0, column=3, sticky="e", padx=(4, 12))
+
+        separator = tk.Frame(row, bg=THEME["border"], height=1)
+        separator.grid(
+            row=1, column=1, columnspan=3,
+            sticky="ew",
+            padx=(7, 0),
+        )
+
+        entry = {
+            "name": name,
+            "desc": desc,
+            "row": row,
+            "button": button,
+            "label": label,
+            "action": action,
+            "marker": marker,
+            "separator": separator,
+            "base_bg": base_bg,
+            "group": group_key,
+            "visible": True,
+            "hovered": False,
+        }
+
+        widgets = (row, button, label, action, marker, separator)
+        for widget in widgets:
+            widget.bind(
+                "<Enter>",
+                lambda _e, en=entry: self._hover(en, True),
+            )
+            widget.bind(
+                "<Leave>",
+                lambda _e, en=entry: self._hover(en, False),
+            )
+            widget.bind(
+                "<Button-3>",
+                lambda _e, n=name: self._copy_cmd(n),
+            )
+
+        for widget in (row, label, action, marker, separator):
+            widget.bind(
+                "<Button-1>",
+                lambda _e, n=name: self.launch(n),
+            )
+
         self._entries.append(entry)
 
     def _build_footer(self):
@@ -424,29 +902,110 @@ class DevPanel(tk.Tk):
         foot.grid(row=3, column=0, sticky="ew")
         foot.columnconfigure(1, weight=1)
 
-        tk.Label(foot, text="extra args", bg=THEME["header"],
-                 fg=THEME["muted"], font=self.font_ui).grid(
-            row=0, column=0, sticky="w", padx=(14, 8), pady=(10, 4))
+        tk.Frame(foot, bg=THEME["border"], height=1).grid(
+            row=0, column=0, columnspan=4, sticky="ew"
+        )
+
+        tk.Label(
+            foot,
+            text=">_  EXTRA ARGS",
+            bg=THEME["header"],
+            fg=THEME["cyan"],
+            font=self.font_button,
+        ).grid(
+            row=1, column=0, sticky="w",
+            padx=(14, 9), pady=(10, 6)
+        )
 
         self.extra = tk.Entry(
-            foot, font=self.font_mono, bg=THEME["button"], fg=THEME["text"],
-            relief="flat", insertbackground=THEME["accent"],
-            highlightthickness=1, highlightbackground=THEME["border"],
+            foot,
+            font=self.font_mono,
+            bg=THEME["button"],
+            fg=THEME["text"],
+            relief="flat",
+            insertbackground=THEME["accent"],
+            selectbackground=THEME["accent"],
+            selectforeground=THEME["on_accent"],
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
             highlightcolor=THEME["accent"],
         )
-        self.extra.grid(row=0, column=1, sticky="ew", pady=(10, 4), ipady=4)
+        self.extra.grid(
+            row=1, column=1, sticky="ew",
+            pady=(10, 6), ipady=4
+        )
         self.extra.bind("<Return>", self._on_extra_return)
 
-        self._flat_button(foot, "Copy command", self._copy_last).grid(
-            row=0, column=2, padx=(8, 4), pady=(10, 4))
-        self._flat_button(foot, "Stop all games", self.stop_all,
-                          fg=THEME["danger"], hover=THEME["danger_hover"]).grid(
-            row=0, column=3, padx=(4, 14), pady=(10, 4))
+        self._flat_button(
+            foot,
+            "COPY CMD",
+            self._copy_last,
+            fg=THEME["cyan"],
+        ).grid(
+            row=1, column=2,
+            padx=(8, 4), pady=(10, 6)
+        )
 
-        self.status = tk.Label(foot, text="", bg=THEME["header"],
-                               fg=THEME["muted"], font=self.font_ui, anchor="w")
-        self.status.grid(row=1, column=0, columnspan=4, sticky="ew",
-                         padx=14, pady=(0, 10))
+        self._flat_button(
+            foot,
+            "■ STOP ALL",
+            self.stop_all,
+            fg=THEME["danger"],
+            hover=THEME["danger_hover"],
+        ).grid(
+            row=1, column=3,
+            padx=(4, 14), pady=(10, 6)
+        )
+
+        status_shell = tk.Frame(
+            foot,
+            bg=THEME["app"],
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
+        )
+        status_shell.grid(
+            row=2, column=0, columnspan=4,
+            sticky="ew",
+            padx=14, pady=(0, 11)
+        )
+        status_shell.columnconfigure(1, weight=1)
+
+        self.status_mark = tk.Label(
+            status_shell,
+            text="●",
+            bg=THEME["app"],
+            fg=THEME["dim"],
+            font=self.font_mono,
+        )
+        self.status_mark.grid(
+            row=0, column=0,
+            padx=(9, 7), pady=6
+        )
+
+        self.status = tk.Label(
+            status_shell,
+            text="",
+            bg=THEME["app"],
+            fg=THEME["muted"],
+            font=self.font_ui,
+            anchor="w",
+        )
+        self.status.grid(
+            row=0, column=1,
+            sticky="ew",
+            pady=6,
+        )
+
+        tk.Label(
+            status_shell,
+            text="RIGHT-CLICK  COPY",
+            bg=THEME["app"],
+            fg=THEME["dim"],
+            font=self.font_small,
+        ).grid(
+            row=0, column=2,
+            padx=(10, 9),
+        )
 
     # ── behaviour ──────────────────────────────────────────────────────────
     def _on_wheel(self, event):
@@ -459,26 +1018,48 @@ class DevPanel(tk.Tk):
             widget = getattr(widget, "master", None)
 
     def _paint_row(self, entry):
-        """Repaint one target row for its current hover/selection state.
-
-        Selection outranks hover, so a keyboard-picked row stays visibly
-        marked while the pointer wanders across the rest of the list.
-        """
         selected = entry["name"] == self._selected
         hovered = entry.get("hovered", False)
+
         if selected:
-            row_bg, btn_bg, btn_fg = (THEME["button_hover"], THEME["accent"],
-                                      THEME["on_accent"])
+            row_bg = THEME["accent_dark"]
+            button_bg = THEME["accent"]
+            button_fg = THEME["on_accent"]
+            label_fg = THEME["text"]
+            marker_bg = THEME["accent"]
+            action_fg = THEME["accent_soft"]
+            action_text = "ACTIVE ▶"
         elif hovered:
-            row_bg, btn_bg, btn_fg = (THEME["button"], THEME["button_hover"],
-                                      THEME["accent"])
+            row_bg = THEME["panel_hover"]
+            button_bg = THEME["button_hover"]
+            button_fg = THEME["accent"]
+            label_fg = THEME["text"]
+            marker_bg = THEME["cyan"]
+            action_fg = THEME["cyan"]
+            action_text = "LAUNCH ▶"
         else:
-            row_bg, btn_bg, btn_fg = (THEME["panel"], THEME["button"],
-                                      THEME["accent"])
-        for widget in (entry["row"], entry["label"]):
-            widget.configure(bg=row_bg)
+            row_bg = entry["base_bg"]
+            button_bg = THEME["button"]
+            button_fg = THEME["accent"]
+            label_fg = THEME["muted"]
+            marker_bg = THEME["border"]
+            action_fg = THEME["dim"]
+            action_text = "RUN   ▶"
+
+        entry["row"].configure(bg=row_bg)
+        entry["label"].configure(bg=row_bg, fg=label_fg)
+        entry["action"].configure(
+            bg=row_bg,
+            fg=action_fg,
+            text=action_text,
+        )
+        entry["marker"].configure(bg=marker_bg)
+        entry["separator"].configure(
+            bg=THEME["border_hot"] if selected else THEME["border"]
+        )
         entry["button"].configure(
-            bg=btn_bg, fg=btn_fg,
+            bg=button_bg,
+            fg=button_fg,
             activebackground=THEME["accent"],
             activeforeground=THEME["on_accent"],
         )
@@ -592,23 +1173,76 @@ class DevPanel(tk.Tk):
             self._launch_first_visible()
 
     def _set_status(self, text, kind="info"):
-        colours = {"info": THEME["muted"], "ok": THEME["accent"],
-                   "warn": THEME["warn"], "err": THEME["danger"]}
-        self.status.configure(text=text, fg=colours.get(kind, THEME["muted"]))
+        colours = {
+            "info": THEME["muted"],
+            "ok": THEME["accent"],
+            "warn": THEME["warn"],
+            "err": THEME["danger"],
+        }
+        marks = {
+            "info": "●",
+            "ok": "◆",
+            "warn": "▲",
+            "err": "×",
+        }
+
+        colour = colours.get(kind, THEME["muted"])
+        self.status.configure(text=text, fg=colour)
+
+        if hasattr(self, "status_mark"):
+            self.status_mark.configure(
+                text=marks.get(kind, "●"),
+                fg=colour,
+            )
 
     def _default_status(self):
         running = self._running()
         if running:
-            return f"Pick a mission to jump into. ({running} game instance(s) running)"
-        return "Pick a mission to jump into."
+            return (
+                f"Session active. {running} child process(es) currently running."
+            )
+        return "System ready. Select a target to begin."
 
     def _running(self):
         return sum(1 for p in self._procs if p.poll() is None)
 
     def _update_counts(self):
         visible = sum(1 for e in self._entries if e["visible"])
+        running = self._running()
+
         self.counts.configure(
-            text=f"{visible}/{len(self._entries)} targets   ·   {self._running()} running")
+            text=(
+                f"{visible:02} / {len(self._entries):02}  VISIBLE\n"
+                f"{running:02}  RUNNING"
+            )
+        )
+
+        self.live_state.configure(
+            text="SESSION ACTIVE" if running else "SYSTEM READY",
+            fg=THEME["accent"] if running else THEME["muted"],
+        )
+
+        if not running:
+            self.live_dot.configure(fg=THEME["dim"])
+
+    def _pulse_live(self):
+        self._pulse_phase = not self._pulse_phase
+        running = self._running()
+
+        if running:
+            colour = (
+                THEME["accent_soft"]
+                if self._pulse_phase
+                else THEME["accent"]
+            )
+        else:
+            colour = THEME["dim"]
+
+        try:
+            self.live_dot.configure(fg=colour)
+            self.after(650, self._pulse_live)
+        except tk.TclError:
+            pass
 
     def _extra_args(self):
         return parse_extra_args(self.extra.get())
@@ -631,8 +1265,14 @@ class DevPanel(tk.Tk):
             shown = per_group.get(key, 0)
             label, total = widgets["label"], widgets["total"]
             widgets["header"].configure(
-                text=f"{label.upper()}   ·   {shown}/{total}" if query
-                else f"{label.upper()}   ·   {total}")
+                text=self._group_heading(
+                    widgets["index"],
+                    label,
+                    shown,
+                    total,
+                    filtered=bool(query),
+                )
+            )
             for widget in (widgets["header"], widgets["frame"]):
                 if shown:
                     widget.grid()
@@ -644,6 +1284,7 @@ class DevPanel(tk.Tk):
         selected = self._entry_for(self._selected)
         if selected is not None and not selected["visible"]:
             self._selected = None
+            self._paint_row(selected)
 
         self._update_counts()
         self.canvas.yview_moveto(0.0)
@@ -660,6 +1301,13 @@ class DevPanel(tk.Tk):
             self.launch(target)
 
     def _copy_cmd(self, name):
+        if name in SOURCE_ACTIONS:
+            _desc, action = SOURCE_ACTIONS[name]
+            text = action(self._extra_args())
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self._set_status(f"Copied: {text}", "ok")
+            return
         if name in TOOL_TARGETS:
             cmd = " ".join(build_tool_cmd(name, self._extra_args()))
         else:
@@ -675,6 +1323,17 @@ class DevPanel(tk.Tk):
 
     def launch(self, target):
         self._last_target = target
+
+        entry = self._entry_for(target)
+        if entry is not None and entry["visible"]:
+            self._select(target)
+
+        if target in SOURCE_ACTIONS:
+            _desc, action = SOURCE_ACTIONS[target]
+            result = action(self._extra_args())
+            self._set_status(result, "ok")
+            self._update_counts()
+            return
         if target in TOOL_TARGETS:
             cmd = build_tool_cmd(target, self._extra_args())
         else:
@@ -698,7 +1357,7 @@ class DevPanel(tk.Tk):
         if killed:
             self._set_status(f"Stopped {killed} game instance(s).", "warn")
         else:
-            self._set_status("No running game instances.")
+            self._set_status("No running game instances.")    
         self._update_counts()
 
     def _reap(self):
@@ -725,4 +1384,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

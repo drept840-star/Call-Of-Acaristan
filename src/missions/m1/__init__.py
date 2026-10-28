@@ -1,4 +1,3 @@
-
 """Package missions/m1 - re-export facade. Parts: map.py, stealth.py, main.py, hotwire.py, update.py, draw.py, meta.py."""
 """Mission 1B gameplay: warehouse infiltrate/firefight/escape."""
 from .map import *  # noqa: F401,F403

@@ -1,4 +1,3 @@
-
 """The Outfitter - spend Acaribucks on the loadout you play the arena in.
 
 One screen with three tabs, not a shop and a separate customization screen:

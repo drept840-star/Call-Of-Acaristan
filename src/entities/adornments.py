@@ -1,4 +1,3 @@
-
 """Head gear, as a registry keyed by catalog id.
 
 Lifted out of Player.draw() so adding a hat is one function and one catalog
