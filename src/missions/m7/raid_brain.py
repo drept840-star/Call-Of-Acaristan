@@ -18,6 +18,8 @@ ROUND_GAP = 0.12
 TELEGRAPH = 0.38
 FLINCH_S = 0.22
 BITE_R = 1.25
+BITE_PLAY = 1.2 / 0.9             # the 1.2 s Bite clip plays inside the dog's 0.9 s gap
+BITE_HIT = 0.55 / BITE_PLAY       # the jaws close 0.55 s into the clip; the bite lands then
 TRUCK_SPEED = 12.0
 TRUCK_START_Z = -80.0
 ALEX_HP, BODI_HP = 80, 100
@@ -99,7 +101,7 @@ class Brain:
         e = dict(kind=kind, x=x, z=z, y=0.0, yaw=0.0, hp=k["hp"], alive=True, live=False,
                  wave=wave, route=list(route), wp=0, spawn_at=self.s.t + delay,
                  next_burst=0.0, tele=0.0, left=0, round_at=0.0, hit_t=-9.0, dead_t=-9.0,
-                 moving=False, slot=self.slot, bite_at=0.0, mags=1, aim=-9.0, tgt=None,
+                 moving=False, slot=self.slot, bite_at=0.0, bite_hit=0.0, mags=1, aim=-9.0, tgt=None,
                  truck=None, gait=0.0, phase=self.rng.random() * 6.0, held=0.0)
         e.update(kw)
         self.enemies.append(e)
@@ -383,12 +385,18 @@ class Brain:
             return
         d = math.hypot(tgt[1] - e["x"], tgt[2] - e["z"])
         e["yaw"] = _yaw(tgt[1] - e["x"], tgt[2] - e["z"])
+        if e["bite_hit"] and now >= e["bite_hit"]:
+            e["bite_hit"] = 0.0
+            if d <= BITE_R * 1.3:
+                self._damage(tgt[0], k["dmg"], (e["x"], e["z"]))
+        if now - e["aim"] < BITE_HIT:
+            return
         if d > BITE_R:
             e["moving"] = self._steer(e, tgt[1], tgt[2], k["speed"], dt)
         elif now >= e["bite_at"]:
             e["bite_at"] = now + k["gap"]
             e["aim"] = now
-            self._damage(tgt[0], k["dmg"], (e["x"], e["z"]))
+            e["bite_hit"] = now + BITE_HIT
 
     # --- allies ----------------------------------------------------------------
 

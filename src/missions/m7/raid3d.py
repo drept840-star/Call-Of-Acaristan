@@ -58,7 +58,7 @@ TANK_BLAST_R = 8.0
 GUARD_VIEW = ("rifle", "rusher", "rifle", "officer")
 GUARD_PUSH_M = 0.35
 BED_TOP = 1.3
-DOG_FALL_S, DOG_PUSH_M = 0.4, 0.35
+DOG_FALL_S, DOG_PUSH_M = 1.0, 0.35      # the Death clip drops over its first second
 
 
 def _wrap(deg):
@@ -842,11 +842,17 @@ class RaidScene:
                 if not e["alive"]:
                     k = _ease(clamp((self.t - e["dead_t"]) / DOG_FALL_S, 0.0, 1.0))
                     ux, uz = e.get("fall_dir", (0.0, 0.0))
-                    _w.add(r, W.placed(W.dog_fall(90.0 * k), x + ux * DOG_PUSH_M * k, 0.0,
-                                       z + uz * DOG_PUSH_M * k, e["yaw"]))
+                    _w.add(r, W.placed(W.dog("Death", self.t - e["dead_t"]), x + ux * DOG_PUSH_M * k,
+                                       0.0, z + uz * DOG_PUSH_M * k, e["yaw"]))
                     continue
-                fr = int(e["gait"] * 3.0) % 4 if e["moving"] else 0
-                _w.add(r, W.placed(W.dog(fr), x, 0.0, z, e["yaw"]))
+                bite = (self.t - e["aim"]) * B.BITE_PLAY
+                if bite < W.dog_clip_s("Bite"):
+                    clip, ct = "Bite", bite
+                elif e["moving"]:
+                    clip, ct = "Run", e["gait"] / W.DOG_RUN_M * W.dog_clip_s("Run")
+                else:
+                    clip, ct = "Idle", self.t + e["phase"]
+                _w.add(r, W.placed(W.dog(clip, ct), x, 0.0, z, e["yaw"]))
                 continue
             kind = "heavy" if e["kind"] == "gunner" else GUARD_VIEW[e["slot"] % len(GUARD_VIEW)]
             gk = ("guard", kind)

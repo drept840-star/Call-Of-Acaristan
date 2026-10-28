@@ -232,8 +232,8 @@ def raidin_yard(surface, t):
     du = F.k(t, 200, 3600)
     d = F.mix((37.5, 0.0, 5.5), (26.0, 0.0, 1.4), du)
     gait = du * 12.2                            # metres walked so far
-    _w.add(r, RW.placed(RW.dog(int(gait * 3.0) % 4), d[0], 0.0, d[2],   # raid_brain
-                        _face(d, (20.0, 0.0, 0.4))))                     # frames the trot the same way
+    _w.add(r, RW.placed(RW.dog("Run", gait / RW.DOG_RUN_M * RW.dog_clip_s("Run")),  # the raid's
+                        d[0], 0.0, d[2], _face(d, (20.0, 0.0, 0.4))))                   # run cycle
     for seed, a, b, delay in ((71, (42.5, 0.0, 9.0), (33.5, 0.0, 5.0), 0),
                               (72, (44.0, 0.0, -4.5), (36.5, 0.0, -1.5), 500)):
         g = F.mix(a, b, F.k(t, delay, 3800))

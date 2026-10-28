@@ -8,9 +8,10 @@ up the valley in the raid-in, and the orchard vanguard).
 Axes: x east, y up, z north.  Yaw 0 faces +z and turns clockwise seen from above.
 """
 import math
+import os
 import random
 
-from engine3d.core import Mesh, box, rot_x, rot_y
+from engine3d.core import Mesh, box, rot_y
 from cutscenes import m6fx3d as _fx
 from cutscenes import m7world3d as F
 
@@ -250,8 +251,6 @@ OLIVE = (62, 74, 54)
 OLIVE_D = (42, 50, 38)
 CANVAS = (88, 92, 66)
 GLASS = (30, 40, 52)
-FUR = (62, 54, 46)
-FUR_D = (42, 36, 30)
 
 
 def truck():
@@ -346,39 +345,46 @@ def truck():
 
 
 _DOG = {}
+_RIG = []
+DOG_RUN_M = 2.7       # metres per Run cycle (0.42 s at the raid dog's 6.4 m/s)
 
 
-def dog(frame):
-    """Guard dog, local forward +x; ``frame`` 0..3 swings the legs."""
-    m = _DOG.get(frame)
+def _dog_rig():
+    """Parts and baked clips of assets/3D/dawg.glb (tools/ae_import_dog.py)."""
+    if not _RIG:
+        import json
+        from game.render3d_bridge import MESHES_DIR
+        with open(os.path.join(MESHES_DIR, "dog_m7.rig.json"), encoding="utf-8") as fh:
+            _RIG.append(json.load(fh))
+    return _RIG[0]
+
+
+def dog_clip_s(clip):
+    """Length in seconds of one of the dog's clips: Idle, Run, Bite, Death."""
+    return _dog_rig()["clips"][clip]["dur"]
+
+
+def dog(clip="Idle", t=0.0):
+    """Guard dog ``t`` seconds into ``clip``, local forward +x.  Idle, Run and
+    Bite loop; Death holds its last frame."""
+    rig = _dog_rig()
+    c = rig["clips"][clip]
+    n = len(c["frames"])
+    if c["loop"]:
+        f = int(t / c["dur"] * n) % n
+    else:
+        f = min(n - 1, max(0, int(round(t / c["dur"] * (n - 1)))))
+    m = _DOG.get((clip, f))
     if m is None:
-        swing = (-0.13, 0.0, 0.13, 0.0)[frame % 4]
         m = Mesh()
-        m.add(box(0.9, 0.34, 0.3, FUR, center=(0, 0.58, 0)))
-        m.add(box(0.3, 0.28, 0.26, FUR, center=(0.6, 0.72, 0)))
-        m.add(box(0.2, 0.12, 0.15, FUR_D, center=(0.82, 0.66, 0)))
-        for sz in (-0.08, 0.08):
-            m.add(box(0.08, 0.14, 0.05, FUR_D, center=(0.58, 0.9, sz * 1.5)))
-        m.add(box(0.34, 0.07, 0.07, FUR_D, center=(-0.6, 0.72, 0)))
-        for k, (lx, sz) in enumerate(((0.33, -0.11), (0.33, 0.11), (-0.33, -0.11), (-0.33, 0.11))):
-            s = swing if k in (0, 3) else -swing
-            m.add(box(0.1, 0.42, 0.1, FUR_D, center=(lx + s, 0.21, sz)))
-        _DOG[frame] = m
-    return m
-
-
-_FALL = {}
-
-
-def dog_fall(angle):
-    """Guard dog rolled onto its side by ``angle`` degrees (0 standing, 90 down)."""
-    step = int(round(angle / 5.0))
-    m = _FALL.get(step)
-    if m is None:
-        deg = 5.0 * step
-        m = Mesh()
-        m.add(dog(0), rot_x(deg), t=(0.0, 0.16 * math.sin(math.radians(deg)), 0.0))
-        _FALL[step] = m
+        for part, x in zip(rig["parts"], c["frames"][f]):
+            base = len(m.verts)
+            m.verts.extend((x[0] * a + x[1] * b + x[2] * d + x[3],
+                            x[4] * a + x[5] * b + x[6] * d + x[7],
+                            x[8] * a + x[9] * b + x[10] * d + x[11]) for a, b, d in part["verts"])
+            m.faces.extend((tuple(i + base for i in idx), tuple(col), 2, True, em)
+                           for idx, col, em in part["faces"])
+        _DOG[(clip, f)] = m
     return m
 
 

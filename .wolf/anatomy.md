@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-28T22:20:27.343Z
-> Files: 480 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-28T23:01:45.138Z
+> Files: 481 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -658,6 +658,7 @@
 ## tools/
 
 - `ae_hold_check.py` — Weapon hold + arm self-collision gate for the 3D cutscenes. (~1381 tok)
+- `ae_import_dog.py` — AE IMPORT DOG - the Mission 7 guard dog (assets/3D/dawg.glb) and its clips. (~1614 tok)
 - `ae_import_tractor.py` — AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb). (~1146 tok)
 - `build_code_txt.py` — find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files (~2979 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)

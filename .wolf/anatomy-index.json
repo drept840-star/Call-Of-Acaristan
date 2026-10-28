@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-10-28T22:20:27.343Z",
-    "fileCount": 480,
+    "lastScanned": "2026-10-28T23:01:45.138Z",
+    "fileCount": 481,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "bd9393ec5a32a363cad9cba44d88db26b2382fbd52750d51b784288df86076df",
-    "storeUpdatedAt": "2026-10-28T22:20:27.354Z",
-    "rootHash": "33b598d98d2dcccf"
+    "renderedHash": "0e268b8ea168273add4292fd30fa4137ee52feb68da250ff2a37c2c3688d82b5",
+    "storeUpdatedAt": "2026-10-28T23:01:45.147Z",
+    "rootHash": "2f80e35e4638b049"
   },
   "files": {
     ".gitattributes": {
@@ -38492,6 +38492,38 @@
           "startLine": 81,
           "endLine": 125,
           "tokens": 535
+        }
+      ]
+    },
+    "tools/ae_import_dog.py": {
+      "description": "AE IMPORT DOG - the Mission 7 guard dog (assets/3D/dawg.glb) and its clips.",
+      "tokens": 1614,
+      "hash": "d1075b469f417074",
+      "size": 5647,
+      "mtimeMs": 1793228504980.9922,
+      "updatedAt": "2026-10-28T23:01:45.137Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_srgb",
+          "kind": "fn",
+          "startLine": 28,
+          "endLine": 32,
+          "tokens": 35
+        },
+        {
+          "name": "_sample",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 49,
+          "tokens": 168
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 50,
+          "endLine": 152,
+          "tokens": 1136
         }
       ]
     }
