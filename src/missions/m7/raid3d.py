@@ -59,6 +59,7 @@ GUARD_VIEW = ("rifle", "rusher", "rifle", "officer")
 GUARD_PUSH_M = 0.35
 BED_TOP = 1.3
 DOG_FALL_S, DOG_PUSH_M = 1.0, 0.35      # the Death clip drops over its first second
+AIM_TWIST = 30.0                         # allies blade the torso this far to aim
 
 
 def _wrap(deg):
@@ -111,8 +112,12 @@ def _ally_gun(key):
 
 
 def _ally_aim(key, slope):
-    """An ally's aiming stance, rifle shouldered along ``slope`` (rise per metre)."""
-    return _hold_cached(_w.hum(key), blend(POSES["stand"], "aim", 0.85), _ally_gun(key), "aim",
+    """An ally's aiming stance, rifle shouldered along ``slope`` (rise per metre).
+
+    The torso blades 30 degrees so the left hand reaches the handguard instead
+    of sliding back onto the receiver; the head turns back down the barrel."""
+    stance = dict(blend(POSES["stand"], "aim", 0.85), twist=AIM_TWIST, head_y=-0.8 * AIM_TWIST)
+    return _hold_cached(_w.hum(key), stance, _ally_gun(key), "aim",
                         aim=(0.0, 1.45 + 10.0 * slope, 10.0), key=key)
 
 
