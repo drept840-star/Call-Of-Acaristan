@@ -24,6 +24,8 @@ TRUCK_SPEED = 12.0
 TRUCK_START_Z = -80.0
 ALEX_HP, BODI_HP = 80, 100
 ALEX_UP_S, BODI_DOWN_S = 8.0, 20.0
+ALLY_RAISE = 0.25                 # an ally shoulders the rifle this long before a first shot
+ALLY_HOLD = 1.8                   # and keeps it up through the gaps between bursts
 ALEX_LEASH = 13.0                 # Alex fights within this many metres of Biribel
 
 # kind, x, z, route, delay (s)
@@ -87,10 +89,10 @@ class Brain:
         loft = f["loft"]
         x, z = (W.LOFT_AT[0], W.LOFT_AT[2]) if loft else W.BODI_GROUND
         self.bodi = dict(x=x, z=z, y=W.LOFT_AT[1] if loft else 0.0, yaw=180.0, hp=BODI_HP,
-                         state="up", down_at=0.0, loft=loft, moving=False, next=2.0, aim=-9.0,
+                         state="up", down_at=0.0, loft=loft, moving=False, next=2.0, aim=-9.0, raised=-9.0, slope=0.0,
                          goal=None, revive=0.0)
         self.alex = dict(x=-3.4, z=-1.0, y=0.0, yaw=0.0, hp=ALEX_HP, state="up", up_at=0.0,
-                         pinned=False, moving=False, next=2.5, aim=-9.0, pull=0.0, burst=0,
+                         pinned=False, moving=False, next=2.5, aim=-9.0, raised=-9.0, slope=0.0, pull=0.0, burst=0,
                          spot=None, replan=0.0, target_slot=None, follow_goal=None, follow_at=0.0)
 
     # --- waves -----------------------------------------------------------------
@@ -413,10 +415,18 @@ class Brain:
                 best, bd = e, d
         return best, bd
 
+    def _raise(self, a, e, now):
+        """Face ``e`` and shoulder the rifle at it; True once it is up to fire."""
+        a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
+        d = max(1.0, math.hypot(e["x"] - a["x"], e["z"] - a["z"]))
+        a["slope"] = _clamp(round((e["y"] - a["y"] - 0.3) / d, 1), -0.4, 0.4)
+        if now - a["aim"] > ALLY_HOLD:
+            a["raised"] = now
+        a["aim"] = now
+        return now - a["raised"] >= ALLY_RAISE
+
     def _ally_shot(self, a, e, d, dmg, acc, now, y):
         muzzle = a.get("muzzle") or (a["x"], a["y"] + 1.35, a["z"])
-        a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
-        a["aim"] = now
         ty = e["y"] + 1.1
         if self.rng.random() < _clamp(acc - d * 0.008, 0.2, 0.9):
             end = (e["x"], ty, e["z"])
@@ -456,8 +466,7 @@ class Brain:
             self._walk(a, sx, sz, 3.8, dt, 0.32)
         if a["moving"]:
             return
-        if now < a["next"]:
-            a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
+        if not self._raise(a, e, now) or now < a["next"]:
             return
         if a["burst"] <= 0:
             a["burst"] = 3
@@ -531,12 +540,10 @@ class Brain:
                 self._walk(b, gx, gz, 2.8, dt, 0.32)
                 return
         e, ed = self._target_for_ally(b["x"], b["z"], 46.0)
-        if e is not None and now >= b["next"]:
+        if e is not None and self._raise(b, e, now) and now >= b["next"]:
             loft = b["loft"]
             self._ally_shot(b, e, ed, 40 if loft else 30, 0.85, now, 1.2)
             b["next"] = now + (1.15 if loft else 1.0) + 0.3 * self.rng.random()
-        elif e is not None:
-            b["yaw"] = _yaw(e["x"] - b["x"], e["z"] - b["z"])
 
     def bodi_climb_down(self):
         """The barn is burning: Bodi drops from the ledge and walks to cover."""

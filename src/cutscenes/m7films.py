@@ -206,7 +206,8 @@ def _raidin_convoy(r, t):
 
 def _ally(r, name, pos, face, t, seed):
     key = ("ally", name)
-    pose = _hold_cached(_w.hum(key), _pose(), "rifle", "ready", key=("m7film", name))
+    pose = _hold_cached(_w.hum(key), _pose(), getattr(_w.hum(key), "_weapon", "rifle"), "ready",
+                        key=("m7film", name))
     _w.actor(r, key, pose, pos, _face(pos, face), t, seed=seed, amp=0.2, rifle_on=True, mouth=0.0)
 
 

@@ -46,10 +46,15 @@ _K9 = dict(grip=(0.012, -0.100, -0.105), fore=(-0.006, 0.035, 0.195),
            guard=(-0.006, 0.020, 0.070), butt=(0.0, 0.0, -0.437))
 _RIG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, -0.035, 0.30), guard=(0.0, -0.035, 0.18),
             butt=None)
+# mirrored from game/content/meshes/m7rifle.mesh.json meta (tools/ae_import_m7rifle.py)
+# ``pocket`` is added to the mode's shoulder pocket: this stock is deep, so it
+# rides out on the shoulder instead of in the chest.
+_M7 = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.038, 0.258), guard=(0.0, 0.038, 0.110),
+           butt=(0.0, 0.025, -0.243), pocket=(0.11, 0.0, 0.0))
 _SG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.025, 0.33), guard=(0.0, 0.025, 0.20),
            butt=(0.0, 0.045, -0.40))
 GRIPS = {"rifle": _RIG, "sniper": dict(_RIG, fore=(0.0, -0.035, 0.34), guard=(0.0, -0.035, 0.20)),
-         "os12": _RIG, "k9": _K9, "shotgun": _SG,
+         "os12": _RIG, "k9": _K9, "shotgun": _SG, "m7rifle": _M7,
          "pistol": dict(grip=(0.0, 0.0, 0.0), fore=None, guard=None, butt=None)}
 
 # anchor "butt": butt point sits ``pocket`` from the right shoulder (torso-local);
@@ -196,7 +201,7 @@ def hold_frame(hum, pose, pos, yaw, weapon="rifle", mode="aim", aim=None):
     for _ in range(2):
         B0, S, sh, _eye = _hold_frames(hum, p, pos, yaw)
         if ms["anchor"] == "butt":
-            anchor = _add(sh, m_apply(S, _scale(ms["pocket"], sc)))
+            anchor = _add(sh, m_apply(S, _scale(_add(ms["pocket"], g.get("pocket", (0.0, 0.0, 0.0))), sc)))
         else:
             anchor = _add(_root(hum, p, pos, yaw), m_apply(S, _scale(ms["at"], sc)))
         if aim is not None:

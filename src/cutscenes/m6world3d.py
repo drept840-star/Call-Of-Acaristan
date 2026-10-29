@@ -488,6 +488,28 @@ def _k9_rig_mesh():
     return m
 
 
+def _m7rifle_mesh():
+    """(mesh, muzzle) of the Mission 7 allies' rifle (tools/ae_import_m7rifle.py),
+    grip at the hand joint and +z muzzle; (None, None) if the asset is missing."""
+    if "m7rifle" not in _cache:
+        out = (None, None)
+        try:
+            import json
+            import os
+            from engine3d.core import Mesh
+            from game.render3d_bridge import MESHES_DIR
+            with open(os.path.join(MESHES_DIR, "m7rifle.mesh.json"), encoding="utf-8") as fh:
+                data = json.load(fh)
+            m = Mesh()
+            m.verts = [tuple(float(c) for c in v) for v in data["verts"]]
+            m.faces = [(tuple(f[0]), tuple(f[1]), 2, True, False) for f in data["faces"]]
+            out = (m, tuple(float(c) for c in data["meta"]["muzzle"]))
+        except Exception:
+            pass
+        _cache["m7rifle"] = out
+    return _cache["m7rifle"]
+
+
 def hum(key, hd=False, wound=0, bloody=False, flags=()):
     """Humanoid for ``key``.  ``hd`` selects the detailed train rig (optionally
     with a wound stage 1-3 / bloody gloves); each variant is its own cached rig,
@@ -518,6 +540,12 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
             h = _guard_humanoid(key[1], extra)
         elif isinstance(key, tuple) and key[0] == "ally":
             h = humanoid3d(key[1], rifle="rifle", **extra)
+            mesh, muzzle = _m7rifle_mesh()
+            if mesh is not None:
+                h._rifle = mesh
+                h._weapon = "m7rifle"
+                h._muzzle_z = muzzle[2]
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|m7rifle"
         elif key == "guard":
             from engine3d import Humanoid
             h = Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra))

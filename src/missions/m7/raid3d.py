@@ -105,6 +105,17 @@ def _held(hum, pose, weapon, mode, key):
     return out
 
 
+def _ally_gun(key):
+    """Grip set of an ally's rifle: the M7Rifle asset, or the rig rifle without it."""
+    return getattr(_w.hum(key), "_weapon", "rifle")
+
+
+def _ally_aim(key, slope):
+    """An ally's aiming stance, rifle shouldered along ``slope`` (rise per metre)."""
+    return _hold_cached(_w.hum(key), blend(POSES["stand"], "aim", 0.85), _ally_gun(key), "aim",
+                        aim=(0.0, 1.45 + 10.0 * slope, 10.0), key=key)
+
+
 class RaidScene:
     MAG = MAG
     RELOAD_S = RELOAD_S
@@ -165,7 +176,9 @@ class RaidScene:
         for name in ("bodi", "alex"):
             key = ("ally", name)
             for pose in stances + (dict(POSES["kneel"]),):
-                _hold_cached(_w.hum(key), pose, "rifle", "ready", key=key)
+                _hold_cached(_w.hum(key), pose, _ally_gun(key), "ready", key=key)
+            for i in range(-4, 5):
+                _ally_aim(key, i / 10.0)
         if self._truck is None:
             self._truck = W.truck()
             self._ledge = W.ledge()
@@ -831,17 +844,21 @@ class RaidScene:
             return dict(POSES["slump"])
         if a.get("pinned"):
             stance = dict(POSES["kneel"])
-        elif self.t - a["aim"] < 0.4:
-            stance = blend(POSES["stand"], "aim", 0.85)
         else:
             stance = dict(POSES["ready"])
-        stance = _hold_cached(_w.hum(key), stance, "rifle", "ready", key=key)
+        stance = _hold_cached(_w.hum(key), stance, _ally_gun(key), "ready", key=key)
+        if not a.get("pinned") and self.t - a["aim"] < B.ALLY_HOLD:
+            # shouldered at the target, raised over ALLY_RAISE from the ready hold
+            aim = _ally_aim(key, a["slope"])
+            up = clamp((self.t - a["raised"]) / B.ALLY_RAISE, 0.0, 1.0)
+            stance = aim if up >= 1.0 else blend(stance, aim, _ease(up))
         k = a.get("walk_k", 0.0)
         if k <= 0.0:
             return stance
         # stride follows distance walked, and the eased weight fades run <-> stance
-        # so a stop or a start never snaps the legs and arms in one frame
-        run = pose_run(a.get("gait", 0.0) * 1.9, lean=6)
+        # so a stop or a start never snaps the legs and arms in one frame; the run
+        # keeps the ready hold's arms, so the rifle stays in both hands
+        run = _held(_w.hum(key), pose_run(a.get("gait", 0.0) * 1.9, lean=6), _ally_gun(key), "ready", key)
         return run if k >= 1.0 else blend(stance, run, k * k * (3.0 - 2.0 * k))
 
     def _draw_allies(self, r, tm):
