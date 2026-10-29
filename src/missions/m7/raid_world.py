@@ -253,7 +253,27 @@ CANVAS = (88, 92, 66)
 GLASS = (30, 40, 52)
 
 
+_TRUCK = []
+
+
 def truck():
+    """Guard cargo truck from assets/3D/IPA-army-truck.glb (tools/ae_import_truck.py),
+    local forward +x, 6.1 long and 2.5 wide, bed floor at 1.29.  Falls back to
+    the block truck when the asset is missing."""
+    if not _TRUCK:
+        try:
+            from game.render3d_bridge import load_mesh_asset
+            verts, faces = load_mesh_asset("truck_m7")
+        except (OSError, ValueError):
+            return _truck_blocks()
+        m = Mesh()
+        m.verts = [tuple(v) for v in verts]
+        m.faces = [(tuple(f[0]), tuple(f[1]), 2, True, f[2] > 0) for f in faces]
+        _TRUCK.append(m)
+    return _TRUCK[0]
+
+
+def _truck_blocks():
     """Olive cargo truck, local forward +x, 5.4 long and 2.3 wide."""
     m = Mesh()
     # Continuous wheels: the sidewall and rim are tiled together so neither

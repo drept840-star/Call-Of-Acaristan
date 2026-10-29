@@ -717,8 +717,8 @@ class RaidScene:
         for t in self.brain.trucks:
             if t["state"] != "wait":
                 _w.add(r, W.placed(self._truck, t["x"], 0.0, t["z"], 0.0))
-                for sx in (-0.7, 0.7):
-                    r.add_sprite((t["x"] + sx, 1.36, t["z"] + 2.85),
+                for sx in (-0.68, 0.68):
+                    r.add_sprite((t["x"] + sx, 1.46, t["z"] + 2.95),
                                  _fx.glow((255, 236, 200), 0.55, tm, core=(255, 250, 236),
                                           intensity=1.15, max_px=34), layer=_fx.FX_LAYER)
                 # Two warm pools on the road and a low glare between them: the
@@ -829,7 +829,7 @@ class RaidScene:
     def _floor(self, x, z):
         """Height a body lands on: a truck bed, else the ground."""
         for t in self.brain.trucks:
-            if t["state"] != "wait" and abs(x - t["x"]) <= 1.15 and abs(z - t["z"]) <= 2.7:
+            if t["state"] != "wait" and abs(x - t["x"]) <= 1.2 and abs(z - t["z"]) <= 3.0:
                 return BED_TOP
         return 0.0
 

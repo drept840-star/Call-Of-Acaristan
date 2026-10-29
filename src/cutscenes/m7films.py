@@ -198,8 +198,8 @@ def _raidin_convoy(r, t):
     for dz in (0.0, -7.5, -15.0):
         zz = z + dz
         _w.add(r, RW.placed(truck, 0.0, 0.0, zz, 0.0))
-        for sx in (-0.7, 0.7):
-            r.add_sprite((sx, 1.35, zz + 2.85),
+        for sx in (-0.68, 0.68):
+            r.add_sprite((sx, 1.46, zz + 2.95),
                          _fx.glow((255, 236, 200), 0.5, t, core=(255, 248, 230), intensity=0.7,
                                   max_px=18), layer=_fx.FX_LAYER)
 

@@ -291,7 +291,7 @@ class Brain:
                 t["z"] = t["stop_z"]
                 t["state"] = "stopped"
                 t["t_stop"] = now
-                self.s.world.dyn.append((t["x"] - 1.2, t["z"] - 2.7, t["x"] + 1.2, t["z"] + 2.7, 2.6))
+                self.s.world.dyn.append((t["x"] - 1.27, t["z"] - 3.05, t["x"] + 1.27, t["z"] + 3.05, 2.7))
                 self.s.on_truck_stop(t)
         elif not t["dumped"] and now - t["t_stop"] > 0.8:
             self._dismount(t)
