@@ -662,13 +662,9 @@ class RaidScene:
             out.append({"pos": W.TANK_AT, "color": (255, 150, 60), "intensity": 1.8 * k,
                         "range": 16.0})
         out += self.fire.lights(tm, now)
-        # Headlights: the beam itself is a road pool (``_beam_pools``); this is
-        # its bounce, low in front, so the grille and the men in the beam catch
-        # light while the truck's body stays moonlit.
-        for t in self.brain.trucks[:2]:
-            if t["state"] != "wait" and t["z"] > -46.0:
-                out.append({"pos": (t["x"], 0.9, t["z"] + 6.0), "color": (255, 232, 192),
-                            "intensity": 1.15, "range": 14.0})
+        # Headlights add no local light: point lights are additive and wash the
+        # Guard's dark uniforms grey.  The beam is the road pools (``_beam_pools``)
+        # and the lamp glows, which leave the men and the truck moonlit.
         out.append({"pos": F.PORCH_LAMP, "color": (255, 190, 110), "intensity": 1.15,
                     "range": 13.0})
         out.append({"pos": F.BARN_LAMP, "color": (255, 180, 100), "intensity": 1.05,
