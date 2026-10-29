@@ -272,6 +272,9 @@ class Brain:
                 self._enemy(e, dt, now)
         self._bodi_update(dt, now)
         self._alex_update(dt, now)
+        for a in (self.alex, self.bodi):    # eased walk weight: the draw blends run and stance
+            k = a.get("walk_k", 0.0)
+            a["walk_k"] = min(1.0, k + dt * 5.0) if a["moving"] else max(0.0, k - dt * 4.0)
         fire = self.s.fire
         if fire.lit:
             for a in (self.alex, self.bodi):
@@ -468,7 +471,9 @@ class Brain:
         d_player = math.hypot(s.px - a["x"], s.pz - a["z"])
         # Do not orbit around Biribel to maintain an exact moving formation point.
         # Refresh the trailing point occasionally, and only pursue outside a wide leash.
-        if d_player < 6.0:
+        # Start past 6 m but keep going until 3.5 m or the goal: one threshold made
+        # Alex flip between walking and standing every frame at the leash edge.
+        if d_player < (3.5 if a["follow_goal"] is not None else 6.0):
             a["follow_goal"] = None
             return
         if a["follow_goal"] is None or s.t >= a["follow_at"]:
@@ -481,6 +486,8 @@ class Brain:
         gx, gz = a["follow_goal"]
         if math.hypot(gx - a["x"], gz - a["z"]) > 1.2:
             self._walk(a, gx, gz, 4.0, dt, 0.32)
+        else:
+            a["follow_goal"] = None
 
     def _alex_spot(self, a, e):
         """A spot Alex can shoot from: a few metres off, inside the leash on Biribel, next to
@@ -548,6 +555,7 @@ class Brain:
         if math.hypot(nx - a["x"], nz - a["z"]) > step * 0.3:
             a["moving"] = True
             a["yaw"] = _yaw(dx, dz)
+            a["gait"] = a.get("gait", 0.0) + math.hypot(nx - a["x"], nz - a["z"])
         else:
             nx, nz = self.s.world.move(a["x"], a["z"], -dz / d * step, dx / d * step, r)
         a["x"], a["z"] = nx, nz

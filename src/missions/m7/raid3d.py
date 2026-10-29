@@ -826,24 +826,29 @@ class RaidScene:
             m = (self.px + f[0] * 0.7 + rg[0] * 0.25, 1.38, self.pz + f[2] * 0.7 + rg[2] * 0.25)
         self._muzzle = m
 
-    def _ally_pose(self, a, held=None):
+    def _ally_pose(self, a, key):
         if a["state"] == "down":
             return dict(POSES["slump"])
         if a.get("pinned"):
-            return dict(POSES["kneel"])
-        if a["moving"]:
-            return pose_run(self.t * 7.0 + a["x"], lean=6)
-        if self.t - a["aim"] < 0.4:
-            return blend(POSES["stand"], "aim", 0.85)
-        return dict(POSES["ready"])
+            stance = dict(POSES["kneel"])
+        elif self.t - a["aim"] < 0.4:
+            stance = blend(POSES["stand"], "aim", 0.85)
+        else:
+            stance = dict(POSES["ready"])
+        stance = _hold_cached(_w.hum(key), stance, "rifle", "ready", key=key)
+        k = a.get("walk_k", 0.0)
+        if k <= 0.0:
+            return stance
+        # stride follows distance walked, and the eased weight fades run <-> stance
+        # so a stop or a start never snaps the legs and arms in one frame
+        run = pose_run(a.get("gait", 0.0) * 1.9, lean=6)
+        return run if k >= 1.0 else blend(stance, run, k * k * (3.0 - 2.0 * k))
 
     def _draw_allies(self, r, tm):
         b = self.brain
         for name, a in (("bodi", b.bodi), ("alex", b.alex)):
             key = ("ally", name)
-            pose = self._ally_pose(a)
-            if not a["moving"] and a["state"] != "down":
-                pose = _hold_cached(_w.hum(key), pose, "rifle", "ready", key=key)
+            pose = self._ally_pose(a, key)
             joints = _w.actor(r, key, pose, (a["x"], a["y"], a["z"]), a["yaw"], int(tm),
                               seed=61 if name == "bodi" else 62, amp=0.3, rifle_on=True, mouth=0.0)
             a["muzzle"] = joints.get("muzzle") if joints else None
