@@ -13,6 +13,7 @@ import random
 
 from engine3d.core import Mesh, box, rot_y
 from cutscenes import m6fx3d as _fx
+from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as F
 
 BOUNDS = (-19.4, 44.0, -27.0, 21.5)     # player and allies: x0, x1, z0, z1
@@ -413,6 +414,40 @@ def placed(mesh, x, y, z, yaw_deg):
     w = Mesh()
     w.add(mesh, rot_y(yaw_deg - 90.0), t=(x, y, z))
     return w
+
+
+_ROWS = {}
+
+
+def put(r, mesh, x, y, z, yaw_deg):
+    """``_w.add(r, placed(...))`` without the per-frame copy and re-pack.
+
+    The truck and the dog frames are thousands of faces; copying them through
+    ``Mesh.add`` and packing them in Python cost ~20 ms each per frame.  GL packs
+    each mesh once and only turns and moves the packed rows; the software
+    backend still places a copy."""
+    if not hasattr(r, "add_packed"):
+        _w.add(r, placed(mesh, x, y, z, yaw_deg))
+        return
+    import numpy as np
+    ent = _ROWS.get(id(mesh))
+    if ent is None or ent[0] is not mesh:
+        faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in mesh.faces]
+        ent = _ROWS[id(mesh)] = [mesh, r.pack(mesh.verts, faces), None, None]
+    rows = ent[1]
+    if rows is None:
+        return
+    if ent[2] != yaw_deg:       # the trucks never turn: keep the turned rows
+        rt = np.array(rot_y(yaw_deg - 90.0), dtype=np.float32).reshape(3, 3).T
+        turned = rows.copy()
+        np.matmul(rows[:, 0:3], rt, out=turned[:, 0:3])
+        np.matmul(rows[:, 6:9], rt, out=turned[:, 6:9])
+        ent[2], ent[3] = yaw_deg, turned
+    out = ent[3].copy()
+    out[:, 0] += x
+    out[:, 1] += y
+    out[:, 2] += z
+    r.add_packed(out)
 
 
 def ledge():

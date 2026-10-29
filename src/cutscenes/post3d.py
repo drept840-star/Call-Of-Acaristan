@@ -162,9 +162,31 @@ def apply_post(surf, spec, t: int, scene_id: str = "", dur_ms: int = 0) -> None:
             pass
     if grain > 0.01:
         seed = zlib.crc32(f"{scene_id}:{t // 40}".encode("utf-8"))
+        up, down = _grain_surfs(seed, w, h, int(28 * grain))
+        # saturating add/sub = the old int16 add + clip, without the array round trip
+        surf.blit(up, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+        surf.blit(down, (0, 0), special_flags=pygame.BLEND_RGB_SUB)
+
+
+_GRAIN = {}
+
+
+def _grain_surfs(seed: int, w: int, h: int, k: int):
+    """(+k, -k) grain layers for one 40 ms grain step; the last few are kept
+    since a film frame at 60 fps reuses its step."""
+    key = (seed, w, h, k)
+    got = _GRAIN.get(key)
+    if got is None:
         rng = np.random.default_rng(seed)
         noise = rng.integers(-1, 2, size=(w // 2, h // 2), dtype=np.int16)
-        noise = np.repeat(np.repeat(noise, 2, axis=0), 2, axis=1)
-        a = _arr(surf)
-        a += (noise[:w, :h] * int(28 * grain)).astype(np.int16)[..., None]
-        _put(surf, a)
+        lv = np.uint8(min(255, max(0, k)))
+        got = []
+        for sign in (1, -1):
+            a = np.zeros((w // 2, h // 2, 3), np.uint8)
+            a[noise == sign] = lv
+            got.append(pygame.transform.scale(pygame.surfarray.make_surface(a),
+                                              ((w // 2) * 2, (h // 2) * 2)))
+        if len(_GRAIN) > 8:
+            _GRAIN.clear()
+        got = _GRAIN[key] = tuple(got)
+    return got

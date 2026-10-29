@@ -88,6 +88,23 @@ def _ease(k):
     return k * k * (3.0 - 2.0 * k)
 
 
+_ARMS = ("lsh_p", "lsh_r", "lsh_y", "lel", "rsh_p", "rsh_r", "rsh_y", "rel", "rifle_p", "rifle_y")
+
+
+def _held(hum, pose, weapon, mode, key):
+    """``pose`` with the arms of the cached hold solved at the ready stance.
+
+    The solve's arms do not depend on the spine and its rifle_p follows the
+    spine one to one, so the look-pitch spine and the hit stagger shift rifle_p
+    instead of costing a fresh 20-60 ms IK solve for every new degree."""
+    ref = POSES["ready"]
+    arms = _hold_cached(hum, ref, weapon, mode, key=key)
+    out = dict(pose)
+    out.update((k, arms[k]) for k in _ARMS if k in arms)
+    out["rifle_p"] = arms.get("rifle_p", 0.0) + pose.get("spine", 0.0) - ref["spine"]
+    return out
+
+
 class RaidScene:
     MAG = MAG
     RELOAD_S = RELOAD_S
@@ -124,10 +141,7 @@ class RaidScene:
         self._setup(int(getattr(STATE, "m7_raid_cp", 0) or 0))
         self._grab(True)
         try:
-            hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
-            for mode in ("ready", "aim"):
-                _hold_cached(hum, dict(POSES["ready"]), "shotgun", mode,
-                             key=("m7player", mode))
+            self._warm()
         except Exception:
             pass
         try:
@@ -135,6 +149,29 @@ class RaidScene:
             self.draw(scratch)
         except Exception:
             pass
+
+    def _warm(self):
+        """Pay the one-off costs here, behind the cut, instead of mid-fight:
+        every arm solve the fight can ask for (20-60 ms each) and the truck's
+        15k-face pack."""
+        hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
+        for mode in ("ready", "aim"):
+            _held(hum, POSES["ready"], "shotgun", mode, ("m7player", mode))
+        stances = (dict(POSES["ready"]), blend(POSES["stand"], "aim", 0.85))
+        for kind in set(GUARD_VIEW) | {"heavy"}:
+            gk = ("guard", kind)
+            for pose in stances:
+                _hold_cached(_w.hum(gk, True), pose, "rifle", "ready", key=gk)
+        for name in ("bodi", "alex"):
+            key = ("ally", name)
+            for pose in stances + (dict(POSES["kneel"]),):
+                _hold_cached(_w.hum(key), pose, "rifle", "ready", key=key)
+        if self._truck is None:
+            self._truck = W.truck()
+            self._ledge = W.ledge()
+        r = _w.rend(*RES)[0]
+        r.begin()
+        W.put(r, self._truck, 0.0, 0.0, 0.0, 0.0)
 
     def active(self):
         return self._active
@@ -712,7 +749,7 @@ class RaidScene:
             _w.add(r, self._ledge)
         for t in self.brain.trucks:
             if t["state"] != "wait":
-                _w.add(r, W.placed(self._truck, t["x"], 0.0, t["z"], 0.0))
+                W.put(r, self._truck, t["x"], 0.0, t["z"], 0.0)
                 for sx in (-0.68, 0.68):
                     r.add_sprite((t["x"] + sx, 1.46, t["z"] + 2.95),
                                  _fx.glow((255, 236, 200), 0.55, tm, core=(255, 250, 236),
@@ -777,7 +814,7 @@ class RaidScene:
         if 0.0 <= self.t - self.pump_at < 0.45:
             pump = math.sin(math.pi * clamp((self.t - self.pump_at) / 0.45, 0.0, 1.0))
         mode = "aim" if (self.ads > 0.5 or self.t - self.last_fire < 0.4) else "ready"
-        pose = _hold_cached(hum, pose, "shotgun", mode, key=("m7player", mode))
+        pose = _held(hum, pose, "shotgun", mode, ("m7player", mode))
         if pump > 0.0:
             pose = dict(pose, lel=pose.get("lel", 12) + 16.0 * pump,
                         lsh_p=pose.get("lsh_p", 8) - 5.0 * pump)
@@ -838,8 +875,8 @@ class RaidScene:
                 if not e["alive"]:
                     k = _ease(clamp((self.t - e["dead_t"]) / DOG_FALL_S, 0.0, 1.0))
                     ux, uz = e.get("fall_dir", (0.0, 0.0))
-                    _w.add(r, W.placed(W.dog("Death", self.t - e["dead_t"]), x + ux * DOG_PUSH_M * k,
-                                       0.0, z + uz * DOG_PUSH_M * k, e["yaw"]))
+                    W.put(r, W.dog("Death", self.t - e["dead_t"]), x + ux * DOG_PUSH_M * k,
+                          0.0, z + uz * DOG_PUSH_M * k, e["yaw"])
                     continue
                 bite = (self.t - e["aim"]) * B.BITE_PLAY
                 if bite < W.dog_clip_s("Bite"):
@@ -848,7 +885,7 @@ class RaidScene:
                     clip, ct = "Run", e["gait"] / W.DOG_RUN_M * W.dog_clip_s("Run")
                 else:
                     clip, ct = "Idle", self.t + e["phase"]
-                _w.add(r, W.placed(W.dog(clip, ct), x, 0.0, z, e["yaw"]))
+                W.put(r, W.dog(clip, ct), x, 0.0, z, e["yaw"])
                 continue
             kind = "heavy" if e["kind"] == "gunner" else GUARD_VIEW[e["slot"] % len(GUARD_VIEW)]
             gk = ("guard", kind)
@@ -871,11 +908,15 @@ class RaidScene:
                                  layer=_fx.FX_LAYER)
                 continue
             pose = self._guard_pose(e)
-            stag = max(0.0, 1.0 - (self.t - e["hit_t"]) / 0.3)
-            if stag > 0.0:
-                pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
             if not e["moving"]:
                 pose = _hold_cached(_w.hum(gk, True), pose, "rifle", "ready", key=gk)
+            stag = max(0.0, 1.0 - (self.t - e["hit_t"]) / 0.3)
+            if stag > 0.0:
+                # after the hold: rifle_p follows the spine one to one in the
+                # solve, so the flinch needs no fresh IK solve per frame
+                pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
+                if not e["moving"]:
+                    pose["rifle_p"] = pose.get("rifle_p", 0.0) - 12.0 * stag
             e["pose"] = pose
             joints = _w.actor(r, gk, pose, (x, y, z), e["yaw"], int(tm), seed=100 + e["slot"],
                               amp=0.4, rifle_on=True, hd=True)

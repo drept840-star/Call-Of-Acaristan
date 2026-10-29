@@ -1274,12 +1274,14 @@ class GLRenderer(SoftwareRenderer):
             occ_t = occ.T
             dst = pygame.surfarray.pixels3d(surface)
             src = pygame.surfarray.pixels3d(before)
-            dst[x0:x1, y0:y1][occ_t] = src[occ_t]
+            # copyto writes through the view; boolean fancy indexing built
+            # two gathered copies per sprite and was the composite's cost
+            np.copyto(dst[x0:x1, y0:y1], src, where=occ_t[:, :, None])
             del dst, src
             if alpha:
                 da = pygame.surfarray.pixels_alpha(surface)
                 sa = pygame.surfarray.pixels_alpha(before)
-                da[x0:x1, y0:y1][occ_t] = sa[occ_t]
+                np.copyto(da[x0:x1, y0:y1], sa, where=occ_t)
                 del da, sa
         self.stats["lights"] = n_light
         self.stats["lights_culled"] = n_cull

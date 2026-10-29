@@ -1655,11 +1655,15 @@ def heli_xform(pos, yaw, bank=0.0, pitch=0.0, scale=1.0):
     x, y, z = pos
     S = scale
 
+    # one combined matrix, built once: L runs thousands of times per frame
+    c = [m_apply(rot_y(yaw), m_apply(rot_z(bank), m_apply(rot_x(pitch), e)))
+         for e in ((S, 0.0, 0.0), (0.0, S, 0.0), (0.0, 0.0, S))]
+    (a0, a1, a2), (b0, b1, b2), (c0, c1, c2) = c
+
     def L(lx, ly, lz):
-        v = m_apply(rot_x(pitch), (lx * S, ly * S, lz * S))
-        v = m_apply(rot_z(bank), v)
-        v = m_apply(rot_y(yaw), v)
-        return (x + v[0], y + v[1], z + v[2])
+        return (x + a0 * lx + b0 * ly + c0 * lz,
+                y + a1 * lx + b1 * ly + c1 * lz,
+                z + a2 * lx + b2 * ly + c2 * lz)
 
     return L
 

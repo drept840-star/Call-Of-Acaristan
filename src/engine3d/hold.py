@@ -267,6 +267,10 @@ def hold_report(hum, pose, pos, yaw, weapon="rifle"):
 
 
 _HOLD_KEYS = ("lsh_p", "lsh_r", "lsh_y", "lel", "rsh_p", "rsh_r", "rsh_y", "rel", "rifle_p", "rifle_y")
+# Legs never reach the arm solve (it runs at the origin and clashes against
+# torso, chest, pelvis and head only), so a running stride must not miss.
+_LEG_KEYS = frozenset(("lhip_p", "lhip_r", "rhip_p", "rhip_r", "lkn", "rkn", "lank", "rank",
+                       "lift"))
 _CACHE = {}
 
 
@@ -274,7 +278,8 @@ def hold_cached(hum, pose, weapon, mode, aim=None, key=None):
     """hold_weapon for per-frame callers: the arm solve is keyed on the body pose
     rounded to whole degrees, so a held stance costs one solve, not one per frame."""
     body = tuple(sorted((k, round(v)) for k, v in pose.items()
-                        if k not in _HOLD_KEYS and isinstance(v, (int, float))))
+                        if k not in _HOLD_KEYS and k not in _LEG_KEYS
+                        and isinstance(v, (int, float))))
     ck = (key if key is not None else id(hum), weapon, mode, aim, body)
     arms = _CACHE.get(ck)
     if arms is None:

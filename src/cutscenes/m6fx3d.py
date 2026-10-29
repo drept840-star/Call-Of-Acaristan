@@ -358,8 +358,14 @@ def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0,
             return
         k = intensity * _m5._flick(t, seed, 0.10)
         sway = math.sin(t * 0.0011 + seed * 2.3) * tilt * wbot
-        _m5._add_at(s, _shaft_img(col, wtop, wbot, h, k),
-                    sx + sway * 0.5, sy + h * 0.5)
+        # Built on a 1.2x size ladder and nearest-scaled to the exact size:
+        # one build per pixel size cost ~8 ms on every frame the camera moved.
+        ls = 1.2 ** round(math.log(scale, 1.2))
+        img = _shaft_img(col, int(top_m * ls), int(bot_m * ls), int(height_m * ls), k)
+        size = (min(260, wbot) * 2 + 2, min(400, h))
+        if img.get_size() != size:
+            img = pygame.transform.scale(img, size)
+        _m5._add_at(s, img, sx + sway * 0.5, sy + h * 0.5)
     _tag(draw)
     draw.light_soft = True          # a cone of lit air, not a surface
     draw.bounds_m = (bot_m * 1.1, height_m)

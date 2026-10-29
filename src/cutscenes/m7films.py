@@ -197,7 +197,7 @@ def _raidin_convoy(r, t):
     truck = RW.truck()
     for dz in (0.0, -7.5, -15.0):
         zz = z + dz
-        _w.add(r, RW.placed(truck, 0.0, 0.0, zz, 0.0))
+        RW.put(r, truck, 0.0, 0.0, zz, 0.0)
         for sx in (-0.68, 0.68):
             r.add_sprite((sx, 1.46, zz + 2.95),
                          _fx.glow((255, 236, 200), 0.5, t, core=(255, 248, 230), intensity=0.7,
@@ -234,8 +234,8 @@ def raidin_yard(surface, t):
     du = F.k(t, 200, 3600)
     d = F.mix((37.5, 0.0, 5.5), (26.0, 0.0, 1.4), du)
     gait = du * 12.2                            # metres walked so far
-    _w.add(r, RW.placed(RW.dog("Run", gait / RW.DOG_RUN_M * RW.dog_clip_s("Run")),  # the raid's
-                        d[0], 0.0, d[2], _face(d, (20.0, 0.0, 0.4))))                   # run cycle
+    RW.put(r, RW.dog("Run", gait / RW.DOG_RUN_M * RW.dog_clip_s("Run")),  # the raid's
+           d[0], 0.0, d[2], _face(d, (20.0, 0.0, 0.4)))                   # run cycle
     for seed, a, b, delay in ((71, (42.5, 0.0, 9.0), (33.5, 0.0, 5.0), 0),
                               (72, (44.0, 0.0, -4.5), (36.5, 0.0, -1.5), 500)):
         g = F.mix(a, b, F.k(t, delay, 3800))
