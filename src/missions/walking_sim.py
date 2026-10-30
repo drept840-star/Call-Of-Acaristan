@@ -3,7 +3,9 @@ import math
 import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
-from core.config import (CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_PLAYER_SKIN, C_WHITE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, SCENE_BOT, SCENE_TOP, SLUM_FLOOR, TILE_SIZE, WIDTH, audio, draw_letterbox, draw_rain, draw_scanlines, draw_vignette, font_btn, font_dialogue, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen, wall_shadow)
+from core.config import (CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_PLAYER_SKIN, C_WHITE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, SCENE_BOT, SCENE_TOP, SLUM_FLOOR, TILE_SIZE, WIDTH, audio, draw_letterbox, draw_rain, draw_scanlines, draw_vignette, font_btn, font_dialogue, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen)
+import engine.lighting as _lighting
+from core import artpack
 from core.state import STATE
 from core import save_system
 from core.camera import CAM_DEADZONE_PX, CAM_EASE_WALK, CAM_LOOKAHEAD_WALK_PX, follow_step
@@ -36,6 +38,32 @@ def _play_walk_type_tick(ch, idx, volume=0.095):
         audio.play("type_tick", volume=volume)
     except Exception:
         pass
+def _sync_walk_dialogue_state():
+    # STATE is a read-only mirror: replay hashes it and radio_blocker gates on it.
+    STATE.walk_dialogue_active = walk_dialogue_active
+    STATE.walk_dialogue_speaker = walk_dialogue_speaker
+    STATE.walk_dialogue_text = walk_dialogue_text
+    STATE.walk_dialogue_char_idx = walk_dialogue_char_idx
+    STATE.walk_dialogue_timer = walk_dialogue_timer
+
+
+def set_walk_dialogue(speaker, text):
+    """Start (or replace) the walk-sim dialogue line.
+
+    The module globals are the single owner of the typewriter; STATE mirrors
+    them for replay hashing and the radio blocker. Do not advance or clear
+    STATE's copy directly.
+    """
+    global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
+    global walk_dialogue_char_idx, walk_dialogue_timer
+    walk_dialogue_active = True
+    walk_dialogue_speaker = speaker
+    walk_dialogue_text = text
+    walk_dialogue_char_idx = 0
+    walk_dialogue_timer = 0
+    _sync_walk_dialogue_state()
+
+
 def clear_walk_dialogue():
     global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
     global walk_dialogue_char_idx, walk_dialogue_timer
@@ -44,11 +72,7 @@ def clear_walk_dialogue():
     walk_dialogue_text = ""
     walk_dialogue_char_idx = 0
     walk_dialogue_timer = 0
-    STATE.walk_dialogue_active = False
-    STATE.walk_dialogue_speaker = ""
-    STATE.walk_dialogue_text = ""
-    STATE.walk_dialogue_char_idx = 0
-    STATE.walk_dialogue_timer = 0
+    _sync_walk_dialogue_state()
 walk_map = [
     "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     "C................CCCC..............C.........C",
@@ -143,6 +167,8 @@ walk_return_timer = 0
 WALK_PROPS = None
 walk_fp_cutscene = None
 _walk_player_moving = False
+_walk_ambient_time = 0.0
+_walk_overlook_warning_time = 0.0
 def _clamp_walk_camera():
     """Clamp the walk camera to the map bounds (M1/M2/M3 approach).
 
@@ -172,6 +198,78 @@ def _walk_update_render():
     max_y = max(0, len(walk_map) * TILE_SIZE - HEIGHT)
     walk_render_x = max(0, min(max_x, walk_camera_x + sx))
     walk_render_y = max(0, min(max_y, walk_camera_y + sy))
+_WALK_INTERACT_RADIUS = 80
+def _walk_hover_target():
+    """What the player can interact with / look at right now.
+
+    Same priority as handle_walk_interact: NPCs first, then stashes, then the
+    non-interactive story points. Returns a dict or None.
+    """
+    px, py = walk_player.rect.centerx, walk_player.rect.centery
+    best_npc = None
+    for npc in walk_npcs:
+        d = math.hypot(px - npc["x"], py - npc["y"])
+        if d < _WALK_INTERACT_RADIUS and (best_npc is None or d < best_npc[0]):
+            best_npc = (d, npc)
+    if best_npc:
+        npc = best_npc[1]
+        return {
+            "label": npc["name"],
+            "action": "talk",
+            "target": npc,
+            "x": npc["x"],
+            "y": npc["y"],
+        }
+    best_stash = None
+    for stash in walk_stashes:
+        d = math.hypot(px - stash["x"], py - stash["y"])
+        if d < _WALK_INTERACT_RADIUS and (best_stash is None or d < best_stash[0]):
+            best_stash = (d, stash)
+    if best_stash:
+        stash = best_stash[1]
+        return {
+            "label": stash["label"],
+            "action": "search",
+            "target": stash,
+            "x": stash["x"],
+            "y": stash["y"],
+        }
+    for sx, sy, key, label, text in walk_story_points:
+        if math.hypot(px - sx, py - sy) < _WALK_INTERACT_RADIUS:
+            return {"label": label, "action": None, "x": sx, "y": sy}
+    return None
+def _draw_walk_hover_prompt(surface, fcx, fcy):
+    """Interaction prompt above the player: [E] action plus what it acts on."""
+    hover = walk_active_hover
+    px = walk_player.rect.centerx - fcx
+    py = walk_player.rect.centery - fcy
+    action = hover.get("action")
+    if action == "talk":
+        head = font_btn.render(_T("ws.prompt_talk"), True, C_ORANGE)
+    elif action == "search":
+        head = font_btn.render(_T("ws.prompt_search"), True, C_ORANGE)
+    else:
+        head = font_btn.render(hover["label"], True, C_ORANGE)
+    lines = [head]
+    if action:
+        lines.append(font_terminal_small.render(hover["label"], True, (200, 195, 180)))
+    target = hover.get("target")
+    if action == "talk" and target and not target["has_given"]:
+        requirement = "Needs a ration - you have none" if player_rations <= 0 else "Share 1 ration"
+        lines.append(font_terminal_small.render(requirement, True, (230, 180, 105)))
+    elif action == "search" and target and target["searched"]:
+        lines.append(font_terminal_small.render("Already searched", True, (150, 150, 150)))
+    gap = 2
+    bg_w = max(s.get_width() for s in lines) + 16
+    bg_h = sum(s.get_height() for s in lines) + gap * (len(lines) - 1) + 6
+    top = py - 46 - bg_h
+    bg = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
+    pygame.draw.rect(bg, (0, 0, 0, 170), (0, 0, bg_w, bg_h))
+    surface.blit(bg, (px - bg_w // 2, top))
+    y = top + 3
+    for line in lines:
+        surface.blit(line, (px - line.get_width() // 2, y))
+        y += line.get_height() + gap
 def start_walking_sim():
     global walk_player, walk_camera_x, walk_camera_y, walk_walls
     global walk_firefight_triggered, walk_firefight_timer, walk_dialogue_active
@@ -182,6 +280,8 @@ def start_walking_sim():
         walk_dialogue_timer
     global walk_van_trigger_x, walk_van_trigger_y, walk_fisherman_pos, walk_complete
     global walk_active_hover, walk_after_firefight, walk_return_timer
+    global _walk_footstep_timer, _walk_player_moving
+    global _walk_ambient_time, _walk_overlook_warning_time
     global _attack_voice_queue, _attack_voice_current, _attack_voice_frames, _attack_voice_hold
     global WALK_PROPS, minimap, walk_fp_cutscene
     global \
@@ -226,6 +326,10 @@ def start_walking_sim():
     walk_active_hover = None
     walk_after_firefight = False
     walk_return_timer = 0
+    _walk_footstep_timer = 0
+    _walk_player_moving = False
+    _walk_ambient_time = 0.0
+    _walk_overlook_warning_time = 0.0
     player_rations = 2
     warehouse_hp_bonus = 0
     warehouse_mag_bonus = 0
@@ -315,19 +419,23 @@ def update_walking_sim(keys):
     global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
     global walk_dialogue_char_idx, walk_dialogue_timer, walk_complete
     global walk_active_hover, walk_after_firefight, walk_fp_cutscene, _walk_player_moving, walk_return_timer
+    global _walk_ambient_time, _walk_overlook_warning_time
     if walk_player is None:
         _walk_update_render()
         return walk_render_x, walk_render_y, False
     if walk_return_timer > 0:
         walk_return_timer -= 1
+    _walk_ambient_time += max(0.0, STATE.dt)
     if walk_fp_cutscene:
         _update_walk_fp_cutscene()
         _walk_update_render()
         return walk_render_x, walk_render_y, False
     movement_locked = (walk_firefight_triggered and not walk_after_firefight) or walk_return_timer > 0
+    _walk_player_moving = False
     if not movement_locked:
         dx, dy = 0, 0
-        spd = 3
+        sprinting = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        spd = 4.5 if sprinting else 3.0
         # Delta-time aware: spd is in px/frame, multiply by (60*dt).
         _dt_mul = 60.0 * STATE.dt
         if keys[pygame.K_w]:
@@ -346,10 +454,12 @@ def update_walking_sim(keys):
         walk_player.move(dx, dy, walk_walls)
         global _walk_footstep_timer
         if is_moving:
-            _walk_footstep_timer -= 1
+            _walk_footstep_timer -= _dt_mul
             if _walk_footstep_timer <= 0:
-                audio.play("footstep_walk", volume=0.2)
-                _walk_footstep_timer = 35 + _rng_legacy.randint(0, 10)
+                audio.play("footstep_walk", volume=0.30 if sprinting else 0.20)
+                _walk_footstep_timer = (22 if sprinting else 35) + _rng_legacy.randint(0, 10)
+                if sprinting and not getattr(STATE, "reduced_motion", False):
+                    STATE.screen_shake = max(STATE.screen_shake, 1)
         else:
             _walk_footstep_timer = 0
         # Smoothed movement lookahead: the camera leans toward the walk
@@ -392,20 +502,18 @@ def update_walking_sim(keys):
         walk_player.angle = math.atan2(
             world_my - walk_player.rect.centery, world_mx - walk_player.rect.centerx
         )
-    walk_active_hover = None
-    for sx, sy, key, label, text in walk_story_points:
-        if (
-            math.hypot(walk_player.rect.centerx - sx, walk_player.rect.centery - sy)
-            < 80
-        ):
-            walk_active_hover = (label, text)
-            break
+    walk_active_hover = _walk_hover_target()
     if not walk_firefight_triggered:
         overlook_x = 38 * TILE_SIZE
-        if walk_player.rect.centerx > overlook_x:
+        warning_x = overlook_x - 2 * TILE_SIZE
+        if walk_player.rect.centerx >= warning_x:
+            _walk_overlook_warning_time += max(0.0, STATE.dt)
+        else:
+            _walk_overlook_warning_time = 0.0
+        if walk_player.rect.centerx > overlook_x and _walk_overlook_warning_time >= 0.6:
             walk_firefight_triggered = True
             STATE.walk_attack_active = True
-            STATE.walk_attack_timer = -90        # pre-roll before anything happens
+            STATE.walk_attack_timer = 0
             STATE.walk_attack_events_done.clear()
             STATE.walk_boat_active = False
             STATE.walk_boat_x = -60.0
@@ -415,7 +523,7 @@ def update_walking_sim(keys):
             STATE.walk_explosions = []
             STATE.walk_terminal_active = False
             STATE.walk_terminal_status = ""
-            walk_dialogue_active = False
+            clear_walk_dialogue()
             audio.play("radio_static", volume=0.25)
             audio.play("wind", volume=0.4, loops=-1)
     if STATE.walk_attack_active:
@@ -427,24 +535,13 @@ def update_walking_sim(keys):
     if walk_dialogue_active and walk_dialogue_char_idx < len(walk_dialogue_text):
         walk_dialogue_timer += 1
         # First few characters type fast so it doesn't sit on "Thi"
-        if walk_dialogue_char_idx < 8:
-            threshold = 1
-        else:
-            threshold = 2
+        threshold = 1 if walk_dialogue_char_idx < 8 else 2
         if walk_dialogue_timer >= threshold:
             walk_dialogue_timer = 0
-            next_ch = walk_dialogue_text[walk_dialogue_char_idx] if walk_dialogue_char_idx < len(walk_dialogue_text) else ""
+            next_ch = walk_dialogue_text[walk_dialogue_char_idx]
             _play_walk_type_tick(next_ch, walk_dialogue_char_idx, volume=0.09)
             walk_dialogue_char_idx += 1
-    if STATE.walk_dialogue_active and STATE.walk_dialogue_char_idx < len(STATE.walk_dialogue_text):
-        STATE.walk_dialogue_timer += 1
-        # Attack-cutscene dialogue should not crawl one letter at a time.
-        state_dialogue_speed = 2 if STATE.walk_attack_active else 5
-        if STATE.walk_dialogue_timer >= state_dialogue_speed:
-            STATE.walk_dialogue_timer = 0
-            next_ch = STATE.walk_dialogue_text[STATE.walk_dialogue_char_idx] if STATE.walk_dialogue_char_idx < len(STATE.walk_dialogue_text) else ""
-            _play_walk_type_tick(next_ch, STATE.walk_dialogue_char_idx, volume=0.10 if STATE.walk_attack_active else 0.09)
-            STATE.walk_dialogue_char_idx += 1
+    _sync_walk_dialogue_state()
     if walk_after_firefight or STATE.walk_after_firefight:
         if walk_player.rect.centerx > walk_van_trigger_x:
             clear_walk_dialogue()
@@ -464,6 +561,7 @@ def _start_walk_fp_cutscene(scene, reward, npc=None, stash=None):
     }
     _slow = {"kid_kevlar": 1.7}
     walk_dialogue_active = False
+    _sync_walk_dialogue_state()
     speed = _slow.get(scene, 1.0)
     walk_fp_cutscene = {
         "scene": scene,
@@ -479,44 +577,42 @@ def _start_walk_fp_cutscene(scene, reward, npc=None, stash=None):
     else:
         audio.play("pickup", volume=0.25)
 def _finish_walk_fp_cutscene():
-    global walk_fp_cutscene
     global warehouse_hp_bonus, warehouse_mag_bonus, warehouse_intel_given
-    global walk_dialogue_active, walk_dialogue_speaker, walk_dialogue_text
-    global walk_dialogue_char_idx, walk_player
+    global walk_fp_cutscene, walk_player
     if not walk_fp_cutscene:
         return
-    scene = walk_fp_cutscene["scene"]
     reward = walk_fp_cutscene["reward"]
     npc = walk_fp_cutscene.get("npc")
-    stash = walk_fp_cutscene.get("stash")
-    walk_dialogue_active = True
-    walk_dialogue_char_idx = 0
     if reward in ("kid_kevlar", "stash_kevlar"):
         warehouse_hp_bonus += 10
         if walk_player:
             walk_player.max_hp = 100 + warehouse_hp_bonus
             walk_player.hp = walk_player.max_hp
-        walk_dialogue_speaker = npc["name"] if npc else "SYSTEM"
+        speaker = npc["name"] if npc else "SYSTEM"
         if npc:
-            walk_dialogue_text = (
+            text = (
                 "The kid watches you strap the plate on.\n"
                 "He gives a small nod, then disappears into the alley.\n"
                 "Kevlar equipped. (+10 Max HP)"
             )
         else:
-            walk_dialogue_text = (
+            text = (
                 "You pry open the damaged container.\n"
                 "Inside: a cracked but usable Kevlar plate.\n"
                 "Kevlar salvaged. (+10 Max HP)"
             )
     elif reward == "stash_ammo":
         warehouse_mag_bonus += 1
-        walk_dialogue_speaker = "SYSTEM"
-        walk_dialogue_text = (
+        speaker = "SYSTEM"
+        text = (
             "You open the KRAP ammo crate.\n"
             "Loose 9mm magazines sit under a torn supply manifest.\n"
             "Extra magazine acquired. (+1 starting mag)"
         )
+    else:
+        speaker = "SYSTEM"
+        text = ""
+    set_walk_dialogue(speaker, text)
     audio.play("pickup", volume=0.55)
     walk_fp_cutscene = None
 def _update_walk_fp_cutscene():
@@ -982,72 +1078,54 @@ def _draw_walk_fp_cutscene(surface):
     draw_letterbox(surface)
 def handle_walk_interact():
     global \
-        walk_dialogue_active, \
-        walk_dialogue_speaker, \
-        walk_dialogue_text, \
-        walk_dialogue_char_idx
-    global \
         player_rations, \
         warehouse_hp_bonus, \
         warehouse_mag_bonus, \
+        warehouse_intel_given, \
         walk_npcs, \
         walk_stashes, \
         walk_fp_cutscene
     if walk_fp_cutscene:
         return
-    if walk_dialogue_active:
+    if walk_dialogue_active or walk_return_timer > 0:
         return
-    for npc in walk_npcs:
-        dist = math.hypot(
-            walk_player.rect.centerx - npc["x"], walk_player.rect.centery - npc["y"]
-        )
-        if dist < 80:
-            walk_dialogue_active = True
-            walk_dialogue_speaker = npc["name"]
-            walk_dialogue_char_idx = 0
-            if npc["has_given"]:
-                walk_dialogue_text = npc["done_dialogue"]
+    if STATE.walk_attack_active or STATE.walk_terminal_active:
+        return
+    if walk_firefight_triggered and not walk_after_firefight:
+        return
+    # Resolve at input time so the prompt target is the one that responds.
+    hover = _walk_hover_target()
+    if not hover:
+        return
+    action = hover["action"]
+    target = hover.get("target")
+    if action == "talk":
+        npc = target
+        if npc["has_given"]:
+            set_walk_dialogue(npc["name"], npc["done_dialogue"])
+        elif player_rations <= 0:
+            set_walk_dialogue(
+                npc["name"], "\n".join(npc["dialogue"]) + "\n\nYou have no rations to share."
+            )
+        else:
+            npc["has_given"] = True
+            player_rations -= 1
+            if npc["reward"] == "kevlar":
+                _start_walk_fp_cutscene("kid_kevlar", "kid_kevlar", npc=npc)
             else:
-                if player_rations > 0:
-                    npc["has_given"] = True
-                    player_rations -= 1
-                    if npc["reward"] == "kevlar":
-                        _start_walk_fp_cutscene("kid_kevlar", "kid_kevlar", npc=npc)
-                        return
-                    else:
-                        warehouse_intel_given = True
-                        audio.play("pickup", volume=0.5)
-                        walk_dialogue_text = (
-                            npc["thanks"][0]
-                            + "\n"
-                            + npc["thanks"][1]
-                            + "\n"
-                            + npc["thanks"][2]
-                            + "\n"
-                            + npc["thanks"][3]
-                        )
-                else:
-                    walk_dialogue_text = npc["dialogue"][0] + "\n" + npc["dialogue"][1]
-            return
-    for stash in walk_stashes:
-        dist = math.hypot(
-            walk_player.rect.centerx - stash["x"], walk_player.rect.centery - stash["y"]
-        )
-        if dist < 80:
-            if stash["searched"]:
-                walk_dialogue_active = True
-                walk_dialogue_speaker = "SYSTEM"
-                walk_dialogue_text = "Already searched."
-                walk_dialogue_char_idx = 0
-            else:
-                stash["searched"] = True
-                if stash["type"] == "ammo":
-                    _start_walk_fp_cutscene("crate_ammo", "stash_ammo", stash=stash)
-                    return
-                elif stash["type"] == "kevlar":
-                    _start_walk_fp_cutscene("crate_kevlar", "stash_kevlar", stash=stash)
-                    return
-            return
+                warehouse_intel_given = True
+                audio.play("pickup", volume=0.5)
+                set_walk_dialogue(npc["name"], "\n".join(npc["thanks"]))
+    elif action == "search":
+        stash = target
+        if stash["searched"]:
+            set_walk_dialogue("SYSTEM", "Already searched.")
+        else:
+            stash["searched"] = True
+            if stash["type"] == "ammo":
+                _start_walk_fp_cutscene("crate_ammo", "stash_ammo", stash=stash)
+            elif stash["type"] == "kevlar":
+                _start_walk_fp_cutscene("crate_kevlar", "stash_kevlar", stash=stash)
 def _draw_walk_poster(surface, x, y):
     w, h = 18, 26
     pygame.draw.rect(surface, (200, 180, 140), (x - w // 2, y - h // 2, w, h))
@@ -1237,16 +1315,27 @@ def _walk_soft_shadow(surface, rect, alpha):
     surface.blit(t, r.topleft)
 
 
+def _walk_lamp_lit(x, y):
+    if getattr(STATE, "reduced_motion", False):
+        return True
+    # One unreliable lamp between the early jacket and the ammo stash.
+    if (x, y) != (9 * TILE_SIZE + 32, 7 * TILE_SIZE + 16):
+        return True
+    phase = _walk_ambient_time % 8.0
+    return not (
+        5.00 <= phase < 5.08
+        or 5.20 <= phase < 5.34
+        or 5.50 <= phase < 5.58
+    )
 def _draw_prop_lamp_pole(surface, x, y, fcx, fcy):
     sx = x - fcx
     sy = y - fcy
     _walk_soft_shadow(surface, (sx - 6, sy - 2, 12, 5), 80)
     pygame.draw.rect(surface, (28, 26, 28), (sx - 2, sy - 28, 4, 28))
     pygame.draw.rect(surface, (40, 38, 40), (sx - 8, sy - 32, 16, 6))
+    if not _walk_lamp_lit(x, y):
+        return
     pygame.draw.circle(surface, (255, 200, 120), (sx, sy - 28), 3)
-    glow = pygame.Surface((20, 20), pygame.SRCALPHA)
-    pygame.draw.circle(glow, (255, 200, 120, 90), (10, 10), 8)
-    surface.blit(glow, (sx - 10, sy - 38))
 def _draw_prop_drum(surface, x, y, fcx, fcy):
     sx = x - fcx
     sy = y - fcy
@@ -1361,22 +1450,149 @@ PROP_DRAWERS = {
     "wall_pipe": _draw_prop_wall_pipe,
     "wall_stain": _draw_prop_wall_stain,
 }
-def _draw_walk_props_pools(fcx, fcy):
-    global WALK_PROPS
-    if WALK_PROPS is None:
-        WALK_PROPS = _gen_walk_props()
-    for kind, x, y in WALK_PROPS:
-        if kind == "lamp":
-            sx = x - fcx
-            sy = y - fcy
-            if -200 < sx < WIDTH + 200 and -200 < sy < HEIGHT + 200:
-                pool = pygame.Surface((180, 180), pygame.SRCALPHA)
-                for r in range(80, 0, -4):
-                    a = int(28 * (1 - r / 80))
-                    pygame.draw.ellipse(
-                        pool, (220, 160, 80, a), (90 - r, 90 - r // 2, r * 2, r)
-                    )
-                screen.blit(pool, (sx - 90, sy - 90))
+# Container paint: red, blue, rust, grey, green. Hard-edged, top-lit.
+_WALK_CONTAINER_COLS = ((84, 44, 38), (38, 54, 76), (82, 60, 38), (58, 58, 62), (46, 62, 48))
+_WALK_STATIC = None
+_WALK_AMBIENT_START = (172, 180, 204)   # alleys: cool overcast night
+_WALK_AMBIENT_END = (120, 124, 156)     # harbour: darker, bluer
+_WALK_LAMP_R = 190
+_WALK_LAMP_COL = (150, 108, 58)
+
+
+def _walk_is_wall(col, row):
+    return 0 <= row < len(walk_map) and 0 <= col < len(walk_map[row]) and walk_map[row][col] in ("C", "W")
+
+
+def _walk_containers():
+    """Split the wall tiles into container rects: 2-tile boxes along runs, singles stay crates."""
+    rows, cols = len(walk_map), len(walk_map[0])
+    used = set()
+    boxes = []
+    for r in range(rows):
+        c = 0
+        while c < cols:
+            if not _walk_is_wall(c, r):
+                c += 1
+                continue
+            end = c
+            while _walk_is_wall(end + 1, r):
+                end += 1
+            n = end - c + 1
+            if n >= 2:
+                while n > 0:
+                    w = 3 if n == 3 else min(2, n)
+                    boxes.append((c, r, w, 1))
+                    used.update((c + i, r) for i in range(w))
+                    c += w
+                    n -= w
+            c = end + 1
+    for c in range(cols):
+        r = 0
+        while r < rows:
+            if (c, r) in used or not _walk_is_wall(c, r):
+                r += 1
+                continue
+            end = r
+            while _walk_is_wall(c, end + 1) and (c, end + 1) not in used:
+                end += 1
+            n = end - r + 1
+            while n > 0:
+                h = 3 if n == 3 else min(2, n)
+                boxes.append((c, r, 1, h))
+                r += h
+                n -= h
+    return boxes
+
+
+def _draw_walk_container(surf, rect, horizontal, col, rng):
+    x, y, w, h = rect
+    r, g, b = col
+
+    def sh(k):
+        return (max(0, min(255, r + k)), max(0, min(255, g + k)), max(0, min(255, b + k)))
+    inner = pygame.Rect(x + 2, y + 2, w - 4, h - 4)
+    surf.fill(col, inner)
+    # Corrugation ribs run across the box's short side.
+    if horizontal:
+        for i, rx in enumerate(range(inner.x + 4, inner.right - 3, 6)):
+            surf.fill(sh(8 if i % 2 else -8), (rx, inner.y + 3, 2, inner.h - 6))
+    else:
+        for i, ry in enumerate(range(inner.y + 4, inner.bottom - 3, 6)):
+            surf.fill(sh(8 if i % 2 else -8), (inner.x + 3, ry, inner.w - 6, 2))
+    # Rust runs, hard edged.
+    for _ in range(rng.randint(1, 3)):
+        rw, rh = (rng.randint(4, 10), rng.randint(6, 16)) if horizontal else (rng.randint(6, 16), rng.randint(4, 10))
+        surf.fill((88, 52, 30), (rng.randint(inner.x, inner.right - rw), rng.randint(inner.y, inner.bottom - rh), rw, rh))
+    # Top light, bottom shade, then the 1 px contact outline.
+    surf.fill(sh(22), (inner.x, inner.y, inner.w, 2))
+    surf.fill(sh(-20), (inner.x, inner.bottom - 2, inner.w, 2))
+    pygame.draw.rect(surf, (14, 14, 16), (x + 1, y + 1, w - 2, h - 2), 1)
+    # Corner castings and the door bars on one end.
+    for cx, cy in ((inner.x, inner.y), (inner.right - 4, inner.y), (inner.x, inner.bottom - 4), (inner.right - 4, inner.bottom - 4)):
+        surf.fill(sh(30), (cx, cy, 4, 4))
+    if horizontal and w > TILE_SIZE:
+        dx = inner.right - 10 if rng.random() < 0.5 else inner.x + 6
+        for bx in (dx, dx + 4):
+            surf.fill(sh(-30), (bx, inner.y + 6, 1, inner.h - 12))
+    elif not horizontal and h > TILE_SIZE:
+        dy = inner.bottom - 10 if rng.random() < 0.5 else inner.y + 6
+        for by in (dy, dy + 4):
+            surf.fill(sh(-30), (inner.x + 6, by, inner.w - 12, 1))
+
+
+def _walk_static_layer():
+    """Floor, container shadows and containers, baked once (the walk map never changes)."""
+    global _WALK_STATIC
+    if _WALK_STATIC is not None:
+        return _WALK_STATIC
+    rows, cols = len(walk_map), len(walk_map[0])
+    size = (cols * TILE_SIZE, rows * TILE_SIZE)
+    surf = pygame.Surface(size)
+    use_pack = artpack.enabled() and artpack.tile(".", 0, 0) is not None
+    if use_pack:
+        # Concrete variants 0/2/3 only: variant 1 has the warehouse floor marking.
+        floor = [artpack.get("t_dot_%d" % v) for v in (0, 2, 3)]
+        for r in range(rows):
+            for c in range(cols):
+                surf.blit(floor[(c * 7 + r * 11 + (c * r) % 5) % 3], (c * TILE_SIZE, r * TILE_SIZE))
+        # Slight warm-dirt cast so the alleys don't read as the M1 warehouse floor.
+        surf.fill((228, 214, 196), special_flags=pygame.BLEND_RGB_MULT)
+    else:
+        for x in range(0, size[0], FLOOR_TILE_SIZE):
+            for y in range(0, size[1], FLOOR_TILE_SIZE):
+                surf.blit(SLUM_FLOOR, (x, y))
+    # Hard drop shadow down-right of every stack (one mask, so overlaps don't double up).
+    mask = pygame.Surface(size)
+    mask.fill((255, 255, 255))
+    for r in range(rows):
+        for c in range(cols):
+            if _walk_is_wall(c, r):
+                mask.fill((112, 112, 124), (c * TILE_SIZE + 10, r * TILE_SIZE + 12, TILE_SIZE, TILE_SIZE))
+    surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+    rng = random.Random(46)
+    for c, r, w, h in _walk_containers():
+        rect = (c * TILE_SIZE, r * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE)
+        _draw_walk_container(surf, rect, w >= h, rng.choice(_WALK_CONTAINER_COLS), rng)
+    _WALK_STATIC = surf
+    return surf
+
+
+def _walk_light_pass(fcx, fcy):
+    """Multiplicative night map (M5 model): cool ambient, warm lamp pools, low torch on the player."""
+    prog = min(1.0, max(0.0, walk_player.rect.centerx / (len(walk_map[0]) * TILE_SIZE)))
+    amb = tuple(int(_lerp(a, b, prog)) for a, b in zip(_WALK_AMBIENT_START, _WALK_AMBIENT_END))
+    R = _WALK_LAMP_R
+    lamps, blooms = [], []
+    for kind, x, y in WALK_PROPS or ():
+        if kind != "lamp" or not _walk_lamp_lit(x, y):
+            continue
+        sx, sy = x - fcx, y - fcy
+        if -R < sx < WIDTH + R and -R < sy < HEIGHT + R:
+            lamps.append((_lighting.falloff_sprite(R, _WALK_LAMP_COL), (sx - R, sy - 20 - R)))
+            blooms.append((_lighting.bloom_sprite(20, (110, 80, 40)), (sx - 20, sy - 48)))
+    px, py = walk_player.rect.centerx - fcx, walk_player.rect.centery - fcy
+    lamps.append((_lighting.falloff_sprite(150, (44, 44, 50)), (px - 150, py - 150)))
+    _lighting.LightMapDraw(amb, lamps, blooms).draw(screen, 0, 0)
 def _draw_walk_props(fcx, fcy):
     global WALK_PROPS
     if WALK_PROPS is None:
@@ -1601,11 +1817,7 @@ def _trigger_walk_dialogue(speaker, text):
         _attack_voice_queue.append((speaker, text))
         _attack_voice_hold = None
         return
-    STATE.walk_dialogue_active = True
-    STATE.walk_dialogue_speaker = speaker
-    STATE.walk_dialogue_text = text
-    STATE.walk_dialogue_char_idx = 0
-    STATE.walk_dialogue_timer = 0
+    set_walk_dialogue(speaker, text)
     try:
         from audio import voice
         voice.play_line(speaker, text)
@@ -1619,11 +1831,7 @@ def _update_attack_voice_queue():
     if _attack_voice_current is None and _attack_voice_queue:
         _attack_voice_current = _attack_voice_queue.pop(0)
         speaker, text = _attack_voice_current
-        STATE.walk_dialogue_active = True
-        STATE.walk_dialogue_speaker = speaker
-        STATE.walk_dialogue_text = text
-        STATE.walk_dialogue_char_idx = 0
-        STATE.walk_dialogue_timer = 0
+        set_walk_dialogue(speaker, text)
         duration_ms = 0
         try:
             from audio import voice
@@ -1639,7 +1847,7 @@ def _update_attack_voice_queue():
     if _attack_voice_current is not None:
         if _attack_voice_frames > 0:
             _attack_voice_frames -= 1
-        elif STATE.walk_dialogue_char_idx >= len(STATE.walk_dialogue_text):
+        elif walk_dialogue_char_idx >= len(walk_dialogue_text):
             _attack_voice_current = None
             if not _attack_voice_queue:
                 _attack_voice_hold = 90
@@ -2842,15 +3050,7 @@ def draw_walking_sim():
     # cinematic scene and its dialogue. Do not draw the walking-sim map at all.
     if STATE.walk_attack_active or STATE.walk_terminal_active:
         _draw_walk_attack_overlook(screen)
-        if STATE.walk_dialogue_active and STATE.walk_dialogue_text:
-            draw_dialogue_box(
-                screen,
-                STATE.walk_dialogue_speaker,
-                STATE.walk_dialogue_text,
-                STATE.walk_dialogue_char_idx,
-                len(STATE.walk_dialogue_text),
-            )
-        elif walk_dialogue_active and walk_dialogue_text:
+        if walk_dialogue_active and walk_dialogue_text:
             draw_dialogue_box(
                 screen,
                 walk_dialogue_speaker,
@@ -2868,41 +3068,20 @@ def draw_walking_sim():
     screen.fill((16, 18, 22))
     # Render from the integer render camera (follow + shake), like M2/M3.
     fcx, fcy = int(round(walk_render_x)), int(round(walk_render_y))
-    start_tx = (fcx // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
-    start_ty = (fcy // FLOOR_TILE_SIZE) * FLOOR_TILE_SIZE
-    for tx in range(
-        start_tx - FLOOR_TILE_SIZE, fcx + WIDTH + FLOOR_TILE_SIZE * 2, FLOOR_TILE_SIZE
-    ):
-        for ty in range(
-            start_ty - FLOOR_TILE_SIZE,
-            fcy + HEIGHT + FLOOR_TILE_SIZE * 2,
-            FLOOR_TILE_SIZE,
-        ):
-            screen.blit(SLUM_FLOOR, (tx - fcx, ty - fcy))
-    _draw_walk_props_pools(fcx, fcy)
-    container_tiles = [
-        CONTAINER_TILE_RED,
-        CONTAINER_TILE_BLUE,
-        CONTAINER_TILE_RUST,
-        CONTAINER_TILE_GREY,
-    ]
-    for wall in walk_walls:
-        dr = pygame.Rect(wall.x - fcx, wall.y - fcy, TILE_SIZE, TILE_SIZE)
-        if -TILE_SIZE < dr.x < WIDTH and -TILE_SIZE < dr.y < HEIGHT:
-            screen.blit(wall_shadow, (dr.x - 4, dr.y - 4))
-            tile_idx = (wall.x // TILE_SIZE + wall.y // TILE_SIZE) % 4
-            screen.blit(container_tiles[tile_idx], (dr.x, dr.y))
+    screen.blit(_walk_static_layer(), (0, 0), (fcx, fcy, WIDTH, HEIGHT))
     _draw_walk_props(fcx, fcy)
     for sx, sy, key, label, text in walk_story_points:
         if -100 < sx - fcx < WIDTH + 100 and -100 < sy - fcy < HEIGHT + 100:
             drawer = WALK_SPRITE_DRAWERS.get(key)
             if drawer:
                 drawer(screen, int(sx - fcx), int(sy - fcy))
-            if walk_active_hover and walk_active_hover[0] == label:
-                pulse = 0.5 + 0.5 * math.sin(_now_ms() * 0.005)
-                glow = pygame.Surface((80, 80), pygame.SRCALPHA)
-                pygame.draw.circle(glow, (255, 220, 100, int(35 * pulse)), (40, 40), 30)
-                screen.blit(glow, (int(sx - fcx) - 40, int(sy - fcy) - 40))
+    if walk_active_hover:
+        hx = int(walk_active_hover["x"] - fcx)
+        hy = int(walk_active_hover["y"] - fcy)
+        pulse = 0.5 + 0.5 * math.sin(_now_ms() * 0.005)
+        glow = pygame.Surface((80, 80), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (255, 220, 100, int(35 * pulse)), (40, 40), 30)
+        screen.blit(glow, (hx - 40, hy - 40))
     if walk_after_firefight:
         van_screen_x = walk_van_trigger_x - fcx + 100
         van_screen_y = walk_van_trigger_y - fcy + 30
@@ -2910,17 +3089,6 @@ def draw_walking_sim():
             _draw_walk_krap_van(screen, van_screen_x, van_screen_y, _now_ms())
     if walk_player:
         walk_player.draw(screen, fcx, fcy, walls=(), no_gun=True, is_moving=_walk_player_moving)
-    if walk_active_hover and walk_player and not walk_dialogue_active:
-        label, desc = walk_active_hover
-        px = walk_player.rect.centerx - fcx
-        py = walk_player.rect.centery - fcy
-        label_surf = font_btn.render(label, True, C_ORANGE)
-        bg_w = label_surf.get_width() + 16
-        bg_h = label_surf.get_height() + 6
-        bg = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
-        pygame.draw.rect(bg, (0, 0, 0, 170), (0, 0, bg_w, bg_h))
-        screen.blit(bg, (px - bg_w // 2, py - 56))
-        screen.blit(label_surf, (px - label_surf.get_width() // 2, py - 54))
     for stash in walk_stashes:
         sx = stash["x"] - fcx
         sy = stash["y"] - fcy
@@ -2929,15 +3097,6 @@ def draw_walking_sim():
             pygame.draw.rect(screen, (45, 30, 15), (sx - 16, sy - 12, 32, 24), 2)
             pygame.draw.line(screen, (50, 35, 20), (sx - 16, sy), (sx + 16, sy), 2)
             pygame.draw.circle(screen, (180, 150, 80), (sx, sy), 3)
-            dist = math.hypot(
-                walk_player.rect.centerx - stash["x"],
-                walk_player.rect.centery - stash["y"],
-            )
-            if dist < 80 and not walk_dialogue_active:
-                prompt = font_terminal_small.render(
-                    _T("ws.search_label", label=stash["label"]), True, C_ORANGE
-                )
-                screen.blit(prompt, (sx - prompt.get_width() // 2, sy - 36))
     for npc in walk_npcs:
         nx = npc["x"] - fcx
         ny = npc["y"] - fcy
@@ -3063,29 +3222,7 @@ def draw_walking_sim():
             else:
                 pygame.draw.circle(screen, npc["color"], (nx, ny), 12)
                 pygame.draw.circle(screen, C_PLAYER_SKIN, (nx, ny), 7)
-            dist = math.hypot(
-                walk_player.rect.centerx - npc["x"], walk_player.rect.centery - npc["y"]
-            )
-            if dist < 80 and not walk_dialogue_active:
-                prompt = font_terminal_small.render(
-                    _T("ws.speak_npc", name=npc["name"]), True, C_ORANGE
-                )
-                screen.blit(prompt, (nx - prompt.get_width() // 2, ny - 36))
-    walk_progress = min(
-        1.0, max(0.0, walk_player.rect.centerx / (len(walk_map[0]) * TILE_SIZE))
-    )
-    fog_r = int(18 - walk_progress * 8)
-    fog_g = int(22 - walk_progress * 14)
-    fog_b = int(30 - walk_progress * 16)
-    fog_a = int(55 + walk_progress * 85)
-    fog = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    fog.fill((fog_r, fog_g, fog_b, fog_a))
-    screen.blit(fog, (0, 0))
-    top_fog = pygame.Surface((WIDTH, HEIGHT // 2), pygame.SRCALPHA)
-    for i in range(HEIGHT // 2):
-        a = int(70 * (1 - i / (HEIGHT // 2)))
-        pygame.draw.line(top_fog, (20, 25, 35, a), (0, i), (WIDTH, i))
-    screen.blit(top_fog, (0, LETTER_H))
+    _walk_light_pass(fcx, fcy)
     observing_attack = walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight)
     if not observing_attack:
         draw_rain(screen, rain_drops, speed_mul=1.0)
@@ -3093,19 +3230,19 @@ def draw_walking_sim():
     draw_scanlines(screen)
     draw_letterbox(screen)
     _draw_walk_return_overlay(screen)
+    if (
+        walk_active_hover
+        and not walk_dialogue_active
+        and not walk_fp_cutscene
+        and not observing_attack
+        and walk_return_timer <= 0
+    ):
+        _draw_walk_hover_prompt(screen, fcx, fcy)
     if walk_fp_cutscene:
         _draw_walk_fp_cutscene(screen)
         return
-    # Dialogue - attack cutscene or NPC
-    if STATE.walk_dialogue_active and STATE.walk_dialogue_text:
-        draw_dialogue_box(
-            screen,
-            STATE.walk_dialogue_speaker,
-            STATE.walk_dialogue_text,
-            STATE.walk_dialogue_char_idx,
-            len(STATE.walk_dialogue_text),
-        )
-    elif walk_dialogue_active and walk_dialogue_text:
+    # Dialogue - attack cutscene or NPC (single owner: the module globals)
+    if walk_dialogue_active and walk_dialogue_text:
         draw_dialogue_box(
             screen,
             walk_dialogue_speaker,
@@ -3117,7 +3254,9 @@ def draw_walking_sim():
         minimap.draw(screen, walk_player, [], walk_render_x, walk_render_y)
     if not observing_attack:
         obj_text = "OBJECTIVE: Walk east toward the harbor."
-        if walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight):
+        if not walk_firefight_triggered and _walk_overlook_warning_time > 0:
+            obj_text = "OVERLOOK: Engine noise offshore..."
+        elif walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight):
             obj_text = "OBJECTIVE: Observe..."
         elif walk_after_firefight or STATE.walk_after_firefight:
             obj_text = "OBJECTIVE: Approach the van."
