@@ -9,9 +9,15 @@ track, then the north sweep while the barn burns and Alex lies pinned at the
 well.  Bodi and Alex fight on the AI in ``raid_brain``.  Dying, or leaving Bodi
 down for twenty seconds, reloads the last checkpoint inside the scene.
 
+Put a barrel in the pig and the night turns: Bodi stops fighting the Guards,
+crosses the yard and rifles *you* down in a scripted beat (``_turn_update``).
+He cannot be killed, wounded or revived from that frame on, and the checkpoint
+replays with him back at your shoulder.
+
 The farm itself is ``cutscenes.m7world3d`` (the same builder the films use).
 """
 import math
+import random
 
 import pygame
 
@@ -53,8 +59,26 @@ SHELL_AT = (0.35, 1.0, 1.65)
 HP_REGEN_DELAY, HP_REGEN = 5.0, 7.0
 LOOT_R = 1.5
 HOLD_S = {"alex": 1.6, "bodi": 2.4}
+WELL_CREAK_S = 0.8                      # Alex is in cover at the well this long before it goes
+KNOCK_S = 0.3                           # the beam throws Alex flat over this long
+LIFT_LOW = dict(POSES["crouch"], spine=40, head_p=-20, lsh_p=62, lsh_r=10, lel=24,
+                rsh_p=62, rsh_r=10, rel=24)
+LIFT_HIGH = dict(POSES["stand"], spine=18, head_p=-12, lhip_p=34, lkn=40, rhip_p=34, rkn=40,
+                 lsh_p=96, lsh_r=10, lel=46, rsh_p=96, rsh_r=10, rel=46)
+RISE_KNEE = 0.5                         # share of Alex's rise spent getting onto a knee
 CP_STATE = {1: (4.0, 2.0, 180.0), 2: (0.0, -2.0, 0.0)}
 TANK_BLAST_R = 8.0
+PIG_HIDE = (-18.5, -14.5)              # the far south-west corner it bolts to
+# The pig as a target: a body sphere (metres) and the shot that ends it.
+PIG_HIT_Y, PIG_HIT_R = 0.36, 0.5
+PIG_HIT_MAX = 2                         # pellets: one barrel at range, not a graze
+# The betrayal. Timings in seconds, distances in metres.
+TURN_STARE = 1.5                        # he looks at the pig, then at you
+TURN_CLOSE_M = 4.6                      # he walks in to this range and stops
+TURN_CLOSE_MAX = 4.2                    # ...or stops walking after this long
+TURN_WALK = 2.9                         # he does not jog it: he walks you down
+TURN_AIM_S = 1.8                        # shoulders the rifle: your last window
+TURN_DEATH_MSG = "BODI PUT YOU DOWN  -  HIS YARD, HIS RULES"
 GUARD_VIEW = ("rifle", "rusher", "rifle", "officer")
 GUARD_PUSH_M = 0.35
 BED_TOP = 1.3
@@ -135,6 +159,7 @@ class RaidScene:
         self.t = 0.0
         self._truck = None
         self._ledge = None
+        self._pig_mesh = None
         self._last_snd = -9.0
         self._setup(0)
 
@@ -180,7 +205,7 @@ class RaidScene:
                 _hold_cached(_w.hum(gk, True), pose, "rifle", "ready", key=gk)
         for name in ("bodi", "alex"):
             key = ("ally", name)
-            for pose in stances + (dict(POSES["kneel"]),):
+            for pose in stances + (dict(POSES["kneel"]), dict(POSES["crouch"])):
                 _hold_cached(_w.hum(key), pose, _ally_gun(key), "ready", key=key)
             for i in range(-4, 5):
                 _ally_aim(key, i / 10.0)
@@ -190,6 +215,9 @@ class RaidScene:
         r = _w.rend(*RES)[0]
         r.begin()
         W.put(r, self._truck, 0.0, 0.0, 0.0, 0.0)
+        W.put(r, self._pig_mesh, F.PIG_HOME[0], 0.0, F.PIG_HOME[1], F.PIG_HOME[2])
+        for mesh in self._pig_walk:
+            W.put(r, mesh, F.PIG_HOME[0], 0.0, F.PIG_HOME[1], F.PIG_HOME[2])
 
     def active(self):
         return self._active
@@ -276,15 +304,33 @@ class RaidScene:
         self.cp_toast = 0.0
         self.kills = 0
         self.dying = False
+        self.death_by_bodi = False
         self.death_t = 0.0
         self.death_msg = ""
         self.hold = 0.0
+        self.wreck = W.WellWreck()
         self.tank_blown = None
         self.marker_screen = None
         self._muzzle = None
         self.phase = "intro" if cp == 0 else "gap"
         self.next_wave = (cp + 1, self.t + (6.0 if cp == 0 else 3.5))
         self.brain = B.Brain(self)
+        self.pig = {"x": F.PIG_HOME[0], "z": F.PIG_HOME[1], "yaw": F.PIG_HOME[2],
+                    "tx": F.PIG_HOME[0], "tz": F.PIG_HOME[1], "mode": "graze",
+                    "next": 2.0, "gait": 0.0, "scared": False, "shy_t": -9.0,
+                    "stuck": 0.0, "dead": False, "fell_at": 0.0}
+        # A checkpoint reload replays the attempt: the pig is alive again.
+        self.turn = None            # the betrayal beat, once the pig is down
+        self.pig_dead = False
+        STATE.m7_pig_dead = False
+        STATE.m7_pig_at = None
+        self._pig_dead_mesh = None
+        self._pig_rng = random.Random(47)
+        self.world.pig_at = (self.pig["x"], self.pig["z"])
+        if self._pig_mesh is None:
+            self._pig_mesh = F.pig()
+            from cutscenes.m7pig3d import FRAMES, pig_pose
+            self._pig_walk = tuple(pig_pose(i) for i in range(FRAMES))
         if p is not None:
             p.hp = getattr(p, "max_hp", 115) or 115
         if cp == 0:
@@ -314,6 +360,7 @@ class RaidScene:
     def flash(self, pos):
         self.flashes.append((self.t, pos))
         del self.flashes[:-6]
+        self._pig_scare()
         d = math.hypot(pos[0] - self.px, pos[2] - self.pz)
         if d < 50.0 and self.t - self._last_snd > 0.07:
             self._last_snd = self.t
@@ -325,10 +372,12 @@ class RaidScene:
     def bodi_lost(self):
         self._fail("BODI WENT DOWN  -  AGAIN FROM THE CHECKPOINT")
 
-    def hurt_player(self, dmg, src=None):
+    def hurt_player(self, dmg, src=None, forced=False):
         p = STATE.player
         if p is None or self.dying:
             return
+        if self.turn is not None and not forced:
+            return          # the Guards are not what ends this one
         p.hp -= dmg
         self.hurt = min(1.0, self.hurt + dmg / 28.0)
         self.last_hurt = self.t
@@ -394,7 +443,10 @@ class RaidScene:
         up = self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6
         up = 0.0 if (self.sprint or self.reloading or not up) else 1.0
         self.gun_up += (up - self.gun_up) * min(1.0, dt * 14.0)
-        self._move(k, dt)
+        if self.turn is None:
+            self._move(k, dt)
+        else:
+            self._turn_update(dt)   # he has the floor: no walking out of this
         if self.reloading:
             self.reloading = max(0.0, self.reloading - dt)
             elapsed = RELOAD_S - self.reloading
@@ -418,6 +470,8 @@ class RaidScene:
         self._hold(k, dt)
         self.fire.update(self.t)
         self.brain.update(dt)
+        self._pig_update(dt)
+        self._well(dt)
         if self.fire.lit and self.fire.burning(self.px, self.pz):
             self.hurt_player(W.FIRE_DPS * dt)
         self._waves()
@@ -481,6 +535,22 @@ class RaidScene:
             kk = clamp(self.death_t / 1.2, 0.0, 1.0)
             eye = (eye[0], eye[1] + 1.4 * kk, eye[2])
             tgt = (self.px, 0.3, self.pz)
+            if getattr(self, "death_by_bodi", False):
+                # His round: the camera drops back and down off the shoulder, the
+                # body stays in the left of frame, and he never leaves the shot.
+                b = self.brain.bodi
+                dx, dz = self.px - b["x"], self.pz - b["z"]
+                n = math.hypot(dx, dz) or 1.0
+                dx, dz = dx / n, dz / n
+                rg = _right(self.yaw)
+                d = _ease(clamp((self.death_t - 0.08) / 0.7, 0.0, 1.0))
+                # step back off the body, but not into the crates behind it
+                pivot = (self.px, 1.45, self.pz)
+                back = min(2.3, max(0.7, self.world.ray_hit(pivot, (dx, 0.0, dz), 2.65) - 0.35))
+                fall = (self.px + dx * back + rg[0] * 0.62, 1.18,
+                        self.pz + dz * back + rg[2] * 0.62)
+                eye = tuple(eye[i] + (fall[i] - eye[i]) * d for i in range(3))
+                tgt = (b["x"], b["y"] + 1.10, b["z"])
         fov = FOV + (FOV_ADS - FOV) * self.ads - 1.4 * self.cam_kick
         return eye, tgt, fov, dist
 
@@ -509,6 +579,7 @@ class RaidScene:
         self.last_fire = self.t
         self.pump_at = self.t
         self.pump_snd_at = self.t + PUMP_S
+        self._pig_scare()
         o, d = self._aim_ray()      # the shot leaves along the sight as it was, before the kick
         look_pitch = self.pitch + 1.6 * self.cam_kick
         self.recoil = min(3.0, self.recoil + 1.4)
@@ -522,16 +593,22 @@ class RaidScene:
                 return
         cone = 0.65 if self.ads > 0.5 else 1.0
         src = self._muzzle or o
+        # The pig is a target, not scenery: take its blocking box out of the
+        # world for the pellet pass so the sphere below decides the hit.
+        pig_block = self.world.pig_at
+        self.world.pig_at = None
         hits = {}
         impact_pts = []
         lanes = []
         farthest = 0.0
         any_enemy = False
         any_head = False
+        pig_pellets = 0
+        bodi_pellets = 0
         for dy, dp in PELLET_FAN:
             dd = _fwd(self.yaw + dy * cone, look_pitch + dp * cone)
             best = self.world.ray_hit(o, dd, 70.0)
-            hit_e, head = None, False
+            hit_e, head, hit_pig, hit_bodi = None, False, False, False
             for e in self.brain.enemies:
                 if not e["alive"] or not e["live"]:
                     continue
@@ -539,10 +616,29 @@ class RaidScene:
                     h = B._ray_sphere(o, dd, c, rad)
                     if h is not None and h < best:
                         best, hit_e, head = h, e, is_head
+            if self.turn is not None:
+                # Bodi is unkillable once he turns: the pellets spark, they do
+                # not damage. Chest sphere, then head, whichever is nearer.
+                bd = self.brain.bodi
+                for cy, rad in ((bd["y"] + 1.15, 0.42), (bd["y"] + 1.62, 0.22)):
+                    h = B._ray_sphere(o, dd, (bd["x"], cy, bd["z"]), rad)
+                    if h is not None and h < best:
+                        best, hit_e, head, hit_pig, hit_bodi = h, None, False, False, True
+            if not self.pig["dead"]:
+                centre = (self.pig["x"], PIG_HIT_Y, self.pig["z"])
+                h = B._ray_sphere(o, dd, centre, PIG_HIT_R)
+                if h is not None and h < best:
+                    best, hit_e, head, hit_pig = h, None, False, True
             end = (o[0] + dd[0] * best, o[1] + dd[1] * best, o[2] + dd[2] * best)
             lanes.append(end)
             farthest = max(farthest, best)
-            if hit_e is None:
+            if hit_bodi:
+                bodi_pellets += 1
+                impact_pts.append((end, "spark"))
+            elif hit_pig:
+                pig_pellets += 1
+                impact_pts.append((end, "blood"))
+            elif hit_e is None:
                 impact_pts.append((end, "dust"))
             else:
                 any_enemy = True
@@ -553,6 +649,7 @@ class RaidScene:
                     rec = hits[id(hit_e)]
                 rec[1] += PELLET_HEAD if head else PELLET_BODY
                 impact_pts.append((end, "blood"))
+        self.world.pig_at = pig_block
         for end in lanes:
             self.tracers.append((self.t, src, end, (255, 226, 160)))
         self.flashes.append((self.t, src))
@@ -563,6 +660,15 @@ class RaidScene:
                                      o[2] + ld[2] * farthest)))
         for e, dmg in hits.values():
             self.brain.hurt_enemy(e, dmg, (o[0], o[2]))
+        if pig_pellets:
+            self.pig_shot(pig_pellets)
+        if bodi_pellets:
+            # He does not even flinch. One line, once, and he keeps coming.
+            self.hit_mark = self.t
+            self._snd("impact", True)
+            if self.turn is not None and not self.turn.get("taunt"):
+                self.turn["taunt"] = True
+                self.say("BODI", "Not tonight, Biribel. Not over a pig.", 3.0)
         if any_enemy:
             self.hit_mark = self.t
             self._snd("headshot" if any_head else "impact", True)
@@ -571,6 +677,7 @@ class RaidScene:
 
     def _blow_tank(self):
         self.tank_blown = self.t
+        self._pig_scare()
         cx, cy, cz = W.TANK_AT
         self._snd("report")
         for e in self.brain.enemies:
@@ -602,6 +709,9 @@ class RaidScene:
                 self._begin_reload()
 
     def _hold(self, k, dt):
+        if self.turn is not None:
+            self.hold = 0.0
+            return
         who = self.brain.near_revive()
         try:
             held = bool(k[pygame.K_e])
@@ -611,9 +721,197 @@ class RaidScene:
             self.hold = 0.0
             return
         self.hold += dt
+        if who == "alex":
+            # step in to the end of the fallen beam and face along it
+            k = min(1.0, dt * 12.0)
+            self.px += (W.WELL_LIFT_AT[0] - self.px) * k
+            self.pz += (W.WELL_LIFT_AT[1] - self.pz) * k
+            self.body_yaw = 270.0
         if self.hold >= HOLD_S[who]:
             self.hold = 0.0
             self.brain.help_done(who)
+
+    # --- the pig -----------------------------------------------------------------
+
+    def _pig_scare(self):
+        """Gunfire (either side), the tank blast or the barn fire sends it off."""
+        p = self.pig
+        if p["scared"] or p["dead"]:
+            return
+        p["scared"] = True
+        p["mode"] = "flee"
+        p["tx"], p["tz"] = PIG_HIDE
+
+    def pig_shot(self, pellets=1):
+        """Pellets found the pig. One barrel of Fallow 12 is enough."""
+        p = self.pig
+        if p["dead"] or pellets < PIG_HIT_MAX:
+            return False
+        p["dead"] = True
+        p["fell_at"] = self.t
+        p["mode"] = "down"
+        self.pig_dead = True
+        STATE.m7_pig_dead = True
+        STATE.m7_pig_at = (p["x"], p["z"])
+        self.world.pig_at = (p["x"], p["z"])       # the body is still in the yard
+        self.hit_mark = self.t
+        self._snd("pig_squeal")
+        self._snd("impact", True)
+        # The night turns here. If Bodi is already down there is no betrayal to
+        # play, and the checkpoint clock still owns that attempt.
+        if self.brain.bodi_turn() and self.turn is None:
+            self.turn = {"phase": "stare", "t": self.t, "shot": False, "taunt": False,
+                         "raised_at": None, "bodi": True}
+            self.say("BODI", "That pig was Maru's. She raised it by hand.", 3.4)
+            self.say("ALEX", "Bodi? Bodi, what are you doing?", 3.4)
+        return True
+
+    # --- the betrayal ------------------------------------------------------------
+
+    def _look_at(self, x, y, z, k=0.2):
+        """Ease the view onto a point (yaw, then pitch, solved from the camera)."""
+        yaw, pitch = self.yaw, self.pitch
+        for _ in range(4):
+            eye, _t, _f, _d = self.camera()
+            dx, dy, dz = x - eye[0], y - eye[1], z - eye[2]
+            self.yaw = _yaw(dx, dz) % 360.0
+            self.pitch = clamp(math.degrees(math.atan2(dy, math.hypot(dx, dz))), *PITCH_LIM)
+        ty, tp = self.yaw, self.pitch
+        self.yaw = (yaw + _wrap(ty - yaw) * k) % 360.0
+        self.pitch = pitch + (tp - pitch) * k
+
+    def _turn_update(self, dt):
+        """Stare, close the distance, shoulder the rifle, fire - in that order.
+
+        Bodi is driven from here, not from ``raid_brain``: the brain leaves him
+        in ``state == "turned"`` and only turns to face you. The player is rooted
+        (no moving out of it), nothing else can damage them, and pellets that
+        reach him spark off him for nothing.
+        """
+        b = self.brain.bodi
+        st = self.turn
+        age = self.t - st["t"]
+        # he never stops looking at you, and he never runs
+        b["yaw"] = _yaw(self.px - b["x"], self.pz - b["z"]) % 360.0
+        b["moving"] = False
+        b["goal"] = None
+        self.vel = (0.0, 0.0)
+        self.pmoving = False
+        self.sprint = False
+        self.stride += 0.0
+        self.body_yaw = _w.yaw_mix(self.body_yaw, self.yaw, min(1.0, dt * 8.0))
+        if st["phase"] == "stare":
+            self.aiming = True          # shouldered on him: it does not help
+            self._look_at(b["x"], 1.55, b["z"], 0.22)
+            if age > TURN_STARE:
+                st["phase"], st["t"] = "close", self.t
+        elif st["phase"] == "close":
+            self._look_at(b["x"], 1.55, b["z"], 0.3)
+            d = math.hypot(self.px - b["x"], self.pz - b["z"])
+            if d > TURN_CLOSE_M:
+                self.brain._walk(b, self.px, self.pz, TURN_WALK, dt, 0.34)
+                b["yaw"] = _yaw(self.px - b["x"], self.pz - b["z"]) % 360.0
+            if d <= TURN_CLOSE_M or age > TURN_CLOSE_MAX:
+                st["phase"], st["t"] = "raise", self.t
+                self.say("BODI", "You don't walk out of this yard.", 3.2)
+        elif st["phase"] == "raise":
+            self.aiming = True
+            self._look_at(b["x"], 1.5, b["z"], 0.4)
+            b["aim"] = self.t
+            b["slope"] = -0.12
+            if st["raised_at"] is None:
+                st["raised_at"] = self.t
+            b["raised"] = st["raised_at"]
+            if age > TURN_AIM_S:
+                st["phase"], st["t"] = "fire", self.t
+        if st["phase"] in ("fire", "done"):
+            b["aim"] = self.t
+            b["slope"] = -0.12
+            self._look_at(b["x"], 1.4, b["z"], 0.5)
+        if st["phase"] == "fire" and not st["shot"]:
+            st["shot"] = True
+            st["phase"] = "done"
+            st["t"] = self.t
+            self._turn_execute()
+
+    def _turn_execute(self):
+        """One round, point blank, in the middle of the frame."""
+        b = self.brain.bodi
+        muzzle = b.get("muzzle") or (b["x"], b["y"] + 1.45, b["z"])
+        x, y, z = self.px, 0.72, self.pz
+        self.tracer(muzzle, (x, y, z))
+        self.flash(muzzle)
+        self.impacts.append((self.t, (x, y, z), "blood"))
+        for i in range(-1, 2):
+            self.impacts.append((self.t + 0.02 * abs(i), (x + 0.22 * i, y - 0.18 + 0.12 * i, z),
+                                 "blood"))
+        self.cam_kick = min(2.6, self.cam_kick + 2.2)
+        self.hurt = 1.0
+        self.hurt_player(999.0, (b["x"], b["z"]), forced=True)
+        if self.dying:
+            self.death_msg = TURN_DEATH_MSG
+            self.death_by_bodi = True
+
+    def _dead_pig_mesh(self):
+        """The standing pig, rolled onto its side and set down on the grass."""
+        if self._pig_dead_mesh is None:
+            from engine3d.core import Mesh
+            src = F.pig()
+            verts = [(x, 0.27 + z, -y) for (x, y, z) in src.verts]
+            self._pig_dead_mesh = Mesh(verts, src.faces)
+        return self._pig_dead_mesh
+
+    def _pig_update(self, dt):
+        """Grazes by the trough until spooked, then bolts for the fence corner
+        and shuffles out of reach if anyone walks up to it there."""
+        p = self.pig
+        if p["dead"]:
+            self.world.pig_at = (p["x"], p["z"])
+            return
+        if not p["scared"]:
+            if self.fire.lit or math.hypot(self.px - p["x"], self.pz - p["z"]) < 2.3:
+                self._pig_scare()
+        elif p["mode"] in ("graze", "hide") and self.t - p["shy_t"] > 3.0 \
+                and math.hypot(self.px - p["x"], self.pz - p["z"]) < 1.7:
+            p["shy_t"] = self.t
+            p["tx"] = clamp(PIG_HIDE[0] + self._pig_rng.uniform(-1.2, 1.2), -19.4, -17.4)
+            p["tz"] = clamp(PIG_HIDE[1] + self._pig_rng.uniform(-1.2, 1.2), -15.7, -13.9)
+            p["mode"] = "walk"
+        if p["mode"] in ("graze", "hide"):
+            home = PIG_HIDE if p["scared"] else (F.PIG_HOME[0], F.PIG_HOME[1])
+            p["yaw"] += math.sin(self.t * 0.9) * dt * 7.0      # rooting sway
+            if self.t >= p["next"]:
+                a = self._pig_rng.uniform(0.0, math.tau)
+                rad = self._pig_rng.uniform(0.4, 0.8 if p["scared"] else 1.7)
+                p["tx"] = home[0] + math.cos(a) * rad
+                p["tz"] = home[1] + math.sin(a) * rad
+                if not p["scared"]:        # grazing stays by the trough
+                    p["tx"] = clamp(p["tx"], 15.6, 19.2)
+                    p["tz"] = clamp(p["tz"], -12.0, -7.6)
+                p["mode"] = "walk"
+        elif p["mode"] in ("walk", "flee"):
+            dx, dz = p["tx"] - p["x"], p["tz"] - p["z"]
+            d = math.hypot(dx, dz)
+            step = min(d, (4.4 if p["mode"] == "flee" else 0.6) * dt)
+            ox, oz = p["x"], p["z"]
+            self.world.pig_at = None          # the pig does not block itself
+            nx, nz = self.world.move(ox, oz, dx / d * step if d else 0.0,
+                                     dz / d * step if d else 0.0, r=0.3)
+            self.world.pig_at = (p["x"], p["z"])
+            moved = math.hypot(nx - ox, nz - oz)
+            p["x"], p["z"] = nx, nz
+            p["gait"] += moved
+            p["yaw"] = _yaw(dx, dz)
+            if moved > step * 0.05:                 # sliding along a box is progress
+                p["stuck"] = 0.0
+            else:
+                p["stuck"] += dt
+            if d < 0.12 or p["stuck"] > 0.6:        # arrived, or truly wedged
+                p["stuck"] = 0.0
+                p["mode"] = "hide" if p["scared"] else "graze"
+                p["next"] = self.t + (self._pig_rng.uniform(1.2, 3.2) if p["scared"]
+                                      else self._pig_rng.uniform(2.5, 6.5))
+        self.world.pig_at = (p["x"], p["z"])
 
     # --- waves -------------------------------------------------------------------
 
@@ -627,7 +925,8 @@ class RaidScene:
             self._clear(1)
         elif self.phase == "w2" and not b.pending(2):
             self._clear(2)
-        elif self.phase == "w3" and not b.pending(3) and not b.alex["pinned"]:
+        elif (self.phase == "w3" and not b.pending(3) and not b.alex["pinned"]
+              and not b.alex.get("to_well") and not b.alex.get("cover_t")):
             self.say("BODI", "North's clear. Go. I'll hold the yard.", 3.0)
             self.finish("win")
 
@@ -643,11 +942,9 @@ class RaidScene:
             self.fire.ignite(self.t)
             if b.bodi["loft"]:
                 b.bodi_climb_down()
-            a = b.alex
-            a["pinned"] = True
-            a["x"], a["z"] = W.WELL_PIN
+            # Alex runs for cover at the well; the frame comes down on him there
+            b.alex["to_well"] = self.t
             self.say("BODI", "That's my barn.", 2.6)
-            self.say("ALEX", "I'm pinned! Biribel, I'm pinned!", 3.4)
         b.start_wave(n)
 
     def _clear(self, n):
@@ -708,23 +1005,73 @@ class RaidScene:
 
     # --- draw ----------------------------------------------------------------------
 
+    def _tank_lights(self):
+        """A hard ignition flash, rolling fireball light, then burning fuel."""
+        if self.tank_blown is None:
+            return []
+
+        age = self.t - self.tank_blown
+        if not 0.0 <= age < 45.0:
+            return []
+
+        cx, cy, cz = W.TANK_AT
+        fade = 1.0 - _ease(clamp((age - 28.0) / 17.0, 0.0, 1.0))
+        flicker = (
+            0.84
+            + 0.10 * math.sin(self.t * 11.7)
+            + 0.06 * math.sin(self.t * 19.3 + 1.2)
+        )
+
+        flash = math.exp(-age * 15.0)
+        fireball = max(0.0, 1.0 - age / 2.2) ** 1.5
+
+        return [{
+            "pos": (cx, cy + 0.8, cz),
+            "color": (255, 218, 155) if age < 0.12 else (255, 142, 48),
+            "intensity": (
+                4.0 * flash + 2.4 * fireball + 1.15 * flicker * fade
+            ),
+            "range": 10.0 + 16.0 * max(flash, fireball),
+        }]
+
     def _lights(self, tm):
         now = self.t
-        out = [{"pos": pos, "color": (255, 196, 120), "intensity": 1.3, "range": 5.0}
-               for t0, pos in self.flashes[-2:] if now - t0 < 0.07]
-        if self.tank_blown is not None and now - self.tank_blown < 2.5:
-            k = 1.0 - (now - self.tank_blown) / 2.5
-            out.append({"pos": W.TANK_AT, "color": (255, 150, 60), "intensity": 1.8 * k,
-                        "range": 16.0})
-        out += self.fire.lights(tm, now)
+
+        # Reserve room for the tank and the two fixed lamps.
+        out = self._tank_lights()
+
+        out += [
+            {
+                "pos": pos,
+                "color": (255, 196, 120),
+                "intensity": 1.3,
+                "range": 5.0,
+            }
+            for t0, pos in self.flashes[-2:]
+            if now - t0 < 0.07
+        ]
+
+        fire_lights = self.fire.lights(tm, now)
+        out += fire_lights[:max(0, 6 - len(out))]
+
         # Headlights add no local light: point lights are additive and wash the
         # Guard's dark uniforms grey.  The beam is the road pools (``_beam_pools``)
         # and the lamp glows, which leave the men and the truck moonlit.
-        out.append({"pos": F.PORCH_LAMP, "color": (255, 190, 110), "intensity": 1.15,
-                    "range": 13.0})
-        out.append({"pos": F.BARN_LAMP, "color": (255, 180, 100), "intensity": 1.05,
-                    "range": 12.0})
-        return out[:8]
+        out.extend([
+            {
+                "pos": F.PORCH_LAMP,
+                "color": (255, 190, 110),
+                "intensity": 1.15,
+                "range": 13.0,
+            },
+            {
+                "pos": F.BARN_LAMP,
+                "color": (255, 180, 100),
+                "intensity": 1.05,
+                "range": 12.0,
+            },
+        ])
+        return out
 
     def _beam_pools(self):
         """The headlight beams on the baked road: two pools ahead of each
@@ -756,10 +1103,15 @@ class RaidScene:
         eye, tgt, fov, _dist = self.camera()
         park = W.TRACTOR_BLOCK if self.flags["tractor"] else None
         r, buf = F.stage("raid", tm, eye, tgt, fov, self._lights(tm), hh=0.0, seed=7,
-                         size=RES, park=park)
+                         size=RES, park=park, well_roof=False)
         del _w.LAST[:]
-        r.set_pools(F.raid_pools(self.fire.lights(tm, self.t) + self._beam_pools()))
+        r.set_pools(F.raid_pools(
+            self.fire.lights(tm, self.t)
+            + self._tank_lights()
+            + self._beam_pools()
+        ))
         F.raid_fx(r, tm)
+        self.wreck.draw(r)
         if self._truck is None:
             self._truck = W.truck()
             self._ledge = W.ledge()
@@ -782,6 +1134,19 @@ class RaidScene:
                 r.add_sprite((t["x"], 1.05, t["z"] + 4.4),
                              _fx.haze((255, 232, 196), 2.1, tm, seed=seed, intensity=0.12),
                              layer=_fx.FX_LAYER)
+        pm = self.pig
+        if pm["dead"]:
+            r.add_sprite(
+                (pm["x"], 0.03, pm["z"]),
+                F.pool((104, 16, 18), 1.05, intensity=0.62, squash=1.0),
+                layer=_fx.FX_LAYER,
+            )
+            W.put(r, self._dead_pig_mesh(), pm["x"], 0.0, pm["z"], pm["yaw"])
+        else:
+            moving = pm["mode"] in ("walk", "flee")
+            from cutscenes.m7pig3d import walking_frame
+            pig_mesh = self._pig_walk[walking_frame(pm["gait"])] if moving else self._pig_mesh
+            W.put(r, pig_mesh, pm["x"], 0.0, pm["z"], pm["yaw"])
         self._draw_player(r, tm)
         self._draw_allies(r, tm)
         self._draw_enemies(r, tm)
@@ -798,14 +1163,226 @@ class RaidScene:
 
     def _draw_tank(self, r, tm):
         cx, cy, cz = W.TANK_AT
-        if self.flags["shed"] and self.tank_blown is None:
-            r.add_sprite((cx, cy + 0.9, cz), W.tank_glow(tm, True), layer=_fx.FX_LAYER)
-        elif self.tank_blown is not None and self.t - self.tank_blown < 7.0:
-            age = self.t - self.tank_blown
-            F.fire(r, (cx, 0.3, cz), tm, seed=91, size=1.5 * max(0.3, 1.0 - age / 7.0))
-            if age < 2.6:
-                r.add_sprite((cx, 1.5, cz), F.sparks(tm, self.tank_blown * 1000.0, seed=5, n=60,
-                                                     speed=9.0, life=2.4), layer=_fx.FX_LAYER)
+
+        if self.tank_blown is None:
+            if self.flags["shed"]:
+                r.add_sprite(
+                    (cx, cy + 0.9, cz),
+                    W.tank_glow(tm, True),
+                    layer=_fx.FX_LAYER,
+                )
+            return
+
+        age = self.t - self.tank_blown
+        if not 0.0 <= age < 45.0:
+            return
+
+        start_ms = self.tank_blown * 1000.0
+        fade = 1.0 - _ease(clamp((age - 28.0) / 17.0, 0.0, 1.0))
+
+        # IGNITION: a very short white-hot flash, not a sustained orange orb.
+        if age < 0.32:
+            flash = (1.0 - age / 0.32) ** 2
+            r.add_sprite(
+                (cx, cy + 0.45, cz),
+                _fx.glow(
+                    (255, 184, 75),
+                    2.2 + age * 11.0,
+                    tm,
+                    core=(255, 250, 220),
+                    intensity=3.0 * flash,
+                    max_px=300,
+                ),
+                layer=_fx.FX_LAYER,
+            )
+
+        # FIREBALL: several expanding, rising lobes with staggered ignition.
+        if age < 2.35:
+            for i in range(7):
+                delay = 0.025 * i
+                a = age - delay
+                if not 0.0 <= a < 2.15:
+                    continue
+
+                ang = i * 2.399963
+                expansion = 1.0 - math.exp(-a * 6.0)
+                collapse = 1.0 - _ease(clamp((a - 0.65) / 1.5, 0.0, 1.0))
+                radius = (0.55 + 1.35 * expansion) * collapse
+                spread = (0.4 + 2.4 * expansion) * (0.7 + 0.3 * (i % 2))
+
+                if radius > 0.03:
+                    F.fire(
+                        r,
+                        (
+                            cx + math.cos(ang) * spread,
+                            max(0.25, cy - 0.4) + a * (1.1 + 0.12 * i),
+                            cz + math.sin(ang) * spread,
+                        ),
+                        tm,
+                        seed=91 + i * 13,
+                        size=radius,
+                    )
+
+        # PRESSURE FRONT: an expanding, low dust ring.
+        if age < 1.15:
+            k = age / 1.15
+            radius = 0.6 + 10.5 * k
+            strength = 0.30 * (1.0 - k) ** 2
+
+            for i in range(10):
+                ang = i * math.tau / 10.0
+                r.add_sprite(
+                    (
+                        cx + math.cos(ang) * radius,
+                        0.15 + 0.3 * k,
+                        cz + math.sin(ang) * radius,
+                    ),
+                    _fx.haze(
+                        (125, 108, 88),
+                        0.65 + 1.4 * k,
+                        tm,
+                        seed=220 + i,
+                        intensity=strength,
+                    ),
+                    layer=_fx.FX_LAYER,
+                )
+
+        # FRAGMENTS: short ballistic streaks, cooling as they travel.
+        if age < 2.8:
+            for i in range(20):
+                ang = i * 2.399963
+                speed = 3.0 + (i % 6) * 0.85
+                vx = math.cos(ang) * speed
+                vz = math.sin(ang) * speed
+                vy = 4.0 + (i % 7) * 0.75
+
+                y = cy + vy * age - 4.9 * age * age
+                if y <= 0.08:
+                    continue
+
+                tail_age = max(0.0, age - 0.035)
+                tail_y = cy + vy * tail_age - 4.9 * tail_age * tail_age
+                hot = max(0.0, 1.0 - age / 2.8)
+                col = (
+                    int(120 + 135 * hot),
+                    int(58 + 150 * hot),
+                    int(28 + 70 * hot),
+                )
+
+                r.add_line3d(
+                    (cx + vx * tail_age, tail_y, cz + vz * tail_age),
+                    (cx + vx * age, y, cz + vz * age),
+                    col,
+                    2 if i % 4 == 0 else 1,
+                    layer=3,
+                )
+
+        # Initial sparks and a delayed secondary shower.
+        for delay, seed, count, speed in (
+            (0.0, 5, 65, 11.0),
+            (0.22, 17, 35, 7.0),
+        ):
+            a = age - delay
+            if 0.0 <= a < 2.4:
+                r.add_sprite(
+                    (cx, cy + 0.5, cz),
+                    F.sparks(
+                        tm,
+                        start_ms + delay * 1000.0,
+                        seed=seed,
+                        n=count,
+                        speed=speed,
+                        life=2.4,
+                    ),
+                    layer=_fx.FX_LAYER,
+                )
+
+        # BURNING FUEL: a broad base with independently moving flame tongues.
+        fuel = _ease(clamp(age / 0.55, 0.0, 1.0)) * fade
+        if fuel > 0.01:
+            for i in range(6):
+                ang = i * 2.399963
+                spread = 0.0 if i == 0 else 0.85 + 0.23 * (i % 3)
+                pulse = (
+                    0.86
+                    + 0.10 * math.sin(self.t * 5.7 + i * 2.1)
+                    + 0.07 * math.sin(self.t * 9.3 + i)
+                )
+                size = 1.45 if i == 0 else 0.85 + 0.16 * (i % 3)
+                size *= fuel * pulse
+
+                F.fire(
+                    r,
+                    (
+                        cx + math.cos(ang) * spread,
+                        0.18,
+                        cz + math.sin(ang) * spread,
+                    ),
+                    tm,
+                    seed=310 + i * 19,
+                    size=size,
+                )
+
+            r.add_sprite(
+                (cx, 0.06, cz),
+                F.pool(
+                    (255, 115, 32),
+                    3.8,
+                    intensity=0.42 * fuel,
+                    squash=0.5,
+                ),
+                layer=_fx.FX_LAYER,
+            )
+
+        # Rising smoke: staggered puffs with coherent upward travel and drift.
+        if age > 0.3:
+            for i in range(8):
+                born = 0.3 + i * 0.58
+                if age < born:
+                    continue
+
+                a = (age - born) % 4.64
+                k = a / 4.64
+                envelope = (
+                    _ease(clamp(a / 0.45, 0.0, 1.0))
+                    * (1.0 - _ease(clamp((k - 0.65) / 0.35, 0.0, 1.0)))
+                    * fade
+                )
+                if envelope < 0.01:
+                    continue
+
+                r.add_sprite(
+                    (
+                        cx + a * 0.42 + math.sin(i * 2.3 + a) * 0.35,
+                        cy + 1.1 + a * 1.65,
+                        cz + a * 0.18 + math.cos(i * 1.7 + a) * 0.3,
+                    ),
+                    _fx.haze(
+                        (62, 57, 53),
+                        1.1 + a * 0.55,
+                        tm,
+                        seed=440 + i,
+                        intensity=0.46 * envelope,
+                    ),
+                    layer=_fx.FX_LAYER,
+                )
+
+        # Small recurring ember showers keep the aftermath alive.
+        if age > 1.0 and fade > 0.05:
+            cycle = int((age - 1.0) / 1.8)
+            ember_start = start_ms + (1.0 + cycle * 1.8) * 1000.0
+            r.add_sprite(
+                (cx, 0.65, cz),
+                F.sparks(
+                    tm,
+                    ember_start,
+                    seed=600 + cycle % 7,
+                    n=max(1, int(14 * fade)),
+                    speed=2.8,
+                    life=1.8,
+                ),
+                layer=_fx.FX_LAYER,
+            )
 
     def _player_pose(self):
         if math.hypot(*self.vel) > 0.5:
@@ -824,6 +1401,14 @@ class RaidScene:
             kk = clamp(self.death_t / 0.6, 0.0, 1.0)
             _w.actor(r, key, blend("kneel", "dead_back", kk), at, self.body_yaw, int(tm), seed=93,
                      amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry")
+            self._muzzle = None
+            return
+        lift = self._help_k()
+        if lift > 0.0:
+            # both hands under the roof's crossbeam: squat, then drive up with the legs
+            pose = blend(LIFT_LOW, LIFT_HIGH, _ease(lift))
+            _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93, amp=0.0,
+                     rifle_on=False, flags=("shotgun",), expression="angry")
             self._muzzle = None
             return
         hum = _w.hum(key, flags=("shotgun",))
@@ -848,11 +1433,24 @@ class RaidScene:
         if a["state"] == "down":
             return dict(POSES["slump"])
         if a.get("pinned"):
-            stance = dict(POSES["kneel"])
-        else:
-            stance = dict(POSES["ready"])
-        stance = _hold_cached(_w.hum(key), stance, _ally_gun(key), "ready", key=key)
-        if not a.get("pinned") and self.t - a["aim"] < B.ALLY_HOLD:
+            pose = self._pinned_pose(a, key)
+            k = (self.t - a.get("pinned_t", -9.0)) / KNOCK_S
+            if k < 1.0:
+                # thrown flat out of the crouch as the beam lands
+                return blend(self._cover_pose(key), pose, _ease(k))
+            return pose
+        if a.get("cover_t") is not None:
+            return self._cover_pose(key)
+        stance = _hold_cached(_w.hum(key), dict(POSES["ready"]), _ally_gun(key), "ready", key=key)
+        rise = (self.t - a.get("freed", -9.0)) / B.ALEX_RISE_S
+        if rise < 1.0:
+            # out from under the roof: push up onto a knee, take the rifle, stand
+            rise = max(0.0, rise)
+            if rise < RISE_KNEE:
+                return blend(self._pinned_pose(a, key, 1.0), POSES["kneel"], _ease(rise / RISE_KNEE))
+            knee = _hold_cached(_w.hum(key), dict(POSES["kneel"]), _ally_gun(key), "ready", key=key)
+            return blend(knee, stance, _ease((rise - RISE_KNEE) / (1.0 - RISE_KNEE)))
+        if self.t - a["aim"] < B.ALLY_HOLD:
             # shouldered at the target, raised over ALLY_RAISE from the ready hold
             aim = _ally_aim(key, a["slope"])
             up = clamp((self.t - a["raised"]) / B.ALLY_RAISE, 0.0, 1.0)
@@ -866,13 +1464,92 @@ class RaidScene:
         run = _held(_w.hum(key), pose_run(a.get("gait", 0.0) * 1.9, lean=6), _ally_gun(key), "ready", key)
         return run if k >= 1.0 else blend(stance, run, k * k * (3.0 - 2.0 * k))
 
+    def _help_k(self):
+        """How far Biribel is through freeing Alex, 0..1."""
+        if self.brain.near_revive() != "alex":
+            return 0.0
+        return clamp(self.hold / HOLD_S["alex"], 0.0, 1.0)
+
+    def _well(self, dt):
+        """Run the well frame: it goes once Alex has been in cover a moment, the
+        first landing pins him, Biribel's hold lifts it, and every hit is heard."""
+        a, wk = self.brain.alex, self.wreck
+        if a.get("cover_t") is not None and self.t - a["cover_t"] >= WELL_CREAK_S:
+            wk.topple()
+        lift = self._help_k() if a.get("pinned") else 0.0
+        wk.update(dt, lift if lift > 0.0 else None)
+        for kind, speed in wk.events:
+            if kind == "frame" and a.get("cover_t") is not None:
+                a["cover_t"] = None
+                a["pinned"], a["pinned_t"], a["yaw"] = True, self.t, 180.0
+                self.say("ALEX", "I'm pinned! Biribel, I'm pinned!", 3.4)
+                self.world.boxes.extend(wk.boxes())
+                self._unstick()
+            if kind == "frame" and speed > 2.0:
+                self._snd("tailgate")
+            else:
+                self._snd("impact", False)
+        del wk.events[:]
+
+    def _unstick(self):
+        """Step Biribel clear if the frame came down where they stood."""
+        if not self.world.blocked(self.px, self.pz):
+            return
+        for rad in (0.3, 0.6, 0.9, 1.2, 1.6):
+            for i in range(12):
+                ang = i * math.pi / 6.0
+                x, z = self.px + rad * math.sin(ang), self.pz + rad * math.cos(ang)
+                if not self.world.blocked(x, z):
+                    self.px, self.pz = x, z
+                    return
+
+    def _pinned_pose(self, a, key, look=None):
+        """Alex face down with the well roof across his legs: he claws at the dirt
+        and heaves against it, kicks, ducks each round that lands near, and drags
+        himself out hand over hand as Biribel lifts (``look`` 0..1)."""
+        if look is None:
+            look = self._help_k()
+        t, calm = self.t, 1.0 - look
+        heave = max(0.0, math.sin(t * 2.2)) ** 3 * calm
+        claw = math.sin(t * 5.3) * calm
+        pull = math.sin(look * math.pi * 3.0)
+        duck = max(0.0, 1.0 - (t - a.get("flinch", -9.0)) / 0.35) * calm
+        kick = max(0.0, math.sin(t * 3.4 + 1.0)) * calm
+        p = dict(POSES["prone"])
+        p.update(spine=p["spine"] - 14.0 * heave + 10.0 * duck,
+                 head_p=p["head_p"] - 10.0 * heave + 30.0 * duck,
+                 head_y=12.0 * math.sin(t * 0.9) * calm,
+                 lsh_p=p["lsh_p"] - 50.0 * heave + 14.0 * claw + 22.0 * pull,
+                 rsh_p=p["rsh_p"] - 50.0 * heave - 14.0 * claw - 22.0 * pull,
+                 lel=p["lel"] + 40.0 * heave + 25.0 * max(0.0, -pull),
+                 rel=p["rel"] + 40.0 * heave + 25.0 * max(0.0, pull),
+                 lkn=p["lkn"] + 26.0 * kick, rkn=p["rkn"] + 26.0 * (calm - kick))
+        return p
+
+    def _cover_pose(self, key):
+        return _hold_cached(_w.hum(key), dict(POSES["crouch"]), _ally_gun(key), "ready", key=key)
+
+    def _alex_armed(self, a):
+        return not a.get("pinned") and (self.t - a.get("freed", -9.0)) / B.ALEX_RISE_S >= RISE_KNEE
+
     def _draw_allies(self, r, tm):
         b = self.brain
         for name, a in (("bodi", b.bodi), ("alex", b.alex)):
+            if a["state"] == "gone":
+                continue
             key = ("ally", name)
             pose = self._ally_pose(a, key)
-            joints = _w.actor(r, key, pose, (a["x"], a["y"], a["z"]), a["yaw"], int(tm),
-                              seed=61 if name == "bodi" else 62, amp=0.3, rifle_on=True, mouth=0.0)
+            z, yaw, armed = a["z"], a["yaw"], True
+            if name == "alex":
+                armed = self._alex_armed(a)
+                if a.get("pinned"):
+                    z -= B.ALEX_CRAWL * self._help_k()
+                if a.get("cover_t") is not None:
+                    # back to the well: turn to face the yard as he drops into cover
+                    k = _ease(clamp((self.t - a["cover_t"]) / 0.3, 0.0, 1.0))
+                    yaw = a["yaw"] + ((180.0 - a["yaw"] + 180.0) % 360.0 - 180.0) * k
+            joints = _w.actor(r, key, pose, (a["x"], a["y"], z), yaw, int(tm),
+                              seed=61 if name == "bodi" else 62, amp=0.3, rifle_on=armed, mouth=0.0)
             a["muzzle"] = joints.get("muzzle") if joints else None
             if a["state"] == "down" and name == "bodi":
                 r.add_sprite((a["x"], 1.6, a["z"]), _fx.glow((255, 90, 70), 0.3, tm, intensity=0.8,

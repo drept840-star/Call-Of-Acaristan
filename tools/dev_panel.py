@@ -60,7 +60,7 @@ from core.dev_jumps import DEV_JUMPS
 GROUPS = [
     ("Mission 0", ["m0"]),
     ("Mission 1", ["m1", "m1-safe"]),
-    ("Walking sim", ["walk"]),
+    ("Walking sim", ["walk", "walk-after"]),
     ("Mission 2", ["m2", "m2-game", "m2-sniper", "m2-after-sniper",
                    "m2-flank", "m2-truck", "m2-evidence"]),
     ("Mission 3", ["m3", "m3-game", "m3-comms", "m3-archives",

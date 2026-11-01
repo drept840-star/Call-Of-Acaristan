@@ -1305,6 +1305,14 @@ def _apply_dev_args():
         gc.start_mission(preserve_timer=True)
         gsm.transition("GAME")
         pygame.mouse.set_visible(False)
+    elif "--dev-walk-after" in args or "--walk-after" in args:
+        # Walking sim harbor right after the rig-strike cutscene (van parked).
+        gc.mission_start_time = _now_ms()
+        gc.mission_end_time = 0
+        gc.start_walking_sim()
+        gc.skip_walk_attack()
+        trigger_transition("WALK")
+        pygame.mouse.set_visible(True)
     elif "--dev-walk" in args or "--walk" in args:
         # Jump into the walking sim harbor from the start.
         gc.mission_start_time = _now_ms()

@@ -27,6 +27,7 @@ LOOPS = (
 
 FOLEY = (
     "m7_bird", "m7_hen", "m7_fence_creak", "m7_goat", "m7_bucket", "m7_crate",
+    "m7_pig_squeal",
     "m7_dirt_step_1", "m7_dirt_step_2", "m7_dirt_step_3",
     "m7_well_crank", "m7_water_pour", "m7_grain_scoop", "m7_hay_rustle",
     "m7_gen_pull", "m7_gen_cough", "m7_gen_backfire", "m7_gen_catch",
@@ -264,6 +265,17 @@ def foley_pcm(name):
         x = _lowpass(_saw(np.cumsum(f) / RATE) * 0.30, 1600.0)
         x *= _env(n, 0.03, 0.25)
         x += _highpass(_noise(n, 821), 1800.0) * np.exp(-((t - 0.05) ** 2) / 0.004) * 0.10
+    elif name == "m7_pig_squeal":
+        # One short, high, falling squeal: the farmyard's worst sound.
+        n = int(0.85 * RATE)
+        t = _t(n)
+        wobble = 34.0 * np.sin(2 * math.pi * 23.0 * t)
+        f = 880.0 * np.exp(-t * 1.9) + 240.0 + wobble
+        x = _lowpass(_saw(np.cumsum(f) / RATE) * 0.30, 3200.0)
+        x += np.sin(2 * math.pi * np.cumsum(f * 1.51) / RATE) * 0.12
+        x *= _env(n, 0.008, 0.22)
+        x += _highpass(_noise(n, 851), 1400.0) * np.exp(-t * 6.0) * 0.14
+        x *= np.exp(-t * 0.7)
     elif name == "m7_bucket":
         n = int(0.45 * RATE)
         t = _t(n)
@@ -541,6 +553,9 @@ class M7Audio:
 
     def hen(self):
         self._one("m7_hen", 0.20)
+
+    def pig_squeal(self):
+        self._one("m7_pig_squeal", 0.55)
 
     def goat(self):
         self._one("m7_goat", 0.22)

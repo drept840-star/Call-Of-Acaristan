@@ -16,4 +16,16 @@ if "--launcher" in sys.argv and os.environ.get("ACA_FROM_LAUNCHER") != "1":
     from launcher import run_launcher
     raise SystemExit(run_launcher(ROOT, demo_update=("--demo-update" in sys.argv)))
 
-import app  # noqa: F401  (runs the game on import)
+if not getattr(sys, "frozen", False):
+    import app  # noqa: F401  (runs the game on import)
+else:
+    # Windowed build: no console, so a crash leaves crash.txt beside the exe.
+    try:
+        import app  # noqa: F401
+    except SystemExit:
+        raise
+    except BaseException:
+        import traceback
+        with open(Path(sys.executable).parent / "crash.txt", "w", encoding="utf-8") as fh:
+            traceback.print_exc(file=fh)
+        raise

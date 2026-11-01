@@ -1,0 +1,7 @@
+LINE	FILE	SECONDS	TEXT
+VO_219	Generated Audio October 29, 2026 - 4_35PM.wav	4.7	You're the one Maru called about. Boots off in the kitchen.
+VO_220	Generated Audio October 29, 2026 - 4_35PM(1).wav	4.0	The generator kicks. Hit it like you mean it.
+VO_221	Generated Audio October 29, 2026 - 4_35PM(2).wav	3.9	I grow potatoes. I don't do politics.
+VO_222	Generated Audio October 29, 2026 - 4_35PM(3).wav	1.8	That's my barn.
+VO_223	Generated Audio October 29, 2026 - 4_35PM(4).wav	6.0	They'll come back. There's nothing left to come back to. I'm coming with you.
+VO_229	(NO AUDIO - record & name it VO_229.wav)		Eyes on the trees, not the track. First knock comes on foot.

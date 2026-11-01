@@ -1,0 +1,116 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m7.goat.escape",
+ "shots": [
+  {
+   "scene": "m7_goat_pen",
+   "speaker": "",
+   "text": "",
+   "min_ms": 3600,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     300,
+     "m7_hen",
+     0.18
+    ],
+    [
+     1500,
+     "m7_goat",
+     0.20
+    ],
+    [
+     2600,
+     "m7_fence_creak",
+     0.26
+    ]
+   ],
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_goat_slip",
+   "speaker": "",
+   "text": "",
+   "min_ms": 3600,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     360,
+     "m7_fence_creak",
+     0.32
+    ],
+    [
+     1360,
+     "m7_fence_creak",
+     0.52
+    ],
+    [
+     1400,
+     "m7_goat",
+     0.26
+    ],
+    [
+     2050,
+     "m7_goat",
+     0.14
+    ]
+   ],
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_goat_orchard",
+   "speaker": "BODI",
+   "text": "One of them got out.",
+   "min_ms": 3400,
+   "cues": [
+    [
+     300,
+     "m7_bird",
+     0.16
+    ]
+   ],
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_goat_potatoes",
+   "speaker": "BIRIBEL",
+   "text": "Is that bad?",
+   "min_ms": 2800,
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  },
+  {
+   "scene": "m7_goat_bodi",
+   "speaker": "BODI",
+   "text": "For the goat? No. For my potatoes, yeah.",
+   "min_ms": 3600,
+   "lighting": [
+    40,
+    34,
+    28
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m7 beat 2, the goat escape"
+ }
+}

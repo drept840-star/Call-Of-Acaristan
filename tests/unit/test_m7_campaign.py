@@ -68,6 +68,22 @@ class M7StageTests(unittest.TestCase):
                 self.assertTrue(shot.get("scene"), (stage, shot))
         self.assertTrue(_meta.outro_shots())
 
+    def test_goat_escape_is_a_mid_film_and_does_not_move_the_ladder(self):
+        self.assertEqual(_meta.MID_TIMELINES,
+                         {_meta.MID_GOAT_ESCAPE: "m7.goat.escape"})
+        shots = _meta.film_shots(_meta.MID_GOAT_ESCAPE)
+        self.assertEqual(
+            [shot["scene"] for shot in shots],
+            ["m7_goat_pen", "m7_goat_slip", "m7_goat_orchard",
+             "m7_goat_potatoes", "m7_goat_bodi"],
+        )
+        for shot in shots:
+            self.assertIsNotNone(scene_renderer(shot["scene"]), shot["scene"])
+
+        _start("chores")
+        _flow.on_cutscene_done(_meta.MID_GOAT_ESCAPE)
+        self.assertEqual(STATE.mission7_stage, "chores")
+
     def test_start_binds_identity(self):
         _start("chores")
         self.assertEqual(STATE.active_mission, "MISSION7")
@@ -315,7 +331,11 @@ class M7VoiceTests(unittest.TestCase):
         for vid, (speaker, text) in self.BODI_ALEX.items():
             self.assertIn(vid, rows)
             self.assertEqual((rows[vid][1], rows[vid][2]), (speaker, text))
-            self.assertIn(vid, _vm.KNOWN_MISSING_AUDIO)
+            if speaker == "BODI":
+                # Recorded: assets/voice/Bodi/VO_219..223.wav exist.
+                self.assertNotIn(vid, _vm.KNOWN_MISSING_AUDIO)
+            else:
+                self.assertIn(vid, _vm.KNOWN_MISSING_AUDIO)
         for n in range(219, 229):
             self.assertIn("VO_%d" % n, rows)
             self.assertNotIn("VO_%d" % n, _vm.VOICE_ORDER)

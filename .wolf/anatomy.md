@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-28T23:18:58.818Z
-> Files: 481 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-01T16:22:48.519Z
+> Files: 489 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -11,7 +11,7 @@
 
 - `.gitattributes` — Git attributes (~97 tok)
 - `.gitignore` — Git ignore rules (~763 tok)
-- `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~106 tok)
+- `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~331 tok)
 - `AGENTS.md` — Agent workflow (read this first) (~2517 tok)
 - `build.bat` (~56 tok)
 - `CLAUDE.md` — OpenWolf (~1659 tok)
@@ -144,7 +144,7 @@
 - `m7films.py` — Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6) (~3194 tok)
 - `m7palette3d.py` — The 2D top-down M7 farm palette, for the 3D farm (raid and films). (~846 tok)
 - `m7runner.py` — Mission 7 beat 3: Alex rides in with the mansion plan (2D cutscene scenes). (~4971 tok)
-- `m7world3d.py` — Mission 7 farm: one shared 3D builder for the drop-off and finale films and (~25906 tok)
+- `m7world3d.py` — Mission 7 farm: shared 3D builder for the drop-off, finale and raid. (~31628 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
 - `ps2mat.py` — ps2mat.py - PS2 pixel textures for sets authored in flat colour. (~1125 tok)
@@ -173,6 +173,7 @@
 
 - `__init__.py` — engine.collision - solid-world queries for gameplay (RPE6 §6.9). (~154 tok)
 - `boxes.py` — engine.collision.boxes - ray, segment and body queries against AABBs. (~1256 tok)
+- `mesh.py` — engine.collision.mesh - exact hitboxes from a mesh's own triangles. (~1966 tok)
 - `nav.py` — engine.collision.nav - A* on a walkability grid (RPE6 §6.9 ``GridGraph``). (~2219 tok)
 
 ## src/engine/core/
@@ -545,9 +546,9 @@
 - `flow.py` — Mission 7 - stage ladder, checkpoints and the outro handoff (skeleton). (~1205 tok)
 - `maps.py` — Mission 7 top-down farm: tile grid, palette and interaction points (beats 2 and 4). (~816 tok)
 - `meta.py` — Mission 7 metadata and stage constants: Fallow Ground (skeleton). (~846 tok)
-- `raid_brain.py` — Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks, (~6203 tok)
+- `raid_brain.py` — Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks, (~7559 tok)
 - `raid_hud.py` — Mission 7 raid HUD: the top-down game's panels (via the M6 yard HUD helpers), a (~1618 tok)
-- `raid_world.py` — Mission 7 raid world: collision boxes, line of sight, the barn fire and the props. (~3405 tok)
+- `raid_world.py` — Mission 7 raid world: collision boxes, line of sight, the barn fire and the props. (~7868 tok)
 - `raid3d.py` — Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night. (~10134 tok)
 - `systems.py` — Mission 7 - per-frame update, dispatched by stage (placeholder stages: ENTER advances). (~281 tok)
 
@@ -560,12 +561,13 @@
 - `portmap.py` — Automatic router port forwarding (UPnP IGD + NAT-PMP), stdlib only. (~7430 tok)
 - `protocol.py` — Wire protocol for the Acaristan multiplayer master server. (~14266 tok)
 - `roomcode.py` — Short, game-branded room codes for direct arena matches. (~1552 tok)
-- `tcp_tunnel.py` — Public raw-TCP tunnels for arena matches. (~2992 tok)
+- `tcp_tunnel.py` — Public raw-TCP tunnels for arena matches. (~3888 tok)
 
 ## src/ui/
 
 - `__init__.py` — Package ui - re-export facade. Parts: widgets.py, main.py, mp.py, system.py. (~1234 tok)
 - `arena_view.py` — Renderer for multiplayer arena matches. (~25138 tok)
+- `arena_view3d.py` — 2.5D renderer for multiplayer arena matches. (~6455 tok)
 - `egg666_3d.py` — egg666_3d.py - the Mission 1 safe-keypad "666" Easter egg as a lit 3D scene. (~4198 tok)
 - `egg666_audio.py` — egg666_audio.py - procedural sound for the 3D "666" scare. (~2740 tok)
 - `egg666_build.py` — egg666_build.py - geometry for the 3D "666" scare: the vault, the ritual (~4899 tok)
@@ -574,13 +576,14 @@
 - `egg666_post.py` — egg666_post.py - screen effects for the 3D "666" scare. (~1364 tok)
 - `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~17073 tok)
 - `main.py` — Split from menu.py - see menu.py (shim) for the map. (~9349 tok)
-- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~60072 tok)
+- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~62841 tok)
 - `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~4138 tok)
 - `mp.py` — Split from menu.py - see menu.py (shim) for the map. (~25518 tok)
+- `mp3d.py` — 3D kit for multiplayer: soldier rigs, guns and Outfitter portraits. (~3566 tok)
 - `multiplayer_style.py` — Read-only KRAPNET presentation. No sockets, timers or session mutations. (~4663 tok)
 - `pixfont.py` — Pixel bitmap fonts for the radio UI (polish pass T6b). (~3560 tok)
 - `radio.py` — Radio transmission widget (polish pass T6, field-radio restyle T6b). (~8171 tok)
-- `shop.py` — The Outfitter - spend Acaribucks on the loadout you play the arena in. (~7496 tok)
+- `shop.py` — The Outfitter - spend Acaribucks on the loadout you play the arena in. (~7819 tok)
 - `system.py` — Split from menu.py - see menu.py (shim) for the map. (~15120 tok)
 - `upload_os.py` — Upload OS - a retro CRT terminal operating system for the evidence upload. (~40384 tok)
 - `widgets.py` — Split from menu.py - see menu.py (shim) for the map. (~4153 tok)
@@ -617,6 +620,7 @@
 - `test_egg666.py` — Tests for the 3D "666" safe-keypad scare (ui/egg666_*.py). (~1755 tok)
 - `test_engine_ai.py` — engine.ai: behaviour tree preemption and memory, sight reaction and (~3255 tok)
 - `test_engine_boot.py` — App.boot display ownership (ADAPTER A-001). (~626 tok)
+- `test_engine_collision_mesh.py` — engine.collision.mesh: hitboxes follow the mesh's triangles, not a box around it, (~890 tok)
 - `test_engine_collision.py` — engine.collision: box rays and segments agree with brute force, and grid (~1776 tok)
 - `test_engine_core.py` — Unit tests for engine.core (stdlib unittest; run: python -m unittest discover -s tests/unit -t .). (~1883 tok)
 - `test_engine_dialogue_box.py` — engine.ui.std.dialogue_box (Phase 4): theme injection, slide ownership. (~1116 tok)
@@ -659,14 +663,18 @@
 
 - `ae_hold_check.py` — Weapon hold + arm self-collision gate for the 3D cutscenes. (~1381 tok)
 - `ae_import_dog.py` — AE IMPORT DOG - the Mission 7 guard dog (assets/3D/dawg.glb) and its clips. (~1614 tok)
+- `ae_import_pistol.py` — AE IMPORT PISTOL - the multiplayer service pistol (assets/3D/pistol_lowpoly.glb). (~903 tok)
 - `ae_import_tractor.py` — AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb). (~1146 tok)
 - `build_code_txt.py` — find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files (~2979 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
+- `build_windows.py` — Build the Windows game as a PyInstaller --onedir bundle (no admin needed). (~1257 tok)
 - `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~10792 tok)
+- `download_bore.py` — Fetch the pinned official Windows x64 bore release for PyInstaller builds. (~218 tok)
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
 - `smoke_test.py` — Must be set before pygame/config import. (~154153 tok)
+- `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~5676 tok)

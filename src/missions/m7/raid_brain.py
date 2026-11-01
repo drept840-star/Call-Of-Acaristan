@@ -27,6 +27,8 @@ ALEX_UP_S, BODI_DOWN_S = 8.0, 20.0
 ALLY_RAISE = 0.25                 # an ally shoulders the rifle this long before a first shot
 ALLY_HOLD = 1.8                   # and keeps it up through the gaps between bursts
 ALEX_LEASH = 13.0                 # Alex fights within this many metres of Biribel
+ALEX_RISE_S = 1.3                 # freed from the well, Alex gets up this long before moving
+ALEX_CRAWL = 1.1                  # metres Alex drags himself out from under the roof
 
 # kind, x, z, route, delay (s)
 ORCHARD = [
@@ -64,6 +66,8 @@ def _yaw(dx, dz):
 
 def _clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
+
+
 
 
 def _fall_from(e, src):
@@ -187,6 +191,7 @@ class Brain:
         elif name == "alex":
             a = self.alex
             if a["pinned"]:
+                a["flinch"] = s.t
                 return
             a["hp"] -= dmg
             if a["hp"] <= 0:
@@ -195,6 +200,8 @@ class Brain:
                 s.say("ALEX", "I'm fine! I'm fine. I'm on the floor, but I'm fine.", 3.0)
         else:
             b = self.bodi
+            if b["state"] != "up":     # downed, or walking off the yard
+                return
             b["hp"] -= dmg * (0.6 if b["loft"] else 1.0)
             if b["hp"] <= 0:
                 b["state"] = "down"
@@ -287,6 +294,9 @@ class Brain:
         if t["state"] == "wait":
             if now >= t["at"]:
                 t["state"] = "drive"
+                t["box"] = len(self.s.world.dyn)
+                self.s.world.dyn.append(None)
+                self._truck_box(t)
             return
         if t["state"] == "drive":
             left = t["stop_z"] - t["z"]
@@ -296,10 +306,23 @@ class Brain:
                 t["z"] = t["stop_z"]
                 t["state"] = "stopped"
                 t["t_stop"] = now
-                self.s.world.dyn.append((t["x"] - 1.27, t["z"] - 3.05, t["x"] + 1.27, t["z"] + 3.05, 2.7))
                 self.s.on_truck_stop(t)
+            self._truck_box(t)
         elif not t["dumped"] and now - t["t_stop"] > 0.8:
             self._dismount(t)
+
+    def _truck_box(self, t):
+        """Keep the truck's collider on it while it drives, and shove anyone
+        standing in its path ahead of the bumper so nobody ends up inside it."""
+        truck = W.truck_at(t["x"], t["z"])
+        self.s.world.dyn[t["box"]] = truck
+        r = W.BODY_R
+        front = truck.world_box()[5] + r
+        for a in (self.alex, self.bodi):
+            if truck.body_hits(a["x"], a["z"], r, 0.0, W.BODY_TOP):
+                a["z"] = front
+        if truck.body_hits(self.s.px, self.s.pz, r, 0.0, W.BODY_TOP):
+            self.s.pz = front
 
     def _enemy(self, e, dt, now):
         if now < e["spawn_at"]:
@@ -444,8 +467,19 @@ class Brain:
                 a["state"] = "up"
                 a["hp"] = ALEX_HP * 0.5
             return
-        if a["pinned"]:
-            self._walk(a, W.WELL_PIN[0], W.WELL_PIN[1], 4.0, dt, 0.3)
+        if a["pinned"] or a.get("cover_t") is not None:
+            return
+        if a.get("to_well") is not None:
+            gx, gz = W.WELL_PIN
+            d = math.hypot(gx - a["x"], gz - a["z"])
+            if d < 0.12 or now - a["to_well"] > 8.0:
+                # in cover at the well; the frame comes down on him there
+                a["x"], a["z"] = gx, gz
+                a["to_well"], a["cover_t"] = None, now
+            else:
+                self._walk(a, gx, gz, 4.0, dt, 0.3)
+            return
+        if now - a.get("freed", -9.0) < ALEX_RISE_S:
             return
         e, ed = self._target_for_ally(a["x"], a["z"], 32.0)
         if e is None:
@@ -528,6 +562,8 @@ class Brain:
     def _bodi_update(self, dt, now):
         b = self.bodi
         b["moving"] = False
+        if b["state"] == "turned":
+            return          # he is not fighting the Guards any more: the scene drives him
         if b["state"] == "down":
             if now - b["down_at"] > BODI_DOWN_S:
                 self.s.bodi_lost()
@@ -551,6 +587,27 @@ class Brain:
         b["loft"] = False
         b["x"], b["z"], b["y"] = 10.0, 5.2, 0.0
         b["goal"] = W.BODI_GROUND
+
+    def bodi_turn(self):
+        """The pig is dead: Bodi stops fighting the Guards and comes for you.
+
+        He is off the target list and off the revive list from this frame on,
+        and the raid's own script (``raid3d._turn_update``) walks him into
+        range and puts the round through you. There is no state in which the
+        player wins this one.
+        """
+        b = self.bodi
+        if b["state"] in ("turned", "down"):
+            return False
+        if b["loft"]:
+            b["loft"] = False
+            b["x"], b["z"], b["y"] = 10.0, 5.2, 0.0
+        b["state"] = "turned"
+        b["goal"] = None
+        b["aim"] = -9.0
+        b["raised"] = -9.0
+        b["moving"] = False
+        return True
 
     def _walk(self, a, gx, gz, speed, dt, r):
         dx, dz = gx - a["x"], gz - a["z"]
@@ -583,6 +640,8 @@ class Brain:
         s = self.s
         if who == "alex":
             self.alex["pinned"] = False
+            self.alex["freed"] = s.t
+            self.alex["z"] -= ALEX_CRAWL
             s.say("ALEX", "Okay. Okay! I owe you. Twice.", 3.2)
         else:
             self.bodi["state"] = "up"

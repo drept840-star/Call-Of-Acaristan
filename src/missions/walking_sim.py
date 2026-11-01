@@ -283,7 +283,7 @@ def start_walking_sim():
     global _walk_footstep_timer, _walk_player_moving
     global _walk_ambient_time, _walk_overlook_warning_time
     global _attack_voice_queue, _attack_voice_current, _attack_voice_frames, _attack_voice_hold
-    global WALK_PROPS, minimap, walk_fp_cutscene
+    global WALK_PROPS, minimap, walk_fp_cutscene, _walk_van_solid
     global \
         player_rations, \
         warehouse_hp_bonus, \
@@ -315,6 +315,7 @@ def start_walking_sim():
     walk_fp_cutscene = None
     walk_player = None
     walk_walls = []
+    _walk_van_solid = False
     walk_firefight_triggered = False
     walk_firefight_timer = 0
     walk_dialogue_active = False
@@ -413,6 +414,40 @@ def start_walking_sim():
     walk_look_y = 0.0
     walk_render_x, walk_render_y = walk_camera_x, walk_camera_y
     save_system.set_slot_progress("walk")
+def skip_walk_attack():
+    """Dev jump: land in the harbor as if the rig-strike cutscene just ended.
+
+    Call after start_walking_sim(). Leaves the same state the timeline's
+    "end" event does (rigs destroyed, van parked and lit, movement free), and
+    drops the player at the overlook so the van is a short walk east.
+    """
+    global walk_firefight_triggered, walk_after_firefight, walk_return_timer
+    global _attack_voice_queue, _attack_voice_current, _attack_voice_frames, _attack_voice_hold
+    global walk_camera_x, walk_camera_y, walk_render_x, walk_render_y
+    walk_firefight_triggered = True
+    walk_after_firefight = True
+    walk_return_timer = 0
+    STATE.walk_after_firefight = True
+    STATE.walk_attack_active = False
+    STATE.walk_terminal_active = False
+    STATE.walk_terminal_status = "SIGNAL LOST - RETURNING TO HARBOR"
+    STATE.walk_boat_active = False
+    STATE.walk_missiles = []
+    STATE.walk_explosions = []
+    STATE.rig_status = ["DESTROYED", "DESTROYED", "DESTROYED"]
+    STATE.screen_shake = 0
+    _attack_voice_queue = []
+    _attack_voice_current = None
+    _attack_voice_frames = 0
+    _attack_voice_hold = None
+    clear_walk_dialogue()
+    if walk_player is not None:
+        walk_player.rect.topleft = (38 * TILE_SIZE + 16, 7 * TILE_SIZE + 16)
+        walk_camera_x = walk_player.rect.centerx - WIDTH // 2
+        walk_camera_y = walk_player.rect.centery - HEIGHT // 2
+        _clamp_walk_camera()
+        walk_render_x, walk_render_y = walk_camera_x, walk_camera_y
+        _walk_ensure_van_solid()
 def update_walking_sim(keys):
     global walk_camera_x, walk_camera_y, walk_firefight_triggered, walk_firefight_timer
     global walk_render_x, walk_render_y, walk_look_x, walk_look_y
@@ -425,6 +460,8 @@ def update_walking_sim(keys):
         return walk_render_x, walk_render_y, False
     if walk_return_timer > 0:
         walk_return_timer -= 1
+    if walk_after_firefight or STATE.walk_after_firefight:
+        _walk_ensure_van_solid()
     _walk_ambient_time += max(0.0, STATE.dt)
     if walk_fp_cutscene:
         _update_walk_fp_cutscene()
@@ -543,8 +580,12 @@ def update_walking_sim(keys):
             walk_dialogue_char_idx += 1
     _sync_walk_dialogue_state()
     if walk_after_firefight or STATE.walk_after_firefight:
-        if walk_player.rect.centerx > walk_van_trigger_x:
+        if walk_return_timer <= 0 and not walk_complete and (
+            walk_player.rect.colliderect(_walk_van_door_zone())
+            or walk_player.rect.centerx > walk_van_trigger_x
+        ):
             clear_walk_dialogue()
+            audio.play("door_open", volume=0.5)
             walk_complete = True
     return walk_render_x, walk_render_y, walk_complete
 def _ease_out_cubic(t):
@@ -1590,6 +1631,9 @@ def _walk_light_pass(fcx, fcy):
         if -R < sx < WIDTH + R and -R < sy < HEIGHT + R:
             lamps.append((_lighting.falloff_sprite(R, _WALK_LAMP_COL), (sx - R, sy - 20 - R)))
             blooms.append((_lighting.bloom_sprite(20, (110, 80, 40)), (sx - 20, sy - 48)))
+    van_lamps, van_blooms = _walk_van_lights(fcx, fcy)
+    lamps += van_lamps
+    blooms += van_blooms
     px, py = walk_player.rect.centerx - fcx, walk_player.rect.centery - fcy
     lamps.append((_lighting.falloff_sprite(150, (44, 44, 50)), (px - 150, py - 150)))
     _lighting.LightMapDraw(amb, lamps, blooms).draw(screen, 0, 0)
@@ -2995,54 +3039,235 @@ def _draw_walk_attack_overlook(surface, force=False):
     panel.blit(clock, (panel.get_width() - clock.get_width() - 12, 7))
     panel.blit(body, (12, 32))
     surface.blit(panel, (16, SCENE_TOP + 12))
-def _draw_walk_krap_van(surface, x, y, t):
-    """Top-down van, still simple/pixel-art, but readable."""
-    x = int(x)
-    y = int(y)
-    # Ground shadow
-    shadow = pygame.Surface((142, 72), pygame.SRCALPHA)
-    pygame.draw.ellipse(shadow, (0, 0, 0, 90), (0, 10, 142, 48))
-    surface.blit(shadow, (x - 12, y + 8))
-    # Main body
-    body = pygame.Rect(x, y, 120, 54)
-    pygame.draw.rect(surface, (14, 16, 19), body, border_radius=4)
-    pygame.draw.rect(surface, (34, 39, 45), body, 2, border_radius=4)
-    # Rear cargo box
-    pygame.draw.rect(surface, (18, 21, 25), (x + 8, y + 8, 70, 38), border_radius=2)
-    pygame.draw.rect(surface, (38, 43, 50), (x + 8, y + 8, 70, 38), 1, border_radius=2)
-    # Cab
-    pygame.draw.rect(surface, (20, 24, 30), (x + 76, y + 5, 36, 44), border_radius=3)
-    pygame.draw.rect(surface, (48, 56, 66), (x + 76, y + 5, 36, 44), 1, border_radius=3)
-    # Windshield / side windows
-    pygame.draw.rect(surface, (22, 34, 46), (x + 88, y + 10, 17, 15), border_radius=2)
-    pygame.draw.rect(surface, (16, 26, 36), (x + 88, y + 29, 17, 15), border_radius=2)
-    pygame.draw.line(surface, (70, 90, 110), (x + 90, y + 12), (x + 102, y + 12), 1)
-    # KRAP blue stripe
-    pygame.draw.rect(surface, C_KRAP_BLUE, (x + 12, y + 13, 58, 5))
-    pygame.draw.rect(surface, (210, 210, 215), (x + 12, y + 18, 58, 1))
-    # Rear door seam
-    pygame.draw.line(surface, (45, 50, 55), (x + 8, y + 27), (x + 78, y + 27), 1)
-    pygame.draw.line(surface, (8, 10, 12), (x + 43, y + 8), (x + 43, y + 46), 1)
-    # Tail light / headlight
-    pygame.draw.rect(surface, (170, 35, 30), (x - 3, y + 17, 5, 8))
-    pygame.draw.rect(surface, (170, 35, 30), (x - 3, y + 31, 5, 8))
-    pygame.draw.rect(surface, (210, 200, 130), (x + 116, y + 12, 5, 7))
-    pygame.draw.rect(surface, (210, 200, 130), (x + 116, y + 35, 5, 7))
-    # Wheels
-    for wx in (x + 20, x + 86):
-        pygame.draw.ellipse(surface, (5, 6, 8), (wx - 8, y - 5, 18, 10))
-        pygame.draw.ellipse(surface, (5, 6, 8), (wx - 8, y + 49, 18, 10))
-        pygame.draw.ellipse(surface, (35, 38, 42), (wx - 4, y - 2, 10, 5))
-        pygame.draw.ellipse(surface, (35, 38, 42), (wx - 4, y + 52, 10, 5))
-    # Rain highlight on roof
-    if (t // 180) % 2 == 0:
-        pygame.draw.line(surface, (75, 85, 95), (x + 18, y + 9), (x + 65, y + 9), 1)
-    # Exhaust puff
-    puff_phase = (t // 80) % 4
-    if puff_phase < 3:
-        puff = pygame.Surface((28, 18), pygame.SRCALPHA)
-        pygame.draw.ellipse(puff, (65, 70, 75, 45 - puff_phase * 10), (0, 0, 24, 12))
-        surface.blit(puff, (x - 26 - puff_phase * 4, y + 24 - puff_phase))
+# ── KRAP extraction van (parked inside the street, east end) ──────────
+_WALK_VAN_W, _WALK_VAN_H = 168, 62
+_WALK_VAN_PAD = (40, 24)          # baked-surface margin: rear doors + mirrors/wheels
+_WALK_VAN_SURF = None
+_VAN_GLOWS = {}
+_walk_van_solid = False
+
+
+def _walk_van_rect():
+    """World rect of the van body (collision + draw anchor). Nose points east."""
+    return pygame.Rect(walk_van_trigger_x - 230, walk_van_trigger_y + 86, _WALK_VAN_W, _WALK_VAN_H)
+
+
+def _walk_van_door_zone():
+    """Walk in here (west of the open rear doors) to board the van."""
+    r = _walk_van_rect()
+    return pygame.Rect(r.x - 56, r.y - 8, 60, r.h + 16)
+
+
+def _walk_van_lit():
+    """Lights stay off while the feed overlay fades, then flicker on and hold."""
+    if walk_return_timer > 108:
+        return False
+    if walk_return_timer > 96 and (walk_return_timer // 3) % 2:
+        return False
+    return True
+
+
+def _walk_ensure_van_solid():
+    """Make the van a wall once it exists; nudge the player clear if they stand where it parks."""
+    global _walk_van_solid
+    if _walk_van_solid or walk_player is None:
+        return
+    r = _walk_van_rect()
+    if walk_player.rect.colliderect(r):
+        walk_player.rect.bottom = r.top - 2
+    walk_walls.append(r)
+    _walk_van_solid = True
+
+
+def _van_glow(radius, col, alpha):
+    key = (radius, col, alpha)
+    g = _VAN_GLOWS.get(key)
+    if g is None:
+        g = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        for i in range(radius, 0, -2):
+            a = int(alpha * (1.0 - i / radius) ** 1.4)
+            pygame.draw.circle(g, (col[0], col[1], col[2], a), (radius, radius), i)
+        _VAN_GLOWS[key] = g
+    return g
+
+
+def _bake_walk_van():
+    """Static paint of the van, drawn once. Lights, exhaust and rain stay live on top."""
+    PX, PY = _WALK_VAN_PAD
+    bw, bh = _WALK_VAN_W, _WALK_VAN_H
+    ox, oy = PX, PY
+    surf = pygame.Surface((PX + bw + 14, bh + PY * 2), pygame.SRCALPHA)
+    rng = random.Random(77)
+    # Ground shadow, offset down-right like the container shadows.
+    sh = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+    pygame.draw.rect(sh, (0, 0, 0, 110), (ox + 6, oy + 10, bw + 4, bh), border_radius=10)
+    surf.blit(sh, (0, 0))
+    # Wheels poke out past the body on both long sides.
+    for wx in (ox + 22, ox + 118):
+        for wy, top in ((oy - 6, True), (oy + bh - 5, False)):
+            pygame.draw.rect(surf, (8, 9, 11), (wx, wy, 30, 11), border_radius=4)
+            pygame.draw.rect(surf, (26, 28, 33), (wx + 4, wy + (2 if top else 3), 22, 4), border_radius=2)
+    # Body shell with a lit top rim and a dark lower edge.
+    pygame.draw.rect(surf, (27, 32, 40), (ox, oy, bw, bh), border_radius=9)
+    pygame.draw.rect(surf, (19, 23, 29), (ox + 3, oy + bh - 9, bw - 6, 7), border_radius=3)
+    pygame.draw.rect(surf, (11, 13, 16), (ox, oy, bw, bh), 2, border_radius=9)
+    pygame.draw.line(surf, (76, 90, 106), (ox + 9, oy + 1), (ox + bw - 18, oy + 1))
+    # Roof panel, ribs, cross bars and vent.
+    pygame.draw.rect(surf, (36, 43, 52), (ox + 8, oy + 7, 112, bh - 14), border_radius=5)
+    pygame.draw.rect(surf, (52, 62, 74), (ox + 8, oy + 7, 112, bh - 14), 1, border_radius=5)
+    for rx in range(ox + 22, ox + 118, 16):
+        pygame.draw.line(surf, (28, 33, 41), (rx, oy + 9), (rx, oy + bh - 10))
+    for bx in (ox + 30, ox + 96):
+        pygame.draw.rect(surf, (20, 24, 29), (bx, oy + 5, 4, bh - 10))
+        pygame.draw.line(surf, (60, 70, 82), (bx, oy + 5), (bx, oy + bh - 6))
+    pygame.draw.rect(surf, (24, 28, 34), (ox + 58, oy + 22, 22, 18))
+    pygame.draw.rect(surf, (52, 60, 70), (ox + 58, oy + 22, 22, 18), 1)
+    for vy in range(oy + 25, oy + 38, 4):
+        pygame.draw.line(surf, (14, 16, 20), (ox + 61, vy), (ox + 77, vy))
+    # KRAP livery: blue stripe, white pinstripe, roof lettering.
+    pygame.draw.rect(surf, C_KRAP_BLUE, (ox + 10, oy + 12, 106, 4))
+    pygame.draw.rect(surf, (200, 204, 210), (ox + 10, oy + 16, 106, 1))
+    tag = font_terminal_small.render("KRAP", True, (196, 202, 210))
+    surf.blit(tag, (ox + 14, oy + bh - 12 - tag.get_height()))
+    # Wear: rust specks, mud behind the wheels, scratches.
+    for _ in range(16):
+        sx, sy = rng.randint(ox + 12, ox + 116), rng.randint(oy + 9, oy + bh - 10)
+        pygame.draw.rect(surf, (74, 46, 30), (sx, sy, rng.randint(1, 3), 1))
+    for wx in (ox + 22, ox + 118):
+        for my in (oy + 2, oy + bh - 6):
+            pygame.draw.ellipse(surf, (46, 38, 30), (wx + 20, my, 14, 4))
+    pygame.draw.line(surf, (58, 68, 80), (ox + 84, oy + 46), (ox + 100, oy + 42))
+    # Cab: dark A-pillar, raked windscreen, hood, mirrors, bumper, lamps.
+    pygame.draw.rect(surf, (18, 21, 26), (ox + 118, oy + 7, 4, bh - 14))
+    wind = [(ox + 122, oy + 8), (ox + 138, oy + 12), (ox + 138, oy + bh - 12), (ox + 122, oy + bh - 8)]
+    pygame.draw.polygon(surf, (20, 36, 52), wind)
+    pygame.draw.polygon(surf, (8, 12, 16), wind, 1)
+    pygame.draw.line(surf, (88, 120, 144), (ox + 126, oy + bh - 11), (ox + 134, oy + 15))
+    pygame.draw.line(surf, (60, 88, 110), (ox + 125, oy + bh - 20), (ox + 129, oy + bh - 27))
+    pygame.draw.rect(surf, (33, 39, 48), (ox + 138, oy + 6, bw - 142, bh - 12), border_radius=5)
+    pygame.draw.rect(surf, (48, 57, 68), (ox + 138, oy + 6, bw - 142, bh - 12), 1, border_radius=5)
+    pygame.draw.line(surf, (24, 29, 36), (ox + 142, oy + bh // 2), (ox + bw - 8, oy + bh // 2))
+    for my in (oy - 6, oy + bh):
+        pygame.draw.rect(surf, (14, 16, 19), (ox + 128, my, 9, 6), border_radius=2)
+        pygame.draw.rect(surf, (44, 52, 62), (ox + 128, my, 9, 6), 1, border_radius=2)
+    pygame.draw.rect(surf, (15, 17, 21), (ox + bw - 4, oy + 8, 6, bh - 16), border_radius=2)
+    for ly in (oy + 6, oy + bh - 18):
+        pygame.draw.rect(surf, (96, 96, 82), (ox + bw - 6, ly, 7, 12), border_radius=2)
+    # Rear: bumper, tail lamps (dim; lit live) and both doors swung open.
+    pygame.draw.rect(surf, (14, 16, 19), (ox - 3, oy + 8, 5, bh - 16), border_radius=2)
+    for ly in (oy + 4, oy + bh - 16):
+        pygame.draw.rect(surf, (92, 24, 22), (ox - 2, ly, 4, 12), border_radius=1)
+    for sgn, hy in ((-1, oy + 1), (1, oy + bh - 1)):
+        door = [(ox + 1, hy), (ox - 30, hy + sgn * 11), (ox - 28, hy + sgn * 7), (ox + 3, hy - sgn * 4)]
+        pygame.draw.polygon(surf, (30, 36, 44), door)
+        pygame.draw.polygon(surf, (62, 74, 88), door, 1)
+        pygame.draw.line(surf, (92, 108, 124), (ox - 2, hy + sgn * 1), (ox - 27, hy + sgn * 10))
+    return surf
+
+
+def _walk_van3d():
+    """Baked 3D van (krap_van.glb) or None -> the painted 2D van stays as fallback."""
+    from missions import walk_van3d  # lazy: pulls in engine3d only for this scene
+    return walk_van3d.get()
+
+
+def _draw_walk_krap_van_3d(surface, van, ax, ay, t):
+    """3D van sprite anchored at the ground centre (ax, ay) = centre of the collision rect.
+
+    Lamp glow, exhaust and the boarding cue stay live on top, placed from the
+    projected lamp / tail positions the bake exposes.
+    """
+    lit = _walk_van_lit()
+    surface.blit(van.shadow, (ax + van.shadow_off[0], ay + van.shadow_off[1]))
+    surface.blit(van.images[lit], (ax + van.origin[0], ay + van.origin[1]))
+    if lit:
+        for hx, hy in van.head:
+            surface.blit(_van_glow(26, (255, 236, 170), 150), (ax + hx + 4 - 26, ay + hy - 26))
+        for lx, ly in van.tail:
+            surface.blit(_van_glow(20, (255, 40, 30), 120), (ax + lx - 20, ay + ly - 20))
+        rx, ry = van.rear
+        surface.blit(_van_glow(34, (255, 200, 120), 90), (ax + rx - 30 - 34, ay + ry - 34))
+    # Exhaust puffs drifting west and down from the rear pipe.
+    ex, ey = van.exhaust
+    puffs = pygame.Surface((90, 60), pygame.SRCALPHA)
+    for i in range(4):
+        age = ((t / 110.0) + i * 0.25) % 1.0
+        pygame.draw.circle(puffs, (96, 102, 110, int(86 * (1.0 - age) ** 1.5)),
+                           (int(82 - age * 70), int(10 + age * 24)), int(3 + age * 8))
+    surface.blit(puffs, (ax + ex - 82, ay + ey - 10))
+    # Boarding cue over the rear doors.
+    if walk_return_timer <= 0:
+        cx, cy = ax + van.cue[0] + 12, ay + van.cue[1] + int(3 * math.sin(t * 0.006))
+        pygame.draw.polygon(surface, C_ORANGE, [(cx - 7, cy), (cx + 7, cy), (cx, cy + 9)])
+        lab = font_terminal_small.render("KRAP EXTRACTION", True, (214, 204, 180))
+        bg = pygame.Surface((lab.get_width() + 12, lab.get_height() + 4), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, 150))
+        surface.blit(bg, (cx - bg.get_width() // 2, cy - bg.get_height() - 3))
+        surface.blit(lab, (cx - lab.get_width() // 2, cy - bg.get_height() - 1))
+
+
+def _draw_walk_krap_van(surface, fcx, fcy, t):
+    """Idling KRAP van: baked paint plus live lamps, exhaust, roof sheen and a boarding cue."""
+    global _WALK_VAN_SURF
+    r = _walk_van_rect()
+    sx, sy = r.x - int(fcx), r.y - int(fcy)
+    if not (-320 < sx < WIDTH + 320 and -200 < sy < HEIGHT + 200):
+        return
+    px, py = _WALK_VAN_PAD
+    bw, bh = r.w, r.h
+    van3d = _walk_van3d()
+    if van3d is not None:
+        _draw_walk_krap_van_3d(surface, van3d, sx + bw // 2, sy + bh // 2, t)
+        return
+    if _WALK_VAN_SURF is None:
+        _WALK_VAN_SURF = _bake_walk_van()
+    surface.blit(_WALK_VAN_SURF, (sx - px, sy - py))
+    if _walk_van_lit():
+        # Tail/brake glow, headlamp bloom and the dome light spilling out of the open rear.
+        for ly in (sy + 10, sy + bh - 12):
+            surface.blit(_van_glow(20, (255, 40, 30), 120), (sx - 20, ly - 20))
+            pygame.draw.rect(surface, (255, 96, 80), (sx - 2, ly - 6, 4, 12), border_radius=1)
+        for ly in (sy + 12, sy + bh - 12):
+            surface.blit(_van_glow(26, (255, 236, 170), 150), (sx + bw - 2, ly - 26))
+            pygame.draw.rect(surface, (255, 246, 200), (sx + bw - 5, ly - 6, 6, 12), border_radius=2)
+        surface.blit(_van_glow(34, (255, 200, 120), 90), (sx - 30 - 34, sy + bh // 2 - 34))
+    # Roof sheen sweeping along the panel.
+    sweep = (t // 24) % 160
+    if sweep < 112:
+        pygame.draw.line(surface, (92, 108, 126), (sx + 8 + sweep, sy + 9), (sx + 8 + sweep, sy + bh - 10))
+    # Exhaust puffs drifting west and down from the rear pipe.
+    puffs = pygame.Surface((90, 60), pygame.SRCALPHA)
+    for i in range(4):
+        age = ((t / 110.0) + i * 0.25) % 1.0
+        rad = int(3 + age * 8)
+        alpha = int(86 * (1.0 - age) ** 1.5)
+        pygame.draw.circle(puffs, (96, 102, 110, alpha), (int(82 - age * 70), int(16 + age * 24)), rad)
+    surface.blit(puffs, (sx - 82, sy + bh - 22))
+    # Boarding cue over the open doors.
+    if walk_return_timer <= 0:
+        bob = int(3 * math.sin(t * 0.006))
+        cx, cy = sx - 44, sy - 26 + bob
+        pygame.draw.polygon(surface, C_ORANGE, [(cx - 7, cy), (cx + 7, cy), (cx, cy + 9)])
+        lab = font_terminal_small.render("KRAP EXTRACTION", True, (214, 204, 180))
+        bg = pygame.Surface((lab.get_width() + 12, lab.get_height() + 4), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, 150))
+        surface.blit(bg, (cx - bg.get_width() // 2, cy - bg.get_height() - 3))
+        surface.blit(lab, (cx - lab.get_width() // 2, cy - bg.get_height() - 1))
+
+
+def _walk_van_lights(fcx, fcy):
+    """Light-pass contribution: headlamp pools ahead of the cab and a warm spill from the rear."""
+    if not (walk_after_firefight or STATE.walk_after_firefight) or not _walk_van_lit():
+        return [], []
+    r = _walk_van_rect()
+    sx, sy = r.x - int(fcx), r.y - int(fcy)
+    lamps = [
+        (_lighting.falloff_sprite(150, (150, 140, 104)), (sx + r.w + 70 - 150, sy + r.h // 2 - 150)),
+        (_lighting.falloff_sprite(90, (120, 62, 44)), (sx - 40 - 90, sy + r.h // 2 - 90)),
+        (_lighting.falloff_sprite(70, (110, 84, 52)), (sx + 40 - 70, sy + r.h // 2 - 70)),
+    ]
+    return lamps, []
+
 def draw_walking_sim():
     if walk_player is None:
         return
@@ -3083,10 +3308,7 @@ def draw_walking_sim():
         pygame.draw.circle(glow, (255, 220, 100, int(35 * pulse)), (40, 40), 30)
         screen.blit(glow, (hx - 40, hy - 40))
     if walk_after_firefight:
-        van_screen_x = walk_van_trigger_x - fcx + 100
-        van_screen_y = walk_van_trigger_y - fcy + 30
-        if -200 < van_screen_x < WIDTH + 200:
-            _draw_walk_krap_van(screen, van_screen_x, van_screen_y, _now_ms())
+        _draw_walk_krap_van(screen, fcx, fcy, _now_ms())
     if walk_player:
         walk_player.draw(screen, fcx, fcy, walls=(), no_gun=True, is_moving=_walk_player_moving)
     for stash in walk_stashes:
@@ -3259,7 +3481,7 @@ def draw_walking_sim():
         elif walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight):
             obj_text = "OBJECTIVE: Observe..."
         elif walk_after_firefight or STATE.walk_after_firefight:
-            obj_text = "OBJECTIVE: Approach the van."
+            obj_text = "OBJECTIVE: Board the KRAP van."
         obj_bg = pygame.Surface((400, 30), pygame.SRCALPHA)
         pygame.draw.rect(obj_bg, (0, 0, 0, 150), (0, 0, 400, 30))
         pygame.draw.line(obj_bg, C_KRAP_BLUE, (0, 0), (0, 30), 3)

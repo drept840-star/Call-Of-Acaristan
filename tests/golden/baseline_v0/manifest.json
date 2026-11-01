@@ -1490,9 +1490,9 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "f3110b173febaafb7d065052c7fcffb9549a2765a0356d68d0246a82328755fc",
+   "sha256": "e6fd5ca8fe4ac5e77d2fa481fa06a9b5f5f04ccb242c927a1571d87878e6d7aa",
    "source": "m3.archives_transition_shots[1] scene=m3_archives_ingame_join",
-   "t_ms": 1500
+   "t_ms": 1175
   },
   "cut.m3.archives_transition_shots.01_m3_archives_ingame_join.t50": {
    "id": "cut.m3.archives_transition_shots.01_m3_archives_ingame_join.t50",
@@ -1504,9 +1504,9 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "55319c3a3ec72dfc62e515af9d5ae077140cb0c81f18634bc3e097529ce14585",
+   "sha256": "b0ebfb19fc7a8f8d4721eef57428267b6009c6f04d75c6226dcf4d91e8d6e8d9",
    "source": "m3.archives_transition_shots[1] scene=m3_archives_ingame_join",
-   "t_ms": 3000
+   "t_ms": 2350
   },
   "cut.m3.archives_transition_shots.01_m3_archives_ingame_join.t75": {
    "id": "cut.m3.archives_transition_shots.01_m3_archives_ingame_join.t75",
@@ -1518,9 +1518,51 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "55319c3a3ec72dfc62e515af9d5ae077140cb0c81f18634bc3e097529ce14585",
+   "sha256": "86914d3c283e803f580e9185ecb8af20a579dbd4b4327dfb41250def6119a9d1",
    "source": "m3.archives_transition_shots[1] scene=m3_archives_ingame_join",
-   "t_ms": 4500
+   "t_ms": 3525
+  },
+  "cut.m3.archives_transition_shots.02_m3_archives_ingame_join.t25": {
+   "id": "cut.m3.archives_transition_shots.02_m3_archives_ingame_join.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "3557d1f183a6f604ddc43b43b65c2c7d9ba1eb934960d235603f091623f2f198",
+   "source": "m3.archives_transition_shots[2] scene=m3_archives_ingame_join",
+   "t_ms": 500
+  },
+  "cut.m3.archives_transition_shots.02_m3_archives_ingame_join.t50": {
+   "id": "cut.m3.archives_transition_shots.02_m3_archives_ingame_join.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "8490d68a83c6e3cb4c7d35434248ce611a118d152d4db42b6e9e9fb8d0179f48",
+   "source": "m3.archives_transition_shots[2] scene=m3_archives_ingame_join",
+   "t_ms": 1000
+  },
+  "cut.m3.archives_transition_shots.02_m3_archives_ingame_join.t75": {
+   "id": "cut.m3.archives_transition_shots.02_m3_archives_ingame_join.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "8490d68a83c6e3cb4c7d35434248ce611a118d152d4db42b6e9e9fb8d0179f48",
+   "source": "m3.archives_transition_shots[2] scene=m3_archives_ingame_join",
+   "t_ms": 1500
   },
   "cut.m3.archives_transition_shots.02_m3_archives_ingame_reveal.t25": {
    "id": "cut.m3.archives_transition_shots.02_m3_archives_ingame_reveal.t25",
@@ -1562,6 +1604,48 @@
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
    "sha256": "9d9bc617bdf7114219adb0364713b6855cc7da36f50323ebebc1641831524c66",
    "source": "m3.archives_transition_shots[2] scene=m3_archives_ingame_reveal",
+   "t_ms": 1935
+  },
+  "cut.m3.archives_transition_shots.03_m3_archives_ingame_reveal.t25": {
+   "id": "cut.m3.archives_transition_shots.03_m3_archives_ingame_reveal.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "6f382930167f4391d4bbefc26d786598878f0c1a29953e6e1a055d974660038c",
+   "source": "m3.archives_transition_shots[3] scene=m3_archives_ingame_reveal",
+   "t_ms": 645
+  },
+  "cut.m3.archives_transition_shots.03_m3_archives_ingame_reveal.t50": {
+   "id": "cut.m3.archives_transition_shots.03_m3_archives_ingame_reveal.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "5b159a583e454ab211bcf0753ee38bececa6bd8452d2cd01ffcf22e670e2f14b",
+   "source": "m3.archives_transition_shots[3] scene=m3_archives_ingame_reveal",
+   "t_ms": 1290
+  },
+  "cut.m3.archives_transition_shots.03_m3_archives_ingame_reveal.t75": {
+   "id": "cut.m3.archives_transition_shots.03_m3_archives_ingame_reveal.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "9d9bc617bdf7114219adb0364713b6855cc7da36f50323ebebc1641831524c66",
+   "source": "m3.archives_transition_shots[3] scene=m3_archives_ingame_reveal",
    "t_ms": 1935
   },
   "cut.m3.broadcast_fail_shots.00_m3_bcast_fail_studio.t25": {
@@ -3706,6 +3790,48 @@
    "source": "m4.mission4_intro_shots[0] scene=m3_end_nation",
    "t_ms": 2850
   },
+  "cut.m4.mission4_intro_shots.00_m4_street_curfew.t25": {
+   "id": "cut.m4.mission4_intro_shots.00_m4_street_curfew.t25",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "6b340b3774fedae97c3a56d5c77073395c9e8ff8febc072fa4e8993172c1d2a8",
+   "source": "m4.mission4_intro_shots[0] scene=m4_street_curfew",
+   "t_ms": 1050
+  },
+  "cut.m4.mission4_intro_shots.00_m4_street_curfew.t50": {
+   "id": "cut.m4.mission4_intro_shots.00_m4_street_curfew.t50",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "f7ec67d93c89aad027d747b784927efa116bfe56d17ecc12d46c82bf423f8c58",
+   "source": "m4.mission4_intro_shots[0] scene=m4_street_curfew",
+   "t_ms": 2100
+  },
+  "cut.m4.mission4_intro_shots.00_m4_street_curfew.t75": {
+   "id": "cut.m4.mission4_intro_shots.00_m4_street_curfew.t75",
+   "kind": "cutscene",
+   "renderer": "software",
+   "resolution": [
+    1000,
+    700
+   ],
+   "seed": 1337,
+   "settings_profile": "default+ACA_FREEZE+pinned_clock",
+   "sha256": "b5d92a29e0c0c264ecd50e01abd15c30f3bdaa7934e143435b612fc55a81b1f3",
+   "source": "m4.mission4_intro_shots[0] scene=m4_street_curfew",
+   "t_ms": 3150
+  },
   "cut.m4.mission4_intro_shots.01_m4_city_curfew.t25": {
    "id": "cut.m4.mission4_intro_shots.01_m4_city_curfew.t25",
    "kind": "cutscene",
@@ -3716,7 +3842,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "3b0392b0e0286d6cab471c2de15cd9a545870d0d24bf32122bd9906efc266acc",
+   "sha256": "2772e01b8b999b6ee55e203b4ea87067b94ac8e7b0c23d1bdfe148b467377d8c",
    "source": "m4.mission4_intro_shots[1] scene=m4_city_curfew",
    "t_ms": 911
   },
@@ -3730,7 +3856,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "1ae3cd18e6a5b04ff6ee66c8f2784f1c164862ea6b403a64a0d6928b4ae8be67",
+   "sha256": "48c978c42bea17435c4001b96a2d5d1380e5b3242d890282fc920f06c9ca27f5",
    "source": "m4.mission4_intro_shots[1] scene=m4_city_curfew",
    "t_ms": 1822
   },
@@ -3744,7 +3870,7 @@
    ],
    "seed": 1337,
    "settings_profile": "default+ACA_FREEZE+pinned_clock",
-   "sha256": "e24084d8b58ef6ee5eb498c358df11bc40459ea6299883225f376cbf1b846edc",
+   "sha256": "11ed27b3f1007d03392ab0fca2982e916313b6c090eb6bd735e8cfd34c9018a6",
    "source": "m4.mission4_intro_shots[1] scene=m4_city_curfew",
    "t_ms": 2733
   },

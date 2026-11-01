@@ -342,7 +342,7 @@
    "files": {
     "0": {
      "file": "maru_0.png",
-     "pixels": "215e9168d19a1f7b3644e46df38aac190d8f55392f6139a9d96b8294793426ec",
+     "pixels": "69883ee601ef534085ef7c18e7dd211fda3c475bbb853113a403e5e2e0e794c3",
      "size": [
       84,
       84
@@ -350,7 +350,7 @@
     },
     "1": {
      "file": "maru_1.png",
-     "pixels": "1c137bc3c076a28e6624712f89e08f1981aa00c4358b07ef6c7a0c277a382454",
+     "pixels": "480cf216a5b51b135430bb6b86df548465fa67816170518f620e48ab0ff59b51",
      "size": [
       84,
       84
@@ -358,7 +358,7 @@
     },
     "10": {
      "file": "maru_10.png",
-     "pixels": "d0871ef29381466645679a9cda23cb766817a872038d549fa44da701afdf735b",
+     "pixels": "0a3c8556bd3d78cb03ebc53f3ef09857f5c83fb0403fcc56c15fd5aedffefbe4",
      "size": [
       84,
       84
@@ -366,7 +366,7 @@
     },
     "11": {
      "file": "maru_11.png",
-     "pixels": "d6a09213f31d484cb6f0ef7ca37da9c0c4ef75bdf7da5fafa24f2e9dc4561825",
+     "pixels": "1392c8c71a3966d10123010971abd68fd17e58518d1119a19e0bf0beb473897c",
      "size": [
       84,
       84
@@ -374,7 +374,7 @@
     },
     "12": {
      "file": "maru_12.png",
-     "pixels": "372cf04eb791694646a9fe8a23c7d18d8653e27a19fb26c4828d392ddfddb2d5",
+     "pixels": "d5870e1379538b89516a2658e78335c1c03e2f03adaa77a54e42b6ca05bccfab",
      "size": [
       84,
       84
@@ -382,7 +382,7 @@
     },
     "13": {
      "file": "maru_13.png",
-     "pixels": "66b49be56189c7e5f44584e2ea81b89e73e651b9bc0ab119a8c96a1488b8dd9e",
+     "pixels": "fd0f68d0081adfcad59c1eb76293112336875d9f41410561e3e98a3d6405c9a1",
      "size": [
       84,
       84
@@ -390,7 +390,7 @@
     },
     "14": {
      "file": "maru_14.png",
-     "pixels": "362b1c5660c6cf0826b706e5afb05b91bb932bfab07dc17da9792971bb9f2277",
+     "pixels": "ba72348f14c13aed49072d1a446978de721c1777ce5e104abb63e8456f2c962d",
      "size": [
       84,
       84
@@ -398,7 +398,7 @@
     },
     "15": {
      "file": "maru_15.png",
-     "pixels": "d147bd7222d807cdb41e6b982d16c905472a082a61baac5a4b76cbbe13d7c885",
+     "pixels": "0a42c3ce0dcb58eae64b37924180698a1ab6c918bc561cbb51846614d657d48d",
      "size": [
       84,
       84
@@ -406,7 +406,7 @@
     },
     "16": {
      "file": "maru_16.png",
-     "pixels": "f4e138e89eacab07e4b5894342f707e6387f22a92ee7108be522afaa4b635f6e",
+     "pixels": "73017d046e205ceca7e8f6b8630d2a5c9934c4690d06ebac991ac6cc9186a026",
      "size": [
       84,
       84
@@ -414,7 +414,7 @@
     },
     "17": {
      "file": "maru_17.png",
-     "pixels": "24b0a91c24942de61cc356e2e159609f09a16b54b74bee0cdfb034322138761e",
+     "pixels": "4cdf7c7fcdfb494922a89f6f6e990d65a48ba23dacddf1eed83d809774ec50c2",
      "size": [
       84,
       84
@@ -422,7 +422,7 @@
     },
     "18": {
      "file": "maru_18.png",
-     "pixels": "6b3680669d30cbaeb881d975c24220fcdde9def4c4e544563551ee250d304f0c",
+     "pixels": "11fdb40af582185dda700d8b55b3ae87a0159086cd977e1cef12f2a31d43c986",
      "size": [
       84,
       84
@@ -430,7 +430,7 @@
     },
     "19": {
      "file": "maru_19.png",
-     "pixels": "785104f689e0d0ed92ad81e3cd97b4048dab7853c6f9e924a2bdeeb2444213d1",
+     "pixels": "89bc221bcff1867d12f66417e09bbe6daa445d7418fcca32144227db934207a8",
      "size": [
       84,
       84
@@ -438,7 +438,7 @@
     },
     "2": {
      "file": "maru_2.png",
-     "pixels": "6411941ba4970d0bd71d00e9fd7296f674c6be73e70dc490d18af80ffe392942",
+     "pixels": "8a61f4c57ec289f13604ba441f62ab26d5607f73f9f8f722986210289a445f12",
      "size": [
       84,
       84
@@ -446,7 +446,7 @@
     },
     "20": {
      "file": "maru_20.png",
-     "pixels": "d13d87f1ad7e1a76b9cf5f5e74e3d61a31c985337f1ebe051ec87e88af5d0e8a",
+     "pixels": "a408041b05f00ddefb689d172d0a5d5a3cff873ad4a5634236cda83b388b6e72",
      "size": [
       84,
       84
@@ -454,7 +454,7 @@
     },
     "21": {
      "file": "maru_21.png",
-     "pixels": "47a841e7be0d8dab4080b3d8b5163ddafcd9e8cc18749fd97418361e2ea44881",
+     "pixels": "aefd0d38f04524798d4c42d17b9c11f5322e22775fc647ec21bf704d62c30566",
      "size": [
       84,
       84
@@ -462,7 +462,7 @@
     },
     "22": {
      "file": "maru_22.png",
-     "pixels": "5f9ff539996d0fd996faa177108cfadd74851d42c8bd7de296d62da18ff38000",
+     "pixels": "efa50231ac1da036925a264223f6fcf6c6a7c05581386e99a4c464078486a158",
      "size": [
       84,
       84
@@ -470,7 +470,7 @@
     },
     "23": {
      "file": "maru_23.png",
-     "pixels": "f647aad63466faa5409f9a94814207209912f7539529fcd3e1ca0888235236ff",
+     "pixels": "34414a139111a0c0f2aa65ee9b9f0babad053358c3731b0e78cb5d00a544b1f3",
      "size": [
       84,
       84
@@ -478,7 +478,7 @@
     },
     "24": {
      "file": "maru_24.png",
-     "pixels": "ef17b632feb8a5e11e2b892dd830ec2bb5d484a755e049b388f7982c70d82abc",
+     "pixels": "9f570bbf060b25b0f6499da38dd47688e0dffa4d3d180f29f9bd3695491a2b49",
      "size": [
       84,
       84
@@ -486,7 +486,7 @@
     },
     "25": {
      "file": "maru_25.png",
-     "pixels": "f7c79322373a4dca94a2d414df711e46b829da702c3e8e957daace93982aa074",
+     "pixels": "5189edfc52d0796b5165680bbea5d5d7ff267dec31e9e13bb87e8dc2933dbe7f",
      "size": [
       84,
       84
@@ -494,7 +494,7 @@
     },
     "26": {
      "file": "maru_26.png",
-     "pixels": "c6f10fe02096eec13b3846b3dfee90cac7021ee24578eaef2c74e3f6fd52c2f5",
+     "pixels": "cb677d7efc97cd8f81c6697c68c097a4349e5f6a0160747e18292ed7173d9079",
      "size": [
       84,
       84
@@ -502,7 +502,7 @@
     },
     "27": {
      "file": "maru_27.png",
-     "pixels": "1893ce7edcc96fc8ba41587f8732fc2fbc4cc87df8774275674057a67cb73869",
+     "pixels": "6e56b38759ca94c88f7f3115794ac1d2547c68ac0ffe16da4cb0085f17d649f7",
      "size": [
       84,
       84
@@ -510,7 +510,7 @@
     },
     "28": {
      "file": "maru_28.png",
-     "pixels": "c63d9dc9cbf49da9cb3d8726bfa8953526109eaac17418b9e3646c93bba51492",
+     "pixels": "23551c9ad025f4cfb85552b4b0cf6912e9523a3b6f0160b23d4e0f6afd400d67",
      "size": [
       84,
       84
@@ -518,7 +518,7 @@
     },
     "29": {
      "file": "maru_29.png",
-     "pixels": "6021a426929aa7b62474d565150c303085a4fc8f66e37d03b67e862f80d2ce4c",
+     "pixels": "aceabfb276f0493dd80e5e1681dd7789b3557e1f3ac38d6897370f5058db7e9f",
      "size": [
       84,
       84
@@ -526,7 +526,7 @@
     },
     "3": {
      "file": "maru_3.png",
-     "pixels": "3d8bd57abc552b24986b6813380588c3cd1738d0175705def5b5c2b69e6e564d",
+     "pixels": "ee3feb76f2a1b80bb3191cab7a0bdb512d063fcbc39ca89d710760516ea215f2",
      "size": [
       84,
       84
@@ -534,7 +534,7 @@
     },
     "30": {
      "file": "maru_30.png",
-     "pixels": "e404d9f7dc1d49532f3de3658eedba2b608a2eea93aeb8148a874f3fae296e6d",
+     "pixels": "95aa04bd2aa6770639ca08436a73d3448645db3bcb09b6646172bed972178ecf",
      "size": [
       84,
       84
@@ -542,7 +542,7 @@
     },
     "31": {
      "file": "maru_31.png",
-     "pixels": "85e729beba80ec84ec5c15ef46125815616f52bac033a5f9ec4e25b9959ebd1c",
+     "pixels": "a18b3a878773b9a7555ff92046ed9782e5c1e7bb0b99b98006e153b84cb57e4e",
      "size": [
       84,
       84
@@ -550,7 +550,7 @@
     },
     "32": {
      "file": "maru_32.png",
-     "pixels": "8fae53fd49b112b64a4f5533ff390b9f4db8f3d5dbdcdf7639155fedf8388e6f",
+     "pixels": "62424576ff93b54028e6aed0bce9bd7286207c3daca0d559504370789cec5541",
      "size": [
       84,
       84
@@ -558,7 +558,7 @@
     },
     "33": {
      "file": "maru_33.png",
-     "pixels": "bd167fceeee09b9554bca4f970b4411e2c080b60f71be3f580c8cf94b261832f",
+     "pixels": "637778b2e6d44b4fd7dbd80326dbf68e5dc6db1828780777ac4d44ae7c1b1591",
      "size": [
       84,
       84
@@ -566,7 +566,7 @@
     },
     "34": {
      "file": "maru_34.png",
-     "pixels": "70df7a0ac5f7da33634314f3cb113a30df99f3b681894e03d7ea3a98a9b627f4",
+     "pixels": "c58db545720c7ea47a22be642bbe6d9472dd804b35b6584752a280ac116baf40",
      "size": [
       84,
       84
@@ -574,7 +574,7 @@
     },
     "35": {
      "file": "maru_35.png",
-     "pixels": "7e4d6277d73c1709686f8413af3111a81cbb781903136d41b7dacc1b22f5750b",
+     "pixels": "2ef36419cd08276d93f8cb2924c64d4c1361cb1515d42ef858b5e753f9531cd6",
      "size": [
       84,
       84
@@ -582,7 +582,7 @@
     },
     "36": {
      "file": "maru_36.png",
-     "pixels": "1c9f63fc62289d1a05967d75573320b5fde9f0735037c16c41940ef277c34a81",
+     "pixels": "ae4ac66b6e5b1b6e5e9a237203e400f33db375fb347835b84c427d6aaf7ee70a",
      "size": [
       84,
       84
@@ -590,7 +590,7 @@
     },
     "37": {
      "file": "maru_37.png",
-     "pixels": "d3faefdbefd95061161c1f4fe0ca53eeca72905ed7312dfc6846e75549e19837",
+     "pixels": "fccd8182107ea42044ac30bf9929d15d12000572e5bcb1fb162e453a7913bf49",
      "size": [
       84,
       84
@@ -598,7 +598,7 @@
     },
     "38": {
      "file": "maru_38.png",
-     "pixels": "c412593b8b68ca4d059728b472d43bb24302bc6fe41ad4e8845bbb49f09ffc9b",
+     "pixels": "2651921e426b54f0d5094602363c5b978230b6a71ae87d2b19ff3f6fb1c7e287",
      "size": [
       84,
       84
@@ -606,7 +606,7 @@
     },
     "39": {
      "file": "maru_39.png",
-     "pixels": "6a4f41826d496d2efc43facbe49304a302527c96b3563608fc01c86e78d1cacb",
+     "pixels": "051de75fa809d874550193270fad1db6f20729992ee10232ea0362b6cb69b84f",
      "size": [
       84,
       84
@@ -614,7 +614,7 @@
     },
     "4": {
      "file": "maru_4.png",
-     "pixels": "e51ec292d1fd65068e4fe21b151ded94d0024d9f5596f4ec64868befc5c63d0c",
+     "pixels": "d980619bf68bd2a989544bb26500a236054642e3993146cda25a4fe59f8e69ee",
      "size": [
       84,
       84
@@ -622,7 +622,7 @@
     },
     "40": {
      "file": "maru_40.png",
-     "pixels": "5797e482d3c21a8a674fb3d5af33f7b164c8d237724f60330904bb571b07d2c9",
+     "pixels": "169b4250a465427d283af0a6fc425e6c4bb80c8e8cfb652f0a6c46ea4790b7c8",
      "size": [
       84,
       84
@@ -630,7 +630,7 @@
     },
     "41": {
      "file": "maru_41.png",
-     "pixels": "09d2d2b315509de2187502eb9026a1bc6dda7f7a0b778d524f4e859dc68e0b0e",
+     "pixels": "8e9b0debdecc1dc882436fae36cdbcc9ae910f8d6a947d2a86d3a9e190b74826",
      "size": [
       84,
       84
@@ -638,7 +638,7 @@
     },
     "42": {
      "file": "maru_42.png",
-     "pixels": "bc4e2a3fb8427a86e37a812de3b74dbc091f2de8e4f3c0b055cbec80bdf450ce",
+     "pixels": "3d5440635b31d8046ac75fc09c0285e3a5c26b301c4b3b89bdacac1d7da1bdd9",
      "size": [
       84,
       84
@@ -646,7 +646,7 @@
     },
     "43": {
      "file": "maru_43.png",
-     "pixels": "1b4ec9ac0ca72be143643423766eec3bf314b192f32410b3aff731aeab3bb7f7",
+     "pixels": "969e335ab35add00f2d3ffb832ec78171653c97ecdc6efbb3188a4546434fa39",
      "size": [
       84,
       84
@@ -654,7 +654,7 @@
     },
     "44": {
      "file": "maru_44.png",
-     "pixels": "a7325a55910c4d6c073a9953baf489d175b0bdbbca840d503efb3f44dea25fcb",
+     "pixels": "69c636015e61349431104b5a15e8d314245568b0ba9ddc99ddff39c2a00db1e6",
      "size": [
       84,
       84
@@ -662,7 +662,7 @@
     },
     "45": {
      "file": "maru_45.png",
-     "pixels": "699b22cc9f2011a1b369d793d5238c83d7878f3b86ac9d20cc124ea3022535ea",
+     "pixels": "274c363ad8028542c46a56112a1aa481600f47bbd42359e09a3001fb34fafb16",
      "size": [
       84,
       84
@@ -670,7 +670,7 @@
     },
     "46": {
      "file": "maru_46.png",
-     "pixels": "fe5869a504807bd37108d0de2bcfcb8b93d8bbdf708cceaed8a81215dce1d4eb",
+     "pixels": "d55871893ad412b5e448bab61ff515f8ff2d30eda09672c74c35ae644f2244dc",
      "size": [
       84,
       84
@@ -678,7 +678,7 @@
     },
     "47": {
      "file": "maru_47.png",
-     "pixels": "42d219a48f2ddbe6e7d32aef2d79e386ba6acca81a9e98a461090a905d3d1ee3",
+     "pixels": "abba3d625bd3eef7b9528dcce6d34a7a8764c20429e6813d7cc19b2753c91ef9",
      "size": [
       84,
       84
@@ -686,7 +686,7 @@
     },
     "48": {
      "file": "maru_48.png",
-     "pixels": "65ad80bac448d4b7949a35bcd30648fd146ff17cf5a2f88fb3d6c846740b53d2",
+     "pixels": "144c5747c44c420bb7134b6fae5b648757fbe493f7fac98c24d66bab230a3fbd",
      "size": [
       84,
       84
@@ -694,7 +694,7 @@
     },
     "49": {
      "file": "maru_49.png",
-     "pixels": "8cfed676797460909139dbed22793c512b50b344ec9fbc3b875fd3ea43bdb7de",
+     "pixels": "4ed0ee97fc51247405f7bd3fddcb305eba1b9c3b3a8b5ad5ffdbdcac44c0b15f",
      "size": [
       84,
       84
@@ -702,7 +702,7 @@
     },
     "5": {
      "file": "maru_5.png",
-     "pixels": "cf506a9e9ba2af230160314a5f09813356f7bccf6f4b459bc97c67018bbcd198",
+     "pixels": "8137adabd7cf794d87881e7367ac2521f883da32af61b895dc4e106a491ea22a",
      "size": [
       84,
       84
@@ -710,7 +710,7 @@
     },
     "50": {
      "file": "maru_50.png",
-     "pixels": "d619ac5acfd6e3cf7641287f13b733ea989e05a95383603388a6db80a20aa663",
+     "pixels": "94ebf3448dc9a3a757dc954d368b9262ceb06dd4e1643818bbdff89ff7ab9dec",
      "size": [
       84,
       84
@@ -718,7 +718,7 @@
     },
     "51": {
      "file": "maru_51.png",
-     "pixels": "a91767edf59822c28db53af8d9c06624f7ff6f78df369acbc0abefb392513136",
+     "pixels": "bf32cf424e4c3e31c73c2f82a3a200cde6615575e196b74360e9e46884bfd5cd",
      "size": [
       84,
       84
@@ -726,7 +726,7 @@
     },
     "52": {
      "file": "maru_52.png",
-     "pixels": "c5edad1f6ed3ab51c4848ca0ac46c869a572fd395cbcd88846b4a606b77d8e76",
+     "pixels": "096b0f8bf38151ec12b0ac3c25024e4af13b907500e1b77f05355cc13b245570",
      "size": [
       84,
       84
@@ -734,7 +734,7 @@
     },
     "53": {
      "file": "maru_53.png",
-     "pixels": "65dfce5ec54a9a4139b226fd0e59a0dc12756a2b9d707cef241a025ace6b39a9",
+     "pixels": "2a3ad2a5cffdc2965244c77b11b4629fdc9d6e84a2854a548c48c86fb498e551",
      "size": [
       84,
       84
@@ -742,7 +742,7 @@
     },
     "54": {
      "file": "maru_54.png",
-     "pixels": "5812f4e1f678ab7a57ad62b5b6103b7b3e4801166eb5417019db64c23aabc4e7",
+     "pixels": "57cc2ee3a2672a956d8fd1d014fd206aaf43f0c72555d4faa7426ff6e33ab00a",
      "size": [
       84,
       84
@@ -750,7 +750,7 @@
     },
     "55": {
      "file": "maru_55.png",
-     "pixels": "80cf76a105ca2c15234ac3c23c99eff494ee556bd82208248e1659ebf156a457",
+     "pixels": "ca0e0035efd954c6da20198d85c245a011b01f27f217f666bd479230a5b56af1",
      "size": [
       84,
       84
@@ -758,7 +758,7 @@
     },
     "56": {
      "file": "maru_56.png",
-     "pixels": "b7602286717f23b10472ffbb066984046b4a0172aebb68770e4f28ef63782b5d",
+     "pixels": "a632cc91ad8b95da37150e0aa3903aca167477251a3e27b73bba599ebf17f366",
      "size": [
       84,
       84
@@ -766,7 +766,7 @@
     },
     "57": {
      "file": "maru_57.png",
-     "pixels": "a2ab03fe85edf85f34c0650c7a77be502fea89bea1f9ea1c5615ac7cb391b939",
+     "pixels": "b6e61dbc5f766a8456d56285c659ab355b88a065c3051bb794b7b0e71c23af07",
      "size": [
       84,
       84
@@ -774,7 +774,7 @@
     },
     "58": {
      "file": "maru_58.png",
-     "pixels": "0909fb09107d0af1eac095bae83fbc7055787c773684bfbed0a20da4f74c426c",
+     "pixels": "411a97d2a95870e3389866f0943f5ccc586e1d1313ebe0524ed58cc76fce4e3d",
      "size": [
       84,
       84
@@ -782,7 +782,7 @@
     },
     "59": {
      "file": "maru_59.png",
-     "pixels": "32bf57ee4d299d29a13e05af560524ba3e5a126842b17a8ee31cdf6856322f57",
+     "pixels": "2bcb33815d52f8942c47bf27362ea9ebe2c2987d8915c39e2a090808a0e7b19f",
      "size": [
       84,
       84
@@ -790,7 +790,7 @@
     },
     "6": {
      "file": "maru_6.png",
-     "pixels": "6a7d5c28fd42526c8f01ec6724bf48a0007977edee5532768be279e2f03afd98",
+     "pixels": "109d6be021afe6c85d6640547a118a9b645c7d5ace5f5119dfd110ad1cf1c8e8",
      "size": [
       84,
       84
@@ -798,7 +798,7 @@
     },
     "60": {
      "file": "maru_60.png",
-     "pixels": "c79165831bd9557efdd9de1622265ddb3ae00869694f99e1fd7562d40bae71db",
+     "pixels": "05d3999f17357a7801379e46a2a0fb247ef700f07d4abbed64e4061592fb0ec1",
      "size": [
       84,
       84
@@ -806,7 +806,7 @@
     },
     "61": {
      "file": "maru_61.png",
-     "pixels": "07dd61fbaa1707e2b201f31afd58658d509b3efeda7d2f1ab6f1453ecc6a2ac4",
+     "pixels": "566702254471c01b714b5c574d2bdab6d68bc4d6601765d80e734f48fe774a42",
      "size": [
       84,
       84
@@ -814,7 +814,7 @@
     },
     "62": {
      "file": "maru_62.png",
-     "pixels": "33477bae87dd5b78702faeccfc2b3a8c0e6f6a0d4e095d4b3c140b772df5ff25",
+     "pixels": "f0f86e13aa2dc0881af01b137b8c4c35644e9e1e238f1ca53072189d6f7dea04",
      "size": [
       84,
       84
@@ -822,7 +822,7 @@
     },
     "63": {
      "file": "maru_63.png",
-     "pixels": "186daa35a5248fa1a20fe89026a8afd649254db910d38d0d707aa64f78fbf61a",
+     "pixels": "58857ae1ebbf29957a0c0de2f3830994c3d51e8228399edbb7ba88334a440d78",
      "size": [
       84,
       84
@@ -830,7 +830,7 @@
     },
     "64": {
      "file": "maru_64.png",
-     "pixels": "d2fce09019e379b5c8c4b1881fd8924950c3bca252a7195ddc9f51f7fb5ceb36",
+     "pixels": "3e9559e1d4af0706596ef6a96c5171847d8faacc4e79132152d0999e44666dc3",
      "size": [
       84,
       84
@@ -838,7 +838,7 @@
     },
     "65": {
      "file": "maru_65.png",
-     "pixels": "1edfb1dcd662497ffc54ec61a791ba7664c18b1ff59719ec99c2b67eb053983f",
+     "pixels": "ca71e9391ec23438acaff6b61df8eba5757bd507ecc32c4e567ffbf437193405",
      "size": [
       84,
       84
@@ -846,7 +846,7 @@
     },
     "66": {
      "file": "maru_66.png",
-     "pixels": "cfc00b7d81baff21806ced0b463b49fd55702b7fbcf6df34c1270348b9642c37",
+     "pixels": "9531a02d4d178f279f6fab161b89fad213d842e15f4d8816477a7870231570bf",
      "size": [
       84,
       84
@@ -854,7 +854,7 @@
     },
     "67": {
      "file": "maru_67.png",
-     "pixels": "6738e6a5d2a0c7d6bf63cd8eaf3110ec86873d524e10bd7108f4cc1afffe9ab6",
+     "pixels": "6d58e10fad6070ad6cd2903b70438b30355e0f6670d965ac21f0fb78e71855c0",
      "size": [
       84,
       84
@@ -862,7 +862,7 @@
     },
     "68": {
      "file": "maru_68.png",
-     "pixels": "2e062498c1c0f934bdd8a2cc8ff7e728a303ba45deeeb6c6522ed6ee10f64f07",
+     "pixels": "363822fc3b7d7f231a20358245915b51e62d439180e7c6765c65d72621bb200d",
      "size": [
       84,
       84
@@ -870,7 +870,7 @@
     },
     "69": {
      "file": "maru_69.png",
-     "pixels": "a0a9a00ae3b231091b0d994af0d474686e2503812ead1f508d96f3b63a0f8aaa",
+     "pixels": "39dab8f9f849fde78ed369d38b2e9adefbd7ec07582fb883ab1d25465e36fdbb",
      "size": [
       84,
       84
@@ -878,7 +878,7 @@
     },
     "7": {
      "file": "maru_7.png",
-     "pixels": "12f5634fdf70d1088ccd97de965a4a99e9da41edd1199b154c6f9c6b7902a7fb",
+     "pixels": "17b0126faf9c019d7c1934085412f2665484166075a0439b1f805cdd3da8f6d3",
      "size": [
       84,
       84
@@ -886,7 +886,7 @@
     },
     "70": {
      "file": "maru_70.png",
-     "pixels": "99ccc31b9b977a8f74aaa7729a8f9f096d11e9ece926f8382af3a07da50c1373",
+     "pixels": "2cfa7b32bdf8de56c15c00c3fda56ed10a36c10c325daeb50b1c019022c38a6f",
      "size": [
       84,
       84
@@ -894,7 +894,7 @@
     },
     "71": {
      "file": "maru_71.png",
-     "pixels": "efbb3b49ccb65955c629d17af8fdeac8d04721818c0db3728932b5d278b586ed",
+     "pixels": "79c591416b78c6e747b9731047caa57302f702b61c8796b5c367cc5b4e5f3f3d",
      "size": [
       84,
       84
@@ -902,7 +902,7 @@
     },
     "8": {
      "file": "maru_8.png",
-     "pixels": "192746c90ea8140284da0dd7c1b034788ef62119bf63a00deff5dc412ac10f0f",
+     "pixels": "ef05fa64048ccb59a01ef870aa470518c0a30531859dffaa7e807b5f85f2b8d0",
      "size": [
       84,
       84
@@ -910,7 +910,7 @@
     },
     "9": {
      "file": "maru_9.png",
-     "pixels": "faf3abfc601a4b963b39ea89e2460660899404deedf55f0e974dd13f6a53ed11",
+     "pixels": "200c1c48c789b3e08426ab2b9c25d2bac129c69862d0af48bdaa16c6081460d4",
      "size": [
       84,
       84

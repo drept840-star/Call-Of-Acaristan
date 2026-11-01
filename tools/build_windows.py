@@ -47,6 +47,28 @@ def main(argv):
            "--hidden-import=pygame", "--hidden-import=pygame._sdl2",
            "--collect-all=pygame", "--collect-all=moderngl",
            "--collect-all=glcontext"]
+    # Missions, cutscenes and adapters are imported by name at runtime, and the
+    # authored content (meshes, levels, timelines) sits beside the code in src/:
+    # bundle every package whole plus each non-Python file at its src path.
+    # (--collect-submodules runs before src/ is on the spec's path, so the
+    # modules are listed here instead.)
+    src = os.path.join(ROOT, "src")
+    for d, dirs, files in os.walk(src):
+        dirs[:] = [x for x in dirs if x not in ("__pycache__", "graphify-out")]
+        rel = os.path.relpath(d, src)
+        pkg = "" if rel == "." else rel.replace(os.sep, ".") + "."
+        is_pkg = rel == "." or os.path.isfile(os.path.join(d, "__init__.py"))
+        for f in files:
+            if f.endswith(".py"):
+                if not is_pkg:
+                    continue
+                mod = pkg + f[:-3]
+                if mod.endswith(".__init__"):
+                    mod = mod[:-9]
+                if mod not in ("__init__", "app"):
+                    cmd.append("--hidden-import=" + mod)
+            elif not f.endswith(".pyc"):
+                cmd += ["--add-data", os.path.join(d, f) + SEP + rel]
     if "--clean" in argv:
         cmd.append("--clean")
     cmd.append(os.path.join(ROOT, "acaristan.py"))

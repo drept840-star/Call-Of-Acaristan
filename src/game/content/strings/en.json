@@ -475,6 +475,7 @@
   "tram_wreck.provocateurs": "PROVOCATEURS",
   "widgets.text": ">",
   "ws.10_max_hp": "+10 MAX HP",
+  "ws.1_starting_mag": "+1 STARTING MAG",
   "ws.clock": "T+{m}.{s}",
   "ws.cracked_but_functional_better_th": "Cracked but functional. Better than nothing.",
   "ws.first_person_interaction": "FIRST PERSON INTERACTION",
@@ -485,9 +486,9 @@
   "ws.krap_observation_feed_lost": "KRAP OBSERVATION FEED LOST",
   "ws.local_control_returning": "LOCAL CONTROL RETURNING",
   "ws.magazine_acquired": "MAGAZINE ACQUIRED",
+  "ws.prompt_search": "[E] Search",
+  "ws.prompt_talk": "[E] Talk",
   "ws.rations_e_player_rations_kevlar": "RATIONS [E]: {player_rations}   Kevlar Plate: +{warehouse_hp_bonus} HP   Extra Mags: +{warehouse_mag_bonus}",
-  "ws.search_label": "[E] Search {label}",
   "ws.signal_breakup": "SIGNAL BREAKUP",
-  "ws.speak_npc": "[E] Speak to {name}",
-  "ws.wasd_walk_mouse_look": "WASD - walk    MOUSE - look"
+  "ws.wasd_walk_mouse_look": "WASD - walk    SHIFT - sprint    MOUSE - look"
 }

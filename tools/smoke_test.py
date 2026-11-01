@@ -2730,6 +2730,35 @@ def check_walking_sim_start_update_draw():
     gc.draw_walking_sim()
 
 
+def check_walking_sim_skip_attack():
+    """--dev-walk-after: harbor lands in the post-rig-strike state, van boardable."""
+    from core.dev_jumps import DEV_JUMPS
+    from core.state import STATE
+    import missions.walking_sim as ws
+    assert DEV_JUMPS["walk-after"][0] == "--dev-walk-after"
+    gc.start_walking_sim()
+    gc.skip_walk_attack()
+    assert not STATE.walk_attack_active and STATE.walk_after_firefight
+    assert STATE.rig_status == ["DESTROYED"] * 3
+    assert ws.walk_return_timer == 0 and ws._walk_van_solid
+    assert not any(w.colliderect(ws.walk_player.rect) for w in ws.walk_walls), \
+        "skip dropped the player inside a wall"
+    gc.update_walking_sim(EmptyKeys())
+    gc.draw_walking_sim()
+    assert not STATE.walk_attack_active, "skip re-triggered the rig cutscene"
+
+    class _HoldD(dict):
+        def __getitem__(self, k):
+            return k == pygame.K_d
+    done = False
+    for _ in range(600):
+        _, _, done = gc.update_walking_sim(_HoldD())
+        if done:
+            break
+    assert done, "could not reach the van after the skip"
+    assert not STATE.walk_attack_active
+
+
 def check_pause_draw():
     clear_screen()
     menu.draw_pause_menu()
@@ -3457,6 +3486,50 @@ def check_voice_manifest_resolves():
     spec.loader.exec_module(mod)
     bad = mod.manifest_problems()
     assert not bad, bad[:8]
+
+
+def check_voice_duplicate_text():
+    """Lines that share their text must be a documented pair.
+
+    ``voice.find_line`` returns the FIRST manifest row for a text, so when two
+    ids carry the same words the later take can never play. Six pairs date
+    from the first recording pass (the same sentence is spoken twice in the
+    script); those are listed here, and the first id of each pair - the one
+    that really plays - must still have audio. Any new duplicate fails here,
+    because a copy-paste is a lost take, not a second performance.
+    """
+    from audio import voice
+    from audio.voice_manifest import VOICE_LINES, KNOWN_MISSING_AUDIO
+
+    documented = {
+        ("VO_006", "VO_014"),   # Balaceanu: "When the address ends, so do you..."
+        ("VO_128", "VO_161"),   # Vasile
+        ("VO_129", "VO_162"),   # Volkov
+        ("VO_130", "VO_163"),   # Vasile
+        ("VO_132", "VO_136"),   # Vasile
+        ("VO_169", "VO_172"),   # Vasile
+    }
+    by_norm = {}
+    for vo, _sp, text in VOICE_LINES:
+        by_norm.setdefault(voice._norm(text), []).append(vo)
+
+    found = set()
+    for ids in by_norm.values():
+        if len(ids) < 2:
+            continue
+        found.add(tuple(ids))
+        first = ids[0]
+        text = next(t for v, _s, t in VOICE_LINES if v == first)
+        assert voice.find_line(None, text) == first, \
+            "the playable take of %r is not the first row: %r" % (ids, first)
+        assert voice.has_file(first) or first in KNOWN_MISSING_AUDIO, \
+            "the take that plays for a duplicated line is missing: %r" % (ids,)
+
+    assert found == documented, \
+        "duplicate line text changed; add/remove the pair with a reason: %r" % (
+            sorted(found ^ documented),)
+    print("  %d documented duplicate-text pairs, first take of each has audio"
+          % len(documented))
 
 
 def check_weapon_attached_all_outfits():
@@ -4758,8 +4831,16 @@ def check_volkov_foreshadowing():
             assert shot["speaker"] == "VOLKOV" and not shot.get("radio")
             assert shot["scene"] == "m3_archives_ingame_join"
             assert shot["min_ms"] >= len(shot["text"]) * I.RADIO_TEXT_MS_PER_CHAR
-            assert "On your six. Move." in shot["text"]
-            assert shots.index(shot) < next(i for i, s in enumerate(shots) if s.get("speaker") == "VASILE")
+            # The two sentences are separate shots so each resolves to its own
+            # VO id (the merged text matched nothing and VO_058 never played).
+            nxt = shots[shots.index(shot) + 1]
+            assert nxt["text"] == "On your six. Move." and nxt["speaker"] == "VOLKOV"
+            assert nxt["scene"] == "m3_archives_ingame_join" and not nxt.get("radio")
+            assert nxt["min_ms"] >= len(nxt["text"]) * I.RADIO_TEXT_MS_PER_CHAR
+            from audio import voice as _voice
+            assert _voice.find_line("VOLKOV", shot["text"]) == "VO_230"
+            assert _voice.find_line("VOLKOV", nxt["text"]) == "VO_058"
+            assert shots.index(nxt) < next(i for i, s in enumerate(shots) if s.get("speaker") == "VASILE")
             assert not I.radio_allowed("CUTSCENE")
 
         # WP2: the M1 escape cut is the m1.escape timeline now (it was the
@@ -8989,7 +9070,7 @@ def check_mission4_ending_shots_render():
     assert getattr(gc, "mission4_intro_shots", None) is mission4_intro_shots, \
         "gc.mission4_intro_shots does not resolve to the M4 intro shots"
 
-    m4_scenes = {"m4_city_curfew", "m4_arrest_screen",
+    m4_scenes = {"m4_street_curfew", "m4_city_curfew", "m4_arrest_screen",
                  "m4_maru_silhouette", "m4_roof_dawn"}
     seen = set()
     for shot in list(mission4_ending_shots) + list(mission4_intro_shots):
@@ -9031,7 +9112,7 @@ def check_mission4_cinematic_arrest():
     from missions.m4.meta import mission4_ending_shots, mission4_intro_shots
 
     original_intro = [
-        ("m3_end_nation", "NARRATOR",
+        ("m4_street_curfew", "NARRATOR",
          "Forty-eight hours after the Vostral, the address is still\n"
          "reading on every screen in the capital."),
         ("m4_city_curfew", "VASILE",
@@ -10146,26 +10227,55 @@ def check_m7_audio_design():
 
 
 def check_m7_generator_minigame():
-    """Prime -> choke -> three timed pulls starts the generator; a miss retries."""
+    """Prime -> hold the cord -> release in the band; a miss retries, never locks.
+
+    The pull-cord rewrite replaced the old moving-marker sweep (choke tap,
+    three timed taps) with a hold-and-release cord, so this drives that API:
+    press to grip, release inside ``band()`` for a good pull.
+    """
     from missions.m7 import farmyard as FY
     from missions.m7 import minigames as G
     from missions import m7
     from engine.core import pin_wall, unpin_wall
 
+    def good_pull(pz, now):
+        lo, hi = pz.band()
+        start = max(now, pz.ready_at)
+        pz.press(start)                                    # grip the cord
+        pz.press(start + int(((lo + hi) / 2.0) * pz.PULL_TIME_MS))   # release in the green
+        return start
+
     p = G.GenPuzzle(0)
     p.press(10), p.press(20), p.press(30)
-    assert p.phase == "choke", p.phase
-    lo, hi = p.band()
-    p.press(p.t + int(((lo + hi) / 2.0) / 2.0 * G.GenPuzzle.CHOKE_MS))
-    assert p.phase == "pull", p.phase
-    for _ in range(G.GenPuzzle.PULLS):
-        lo, hi = p.band()
-        p.press(p.t + int(((lo + hi) / 2.0) / 2.0 * G.GenPuzzle.PULL_MS))
+    assert p.phase == "crank" and p.pull == 0, (p.phase, p.pull)
+    now = 30
+    for _ in range(G.GenPuzzle.PULLS + 4):
+        now = good_pull(p, now) + 1
+        if p.done:
+            break
     assert p.done and p.phase == "run" and p.comp >= 1.0
-    q = G.GenPuzzle(0)
-    q.press(0), q.press(0), q.press(0)
-    q.press(q.t + int(0.5 * G.GenPuzzle.CHOKE_MS))
-    assert q.phase == "choke" and q.tries == 1, "a miss must retry, never lock"
+    assert p.tries == 0, "clean pulls must never count as misses"
+
+    # Releasing late is a kickback, not a lockout: it needs a breath, then pulls.
+    k = G.GenPuzzle(0)
+    k.press(10), k.press(20), k.press(30)
+    lo, hi = k.band()
+    start = max(30, k.ready_at)
+    k.press(start)
+    k.press(start + int(hi * 1.15 * k.PULL_TIME_MS))
+    assert k.phase == "crank" and k.tries == 1 and not k.done, k.phase
+    assert k.ready_at > start, "a kickback must make the player wait for the cord"
+    good_pull(k, k.ready_at)
+    assert k.tries == 1 and k.comp > 0.0, "a good pull after a kickback must still count"
+
+    # A too-gentle pull retries from the same crank phase.
+    w = G.GenPuzzle(0)
+    w.press(10), w.press(20), w.press(30)
+    lo, hi = w.band()
+    start = max(30, w.ready_at)
+    w.press(start)
+    w.press(start + int(lo * 0.5 * w.PULL_TIME_MS))
+    assert w.phase == "crank" and w.tries == 1, (w.phase, w.tries)
 
     class _Keys(dict):
         def __missing__(self, key):
@@ -10176,28 +10286,216 @@ def check_m7_generator_minigame():
     pin_wall(ms=lambda: clock[0])
     try:
         m7.start_m7("chores")
+        # The chores come first; the goat rescue only starts after Bodi's talk.
+        assert FY._RESCUE is None, "the goat rescue must not start before the chores"
+        assert not FY._S["gen_on"] and FY._S["trough"] == {"water": False, "feed": False}
         FY._S["gen_hint"] = True
         FY._S["lines"] = []
         FY._h_generator()
         assert FY._S["genplay"] is not None
-        for _ in range(3):
+        for _ in range(G.GenPuzzle.PRIME_TAPS):
             clock[0] += 40
             m7.game_update(N)
             clock[0] += 40
             m7.game_update(E)
-        assert FY._S["genplay"].phase == "choke"
-        for _ in range(1 + G.GenPuzzle.PULLS):
-            clock[0] += 16
-            m7.game_update(N)
+        assert FY._S["genplay"].phase == "crank"
+        for _ in range(G.GenPuzzle.PULLS + 4):
+            if FY._S["genplay"] is None:
+                break
             pz = FY._S["genplay"]
             lo, hi = pz.band()
-            u = ((lo + hi) / 2.0) / 2.0
-            period = pz.CHOKE_MS if pz.phase == "choke" else pz.PULL_MS
-            clock[0] = pz.t + int(u * period)
-            m7.game_update(E)
+            clock[0] = max(clock[0], pz.ready_at)
             clock[0] += 16
             m7.game_update(N)
+            clock[0] += 16
+            m7.game_update(E)
+            pz = FY._S["genplay"]
+            if pz is None:
+                break
+            clock[0] = pz.pull_started + int(((lo + hi) / 2.0) * pz.PULL_TIME_MS)
+            m7.game_update(N)
         assert FY._S["gen_on"] and "generator" in FY._S["done"]
+    finally:
+        unpin_wall()
+
+
+def check_m7_goat_escape():
+    """The chores-complete film: requested once, plays, and hands back to chores."""
+    from missions import m7
+    from missions.m7 import farmyard as FY
+    from missions.m7 import meta as M7META
+    from core.cutscene_registry import scene_renderer
+    from core.state import STATE
+    from engine.core import pin_wall, unpin_wall
+
+    clock = [80000]
+    pin_wall(ms=lambda: clock[0])
+    try:
+        m7.start_m7("chores")
+        assert STATE.request_m7_cutscene is None
+        FY._h_well()
+        FY._h_trough()
+        FY._h_bin()
+        FY._h_trough()
+        assert STATE.request_m7_cutscene is None, \
+            "water and feed alone must not fire the escape film"
+
+        FY._S["gen_on"] = True
+        FY._S["done"].add("generator")
+        assert FY._chores_complete(), "the last chore must request the escape film"
+        assert STATE.request_m7_cutscene == M7META.MID_GOAT_ESCAPE
+        assert not FY._chores_complete(), "the escape film must only fire once"
+        assert m7.take_cutscene_request() == M7META.MID_GOAT_ESCAPE
+        assert m7.take_cutscene_request() is None
+
+        shots = M7META.film_shots(M7META.MID_GOAT_ESCAPE)
+        assert len(shots) == 5, shots
+        surf = pygame.Surface((1000, 700))
+        for shot in shots:
+            draw = scene_renderer(shot["scene"])
+            assert draw is not None, shot["scene"]
+            for t in (0, 1500, 3000):
+                surf.fill((0, 0, 0))
+                draw(surf, t)
+        assert surf.get_at((500, 350))[:3] != (0, 0, 0)
+
+        m7.on_cutscene_done(M7META.MID_GOAT_ESCAPE)
+        assert STATE.mission7_stage == "chores", \
+            "the escape film must not advance the ladder"
+        assert FY._objective() == "TALK TO BODI"
+        assert FY._S["escape_shown"]
+        assert FY._S["toast"][0].startswith("Chores done")
+
+        # Talking to Bodi now starts with the walk, not the reveal again.
+        FY._h_bodi()
+        assert FY._S["lines"] and "potatoes" in FY._S["lines"][0][1]
+        clock[0] += 5000
+        FY._advance_line()
+        FY._advance_line()
+        assert FY._RESCUE is not None
+        assert FY._RESCUE.lines and "wire" in FY._RESCUE.lines[0][1], \
+            FY._RESCUE.lines
+        m7.game_draw(config.screen, 0, 0)   # the pen hides the escaped goat
+    finally:
+        unpin_wall()
+
+
+def check_m7_goat_rescue():
+    """Beat 2 plays through: follow, spook, herd, repair, overlook, then the runner."""
+    from missions.m7 import farmyard as FY
+    from missions.m7 import goat_rescue as GR
+    from missions import m7
+    from engine.core import pin_wall, unpin_wall
+    from core.state import STATE
+
+    class _Keys(dict):
+        def __missing__(self, key):
+            return False
+
+    clock = [80000]
+    pin_wall(ms=lambda: clock[0])
+    try:
+        m7.start_m7("chores")
+        assert FY._RESCUE is None, "the goat rescue must wait for the chores"
+        assert FY._objective().startswith("CHORES"), FY._objective()
+
+        # Bodi turns the player away until generator, water and feed are done.
+        FY._S["lines"] = []
+        FY._h_bodi()
+        assert FY._S["lines"] and FY._RESCUE is None
+        assert "Generator" in FY._S["lines"][0][1], FY._S["lines"][0]
+        FY._S["lines"] = []
+
+        # Water and feed go through the real well / bin / trough handlers.
+        for source, kind in ((FY._h_well, "water"), (FY._h_bin, "feed")):
+            source()
+            assert FY._S["carry"] == kind
+            FY._h_trough()
+            assert FY._S["trough"][kind] and kind in FY._S["done"], kind
+        assert not FY._chores_done(), "the generator is still cold"
+        FY._S["gen_on"] = True              # started by check_m7_generator_minigame
+        FY._S["done"].add("generator")
+        assert FY._chores_done() and FY._objective() == "TALK TO BODI"
+
+        # Talking to Bodi now plays his line and hands over to the rescue.
+        FY._h_bodi()
+        assert FY._RESCUE is None
+        for _ in range(8):
+            if FY._RESCUE is not None:
+                break
+            clock[0] += 5000
+            FY._advance_line()
+            FY._advance_line()
+        R = FY._RESCUE
+        assert isinstance(R, GR.GoatRescue) and R.phase == "outbound"
+        assert FY._S["gen_on"] and FY._S["trough"] == {"water": True, "feed": True}
+
+        def steer(target, careful=False, extra=()):
+            keys = _Keys({k: True for k in extra})
+            delta = target - pygame.Vector2(STATE.player.rect.center)
+            if abs(delta.x) > 4:
+                keys[pygame.K_d if delta.x > 0 else pygame.K_a] = True
+            if abs(delta.y) > 4:
+                keys[pygame.K_s if delta.y > 0 else pygame.K_w] = True
+            if careful:
+                keys[pygame.K_LSHIFT] = True
+            return keys
+
+        seen, spooked, released = [], False, False
+        for frame in range(20000):
+            clock[0] += 50
+            if STATE.mission7_stage != "chores":
+                break
+            R = FY._RESCUE
+            if R.phase not in seen:
+                seen.append(R.phase)
+            if frame % 8 == 0 and R.phase != "repairing":
+                R.advance_dialogue()
+            if R.phase == "outbound":
+                keys = steer(R.bodi - pygame.Vector2(50, 0))
+            elif R.phase == "approach":
+                me = pygame.Vector2(STATE.player.rect.center)
+                if not spooked:
+                    keys = steer(R.goat)          # rush her once
+                    spooked = R.flee_count > 0
+                elif me.x < GR.DITCH_X + GR.DITCH_W + 30:
+                    keys = steer(GR.vec((20.3, 5.5)))
+                else:
+                    keys = steer(R.goat - pygame.Vector2(0, 50), careful=True)
+            elif R.phase == "herd":
+                keys = steer(R.goat + pygame.Vector2(60, 0))
+            elif R.phase == "repair":
+                keys = steer(GR.vec((13.5, 5.3)))
+                if R._near_post():
+                    FY.interact()
+            elif R.phase == "repairing":
+                if R.repair_time >= 1.0 and not released:
+                    released = True     # one frame off E: progress must hold
+                    keys = _Keys()
+                    m7.game_update(keys)
+                    assert R.phase == "repairing" and R.repair_time >= 1.0
+                    continue
+                # The repair is a balance: grip with E and steer against the
+                # post's lean (the on-screen card says so). Holding E alone
+                # pins the post over and makes no progress.
+                keys = _Keys({pygame.K_e: True})
+                if R.post_lean > 0.06:
+                    keys[pygame.K_a] = True
+                elif R.post_lean < -0.06:
+                    keys[pygame.K_d] = True
+            elif R.phase in ("overlook", "repair_talk"):
+                walking = R.route_index < len(GR.TO_OVERLOOK) or R.phase == "repair_talk"
+                keys = steer(R.bodi if walking else GR.OVERLOOK)
+            else:
+                keys = _Keys()
+            m7.game_update(keys)
+            if frame % 200 == 0:
+                m7.game_draw(config.screen, 0, 0)
+        assert seen == ["outbound", "approach", "herd", "repair", "repairing",
+                        "repair_talk", "overlook", "bike"], seen
+        assert spooked and released and R.repaired and R.overlook_spoken
+        assert STATE.mission7_stage == "runner", STATE.mission7_stage
+        assert R.goat.distance_to(GR.vec(GR.HOMEWARD[-1])) < 1
     finally:
         unpin_wall()
 
@@ -10212,28 +10510,34 @@ def check_m7_tractor_minigame():
     from core.state import STATE
 
     p = G.TractorPuzzle(M.tractor_route_px(), 0)
+    # The rewrite gave the tractor inertia, a graded stop and a handbrake at
+    # the end, so the route is driven frame by frame: hold the shown control,
+    # let go between prompts, then park on the brake.
     t = 0
-    for i in range(len(p.route)):
-        assert p.state == "prompt", (i, p.state)
-        p.update(t + 40)
-        p.press(t + 100, p.step()[6])
-        assert p.state == "drive", (i, p.state)
-        t += 100 + p.duration + 10
-        p.update(t)
-    assert p.done and p.state == "done"
+    prompts = 0
+    last_state = None
+    while not p.done and t < 400000:
+        t += 16
+        if p.state == "prompt" and last_state != "prompt":
+            prompts += 1
+        last_state = p.state
+        held = {p.step()[6]} if p.state in ("prompt", "drive") else set()
+        p.set_input(held, p.state == "park", t)
+    assert p.done and p.state == "done", p.state
+    assert prompts == len(p.route), (prompts, len(p.route))
     x, y, _ang = p.pose(t)
     assert abs(x - (M.TRACTOR_PARK[0] + M.TILE)) <= 2, x
     assert abs(y - (M.TRACTOR_PARK[1] + M.TILE // 2)) <= 2, y
     waiting = G.TractorPuzzle(M.tractor_route_px(), 0)
     waiting.update(60000)
     assert waiting.state == "prompt", "steering prompts must not time out"
-    waiting.press(60000, waiting.step()[6])
+    waiting.set_input({waiting.step()[6]}, False, 60000)
     assert waiting.state == "drive"
     q = G.TractorPuzzle(M.tractor_route_px(), 0)
     q.press(50, "d")
     assert q.state == "stall" and q.i == 0 and q.tries == 1
-    q.update(50 + G.TractorPuzzle.STALL_MS + 10)
-    assert q.state == "prompt", "a stall must replay the prompt"
+    q.set_input(set(), False, 50 + G.TractorPuzzle.STALL_MS + 10)
+    assert q.state == "prompt", "a stall must replay the prompt once the key is released"
 
     class _Keys(dict):
         def __missing__(self, key):
@@ -10250,13 +10554,18 @@ def check_m7_tractor_minigame():
         FY._h_tractor()
         pz = FY._S["drive"]
         assert pz is not None and "tractor" not in FY._S["preps"]
-        for _ in range(len(pz.route)):
-            clock[0] += 60
-            m7.game_update(N)
-            clock[0] += 60
-            m7.game_update(_Keys({keymap[pz.step()[6]]: True}))
-            clock[0] += pz.duration + 60
-            m7.game_update(N)
+        for _ in range(300000):
+            if FY._S.get("drive") is None:
+                break
+            pz = FY._S["drive"]
+            clock[0] += 16
+            if pz.state == "park":
+                held = {pygame.K_SPACE}       # handbrake holds the tractor
+            elif pz.state in ("prompt", "drive"):
+                held = {keymap[pz.step()[6]]}
+            else:
+                held = set()                  # let go between prompts
+            m7.game_update(_Keys({k: True for k in held}))
         assert not FY._S.get("drive")
         assert not any(STATE.player.rect.colliderect(w) for w in STATE.walls), "unsafe dismount"
         assert "tractor" in FY._S["preps"] and "tractor" in STATE.m7_preps
@@ -10377,8 +10686,12 @@ def check_m7_choice_radio():
     _S = C._S
     assert _S["sel"] == 0 and _S["line_i"] == 0
     m7.game_draw(config.screen, 0, 0)
-    edge = config.screen.get_at((171, 431))[:3]
-    assert sum(edge) > 380, ("the tuned channel card must light up", edge)
+    bay = C.BAYS[0]
+    edge = config.screen.get_at((bay.x, bay.centery))[:3]
+    assert sum(edge) > 380, ("the tuned channel bay must light up", edge)
+    other = C.BAYS[1]
+    assert sum(config.screen.get_at((other.x, other.centery))[:3]) < 380, \
+        "only the tuned bay may carry the tuned frame"
 
 
 def check_runner_handoff():
@@ -10506,6 +10819,86 @@ def check_m6_train_viewmodel():
     assert meta.get("mag_faces"), "K93D magazine group missing"
     reticle = Path(__file__).resolve().parent.parent / "assets" / "3D" / "K93D_reticle.png"
     assert reticle.is_file(), "K93D reticle sprite missing: %s" % reticle
+
+
+def check_ak_rifle_asset():
+    """The shared Guard rifle is a baked asset, rigged and attached everywhere.
+
+    ``assets/3D/ak-style-rifle.glb`` -> ``akrifle.mesh.json`` is the
+    third-person gun for every plain-rifle humanoid (M2/M5-M7, M8 to come);
+    the GL viewmodel stays the K93D.  A missing/corrupt bake only costs the
+    procedural fallback, so it must fail the gate instead of shipping quietly.
+    """
+    import json
+    import os
+    from cutscenes.cast3d import humanoid3d, rifle_asset, third_person_rifle
+    from engine3d.hold import GRIPS
+    from game.render3d_bridge import MESHES_DIR
+
+    path = os.path.join(MESHES_DIR, "akrifle.mesh.json")
+    assert os.path.isfile(path), "AK rifle asset missing: %s" % path
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data.get("schema") == "ae.mesh/1", "AK rifle asset schema"
+    assert 1200 <= int(data.get("tris", 0)) <= 3000, \
+        "AK rifle tri budget: %s" % data.get("tris")
+    meta = data["meta"]
+    muzzle, butt = meta["muzzle"], meta["butt"]
+    guard, fore = meta["guard"], meta["fore"]
+    assert muzzle[2] > 0.4, "AK muzzle point missing"
+    assert butt[2] < -0.2, "AK butt point missing"
+    assert 0.05 < guard[2] < fore[2] < muzzle[2], "AK grip landmarks out of order"
+
+    # The hold solver's grips are a mirror of the bake: drift here puts the
+    # hands inside the gun without any other check noticing.
+    g = GRIPS["akrifle"]
+    for key in ("guard", "fore", "butt"):
+        for a, b in zip(g[key], meta[key]):
+            assert abs(a - b) <= 1e-3, \
+                "hold.GRIPS['akrifle']['%s'] does not mirror the asset meta" % key
+    assert g["grip"] == (0.0, 0.0, 0.0), "AK grip must sit at the hand joint"
+
+    mesh, muzzle_pt = rifle_asset()
+    assert mesh is not None, "AK asset did not load through cast3d.rifle_asset"
+    assert mesh is rifle_asset()[0], "AK asset is not cached"
+    assert len(mesh.faces) == int(data["tris"]), "AK asset face count changed"
+    assert abs(muzzle_pt[2] - muzzle[2]) <= 1e-3, "AK muzzle meta mismatch"
+
+    gun = humanoid3d("krap", rifle="rifle")
+    assert getattr(gun, "_weapon", None) == "akrifle", \
+        "a plain rifle spec did not get the AK"
+    assert gun._rifle is mesh, "AK rig does not carry the shared mesh"
+    assert abs(gun._muzzle_z - muzzle[2]) <= 1e-3, "AK muzzle offset not applied"
+    assert str(getattr(gun, "_gl_spec_key", "")).endswith("|akrifle"), \
+        "AK rig has no GL template key (it would reuse the box-rifle VBO)"
+
+    sniper = humanoid3d("ucilev", rifle="sniper")
+    assert getattr(sniper, "_weapon", None) is None, "sniper got the AK"
+    assert sniper._rifle is not mesh, "sniper shares the AK mesh"
+    os12 = humanoid3d("krap", rifle="os12")
+    assert getattr(os12, "_weapon", None) is None, "os12 got the AK"
+    assert os12._rifle is not mesh, "os12 shares the AK mesh"
+
+    # A rig that already carries a custom gun (M7 allies) must be left alone.
+    custom = humanoid3d("krap", rifle="rifle")
+    custom._weapon = "m7rifle"
+    before = custom._rifle
+    assert third_person_rifle(custom) is custom and custom._rifle is before, \
+        "third_person_rifle replaced an assigned weapon"
+
+    from cutscenes import m6world3d as W
+    trooper = W.hum(("guard", "rifle"))
+    assert getattr(trooper, "_weapon", None) == "akrifle", \
+        "the M6 Guard did not get the AK"
+
+    # Scenes ask for the generic "rifle": the solve must use the AK's own
+    # fore-end, or the support hand floats a few centimetres off the gun.
+    from engine3d import POSES
+    from engine3d.hold import hold_cached, hold_report
+    pose = hold_cached(trooper, dict(POSES["ready"]), "rifle", "ready")
+    rep = hold_report(trooper, pose, (0.0, 0.0, 0.0), 0.0, "akrifle")
+    assert rep["support"] is not None and rep["support"] < 0.02, \
+        "AK support hand misses the handguard by %s m" % rep["support"]
 
 
 def check_m6_train_ads_and_muzzle():
@@ -11435,6 +11828,7 @@ def main():
     print("\n=== Walking sim checks ===")
     walking_checks = [
         ("walking_sim_start_update_draw", check_walking_sim_start_update_draw),
+        ("walking_sim_skip_attack", check_walking_sim_skip_attack),
     ]
 
     for name, fn in walking_checks:
@@ -11547,6 +11941,7 @@ def main():
                      ("weapon_attached_all_outfits", check_weapon_attached_all_outfits),
                      ("radio_gated_by_cutscenes", check_radio_gated_by_cutscenes),
                      ("voice_manifest_resolves", check_voice_manifest_resolves),
+                     ("voice_duplicate_text", check_voice_duplicate_text),
                      ("radio_widget_headless", check_radio_widget_headless),
                          ("depot_restage_timing", check_depot_restage_timing),
                       ("sprite_pipeline", check_sprite_pipeline),
@@ -11572,6 +11967,8 @@ def main():
     ok = run_check("mission7_vertical_slice", check_mission7_vertical_slice) and ok
     for name, fn in (("m7_audio_design", check_m7_audio_design),
                      ("m7_generator_minigame", check_m7_generator_minigame),
+                     ("m7_goat_escape", check_m7_goat_escape),
+                     ("m7_goat_rescue", check_m7_goat_rescue),
                      ("m7_tractor_minigame", check_m7_tractor_minigame),
                      ("m7_shotgun_raid", check_m7_shotgun_raid),
                      ("m7_shotgun_hold", check_m7_shotgun_hold),
@@ -11580,6 +11977,7 @@ def main():
                      ("arena_shotgun", check_arena_shotgun)):
         ok = run_check(name, fn) and ok
     ok = run_check("m6_train_viewmodel", check_m6_train_viewmodel) and ok
+    ok = run_check("ak_rifle_asset", check_ak_rifle_asset) and ok
     ok = run_check("m6_train_ads_muzzle", check_m6_train_ads_and_muzzle) and ok
     ok = run_check("m6_train_scope_subject", check_m6_train_scope_sees_the_target) and ok
     ok = run_check("m6_train_death_beat", check_m6_train_death_beat) and ok

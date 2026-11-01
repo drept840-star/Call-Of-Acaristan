@@ -89,10 +89,17 @@ def load_gltf(path):
             col = (255, 255, 255)
             mat = prim.get("material")
             if mat is not None:
-                factor = gltf["materials"][mat].get(
-                    "pbrMetallicRoughness", {}).get("baseColorFactor")
-                if factor:
-                    col = tuple(int(round(c * 255)) for c in factor[:3])
+                matdef = gltf["materials"][mat]
+                # Generated GLBs tag the exact house colour here (glTF factors
+                # are linear, so converting them back would round-trip).
+                pal = (matdef.get("extras") or {}).get("palette")
+                if isinstance(pal, str) and len(pal) == 7 and pal[0] == "#":
+                    col = tuple(int(pal[i:i + 2], 16) for i in (1, 3, 5))
+                else:
+                    factor = matdef.get(
+                        "pbrMetallicRoughness", {}).get("baseColorFactor")
+                    if factor:
+                        col = tuple(int(round(c * 255)) for c in factor[:3])
             for i in range(0, len(idxs) - 2, 3):
                 faces.append(((base + idxs[i], base + idxs[i + 1],
                                base + idxs[i + 2]), col))
@@ -127,6 +134,9 @@ def main():
     ap.add_argument("id")
     ap.add_argument("--scale", type=float, default=1.0)
     ap.add_argument("--budget", type=int, default=1500)
+    ap.add_argument("--min-height", type=float, default=0.05,
+                    help="height lint floor in metres (default 0.05; lower it "
+                         "deliberately for a legitimately flat prop)")
     ap.add_argument("--color", default=None, help="OBJ default #RRGGBB")
     ap.add_argument("--mtl", action="append", default=[],
                     help="OBJ material colour name=#RRGGBB (repeatable)")
@@ -170,9 +180,10 @@ def main():
         print(f"AE IMPORT MESH: FAIL ({len(faces)} tris > budget "
               f"{args.budget}; raise --budget deliberately if intended)")
         return 1
-    if not (0.05 <= height <= 40.0):
+    if not (args.min_height <= height <= 40.0):
         print(f"AE IMPORT MESH: FAIL (height {height:.2f} m outside "
-              "0.05-40 m - wrong units? pass --scale)")
+              f"{args.min_height:g}-40 m - wrong units? pass --scale, or "
+              "--min-height for a flat prop)")
         return 1
     if args.strict and worst > 42.0:
         print("AE IMPORT MESH: FAIL (strict palette snap > 42)")

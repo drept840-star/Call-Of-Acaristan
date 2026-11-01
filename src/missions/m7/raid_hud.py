@@ -60,6 +60,8 @@ def minimap(surface, s):
         if e["alive"] and e["live"] and (s.t - e["aim"] < 2.5 or s.t - e["hit_t"] < 2.0):
             pygame.draw.circle(surface, (224, 70, 58), _mp(e["x"], e["z"], ox, oy), 2)
     for a, col in ((s.brain.alex, SPEAKER["ALEX"]), (s.brain.bodi, SPEAKER["BODI"])):
+        if a["state"] == "gone":       # he walked off; there is nobody to plot
+            continue
         pygame.draw.circle(surface, col, _mp(a["x"], a["z"], ox, oy), 3, 1 if a["state"] == "down" else 0)
     tx, tz = s.objective_point()
     if tx is not None:
@@ -129,6 +131,9 @@ def draw(surface, s):
     U.weapon(surface, s.hp(), s.hp_max(), s.mag, s.MAG, s.reserve, s.reloading, s.RELOAD_S,
              cw="fallow12", label="FALLOW 12", caliber="12GA", kind="shell", reload_ms=132)
     bodi_clock(surface, s)
+    if getattr(s, "pig_dead", False):
+        H._text(surface, font_terminal_small, "BODI HAS TURNED ON YOU", H.DANGER,
+                (WIDTH // 2, HEIGHT - 236), "midtop")
     callouts(surface, s)
     if s.cp_toast and s.t - s.cp_toast < 2.6:
         H._text(surface, font_terminal, "CHECKPOINT", H.GOOD, (cx, 120), "midtop",

@@ -12,6 +12,7 @@ from core.config import (C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_WHITE, HEIGHT,
 from cutscenes.cast import draw_biribel, draw_civilian
 from cutscenes.route12 import draw_biribel_blackout, draw_factory, draw_ipa_radio_chatter, draw_krap_door_kickin, draw_mag_graffiti, draw_oil_rig, draw_propaganda_poster, draw_route12_aftermath, draw_route12_black, draw_route12_broadcast, draw_route12_checkpoint, draw_route12_files, draw_route12_mag_alert, draw_route12_tanker, draw_van_exterior, draw_van_handoff, draw_van_interior, GROUND_Y, _draw_vertical_gradient, _draw_light_cone
 from core.cutscene_registry import scene_renderer as _scene_renderer
+import cutscenes.van3d  # noqa: F401  registers the 3D "van_exterior" take (2D fallback inside)
 from cutscenes.m5mid3d import draw_m5x
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.ui import dialogue_box as _dialogue_box  # RPE6 Phase 4 (A-009): shared cutscene box

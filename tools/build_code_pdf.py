@@ -26,11 +26,21 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 # ─── CONFIG ────────────────────────────────────────────────
-FONT_SIZE = 0.35
-LINE_HEIGHT = 0.50
-INDIVIDUAL_FONT_SIZE = 0.4
-INDIVIDUAL_LINE_HEIGHT = 0.6
-HEADER_SIZE = 0.3
+# NOTE: fpdf font sizes are in POINTS. Line heights / margins are in MM.
+
+# Combined PDF (intentionally ultra-dense)
+FONT_SIZE = 0.35        # pt
+LINE_HEIGHT = 0.50      # mm
+HEADER_SIZE = 0.3       # pt (file banner)
+
+# Individual per-file PDFs: normal, readable sizes
+INDIVIDUAL_FONT_SIZE = 8.0          # pt
+INDIVIDUAL_LINE_HEIGHT = 3.6        # mm
+INDIVIDUAL_HEADER_SIZE = 10.0       # pt (file banner)
+INDIVIDUAL_CHROME_PT = (7.0, 8.0)   # pt: (running page header, page-number footer)
+
+COMBINED_CHROME_PT = (2.5, 3.0)     # pt: (running page header, page-number footer)
+PT_TO_MM = 0.3528
 MARGIN = 5
 
 TEXT_COLOR = (10, 35, 64)       # Blueprint Blue
@@ -97,13 +107,21 @@ def find_unicode_mono_font():
         if candidate.exists(): return candidate
     return None
 
+def header_height(header_size):
+    """File-banner height in mm for a header font size given in points."""
+    return header_size * PT_TO_MM + 1.5
+
+def footer_height(ftr_pt):
+    """Footer cell height in mm for a footer font size given in points."""
+    return max(3, ftr_pt * PT_TO_MM * 1.5)
+
 class CodePDF(FPDF):
     _has_cover = False
+    hdr_pt = 2.5      # running header font size (pt)
+    ftr_pt = 3.0      # footer font size (pt)
 
     def add_page(self, *args, **kwargs):
         super().add_page(*args, **kwargs)
-        self.set_fill_color(*BG_COLOR)
-        self.rect(0, 0, self.w, self.h, "F")
         if self.page_no() % 2 != 0:
             self.set_left_margin(12); self.set_right_margin(5)
         else:
@@ -111,21 +129,26 @@ class CodePDF(FPDF):
         self.set_x(self.l_margin)
 
     def header(self):
+        # Paint the page background first, so it never covers the header text.
+        self.set_fill_color(*BG_COLOR)
+        self.rect(0, 0, self.w, self.h, "F")
         if self.page_no() == 1 and self._has_cover: return
         l_mar, r_mar = (12, 5) if self.page_no() % 2 != 0 else (5, 12)
-        self.set_font("Courier", size=2.5)
+        h = max(3, self.hdr_pt * PT_TO_MM * 1.5)
+        self.set_font("Courier", size=self.hdr_pt)
         self.set_text_color(100, 100, 100)
         self.set_x(l_mar)
-        self.cell(self.w - l_mar - r_mar, 3, "CALL OF ACARISTAN - SOURCE CODE", new_x="LMARGIN", new_y="NEXT")
+        self.cell(self.w - l_mar - r_mar, h, "CALL OF ACARISTAN - SOURCE CODE", new_x="LMARGIN", new_y="NEXT")
         self.set_draw_color(180, 190, 200)
         self.line(l_mar, self.get_y(), self.w - r_mar, self.get_y())
         self.ln(2)
 
     def footer(self):
-        self.set_y(-6)
-        self.set_font("Courier", size=3)
+        h = footer_height(self.ftr_pt)
+        self.set_y(-(h + 3))
+        self.set_font("Courier", size=self.ftr_pt)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 3, f"- {self.page_no()} -", align="C")
+        self.cell(0, h, f"- {self.page_no()} -", align="C")
 
 # Characters commonly missing from monospace fonts like Consolas
 GLYPH_REPLACEMENTS = {
@@ -203,14 +226,14 @@ def split_file_list(files, num_parts, font_size, line_height, header_size):
     estimates = []
     for f in files:
         count = get_file_line_count(f)
-        height = header_size + (count * line_height) + 2
+        height = header_height(header_size) + (count * line_height) + 2
         estimates.append(height)
-        
+
     num_parts = min(num_parts, len(files))
     total = sum(estimates)
     cum = [0]
     for est in estimates: cum.append(cum[-1] + est)
-    
+
     splits = [0]
     for p in range(1, num_parts):
         ideal = total * p / num_parts
@@ -221,7 +244,7 @@ def split_file_list(files, num_parts, font_size, line_height, header_size):
             if d < best_diff: best_diff, best = d, i
         splits.append(best)
     splits.append(len(files))
-    
+
     chunks = [files[splits[i]:splits[i + 1]] for i in range(num_parts)]
     est_pages = [(cum[splits[i + 1]] - cum[splits[i]]) / page_height for i in range(num_parts)]
     return chunks, est_pages
@@ -239,7 +262,7 @@ def setup_font(pdf: FPDF):
     return "Courier", False
 
 def ensure_room_for_header(pdf: FPDF):
-    if pdf.get_y() > pdf.h - MARGIN - 8: pdf.add_page()
+    if pdf.get_y() > pdf.h - pdf.b_margin - 8: pdf.add_page()
 
 def add_cover_page(pdf: CodePDF, total_file_count, total_lines, files):
     pdf._has_cover = True; pdf.add_page()
@@ -257,7 +280,7 @@ def add_cover_page(pdf: CodePDF, total_file_count, total_lines, files):
     pdf.set_font("Courier", size=4); pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 4, get_git_meta(), align="C", new_x="LMARGIN", new_y="NEXT"); pdf.ln(5)
     pdf.set_text_color(*TEXT_COLOR)
-    for label, value in [("DATE", date.today().strftime("%Y-%m-%d")), ("FILES", str(total_file_count)), 
+    for label, value in [("DATE", date.today().strftime("%Y-%m-%d")), ("FILES", str(total_file_count)),
                          ("TOTAL LINES", f"{total_lines:,}"), ("DENSITY", "EXTREME")]:
         pdf.cell(0, 4, f"{label}: {value}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(10); pdf.set_font("Courier", size=3); pdf.set_text_color(120, 120, 120)
@@ -284,14 +307,22 @@ def write_code_line(pdf: FPDF, line: str, line_no: int, unicode_font_available: 
         pdf.cell(0, line_height, prefix + chunk, new_x="LMARGIN", new_y="NEXT")
         start += max_chars; first = False
 
-def write_files_to_pdf(files, pdf_path, font_size=None, line_height=None, header_size=None, *, add_cover=False, total_file_count=0, total_lines=0):
+def write_files_to_pdf(files, pdf_path, font_size=None, line_height=None, header_size=None, *,
+                       add_cover=False, total_file_count=0, total_lines=0,
+                       chrome_pt=COMBINED_CHROME_PT):
     if font_size is None: font_size = FONT_SIZE
     if line_height is None: line_height = LINE_HEIGHT
     if header_size is None: header_size = HEADER_SIZE
-    
+
     pdf = CodePDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=MARGIN)
+    pdf.hdr_pt, pdf.ftr_pt = chrome_pt
+
+    # Keep body text clear of the footer when the footer is large.
+    ftr_h = footer_height(pdf.ftr_pt)
+    bottom_margin = MARGIN if ftr_h + 3 <= MARGIN + 1 else ftr_h + 3
+    pdf.set_auto_page_break(auto=True, margin=bottom_margin)
     pdf.set_margins(MARGIN, MARGIN, MARGIN)
+
     font_family, unicode_font_available = setup_font(pdf)
     if add_cover: add_cover_page(pdf, total_file_count, total_lines, files)
     pdf.add_page()
@@ -304,7 +335,7 @@ def write_files_to_pdf(files, pdf_path, font_size=None, line_height=None, header
         header_text = safe_text(f"  {str(filepath).replace(chr(92), '/').upper()}  ", unicode_font_available)
         pdf.set_fill_color(*HEADER_BG); pdf.set_font(font_family, style="B", size=header_size)
         pdf.set_text_color(*HEADER_TEXT)
-        pdf.cell(0, header_size + 1.5, header_text, fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, header_height(header_size), header_text, fill=True, new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(*TEXT_COLOR); pdf.ln(0.8)
         pdf.set_font(font_family, size=font_size)
         prev_blank = False
@@ -319,6 +350,18 @@ def write_files_to_pdf(files, pdf_path, font_size=None, line_height=None, header
         print(f"  Added: {filepath}")
     pdf.output(str(pdf_path))
     print(f"Written: {pdf_path}")
+
+def build_individual_files(files):
+    """Readable per-file PDFs + TXTs (shared by CLI and GUI)."""
+    print("\n-- Building individual files --")
+    for filepath in files:
+        name = str(filepath).replace("\\", "/").replace("/", "_")
+        write_files_to_pdf([filepath], PDF_OUTPUT_DIR / f"{name}.pdf",
+                           font_size=INDIVIDUAL_FONT_SIZE,
+                           line_height=INDIVIDUAL_LINE_HEIGHT,
+                           header_size=INDIVIDUAL_HEADER_SIZE,
+                           chrome_pt=INDIVIDUAL_CHROME_PT)
+        write_files_to_txt([filepath], TXT_OUTPUT_DIR / f"{name}.txt")
 
 # ─── CLI FALLBACK LOGIC ────────────────────────────────────
 def choose_mode_cli():
@@ -344,7 +387,7 @@ def choose_mode_cli():
         except (EOFError, KeyboardInterrupt): return "full", 0
 
 def build_pdf_cli():
-    PDF_OUTPUT_DIR.mkdir(exist_ok=True); TXT_OUTPUT_DIR.mkdir(exist_ok=True)
+    PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True); TXT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     files = find_py_files(PROJECT_ROOT)
     if not files: print("No .py files found."); return
     total_lines = sum(len((PROJECT_ROOT / f).read_text(encoding="utf-8").splitlines()) for f in files if (PROJECT_ROOT / f).exists())
@@ -357,11 +400,7 @@ def build_pdf_cli():
     else:
         write_files_to_pdf(files, PDF_OUTPUT_DIR / "game_source.pdf", add_cover=True, total_file_count=len(files), total_lines=total_lines)
         write_files_to_txt(files, TXT_OUTPUT_DIR / "game_source.txt")
-    print("\n-- Building individual files --")
-    for filepath in files:
-        name = str(filepath).replace("\\", "/").replace("/", "_")
-        write_files_to_pdf([filepath], PDF_OUTPUT_DIR / f"{name}.pdf", font_size=INDIVIDUAL_FONT_SIZE, line_height=INDIVIDUAL_LINE_HEIGHT, header_size=HEADER_SIZE)
-        write_files_to_txt([filepath], TXT_OUTPUT_DIR / f"{name}.txt")
+    build_individual_files(files)
 
 # ─── GUI LOGIC (PySide6) ───────────────────────────────────
 DARK_THEME_QSS = """
@@ -629,17 +668,17 @@ try:
         v = QVBoxLayout(frame)
         v.setContentsMargins(18, 16, 18, 16)
         v.setSpacing(8)
-        
+
         lbl = QLabel(title)
         lbl.setStyleSheet("color: #4DA6FF; font-weight: bold; font-size: 11px; letter-spacing: 2px; background-color: transparent;")
         v.addWidget(lbl)
-        
+
         line = QFrame()
         line.setFixedHeight(1)
         line.setStyleSheet("background-color: #1E3A5F; border: none;")
         v.addWidget(line)
         v.addSpacing(6)
-        
+
         return frame, v
 
     def fix_combo_popup(combo: QComboBox):
@@ -684,8 +723,8 @@ try:
             for f in files:
                 try: total_lines += len((PROJECT_ROOT / f).read_text(encoding="utf-8").splitlines())
                 except: pass
-            found_names = {f.name for f in files}
-            missing = [name.strip() for name in PREFERRED_ORDER if name.strip() not in found_names]
+            found_paths = {str(f).replace("\\", "/") for f in files}
+            missing = [name.strip() for name in PREFERRED_ORDER if name.strip() not in found_paths]
             self.finished.emit(files, total_lines, missing)
 
     class BuildWorker(QThread):
@@ -711,36 +750,33 @@ try:
                         line, self.buffer = self.buffer.split("\n", 1)
                         if line.strip(): self.signal.emit(line)
                 def flush(self): pass
-            
+
             old_stdout = sys.stdout
             sys.stdout = SignalStream(self.log_signal)
             try:
-                PDF_OUTPUT_DIR.mkdir(exist_ok=True); TXT_OUTPUT_DIR.mkdir(exist_ok=True)
+                PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True); TXT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
                 files = find_py_files(PROJECT_ROOT)
                 if not files: print("No .py files found."); return
                 total_lines = sum(len((PROJECT_ROOT / f).read_text(encoding="utf-8").splitlines()) for f in files if (PROJECT_ROOT / f).exists())
-                
+
+                # Combined PDF uses the GUI density controls
                 if self.mode == "split":
                     chunks, est_pages = split_file_list(files, self.num_parts, self.font_size, self.line_height, self.header_size)
                     print(f"Estimated pages: {', '.join(f'part {i+1} ~{p:.0f}p' for i, p in enumerate(est_pages))}")
                     for i, chunk in enumerate(chunks):
-                        write_files_to_pdf(chunk, PDF_OUTPUT_DIR / f"game_source_part{i+1}.pdf", 
+                        write_files_to_pdf(chunk, PDF_OUTPUT_DIR / f"game_source_part{i+1}.pdf",
                                            font_size=self.font_size, line_height=self.line_height, header_size=self.header_size,
                                            add_cover=(i == 0), total_file_count=len(files), total_lines=total_lines)
                 else:
                     print("Building combined PDF/TXT...")
-                    write_files_to_pdf(files, PDF_OUTPUT_DIR / "game_source.pdf", 
+                    write_files_to_pdf(files, PDF_OUTPUT_DIR / "game_source.pdf",
                                        font_size=self.font_size, line_height=self.line_height, header_size=self.header_size,
                                        add_cover=True, total_file_count=len(files), total_lines=total_lines)
                     write_files_to_txt(files, TXT_OUTPUT_DIR / "game_source.txt")
-                    
-                print("\n-- Building individual files --")
-                for filepath in files:
-                    name = str(filepath).replace("\\", "/").replace("/", "_")
-                    write_files_to_pdf([filepath], PDF_OUTPUT_DIR / f"{name}.pdf", 
-                                       font_size=self.font_size, line_height=self.line_height, header_size=self.header_size)
-                    write_files_to_txt([filepath], TXT_OUTPUT_DIR / f"{name}.txt")
-                    
+
+                # Individual PDFs always use the readable INDIVIDUAL_* constants
+                build_individual_files(files)
+
                 print(f"\nPDF output: {PDF_OUTPUT_DIR}/")
                 self.finished_signal.emit("ARCHIVAL SEQUENCE COMPLETE.")
             except Exception as e:
@@ -753,7 +789,7 @@ try:
         def __init__(self):
             super().__init__()
             self.setWindowTitle("CALL OF ACARISTAN // ARCHIVAL MONOLITH")
-            self.resize(1080, 820)                          
+            self.resize(1080, 820)
             self.setMinimumSize(920, 720)
 
             central = QWidget()
@@ -801,7 +837,7 @@ try:
             content_row.addWidget(radar_group, stretch=5)
 
             # RIGHT: Config
-            config_group, config_layout = make_group("CONFIGURATION")
+            config_group, config_layout = make_group("CONFIGURATION (COMBINED PDF)")
 
             self.mode_combo = QComboBox()
             self.mode_combo.addItems([
@@ -821,14 +857,14 @@ try:
             self.parts_field.setVisible(False)
             config_layout.addWidget(self.parts_field)
 
-            # --- Live Density Controllers ---
+            # --- Live Density Controllers (font/header in pt, line height in mm) ---
             density_row1 = QHBoxLayout()
             density_row1.setSpacing(10)
-            
+
             self.font_spin = QDoubleSpinBox()
             self.font_spin.setRange(0.15, 1.5)
             self.font_spin.setSingleStep(0.05)
-            self.font_spin.setSuffix(" mm")
+            self.font_spin.setSuffix(" pt")
             self.font_spin.setFixedHeight(36)
             self.font_spin.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
             self.font_spin.valueChanged.connect(self.update_estimate)
@@ -842,13 +878,13 @@ try:
             self.line_spin.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
             self.line_spin.valueChanged.connect(self.update_estimate)
             density_row1.addWidget(make_field("LINE HEIGHT", self.line_spin))
-            
+
             config_layout.addLayout(density_row1)
 
             self.header_spin = QDoubleSpinBox()
             self.header_spin.setRange(0.15, 1.5)
             self.header_spin.setSingleStep(0.05)
-            self.header_spin.setSuffix(" mm")
+            self.header_spin.setSuffix(" pt")
             self.header_spin.setFixedHeight(36)
             self.header_spin.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
             self.header_spin.valueChanged.connect(self.update_estimate)
@@ -929,12 +965,13 @@ try:
 
         def update_estimate(self):
             if not self.files: return
-            
+
             font_size = self.font_spin.value()
             line_height = self.line_spin.value()
             header_size = self.header_spin.value()
 
-            if line_height < font_size:
+            # font_size is in pt, line_height in mm -> convert before comparing
+            if line_height < font_size * PT_TO_MM:
                 self.page_bar.setRange(0, 1)
                 self.page_bar.setValue(1)
                 self.page_bar.setFormat("LINE HEIGHT < FONT SIZE - TEXT OVERLAP")
@@ -945,13 +982,13 @@ try:
                 return
 
             self.page_bar.setRange(0, 150)
-            
+
             page_height = 297 - 2 * MARGIN
             mode_idx = self.mode_combo.currentIndex()
             mode = "split" if mode_idx == 1 else "full"
             parts_idx = self.parts_combo.currentIndex()
             parts = int(self.parts_combo.itemText(parts_idx)) if mode == "split" else 1
-            
+
             if mode == "split":
                 chunks, est_pages = split_file_list(self.files, parts, font_size, line_height, header_size)
                 total_est = sum(est_pages)
@@ -959,33 +996,33 @@ try:
                 total_height = 0
                 for f in self.files:
                     count = get_file_line_count(f)
-                    total_height += header_size + (count * line_height) + 2
+                    total_height += header_height(header_size) + (count * line_height) + 2
                 total_est = total_height / page_height
 
             self.page_bar.setValue(int(total_est))
-            
-            if total_est < 80: 
+
+            if total_est < 80:
                 color = "#00C853"
                 status = "OPTIMAL"
-            elif total_est <= 95: 
+            elif total_est <= 95:
                 color = "#FFD740"
                 status = "TIGHT"
-            else: 
+            else:
                 color = "#F44336"
                 status = "EXCEEDS BUDGET"
-                
+
             self.page_bar.setStyleSheet(f"""
                 QProgressBar {{ border: 1px solid #2A4B7C; border-radius: 8px; text-align: center; color: #FFFFFF; background-color: #050505; min-height: 30px; font-weight: bold; }}
                 QProgressBar::chunk {{ background-color: {color}; border-radius: 7px; }}
             """)
-            
+
             self.page_bar.setFormat(f"{status}  |  ~{int(total_est)} pages  |  target 90")
 
         def on_radar_finished(self, files, total_lines, missing):
             self.files = files
             self.radar_label.setText(f"{len(files)} FILES DETECTED   |   {total_lines:,} LINES")
             self.radar_list.clear()
-            
+
             for name in PREFERRED_ORDER:
                 name_clean = name.strip()
                 item = QListWidgetItem(name_clean)
@@ -995,14 +1032,14 @@ try:
                 else:
                     item.setForeground(QColor("#4CAF50"))
                 self.radar_list.addItem(item)
-                
+
             self.update_estimate()
 
         def load_settings(self):
             self.font_spin.setValue(FONT_SIZE)
             self.line_spin.setValue(LINE_HEIGHT)
             self.header_spin.setValue(HEADER_SIZE)
-            
+
             if SETTINGS_FILE.exists():
                 try:
                     data = json.loads(SETTINGS_FILE.read_text())
@@ -1019,10 +1056,10 @@ try:
             effect.setColor(QColor(77, 166, 255))
             effect.setBlurRadius(15)
             effect.setOffset(0)
-            
+
             self.mode_combo.setGraphicsEffect(effect)
             self.parts_combo.setGraphicsEffect(effect)
-            
+
             QTimer.singleShot(1500, lambda: self.mode_combo.setGraphicsEffect(None))
             QTimer.singleShot(1500, lambda: self.parts_combo.setGraphicsEffect(None))
 
@@ -1042,7 +1079,7 @@ try:
                 self.toast = QLabel(msg, self)
                 self.toast.setStyleSheet("background-color: #4DA6FF; color: #0A0A0A; padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 14px;")
                 self.toast.hide()
-            
+
             self.toast.setText(msg)
             self.toast.adjustSize()
             x = (self.width() - self.toast.width()) // 2
@@ -1050,7 +1087,7 @@ try:
             self.toast.move(x, y)
             self.toast.show()
             self.toast.raise_()
-            
+
             effect = QGraphicsOpacityEffect()
             self.toast.setGraphicsEffect(effect)
             anim = QPropertyAnimation(effect, b"opacity")
@@ -1066,14 +1103,14 @@ try:
             self.log_text.clear(); self.build_btn.setEnabled(False); self.progress.setVisible(True)
             self.open_btn.setEnabled(False); self.open_ind_btn.setEnabled(False)
             if hasattr(self, 'pulse_timer'): self.pulse_timer.stop()
-            
+
             mode = "split" if self.mode_combo.currentIndex() == 1 else "full"
             parts = int(self.parts_combo.currentText())
-            
+
             font_size = self.font_spin.value()
             line_height = self.line_spin.value()
             header_size = self.header_spin.value()
-            
+
             self.worker = BuildWorker(mode, parts, font_size, line_height, header_size)
             self.worker.log_signal.connect(self.append_log)
             self.worker.finished_signal.connect(self.build_finished)
@@ -1090,7 +1127,7 @@ try:
                     self.log_text.append(html)
                     self.last_generated_file = abs_path
                     return
-                    
+
             self.log_text.append(f"&gt; {text}")
             scrollbar = self.log_text.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())

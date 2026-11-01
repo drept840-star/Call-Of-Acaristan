@@ -188,198 +188,414 @@ def draw_mag_graffiti(surface, x, y, scale=1.0):
     pygame.draw.circle(
         surface, (180, 30, 30), (x + int(3 * s), y - int(2 * s)), int(1 * s)
     )
-def draw_van_exterior(surface, t):
-    """Simple cinematic exterior shot before the van briefing."""
-    draw_sky_gradient(surface, (10, 12, 18), (24, 18, 22))
+_VAN_GLOWS = {}
+_VAN_BAKE = {}
+_VAN_RAIN = None
+
+
+def _van_glow(radius, col, alpha, squash=1.0):
+    """Cached radial glow (SRCALPHA), optionally squashed vertically."""
+    key = (radius, col, alpha, squash)
+    g = _VAN_GLOWS.get(key)
+    if g is None:
+        h = max(2, int(radius * 2 * squash))
+        g = pygame.Surface((radius * 2, h), pygame.SRCALPHA)
+        for i in range(radius, 0, -2):
+            a = int(alpha * (1.0 - i / radius) ** 1.5)
+            pygame.draw.ellipse(
+                g, (col[0], col[1], col[2], a),
+                (radius - i, h // 2 - int(i * squash), i * 2, max(2, int(i * 2 * squash))),
+            )
+        _VAN_GLOWS[key] = g
+    return g
+
+
+def _van_exterior_bake():
+    """Sky, wet road and the two scrolling skyline strips, painted once."""
+    b = _VAN_BAKE.get("ext")
+    if b is not None:
+        return b
     road_y = SCENE_BOT - 150
-    # Distant slum silhouettes
+    base = pygame.Surface((WIDTH, HEIGHT))
+    base.fill((6, 7, 9))
+    draw_sky_gradient(base, (9, 11, 17), (30, 21, 24))
+    haze = pygame.Surface((WIDTH, 90), pygame.SRCALPHA)
+    for i in range(90):
+        haze.fill((120, 78, 52, int(34 * (i / 90.0) ** 2)), (0, i, WIDTH, 1))
+    base.blit(haze, (0, road_y - 120))
+    pygame.draw.rect(base, (10, 12, 15), (0, road_y, WIDTH, SCENE_BOT - road_y))
+    pygame.draw.rect(base, (30, 32, 36), (0, road_y, WIDTH, 5))
+    pygame.draw.rect(base, (14, 15, 18), (0, road_y + 5, WIDTH, 9))
+    for y in range(road_y + 22, SCENE_BOT, 22):
+        pygame.draw.line(base, (19, 25, 33), (0, y), (WIDTH, y), 1)
+    sheen = pygame.Surface((WIDTH, SCENE_BOT - road_y), pygame.SRCALPHA)
+    for i in range(sheen.get_height()):
+        sheen.fill((70, 90, 120, int(26 * i / sheen.get_height())), (0, i, WIDTH, 1))
+    base.blit(sheen, (0, road_y))
+    period = 20 * 56
+    far = pygame.Surface((period, 130), pygame.SRCALPHA)
     rng = random.Random(91)
-    for bx in range(-20, WIDTH + 40, 56):
-        bh = rng.randint(30, 105)
+    for i in range(20):
+        bx, bh = i * 56, rng.randint(34, 108)
         col = rng.choice([(13, 15, 20), (16, 17, 22), (18, 16, 18)])
-        pygame.draw.rect(surface, col, (bx, road_y - bh, 48, bh))
-        if rng.random() > 0.45:
-            pygame.draw.rect(surface, (150, 115, 60), (bx + 16, road_y - bh + 16, 5, 6))
-    # Wet road
-    pygame.draw.rect(surface, (10, 12, 15), (0, road_y, WIDTH, SCENE_BOT - road_y))
-    for y in range(road_y + 16, SCENE_BOT, 24):
-        pygame.draw.line(surface, (22, 28, 36), (0, y), (WIDTH, y), 1)
-    # Reflections
+        pygame.draw.rect(far, col, (bx, 130 - bh, 50, bh))
+        pygame.draw.rect(far, (22, 24, 30), (bx, 130 - bh, 50, 2))
+        if rng.random() > 0.6:
+            pygame.draw.line(far, (26, 28, 34), (bx + 25, 130 - bh), (bx + 25, 130 - bh - 14), 1)
+        for wy in range(130 - bh + 12, 126, 17):
+            for wx in (bx + 9, bx + 26):
+                if rng.random() > 0.62:
+                    c = rng.choice([(150, 115, 60), (104, 90, 62), (86, 110, 128)])
+                    pygame.draw.rect(far, c, (wx, wy, 5, 6))
+    near_p = 760
+    near = pygame.Surface((near_p, 190), pygame.SRCALPHA)
+    pygame.draw.rect(near, (7, 8, 10), (0, 150, near_p, 40))
+    for fx in range(0, near_p, 12):
+        pygame.draw.line(near, (11, 12, 15), (fx, 128), (fx, 160), 1)
+    pygame.draw.line(near, (13, 14, 17), (0, 130), (near_p, 130), 2)
+    pygame.draw.line(near, (13, 14, 17), (0, 150), (near_p, 150), 1)
+    for cx2, cw, ch, cc in ((70, 120, 62, (36, 22, 20)), (200, 120, 62, (18, 26, 38)),
+                            (200, 120, 124, (30, 30, 34)), (470, 120, 62, (20, 30, 24))):
+        pygame.draw.rect(near, cc, (cx2, 150 - ch, cw, ch))
+        pygame.draw.rect(near, (6, 7, 9), (cx2, 150 - ch, cw, ch), 2)
+        for rib in range(cx2 + 8, cx2 + cw - 4, 10):
+            pygame.draw.line(near, (6, 7, 9), (rib, 150 - ch + 3), (rib, 148), 1)
+    pygame.draw.rect(near, (9, 10, 12), (356, 52, 5, 98))
+    pygame.draw.rect(near, (9, 10, 12), (336, 50, 30, 5))
+    pygame.draw.rect(near, (176, 140, 84), (334, 53, 12, 4))
+    _VAN_BAKE["ext"] = b = (base, far, near)
+    return b
+
+
+def _van_rain_cache():
+    global _VAN_RAIN
+    if _VAN_RAIN is None:
+        rng = random.Random(44)
+        _VAN_RAIN = [(rng.randint(0, WIDTH), rng.randint(0, SCENE_H), rng.randint(25, 70), rng.randint(14, 26))
+                     for _ in range(130)]
+    return _VAN_RAIN
+
+
+def _van_wheel(surface, wx, wy, t, r=22):
+    pygame.draw.circle(surface, (4, 5, 7), (wx, wy), r)
+    pygame.draw.circle(surface, (22, 24, 28), (wx, wy), r, 2)
+    pygame.draw.circle(surface, (42, 46, 52), (wx, wy), r - 9)
+    ang = t * 0.021
+    for k in range(5):
+        a = ang + k * (math.tau / 5)
+        pygame.draw.line(surface, (20, 22, 26), (wx, wy),
+                         (wx + int(math.cos(a) * (r - 10)), wy + int(math.sin(a) * (r - 10))), 2)
+    pygame.draw.circle(surface, (15, 16, 18), (wx, wy), 4)
+    pygame.draw.circle(surface, (84, 90, 98), (wx, wy), 2)
+
+
+
+
+def draw_van_exterior(surface, t):
+    """Moving-van establishing shot: parallax skyline, rain in the headlights, spinning wheels."""
+    base, far, near = _van_exterior_bake()
+    road_y = SCENE_BOT - 150
+    surface.blit(base, (0, SCENE_TOP), (0, SCENE_TOP, WIDTH, SCENE_H))
+    off_far = int(t * 0.03) % far.get_width()
+    for x0 in (-off_far, far.get_width() - off_far):
+        surface.blit(far, (x0, road_y - 130 + 4))
+    off_near = int(t * 0.2) % near.get_width()
+    lamp_x = []
+    for x0 in (-off_near, near.get_width() - off_near):
+        surface.blit(near, (x0, road_y - 150 + 2))
+        lamp_x.append(x0 + 340)
+    for lx in lamp_x:
+        if -120 < lx < WIDTH + 120:
+            surface.blit(_van_glow(70, (255, 190, 110), 70), (lx - 70, road_y - 150 + 56 - 70))
+            surface.blit(_van_glow(90, (255, 190, 110), 46, 0.22), (lx - 90, road_y + 36))
     for i in range(12):
-        rx = (i * 97 + int(t * 0.08)) % WIDTH
+        rx = (i * 97 - int(t * 0.12)) % WIDTH
         rw = 30 + (i % 3) * 20
         col = [(40, 75, 110), (90, 65, 45), (120, 45, 35)][i % 3]
         refl = pygame.Surface((rw, 8), pygame.SRCALPHA)
         pygame.draw.ellipse(refl, (*col, 35), (0, 0, rw, 8))
         surface.blit(refl, (rx, road_y + 25 + (i % 5) * 16))
-    # Van side silhouette
-    van_x = WIDTH // 2 - 170 + int(math.sin(t * 0.004) * 2)
-    van_y = road_y - 58
-    # Shadow
-    shadow = pygame.Surface((350, 55), pygame.SRCALPHA)
-    render_util.soft_shadow(shadow, (0, 10, 350, 36), 105)
-    surface.blit(shadow, (van_x - 18, van_y + 45))
-    # Body
+    dash_off = int(t * 0.5) % 150
+    for dx in range(-150, WIDTH + 150, 150):
+        pygame.draw.rect(surface, (52, 54, 58), (dx - dash_off, road_y + 118, 74, 4))
+    # Wheels are pinned to the road; only the body rides the suspension.
+    bob = int(round(math.sin(t * 0.011) * 1.2 + math.sin(t * 0.027) * 0.6))
+    van_x = WIDTH // 2 - 170
+    wheel_cy = road_y + 50                 # wheel centre (fixed)
+    ground_y = wheel_cy + 22               # tyre contact line (fixed)
+    van_y = wheel_cy - 72 + bob
+    # Wide soft ground shadow, then a hard dark contact patch under every tyre.
+    shadow = pygame.Surface((380, 44), pygame.SRCALPHA)
+    render_util.soft_shadow(shadow, (0, 6, 380, 32), 170)
+    render_util.soft_shadow(shadow, (30, 14, 320, 18), 120)
+    surface.blit(shadow, (van_x - 34, ground_y - 22))
+    for wcx in (van_x + 62, van_x + 235):
+        contact = pygame.Surface((76, 14), pygame.SRCALPHA)
+        pygame.draw.ellipse(contact, (0, 0, 0, 215), (0, 0, 76, 14))
+        pygame.draw.ellipse(contact, (0, 0, 0, 255), (14, 3, 48, 8))
+        surface.blit(contact, (wcx - 38, ground_y - 8))
+    puffs = pygame.Surface((220, 90), pygame.SRCALPHA)
+    for i in range(6):
+        age = ((t / 520.0) + i / 6.0) % 1.0
+        pygame.draw.circle(puffs, (96, 102, 112, int(80 * (1 - age) ** 1.6)),
+                           (int(212 - age * 200), int(70 - age * 30)), int(4 + age * 15))
+    surface.blit(puffs, (van_x - 222, van_y + 16))
+    spray = pygame.Surface((120, 50), pygame.SRCALPHA)
+    for i in range(9):
+        age = ((t / 380.0) + i / 9.0) % 1.0
+        pygame.draw.circle(spray, (120, 140, 170, int(70 * (1 - age))),
+                           (int(112 - age * 100), int(44 - math.sin(age * 3.1) * 26)), 2 + int(age * 3))
+    surface.blit(spray, (van_x - 70, van_y + 50))
     pygame.draw.rect(surface, (15, 17, 20), (van_x, van_y, 310, 72), border_radius=5)
+    pygame.draw.rect(surface, (22, 25, 30), (van_x + 2, van_y + 46, 306, 24), border_radius=4)
     pygame.draw.rect(surface, (40, 46, 54), (van_x, van_y, 310, 72), 2, border_radius=5)
-    # Cab slope / hood
-    pygame.draw.polygon(
-        surface,
-        (18, 22, 27),
-        [
-            (van_x + 230, van_y),
-            (van_x + 290, van_y + 12),
-            (van_x + 310, van_y + 45),
-            (van_x + 230, van_y + 45),
-        ],
-    )
-    pygame.draw.polygon(
-        surface,
-        (42, 48, 56),
-        [
-            (van_x + 230, van_y),
-            (van_x + 290, van_y + 12),
-            (van_x + 310, van_y + 45),
-            (van_x + 230, van_y + 45),
-        ],
-        1,
-    )
-    # Windows
+    pygame.draw.line(surface, (72, 84, 98), (van_x + 8, van_y + 2), (van_x + 224, van_y + 2), 1)
+    cab = [(van_x + 230, van_y), (van_x + 290, van_y + 12), (van_x + 310, van_y + 45), (van_x + 230, van_y + 45)]
+    pygame.draw.polygon(surface, (18, 22, 27), cab)
+    pygame.draw.polygon(surface, (42, 48, 56), cab, 1)
+    pygame.draw.rect(surface, (22, 26, 31), (van_x + 24, van_y - 5, 170, 5))
+    for rx in (40, 100, 160):
+        pygame.draw.line(surface, (46, 52, 60), (van_x + rx, van_y - 5), (van_x + rx, van_y), 2)
+    pygame.draw.rect(surface, (26, 30, 36), (van_x + 120, van_y - 11, 34, 7), border_radius=2)
+    sway = math.sin(t * 0.008) * 5
+    pygame.draw.line(surface, (60, 66, 74), (van_x + 214, van_y), (van_x + 206 + int(sway), van_y - 52), 1)
+    pygame.draw.circle(surface, (170, 40, 36) if (t // 500) % 2 == 0 else (60, 20, 20),
+                       (van_x + 206 + int(sway), van_y - 52), 2)
     pygame.draw.rect(surface, (22, 34, 46), (van_x + 236, van_y + 10, 42, 26), border_radius=2)
+    pygame.draw.circle(surface, (9, 11, 14), (van_x + 256, van_y + 22), 7)
+    pygame.draw.rect(surface, (9, 11, 14), (van_x + 247, van_y + 27, 20, 9))
     pygame.draw.rect(surface, (18, 28, 38), (van_x + 90, van_y + 12, 48, 24), border_radius=2)
+    pygame.draw.rect(surface, (9, 11, 14), (van_x + 105, van_y + 24, 15, 12))
+    pygame.draw.circle(surface, (9, 11, 14), (van_x + 112, van_y + 21), 6)
+    glow = int(26 + 8 * math.sin(t * 0.004))
+    surface.blit(_van_glow(40, (160, 60, 50), glow), (van_x + 114 - 40, van_y + 24 - 40))
     pygame.draw.line(surface, (80, 100, 120), (van_x + 240, van_y + 13), (van_x + 272, van_y + 13), 1)
-    # KRAP stripe
+    pygame.draw.line(surface, (60, 74, 90), (van_x + 94, van_y + 14), (van_x + 120, van_y + 14), 1)
+    pygame.draw.rect(surface, (11, 13, 16), (van_x + 150, van_y + 8, 74, 56), 1)
+    pygame.draw.line(surface, (11, 13, 16), (van_x + 186, van_y + 8), (van_x + 186, van_y + 64), 1)
+    pygame.draw.rect(surface, (70, 78, 88), (van_x + 160, van_y + 33, 12, 3))
+    pygame.draw.rect(surface, (20, 23, 28), (van_x + 280, van_y + 20, 9, 14), border_radius=2)
     pygame.draw.rect(surface, C_KRAP_BLUE, (van_x + 24, van_y + 22, 185, 7))
     pygame.draw.rect(surface, (220, 220, 225), (van_x + 24, van_y + 30, 185, 2))
     krap = font_terminal_small.render(_T("route12.krap"), True, (190, 210, 230))
     surface.blit(krap, (van_x + 38, van_y + 40))
-    # Lights
-    pygame.draw.rect(surface, (190, 40, 35), (van_x - 4, van_y + 28, 6, 14))
-    pygame.draw.ellipse(surface, (220, 210, 140), (van_x + 304, van_y + 24, 12, 10))
-    # Wheels
+    for sx2, sy2 in ((60, 52), (92, 57), (176, 54), (246, 50)):
+        pygame.draw.rect(surface, (58, 40, 30), (van_x + sx2, van_y + sy2, 6, 2))
     for wx in (van_x + 62, van_x + 235):
-        pygame.draw.circle(surface, (4, 5, 7), (wx, van_y + 72), 22)
-        pygame.draw.circle(surface, (36, 40, 45), (wx, van_y + 72), 10)
-        pygame.draw.circle(surface, (15, 16, 18), (wx, van_y + 72), 4)
-    # Light beam
-    beam = pygame.Surface((250, 70), pygame.SRCALPHA)
-    pygame.draw.polygon(beam, (220, 210, 150, 25), [(0, 25), (235, 0), (235, 55), (0, 38)])
-    surface.blit(beam, (van_x + 306, van_y + 12))
-    # Foreground rain
-    rain_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    rng_r = random.Random(44)
-    for i in range(90):
-        rx = (rng_r.randint(0, WIDTH) + int(t * 1.9)) % WIDTH
-        ry = SCENE_TOP + ((rng_r.randint(0, SCENE_H) + int(t * 5.0)) % SCENE_H)
-        pygame.draw.line(rain_layer, (135, 155, 190, rng_r.randint(25, 65)), (rx, ry), (rx - 5, ry + 20), 1)
-    surface.blit(rain_layer, (0, 0))
-    # Caption-style location tag
+        # Arch cut into the body (moves with it), wheel stays planted.
+        pygame.draw.circle(surface, (6, 7, 9), (wx, van_y + 72), 27)
+        _van_wheel(surface, wx, wheel_cy, t)
+        pygame.draw.rect(surface, (8, 9, 11), (wx - 34, van_y + 66, 4, 16))
+        # Tyre squash where rubber meets wet asphalt, and a thin specular edge.
+        pygame.draw.ellipse(surface, (3, 4, 5), (wx - 20, ground_y - 4, 40, 7))
+        pygame.draw.line(surface, (46, 56, 70), (wx - 12, ground_y + 3), (wx + 12, ground_y + 3), 1)
+    # Wet-road reflection: the lower body mirrored under the contact line, fading out.
+    rh = 46
+    ref = surface.subsurface((van_x, van_y + 72 - rh + 22, 310, rh)).copy()
+    ref = pygame.transform.flip(ref, False, True)
+    fade = _VAN_BAKE.get("refl_fade")
+    if fade is None:
+        fade = pygame.Surface((310, rh), pygame.SRCALPHA)
+        for yy in range(rh):
+            fade.fill((255, 255, 255, int(70 * (1.0 - yy / rh) ** 1.4)), (0, yy, 310, 1))
+        _VAN_BAKE["refl_fade"] = fade
+    ref = ref.convert_alpha()
+    ref.blit(fade, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    surface.blit(ref, (van_x, ground_y + 2))
+    brake = 150 if (t // 1800) % 5 != 4 else 230
+    pygame.draw.rect(surface, (200, 44, 38), (van_x - 4, van_y + 28, 6, 14))
+    surface.blit(_van_glow(36, (255, 40, 30), brake), (van_x - 36, van_y + 35 - 36))
+    surface.blit(_van_glow(70, (255, 40, 30), 70, 0.3), (van_x - 74, ground_y - 6))
+    pygame.draw.ellipse(surface, (232, 224, 160), (van_x + 304, van_y + 24, 12, 10))
+    beam = pygame.Surface((330, 120), pygame.SRCALPHA)
+    pygame.draw.polygon(beam, (225, 215, 160, 34), [(0, 55), (326, 8), (326, 112), (0, 64)])
+    pygame.draw.polygon(beam, (240, 232, 190, 22), [(0, 58), (326, 40), (326, 90), (0, 62)])
+    surface.blit(beam, (van_x + 310, van_y - 6))
+    surface.blit(_van_glow(40, (255, 240, 190), 120), (van_x + 310 - 40, van_y + 29 - 40))
+    surface.blit(_van_glow(150, (210, 200, 150), 70, 0.2), (van_x + 380, ground_y - 14))
+    rain = pygame.Surface((WIDTH, SCENE_H), pygame.SRCALPHA)
+    for rx0, ry0, ra, rl in _van_rain_cache():
+        rx = (rx0 - int(t * 1.9)) % WIDTH
+        ry = (ry0 + int(t * 5.0)) % SCENE_H
+        pygame.draw.line(rain, (135, 155, 190, ra), (rx, ry), (rx - 5, ry + rl), 1)
+        if van_x + 310 < rx < van_x + 640 and van_y - SCENE_TOP < ry < van_y - SCENE_TOP + 110:
+            pygame.draw.line(rain, (230, 232, 215, min(255, ra * 2)), (rx, ry), (rx - 6, ry + rl + 4), 1)
+    surface.blit(rain, (0, SCENE_TOP))
     tag = font_location_sub.render(_T("route12.acaristan_city_slum_district"), True, (130, 150, 170))
     bg = pygame.Surface((tag.get_width() + 24, tag.get_height() + 10), pygame.SRCALPHA)
     bg.fill((0, 0, 0, 150))
     surface.blit(bg, (42, SCENE_TOP + 24))
     surface.blit(tag, (54, SCENE_TOP + 29))
-def draw_van_interior(surface, t):
-    """Cinematic but still simple/pixel-style KRAP van interior."""
-    surface.fill((8, 8, 10))
-    # Rear wall gradient
+
+
+def _van_interior_bake():
+    """Static cabin (walls, board, benches, crates, floor), painted once. No windows or people."""
+    b = _VAN_BAKE.get("int")
+    if b is not None:
+        return b
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    surf.fill((8, 8, 10))
+    floor_y = SCENE_BOT - 95
     for y in range(SCENE_TOP, SCENE_BOT):
         p = (y - SCENE_TOP) / max(1, SCENE_H)
-        r = int(17 + p * 10)
-        g = int(13 + p * 7)
-        b = int(14 + p * 8)
-        pygame.draw.line(surface, (r, g, b), (0, y), (WIDTH, y))
-    # Metal wall panel lines
+        pygame.draw.line(surf, (int(17 + p * 10), int(13 + p * 7), int(14 + p * 8)), (0, y), (WIDTH, y))
+    pygame.draw.rect(surf, (11, 10, 12), (0, SCENE_TOP, WIDTH, 36))
+    pygame.draw.line(surf, (34, 28, 30), (0, SCENE_TOP + 36), (WIDTH, SCENE_TOP + 36), 2)
     for x in range(80, WIDTH - 80, 96):
-        pygame.draw.line(surface, (26, 22, 24), (x, SCENE_TOP + 10), (x, SCENE_BOT - 90), 1)
-    for y in range(SCENE_TOP + 50, SCENE_BOT - 90, 48):
-        pygame.draw.line(surface, (22, 18, 20), (40, y), (WIDTH - 40, y), 1)
-    # Rear door seams
-    pygame.draw.line(surface, (36, 30, 32), (WIDTH // 2, SCENE_TOP + 20), (WIDTH // 2, SCENE_BOT - 92), 2)
-    pygame.draw.rect(surface, (28, 24, 26), (60, SCENE_TOP + 40, WIDTH - 120, SCENE_H - 155), 2)
-    # Overhead red cabin light, softer and less empty
-    lamp_x = WIDTH // 2 - 95
-    lamp_y = SCENE_TOP + 28
-    pygame.draw.rect(surface, (145, 28, 30), (lamp_x, lamp_y, 190, 7))
-    glow = pygame.Surface((360, 120), pygame.SRCALPHA)
-    for r in range(160, 0, -8):
-        a = int(20 * (1 - r / 160))
-        pygame.draw.ellipse(glow, (180, 30, 35, a), (180 - r, 45 - r // 3, r * 2, r))
-    surface.blit(glow, (WIDTH // 2 - 180, SCENE_TOP + 0))
-    # Right window with moving city/rain outside
-    win_x = WIDTH - 310
-    win_y = SCENE_TOP + 70
-    win_w = 220
-    win_h = 180
+        pygame.draw.line(surf, (26, 22, 24), (x, SCENE_TOP + 38), (x, floor_y), 1)
+        pygame.draw.line(surf, (11, 10, 12), (x + 1, SCENE_TOP + 38), (x + 1, floor_y), 1)
+        for ry in range(SCENE_TOP + 56, floor_y - 6, 52):
+            pygame.draw.circle(surf, (44, 38, 38), (x - 4, ry), 1)
+            pygame.draw.circle(surf, (44, 38, 38), (x + 5, ry), 1)
+    for y in range(SCENE_TOP + 62, floor_y, 48):
+        pygame.draw.line(surf, (22, 18, 20), (40, y), (WIDTH - 40, y), 1)
+    pygame.draw.rect(surf, (28, 24, 26), (60, SCENE_TOP + 44, WIDTH - 120, floor_y - SCENE_TOP - 54), 2)
+    pygame.draw.line(surf, (36, 30, 32), (WIDTH // 2, SCENE_TOP + 44), (WIDTH // 2, floor_y), 2)
+    pygame.draw.rect(surf, (52, 46, 42), (WIDTH // 2 - 30, SCENE_TOP + 170, 60, 7), border_radius=2)
+    pygame.draw.rect(surf, (20, 18, 18), (WIDTH // 2 - 30, SCENE_TOP + 177, 60, 3))
+    win_x, win_y, win_w, win_h = WIDTH - 310, SCENE_TOP + 70, 220, 180
+    pygame.draw.rect(surf, (42, 34, 32), (win_x - 8, win_y - 8, win_w + 16, win_h + 16), 6)
+    pygame.draw.rect(surf, (22, 18, 18), (win_x - 8, win_y - 8, win_w + 16, win_h + 16), 1)
+    pygame.draw.line(surf, (30, 26, 26), (win_x + win_w // 2, win_y), (win_x + win_w // 2, win_y + win_h), 4)
+    bx, by, bw, bh = WIDTH - 560, SCENE_TOP + 82, 170, 140
+    pygame.draw.rect(surf, (45, 38, 32), (bx - 5, by - 5, bw + 10, bh + 10))
+    pygame.draw.rect(surf, (10, 14, 16), (bx, by, bw, bh))
+    for gx in range(bx + 17, bx + bw, 17):
+        pygame.draw.line(surf, (18, 26, 28), (gx, by), (gx, by + bh), 1)
+    for gy in range(by + 17, by + bh, 17):
+        pygame.draw.line(surf, (18, 26, 28), (bx, gy), (bx + bw, gy), 1)
+    pygame.draw.line(surf, (30, 52, 66), (bx + 8, by + 126), (bx + bw - 8, by + 12), 1)
+    pts = [(bx + 22, by + 100), (bx + 48, by + 82), (bx + 68, by + 92), (bx + 96, by + 58),
+           (bx + 120, by + 66), (bx + 140, by + 32)]
+    cols = [(120, 70, 60), (95, 105, 135), (130, 95, 45)]
+    for i in range(len(pts) - 1):
+        pygame.draw.line(surf, cols[i % 3], pts[i], pts[i + 1], 3)
+    for p in pts[:-1]:
+        pygame.draw.circle(surf, (170, 160, 130), p, 2)
+    pygame.draw.circle(surf, C_ORANGE, pts[-1], 5, 1)
+    hdr = font_terminal_small.render("SLUM DIST. // ROUTE 4", True, (86, 118, 130))
+    surf.blit(hdr, (bx + 6, by - 20))
+    pygame.draw.rect(surf, (24, 22, 22), (46, SCENE_TOP + 140, 250, 8))
+    pygame.draw.rect(surf, (14, 16, 18), (60, SCENE_TOP + 98, 94, 42), border_radius=2)
+    pygame.draw.rect(surf, (52, 58, 62), (60, SCENE_TOP + 98, 94, 42), 1, border_radius=2)
+    pygame.draw.circle(surf, (28, 32, 36), (82, SCENE_TOP + 120), 11)
+    pygame.draw.circle(surf, (70, 76, 82), (82, SCENE_TOP + 120), 11, 1)
+    pygame.draw.line(surf, (84, 90, 96), (82, SCENE_TOP + 120), (88, SCENE_TOP + 112), 1)
+    pygame.draw.rect(surf, (8, 18, 12), (108, SCENE_TOP + 106, 38, 14))
+    pygame.draw.rect(surf, (32, 30, 28), (170, SCENE_TOP + 112, 30, 28), border_radius=3)
+    pygame.draw.rect(surf, (52, 48, 42), (170, SCENE_TOP + 112, 30, 28), 1, border_radius=3)
+    pygame.draw.rect(surf, (10, 10, 12), (0, floor_y, WIDTH, SCENE_BOT - floor_y))
+    pygame.draw.line(surf, (30, 26, 26), (0, floor_y), (WIDTH, floor_y), 2)
+    for sx in range(0, WIDTH, 32):
+        pygame.draw.line(surf, (18, 18, 20), (sx, floor_y), (sx + 12, SCENE_BOT), 1)
+    for sy in range(floor_y + 22, SCENE_BOT, 22):
+        pygame.draw.line(surf, (14, 14, 16), (0, sy), (WIDTH, sy), 1)
+    rng = random.Random(61)
+    for _ in range(26):
+        x, y = rng.randint(10, WIDTH - 30), rng.randint(floor_y + 6, SCENE_BOT - 6)
+        pygame.draw.line(surf, (22, 22, 24), (x, y), (x + rng.randint(6, 18), y), 1)
+    for bxx, bww in ((40, 260), (WIDTH - 360, 300)):
+        pygame.draw.rect(surf, (18, 16, 16), (bxx, floor_y - 35, bww, 48), border_radius=4)
+        pygame.draw.rect(surf, (32, 27, 25), (bxx, floor_y - 35, bww, 8), border_radius=3)
+        pygame.draw.line(surf, (48, 42, 38), (bxx + 4, floor_y - 34), (bxx + bww - 4, floor_y - 34), 1)
+        for sx in range(bxx + 40, bxx + bww - 20, 70):
+            pygame.draw.rect(surf, (36, 32, 28), (sx, floor_y - 35, 6, 48))
+    pygame.draw.rect(surf, (55, 58, 48), (325, floor_y - 52, 86, 46), border_radius=3)
+    pygame.draw.rect(surf, (85, 88, 72), (325, floor_y - 52, 86, 46), 2, border_radius=3)
+    pygame.draw.line(surf, (40, 42, 34), (325, floor_y - 30), (411, floor_y - 30), 1)
+    surf.blit(font_terminal_small.render(_T("route12.krap"), True, C_KRAP_BLUE), (350, floor_y - 46))
+    pygame.draw.rect(surf, (70, 54, 38), (430, floor_y - 44, 72, 38), border_radius=2)
+    pygame.draw.rect(surf, (45, 32, 22), (430, floor_y - 44, 72, 38), 2, border_radius=2)
+    pygame.draw.rect(surf, (62, 48, 34), (344, floor_y - 74, 52, 22), border_radius=2)
+    pygame.draw.rect(surf, (36, 28, 20), (344, floor_y - 74, 52, 22), 2, border_radius=2)
+    pygame.draw.ellipse(surf, (28, 30, 26), (512, floor_y - 18, 34, 14), 3)
+    pygame.draw.rect(surf, (5, 6, 8), (WIDTH // 2 - 70, SCENE_BOT - 112, 140, 28), border_radius=3)
+    pygame.draw.line(surf, (12, 14, 16), (WIDTH // 2 - 52, SCENE_BOT - 98), (WIDTH // 2 + 50, SCENE_BOT - 98), 3)
+    pygame.draw.circle(surf, (18, 20, 24), (WIDTH // 2 + 58, SCENE_BOT - 98), 6)
+    _VAN_BAKE["int"] = b = surf
+    return b
+
+
+def draw_van_interior(surface, t):
+    """KRAP van cabin: swinging lamp, moving city in the window, live radio, breathing cast."""
+    base = _van_interior_bake()
+    surface.blit(base, (0, SCENE_TOP), (0, SCENE_TOP, WIDTH, SCENE_H))
+    floor_y = SCENE_BOT - 95
+    win_x, win_y, win_w, win_h = WIDTH - 310, SCENE_TOP + 70, 220, 180
     pygame.draw.rect(surface, (7, 9, 13), (win_x, win_y, win_w, win_h))
-    pygame.draw.rect(surface, (42, 34, 32), (win_x - 6, win_y - 6, win_w + 12, win_h + 12), 5)
-    # Passing colored lights
+    sky = pygame.Surface((win_w, win_h), pygame.SRCALPHA)
+    for i in range(0, win_h, 6):
+        sky.fill((60, 40, 36, int(40 * i / win_h)), (0, i, win_w, 6))
+    surface.blit(sky, (win_x, win_y))
+    city = pygame.Surface((win_w, win_h), pygame.SRCALPHA)
+    for i in range(9):
+        bx = (i * 41 - int(t * 0.045)) % (win_w + 40) - 20
+        bh = 36 + (i * 37) % 52
+        pygame.draw.rect(city, (11, 12, 16), (bx, win_h - 40 - bh, 26, bh))
+    surface.blit(city, (win_x, win_y))
     for i in range(16):
-        lx = win_x + ((i * 41 + int(t * 0.7)) % win_w)
+        lx = win_x + ((i * 41 - int(t * 0.7)) % win_w)
         ly = win_y + 20 + (i * 23) % (win_h - 40)
         col = [(150, 80, 55), (80, 95, 130), (170, 130, 55)][i % 3]
         pygame.draw.rect(surface, col, (lx, ly, 22, 4))
-    # Window rain
+    flare_x = win_x + win_w - ((t * 0.35) % (win_w + 160)) + 40
+    if win_x - 60 < flare_x < win_x + win_w + 60:
+        surface.blit(_van_glow(60, (255, 190, 110), 90), (int(flare_x) - 60, win_y + 60))
     for i in range(18):
         rx = win_x + ((i * 29 + int(t * 1.1)) % win_w)
         ry = win_y + ((i * 47 + int(t * 2.8)) % win_h)
         pygame.draw.line(surface, (140, 150, 175), (rx, ry), (rx - 2, ry + 18), 1)
-    # Tactical map board / route chart
-    board_x = WIDTH - 560
-    board_y = SCENE_TOP + 82
-    board_w = 170
-    board_h = 140
-    pygame.draw.rect(surface, (12, 14, 18), (board_x, board_y, board_w, board_h))
-    pygame.draw.rect(surface, (45, 38, 32), (board_x, board_y, board_w, board_h), 3)
-    # Route lines
-    route_cols = [(120, 70, 60), (95, 105, 135), (130, 95, 45)]
-    pts = [
-        (board_x + 22, board_y + 100),
-        (board_x + 48, board_y + 82),
-        (board_x + 68, board_y + 92),
-        (board_x + 96, board_y + 58),
-        (board_x + 120, board_y + 66),
-        (board_x + 140, board_y + 32),
-    ]
-    for i in range(len(pts) - 1):
-        pygame.draw.line(surface, route_cols[i % len(route_cols)], pts[i], pts[i + 1], 3)
-    pygame.draw.circle(surface, C_ORANGE, pts[-1], 4)
-    pygame.draw.rect(surface, (70, 50, 30), (board_x + board_w - 5, board_y + 80, 14, 5))
-    # Floor / foreground
-    floor_y = SCENE_BOT - 95
-    pygame.draw.rect(surface, (10, 10, 12), (0, floor_y, WIDTH, SCENE_BOT - floor_y))
-    for sx in range(0, WIDTH, 32):
-        pygame.draw.line(surface, (18, 18, 20), (sx, floor_y), (sx + 12, SCENE_BOT), 1)
-    # Benches
-    pygame.draw.rect(surface, (18, 16, 16), (40, floor_y - 35, 260, 48), border_radius=4)
-    pygame.draw.rect(surface, (28, 24, 22), (40, floor_y - 35, 260, 8), border_radius=3)
-    pygame.draw.rect(surface, (18, 16, 16), (WIDTH - 360, floor_y - 35, 300, 48), border_radius=4)
-    pygame.draw.rect(surface, (28, 24, 22), (WIDTH - 360, floor_y - 35, 300, 8), border_radius=3)
-    # Gear crates
-    pygame.draw.rect(surface, (55, 58, 48), (325, floor_y - 52, 86, 46), border_radius=3)
-    pygame.draw.rect(surface, (85, 88, 72), (325, floor_y - 52, 86, 46), 2, border_radius=3)
-    krap = font_terminal_small.render(_T("route12.krap"), True, C_KRAP_BLUE)
-    surface.blit(krap, (350, floor_y - 38))
-    pygame.draw.rect(surface, (70, 54, 38), (430, floor_y - 44, 72, 38), border_radius=2)
-    pygame.draw.rect(surface, (45, 32, 22), (430, floor_y - 44, 72, 38), 2, border_radius=2)
-    # Character rim-light zones
-    vasile_glow = pygame.Surface((160, 220), pygame.SRCALPHA)
-    pygame.draw.ellipse(vasile_glow, (100, 160, 220, 28), (0, 20, 160, 180))
-    surface.blit(vasile_glow, (75, floor_y - 215))
-    biribel_glow = pygame.Surface((180, 240), pygame.SRCALPHA)
-    pygame.draw.ellipse(biribel_glow, (180, 190, 200, 18), (0, 20, 180, 200))
-    surface.blit(biribel_glow, (WIDTH // 2 + 50, floor_y - 230))
-    # Characters larger and better staged
-    draw_vasile(surface, 160, floor_y + 2, scale=0.72, facing_right=True)
-    draw_biribel(surface, WIDTH // 2 + 150, floor_y + 2, scale=0.76, facing_right=False, in_silhouette=True)
-    # Foreground silhouettes: radio / rifle case, gives cramped depth
-    pygame.draw.rect(surface, (5, 6, 8), (WIDTH // 2 - 70, SCENE_BOT - 112, 140, 28), border_radius=3)
-    pygame.draw.line(surface, (12, 14, 16), (WIDTH // 2 - 52, SCENE_BOT - 98), (WIDTH // 2 + 50, SCENE_BOT - 98), 3)
-    pygame.draw.circle(surface, (18, 20, 24), (WIDTH // 2 + 58, SCENE_BOT - 98), 6)
-    # Subtle red wash
-    red_glow = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    red_glow.fill((60, 10, 12, 22))
-    surface.blit(red_glow, (0, 0))
+    refl = pygame.Surface((win_w, win_h), pygame.SRCALPHA)
+    pygame.draw.polygon(refl, (200, 210, 230, 16), [(0, 0), (70, 0), (20, win_h), (0, win_h)])
+    surface.blit(refl, (win_x, win_y))
+    sw = math.sin(t * 0.0023) * 22 + math.sin(t * 0.0071) * 4
+    pivot = (WIDTH // 2, SCENE_TOP + 36)
+    lamp_x = int(pivot[0] + sw)
+    lamp_y = SCENE_TOP + 66
+    pygame.draw.line(surface, (36, 32, 32), pivot, (lamp_x, lamp_y), 2)
+    flick = 0.82 if (t // 90) % 37 == 5 else 1.0
+    surface.blit(_van_glow(230, (255, 150, 90), int(58 * flick), 0.62),
+                 (lamp_x - 230, lamp_y + 8 - int(230 * 0.62)))
+    surface.blit(_van_glow(120, (255, 120, 80), int(48 * flick)), (lamp_x - 120, lamp_y - 120))
+    pygame.draw.rect(surface, (30, 26, 26), (lamp_x - 22, lamp_y - 6, 44, 12), border_radius=4)
+    pygame.draw.rect(surface, (205, 60, 52) if flick == 1.0 else (120, 36, 34),
+                     (lamp_x - 17, lamp_y, 34, 8), border_radius=3)
+    for k in range(4):
+        on = ((t // (160 + k * 40)) + k) % 3 == 0
+        pygame.draw.circle(surface, (80, 220, 110) if on else (22, 40, 26), (66 + k * 8, SCENE_TOP + 132), 2)
+    for k in range(6):
+        h = 2 + int(abs(math.sin(t * 0.011 + k * 1.3)) * 9)
+        pygame.draw.rect(surface, (40, 170, 80), (112 + k * 6, SCENE_TOP + 120 - h, 4, h))
+    bx, by = WIDTH - 560, SCENE_TOP + 82
+    seg = [(bx + 22, by + 100), (bx + 48, by + 82), (bx + 68, by + 92), (bx + 96, by + 58),
+           (bx + 120, by + 66), (bx + 140, by + 32)]
+    f = ((t / 3200.0) % 1.0) * (len(seg) - 1)
+    i0 = min(len(seg) - 2, int(f))
+    fx = seg[i0][0] + (seg[i0 + 1][0] - seg[i0][0]) * (f - i0)
+    fy = seg[i0][1] + (seg[i0 + 1][1] - seg[i0][1]) * (f - i0)
+    surface.blit(_van_glow(14, (255, 170, 80), 140), (int(fx) - 14, int(fy) - 14))
+    pygame.draw.circle(surface, (255, 214, 140), (int(fx), int(fy)), 3)
+    pulse = int(3 + 2 * math.sin(t * 0.006))
+    pygame.draw.circle(surface, C_ORANGE, seg[-1], 5 + pulse // 2, 1)
+    jost = math.sin(t * 0.009) * 1.2
+    blink_v = 1.0 if (t // 90) % 41 == 3 else 0.0
+    blink_b = 1.0 if (t // 90) % 53 == 7 else 0.0
+    glow_v = pygame.Surface((160, 220), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow_v, (100, 160, 220, 28), (0, 20, 160, 180))
+    surface.blit(glow_v, (75, floor_y - 215))
+    glow_b = pygame.Surface((180, 240), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow_b, (180, 190, 200, 18), (0, 20, 180, 200))
+    surface.blit(glow_b, (WIDTH // 2 + 50, floor_y - 230))
+    _fk_draw(surface, "vasile", 160 + jost, floor_y + 2, 0.72, True, t=t, blink=blink_v)
+    _fk_draw(surface, "biribel", WIDTH // 2 + 150 - jost * 0.7, floor_y + 2, 0.76, False, True,
+             t=t, blink=blink_b)
+    for i in range(14):
+        dx = lamp_x - 170 + (i * 53 + int(t * 0.012 * (1 + i % 3))) % 340
+        dy = SCENE_TOP + 90 + (i * 37 + int(t * 0.01)) % 250
+        pygame.draw.circle(surface, (150, 120, 100), (int(dx), int(dy)), 1)
+    red = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    red.fill((60, 10, 12, 22))
+    surface.blit(red, (0, 0))
 # ── Handoff insert-shot helpers (van cutscene) ──
 def _ease_cutscene(t):
     t = max(0.0, min(1.0, t))

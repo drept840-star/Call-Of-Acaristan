@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AKS-74U · 3D Viewer</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #11151c;
+      color: #edf2fa;
+      font-family: system-ui, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      touch-action: none;
+    }
+
+    header {
+      position: absolute;
+      top: 32px;
+      left: 36px;
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      color: #e3a363;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 8px 0;
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 650;
+      letter-spacing: -2px;
+    }
+
+    header p, footer {
+      color: #929eae;
+      font-size: 13px;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      width: max-content;
+      max-width: calc(100% - 24px);
+      padding: 10px;
+      border: 1px solid #ffffff14;
+      border-radius: 16px;
+      background: #151b25e6;
+      backdrop-filter: blur(16px);
+    }
+
+    button {
+      padding: 11px 16px;
+      border: 1px solid #ffffff18;
+      border-radius: 10px;
+      background: #ffffff08;
+      color: #e5ebf5;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+
+    button:hover { background: #ffffff18; }
+    button:disabled { cursor: wait; opacity: .6; }
+
+    #export {
+      background: #e3a363;
+      border-color: #e3a363;
+      color: #17120d;
+      font-weight: 700;
+    }
+
+    #export:hover { background: #f1b77f; }
+
+    #status {
+      position: absolute;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(90vw, 560px);
+      text-align: center;
+      font-size: 13px;
+      color: #b8c8db;
+      pointer-events: none;
+    }
+
+    footer {
+      position: absolute;
+      right: 24px;
+      top: 28px;
+      pointer-events: none;
+    }
+
+    @media (max-width: 600px) {
+      header { top: 22px; left: 22px; }
+      header p { max-width: 260px; line-height: 1.6; }
+      footer { display: none; }
+      .controls { bottom: 18px; gap: 6px; }
+      button { padding: 10px 12px; }
+      #status { bottom: 140px; }
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <header>
+    <div class="eyebrow">Interactive low-poly study</div>
+    <h1>AKS–74U</h1>
+    <p>Drag to orbit · Scroll to zoom · Right-drag to pan</p>
+  </header>
+
+  <div class="controls">
+    <button id="rotate">Auto-rotate: ON</button>
+    <button id="reset">Reset view</button>
+    <button id="wire" aria-pressed="false">Wireframe: OFF</button>
+    <button id="export">Export GLB</button>
+  </div>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <footer>Stylized visual model · Not to scale</footer>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from
+      "three/addons/controls/OrbitControls.js";
+    import { GLTFExporter } from
+      "three/addons/exporters/GLTFExporter.js";
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#11151c");
+    scene.fog = new THREE.Fog("#11151c", 18, 45);
+
+    // Keep the near/far range tight for better depth precision.
+    const camera = new THREE.PerspectiveCamera(
+      38, innerWidth / innerHeight, 0.5, 65
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.35;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.65;
+    controls.minDistance = 5;
+    controls.maxDistance = 20;
+    controls.maxPolarAngle = Math.PI * 0.88;
+
+    function resetView() {
+      camera.position.set(7.8, 4.2, 9.5);
+      controls.target.set(0, -0.25, 0);
+      controls.update();
+      controls.saveState();
+    }
+
+    resetView();
+
+    function material(name, options) {
+      const result = new THREE.MeshStandardMaterial(options);
+      result.name = name;
+      return result;
+    }
+
+    const metal = material("Gunmetal", {
+      color: "#303944", metalness: 0.85, roughness: 0.38
+    });
+
+    const dark = material("Dark steel", {
+      color: "#151b23", metalness: 0.65, roughness: 0.5
+    });
+
+    const edges = material("Polished steel", {
+      color: "#596370", metalness: 0.85, roughness: 0.3
+    });
+
+    const wood = material("Wood", {
+      color: "#9b4723", roughness: 0.64, metalness: 0.05
+    });
+
+    const bakelite = material("Bakelite", {
+      color: "#713824", roughness: 0.43, metalness: 0.08
+    });
+
+    const black = material("Recesses and rubber", {
+      color: "#07090c", roughness: 0.95
+    });
+
+    // Only this group is exported.
+    const model = new THREE.Group();
+    model.name = "AKS-74U";
+    scene.add(model);
+
+    function mesh(geometry, mat, x = 0, y = 0, z = 0, name = "") {
+      const object = new THREE.Mesh(geometry, mat);
+      object.name = name;
+      object.position.set(x, y, z);
+      object.castShadow = true;
+      object.receiveShadow = true;
+      model.add(object);
+      return object;
+    }
+
+    function box(w, h, d, mat, x, y, z = 0, name = "") {
+      return mesh(
+        new THREE.BoxGeometry(w, h, d), mat, x, y, z, name
+      );
+    }
+
+    function cylinder(radius, length, mat, x, y, z = 0, name = "") {
+      const object = mesh(
+        new THREE.CylinderGeometry(radius, radius, length, 32),
+        mat, x, y, z, name
+      );
+      object.rotation.z = Math.PI / 2;
+      return object;
+    }
+
+    function rod(a, b, radius = 0.045, mat = metal, name = "") {
+      const start = new THREE.Vector3(...a);
+      const end = new THREE.Vector3(...b);
+      const direction = end.clone().sub(start);
+
+      const object = mesh(
+        new THREE.CylinderGeometry(
+          radius, radius, direction.length(), 16
+        ),
+        mat, 0, 0, 0, name
+      );
+
+      object.position.copy(start.clone().add(end).multiplyScalar(0.5));
+      object.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0), direction.normalize()
+      );
+      return object;
+    }
+
+    function extrudedShape(points, depth, mat, name = "", bevel = 0.025) {
+      const shape = new THREE.Shape();
+      shape.moveTo(...points[0]);
+      points.slice(1).forEach(point => shape.lineTo(...point));
+      shape.closePath();
+
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth,
+        bevelEnabled: bevel > 0,
+        bevelSegments: 2,
+        steps: 1,
+        bevelSize: bevel,
+        bevelThickness: bevel
+      });
+
+      geometry.translate(0, 0, -depth / 2);
+      return mesh(geometry, mat, 0, 0, 0, name);
+    }
+
+    // Receiver.
+    box(2.25, 0.53, 0.46, metal, -0.35, 0.15, 0, "Receiver");
+
+    // Lower trim is slightly inset, avoiding coplanar exterior faces.
+    box(2.12, 0.09, 0.44, dark, -0.37, -0.145, 0, "Lower trim");
+
+    // One continuous D-shaped cover instead of an overlapping box
+    // and full cylinder with coincident end caps.
+    const coverProfile = new THREE.Shape();
+    coverProfile.moveTo(-0.24, 0);
+    coverProfile.lineTo(0.24, 0);
+    coverProfile.absarc(0, 0, 0.24, 0, Math.PI, false);
+    coverProfile.closePath();
+
+    const coverGeometry = new THREE.ExtrudeGeometry(coverProfile, {
+      depth: 2.05,
+      bevelEnabled: false,
+      curveSegments: 24
+    });
+
+    // Profile X becomes model Z; extrusion Z becomes model X.
+    coverGeometry.translate(0, 0, -1.025);
+    coverGeometry.rotateY(Math.PI / 2);
+    mesh(coverGeometry, dark, -0.4, 0.39, 0, "Rounded top cover");
+
+    // Raised rivets are physically offset from the receiver surface.
+    for (const x of [-1.15, -0.7, 0.2, 0.55]) {
+      for (const side of [-1, 1]) {
+        const rivet = mesh(
+          new THREE.SphereGeometry(0.035, 12, 8),
+          edges, x, 0.07, side * 0.239, "Receiver rivet"
+        );
+        rivet.scale.z = 0.45;
+      }
+    }
+
+    box(0.74, 0.14, 0.018, black, 0.05, 0.27, 0.244, "Port inset");
+    box(0.47, 0.075, 0.022, edges, 0.26, 0.25, 0.268, "Bolt detail");
+    rod([0.4, 0.26, 0.28], [0.4, 0.26, 0.49], 0.045, metal);
+    cylinder(0.065, 0.14, dark, 0.4, 0.26, 0.49, "Handle");
+
+    const selector = box(
+      0.7, 0.065, 0.025, metal, -0.48, 0.02, 0.253, "Selector"
+    );
+    selector.rotation.z = -0.14;
+
+    // Handguard.
+    box(1.08, 0.35, 0.5, wood, 1.26, 0.08, 0, "Lower handguard");
+    cylinder(0.17, 1.04, wood, 1.27, 0.42, 0, "Upper handguard");
+
+    // The tube passes inside the wood; no coincident outer surfaces.
+    cylinder(0.085, 1.5, metal, 1.5, 0.43, 0, "Gas tube");
+
+    for (const x of [0.79, 1.74]) {
+      box(0.09, 0.43, 0.54, dark, x, 0.12, 0, "Handguard band");
+    }
+
+    for (const x of [0.98, 1.23, 1.48]) {
+      for (const side of [-1, 1]) {
+        box(
+          0.13, 0.065, 0.012, dark,
+          x, 0.15, side * 0.260, "Handguard detail"
+        );
+      }
+    }
+
+    // Barrel.
+    cylinder(0.095, 1.12, metal, 2.18, 0.1, 0, "Barrel");
+    cylinder(0.14, 0.31, dark, 2.44, 0.1, 0, "Barrel collar");
+
+    // Muzzle profile includes a recessed opening, rather than
+    // placing a nearly coplanar black disk over a closed cylinder.
+    const muzzleProfile = [
+      new THREE.Vector2(0.10, -0.225),
+      new THREE.Vector2(0.19, -0.225),
+      new THREE.Vector2(0.19, 0.175),
+      new THREE.Vector2(0.205, 0.175),
+      new THREE.Vector2(0.205, 0.245),
+      new THREE.Vector2(0.135, 0.245),
+      new THREE.Vector2(0.135, 0.08),
+      new THREE.Vector2(0.10, -0.225)
+    ];
+
+    const muzzleGeometry = new THREE.LatheGeometry(muzzleProfile, 48);
+    muzzleGeometry.rotateZ(-Math.PI / 2);
+    mesh(muzzleGeometry, dark, 2.8, 0.1, 0, "Muzzle shroud");
+
+    cylinder(0.132, 0.018, black, 2.87, 0.1, 0, "Muzzle recess");
+
+    // Sights.
+    box(0.16, 0.57, 0.24, dark, 2.23, 0.36, 0, "Front sight base");
+    rod([2.23, 0.55, -0.14], [2.23, 0.77, -0.14], 0.035);
+    rod([2.23, 0.55, 0.14], [2.23, 0.77, 0.14], 0.035);
+    box(0.08, 0.19, 0.045, edges, 2.23, 0.66, 0, "Front post");
+    box(0.28, 0.16, 0.3, dark, 0.56, 0.59, 0, "Rear sight base");
+    box(0.08, 0.12, 0.07, edges, 0.56, 0.7, 0, "Rear sight");
+
+    // Pistol grip.
+    extrudedShape([
+      [-1.03, -0.12],
+      [-0.54, -0.12],
+      [-0.77, -1.12],
+      [-1.25, -1.04]
+    ], 0.35, bakelite, "Pistol grip");
+
+    // Grip depth plus bevel reaches Z = ±0.200.
+    // Place grooves beyond that face, not inside/on it.
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 5; i++) {
+        const stripe = box(
+          0.29, 0.025, 0.012, dark,
+          -0.91 - i * 0.026,
+          -0.43 - i * 0.105,
+          side * 0.207,
+          "Grip texture"
+        );
+        stripe.rotation.z = -0.12;
+      }
+    }
+
+    // Open trigger guard.
+    const guard = new THREE.Shape();
+    guard.moveTo(-0.68, -0.13);
+    guard.lineTo(0.13, -0.13);
+    guard.lineTo(0.07, -0.58);
+    guard.quadraticCurveTo(-0.25, -0.73, -0.59, -0.54);
+    guard.closePath();
+
+    const hole = new THREE.Path();
+    hole.moveTo(-0.56, -0.24);
+    hole.lineTo(-0.49, -0.46);
+    hole.quadraticCurveTo(-0.23, -0.59, -0.04, -0.48);
+    hole.lineTo(0.01, -0.24);
+    hole.closePath();
+    guard.holes.push(hole);
+
+    const guardGeometry = new THREE.ExtrudeGeometry(guard, {
+      depth: 0.12,
+      bevelEnabled: false,
+      curveSegments: 18
+    });
+    guardGeometry.translate(0, 0, -0.06);
+    mesh(guardGeometry, dark, 0, 0, 0, "Trigger guard");
+
+    const trigger = box(
+      0.075, 0.3, 0.09, edges, -0.29, -0.3, 0, "Trigger"
+    );
+    trigger.rotation.z = -0.3;
+
+    // Magazine.
+    extrudedShape([
+      [0.12, -0.14],
+      [0.63, -0.14],
+      [0.69, -0.62],
+      [0.84, -1.13],
+      [1.1, -1.62],
+      [0.59, -1.87],
+      [0.32, -1.38],
+      [0.17, -0.83]
+    ], 0.4, bakelite, "Magazine");
+
+    // Magazine bevel reaches Z = ±0.225.
+    // Rib centers sit outside that face and remain partly embedded.
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const z = side * 0.236;
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(0.25 + i * 0.12, -0.39, z),
+          new THREE.Vector3(0.31 + i * 0.12, -0.93, z),
+          new THREE.Vector3(0.65 + i * 0.12, -1.67, z)
+        ]);
+
+        mesh(
+          new THREE.TubeGeometry(curve, 24, 0.018, 8, false),
+          wood, 0, 0, 0, "Magazine rib"
+        );
+      }
+    }
+
+    const floorplate = box(
+      0.6, 0.09, 0.48, dark, 0.85, -1.76, 0, "Magazine floorplate"
+    );
+    floorplate.rotation.z = 0.44;
+
+    // Skeletal stock.
+    box(0.19, 0.54, 0.5, dark, -1.58, 0.12, 0, "Stock hinge");
+
+    for (const z of [-0.13, 0.13]) {
+      rod([-1.65, 0.31, z], [-3.43, 0.26, z], 0.055, metal, "Upper stock rail");
+      rod([-1.65, -0.08, z], [-3.43, -0.54, z], 0.055, metal, "Lower stock rail");
+      rod([-3.43, 0.26, z], [-3.43, -0.54, z], 0.055, metal, "Stock end rail");
+    }
+
+    box(0.16, 0.94, 0.42, dark, -3.5, -0.14, 0, "Buttplate");
+    box(0.055, 0.84, 0.45, black, -3.61, -0.14, 0, "Buttpad");
+
+    // Presentation objects remain outside the export group.
+    const platform = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.1, 5.25, 0.18, 96),
+      material("Platform", {
+        color: "#1c2430", metalness: 0.35, roughness: 0.65
+      })
+    );
+    platform.position.y = -2.35;
+    platform.receiveShadow = true;
+    scene.add(platform);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 100),
+      material("Floor", { color: "#11151c", roughness: 0.9 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -2.46;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Studio lighting.
+    scene.add(new THREE.HemisphereLight("#c9ddff", "#37303a", 2.4));
+
+    function directionalLight(color, intensity, position) {
+      const light = new THREE.DirectionalLight(color, intensity);
+      light.position.set(...position);
+      scene.add(light);
+      return light;
+    }
+
+    const key = directionalLight("#ffe0bf", 4, [2, 7, 5]);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -7;
+    key.shadow.camera.right = 7;
+    key.shadow.camera.top = 7;
+    key.shadow.camera.bottom = -7;
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 25;
+    key.shadow.normalBias = 0.025;
+    key.shadow.bias = -0.0001;
+
+    directionalLight("#8fbfff", 3.5, [-4, 3, -5]);
+    directionalLight("#ffffff", 1.3, [0, 2, 7]);
+
+    // UI.
+    const rotateButton = document.querySelector("#rotate");
+    const wireButton = document.querySelector("#wire");
+    const exportButton = document.querySelector("#export");
+    const status = document.querySelector("#status");
+
+    rotateButton.onclick = () => {
+      controls.autoRotate = !controls.autoRotate;
+      rotateButton.textContent =
+        `Auto-rotate: ${controls.autoRotate ? "ON" : "OFF"}`;
+    };
+
+    document.querySelector("#reset").onclick = resetView;
+
+    let wireframe = false;
+
+    wireButton.onclick = () => {
+      wireframe = !wireframe;
+      model.traverse(object => {
+        if (!object.isMesh) return;
+        const materials = Array.isArray(object.material)
+          ? object.material : [object.material];
+
+        materials.forEach(mat => {
+          mat.wireframe = wireframe;
+        });
+      });
+
+      wireButton.textContent = `Wireframe: ${wireframe ? "ON" : "OFF"}`;
+      wireButton.setAttribute("aria-pressed", String(wireframe));
+    };
+
+    // Export a clone with independent materials so wireframe preview
+    // cannot affect the downloaded model or interrupt the live viewer.
+    exportButton.onclick = async () => {
+      exportButton.disabled = true;
+      status.textContent = "Preparing GLB…";
+
+      let exportModel;
+      const exportMaterials = new Map();
+
+      try {
+        exportModel = model.clone(true);
+
+        exportModel.traverse(object => {
+          if (!object.isMesh) return;
+
+          function cloneMaterial(source) {
+            if (!exportMaterials.has(source)) {
+              const copy = source.clone();
+              copy.wireframe = false;
+              exportMaterials.set(source, copy);
+            }
+            return exportMaterials.get(source);
+          }
+
+          object.material = Array.isArray(object.material)
+            ? object.material.map(cloneMaterial)
+            : cloneMaterial(object.material);
+        });
+
+        exportModel.updateMatrixWorld(true);
+
+        const exporter = new GLTFExporter();
+        const result = await exporter.parseAsync(exportModel, {
+          binary: true,
+          onlyVisible: true,
+          trs: false
+        });
+
+        if (!(result instanceof ArrayBuffer)) {
+          throw new Error("The exporter did not return a binary GLB.");
+        }
+
+        const blob = new Blob([result], { type: "model/gltf-binary" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "aks-74u.glb";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        status.textContent = "GLB ready — download started.";
+      } catch (error) {
+        console.error("GLB export failed:", error);
+        status.textContent = `Export failed: ${error.message}`;
+      } finally {
+        exportMaterials.forEach(mat => mat.dispose());
+        // Clone shares geometries with the viewer; do not dispose them.
+        exportModel?.clear();
+        exportButton.disabled = false;
+      }
+    };
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    });
+
+    const clock = new THREE.Clock();
+
+    renderer.setAnimationLoop(() => {
+      controls.update(Math.min(clock.getDelta(), 0.05));
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
