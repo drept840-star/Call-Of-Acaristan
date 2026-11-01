@@ -4,7 +4,21 @@ budget_tokens: 1000
 ---
 # STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-10-27
+> Read this FIRST when resuming. Last updated: 2026-10-31
+
+---
+
+## M7 goat-escape bridge (2026-10-31, branch `walk/look-pass`, uncommitted)
+
+Chores-complete film, so Bodi's "one of them got out" is watched, not told:
+`src/cutscenes/m7goat.py` (5 shots: pen / slip / orchard / two-shot / Bodi) +
+`src/game/content/timelines/m7.goat.escape.timeline.json`. `farmyard._chores_complete()`
+requests it once from the trough and generator handlers; `meta.MID_TIMELINES`
+(`MID_GOAT_ESCAPE`) registers it, `flow.on_cutscene_done` resumes chores without
+moving the ladder, and `flow.film_music` keeps the farm cue. VO_345-347 moved
+from `GoatRescue.__init__` into the film; the cream goat is hidden from the pen
+after it. Gates: compileall OK, smoke OK (new `m7_goat_escape`), M7 unit 29 OK,
+AE TIMELINE/VALIDATE OK. Not hand-played yet.
 
 ---
 

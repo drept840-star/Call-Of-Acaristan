@@ -3155,6 +3155,186 @@
       "last_seen": "2026-10-28T21:25:03.673Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m7/raid_world.py",
+      "root_cause": "Was returning: (x + x0, z + z0, x + x1, z + z1, 1.9)",
+      "fix": "Now returns: _SHAPES[ref]",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-176",
+      "timestamp": "2026-11-01T12:17:24.905Z",
+      "last_seen": "2026-11-01T12:17:24.905Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in pistol_mesh()",
+      "file": "src/ui/mp3d.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-177",
+      "timestamp": "2026-11-01T14:44:13.768Z",
+      "last_seen": "2026-11-01T14:44:13.768Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/ui/shop.py",
+      "root_cause": "Had \"SHOTGUN\"",
+      "fix": "Changed to \"FALLOW 12\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-178",
+      "timestamp": "2026-11-01T14:44:17.291Z",
+      "last_seen": "2026-11-01T14:44:17.291Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of build_windows.py",
+      "file": "tools/build_windows.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 10→17 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-179",
+      "timestamp": "2026-11-01T14:58:52.776Z",
+      "last_seen": "2026-11-01T14:58:52.776Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in acaristan.py",
+      "file": "acaristan.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-180",
+      "timestamp": "2026-11-01T15:03:07.627Z",
+      "last_seen": "2026-11-01T15:03:07.627Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/net/tcp_tunnel.py",
+      "root_cause": "Had \"bore was not found in assets/bin; reinstall the g",
+      "fix": "Changed to \"bore was not found and could not be downloaded; c",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-181",
+      "timestamp": "2026-11-01T15:45:51.655Z",
+      "last_seen": "2026-11-01T15:45:51.655Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in bore_cache_dir()",
+      "file": "src/net/tcp_tunnel.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-182",
+      "timestamp": "2026-11-01T15:46:03.104Z",
+      "last_seen": "2026-11-01T15:46:03.104Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/ui/match_screen.py",
+      "root_cause": "Had \"LAN only - bore missing; reinstall, use Hamachi/T",
+      "fix": "Changed to \"LAN only - bore download failed; use Hamachi/Tail",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-183",
+      "timestamp": "2026-11-01T15:46:10.631Z",
+      "last_seen": "2026-11-01T15:46:10.631Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of match_screen.py",
+      "file": "src/ui/match_screen.py",
+      "root_cause": "10 lines replaced/restructured",
+      "fix": "Rewrote 24→49 lines (10 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-184",
+      "timestamp": "2026-11-01T16:03:19.060Z",
+      "last_seen": "2026-11-01T16:03:19.060Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: kind should be key",
+      "file": "src/ui/match_screen.py",
+      "root_cause": "Used \"kind\" instead of \"key\"",
+      "fix": "Changed kind → key",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-185",
+      "timestamp": "2026-11-01T16:03:22.926Z",
+      "last_seen": "2026-11-01T16:03:22.926Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -3328,7 +3508,17 @@
     "5da656c1-bb9c-46b3-98c6-fcae6ce11ecf": true,
     "250874a5-221e-436d-9bf0-053dba1fd0f1": true,
     "cd035430-fbec-4454-a4ac-dfd5875bebb7": true,
-    "358e9dd9-3296-4985-a781-d18516999cce": true
+    "358e9dd9-3296-4985-a781-d18516999cce": true,
+    "05e34e7d-6fe2-41c5-93d3-291ebe4fa03a": true,
+    "251fea0e-22fa-462b-b637-9f57e5d75352": true,
+    "84886be6-1f38-4da6-a862-3f898d88a399": true,
+    "beaf2e78-ffda-4ae1-b753-109c7155438d": true,
+    "0331712b-a6d0-4166-b69a-ee2ac8f9722c": true,
+    "b8af29af-6823-4820-8f74-8c094abe9ca8": true,
+    "cf57bc02-1bae-4c5a-bb79-00c602078f80": true,
+    "846ec21f-f685-415b-9c9f-307b4bd9cf89": true,
+    "dcc17413-f167-4f1d-8c49-34c3dd8f42f1": true,
+    "b14d2cdf-fce4-4fcf-9abb-2c44b5d7546c": true
   },
-  "next_id": 176
+  "next_id": 186
 }

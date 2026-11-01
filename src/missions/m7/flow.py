@@ -14,9 +14,9 @@ from . import choice as _choice
 from . import farmyard as _farmyard
 from . import raid3d as _raid
 from .meta import (
-    FILM_TIMELINES, MISSION7_ID, MISSION7_KEY, MISSION7_TITLE, STAGES, STAGE_ARRIVAL,
-    STAGE_CHORES, STAGE_CHOICE, STAGE_FINALE, STAGE_PREP, STAGE_RAID, STAGE_RAIDIN,
-    STAGE_RUNNER)
+    FILM_TIMELINES, MID_GOAT_ESCAPE, MISSION7_ID, MISSION7_KEY, MISSION7_TITLE, STAGES,
+    STAGE_ARRIVAL, STAGE_CHORES, STAGE_CHOICE, STAGE_FINALE, STAGE_PREP, STAGE_RAID,
+    STAGE_RAIDIN, STAGE_RUNNER)
 
 # Score cue per stage (m7_audio.MUSIC). The runner film keeps the farm theme
 # running between chores and prep; the raid-in film starts the raid track so
@@ -83,6 +83,11 @@ def music_tick():
 
 def film_music(key):
     """Per frame while an M7 film plays: ``key`` is the stage token, or "outro"."""
+    if key == MID_GOAT_ESCAPE:
+        # The farm cue runs straight through the escape; the film is a beat
+        # of the same afternoon, not a new stage.
+        _m7_audio.music(_audio_manager, "farm")
+        return
     _m7_audio.music(_audio_manager, "outro" if key == "outro" else STAGE_MUSIC.get(key))
 
 
@@ -101,7 +106,10 @@ def take_cutscene_request():
 
 
 def on_cutscene_done(key):
-    """A stage film ended: step past its stage."""
+    """A film ended: step past a stage film, or resume a mid-stage beat."""
+    if key == MID_GOAT_ESCAPE:
+        _farmyard.after_goat_escape()
+        return
     if getattr(STATE, "mission7_stage", "") == key:
         advance_stage()
 

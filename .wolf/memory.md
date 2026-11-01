@@ -1801,3 +1801,110 @@ description: chronological action log per session, consolidated weekly
 | 01:18 | Edited src/cutscenes/m7films.py | 2→4 lines | ~83 |
 <!-- session:NjMyZDEwNjQtNWY4My00MTg3LWEwZWYtMjM5NmYyN2M5Mzg0 -->
 | 2026-10-28T23:28:06.539Z | Bodi seated on tractor in M7 burn films: feet on footplate, sit_pose leg solve rests thighs on cushion (SEAT_H 0.48) | src/cutscenes/m7films.py,src/cutscenes/m7world3d.py | renders checked; smoke OK |
+
+## Session: 2026-10-31 20:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:08 | Edited tools/test_m7_pig.py | inline fix | ~24 |
+
+## Session: 2026-10-31 01:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 04:14
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 13:37
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:37 | Edited src/cutscenes/m7world3d.py | 2→2 lines | ~25 |
+| 13:42 | Edited src/missions/m7/raid_world.py | inline fix | ~20 |
+
+## Session: 2026-11-01 14:14
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 14:16 | Created src/engine/collision/mesh.py | — | ~1966 |
+| 14:17 | Edited src/missions/m7/raid_world.py | added 1 import(s) | ~39 |
+| 14:17 | Edited src/missions/m7/raid_world.py | modified mouth() | ~81 |
+| 14:17 | Edited src/missions/m7/raid_world.py | modified _shape() | ~273 |
+| 14:17 | Edited src/missions/m7/raid_world.py | modified __init__() | ~288 |
+| 14:17 | Edited src/missions/m7/raid_world.py | modified los() | ~351 |
+| 14:17 | Edited src/missions/m7/raid_brain.py | 3→3 lines | ~37 |
+| 14:17 | Edited src/missions/m7/raid_brain.py | modified _truck_box() | ~164 |
+| 14:17 | Created tests/unit/test_engine_collision_mesh.py | — | ~890 |
+| 14:27 | Edited src/missions/m7/raid_world.py | — | ~0 |
+| 14:27 | Edited src/missions/m7/raid_world.py | modified motorcycle_at() | ~84 |
+| 14:27 | Edited src/missions/m7/raid_world.py | 7→8 lines | ~88 |
+| 14:27 | Edited src/missions/m7/raid_world.py | modified mouth() | ~52 |
+
+## Session: 2026-11-01 15:25
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 15:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:36 | Created src/ui/mp3d.py | — | ~3256 |
+| 15:38 | Created src/ui/arena_view3d.py | — | ~6455 |
+<!-- session:NWY5ZTk5YzAtYTFjYi00ZDlhLTlmMjUtMTI0Zjk4MTJkMDAz -->
+| 2026-11-01T13:54:18.113Z | Multiplayer goes 2.5D: ui/arena_view3d.py (ArenaView3D + make_view, mouse aim unprojected at gun height, baked walls/floor per map theme, pickup meshes packed once and moved in numpy, 3D corpses kept in the shared _corpses table) and ui/mp3d.py (catalog look -> box rig, finished guns, shop portraits). match_screen uses make_view + view.aim_angle; shop cells and preview render 3D with 2D fallback; ACA_MP_2D=1 forces 2D. | src/ui/arena_view3d.py,src/ui/mp3d.py,src/ui/arena_view.py,src/ui/match_screen.py,src/ui/shop.py,CLAUDE.md | compileall OK; smoke only fails m7_goat_rescue (GoatRescue.repair_time, not touched here); ~10-15 ms/frame GL |
+
+## Session: 2026-11-01 16:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 16:32
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 16:35
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 16:42
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:44 | Created tools/ae_import_pistol.py | — | ~903 |
+| 16:44 | Edited src/ui/mp3d.py | added error handling | ~244 |
+| 16:44 | Edited src/ui/shop.py | inline fix | ~13 |
+| 16:55 | Edited tools/build_windows.py | modified walk() | ~229 |
+| 16:58 | Edited tools/build_windows.py | modified walk() | ~241 |
+| 16:59 | Edited tools/build_windows.py | modified endswith() | ~109 |
+| 17:03 | Edited acaristan.py | added error handling | ~130 |
+
+## Session: 2026-11-01 17:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:26 | Session end: 2 writes across 2 files (mp3d.py, arena_view3d.py) | 0 reads | ~9711 tok |
+| 17:26 | Session end: 13 writes across 4 files (mesh.py, raid_world.py, raid_brain.py, test_engine_collision_mesh.py) | 0 reads | ~4313 tok |
+| 17:26 | Session end: 7 writes across 5 files (ae_import_pistol.py, mp3d.py, shop.py, build_windows.py, acaristan.py) | 0 reads | ~1869 tok |
+| 17:26 | Session end: 2 writes across 2 files (m7world3d.py, raid_world.py) | 0 reads | ~45 tok |
+| 17:45 | Edited src/net/tcp_tunnel.py | added 2 import(s) | ~21 |
+| 17:45 | Edited src/net/tcp_tunnel.py | expanded (+9 lines) | ~135 |
+| 17:45 | Edited src/net/tcp_tunnel.py | 2→3 lines | ~54 |
+| 17:46 | Edited src/net/tcp_tunnel.py | added error handling | ~768 |
+| 17:46 | Edited src/ui/match_screen.py | "LAN only - bore missing; " → "LAN only - bore download " | ~27 |
+| 17:46 | Created tools/download_bore.py | — | ~218 |
+| 18:03 | Edited src/ui/match_screen.py | modified __init__() | ~554 |
+| 18:03 | Edited src/ui/match_screen.py | 2→2 lines | ~25 |
+| 18:22 | Edited src/ui/match_screen.py | 3→6 lines | ~91 |
+<!-- session:YjMzZGIwZDEtMTNhMS00MDU0LWJmZjAtM2JmMzlkNjY1ZGM0 -->
+| 2026-11-01T16:47:02.958Z | MP TCP fallback lag fix: Wire coalesces snapshots/room state/movement input, 8KB SO_SNDBUF, delay-based pacing (host: input sk/sa echo; client: 0.5s ping) stretches send gaps up to 8x; room state deduped (resend on change or 1s); TCP input 30Hz with button edges kept. bore auto-fetch earlier. Soak got --rate-kbps/--queue-kb/--max-view-delay-ms. | src/ui/match_screen.py,tools/mp_net_soak.py,src/net/tcp_tunnel.py,tools/download_bore.py | 6KiB/s link view delay 5058ms->172ms, 3KiB/s 11-14s->~300ms, uncapped/UDP unchanged; compileall OK; smoke fails only m7_goat_rescue (unrelated M7 WIP) |
+
+## Session: 2026-11-01 18:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

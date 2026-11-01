@@ -33,6 +33,9 @@ BODI_TILE = (6.5, 4.5)
 LOFT_TILE = (10.5, 1.4)     # beat 4: Bodi in the hayloft
 ALEX_TILE = (9.5, 8.5)      # beat 4: Alex waits by his bike
 BIKE_AT = (10.5, 8.5)
+# Easter egg: Colonel Paie the scarecrow. Feet of the post, in tile units.
+COLONEL_TILE = (1.5, 5.5)
+
 # Beat 4: the tractor parks across the track mouth (pixel top-left of its sprite).
 TRACTOR_PARK = (int(6.5 * TILE), 8 * TILE)
 
@@ -71,6 +74,7 @@ POINTS = {
     "porch": {"at": (3.0, 4.5), "reach": 52},
     "tractor": {"at": (13.0, 4.5), "reach": 96},
     "shed": {"at": (2.0, 8.0), "reach": 90},
+    "colonel": {"at": (1.5, 5.5), "reach": 58},
 }
 
 # Flat daylight palette, shared by the tiles and the props.

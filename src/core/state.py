@@ -95,6 +95,11 @@ class GameState:
         # before picking up a shank/sidearm). weapons.py gates all weapon
         # actions on this. Default False (M1/M2 start armed).
         self.player_disarmed = False
+        # Mission-level weapons lock - True when a mission section wants to
+        # block ALL weapon actions (shoot / melee / throw / reload / swap)
+        # even though the player is carrying a sidearm. Owned by the
+        # mission that sets it (currently M7 farmyard.begin / _finish).
+        self.weapons_locked = False
         # ─── Mission 3 crafting ──
         # The chair breaks during the breach; Biribel grabs a chair leg,
         # then whittles it into a shiv on the drain grate. The doorway is
@@ -289,6 +294,8 @@ class GameState:
         # ── Mission 7: Fallow Ground (skeleton) ──
         self.mission7_stage = ""            # stage token (missions.m7.meta STAGES)
         self.m7_preps = []                  # prep items (placeholder)
+        self.m7_pig_dead = False            # beat 5: Bodi's pig was shot in the raid (missions.m7.raid3d)
+        self.m7_pig_at = None               # where it fell, world metres (x, z)
         self.m8_route = ""                  # placeholder: M8 route set by the M7 choice
         self.m7_raid_active = False         # the raid owns the frame
         self.m7_raid_cp = 0                 # raid checkpoint: 0 start, 1 orchard cleared, 2 trucks cleared

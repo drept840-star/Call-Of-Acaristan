@@ -17,8 +17,21 @@
   {
    "scene": "m3_archives_ingame_join",
    "speaker": "VOLKOV",
-   "text": "Your captain's code opened that IPA relay on the first try. Ask him where he got it.\nOn your six. Move.",
-   "min_ms": 6000,
+   "text": "Your captain's code opened that IPA relay on the first try. Ask him where he got it.",
+   "hard_cut": true,
+   "min_ms": 4700,
+   "lighting": [
+    7,
+    9,
+    10
+   ]
+  },
+  {
+   "scene": "m3_archives_ingame_join",
+   "speaker": "VOLKOV",
+   "text": "On your six. Move.",
+   "scene_time_offset_ms": 4700,
+   "min_ms": 2000,
    "lighting": [
     7,
     9,

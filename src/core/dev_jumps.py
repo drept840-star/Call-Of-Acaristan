@@ -21,6 +21,8 @@ DEV_JUMPS = {
     # ── Walking sim ──
     "walk": ("--dev-walk",
              "Walking sim harbor exploration from the start"),
+    "walk-after": ("--dev-walk-after",
+                   "Walking sim harbor right after the rig-strike cutscene (van ready)"),
     # ── Mission 2 ──
     "m2": ("--dev-mission2",
            "Mission 2 intro cutscene"),

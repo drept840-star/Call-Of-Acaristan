@@ -40,6 +40,14 @@ FILM_TIMELINES = {
 }
 OUTRO_TIMELINE = "m7.outro"
 
+# Mid-stage films: these play without advancing the ladder.  The goat escape
+# is requested by the chore handlers when the last chore lands, so Bodi's
+# "one of them got out" is something the player has watched happen.
+MID_GOAT_ESCAPE = "goat_escape"
+MID_TIMELINES = {
+    MID_GOAT_ESCAPE: "m7.goat.escape",
+}
+
 # Scene id -> (module in cutscenes, function name).  Loaded on first draw so
 # the 3D stack stays out of game start-up.
 M7_SCENES = {
@@ -59,6 +67,11 @@ M7_SCENES = {
     "m7_burn_bodi": ("m7films", "burn_bodi"),
     "m7_burn_face": ("m7films", "burn_face"),
     "m7_endcard": ("m7films", "endcard"),
+    "m7_goat_pen": ("m7goat", "pen"),
+    "m7_goat_slip": ("m7goat", "slip"),
+    "m7_goat_orchard": ("m7goat", "orchard"),
+    "m7_goat_potatoes": ("m7goat", "potatoes"),
+    "m7_goat_bodi": ("m7goat", "bodi"),
 }
 
 
@@ -80,8 +93,8 @@ _register_scenes()
 
 
 def film_shots(stage):
-    """Cutscene shots for a film stage (empty list for a stage without one)."""
-    timeline = FILM_TIMELINES.get(stage)
+    """Cutscene shots for a stage film or a mid-stage film (or an empty list)."""
+    timeline = FILM_TIMELINES.get(stage) or MID_TIMELINES.get(stage)
     if not timeline:
         return []
     from game import timelines as _timelines

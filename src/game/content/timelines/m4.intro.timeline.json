@@ -3,26 +3,69 @@
  "id": "m4.intro",
  "shots": [
   {
-   "scene": "m3_end_nation",
+   "scene": "m4_street_curfew",
    "speaker": "NARRATOR",
    "text": "Forty-eight hours after the Vostral, the address is still\nreading on every screen in the capital.",
+   "quiet_ui": true,
    "lighting": [
     10,
     14,
     20
    ],
-   "min_ms": 3800
+   "min_ms": 4200,
+   "caption_after_ms": 2400,
+   "cues": [
+    [
+     0,
+     "rain",
+     0.3
+    ],
+    [
+     300,
+     "radio_static",
+     0.12
+    ],
+    [
+     1500,
+     "gunshot_distant",
+     0.22
+    ],
+    [
+     2600,
+     "footstep_walk",
+     0.14
+    ]
+   ]
   },
   {
    "scene": "m4_city_curfew",
    "speaker": "VASILE",
    "text": "And this is what it bought us. A curfew nobody can enforce\nand a regime that shoots its own order.",
+   "quiet_ui": true,
    "lighting": [
     12,
     10,
     16
    ],
-   "min_ms": 3600
+   "min_ms": 3400,
+   "caption_after_ms": 1800,
+   "cues": [
+    [
+     0,
+     "radio_static",
+     0.1
+    ],
+    [
+     1200,
+     "gunshot_distant",
+     0.18
+    ],
+    [
+     2200,
+     "m4_breath",
+     0.3
+    ]
+   ]
   },
   {
    "scene": "title_card",

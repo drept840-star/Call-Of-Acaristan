@@ -110,25 +110,34 @@ M4_ROLE_TUNING = {
 # Cutscene shot-lists (W5: real finale + intro art)
 # ─────────────────────────────────────────────
 # Scene names dispatch through cutscenes/engine.py::draw_cutscene_scene to the
-# bespoke draws in cutscenes/m4aftermath.py. The M3 callback reuses an existing
-# M3 scene (m3_end_nation) rather than duplicating art. Schema mirrors the M2/M3
-# convention: scene / speaker / text / lighting / min_ms. "Keep these names:
-# acaristan.py uses them."
+# bespoke draws in cutscenes/m4aftermath.py. The intro opens on its own street
+# frame (m4_street_curfew) rather than reusing the M3 ending's screen wall, so
+# the campaign's second day starts where the first one left the capital.
+# Schema mirrors the M2/M3 convention: scene / speaker / text / lighting /
+# min_ms. "Keep these names: acaristan.py uses them."
 import game.timelines as _timelines  # RPE6 P8: timeline data access
 mission4_intro_shots = [
     {
-        "scene": "m3_end_nation",
+        "scene": "m4_street_curfew",
         "speaker": "NARRATOR",
         "text": "Forty-eight hours after the Vostral, the address is still\nreading on every screen in the capital.",
         "lighting": (10, 14, 20),
-        "min_ms": 3800,
+        "min_ms": 4200,
+        "caption_after_ms": 2400,
+        "quiet_ui": True,
+        "cues": ((0, "rain", 0.3), (300, "radio_static", 0.12),
+                 (1500, "gunshot_distant", 0.22), (2600, "footstep_walk", 0.14)),
     },
     {
         "scene": "m4_city_curfew",
         "speaker": "VASILE",
         "text": "And this is what it bought us. A curfew nobody can enforce\nand a regime that shoots its own order.",
         "lighting": (12, 10, 16),
-        "min_ms": 3600,
+        "min_ms": 3400,
+        "caption_after_ms": 1800,
+        "quiet_ui": True,
+        "cues": ((0, "radio_static", 0.1), (1200, "gunshot_distant", 0.18),
+                 (2200, "m4_breath", 0.3)),
     },
     {
         "scene": "title_card",

@@ -15,7 +15,8 @@ Change a look in ``figure_kit.SPECS`` and both renderers follow.
 """
 from .figure_kit import SPECS as SPECS_2D
 
-__all__ = ["spec3d", "humanoid3d", "CAST3D_ALIASES"]
+__all__ = ["spec3d", "humanoid3d", "third_person_rifle", "rifle_asset", "ak74_asset",
+           "weapon_asset", "RIFLE_ASSETS", "CAST3D_ALIASES"]
 
 _BASE_H = 258.0          # 2D height that maps to Humanoid scale 1.0
 _CAP_COL = (19, 29, 46)  # figure_kit draws every peaked cap in this navy
@@ -77,7 +78,77 @@ def spec3d(who, **overrides):
     return out
 
 
+_RIFLE_CACHE = {}
+# Baked ae.mesh/1 weapons a spec may name directly. All share one gun-space
+# frame: +z is the muzzle and the origin is the right hand on the pistol grip,
+# so they drop into ``Humanoid._rifle`` without a transform.
+RIFLE_ASSETS = ("akrifle", "ak74")
+
+
+def weapon_asset(name):
+    """(mesh, muzzle) of a baked ae.mesh/1 weapon in RIFLE_ASSETS, grip at the
+    hand joint and +z muzzle; (None, None) if the asset is missing or corrupt.
+    Loaded once and shared: the rig only ever reads the mesh."""
+    if name not in _RIFLE_CACHE:
+        out = (None, None)
+        try:
+            import json
+            import os
+            from engine3d.core import Mesh
+            from game.render3d_bridge import MESHES_DIR
+            with open(os.path.join(MESHES_DIR, "%s.mesh.json" % name), encoding="utf-8") as fh:
+                data = json.load(fh)
+            if data.get("schema") == "ae.mesh/1":
+                m = Mesh()
+                m.verts = [tuple(float(c) for c in v) for v in data["verts"]]
+                m.faces = [(tuple(f[0]), tuple(f[1]), 2, True, False) for f in data["faces"]]
+                out = (m, tuple(float(c) for c in data["meta"]["muzzle"]))
+        except Exception:
+            pass
+        _RIFLE_CACHE[name] = out
+    return _RIFLE_CACHE[name]
+
+
+def rifle_asset():
+    """(mesh, muzzle) of the shared Guard rifle (tools/ae_import_akrifle.py)."""
+    return weapon_asset("akrifle")
+
+
+def ak74_asset():
+    """(mesh, muzzle) of the code-authored AK-74 (tools/ae_build_ak74.py)."""
+    return weapon_asset("ak74")
+
+
+def _attach(hum, name):
+    """Put the baked weapon ``name`` on ``hum`` as its rig rifle."""
+    mesh, muzzle = weapon_asset(name)
+    if mesh is None:
+        return hum          # missing asset -> the procedural rifle stays
+    hum._rifle = mesh
+    hum._weapon = name
+    hum._muzzle_z = muzzle[2]
+    # GL caches rig templates by spec repr; each gun needs its own, or it
+    # reuses the procedural box-rifle VBO.
+    hum._gl_spec_key = repr(sorted((getattr(hum, "spec", None) or {}).items())) + "|" + name
+    return hum
+
+
+def third_person_rifle(hum):
+    """Swap a plain ``rifle`` rig's box gun for the shared AK asset and return it.
+
+    A spec may also name a baked weapon directly (``rifle="ak74"``).  Anything
+    else is left alone: sniper / os12 / shotgun / k9 (and any rig that already
+    carries a custom ``_weapon``) keep their own mesh.  Missing asset -> the
+    procedural rifle stays, so every scene still renders.
+    """
+    spec = getattr(hum, "spec", None) or {}
+    want = spec.get("rifle")
+    if getattr(hum, "_weapon", None) or want not in ("rifle",) + RIFLE_ASSETS:
+        return hum
+    return _attach(hum, want if want in RIFLE_ASSETS else "akrifle")
+
+
 def humanoid3d(who, **overrides):
     """-> engine3d.Humanoid built from the 2D spec (+ overrides, e.g. rifle=)."""
     from engine3d import Humanoid  # lazy: keep cutscenes importable without the 3D stack
-    return Humanoid(spec3d(who, **overrides))
+    return third_person_rifle(Humanoid(spec3d(who, **overrides)))

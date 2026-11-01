@@ -6,6 +6,9 @@ Bespoke shots replace the Slice-0 title-card stubs:
                            fire, searchlights, a curfew the regime can no
                            longer hold. Doubles as the M3 -> M4 intro callback
                            frame (the Vostral still glowing on the street).
+  1b. m4_street_curfew   - the intro's opening frame at pavement level: the
+                           address still reading on every screen two days
+                           later, and a checkpoint nobody is left to man.
   2. m4_arrest_screen    - the state airwaves turning on their own general:
                            Balaceanu escorted out on a wall monitor while the
                            square cheers Retardovici's crest. Biribel is not in
@@ -144,6 +147,86 @@ def _draw_m4_city_curfew(surface, t):
     _m3_noise(surface, 5151, count=70, alpha=20)
     _ko_tint(surface)
     _tag(surface, "THE CAPITAL // 48H CURFEW")
+
+
+def _draw_m4_street_curfew(surface, t):
+    """Pavement level, forty-eight hours after the Vostral.
+
+    The M3 ending left the address burning on every screen; the M4 intro opens
+    on what that looks like from the street - the feed still running, the
+    checkpoint barrier down and nobody left to man it.
+    """
+    t = max(0, min(t, 12000))
+    surface.fill((8, 10, 16))
+    _draw_vertical_gradient(surface, 0, SCENE_TOP, WIDTH, SAFE_BOT - SCENE_TOP,
+                            (28, 26, 40), (8, 9, 15))
+    rng = random.Random(4040)
+    base_y = SAFE_BOT - 128
+    _skyline(surface, base_y, rng, lit_runs=True, fire=True, t=t, height_scale=.74)
+
+    # The state broadcast still owns the street: one screen, one face, all night.
+    sx, sy, sw, sh = 46, SAFE_TOP + 26, 316, 188
+    pygame.draw.rect(surface, (15, 16, 24), (sx - 10, sy - 10, sw + 20, sh + 20))
+    pygame.draw.rect(surface, (56, 58, 68), (sx - 10, sy - 10, sw + 20, sh + 20), 2)
+    screen = pygame.Surface((sw, sh))
+    screen.fill((22, 30, 42))
+    _draw_vertical_gradient(screen, 0, 0, sw, sh, (34, 46, 62), (16, 22, 32))
+    _face(screen, sw // 2 - 4, 76, 1.45, smile=.85, president=True)
+    pygame.draw.rect(screen, (10, 14, 20), (0, sh - 46, sw, 46))
+    pygame.draw.rect(screen, (196, 170, 96), (0, sh - 46, sw, 2))
+    label = font_terminal_small.render("THE ADDRESS CONTINUES", True, (226, 202, 132))
+    screen.blit(label, (sw // 2 - label.get_width() // 2, sh - 31))
+    live = .55 + .45 * math.sin(t * .005)
+    pygame.draw.circle(screen, (int(150 + 90 * live), 42, 38), (16, 16), 5)
+    surface.blit(screen, (sx, sy))
+    _ko_glow(surface, (96, 130, 176), (sx + sw // 2, sy + sh // 2), 300, 26)
+
+    # Smaller sets across the street repeat the same feed.
+    for mx, my, mw, mh in ((WIDTH - 268, SAFE_TOP + 52, 152, 90),
+                           (WIDTH - 122, SAFE_TOP + 152, 94, 58)):
+        pygame.draw.rect(surface, (14, 15, 22), (mx - 5, my - 5, mw + 10, mh + 10))
+        pygame.draw.rect(surface, (54, 56, 66), (mx - 5, my - 5, mw + 10, mh + 10), 1)
+        mini = pygame.Surface((mw, mh))
+        mini.fill((21, 29, 40))
+        _face(mini, mw // 2, mh // 2 - 2, max(.5, mh / 120.0), smile=.8, president=True)
+        surface.blit(mini, (mx, my))
+
+    # Wet asphalt: the screen light smeared down it, fires glowing at the kerb.
+    pygame.draw.rect(surface, (11, 12, 17), (0, base_y, WIDTH, HEIGHT - base_y))
+    for y in range(base_y, HEIGHT, 24):
+        pygame.draw.line(surface, (17, 18, 24), (0, y), (WIDTH, y), 1)
+    for i in range(9):
+        band = pygame.Surface((sw, 8), pygame.SRCALPHA)
+        band.fill((84, 112, 152, max(0, 34 - i * 3)))
+        surface.blit(band, (sx + round(math.sin(t * .001 + i) * 6), base_y + 6 + i * 11))
+    _ko_glow(surface, (176, 92, 66), (WIDTH // 2 + 120, base_y + 6), 300, 30)
+
+    # Curfew checkpoint: barrier down, floodlight still burning over an empty lane.
+    bx0 = WIDTH // 2 - 96
+    for px in (bx0, bx0 + 210):
+        pygame.draw.rect(surface, (36, 33, 30), (px, base_y - 34, 18, 40))
+        pygame.draw.rect(surface, (52, 48, 42), (px, base_y - 34, 18, 4))
+    for k in range(8):
+        col = (188, 150, 74) if k % 2 == 0 else (32, 30, 28)
+        pygame.draw.rect(surface, col, (bx0 + 9 + k * 26, base_y - 30, 26, 9))
+    pygame.draw.rect(surface, (58, 54, 48), (bx0 + 9, base_y - 30, 208, 9), 1)
+    pygame.draw.line(surface, (48, 44, 40), (WIDTH // 2 + 190, base_y - 120),
+                     (WIDTH // 2 + 190, base_y - 2), 4)
+    _ko_glow(surface, (214, 208, 178), (WIDTH // 2 + 190, base_y - 120), 120, 30)
+
+    # Rain keeps falling on it all.
+    rain = pygame.Surface((WIDTH, SAFE_BOT - SCENE_TOP), pygame.SRCALPHA)
+    for i in range(150):
+        rx = (i * 97 + int(t * .19)) % (WIDTH + 60) - 30
+        ry = (i * 53 + int(t * .42)) % (SAFE_BOT - SCENE_TOP)
+        pygame.draw.line(rain, (150, 170, 200, 26), (rx, ry), (rx - 5, ry + 17), 1)
+    surface.blit(rain, (0, SCENE_TOP))
+
+    _draw_dust_motes(surface, t)
+    _m3_noise(surface, 8080, count=66, alpha=18)
+    _push_safe(surface, 1 + .10 * _beat(t, 0, 9000),
+               (WIDTH // 2 + 40, SAFE_TOP + 250), t=t)
+    _tag(surface, "THE CAPITAL // 48H AFTER THE VOSTRAL", (206, 190, 150))
 
 
 # One millisecond timeline owns blocking and editorial cuts. No render-time
@@ -622,6 +705,7 @@ from core.cutscene_registry import register_scene_renderers as _register_takes  
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
 _register_takes({
+    "m4_street_curfew": _draw_m4_street_curfew,
     "m4_city_curfew": _draw_m4_city_curfew,
     "m4_arrest_screen": _draw_m4_arrest_screen,
     "m4_maru_silhouette": _draw_m4_maru_silhouette,

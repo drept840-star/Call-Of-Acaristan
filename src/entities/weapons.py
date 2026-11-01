@@ -44,8 +44,12 @@ def _mission2_actions_blocked():
 
 def _player_disarmed():
     """True when the player has no weapon at all (e.g. Mission 3's cell,
-    before the chair breaks). Blocks ALL weapon actions."""
-    return bool(getattr(STATE, "player_disarmed", False))
+    before the chair breaks), or when a mission has locked weapons
+    (e.g. Mission 7's farmyard chores / prep). Blocks ALL weapon actions."""
+    return (bool(getattr(STATE, "player_disarmed", False))
+            or bool(getattr(STATE, "weapons_locked", False))
+
+            or bool(getattr(STATE, "weapons_locked", False)))
 
 
 def _player_has_firearm():

@@ -65,6 +65,73 @@ C_KRAP_BLUE = (55, 125, 185)
 C_RED = (225, 75, 65)
 
 
+# ── visual helpers (all built once; nothing here runs per-frame except
+#    _lerp_col and _draw_brackets, which only issue draw calls) ─────────────
+
+
+def _lerp_col(a, b, t):
+    t = max(0.0, min(1.0, t))
+    return (
+        int(a[0] + (b[0] - a[0]) * t),
+        int(a[1] + (b[1] - a[1]) * t),
+        int(a[2] + (b[2] - a[2]) * t),
+    )
+
+
+def _make_vignette(size, reach=170, strength=150):
+    """Dark edges, built once. Blit over the background each frame."""
+    w, h = size
+    surf = pygame.Surface(size, pygame.SRCALPHA)
+    for i in range(reach):
+        a = int(strength * (1 - i / reach) ** 2.2)
+        if a > 0:
+            pygame.draw.rect(surf, (0, 0, 0, a), (i, i, w - 2 * i, h - 2 * i), 1)
+    return surf
+
+
+def _make_glow_sprite(radius, color, peak=0.85):
+    """Radial glow for BLEND_ADD (black = no effect), with a hot core."""
+    d = radius * 2 + 1
+    s = pygame.Surface((d, d))
+    for ring in range(radius, 0, -1):
+        k = peak * (1 - ring / radius) ** 2
+        pygame.draw.circle(s, tuple(int(c * k) for c in color), (radius, radius), ring)
+    pygame.draw.circle(s, (255, 200, 110), (radius, radius), max(1, radius // 4))
+    return s
+
+
+def _render_glow_text(font, text, color, glow_color, radius=4, alpha=12, shadow=(3, 3)):
+    """Pre-render text with soft glow + drop shadow. Returns (surface, pad)."""
+    pad = radius + max(shadow) + 1
+    base = font.render(text, True, color)
+    surf = pygame.Surface((base.get_width() + pad * 2, base.get_height() + pad * 2), pygame.SRCALPHA)
+    glow = font.render(text, True, glow_color)
+    glow.set_alpha(alpha)
+    for dx in range(-radius, radius + 1, 2):
+        for dy in range(-radius, radius + 1, 2):
+            if dx * dx + dy * dy <= radius * radius:
+                surf.blit(glow, (pad + dx, pad + dy))
+    surf.blit(font.render(text, True, (0, 0, 0)), (pad + shadow[0], pad + shadow[1]))
+    surf.blit(base, (pad, pad))
+    return surf, pad
+
+
+def _make_gradient_rule(w, h, color):
+    """Horizontal rule that fades out to the right."""
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    for x in range(w):
+        a = int(40 + 215 * (1 - x / w) ** 1.5)
+        pygame.draw.line(surf, (*color, a), (x, 0), (x, h - 1))
+    return surf
+
+
+def _draw_brackets(surf, rect, color, size=12, width=2):
+    x0, y0, x1, y1 = rect.left, rect.top, rect.right - 1, rect.bottom - 1
+    for cx, cy, sx, sy in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
+        pygame.draw.line(surf, color, (cx, cy), (cx + sx * size, cy), width)
+        pygame.draw.line(surf, color, (cx, cy), (cx, cy + sy * size), width)
+
+
 def play_requires_update(
     result: UpdateCheckResult | None,
     config: dict | None = None,
@@ -143,6 +210,7 @@ class _LauncherButton:
         # user is pointing at out from under the cursor (the hitbox `rect` and
         # the drawn rect stay identical). Only the label nudges.
         r = pygame.Rect(self.x, self.y, self.w, self.h)
+        active = self.is_hovered or self.is_selected
 
         if not self.enabled:
             self._bg.fill((14, 17, 22, 140))
@@ -150,27 +218,34 @@ class _LauncherButton:
             bar_col = (55, 60, 68)
             txt_col = (85, 90, 98)
         elif self.primary:
-            alpha = int(190 + 45 * self.glow)
-            self._bg.fill((32, 22, 12, alpha))
-            border_col = C_ORANGE if (self.is_hovered or self.is_selected) else (165, 85, 20)
+            self._bg.fill((32, 22, 12, int(190 + 45 * self.glow)))
+            if active:
+                border_col = C_ORANGE
+            else:
+                # Idle pulse so PLAY reads as the primary action.
+                pulse = 0.5 + 0.5 * math.sin(_now_ms() / 450.0)
+                border_col = _lerp_col((150, 78, 18), (215, 110, 25), pulse)
             bar_col = C_ORANGE
             txt_col = C_WHITE
         else:
-            alpha = int(165 + 50 * self.glow)
-            self._bg.fill((14, 20, 28, alpha))
-            border_col = C_ORANGE if (self.is_hovered or self.is_selected) else (45, 62, 82)
-            bar_col = C_ORANGE if (self.is_hovered or self.is_selected) else C_KRAP_BLUE
-            txt_col = C_WHITE if (self.is_hovered or self.is_selected) else C_GREY
+            self._bg.fill((14, 20, 28, int(165 + 50 * self.glow)))
+            border_col = C_ORANGE if active else (45, 62, 82)
+            bar_col = C_ORANGE if active else C_KRAP_BLUE
+            txt_col = C_WHITE if active else C_GREY
+
+        if self.enabled:
+            # Faint top sheen.
+            pygame.draw.line(self._bg, (255, 255, 255, 28 if active else 12), (1, 1), (self.w - 2, 1))
 
         surf.blit(self._bg, r.topleft)
         pygame.draw.rect(surf, border_col, r, 1)
-        pygame.draw.rect(surf, bar_col, (r.x, r.y, 5, r.h))
+        pygame.draw.rect(surf, bar_col, (r.x, r.y, 5 + int(round(self.slide * 3.0)), r.h))
 
         if self.flash > 0.0:
             self._flash_surf.fill((255, 220, 170, int(110 * (self.flash / 0.16))))
             surf.blit(self._flash_surf, r.topleft)
 
-        prefix = "> " if (self.is_hovered or self.is_selected) and self.enabled else ""
+        prefix = "> " if active and self.enabled else ""
         lbl = font.render(prefix + self.text, True, txt_col)
         dx = int(round(self.slide * 6.0))
         surf.blit(lbl, (r.x + 16 + dx, r.y + (r.h - lbl.get_height()) // 2))
@@ -281,6 +356,11 @@ class LauncherApp:
             for _ in range(24)
         ]
 
+        self._card_key: str | None = None   # right-panel state, for fade-in
+        self._card_fade = 0.0
+        self._shown_frac = 0.0              # eased progress bar value
+        self._dt = 1.0 / 60.0
+
         self._init_pygame()
 
     # ── window / canvas ────────────────────────────────────────────────────
@@ -346,6 +426,14 @@ class LauncherApp:
         self.dim_overlay.fill((6, 9, 14, 185))
         for y in range(0, L_HEIGHT, 3):
             pygame.draw.line(self.dim_overlay, (0, 0, 0, 28), (0, y), (L_WIDTH, y), 1)
+
+        # Pre-rendered visual layers (built once, blitted every frame).
+        self.vignette = _make_vignette((L_WIDTH, L_HEIGHT))
+        self._ember_sprites = {r: _make_glow_sprite(r * 4, (255, 135, 35)) for r in range(1, 5)}
+        self._title_surf, self._title_pad = _render_glow_text(
+            self.font_title, "CALL OF ACARISTAN", C_WHITE, C_ORANGE
+        )
+        self._title_rule = _make_gradient_rule(286, 3, C_ORANGE)
 
         # Pre-allocated translucent plates (no Surface churn in the draw path).
         self._plate_cache: dict[tuple[int, int], pygame.Surface] = {}
@@ -475,6 +563,7 @@ class LauncherApp:
             res = self.check_result
             done = self.update_done
             play_after = self._play_after_update
+            frac = self.progress_frac
 
         self.btn_check.enabled = not (checking or updating)
         self.btn_check.text = "CHECKING RELAY..." if checking else "CHECK FOR UPDATES"
@@ -491,7 +580,7 @@ class LauncherApp:
         if updating:
             self.btn_update.enabled = False
             self.btn_update.text = "UPDATING..."
-            self.btn_update.badge = f"{int(self.progress_frac * 100)}%"
+            self.btn_update.badge = f"{int(frac * 100)}%"
         elif done:
             self.btn_update.enabled = False
             self.btn_update.text = "UPDATE INSTALLED"
@@ -521,17 +610,22 @@ class LauncherApp:
 
     def _draw_fx(self) -> None:
         self.screen.blit(self.bg_surf, (0, 0))
-        for x, y, _spd, length in self._rain:
+        # Rain brightness follows speed: faster drops read as nearer.
+        for x, y, spd, length in self._rain:
+            shade = 0.55 + 0.45 * ((spd - 260.0) / 160.0)
+            col = (int(110 * shade), int(125 * shade), int(145 * shade))
             pygame.draw.line(
-                self.screen,
-                (110, 125, 145),
-                (int(x), int(y)),
-                (int(x - length * 0.22), int(y + length)),
-                1,
+                self.screen, col, (int(x), int(y)), (int(x - length * 0.22), int(y + length)), 1
             )
-        for x, y, _vx, _vy, rad in self._embers:
-            pygame.draw.circle(self.screen, (255, 135, 35), (int(x), int(y)), int(rad))
         self.screen.blit(self.dim_overlay, (0, 0))
+        # Embers are additive glows drawn after the dim layer so they glow.
+        now = _now_ms()
+        for x, y, _vx, _vy, rad in self._embers:
+            size = max(1, min(4, int(rad + 0.6 * math.sin(now / 200.0 + x * 0.1))))
+            spr = self._ember_sprites[size]
+            half = spr.get_width() // 2
+            self.screen.blit(spr, (int(x) - half, int(y) - half), special_flags=pygame.BLEND_ADD)
+        self.screen.blit(self.vignette, (0, 0))
 
     def _draw_left_column(self) -> None:
         # Top classification bar
@@ -548,12 +642,10 @@ class LauncherApp:
         )
         self.screen.blit(hdr, (38, 21))
 
-        # Game title
-        t_shadow = self.font_title.render("CALL OF ACARISTAN", True, (0, 0, 0))
-        t_main = self.font_title.render("CALL OF ACARISTAN", True, C_WHITE)
-        self.screen.blit(t_shadow, (31, 55))
-        self.screen.blit(t_main, (28, 52))
-        pygame.draw.rect(self.screen, C_ORANGE, (28, 106, 286, 3))
+        # Game title (glow + shadow are pre-rendered)
+        pad = self._title_pad
+        self.screen.blit(self._title_surf, (28 - pad, 52 - pad))
+        self.screen.blit(self._title_rule, (28, 106))
 
         # Local version & active save card
         info_card = self._plate(286, 118)
@@ -569,6 +661,7 @@ class LauncherApp:
         l4 = self.font_small.render(_ellipsize(self.font_small, self.save_summary, 260), True, (130, 140, 135))
         self.screen.blit(l1, (42, 132))
         self.screen.blit(l2, (42, 150))
+        pygame.draw.line(self.screen, (45, 65, 85), (42, 172), (300, 172), 1)
         self.screen.blit(l3, (42, 176))
         self.screen.blit(l4, (42, 196))
 
@@ -592,19 +685,43 @@ class LauncherApp:
 
         has_update = (res is not None and res.status == "update_available" and res.remote is not None and not done)
 
+        # Which card is showing; a change restarts the fade-in.
+        if updating:
+            key = "updating"
+        elif has_update:
+            key = "notice"
+        elif done and res and res.remote:
+            key = "done"
+        else:
+            key = "status"
+        if key != self._card_key:
+            self._card_key = key
+            self._card_fade = 0.0
+        else:
+            self._card_fade = min(1.0, self._card_fade + self._dt / 0.30)
+        if not updating:
+            self._shown_frac = 0.0
+
         border_col = C_ORANGE if (has_update or updating) else (C_GREEN if done else (48, 64, 82))
+        bracket_col = C_ORANGE if (has_update or updating) else (C_GREEN if done else (95, 130, 165))
         pygame.draw.rect(panel, border_col, panel.get_rect(), 1)
         pygame.draw.rect(panel, border_col, (0, 0, pw, 4))
         self.screen.blit(panel, (px, py))
+        _draw_brackets(self.screen, pygame.Rect(px - 3, py - 3, pw + 6, ph + 6), bracket_col, 12, 2)
 
-        if updating:
+        if key == "updating":
             self._draw_updating_card(px, py, pw, ph, stage, frac, detail)
-        elif has_update and res and res.remote:
+        elif key == "notice":
             self._draw_update_notice_card(px, py, pw, ph, res.remote, err)
-        elif done and res and res.remote:
+        elif key == "done":
             self._draw_update_complete_card(px, py, pw, ph, res.remote)
         else:
             self._draw_status_card(px, py, pw, ph, checking, res, err)
+
+        if self._card_fade < 1.0:
+            veil = self._plate(pw - 2, ph - 5)
+            veil.fill((10, 14, 20, int(228 * (1.0 - self._card_fade) ** 2)))
+            self.screen.blit(veil, (px + 1, py + 4))
 
     def _draw_update_notice_card(
         self,
@@ -670,17 +787,23 @@ class LauncherApp:
             )
             note_y += 15
 
-        pygame.draw.line(self.screen, (45, 55, 68), (px + 16, py + 104), (px + pw - 16, py + 104), 1)
+        # Everything below the notes shifts down by however many note lines
+        # were added (0 when there are none, matching the original layout).
+        off = max(0, note_y + 4 - (py + 104))
+
+        pygame.draw.line(
+            self.screen, (45, 55, 68), (px + 16, py + 104 + off), (px + pw - 16, py + 104 + off), 1
+        )
 
         # Headline
         hl = self.font_card_hdr.render(_ellipsize(self.font_card_hdr, remote.headline, pw - 36), True, C_WHITE)
-        self.screen.blit(hl, (px + 18, py + 112))
+        self.screen.blit(hl, (px + 18, py + 112 + off))
 
         # Changelog notes
         sub = self.font_small.render("TRANSMISSION CHANGELOG:", True, C_ORANGE)
-        self.screen.blit(sub, (px + 18, py + 146))
+        self.screen.blit(sub, (px + 18, py + 146 + off))
 
-        y_cursor = py + 168
+        y_cursor = py + 168 + off
         notes = remote.notes or ["General stability, netcode, and campaign improvements."]
         for note in notes[:6]:
             wrapped = _wrap_lines(self.font_mono, note, pw - 56)
@@ -703,7 +826,7 @@ class LauncherApp:
         pygame.draw.rect(foot_box, (65, 85, 105), foot_box.get_rect(), 1)
         self.screen.blit(foot_box, (px + 16, py + ph - 44))
         if play_requires_update(self.check_result, self.config):
-            foot_line = f"Click [UPDATE & PLAY] to patch and launch, or [EXIT] to patch later."
+            foot_line = "Click [UPDATE & PLAY] to patch and launch, or [EXIT] to patch later."
         else:
             foot_line = f"Click [UPDATE TO v{remote.version}] to patch now, or [PLAY GAME] to skip."
         f_txt = self.font_small.render(_ellipsize(self.font_small, foot_line, pw - 48), True, C_WHITE)
@@ -725,16 +848,37 @@ class LauncherApp:
         st = self.font_mono_b.render(_ellipsize(self.font_mono_b, f"STAGE: {stage}", pw - 40), True, C_WHITE)
         self.screen.blit(st, (px + 20, py + 66))
 
-        # Progress bar frame
+        # Progress bar: eases toward the real value, with animated stripes,
+        # a top highlight, a bright leading edge and 10% tick marks.
+        self._shown_frac += (frac - self._shown_frac) * min(1.0, self._dt * 8.0)
+        shown = max(0.0, min(1.0, self._shown_frac))
         bar_x, bar_y, bar_w, bar_h = px + 20, py + 98, pw - 40, 28
         pygame.draw.rect(self.screen, (16, 20, 28), (bar_x, bar_y, bar_w, bar_h))
-        fill_w = int((bar_w - 4) * max(0.0, min(1.0, frac)))
+        fill_w = int((bar_w - 4) * shown)
         if fill_w > 0:
-            pygame.draw.rect(self.screen, C_ORANGE, (bar_x + 2, bar_y + 2, fill_w, bar_h - 4))
+            fill = pygame.Rect(bar_x + 2, bar_y + 2, fill_w, bar_h - 4)
+            pygame.draw.rect(self.screen, C_ORANGE, fill)
+            pygame.draw.rect(self.screen, (255, 175, 90), (fill.x, fill.y, fill.w, 3))
+            old_clip = self.screen.get_clip()
+            self.screen.set_clip(fill)
+            off = (_now_ms() // 40) % 16
+            for sx in range(fill.x - 16 + off, fill.right, 16):
+                pygame.draw.line(self.screen, (225, 95, 0), (sx, fill.bottom), (sx + fill.h, fill.y), 3)
+            self.screen.set_clip(old_clip)
+            pygame.draw.line(
+                self.screen, (255, 235, 200), (fill.right - 1, fill.y), (fill.right - 1, fill.bottom - 1), 2
+            )
+        for i in range(1, 10):
+            tx = bar_x + 2 + int((bar_w - 4) * i / 10)
+            pygame.draw.line(self.screen, (16, 20, 28), (tx, bar_y + 2), (tx, bar_y + 6), 1)
+            pygame.draw.line(self.screen, (16, 20, 28), (tx, bar_y + bar_h - 7), (tx, bar_y + bar_h - 3), 1)
         pygame.draw.rect(self.screen, C_ORANGE, (bar_x, bar_y, bar_w, bar_h), 1)
 
         pct_s = self.font_mono_b.render(f"{int(frac * 100)}%", True, C_WHITE)
-        self.screen.blit(pct_s, (bar_x + (bar_w - pct_s.get_width()) // 2, bar_y + 5))
+        pct_sh = self.font_mono_b.render(f"{int(frac * 100)}%", True, (0, 0, 0))
+        pcx = bar_x + (bar_w - pct_s.get_width()) // 2
+        self.screen.blit(pct_sh, (pcx + 1, bar_y + 6))
+        self.screen.blit(pct_s, (pcx, bar_y + 5))
 
         det = self.font_mono.render(_ellipsize(self.font_mono, detail, pw - 40), True, C_GREY)
         self.screen.blit(det, (px + 20, py + 140))
@@ -833,10 +977,12 @@ class LauncherApp:
         pygame.draw.line(self.screen, (45, 58, 72), (px + 18, py + 52), (px + pw - 18, py + 52), 1)
 
         st_txt, st_col = self._status_headline(checking, res)
-        st_surf = self.font_mono_b.render(st_txt[:54], True, st_col)
+        st_surf = self.font_mono_b.render(_ellipsize(self.font_mono_b, st_txt, pw - 36), True, st_col)
         self.screen.blit(st_surf, (px + 18, py + 64))
 
-        hl = self.font_mono_b.render(self.local_version.headline[:50], True, C_WHITE)
+        hl = self.font_mono_b.render(
+            _ellipsize(self.font_mono_b, self.local_version.headline, pw - 36), True, C_WHITE
+        )
         self.screen.blit(hl, (px + 18, py + 98))
 
         sub = self.font_small.render("CURRENT BUILD HIGHLIGHTS:", True, C_ORANGE)
@@ -851,7 +997,10 @@ class LauncherApp:
             y_c += 4
 
         if err:
-            self.screen.blit(self.font_small.render(f"NOTICE: {err[:56]}", True, C_RED), (px + 18, py + ph - 72))
+            self.screen.blit(
+                self.font_small.render(_ellipsize(self.font_small, f"NOTICE: {err}", pw - 36), True, C_RED),
+                (px + 18, py + ph - 72),
+            )
         elif res is not None and res.refused_reason:
             reason = self.font_small.render(
                 _ellipsize(self.font_small, f"NOTICE: {res.refused_reason}", pw - 36), True, C_RED
@@ -930,6 +1079,7 @@ class LauncherApp:
         self.screen.blit(right_lbl, (L_WIDTH - 28 - right_lbl.get_width(), L_HEIGHT - 31))
 
     def render_frame(self, dt: float = 1.0 / 60.0) -> None:
+        self._dt = dt
         self._sync_buttons()
         self._update_fx(dt)
         mouse_pos = self.logical_mouse()

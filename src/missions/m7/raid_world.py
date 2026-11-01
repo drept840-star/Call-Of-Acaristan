@@ -11,22 +11,28 @@ import math
 import os
 import random
 
-from engine3d.core import Mesh, box, rot_y
+from engine3d.core import Mesh, box, m_apply, rot_x, rot_y
+from engine.collision import MeshCollider
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as F
 
 BOUNDS = (-19.4, 44.0, -27.0, 21.5)     # player and allies: x0, x1, z0, z1
 BODY_R = 0.32
-LOS_MIN_H = 1.15                        # lower boxes do not stop bullets
+BODY_TOP = 1.9                          # a body blocks anything under this height
+LOS_MIN_H = 1.15                        # lower solids do not stop bullets
 
-# Tractor parked across the track mouth (prep "block the track").
+# Tractor parked across the track mouth (prep "block the track"): x, z, yaw.
 TRACTOR_BLOCK = (-0.3, -15.0, 0)
-TRACTOR_YAW_BOX = {0: (-1.7, 2.3, -1.3, 1.3), -90: (-1.3, 1.3, -1.7, 2.3)}
+MOTORCYCLE_AT = (16.75, -6.4, 100.0)    # x, z, yaw: next to the pig
 
 LOFT_AT = (13.0, 4.7, 6.45)             # Bodi's ledge below the hayloft door
 BODI_GROUND = (8.2, 2.2)
-WELL_PIN = (1.0, 2.5)
+WELL_PIN = (1.0, 1.9)                   # Alex's hips, under the fallen crossbeam
+WELL_AT = (1.0, 4.0)
+WELL_HINGE = (0.0, 0.7, -0.55)          # the roof tips south about the south wall's top
+WELL_DOWN = 112.0                       # degrees the fallen frame lies at, beam across Alex
+WELL_LIFT_AT = (2.3, 1.85)              # Biribel's spot at the beam's east end
 TANK_AT = (-7.6, 1.5, -9.0)
 GATE_EAST = (20.0, 0.0)
 MOUTH = (0.0, -17.0)
@@ -51,8 +57,8 @@ STATIC = [
     (-8.25, -9.65, -6.95, -8.35, 2.2),  # fuel tank (the stand is open)
     (-13.75, -9.85, -13.25, -8.05, 0.85),
     (0.15, 3.15, 1.85, 4.85, 0.7),      # well wall
-    (5.1, 5.55, 6.7, 6.45, 1.4),        # hay bales
-    (5.7, 3.35, 7.3, 4.25, 1.4),
+    (4.32, 5.5, 7.28, 6.55, 1.42),      # hay bales, hay(4) at (5.8, 6)
+    (4.93, 3.3, 7.87, 4.27, 1.42),      # hay bales, hay(3) at (6.4, 3.8)
     (-20.15, -16.15, -3.4, -15.85, 0.9),    # fence, south
     (3.4, -16.15, 20.15, -15.85, 0.9),
     (-20.15, -16.0, -19.85, 22.0, 0.9),     # fence, west
@@ -68,9 +74,46 @@ STATIC = [
 ] + _orchard()
 
 
-def tractor_box(x, z, yaw):
-    x0, x1, z0, z1 = TRACTOR_YAW_BOX[yaw]
-    return (x + x0, z + z0, x + x1, z + z1, 1.9)
+_SHAPES = {}
+
+
+def _shape(ref):
+    """Collider of an imported mesh, built once from its triangles."""
+    if ref not in _SHAPES:
+        from game.render3d_bridge import load_mesh_asset
+        verts, faces = load_mesh_asset(ref)
+        _SHAPES[ref] = MeshCollider(verts, [f[0] for f in faces])
+    return _SHAPES[ref]
+
+
+def tractor_at(x, z, yaw):
+    """Tractor asset at (x, z), local forward +x turned by ``yaw`` (as the renderer does)."""
+    return _shape("tractor_m7").at(x, 0.0, z, yaw)
+
+
+_MOTO = []
+
+
+def motorcycle_at(x, z, yaw):
+    """Scrambler at (x, z) turned by ``yaw`` as build_static draws it."""
+    if not _MOTO:
+        m = F.motorcycle()
+        _MOTO.append(MeshCollider(m.verts, [f[0] for f in m.faces]))
+    return _MOTO[0].at(x, 0.0, z, yaw)
+
+
+def truck_at(x, z):
+    """Truck asset at (x, z) facing +z, as ``put(..., yaw 0)`` draws it."""
+    return _shape("truck_m7").at(x, 0.0, z, -90.0)
+
+
+def _mesh_sight(m, a, b):
+    """True when the chest-height sight line from a to b (x, z) meets the mesh."""
+    dx, dz = b[0] - a[0], b[1] - a[1]
+    dist = math.hypot(dx, dz)
+    if dist < 1e-9:
+        return False
+    return m.ray((a[0], LOS_MIN_H, a[1]), (dx / dist, 0.0, dz / dist), dist) is not None
 
 
 def seg_box(ax, az, bx, bz, box_):
@@ -93,24 +136,30 @@ def seg_box(ax, az, bx, bz, box_):
 
 
 class World:
-    """Blocking boxes for one raid: the static farm plus the vehicles."""
+    """Blocking solids for one raid: the static farm boxes, the tractor and the trucks."""
 
     def __init__(self, tractor_blocks):
         self.boxes = list(STATIC)
         self.tractor = None
         if tractor_blocks:
             self.tractor = TRACTOR_BLOCK
-            self.boxes.append(tractor_box(*TRACTOR_BLOCK))
+            tractor = tractor_at(*TRACTOR_BLOCK)
         else:
-            self.boxes.append(tractor_box(-16.0, -3.0, -90))
-        self.dyn = []
+            tractor = tractor_at(-16.0, -3.0, -90)
+        self.meshes = [tractor, motorcycle_at(*MOTORCYCLE_AT)]
+        self.dyn = []          # placed truck colliders, kept current by raid_brain
+        self.pig_at = None     # the pig's (x, z) while it is on the farm
 
     def blocked(self, x, z, r=BODY_R):
+        if self.pig_at is not None:
+            dx, dz = x - self.pig_at[0], z - self.pig_at[1]
+            if dx * dx + dz * dz < (r + 0.45) ** 2:
+                return True
         for b in self.boxes:
             if _hit(x, z, r, b):
                 return True
-        for b in self.dyn:
-            if _hit(x, z, r, b):
+        for m in self.meshes + self.dyn:
+            if m.body_hits(x, z, r, 0.0, BODY_TOP):
                 return True
         return False
 
@@ -131,10 +180,9 @@ class World:
         for box_ in self.boxes:
             if box_[4] >= LOS_MIN_H and seg_box(a[0], a[1], b[0], b[1], box_):
                 return False
-        if dyn:
-            for box_ in self.dyn:
-                if seg_box(a[0], a[1], b[0], b[1], box_):
-                    return False
+        for m in self.meshes + (self.dyn if dyn else []):
+            if _mesh_sight(m, a, b):
+                return False
         return True
 
     def ray_hit(self, o, d, limit=60.0):
@@ -145,8 +193,17 @@ class World:
             gy = -o[1] / d[1]
             if 0.0 < gy < best:
                 best = gy
-        for b in self.boxes + self.dyn:
+        if self.pig_at is not None:
+            px, pz = self.pig_at
+            h = _ray_box(o, d, (px - 0.4, pz - 0.4, px + 0.4, pz + 0.4, 0.55))
+            if h is not None and h < best:
+                best = h
+        for b in self.boxes:
             h = _ray_box(o, d, b)
+            if h is not None and h < best:
+                best = h
+        for m in self.meshes + self.dyn:
+            h = m.ray(o, d, best)
             if h is not None and h < best:
                 best = h
         return best
@@ -227,14 +284,21 @@ class Fire:
             F.fire(r, (FIRE_COLS[i], 0.05, FIRE_ROWS[j]), t, seed=n * 5 + 2, size=size,
                    smoky=n % 3 == 0, layer=2)
         g = self.grow(now)
-        for n, (dx, dy, dz, sz) in enumerate(((-3.6, 4.7, 10.0, 1.05), (-0.5, 4.9, 12.0, 1.2),
-                                              (2.8, 4.7, 14.0, 1.0), (4.2, 4.8, 10.5, 0.95),
-                                              (-2.0, 1.4, 6.9, 0.85), (2.2, 1.6, 6.9, 0.8))):
-            # Keep the barn tongues just in front of its south facade. The
-            # raid's world-depth layer then lets Bodi/Alex/guards correctly
-            # occlude the flames when they cross in front of them.
-            F.fire(r, (13.0 + dx, dy, 6.35), t, seed=40 + n * 3,
-                   size=sz * (0.45 + 0.55 * g), smoky=n % 2 == 0, layer=2)
+        # x, base y, size, wall face z: the door (x 10.5-15.5) stands 0.08 m
+        # proud of the wall at z=7.0, so flames in the doorway sit on it.
+        sources = (
+            (9.8,  1.0, 0.75, 7.0),
+            (11.0, 0.1, 0.90, 6.92),
+            (13.0, 0.1, 1.05, 6.92),
+            (15.0, 0.1, 0.85, 6.92),
+            (16.2, 1.0, 0.70, 7.0),
+            (13.0, 4.5, 0.75, 7.0),  # hayloft opening
+        )
+        for n, (x, y, size, wall_z) in enumerate(sources):
+            F.wall_fire(
+                r, x, y, wall_z, t, seed=40 + n * 3,
+                size=size * (0.45 + 0.55 * g),
+                smoky=n % 3 == 0, layer=2)
 
     def lights(self, t, now):
         if not self.lit:
@@ -448,6 +512,170 @@ def put(r, mesh, x, y, z, yaw_deg):
     out[:, 1] += y
     out[:, 2] += z
     r.add_packed(out)
+
+
+G = 9.8
+
+
+class WellWreck:
+    """The well's roof frame coming down on Alex.
+
+    Upright until ``topple``; then a body hinged on the south wall that gravity
+    swings over (angle ``th`` from upright), bouncing where the beam lands across
+    Alex.  The tin roof tears off when it touches the ground and goes on as a free
+    rigid sheet (six Verlet points held by all their pair lengths); the bucket
+    swings on its rope from the beam.  ``update`` takes ``lift`` 0..1 while Biribel
+    heaves the beam, None otherwise.  Impacts land in ``events`` for the sound."""
+
+    STEP = 1.0 / 240.0
+    SWING = 7.0                 # g over the frame's pendulum length, 1/s^2
+    KICK = 1.3                  # rad/s it starts toppling with
+    REST = math.radians(WELL_DOWN)
+    ROPE = 1.0
+
+    def __init__(self):
+        self.th = 0.0
+        self.om = 0.0
+        self.live = False
+        self.landed = False
+        self.tin = None
+        self.bob = None
+        self.events = []
+        self._acc = 0.0
+        self._tin_down = False
+        self._frame = None
+
+    def topple(self):
+        if not self.live:
+            self.live, self.om = True, self.KICK
+
+    def at(self, v, th=None):
+        """World position of a point given in the well's frame, tipped ``th``."""
+        m = rot_x(-math.degrees(self.th if th is None else th))
+        q = m_apply(m, (v[0] - WELL_HINGE[0], v[1] - WELL_HINGE[1], v[2] - WELL_HINGE[2]))
+        return (WELL_AT[0] + WELL_HINGE[0] + q[0], WELL_HINGE[1] + q[1],
+                WELL_AT[1] + WELL_HINGE[2] + q[2])
+
+    def boxes(self):
+        """Blocking boxes of the frame lying across Alex: two posts and the beam."""
+        bz = self.at((0.0, 2.3, 0.0), self.REST)[2]
+        hz = WELL_AT[1] - 0.85
+        x0 = WELL_AT[0]
+        return [(x0 - 0.84, bz - 0.1, x0 - 0.72, hz, 0.5), (x0 + 0.72, bz - 0.1, x0 + 0.84, hz, 0.5),
+                (x0 - 0.9, bz - 0.1, x0 + 0.9, bz + 0.1, 0.7)]
+
+    def update(self, dt, lift=None):
+        if not self.live:
+            return
+        self._acc = min(self._acc + dt, 0.1)
+        while self._acc >= self.STEP:
+            self._acc -= self.STEP
+            self._step(self.STEP, lift)
+
+    def _step(self, h, lift):
+        th0 = self.th
+        if lift is not None and self.landed:
+            tgt = self.REST - math.radians(24.0) * lift
+            acc = 90.0 * (tgt - self.th) - 16.0 * self.om
+        else:
+            acc = self.SWING * math.sin(self.th)
+        self.om += acc * h
+        self.th += self.om * h
+        if self.tin is None and min(self.at(v)[1] for v in _TIN_PTS) < 0.02:
+            self._tear(th0)
+        if self.th >= self.REST:
+            if self.tin is None:
+                self._tear(th0)
+            self.th = self.REST
+            if self.om > 0.8:
+                self.events.append(("frame", self.om))
+                self.om *= -0.28
+            else:
+                self.om = 0.0
+            self.landed = True
+        self._step_tin(h)
+        self._step_bob(h)
+
+    def _tear(self, th0):
+        """Free the tin: its points now, and a step back for their velocity,
+        with a little sideways drift and roll so it does not land square."""
+        self.tin = []
+        for v in _TIN_PTS:
+            p, q = self.at(v), self.at(v, th0)
+            self.tin.append([p, (q[0] + 0.5 * self.STEP, q[1] - 0.4 * self.STEP * v[0], q[2])])
+
+    def _step_tin(self, h):
+        if self.tin is None:
+            return
+        g = G * h * h
+        for pt in self.tin:
+            p, q = pt
+            pt[0], pt[1] = (2 * p[0] - q[0], 2 * p[1] - q[1] - g, 2 * p[2] - q[2]), p
+        for _ in range(3):
+            for i, j, d in _TIN_LINKS:
+                a, b = self.tin[i][0], self.tin[j][0]
+                dx, dy, dz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+                ln = math.sqrt(dx * dx + dy * dy + dz * dz) or 1e-6
+                k = (ln - d) / ln * 0.5
+                self.tin[i][0] = (a[0] + dx * k, a[1] + dy * k, a[2] + dz * k)
+                self.tin[j][0] = (b[0] - dx * k, b[1] - dy * k, b[2] - dz * k)
+        hit = 0.0
+        for pt in self.tin:
+            p, q = pt
+            if p[1] < 0.0:
+                vy = (p[1] - q[1]) / h
+                hit = max(hit, -vy)
+                # bounce a little, scrape along the dirt
+                pt[0] = (p[0], 0.0, p[2])
+                pt[1] = (p[0] - (p[0] - q[0]) * 0.55, -0.25 * (p[1] - q[1]), p[2] - (p[2] - q[2]) * 0.55)
+        if hit > 1.5 and not self._tin_down:
+            self.events.append(("tin", hit))
+        self._tin_down = hit > 0.0
+
+    def _step_bob(self, h):
+        top = self.at((0.0, 2.3, 0.0))
+        if self.bob is None:
+            b = (top[0], top[1] - self.ROPE, top[2])
+            self.bob = [b, b]
+        p, q = self.bob
+        n = (p[0] + (p[0] - q[0]) * 0.998, p[1] + (p[1] - q[1]) * 0.998 - G * h * h,
+             p[2] + (p[2] - q[2]) * 0.998)
+        dx, dy, dz = n[0] - top[0], n[1] - top[1], n[2] - top[2]
+        ln = math.sqrt(dx * dx + dy * dy + dz * dz) or 1e-6
+        if ln > self.ROPE:
+            k = self.ROPE / ln
+            n = (top[0] + dx * k, top[1] + dy * k, top[2] + dz * k)
+        if n[1] < 0.11:
+            n = (n[0], 0.11, n[2])
+            p = (n[0] - (n[0] - p[0]) * 0.6, 0.11, n[2] - (n[2] - p[2]) * 0.6)
+        self.bob = [n, p]
+
+    def draw(self, r):
+        if self._frame is None:
+            m = Mesh()
+            m.add(F.well_frame(), t=(-WELL_HINGE[0], -WELL_HINGE[1], -WELL_HINGE[2]))
+            self._frame = m
+            _COL.update(tin=F._t("tin", F.ROOF_METAL))
+        w = Mesh()
+        w.add(self._frame, rot_x(-math.degrees(self.th)),
+              t=(WELL_AT[0] + WELL_HINGE[0], WELL_HINGE[1], WELL_AT[1] + WELL_HINGE[2]))
+        pts = [pt[0] for pt in self.tin] if self.tin else [self.at(v) for v in _TIN_PTS]
+        for quad in _TIN_QUADS:
+            w.face([pts[i] for i in quad], _COL["tin"], 2, True)
+        top = self.at((0.0, 2.3, 0.0))
+        bob = self.bob[0] if self.bob else (top[0], top[1] - self.ROPE, top[2])
+        w.face([(top[0] - 0.012, top[1], top[2]), (top[0] + 0.012, top[1], top[2]),
+                (bob[0] + 0.012, bob[1] + 0.11, bob[2]), (bob[0] - 0.012, bob[1] + 0.11, bob[2])],
+               F.WOOD_D, 2, True)
+        w.add(F.well_bucket(), t=bob)
+        _w.add(r, w)
+
+
+_COL = {}
+_TIN_PTS = ((-1, 2.3, -0.7), (1, 2.3, -0.7), (1, 2.8, 0), (-1, 2.8, 0), (-1, 2.3, 0.7), (1, 2.3, 0.7))
+_TIN_QUADS = ((0, 1, 2, 3), (4, 5, 2, 3))
+_TIN_LINKS = tuple((i, j, math.dist(_TIN_PTS[i], _TIN_PTS[j]))
+                   for i in range(6) for j in range(i + 1, 6))
 
 
 def ledge():

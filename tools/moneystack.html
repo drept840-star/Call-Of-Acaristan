@@ -1,0 +1,1569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moneystack — procedural prop</title>
+<!--
+  MONEYSTACK — a dependency-free 3D prop generator (open this file in any browser).
+
+  Builds a stack of banded banknote bundles from code, previews it with a tiny
+  hand-written WebGL renderer, and exports it as a game-ready asset:
+
+    * moneystack.glb                    ->  tools/ae_import_mesh.py  ->  ae.mesh/1
+    * moneystack.obj + moneystack.mtl   ->  tools/ae_import_mesh.py  (--mtl path)
+    * moneystack.png                    ->  a transparent-background product shot
+
+  Every colour is one of the 13 entries in the house palette
+  (src/game/content/textures/*.texture.json), so the importer's palette lint
+  snaps at zero and the preview is exactly what the engine receives. The GLB
+  writes linear baseColorFactor for standard viewers plus the exact palette
+  hex in material extras for the importer.
+  Units are metres; the bundle is 156 x 66.3 x 11.4 mm (100 notes).
+-->
+<style>
+  :root{
+    --bg-0:#101113; --bg-1:#26282b;
+    --panel:rgba(24,25,28,.86); --panel-2:#202126;
+    --line:#2e3035; --line-2:#3a3c42;
+    --text:#dedcd5; --muted:#8c8b86; --dim:#6b6a66;
+    --accent:#b08a56; --accent-2:#c9a26b; --accent-ink:#18130d;
+    --warn:#c39a5c;
+    --ui:"Segoe UI",Inter,system-ui,-apple-system,sans-serif;
+    --mono:"Cascadia Mono",Consolas,"SF Mono",ui-monospace,monospace;
+    --r:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; overflow:hidden; color:var(--text); font-family:var(--ui);
+    -webkit-font-smoothing:antialiased;
+    background:radial-gradient(120% 92% at 50% 34%,var(--bg-1) 0%,#191a1d 46%,var(--bg-0) 100%);
+  }
+  #gl{position:fixed; inset:0; width:100%; height:100%; display:block;
+      touch-action:none; cursor:grab; outline:none}
+  #gl.drag{cursor:grabbing}
+
+  /* ── identity ─────────────────────────────────────────── */
+  .brand{position:fixed; left:30px; top:26px; pointer-events:none; user-select:none}
+  .eyebrow{font-size:9px; letter-spacing:.26em; color:var(--dim); text-transform:uppercase}
+  .brand h1{margin:9px 0 0; font-size:34px; line-height:.94; font-weight:600;
+            letter-spacing:-.02em; text-transform:uppercase}
+  .brand h1 span{color:var(--accent)}
+  .brand p{margin:11px 0 0; font-size:10.5px; letter-spacing:.06em; color:var(--muted)}
+  .brand .rule{width:38px; height:1px; background:var(--line-2); margin-top:16px}
+
+  /* ── panel ────────────────────────────────────────────── */
+  .panel{
+    position:fixed; right:24px; top:24px; width:308px; max-height:calc(100% - 48px);
+    overflow:auto; padding:17px 17px 15px; border:1px solid var(--line);
+    border-radius:14px; background:var(--panel);
+    -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+    box-shadow:0 24px 70px rgba(0,0,0,.45);
+    scrollbar-width:thin; scrollbar-color:#3a3c42 transparent;
+  }
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:#33353a; border-radius:8px}
+  .ph{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .ph b{font-size:9.5px; letter-spacing:.2em; color:var(--muted); font-weight:600}
+  .ph i{font-style:normal; font-family:var(--mono); font-size:9px; color:var(--dim)}
+
+  .label{display:flex; align-items:baseline; justify-content:space-between; margin:15px 0 7px}
+  .label b{font-size:9.5px; letter-spacing:.17em; color:var(--muted); font-weight:600;
+           text-transform:uppercase}
+  .label output{font-family:var(--mono); font-size:10.5px; color:var(--text)}
+
+  .seg{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:3px;
+       padding:3px; background:#141518; border:1px solid #26282c; border-radius:9px}
+  .seg button{
+    appearance:none; border:1px solid transparent; background:transparent; color:var(--muted);
+    font:600 10.5px/1 var(--ui); letter-spacing:.04em; padding:8px 4px; border-radius:6px;
+    cursor:pointer; transition:background .14s,color .14s,border-color .14s;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:#2a2c31; border-color:#3a3c42; color:#f0eee8;
+                 box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+
+  .range{width:100%; height:20px; margin:1px 0 0; appearance:none; background:transparent;
+         cursor:pointer}
+  .range::-webkit-slider-runnable-track{height:3px; border-radius:3px;
+    background:linear-gradient(90deg,var(--accent) var(--fill,50%),#33353a var(--fill,50%))}
+  .range::-webkit-slider-thumb{appearance:none; width:13px; height:13px; margin-top:-5px;
+    border-radius:50%; background:#e8e2d6; border:2px solid #1a1b1e;
+    box-shadow:0 0 0 1px #54565c}
+  .range::-moz-range-track{height:3px; border-radius:3px; background:#33353a}
+  .range::-moz-range-progress{height:3px; border-radius:3px; background:var(--accent)}
+  .range::-moz-range-thumb{width:11px; height:11px; border-radius:50%; background:#e8e2d6;
+    border:2px solid #1a1b1e}
+
+  .chips{display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px}
+  .chips button{
+    display:flex; align-items:center; gap:6px; padding:7px 7px; border-radius:7px;
+    border:1px solid #2b2d32; background:#191a1d; color:var(--muted);
+    font:600 10px/1 var(--ui); letter-spacing:.05em; cursor:pointer;
+    transition:border-color .14s,color .14s,background .14s;
+  }
+  .chips button:hover{border-color:#3e4046; color:var(--text)}
+  .chips button.on{border-color:var(--accent); background:#26231d; color:#f0eee8}
+  .chips i{width:9px; height:9px; flex:none; border-radius:2px; background:var(--c);
+           box-shadow:0 0 0 1px rgba(0,0,0,.55) inset}
+
+  .switches{display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin-top:16px}
+  .sw{display:flex; align-items:center; gap:7px; font-size:10.5px; color:var(--muted);
+      cursor:pointer; user-select:none}
+  .sw input{width:13px; height:13px; margin:0; accent-color:var(--accent); cursor:pointer}
+  .sw:hover{color:var(--text)}
+
+  .seedrow{display:grid; grid-template-columns:1fr auto; gap:6px}
+  .seedrow input{
+    width:100%; height:32px; padding:0 9px; border-radius:7px; border:1px solid #2b2d32;
+    background:#141518; color:var(--text); font:500 11px var(--mono); outline:none;
+  }
+  .seedrow input:focus{border-color:var(--accent)}
+  .seedrow button{
+    padding:0 11px; border-radius:7px; border:1px solid #2b2d32; background:#191a1d;
+    color:var(--muted); font:600 9.5px/1 var(--ui); letter-spacing:.1em; cursor:pointer;
+  }
+  .seedrow button:hover{border-color:var(--line-2); color:var(--text)}
+
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:17px 0 0;
+         background:var(--line); border:1px solid var(--line); border-radius:9px;
+         overflow:hidden}
+  .stats div{background:#17181b; padding:8px 9px}
+  .stats span{display:block; font-size:8.5px; letter-spacing:.15em; color:var(--dim);
+              text-transform:uppercase}
+  .stats b{display:block; margin-top:3px; font:500 11px var(--mono); color:#d8d5cd;
+           white-space:nowrap}
+  .stats b.warn{color:var(--warn)}
+  .lint{margin:8px 0 0; font-size:9.5px; line-height:1.45; color:var(--warn);
+        letter-spacing:.02em}
+  .lint:empty{display:none}
+
+  .primary{
+    width:100%; height:40px; margin-top:15px; border:0; border-radius:9px; cursor:pointer;
+    background:linear-gradient(180deg,var(--accent-2),var(--accent)); color:var(--accent-ink);
+    font:700 10.5px/1 var(--ui); letter-spacing:.16em; text-transform:uppercase;
+    box-shadow:0 6px 18px rgba(176,138,86,.18);
+    transition:filter .14s,transform .06s;
+  }
+  .primary:hover{filter:brightness(1.07)}
+  .primary:active{transform:translateY(1px)}
+  .btnrow{display:grid; grid-template-columns:1fr auto auto; gap:6px; margin-top:6px}
+  .btnrow button{
+    height:32px; border-radius:7px; border:1px solid #2b2d32; background:#191a1d;
+    color:var(--muted); font:600 9.5px/1 var(--ui); letter-spacing:.1em; cursor:pointer;
+    padding:0 11px; transition:border-color .14s,color .14s;
+  }
+  .btnrow button:hover{border-color:var(--line-2); color:var(--text)}
+
+  details.cmd{margin-top:12px; border-top:1px solid var(--line); padding-top:10px}
+  details.cmd summary{
+    list-style:none; cursor:pointer; font-size:9px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--dim); user-select:none;
+  }
+  details.cmd summary::-webkit-details-marker{display:none}
+  details.cmd summary:hover{color:var(--muted)}
+  details.cmd summary::before{content:"+ "; color:var(--accent)}
+  details.cmd[open] summary::before{content:"– "}
+  details.cmd pre{
+    margin:8px 0 0; padding:9px; border-radius:7px; background:#111214;
+    border:1px solid #24262a; color:#b8b5ac; font:400 9px/1.6 var(--mono);
+    white-space:pre-wrap; word-break:break-word; max-height:150px; overflow:auto;
+  }
+  .fine{margin:12px 0 0; font-size:8.8px; line-height:1.55; color:var(--dim)}
+  .fine code{font-family:var(--mono); color:var(--muted)}
+
+  .hint{position:fixed; left:30px; bottom:24px; font-size:9.5px; letter-spacing:.08em;
+        color:var(--dim); pointer-events:none; user-select:none}
+  .hint b{color:var(--muted); font-weight:600}
+
+  .toast{
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%,14px);
+    padding:9px 14px; border-radius:8px; border:1px solid var(--line-2);
+    background:#1c1d20; color:var(--text); font:500 10.5px var(--ui);
+    letter-spacing:.03em; opacity:0; pointer-events:none;
+    transition:opacity .18s,transform .18s; z-index:20;
+  }
+  .toast.on{opacity:1; transform:translate(-50%,0)}
+
+  #fallback{position:fixed; inset:0; display:none; place-items:center; text-align:center;
+            padding:30px; color:var(--muted); font-size:13px; line-height:1.7}
+  body.nogl #fallback{display:grid}
+  body.nogl #gl{display:none}
+
+  @media (max-width:820px){
+    .brand{left:18px; top:16px}
+    .brand h1{font-size:24px}
+    .brand p{display:none}
+    .brand .rule{display:none}
+    .hint{display:none}
+    .panel{left:10px; right:10px; top:auto; bottom:10px; width:auto; max-height:46vh;
+           padding:13px 14px 12px}
+    .ph{margin-bottom:10px}
+    .label{margin-top:11px}
+    .stats{margin-top:13px}
+    .primary{margin-top:11px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="3D money stack preview"></canvas>
+
+<header class="brand">
+  <div class="eyebrow">Acaristan · Prop Lab</div>
+  <h1>Money<span>stack</span></h1>
+  <p>Procedural bank bundle · 1 unit = 1 metre</p>
+  <div class="rule"></div>
+</header>
+
+<aside class="panel" aria-label="Moneystack controls">
+  <div class="ph"><b>Generator</b><i id="phId">MS-01</i></div>
+
+  <div class="seg" id="segLayout" role="group" aria-label="Layout">
+    <button data-k="stack" class="on">Stack</button>
+    <button data-k="brick">Brick</button>
+    <button data-k="spread">Spread</button>
+  </div>
+
+  <div class="label"><b id="countLabel">Bundles</b><output id="countOut">7</output></div>
+  <input class="range" id="count" type="range" min="3" max="12" step="1" value="7" aria-label="Bundle count">
+
+  <div class="label"><b>Note</b></div>
+  <div class="chips" id="segTheme" role="group" aria-label="Note theme">
+    <button data-k="kraft" class="on"><i style="--c:#7A7870"></i>Kraft</button>
+    <button data-k="slate"><i style="--c:#686662"></i>Slate</button>
+    <button data-k="ochre"><i style="--c:#A48050"></i>Ochre</button>
+  </div>
+
+  <div class="switches">
+    <label class="sw"><input type="checkbox" id="optPrint" checked><span>Printed face</span></label>
+    <label class="sw"><input type="checkbox" id="optStrap" checked><span>Paper strap</span></label>
+    <label class="sw"><input type="checkbox" id="optSpin" checked><span>Turntable</span></label>
+    <label class="sw"><input type="checkbox" id="optShadow" checked><span>Soft shadow</span></label>
+  </div>
+
+  <div class="label"><b>Seed</b><output id="seedOut">1337</output></div>
+  <div class="seedrow">
+    <input id="seed" type="number" min="0" max="99999" step="1" value="1337" aria-label="Seed">
+    <button id="reroll">Reroll</button>
+  </div>
+
+  <div class="stats">
+    <div><span>Tris</span><b id="sTris">—</b></div>
+    <div><span>Verts</span><b id="sVerts">—</b></div>
+    <div><span>Size</span><b id="sSize">—</b></div>
+    <div><span>Height</span><b id="sHeight">—</b></div>
+  </div>
+  <p class="lint" id="lint"></p>
+
+  <button class="primary" id="export">Export GLB</button>
+  <div class="btnrow">
+    <button id="exportObj">OBJ + MTL</button>
+    <button id="copy">Copy cmd</button>
+    <button id="png" title="Transparent PNG product shot">PNG</button>
+  </div>
+
+  <details class="cmd">
+    <summary>Import command</summary>
+    <pre id="cmdText"></pre>
+  </details>
+
+  <p class="fine">Palette-locked to the 13 house colours, so
+    <code>ae_import_mesh.py</code> snaps at 0. GLB carries each tone in material
+    extras; both exports are Y-up metres, one material per printed tone.</p>
+</aside>
+
+<footer class="hint"><b>drag</b> orbit · <b>scroll</b> zoom · <b>double-click</b> reset</footer>
+<div class="toast" id="toast" role="status"></div>
+<div id="fallback">This preview needs WebGL.<br>Try a current Chrome, Edge or Firefox.</div>
+
+<script>
+(function () {
+'use strict';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   1. House palette + themes
+   Every colour below is a verbatim entry of the 13-colour house palette
+   (union of src/game/content/textures/*.texture.json), so the OBJ survives
+   tools/ae_import_mesh.py's palette lint without a single unit of snap error.
+   ────────────────────────────────────────────────────────────────────────── */
+const PALETTE = {
+  note:      '#7A7870', // warm paper
+  edge:      '#686662', // page edges
+  edgeDark:  '#565450',
+  inkSoft:   '#42403C', // half-tone print
+  seal:      '#3A302A', // strap label / dark brown
+  ink:       '#282A2E', // printed ink
+  band:      '#926E42', // kraft strap
+  ochre:     '#A48050',
+  leather:   '#5E4226',
+  leather2:  '#765630',
+  slate:     '#36383C',
+  slate2:    '#44464A',
+  slate3:    '#585A5E',
+};
+
+const THEMES = {
+  kraft: { label: 'Kraft', note: '#7A7870', edge: '#686662', ink: '#282A2E',
+           ink_soft: '#565450', band: '#5E4226', seal: '#A48050' },
+  slate: { label: 'Slate', note: '#686662', edge: '#565450', ink: '#282A2E',
+           ink_soft: '#42403C', band: '#36383C', seal: '#7A7870' },
+  ochre: { label: 'Ochre', note: '#A48050', edge: '#926E42', ink: '#3A302A',
+           ink_soft: '#5E4226', band: '#3A302A', seal: '#A48050' },
+};
+
+const MAT_ORDER = ['note', 'edge', 'ink', 'ink_soft', 'band', 'seal'];
+
+/* ──────────────────────────────────────────────────────────────────────────
+   2. Prop dimensions (metres)
+   A bundle of 100 notes: 156 x 66.3 mm, 11.4 mm thick, one paper strap.
+   ────────────────────────────────────────────────────────────────────────── */
+const BUNDLE = { L: 0.156, W: 0.0663, H: 0.0114 };
+const STRAP  = { w: 0.019, over: 0.00045, label: 0.021 };
+const CORNER = 0.0009;          // chamfer on the note corners
+const SEAM   = 0.0005;          // clears the strap fold; keeps each bundle readable
+const BUDGET = 1500;            // ae_import_mesh.py default triangle budget
+const MIN_H  = 0.05;            // ae_import_mesh.py height lint
+const FOV    = 30 * Math.PI / 180;
+
+/* Note face resolution. One cell is ~4.9 x 4.1 mm on the real 156 x 66.3 mm
+   note, enough for a banknote border, seal and 3 x 7 denomination digits. */
+const NOTE_COLS = 32;
+const NOTE_ROWS = 16;
+
+/* ──────────────────────────────────────────────────────────────────────────
+   3. Small math helpers
+   ────────────────────────────────────────────────────────────────────────── */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1],
+                          a[2] * b[0] - a[0] * b[2],
+                          a[0] * b[1] - a[1] * b[0]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hexRgb(hex) {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16),
+          parseInt(h.slice(4, 6), 16)];
+}
+function srgbToLinear(c) {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+
+/* Table space is Z-up (easy to author: notes lie in XY, thickness on Z).
+   The asset is Y-up, so every vertex passes through this rigid rotation. */
+const toYUp = (p) => [p[0], p[2], -p[1]];
+
+/* ──────────────────────────────────────────────────────────────────────────
+   4. Geometry builder
+   ────────────────────────────────────────────────────────────────────────── */
+function tri(out, a, b, c, mat) { out.push({ a: a, b: b, c: c, mat: mat }); }
+
+function quad(out, a, b, c, d, mat) {
+  tri(out, a, b, c, mat);
+  tri(out, a, c, d, mat);
+}
+
+/* Flip every triangle whose geometric normal points at the part centre.
+   The bundle (body + protruding strap + flush print) is star-shaped around
+   its centre, so this guarantees outward normals for the engine's lighting
+   without hand-reasoning about winding order. */
+function orientOut(out, c) {
+  for (const t of out) {
+    const n = cross3(sub3(t.b, t.a), sub3(t.c, t.a));
+    const fc = [(t.a[0] + t.b[0] + t.c[0]) / 3 - c[0],
+                (t.a[1] + t.b[1] + t.c[1]) / 3 - c[1],
+                (t.a[2] + t.b[2] + t.c[2]) / 3 - c[2]];
+    if (dot3(n, fc) < 0) { const b = t.b; t.b = t.c; t.c = b; }
+  }
+}
+
+/* ── the printed top face ──────────────────────────────────────────────────
+   A 32 x 16 note face: ink rim, light inner rule, guilloche seal with the
+   Acaristan monogram on the left, a 3 x 7 "100" on the right, bank-name
+   dashes on top and a serial block under the value. The strap crosses the
+   empty gutter between the seal and the value, so no ornament is hidden. */
+function notePattern() {
+  const C = NOTE_COLS, R = NOTE_ROWS;
+  const g = Array.from({ length: R }, () => Array(C).fill('note'));
+  const put = (x, y, m) => { if (x >= 0 && x < C && y >= 0 && y < R) g[y][x] = m; };
+  const box = (x0, y0, x1, y1, m) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) put(x, y, m);
+  };
+
+  // engraved border: ink rim plus a light rule inset by one cell
+  box(0, 0, C - 1, 0, 'ink'); box(0, R - 1, C - 1, R - 1, 'ink');
+  box(0, 1, 0, R - 2, 'ink'); box(C - 1, 1, C - 1, R - 2, 'ink');
+  for (let x = 2; x < C - 2; x++) { put(x, 1, 'edge'); put(x, R - 2, 'edge'); }
+  for (let y = 2; y < R - 2; y++) { put(1, y, 'edge'); put(C - 2, y, 'edge'); }
+
+  // guilloche seal around the national monogram
+  const RING = [
+    '...#####...',
+    '.##.....##.',
+    '.#.......#.',
+    '#.........#',
+    '#.........#',
+    '#.........#',
+    '#.........#',
+    '#.........#',
+    '.#.......#.',
+    '.##.....##.',
+    '...#####...',
+  ];
+  RING.forEach((line, y) => {
+    for (let x = 0; x < line.length; x++) if (line[x] === '#') put(4 + x, 2 + y, 'ink');
+  });
+  const MONO = ['..#..', '.#.#.', '.#.#.', '#####', '#...#', '#...#', '#...#'];
+  MONO.forEach((line, y) => {
+    for (let x = 0; x < line.length; x++) if (line[x] === '#') put(7 + x, 4 + y, 'ink');
+  });
+
+  // denomination, in the same 3 x 7 stroke weight as the monogram
+  const DIGITS = {
+    1: ['..#', '.##', '..#', '..#', '..#', '..#', '###'],
+    0: ['###', '#.#', '#.#', '#.#', '#.#', '#.#', '###'],
+  };
+  let dx = 19;
+  for (const ch of '100') {
+    DIGITS[ch].forEach((line, y) => {
+      for (let x = 0; x < line.length; x++) if (line[x] === '#') put(dx + x, 4 + y, 'ink');
+    });
+    dx += 4;
+  }
+
+  // bank name across the top right, serial under the value
+  for (let x = 16; x < C - 2; x += 3) box(x, 2, x + 1, 2, 'edge');
+  box(19, 12, 26, 12, 'ink_soft');
+  box(21, 13, 24, 13, 'edge');
+  return g;
+}
+const NOTE_FACE = notePattern();
+
+/* Merge same-material cells into maximal rectangles. The print stays flat and
+   non-overlapping either way, but runs keep a detailed face at ~80 quads
+   instead of 512: no coplanar decals to flicker in the painter sort, and the
+   whole prop fits the importer's default triangle budget. */
+function noteRects() {
+  const g = NOTE_FACE, C = NOTE_COLS, R = NOTE_ROWS;
+  const used = Array.from({ length: R }, () => Array(C).fill(false));
+  const out = [];
+  for (let y = 0; y < R; y++) {
+    for (let x = 0; x < C; x++) {
+      if (used[y][x]) continue;
+      const mat = g[y][x];
+      let w = 1, h = 1, grew = true;
+      while (grew) {
+        grew = false;
+        if (x + w < C) {
+          let same = true;
+          for (let yy = y; yy < y + h && same; yy++) same = g[yy][x + w] === mat;
+          if (same) { w++; grew = true; }
+        }
+        if (y + h < R) {
+          let same = true;
+          for (let xx = x; xx < x + w && same; xx++) same = g[y + h][xx] === mat;
+          if (same) { h++; grew = true; }
+        }
+      }
+      for (let yy = y; yy < y + h; yy++) {
+        for (let xx = x; xx < x + w; xx++) used[yy][xx] = true;
+      }
+      out.push({ x0: x, y0: y, x1: x + w - 1, y1: y + h - 1, mat: mat });
+    }
+  }
+  return out;
+}
+const NOTE_RECTS = noteRects();
+
+/* ── one bundle (table space, base at z = 0, centred on x/y) ─────────────── */
+function bundleTris(printed, strapped, rand) {
+  const out = [];
+  const L = BUNDLE.L, W = BUNDLE.W, H = BUNDLE.H;
+  const hx = L / 2, hy = W / 2, c = CORNER;
+
+  // chamfered-rectangle profile, CCW seen from +Z
+  const prof = [
+    [ hx - c, -hy], [ hx, -hy + c], [ hx,  hy - c], [ hx - c,  hy],
+    [-hx + c,  hy], [-hx,  hy - c], [-hx, -hy + c], [-hx + c, -hy],
+  ];
+
+  // page-layer stripes: shared by both long sides, gently irregular
+  const bands = [0.18, 0.24, 0.15, 0.22, 0.21].map(v => v + (rand() - 0.5) * 0.05);
+  const sum = bands.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < bands.length; i++) bands[i] /= sum;
+
+  for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8;
+    const a = prof[i], b = prof[j];
+    if (Math.abs(a[0] - b[0]) > W * 1.2) {           // the two long faces
+      let z = 0;
+      for (let s = 0; s < bands.length; s++) {
+        const z1 = s === bands.length - 1 ? H : z + H * bands[s];
+        quad(out, [a[0], a[1], z], [b[0], b[1], z],
+                  [b[0], b[1], z1], [a[0], a[1], z1],
+             s % 2 ? 'note' : 'edge');
+        z = z1;
+      }
+    } else {
+      quad(out, [a[0], a[1], 0], [b[0], b[1], 0],
+                [b[0], b[1], H], [a[0], a[1], H], 'edge');
+    }
+  }
+
+  // top: printed note or plain paper
+  if (printed) {
+    const cw = (2 * hx) / NOTE_COLS, ch = (2 * hy) / NOTE_ROWS;
+    for (const q of NOTE_RECTS) {
+      const x0 = -hx + q.x0 * cw, x1 = -hx + (q.x1 + 1) * cw;
+      const y1 = hy - q.y0 * ch, y0 = hy - (q.y1 + 1) * ch;
+      quad(out, [x0, y0, H], [x1, y0, H], [x1, y1, H], [x0, y1, H], q.mat);
+    }
+  } else {
+    quad(out, [-hx, -hy, H], [hx, -hy, H], [hx, hy, H], [-hx, hy, H], 'note');
+  }
+
+  // bottom
+  quad(out, [-hx, -hy, 0], [-hx, hy, 0], [hx, hy, 0], [hx, -hy, 0], 'edge');
+
+  if (strapped) strapTris(out, H);
+  orientOut(out, [0, 0, H / 2]);
+  return out;
+}
+
+/* ── the paper strap: a belt with a printed label, split into flat regions ─ */
+function strapTris(out, H) {
+  const hx = STRAP.w / 2;
+  const hy = BUNDLE.W / 2 + STRAP.over;
+  const z0 = -STRAP.over, z1 = H + STRAP.over;
+  const ly = STRAP.label;
+
+  // top belt, three pieces so the label needs no decal
+  quad(out, [-hx, -hy, z1], [hx, -hy, z1], [hx, -ly, z1], [-hx, -ly, z1], 'band');
+  quad(out, [-hx, -ly, z1], [hx, -ly, z1], [hx,  ly, z1], [-hx,  ly, z1], 'seal');
+  quad(out, [-hx,  ly, z1], [hx,  ly, z1], [hx,  hy, z1], [-hx,  hy, z1], 'band');
+  // bottom
+  quad(out, [-hx, -hy, z0], [-hx, hy, z0], [hx, hy, z0], [hx, -hy, z0], 'band');
+  // long sides
+  quad(out, [-hx, -hy, z0], [hx, -hy, z0], [hx, -hy, z1], [-hx, -hy, z1], 'band');
+  quad(out, [-hx,  hy, z0], [-hx,  hy, z1], [hx,  hy, z1], [hx,  hy, z0], 'band');
+  // cut ends
+  quad(out, [-hx, -hy, z0], [-hx, -hy, z1], [-hx, hy, z1], [-hx, hy, z0], 'band');
+  quad(out, [ hx, -hy, z0], [ hx,  hy, z0], [ hx, hy, z1], [ hx, -hy, z1], 'band');
+}
+
+/* ── place one bundle: yaw + optional tilt, then sit it on the table ─────── */
+function addBundle(out, local, o, group) {
+  const yaw = o.yaw || 0, tx = o.tiltX || 0, ty = o.tiltY || 0;
+  const ca = Math.cos(yaw), sa = Math.sin(yaw);
+  const cb = Math.cos(ty),   sb = Math.sin(ty);
+  const cc = Math.cos(tx),   sc = Math.sin(tx);
+
+  const rot = (p) => {
+    const x1 = p[0] * ca - p[1] * sa;
+    const y1 = p[0] * sa + p[1] * ca;
+    const z1 = p[2];
+    const x2 = x1 * cb + z1 * sb;
+    const z2 = -x1 * sb + z1 * cb;
+    const y2 = y1 * cc - z2 * sc;
+    const z3 = y1 * sc + z2 * cc;
+    return [x2, y2, z3];
+  };
+
+  const moved = local.map(t => ({ a: rot(t.a), b: rot(t.b), c: rot(t.c), mat: t.mat }));
+
+  let dz = o.z || 0;
+  if (o.drop) {
+    let minZ = Infinity;
+    for (const t of moved) for (const p of [t.a, t.b, t.c]) if (p[2] < minZ) minZ = p[2];
+    dz = -minZ;
+  }
+  const ox = o.x || 0, oy = o.y || 0;
+  for (const t of moved) {
+    out.push({
+      a: toYUp([t.a[0] + ox, t.a[1] + oy, t.a[2] + dz]),
+      b: toYUp([t.b[0] + ox, t.b[1] + oy, t.b[2] + dz]),
+      c: toYUp([t.c[0] + ox, t.c[1] + oy, t.c[2] + dz]),
+      mat: t.mat, g: group,
+    });
+  }
+}
+
+/* ── layouts ─────────────────────────────────────────────────────────────── */
+function buildLayout(state) {
+  const out = [];
+  const rand = mulberry32(state.seed);
+  let group = 0;
+
+  const put = (opts) => {
+    const local = bundleTris(opts.print, state.strap, rand);
+    addBundle(out, local, opts, group++);
+  };
+
+  if (state.layout === 'stack') {
+    const phase = rand() * Math.PI * 2;
+    for (let i = 0; i < state.bundles; i++) {
+      put({
+        x: 0.0024 * Math.sin(i * 2.1 + phase),
+        y: 0.0018 * Math.cos(i * 1.7 + phase * 1.31),
+        z: i * (BUNDLE.H + SEAM),
+        yaw: (rand() - 0.5) * 0.032,
+        print: state.print && i === state.bundles - 1,
+      });
+    }
+  } else if (state.layout === 'brick') {
+    const rows = state.rows;
+    for (let r = 0; r < rows; r++) {
+      const count = rows - r;
+      const across = r % 2 === 1;
+      const step = BUNDLE.W + 0.002;
+      for (let k = 0; k < count; k++) {
+        const off = (k - (count - 1) / 2) * step;
+        put({
+          x: across ? off : 0,
+          y: across ? 0 : off,
+          z: r * (BUNDLE.H + SEAM),
+          yaw: (across ? Math.PI / 2 : 0) + (rand() - 0.5) * 0.012,
+          print: state.print,
+        });
+      }
+    }
+  } else { // spread: five-bundle stacks laid out in a ring
+    const stacks = state.stacks;
+    const radius = 0.105 + 0.007 * (stacks - 3);
+    const phase = rand() * Math.PI * 2;
+    for (let s = 0; s < stacks; s++) {
+      const ang = phase + s * Math.PI * 2 / stacks;
+      const cx = Math.cos(ang) * radius;
+      const cy = Math.sin(ang) * radius * 0.82;
+      const yaw = ang + Math.PI / 2;
+      for (let i = 0; i < 5; i++) {
+        put({
+          x: cx + 0.0016 * Math.sin(i * 2.0 + phase + s),
+          y: cy + 0.0012 * Math.cos(i * 1.6 + phase),
+          z: i * (BUNDLE.H + SEAM),
+          yaw: yaw + (rand() - 0.5) * 0.03,
+          print: state.print && i === 4,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/* ── bounds + derived counts ─────────────────────────────────────────────── */
+function bounds(tris) {
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const t of tris) {
+    for (const p of [t.a, t.b, t.c]) {
+      for (let i = 0; i < 3; i++) {
+        if (p[i] < min[i]) min[i] = p[i];
+        if (p[i] > max[i]) max[i] = p[i];
+      }
+    }
+  }
+  if (!tris.length) return { min: [0, 0, 0], max: [0, 0, 0], size: [0, 0, 0] };
+  return { min: min, max: max,
+           size: [max[0] - min[0], max[1] - min[1], max[2] - min[2]] };
+}
+
+function meshData(tris) {
+  const verts = [], faces = [], map = new Map();
+  for (const t of tris) {
+    const idx = [t.a, t.b, t.c].map(p => {
+      const key = p[0].toFixed(5) + ' ' + p[1].toFixed(5) + ' ' + p[2].toFixed(5);
+      let i = map.get(key);
+      if (i === undefined) { i = verts.length; map.set(key, i); verts.push(p); }
+      return i;
+    });
+    faces.push({ idx: idx, mat: t.mat, g: t.g });
+  }
+  return { verts: verts, faces: faces };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   5. State + rebuild
+   ────────────────────────────────────────────────────────────────────────── */
+const state = {
+  layout: 'stack',
+  bundles: 7,          // stack layout
+  rows: 3,             // brick layout
+  stacks: 3,           // spread layout
+  theme: 'kraft',
+  print: true,
+  strap: true,
+  spin: true,
+  shadow: true,
+  seed: 1337,
+};
+
+let tris = [];          // world-space, Y-up, mat names
+let stats = {};
+let theme = THEMES[state.theme];
+
+function bundleCount(s) {
+  if (s.layout === 'brick') return s.rows * (s.rows + 1) / 2;
+  if (s.layout === 'spread') return s.stacks * 5;
+  return s.bundles;
+}
+
+function rebuild(resetView) {
+  theme = THEMES[state.theme];
+  tris = buildLayout(state);
+  const b = bounds(tris);
+  const md = meshData(tris);
+
+  const height = b.size[1];
+  stats = {
+    tris: tris.length,
+    verts: md.verts.length,
+    size: b.size,
+    height: height,
+    bundles: bundleCount(state),
+    overBudget: tris.length > BUDGET,
+    underHeight: height < MIN_H,
+  };
+
+  uploadMesh();
+  updateStatsUI();
+  syncCount();        // the bundle total depends on the layout just rebuilt
+
+  camera.fit = Math.hypot(b.size[0], b.size[1], b.size[2]) * 0.5 /
+               Math.sin(FOV / 2) * 1.12;
+  camera.targetY = b.min[1] + b.size[1] * 0.5;
+  shadowSize = [Math.max(0.02, b.size[0] * 0.62), Math.max(0.02, b.size[2] * 0.66)];
+  if (resetView) resetCamera();
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   6. WebGL renderer (no libraries)
+   ────────────────────────────────────────────────────────────────────────── */
+const canvas = document.getElementById('gl');
+let gl = null, meshProg = null, shadowProg = null;
+let meshBuf = null, meshCount = 0;
+let shadowBuf = null;
+let shadowSize = [0.1, 0.05];
+let shadowTex = null;
+let proj = null, view = null, vp = null;
+let aspect = 1;
+
+const camera = {
+  yaw: 0.62, pitch: 0.52, zoom: 1,
+  tYaw: 0.62, tPitch: 0.52, tZoom: 1,
+  fit: 0.42, targetY: 0.04,
+};
+
+const MESH_VS = [
+  'attribute vec3 aPos;',
+  'attribute vec3 aNrm;',
+  'attribute vec3 aCol;',
+  'uniform mat4 uVP;',
+  'varying vec3 vN;',
+  'varying vec3 vC;',
+  'varying vec3 vW;',
+  'void main(){',
+  '  vN = aNrm; vC = aCol; vW = aPos;',
+  '  gl_Position = uVP * vec4(aPos, 1.0);',
+  '}',
+].join('\n');
+
+const MESH_FS = [
+  'precision mediump float;',
+  'varying vec3 vN;',
+  'varying vec3 vC;',
+  'varying vec3 vW;',
+  'uniform vec3 uEye;',
+  'void main(){',
+  '  vec3 n = normalize(vN);',
+  '  vec3 v = normalize(uEye - vW);',
+  '  if (dot(n, v) < 0.0) n = -n;',            // two-sided: no culling needed
+  '  vec3 key  = normalize(vec3(-0.46, 0.84, 0.38));',
+  '  vec3 fill = normalize(vec3( 0.66, 0.30, -0.52));',
+  '  float kd = max(dot(n, key), 0.0);',
+  '  float fd = max(dot(n, fill), 0.0);',
+  '  float sky = n.y * 0.5 + 0.5;',
+  '  vec3 c = vC * (0.30 + 0.78 * kd + 0.22 * fd + 0.12 * sky);',
+  '  c += vC * 0.05 * max(-n.y, 0.0) * vec3(1.0, 0.86, 0.68);',   // warm bounce
+  '  float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);',
+  '  c += vec3(0.05, 0.048, 0.042) * fres;',
+  '  c *= 1.06;',
+  '  c = c / (c + vec3(0.86));',                // soft highlight shoulder
+  '  c = pow(max(c, 0.0), vec3(1.0 / 2.2));',
+  '  gl_FragColor = vec4(c, 1.0);',
+  '}',
+].join('\n');
+
+const SHADOW_VS = [
+  'attribute vec3 aPos;',
+  'attribute vec2 aUV;',
+  'attribute float aA;',
+  'uniform mat4 uVP;',
+  'varying vec2 vUV;',
+  'varying float vA;',
+  'void main(){',
+  '  vUV = aUV; vA = aA;',
+  '  gl_Position = uVP * vec4(aPos, 1.0);',
+  '}',
+].join('\n');
+
+const SHADOW_FS = [
+  'precision mediump float;',
+  'varying vec2 vUV;',
+  'varying float vA;',
+  'uniform sampler2D uTex;',
+  'void main(){',
+  '  vec4 t = texture2D(uTex, vUV);',
+  '  gl_FragColor = vec4(0.0, 0.0, 0.0, t.a * vA);',
+  '}',
+].join('\n');
+
+function compile(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    throw new Error(gl.getShaderInfoLog(sh) || 'shader compile failed');
+  }
+  return sh;
+}
+
+function program(vs, fs, attrs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  attrs.forEach((name, i) => gl.bindAttribLocation(p, i, name));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(p) || 'program link failed');
+  }
+  return p;
+}
+
+function initGL() {
+  const opts = { alpha: true, antialias: true, depth: true,
+                 premultipliedAlpha: false, preserveDrawingBuffer: true };
+  gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
+  if (!gl) { document.body.classList.add('nogl'); return false; }
+
+  try {
+    meshProg = program(MESH_VS, MESH_FS, ['aPos', 'aNrm', 'aCol']);
+    shadowProg = program(SHADOW_VS, SHADOW_FS, ['aPos', 'aUV', 'aA']);
+  } catch (err) {
+    console.error(err);
+    document.body.classList.add('nogl');
+    return false;
+  }
+
+  meshBuf = gl.createBuffer();
+  shadowBuf = gl.createBuffer();
+  shadowTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, shadowTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE,
+                radialCanvas(128));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  gl.clearColor(0, 0, 0, 0);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.disable(gl.CULL_FACE);
+  return true;
+}
+
+function radialCanvas(size) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0.00, 'rgba(0,0,0,0.70)');
+  g.addColorStop(0.34, 'rgba(0,0,0,0.46)');
+  g.addColorStop(0.62, 'rgba(0,0,0,0.20)');
+  g.addColorStop(0.85, 'rgba(0,0,0,0.05)');
+  g.addColorStop(1.00, 'rgba(0,0,0,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, size, size);
+  return c;
+}
+
+/* interleaved position / normal / linear colour, flat shaded */
+function uploadMesh() {
+  if (!gl) return;
+  const data = new Float32Array(tris.length * 3 * 9);
+  let o = 0;
+  for (const t of tris) {
+    const n = cross3(sub3(t.b, t.a), sub3(t.c, t.a));
+    const len = Math.hypot(n[0], n[1], n[2]) || 1;
+    const nx = n[0] / len, ny = n[1] / len, nz = n[2] / len;
+    const rgb = hexRgb(theme[t.mat] || theme.note);
+    const r = srgbToLinear(rgb[0]), g = srgbToLinear(rgb[1]), b = srgbToLinear(rgb[2]);
+    for (const p of [t.a, t.b, t.c]) {
+      data[o++] = p[0]; data[o++] = p[1]; data[o++] = p[2];
+      data[o++] = nx;   data[o++] = ny;   data[o++] = nz;
+      data[o++] = r;    data[o++] = g;    data[o++] = b;
+    }
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+  meshCount = tris.length * 3;
+  updateShadowBuffer();
+}
+
+/* two stacked soft ellipses under the prop */
+function updateShadowBuffer() {
+  if (!gl) return;
+  const sx = shadowSize[0], sz = shadowSize[1];
+  const quads = [
+    { sx: sx, sz: sz, a: 0.55 },
+    { sx: sx * 0.56, sz: sz * 0.5, a: 0.34 },
+  ];
+  const data = new Float32Array(quads.length * 6 * 6);
+  let o = 0;
+  for (const q of quads) {
+    const y = q.sx === sx ? -0.0006 : -0.0002;
+    const p = [
+      [-q.sx, y, -q.sz, 0, 0], [ q.sx, y, -q.sz, 1, 0], [ q.sx, y, q.sz, 1, 1],
+      [-q.sx, y, -q.sz, 0, 0], [ q.sx, y,  q.sz, 1, 1], [-q.sx, y, q.sz, 0, 1],
+    ];
+    for (const v of p) {
+      data[o++] = v[0]; data[o++] = v[1]; data[o++] = v[2];
+      data[o++] = v[3]; data[o++] = v[4]; data[o++] = q.a;
+    }
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+}
+
+/* ── matrices (column-major) ─────────────────────────────────────────────── */
+function perspective(fovy, asp, near, far) {
+  const f = 1 / Math.tan(fovy / 2);
+  const nf = 1 / (near - far);
+  return new Float32Array([
+    f / asp, 0, 0, 0,
+    0, f, 0, 0,
+    0, 0, (far + near) * nf, -1,
+    0, 0, 2 * far * near * nf, 0,
+  ]);
+}
+
+function lookAt(eye, target, up) {
+  let zx = eye[0] - target[0], zy = eye[1] - target[1], zz = eye[2] - target[2];
+  let l = Math.hypot(zx, zy, zz) || 1;
+  zx /= l; zy /= l; zz /= l;
+  let xx = up[1] * zz - up[2] * zy;
+  let xy = up[2] * zx - up[0] * zz;
+  let xz = up[0] * zy - up[1] * zx;
+  l = Math.hypot(xx, xy, xz) || 1;
+  xx /= l; xy /= l; xz /= l;
+  const yx = zy * xz - zz * xy;
+  const yy = zz * xx - zx * xz;
+  const yz = zx * xy - zy * xx;
+  return new Float32Array([
+    xx, yx, zx, 0,
+    xy, yy, zy, 0,
+    xz, yz, zz, 0,
+    -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
+    -(yx * eye[0] + yy * eye[1] + yz * eye[2]),
+    -(zx * eye[0] + zy * eye[1] + zz * eye[2]),
+    1,
+  ]);
+}
+
+function mul(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) {
+    for (let r = 0; r < 4; r++) {
+      o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] +
+                     a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    }
+  }
+  return o;
+}
+
+/* ── draw ────────────────────────────────────────────────────────────────── */
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+  const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    gl.viewport(0, 0, w, h);
+  }
+  aspect = w / h;
+  proj = perspective(FOV, aspect, 0.02, 10);
+}
+
+function eye() {
+  const d = camera.fit * camera.zoom;
+  const cp = Math.cos(camera.pitch);
+  return [Math.sin(camera.yaw) * cp * d,
+          camera.targetY + Math.sin(camera.pitch) * d,
+          Math.cos(camera.yaw) * cp * d];
+}
+
+function draw() {
+  resize();
+  const e = eye();
+  view = lookAt(e, [0, camera.targetY, 0], [0, 1, 0]);
+  vp = mul(proj, view);
+
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  if (state.shadow) {
+    gl.disable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA,
+                         gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(shadowProg);
+    gl.uniformMatrix4fv(gl.getUniformLocation(shadowProg, 'uVP'), false, vp);
+    gl.uniform1i(gl.getUniformLocation(shadowProg, 'uTex'), 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, shadowTex);
+    gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuf);
+    const stride = 6 * 4;
+    const aPos = gl.getAttribLocation(shadowProg, 'aPos');
+    const aUV = gl.getAttribLocation(shadowProg, 'aUV');
+    const aA = gl.getAttribLocation(shadowProg, 'aA');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(aUV);
+    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 12);
+    gl.enableVertexAttribArray(aA);
+    gl.vertexAttribPointer(aA, 1, gl.FLOAT, false, stride, 20);
+    gl.drawArrays(gl.TRIANGLES, 0, 12);
+    gl.disable(gl.BLEND);
+  }
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.useProgram(meshProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(meshProg, 'uVP'), false, vp);
+  gl.uniform3f(gl.getUniformLocation(meshProg, 'uEye'), e[0], e[1], e[2]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshBuf);
+  const st = 9 * 4;
+  const pLoc = gl.getAttribLocation(meshProg, 'aPos');
+  const nLoc = gl.getAttribLocation(meshProg, 'aNrm');
+  const cLoc = gl.getAttribLocation(meshProg, 'aCol');
+  gl.enableVertexAttribArray(pLoc);
+  gl.vertexAttribPointer(pLoc, 3, gl.FLOAT, false, st, 0);
+  gl.enableVertexAttribArray(nLoc);
+  gl.vertexAttribPointer(nLoc, 3, gl.FLOAT, false, st, 12);
+  gl.enableVertexAttribArray(cLoc);
+  gl.vertexAttribPointer(cLoc, 3, gl.FLOAT, false, st, 24);
+  gl.drawArrays(gl.TRIANGLES, 0, meshCount);
+}
+
+/* ── animation ───────────────────────────────────────────────────────────── */
+let dragging = false;
+let lastT = 0;
+
+function frame(now) {
+  const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0;
+  lastT = now;
+
+  if (state.spin && !dragging) camera.tYaw += dt * 0.30;
+
+  const k = 1 - Math.exp(-dt * 9);
+  camera.yaw += (camera.tYaw - camera.yaw) * k;
+  camera.pitch += (camera.tPitch - camera.pitch) * k;
+  camera.zoom += (camera.tZoom - camera.zoom) * k;
+
+  if (gl) draw();
+  requestAnimationFrame(frame);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   7. Export (OBJ + MTL, ae.mesh/1 import command, PNG)
+   ────────────────────────────────────────────────────────────────────────── */
+function usedMaterials() {
+  const set = new Set(tris.map(t => t.mat));
+  return MAT_ORDER.filter(m => set.has(m));
+}
+
+function faceNormal(verts, idx) {
+  const a = verts[idx[0]], b = verts[idx[1]], c = verts[idx[2]];
+  let n = cross3(sub3(b, a), sub3(c, a));
+  const l = Math.hypot(n[0], n[1], n[2]) || 1;
+  return [n[0] / l, n[1] / l, n[2] / l];
+}
+
+const f5 = (v) => {
+  const s = v.toFixed(5);
+  return s === '-0.00000' ? '0.00000' : s;
+};
+
+/* Layouts past the importer's default are deliberate, not accidents: raise
+   the budget / lower the height floor in the command itself, so the
+   copy-paste always imports. */
+function importFlags() {
+  const budget = stats.tris > BUDGET ? ' --budget ' + (Math.ceil(stats.tris / 100) * 100) : '';
+  return budget + (stats.underHeight ? ' --min-height 0' : '');
+}
+
+function glbCommand() {
+  return 'python tools/ae_import_mesh.py moneystack.glb moneystack' + importFlags();
+}
+
+function objCommand() {
+  const args = usedMaterials()
+    .map(m => '--mtl ' + m + '=' + theme[m].replace('#', '').toUpperCase())
+    .join(' ');
+  return 'python tools/ae_import_mesh.py moneystack.obj moneystack ' + args + importFlags();
+}
+
+function objText() {
+  const md = meshData(tris);
+  const mats = usedMaterials();
+  const order = {};
+  MAT_ORDER.forEach((m, i) => { order[m] = i; });
+
+  const faces = md.faces.slice().sort((a, b) =>
+    a.g - b.g || order[a.mat] - order[b.mat]);
+  faces.forEach((f, i) => { f.n = i + 1; });
+
+  const mm = (v) => (v * 1000).toFixed(1);
+  const L = [];
+  L.push('# Moneystack — procedural bank bundle');
+  L.push('# ' + state.layout + ' · ' + stats.bundles + ' bundles · seed ' + state.seed +
+         ' · ' + faces.length + ' tris');
+  L.push('# size ' + mm(stats.size[0]) + ' x ' + mm(stats.size[1]) + ' x ' +
+         mm(stats.size[2]) + ' mm · Y up · metres');
+  L.push('# materials: ' + mats.join(', '));
+  L.push('#');
+  L.push('# import from the repo root (OBJ in the working directory):');
+  L.push('#   ' + objCommand());
+  L.push('mtllib moneystack.mtl');
+  L.push('o moneystack');
+
+  for (const v of md.verts) L.push('v ' + f5(v[0]) + ' ' + f5(v[1]) + ' ' + f5(v[2]));
+  for (const f of faces) {
+    const n = faceNormal(md.verts, f.idx);
+    L.push('vn ' + f5(n[0]) + ' ' + f5(n[1]) + ' ' + f5(n[2]));
+  }
+
+  let lastG = -1, lastM = '';
+  for (const f of faces) {
+    if (f.g !== lastG) {
+      L.push('g bundle_' + String(f.g + 1).padStart(2, '0'));
+      lastG = f.g; lastM = '';
+    }
+    if (f.mat !== lastM) { L.push('usemtl ' + f.mat); lastM = f.mat; }
+    L.push('f ' + (f.idx[0] + 1) + '//' + f.n + ' ' +
+                  (f.idx[1] + 1) + '//' + f.n + ' ' +
+                  (f.idx[2] + 1) + '//' + f.n);
+  }
+  return L.join('\n') + '\n';
+}
+
+function mtlText() {
+  const L = ['# Moneystack — house-palette materials', ''];
+  for (const m of usedMaterials()) {
+    const rgb = hexRgb(theme[m]);
+    L.push('newmtl ' + m);
+    L.push('Kd ' + (rgb[0] / 255).toFixed(6) + ' ' + (rgb[1] / 255).toFixed(6) + ' ' +
+           (rgb[2] / 255).toFixed(6));
+    L.push('Ka 0 0 0');
+    L.push('Ks 0 0 0');
+    L.push('Ns 1');
+    L.push('illum 1');
+    L.push('d 1');
+    L.push('# ' + theme[m].toUpperCase());
+    L.push('');
+  }
+  return L.join('\n');
+}
+
+/* ── GLB: glTF 2.0 binary, one primitive per house tone ───────────────────
+   Positions and normals are flat-shaded metres, Y up. baseColorFactor is the
+   linear colour (correct in any viewer); material extras carry the exact
+   palette hex, which ae_import_mesh.py reads for a zero palette snap. */
+function glbBytes() {
+  const names = usedMaterials();
+  const parts = names.map((m, i) => ({
+    name: m, material: i, pos: [], nrm: [], idx: [],
+    min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity],
+  }));
+  const byName = new Map(parts.map(p => [p.name, p]));
+
+  for (const t of tris) {
+    const p = byName.get(t.mat);
+    const n = cross3(sub3(t.b, t.a), sub3(t.c, t.a));
+    const len = Math.hypot(n[0], n[1], n[2]) || 1;
+    const nx = n[0] / len, ny = n[1] / len, nz = n[2] / len;
+    const base = p.pos.length / 3;
+    for (const v of [t.a, t.b, t.c]) {
+      p.pos.push(v[0], v[1], v[2]);
+      p.nrm.push(nx, ny, nz);
+      for (let k = 0; k < 3; k++) {
+        if (v[k] < p.min[k]) p.min[k] = v[k];
+        if (v[k] > p.max[k]) p.max[k] = v[k];
+      }
+    }
+    p.idx.push(base, base + 1, base + 2);
+  }
+
+  const bufferViews = [], accessors = [], primitives = [], chunks = [];
+  let offset = 0;
+  const pushView = (arr, target) => {
+    const bytes = new Uint8Array(arr.buffer);
+    bufferViews.push({ buffer: 0, byteOffset: offset, byteLength: bytes.byteLength,
+                       target: target });
+    chunks.push(bytes);
+    offset += bytes.byteLength;
+    return bufferViews.length - 1;
+  };
+
+  for (const p of parts) {
+    const pos = new Float32Array(p.pos), nrm = new Float32Array(p.nrm);
+    const idx = new Uint32Array(p.idx);
+    const posView = pushView(pos, 34962);
+    const nrmView = pushView(nrm, 34962);
+    const idxView = pushView(idx, 34963);
+    const posAcc = accessors.length;
+    accessors.push({ bufferView: posView, componentType: 5126, count: pos.length / 3,
+                     type: 'VEC3', min: p.min.slice(), max: p.max.slice() });
+    const nrmAcc = accessors.length;
+    accessors.push({ bufferView: nrmView, componentType: 5126, count: nrm.length / 3,
+                     type: 'VEC3' });
+    const idxAcc = accessors.length;
+    accessors.push({ bufferView: idxView, componentType: 5125, count: idx.length,
+                     type: 'SCALAR' });
+    primitives.push({ attributes: { POSITION: posAcc, NORMAL: nrmAcc },
+                      indices: idxAcc, material: p.material, mode: 4 });
+  }
+
+  const bin = new Uint8Array(offset);
+  let o = 0;
+  for (const c of chunks) { bin.set(c, o); o += c.byteLength; }
+
+  const materials = names.map(m => {
+    const rgb = hexRgb(theme[m]);
+    return {
+      name: m,
+      doubleSided: true,
+      pbrMetallicRoughness: {
+        baseColorFactor: [srgbToLinear(rgb[0]), srgbToLinear(rgb[1]),
+                          srgbToLinear(rgb[2]), 1],
+        metallicFactor: 0,
+        roughnessFactor: 0.9,
+      },
+      extras: { palette: theme[m].toUpperCase() },
+    };
+  });
+
+  const gltf = {
+    asset: {
+      version: '2.0',
+      generator: 'Moneystack MS-01 (procedural)',
+      extras: { layout: state.layout, bundles: stats.bundles, seed: state.seed },
+    },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0, name: 'moneystack' }],
+    meshes: [{ name: 'moneystack', primitives: primitives }],
+    materials: materials,
+    accessors: accessors,
+    bufferViews: bufferViews,
+    buffers: [{ byteLength: bin.byteLength }],
+  };
+
+  const json = new TextEncoder().encode(JSON.stringify(gltf));
+  const jsonLen = Math.ceil(json.length / 4) * 4;
+  const binLen = Math.ceil(bin.byteLength / 4) * 4;
+  const total = 12 + 8 + jsonLen + 8 + binLen;
+  const out = new ArrayBuffer(total);
+  const dv = new DataView(out), u8 = new Uint8Array(out);
+  dv.setUint32(0, 0x46546C67, true);            // 'glTF'
+  dv.setUint32(4, 2, true);
+  dv.setUint32(8, total, true);
+  dv.setUint32(12, jsonLen, true);
+  dv.setUint32(16, 0x4E4F534A, true);           // 'JSON'
+  u8.set(json, 20);
+  u8.fill(0x20, 20 + json.length, 20 + jsonLen);
+  const binStart = 20 + jsonLen;
+  dv.setUint32(binStart, binLen, true);
+  dv.setUint32(binStart + 4, 0x004E4942, true); // 'BIN\0'
+  u8.set(bin, binStart + 8);
+  return out;
+}
+
+function saveBlob(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function download(name, text) {
+  saveBlob(name, new Blob([text], { type: 'text/plain' }));
+}
+
+function exportGlb() {
+  saveBlob('moneystack.glb',
+           new Blob([glbBytes()], { type: 'model/gltf-binary' }));
+  toast('GLB exported · ' + stats.tris + ' tris');
+}
+
+function exportObj() {
+  download('moneystack.obj', objText());
+  setTimeout(() => download('moneystack.mtl', mtlText()), 60);
+  toast('OBJ + MTL exported · ' + stats.tris + ' tris');
+}
+
+/* PNG: the WebGL buffer already carries straight alpha (prop opaque, contact
+   shadow translucent, rest clear), so it exports as a cut-out product shot. */
+function snapshot() {
+  if (!gl) return;
+  canvas.toBlob(b => {
+    if (!b) return;
+    const url = URL.createObjectURL(b);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'moneystack.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast('PNG saved · transparent');
+  }, 'image/png');
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   8. UI
+   ────────────────────────────────────────────────────────────────────────── */
+const $ = (s) => document.querySelector(s);
+
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => el.classList.remove('on'), 1900);
+}
+
+function syncCount() {
+  const input = $('#count');
+  const out = $('#countOut');
+  const label = $('#countLabel');
+  if (state.layout === 'brick') {
+    input.min = 2; input.max = 5; input.value = state.rows;
+    label.textContent = 'Rows'; out.textContent = state.rows + '  (' + stats.bundles + ')';
+  } else if (state.layout === 'spread') {
+    input.min = 2; input.max = 4; input.value = state.stacks;
+    label.textContent = 'Stacks'; out.textContent = state.stacks + '  (' + stats.bundles + ')';
+  } else {
+    input.min = 3; input.max = 12; input.value = state.bundles;
+    label.textContent = 'Bundles'; out.textContent = state.bundles;
+  }
+  const pct = (input.value - input.min) / Math.max(1, input.max - input.min) * 100;
+  input.style.setProperty('--fill', pct.toFixed(1) + '%');
+}
+
+function updateStatsUI() {
+  const mm = (v) => Math.round(v * 1000);
+  $('#sTris').textContent = stats.tris.toLocaleString('en-US');
+  $('#sVerts').textContent = stats.verts.toLocaleString('en-US');
+  $('#sSize').textContent = mm(stats.size[0]) + ' × ' + mm(stats.size[1]) + ' × ' +
+                            mm(stats.size[2]) + ' mm';
+  $('#sHeight').textContent = (stats.size[1] * 1000).toFixed(1) + ' mm';
+  $('#sTris').classList.toggle('warn', stats.overBudget);
+  $('#sHeight').classList.toggle('warn', stats.underHeight);
+
+  const notes = [];
+  if (stats.overBudget) {
+    notes.push(stats.tris + ' tris is over the importer\'s ' + BUDGET +
+               ' default — allowed; the import command below raises --budget.');
+  }
+  if (stats.underHeight) {
+    notes.push((stats.size[1] * 1000).toFixed(0) + ' mm is under the importer\'s ' +
+               (MIN_H * 1000) + ' mm floor — a flat pile is fine; the import ' +
+               'command passes --min-height 0.');
+  }
+  $('#lint').textContent = notes.join(' ');
+  $('#cmdText').textContent = 'GLB  ' + glbCommand() + '\nOBJ  ' + objCommand();
+}
+
+function sync() {
+  document.querySelectorAll('#segLayout button').forEach(b =>
+    b.classList.toggle('on', b.dataset.k === state.layout));
+  document.querySelectorAll('#segTheme button').forEach(b =>
+    b.classList.toggle('on', b.dataset.k === state.theme));
+  $('#optPrint').checked = state.print;
+  $('#optStrap').checked = state.strap;
+  $('#optSpin').checked = state.spin;
+  $('#optShadow').checked = state.shadow;
+  $('#seed').value = state.seed;
+  $('#seedOut').textContent = state.seed;
+  syncCount();
+}
+
+function resetCamera() {
+  camera.tYaw = 0.62; camera.tPitch = 0.52; camera.tZoom = 1;
+  camera.zoom = 1;
+}
+
+function bindUI() {
+  document.querySelectorAll('#segLayout button').forEach(b => {
+    b.addEventListener('click', () => {
+      state.layout = b.dataset.k;
+      sync();
+      rebuild(true);
+    });
+  });
+
+  document.querySelectorAll('#segTheme button').forEach(b => {
+    b.addEventListener('click', () => {
+      state.theme = b.dataset.k;
+      sync();
+      rebuild(false);
+    });
+  });
+
+  $('#count').addEventListener('input', (e) => {
+    const v = parseInt(e.target.value, 10) || 1;
+    if (state.layout === 'brick') state.rows = v;
+    else if (state.layout === 'spread') state.stacks = v;
+    else state.bundles = v;
+    syncCount();
+    rebuild(false);
+  });
+
+  $('#optPrint').addEventListener('change', (e) => {
+    state.print = e.target.checked; rebuild(false);
+  });
+  $('#optStrap').addEventListener('change', (e) => {
+    state.strap = e.target.checked; rebuild(false);
+  });
+  $('#optSpin').addEventListener('change', (e) => {
+    state.spin = e.target.checked;
+  });
+  $('#optShadow').addEventListener('change', (e) => {
+    state.shadow = e.target.checked;
+  });
+
+  const setSeed = (v) => {
+    state.seed = clamp(parseInt(v, 10) || 0, 0, 99999);
+    $('#seed').value = state.seed;
+    $('#seedOut').textContent = state.seed;
+    rebuild(false);
+  };
+  $('#seed').addEventListener('change', (e) => setSeed(e.target.value));
+  $('#reroll').addEventListener('click', () =>
+    setSeed(Math.floor(Math.random() * 100000)));
+
+  $('#export').addEventListener('click', exportGlb);
+  $('#exportObj').addEventListener('click', exportObj);
+  $('#copy').addEventListener('click', () => {
+    const cmd = glbCommand();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cmd).then(() => toast('GLB import command copied'),
+        () => fallbackCopy(cmd));
+    } else {
+      fallbackCopy(cmd);
+    }
+  });
+  $('#png').addEventListener('click', snapshot);
+
+  /* view */
+  let px = 0, py = 0, moved = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    dragging = true; moved = 0;
+    px = e.clientX; py = e.clientY;
+    canvas.classList.add('drag');
+    if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - px, dy = e.clientY - py;
+    px = e.clientX; py = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    camera.tYaw -= dx * 0.0075;
+    camera.tPitch = clamp(camera.tPitch - dy * 0.0062, 0.045, 1.32);
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    canvas.classList.remove('drag');
+    if (canvas.releasePointerCapture && e && e.pointerId !== undefined) {
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('pointerleave', (e) => { if (dragging) endDrag(e); });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    camera.tZoom = clamp(camera.tZoom * Math.exp(e.deltaY * 0.0011), 0.52, 2.8);
+  }, { passive: false });
+
+  canvas.addEventListener('dblclick', () => {
+    resetCamera();
+    camera.yaw = camera.tYaw;
+    camera.pitch = camera.tPitch;
+    toast('View reset');
+  });
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); toast('Import command copied'); }
+  catch (_) { toast('Copy failed — open “Import command”'); }
+  ta.remove();
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   9. Boot
+   ────────────────────────────────────────────────────────────────────────── */
+if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  state.spin = false;
+}
+
+bindUI();
+if (initGL()) {
+  rebuild(true);
+  camera.yaw = camera.tYaw;
+  camera.pitch = camera.tPitch;
+  requestAnimationFrame(frame);
+} else {
+  sync();
+}
+
+/* automation / power-user hook */
+window.MS = {
+  state: () => Object.assign({}, state),
+  set: (patch) => {
+    Object.assign(state, patch);
+    sync();
+    rebuild(true);
+  },
+  stats: () => Object.assign({}, stats, { size: stats.size.slice() }),
+  rects: () => NOTE_RECTS.length,
+  obj: () => objText(),
+  mtl: () => mtlText(),
+  glb: () => glbBytes(),
+  command: () => glbCommand(),
+  objCommand: () => objCommand(),
+  view: () => Object.assign({}, camera),
+};
+})();
+</script>
+</body>
+</html>
