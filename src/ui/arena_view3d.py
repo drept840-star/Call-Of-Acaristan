@@ -24,12 +24,13 @@ import pygame
 
 from core.config import TILE_SIZE, WIDTH, HEIGHT
 from core.state import STATE
+from game import topdown3d as td
+from game.topdown3d import K, to3, yaw_of
 from missions import arena as AR
 from net import protocol as P
 from ui import mp3d
 from ui.arena_view import ArenaView, MUZZLE_FRAMES, color_for
 
-K = 1.6 / TILE_SIZE              # metres per sim pixel: a tile is 1.6 m
 RES = (640, 448)                 # internal buffer, x1.5625 to the 1000x700 canvas
 WALL_H = 2.1
 COVER_H = 0.95
@@ -37,6 +38,7 @@ AIM_H = 1.3                      # the mouse ray meets the floor at gun height
 CAM_DIST = 21.0
 CAM_PITCH = 58.0
 CAM_FOV = 54.0
+CAM = td.Cam(CAM_PITCH, CAM_DIST, CAM_FOV, RES)
 WALK_RAD_PER_M = 2.6
 CORPSE_FALL_FRAMES = 36
 PICKUP_COL = {"health": (90, 230, 130), "armour": (110, 170, 255)}
@@ -57,17 +59,6 @@ THEMES = {
                     cap=(62, 50, 44), cover=("steel", (84, 88, 94)), void=(12, 9, 8),
                     lamp=(255, 150, 80), key=(1.06, 0.94, 0.84)),
 }
-
-
-def to3(x, y, h=0.0):
-    """Sim pixel (x, y) at height h metres -> world point."""
-    return (x * K, h, -y * K)
-
-
-def yaw_of(angle_deg):
-    """2D aim angle (degrees, y down) -> rig yaw (degrees, +z forward)."""
-    a = math.radians(angle_deg)
-    return math.degrees(math.atan2(math.cos(a), -math.sin(a)))
 
 
 def make_view(map_name="yard"):
@@ -122,19 +113,9 @@ class ArenaView3D(ArenaView):
 
     def aim_point(self, mouse):
         """Screen point -> sim pixel under it at gun height, or None."""
-        c = self._cam3
-        if c is None:
+        if self._cam3 is None:
             return None
-        eye, right, up, fwd, focal, w, h = c
-        sw, sh = self._surf_size
-        bx = mouse[0] * w / float(sw)
-        by = mouse[1] * h / float(sh)
-        xs, ys = (bx - w / 2.0) / focal, (h / 2.0 - by) / focal
-        d = [fwd[i] + right[i] * xs + up[i] * ys for i in range(3)]
-        if d[1] >= -1e-4:
-            return None
-        t = (AIM_H - eye[1]) / d[1]
-        return ((eye[0] + d[0] * t) / K, -(eye[2] + d[2] * t) / K)
+        return self._cam3.ground(mouse, AIM_H)
 
     def aim_angle(self, mouse, origin):
         p = self.aim_point(mouse)
@@ -187,13 +168,7 @@ class ArenaView3D(ArenaView):
     # ── camera ─────────────────────────────────────────────────────────
 
     def _camera(self, vw, vh):
-        fx = self.cam_x + vw / 2.0
-        fy = self.cam_y + vh / 2.0
-        tx, _, tz = to3(fx, fy)
-        p = math.radians(CAM_PITCH)
-        tgt = (tx, 0.6, tz)
-        eye = (tx, 0.6 + math.sin(p) * CAM_DIST, tz - math.cos(p) * CAM_DIST)
-        return eye, tgt
+        return td.View(CAM, self.cam_x + vw / 2.0, self.cam_y + vh / 2.0, (vw, vh))
 
     # ── draw ───────────────────────────────────────────────────────────
 
@@ -231,9 +206,9 @@ class ArenaView3D(ArenaView):
                             sky=0.24, tint=th["key"])
             r.fog, r.fog_start, r.fog_end = th["void"], 34.0, 70.0
             r.light_cap = 8
-            eye, tgt = self._camera(vw, vh)
-            r.set_camera(eye, tgt, CAM_FOV)
-            self._cam3 = (r.cam, r.right, r.up, r.fwd, r.focal, r.w, r.h)
+            view = self._camera(vw, vh)
+            view.apply(r)
+            self._cam3 = view
             lights = [{"pos": to3(lx, ly, WALL_H + 0.6), "color": th["lamp"],
                        "intensity": 0.9, "range": 9.0} for lx, ly in self._lamps[:4]]
             flashes = []
@@ -268,18 +243,9 @@ class ArenaView3D(ArenaView):
 
     def _screen(self, p):
         """World point -> canvas pixel through the last frame's camera."""
-        c = self._cam3
-        if c is None:
+        if self._cam3 is None:
             return None
-        eye, right, up, fwd, focal, w, h = c
-        d = (p[0] - eye[0], p[1] - eye[1], p[2] - eye[2])
-        z = d[0] * fwd[0] + d[1] * fwd[1] + d[2] * fwd[2]
-        if z <= 0.06:
-            return None
-        x = d[0] * right[0] + d[1] * right[1] + d[2] * right[2]
-        y = d[0] * up[0] + d[1] * up[1] + d[2] * up[2]
-        sw, sh = self._surf_size
-        return ((w / 2.0 + x / z * focal) * sw / float(w), (h / 2.0 - y / z * focal) * sh / float(h))
+        return self._cam3.screen(p)
 
     # ── pickups ────────────────────────────────────────────────────────
 
@@ -306,29 +272,7 @@ class ArenaView3D(ArenaView):
         return self._crates[key]
 
     def _put(self, r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0):
-        """A small rigid mesh at pos. On GL it is packed once and moved with
-        numpy each frame; re-packing in Python cost ~4 ms a pickup."""
-        from engine3d import Mesh, m_mul, rot_y, rot_z
-        m = m_mul(rot_y(yaw), rot_z(roll))
-        if not hasattr(r, "add_packed"):
-            src = Mesh([(v[0] * scale, v[1] * scale, v[2] * scale) for v in mesh.verts], mesh.faces)
-            out = Mesh().add(src, m=m, t=pos)
-            r.add_dynamic(out.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in out.faces])
-            return
-        import numpy as np
-        key = (id(mesh), scale)
-        arr = self._packed.get(key)
-        if arr is None:
-            verts = [(v[0] * scale, v[1] * scale, v[2] * scale) for v in mesh.verts]
-            arr = r.pack(verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in mesh.faces])
-            if arr is None:
-                return
-            self._packed[key] = arr
-        rot = np.asarray(m, dtype=np.float32).reshape(3, 3)
-        out = arr.copy()
-        out[:, 0:3] = arr[:, 0:3] @ rot.T + np.asarray(pos, dtype=np.float32)
-        out[:, 6:9] = arr[:, 6:9] @ rot.T
-        r.add_packed(out)
+        td.put(r, mesh, pos, yaw, roll, scale, cache=self._packed)
 
     def _draw_pickups3d(self, r, live, tm):
         from cutscenes import m6fx3d as _fx
@@ -436,11 +380,7 @@ class ArenaView3D(ArenaView):
         return tags
 
     def _ring(self, r, x, z, rad, col):
-        n = 16
-        for i in range(n):
-            a0, a1 = 2 * math.pi * i / n, 2 * math.pi * (i + 1) / n
-            r.add_line3d((x + math.cos(a0) * rad, 0.03, z + math.sin(a0) * rad),
-                         (x + math.cos(a1) * rad, 0.03, z + math.sin(a1) * rad), col, 1)
+        td.ring(r, x, z, rad, col)
 
     def _tag3d(self, surface, sx, sy, state, pid, local_id, v, ent, at):
         head = self._screen((at[0], 2.15, at[2]))
@@ -501,22 +441,6 @@ class ArenaView3D(ArenaView):
             surface.blit(surf, (int(p[0] - surf.get_width() // 2), int(p[1])))
 
 
-def _mix(a, b, t):
-    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-
-def _dot(col, size):
-    def draw(s, sx, sy, scale, z):
-        rad = max(1, int(size * 0.5 + scale * 0.02))
-        pygame.draw.rect(s, col, (int(sx) - rad // 2, int(sy) - rad // 2, rad + 1, rad + 1))
-    return draw
-
-
-def _blood_pool(k):
-    def draw(s, sx, sy, scale, z):
-        w = int(scale * (0.5 + 0.7 * k))
-        h = max(2, int(w * 0.75))
-        if w < 2:
-            return
-        pygame.draw.ellipse(s, (82, 14, 16), (int(sx) - w // 2, int(sy) - h // 2, w, h))
-    return draw
+_mix = td.mix
+_dot = td.dot
+_blood_pool = td.blood_pool

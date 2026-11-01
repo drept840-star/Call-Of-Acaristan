@@ -44,140 +44,91 @@ class MiniMap(_MiniMap):
 
     def __init__(self, map_data, tile_size=64, palette="m2"):
         super().__init__(map_data, tile_size, palette, theme=THEME)
-def _draw_dirty_hand_text(surface, text, x, y, font, color, seed=0, alpha=120, jitter=2, angle=0):
+_NOTE_PAPER = (200, 189, 154)
+_NOTE_FIBRE = (188, 176, 140)
+_NOTE_SHADE = (170, 157, 120)
+_NOTE_LIGHT = (214, 204, 172)
+_NOTE_EDGE = (116, 102, 72)
+_NOTE_INK = (38, 36, 58)
+_NOTE_INK_FADE = (112, 106, 120)
+_NOTE_PENCIL = (64, 62, 66)
+_NOTE_PENCIL_FADE = (132, 124, 106)
+_NOTE_STAMP = (156, 44, 34)
+_NOTE_SHADOW = (6, 5, 4)
+_NOTE_CACHE = {}
+
+
+def _note_fibres(surf, rect, seed, cell=3, n=260):
+    """Hard 3 px paper fibre cells; deterministic, no alpha."""
     rng = random.Random(seed)
-    cx = x
-    for i, ch in enumerate(text):
-        if ch == " ":
-            cx += font.size(" ")[0] + rng.randint(2, 6)
-            continue
-        ch_surf = font.render(ch, True, color).convert_alpha()
-        ch_surf.set_alpha(max(0, min(255, alpha + rng.randint(-45, 25))))
-        rot = pygame.transform.rotate(ch_surf, angle + rng.uniform(-9, 9))
-        rx = cx + rng.randint(-jitter, jitter)
-        ry = y + rng.randint(-jitter, jitter)
-        surface.blit(rot, (rx, ry))
-        if rng.random() < 0.65:
-            ghost = font.render(ch, True, color).convert_alpha()
-            ghost.set_alpha(max(0, alpha // 3))
-            ghost = pygame.transform.rotate(ghost, angle + rng.uniform(-14, 14))
-            surface.blit(ghost, (rx + rng.randint(-3, 3), ry + rng.randint(-2, 3)))
-        cx += font.size(ch)[0] + rng.randint(-2, 3)
+    x0, y0, w, h = rect
+    for _ in range(n):
+        x = x0 + rng.randrange(0, max(1, w - cell), cell)
+        y = y0 + rng.randrange(0, max(1, h - cell), cell)
+        surf.fill(_NOTE_FIBRE if rng.random() < 0.8 else _NOTE_SHADE, (x, y, cell * rng.randint(1, 3), cell))
+
+
+def _build_crumpled_scrap():
+    """The safe-code scrap: a torn, crumpled pencil note. Flat facet shading
+    from a fan of triangles, hard pixel pencil; built once."""
+    from ui import pixfont
+    w, h = 440, 300
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    pts = [
+        (24, 18), (84, 8), (150, 18), (226, 6), (300, 20), (376, 10), (420, 34),
+        (412, 90), (430, 146), (410, 200), (424, 262), (368, 290), (300, 280),
+        (232, 296), (164, 282), (96, 292), (26, 268), (14, 210), (28, 152),
+        (10, 90),
+    ]
+    pygame.draw.polygon(surf, _NOTE_PAPER, pts)
+    mask = pygame.mask.from_surface(surf)
+    rng = random.Random(742)
+    cols, rows = 5, 4                            # crumple: a jittered grid of flat facets
+    grid = [[(min(w, max(0, i * w // cols + (rng.randint(-22, 22) if 0 < i < cols else 0))),
+              min(h, max(0, j * h // rows + (rng.randint(-18, 18) if 0 < j < rows else 0))))
+             for j in range(rows + 1)] for i in range(cols + 1)]
+    shades = (_NOTE_PAPER, _NOTE_LIGHT, _NOTE_FIBRE, _NOTE_SHADE)
+    for i in range(cols):
+        for j in range(rows):
+            a, b, c, d = grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]
+            pygame.draw.polygon(surf, shades[(i + 2 * j) % 4], (a, b, c))
+            pygame.draw.polygon(surf, shades[(i + 2 * j + 1) % 4], (a, c, d))
+            pygame.draw.line(surf, _NOTE_SHADE, a, c, 1)
+    _note_fibres(surf, (0, 0, w, h), 742, n=320)
+    big, mid, small = pixfont.font("R7", 6, bold=True), pixfont.font("R7", 3), pixfont.font("R7", 2)
+    small.draw(surf, "dont forget", (64, 50), _NOTE_PENCIL)
+    big.draw(surf, "7", (110, 92), _NOTE_PENCIL)
+    big.draw(surf, "4", (196, 100), _NOTE_PENCIL_FADE)
+    big.draw(surf, "2", (284, 90), _NOTE_PENCIL)
+    for k in range(4):                           # the 4 half rubbed out: a few eraser streaks
+        surf.fill(_NOTE_PAPER, (192 + k * 3, 106 + k * 12, 50, 3))
+    mid.draw(surf, "7  ?  2", (124, 182), _NOTE_PENCIL)
+    pygame.draw.line(surf, _NOTE_PENCIL, (118, 214), (282, 210), 2)
+    small.draw(surf, "last three", (78, 238), _NOTE_PENCIL)
+    # fibres and creases outside the torn outline are cut away again
+    clip = mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
+    surf.blit(clip, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    pygame.draw.polygon(surf, _NOTE_EDGE, pts, 2)
+    return surf, pts
+
+
 def _draw_crumpled_safe_scrap():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 215))
     screen.blit(overlay, (0, 0))
-    rng = random.Random(742)
-    paper_w, paper_h = 460, 330
-    paper = pygame.Surface((paper_w, paper_h), pygame.SRCALPHA)
-    pts = [
-        (28, 18), (90, 5), (158, 16), (236, 8), (315, 20), (404, 10), (444, 38),
-        (433, 92), (452, 148), (430, 205), (445, 286), (388, 317), (316, 306),
-        (244, 326), (173, 308), (98, 321), (28, 292), (15, 230), (30, 166),
-        (10, 96),
-    ]
-    shadow = pygame.Surface((paper_w + 40, paper_h + 40), pygame.SRCALPHA)
-    pygame.draw.polygon(shadow, (0, 0, 0, 120), [(x + 20, y + 22) for x, y in pts])
-    shadow_rot = pygame.transform.rotate(shadow, -4)
-    shadow_rect = shadow_rot.get_rect(center=(WIDTH // 2 + 10, HEIGHT // 2 + 12))
-    screen.blit(shadow_rot, shadow_rect)
-    pygame.draw.polygon(paper, (177, 160, 118), pts)
-    pygame.draw.polygon(paper, (92, 73, 45), pts, 2)
-    for _ in range(900):
-        x = rng.randint(10, paper_w - 12)
-        y = rng.randint(8, paper_h - 10)
-        if rng.random() < 0.75:
-            col = rng.choice([
-                (120, 96, 58, 35), (70, 55, 35, 28),
-                (210, 196, 150, 18), (35, 28, 20, 20),
-            ])
-            paper.set_at((x, y), col)
-    for _ in range(12):
-        sx = rng.randint(45, paper_w - 80)
-        sy = rng.randint(35, paper_h - 70)
-        sw = rng.randint(30, 110)
-        sh = rng.randint(18, 70)
-        stain = pygame.Surface((sw, sh), pygame.SRCALPHA)
-        pygame.draw.ellipse(stain, rng.choice([
-            (45, 32, 20, 45), (78, 51, 22, 38), (20, 20, 18, 35),
-        ]), stain.get_rect())
-        paper.blit(stain, (sx, sy))
-    facets = [
-        [(40, 30), (180, 42), (95, 150)],
-        [(190, 20), (315, 45), (250, 145)],
-        [(320, 38), (430, 70), (365, 180)],
-        [(32, 175), (120, 150), (75, 285)],
-        [(150, 170), (265, 150), (220, 310)],
-        [(275, 165), (420, 210), (335, 300)],
-    ]
-    for i, fpts in enumerate(facets):
-        col = (255, 240, 180, 18) if i % 2 == 0 else (20, 12, 8, 35)
-        pygame.draw.polygon(paper, col, fpts)
-    fold_lines = [
-        ((35, 76), (430, 58), 38), ((54, 145), (432, 132), 62),
-        ((34, 220), (428, 205), 45), ((112, 20), (122, 310), 50),
-        ((248, 18), (230, 320), 65), ((365, 35), (318, 304), 55),
-        ((38, 285), (440, 40), 32), ((30, 44), (420, 292), 30),
-    ]
-    for (a, b, alpha) in fold_lines:
-        pygame.draw.line(paper, (42, 31, 19, alpha), a, b, 4)
-        pygame.draw.line(paper, (225, 210, 160, max(15, alpha // 2)),
-                         (a[0] + 2, a[1] - 2), (b[0] + 2, b[1] - 2), 1)
-    hand_font_big = pygame.font.SysFont("Comic Sans MS", 35, bold=True)
-    hand_font_mid = pygame.font.SysFont("Comic Sans MS", 25, bold=True)
-    hand_font_small = pygame.font.SysFont("Comic Sans MS", 18, bold=True)
-    ink = (37, 31, 25)
-    _draw_dirty_hand_text(paper, "dont forget", 72, 72, hand_font_small, ink,
-                          seed=12, alpha=55, jitter=3, angle=-6)
-    _draw_dirty_hand_text(paper, "7", 122, 132, hand_font_big, ink,
-                          seed=1, alpha=95, jitter=5, angle=-10)
-    _draw_dirty_hand_text(paper, "4", 210, 126, hand_font_big, ink,
-                          seed=2, alpha=62, jitter=7, angle=7)
-    _draw_dirty_hand_text(paper, "2", 306, 138, hand_font_big, ink,
-                          seed=3, alpha=78, jitter=6, angle=-4)
-    _draw_dirty_hand_text(paper, "7  ?  2", 120, 182, hand_font_mid, ink,
-                          seed=4, alpha=48, jitter=7, angle=3)
-    _draw_dirty_hand_text(paper, "last three", 80, 244, hand_font_small, ink,
-                          seed=5, alpha=45, jitter=3, angle=-3)
-    for _ in range(34):
-        x1 = rng.randint(90, 360)
-        y1 = rng.randint(115, 210)
-        x2 = x1 + rng.randint(-55, 80)
-        y2 = y1 + rng.randint(-10, 18)
-        pygame.draw.line(paper, rng.choice([
-            (20, 14, 8, 65), (70, 45, 20, 55), (120, 96, 58, 45),
-        ]), (x1, y1), (x2, y2), rng.randint(2, 6))
-    fold = pygame.Surface((paper_w, paper_h), pygame.SRCALPHA)
-    pygame.draw.polygon(fold, (18, 12, 8, 80),
-                        [(155, 105), (292, 92), (278, 230), (140, 246)])
-    pygame.draw.line(fold, (235, 215, 160, 45), (160, 105), (145, 245), 2)
-    paper.blit(fold, (0, 0))
-    for _ in range(18):
-        hx = rng.randint(35, paper_w - 40)
-        hy = rng.randint(30, paper_h - 30)
-        if rng.random() < 0.45:
-            pygame.draw.line(paper, (65, 45, 28, 90),
-                             (hx, hy), (hx + rng.randint(-20, 25), hy + rng.randint(-7, 9)),
-                             rng.randint(1, 3))
-    for _ in range(85):
-        edge = rng.choice(["top", "bottom", "left", "right"])
-        if edge == "top":
-            x, y = rng.randint(25, paper_w - 25), rng.randint(8, 35)
-        elif edge == "bottom":
-            x, y = rng.randint(25, paper_w - 25), rng.randint(paper_h - 38, paper_h - 8)
-        elif edge == "left":
-            x, y = rng.randint(8, 38), rng.randint(25, paper_h - 25)
-        else:
-            x, y = rng.randint(paper_w - 40, paper_w - 8), rng.randint(25, paper_h - 25)
-        pygame.draw.circle(paper, (35, 24, 15, rng.randint(25, 80)), (x, y), rng.randint(1, 5))
-    paper_rot = pygame.transform.rotate(paper, -4)
-    paper_rect = paper_rot.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 12))
-    screen.blit(paper_rot, paper_rect)
+    hit = _NOTE_CACHE.get("__scrap__")
+    if hit is None:
+        hit = _NOTE_CACHE["__scrap__"] = _build_crumpled_scrap()
+    paper, pts = hit
+    x = WIDTH // 2 - paper.get_width() // 2
+    y = HEIGHT // 2 - paper.get_height() // 2 - 12
+    pygame.draw.polygon(screen, _NOTE_SHADOW, [(px + x + 8, py + y + 10) for px, py in pts])
+    screen.blit(paper, (x, y))
     if (_now_ms() // 600) % 2 == 0:
         prompt = font_prompt.render(_T("hud.space_close"), True, (160, 145, 100))
-        screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, HEIGHT // 2 + 210))
-    lbl = font_terminal_small.render(_T("hud.crumpled_scrap"), True, (95, 82, 58))
-    screen.blit(lbl, (WIDTH // 2 - lbl.get_width() // 2, HEIGHT // 2 - 218))
+        screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, y + paper.get_height() + 22))
+    lbl = font_terminal_small.render(_T("hud.crumpled_scrap"), True, (150, 132, 96))
+    screen.blit(lbl, (WIDTH // 2 - lbl.get_width() // 2, y - 26))
 def _schedule_text_ticks(text, start_delay=0, step=2, volume=0.08, max_ticks=42):
     tick_i = 0
     for ch in text:
@@ -190,6 +141,53 @@ def _play_ui_type_tick(volume=0.095):
         audio.play("type_tick", volume=volume)
     except Exception:
         pass
+def _build_typed_note(text):
+    """A typed memo sheet: cream paper, typewriter ink in the bitmap font,
+    title rule, punch holes, a dog-eared corner and a red IPA stamp. Hard
+    pixels only; built once per note."""
+    from ui import pixfont
+    body_f, title_f = pixfont.font("R7", 2), pixfont.font("R7", 2, bold=True)
+    stamp_f = pixfont.font("R5", 2, bold=True)
+    lines = text.split("\n")
+    title, body = lines[0].rstrip(":"), lines[1:]
+    lh = body_f.get_linesize() + 8
+    label = "IPA - INTERNAL"
+    sw, sh = stamp_f.size(label)[0] + 16, stamp_f.get_height() + 12
+    text_w = max([title_f.size(title)[0] + sw + 24] + [body_f.size(l)[0] for l in body])
+    w = max(460, min(WIDTH - 80, text_w + 100))
+    h = 96 + lh * len(body) + 40
+    surf = pygame.Surface((w, h))
+    surf.fill(_NOTE_PAPER)
+    _note_fibres(surf, (0, 0, w, h), sum(map(ord, text)), n=w * h // 260)
+    for y in range(78, h - 40, lh):              # faint typing guide lines
+        surf.fill(_NOTE_FIBRE, (52, y + lh - 8, w - 80, 2))
+    for hy in (40, h - 40):                      # binder punch holes
+        pygame.draw.circle(surf, _NOTE_SHADOW, (24, hy), 7)
+        pygame.draw.circle(surf, _NOTE_SHADE, (24, hy), 8, 2)
+    title_f.draw(surf, title, (52, 32), _NOTE_INK)
+    surf.fill(_NOTE_INK, (52, 56, title_f.size(title)[0], 2))
+    rng = random.Random(len(text))
+    y = 78
+    for line in body:
+        x = 52
+        for word in line.split(" "):             # uneven typebar strikes
+            col = _NOTE_INK if rng.random() > 0.18 else _NOTE_INK_FADE
+            body_f.draw(surf, word, (x, y + rng.choice((0, 0, 0, 1))), col)
+            x += body_f.size(word + " ")[0]
+        y += lh
+    sx, sy = w - sw - 28, 24
+    pygame.draw.rect(surf, _NOTE_STAMP, (sx, sy, sw, sh), 2)
+    stamp_f.draw(surf, label, (sx + 8, sy + 6), _NOTE_STAMP)
+    for _ in range(8):                           # dry stamp ink
+        surf.fill(_NOTE_PAPER, (sx + rng.randrange(0, sw, 2), sy + rng.randrange(0, sh, 2), 2, 2))
+    ear = 28                                     # dog-ear, bottom right
+    pygame.draw.polygon(surf, _NOTE_SHADOW, [(w - ear, h), (w, h - ear), (w, h)])
+    pygame.draw.polygon(surf, _NOTE_SHADE, [(w - ear, h), (w, h - ear), (w - ear, h - ear)])
+    pygame.draw.line(surf, _NOTE_EDGE, (w - ear, h), (w, h - ear), 2)
+    pygame.draw.rect(surf, _NOTE_EDGE, (0, 0, w, h), 2)
+    return surf
+
+
 def draw_desk_note():
     global _last_note_tick_key
     if not STATE.active_read_note:
@@ -204,38 +202,20 @@ def draw_desk_note():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 200))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 500, 280
-    panel_x = (WIDTH - panel_w) // 2
-    panel_y = (HEIGHT - panel_h) // 2
-    paper = pygame.Surface((panel_w, panel_h))
-    paper.fill((32, 28, 22))
-    for row in range(0, panel_h, 3):
-        shade = _rng_legacy.randint(-3, 3)
-        c = max(0, min(255, 32 + shade))
-        pygame.draw.line(paper, (c, c - 2, c - 4), (0, row), (panel_w, row))
-    screen.blit(paper, (panel_x, panel_y))
-    pygame.draw.rect(screen, (80, 70, 50), (panel_x, panel_y, panel_w, panel_h), 2)
-    header = font_speaker.render(_T("hud.field_note"), True, C_ORANGE)
-    screen.blit(header, (panel_x + 16, panel_y + 12))
-    pygame.draw.line(
-        screen,
-        (80, 65, 35),
-        (panel_x + 16, panel_y + 42),
-        (panel_x + panel_w - 16, panel_y + 42),
-        1,
-    )
-    lines = STATE.active_read_note.split("\n")
-    y = panel_y + 56
-    for line in lines:
-        surf = font_terminal.render(line, True, C_WHITE)
-        screen.blit(surf, (panel_x + 20, y))
-        y += 28
+    paper = _NOTE_CACHE.get(STATE.active_read_note)
+    if paper is None:
+        if len(_NOTE_CACHE) > 16:
+            _NOTE_CACHE.clear()
+        paper = _NOTE_CACHE[STATE.active_read_note] = _build_typed_note(STATE.active_read_note)
+    x = (WIDTH - paper.get_width()) // 2
+    y = (HEIGHT - paper.get_height()) // 2 - 10
+    screen.fill(_NOTE_SHADOW, (x + 8, y + 10, paper.get_width(), paper.get_height()))
+    screen.blit(paper, (x, y))
+    header = font_terminal_small.render(_T("hud.field_note"), True, C_ORANGE)
+    screen.blit(header, (WIDTH // 2 - header.get_width() // 2, y - 26))
     if (_now_ms() // 600) % 2 == 0:
         prompt = font_prompt.render(_T("hud.space_close"), True, (160, 145, 100))
-        screen.blit(
-            prompt,
-            (panel_x + panel_w // 2 - prompt.get_width() // 2, panel_y + panel_h - 28),
-        )
+        screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, y + paper.get_height() + 22))
 _LEAF_SIZE = (360, 92)
 _LEAF_PAPER = (196, 184, 150)
 _LEAF_TIDE = (172, 159, 122)

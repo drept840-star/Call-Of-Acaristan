@@ -64,7 +64,10 @@ _SG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.025, 0.33), guard=(0.0, 0.025, 0.2
            butt=(0.0, 0.045, -0.40))
 GRIPS = {"rifle": _RIG, "sniper": dict(_RIG, fore=(0.0, -0.035, 0.34), guard=(0.0, -0.035, 0.20)),
          "os12": _RIG, "k9": _K9, "shotgun": _SG, "m7rifle": _M7, "akrifle": _AK,
-         "ak74": _AK74, "pistol": dict(grip=(0.0, 0.0, 0.0), fore=None, guard=None, butt=None)}
+         "ak74": _AK74,
+         # the support hand cups the shooting hand from the left of the grip
+         "pistol": dict(grip=(0.0, 0.0, 0.0), fore=(-0.045, -0.025, 0.0),
+                        guard=(-0.045, -0.025, 0.0), butt=None)}
 
 # anchor "butt": butt point sits ``pocket`` from the right shoulder (torso-local);
 # anchor "grip": the right hand sits at ``at`` (torso-local, origin at the hip).
@@ -75,6 +78,11 @@ MODES = {
     "port": dict(anchor="grip", at=(0.10, 0.34, 0.26), aim=(-0.55, 0.65, 0.5), two=True),
     "carry": dict(anchor="grip", at=(0.20, 0.18, 0.24), aim=(-0.10, -0.30, 1.0), two=True),
     "one_hand": dict(anchor="grip", at=(0.24, 0.10, 0.20), aim=(0.0, -0.55, 1.0), two=False),
+    # handguns: no stock, so the grip is the anchor. Isosceles stance with both
+    # arms out and the hands on the centre line at chin height; low ready
+    # points the muzzle at the floor a few metres ahead.
+    "pistol_aim": dict(anchor="grip", at=(0.03, 0.50, 0.46), aim=(0.0, 0.0, 1.0), two=True),
+    "pistol_ready": dict(anchor="grip", at=(0.04, 0.30, 0.34), aim=(0.0, -0.55, 1.0), two=True),
 }
 ARM_REACH = 0.58            # shoulder to hand, a touch short of straight
 _TORSO = ("torso", "chest", "pelvis")

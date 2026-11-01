@@ -12,6 +12,7 @@ from entities.art_cache import get_blood_decal, get_glow, get_panel_bg
 from entities import corpse
 from entities.enemy_ai import Enemy, enemy_hear_shot, _enemy_shadow
 from core.state import STATE
+from game import topdown3d as td
 from game.art import m1 as _m1art
 from ui.hud import THEME, MiniMap, draw_objective_panel, draw_pinned_radio
 from engine.ui import (bottle_hud as _hud_bottle_hud,
@@ -693,17 +694,22 @@ def _draw_dropoff_entry(surface, t):
     _draw_dropoff_zoom(surface, t, 2.1, locked=True)
 
 
-def _dropoff_take(fn):
+def _dropoff_take(fn, zoom=1.0, locked=False):
     def _draw(surface, t):
-        fn(surface, t)
+        drawn = False
+        if td.active_cam() is not None:
+            from missions.m1 import draw3d
+            drawn = draw3d.dropoff(surface, t, zoom, locked)
+        if not drawn:
+            fn(surface, t)
         _dropoff_post(surface, max(0, min(_DROPOFF_MS, int(t))))
     return _draw
 
 
 _register_takes({
     "m1_dropoff": _dropoff_take(_draw_dropoff_street),
-    "m1_dropoff_follow": _dropoff_take(_draw_dropoff_follow),
-    "m1_dropoff_entry": _dropoff_take(_draw_dropoff_entry),
+    "m1_dropoff_follow": _dropoff_take(_draw_dropoff_follow, 1.5),
+    "m1_dropoff_entry": _dropoff_take(_draw_dropoff_entry, 2.1, locked=True),
 })
 
 
@@ -2266,9 +2272,10 @@ def _draw_m1_hud(surface, cam_x, cam_y):
 STANDOFF_BAR_H = 24
 
 
-def _draw_m1_standoff(surface, cam_x, cam_y):
+def _draw_m1_standoff(surface, cam_x, cam_y, anchor=None):
     """WP6 standoff: hard 24 px letterbox, the current beat as an in-person
-    subtitle above the lower bar, and K's red '!' on the spot beat."""
+    subtitle above the lower bar, and K's red '!' on the spot beat.
+    ``anchor(k)`` gives the canvas point over K's head (the 2.5D view)."""
     so = getattr(STATE, "_m1_standoff", None)
     if not so:
         return
@@ -2293,9 +2300,10 @@ def _draw_m1_standoff(surface, cam_x, cam_y):
             x += s.get_width() + gap
     if so.get("spot"):
         k = _m1_update.standoff_commander()
-        if k is not None:
-            kx = int(k.rect.centerx - cam_x)
-            ky = int(k.rect.top - cam_y) - 30
+        at = None if k is None else (anchor(k) if anchor else
+                                     (k.rect.centerx - cam_x, k.rect.top - cam_y - 30))
+        if at is not None:
+            kx, ky = int(at[0]), int(at[1])
             pygame.draw.rect(surface, (0, 0, 0), (kx - 4, ky - 2, 8, 24))
             pygame.draw.rect(surface, (230, 40, 40), (kx - 2, ky, 4, 12))
             pygame.draw.rect(surface, (230, 40, 40), (kx - 2, ky + 16, 4, 4))
@@ -2322,6 +2330,15 @@ def submit_frame(q, fcx, fcy):
     """Submit one Mission 1 frame (draw order is the legacy painter's, ADR-017)."""
     fcx, fcy = round(fcx), round(fcy)
     _M1_CAM[0], _M1_CAM[1] = fcx, fcy
+    if td.active_cam() is not None:
+        from missions.m1 import draw3d
+        try:
+            draw3d.submit_frame(q, fcx, fcy)
+            return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            td.disable()      # 2D for the rest of the run
     if artpack.enabled():
         lighting.buffer().begin_frame(_m1_wing_name(), _m1_light_sig())
     q.submit(_FillDraw(C_BG_GAME), _L.FLOOR, sort_key=-1)

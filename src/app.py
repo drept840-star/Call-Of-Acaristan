@@ -3403,7 +3403,7 @@ class _GameState_(GameState):
                 gc.dismiss_note()
         elif gc.safe_keypad_active:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                gc.handle_keypad_click(event.pos)
+                gc.handle_keypad_click(get_scaled_mouse())
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     gc.safe_keypad_active = False
@@ -3419,7 +3419,7 @@ class _GameState_(GameState):
         else:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if gc.truck_hotwiring:
-                    gc.handle_hotwire_click(event.pos)
+                    gc.handle_hotwire_click(get_scaled_mouse())
                 else:
                     gc.handle_shoot()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:

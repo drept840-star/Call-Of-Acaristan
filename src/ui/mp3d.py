@@ -234,8 +234,10 @@ def held(h, base, rig, mode="aim"):
     key = (weapon, mode)
     arms = _HOLDS.get(key)
     if arms is None:
+        # a handgun has no stock for the shoulder-anchored rifle modes
+        solve = "pistol_" + mode if weapon == "pistol" and mode in ("aim", "ready") else mode
         try:
-            arms = hold_cached(h, ref, weapon, mode, key=("mp3d", weapon, mode))
+            arms = hold_cached(h, ref, weapon, solve, key=("mp3d", weapon, solve))
         except Exception:
             arms = dict(POSES["aim" if mode == "aim" else "ready"])
         _HOLDS[key] = arms

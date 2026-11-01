@@ -514,9 +514,8 @@ def handle_throw_bottle():
             "NO MOLOTOVS", (220, 60, 60), 60,
         ])
         return
-    mx, my = get_scaled_mouse()
-    world_mx = mx + STATE.camera_x
-    world_my = my + STATE.camera_y
+    from game import topdown3d as td
+    world_mx, world_my = td.mouse_world()
     dx = world_mx - STATE.player.rect.centerx
     dy = world_my - STATE.player.rect.centery
     dist = math.hypot(dx, dy)

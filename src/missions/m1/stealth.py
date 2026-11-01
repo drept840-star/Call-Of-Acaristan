@@ -361,8 +361,8 @@ def throw_brick():
     if getattr(STATE, "_m1_bricks", 0) <= 0:
         STATE.floating_texts.append([p.rect.centerx, p.rect.centery - 40, "NO BRICKS", (220, 60, 60), 60])
         return
-    mx, my = get_scaled_mouse()
-    tx, ty = mx + STATE.camera_x, my + STATE.camera_y
+    from game import topdown3d as td
+    tx, ty = td.mouse_world()
     dx, dy = tx - p.rect.centerx, ty - p.rect.centery
     dist = math.hypot(dx, dy)
     if dist > 400:

@@ -17,6 +17,7 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
 ## src/
 - `engine/` - RPE6 kernels: ai, anim, assets, collision, core, dialogue, input, level, lighting, render2d, render3d (`ae.set3d/1` data, no renderer), save, scene, settings, text, timeline, ui, world. Pure: never imports game code, no import-time side effects. Public API changes need `tools/ae_api_snapshot.py` + `tests/api/engine_api.json`. Boundary checked by `tools/check_boundaries.py`.
 - `game/` - game side of the engine boundary. Adapters `render3d_bridge.py`, `input_adapter.py`, `save_adapter.py` are the intended boundary, not violations. `world/legacy.py` bridges `STATE` objects to `engine.world`.
+  - `game/topdown3d.py` - shared 2.5D top-down host (camera presets `CAMS` per mission, `View` projection and aim via `mouse_world`, cast/prop helpers). Used by the MP arena and M1 (`missions/m1/draw3d.py`). `ACA_TD_2D=1` forces the 2D top-down view; any renderer error falls back to 2D for the run.
   - `game/content/` - authored data: levels, dialogue, timelines, sets, strings, meshes, textures, grades, lighting3d, per-mission packs `m1`-`m5`. Legacy Python tables stay reachable via `ACA_*_SRC=legacy`; they are fallbacks, not dead code.
   - `game/art/m1`-`m5` - code-authored mission art. `src/art/m5` is a compatibility shim over `game/art/m5`; edit `game/art`.
 - `engine3d/` - 3D renderer: `core.py` (software), `gl.py` (ModernGL), `rig.py`, `ik.py`, `textures.py`. Use `engine3d.Renderer(...)`.

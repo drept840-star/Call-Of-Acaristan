@@ -183,6 +183,7 @@ def start_mission(preserve_timer=False):
     STATE.thrown_bottles = []
     STATE.molotov_fires = []
     STATE.fire_zones = []
+    STATE._m1_player_burn = 0
     STATE.floating_texts.append([
         7 * TILE_SIZE + 32,
         13 * TILE_SIZE + 32,

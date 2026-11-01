@@ -9,6 +9,7 @@ from entities.art_cache import get_blood_decal, get_glow, get_shadow
 from entities.enemy_ai import Enemy, enemy_hear_shot
 from entities import corpse
 from core.state import STATE
+from game import topdown3d as td
 from ui.hud import MiniMap, draw_objective_panel, draw_pinned_radio
 from entities.player import Player, resolve_melee
 from core.interactions import (
@@ -196,6 +197,39 @@ def _fire_spread_update():
             x, y = _tc(col, M1_BAY_ROW)
             STATE.fire_zones.append(FireZone(x, y, radius=36, life=36000,
                                              damage=(6, 3), outline=False))
+
+
+BURN_FRAMES = 150      # an enemy keeps burning 2.5 s after leaving the flames
+BURN_DPS = 6.0         # hp per second while alight, before fire_weakness
+CORPSE_BURN = 300      # the body of a burning enemy smoulders 5 s
+
+
+def _tick_burning():
+    """Whoever stands in a fire zone catches. Enemies keep burning (and
+    taking a little damage) after they step out; Biribel only shows it, his
+    burn damage is the molotov's own. A burning enemy's body smoulders."""
+    zones = STATE.fire_zones
+
+    def alight(rect):
+        return any(math.hypot(rect.centerx - fz.x, rect.centery - fz.y) < fz.radius + 10
+                   for fz in zones)
+
+    for e in STATE.enemies:
+        if e.hp <= 0:
+            continue
+        if alight(e.rect):
+            e.burn = BURN_FRAMES
+        b = getattr(e, "burn", 0)
+        if b > 0:
+            e.burn = b - 1
+            e.hp -= BURN_DPS / 60.0 * e.fire_weakness
+    for c in getattr(STATE, "corpses", ()):
+        if getattr(c, "burn", 0) > 0:
+            c.burn -= 1
+    p = STATE.player
+    if p is not None and not STATE.player_dead:
+        b = getattr(STATE, "_m1_player_burn", 0)
+        STATE._m1_player_burn = BURN_FRAMES // 3 if alight(p.rect) else max(0, b - 1)
 
 
 def _exfil_van_update():
@@ -607,6 +641,7 @@ def game_update(keys):
     # the arc, the embers and the damage all read identically everywhere.
     if update_molotovs(solid_walls):
         player_hit_this_frame = True
+    _tick_burning()
     if STATE.player and (STATE.mission_phase == "escape" or (
             STATE.mission_phase == "firefight" and STATE.notebook_collected)):
         dist_to_truck = math.hypot(
@@ -716,9 +751,7 @@ def game_update(keys):
         # M2/M3/molotov targeting. Using the render camera (fcx/fcy, which
         # includes recoil kick + shake) made the crosshair world position
         # drift on every shot.
-        world_mx, world_my = get_scaled_mouse()
-        world_mx += STATE.camera_x
-        world_my += STATE.camera_y
+        world_mx, world_my = td.mouse_world(1.2)   # chest height in 2.5D
         STATE.player.angle = math.atan2(
             world_my - STATE.player.rect.centery, world_mx - STATE.player.rect.centerx
         )
@@ -892,7 +925,9 @@ def game_update(keys):
             )
             # Body topples, bleeds out, and fades instead of vanishing
             # on the death frame (entities/corpse.py).
-            corpse.spawn_corpse(e)
+            body = corpse.spawn_corpse(e)
+            if getattr(e, "burn", 0) > 0:
+                body.burn = CORPSE_BURN
             if e.is_commander:
                 STATE.pickups.append([e.rect.centerx, e.rect.centery, "keycard"])
                 STATE.floating_texts.append(
