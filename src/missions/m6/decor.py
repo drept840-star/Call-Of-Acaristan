@@ -2091,8 +2091,50 @@ def _draw_plough(surf, x, y, w, h, seed, flat_snow=True):
     pygame.draw.rect(surf, (226, 232, 240), (x - 4, bot + 3, 26, 2))
 
 
+def _draw_fuel_tank_wreck(surf, x, y, w, h):
+    """Ruptured tank: split shell, peeled plates, black gap, one end dropped."""
+    body = pygame.Rect(x + 4, y + 8, w - 8, h - 16)
+    cx, gap = body.centerx, 12
+    shell, ink, soot = (64, 60, 56), (10, 10, 12), (28, 26, 26)
+    left = pygame.Rect(body.x, body.y, cx - gap - body.x, body.h)
+    right = pygame.Rect(cx + gap + 6, body.y + 7, body.right - (cx + gap + 6), body.h - 3)
+    # Black interior first, ragged, then the halves over it.
+    pygame.draw.polygon(surf, ink, [(left.right - 4, body.y - 2), (cx, body.y + 6),
+                                    (right.x + 4, body.y + 3), (right.x + 6, right.bottom),
+                                    (cx + 4, body.bottom + 2), (left.right - 6, body.bottom)])
+    pygame.draw.rect(surf, (48, 22, 14), (cx - 6, body.centery - 6, 10, 12))
+    for half, rl, rr in ((left, 9, 0), (right, 0, 9)):
+        pygame.draw.rect(surf, ink, half.inflate(3, 3), border_top_left_radius=rl + 1,
+                         border_bottom_left_radius=rl + 1, border_top_right_radius=rr + 1,
+                         border_bottom_right_radius=rr + 1)
+        pygame.draw.rect(surf, shell, half, border_top_left_radius=rl,
+                         border_bottom_left_radius=rl, border_top_right_radius=rr,
+                         border_bottom_right_radius=rr)
+        pygame.draw.rect(surf, _shift(shell, 14), (half.x + 3, half.y + 2, half.w - 6, half.h // 5))
+        for k in range(3):
+            pygame.draw.line(surf, soot, (half.x + 8 + k * 17, half.y + 4),
+                             (half.x + 14 + k * 17, half.bottom - 4), 3)
+    # Peeled plate teeth curling out of each rupture edge.
+    for ex, d, dy in ((left.right, 1, 0), (right.x, -1, 5)):
+        for ty, ln in ((body.y + 6, 12), (body.y + 24, 9), (body.centery + 8, 13)):
+            ty += dy
+            tip = [(ex, ty), (ex + d * ln, ty - 8), (ex + d * (ln - 5), ty + 7)]
+            pygame.draw.polygon(surf, ink, [(px + d, py) for px, py in tip], 0)
+            pygame.draw.polygon(surf, _shift(shell, 34), tip)
+    pygame.draw.circle(surf, _shift(shell, -20), (left.x + 16, body.centery), 4)
+    pygame.draw.rect(surf, (34, 34, 38), (body.x + 18, body.bottom - 2, 12, 6))
+    pygame.draw.polygon(surf, (34, 34, 38), [(right.right - 28, right.bottom + 3),
+                                             (right.right - 14, right.bottom + 1),
+                                             (right.right - 12, right.bottom + 6),
+                                             (right.right - 26, right.bottom + 7)])
+    pygame.draw.rect(surf, (10, 12, 16), (body.x + 2, body.bottom + 4, body.w - 4, 3))
+
+
 def _draw_fuel_tank(surf, x, y, w, h, seed, alive=True):
     """Yard fuel tank: sits on saddles, snow on the crown, frost on the seam."""
+    if not alive:
+        _draw_fuel_tank_wreck(surf, x, y, w, h)
+        return
     top = y + 8
     body = pygame.Rect(x + 4, top, w - 8, h - 16)
     pygame.draw.rect(surf, _INK, body.inflate(3, 3))
@@ -2125,7 +2167,8 @@ def fuel_tank_surface(w, h, alive=True):
     if surf is None:
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
         _draw_fuel_tank(surf, 0, 0, w, h, 0, alive=alive)
-        _settle_snow(surf, 0)
+        if alive:
+            _settle_snow(surf, 0)
         _FUEL_TANK_SURF[key] = surf
     return surf
 
