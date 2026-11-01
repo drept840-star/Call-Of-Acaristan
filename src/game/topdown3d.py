@@ -250,6 +250,9 @@ def dot(col, size):
     def draw(s, sx, sy, scale, z):
         rad = max(1, int(size * 0.5 + scale * 0.02))
         pygame.draw.rect(s, col, (int(sx) - rad // 2, int(sy) - rad // 2, rad + 1, rad + 1))
+    # the GL composite depth-tests only this box; without it every dot
+    # masks the generic 3.5 m reach (a molotov burst is 200+ dots)
+    draw.bounds_m = (0.03 + size * 0.01, 0.03 + size * 0.01)
     return draw
 
 
@@ -261,4 +264,5 @@ def blood_pool(k, col=(82, 14, 16)):
         if w < 2:
             return
         pygame.draw.ellipse(s, col, (int(sx) - w // 2, int(sy) - h // 2, w, h))
+    draw.bounds_m = (0.3 + 0.35 * k, 0.25 + 0.3 * k)
     return draw

@@ -569,8 +569,7 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
             if _glyph(col, row) == "F":
                 x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
                 p = (x, 1.05, z)
-                from cutscenes import m7world3d as _m7
-                _m7.fire(r, (x, 0.9, z), tm, seed=col * 7 + row, size=0.3, smoky=False)
+                _fire(r, (x, 0.9, z), tm, col * 7 + row, 0.3)
                 flashes.append({"pos": p, "color": (255, 140, 60), "intensity": 0.9, "range": 5.0})
                 pools.append({"pos": p, "range": 3.0, "color": (255, 140, 60), "intensity": 0.9})
     p = STATE.player
@@ -595,6 +594,52 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
 
 def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0):
     td.put(r, mesh, pos, yaw, roll, scale, cache=_cache["packed"], pitch=pitch)
+
+
+_FLAMES = {}
+
+
+def _fire(r, pos, tm, seed, size):
+    """``m7world3d.fire`` (no smoke) with the flame mesh packed once per
+    animation step at the origin and moved per frame: re-packing every
+    flame every frame was most of a molotov's cost. The step boundary is
+    staggered by seed so a fire's flames do not all re-pack on one frame."""
+    from cutscenes import m7world3d as _m7
+    from cutscenes import m6fx3d as _fx
+    if size <= 0.0:
+        return
+    if not hasattr(r, "add_packed"):
+        _m7.fire(r, pos, tm, seed=seed, size=size, smoky=False)
+        return
+    x, y, z = pos
+    flicker = _m7._fire_flicker(tm, seed)
+    r.add_sprite((x, y + size * 0.8, z),
+                 _fx.glow((255, 111, 34), size * 1.9, tm, flicker=0.08, seed=seed,
+                          core=(255, 196, 96), intensity=0.34 * flicker, max_px=70),
+                 layer=_fx.FX_LAYER)
+    step_ms = _m7._FIRE_STEP_MS
+    step = int((tm + (seed % 4) * step_ms / 4.0) // step_ms)
+    cam = getattr(r, "cam", None)
+    ang = 0.0 if cam is None else math.atan2(cam[2] - z, cam[0] - x)
+    ang = round(ang * 16.0 / math.pi) * math.pi / 16.0
+    yk = round(y, 2)
+    sq = round(math.log(size) * 12.0)        # ~8% size steps: a fading fire still hits
+    key = (seed, yk, sq, ang)
+    hit = _FLAMES.get(key)
+    if hit is None or hit[0] != step:
+        if len(_FLAMES) > 512:
+            _FLAMES.clear()
+        m = _m7.flame_mesh((0.0, yk, 0.0), step * step_ms, seed, math.exp(sq / 12.0),
+                           heat=_m7._fire_flicker(step * step_ms, seed),
+                           cam=(math.cos(ang) * 10.0, yk, math.sin(ang) * 10.0))
+        faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
+        hit = _FLAMES[key] = (step, r.pack(m.verts, faces))
+    if hit[1] is not None:
+        arr = hit[1].copy()
+        arr[:, 0] += x
+        arr[:, 1] += y - yk
+        arr[:, 2] += z
+        r.add_packed(arr)
 
 
 def _cut_zone():
@@ -775,7 +820,6 @@ def _feet(r, x, y, col, rad=0.42):
 def _burning(r, x, y, k, tm, seed, flashes, lying=False):
     """Flames on a body: three licks up a standing one, a row along a
     fallen one. ``k`` 0..1 is how hard it still burns."""
-    from cutscenes import m7world3d as _m7
     if k <= 0.0:
         return
     bx, _, bz = to3(x, y)
@@ -784,7 +828,7 @@ def _burning(r, x, y, k, tm, seed, flashes, lying=False):
     else:
         licks = ((0.0, 0.3, -0.3, 0.42), (0.16, 0.9, -0.28, 0.34), (-0.1, 1.4, -0.24, 0.26))
     for i, (dx, hy, dz, size) in enumerate(licks):
-        _m7.fire(r, (bx + dx, hy, bz + dz), tm, seed=seed + i, size=size * k, smoky=False)
+        _fire(r, (bx + dx, hy, bz + dz), tm, seed + i, size * k)
     if len(flashes) < 6:
         flashes.append({"pos": (bx, 1.0, bz), "color": (255, 128, 48),
                         "intensity": 1.2 * k, "range": 3.5})
@@ -985,7 +1029,6 @@ def _fuel_pool(x, z, rad, seed):
 
 def _draw_fx(r, flashes, tm):
     from cutscenes import m6fx3d as _fx
-    from cutscenes import m7world3d as _m7
     from core.config import C_BULLET
     t = _now_s()
     for pu in STATE.pickups:
@@ -1029,8 +1072,7 @@ def _draw_fx(r, flashes, tm):
             d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
             size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
             # no smoke: from the top-down camera it smears over the walls behind
-            _m7.fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, seed=int(fz.x) + i,
-                     size=size, smoky=False)
+            _fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size)
         flashes.append({"pos": (x, 1.0, z), "color": (255, 140, 60), "intensity": 1.0 * heat,
                         "range": 4.0 + rad})
     from engine3d import m_apply, m_mul, rot_x, rot_y
