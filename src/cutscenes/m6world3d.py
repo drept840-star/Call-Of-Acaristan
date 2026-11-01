@@ -32,7 +32,7 @@ import pygame
 from core.config import HEIGHT, SCENE_TOP, WIDTH, font_terminal_small
 from core.outfits import OUTFIT_GUARD, biribel_3d
 from cutscenes import m6fx3d as _fx
-from cutscenes.cast3d import humanoid3d, spec3d
+from cutscenes.cast3d import humanoid3d, spec3d, third_person_rifle
 
 SAFE_TOP = SCENE_TOP + 6
 SAFE_BOT = HEIGHT - 158
@@ -448,7 +448,7 @@ def _guard_humanoid(kind, extra=None):
             out[key] = variant["body"][key]
     if extra:
         out.update(extra)
-    return Humanoid(out)
+    return third_person_rifle(Humanoid(out))
 
 
 # HD train cast (opt-in; the films keep the plain rigs): the coats are lifted a
@@ -529,6 +529,8 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
             if "rifle" in flags and not hd:
                 h._rifle = _k9_rig_mesh()
                 h._weapon = "k9"
+                # GL caches rig VBOs by spec repr; the K9 needs its own.
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|k9"
             elif "shotgun" in flags and not hd:
                 from engine3d.rig import shotgun_mesh
                 h._rifle = shotgun_mesh()
@@ -548,7 +550,7 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
                 h._gl_spec_key = repr(sorted(h.spec.items())) + "|m7rifle"
         elif key == "guard":
             from engine3d import Humanoid
-            h = Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra))
+            h = third_person_rifle(Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra)))
         elif key == "ucilev":
             h = humanoid3d("ucilev", rifle="sniper", **extra)
         else:

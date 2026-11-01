@@ -51,11 +51,20 @@ _RIG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, -0.035, 0.30), guard=(0.0, -0.035, 
 # rides out on the shoulder instead of in the chest.
 _M7 = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.038, 0.258), guard=(0.0, 0.038, 0.110),
            butt=(0.0, 0.025, -0.243), pocket=(0.11, 0.0, 0.0))
+# mirrored from game/content/meshes/akrifle.mesh.json meta (tools/ae_import_akrifle.py)
+_AK = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.0235, 0.2835), guard=(0.0, -0.0109, 0.1065),
+           butt=(0.0, 0.0038, -0.2857))
+# mirrored from game/content/meshes/ak74.mesh.json meta (tools/ae_build_ak74.py)
+# The authored AK-74 is a real 0.940 m 6P20, so its stock reaches 24 mm further
+# back than the imported asset's; the deeper butt is what puts the length of
+# pull at 0.355 m instead of 0.30 m.
+_AK74 = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.029, 0.3125), guard=(0.0, 0.01, 0.07),
+             butt=(0.0, -0.007, -0.31))
 _SG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.025, 0.33), guard=(0.0, 0.025, 0.20),
            butt=(0.0, 0.045, -0.40))
 GRIPS = {"rifle": _RIG, "sniper": dict(_RIG, fore=(0.0, -0.035, 0.34), guard=(0.0, -0.035, 0.20)),
-         "os12": _RIG, "k9": _K9, "shotgun": _SG, "m7rifle": _M7,
-         "pistol": dict(grip=(0.0, 0.0, 0.0), fore=None, guard=None, butt=None)}
+         "os12": _RIG, "k9": _K9, "shotgun": _SG, "m7rifle": _M7, "akrifle": _AK,
+         "ak74": _AK74, "pistol": dict(grip=(0.0, 0.0, 0.0), fore=None, guard=None, butt=None)}
 
 # anchor "butt": butt point sits ``pocket`` from the right shoulder (torso-local);
 # anchor "grip": the right hand sits at ``at`` (torso-local, origin at the hip).
@@ -281,7 +290,13 @@ _CACHE = {}
 
 def hold_cached(hum, pose, weapon, mode, aim=None, key=None):
     """hold_weapon for per-frame callers: the arm solve is keyed on the body pose
-    rounded to whole degrees, so a held stance costs one solve, not one per frame."""
+    rounded to whole degrees, so a held stance costs one solve, not one per frame.
+
+    A generic ``rifle`` request resolves to the rig's own grip set, so an
+    imported mesh (the shared AK) is never solved against the box gun's
+    fore-end."""
+    if weapon == "rifle":
+        weapon = weapon_of(hum)
     body = tuple(sorted((k, round(v)) for k, v in pose.items()
                         if k not in _HOLD_KEYS and k not in _LEG_KEYS
                         and isinstance(v, (int, float))))

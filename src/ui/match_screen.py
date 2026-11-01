@@ -262,39 +262,160 @@ class Wire(object):
     """
 
     MAX_QUEUED_BYTES = 256 * 1024
+    RULES_KEY = "ms-rules"
+    # Keep the kernel's share of the backlog small. Windows auto-tunes the
+    # send buffer far past what a slow relay drains, and bytes handed to the
+    # kernel can no longer be coalesced, so a congested bore hop used to
+    # build seconds of stale snapshots there.
+    KERNEL_SNDBUF = 8 * 1024
+    # Nominal gaps between latest-state messages. When the measured round
+    # trip climbs above its baseline the link is queueing (a slow relay
+    # holds the backlog where nothing can drop it), so these stretch by
+    # ``slow`` until the link drains faster than we fill it.
+    PACE_GAP = {P.T_SNAPSHOT: 1.0 / 20, P.T_MATCH_STATE: 0.15,
+                RULES_KEY: 0.5, P.T_INPUT: 1.0 / 30}
+    # Unpaced floor. The host keeps the newest input per tick, so 30 Hz of
+    # held state is plenty over TCP and halves the upstream a relay carries.
+    MIN_GAP = {P.T_INPUT: 1.0 / 30}
+    MAX_SLOW = 8
+    BACKLOG_MS = 250.0
+    CALM_MS = 120.0
 
     def __init__(self, sock):
         self.sock = sock
-        self.out = deque()       # [bytes, offset, message type]
+        self.out = deque()       # [bytes, offset, coalesce key or None]
         self.queued_bytes = 0
         self.lock = threading.Lock()
+        self.slow = 1
+        self._buttons_sent = None
+        self._held = {}          # key -> newest data waiting for its gap
+        self._next_ok = {}
+        self._mins = deque()     # [second, lowest rtt seen in it]
+        self._hold_until = 0.0
+        self._over_since = None
+        self._calm_since = None
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF,
+                            self.KERNEL_SNDBUF)
+        except (OSError, AttributeError):
+            pass
+
+    def _coalesce_key(self, obj):
+        """Messages where only the newest copy matters, else None."""
+        if not isinstance(obj, dict):
+            return None
+        kind = obj.get("t")
+        if kind == P.T_SNAPSHOT:
+            return kind
+        if kind == P.T_MATCH_STATE:
+            # The sim's partial rules packet must never replace a pending
+            # full room state, which may carry a phase change.
+            return kind if "session_phase" in obj else self.RULES_KEY
+        if kind == P.T_INPUT:
+            # Movement is latest-state, but a weapon request is a one-shot
+            # and a button change is an edge: a quick click must not be
+            # replaced by the release that follows it.
+            if ("w" not in obj and "c" not in obj
+                    and obj.get("b") == self._buttons_sent):
+                return kind
+        return None
+
+    def pace_sample(self, rtt_ms, now=None):
+        """Feed one round-trip measurement; adjusts ``slow``."""
+        now = time.monotonic() if now is None else now
+        with self.lock:
+            # Baseline = lowest round trip of the last ~10 s, so it follows a
+            # route that really changed and forgets a lucky early sample.
+            second = int(now)
+            if self._mins and self._mins[-1][0] == second:
+                self._mins[-1][1] = min(self._mins[-1][1], rtt_ms)
+            else:
+                self._mins.append([second, rtt_ms])
+            while self._mins[0][0] < second - 10:
+                self._mins.popleft()
+            # Cap the baseline: a "normal" over 300 ms is a backlog that was
+            # already there when measuring began, not the route.
+            excess = rtt_ms - min(300.0, min(m[1] for m in self._mins))
+            if excess > self.BACKLOG_MS:
+                self._calm_since = None
+                if self._over_since is None:
+                    self._over_since = now
+                # A lone retransmit stall is not a backlog; a backlog stays.
+                if (now - self._over_since >= 0.5 and now >= self._hold_until
+                        and self.slow < self.MAX_SLOW):
+                    self.slow *= 2
+                    # The slower rate needs about a round trip to show up
+                    # in the measurements; doubling sooner overshoots.
+                    self._hold_until = now + max(1.0, rtt_ms / 1000.0)
+            elif excess < self.CALM_MS:
+                self._over_since = None
+                if self._calm_since is None:
+                    self._calm_since = now
+                elif (self.slow > 1 and now - self._calm_since >= 2.0
+                        and now >= self._hold_until):
+                    self.slow //= 2
+                    self._calm_since = now
+            else:
+                self._over_since = None
+                self._calm_since = None
+
+    def _enqueue_locked(self, data, key):
+        # A newer state replaces every unsent older copy instead of queueing
+        # behind it.
+        if key is not None and self.out:
+            kept = deque()
+            for item in self.out:
+                if item[2] == key and item[1] == 0:
+                    self.queued_bytes -= len(item[0])
+                else:
+                    kept.append(item)
+            self.out = kept
+        if self.queued_bytes + len(data) > self.MAX_QUEUED_BYTES:
+            # Never evict reliable control/chat. If the queue is full,
+            # reject the new item and let the transport watchdog recover.
+            return False
+        self.out.append([data, 0, key])
+        self.queued_bytes += len(data)
+        return True
 
     def _send(self, obj):
         try:
             data = P.encode(obj)
         except (TypeError, ValueError, OverflowError):
             return False
-        kind = obj.get("t") if isinstance(obj, dict) else None
         with self.lock:
-            # When a TCP-only peer falls behind, newer snapshots replace the
-            # last unsent snapshot instead of growing an ever-older backlog.
-            if kind == P.T_SNAPSHOT and self.out:
-                tail = self.out[-1]
-                if tail[2] == P.T_SNAPSHOT and tail[1] == 0:
-                    self.queued_bytes += len(data) - len(tail[0])
-                    self.out[-1] = [data, 0, kind]
-                    return self.queued_bytes <= self.MAX_QUEUED_BYTES
-            if self.queued_bytes + len(data) > self.MAX_QUEUED_BYTES:
-                # Never evict reliable control/chat. If the queue is full,
-                # reject the new item and let the transport watchdog recover.
-                return False
-            self.out.append([data, 0, kind])
-            self.queued_bytes += len(data)
-        return True
+            key = self._coalesce_key(obj)
+            if isinstance(obj, dict) and obj.get("t") == P.T_INPUT:
+                self._buttons_sent = obj.get("b")
+                if key is None:
+                    # This edge goes now and supersedes any held movement.
+                    self._held.pop(P.T_INPUT, None)
+            gap = self._gap(key)
+            if gap:
+                now = time.monotonic()
+                if now < self._next_ok.get(key, 0.0):
+                    self._held[key] = data
+                    return True
+                self._held.pop(key, None)
+                self._next_ok[key] = now + gap
+            return self._enqueue_locked(data, key)
+
+    def _gap(self, key):
+        if key is None:
+            return 0.0
+        if self.slow > 1:
+            return self.PACE_GAP[key] * self.slow
+        return self.MIN_GAP.get(key, 0.0)
 
     def flush(self):
         """Write as much as the nonblocking socket will accept."""
         with self.lock:
+            if self._held:
+                now = time.monotonic()
+                for key in list(self._held):
+                    if now >= self._next_ok.get(key, 0.0):
+                        self._next_ok[key] = now + self._gap(key)
+                        self._enqueue_locked(self._held.pop(key), key)
             while self.out:
                 data, offset, kind = self.out[0]
                 try:
@@ -532,6 +653,7 @@ class MatchScreen(object):
         # 20 Hz packets instead of stepping at packet rate.
         self._client_tick = 0.0
         self._latest_snap_tick = None
+        self._latest_snap_at = 0.0
         self.buf = b""
         self.seq = 0
         # Client-side connection diagnostics. These are kept separate from
@@ -885,6 +1007,17 @@ class MatchScreen(object):
             state["countdown"] = 0.0
         state["scoreboard"] = self.sim.scoreboard()
         self._match_state = state
+        # Most of these packets repeat the last one: clients run the
+        # countdown locally and the sim's 2 Hz rules packet carries the
+        # clock, so resending 7 times a second mostly filled slow relays
+        # with backlog. Changes still go at once.
+        same = dict((k, v) for k, v in state.items()
+                    if k not in ("countdown", "clock"))
+        if (not force and same == getattr(self, "_room_state_sent", None)
+                and now - getattr(self, "_room_state_sent_at", 0.0) < 1.0):
+            return False
+        self._room_state_sent = same
+        self._room_state_sent_at = now
         return self.sess.send_match_state(state)
 
     def share_code(self):
@@ -1311,6 +1444,7 @@ class MatchScreen(object):
                 self._udp_fallback_until = 0.0
                 self._udp_last_snapshot = now
                 self._latest_snap_tick = parsed[0]
+                self._latest_snap_at = now
                 self.net_telemetry.note_snapshot(parsed[0])
         now = time.monotonic()
         if self._udp_active and now - self._udp_last_snapshot > UDP.UDP_STALE_SECONDS:
@@ -1732,6 +1866,18 @@ class MatchScreen(object):
                             self.sess._accept_action(raw, peer_id=peer.player_id)
                         continue
                     if self._session_phase == "playing":
+                        # The input echoes the newest snapshot tick and how
+                        # long the client has held it, so the remainder is
+                        # the round trip, backlog included.
+                        sk, sa = raw.get("sk"), raw.get("sa")
+                        # A snapshot held for over a second (lobby, countdown)
+                        # says nothing about the pipe, so it is not a sample.
+                        if (isinstance(sk, int) and isinstance(sa, int)
+                                and 0 <= sa <= 1000):
+                            lag = (self.sess.tick - sk) & 0xFFFFFFFF
+                            rtt = lag * 1000.0 / TICK_RATE - sa
+                            if lag < 0x80000000 and rtt >= 0.0:
+                                peer.wire.pace_sample(rtt)
                         self.sess._accept_input(raw, peer_id=peer.player_id)
         self._pump_udp_host()
         # The lobby is a real pre-game state, not an auto-start wait: accepted
@@ -2150,7 +2296,9 @@ class MatchScreen(object):
                     continue
                 pong = P.parse_pong(raw)
                 if pong is not None:
-                    self.net_telemetry.accept_pong(pong)
+                    if self.net_telemetry.accept_pong(pong):
+                        self.wire.pace_sample(
+                            self.net_telemetry._last_rtt_sample)
                     continue
                 # A chat line from the host's relay. Read before the gameplay
                 # dispatch because it shares the socket with snapshots, and
@@ -2212,6 +2360,7 @@ class MatchScreen(object):
                     self.sess._accept_snapshot(P.make_snapshot(*msg))
                     self.net_telemetry.note_snapshot(msg[0])
                     self._latest_snap_tick = msg[0]
+                    self._latest_snap_at = time.monotonic()
                     # Lobby snapshots seed positions but do not start play; the
                     # only authority for that transition is the host's room
                     # state, followed by the frozen countdown.
@@ -2238,6 +2387,9 @@ class MatchScreen(object):
         # simulation ticks. This runs in the frozen lobby too, which makes the
         # connection indicator useful before the match starts.
         ping_now = time.monotonic()
+        # On the TCP fallback the ping also drives upstream pacing, so it
+        # has to notice a backlog within a second, not several.
+        self.net_telemetry.PING_INTERVAL = 2.0 if self._udp_active else 0.5
         if self.net_telemetry.ping_due(ping_now):
             nonce = self.net_telemetry.begin_ping(ping_now)
             self.wire._send(P.make_ping(nonce))
@@ -2301,6 +2453,12 @@ class MatchScreen(object):
                      "mx": ax, "my": ay, "a": angle,
                      "b": buttons,
                      "rt": int(round(render_tick)) & 0xFFFFFFFF}
+            if self._latest_snap_tick is not None:
+                # Newest snapshot tick plus how long we have held it: the
+                # host turns this into a true round trip for TCP pacing.
+                msg_in["sk"] = int(self._latest_snap_tick) & 0xFFFFFFFF
+                msg_in["sa"] = int((time.monotonic() - self._latest_snap_at)
+                                   * 1000.0)
             if not frozen and self._want_weapon is not None:
                 msg_in["w"] = self._want_weapon
             if not frozen and self._want_cycle:
@@ -3638,7 +3796,7 @@ class MatchScreen(object):
                 return ("Internet tunnel lost - LAN only; leave and host again.",
                         (240, 200, 80))
             if "bore was not found" in self.forward_note:
-                return ("LAN only - bore missing; reinstall, use Hamachi/Tailscale or forward.",
+                return ("LAN only - bore download failed; use Hamachi/Tailscale or forward.",
                         (240, 200, 80))
             if "cloudflared is not installed" in self.forward_note:
                 return ("LAN only - tunnel missing; use Hamachi/Tailscale or forward the port.",
@@ -4459,6 +4617,7 @@ class MatchScreen(object):
         self._peer_addr = None
         self._client_tick = 0.0
         self._latest_snap_tick = None
+        self._latest_snap_at = 0.0
         self.buf = b""
         self.paused = False
         self._pause_rects = {}

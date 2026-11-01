@@ -6,6 +6,8 @@ Configured ngrok on PATH is an optional fallback. Cloudflare quick tunnels are
 not used: their public HTTP hostname is not a directly connectable TCP endpoint.
 """
 import atexit
+import hashlib
+import io
 import os
 import sys
 import queue
@@ -14,6 +16,15 @@ import shutil
 import subprocess
 import threading
 import time
+import urllib.request
+import zipfile
+
+# Pinned official Windows x64 release; tools/download_bore.py uses the same pin.
+BORE_VERSION = "0.6.0"
+BORE_URL = ("https://github.com/ekzhang/bore/releases/download/v0.6.0/"
+            "bore-v0.6.0-x86_64-pc-windows-msvc.zip")
+BORE_ARCHIVE_SHA256 = "01709c64fe2787cdc9a21d7030b0f08ad72dff0c36b7ecb72f4f667a55a34b4f"
+BORE_BINARY_SHA256 = "e8c1096ea01460ba9dbf30017b5eccf2100f63ef2c701930e56fcaca239b48cc"
 
 _ENDPOINT_RE = re.compile(r"(?:tcp://|listening at )([A-Za-z0-9.-]+):(\d{1,5})(?!\d)")
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -41,7 +52,8 @@ def explain_error(error):
     if "err_ngrok_4018" in low or "authtoken" in low:
         return "ngrok account is not configured; use bundled bore instead"
     if "bore is not installed" in low:
-        return "bore was not found in assets/bin; reinstall the game or run tools/download_bore.py"
+        return ("bore was not found and could not be downloaded; check the "
+                "connection or antivirus, or run tools/download_bore.py")
     return text
 
 
@@ -176,12 +188,68 @@ def find_bore():
                 candidate = os.path.join(base, sub, name)
                 if os.path.isfile(candidate) and (os.name == "nt" or os.access(candidate, os.X_OK)):
                     return candidate
+    cached = os.path.join(bore_cache_dir(), name)
+    if os.path.isfile(cached) and _sha256_file(cached) == BORE_BINARY_SHA256:
+        return cached
     return shutil.which("bore")
+
+
+def bore_cache_dir():
+    """Per-user folder for a downloaded bore; the install folder may be read-only."""
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    return os.path.join(base, "Acaristan", "bin")
+
+
+def _sha256_file(path):
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return ""
+
+
+def download_bore(dest, timeout=30.0):
+    """Fetch the pinned bore release into *dest* after checking both hashes.
+
+    Returns "" on success or a short reason. Never raises.
+    """
+    try:
+        with urllib.request.urlopen(BORE_URL, timeout=timeout) as response:
+            data = response.read()
+        if hashlib.sha256(data).hexdigest() != BORE_ARCHIVE_SHA256:
+            return "bore archive checksum mismatch"
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            names = [n for n in archive.namelist() if os.path.basename(n) == "bore.exe"]
+            if len(names) != 1:
+                return "bore release must contain exactly one bore.exe"
+            binary = archive.read(names[0])
+        if hashlib.sha256(binary).hexdigest() != BORE_BINARY_SHA256:
+            return "bore executable checksum mismatch"
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        temp = dest + ".tmp"
+        with open(temp, "wb") as f:
+            f.write(binary)
+        os.replace(temp, dest)
+    except Exception as exc:
+        return "bore download failed: %s" % (exc,)
+    # Antivirus may quarantine the file as soon as it lands.
+    if _sha256_file(dest) != BORE_BINARY_SHA256:
+        return "bore was removed after download (antivirus?)"
+    return ""
 
 
 def start_bore_tunnel(local_port, timeout=40.0, cancelled=None):
     """Expose localhost through bore.pub. Caller must stop the returned process."""
     exe = find_bore()
+    if not exe and os.name == "nt":
+        # Source copies do not carry the gitignored binary; fetch it once.
+        dest = os.path.join(bore_cache_dir(), "bore.exe")
+        err = download_bore(dest, timeout=min(30.0, timeout))
+        if cancelled is not None and cancelled():
+            return None, None, "tunnel start cancelled"
+        if err:
+            return None, None, "bore is not installed (%s)" % err
+        exe = dest
     if not exe:
         return None, None, "bore is not installed"
     env = os.environ.copy()

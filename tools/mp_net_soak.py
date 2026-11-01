@@ -41,12 +41,16 @@ class TcpImpairmentProxy(object):
 
     def __init__(self, target, latency_ms=0.0, jitter_ms=0.0,
                  loss_percent=0.0, stall_ms=120.0, seed=None,
-                 udp_enabled=True):
+                 udp_enabled=True, rate_kbps=0.0, queue_kb=1024.0):
         self.target = target
         self.latency = max(0.0, latency_ms) / 1000.0
         self.jitter = max(0.0, jitter_ms) / 1000.0
         self.loss = min(100.0, max(0.0, loss_percent)) / 100.0
         self.stall = max(0.0, stall_ms) / 1000.0
+        # A rate cap models a slow relay hop: bytes beyond the bottleneck
+        # queue stay in the sender's own buffers, where real backlogs form.
+        self.rate = max(0.0, rate_kbps) * 1024.0
+        self.queue_limit = int(max(1.0, queue_kb) * 1024)
         self.rng = random.Random(seed)
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -92,6 +96,11 @@ class TcpImpairmentProxy(object):
         upstream = None
         try:
             upstream = socket.create_connection(self.target, timeout=3.0)
+            if self.rate:
+                # Loopback buffers would otherwise add far more queue than
+                # the modelled bottleneck itself.
+                for sock in (client, upstream):
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8192)
             client.setblocking(False)
             upstream.setblocking(False)
             # Each entry is [delivery_time, bytes]. The monotonically ordered
@@ -102,9 +111,9 @@ class TcpImpairmentProxy(object):
             while not self.stopped.is_set():
                 now = time.monotonic()
                 read_socks = []
-                if sum(len(x[1]) for x in to_host) < (1 << 20):
+                if sum(len(x[1]) for x in to_host) < self.queue_limit:
                     read_socks.append(client)
-                if sum(len(x[1]) for x in to_client) < (1 << 20):
+                if sum(len(x[1]) for x in to_client) < self.queue_limit:
                     read_socks.append(upstream)
                 write_socks = []
                 if to_host and to_host[0][0] <= now:
@@ -118,8 +127,10 @@ class TcpImpairmentProxy(object):
                 ready_r, ready_w, _ = select.select(read_socks, write_socks,
                                                     [], timeout)
                 for src in ready_r:
+                    queue = to_host if src is client else to_client
+                    room = self.queue_limit - sum(len(x[1]) for x in queue)
                     try:
-                        chunk = src.recv(65536)
+                        chunk = src.recv(max(1, min(65536, room)))
                     except (BlockingIOError, OSError):
                         continue
                     if not chunk:
@@ -133,6 +144,9 @@ class TcpImpairmentProxy(object):
                     if self.rng.random() < self.loss:
                         delay += self.stall
                     due = max(now + delay, last_due[dest])
+                    if self.rate:
+                        due = max(now + delay,
+                                  last_due[dest] + len(chunk) / self.rate)
                     last_due[dest] = due
                     queue.append([due, chunk])
                 for dest in ready_w:
@@ -389,6 +403,12 @@ def main(argv=None):
     ap.add_argument("--stall-ms", type=float, default=120.0,
                     help="extra delay for a simulated loss event")
     ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--rate-kbps", type=float, default=0.0,
+                    help="cap each TCP direction to this many KiB/s (0 = no cap)")
+    ap.add_argument("--queue-kb", type=float, default=1024.0,
+                    help="bottleneck queue in the TCP proxy (KiB, default 1024)")
+    ap.add_argument("--max-view-delay-ms", type=float, default=0.0,
+                    help="fail if a client's newest snapshot trails the host by more")
     ap.add_argument("--lag-shot-check", action="store_true",
                     help="run a real delayed UDP shot against a moving target; uses 2 players")
     ap.add_argument("--block-udp", action="store_true",
@@ -428,7 +448,8 @@ def main(argv=None):
             proxy = TcpImpairmentProxy(
                 target, args.latency_ms, args.jitter_ms, args.loss_percent,
                 args.stall_ms, seed=args.seed + i,
-                udp_enabled=not args.block_udp)
+                udp_enabled=not args.block_udp, rate_kbps=args.rate_kbps,
+                queue_kb=args.queue_kb)
             proxies.append(proxy)
             client = MatchScreen()
             client.open_panel()
@@ -466,6 +487,10 @@ def main(argv=None):
             _run_lag_shot_check(host, clients[0], proxies[0])
 
         end = time.monotonic() + args.seconds
+        settle = time.monotonic() + args.seconds * 0.5
+        # How far each client's newest snapshot trails the host sim, sampled
+        # over the second half so a standing backlog shows up, not warm-up.
+        view_delay = [[] for _ in clients]
         frame = 0
         last = time.monotonic()
         while time.monotonic() < end:
@@ -474,6 +499,12 @@ def main(argv=None):
             last = now
             _advance(screens, dt, keys, idle_mouse)
             frame += 1
+            if now >= settle:
+                for index, client in enumerate(clients):
+                    snap = client._latest_snap_tick
+                    if snap is not None:
+                        view_delay[index].append(
+                            (host.sess.tick - snap) * 1000.0 / 60.0)
             # A ~60 Hz pump makes this a modest soak rather than a CPU burner.
             time.sleep(max(0.0, 1.0 / 60.0 - (time.monotonic() - now)))
 
@@ -491,6 +522,13 @@ def main(argv=None):
                       stats["snapshots_received"], stats["snapshot_hz"],
                       stats["snapshot_gaps"], stats["inputs_sent"],
                       stats["quality"]))
+            delays = view_delay[index - 1]
+            if delays:
+                print("  player %d: view delay avg=%.0fms max=%.0fms" % (
+                    index, sum(delays) / len(delays), max(delays)))
+                if args.max_view_delay_ms and max(delays) > args.max_view_delay_ms:
+                    failures.append("player %d view delay %.0fms over %gms" % (
+                        index, max(delays), args.max_view_delay_ms))
             if stats["pongs_received"] == 0:
                 failures.append("player %d received no heartbeat response" % index)
             if stats["snapshots_received"] < 2:
