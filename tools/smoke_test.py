@@ -10469,20 +10469,24 @@ def check_m7_goat_rescue():
                 if R._near_post():
                     FY.interact()
             elif R.phase == "repairing":
-                if R.repair_time >= 1.0 and not released:
+                if R.set_time >= 1.0 and not released:
                     released = True     # one frame off E: progress must hold
+                    held = R.set_time
                     keys = _Keys()
                     m7.game_update(keys)
-                    assert R.phase == "repairing" and R.repair_time >= 1.0
+                    assert R.phase == "repairing" and R.set_time >= held
                     continue
                 # The repair is a balance: grip with E and steer against the
-                # post's lean (the on-screen card says so). Holding E alone
-                # pins the post over and makes no progress.
+                # post's lean to set it, then cinch three wraps with SPACE
+                # while the marker crosses the target.
                 keys = _Keys({pygame.K_e: True})
                 if R.post_lean > 0.06:
                     keys[pygame.K_a] = True
                 elif R.post_lean < -0.06:
                     keys[pygame.K_d] = True
+                if (R.repair_stage == "wrap" and not R.prev_cinch
+                        and abs(R._wrap_marker() - R.wrap_target) <= GR.WRAP_PERFECT):
+                    keys[pygame.K_SPACE] = True
             elif R.phase in ("overlook", "repair_talk"):
                 walking = R.route_index < len(GR.TO_OVERLOOK) or R.phase == "repair_talk"
                 keys = steer(R.bodi if walking else GR.OVERLOOK)
@@ -10491,7 +10495,7 @@ def check_m7_goat_rescue():
             m7.game_update(keys)
             if frame % 200 == 0:
                 m7.game_draw(config.screen, 0, 0)
-        assert seen == ["outbound", "approach", "herd", "repair", "repairing",
+        assert seen == ["outbound", "reveal", "approach", "herd", "repair", "repairing",
                         "repair_talk", "overlook", "bike"], seen
         assert spooked and released and R.repaired and R.overlook_spoken
         assert STATE.mission7_stage == "runner", STATE.mission7_stage
