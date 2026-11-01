@@ -64,6 +64,7 @@ def _add(dst, col, cx, cy, w, h):
     if w < 4 or h < 4:
         return
     dw, dh = dst.get_size()
+    w, h = min(w, dw * 2.0), min(h, dh * 2.0)    # free cut cameras get close to lights
     if cx + w / 2.0 < 0 or cx - w / 2.0 > dw or cy + h / 2.0 < 0 or cy - h / 2.0 > dh:
         return
     g = _grad(col, w, h)

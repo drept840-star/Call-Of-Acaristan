@@ -25,9 +25,24 @@
      0.45
     ],
     [
-     633,
+     600,
+     "terminal_glitch",
+     0.2
+    ],
+    [
+     1000,
+     "terminal_glitch",
+     0.2
+    ],
+    [
+     1250,
      "rig_low_boom",
-     0.25
+     0.2
+    ],
+    [
+     1750,
+     "rig_low_boom",
+     0.32
     ]
    ]
   },
@@ -46,6 +61,13 @@
     5,
     7,
     10
+   ],
+   "cues": [
+    [
+     2000,
+     "rig_low_boom",
+     0.3
+    ]
    ]
   },
   {
@@ -66,14 +88,24 @@
    ],
    "cues": [
     [
-     167,
-     "missile_launch",
-     0.32
+     650,
+     "rig_metal_collapse",
+     0.5
+    ],
+    [
+     667,
+     "rig_impact_crack",
+     0.45
+    ],
+    [
+     750,
+     "glass_shatter",
+     0.35
     ]
    ],
    "dialogue_events": [
     [
-     1533,
+     2000,
      "VASILE",
      "Good. I've got it. Later. You need sleep.",
      true

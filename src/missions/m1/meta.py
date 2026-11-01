@@ -42,23 +42,29 @@ escape_shots = [
      "auto_advance": True, "hard_cut": True,
      "min_ms": _ms(135), "scene_time_offset_ms": _ms(0), "lighting": (5, 7, 10),
      "cues": ((_at(18, 0), "door_open", 0.45),
-              (_at(38, 0), "rig_low_boom", 0.25))},
+              (_at(36, 0), "terminal_glitch", 0.2),
+              (_at(60, 0), "terminal_glitch", 0.2),
+              (_at(75, 0), "rig_low_boom", 0.2),
+              (_at(105, 0), "rig_low_boom", 0.32))},
     # 135-299  Biribel at the wheel.
     {"scene": "m1_escape_closeup", "speaker": None, "text": None,
      "hide_caption": True, "quiet_ui": True, "self_graded": True,
      "auto_advance": True, "hard_cut": True,
      "min_ms": _ms(300) - _ms(135), "scene_time_offset_ms": _ms(135),
-     "lighting": (5, 7, 10)},
-    # 300-499  side view: the truck bursts the service gate. Vasile takes the
-    # notebook over the radio at frame 392 (VO_198, the M6 plant) - the painter
+     "lighting": (5, 7, 10),
+     "cues": ((_at(255, 135), "rig_low_boom", 0.3),)},
+    # 300-499  the truck rams the van out through the gate. Vasile takes the
+    # notebook over the radio at frame 420 (VO_198, the M6 plant) - the painter
     # draws that caption, the timeline owns the line.
     {"scene": "m1_escape_truck", "speaker": None, "text": None,
      "hide_caption": True, "quiet_ui": True, "self_graded": True,
      "auto_advance": True, "hard_cut": True,
      "min_ms": _ms(500) - _ms(300), "scene_time_offset_ms": _ms(300),
      "lighting": (5, 7, 10),
-     "cues": ((_at(310, 300), "missile_launch", 0.32),),
-     "dialogue_events": ((_at(392, 300), "VASILE", ESCAPE_VO_NOTEBOOK, True),)},
+     "cues": ((_at(339, 300), "rig_metal_collapse", 0.5),
+              (_at(340, 300), "rig_impact_crack", 0.45),
+              (_at(345, 300), "glass_shatter", 0.35)),
+     "dialogue_events": ((_at(420, 300), "VASILE", ESCAPE_VO_NOTEBOOK, True),)},
     # 500-1079  rear view: road, radio handoff, signal tear-down, report card.
     {"scene": "m1_escape_rear", "speaker": None, "text": None,
      "hide_caption": True, "quiet_ui": True, "self_graded": True,

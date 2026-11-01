@@ -237,7 +237,6 @@ def _draw_escape_dashboard(surface, t):
             pygame.draw.line(surface, (255, 220, 90), (sx, sy), (sx+_rng_legacy.randint(-24,24), sy+_rng_legacy.randint(-18,18)), 1)
     wheel_r = 92 + int(math.sin(t*.08)*2)
     pygame.draw.circle(surface, (12, 13, 14), (WIDTH//2 + 190, dash_y - 16), wheel_r, 12)
-    _escape_subtitle(surface, "ENGINE", "starter catches...", min(255, t*6))
 
 
 def _draw_escape_closeup(surface, t):
@@ -343,16 +342,6 @@ def _draw_escape_truck_side(surface, t):
     pygame.draw.rect(bg, (255, 180, 70, 120), bg.get_rect(), 1)
     surface.blit(bg, (WIDTH//2 - bg.get_width()//2, LETTER_H + 24))
     surface.blit(banner, (WIDTH//2 - banner.get_width()//2, LETTER_H + 29))
-    if t < 372:
-        _escape_subtitle(surface, "BIRIBEL", "Go, go, go!", 255)
-    # M6 plant (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit"): Vasile
-    # pockets the notebook without reading it in front of Biribel.  He
-    # already knew what was in it - in M6 the leaf in Volkov's copy says
-    # so, and the M2 auth chain already carried his name.
-    if 392 <= t < 470:
-        _escape_subtitle(surface, "VASILE",
-                         "Good. I've got it. Later. You need sleep.",
-                         min(255, (t - 392) * 5, (470 - t) * 6))
 
 
 def _draw_escape_rear(surface, t):
@@ -402,11 +391,24 @@ def _draw_escape_rear(surface, t):
     fog = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     fog.fill((18, 24, 32, int(70 * prog)))
     surface.blit(fog, (0, 0))
+
+
+def _escape_overlay(surface, t):
+    """Screen layer both the 3D and 2D cut share: Vasile's line, the
+    location title, the radio readout, the signal tear and the report card."""
+    # M6 plant (docs/MISSION8_PLOT.md "Foreshadowing to Retrofit"): Vasile
+    # pockets the notebook without reading it in front of Biribel.  He
+    # already knew what was in it - in M6 the leaf in Volkov's copy says
+    # so, and the M2 auth chain already carried his name.
+    if 420 <= t < 560:
+        _escape_subtitle(surface, "VASILE",
+                         "Good. I've got it. Later. You need sleep.",
+                         min(255, (t - 420) * 5, (560 - t) * 6))
+    if t < 520:
+        return
     loc = font_location_sub.render(_T("m1.kilemeno_harbor_road_03_17"), True, (165, 165, 150))
     loc.set_alpha(min(255, max(0, (t-520)*4)))
     surface.blit(loc, (WIDTH//2 - loc.get_width()//2, LETTER_H + 34))
-    if t > 570:
-        _escape_subtitle(surface, "RADIO", "Signal clear. They're away.", min(255, (t-570)*5))
     # Polished handoff to the results screen:
     # 1) long radio acquisition hold, 2) slower signal corruption, 3) readable report boot card.
     if t > 620:
@@ -496,8 +498,14 @@ def _escape_scene(start, end, phase):
     """Take factory: paint one phase of the cut from a shot-local ms clock."""
     def _draw(surface, t_ms):
         t = max(start, min(_escape_frame(t_ms), end - 1))
-        _escape_sky(surface, t)
-        phase(surface, t)
+        drawn = False
+        if td.active_cam() is not None:
+            from missions.m1 import escape3d
+            drawn = escape3d.frame(surface, t)
+        if not drawn:
+            _escape_sky(surface, t)
+            phase(surface, t)
+        _escape_overlay(surface, t)
         _escape_grade(surface)
     return _draw
 

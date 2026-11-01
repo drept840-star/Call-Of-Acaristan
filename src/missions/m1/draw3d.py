@@ -1538,6 +1538,24 @@ def _draw_fx(r, flashes, tm):
 
 VAN_LEN = 3.6
 VAN_COL = (58, 62, 66)
+KRAP_VAN_M = 7.18                # krap_van.glb nose to tail, as walk3d measures it
+
+
+def _krap_van_mesh():
+    """krap_van.glb scaled to the drop-off footprint (VAN_LEN), nose +x; the
+    block van stands in when the asset is missing."""
+    from engine3d import Mesh
+    try:
+        from game.render3d_bridge import load_mesh_asset
+        verts, faces = load_mesh_asset("krap_van")
+    except (OSError, ValueError, KeyError):
+        return _van(VAN_COL)
+    s = VAN_LEN / KRAP_VAN_M
+    m = Mesh()
+    m.verts = [(x * s, y * s, z * s) for x, y, z in verts]
+    for idx, col, grp in faces:
+        m.faces.append((tuple(idx), tuple(col), 3 if grp == 9 else 2, False, grp in (1, 2)))
+    return m
 
 
 def dropoff(surface, t, zoom=1.0, locked=False):
@@ -1574,7 +1592,7 @@ def dropoff(surface, t, zoom=1.0, locked=False):
         rear, vy = van
         x, _, z = to3(rear + VAN_LEN / 2.0 / K, vy)
         r.add_sprite((x, 0.02, z), td.shadow(2.0, 0.95, 150), layer=0)
-        _put(r, _mesh("dropoff_van", lambda: _van(VAN_COL)), (x, 0.0, z))
+        _put(r, _mesh("dropoff_van", _krap_van_mesh), (x, 0.0, z))
         hot = t < _d._DROPOFF_ARRIVE_MS + 300 or t > _d._DROPOFF_LEAVE_MS
         tail = (x - VAN_LEN / 2.0 - 0.1, 0.65, z)
         flashes.append({"pos": tail, "color": (230, 40, 32), "intensity": 0.9 if hot else 0.4,
