@@ -731,7 +731,7 @@ def start_cutscene(shots, after_state, use_fades=True):
 # ─────────────────────────────────────────────
 
 _current_ambience = set()
-MENU_MUSIC_FILE = "menu_theme.mp3"
+MENU_MUSIC_FILE = "assets/music/ost/01_call_of_acaristan.mp3"
 _menu_music_active = False
 _menu_music_failed = False
 MENU_MUSIC_STATES = {"MENU", "SLOT_SELECT", "SETTINGS", "SHOP", "MULTIPLAYER"}
