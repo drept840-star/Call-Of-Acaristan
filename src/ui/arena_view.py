@@ -501,6 +501,11 @@ class ArenaView(object):
             self.cam_y = max(0.0, min(float(max_y), self.cam_y + eff_y))
         return self.cam_x, self.cam_y
 
+    def aim_angle(self, mouse, origin):
+        """Angle from origin (sim px) toward the mouse, in degrees."""
+        wx, wy = mouse[0] + self.cam_x, mouse[1] + self.cam_y
+        return math.degrees(math.atan2(wy - origin[1], wx - origin[0])) % 360.0
+
     def apply_recoil_kick(self, aim_degrees, amount):
         """Fire the shared camera's recoil kick for a local shot.
 

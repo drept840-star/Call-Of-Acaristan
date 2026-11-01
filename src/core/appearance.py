@@ -28,8 +28,8 @@ appearance_default_is_legacy and tools/avatar_parity.py.
 
 # ── Identifiers ─────────────────────────────────────────────────────────
 
-GUN_KEYS = ("os12", "k9", "pistol")
-"""The three guns an appearance carries a finish for."""
+GUN_KEYS = ("os12", "k9", "pistol", "shotgun")
+"""The four guns an appearance carries a finish for."""
 
 FINISH_KEY_BY_RIG = {
     # ArenaView/campaign set Player.rig_weapon to these strings; map them to
@@ -37,6 +37,7 @@ FINISH_KEY_BY_RIG = {
     "pistol": "pistol",
     "os12": "os12",
     "k9_smg": "k9",
+    "shotgun": "shotgun",
 }
 
 ID_MAX = 32
@@ -117,6 +118,17 @@ GUN_BASE = {
         "bore": (8, 8, 10),            # :823
         "grip": (18, 19, 20),          # :831 :838
         "optic": (180, 35, 35),        # :843
+    },
+    "shotgun": {                     # weapon_rig.draw_shotgun; drew from the OS-12's roles
+        "receiver": (38, 36, 32),
+        "cover_edge": (22, 20, 18),
+        "wood": (110, 70, 40),
+        "wood_edge": (75, 48, 28),
+        "barrel": (70, 68, 64),
+        "muzzle": (50, 48, 44),
+        "groove": (35, 33, 30),
+        "front_sight": (45, 43, 40),
+        "bore": (8, 8, 10),
     },
 }
 
@@ -318,6 +330,30 @@ FINISHES = {
                               "stock_knob": (102, 74, 20), "grip": (118, 86, 24),
                               "grip_shine": (188, 150, 50), "mag": (132, 98, 28),
                               "mag_edge": (200, 160, 56), "mag_line": (160, 124, 38)}},
+    # ── Fallow 12 shotgun ──
+    "shotgun_standard": {"name": "Issue", "price": 0, "gun": "shotgun",
+                         "desc": "Walnut and blued steel, straight off the farm.",
+                         "roles": {}},
+    "shotgun_parkerized": {"name": "Parkerized", "price": 140, "gun": "shotgun",
+                           "desc": "Grey phosphate metal, wood left as it was.",
+                           "roles": {"receiver": (62, 66, 70), "cover_edge": (34, 37, 41),
+                                     "barrel": (96, 100, 106), "muzzle": (74, 78, 84),
+                                     "groove": (50, 53, 58)}},
+    "shotgun_synthetic": {"name": "Black Synthetic", "price": 200, "gun": "shotgun",
+                          "desc": "Polymer stock and fore-end, nothing to rot.",
+                          "roles": {"wood": (34, 35, 38), "wood_edge": (18, 19, 21),
+                                    "receiver": (28, 29, 32), "cover_edge": (14, 15, 17)}},
+    "shotgun_birch": {"name": "Pale Birch", "price": 240, "gun": "shotgun",
+                      "desc": "Light birch furniture over dark steel.",
+                      "roles": {"wood": (196, 164, 116), "wood_edge": (140, 112, 74)}},
+    "shotgun_crimson": {"name": "Crimson", "price": 320, "gun": "shotgun",
+                        "desc": "Red-stained stock and pump.",
+                        "roles": {"wood": (120, 28, 30), "wood_edge": (70, 14, 16)}},
+    "shotgun_goldleaf": {"name": "Gold Leaf", "price": 600, "gun": "shotgun",
+                         "desc": "Gilt receiver and barrels. Loud before it fires.",
+                         "roles": {"receiver": (168, 128, 42), "cover_edge": (110, 84, 26),
+                                   "barrel": (184, 146, 54), "muzzle": (150, 116, 38),
+                                   "groove": (110, 84, 26)}},
     # ── Pistol ──
     "pistol_standard": {"name": "Issue", "price": 0, "gun": "pistol",
                         "desc": "The service sidearm, matte and worn.",
@@ -498,8 +534,8 @@ def key_of(app):
     """
     a = normalize(app)
     f = a["finish"]
-    return "%s|%s|%s|%s|%s" % (a["palette"], a["head"],
-                               f["os12"], f["k9"], f["pistol"])
+    return "%s|%s|%s|%s|%s|%s" % (a["palette"], a["head"],
+                                  f["os12"], f["k9"], f["pistol"], f["shotgun"])
 
 
 def resolve(app):

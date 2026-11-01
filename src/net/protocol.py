@@ -529,7 +529,7 @@ def default_name(player_id):
 
 MAX_APPEARANCE_KEYS = 8
 APPEARANCE_ID_CHARS = 32
-APPEARANCE_GUNS = 3
+APPEARANCE_GUNS = 4
 """Bounds for a cosmetic loadout bundle. See ``clean_appearance``."""
 
 

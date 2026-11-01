@@ -27,7 +27,7 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
 - `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`), shared `figure_kit.py` (cast look `SPECS`), `cast3d.py`, `post3d.py`, `weather3d.py`.
 - `core/` - legacy runtime: `state.py` (`STATE`), `game_core.py`, `camera.py`, `mapbuilder.py` (dependency-free), `artpack.py` (sprite sheet access), `save_system.py`, `settings_store.py`, `lighting.py`, `dev_jumps.py`.
 - `entities/` - player, `enemy_ai.py`, weapons, weapon rig, corpses, death anims.
-- `ui/` - menus (`main.py`), `hud.py`, `radio.py` + `pixfont.py` (bitmap fonts), shop, multiplayer screens, mission failed.
+- `ui/` - menus (`main.py`), `hud.py`, `radio.py` + `pixfont.py` (bitmap fonts), shop, multiplayer screens, mission failed. Multiplayer draws in 2.5D: `arena_view3d.py` (`make_view`, aim unprojection) over the 2D `arena_view.py`, cast and guns from `mp3d.py`; `ACA_MP_2D=1` forces 2D, and any 3D error falls back to 2D for the run.
 - `audio/` - `audio.py`, `voice.py`, `voice_manifest.py` (`VO_xxx` rows, `KNOWN_MISSING_AUDIO`, `VOICE_ORDER`).
 - `net/` - multiplayer: protocol, client, match, discovery, tunnel.
 - `fx/` - 2D effects. `tools/` (under src) - dev-only input recorder and trailer bot.

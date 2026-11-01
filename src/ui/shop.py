@@ -30,6 +30,7 @@ from core.config import (
 )
 from entities import weapon_rig
 from entities.player import Player
+from ui import mp3d
 from ui.widgets import note_hover
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
@@ -66,7 +67,7 @@ GRID_X = PANEL_X + 28
 GRID_Y = CONTENT_Y + 40
 GRID_W = COLS * CELL_W
 
-GUN_CHIP_W = GRID_W // 3
+GUN_CHIP_W = GRID_W // 4
 
 RIGHT_X = PANEL_X + GRID_W + 44
 RIGHT_W = PANEL_X + PANEL_W - 28 - RIGHT_X
@@ -80,7 +81,7 @@ DESC_Y = GRID_Y + ROWS * CELL_H + 16
 BACK = pygame.Rect(PANEL_X + 28, PANEL_Y + PANEL_H - 56, 150, 30)
 
 # Catalog gun key -> the rig name Player.rig_weapon expects.
-RIG_BY_GUN = {"os12": "os12", "k9": "k9_smg", "pistol": "pistol"}
+RIG_BY_GUN = {"os12": "os12", "k9": "k9_smg", "pistol": "pistol", "shotgun": "shotgun"}
 
 # Icon poses. The rifle is drawn along the facing and the head sits two pixels
 # further along that same line, so a head-on crop of the head has a barrel
@@ -308,6 +309,22 @@ class ShopScreen(object):
                              box, scale, int(focus), round(angle, 3)),
                             (box * scale, box * scale), paint)
 
+    def _art3d(self, item_id, size, live=False):
+        """The item on the 3D rig: a gun finish on the gun alone, gear on the
+        head, a palette on the whole body. ``live`` turns it on a stand.
+        None when 3D is off, so the caller draws the 2D sprite instead."""
+        if not mp3d.enabled():
+            return None
+        app = self._loadout_with(item_id)
+        if item_id in appearance.FINISHES:
+            rig, focus = RIG_BY_GUN[appearance.FINISHES[item_id]["gun"]], "gun"
+        else:
+            rig, focus = "os12", ("head" if item_id in appearance.HEADGEARS else "body")
+        if not live:
+            return mp3d.icon(app, rig, size, focus=focus)
+        t = pygame.time.get_ticks() / 1000.0
+        return mp3d.portrait(app, rig, size, yaw=200.0 + t * 40.0, focus=focus, t=t)
+
     def _rig_icon(self, item_id, gun, box, scale=2):
         """One weapon, drawn by the same function the match calls.
 
@@ -434,11 +451,12 @@ class ShopScreen(object):
             else:
                 pygame.draw.rect(surface, C_MID if hot else C_DARK, rect)
 
-            if item_id in appearance.FINISHES:
+            art = self._art3d(item_id, ICON_BOX)
+            if art is None and item_id in appearance.FINISHES:
                 art = self._rig_icon(item_id,
                                      appearance.FINISHES[item_id]["gun"],
                                      ICON_BOX)
-            else:
+            elif art is None:
                 # Gear is a zoom on the head; a palette is the whole body,
                 # because that is the difference between what is being sold.
                 gear = item_id in appearance.HEADGEARS
@@ -490,7 +508,9 @@ class ShopScreen(object):
         app = self._loadout_with(item_id)
         rig = (RIG_BY_GUN[appearance.FINISHES[item_id]["gun"]]
                if item_id in appearance.FINISHES else "os12")
-        art = self._avatar(app, rig, 116, scale=2)
+        art = self._art3d(item_id, min(RIGHT_W, PREVIEW_H) - 12, live=True)
+        if art is None:
+            art = self._avatar(app, rig, 116, scale=2)
         surface.blit(art, (box.centerx - art.get_width() // 2,
                            box.centery - art.get_height() // 2))
 
@@ -554,7 +574,7 @@ def _is_worn(item_id, wearing):
 
 
 def _gun_label(gun):
-    return {"os12": "OS-12", "k9": "K-9", "pistol": "PISTOL"}.get(gun, gun)
+    return {"os12": "OS-12", "k9": "K-9", "pistol": "PISTOL", "shotgun": "SHOTGUN"}.get(gun, gun)
 
 
 def _name_lines(font, name, max_w):

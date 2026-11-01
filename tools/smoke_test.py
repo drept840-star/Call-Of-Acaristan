@@ -6711,7 +6711,7 @@ def check_appearance_default_is_legacy():
                 "%s overrides %r, which %s does not have" % (fid, role, gun)
     counts = (len(_appearance.PALETTES), len(_appearance.HEADGEARS),
               len(_appearance.FINISHES))
-    assert sum(counts) == 32, "catalog size changed: %s" % (counts,)
+    assert sum(counts) == 38, "catalog size changed: %s" % (counts,)
     for free in _appearance.FREE_ITEM_IDS:
         assert _appearance.price_of(free) == 0, "%s is free by name only" % free
 

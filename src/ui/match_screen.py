@@ -54,7 +54,7 @@ from net import udp_transport as UDP
 from net.match import Fanout, MatchSession, TICK_RATE
 from net.telemetry import NetworkTelemetry
 from missions import arena as AR
-from ui.arena_view import ArenaView
+from ui.arena_view3d import make_view
 from ui.widgets import clipboard_text
 from ui import multiplayer_style as _mp_style
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
@@ -1037,7 +1037,7 @@ class MatchScreen(object):
         # path that could drift from what the host is actually wearing.
         self.sim.add_player(0, self.play_name(), profile_store.equipped())
         self.sess.world = self.sim.snapshot_entities()
-        self.view = ArenaView(self.map_name)
+        self.view = make_view(self.map_name)
         self._local_firing_prev = False
         self._remote_firing_prev = {}
         self._pending_peers = []
@@ -1348,7 +1348,7 @@ class MatchScreen(object):
         self.sess = MatchSession(self.wire, is_host=False, local_id=0)
         self.net_telemetry = NetworkTelemetry()
         self._net_warning = ""
-        self.view = ArenaView(self.map_name)
+        self.view = make_view(self.map_name)
         self._local_firing_prev = False
         self._remote_firing_prev = {}
         # Predict our own movement from the very first frame. It seeds from
@@ -1779,8 +1779,7 @@ class MatchScreen(object):
             if not still and keys[pygame.K_r]:
                 buttons |= P.F_RELOAD
             inp = {"t": P.T_INPUT, "q": self.sim.tick, "mx": ax, "my": ay,
-                   "a": aim_degrees(mouse, (me["x"], me["y"]),
-                                    self.view.cam_x, self.view.cam_y),
+                   "a": self.view.aim_angle(mouse, (me["x"], me["y"])),
                    "b": buttons}
             if self._want_weapon is not None:
                 inp["w"] = self._want_weapon
@@ -2192,7 +2191,7 @@ class MatchScreen(object):
                     host_map = P.assign_map(raw)
                     if host_map in AR.ARENAS and host_map != self.map_name:
                         self.map_name = host_map
-                        self.view = ArenaView(host_map)
+                        self.view = make_view(host_map)
                         # The predictor holds a wall list from when it was
                         # built. Adopting the host's map replaces the walls,
                         # so a stale predictor would predict movement through
@@ -2285,7 +2284,7 @@ class MatchScreen(object):
             origin = ((self._pred.x, self._pred.y)
                       if (self._pred is not None and self._pred.seeded)
                       else (me[2], me[3]))
-            angle = aim_degrees(mouse, origin, self.view.cam_x, self.view.cam_y)
+            angle = self.view.aim_angle(mouse, origin)
             buttons = 0
             if firing:
                 buttons |= P.F_FIRING

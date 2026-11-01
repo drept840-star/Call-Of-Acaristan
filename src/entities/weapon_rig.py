@@ -441,7 +441,7 @@ RIGS = {
     "os12": (draw_os12, "os12"),
     "k9_smg": (draw_k9, "k9"),
     "pistol": (draw_pistol, "pistol"),
-    "shotgun": (draw_shotgun, "os12"),
+    "shotgun": (draw_shotgun, "shotgun"),
 }
 
 
