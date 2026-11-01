@@ -36,7 +36,7 @@ def draw(surface: pygame.Surface, theme: Theme, bottles: int, *, panel_bg, icon,
     surface.blit(panel_bg(width, PANEL_H), (x, y))
     for i in range(cap):
         icon(surface, x + ICON_X0 + i * ICON_STEP, y + ICON_Y, i < bottles)
-    label_col = COL_LABEL_ON if bottles > 0 else COL_LABEL_OFF
+    label_col = theme.c_amber if bottles > 0 else COL_LABEL_OFF
     surface.blit(theme.font_terminal_small.render(T("hud.molotovs"), True, label_col),
                  (x + 120, y + 4))
     count_col = theme.c_terminal if bottles > 0 else COL_COUNT_OFF

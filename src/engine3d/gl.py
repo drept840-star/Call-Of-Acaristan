@@ -1250,6 +1250,12 @@ class GLRenderer(SoftwareRenderer):
                 # case the mask actually changes.
                 draw(surface)
                 continue
+            if not light and (x1 - x0) * (y1 - y0) <= 196:
+                # particle-sized (a molotov is 200+ dots): one depth probe at
+                # the centre instead of a masked box (<= 14x14 px); the mean was ~50 us each
+                if not occ_depth[(y0 + y1) // 2, (x0 + x1) // 2] < limit:
+                    draw(surface)
+                continue
             occ = occ_depth[y0:y1, x0:x1] < limit
             frac = float(occ.mean()) if occ.size else 0.0
             if frac <= 0.12:

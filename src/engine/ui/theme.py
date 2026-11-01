@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import pygame
+
 __all__ = ["Theme"]
+
+_PANELS: dict = {}
 
 
 @dataclass
@@ -38,6 +42,13 @@ class Theme:
     c_krap_blue: tuple[int, int, int] = (35, 65, 110)
     c_krap_uniform: tuple[int, int, int] = (55, 65, 80)
 
+    # Tactical HUD skin: slate panels with a 1px steel edge (the minimap frame),
+    # phosphor text and amber accents.
+    c_amber: tuple[int, int, int] = (230, 159, 58)
+    c_panel: tuple[int, int, int] = (16, 19, 22)
+    c_panel_alpha: int = 200
+    c_edge: tuple[int, int, int] = (58, 68, 76)
+
     # Speaker name -> accent colour (game: core.config.SPEAKER_COLORS). Empty
     # in a bare theme; ``speaker_accent`` falls back to the orange accent.
     speaker_colors: dict = field(default_factory=dict)
@@ -53,6 +64,37 @@ class Theme:
     @property
     def height(self) -> int:
         return self.size[1]
+
+    def panel(self, w: int, h: int, *, fade: int = 0, stripe=None,
+              alpha: int | None = None) -> pygame.Surface:
+        """Cached HUD panel: slate fill, 1px edge; ``fade`` px on the right ease
+        out to clear (no right edge then); ``stripe`` is a 3px left accent."""
+        a = self.c_panel_alpha if alpha is None else alpha
+        key = (w, h, fade, stripe and tuple(stripe), a, tuple(self.c_panel), tuple(self.c_edge))
+        s = _PANELS.get(key)
+        if s is None:
+            if len(_PANELS) > 64:
+                _PANELS.clear()
+            s = pygame.Surface((w, h), pygame.SRCALPHA)
+            s.fill(self.c_panel + (a,))
+            edge = self.c_edge + (255,)
+            pygame.draw.line(s, edge, (0, 0), (w - 1, 0))
+            pygame.draw.line(s, edge, (0, h - 1), (w - 1, h - 1))
+            pygame.draw.line(s, edge, (0, 0), (0, h - 1))
+            if not fade:
+                pygame.draw.line(s, edge, (w - 1, 0), (w - 1, h - 1))
+            if stripe is not None:
+                s.fill(tuple(stripe) + (255,), (0, 0, 3, h))
+            if fade:
+                fade = min(fade, w)
+                alpha_px = pygame.surfarray.pixels_alpha(s)
+                for i in range(fade):
+                    col = w - fade + i
+                    k = 1.0 - (i + 1) / float(fade)
+                    alpha_px[col, :] = (alpha_px[col, :] * k).astype(alpha_px.dtype)
+                del alpha_px
+            _PANELS[key] = s
+        return s
 
     def speaker_accent(self, name: str) -> tuple[int, int, int]:
         """Accent colour for ``name`` (case-insensitive), orange when unknown."""

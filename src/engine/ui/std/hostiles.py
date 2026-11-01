@@ -24,9 +24,7 @@ def draw(surface: pygame.Surface, theme: Theme, count: int, *, x: int = 20, y: i
 
     ``label`` is the legacy override: a ``{}``-template formatted with the count.
     """
-    host_bg = pygame.Surface((BOX_W, BOX_H), pygame.SRCALPHA)
-    pygame.draw.rect(host_bg, (0, 0, 0, 120), (0, 0, BOX_W, BOX_H))
-    surface.blit(host_bg, (x, y))
+    surface.blit(theme.panel(BOX_W, BOX_H), (x, y))
     text = label.format(int(count)) if label is not None else T("hud.hostiles", n=int(count))
     surface.blit(theme.font_terminal_small.render(text, True, theme.c_terminal),
                  (x + 10, y + 5))

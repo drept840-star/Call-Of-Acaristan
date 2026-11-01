@@ -39,7 +39,7 @@ from missions import walking_sim
 from core import artpack, lighting, staticlayer
 from core import render_util
 from core import props as _props
-from core.config import draw_rain as _draw_rain_streaks
+from core.config import SCENE_BOT, SCENE_TOP
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
 
@@ -1563,15 +1563,13 @@ def _paint_m1_exfil_truck(surface, ex, ey, headlights=True):
 
 
 def _m1_hp_panel(w, h):
-    """M1's plain HP backdrop (the shared health_bar takes a panel factory)."""
-    surf = pygame.Surface((w, h), pygame.SRCALPHA)
-    pygame.draw.rect(surf, (0, 0, 0, 140), (0, 0, w, h))
-    return surf
+    """M1's HP backdrop: the tactical HUD panel (the health_bar takes a factory)."""
+    return THEME.panel(w, h)
 
 
 def _m1_panel_140(w, h):
-    """M1's 140-alpha panel backdrop (the shared art_cache.get_panel_bg with M1's alpha)."""
-    return get_panel_bg(w, h, alpha=140)
+    """M1's bottle-strip backdrop: the tactical HUD panel."""
+    return THEME.panel(w, h)
 
 
 def _submit_ground_decor(q, cam_x, cam_y):
@@ -2121,7 +2119,7 @@ def _draw_m1_hud(surface, cam_x, cam_y):
         _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
                              panel_bg=_m1_hp_panel, x=30, y=HEIGHT - 50,
                              bb=(0, 0, 160, 14), inset=0, panel=(180, 42),
-                             panel_off=(-10, -16), label_dy=-14)
+                             panel_off=(-6, -18), label_dy=-14)
 
         # Objective text (without "OBJECTIVE:" prefix - the shared helper
         # prepends it, matching M2's behavior).
@@ -2136,14 +2134,11 @@ def _draw_m1_hud(surface, cam_x, cam_y):
         elif STATE.mission_phase == "escape":
             obj_text = "Reach exfil zone"
         draw_objective_panel(surface, obj_text)
-        # Ammo panel sits 96 px above the HP strip anchor (Phase 4: the strip
+        # Ammo panel sits 116 px above the HP strip anchor (Phase 4: the strip
         # is the shared widget now, so its anchor is spelled out here).
-        ammo_x, ammo_y = 30, (HEIGHT - 50) - 96
+        ammo_x, ammo_y = 30, (HEIGHT - 50) - 116
         bg_w, bg_h = 246, 92
-        bg = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
-        pygame.draw.rect(bg, (0, 0, 0, 140), (0, 0, bg_w, bg_h), border_radius=4)
-        pygame.draw.rect(bg, (40, 42, 38), (0, 0, bg_w, bg_h), 1, border_radius=4)
-        surface.blit(bg, (ammo_x - 6, ammo_y))
+        surface.blit(THEME.panel(bg_w, bg_h), (ammo_x - 6, ammo_y))
         for i in range(4):
             mx = ammo_x + 8 + i * 36
             my = ammo_y + 8
@@ -2186,7 +2181,7 @@ def _draw_m1_hud(surface, cam_x, cam_y):
                 ],
             )
             outline = (
-                C_TERMINAL if is_active else (rim if not is_empty else (55, 50, 45))
+                THEME.c_terminal if is_active else (rim if not is_empty else (55, 50, 45))
             )
             pygame.draw.polygon(surface, outline, body_pts, 1)
             bullet_y = my + 8
@@ -2211,7 +2206,7 @@ def _draw_m1_hud(surface, cam_x, cam_y):
                     1,
                 )
         ammo_text = f"{STATE.ammo_in_mag}/{STATE.mag_size}"
-        text_col = C_TERMINAL if STATE.ammo_in_mag > 0 else (220, 60, 60)
+        text_col = THEME.c_terminal if STATE.ammo_in_mag > 0 else (220, 60, 60)
         surface.blit(
             font_terminal_small.render(ammo_text, True, text_col),
             (ammo_x + 154, ammo_y + 8),
@@ -2229,11 +2224,11 @@ def _draw_m1_hud(surface, cam_x, cam_y):
             )
             pygame.draw.rect(
                 surface,
-                (220, 160, 40),
+                THEME.c_amber,
                 (bar_x, bar_y, int(bar_w * progress), bar_h),
                 border_radius=2,
             )
-            reload_lbl = font_terminal_small.render(_T("m1.reloading"), True, (220, 160, 40))
+            reload_lbl = font_terminal_small.render(_T("m1.reloading"), True, THEME.c_amber)
             surface.blit(reload_lbl, (ammo_x + 150, ammo_y + 58))
         else:
             mag_label = f"MAGS: {STATE.spare_mags}"
@@ -2314,6 +2309,63 @@ def _composite_m1_lighting(surface):
     lighting.buffer().composite(surface, _now_s())
 
 
+# Layered rain: the drop's speed tier picks its depth (far, mid, near). Far drops are
+# short and faint, near ones long and brighter, so the sheet reads with parallax.
+# (length per px of speed, alpha, colour)
+RAIN_LAYERS = ((0.9, 40, (150, 165, 190)), (1.25, 70, (165, 178, 200)),
+               (1.7, 110, (185, 196, 214)))
+SPLASH_ALPHA = 80
+SPLASHES_PER_FRAME = 7
+_rain_streaks = {}
+_splashes = []                      # [x, y, age]; draw-only, never in STATE
+_splash_rng = random.Random(0x5EA1)
+
+
+def _rain_streak(tier, length):
+    key = (tier, length)
+    st = _rain_streaks.get(key)
+    if st is None:
+        _k, alpha, col = RAIN_LAYERS[tier]
+        dx = int(length * 0.4)
+        st = pygame.Surface((dx + 2, length + 1), pygame.SRCALPHA)
+        for j in range(length + 1):
+            t = j / float(length)            # tail faint, head full
+            st.set_at((int(dx * (1.0 - t)), j), col + (int(alpha * (0.25 + 0.75 * t)),))
+        _rain_streaks[key] = st
+    return st
+
+
+def _paint_splashes(s):
+    w, h = s.get_size()
+    for _ in range(SPLASHES_PER_FRAME):
+        _splashes.append([_splash_rng.randint(0, w), _splash_rng.randint(SCENE_TOP, max(SCENE_TOP, h)), 0])
+    col = (175, 188, 208)
+    for sp in _splashes:
+        x, y, age = sp
+        a = SPLASH_ALPHA - age * 24
+        rw, rh = 1 + age * 3, 1 + age
+        ring = pygame.Surface((rw * 2 + 1, rh * 2 + 1), pygame.SRCALPHA)
+        pygame.draw.ellipse(ring, col + (a,), ring.get_rect(), 0 if age == 0 else 1)
+        s.blit(ring, (x - rw, y - rh))
+        sp[2] += 1
+    _splashes[:] = [sp for sp in _splashes if sp[2] < 3]
+
+
+def _draw_rain_layers(surface, drops, rng):
+    """Same drop step and respawn draws as ``core.config.draw_rain`` (the drops are in
+    the replay hash); only the look differs."""
+    rng = rng or _rng_legacy
+    for i, (x, y, spd) in enumerate(drops):
+        ey = y + int(spd)
+        tier = 0 if spd < 13 else (1 if spd < 17 else 2)
+        st = _rain_streak(tier, max(4, int(spd * RAIN_LAYERS[tier][0])))
+        surface.blit(st, (x - st.get_width() + 1, ey - st.get_height()))
+        drops[i] = (x - 1, ey, spd)
+        if ey > SCENE_BOT:
+            drops[i] = (rng.randint(0, WIDTH), SCENE_TOP - rng.randint(0, 40), spd)
+    _paint_splashes(surface)
+
+
 def _submit_m1_rain(q, fcy):
     """Rain over the street band only (rows 0-9); nothing once the band is off-screen."""
     drops = getattr(STATE, "rain_drops", None)
@@ -2321,8 +2373,8 @@ def _submit_m1_rain(q, fcy):
     if not drops or clip_h <= 0:
         return
     def paint(s):
-        _draw_rain_streaks(s.subsurface((0, 0, WIDTH, clip_h)), drops,
-                           rng=getattr(STATE, "_m1_rain_rng", None))
+        _draw_rain_layers(s.subsurface((0, 0, WIDTH, clip_h)), drops,
+                          getattr(STATE, "_m1_rain_rng", None))
     q.submit(_UiPassDraw(paint, "m1.rain"), _L.UI, sort_key=-1)
 
 

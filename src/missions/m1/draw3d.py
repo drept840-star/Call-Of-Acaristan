@@ -22,7 +22,7 @@ import math
 import pygame
 
 from core.config import (C_TERMINAL, DOOR_INTERACT_RANGE, HEIGHT, TILE_SIZE, WIDTH,
-                         draw_scanlines, draw_vignette, font_prompt, font_terminal_small,
+                         draw_scanlines, font_prompt, font_terminal_small,
                          get_scaled_mouse)
 from core.state import STATE
 from engine.core import now_ms as _now_ms, now_s as _now_s
@@ -31,6 +31,7 @@ from engine.render2d import Layer as _L, UiPassDraw as _UiPassDraw
 from game import topdown3d as td
 from game.topdown3d import K, to3
 from missions.m1 import draw as _d
+from missions.m1 import grade3d as _grade
 from missions.m1 import stealth as _st
 from missions.m1.map import MAP_W, MAP_H, M1_STREET_ROW, mission1_map
 
@@ -58,7 +59,7 @@ CONTAINER_COLS = ((122, 44, 36), (44, 66, 100), (112, 66, 38), (92, 94, 96))
 IPA = (80, 60, 50)               # core.config.C_IPA_UNIFORM
 MAG = (50, 55, 45)               # core.config.C_MAG_UNIFORM
 CHAR = ((22, 18, 16), 0.45)      # tint on a burning or burnt body
-RING_YOU = (120, 230, 150)
+RING_YOU = (75, 227, 122)
 RING_FOE = {"ATTACK": (230, 56, 44), "CHASE": (230, 56, 44), "SEARCH": (236, 150, 48)}
 RING_FOE_CALM = (150, 74, 60)
 
@@ -111,10 +112,13 @@ def _tick_decals():
             STATE.blood_decals.remove(decal)
 
 
-def render_world(surface, v, actors=None, lit=None):
+def render_world(surface, v, actors=None, lit=None, film=None):
     """Draw the M1 set through view ``v`` onto ``surface``. ``actors`` is an
     optional callback(r, flashes, tm) that replaces the gameplay cast (the
-    drop-off film uses it); ``lit`` caps the lamps to the ones near it."""
+    drop-off film uses it); ``lit`` caps the lamps to the ones near it.
+    ``film`` (the escape cut) turns the wall cutaway off: walls stand at
+    full height except the tiles in ``film["gone"]``, which are not drawn,
+    and ``film["grade"]`` adds light tuples to the night grade."""
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
@@ -137,13 +141,14 @@ def render_world(surface, v, actors=None, lit=None):
         finally:
             _w.static_end(r, ok)
         flashes = []
-        _draw_walls(r)
-        _draw_doors(r)
+        _draw_walls(r, film)
+        _draw_doors(r, film)
         if actors is not None:
             actors(r, flashes, tm)
         else:
             _draw_cast(r, flashes, tm)
             _draw_fx(r, flashes, tm)
+        dyn = _dyn_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm, actors)
         r.flush(buf)
     except Exception:
@@ -155,6 +160,7 @@ def render_world(surface, v, actors=None, lit=None):
     finally:
         r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
     _fx.present_crisp(buf, surface)
+    _grade.apply(surface, v, _night_lights() + dyn + list((film or {}).get("grade", ())))
     return True
 
 
@@ -242,8 +248,36 @@ def _wall_mesh(kind, w, d, hgt, var):
         block = tex("concrete", like=(96, 92, 86))
         m.add(box(w, hgt, d, block, center=(0.0, hgt / 2.0, 0.0),
                   cols={"top": CUT_CAP if cut else (70, 68, 64)}, seg=3.2))
+    _wall_shade(m, kind, w, d, hgt, var, cut)
     _cache["meshes"][key] = m
     return m
+
+
+# Wall volume: darker grime bands at the foot, a lit band under the roof
+# edge. (height from, height to, brightness) - skins a hair proud of the wall.
+WALL_SHADE = ((0.0, 0.32, 0.6), (0.32, 0.8, 0.8))
+WALL_LIT = (0.28, 1.14)
+
+
+def _wall_shade(m, kind, w, d, hgt, var, cut):
+    from engine3d import box, tex
+    if kind == "container":
+        name, like = "metal_rib", CONTAINER_COLS[var]
+    elif kind == "facade":
+        name, like = "brick", (92, 62, 50)
+    else:
+        name, like = "concrete", (96, 92, 86)
+    for y0, y1, k in WALL_SHADE:
+        y1 = min(y1, hgt - 0.02)
+        if y1 > y0:
+            col = tex(name, like=tuple(int(c * k) for c in like))
+            m.add(box(w + 0.02, y1 - y0, d + 0.02, col, center=(0.0, (y0 + y1) / 2.0, 0.0),
+                      skip=("top", "bottom")))
+    if not cut and kind != "facade":
+        band, k = WALL_LIT
+        col = tex(name, like=tuple(min(255, int(c * k)) for c in like))
+        m.add(box(w + 0.015, band, d + 0.015, col, center=(0.0, hgt - band / 2.0 - 0.02, 0.0),
+                  skip=("top", "bottom")))
 
 
 def _facade_windows(r, c0, r0, w):
@@ -263,25 +297,55 @@ def _facade_windows(r, c0, r0, w):
             continue
 
 
+def _bands():
+    """Floor bands (y0, y1, colour) in sim px, north to south."""
+    T = TILE_SIZE
+    pave_n, road, pave_s, yard = _d._M1_PAVE_N, _d._M1_ROAD, _d._M1_PAVE_S, _d._M1_YARD
+    return ((0, pave_n[1], (56, 56, 55)), (road[0], road[1], (30, 31, 34)),
+            (pave_s[0], pave_s[1], (55, 55, 53)), (yard[0], (M1_STREET_ROW + 1) * T, (46, 46, 44)),
+            ((M1_STREET_ROW + 1) * T, 21 * T, (41, 40, 37)), (21 * T, 30 * T, (50, 47, 43)),
+            (30 * T, MAP_H * T, (32, 32, 34)))
+
+
+def _floor_col(y):
+    for y0, y1, col in _bands():
+        if y0 <= y < y1:
+            return col
+    return (40, 40, 40)
+
+
+def _floor_tex(col, k=1.0):
+    """The paving texture over ``col`` scaled by ``k`` (shadows, stains keep
+    the concrete grain instead of a flat patch)."""
+    from engine3d import tex
+    return tex("pavement", like=tuple(max(0, min(255, int(c * k))) for c in col), tint=True)
+
+
+def _tile_col(col, row, base):
+    """``base`` with a per-tile shift of up to ~4% brightness and a faint
+    warm/cool lean, fixed by the tile, so the paving is not one flat sheet."""
+    k = 1.0 + (_d._m1_hash(col, row, 9) - 4) * 0.011
+    lean = (_d._m1_hash(col + 3, row + 11, 5) - 2) * 0.006
+    return (base[0] * k * (1.0 + lean), base[1] * k, base[2] * k * (1.0 - lean))
+
+
 def _build_set(r):
     """Static batch: floor bands, street furniture, props, lamps, desks."""
     from cutscenes import m6world3d as _w
-    from engine3d import box, quad_xz, tex
+    from engine3d import box, quad_xz
     T = TILE_SIZE
     W = MAP_W * T * K
 
-    def band(y0, y1, col, name="concrete", layer=0):
-        _w.add(r, quad_xz(0.0, -y1 * K, W, -y0 * K, 0.0, tex(name, like=col, tint=True),
-                          layer=layer, seg=4.8))
-
-    pave_n, road, pave_s, yard = _d._M1_PAVE_N, _d._M1_ROAD, _d._M1_PAVE_S, _d._M1_YARD
-    band(0, pave_n[1], (56, 56, 55))
-    band(road[0], road[1], (30, 31, 34))
-    band(pave_s[0], pave_s[1], (55, 55, 53))
-    band(yard[0], (M1_STREET_ROW + 1) * T, (46, 46, 44))
-    band((M1_STREET_ROW + 1) * T, 21 * T, (41, 40, 37))
-    band(21 * T, 30 * T, (50, 47, 43))
-    band(30 * T, MAP_H * T, (32, 32, 34))
+    # one quad per tile and band slice, each with its own slight tint
+    for y0, y1, base in _bands():
+        for row in range(y0 // T, (y1 - 1) // T + 1):
+            ya, yb = max(y0, row * T), min(y1, (row + 1) * T)
+            for col in range(MAP_W):
+                _w.add(r, quad_xz(col * T * K, -yb * K, (col + 1) * T * K, -ya * K, 0.0,
+                                  _floor_tex(_tile_col(col, row, base)), layer=0))
+    _ground_decals(r)
+    _contact_shadows(r)
+    road = _d._M1_ROAD
     # curbs, lane dashes, puddles
     for y, face in ((road[0], 1), (road[1], -1)):
         _w.add(r, box(W, 0.12, 0.16, (88, 88, 84), center=(W / 2.0, 0.06, -y * K)))
@@ -321,6 +385,114 @@ def _build_set(r):
         px, py = ptx * T + 20, pty * T + 44
         _w.add(r, quad_xz(px * K, -(py + 10) * K, (px + 14) * K, -py * K, 0.007,
                           (205, 198, 180), layer=1))
+
+
+def _wobble(col, row, n=9):
+    return [0.72 + 0.07 * _d._m1_hash(col + i * 7, row * 3 + i, 5) for i in range(n)]
+
+
+def _ground_decals(r):
+    """Scattered by tile hash: dirt by the walls, oil by the curbs, wet
+    puddles outdoors, hairline cracks anywhere."""
+    from cutscenes import m6world3d as _w
+    from engine3d import disc_xz, quad_xz
+    T = TILE_SIZE
+    for row in range(MAP_H):
+        for col in range(MAP_W):
+            if _glyph(col, row) != ".":
+                continue
+            h = _d._m1_hash(col * 3 + 1, row * 5 + 2, 23)
+            ox = (_d._m1_hash(col, row * 7, 9) - 4) * 0.12
+            oz = (_d._m1_hash(col * 5, row, 9) - 4) * 0.1
+            x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
+            x, z = x + ox, z + oz
+            fc = _tile_col(col, row, _floor_col(row * T + T / 2.0))
+            walled = any(_wall_kind(col + dc, row + dr) for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            outdoor = row <= M1_STREET_ROW or row >= 30
+            curb = row in (2, 6)
+            if walled and h < 8:
+                rad = 0.4 + 0.05 * (h % 4)
+                dirt = td.mix(fc, (74, 60, 42), 0.4)
+                _w.add(r, disc_xz(x, z, rad, 0.004, _floor_tex(dirt, 0.92), n=9,
+                                  wobble=_wobble(col, row)))
+            elif curb and h < 6:
+                _w.add(r, disc_xz(x, z, 0.42, 0.004, _floor_tex(fc, 0.62), n=9, wobble=_wobble(col, row)))
+                _w.add(r, disc_xz(x + 0.06, z, 0.22, 0.005, (16, 15, 19), n=7, layer=2,
+                                  wobble=_wobble(row, col, 7)))
+            elif outdoor and h in (8, 9, 10):
+                rad = 0.35 + 0.08 * (h - 8)
+                _w.add(r, disc_xz(x, z, rad, 0.005, (34, 40, 52), n=9, wobble=_wobble(col, row)))
+                _w.add(r, disc_xz(x - rad * 0.2, z + rad * 0.15, rad * 0.4, 0.006, (48, 56, 70),
+                                  n=7, layer=2))
+            elif h in (11, 12, 13):
+                ang = _d._m1_hash(col, row, 8) * math.pi / 8.0
+                cx, cz = x, z
+                for i in range(4):
+                    ang += (_d._m1_hash(col + i, row - i, 5) - 2) * 0.35
+                    nx, nz = cx + math.cos(ang) * 0.18, cz + math.sin(ang) * 0.18
+                    _w.add(r, quad_xz(min(cx, nx) - 0.012, min(cz, nz) - 0.012,
+                                      max(cx, nx) + 0.012, max(cz, nz) + 0.012, 0.004,
+                                      _floor_tex(fc, 0.6), layer=1))
+                    cx, cz = nx, nz
+
+
+AO_STEPS = (0.55, 0.72, 0.87)       # floor darkening from the wall base outwards
+AO_STEP_PX = 7                      # sim px per step: the band is ~0.5 m deep
+
+
+def _ao_rect(r, x0, y0, x1, y1, steps=AO_STEPS, step=AO_STEP_PX):
+    """Contact shadow bands round a footprint (sim px), darkest at its foot."""
+    from cutscenes import m6world3d as _w
+    from engine3d import quad_xz
+    for i, k in enumerate(steps):
+        a, b = i * step, (i + 1) * step
+        for ya, yb, xa, xb in ((y1 + a, y1 + b, x0 - b, x1 + b), (y0 - b, y0 - a, x0 - b, x1 + b),
+                               (y0 - a, y1 + a, x0 - b, x0 - a), (y0 - a, y1 + a, x1 + a, x1 + b)):
+            col = _floor_col((ya + yb) / 2.0)
+            _w.add(r, quad_xz(xa * K, -yb * K, xb * K, -ya * K, 0.003, _floor_tex(col, k), layer=1))
+
+
+def _shadow_at(r, x, z, hw, hd, k=0.5):
+    """A two-step drop shadow under a static prop (world metres)."""
+    from cutscenes import m6world3d as _w
+    from engine3d import quad_xz
+    col = _floor_col(-z / K)
+    for grow, kk in ((0.18, (1.0 + k) / 2.0), (0.0, k)):
+        _w.add(r, quad_xz(x - hw - grow, z - hd - grow, x + hw + grow, z + hd + grow, 0.0035 + grow * 0.001,
+                          _floor_tex(col, kk), layer=1))
+
+
+def _contact_shadows(r):
+    """Ambient occlusion where walls, fences and shutters meet the floor, and
+    drop shadows under the parked cars, barrels, crates and desks."""
+    T = TILE_SIZE
+    for kind, c0, r0, w, h, var in _wall_boxes():
+        _ao_rect(r, c0 * T, r0 * T, (c0 + w) * T, (r0 + h) * T)
+    for row in range(MAP_H):
+        for col in range(MAP_W):
+            ch = _glyph(col, row)
+            if ch == "f":
+                cy = row * T + T / 2.0
+                _ao_rect(r, col * T, cy - 1, (col + 1) * T, cy + 1, (0.68, 0.84), 5)
+            elif ch in ("S", "T") and _glyph(col - 1, row) != ch and _glyph(col, row - 1) != ch:
+                w, h = _d._m1_run_size(col, row, ch)
+                cx, _, cz = to3(col * T + w * T / 2.0, row * T + h * T / 2.0)
+                if ch == "S":
+                    _ao_rect(r, col * T, row * T + T // 4, (col + w) * T, row * T + 3 * T // 4)
+                elif (w, h) == (4, 1):
+                    _shadow_at(r, cx, cz, 2.0, 0.85, 0.45)
+                else:
+                    _shadow_at(r, cx, cz, 2.2, 0.95, 0.42)
+            elif ch == "F":
+                x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
+                _shadow_at(r, x, z, 0.36, 0.36, 0.55)
+    for kind, ptx, pty, arg in _d._M1_DRESSING_PROPS:
+        if not _d._m1_prop_overlaps_solid(kind, ptx, pty, arg):
+            x, _, z = to3(ptx * T + T / 2.0, pty * T + T / 2.0)
+            _shadow_at(r, x + 0.25, z, 0.75, 0.6, 0.55)
+    for desk in STATE.desks:
+        x, _, z = to3(desk["x"], desk["y"])
+        _shadow_at(r, x, z, 0.7, 0.4, 0.6)
 
 
 def _glyph_prop(r, col, row, ch):
@@ -402,20 +574,56 @@ def _lamps(m, front_x, back_x, y, half_w, head=(232, 216, 160), tail=(150, 28, 2
     m.add(box(0.03, 0.1, 0.36, (196, 196, 180), center=(back_x, y - 0.14, 0.0)))   # plate
 
 
+def _car_finish(m, col, W, cw, wheel_xs, screen, roof, sill):
+    """Shared car detail: dark wheel wells round the tyres, a grime sill,
+    a few rust flecks, a metallic glint on the roof and two streaks of
+    reflection across the windscreen. ``screen`` is the windscreen edge
+    (two profile points), ``roof`` (x0, x1, y) the roof panel, ``sill``
+    (x0, x1, y) the lower body line."""
+    from engine3d import Mesh, box, rot_z
+    well = (12, 12, 14)
+    grime = td.mix(col, (26, 22, 18), 0.55)
+    for side in (-1, 1):
+        zs = side * (W / 2.0 + 0.004)
+        for wx in wheel_xs:
+            m.add(box(0.86, 0.44, 0.012, well, center=(wx, 0.5, zs)))
+        m.add(box(sill[1] - sill[0], 0.1, 0.012, grime, center=((sill[0] + sill[1]) / 2.0, 0.37, zs)))
+        for i in range(3):
+            fx = sill[0] + (sill[1] - sill[0]) * (0.2 + 0.3 * i) + 0.1 * side
+            m.add(box(0.07, 0.05, 0.014, (78, 46, 30), center=(fx, 0.46 + 0.05 * (i % 2), zs)))
+    x0, x1, y = roof
+    m.add(box((x1 - x0) * 0.7, 0.012, cw * 0.18, td.mix(col, (255, 255, 255), 0.42),
+              center=(x0 + (x1 - x0) * 0.45, y + 0.007, -cw * 0.18)))
+    (ax, ay), (bx, by) = screen
+    ang = math.degrees(math.atan2(by - ay, bx - ax))
+    ln = math.hypot(bx - ax, by - ay) * 0.8
+    nx, ny = -(by - ay), (bx - ax)
+    nl = math.hypot(nx, ny) or 1.0
+    mx, my = (ax + bx) / 2.0 - nx / nl * 0.012, (ay + by) / 2.0 - ny / nl * 0.012
+    if my < (ay + by) / 2.0:                       # keep the streak on the outside of the glass
+        mx, my = (ax + bx) / 2.0 + nx / nl * 0.012, (ay + by) / 2.0 + ny / nl * 0.012
+    for zc, wd in ((-cw * 0.22, 0.16), (cw * 0.12, 0.06)):
+        g = Mesh().add(box(ln, 0.012, wd, (128, 146, 162)), m=rot_z(ang), t=(mx, my, zc))
+        m.add(g)
+
+
 def _sedan(col):
     """Boxy 70s saloon, 4.2 m, nose +x: a sloped body, a narrower glass
     cabin, chrome bumpers and octagon tyres."""
     from engine3d import Mesh, box, prism
     L, W = 4.2, 1.7
     m = Mesh()
-    top = td.mix(col, (255, 255, 255), 0.06)
+    top = td.mix(col, (255, 255, 255), 0.14)
+    side = td.mix(col, (0, 0, 0), 0.18)
     body = [(-2.1, 0.30), (2.1, 0.30), (2.12, 0.60), (2.02, 0.80), (0.95, 0.86),
             (-1.45, 0.86), (-2.06, 0.80), (-2.12, 0.60)]
-    m.add(prism(body, W, col, z0=-W / 2.0, cols={3: top, 4: top, 5: top}))
+    m.add(prism(body, W, col, z0=-W / 2.0, cols={3: top, 4: top, 5: top, "front": side, "back": side}))
     cw = W * 0.88
     cabin = [(-1.3, 0.86), (0.9, 0.86), (0.32, 1.36), (-0.98, 1.36)]
     m.add(prism(cabin, cw, td.mix(col, (0, 0, 0), 0.1), z0=-cw / 2.0,
                 cols={1: GLASS, 3: GLASS, "front": GLASS, "back": GLASS, 2: top}))
+    _car_finish(m, col, W, cw, (-1.3, 1.3), ((0.9, 0.86), (0.32, 1.36)), (-0.98, 0.32, 1.36),
+                (-1.45, 0.95, 0.86))
     for side in (-1, 1):                       # door pillars over the side glass
         for px, w in ((-0.3, 0.1), (-1.0, 0.14), (0.55, 0.08)):
             m.add(box(w, 0.48, 0.02, td.mix(col, (0, 0, 0), 0.15),
@@ -435,8 +643,11 @@ def _van(col):
     L, W = 3.6, 1.62
     m = Mesh()
     top = td.mix(col, (255, 255, 255), 0.16)
+    side = td.mix(col, (0, 0, 0), 0.18)
     shell = [(-1.8, 0.32), (1.8, 0.32), (1.86, 0.76), (1.6, 1.04), (1.02, 1.86), (-1.78, 1.92)]
-    m.add(prism(shell, W, col, z0=-W / 2.0, cols={2: top, 3: GLASS, 4: top}))
+    m.add(prism(shell, W, col, z0=-W / 2.0, cols={2: top, 3: GLASS, 4: top, "front": side, "back": side}))
+    _car_finish(m, col, W, W, (-1.15, 1.2), ((1.6, 1.04), (1.02, 1.86)), (-1.7, 0.9, 1.91),
+                (-1.7, 1.5, 0.4))
     for side in (-1, 1):
         zs = side * (W / 2.0 + 0.005)
         m.add(box(0.62, 0.4, 0.02, GLASS, center=(0.78, 1.36, zs)))               # cab window
@@ -592,6 +803,90 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
 
 # ── walls and doors (per frame) ────────────────────────────────────────
 
+# ── night grade lights (grade3d) ───────────────────────────────────────
+
+WINDOW_WARM = (255, 190, 100)
+TAIL_RED = (226, 44, 32)
+FIRE_ORANGE = (255, 140, 56)
+_POOL_K = {"sl": 0.62, "fl": 0.66, "wh": 0.52, "dk": 0.32, "gate": 0.42, "ex": 0.5}
+
+
+def _night_lights():
+    """The fixed lights of the set for ``grade3d``: lamp throws and bulbs,
+    lit windows (glass, spill, wet reflection), the parked cars' tail lights."""
+    hit = _cache.get("night")
+    if hit is not None:
+        return hit
+    T = TILE_SIZE
+    out = []
+    for tx, ty, rad, col, key in _d._M1_LAMPS:
+        fam = key.split("_")[0]
+        hx, hy, hz = _lamp_head(key, tx * T + T / 2.0, ty * T + T / 2.0)
+        reach = rad * K * 1.6
+        out.append(("pool", (hx, 0.0, hz), col, reach * 0.72, _POOL_K.get(fam, 0.45)))
+        if fam != "dk":
+            out.append(("glow", (hx, hy, hz), col, 0.7, 0.55))
+        if fam in ("sl", "fl"):
+            out.append(("reflect", (hx, 0.0, hz - 0.3), col, 0.55, 0.3))
+    for kind, c0, r0, w, h, var in _wall_boxes():
+        if kind != "facade":
+            continue
+        for col in range(c0, c0 + w):
+            if not 0 < col < MAP_W - 1 or _d._m1_hash(col, r0, 3) == 0:
+                continue
+            if _d._m1_hash(col + 5, r0, 7) != 0:
+                continue
+            x, _, z = to3(col * T + T / 2.0, (r0 + 1) * T)
+            out.append(("glow", (x, 1.9, z - 0.05), WINDOW_WARM, 0.95, 0.5))
+            out.append(("pool", (x, 0.0, z - 1.0), WINDOW_WARM, 1.4, 0.32))
+            out.append(("reflect", (x, 0.0, z - 0.45), WINDOW_WARM, 0.42, 0.24))
+    for row in range(MAP_H):
+        for col in range(MAP_W):
+            ch = _glyph(col, row)
+            if ch not in ("S", "T") or _glyph(col - 1, row) == ch or _glyph(col, row - 1) == ch:
+                continue
+            w, h = _d._m1_run_size(col, row, ch)
+            if ch != "T":
+                continue
+            cx, _, cz = to3(col * T + w * T / 2.0, row * T + h * T / 2.0)
+            truck = (w, h) == (4, 1)
+            tail_x = cx - 1.9 if truck else cx + 2.14   # the sedan is parked nose west
+            for side in (-1, 1):
+                p = (tail_x, 0.7, cz + side * 0.62)
+                out.append(("glow", p, TAIL_RED, 0.42, 0.3 if truck else 0.55))
+                out.append(("reflect", (p[0], 0.0, p[2] - 0.2), TAIL_RED, 0.26, 0.22))
+    _cache["night"] = out
+    return out
+
+
+def _flicker(tm, seed):
+    return 0.8 + 0.12 * math.sin(tm * 0.017 + seed) + 0.08 * math.sin(tm * 0.053 + seed * 1.7)
+
+
+def _dyn_lights(flashes, tm):
+    """This frame's lights for ``grade3d``: every flash the cast and fx
+    queued (muzzles, molotov fires, burning bodies, headlights), fires
+    flickering, plus the burning barrels."""
+    out = []
+    for i, f in enumerate(flashes):
+        col, k, rng = f["color"], f.get("intensity", 1.0), f.get("range", 4.0)
+        fire = col[0] > 200 and col[1] < 160
+        if fire:
+            k *= _flicker(tm, i * 3.1 + f["pos"][0])
+        out.append(("pool", f["pos"], col, rng * 0.55, min(0.75, 0.38 * k)))
+        out.append(("glow", f["pos"], col, rng * 0.22, min(0.8, 0.42 * k)))
+    T = TILE_SIZE
+    for row in range(MAP_H):
+        for col in range(MAP_W):
+            if _glyph(col, row) == "F":
+                x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
+                k = _flicker(tm, col * 7 + row)
+                out.append(("pool", (x, 0.0, z), FIRE_ORANGE, 2.6, 0.5 * k))
+                out.append(("glow", (x, 1.05, z), FIRE_ORANGE, 1.0, 0.55 * k))
+                out.append(("reflect", (x, 0.0, z - 0.4), FIRE_ORANGE, 0.5, 0.25 * k))
+    return out
+
+
 def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0):
     td.put(r, mesh, pos, yaw, roll, scale, cache=_cache["packed"], pitch=pitch)
 
@@ -682,15 +977,22 @@ def _cut_level(key, cut, snap):
     return k
 
 
-def _draw_walls(r):
+def _draw_walls(r, film=None):
     """Wall boxes at full height, except the tiles of a run that stand
     between the camera and Biribel: the run is split there and that
-    stretch sinks to a stub over a few frames (and rises again behind him)."""
+    stretch sinks to a stub over a few frames (and rises again behind him).
+    A film has no cutaway; its ``gone`` tiles are left out."""
     T = TILE_SIZE
-    zone = _cut_zone()
-    snap = _cache["cut_snap"] = _cut_snap()
+    gone = film.get("gone", ()) if film else ()
+    zone = None if film else _cut_zone()
+    snap = True if film else _cut_snap()
+    _cache["cut_snap"] = snap
 
     def level(c, row):
+        if (c, row) in gone:
+            return -1.0
+        if film:
+            return 1.0
         k = _cut_level((c, row), _hides(zone, c * T, row * T, (c + 1) * T, (row + 1) * T), snap)
         return round(k * 8) / 8.0                 # eighths, so the stretch meshes stay cached
 
@@ -709,10 +1011,46 @@ def _draw_walls(r):
                 sc, sr, sw, sh = c0 + i, r0, j - i + 1, h
             else:
                 sc, sr, sw, sh = c0, r0 + i, w, j - i + 1
+            if levels[i] < 0.0:
+                i = j + 1
+                continue
             hgt = STUB_H + (_FULL_H[kind] - STUB_H) * levels[i]
             cx, _, cz = to3((sc + sw / 2.0) * T, (sr + sh / 2.0) * T)
             _put(r, _wall_mesh(kind, sw * T * K, sh * T * K, hgt, var), (cx, 0.0, cz))
+            if levels[i] >= 1.0 and kind != "container":
+                for tc in range(sc, sc + sw):
+                    for tr in range(sr, sr + sh):
+                        _roof_prop(r, tc, tr, hgt)
             i = j + 1
+
+
+def _roof_prop(r, col, row, hgt):
+    """Rooftop clutter on a full-height wall tile, fixed by the tile: AC
+    boxes, vent stacks, tar patches. Hidden with the wall when it is cut."""
+    pick = _d._m1_hash(col * 11 + 3, row * 13 + 5, 9)
+    if pick > 2:
+        return
+    x, _, z = to3(col * TILE_SIZE + TILE_SIZE / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
+    x += (_d._m1_hash(col, row, 5) - 2) * 0.12
+    _put(r, _mesh(("roof", pick), lambda: _roof_mesh(pick)), (x, hgt, z),
+         yaw=90.0 * _d._m1_hash(row, col, 2))
+
+
+def _roof_mesh(pick):
+    from engine3d import Mesh, box
+    m = Mesh()
+    if pick == 0:                                  # AC unit: lit lid, dark sides, fan grille
+        m.add(box(0.72, 0.36, 0.52, (64, 66, 68), center=(0.0, 0.18, 0.0),
+                  cols={"top": (96, 98, 100)}))
+        m.add(box(0.36, 0.01, 0.36, (30, 32, 34), center=(-0.1, 0.365, 0.0)))
+        m.add(box(0.74, 0.03, 0.04, (110, 112, 112), center=(0.0, 0.33, -0.25)))
+    elif pick == 1:                                # vent stack with a cap
+        m.add(box(0.16, 0.5, 0.16, (54, 52, 50), center=(0.0, 0.25, 0.0), cols={"top": (24, 24, 26)}))
+        m.add(box(0.28, 0.05, 0.28, (82, 80, 78), center=(0.0, 0.54, 0.0)))
+    else:                                          # tar patch and a hatch
+        m.add(box(1.0, 0.012, 0.7, (34, 33, 34), center=(0.0, 0.006, 0.0)))
+        m.add(box(0.5, 0.1, 0.5, (58, 56, 54), center=(0.25, 0.05, 0.05), cols={"top": (78, 76, 72)}))
+    return m
 
 
 def _door_axis(d):
@@ -721,11 +1059,11 @@ def _door_axis(d):
     return _glyph(col - 1, row) not in ("", ".") or _glyph(col + 1, row) not in ("", ".")
 
 
-def _draw_doors(r):
+def _draw_doors(r, film=None):
     from engine3d import Mesh, box, tex
     T = TILE_SIZE
     s = T * K
-    zone = _cut_zone()
+    zone = None if film else _cut_zone()
     snap = _cache.get("cut_snap", True)
     for d in STATE.doors:
         p = max(0.0, min(1.0, d.anim_progress))
@@ -794,11 +1132,53 @@ def _motion(key, x, y, angle):
     return m[2], m[3] > 0.5
 
 
-def _body(r, hum, x, y, angle, rig, mode, key, flashes=None, flash=False, tint=None):
+# Pistol-butt strike, as offsets on the aim hold: (progress, offsets). The
+# torso coils back, then whips through with a lean while the gun arm chops
+# the butt down and forward; the last half eases home.
+MELEE_KEYS = (
+    (0.00, {}),
+    (0.28, {"twist": -38, "spine": -4, "rsh_p": 34, "rel": 38, "rifle_p": -48,
+            "lsh_p": -26, "lel": 30, "head_y": 10}),
+    (0.42, {"twist": 34, "spine": 18, "rsh_p": 18, "rel": -46, "rifle_p": 64,
+            "lsh_p": -40, "lel": 46, "head_y": -8, "head_p": 8}),
+    (0.55, {"twist": 28, "spine": 15, "rsh_p": 12, "rel": -38, "rifle_p": 56,
+            "lsh_p": -36, "lel": 40, "head_p": 6}),
+    (1.00, {}),
+)
+MELEE_LUNGE_PX = 12        # sim px the body steps into the strike
+
+
+def _ease(t):
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _melee_offsets(p):
+    for (p0, a), (p1, b) in zip(MELEE_KEYS, MELEE_KEYS[1:]):
+        if p <= p1:
+            t = _ease((p - p0) / (p1 - p0))
+            return {k: a.get(k, 0.0) + (b.get(k, 0.0) - a.get(k, 0.0)) * t
+                    for k in set(a) | set(b)}
+    return {}
+
+
+def _melee_progress():
+    if not getattr(STATE, "melee_active", False) or STATE.melee_timer <= 0:
+        return None
+    dur = max(1.0, float(getattr(STATE, "melee_duration", 18)))
+    return max(0.0, min(1.0, 1.0 - STATE.melee_timer / dur))
+
+
+def _body(r, hum, x, y, angle, rig, mode, key, flashes=None, flash=False, tint=None,
+          melee=None):
     from engine3d import POSES, pose_run
     phase, moving = _motion(key, x, y, angle)
     base = pose_run(phase, lean=4) if moving else dict(POSES["stand"])
     pose = td.held(hum, base, rig, mode)
+    if melee is not None:
+        for k, v in _melee_offsets(melee).items():
+            pose[k] = pose.get(k, 0.0) + v
+        lunge = MELEE_LUNGE_PX * math.sin(math.pi * min(1.0, melee / 0.7))
+        x, y = x + math.cos(angle) * lunge, y + math.sin(angle) * lunge
     if flash:
         pose["rifle_p"] = pose.get("rifle_p", 0.0) - 6.0
     joints = r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=True, tint=tint)
@@ -813,8 +1193,9 @@ def _body(r, hum, x, y, angle, rig, mode, key, flashes=None, flash=False, tint=N
 
 
 def _feet(r, x, y, col, rad=0.42):
-    """A ground ring: who is who reads from the floor."""
-    td.ring(r, *_xz(x, y), rad, col, width=2)
+    """A tactical floor marker over a soft drop shadow: who is who reads
+    from the floor."""
+    r.add_sprite(to3(x, y, 0.02), td.tac_ring(rad, col), layer=0)
 
 
 def _burning(r, x, y, k, tm, seed, flashes, lying=False):
@@ -869,10 +1250,12 @@ def _draw_cast(r, flashes, tm):
     if getattr(STATE, "exfil_van_arrived", False):
         # rear against the east wall, nose west (the 2D van overlaps the wall)
         cx, _, cz = to3(27 * T - 1.8 / K, 31 * T + 16)
+        r.add_sprite((cx, 0.02, cz), td.shadow(2.0, 0.95, 150), layer=0)
         _put(r, _mesh("van", lambda: _van((34, 36, 40))), (cx, 0.0, cz), yaw=180.0)
     if STATE.notebook_collected and STATE.EXFIL_POS:
         ex, _, ez = to3(*STATE.EXFIL_POS)
         ex -= 1.0                     # clear of the van's nose when both are parked
+        r.add_sprite((ex, 0.02, ez), td.shadow(2.1, 0.95, 150), layer=0)
         _put(r, _truck(), (ex, 0.0, ez))
         for wz in (-0.6, 0.6):
             flashes.append({"pos": (ex + 2.2, 0.8, ez + wz), "color": (255, 230, 150),
@@ -882,20 +1265,7 @@ def _draw_cast(r, flashes, tm):
             bx, _, bz = to3(x + (-9, 1, -4)[i], y + (2, 3, -3)[i])
             _put(r, _mesh("brick", lambda: _box(0.3, 0.1, 0.15, (128, 64, 48))),
                  (bx, 0.05 + 0.1 * (i == 2), bz), yaw=i * 30.0)
-    for c in list(getattr(STATE, "corpses", ())):
-        hum = (td.armed("commander", "pistol") if c.is_commander else
-               td.armed("ipa", "os12", jacket=MAG if c.is_mag else IPA))
-        k = min(1.0, c.t / float(CORPSE_FALL))
-        pose = blend("kneel", "dead_side", k) if k > 0.35 else blend("stand", "kneel", k / 0.35)
-        at = to3(c.x, c.y)
-        if k >= 1.0:
-            r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - CORPSE_FALL) / 90.0)),
-                         layer=0)
-        burnt = hasattr(c, "burn")
-        r.add_humanoid(hum, pose, at, td.yaw_rad(c.angle) + 90.0 * c.fall_dir, rifle_on=False,
-                       tint=CHAR if burnt else None)
-        if burnt:
-            _burning(r, c.x, c.y, min(1.0, c.burn / 120.0), tm, id(c) % 97, flashes, lying=True)
+    _draw_corpses(r, flashes, tm)
     flash_on = STATE.muzzle_flash_timer > 0
     for e in STATE.enemies:
         hum, rig = _enemy_hum(e)
@@ -912,11 +1282,32 @@ def _draw_cast(r, flashes, tm):
         _draw_dead_player(r)
         return
     hum, rig = player_hum()
-    mode = "ready" if (STATE.is_reloading or STATE.melee_active) else "aim"
+    melee = _melee_progress()
+    mode = "ready" if STATE.is_reloading else "aim"
     _feet(r, p.rect.centerx, p.rect.centery, RING_YOU, rad=0.46)
-    _body(r, hum, p.rect.centerx, p.rect.centery, p.angle, rig, mode, "player", flashes, flash_on)
+    _body(r, hum, p.rect.centerx, p.rect.centery, p.angle, rig, mode, "player", flashes,
+          flash_on and melee is None, melee=melee)
     _burning(r, p.rect.centerx, p.rect.centery,
              min(1.0, getattr(STATE, "_m1_player_burn", 0) / 30.0), tm, 7, flashes)
+
+
+def _draw_corpses(r, flashes, tm):
+    from engine3d import blend
+    for c in list(getattr(STATE, "corpses", ())):
+        hum = (td.armed("commander", "pistol") if c.is_commander else
+               td.armed("ipa", "os12", jacket=MAG if c.is_mag else IPA))
+        k = min(1.0, c.t / float(CORPSE_FALL))
+        pose = blend("kneel", "dead_side", k) if k > 0.35 else blend("stand", "kneel", k / 0.35)
+        at = to3(c.x, c.y)
+        if k >= 1.0:
+            r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - CORPSE_FALL) / 90.0)),
+                         layer=0)
+        burnt = hasattr(c, "burn")
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=0)
+        r.add_humanoid(hum, pose, at, td.yaw_rad(c.angle) + 90.0 * c.fall_dir, rifle_on=False,
+                       tint=CHAR if burnt else None)
+        if burnt:
+            _burning(r, c.x, c.y, min(1.0, c.burn / 120.0), tm, id(c) % 97, flashes, lying=True)
 
 
 def _xz(x, y):
@@ -1027,6 +1418,34 @@ def _fuel_pool(x, z, rad, seed):
     return m
 
 
+FIRE_CULL_PX = 256       # fire zones this far outside the 2D camera rect are skipped
+_POOLS = {}
+
+
+def _fuel_pool_at(r, x, z, rad, seed):
+    """``_fuel_pool`` packed once at the origin per (seed, ~6% radius step) and
+    moved per frame; rebuilding and packing it per zone per frame was the bulk
+    of a late-mission fire's cost (the bay fire alone is 26 zones)."""
+    if not hasattr(r, "add_packed"):
+        from cutscenes import m6world3d as _w
+        _w.add(r, _fuel_pool(x, z, rad, seed))
+        return
+    rq = round(math.log(max(rad, 0.05)) * 16.0)
+    key = (round(seed, 1), rq)
+    arr = _POOLS.get(key)
+    if arr is None:
+        if len(_POOLS) > 512:
+            _POOLS.clear()
+        m = _fuel_pool(0.0, 0.0, math.exp(rq / 16.0), seed)
+        faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
+        arr = _POOLS[key] = r.pack(m.verts, faces)
+    if arr is not None:
+        arr = arr.copy()
+        arr[:, 0] += x
+        arr[:, 2] += z
+        r.add_packed(arr)
+
+
 def _draw_fx(r, flashes, tm):
     from cutscenes import m6fx3d as _fx
     from core.config import C_BULLET
@@ -1058,14 +1477,17 @@ def _draw_fx(r, flashes, tm):
         if k > 0.05:
             r.add_sprite(to3(decal[0], decal[1], 0.015),
                          td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    cx0, cy0 = _d._M1_CAM[0] - FIRE_CULL_PX, _d._M1_CAM[1] - FIRE_CULL_PX
+    cx1, cy1 = cx0 + WIDTH + 2 * FIRE_CULL_PX, cy0 + HEIGHT + 2 * FIRE_CULL_PX
     for fz in STATE.fire_zones:
+        if not (cx0 < fz.x < cx1 and cy0 < fz.y < cy1):
+            continue                              # off-screen: no flames, pool or light
         life = fz.life / float(max(1, fz.max_life))
         heat = min(1.0, life * 4.0)               # the last quarter of a fire dies down
         x, _, z = to3(fz.x, fz.y)
         rad = fz.radius * K
         r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
-        from cutscenes import m6world3d as _w
-        _w.add(r, _fuel_pool(x, z, rad * (0.55 + 0.45 * heat), fz.x * 0.37 + fz.y * 0.11))
+        _fuel_pool_at(r, x, z, rad * (0.55 + 0.45 * heat), fz.x * 0.37 + fz.y * 0.11)
         n = 1 + min(9, int(rad / 0.3))
         for i in range(n):                        # the layered M7 flame: a tall core, licks over the pool
             a = i * 2.39996 + fz.x * 0.013
@@ -1093,7 +1515,7 @@ def _draw_fx(r, flashes, tm):
                          _fx.glow((255, 140, 40), 0.22, tm, flicker=0.55, seed=int(p[2] * 100),
                                   core=(255, 200, 120), intensity=1.0, max_px=16),
                          layer=_fx.FX_LAYER)
-        r.add_sprite((p[0], 0.02, p[2]), td.blood_pool(0.25, (12, 12, 14)), layer=0)
+        r.add_sprite((p[0], 0.02, p[2]), td.shadow(0.16, alpha=120), layer=0)
     for b in STATE.bullets:
         head = to3(b["x"], b["y"], AIM_H)
         tail = to3(b.get("prev_x", b["x"] - b["dx"]), b.get("prev_y", b["y"] - b["dy"]), AIM_H)
@@ -1140,15 +1562,18 @@ def dropoff(surface, t, zoom=1.0, locked=False):
             if e.rect.centery < M1_STREET_ROW * T:
                 hum, rig = _enemy_hum(e)
                 pose = td.held(hum, dict(POSES["stand"]), rig, "ready")
+                r.add_sprite(to3(e.rect.centerx, e.rect.centery, 0.02), td.shadow(0.42), layer=0)
                 r.add_humanoid(hum, pose, to3(e.rect.centerx, e.rect.centery), td.yaw_rad(e.angle))
         hum, rig = player_hum()
         base = pose_run(t * 0.009, lean=3) if moving else dict(POSES["stand"])
+        r.add_sprite(to3(bx, by, 0.02), td.shadow(0.42), layer=0)
         r.add_humanoid(hum, td.held(hum, base, rig, "ready"), to3(bx, by), td.yaw_rad(facing))
         van = _d._dropoff_van(t)
         if van is None:
             return
         rear, vy = van
         x, _, z = to3(rear + VAN_LEN / 2.0 / K, vy)
+        r.add_sprite((x, 0.02, z), td.shadow(2.0, 0.95, 150), layer=0)
         _put(r, _mesh("dropoff_van", lambda: _van(VAN_COL)), (x, 0.0, z))
         hot = t < _d._DROPOFF_ARRIVE_MS + 300 or t > _d._DROPOFF_LEAVE_MS
         tail = (x - VAN_LEN / 2.0 - 0.1, 0.65, z)
@@ -1289,4 +1714,4 @@ def _overlay(q, v):
     if STATE.breach_stage in (3, 4):
         q.submit(_UiPassDraw(_d._draw_m1_breach_wash, "m1.wash"), _L.OVERLAY_WORLD, sort_key=(6, 0))
     q.submit(_UiPassDraw(lambda s: draw_scanlines(s), "m1.scanlines"), _L.OVERLAY_WORLD, sort_key=(7, 0))
-    q.submit(_UiPassDraw(lambda s: draw_vignette(s), "m1.vignette"), _L.OVERLAY_WORLD, sort_key=(8, 0))
+    q.submit(_UiPassDraw(_grade.vignette, "m1.vignette"), _L.OVERLAY_WORLD, sort_key=(8, 0))

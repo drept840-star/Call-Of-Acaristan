@@ -59,10 +59,12 @@ PORTRAIT_PX = 24           # portrait source size (spr_portraits frames)
 
 BODY_RGB = (226, 238, 214)     # phosphor white on the display glass
 HIST_RGB = (196, 204, 192)
-CASE = (50, 54, 46)            # olive gunmetal
-CASE_HI = (82, 88, 72)
-CASE_LO = (28, 30, 26)
-CASE_INK = (12, 13, 11)
+CASE = (24, 28, 32)            # dark slate, the tactical HUD panel
+CASE_HI = (58, 68, 76)         # steel edge (#3a444c, the minimap frame)
+CASE_LO = (13, 15, 18)
+CASE_INK = (7, 8, 10)
+STRIPE_W = 3                   # left accent stripe, px
+FADE_W = 90                    # right edge eases out to clear, px
 GLASS = (10, 15, 12)
 GLASS_HI = (24, 32, 26)
 AMBER = (255, 178, 64)
@@ -346,6 +348,23 @@ def _screen_overlay(chip, u):
     return hit
 
 
+def _fade_right(s, fade_w):
+    """Ease the last ``fade_w`` px of ``s`` out to clear (per-pixel alpha)."""
+    w = s.get_width()
+    fade_w = min(fade_w, w)
+    ramp = _fade_ramps.get(fade_w)
+    if ramp is None:
+        ramp = _fade_ramps[fade_w] = [1.0 - (i + 1) / float(fade_w) for i in range(fade_w)]
+    a = pygame.surfarray.pixels_alpha(s)
+    for i, k in enumerate(ramp):
+        col = a[w - fade_w + i]
+        col[:] = col * k
+    del a
+
+
+_fade_ramps = {}
+
+
 def _chassis_for(w, h, u, layout):
     key = (w, h, u, layout["screen"].topleft, layout.get("grille") is not None)
     hit = _chassis.get(key)
@@ -495,7 +514,8 @@ class RadioTransmission:
         s = pygame.Surface((panel_w, hgt), pygame.SRCALPHA)
         s.fill((14, 16, 13, int(alpha * 0.85)))
         s.fill((*CASE_LO, alpha), (0, hgt - u, panel_w, u))
-        s.fill((*acc, alpha), (0, 0, u, hgt))
+        s.fill((*acc, alpha), (0, 0, STRIPE_W, hgt))
+        _fade_right(s, FADE_W)
         x = 3 * u
         if name:
             t = font.render(name, False, acc)
@@ -677,6 +697,8 @@ class RadioTransmission:
                 _noise[key] = noise
             s.blit(noise, (0, 0))
 
+        s.fill(acc, (0, 0, STRIPE_W, panel_h))
+        _fade_right(s, FADE_W)
         s.set_alpha(int(255 * alpha))
         surface.blit(s, (x0 + int(slide), bottom - panel_h))
         return pygame.Rect(x0, bottom - panel_h, panel_w, panel_h)

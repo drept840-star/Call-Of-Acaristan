@@ -939,6 +939,7 @@
     "REF_H",
     "SPECS",
     "draw_character",
+    "draw_prop",
     "Pen",
     "face",
     "mix",
@@ -1014,7 +1015,11 @@
     },
     "draw_character": {
      "kind": "function",
-     "signature": "(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False, t=0, fear=0, smile=0, blink=0, look=None, moving=0, prop=None, prop_label=None, label_font=None, *, seated=False, reach=None, bow=0, wardrobe=None, arms=True)"
+     "signature": "(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False, t=0, fear=0, smile=0, blink=0, look=None, moving=0, prop=None, prop_label=None, label_font=None, *, seated=False, reach=None, bow=0, wardrobe=None, arms=True, prop_at=None, prop_offset=(10, -8))"
+    },
+    "draw_prop": {
+     "kind": "function",
+     "signature": "(surface, kind, x, y, scale, facing_right=True, angle=0)"
     },
     "face": {
      "kind": "function",
@@ -1037,7 +1042,8 @@
     "REF_H",
     "KRAP_UNIFORM",
     "KRAP_BLUE",
-    "draw_character"
+    "draw_character",
+    "draw_prop"
    ],
    "names": {
     "HEIGHT": {
@@ -1062,7 +1068,11 @@
     },
     "draw_character": {
      "kind": "function",
-     "signature": "(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False, t=0, fear=0, smile=0, blink=0, look=None, moving=0, prop=None, prop_label=None, label_font=None, *, seated=False, reach=None, bow=0, wardrobe=None, arms=True)"
+     "signature": "(surface, who, cx, foot_y, scale=1.0, facing_right=True, silhouette=False, t=0, fear=0, smile=0, blink=0, look=None, moving=0, prop=None, prop_label=None, label_font=None, *, seated=False, reach=None, bow=0, wardrobe=None, arms=True, prop_at=None, prop_offset=(10, -8))"
+    },
+    "draw_prop": {
+     "kind": "function",
+     "signature": "(surface, kind, x, y, scale, facing_right=True, angle=0)"
     }
    }
   },
@@ -1789,6 +1799,8 @@
    "all": [
     "BoxWorld",
     "GridNav",
+    "MeshCollider",
+    "Placement",
     "ray_aabb"
    ],
    "names": {
@@ -1819,6 +1831,27 @@
       "walk_clear": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'bool'"
      }
     },
+    "MeshCollider": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, verts: 'Iterable[Vec3]', faces: 'Iterable[Sequence[int]]', cell: 'float' = 2.0) -> 'None'",
+      "at": "(self, x: 'float', y: 'float', z: 'float', rot_deg: 'float' = 0.0) -> \"'Placement'\"",
+      "candidates": "(self, x0, z0, x1, z1) -> 'set[int]'"
+     }
+    },
+    "Placement": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, shape: 'MeshCollider', x: 'float', y: 'float', z: 'float', rot_deg: 'float' = 0.0) -> 'None'",
+      "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'float | None'",
+      "world_box": "(self) -> 'tuple[float, ...]'"
+     }
+    },
     "ray_aabb": {
      "kind": "function",
      "signature": "(o: 'Vec3', d: 'Vec3', lo: 'Vec3', hi: 'Vec3') -> 'float | None'"
@@ -1846,6 +1879,35 @@
     "ray_aabb": {
      "kind": "function",
      "signature": "(o: 'Vec3', d: 'Vec3', lo: 'Vec3', hi: 'Vec3') -> 'float | None'"
+    }
+   }
+  },
+  "engine.collision.mesh": {
+   "all": [
+    "MeshCollider",
+    "Placement"
+   ],
+   "names": {
+    "MeshCollider": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, verts: 'Iterable[Vec3]', faces: 'Iterable[Sequence[int]]', cell: 'float' = 2.0) -> 'None'",
+      "at": "(self, x: 'float', y: 'float', z: 'float', rot_deg: 'float' = 0.0) -> \"'Placement'\"",
+      "candidates": "(self, x0, z0, x1, z1) -> 'set[int]'"
+     }
+    },
+    "Placement": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, shape: 'MeshCollider', x: 'float', y: 'float', z: 'float', rot_deg: 'float' = 0.0) -> 'None'",
+      "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'float | None'",
+      "world_box": "(self) -> 'tuple[float, ...]'"
+     }
     }
    }
   },
@@ -5516,10 +5578,14 @@
    "names": {
     "Theme": {
      "attrs": {
+      "c_amber": "tuple",
+      "c_edge": "tuple",
       "c_grey": "tuple",
       "c_krap_blue": "tuple",
       "c_krap_uniform": "tuple",
       "c_orange": "tuple",
+      "c_panel": "tuple",
+      "c_panel_alpha": "int",
       "c_terminal": "tuple",
       "c_white": "tuple",
       "font_btn": "NoneType",
@@ -5537,10 +5603,14 @@
      },
      "bases": [],
      "fields": [
+      "c_amber",
+      "c_edge",
       "c_grey",
       "c_krap_blue",
       "c_krap_uniform",
       "c_orange",
+      "c_panel",
+      "c_panel_alpha",
       "c_terminal",
       "c_white",
       "extra",
@@ -5560,8 +5630,9 @@
      ],
      "kind": "class",
      "methods": {
-      "__init__": "(self, size: 'tuple[int, int]' = (1000, 700), letter_h: 'int' = 80, tile_size: 'int' = 64, font_prompt: 'object | None' = None, font_terminal: 'object | None' = None, font_terminal_small: 'object | None' = None, font_dialogue: 'object | None' = None, font_speaker: 'object | None' = None, font_title: 'object | None' = None, font_location: 'object | None' = None, font_location_sub: 'object | None' = None, font_btn: 'object | None' = None, c_white: 'tuple[int, int, int]' = (240, 240, 240), c_grey: 'tuple[int, int, int]' = (150, 150, 150), c_orange: 'tuple[int, int, int]' = (255, 120, 0), c_terminal: 'tuple[int, int, int]' = (50, 255, 150), c_krap_blue: 'tuple[int, int, int]' = (35, 65, 110), c_krap_uniform: 'tuple[int, int, int]' = (55, 65, 80), speaker_colors: 'dict' = <factory>, extra: 'dict' = <factory>) -> None",
+      "__init__": "(self, size: 'tuple[int, int]' = (1000, 700), letter_h: 'int' = 80, tile_size: 'int' = 64, font_prompt: 'object | None' = None, font_terminal: 'object | None' = None, font_terminal_small: 'object | None' = None, font_dialogue: 'object | None' = None, font_speaker: 'object | None' = None, font_title: 'object | None' = None, font_location: 'object | None' = None, font_location_sub: 'object | None' = None, font_btn: 'object | None' = None, c_white: 'tuple[int, int, int]' = (240, 240, 240), c_grey: 'tuple[int, int, int]' = (150, 150, 150), c_orange: 'tuple[int, int, int]' = (255, 120, 0), c_terminal: 'tuple[int, int, int]' = (50, 255, 150), c_krap_blue: 'tuple[int, int, int]' = (35, 65, 110), c_krap_uniform: 'tuple[int, int, int]' = (55, 65, 80), c_amber: 'tuple[int, int, int]' = (230, 159, 58), c_panel: 'tuple[int, int, int]' = (16, 19, 22), c_panel_alpha: 'int' = 200, c_edge: 'tuple[int, int, int]' = (58, 68, 76), speaker_colors: 'dict' = <factory>, extra: 'dict' = <factory>) -> None",
       "height": "property",
+      "panel": "(self, w: 'int', h: 'int', *, fade: 'int' = 0, stripe=None, alpha: 'int | None' = None) -> 'pygame.Surface'",
       "speaker_accent": "(self, name: 'str') -> 'tuple[int, int, int]'",
       "width": "property"
      }
@@ -6421,10 +6492,14 @@
    "names": {
     "Theme": {
      "attrs": {
+      "c_amber": "tuple",
+      "c_edge": "tuple",
       "c_grey": "tuple",
       "c_krap_blue": "tuple",
       "c_krap_uniform": "tuple",
       "c_orange": "tuple",
+      "c_panel": "tuple",
+      "c_panel_alpha": "int",
       "c_terminal": "tuple",
       "c_white": "tuple",
       "font_btn": "NoneType",
@@ -6442,10 +6517,14 @@
      },
      "bases": [],
      "fields": [
+      "c_amber",
+      "c_edge",
       "c_grey",
       "c_krap_blue",
       "c_krap_uniform",
       "c_orange",
+      "c_panel",
+      "c_panel_alpha",
       "c_terminal",
       "c_white",
       "extra",
@@ -6465,8 +6544,9 @@
      ],
      "kind": "class",
      "methods": {
-      "__init__": "(self, size: 'tuple[int, int]' = (1000, 700), letter_h: 'int' = 80, tile_size: 'int' = 64, font_prompt: 'object | None' = None, font_terminal: 'object | None' = None, font_terminal_small: 'object | None' = None, font_dialogue: 'object | None' = None, font_speaker: 'object | None' = None, font_title: 'object | None' = None, font_location: 'object | None' = None, font_location_sub: 'object | None' = None, font_btn: 'object | None' = None, c_white: 'tuple[int, int, int]' = (240, 240, 240), c_grey: 'tuple[int, int, int]' = (150, 150, 150), c_orange: 'tuple[int, int, int]' = (255, 120, 0), c_terminal: 'tuple[int, int, int]' = (50, 255, 150), c_krap_blue: 'tuple[int, int, int]' = (35, 65, 110), c_krap_uniform: 'tuple[int, int, int]' = (55, 65, 80), speaker_colors: 'dict' = <factory>, extra: 'dict' = <factory>) -> None",
+      "__init__": "(self, size: 'tuple[int, int]' = (1000, 700), letter_h: 'int' = 80, tile_size: 'int' = 64, font_prompt: 'object | None' = None, font_terminal: 'object | None' = None, font_terminal_small: 'object | None' = None, font_dialogue: 'object | None' = None, font_speaker: 'object | None' = None, font_title: 'object | None' = None, font_location: 'object | None' = None, font_location_sub: 'object | None' = None, font_btn: 'object | None' = None, c_white: 'tuple[int, int, int]' = (240, 240, 240), c_grey: 'tuple[int, int, int]' = (150, 150, 150), c_orange: 'tuple[int, int, int]' = (255, 120, 0), c_terminal: 'tuple[int, int, int]' = (50, 255, 150), c_krap_blue: 'tuple[int, int, int]' = (35, 65, 110), c_krap_uniform: 'tuple[int, int, int]' = (55, 65, 80), c_amber: 'tuple[int, int, int]' = (230, 159, 58), c_panel: 'tuple[int, int, int]' = (16, 19, 22), c_panel_alpha: 'int' = 200, c_edge: 'tuple[int, int, int]' = (58, 68, 76), speaker_colors: 'dict' = <factory>, extra: 'dict' = <factory>) -> None",
       "height": "property",
+      "panel": "(self, w: 'int', h: 'int', *, fade: 'int' = 0, stripe=None, alpha: 'int | None' = None) -> 'pygame.Surface'",
       "speaker_accent": "(self, name: 'str') -> 'tuple[int, int, int]'",
       "width": "property"
      }

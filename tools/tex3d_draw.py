@@ -242,6 +242,27 @@ def concrete(rng):
     return img
 
 
+def pavement(rng):
+    """M1 street and yard paving, 32 texels/m: the concrete surface without
+    the hard slab joint, so the floor reads as one continuous pour. The
+    2 m seam is a dithered half-step darker line and the cracks are fewer."""
+    v = fbm(rng, [16, 8, 4], [0.45, 0.35, 0.2])
+    img = ramp(v, [SLATE_MID, BLUE_GREY, BLUE_GREY_HI, COOL_GREY], dither=1.0)
+    stain = noise(rng, 16) * noise(rng, 8)
+    img[(stain > 0.6) & (BAYER > 0.2)] = RUST_DARK
+    seam = (BAYER[0] > -0.1)
+    img[0, :] = np.where(seam[:, None], SLATE_MID, img[0, :])
+    img[:, 0] = np.where(seam[:, None], SLATE_MID, img[:, 0])
+    for _ in range(3):                               # hairline cracks
+        x, y = int(rng.integers(0, N)), int(rng.integers(0, N))
+        dx, dy = (1, 0) if rng.random() < 0.5 else (0, 1)
+        for _ in range(int(rng.integers(6, 14))):
+            x += dx + (int(rng.integers(-1, 2)) if dy else 0)
+            y += dy + (int(rng.integers(-1, 2)) if dx else 0)
+            put(img, x, y, SLATE_MID)
+    return img
+
+
 def brick(rng):
     """Old rust-red brick, 32 texels/m: 8 x 4 texel courses (25 x 12.5 cm),
     grey mortar, soot-darkened and chipped bricks."""
@@ -436,6 +457,7 @@ TEXTURES = {
     "metal_rib": (metal_rib, 17), "boxcar": (boxcar, 18), "crate": (crate, 19),
     "rust": (rust, 20), "steel": (steel, 21),
     "bone": (bone, 22), "scorch": (scorch, 23), "vault": (vault, 24),
+    "pavement": (pavement, 25),
 }
 
 

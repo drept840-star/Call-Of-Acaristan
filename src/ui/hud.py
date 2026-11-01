@@ -33,7 +33,7 @@ THEME = _Theme(
     font_prompt=font_prompt, font_terminal=font_terminal,
     font_terminal_small=font_terminal_small, font_dialogue=font_dialogue,
     font_speaker=font_speaker, font_title=font_title, font_btn=font_btn,
-    c_white=C_WHITE, c_grey=C_GREY, c_orange=C_ORANGE, c_terminal=C_TERMINAL,
+    c_white=C_WHITE, c_grey=C_GREY, c_orange=C_ORANGE, c_terminal=(75, 227, 122),
     c_krap_blue=C_KRAP_BLUE, speaker_colors=SPEAKER_COLORS,
 )
 

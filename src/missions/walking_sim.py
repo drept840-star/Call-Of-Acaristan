@@ -1,6 +1,7 @@
 """Walking sim section: slum exploration, NPCs, firefight overlook panorama."""
 import math
 import random
+import sys
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
 from core.config import (CONTAINER_TILE_BLUE, CONTAINER_TILE_GREY, CONTAINER_TILE_RED, CONTAINER_TILE_RUST, C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_PLAYER_SKIN, C_WHITE, FLOOR_TILE_SIZE, HEIGHT, LETTER_H, SCENE_BOT, SCENE_TOP, SLUM_FLOOR, TILE_SIZE, WIDTH, audio, draw_letterbox, draw_rain, draw_scanlines, draw_vignette, font_btn, font_dialogue, font_prompt, font_speaker, font_terminal, font_terminal_small, get_scaled_mouse, screen)
@@ -14,6 +15,7 @@ from ui.hud import MiniMap
 from engine.ui import crosshair as _hud_crosshair
 from cutscenes import draw_dialogue_box
 from missions.walking_attack3d import draw_oilrig_attack_3d
+from missions import walk3d
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
 _attack_voice_queue = []
@@ -243,6 +245,9 @@ def _draw_walk_hover_prompt(surface, fcx, fcy):
     hover = walk_active_hover
     px = walk_player.rect.centerx - fcx
     py = walk_player.rect.centery - fcy
+    _head = walk3d.head_point(walk_player.rect.centerx, walk_player.rect.centery)
+    if _head is not None:
+        px, py = _head[0], _head[1] + 38
     action = hover.get("action")
     if action == "talk":
         head = font_btn.render(_T("ws.prompt_talk"), True, C_ORANGE)
@@ -536,6 +541,9 @@ def update_walking_sim(keys):
         mx, my = get_scaled_mouse()
         world_mx = mx + walk_render_x
         world_my = my + walk_render_y
+        _aim = walk3d.aim((mx, my), walk_render_x, walk_render_y)
+        if _aim is not None:
+            world_mx, world_my = _aim
         walk_player.angle = math.atan2(
             world_my - walk_player.rect.centery, world_mx - walk_player.rect.centerx
         )
@@ -3268,31 +3276,8 @@ def _walk_van_lights(fcx, fcy):
     ]
     return lamps, []
 
-def draw_walking_sim():
-    if walk_player is None:
-        return
-    # Nuclear option: while the overlook attack is active, render ONLY the
-    # cinematic scene and its dialogue. Do not draw the walking-sim map at all.
-    if STATE.walk_attack_active or STATE.walk_terminal_active:
-        _draw_walk_attack_overlook(screen)
-        if walk_dialogue_active and walk_dialogue_text:
-            draw_dialogue_box(
-                screen,
-                walk_dialogue_speaker,
-                walk_dialogue_text,
-                walk_dialogue_char_idx,
-                len(walk_dialogue_text),
-            )
-        return
-    if walk_return_timer > 120:
-        # Hold the final burning-rigs feed under the signal-lost overlay before
-        # fading into the playable harbor view. This makes the handoff breathe.
-        _draw_walk_attack_overlook(screen, force=True)
-        _draw_walk_return_overlay(screen)
-        return
-    screen.fill((16, 18, 22))
-    # Render from the integer render camera (follow + shake), like M2/M3.
-    fcx, fcy = int(round(walk_render_x)), int(round(walk_render_y))
+def _draw_walk_world_2d(fcx, fcy):
+    """The painted 2D world pass (the fallback when 2.5D is off)."""
     screen.blit(_walk_static_layer(), (0, 0), (fcx, fcy, WIDTH, HEIGHT))
     _draw_walk_props(fcx, fcy)
     for sx, sy, key, label, text in walk_story_points:
@@ -3445,6 +3430,34 @@ def draw_walking_sim():
                 pygame.draw.circle(screen, npc["color"], (nx, ny), 12)
                 pygame.draw.circle(screen, C_PLAYER_SKIN, (nx, ny), 7)
     _walk_light_pass(fcx, fcy)
+
+def draw_walking_sim():
+    if walk_player is None:
+        return
+    # Nuclear option: while the overlook attack is active, render ONLY the
+    # cinematic scene and its dialogue. Do not draw the walking-sim map at all.
+    if STATE.walk_attack_active or STATE.walk_terminal_active:
+        _draw_walk_attack_overlook(screen)
+        if walk_dialogue_active and walk_dialogue_text:
+            draw_dialogue_box(
+                screen,
+                walk_dialogue_speaker,
+                walk_dialogue_text,
+                walk_dialogue_char_idx,
+                len(walk_dialogue_text),
+            )
+        return
+    if walk_return_timer > 120:
+        # Hold the final burning-rigs feed under the signal-lost overlay before
+        # fading into the playable harbor view. This makes the handoff breathe.
+        _draw_walk_attack_overlook(screen, force=True)
+        _draw_walk_return_overlay(screen)
+        return
+    screen.fill((16, 18, 22))
+    # Render from the integer render camera (follow + shake), like M2/M3.
+    fcx, fcy = int(round(walk_render_x)), int(round(walk_render_y))
+    if not walk3d.draw(sys.modules[__name__], screen, fcx, fcy):
+        _draw_walk_world_2d(fcx, fcy)
     observing_attack = walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight)
     if not observing_attack:
         draw_rain(screen, rain_drops, speed_mul=1.0)

@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-11-01T16:22:48.519Z",
-    "fileCount": 489,
+    "lastScanned": "2026-11-01T20:21:30.175Z",
+    "fileCount": 493,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "087ce7b978685cde34e2d6cbaeec3c49279465b322f49bd4aa594bb3352313f0",
-    "storeUpdatedAt": "2026-11-01T16:22:48.528Z",
-    "rootHash": "e60c3dbbb12b8e3b"
+    "renderedHash": "5613b055d3704c622799902ee93798e5fc12690349fb7aeeaeebf0b80ece537e",
+    "storeUpdatedAt": "2026-11-01T20:21:30.185Z",
+    "rootHash": "f2288eef8709047d"
   },
   "files": {
     ".gitattributes": {
@@ -28363,222 +28363,222 @@
     },
     "src/ui/hud.py": {
       "description": "HUD overlays: minimap, safe keypad, notebook inspection, desk notes.",
-      "tokens": 17073,
-      "hash": "2f706158d663d134",
-      "size": 60047,
-      "mtimeMs": 1792793227170.7322,
-      "updatedAt": "2026-10-23T22:07:07.382Z",
+      "tokens": 18364,
+      "hash": "8c387a8c87e04fa1",
+      "size": 64573,
+      "mtimeMs": 1793557654149.589,
+      "updatedAt": "2026-11-01T18:27:34.284Z",
       "source": "hook",
       "symbols": [
         {
           "name": "MiniMap",
           "kind": "class",
           "startLine": 41,
-          "endLine": 46,
-          "tokens": 89
+          "endLine": 60,
+          "tokens": 187
         },
         {
-          "name": "_draw_dirty_hand_text",
+          "name": "_note_fibres",
           "kind": "fn",
-          "startLine": 47,
-          "endLine": 65,
-          "tokens": 279
+          "startLine": 61,
+          "endLine": 70,
+          "tokens": 120
+        },
+        {
+          "name": "_build_crumpled_scrap",
+          "kind": "fn",
+          "startLine": 71,
+          "endLine": 114,
+          "tokens": 691
         },
         {
           "name": "_draw_crumpled_safe_scrap",
           "kind": "fn",
-          "startLine": 66,
-          "endLine": 180,
-          "tokens": 1674
+          "startLine": 115,
+          "endLine": 131,
+          "tokens": 255
         },
         {
           "name": "_schedule_text_ticks",
           "kind": "fn",
-          "startLine": 181,
-          "endLine": 187,
+          "startLine": 132,
+          "endLine": 138,
           "tokens": 96
         },
         {
           "name": "_play_ui_type_tick",
           "kind": "fn",
-          "startLine": 188,
-          "endLine": 192,
+          "startLine": 139,
+          "endLine": 143,
           "tokens": 37
+        },
+        {
+          "name": "_build_typed_note",
+          "kind": "fn",
+          "startLine": 144,
+          "endLine": 190,
+          "tokens": 686
         },
         {
           "name": "draw_desk_note",
           "kind": "fn",
-          "startLine": 193,
-          "endLine": 239,
-          "tokens": 554
+          "startLine": 191,
+          "endLine": 237,
+          "tokens": 524
+        },
+        {
+          "name": "_leaf_bleed",
+          "kind": "fn",
+          "startLine": 238,
+          "endLine": 264,
+          "tokens": 277
+        },
+        {
+          "name": "build_notebook_leaf",
+          "kind": "fn",
+          "startLine": 265,
+          "endLine": 309,
+          "tokens": 588
         },
         {
           "name": "reset_notebook_inspect",
           "kind": "fn",
-          "startLine": 240,
-          "endLine": 242,
+          "startLine": 310,
+          "endLine": 312,
           "tokens": 28
         },
         {
           "name": "draw_notebook_inspection",
           "kind": "fn",
-          "startLine": 243,
-          "endLine": 427,
-          "tokens": 2245
+          "startLine": 313,
+          "endLine": 505,
+          "tokens": 2382
         },
         {
           "name": "_safe_666_asset_candidates",
           "kind": "fn",
-          "startLine": 428,
-          "endLine": 452,
+          "startLine": 506,
+          "endLine": 530,
           "tokens": 279
         },
         {
           "name": "_play_safe_666_demon_noise",
           "kind": "fn",
-          "startLine": 453,
-          "endLine": 476,
+          "startLine": 531,
+          "endLine": 554,
           "tokens": 225
         },
         {
           "name": "_stop_safe_666_demon_noise",
           "kind": "fn",
-          "startLine": 477,
-          "endLine": 507,
+          "startLine": 555,
+          "endLine": 585,
           "tokens": 236
         },
         {
           "name": "safe_666_3d_live",
           "kind": "fn",
-          "startLine": 508,
-          "endLine": 512,
+          "startLine": 586,
+          "endLine": 590,
           "tokens": 57
         },
         {
           "name": "_egg3d_begin",
           "kind": "fn",
-          "startLine": 513,
-          "endLine": 524,
+          "startLine": 591,
+          "endLine": 602,
           "tokens": 132
         },
         {
           "name": "_egg3d_stop",
           "kind": "fn",
-          "startLine": 525,
-          "endLine": 534,
+          "startLine": 603,
+          "endLine": 612,
           "tokens": 57
         },
         {
           "name": "_draw_safe_666_3d",
           "kind": "fn",
-          "startLine": 535,
-          "endLine": 552,
+          "startLine": 613,
+          "endLine": 630,
           "tokens": 170
         },
         {
           "name": "_safe_666_window_tamper",
           "kind": "fn",
-          "startLine": 553,
-          "endLine": 618,
+          "startLine": 631,
+          "endLine": 696,
           "tokens": 796
         },
         {
           "name": "_draw_safe_666_error_glyphs",
           "kind": "fn",
-          "startLine": 619,
-          "endLine": 645,
+          "startLine": 697,
+          "endLine": 723,
           "tokens": 287
         },
         {
           "name": "_safe_666_fake_crash",
           "kind": "fn",
-          "startLine": 646,
-          "endLine": 697,
+          "startLine": 724,
+          "endLine": 775,
           "tokens": 478
         },
         {
           "name": "_trigger_safe_666_easter_egg",
           "kind": "fn",
-          "startLine": 698,
-          "endLine": 728,
+          "startLine": 776,
+          "endLine": 806,
           "tokens": 332
         },
         {
           "name": "_safe_666_loud_open",
           "kind": "fn",
-          "startLine": 729,
-          "endLine": 751,
+          "startLine": 807,
+          "endLine": 829,
           "tokens": 287
         },
         {
           "name": "_submit_safe_keypad_code",
           "kind": "fn",
-          "startLine": 752,
-          "endLine": 762,
+          "startLine": 830,
+          "endLine": 840,
           "tokens": 113
         },
         {
           "name": "_draw_safe_666_easter_egg",
           "kind": "fn",
-          "startLine": 763,
-          "endLine": 1058,
+          "startLine": 841,
+          "endLine": 1136,
           "tokens": 3958
         },
         {
           "name": "draw_safe_keypad",
           "kind": "fn",
-          "startLine": 1059,
-          "endLine": 1180,
+          "startLine": 1137,
+          "endLine": 1258,
           "tokens": 1590
         },
         {
           "name": "handle_keypad_click",
           "kind": "fn",
-          "startLine": 1181,
-          "endLine": 1196,
+          "startLine": 1259,
+          "endLine": 1274,
           "tokens": 190
         },
         {
           "name": "handle_keypad_keypress",
           "kind": "fn",
-          "startLine": 1197,
-          "endLine": 1216,
+          "startLine": 1275,
+          "endLine": 1294,
           "tokens": 219
         },
         {
           "name": "_crosshair_color",
           "kind": "fn",
-          "startLine": 1217,
-          "endLine": 1235,
-          "tokens": 268
-        },
-        {
-          "name": "draw_crosshair",
-          "kind": "fn",
-          "startLine": 1236,
-          "endLine": 1306,
-          "tokens": 795
-        },
-        {
-          "name": "draw_gameplay_crosshair",
-          "kind": "fn",
-          "startLine": 1307,
-          "endLine": 1316,
-          "tokens": 106
-        },
-        {
-          "name": "draw_combat_reticle",
-          "kind": "fn",
-          "startLine": 1317,
-          "endLine": 1377,
-          "tokens": 751
-        },
-        {
-          "name": "draw_objective_panel",
-          "kind": "fn",
-          "startLine": 1378,
-          "endLine": 1398,
-          "tokens": 248
+          "startLine": 1295,
+          "endLine": 1476,
+          "tokens": 2168
         }
       ]
     },
@@ -35166,11 +35166,11 @@
     },
     "tools/smoke_test.py": {
       "description": "Must be set before pygame/config import.",
-      "tokens": 154153,
-      "hash": "cb60a08286bc3fc4",
-      "size": 541727,
-      "mtimeMs": 1793209064079.568,
-      "updatedAt": "2026-10-28T17:37:44.223Z",
+      "tokens": 155983,
+      "hash": "2c9dc6a8833017cf",
+      "size": 548134,
+      "mtimeMs": 1793552751508.3481,
+      "updatedAt": "2026-11-01T17:05:51.658Z",
       "source": "hook"
     },
     "src/cutscenes/ps2mat.py": {
@@ -35435,11 +35435,11 @@
     },
     "tools/tex3d_draw.py": {
       "description": "Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette.",
-      "tokens": 5676,
-      "hash": "41fe0999e41ce6c8",
-      "size": 20116,
-      "mtimeMs": 1792790014343.1667,
-      "updatedAt": "2026-10-23T21:13:34.536Z",
+      "tokens": 6119,
+      "hash": "ce840102cae75c3a",
+      "size": 21666,
+      "mtimeMs": 1793562052854.92,
+      "updatedAt": "2026-11-01T19:40:52.994Z",
       "source": "hook",
       "symbols": [
         {
@@ -35541,94 +35541,101 @@
           "tokens": 360
         },
         {
-          "name": "brick",
+          "name": "pavement",
           "kind": "fn",
           "startLine": 245,
-          "endLine": 270,
+          "endLine": 265,
+          "tokens": 298
+        },
+        {
+          "name": "brick",
+          "kind": "fn",
+          "startLine": 266,
+          "endLine": 291,
           "tokens": 350
         },
         {
           "name": "metal_rib",
           "kind": "fn",
-          "startLine": 271,
-          "endLine": 299,
+          "startLine": 292,
+          "endLine": 320,
           "tokens": 336
         },
         {
           "name": "boxcar",
           "kind": "fn",
-          "startLine": 300,
-          "endLine": 328,
+          "startLine": 321,
+          "endLine": 349,
           "tokens": 379
         },
         {
           "name": "crate",
           "kind": "fn",
-          "startLine": 329,
-          "endLine": 353,
+          "startLine": 350,
+          "endLine": 374,
           "tokens": 274
         },
         {
           "name": "rust",
           "kind": "fn",
-          "startLine": 354,
-          "endLine": 363,
+          "startLine": 375,
+          "endLine": 384,
           "tokens": 112
         },
         {
           "name": "steel",
           "kind": "fn",
-          "startLine": 364,
-          "endLine": 374,
+          "startLine": 385,
+          "endLine": 395,
           "tokens": 113
         },
         {
           "name": "bone",
           "kind": "fn",
-          "startLine": 375,
-          "endLine": 391,
+          "startLine": 396,
+          "endLine": 412,
           "tokens": 214
         },
         {
           "name": "scorch",
           "kind": "fn",
-          "startLine": 392,
-          "endLine": 404,
+          "startLine": 413,
+          "endLine": 425,
           "tokens": 166
         },
         {
           "name": "vault",
           "kind": "fn",
-          "startLine": 405,
-          "endLine": 441,
+          "startLine": 426,
+          "endLine": 462,
           "tokens": 466
         },
         {
           "name": "draw",
           "kind": "fn",
-          "startLine": 442,
-          "endLine": 451,
+          "startLine": 463,
+          "endLine": 472,
           "tokens": 86
         },
         {
           "name": "save",
           "kind": "fn",
-          "startLine": 452,
-          "endLine": 456,
+          "startLine": 473,
+          "endLine": 477,
           "tokens": 41
         },
         {
           "name": "sheet",
           "kind": "fn",
-          "startLine": 457,
-          "endLine": 469,
+          "startLine": 478,
+          "endLine": 490,
           "tokens": 143
         },
         {
           "name": "main",
           "kind": "fn",
-          "startLine": 470,
-          "endLine": 489,
+          "startLine": 491,
+          "endLine": 510,
           "tokens": 137
         }
       ]
@@ -38857,6 +38864,673 @@
       "mtimeMs": 1793547973600.3877,
       "updatedAt": "2026-11-01T15:46:13.739Z",
       "source": "hook"
+    },
+    "src/game/topdown3d.py": {
+      "description": "Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim.",
+      "tokens": 3555,
+      "hash": "b0ff44db51f29c42",
+      "size": 12685,
+      "mtimeMs": 1793562270268.0637,
+      "updatedAt": "2026-11-01T19:44:30.406Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "Cam",
+          "kind": "class",
+          "startLine": 29,
+          "endLine": 47,
+          "tokens": 211
+        },
+        {
+          "name": "enabled",
+          "kind": "fn",
+          "startLine": 48,
+          "endLine": 60,
+          "tokens": 100
+        },
+        {
+          "name": "disable",
+          "kind": "fn",
+          "startLine": 61,
+          "endLine": 65,
+          "tokens": 29
+        },
+        {
+          "name": "to3",
+          "kind": "fn",
+          "startLine": 66,
+          "endLine": 70,
+          "tokens": 33
+        },
+        {
+          "name": "to2",
+          "kind": "fn",
+          "startLine": 71,
+          "endLine": 75,
+          "tokens": 30
+        },
+        {
+          "name": "yaw_of",
+          "kind": "fn",
+          "startLine": 76,
+          "endLine": 81,
+          "tokens": 56
+        },
+        {
+          "name": "yaw_rad",
+          "kind": "fn",
+          "startLine": 82,
+          "endLine": 86,
+          "tokens": 50
+        },
+        {
+          "name": "_norm",
+          "kind": "fn",
+          "startLine": 87,
+          "endLine": 91,
+          "tokens": 36
+        },
+        {
+          "name": "_cross",
+          "kind": "fn",
+          "startLine": 92,
+          "endLine": 95,
+          "tokens": 32
+        },
+        {
+          "name": "View",
+          "kind": "class",
+          "startLine": 96,
+          "endLine": 149,
+          "tokens": 653
+        },
+        {
+          "name": "active_cam",
+          "kind": "fn",
+          "startLine": 150,
+          "endLine": 156,
+          "tokens": 67
+        },
+        {
+          "name": "mouse_world",
+          "kind": "fn",
+          "startLine": 157,
+          "endLine": 175,
+          "tokens": 179
+        },
+        {
+          "name": "armed",
+          "kind": "fn",
+          "startLine": 176,
+          "endLine": 197,
+          "tokens": 230
+        },
+        {
+          "name": "held",
+          "kind": "fn",
+          "startLine": 198,
+          "endLine": 205,
+          "tokens": 70
+        },
+        {
+          "name": "put",
+          "kind": "fn",
+          "startLine": 206,
+          "endLine": 236,
+          "tokens": 396
+        },
+        {
+          "name": "ring",
+          "kind": "fn",
+          "startLine": 237,
+          "endLine": 243,
+          "tokens": 86
+        },
+        {
+          "name": "mix",
+          "kind": "fn",
+          "startLine": 244,
+          "endLine": 247,
+          "tokens": 25
+        },
+        {
+          "name": "dot",
+          "kind": "fn",
+          "startLine": 248,
+          "endLine": 262,
+          "tokens": 166
+        },
+        {
+          "name": "_soft_surf",
+          "kind": "fn",
+          "startLine": 263,
+          "endLine": 279,
+          "tokens": 170
+        },
+        {
+          "name": "shadow",
+          "kind": "fn",
+          "startLine": 280,
+          "endLine": 295,
+          "tokens": 191
+        },
+        {
+          "name": "tac_ring",
+          "kind": "fn",
+          "startLine": 296,
+          "endLine": 323,
+          "tokens": 337
+        },
+        {
+          "name": "blood_pool",
+          "kind": "fn",
+          "startLine": 324,
+          "endLine": 334,
+          "tokens": 114
+        }
+      ]
+    },
+    "src/missions/m1/draw3d.py": {
+      "description": "Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules.",
+      "tokens": 22032,
+      "hash": "71d5454784cb3572",
+      "size": 78026,
+      "mtimeMs": 1793564490048.435,
+      "updatedAt": "2026-11-01T20:21:30.174Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "view",
+          "kind": "fn",
+          "startLine": 73,
+          "endLine": 77,
+          "tokens": 31
+        },
+        {
+          "name": "submit_frame",
+          "kind": "fn",
+          "startLine": 78,
+          "endLine": 101,
+          "tokens": 328
+        },
+        {
+          "name": "_tick_decals",
+          "kind": "fn",
+          "startLine": 102,
+          "endLine": 114,
+          "tokens": 126
+        },
+        {
+          "name": "render_world",
+          "kind": "fn",
+          "startLine": 115,
+          "endLine": 168,
+          "tokens": 565
+        },
+        {
+          "name": "_glyph",
+          "kind": "fn",
+          "startLine": 169,
+          "endLine": 174,
+          "tokens": 40
+        },
+        {
+          "name": "_wall_kind",
+          "kind": "fn",
+          "startLine": 175,
+          "endLine": 183,
+          "tokens": 56
+        },
+        {
+          "name": "_wall_boxes",
+          "kind": "fn",
+          "startLine": 184,
+          "endLine": 222,
+          "tokens": 396
+        },
+        {
+          "name": "_wall_mesh",
+          "kind": "fn",
+          "startLine": 223,
+          "endLine": 261,
+          "tokens": 474
+        },
+        {
+          "name": "_wall_shade",
+          "kind": "fn",
+          "startLine": 262,
+          "endLine": 282,
+          "tokens": 245
+        },
+        {
+          "name": "_facade_windows",
+          "kind": "fn",
+          "startLine": 283,
+          "endLine": 299,
+          "tokens": 206
+        },
+        {
+          "name": "_bands",
+          "kind": "fn",
+          "startLine": 300,
+          "endLine": 309,
+          "tokens": 144
+        },
+        {
+          "name": "_floor_col",
+          "kind": "fn",
+          "startLine": 310,
+          "endLine": 316,
+          "tokens": 36
+        },
+        {
+          "name": "_floor_tex",
+          "kind": "fn",
+          "startLine": 317,
+          "endLine": 323,
+          "tokens": 80
+        },
+        {
+          "name": "_tile_col",
+          "kind": "fn",
+          "startLine": 324,
+          "endLine": 331,
+          "tokens": 108
+        },
+        {
+          "name": "_build_set",
+          "kind": "fn",
+          "startLine": 332,
+          "endLine": 389,
+          "tokens": 804
+        },
+        {
+          "name": "_wobble",
+          "kind": "fn",
+          "startLine": 390,
+          "endLine": 393,
+          "tokens": 33
+        },
+        {
+          "name": "_ground_decals",
+          "kind": "fn",
+          "startLine": 394,
+          "endLine": 442,
+          "tokens": 733
+        },
+        {
+          "name": "_ao_rect",
+          "kind": "fn",
+          "startLine": 443,
+          "endLine": 454,
+          "tokens": 184
+        },
+        {
+          "name": "_shadow_at",
+          "kind": "fn",
+          "startLine": 455,
+          "endLine": 464,
+          "tokens": 125
+        },
+        {
+          "name": "_contact_shadows",
+          "kind": "fn",
+          "startLine": 465,
+          "endLine": 497,
+          "tokens": 454
+        },
+        {
+          "name": "_glyph_prop",
+          "kind": "fn",
+          "startLine": 498,
+          "endLine": 532,
+          "tokens": 496
+        },
+        {
+          "name": "_barrel",
+          "kind": "fn",
+          "startLine": 533,
+          "endLine": 548,
+          "tokens": 151
+        },
+        {
+          "name": "_at_mesh",
+          "kind": "fn",
+          "startLine": 549,
+          "endLine": 553,
+          "tokens": 36
+        },
+        {
+          "name": "_wheels",
+          "kind": "fn",
+          "startLine": 554,
+          "endLine": 567,
+          "tokens": 203
+        },
+        {
+          "name": "_lamps",
+          "kind": "fn",
+          "startLine": 568,
+          "endLine": 576,
+          "tokens": 132
+        },
+        {
+          "name": "_car_finish",
+          "kind": "fn",
+          "startLine": 577,
+          "endLine": 609,
+          "tokens": 507
+        },
+        {
+          "name": "_sedan",
+          "kind": "fn",
+          "startLine": 610,
+          "endLine": 639,
+          "tokens": 449
+        },
+        {
+          "name": "_van",
+          "kind": "fn",
+          "startLine": 640,
+          "endLine": 667,
+          "tokens": 393
+        },
+        {
+          "name": "_truck",
+          "kind": "fn",
+          "startLine": 668,
+          "endLine": 684,
+          "tokens": 185
+        },
+        {
+          "name": "_dressing",
+          "kind": "fn",
+          "startLine": 685,
+          "endLine": 1718,
+          "tokens": 13418
+        }
+      ]
+    },
+    "src/missions/m1/grade3d.py": {
+      "description": "Mission 1 night grade for the 2.5D frame: a screen-space light map.",
+      "tokens": 1367,
+      "hash": "f22b973f185fc63e",
+      "size": 4783,
+      "mtimeMs": 1793562094731.4678,
+      "updatedAt": "2026-11-01T19:41:34.844Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_base",
+          "kind": "fn",
+          "startLine": 33,
+          "endLine": 42,
+          "tokens": 83
+        },
+        {
+          "name": "_grad",
+          "kind": "fn",
+          "startLine": 43,
+          "endLine": 58,
+          "tokens": 165
+        },
+        {
+          "name": "_scale",
+          "kind": "fn",
+          "startLine": 59,
+          "endLine": 62,
+          "tokens": 20
+        },
+        {
+          "name": "_add",
+          "kind": "fn",
+          "startLine": 63,
+          "endLine": 73,
+          "tokens": 103
+        },
+        {
+          "name": "_light_map",
+          "kind": "fn",
+          "startLine": 74,
+          "endLine": 81,
+          "tokens": 50
+        },
+        {
+          "name": "apply",
+          "kind": "fn",
+          "startLine": 82,
+          "endLine": 115,
+          "tokens": 396
+        },
+        {
+          "name": "vignette",
+          "kind": "fn",
+          "startLine": 116,
+          "endLine": 131,
+          "tokens": 193
+        }
+      ]
+    },
+    "src/missions/walk3d.py": {
+      "description": "Walking sim in 2.5D: the harbour alley drawn in 3D over the 2D rules.",
+      "tokens": 6358,
+      "hash": "a1729869c4ea29e4",
+      "size": 22949,
+      "mtimeMs": 1793564438106.9143,
+      "updatedAt": "2026-11-01T20:20:38.240Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "view",
+          "kind": "fn",
+          "startLine": 49,
+          "endLine": 53,
+          "tokens": 31
+        },
+        {
+          "name": "aim",
+          "kind": "fn",
+          "startLine": 54,
+          "endLine": 61,
+          "tokens": 77
+        },
+        {
+          "name": "head_point",
+          "kind": "fn",
+          "startLine": 62,
+          "endLine": 67,
+          "tokens": 54
+        },
+        {
+          "name": "draw",
+          "kind": "fn",
+          "startLine": 68,
+          "endLine": 116,
+          "tokens": 438
+        },
+        {
+          "name": "_ambient",
+          "kind": "fn",
+          "startLine": 117,
+          "endLine": 126,
+          "tokens": 125
+        },
+        {
+          "name": "_h",
+          "kind": "fn",
+          "startLine": 127,
+          "endLine": 131,
+          "tokens": 39
+        },
+        {
+          "name": "_put",
+          "kind": "fn",
+          "startLine": 132,
+          "endLine": 135,
+          "tokens": 32
+        },
+        {
+          "name": "_mesh",
+          "kind": "fn",
+          "startLine": 136,
+          "endLine": 142,
+          "tokens": 38
+        },
+        {
+          "name": "_floor_tex",
+          "kind": "fn",
+          "startLine": 143,
+          "endLine": 147,
+          "tokens": 44
+        },
+        {
+          "name": "_barrel",
+          "kind": "fn",
+          "startLine": 148,
+          "endLine": 159,
+          "tokens": 124
+        },
+        {
+          "name": "_props",
+          "kind": "fn",
+          "startLine": 160,
+          "endLine": 165,
+          "tokens": 34
+        },
+        {
+          "name": "_lamps",
+          "kind": "fn",
+          "startLine": 166,
+          "endLine": 169,
+          "tokens": 24
+        },
+        {
+          "name": "_lamp_head",
+          "kind": "fn",
+          "startLine": 170,
+          "endLine": 174,
+          "tokens": 23
+        },
+        {
+          "name": "_build_set",
+          "kind": "fn",
+          "startLine": 175,
+          "endLine": 194,
+          "tokens": 227
+        },
+        {
+          "name": "_contact_shadows",
+          "kind": "fn",
+          "startLine": 195,
+          "endLine": 209,
+          "tokens": 211
+        },
+        {
+          "name": "_prop",
+          "kind": "fn",
+          "startLine": 210,
+          "endLine": 262,
+          "tokens": 814
+        },
+        {
+          "name": "_story",
+          "kind": "fn",
+          "startLine": 263,
+          "endLine": 295,
+          "tokens": 489
+        },
+        {
+          "name": "_wall_mesh",
+          "kind": "fn",
+          "startLine": 296,
+          "endLine": 321,
+          "tokens": 295
+        },
+        {
+          "name": "_cut_snap",
+          "kind": "fn",
+          "startLine": 322,
+          "endLine": 328,
+          "tokens": 64
+        },
+        {
+          "name": "_draw_walls",
+          "kind": "fn",
+          "startLine": 329,
+          "endLine": 352,
+          "tokens": 328
+        },
+        {
+          "name": "_hum",
+          "kind": "fn",
+          "startLine": 353,
+          "endLine": 365,
+          "tokens": 107
+        },
+        {
+          "name": "_motion",
+          "kind": "fn",
+          "startLine": 366,
+          "endLine": 380,
+          "tokens": 148
+        },
+        {
+          "name": "_face",
+          "kind": "fn",
+          "startLine": 381,
+          "endLine": 388,
+          "tokens": 76
+        },
+        {
+          "name": "_person",
+          "kind": "fn",
+          "startLine": 389,
+          "endLine": 396,
+          "tokens": 112
+        },
+        {
+          "name": "_van_mesh",
+          "kind": "fn",
+          "startLine": 397,
+          "endLine": 410,
+          "tokens": 137
+        },
+        {
+          "name": "_van_scale",
+          "kind": "fn",
+          "startLine": 411,
+          "endLine": 414,
+          "tokens": 19
+        },
+        {
+          "name": "_draw_cast",
+          "kind": "fn",
+          "startLine": 415,
+          "endLine": 456,
+          "tokens": 636
+        },
+        {
+          "name": "_stash",
+          "kind": "fn",
+          "startLine": 457,
+          "endLine": 469,
+          "tokens": 160
+        },
+        {
+          "name": "_lights",
+          "kind": "fn",
+          "startLine": 470,
+          "endLine": 496,
+          "tokens": 380
+        },
+        {
+          "name": "_grade_lights",
+          "kind": "fn",
+          "startLine": 497,
+          "endLine": 538,
+          "tokens": 556
+        }
+      ]
     }
   },
   "preamble": [

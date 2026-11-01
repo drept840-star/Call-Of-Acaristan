@@ -16,6 +16,7 @@ __all__ = ["draw"]
 
 PANEL_W = 246
 PANEL_H = 30
+SEG_W = 12        # HP segment pitch, px
 
 
 def draw(surface: pygame.Surface, theme: Theme, hp: float, max_hp: float, *,
@@ -38,8 +39,19 @@ def draw(surface: pygame.Surface, theme: Theme, hp: float, max_hp: float, *,
     surface.blit(panel_bg(*panel), (x + panel_off[0], y + panel_off[1]))
     surface.blit(theme.font_terminal_small.render(T("hud.hp"), True, theme.c_terminal),
                  (x + bb[0], y + label_dy))
-    pygame.draw.rect(surface, (30, 30, 30), (bx + inset, by, bw - inset, bh))
-    col = ((int(200 * ratio), int(220 * ratio), 40) if ratio > 0.5 else
-           (220, int(200 * ratio * 2), 40) if ratio > 0.25 else (220, 40, 40))
-    pygame.draw.rect(surface, col, (bx + inset, by, int((bw - inset) * ratio), bh))
-    pygame.draw.rect(surface, theme.c_terminal, (bx + inset, by, bw - inset, bh), 1)
+    tx, tw = bx + inset, bw - inset
+    # Recessed track: near-black well, a darker lip along its top edge.
+    pygame.draw.rect(surface, (8, 10, 12), (tx, by, tw, bh))
+    pygame.draw.line(surface, (2, 3, 4), (tx, by), (tx + tw - 1, by))
+    col = (theme.c_terminal if ratio > 0.5 else theme.c_amber if ratio > 0.25
+           else (214, 58, 46))
+    fill_w = int(tw * ratio)
+    if fill_w > 0:
+        # Vertical gradient (lit top, darker base) cut into segments.
+        for j in range(1, bh - 1):
+            k = 1.08 - 0.42 * (j - 1) / max(1, bh - 3)
+            c = tuple(min(255, int(v * k)) for v in col)
+            pygame.draw.line(surface, c, (tx + 1, by + j), (tx + fill_w - 2, by + j))
+        for sx in range(tx + SEG_W, tx + fill_w - 1, SEG_W):
+            pygame.draw.line(surface, (8, 10, 12), (sx, by + 1), (sx, by + bh - 2))
+    pygame.draw.rect(surface, theme.c_edge, (tx - 1, by - 1, tw + 2, bh + 2), 1)

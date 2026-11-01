@@ -17,6 +17,7 @@ __all__ = ["DEFAULT_PANEL_HEIGHT", "DEFAULT_PANEL_WIDTH", "draw"]
 
 DEFAULT_PANEL_WIDTH = 520    # was OBJECTIVE_PANEL_WIDTH in src/ui/hud.py
 DEFAULT_PANEL_HEIGHT = 30    # was OBJECTIVE_PANEL_HEIGHT in src/ui/hud.py
+FADE_W = 140                 # right edge eases out to clear
 
 # The wrapped panel (backdrop + rendered lines) for the text last drawn: the
 # banner is redrawn every frame with the same words, and measuring them and
@@ -39,7 +40,7 @@ def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
 
     full = (label if label is not None else T("hud.objective")) + str(text)
     key = (full, panel_w, id(font_prompt), font_prompt.get_height(),
-           tuple(theme.c_krap_blue), tuple(theme.c_white))
+           tuple(theme.c_amber), tuple(theme.c_white), tuple(theme.c_panel))
     cached = _PANELS.get(key)
     if cached is not None:
         bg, line_surfs = cached
@@ -78,9 +79,7 @@ def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
 
     line_h = font_prompt.get_height()
     panel_h = max(DEFAULT_PANEL_HEIGHT, 14 + len(lines) * line_h + (len(lines) - 1) * line_gap)
-    bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    pygame.draw.rect(bg, (0, 0, 0, 150), (0, 0, panel_w, panel_h))
-    pygame.draw.line(bg, theme.c_krap_blue, (0, 0), (0, panel_h), 3)
+    bg = theme.panel(panel_w, panel_h, fade=FADE_W, stripe=theme.c_amber)
     surface.blit(bg, (x, y))
 
     line_surfs = []

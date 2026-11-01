@@ -1908,3 +1908,91 @@ description: chronological action log per session, consolidated weekly
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 19:02 | Edited tools/smoke_test.py | added 1 condition(s) | ~279 |
+| 19:05 | Edited tools/smoke_test.py | inline fix | ~26 |
+<!-- session:NzUxOTNkMTAtMmI2Mi00MDIzLTk4YzYtYzU5YjJjYmZjZjY1 -->
+| 2026-11-01T17:09:59.568Z | Merged branch stack + ost-album + m6-explosions into main, committed WIP tree, fixed m7_goat_rescue smoke check for two-stage repair and reveal phase, pushed main | tools/smoke_test.py | SMOKE TEST: OK; main pushed 90fc35f |
+
+## Session: 2026-11-01 19:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:22 | Created src/game/topdown3d.py | — | ~2072 |
+| 19:25 | Edited src/game/topdown3d.py | modified armed() | ~326 |
+| 19:29 | Created src/missions/m1/draw3d.py | — | ~12232 |
+
+## Session: 2026-11-01 20:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:27 | Edited src/ui/hud.py | modified range() | ~405 |
+| 20:27 | Edited src/ui/hud.py | inline fix | ~19 |
+| 20:27 | Edited src/ui/hud.py | modified range() | ~46 |
+| 20:28 | Edited src/missions/m1/draw3d.py | modified range() | ~275 |
+| 20:28 | Edited src/missions/m1/draw3d.py | added 1 import(s) | ~32 |
+| 20:28 | Edited src/missions/m1/draw3d.py | added 1 import(s) | ~47 |
+| 20:28 | Edited src/missions/m1/draw3d.py | 2→3 lines | ~80 |
+| 20:28 | Edited src/missions/m1/draw3d.py | 1→2 lines | ~34 |
+| 20:28 | Edited src/missions/m1/draw3d.py | modified _stub() | ~660 |
+| 20:29 | Edited src/missions/m1/draw3d.py | modified range() | ~162 |
+| 20:29 | Edited src/missions/m1/draw3d.py | inline fix | ~25 |
+| 20:31 | Edited src/missions/m1/draw3d.py | added 1 import(s) | ~77 |
+| 20:31 | Edited src/missions/m1/draw3d.py | modified _fuel_pool() | ~204 |
+| 20:40 | Session end: 2 writes across 1 files (smoke_test.py) | 1 reads | ~305 tok |
+| 20:40 | Session end: 3 writes across 2 files (topdown3d.py, draw3d.py) | 12 reads | ~14630 tok |
+| 20:40 | Session end: 9 writes across 3 files (tcp_tunnel.py, match_screen.py, download_bore.py) | 0 reads | ~1893 tok |
+
+## Session: 2026-11-01 21:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 21:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:13 | Edited src/game/topdown3d.py | 2→5 lines | ~88 |
+| 21:13 | Edited src/game/topdown3d.py | 2→3 lines | ~43 |
+| 21:14 | Session end: 13 writes across 2 files (hud.py, draw3d.py) | 0 reads | ~2066 tok |
+| 21:21 | Edited src/missions/m1/draw3d.py | modified _fire() | ~536 |
+<!-- session:YmY4ZTkyMjItYTRlMi00ZWE2LTg4Y2QtN2ZmNWNkZjBlMDRl -->
+| 2026-11-01T19:31:44.040Z | M1 molotov lag: td.dot/blood_pool now declare bounds_m (GL composite masked a 3.5 m box per particle); M1 flames packed once per 66 ms step via draw3d._fire and translated per frame | src/game/topdown3d.py,src/missions/m1/draw3d.py | 2 molotovs + 4 burning guards 37->17 ms/frame headless; smoke OK 2 of 3 runs, first run failure not reproduced |
+
+## Session: 2026-11-01 21:35
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:40 | Edited tools/tex3d_draw.py | modified pavement() | ~302 |
+| 21:41 | Created src/missions/m1/grade3d.py | — | ~1367 |
+| 21:42 | Edited src/missions/m1/draw3d.py | modified _bands() | ~576 |
+| 21:43 | Edited src/missions/m1/draw3d.py | added 1 condition(s) | ~1595 |
+| 21:43 | Edited src/missions/m1/draw3d.py | modified _wall_shade() | ~390 |
+| 21:43 | Edited src/missions/m1/draw3d.py | modified _roof_prop() | ~556 |
+| 21:43 | Edited src/missions/m1/draw3d.py | 10→13 lines | ~210 |
+| 21:44 | Edited src/missions/m1/draw3d.py | 3→6 lines | ~118 |
+| 21:44 | Edited src/missions/m1/draw3d.py | modified _car_finish() | ~512 |
+| 21:44 | Edited src/game/topdown3d.py | modified _soft_surf() | ~736 |
+| 21:45 | Edited src/missions/m1/draw3d.py | modified _night_lights() | ~1056 |
+| 21:45 | Edited src/missions/m1/draw3d.py | 4→5 lines | ~53 |
+| 21:45 | Edited src/missions/m1/draw3d.py | 3→4 lines | ~49 |
+<!-- session:ZjRjODIzNjYtODA2NS00NTI0LTk4ODYtNTgyODIxMTNmNDFh -->
+| 2026-11-01T20:02:45.698Z | M1 visual overhaul (night grade, floor, AO, rain layers, tactical HUD/radio) plus fire perf: tiny GL sprites use one centre depth probe, fire zones culled off-screen, fuel pool mesh packed once | src/missions/m1/draw3d.py,src/missions/m1/grade3d.py,src/missions/m1/draw.py,src/engine3d/gl.py,src/engine/ui/theme.py,src/ui/radio.py | SMOKE TEST: OK; 6 molotovs + bay fire 78ms -> 28ms headless |
+
+## Session: 2026-11-01 22:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-01 22:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:20 | Created src/missions/walk3d.py | — | ~6358 |
+| 22:20 | Edited src/missions/m1/draw3d.py | modified render_world() | ~144 |
+| 22:21 | Edited src/missions/m1/draw3d.py | 3→3 lines | ~23 |
+| 22:21 | Edited src/missions/m1/draw3d.py | 3→3 lines | ~41 |
+| 22:21 | Edited src/missions/m1/draw3d.py | added 1 condition(s) | ~228 |
+| 22:21 | Edited src/missions/m1/draw3d.py | 2→5 lines | ~62 |
+| 22:21 | Edited src/missions/m1/draw3d.py | modified _draw_doors() | ~41 |
+| 22:21 | Edited src/missions/m1/draw3d.py | modified _draw_corpses() | ~459 |
+| 22:21 | Edited src/missions/m1/draw3d.py | removed 27 lines | ~33 |

@@ -3335,6 +3335,168 @@
       "last_seen": "2026-11-01T16:03:22.926Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of smoke_test.py",
+      "file": "tools/smoke_test.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 14→18 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-186",
+      "timestamp": "2026-11-01T17:02:21.337Z",
+      "last_seen": "2026-11-01T17:02:21.337Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "tools/smoke_test.py",
+      "root_cause": "Had \"approach\"",
+      "fix": "Changed to \"reveal\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-187",
+      "timestamp": "2026-11-01T17:05:51.698Z",
+      "last_seen": "2026-11-01T17:05:51.698Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→3 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-188",
+      "timestamp": "2026-11-01T18:28:04.846Z",
+      "last_seen": "2026-11-01T18:28:04.846Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 35→56 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-189",
+      "timestamp": "2026-11-01T18:28:41.428Z",
+      "last_seen": "2026-11-01T18:28:41.428Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "11 lines replaced/restructured",
+      "fix": "Rewrote 20→49 lines (11 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-190",
+      "timestamp": "2026-11-01T19:42:57.888Z",
+      "last_seen": "2026-11-01T19:42:57.888Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 10→13 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-191",
+      "timestamp": "2026-11-01T19:43:58.824Z",
+      "last_seen": "2026-11-01T19:43:58.824Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-192",
+      "timestamp": "2026-11-01T20:20:56.936Z",
+      "last_seen": "2026-11-01T20:20:56.936Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 11→18 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-193",
+      "timestamp": "2026-11-01T20:21:04.135Z",
+      "last_seen": "2026-11-01T20:21:04.135Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m1/draw3d.py",
+      "root_cause": "23 lines replaced/restructured",
+      "fix": "Rewrote 27→4 lines (23 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-194",
+      "timestamp": "2026-11-01T20:21:30.206Z",
+      "last_seen": "2026-11-01T20:21:30.206Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -3518,7 +3680,16 @@
     "cf57bc02-1bae-4c5a-bb79-00c602078f80": true,
     "846ec21f-f685-415b-9c9f-307b4bd9cf89": true,
     "dcc17413-f167-4f1d-8c49-34c3dd8f42f1": true,
-    "b14d2cdf-fce4-4fcf-9abb-2c44b5d7546c": true
+    "b14d2cdf-fce4-4fcf-9abb-2c44b5d7546c": true,
+    "146c62cc-dc50-485b-98de-dc73b06833cf": true,
+    "a968d026-bcf2-43e0-a191-ec0eadc61e5f": true,
+    "4cfc5090-f3b1-4b10-bde0-16ccb4f1ff11": true,
+    "649b33b6-a7b0-4078-9c9c-aa2769a55108": true,
+    "9c1166c0-3191-434d-bb57-fbd6ac78134b": true,
+    "0423c0c6-782f-4a1c-b50e-9f6492d8e20f": true,
+    "d4ea31cb-6648-4783-b298-a5844a0f8a5c": true,
+    "5bc5a328-1d85-4725-9a7f-dba9f63fb233": true,
+    "68d5cb55-47e7-4488-a6f2-28e97a9d4b0d": true
   },
-  "next_id": 186
+  "next_id": 195
 }

@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-01T16:22:48.519Z
-> Files: 489 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-01T20:21:30.175Z
+> Files: 493 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -330,6 +330,7 @@
 - `render3d_bridge.py` — game.render3d_bridge - apply ae.set3d/1 data to a live 3D renderer (RPE6 Phase 8). (~7486 tok)
 - `save_adapter.py` — RPE6 Phase 9: game-side adapter between live state and ``engine.save``. (~4305 tok)
 - `timelines.py` — game.timelines - cutscene shot-list access (RPE6 Phase 8). (~739 tok)
+- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~3555 tok)
 
 ## src/game/art/
 
@@ -428,6 +429,7 @@
 
 - `__init__.py` — missions package. (~8 tok)
 - `arena.py` — Multiplayer arena maps and the deathmatch rules. (~19521 tok)
+- `walk3d.py` — Walking sim in 2.5D: the harbour alley drawn in 3D over the 2D rules. (~6358 tok)
 - `walking_attack3d.py` — True 3D oil-rig strike cinematic, rendered by the game's engine3d. (~12032 tok)
 - `walking_sim.py` — Walking sim section: slum exploration, NPCs, firefight overlook panorama. (~42172 tok)
 
@@ -440,6 +442,8 @@
 
 - `__init__.py` — Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py. (~428 tok)
 - `draw.py` — Split from mission.py - see mission.py (shim) for the map. (~33772 tok)
+- `draw3d.py` — Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules. (~22032 tok)
+- `grade3d.py` — Mission 1 night grade for the 2.5D frame: a screen-space light map. (~1367 tok)
 - `hotwire.py` — Split from mission.py - see mission.py (shim) for the map. (~1741 tok)
 - `main.py` — Split from mission.py - see mission.py (shim) for the map. (~3223 tok)
 - `map.py` — Mission 1 map - authored with core.MapBuilder, baked to list[str]. (~1303 tok)
@@ -574,7 +578,7 @@
 - `egg666_dir.py` — egg666_dir.py - the director of the 3D "666" scare: what happens at which frame. (~3842 tok)
 - `egg666_fx.py` — egg666_fx.py - light halos, the PS2 grade and the crisp present for the 3D "666" scare. (~1776 tok)
 - `egg666_post.py` — egg666_post.py - screen effects for the 3D "666" scare. (~1364 tok)
-- `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~17073 tok)
+- `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~18364 tok)
 - `main.py` — Split from menu.py - see menu.py (shim) for the map. (~9349 tok)
 - `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~62841 tok)
 - `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~4138 tok)
@@ -674,7 +678,7 @@
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
-- `smoke_test.py` — Must be set before pygame/config import. (~154153 tok)
+- `smoke_test.py` — Must be set before pygame/config import. (~155983 tok)
 - `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
-- `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~5676 tok)
+- `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~6119 tok)

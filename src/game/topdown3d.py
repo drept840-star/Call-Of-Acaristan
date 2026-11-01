@@ -256,6 +256,71 @@ def dot(col, size):
     return draw
 
 
+_SOFT = {}
+SQUASH = 0.86                      # a floor circle seen from the top-down cameras
+
+
+def _soft_surf(key, w, h, build):
+    s = _SOFT.get(key)
+    if s is None:
+        if len(_SOFT) > 256:
+            _SOFT.clear()
+        import numpy as np
+        y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+        d = np.hypot((x - (w - 1) / 2.0) / (w / 2.0), (y - (h - 1) / 2.0) / (h / 2.0))
+        a = np.arctan2(y - (h - 1) / 2.0, x - (w - 1) / 2.0)
+        rgb, alpha = build(d, a)
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        s.fill(rgb + (0,))
+        pygame.surfarray.pixels_alpha(s)[:] = np.clip(alpha, 0, 255).astype(np.uint8).T
+        _SOFT[key] = s
+    return s
+
+
+def shadow(half_w, half_d=None, alpha=130):
+    """Sprite callback: a soft drop shadow on the floor, ``half_w`` x
+    ``half_d`` metres, darkest under the middle."""
+    half_d = half_w * SQUASH if half_d is None else half_d * SQUASH
+
+    def draw(s, sx, sy, scale, z):
+        w, h = int(scale * half_w * 2) // 2 * 2, int(scale * half_d * 2) // 2 * 2
+        if w < 4 or h < 4:
+            return
+        img = _soft_surf(("sh", w, h, alpha), w, h,
+                         lambda d, a: ((0, 0, 0), alpha * (1.0 - d.clip(0, 1) ** 2) ** 1.4))
+        s.blit(img, (int(sx) - w // 2, int(sy) - h // 2))
+    draw.bounds_m = (half_w + 0.1, half_d + 0.1)
+    return draw
+
+
+def tac_ring(rad, col, shade=0.52):
+    """Sprite callback: the tactical floor marker - a soft drop shadow, a
+    faint glow just inside the ring, and a thin ring cut into eight
+    segments."""
+    def draw(s, sx, sy, scale, z):
+        w = int(scale * rad * 2.5) // 2 * 2
+        h = int(w * SQUASH) // 2 * 2
+        if w < 6 or h < 6:
+            return
+        k = 1.25                       # ring radius 1.0 sits at d = 1 / k
+
+        def build(d, a):
+            import numpy as np
+            seg = (np.mod(a, np.pi / 4.0) < np.pi / 4.0 * 0.74).astype(np.float32)
+            dd = d * k
+            ring = 205.0 * np.exp(-((dd - 1.0) / 0.045) ** 2) * seg
+            glow = 46.0 * np.exp(-((dd - 0.88) / 0.16) ** 2)
+            return col, np.maximum(ring, glow)
+
+        sh = _soft_surf(("sh", w, h, int(shade * 255)), w, h,
+                        lambda d, a: ((0, 0, 0), shade * 255 * (1.0 - (d * k * 1.1).clip(0, 1) ** 2) ** 1.4))
+        img = _soft_surf(("ring", w, h, col), w, h, build)
+        s.blit(sh, (int(sx) - w // 2, int(sy) - h // 2))
+        s.blit(img, (int(sx) - w // 2, int(sy) - h // 2))
+    draw.bounds_m = (rad * 1.3, rad * 1.2)
+    return draw
+
+
 def blood_pool(k, col=(82, 14, 16)):
     """Sprite callback: a floor blood pool grown to k (0..1)."""
     def draw(s, sx, sy, scale, z):
