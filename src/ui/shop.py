@@ -574,7 +574,7 @@ def _is_worn(item_id, wearing):
 
 
 def _gun_label(gun):
-    return {"os12": "OS-12", "k9": "K-9", "pistol": "PISTOL", "shotgun": "SHOTGUN"}.get(gun, gun)
+    return {"os12": "OS-12", "k9": "K-9", "pistol": "PISTOL", "shotgun": "FALLOW 12"}.get(gun, gun)
 
 
 def _name_lines(font, name, max_w):

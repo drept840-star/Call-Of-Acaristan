@@ -68,8 +68,23 @@ def _lum(c):
 
 def pistol_mesh():
     """Service pistol in the rig's gun frame: origin at the right hand on the
-    grip, +z muzzle. Colours are appearance.GUN_BASE["pistol"] verbatim so a
-    finish maps role for role."""
+    grip, +z muzzle. The asset (tools/ae_import_pistol.py) carries
+    appearance.GUN_BASE["pistol"] colours verbatim so a finish maps role for
+    role; the box pistol stands in if it is missing."""
+    try:
+        from engine3d import Mesh
+        from game.render3d_bridge import MESHES_DIR
+        with open(os.path.join(MESHES_DIR, "pistol.mesh.json"), encoding="utf-8") as fh:
+            data = json.load(fh)
+        m = Mesh()
+        m.verts = [tuple(float(c) for c in v) for v in data["verts"]]
+        m.faces = [(tuple(f[0]), tuple(f[1]), 2, True, False) for f in data["faces"]]
+        return m, float(data["meta"]["muzzle"][2])
+    except Exception:
+        return _box_pistol()
+
+
+def _box_pistol():
     from engine3d import Mesh, box, rot_x
     c = appearance.GUN_BASE["pistol"]
     m = Mesh()
