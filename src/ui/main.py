@@ -1,18 +1,19 @@
 """Split from menu.py - see menu.py (shim) for the map."""
 import math
+import time
 import pygame
-from core.config import (C_BLACK, C_KRAP_BLUE, C_ORANGE, C_WHITE, HEIGHT, WIDTH, audio, bg_image, font_title, get_scaled_mouse, screen)
+from core.config import (C_BLACK, C_ORANGE, C_WHITE, HEIGHT, WIDTH, audio, bg_image, font_title, get_scaled_mouse, screen)
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 
 from core.state import STATE
 
 from core import save_system
 
-from ui.widgets import ModernButton, buttons, consume_hover, _menu_overlay, _btn_hover_bg, _subtitle_font, _tagline_font, _classification_font, _micro_font, _glyph_font, _lerp_dt
-from ui.system import _footer_font  # SYSTEM's copy: original file redefines it later, readers see the final object
+from ui.widgets import ModernButton, buttons, consume_hover, note_hover, _menu_overlay, _btn_hover_bg, _subtitle_font, _tagline_font, _classification_font, _micro_font, _glyph_font, _lerp_dt
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
 from pathlib import Path as _Path
+from ui import kit
 
 
 def _resolve_menu_version_override() -> str:
@@ -30,14 +31,8 @@ _menu_version_override = _resolve_menu_version_override()
 
 
 def draw_menu_background():
-
-    if bg_image:
-
-        screen.blit(bg_image, (0, 0))
-
-    else:
-
-        screen.fill(C_BLACK)
+    """Sub-screen backdrop: the menu art under the kit's ink wash."""
+    kit.backdrop(screen)
 
 def draw_menu():
 
@@ -62,101 +57,29 @@ def draw_menu():
     if mx != 0 or my != 0:
         reset_keyboard_selection()
 
-    # ── Background + rain + embers (under the dark panel) ──
-    draw_menu_background()
-    _draw_rain(screen)
-    _draw_embers(screen)
-
-    # Dark panel overlay (existing CRT-style left panel)
-    screen.blit(_menu_overlay, (0, 0))
-
-    # ── Top classification banner OR boot sequence ──
-    # On first menu show, the boot banner plays a typewriter sequence.
-    # Once done, the normal "// KRAPNET TERMINAL //" banner takes over.
-    if not _draw_boot_banner(screen):
-        classif_bar = pygame.Surface((460, 22), pygame.SRCALPHA)
-        classif_bar.fill((8, 10, 14, 220))
-        pygame.draw.line(classif_bar, C_ORANGE, (0, 0), (460, 0), 1)
-        pygame.draw.line(classif_bar, C_ORANGE, (0, 21), (460, 21), 1)
-        screen.blit(classif_bar, (20, 20))
-        classif_text = _classification_font.render(
-            _T("menu.krapnet_terminal_clearance_opera"), True, C_ORANGE
-        )
-        screen.blit(classif_text, (30, 24))
-
-    # ── Title (no glow - kept clean per user preference) ──
-    title_x = 40
-    title_y = 110
-    title_text = "CALL OF ACARISTAN"
-
-    # Measure title for scanline math.
-    title_surf = font_title.render(title_text, True, C_WHITE)
-    title_w = title_surf.get_width()
-    title_h = title_surf.get_height()
-
-    # Drop shadow
-    screen.blit(font_title.render(title_text, True, (0, 0, 0)),
-                (title_x + 4, title_y + 4))
-    # Main title
-    screen.blit(title_surf, (title_x, title_y))
-
-    # Scanline drift over the title text (drawn after, additive).
-    _draw_scanline_drift(screen, title_x, title_y, title_w, title_h)
-
-    # Orange accent bar under title
-    pygame.draw.rect(screen, C_ORANGE, (title_x, title_y + 88, 320, 3))
-
-    # ── Section header above menu buttons ──
-    pygame.draw.line(screen, (60, 45, 25), (135, 320), (420, 320), 1)
-    section_lbl = _classification_font.render(_T("menu.main_terminal"), True, (140, 100, 50))
-    screen.blit(section_lbl, (135, 305))
-
-    # ── Active save slot summary ──
-    slot = save_system.get_slot()
-    slot_idx = save_system.current_slot_index() + 1
-    slot_panel = pygame.Surface((350, 48), pygame.SRCALPHA)
-    slot_panel.fill((0, 0, 0, 135))
-    pygame.draw.rect(slot_panel, (45, 70, 90, 120), slot_panel.get_rect(), 1)
-    pygame.draw.line(slot_panel, C_KRAP_BLUE, (0, 0), (0, 48), 3)
-    screen.blit(slot_panel, (135, 260))
-
-    active = _footer_font.render(_T("menu.active_save_slot_slot_idx", slot_idx=slot_idx), True, (80, 150, 190))
-    last = slot.get("last_completed_label", "No missions completed")
-    if slot.get("last_completed_mission"):
-        last = "LAST COMPLETED: " + last
-    elif slot.get("occupied"):
-        progress = slot.get("progress", "")
-        if progress == "m1":
-            last = "MISSION 1 IN PROGRESS"
-        elif progress == "walk":
-            last = "WALKING SIM IN PROGRESS"
-        else:
-            last = slot.get("last_completed_label", "Campaign started")
+    # ── Background + rain + embers, then the ink shades ──
+    # Mouse parallax: the art drifts against the pointer, the rain/ember
+    # foreground drifts with it, so the right side reads as depth.
+    bg_off, fg_off = _parallax_offsets(dt)
+    if _anim.parallax_bg is not None:
+        screen.blit(_anim.parallax_bg,
+                    (bg_off[0] - _PARALLAX_PAD_X, bg_off[1] - _PARALLAX_PAD_Y))
     else:
-        last = "EMPTY SLOT - START A NEW CAMPAIGN"
-    last_surf = _footer_font.render(last[:48], True, (145, 145, 135))
-    screen.blit(active, (150, 268))
-    screen.blit(last_surf, (150, 286))
+        draw_menu_background()
+    _draw_rain(screen, fg_off)
+    _draw_embers(screen, fg_off)
+    screen.blit(_anim.shade_left, (0, 0))
+    screen.blit(_anim.shade_bottom, (0, HEIGHT - _anim.shade_bottom.get_height()))
+
+    _draw_top_bar(screen)
+    _draw_title(screen)
 
     # ── Buttons ──
-    has_save = save_system.has_any_save()
-    if has_save:
-        layout = [
-            (0, 330, "CONTINUE"),
-            (1, 390, "NEW CAMPAIGN"),
-            (2, 450, "MULTIPLAYER"),
-            (3, 510, "SETTINGS"),
-            (4, 570, "EXIT"),
-        ]
-    else:
-        # No Continue button until at least one save slot exists.
-        layout = [
-            (0, -999, "CONTINUE"),
-            (1, 350, "NEW CAMPAIGN"),
-            (2, 410, "MULTIPLAYER"),
-            (3, 470, "SETTINGS"),
-            (4, 530, "EXIT"),
-        ]
+    # Index order is a contract with app.py's routing; CONTINUE only shows
+    # once a save slot exists.
+    names = ["CONTINUE", "NEW CAMPAIGN", "MULTIPLAYER", "SETTINGS", "EXIT"]
+    shown = range(5) if save_system.has_any_save() else range(1, 5)
+    layout = [(idx, _ROW_TOP + n * _ROW_STEP, names[idx]) for n, idx in enumerate(shown)]
 
     # Hide everything first, then place what the layout names. Without this a
     # button missing from the layout keeps the y it was last given, which means
@@ -167,52 +90,44 @@ def draw_menu():
         btn.y = -999
         btn.rect.y = -999
 
+    # Hitboxes span the whole row and close the vertical gaps between rows,
+    # so a click anywhere on the line counts, not just on the letters.
     for idx, y, text in layout:
         buttons[idx].text = text
         buttons[idx].y = y
-        buttons[idx].rect.y = y
+        buttons[idx].rect.update(_ROW_X, y, _ROW_W, _ROW_STEP)
 
-    for i, btn in enumerate(buttons):
+    kit.section(screen, _T("menu.main_terminal"), _ROW_X + 18, _ROW_TOP - 22, _ROW_W - 18)
+    focused = None
+    for n, (idx, y, text) in enumerate(layout):
+        btn = buttons[idx]
+        btn.check_hover(get_scaled_mouse())
+        # Apply keyboard focus: a button is selected if its index matches
+        # the keyboard cursor AND the mouse isn't currently hovering it.
+        btn.is_selected = (_anim.keyboard_idx == idx) and not btn.is_hovered
+        btn.update(dt)
+        if btn.is_hovered or btn.is_selected:
+            focused = btn
+        _draw_row(screen, btn, n, _reveal(0.15 + n * 0.06))
+    for btn in buttons:
         if btn.y < 0:
             btn.is_hovered = False
             btn.is_selected = False
             btn.update(dt)
-            continue
-        btn.check_hover(get_scaled_mouse())
-        # Apply keyboard focus: a button is selected if its index matches
-        # the keyboard cursor AND the mouse isn't currently hovering it.
-        btn.is_selected = (_anim.keyboard_idx == i) and not btn.is_hovered
-        btn.update(dt)
-        btn.draw(screen)
 
-    # ── News ticker (above footer) ──
+    _draw_brief(screen, focused, _ROW_TOP + len(layout) * _ROW_STEP + 12, dt)
+    _draw_slot_card(screen)
+
+    # ── News ticker + footer ──
     _draw_news_ticker(screen)
-
-    # ── Bottom divider line above footer ──
-    pygame.draw.line(screen, (40, 30, 15), (30, HEIGHT - 50), (470, HEIGHT - 50), 1)
-
-    # ── Footer ──
     footer_ver_str = _T("menu.v0_1_0_build_4471")
     if _menu_version_override:
         footer_ver_str = _menu_version_override
-    footer_left = _footer_font.render(
-        footer_ver_str, True, (90, 90, 95)
-    )
-    screen.blit(footer_left, (30, HEIGHT - 38))
-
-    footer_right = _footer_font.render(
-        _T("menu.retardovici_inc"), True, (90, 90, 95)
-    )
-    screen.blit(footer_right, (470 - footer_right.get_width(), HEIGHT - 38))
-
-    # Blinking status indicator
-    if (_now_ms() // 600) % 2 == 0:
-        pygame.draw.circle(screen, (50, 220, 100), (40, HEIGHT - 22), 3)
-    else:
-        pygame.draw.circle(screen, (30, 130, 60), (40, HEIGHT - 22), 3)
-
-    status_text = _footer_font.render(_T("menu.connected_krapnet_relay_7"), True, (60, 70, 65))
-    screen.blit(status_text, (50, HEIGHT - 26))
+    kit.text(screen, footer_ver_str, 24, HEIGHT - 27, 11, kit.MUTED)
+    kit.key_hints(screen, [("ARROWS", "SELECT"), ("ENTER", "OPEN"), ("TAB", "SWITCH FILE")],
+                  WIDTH // 2 + 170, HEIGHT - 29)
+    kit.text(screen, _T("menu.retardovici_inc"), WIDTH - 24, HEIGHT - 27, 11, kit.MUTED,
+             align="right")
 
     # ── Vignette (drawn last so it darkens the edges over everything) ──
     _draw_vignette(screen)
@@ -222,6 +137,155 @@ def draw_menu():
     # also covers slot select / multiplayer / settings / pause / death / report
     # / notebook. Drawing it here too would double-blit it and double-apply its
     # additive hover glow.
+
+
+def _reveal(delay, dur=0.4):
+    """0..1 ease-out for the intro stagger, *delay* seconds after first show.
+
+    Frame count backs the clock up, so a pinned timebase (headless tools)
+    still ends with the menu fully drawn.
+    """
+    t = max(0.0, min(1.0, (max(_anim.t, _anim.frames / 60.0) - delay) / dur))
+    return 1.0 - (1.0 - t) ** 3
+
+
+def _draw_top_bar(surface):
+    """Full-width status strip: boot log, then the clearance line and a clock."""
+    pygame.draw.rect(surface, kit.INK, (0, 0, WIDTH, 26))
+    pygame.draw.line(surface, kit.EDGE, (0, 26), (WIDTH, 26))
+    pygame.draw.rect(surface, kit.ORANGE, (0, 0, 4, 26))
+    if not _draw_boot_banner(surface):
+        kit.text(surface, _T("menu.krapnet_terminal_clearance_opera"), 20, 6, 11, kit.AMBER, "bold")
+    live = (_now_ms() // 600) % 2 == 0
+    r = kit.text(surface, time.strftime("%H:%M:%S"), WIDTH - 20, 6, 11, kit.DIM, "bold", "right")
+    r = kit.text(surface, _T("menu.connected_krapnet_relay_7"), r.x - 22, 6, 11, kit.MUTED,
+                 align="right")
+    pygame.draw.circle(surface, kit.GOOD if live else (40, 120, 70), (r.x - 10, 13), 3)
+
+
+def _draw_title(surface):
+    """Two-line wordmark, rendered once; slides up and fades in on first show."""
+    if _anim.title_surf is None:
+        top = kit.font(30, "display").render("CALL OF", True, kit.AMBER)
+        big_f = kit.font(96, "display")
+        big = big_f.render("ACARISTAN", True, kit.TEXT)
+        shadow = big_f.render("ACARISTAN", True, (0, 0, 0))
+        w = max(top.get_width(), big.get_width()) + 6
+        # Oswald carries a tall line box; tuck the big line up under the small.
+        big_y = top.get_height() - 20
+        s = pygame.Surface((w, big_y + big.get_height() + 6), pygame.SRCALPHA)
+        s.blit(top, (2, 0))
+        s.blit(shadow, (5, big_y + 4))
+        s.blit(big, (0, big_y))
+        _anim.title_surf = s.subsurface(s.get_bounding_rect()).copy()
+    a = _reveal(0.0, 0.6)
+    s = _anim.title_surf
+    s.set_alpha(int(255 * a))
+    y = _TITLE_Y + int(10 * (1 - a))
+    surface.blit(s, (_TITLE_X, y))
+    rule_y = _TITLE_Y + s.get_height() + 18
+    pygame.draw.line(surface, kit.EDGE, (_TITLE_X, rule_y), (_ROW_X + _ROW_W, rule_y))
+    pygame.draw.rect(surface, kit.ORANGE, (_TITLE_X, rule_y - 1, int(96 * a), 3))
+
+
+def _draw_row(surface, btn, n, reveal):
+    """One menu row: index, Oswald label, amber wash and bar when focused."""
+    hot = btn.is_hovered or btn.is_selected
+    g = btn.glow_alpha / 220.0
+    r = btn.rect
+    box = pygame.Rect(r.x, r.y + 5, r.w, r.h - 10)
+    dip = int(btn.press_dip)
+    if g > 0.03:
+        wash = pygame.Surface(box.size, pygame.SRCALPHA)
+        wash.fill((40, 26, 10, int(170 * g)))
+        surface.blit(wash, box.topleft)
+        pygame.draw.rect(surface, kit.ORANGE, (box.x, box.y, 3, box.h))
+        pygame.draw.line(surface, kit.EDGE_HI, (box.x, box.bottom - 1),
+                         (box.x + int(box.w * g), box.bottom - 1))
+    fade = int(255 * reveal)
+    num = kit.font(12, "bold").render("%02d" % (n + 1), True, kit.AMBER if hot else kit.MUTED)
+    num.set_alpha(fade)
+    surface.blit(num, (box.x + 18, box.centery - num.get_height() // 2 + dip))
+    label = _row_font.render(btn.text, True, kit.AMBER if hot else (214, 210, 198))
+    label.set_alpha(fade)
+    x = box.x + 54 + int(btn.anim_offset * 0.5) - int(28 * (1 - reveal))
+    surface.blit(label, (x, box.centery - label.get_height() // 2 - 2 + dip))
+    if hot:
+        kit.text(surface, ">", box.right - 22, box.centery - 11 + dip, 16, kit.ORANGE, "bold")
+    if btn.flash_timer > 0.0:
+        flash = pygame.Surface(box.size, pygame.SRCALPHA)
+        flash.fill((255, 236, 200, int(110 * btn.flash_timer / 0.18)))
+        surface.blit(flash, box.topleft)
+
+
+def _draw_brief(surface, focused, y, dt):
+    """Typed one-line readout of what the focused row does."""
+    line = _BRIEFS.get(focused.text, "") if focused else ""
+    if line != _anim.brief_line:
+        _anim.brief_line = line
+        _anim.brief_t = 0.0
+    _anim.brief_t += dt
+    if not line:
+        kit.text(surface, "> " + _BRIEF_IDLE, _ROW_X + 18, y, 12, kit.MUTED)
+        return
+    shown = line[:int(_anim.brief_t * 90)]
+    if int(_anim.t * 3) % 2 == 0:
+        shown += "_"
+    kit.text(surface, "> " + shown, _ROW_X + 18, y, 12, kit.DIM)
+
+
+def _slot_status(slot):
+    if slot.get("last_completed_mission"):
+        return "LAST: " + slot.get("last_completed_label", "Campaign record")
+    if slot.get("occupied"):
+        progress = slot.get("progress", "")
+        if progress == "m1":
+            return "MISSION 1 IN PROGRESS"
+        if progress == "walk":
+            return "WALKING SIM IN PROGRESS"
+        return slot.get("last_completed_label", "Campaign started")
+    return "EMPTY FILE - START A NEW CAMPAIGN"
+
+
+def _draw_slot_card(surface):
+    """Active operation file, bottom right. Click or TAB cycles the slot."""
+    rect = SLOT_PANEL_RECT
+    hot = rect.collidepoint(get_scaled_mouse())
+    if hot:
+        note_hover()
+        if not _anim.slot_hot:
+            audio.play("menu_hover", volume=0.3)
+    _anim.slot_hot = hot
+    a = _reveal(0.5)
+    plate = pygame.Surface(rect.size, pygame.SRCALPHA)
+    plate.fill((*kit.PLATE, int((236 if hot else 214) * a)))
+    surface.blit(plate, rect.topleft)
+    pygame.draw.rect(surface, kit.EDGE_HI if hot else kit.EDGE, rect, 1)
+    pygame.draw.rect(surface, kit.AMBER if hot else kit.STEEL, (rect.x, rect.y, 3, rect.h))
+    if a < 1.0:
+        return
+    data = save_system.load_data()
+    cur = save_system.current_slot_index()
+    slot = save_system.get_slot()
+    x = rect.x + 16
+    kit.text(surface, "OPERATION FILE %02d" % (cur + 1), x, rect.y + 10, 11, kit.STEEL, "bold")
+    # One pip per slot: filled when occupied, amber outline on the active one.
+    for i in range(save_system.SLOT_COUNT):
+        pip = pygame.Rect(rect.right - 16 - (save_system.SLOT_COUNT - i) * 14, rect.y + 13, 9, 9)
+        if data["slots"][i].get("occupied"):
+            pygame.draw.rect(surface, kit.STEEL, pip)
+        pygame.draw.rect(surface, kit.AMBER if i == cur else kit.EDGE_HI, pip, 1)
+    status = _slot_status(slot)
+    kit.text(surface, kit.fit(status, 13, rect.w - 32, "semibold"), x, rect.y + 30, 13,
+             kit.TEXT if slot.get("occupied") else kit.DIM, "semibold")
+    if slot.get("occupied"):
+        meta = "TIME %s  /  %s" % (slot.get("total_time", "00:00"),
+                                   save_system.format_timestamp(slot.get("updated_at")))
+    else:
+        meta = "NO RECORD IN THIS FILE"
+    kit.text(surface, kit.fit(meta, 11, rect.w - 120), x, rect.y + 54, 11, kit.MUTED)
+    kit.text(surface, "[TAB] SWITCH", rect.right - 14, rect.y + 54, 11,
+             kit.AMBER if hot else kit.AMBER_DIM, "bold", "right")
 
 
 # States that get the custom arrow instead of the OS pointer. Deliberately
@@ -289,7 +353,9 @@ def draw_menu_cursor(surface=None, state_name=None, suppressed=False):
         for b in buttons
         if getattr(b, "y", -999) > 0
     )
-    fill = C_ORANGE if hovered else C_WHITE
+    # Terminal amber, so it reads as a KRAPNET OS pointer and not the
+    # desktop arrow; it brightens toward pale amber over anything clickable.
+    fill = (255, 214, 130) if hovered else _CURSOR_AMBER
     # Arrow body: tip is the hotspot at (mx, my), tail extends down-right.
     pts = [
         (mx, my), (mx, my + 22), (mx + 5.5, my + 16.8),
@@ -298,10 +364,10 @@ def draw_menu_cursor(surface=None, state_name=None, suppressed=False):
     ]
     int_pts = [(int(x), int(y)) for x, y in pts]
     if hovered:
-        glow = pygame.Surface((44, 44), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (255, 120, 0, 50), (22, 22), 16)
+        glow = pygame.Surface((44, 44))
+        pygame.draw.circle(glow, (60, 28, 0), (22, 22), 16)
         surface.blit(glow, (mx - 22, my - 22),
-                     special_flags=pygame.BLEND_RGBA_ADD)
+                     special_flags=pygame.BLEND_RGB_ADD)
     # Soft drop shadow so the arrow survives bright bg art.
     shadow = [(x + 1, y + 2) for x, y in int_pts]
     pygame.draw.polygon(surface, (0, 0, 0), shadow)
@@ -310,6 +376,61 @@ def draw_menu_cursor(surface=None, state_name=None, suppressed=False):
     pygame.draw.polygon(surface, (0, 0, 0), int_pts, 2)
     pygame.draw.line(surface, C_ORANGE,
                      (mx + 1, my + 3), (mx + 1, my + 19), 1)
+    # Pixel corner bracket framing the tip (top-left of the hotspot).
+    bx, by = mx - 4, my - 4
+    for col, o in (((0, 0, 0), 1), (fill, 0)):
+        pygame.draw.rect(surface, col, (bx + o, by + o, 5, 2))
+        pygame.draw.rect(surface, col, (bx + o, by + o, 2, 5))
+
+
+_CURSOR_AMBER = (255, 170, 40)
+
+# Main-menu layout. Row hitboxes are _ROW_STEP tall so the gaps close.
+_TITLE_X, _TITLE_Y = 56, 62
+_ROW_X, _ROW_W = 40, 400
+_ROW_TOP, _ROW_STEP = 282, 56
+SLOT_PANEL_RECT = pygame.Rect(WIDTH - 334, HEIGHT - 162, 310, 78)
+_row_font = kit.font(28, "display")
+
+# One typed line per row, shown under the menu while that row has focus.
+_BRIEFS = {
+    "CONTINUE": "RESUME THE ACTIVE OPERATION FILE",
+    "NEW CAMPAIGN": "OPEN A FRESH OPERATION FILE FROM MISSION 1",
+    "MULTIPLAYER": "KRAPNET LOBBIES, ARENA MATCHES, OUTFITTER",
+    "SETTINGS": "DISPLAY, AUDIO, CONTROLS, ACCESSIBILITY",
+    "EXIT": "CLOSE THE TERMINAL",
+}
+_BRIEF_IDLE = "AWAITING OPERATOR INPUT"
+
+# Parallax travel in pixels at the screen edge. The art is pre-scaled by
+# twice the pad so its edges never come into view.
+_PARALLAX_BG = (7, 5)
+_PARALLAX_FG = (12, 7)
+_PARALLAX_PAD_X, _PARALLAX_PAD_Y = 8, 6
+_PARALLAX_SPEED = 6.0
+
+
+def _parallax_offsets(dt):
+    """Smoothed (bg, fg) pixel offsets from the pointer's place on screen."""
+    mx, my = get_scaled_mouse()
+    nx = max(-1.0, min(1.0, (mx - WIDTH / 2) / (WIDTH / 2)))
+    ny = max(-1.0, min(1.0, (my - HEIGHT / 2) / (HEIGHT / 2)))
+    _anim.parallax_x = _lerp_dt(_anim.parallax_x, nx, _PARALLAX_SPEED, dt)
+    _anim.parallax_y = _lerp_dt(_anim.parallax_y, ny, _PARALLAX_SPEED, dt)
+    px, py = _anim.parallax_x, _anim.parallax_y
+    bg = (int(round(-px * _PARALLAX_BG[0])), int(round(-py * _PARALLAX_BG[1])))
+    fg = (int(round(px * _PARALLAX_FG[0])), int(round(py * _PARALLAX_FG[1])))
+    return bg, fg
+
+
+def slot_panel_clicked(event, mp):
+    """Left click on the save slot panel: cycle to the next slot."""
+    if not (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+            and SLOT_PANEL_RECT.collidepoint(mp)):
+        return False
+    audio.play("menu_click", volume=0.5)
+    save_system.select_slot((save_system.current_slot_index() + 1) % save_system.SLOT_COUNT)
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -369,6 +490,19 @@ class _MenuAnimState:
         # Keyboard nav
         self.keyboard_idx = -1     # -1 = mouse control, 0..N-1 = focused button
         self.pending_trigger = -1  # button index that should fire this frame, or -1
+        self.slot_hot = False      # pointer over the save slot panel last frame
+        # Mouse parallax: smoothed pointer position (-1..1) and padded art.
+        self.parallax_x = 0.0
+        self.parallax_y = 0.0
+        self.parallax_bg = None
+        # Overhaul chrome: cached shades and wordmark, typed brief line.
+        self.shade_left = None
+        self.shade_bottom = None
+        self.title_surf = None
+        self.brief_line = ""
+        self.brief_t = 0.0
+        self.ticker_surf = None
+        self.frames = 0            # draws since first show; reveal fallback
 
 
 _anim = _MenuAnimState()
@@ -387,7 +521,7 @@ _BOOT_LINES = [
     "> READY.",
 ]
 _BOOT_LINE_DELAY = 0.18   # seconds between lines starting
-_BOOT_CHAR_RATE  = 35.0   # chars per second
+_BOOT_CHAR_RATE  = 70.0   # chars per second
 
 
 # ── News ticker messages ─────────────────────────────────────────────────
@@ -457,6 +591,23 @@ def _init_menu_anim():
         pygame.draw.circle(vig, (0, 0, 0, alpha), (cx, cy), r)
     _anim.vignette = vig
 
+    # ---- Ink shades: solid left column fading into the art, bottom band ----
+    shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    solid, fade = 430, 300
+    for x in range(solid + fade):
+        a = 238 if x < solid else int(238 * (1 - (x - solid) / fade) ** 1.7)
+        pygame.draw.line(shade, (*kit.INK, a), (x, 0), (x, HEIGHT))
+    _anim.shade_left = shade
+    band = pygame.Surface((WIDTH, 190), pygame.SRCALPHA)
+    for y in range(190):
+        pygame.draw.line(band, (*kit.INK, int(200 * (y / 189) ** 1.5)), (0, y), (WIDTH, y))
+    _anim.shade_bottom = band
+
+    # ---- Parallax art: menu bg grown by the pad on every side ----
+    if bg_image:
+        _anim.parallax_bg = pygame.transform.scale(
+            bg_image, (WIDTH + 2 * _PARALLAX_PAD_X, HEIGHT + 2 * _PARALLAX_PAD_Y))
+
 
 def _update_menu_anim(dt):
     """Advance all animation systems by dt seconds."""
@@ -464,6 +615,7 @@ def _update_menu_anim(dt):
         _init_menu_anim()
 
     _anim.t += dt
+    _anim.frames += 1
     _anim.title_glow_pulse = 0.5 + 0.5 * math.sin(_anim.t * 1.8)
 
     # ---- Rain drops ----
@@ -559,7 +711,7 @@ def _update_menu_anim(dt):
 # ── Draw helpers ─────────────────────────────────────────────────────────
 
 
-def _draw_rain(surface):
+def _draw_rain(surface, offset=(0, 0)):
     """3-layer parallax rain + ground splashes."""
     if not _anim.initialized:
         return
@@ -580,7 +732,7 @@ def _draw_rain(surface):
             pygame.draw.line(rain_surf, col,
                              (int(d["x"]), int(d["y"])),
                              (int(x2), int(y2)), 2)
-    surface.blit(rain_surf, (0, 0))
+    surface.blit(rain_surf, offset)
 
     # Splashes on top of rain.
     if _anim.splashes:
@@ -596,10 +748,10 @@ def _draw_rain(surface):
                 (int(s["x"] - r), int(s["y"] - r // 2), r * 2, r),
                 1,
             )
-        surface.blit(splash_surf, (0, 0))
+        surface.blit(splash_surf, offset)
 
 
-def _draw_embers(surface):
+def _draw_embers(surface, offset=(0, 0)):
     """Drifting fire embers from the right-side bg glow."""
     if not _anim.initialized or not _anim.embers:
         return
@@ -626,7 +778,7 @@ def _draw_embers(surface):
                 em_surf, (255, 140, 60, halo_a),
                 (int(e["x"]), int(e["y"])), r * 2, 1
             )
-    surface.blit(em_surf, (0, 0))
+    surface.blit(em_surf, offset)
 
 
 def _draw_vignette(surface):
@@ -685,98 +837,65 @@ def _draw_scanline_drift(surface, x, y, w, h):
 
 
 def _draw_boot_banner(surface):
-    """Typewriter KRAPNET boot sequence shown on first menu show.
+    """Typewriter KRAPNET boot sequence in the top bar on first menu show.
 
-    Returns True while the boot is still playing (so draw_menu can suppress
-    the normal classification banner), False when done.
+    Types the lines one after another on the bar's single line. Returns True
+    while the boot is still playing (so the bar skips its clearance line),
+    False when done.
     """
     if _anim.boot_done:
         return False
-
-    # Backdrop - same dimensions as the normal classification banner.
-    banner = pygame.Surface((460, 22), pygame.SRCALPHA)
-    banner.fill((8, 10, 14, 230))
-    pygame.draw.line(banner, C_ORANGE, (0, 0), (460, 0), 1)
-    pygame.draw.line(banner, C_ORANGE, (0, 21), (460, 21), 1)
-    surface.blit(banner, (20, 20))
-
-    # Render lines with a typewriter effect, staggered by _BOOT_LINE_DELAY.
-    chars_remaining = _anim.boot_chars_typed
-    y_offset = 24
-    for line_idx, line in enumerate(_BOOT_LINES):
-        # Each line starts typing at line_idx * _BOOT_LINE_DELAY worth of
-        # chars consumed.
-        start_chars = int(line_idx * _BOOT_LINE_DELAY * _BOOT_CHAR_RATE)
-        if chars_remaining <= start_chars:
+    chars = _anim.boot_chars_typed
+    line = ""
+    for line_idx, candidate in enumerate(_BOOT_LINES):
+        # Each line starts typing after the previous one plus a short pause.
+        start = sum(len(l) for l in _BOOT_LINES[:line_idx]) + \
+            int(line_idx * _BOOT_LINE_DELAY * _BOOT_CHAR_RATE)
+        if chars <= start:
             break
-        chars_on_this_line = min(
-            len(line), chars_remaining - start_chars
-        )
-        visible = line[:chars_on_this_line]
-        # Blinking cursor on the line currently being typed.
-        if chars_on_this_line < len(line) and \
-           (line_idx == len(_BOOT_LINES) - 1 or
-            chars_remaining < start_chars + len(line)):
-            if int(_anim.t * 3) % 2 == 0:
-                visible += "_"
-        surf = _classification_font.render(visible, True, C_ORANGE)
-        surface.blit(surf, (30, y_offset))
-        y_offset += 14
-        if y_offset > 64:  # clamp to banner area
-            break
-
+        line = candidate[:chars - start]
+    if int(_anim.t * 3) % 2 == 0:
+        line += "_"
+    kit.text(surface, line, 20, 6, 11, kit.AMBER, "bold")
     return True
 
 
 def _draw_news_ticker(surface):
     """Scrolling lore ticker above the footer."""
-    # Compose the full ticker string with separators.
     # ASCII separator: "◆" is tofu on the bundled font, so never render it.
-    separator = " // "
-    full = separator.join(_TICKER_ITEMS) + separator
-    full_surf = _footer_font.render(full, True, (180, 160, 110))
-    sep_surf = _footer_font.render(separator, True, C_ORANGE)
-    sep_w = sep_surf.get_width()
-    full_w = full_surf.get_width()
+    separator = "   //   "
+    if _anim.ticker_surf is None:
+        f = kit.font(11)
+        _anim.ticker_surf = f.render(separator.join(_TICKER_ITEMS) + separator, True,
+                                     (184, 164, 120))
+    full_surf = _anim.ticker_surf
+    period = full_surf.get_width()
 
-    # Ticker area: above the footer divider line, full width of the dark panel.
+    # Ticker strip above the footer, full width.
     ticker_y = HEIGHT - 56
-    ticker_h = 18
-    # Backdrop strip.
+    ticker_h = 20
     strip = pygame.Surface((WIDTH, ticker_h), pygame.SRCALPHA)
-    strip.fill((0, 0, 0, 150))
+    strip.fill((*kit.INK, 210))
     surface.blit(strip, (0, ticker_y))
+    pygame.draw.line(surface, kit.EDGE, (0, ticker_y), (WIDTH, ticker_y))
+    pygame.draw.line(surface, kit.EDGE, (0, ticker_y + ticker_h), (WIDTH, ticker_y + ticker_h))
 
-    # KRAPNET WIRE label on the left - static.
-    label = _classification_font.render(_T("menu.krapnet_wire"), True, C_ORANGE)
-    label_w = label.get_width() + 16
-    surface.blit(label, (8, ticker_y + 2))
-    # Vertical separator after the label.
-    pygame.draw.line(surface, (90, 60, 25),
-                     (label_w, ticker_y),
-                     (label_w, ticker_y + ticker_h), 1)
+    # KRAPNET WIRE tag on the left - static, amber block.
+    label = kit.font(10, "bold").render(_T("menu.krapnet_wire"), True, kit.INK)
+    tag = pygame.Rect(0, ticker_y + 1, label.get_width() + 28, ticker_h - 1)
+    pygame.draw.rect(surface, kit.AMBER, tag)
+    surface.blit(label, (tag.x + 14, ticker_y + 4))
 
-    # Scrolling text window: from label_w to WIDTH.
-    window_w = WIDTH - label_w - 4
-    if window_w <= 0 or full_w <= 0:
+    window = pygame.Rect(tag.right + 8, ticker_y, WIDTH - tag.right - 8, ticker_h)
+    if period <= 0:
         return
-
-    # Offset wraps modulo (full_w + sep_w) so the loop is seamless.
-    period = full_w + sep_w
     offset = int(_anim.ticker_offset) % period
-
-    # Draw the text twice - once at -offset, once at (period - offset) - so
-    # the loop has no visible gap when it wraps.
-    clip_rect = pygame.Rect(label_w + 2, ticker_y, window_w, ticker_h)
+    # Drawn twice so the loop has no visible gap when it wraps.
     prev_clip = surface.get_clip()
-    surface.set_clip(clip_rect)
-    surface.blit(full_surf, (label_w + 4 - offset, ticker_y + 2))
-    surface.blit(full_surf, (label_w + 4 - offset + period, ticker_y + 2))
+    surface.set_clip(window)
+    surface.blit(full_surf, (window.x - offset, ticker_y + 3))
+    surface.blit(full_surf, (window.x - offset + period, ticker_y + 3))
     surface.set_clip(prev_clip)
-
-    # Top border line on the ticker strip.
-    pygame.draw.line(surface, (60, 40, 15),
-                     (0, ticker_y), (WIDTH, ticker_y), 1)
 
 
 # ── Keyboard navigation API ──────────────────────────────────────────────
@@ -832,6 +951,19 @@ def handle_menu_keydown(event):
         if _anim.keyboard_idx != -1:
             _anim.pending_trigger = _anim.keyboard_idx
             buttons[_anim.keyboard_idx].press()
+            audio.play("menu_click", volume=0.5)
+    elif event.key == pygame.K_TAB:
+        # Same as clicking the operation file card.
+        audio.play("menu_click", volume=0.5)
+        save_system.select_slot((save_system.current_slot_index() + 1) % save_system.SLOT_COUNT)
+    elif pygame.K_1 <= event.key <= pygame.K_9:
+        # Number keys fire the row with that on-screen index.
+        visible = _visible_button_indices()
+        n = event.key - pygame.K_1
+        if n < len(visible):
+            _anim.keyboard_idx = visible[n]
+            _anim.pending_trigger = visible[n]
+            buttons[visible[n]].press()
             audio.play("menu_click", volume=0.5)
 
 

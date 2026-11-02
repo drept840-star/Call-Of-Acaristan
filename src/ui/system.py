@@ -12,6 +12,12 @@ from core import mission_meta as _mission_meta
 from ui.widgets import ModernButton
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
+from ui import kit as _K
+
+# Settings controls on the shared KRAPNET kit palette.
+_IDLE_EDGE = (74, 60, 42)
+_WELL = (10, 10, 11)
+_HOT_BG = (40, 28, 14)
 
 
 # ─────────────────────────────────────────────
@@ -268,7 +274,7 @@ settings_shake_right       = pygame.Rect(CONTROL_X + 250, ROW_SHAKE_Y - 4, 28, 2
 _VOL_GRADIENT = pygame.Surface((VOL_BAR_W, 14))
 for vx in range(VOL_BAR_W):
     t = vx / max(1, VOL_BAR_W - 1)
-    pygame.draw.line(_VOL_GRADIENT, (int(170 + t * 61), int(139 + t * 42), 75),
+    pygame.draw.line(_VOL_GRADIENT, (int(150 + t * 105), int(80 + t * 96), int(20 + t * 44)),
                      (vx, 0), (vx, 13))
 
 # CRT scanline overlay for the settings panel - thin horizontal lines every 3px
@@ -285,17 +291,17 @@ for y in range(0, SETTINGS_PANEL_H, 3):
 
 _settings_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 
-_settings_overlay.fill((0, 0, 0, 190))
+_settings_overlay.fill((*_K.INK, 110))
 
 _settings_panel = pygame.Surface((SETTINGS_PANEL_W, SETTINGS_PANEL_H), pygame.SRCALPHA)
 
-_settings_panel.fill((16, 21, 17, 250))
+_settings_panel.fill((*_K.PLATE, 248))
 
 # Double border: outer green phosphor, inner darker
 
-pygame.draw.rect(_settings_panel, (115, 129, 91), (0, 0, SETTINGS_PANEL_W, SETTINGS_PANEL_H), 2)
+pygame.draw.rect(_settings_panel, _K.EDGE_HI, (0, 0, SETTINGS_PANEL_W, SETTINGS_PANEL_H), 2)
 
-pygame.draw.rect(_settings_panel, (49, 61, 43), (3, 3, SETTINGS_PANEL_W - 6, SETTINGS_PANEL_H - 6), 1)
+pygame.draw.rect(_settings_panel, _K.EDGE, (3, 3, SETTINGS_PANEL_W - 6, SETTINGS_PANEL_H - 6), 1)
 
 
 
@@ -345,15 +351,15 @@ def _draw_arrow_btn(rect, sym):
 
     hover = rect.collidepoint(get_scaled_mouse())
 
-    bg = (55, 61, 40) if hover else (23, 29, 22)
+    bg = _HOT_BG if hover else _K.PLATE_HI
 
     pygame.draw.rect(screen, bg, rect)
 
-    border_col = (231, 181, 94) if hover else (79, 89, 69)
+    border_col = _K.AMBER if hover else _IDLE_EDGE
 
     pygame.draw.rect(screen, border_col, rect, 1)
 
-    c = font_btn.render(sym, True, (231, 181, 94) if hover else (185, 192, 167))
+    c = font_btn.render(sym, True, _K.AMBER if hover else (200, 194, 180))
 
     screen.blit(c, (rect.centerx - c.get_width() // 2, rect.centery - c.get_height() // 2))
 
@@ -365,11 +371,11 @@ def _draw_volume_slider(label, bar_rect, left_rect, right_rect, value, row_y):
 
     """Volume/brightness slider with CRT phosphor fill."""
 
-    screen.blit(font_terminal_small.render(label, True, (215, 220, 199)), (LABEL_X, row_y + 3))
+    screen.blit(font_terminal_small.render(label, True, _K.TEXT), (LABEL_X, row_y + 3))
 
     _draw_arrow_btn(left_rect, "<")
 
-    pygame.draw.rect(screen, (12, 17, 13), bar_rect)
+    pygame.draw.rect(screen, _WELL, bar_rect)
 
     value = max(0, min(100, int(value)))
     fill_w = int(bar_rect.width * value / 100)
@@ -378,13 +384,13 @@ def _draw_volume_slider(label, bar_rect, left_rect, right_rect, value, row_y):
 
         screen.blit(_VOL_GRADIENT, bar_rect.topleft, (0, 0, fill_w, bar_rect.height))
 
-    pygame.draw.rect(screen, (79, 89, 69), bar_rect, 1)
+    pygame.draw.rect(screen, _IDLE_EDGE, bar_rect, 1)
     thumb_x = bar_rect.x + int((bar_rect.width - 4) * value / 100)
-    pygame.draw.rect(screen, (237, 213, 158), (thumb_x, bar_rect.y - 3, 4, bar_rect.height + 6))
+    pygame.draw.rect(screen, (255, 214, 150), (thumb_x, bar_rect.y - 3, 4, bar_rect.height + 6))
 
     _draw_arrow_btn(right_rect, ">")
 
-    pct = font_terminal.render(_T("sys.value_3", value=value), True, (231, 181, 94))
+    pct = font_terminal.render(_T("sys.value_3", value=value), True, _K.AMBER)
 
     screen.blit(pct, (right_rect.right + 12, row_y))
 
@@ -396,13 +402,13 @@ def _draw_toggle(label, rect, value, row_y):
 
     """CRT toggle switch - green when ON, dim when OFF."""
 
-    screen.blit(font_terminal_small.render(label, True, (215, 220, 199)), (LABEL_X, row_y + 3))
+    screen.blit(font_terminal_small.render(label, True, _K.TEXT), (LABEL_X, row_y + 3))
 
     hover = rect.collidepoint(get_scaled_mouse())
 
-    on_col = (93, 110, 62) if value else (23, 29, 22)
+    on_col = (88, 56, 18) if value else _K.PLATE_HI
 
-    border_col = (231, 181, 94) if (hover or value) else (79, 89, 69)
+    border_col = _K.AMBER if (hover or value) else _IDLE_EDGE
 
     pygame.draw.rect(screen, on_col, rect)
 
@@ -412,13 +418,13 @@ def _draw_toggle(label, rect, value, row_y):
 
     knob_x = rect.right - 22 if value else rect.x + 4
 
-    pygame.draw.rect(screen, (230, 220, 177) if value else (135, 145, 124),
+    pygame.draw.rect(screen, _K.TEXT if value else (110, 106, 98),
 
                      (knob_x, rect.y + 4, 18, rect.height - 8))
 
     state_label = "ON" if value else "OFF"
 
-    s = font_terminal_small.render(state_label, True, (231, 181, 94) if value else (175, 182, 160))
+    s = font_terminal_small.render(state_label, True, _K.AMBER if value else _K.DIM)
 
     screen.blit(s, (rect.right + 12, row_y + 3))
 
@@ -430,11 +436,11 @@ def _draw_stepper(label, left_rect, right_rect, value_str, row_y):
 
     """Stepper control: < VALUE >  for enumerated settings (resolution, mode, etc.)."""
 
-    screen.blit(font_terminal_small.render(label, True, (215, 220, 199)), (LABEL_X, row_y + 3))
+    screen.blit(font_terminal_small.render(label, True, _K.TEXT), (LABEL_X, row_y + 3))
 
     _draw_arrow_btn(left_rect, "<")
 
-    val_surf = font_terminal.render(value_str, True, (231, 181, 94))
+    val_surf = font_terminal.render(value_str, True, _K.AMBER)
 
     val_cx = (left_rect.right + right_rect.left) // 2
 
@@ -450,13 +456,13 @@ def _draw_section_header(text, y):
 
     """Small green section divider with a label - groups related settings."""
 
-    header = font_terminal_small.render(text, True, (231, 181, 94))
+    header = font_terminal_small.render(text, True, _K.AMBER)
 
     screen.blit(header, (LABEL_X, y))
 
     line_y = y + header.get_height() + 2
 
-    pygame.draw.line(screen, (67, 78, 60), (LABEL_X, line_y),
+    pygame.draw.line(screen, _K.EDGE, (LABEL_X, line_y),
 
                      (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 48, line_y), 1)
 
@@ -468,7 +474,7 @@ def _draw_hint(text, y):
 
     """Dim helper text under a setting."""
 
-    hint = font_terminal_small.render(text, True, (157, 170, 143))
+    hint = font_terminal_small.render(text, True, _K.DIM)
 
     screen.blit(hint, (LABEL_X, y))
 
@@ -504,27 +510,33 @@ def draw_settings(active_tab, display_mode, res_idx,
 
 
     # Field-console hierarchy: equipment label, title, restrained serial mark.
-    screen.blit(font_terminal_small.render(_T("sys.acaristan_field_equipment"), True, (157, 170, 143)),
-                (SETTINGS_PANEL_X + 32, SETTINGS_PANEL_Y + 14))
-    screen.blit(font_speaker.render(_T("sys.system_configuration"), True, (230, 220, 177)),
-                (SETTINGS_PANEL_X + 32, SETTINGS_PANEL_Y + 36))
-    serial = font_terminal_small.render(_T("sys.local_profile_01"), True, (231, 181, 94))
-    screen.blit(serial, (SETTINGS_PANEL_X + SETTINGS_PANEL_W - serial.get_width() - 32,
-                         SETTINGS_PANEL_Y + 20))
-    pygame.draw.line(screen, (115, 129, 91),
-                     (SETTINGS_PANEL_X + 32, SETTINGS_PANEL_Y + 66),
-                     (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 32, SETTINGS_PANEL_Y + 66))
+    pygame.draw.rect(screen, _K.ORANGE, (SETTINGS_PANEL_X, SETTINGS_PANEL_Y, 4, 64))
+    _K.text(screen, _T("sys.acaristan_field_equipment"), SETTINGS_PANEL_X + 32,
+            SETTINGS_PANEL_Y + 12, 11, _K.AMBER, "bold")
+    title_f = _K.font(28, "display")
+    title = _T("sys.system_configuration")
+    screen.blit(title_f.render(title, True, (0, 0, 0)), (SETTINGS_PANEL_X + 34, SETTINGS_PANEL_Y + 24))
+    screen.blit(title_f.render(title, True, _K.TEXT), (SETTINGS_PANEL_X + 32, SETTINGS_PANEL_Y + 22))
+    serial = _K.font(11, "bold").render(_T("sys.local_profile_01"), True, _K.AMBER)
+    chip = pygame.Rect(0, SETTINGS_PANEL_Y + 18, serial.get_width() + 22, 22)
+    chip.right = SETTINGS_PANEL_X + SETTINGS_PANEL_W - 32
+    pygame.draw.rect(screen, _K.PLATE_HI, chip)
+    pygame.draw.rect(screen, _K.EDGE_HI, chip, 1)
+    screen.blit(serial, (chip.x + 11, chip.y + 4))
+    pygame.draw.line(screen, _K.EDGE,
+                     (SETTINGS_PANEL_X + 32, SETTINGS_PANEL_Y + 68),
+                     (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 32, SETTINGS_PANEL_Y + 68))
     # Inner content plate and hardware corner marks.
     plate = pygame.Rect(SETTINGS_PANEL_X + 24, CONTENT_Y - 6,
                         SETTINGS_PANEL_W - 48, 426)
-    pygame.draw.rect(screen, (12, 17, 13), plate)
-    pygame.draw.rect(screen, (49, 61, 43), plate, 1)
+    pygame.draw.rect(screen, _WELL, plate)
+    pygame.draw.rect(screen, _K.EDGE, plate, 1)
     for x, y, dx, dy in [(SETTINGS_PANEL_X, SETTINGS_PANEL_Y, 1, 1),
                          (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 1, SETTINGS_PANEL_Y, -1, 1),
                          (SETTINGS_PANEL_X, SETTINGS_PANEL_Y + SETTINGS_PANEL_H - 1, 1, -1),
                          (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 1, SETTINGS_PANEL_Y + SETTINGS_PANEL_H - 1, -1, -1)]:
-        pygame.draw.line(screen, (231, 181, 94), (x, y), (x + dx * 15, y), 2)
-        pygame.draw.line(screen, (231, 181, 94), (x, y), (x, y + dy * 15), 2)
+        pygame.draw.line(screen, _K.AMBER, (x, y), (x + dx * 15, y), 2)
+        pygame.draw.line(screen, _K.AMBER, (x, y), (x, y + dy * 15), 2)
 
     # ── Tab bar ──
 
@@ -536,19 +548,19 @@ def draw_settings(active_tab, display_mode, res_idx,
 
         hover = rect.collidepoint(mouse)
 
-        bg = (50, 55, 36) if is_active else ((30, 37, 26) if hover else (12, 17, 13))
+        bg = _HOT_BG if is_active else ((26, 22, 17) if hover else _WELL)
 
         pygame.draw.rect(screen, bg, rect)
 
         if is_active:
 
-            pygame.draw.rect(screen, (231, 181, 94), (rect.x, rect.bottom - 3, rect.width, 3))
+            pygame.draw.rect(screen, _K.AMBER, (rect.x, rect.bottom - 3, rect.width, 3))
 
         else:
 
-            pygame.draw.line(screen, (67, 78, 60), (rect.x, rect.bottom), (rect.right, rect.bottom), 1)
+            pygame.draw.line(screen, _K.EDGE, (rect.x, rect.bottom), (rect.right, rect.bottom), 1)
 
-        col = (231, 181, 94) if is_active else ((212, 215, 190) if hover else (162, 174, 144))
+        col = _K.AMBER if is_active else (_K.TEXT if hover else _K.DIM)
 
         ts = font_terminal_small.render(_T("sys.session_row", n="{:02}".format(i + 1), label=label), True, col)
 
@@ -564,8 +576,8 @@ def draw_settings(active_tab, display_mode, res_idx,
 
         _draw_section_header("MONITOR", CONTENT_Y)
 
-        screen.blit(font_terminal_small.render(_T("sys.logical_canvas"), True, (215, 220, 199)), (LABEL_X, ROW_RES_Y + 3))
-        screen.blit(font_terminal.render(_T("sys.1000_x_700"), True, (185, 192, 167)), (CONTROL_X, ROW_RES_Y))
+        screen.blit(font_terminal_small.render(_T("sys.logical_canvas"), True, _K.TEXT), (LABEL_X, ROW_RES_Y + 3))
+        screen.blit(font_terminal.render(_T("sys.1000_x_700"), True, (200, 194, 180)), (CONTROL_X, ROW_RES_Y))
         _draw_hint("Fixed render canvas; the window scales without changing gameplay.", ROW_RES_Y + 30)
         _draw_stepper("Display Mode", settings_display_left_rect, settings_display_right_rect,
                       DISPLAY_MODES[max(0, min(display_mode, len(DISPLAY_MODES) - 1))], ROW_DISPLAY_Y)
@@ -698,17 +710,17 @@ def draw_settings(active_tab, display_mode, res_idx,
             badge = pygame.Rect(x + 150, y, 118, 31)
             settings_binding_rects[action] = badge
             capturing = (binding_capture == action)
-            pygame.draw.rect(screen, (44, 40, 22) if capturing else (28, 35, 25), badge)
-            pygame.draw.rect(screen, (231, 181, 94) if capturing else (79, 89, 69), badge, 1)
+            pygame.draw.rect(screen, (52, 34, 12) if capturing else _K.PLATE_HI, badge)
+            pygame.draw.rect(screen, _K.AMBER if capturing else _IDLE_EDGE, badge, 1)
             key_label = "PRESS A KEY..." if capturing else str((bindings or {}).get(action, "")).upper()
-            text = font_terminal_small.render(key_label, True, (231, 181, 94))
+            text = font_terminal_small.render(key_label, True, _K.AMBER)
             screen.blit(text, (badge.centerx - text.get_width() // 2, badge.centery - text.get_height() // 2))
-            screen.blit(font_terminal_small.render(label, True, (215, 220, 199)), (x, y + 8))
+            screen.blit(font_terminal_small.render(label, True, _K.TEXT), (x, y + 8))
         reset_y = ROW_MOUSE_SENS_Y + 103 + 5 * 41
         settings_binding_reset_rect.update(LABEL_X, reset_y, 150, 31)
-        pygame.draw.rect(screen, (28, 35, 25), settings_binding_reset_rect)
-        pygame.draw.rect(screen, (79, 89, 69), settings_binding_reset_rect, 1)
-        text = font_terminal_small.render("RESET DEFAULTS", True, (215, 220, 199))
+        pygame.draw.rect(screen, _K.PLATE_HI, settings_binding_reset_rect)
+        pygame.draw.rect(screen, _IDLE_EDGE, settings_binding_reset_rect, 1)
+        text = font_terminal_small.render("RESET DEFAULTS", True, _K.TEXT)
         screen.blit(text, (settings_binding_reset_rect.centerx - text.get_width() // 2,
                            settings_binding_reset_rect.centery - text.get_height() // 2))
 
@@ -757,23 +769,18 @@ def draw_settings(active_tab, display_mode, res_idx,
                     (0, 0, SETTINGS_PANEL_W, 10))
 
     line_y = SETTINGS_PANEL_Y + SETTINGS_PANEL_H - 100
-    pygame.draw.line(screen, (67, 78, 60), (LABEL_X, line_y),
+    pygame.draw.line(screen, _K.EDGE, (LABEL_X, line_y),
                      (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 48, line_y))
-    status_col = (240, 142, 115) if save_failed else (231, 181, 94)
+    status_col = _K.BAD if save_failed else _K.AMBER
     screen.blit(font_terminal_small.render(save_status, True, status_col), (LABEL_X, line_y + 10))
-    shortcuts = font_terminal_small.render(_T("sys.tab_1_6_sections_ctrl_s_apply_es"), True, (157, 170, 143))
+    shortcuts = font_terminal_small.render(_T("sys.tab_1_6_sections_ctrl_s_apply_es"), True, _K.DIM)
     screen.blit(shortcuts, (SETTINGS_PANEL_X + SETTINGS_PANEL_W - 48 - shortcuts.get_width(), line_y + 30))
 
     # Explicit, consistent command bar. Rectangles also work before first draw.
     for button, primary in ((settings_back_btn, False), (settings_apply_btn, True)):
         button.check_hover(mouse)
-        bg = (56, 61, 38) if button.is_hovered else (28, 35, 25)
-        pygame.draw.rect(screen, bg, button.rect)
-        pygame.draw.rect(screen, (231, 181, 94) if primary or button.is_hovered else (79, 89, 69), button.rect, 1)
-        label = font_prompt.render("APPLY / SAVE" if primary else "SAVE & BACK", True,
-                                   (231, 181, 94) if primary else (215, 220, 199))
-        screen.blit(label, (button.rect.centerx - label.get_width() // 2,
-                            button.rect.centery - label.get_height() // 2))
+        _K.button(screen, button.rect, "APPLY / SAVE" if primary else "SAVE & BACK",
+                  hot=button.is_hovered, primary=primary)
 
 # ─────────────────────────────────────────────
 

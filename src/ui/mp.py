@@ -1257,7 +1257,7 @@ def _draw_server_badge(text, color, x, y, w=78):
 
     badge = pygame.Surface((w, 22), pygame.SRCALPHA)
 
-    badge.fill((8, 12, 16, 210))
+    badge.fill((10, 10, 11, 210))
 
     pygame.draw.rect(badge, color, badge.get_rect(), 1)
 
@@ -1566,7 +1566,7 @@ def draw_connections_panel():
 
         if is_open:
 
-            row_surf.fill((28, 36, 42, 235))
+            row_surf.fill((26, 23, 19, 235))
 
             pygame.draw.rect(row_surf, C_ORANGE, row_surf.get_rect(), 1)
 
@@ -1574,15 +1574,15 @@ def draw_connections_panel():
 
         elif hover:
 
-            row_surf.fill((18, 28, 34, 225))
+            row_surf.fill((30, 24, 16, 225))
 
             pygame.draw.rect(row_surf, (80, 120, 140), row_surf.get_rect(), 1)
 
         else:
 
-            row_surf.fill((9, 14, 18, 210))
+            row_surf.fill((10, 10, 11, 210))
 
-            pygame.draw.rect(row_surf, (28, 44, 56), row_surf.get_rect(), 1)
+            pygame.draw.rect(row_surf, (40, 32, 22), row_surf.get_rect(), 1)
 
         screen.blit(row_surf, row_rect)
 
@@ -1664,9 +1664,9 @@ def draw_connections_panel():
 
         sb_w = 5
 
-        pygame.draw.rect(screen, (15, 22, 28), (sb_x, sb_y, sb_w, sb_h))
+        pygame.draw.rect(screen, (16, 15, 14), (sb_x, sb_y, sb_w, sb_h))
 
-        pygame.draw.rect(screen, (28, 44, 56), (sb_x, sb_y, sb_w, sb_h), 1)
+        pygame.draw.rect(screen, (40, 32, 22), (sb_x, sb_y, sb_w, sb_h), 1)
 
         thumb_ratio = visible_friends / len(CONNECTIONS)
 
@@ -1692,9 +1692,9 @@ def draw_connections_panel():
 
     dm_bg = pygame.Surface((dm_w, dm_h), pygame.SRCALPHA)
 
-    dm_bg.fill((6, 11, 16, 230))
+    dm_bg.fill((8, 8, 10, 230))
 
-    pygame.draw.rect(dm_bg, (30, 50, 60), dm_bg.get_rect(), 1)
+    pygame.draw.rect(dm_bg, (44, 34, 22), dm_bg.get_rect(), 1)
 
     pygame.draw.rect(dm_bg, (40, 60, 70, 100), dm_bg.get_rect(), 1)
 
@@ -1702,7 +1702,7 @@ def draw_connections_panel():
 
     if _dm_open_user is None:
 
-        empty_lbl = font_terminal.render(_T("mp.select_a_contact"), True, (60, 90, 110))
+        empty_lbl = font_terminal.render(_T("mp.select_a_contact"), True, (90, 70, 44))
 
         screen.blit(
 
@@ -1718,7 +1718,7 @@ def draw_connections_panel():
 
             _T("mp.click_a_name_on_the_left_to_star"),
 
-            True, (50, 70, 85),
+            True, (70, 56, 38),
 
         )
 
@@ -1754,7 +1754,7 @@ def draw_connections_panel():
 
         pygame.draw.line(
 
-            screen, (30, 50, 60),
+            screen, (44, 34, 22),
 
             (dm_x + 8, dm_y + 40),
 
@@ -1868,7 +1868,7 @@ def draw_connections_panel():
 
         input_box_y = dm_y + dm_h - 42
 
-        pygame.draw.rect(screen, (15, 22, 28), (dm_x + 8, input_box_y, dm_w - 16, 32))
+        pygame.draw.rect(screen, (16, 15, 14), (dm_x + 8, input_box_y, dm_w - 16, 32))
 
         pygame.draw.rect(screen, (50, 80, 100), (dm_x + 8, input_box_y, dm_w - 16, 32), 1)
 
@@ -2390,7 +2390,7 @@ _server_shade.fill((0, 0, 0, 115))
 
 _server_panel = pygame.Surface((SERVER_PANEL_W, SERVER_PANEL_H), pygame.SRCALPHA)
 
-_server_panel.fill((7, 10, 13, 236))
+_server_panel.fill((11, 11, 12, 236))
 
 pygame.draw.rect(_server_panel, (38, 58, 70, 170), _server_panel.get_rect(), 1)
 
@@ -2623,8 +2623,8 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
     # header keeps it reachable without scrolling and mirrors the REFRESH
     # button on the same row, so "find servers" and "join a known one"
     # read as the two ways in.
-    _box_col = _mp_style.ACCENT if _connect_focused else (60, 90, 110)
-    pygame.draw.rect(screen, (8, 14, 20), _connect_rect)
+    _box_col = _mp_style.ACCENT if _connect_focused else (90, 70, 44)
+    pygame.draw.rect(screen, (9, 9, 10), _connect_rect)
     pygame.draw.rect(screen, _box_col, _connect_rect, 1)
     _hint = "paste host:port" if not _connect_input else _connect_input
     _hint_col = (90, 110, 130) if not _connect_input else (200, 220, 230)
@@ -2636,9 +2636,9 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
     )
 
     _btn_hover = _connect_btn_rect.collidepoint(get_scaled_mouse())
-    pygame.draw.rect(screen, (28, 38, 48) if _btn_hover else (12, 20, 28),
+    pygame.draw.rect(screen, (30, 26, 20) if _btn_hover else (20, 18, 15),
                      _connect_btn_rect)
-    pygame.draw.rect(screen, _mp_style.ACCENT if _btn_hover else (70, 100, 120),
+    pygame.draw.rect(screen, _mp_style.ACCENT if _btn_hover else (120, 82, 38),
                      _connect_btn_rect, 1)
     _btn_lbl = font_terminal_small.render(_T("mp.connect"), True, _mp_style.ACCENT)
     screen.blit(_btn_lbl, (
@@ -2674,7 +2674,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
         if is_active:
 
-            pygame.draw.rect(screen, (28, 38, 48), tab_rect)
+            pygame.draw.rect(screen, (30, 26, 20), tab_rect)
 
             pygame.draw.rect(screen, _mp_style.ACCENT, tab_rect, 1)
 
@@ -2684,7 +2684,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
             pygame.draw.rect(screen, _mp_style.PLATE, tab_rect)
 
-            pygame.draw.rect(screen, (50, 70, 85) if hover else _mp_style.EDGE, tab_rect, 1)
+            pygame.draw.rect(screen, (70, 56, 38) if hover else _mp_style.EDGE, tab_rect, 1)
 
         label_text = tab_name
 
@@ -2709,11 +2709,11 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
     _out_hover = outfitter_btn_rect.collidepoint(get_scaled_mouse())
 
-    pygame.draw.rect(screen, (16, 30, 22) if _out_hover else _mp_style.PLATE, outfitter_btn_rect)
+    pygame.draw.rect(screen, (34, 26, 16) if _out_hover else _mp_style.PLATE, outfitter_btn_rect)
 
-    pygame.draw.rect(screen, (80, 220, 120) if _out_hover else (40, 70, 55), outfitter_btn_rect, 1)
+    pygame.draw.rect(screen, _mp_style.ACCENT if _out_hover else (74, 60, 42), outfitter_btn_rect, 1)
 
-    _olabel = font_terminal_small.render(_T("mp.outfitter"), True, C_WHITE if _out_hover else (150, 170, 160))
+    _olabel = font_terminal_small.render(_T("mp.outfitter"), True, _mp_style.ACCENT if _out_hover else _mp_style.DIM)
 
     screen.blit(_olabel, (outfitter_btn_rect.centerx - _olabel.get_width() // 2, outfitter_btn_rect.centery - _olabel.get_height() // 2))
 
@@ -2833,7 +2833,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
             if i == selected_idx:
 
-                row_surf.fill((28, 36, 42, 235))
+                row_surf.fill((26, 23, 19, 235))
 
                 pygame.draw.rect(row_surf, _mp_style.ACCENT, row_surf.get_rect(), 1)
 
@@ -2841,13 +2841,13 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
             elif hover:
 
-                row_surf.fill((18, 28, 34, 225))
+                row_surf.fill((30, 24, 16, 225))
 
                 pygame.draw.rect(row_surf, (80, 120, 140), row_surf.get_rect(), 1)
 
             else:
 
-                row_surf.fill((9, 14, 18, 210))
+                row_surf.fill((10, 10, 11, 210))
 
                 pygame.draw.rect(row_surf, _mp_style.EDGE, row_surf.get_rect(), 1)
 
@@ -2915,7 +2915,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
             sb_w = 5
 
-            pygame.draw.rect(screen, (15, 22, 28), (sb_x, sb_y, sb_w, sb_h))
+            pygame.draw.rect(screen, (16, 15, 14), (sb_x, sb_y, sb_w, sb_h))
 
             pygame.draw.rect(screen, _mp_style.EDGE, (sb_x, sb_y, sb_w, sb_h), 1)
 
@@ -2971,7 +2971,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
         chat_bg = pygame.Surface((CHAT_PANEL_W, CHAT_PANEL_H), pygame.SRCALPHA)
 
-        chat_bg.fill((4, 8, 12, 215))
+        chat_bg.fill((7, 7, 9, 215))
 
         pygame.draw.rect(chat_bg, _mp_style.EDGE, chat_bg.get_rect(), 1)
 
@@ -3147,7 +3147,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
                 tip_surf = pygame.Surface((tip_w, tip_h), pygame.SRCALPHA)
 
-                tip_surf.fill((6, 10, 14, 245))
+                tip_surf.fill((10, 10, 11, 245))
 
                 pygame.draw.rect(tip_surf, _mp_style.ACCENT, tip_surf.get_rect(), 1)
 
@@ -3226,7 +3226,7 @@ def draw_server_browser(selected_idx, connecting, kicked_msg, connect_progress=0
 
         popup = pygame.Surface((460, 220), pygame.SRCALPHA)
 
-        popup.fill((8, 11, 16, 248))
+        popup.fill((11, 11, 12, 248))
 
         popup_rect = popup.get_rect(center=(WIDTH // 2, HEIGHT // 2))
 

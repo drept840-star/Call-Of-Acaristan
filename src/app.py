@@ -9,6 +9,7 @@ from core.state import STATE
 import ui as menu
 from ui import mp as menu_mp  # DM-input state owner (menu._dm_input would shadow the shim)
 from ui.widgets import _classification_font
+from ui import kit as _kit
 from core import game_core as gc
 from core import profile_store
 from core import save_system
@@ -890,229 +891,135 @@ def _mission_report_data(success=True):
 # ─────────────────────────────────────────────
 
 def draw_slot_select_screen():
-    """Draw save-slot selection in the house orange-terminal style.
+    """Draw save-slot selection on the shared KRAPNET kit.
 
-    Pause-menu chrome recipe (orange 2px border + inner line + corner ticks +
-    classification banner + Oswald title with drop shadow), dossier cards,
-    CRT scanlines + vignette last. Same click rectangles / save logic as
-    before - hit rects now cover the hover lift so they match what's drawn.
+    Header plaque, three operation-file cards, key-hint footer, toast. Same
+    click rectangles / save logic as before - hit rects cover the hover lift
+    so they match what's drawn.
     """
     global _slot_rects, _slot_focus, menu_notice, menu_notice_timer
 
     menu.draw_menu_background()
 
-    # Dark cinematic wash, cooler center so cards have depth but background art
-    # still contributes atmosphere.
-    dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    dim.fill((0, 0, 0, 205))
-    screen.blit(dim, (0, 0))
-
     data = save_system.load_data()
     mouse = get_scaled_mouse()
     current_idx = data.get("current_slot", 0)
-    title_text = "SELECT SAVE SLOT" if slot_select_purpose == "new" else "CONTINUE CAMPAIGN"
+    new = slot_select_purpose == "new"
+    title_text = "SELECT SAVE SLOT" if new else "CONTINUE CAMPAIGN"
     sub_text = ("Choose a file for the new operation. Occupied files will be overwritten."
-                if slot_select_purpose == "new"
-                else "Choose an active operation record to continue.")
+                if new else "Choose an active operation record to continue.")
 
-    # ── Header plaque: pause-menu recipe ──
-    plaque = pygame.Rect(WIDTH // 2 - 380, 56, 760, 112)
-    pl = pygame.Surface((plaque.w, plaque.h), pygame.SRCALPHA)
-    pl.fill((3, 8, 12, 220))
-    pygame.draw.rect(pl, C_ORANGE, pl.get_rect(), 2)
-    pygame.draw.rect(pl, (90, 50, 20), pl.get_rect().inflate(-6, -6), 1)
-    for cx, cy in ((12, 12), (plaque.w - 12, 12), (12, plaque.h - 12), (plaque.w - 12, plaque.h - 12)):
-        dx = 1 if cx < plaque.w // 2 else -1
-        dy = 1 if cy < plaque.h // 2 else -1
-        pygame.draw.line(pl, C_ORANGE, (cx, cy), (cx + dx * 14, cy), 2)
-        pygame.draw.line(pl, C_ORANGE, (cx, cy), (cx, cy + dy * 14), 2)
-    # Classification banner - same treatment as the main menu / pause panel.
-    pygame.draw.line(pl, C_ORANGE, (40, 10), (plaque.w - 40, 10), 1)
-    pygame.draw.line(pl, C_ORANGE, (40, 30), (plaque.w - 40, 30), 1)
-    eyebrow = _classification_font.render(_T("app.krapnet_archive_save_management"), True, C_ORANGE)
-    pl.blit(eyebrow, ((plaque.w - eyebrow.get_width()) // 2, 14))
-    # Title: bundled Oswald (font_location) cached in config - never SysFont.
-    t_w = font_location.size(title_text)[0]
-    pl.blit(font_location.render(title_text, True, (0, 0, 0)),
-            ((plaque.w - t_w) // 2 + 3, 34 + 3))
-    pl.blit(font_location.render(title_text, True, (235, 242, 246)),
-            ((plaque.w - t_w) // 2, 34))
-    pygame.draw.rect(pl, C_ORANGE, (plaque.w // 2 - 110, 84, 220, 3))
-    sub = font_terminal_small.render(
-        menu_mp._fit_text(sub_text, font_terminal_small, plaque.w - 70),
-        True, (152, 160, 154))
-    pl.blit(sub, ((plaque.w - sub.get_width()) // 2, 92))
-    screen.blit(pl, plaque.topleft)
+    plaque = pygame.Rect(40, 44, WIDTH - 80, 118)
+    _kit.panel(screen, plaque)
+    _kit.header(screen, plaque, _T("app.krapnet_archive_save_management"), title_text,
+                tag="%d FILES" % save_system.SLOT_COUNT, sub=sub_text)
 
     _slot_rects = []
-    card_w, card_h = 286, 270
-    gap = 28
+    card_w, card_h = 286, 290
+    gap = 21
     start_x = WIDTH // 2 - (card_w * 3 + gap * 2) // 2
-    y = 222
-
-    def _mission_label(slot):
-        if not slot.get("occupied"):
-            return "No campaign data"
-        completed = slot.get("last_completed_mission")
-        if completed:
-            return slot.get("last_completed_label", "Campaign record")
-        return slot.get("last_completed_label", "Campaign started")
+    y = 196
 
     for i in range(3):
         x = start_x + i * (card_w + gap)
-        # Hit rect covers the -8px hover lift so visual and hitbox match.
-        rect = pygame.Rect(x, y - 8, card_w, card_h + 8)
+        # Hit rect covers the -6px hover lift so visual and hitbox match.
+        rect = pygame.Rect(x, y - 6, card_w, card_h + 6)
         _slot_rects.append(rect)
         slot = data["slots"][i]
         occupied = bool(slot.get("occupied"))
-        selectable = slot_select_purpose == "new" or occupied
+        selectable = new or occupied
         hovered = rect.collidepoint(mouse) and selectable
         if hovered and _slot_focus != i:
             _slot_focus = i
             audio.play("menu_hover", volume=0.25)
         active = hovered or (selectable and _slot_focus == i)
 
-        # Card lift/outline.
-        lift = -8 if active else 0
-        draw_y = y + lift
-        shadow = pygame.Surface((card_w + 20, card_h + 24), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 120 if active else 82), shadow.get_rect(), border_radius=12)
-        screen.blit(shadow, (x - 8, draw_y + 8))
+        card = pygame.Rect(x, y - (6 if active else 0), card_w, card_h)
+        _kit.panel(screen, card, alpha=240 if selectable else 190, spine=False)
+        if active:
+            pygame.draw.rect(screen, _kit.ORANGE, card, 1)
+        pygame.draw.rect(screen, _kit.ORANGE if active else (_kit.STEEL if occupied else _kit.EDGE_HI),
+                         (card.x, card.y, 4, card.h))
+        cx = card.x + 22
 
-        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
-        base = (8, 14, 20, 238 if selectable else 178)
-        pygame.draw.rect(card, base, card.get_rect(), border_radius=10)
-        pygame.draw.rect(card, (255, 120, 0, 230) if active else ((70, 76, 82, 120) if not selectable else (52, 96, 128, 180)),
-                         card.get_rect(), 3 if active else 1, border_radius=10)
-        # Left file-tab accent.
-        accent = (255, 120, 0) if active else ((75, 110, 130) if selectable else (55, 55, 58))
-        pygame.draw.rect(card, (*accent, 230), (0, 0, 7, card_h), border_radius=5)
-        # Dossier section lines - header band + separator above the action strip
-        # (no line runs through any text row).
-        for yy in (72, 210):
-            pygame.draw.line(card, (44, 70, 86, 95), (22, yy), (card_w - 22, yy), 1)
+        # File header: small label + big Oswald slot number.
+        _kit.text(screen, _T("app.file_n", n=i + 1), cx, card.y + 16, 11, _kit.STEEL, "bold")
+        num = _kit.font(46, "display").render("%02d" % (i + 1), True,
+                                              _kit.AMBER if active else (_kit.TEXT if selectable else _kit.MUTED))
+        screen.blit(num, (card.right - 20 - num.get_width(), card.y + 2))
+        _kit.text(screen, _T("app.save_slot", n=i + 1), cx, card.y + 34, 15,
+                  _kit.AMBER if active else _kit.TEXT, "bold")
 
-        # File number header.
-        file_num = font_terminal_small.render(_T("app.file_n", n=i + 1), True, (88, 142, 172))
-        card.blit(file_num, (24, 18))
-        header = font_terminal.render(_T("app.save_slot", n=i + 1), True,
-                                      (255, 190, 95) if active else (150, 205, 232))
-        card.blit(header, (24, 38))
-
-        # Status chip.
-        if occupied:
-            status_text = "ACTIVE FILE"
-            status_col = (92, 226, 142)
-            chip_col = (10, 42, 25, 210)
-        else:
-            status_text = "EMPTY FILE"
-            status_col = (150, 155, 158)
-            chip_col = (28, 30, 32, 210)
-        chip = pygame.Rect(24, 82, 132, 26)
-        pygame.draw.rect(card, chip_col, chip, border_radius=4)
-        pygame.draw.rect(card, (*status_col, 120), chip, 1, border_radius=4)
-        st = font_terminal_small.render(status_text, True, status_col)
-        card.blit(st, (chip.x + 10, chip.y + 6))
-
-        # CURRENT-slot marker (persisted active slot), right of the chip.
+        # Status chips: file state, and CURRENT on the persisted active slot.
+        chip_label, chip_col = ("ACTIVE FILE", _kit.GOOD) if occupied else ("EMPTY FILE", _kit.DIM)
+        chip = pygame.Rect(cx, card.y + 74, _kit.font(11, "bold").size(chip_label)[0] + 20, 22)
+        pygame.draw.rect(screen, _kit.PLATE_HI, chip)
+        pygame.draw.rect(screen, chip_col, chip, 1)
+        _kit.text(screen, chip_label, chip.x + 10, chip.y + 4, 11, chip_col, "bold")
         if occupied and i == current_idx:
-            badge = "CURRENT"
-            bw = font_terminal_small.size(badge)[0] + 16
-            brect = pygame.Rect(card_w - 24 - bw, 84, bw, 22)
-            pygame.draw.rect(card, (46, 24, 6, 230), brect, border_radius=3)
-            pygame.draw.rect(card, (*C_ORANGE, 200), brect, 1, border_radius=3)
-            bs = font_terminal_small.render(badge, True, C_ORANGE)
-            card.blit(bs, (brect.x + 8, brect.y + 4))
+            cur = pygame.Rect(chip.right + 8, chip.y, _kit.font(11, "bold").size("CURRENT")[0] + 20, 22)
+            pygame.draw.rect(screen, (46, 26, 8), cur)
+            pygame.draw.rect(screen, _kit.ORANGE, cur, 1)
+            _kit.text(screen, "CURRENT", cur.x + 10, cur.y + 4, 11, _kit.AMBER, "bold")
+
+        pygame.draw.line(screen, _kit.EDGE, (cx, card.y + 110), (card.right - 22, card.y + 110))
 
         # Mission data.
         if occupied:
-            completed = slot.get("last_completed_mission")
-            l1 = "LAST COMPLETED" if completed else "IN PROGRESS"
-            mission = _mission_label(slot)
-            tline = f"TOTAL TIME  {slot.get('total_time', '00:00')}"
-            updated = "UPDATED  " + save_system.format_timestamp(slot.get("updated_at"))
+            l1 = "LAST COMPLETED" if slot.get("last_completed_mission") else "IN PROGRESS"
+            mission = slot.get("last_completed_label", "Campaign record" if slot.get("last_completed_mission")
+                               else "Campaign started")
+            rows = (("TOTAL TIME", slot.get("total_time", "00:00")),
+                    ("UPDATED", save_system.format_timestamp(slot.get("updated_at"))))
         else:
-            if slot_select_purpose == "new":
-                l1 = "NEW CAMPAIGN"
-                mission = "Operation file will begin at Mission 1"
-            else:
-                l1 = "NO SAVE DATA"
-                mission = "No operation record in this file"
-            tline = "TOTAL TIME  --:--"
-            updated = "UPDATED  never"
-
-        label = font_terminal_small.render(l1, True, (92, 154, 190))
-        card.blit(label, (24, 118))
+            l1 = "NEW CAMPAIGN" if new else "NO SAVE DATA"
+            mission = ("Begins at Mission 1" if new
+                       else "No record in this file")
+            rows = (("TOTAL TIME", "--:--"), ("UPDATED", "never"))
+        _kit.text(screen, l1, cx, card.y + 122, 11, _kit.AMBER_DIM, "bold")
         # Width-based truncation so long labels never overrun the card.
-        mission_text = menu_mp._fit_text(mission, font_terminal_small, card_w - 48)
-        mission_surf = font_terminal_small.render(mission_text, True,
-                                                  (205, 205, 190) if occupied else (165, 165, 154))
-        card.blit(mission_surf, (24, 142))
-        time_surf = font_terminal_small.render(tline, True, (178, 184, 178))
-        card.blit(time_surf, (24, 170))
-        upd_surf = font_terminal_small.render(updated, True, (136, 142, 140))
-        card.blit(upd_surf, (24, 190))
+        _kit.text(screen, _kit.fit(mission, 13, card_w - 44, "semibold"), cx, card.y + 140, 13,
+                  _kit.TEXT if occupied else _kit.DIM, "semibold")
+        for n, (k, v) in enumerate(rows):
+            ry = card.y + 172 + n * 22
+            _kit.text(screen, k, cx, ry, 11, _kit.MUTED)
+            _kit.text(screen, v, card.right - 22, ry, 12, _kit.DIM if occupied else _kit.MUTED, "bold", "right")
 
         # Action strip - reads as a button affordance.
-        strip = pygame.Rect(14, 216, card_w - 28, 36)
-        pygame.draw.rect(card, (14, 20, 28, 220) if selectable else (10, 12, 14, 180),
-                         strip, border_radius=4)
-        pygame.draw.rect(card, (C_ORANGE if active else ((52, 96, 128, 180) if selectable else (70, 76, 82, 120))),
-                         strip, 1 if not active else 2, border_radius=4)
-        if slot_select_purpose == "new":
+        strip = pygame.Rect(card.x + 14, card.bottom - 50, card_w - 28, 36)
+        if new:
             action = "OVERWRITE FILE" if occupied else "CREATE FILE"
-            if occupied:
-                action_col = (255, 165, 90) if active else (235, 115, 80)
-            else:
-                action_col = (150, 245, 180) if active else (115, 220, 150)
         else:
             action = "LOAD FILE" if occupied else "NO DATA"
-            action_col = ((255, 190, 90) if active else (180, 190, 170)) if occupied else (120, 120, 120)
-        action_surf = font_terminal_small.render(action, True, action_col if selectable else (90, 90, 90))
-        card.blit(action_surf, (strip.centerx - action_surf.get_width() // 2, strip.y + 11))
+        if selectable:
+            _kit.button(screen, strip, action, hot=active, primary=False)
+            if new and occupied:
+                # Overwrite is destructive: red edge so it never reads as LOAD.
+                pygame.draw.rect(screen, _kit.BAD, strip, 1)
+        else:
+            pygame.draw.rect(screen, _kit.PLATE, strip)
+            pygame.draw.rect(screen, _kit.EDGE, strip, 1)
+            _kit.text(screen, action, strip.centerx, strip.y + 10, 13, _kit.MUTED, "bold", "center")
 
-        if active:
-            # Small focus chevron and warm tint. Normal alpha blit - BLEND_ADD
-            # ignores source alpha and would flood the whole card orange.
-            pygame.draw.polygon(card, (255, 120, 0, 220), [(card_w - 31, 20), (card_w - 17, 27), (card_w - 31, 34)])
-            glow = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
-            pygame.draw.rect(glow, (255, 120, 0, 28), glow.get_rect(), border_radius=10)
-            card.blit(glow, (0, 0))
+    # Footer: purpose line + key hints, on the menu's ticker band.
+    band = pygame.Rect(0, HEIGHT - 70, WIDTH, 70)
+    pygame.draw.rect(screen, _kit.INK, band)
+    pygame.draw.line(screen, _kit.EDGE, band.topleft, band.topright)
+    footer_text = ("New campaign writes to the selected file. Occupied files will be overwritten."
+                   if new else "Only active files can be continued.")
+    _kit.text(screen, _kit.fit(footer_text, 12, WIDTH - 80), 40, band.y + 14, 12,
+              (196, 142, 96) if new else _kit.DIM)
+    _kit.text(screen, _kit.fit(_T("app.press_esc_to_return_save_data_js"), 11, 420), 40, band.y + 40, 11,
+              _kit.MUTED)
+    _kit.key_hints(screen, [("ARROWS", "SELECT"), ("ENTER", "OPEN"), ("ESC", "BACK")],
+                   WIDTH - 40, band.y + 38)
 
-        screen.blit(card, (x, draw_y))
-
-    # Bottom footer - orange top strip (MP-browser recipe) + purpose + ESC hint.
-    footer_panel = pygame.Surface((720, 68), pygame.SRCALPHA)
-    footer_panel.fill((0, 0, 0, 150))
-    pygame.draw.rect(footer_panel, (42, 72, 90, 120), footer_panel.get_rect(), 1)
-    pygame.draw.rect(footer_panel, (*C_ORANGE, 170), (0, 0, 720, 3))
-    if slot_select_purpose == "new":
-        footer_text = "New campaign writes to the selected file. Occupied files will be overwritten."
-        footer_col = (184, 132, 92)
-    else:
-        footer_text = "Only active files can be continued."
-        footer_col = (126, 150, 160)
-    f1 = font_terminal_small.render(
-        menu_mp._fit_text(footer_text, font_terminal_small, 690), True, footer_col)
-    f2 = font_terminal_small.render(_T("app.press_esc_to_return_save_data_js"), True, (100, 108, 112))
-    footer_panel.blit(f1, (720 // 2 - f1.get_width() // 2, 14))
-    footer_panel.blit(f2, (720 // 2 - f2.get_width() // 2, 40))
-    screen.blit(footer_panel, (WIDTH // 2 - footer_panel.get_width() // 2, HEIGHT - 92))
-
-    # Toast notices (e.g. deny feedback on empty slots) - same style as the
-    # menu's menu_notice pill, positioned in the gap above the footer.
+    # Toast notices (e.g. deny feedback on empty slots) - same pill as the menu.
     if menu_notice_timer > 0:
-        notice = font_prompt.render(menu_notice, True, C_ORANGE)
-        bg = pygame.Surface((notice.get_width() + 28, notice.get_height() + 12), pygame.SRCALPHA)
-        bg.fill((0, 0, 0, 190))
-        pygame.draw.rect(bg, (120, 70, 20), bg.get_rect(), 1)
-        screen.blit(bg, (WIDTH // 2 - bg.get_width() // 2, 536))
-        screen.blit(notice, (WIDTH // 2 - notice.get_width() // 2, 542))
+        _kit.toast(screen, menu_notice, HEIGHT - 116)
         menu_notice_timer -= 1
 
-    # CRT finish - same as death/settings screens.
-    draw_scanlines(screen)
-    draw_vignette(screen)
+    _kit.finish(screen)
 
 
 # ─────────────────────────────────────────────
@@ -2289,6 +2196,7 @@ class _MenuState(GameState):
         if menu.buttons[1].is_clicked(event, (mouse_x, mouse_y)):
             slot_select_purpose = "new"
             gsm.transition("SLOT_SELECT")
+        menu.slot_panel_clicked(event, (mouse_x, mouse_y))
         if menu.buttons[2].is_clicked(event, (mouse_x, mouse_y)):
             global mp_state, mp_selected, mp_kick_msg
             mp_state = "browser"
@@ -2331,12 +2239,7 @@ class _MenuState(GameState):
         elif kb_trigger == 4:
             running = False
         if menu_notice_timer > 0:
-            notice = font_prompt.render(menu_notice, True, C_ORANGE)
-            bg = pygame.Surface((notice.get_width() + 28, notice.get_height() + 12), pygame.SRCALPHA)
-            bg.fill((0, 0, 0, 190))
-            pygame.draw.rect(bg, (120, 70, 20), bg.get_rect(), 1)
-            surface.blit(bg, (WIDTH // 2 - bg.get_width() // 2, HEIGHT - 120))
-            surface.blit(notice, (WIDTH // 2 - notice.get_width() // 2, HEIGHT - 114))
+            _kit.toast(surface, menu_notice, HEIGHT - 120)
             menu_notice_timer -= 1
 
 

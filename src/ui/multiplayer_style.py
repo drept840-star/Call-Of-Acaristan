@@ -6,13 +6,14 @@ this module never changes maps, teams, capacity or protocol data.
 import pygame
 from missions import arena as AR
 from engine.text import T as _T  # RPE6 Phase 4 text table
+from ui import kit
 
-BG = (7, 12, 15)
-PLATE = (14, 21, 24)
-EDGE = (48, 64, 66)
-ACCENT = (232, 166, 82)
-TEXT = (225, 229, 216)
-DIM = (148, 162, 157)
+BG = (8, 8, 10)
+PLATE = (12, 12, 14)
+EDGE = (58, 48, 36)
+ACCENT = (255, 176, 64)
+TEXT = (232, 228, 216)
+DIM = (152, 148, 136)
 GREEN = (155, 194, 134)
 
 
@@ -26,25 +27,21 @@ def fitted(ui, surface, rect, label, size=12, color=DIM, bold=False):
 
 
 def background(surface):
-    surface.fill(BG)
-    w, h = surface.get_size()
-    for x in range(0, w, 40):
-        pygame.draw.line(surface, (12, 21, 24), (x, 0), (x, h))
-    for y in range(0, h, 40):
-        pygame.draw.line(surface, (12, 21, 24), (0, y), (w, y))
+    """Menu art under the kit's ink wash, so every menu screen shares one floor."""
+    kit.backdrop(surface, 226)
 
 
 def frame(ui, surface, panel, title, subtitle, state):
-    pygame.draw.rect(surface, (2, 5, 7), panel.move(5, 6))
+    pygame.draw.rect(surface, (0, 0, 0), panel.move(5, 6))
     pygame.draw.rect(surface, PLATE, panel)
     pygame.draw.rect(surface, EDGE, panel, 1)
     pygame.draw.rect(surface, ACCENT, (panel.x, panel.y, 5, 88))
     x = panel.x + 24
     text(ui, surface, x, panel.y + 17, 'KRAPNET / OPERATIONS TERMINAL', 11, ACCENT, True)
-    text(ui, surface, x, panel.y + 38, title, 30, TEXT, True)
+    surface.blit(kit.font(32, "display").render(title, True, TEXT), (x, panel.y + 30))
     text(ui, surface, x, panel.y + 78, subtitle, 12)
     r = pygame.Rect(panel.right - 194, panel.y + 22, 170, 30)
-    pygame.draw.rect(surface, (24, 34, 30), r)
+    pygame.draw.rect(surface, (20, 18, 15), r)
     pygame.draw.rect(surface, EDGE, r, 1)
     pygame.draw.circle(surface, GREEN, (r.x + 14, r.centery), 3)
     text(ui, surface, r.x + 26, r.y + 8, state, 11, GREEN, True)
@@ -63,7 +60,7 @@ def section(ui, surface, x, y, label, width):
 
 
 def card(surface, rect):
-    pygame.draw.rect(surface, (9, 16, 19), rect)
+    pygame.draw.rect(surface, (10, 10, 11), rect)
     pygame.draw.rect(surface, EDGE, rect, 1)
 
 
@@ -317,9 +314,13 @@ def browser_font(size, bold=False):
 
 def browser_shell(surface, panel):
     """Browser chrome only. All existing list, relay and DM logic stays owned by mp."""
-    pygame.draw.rect(surface, (2, 5, 7), panel.move(5, 6))
+    pygame.draw.rect(surface, (0, 0, 0), panel.move(5, 6))
     pygame.draw.rect(surface, PLATE, panel)
     pygame.draw.rect(surface, EDGE, panel, 1)
     pygame.draw.rect(surface, ACCENT, (panel.x, panel.y, 5, 88))
     surface.blit(browser_font(11, True).render(_T("multiplayer_style.krapnet_operations_terminal"), True, ACCENT), (panel.x + 28, panel.y + 16))
-    surface.blit(browser_font(30, True).render(_T("multiplayer_style.multiplayer"), True, TEXT), (panel.x + 28, panel.y + 38))
+    title = kit.font(32, "display")
+    label = _T("multiplayer_style.multiplayer")
+    surface.blit(title.render(label, True, (0, 0, 0)), (panel.x + 30, panel.y + 32))
+    surface.blit(title.render(label, True, TEXT), (panel.x + 28, panel.y + 30))
+    kit.ticks(surface, panel, ACCENT, 10, 1)

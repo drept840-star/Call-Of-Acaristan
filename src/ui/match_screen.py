@@ -211,7 +211,7 @@ PANEL_Y = (HEIGHT - PANEL_H) // 2
 
 # Palette lifted from ui/mp.py's server browser so this screen does not
 # look like a different program bolted onto the same game.
-C_PANEL_BG = (14, 21, 24)
+C_PANEL_BG = (12, 12, 14)
 # Side colours for the lobby board. Warm/cool rather than the factions' own
 # uniform greens and blues, because on a dark panel both of those read as
 # "rectangle" and the whole point of the board is telling two groups apart at a
@@ -232,9 +232,9 @@ def _fit_to_font(font, text, max_w):
     while text and font.size(text + "...")[0] > max_w:
         text = text[:-1]
     return (text.rstrip() + "...") if text else ""
-C_PANEL_EDGE = (48, 64, 66)
-C_ROW_BG = (9, 16, 19)
-C_ROW_HOVER = (29, 43, 43)
+C_PANEL_EDGE = (58, 48, 36)
+C_ROW_BG = (10, 10, 11)
+C_ROW_HOVER = (34, 28, 20)
 C_ACCENT = (232, 166, 82)          # the game's orange
 C_CYAN = (131, 191, 200)          # selection / focus
 C_TEXT = (225, 229, 216)
@@ -3008,9 +3008,9 @@ class MatchScreen(object):
         px, py = w - pw - 12, h - ph - 46
         panel = pygame.Rect(px, py, pw, ph)
         bg = pygame.Surface((pw, ph), pygame.SRCALPHA)
-        bg.fill((4, 8, 12, 205))
+        bg.fill((6, 7, 9, 205))
         surface.blit(bg, panel.topleft)
-        pygame.draw.rect(surface, (30, 50, 60), panel, 1)
+        pygame.draw.rect(surface, (44, 34, 22), panel, 1)
         y = py + 6
         for kind, text, author in lines:
             col = P.color_for(author) if (kind == "head" and author) else C_DIM
@@ -3021,7 +3021,7 @@ class MatchScreen(object):
             y += CHAT_LINE_H
         if self._composing:
             rule_y = py + ph - composer_h - 4
-            pygame.draw.line(surface, (40, 70, 86), (px + 6, rule_y),
+            pygame.draw.line(surface, (80, 62, 40), (px + 6, rule_y),
                              (px + pw - 6, rule_y), 1)
             caret = "|" if (_now_ms() // 500) % 2 else " "
             shown = self._clip("> " + self._chat_input + caret, font, pw - 18)
@@ -3350,7 +3350,7 @@ class MatchScreen(object):
     def _draw_reconnecting(self, surface):
         """A calm, explicit screen while automatic rejoin attempts run."""
         w, h = surface.get_size()
-        surface.fill((7, 12, 16))
+        surface.fill((8, 8, 10))
         pw, ph = min(620, w - 32), 230
         x, y = (w - pw) // 2, (h - ph) // 2
         panel = pygame.Rect(x, y, pw, ph)
@@ -3636,9 +3636,9 @@ class MatchScreen(object):
         pw, ph = 224, 58
         x, y = max(12, sw - pw - 14), max(12, sh - ph - 12)
         card = pygame.Surface((pw, ph), pygame.SRCALPHA)
-        pygame.draw.rect(card, (5, 10, 14, 218), (0, 0, pw, ph),
+        pygame.draw.rect(card, (8, 8, 10, 218), (0, 0, pw, ph),
                          border_radius=5)
-        pygame.draw.rect(card, (55, 65, 75, 230), (0, 0, pw, ph), 1,
+        pygame.draw.rect(card, (64, 56, 46, 230), (0, 0, pw, ph), 1,
                          border_radius=5)
 
         if self.sim is not None:
@@ -3890,7 +3890,7 @@ class MatchScreen(object):
         if self._intro_plate is None or \
                 self._intro_plate.get_size() != (w, 168):
             self._intro_plate = pygame.Surface((w, 168), pygame.SRCALPHA)
-            pygame.draw.rect(self._intro_plate, (6, 8, 12, 170), (0, 0, w, 168))
+            pygame.draw.rect(self._intro_plate, (6, 7, 9, 170), (0, 0, w, 168))
         self._intro_plate.set_alpha(ta)
         surface.blit(self._intro_plate, (0, cy - 84))
 
@@ -4334,7 +4334,7 @@ class MatchScreen(object):
         elif hovered:
             bg, fg, border = C_ROW_HOVER, C_TEXT, C_PANEL_EDGE
         else:
-            bg, fg, border = C_ROW_BG, C_DIM, (30, 44, 56)
+            bg, fg, border = C_ROW_BG, C_DIM, (40, 32, 22)
         pygame.draw.rect(surface, bg, r)
         pygame.draw.rect(surface, border, r, 1)
         if selected:
@@ -4348,7 +4348,7 @@ class MatchScreen(object):
         hovered = r.collidepoint(get_scaled_mouse())
         if primary:
             bg = (250, 189, 107) if hovered else C_ACCENT
-            fg = (14, 21, 24)
+            fg = (12, 12, 14)
         else:
             bg = C_ROW_HOVER if hovered else C_ROW_BG
             fg = C_TEXT if hovered else C_CYAN
@@ -4387,7 +4387,7 @@ class MatchScreen(object):
     def _btn(self, surface, label, x, y, tag):
         r = pygame.Rect(x, y, 210, 30)
         hovered = r.collidepoint(get_scaled_mouse())
-        pygame.draw.rect(surface, (40, 60, 80) if hovered else (26, 30, 38), r)
+        pygame.draw.rect(surface, (70, 56, 38) if hovered else (26, 23, 19), r)
         pygame.draw.rect(surface, (90, 130, 170), r, 1)
         self._blit(surface, x + r.w // 2, label, y + 8, 18, (210, 225, 240),
                    center=True)

@@ -95,6 +95,7 @@ class ModernButton:
 
         self.rect = pygame.Rect(x, y, self.width, self.height)
 
+        self.idle_color = C_GREY   # text colour when neither hovered nor selected
         self.is_hovered = False
         self.is_selected = False   # keyboard focus (arrow keys)
         self._prev_hover = False
@@ -146,7 +147,7 @@ class ModernButton:
 
     def draw(self, surface):
 
-        text_color = C_WHITE if (self.is_hovered or self.is_selected) else C_GREY
+        text_color = C_WHITE if (self.is_hovered or self.is_selected) else self.idle_color
 
         actual_x = self.x + int(self.anim_offset)
         actual_y = self.y + int(self.press_dip)
@@ -236,6 +237,11 @@ buttons = [
     ModernButton(135, 570, "EXIT"),
 
 ]
+
+# Main-menu rows idle in near-white so they never read as disabled; the grey
+# default stays for the pause / death / settings buttons.
+for _b in buttons:
+    _b.idle_color = (218, 216, 206)
 
 # The OUTFITTER deliberately does NOT live here. Acaribucks are earned from
 # arena results and spent on loadouts other players see, so the shop belongs
