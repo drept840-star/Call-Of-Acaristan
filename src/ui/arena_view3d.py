@@ -27,6 +27,7 @@ from core.state import STATE
 from game import topdown3d as td
 from game.topdown3d import K, to3, yaw_of
 from missions import arena as AR
+from missions.m1 import grade3d as _grade
 from net import protocol as P
 from ui import mp3d
 from ui.arena_view import ArenaView, MUZZLE_FRAMES, color_for
@@ -46,19 +47,23 @@ WEAPON_PICKUP_COL = {P.WPN_OS12: (235, 150, 70), P.WPN_K9: (200, 120, 235),
                      P.WPN_SHOTGUN: (176, 200, 112)}
 PICKUP_RIG = {P.WPN_OS12: "os12", P.WPN_K9: "k9_smg", P.WPN_SHOTGUN: "shotgun"}
 
-# Per-map dressing: texture + brightness for floor, walls and cover, the void
-# colour past the walls, and the lamp colour.
+# Per-map dressing: texture + brightness for floor, walls and cover, the flat
+# wall-top colour, the void past the walls, the lamp colour, the key light
+# tint and the grade's ambient (the light map floor the lamp pools add to).
 THEMES = {
-    "yard": dict(floor=("concrete", (58, 60, 64)), wall=("concrete", (104, 106, 112)),
-                 cap=(70, 72, 78), cover=("crate", (112, 88, 58)), void=(10, 12, 16),
-                 lamp=(255, 196, 120), key=(1.0, 0.97, 0.92)),
-    "crossfire": dict(floor=("steel", (56, 60, 66)), wall=("brick", (98, 64, 50)),
-                      cap=(66, 58, 54), cover=("metal_rib", (70, 76, 84)), void=(9, 10, 14),
-                      lamp=(200, 220, 255), key=(0.94, 0.98, 1.06)),
-    "foundry": dict(floor=("concrete", (64, 56, 50)), wall=("rust", (96, 60, 42)),
-                    cap=(62, 50, 44), cover=("steel", (84, 88, 94)), void=(12, 9, 8),
-                    lamp=(255, 150, 80), key=(1.06, 0.94, 0.84)),
+    "yard": dict(floor=("concrete", (44, 46, 50)), wall=("concrete", (92, 94, 100)),
+                 cap=(30, 31, 35), cover=("crate", (112, 88, 58)), void=(8, 9, 12),
+                 lamp=(255, 196, 120), key=(0.86, 0.90, 1.02), ambient=(138, 146, 170)),
+    "crossfire": dict(floor=("concrete", (42, 43, 46)), wall=("brick", (92, 60, 48)),
+                      cap=(30, 27, 26), cover=("metal_rib", (70, 76, 84)), void=(8, 9, 12),
+                      lamp=(226, 228, 220), key=(0.92, 0.92, 0.96), ambient=(136, 136, 142)),
+    "foundry": dict(floor=("concrete", (50, 44, 40)), wall=("rust", (88, 56, 40)),
+                    cap=(34, 27, 24), cover=("steel", (84, 88, 94)), void=(10, 8, 7),
+                    lamp=(255, 150, 80), key=(1.0, 0.88, 0.78), ambient=(150, 128, 118)),
 }
+LAMP_GAP = 6                     # tiles between lamps along the outer walls
+LAMP_REACH = 5.2                 # metres: a pool's radius on the floor
+LAMP_GRADE_K = 0.55              # pool strength in the screen grade
 
 
 def make_view(map_name="yard"):
@@ -126,27 +131,39 @@ class ArenaView3D(ArenaView):
     # ── set ────────────────────────────────────────────────────────────
 
     def _lamp_spots(self):
-        """Wall-top lamps over the longest inner walls, at most six."""
-        inner = [w for w in self.walls
-                 if w.left > 0 and w.top > 0 and w.right < self.map_w and w.bottom < self.map_h]
-        inner.sort(key=lambda w: -(w.w * w.h))
-        spots = [(w.centerx, w.centery) for w in inner[:4]]
-        spots += [(self.map_w * 0.25, self.map_h * 0.5), (self.map_w * 0.75, self.map_h * 0.5)]
-        return spots[:6]
+        """Wall-top lamps, as (sim x, sim y, pool x, pool y): one over each
+        long inner wall, and a row along the inner face of the outer walls
+        throwing light into the floor."""
+        T = TILE_SIZE
+        spots = []
+        for w in self.walls:
+            inner = w.left > 0 and w.top > 0 and w.right < self.map_w and w.bottom < self.map_h
+            if inner:
+                if max(w.w, w.h) >= 3 * T:
+                    spots.append((w.centerx, w.centery, w.centerx, w.centery))
+                continue
+            if w.w >= w.h:
+                y, dy = (w.bottom, 1) if w.top <= 0 else (w.top, -1)
+                xs = range(int(w.left + T * 2), int(w.right - T), LAMP_GAP * T)
+                spots += [(x, y, x, y + dy * T * 1.5) for x in xs]
+            else:
+                x, dx = (w.right, 1) if w.left <= 0 else (w.left, -1)
+                ys = range(int(w.top + T * 2), int(w.bottom - T), LAMP_GAP * T)
+                spots += [(x, y, x + dx * T * 1.5, y) for y in ys]
+        return spots
 
     def _build_set(self, r):
         from cutscenes import m6world3d as _w
         from engine3d import box, quad_xz, disc_xz, tex
         th = self.theme
         floor = tex(th["floor"][0], like=th["floor"][1], tint=True)
-        cap = tex(th["wall"][0], like=th["cap"], tint=True)
         wall = tex(th["wall"][0], like=th["wall"][1])
         cover = tex(th["cover"][0], like=th["cover"][1])
         _w.add(r, quad_xz(0.0, -self.map_h * K, self.map_w * K, 0.0, 0.0, floor, layer=0, seg=4.8))
         for wr in self.walls:
             cx, _, cz = to3(wr.centerx, wr.centery)
             _w.add(r, box(wr.w * K, WALL_H, wr.h * K, wall, center=(cx, WALL_H / 2.0, cz),
-                          cols={"top": cap}, seg=3.2))
+                          cols={"top": th["cap"]}, seg=3.2))
         for ri, row in enumerate(self.map_rows):
             for ci, ch in enumerate(row):
                 x, y = ci * TILE_SIZE + TILE_SIZE / 2.0, ri * TILE_SIZE + TILE_SIZE / 2.0
@@ -157,9 +174,9 @@ class ArenaView3D(ArenaView):
                                   center=(cx, COVER_H / 2.0, cz)))
                 elif ch in AR.SPAWN_TILES:
                     cx, _, cz = to3(x, y)
-                    _w.add(r, disc_xz(cx, cz, 0.42, 0.012, _mix(th["floor"][1], (120, 150, 190), 0.35),
+                    _w.add(r, disc_xz(cx, cz, 0.42, 0.012, _mix(th["floor"][1], (120, 150, 190), 0.12),
                                       n=12, layer=1))
-        for lx, ly in self._lamps:
+        for lx, ly, _px, _py in self._lamps:
             cx, _, cz = to3(lx, ly)
             _w.add(r, box(0.34, 0.12, 0.34, (40, 40, 44), center=(cx, WALL_H + 0.06, cz)))
             _w.add(r, box(0.26, 0.05, 0.26, th["lamp"], center=(cx, WALL_H + 0.145, cz),
@@ -202,15 +219,13 @@ class ArenaView3D(ArenaView):
         r, buf = _w.rend(*RES)
         saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
         try:
-            r.light = Light(direction=(-0.35, 0.82, -0.45), ambient=0.46, diffuse=0.66,
-                            sky=0.24, tint=th["key"])
+            r.light = Light(direction=(-0.35, 0.82, -0.45), ambient=0.40, diffuse=0.56,
+                            sky=0.12, tint=th["key"])
             r.fog, r.fog_start, r.fog_end = th["void"], 34.0, 70.0
             r.light_cap = 8
             view = self._camera(vw, vh)
             view.apply(r)
             self._cam3 = view
-            lights = [{"pos": to3(lx, ly, WALL_H + 0.6), "color": th["lamp"],
-                       "intensity": 0.9, "range": 9.0} for lx, ly in self._lamps[:4]]
             flashes = []
             buf.fill(th["void"])
             r.begin()
@@ -225,11 +240,13 @@ class ArenaView3D(ArenaView):
             self._draw_pickups3d(r, hud.get("pickups"), tm)
             tags = self._draw_players3d(r, posed, local_id, flashes, tm)
             self._draw_fx3d(r, tm)
-            r.set_lights(lights + flashes, cap=8)
+            self._lamp_lights(r, view, flashes, tm)
             r.flush(buf)
         finally:
             r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
         _fx.present_crisp(buf, surface)
+        _grade.apply(surface, view, self._grade_lights(flashes), ambient=th["ambient"])
+        _grade.vignette(surface)
         sx, sy = vw / float(RES[0]), vh / float(RES[1])
         for tag in tags:
             self._tag3d(surface, sx, sy, *tag)
@@ -240,6 +257,38 @@ class ArenaView3D(ArenaView):
             draw_combat_reticle(surface, require_player=False)
         self._draw_feel(surface)
         return posed
+
+    def _lamp_lights(self, r, view, flashes, tm):
+        """Every lamp pools on the baked floor; the ones nearest the camera
+        focus fill the per-frame lights the flashes leave free."""
+        from cutscenes import m6fx3d as _fx
+        col = self.theme["lamp"]
+        hot = td.mix(col, (255, 250, 235), 0.5)
+        fx, fz = view.tgt[0], view.tgt[2]
+        pools, near = [], []
+        for lx, ly, px, py in self._lamps:
+            ground = to3(px, py, WALL_H + 0.2)
+            pools.append({"pos": ground, "range": LAMP_REACH, "color": col, "intensity": 1.2,
+                          "hot": hot})
+            near.append(((ground[0] - fx) ** 2 + (ground[2] - fz) ** 2,
+                         {"pos": ground, "color": col, "intensity": 0.5, "range": LAMP_REACH}))
+            r.add_sprite(to3(lx, ly, WALL_H + 0.2), _fx.glow(col, 0.26, tm, intensity=0.9, max_px=16),
+                         layer=_fx.FX_LAYER)
+        near.sort(key=lambda e: e[0])
+        r.set_pools(pools)
+        r.set_lights(flashes + [e[1] for e in near[:max(0, 8 - len(flashes))]], cap=8)
+
+    def _grade_lights(self, flashes):
+        """Lights for the screen grade: the lamp pools and bulbs, then this
+        frame's flashes (muzzles, player fills)."""
+        col = self.theme["lamp"]
+        out = []
+        for lx, ly, px, py in self._lamps:
+            out.append(("pool", to3(px, py), col, LAMP_REACH, LAMP_GRADE_K))
+            out.append(("glow", to3(lx, ly, WALL_H + 0.2), col, 0.6, 0.5))
+        for f in flashes:
+            out.append(("glow", f["pos"], f["color"], f["range"] * 0.5, 0.35 * f["intensity"]))
+        return out
 
     def _screen(self, p):
         """World point -> canvas pixel through the last frame's camera."""
@@ -364,7 +413,10 @@ class ArenaView3D(ArenaView):
                 pose["rifle_p"] = pose.get("rifle_p", 0.0) - 7.0 * kick
                 pose["spine"] = pose.get("spine", 0.0) - 2.0 * kick
             at = to3(px, py)
+            r.add_sprite((at[0], 0.02, at[2]), _shadow, layer=1)
             joints = r.add_humanoid(h, pose, at, yaw, rifle_on=True)
+            flashes.append({"pos": (at[0], 2.4, at[2] - 1.4), "color": (200, 210, 230),
+                            "intensity": 1.25 if pid == local_id else 1.05, "range": 4.0})
             if ent[8] & P.F_INVULNERABLE:
                 self._ring(r, at[0], at[2], 0.55, (150, 210, 255))
             if pid == local_id:
@@ -444,3 +496,4 @@ class ArenaView3D(ArenaView):
 _mix = td.mix
 _dot = td.dot
 _blood_pool = td.blood_pool
+_shadow = td.shadow(0.42)

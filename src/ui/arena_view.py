@@ -104,32 +104,60 @@ WEAPON_STRIP_H = 48
 _LOCKED_ICON_INK = (31, 35, 41)
 
 
-def _rig_icon(look, rig, locked):
-    """A gun for the weapon strip, drawn by the production rig at 2x.
+def _rig_icon(look, rig, locked, box=(76, 40)):
+    """A gun for the weapon strip, fitted into ``box`` (w, h).
 
-    Same reasoning as the Outfitter preview: the rig is the gun, so the strip
-    shows the player's own finish on the real silhouette instead of a stand-in.
-    The old strip used the campaign's magazine shells, which made the OS-12 and
-    the K-9 the same grey bar and the pistol a beige block. Doubled because at
-    1:1 the pistol is 28 px of dark finish on a dark plate.
+    The 3D gun the match draws, side on with the muzzle right, in the
+    player's own finish, with a 1 px light rim so a black gun still reads on
+    the dark plate. Without the 3D stack it is the 2D production rig at 2x.
     """
-    key = (appearance.key_of(look), rig, locked)
+    key = (appearance.key_of(look), rig, locked, tuple(box))
     icon = _RIG_ICONS.get(key)
     if icon is None:
-        from entities import weapon_rig
-        roles = appearance.resolve(look)["rigs"]
-        canvas = pygame.Surface((64, 40), pygame.SRCALPHA)
-        ctx = {"grip_x": 24, "grip_y": 20, "arm_dx": 1.0, "arm_dy": 0.0,
-               "raise_factor": 0.0, "reload_active": False,
-               "reload_progress": 0.0}
-        weapon_rig.draw(canvas, rig, ctx, roles)
-        icon = pygame.transform.scale_by(
-            canvas.subsurface(canvas.get_bounding_rect()), 2)
+        icon = _rig_icon_3d(look, rig, box)
+        if icon is None:
+            icon = _rig_icon_2d(look, rig)
         if locked:
             icon.fill(_LOCKED_ICON_INK + (0,), special_flags=pygame.BLEND_RGBA_MAX)
             icon.fill(_LOCKED_ICON_INK + (255,), special_flags=pygame.BLEND_RGBA_MIN)
         _RIG_ICONS[key] = icon
     return icon
+
+
+_ICON_RIM = (92, 100, 112)
+
+
+def _rig_icon_3d(look, rig, box):
+    from ui import mp3d
+    if not mp3d.enabled():
+        return None
+    src = mp3d.icon(look, rig, 180, focus="gun", yaw=180.0)
+    if src is None:
+        return None
+    src = src.subsurface(src.get_bounding_rect())
+    w, h = src.get_size()
+    k = min((box[0] - 2) / float(w), (box[1] - 2) / float(h))
+    if rig == "pistol":
+        k *= 0.72                # a handgun, not a rifle-sized slab
+    gun = pygame.transform.smoothscale(src, (max(1, int(w * k)), max(1, int(h * k))))
+    mask = pygame.mask.from_surface(gun, 96)
+    out = pygame.Surface((gun.get_width() + 2, gun.get_height() + 2), pygame.SRCALPHA)
+    rim = mask.to_surface(setcolor=_ICON_RIM + (255,), unsetcolor=(0, 0, 0, 0))
+    for dx, dy in ((0, 1), (2, 1), (1, 0), (1, 2)):
+        out.blit(rim, (dx, dy))
+    out.blit(gun, (1, 1))
+    return out
+
+
+def _rig_icon_2d(look, rig):
+    from entities import weapon_rig
+    roles = appearance.resolve(look)["rigs"]
+    canvas = pygame.Surface((64, 40), pygame.SRCALPHA)
+    ctx = {"grip_x": 24, "grip_y": 20, "arm_dx": 1.0, "arm_dy": 0.0,
+           "raise_factor": 0.0, "reload_active": False,
+           "reload_progress": 0.0}
+    weapon_rig.draw(canvas, rig, ctx, roles)
+    return pygame.transform.scale_by(canvas.subsurface(canvas.get_bounding_rect()), 2)
 
 
 _STRIP_PLATES = {}
@@ -1563,8 +1591,9 @@ class ArenaView(object):
             surface.blit(key_text, (key_box.centerx - key_text.get_width() // 2 + 1,
                                     key_box.centery - key_text.get_height() // 2))
             # Centred in the space right of the key cap; the OS-12 fills it.
-            icon = _rig_icon(look, rig_for_weapon(wid), locked)
             left = sx + 21
+            icon = _rig_icon(look, rig_for_weapon(wid), locked,
+                             (sx + slot_w - 4 - left, WEAPON_STRIP_H - 6))
             surface.blit(icon, (left + (sx + slot_w - 2 - left - icon.get_width()) // 2,
                                 y + (WEAPON_STRIP_H - icon.get_height()) // 2))
 
