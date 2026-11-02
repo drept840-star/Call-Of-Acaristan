@@ -143,6 +143,11 @@ JOIN_TOKEN_BYTES = 4  # token_hex -> 8 chars
 # frozen arena forever, because a dead TCP peer that never sends RST simply
 # looks like an idle one. Long enough to ride out a hitch or an alt-tab.
 HOST_SILENCE_TIMEOUT = 8.0
+
+# Host network choice on the entry panel.
+NET_UDP = "udp"
+NET_LAN = "lan"
+NET_MODES = ((NET_UDP, "UDP ONLINE"), (NET_LAN, "LAN ONLY"))
 # During a temporary TCP failure the client keeps trying the same invite for
 # a short window. Rejoining is a fresh seat today, so round stats may reset.
 RECONNECT_WINDOW_SECONDS = 20.0
@@ -493,6 +498,7 @@ class Peer(object):
         self.udp_ready = False
         self.udp_last_seen = 0.0
         self.udp_last_input = 0.0
+        self.udp_input_budget = UDP.INPUT_BURST
         self.udp_nonce = None
         self.udp_retry_after = 0.0
         self.udp_last_probe = 0.0
@@ -581,6 +587,7 @@ class MatchScreen(object):
     # Building a Font is expensive and this panel redraws every frame, so
     # a per-instance cache would still thrash on every screen transition.
     _fonts = {}
+    NET_MODES = NET_MODES
 
     def __init__(self):
         # "closed", NOT "panel". The multiplayer screen is the SERVER BROWSER;
@@ -596,6 +603,10 @@ class MatchScreen(object):
         # and echoed to clients in the match-state packet.
         self.mode_name = AR.MODE_TDM
         self.players = 4
+        # How a new room is reached: NET_UDP looks for an internet route
+        # (Hamachi, router mapping, then a TCP tunnel as last resort);
+        # NET_LAN shares the local address only and probes nothing.
+        self.net_mode = NET_UDP
         self.address = ""
         # The name this player competes under. Typed on the entry panel and
         # remembered between sessions, because being asked to retype your
@@ -758,6 +769,7 @@ class MatchScreen(object):
         self._tunnel_pending = False
         self._tunnel_active = False
         self._hamachi_active = False
+        self._lan_only = False
         self._network_check_pending = False
         self._tunnel_proc = None
         # Guards _tunnel_proc/_host_token hand-off between the forwarding
@@ -1195,12 +1207,16 @@ class MatchScreen(object):
         # this worker may replace it with must share a prefix, or the host
         # reads out one code and the card shows another.
         self.code_prefix = roomcode.random_prefix()
-        self.join_token = secrets.token_hex(JOIN_TOKEN_BYTES).upper()
+        # ACA_MP_DEV_TOKEN pins the token so tools/mp_arena_duo.py can hand
+        # its joiner the matching CODE@TOKEN (dev only).
+        self.join_token = (P.clean_token(os.environ.get("ACA_MP_DEV_TOKEN", ""))
+                           or secrets.token_hex(JOIN_TOKEN_BYTES).upper())
         self.share_host = portmap.local_ip()
         self.room_code = roomcode.encode(self.share_host, bound,
                                          prefix=self.code_prefix)
-        self._network_check_pending = port != 0
-        if port != 0:
+        self._lan_only = self.net_mode == NET_LAN
+        self._network_check_pending = port != 0 and not self._lan_only
+        if self._network_check_pending:
             threading.Thread(target=self._begin_forwarding,
                              args=(bound, self._host_token), daemon=True).start()
 
@@ -1701,10 +1717,17 @@ class MatchScreen(object):
             parsed = P.parse_input(raw)
             if parsed is None:
                 continue
+            # Token bucket, not a minimum gap: datagrams sent a frame apart
+            # often land in the same host pump, and a gap check kept the
+            # older one and dropped the newest input, a frame of lag each time.
             now = time.monotonic()
-            if now - peer.udp_last_input < 1.0 / UDP.MAX_INPUTS_PER_SECOND:
-                continue
+            budget = min(UDP.INPUT_BURST, peer.udp_input_budget
+                         + (now - peer.udp_last_input) * UDP.MAX_INPUTS_PER_SECOND)
             peer.udp_last_input = now
+            if budget < 1.0:
+                peer.udp_input_budget = budget
+                continue
+            peer.udp_input_budget = budget - 1.0
             peer.udp_last_seen = now
             peer.last_seen = now
             self.sess._accept_input(raw, peer_id=peer.player_id)
@@ -3183,6 +3206,10 @@ class MatchScreen(object):
                 if r.collidepoint(m):
                     self.players = n
                     return True
+            for net, r in getattr(self, "_net_rects", {}).items():
+                if r.collidepoint(m):
+                    self.net_mode = net
+                    return True
             for tag, r in getattr(self, "_btn_rects", {}).items():
                 if r.collidepoint(m):
                     if tag == 1:
@@ -3770,12 +3797,19 @@ class MatchScreen(object):
         separate inline blocks they could drift, and the host would be told
         the code was fine in one place and unusable in the other.
         """
+        if self._lan_only:
+            return ("LAN mode - direct UDP; players must be on your network.",
+                    (120, 220, 150))
         if self._hamachi_active:
             return ("Hamachi ready - same network; allow game in Windows Firewall.",
                     (120, 220, 150))
         if self._tunnel_active:
-            return ("Public TCP tunnel ready - gameplay uses safe TCP mode.",
-                    (120, 220, 150))
+            try:
+                port = self.srv.getsockname()[1]
+            except (AttributeError, OSError):
+                port = DEFAULT_PORT
+            return ("TCP tunnel - slower; forward port %d TCP+UDP for UDP."
+                    % port, (240, 200, 80))
         if self.forwarded and getattr(self, "_udp_public_ok", None) is False:
             return ("TCP reachable; fast UDP path unavailable (TCP fallback).",
                     (240, 200, 80))
@@ -4656,6 +4690,7 @@ class MatchScreen(object):
         self._tunnel_pending = False
         self._tunnel_active = False
         self._hamachi_active = False
+        self._lan_only = False
         self._network_check_pending = False
 
     def maps(self):

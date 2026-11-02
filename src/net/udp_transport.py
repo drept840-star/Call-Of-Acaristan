@@ -13,6 +13,8 @@ from net import protocol as P
 MAX_DATAGRAM_BYTES = 1200
 MAX_DATAGRAMS_PER_PUMP = 64
 MAX_INPUTS_PER_SECOND = 120.0
+# Inputs one pump may take at once; covers a host frame hitch.
+INPUT_BURST = 8.0
 UDP_PROBE_INTERVAL = 0.5
 UDP_STALE_SECONDS = 1.5
 UDP_FALLBACK_RETRY = 2.0

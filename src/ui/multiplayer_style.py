@@ -141,7 +141,12 @@ def draw_entry(ui, surface, panel):
     host_card = pygame.Rect(rx, y + 90, rw, 132)
     card(surface, host_card)
     text(ui, surface, rx + 14, y + 104, 'CREATE A ROOM', 18, TEXT, True)
-    text(ui, surface, rx + 14, y + 134, 'Host. Share the code. Start when ready.', 12)
+    ui._net_rects = {}
+    nw = (rw - 28 - 8) // 2
+    for i, (net, label) in enumerate(ui.NET_MODES):
+        r = pygame.Rect(rx + 14 + i * (nw + 8), y + 128, nw, 30)
+        ui._row(surface, r, label, ui.net_mode == net)
+        ui._net_rects[net] = r
     hr = pygame.Rect(rx + 14, y + 164, rw - 28, 44)
     ui._action(surface, hr, 'HOST MATCH', True)
     ui._btn_rects[1] = hr

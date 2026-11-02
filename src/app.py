@@ -1863,7 +1863,7 @@ def _apply_dev_args():
                 pass
             _match_screen.request_host(_mp_port)
         else:
-            _mp_addr = (_dev_flag_value(raw, "--mp-join", "") or "").strip()
+            _mp_addr = (_dev_flag_value(raw, "--dev-mp-join", "") or "").strip()
             if _mp_addr:
                 _match_screen.request_join(_mp_addr)
     # Trailer bot flags (AI 1). Gated, off by default, never affects play.

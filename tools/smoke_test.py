@@ -5510,6 +5510,43 @@ def check_mp_host_and_portmap():
             _lan._forward_status()[0],)
     _lan._teardown()
 
+    # LAN mode: the local code is final at once, nothing probes the router or
+    # starts a tunnel, and UDP input sent a frame apart is not dropped when
+    # both datagrams land in one host pump (that was a frame of input lag).
+    import socket as _sock
+    import ui.match_screen as _msmod
+    _lanm = _MatchScreen()
+    _lanm.net_mode = _msmod.NET_LAN
+    _spawned = []
+    _old_thread = _msmod.threading.Thread
+    _msmod.threading.Thread = lambda *a, **k: _spawned.append(k) or _old_thread(target=lambda: None)
+    try:
+        _lanm._start_hosting(47123)
+    finally:
+        _msmod.threading.Thread = _old_thread
+    assert not _spawned and _lanm.room_code_ready(),         "LAN mode still searched for an internet route"
+    assert "LAN mode" in _lanm._forward_status()[0], _lanm._forward_status()
+    _cli = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+    _cli.bind(("127.0.0.1", 0))
+    _peer = _msmod.Peer(None, ("127.0.0.1", 0), player_id=1)
+    _peer.udp_token, _peer.udp_ready = "ABCD1234", True
+    _peer.udp_addr = _cli.getsockname()
+    _lanm.peers.append(_peer)
+    _lanm._udp_peers_by_token[_peer.udp_token] = _peer
+    _lanm._session_phase = "playing"
+    _udp_port = _lanm.udp_srv.getsockname()[1]
+    for _q in (1, 2):
+        _m = P.make_input(_q, 1, 0, 0.0)
+        _m["u"] = _peer.udp_token
+        _cli.sendto(P.encode(_m), ("127.0.0.1", _udp_port))
+    time.sleep(0.05)
+    _lanm._pump_udp_host()
+    _cli.close()
+    assert _lanm.sess._latest_input_seq.get(1) == 2,         "host dropped the newest of two same-pump UDP inputs: %r" % (
+            _lanm.sess._latest_input_seq,)
+    _lanm.peers.remove(_peer)
+    _lanm._teardown()
+
     # Relay loss mid-session: a dead tunnel process must drop the stale public
     # invite, fall back to the LAN code and tell the host to host again.
     _lost = _MatchScreen()

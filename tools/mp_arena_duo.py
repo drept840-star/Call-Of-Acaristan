@@ -19,6 +19,7 @@ to feel input latency, camera, fire rate and prediction with 2 players.
 """
 import argparse
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -49,11 +50,14 @@ def main(argv=None):
     args = ap.parse_args(argv)
     args.players = max(2, min(8, args.players))
 
+    # The host refuses a join without its secret token, so both windows
+    # share one picked here.
+    token = secrets.token_hex(4).upper()
     procs = []
     try:
         print("[duo] P1 hosting %s on 127.0.0.1:%d ..." % (args.map, args.port))
         procs.append(_launch(
-            {"ACA_SAVE_SUFFIX": "_p1"},
+            {"ACA_SAVE_SUFFIX": "_p1", "ACA_MP_DEV_TOKEN": token},
             "--dev-mp-host",
             "--mp-map", args.map,
             "--mp-players", str(args.players),
@@ -62,7 +66,7 @@ def main(argv=None):
         print("[duo] P2 joining 127.0.0.1:%d ..." % args.port)
         procs.append(_launch(
             {"ACA_SAVE_SUFFIX": "_p2"},
-            "--dev-mp-join", "127.0.0.1:%d" % args.port,
+            "--dev-mp-join", "127.0.0.1:%d@%s" % (args.port, token),
             "--mp-map", args.map,
             "--mp-players", str(args.players),
         ))
