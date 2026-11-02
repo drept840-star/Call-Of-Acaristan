@@ -38,6 +38,7 @@ _DEFAULTS = {
     "music_volume": 70,
     "sfx_volume": 85,
     "mute_on_focus_loss": True,
+    "dynamic_music": True,        # core.score: OST in quiet stretches and fights
     # ── Gameplay ──
     "crosshair": True,
     "crosshair_size": 6,          # 3=small, 6=medium, 10=large

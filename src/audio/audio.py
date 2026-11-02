@@ -2873,6 +2873,12 @@ class AudioManager:
         self.sounds = {}
         self.master_volume = 0.8
         self.sfx_volume = 1.0       # 0..1 - separate scale for SFX (one-shots + loops)
+        # Music slider as a multiplier on each track's authored level (see
+        # set_music_scale); play_music(volume=...) stays the per-track level.
+        self.music_scale = 1.0
+        # core.score fills combat_names; play()/play_3d() stamp the last one heard.
+        self.combat_names = frozenset()
+        self.last_combat_ms = None
         self.scheduled = []
         self._loop_channels = {}
         self._loop_base_volumes = {}
@@ -3039,6 +3045,8 @@ class AudioManager:
             s = self._ensure(name)
         if s is None:
             return None
+        if name in self.combat_names:
+            self.last_combat_ms = pygame.time.get_ticks()
         if self.verbose:
             print(f"[audio] {name} vol={volume:.2f}")
         vol = self._effective_volume(name, volume)
@@ -3101,6 +3109,8 @@ class AudioManager:
         s = self._ensure(name)
         if s is None:
             return None
+        if name in self.combat_names:
+            self.last_combat_ms = pygame.time.get_ticks()
         dx = source_pos[0] - listener_pos[0]
         dy = source_pos[1] - listener_pos[1]
         dist = math.hypot(dx, dy)
@@ -3174,8 +3184,17 @@ class AudioManager:
         
     def set_master_volume(self, vol_0_to_100):
         self.master_volume = max(0.0, min(1.0, vol_0_to_100 / 100.0))
+        self._apply_music_volume()
+
+    def set_music_scale(self, scale):
+        """Music slider: multiplies every track's authored level, live."""
+        self.music_scale = max(0.0, float(scale))
+        self._apply_music_volume()
+
+    def _apply_music_volume(self):
+        vol = self.master_volume * self.music_scale * getattr(self, "_current_music_vol", 0.5)
         try:
-            pygame.mixer.music.set_volume(self.master_volume * getattr(self, "_current_music_vol", 0.5))
+            pygame.mixer.music.set_volume(max(0.0, min(1.0, vol)))
         except Exception:
             pass
         
@@ -3209,7 +3228,7 @@ class AudioManager:
         try:
             _load_music(filepath)
             self._current_music_vol = volume
-            pygame.mixer.music.set_volume(self.master_volume * volume)
+            self._apply_music_volume()
             pygame.mixer.music.play(loops=-1, fade_ms=max(0, int(fade_ms)))
             self._music_name = filename
             self._music_paused = False
@@ -3274,12 +3293,9 @@ class AudioManager:
             return False
 
     def set_music_volume(self, volume):
-        """Adjusts the streaming music volume dynamically."""
+        """Sets the current track's level (scaled by master and the music slider)."""
         self._current_music_vol = volume
-        try:
-            pygame.mixer.music.set_volume(self.master_volume * volume)
-        except Exception:
-            pass
+        self._apply_music_volume()
 
     def set_sfx_volume(self, volume):
         """Adjusts the SFX volume scale dynamically.

@@ -19,6 +19,7 @@ from core.level_editor import LevelEditor
 from core.console import Console
 from core import interactions
 from core import ambience
+from core import score
 from core import mission_meta as _mission_meta
 from core.dev_jumps import DEV_JUMPS, jump_flag
 from core import fixedstep as _fixedstep
@@ -121,6 +122,8 @@ master_volume = _settings["master_volume"]
 music_volume = _settings["music_volume"]
 sfx_volume = _settings["sfx_volume"]
 mute_on_focus_loss = _settings["mute_on_focus_loss"]
+dynamic_music = _settings["dynamic_music"]
+score.enabled = dynamic_music
 crosshair = _settings["crosshair"]
 crosshair_size = _settings["crosshair_size"]
 auto_reload = _settings["auto_reload"]
@@ -163,6 +166,7 @@ def _current_settings_dict():
         "music_volume": music_volume,
         "sfx_volume": sfx_volume,
         "mute_on_focus_loss": mute_on_focus_loss,
+        "dynamic_music": dynamic_music,
         "crosshair": crosshair,
         "crosshair_size": crosshair_size,
         "auto_reload": auto_reload,
@@ -187,7 +191,7 @@ def _current_settings_dict():
 
 def _apply_audio_settings():
     audio.set_master_volume(master_volume)
-    audio.set_music_volume(music_volume / 100.0)
+    audio.set_music_scale(music_volume / 70.0)   # 70 (default) = each track's authored level
     audio.set_sfx_volume(sfx_volume / 100.0)
 
 
@@ -270,7 +274,7 @@ def _present_frame():
 def handle_settings_event(event):
     global settings_active_tab, _settings_drag_bar, _binding_capture
     global display_mode, res_idx
-    global master_volume, music_volume, sfx_volume, mute_on_focus_loss
+    global master_volume, music_volume, sfx_volume, mute_on_focus_loss, dynamic_music
     global crosshair, crosshair_size, auto_reload, aim_assist, subtitles
     global radio_text_size, radio_speaker_names
     global brightness, scanlines_enabled, grain_enabled, particle_density
@@ -384,6 +388,9 @@ def handle_settings_event(event):
             sfx_volume = _bar_value(menu.settings_sfx_bar_rect); changed = True
         elif menu.settings_mute_rect.collidepoint(mp):
             mute_on_focus_loss = not mute_on_focus_loss; changed = True
+        elif menu.settings_dyn_music_rect.collidepoint(mp):
+            dynamic_music = not dynamic_music
+            score.enabled = dynamic_music; changed = True
         if changed:
             _preview_settings()
             audio.play("menu_click", volume=0.3)
@@ -2282,6 +2289,7 @@ class _MenuState(GameState):
     def handle_event(self, event, mouse_x, mouse_y, keys):
         if event.type == pygame.KEYDOWN:
             menu.handle_menu_keydown(event)
+        menu.slot_panel_clicked(event, (mouse_x, mouse_y))
         if menu.buttons[0].is_clicked(event, (mouse_x, mouse_y)) and save_system.has_any_save():
             global slot_select_purpose
             slot_select_purpose = "continue"
@@ -2747,6 +2755,7 @@ class _SettingsState(GameState):
             mouse_sensitivity, invert_mouse,
             STATE.reduced_motion, colorblind_mode,
             shake_scale, flash_reduction, text_speed,
+            dynamic_music=dynamic_music,
             save_status=_settings_status, save_failed=_settings_save_failed,
             bindings=_input_adapter.display_bindings(), binding_capture=_binding_capture,
         )
@@ -4426,6 +4435,8 @@ def _legacy_frame():
     # Stream menu music on menu-family states
     music_state = gsm.next_state if gsm.transitioning and gsm.fade_speed > 0 else current_name
     _set_menu_music(music_state in MENU_MUSIC_STATES)
+    # OST under quiet play and fights (M1-M6, prologue walk); M7 has its own cues
+    score.update("EGG" if _GameState_._egg3d_live() else current_name, dt)
 
     _dev_sim_ms = (_dev_time.perf_counter() - _dev_t0) * 1000.0   # RPE6 P10 sim split
     # ── Render dispatch ──
