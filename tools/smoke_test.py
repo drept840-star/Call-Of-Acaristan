@@ -1720,16 +1720,6 @@ def check_udp_transport_codecs_and_limits():
     assert P.parse_udp_fallback(P.decode(P.encode(fallback))) == (
         token, 123456)
     assert P.parse_udp_fallback({"t": P.T_UDP_FALLBACK, "u": "*bad", "n": 1}) is None
-    punch = P.make_udp_punch(token, "198.51.100.7", 40001)
-    assert P.parse_udp_punch(P.decode(P.encode(punch))) == (
-        token, "198.51.100.7", 40001)
-    assert P.parse_udp_punch({"t": P.T_UDP_PUNCH, "u": token, "ip": "x",
-                              "p": True}) is None
-    assert UDP.punch_endpoint("198.51.100.7", 40001) == ("198.51.100.7", 40001)
-    assert UDP.punch_endpoint("127.0.0.1", 5) == ("127.0.0.1", 5)
-    for bad in (("224.0.0.1", 5), ("0.0.0.0", 5), ("255.255.255.255", 5),
-                ("198.51.100.7", 0), ("not-an-ip", 5)):
-        assert UDP.punch_endpoint(*bad) is None, bad
 
     action = P.make_action(8, cycle=True)
     assert P.parse_action(P.decode(P.encode(action))) == {
@@ -1793,22 +1783,6 @@ def check_udp_blocked_channel_falls_back_to_tcp():
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "TCP FALLBACK CHECK: PASS" in output, \
         "blocked UDP did not retain playable TCP updates (exit %d):\n%s" % (
-            result.returncode, output[-5000:])
-
-
-def check_udp_hole_punch_through_tcp_tunnel():
-    """A TCP-only route (bore) must still end with direct UDP via punching."""
-    import subprocess
-
-    tool = Path(__file__).resolve().parent / "mp_net_soak.py"
-    result = subprocess.run(
-        [sys.executable, str(tool), "--players", "2", "--seconds", "2",
-         "--latency-ms", "25", "--jitter-ms", "0", "--loss-percent", "0",
-         "--block-udp", "--punch"],
-        cwd=str(tool.parent.parent), capture_output=True, text=True, timeout=45)
-    output = result.stdout + result.stderr
-    assert result.returncode == 0 and "PUNCH CHECK: PASS" in output, \
-        "no punched UDP path behind a TCP-only route (exit %d):\n%s" % (
             result.returncode, output[-5000:])
 
 
@@ -11820,8 +11794,6 @@ def main():
          check_lag_compensation_real_network_path),
         ("udp_blocked_channel_falls_back_to_tcp",
          check_udp_blocked_channel_falls_back_to_tcp),
-        ("udp_hole_punch_through_tcp_tunnel",
-         check_udp_hole_punch_through_tcp_tunnel),
         ("arena_weapons_and_pickups", check_arena_weapons_and_pickups),
         ("arena_teams_and_rounds", check_arena_teams_and_rounds),
         ("client_prediction_is_authoritative",

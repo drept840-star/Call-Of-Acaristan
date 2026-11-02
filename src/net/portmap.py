@@ -644,31 +644,33 @@ STUN_SERVERS = (
 )
 
 
-def stun_request():
-    """One binding request and its transaction ID, for any UDP socket."""
-    # The header is 20 bytes: type(2) length(2) cookie(4) txid(12). A short
-    # packet is silently ignored by STUN servers, so all 20 must be sent.
-    txid = os.urandom(12)
-    return struct.pack("!HHI", STUN_BINDING_REQUEST, 0, STUN_MAGIC) + txid, txid
-
-
-def is_stun(data):
-    """True for anything shaped like a STUN message (cheap pre-filter)."""
-    return (len(data) >= 20 and data[0] < 0x40
-            and struct.unpack("!I", data[4:8])[0] == STUN_MAGIC)
-
-
-def parse_stun_response(data, txids=None):
-    """(ip, port) from a binding response, or None.
-
-    ``txids`` limits replies to requests this socket actually sent.
-    """
-    if not is_stun(data):
+def _stun_probe(host, port, timeout=2.0):
+    """Send one binding request. Returns the observed public IP or None."""
+    try:
+        addr = socket.gethostbyname(host)
+    except OSError:
         return None
-    msg_type = struct.unpack("!H", data[:2])[0]
-    if msg_type != STUN_BINDING_RESPONSE:
+    # Transaction ID: any value will do; it only guards against matching a
+    # stale reply. The header is 20 bytes: type(2) length(2) cookie(4)
+    # txid(12). The trailing 12 zero bytes are the FINGERPRINT/attribute
+    # area -- a short packet is silently ignored by STUN servers, so the
+    # full 20 must be sent or we get no reply at all.
+    packet = (struct.pack("!HHI", STUN_BINDING_REQUEST, 0, STUN_MAGIC)
+              + struct.pack("!HH", int(time.time()) & 0xFFFF, 0x1234)
+              + b"\x00" * 8)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.settimeout(timeout)
+        sock.sendto(packet, (addr, port))
+        data, _src = sock.recvfrom(2048)
+    except (OSError, socket.timeout):
         return None
-    if txids is not None and bytes(data[8:20]) not in txids:
+    finally:
+        sock.close()
+    if len(data) < 20:
+        return None
+    msg_type, msg_len, magic = struct.unpack("!HHI", data[:8])
+    if magic != STUN_MAGIC or msg_type != STUN_BINDING_RESPONSE:
         return None
     # Walk the attribute list looking for XOR-MAPPED-ADDRESS (0x0020).
     offset = 20
@@ -685,25 +687,6 @@ def parse_stun_response(data, txids=None):
                 xaddr = struct.unpack("!I", value[4:8])[0] ^ STUN_MAGIC
                 return (socket.inet_ntoa(struct.pack("!I", xaddr)), xport)
     return None
-
-
-def _stun_probe(host, port, timeout=2.0):
-    """Send one binding request. Returns the observed public IP or None."""
-    try:
-        addr = socket.gethostbyname(host)
-    except OSError:
-        return None
-    packet, txid = stun_request()
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.settimeout(timeout)
-        sock.sendto(packet, (addr, port))
-        data, _src = sock.recvfrom(2048)
-    except (OSError, socket.timeout):
-        return None
-    finally:
-        sock.close()
-    return parse_stun_response(data, {txid})
 
 
 def public_ip(timeout=2.0):

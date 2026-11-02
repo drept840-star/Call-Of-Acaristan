@@ -6,7 +6,6 @@ Examples (run from the repository root):
     python tools/mp_net_soak.py --players 4 --loss-percent 1.0
     python tools/mp_net_soak.py --lag-shot-check --latency-ms 35
     python tools/mp_net_soak.py --players 2 --block-udp --require-tcp-fallback
-    python tools/mp_net_soak.py --players 2 --block-udp --punch
 
 TCP bytes stay ordered; ``--loss-percent`` models retransmission stalls there,
 and actually drops disposable UDP motion packets (which may also reorder).
@@ -30,7 +29,6 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame  # noqa: E402
 
-from net import portmap  # noqa: E402
 from net import roomcode  # noqa: E402
 from ui.match_screen import MatchScreen  # noqa: E402
 from missions import arena as AR  # noqa: E402
@@ -260,45 +258,6 @@ def _advance(screens, dt, keys, mouse):
         screen.update(keys, mouse, dt)
 
 
-class FakeStunServer(object):
-    """Loopback STUN server: answers each binding request with its source.
-
-    Stands in for the public servers so --punch never leaves this machine.
-    """
-
-    def __init__(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(("127.0.0.1", 0))
-        self.sock.settimeout(0.2)
-        self.port = self.sock.getsockname()[1]
-        self.running = True
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self):
-        import struct
-        magic = portmap.STUN_MAGIC
-        while self.running:
-            try:
-                data, (ip, port) = self.sock.recvfrom(2048)
-            except (socket.timeout, OSError):
-                continue
-            if len(data) < 20:
-                continue
-            xaddr = struct.unpack("!I", socket.inet_aton(ip))[0] ^ magic
-            attr = struct.pack("!HHBBHI", 0x0020, 8, 0, 1,
-                               port ^ (magic >> 16), xaddr)
-            reply = (struct.pack("!HHI", portmap.STUN_BINDING_RESPONSE,
-                                 len(attr), magic) + data[8:20] + attr)
-            try:
-                self.sock.sendto(reply, (ip, port))
-            except OSError:
-                pass
-
-    def close(self):
-        self.running = False
-        self.sock.close()
-
-
 class _Keys(object):
     """Tiny key-state object usable by MatchScreen without a real keyboard."""
     def __init__(self, *held):
@@ -454,9 +413,6 @@ def main(argv=None):
                     help="run a real delayed UDP shot against a moving target; uses 2 players")
     ap.add_argument("--block-udp", action="store_true",
                     help="block the datagram path to test automatic TCP compatibility fallback")
-    ap.add_argument("--punch", action="store_true",
-                    help="with --block-udp: host behind a TCP-only route; "
-                         "require a hole-punched direct UDP path")
     ap.add_argument("--require-tcp-fallback", action="store_true",
                     help="fail unless blocked-UDP clients keep receiving snapshots over TCP")
     args = ap.parse_args(argv)
@@ -464,8 +420,6 @@ def main(argv=None):
         args.players = 2
     if args.lag_shot_check and args.block_udp:
         ap.error("--lag-shot-check requires UDP; do not combine it with --block-udp")
-    if args.punch and (not args.block_udp or args.require_tcp_fallback):
-        ap.error("--punch needs --block-udp and excludes --require-tcp-fallback")
     if args.require_tcp_fallback and not args.block_udp:
         ap.error("--require-tcp-fallback must be used with --block-udp")
     if not 2 <= args.players <= 8:
@@ -480,8 +434,6 @@ def main(argv=None):
     host = MatchScreen()
     clients = []
     proxies = []
-    stun = None
-    old_stun = portmap.STUN_SERVERS
     try:
         host.open_panel()
         host.players = args.players
@@ -491,12 +443,6 @@ def main(argv=None):
         host.update(keys, idle_mouse, 1.0 / 60.0)
         if host.mode != "hosting" or host.srv is None:
             raise RuntimeError("host failed to start: %s" % host.status)
-        if args.punch:
-            # The proxy drops UDP like a bore tunnel; only a punched path
-            # straight to the host's game socket can carry datagrams.
-            stun = FakeStunServer()
-            portmap.STUN_SERVERS = (("127.0.0.1", stun.port),)
-            host._start_udp_punching()
         target = ("127.0.0.1", host.srv.getsockname()[1])
         for i in range(1, args.players):
             proxy = TcpImpairmentProxy(
@@ -599,14 +545,6 @@ def main(argv=None):
             if not failures:
                 print("TCP FALLBACK CHECK: PASS | UDP blocked, live snapshots "
                       "continued over the reliable connection")
-        if args.punch:
-            for index, client in enumerate(clients, 1):
-                if not client._udp_active:
-                    failures.append("player %d never got a punched UDP path"
-                                    % index)
-            if not failures:
-                print("PUNCH CHECK: PASS | UDP blocked on the tunnel, every "
-                      "player reached the host over a punched UDP path")
         if failures:
             print("FAIL: " + "; ".join(failures))
             return 1
@@ -627,9 +565,6 @@ def main(argv=None):
             pass
         for proxy in proxies:
             proxy.close()
-        portmap.STUN_SERVERS = old_stun
-        if stun is not None:
-            stun.close()
         pygame.quit()
 
 

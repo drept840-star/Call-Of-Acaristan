@@ -502,11 +502,6 @@ class Peer(object):
         self.udp_nonce = None
         self.udp_retry_after = 0.0
         self.udp_last_probe = 0.0
-        # Hole punching: the joiner's STUN endpoint, and whether ours went out.
-        self.udp_punch_addr = None
-        self.udp_punch_until = 0.0
-        self.udp_punch_next = 0.0
-        self.udp_ep_sent = False
 
     @property
     def verified(self):
@@ -621,7 +616,6 @@ class MatchScreen(object):
         self.status = ""
         self.srv = None
         self.udp_srv = None
-        self._udp_stun = None
         self.peers = []
         self._udp_peers_by_token = {}
         # resume-token -> {player_id, expires_at}; ArenaSim holds the saved
@@ -1158,7 +1152,6 @@ class MatchScreen(object):
         self.srv = srv
         bound_port = srv.getsockname()[1]
         self.udp_srv = None
-        self._udp_stun = None
         self._udp_peers_by_token = {}
         try:
             udp_srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1283,7 +1276,6 @@ class MatchScreen(object):
                     if self._udp_public_ok is False:
                         self.forward_note = (
                             "TCP port forwarded; UDP unavailable, using fallback")
-                        self._start_udp_punching()
                     self._network_check_pending = False
                     return
             router_error = (
@@ -1316,7 +1308,6 @@ class MatchScreen(object):
             self.room_code = "%s:%d" % endpoint
             self.forward_note = "Public TCP tunnel ready (%s)." % tunnel_note
             self._network_check_pending = False
-            self._start_udp_punching()
             return
 
         tunnel_error = tcp_tunnel.explain_error(tunnel_note)
@@ -1325,39 +1316,6 @@ class MatchScreen(object):
             tunnel_error or "public TCP tunnel unavailable")
         self._network_check_pending = False
         self.status = tunnel_error
-
-    def _start_udp_punching(self):
-        """Learn our public UDP endpoint so joiners can punch a direct path.
-
-        Used when the room is only reachable over TCP (tunnel, or a router
-        that mapped TCP alone). The endpoint goes to each joiner over TCP;
-        TCP stays the fallback when the NATs refuse the punch.
-        """
-        if getattr(self, "udp_srv", None) is not None and self._udp_stun is None:
-            self._udp_stun = UDP.StunMapper(self.udp_srv).start()
-
-    def _punch_udp_peers(self):
-        """Send our endpoint to joiners and fire punches at theirs."""
-        udp_sock = getattr(self, "udp_srv", None)
-        stun = getattr(self, "_udp_stun", None)
-        if udp_sock is None or stun is None:
-            return
-        now = time.monotonic()
-        for peer in self.peers:
-            if not peer.udp_token or peer.udp_ready:
-                continue
-            if stun.endpoint is not None and not peer.udp_ep_sent:
-                msg = P.make_udp_punch(peer.udp_token, *stun.endpoint)
-                if msg is not None:
-                    peer.wire._send(msg)
-                peer.udp_ep_sent = True
-            if (peer.udp_punch_addr is not None and now < peer.udp_punch_until
-                    and now >= peer.udp_punch_next):
-                peer.udp_punch_next = now + UDP.PUNCH_INTERVAL
-                try:
-                    udp_sock.sendto(UDP.PUNCH_DATAGRAM, peer.udp_punch_addr)
-                except OSError:
-                    pass
 
     def _connect_socket(self, host, port):
         """Open a TCP connection, retrying loopback for a private target.
@@ -1409,8 +1367,6 @@ class MatchScreen(object):
         self._udp_started_at = time.monotonic()
         self._udp_probe_sent_at = 0.0
         self._udp_fallback_until = 0.0
-        self._udp_join_stun = None
-        self._udp_ep_sent = False
         if not token or self.sock is None:
             return False
         try:
@@ -1474,16 +1430,9 @@ class MatchScreen(object):
                 data, address = udp_sock.recvfrom(UDP.MAX_DATAGRAM_BYTES + 1)
             except (BlockingIOError, InterruptedError):
                 break
-            except ConnectionResetError:
-                # Windows: an ICMP refusal for an earlier probe, not a dead
-                # socket. Probes to a not-yet-punched host make that common.
-                continue
             except OSError:
                 self._request_udp_fallback()
                 return
-            stun = self._udp_join_stun
-            if stun is not None and stun.feed(data):
-                continue
             raw = UDP.decode_datagram(data)
             if raw is None or address != self._udp_peer_addr:
                 continue
@@ -1513,13 +1462,6 @@ class MatchScreen(object):
                 self._latest_snap_tick = parsed[0]
                 self._latest_snap_at = now
                 self.net_telemetry.note_snapshot(parsed[0])
-        stun = self._udp_join_stun
-        if (stun is not None and stun.endpoint is not None
-                and not self._udp_ep_sent and self.wire is not None):
-            msg = P.make_udp_punch(self._udp_token, *stun.endpoint)
-            if msg is not None:
-                self.wire._send(msg)
-            self._udp_ep_sent = True
         now = time.monotonic()
         if self._udp_active and now - self._udp_last_snapshot > UDP.UDP_STALE_SECONDS:
             self._request_udp_fallback()
@@ -1732,15 +1674,8 @@ class MatchScreen(object):
                 data, address = udp_sock.recvfrom(UDP.MAX_DATAGRAM_BYTES + 1)
             except (BlockingIOError, InterruptedError):
                 break
-            except ConnectionResetError:
-                # Windows reports an ICMP refusal for an earlier send here;
-                # punching makes that routine, and the socket is still fine.
-                continue
             except OSError:
                 break
-            stun = self._udp_stun
-            if stun is not None and stun.feed(data):
-                continue
             raw = UDP.decode_datagram(data)
             if raw is None:
                 continue
@@ -1796,7 +1731,6 @@ class MatchScreen(object):
             peer.udp_last_seen = now
             peer.last_seen = now
             self.sess._accept_input(raw, peer_id=peer.player_id)
-        self._punch_udp_peers()
 
     def _update_host(self, keys, mouse, dt):
         srv = self.srv
@@ -1925,19 +1859,6 @@ class MatchScreen(object):
                             peer.udp_addr = None
                             peer.udp_retry_after = (time.monotonic()
                                                     + UDP.UDP_FALLBACK_RETRY)
-                        continue
-                    punch = P.parse_udp_punch(raw)
-                    if punch is not None:
-                        token, ip, port = punch
-                        addr = UDP.punch_endpoint(ip, port)
-                        if (addr is not None
-                                and UDP.token_matches(token, peer.udp_token)):
-                            # Fire datagrams at the joiner's NAT mapping so
-                            # its hello probes find ours open.
-                            peer.udp_punch_addr = addr
-                            peer.udp_punch_until = (time.monotonic()
-                                                    + UDP.PUNCH_SECONDS)
-                            peer.udp_punch_next = 0.0
                         continue
                     if P.parse_match_leave(raw):
                         self._drop_peer(peer)
@@ -2427,21 +2348,6 @@ class MatchScreen(object):
                 if gone is not None:
                     self._end_session_remotely(gone or "host ended the session")
                     return
-                # Hole punching: the host is behind a TCP-only route and
-                # sent its public UDP endpoint. Probe that instead, and learn
-                # our own so the host can punch back.
-                punch = P.parse_udp_punch(raw)
-                if punch is not None:
-                    token, ip, port = punch
-                    addr = UDP.punch_endpoint(ip, port)
-                    if (addr is not None and self.udp_sock is not None
-                            and UDP.token_matches(token, self._udp_token)):
-                        self._udp_peer_addr = addr
-                        if self._udp_join_stun is None:
-                            self._udp_join_stun = UDP.StunMapper(
-                                self.udp_sock).start()
-                        self._send_udp_probe()
-                    continue
                 # The host tells us our slot on connect. Until then we
                 # cannot know which entity is ours.
                 assigned = P.parse_assign(raw)
@@ -3897,16 +3803,7 @@ class MatchScreen(object):
         if self._hamachi_active:
             return ("Hamachi ready - same network; allow game in Windows Firewall.",
                     (120, 220, 150))
-        punched = sum(1 for p in self.peers if p.udp_ready)
-        if (self._tunnel_active or self.forwarded) and punched and \
-                getattr(self, "_udp_public_ok", None) is False:
-            return ("Direct UDP to %d player%s; TCP carries control."
-                    % (punched, "" if punched == 1 else "s"), (120, 220, 150))
         if self._tunnel_active:
-            stun = getattr(self, "_udp_stun", None)
-            if stun is not None and stun.endpoint is not None:
-                return ("TCP tunnel - joiners will try a direct UDP path.",
-                        (240, 200, 80))
             try:
                 port = self.srv.getsockname()[1]
             except (AttributeError, OSError):
@@ -4729,7 +4626,6 @@ class MatchScreen(object):
             except OSError:
                 pass
             self.udp_srv = None
-        self._udp_stun = None
         if getattr(self, "udp_sock", None) is not None:
             try:
                 self.udp_sock.close()

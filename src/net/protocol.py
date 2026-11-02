@@ -72,7 +72,6 @@ T_ACTION = "act"          # reliable one-shot player action over control TCP
 T_UDP_HELLO = "udph"      # token-authenticated client -> host datagram probe
 T_UDP_ACK = "udpa"        # host -> client datagram-path confirmation
 T_UDP_FALLBACK = "udpf"  # client -> host, stop sending snapshots on UDP
-T_UDP_PUNCH = "udpp"     # both ways over TCP: my public UDP endpoint
 T_JOIN_MATCH = "joinmatch"
 # T_YOU is host -> client, sent once when a connection is accepted: it tells
 # the client which roster slot it owns. Without it a client had no way to
@@ -924,31 +923,6 @@ def parse_udp_fallback(msg):
             or not 0 <= nonce <= 0xFFFFFFFF):
         return None
     return token, nonce
-
-
-def make_udp_punch(token, ip, port):
-    """Reliable control message: the sender's STUN-mapped UDP endpoint.
-
-    Host and joiner swap these over TCP (a tunnel included) and then fire
-    datagrams at each other, which opens a direct path through both NATs.
-    """
-    token = clean_token(token)
-    if not token or not isinstance(ip, str):
-        return None
-    return {"t": T_UDP_PUNCH, "u": token, "ip": ip[:15],
-            "p": int(port) & 0xFFFF}
-
-
-def parse_udp_punch(msg):
-    """Return (token, ip, port) for a well-formed endpoint message."""
-    if not isinstance(msg, dict) or msg.get("t") != T_UDP_PUNCH:
-        return None
-    token = clean_token(msg.get("u"))
-    ip, port = msg.get("ip"), msg.get("p")
-    if (not token or not isinstance(ip, str) or not isinstance(port, int)
-            or isinstance(port, bool)):
-        return None
-    return token, ip, port
 
 
 def make_udp_ack(token, nonce, tick=0):
