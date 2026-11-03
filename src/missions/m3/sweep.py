@@ -685,15 +685,18 @@ def draw_overwatch_laser(surface, cam_x, cam_y):
         return
     nx, ny = mk.rect.centerx, mk.rect.centery
     px, py = STATE.player.rect.centerx, STATE.player.rect.centery
+    from missions.m3.draw import _scr  # lazy: draw imports sweep
+    n_xy = tuple(int(c) for c in _scr(nx, ny, cam_x, cam_y, 1.3))   # 3D: at gun height
+    p_xy = tuple(int(c) for c in _scr(px, py, cam_x, cam_y, 1.3))
     # Scope glint at the nest: always drawn while the marksman lives, so the
     # player can trace the beam back to a source and assault it.
     glint_pulse = 0.5 + 0.5 * math.sin(_time.time() * 6.0)
     glint_a = int(90 + 90 * glint_pulse)
     lay = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
     pygame.draw.circle(lay, (255, 120, 90, glint_a),
-                       (int(nx - cam_x), int(ny - cam_y)), 5)
+                       n_xy, 5)
     pygame.draw.circle(lay, (255, 220, 200, glint_a),
-                       (int(nx - cam_x), int(ny - cam_y)), 2)
+                       n_xy, 2)
     if tel <= 0:
         if _zone() != "lobby":
             surface.blit(lay, (0, 0))
@@ -713,17 +716,17 @@ def draw_overwatch_laser(surface, cam_x, cam_y):
         alpha = min(235, 60 + tel * 4)
         width = 2 + int(tel / 18)           # 2px -> 4px as the shot nears
     pygame.draw.line(lay, (255, 60, 50, alpha),
-                     (int(nx - cam_x), int(ny - cam_y)),
-                     (int(px - cam_x), int(py - cam_y)), width)
+                     n_xy,
+                     p_xy, width)
     pygame.draw.line(lay, (255, 170, 130, min(255, alpha + 20)),
-                     (int(nx - cam_x), int(ny - cam_y)),
-                     (int(px - cam_x), int(py - cam_y)), 1)
+                     n_xy,
+                     p_xy, 1)
     if tel > 0:
-        pygame.draw.circle(lay, (255, 60, 50, alpha), (int(px - cam_x), int(py - cam_y)), 6, 2)
+        pygame.draw.circle(lay, (255, 60, 50, alpha), p_xy, 6, 2)
         # Closing ring: shrinks onto the player as telegraph fills.
         frac = tel / max(1.0, float(OVERWATCH_TELEGRAPH))
         pygame.draw.circle(lay, (255, 200, 160, alpha),
-                           (int(px - cam_x), int(py - cam_y)),
+                           p_xy,
                            max(4, int(22 - 16 * frac)), 1)
     surface.blit(lay, (0, 0))
     # Top-center status chip: IN LANE / IN COVER / FIRING, mirroring the M2

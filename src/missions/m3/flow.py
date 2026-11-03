@@ -1721,9 +1721,11 @@ def _draw_archives_nav_arrow(cam_x, cam_y):
 
     angle = math.atan2(dy, dx)
     bob = math.sin(_now_ms() * 0.008) * 3
-    sx = int(px - cam_x)
+    from missions.m3.draw import _scr  # lazy: draw imports flow
+    ax, ay = _scr(px, py, cam_x, cam_y)
+    sx = int(ax)
     # High above the sprite so it clears Volkov labels / furniture.
-    sy = int(py - cam_y - 58 + bob)
+    sy = int(ay - 58 + bob)
     # Clamp so the arrow itself never draws under the top HUD.
     sy = max(64, min(HEIGHT - 90, sy))
     sx = max(24, min(WIDTH - 24, sx))

@@ -197,8 +197,12 @@ def _scr(wx, wy, cam_x, cam_y, h=0.0):
 
 
 def _m3_td3d_gate():
-    return (getattr(STATE, "mission3_stage", None) == STAGE_BREAKOUT
-            and _m3_maps.MISSION3_MAP is _m3_maps.MISSION3_CELL_MAP
+    """2.5D runs on the five playable maps, each only in its own stage."""
+    grid = {STAGE_BREAKOUT: _m3_maps.MISSION3_CELL_MAP, STAGE_COMMS: _m3_maps.MISSION3_COMMS_MAP,
+            STAGE_ARCHIVES: _m3_maps.MISSION3_ARCHIVES_MAP,
+            STAGE_KILL_ORDER: _m3_maps.MISSION3_KILL_ORDER_MAP,
+            STAGE_BROADCAST: _m3_maps.MISSION3_BROADCAST_MAP}.get(getattr(STATE, "mission3_stage", None))
+    return (grid is not None and _m3_maps.MISSION3_MAP is grid
             and not getattr(STATE, "m3_black_ledger_death_active", False))
 
 
@@ -2587,7 +2591,7 @@ def _draw_comms_relay_prompt(cam_x, cam_y):
     if getattr(STATE, "m3_relay_active", False):
         return
     rx, ry = _relay_pos()
-    sx, sy = rx - cam_x, ry - cam_y
+    sx, sy = _scr(rx, ry, cam_x, cam_y)
     if not (-80 < sx < WIDTH + 80 and -80 < sy < HEIGHT + 80):
         return
     if getattr(STATE, "m3_relay_tuned", False):
@@ -2616,7 +2620,7 @@ def _draw_comms_relay_prompt(cam_x, cam_y):
     screen.blit(ring, (int(sx - 36), int(sy - 36)))
 
 
-def _draw_comms_dynamic_atmosphere(cam_x, cam_y):
+def _draw_comms_dynamic_atmosphere(cam_x, cam_y, glow=True):
     """State-driven lighting and machinery feedback for the Comms Wing."""
     timer = getattr(STATE, "m3_comms_ambience_timer", 0)
     powered = getattr(STATE, "m3_comms_power_restored", False)
@@ -2632,7 +2636,7 @@ def _draw_comms_dynamic_atmosphere(cam_x, cam_y):
             dropout = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             dropout.fill((0, 0, 0, 82))
             screen.blit(dropout, (0, 0))
-    else:
+    elif glow:                     # the 3D frame lights the relay room itself
         # Restored green status glow centered on the relay room.
         rx, ry = _relay_pos()
         sx, sy = int(rx - cam_x), int(ry - cam_y)
@@ -2655,7 +2659,7 @@ def _draw_comms_system_prompts(cam_x, cam_y):
          getattr(STATE, "m3_comms_auth_acquired", False)),
     ]
     for (wx, wy), text, complete in objectives:
-        sx, sy = wx - cam_x, wy - cam_y
+        sx, sy = _scr(wx, wy, cam_x, cam_y)
         if not (-90 < sx < WIDTH + 90 and -90 < sy < HEIGHT + 90):
             continue
         near = bool(STATE.player) and math.hypot(
@@ -2676,7 +2680,7 @@ def _draw_comms_system_prompts(cam_x, cam_y):
     # Diegetic archive-lock status beside the east portal.
     wx = 44 * TILE_SIZE + TILE_SIZE // 2
     wy = 24 * TILE_SIZE + TILE_SIZE // 2
-    sx, sy = wx - cam_x, wy - cam_y
+    sx, sy = _scr(wx, wy, cam_x, cam_y)
     if -90 < sx < WIDTH + 90 and -90 < sy < HEIGHT + 90:
         unlocked = getattr(STATE, "m3_relay_tuned", False)
         text = "ARCHIVE LINK OPEN" if unlocked else "ARCHIVE LINK SEALED"
@@ -3827,7 +3831,7 @@ def _draw_archives_system_prompts(cam_x, cam_y):
     # Maru terminal - only when close enough to interact.
     mx, my = _maru_terminal_pos()
     if math.hypot(px - mx, py - my) <= 88:
-        sx, sy = mx - cam_x, my - cam_y
+        sx, sy = _scr(mx, my, cam_x, cam_y)
         if getattr(STATE, "m3_maru_contacted", False):
             _draw_prompt_tag(sx, sy, "CHANNEL CLOSED", (120, 220, 160), y_off=-62)
         else:
@@ -3837,7 +3841,7 @@ def _draw_archives_system_prompts(cam_x, cam_y):
     if not getattr(STATE, "m3_vostral_acquired", False):
         vx, vy = _vostral_file_pos()
         if math.hypot(px - vx, py - vy) <= 150:
-            sx, sy = vx - cam_x, vy - cam_y
+            sx, sy = _scr(vx, vy, cam_x, cam_y)
             if not getattr(STATE, "m3_maru_contacted", False):
                 _draw_prompt_tag(sx, sy, "VAULT SEALED, CONTACT MARU", (220, 130, 90), y_off=-74)
             else:
@@ -3846,7 +3850,7 @@ def _draw_archives_system_prompts(cam_x, cam_y):
     # North exit - near only.
     ex, ey = _archives_exit_pos()
     if math.hypot(px - ex, py - ey) <= 110:
-        sx, sy = ex - cam_x, ey - cam_y
+        sx, sy = _scr(ex, ey, cam_x, cam_y)
         if getattr(STATE, "m3_vostral_acquired", False):
             _draw_prompt_tag(sx, sy, "[E] EXIT, KILL ORDER", (120, 230, 160), y_off=-48, icon="keycard")
         else:
@@ -4783,8 +4787,8 @@ def _draw_ko_nav_arrow(cam_x, cam_y):
             ty = sum(e.rect.centery for e in mem) / len(mem)
     if tx is None:
         tx, ty = _exfil_pos()
-    px, py = wx - cam_x, wy - cam_y
-    tx, ty = tx - cam_x, ty - cam_y
+    px, py = _scr(wx, wy, cam_x, cam_y)
+    tx, ty = _scr(tx, ty, cam_x, cam_y)
     if 0 <= tx <= WIDTH and 0 <= ty <= HEIGHT:
         return                      # target already on screen - no arrow needed
     ang = math.atan2(ty - py, tx - px)
@@ -4817,12 +4821,12 @@ def _draw_ko_system_prompts(cam_x, cam_y):
             continue
         tag = font_terminal_small.render(text, True, color)
         tag.set_alpha(190)
-        screen.blit(tag, (int(d.rect.centerx - cam_x - tag.get_width() // 2),
-                          int(d.rect.centery - cam_y - 22)))
+        screen.blit(tag, (int(_scr(d.rect.centerx, d.rect.centery, cam_x, cam_y)[0] - tag.get_width() // 2),
+                          int(_scr(d.rect.centerx, d.rect.centery, cam_x, cam_y)[1] - 22)))
     ex, ey = _exfil_pos()
     if math.hypot(ex - px, ey - py) < TILE_SIZE * 2.2:
         tag = font_terminal_small.render(_T("m3.exfil_point_holdout_incoming"), True, (200, 185, 120))
-        screen.blit(tag, (int(ex - cam_x - tag.get_width() // 2), int(ey - cam_y - 34)))
+        screen.blit(tag, (int(_scr(ex, ey, cam_x, cam_y)[0] - tag.get_width() // 2), int(_scr(ex, ey, cam_x, cam_y)[1] - 34)))
 
 def _draw_broadcast_wing_details(cam_x, cam_y):
     """Dress the Broadcast Wing: cable runs, studio lights, cameras, ON AIR."""
@@ -5029,7 +5033,7 @@ def _draw_broadcast_system_prompts(cam_x, cam_y):
     pcx, pcy = _bcast_pc_pos()
     if math.hypot(px - pcx, py - pcy) > 110:
         return
-    sx, sy = pcx - cam_x, pcy - cam_y
+    sx, sy = _scr(pcx, pcy, cam_x, cam_y)
     if not _screen_visible_rect(sx, sy, 2, 2):
         return
     txt = font_terminal_small.render(_T("m3.e_use_station_pc"), True, (200, 185, 230))
@@ -5871,6 +5875,52 @@ def _game_draw_inner(fcx, fcy):
         screen.blit(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y))
 
     _draw_screen_passes(cam_x, cam_y)
+
+
+def _draw_wing_screen_passes(cam_x, cam_y):
+    """The comms, archives, kill order and broadcast overlays over the 3D
+    world, in the order each 2D wing frame draws them. World anchors go
+    through ``_scr``."""
+    key = _m3_map_key()
+    if key == "comms":
+        _draw_comms_dynamic_atmosphere(cam_x, cam_y, glow=False)
+        _draw_comms_system_prompts(cam_x, cam_y)
+        _draw_comms_relay_prompt(cam_x, cam_y)
+        _draw_objective_waypoint(cam_x, cam_y)
+    elif key == "archives":
+        _draw_archives_atmosphere(cam_x, cam_y)
+        _draw_archives_nav_arrow(cam_x, cam_y)
+        _draw_archives_system_prompts(cam_x, cam_y)
+    elif key == "killorder":
+        _draw_ko_nav_arrow(cam_x, cam_y)
+        _ko_sweep.draw_overwatch_laser(screen, cam_x, cam_y)
+        _draw_ko_system_prompts(cam_x, cam_y)
+        if getattr(STATE, "m3_alarm_active", False) and getattr(STATE, "m3_alarm_timer", 0) % 240 < 70:
+            _draw_m3_alarm_effect(screen)
+    elif key == "broadcast":
+        if getattr(STATE, "m3_bcast_pc_ready", False):
+            pcx, pcy = _bcast_pc_pos()
+            sx, sy = _scr(pcx, pcy, cam_x, cam_y, 1.4)
+            tag = font_terminal_small.render(_T("m3.station_pc"), True, (120, 235, 165))
+            screen.blit(tag, (int(sx - tag.get_width() // 2), int(sy - 40)))
+        _draw_broadcast_system_prompts(cam_x, cam_y)
+    if STATE.player_dead:
+        from missions import m2 as _m2       # the 3D cast draws the body; keep the tinnitus
+        _m2._draw_tinnitus_overlay(screen)
+    draw_vignette(screen, strength=125 if key == "comms" else 130)
+    draw_scanlines(screen)
+    _draw_mission3_hud(screen, cam_x, cam_y)
+    if key == "comms":
+        _draw_comms_relay_overlay()
+    elif key == "archives":
+        _draw_maru_contact_overlay()
+    elif key == "broadcast":
+        from ui import upload_os  # lazy: ui package
+        if upload_os.is_upload_os_active():
+            upload_os.draw_upload_os(screen)
+    if STATE.player_dead:
+        from entities import death_anim
+        death_anim.apply_camera_tilt(screen)
 
 
 def _draw_screen_passes(cam_x, cam_y, world3d=False):

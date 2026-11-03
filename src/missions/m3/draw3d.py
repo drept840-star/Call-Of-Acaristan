@@ -1,14 +1,17 @@
-"""Mission 3 in 2.5D: the Vostral cell block drawn in 3D over the 2D rules.
+"""Mission 3 in 2.5D: the five playable maps drawn in 3D over the 2D rules.
 
 ``draw.game_draw`` hands the frame here while ``game.topdown3d`` is on for
-Mission 3, and the ``GATES["MISSION3"]`` gate keeps that to the breakout on
-the cell-block map. The interrogation (monitor POV and breach film), the vent
-film, comms, archives, the kill order and the broadcast stay 2D. The sim,
-the doors, the detainees and every collision rect stay where they were;
-this module only changes what the world looks like. The 2D screen passes
-(alarm wash, waypoint, vignette, HUD, prompts, crafting, death tilt) run
-on top through ``draw._draw_screen_passes``, and ``draw._PROJ`` makes their
-world anchors project through this frame's ``td.View``.
+Mission 3, and ``draw._m3_td3d_gate`` keeps that to each stage on its own
+map: the cell-block breakout, comms, archives, the kill order and the
+broadcast. The interrogation (monitor POV and breach film) and the vent
+film stay 2D. The sim, the doors, the detainees and every collision rect
+stay where they were; this module only changes what the world looks like.
+The 2D screen passes (alarm wash, waypoint, vignette, HUD, prompts,
+crafting, wing overlays, death tilt) run on top through
+``draw._draw_screen_passes`` on the cell block and
+``draw._draw_wing_screen_passes`` on the wings, and ``draw._PROJ`` makes
+their world anchors project through this frame's ``td.View``. The wing
+sets, lamps and live props live in ``wings3d``.
 
 Set: the map glyphs are the source. ``C`` is the border or a block wall,
 ``D`` a door (barred on the cell row, steel slabs elsewhere). Furniture
@@ -32,6 +35,7 @@ from missions.m1 import grade3d as _grade
 from missions.m3 import draw as _d
 from missions.m3 import maps as _maps
 from missions.m3 import systems as _s
+from missions.m3 import wings3d as _wings
 from missions.m3 import world as _wd
 
 CAM = td.CAMS["MISSION3"]
@@ -40,7 +44,7 @@ AIM_H = _m1.AIM_H
 STUB_H = _m1.STUB_H
 CUT_CAP = _m1.CUT_CAP
 DOOR_H = _m1.DOOR_H
-WALL_H = {"border": 3.2, "block": 2.7}
+WALL_H = {"border": 3.2, "block": 2.7, "shelf": 2.1, "cube": 1.35}
 
 WALL = (74, 74, 70)              # grimy whitewash above the dado
 DADO = (44, 60, 56)              # institutional green paint, waist down
@@ -111,7 +115,12 @@ _LAMPS = (*((9.5 + 8 * i, 8.5, 190, td.mix(col, (255, 255, 255), 0.3), "cell")
 _LAMP_H = {"fl": 4.0, "exit": 2.45, "wfl": 3.1}
 _YARD_MID = (24.5, 37.0)
 
-_cache = {"walls": None, "packed": {}, "meshes": {}, "night": None, "doors": None}
+# per wing: (whitewash, dado) of the block walls
+_WALLS = {"cell": (WALL, DADO), "comms": ((68, 72, 74), (40, 52, 60)),
+          "archives": ((86, 80, 70), (70, 52, 38)), "killorder": ((78, 78, 76), (52, 54, 58)),
+          "broadcast": ((64, 62, 72), (40, 38, 50))}
+
+_cache = {"walls": None, "packed": {}, "meshes": {}, "night": {}, "doors": None}
 
 
 # ── frame ──────────────────────────────────────────────────────────────
@@ -130,7 +139,10 @@ def game_draw3d(fcx, fcy):
         STATE.muzzle_flash_timer -= 1
     _d._PROJ[0] = v
     try:
-        _d._draw_screen_passes(cam_x, cam_y, world3d=True)
+        if _key() == "cell":
+            _d._draw_screen_passes(cam_x, cam_y, world3d=True)
+        else:
+            _d._draw_wing_screen_passes(cam_x, cam_y)
     finally:
         _d._PROJ[0] = None
     return True
@@ -170,7 +182,10 @@ def render_world(surface, v):
         flashes = []
         _draw_walls(r)
         _draw_doors(r)
-        _draw_story_props(r, tm)
+        if _key() == "cell":
+            _draw_story_props(r, tm)
+        else:
+            _wings.draw_live(r, _key(), tm, flashes)
         _draw_cast(r, flashes, tm)
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
@@ -184,11 +199,20 @@ def render_world(surface, v):
     finally:
         r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn + _presence(), ambient=AMBIENT)
+    wing = [] if _key() == "cell" else _wings.dyn_lights(_key(), tm)
+    _grade.apply(surface, v, _night_lights() + dyn + wing + _presence(), ambient=_wings.AMBIENT.get(_key(), AMBIENT))
     return True
 
 
 # ── helpers ────────────────────────────────────────────────────────────
+
+def _key():
+    return _d._m3_map_key()
+
+
+def _lamps():
+    return _LAMPS if _key() == "cell" else _wings.lamps(_key())
+
 
 def _dims():
     return _maps._live_map_dims()
@@ -246,26 +270,31 @@ def _glow(col, size, tm, k=0.8, px=16, **kw):
 def _build_set(r):
     from cutscenes import m6world3d as _w
     from engine3d import quad_xz
+    key = _key()
+    floor = _FLOOR if key == "cell" else _wings.FLOOR[key]
     w, h = _dims()
     for row in range(h):
         for col in range(w):
             g = _glyph(col, row)
-            if g not in _FLOOR:
+            if g not in floor:
                 continue
-            name, base = _FLOOR[g]
+            name, base = floor[g]
             if g == "K" and (col + row) % 2:
                 base = _shade(base, 0.78)
             cell = (col - 7) // 8
-            if 6 <= row <= 11 and 0 <= cell <= 2 and (col - 7) % 8 < 6:
+            if key == "cell" and 6 <= row <= 11 and 0 <= cell <= 2 and (col - 7) % 8 < 6:
                 base = td.mix(base, _d._NEIGHBOR_THEMES[cell]["tint"], 0.22)
             _w.add(r, quad_xz(col * T * K, -(row + 1) * T * K, (col + 1) * T * K, -row * T * K, 0.0,
                               _floor_tex(_tile_col(col, row, base), name), layer=0))
-    _paint(r)
-    for kind, x, y, pw, ph in _PROPS:
-        _furniture(r, kind, x, y, pw, ph)
-    _cells(r)
-    _own_cell(r)
-    for kind, ptx, pty, arg in _d._M3_DRESSING_PROPS.get("cell", ()):
+    if key == "cell":
+        _paint(r)
+        for kind, x, y, pw, ph in _PROPS:
+            _furniture(r, kind, x, y, pw, ph)
+        _cells(r)
+        _own_cell(r)
+    else:
+        _wings.build(r, key)
+    for kind, ptx, pty, arg in _d._M3_DRESSING_PROPS.get(key, ()):
         if _d._bg_prop_overlaps_solid(kind, ptx, pty, arg):
             continue
         if kind in ("crates", "barrels", "coil"):
@@ -273,8 +302,8 @@ def _build_set(r):
         else:
             x, _, z = _tc(ptx, pty)
             _w.add(r, _cart_mesh(kind, x, z))
-    for col, row, _rad, color, key in _LAMPS:
-        _fixture(r, col, row, color, key)
+    for col, row, _rad, color, lk in _lamps():
+        _fixture(r, col, row, color, lk)
 
 
 def _paint(r):
@@ -567,7 +596,14 @@ def _wall_kind(col, row):
     if _glyph(col, row) != "C":
         return None
     w, h = _dims()
-    return "border" if row in (0, h - 1) or col in (0, w - 1) else "block"
+    if row in (0, h - 1) or col in (0, w - 1):
+        return "border"
+    if _key() == "archives":                  # free-standing C runs: stacks and cubicle walls
+        if 6 <= col <= 17 and 20 <= row <= 34:
+            return "shelf"
+        if 30 <= col <= 41 and 20 <= row <= 34:
+            return "cube"
+    return "block"
 
 
 def _wall_boxes():
@@ -612,14 +648,18 @@ def _wall_boxes():
 def _wall_mesh(kind, w, d, hgt):
     """A wall box: whitewash over a painted dado (bare concrete on the
     border), a grime foot, a flat dark top."""
-    key = ("wall", kind, round(w, 3), round(d, 3), hgt)
+    wall, dado = _WALLS.get(_key(), _WALLS["cell"])
+    key = ("wall", kind, round(w, 3), round(d, 3), hgt, wall)
     m = _cache["meshes"].get(key)
     if m is not None:
         return m
     from engine3d import Mesh, box, tex
     cut = hgt < WALL_H[kind] - 0.01
-    body = BORDER if kind == "border" else WALL
-    low = _shade(BORDER, 0.78) if kind == "border" else DADO
+    if kind in ("shelf", "cube"):
+        m = _cache["meshes"][key] = (_shelf_mesh if kind == "shelf" else _cube_mesh)(w, d, hgt, cut)
+        return m
+    body = BORDER if kind == "border" else wall
+    low = _shade(BORDER, 0.78) if kind == "border" else dado
     m = Mesh()
     m.add(box(w, hgt, d, tex("concrete", like=body, tint=True), center=(0.0, hgt / 2.0, 0.0),
               cols={"top": CUT_CAP if cut else CAP}))
@@ -630,9 +670,46 @@ def _wall_mesh(kind, w, d, hgt):
             m.add(box(w + grow, y1 - y0, d + grow, tex("concrete", like=col, tint=True),
                       center=(0.0, (y0 + y1) / 2.0, 0.0), skip=("top", "bottom")))
     if kind != "border" and hgt > DADO_H + 0.1:
-        m.add(box(w + 0.025, 0.05, d + 0.025, _shade(DADO, 0.7), center=(0.0, DADO_H, 0.0),
+        m.add(box(w + 0.025, 0.05, d + 0.025, _shade(dado, 0.7), center=(0.0, DADO_H, 0.0),
                   skip=("top", "bottom")))
     _cache["meshes"][key] = m
+    return m
+
+
+_BOOKS = ((112, 44, 38), (52, 70, 96), (126, 104, 60), (60, 84, 58), (138, 126, 104), (84, 52, 70))
+
+
+def _shelf_mesh(w, d, hgt, cut):
+    """Archive stack: a dark wood carcass, shelf boards, book spines down
+    both long faces."""
+    from engine3d import Mesh, box, tex
+    m = Mesh()
+    m.add(box(w, hgt, d, tex("crate", like=(66, 48, 32)), center=(0.0, hgt / 2.0, 0.0),
+              cols={"top": CUT_CAP if cut else (40, 30, 22)}))
+    along_x = w >= d
+    span = w if along_x else d
+    n = max(1, int(span / 0.32))
+    for k, y in enumerate(y for y in (0.12, 0.62, 1.12, 1.62) if y + 0.4 < hgt):
+        for i in range(n):
+            col = _BOOKS[_hash(i, k, len(_BOOKS))]
+            hb = 0.3 + 0.06 * _hash(i + 5, k, 3)
+            a = -span / 2.0 + (i + 0.5) * span / n
+            for side in (-1.0, 1.0):
+                if along_x:
+                    m.add(box(span / n - 0.03, hb, 0.02, col, center=(a, y + hb / 2.0, side * (d / 2.0 + 0.01))))
+                else:
+                    m.add(box(0.02, hb, span / n - 0.03, col, center=(side * (w / 2.0 + 0.01), y + hb / 2.0, a)))
+        m.add(box(w + 0.04, 0.04, d + 0.04, (84, 62, 42), center=(0.0, y - 0.02, 0.0), skip=("top", "bottom")))
+    return m
+
+
+def _cube_mesh(w, d, hgt, cut):
+    """Cubicle partition: blue-grey fabric on a steel frame, a pale top rail."""
+    from engine3d import Mesh, box, tex
+    m = Mesh()
+    m.add(box(w, hgt, d, tex("m7_plaster", like=(70, 78, 92), tint=True), center=(0.0, hgt / 2.0, 0.0),
+              cols={"top": CUT_CAP if cut else (92, 96, 104)}))
+    m.add(box(w + 0.03, 0.08, d + 0.03, (40, 42, 46), center=(0.0, 0.04, 0.0), skip=("top", "bottom")))
     return m
 
 
@@ -640,13 +717,13 @@ def _solid(col, row):
     return _glyph(col, row) in ("C", "D", "")
 
 
-def _rim_mesh(sc, sr, sw, sh, hgt):
+def _rim_mesh(sc, sr, sw, sh, hgt, full=WALL_H["block"]):
     """The lip round a wall run's top, only on edges that face open floor:
     the outline that tells wall from floor at a glance."""
     def build():
         from engine3d import Mesh, box
         m = Mesh()
-        cut = hgt < WALL_H["block"] - 0.01
+        cut = hgt < full - 0.01
         col = RIM_CUT if cut else RIM
         y, t, tk = hgt + 0.012, 0.07, 0.024
         cx, cz = (sc + sw / 2.0) * T * K, -(sr + sh / 2.0) * T * K
@@ -675,7 +752,7 @@ def _rim_mesh(sc, sr, sw, sh, hgt):
         run([(rw, not _solid(sc - 1, rw)) for rw in range(sr, sr + sh)], "w")
         run([(rw, not _solid(sc + sw, rw)) for rw in range(sr, sr + sh)], "e")
         return m
-    return _mesh(("rim", sc, sr, sw, sh, round(hgt, 3)), build)
+    return _mesh(("rim", sc, sr, sw, sh, round(hgt, 3), full), build)
 
 
 def _cut(zone, snap, c, row):
@@ -706,7 +783,7 @@ def _draw_walls(r):
             hgt = STUB_H + (full - STUB_H) * levels[i]
             cx, _, cz = to3((sc + sw / 2.0) * T, (sr + sh / 2.0) * T)
             _put(r, _wall_mesh(kind, sw * T * K, sh * T * K, hgt), (cx, 0.0, cz))
-            _put(r, _rim_mesh(sc, sr, sw, sh, hgt), (cx, 0.0, cz))
+            _put(r, _rim_mesh(sc, sr, sw, sh, hgt, full), (cx, 0.0, cz))
             i = j + 1
 
 
@@ -768,12 +845,14 @@ def _draw_doors(r):
         x, _, z = _tc(col + 0.5, row + 0.5)
         yaw = 0.0 if along_x else 90.0
         if hgt > DOOR_H + 0.05:
-            lin = _mesh(("lintel", round(hgt, 3)), lambda h=hgt: box(T * K, h - DOOR_H, T * K, WALL,
+            wall = _WALLS.get(_key(), _WALLS["cell"])[0]
+            lin = _mesh(("lintel", round(hgt, 3), wall), lambda h=hgt, c=wall: box(T * K, h - DOOR_H, T * K, c,
                                                                     center=(0.0, (h + DOOR_H) / 2.0, 0.0),
                                                                     cols={"top": CAP if h >= WALL_H["block"] - 0.01 else CUT_CAP}))
             _put(r, lin, (x, 0.0, z))
             _put(r, _rim_mesh(col, row, 1, 1, hgt), (x, 0.0, z))
-        blown = row == _d._DOOR_TILE_ROW and col in (_d._DOOR_TILE_COL, _d._DOOR_TILE_COL + 1) and open_p >= 1.0
+        cell_row = row == _d._DOOR_TILE_ROW and _key() == "cell"
+        blown = cell_row and col in (_d._DOOR_TILE_COL, _d._DOOR_TILE_COL + 1) and open_p >= 1.0
         if blown:
             if col == _d._DOOR_TILE_COL:
                 _blown_door(r, x + T * K / 2.0, z)
@@ -782,7 +861,7 @@ def _draw_doors(r):
             continue
         off = slide * open_p * (T * K - 0.1)
         pos = (x + off, 0.0, z) if along_x else (x, 0.0, z - off)
-        style = "bars" if row == _d._DOOR_TILE_ROW else "slab"
+        style = "bars" if cell_row else "slab"
         _put(r, _door_mesh(style, round(min(DOOR_H, hgt), 2), bool(locked)), pos, yaw=yaw)
 
 
@@ -994,7 +1073,30 @@ def _draw_cast(r, flashes, tm):
     _draw_detainees(r)
     _draw_enemies(r, flashes, tm)
     _draw_inmate(r)
+    _draw_volkov(r, flashes, tm)
     _draw_player(r, flashes)
+
+
+def _draw_volkov(r, flashes, tm):
+    """Volkov covering Biribel through the wings, his tracer cues and the
+    K-9 mags he throws."""
+    from cutscenes import m6fx3d as _fx
+    if not getattr(STATE, "m3_volkov_ally_active", False) or _key() == "cell":
+        return
+    x = getattr(STATE, "m3_volkov_ally_x", 0.0)
+    y = getattr(STATE, "m3_volkov_ally_y", 0.0)
+    shots = getattr(STATE, "m3_volkov_ally_shots", None) or ()
+    _m1._feet(r, x, y, (110, 170, 230), rad=0.48)
+    _m1._body(r, td.armed("volkov", "os12"), x, y, getattr(STATE, "m3_volkov_ally_angle", 0.0), "os12",
+              "aim" if shots else "ready", "volkov_m3", flashes, bool(shots))
+    for x1, y1, x2, y2, _life in shots:
+        r.add_line3d(to3(x1, y1, AIM_H), to3(x2, y2, AIM_H), (255, 190, 90), 2, layer=4)
+    for mag in getattr(STATE, "m3_volkov_mags", None) or ():
+        if mag.get("caught"):
+            continue
+        p = to3(mag["x"], mag["y"], 0.9)
+        _put(r, _mesh(("k9mag",), lambda: _m1._pickup_mesh("mag")), p, yaw=math.degrees(mag.get("rot", 0.0)))
+        r.add_sprite(p, _glow((255, 210, 120), 0.2, tm, 0.6, 12), layer=_fx.FX_LAYER)
 
 
 def _draw_fx(r, flashes, tm):
@@ -1084,7 +1186,7 @@ def _lamp_lights(r, v, flashes, tm):
     plus the flashes are the eight per-frame lights."""
     fx, fz = v.tgt[0], v.tgt[2]
     pools, near = [], []
-    for col, row, rad, color, key in _LAMPS:
+    for col, row, rad, color, key in _lamps():
         head = _lamp_head(col, row, key)
         reach = rad * K * 1.6
         pools.append({"pos": head, "range": reach, "color": color, "intensity": 2.0,
@@ -1122,16 +1224,18 @@ def _presence():
 
 def _night_lights():
     """Fixed lights for the grade: each tube's throw and bulb."""
-    hit = _cache["night"]
+    lamps = _lamps()
+    hit = _cache["night"].get(lamps)
     if hit is not None:
         return hit
     out = []
-    for col, row, rad, color, key in _LAMPS:
+    for col, row, rad, color, key in lamps:
         px, pz = _pool_at(col, row, key)
-        out.append(("pool", (px, 0.0, pz), color, rad * K * 1.6 * 0.72, _POOL_K.get(key, 0.45)))
+        out.append(("pool", (px, 0.0, pz), color, rad * K * 1.6 * 0.72,
+                    _POOL_K.get(key, _wings.POOL_K.get(key, 0.45))))
         if key in ("fl", "wfl", "exit"):                 # only fixtures you can see glow
             out.append(("glow", _lamp_head(col, row, key), color, 0.5, 0.45))
-    _cache["night"] = out
+    _cache["night"][lamps] = out
     return out
 
 
@@ -1171,17 +1275,45 @@ def _plaque(idx):
     return out
 
 
+def _room_plaque(text, accent):
+    import pygame
+    hit = _PLAQUES.get(("room", text))
+    if hit is None:
+        lbl = font_terminal_small.render(text, True, accent)
+        w, h = lbl.get_width() + 16, lbl.get_height() + 6
+        hit = pygame.Surface((w, h), pygame.SRCALPHA)
+        hit.fill((0, 0, 0, 170))
+        pygame.draw.rect(hit, (*accent, 140), hit.get_rect(), 1)
+        pygame.draw.rect(hit, (*accent, 190), (0, 0, 4, h))
+        hit.blit(lbl, (9, 3))
+        _PLAQUES[("room", text)] = hit
+    return hit
+
+
+def _wing_plaques(s, v):
+    """Room names on each room's north wall, like the cell plaques."""
+    accent = _wings.ACCENT[_key()]
+    for col, row, text in _wings.PLAQUES.get(_key(), ()):
+        pt = v.screen_sim(col * T, row * T, 2.3)
+        if pt is None or not (-200 < pt[0] < WIDTH + 40 and -40 < pt[1] < HEIGHT + 40):
+            continue
+        img = _room_plaque(text, accent)
+        s.blit(img, (int(pt[0]), int(pt[1]) - img.get_height()))
+
+
 def _labels(s, v):
     """Cell plaques, detainee barks and the unpinned floating texts, as the
     2D world pass draws them, anchored over the 3D set."""
     import pygame
-    for tx, ty, h, text, col in _TAGS:
+    if _key() != "cell":
+        _wing_plaques(s, v)
+    for tx, ty, h, text, col in (_TAGS if _key() == "cell" else ()):
         pt = v.screen_sim(tx * T, ty * T, h)
         if pt is None or not (-40 < pt[0] < WIDTH + 40 and -40 < pt[1] < HEIGHT + 40):
             continue
         img = _tag(text, col)
         s.blit(img, (int(pt[0]) - img.get_width() // 2, int(pt[1]) - img.get_height() // 2))
-    for idx in range(3):
+    for idx in (range(3) if _key() == "cell" else ()):
         pt = v.screen_sim((7.15 + 8 * idx) * T, 13.0 * T, 2.45)   # over the cell door, corridor face
         if pt is None or not (-200 < pt[0] < WIDTH + 40 and -40 < pt[1] < HEIGHT + 40):
             continue
