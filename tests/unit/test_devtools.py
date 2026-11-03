@@ -81,19 +81,19 @@ class EditorTests(unittest.TestCase):
         from game import timelines as tl
 
         tmp = tempfile.mkdtemp()
-        src = os.path.join(tl.TIMELINES_DIR, "m4.story_beats.timeline.json")
-        shutil.copy(src, os.path.join(tmp, "m4.story_beats.timeline.json"))
+        src = os.path.join(tl.TIMELINES_DIR, "m4.arrest_beats.timeline.json")
+        shutil.copy(src, os.path.join(tmp, "m4.arrest_beats.timeline.json"))
         old_dir, old_cache = tl.TIMELINES_DIR, dict(tl._cache)
         tl.TIMELINES_DIR = tmp
         tl._cache.clear()
         try:
             from core.console import Console
             c = Console()
-            c._tl_edit("tl_mark", ["tl_mark", "m4.story_beats", "review", "1200"])
-            data = json.load(open(os.path.join(tmp, "m4.story_beats.timeline.json"), encoding="utf-8"))
+            c._tl_edit("tl_mark", ["tl_mark", "m4.arrest_beats", "review", "1200"])
+            data = json.load(open(os.path.join(tmp, "m4.arrest_beats.timeline.json"), encoding="utf-8"))
             self.assertEqual(data["metadata"]["markers"][-1], {"name": "review", "t": 1200})
             tl._cache.clear()
-            self.assertIn("story_beats", tl.timeline("m4.story_beats").id)
+            self.assertIn("arrest_beats", tl.timeline("m4.arrest_beats").id)
         finally:
             tl.TIMELINES_DIR = old_dir
             tl._cache.clear()

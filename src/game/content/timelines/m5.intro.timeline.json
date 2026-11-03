@@ -11,13 +11,7 @@
     12,
     18
    ],
-   "min_ms": 4200,
-   "post": {
-    "grade": "night_warm",
-    "grain": 0.2,
-    "vignette": 0.45,
-    "bloom": 0.3
-   }
+   "min_ms": 4200
   },
   {
    "scene": "m5_safehouse_tv",

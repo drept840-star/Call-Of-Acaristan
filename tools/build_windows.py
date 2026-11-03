@@ -4,8 +4,8 @@ Usage:  python tools/build_windows.py [--clean]
 
 Output: dist/Call of Acaristan/Call of Acaristan.exe (+ _internal/ folder).
 The folder is self-contained: zip it, or run it from any user-writable path.
-bore.exe ships once, as part of the assets tree (assets/bin/bore.exe), and is
-found at runtime by net.tcp_tunnel.find_bore() via sys._MEIPASS (which is
+bore.exe and playitd.exe (the playit.gg agent) ship once, as part of the assets tree (assets/bin), and are
+found at runtime by net.tcp_tunnel.find_bundled() via sys._MEIPASS (which is
 <exe dir>/_internal on PyInstaller 6) or the executable's own directory.
 Nothing is extracted to a temp dir (onedir) and nothing is installed system-wide.
 """
@@ -26,10 +26,12 @@ def run(cmd):
 def main(argv):
     if run([sys.executable, os.path.join("tools", "download_bore.py")]):
         return 1
-    bore = os.path.join(ROOT, "assets", "bin", "bore.exe")
-    if not os.path.isfile(bore):
-        print("assets/bin/bore.exe missing")
+    if run([sys.executable, os.path.join("tools", "download_playit.py")]):
         return 1
+    for exe in ("bore.exe", "playitd.exe"):
+        if not os.path.isfile(os.path.join(ROOT, "assets", "bin", exe)):
+            print("assets/bin/%s missing" % exe)
+            return 1
     # --user keeps the install out of system site-packages: no admin rights.
     if run([sys.executable, "-m", "pip", "install", "--user", "--upgrade",
             "pyinstaller", "--quiet"]):
@@ -41,7 +43,7 @@ def main(argv):
            "--specpath", os.path.join(ROOT, "build"),
            "--paths", os.path.join(ROOT, "src"),
            "--icon", os.path.join(ROOT, "assets", "logo.ico"),
-           # assets/ already contains assets/bin/bore.exe: add it ONCE
+           # assets/ already contains assets/bin/*.exe: add them ONCE
            # (a separate --add-binary would duplicate it).
            "--add-data", os.path.join(ROOT, "assets") + SEP + "assets",
            "--hidden-import=pygame", "--hidden-import=pygame._sdl2",
@@ -75,10 +77,13 @@ def main(argv):
     if run(cmd):
         return 1
     out = os.path.join(ROOT, "dist", NAME)
-    found = [os.path.join(d, "bore.exe") for d, _, f in os.walk(out) if "bore.exe" in f]
-    if not found:
-        print("BUILD CHECK FAILED: bore.exe not bundled")
-        return 1
+    found = []
+    for exe in ("bore.exe", "playitd.exe"):
+        hits = [os.path.join(d, exe) for d, _, f in os.walk(out) if exe in f]
+        if not hits:
+            print("BUILD CHECK FAILED: %s not bundled" % exe)
+            return 1
+        found += hits
     for cfg_name in ("version.json", "launcher_config.json"):
         src_cfg = os.path.join(ROOT, cfg_name)
         if os.path.isfile(src_cfg):

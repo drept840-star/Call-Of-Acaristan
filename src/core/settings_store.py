@@ -38,6 +38,7 @@ _DEFAULTS = {
     "music_volume": 70,
     "sfx_volume": 85,
     "mute_on_focus_loss": True,
+    "dynamic_music": True,        # core.score: OST in quiet stretches and fights
     # ── Gameplay ──
     "crosshair": True,
     "crosshair_size": 6,          # 3=small, 6=medium, 10=large
@@ -69,6 +70,8 @@ _DEFAULTS = {
     # is actively trying to shoot you. Empty means "not chosen yet", and the
     # arena entry panel makes you choose one.
     "player_name": "",
+    # The host's own playit.gg tunnel address (host:port), reused per room.
+    "playit_address": "",
 }
 
 
@@ -135,6 +138,8 @@ def save(settings_dict):
 # protocol sanitizes again on the way onto the wire; this bound is about the
 # file, not the network.
 PLAYER_NAME_MAX = 64
+# Two tunnel addresses ("TCP+UDP") on free playit accounts.
+PLAYIT_ADDRESS_MAX = 128
 
 
 def player_name():
@@ -143,6 +148,20 @@ def player_name():
     if not isinstance(value, str):
         return ""
     return value.strip()[:PLAYER_NAME_MAX]
+
+
+def playit_address():
+    """The host's remembered playit.gg tunnel address, or ''."""
+    value = load().get("playit_address", "")
+    return value.strip()[:PLAYIT_ADDRESS_MAX] if isinstance(value, str) else ""
+
+
+def set_playit_address(text):
+    """Remember the playit.gg address for the next room. Never raises."""
+    try:
+        save({"playit_address": str(text or "").strip()[:PLAYIT_ADDRESS_MAX]})
+    except Exception as e:
+        print(f"playit address save failed: {e}")
 
 
 def set_player_name(name):

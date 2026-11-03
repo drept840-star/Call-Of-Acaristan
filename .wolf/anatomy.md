@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-01T20:21:30.175Z
-> Files: 493 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-03T22:39:57.242Z
+> Files: 505 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -40,7 +40,7 @@
 
 ## src/
 
-- `app.py` — _input_recorder: handle_settings_event (~58569 tok)
+- `app.py` — _input_recorder: handle_settings_event (~58917 tok)
 
 ## src/art/
 
@@ -74,7 +74,7 @@
 ## src/audio/
 
 - `__init__.py` — audio package. (~7 tok)
-- `audio.py` (~33059 tok)
+- `audio.py` (~35683 tok)
 - `voice_manifest.py` — Generated from voice_lines.xlsx - (VO ID, speaker, line) for every voiced line. (~7039 tok)
 - `voice.py` — Voice-over playback for Call of Acaristan. (~8837 tok)
 
@@ -92,9 +92,9 @@
 - `fixedstep.py` — Fixed-timestep accumulator, for making the simulation host-independent. (~4752 tok)
 - `font_coverage.py` — Font glyph coverage - the fontTools half of §6.13 (dev/audit only). (~649 tok)
 - `fsm.py` — fsm.py - Finite State Machine infrastructure for Acaristan. (~1929 tok)
-- `game_core.py` — game_core.py - Proxy facade that delegates to split modules. (~6310 tok)
+- `game_core.py` — game_core.py - Proxy facade that delegates to split modules. (~6537 tok)
 - `hands.py` — Canonical hand renderers - the reference-anatomy model (dorsal view). (~4371 tok)
-- `interactions.py` — Player interactions with the world: doors, safe, NPCs, alarms. (~6462 tok)
+- `interactions.py` — Player interactions with the world: doors, safe, NPCs, alarms. (~6775 tok)
 - `json_store.py` — Shared atomic JSON persistence helpers for save_data.json / settings.json. (~413 tok)
 - `level_editor.py` — LevelEditor: set_map, toggle, handle_event, rebuild_world + 3 more (~2564 tok)
 - `lighting.py` — core.lighting - deprecated path (RPE6 Phase 2, A-006). (~180 tok)
@@ -106,7 +106,8 @@
 - `render_util.py` — core.render_util - deprecated path (RPE6 Phase 2, A-006). (~223 tok)
 - `save_system.py` — 3-slot JSON save system for campaign progress. (~2299 tok)
 - `scene_mirror.py` — RPE6 ADAPTER A-005: mirror the legacy GameStateManager onto an engine SceneStack. (~856 tok)
-- `settings_store.py` — Settings store - persistent JSON-backed user preferences. (~1856 tok)
+- `score.py` — score.py - the OST under quiet gameplay. (~1411 tok)
+- `settings_store.py` — Settings store - persistent JSON-backed user preferences. (~2072 tok)
 - `state.py` — Central game state singleton. (~6980 tok)
 - `staticlayer.py` — staticlayer.py - chunked bake of the static world (phase 0). (~1035 tok)
 - `surfaces.py` — surfaces.py - floor-material zones for footstep timbre selection. (~536 tok)
@@ -330,7 +331,7 @@
 - `render3d_bridge.py` — game.render3d_bridge - apply ae.set3d/1 data to a live 3D renderer (RPE6 Phase 8). (~7486 tok)
 - `save_adapter.py` — RPE6 Phase 9: game-side adapter between live state and ``engine.save``. (~4305 tok)
 - `timelines.py` — game.timelines - cutscene shot-list access (RPE6 Phase 8). (~739 tok)
-- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~3555 tok)
+- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~3968 tok)
 
 ## src/game/art/
 
@@ -431,7 +432,7 @@
 - `arena.py` — Multiplayer arena maps and the deathmatch rules. (~19521 tok)
 - `walk3d.py` — Walking sim in 2.5D: the harbour alley drawn in 3D over the 2D rules. (~6358 tok)
 - `walking_attack3d.py` — True 3D oil-rig strike cinematic, rendered by the game's engine3d. (~12032 tok)
-- `walking_sim.py` — Walking sim section: slum exploration, NPCs, firefight overlook panorama. (~42172 tok)
+- `walking_sim.py` — Walking sim section: slum exploration, NPCs, firefight overlook panorama. (~47183 tok)
 
 ## src/missions/m0/
 
@@ -442,7 +443,8 @@
 
 - `__init__.py` — Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py. (~428 tok)
 - `draw.py` — Split from mission.py - see mission.py (shim) for the map. (~33772 tok)
-- `draw3d.py` — Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules. (~22032 tok)
+- `draw3d.py` — Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules. (~22230 tok)
+- `escape3d.py` — Mission 1 escape cut (timeline m1.escape) in 3D. (~3941 tok)
 - `grade3d.py` — Mission 1 night grade for the 2.5D frame: a screen-space light map. (~1367 tok)
 - `hotwire.py` — Split from mission.py - see mission.py (shim) for the map. (~1741 tok)
 - `main.py` — Split from mission.py - see mission.py (shim) for the map. (~3223 tok)
@@ -455,6 +457,7 @@
 - `__init__.py` — Package missions/m2 - re-export facade. Parts: meta.py, world.py, starts.py, sniper.py, update.py, draw.py. (~1467 tok)
 - `components.py` — Mission 2 entity components (RPE6 Phase 5, D4). (~160 tok)
 - `draw.py` — Split from mission2.py - see mission2.py (shim) for the map. (~110670 tok)
+- `draw3d.py` — Mission 2 in 2.5D: Route 12 drawn in 3D over the 2D rules. (~15851 tok)
 - `meta.py` — Split from mission2.py - see mission2.py (shim) for the map. (~7805 tok)
 - `sniper.py` — Split from mission2.py - see mission2.py (shim) for the map. (~25924 tok)
 - `sniper3d_set.py` — Route 12 toll plaza, built for the low-poly sniper cinematic. (~3732 tok)
@@ -468,24 +471,26 @@
 - `__init__.py` — Package missions/m3 - re-export facade. Parts: meta.py, maps.py, world.py, flow.py, interrog.py, systems.py, draw.py. (~86254 tok)
 - `components.py` — Mission 3 entity components (RPE6 Phase 5, D4). (~752 tok)
 - `draw.py` — Split from mission3.py - see mission3.py (shim) for the map. (~117532 tok)
-- `flow.py` — Split from mission3.py - see mission3.py (shim) for the map. (~22902 tok)
+- `draw3d.py` — Mission 3 in 2.5D: the Vostral cell block drawn in 3D over the 2D rules. (~12973 tok)
+- `flow.py` — Split from mission3.py - see mission3.py (shim) for the map. (~23460 tok)
 - `interrog.py` — Split from mission3.py - see mission3.py (shim) for the map. (~7726 tok)
 - `maps.py` — Split from mission3.py - see mission3.py (shim) for the map. (~8965 tok)
 - `meta.py` — Split from mission3.py - see mission3.py (shim) for the map. (~7918 tok)
 - `sweep.py` — Slice 5b-5d: the Kill Order sweep director, overwatch pin, Volkov (~13662 tok)
 - `systems.py` — Split from mission3.py - see mission3.py (shim) for the map. (~53970 tok)
-- `world.py` — Split from mission3.py - see mission3.py (shim) for the map. (~28380 tok)
+- `wings3d.py` — Mission 3 wings in 2.5D: the comms wing, the archives, the kill order (~10847 tok)
+- `world.py` — Split from mission3.py - see mission3.py (shim) for the map. (~29227 tok)
 
 ## src/missions/m4/
 
 - `__init__.py` — Mission 4: The Aftermath - the world after the broadcast. (~1108 tok)
 - `components.py` — Mission 4 entity components (RPE6 Phase 5, D4). (~171 tok)
 - `draw.py` — Split from mission4.py - see __init__.py for the package facade. (~34421 tok)
-- `flow.py` — Split from mission4.py - see __init__.py for the package facade. (~7542 tok)
+- `flow.py` — Split from mission4.py - see __init__.py for the package facade. (~9239 tok)
 - `maps.py` — Split from mission4.py - see __init__.py for the package facade. (~5400 tok)
 - `meta.py` — Mission 4 - part module. See __init__.py for the package facade. (~2782 tok)
 - `systems.py` — Split from mission4.py - see __init__.py for the package facade. (~4365 tok)
-- `world.py` — Split from mission4.py - see __init__.py for the package facade. (~7252 tok)
+- `world.py` — Split from mission4.py - see __init__.py for the package facade. (~8662 tok)
 
 ## src/missions/m5/
 
@@ -562,10 +567,12 @@
 - `client.py` — Game-side client for the KRAPNET master server. (~4646 tok)
 - `discovery.py` — LAN auto-discovery for the master server. (~511 tok)
 - `match.py` — A multiplayer match session: authoritative host + interpolating clients. (~4524 tok)
+- `playit_agent.py` — Bundled playit.gg agent for hosts without their own playit install. (~2320 tok)
 - `portmap.py` — Automatic router port forwarding (UPnP IGD + NAT-PMP), stdlib only. (~7430 tok)
 - `protocol.py` — Wire protocol for the Acaristan multiplayer master server. (~14266 tok)
 - `roomcode.py` — Short, game-branded room codes for direct arena matches. (~1552 tok)
 - `tcp_tunnel.py` — Public raw-TCP tunnels for arena matches. (~3888 tok)
+- `udp_transport.py` — Small, bounded helpers for the real-time match datagram channel. (~1261 tok)
 
 ## src/ui/
 
@@ -579,16 +586,17 @@
 - `egg666_fx.py` — egg666_fx.py - light halos, the PS2 grade and the crisp present for the 3D "666" scare. (~1776 tok)
 - `egg666_post.py` — egg666_post.py - screen effects for the 3D "666" scare. (~1364 tok)
 - `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~18364 tok)
-- `main.py` — Split from menu.py - see menu.py (shim) for the map. (~9349 tok)
-- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~62841 tok)
+- `kit.py` — KRAPNET terminal style kit shared by the main menu and its sub-screens. (~2093 tok)
+- `main.py` — Split from menu.py - see menu.py (shim) for the map. (~11581 tok)
+- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~64890 tok)
 - `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~4138 tok)
 - `mp.py` — Split from menu.py - see menu.py (shim) for the map. (~25518 tok)
 - `mp3d.py` — 3D kit for multiplayer: soldier rigs, guns and Outfitter portraits. (~3566 tok)
-- `multiplayer_style.py` — Read-only KRAPNET presentation. No sockets, timers or session mutations. (~4663 tok)
+- `multiplayer_style.py` — Read-only KRAPNET presentation. No sockets, timers or session mutations. (~4804 tok)
 - `pixfont.py` — Pixel bitmap fonts for the radio UI (polish pass T6b). (~3560 tok)
 - `radio.py` — Radio transmission widget (polish pass T6, field-radio restyle T6b). (~8171 tok)
 - `shop.py` — The Outfitter - spend Acaribucks on the loadout you play the arena in. (~7819 tok)
-- `system.py` — Split from menu.py - see menu.py (shim) for the map. (~15120 tok)
+- `system.py` — Split from menu.py - see menu.py (shim) for the map. (~15165 tok)
 - `upload_os.py` — Upload OS - a retro CRT terminal operating system for the evidence upload. (~40384 tok)
 - `widgets.py` — Split from menu.py - see menu.py (shim) for the map. (~4153 tok)
 
@@ -666,19 +674,23 @@
 ## tools/
 
 - `ae_hold_check.py` — Weapon hold + arm self-collision gate for the 3D cutscenes. (~1381 tok)
+- `ae_import_car.py` — AE IMPORT CAR - the Mission 2 civilian car (assets/3D/low-poly-car_green.glb). (~1176 tok)
 - `ae_import_dog.py` — AE IMPORT DOG - the Mission 7 guard dog (assets/3D/dawg.glb) and its clips. (~1614 tok)
+- `ae_import_m3_van.py` — AE IMPORT M3 VAN - Volkov's armoured van (assets/3D/M3van.glb). (~1156 tok)
 - `ae_import_pistol.py` — AE IMPORT PISTOL - the multiplayer service pistol (assets/3D/pistol_lowpoly.glb). (~903 tok)
 - `ae_import_tractor.py` — AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb). (~1146 tok)
 - `build_code_txt.py` — find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files (~2979 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
 - `build_windows.py` — Build the Windows game as a PyInstaller --onedir bundle (no admin needed). (~1257 tok)
-- `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~10792 tok)
+- `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~14270 tok)
 - `download_bore.py` — Fetch the pinned official Windows x64 bore release for PyInstaller builds. (~218 tok)
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
+- `m2_td3d_shots.py` — Render Mission 2 top-down frames in 2.5D (and 2D with ACA_TD_2D=1). (~734 tok)
+- `m3_td3d_shots.py` — Render Mission 3 frames in 2.5D (and 2D with ACA_TD_2D=1). (~981 tok)
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
-- `smoke_test.py` — Must be set before pygame/config import. (~155983 tok)
+- `smoke_test.py` — Must be set before pygame/config import. (~157509 tok)
 - `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~6119 tok)

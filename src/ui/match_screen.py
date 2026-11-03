@@ -48,6 +48,7 @@ from core import profile_store
 from core import settings_store
 from net import protocol as P
 from net import roomcode
+from net import playit_agent
 from net import portmap
 from net import tcp_tunnel
 from net import udp_transport as UDP
@@ -147,7 +148,44 @@ HOST_SILENCE_TIMEOUT = 8.0
 # Host network choice on the entry panel.
 NET_UDP = "udp"
 NET_LAN = "lan"
-NET_MODES = ((NET_UDP, "UDP ONLINE"), (NET_LAN, "LAN ONLY"))
+NET_PLAYIT = "playit"
+# A Terraria "Hello" frame: the free playit TCP tunnel type we use forwards a
+# connection only once it sees one. Newline-ended so it parses as junk.
+PLAYIT_PREAMBLE = b"\x0f\x00\x01\x0bTerraria279\n"
+NET_MODES = ((NET_UDP, "UDP ONLINE"), (NET_LAN, "LAN ONLY"),
+             (NET_PLAYIT, "PLAYIT.GG"))
+# One-line trade-off under the host choice: (text, good?).
+NET_NOTES = {
+    NET_UDP: ("FAST IF YOUR INTERNET BOX LETS IT - ELSE SLOW", False),
+    NET_LAN: ("BEST PERFORMANCE - SAME NETWORK ONLY", True),
+    NET_PLAYIT: ("RELAYED - A BIT MORE PING, FREE ACCOUNT", False),
+}
+# The HOW TO overlay: numbered steps per host choice (\n wraps), then joining.
+NET_GUIDES = {
+    NET_UDP: ("UDP ONLINE", (
+        "Press HOST MATCH. The game tries to open a door in your internet\n"
+        "box (the router) by itself. Nothing for you to set up.",
+        "Green status: it worked. Friends connect straight to you.",
+        "Yellow status: your internet box said no, so the game goes through a\n"
+        "slow free relay. Fix: pick PLAYIT.GG instead - no router settings.",
+        "Send the code to your friends.")),
+    NET_LAN: ("LAN ONLY", (
+        "Everyone joins the same router or Wi-Fi (or one Hamachi, Radmin\n"
+        "or ZeroTier network).",
+        "Press HOST MATCH and send the code.",
+        "Friends cannot connect? Allow the game in Windows Firewall.")),
+    NET_PLAYIT: ("PLAYIT.GG", (
+        "Leave the address empty and press HOST MATCH.",
+        "Your browser opens playit.gg: sign in or make a free account,\n"
+        "then approve the game.",
+        "The game makes a TCP and a UDP tunnel and hosts. Next time the\n"
+        "saved address hosts at once.",
+        "Asked to add tunnels? Add a Terraria tunnel and a UDP tunnel to\n"
+        "127.0.0.1:27017, then paste both as TCP+UDP in the field.")),
+}
+JOIN_GUIDE = (
+    "Paste the whole code, including @TOKEN, and press JOIN MATCH.",
+    "Joining needs nothing installed, whatever the host picked.")
 # During a temporary TCP failure the client keeps trying the same invite for
 # a short window. Rejoining is a fresh seat today, so round stats may reset.
 RECONNECT_WINDOW_SECONDS = 20.0
@@ -252,7 +290,7 @@ C_BAD = (255, 96, 96)
 # flat, test-readable form of the same data, so the two can never disagree.
 HOST_STEPS = (
     ("1", "PRESS HOST MATCH", "the code appears once the address settles"),
-    ("2", "SEND THE CODE", "LAN, forwarded port, or public tunnel"),
+    ("2", "SEND THE CODE", "copy it to your friends (Discord, chat...)"),
     ("3", "THEY PASTE IT", "MULTIPLAYER > ARENA MATCH > JOIN MATCH"),
 )
 HOST_HELP = tuple("%s  %-18s %s" % step for step in HOST_STEPS)
@@ -588,6 +626,10 @@ class MatchScreen(object):
     # a per-instance cache would still thrash on every screen transition.
     _fonts = {}
     NET_MODES = NET_MODES
+    NET_PLAYIT = NET_PLAYIT
+    NET_NOTES = NET_NOTES
+    NET_GUIDES = NET_GUIDES
+    JOIN_GUIDE = JOIN_GUIDE
 
     def __init__(self):
         # "closed", NOT "panel". The multiplayer screen is the SERVER BROWSER;
@@ -606,8 +648,11 @@ class MatchScreen(object):
         # How a new room is reached: NET_UDP looks for an internet route
         # (Hamachi, router mapping, then a TCP tunnel as last resort);
         # NET_LAN shares the local address only and probes nothing.
+        # NET_PLAYIT shares the host's own playit.gg TCP+UDP tunnel address.
         self.net_mode = NET_UDP
         self.address = ""
+        self.playit_address = settings_store.playit_address()
+        self._playit_setup = False
         # The name this player competes under. Typed on the entry panel and
         # remembered between sessions, because being asked to retype your
         # handle every time you want to play with strangers is how a name
@@ -770,6 +815,7 @@ class MatchScreen(object):
         self._tunnel_active = False
         self._hamachi_active = False
         self._lan_only = False
+        self._playit_active = False
         self._network_check_pending = False
         self._tunnel_proc = None
         # Guards _tunnel_proc/_host_token hand-off between the forwarding
@@ -1079,8 +1125,35 @@ class MatchScreen(object):
         # "ephemeral". `port or DEFAULT_PORT` conflated the two, so a caller
         # asking for an ephemeral port silently got the default and could
         # collide with whatever already held it.
+        if self.net_mode == NET_PLAYIT and not self.playit_address.strip():
+            # No address yet: claim the bundled agent and find its tunnels.
+            if not self._playit_setup:
+                self._playit_setup = True
+                self.status = "setting up playit.gg..."
+                threading.Thread(target=self._playit_setup_worker,
+                                 args=(DEFAULT_PORT if port is None else port,),
+                                 daemon=True).start()
+            return
+        if self.net_mode == NET_PLAYIT and playit_agent.load_secret():
+            threading.Thread(target=playit_agent.start_agent,
+                             args=(playit_agent.load_secret(),), daemon=True).start()
         self._pending = [("host", DEFAULT_PORT if port is None else port)]
         self.status = "starting..."
+
+    def _playit_setup_worker(self, port):
+        def status(text):
+            self.status = text
+        try:
+            address = playit_agent.setup(
+                port, status, lambda: self.net_mode != NET_PLAYIT or self.mode != "panel")
+        except Exception as exc:
+            address = ""
+            self.status = "playit setup failed: %s" % (exc,)
+        self._playit_setup = False
+        if address and self.net_mode == NET_PLAYIT and self.mode == "panel":
+            self.playit_address = address
+            settings_store.set_playit_address(address)
+            self._pending.append(("host", port))
 
     def request_join(self, text=None):
         if text is not None:
@@ -1097,6 +1170,9 @@ class MatchScreen(object):
         if new_room_token != previous_room_token:
             self._resume_token = ""
         self._join_token = new_room_token
+        # "TCP+UDP": a host whose datagrams arrive on a separate tunnel.
+        addr_text, _, udp_text = addr_text.partition("+")
+        self._udp_override = parse_addr(udp_text) if udp_text.strip() else None
         self._reconnect_active = False
         self._reconnect_connecting = False
         self._reconnect_target = None
@@ -1215,7 +1291,21 @@ class MatchScreen(object):
         self.room_code = roomcode.encode(self.share_host, bound,
                                          prefix=self.code_prefix)
         self._lan_only = self.net_mode == NET_LAN
-        self._network_check_pending = port != 0 and not self._lan_only
+        # playit.gg: the player runs the agent with tunnels to this port, so
+        # the public address is final. Free accounts get TCP and UDP as two
+        # tunnels ("TCP+UDP" in the field); the code carries both so joiners
+        # send datagrams to the UDP tunnel.
+        self._playit_active = self.net_mode == NET_PLAYIT
+        if self._playit_active:
+            tcp_text, _, udp_text = self.playit_address.partition("+")
+            self.share_host, self.share_port = parse_addr(tcp_text)
+            self.room_code = "%s:%d" % (self.share_host, self.share_port)
+            if udp_text.strip():
+                self.room_code += "+%s:%d" % parse_addr(udp_text)
+            self.forwarded = True
+            settings_store.set_playit_address(self.playit_address)
+        self._network_check_pending = port != 0 and not (
+            self._lan_only or self._playit_active)
         if self._network_check_pending:
             threading.Thread(target=self._begin_forwarding,
                              args=(bound, self._host_token), daemon=True).start()
@@ -1374,7 +1464,14 @@ class MatchScreen(object):
             udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             udp_sock.setblocking(False)
             self.udp_sock = udp_sock
-            self._udp_peer_addr = (remote[0], int(self._peer_addr[1]))
+            override = getattr(self, "_udp_override", None)
+            if override:
+                # Resolved once, so host replies match the address check.
+                self._udp_peer_addr = socket.getaddrinfo(
+                    override[0], override[1], socket.AF_INET,
+                    socket.SOCK_DGRAM)[0][4][:2]
+            else:
+                self._udp_peer_addr = (remote[0], int(self._peer_addr[1]))
         except (OSError, TypeError, IndexError, ValueError):
             if self.udp_sock is not None:
                 try:
@@ -1492,6 +1589,13 @@ class MatchScreen(object):
                     exc.strerror if getattr(exc, "strerror", None) else exc)
             return False
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        if getattr(self, "_udp_override", None) or str(host).endswith(".ply.gg"):
+            # Free playit TCP tunnels only open for a game's own hello; the
+            # host skips this as one malformed line.
+            try:
+                sock.sendall(PLAYIT_PREAMBLE)
+            except OSError:
+                pass
         sock.setblocking(False)
         self.sock = sock
         self.wire = Wire(sock)
@@ -3177,8 +3281,18 @@ class MatchScreen(object):
             # swallow clicks/keys other than Esc and COPY CODE so the pointer
             # stays available and no accidental shot leaks through.
             return self.waiting_for_player()
+        if getattr(self, "_howto", False):
+            # The guide is modal: any click or ESC closes it.
+            if event.type == pygame.MOUSEBUTTONDOWN or (
+                    event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                self._howto = False
+            return True
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             m = mouse_pos
+            howto_r = getattr(self, "_howto_rect", None)
+            if howto_r is not None and howto_r.collidepoint(m):
+                self._howto = True
+                return True
             # Field focus is resolved BEFORE the row chips, because the name
             # and address boxes are inside the panel and a click on either
             # must move the caret rather than fall through to a mode/map row
@@ -3190,6 +3304,10 @@ class MatchScreen(object):
             addr_r = getattr(self, "_addr_rect", None)
             if addr_r is not None and addr_r.collidepoint(m):
                 self.selected_field = "address"
+                return True
+            playit_r = getattr(self, "_playit_rect", None)
+            if playit_r is not None and playit_r.collidepoint(m):
+                self.selected_field = "playit"
                 return True
             for i, r in getattr(self, "_mode_rects", {}).items():
                 if r.collidepoint(m):
@@ -3209,6 +3327,10 @@ class MatchScreen(object):
             for net, r in getattr(self, "_net_rects", {}).items():
                 if r.collidepoint(m):
                     self.net_mode = net
+                    if net == NET_PLAYIT and not self.playit_address:
+                        self.selected_field = "playit"
+                    elif self.selected_field == "playit":
+                        self.selected_field = "address"
                     return True
             for tag, r in getattr(self, "_btn_rects", {}).items():
                 if r.collidepoint(m):
@@ -3227,11 +3349,17 @@ class MatchScreen(object):
                 # Two fields, so Tab is a two-way toggle rather than a dead
                 # key. Both ways round, because a player who clicked into the
                 # wrong box must be able to reach the other one.
-                self.selected_field = ("address" if self.selected_field == "name"
-                                       else "name")
+                fields = ["name", "address"]
+                if self.net_mode == NET_PLAYIT:
+                    fields.insert(1, "playit")
+                at = (fields.index(self.selected_field)
+                      if self.selected_field in fields else -1)
+                self.selected_field = fields[(at + 1) % len(fields)]
                 return True
             if self.selected_field == "name":
                 return self._name_field_key(event)
+            if self.selected_field == "playit":
+                return self._playit_field_key(event)
             if event.key == pygame.K_BACKSPACE:
                 self.address = self.address[:-1]
                 return True
@@ -3284,6 +3412,25 @@ class MatchScreen(object):
             self.player_name += event.unicode
             self._commit_name(save=False)
             return True
+        return True
+
+    def _playit_field_key(self, event):
+        """Typing into the playit.gg address field; ENTER hosts."""
+        if event.key == pygame.K_RETURN:
+            self.request_host()
+            return True
+        if event.key == pygame.K_BACKSPACE:
+            self.playit_address = self.playit_address[:-1]
+            return True
+        if event.key == pygame.K_v and (
+                event.mod & (pygame.KMOD_CTRL | pygame.KMOD_META)):
+            paste = clipboard_text(128 - len(self.playit_address))
+            if paste:
+                self.playit_address += paste
+            return True
+        if event.unicode and event.unicode.isprintable() \
+                and len(self.playit_address) < 128:
+            self.playit_address += event.unicode
         return True
 
     def _commit_name(self, save=True):
@@ -3803,25 +3950,28 @@ class MatchScreen(object):
         if self._hamachi_active:
             return ("Hamachi ready - same network; allow game in Windows Firewall.",
                     (120, 220, 150))
+        if self._playit_active:
+            return ("playit.gg TCP+UDP tunnel - keep the playit agent running.",
+                    (120, 220, 150))
         if self._tunnel_active:
             try:
                 port = self.srv.getsockname()[1]
             except (AttributeError, OSError):
                 port = DEFAULT_PORT
-            return ("TCP tunnel - slower; forward port %d TCP+UDP for UDP."
+            return ("Slow relay (port %d blocked) - pick PLAYIT.GG for speed."
                     % port, (240, 200, 80))
         if self.forwarded and getattr(self, "_udp_public_ok", None) is False:
-            return ("TCP reachable; fast UDP path unavailable (TCP fallback).",
+            return ("Friends can join, but slower - PLAYIT.GG may be faster.",
                     (240, 200, 80))
         if self.forwarded:
-            return ("TCP + UDP ports opened - share the public room code.",
+            return ("Internet ready - send the code to your friends.",
                     (120, 220, 150))
         if self._tunnel_pending:
-            return ("Router blocked; trying automatic internet tunnel...",
+            return ("Internet box said no; trying a free relay instead...",
                     (240, 200, 80))
         if self.forward_note:
             if "8013" in self.forward_note:
-                return ("LAN only - ngrok wants a card; use Hamachi/Tailscale or forward the port.",
+                return ("Same network only - relay failed; try PLAYIT.GG or Hamachi/Tailscale.",
                         (240, 200, 80))
             if "9009" in self.forward_note:
                 return ("LAN only - ngrok proxy_url needs a paid plan.",
@@ -3830,14 +3980,14 @@ class MatchScreen(object):
                 return ("Internet tunnel lost - LAN only; leave and host again.",
                         (240, 200, 80))
             if "bore was not found" in self.forward_note:
-                return ("LAN only - bore download failed; use Hamachi/Tailscale or forward.",
+                return ("Same network only - relay failed; try PLAYIT.GG or Hamachi/Tailscale.",
                         (240, 200, 80))
             if "cloudflared is not installed" in self.forward_note:
-                return ("LAN only - tunnel missing; use Hamachi/Tailscale or forward the port.",
+                return ("Same network only - relay failed; try PLAYIT.GG or Hamachi/Tailscale.",
                         (240, 200, 80))
-            return ("LAN only - tunnel failed; use Hamachi/Tailscale or forward the port.",
+            return ("Same network only - relay failed; try PLAYIT.GG or Hamachi/Tailscale.",
                     (240, 200, 80))
-        return ("Checking router and public connection options...", C_DIM)
+        return ("Checking how friends can reach you over the internet...", C_DIM)
 
     def _draw_waiting(self, surface):
         """Shared frozen lobby. Host authorization remains in handle_event."""
@@ -4278,6 +4428,24 @@ class MatchScreen(object):
                    mono=True, middle=True)
         self._addr_rect = box
 
+    def _draw_playit_box(self, surface, box):
+        """The host's playit.gg tunnel address field."""
+        focused = self.selected_field == "playit"
+        pygame.draw.rect(surface, C_ROW_BG, box)
+        pygame.draw.rect(surface, C_CYAN if focused else C_PANEL_EDGE, box,
+                         2 if focused else 1)
+        font = self._font(12, False, True)
+        if self.playit_address:
+            shown, col = self.playit_address, C_TEXT
+        else:
+            shown, col = "EMPTY - HOST MATCH SETS UP PLAYIT", C_DIM
+        blink = (_now_ms() // 500) % 2 == 0
+        caret = "_" if (focused and blink) else ""
+        text = self._clip(shown + caret, font, box.w - 24)
+        self._blit(surface, box.x + 10, text, box.centery, 12, col,
+                   mono=True, middle=True)
+        self._playit_rect = box
+
     def _draw_host_steps(self, surface, x, y):
         """The three hosting steps: accent number, bold action, dim note.
 
@@ -4691,6 +4859,7 @@ class MatchScreen(object):
         self._tunnel_active = False
         self._hamachi_active = False
         self._lan_only = False
+        self._playit_active = False
         self._network_check_pending = False
 
     def maps(self):

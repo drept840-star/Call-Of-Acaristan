@@ -555,7 +555,7 @@ def draw_live(r, key, tm, flashes):
             vx, _, vz = to3((31.0 + 0.125 + 1.875) * T, (35.0 + 0.03 + 0.64) * T)
             D._put(r, D._mesh(("van",), _van), (vx, 0.0, vz))
             b = 0.55 + 0.45 * math.sin(t * 5.0)
-            head = (vx + 0.55, 2.05, vz + 0.2)
+            head = (vx, 3.7, vz)
             r.add_sprite(head, D._glow((255, int(130 + 70 * b), 60), 0.3, tm, 0.5 + 0.4 * b, 14), layer=_fx.FX_LAYER)
             flashes.append({"pos": head, "color": (255, 170, 70), "intensity": 0.4 + 0.3 * b, "range": 3.5})
         else:
@@ -611,7 +611,27 @@ def _vostral():
     return m
 
 
+M3_VAN_M = 5.66                  # m3_van.glb length as tools/ae_import_m3_van.py measures it
+
+
 def _van():
+    """Volkov's Badger (m3_van.glb) fitted to the old footprint length; the
+    block van stands in when the asset is missing."""
+    from engine3d import Mesh
+    try:
+        from game.render3d_bridge import load_mesh_asset
+        verts, faces = load_mesh_asset("m3_van")
+    except (OSError, ValueError, KeyError):
+        return _van_block()
+    s = 3.75 * T * K / M3_VAN_M
+    m = Mesh()
+    m.verts = [(x * s, y * s, z * s) for x, y, z in verts]
+    for idx, col, grp in faces:
+        m.faces.append((tuple(idx), tuple(col), 3 if grp == 9 else 2, False, grp in (1, 2)))
+    return m
+
+
+def _van_block():
     from engine3d import Mesh, box, tex
     m = Mesh()
     L, W = 3.75 * T * K, 1.28 * T * K

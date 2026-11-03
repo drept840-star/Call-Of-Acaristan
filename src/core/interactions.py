@@ -199,6 +199,9 @@ def _on_safe_opened(success):
 # flavour (Volkov mag throws, PA chatter).
 RADIO_MIN_GAP_MS = 2500
 RADIO_QUEUE_MAX = 4
+# A queued line older than this (radio clock, frozen during blocks) is stale.
+RADIO_FLAVOUR_MAX_WAIT_MS = 1500
+RADIO_STORY_MAX_WAIT_MS = 6000
 # Breath between a cutscene / dialogue ending and the first held line, so a
 # transmission never lands on the same frame control comes back.
 RADIO_RESUME_BREATH_MS = (600, 900)
@@ -376,7 +379,7 @@ def radio_clock():
     return _radio_clock
 
 
-def _radio_release(text, color, duration, priority=0):
+def _radio_release(text, color, duration, priority=0, valid=None):
     """Put one transmission on air. Returns the voice clip length in ms
     (0 if the line has no recording yet)."""
     global _radio_live
@@ -413,7 +416,7 @@ def _radio_release(text, color, duration, priority=0):
     _radio_live = {
         "text": text, "speaker": speaker, "body": body, "color": color,
         "start": _radio_clock, "end": _radio_clock + show_ms,
-        "vo_ms": vo_ms, "priority": priority,
+        "vo_ms": vo_ms, "priority": priority, "valid": valid,
     }
     # No floating-text "pin" any more (T6): ui.radio.RadioTransmission reads
     # live_line() and runs on the radio clock, so the on-screen time is
@@ -422,7 +425,8 @@ def _radio_release(text, color, duration, priority=0):
     return vo_ms
 
 
-def trigger_radio_chatter(text, color=(100, 160, 220), duration=360, priority=0):
+def trigger_radio_chatter(text, color=(100, 160, 220), duration=360, priority=0,
+                          valid=None):
     """Enqueue a transmission. Back-compatible: priority is optional.
 
     While the radio is blocked (cutscene, dialogue, menus...) priority 0
@@ -442,7 +446,15 @@ def trigger_radio_chatter(text, color=(100, 160, 220), duration=360, priority=0)
         else:                          # queue is all critical: drop oldest
             del _radio_queue[0]
     _radio_seq += 1
-    _radio_queue.append((priority, _radio_seq, text, color, duration))
+    speaker, _body = _split_radio(text)
+    if priority <= 0 and speaker:
+        # A new flavour line supersedes the speaker's stale queue and cuts his
+        # live line, so he never talks over himself.
+        _radio_queue[:] = [e for e in _radio_queue
+                           if _split_radio(e[2])[0] != speaker]
+        if _radio_live and _radio_live.get("speaker") == speaker:
+            _cut_live_line(squelch=False)
+    _radio_queue.append((priority, _radio_seq, text, color, duration, _radio_clock, valid))
     pump_radio()
 
 
@@ -492,11 +504,20 @@ def pump_radio(state=None, transitioning=False):
     _radio_clock += dt
     if _radio_live is not None and _radio_clock >= _radio_live["end"]:
         _radio_live = None
+    # A line whose premise is gone (e.g. "Maru is inside" while he is in the
+    # room) cuts itself off on air, and is dropped from the queue.
+    if _radio_live is not None and _radio_live.get("valid") \
+            and not _radio_live["valid"]():
+        _cut_live_line(squelch=False)
+    _radio_queue[:] = [e for e in _radio_queue
+                       if _radio_clock - e[5] <= (RADIO_STORY_MAX_WAIT_MS if e[0] > 0
+                                                  else RADIO_FLAVOUR_MAX_WAIT_MS)
+                       and (e[6] is None or e[6]())]
     if _radio_clock < _radio_live_until or not _radio_queue:
         return
     _radio_queue.sort(key=lambda e: (-e[0], e[1]))
-    pri, _seq, text, color, duration = _radio_queue.pop(0)
-    vo_ms = _radio_release(text, color, duration, pri) or 0
+    pri, _seq, text, color, duration, _queued_at, valid = _radio_queue.pop(0)
+    vo_ms = _radio_release(text, color, duration, pri, valid) or 0
     # Hold the channel for the entire subtitle, not just the VO/minimum gap.
     # Unvoiced lines used to be replaced while the widget was still typing.
     readable_until = _radio_live["end"] if _radio_live else _radio_clock

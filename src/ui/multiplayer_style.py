@@ -135,24 +135,39 @@ def draw_entry(ui, surface, panel):
 
     section(ui, surface, rx, y, 'OPERATOR / CALLSIGN', rw)
     ui._draw_name_box(surface, pygame.Rect(rx, y + 24, rw, 42))
-    host_card = pygame.Rect(rx, y + 90, rw, 132)
+    playit = ui.net_mode == ui.NET_PLAYIT
+    host_card = pygame.Rect(rx, y + 90, rw, 172 if playit else 146)
     card(surface, host_card)
     text(ui, surface, rx + 14, y + 104, 'CREATE A ROOM', 18, TEXT, True)
+    ui._howto_rect = pygame.Rect(host_card.right - 86, y + 100, 72, 22)
+    pygame.draw.rect(surface, EDGE, ui._howto_rect, 1)
+    text(ui, surface, ui._howto_rect.x + 9, ui._howto_rect.y + 5, '? HOW TO', 10, ACCENT, True)
     ui._net_rects = {}
-    nw = (rw - 28 - 8) // 2
+    count = len(ui.NET_MODES)
+    nw = (rw - 28 - 8 * (count - 1)) // count
     for i, (net, label) in enumerate(ui.NET_MODES):
         r = pygame.Rect(rx + 14 + i * (nw + 8), y + 128, nw, 30)
         ui._row(surface, r, label, ui.net_mode == net)
         ui._net_rects[net] = r
-    hr = pygame.Rect(rx + 14, y + 164, rw - 28, 44)
+    note, good = ui.NET_NOTES[ui.net_mode]
+    fitted(ui, surface, pygame.Rect(rx + 14, y + 164, rw - 28, 14), note, 10,
+           GREEN if good else ACCENT, True)
+    ui._playit_rect = None
+    if playit:
+        # The host's own playit.gg tunnel (TCP+UDP to this game's port).
+        ui._draw_playit_box(surface, pygame.Rect(rx + 14, y + 184, rw - 28, 30))
+        hr = pygame.Rect(rx + 14, y + 220, rw - 28, 34)
+    else:
+        hr = pygame.Rect(rx + 14, y + 184, rw - 28, 44)
     ui._action(surface, hr, 'HOST MATCH', True)
     ui._btn_rects[1] = hr
-    join_card = pygame.Rect(rx, y + 246, rw, 194)
+    jy = host_card.bottom + 8
+    join_card = pygame.Rect(rx, jy, rw, 168)
     card(surface, join_card)
-    text(ui, surface, rx + 14, y + 260, 'JOIN AN OPERATION', 18, TEXT, True)
-    text(ui, surface, rx + 14, y + 290, 'Paste the entire code, including @TOKEN.', 12)
-    ui._draw_addr_box(surface, pygame.Rect(rx + 14, y + 316, rw - 28, 42))
-    jr = pygame.Rect(rx + 14, y + 382, rw - 28, 44)
+    text(ui, surface, rx + 14, jy + 14, 'JOIN AN OPERATION', 18, TEXT, True)
+    text(ui, surface, rx + 14, jy + 40, 'Paste the entire code, including @TOKEN.', 12)
+    ui._draw_addr_box(surface, pygame.Rect(rx + 14, jy + 62, rw - 28, 42))
+    jr = pygame.Rect(rx + 14, jy + 114, rw - 28, 40)
     ui._action(surface, jr, 'JOIN MATCH', False)
     ui._btn_rects[2] = jr
     text(ui, surface, rx, y + 452, 'HOST SETTINGS APPLY TO NEW ROOMS ONLY', 10)
@@ -168,6 +183,40 @@ def draw_entry(ui, surface, panel):
     else:
         label, color = 'TAB / SWITCH FIELD    ENTER / JOIN    ESC / BACK', DIM
     fitted(ui, surface, pygame.Rect(br.right + 24, fy + 20, panel.right - br.right - 48, 18), label, 12, color)
+    if getattr(ui, '_howto', False):
+        draw_howto(ui, surface, panel)
+
+
+def draw_howto(ui, surface, panel):
+    """Modal guide for the selected host choice, plus joining."""
+    shade = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    shade.fill((2, 5, 7, 215))
+    surface.blit(shade, (0, 0))
+    title, steps = ui.NET_GUIDES[ui.net_mode]
+    note, good = ui.NET_NOTES[ui.net_mode]
+    rows = sum(step.count('\n') + 1 for step in steps) + len(ui.JOIN_GUIDE)
+    box = pygame.Rect(0, 0, 660, 160 + 20 * rows + 6 * len(steps))
+    box.center = panel.center
+    pygame.draw.rect(surface, PLATE, box)
+    pygame.draw.rect(surface, ACCENT, (box.x, box.y, box.w, 3))
+    pygame.draw.rect(surface, EDGE, box, 1)
+    x, y = box.x + 24, box.y + 18
+    text(ui, surface, x, y, 'HOW TO HOST / ' + title, 18, TEXT, True)
+    text(ui, surface, x, y + 28, note, 11, GREEN if good else ACCENT, True)
+    y += 56
+    for i, step in enumerate(steps):
+        text(ui, surface, x, y, str(i + 1), 12, ACCENT, True)
+        for line in step.split('\n'):
+            fitted(ui, surface, pygame.Rect(x + 22, y, box.w - 70, 16), line, 12, TEXT)
+            y += 20
+        y += 6
+    y += 10
+    section(ui, surface, x, y, 'JOINING', box.w - 48)
+    y += 22
+    for line in ui.JOIN_GUIDE:
+        fitted(ui, surface, pygame.Rect(x, y, box.w - 48, 16), line, 12, TEXT)
+        y += 20
+    text(ui, surface, x, box.bottom - 26, 'CLICK OR ESC TO CLOSE', 10)
 
 
 def draw_lobby(ui, surface, panel):

@@ -15,7 +15,8 @@ import math
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
 
-from core.config import WIDTH, HEIGHT, C_TERMINAL, audio, get_scaled_mouse
+from core.config import (WIDTH, HEIGHT, C_TERMINAL, audio, get_scaled_mouse,
+                         letterbox_rect)
 from core.state import STATE
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.text import T as _T  # RPE6 Phase 4 text table
@@ -982,6 +983,32 @@ def _draw_custom_cursor(surface):
                                  (mx + gx * p, my + gy * p, p, p))
 
 
+def _canvas_pos(pos):
+    """Map a window-space point (``event.pos``) into the 1000x700 canvas.
+
+    The game draws on a fixed 1000x700 canvas that ``present()`` letterboxes
+    into the (usually larger) window, so mouse events arrive in window pixels.
+    Every hit-test in this module is authored in canvas space, so comparing a
+    raw ``event.pos`` against them left the whole desktop unclickable at any
+    window size but exactly 1000x700. ``letterbox_rect`` is the same mapping
+    ``present()`` and ``get_scaled_mouse()`` use, so pointer and picture can
+    never disagree.
+    """
+    try:
+        display = pygame.display.get_surface()
+        dw, dh = display.get_size() if display is not None else (WIDTH, HEIGHT)
+    except Exception:
+        dw, dh = WIDTH, HEIGHT
+    if (dw, dh) == (WIDTH, HEIGHT):
+        return pos
+    ox, oy, sw, sh = letterbox_rect(dw, dh)
+    scale = sw / float(WIDTH) if WIDTH else 0.0
+    if scale <= 0.0:
+        return pos
+    return (max(0, min(WIDTH - 1, int((pos[0] - ox) / scale))),
+            max(0, min(HEIGHT - 1, int((pos[1] - oy) / scale))))
+
+
 def handle_upload_os_event(event):
     """Handle a pygame event (keyboard/mouse) for the upload OS.
 
@@ -1002,7 +1029,8 @@ def handle_upload_os_event(event):
 
     # ── BOOT: SPACE to skip ──
     if _os_phase == PHASE_BOOT:
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+        if ((event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE)
+                or (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1)):
             _os_phase = PHASE_LOGIN
             _os_timer = 0
             return True
@@ -1013,6 +1041,9 @@ def handle_upload_os_event(event):
         # If locked out, reject all input except ESC (which does nothing but consume).
         if _login_lockout_timer > 0:
             return True
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN,
+                                       unicode="\r", mod=0)
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
                 if _login_password.lower() in ("admin", "admin/admin", "", "vostral"):
@@ -1072,7 +1103,7 @@ def handle_upload_os_event(event):
     if _os_phase == PHASE_DESKTOP and _run_dialog_open:
         # Mouse clicks on OK / Cancel buttons.
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             # Button positions (must match _draw_run_dialog).
             dw, dh = 420, 140
             dx = WIDTH // 2 - dw // 2
@@ -1127,7 +1158,7 @@ def handle_upload_os_event(event):
     # ── Start menu (overlays on desktop) ──
     if _os_phase == PHASE_DESKTOP and _start_menu_open:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             # Start menu position (must match _draw_start_menu).
             sm_x = 4
             sm_y = HEIGHT - 36 - 280
@@ -1223,7 +1254,7 @@ def handle_upload_os_event(event):
             return True
         # Mouse motion updates the hovered submenu (for cascade feel).
         if event.type == pygame.MOUSEMOTION:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             sm_x = 4
             sm_y = HEIGHT - 36 - 280
             # If hovering Programs/Documents, auto-open that submenu.
@@ -1240,7 +1271,7 @@ def handle_upload_os_event(event):
     # ── DESKTOP: click icons + Start button ──
     if _os_phase == PHASE_DESKTOP:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             # Start button (bottom-left, in the taskbar).
             start_btn_rect = pygame.Rect(4, HEIGHT - 36 + 4, 80, 28)
             if start_btn_rect.collidepoint(mx, my):
@@ -1284,7 +1315,7 @@ def handle_upload_os_event(event):
         win_w, win_h = 560, 460  # bigger window for the richer content
         win_rect = pygame.Rect(win_x, win_y, win_w, win_h)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             # Click outside the window closes it.
             if not win_rect.collidepoint(mx, my):
                 _os_phase = PHASE_DESKTOP
@@ -1387,7 +1418,7 @@ def handle_upload_os_event(event):
             return True  # consume all events while editing
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             win_x = WIDTH // 2 - 360
             win_y = 60
             body_x = win_x + 2
@@ -1464,7 +1495,7 @@ def handle_upload_os_event(event):
     # ── FILE PICKER: select files, then UPLOAD ──
     if _os_phase == PHASE_FILE_PICKER:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
+            mx, my = _canvas_pos(event.pos)
             # File picker window position (must match _draw_file_picker).
             win_x = WIDTH // 2 - 340
             win_y = 60

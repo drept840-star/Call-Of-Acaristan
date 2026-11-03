@@ -28,7 +28,7 @@ from missions.m4 import maps as _m4_maps  # live view of MISSION4_MAP/_objective
 from missions.m4.meta import (
     MAP_W, MAP_H,
     MISSION4_ID, MISSION4_KEY, MISSION4_TITLE,
-    M4_HOLD_SECONDS,
+    M4_HOLD_SECONDS, M4_MIC_RADIUS, M4_OFFAIR_DECAY_EVERY,
     STAGE_INTRO, STAGE_AFTERMATH, STAGE_KRAP_STATUS, STAGE_MARU,
     STAGE_COMMIT, STAGE_DONE,
     TRANSMITTER_TILE,
@@ -36,7 +36,8 @@ from missions.m4.meta import (
     BIRIBEL_SPEAKER,
 )
 from missions.m4.world import (
-    _build_m4_world, _build_station_world, _movement_locked, _near, _radio,
+    _build_m4_world, _build_station_world, _movement_locked, _near, _player_pos,
+    _radio,
     _set_objective, _street_door_pos, _tile_world, _vasile_cache_pos,
     _liaison_pos, _jammer_pos, _run_siege_director, _siege_reset,
     _arm_m4_allies,
@@ -71,18 +72,27 @@ _M4_GUN_GAP = (300, 620)      # frames between distant bursts
 _M4_STATIC_GAP = (520, 940)   # frames between radio-band squelches
 _M4_PA_GAP = (1080, 1680)     # frames between PA mumbles (the regime performing calm)
 
-# (chaos-timer frame, radio mark, line, speaker color) one-shots.
-_M4_STORY_BEATS = [
-    (240, "beat_loyalists",
-     "VASILE: This isn't a crackdown - it's a collapse. Stay off the boulevard.",
-     C_VASILE),
-    (600, "beat_volkov",
-     "INTERCEPT: North border logged one vehicle at first light. Volkov ran.",
-     C_VOLKOV),
-    (960, "beat_retardovici",
-     "PA: Citizens. Curfew holds. The Presidency has this under control.",
-     C_RETARDOVICI),
-]
+# Street story beats: the opening read fires once after the grace window,
+# then the rest key off WHERE Biribel is. The old frame table fired all three
+# lines at 4/10/16 seconds, while the player was still in the north blocks,
+# and left the rest of the crossing silent. maps.zone_at() already owns the
+# named districts (M4_ZONE_WORLD_RECTS) - this is its caller.
+# The opening read is not geography - it must play even if the player sprints
+# out of Old Town before the beat is due.
+_M4_OPEN_BEAT = ("beat_loyalists",
+                 "VASILE: This isn't a crackdown - it's a collapse. Stay off the boulevard.",
+                 C_VASILE)
+_M4_ZONE_BEATS = {
+    "boulevard": ("beat_volkov",
+                  "INTERCEPT: North border logged one vehicle at first light. Volkov ran.",
+                  C_VOLKOV),
+    "station_cordon": ("beat_retardovici",
+                       "PA: Citizens. Curfew holds. The Presidency has this under control.",
+                       C_RETARDOVICI),
+}
+_M4_ZONE_GRACE_FRAMES = 400   # let the opening Vasile line breathe
+_M4_OPEN_SEEN = [False]       # list: mutated in place (single owner)
+_M4_ZONE_SEEN = set()         # single owner: this module (cleared by start_m4)
 
 
 def _sfx(name, volume):
@@ -99,17 +109,20 @@ def _aftermath_ambient():
     STATE.m4_chaos_timer = getattr(STATE, "m4_chaos_timer", 0) + 1
     t = STATE.m4_chaos_timer
 
-    # Timed one-shot story beats (dedup via _radio marks, objective untouched
-    # so the stage ladder stays deterministic for the smoke chain).  RPE6 P8:
-    # the ladder is timeline data (m4.story_beats event track, frames).
-    if _timelines.use_legacy():
-        for frame, mark, line, color in _M4_STORY_BEATS:
-            if t == frame:
-                _radio(line, color=color, duration=440, mark=mark)
-    else:
-        for clip in _ladder_player("story").events_between(t - 1, t):
-            _radio(clip["text"], color=tuple(clip["color"]),
-                   duration=clip["duration"], mark=clip["name"])
+    # Zone-triggered story beats: crossing into a named district is the
+    # trigger, so the walk keeps talking to the player the whole way across
+    # the map instead of dumping all three lines in the first 16 seconds
+    # (objective untouched, so the stage ladder stays deterministic).
+    if t >= _M4_ZONE_GRACE_FRAMES:
+        if not _M4_OPEN_SEEN[0]:
+            _M4_OPEN_SEEN[0] = True
+            mark, line, color = _M4_OPEN_BEAT
+            _radio(line, color=color, duration=440, mark=mark)
+        zone = _m4_maps.zone_at(_player_pos())
+        if zone in _M4_ZONE_BEATS and zone not in _M4_ZONE_SEEN:
+            _M4_ZONE_SEEN.add(zone)
+            mark, line, color = _M4_ZONE_BEATS[zone]
+            _radio(line, color=color, duration=440, mark=mark)
 
     # Repeating distant-audio events.
     _M4_AMB["gun"] -= 1
@@ -292,6 +305,11 @@ def _resolve_choice(chosen):
     _advance_beat()
 
 
+def _maru_not_in_room():
+    """Vasile's 'Maru is inside' lines stop being true once you stand with him."""
+    return not _near(_liaison_pos(), radius=200)
+
+
 def _finish_liaison_dialogue():
     _m4_dlg["active"] = False
     STATE.m4_dialogue_active = False
@@ -349,20 +367,22 @@ def handle_dialogue_event(event):
 # transmitter stays live: Retardovici's order goes out on the general's own
 # airwaves (PA mumble + his color), the loyalist comms curdle into confusion
 # once the jammer is soup (radio_static + C_BALACEANU), then a stand-down and
-# a retreat (footstep). Driven off STATE.m4_hold_timer so the arrest reads on
-# schedule no matter how the wave director is going - the clock is the boss.
+# a retreat (footstep). Driven off the AIRTIME high-water mark
+# (STATE.m4_hold_peak) so the arrest reads on schedule no matter how the wave
+# director is going - and so the ladder always fits inside M4_HOLD_SECONDS
+# (the old 90 s clock ended 22.5 s after the last beat had aired).
 _M4_ARREST_BEATS = [
     (300, "arrest_open", C_RETARDOVICI, "pa_mumble",
      "PA: All units. By order of the Presidency, garrison command is... recalibrated."),
-    (1350, "arrest_order", C_RETARDOVICI, "pa_mumble",
+    (1080, "arrest_order", C_RETARDOVICI, "pa_mumble",
      "PA: General Balaceanu is relieved of command and arrested. Escort him out."),
-    (1800, "arrest_steer", C_VASILE, "radio_static",
+    (1440, "arrest_steer", C_VASILE, "radio_static",
      "VASILE: You don't need to see him. Trust me."),
-    (2250, "arrest_confusion", C_BALACEANU, "radio_static",
+    (1800, "arrest_confusion", C_BALACEANU, "radio_static",
      "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-"),
-    (3150, "arrest_standdown", C_SYSTEM, "radio_static",
+    (2520, "arrest_standdown", C_SYSTEM, "radio_static",
      "SYSTEM: Guns down. That's the President on the wire. They're taking the General."),
-    (4050, "arrest_retreat", C_BALACEANU, "footstep",
+    (3120, "arrest_retreat", C_BALACEANU, "footstep",
      "LOYALIST COMMS: Fall back! Nobody dies for a man already in a cell. Break off!"),
 ]
 
@@ -378,7 +398,11 @@ def _ladder_player(kind: str):
 
 
 def _arrest_beats():
-    t = getattr(STATE, "m4_hold_timer", 0)
+    # The ladder rides the monotonic airtime high-water mark, not the live
+    # clock: airtime can bleed off when the mic is shut, but an order the
+    # country already heard cannot un-air. That also makes the beat table safe
+    # against a decaying timer skipping a frame.
+    t = getattr(STATE, "m4_hold_peak", 0)
     if _timelines.use_legacy():
         for frame, mark, color, sfx, line in _M4_ARREST_BEATS:
             if t == frame:
@@ -394,8 +418,77 @@ def _arrest_beats():
 # ─────────────────────────────────────────────
 # Mission start / checkpoints
 # ─────────────────────────────────────────────
-def start_m4(preserve_timer=False):
-    """Called by game_core/acaristan to begin Mission 4 gameplay."""
+# ─────────────────────────────────────────────
+# The mic switch (STAGE_COMMIT)
+# ─────────────────────────────────────────────
+# The mission's title verb, modelled: airtime only accumulates while the feed
+# is OPEN at the transmitter rack. The open mic is also a beacon - fireteams
+# commit faster and marksmen press harder - so the hold is a choice between
+# staying on the air under fire and ducking the push at the cost of the
+# address. This is what turns a 90-second arena timer into a defence.
+_M4_MIC_LOCKED = {"state": None}   # last announced feed state (feedback dedup)
+
+
+def _mic_state():
+    """'on' when the feed is open and Biribel is at the rack, else 'off'."""
+    if not getattr(STATE, "m4_broadcasting", False):
+        return "off"
+    if not _near(_tx_pos(), radius=M4_MIC_RADIUS):
+        return "off"
+    return "on"
+
+
+def _toggle_mic():
+    """E at the transmitter: open or shut the feed."""
+    STATE.m4_broadcasting = not getattr(STATE, "m4_broadcasting", False)
+    _M4_MIC_LOCKED["state"] = None   # force the feedback line this frame
+    _sfx("rifle_handle", 0.4)
+    _sfx("terminal_glitch", 0.35)
+
+
+def _broadcast_feedback(mic):
+    """Objective + one radio line on every feed-state change."""
+    if mic == _M4_MIC_LOCKED["state"]:
+        return
+    _M4_MIC_LOCKED["state"] = mic
+    if mic == "on":
+        _set_objective("ON AIR - keep the mic open.")
+        _radio("SYSTEM: Mic open. The address is going out.",
+               color=C_SYSTEM, duration=300)
+    else:
+        _set_objective("Press E at the transmitter to open the mic.")
+        _radio("SYSTEM: Mic down. Airtime is bleeding off.",
+               color=C_SYSTEM, duration=300)
+
+
+def _update_broadcast_clock():
+    """Airtime accounting: on the air, off the air (decay), or off the rack."""
+    total = int(M4_HOLD_SECONDS * 60)
+    mic = _mic_state()
+    if mic == "on":
+        STATE.m4_hold_timer = min(total, getattr(STATE, "m4_hold_timer", 0) + 1)
+        STATE.m4_offair_tick = 0
+    else:
+        # Stepping away physically drops the feed (the switch is on the rack).
+        if getattr(STATE, "m4_broadcasting", False):
+            STATE.m4_broadcasting = False
+        STATE.m4_offair_tick = getattr(STATE, "m4_offair_tick", 0) + 1
+        if STATE.m4_offair_tick >= M4_OFFAIR_DECAY_EVERY:
+            STATE.m4_offair_tick = 0
+            STATE.m4_hold_timer = max(0, getattr(STATE, "m4_hold_timer", 0) - 1)
+    STATE.m4_hold_peak = max(getattr(STATE, "m4_hold_peak", 0),
+                             getattr(STATE, "m4_hold_timer", 0))
+    _broadcast_feedback(mic)
+
+
+def start_m4(preserve_timer=False, preserve_tone=False):
+    """Called by game_core/acaristan to begin Mission 4 gameplay.
+
+    preserve_tone keeps STATE.m4_tone across a death/checkpoint restart: the
+    liaison answer now picks the ally door posts for the hold, so losing it on
+    a wipe would silently re-pick the other side of the siege (and blank the
+    M5 completion-card echo).
+    """
     STATE.reset()
     STATE.active_mission = MISSION4_KEY
     STATE.active_mission_id = MISSION4_ID
@@ -418,10 +511,14 @@ def start_m4(preserve_timer=False):
     STATE.m4_maru_joined = False
     STATE.m4_dialogue_active = False
     STATE.m4_dialogue_done = False
-    STATE.m4_tone = []
+    if not preserve_tone:
+        STATE.m4_tone = []
     STATE.m4_jammer_installed = False
     STATE.m4_siege_active = False
     STATE.m4_hold_timer = 0
+    STATE.m4_hold_peak = 0
+    STATE.m4_broadcasting = False
+    STATE.m4_offair_tick = 0
     STATE.m4_broadcast_held = False
     STATE.mission4_station_checkpoint_reached = False
     STATE.mission4_tower_checkpoint_reached = False
@@ -465,14 +562,20 @@ def start_m4(preserve_timer=False):
     _M4_AMB["gun"] = 240
     _M4_AMB["static"] = 460
     _M4_AMB["pa"] = 760
+    _M4_ZONE_SEEN.clear()
+    _M4_OPEN_SEEN[0] = False
+    _M4_MIC_LOCKED["state"] = None
     _dlg_reset()  # W3 liaison dialogue state (module-local, single owner)
 
     _build_m4_world()
     _snap_camera_safe()
 
     _set_objective("Pick up the KRAP comms cache (E) on the boulevard, then meet Vasile at the station.")
-    _radio("VASILE: Two days of curfew, the city's coming apart. Meet me at the cache.",
-           color=C_VASILE, duration=380, mark="start_vasile")
+    if getattr(STATE, "_skip_m4_intro_radio", False):
+        STATE._skip_m4_intro_radio = False
+    else:
+        _radio("VASILE: Two days of curfew, the city's coming apart. Meet me at the cache.",
+               color=C_VASILE, duration=380, mark="start_vasile")
     return STATE.player
 
 
@@ -482,7 +585,7 @@ def start_mission4_station_checkpoint(preserve_timer=False):
     W3 owns the meet content; W1 only needs the dev boot + the resume
     target for the restart ladder.
     """
-    start_m4(preserve_timer=preserve_timer)
+    start_m4(preserve_timer=preserve_timer, preserve_tone=True)
 
     _m4_maps.MISSION4_MAP = _m4_maps.MISSION4_STATION_MAP
     STATE.show_minimap = True
@@ -496,7 +599,8 @@ def start_mission4_station_checkpoint(preserve_timer=False):
 
     _set_objective("Talk to Maru at the transmitter hall (north).")
     _radio("VASILE: Station's ours for now. Find Maru in the transmitter hall.",
-           color=C_VASILE, duration=340, mark="station_checkpoint")
+           color=C_VASILE, duration=340, mark="station_checkpoint",
+           valid=_maru_not_in_room)
     return STATE.player
 
 
@@ -514,9 +618,11 @@ def start_mission4_tower_checkpoint(preserve_timer=False):
     STATE.m4_siege_active = True
     STATE.mission4_tower_checkpoint_reached = True
     STATE.m4_hold_timer = 0
+    STATE.m4_hold_peak = 0
+    STATE.m4_broadcasting = False
     _arm_m4_allies()
 
-    _set_objective("Hold the transmitter until the order airs.")
+    _set_objective("Press E at the transmitter to open the mic.")
     _radio("SYSTEM: The transmitter is live. Do not let it go dark.",
            color=C_SYSTEM, duration=340, mark="tower_checkpoint")
     return STATE.player
@@ -543,7 +649,8 @@ def _enter_station():
 
     _set_objective("Cross to the transmitter hall - Maru is waiting inside.")
     _radio("VASILE: Door's clear. Maru's inside - watch the gallery.",
-           color=C_VASILE, duration=380, mark="door_enter")
+           color=C_VASILE, duration=380, mark="door_enter",
+           valid=_maru_not_in_room)
 
 
 def _update_stage(keys):
@@ -599,14 +706,15 @@ def _update_stage(keys):
         return
 
     if stage == STAGE_COMMIT:
-        # W4 siege: the wave director + the diegetic arrest-on-air ladder both
-        # ride the same hold clock. The clock is timer-driven and independent
-        # of wave state (m3 exfil-door lesson) - the arrest finishes whether or
-        # not a single loyalist is left standing.
-        STATE.m4_hold_timer = getattr(STATE, "m4_hold_timer", 0) + 1
+        # The feed is the clock: airtime advances only while the mic is open
+        # at the rack. The wave director and the diegetic arrest ladder ride
+        # the same number, so the story is a consequence of the hold, never a
+        # stopwatch running beside it (the old 90 s timer ended 22 s after the
+        # last beat had already aired).
+        _update_broadcast_clock()
         _run_siege_director()
         _arrest_beats()
-        if STATE.m4_hold_timer >= int(M4_HOLD_SECONDS * 60):
+        if getattr(STATE, "m4_hold_timer", 0) >= int(M4_HOLD_SECONDS * 60):
             _complete_m4()
         return
 
@@ -643,9 +751,11 @@ def _install_jammer():
     STATE.mission4_tower_checkpoint_reached = True
     STATE.m4_hold_timer = 0
     _arm_m4_allies()
-    _set_objective("Hold the transmitter until the order airs.")
-    _radio("SYSTEM: All units - the studio transmitter is live. "
-           "Do not let it go dark.",
+    STATE.m4_broadcasting = False
+    STATE.m4_hold_peak = 0
+    _set_objective("Press E at the transmitter to open the mic.")
+    _radio("SYSTEM: The rack is armed. Open the mic (E) and keep the feed "
+           "alive - the order has to reach every set in the country.",
            color=C_SYSTEM, duration=340, mark="commit_start")
 
 
@@ -678,4 +788,8 @@ def handle_interact():
     if stage == STAGE_MARU and not getattr(STATE, "m4_jammer_installed", False):
         if _near(_jammer_pos(), radius=95):
             _install_jammer()
+        return
+    if stage == STAGE_COMMIT:
+        if _near(_tx_pos(), radius=M4_MIC_RADIUS):
+            _toggle_mic()
     return

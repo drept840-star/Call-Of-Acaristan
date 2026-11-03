@@ -167,6 +167,10 @@ def _solid_walls():
                 and STATE.player.rect.colliderect(_CHAIR_RECT))):
         barriers = [b for b in barriers if b is not _CHAIR_RECT]
     out.extend(barriers)
+    # Volkov's van body on the dock: solid until he bails (the cage replaces it).
+    if (_m3_maps.MISSION3_MAP is _m3_maps.MISSION3_KILL_ORDER_MAP
+            and not getattr(STATE, "m3_volkov_bailed", False)):
+        out.append(_KO_VAN_RECT)
     # Doorway blocked until the shiv is crafted (mandatory crafting lock).
     # The blasted cell doorway is TWO tiles wide (_DOOR_TILE_COL and +1);
     # the block must span both, or the player slips out through the east
@@ -1073,6 +1077,13 @@ _KO_PICKUPS = (
     (26, 23, "mag"),
     (6, 36, "bandage"),
 )
+
+
+# Van body footprint, matching wings3d._van (3.75 x 2.04 tiles). The exfil
+# ring at (33, 36) sits inside it, so the player reaches it from N, E, W or S.
+_KO_VAN_RECT = pygame.Rect(int(33.0 * TILE_SIZE - 3.75 * TILE_SIZE / 2),
+                           int(35.67 * TILE_SIZE - 2.04 * TILE_SIZE / 2),
+                           int(3.75 * TILE_SIZE), int(2.04 * TILE_SIZE))
 
 
 def _exfil_pos():

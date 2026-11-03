@@ -57,6 +57,8 @@ from .flow import (  # noqa: F401
     start_m4, start_mission4_station_checkpoint,
     start_mission4_tower_checkpoint, _enter_station, _update_stage,
     _complete_m4, handle_interact, handle_dialogue_event, _install_jammer,
+    _M4_ZONE_GRACE_FRAMES, _M4_ZONE_BEATS, _update_broadcast_clock,
+    _toggle_mic, _mic_state,
 )
 
 # These names are REBOUND at runtime (map swaps, per-frame key capture,

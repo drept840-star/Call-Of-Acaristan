@@ -78,8 +78,9 @@ def main() -> int:
     # The M4 ladders: every legacy beat must fire exactly once, at its frame.
     from engine.timeline import TimelinePlayer
     from missions.m4 import flow as m4_flow
+    # Only the arrest ladder is frame-scheduled; the street beats are
+    # zone-triggered and have no timeline data (see flow._M4_ZONE_BEATS).
     ladders = [
-        ("m4.story_beats", [(f, m, ln, c, None, 440) for f, m, ln, c in m4_flow._M4_STORY_BEATS]),
         ("m4.arrest_beats", [(f, m, ln, c, sfx, 470) for f, m, c, sfx, ln in m4_flow._M4_ARREST_BEATS]),
     ]
     for tid, legacy in ladders:

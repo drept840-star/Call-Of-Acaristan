@@ -1996,3 +1996,233 @@ description: chronological action log per session, consolidated weekly
 | 22:21 | Edited src/missions/m1/draw3d.py | modified _draw_doors() | ~41 |
 | 22:21 | Edited src/missions/m1/draw3d.py | modified _draw_corpses() | ~459 |
 | 22:21 | Edited src/missions/m1/draw3d.py | removed 27 lines | ~33 |
+| 22:29 | Created src/missions/m1/escape3d.py | — | ~3941 |
+<!-- session:OTE2MWE4OTItZjhjMC00NGI1LWJlNTQtMmM3MDQyYzljNTk2 -->
+| 2026-11-01T21:06:27.404Z | M1 escape cut rebuilt in 3D (escape3d.py), shared overlay in draw.py, cues retimed, grade3d size cap | src/missions/m1/escape3d.py,src/missions/m1/draw.py,src/missions/m1/meta.py,src/missions/m1/grade3d.py,src/missions/m1/draw3d.py | smoke OK, frames rendered |
+
+## Session: 2026-11-01 23:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 23:07 | Edited src/missions/m1/draw3d.py | added error handling | ~215 |
+| 23:07 | Edited src/missions/m1/draw3d.py | inline fix | ~19 |
+
+## Session: 2026-11-02 14:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 14:34 | Edited src/app.py | "--mp-join" → "--dev-mp-join" | ~23 |
+| 15:01 | Session end: 1 writes across 1 files (app.py) | 8 reads | ~23 tok |
+
+## Session: 2026-11-02 15:01
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:06 | Edited src/ui/multiplayer_style.py | modified enumerate() | ~88 |
+| 15:06 | Edited src/ui/match_screen.py | modified __init__() | ~19 |
+
+## Session: 2026-11-02 15:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:16 | Edited tools/dev_panel.py | inline fix | ~14 |
+| 15:16 | Edited tools/dev_panel.py | modified bundle() | ~487 |
+| 15:16 | Edited tools/dev_panel.py | 3→3 lines | ~36 |
+| 15:16 | Edited tools/dev_panel.py | 3→2 lines | ~34 |
+| 15:17 | Edited tools/dev_panel.py | 2→3 lines | ~65 |
+| 15:17 | Edited tools/dev_panel.py | 3→3 lines | ~51 |
+
+## Session: 2026-11-02 15:19
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-02 15:19
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:24 | Edited tools/dev_panel.py | expanded (+14 lines) | ~288 |
+| 15:24 | Edited tools/dev_panel.py | 3→6 lines | ~85 |
+| 15:27 | Edited src/net/udp_transport.py | added 5 import(s) | ~33 |
+| 15:27 | Edited src/net/udp_transport.py | expanded (+8 lines) | ~92 |
+| 15:27 | Edited src/net/udp_transport.py | modified punch_endpoint() | ~20 |
+| 15:28 | Edited src/ui/match_screen.py | 4→9 lines | ~86 |
+| 15:28 | Edited src/ui/match_screen.py | 3→4 lines | ~31 |
+| 15:28 | Edited src/ui/match_screen.py | 3→4 lines | ~67 |
+| 15:28 | Edited src/ui/match_screen.py | 4→5 lines | ~66 |
+| 15:28 | Edited src/ui/match_screen.py | added error handling | ~451 |
+| 15:28 | Edited src/ui/match_screen.py | modified except() | ~194 |
+| 15:28 | Edited src/ui/match_screen.py | modified _update_host() | ~50 |
+| 15:28 | Edited src/ui/match_screen.py | added 1 condition(s) | ~265 |
+| 15:29 | Edited src/ui/match_screen.py | 3→4 lines | ~30 |
+| 15:29 | Edited src/ui/match_screen.py | 2→3 lines | ~34 |
+| 15:29 | Edited src/ui/match_screen.py | 4→6 lines | ~66 |
+| 15:29 | Edited src/ui/match_screen.py | modified except() | ~204 |
+| 15:29 | Edited src/ui/match_screen.py | added 1 condition(s) | ~146 |
+| 15:29 | Edited src/ui/match_screen.py | added 1 condition(s) | ~289 |
+| 15:29 | Edited src/ui/match_screen.py | added 1 condition(s) | ~273 |
+| 15:31 | Edited tools/smoke_test.py | modified route() | ~41 |
+| 15:40 | Edited src/ui/match_screen.py | 1→2 lines | ~32 |
+| 15:40 | Edited tools/smoke_test.py | expanded (+27 lines) | ~363 |
+| 15:42 | Edited src/ui/match_screen.py | "PLAYIT ADDRESS  e.g. name" → "PASTE PLAYIT ADDRESS  hos" | ~19 |
+
+## Session: 2026-11-02 16:31
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:33 | Edited src/ui/match_screen.py | modified strip() | ~193 |
+| 16:34 | Edited src/ui/match_screen.py | 4→7 lines | ~112 |
+| 16:34 | Edited src/ui/match_screen.py | expanded (+7 lines) | ~131 |
+| 16:34 | Edited src/ui/match_screen.py | 6→6 lines | ~76 |
+| 16:34 | Edited tools/smoke_test.py | expanded (+18 lines) | ~241 |
+| 16:44 | Edited src/ui/match_screen.py | added error handling | ~157 |
+| 16:44 | Edited src/ui/match_screen.py | 1→4 lines | ~64 |
+| 19:47 | Created src/net/playit_agent.py | — | ~2320 |
+| 19:48 | Edited tools/smoke_test.py | expanded (+27 lines) | ~476 |
+| 20:24 | Edited tools/smoke_test.py | expanded (+6 lines) | ~135 |
+| 20:30 | Edited tools/smoke_test.py | "port" → "internet ready" | ~26 |
+
+## Session: 2026-11-02 21:04
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-02 21:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-02 21:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:08 | Edited src/ui/main.py | expanded (+7 lines) | ~145 |
+| 21:08 | Edited src/ui/main.py | expanded (+11 lines) | ~289 |
+| 21:08 | Edited src/ui/main.py | modified enumerate() | ~239 |
+| 21:08 | Edited src/ui/main.py | 2→4 lines | ~80 |
+| 21:09 | Edited src/ui/main.py | modified _parallax_offsets() | ~664 |
+| 21:09 | Edited src/ui/main.py | 2→7 lines | ~96 |
+| 21:09 | Edited src/ui/main.py | 2→7 lines | ~71 |
+| 21:09 | Edited src/ui/main.py | modified _draw_rain() | ~26 |
+| 21:09 | Edited src/ui/main.py | 2→2 lines | ~25 |
+| 21:09 | Edited src/ui/main.py | modified _draw_embers() | ~25 |
+| 21:09 | Edited src/ui/main.py | 3→3 lines | ~29 |
+| 21:09 | Edited src/ui/main.py | inline fix | ~25 |
+| 21:09 | Edited src/app.py | 2→3 lines | ~41 |
+| 21:09 | Edited src/audio/audio.py | expanded (+6 lines) | ~131 |
+| 21:10 | Edited src/audio/audio.py | 5→7 lines | ~62 |
+| 21:10 | Edited src/audio/audio.py | 4→6 lines | ~62 |
+| 21:10 | Edited src/audio/audio.py | modified set_music_scale() | ~160 |
+| 21:10 | Edited src/audio/audio.py | set_volume() → _apply_music_volume() | ~35 |
+| 21:10 | Edited src/audio/audio.py | 6→3 lines | ~46 |
+| 21:11 | Created src/core/score.py | — | ~1411 |
+| 21:11 | Edited src/ui/system.py | 1→5 lines | ~56 |
+| 21:11 | Edited src/ui/system.py | 2→3 lines | ~40 |
+| 21:11 | Edited src/ui/system.py | 1→5 lines | ~80 |
+| 21:11 | Edited src/core/settings_store.py | 2→3 lines | ~33 |
+
+## Session: 2026-11-02 21:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:13 | Edited src/ui/main.py | 2→2 lines | ~27 |
+| 21:13 | Edited src/ui/main.py | 4→4 lines | ~58 |
+| 21:13 | Edited src/missions/walking_sim.py | 2→7 lines | ~112 |
+| 21:13 | Edited src/missions/walking_sim.py | added error handling | ~160 |
+| 21:14 | Edited src/ui/main.py | 2→2 lines | ~27 |
+<!-- session:ODJlMjVkMTctYzk4NC00NTY0LThkMWMtNGNhZmVmOGY4OTk3 -->
+| 2026-11-02T19:18:20.053Z | Dynamic OST: core/score.py plays calm mission track in quiet gameplay, 06_not_tonight in fights; Dynamic Music toggle; music slider now a scale. Committed d4a5736 on audio/dynamic-ost (worktree ../ost-dynamic). | src/core/score.py,src/audio/audio.py,src/app.py,src/ui/system.py,src/core/settings_store.py | smoke OK, compileall OK, stub sim OK; not heard in game |
+
+## Session: 2026-11-02 21:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:27 | Created src/ui/kit.py | — | ~2093 |
+| 21:32 | Edited src/ui/system.py | expanded (+6 lines) | ~306 |
+| 21:32 | Edited src/ui/system.py | 8→3 lines | ~51 |
+| 21:33 | Edited src/ui/main.py | modified draw_menu_background() | ~35 |
+
+## Session: 2026-11-02 21:45
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:49 | Created tools/m2_td3d_shots.py | — | ~734 |
+| 21:51 | Created tools/ae_import_car.py | — | ~1176 |
+| 22:10 | Created src/missions/m2/draw3d.py | — | ~15851 |
+<!-- session:YTRmMDQ3ZWUtMGU0OC00MjYyLTk5NDAtZTdjYmYwMmQxNGI0 -->
+| 2026-11-02T20:25:05.073Z | M2 ported to 2.5D: new missions/m2/draw3d.py (set, car_m2 GLB cars, box tanker, gantry sniper, squad, 3D tanker blast, M1-style grade lifted greyer), draw.py _PROJ/_draw_screen_passes split, update.py aim via td.mouse_world, CAMS MISSION2; recaptured gp.m2 goldens | src/missions/m2/draw3d.py,src/missions/m2/draw.py,src/missions/m2/update.py,src/game/topdown3d.py,tools/m2_td3d_shots.py,tools/ae_import_car.py,tests/golden/baseline_v0/manifest.json | SMOKE TEST: OK; gp.m2 golden verify OK; rest of gameplay goldens (M1/M3/M5) already stale |
+| 22:43 | Session end: 2 writes across 1 files (draw3d.py) | 1 reads | ~4918 tok |
+| 22:43 | Session end: 9 writes across 2 files (draw3d.py, escape3d.py) | 1 reads | ~4972 tok |
+| 22:43 | Session end: 4 writes across 3 files (kit.py, system.py, main.py) | 0 reads | ~2485 tok |
+| 22:43 | Session end: 8 writes across 1 files (dev_panel.py) | 0 reads | ~1060 tok |
+| 22:43 | Session end: 11 writes across 4 files (audio.py, score.py, system.py, settings_store.py) | 1 reads | ~2116 tok |
+| 22:43 | Session end: 1 writes across 1 files (smoke_test.py) | 0 reads | ~26 tok |
+| 22:43 | Session end: 2 writes across 2 files (multiplayer_style.py, match_screen.py) | 0 reads | ~107 tok |
+| 22:43 | Session end: 16 writes across 2 files (main.py, app.py) | 1 reads | ~1867 tok |
+| 22:43 | Session end: 1 writes across 1 files (walk3d.py) | 10 reads | ~11280 tok |
+| 22:43 | Session end: 2 writes across 1 files (walking_sim.py) | 0 reads | ~272 tok |
+| 22:51 | Edited src/game/topdown3d.py | 6→10 lines | ~176 |
+| 23:01 | Edited src/game/topdown3d.py | modified dots() | ~343 |
+
+## Session: 2026-11-02 01:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:08 | Created tools/m3_td3d_shots.py | — | ~570 |
+| 01:17 | Edited src/missions/m3/flow.py | added 1 import(s) | ~44 |
+| 01:27 | Created src/missions/m3/draw3d.py | — | ~12975 |
+| 01:27 | Edited src/missions/m3/draw3d.py | 2→2 lines | ~41 |
+<!-- session:MTcwOTY4MGQtMTVkMC00MDQ0LWFkMGYtOWE5ZjAxMjM4MDAw -->
+| 2026-11-03T13:54:43.468Z | Fixed M2 stray burning-barrel lights (m1 _flash_lights split out). Polished M3 2.5D breakout: dark wall caps with rims and green dado, colour-coded neighbour cells with plaques, calmer pavement floor, guard-room consoles/lockers/gunrack/briefing table, armory wall racks and 9MM/SMG cabinets with green K-9 light, wall-mounted yard floods, steel pull-up frames, no floating ceiling tubes, presence light and brighter calm rings. | src/missions/m1/draw3d.py,src/missions/m2/draw3d.py,src/missions/m3/draw.py,src/missions/m3/draw3d.py,tools/m3_td3d_shots.py | SMOKE TEST: OK; compileall clean; shots in shots/m3_td3d |
+| 16:32 | Created tools/m3_td3d_shots.py | — | ~981 |
+| 16:38 | Created src/missions/m3/wings3d.py | — | ~10193 |
+| 16:43 | Edited src/missions/m3/wings3d.py | inline fix | ~12 |
+| 16:43 | Edited src/missions/m3/wings3d.py | modified range() | ~161 |
+
+## 2026-11-03 M3 wings in 2.5D
+- All five M3 playable maps now render through draw3d: cell plus comms/archives/killorder/broadcast via new `src/missions/m3/wings3d.py` (FLOOR, PROPS, LAMPS, AMBIENT, live props). Gate `_m3_td3d_gate` maps stage->map. 2D overlays for wings in `draw._draw_wing_screen_passes`. Gates: compileall + smoke OK; 2D fallback renders.
+| 21:23 | Session end: 5 writes across 4 files (m2_td3d_shots.py, ae_import_car.py, draw3d.py, topdown3d.py) | 15 reads | ~20890 tok |
+| 21:23 | Session end: 8 writes across 4 files (m3_td3d_shots.py, flow.py, draw3d.py, wings3d.py) | 22 reads | ~36967 tok |
+| 21:23 | Session end: 32 writes across 4 files (udp_transport.py, match_screen.py, smoke_test.py, playit_agent.py) | 1 reads | ~6757 tok |
+
+## Session: 2026-11-03 00:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:01 | Created tools/ae_import_m3_van.py | — | ~1401 |
+| 00:02 | Created tools/ae_import_m3_van.py | — | ~1159 |
+| 00:02 | Edited tools/ae_import_m3_van.py | inline fix | ~21 |
+| 00:02 | Edited src/missions/m3/wings3d.py | added error handling | ~232 |
+| 00:02 | Edited src/missions/m3/wings3d.py | inline fix | ~10 |
+
+## Session: 2026-11-03 00:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:11 | Edited src/missions/m3/world.py | added 1 condition(s) | ~99 |
+| 00:11 | Edited src/missions/m3/world.py | modified _exfil_pos() | ~116 |
+| 00:12 | Edited src/core/interactions.py | 1→4 lines | ~46 |
+| 00:12 | Edited src/core/interactions.py | expanded (+8 lines) | ~158 |
+| 00:12 | Edited src/core/interactions.py | 4→7 lines | ~118 |
+| 00:18 | Edited src/core/game_core.py | 1→3 lines | ~51 |
+| 00:27 | Edited src/core/game_core.py | modified _in_walking_sim() | ~48 |
+| 00:27 | Edited src/missions/m4/flow.py | modified getattr() | ~113 |
+| 00:39 | Edited src/core/interactions.py | expanded (+6 lines) | ~237 |
+| 00:39 | Edited src/core/interactions.py | inline fix | ~19 |
+| 00:39 | Edited src/core/interactions.py | inline fix | ~18 |
+| 00:39 | Edited src/core/interactions.py | modified trigger_radio_chatter() | ~34 |
+| 00:39 | Edited src/core/interactions.py | inline fix | ~26 |
+| 00:39 | Edited src/missions/m4/world.py | modified _radio() | ~176 |
+| 00:39 | Edited src/missions/m4/flow.py | 2→3 lines | ~53 |
+| 00:39 | Edited src/missions/m4/flow.py | 1→2 lines | ~28 |
+| 00:39 | Edited src/missions/m4/flow.py | modified _maru_not_in_room() | ~55 |
+
+## Session: 2026-11-03 00:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-03 01:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

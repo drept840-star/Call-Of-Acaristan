@@ -168,6 +168,7 @@ walk_after_firefight = False
 walk_return_timer = 0
 WALK_PROPS = None
 walk_fp_cutscene = None
+_walk_fp_broken = False
 _walk_player_moving = False
 _walk_ambient_time = 0.0
 _walk_overlook_warning_time = 0.0
@@ -668,7 +669,12 @@ def _update_walk_fp_cutscene():
     global walk_fp_cutscene
     if not walk_fp_cutscene:
         return
+    prev = walk_fp_cutscene["timer"]
     walk_fp_cutscene["timer"] += 1.0 / walk_fp_cutscene.get("speed", 1.0)
+    from missions import walk_fp
+    for frame, sound, vol in walk_fp.SOUND_CUES.get(walk_fp_cutscene["scene"], ()):
+        if prev < frame <= walk_fp_cutscene["timer"]:
+            audio.play(sound, volume=vol)
     if walk_fp_cutscene["timer"] >= walk_fp_cutscene["duration"]:
         _finish_walk_fp_cutscene()
 def _draw_fp_hands(surface, reach=0.0):
@@ -772,8 +778,18 @@ def _draw_fp_crate(surface, cx, cy, open_t, contents="ammo"):
     pygame.draw.rect(surface, (55, 36, 22), (cx - cw // 2, lid_y, cw, lid_squash), 2, border_radius=4)
     pygame.draw.line(surface, (70, 45, 25), (cx - cw // 2 + 10, lid_y + lid_squash // 2), (cx + cw // 2 - 10, lid_y + lid_squash // 2), 2)
 def _draw_walk_fp_cutscene(surface):
+    global _walk_fp_broken
     if not walk_fp_cutscene:
         return
+    if not _walk_fp_broken:
+        try:
+            from missions import walk_fp
+            walk_fp.draw(surface, walk_fp_cutscene)
+            return
+        except Exception as exc:
+            # Same rule as the 2.5D world: one failure drops to the old painter for the run.
+            _walk_fp_broken = True
+            print("walk_fp: falling back to legacy cutscene (%s: %s)" % (type(exc).__name__, exc))
     scene = walk_fp_cutscene["scene"]
     timer = walk_fp_cutscene["timer"]
     duration = walk_fp_cutscene["duration"]

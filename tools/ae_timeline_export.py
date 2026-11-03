@@ -47,17 +47,17 @@ SPECS = [
 
 
 def _ladder_docs() -> dict:
-    """The M4 frame-scheduled radio ladders (Phase 7 rescope) as event tracks."""
+    """The M4 frame-scheduled radio ladders (Phase 7 rescope) as event tracks.
+
+    Only the arrest ladder is time-scheduled now. The curfew-street beats are
+    zone-triggered (flow._M4_ZONE_BEATS + maps.zone_at), so there is no timed
+    data to export for them; the stale m4.story_beats file was removed.
+    """
     from missions.m4 import flow as m4
-    story = [{"t": frame, "name": mark, "text": line, "color": list(color), "duration": 440}
-             for frame, mark, line, color in m4._M4_STORY_BEATS]
     arrest = [{"t": frame, "name": mark, "text": line, "color": list(color), "sfx": sfx, "duration": 470}
               for frame, mark, color, sfx, line in m4._M4_ARREST_BEATS]
     base = {"schema": "ae.timeline/1", "fps_hint": 60, "metadata": {"time_unit": "frames"}}
     return {
-        "m4.story_beats": {**base, "id": "m4.story_beats", "tracks": {"event": story},
-                           "metadata": {"time_unit": "frames", "kind": "radio_ladder",
-                                        "source": "missions/m4/flow.py _M4_STORY_BEATS"}},
         "m4.arrest_beats": {**base, "id": "m4.arrest_beats", "tracks": {"event": arrest},
                             "metadata": {"time_unit": "frames", "kind": "radio_ladder",
                                          "source": "missions/m4/flow.py _M4_ARREST_BEATS"}},

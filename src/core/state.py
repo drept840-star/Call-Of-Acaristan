@@ -226,7 +226,9 @@ class GameState:
         self.m4_dialogue_active = False    # meet dialogue locks movement
         self.m4_jammer_installed = False   # transmitter jammer beat done
         self.m4_siege_active = False       # loyalist assault running
-        self.m4_hold_timer = 0             # frames held at the transmitter
+        self.m4_hold_timer = 0             # frames of AIRTIME held at the mic
+        self.m4_hold_peak = 0              # monotonic airtime high-water mark
+        self.m4_broadcasting = False       # mic switch: ON AIR vs jammed
         self.m4_broadcast_held = False     # hold completed → arrest on air
         self.request_mission4_ending = False
         # Siege director (W4 STAGE_COMMIT): loyalist fireteams spawn from the

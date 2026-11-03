@@ -159,8 +159,9 @@ def _movement_locked():
     return False
 
 
-def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0):
-    """Pinned-radio helper (m3.world._radio idiom, dedup via _radio_marks)."""
+def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0, valid=None):
+    """Pinned-radio helper (m3.world._radio idiom, dedup via _radio_marks).
+    ``valid`` is a callable; the line cuts itself off once it returns False."""
     if mark and mark in _m4_maps._radio_marks:
         return
     if mark:
@@ -168,7 +169,8 @@ def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0):
     try:
         from core.interactions import trigger_radio_chatter
         trigger_radio_chatter(text, color=color, duration=duration,
-                              priority=max(priority, 0.5) if mark else priority)
+                              priority=max(priority, 0.5) if mark else priority,
+                              valid=valid)
     except Exception:
         # Audio/interactions are optional in headless test harnesses.
         pass
@@ -326,22 +328,43 @@ def _init_m4_allies():
     return allies
 
 
+def _ally_posts_for_tone():
+    """The liaison answer decides who takes which door for the hold.
+
+    tone 1 ("the people") flips the posts: Maru - MAG, the people - takes
+    the rack-side north door and Vasile the studio mouth. No new dialogue:
+    the choice changes who is standing where when the assault comes, which is
+    the weight the question never carried inside M4 before.
+    """
+    tone = getattr(STATE, "m4_tone", None)
+    choice = tone[0] if isinstance(tone, list) and tone else 0
+    posts = {name: {"cover": spec["cover"], "door": spec["door"]}
+             for name, spec in M4_ALLY_POSTS.items()}
+    if choice == 1:
+        posts["VASILE"], posts["MARU"] = posts["MARU"], posts["VASILE"]
+    return posts
+
+
 def _arm_m4_allies():
     allies = getattr(STATE, "m4_allies", None)
     if not allies:
         allies = _init_m4_allies()
+    posts = _ally_posts_for_tone()
     for a in allies:
         spec = M4_ALLY_POSTS[a["name"]]
+        post = posts[a["name"]]
         a["path"] = []
         a["path_goal"] = None
         a["stuck"] = 0
         a["armed"] = True
         a["weapon"] = spec["weapon"]
+        a["cover"] = post["cover"]
+        a["door"] = post["door"]
         a["hp"] = spec["hp"]
         a["max_hp"] = spec["hp"]
         a["downed"] = 0
         a["cooldown"] = 18
-        dx, dy = _tile_world(*spec["door"])
+        dx, dy = _tile_world(*post["door"])
         a["angle"] = math.atan2(dy - a["y"], dx - a["x"])
     STATE.m4_maru_joined = True
     return allies
@@ -485,7 +508,15 @@ def _update_m4_allies(solid_walls):
         if a["downed"] > 0:
             a["downed"] -= 1
             if a["downed"] <= 0:
-                a["hp"] = max(40, a["max_hp"] // 2)
+                # A post that is still being pushed stays overrun: an ally
+                # cannot get up with a loyalist on top of them, so the player
+                # has to clear that door. Allies were previously invulnerable
+                # in practice (3 s auto-revive, forever) and won the siege
+                # for you.
+                if _enemy_within(a["x"], a["y"], 140):
+                    a["downed"] = 60
+                else:
+                    a["hp"] = max(40, a["max_hp"] // 2)
             continue
         door = _tile_world(*a["door"])
         if a["armed"]:
@@ -541,6 +572,19 @@ def _update_m4_allies(solid_walls):
             a["cooldown"] = max(0, a["cooldown"] - 1)
 
 
+def _enemy_within(x, y, radius):
+    """True when a living enemy is inside `radius` of a world point."""
+    r2 = radius * radius
+    for e in getattr(STATE, "enemies", []):
+        if e.hp <= 0:
+            continue
+        dx = e.rect.centerx - x
+        dy = e.rect.centery - y
+        if dx * dx + dy * dy <= r2:
+            return True
+    return False
+
+
 def _hit_m4_ally(b):
     """Apply an enemy bullet to the first living ally under it. Returns True
     on a hit so the bullet is consumed. Downed allies kneel, then stand."""
@@ -556,7 +600,7 @@ def _hit_m4_ally(b):
         a["hit_flash"] = 10
         if a["hp"] <= 0:
             a["hp"] = 0
-            a["downed"] = 180
+            a["downed"] = 600
         return True
     return False
 
@@ -568,10 +612,10 @@ def _hit_m4_ally(b):
 # cadence; neither module is imported (both are mission-scoped, one-owner
 # rule). The loyalist assault is the clock's texture, never its lock: up to
 # M4_MAX_CONCURRENT fireteams stream from the station's carved assault doors,
-# pursuit runs on the shared Enemy target coords, and a marksman press paints
-# a laser telegraph (m2._add_sniper_laser visual idiom). The hold ends on the
-# timer, not on kills (m3 exfil-door lesson), and once the arrest order lands
-# on air (M4_SIEGE_RELIEF_FRAMES) no fresh teams commit - the siege breaks off.
+# pursuit runs on the shared Enemy target coords, and a marksman press pins a
+# real windup beam (the shot lands where the beam was pinned). The hold ends on
+# AIRTIME, not on kills (m3 exfil-door lesson), and once the address has aired
+# past M4_SIEGE_RELIEF_FRAMES no fresh teams commit - the siege breaks off.
 #
 # INSERTION DOORS: every tile here MUST be a walkable floor char ("D"/"O"/
 # "L") on MISSION4_STATION_MAP so a fireteam commits THROUGH a doorway onto
@@ -583,7 +627,8 @@ M4_INSERTION_TILES = [(15, 8), (18, 9), (11, 13)]
 M4_MAX_CONCURRENT = 6
 M4_FIRETEAM_GAP = (150, 260)   # frames between committed fireteams
 M4_LASER_GAP = (150, 320)      # frames between marksman telegraph pins
-M4_SIEGE_RELIEF_FRAMES = 4080  # ~68s: after the standdown beat, spawns cease
+M4_SIEGE_RELIEF_FRAMES = 3180  # ~53s of AIRTIME: after the standdown, spawns cease
+M4_MARKSMAN_DAMAGE = 28        # the pinned shot a laser windup delivers
 
 
 def _siege_reset():
@@ -599,9 +644,16 @@ def _siege_alive_count():
                if _m4g(e).loyalist and e.hp > 0)
 
 
-def _add_sniper_laser(target_pos, from_pos, life=48):
-    """Queue a telegraph beam (m2 idiom: purely visual; the Enemy AI owns fire)."""
-    STATE.m4_lasers.append({"from": from_pos, "to": target_pos, "life": life})
+def _add_sniper_laser(target_pos, from_pos, life=48, shooter=None, damage=0):
+    """Queue a marksman windup.
+
+    The beam is a real telegraph now: while it is up the shooter's own fire is
+    suppressed, and when it expires the shot lands on the pinned point - not
+    on wherever the player has walked to - so strafing out of the beam dodges
+    it. A beam queued with no shooter stays visual-only (smoke proof).
+    """
+    STATE.m4_lasers.append({"from": from_pos, "to": target_pos, "life": life,
+                            "shooter": shooter, "damage": damage})
 
 
 def _arm_loyalist_hunt(e):
@@ -666,17 +718,56 @@ def _sfx(name, volume):
 def _decay_lasers():
     for laser in getattr(STATE, "m4_lasers", [])[:]:
         laser["life"] -= 1
+        shooter = laser.get("shooter")
+        if shooter is not None:
+            if getattr(shooter, "hp", 0) > 0:
+                # Hold the marksman's own trigger while the beam is up: the
+                # telegraph must be the only shot coming, or it teaches the
+                # player nothing (the old "visual only" beam was a lie).
+                shooter.fire_cooldown = max(getattr(shooter, "fire_cooldown", 0),
+                                            max(1, laser["life"]))
+            else:
+                laser["life"] = 0      # shooter died mid-windup: no shot
         if laser["life"] <= 0:
+            _resolve_laser_shot(laser)
             STATE.m4_lasers.remove(laser)
 
 
+def _resolve_laser_shot(laser):
+    """Fire the pinned marksman shot at the point the beam pinned."""
+    shooter = laser.get("shooter")
+    if shooter is None or getattr(shooter, "hp", 0) <= 0:
+        return
+    tx, ty = laser["to"]
+    sx, sy = shooter.rect.centerx, shooter.rect.centery
+    dx, dy = tx - sx, ty - sy
+    dist = math.hypot(dx, dy)
+    if dist < 1:
+        return
+    speed = 26
+    STATE.bullets.append({
+        "x": sx, "y": sy, "prev_x": sx, "prev_y": sy,
+        "dx": dx / dist * speed, "dy": dy / dist * speed,
+        "life": 90, "owner": "enemy",
+        "damage": laser.get("damage") or M4_MARKSMAN_DAMAGE,
+        "marksman": True,
+    })
+    _sfx("gunshot_distant", 0.4)
+
+
 def _marksman_press():
-    """Telegraph a marksman pin on the player. Visual only - the shared Enemy
-    AI owns the actual shot, same as m2's sniper pressure reads."""
+    """Pin a real marksman windup on the player.
+
+    On the air the marksmen press harder (the open feed is a beacon); off the
+    air they take their time. The windup itself is resolved by _decay_lasers,
+    so the beam is a rule the player can learn and dodge.
+    """
     STATE.m4_laser_timer -= 1
     if STATE.m4_laser_timer > 0:
         return
-    STATE.m4_laser_timer = _rng_legacy.randint(*M4_LASER_GAP)
+    on_air = bool(getattr(STATE, "m4_broadcasting", False))
+    gap = _rng_legacy.randint(*M4_LASER_GAP)
+    STATE.m4_laser_timer = max(45, int(gap * (0.6 if on_air else 1.0)))
     marksmen = [e for e in STATE.enemies
                 if _m4g(e).loyalist
                 and _m4l(e).kind == "marksman" and e.hp > 0]
@@ -684,7 +775,8 @@ def _marksman_press():
         return
     m = _rng_legacy.choice(marksmen)
     px, py = STATE.player.rect.center
-    _add_sniper_laser((px, py), from_pos=(m.rect.centerx, m.rect.centery), life=46)
+    _add_sniper_laser((px, py), from_pos=(m.rect.centerx, m.rect.centery),
+                      life=46, shooter=m, damage=M4_MARKSMAN_DAMAGE)
     _sfx("rifle_handle", 0.3)
 
 
@@ -694,10 +786,15 @@ def _run_siege_director():
         return
     _decay_lasers()
     STATE.m4_siege_spawn_timer -= 1
-    if STATE.m4_hold_timer >= M4_SIEGE_RELIEF_FRAMES:
+    if STATE.m4_hold_peak >= M4_SIEGE_RELIEF_FRAMES:
         return  # the order aired - the siege breaks off, the clock runs out
+    on_air = bool(getattr(STATE, "m4_broadcasting", False))
     if (STATE.m4_siege_spawn_timer <= 0
             and _siege_alive_count() < M4_MAX_CONCURRENT):
         _spawn_loyalist_fireteam()
-        STATE.m4_siege_spawn_timer = _rng_legacy.randint(*M4_FIRETEAM_GAP)
+        gap = _rng_legacy.randint(*M4_FIRETEAM_GAP)
+        # The open mic is a beacon: teams commit faster while Biribel is on
+        # the air, and slower while he is ducked off it.
+        gap = int(gap * (0.7 if on_air else 1.25))
+        STATE.m4_siege_spawn_timer = max(45, gap)
     _marksman_press()

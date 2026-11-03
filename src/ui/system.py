@@ -152,6 +152,10 @@ settings_sfx_bar_rect      = pygame.Rect(VOL_BAR_X, ROW_SFX_Y + 3, VOL_BAR_W, 14
 
 settings_mute_rect         = pygame.Rect(CONTROL_X, ROW_MUTE_Y - 3, 56, 26)
 
+ROW_DYN_MUSIC_Y = ROW_MUTE_Y + ROW_H
+
+settings_dyn_music_rect    = pygame.Rect(CONTROL_X, ROW_DYN_MUSIC_Y - 3, 56, 26)
+
 
 
 # ── GAMEPLAY tab rows ── (header "COMBAT" at top, "PRESENTATION" before subtitles)
@@ -494,6 +498,7 @@ def draw_settings(active_tab, display_mode, res_idx,
 
                   reduced_motion, colorblind_mode,
                   shake_scale=100, flash_reduction=False, text_speed=1,
+                  dynamic_music=True,
                   save_status="CONFIG SYNCED", save_failed=False,
                   bindings=None, binding_capture=None):
 
@@ -617,6 +622,10 @@ def draw_settings(active_tab, display_mode, res_idx,
                      mute_on_focus_loss, ROW_MUTE_Y)
 
         _draw_hint("Silences all audio when the window loses focus.", ROW_MUTE_Y + 36)
+
+        _draw_toggle("Dynamic Music", settings_dyn_music_rect, dynamic_music, ROW_DYN_MUSIC_Y)
+
+        _draw_hint("Plays the soundtrack in quiet stretches and fights.", ROW_DYN_MUSIC_Y + 36)
 
 
 

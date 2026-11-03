@@ -177,6 +177,17 @@ def _await_endpoint(proc, timeout, fill_port, cancelled=None):
 def find_bore():
     """Find a platform-appropriate bundled binary, then fall back to PATH."""
     name = "bore.exe" if os.name == "nt" else "bore"
+    found = find_bundled(name)
+    if found:
+        return found
+    cached = os.path.join(bore_cache_dir(), name)
+    if os.path.isfile(cached) and _sha256_file(cached) == BORE_BINARY_SHA256:
+        return cached
+    return shutil.which("bore")
+
+
+def find_bundled(name):
+    """Path of *name* shipped beside the game (assets/bin), or None."""
     bases = [getattr(sys, "_MEIPASS", None),
              os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else None,
              os.path.dirname(os.path.abspath(sys.argv[0] or ".")),
@@ -188,10 +199,7 @@ def find_bore():
                 candidate = os.path.join(base, sub, name)
                 if os.path.isfile(candidate) and (os.name == "nt" or os.access(candidate, os.X_OK)):
                     return candidate
-    cached = os.path.join(bore_cache_dir(), name)
-    if os.path.isfile(cached) and _sha256_file(cached) == BORE_BINARY_SHA256:
-        return cached
-    return shutil.which("bore")
+    return None
 
 
 def bore_cache_dir():

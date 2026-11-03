@@ -267,7 +267,7 @@ def check_host_is_taught_how_to_host():
     ok_note, _ = m._forward_status()
     m.forwarded, m.forward_note = False, "no UPnP gateway found"
     bad_note, _ = m._forward_status()
-    assert "port" in ok_note.lower() and "LAN" in bad_note, \
+    assert "internet ready" in ok_note.lower() and "same network" in bad_note.lower(), \
         "forwarding status does not distinguish public mapping from LAN-only"
 
     # ...and that the card's hit-rect dies with it. A rect left behind after
@@ -5547,6 +5547,85 @@ def check_mp_host_and_portmap():
     _lanm.peers.remove(_peer)
     _lanm._teardown()
 
+    # playit.gg: the host's own TCP+UDP tunnel address is the final code at
+    # once; nothing probes the router or starts bore. An empty address sets
+    # up the bundled agent off-thread instead of sharing a LAN code.
+    from core import settings_store as _ss
+    from net import playit_agent as _pa
+    _pit = _MatchScreen()
+    _pit.net_mode = _msmod.NET_PLAYIT
+    _pit.playit_address = ""
+    _spawned = []
+    _msmod.threading.Thread = lambda *a, **k: _spawned.append(k) or _old_thread(target=lambda: None)
+    try:
+        _pit.request_host(0)
+        _pit.request_host(0)
+    finally:
+        _msmod.threading.Thread = _old_thread
+    assert not _pit._pending and _pit._playit_setup and len(_spawned) == 1 \
+        and _spawned[0]["target"] == _pit._playit_setup_worker, \
+        "playit mode hosted without a tunnel address"
+    _old_setup = _pa.setup
+    _old_save = _ss.set_playit_address
+    _pit.mode = "panel"
+    _pa.setup = lambda port, status, cancelled: "t.ply.gg:1+u.ply.gg:2"
+    _ss.set_playit_address = lambda text: None
+    try:
+        _pit._playit_setup_worker(0)
+    finally:
+        _pa.setup = _old_setup
+        _ss.set_playit_address = _old_save
+    assert _pit._pending == [("host", 0)] and not _pit._playit_setup \
+        and _pit.playit_address == "t.ply.gg:1+u.ply.gg:2", _pit._pending
+    _pit._pending = []
+    # HOW TO overlay: every host choice has a notice and a guide, and the
+    # open guide swallows the next click instead of hosting.
+    assert set(_msmod.NET_NOTES) == set(_msmod.NET_GUIDES) == {n for n, _ in _msmod.NET_MODES}
+    _pit._howto = True
+    _click = pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(0, 0))
+    assert _pit.handle_event(_click, (0, 0)) and not _pit._howto and not _pit._pending
+    assert _pa.find_tunnels([
+        {"local_port": 27017, "proto": "tcp", "assigned_domain": "a.ply.gg",
+         "port": {"from": 5, "to": 5}},
+        {"local_port": 9, "proto": "udp", "assigned_domain": "x.ply.gg",
+         "port": {"from": 6, "to": 6}},
+        {"local_port": 27017, "proto": "udp", "assigned_domain": "b.ply.gg",
+         "port": {"from": 7, "to": 7}}], 27017) == ("a.ply.gg:5", "b.ply.gg:7")
+    _pit.playit_address = "name.gl.joinmc.link:41234"
+    _old_save = _ss.set_playit_address
+    _ss.set_playit_address = lambda text: None
+    _spawned = []
+    _msmod.threading.Thread = lambda *a, **k: _spawned.append(k) or _old_thread(target=lambda: None)
+    try:
+        _pit._start_hosting(47124)
+    finally:
+        _msmod.threading.Thread = _old_thread
+        _ss.set_playit_address = _old_save
+    assert not _spawned and _pit.room_code_ready(), \
+        "playit mode still searched for another internet route"
+    assert _pit.share_code().startswith("name.gl.joinmc.link:41234@"), \
+        _pit.share_code()
+    assert "playit.gg" in _pit._forward_status()[0], _pit._forward_status()
+    _pit._teardown()
+    # Free playit accounts: separate TCP and UDP tunnels ride in one code,
+    # and the joiner aims datagrams at the UDP one.
+    _pit.playit_address = "a.tun.ply.gg:61147+b.udp.ply.gg:5001"
+    _ss.set_playit_address = lambda text: None
+    try:
+        _pit._start_hosting(47124)
+    finally:
+        _ss.set_playit_address = _old_save
+    _two = _pit.share_code()
+    assert _two.startswith("a.tun.ply.gg:61147+b.udp.ply.gg:5001@"), _two
+    _pit._teardown()
+    _pj = _MatchScreen()
+    _pj.request_join(_two)
+    assert _pj._pending == [("join", ("a.tun.ply.gg", 61147))] \
+        and _pj._udp_override == ("b.udp.ply.gg", 5001), _pj._pending
+    _pj.request_join("1.2.3.4:27017")
+    assert _pj._udp_override is None
+    _pj._teardown()
+
     # Relay loss mid-session: a dead tunnel process must drop the stale public
     # invite, fall back to the LAN code and tell the host to host again.
     _lost = _MatchScreen()
@@ -8762,13 +8841,25 @@ def check_mission4_boot_and_walk():
     m4.game_draw(*cam)
     m4.handle_interact()
 
-    # W2 story-beat ladder: advance the chaos clock to a timed beat and
-    # confirm the radio line is queued (dedup mark set on the owner module).
-    STATE.m4_chaos_timer = 239
-    if getattr(STATE, "mission4_stage", None) == m4.STAGE_AFTERMATH:
+    # W2 story beats are ZONE-triggered now: walking into each named district
+    # fires its line exactly once (the old frame table dumped all three in
+    # the first 16 seconds, before the player had crossed the first block).
+    # The opening beat is time-gated exactly once (not zone-gated: a sprint
+    # out of Old Town must not drop Vasile's read).
+    STATE.m4_chaos_timer = m4._M4_ZONE_GRACE_FRAMES
+    cam = m4.game_update(keys)
+    assert "beat_loyalists" in m4._radio_marks, \
+        "opening street beat did not fire after the grace window"
+    for zone, mark, tile in (("boulevard", "beat_volkov", (10, 19)),
+                             ("station_cordon", "beat_retardovici", (31, 19))):
+        nx, ny = m4._tile_world(*tile)
+        STATE.player.rect.center = (nx, ny)
+        STATE.m4_chaos_timer = max(STATE.m4_chaos_timer,
+                                   m4._M4_ZONE_GRACE_FRAMES)
         cam = m4.game_update(keys)
-        assert "beat_loyalists" in m4._radio_marks, \
-            "timed story beat did not fire at chaos-frame 240"
+        assert m4.zone_at((nx, ny)) == zone, \
+            "zone probe tile left its district: " + zone
+        assert mark in m4._radio_marks, "zone beat did not fire: " + zone
 
 
 def check_mission4_stage_transitions():
@@ -8777,9 +8868,10 @@ def check_mission4_stage_transitions():
     The W3 station ladder: the Vasile cache beat arms the door objective, the
     door tile hands the world over to the station interior, walking to Maru
     opens the typewriter liaison dialogue (a choice beat records the tone on
-    STATE.m4_tone), completing it moves to the jammer stage, planting the
-    jammer gates the STAGE_COMMIT hold, and M4_HOLD_SECONDS of ticking raises
-    request_mission4_ending exactly once (idempotent guard).
+    STATE.m4_tone), completing it moves to the jammer stage, and planting the
+    jammer gates the STAGE_COMMIT hold. The hold is the mic switch: airtime
+    only advances while the feed is OPEN at the rack, and M4_HOLD_SECONDS of
+    airtime raises request_mission4_ending exactly once (idempotent guard).
     """
     from missions import m4
     from missions.m4.meta import (
@@ -8846,7 +8938,36 @@ def check_mission4_stage_transitions():
         "jammer install did not gate the siege hold"
     assert STATE.m4_siege_active and STATE.mission4_tower_checkpoint_reached
 
-    # 4) The hold clock completes the mission exactly once.
+    # 3c) The mic switch: airtime only advances with the feed OPEN at the rack.
+    tx, ty = m4._tile_world(*m4.TRANSMITTER_TILE)
+    STATE.player.rect.center = (tx, ty)
+    cam = m4.game_update(keys)
+    assert not STATE.m4_broadcasting, "the feed must start shut at the handoff"
+    before = STATE.m4_hold_timer
+    for _ in range(12):
+        cam = m4.game_update(keys)
+    assert STATE.m4_hold_timer == before, "airtime advanced with the mic shut"
+
+    m4.handle_interact()          # E at the transmitter opens the mic
+    assert STATE.m4_broadcasting, "E at the transmitter did not open the mic"
+    for _ in range(12):
+        cam = m4.game_update(keys)
+    assert STATE.m4_hold_timer > before, "airtime did not advance on air"
+
+    # 3d) Stepping off the rack drops the feed (the switch is on the machine).
+    STATE.player.rect.center = (tx - 4 * m4.TILE, ty)
+    cam = m4.game_update(keys)
+    assert not STATE.m4_broadcasting, "leaving the rack did not drop the feed"
+    STATE.player.rect.center = (tx, ty)
+
+    # 4) The hold completes exactly once. The assault is cleared for this chain
+    #    so it asserts the clock/ending wiring; the siege itself is covered by
+    #    check_mission4_hold_clock.
+    STATE.enemies = []
+    STATE.m4_siege_spawn_timer = 10 ** 7
+    STATE.player.hp = 99999
+    m4.handle_interact()          # back on the air for the full address
+    assert STATE.m4_broadcasting
     hold_frames = int(M4_HOLD_SECONDS * 60) + 120
     for _ in range(hold_frames):
         if STATE.request_mission4_ending:
@@ -8922,6 +9043,27 @@ def check_mission4_hold_clock():
     for _ in range(4):
         m4._run_siege_director()
     assert len(STATE.m4_lasers) == 0, "laser telegraph did not decay"
+
+    # 1b) The windup is honest: a pinned beam resolves into a real enemy shot
+    #     aimed at the pinned point (strafe out of the beam to dodge it).
+    from missions.m4.world import _decay_lasers, _m4g as _world_m4g
+    probe = m4._spawn_m4_guard(200, 200, etype="marksman", label="beam_probe")
+    _world_m4g(probe).loyalist = True
+    STATE.bullets = []
+    m4._add_sniper_laser((320, 200), from_pos=(200, 200), life=2,
+                         shooter=probe, damage=28)
+    for _ in range(3):
+        _decay_lasers()
+    _shots = [b for b in STATE.bullets if b.get("marksman")]
+    assert _shots, "marksman windup did not resolve into a shot"
+    assert _shots[0]["damage"] == 28, "marksman shot lost its damage"
+    _tx, _ty = _shots[0]["x"], _shots[0]["y"]
+    _dot = _shots[0]["dx"] * (320 - _tx) + _shots[0]["dy"] * (200 - _ty)
+    assert _dot > 0, "marksman shot did not aim at the pinned point"
+    assert abs(_shots[0]["dy"]) < abs(_shots[0]["dx"]) * 0.2, \
+        "marksman shot aimed off the pinned line"
+    STATE.enemies.remove(probe)
+    STATE.bullets = []
     m4._add_sniper_laser((128, 128), from_pos=(8, 8), life=20)
     cam = m4.game_update(keys)
     m4.game_draw(*cam)  # exercises _draw_m4_lasers with a live beam present
@@ -8996,22 +9138,28 @@ def check_mission4_hold_clock():
     assert m4._hit_m4_ally({"x": probe["x"], "y": probe["y"], "damage": 25})
     assert probe["hp"] == hp0 - 25, "ally did not take the probe hit"
 
-    # 3) The full hold, spawns active.
+    # 3) The full hold, spawns active, feed open at the rack.
     m4._siege_reset()
     STATE.enemies = [e for e in STATE.enemies if not _m4g(e).loyalist]
-    STATE.player.hp = STATE.player.max_hp
+    STATE.player.hp = 99999
     STATE.m4_hold_timer = 0
+    STATE.m4_hold_peak = 0
+    tx, ty = m4._tile_world(*m4.TRANSMITTER_TILE)
+    STATE.player.rect.center = (tx, ty)
+    STATE.m4_broadcasting = False
+    m4.handle_interact()
+    assert STATE.m4_broadcasting, "mic did not open for the hold"
     want = {"arrest_open", "arrest_order", "arrest_confusion",
             "arrest_standdown", "arrest_retreat"}
     wave_seen = 0
     relief_seen = False
-    for _ in range(int(M4_HOLD_SECONDS * 60) + 10):
+    for _ in range(int(M4_HOLD_SECONDS * 60) * 2 + 10):
         cam = m4.game_update(keys)
         if STATE.m4_siege_wave > wave_seen:
             wave_seen = STATE.m4_siege_wave
-        if STATE.m4_hold_timer >= m4.M4_SIEGE_RELIEF_FRAMES:
+        if STATE.m4_hold_peak >= m4.M4_SIEGE_RELIEF_FRAMES:
             relief_seen = True
-        if STATE.m4_hold_timer < m4.M4_SIEGE_RELIEF_FRAMES:
+        if STATE.m4_hold_peak < m4.M4_SIEGE_RELIEF_FRAMES:
             alive = sum(1 for e in STATE.enemies
                         if _m4g(e).loyalist and e.hp > 0)
             assert alive <= m4.M4_MAX_CONCURRENT, "siege exceeded concurrency cap"

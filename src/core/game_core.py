@@ -277,6 +277,8 @@ def restart_current_mission():
     if _is_mission2_active() and not _in_walking_sim():
         if getattr(STATE, "mission2_checkpoint_reached", False):
             return start_mission2_checkpoint(preserve_timer=False)
+        # Death restart: the investigation intro line is wrong mid-fight.
+        STATE._skip_mission2_intro_radio = True
         return m2.start_mission2(preserve_timer=False)
     if _is_mission3_active() and not _in_walking_sim():
         if getattr(STATE, "mission3_broadcast_checkpoint_reached", False):
@@ -314,6 +316,8 @@ def restart_current_mission():
             return start_mission5_quarter_checkpoint(preserve_timer=False)
         return start_mission5_hq_checkpoint(preserve_timer=False)
     if _is_mission4_active() and not _in_walking_sim():
+        # Death restart: the opening Vasile line is wrong mid-fight.
+        STATE._skip_m4_intro_radio = True
         if getattr(STATE, "mission4_tower_checkpoint_reached", False):
             return start_mission4_tower_checkpoint(preserve_timer=False)
         if getattr(STATE, "mission4_station_checkpoint_reached", False):

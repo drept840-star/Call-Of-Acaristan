@@ -3991,6 +3991,11 @@ def draw_archives_transition_cinematic(surface, t, phase):
     cam_y = max(0.0, min(mh * TILE_SIZE - HEIGHT, focus[1] - HEIGHT / 2))
     cam_x, cam_y = int(cam_x), int(cam_y)
 
+    if _td.enabled() and _m3_maps.MISSION3_MAP is _m3_maps.MISSION3_ARCHIVES_MAP:
+        if _archives_transition_3d(target, cam_x, cam_y, player_pos, volkov_pos, reveal_enemies):
+            _archives_transition_finish(surface, target, t, phase)
+            return
+
     target.fill((12, 10, 16))
     _render_cell_bg(target, cam_x, cam_y)
     _draw_archives_wing_details(cam_x, cam_y)
@@ -4037,6 +4042,32 @@ def draw_archives_transition_cinematic(surface, t, phase):
         STATE.m3_volkov_ally_y = old_vy
         STATE.m3_volkov_ally_angle = old_va
 
+    _archives_transition_finish(surface, target, t, phase)
+
+
+def _archives_transition_3d(target, cam_x, cam_y, player_pos, volkov_pos, reveal_enemies):
+    """The same directed beat through the 2.5D wing: actors are moved for
+    this frame only and the guards stay hidden until the reveal."""
+    from missions.m3 import draw3d
+    p = STATE.player
+    saved = (p.rect.center, p.angle, STATE.enemies,
+             getattr(STATE, "m3_volkov_ally_x", 0.0), getattr(STATE, "m3_volkov_ally_y", 0.0),
+             getattr(STATE, "m3_volkov_ally_angle", 0.0))
+    try:
+        p.rect.center = (int(player_pos[0]), int(player_pos[1]))
+        p.angle = -math.pi / 2
+        STATE.m3_volkov_ally_x, STATE.m3_volkov_ally_y = float(volkov_pos[0]), float(volkov_pos[1])
+        STATE.m3_volkov_ally_angle = -math.pi / 2
+        if not reveal_enemies:
+            STATE.enemies = []
+        v = _td.View(draw3d.CAM, cam_x + WIDTH / 2.0, cam_y + HEIGHT / 2.0)
+        return draw3d.render_world(target, v)
+    finally:
+        (p.rect.center, p.angle, STATE.enemies, STATE.m3_volkov_ally_x,
+         STATE.m3_volkov_ally_y, STATE.m3_volkov_ally_angle) = saved
+
+
+def _archives_transition_finish(surface, target, t, phase):
     # Restrained cinematic treatment over gameplay art: no HUD, only a subtle
     # vignette and location plate during the final reveal.
     draw_vignette(target, strength=115)

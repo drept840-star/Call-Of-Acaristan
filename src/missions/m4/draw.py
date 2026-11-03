@@ -1642,9 +1642,12 @@ def _push_m4_lights(cam_x, cam_y, t):
         cam_x, cam_y, t, cast,
         key_fn=lambda wx, wy: ("lamp", int(wx // TILE_SIZE), int(wy // TILE_SIZE)))
     if station:
-        # Motivated glow on the objective fixtures.
+        # Motivated glow on the objective fixtures. The transmitter only runs
+        # hot while the feed is open, so the room reads the mic state without
+        # a label.
+        _on_air = bool(getattr(STATE, "m4_broadcasting", False))
         for (fx, fy), col, radius in (
-                (TRANSMITTER_TILE, (170, 255, 200), 150),
+                (TRANSMITTER_TILE, (170, 255, 200) if _on_air else (90, 110, 118), 150),
                 (JAMMER_TILE, (180, 220, 255), 120)):
             sx = fx * TILE_SIZE + TILE_SIZE // 2 - cam_x
             sy = fy * TILE_SIZE + TILE_SIZE // 2 - cam_y
@@ -2279,14 +2282,16 @@ def _draw_m4_hold_bar(surface):
     secs_left = max(0, int(round((total - t) / 60)))
     w = 320
     x = (WIDTH - w) // 2
-    y = 64
+    y = 14   # clear of the objective panel below (was overlapping it at 64)
     surface.blit(get_plate_bg(w, 46), (x, y))
     surface.blit(font_terminal_small.render(_T("hud.hold_transmitter"), True,
                                             (200, 210, 224)), (x + 12, y + 6))
+    on_air = bool(getattr(STATE, "m4_broadcasting", False))
+    fill_col = (120, 220, 170) if on_air else (200, 170, 90)
     bar = pygame.Rect(x + 12, y + 26, w - 70, 12)
     pygame.draw.rect(surface, (30, 30, 30), bar)
-    pygame.draw.rect(surface, (120, 220, 170), (bar.x, bar.y, int(bar.w * frac), bar.h))
-    pygame.draw.rect(surface, (150, 170, 190), bar, 1)
+    pygame.draw.rect(surface, fill_col, (bar.x, bar.y, int(bar.w * frac), bar.h))
+    pygame.draw.rect(surface, fill_col, bar, 1)
     surface.blit(font_terminal_small.render(_T("hud.hold_timer", s=secs_left), True,
                                             (220, 226, 236)), (bar.right + 8, y + 24))
 

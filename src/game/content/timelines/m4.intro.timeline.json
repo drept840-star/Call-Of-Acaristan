@@ -6,7 +6,6 @@
    "scene": "m4_street_curfew",
    "speaker": "NARRATOR",
    "text": "Forty-eight hours after the Vostral, the address is still\nreading on every screen in the capital.",
-   "quiet_ui": true,
    "lighting": [
     10,
     14,
@@ -14,6 +13,7 @@
    ],
    "min_ms": 4200,
    "caption_after_ms": 2400,
+   "quiet_ui": true,
    "cues": [
     [
      0,
@@ -41,7 +41,6 @@
    "scene": "m4_city_curfew",
    "speaker": "VASILE",
    "text": "And this is what it bought us. A curfew nobody can enforce\nand a regime that shoots its own order.",
-   "quiet_ui": true,
    "lighting": [
     12,
     10,
@@ -49,6 +48,7 @@
    ],
    "min_ms": 3400,
    "caption_after_ms": 1800,
+   "quiet_ui": true,
    "cues": [
     [
      0,

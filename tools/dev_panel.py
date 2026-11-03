@@ -18,8 +18,9 @@ Layout, top to bottom::
     header   title + live "visible/total targets · running" counts
     filter   type to narrow the list (matches target name or description)
     body     scrollable, grouped target list in mission order, plus a
-             "Packaging" group (full / slim / handoff zip via tools/zip_project.py)
-             and a "Source" group (build all source .py -> TXT via
+             "Packaging" group (full / slim / handoff zip via tools/zip_project.py),
+             a "Checks" group (smoke test, engine CI gate), a "Builds" group
+             (Windows build, engine package) and a "Source" group (build all source .py -> TXT via
              tools/build_code_txt.py --all, plus a directory-tree TXT listing
              every project file, any type (source_dir.txt)
      footer   extra args, Copy command, Stop all games, status line
@@ -33,8 +34,8 @@ Structure notes:
       ``DEV_JUMPS`` entry is filed under exactly one group and reports any
       drift in the status line, so the registry and the panel cannot silently
       fall out of sync as new jumps are added.
-    * ``TOOL_TARGETS`` (the "Packaging" group) are not dev jumps: they run
-      ``tools/zip_project.py`` with a fixed base argv instead of
+    * ``TOOL_TARGETS`` (the Packaging, Checks and Builds groups) are not dev
+      jumps: they run their own script with a fixed base argv instead of
       ``acaristan.py --jump``. Extra args from the footer still append, so
       ``--no-upload`` / ``--with-tests`` can be passed from the panel.
     * ``grouped_targets`` / ``build_launch_cmd`` / ``build_tool_cmd`` /
@@ -59,7 +60,7 @@ from core.dev_jumps import DEV_JUMPS
 # warns (in the status line) about any entry that is missing or duplicated.
 GROUPS = [
     ("Mission 0", ["m0"]),
-    ("Mission 1", ["m1", "m1-safe"]),
+    ("Mission 1", ["m1", "m1-game", "m1-safe"]),
     ("Walking sim", ["walk", "walk-after"]),
     ("Mission 2", ["m2", "m2-game", "m2-sniper", "m2-after-sniper",
                    "m2-flank", "m2-truck", "m2-evidence"]),
@@ -95,18 +96,54 @@ TRAILER_ACTS = {
     "trailer-m3-comms": "act3_relay",
 }
 
-# ── Packager targets: full / slim zip via tools/zip_project.py ──
-# Rendered as their own "Packaging" group. Not DEV_JUMPS entries (they are
-# not missions), so they stay out of ``GROUPS`` and the drift check; the
-# base argv lives here and ``build_tool_cmd`` turns it into a launch line.
+# ── Tool targets: CLI scripts that are not dev jumps ──
+# Each row is (description, script under ROOT, fixed args). Rendered in the
+# ``TOOL_GROUPS`` sections below. Not DEV_JUMPS entries, so they stay out of
+# ``GROUPS`` and the drift check; ``build_tool_cmd`` turns a row into a launch line.
 ZIP_TOOL = "tools/zip_project.py"
 TOOL_TARGETS = {
-    "zip": ("Full project snapshot zip + Pixeldrain upload", []),
+    "zip": ("Full project snapshot zip + Pixeldrain upload", ZIP_TOOL, []),
     "zip-slim": ("Slim playable bundle (--slim): runtime essentials only",
-                 ["--slim"]),
+                 ZIP_TOOL, ["--slim"]),
     "zip-handoff": ("Handoff zip (--handoff): tests + .wolf + plan, for review",
-                    ["--handoff"]),
+                    ZIP_TOOL, ["--handoff"]),
+    "smoke": ("Smoke test gate (SMOKE TEST: OK) - the working game gate",
+              "tools/smoke_test.py", []),
+    "ae-ci": ("Full engine gate (AE CI: OK)", "tools/ae_ci.py", []),
+    "ae-ci-quick": ("Engine gate, quick subset (ae_ci.py --quick)",
+                    "tools/ae_ci.py", ["--quick"]),
+    "build-windows": ("Windows PyInstaller build into dist/",
+                      "tools/build_windows.py", []),
+    "build-windows-clean": ("Windows PyInstaller build with --clean",
+                            "tools/build_windows.py", ["--clean"]),
+    "ae-package": ("Engine package build (tools/ae_package.py)",
+                   "tools/ae_package.py", []),
+    "ae-package-check": ("Engine package check (ae_package.py --check)",
+                         "tools/ae_package.py", ["--check"]),
+    "mp-server": ("KRAPNET master server on 127.0.0.1 (mp_server.py)",
+                  "tools/mp_server.py", []),
+    "mp-server-lan": ("KRAPNET master server on the LAN (--host 0.0.0.0)",
+                      "tools/mp_server.py", ["--host", "0.0.0.0"]),
+    "mp-host-tool": ("Self-hosted lobby: host a game (mp_host.py)",
+                     "tools/mp_host.py", []),
+    "mp-host-check": ("Self-hosted lobby: diagnose network, host nothing",
+                      "tools/mp_host.py", ["--check"]),
+    "mp-arena-duo": ("Two game windows already in the MP arena (mp_arena_duo.py)",
+                     "tools/mp_arena_duo.py", []),
+    "mp-bot": ("Headless fake player for one-PC MP testing (mp_bot.py)",
+               "tools/mp_bot.py", []),
+    "mp-net-soak": ("Multiplayer network soak test (mp_net_soak.py)",
+                    "tools/mp_net_soak.py", []),
 }
+TOOL_GROUPS = [
+    ("Packaging", ["zip", "zip-slim", "zip-handoff"]),
+    ("Checks", ["smoke", "ae-ci", "ae-ci-quick"]),
+    ("Builds", ["build-windows", "build-windows-clean",
+                "ae-package", "ae-package-check"]),
+    ("Multiplayer tools", ["mp-server", "mp-server-lan", "mp-host-tool",
+                           "mp-host-check", "mp-arena-duo", "mp-bot",
+                           "mp-net-soak"]),
+]
 
 # ── Source-code bundle actions: all source .py -> one TXT, plus directory tree ──
 SOURCE_TXT_TOOL = "tools/build_code_txt.py"
@@ -188,8 +225,8 @@ def build_tool_cmd(target, extra_args=()):
     the base argv from the table plus any extra args (``--no-upload``,
     ``--with-tests``, ...) typed in the footer.
     """
-    _desc, base_args = TOOL_TARGETS[target]
-    cmd = [sys.executable, str(ROOT / ZIP_TOOL)]
+    _desc, script, base_args = TOOL_TARGETS[target]
+    cmd = [sys.executable, str(ROOT / script)]
     cmd.extend(base_args)
     cmd.extend(a for a in extra_args if a != "--")
     return cmd
@@ -734,9 +771,8 @@ class DevPanel(tk.Tk):
             self._add_group(label, targets)
         # Packaging rows are not dev jumps, but they ride the same row /
         # filter / keyboard machinery; ``launch`` dispatches them separately.
-        self._add_group("Packaging",
-                        [(name, desc) for name, (desc, _args) in
-                         TOOL_TARGETS.items()])
+        for label, names in TOOL_GROUPS:
+            self._add_group(label, [(n, TOOL_TARGETS[n][0]) for n in names])
         self._add_group("Source", [
             (SOURCE_TXT_TARGET, SOURCE_TXT_DESC),
             (SOURCE_DIR_TXT_TARGET, SOURCE_DIR_TXT_DESC),

@@ -85,9 +85,19 @@ M4_ZONE_DEFS = {
 }
 
 # Slice 3 hold clock: the transmitter must hold while the arrest plays out
-# on air. Timer-driven and independent of wave state (M3's exfil-door
-# lesson - a hold that only ends on kills can soft-lock).
-M4_HOLD_SECONDS = 90
+# on air. Now airtime, not wall clock: the count only advances while the
+# player has the mic OPEN at the rack and no loyalist is contesting it, so
+# the mission's title verb (hold the mic) is the progress bar. Independent
+# of wave state (M3's exfil-door lesson - a hold that only ends on kills can
+# soft-lock).
+M4_HOLD_SECONDS = 60
+
+# The mic switch. E within M4_MIC_RADIUS of the transmitter toggles
+# BROADCAST/JAM; stepping out of range drops the feed (the switch is on the
+# rack, not in Biribel's pocket). Off-air progress bleeds back 1 frame every
+# M4_OFFAIR_DECAY_EVERY frames, so ducking a push costs airtime.
+M4_MIC_RADIUS = 110
+M4_OFFAIR_DECAY_EVERY = 4
 
 # Radio/PA speaker colors (m3.meta convention, local to m4 - no cross-
 # package imports of m3 constants).
