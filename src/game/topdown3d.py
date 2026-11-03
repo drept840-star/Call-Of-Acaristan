@@ -42,7 +42,12 @@ class Cam(object):
 CAMS = {
     # steeper than the arena so walls hide less, about the 2D view's width
     "MISSION1": Cam(64.0, 25.0, 50.0),
+    "MISSION2": Cam(64.0, 25.0, 50.0),
+    "MISSION3": Cam(64.0, 25.0, 50.0),
 }
+# Optional per-mission gate: the mission is 2.5D only while its gate returns
+# True (Mission 3 draws only the cell block in 3D; the other wings stay 2D).
+GATES = {}
 
 
 def enabled():
@@ -150,8 +155,10 @@ class View(object):
 def active_cam():
     """The 2.5D camera of the running mission, or None (2D)."""
     from core.state import STATE
-    cam = CAMS.get(getattr(STATE, "active_mission", None))
-    return cam if cam is not None and enabled() else None
+    key = getattr(STATE, "active_mission", None)
+    cam = CAMS.get(key)
+    gate = GATES.get(key)
+    return cam if cam is not None and (gate is None or gate()) and enabled() else None
 
 
 def mouse_world(h=0.0):
@@ -256,6 +263,35 @@ def dot(col, size):
     return draw
 
 
+_DOT_UNIT = []
+
+
+def dots(r, pts, layer=2):
+    """Many ``dot``s at once: ``pts`` = [(pos, col, size)]. On GL they go as
+    one batch of small emissive cubes; a sprite each cost a Python depth
+    test per dot in the composite, and a molotov's burst is 300+ dots."""
+    if not pts:
+        return
+    if not hasattr(r, "add_packed"):
+        for pos, col, size in pts:
+            r.add_sprite(pos, dot(col, size), layer=layer)
+        return
+    import numpy as np
+    if not _DOT_UNIT:
+        from engine3d import box
+        m = box(1.0, 1.0, 1.0, (255, 255, 255), emissive=True)
+        _DOT_UNIT.append(r.pack(m.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]))
+    unit = _DOT_UNIT[0]
+    k = len(unit)
+    pos = np.repeat(np.asarray([p[0] for p in pts], dtype=np.float32), k, axis=0)
+    col = np.repeat(np.asarray([p[1][:3] for p in pts], dtype=np.float32), k, axis=0)
+    side = np.repeat(np.asarray([0.04 + 0.018 * p[2] for p in pts], dtype=np.float32), k)
+    out = np.tile(unit, (len(pts), 1))
+    out[:, 0:3] = out[:, 0:3] * side[:, None] + pos
+    out[:, 3:6] = col
+    r.add_packed(out)
+
+
 _SOFT = {}
 SQUASH = 0.86                      # a floor circle seen from the top-down cameras
 
@@ -286,8 +322,12 @@ def shadow(half_w, half_d=None, alpha=130):
         w, h = int(scale * half_w * 2) // 2 * 2, int(scale * half_d * 2) // 2 * 2
         if w < 4 or h < 4:
             return
-        img = _soft_surf(("sh", w, h, alpha), w, h,
+        w, h = min(w, s.get_width() * 2), min(h, s.get_height() * 2)
+        # one gradient per alpha, scaled to size: keyed by (w, h) every car
+        # shadow built a fresh numpy surface each frame as the camera moved
+        img = _soft_surf(("sh", 128, 128, alpha), 128, 128,
                          lambda d, a: ((0, 0, 0), alpha * (1.0 - d.clip(0, 1) ** 2) ** 1.4))
+        img = pygame.transform.smoothscale(img, (w, h))
         s.blit(img, (int(sx) - w // 2, int(sy) - h // 2))
     draw.bounds_m = (half_w + 0.1, half_d + 0.1)
     return draw

@@ -46,6 +46,7 @@ from missions.m2.meta import CONTROL_ROOM, EXFIL_POS, KILL_ZONE, MAP_H, MAP_W, M
 from missions.m2.world import _burst, _close_card, _dist, _near, _open_card, _player_pos, _radio, _set_objective, _solid_walls, _sync_story_prop_collisions
 from missions.m2.starts import _clue_count, _evidence_count
 from missions.m2.sniper import _add_sniper_laser, _complete_mission2, _explode_tanker, _sniper_actor_pos, _start_sniper_sequence, _start_tanker_run, _update_evidence_waves, _update_post_sniper_gameplay, _update_sniper_sequence, _update_squad_ambient, _update_travel_triggers
+from game import topdown3d as td
 import game.world as _gw  # RPE6 Phase 5 (D4): mission data lives in components
 from missions.m2.components import M2Role as _M2Role
 
@@ -53,6 +54,27 @@ from missions.m2.components import M2Role as _M2Role
 def _m2g(e):
     """Declared M2 data of an enemy (replaces the ad hoc ``e.m2_*`` attributes)."""
     return _gw.ensure(e, _M2Role)
+
+
+def _begin_upload_os():
+    """Boot the terminal OS and enter the upload stage.
+
+    One press of [E] at the terminal must open it. The stage update flipped
+    to STAGE_UPLOAD and only then waited for a *second* [E] before starting
+    the OS, so a normal tap left the player at a terminal that did nothing.
+    """
+    if getattr(STATE, "mission2_evidence_cinematic_active", False):
+        return False
+    if getattr(STATE, "mission2_evidence_cinematic_grace", 0) > 0:
+        return False
+    STATE.mission2_stage = STAGE_UPLOAD
+    STATE.mission_phase = "m2_upload"
+    STATE.mission2_timer = 0
+    from ui import upload_os  # lazy: ui package
+    if not upload_os.is_upload_os_active():
+        upload_os.start_upload_os()
+        STATE.mission2_upload_started = True
+    return True
 
 
 def handle_interact():
@@ -133,7 +155,11 @@ def handle_interact():
                 _open_card(ev["title"], ev["lines"], color=C_TERMINAL, after=after, kind=ev.get("kind", "terminal"))
                 return
         if _evidence_count() >= 3 and _near(UPLOAD_TERMINAL_POS, 95):
-            _set_objective("Hold [E] at the upload terminal")
+            _begin_upload_os()
+    elif stage == STAGE_UPLOAD:
+        # [E] also restarts the OS after the player shut it down from its menu.
+        if _near(UPLOAD_TERMINAL_POS, 110):
+            _begin_upload_os()
 
 
 def blocks_player_actions():
@@ -297,9 +323,7 @@ def _update_stage(keys):
         else:
             _set_objective("Hold [E] at the upload terminal")
             if _near(UPLOAD_TERMINAL_POS, 95) and keys[pygame.K_e]:
-                STATE.mission2_stage = STAGE_UPLOAD
-                STATE.mission_phase = "m2_upload"
-                STATE.mission2_timer = 0
+                _begin_upload_os()
     elif stage == STAGE_UPLOAD:
         # ── Upload OS integration ──
         # The old "hold [E] to fill progress bar" mechanic is replaced by a
@@ -319,8 +343,7 @@ def _update_stage(keys):
             else:
                 _set_objective("Press [E] at the upload terminal")
                 if keys[pygame.K_e]:
-                    upload_os.start_upload_os()
-                    STATE.mission2_upload_started = True
+                    _begin_upload_os()
     elif stage == STAGE_EXFIL:
         _set_objective("Reach the green exfil marker")
         if _near(EXFIL_POS, 92):
@@ -340,9 +363,7 @@ def _update_player(keys, solid_walls):
     else:
         STATE.player.speed = 3.6
 
-    mx, my = get_scaled_mouse()
-    world_mx = mx + STATE.camera_x
-    world_my = my + STATE.camera_y
+    world_mx, world_my = td.mouse_world(1.2)     # 2D: mouse + camera; 2.5D: chest-height plane
     STATE.player.angle = math.atan2(world_my - STATE.player.rect.centery, world_mx - STATE.player.rect.centerx)
 
     dx = dy = 0

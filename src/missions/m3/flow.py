@@ -42,7 +42,7 @@ import time
 
 import pygame
 
-from core.config import (C_VASILE, HEIGHT, TILE_SIZE, WIDTH, font_terminal_small, get_scaled_mouse, screen)
+from core.config import (C_VASILE, HEIGHT, TILE_SIZE, WIDTH, font_terminal_small, screen)
 from entities.art_cache import get_blood_decal, get_fullscreen_overlay, get_panel_bg
 from core.state import STATE
 from entities.player import Player, resolve_melee
@@ -666,9 +666,8 @@ def _update_player(keys, solid_walls):
         return
     STATE.player.speed = 3.6
 
-    mx, my = get_scaled_mouse()
-    world_mx = mx + STATE.camera_x
-    world_my = my + STATE.camera_y
+    from game import topdown3d as td
+    world_mx, world_my = td.mouse_world(1.2)     # flat sum while the wing is 2D
     STATE.player.angle = math.atan2(
         world_my - STATE.player.rect.centery,
         world_mx - STATE.player.rect.centerx,

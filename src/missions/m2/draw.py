@@ -63,11 +63,20 @@ PROP_WORLD_HALO_RADIUS = 22
 MARKER_RADIUS = 22
 
 
+_PROJ = [None]          # td.View of the 2.5D frame while draw3d runs the 2D label passes
+GANTRY_DECK_H = 5.0     # metres: the sniper nest's catwalk in the 2.5D set
+
+
 def _world(pos, fcx, fcy):
     # Snap world-to-screen coordinates to whole pixels.  Mission 2 camera values
     # can be fractional because the player speed is fractional; drawing tiles and
     # clue icons at fractional positions causes shimmering/"glitchy" textures
     # while walking.
+    v = _PROJ[0]
+    if v is not None:
+        h = GANTRY_DECK_H if tuple(pos) == tuple(SNIPER_NEST_POS) else 0.0
+        p = v.screen_sim(pos[0], pos[1], h)
+        return (-9999, -9999) if p is None else (int(round(p[0])), int(round(p[1])))
     return int(round(pos[0] - fcx)), int(round(pos[1] - fcy))
 
 
@@ -2506,15 +2515,16 @@ def _draw_gantry_static(target, fcx, fcy):
         target.blit(txt2, (rect.centerx - txt2.get_width() // 2, rect.y + 22))
 
 
-def _draw_gantry_dynamic(surface, fcx, fcy):
-    """Per-frame gantry state: sniper silhouette, labels, threat warning."""
+def _draw_gantry_dynamic(surface, fcx, fcy, figure=True):
+    """Per-frame gantry state: sniper silhouette, labels, threat warning.
+    ``figure`` False leaves the silhouette to the 2.5D set."""
     sx, sy = _world(SNIPER_NEST_POS, fcx, fcy)
     # Sniper silhouette and rifle on the gantry - ONLY drawn while the sniper
     # is still physically up there. Once the flank cutscene plays and sets
     # mission2_sniper_suppressed, this decoration is hidden so it doesn't
     # conflict with the abandoned-nest decal (casings + dropped rifle) that
     # _draw_abandoned_nest() renders at the same world position.
-    if not getattr(STATE, "mission2_sniper_suppressed", False):
+    if figure and not getattr(STATE, "mission2_sniper_suppressed", False):
         pygame.draw.circle(surface, (8, 8, 8), (sx, sy - 15), 7)
         pygame.draw.rect(surface, (12, 12, 11), (sx - 6, sy - 12, 12, 19), border_radius=3)
         pygame.draw.line(surface, (8, 8, 7), (sx + 3, sy - 10), (sx - 34, sy + 20), 4)
@@ -3867,10 +3877,17 @@ def _draw_garden(surface, fcx, fcy):
     # ══════════════════════════════════════════════════════════════════
 
 
-def _draw_interactables(surface, fcx, fcy):
+def _draw_interactables(surface, fcx, fcy, props=True):
+    """World markers plus the clue/evidence props.
+
+    ``props=False`` is the 2.5D frame: draw3d builds those props as real
+    geometry, so the flat top-down icons (and the upload PC sprite) must not
+    be blitted over the set. The markers still draw - they are the [E] cues.
+    """
     if STATE.mission2_stage == STAGE_INVESTIGATE:
         for clue in STATE.mission2_clues:
-            _draw_world_prop(surface, clue, fcx, fcy, active=not clue["done"])
+            if props:
+                _draw_world_prop(surface, clue, fcx, fcy, active=not clue["done"])
             if not clue["done"]:
                 label = f"{clue['name']} [E]"
                 _draw_marker(surface, clue["pos"], label, (245, 190, 65), fcx, fcy)
@@ -3892,7 +3909,8 @@ def _draw_interactables(surface, fcx, fcy):
             _draw_marker(surface, SNIPER_NEST_POS, "SNIPER SUPPRESSED", (120, 220, 150), fcx, fcy, radius=28)
     elif STATE.mission2_stage == STAGE_TRUCK:
         truck = STATE.mission2_truck_manifest
-        _draw_world_prop(surface, truck, fcx, fcy, active=not truck["done"])
+        if props:
+            _draw_world_prop(surface, truck, fcx, fcy, active=not truck["done"])
         _draw_marker(surface, IPA_TRUCK_POS, "IPA MANIFEST [E]", (255, 190, 90), fcx, fcy)
     elif STATE.mission2_stage == STAGE_TANKER:
         inspected = getattr(STATE, "mission2_tanker_inspected", False)
@@ -3902,7 +3920,8 @@ def _draw_interactables(surface, fcx, fcy):
         _draw_marker(surface, SAFE_ZONE, "RUN HERE", C_VASILE, fcx, fcy, radius=34)
     elif STATE.mission2_stage == STAGE_EVIDENCE:
         for ev in STATE.mission2_evidence:
-            _draw_world_prop(surface, ev, fcx, fcy, active=not ev["done"])
+            if props:
+                _draw_world_prop(surface, ev, fcx, fcy, active=not ev["done"])
             if not ev["done"]:
                 _draw_marker(surface, ev["pos"], f"{ev['name']} [E]", C_TERMINAL, fcx, fcy)
         # Always draw the upload PC during the evidence phase so the player
@@ -3911,7 +3930,8 @@ def _draw_interactables(surface, fcx, fcy):
         # ground marker until the player had already walked up to it and
         # the stage had transitioned. Now the PC is visible from the
         # moment the player enters the control building.
-        _draw_upload_computer(surface, *_world(UPLOAD_TERMINAL_POS, fcx, fcy), fcx, fcy)
+        if props:
+            _draw_upload_computer(surface, *_world(UPLOAD_TERMINAL_POS, fcx, fcy), fcx, fcy)
         if _evidence_count() >= 3:
             _draw_marker(surface, UPLOAD_TERMINAL_POS, "UPLOAD [E]", C_TERMINAL, fcx, fcy)
         else:
@@ -3920,7 +3940,8 @@ def _draw_interactables(surface, fcx, fcy):
             # marker to read as "not yet".
             _draw_marker(surface, UPLOAD_TERMINAL_POS, "UPLOAD (after 3 evidence)", C_TERMINAL, fcx, fcy)
     elif STATE.mission2_stage == STAGE_UPLOAD:
-        _draw_upload_computer(surface, *_world(UPLOAD_TERMINAL_POS, fcx, fcy), fcx, fcy)
+        if props:
+            _draw_upload_computer(surface, *_world(UPLOAD_TERMINAL_POS, fcx, fcy), fcx, fcy)
         _draw_marker(surface, UPLOAD_TERMINAL_POS, "UPLOAD [E]", C_TERMINAL, fcx, fcy)
     elif STATE.mission2_stage == STAGE_EXFIL:
         _draw_marker(surface, EXFIL_POS, "EXFIL", (80, 220, 120), fcx, fcy, radius=34)
@@ -4223,8 +4244,11 @@ def _update_evidence_cinematic():
         )
 
 
-def _draw_evidence_cinematic(surface):
+def _draw_evidence_cinematic(surface, proj=None):
     """Draw the evidence completion cinematic - a proper cutscene, not an overlay.
+
+    ``proj(x, y)`` maps a world point to this frame's screen (the 2.5D view);
+    None keeps the flat 2D camera offset.
 
     Called from game_draw() when STATE.mission2_evidence_cinematic_active
     is True. The cinematic darkens the world to near-black (the burning tanker
@@ -4262,6 +4286,13 @@ def _draw_evidence_cinematic(surface):
             fcx += _rng_legacy.randint(-_csh, _csh)
             fcy += _rng_legacy.randint(-_csh, _csh)
 
+    def _anchor(pos):
+        """World point -> screen, through the 3D view when there is one."""
+        if proj is not None:
+            p = proj(pos[0], pos[1])
+            return None if p is None else (int(round(p[0])), int(round(p[1])))
+        return int(round(pos[0] - fcx)), int(round(pos[1] - fcy))
+
     # ── Darken the world to near-black ──
     # The cinematic is a cutscene, not an overlay. The world fades to ~85%
     # darkness over shot 0, then stays dark for the rest of the cinematic.
@@ -4290,8 +4321,10 @@ def _draw_evidence_cinematic(surface):
     if shot_idx <= 1:
         glow_pulse = 0.5 + 0.5 * math.sin(shot_timer * 0.15)
         for ev in STATE.mission2_evidence:
-            sx = int(ev["pos"][0] - fcx)
-            sy = int(ev["pos"][1] - fcy)
+            spot = _anchor(ev["pos"])
+            if spot is None:
+                continue
+            sx, sy = spot
             # Soft red glow.
             glow_r = int(20 + glow_pulse * 8)
             glow = pygame.Surface((glow_r * 2 + 4, glow_r * 2 + 4), pygame.SRCALPHA)
@@ -4451,7 +4484,10 @@ def _draw_evidence_cinematic(surface):
     elif shot_idx == 3:
         # Camera is focused on the upload terminal (set in update).
         # Draw a pulsing red ring around it.
-        ux, uy = _world(UPLOAD_TERMINAL_POS, fcx, fcy)
+        spot = _anchor(UPLOAD_TERMINAL_POS)
+        if spot is None:
+            return
+        ux, uy = spot
         pulse = 0.5 + 0.5 * math.sin(shot_timer * 0.3)
         ring_radius = int(40 + pulse * 20)
         ring = pygame.Surface((ring_radius * 2 + 8, ring_radius * 2 + 8), pygame.SRCALPHA)
@@ -7077,6 +7113,42 @@ def _draw_m2_lamp_post(target, sx, sy, head_col=(210, 225, 255)):
     pygame.draw.rect(target, head_col, (int(sx + 10), int(sy - 52), 8, 5))
 
 
+_M2_DRESSING_PROPS = (
+    ("crates", 26, 35, 0.8), ("barrels", 50, 38, 2),
+    # Shoulder dressing.  The north-west verge (cols 2-38, rows 2-22) is
+    # outside every zone - the player can walk it, so leaving it as bare
+    # ground read as an unfinished map.  Everything here sits off the
+    # centre lane (cols 28-44) so the sniper sightline is untouched.
+    ("crates", 19, 27, 0.72), ("coil", 18, 40, 1),
+    ("barrels", 20, 49, 2), ("mop", 52, 28, 1),
+    ("cart", 52, 50, 1), ("crates", 51, 62, 0.85),
+    ("barrels", 19, 66, 3), ("coil", 52, 68, 1),
+    ("crates", 8, 8, 0.85), ("barrels", 20, 11, 2),
+    ("coil", 31, 15, 1), ("crates", 11, 19, 0.72),
+    ("mop", 25, 20, 1), ("barrels", 34, 9, 3),
+    ("cart", 6, 31, 1), ("crates", 7, 39, 0.85),
+    ("coil", 5, 56, 1), ("mop", 9, 63, 1),
+    ("crates", 30, 72, 0.72), ("barrels", 41, 73, 2),
+    ("cart", 56, 70, 1), ("coil", 61, 60, 1),
+    ("crates", 62, 52, 0.85), ("barrels", 46, 20, 2),
+    # North-west overflow yard (cols 6-36, rows 3-22) - the block sat
+    # outside every zone and rendered as a bare field.  Grouped into the
+    # same six kit clusters as the story props so the two passes read as
+    # one yard instead of two unrelated scatterings.
+    ("crates", 6, 10, 0.85), ("barrels", 9, 12, 3), ("coil", 12, 9, 1),
+    ("crates", 19, 17, 0.8), ("barrels", 22, 19, 2), ("mop", 25, 16, 1),
+    ("crates", 25, 7, 0.72), ("barrels", 28, 9, 2), ("coil", 32, 6, 1),
+    ("crates", 7, 21, 0.85), ("barrels", 12, 20, 2), ("coil", 14, 22, 1),
+    ("crates", 29, 13, 0.8), ("barrels", 34, 12, 2), ("cart", 31, 15, 1),
+    ("crates", 17, 4, 0.72), ("barrels", 21, 3, 2), ("coil", 24, 5, 1),
+    # Thin margins: south edge strip, west edge strip, south-east block.
+    ("barrels", 26, 78, 2), ("coil", 42, 78, 1), ("crates", 58, 78, 0.72),
+    ("barrels", 1, 34, 2), ("coil", 1, 43, 1), ("crates", 2, 39, 0.72),
+    ("crates", 59, 59, 0.85), ("barrels", 63, 61, 3), ("coil", 66, 64, 1),
+    ("crates", 61, 71, 0.8), ("barrels", 65, 74, 2), ("mop", 68, 69, 1),
+)
+
+
 def _draw_m2_static_dressing(target, cam_x, cam_y):
     """Baked road-dressing pass: edges, stops, posts, cracks, windows, pools."""
     start_col = max(0, int(cam_x // TILE_SIZE) - 1)
@@ -7118,40 +7190,7 @@ def _draw_m2_static_dressing(target, cam_x, cam_y):
     # tilemap so nothing lands inside solid geometry, and they all sit on the
     # shoulder bands (cols 18-20 / 51-53) - clear of the centre lane the
     # sniper fight relies on.
-    for kind, ptx, pty, arg in (
-        ("crates", 26, 35, 0.8), ("barrels", 50, 38, 2),
-        # Shoulder dressing.  The north-west verge (cols 2-38, rows 2-22) is
-        # outside every zone - the player can walk it, so leaving it as bare
-        # ground read as an unfinished map.  Everything here sits off the
-        # centre lane (cols 28-44) so the sniper sightline is untouched.
-        ("crates", 19, 27, 0.72), ("coil", 18, 40, 1),
-        ("barrels", 20, 49, 2), ("mop", 52, 28, 1),
-        ("cart", 52, 50, 1), ("crates", 51, 62, 0.85),
-        ("barrels", 19, 66, 3), ("coil", 52, 68, 1),
-        ("crates", 8, 8, 0.85), ("barrels", 20, 11, 2),
-        ("coil", 31, 15, 1), ("crates", 11, 19, 0.72),
-        ("mop", 25, 20, 1), ("barrels", 34, 9, 3),
-        ("cart", 6, 31, 1), ("crates", 7, 39, 0.85),
-        ("coil", 5, 56, 1), ("mop", 9, 63, 1),
-        ("crates", 30, 72, 0.72), ("barrels", 41, 73, 2),
-        ("cart", 56, 70, 1), ("coil", 61, 60, 1),
-        ("crates", 62, 52, 0.85), ("barrels", 46, 20, 2),
-        # North-west overflow yard (cols 6-36, rows 3-22) - the block sat
-        # outside every zone and rendered as a bare field.  Grouped into the
-        # same six kit clusters as the story props so the two passes read as
-        # one yard instead of two unrelated scatterings.
-        ("crates", 6, 10, 0.85), ("barrels", 9, 12, 3), ("coil", 12, 9, 1),
-        ("crates", 19, 17, 0.8), ("barrels", 22, 19, 2), ("mop", 25, 16, 1),
-        ("crates", 25, 7, 0.72), ("barrels", 28, 9, 2), ("coil", 32, 6, 1),
-        ("crates", 7, 21, 0.85), ("barrels", 12, 20, 2), ("coil", 14, 22, 1),
-        ("crates", 29, 13, 0.8), ("barrels", 34, 12, 2), ("cart", 31, 15, 1),
-        ("crates", 17, 4, 0.72), ("barrels", 21, 3, 2), ("coil", 24, 5, 1),
-        # Thin margins: south edge strip, west edge strip, south-east block.
-        ("barrels", 26, 78, 2), ("coil", 42, 78, 1), ("crates", 58, 78, 0.72),
-        ("barrels", 1, 34, 2), ("coil", 1, 43, 1), ("crates", 2, 39, 0.72),
-        ("crates", 59, 59, 0.85), ("barrels", 63, 61, 3), ("coil", 66, 64, 1),
-        ("crates", 61, 71, 0.8), ("barrels", 65, 74, 2), ("mop", 68, 69, 1),
-    ):
+    for kind, ptx, pty, arg in _M2_DRESSING_PROPS:
         if _m2_prop_overlaps_solid(kind, ptx, pty, arg):
             continue
         ax = ptx * TILE_SIZE + TILE_SIZE // 2 - cam_x
@@ -7204,6 +7243,16 @@ def game_draw(fcx: float, fcy: float) -> None:
         except Exception as exc:          # fall back to the 2D view, keep playing
             print(f"[m2] 3D sniper film draw failed: {exc}")
             cine.done = True
+    from game import topdown3d as td
+    if td.active_cam() is not None:
+        try:
+            from missions.m2 import draw3d
+            if draw3d.game_draw3d(fcx, fcy):
+                return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            td.disable()                  # the 2D painter from here on
     if artpack.enabled():
         lighting.buffer().begin_frame(_m2_wing_name(), _m2_light_sig())
     _game_draw_inner(fcx, fcy)
@@ -7377,6 +7426,14 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
                                     (255, 190, 110), 0.9)
         STATE.muzzle_flash_timer -= 1
 
+    _draw_screen_passes(cam_x, cam_y)
+
+
+def _draw_screen_passes(cam_x, cam_y, world3d=False, proj=None):
+    """Reticle, flashes, vignette, HUD, cards and fades over the world.
+    ``world3d``: the 2.5D frame (draw3d) drew the world and the dead body.
+    ``proj``: that frame's world->screen projector, for world-anchored
+    overlays (the evidence cinematic's glows and terminal ring)."""
     ch_x, ch_y = get_scaled_mouse()
     # Honor the Gameplay → Crosshair setting. The shared
     # ui_hud.draw_gameplay_crosshair() (called from acaristan.py after this
@@ -7407,7 +7464,9 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
         size = max(3, int(SETTINGS.crosshair_size))
         _hud_crosshair.draw_combat(screen, ch_x, ch_y, size=size, color=col)
 
-    if STATE.player_dead:
+    if STATE.player_dead and world3d:
+        _draw_tinnitus_overlay(screen)
+    elif STATE.player_dead:
         # Death animation overlay: blood pool, fallen body, weapon eject,
         # tinnitus. Camera tilt is applied at the very end of the frame.
         from entities import death_anim
@@ -7492,7 +7551,7 @@ def _game_draw_inner(fcx: float, fcy: float) -> None:
 
     # ── Evidence completion cinematic (Option E) ──
     # Drawn after the card so it covers everything when active.
-    _draw_evidence_cinematic(screen)
+    _draw_evidence_cinematic(screen, proj)
 
     # ── Upload OS ──
     # Drawn on top of everything when active - the OS takes over the screen.
@@ -7770,7 +7829,11 @@ def _update_flank_cutscene():
             }
 
 
-def _draw_flank_cutscene(surface, fcx, fcy):
+def _draw_flank_cutscene(surface, fcx, fcy, figure=True):
+    """Letterbox, the sniper's last beats and the "NEST ABANDONED" stamp.
+    ``figure`` False leaves the sniper (and the rifle he drops) to the 2.5D
+    set, which draws him as a real actor - the same contract as
+    ``_draw_gantry_dynamic``."""
     t = getattr(STATE, "mission2_flank_cutscene_timer", 0)
     if t <= 0:
         return
@@ -7807,7 +7870,7 @@ def _draw_flank_cutscene(surface, fcx, fcy):
     #   STARTLE   - head lifts off scope, rifle tilts up
     #   SCRAMBLE  - rifle drops to deck; body crawls NORTH and fades
     # ====================================================================
-    if elapsed < FLANK_BEAT_BURST:
+    if figure and elapsed < FLANK_BEAT_BURST:
         # --- Compute pose_t: 0 = AIM, 1 = STARTLE, 2 = SCRAMBLE/GONE ------
         if elapsed < FLANK_BEAT_STARTLE:
             pose_t = 0.0
@@ -7978,7 +8041,7 @@ def _draw_flank_cutscene(surface, fcx, fcy):
     # --- Dropped rifle on the deck (visible after the scramble begins) ------
     # Drawn separately from the silhouette so it stays put after the body
     # has crawled off-frame. Persists into gameplay via _draw_abandoned_nest.
-    if getattr(STATE, "mission2_flank_cutscene_rifle_dropped", False):
+    if figure and getattr(STATE, "mission2_flank_cutscene_rifle_dropped", False):
         rifle_pos = getattr(STATE, "mission2_flank_cutscene_rifle_pos", (sx + 6, sy + 24))
         rx, ry = _world(rifle_pos, fcx, fcy)
         # Rifle body - dark line with stock and scope bumps

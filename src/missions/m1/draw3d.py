@@ -863,10 +863,9 @@ def _flicker(tm, seed):
     return 0.8 + 0.12 * math.sin(tm * 0.017 + seed) + 0.08 * math.sin(tm * 0.053 + seed * 1.7)
 
 
-def _dyn_lights(flashes, tm):
-    """This frame's lights for ``grade3d``: every flash the cast and fx
-    queued (muzzles, molotov fires, burning bodies, headlights), fires
-    flickering, plus the burning barrels."""
+def _flash_lights(flashes, tm):
+    """Grade lights for every flash the cast and fx queued (muzzles, molotov
+    fires, burning bodies, headlights), fires flickering."""
     out = []
     for i, f in enumerate(flashes):
         col, k, rng = f["color"], f.get("intensity", 1.0), f.get("range", 4.0)
@@ -875,6 +874,13 @@ def _dyn_lights(flashes, tm):
             k *= _flicker(tm, i * 3.1 + f["pos"][0])
         out.append(("pool", f["pos"], col, rng * 0.55, min(0.75, 0.38 * k)))
         out.append(("glow", f["pos"], col, rng * 0.22, min(0.8, 0.42 * k)))
+    return out
+
+
+def _dyn_lights(flashes, tm):
+    """This frame's lights for ``grade3d``: the flashes plus the burning
+    barrels."""
+    out = _flash_lights(flashes, tm)
     T = TILE_SIZE
     for row in range(MAP_H):
         for col in range(MAP_W):
@@ -892,13 +898,39 @@ def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0):
 
 
 _FLAMES = {}
+# World-space rows of a flame, keyed like ``_FLAMES`` plus its spot and size
+# bucket. A zone's flames stand still, so these only change when the flame's
+# mesh step does: re-copying and transforming every flame every frame was
+# ~45 us each, ~6 ms a frame for the tanker's 17 permanent fires.
+_FLAME_WORLD = {}
+# Re-packs allowed per frame once a flame has a mesh: past it a flame keeps
+# its last step's mesh one more frame. Without it the tanker fire's flames
+# hit their step boundary together and spiked a frame past 100 ms.
+_REPACK = [None, 0]
+_REPACK_MAX = 3
+_EXPIRE = [0]
 
 
-def _fire(r, pos, tm, seed, size):
+def _expire_flames(tm):
+    """Drop flames not drawn for 1.5 s. A moving flame (the blast's
+    fireball) mints a key each frame; evicting only those keeps the cache
+    bounded without the full clear that would rebuild every standing zone's
+    rows in one frame - a visible hitch seconds into the blast. A standing
+    zone is touched every frame, so it never expires."""
+    old = tm - 1500
+    stale = [k for k, e in _FLAME_WORLD.items() if e[2] < old]
+    for k in stale[:512]:
+        del _FLAME_WORLD[k]
+
+
+def _fire(r, pos, tm, seed, size, glow=True):
     """``m7world3d.fire`` (no smoke) with the flame mesh packed once per
     animation step at the origin and moved per frame: re-packing every
     flame every frame was most of a molotov's cost. The step boundary is
-    staggered by seed so a fire's flames do not all re-pack on one frame."""
+    staggered by seed so a fire's flames do not all re-pack on one frame.
+    Flames share eight mesh variants (``seed % 8``): a mesh per seed made
+    the tanker blast's ~140 flames re-pack ~10 a frame and overflow the
+    cache. ``glow`` False skips the halo sprite (a fire's later flames)."""
     from cutscenes import m7world3d as _m7
     from cutscenes import m6fx3d as _fx
     if size <= 0.0:
@@ -907,34 +939,50 @@ def _fire(r, pos, tm, seed, size):
         _m7.fire(r, pos, tm, seed=seed, size=size, smoky=False)
         return
     x, y, z = pos
-    flicker = _m7._fire_flicker(tm, seed)
-    r.add_sprite((x, y + size * 0.8, z),
-                 _fx.glow((255, 111, 34), size * 1.9, tm, flicker=0.08, seed=seed,
-                          core=(255, 196, 96), intensity=0.34 * flicker, max_px=70),
-                 layer=_fx.FX_LAYER)
+    if glow:
+        flicker = _m7._fire_flicker(tm, seed)
+        r.add_sprite((x, y + size * 0.8, z),
+                     _fx.glow((255, 111, 34), size * 1.9, tm, flicker=0.08, seed=seed,
+                              core=(255, 196, 96), intensity=0.34 * flicker, max_px=70),
+                     layer=_fx.FX_LAYER)
+    seed %= 8
     step_ms = _m7._FIRE_STEP_MS
     step = int((tm + (seed % 4) * step_ms / 4.0) // step_ms)
     cam = getattr(r, "cam", None)
     ang = 0.0 if cam is None else math.atan2(cam[2] - z, cam[0] - x)
-    ang = round(ang * 16.0 / math.pi) * math.pi / 16.0
-    yk = round(y, 2)
-    sq = round(math.log(size) * 12.0)        # ~8% size steps: a fading fire still hits
+    ang = round(ang * 8.0 / math.pi) * math.pi / 8.0
+    yk = 0.0 if y < 0.5 else 1.0             # height only picks the coal bed; a rising fireball missed every frame
+    sq = round(math.log(size) * 4.0)         # ~28% size buckets, scaled to the exact size below
     key = (seed, yk, sq, ang)
     hit = _FLAMES.get(key)
-    if hit is None or hit[0] != step:
+    if _REPACK[0] != tm:
+        _REPACK[:] = [tm, 0]
+    if hit is None or (hit[0] != step and _REPACK[1] < _REPACK_MAX):
+        _REPACK[1] += 1
         if len(_FLAMES) > 512:
             _FLAMES.clear()
-        m = _m7.flame_mesh((0.0, yk, 0.0), step * step_ms, seed, math.exp(sq / 12.0),
+        m = _m7.flame_mesh((0.0, yk, 0.0), step * step_ms, seed, math.exp(sq / 4.0),
                            heat=_m7._fire_flicker(step * step_ms, seed),
                            cam=(math.cos(ang) * 10.0, yk, math.sin(ang) * 10.0))
         faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
         hit = _FLAMES[key] = (step, r.pack(m.verts, faces))
-    if hit[1] is not None:
+    if hit[1] is None:
+        return
+    wkey = (key, round(x, 3), round(y, 3), round(z, 3), round(size * 64))
+    ent = _FLAME_WORLD.get(wkey)
+    if ent is None or ent[0] != hit[0]:
         arr = hit[1].copy()
-        arr[:, 0] += x
-        arr[:, 1] += y - yk
-        arr[:, 2] += z
-        r.add_packed(arr)
+        k = size / math.exp(sq / 4.0)
+        arr[:, 0] = arr[:, 0] * k + x
+        arr[:, 1] = (arr[:, 1] - yk) * k + y
+        arr[:, 2] = arr[:, 2] * k + z
+        ent = _FLAME_WORLD[wkey] = [hit[0], arr, tm]
+        if len(_FLAME_WORLD) > 1024 and _EXPIRE[0] != tm:
+            _EXPIRE[0] = tm
+            _expire_flames(tm)
+    else:
+        ent[2] = tm
+    r.add_packed(ent[1])
 
 
 def _cut_zone():
@@ -1315,7 +1363,7 @@ def _xz(x, y):
     return p[0], p[2]
 
 
-def _draw_dead_player(r):
+def _draw_dead_player(r, hum=None):
     from engine3d import blend
     p = STATE.player
     t = getattr(STATE, "death_anim_timer", 999)
@@ -1333,7 +1381,8 @@ def _draw_dead_player(r):
         mesh, _mz = mp3d.gun(STATE.death_weapon_type)
         wx, _, wz = to3(*STATE.death_weapon_pos)
         _put(r, mesh, (wx, 0.04, wz), yaw=STATE.death_weapon_rotation, roll=90.0)
-    hum, _rig = player_hum()
+    if hum is None:
+        hum, _rig = player_hum()
     pose = blend("kneel", "dead_back", k) if k > 0.4 else blend("stand", "kneel", k / 0.4)
     r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(p.angle), rifle_on=False)
 
@@ -1420,6 +1469,7 @@ def _fuel_pool(x, z, rad, seed):
 
 FIRE_CULL_PX = 256       # fire zones this far outside the 2D camera rect are skipped
 _POOLS = {}
+_POOL_WORLD = {}         # the same rows moved to a zone's spot (see _fuel_pool_at)
 
 
 def _fuel_pool_at(r, x, z, rad, seed):
@@ -1439,11 +1489,18 @@ def _fuel_pool_at(r, x, z, rad, seed):
         m = _fuel_pool(0.0, 0.0, math.exp(rq / 16.0), seed)
         faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
         arr = _POOLS[key] = r.pack(m.verts, faces)
-    if arr is not None:
-        arr = arr.copy()
-        arr[:, 0] += x
-        arr[:, 2] += z
-        r.add_packed(arr)
+    if arr is None:
+        return
+    wkey = (key, round(x, 3), round(z, 3))
+    ent = _POOL_WORLD.get(wkey)
+    if ent is None or ent[0] is not arr:
+        out = arr.copy()
+        out[:, 0] += x
+        out[:, 2] += z
+        if len(_POOL_WORLD) > 512:
+            _POOL_WORLD.clear()
+        ent = _POOL_WORLD[wkey] = (arr, out)
+    r.add_packed(ent[1])
 
 
 def _draw_fx(r, flashes, tm):
@@ -1479,6 +1536,7 @@ def _draw_fx(r, flashes, tm):
                          td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
     cx0, cy0 = _d._M1_CAM[0] - FIRE_CULL_PX, _d._M1_CAM[1] - FIRE_CULL_PX
     cx1, cy1 = cx0 + WIDTH + 2 * FIRE_CULL_PX, cy0 + HEIGHT + 2 * FIRE_CULL_PX
+    lit = []
     for fz in STATE.fire_zones:
         if not (cx0 < fz.x < cx1 and cy0 < fz.y < cy1):
             continue                              # off-screen: no flames, pool or light
@@ -1489,12 +1547,20 @@ def _draw_fx(r, flashes, tm):
         r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
         _fuel_pool_at(r, x, z, rad * (0.55 + 0.45 * heat), fz.x * 0.37 + fz.y * 0.11)
         n = 1 + min(9, int(rad / 0.3))
+        # zones heaped on one spot (the tanker leaves 23) read as one fire: past
+        # the first, a zone inside another's radius keeps three flames, no light
+        near = any((x - px) ** 2 + (z - pz) ** 2 < rad * rad for px, pz in lit)
+        if near:
+            n = min(n, 3)
+        else:
+            lit.append((x, z))
         for i in range(n):                        # the layered M7 flame: a tall core, licks over the pool
             a = i * 2.39996 + fz.x * 0.013
             d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
             size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
             # no smoke: from the top-down camera it smears over the walls behind
-            _fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size)
+            _fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
+                  glow=i == 0)
         flashes.append({"pos": (x, 1.0, z), "color": (255, 140, 60), "intensity": 1.0 * heat,
                         "range": 4.0 + rad})
     from engine3d import m_apply, m_mul, rot_x, rot_y
@@ -1521,11 +1587,9 @@ def _draw_fx(r, flashes, tm):
         tail = to3(b.get("prev_x", b["x"] - b["dx"]), b.get("prev_y", b["y"] - b["dy"]), AIM_H)
         r.add_line3d(tail, head, (255, 220, 140), 2, layer=4)
         r.add_sprite(head, _fx.glow(C_BULLET, 0.12, tm, intensity=0.9, max_px=10), layer=_fx.FX_LAYER)
-    for p in STATE.particles:
-        r.add_sprite(to3(p.x, p.y, 0.25 + 0.03 * getattr(p, "life", 0)),
-                     td.dot(tuple(p.color[:3]), getattr(p, "size", 2)), layer=_fx.FX_LAYER)
-    for c in STATE.casings:
-        r.add_sprite(to3(c.x, c.y, 0.03), td.dot((200, 160, 70), 2), layer=1)
+    td.dots(r, [(to3(p.x, p.y, 0.25 + 0.03 * getattr(p, "life", 0)), p.color, getattr(p, "size", 2))
+                for p in STATE.particles], layer=_fx.FX_LAYER)
+    td.dots(r, [(to3(c.x, c.y, 0.03), (200, 160, 70), 2) for c in STATE.casings], layer=1)
     if STATE.notebook_collected and STATE.EXFIL_POS:
         x, z = _xz(*STATE.EXFIL_POS)
         pulse = 0.5 + 0.5 * math.sin(t * 3)

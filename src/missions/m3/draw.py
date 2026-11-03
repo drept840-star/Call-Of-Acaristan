@@ -182,6 +182,28 @@ _screen_visible_rect = render_util.screen_visible
 
 # ── static-layer bake + lighting fixtures (graphics rework phases 0/3) ──
 _M3_CAM = [0, 0]
+# The 2.5D frame's td.View while draw3d runs the screen passes; world anchors
+# (waypoint, prompts) project through it instead of the flat camera offset.
+_PROJ = [None]
+
+
+def _scr(wx, wy, cam_x, cam_y, h=0.0):
+    v = _PROJ[0]
+    if v is not None:
+        pt = v.screen_sim(wx, wy, h)
+        if pt is not None:
+            return pt
+    return wx - cam_x, wy - cam_y
+
+
+def _m3_td3d_gate():
+    return (getattr(STATE, "mission3_stage", None) == STAGE_BREAKOUT
+            and _m3_maps.MISSION3_MAP is _m3_maps.MISSION3_CELL_MAP
+            and not getattr(STATE, "m3_black_ledger_death_active", False))
+
+
+from game import topdown3d as _td  # noqa: E402
+_td.GATES["MISSION3"] = _m3_td3d_gate
 
 
 def _m3_static_layer():
@@ -2122,8 +2144,7 @@ def _draw_objective_waypoint(cam_x, cam_y):
         return
 
     wx, wy, label_text, marker_col = target
-    sx = wx - cam_x
-    sy = wy - cam_y
+    sx, sy = _scr(wx, wy, cam_x, cam_y)
     pulse = 0.5 + 0.5 * math.sin(_now_s() * 5.0)
     alpha = int(145 + 80 * pulse)
 
@@ -2148,8 +2169,7 @@ def _draw_objective_waypoint(cam_x, cam_y):
         dist = math.hypot(STATE.player.rect.centerx - wx,
                           STATE.player.rect.centery - wy)
         if dist > 85:
-            px = STATE.player.rect.centerx - cam_x
-            py = STATE.player.rect.centery - cam_y
+            px, py = _scr(STATE.player.rect.centerx, STATE.player.rect.centery, cam_x, cam_y)
             ang = math.atan2(sy - py, sx - px)
             start = (int(px + math.cos(ang) * 28), int(py + math.sin(ang) * 28))
             end = (int(px + math.cos(ang) * 68), int(py + math.sin(ang) * 68))
@@ -2161,8 +2181,7 @@ def _draw_objective_waypoint(cam_x, cam_y):
             pygame.draw.polygon(screen, marker_col, [end, left, right])
     else:
         # Off-screen fallback arrow clamped to screen edge.
-        px = STATE.player.rect.centerx - cam_x
-        py = STATE.player.rect.centery - cam_y
+        px, py = _scr(STATE.player.rect.centerx, STATE.player.rect.centery, cam_x, cam_y)
         ang = math.atan2(sy - py, sx - px)
         edge_x = max(40, min(WIDTH - 40, int(WIDTH / 2 + math.cos(ang) * (WIDTH / 2 - 60))))
         edge_y = max(LETTER_H + 35, min(HEIGHT - LETTER_H - 35,
@@ -5637,6 +5656,16 @@ def _draw_breach_cinematic_letterbox():
     screen.blit(bot, (0, HEIGHT - h))
 
 def game_draw(fcx, fcy):
+    if _td.active_cam() is not None:
+        try:
+            from missions.m3 import draw3d
+            if draw3d.game_draw3d(fcx, fcy):
+                _draw_m3_combat_reticle()
+                return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            _td.disable()
     if artpack.enabled():
         lighting.buffer().begin_frame(_m3_wing_name(), _m3_doors_sig())
     _game_draw_inner(fcx, fcy)
@@ -5733,11 +5762,6 @@ def _game_draw_inner(fcx, fcy):
         _draw_m3_corridor_and_map_details(cam_x, cam_y)
     _draw_m3_dynamic_tiles(cam_x, cam_y)
     _draw_m3_doors(cam_x, cam_y)
-
-    if getattr(STATE, "m3_hide_molotov", False):
-        STATE.show_molotov_hud = False
-    else:
-        STATE.show_molotov_hud = True
 
     stage = getattr(STATE, "mission3_stage", STAGE_INTERROGATION)
 
@@ -5846,6 +5870,15 @@ def _game_draw_inner(fcx, fcy):
         txt = font_terminal_small.render(ft[2], True, ft[3])
         screen.blit(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y))
 
+    _draw_screen_passes(cam_x, cam_y)
+
+
+def _draw_screen_passes(cam_x, cam_y, world3d=False):
+    """Overlays over the world: alarm wash, waypoint, hand weapon and muzzle
+    flash (2D only; the 3D cast holds its own), vignette, death, HUD, the
+    world-anchored prompts (through ``_scr``), crafting, death tilt."""
+    STATE.show_molotov_hud = not getattr(STATE, "m3_hide_molotov", False)
+
     # Subtle facility lockdown lighting after Volkov detonates the door.
     _draw_m3_alarm_effect(screen)
 
@@ -5857,10 +5890,11 @@ def _game_draw_inner(fcx, fcy):
     # (Only drawn while the player has an improvised weapon; once the sidearm
     # is acquired, the pistol is rendered by Player.draw above and this overlay
     # is suppressed.)
-    _draw_mission3_hand_weapon(screen, cam_x, cam_y)
+    if not world3d:
+        _draw_mission3_hand_weapon(screen, cam_x, cam_y)
 
     # Muzzle flash - matches M1/M2 barrel-tip flash.
-    if STATE.muzzle_flash_timer > 0 and STATE.player:
+    if STATE.muzzle_flash_timer > 0 and STATE.player and not world3d:
         if hasattr(STATE.player, "barrel_tip"):
             tip_x, tip_y = STATE.player.barrel_tip()
         else:
@@ -5883,6 +5917,9 @@ def _game_draw_inner(fcx, fcy):
     # Black Ledger owns its own custom death animation.
     if getattr(STATE, "m3_black_ledger_death_active", False):
         _draw_black_ledger_death_overlay()
+    elif STATE.player_dead and world3d:
+        from missions import m2 as _m2       # the 3D cast draws the body; keep the tinnitus
+        _m2._draw_tinnitus_overlay(screen)
     elif STATE.player_dead:
         from entities import death_anim
         death_anim.draw_death_overlay(screen, cam_x, cam_y)
@@ -5918,8 +5955,8 @@ def _game_draw_inner(fcx, fcy):
         if _near(drain_pos, radius=60):
             prompt = font_terminal_small.render(
                 _T("m3.e_sharpen_the_leg"), True, (200, 170, 120))
-            px = drain_pos[0] - cam_x
-            py = drain_pos[1] - cam_y - 30
+            px, py = _scr(drain_pos[0], drain_pos[1], cam_x, cam_y)
+            py -= 30
             # Pulsing alpha.
             a = int(180 + math.sin(_now_s() * 4) * 60)
             prompt.set_alpha(a)
@@ -5937,8 +5974,8 @@ def _game_draw_inner(fcx, fcy):
             else:
                 prompt = font_terminal_small.render(
                     _T("m3.e_crawl_into_vent"), True, (140, 220, 160))
-            px = vent_pos[0] - cam_x
-            py = vent_pos[1] - cam_y - 30
+            px, py = _scr(vent_pos[0], vent_pos[1], cam_x, cam_y)
+            py -= 30
             a = int(180 + math.sin(_now_s() * 4) * 60)
             prompt.set_alpha(a)
             screen.blit(prompt,
@@ -5956,8 +5993,8 @@ def _game_draw_inner(fcx, fcy):
             prompt_text = "[ REACH THE EXIT ]" if exit_ready else "[ EXIT LOCKED: OBJECTIVE INCOMPLETE ]"
             prompt_col = (140, 220, 160) if exit_ready else (220, 170, 90)
             prompt = font_terminal_small.render(prompt_text, True, prompt_col)
-            px = exit_pos[0] - cam_x
-            py = exit_pos[1] - cam_y - 36
+            px, py = _scr(exit_pos[0], exit_pos[1], cam_x, cam_y)
+            py -= 36
             a = int(180 + math.sin(_now_s() * 4) * 60)
             prompt.set_alpha(a)
             screen.blit(prompt,
@@ -5974,8 +6011,8 @@ def _game_draw_inner(fcx, fcy):
         if _near(k9_pos, radius=72):
             prompt = font_terminal_small.render(
                 _T("m3.e_take_k_9_suppressed_smg"), True, (140, 230, 190))
-            px = k9_pos[0] - cam_x
-            py = k9_pos[1] - cam_y + 36
+            px, py = _scr(k9_pos[0], k9_pos[1], cam_x, cam_y)
+            py += 36
             a = int(180 + math.sin(_now_s() * 4) * 60)
             prompt.set_alpha(a)
             screen.blit(prompt, (px - prompt.get_width() // 2, py))
@@ -6804,31 +6841,8 @@ def _draw_neighbor_cell_base(cell_idx, L, T, W, H, vostral=None, live=True):
     """
     ix, iy, iw, ih = int(L), int(T), int(W), int(H)
 
-    themes = [
-        # cell_idx 0 - storage / archives overflow
-        {
-            "tint": (85, 70, 35),
-            "label": "CELL 01 / STORAGE",
-            "sub": "ARCHIVE OVERFLOW",
-            "accent": (190, 150, 70),
-        },
-        # cell_idx 1 - torture / interrogation overflow
-        {
-            "tint": (105, 28, 22),
-            "label": "CELL 02 / INTERVIEW",
-            "sub": "CLEANED DAILY",
-            "accent": (210, 65, 45),
-        },
-        # cell_idx 2 - remains / Vostral rumor cell
-        {
-            "tint": (45, 82, 60),
-            "label": "CELL 03 / NO LOG",
-            "sub": "TRANSFER RECORD MISSING",
-            "accent": (110, 180, 130),
-        },
-    ]
 
-    theme = themes[cell_idx]
+    theme = _NEIGHBOR_THEMES[cell_idx]
     tint = theme["tint"]
     accent = theme["accent"]
 
@@ -6972,6 +6986,30 @@ def _draw_cell_details_live(cam_x, cam_y):
     pygame.draw.circle(screen, (200 if led_on else 60, 20, 20), (speaker_x + 4, speaker_y + 2), 1)
 
 
+# Per neighbour cell: wash tint, plaque label and sub line, accent colour.
+_NEIGHBOR_THEMES = (
+    # cell_idx 0 - storage / archives overflow
+    {
+        "tint": (85, 70, 35),
+        "label": "CELL 01 / STORAGE",
+        "sub": "ARCHIVE OVERFLOW",
+        "accent": (190, 150, 70),
+    },
+    # cell_idx 1 - torture / interrogation overflow
+    {
+        "tint": (105, 28, 22),
+        "label": "CELL 02 / INTERVIEW",
+        "sub": "CLEANED DAILY",
+        "accent": (210, 65, 45),
+    },
+    # cell_idx 2 - remains / Vostral rumor cell
+    {
+        "tint": (45, 82, 60),
+        "label": "CELL 03 / NO LOG",
+        "sub": "TRANSFER RECORD MISSING",
+        "accent": (110, 180, 130),
+    },
+)
 _NEIGHBOR_LIGHT_COLS = ((210, 185, 115), (180, 55, 45), (120, 190, 145))
 
 
