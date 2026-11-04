@@ -1326,7 +1326,7 @@ def _draw_m4_street_arrow(surface, cam_x, cam_y):
     else:
         wx, wy = _street_door_pos()
         label = "STATION"
-    sx, sy = wx - cam_x, wy - cam_y
+    sx, sy = _scr(wx, wy, cam_x, cam_y)
     m = 64
     if m <= sx <= WIDTH - m and m <= sy <= HEIGHT - m:
         return
@@ -1421,6 +1421,19 @@ def _draw_m4_cache_prop_world(surface, cam_x, cam_y):
 #    module is NOT imported - those globals are mission-scoped). Everything
 #    degrades to the direct sprite blit when the art/static tiers are off.
 _M4_CAM = [0, 0]
+# The 2.5D frame's View while draw3d runs the world-anchored 2D passes
+# (street arrow, floating texts); None in 2D.
+_PROJ = [None]
+
+
+def _scr(wx, wy, cam_x, cam_y, h=0.0):
+    """World point to screen: through the 2.5D view when one is live."""
+    v = _PROJ[0]
+    if v is not None:
+        pt = v.screen_sim(wx, wy, h)
+        if pt is not None:
+            return pt
+    return wx - cam_x, wy - cam_y
 # Open exterior ground the world-space dressing pass treats as wearable.
 _GROUND_OPEN = (".", "d", "g")
 _GROUND_SOLID = ("C", "B", "D")
@@ -2614,18 +2627,34 @@ def _game_draw_inner(cam_x, cam_y):
     for fz in getattr(STATE, "fire_zones", []):
         fz.draw(screen, cam_x, cam_y)
 
-    # Unpinned floating texts (damage numbers, pickup notifications).
-    unpinned = [ft for ft in STATE.floating_texts if not (len(ft) >= 6 and ft[5] == "pin")]
-    for ft in unpinned:
-        txt = font_terminal_small.render(ft[2], True, ft[3])
-        screen.blit(txt, (ft[0] - cam_x - txt.get_width() // 2, ft[1] - cam_y))
+    _draw_m4_floating(screen, cam_x, cam_y)
 
     # Vignette is part of the world grade; the lighting composite follows it in
     # the wrapper, and the HUD is drawn after the composite so it stays legible.
     draw_vignette(screen)
 
 
+def _draw_m4_floating(surface, cam_x, cam_y):
+    """Unpinned floating texts (damage numbers, pickup notifications)."""
+    for ft in STATE.floating_texts:
+        if len(ft) >= 6 and ft[5] == "pin":
+            continue
+        txt = font_terminal_small.render(ft[2], True, ft[3])
+        sx, sy = _scr(ft[0], ft[1], cam_x, cam_y, 1.0)
+        surface.blit(txt, (int(sx) - txt.get_width() // 2, int(sy)))
+
+
 def game_draw(fcx, fcy):
+    from game import topdown3d as td
+    if td.active_cam() is not None:
+        try:
+            from missions.m4 import draw3d
+            if draw3d.game_draw3d(fcx, fcy):
+                return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            td.disable()
     cam_x, cam_y = int(round(fcx)), int(round(fcy))
     _M4_CAM[0], _M4_CAM[1] = cam_x, cam_y
     lit = artpack.enabled()
@@ -2635,11 +2664,26 @@ def game_draw(fcx, fcy):
     if lit:
         _push_m4_lights(cam_x, cam_y, _now_s())
         lighting.buffer().composite(screen, _now_s())
+    _draw_screen_passes(cam_x, cam_y)
 
+
+def _draw_death_edge(surface):
+    """2.5D death: the body lies in the world; the screen only reddens."""
+    red = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    for i in range(6):
+        pygame.draw.rect(red, (120, 0, 0, 70 - i * 10), (i * 6, i * 6, WIDTH - i * 12, HEIGHT - i * 12), 6)
+    surface.blit(red, (0, 0))
+
+
+def _draw_screen_passes(cam_x, cam_y, world3d=False):
+    """Rain, scanlines, death overlay, flash, HUD, dialogue and reticle over
+    the world (2D or the 2.5D frame from draw3d)."""
     _m4_draw_rain()
     draw_scanlines(screen)
 
-    if STATE.player_dead:
+    if STATE.player_dead and world3d:
+        _draw_death_edge(screen)
+    elif STATE.player_dead:
         from entities import death_anim
         death_anim.draw_death_overlay(screen, cam_x, cam_y)
 

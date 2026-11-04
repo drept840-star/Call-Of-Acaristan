@@ -14,7 +14,7 @@ import time
 
 import pygame
 
-from core.config import (C_BLOOD, C_TERMINAL, ENEMY_DAMAGE, TILE_SIZE, get_scaled_mouse)
+from core.config import (C_BLOOD, C_TERMINAL, ENEMY_DAMAGE, TILE_SIZE)
 from core.state import STATE
 from entities import corpse
 from entities.player import Player, resolve_melee
@@ -82,9 +82,8 @@ def _update_player(keys, solid_walls):
         return
     STATE.player.speed = 3.6
 
-    mx, my = get_scaled_mouse()
-    world_mx = mx + STATE.camera_x
-    world_my = my + STATE.camera_y
+    from game import topdown3d as _td
+    world_mx, world_my = _td.mouse_world(1.2)   # 2D: mouse + camera; 2.5D: chest-height plane
     STATE.player.angle = math.atan2(
         world_my - STATE.player.rect.centery,
         world_mx - STATE.player.rect.centerx,
