@@ -33,7 +33,43 @@ SETS = {
                 {"sta_forecourt": (17, 23), "sta_entry": (17, 17), "sta_hall": (18, 7),
                  "sta_corridor": (24, 11), "sta_studio": (27, 17), "sta_ring_e": (32, 12),
                  "sta_archive": (8, 7)}),
+    "siege": ("start_mission4_tower_checkpoint",
+              {"sg_forecourt": (18, 22), "sg_entry": (17, 18), "sg_hall": (18, 9),
+               "sg_corridor": (25, 11), "sg_build": (12, 5)}),
 }
+
+
+def _stage_siege(m4):
+    """Wave 5 mid-fight: every site built (mixed kinds and damage), the weak
+    wall blown, the APC parked at the main door, loyalists on the ring."""
+    from missions.m4 import fortify, siege, apc
+    import random
+    random.seed(7)
+    for i, (c, r, kind) in enumerate(STATE.m4_sites):
+        k = ("plate" if i % 2 else "planks") if kind == "door" else "boards"
+        fortify._place((c, r), k)
+        bar = STATE.m4_barricades[(c, r)]
+        bar["hp"] = int(bar["max"] * (1.0, 0.55, 0.2, 0.0)[i % 4])
+    siege.blow_quiet()
+    STATE.m4_siege_t = 24000 + 1800
+    STATE.m4_wave = 5
+    STATE.m4_supply = 7
+    apc.start()
+    a = STATE.m4_apc
+    a.update(x=apc.TURN_X, y=apc.PARK_Y, yaw=-1.5707963, phase="parked")
+    apc._park()
+    for door in ("S", "E", "W", "N", "SE"):
+        siege._spawn(random.choice(("loyalist", "marksman", "breacher")), door)
+    for _ in range(40):
+        m4.game_update(_NoKeys())
+
+
+class _NoKeys:
+    def __getitem__(self, k):
+        return False
+
+
+SETUP = {"siege": _stage_siege}
 
 
 def _frame(m4, out, name, tag):
@@ -62,6 +98,8 @@ def main():
         STATE.active_mission = "MISSION4"
         for flag in filter(None, os.environ.get("ACA_M4_FLAGS", "").split(",")):
             setattr(STATE, flag, True)
+        if key in SETUP:
+            SETUP[key](m4)
         for name in picked:
             tx, ty = spots[name]
             STATE.player.rect.center = (tx * T + T // 2, ty * T + T // 2)

@@ -8793,19 +8793,75 @@ def check_mission5_cutscenes_3d():
             _os.environ["ACARISTAN_CUTSCENE3D"] = prev
 
 
-def check_mission4_boot_and_walk():
-    """M4 Slice 0 boot proof: start headless, walk ticks, draw a frame.
+class _HeldKeys:
+    """get_pressed() stand-in with a fixed set of keys held."""
+    def __init__(self, *held):
+        self.held = set(held)
 
-    Also enforces the map-seam contract the M2/M3 procedural style skips
-    (MapBuilder.validate() is unused there): MISSION4_MAP's border must be
-    solid on all four sides and the player must spawn on a floor tile.
+    def __getitem__(self, key):
+        return key in self.held
+
+
+def _m4_hold_e(frames):
+    from missions import m4
+    keys = _HeldKeys(pygame.K_e)
+    cam = None
+    for _ in range(frames):
+        cam = m4.game_update(keys)
+    return cam
+
+
+def _m4_to_station():
+    """Fresh M4 boot, Vasile walked to the door, the world swapped in."""
+    from missions import m4
+    from missions.m4 import escort
+    from core.state import STATE
+    m4.start_m4()
+    dx, dy = m4._street_door_pos()
+    v = escort.vasile()
+    v["x"], v["y"] = dx - 20, dy
+    STATE.player.rect.center = (dx, dy)
+    m4.game_update(EmptyKeys())
+    assert STATE.mission4_stage == m4.STAGE_FORTIFY, "door did not enter the station"
+
+
+def _m4_finish_meet():
+    from missions import m4
+    from missions.m4.meta import LIAISON_TILE
+    from core.state import STATE
+    keys = EmptyKeys()
+    lx, ly = m4._tile_world(*LIAISON_TILE)
+    STATE.player.rect.center = (lx, ly)
+    cam = m4.game_update(keys)
+    assert STATE.m4_dialogue_active, "liaison proximity did not open the dialogue"
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    for i in range(800):
+        if not STATE.m4_dialogue_active:
+            break
+        m4.handle_dialogue_event(enter)
+        cam = m4.game_update(keys)
+        m4.handle_dialogue_event(enter)
+        cam = m4.game_update(keys)
+        if i % 3 == 0:
+            m4.game_draw(*cam)
+    assert STATE.m4_dialogue_done and not STATE.m4_dialogue_active, \
+        "liaison dialogue did not complete"
+
+
+def check_mission4_boot_and_walk():
+    """M4 boot proof: the curfew street, Vasile with the cache, the zone beats.
+
+    Also enforces the map-seam contract: MISSION4_MAP's border must be solid
+    on all four sides and the player must spawn on a floor tile.
     """
     from missions import m4
+    from missions.m4 import escort
+    from missions.m4.meta import M4_SUPPLY_START
     from core.state import STATE
 
     m4.start_m4()
     assert STATE.active_mission == "MISSION4", "active_mission not MISSION4"
-    assert STATE.mission4_stage == m4.STAGE_AFTERMATH, "stage not aftermath"
+    assert STATE.mission4_stage == m4.STAGE_ESCORT, "stage not escort"
 
     grid = m4.MISSION4_MAP
     h = len(grid)
@@ -8820,19 +8876,20 @@ def check_mission4_boot_and_walk():
     pcol, prow = pcx // m4.TILE, pcy // m4.TILE
     assert grid[prow][pcol] not in m4.M4_SOLID_CHARS, "player spawned inside geometry"
 
-    assert m4._objective.startswith("Pick up the KRAP comms cache"), \
+    assert m4._objective.startswith("Get Vasile and the cache"), \
         "opening objective missing: " + repr(m4._objective)
+    v = escort.vasile()
+    assert v is not None and v["downed"] == 0, "Vasile missing on the street"
+    assert STATE.m4_cache_carried and STATE.m4_supply == M4_SUPPLY_START, \
+        "the cache (supply pool) did not start on Vasile"
 
-    # W2 content proof: the named curfew-zone table resolves to world rects
-    # and the boulevard drives position lookups; the street spawns both IPA
-    # types (guards hold checkpoints, marksmen cover the long sightlines).
     assert len(m4.M4_ZONE_DEFS) == 3 and len(m4.M4_ZONE_WORLD_RECTS) == 3, \
-        "W2 zone table not fully populated"
+        "zone table not fully populated"
     assert m4.zone_at(m4._vasile_cache_pos()) == "boulevard", \
         "zone_at failed to place the Vasile cache on the boulevard"
     _types = [_label_of(e).kind for e in STATE.enemies]
     assert _types.count("guard") >= 4 and _types.count("marksman") == 3, \
-        "W2 IPA patrol mix missing: " + repr(_types)
+        "IPA patrol mix missing: " + repr(_types)
 
     keys = EmptyKeys()
     cam = m4.game_update(keys)
@@ -8841,11 +8898,13 @@ def check_mission4_boot_and_walk():
     m4.game_draw(*cam)
     m4.handle_interact()
 
-    # W2 story beats are ZONE-triggered now: walking into each named district
-    # fires its line exactly once (the old frame table dumped all three in
-    # the first 16 seconds, before the player had crossed the first block).
-    # The opening beat is time-gated exactly once (not zone-gated: a sprint
-    # out of Old Town must not drop Vasile's read).
+    # Vasile follows Biribel up the street.
+    sx, sy = v["x"], v["y"]
+    STATE.player.rect.center = (STATE.player.rect.centerx + 6 * m4.TILE, STATE.player.rect.centery)
+    for _ in range(120):
+        m4.game_update(keys)
+    assert abs(v["x"] - sx) + abs(v["y"] - sy) > 24, "Vasile did not follow Biribel"
+
     STATE.m4_chaos_timer = m4._M4_ZONE_GRACE_FRAMES
     cam = m4.game_update(keys)
     assert "beat_loyalists" in m4._radio_marks, \
@@ -8854,323 +8913,362 @@ def check_mission4_boot_and_walk():
                              ("station_cordon", "beat_retardovici", (31, 19))):
         nx, ny = m4._tile_world(*tile)
         STATE.player.rect.center = (nx, ny)
-        STATE.m4_chaos_timer = max(STATE.m4_chaos_timer,
-                                   m4._M4_ZONE_GRACE_FRAMES)
+        STATE.m4_chaos_timer = max(STATE.m4_chaos_timer, m4._M4_ZONE_GRACE_FRAMES)
         cam = m4.game_update(keys)
-        assert m4.zone_at((nx, ny)) == zone, \
-            "zone probe tile left its district: " + zone
+        assert m4.zone_at((nx, ny)) == zone, "zone probe tile left its district: " + zone
         assert mark in m4._radio_marks, "zone beat did not fire: " + zone
 
 
 def check_mission4_stage_transitions():
-    """Headless E2E chain: street -> station -> meet -> hold -> ending.
+    """Headless E2E chain: escort -> fortify (build, meet, squad) -> jammer ->
+    siege -> ending.
 
-    The W3 station ladder: the Vasile cache beat arms the door objective, the
-    door tile hands the world over to the station interior, walking to Maru
-    opens the typewriter liaison dialogue (a choice beat records the tone on
-    STATE.m4_tone), completing it moves to the jammer stage, and planting the
-    jammer gates the STAGE_COMMIT hold. The hold is the mic switch: airtime
-    only advances while the feed is OPEN at the rack, and M4_HOLD_SECONDS of
-    airtime raises request_mission4_ending exactly once (idempotent guard).
+    The station door only opens with Vasile beside it; Maru wants a barricade
+    up before the meet; the tone answer picks the squad (state: 2 soldiers,
+    people: 4 civilians); the jammer starts the 10 s countdown; the siege clock
+    reaching M4_SIEGE_FRAMES raises request_mission4_ending exactly once.
     """
     from missions import m4
+    from missions.m4 import escort, fortify
     from missions.m4.meta import (
-        M4_HOLD_SECONDS, STATION_START_TILE, LIAISON_TILE, JAMMER_TILE)
+        M4_SIEGE_FRAMES, M4_JAMMER_COUNTDOWN, M4_BUILD_HOLD, M4_BARRICADE_KINDS,
+        STATION_START_TILE, LIAISON_TILE, JAMMER_TILE)
     from core.state import STATE
 
     keys = EmptyKeys()
     m4.start_m4()
 
-    # 1) Vasile cache pickup (E) -> door objective armed.
-    cx, cy = m4._vasile_cache_pos()
-    STATE.player.rect.center = (cx, cy)
-    for _ in range(5):
-        cam = m4.game_update(keys)
-    m4.handle_interact()
-    assert "Reach the radio station door" in m4._objective, \
-        "cache beat did not arm the door objective: " + repr(m4._objective)
-
-    # 2) Station door -> interior world swap + checkpoint flag.
+    # 1) The door stays shut without Vasile.
     dx, dy = m4._street_door_pos()
+    v = escort.vasile()
+    v["x"], v["y"] = dx - 12 * m4.TILE, dy
+    v["following"] = False
     STATE.player.rect.center = (dx, dy)
-    cam = m4.game_update(keys)
-    assert STATE.mission4_stage == m4.STAGE_KRAP_STATUS, "door did not enter station"
+    m4.game_update(keys)
+    assert STATE.mission4_stage == m4.STAGE_ESCORT, "door opened without Vasile"
+    assert "door_wait" in m4._radio_marks
+
+    # 2) With Vasile at the door: the station world, the checkpoint, supply kept.
+    supply = STATE.m4_supply
+    v["x"], v["y"] = dx - 20, dy
+    m4.game_update(keys)
+    assert STATE.mission4_stage == m4.STAGE_FORTIFY, "door did not enter station"
     assert STATE.mission4_station_checkpoint_reached, "station checkpoint flag not set"
     assert m4.MISSION4_MAP is m4.MISSION4_STATION_MAP, "map not swapped to station"
+    assert STATE.m4_supply == supply, "supply lost at the door"
     sx, sy = m4._tile_world(*STATION_START_TILE)
     assert abs(STATE.player.rect.centerx - sx) < 80 \
         and abs(STATE.player.rect.centery - sy) < 80, \
         "player not spawned in the station entry hall"
+    assert STATE.m4_sites, "station sites missing"
 
-    # 3) Liaison meet: walk to Maru -> dialogue opens (movement locks), then
-    #    drive the typewriter + choice beats to completion -> STAGE_MARU.
+    # 3) Maru: doors first.
     lx, ly = m4._tile_world(*LIAISON_TILE)
     STATE.player.rect.center = (lx, ly)
-    cam = m4.game_update(keys)  # proximity triggers _start_liaison_dialogue
-    assert STATE.m4_dialogue_active, "liaison proximity did not open the dialogue"
-    _enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
-    _frames = 0
-    for _ in range(800):
-        if not STATE.m4_dialogue_active:
-            break
-        m4.handle_dialogue_event(_enter)   # snap the typewriter to full
-        cam = m4.game_update(keys)         # tick the reveal
-        m4.handle_dialogue_event(_enter)   # advance / resolve the choice
-        cam = m4.game_update(keys)
-        # Render the meet every few frames so the dialogue panel (typing +
-        # the choice beat) and the friendly-NPC poses are drawn headlessly.
-        _frames += 1
-        if _frames % 3 == 0:
-            m4.game_draw(*cam)
-    assert STATE.m4_dialogue_done and not STATE.m4_dialogue_active, \
-        "liaison dialogue did not complete"
-    assert STATE.mission4_stage == m4.STAGE_MARU, \
-        "dialogue did not hand off to the jammer stage"
-    assert getattr(STATE, "m4_tone", []) and STATE.m4_tone[0] in (0, 1), \
-        "the tone choice was not recorded on STATE.m4_tone"
+    m4.game_update(keys)
+    assert not STATE.m4_dialogue_active and "maru_doors_first" in m4._radio_marks, \
+        "Maru took the meet before any barricade was up"
 
-    # 3b) Jammer install (E) is the gate to the siege hold.
+    # 4) Build planks on a door site (hold E, paid from supply).
+    door = next((c, r) for c, r, k in STATE.m4_sites if k == "door")
+    STATE.player.rect.center = fortify.site_center(*door)
+    m4.game_update(keys)
+    _m4_hold_e(M4_BUILD_HOLD + 2)
+    bar = STATE.m4_barricades.get(door)
+    assert fortify.standing(bar) and bar["kind"] == "planks", "hold E did not build planks"
+    assert STATE.m4_supply == supply - M4_BARRICADE_KINDS["planks"][1], "build was not paid"
+    m4.game_draw(*m4.game_update(keys))
+
+    # 5) The meet, then the squad the tone picked.
+    _m4_finish_meet()
+    assert STATE.mission4_stage == m4.STAGE_FORTIFY
+    tone = STATE.m4_tone[0]
+    assert tone in (0, 1), "the tone choice was not recorded"
+    squad = [a for a in STATE.m4_allies if a.get("squad")]
+    assert len(squad) == (2 if tone == 0 else 4), "squad size does not follow the tone"
+    maru = m4._ally("MARU")
+    assert maru["armed"] and maru["weapon"] != "folder", "Maru was not armed after the meet"
+
+    # 6) Jammer -> siege countdown.
     jx, jy = m4._tile_world(*JAMMER_TILE)
     STATE.player.rect.center = (jx, jy)
     m4.handle_interact()
     assert STATE.m4_jammer_installed, "jammer interact did not install the jammer"
-    assert STATE.mission4_stage == m4.STAGE_COMMIT, \
-        "jammer install did not gate the siege hold"
+    assert STATE.mission4_stage == m4.STAGE_SIEGE, "jammer did not start the siege"
+    assert STATE.m4_siege_t == -M4_JAMMER_COUNTDOWN
     assert STATE.m4_siege_active and STATE.mission4_tower_checkpoint_reached
-
-    # 3c) The mic switch: airtime only advances with the feed OPEN at the rack.
-    tx, ty = m4._tile_world(*m4.TRANSMITTER_TILE)
-    STATE.player.rect.center = (tx, ty)
     cam = m4.game_update(keys)
-    assert not STATE.m4_broadcasting, "the feed must start shut at the handoff"
-    before = STATE.m4_hold_timer
-    for _ in range(12):
-        cam = m4.game_update(keys)
-    assert STATE.m4_hold_timer == before, "airtime advanced with the mic shut"
+    m4.game_draw(*cam)
 
-    m4.handle_interact()          # E at the transmitter opens the mic
-    assert STATE.m4_broadcasting, "E at the transmitter did not open the mic"
-    for _ in range(12):
-        cam = m4.game_update(keys)
-    assert STATE.m4_hold_timer > before, "airtime did not advance on air"
-
-    # 3d) Stepping off the rack drops the feed (the switch is on the machine).
-    STATE.player.rect.center = (tx - 4 * m4.TILE, ty)
-    cam = m4.game_update(keys)
-    assert not STATE.m4_broadcasting, "leaving the rack did not drop the feed"
-    STATE.player.rect.center = (tx, ty)
-
-    # 4) The hold completes exactly once. The assault is cleared for this chain
-    #    so it asserts the clock/ending wiring; the siege itself is covered by
-    #    check_mission4_hold_clock.
+    # 7) The clock completes exactly once.
     STATE.enemies = []
-    STATE.m4_siege_spawn_timer = 10 ** 7
     STATE.player.hp = 99999
-    m4.handle_interact()          # back on the air for the full address
-    assert STATE.m4_broadcasting
-    hold_frames = int(M4_HOLD_SECONDS * 60) + 120
-    for _ in range(hold_frames):
+    STATE.m4_siege_t = M4_SIEGE_FRAMES - 3
+    for _ in range(10):
         if STATE.request_mission4_ending:
             break
-        cam = m4.game_update(keys)
-    assert STATE.request_mission4_ending, "hold clock never requested the ending"
+        m4.game_update(keys)
+    assert STATE.request_mission4_ending, "siege clock never requested the ending"
     assert STATE.mission4_stage == m4.STAGE_DONE
-    held = STATE.m4_hold_timer
-    m4._complete_m4()  # idempotent guard must be a no-op
-    assert STATE.m4_hold_timer == held, "_complete_m4 is not idempotent"
+    end = STATE.mission_end_time
+    m4._complete_m4()
+    assert STATE.mission_end_time == end, "_complete_m4 is not idempotent"
 
 
 def check_mission4_checkpoint_routes():
-    """Death-restart ladder: deepest checkpoint first (tower -> station)."""
+    """Death-restart ladder: station -> siege; the siege resumes at the latest
+    wave snapshot, 5 s before that wave, with the barricades as they were."""
     from missions import m4
+    from missions.m4 import siege
+    from missions.m4.meta import M4_WAVE_GRACE
     from core.state import STATE
+    from core import game_core
+    from ui import mission_failed
 
+    m4.start_m4()
     m4.start_mission4_station_checkpoint()
-    assert STATE.mission4_stage == m4.STAGE_KRAP_STATUS
+    assert STATE.mission4_stage == m4.STAGE_FORTIFY
     assert m4.MISSION4_MAP is m4.MISSION4_STATION_MAP
     cam = m4.game_update(EmptyKeys())
     m4.game_draw(*cam)
 
     m4.start_mission4_tower_checkpoint()
-    assert STATE.mission4_stage == m4.STAGE_COMMIT
-    assert STATE.m4_siege_active and STATE.m4_hold_timer == 0
+    assert STATE.mission4_stage == m4.STAGE_SIEGE
+    assert STATE.m4_siege_t == -M4_WAVE_GRACE, "no-snapshot siege entry off the wave 1 grace"
+    assert mission_failed.checkpoint_label(STATE) == "SIEGE"
 
-    # Restart routing reads the checkpoint flags: tower wins over station.
-    STATE.mission4_station_checkpoint_reached = True
-    STATE.mission4_tower_checkpoint_reached = False
-    from core import game_core
-    game_core.restart_current_mission()
-    assert STATE.mission4_stage == m4.STAGE_KRAP_STATUS, \
-        "restart did not route to the station checkpoint"
+    # Run up to the wave 2 snapshot point; damage a barricade first.
+    site = STATE.m4_sites[0][:2]
+    from missions.m4 import fortify
+    fortify._place(site, "planks" if STATE.m4_sites[0][2] == "door" else "boards")
+    STATE.m4_barricades[site]["hp"] = 77
+    STATE.enemies = []
+    w2 = siege.WAVES[1]["start"]
+    STATE.m4_siege_t = w2 - M4_WAVE_GRACE - 2
+    for _ in range(4):
+        m4.game_update(EmptyKeys())
+    snap = siege.latest()
+    assert snap is not None and snap["wave"] == 2, "wave 2 snapshot not taken"
+    assert mission_failed.checkpoint_label(STATE) == "SIEGE WAVE 2"
+
+    STATE.m4_barricades[site]["hp"] = 0
     STATE.mission4_tower_checkpoint_reached = True
     game_core.restart_current_mission()
-    assert STATE.mission4_stage == m4.STAGE_COMMIT, \
-        "restart did not route to the tower checkpoint"
+    assert STATE.mission4_stage == m4.STAGE_SIEGE, "restart did not route to the siege"
+    assert STATE.m4_siege_t == w2 - M4_WAVE_GRACE, "restart not 5 s before wave 2"
+    assert STATE.m4_barricades[site]["hp"] == 77, "snapshot did not restore the barricade"
+    from missions.m4.meta import RESPAWN_TILE
+    from core.config import TILE_SIZE as _T
+    pc = STATE.player.rect.center
+    assert (pc[0] // _T, pc[1] // _T) == RESPAWN_TILE, "wave restart left Biribel outside the rack room"
+
+    # Biribel slips through his own barricade; loyalists are held at it.
+    door = next((c, r) for c, r, k in STATE.m4_sites if k == "door")
+    fortify._place(door, "plate")
+    STATE.enemies = []
+    STATE.player.rect.center = (door[0] * _T + _T // 2, door[1] * _T + _T // 2 + _T)
+    keys = _HeldKeys(pygame.K_w)
+    for _ in range(90):
+        m4.game_update(keys)
+    assert STATE.player.rect.centery // _T < door[1], "own barricade blocked Biribel"
+
+    STATE.mission4_tower_checkpoint_reached = False
+    STATE.mission4_station_checkpoint_reached = True
+    game_core.restart_current_mission()
+    assert STATE.mission4_stage == m4.STAGE_FORTIFY, \
+        "restart did not route to the station checkpoint"
+    siege.clear_snapshots()
 
 
-def check_mission4_hold_clock():
-    """W4 siege hold: the wave director, the diegetic arrest ladder and the
-    timer-driven completion.
+def check_mission4_escort_downs():
+    """Vasile can be revived once (hold E inside 10 s); the second down kills
+    him and fails the mission with its own failure copy."""
+    from missions import m4
+    from missions.m4 import escort
+    from missions.m4.meta import M4_REVIVE_HOLD, M4_REVIVE_WINDOW
+    from core.state import STATE
+    from ui import mission_failed
 
-    Two parts:
-      * Telegraph wiring, deterministic (not left to the wave RNG): a beam
-        queues on STATE.m4_lasers and the director decays it; game_draw
-        exercises the beam renderer with a live beam present.
-      * The full hold: fireteams commit up to M4_MAX_CONCURRENT from the
-        insertion doors, the arrest-beat ladder fires every mark on schedule,
-        spawns break off after the relief frame, and the clock (never kills)
-        raises request_mission4_ending -> STAGE_DONE. The player parked here
-        may die to en-route fire; that must NOT stop the timer (m3 exfil-door
-        lesson), which is exactly what this asserts.
+    m4.start_m4()
+    v = escort.vasile()
+    supply = STATE.m4_supply
+    m4._damage_m4_ally(v, 10 ** 5)
+    assert v["downed"] == M4_REVIVE_WINDOW and STATE.m4_vasile_downs == 1, "first hit did not down Vasile"
+    assert STATE.m4_supply < supply, "the down did not spill supply"
+    assert escort.revive_prompt() is not None
+    m4.game_draw(*m4.game_update(EmptyKeys()))
+
+    STATE.player.rect.center = (int(v["x"]), int(v["y"]))
+    STATE.enemies = []
+    _m4_hold_e(M4_REVIVE_HOLD + 4)
+    assert v["downed"] == 0 and v["hp"] == v["max_hp"] // 2, "hold E did not revive Vasile"
+    assert "vasile_up" in m4._radio_marks
+
+    m4._damage_m4_ally(v, 10 ** 5)
+    assert v["dead"] and STATE.m4_fail_reason == "vasile", "second down did not kill Vasile"
+    for _ in range(200):
+        if STATE.request_death_screen:
+            break
+        m4.game_update(EmptyKeys())
+    assert STATE.request_death_screen, "Vasile's death never raised the death screen"
+    assert mission_failed.failure_copy(STATE)[0] == "VASILE DID NOT MAKE IT"
+
+    # An unrevived down runs out too.
+    m4.start_m4()
+    v = escort.vasile()
+    m4._damage_m4_ally(v, 10 ** 5)
+    STATE.enemies = []
+    STATE.player.rect.center = (int(v["x"]) + 400, int(v["y"]))
+    for _ in range(M4_REVIVE_WINDOW + 5):
+        m4.game_update(EmptyKeys())
+    assert v["dead"] and STATE.m4_fail_reason == "vasile", "the revive window never ran out"
+
+
+def check_mission4_barricades():
+    """Fortify rules: build, stop bullets, break down through damaged/broken,
+    repair for supply in the siege, plate upgrade only before it, rack fail."""
+    from missions import m4
+    from missions.m4 import fortify, siege
+    from missions.m4.meta import M4_BARRICADE_KINDS, M4_REPAIR_STEP, M4_RACK_HOLD_FAIL, M4_BUILD_HOLD
+    from core.state import STATE
+    from ui import mission_failed
+
+    _m4_to_station()
+    STATE.m4_supply = 30
+    window = next((c, r) for c, r, k in STATE.m4_sites if k == "window")
+    door = next((c, r) for c, r, k in STATE.m4_sites if k == "door")
+    assert fortify.action_at(window)[1] == "boards" and fortify.action_at(door)[1] == "planks"
+
+    STATE.player.rect.center = fortify.site_center(*door)
+    _m4_hold_e(M4_BUILD_HOLD + 2)
+    m4.game_update(EmptyKeys())
+    act = fortify.action_at(door)
+    assert act is not None and act[0] == "upgrade" and act[1] == "plate", "no plate upgrade offered"
+    _m4_hold_e(act[3] + 2)
+    bar = STATE.m4_barricades[door]
+    assert bar["kind"] == "plate" and bar["hp"] == M4_BARRICADE_KINDS["plate"][2], "upgrade failed"
+
+    # An enemy bullet into a standing barricade stops on it.
+    sx, sy = fortify.site_center(*door)
+    b = {"x": sx, "y": sy, "prev_x": sx - 90, "prev_y": sy, "dx": 1.0, "dy": 0.0,
+         "owner": "enemy", "damage": 20}
+    assert fortify.bullet_hit(b) == door, "barricade did not stop the bullet"
+
+    # Damage ladder: intact -> damaged -> broken -> gone.
+    states = []
+    for _ in range(12):
+        fortify.damage(door, 70)
+        states.append(fortify.state_of(bar))
+    for want in ("damaged", "broken", "gone"):
+        assert want in states, "barricade never reached " + want
+    assert fortify.action_at(door)[0] == "build", "a gone site is not rebuildable"
+
+    # Siege: repair (supply) yes, upgrade no.
+    STATE.player.rect.center = fortify.site_center(*window)
+    STATE.m4_supply = 30
+    _m4_hold_e(M4_BUILD_HOLD + 2)
+    m4.game_update(EmptyKeys())
+    m4.start_mission4_tower_checkpoint()
+    fortify._place(window, "boards")
+    wb = STATE.m4_barricades[window]
+    wb["hp"] = wb["max"] // 4
+    STATE.m4_supply = 5
+    STATE.enemies = []
+    STATE.m4_siege_t = -4000
+    STATE.player.rect.center = fortify.site_center(*window)
+    hp0 = wb["hp"]
+    _m4_hold_e(M4_REPAIR_STEP + 2)
+    assert wb["hp"] > hp0 and STATE.m4_supply == 4, "siege repair did not work / was not paid"
+    STATE.m4_supply = 0
+    hp1 = wb["hp"]
+    _m4_hold_e(M4_REPAIR_STEP + 2)
+    assert wb["hp"] == hp1, "repair went through with no supply"
+    m4.game_draw(*m4.game_update(EmptyKeys()))
+
+    # Rack: a loyalist on it with Biribel away fails the wave.
+    STATE.m4_siege_t = siege.WAVES[0]["start"] + 10
+    rx, ry = siege.rack_pos()
+    e = siege._spawn("loyalist", "N")
+    e.rect.center = (int(rx), int(ry))
+    e.speed = 0
+    STATE.player.rect.center = (int(rx), int(ry) + 8 * m4.TILE)
+    STATE.player.hp = 99999
+    for a in STATE.m4_allies:
+        a["armed"] = False
+    for _ in range(M4_RACK_HOLD_FAIL + 10):
+        e.rect.center = (int(rx), int(ry))
+        e.hp = max(e.hp, 1)
+        siege._update_rack()
+        if STATE.m4_fail_reason:
+            break
+    assert STATE.m4_fail_reason == "rack", "a held rack did not fail the wave"
+    assert mission_failed.failure_copy(STATE)[0] == "THE RACK FELL"
+    siege.clear_snapshots()
+
+
+def check_mission4_wave_director():
+    """The full eight-minute siege, sped through headless: five waves under
+    their caps, the arrest ladder on schedule, the wall breach at wave 4, the
+    APC ram and park at wave 5, the stand-down retreat, then the ending.
+
+    Biribel parks on the rack (contested, so it can never be lost) and is
+    made unkillable; Vasile is kept alive. The siege must still end on the
+    clock, never on kills.
     """
     import random as _rnd
     _rnd.seed(4469)
     from missions import m4
-    from missions.m4.meta import M4_HOLD_SECONDS
+    from missions.m4 import siege, escort
+    from missions.m4.meta import M4_SIEGE_FRAMES
     from core.state import STATE
 
     keys = EmptyKeys()
+    m4.start_m4()
     m4.start_mission4_tower_checkpoint()
-    assert STATE.mission4_stage == m4.STAGE_COMMIT
-    STATE.m4_hold_timer = 0
-    m4._siege_reset()
-
-    # 1) Telegraph + decay wiring (deterministic). Suppress spawns for this
-    #    micro-run so only the decay path is exercised.
-    STATE.m4_siege_spawn_timer = 10 ** 7
+    # Laser telegraph wiring (deterministic).
     m4._add_sniper_laser((64, 64), from_pos=(8, 8), life=3)
     assert len(STATE.m4_lasers) == 1, "laser telegraph did not queue"
+    from missions.m4.world import _decay_lasers
     for _ in range(4):
-        m4._run_siege_director()
-    assert len(STATE.m4_lasers) == 0, "laser telegraph did not decay"
-
-    # 1b) The windup is honest: a pinned beam resolves into a real enemy shot
-    #     aimed at the pinned point (strafe out of the beam to dodge it).
-    from missions.m4.world import _decay_lasers, _m4g as _world_m4g
-    probe = m4._spawn_m4_guard(200, 200, etype="marksman", label="beam_probe")
-    _world_m4g(probe).loyalist = True
-    STATE.bullets = []
-    m4._add_sniper_laser((320, 200), from_pos=(200, 200), life=2,
-                         shooter=probe, damage=28)
-    for _ in range(3):
         _decay_lasers()
-    _shots = [b for b in STATE.bullets if b.get("marksman")]
-    assert _shots, "marksman windup did not resolve into a shot"
-    assert _shots[0]["damage"] == 28, "marksman shot lost its damage"
-    _tx, _ty = _shots[0]["x"], _shots[0]["y"]
-    _dot = _shots[0]["dx"] * (320 - _tx) + _shots[0]["dy"] * (200 - _ty)
-    assert _dot > 0, "marksman shot did not aim at the pinned point"
-    assert abs(_shots[0]["dy"]) < abs(_shots[0]["dx"]) * 0.2, \
-        "marksman shot aimed off the pinned line"
-    STATE.enemies.remove(probe)
-    STATE.bullets = []
-    m4._add_sniper_laser((128, 128), from_pos=(8, 8), life=20)
-    cam = m4.game_update(keys)
-    m4.game_draw(*cam)  # exercises _draw_m4_lasers with a live beam present
+    assert not STATE.m4_lasers, "laser telegraph did not decay"
 
-    # 2) Fireteams hunt the player, not last-seen SEARCH (CHASE needs a pin).
-    from missions.m4.world import _spawn_loyalist_fireteam
-    m4._siege_reset()
-    STATE.m4_hold_timer = 0
-    STATE.m4_siege_spawn_timer = 0
-    STATE.player.hp = 99999
-    for a in getattr(STATE, "m4_allies", []) or []:
-        a["armed"] = False
-        a["cooldown"] = 10 ** 6
-    _spawn_loyalist_fireteam()
-    hunters = [e for e in STATE.enemies if _m4g(e).loyalist and e.hp > 0]
-    assert hunters, "fireteam spawn produced no loyalists"
-    px, py = STATE.player.rect.centerx, STATE.player.rect.centery
-    start = [(e.uid, e.rect.centerx, e.rect.centery) for e in hunters]
-    for e in hunters:
-        assert e.last_seen_pos is not None, "loyalist spawned with no last_seen_pos"
-        assert e.state == "CHASE", "loyalist did not enter CHASE on spawn"
-    for _ in range(90):
-        m4.game_update(keys)
-    closed = False
-    for uid, sx, sy in start:
-        now = next((e for e in STATE.enemies if getattr(e, "uid", None) == uid), None)
-        if now is None:
-            closed = True
-            continue
-        before = ((sx - px) ** 2 + (sy - py) ** 2) ** 0.5
-        after = ((now.rect.centerx - px) ** 2 + (now.rect.centery - py) ** 2) ** 0.5
-        if after < before - 8 or now.state == "ATTACK":
-            closed = True
-        assert now.last_seen_pos == (STATE.player.rect.centerx,
-                                     STATE.player.rect.centery), \
-            "loyalist lost the player pin mid-hunt"
-        assert now.state in ("CHASE", "ATTACK"), \
-            "loyalist dropped out of hunt: " + repr(now.state)
-    assert closed, "loyalist fireteam never closed on the player"
-
-    # 2b) Vasile/Maru peel to their door posts and fight.
-    m4._arm_m4_allies()
-    allies = list(getattr(STATE, "m4_allies", []) or [])
-    assert {a["name"] for a in allies} == {"VASILE", "MARU"}, \
-        "station allies missing: " + repr([a.get("name") for a in allies])
-    for a in allies:
-        assert a.get("armed"), a["name"] + " was not armed for the hold"
-        assert a["weapon"] != "folder", a["name"] + " still holding the meet prop"
-    start = {a["name"]: (a["x"], a["y"]) for a in STATE.m4_allies}
-    for _ in range(90):
-        m4.game_update(keys)
-    for a in STATE.m4_allies:
-        sx, sy = start[a["name"]]
-        cx, cy = m4._tile_world(*a["cover"])
-        before = ((sx - cx) ** 2 + (sy - cy) ** 2) ** 0.5
-        after = ((a["x"] - cx) ** 2 + (a["y"] - cy) ** 2) ** 0.5
-        assert after < before - 16, a["name"] + " never left the meet toward cover"
-    ally_shot = any(b.get("ally") for b in STATE.bullets)
-    if not ally_shot:
-        dummy = m4._spawn_m4_guard(
-            STATE.m4_allies[0]["x"] + 40, STATE.m4_allies[0]["y"],
-            etype="guard", label="ally_los_probe", aware=True)
-        dummy.m4_loyalist = True
-        for _ in range(50):
-            m4.game_update(keys)
-            if any(b.get("ally") for b in STATE.bullets):
-                ally_shot = True
-                break
-    assert ally_shot, "allies never fired"
-    probe = STATE.m4_allies[0]
-    hp0 = probe["hp"]
-    assert m4._hit_m4_ally({"x": probe["x"], "y": probe["y"], "damage": 25})
-    assert probe["hp"] == hp0 - 25, "ally did not take the probe hit"
-
-    # 3) The full hold, spawns active, feed open at the rack.
-    m4._siege_reset()
-    STATE.enemies = [e for e in STATE.enemies if not _m4g(e).loyalist]
-    STATE.player.hp = 99999
-    STATE.m4_hold_timer = 0
-    STATE.m4_hold_peak = 0
-    tx, ty = m4._tile_world(*m4.TRANSMITTER_TILE)
-    STATE.player.rect.center = (tx, ty)
-    STATE.m4_broadcasting = False
-    m4.handle_interact()
-    assert STATE.m4_broadcasting, "mic did not open for the hold"
-    want = {"arrest_open", "arrest_order", "arrest_confusion",
-            "arrest_standdown", "arrest_retreat"}
-    wave_seen = 0
-    relief_seen = False
-    for _ in range(int(M4_HOLD_SECONDS * 60) * 2 + 10):
+    rx, ry = siege.rack_pos()
+    want = {m for _, m, _, _, _ in m4._M4_ARREST_BEATS}
+    waves, peak, kinds = set(), {}, set()
+    breached = apc_parked = False
+    v = escort.vasile()
+    for i in range(M4_SIEGE_FRAMES + 900):
+        STATE.player.rect.center = (int(rx), int(ry) + 40)
+        STATE.player.hp = 99999
+        if v is not None:
+            v["hp"] = v["max_hp"]
+            v["downed"] = 0
         cam = m4.game_update(keys)
-        if STATE.m4_siege_wave > wave_seen:
-            wave_seen = STATE.m4_siege_wave
-        if STATE.m4_hold_peak >= m4.M4_SIEGE_RELIEF_FRAMES:
-            relief_seen = True
-        if STATE.m4_hold_peak < m4.M4_SIEGE_RELIEF_FRAMES:
-            alive = sum(1 for e in STATE.enemies
-                        if _m4g(e).loyalist and e.hp > 0)
-            assert alive <= m4.M4_MAX_CONCURRENT, "siege exceeded concurrency cap"
+        n = siege.current_wave()
+        if STATE.m4_siege_t >= 0 and n:
+            waves.add(n)
+            live = siege.alive()
+            peak[n] = max(peak.get(n, 0), len(live))
+            kinds.update(_label_of(e).kind for e in live)
+        breached = breached or bool(STATE.m4_breached)
+        apc = STATE.m4_apc
+        apc_parked = apc_parked or bool(apc and apc["phase"] == "parked")
+        if i % 1500 == 0:
+            m4.game_draw(*cam)
+        assert not STATE.m4_fail_reason, "siege failed: " + repr(STATE.m4_fail_reason)
         if STATE.request_mission4_ending:
             break
-    assert wave_seen >= 1, "director never committed a fireteam"
-    assert relief_seen, "hold never reached the siege relief frame"
-    assert want <= m4._radio_marks, \
-        "arrest beat ladder incomplete: " + repr(want - set(m4._radio_marks))
-    assert STATE.request_mission4_ending, "hold clock did not request the ending"
-    assert STATE.mission4_stage == m4.STAGE_DONE
+    assert waves >= {1, 2, 3, 4, 5}, "waves seen: " + repr(sorted(waves))
+    for w in siege.WAVES:
+        assert peak.get(w["n"], 0) <= w["cap"] + 5, "wave %d over its cap: %d" % (w["n"], peak[w["n"]])
+    assert {"loyalist", "marksman", "breacher"} <= kinds, "unit mix: " + repr(kinds)
+    assert breached, "wave 4 never blew the weak wall"
+    assert apc_parked, "wave 5 APC never rammed and parked"
+    assert want <= m4._radio_marks, "arrest ladder incomplete: " + repr(want - set(m4._radio_marks))
+    assert STATE.request_mission4_ending and STATE.mission4_stage == m4.STAGE_DONE, \
+        "siege clock did not request the ending"
+    siege.clear_snapshots()
 
 
 def check_mission4_layout():
@@ -9676,13 +9774,13 @@ def check_mission4_campaign_chain():
     # target boots MISSION4.
     gc.start_mission4()
     assert STATE.active_mission == "MISSION4", "MISSION_3 resume target did not boot M4"
-    assert STATE.mission4_stage == m4.STAGE_AFTERMATH
+    assert STATE.mission4_stage == m4.STAGE_ESCORT
 
     # In-progress ("m4") ladder: each checkpoint resume lands its stage.
     gc.start_mission4_station_checkpoint()
-    assert STATE.mission4_stage == m4.STAGE_KRAP_STATUS
+    assert STATE.mission4_stage == m4.STAGE_FORTIFY
     gc.start_mission4_tower_checkpoint()
-    assert STATE.mission4_stage == m4.STAGE_COMMIT
+    assert STATE.mission4_stage == m4.STAGE_SIEGE
     _reset_save_store()
 
 
@@ -12104,7 +12202,9 @@ def main():
         ("mission4_layout", check_mission4_layout),
         ("mission4_stage_transitions", check_mission4_stage_transitions),
         ("mission4_checkpoint_routes", check_mission4_checkpoint_routes),
-        ("mission4_hold_clock", check_mission4_hold_clock),
+        ("mission4_escort_downs", check_mission4_escort_downs),
+        ("mission4_barricades", check_mission4_barricades),
+        ("mission4_wave_director", check_mission4_wave_director),
         ("mission4_ending_shots_render", check_mission4_ending_shots_render),
         ("mission4_cinematic_arrest", check_mission4_cinematic_arrest),
         ("mission4_campaign_chain", check_mission4_campaign_chain),
