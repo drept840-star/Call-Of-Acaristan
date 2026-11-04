@@ -4,6 +4,7 @@
 
 """Cutscene visuals and dialogue: character drawings, scene backgrounds, shot lists."""
 import math
+import os
 import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
@@ -12,6 +13,7 @@ from core.config import (C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_WHITE, HEIGHT,
 from cutscenes.cast import draw_biribel, draw_civilian
 from cutscenes.route12 import draw_biribel_blackout, draw_factory, draw_ipa_radio_chatter, draw_krap_door_kickin, draw_mag_graffiti, draw_oil_rig, draw_propaganda_poster, draw_route12_aftermath, draw_route12_black, draw_route12_broadcast, draw_route12_checkpoint, draw_route12_files, draw_route12_mag_alert, draw_route12_tanker, draw_van_exterior, draw_van_handoff, draw_van_interior, GROUND_Y, _draw_vertical_gradient, _draw_light_cone
 from core.cutscene_registry import scene_renderer as _scene_renderer
+from core.cutscene_registry import register_scene_renderer as _register_intro
 import cutscenes.van3d  # noqa: F401  registers the 3D "van_exterior" take (2D fallback inside)
 from cutscenes.m5mid3d import draw_m5x
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
@@ -535,45 +537,89 @@ def draw_volkov_dossier_overlay(surface, t):
 # CUTSCENE SHOT LISTS
 # ─────────────────────────────────────────────
 import game.timelines as _timelines  # RPE6 P8: timeline data access
+# The opening narration plays as engine3d takes (cutscenes.intro3d); the
+# painted shots stay as the fallback when the 3D stack declines.
+_INTRO_2D = {
+    "intro_ocean": "ocean_wide", "intro_city": "city_skyline", "intro_poster": "ipa_poster",
+    "intro_graffiti": "mag_graffiti", "intro_convoy": "krap_convoy",
+    "intro_checkpoint": "krap_patch", "intro_arrival": "biribel_arrival",
+}
+_intro_state = {"failed": False}
+
+
+def _intro_take(scene_id):
+    def draw(surface, t):
+        if not _intro_state["failed"] and os.environ.get("ACARISTAN_CUTSCENE3D", "1").strip() != "0":
+            try:
+                from cutscenes import intro3d  # lazy: engine3d stack
+                intro3d.SCENES[scene_id](surface, t)
+                return
+            except Exception as e:
+                _intro_state["failed"] = True
+                print(f"intro3d: 3D intro disabled, using 2D ({e!r})")
+        from core.cutscene_registry import current_shot
+        shot = dict(current_shot() or {}, scene=_INTRO_2D[scene_id])
+        _draw_cutscene_scene_raw(surface, shot, t)
+    return draw
+
+
+for _sid in _INTRO_2D:
+    _register_intro(_sid, _intro_take(_sid))
+
+
 cutscene1_shots = [
     {
-        "scene": "ocean_wide",
+        "scene": "intro_ocean",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "The Kilemeno Ocean. Once a fishing route.\nNow a graveyard of derricks and broken treaties.",
         "lighting": (30, 25, 30),
     },
     {
-        "scene": "city_skyline",
+        "scene": "intro_city",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "Acaristan. A nation in name only.\nThe ground beneath it is worth more than the people standing on it.",
         "lighting": (28, 22, 30),
     },
     {
-        "scene": "ipa_poster",
+        "scene": "intro_poster",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "The IPA promises rebuilding.\nTheir oil flows. Their guns sell.\nTheir hands are clean - for the cameras.",
         "lighting": (25, 22, 20),
     },
     {
-        "scene": "mag_graffiti",
+        "scene": "intro_graffiti",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "MAG promises freedom.\nThey bomb checkpoints. They bury their dead in unmarked steppes.\nThe state calls them terrorists. The poor call them family.",
         "lighting": (35, 32, 30),
     },
     {
-        "scene": "krap_convoy",
+        "scene": "intro_convoy",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "And then there is KRAP.\nKoaliția Regională de Apărare Și Pace.\nPeacekeepers, they call themselves.",
         "lighting": (60, 50, 45),
     },
     {
-        "scene": "krap_patch",
+        "scene": "intro_checkpoint",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "They keep the highways open.\nThey keep the oil moving.\nThey keep the questions unasked.",
         "lighting": (25, 25, 28),
     },
     {
-        "scene": "biribel_arrival",
+        "scene": "intro_arrival",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "Today, one of their operators arrives.\nHe has been told this is a stabilization assignment.\nHe has not been told the truth.",
         "lighting": (15, 18, 28),

@@ -3080,6 +3080,8 @@ class _CutsceneState(GameState):
         if shot is None:
             return
         rain_scenes = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy",
+                       "intro_ocean", "intro_city", "intro_poster", "intro_convoy",
+                       "intro_checkpoint", "intro_arrival",
                        "route12_checkpoint", "route12_tanker", "route12_aftermath",
                        "seby_pickup_body", "seby_pickup_reach", "seby_pickup_raise",
                        "m1_escape_dashboard", "m1_escape_closeup",
@@ -3138,8 +3140,15 @@ class _CutsceneState(GameState):
                 draw_scanlines(surface)
             draw_letterbox(surface)
             if t_ms >= shot.get("caption_after_ms", 0) and not shot.get("hide_caption") and (shot["text"] or shot.get("speaker")):
-                gc.draw_film_caption(surface, shot["speaker"], shot["text"],
-                                     typed=cp.char_idx)
+                if shot.get("caption") == "box":
+                    # the in-game dialogue box (name tab, pixel font, typewriter)
+                    gc.draw_dialogue_box(surface, shot["speaker"], shot["text"], cp.char_idx,
+                                         len(shot["text"]),
+                                         can_continue=cp.char_idx >= len(shot["text"]),
+                                         show_speaker=bool(shot["speaker"]))
+                else:
+                    gc.draw_film_caption(surface, shot["speaker"], shot["text"],
+                                         typed=cp.char_idx)
             if not shot.get("self_graded"):
                 _g = _advance_grain()
                 if _g is not None:
