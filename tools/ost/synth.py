@@ -209,6 +209,31 @@ def epiano(f, dur=1.0):
     return norm(y * np.exp(-t / 2.0) * env(n, 0.002, 0, 1, 0.5))
 
 
+@lru_cache(maxsize=4096)
+def piano(f, dur=1.0, vel=0.8):
+    """Upright piano: three detuned strings per note, stiff-string partials, two-stage decay, damper on release."""
+    n = int(min(dur + 1.8, 6.0) * SR)
+    t = _t(n)
+    stiff = 0.00004 * (f / 65.0) ** 1.2
+    tau = float(np.clip(4.5 * (110.0 / f) ** 0.55, 0.6, 7.0))
+    y = np.zeros(n)
+    for s, det in enumerate((0.9993, 1.0, 1.0008)):
+        for k in range(1, 18):
+            fk = f * det * k * np.sqrt(1 + stiff * k * k)
+            if fk > 11000:
+                break
+            amp = (0.15 + abs(np.sin(np.pi * k / 7.5))) / k * np.exp(-0.32 * k * (1.1 - vel))
+            tk = tau / (1 + 0.22 * k)
+            y += amp * (0.6 * np.exp(-t / (0.22 * tk)) + 0.4 * np.exp(-t / tk)) * np.sin(2 * np.pi * fk * t + s * k)
+    off = int(dur * SR)
+    if off < n:
+        y[off:] *= np.exp(-np.arange(n - off) / (0.14 * SR))
+    h = int(0.02 * SR)
+    y[:h] += 0.25 * vel * lp(noise(h, _rng("hammer", f)), 1800 + 2000 * vel) * np.linspace(1, 0, h) ** 2
+    y = y + 0.25 * bp(y, 90, 400)
+    return norm(y * np.clip(t / 0.0015, 0, 1))
+
+
 @lru_cache(maxsize=1024)
 def pad(f, dur=4.0, cutoff=1400.0, a=0.8, r=1.5):
     n = int((dur + r) * SR)
@@ -558,6 +583,20 @@ def wind(n, rng, lo=250.0, hi=900.0):
         g = np.exp(1.2 * smooth_random(n, 0.4, rng))
         whistle = lp_sweep(hp(noise(n, rng), lo * 1.5), hi * 1.6 + hi * smooth_random(n, 0.25, rng), 1024)
         out[ch] = (bp(noise(n, rng), lo, hi) + 0.3 * whistle) * g
+    return norm(out)
+
+
+def fire(n, rng):
+    """Burning barn: low roar plus random pops and crackles."""
+    out = np.zeros((2, n))
+    k = int(0.004 * SR)
+    for ch in range(2):
+        roar = lp(noise(n, rng), 260) * (1 + 0.6 * smooth_random(n, 1.5, rng))
+        imp = np.zeros(n)
+        idx = rng.integers(0, n, int(n / SR * 40))
+        imp[idx] = rng.uniform(0.1, 1.0, len(idx)) ** 2
+        pop = bp(noise(k, rng), 1500, 6000) * np.linspace(1, 0, k)
+        out[ch] = 0.5 * norm(roar) + signal.fftconvolve(imp, pop)[:n]
     return norm(out)
 
 

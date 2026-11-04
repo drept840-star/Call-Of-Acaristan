@@ -1,6 +1,6 @@
 """Render the Call of Acaristan OST (tools/ost/album.py).
 
-    python tools/build_ost.py              # all 8 tracks
+    python tools/build_ost.py              # all 12 tracks
     python tools/build_ost.py 1 7          # only tracks 1 and 7
     python tools/build_ost.py --wav-only   # skip the MP3 encode
 

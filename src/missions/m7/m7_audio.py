@@ -676,7 +676,7 @@ class M7Audio:
 OST_DIR = "assets/music/ost/"
 MUSIC = {
     "farm": (OST_DIR + "05_curfew_dawn.mp3", 0.30, 2500),
-    "raid": (OST_DIR + "06_not_tonight.mp3", 0.42, 1500),
+    "raid": (OST_DIR + "09_fallow_ground.mp3", 0.42, 1500),
     "film": (OST_DIR + "03_quiet_on_route_12.mp3", 0.36, 2000),
     "outro": (OST_DIR + "08_i_chose_the_many.mp3", 0.48, 2500),
 }
