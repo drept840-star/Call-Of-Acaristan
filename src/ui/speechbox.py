@@ -1,17 +1,14 @@
 """Speech box: the one in-person dialogue box and film caption for the game.
 
-The HUD radio (``ui.radio``) is the house look for spoken lines; this module
-draws every other spoken / narrated line in the same family so a conversation
-reads as the same device language as a transmission:
-
-* ``draw_box``: in-person conversation box (cutscene dialogue box shim, walk
-  sim, M5 conversations, M7 farm, mission briefings). Gunmetal case with ink
-  outline and notched corners, caller-ID chip with the speaker's pixel
-  portrait, recessed glass with scanlines, accent name plate, voice LED
-  ladder while the VO channel is busy, typed body with block caret, beat
-  pips and a blinking pixel continue arrow. Unfolds open (160 ms).
-* ``draw_caption``: film subtitle for the letterbox band (no case: the band
-  is already black) - accent name plate over centred typed rows.
+* ``draw_box``: the slab. A full-width dark strip resting on the bottom
+  letterbox, a hard accent rule along its top edge, the speaker's name in an
+  accent tab that breaks the rule, wide typed rows with a block caret, and
+  three pixel bars at the right (they bob while the line is spoken, then
+  step as the continue mark). Used by the cutscene dialogue box shim, walk
+  sim, M5 conversations, M7 farm and the mission briefings. Wipes up from
+  the letterbox (160 ms).
+* ``draw_caption``: film subtitle for the letterbox band (already black) -
+  the same accent tab over centred typed rows.
 
 Both lay out from the FULL text, so nothing jumps while it types. Bitmap
 fonts only (``ui.pixfont``), integer pixel unit, hard edges.
@@ -137,41 +134,35 @@ def _vo_busy():
         return False
 
 
-def _plate(s, f_lab, name, acc, x, y, u):
-    """Accent callsign plate (the radio's), returns its rect."""
-    nw = f_lab.size(name)[0]
-    plate = pygame.Rect(x, y, nw + 4 * u, (f_lab.cap + 2) * u)
-    s.fill(acc, plate)
-    s.fill(_R._mix(acc, (255, 255, 255), 0.35), (plate.x, plate.y, plate.w, u))
-    s.fill(_R._mix(acc, (0, 0, 0), 0.35), (plate.x, plate.bottom - u, plate.w, u))
-    f_lab.draw(s, name, (plate.x + 2 * u, plate.y + u), (14, 14, 16))
-    return plate
+def _mix(a, b, k):
+    return tuple(int(a[i] + (b[i] - a[i]) * k) for i in range(3))
 
 
-def _ladder(s, x, y, h, u, acc, clock, busy):
-    """Six-bar voice meter; bars only move while the VO channel speaks."""
-    seg_rows = max(3, (h // u - 1) // 2)
-    for i in range(6):
-        lv = 0.0
-        if busy:
-            lv = 0.25 + 0.75 * abs(math.sin(clock * (0.011 + i * 0.0037) + i * 1.7)
-                                   * math.sin(clock * 0.0047 + i))
-        lit = int(round(lv * seg_rows))
-        for j in range(seg_rows):
-            col = ((_R.LED_RED if j == seg_rows - 1 else acc) if j < lit else _R.LED_OFF)
-            s.fill(col, (x + i * 2 * u, y + h - (j + 1) * 2 * u + u, u, u))
-    return 12 * u
+def _tab(s, f_tab, name, acc, x, y, u):
+    """Accent name tab with notched top corners; returns its rect."""
+    h = (f_tab.cap + 3) * u
+    r = pygame.Rect(x, y, f_tab.size(name)[0] + 10 * u, h)
+    s.fill(acc, (r.x + u, r.y, r.w - 2 * u, u))
+    s.fill(acc, (r.x, r.y + u, r.w, r.h - u))
+    f_tab.draw(s, name, (r.x + 5 * u, r.y + (h - f_tab.cap * u) // 2), (12, 12, 14))
+    return r
 
 
-def _arrow(s, x, y, u, col):
-    """Pixel down-arrow, 5 units wide (no glyph: fonts lack the codepoint)."""
-    for r, w in enumerate((5, 3, 1)):
-        s.fill(col, (x + (5 - w) // 2 * u, y + r * u, w * u, u))
-
-
-def _diamond(s, x, y, u, col):
-    for r, w in enumerate((1, 3, 5, 3, 1)):
-        s.fill(col, (x + (5 - w) // 2 * u, y + r * u, w * u, u))
+def _bars(s, x, y, u, acc, now, mode):
+    """Three pixel bars, 5u tall. ``mode``: "talk" bobs, "next" steps,
+    "wait" pulses the first bar."""
+    dim = _mix(acc, (40, 42, 44), 0.7)
+    for i in range(3):
+        bx = x + i * 5 * u
+        if mode == "talk":
+            h = 2 + int(round(3 * abs(math.sin(now * (0.012 + 0.004 * i) + i * 1.9))))
+            s.fill(acc, (bx, y + (5 - h) * u, 3 * u, h * u))
+        elif mode == "next":
+            lit = i < 1 + (now // 220) % 3
+            s.fill(acc if lit else dim, (bx, y, 3 * u, 5 * u))
+        else:
+            lit = i == 0 and (now // 420) % 2 == 0
+            s.fill(acc if lit else dim, (bx, y, 3 * u, 5 * u))
 
 
 def _typed_rows(rows, n):
@@ -206,59 +197,26 @@ def _is_system(speaker):
     return _R._base(speaker) in ("", "SYSTEM")
 
 
-# -- conversation box --------------------------------------------------------
+def _fonts(u):
+    """(body, tab, hint) bitmap fonts for pixel unit ``u``."""
+    return (pixfont.font("R7", max(1, 3 * u // 2)), pixfont.font("R7", u),
+            pixfont.font("R5", u))
+
+
+# -- the slab ----------------------------------------------------------------
 _box_state = {"last": -10 ** 9, "open_t": 0}
-_case_cache = {}
-
-
-def _case(w, h, u, chip_rect, win):
-    key = (w, h, u, chip_rect and tuple(chip_rect), tuple(win))
-    hit = _case_cache.get(key)
-    if hit is not None:
-        return hit
-    if len(_case_cache) > 24:
-        _case_cache.clear()
-    s = pygame.Surface((w, h), pygame.SRCALPHA)
-    s.fill((*_R.CASE_INK, 255), (u, 0, w - 2 * u, h))
-    s.fill((*_R.CASE_INK, 255), (0, u, w, h - 2 * u))
-    body = pygame.Rect(u, u, w - 2 * u, h - 2 * u)
-    _R._bevel_box(s, body, _R.CASE, _R.CASE_HI, _R.CASE_LO, u)
-    for y in range(body.y + 3 * u, body.bottom - 2 * u, 3 * u):
-        s.fill(_R._mix(_R.CASE, _R.CASE_LO, 0.25), (body.x + u, y, body.w - 2 * u, max(1, u // 2)))
-    for x, y in ((2 * u, 2 * u), (w - 4 * u, 2 * u), (2 * u, h - 4 * u), (w - 4 * u, h - 4 * u)):
-        _R._screw(s, x, y, u)
-    if chip_rect is not None:
-        _R._bevel_box(s, chip_rect.inflate(2 * u, 2 * u), (8, 10, 9), _R.CASE_LO, _R.CASE_HI, u)
-    _R._bevel_box(s, win.inflate(2 * u, 2 * u), _R.GLASS, _R.CASE_LO, _R.CASE_HI, u)
-    s.fill(_R.GLASS, win)
-    s.fill(_R.GLASS_HI, (win.x, win.y, win.w, u))
-    for y in range(win.y + u, win.bottom, 2 * u):
-        s.fill((14, 20, 16), (win.x, y, win.w, max(1, u // 2)))
-    _case_cache[key] = s
-    return s
-
-
-def box_metrics(surface):
-    sw, sh = surface.get_size()
-    scale = _scale(surface)
-    u = _unit(surface)
-    f_body = _R.body_font(None, u)
-    f_lab = pixfont.font("R5", u)
-    return {"scale": scale, "u": u, "f_body": f_body, "f_lab": f_lab,
-            "panel_w": int(min(sw - 60 * scale, 760 * scale)),
-            "chip": _R.PORTRAIT_PX * 2 * u, "pad": 4 * u,
-            "plate_h": (f_lab.cap + 2) * u, "row_h": f_body.get_linesize()}
+STRIP_RGBA = (8, 10, 12, 228)
 
 
 def draw_box(surface, speaker, text, shown, total=None, prompt=True, show_name=True,
              color=None, bottom=None, pips=None, hint=None, clock=None):
-    """Draw the conversation box; returns its screen rect.
+    """Draw the slab; returns its screen rect (tab included).
 
     ``shown`` characters of ``text`` are visible (the caller's typewriter);
-    ``prompt``: True = continue arrow + ``hint`` once typed, False =
-    "ANALYZING FILE...", None = no prompt (timeline-owned lines). ``pips`` =
-    (index, count) beat progress. ``bottom`` defaults to just above the
-    bottom letterbox band."""
+    ``prompt``: True = continue bars (+ ``hint`` if given) once typed,
+    False = "ANALYZING FILE...", None = no prompt (timeline-owned lines).
+    ``pips`` = (index, count) beat progress. ``bottom`` defaults to the top
+    of the bottom letterbox band."""
     text = text or ""
     total = len(text) if total is None else total
     now = _now_ms() if clock is None else clock
@@ -268,106 +226,77 @@ def draw_box(surface, speaker, text, shown, total=None, prompt=True, show_name=T
     st["last"] = now
 
     sw, sh = surface.get_size()
-    m = box_metrics(surface)
-    u, pad, f_body, f_lab = m["u"], m["pad"], m["f_body"], m["f_lab"]
-    panel_w, row_h, plate_h = m["panel_w"], m["row_h"], m["plate_h"]
+    u = _unit(surface)
+    f_body, f_tab, f_hint = _fonts(u)
     system = _is_system(speaker)
-    acc = tuple((color or _R.accent_for(speaker, SYSTEM_RGB)))[:3]
-    chip = 0 if system else m["chip"]
+    acc = tuple(color or (SYSTEM_RGB if system else _R.accent_for(speaker, SYSTEM_RGB)))[:3]
     names = show_name and not system and _R.PREFS.get("radio_speaker_names", True)
 
-    win_x = pad + u + ((chip + 2 * u + 3 * u) if chip else 0)
-    win_w = panel_w - win_x - pad - u
-    text_w = win_w - 8 * u
-    rows = _wrap(text, f_body, text_w)
+    margin = 30 * u
+    rows = _wrap(text, f_body, sw - 2 * margin - 24 * u)
+    row_h = f_body.get_linesize() + 2 * u
     n_rows = max(2, min(MAX_ROWS, len(rows)))
-    head_h = (plate_h + 3 * u) if (names or pips) else 2 * u
-    foot_h = plate_h + u
-    win_h = 2 * u + head_h + n_rows * row_h + foot_h
-    panel_h = max(chip + 2 * u + 2 * pad, win_h + 2 * u + 2 * pad)
-    win = pygame.Rect(win_x, pad + u, win_w, panel_h - 2 * pad - 2 * u)
-    chip_rect = pygame.Rect(pad + u, (panel_h - chip) // 2, chip, chip) if chip else None
-
-    s = _case(panel_w, panel_h, u, chip_rect, win).copy()
-    if chip_rect is not None:
-        s.fill(_R._mix(acc, (6, 8, 8), 0.82), chip_rect)
-        s.blit(_R._portrait(speaker, chip, acc), chip_rect.topleft)
-        s.blit(_R._screen_overlay(chip, u), chip_rect.topleft)
-
-    hx, hy = win.x + 4 * u, win.y + 2 * u
-    busy = _vo_busy() and not system
+    strip_h = 8 * u + n_rows * row_h + 6 * u
+    tab_h = (f_tab.cap + 3) * u
+    lift = (tab_h - u) if names else 0
+    s = pygame.Surface((sw, lift + strip_h), pygame.SRCALPHA)
+    s.fill(STRIP_RGBA, (0, lift, sw, strip_h))
+    s.fill(acc, (0, lift, sw, u))
     if names:
-        plate = _plate(s, f_lab, _R._base(speaker), acc, hx, hy, u)
-        _ladder(s, plate.right + 3 * u, hy, plate_h, u, acc, now, busy)
+        _tab(s, f_tab, _R._base(speaker), acc, 20 * u, 0, u)
     if pips:
         idx, cnt = pips
         cnt = max(1, min(int(cnt), 24))
-        px = win.right - 4 * u - cnt * 3 * u + u
+        px = sw - margin - cnt * 4 * u + u
         for i in range(cnt):
-            col = acc if i <= idx else _R.LED_OFF
-            s.fill(col, (px + i * 3 * u, hy + plate_h // 2 - u, 2 * u, 2 * u))
+            col = acc if i <= idx else _mix(acc, (40, 42, 44), 0.7)
+            s.fill(col, (px + i * 4 * u, lift + 4 * u, 2 * u, 2 * u))
 
     # body: wrapped from the full line, typed prefix, scroll past MAX_ROWS
     n = max(0, min(len(text), int(shown)))
     vis = _typed_rows(rows, n)
     scrolled = max(0, len(vis) - MAX_ROWS)
     vis = vis[scrolled:]
-    tx, by = win.x + 4 * u, win.y + 2 * u + head_h
+    tx, by = margin, lift + 8 * u
     ink = SYSTEM_RGB if system else TEXT_RGB
-    sh_off = max(1, u // 2)
     for i, r in enumerate(vis):
         if not r:
             continue
-        t = f_body.render(r, False, ink)
-        shd = f_body.render(r, False, (0, 0, 0))
-        if scrolled and i == 0:
-            t, shd = t.copy(), shd.copy()
-            t.set_alpha(120)
-            shd.set_alpha(120)
-        s.blit(shd, (tx + sh_off, by + i * row_h + sh_off))
-        s.blit(t, (tx, by + i * row_h))
+        col = _mix(ink, (8, 10, 12), 0.5) if (scrolled and i == 0) else ink
+        f_body.draw(s, r, (tx + u, by + i * row_h + u), (0, 0, 0))
+        f_body.draw(s, r, (tx, by + i * row_h), col)
     typing = n < len(text)
     if typing and vis and (now // 220) % 2 == 0:
         cx = tx + f_body.size(vis[-1])[0] + f_body.scale
-        s.fill(acc, (cx, by + (len(vis) - 1) * row_h, f_body.scale * 3, f_body.get_ascent()))
+        s.fill(acc, (cx, by + (len(vis) - 1) * row_h, f_body.scale * 3, f_body.cap * f_body.scale))
 
-    # footer prompt, bottom-right of the glass
-    fy = win.bottom - plate_h
-    if not typing and n >= total and prompt is not None:
-        blink = (now // 420) % 2 == 0
-        dim = _R._mix(acc, (40, 44, 40), 0.45)
-        if prompt:
-            label = hint if hint is not None else _T("cutscene.space_to_continue")
-            ax = win.right - 9 * u
-            if blink:
-                _arrow(s, ax, fy + u, u, acc)
-        else:
-            label = _T("cutscene.analyzing_file")
-            ax = win.right - 9 * u
-            _diamond(s, ax, fy, u, acc if blink else dim)
+    # right edge: bars bob while spoken, then step as the continue mark
+    bx, bby = sw - margin - 13 * u, lift + strip_h - 11 * u
+    if typing or (_vo_busy() and not system):
+        _bars(s, bx, bby, u, acc, now, "talk")
+    elif n >= total and prompt is not None:
+        label = (hint if prompt else _T("cutscene.analyzing_file")) or ""
+        _bars(s, bx, bby, u, acc, now, "next" if prompt else "wait")
         if label:
-            lw = f_lab.size(label)[0]
-            f_lab.draw(s, label, (ax - 3 * u - lw, fy + u), HINT_RGB)
+            lw = f_hint.size(label)[0]
+            f_hint.draw(s, label, (bx - 4 * u - lw, bby + (5 * u - f_hint.cap * u) // 2), HINT_RGB)
 
-    # open: unfold from a centre line, hard edges
-    k = 1.0 if OPEN_MS <= 0 else _R._ease_out((now - st["open_t"]) / OPEN_MS)
-    x0 = (sw - panel_w) // 2
+    # open: wipe up from the letterbox, hard edge
     if bottom is None:
-        bottom = sh - int(LETTER_H * sh / HEIGHT) - int(14 * m["scale"])
-    y0 = bottom - panel_h
+        bottom = sh - int(LETTER_H * sh / HEIGHT)
+    full_h = s.get_height()
+    y0 = bottom - full_h
+    k = 1.0 if OPEN_MS <= 0 else _R._ease_out((now - st["open_t"]) / OPEN_MS)
     if k < 1.0:
-        h = max(2 * u, int(panel_h * k) // u * u)
-        top = (panel_h - h) // 2
-        part = s.subsurface((0, top, panel_w, h)).copy()
-        part.set_alpha(int(255 * (0.35 + 0.65 * k)))
-        surface.blit(part, (x0, y0 + top))
+        h = max(u, int(full_h * k) // u * u)
+        surface.blit(s.subsurface((0, full_h - h, sw, h)), (0, bottom - h))
     else:
-        surface.blit(s, (x0, y0))
-    return pygame.Rect(x0, y0, panel_w, panel_h)
+        surface.blit(s, (0, y0))
+    return pygame.Rect(0, y0, sw, full_h)
 
 
 def reset_box():
-    """Next ``draw_box`` unfolds again (scene entry)."""
+    """Next ``draw_box`` wipes in again (scene entry)."""
     _box_state["last"] = -10 ** 9
 
 
@@ -383,26 +312,26 @@ def draw_caption(surface, speaker, text, shown=None, band=None, clock=None):
     scale = _scale(surface)
     u = _unit(surface)
     f_body = _R.body_font(None, u)
-    f_lab = pixfont.font("R5", u)
+    f_tab = _fonts(u)[1]
     if band is None:
         band = (sh - int(LETTER_H * sh / HEIGHT), sh)
     top, bot = band
     rows = _wrap(text, f_body, int(sw - 160 * scale)) if text else []
     row_h = f_body.get_linesize()
     names = bool(speaker) and not _is_system(speaker) and _R.PREFS.get("radio_speaker_names", True)
-    plate_h = (f_lab.cap + 2) * u
-    head = (plate_h + 2 * u) if names else 0
+    tab_h = (f_tab.cap + 3) * u
+    head = (tab_h + 2 * u) if names else 0
     block = head + len(rows) * row_h
     y = top + max(u, (bot - top - block) // 2)
     acc = _R.accent_for(speaker, (255, 150, 60))
     if names:
         name = _R._base(speaker)
-        pw = f_lab.size(name)[0] + 4 * u
-        meter = 13 * u if _vo_busy() else 0
-        px = (sw - pw - meter) // 2
-        plate = _plate(surface, f_lab, name, acc, px, y, u)
-        if meter:
-            _ladder(surface, plate.right + u, y, plate_h, u, acc, now, True)
+        tw = f_tab.size(name)[0] + 10 * u
+        talk = _vo_busy()
+        x = (sw - tw - (16 * u if talk else 0)) // 2
+        r = _tab(surface, f_tab, name, acc, x, y, u)
+        if talk:
+            _bars(surface, r.right + 3 * u, y + (tab_h - 5 * u) // 2, u, acc, now, "talk")
         y += head
     n = len(text) if shown is None else max(0, min(len(text), int(shown)))
     vis = _typed_rows(rows, n)
