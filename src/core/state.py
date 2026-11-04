@@ -221,19 +221,29 @@ class GameState:
         self.mission4_stage = None
         self.m4_chaos_timer = 0            # frames since mission start
         self.m4_liaison_reached = False    # station exterior door opened
-        self.m4_cache_taken = False        # Vasile comms cache picked up (E)
+        self.m4_cache_taken = False        # the KRAP cache is in play (Vasile carries it)
+        self.m4_cache_carried = False      # Vasile alive with the cache on his back
+        self.m4_supply = 0                 # supply pool: barricades and repairs
+        self.m4_vasile_downs = 0           # 1 = revived once; the next down kills him
+        self.m4_reviving = False           # E held over a downed Vasile
+        self.m4_work_lock = False          # a hold (revive/build/repair) locks movement
+        self.m4_hold_ui = None             # (label, frac, site) of the running hold
+        self.m4_fail_reason = None         # "vasile" / "rack" -> death screen
+        self.m4_fail_timer = 0
+        self.m4_barricades = {}            # (col, row) -> {"kind","hp","max","rect"}
+        self.m4_breached = False           # wave 4 blew the east corridor wall
+        self.m4_apc = None                 # wave 5 APC (missions.m4.apc)
+        self.m4_siege_t = 0                # siege clock, frames (negative = countdown)
+        self.m4_wave = 0                   # wave in progress (1-5)
+        self.m4_rack_hold = 0              # frames loyalists have held the rack
         self.m4_maru_joined = False        # Maru accepted at the meet
         self.m4_dialogue_active = False    # meet dialogue locks movement
         self.m4_jammer_installed = False   # transmitter jammer beat done
         self.m4_siege_active = False       # loyalist assault running
-        self.m4_hold_timer = 0             # frames of AIRTIME held at the mic
-        self.m4_hold_peak = 0              # monotonic airtime high-water mark
-        self.m4_broadcasting = False       # mic switch: ON AIR vs jammed
+        self.m4_hold_timer = 0             # legacy airtime counter (unused since the overhaul)
         self.m4_broadcast_held = False     # hold completed → arrest on air
         self.request_mission4_ending = False
-        # Siege director (W4 STAGE_COMMIT): loyalist fireteams spawn from the
-        # insertion doors up to world.M4_MAX_CONCURRENT; a marksman press draws
-        # a laser telegraph on m4_lasers (m2._add_sniper_laser visual idiom,
+        # Marksman telegraphs on m4_lasers (m2._add_sniper_laser visual idiom,
         # ported). Reset in world._reset_world_lists + flow.start_m4.
         self.m4_lasers = []                # [{"from","to","life"}] telegraph beams
         self.m4_siege_wave = 0             # fireteams committed this hold

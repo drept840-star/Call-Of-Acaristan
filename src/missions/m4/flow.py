@@ -28,21 +28,22 @@ from missions.m4 import maps as _m4_maps  # live view of MISSION4_MAP/_objective
 from missions.m4.meta import (
     MAP_W, MAP_H,
     MISSION4_ID, MISSION4_KEY, MISSION4_TITLE,
-    M4_HOLD_SECONDS, M4_MIC_RADIUS, M4_OFFAIR_DECAY_EVERY,
-    STAGE_INTRO, STAGE_AFTERMATH, STAGE_KRAP_STATUS, STAGE_MARU,
-    STAGE_COMMIT, STAGE_DONE,
-    TRANSMITTER_TILE,
+    M4_SIEGE_FRAMES, M4_WAVE_GRACE, M4_JAMMER_COUNTDOWN, M4_SUPPLY_START,
+    STAGE_INTRO, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE, STAGE_DONE,
+    STAGE_AFTERMATH, TRANSMITTER_TILE, VASILE_STATION_TILE, RESPAWN_TILE,
     C_SYSTEM, C_VASILE, C_MARU, C_VOLKOV, C_RETARDOVICI, C_BALACEANU,
     BIRIBEL_SPEAKER,
 )
 from missions.m4.world import (
     _build_m4_world, _build_station_world, _movement_locked, _near, _player_pos,
     _radio,
-    _set_objective, _street_door_pos, _tile_world, _vasile_cache_pos,
-    _liaison_pos, _jammer_pos, _run_siege_director, _siege_reset,
-    _arm_m4_allies,
-
+    _set_objective, _street_door_pos, _tile_world,
+    _liaison_pos, _jammer_pos, _siege_reset, _ally,
+    _arm_m4_allies, _tone_choice,
 )
+from missions.m4 import escort as _m4_escort
+from missions.m4 import fortify as _m4_fortify
+from missions.m4 import siege as _m4_siege
 
 
 def _tx_pos():
@@ -310,15 +311,20 @@ def _maru_not_in_room():
     return not _near(_liaison_pos(), radius=200)
 
 
+_SQUAD_LINES = (
+    "MARU: Two of Balaceanu's own walked out on him. Soldiers - they'll hold a door.",
+    "MARU: MAG sent who it had. Four of them, no armour. Keep them alive.",
+)
+
+
 def _finish_liaison_dialogue():
+    """The meet is done: Maru arms, the tone's squad walks in, the jammer opens."""
     _m4_dlg["active"] = False
     STATE.m4_dialogue_active = False
     STATE.m4_dialogue_done = True
-    STATE.mission4_stage = STAGE_MARU
-    STATE.mission_phase = "m4_jammer"
-    _set_objective("Install the jammer on the transmitter rack, east wall.")
-    _radio("MARU: Jammer's on the east rack. Break their comms before they organize.",
-           color=C_MARU, duration=420, mark="maru_jammer")
+    _arm_m4_allies()
+    _radio(_SQUAD_LINES[_tone_choice()], color=C_MARU, duration=420, mark="maru_squad")
+    _fortify_objective()
 
 
 def _dlg_press(key):
@@ -361,28 +367,28 @@ def handle_dialogue_event(event):
 
 
 # ─────────────────────────────────────────────
-# The hold: diegetic arrest-on-air beat ladder (W4)
+# The arrest on air: diegetic beat ladder over the siege
 # ─────────────────────────────────────────────
 # Biribel never sees Balaceanu. He only hears the regime eat itself while the
 # transmitter stays live: Retardovici's order goes out on the general's own
 # airwaves (PA mumble + his color), the loyalist comms curdle into confusion
 # once the jammer is soup (radio_static + C_BALACEANU), then a stand-down and
-# a retreat (footstep). Driven off the AIRTIME high-water mark
-# (STATE.m4_hold_peak) so the arrest reads on schedule no matter how the wave
-# director is going - and so the ladder always fits inside M4_HOLD_SECONDS
-# (the old 90 s clock ended 22.5 s after the last beat had aired).
+# a retreat (footstep). Frames are siege-clock frames (STATE.m4_siege_t),
+# spread over the five waves: the order airs early in wave 1, Vasile's steer
+# and the jammed comms land in the wave 3 lull, the stand-down in wave 5 and
+# the retreat sends the last of them out before the clock runs down.
 _M4_ARREST_BEATS = [
-    (300, "arrest_open", C_RETARDOVICI, "pa_mumble",
+    (600, "arrest_open", C_RETARDOVICI, "pa_mumble",
      "PA: All units. By order of the Presidency, garrison command is... recalibrated."),
-    (1080, "arrest_order", C_RETARDOVICI, "pa_mumble",
+    (11000, "arrest_order", C_RETARDOVICI, "pa_mumble",
      "PA: General Balaceanu is relieved of command and arrested. Escort him out."),
-    (1440, "arrest_steer", C_VASILE, "radio_static",
+    (11500, "arrest_steer", C_VASILE, "radio_static",
      "VASILE: You don't need to see him. Trust me."),
-    (1800, "arrest_confusion", C_BALACEANU, "radio_static",
+    (19800, "arrest_confusion", C_BALACEANU, "radio_static",
      "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-"),
-    (2520, "arrest_standdown", C_SYSTEM, "radio_static",
+    (26400, "arrest_standdown", C_SYSTEM, "radio_static",
      "SYSTEM: Guns down. That's the President on the wire. They're taking the General."),
-    (3120, "arrest_retreat", C_BALACEANU, "footstep",
+    (28200, "arrest_retreat", C_BALACEANU, "footstep",
      "LOYALIST COMMS: Fall back! Nobody dies for a man already in a cell. Break off!"),
 ]
 
@@ -398,97 +404,66 @@ def _ladder_player(kind: str):
 
 
 def _arrest_beats():
-    # The ladder rides the monotonic airtime high-water mark, not the live
-    # clock: airtime can bleed off when the mic is shut, but an order the
-    # country already heard cannot un-air. That also makes the beat table safe
-    # against a decaying timer skipping a frame.
-    t = getattr(STATE, "m4_hold_peak", 0)
+    """Air the beat ladder off the siege clock. The retreat beat also sends
+    the loyalists out (siege.stand_down)."""
+    t = getattr(STATE, "m4_siege_t", 0)
+    fired = []
     if _timelines.use_legacy():
         for frame, mark, color, sfx, line in _M4_ARREST_BEATS:
             if t == frame:
                 _radio(line, color=color, duration=470, mark=mark)
                 _sfx(sfx, 0.42)
+                fired.append(mark)
     else:
         for clip in _ladder_player("arrest").events_between(t - 1, t):
             _radio(clip["text"], color=tuple(clip["color"]),
                    duration=clip["duration"], mark=clip["name"])
             _sfx(clip["sfx"], 0.42)
+            fired.append(clip["name"])
+    if "arrest_retreat" in fired:
+        _m4_siege.stand_down()
+
+
+# ─────────────────────────────────────────────
+# Holds (revive, build, repair) and the fail countdown
+# ─────────────────────────────────────────────
+def _update_holds(keys):
+    """Runs before the player update so a hold locks movement this frame."""
+    STATE.m4_work_lock = False
+    _m4_escort.update_vasile_down(keys)
+    if getattr(STATE, "m4_reviving", False):
+        STATE.m4_hold_ui = None
+        return
+    _m4_fortify.update_holds(keys)
+
+
+def _update_fail():
+    """Vasile dead or the rack lost: a beat, then the death screen."""
+    if not getattr(STATE, "m4_fail_reason", None):
+        return False
+    STATE.m4_fail_timer = getattr(STATE, "m4_fail_timer", 0) - 1
+    if STATE.m4_fail_timer == 120:
+        if STATE.m4_fail_reason == "rack":
+            _radio("SYSTEM: Carrier lost. The rack is theirs.", color=C_SYSTEM,
+                   duration=300, mark="fail_rack")
+        _sfx("radio_static", 0.5)
+    if STATE.m4_fail_timer <= 0 and not getattr(STATE, "request_death_screen", False):
+        STATE.request_death_screen = True
+    return True
 
 
 # ─────────────────────────────────────────────
 # Mission start / checkpoints
 # ─────────────────────────────────────────────
-# ─────────────────────────────────────────────
-# The mic switch (STAGE_COMMIT)
-# ─────────────────────────────────────────────
-# The mission's title verb, modelled: airtime only accumulates while the feed
-# is OPEN at the transmitter rack. The open mic is also a beacon - fireteams
-# commit faster and marksmen press harder - so the hold is a choice between
-# staying on the air under fire and ducking the push at the cost of the
-# address. This is what turns a 90-second arena timer into a defence.
-_M4_MIC_LOCKED = {"state": None}   # last announced feed state (feedback dedup)
-
-
-def _mic_state():
-    """'on' when the feed is open and Biribel is at the rack, else 'off'."""
-    if not getattr(STATE, "m4_broadcasting", False):
-        return "off"
-    if not _near(_tx_pos(), radius=M4_MIC_RADIUS):
-        return "off"
-    return "on"
-
-
-def _toggle_mic():
-    """E at the transmitter: open or shut the feed."""
-    STATE.m4_broadcasting = not getattr(STATE, "m4_broadcasting", False)
-    _M4_MIC_LOCKED["state"] = None   # force the feedback line this frame
-    _sfx("rifle_handle", 0.4)
-    _sfx("terminal_glitch", 0.35)
-
-
-def _broadcast_feedback(mic):
-    """Objective + one radio line on every feed-state change."""
-    if mic == _M4_MIC_LOCKED["state"]:
-        return
-    _M4_MIC_LOCKED["state"] = mic
-    if mic == "on":
-        _set_objective("ON AIR - keep the mic open.")
-        _radio("SYSTEM: Mic open. The address is going out.",
-               color=C_SYSTEM, duration=300)
-    else:
-        _set_objective("Press E at the transmitter to open the mic.")
-        _radio("SYSTEM: Mic down. Airtime is bleeding off.",
-               color=C_SYSTEM, duration=300)
-
-
-def _update_broadcast_clock():
-    """Airtime accounting: on the air, off the air (decay), or off the rack."""
-    total = int(M4_HOLD_SECONDS * 60)
-    mic = _mic_state()
-    if mic == "on":
-        STATE.m4_hold_timer = min(total, getattr(STATE, "m4_hold_timer", 0) + 1)
-        STATE.m4_offair_tick = 0
-    else:
-        # Stepping away physically drops the feed (the switch is on the rack).
-        if getattr(STATE, "m4_broadcasting", False):
-            STATE.m4_broadcasting = False
-        STATE.m4_offair_tick = getattr(STATE, "m4_offair_tick", 0) + 1
-        if STATE.m4_offair_tick >= M4_OFFAIR_DECAY_EVERY:
-            STATE.m4_offair_tick = 0
-            STATE.m4_hold_timer = max(0, getattr(STATE, "m4_hold_timer", 0) - 1)
-    STATE.m4_hold_peak = max(getattr(STATE, "m4_hold_peak", 0),
-                             getattr(STATE, "m4_hold_timer", 0))
-    _broadcast_feedback(mic)
-
-
-def start_m4(preserve_timer=False, preserve_tone=False):
+def start_m4(preserve_timer=False, preserve_tone=False, keep_snaps=False):
     """Called by game_core/acaristan to begin Mission 4 gameplay.
 
-    preserve_tone keeps STATE.m4_tone across a death/checkpoint restart: the
-    liaison answer now picks the ally door posts for the hold, so losing it on
-    a wipe would silently re-pick the other side of the siege (and blank the
-    M5 completion-card echo).
+    preserve_tone keeps STATE.m4_tone across a checkpoint restart: the liaison
+    answer picks the squad, so losing it on a wipe would silently swap it.
+    keep_snaps keeps the wave snapshots (the checkpoint wrappers restore from
+    them); a fresh start clears them.
     """
+    tone = list(getattr(STATE, "m4_tone", []) or []) if preserve_tone else []
     STATE.reset()
     STATE.active_mission = MISSION4_KEY
     STATE.active_mission_id = MISSION4_ID
@@ -503,27 +478,38 @@ def start_m4(preserve_timer=False, preserve_tone=False):
     STATE.request_mission4_ending = False
     STATE.request_death_screen = False
     STATE.player_dead = False
-    STATE.mission4_stage = STAGE_AFTERMATH
-    STATE.mission_phase = "m4_aftermath"
+    STATE.mission4_stage = STAGE_ESCORT
+    STATE.mission_phase = "m4_escort"
     STATE.m4_chaos_timer = 0
     STATE.m4_liaison_reached = False
-    STATE.m4_cache_taken = False
+    # Vasile carries the cache from the first frame: it is the supply pool.
+    STATE.m4_cache_taken = True
+    STATE.m4_cache_carried = True
+    STATE.m4_supply = M4_SUPPLY_START
+    STATE.m4_vasile_downs = 0
+    STATE.m4_reviving = False
+    STATE.m4_work_lock = False
+    STATE.m4_hold_ui = None
+    STATE.m4_fail_reason = None
+    STATE.m4_fail_timer = 0
     STATE.m4_maru_joined = False
     STATE.m4_dialogue_active = False
     STATE.m4_dialogue_done = False
-    if not preserve_tone:
-        STATE.m4_tone = []
+    STATE.m4_tone = tone
     STATE.m4_jammer_installed = False
     STATE.m4_siege_active = False
+    STATE.m4_siege_t = -M4_JAMMER_COUNTDOWN
     STATE.m4_hold_timer = 0
-    STATE.m4_hold_peak = 0
-    STATE.m4_broadcasting = False
-    STATE.m4_offair_tick = 0
     STATE.m4_broadcast_held = False
+    STATE.m4_apc = None
     STATE.mission4_station_checkpoint_reached = False
     STATE.mission4_tower_checkpoint_reached = False
     STATE.m4_marks = set()
-    _siege_reset()  # W4 siege counters + telegraph beams (single owner: world)
+    _siege_reset()  # telegraph beams (single owner: world)
+    _m4_siege.reset_runtime()
+    _m4_fortify.reset()
+    if not keep_snaps:
+        _m4_siege.clear_snapshots()
 
     STATE.show_minimap = True
     STATE.minimap = MiniMap(_m4_maps.MISSION4_MAP, palette="m4")
@@ -564,67 +550,92 @@ def start_m4(preserve_timer=False, preserve_tone=False):
     _M4_AMB["pa"] = 760
     _M4_ZONE_SEEN.clear()
     _M4_OPEN_SEEN[0] = False
-    _M4_MIC_LOCKED["state"] = None
-    _dlg_reset()  # W3 liaison dialogue state (module-local, single owner)
+    _dlg_reset()  # liaison dialogue state (module-local, single owner)
 
+    _m4_maps.MISSION4_MAP = _m4_maps.MISSION4_STREET_MAP
     _build_m4_world()
     _snap_camera_safe()
 
-    _set_objective("Pick up the KRAP comms cache (E) on the boulevard, then meet Vasile at the station.")
+    _set_objective("Get Vasile and the cache to the radio station - east end of the boulevard.")
     if getattr(STATE, "_skip_m4_intro_radio", False):
         STATE._skip_m4_intro_radio = False
     else:
-        _radio("VASILE: Two days of curfew, the city's coming apart. Meet me at the cache.",
+        _radio("VASILE: Two days of curfew, the city's coming apart. I've got the cache - stay close.",
                color=C_VASILE, duration=380, mark="start_vasile")
     return STATE.player
 
 
-def start_mission4_station_checkpoint(preserve_timer=False):
-    """Resume inside the radio station (liaison meet).
-
-    W3 owns the meet content; W1 only needs the dev boot + the resume
-    target for the restart ladder.
-    """
-    start_m4(preserve_timer=preserve_timer, preserve_tone=True)
-
+def _station_world(vasile_hp=None):
     _m4_maps.MISSION4_MAP = _m4_maps.MISSION4_STATION_MAP
     STATE.show_minimap = True
     STATE.minimap = MiniMap(_m4_maps.MISSION4_MAP, palette="m4")
     _build_station_world()
+    if vasile_hp is not None:
+        v = _ally("VASILE")
+        if v is not None:
+            v["hp"] = max(1, int(vasile_hp))
     _snap_camera_safe()
-
-    STATE.mission4_stage = STAGE_KRAP_STATUS
-    STATE.mission_phase = "m4_krap_status"
+    STATE.mission4_stage = STAGE_FORTIFY
+    STATE.mission_phase = "m4_fortify"
     STATE.mission4_station_checkpoint_reached = True
+    STATE.m4_liaison_reached = True
 
-    _set_objective("Talk to Maru at the transmitter hall (north).")
-    _radio("VASILE: Station's ours for now. Find Maru in the transmitter hall.",
+
+def _fortify_objective():
+    if getattr(STATE, "m4_dialogue_done", False):
+        _set_objective("Barricade the doors and windows (hold E). Plant the jammer on the rack when ready.")
+    else:
+        _set_objective("Barricade the doors and windows (hold E), then talk to Maru in the entry hall.")
+
+
+def start_mission4_station_checkpoint(preserve_timer=False, keep_snaps=True):
+    """Resume inside the radio station at the top of the fortify stage."""
+    snap = _m4_siege.SNAPS.get("station")
+    start_m4(preserve_timer=preserve_timer, preserve_tone=True, keep_snaps=keep_snaps)
+    _station_world(vasile_hp=snap["vasile_hp"] if snap else None)
+    if snap:
+        STATE.m4_supply = snap["supply"]
+        STATE.m4_vasile_downs = snap["downs"]
+    _fortify_objective()
+    _radio("VASILE: Station's ours for now. Board it up - Maru's in the entry hall.",
            color=C_VASILE, duration=340, mark="station_checkpoint",
            valid=_maru_not_in_room)
     return STATE.player
 
 
 def start_mission4_tower_checkpoint(preserve_timer=False):
-    """Resume at the transmitter hold (siege checkpoint).
+    """Resume the siege at the latest wave snapshot (5 s before that wave).
 
-    W4 replaces the placeholder objective with the wave director; the
-    hold clock itself already ticks in _update_stage so the chain is
-    testable end to end from Slice 0.
-    """
+    With no snapshot (dev boot) the meet is taken as done, the squad armed and
+    the clock put just before wave 1."""
+    snap = _m4_siege.latest()
     start_mission4_station_checkpoint(preserve_timer=preserve_timer)
-
-    STATE.mission4_stage = STAGE_COMMIT
-    STATE.mission_phase = "m4_commit"
+    STATE.m4_dialogue_done = True
+    STATE.m4_jammer_installed = True
     STATE.m4_siege_active = True
     STATE.mission4_tower_checkpoint_reached = True
-    STATE.m4_hold_timer = 0
-    STATE.m4_hold_peak = 0
-    STATE.m4_broadcasting = False
-    _arm_m4_allies()
-
-    _set_objective("Press E at the transmitter to open the mic.")
-    _radio("SYSTEM: The transmitter is live. Do not let it go dark.",
-           color=C_SYSTEM, duration=340, mark="tower_checkpoint")
+    STATE.mission4_stage = STAGE_SIEGE
+    STATE.mission_phase = "m4_siege"
+    if snap:
+        _m4_siege.restore(snap)
+        _set_objective("Hold the station. Keep them off the transmitter rack.")
+        _radio("SYSTEM: Wave %d inbound. Hold the rack." % snap["wave"], color=C_SYSTEM,
+               duration=300, mark="tower_checkpoint")
+    else:
+        if not STATE.m4_tone:
+            STATE.m4_tone = [0]
+        _arm_m4_allies()
+        STATE.m4_siege_t = -M4_WAVE_GRACE
+        _set_objective("Hold the station. Keep them off the transmitter rack.")
+        _radio("SYSTEM: The transmitter is live. Do not let it go dark.",
+               color=C_SYSTEM, duration=340, mark="tower_checkpoint")
+        v = _ally("VASILE")
+        if v is not None:
+            v["x"], v["y"] = _tile_world(*VASILE_STATION_TILE)
+            v["path"], v["path_goal"] = [], None
+    # A wave restart puts Biribel back at the rack, inside the barricades.
+    if STATE.player is not None:
+        STATE.player.rect.center = _tile_world(*RESPAWN_TILE)
     return STATE.player
 
 
@@ -632,131 +643,94 @@ def start_mission4_tower_checkpoint(preserve_timer=False):
 # Stage ladder
 # ─────────────────────────────────────────────
 def _enter_station():
-    """Street -> station interior handoff (the door tile owns the swap)."""
-    _m4_maps.MISSION4_MAP = _m4_maps.MISSION4_STATION_MAP
-    STATE.show_minimap = True
-    STATE.minimap = MiniMap(_m4_maps.MISSION4_MAP, palette="m4")
-    _build_station_world()
+    """Street -> station interior handoff (the door tile owns the swap).
+    Vasile's hp and his one down carry over, and so does the supply."""
+    v = _ally("VASILE")
+    vasile_hp = v["hp"] if v is not None else None
+    _m4_siege.SNAPS["station"] = {"supply": STATE.m4_supply, "downs": STATE.m4_vasile_downs,
+                                  "vasile_hp": vasile_hp}
+    _station_world(vasile_hp=vasile_hp)
     if STATE.player is not None:
         STATE.player.hp = STATE.player.max_hp
         STATE.player.angle = -math.pi / 2
-    _snap_camera_safe()
+    _fortify_objective()
+    _radio("VASILE: We're in. %d loads of supply - spend it on the doors before they come."
+           % STATE.m4_supply, color=C_VASILE, duration=420, mark="door_enter")
 
-    STATE.mission4_stage = STAGE_KRAP_STATUS
-    STATE.mission_phase = "m4_krap_status"
-    STATE.mission4_station_checkpoint_reached = True
-    STATE.m4_liaison_reached = True
 
-    _set_objective("Cross to the transmitter hall - Maru is waiting inside.")
-    _radio("VASILE: Door's clear. Maru's inside - watch the gallery.",
-           color=C_VASILE, duration=380, mark="door_enter",
-           valid=_maru_not_in_room)
+def _update_street():
+    _aftermath_ambient()
+    v = _m4_escort.vasile()
+    if v is not None and v.get("downed", 0) > 0:
+        _set_objective("Vasile is down - hold E over him.")
+    elif "street_objective" not in _m4_maps._radio_marks:
+        _m4_maps._radio_marks.add("street_objective")
+        _set_objective("Get Vasile and the cache to the radio station - east end of the boulevard.")
+    if _near(_street_door_pos(), radius=70):
+        if _m4_escort.vasile_at_door():
+            _enter_station()
+        else:
+            _radio("BIRIBEL: Wait for Vasile - the door stays shut without him.",
+                   color=BIRIBEL_SPEAKER, duration=260, mark="door_wait")
+
+
+def _update_fortify():
+    if not getattr(STATE, "m4_dialogue_done", False):
+        ready = _m4_fortify.built_count() >= 1 or _near(_tx_pos(), radius=260)
+        if _near(_liaison_pos(), radius=95):
+            if ready:
+                _start_liaison_dialogue()
+            else:
+                _radio("MARU: Doors first, talk later. Board something up and come back.",
+                       color=C_MARU, duration=300, mark="maru_doors_first")
+        return
+    if (not getattr(STATE, "m4_jammer_installed", False)
+            and "jammer_prompt" not in _m4_maps._radio_marks
+            and _near(_jammer_pos(), radius=95)):
+        _radio("MARU: That's the rack. Plant it (E) when the doors are done - "
+               "it starts the clock.", color=C_MARU, duration=320, mark="jammer_prompt")
+
+
+def _update_siege():
+    t = _m4_siege.update()
+    _arrest_beats()
+    if t >= M4_SIEGE_FRAMES:
+        _m4_siege.player_line_done()
+        _complete_m4()
 
 
 def _update_stage(keys):
-    """Phase dispatcher (mirrors m3.flow._update_stage).
-
-    The station ladder (W3): proximity to the liaison (Maru) opens the
-    typewriter dialogue; completing it hands off to STAGE_MARU, where the
-    jammer-install (handle_interact) is the gate to the STAGE_COMMIT hold
-    clock (W4 owns the wave director around that clock)."""
+    """Phase dispatcher: escort (street), fortify (station), siege."""
+    if _update_fail():
+        return
     # Dialogue owns the frame while it's up (typewriter tick, no other logic).
     if getattr(STATE, "m4_dialogue_active", False):
         _update_dialogue()
         return
-
-    stage = getattr(STATE, "mission4_stage", STAGE_AFTERMATH)
-
-    if stage == STAGE_AFTERMATH:
-        _aftermath_ambient()
-        if not getattr(STATE, "m4_cache_taken", False):
-            # The cache is a real pickup (E), not a proximity flag: the street
-            # stage cannot be skipped by sprinting past the drop.
-            if _near(_vasile_cache_pos(), radius=90):
-                _radio("VASILE: That's the drop - the KRAP comms cache. Grab it (E).",
-                       color=C_VASILE, duration=380, mark="cache_prompt")
-        elif "aftermath_vasile" not in _m4_maps._radio_marks:
-            _radio("VASILE: That file reached every screen. Head east - hold the station.",
-                   color=C_VASILE, duration=430, mark="aftermath_vasile")
-            _set_objective("Reach the radio station door - east end of the boulevard.")
-            STATE.m4_liaison_reached = False
-        if _near(_street_door_pos(), radius=70):
-            if getattr(STATE, "m4_cache_taken", False):
-                _enter_station()
-            else:
-                _radio("VASILE: Not without the cache, Biribel. Grab it first.",
-                       color=C_VASILE, duration=300, mark="door_without_cache")
-        return
-
-    if stage == STAGE_KRAP_STATUS:
-        # Walk to Maru; the dialogue locks movement. Finishing it moves on.
-        if not getattr(STATE, "m4_dialogue_done", False):
-            if _near(_liaison_pos(), radius=95):
-                _start_liaison_dialogue()
-        return
-
-    if stage == STAGE_MARU:
-        # Jammer install (handle_interact) is the gate. Prompt once on
-        # proximity (dedup via _radio_marks); the interact does the rest.
-        if (not getattr(STATE, "m4_jammer_installed", False)
-                and "jammer_prompt" not in _m4_maps._radio_marks
-                and _near(_jammer_pos(), radius=95)):
-            _radio("MARU: That's the rack. Plant it (E) and their comms go dark.",
-                   color=C_MARU, duration=300, mark="jammer_prompt")
-        return
-
-    if stage == STAGE_COMMIT:
-        # The feed is the clock: airtime advances only while the mic is open
-        # at the rack. The wave director and the diegetic arrest ladder ride
-        # the same number, so the story is a consequence of the hold, never a
-        # stopwatch running beside it (the old 90 s timer ended 22 s after the
-        # last beat had already aired).
-        _update_broadcast_clock()
-        _run_siege_director()
-        _arrest_beats()
-        if getattr(STATE, "m4_hold_timer", 0) >= int(M4_HOLD_SECONDS * 60):
-            _complete_m4()
-        return
-
-    # STAGE_INTRO / STAGE_DONE: no stage logic.
-    return
-
-
-def _take_cache():
-    """Pick up Vasile's comms cache (E on the drop). Arms the door objective."""
-    STATE.m4_cache_taken = True
-    _sfx("pickup", 0.5)
-    if STATE.player is not None:
-        STATE.floating_texts.append(
-            [STATE.player.rect.centerx, STATE.player.rect.centery - 42,
-             "+ KRAP COMMS CACHE", (140, 200, 150), 90])
-    _radio("VASILE: That file reached every screen. Head east - hold the station.",
-           color=C_VASILE, duration=430, mark="aftermath_vasile")
-    _set_objective("Reach the radio station door - east end of the boulevard.")
-    STATE.m4_liaison_reached = False
+    stage = getattr(STATE, "mission4_stage", STAGE_ESCORT)
+    if stage == STAGE_ESCORT:
+        _update_street()
+    elif stage == STAGE_FORTIFY:
+        _update_fortify()
+    elif stage == STAGE_SIEGE:
+        _update_siege()
 
 
 def _install_jammer():
-    """Plant the jammer -> loyalist comms go dark -> the siege (STAGE_COMMIT)."""
+    """Plant the jammer -> loyalist comms go dark -> the 10 s countdown."""
     STATE.m4_jammer_installed = True
     _sfx("rifle_handle", 0.5)
     _sfx("terminal_glitch", 0.5)
-    _radio("MARU: Jammer's live. Their comms are soup now. Get to the "
-           "transmitter and hold it - when Retardovici gives the order, it "
-           "has to reach every set in the country.",
+    _radio("MARU: Jammer's live. Their comms are soup now. Hold this building - "
+           "when Retardovici gives the order, it has to reach every set in the country.",
            color=C_MARU, duration=440, mark="jammer_live")
-    STATE.mission4_stage = STAGE_COMMIT
-    STATE.mission_phase = "m4_commit"
+    STATE.mission4_stage = STAGE_SIEGE
+    STATE.mission_phase = "m4_siege"
     STATE.m4_siege_active = True
     STATE.mission4_tower_checkpoint_reached = True
-    STATE.m4_hold_timer = 0
-    _arm_m4_allies()
-    STATE.m4_broadcasting = False
-    STATE.m4_hold_peak = 0
-    _set_objective("Press E at the transmitter to open the mic.")
-    _radio("SYSTEM: The rack is armed. Open the mic (E) and keep the feed "
-           "alive - the order has to reach every set in the country.",
-           color=C_SYSTEM, duration=340, mark="commit_start")
+    STATE.m4_siege_t = -M4_JAMMER_COUNTDOWN
+    _m4_siege.reset_runtime()
+    _set_objective("Hold the station. Keep them off the transmitter rack.")
 
 
 def _complete_m4():
@@ -775,21 +749,13 @@ def _complete_m4():
 
 
 def handle_interact():
-    """E-key dispatch: take the cache, advance the liaison dialogue, or plant
-    the jammer."""
+    """E-key dispatch: advance the liaison dialogue or plant the jammer.
+    Holds (revive, build, repair) read the held key in _update_holds."""
     if getattr(STATE, "m4_dialogue_active", False):
         _dlg_press(pygame.K_e)
         return
-    stage = getattr(STATE, "mission4_stage", STAGE_AFTERMATH)
-    if stage == STAGE_AFTERMATH and not getattr(STATE, "m4_cache_taken", False):
-        if _near(_vasile_cache_pos(), radius=90):
-            _take_cache()
-        return
-    if stage == STAGE_MARU and not getattr(STATE, "m4_jammer_installed", False):
-        if _near(_jammer_pos(), radius=95):
-            _install_jammer()
-        return
-    if stage == STAGE_COMMIT:
-        if _near(_tx_pos(), radius=M4_MIC_RADIUS):
-            _toggle_mic()
-    return
+    stage = getattr(STATE, "mission4_stage", STAGE_ESCORT)
+    if (stage == STAGE_FORTIFY and getattr(STATE, "m4_dialogue_done", False)
+            and not getattr(STATE, "m4_jammer_installed", False)
+            and _near(_jammer_pos(), radius=95)):
+        _install_jammer()

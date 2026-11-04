@@ -38,7 +38,7 @@ from missions.m4 import maps as _maps
 from missions.m4 import world as _wd
 from missions.m4.maps import M4_BLOCKS, STATION_BLOCK
 from missions.m4.meta import (JAMMER_TILE, STATION_DOOR_TILE, TRANSMITTER_TILE,
-                              VASILE_CACHE_TILE, STAGE_AFTERMATH)
+                              VASILE_CACHE_TILE, STAGE_AFTERMATH, STAGE_ESCORT, STAGE_SIEGE)
 
 CAM = td.CAMS["MISSION4"]
 T = TILE_SIZE
@@ -189,6 +189,7 @@ def render_world(surface, v):
         _draw_walls(r)
         _draw_openings(r)
         _draw_dynamic_set(r, flashes, tm)
+        _draw_apc(r, flashes, tm)
         _draw_cast(r, flashes, tm)
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
@@ -1008,7 +1009,7 @@ def _draw_dynamic_set(r, flashes, tm):
         flashes.append({"pos": (x, 1.3, z), "color": FIRE, "intensity": 1.1 * flick, "range": 6.0})
     if _station():
         x, _, z = _tc(*TRANSMITTER_TILE)
-        on_air = bool(getattr(STATE, "m4_broadcasting", False)) or getattr(STATE, "m4_siege_t", 0) > 0
+        on_air = getattr(STATE, "mission4_stage", "") == STAGE_SIEGE
         col = (120, 255, 170) if on_air else (90, 120, 130)
         for i in range(7):
             cx, _, cz = to3((15 + i) * T + T / 2.0, 5 * T + T / 2.0)
@@ -1028,11 +1029,6 @@ def _draw_dynamic_set(r, flashes, tm):
         if (int(t * 1.4) % 2) == 0:
             r.add_sprite((mx, WALL_H["station"] + 6.6, mz), _glow((255, 50, 40), 0.26, tm, 1.0, 16),
                          layer=_fx_layer())
-        if not getattr(STATE, "m4_cache_taken", True) and getattr(STATE, "mission4_stage", "") == STAGE_AFTERMATH:
-            cx, _, cz = _tc(*VASILE_CACHE_TILE)
-            _put(r, _mesh(("cache",), _cache_mesh), (cx, 0.0, cz), yaw=15.0)
-            if (int(t * 2.4) % 2) == 0:
-                r.add_sprite((cx + 0.2, 0.5, cz - 0.1), _glow((130, 255, 150), 0.08, tm, 0.9, 8), layer=_fx_layer())
     _beacons(r, t)
 
 
@@ -1043,7 +1039,7 @@ def _beacons(r, t):
     station = _station()
     rad = 0.55 + 0.08 * math.sin(t * 3.0)
     marks = []
-    if not station and stage == STAGE_AFTERMATH and getattr(STATE, "m4_cache_taken", False):
+    if not station and stage == STAGE_ESCORT:
         marks.append((STATION_DOOR_TILE, (255, 200, 90)))
     if station:
         for (col, row) in (TRANSMITTER_TILE, JAMMER_TILE):
@@ -1055,6 +1051,61 @@ def _beacons(r, t):
         x, _, z = _tc(col, row)
         td.ring(r, x, z, rad, col3, n=20, width=2)
         td.ring(r, x, z, rad * 0.6, td.mix(col3, (0, 0, 0), 0.4), n=14, width=1)
+
+
+APC_OLIVE = (66, 74, 54)
+APC_DARK = (40, 44, 34)
+APC_TYRE = (20, 20, 22)
+
+
+def _apc_mesh():
+    """Wave 5 APC: eight-wheel box hull, sloped glacis, small turret, IPA
+    stripe. Built along +z (nose forward) to the apc.HULL footprint."""
+    from engine3d import Mesh, box
+    from missions.m4 import apc as _apc
+    w = _apc.HULL_W * K * 0.92
+    ln = _apc.HULL_L * K * 0.96
+    m = Mesh()
+    m.add(box(w, 0.9, ln, APC_OLIVE, center=(0.0, 0.95, 0.0)))
+    m.add(box(w * 0.86, 0.55, ln * 0.62, _shade(APC_OLIVE, 0.9), center=(0.0, 1.66, -ln * 0.08)))
+    m.add(box(w * 0.92, 0.36, ln * 0.2, _shade(APC_OLIVE, 1.12), center=(0.0, 1.32, ln * 0.4)))
+    m.add(box(w * 0.98, 0.12, ln * 0.98, APC_DARK, center=(0.0, 0.52, 0.0)))
+    m.add(box(0.9, 0.4, 0.9, _shade(APC_OLIVE, 0.82), center=(0.0, 2.12, -ln * 0.06)))
+    m.add(box(0.12, 0.12, 1.3, APC_DARK, center=(0.0, 2.14, ln * 0.3)))
+    for i in range(4):
+        z = -ln * 0.36 + i * ln * 0.24
+        for sx in (-1, 1):
+            m.add(box(0.3, 0.86, 0.86, APC_TYRE, center=(sx * (w / 2.0 - 0.1), 0.43, z)))
+    m.add(box(w * 1.0, 0.1, 0.5, (150, 40, 34), center=(0.0, 1.2, -ln * 0.2)))
+    for dz in (-0.34, 0.12):                                   # roof hatches
+        m.add(box(0.62, 0.08, 0.62, APC_DARK, center=(w * 0.24, 1.97, ln * dz)))
+    m.add(box(w * 0.7, 0.06, ln * 0.14, (28, 30, 26), center=(0.0, 1.95, -ln * 0.36)))  # engine grille
+    for sx in (-1, 1):                                         # vision slits + side boxes
+        m.add(box(0.04, 0.08, ln * 0.4, (16, 18, 16), center=(sx * w * 0.43, 1.62, ln * 0.05)))
+        m.add(box(0.2, 0.3, 0.7, _shade(APC_OLIVE, 0.78), center=(sx * (w / 2.0 + 0.06), 1.1, -ln * 0.25)))
+    m.add(box(0.5, 0.04, 0.5, (196, 192, 176), center=(-w * 0.24, 1.95, -ln * 0.1)))  # IPA roundel
+    for sx in (-1, 1):
+        m.add(box(0.2, 0.14, 0.04, (255, 236, 180), center=(sx * w * 0.32, 1.1, ln / 2.0 + 0.01),
+                  emissive=True))
+        m.add(box(0.14, 0.1, 0.04, (200, 30, 26), center=(sx * w * 0.36, 1.1, -ln / 2.0 - 0.01),
+                  emissive=True))
+    return m
+
+
+def _draw_apc(r, flashes, tm):
+    apc = getattr(STATE, "m4_apc", None)
+    if not apc or not _station():
+        return
+    x, _, z = to3(apc["x"], apc["y"])
+    bob = 0.0 if apc["phase"] == "parked" else 0.03 * math.sin(tm * 0.03)
+    _put(r, _mesh(("apc",), _apc_mesh), (x, bob, z), yaw=td.yaw_rad(apc["yaw"]))
+    if apc["phase"] in ("parked", "back"):
+        return
+    fx, fz = math.cos(apc["yaw"]) * K, -math.sin(apc["yaw"]) * K
+    from missions.m4 import apc as _apc
+    nose = _apc.HULL_L * 0.5
+    flashes.append({"pos": (x + fx * nose, 1.1, z + fz * nose), "color": (255, 230, 170),
+                    "intensity": 1.3, "range": 9.0})
 
 
 def _jammer_mesh():

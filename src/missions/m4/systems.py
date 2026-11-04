@@ -29,14 +29,16 @@ audio = _config.audio
 
 from missions.m4 import maps as _m4_maps  # _last_keys owner
 from missions.m4.meta import (
-    MAP_W, MAP_H, M4_ROLE_TUNING,
-    STAGE_INTRO, STAGE_AFTERMATH, STAGE_KRAP_STATUS, STAGE_MARU,
-    STAGE_COMMIT, STAGE_DONE,
+    MAP_W, MAP_H, M4_ROLE_TUNING, M4_BAR_FIRE_MUL,
+    STAGE_INTRO, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE, STAGE_DONE,
 )
 from missions.m4.world import (
-    _solid_walls, _movement_locked, _near, _radio, _set_objective,
+    _solid_walls, _shot_walls, _movement_locked, _near, _radio, _set_objective,
     _spawn_m4_guard, _update_m4_allies, _hit_m4_ally,
 )
+from missions.m4 import escort as _m4_escort
+from missions.m4 import fortify as _m4_fortify
+from missions.m4 import siege as _m4_siege
 from missions.m4 import flow as _m4_flow  # _update_stage / _complete_m4 owner
 import game.world as _gw  # RPE6 Phase 5 (D4): mission data lives in components
 from missions.m4.components import M4Guard as _M4Guard
@@ -195,28 +197,29 @@ def _update_shooting():
 def _m4_guards_active():
     """Combat AI only runs in the playable action stages - and never while a
     dialogue/story beat has the frame (the liaison meet must not be a firefight)."""
-    if _movement_locked():
+    if getattr(STATE, "m4_dialogue_active", False) or getattr(STATE, "player_dead", False):
         return False
-    stage = getattr(STATE, "mission4_stage", STAGE_AFTERMATH)
-    return stage in (STAGE_AFTERMATH, STAGE_KRAP_STATUS, STAGE_MARU, STAGE_COMMIT)
+    stage = getattr(STATE, "mission4_stage", STAGE_ESCORT)
+    return stage in (STAGE_ESCORT, STAGE_SIEGE)
 
 
 def _update_m4_enemies(solid_walls):
     if not STATE.player or STATE.player_dead:
         return
     px, py = STATE.player.rect.centerx, STATE.player.rect.centery
-
+    if getattr(STATE, "mission4_stage", None) == STAGE_SIEGE:
+        _m4_siege.update_enemies(solid_walls)
+    sight = None
     for e in STATE.enemies[:]:
-        if e.hp > 0:
-            if _m4g(e).loyalist \
-                    and getattr(STATE, "mission4_stage", None) == STAGE_COMMIT:
-                e.alerted = True
-                e.last_seen_pos = (px, py)
-                e.combat_alert_timer = max(getattr(e, "combat_alert_timer", 0), 420)
-                if e.state in ("IDLE", "PATROL", "SEARCH"):
-                    e.state = "CHASE"
-            e.update(px, py, solid_walls, STATE.bullets, STATE.particles,
-                     STATE.enemies, getattr(STATE, "fire_zones", []))
+        if e.hp > 0 and not _m4g(e).loyalist:
+            if sight is None:
+                sight = _shot_walls()
+            tx, ty = _m4_escort.enemy_focus(e, px, py, sight)
+            e.update(tx, ty, solid_walls, STATE.bullets, STATE.particles,
+                     STATE.enemies, getattr(STATE, "fire_zones", []), sight_walls=sight)
+        if e.hp <= 0 and _m4g(e).retreat:
+            STATE.enemies.remove(e)      # walked off the map: not a kill
+            continue
         if e.hp <= 0:
             STATE.hostiles_killed += 1
             STATE.blood_decals.append([
@@ -250,6 +253,8 @@ def _update_bullets(solid_walls):
         return
     px, py = STATE.player.rect.centerx, STATE.player.rect.centery
     w_tiles, h_tiles = _m4_maps._live_map_dims()
+    bars = set(id(b["rect"]) for b in getattr(STATE, "m4_barricades", {}).values())
+    bullet_walls = [w for w in solid_walls if id(w) not in bars]
     for b in STATE.bullets[:]:
         b["prev_x"] = b["x"]
         b["prev_y"] = b["y"]
@@ -294,9 +299,22 @@ def _update_bullets(solid_walls):
                         pass
                     break
 
+        # Barricades: unbroken ones stop bullets, and enemy fire chews them.
+        if not hit:
+            site = _m4_fortify.bullet_hit(b)
+            if site is not None:
+                hit = True
+                if b.get("owner") == "enemy":
+                    _m4_fortify.damage(site, int(b.get("damage", ENEMY_DAMAGE) * M4_BAR_FIRE_MUL))
+                effects.burst(b["x"], b["y"], (150, 118, 76), 5)
+                try:
+                    audio.play("concrete_impact", volume=0.22)
+                except Exception:
+                    pass
+
         # Wall hits (only if no entity was hit).
         if not hit:
-            hit = collide_bullet_walls(b, solid_walls)
+            hit = collide_bullet_walls(b, bullet_walls)
             if hit:
                 effects.burst(b["x"], b["y"], (130, 125, 110), 4)
                 try:
@@ -369,11 +387,16 @@ def game_update(keys):
         STATE._death_logic_ticks = 1
 
     solid_walls = _solid_walls()
-    _update_player(keys, solid_walls)
+    # Biribel and the squad slip through their own barricades; only the
+    # loyalists are held at them.
+    bar_ids = set(id(b["rect"]) for b in getattr(STATE, "m4_barricades", {}).values())
+    friendly_walls = [w for w in solid_walls if id(w) not in bar_ids] if bar_ids else solid_walls
+    _m4_flow._update_holds(keys)
+    _update_player(keys, friendly_walls)
     _update_melee()
     _update_weapon_timers()
     _update_shooting()
-    _update_m4_allies(solid_walls)
+    _update_m4_allies(friendly_walls)
     if _m4_guards_active():
         _update_m4_enemies(solid_walls)
     _update_bullets(solid_walls)

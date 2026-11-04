@@ -23,11 +23,13 @@ Integration contract (all wired in Slice 0):
     - app.py intro/ending cutscene chains + --dev-mission4* flags
     - save as MISSION_4
 Package layout: re-export facade. Parts (load order): meta.py, maps.py,
-world.py, flow.py, systems.py, draw.py.
+world.py, escort.py, fortify.py, siege.py, apc.py, flow.py, systems.py,
+draw.py.
 """
 from .meta import *  # noqa: F401,F403
 from .maps import *  # noqa: F401,F403
 from .world import *  # noqa: F401,F403
+from . import escort, fortify, siege, apc  # noqa: F401
 from .flow import *  # noqa: F401,F403
 from .systems import *  # noqa: F401,F403
 from .draw import *  # noqa: F401,F403
@@ -36,7 +38,7 @@ from .draw import *  # noqa: F401,F403
 from .meta import (  # noqa: F401
     MAP_W, MAP_H, TILE, M4_SOLID_CHARS,
     PLAYER_START_TILE, VASILE_CACHE_TILE, STATION_DOOR_TILE,
-    STATION_START_TILE, TRANSMITTER_TILE, M4_HOLD_SECONDS,
+    STATION_START_TILE, TRANSMITTER_TILE, M4_HOLD_SECONDS, M4_SIEGE_FRAMES,
     M4_ROLE_TUNING, MISSION_PHASES,
 )
 from .maps import (  # noqa: F401
@@ -48,17 +50,17 @@ from .world import (  # noqa: F401
     _dist, _player_pos, _near, _tile_world, _street_door_pos,
     _vasile_cache_pos, _solid_walls, _set_objective, _movement_locked,
     _radio, _spawn_m4_guard, _build_m4_world, _build_station_world,
-    _liaison_pos, _jammer_pos, friendly_npcs, M4_ALLY_POSTS,
-    M4_INSERTION_TILES, M4_MAX_CONCURRENT, M4_SIEGE_RELIEF_FRAMES,
-    _siege_reset, _siege_alive_count, _add_sniper_laser, _run_siege_director,
+    _liaison_pos, _jammer_pos, friendly_npcs, _ally, _shot_walls,
+    _siege_reset, _siege_alive_count, _add_sniper_laser, fail_mission,
     _init_m4_allies, _arm_m4_allies, _update_m4_allies, _hit_m4_ally,
+    _damage_m4_ally,
 )
 from .flow import (  # noqa: F401
     start_m4, start_mission4_station_checkpoint,
     start_mission4_tower_checkpoint, _enter_station, _update_stage,
     _complete_m4, handle_interact, handle_dialogue_event, _install_jammer,
-    _M4_ZONE_GRACE_FRAMES, _M4_ZONE_BEATS, _update_broadcast_clock,
-    _toggle_mic, _mic_state,
+    _M4_ZONE_GRACE_FRAMES, _M4_ZONE_BEATS, _M4_ARREST_BEATS, _update_holds,
+    _update_fail, _arrest_beats,
 )
 
 # These names are REBOUND at runtime (map swaps, per-frame key capture,
@@ -77,6 +79,10 @@ _LIVE_STATE = frozenset([
 
 _LIVE_MODULES = (
     "missions.m4.draw",
+    "missions.m4.apc",
+    "missions.m4.siege",
+    "missions.m4.fortify",
+    "missions.m4.escort",
     "missions.m4.systems",
     "missions.m4.flow",
     "missions.m4.world",

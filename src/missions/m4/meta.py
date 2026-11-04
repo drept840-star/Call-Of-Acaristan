@@ -69,6 +69,7 @@ TRANSMITTER_TILE = (18, 7)      # rack-area centre (the siege's hold point)
 JAMMER_TILE = (18, 6)           # jammer install point in front of the TX rack
 LIAISON_TILE = (17, 16)         # Maru's meet anchor in the entry hall
 VASILE_STATION_TILE = (16, 8)   # Vasile's post by the rack
+RESPAWN_TILE = (18, 9)          # wave restart: Biribel by the rack
 RACK_TILES = (15, 5, 7)         # (col, row, width) of the rack along the hall's north wall
 APC_STOP_RECT = (16, 22, 4, 3)  # tiles the rammed APC occupies (solid cover after wave 5)
 
@@ -106,12 +107,13 @@ M4_REVIVE_RADIUS = 70
 M4_BARRICADE_KINDS = {
     "planks": ("PLANKS", 3, 300),
     "plate": ("STEEL PLATE", 6, 700),
-    "boards": ("BOARDS", 2, 200),
+    "boards": ("BOARDS", 2, 260),
 }
 M4_BUILD_HOLD = 45              # frames of held E to put a barricade up
 M4_REPAIR_STEP = 90             # 1.5 s per repair step
 M4_REPAIR_FRAC = 0.25           # each step restores a quarter of max hp
 M4_REPAIR_COST = 1
+M4_BAR_FIRE_MUL = 0.5            # rifle rounds only chip a barricade
 M4_SITE_RADIUS = 80             # how close Biribel stands to build or repair
 M4_RUNNER_SUPPLY = 3            # MAG runners bring timber before waves 2-5
 M4_JAMMER_COUNTDOWN = 600       # 10 s from install to the first wave
@@ -120,14 +122,40 @@ M4_JAMMER_COUNTDOWN = 600       # 10 s from install to the first wave
 # same frame clock.
 M4_SIEGE_FRAMES = 28800         # 8 minutes at 60 fps
 M4_HOLD_SECONDS = M4_SIEGE_FRAMES // 60   # the hold the arrest plays out over
-M4_MIC_RADIUS = 110             # legacy mic switch (removed with the siege rewrite)
-M4_OFFAIR_DECAY_EVERY = 4
+M4_WAVE_GRACE = 300             # a wave restart drops you 5 s before the wave
 M4_RACK_RADIUS = 200            # loyalists this close to the rack hold it
 M4_RACK_HOLD_FAIL = 480         # 8 s held fails the wave
 M4_BREACH_CHARGE = 240          # a breacher's charge on plate burns 4 s
 M4_SOLDIER_HP = 160
 M4_SOLDIER_DMG_TAKEN = 0.6
-M4_CIVILIAN_HP = 60
+M4_CIVILIAN_HP = 100
+M4_FOCUS_VASILE = 0.35          # share of street shooters that pick Vasile when they see him
+M4_LEASH_NEAR = 96              # Vasile stops this close to Biribel
+M4_LEASH_FAR = 150              # and starts walking again past this
+M4_DOOR_ESCORT_RADIUS = 220     # Vasile must be this close for the station door to open
+
+# Station posts: (cover tile, watched opening). Every cover tile is open
+# floor inside the building with a clear line to the opening it watches.
+M4_POSTS = {
+    "rack": ((16, 8), (12, 4)),
+    "main_w": ((16, 17), (17, 21)),
+    "main_e": ((19, 17), (18, 21)),
+    "studio": ((26, 16), (29, 17)),
+    "office": ((9, 16), (6, 16)),
+    "corridor_e": ((24, 12), (28, 11)),   # faces the weak wall (solid until wave 4)
+    "tx_window": ((22, 6), (23, 4)),
+}
+# Who joins after the Maru meet, per tone (0 = "the state", 1 = "the people").
+# (name, look, weapon, post, coat tint)
+M4_SQUADS = {
+    0: (("SGT. DRAGAN", "soldier", "rifle", "main_w", None),
+        ("PVT. ILIESCU", "soldier", "rifle", "studio", None)),
+    1: (("TOMA", "civilian", "pistol", "main_w", (82, 64, 52)),
+        ("ANCA", "civilian", "shotgun", "studio", (60, 70, 84)),
+        ("BOGDAN", "civilian", "pistol", "office", (70, 76, 58)),
+        ("ILEANA", "civilian", "pistol", "corridor_e", (88, 58, 62))),
+}
+M4_SQUAD_ENTRY_TILE = (18, 19)   # the squad comes in through the entry hall
 
 # Radio/PA speaker colors (m3.meta convention, local to m4 - no cross-
 # package imports of m3 constants).
@@ -144,7 +172,7 @@ BIRIBEL_SPEAKER = (225, 228, 232)  # player's own lines in the liaison beat
 M4_ROLE_TUNING = {
     "guard": {"hp": 90, "speed": 2.0},
     "marksman": {"hp": 70, "speed": 1.6},
-    "breacher": {"hp": 120, "speed": 2.3},
+    "breacher": {"hp": 75, "speed": 2.5},
 }
 
 # ─────────────────────────────────────────────
@@ -269,8 +297,8 @@ MISSION_PHASES = [
 # Runtime stage enum
 # ─────────────────────────────────────────────
 STAGE_INTRO = "intro"
-STAGE_AFTERMATH = "aftermath"
-STAGE_KRAP_STATUS = "krap_status"
-STAGE_MARU = "maru"
-STAGE_COMMIT = "commit"
+STAGE_ESCORT = "escort"        # curfew street: walk Vasile and the cache to the station
+STAGE_FORTIFY = "fortify"      # station: barricades, the Maru meet, the jammer
+STAGE_SIEGE = "siege"          # 5 waves while the arrest airs
 STAGE_DONE = "done"
+STAGE_AFTERMATH = STAGE_ESCORT  # pre-overhaul name, still read by the 3D set

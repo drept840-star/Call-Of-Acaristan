@@ -10,7 +10,7 @@
  "tracks": {
   "event": [
    {
-    "t": 300,
+    "t": 600,
     "name": "arrest_open",
     "text": "PA: All units. By order of the Presidency, garrison command is... recalibrated.",
     "color": [
@@ -22,7 +22,7 @@
     "duration": 470
    },
    {
-    "t": 1080,
+    "t": 11000,
     "name": "arrest_order",
     "text": "PA: General Balaceanu is relieved of command and arrested. Escort him out.",
     "color": [
@@ -34,7 +34,7 @@
     "duration": 470
    },
    {
-    "t": 1440,
+    "t": 11500,
     "name": "arrest_steer",
     "text": "VASILE: You don't need to see him. Trust me.",
     "color": [
@@ -46,7 +46,7 @@
     "duration": 470
    },
    {
-    "t": 1800,
+    "t": 19800,
     "name": "arrest_confusion",
     "text": "LOYALIST COMMS (JAMMED): -say again- who gave the or- our channel's on every set-",
     "color": [
@@ -58,7 +58,7 @@
     "duration": 470
    },
    {
-    "t": 2520,
+    "t": 26400,
     "name": "arrest_standdown",
     "text": "SYSTEM: Guns down. That's the President on the wire. They're taking the General.",
     "color": [
@@ -70,7 +70,7 @@
     "duration": 470
    },
    {
-    "t": 3120,
+    "t": 28200,
     "name": "arrest_retreat",
     "text": "LOYALIST COMMS: Fall back! Nobody dies for a man already in a cell. Break off!",
     "color": [

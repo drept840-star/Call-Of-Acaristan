@@ -70,6 +70,13 @@ def checkpoint_label(state):
     key = mission_meta.mission_key(state)
     if key == "MISSION7":
         return _M7_CHECKPOINTS.get(getattr(state, "mission7_stage", ""), "ARRIVAL")
+    if key == "MISSION4" and getattr(state, "mission4_tower_checkpoint_reached", False):
+        try:
+            from missions.m4 import siege as _m4_siege
+            snap = _m4_siege.latest()
+        except Exception:
+            snap = None
+        return "SIEGE WAVE %d" % snap["wave"] if snap else "SIEGE"
     ladders = {
         "MISSION2": [("mission2_checkpoint_reached", "ROUTE 12 CHECKPOINT")],
         "MISSION3": [("mission3_" + part + "_checkpoint_reached", label) for part, label in
@@ -94,6 +101,13 @@ def failure_copy(state):
         return ("VOLKOV NEVER REACHED THE TRAIN",
                 "VASILE: You didn't clear the platform. They cut him down "
                 "before the carriage.")
+    if key == "MISSION4" and getattr(state, "m4_fail_reason", None) == "vasile":
+        return ("VASILE DID NOT MAKE IT",
+                "MARU: He went down twice. The cache went with him. Nobody holds a door "
+                "without him.")
+    if key == "MISSION4" and getattr(state, "m4_fail_reason", None) == "rack":
+        return ("THE RACK FELL",
+                "MARU: They pulled the carrier. The whole city just heard static.")
     if key == "MISSION5" and getattr(state, "m5_maru_dead", False):
         return "MARU DID NOT MAKE IT OUT", "VASILE: ...Biribel? Tell me that wasn't Maru."
     return mission_meta.fail_text(state)

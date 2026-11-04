@@ -42,15 +42,15 @@ from missions.m4 import maps as _m4_maps  # _objective / _last_keys live view
 from missions.m4.maps import (
     M4_BLOCKS, STATION_BLOCK, SIDEWALK_N, SIDEWALK_S)
 from missions.m4.meta import (
-    M4_HOLD_SECONDS, STAGE_DONE,
-    STAGE_AFTERMATH, STAGE_KRAP_STATUS, STAGE_MARU, STAGE_COMMIT,
+    M4_HOLD_SECONDS, M4_SIEGE_FRAMES, STAGE_DONE,
+    STAGE_AFTERMATH, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE,
     TILE, TRANSMITTER_TILE, JAMMER_TILE,
     VASILE_CACHE_TILE, STATION_DOOR_TILE,
     C_VASILE, C_MARU,
 )
 from missions.m4.world import (
     _movement_locked, _solid_walls, friendly_npcs,
-    _street_door_pos, _vasile_cache_pos)
+    _street_door_pos, _vasile_cache_pos, _liaison_pos)
 from missions.m4 import flow as _m4_flow  # live view of _m4_dlg (typewriter state)
 
 
@@ -1277,8 +1277,7 @@ def _draw_m4_objective_beacons(surface, cam_x, cam_y):
     a = 150 + int(math.sin(_now_s() * 3.0) * 70)
     street = not _m4_is_station(g)
     stage = getattr(STATE, "mission4_stage", "")
-    door_armed = (street and stage == STAGE_AFTERMATH
-                  and getattr(STATE, "m4_cache_taken", False))
+    door_armed = street and stage == STAGE_ESCORT
     for row in range(y0, y1):
         grow = g[row]
         for col in range(x0, x1):
@@ -1286,7 +1285,7 @@ def _draw_m4_objective_beacons(surface, cam_x, cam_y):
             if ch == "D" and door_armed and (col, row) == STATION_DOOR_TILE:
                 ct = (255, 200, 90, a)  # gold: this is the way in
             elif ch in ("V", "T", "J", "N"):
-                if ch == "V" and getattr(STATE, "m4_cache_taken", False):
+                if ch == "V":
                     continue  # drop already collected - no beacon on empty sidewalk
                 ct = (170, 210, 250, a)
             else:
@@ -1320,9 +1319,12 @@ def _draw_m4_street_arrow(surface, cam_x, cam_y):
         return
     if STATE.player is None:
         return
-    if not getattr(STATE, "m4_cache_taken", False):
-        wx, wy = _vasile_cache_pos()
-        label = "CACHE"
+    from missions.m4 import escort as _escort
+    v = _escort.vasile()
+    if v is not None and (v["downed"] > 0 or math.hypot(
+            v["x"] - STATE.player.rect.centerx, v["y"] - STATE.player.rect.centery) > 520):
+        wx, wy = v["x"], v["y"]
+        label = "VASILE"
     else:
         wx, wy = _street_door_pos()
         label = "STATION"
@@ -1403,8 +1405,7 @@ def _draw_m4_cache_prop_world(surface, cam_x, cam_y):
     picked up). Kept out of the static bake so pickup removes it for good."""
     if _m4_is_station(_m4_maps.MISSION4_MAP):
         return
-    if getattr(STATE, "m4_cache_taken", False):
-        return
+    return  # the cache rides on Vasile's back now (no ground prop)
     tx, ty = VASILE_CACHE_TILE
     sx = tx * TILE_SIZE - cam_x
     sy = ty * TILE_SIZE - cam_y
@@ -1671,7 +1672,7 @@ def _push_m4_lights(cam_x, cam_y, t):
         # Motivated glow on the objective fixtures. The transmitter only runs
         # hot while the feed is open, so the room reads the mic state without
         # a label.
-        _on_air = bool(getattr(STATE, "m4_broadcasting", False))
+        _on_air = getattr(STATE, "mission4_stage", None) == STAGE_SIEGE
         for (fx, fy), col, radius in (
                 (TRANSMITTER_TILE, (170, 255, 200) if _on_air else (90, 110, 118), 150),
                 (JAMMER_TILE, (180, 220, 255), 120)):
@@ -2091,7 +2092,7 @@ def _draw_m4_npcs(surface, cam_x, cam_y):
     humanoid structure, plus name tag + role line. The foot shadow is baked
     into the pose. No-op on the street (friendly_npcs() is empty)."""
     live = {a["name"]: a for a in getattr(STATE, "m4_allies", []) or []}
-    hold = getattr(STATE, "mission4_stage", None) == STAGE_COMMIT
+    hold = getattr(STATE, "mission4_stage", None) in (STAGE_SIEGE, STAGE_ESCORT)
     for row in friendly_npcs():
         name, (wx, wy), color, facing = row[0], row[1], row[2], row[3]
         weapon = row[4] if len(row) > 4 else "rifle"
@@ -2208,13 +2209,12 @@ def _m4_objective_world_pos():
     Street: regroup on Vasile's cache, then the station door. Station:
     the transmitter rack."""
     stage = getattr(STATE, "mission4_stage", None)
-    if (_m4_is_station(_m4_maps.MISSION4_MAP)
-            or stage in (STAGE_MARU, STAGE_COMMIT, STAGE_DONE)):
-        tx, ty = TRANSMITTER_TILE
-    elif stage == STAGE_KRAP_STATUS:
+    if not _m4_is_station(_m4_maps.MISSION4_MAP):
         tx, ty = STATION_DOOR_TILE
+    elif stage == STAGE_FORTIFY and not getattr(STATE, "m4_dialogue_done", False):
+        return _liaison_pos()
     else:
-        tx, ty = VASILE_CACHE_TILE
+        tx, ty = TRANSMITTER_TILE
     return (tx * TILE + TILE // 2, ty * TILE + TILE // 2)
 
 
@@ -2297,35 +2297,140 @@ def _paint_m4_mag_icon(surface, mx, my, kind, rounds, cap, is_active):
                                (mx + top_w // 2, my + 8 + bi * 3), 2)
 
 
-def _draw_m4_hold_bar(surface):
-    """Hold-the-transmitter clock for STAGE_COMMIT, styled like the M3 clock
-    plate (ported look, own values): a centred diegetic bar + countdown."""
-    if getattr(STATE, "mission4_stage", None) != STAGE_COMMIT:
+C_SUPPLY_HUD = (232, 190, 96)
+C_RACK_WARN = (235, 96, 80)
+
+
+def _hud_bar(surface, x, y, w, h, frac, col, back=(30, 30, 30)):
+    frac = max(0.0, min(1.0, frac))
+    pygame.draw.rect(surface, back, (x, y, w, h))
+    pygame.draw.rect(surface, col, (x, y, int(w * frac), h))
+    pygame.draw.rect(surface, col, (x, y, w, h), 1)
+
+
+def _draw_m4_siege_bar(surface):
+    """Siege plate: wave, the 8-minute hold, the next wave countdown and the
+    rack-hold warning when loyalists stand on the transmitter."""
+    from missions.m4 import siege as _siege
+    if getattr(STATE, "mission4_stage", None) != STAGE_SIEGE:
         return
-    total = max(1, int(M4_HOLD_SECONDS * 60))
-    t = getattr(STATE, "m4_hold_timer", 0)
-    frac = max(0.0, min(1.0, t / total))
-    secs_left = max(0, int(round((total - t) / 60)))
-    w = 320
+    t = getattr(STATE, "m4_siege_t", 0)
+    w = 360
     x = (WIDTH - w) // 2
-    y = 14   # clear of the objective panel below (was overlapping it at 64)
+    y = 14
     surface.blit(get_plate_bg(w, 46), (x, y))
-    surface.blit(font_terminal_small.render(_T("hud.hold_transmitter"), True,
-                                            (200, 210, 224)), (x + 12, y + 6))
-    on_air = bool(getattr(STATE, "m4_broadcasting", False))
-    fill_col = (120, 220, 170) if on_air else (200, 170, 90)
-    bar = pygame.Rect(x + 12, y + 26, w - 70, 12)
-    pygame.draw.rect(surface, (30, 30, 30), bar)
-    pygame.draw.rect(surface, fill_col, (bar.x, bar.y, int(bar.w * frac), bar.h))
-    pygame.draw.rect(surface, fill_col, bar, 1)
-    surface.blit(font_terminal_small.render(_T("hud.hold_timer", s=secs_left), True,
-                                            (220, 226, 236)), (bar.right + 8, y + 24))
+    if t < 0:
+        head = "JAMMER LIVE - FIRST CONTACT IN %ds" % int(math.ceil(-t / 60.0))
+        frac = 0.0
+    else:
+        n, wait, left = _siege.hud_state()
+        if wait is not None:
+            head = "WAVE %d IN %ds" % (n, int(math.ceil(wait)))
+        else:
+            head = "WAVE %d/5  -  %d INBOUND" % (n, left)
+        frac = t / float(M4_SIEGE_FRAMES)
+    surface.blit(font_terminal_small.render(head, True, (200, 210, 224)), (x + 12, y + 6))
+    bar_w = w - 84
+    _hud_bar(surface, x + 12, y + 26, bar_w, 12, frac, (120, 220, 170))
+    for wv in _siege.WAVES:
+        tick = x + 12 + int(bar_w * wv["start"] / float(M4_SIEGE_FRAMES))
+        pygame.draw.line(surface, (70, 80, 90), (tick, y + 24), (tick, y + 39), 1)
+    secs = int(math.ceil(_siege.clock_left()))
+    surface.blit(font_terminal_small.render("%d:%02d" % (secs // 60, secs % 60), True,
+                                            (220, 226, 236)), (x + 12 + bar_w + 10, y + 24))
+    hold = getattr(STATE, "m4_rack_hold", 0)
+    if hold > 0:
+        from missions.m4.meta import M4_RACK_HOLD_FAIL
+        ry = y + 52
+        surface.blit(get_plate_bg(w, 24), (x, ry))
+        blink = int(_now_s() * 4) % 2 == 0
+        surface.blit(font_terminal_small.render("RACK UNDER ATTACK", True,
+                                                C_RACK_WARN if blink else (200, 120, 100)),
+                     (x + 12, ry + 4))
+        _hud_bar(surface, x + 190, ry + 7, w - 202, 10, hold / float(M4_RACK_HOLD_FAIL), C_RACK_WARN)
+
+
+def _draw_m4_supply_panel(surface):
+    """Supply pool, Vasile's hp and his one remaining down."""
+    from missions.m4 import escort as _escort
+    stage = getattr(STATE, "mission4_stage", None)
+    if stage not in (STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE):
+        return
+    v = _escort.vasile()
+    w, h = 250, 48
+    x = (WIDTH - w) // 2
+    y = HEIGHT - h - 14           # bottom centre: clear of the objective and the siege plate
+    surface.blit(get_plate_bg(w, h), (x, y))
+    supply = getattr(STATE, "m4_supply", 0)
+    surface.blit(font_terminal_small.render("SUPPLY %d" % supply, True, C_SUPPLY_HUD), (x + 10, y + 5))
+    if v is None:
+        surface.blit(font_terminal_small.render("VASILE LOST", True, C_RACK_WARN), (x + 120, y + 5))
+        return
+    surface.blit(font_terminal_small.render("VASILE", True, C_VASILE), (x + 120, y + 5))
+    downs = getattr(STATE, "m4_vasile_downs", 0)
+    tag = "NO DOWNS LEFT" if downs >= 1 else "1 DOWN LEFT"
+    surface.blit(font_terminal_small.render(tag, True, C_RACK_WARN if downs >= 1 else (150, 160, 170)),
+                 (x + 120, y + 24))
+    if v["downed"] > 0:
+        _hud_bar(surface, x + 10, y + 28, 100, 8, v["downed"] / 600.0, C_RACK_WARN)
+    else:
+        _hud_bar(surface, x + 10, y + 28, 100, 8, v["hp"] / float(max(1, v["max_hp"])),
+                 (120, 220, 150) if v["hp"] > v["max_hp"] * 0.35 else (230, 150, 80))
+
+
+def _world_tag(surface, wx, wy, cam_x, cam_y, text, col, frac=None, lift=1.9):
+    sx, sy = _scr(wx, wy, cam_x, cam_y, lift)
+    f = font_terminal_small
+    tw, th = f.size(text)
+    bw = max(tw + 16, 120)
+    bx, by = int(sx - bw // 2), int(sy - th - 22)
+    plate = pygame.Surface((bw, th + (16 if frac is not None else 8)), pygame.SRCALPHA)
+    plate.fill((8, 10, 14, 190))
+    surface.blit(plate, (bx, by))
+    surface.blit(f.render(text, True, col), (bx + (bw - tw) // 2, by + 4))
+    if frac is not None:
+        _hud_bar(surface, bx + 8, by + th + 7, bw - 16, 5, frac, col)
+
+
+def _draw_m4_prompts(surface, cam_x, cam_y):
+    """World-anchored prompts: revive Vasile, the running hold, the site
+    under Biribel (build / upgrade / repair and its cost)."""
+    from missions.m4 import escort as _escort, fortify as _fortify
+    if STATE.player is None or getattr(STATE, "m4_dialogue_active", False):
+        return
+    rp = _escort.revive_prompt()
+    if rp is not None:
+        v = _escort.vasile()
+        secs, frac = rp
+        _world_tag(surface, v["x"], v["y"], cam_x, cam_y,
+                   "HOLD E - REVIVE VASILE  %ds" % int(math.ceil(secs)), C_RACK_WARN, frac, 1.2)
+    ui = getattr(STATE, "m4_hold_ui", None)
+    if ui is not None:
+        label, frac, site = ui
+        sx, sy = _fortify.site_center(*site)
+        _world_tag(surface, sx, sy, cam_x, cam_y, label, C_SUPPLY_HUD, frac)
+        return
+    pr = _fortify.prompt()
+    if pr is not None:
+        label, cost, ok = pr
+        p = STATE.player
+        site = _fortify.nearest_site(p.rect.centerx, p.rect.centery)
+        sx, sy = _fortify.site_center(*site)
+        txt = "HOLD E - %s (%d)" % (label, cost)
+        _world_tag(surface, sx, sy, cam_x, cam_y, txt, C_SUPPLY_HUD if ok else (150, 140, 120))
+    if (getattr(STATE, "mission4_stage", None) == STAGE_FORTIFY
+            and getattr(STATE, "m4_dialogue_done", False)
+            and not getattr(STATE, "m4_jammer_installed", False)):
+        jx, jy = JAMMER_TILE[0] * TILE + TILE // 2, JAMMER_TILE[1] * TILE + TILE // 2
+        if math.hypot(jx - STATE.player.rect.centerx, jy - STATE.player.rect.centery) < 95:
+            _world_tag(surface, jx, jy, cam_x, cam_y, "E - PLANT JAMMER (STARTS THE SIEGE)",
+                       (180, 220, 255))
 
 
 def _draw_m4_hud(surface, cam_x, cam_y):
     """M4 gameplay HUD (visual-parity rework): objective panel + pinned radio,
     an HP panel, a K-9/OS-12/sidearm magazine-icon weapon panel, a hostiles
-    counter, the minimap (now actually drawn) and the STAGE_COMMIT hold clock.
+    counter, the minimap, the siege clock and the supply / Vasile panel.
     The magazine-icon + clock-plate looks are ported from the M3 HUD language
     (values local; the m3 module is not imported)."""
     draw_objective_panel(surface, _m4_maps._objective)
@@ -2352,8 +2457,10 @@ def _draw_m4_hud(surface, cam_x, cam_y):
         STATE.minimap.draw(surface, STATE.player, STATE.enemies, cam_x, cam_y,
                            notebook_pos=_m4_objective_world_pos())
 
-    # ── Hold-the-transmitter clock (STAGE_COMMIT only) ──
-    _draw_m4_hold_bar(surface)
+    # ── Siege clock, supply / Vasile, world prompts ──
+    _draw_m4_siege_bar(surface)
+    _draw_m4_supply_panel(surface)
+    _draw_m4_prompts(surface, cam_x, cam_y)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -2577,6 +2684,9 @@ def _game_draw_inner(cam_x, cam_y):
     for e in STATE.enemies:
         e.draw(screen, cam_x, cam_y)
 
+    _draw_m4_barricades_2d(screen, cam_x, cam_y)
+    _draw_m4_apc_2d(screen, cam_x, cam_y)
+
     # Friendly liaison-meet NPCs (station stages only; empty on the street).
     _draw_m4_npcs(screen, cam_x, cam_y)
 
@@ -2632,6 +2742,45 @@ def _game_draw_inner(cam_x, cam_y):
     # Vignette is part of the world grade; the lighting composite follows it in
     # the wrapper, and the HUD is drawn after the composite so it stays legible.
     draw_vignette(screen)
+
+
+_BAR_2D = {"planks": (128, 96, 60), "boards": (112, 86, 56), "plate": (112, 116, 120)}
+
+
+def _draw_m4_barricades_2d(surface, cam_x, cam_y):
+    """2D fallback: planks / boards / plate over each built site, a wreck
+    smear when one is gone."""
+    for (c, r), bar in (getattr(STATE, "m4_barricades", None) or {}).items():
+        x, y = c * TILE_SIZE - cam_x, r * TILE_SIZE - cam_y
+        if not (-TILE_SIZE < x < WIDTH and -TILE_SIZE < y < HEIGHT):
+            continue
+        col = _BAR_2D.get(bar["kind"], (120, 100, 70))
+        if bar["hp"] <= 0:
+            for k in range(3):
+                pygame.draw.line(surface, (70, 54, 36), (x + 8 + k * 14, y + 40), (x + 20 + k * 12, y + 52), 3)
+            continue
+        frac = bar["hp"] / float(max(1, bar["max"]))
+        if bar["kind"] == "plate":
+            pygame.draw.rect(surface, col, (x + 4, y + 18, TILE_SIZE - 8, TILE_SIZE - 36))
+            pygame.draw.rect(surface, (170, 120, 60), (x + 4, y + 18, TILE_SIZE - 8, TILE_SIZE - 36), 2)
+        else:
+            n = max(1, int(math.ceil(frac * (3 if bar["kind"] == "planks" else 2))))
+            for k in range(n):
+                yy = y + 14 + k * 14
+                pygame.draw.line(surface, col, (x + 2, yy + (k % 2) * 4), (x + TILE_SIZE - 2, yy + 6 - (k % 2) * 4), 6)
+        _hud_bar(surface, x + 8, y + TILE_SIZE - 10, TILE_SIZE - 16, 3, frac,
+                 (120, 220, 150) if frac > 0.67 else (230, 170, 80) if frac > 1 / 3.0 else (230, 96, 80))
+
+
+def _draw_m4_apc_2d(surface, cam_x, cam_y):
+    apc = getattr(STATE, "m4_apc", None)
+    if not apc:
+        return
+    from missions.m4 import apc as _apc
+    r = _apc.hull_rect(apc).move(-cam_x, -cam_y)
+    pygame.draw.rect(surface, (58, 64, 52), r)
+    pygame.draw.rect(surface, (30, 32, 28), r, 3)
+    pygame.draw.circle(surface, (44, 48, 40), r.center, min(r.w, r.h) // 4)
 
 
 def _draw_m4_floating(surface, cam_x, cam_y):
