@@ -32,6 +32,7 @@ import re
 import struct
 
 import pygame
+from audio import mixlock as _mixlock  # GIL-free pause/resume (alt-tab deadlock)
 from engine.assets import load_sound as _load_sound  # RPE6 D5: raw loads via engine.assets
 
 from audio.voice_manifest import VOICE_LINES, VOICE_ORDER
@@ -637,7 +638,7 @@ def pause():
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
-                ch.pause()
+                _mixlock.pause(ch.id)
             except Exception:
                 pass
 
@@ -650,7 +651,7 @@ def resume():
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
-                ch.unpause()
+                _mixlock.resume(ch.id)
             except Exception:
                 pass
 

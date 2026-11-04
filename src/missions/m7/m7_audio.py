@@ -46,6 +46,14 @@ _M6_REUSE = (
 
 
 # ── tiny deterministic synth helpers ────────────────────────────────────────
+
+def _mixlock():
+    """GIL-free channel pause/resume (alt-tab deadlock); imported lazily, like the
+    rest of the shared audio package."""
+    from audio import mixlock
+    return mixlock
+
+
 def _t(n):
     return np.arange(n, dtype=np.float64) / RATE
 
@@ -506,7 +514,7 @@ class M7Audio:
         self.paused = True
         for ch in list(self.loops.values()):
             try:
-                ch.pause()
+                _mixlock().pause(ch.id)
             except Exception:
                 pass
         try:
@@ -520,7 +528,7 @@ class M7Audio:
         self.paused = False
         for ch in list(self.loops.values()):
             try:
-                ch.unpause()
+                _mixlock().resume(ch.id)
             except Exception:
                 pass
         try:

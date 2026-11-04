@@ -242,6 +242,35 @@ def _advance_grain():
     return GRAIN_VARIANTS[grain_idx]
 
 
+# Hang watchdog: a frozen main loop (Windows "not responding") leaves no
+# Python traceback, so the crash handler never sees it. faulthandler's C
+# watchdog thread runs without the GIL; it is re-armed after every flip and
+# dumps all thread stacks to crash_reports/hang-*.txt if a frame takes over
+# HANG_WATCH_S. An empty file is removed on a clean exit.
+HANG_WATCH_S = 10
+_hang_file = None
+
+
+def _hang_watch():
+    global _hang_file
+    import faulthandler
+    if _hang_file is None:
+        import os as _os_h, time as _time_h
+        _os_h.makedirs("crash_reports", exist_ok=True)
+        _hang_file = open(_os_h.path.join(
+            "crash_reports", _time_h.strftime("hang-%Y%m%d-%H%M%S.txt")), "w")
+    faulthandler.dump_traceback_later(HANG_WATCH_S, repeat=True, file=_hang_file)
+
+
+def _hang_watch_close():
+    import faulthandler, os as _os_h
+    faulthandler.cancel_dump_traceback_later()
+    if _hang_file is not None:
+        _hang_file.close()
+        if _os_h.path.getsize(_hang_file.name) == 0:
+            _os_h.remove(_hang_file.name)
+
+
 def _apply_postprocess():
     b = SETTINGS.brightness
     if abs(b - 1.0) < 0.01:
@@ -4470,6 +4499,7 @@ def _legacy_frame():
     _present_frame()
     _dev_draw_ms = (_dev_time.perf_counter() - _dev_t0) * 1000.0 - _dev_sim_ms   # RPE6 P10
     pygame.display.flip()
+    _hang_watch()
     # RPE6 B-001: the frame-coherent wall clock (engine.core.now_ms/now_s)
     # advances once per presented frame by the raw, unclamped frame time, so
     # every read during the next frame sees the same "now". Fed after flip:
@@ -4557,6 +4587,7 @@ class _LegacyGameScene:
 
 
 _rpe6_config._engine_app.run_scene(_LegacyGameScene())
+_hang_watch_close()
 
 try:
     audio.hard_stop(music=True)          # no VO/loop tail after the window closes

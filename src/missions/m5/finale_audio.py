@@ -33,6 +33,13 @@ PALETTE = {
 }
 
 
+def _mixlock():
+    """GIL-free channel pause/resume (alt-tab deadlock); imported lazily, like the
+    rest of the shared audio package."""
+    from audio import mixlock
+    return mixlock
+
+
 def _wav(pcm):
     out = io.BytesIO()
     with wave.open(out, 'wb') as w:
@@ -237,13 +244,13 @@ class FinaleAudio:
         for ch in list(self.channels.values()) + [c for c, s in self.foley_channels
                                                if c.get_sound() is s]:
             if ch.get_busy():
-                ch.pause()
+                _mixlock().pause(ch.id)
 
     def resume(self):
         self.paused = False
         for ch in list(self.channels.values()) + [c for c, s in self.foley_channels
                                                if c.get_sound() is s]:
-            ch.unpause()
+            _mixlock().resume(ch.id)
 
     def stop(self):
         if self.closed:
