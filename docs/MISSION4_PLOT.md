@@ -115,15 +115,17 @@ The runtime driver is `STATE.mission4_stage` (mirrors M3), owned by
 
 | # | Stage | Objective | Beat |
 |---|-------|-----------|------|
-| 1 | **STAGE_AFTERMATH** | Pick up the KRAP comms cache, then meet Vasile at the station door. | Curfew-street ambience on a clock: timed radio story beats (Vasile's read on the collapse, the border intercept that Volkov ran, the PA performing calm), distant gunfire/static/PA on repeating timers. Guard + marksman patrols. |
-| 2 | **STAGE_KRAP_STATUS** | Cross the station interior to the transmitter hall; talk to Maru. | Door handoff swaps to the station map. Friendly NPCs (Maru, Vasile) drawn as faction-colored standing figures. |
-| 3 | **STAGE_MARU** (dialogue) | Hold the liaison meeting. | Typewriter dialogue (M3-interrogation cadence, ported). Before the tone question, Biribel admits the chain carried Vasile's name — "There's an explanation." — and Maru answers, "There always is." The single choice records the tone on `STATE.m4_tone`; Biribel speaks the option, **Maru** speaks the follow-up (VO_076/077). Movement locked during the meet. |
-| 4 | **STAGE_MARU** (jammer) | Install the jammer on the transmitter rack. | E-key interact (`rifle_handle` + `terminal_glitch`). Gates the siege; sets the tower checkpoint. |
-| 5 | **STAGE_COMMIT** | Hold the mic open at the transmitter for `M4_HOLD_SECONDS` (60s of airtime). | **The clock, not a boss.** Loyalist fireteams stream from 3 insertion doors (≤6 concurrent), marksman laser telegraphs; a diegetic PA/arrest beat ladder narrates Retardovici's order over `pa_mumble` / `radio_static` / `footstep`. Spawns break off after the order airs. The ladder reports "They're taking the General" before the live cutscene cuffs him, so the radio no longer announces the cuffs ~37 seconds early. Between the arrest order and the loyalist confusion, Vasile steers Biribel away from it — *"You don't need to see him. Trust me."* (M6 plant: he is protecting the man, or the secret.) The completion card quotes Biribel's dawn line, *"Nobody asked us to do this..."* (VO_082), and the tone choice echoes on the M5 card. |
-| 6 | **STAGE_DONE** | — | Hold completes → `_complete_m4()` → `request_mission4_ending`. |
+| 1 | **STAGE_INTRO** | - | Intro cutscene, then the street. |
+| 2 | **STAGE_ESCORT** | Bring Vasile and the KRAP cache to the station door. | Vasile follows Biribel down the curfew street carrying the cache (the supply pool, 24). Guard and marksman patrols; the timed radio story beats (Vasile's read on the collapse, the border intercept, the PA performing calm) still air on their clock. Vasile can be revived **once** (hold E inside 10 s); the first down spills a share of the supply, the second kills him and fails the mission. |
+| 3 | **STAGE_FORTIFY** | Meet Maru, build the barricades, plant the jammer. | Door handoff swaps to the station. Biribel holds E at door sites (planks, upgrade to steel plate) and window sites (boards), paid from supply. The Maru meet runs here, word for word: Biribel admits the chain carried Vasile's name - "There's an explanation." - and Maru answers, "There always is." The tone choice (VO_076/077) now picks the squad: **the state** sends 2 armoured soldiers, **the people** 4 fragile MAG civilians. Planting the jammer on the rack starts a 10 s countdown. |
+| 4 | **STAGE_SIEGE** | Hold the station for 8 minutes. Keep them off the rack. | Five waves of riflemen, marksmen (laser telegraph) and breachers (charges on plate, shotguns up close). MAG runners bring timber before waves 2-5. Wave 4 blows the weak east wall; wave 5 opens with the APC ramming the forecourt and unloading breachers. Repairs are hold E, 1 supply a step, any time. The arrest PA ladder plays out word for word over the 8 minutes, and Vasile still steers Biribel away from it - *"You don't need to see him. Trust me."* (M6 plant). The completion card quotes VO_082 and the tone echoes on the M5 card. |
+| 5 | **STAGE_DONE** | - | Clock ends -> `_complete_m4()` -> `request_mission4_ending`. |
 
-**Fail state:** death reloads the deepest checkpoint reached (tower → station →
-street) via `game_core.restart_current_mission()` — same ladder as M3.
+**Fail state:** combat stays lethal. Death restarts the current wave from its
+snapshot (5 s before it, barricades, supply, squad and APC as they were, Biribel
+back by the rack); before the siege it reloads the station or the street.
+Loyalists holding the rack for 8 s fail the wave. Vasile's second down fails
+the mission. All routes go through `game_core.restart_current_mission()`.
 
 ---
 
@@ -190,6 +192,17 @@ scene: title_card           speaker: ""       "THE AFTERMATH"
   `_draw_m4_arrest_screen`, `_draw_m4_maru_silhouette`, `_draw_m4_roof_dawn`),
   dispatched from `cutscenes/engine.py::draw_cutscene_scene` and re-exported from
   `cutscenes/__init__.py` — following the `m3ending.py` per-scene `surface, t` idiom.
-- **Verification:** smoke checks `mission4_boot_and_walk`,
+- **2.5D:** the street and station draw through the shared top-down host
+  (`game/topdown3d.py`, `missions/m4/draw3d.py`); `ACA_TD_2D=1` or any
+  renderer error falls back to the 2D view, whose static layer is baked in
+  `assets/baked/m4` (rebake with `python tools/ae_bake.py --pack m4` after a
+  map or static-draw change).
+- **Overhaul modules:** `escort.py` (Vasile, supply, downs), `fortify.py`
+  (sites, barricades, holds), `siege.py` (wave director, flow field to the
+  rack, enemy brains, snapshots), `apc.py` (wave 5 ram). Design in
+  `docs/M4_OVERHAUL_PLAN.md`.
+- **Verification:** smoke checks `mission4_boot_and_walk`, `mission4_layout`,
   `mission4_stage_transitions`, `mission4_checkpoint_routes`,
-  `mission4_hold_clock`, `mission4_ending_shots_render`, `mission4_campaign_chain`.
+  `mission4_escort_downs`, `mission4_barricades`, `mission4_wave_director`,
+  `mission4_cinematic_arrest`, `mission4_ending_shots_render`,
+  `mission4_campaign_chain`. Review shots: `python tools/m4_td3d_shots.py`.

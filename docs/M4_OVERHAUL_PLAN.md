@@ -244,3 +244,27 @@ Replace or rewrite these smoke checks:
   enemies)?
 - Tuning numbers above (supply 24, barricade costs and HP, ally HP, wave
   timing) are first guesses for the tuning pass.
+
+---
+
+## 8. Build notes (2026-11-04)
+
+All eight slices are in. Answers to section 7 and what changed in tuning:
+- Vasile's first down spills a share of the supply (`M4_SUPPLY_DROP_FRAC`).
+- Loyalists holding the rack for 8 s (`M4_RACK_HOLD_FAIL`) fail the wave.
+- Biribel and the squad pass through their own barricades; only loyalists
+  are held at them. This stops a softlock where a barricaded main door left
+  Biribel or Vasile outside.
+- A wave restart puts Biribel at `RESPAWN_TILE` (18, 9) by the rack.
+- Rifle fire chips barricades at half damage (`M4_BAR_FIRE_MUL`). Riflemen
+  working a barricade fire every 48-72 frames. Once boards drop under a third
+  (they stop blocking shots), riflemen tear the rest out by hand. Boards
+  have 260 hp.
+- Civilians have 100 hp, up from 60. In playtest probes, three of the four
+  died in wave 1 at 60 hp.
+- Siege movement keeps the sub-pixel remainder (`siege._move`). Before this,
+  units pinned at a window edge never slid into the gap.
+
+In a static probe (player parked at the rack, auto-fire, periodic repairs),
+both tones take no damage in wave 1. The pressure then climbs each wave, and
+wave 5 peaks at 13 loyalists (cap 8 plus the APC load).

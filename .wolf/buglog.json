@@ -3893,6 +3893,61 @@
       "last_seen": "2026-11-03T22:39:39.195Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m4/draw.py",
+      "root_cause": "Was returning: base = M4_TILE_BASE.get(ch, (24, 24, 26))",
+      "fix": "Now returns: if station:",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-217",
+      "timestamp": "2026-11-03T23:52:48.327Z",
+      "last_seen": "2026-11-03T23:52:48.327Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m4/draw3d.py",
+      "root_cause": "11 lines replaced/restructured",
+      "fix": "Rewrote 12→7 lines (11 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-218",
+      "timestamp": "2026-11-04T00:10:19.013Z",
+      "last_seen": "2026-11-04T00:10:19.013Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "M4 siege loyalists froze at window and door edges, pressed against the wall",
+      "file": "src/missions/m4/siege.py",
+      "root_cause": "Enemy._apply_move adds float steps to pygame.Rect ints, which truncate. A sideways component under 1 px was lost every frame, so a unit pinned on one axis never slid into the gap.",
+      "fix": "siege._move keeps the sub-pixel remainder on the enemy (_m4_fx/_m4_fy) and passes whole pixels to _apply_move.",
+      "tags": [
+        "movement",
+        "pygame-rect",
+        "truncation",
+        "m4"
+      ],
+      "status": "fixed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-219",
+      "timestamp": "2026-11-04T02:00:00.000Z",
+      "last_seen": "2026-11-04T02:00:00.000Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -4107,7 +4162,9 @@
     "d23f46ad-518d-444d-a837-6f3b19edc00f": true,
     "a21ed5a9-69ec-456f-aef4-dbec4518678d": true,
     "f0fed8c3-0d94-40fa-b632-762aa8f347fb": true,
-    "40a38188-e338-4660-a5e3-6825b4825bb7": true
+    "40a38188-e338-4660-a5e3-6825b4825bb7": true,
+    "ab022cc1-ddf6-4308-813a-e0cc77eb1ccd": true,
+    "d198c2ce-7d31-4e70-b9ed-cc8a0057a2b5": true
   },
-  "next_id": 217
+  "next_id": 219
 }

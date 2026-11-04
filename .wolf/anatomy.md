@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-03T22:39:57.242Z
-> Files: 505 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-04T00:34:14.296Z
+> Files: 512 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -31,6 +31,7 @@
 
 ## docs/
 
+- `M4_OVERHAUL_PLAN.md` — Mission 4 overhaul plan - "The Aftermath" in 2.5D (~3281 tok)
 - `M6_3D_PERF.md` — M6 playable 3D scenes - performance pass (2026-10-24) (~3606 tok)
 - `M6_HALOS_AND_ENDING_PLAN.md` — M6 plan - halos that stay behind walls, and an ending the player can follow (~5753 tok)
 - `M6_TOPDOWN_ART_BRIEF.md` — M6 top-down art brief (Phase 0 diagnosis + Phase 1 brief) (~1882 tok)
@@ -484,11 +485,16 @@
 ## src/missions/m4/
 
 - `__init__.py` — Mission 4: The Aftermath - the world after the broadcast. (~1108 tok)
+- `apc.py` — Mission 4 wave 5: the APC ram. (~1266 tok)
 - `components.py` — Mission 4 entity components (RPE6 Phase 5, D4). (~171 tok)
-- `draw.py` — Split from mission4.py - see __init__.py for the package facade. (~34421 tok)
+- `draw.py` — Split from mission4.py - see __init__.py for the package facade. (~35485 tok)
+- `draw3d.py` — Mission 4 in 2.5D: the curfew street and the radio station in 3D. (~16715 tok)
+- `escort.py` — Mission 4 escort: Vasile, the KRAP comms cache and the supply pool. (~1382 tok)
 - `flow.py` — Split from mission4.py - see __init__.py for the package facade. (~9239 tok)
+- `fortify.py` — Mission 4 fortify: barricade sites, the build / upgrade / repair holds. (~2133 tok)
 - `maps.py` — Split from mission4.py - see __init__.py for the package facade. (~5400 tok)
 - `meta.py` — Mission 4 - part module. See __init__.py for the package facade. (~2782 tok)
+- `siege.py` — Mission 4 siege: five waves on the station while the arrest airs. (~6390 tok)
 - `systems.py` — Split from mission4.py - see __init__.py for the package facade. (~4365 tok)
 - `world.py` — Split from mission4.py - see __init__.py for the package facade. (~8662 tok)
 
@@ -687,10 +693,11 @@
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
 - `m2_td3d_shots.py` — Render Mission 2 top-down frames in 2.5D (and 2D with ACA_TD_2D=1). (~734 tok)
 - `m3_td3d_shots.py` — Render Mission 3 frames in 2.5D (and 2D with ACA_TD_2D=1). (~981 tok)
+- `m4_td3d_shots.py` — Render Mission 4 frames in 2.5D (and 2D with ACA_TD_2D=1). (~774 tok)
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
-- `smoke_test.py` — Must be set before pygame/config import. (~157509 tok)
+- `smoke_test.py` — Must be set before pygame/config import. (~158762 tok)
 - `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~6119 tok)

@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-11-03T22:39:57.242Z",
-    "fileCount": 505,
+    "lastScanned": "2026-11-04T00:34:14.296Z",
+    "fileCount": 512,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "aff19748bc760e44872cb9946618d7d5dc51c2075d7774722296864aba4419bd",
-    "storeUpdatedAt": "2026-11-03T22:39:57.252Z",
-    "rootHash": "52a8c587f36f24a2"
+    "renderedHash": "f1dca8fbeb5fdd873dd2d3ad439b101e872ed37ba398a4566ce5b48da44271ba",
+    "storeUpdatedAt": "2026-11-04T00:34:14.306Z",
+    "rootHash": "d08f164d65366727"
   },
   "files": {
     ".gitattributes": {
@@ -20880,227 +20880,224 @@
     },
     "src/missions/m4/draw.py": {
       "description": "Split from mission4.py - see __init__.py for the package facade.",
-      "tokens": 34421,
-      "hash": "022d55e5e1777d64",
-      "size": 121065,
-      "mtimeMs": 1792184374389.9314,
-      "updatedAt": "2026-10-21T18:53:50.182Z",
-      "source": "scan",
+      "tokens": 35485,
+      "hash": "f3ef4da1705d7072",
+      "size": 124790,
+      "mtimeMs": 1793749968141.612,
+      "updatedAt": "2026-11-03T23:52:48.287Z",
+      "source": "hook",
       "symbols": [
         {
           "name": "_stable_seed",
           "kind": "fn",
-          "startLine": 94,
-          "endLine": 98,
-          "tokens": 102
+          "startLine": 93,
+          "endLine": 99,
+          "tokens": 103
         },
         {
           "name": "_m4_is_station",
           "kind": "fn",
-          "startLine": 101,
-          "endLine": 102,
+          "startLine": 100,
+          "endLine": 103,
           "tokens": 20
         },
         {
           "name": "_m4_floor_code",
           "kind": "fn",
-          "startLine": 105,
-          "endLine": 118,
-          "tokens": 146
+          "startLine": 104,
+          "endLine": 119,
+          "tokens": 147
         },
         {
           "name": "_m4_floor_art",
           "kind": "fn",
-          "startLine": 121,
-          "endLine": 123,
-          "tokens": 44
+          "startLine": 120,
+          "endLine": 124,
+          "tokens": 45
         },
         {
           "name": "_m4_tile_rect",
           "kind": "fn",
-          "startLine": 126,
-          "endLine": 157,
+          "startLine": 125,
+          "endLine": 158,
           "tokens": 525
         },
         {
           "name": "_m4_blit_station_tile",
           "kind": "fn",
-          "startLine": 160,
-          "endLine": 270,
-          "tokens": 1061
+          "startLine": 159,
+          "endLine": 271,
+          "tokens": 1062
         },
         {
           "name": "_m4_blit_tile",
           "kind": "fn",
-          "startLine": 273,
-          "endLine": 324,
-          "tokens": 592
+          "startLine": 272,
+          "endLine": 338,
+          "tokens": 786
         },
         {
           "name": "_draw_m4_floor_and_walls",
           "kind": "fn",
-          "startLine": 327,
-          "endLine": 346,
-          "tokens": 252
+          "startLine": 339,
+          "endLine": 461,
+          "tokens": 1680
         },
         {
           "name": "_m4_block_palette",
           "kind": "fn",
-          "startLine": 450,
-          "endLine": 452,
-          "tokens": 50
+          "startLine": 462,
+          "endLine": 466,
+          "tokens": 51
         },
         {
           "name": "_m4_facade_cladding",
           "kind": "fn",
-          "startLine": 455,
-          "endLine": 509,
+          "startLine": 467,
+          "endLine": 523,
           "tokens": 747
         },
         {
           "name": "_m4_storey_rows",
           "kind": "fn",
-          "startLine": 512,
-          "endLine": 522,
-          "tokens": 138
+          "startLine": 524,
+          "endLine": 536,
+          "tokens": 139
         },
         {
           "name": "_m4_floor_band",
           "kind": "fn",
-          "startLine": 525,
-          "endLine": 540,
+          "startLine": 537,
+          "endLine": 554,
           "tokens": 188
         },
         {
           "name": "_m4_boarded_panels",
           "kind": "fn",
-          "startLine": 543,
-          "endLine": 553,
-          "tokens": 166
+          "startLine": 555,
+          "endLine": 567,
+          "tokens": 167
         },
         {
           "name": "_m4_broken_glass",
           "kind": "fn",
-          "startLine": 556,
-          "endLine": 568,
-          "tokens": 195
+          "startLine": 568,
+          "endLine": 582,
+          "tokens": 196
         },
         {
           "name": "_m4_window_grid",
           "kind": "fn",
-          "startLine": 571,
-          "endLine": 708,
-          "tokens": 2102
+          "startLine": 583,
+          "endLine": 722,
+          "tokens": 2103
         },
         {
           "name": "_m4_ground_strip",
           "kind": "fn",
-          "startLine": 711,
-          "endLine": 719,
+          "startLine": 723,
+          "endLine": 733,
           "tokens": 128
         },
         {
           "name": "_m4_roof_plate",
           "kind": "fn",
-          "startLine": 722,
-          "endLine": 741,
+          "startLine": 734,
+          "endLine": 755,
           "tokens": 325
         },
         {
           "name": "_m4_cornice_shadow",
           "kind": "fn",
-          "startLine": 744,
-          "endLine": 750,
+          "startLine": 756,
+          "endLine": 764,
           "tokens": 100
         },
         {
           "name": "_m4_facade_weathering",
           "kind": "fn",
-          "startLine": 753,
-          "endLine": 835,
-          "tokens": 1147
+          "startLine": 765,
+          "endLine": 849,
+          "tokens": 1148
         },
         {
           "name": "_m4_facade_relief",
           "kind": "fn",
-          "startLine": 838,
-          "endLine": 848,
-          "tokens": 166
+          "startLine": 850,
+          "endLine": 862,
+          "tokens": 167
         },
         {
           "name": "_m4_drop_shadow",
           "kind": "fn",
-          "startLine": 851,
-          "endLine": 857,
+          "startLine": 863,
+          "endLine": 871,
           "tokens": 100
         },
         {
           "name": "_m4_roof_props",
           "kind": "fn",
-          "startLine": 860,
-          "endLine": 1013,
+          "startLine": 872,
+          "endLine": 1027,
           "tokens": 2080
         },
         {
           "name": "_m4_horizontal_stripe",
           "kind": "fn",
-          "startLine": 1016,
-          "endLine": 1031,
-          "tokens": 190
+          "startLine": 1028,
+          "endLine": 1045,
+          "tokens": 191
         },
         {
           "name": "_m4_draw_roof_props",
           "kind": "fn",
-          "startLine": 1034,
-          "endLine": 1036,
-          "tokens": 37
+          "startLine": 1046,
+          "endLine": 1050,
+          "tokens": 38
         },
         {
           "name": "_m4_draw_storefront",
           "kind": "fn",
-          "startLine": 1039,
-          "endLine": 1081,
-          "tokens": 598
+          "startLine": 1051,
+          "endLine": 1095,
+          "tokens": 599
         },
         {
           "name": "_draw_m4_buildings",
           "kind": "fn",
-          "startLine": 1084,
-          "endLine": 1250,
+          "startLine": 1096,
+          "endLine": 1264,
           "tokens": 2688
         },
         {
           "name": "_draw_m4_objective_beacons",
           "kind": "fn",
-          "startLine": 1253,
-          "endLine": 1294,
-          "tokens": 612
+          "startLine": 1265,
+          "endLine": 1308,
+          "tokens": 613
         },
         {
           "name": "_draw_m4_street_arrow",
           "kind": "fn",
-          "startLine": 1297,
-          "endLine": 1334,
-          "tokens": 487
+          "startLine": 1309,
+          "endLine": 1354,
+          "tokens": 610
         },
         {
           "name": "_m4_draw_cache_prop",
           "kind": "fn",
-          "startLine": 1343,
-          "endLine": 1382,
+          "startLine": 1355,
+          "endLine": 1396,
           "tokens": 572
         },
         {
           "name": "_m4_cache_sprite",
           "kind": "fn",
-          "startLine": 1385,
-          "endLine": 1386,
-          "tokens": 28
+          "startLine": 1397,
+          "endLine": 2658,
+          "tokens": 16259
         }
-      ],
-      "symbolSource": "ts",
-      "importance": 0.0683,
-      "skeleton": "def _stable_seed(key):\ndef _m4_is_station(g):\ndef _m4_floor_code(ch, station):\ndef _m4_floor_art(ch, col, row, station):\ndef _m4_tile_rect(target, base, sx, sy, ch, col=0, row=0):\ndef _m4_blit_station_tile(target, ch, col, row, sx, sy):\ndef _m4_blit_tile(target, ch, col, row, sx, sy, station):\ndef _draw_m4_floor_and_walls(surface, cam_x, cam_y):\ndef _m4_block_palette(style):\ndef _m4_facade_cladding(surf, bx, by, bw, bh, rnd, pal):\ndef _m4_storey_rows(bh, pal):\ndef _m4_floor_band(surf, bx, by, bw, bh, pal, storeys, y_top):\ndef _m4_boarded_panels(surf, x, y, ww, wh, rnd):\ndef _m4_broken_glass(surf, x, y, ww, wh, rnd, pal):\ndef _m4_window_grid(surf, bx, by, bw, bh, rnd, pal, storeys, storefront_rows):\ndef _m4_ground_strip(surf, bx, by, bw, bh, pal, rnd):\ndef _m4_roof_plate(surf, bx, by, bw, bh, pal, rnd):\ndef _m4_cornice_shadow(surf, bx, by, bw, bh, pal):\ndef _m4_facade_weathering(surf, bx, by, bw, bh, rnd, pal):\ndef _m4_facade_relief(surf, bx, by, bw, bh, pal):\ndef _m4_drop_shadow(surf, bx, by, bw, bh):\ndef _m4_roof_props(surf, bx, by, bw, bh, rnd, pal):\ndef _m4_horizontal_stripe(surf, bx, by, bw, bh, pal):\ndef _m4_draw_roof_props(*args, **kwargs):\ndef _m4_draw_storefront(surf, ex, ey, vertical, rnd):\ndef _draw_m4_buildings(surface, cam_x, cam_y):\ndef _draw_m4_objective_beacons(surface, cam_x, cam_y):\ndef _draw_m4_street_arrow(surface, cam_x, cam_y):\ndef _m4_draw_cache_prop(s):"
+      ]
     },
     "src/missions/m4/flow.py": {
       "description": "Split from mission4.py - see __init__.py for the package facade.",
@@ -35200,11 +35197,11 @@
     },
     "tools/smoke_test.py": {
       "description": "Must be set before pygame/config import.",
-      "tokens": 157509,
-      "hash": "50d02ec6f08349fd",
-      "size": 553474,
-      "mtimeMs": 1793644257828.79,
-      "updatedAt": "2026-11-02T18:30:57.953Z",
+      "tokens": 158762,
+      "hash": "5aa3d6252feef274",
+      "size": 557858,
+      "mtimeMs": 1793750101653.913,
+      "updatedAt": "2026-11-03T23:55:01.875Z",
       "source": "hook"
     },
     "src/cutscenes/ps2mat.py": {
@@ -40696,6 +40693,739 @@
           "startLine": 44,
           "endLine": 110,
           "tokens": 749
+        }
+      ]
+    },
+    "docs/M4_OVERHAUL_PLAN.md": {
+      "description": "Mission 4 overhaul plan - \"The Aftermath\" in 2.5D",
+      "tokens": 3281,
+      "hash": "ccceaf8ee4d90194",
+      "size": 13124,
+      "mtimeMs": 1793748479993.1355,
+      "updatedAt": "2026-11-03T23:28:00.175Z",
+      "source": "hook"
+    },
+    "src/missions/m4/draw3d.py": {
+      "description": "Mission 4 in 2.5D: the curfew street and the radio station in 3D.",
+      "tokens": 16715,
+      "hash": "9857346bc853cade",
+      "size": 59694,
+      "mtimeMs": 1793751018835.1938,
+      "updatedAt": "2026-11-04T00:10:18.973Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "game_draw3d",
+          "kind": "fn",
+          "startLine": 134,
+          "endLine": 155,
+          "tokens": 214
+        },
+        {
+          "name": "_tick",
+          "kind": "fn",
+          "startLine": 156,
+          "endLine": 163,
+          "tokens": 59
+        },
+        {
+          "name": "render_world",
+          "kind": "fn",
+          "startLine": 164,
+          "endLine": 211,
+          "tokens": 459
+        },
+        {
+          "name": "_grid",
+          "kind": "fn",
+          "startLine": 212,
+          "endLine": 215,
+          "tokens": 13
+        },
+        {
+          "name": "_station",
+          "kind": "fn",
+          "startLine": 216,
+          "endLine": 219,
+          "tokens": 16
+        },
+        {
+          "name": "_key",
+          "kind": "fn",
+          "startLine": 220,
+          "endLine": 223,
+          "tokens": 18
+        },
+        {
+          "name": "_dims",
+          "kind": "fn",
+          "startLine": 224,
+          "endLine": 228,
+          "tokens": 21
+        },
+        {
+          "name": "_glyph",
+          "kind": "fn",
+          "startLine": 229,
+          "endLine": 235,
+          "tokens": 38
+        },
+        {
+          "name": "_tc",
+          "kind": "fn",
+          "startLine": 236,
+          "endLine": 239,
+          "tokens": 24
+        },
+        {
+          "name": "_put",
+          "kind": "fn",
+          "startLine": 240,
+          "endLine": 243,
+          "tokens": 45
+        },
+        {
+          "name": "_mesh",
+          "kind": "fn",
+          "startLine": 244,
+          "endLine": 250,
+          "tokens": 38
+        },
+        {
+          "name": "_hash",
+          "kind": "fn",
+          "startLine": 251,
+          "endLine": 254,
+          "tokens": 20
+        },
+        {
+          "name": "_shade",
+          "kind": "fn",
+          "startLine": 255,
+          "endLine": 258,
+          "tokens": 24
+        },
+        {
+          "name": "_glow",
+          "kind": "fn",
+          "startLine": 259,
+          "endLine": 263,
+          "tokens": 44
+        },
+        {
+          "name": "_fx_layer",
+          "kind": "fn",
+          "startLine": 264,
+          "endLine": 268,
+          "tokens": 24
+        },
+        {
+          "name": "_floor_tex",
+          "kind": "fn",
+          "startLine": 269,
+          "endLine": 273,
+          "tokens": 40
+        },
+        {
+          "name": "_tile_col",
+          "kind": "fn",
+          "startLine": 274,
+          "endLine": 279,
+          "tokens": 61
+        },
+        {
+          "name": "_box_at",
+          "kind": "fn",
+          "startLine": 280,
+          "endLine": 294,
+          "tokens": 190
+        },
+        {
+          "name": "_floor_at",
+          "kind": "fn",
+          "startLine": 295,
+          "endLine": 317,
+          "tokens": 201
+        },
+        {
+          "name": "_build_set",
+          "kind": "fn",
+          "startLine": 318,
+          "endLine": 347,
+          "tokens": 280
+        },
+        {
+          "name": "_paint",
+          "kind": "fn",
+          "startLine": 348,
+          "endLine": 385,
+          "tokens": 524
+        },
+        {
+          "name": "_barrier",
+          "kind": "fn",
+          "startLine": 386,
+          "endLine": 400,
+          "tokens": 184
+        },
+        {
+          "name": "_car_mesh",
+          "kind": "fn",
+          "startLine": 401,
+          "endLine": 430,
+          "tokens": 294
+        },
+        {
+          "name": "_car",
+          "kind": "fn",
+          "startLine": 431,
+          "endLine": 451,
+          "tokens": 273
+        },
+        {
+          "name": "_mast",
+          "kind": "fn",
+          "startLine": 452,
+          "endLine": 467,
+          "tokens": 196
+        },
+        {
+          "name": "_hold_marks",
+          "kind": "fn",
+          "startLine": 468,
+          "endLine": 486,
+          "tokens": 208
+        },
+        {
+          "name": "_station_props",
+          "kind": "fn",
+          "startLine": 487,
+          "endLine": 495,
+          "tokens": 100
+        },
+        {
+          "name": "_prop_kind",
+          "kind": "fn",
+          "startLine": 496,
+          "endLine": 501,
+          "tokens": 73
+        },
+        {
+          "name": "_prop",
+          "kind": "fn",
+          "startLine": 502,
+          "endLine": 560,
+          "tokens": 959
+        },
+        {
+          "name": "_sim_of",
+          "kind": "fn",
+          "startLine": 561,
+          "endLine": 1364,
+          "tokens": 10284
+        }
+      ]
+    },
+    "tools/m4_td3d_shots.py": {
+      "description": "Render Mission 4 frames in 2.5D (and 2D with ACA_TD_2D=1).",
+      "tokens": 774,
+      "hash": "cdb713a6536eb7d9",
+      "size": 2708,
+      "mtimeMs": 1793751068040.4297,
+      "updatedAt": "2026-11-04T00:11:08.174Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_frame",
+          "kind": "fn",
+          "startLine": 39,
+          "endLine": 47,
+          "tokens": 92
+        },
+        {
+          "name": "main",
+          "kind": "fn",
+          "startLine": 48,
+          "endLine": 73,
+          "tokens": 277
+        }
+      ]
+    },
+    "src/missions/m4/escort.py": {
+      "description": "Mission 4 escort: Vasile, the KRAP comms cache and the supply pool.",
+      "tokens": 1382,
+      "hash": "d99d6dc4bd596564",
+      "size": 4837,
+      "mtimeMs": 1793751863227.2598,
+      "updatedAt": "2026-11-04T00:24:23.413Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "held",
+          "kind": "fn",
+          "startLine": 31,
+          "endLine": 37,
+          "tokens": 43
+        },
+        {
+          "name": "vasile",
+          "kind": "fn",
+          "startLine": 38,
+          "endLine": 44,
+          "tokens": 31
+        },
+        {
+          "name": "vasile_up",
+          "kind": "fn",
+          "startLine": 45,
+          "endLine": 49,
+          "tokens": 24
+        },
+        {
+          "name": "add_supply",
+          "kind": "fn",
+          "startLine": 50,
+          "endLine": 56,
+          "tokens": 76
+        },
+        {
+          "name": "vasile_down",
+          "kind": "fn",
+          "startLine": 57,
+          "endLine": 76,
+          "tokens": 210
+        },
+        {
+          "name": "_vasile_dies",
+          "kind": "fn",
+          "startLine": 77,
+          "endLine": 85,
+          "tokens": 64
+        },
+        {
+          "name": "update_vasile_down",
+          "kind": "fn",
+          "startLine": 86,
+          "endLine": 118,
+          "tokens": 357
+        },
+        {
+          "name": "revive_prompt",
+          "kind": "fn",
+          "startLine": 119,
+          "endLine": 126,
+          "tokens": 68
+        },
+        {
+          "name": "enemy_focus",
+          "kind": "fn",
+          "startLine": 127,
+          "endLine": 142,
+          "tokens": 148
+        },
+        {
+          "name": "vasile_at_door",
+          "kind": "fn",
+          "startLine": 143,
+          "endLine": 149,
+          "tokens": 58
+        }
+      ]
+    },
+    "src/missions/m4/fortify.py": {
+      "description": "Mission 4 fortify: barricade sites, the build / upgrade / repair holds.",
+      "tokens": 2133,
+      "hash": "2fe4ed093a66bfff",
+      "size": 7464,
+      "mtimeMs": 1793752219064.5042,
+      "updatedAt": "2026-11-04T00:30:19.227Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "reset",
+          "kind": "fn",
+          "startLine": 31,
+          "endLine": 35,
+          "tokens": 34
+        },
+        {
+          "name": "site_kind",
+          "kind": "fn",
+          "startLine": 36,
+          "endLine": 42,
+          "tokens": 44
+        },
+        {
+          "name": "site_center",
+          "kind": "fn",
+          "startLine": 43,
+          "endLine": 46,
+          "tokens": 31
+        },
+        {
+          "name": "nearest_site",
+          "kind": "fn",
+          "startLine": 47,
+          "endLine": 56,
+          "tokens": 82
+        },
+        {
+          "name": "standing",
+          "kind": "fn",
+          "startLine": 57,
+          "endLine": 60,
+          "tokens": 21
+        },
+        {
+          "name": "built_count",
+          "kind": "fn",
+          "startLine": 61,
+          "endLine": 64,
+          "tokens": 31
+        },
+        {
+          "name": "state_of",
+          "kind": "fn",
+          "startLine": 65,
+          "endLine": 75,
+          "tokens": 62
+        },
+        {
+          "name": "_place",
+          "kind": "fn",
+          "startLine": 76,
+          "endLine": 84,
+          "tokens": 73
+        },
+        {
+          "name": "action_at",
+          "kind": "fn",
+          "startLine": 85,
+          "endLine": 105,
+          "tokens": 253
+        },
+        {
+          "name": "prompt",
+          "kind": "fn",
+          "startLine": 106,
+          "endLine": 116,
+          "tokens": 116
+        },
+        {
+          "name": "_finish",
+          "kind": "fn",
+          "startLine": 117,
+          "endLine": 131,
+          "tokens": 126
+        },
+        {
+          "name": "update_holds",
+          "kind": "fn",
+          "startLine": 132,
+          "endLine": 181,
+          "tokens": 546
+        },
+        {
+          "name": "damage",
+          "kind": "fn",
+          "startLine": 182,
+          "endLine": 202,
+          "tokens": 209
+        },
+        {
+          "name": "site_of_rect",
+          "kind": "fn",
+          "startLine": 203,
+          "endLine": 209,
+          "tokens": 48
+        },
+        {
+          "name": "bullet_hit",
+          "kind": "fn",
+          "startLine": 210,
+          "endLine": 220,
+          "tokens": 133
+        }
+      ]
+    },
+    "src/missions/m4/siege.py": {
+      "description": "Mission 4 siege: five waves on the station while the arrest airs.",
+      "tokens": 6390,
+      "hash": "d2d7f1df71c12a98",
+      "size": 23443,
+      "mtimeMs": 1793752407227.4846,
+      "updatedAt": "2026-11-04T00:33:27.389Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "wave_of",
+          "kind": "fn",
+          "startLine": 78,
+          "endLine": 84,
+          "tokens": 30
+        },
+        {
+          "name": "current_wave",
+          "kind": "fn",
+          "startLine": 85,
+          "endLine": 88,
+          "tokens": 18
+        },
+        {
+          "name": "reset_runtime",
+          "kind": "fn",
+          "startLine": 89,
+          "endLine": 94,
+          "tokens": 40
+        },
+        {
+          "name": "clear_snapshots",
+          "kind": "fn",
+          "startLine": 95,
+          "endLine": 101,
+          "tokens": 47
+        },
+        {
+          "name": "_rack_goal",
+          "kind": "fn",
+          "startLine": 102,
+          "endLine": 106,
+          "tokens": 20
+        },
+        {
+          "name": "rack_pos",
+          "kind": "fn",
+          "startLine": 107,
+          "endLine": 110,
+          "tokens": 16
+        },
+        {
+          "name": "_static_free",
+          "kind": "fn",
+          "startLine": 111,
+          "endLine": 121,
+          "tokens": 92
+        },
+        {
+          "name": "_flow_key",
+          "kind": "fn",
+          "startLine": 122,
+          "endLine": 127,
+          "tokens": 64
+        },
+        {
+          "name": "flow",
+          "kind": "fn",
+          "startLine": 128,
+          "endLine": 159,
+          "tokens": 287
+        },
+        {
+          "name": "_next_tile",
+          "kind": "fn",
+          "startLine": 160,
+          "endLine": 172,
+          "tokens": 136
+        },
+        {
+          "name": "_pool_for",
+          "kind": "fn",
+          "startLine": 173,
+          "endLine": 180,
+          "tokens": 75
+        },
+        {
+          "name": "_spawn",
+          "kind": "fn",
+          "startLine": 181,
+          "endLine": 196,
+          "tokens": 145
+        },
+        {
+          "name": "alive",
+          "kind": "fn",
+          "startLine": 197,
+          "endLine": 200,
+          "tokens": 25
+        },
+        {
+          "name": "_run_spawns",
+          "kind": "fn",
+          "startLine": 201,
+          "endLine": 224,
+          "tokens": 218
+        },
+        {
+          "name": "_defenders",
+          "kind": "fn",
+          "startLine": 225,
+          "endLine": 235,
+          "tokens": 102
+        },
+        {
+          "name": "_target_pos",
+          "kind": "fn",
+          "startLine": 236,
+          "endLine": 247,
+          "tokens": 110
+        },
+        {
+          "name": "_pick_target",
+          "kind": "fn",
+          "startLine": 248,
+          "endLine": 266,
+          "tokens": 170
+        },
+        {
+          "name": "_face",
+          "kind": "fn",
+          "startLine": 267,
+          "endLine": 270,
+          "tokens": 33
+        },
+        {
+          "name": "_aimed",
+          "kind": "fn",
+          "startLine": 271,
+          "endLine": 275,
+          "tokens": 49
+        },
+        {
+          "name": "_separate",
+          "kind": "fn",
+          "startLine": 276,
+          "endLine": 288,
+          "tokens": 103
+        },
+        {
+          "name": "_advance",
+          "kind": "fn",
+          "startLine": 289,
+          "endLine": 310,
+          "tokens": 214
+        },
+        {
+          "name": "_fire",
+          "kind": "fn",
+          "startLine": 311,
+          "endLine": 315,
+          "tokens": 44
+        },
+        {
+          "name": "_blast",
+          "kind": "fn",
+          "startLine": 316,
+          "endLine": 332,
+          "tokens": 199
+        },
+        {
+          "name": "_work_on",
+          "kind": "fn",
+          "startLine": 333,
+          "endLine": 363,
+          "tokens": 299
+        },
+        {
+          "name": "_retreat",
+          "kind": "fn",
+          "startLine": 364,
+          "endLine": 379,
+          "tokens": 157
+        },
+        {
+          "name": "_brain",
+          "kind": "fn",
+          "startLine": 380,
+          "endLine": 462,
+          "tokens": 896
+        },
+        {
+          "name": "update_enemies",
+          "kind": "fn",
+          "startLine": 463,
+          "endLine": 472,
+          "tokens": 83
+        },
+        {
+          "name": "_update_rack",
+          "kind": "fn",
+          "startLine": 473,
+          "endLine": 492,
+          "tokens": 216
+        },
+        {
+          "name": "_runner",
+          "kind": "fn",
+          "startLine": 493,
+          "endLine": 500,
+          "tokens": 78
+        },
+        {
+          "name": "blow_wall",
+          "kind": "fn",
+          "startLine": 501,
+          "endLine": 645,
+          "tokens": 1445
+        }
+      ]
+    },
+    "src/missions/m4/apc.py": {
+      "description": "Mission 4 wave 5: the APC ram.",
+      "tokens": 1266,
+      "hash": "310c379fa6c019f7",
+      "size": 4431,
+      "mtimeMs": 1793752454152.082,
+      "updatedAt": "2026-11-04T00:34:14.295Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "start",
+          "kind": "fn",
+          "startLine": 36,
+          "endLine": 45,
+          "tokens": 102
+        },
+        {
+          "name": "hull_rect",
+          "kind": "fn",
+          "startLine": 46,
+          "endLine": 54,
+          "tokens": 89
+        },
+        {
+          "name": "_crush",
+          "kind": "fn",
+          "startLine": 55,
+          "endLine": 70,
+          "tokens": 155
+        },
+        {
+          "name": "_ram",
+          "kind": "fn",
+          "startLine": 71,
+          "endLine": 84,
+          "tokens": 132
+        },
+        {
+          "name": "_park",
+          "kind": "fn",
+          "startLine": 85,
+          "endLine": 97,
+          "tokens": 114
+        },
+        {
+          "name": "restore_parked",
+          "kind": "fn",
+          "startLine": 98,
+          "endLine": 104,
+          "tokens": 71
+        },
+        {
+          "name": "update",
+          "kind": "fn",
+          "startLine": 105,
+          "endLine": 138,
+          "tokens": 292
         }
       ]
     }

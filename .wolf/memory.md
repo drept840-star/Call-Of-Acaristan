@@ -2226,3 +2226,16 @@ description: chronological action log per session, consolidated weekly
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 01:28 | Created docs/M4_OVERHAUL_PLAN.md | — | ~3500 |
+| 01:52 | Edited src/missions/m4/draw.py | modified in() | ~233 |
+| 01:54 | Edited tools/smoke_test.py | inline fix | ~22 |
+| 01:55 | Edited tools/smoke_test.py | modified items() | ~292 |
+| 02:07 | Created src/missions/m4/draw3d.py | — | ~16791 |
+| 02:10 | Edited src/missions/m4/draw3d.py | 12→7 lines | ~124 |
+| 02:11 | Created tools/m4_td3d_shots.py | — | ~774 |
+| 02:24 | Created src/missions/m4/escort.py | — | ~1382 |
+| 02:30 | Created src/missions/m4/fortify.py | — | ~2133 |
+| 02:33 | Created src/missions/m4/siege.py | — | ~6390 |
+| 02:34 | Created src/missions/m4/apc.py | — | ~1266 |
+<!-- session:NjNlNzBkMWItNDBiMC00Nzc2LWJlNzAtNTBjMzE1ZWExZThj -->
+| 2026-11-04T12:24:23.310Z | M4 overhaul finished: escort, fortify, siege, APC, art pass; playtest fixes (friendly pass-through barricades, wave restart at rack, sub-pixel siege movement, barricade/civilian tuning); smoke checks and docs | src/missions/m4/siege.py,src/missions/m4/systems.py,src/missions/m4/flow.py,src/missions/m4/meta.py,tools/smoke_test.py,docs/MISSION4_PLOT.md,docs/M4_OVERHAUL_PLAN.md | SMOKE TEST: OK; M4 SMOKE: OK |
