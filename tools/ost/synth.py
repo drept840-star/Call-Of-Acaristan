@@ -234,6 +234,134 @@ def piano(f, dur=1.0, vel=0.8):
     return norm(y * np.clip(t / 0.0015, 0, 1))
 
 
+@lru_cache(maxsize=2048)
+def accordion(f, dur=0.5, a=0.02, r=0.08):
+    """Musette accordion: three reeds, the outer two detuned for the wet beat."""
+    n = int((dur + r) * SR)
+    y = sum(0.6 * square(f * d, n, ph) + 0.4 * saw(f * d, n, ph) for d, ph in ((1.0, 0), (1.006, 0.3), (0.994, 0.6)))
+    y = lp(y, 3200) + 0.5 * bp(y, 1000, 2200)
+    return norm(y) * env(n, a, 0.05, 0.9, r)
+
+
+@lru_cache(maxsize=2048)
+def fiddle(f, dur=0.5, a=0.03, r=0.12):
+    """Solo violin: fast vibrato, bow pressure wobble, body formant, rosin noise."""
+    n = int((dur + r) * SR)
+    rng = _rng("fiddle", f, dur)
+    y = saw(f * vibrato(n, 6.2, 0.006, 0.12, rng.uniform(0, 6)), n)
+    y = bp(y, 300, 4500) + 0.6 * bp(y, 2200, 3400)
+    y = y * (1 + 0.08 * smooth_random(n, 12.0, rng)) + 0.03 * bp(noise(n, rng), 2000, 7000)
+    return norm(y) * env(n, a, 0.1, 0.85, r)
+
+
+@lru_cache(maxsize=2048)
+def pluck(f, dur=0.6, bright=0.6, twang=0.0):
+    """Karplus-Strong guitar string; `twang` adds a surf-amp tremolo."""
+    n = int((dur + 0.8) * SR)
+    rng = _rng("pluck", f)
+    p = max(2, int(round(SR / f - 0.5)))
+    x = np.zeros(n)
+    x[:p] = lp(rng.uniform(-1, 1, p), 1500 + 6000 * bright)
+    a_ = np.zeros(p + 2)
+    a_[0], a_[p], a_[p + 1] = 1.0, -0.4985, -0.4985
+    y = signal.lfilter([1.0], a_, x)
+    t = _t(n)
+    if twang:
+        y *= 1 + twang * np.sin(2 * np.pi * 6.5 * t)
+    off = int(dur * SR)
+    y[off:] *= np.exp(-np.arange(n - off) / (0.1 * SR))
+    return norm(hp(y, 70))
+
+
+@lru_cache(maxsize=1024)
+def whistle(f, dur=1.0, a=0.06, r=0.2):
+    """Human whistle: near-pure tone, scooped attack, wide slow vibrato, breath."""
+    n = int((dur + r) * SR)
+    t = _t(n)
+    rng = _rng("whistle", f, dur)
+    scoop = 2 ** (-1.0 / 12 * np.exp(-t / 0.06))
+    y = sine(f * scoop * vibrato(n, 5.0, 0.009, 0.25), n) + 0.04 * sine(2 * f, n)
+    y += 0.05 * bp(noise(n, rng), f * 0.9, f * 1.15)
+    return norm(y) * env(n, a, 0.1, 0.9, r)
+
+
+@lru_cache(maxsize=1024)
+def power(f, dur=0.5, mute=False):
+    """Overdriven power chord (root, fifth, octave), double-tracked left and right."""
+    n = int((dur + (0.05 if mute else 0.3)) * SR)
+    t = _t(n)
+    rng = _rng("power", f, dur, mute)
+    out = np.zeros((2, n))
+    for ch in range(2):
+        d = 1 + rng.uniform(-0.002, 0.002)
+        y = saw(f * d, n, rng.uniform()) + saw(f * 1.5 * d, n, rng.uniform()) + 0.6 * saw(f * 2 * d, n, rng.uniform())
+        y = np.tanh(7 * norm(y))
+        y = hp(lp(lp(y, 1100 if mute else 3800), 5000), 90)
+        out[ch] = y * (np.exp(-t / 0.09) if mute else 1.0)
+    return norm(out) * env(n, 0.003, 0.15, 0.8, 0.04 if mute else 0.25)
+
+
+@lru_cache(maxsize=1024)
+def reese(f, dur=1.0, cutoff=700.0):
+    """Detuned growl bass with a sine sub."""
+    n = int((dur + 0.08) * SR)
+    y = saw(f * 0.996, n) + saw(f * 1.004, n, 0.5)
+    y = np.tanh(2.5 * norm(lp(y, cutoff))) + 0.8 * sine(f, n)
+    return norm(y) * env(n, 0.005, 0.1, 0.85, 0.06)
+
+
+@lru_cache(maxsize=64)
+def bell(f, v=0):
+    """Iron yard bell: inharmonic partials, long hum."""
+    n = int(5.0 * SR)
+    t = _t(n)
+    y = sum(g * sine(f * m, n) * np.exp(-t / tau) for m, g, tau in
+            ((0.5, 0.6, 3.5), (1.0, 1.0, 2.4), (1.19, 0.5, 1.6), (1.56, 0.4, 1.1), (2.0, 0.35, 0.9), (2.51, 0.25, 0.6),
+             (3.0, 0.15, 0.4)))
+    y += 0.4 * hp(noise(n, _rng("bell", f, v)), 3000) * np.exp(-t / 0.01)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def tom(v=0, f0=110.0):
+    n = int(0.8 * SR)
+    t = _t(n)
+    rng = _rng("tom", v, f0)
+    y = np.sin(2 * np.pi * _phase(f0 * (1 + 0.5 * np.exp(-t / 0.04)), n)) * np.exp(-t / 0.3)
+    y += 0.4 * lp(noise(n, rng), 1500) * np.exp(-t / 0.03)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def clap(v=0):
+    n = int(0.3 * SR)
+    t = _t(n)
+    rng = _rng("clap", v)
+    e = sum(np.exp(-np.clip(t - d, 0, None) / 0.006) * (t >= d) for d in (0, 0.009, 0.018))
+    e = e + 0.5 * np.exp(-np.clip(t - 0.027, 0, None) / 0.07) * (t >= 0.027)
+    return norm(bp(noise(n, rng), 900, 4000) * e)
+
+
+@lru_cache(maxsize=64)
+def tamb(v=0):
+    n = int(0.2 * SR)
+    t = _t(n)
+    y = hp(noise(n, _rng("tamb", v)), 5000) * (np.exp(-t / 0.035) + 0.3 * np.exp(-t / 0.1))
+    return norm(y)
+
+
+@lru_cache(maxsize=16)
+def whip(v=0):
+    """Whip crack for the western cue."""
+    n = int(0.25 * SR)
+    t = _t(n)
+    rng = _rng("whip", v)
+    y = lp_sweep(hp(noise(n, rng), 1200), 9000 * np.exp(-t / 0.02) + 600) * np.exp(-t / 0.04)
+    k = int(0.03 * SR)
+    y[:k] *= np.linspace(0.2, 1, k) ** 3
+    return norm(y)
+
+
 @lru_cache(maxsize=1024)
 def pad(f, dur=4.0, cutoff=1400.0, a=0.8, r=1.5):
     n = int((dur + r) * SR)
