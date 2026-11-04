@@ -90,12 +90,12 @@ def _jammer_pos():
 # north-door overwatch without sitting inside solid geometry.
 M4_ALLY_POSTS = {
     "VASILE": {
-        "meet": VASILE_STATION_TILE, "cover": (13, 7), "door": (15, 8),
+        "meet": VASILE_STATION_TILE, "cover": (16, 17), "door": (17, 21),
         "color": C_VASILE, "hp": 180, "damage": 24, "cooldown": 36,
         "range": 520, "weapon": "rifle",
     },
     "MARU": {
-        "meet": LIAISON_TILE, "cover": (19, 5), "door": (18, 9),
+        "meet": LIAISON_TILE, "cover": (19, 17), "door": (18, 21),
         "color": C_MARU, "hp": 140, "damage": 16, "cooldown": 28,
         "range": 420, "weapon": "pistol",
     },
@@ -207,6 +207,9 @@ def _reset_world_lists():
     STATE.floating_texts = []
     STATE.fire_zones = []
     STATE.m4_barriers = []
+    STATE.m4_breach_walls = []
+    STATE.m4_sites = []
+    STATE.m4_spawns = []
     STATE.doors = []
     STATE.player = None
     # Siege director scratch state (W4). Single-owner reset so a fresh world
@@ -221,12 +224,29 @@ def _reset_world_lists():
 
 def _parse_grid(g, etype="guard"):
     """Walk MISSION4_MAP: build walls/barriers, spawn the player on "P" and
-    patrols on "E". Returns the player (or None if the grid had no "P")."""
+    patrols on "E". Returns the player (or None if the grid had no "P").
+
+    "H"/"h" car hulks are solid cover (body rect inset across the short
+    axis), "W" is the weak station wall (kept on STATE.m4_breach_walls so the
+    wave-4 charge can lift it), "b"/"w" register barricade sites and "Z"
+    loyalist insertion points; sites and markers are walkable floor."""
     for row_idx, row in enumerate(g):
         for col_idx, tile in enumerate(row):
             x, y = col_idx * TILE_SIZE, row_idx * TILE_SIZE
             if tile == "C":
                 STATE.walls.append(pygame.Rect(x, y, TILE_SIZE, TILE_SIZE))
+            elif tile == "H":
+                STATE.walls.append(pygame.Rect(x, y + 12, TILE_SIZE, TILE_SIZE - 24))
+            elif tile == "h":
+                STATE.walls.append(pygame.Rect(x + 12, y, TILE_SIZE - 24, TILE_SIZE))
+            elif tile == "W":
+                r = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+                STATE.walls.append(r)
+                STATE.m4_breach_walls.append(r)
+            elif tile in ("b", "w"):
+                STATE.m4_sites.append((col_idx, row_idx, "door" if tile == "b" else "window"))
+            elif tile == "Z":
+                STATE.m4_spawns.append((col_idx, row_idx))
             elif tile == "B":
                 r = pygame.Rect(x + 4, y + 12, TILE_SIZE - 8, TILE_SIZE - 24)
                 STATE.walls.append(r)
@@ -255,27 +275,34 @@ def _build_m4_world():
     return STATE.player
 
 
+# (col, row, tiles_w, tiles_h, inset px) - shared with missions.m4.draw3d.
+STATION_PROPS = (
+    (15, 5, 7, 1, 2),     # TX rack row along the hall's north wall
+    (12, 7, 2, 1, 6),     # hall console, west
+    (23, 7, 1, 2, 6),     # hall console, east
+    (14, 19, 2, 1, 6),    # reception desk, west of the door lane
+    (20, 19, 2, 1, 6),    # reception desk, east of the door lane
+    (9, 5, 1, 2, 8),      # archive shelving
+    (26, 6, 1, 2, 8),     # engineering bench
+    (8, 18, 2, 1, 6),     # office desk
+    (27, 19, 2, 1, 6),    # studio table
+)
+
+
 def _build_station_world():
     """Radio-station interior world (STAGE_KRAP_STATUS..STAGE_COMMIT arena)."""
     _reset_world_lists()
     player = _parse_grid(_m4_maps.MISSION4_STATION_MAP)
 
-    # Station furniture collision (mirrors the dressing pass in draw.py): the
-    # rack row, console desk, entry bench, studio table and utility shelves
-    # are solid so rooms read as furnished spaces, not walk-over decals.
-    # Every rect keeps a walkable lane around it (hall rows 3-8, entry cols
-    # 6-13, studio sides, utility centre col 11).
-    def _prop(c, r, tw=1, th=1, inset=6):
+    # Station furniture collision (the 3D set dresses the same rects): the
+    # transmitter rack on the hall's north wall, the hall consoles, the
+    # reception desks either side of the main door lane, archive shelving,
+    # the engineering bench, the office desk and the studio table. Every
+    # rect leaves a lane to its room's door and barricade sites.
+    for c, r, tw, th, inset in STATION_PROPS:
         STATE.walls.append(pygame.Rect(
             c * TILE_SIZE + inset, r * TILE_SIZE + inset,
             tw * TILE_SIZE - 2 * inset, th * TILE_SIZE - 2 * inset))
-
-    _prop(5, 2, 9, 1, 2)     # TX rack row along the hall's north wall
-    _prop(12, 6, 2, 1)       # console desk (hall middle)
-    _prop(5, 15, 1, 2, 8)    # entry-hall bench (west wall)
-    _prop(18, 13, 2, 1)      # studio broadcast table
-    _prop(10, 10)            # utility shelf, west bay
-    _prop(12, 10)            # utility shelf, east bay
 
     if player is None:
         sx, sy = STATION_DOOR_TILE
@@ -623,7 +650,7 @@ def _hit_m4_ally(b):
 #   (15, 8)  north-wall door of the transmitter hall
 #   (18, 9)  studio corridor mouth (studio <-> TX hall)
 #   (11, 13) east-wall door of the entry hall
-M4_INSERTION_TILES = [(15, 8), (18, 9), (11, 13)]
+M4_INSERTION_TILES = [(13, 26), (2, 14), (33, 14)]
 M4_MAX_CONCURRENT = 6
 M4_FIRETEAM_GAP = (150, 260)   # frames between committed fireteams
 M4_LASER_GAP = (150, 320)      # frames between marksman telegraph pins

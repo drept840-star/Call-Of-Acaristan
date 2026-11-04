@@ -18,8 +18,9 @@ import game.levels as _levels  # RPE6 P7: level data access
 
 from missions.m4.meta import (
     MAP_W, MAP_H, TILE, M4_SOLID_CHARS, M4_ZONE_DEFS,
-    PLAYER_START_TILE, VASILE_CACHE_TILE, STATION_DOOR_TILE,
-    STATION_START_TILE, TRANSMITTER_TILE, LIAISON_TILE, JAMMER_TILE,
+    PLAYER_START_TILE, VASILE_START_TILE, STATION_DOOR_TILE,
+    STATION_W, STATION_H, STATION_BUILDING,
+    STATION_START_TILE, VASILE_ARRIVE_TILE, TRANSMITTER_TILE, LIAISON_TILE, JAMMER_TILE,
 )
 
 
@@ -56,12 +57,12 @@ def _outline_building(g, col, row, bw, bh, interior, w, h, door_tiles=()):
         _set_tile(g, col + dx, row + dy, interior, w, h)
 
 
-# Tile chars the player can stand on. Solid set is M4_SOLID_CHARS ("C", "B");
+# Tile chars the player can stand on. Solid set is M4_SOLID_CHARS;
 # everything else in the grammar below is walkable floor or a marker on floor.
 # "d" is the sidewalk border of the curfew streets (art-backed t_d_*).
 # "F" is an interior ground floor (station foyer) - walkable,
 # rendered as a distinct floor tile so interiors read differently from asphalt.
-_WALKABLE_TILES = ".adRFDOGJTVENPMXS"
+_WALKABLE_TILES = ".adRFDOGJTVENPMXSbwAZ"
 
 
 def _validate(g, w, h, key_tiles):
@@ -249,17 +250,28 @@ def _street_grid(w, h):
     g[STATION_DOOR_TILE[1]][STATION_DOOR_TILE[0]] = "D"
     _carve_station_interior(g, w, h)
 
-    # Vasile's comms cache on the south sidewalk (in the "boulevard" zone).
-    g[VASILE_CACHE_TILE[1]][VASILE_CACHE_TILE[0]] = "V"
+    # Wrecked cars: cover on the boulevard and the lanes south from the
+    # safehouse ("H" parks east-west over two tiles, "h" north-south).
+    for cx, cy in _STREET_CARS:
+        g[cy][cx] = g[cy][cx + 1] = "H"
+    for cx, cy in _STREET_CARS_NS:
+        g[cy][cx] = g[cy + 1][cx] = "h"
 
-    # Sparse IPA patrols (walkable street tiles; world.py spawns them). Two
-    # guards hold boulevard checkpoints, two marksmen cover the long sidewalks
-    # into the station cordon. Enemy mix asserted by the W2 smoke check.
-    for gx, gy in ((11, 19), (27, 19)):
+    # IPA patrols (walkable street tiles; world.py spawns them). Guards hold
+    # the boulevard checkpoints and the lane down from the safehouse,
+    # marksmen cover the long sidewalks into the station cordon.
+    for gx, gy in _STREET_GUARDS:
         g[gy][gx] = "E"
-    for mx, my in ((17, SIDEWALK_N), (22, SIDEWALK_S)):
+    for mx, my in _STREET_MARKSMEN:
         g[my][mx] = "M"
     return g
+
+
+# Car hulks (left/top tile) and patrol tiles on the curfew street.
+_STREET_CARS = ((6, 18), (18, 20), (29, 18), (15, 13), (27, 8))
+_STREET_CARS_NS = ((9, 10), (22, 26), (33, 22))
+_STREET_GUARDS = ((11, 19), (20, 19), (27, 19), (9, 14), (31, 20))
+_STREET_MARKSMEN = ((17, SIDEWALK_N), (22, SIDEWALK_S), (30, SIDEWALK_N))
 
 
 def _generate_m4_map():
@@ -268,169 +280,124 @@ def _generate_m4_map():
     Tile grammar: C building block (solid), B barricade (solid), "." asphalt,
     "d" sidewalk, "R" lane paint (overlay on asphalt), "D" door gap (walkable),
     "F" interior floor (station foyer), "L" corridor floor,
-    "P" player spawn (open street between the blocks), "V" Vasile comms cache,
-    "E" guard spawn, "M" marksman spawn (both on street floor).
+    "P" player spawn (open street between the blocks), "H"/"h" car hulk
+    (solid), "E" guard spawn, "M" marksman spawn (both on street floor).
     """
     w, h = MAP_W, MAP_H
     g = _street_grid(w, h)
 
     _validate(g, w, h, {
         "PLAYER_START_TILE": PLAYER_START_TILE,
-        "VASILE_CACHE_TILE": VASILE_CACHE_TILE,
+        "VASILE_START_TILE": VASILE_START_TILE,
         "STATION_DOOR_TILE": STATION_DOOR_TILE,
     })
     return g
 
 
+# Station barricade sites: door sites "b" take planks or plate, window
+# sites "w" take boards. "W" is the weak east wall wave 4 blows open.
+STATION_DOOR_SITES = ((17, 21), (18, 21), (6, 16), (29, 17), (12, 4))
+STATION_WINDOW_SITES = ((6, 7), (6, 12), (29, 7), (13, 21), (22, 21), (23, 4))
+STATION_BREACH_TILES = ((29, 11), (29, 12))
+# Loyalist insertion points round the street ring (name -> tile).
+STATION_SPAWNS = {"NW": (2, 2), "N": (18, 1), "NE": (33, 2), "W": (2, 14), "E": (33, 14),
+                  "SW": (2, 25), "S": (13, 26), "SE": (33, 25)}
+# Cover on the forecourt and the ring: car hulks and jersey barriers.
+_STATION_CARS = ((8, 24), (25, 24), (31, 2))
+_STATION_CARS_NS = ((2, 6), (33, 18), (3, 19))
+_STATION_JERSEY = ((13, 24), (14, 24), (22, 24), (23, 24), (31, 10), (4, 10))
+
+
 def _generate_station_map():
-    """24x20 station with a connected circulation loop.
+    """36x28 radio station with its forecourt and street ring.
 
-    North: broadcast hall, liaison west, transmitter east.
-    Middle: cross-hall linking three broad approaches.
-    South: reception and studio, connected by a second route.
-
-    Existing objective and assault-door coordinates are preserved.
+    The building (cols 6-29, rows 4-21) has seven rooms: the transmitter
+    hall (north middle) with the rack on its north wall, the entry hall
+    (south middle) behind the main door, a cross corridor between them,
+    and four wing rooms. Exterior openings are barricade sites ("b" doors,
+    "w" windows); the corridor's east end is the weak wall "W". The street
+    ring round the building carries the loyalist insertion points "Z" and
+    the APC lane "A" on the south forecourt.
     """
     from collections import deque
 
-    w, h = 24, 20
-    g = _blank(w, h, "C")
+    w, h = STATION_W, STATION_H
+    g = _blank(w, h, ".")
+    for x in range(w):
+        g[0][x] = g[h - 1][x] = "C"
+    for y in range(h):
+        g[y][0] = g[y][w - 1] = "C"
 
-    def paint(x, y, width, height, tile="O"):
+    def paint(x, y, width, height, tile):
         _paint_tiles(g, x, y, width, height, tile, w, h)
 
-    def door(x, y, width=2):
-        paint(x, y, width, 1, "D")
-
-    # Reception: a generous arrival space rather than a narrow pocket.
-    paint(4, 13, 10, 5, "F")
-
-    # Broadcast hall: preserve the existing liaison and equipment sites.
-    paint(4, 2, 17, 7)
-
-    # Studio: extend south so its return route has room to breathe.
-    paint(16, 11, 6, 7)
-
-    # Cross-hall. Connects all approaches instead of leaving isolated
-    # utility pockets between reception and the broadcast hall.
-    paint(7, 10, 13, 3, "L")
-
-    # West approach: two tiles wide.
-    paint(7, 8, 2, 6, "L")
-
-    # Central approach: preserves the old utility-spine door at (11, 9).
-    paint(10, 8, 3, 6, "L")
-
-    # East approach: preserves the stair entrance at (15, 8).
-    paint(14, 8, 3, 4, "L")
-
-    # Studio approach: widen the old single-tile passage.
-    paint(18, 8, 2, 5, "L")
-
-    # Southern return route. Reception -> studio -> cross-hall ->
-    # broadcast hall now forms a loop rather than a branching dead end.
-    paint(13, 15, 4, 2, "L")
-
-    # Broad thresholds. Keep the old named assault-door cells walkable.
-    door(7, 8)
-    door(7, 13)
-    door(10, 9, 3)
-    door(10, 13, 3)
-    door(14, 8, 3)
-    door(18, 11)
-    door(13, 15)
-    door(15, 16)
-
-    # Broadcast-hall cover:
-    # - west pier separates liaison space from the main fighting area;
-    # - staggered islands break east-west fire;
-    # - north and south bypasses prevent a single compulsory choke.
-    #
-    # C is full-height solid cover, not shoot-over furniture.
-    paint(11, 3, 1, 2, "C")
-    paint(14, 5, 2, 1, "C")
-    paint(17, 3, 1, 2, "C")
-
-    # Reception security partition: cover on arrival without blocking
-    # the spawn or either northern approach.
-    paint(5, 15, 1, 2, "C")
-
-    # Studio equipment island: usable cover with routes on every side.
-    paint(18, 14, 2, 1, "C")
+    bx, by, bw, bh = STATION_BUILDING
+    paint(bx - 1, by - 1, bw + 2, bh + 2, "d")    # sidewalk ring hugging the building
+    paint(bx, by, bw, bh, "C")
+    paint(7, 5, 3, 5, "O")          # NW room (archive)
+    paint(11, 5, 14, 5, "O")        # transmitter hall
+    paint(26, 5, 3, 5, "O")         # NE room (engineering)
+    paint(7, 11, 22, 2, "L")        # cross corridor
+    paint(7, 14, 3, 7, "F")         # SW room (offices)
+    paint(11, 14, 14, 7, "F")       # entry hall
+    paint(26, 14, 3, 7, "F")        # SE room (studio)
+    for col in (8, 14, 15, 20, 21, 27):
+        g[10][col] = "D"
+    for col in (8, 17, 18, 27):
+        g[13][col] = "D"
+    for col, row in ((13, 16), (22, 16)):
+        g[row][col] = "C"           # entry-hall pillars
+    for col, row in STATION_DOOR_SITES:
+        g[row][col] = "b"
+    for col, row in STATION_WINDOW_SITES:
+        g[row][col] = "w"
+    for col, row in STATION_BREACH_TILES:
+        g[row][col] = "W"
+    paint(8, 25, 20, 1, "A")        # the APC lane across the forecourt
+    for cx, cy in _STATION_CARS:
+        g[cy][cx] = g[cy][cx + 1] = "H"
+    for cx, cy in _STATION_CARS_NS:
+        g[cy][cx] = g[cy + 1][cx] = "h"
+    for cx, cy in _STATION_JERSEY:
+        g[cy][cx] = "B"
 
     keys = {
         "STATION_START_TILE": STATION_START_TILE,
+        "VASILE_ARRIVE_TILE": VASILE_ARRIVE_TILE,
         "TRANSMITTER_TILE": TRANSMITTER_TILE,
         "JAMMER_TILE": JAMMER_TILE,
         "LIAISON_TILE": LIAISON_TILE,
     }
-
+    keys.update({"Z_" + k: v for k, v in STATION_SPAWNS.items()})
     # Validate before stamping markers: an objective must not silently
     # punch a walkable hole into a misplaced wall.
     _validate(g, w, h, keys)
 
-    for (x, y), tile in (
-        (STATION_START_TILE, "P"),
-        (TRANSMITTER_TILE, "T"),
-        (JAMMER_TILE, "J"),
-        (LIAISON_TILE, "N"),
-    ):
+    for (x, y), tile in ((STATION_START_TILE, "P"), (TRANSMITTER_TILE, "T"),
+                         (JAMMER_TILE, "J"), (LIAISON_TILE, "N")):
         g[y][x] = tile
+    for x, y in STATION_SPAWNS.values():
+        g[y][x] = "Z"
 
-    # Verify connectivity, not just whether individual keys are floor.
+    # Every floor tile is reachable from the forecourt (the weak wall counts
+    # as solid: the rooms connect without it).
     start = STATION_START_TILE
     reached = {start}
     pending = deque([start])
-
     while pending:
         x, y = pending.popleft()
-        for nx, ny in (
-            (x - 1, y),
-            (x + 1, y),
-            (x, y - 1),
-            (x, y + 1),
-        ):
-            if not (0 <= nx < w and 0 <= ny < h):
-                continue
-            if (nx, ny) in reached:
+        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if not (0 <= nx < w and 0 <= ny < h) or (nx, ny) in reached:
                 continue
             if g[ny][nx] in M4_SOLID_CHARS:
                 continue
             reached.add((nx, ny))
             pending.append((nx, ny))
-
-    walkable = {
-        (x, y)
-        for y in range(h)
-        for x in range(w)
-        if g[y][x] not in M4_SOLID_CHARS
-    }
+    walkable = {(x, y) for y in range(h) for x in range(w) if g[y][x] not in M4_SOLID_CHARS}
     disconnected = walkable - reached
     if disconnected:
-        raise ValueError(
-            "m4 station has disconnected floor: {}".format(
-                sorted(disconnected)
-            )
-        )
-
-    # Retain the original assault-door anchors and give each at least
-    # two adjacent escape directions.
-    for x, y in ((15, 8), (11, 9), (11, 13)):
-        exits = sum(
-            g[ny][nx] not in M4_SOLID_CHARS
-            for nx, ny in (
-                (x - 1, y),
-                (x + 1, y),
-                (x, y - 1),
-                (x, y + 1),
-            )
-        )
-        if (x, y) not in reached or exits < 2:
-            raise ValueError(
-                "m4 station assault door is trapped: {}".format((x, y))
-            )
-
-    return g
+        raise ValueError("m4 station has disconnected floor: {}".format(sorted(disconnected)))
+    return ["".join(row) for row in g]
 
 
 MISSION4_STREET_MAP = _levels.grid("m4.street", _generate_m4_map())
@@ -441,7 +408,7 @@ MISSION4_MAP = MISSION4_STREET_MAP
 def _live_map_dims():
     """(width, height) of the currently-bound MISSION4_MAP, in tiles.
 
-    The street map is 40x40 but the station interior is 24x20 - render
+    The street map is 40x40 but the station is 36x28 - render
     loops and camera clamps must derive bounds from this, never from
     MAP_W/MAP_H (m3.maps._live_map_dims lesson).
     """
@@ -476,5 +443,5 @@ def zone_label(name):
 
 
 _last_keys = None
-_objective = "Pick up the KRAP comms cache."
+_objective = "Get Vasile and the cache to the radio station."
 _radio_marks = set()

@@ -272,6 +272,19 @@ def _m4_blit_station_tile(target, ch, col, row, sx, sy):
 def _m4_blit_tile(target, ch, col, row, sx, sy, station):
     """Blit one tile: wall sprite, floor sprite (with a marker fallback), a
     framed doorway, a painted lane dash, or an objective fixture prop."""
+    if ch in ("H", "h"):
+        # Burned car hulk (2D fallback; the 2.5D set builds the real car).
+        floor = _m4_floor_art(".", col, row, station)
+        if floor is not None:
+            target.blit(floor, (sx, sy))
+        else:
+            pygame.draw.rect(target, M4_TILE_BASE["."], (sx, sy, TILE_SIZE, TILE_SIZE))
+        body = (pygame.Rect(sx, sy + 12, TILE_SIZE, TILE_SIZE - 24) if ch == "H"
+                else pygame.Rect(sx + 12, sy, TILE_SIZE - 24, TILE_SIZE))
+        pygame.draw.rect(target, (34, 30, 28), body)
+        pygame.draw.rect(target, (58, 50, 44), body.inflate(-12, -12))
+        pygame.draw.rect(target, (18, 16, 15), body, 2)
+        return
     if station:
         _m4_blit_station_tile(target, ch, col, row, sx, sy)
         return

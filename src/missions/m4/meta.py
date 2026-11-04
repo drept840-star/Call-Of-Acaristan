@@ -44,25 +44,33 @@ MAP_H = 40
 TILE = 64  # mirrors core.config.TILE_SIZE (local copy for the same reason)
 
 # Tile chars (solid-first street grammar): C building block (solid), B
-# barricade (solid), "." asphalt, "d" sidewalk, "R" lane paint (overlay),
-# "D" door gap (walkable), "O" interior floor, "L" corridor floor,
-# "V" Vasile comms cache marker, "E" guard spawn (floor), "M" marksman spawn
-# (floor), "J" jammer spot, "T" transmitter spot. Solid set consumed by
-# world._build_walls; the street map is a lattice carved out of a solid C field.
-M4_SOLID_CHARS = ("C", "B")
+# barricade (solid), H/h car hulk (solid, east-west / north-south), W weak
+# wall (solid until the wave-4 breach), "." asphalt, "d" sidewalk, "R" lane
+# paint (overlay), "D" door gap (walkable), "O" interior floor, "L" corridor
+# floor, "F" entry-hall floor, "b" door barricade site, "w" window barricade
+# site (both walkable until something is built on them), "A" APC lane, "Z"
+# loyalist insertion point, "E" guard spawn, "M" marksman spawn, "J" jammer
+# spot, "T" transmitter (rack area centre), "N" Maru's meet anchor. Solid
+# set consumed by world._parse_grid.
+M4_SOLID_CHARS = ("C", "B", "H", "h", "W")
 
 # Key tiles (col, row). Street map: NW cross-streets, boulevard mid,
 # radio station east.
 PLAYER_START_TILE = (9, 4)     # street intersection between the blocks (V+H lane)
-VASILE_CACHE_TILE = (16, 21)   # south sidewalk of the boulevard ("boulevard" zone)
+VASILE_START_TILE = (10, 4)    # Vasile starts beside Biribel, carrying the cache
+VASILE_CACHE_TILE = (16, 21)   # legacy cache drop (Vasile carries it now)
 STATION_DOOR_TILE = (34, 19)   # western face of the station block, off the boulevard
-STATION_START_TILE = (8, 15)    # interior spawn after the door handoff
-TRANSMITTER_TILE = (20, 7)      # W3/W4 objective inside the station
-# Liaison meet (W3): Maru stands in the north transmitter hall; the jammer
-# is installed on the transmitter rack beside him. Both are on "O" floor.
-LIAISON_TILE = (7, 4)           # Maru (the KRAP-MAG liaison)
-JAMMER_TILE = (20, 5)           # jammer install point on the TX rack
-VASILE_STATION_TILE = (9, 4)    # Vasile covers the hall during the meet
+# Station map (36x28): the building with its forecourt and street ring.
+STATION_W, STATION_H = 36, 28
+STATION_BUILDING = (6, 4, 24, 18)   # (col, row, w, h): outer walls cols 6-29, rows 4-21
+STATION_START_TILE = (17, 23)   # Biribel arrives on the forecourt, outside the main door
+VASILE_ARRIVE_TILE = (18, 23)
+TRANSMITTER_TILE = (18, 7)      # rack-area centre (the siege's hold point)
+JAMMER_TILE = (18, 6)           # jammer install point in front of the TX rack
+LIAISON_TILE = (17, 16)         # Maru's meet anchor in the entry hall
+VASILE_STATION_TILE = (16, 8)   # Vasile's post by the rack
+RACK_TILES = (15, 5, 7)         # (col, row, width) of the rack along the hall's north wall
+APC_STOP_RECT = (16, 22, 4, 3)  # tiles the rammed APC occupies (solid cover after wave 5)
 
 # Named regions of the curfew street (W2). Mirrors the m2.meta ZONE_DEFS
 # concept - a label + a tile-space rect - but stored as a raw (left, top,
@@ -84,20 +92,42 @@ M4_ZONE_DEFS = {
     },
 }
 
-# Slice 3 hold clock: the transmitter must hold while the arrest plays out
-# on air. Now airtime, not wall clock: the count only advances while the
-# player has the mic OPEN at the rack and no loyalist is contesting it, so
-# the mission's title verb (hold the mic) is the progress bar. Independent
-# of wave state (M3's exfil-door lesson - a hold that only ends on kills can
-# soft-lock).
-M4_HOLD_SECONDS = 60
+# Escort (street): Vasile carries the KRAP comms cache, which is the supply
+# pool. One revive; his next down kills him and fails the street.
+M4_SUPPLY_START = 24
+M4_SUPPLY_DROP_FRAC = 0.25      # first down spills a quarter of the cache
+M4_VASILE_HP = 220
+M4_REVIVE_WINDOW = 600          # frames to reach a downed Vasile (10 s)
+M4_REVIVE_HOLD = 120            # hold E for 2 s
+M4_REVIVE_RADIUS = 70
 
-# The mic switch. E within M4_MIC_RADIUS of the transmitter toggles
-# BROADCAST/JAM; stepping out of range drops the feed (the switch is on the
-# rack, not in Biribel's pocket). Off-air progress bleeds back 1 frame every
-# M4_OFFAIR_DECAY_EVERY frames, so ducking a push costs airtime.
-M4_MIC_RADIUS = 110
+# Fortify. kind -> (label, cost, hp). Door sites take planks or plate,
+# window sites take boards.
+M4_BARRICADE_KINDS = {
+    "planks": ("PLANKS", 3, 300),
+    "plate": ("STEEL PLATE", 6, 700),
+    "boards": ("BOARDS", 2, 200),
+}
+M4_BUILD_HOLD = 45              # frames of held E to put a barricade up
+M4_REPAIR_STEP = 90             # 1.5 s per repair step
+M4_REPAIR_FRAC = 0.25           # each step restores a quarter of max hp
+M4_REPAIR_COST = 1
+M4_SITE_RADIUS = 80             # how close Biribel stands to build or repair
+M4_RUNNER_SUPPLY = 3            # MAG runners bring timber before waves 2-5
+M4_JAMMER_COUNTDOWN = 600       # 10 s from install to the first wave
+
+# Siege. Waves come from content/m4/waves.json; the arrest beats run on the
+# same frame clock.
+M4_SIEGE_FRAMES = 28800         # 8 minutes at 60 fps
+M4_HOLD_SECONDS = M4_SIEGE_FRAMES // 60   # the hold the arrest plays out over
+M4_MIC_RADIUS = 110             # legacy mic switch (removed with the siege rewrite)
 M4_OFFAIR_DECAY_EVERY = 4
+M4_RACK_RADIUS = 200            # loyalists this close to the rack hold it
+M4_RACK_HOLD_FAIL = 480         # 8 s held fails the wave
+M4_BREACH_CHARGE = 240          # a breacher's charge on plate burns 4 s
+M4_SOLDIER_HP = 160
+M4_SOLDIER_DMG_TAKEN = 0.6
+M4_CIVILIAN_HP = 60
 
 # Radio/PA speaker colors (m3.meta convention, local to m4 - no cross-
 # package imports of m3 constants).
@@ -114,6 +144,7 @@ BIRIBEL_SPEAKER = (225, 228, 232)  # player's own lines in the liaison beat
 M4_ROLE_TUNING = {
     "guard": {"hp": 90, "speed": 2.0},
     "marksman": {"hp": 70, "speed": 1.6},
+    "breacher": {"hp": 120, "speed": 2.3},
 }
 
 # ─────────────────────────────────────────────

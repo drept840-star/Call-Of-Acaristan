@@ -8831,7 +8831,7 @@ def check_mission4_boot_and_walk():
     assert m4.zone_at(m4._vasile_cache_pos()) == "boulevard", \
         "zone_at failed to place the Vasile cache on the boulevard"
     _types = [_label_of(e).kind for e in STATE.enemies]
-    assert _types.count("guard") >= 1 and _types.count("marksman") == 2, \
+    assert _types.count("guard") >= 4 and _types.count("marksman") == 3, \
         "W2 IPA patrol mix missing: " + repr(_types)
 
     keys = EmptyKeys()
@@ -9235,6 +9235,20 @@ def check_mission4_layout():
             "station objective %s sits on a solid char" % name
     assert _flood(station, STATION_START_TILE, TRANSMITTER_TILE), \
         "station entry is not connected to the transmitter hall"
+
+    # Maps v2: every barricade site is an exterior opening (walkable, with
+    # the street ring on one side), the weak wall is solid, and every
+    # loyalist insertion point reaches the main door.
+    from missions.m4.maps import (STATION_DOOR_SITES, STATION_WINDOW_SITES,
+                                  STATION_BREACH_TILES, STATION_SPAWNS)
+    for c, r in STATION_DOOR_SITES + STATION_WINDOW_SITES:
+        assert station[r][c] in "bw", "barricade site %s lost its glyph" % ((c, r),)
+        sides = [station[r + dr][c + dc] for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+        assert "d" in sides, "site %s does not face the street ring" % ((c, r),)
+    for c, r in STATION_BREACH_TILES:
+        assert station[r][c] == "W" and "W" in solid
+    for name, t in STATION_SPAWNS.items():
+        assert _flood(station, t, (17, 21)), "spawn %s cannot reach the main door" % name
 
 
 def check_mission4_ending_shots_render():
