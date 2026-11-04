@@ -926,10 +926,10 @@ def _draw_dialogue(surface):
     bars.fill((0, 0, 0, 170))
     surface.blit(bars, (0, 0))
     surface.blit(bars, (0, HEIGHT - bar))
-    # Sit above the weapon panel (bottom-left HUD stays up during talks).
-    hud_top = HEIGHT - 40 - _hud_weapon_panel.PANEL_H - 2
+    # Rests on the bottom bar; _draw_hud hides the HP strip and weapon panel
+    # while a conversation is up, so nothing sits under it.
     speechbox.draw_box(surface, beat.get("speaker", ""), beat["text"], dlg["char_idx"],
-                       color=tuple(beat.get("color", C_WHITE))[:3], bottom=hud_top - 8,
+                       color=tuple(beat.get("color", C_WHITE))[:3], bottom=HEIGHT - bar,
                        pips=(dlg.get("index", 0), len(dlg.get("beats", []))),
                        hint=_T("draw.enter_e"))
 
@@ -1127,11 +1127,11 @@ def _draw_hud(surface, cam_x, cam_y):
 
     # Phase 4: the duplicated M4/M5 panel bodies are engine.ui.std widgets now;
     # this HUD only gathers the data (hostiles count / minimap enemies differ).
-    _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                         panel_bg=get_panel_bg)
-
-    _hud_weapon_panel.draw(surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
-                           panel_bg=get_panel_bg, mag_icon=_draw_m5_mag_icon)
+    if not _m5_flow._m5_dlg["active"]:  # the speech box owns the bottom edge
+        _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
+                             panel_bg=get_panel_bg)
+        _hud_weapon_panel.draw(surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
+                               panel_bg=get_panel_bg, mag_icon=_draw_m5_mag_icon)
 
     # ── Hostiles counter (same box + wording as M4) ──
     _hud_hostiles.draw(surface, THEME,
