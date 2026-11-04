@@ -523,6 +523,7 @@ class CutscenePlayer:
         self.skip_confirm = False
         self.completed = False
         self.finale_audio = None  # optional scene-owned stems / foley channels
+        self.vo = None  # (shot_idx, clip ms, radio) of the voiced caption
 
     @staticmethod
     def _normalize(shot):
@@ -3039,14 +3040,24 @@ class _CutsceneState(GameState):
         # tagged "radio": True (Vasile on comms, etc.) get the radio filter.
         if (cp.shot_idx, "vo") not in cp.fired_cues:
             cp.fired_cues.add((cp.shot_idx, "vo"))
+            cp.vo = None
             if shot.get("speaker") and shot["text"]:
                 try:
                     from audio import voice
-                    voice.play_line(shot["speaker"], shot["text"],
-                                    radio=bool(shot.get("radio")))
+                    ms = voice.play_line(shot["speaker"], shot["text"],
+                                         radio=bool(shot.get("radio")))
+                    if ms:
+                        cp.vo = (cp.shot_idx, ms, bool(shot.get("radio")))
                 except Exception as exc:
                     print(f"[voice] cutscene VO skipped: {exc}")
-        if cp.char_idx < len(shot["text"]):
+        vo = getattr(cp, "vo", None)
+        if vo and vo[0] == cp.shot_idx and cp.char_idx < len(shot["text"]):
+            # Voiced: the caption types over the clip (ui.speechbox pacing).
+            from ui import speechbox
+            age = elapsed - shot.get("caption_after_ms", 0)
+            cp.char_idx = max(cp.char_idx, speechbox.reveal_count(
+                shot["text"], age, vo[1], vo[2]))
+        elif cp.char_idx < len(shot["text"]):
             if cp.timer >= _text_speed_interval():  # RPE6 P9 text speed (live setting)
                 cp.timer = 0
                 last = shot["text"][max(0, cp.char_idx - 1)]
@@ -3127,7 +3138,8 @@ class _CutsceneState(GameState):
                 draw_scanlines(surface)
             draw_letterbox(surface)
             if t_ms >= shot.get("caption_after_ms", 0) and not shot.get("hide_caption") and (shot["text"] or shot.get("speaker")):
-                gc.draw_film_caption(surface, shot["speaker"], shot["text"])
+                gc.draw_film_caption(surface, shot["speaker"], shot["text"],
+                                     typed=cp.char_idx)
             if not shot.get("self_graded"):
                 _g = _advance_grain()
                 if _g is not None:

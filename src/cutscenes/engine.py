@@ -411,101 +411,46 @@ from engine.text import T as _T  # RPE6 Phase 4 text table
 
 
 def reset_dialogue_slide():
-    """A-009 shim: the slide state is owned by ``engine.ui.std.dialogue_box``."""
+    """Scene entry: the next box unfolds again (``ui.speechbox``); the legacy
+    slide state in ``engine.ui.std.dialogue_box`` is reset with it."""
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
     _dialogue_box.reset_slide()
+    speechbox.reset_box()
 
 
 def draw_dialogue_box(surface, speaker, text, char_idx, total_len, can_continue=True,
                       show_speaker=False):
-    """A-009 shim: the box body moved verbatim to ``engine.ui.std.dialogue_box``.
+    """Cutscene / conversation box: the shared pixel speech box (``ui.speechbox``,
+    the radio's chassis family).
 
     ``can_continue=None`` draws no prompt (timeline-owned lines, M5 shadow
-    finale); ``show_speaker`` opts into the name tab - see the widget docstring.
+    finale); ``show_speaker`` opts into the name plate (polish pass T8: the
+    cutscene box carries no name by default - the portrait and accent say who
+    talks).
     """
-    _dialogue_box.draw(surface, _hud_theme, speaker, text, char_idx, total_len,
-                       can_continue=can_continue, show_speaker=show_speaker)
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
+    speechbox.draw_box(surface, speaker or "", text or "", char_idx, total_len,
+                       prompt=can_continue, show_name=bool(show_speaker))
+
+
 def draw_cinematic_subtitle(surface, speaker, text, char_idx=None,
                             band=(HEIGHT - LETTER_H, HEIGHT)):
     """Film subtitle, centred in the bottom letterbox band.
 
     Must be drawn AFTER draw_letterbox (the band is painted black by it); the
     M5 finale calls it from m5shadow3d.draw_controls for that reason. The
-    picture stays clear of text ("subtitles are separate from the 3D film
-    area"). One font; the speaker is an inline accent-coloured prefix - the
-    radio/off-screen convention - not a header strip (polish pass T8). The
-    block is laid out from the FULL text so it never jumps while typing.
+    picture stays clear of text. Shared pixel caption (``ui.speechbox``),
+    laid out from the FULL text so it never jumps while typing.
     """
-    if not text and not speaker:
-        return
-    body_font = font_dialogue
-    accent = SPEAKER_COLORS.get((speaker or "").upper(), C_ORANGE)
-    prefix = (speaker.upper() + "  ") if speaker else ""
-    pw = body_font.size(prefix)[0] if prefix else 0
-    max_width = WIDTH - 120
-
-    def wrap(s):
-        lines = []
-        for para in s.split("\n"):
-            cur = ""
-            for word in para.split(" "):
-                test = (cur + " " + word) if cur else word
-                limit = max_width - (pw if not lines else 0)
-                if body_font.size(test)[0] <= limit or not cur:
-                    cur = test
-                else:
-                    lines.append(cur)
-                    cur = word
-            lines.append(cur)
-        return lines
-
-    full_lines = wrap(text)
-    line_h = body_font.get_linesize()
-    top, bottom = band
-    y = top + max(2, (bottom - top - len(full_lines) * line_h) // 2)
-
-    # Typewriter over the spoken text only; the speaker prefix is always shown.
-    remaining = len(text) if char_idx is None else max(0, min(len(text), char_idx))
-    for i, line in enumerate(full_lines):
-        x = (WIDTH - body_font.size(line)[0] - (pw if i == 0 else 0)) // 2
-        if i == 0 and prefix:
-            surface.blit(body_font.render(prefix.rstrip(), True, accent), (x, y))
-            x += pw
-        part = line[:max(0, remaining)]
-        remaining -= len(line) + 1
-        if part:
-            surface.blit(body_font.render(part, True, (240, 242, 240)), (x, y))
-        y += line_h
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
+    speechbox.draw_caption(surface, speaker, text, char_idx, band=band)
 
 
-def draw_film_caption(surface, speaker, text):
-    """Film caption in the M2 sniper style (missions/m2/sniper3d._draw_bars).
-
-    Speaker tag over centred, word-wrapped text. No typewriter, no prompt.
-    Draw AFTER draw_letterbox.
-    """
-    lines = []
-    for para in text.split("\n"):
-        cur = ""
-        for word in para.split(" "):
-            test = (cur + " " + word) if cur else word
-            if font_dialogue.size(test)[0] <= WIDTH - 120 or not cur:
-                cur = test
-            else:
-                lines.append(cur)
-                cur = word
-        lines.append(cur)
-    tag = speaker.upper() if speaker else ""
-    tag_h = font_prompt.get_linesize() if tag else 0
-    text_h = font_dialogue.get_linesize()
-    y = HEIGHT - LETTER_H + max(2, (LETTER_H - tag_h - len(lines) * text_h) // 2)
-    if tag:
-        nm = font_prompt.render(tag, True, SPEAKER_COLORS.get(tag, C_ORANGE))
-        surface.blit(nm, ((WIDTH - nm.get_width()) // 2, y))
-        y += tag_h
-    for line in lines:
-        tx = font_dialogue.render(line, True, (236, 234, 226))
-        surface.blit(tx, ((WIDTH - tx.get_width()) // 2, y))
-        y += text_h
+def draw_film_caption(surface, speaker, text, typed=None):
+    """Film caption under the picture (CutscenePlayer shots). ``typed`` is the
+    player's typewriter count (None = whole line). Draw AFTER draw_letterbox."""
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
+    speechbox.draw_caption(surface, speaker, text, typed)
 
 
 def draw_volkov_dossier_overlay(surface, t):

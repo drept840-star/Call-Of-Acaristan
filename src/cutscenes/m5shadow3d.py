@@ -1051,11 +1051,22 @@ def _subtitle(s,t):
     the authored clock; ESC/ENTER are the only controls.
     """
     from cutscenes.engine import draw_cinematic_subtitle  # lazy: engine lazily imports this film
+    from ui import speechbox  # lazy: typewriter paced to the recorded take
     for on,off,who,text in LINES:
         if on <= t < off:
-            char_idx = min(len(text), max(0, int((t - on) / 50)))   # 50 ms per character
-            draw_cinematic_subtitle(s, who, text, char_idx)
+            vo = _SUB_CLIP.get((who, text))
+            if vo is None:
+                try:
+                    from audio import voice
+                    vo = voice.clip_ms(who, text)
+                except Exception:
+                    vo = 0
+                _SUB_CLIP[(who, text)] = vo
+            draw_cinematic_subtitle(s, who, text, speechbox.reveal_count(text, t - on, vo))
             break
+
+
+_SUB_CLIP = {}
 
 
 def _clip_seg(r,a,b):

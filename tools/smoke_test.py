@@ -9258,7 +9258,7 @@ def check_mission4_cinematic_arrest():
         fake_gc = SimpleNamespace(
             reset_dialogue_slide=lambda: resets.append(clock[0]),
             draw_cutscene_scene=lambda *args: None,
-            draw_film_caption=lambda *args: captions.append(args[1:]),
+            draw_film_caption=lambda *args, **kw: captions.append(args[1:3]),
             draw_typewriter_title=lambda *args: None,
         )
         namespace = {
@@ -9337,9 +9337,14 @@ def check_mission4_cinematic_arrest():
             tick(cp, delay - 1, frames=8)
             assert cp.char_idx == cp.timer == 0, "typewriter advanced before caption delay"
             tick(cp, delay, frames=3)
-            assert cp.char_idx == 0 and cp.timer == 3
-            tick(cp, delay, frames=1)
-            assert cp.char_idx == 1, "caption typewriter did not start after its delay"
+            if cp.vo:  # voiced: the caption types over the clip (ui.speechbox)
+                assert cp.char_idx == 0
+                tick(cp, delay + cp.vo[1] // 2, frames=1)
+                assert 0 < cp.char_idx < len(shot["text"]), "voiced caption did not type over its clip"
+            else:
+                assert cp.char_idx == 0 and cp.timer == 3
+                tick(cp, delay, frames=1)
+                assert cp.char_idx == 1, "caption typewriter did not start after its delay"
             assert not any(name in {"type_tick", "menu_hover", "menu_click"} for name, _ in played)
             cp = fresh([shot])
             press(2)  # Completing text early must not reveal it in render().
