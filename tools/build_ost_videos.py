@@ -208,7 +208,8 @@ def render(num, stills=False, loop=False):
 
 def main(argv):
     stills = "--stills" in argv
-    nums = [int(a) for a in argv if a.isdigit()] or list(range(1, len(ALBUM) + 1))
+    from ost import mv
+    nums = [int(a) for a in argv if a.isdigit()] or sorted(mv.SCENES)
     pygame.init()
     for num in nums:
         if "--thumbs" in argv:

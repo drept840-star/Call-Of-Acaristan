@@ -1,0 +1,93 @@
+{
+ "wall_sec": 61.9,
+ "host_frames": 1310,
+ "host_seconds": 43.67,
+ "client_frames": 1151,
+ "client_seconds": 38.37,
+ "room_code": "BIRI-R2M01-EB9H46",
+ "client_pid": 2,
+ "kills": {
+  "ANDREI": 4,
+  "BIRIBEL": 2,
+  "MIRELA": 0,
+  "MICUL FUEGO": 3
+ },
+ "scoreboard_kills": {
+  "ANDREI": 4,
+  "BIRIBEL": 2,
+  "MIRELA": 0,
+  "MICUL FUEGO": 3
+ },
+ "score_adjustments": {
+  "ANDREI": 0,
+  "BIRIBEL": 0,
+  "MIRELA": 0,
+  "MICUL FUEGO": 0
+ },
+ "host_err": "",
+ "client_err": "",
+ "host_liveness": 0.93,
+ "host_luma": 27.7,
+ "chapters": {
+  "panel_open": {
+   "frame": 0,
+   "sec": 0.0
+  },
+  "callsign_typed": {
+   "frame": 144,
+   "sec": 2.4
+  },
+  "host_clicked": {
+   "frame": 173,
+   "sec": 2.883
+  },
+  "code_ready": {
+   "frame": 173,
+   "sec": 2.883
+  },
+  "roster_2": {
+   "frame": 267,
+   "sec": 4.45
+  },
+  "client_addr_focus": {
+   "frame": 25,
+   "sec": 0.417
+  },
+  "client_code_typed": {
+   "frame": 76,
+   "sec": 1.267
+  },
+  "join_clicked": {
+   "frame": 84,
+   "sec": 1.4
+  },
+  "client_connected": {
+   "frame": 141,
+   "sec": 2.35
+  },
+  "roster_full": {
+   "frame": 529,
+   "sec": 8.817
+  },
+  "start_clicked": {
+   "frame": 591,
+   "sec": 9.85
+  },
+  "go_moment": {
+   "frame": 784,
+   "sec": 13.067
+  },
+  "go_moment_client": {
+   "frame": 467,
+   "sec": 7.783
+  },
+  "combat_end": {
+   "frame": 2620,
+   "sec": 43.667
+  },
+  "combat_end_client": {
+   "frame": 2303,
+   "sec": 38.383
+  }
+ }
+}

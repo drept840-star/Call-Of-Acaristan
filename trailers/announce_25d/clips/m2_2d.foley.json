@@ -1,0 +1,481 @@
+{
+ "act": "act2",
+ "label": "ACT II - QUIET ON ROUTE 12",
+ "starter": "gc.start_mission2_after_sniper(preserve_timer=True)",
+ "hz": 60,
+ "frames": 240,
+ "seconds": 8.0,
+ "ticks": 480,
+ "seed": 20261107,
+ "stats": {
+  "shots": 40,
+  "kills": 4,
+  "blind_shots": 0,
+  "enemy_shots": 2
+ },
+ "events": [
+  {
+   "t": 19,
+   "kind": "footstep"
+  },
+  {
+   "t": 33,
+   "kind": "footstep"
+  },
+  {
+   "t": 37,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 46,
+   "kind": "footstep"
+  },
+  {
+   "t": 49,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 60,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 63,
+   "kind": "footstep"
+  },
+  {
+   "t": 73,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 75,
+   "kind": "footstep"
+  },
+  {
+   "t": 83,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 86,
+   "kind": "footstep"
+  },
+  {
+   "t": 92,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 97,
+   "kind": "footstep"
+  },
+  {
+   "t": 104,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 107,
+   "kind": "footstep"
+  },
+  {
+   "t": 116,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 120,
+   "kind": "footstep"
+  },
+  {
+   "t": 129,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 131,
+   "kind": "footstep"
+  },
+  {
+   "t": 141,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 141,
+   "kind": "footstep"
+  },
+  {
+   "t": 151,
+   "kind": "footstep"
+  },
+  {
+   "t": 153,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 165,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 165,
+   "kind": "footstep"
+  },
+  {
+   "t": 177,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 177,
+   "kind": "footstep"
+  },
+  {
+   "t": 188,
+   "kind": "footstep"
+  },
+  {
+   "t": 189,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 197,
+   "kind": "footstep"
+  },
+  {
+   "t": 202,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 208,
+   "kind": "footstep"
+  },
+  {
+   "t": 210,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 213,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 219,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 220,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 221,
+   "kind": "footstep"
+  },
+  {
+   "t": 222,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 228,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 231,
+   "kind": "footstep"
+  },
+  {
+   "t": 234,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 239,
+   "kind": "enemy_hit",
+   "dmg": 21
+  },
+  {
+   "t": 240,
+   "kind": "footstep"
+  },
+  {
+   "t": 244,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 253,
+   "kind": "footstep"
+  },
+  {
+   "t": 256,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 267,
+   "kind": "footstep"
+  },
+  {
+   "t": 268,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 269,
+   "kind": "enemy_shot"
+  },
+  {
+   "t": 274,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 278,
+   "kind": "footstep"
+  },
+  {
+   "t": 280,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 285,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 288,
+   "kind": "footstep"
+  },
+  {
+   "t": 291,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 296,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 297,
+   "kind": "footstep"
+  },
+  {
+   "t": 303,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 308,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 309,
+   "kind": "footstep"
+  },
+  {
+   "t": 315,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 319,
+   "kind": "footstep"
+  },
+  {
+   "t": 320,
+   "kind": "enemy_hit",
+   "dmg": 3
+  },
+  {
+   "t": 327,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 330,
+   "kind": "footstep"
+  },
+  {
+   "t": 338,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 340,
+   "kind": "footstep"
+  },
+  {
+   "t": 347,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 349,
+   "kind": "footstep"
+  },
+  {
+   "t": 358,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 358,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 363,
+   "kind": "footstep"
+  },
+  {
+   "t": 369,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 370,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 375,
+   "kind": "footstep"
+  },
+  {
+   "t": 380,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 381,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 386,
+   "kind": "footstep"
+  },
+  {
+   "t": 389,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 390,
+   "kind": "enemy_hit",
+   "dmg": 16
+  },
+  {
+   "t": 400,
+   "kind": "footstep"
+  },
+  {
+   "t": 402,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 412,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 414,
+   "kind": "footstep"
+  },
+  {
+   "t": 416,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 421,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 424,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 427,
+   "kind": "footstep"
+  },
+  {
+   "t": 431,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 433,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 436,
+   "kind": "footstep"
+  },
+  {
+   "t": 443,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 445,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 446,
+   "kind": "footstep"
+  },
+  {
+   "t": 455,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 455,
+   "kind": "enemy_hit",
+   "dmg": 16
+  },
+  {
+   "t": 458,
+   "kind": "footstep"
+  },
+  {
+   "t": 467,
+   "kind": "player_shot",
+   "weapon": "os12"
+  },
+  {
+   "t": 471,
+   "kind": "footstep"
+  },
+  {
+   "t": 475,
+   "kind": "enemy_hit",
+   "dmg": 28
+  },
+  {
+   "t": 479,
+   "kind": "player_shot",
+   "weapon": "os12"
+  }
+ ]
+}

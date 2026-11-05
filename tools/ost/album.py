@@ -1,4 +1,4 @@
-"""Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film.
+"""Call of Acaristan - Original Soundtrack. Twelve tracks, menu to outro.
 
 Leitmotifs (offsets in semitones from the track root, lengths in beats):
 - Biribel: a doina phrase in Romanian minor (raised 4th). CALL, ANSWER, HOME.
@@ -8,10 +8,11 @@ Leitmotifs (offsets in semitones from the track root, lengths in beats):
 
 The Vostral re-voices Biribel's phrases in maqam Hijaz, degree for degree (see `modal`).
 """
-from .synth import (Track, SR, boom, brass, chirp, chord, choir, cimbalom, clack, crowd, doum, drone, epiano,
+from .synth import (Track, SR, boom, braam, brass, chirp, chord, choir, cimbalom, clack, crowd, doum, drone, epiano,
                     fade, glass, hat, horn, hum, hz, kick, metal, midi, musicbox, ney, organ, oud, pad, pulse,
                     radio, rain, reed, rim, riq, riser, rotor, shot, snare, squelch, static, strings, taiko,
-                    tek, timpani, wind, sine, env)
+                    tek, timpani, wind, sine, env, fire, piano, accordion, fiddle, pluck, whistle,
+                    power, reese, bell, tom, clap, tamb, whip, square)
 
 CALL = [(0, 1), (7, 1), (6, .5), (7, .5), (3, 1), (2, .5), (3, .5), (0, 3)]
 ANSWER = [(7, 1), (10, 1), (9, .5), (7, .5), (6, 1), (7, 4)]
@@ -587,6 +588,384 @@ def t8_i_chose_the_many():
     return T
 
 
+# ---------------------------------------------------------------- 9-12: the new cues
+# These four carry their own themes, keys, meters and grooves on purpose: none of
+# the leitmotifs above, no 16th pulse bass, no cimbalom 16ths, no taiko gallop.
+
+def bars_of(*phrases):
+    return [n for p in phrases for n in p]
+
+
+def roots(T, inst, prog, bar, hits, gain, base=31, pan=0.0, verb=0.1, fifth_on=(), **kw):
+    """Root (or fifth, on the listed hit indexes) of each bar's chord at the given beats."""
+    for i, sym in enumerate(prog):
+        r = chord(sym, base)[0]
+        for k, (beat, length) in enumerate(hits):
+            m = r + 7 if k in fifth_on else r
+            T.add(inst(hz(m), T.dur(length), **kw), T.t(bar + i, beat), gain, pan, verb, 0.003)
+
+
+def stabs(T, inst, prog, bar, hits, gain, base=40, pan=0.0, verb=0.2, **kw):
+    """One voicing per hit: power chords take the root, anything else the whole chord."""
+    for i, sym in enumerate(prog):
+        notes = chord(sym, base)
+        if inst is power:
+            notes = notes[:1]
+        for beat, length in hits:
+            for m in notes:
+                T.add(inst(hz(m), T.dur(length), **kw), T.t(bar + i, beat), gain / len(notes) ** 0.5, pan, verb, 0.003)
+
+
+def keys(T, notes, root, bar, beat=0.0, gain=0.4, vel=0.7, pan=0.1, verb=0.4, scale=1.0):
+    motif(T, piano, notes, root, bar, beat, scale, gain, pan, verb, 1.0, 0.008, vel=vel)
+
+
+def lh(T, prog, bar, gain=0.2, pattern=("r", "5", "R", "3", "R", "5"), step=0.5, base=39, vel=0.5):
+    """Left-hand broken chords, each note left ringing like the pedal is down."""
+    for i, sym in enumerate(prog):
+        c = chord(sym, base)
+        r = c[0]
+        tone = {"r": r, "5": r + 7, "R": r + 12, "9": r + 14, "3": c[1] + 12}
+        for k in range(int(round(T.beats / step))):
+            m = tone[pattern[k % len(pattern)]]
+            T.add(piano(hz(m), T.dur(T.beats - k * step), vel), T.t(bar + i, k * step), gain, -0.25 + 0.05 * k, 0.45, 0.006)
+
+
+def square_blip(f, dur):
+    n = int(dur * SR)
+    return square(f, n) * env(n, 0.002, 0.05, 0.4, 0.05)
+
+
+# ---------------------------------------------------------------- 9. Fallow Ground (M7, the raid)
+# 7/8 (2+2+3), G harmonic minor: accordion and fiddle over distorted guitar, the barn bell ringing.
+
+AKSAK_A = [(7, 1), (8, .5), (7, .5), (3, .5), (2, .5), (0, .5)]
+AKSAK_B = [(0, .5), (2, .5), (3, .5), (5, .5), (7, 1), (3, .5)]
+AKSAK_C = [(8, 1), (7, .5), (6, .5), (7, 1.5)]
+AKSAK_D = [(3, .5), (2, .5), (0, .5), (-1, .5), (0, 1.5)]
+AKSAK_E = [(12, .5), (10, .5), (8, .5), (7, .5), (8, 1), (7, .5)]
+AKSAK_F = [(5, .5), (3, .5), (2, 1), (0, 1.5)]
+RAID = bars_of(AKSAK_A, AKSAK_B, AKSAK_C, AKSAK_D, AKSAK_E, AKSAK_C, AKSAK_F, AKSAK_D)
+RAID_G = ["Gm", "Cm", "D", "Gm", "Eb", "Cm", "D7", "Gm"]
+RAID_A = ["Am", "Dm", "E", "Am", "F", "Dm", "E7", "Am"]
+GROUPS = ((0, 1), (1, 1), (2, 1.5))
+
+
+def aksak_kit(T, bar, bars, gain=1.0, full=True):
+    parts = [(kick, [0, 2, (3, 0.5)], 0.5 * gain, 0, 0.08), (snare, [1, (2.5, 0.7)], 0.3 * gain, 0, 0.25),
+             (clap, [1], 0.12 * gain, 0.1, 0.3)]
+    if full:
+        parts.append((hat, [(k * 0.5, 1.0 if k in (0, 2, 4) else 0.5) for k in range(7)], 0.05 * gain, 0.4, 0.08))
+        parts.append((tamb, [0.5, 1.5, 3], 0.05 * gain, -0.4, 0.15))
+    groove(T, bar, bars, parts)
+
+
+def tom_fill(T, bar, gain=0.4):
+    for k, (beat, f0) in enumerate(((2, 150.0), (2.5, 125.0), (3, 100.0))):
+        T.add(tom(k, f0), T.t(bar, beat), gain, (k - 1) * 0.4, 0.3)
+
+
+def t9_fallow_ground():
+    T = Track(76, 168, beats=3.5, seed=99, verb_s=2.4, damp=4800, tail=5.0)
+    T.add(fade(fire(T.n, T.rng), 3, 6), 0, 0.1, verb=0.05)
+    for b in range(0, 8, 2):
+        T.add(bell(hz("G4"), b), T.t(b), 0.18, 0.3, 0.6)
+    T.add(fade(reese(hz("G1"), T.dur(28), 300.0), 1.5, 0.5), 0, 0.22, verb=0.05)
+    for b in range(4, 8):
+        groove(T, b, 1, [(tom, [0, 1, 2], 0.25 + 0.06 * (b - 4), 0, 0.3)])
+    tom_fill(T, 7, 0.5)
+
+    def verse(bar, prog, root, fiddle_on, gain=1.0, mute=False):
+        up = midi(root) - midi("G4")
+        aksak_kit(T, bar, 8, gain)
+        roots(T, reese, prog, bar, GROUPS, 0.3 * gain, base=31 + up, fifth_on=(2,))
+        stabs(T, power, prog, bar, [(b, l * 0.8) for b, l in GROUPS], 0.2 * gain, base=40 + up, mute=mute)
+        motif(T, accordion, RAID, root, bar, gain=0.36 * gain, pan=-0.1, verb=0.3)
+        if fiddle_on:
+            motif(T, fiddle, RAID, midi(root) + 12, bar, gain=0.26 * gain, pan=0.2, verb=0.35)
+        tom_fill(T, bar + 7, 0.45 * gain)
+
+    T.add(boom(10), T.t(8), 0.55, 0, 0.5)
+    verse(8, RAID_G, "G4", False, mute=True)
+    verse(16, RAID_G, "G4", True)
+
+    # Half-time break: guitar rings, the fiddle takes the tune at half speed over the fire.
+    for i, sym in enumerate(RAID_G):
+        T.add(power(hz(chord(sym, 40)[0]), T.dur(3.4)), T.t(24 + i), 0.16, 0, 0.35)
+    groove(T, 24, 8, [(kick, [0], 0.45, 0, 0.1), (snare, [2], 0.25, 0, 0.35)])
+    motif(T, fiddle, RAID[:len(RAID) // 2], "G4", 24, scale=2.0, gain=0.34, verb=0.45)
+    for b in (24, 28):
+        T.add(bell(hz("G4"), b), T.t(b), 0.12, 0.3, 0.6)
+    T.add(riser(T.dur(7)), T.t(30), 0.25)
+    tom_fill(T, 31, 0.55)
+
+    T.add(boom(11), T.t(32), 0.65, 0, 0.5)
+    for bar in (32, 40):
+        verse(bar, RAID_G, "G4", True, 1.05)
+        motif(T, brass, RAID, "G3", bar, gain=0.3, verb=0.3)
+
+    # Call and answer: one bar of accordion, one bar of guitar and toms.
+    aksak_kit(T, 48, 8, 0.9, full=False)
+    for b in range(48, 56, 2):
+        motif(T, accordion, (AKSAK_E if b % 4 == 0 else AKSAK_B), "G4", b, gain=0.38)
+        for beat, l in GROUPS:
+            T.add(power(hz(chord(RAID_G[(b - 48 + 1) % 8], 40)[0]), T.dur(l * 0.7)), T.t(b + 1, beat), 0.24, 0, 0.2)
+        groove(T, b + 1, 1, [(tom, [0, 0.5, 1, 1.5, 2, 2.5, 3], 0.3, 0, 0.25)])
+    roots(T, reese, RAID_G, 48, GROUPS, 0.28, fifth_on=(2,))
+    T.add(riser(T.dur(7)), T.t(54), 0.28)
+    tom_fill(T, 55, 0.6)
+
+    # Up a step to A: the last push out of the yard.
+    T.add(boom(12), T.t(56), 0.75, 0, 0.5)
+    for bar in (56, 64):
+        verse(bar, RAID_A, "A4", True, 1.1)
+        motif(T, brass, RAID, "A3", bar, gain=0.32, verb=0.3)
+        pads(T, choir, RAID_A, bar, 0.2, base=52)
+
+    for beat in (0, 1, 2):
+        T.add(power(hz("A2"), T.dur(0.6)), T.t(72, beat), 0.3, 0, 0.3)
+        T.add(tom(beat, 90.0), T.t(72, beat), 0.5, 0, 0.3)
+    T.add(power(hz("A2"), T.dur(6)), T.t(73), 0.26, 0, 0.5)
+    T.add(boom(13), T.t(73), 0.7, 0, 0.6)
+    T.add(bell(hz("A4"), 9), T.t(73), 0.2, 0.3, 0.7)
+    return T
+
+
+# ---------------------------------------------------------------- 10. Head of State (M8 Duty)
+# 12/8 shuffle in E minor: horn fanfare, growl bass, a ticking clock; the coronation in E major, ending on C.
+
+TR = 1 / 3
+FANFARE = bars_of([(0, 1), (7, 1), (12, 4 * TR), (10, 2 * TR)], [(8, 1), (7, 2 * TR), (5, TR), (7, 2)],
+                  [(0, 1), (7, 1), (12, 1), (15, 1)], [(14, 4 * TR), (12, 2 * TR), (11, 2)])
+FANFARE_MAJOR = modal(FANFARE, (0, 2, 3, 5, 7, 8, 10, 11), (0, 2, 4, 5, 7, 9, 11, 11))
+STATE_E = ["Em", "C", "Am", "B", "Em", "C", "D", "B"]
+CROWN = ["E", "A", "C#m", "B", "E", "A", "C", "C"]
+SHUFFLE = (0, 4 * TR, 8 * TR)
+SHUFFLE_BASS = [(0, 5 * TR), (5 * TR, TR), (2, 2)]
+
+
+def tick(T, bar, bars, gain=0.08):
+    for b in range(bar, bar + bars):
+        for k in range(4):
+            T.add(rim(k), T.t(b, k), gain * (1.0 if k == 0 else 0.6), 0.35, 0.2)
+
+
+def shuffle_kit(T, bar, bars, gain=1.0):
+    groove(T, bar, bars, [(kick, [0, 5 * TR, 2, (3 + 2 * TR, 0.6)], 0.5 * gain, 0, 0.08),
+                          (snare, [1, 3], 0.32 * gain, 0, 0.25),
+                          (hat, [(k * TR, 1.0 if k % 3 == 0 else 0.45) for k in range(12)], 0.045 * gain, 0.4, 0.08)])
+    for b in range(bar + 3, bar + bars, 4):
+        for k, beat in enumerate((3, 3 + TR, 3 + 2 * TR)):
+            T.add(tom(k, 140.0 - 25 * k), T.t(b, beat), 0.35 * gain, (k - 1) * 0.4, 0.3)
+
+
+def state_band(T, bar, gain=1.0):
+    shuffle_kit(T, bar, 8, gain)
+    roots(T, reese, STATE_E, bar, SHUFFLE_BASS, 0.3 * gain, base=28)
+    stabs(T, brass, STATE_E, bar, [(b, 0.35) for b in SHUFFLE], 0.22 * gain, base=52, bright=2600.0, a=0.01, r=0.12)
+
+
+def t10_head_of_state():
+    T = Track(50, 100, seed=110, verb_s=3.2, damp=4400, tail=6.0)
+    T.add(fade(rotor(int(T.t(22) * SR), T.rng, 5.8), 4, 3), 0, 0.13, 0.1, 0.12)
+    tick(T, 0, 4)
+    for b in range(4):
+        T.add(timpani(hz("E2"), b), T.t(b), 0.25 + 0.05 * b, 0, 0.4)
+    T.add(fade(reese(hz("E1"), T.dur(16), 300.0), 2, 0.3), 0, 0.22, verb=0.05)
+
+    # The mansion: shuffle kit, brass stabs, the fanfare low in the strings, then on horns.
+    T.add(boom(15), T.t(4), 0.6, 0, 0.5)
+    state_band(T, 4)
+    state_band(T, 12)
+    for bar in (4, 8):
+        motif(T, strings, FANFARE, "E3", bar, gain=0.34, verb=0.35, a=0.08)
+    for bar in (12, 16):
+        motif(T, brass, FANFARE, "E3", bar, gain=0.48, verb=0.3)
+    motif(T, strings, FANFARE, "E5", 16, gain=0.24, verb=0.4, a=0.05)
+
+    # The chase: rotor up front, the fanfare an octave up, choir, triplet square arp.
+    T.add(boom(16), T.t(20), 0.7, 0, 0.5)
+    T.add(fade(rotor(int(T.t(9) * SR), T.rng, 6.4), 0.5, 1), T.t(20), 0.14, -0.2, 0.12)
+    state_band(T, 20, 1.1)
+    arp(T, square_blip, STATE_E, 20, 0.04, step=TR, length=0.2, pattern=("R", "5", "3"), base=52, pan=0.3)
+    pads(T, choir, STATE_E, 20, 0.26, base=52)
+    for bar in (20, 24):
+        motif(T, brass, FANFARE, "E4", bar, gain=0.42, verb=0.3)
+        motif(T, strings, FANFARE, "E5", bar, gain=0.3, verb=0.35, a=0.05)
+    T.add(riser(T.dur(4)), T.t(27), 0.25)
+
+    # The crash, then the ridge: wind, the clock, the fanfare alone on the piano.
+    T.add(boom(17), T.t(28), 0.6, 0, 0.6)
+    T.add(shot(2), T.t(28), 0.35, 0.2, 0.7)
+    T.add(fade(static(int(T.t(2) * SR), T.rng), 0.2, 3), T.t(28, 1), 0.05, verb=0)
+    T.add(fade(wind(int(T.t(10) * SR), T.rng, 300, 1100), 3, 2), T.t(29), 0.14, verb=0.1)
+    tick(T, 30, 8, 0.07)
+    for nn in ("E2", "B2"):
+        T.add(fade(strings(hz(nn), T.dur(32), a=2.5, r=1.0, cutoff=1300.0), 0, 2), T.t(30), 0.1, 0, 0.5)
+    keys(T, FANFARE, "E4", 30, gain=0.3, vel=0.5, scale=2.0, verb=0.6)
+    T.add(squelch(2), T.t(37, 3), 0.1, -0.3)
+
+    T.add(shot(3), T.t(38), 0.9, 0.1, 0.9)
+    T.add(boom(18), T.t(38), 0.55, 0, 0.6)
+
+    # The coronation: the fanfare in E major on organ and horns, ending on a C chord that never comes home.
+    T.add(fade(crowd(int(T.t(12) * SR), T.rng), 3, 6), T.t(39), 0.05, verb=0.3)
+    pads(T, organ, CROWN, 39, 0.3, base=52)
+    pads(T, strings, CROWN, 39, 0.2, a=1.0)
+    roots(T, bass_long, CROWN, 39, [(0, 4)], 0.28, base=40, verb=0.1)
+    motif(T, brass, FANFARE_MAJOR, "E3", 39, gain=0.46, verb=0.35)
+    motif(T, brass, FANFARE_MAJOR[:8] + [(12, 4), (12, 4)], "E3", 43, gain=0.46, verb=0.35)
+    groove(T, 39, 6, [(snare, [0, (2 * TR, 0.5), 1, 2, (2 + 2 * TR, 0.5), 3], 0.22, 0, 0.2),
+                      (lambda v: timpani(hz("E2"), v), [0, 2], 0.3, 0, 0.3)])
+    for nn in ("C3", "G3", "C4", "E4"):
+        T.add(fade(strings(hz(nn), T.dur(18), a=0.8, r=3.0), 0, 6), T.t(45), 0.1, 0, 0.6)
+    T.add(fade(organ(hz("C3"), T.dur(16)), 0, 5), T.t(45), 0.12, 0, 0.5)
+    return T
+
+
+# ---------------------------------------------------------------- 11. Old Friends (M8 Revenge)
+# A western showdown in A minor: whistle, twangy guitar, trumpet, whip and bell; the chase up in B minor.
+
+SHOWDOWN = bars_of([(7, 2), (8, .5), (7, .5), (5, .5), (3, .5)], [(5, 3), (None, 1)],
+                   [(3, 1), (5, .5), (7, .5), (10, 2)], [(8, 1), (7, 1), (0, 2)])
+RIFF = bars_of([(0, .5), (None, .25), (0, .25), (3, .5), (5, .5), (7, 1), (5, .5), (3, .5)],
+               [(0, .5), (None, .25), (0, .25), (3, .5), (5, .5), (6, .5), (5, .5), (3, .5), (-2, .5)])
+DUST_A = ["Am", "Am", "F", "E", "Dm", "Am", "E", "Am"]
+DUST_B = ["Bm", "Bm", "G", "F#", "Em", "Bm", "F#", "Bm"]
+
+
+def west_kit(T, bar, bars, gain=1.0, chase=False):
+    kicks = [0, 1, 2, 3] if chase else [0, 1.5, 2.5]
+    groove(T, bar, bars, [(kick, kicks, 0.48 * gain, 0, 0.08), (snare, [1, 3], 0.3 * gain, 0, 0.3),
+                          (whip, [3], 0.1 * gain, 0.3, 0.4),
+                          (tamb, [(k * 0.5, 1.0 if k % 2 else 0.5) for k in range(8)], 0.06 * gain, -0.35, 0.15)])
+
+
+def t11_old_friends():
+    T = Track(68, 120, seed=121, verb_s=3.4, damp=4200, tail=7.0)
+    T.add(fade(wind(int(T.t(12) * SR), T.rng, 250, 900), 3, 3), 0, 0.12, verb=0.1)
+    for b in range(0, 8, 2):
+        T.add(bell(hz("A3"), b), T.t(b), 0.14, -0.3, 0.6)
+    for b in range(8):
+        T.add(pluck(hz("A2"), T.dur(3.5), 0.4, 0.35), T.t(b), 0.24, -0.2, 0.5)
+    for nn in ("A2", "E3"):
+        T.add(fade(strings(hz(nn), T.dur(32), a=3.0, r=1.0, cutoff=1300.0), 0, 2), 0, 0.08, 0, 0.5)
+    motif(T, whistle, SHOWDOWN, "A5", 0, scale=2.0, gain=0.3, pan=0.15, verb=0.6, human=0.01)
+
+    T.add(shot(4), T.t(8), 0.75, -0.2, 0.9)
+    T.add(shot(5), T.t(8, 2.5), 0.55, 0.3, 0.9)
+
+    # The trap: trumpet over twang riff and the western beat.
+    T.add(boom(19), T.t(8), 0.55, 0, 0.5)
+    for bar in (8, 16):
+        west_kit(T, bar, 8)
+        for k in range(0, 8, 2):
+            motif(T, pluck, RIFF, "A2", bar + k, gain=0.3, pan=-0.25, verb=0.35, bright=0.7, twang=0.15)
+        roots(T, bass_long, DUST_A, bar, [(0, 1.5), (1.5, 0.5), (2, 2)], 0.28, base=33)
+        stabs(T, power, DUST_A, bar, [(0, 1.2), (2.5, 1.2)], 0.12, base=45, mute=True)
+    motif(T, brass, SHOWDOWN + SHOWDOWN, "A4", 8, gain=0.42, verb=0.35, bright=2800.0)
+    motif(T, fiddle, SHOWDOWN, "A4", 16, gain=0.24, pan=0.25, verb=0.4)
+    for b in (8, 12, 16, 20):
+        T.add(choir(hz("A3"), 0.25, "a", 0.01, 0.15), T.t(b), 0.2, 0, 0.4)
+
+    # The gantry: six rounds, each one quieter; the whistle alone.
+    T.add(boom(20), T.t(24), 0.5, 0, 0.6)
+    for b in (24, 26, 28, 30):
+        T.add(bell(hz("A3"), b), T.t(b), 0.14, -0.3, 0.6)
+    for nn in ("A2", "E3", "C4"):
+        T.add(fade(strings(hz(nn), T.dur(32), a=1.5, r=1.0, cutoff=1600.0), 0, 2), T.t(24), 0.08, 0, 0.5)
+    for k, (bar, beat) in enumerate(((26, 0), (26, 2.5), (27, 2), (28, 1), (29, 0), (30, 2))):
+        T.add(shot(6 + k), T.t(bar, beat), 0.72 - 0.08 * k, 0.1, 0.8)
+    motif(T, whistle, SHOWDOWN[:5], "A5", 28, gain=0.26, verb=0.7)
+    T.add(riser(T.dur(6)), T.t(30, 2), 0.25)
+
+    # The tractor chase: four on the floor, riff doubled by fiddle, trumpet melody, up to B minor.
+    def chase(bar, prog, root, gain=1.0):
+        up = midi(root + "2") - midi("A2")
+        west_kit(T, bar, 8, gain, chase=True)
+        for k in range(0, 8, 2):
+            motif(T, pluck, RIFF, root + "2", bar + k, gain=0.3 * gain, pan=-0.25, verb=0.3, bright=0.8, twang=0.1)
+            motif(T, fiddle, RIFF, root + "4", bar + k, gain=0.14 * gain, pan=0.3, verb=0.3)
+        roots(T, bass_long, prog, bar, [(0, 1), (1, 1), (2, 1), (3, 1)], 0.28 * gain, base=33 + up)
+        stabs(T, power, prog, bar, [(0, 0.4), (1.5, 0.4), (2.5, 1.2)], 0.16 * gain, base=45 + up)
+        motif(T, brass, SHOWDOWN + SHOWDOWN, root + "4", bar, gain=0.4 * gain, verb=0.3, bright=2800.0)
+        motif(T, whistle, SHOWDOWN + SHOWDOWN, root + "5", bar, gain=0.16 * gain, pan=0.2, verb=0.4)
+        for b in range(bar, bar + 8, 4):
+            T.add(choir(hz(midi(root + "3")), 0.25, "a", 0.01, 0.15), T.t(b), 0.22, 0, 0.4)
+
+    T.add(boom(21), T.t(32), 0.7, 0, 0.5)
+    chase(32, DUST_A, "A")
+    T.add(horn(2.0), T.t(38), 0.1, 0.5, 0.8)
+    T.add(boom(22), T.t(40), 0.75, 0, 0.5)
+    chase(40, DUST_B, "B", 1.05)
+    chase(48, DUST_B, "B", 1.1)
+    T.add(horn(3.0), T.t(52), 0.12, 0.5, 0.8)
+    T.add(riser(T.dur(6)), T.t(54, 2), 0.3)
+
+    # The barrier, then the train: rail clacks slowing, the whistle tune slow over bell and strings.
+    T.add(boom(23), T.t(56), 0.85, 0, 0.6)
+    T.add(metal(3), T.t(56), 0.45, 0.2, 0.6)
+    for b in range(56, 66):
+        g = 0.2 * max(0.15, 1 - (b - 56) / 10)
+        T.add(clack(b % 8), T.t(b), g, 0.3, 0.5)
+        T.add(clack((b + 3) % 8), T.t(b, 0.25), g * 0.9, 0.3, 0.5)
+    T.add(horn(4.5), T.t(57), 0.12, -0.3, 0.9)
+    pads(T, strings, ["Am", "F", "C", "E", "Am", "F", "E", "Am"], 58, 0.16, a=2.0, r=2.0)
+    motif(T, whistle, SHOWDOWN, "A5", 58, scale=2.0, gain=0.28, verb=0.65)
+    for b in (58, 62):
+        T.add(bell(hz("A3"), b), T.t(b), 0.12, -0.3, 0.6)
+    T.add(pluck(hz("A2"), T.dur(8), 0.5, 0.35), T.t(66), 0.26, -0.2, 0.6)
+    T.add(pluck(hz("B3"), T.dur(8), 0.5, 0.35), T.t(66, 0.1), 0.18, 0.2, 0.6)
+    return T
+
+
+# ---------------------------------------------------------------- 12. Gabi, Seby, Darius (outro)
+# Solo piano in 3/4, E-flat major turning to C minor and back. Strings only under the fullest pass.
+
+OUT_A = bars_of([(4, 1.5), (2, .5), (0, 1)], [(7, 1.5), (4, .5), (2, 1)], [(9, 1.5), (7, .5), (4, 1)], [(5, 2), (0, 1)],
+                [(5, 1.5), (4, .5), (2, 1)], [(2, 1), (7, 1), (5, 1)], [(4, 2), (2, .5), (0, .5)], [(0, 3)])
+OUT_B = bars_of([(7, 1), (8, 1), (7, 1)], [(3, 2), (2, 1)], [(0, 1), (2, 1), (3, 1)], [(2, 3)],
+                [(8, 1), (10, 1), (8, 1)], [(7, 2), (5, 1)], [(3, 1), (2, 1), (-1, 1)], [(0, 3)])
+OUT_A_CH = ["Eb", "Gm", "Cm", "Ab", "Fm", "Bb", "Eb", "Eb"]
+OUT_B_CH = ["Cm", "Ab", "Eb", "Bb", "Ab", "Fm", "G", "Cm"]
+
+
+def t12_gabi_seby_darius():
+    T = Track(48, 72, beats=3, seed=132, verb_s=3.8, damp=3600, tail=8.0, target_db=-16.0)
+    lh(T, OUT_A_CH, 0, 0.2)
+    keys(T, OUT_A, "Eb5", 0, gain=0.38, vel=0.6)
+
+    lh(T, OUT_A_CH, 8, 0.2, vel=0.55)
+    keys(T, OUT_A, "Eb5", 8, gain=0.36, vel=0.65)
+    keys(T, OUT_A, "Eb4", 8, gain=0.16, vel=0.5, pan=-0.05)
+
+    lh(T, OUT_B_CH, 16, 0.2, base=36)
+    keys(T, OUT_B, "C5", 16, gain=0.38, vel=0.62)
+
+    lh(T, OUT_A_CH, 24, 0.2, vel=0.6)
+    keys(T, OUT_A, "Eb5", 24, gain=0.38, vel=0.7)
+    keys(T, OUT_A, "Eb6", 24, gain=0.18, vel=0.6, pan=0.25)
+
+    # The fullest pass: chords on every beat, melody in octaves, strings and a soft timpani.
+    T.add(timpani(hz("C2")), T.t(32), 0.22, 0, 0.6)
+    lh(T, OUT_B_CH, 32, 0.22, base=36, vel=0.7)
+    for i, sym in enumerate(OUT_B_CH):
+        for beat in (1, 2):
+            for m in chord(sym, 55):
+                T.add(piano(hz(m), T.dur(1), 0.5), T.t(32 + i, beat), 0.06, 0.15, 0.4, 0.006)
+    keys(T, OUT_B, "C5", 32, gain=0.4, vel=0.8)
+    keys(T, OUT_B, "C6", 32, gain=0.2, vel=0.7, pan=0.25)
+    pads(T, strings, OUT_B_CH, 32, 0.14, a=1.2, r=2.0)
+    roots(T, bass_long, OUT_B_CH, 32, [(0, 3)], 0.12, base=36)
+
+    # Alone again: the first line once more, slower, and an A-flat chord left hanging.
+    lh(T, OUT_A_CH[:6], 40, 0.17, vel=0.45)
+    keys(T, OUT_A[:14], "Eb5", 40, gain=0.32, vel=0.5, scale=1.1)
+    for m in (44, 51, 58, 63, 70):
+        T.add(piano(hz(m), T.dur(14), 0.4), T.t(46), 0.12, 0.1, 0.55, 0.01)
+    return T
+
+
 ALBUM = [
     ("Call of Acaristan", "Main Theme", t1_call_of_acaristan),
     ("Black Notebook", "Mission 1 - Day 0", t2_black_notebook),
@@ -596,4 +975,8 @@ ALBUM = [
     ("Not Tonight", "Mission 5 - Martial Law", t6_not_tonight),
     ("Whiteout", "Mission 6 - Day 10", t7_whiteout),
     ("I Chose the Many", "Ending", t8_i_chose_the_many),
+    ("Fallow Ground", "Mission 7 - The Raid", t9_fallow_ground),
+    ("Head of State", "Mission 8 - Duty Ending", t10_head_of_state),
+    ("Old Friends", "Mission 8 - Revenge Ending", t11_old_friends),
+    ("Gabi, Seby, Darius", "Outro", t12_gabi_seby_darius),
 ]

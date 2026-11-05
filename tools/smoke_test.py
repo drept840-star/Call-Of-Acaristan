@@ -7885,8 +7885,12 @@ def check_every_corpse_shows_for_everyone():
         if not st["dead"]:
             # Revived on the next tick, as any death with no wait attached is.
             # Re-kill it and hold the timer open so the state outlives the pump.
+            # The revive also started spawn protection; without dropping it
+            # the re-kill does nothing and the slot is alive.
+            sim.rules.spawned_at.pop(pid, None)
             sim.rules.respawn[pid] = sim.tick + AR.RESPAWN_TICKS
             sim.damage(pid, 999, killer_id=0)
+        assert st["dead"], "slot %d survived the re-kill" % pid
         park(pid, 300 + pid * 40, 260)
 
     def bodies():
@@ -7916,8 +7920,11 @@ def check_every_corpse_shows_for_everyone():
     victim = peers[0].sess.local_id
     kill(victim)
     seen_by_all(victim)
-    assert len(host.view._corpses) >= 2, \
-        "host still draws no corpses at all: %r" % (sorted(host.view._corpses),)
+    # kill() cleared every respawn timer, so the sim has already revived slot
+    # 3. The host must follow its sim, not a local countdown that still says
+    # "dead": that drew a standing player as a corpse and hid them for seconds.
+    assert 3 not in host.view._corpses and not host.sim.players[3]["dead"], \
+        "host still draws revived slot 3 as a corpse: %r" % (sorted(host.view._corpses),)
 
     # Respawn clears the body: a live player must not stay flat on the deck.
     # Let the sim revive everyone through its own rule rather than flipping
@@ -8821,7 +8828,10 @@ def _m4_to_station():
     v = escort.vasile()
     v["x"], v["y"] = dx - 20, dy
     STATE.player.rect.center = (dx, dy)
-    m4.game_update(EmptyKeys())
+    for _ in range(200):
+        m4.game_update(EmptyKeys())
+        if STATE.mission4_stage == m4.STAGE_FORTIFY and not STATE.m4_door_fade:
+            break
     assert STATE.mission4_stage == m4.STAGE_FORTIFY, "door did not enter the station"
 
 
@@ -8952,6 +8962,11 @@ def check_mission4_stage_transitions():
     supply = STATE.m4_supply
     v["x"], v["y"] = dx - 20, dy
     m4.game_update(keys)
+    assert STATE.m4_door_fade > 0, "door fade did not start"
+    for _ in range(120):
+        if STATE.mission4_stage == m4.STAGE_FORTIFY:
+            break
+        m4.game_update(keys)
     assert STATE.mission4_stage == m4.STAGE_FORTIFY, "door did not enter station"
     assert STATE.mission4_station_checkpoint_reached, "station checkpoint flag not set"
     assert m4.MISSION4_MAP is m4.MISSION4_STATION_MAP, "map not swapped to station"
@@ -8961,6 +8976,11 @@ def check_mission4_stage_transitions():
         and abs(STATE.player.rect.centery - sy) < 80, \
         "player not spawned in the station entry hall"
     assert STATE.m4_sites, "station sites missing"
+    for _ in range(120):
+        if not STATE.m4_door_fade:
+            break
+        m4.game_update(keys)
+    assert not STATE.m4_door_fade, "door fade never cleared"
 
     # 3) Maru: doors first.
     lx, ly = m4._tile_world(*LIAISON_TILE)
@@ -9555,7 +9575,7 @@ def check_mission4_cinematic_arrest():
         fake_gc = SimpleNamespace(
             reset_dialogue_slide=lambda: resets.append(clock[0]),
             draw_cutscene_scene=lambda *args: None,
-            draw_film_caption=lambda *args: captions.append(args[1:]),
+            draw_film_caption=lambda *args, **kw: captions.append(args[1:3]),
             draw_typewriter_title=lambda *args: None,
         )
         namespace = {
@@ -9634,9 +9654,14 @@ def check_mission4_cinematic_arrest():
             tick(cp, delay - 1, frames=8)
             assert cp.char_idx == cp.timer == 0, "typewriter advanced before caption delay"
             tick(cp, delay, frames=3)
-            assert cp.char_idx == 0 and cp.timer == 3
-            tick(cp, delay, frames=1)
-            assert cp.char_idx == 1, "caption typewriter did not start after its delay"
+            if cp.vo:  # voiced: the caption types over the clip (ui.speechbox)
+                assert cp.char_idx == 0
+                tick(cp, delay + cp.vo[1] // 2, frames=1)
+                assert 0 < cp.char_idx < len(shot["text"]), "voiced caption did not type over its clip"
+            else:
+                assert cp.char_idx == 0 and cp.timer == 3
+                tick(cp, delay, frames=1)
+                assert cp.char_idx == 1, "caption typewriter did not start after its delay"
             assert not any(name in {"type_tick", "menu_hover", "menu_click"} for name, _ in played)
             cp = fresh([shot])
             press(2)  # Completing text early must not reveal it in render().
