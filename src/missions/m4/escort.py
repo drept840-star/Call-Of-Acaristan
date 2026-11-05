@@ -70,7 +70,8 @@ def vasile_down(a):
         add_supply(-spill, a["x"], a["y"])
     STATE.blood_decals.append([a["x"], a["y"], 150, _rng_legacy.randint(10, 16)])
     _radio("VASILE: I'm hit - I'm down! The cache is spilling - get me up!",
-           color=C_VASILE, duration=360, mark="vasile_down")
+           color=C_VASILE, duration=360, mark="vasile_down",
+           valid=lambda: (vasile() or {}).get("downed", 0) > 0)
     _sfx("bullet_impact_enemy", 0.5)
 
 
@@ -108,11 +109,12 @@ def update_vasile_down(keys):
         a["hurt"] = 0
         STATE.m4_reviving = False
         _radio("VASILE: ...Okay. I'm up. That was the one, Biribel - "
-               "I don't get another.", color=C_VASILE, duration=380, mark="vasile_up")
+               "I don't get another.", color=C_VASILE, duration=380, mark="vasile_up",
+               interrupt=True)
         _sfx("pickup", 0.4)
     elif a["downed"] <= 0:
         _radio("BIRIBEL: Vasile? ...Vasile!", color=BIRIBEL_SPEAKER, duration=300,
-               mark="vasile_lost")
+               mark="vasile_lost", interrupt=True)
         _vasile_dies(a)
 
 

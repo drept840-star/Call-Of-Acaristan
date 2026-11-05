@@ -26,7 +26,8 @@ from missions.m4.meta import (
     MAP_W, MAP_H,
     M4_SOLID_CHARS, M4_ROLE_TUNING,
     PLAYER_START_TILE, VASILE_CACHE_TILE, STATION_DOOR_TILE, VASILE_START_TILE,
-    LIAISON_TILE, JAMMER_TILE, VASILE_STATION_TILE, VASILE_ARRIVE_TILE,
+    LIAISON_TILE, JAMMER_TILE, VASILE_STATION_TILE, VASILE_ARRIVE_TILE, M4_DOOR_FADE_OUT,
+    M4_PLAYER_HP, M4_SQUAD_DOWN, M4_COVER_DMG,
     C_SYSTEM, C_VASILE, C_MARU,
     M4_VASILE_HP, M4_POSTS, M4_SQUADS, M4_SQUAD_ENTRY_TILE,
     M4_SOLDIER_HP, M4_SOLDIER_DMG_TAKEN, M4_CIVILIAN_HP,
@@ -89,9 +90,9 @@ def _jammer_pos():
 # Weapon kits for the allies: damage per bullet, frames between shots,
 # reach in px, pellets per shot.
 ALLY_WEAPONS = {
-    "rifle": (24, 36, 520, 1),
-    "pistol": (16, 30, 420, 1),
-    "shotgun": (11, 54, 260, 4),
+    "rifle": (32, 24, 600, 1),
+    "pistol": (24, 20, 480, 1),
+    "shotgun": (15, 42, 300, 5),
 }
 C_SQUAD = (150, 190, 120)
 
@@ -187,10 +188,13 @@ def _movement_locked():
         return True
     if getattr(STATE, "m4_work_lock", False):
         return True
+    if 0 < getattr(STATE, "m4_door_fade", 0) <= M4_DOOR_FADE_OUT:
+        return True
     return False
 
 
-def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0, valid=None):
+def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0, valid=None,
+           cut_to=None, interrupt=False):
     """Pinned-radio helper (m3.world._radio idiom, dedup via _radio_marks).
     ``valid`` is a callable; the line cuts itself off once it returns False."""
     if mark and mark in _m4_maps._radio_marks:
@@ -201,7 +205,7 @@ def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0, valid=None
         from core.interactions import trigger_radio_chatter
         trigger_radio_chatter(text, color=color, duration=duration,
                               priority=max(priority, 0.5) if mark else priority,
-                              valid=valid)
+                              valid=valid, cut_to=cut_to, interrupt=interrupt)
     except Exception:
         # Audio/interactions are optional in headless test harnesses.
         pass
@@ -285,7 +289,7 @@ def _parse_grid(g, etype="guard"):
                 STATE.walls.append(r)
                 STATE.m4_barriers.append(r)
             elif tile == "P":
-                STATE.player = Player(x + 16, y + 16, max_hp=115)
+                STATE.player = Player(x + 16, y + 16, max_hp=M4_PLAYER_HP)
             elif tile == "E":
                 _spawn_m4_guard(x + TILE_SIZE // 2, y + TILE_SIZE // 2,
                                 etype="guard", label="patrol_{}_{}".format(col_idx, row_idx))
@@ -304,7 +308,7 @@ def _build_m4_world():
     if player is None:
         # Fallback spawn if the map ever loses its "P".
         sx, sy = PLAYER_START_TILE
-        STATE.player = Player(sx * TILE_SIZE + 16, sy * TILE_SIZE + 16, max_hp=115)
+        STATE.player = Player(sx * TILE_SIZE + 16, sy * TILE_SIZE + 16, max_hp=M4_PLAYER_HP)
     vasile = _ally_record("VASILE", VASILE_START_TILE, C_VASILE, M4_VASILE_HP, "rifle",
                           role="follow")
     STATE.m4_allies = [vasile]
@@ -342,7 +346,7 @@ def _build_station_world():
 
     if player is None:
         sx, sy = STATION_DOOR_TILE
-        STATE.player = Player(sx * TILE_SIZE + 16, sy * TILE_SIZE + 16, max_hp=115)
+        STATE.player = Player(sx * TILE_SIZE + 16, sy * TILE_SIZE + 16, max_hp=M4_PLAYER_HP)
     _init_m4_allies()
     walls = _solid_walls()
     ex, ey = _tile_world(*M4_SQUAD_ENTRY_TILE)
@@ -396,12 +400,12 @@ def _arm_m4_allies():
             ex, ey = M4_SQUAD_ENTRY_TILE
             a = _ally_record(name, (ex + (i % 2), ey), C_SQUAD,
                              M4_SOLDIER_HP if soldier else M4_CIVILIAN_HP, weapon,
-                             look=look, coat=coat, role="post", mortal=True,
-                             dmg_mul=M4_SOLDIER_DMG_TAKEN if soldier else 1.0)
+                             look=look, coat=coat, role="post", mortal=False,
+                             dmg_mul=M4_SOLDIER_DMG_TAKEN if soldier else 0.7)
             a["squad"] = True
             a["cover"], a["door"] = M4_POSTS[post]
             if soldier:
-                a["damage"] = 22
+                a["damage"] = 36
             STATE.m4_allies.append(a)
     STATE.m4_maru_joined = True
     return STATE.m4_allies
@@ -543,9 +547,23 @@ def _ally_walk_to(a, goal, step, walls):
     return False
 
 
+# Points on an enemy's body an ally may sight (centre first). Enemies see
+# defenders through the same kind of spread (Enemy._can_see), so an ally at a
+# door corner can answer a loyalist who can hit him.
+_SIGHT_PTS = ((0, 0), (-10, 0), (10, 0), (0, -10), (0, 10))
+
+
+def _ally_sight_point(a, ex, ey, walls):
+    for ox, oy in _SIGHT_PTS:
+        if _ally_los(a["x"], a["y"], ex + ox, ey + oy, walls):
+            return ex + ox, ey + oy
+    return None
+
+
 def _ally_targets(a, walls, anchor):
-    """Nearest living enemy in reach and in sight, weighted toward `anchor`."""
-    best, target = 1e9, None
+    """Nearest living enemy in reach and in sight, weighted toward `anchor`.
+    Returns (enemy, aim point) or (None, None)."""
+    best, target, aim = 1e9, None, None
     for e in getattr(STATE, "enemies", []):
         if e.hp <= 0:
             continue
@@ -553,17 +571,19 @@ def _ally_targets(a, walls, anchor):
         d_ally = math.hypot(ex - a["x"], ey - a["y"])
         if d_ally > a["range"]:
             continue
-        if not _ally_los(a["x"], a["y"], ex, ey, walls):
+        pt = _ally_sight_point(a, ex, ey, walls)
+        if pt is None:
             continue
         score = d_ally if anchor is None else (
             math.hypot(ex - anchor[0], ey - anchor[1]) * 0.55 + d_ally * 0.45)
         if score < best:
-            best, target = score, e
-    return target
+            best, target, aim = score, e, pt
+    return target, aim
 
 
-def _ally_fire(a, target):
-    a["angle"] = math.atan2(target.rect.centery - a["y"], target.rect.centerx - a["x"])
+def _ally_fire(a, target, aim=None):
+    tx, ty = aim if aim else (target.rect.centerx, target.rect.centery)
+    a["angle"] = math.atan2(ty - a["y"], tx - a["x"])
     a["cooldown"] = max(0, a["cooldown"] - 1)
     if a["cooldown"] > 0:
         return
@@ -580,7 +600,7 @@ def _ally_fire(a, target):
         STATE.bullets.append({
             "x": mx, "y": my, "prev_x": mx, "prev_y": my,
             "dx": math.cos(shot_a) * 22, "dy": math.sin(shot_a) * 22,
-            "life": 22 if pellets == 1 else 12, "owner": "player",
+            "life": int(a["range"] / 22) + 2, "owner": "player",
             "damage": a["damage"], "ally": a["name"],
         })
     target.alerted = True
@@ -624,12 +644,14 @@ def _update_m4_allies(solid_walls):
         for k in ("hit_flash", "muzzle", "hurt"):
             if a[k] > 0:
                 a[k] -= 1
+        if a["hurt"] <= 0 and a["downed"] <= 0 and a["name"] != "VASILE" and a["hp"] < a["max_hp"]:
+            a["hp"] = min(a["max_hp"], a["hp"] + 0.3 * dt_mul)   # out of fire: patch up
         if a["downed"] > 0:
             if a["name"] == "VASILE":
                 continue          # escort.update_vasile_down owns the revive
             a["downed"] -= 1
             if a["downed"] <= 0:
-                # Maru stays down while a loyalist stands over her.
+                # Maru stays down while a loyalist stands over him.
                 if _enemy_within(a["x"], a["y"], 140):
                     a["downed"] = 60
                 else:
@@ -648,10 +670,10 @@ def _update_m4_allies(solid_walls):
         if not a["armed"]:
             continue
         anchor = _tile_world(*a["door"]) if role == "post" else None
-        target = _ally_targets(a, shot_walls, anchor)
+        target, aim = _ally_targets(a, shot_walls, anchor)
         if target is not None:
             a["engaged"] = True
-            _ally_fire(a, target)
+            _ally_fire(a, target, aim)
         else:
             a["cooldown"] = max(0, a["cooldown"] - 1)
             if role == "post" and not a["path"]:
@@ -684,9 +706,14 @@ def _ally_at(x, y, radius=22):
 def _damage_m4_ally(a, amount):
     """Apply damage to one ally. Squad members die; Maru kneels and gets up;
     Vasile goes to the escort down/revive rule."""
+    if a.get("role") == "post" and not a.get("path"):
+        amount *= M4_COVER_DMG      # settled behind his cover
     a["hp"] -= amount * a.get("dmg_mul", 1.0)
     a["hit_flash"] = 10
     a["hurt"] = 120
+    if a["name"] == "MARU":
+        a["hp"] = max(1, a["hp"])   # Maru cannot die or go down
+        return
     if a["hp"] > 0:
         return
     a["hp"] = 0
@@ -699,7 +726,9 @@ def _damage_m4_ally(a, amount):
         STATE.blood_decals.append([a["x"], a["y"], 170, _rng_legacy.randint(14, 22)])
         _radio("%s is down." % a["label"], color=C_SYSTEM, duration=240)
     else:
-        a["downed"] = 600
+        a["downed"] = M4_SQUAD_DOWN
+        if a.get("squad"):
+            _radio("%s is hit - he'll be back up." % a["label"], color=C_SYSTEM, duration=200)
 
 
 def _hit_m4_ally(b):

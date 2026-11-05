@@ -63,8 +63,11 @@ STATION_DOOR_TILE = (34, 19)   # western face of the station block, off the boul
 # Station map (36x28): the building with its forecourt and street ring.
 STATION_W, STATION_H = 36, 28
 STATION_BUILDING = (6, 4, 24, 18)   # (col, row, w, h): outer walls cols 6-29, rows 4-21
-STATION_START_TILE = (17, 23)   # Biribel arrives on the forecourt, outside the main door
-VASILE_ARRIVE_TILE = (18, 23)
+STATION_START_TILE = (17, 20)   # Biribel steps in through the main door, entry hall
+VASILE_ARRIVE_TILE = (18, 20)
+M4_DOOR_FADE_OUT = 30           # street door: frames to black, then hold, then fade in
+M4_DOOR_FADE_HOLD = 14
+M4_DOOR_FADE_IN = 40
 TRANSMITTER_TILE = (18, 7)      # rack-area centre (the siege's hold point)
 JAMMER_TILE = (18, 6)           # jammer install point in front of the TX rack
 LIAISON_TILE = (17, 16)         # Maru's meet anchor in the entry hall
@@ -98,6 +101,13 @@ M4_ZONE_DEFS = {
 M4_SUPPLY_START = 24
 M4_SUPPLY_DROP_FRAC = 0.25      # first down spills a quarter of the cache
 M4_VASILE_HP = 220
+M4_PLAYER_HP = 200              # Biribel's max hp in M4 (was 115)
+M4_REGEN_DELAY = 240            # frames without a hit before Biribel patches up
+M4_REGEN_RATE = 0.35            # hp per frame once regen starts
+M4_SPARE_CAP = 8                # spare mags per gun
+M4_RACK_AMMO_GAP = 480          # frames per free mag while standing at the rack (8 s)
+M4_SQUAD_DOWN = 420             # frames a hit squad member stays down before getting up
+M4_COVER_DMG = 0.55             # damage taken by an ally settled at his cover post
 M4_REVIVE_WINDOW = 600          # frames to reach a downed Vasile (10 s)
 M4_REVIVE_HOLD = 120            # hold E for 2 s
 M4_REVIVE_RADIUS = 70
@@ -126,9 +136,9 @@ M4_WAVE_GRACE = 300             # a wave restart drops you 5 s before the wave
 M4_RACK_RADIUS = 200            # loyalists this close to the rack hold it
 M4_RACK_HOLD_FAIL = 480         # 8 s held fails the wave
 M4_BREACH_CHARGE = 240          # a breacher's charge on plate burns 4 s
-M4_SOLDIER_HP = 160
-M4_SOLDIER_DMG_TAKEN = 0.6
-M4_CIVILIAN_HP = 100
+M4_SOLDIER_HP = 260
+M4_SOLDIER_DMG_TAKEN = 0.5
+M4_CIVILIAN_HP = 180
 M4_FOCUS_VASILE = 0.35          # share of street shooters that pick Vasile when they see him
 M4_LEASH_NEAR = 96              # Vasile stops this close to Biribel
 M4_LEASH_FAR = 150              # and starts walking again past this
@@ -151,9 +161,9 @@ M4_SQUADS = {
     0: (("SGT. DRAGAN", "soldier", "rifle", "main_w", None),
         ("PVT. ILIESCU", "soldier", "rifle", "studio", None)),
     1: (("TOMA", "civilian", "pistol", "main_w", (82, 64, 52)),
-        ("ANCA", "civilian", "shotgun", "studio", (60, 70, 84)),
+        ("RADU", "civilian", "shotgun", "studio", (60, 70, 84)),
         ("BOGDAN", "civilian", "pistol", "office", (70, 76, 58)),
-        ("ILEANA", "civilian", "pistol", "corridor_e", (88, 58, 62))),
+        ("MIHAI", "civilian", "pistol", "corridor_e", (88, 58, 62))),
 }
 M4_SQUAD_ENTRY_TILE = (18, 19)   # the squad comes in through the entry hall
 

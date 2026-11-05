@@ -81,7 +81,7 @@ def _ram():
     effects.shake(22)
     _sfx("rig_metal_collapse", 0.6)
     _radio("VASILE: Main door's gone! Breachers behind it!", color=C_VASILE,
-           duration=320, mark="apc_ram")
+           duration=320, mark="apc_ram", interrupt=True)
 
 
 def _park():

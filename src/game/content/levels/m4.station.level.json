@@ -25,10 +25,10 @@
    "C....dCFFFCFFFFFFFFFFFFFFCFFFbd....C",
    "C....dCFFFCFFFFFFFFFFFFFFCFFFCd..h.C",
    "C..h.dCFFFCFFFFFFFFFFFFFFCFFFCd..h.C",
-   "C..h.dCFFFCFFFFFFFFFFFFFFCFFFCd....C",
+   "C..h.dCFFFCFFFFFFPFFFFFFFCFFFCd....C",
    "C....dCCCCCCCwCCCbbCCCwCCCCCCCd....C",
    "C....dddddddddddddddddddddddddd....C",
-   "C................P.................C",
+   "C..................................C",
    "C.......HH...BB.......BB.HH........C",
    "C.Z.....AAAAAAAAAAAAAAAAAAAA.....Z.C",
    "C............Z.....................C",
@@ -37,11 +37,11 @@
  },
  "objects": [
   {
-   "id": "spawn-player@17,23",
+   "id": "spawn-player@17,20",
    "kind": "spawn",
    "tile": [
     17,
-    23
+    20
    ],
    "props": {
     "who": "player",

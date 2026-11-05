@@ -32,7 +32,7 @@ from missions.m4.meta import (
     STAGE_INTRO, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE, STAGE_DONE,
     STAGE_AFTERMATH, TRANSMITTER_TILE, VASILE_STATION_TILE, RESPAWN_TILE,
     C_SYSTEM, C_VASILE, C_MARU, C_VOLKOV, C_RETARDOVICI, C_BALACEANU,
-    BIRIBEL_SPEAKER,
+    BIRIBEL_SPEAKER, M4_DOOR_FADE_OUT, M4_DOOR_FADE_HOLD, M4_DOOR_FADE_IN,
 )
 from missions.m4.world import (
     _build_m4_world, _build_station_world, _movement_locked, _near, _player_pos,
@@ -274,6 +274,11 @@ def _update_dialogue():
 
 
 def _advance_beat():
+    try:
+        from audio import voice
+        voice.cut()          # skipping the box skips its line too
+    except Exception:
+        pass
     _m4_dlg["index"] += 1
     _m4_dlg["char_idx"] = 0
     _m4_dlg["timer"] = 0
@@ -480,6 +485,14 @@ def start_m4(preserve_timer=False, preserve_tone=False, keep_snaps=False):
     STATE.player_dead = False
     STATE.mission4_stage = STAGE_ESCORT
     STATE.mission_phase = "m4_escort"
+    STATE.m4_door_fade = 0
+    STATE.m4_mag_drops = 0
+    STATE.m4_bandage_drops = 0
+    STATE.m4_regen_wait = 0
+    STATE.m4_last_hp = 0
+    STATE.m4_rack_ammo_t = 0
+    STATE.k9_spare_mags = max(getattr(STATE, "k9_spare_mags", 0), 4)
+    STATE.spare_mags = max(getattr(STATE, "spare_mags", 0), 3)
     STATE.m4_chaos_timer = 0
     STATE.m4_liaison_reached = False
     # Vasile carries the cache from the first frame: it is the supply pool.
@@ -668,7 +681,9 @@ def _update_street():
         _set_objective("Get Vasile and the cache to the radio station - east end of the boulevard.")
     if _near(_street_door_pos(), radius=70):
         if _m4_escort.vasile_at_door():
-            _enter_station()
+            if not getattr(STATE, "m4_door_fade", 0):
+                STATE.m4_door_fade = 1
+                _sfx("door_open", 0.6)
         else:
             _radio("BIRIBEL: Wait for Vasile - the door stays shut without him.",
                    color=BIRIBEL_SPEAKER, duration=260, mark="door_wait")
@@ -682,7 +697,8 @@ def _update_fortify():
                 _start_liaison_dialogue()
             else:
                 _radio("MARU: Doors first, talk later. Board something up and come back.",
-                       color=C_MARU, duration=300, mark="maru_doors_first")
+                       color=C_MARU, duration=300, mark="maru_doors_first",
+                       valid=lambda: _m4_fortify.built_count() < 1)
         return
     if (not getattr(STATE, "m4_jammer_installed", False)
             and "jammer_prompt" not in _m4_maps._radio_marks
@@ -707,6 +723,17 @@ def _update_stage(keys):
     if getattr(STATE, "m4_dialogue_active", False):
         _update_dialogue()
         return
+    fade = getattr(STATE, "m4_door_fade", 0)
+    if fade:
+        # Street door: fade to black, swap to the station at full black,
+        # hold a beat, fade back in on the entry hall.
+        STATE.m4_door_fade = fade + 1
+        if fade == M4_DOOR_FADE_OUT:
+            _enter_station()
+        elif fade >= M4_DOOR_FADE_OUT + M4_DOOR_FADE_HOLD + M4_DOOR_FADE_IN:
+            STATE.m4_door_fade = 0
+        if fade <= M4_DOOR_FADE_OUT:
+            return
     stage = getattr(STATE, "mission4_stage", STAGE_ESCORT)
     if stage == STAGE_ESCORT:
         _update_street()

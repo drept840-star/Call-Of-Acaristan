@@ -30,6 +30,7 @@ audio = _config.audio
 from missions.m4 import maps as _m4_maps  # _last_keys owner
 from missions.m4.meta import (
     MAP_W, MAP_H, M4_ROLE_TUNING, M4_BAR_FIRE_MUL,
+    M4_REGEN_DELAY, M4_REGEN_RATE, M4_SPARE_CAP, M4_RACK_AMMO_GAP,
     STAGE_INTRO, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE, STAGE_DONE,
 )
 from missions.m4.world import (
@@ -230,10 +231,10 @@ def _update_m4_enemies(solid_walls):
             corpse.spawn_corpse(e)
             # Drop economy (m3 ratios ported): a mag most kills, a bandage
             # sometimes - capped through the session so fights aren't loot piñatas.
-            if getattr(STATE, "m4_mag_drops", 0) < 4 and _rng_legacy.random() < 0.30:
+            if getattr(STATE, "m4_mag_drops", 0) < 40 and _rng_legacy.random() < 0.50:
                 STATE.m4_mag_drops = getattr(STATE, "m4_mag_drops", 0) + 1
                 STATE.pickups.append([e.rect.centerx, e.rect.centery, "k9mag"])
-            if getattr(STATE, "m4_bandage_drops", 0) < 3 and _rng_legacy.random() < 0.22:
+            if getattr(STATE, "m4_bandage_drops", 0) < 16 and _rng_legacy.random() < 0.25:
                 STATE.m4_bandage_drops = getattr(STATE, "m4_bandage_drops", 0) + 1
                 STATE.pickups.append([
                     e.rect.centerx + _rng_legacy.randint(-8, 8),
@@ -329,6 +330,56 @@ def _update_bullets(solid_walls):
                 STATE.bullets.remove(b)
 
 
+def _give_mag(x, y):
+    """One spare mag: the K-9 first, the pistol once the K-9 is full."""
+    if getattr(STATE, "k9_spare_mags", 0) < M4_SPARE_CAP:
+        STATE.k9_spare_mags = getattr(STATE, "k9_spare_mags", 0) + 1
+        STATE.floating_texts.append([x, y - 16, "+1 K-9 MAG", C_TERMINAL, 70])
+    elif STATE.spare_mags < M4_SPARE_CAP:
+        STATE.spare_mags += 1
+        STATE.floating_texts.append([x, y - 16, "+1 9MM MAG", C_TERMINAL, 70])
+    else:
+        return False
+    return True
+
+
+def _update_m4_sustain():
+    """Biribel patches up after a few seconds out of fire, and the ammo crate
+    at the rack hands out a mag every M4_RACK_AMMO_GAP frames."""
+    p = STATE.player
+    if p is None or STATE.player_dead:
+        return
+    dt_mul = 60.0 * STATE.dt
+    last = getattr(STATE, "m4_last_hp", p.hp)
+    if p.hp < last:
+        STATE.m4_regen_wait = M4_REGEN_DELAY
+    wait = getattr(STATE, "m4_regen_wait", 0)
+    if wait > 0:
+        STATE.m4_regen_wait = wait - dt_mul
+    elif p.hp < p.max_hp:
+        p.hp = min(p.max_hp, p.hp + M4_REGEN_RATE * dt_mul)
+    STATE.m4_last_hp = p.hp
+    if getattr(STATE, "mission4_stage", None) not in (STAGE_FORTIFY, STAGE_SIEGE):
+        return
+    if _near(_m4_siege.rack_pos(), radius=120):
+        t = getattr(STATE, "m4_rack_ammo_t", 0) + dt_mul
+        if t >= M4_RACK_AMMO_GAP:
+            rx, ry = p.rect.center
+            if _give_mag(rx, ry):
+                _sfx_pickup()
+            t = 0
+        STATE.m4_rack_ammo_t = t
+    else:
+        STATE.m4_rack_ammo_t = 0
+
+
+def _sfx_pickup():
+    try:
+        audio.play("pickup", volume=0.35)
+    except Exception:
+        pass
+
+
 def _update_m4_pickups():
     """Auto-pickup within 36px of the player (m3._update_m3_pickups idiom).
     Kinds: "k9mag" (SMG spare), "mag" (pistol spare), "bandage" (+40 HP)."""
@@ -340,16 +391,9 @@ def _update_m4_pickups():
             continue
         kind = pu[2]
         if kind == "k9mag":
-            if getattr(STATE, "k9_spare_mags", 0) < 5:
-                STATE.k9_spare_mags = getattr(STATE, "k9_spare_mags", 0) + 1
-                STATE.floating_texts.append([
-                    pu[0], pu[1] - 16, "+1 K-9 MAG", C_TERMINAL, 70])
-            else:
-                STATE.spare_mags = min(5, STATE.spare_mags + 1)
-                STATE.floating_texts.append([
-                    pu[0], pu[1] - 16, "+1 9MM MAG", C_TERMINAL, 70])
+            _give_mag(pu[0], pu[1])
         elif kind == "mag":
-            if STATE.spare_mags < 5:
+            if STATE.spare_mags < M4_SPARE_CAP:
                 STATE.spare_mags += 1
                 STATE.floating_texts.append([
                     pu[0], pu[1] - 16, "+1 9MM MAG", C_TERMINAL, 70])
@@ -402,6 +446,7 @@ def game_update(keys):
     _update_bullets(solid_walls)
     effects.update_casings(solid_walls)
     _update_m4_pickups()
+    _update_m4_sustain()
     effects.update_particles()
     effects.update_floating_texts()
     _m4_flow._update_stage(keys)

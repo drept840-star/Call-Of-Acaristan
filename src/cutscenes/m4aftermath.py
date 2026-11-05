@@ -354,22 +354,46 @@ def _face(s, cx, cy, scale, *, fear=0, smile=0, look=0, blink=0, president=False
         line((184, 193, 189), [(-22, -13), (-23, -6)], 1)  # a single sweat catchlight
 
 
-def _official(s, who, cx, foot, t, arrest=0, moving=0):
+_STRIDE_PX = 84.0      # body travel per full gait cycle
+_STRIDE_HALF = 25.0    # foot reach either side of the hip at mid-stance
+
+
+def _gait_feet(walked, side, env):
+    """Planted foot slides back at body speed; swing foot lifts and reaches forward.
+
+    Returns (x offset, lift). Stance covers 60% of the cycle, so the foot
+    travels 2 * _STRIDE_HALF = 0.6 * _STRIDE_PX relative to the body, matching
+    ground speed and keeping the shoe pinned to the floor.
+    """
+    cycle = (walked / _STRIDE_PX) % 1.0
+    u = (cycle + (0.0 if side == -1 else .5)) % 1.0
+    if u < .6:
+        travel = 1.0 - 2.0 * (u / .6)
+        lift = 0.0
+    else:
+        q = (u - .6) / .4
+        travel = -1.0 + 2.0 * (q * q * (3 - 2 * q))
+        lift = 8.0 * math.sin(math.pi * q)
+    return travel * _STRIDE_HALF * env, -lift * env
+
+
+def _official(s, who, cx, foot, t, arrest=0, moving=0, walked=0):
     president = who == "president"
-    step = math.sin(max(0, t - ARREST_ESCORT_MS) * .009) * moving
+    bob = 2.2 * moving * abs(math.sin(math.pi * walked / _STRIDE_PX))
     breath = math.sin(t * .0023) * (1.1 if president else 1.8) * (1 - moving)
     slouch = arrest * 9
-    head_y = foot - 258 + breath + slouch
+    head_y = foot - 258 + breath + slouch - bob
     lean = -arrest * 5
     # Weight transfer is tied to physical movement, not the camera's zoom.
     pygame.draw.ellipse(s, (10, 13, 20), (cx - 51, foot - 5, 102, 13))
     for side in (-1, 1):
-        hip = (cx + side * 15, foot - 104)
-        knee = (cx + side * 17 + step * side * 7, foot - 49)
-        shoe = (cx + side * 18 - step * side * 13, foot)
+        dx, lift = _gait_feet(walked, side, moving)
+        hip = (cx + side * 15, foot - 104 - bob)
+        knee = (cx + side * 17 + dx * .5, foot - 49 + lift * .5)
+        shoe = (cx + side * 18 + dx, foot + lift)
         pygame.draw.lines(s, (19, 23, 33), False, [hip, knee, shoe], 19)
         pygame.draw.line(s, (62, 63, 71), (hip[0] - 7, hip[1]), (knee[0] - 7, knee[1]), 2)
-        pygame.draw.ellipse(s, (8, 10, 17), (shoe[0] - 15, shoe[1] - 4, 34, 9))
+        pygame.draw.ellipse(s, (8, 10, 17), (shoe[0] - 15, foot - 4, 34, 9))
     body = (31, 40, 61) if president else (49, 38, 37)
     pygame.draw.polygon(s, body, [(cx - 47, head_y + 43), (cx - 25, head_y + 33),
                         (cx + 24, head_y + 33), (cx + 47, head_y + 46),
@@ -392,13 +416,13 @@ def _official(s, who, cx, foot, t, arrest=0, moving=0):
           look=0 if president else -_beat(t, 4700, 1100), blink=blink, president=president)
 
 
-def _guard(s, cx, foot, t, side, reach=0, moving=0):
-    step = math.sin(t * .009 + side) * moving
+def _guard(s, cx, foot, t, side, reach=0, moving=0, walked=0):
     for k in (-1, 1):
+        dx, lift = _gait_feet(walked, k, moving)
         pygame.draw.lines(s, (16, 25, 39), False,
-                         [(cx + k * 12, foot - 106), (cx + k * 14 + k * step * 8, foot - 51),
-                          (cx + k * 15 - k * step * 11, foot)], 18)
-        pygame.draw.ellipse(s, (7, 11, 18), (cx + k * 15 - k * step * 11 - 14, foot - 4, 32, 10))
+                         [(cx + k * 12, foot - 106), (cx + k * 14 + dx * .5, foot - 51 + lift * .5),
+                          (cx + k * 15 + dx, foot + lift)], 18)
+        pygame.draw.ellipse(s, (7, 11, 18), (cx + k * 15 + dx - 14, foot - 4, 32, 10))
     pygame.draw.polygon(s, (27, 40, 58), [(cx - 40, foot - 228), (cx + 40, foot - 228),
                         (cx + 33, foot - 99), (cx - 33, foot - 99)])
     pygame.draw.line(s, (91, 102, 110), (cx - 33, foot - 221), (cx - 28, foot - 115), 2)
@@ -423,11 +447,15 @@ def _arrest_world(t):
     approach = _beat(t, 4300, 2900)
     cuffs = _beat(t, 7480, 420)
     walk = _beat(t, ARREST_ESCORT_MS, 3200)
-    move = 1 if ARREST_ESCORT_MS < t < 12600 else 0
+    # Gait strength eases in at the escort start and out at the stop, so feet never snap.
+    escort = _m3_clamp01((t - ARREST_ESCORT_MS) / 260.0) * (1 - _beat(t, 12200, 400))
+    walking = math.sin(math.pi * approach) if 0 < approach < 1 else 0
     bx = 681 + walk * 410
-    _guard(s, bx - 73 - (1 - approach) * 142, 404, t, -1, cuffs, move or (0 < approach < 1))
-    _official(s, "general", bx, 400, t, _beat(t, 4750, 2000), move)
-    _guard(s, bx + 73 + (1 - approach) * 123, 411, t, 1, cuffs, move or (0 < approach < 1))
+    _guard(s, bx - 73 - (1 - approach) * 142, 404, t, -1, cuffs,
+           max(walking, escort), walked=approach * 142 + walk * 410)
+    _official(s, "general", bx, 400, t, _beat(t, 4750, 2000), escort, walked=walk * 410)
+    _guard(s, bx + 73 + (1 - approach) * 123, 411, t, 1, cuffs,
+           max(walking, escort), walked=approach * 123 + walk * 410)
     _official(s, "president", 318, 400, t)
     # The lectern divides power from custody and hides only the president's legs.
     pygame.draw.polygon(s, (61, 45, 40), [(232, 286), (401, 286), (391, 415), (244, 415)])

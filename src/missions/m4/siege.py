@@ -49,19 +49,23 @@ C_RUNNER = (150, 200, 140)
 
 # start/end in siege frames; units = budget by kind; doors = insertion keys.
 WAVES = (
-    {"n": 1, "start": 0, "end": 4800, "cap": 4, "gap": 170,
-     "units": (("loyalist", 8),), "doors": ("S", "SW", "SE")},
-    {"n": 2, "start": 6000, "end": 10800, "cap": 5, "gap": 150,
-     "units": (("loyalist", 8), ("marksman", 2)), "doors": ("S", "W", "E", "SW")},
-    {"n": 3, "start": 12000, "end": 16800, "cap": 6, "gap": 140,
-     "units": (("loyalist", 8), ("marksman", 2), ("breacher", 3)), "doors": ("W", "E", "N", "NW")},
-    {"n": 4, "start": 18000, "end": 22800, "cap": 7, "gap": 130,
-     "units": (("loyalist", 9), ("marksman", 3), ("breacher", 3)), "doors": ("E", "NE", "SE", "N"),
+    {"n": 1, "start": 0, "end": 4800, "cap": 6, "gap": 120,
+     "units": (("loyalist", 14),), "doors": ("S", "SW", "SE")},
+    {"n": 2, "start": 6000, "end": 10800, "cap": 7, "gap": 110,
+     "units": (("loyalist", 14), ("marksman", 3)), "doors": ("S", "W", "E", "SW")},
+    {"n": 3, "start": 12000, "end": 16800, "cap": 8, "gap": 100,
+     "units": (("loyalist", 14), ("marksman", 3), ("breacher", 4)), "doors": ("W", "E", "N", "NW")},
+    {"n": 4, "start": 18000, "end": 22800, "cap": 9, "gap": 95,
+     "units": (("loyalist", 15), ("marksman", 4), ("breacher", 4)), "doors": ("E", "NE", "SE", "N"),
      "breach": 900},
-    {"n": 5, "start": 24000, "end": 28800, "cap": 8, "gap": 120,
-     "units": (("loyalist", 9), ("marksman", 3), ("breacher", 5)), "doors": ("S", "SW", "SE", "W", "E"),
+    {"n": 5, "start": 24000, "end": 28800, "cap": 10, "gap": 90,
+     "units": (("loyalist", 16), ("marksman", 4), ("breacher", 6)), "doors": ("S", "SW", "SE", "W", "E"),
      "apc": 300},
 )
+# Once a wave's budget is spent, reinforcements keep coming in small squads
+# until this many frames before the wave window closes.
+REFILL_STOP = 900
+REFILL_SQUAD = 4
 WAVE_LINES = {
     1: ("VASILE: Here they come - south side, off the forecourt!", C_VASILE),
     2: ("MARU: Marksmen on the ring. Watch for the red line and move.", C_MARU),
@@ -215,7 +219,13 @@ def _run_spawns(t):
         _radio(line, color=color, duration=380, mark="wave_%d" % w["n"])
         _sfx("alarm", 0.25)
     if not _RT["pool"]:
-        return
+        # Budget spent and the floor clear: the next squad is already inbound.
+        if t < w["end"] - REFILL_STOP and len(alive()) <= w["cap"] // 3:
+            kinds = [k for k, _ in w["units"] if k != "breacher"] or ["loyalist"]
+            _RT["pool"] = ["loyalist"] * (REFILL_SQUAD - 1) + [_rng_legacy.choice(kinds)]
+            _RT["spawn_t"] = min(_RT["spawn_t"], 90)
+        else:
+            return
     _RT["spawn_t"] -= 1
     if _RT["spawn_t"] > 0 or len(alive()) >= w["cap"]:
         return
@@ -262,8 +272,10 @@ def _pick_target(e, sight, reach):
     best, best_d = None, reach
     for name, x, y in _defenders():
         d = math.hypot(x - ex, y - ey)
-        if d < best_d and e._can_see(x, y, sight):
-            best, best_d = name, d
+        # Biribel draws the fire: an ally has to be clearly closer to be picked.
+        score = d if name == "player" else d * 1.35
+        if d < reach and score < best_d and e._can_see(x, y, sight):
+            best, best_d = name, score
     g.focus = best or ""
     return _target_pos(best) if best else None
 

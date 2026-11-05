@@ -46,7 +46,7 @@ from missions.m4.meta import (
     STAGE_AFTERMATH, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE,
     TILE, TRANSMITTER_TILE, JAMMER_TILE,
     VASILE_CACHE_TILE, STATION_DOOR_TILE,
-    C_VASILE, C_MARU,
+    C_VASILE, C_MARU, M4_DOOR_FADE_OUT, M4_DOOR_FADE_HOLD, M4_DOOR_FADE_IN,
 )
 from missions.m4.world import (
     _movement_locked, _solid_walls, friendly_npcs,
@@ -2358,8 +2358,8 @@ def _draw_m4_supply_panel(surface):
         return
     v = _escort.vasile()
     w, h = 250, 48
-    x = (WIDTH - w) // 2
-    y = HEIGHT - h - 14           # bottom centre: clear of the objective and the siege plate
+    x = WIDTH - w - 10
+    y = 180                       # under the minimap: the radio owns the bottom edge
     surface.blit(get_plate_bg(w, h), (x, y))
     supply = getattr(STATE, "m4_supply", 0)
     surface.blit(font_terminal_small.render("SUPPLY %d" % supply, True, C_SUPPLY_HUD), (x + 10, y + 5))
@@ -2824,6 +2824,23 @@ def _draw_death_edge(surface):
     surface.blit(red, (0, 0))
 
 
+def _draw_door_fade(surface):
+    """Street door -> station: black fade out, hold, fade in."""
+    t = getattr(STATE, "m4_door_fade", 0)
+    if not t:
+        return
+    out, hold, fin = M4_DOOR_FADE_OUT, M4_DOOR_FADE_HOLD, M4_DOOR_FADE_IN
+    if t <= out:
+        k = t / out
+    elif t <= out + hold:
+        k = 1.0
+    else:
+        k = max(0.0, 1.0 - (t - out - hold) / fin)
+    veil = pygame.Surface(surface.get_size())
+    veil.set_alpha(int(255 * k * k * (3 - 2 * k)))
+    surface.blit(veil, (0, 0))
+
+
 def _draw_screen_passes(cam_x, cam_y, world3d=False):
     """Rain, scanlines, death overlay, flash, HUD, dialogue and reticle over
     the world (2D or the 2.5D frame from draw3d)."""
@@ -2845,6 +2862,7 @@ def _draw_screen_passes(cam_x, cam_y, world3d=False):
     # HUD last, on top of the graded world.
     _draw_m4_hud(screen, cam_x, cam_y)
     _draw_m4_dialogue(screen)
+    _draw_door_fade(screen)
     if (getattr(STATE, "mission4_stage", None) != STAGE_DONE
             and not getattr(STATE, "m4_dialogue_active", False)):
         draw_combat_reticle(screen)
