@@ -3049,7 +3049,8 @@ def _restore_comms_power():
         pass
     _radio("VASILE: Power spike received. Now find a relay authorization key.",
            color=C_SYSTEM, duration=300, mark="comms_power_restored",
-           priority=1)
+           priority=1,
+           valid=lambda: not getattr(STATE, "m3_comms_auth_acquired", False))
 
 
 def _acquire_comms_auth():
@@ -3066,7 +3067,7 @@ def _acquire_comms_auth():
         pass
     _radio("VOLKOV: Authorization is good. Get back to the relay.",
            color=C_VOLKOV, duration=280, mark="comms_auth_acquired",
-           priority=1)
+           priority=1, interrupt=True)
 
 
 def _start_comms_relay_tuning():
@@ -3875,6 +3876,11 @@ def handle_event(event):
             # fired on entry, fire them now so the breach flash/shake lands.
             if btype == "action" and _m3_flow._dialogue_timer <= 1:
                 _trigger_action(beat.get("action"))
+            try:
+                from audio import voice
+                voice.cut()      # skipping the box skips its line too
+            except Exception:
+                pass
             _advance_beat()
 
 

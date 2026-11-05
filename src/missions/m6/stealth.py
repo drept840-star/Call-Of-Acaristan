@@ -168,7 +168,8 @@ def shoot_lamp(bullet):
             from . import world as _world
             _world.sfx("glass_shatter", 0.5)
             _world.radio("MARU: Lamp's out. Keep going.", color=(146, 196, 206),
-                         duration=200, mark="m6_lamp_" + str(_stage), priority=1)
+                         duration=200, mark="m6_lamp_" + str(_stage), priority=1,
+                         interrupt=True)
             return True
     return False
 

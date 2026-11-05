@@ -737,12 +737,14 @@ def _update_post_sniper_gameplay():
         if STATE.mission2_post_sniper_timer == 1:
             _spawn_initial_ipa_team()
             _set_objective("GET TO COVER - break the sniper line")
-            _radio('VASILE: "Concrete blocks! Left side! Move now!"', color=(255, 170, 80), mark="post_cover")
+            _radio('VASILE: "Concrete blocks! Left side! Move now!"', color=(255, 170, 80), mark="post_cover",
+                   valid=lambda: not _player_in_meaningful_cover())
         if _player_in_meaningful_cover() and STATE.mission2_post_sniper_timer > 45:
             STATE.mission2_post_sniper_phase = "survive"
             STATE.mission2_post_sniper_timer = 0
             STATE.mission2_sniper_pressure_timer = 70
-            _radio('VASILE: "Hold there. Watch the glint. Move only between shots."', color=C_VASILE, mark="survive_killbox")
+            _radio('VASILE: "Hold there. Watch the glint. Move only between shots."', color=C_VASILE, mark="survive_killbox",
+                   interrupt=True)
             # Player committed to cover -> IPA pours in from the flanks to
             # punish the static position.  First wave is immediate and a bit
             # bigger; follow-up waves are scheduled below in the survive phase.
@@ -878,7 +880,9 @@ def _update_post_sniper_gameplay():
             _spawn_enemy(48, 40, hp=110, speed=2.0)
             _set_objective("Clear the IPA cleanup team blocking the truck")
             _radio('VASILE: "Cleanup squad\'s between you and the truck. Drop them."',
-                   color=C_VASILE, mark="cleanup_spawn")
+                   color=C_VASILE, mark="cleanup_spawn",
+                   valid=lambda: any(e.hp > 0 for e in STATE.enemies),
+                   cut_to='VASILE: "...Never mind. They\'re down. Truck."')
             # OS-12 spare mags are capped at 2 from pickup - no mid-mission
             # reward. The cleanup team is a combat beat, not an ammo drop.
 

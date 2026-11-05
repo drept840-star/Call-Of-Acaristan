@@ -514,7 +514,7 @@ def _cabin_snow(r, t, L, n=30, seed=0):
 def _insert_cabin(surface, t):
     """INT. Huey, the briefing on the run.  Angle 1: Maru, lit green by the
     instruments, turns from the controls; Biribel sits at the open door
-    behind her.  Angle 2: Biribel in profile against the door, the moon
+    behind him.  Angle 2: Biribel in profile against the door, the moon
     chopped by the rotor, snow streaming past; he racks the rifle."""
     t = min(t, 6000)
     ang = _cabin_angle()

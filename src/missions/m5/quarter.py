@@ -160,16 +160,18 @@ def _update_convoy():
     if frac >= 0.5 and not _S["radio50"]:
         _S["radio50"] = True
         _radio("VASILE: Guard convoy just cleared the bridge. Halfway to you. Every shot you "
-               "fire, they hear it - and they speed up.", color=C_VASILE, duration=380)
+               "fire, they hear it - and they speed up.", color=C_VASILE, duration=380,
+               valid=lambda: not _S["late"])
     if frac >= 0.8 and not _S["radio80"]:
         _S["radio80"] = True
-        _radio("VASILE: Two streets out. Move, Biribel.", color=C_VASILE, duration=300, priority=1)
+        _radio("VASILE: Two streets out. Move, Biribel.", color=C_VASILE, duration=300, priority=1,
+               valid=lambda: not _S["late"])
     if frac >= 1.0:
         _S["late"] = True
         STATE.m5_convoy_late = True
         _sfx("alarm", 0.3)
         _radio("GUARD RADIO: Convoy on site. Dismount, secure the print works.",
-               color=C_GUARD, duration=360)
+               color=C_GUARD, duration=360, interrupt=True)
         for c, r in ((33, 13), (33, 17), (32, 15)):
             if _tile_walkable(c, r):
                 _spawn_m5_guard(*_tile_world(c, r), etype="guard", label="convoy", aware=False)
@@ -402,11 +404,12 @@ def _update_civilian(px, py):
             _S["civ"] = "run"
             STATE.m5_civ_saved = True
             _radio("DETAINED MAN: God keep you, soldier. I'm gone - I was never here.",
-                   color=(220, 210, 190), duration=320)
+                   color=(220, 210, 190), duration=320, interrupt=True)
         elif px > 27 * T and not _S["civ_walked"]:
             _S["civ_walked"] = True
             _radio("VASILE: They've got a man on his knees by the south lane. ...Keep walking. "
-                   "Or don't. Your call.", color=C_VASILE, duration=380)
+                   "Or don't. Your call.", color=C_VASILE, duration=380,
+                   valid=lambda: _S["civ"] == "held")
     elif st == "run":
         _S["civ_x"] -= 2.6
         _S["civ_alpha"] -= 2

@@ -139,12 +139,35 @@ def blend(a, b, t):
 
 
 def pose_run(phase, lean=16):
+    """Gait cycle. ``lean`` doubles as intensity: ~4 is a walk, 16+ a run.
+
+    Left leg swings forward while cos(phase) > 0 and is planted behind when
+    sin(phase) < 0, so the knee folds on the forward swing, softens a little
+    at heel strike, and the ankle points at toe-off. The torso twists
+    against the hips and the head stays level.
+    """
     s = math.sin(phase)
     c = math.cos(phase)
-    return dict(spine=lean, head_p=-8, lhip_p=40 * s + 10, rhip_p=-40 * s + 10,
-                lkn=20 + 60 * max(0.0, -c), rkn=20 + 60 * max(0.0, c),
-                lsh_p=-30 * s + 20, lel=80, rsh_p=30 * s + 20, rel=80, rsh_r=12, lsh_r=8,
-                lift=0.05 * abs(s), rifle_p=50)
+    r = max(0.0, min(1.0, (lean - 6.0) / 14.0))
+    hip = 24.0 + 20.0 * r
+    fold = 52.0 + 40.0 * r
+
+    def leg(s, c):
+        swing = max(0.0, c)
+        knee = 5.0 + fold * swing ** 1.3 + (6.0 + 6.0 * r) * max(0.0, s) * max(0.0, -c)
+        ankle = (14.0 + 6.0 * r) * max(0.0, -s) - 14.0 * max(0.0, s) * swing
+        return hip * s + 6.0, knee, ankle
+
+    lhip, lkn, lank = leg(s, c)
+    rhip, rkn, rank = leg(-s, -c)
+    arm = 22.0 + 16.0 * r
+    elbow = 22.0 + 52.0 * r
+    return dict(spine=lean, spine_r=1.8 * s, twist=-(4.0 + 4.0 * r) * s,
+                head_p=-lean * 0.5, head_y=(2.0 + 2.0 * r) * s,
+                lhip_p=lhip, rhip_p=rhip, lkn=lkn, rkn=rkn, lank=lank, rank=rank,
+                lsh_p=-arm * s + 14, lel=elbow + 14 * max(0.0, -s), rsh_p=arm * s + 14,
+                rel=elbow + 14 * max(0.0, s), lsh_r=8, rsh_r=12,
+                lift=0.012 * r * abs(c), rifle_p=50)
 
 
 def pose_drag(phase):

@@ -2495,7 +2495,8 @@ def _restore_comms_power():
     except Exception:
         pass
     _radio("VASILE: Power spike received. Now find a relay authorization key.",
-           color=C_SYSTEM, duration=300, mark="comms_power_restored")
+           color=C_SYSTEM, duration=300, mark="comms_power_restored",
+           valid=lambda: not getattr(STATE, "m3_comms_auth_acquired", False))
 
 
 def _acquire_comms_auth():
@@ -2511,7 +2512,7 @@ def _acquire_comms_auth():
     except Exception:
         pass
     _radio("VOLKOV: Authorization is good. Get back to the relay.",
-           color=C_VOLKOV, duration=280, mark="comms_auth_acquired")
+           color=C_VOLKOV, duration=280, mark="comms_auth_acquired", interrupt=True)
 
 
 def _start_comms_relay_tuning():

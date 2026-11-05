@@ -762,7 +762,7 @@ class RaidScene:
         if self.brain.bodi_turn() and self.turn is None:
             self.turn = {"phase": "stare", "t": self.t, "shot": False, "taunt": False,
                          "raised_at": None, "bodi": True}
-            self.say("BODI", "That pig was Maru's. She raised it by hand.", 3.4)
+            self.say("BODI", "That pig was Maru's. He raised it by hand.", 3.4)
             self.say("ALEX", "Bodi? Bodi, what are you doing?", 3.4)
         return True
 

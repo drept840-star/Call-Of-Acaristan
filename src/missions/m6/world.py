@@ -101,7 +101,8 @@ def _movement_locked():
     return bool(getattr(STATE, "m6_train_active", False))
 
 
-def radio(text, color=(100, 160, 220), duration=340, mark=None, priority=1):
+def radio(text, color=(100, 160, 220), duration=340, mark=None, priority=1, valid=None,
+          cut_to=None, interrupt=False):
     """Deduped mission radio.  M6 lines are all story-critical."""
     if mark and mark in _maps._radio_marks:
         return False
@@ -110,7 +111,8 @@ def radio(text, color=(100, 160, 220), duration=340, mark=None, priority=1):
     try:
         from core.interactions import trigger_radio_chatter
         trigger_radio_chatter(text, color=color, duration=duration,
-                              priority=priority)
+                              priority=priority, valid=valid, cut_to=cut_to,
+                              interrupt=interrupt)
         return True
     except Exception:
         return False
@@ -405,7 +407,9 @@ def _rail_bark():
         return
     if _volkov and near((_volkov["x"], _volkov["y"]), 220):
         radio("VASILE: The car with the red stripe. Volkov. Clear the yard first.",
-              color=(212, 178, 120), duration=360, mark="rail_volkov_seen")
+              color=(212, 178, 120), duration=360, mark="rail_volkov_seen",
+              valid=lambda: any(e.hp > 0 for e in STATE.enemies),
+              cut_to="VASILE: ...Yard's clear. Go to him.")
 
 
 def update_world():

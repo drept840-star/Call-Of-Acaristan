@@ -22,6 +22,7 @@ from core.state import STATE
 from game import save_adapter as _save_adapter  # RPE6 P9 (game-layer adapter; no cycle)
 from core import config as _config
 from ui.hud import MiniMap
+from ui import speechbox as _speechbox
 from core.outfits import OUTFIT_GUARD
 import game.dialogues as _dialogues  # RPE6 P7: conversation data access
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
@@ -106,6 +107,9 @@ _M5_MARU_BEATS = [
 # "kind" picks the completion hook: "maru" -> raid, "vasile" -> quarter.
 _m5_dlg = {"beats": [], "index": 0, "char_idx": 0, "timer": 0,
            "post_hold": 0, "active": False, "kind": ""}
+
+# Typewriter clock for the current beat (ui.speechbox).
+_PACER = _speechbox.Pacer()
 
 _SPEAKER_COLORS = {"VASILE": C_VASILE, "BIRIBEL": BIRIBEL_SPEAKER,
                    "MARU": C_MARU}
@@ -192,28 +196,31 @@ def _update_dialogue():
     beat = _current_beat()
     if beat is None:
         return
-    if _m5_dlg["timer"] == 1 and beat["speaker"] != "SYSTEM":
-        try:
-            from audio import voice
-            voice.play_line(beat["speaker"], beat["text"])
-        except Exception:
-            pass
     full = beat["text"]
+    if _m5_dlg["timer"] == 1:
+        _PACER.start(full)
+        if beat["speaker"] != "SYSTEM":
+            try:
+                from audio import voice
+                _PACER.voice(voice.play_line(beat["speaker"], full))
+            except Exception:
+                pass
     if _m5_dlg["char_idx"] < len(full):
-        if _m5_dlg["post_hold"] > 0:
-            _m5_dlg["post_hold"] -= 1
-        elif _m5_dlg["timer"] % _type_interval() == 0:
-            ch = full[_m5_dlg["char_idx"]]
-            _m5_dlg["char_idx"] += 1
-            if ch in ".,;:!?" or _m5_dlg["char_idx"] % 3 == 0:
+        # Shared typewriter (ui.speechbox): over the clip when voiced.
+        n = _PACER.step(full)
+        if n > _m5_dlg["char_idx"]:
+            ch = full[n - 1]
+            if not _PACER.voiced and (ch in ".,;:!?" or n // 3 > _m5_dlg["char_idx"] // 3):
                 _sfx("type_tick", 0.10)
-            if ch in ".!?":
-                _m5_dlg["post_hold"] = _TYPE_PAUSE_FULL
-            elif ch in ",;:":
-                _m5_dlg["post_hold"] = _TYPE_PAUSE_SOFT
+            _m5_dlg["char_idx"] = n
 
 
 def _advance_beat():
+    try:
+        from audio import voice
+        voice.cut()          # skipping the box skips its line too
+    except Exception:
+        pass
     _m5_dlg.update(index=_m5_dlg["index"] + 1, char_idx=0, timer=0,
                    post_hold=0)
     if _m5_dlg["index"] >= len(_m5_dlg["beats"]):

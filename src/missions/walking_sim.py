@@ -12,6 +12,7 @@ from core import save_system
 from core.camera import CAM_DEADZONE_PX, CAM_EASE_WALK, CAM_LOOKAHEAD_WALK_PX, follow_step
 from entities.player import Player
 from ui.hud import MiniMap
+from ui import speechbox as _speechbox
 from engine.ui import crosshair as _hud_crosshair
 from cutscenes import draw_dialogue_box
 from missions.walking_attack3d import draw_oilrig_attack_3d
@@ -40,6 +41,11 @@ def _play_walk_type_tick(ch, idx, volume=0.095):
         audio.play("type_tick", volume=volume)
     except Exception:
         pass
+# Typewriter clock for the walk-sim line (ui.speechbox): paced to the VO clip
+# once _trigger_walk_dialogue / the attack queue attach its length.
+_walk_pacer = _speechbox.Pacer()
+
+
 def _sync_walk_dialogue_state():
     # STATE is a read-only mirror: replay hashes it and radio_blocker gates on it.
     STATE.walk_dialogue_active = walk_dialogue_active
@@ -63,6 +69,7 @@ def set_walk_dialogue(speaker, text):
     walk_dialogue_text = text
     walk_dialogue_char_idx = 0
     walk_dialogue_timer = 0
+    _walk_pacer.start(text)
     _sync_walk_dialogue_state()
 
 
@@ -580,13 +587,14 @@ def update_walking_sim(keys):
         _update_attack_voice_queue()
     if walk_dialogue_active and walk_dialogue_char_idx < len(walk_dialogue_text):
         walk_dialogue_timer += 1
-        # First few characters type fast so it doesn't sit on "Thi"
-        threshold = 1 if walk_dialogue_char_idx < 8 else 2
-        if walk_dialogue_timer >= threshold:
-            walk_dialogue_timer = 0
-            next_ch = walk_dialogue_text[walk_dialogue_char_idx]
-            _play_walk_type_tick(next_ch, walk_dialogue_char_idx, volume=0.09)
-            walk_dialogue_char_idx += 1
+        # Shared typewriter (ui.speechbox): over the clip when voiced, else a
+        # fixed rate. SPACE (app._WalkState) still snaps to full first.
+        n = _walk_pacer.step(walk_dialogue_text)
+        if n > walk_dialogue_char_idx:
+            if not _walk_pacer.voiced:
+                next_ch = walk_dialogue_text[walk_dialogue_char_idx]
+                _play_walk_type_tick(next_ch, walk_dialogue_char_idx, volume=0.09)
+            walk_dialogue_char_idx = n
     _sync_walk_dialogue_state()
     if walk_after_firefight or STATE.walk_after_firefight:
         if walk_return_timer <= 0 and not walk_complete and (
@@ -1888,7 +1896,7 @@ def _trigger_walk_dialogue(speaker, text):
     set_walk_dialogue(speaker, text)
     try:
         from audio import voice
-        voice.play_line(speaker, text)
+        _walk_pacer.voice(voice.play_line(speaker, text))
     except Exception:
         pass
 
@@ -1906,6 +1914,7 @@ def _update_attack_voice_queue():
             duration_ms = voice.play_line(speaker, text)
         except Exception:
             pass
+        _walk_pacer.voice(duration_ms)
         _attack_voice_frames = (
             int(math.ceil(duration_ms * 0.06)) + 18
             if duration_ms else max(84, len(text) * 2 + 36)

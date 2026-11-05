@@ -570,7 +570,7 @@ def gait(distance,stride,scale=1.0,speed=1.4,style='walk',route=_straight,pelvis
 
 
 def guard_left_hand(hum,pose):
-    """Maru's wounded arm: right hand solved onto (not into) her stomach, then
+    """Maru's wounded arm: right hand solved onto (not into) his stomach, then
     the left hand clamps the top of that forearm. Both arms are IK-solved."""
     places,_,_,_=hum.placements(pose,False)
     local,world,w,top=_body(hum,places)
@@ -1051,11 +1051,22 @@ def _subtitle(s,t):
     the authored clock; ESC/ENTER are the only controls.
     """
     from cutscenes.engine import draw_cinematic_subtitle  # lazy: engine lazily imports this film
+    from ui import speechbox  # lazy: typewriter paced to the recorded take
     for on,off,who,text in LINES:
         if on <= t < off:
-            char_idx = min(len(text), max(0, int((t - on) / 50)))   # 50 ms per character
-            draw_cinematic_subtitle(s, who, text, char_idx)
+            vo = _SUB_CLIP.get((who, text))
+            if vo is None:
+                try:
+                    from audio import voice
+                    vo = voice.clip_ms(who, text)
+                except Exception:
+                    vo = 0
+                _SUB_CLIP[(who, text)] = vo
+            draw_cinematic_subtitle(s, who, text, speechbox.reveal_count(text, t - on, vo))
             break
+
+
+_SUB_CLIP = {}
 
 
 def _clip_seg(r,a,b):

@@ -361,7 +361,8 @@ def _movement_locked():
     return False
 
 
-def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0):
+def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0, valid=None,
+           cut_to=None, interrupt=False):
     """Pinned-radio helper, mirroring mission2._radio's signature.
 
     The interrogation cold open does NOT use this (its dialogue is a
@@ -375,7 +376,8 @@ def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0):
     try:
         from core.interactions import trigger_radio_chatter
         trigger_radio_chatter(text, color=color, duration=duration,
-                              priority=max(priority, 0.5) if mark else priority)
+                              priority=max(priority, 0.5) if mark else priority,
+                              valid=valid, cut_to=cut_to, interrupt=interrupt)
     except Exception:
         # Audio/interactions are optional in headless test harnesses.
         pass

@@ -298,7 +298,7 @@ def _set_objective(text):
 
 
 def _radio(text, color=C_VASILE, duration=300, mark=None, allow_when_cut=False,
-           priority=None):
+           priority=None, valid=None, cut_to=None, interrupt=False):
     """Small radio helper. Used sparingly; cards do most story work."""
     if mark and mark in _radio_marks:
         return
@@ -327,7 +327,8 @@ def _radio(text, color=C_VASILE, duration=300, mark=None, allow_when_cut=False,
     # or dialogue box holds them instead of dropping them (radio_allowed).
     if priority is None:
         priority = 0.5 if mark else 0
-    trigger_radio_chatter(text, color=color, duration=duration, priority=priority)
+    trigger_radio_chatter(text, color=color, duration=duration, priority=priority,
+                          valid=valid, cut_to=cut_to, interrupt=interrupt)
 
 
 def _muffle_radio_text(text):

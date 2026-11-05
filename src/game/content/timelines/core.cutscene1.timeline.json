@@ -3,7 +3,9 @@
  "id": "core.cutscene1",
  "shots": [
   {
-   "scene": "ocean_wide",
+   "scene": "intro_ocean",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "The Kilemeno Ocean. Once a fishing route.\nNow a graveyard of derricks and broken treaties.",
    "lighting": [
@@ -13,7 +15,9 @@
    ]
   },
   {
-   "scene": "city_skyline",
+   "scene": "intro_city",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "Acaristan. A nation in name only.\nThe ground beneath it is worth more than the people standing on it.",
    "lighting": [
@@ -23,7 +27,9 @@
    ]
   },
   {
-   "scene": "ipa_poster",
+   "scene": "intro_poster",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "The IPA promises rebuilding.\nTheir oil flows. Their guns sell.\nTheir hands are clean - for the cameras.",
    "lighting": [
@@ -33,7 +39,9 @@
    ]
   },
   {
-   "scene": "mag_graffiti",
+   "scene": "intro_graffiti",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "MAG promises freedom.\nThey bomb checkpoints. They bury their dead in unmarked steppes.\nThe state calls them terrorists. The poor call them family.",
    "lighting": [
@@ -43,7 +51,9 @@
    ]
   },
   {
-   "scene": "krap_convoy",
+   "scene": "intro_convoy",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "And then there is KRAP.\nKoaliția Regională de Apărare Și Pace.\nPeacekeepers, they call themselves.",
    "lighting": [
@@ -53,7 +63,9 @@
    ]
   },
   {
-   "scene": "krap_patch",
+   "scene": "intro_checkpoint",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "They keep the highways open.\nThey keep the oil moving.\nThey keep the questions unasked.",
    "lighting": [
@@ -63,7 +75,9 @@
    ]
   },
   {
-   "scene": "biribel_arrival",
+   "scene": "intro_arrival",
+   "self_graded": true,
+   "caption": "box",
    "speaker": "NARRATOR",
    "text": "Today, one of their operators arrives.\nHe has been told this is a stabilization assignment.\nHe has not been told the truth.",
    "lighting": [

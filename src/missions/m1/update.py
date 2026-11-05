@@ -652,7 +652,10 @@ def game_update(keys):
             if STATE.enemies or _hostiles_pending():
                 if keys[pygame.K_e] and not STATE.hotwire_radio_said:
                     STATE.hotwire_radio_said = True
-                    trigger_radio_chatter('VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_truck_not_clear", "Not yet. Clear the yard before you put your head under that dash.")))
+                    trigger_radio_chatter(
+                        'VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_truck_not_clear", "Not yet. Clear the yard before you put your head under that dash.")),
+                        valid=lambda: bool(STATE.enemies or _hostiles_pending()),
+                        cut_to='VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_truck_clear_now", "...No, that was the last of them. Get it started.")))
                 STATE.truck_hotwiring = False
                 STATE.hotwire_selected_wire = None
             elif not STATE.truck_hotwiring:

@@ -1790,7 +1790,7 @@ def helicopter(r, t, pos, yaw=-18.0, rotor_speed=1.0, lit=True, scale=1.0,
     a translucent two-blade rotor blurred out to the blade radius.  ``blur``
     scales only the additive blur, so a distant airframe stays solid under it.
     ``pilot``: True seats Maru at the controls looking ahead, a (twist,
-    head_y) pair turns her head, False leaves the cockpit empty.
+    head_y) pair turns his head, False leaves the cockpit empty.
     Returns world anchors: door_sill (point, outward normal), skid_top_r, hub,
     belly, nose, rotor_radius, blur_radius."""
     from engine3d.core import Mesh, box, m_apply, prism, rot_x, rot_y, rot_z

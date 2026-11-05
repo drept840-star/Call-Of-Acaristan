@@ -573,7 +573,7 @@ def _update_overwatch(st):
         STATE.pickups.append([lx - 10, ly, "mag"])
         STATE.pickups.append([lx + 10, ly, "bandage"])
         _radio("VASILE: Nest is dark. Their eyes are out - move while it lasts.",
-               color=C_VASILE, duration=260, mark="ko_nest_down")
+               color=C_VASILE, duration=260, mark="ko_nest_down", interrupt=True)
         ow["telegraph"] = 0
         return
     if marksman is None:
@@ -607,7 +607,8 @@ def _update_overwatch(st):
         st["sniper_warned"] = True
         _radio("VASILE: Marksman up on that mezzanine - his red line means "
                "they have the lane zeroed. Keep your head down.",
-               color=C_VASILE, duration=280, mark="ko_sniper_warn")
+               color=C_VASILE, duration=280, mark="ko_sniper_warn",
+               valid=lambda: any(e.uid == uid and e.hp > 0 for e in STATE.enemies))
     pinx, piny = _wpos(NEST_AIM_TILE) if engaged else _wpos(NEST_TILE)
     mx, my = marksman.rect.center
     dd = math.hypot(pinx - mx, piny - my)

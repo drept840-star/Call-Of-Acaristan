@@ -261,7 +261,7 @@ def bullet_hit(bullet):
                                  cy + (i - 1) * 10, 70, 0.6])
             from . import world as _world
             _world.radio("MARU: The tanker! Get down!", color=(222, 120, 92),
-                         duration=260, mark="m6_tanker", priority=1)
+                         duration=260, mark="m6_tanker", priority=1, interrupt=True)
         return True
     return False
 

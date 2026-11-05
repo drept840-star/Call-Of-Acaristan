@@ -129,7 +129,8 @@ M5_RADIO_ESSENTIAL_MARKS = frozenset({
 })
 
 
-def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0):
+def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0, valid=None,
+           cut_to=None, interrupt=False):
     """Curated M5 radio; dedup keys do not make incidental barks critical."""
     if priority <= 0 and mark not in M5_RADIO_ESSENTIAL_MARKS:
         return
@@ -140,7 +141,8 @@ def _radio(text, color=C_SYSTEM, duration=320, mark=None, priority=0):
     try:
         from core.interactions import trigger_radio_chatter
         trigger_radio_chatter(text, color=color, duration=duration,
-                              priority=max(priority, 1) if mark in M5_RADIO_ESSENTIAL_MARKS else priority)
+                              priority=max(priority, 1) if mark in M5_RADIO_ESSENTIAL_MARKS else priority,
+                              valid=valid, cut_to=cut_to, interrupt=interrupt)
     except Exception:
         pass  # optional in headless harnesses
 
@@ -579,7 +581,8 @@ def _update_maru(solid_walls=None):
         if not m["waiting"]:
             m["waiting"] = True
             _radio("MARU: Biribel - slow down. I can't keep that pace.",
-                   color=C_MARU, duration=260, mark="maru_leash")
+                   color=C_MARU, duration=260, mark="maru_leash",
+                   valid=lambda: bool((getattr(STATE, "m5_maru", None) or {}).get("waiting")))
         if aim is None:
             m["angle"] = math.atan2(py - m["y"], px - m["x"])
         return

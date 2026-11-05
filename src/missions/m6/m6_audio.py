@@ -75,6 +75,14 @@ _FOLEY_GAIN = {
 
 
 # ── tiny deterministic synth helpers ────────────────────────────────────────
+
+def _mixlock():
+    """GIL-free channel pause/resume (alt-tab deadlock); imported lazily, like the
+    rest of the shared audio package."""
+    from audio import mixlock
+    return mixlock
+
+
 def _t(n):
     return np.arange(n, dtype=np.float64) / RATE
 
@@ -482,13 +490,13 @@ class M6FilmAudio:
         for ch in list(self.channels.values()) + [c for c, s in self.foley_channels
                                                    if c.get_sound() is s]:
             if ch.get_busy():
-                ch.pause()
+                _mixlock().pause(ch.id)
 
     def resume(self):
         self.paused = False
         for ch in list(self.channels.values()) + [c for c, s in self.foley_channels
                                                    if c.get_sound() is s]:
-            ch.unpause()
+            _mixlock().resume(ch.id)
 
     def stop(self):
         if self.closed:
@@ -638,7 +646,7 @@ class M6TrainAudio:
         self.paused = True
         for ch in list(self.loops.values()):
             try:
-                ch.pause()
+                _mixlock().pause(ch.id)
             except Exception:
                 pass
 
@@ -648,7 +656,7 @@ class M6TrainAudio:
         self.paused = False
         for ch in list(self.loops.values()):
             try:
-                ch.unpause()
+                _mixlock().resume(ch.id)
             except Exception:
                 pass
 

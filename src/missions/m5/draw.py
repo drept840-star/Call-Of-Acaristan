@@ -910,20 +910,15 @@ def _wrap(text, font, max_w):
 
 
 def _draw_dialogue(surface):
+    """M5 conversation (Maru's hideout, Vasile's office) in the shared pixel
+    speech box (``ui.speechbox``): portrait, name plate, beat pips."""
     dlg = _m5_flow._m5_dlg
     if not dlg["active"]:
         return
     beat = _m5_flow._current_beat()
     if beat is None:
         return
-    t = _now_ms()
-    speaker = beat.get("speaker", "")
-    color = tuple(beat.get("color", C_WHITE))[:3]
-    system = speaker == "SYSTEM"
-    body = font_dialogue
-    line_h = body.get_height() + 3
-    shown = beat["text"][:dlg["char_idx"]]
-    typed = _m5_flow._line_fully_typed()
+    from ui import speechbox  # lazy: ui facade
 
     # Cinematic bars while a conversation is on screen.
     bar = 46
@@ -931,71 +926,12 @@ def _draw_dialogue(surface):
     bars.fill((0, 0, 0, 170))
     surface.blit(bars, (0, 0))
     surface.blit(bars, (0, HEIGHT - bar))
-
-    panel_w = min(WIDTH - 90, 820)
-    port = 0 if system else 104
-    pad = 20
-    text_w = panel_w - pad * 2 - (port + 16 if port else 0)
-    full_lines = _wrap(beat["text"], body, text_w) or [""]
-    lines = _wrap(shown, body, text_w) if shown else [""]
-    panel_h = max(port + 24, len(full_lines) * line_h + 58)  # sized to the FULL line: no jumping
-    px = (WIDTH - panel_w) // 2
-    py = HEIGHT - bar - panel_h - 14
-
-    bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    for i in range(panel_h):  # vertical gradient
-        a = 236 - int(30 * i / panel_h)
-        pygame.draw.line(bg, (10 + i // 18, 12 + i // 18, 18 + i // 14, a), (0, i), (panel_w, i))
-    pygame.draw.rect(bg, (*color, 90), bg.get_rect(), 1, border_radius=8)
-    pygame.draw.line(bg, (*color, 230), (10, 0), (panel_w - 10, 0), 2)
-    msk = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    pygame.draw.rect(msk, (255, 255, 255, 255), msk.get_rect(), border_radius=8)
-    bg.blit(msk, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-    drop = pygame.Surface((panel_w + 12, panel_h + 12), pygame.SRCALPHA)
-    pygame.draw.rect(drop, (0, 0, 0, 110), drop.get_rect(), border_radius=12)
-    surface.blit(drop, (px - 6, py + 2))
-    surface.blit(bg, (px, py))
-
-    tx = px + pad
-    if not system:
-        pr = pygame.Rect(px + pad, py + 12, port, port)
-        surface.blit(_dialogue_portrait(speaker, color, port), pr.topleft)
-        pygame.draw.rect(surface, color, pr, 2, border_radius=6)
-        tx = pr.right + 16
-        # Name tab.
-        name = font_speaker.render(speaker, True, (14, 14, 18))
-        tab = pygame.Rect(tx - 2, py - name.get_height() // 2 - 2, name.get_width() + 22,
-                          name.get_height() + 6)
-        pygame.draw.rect(surface, color, tab, border_radius=4)
-        surface.blit(name, (tab.x + 11, tab.y + 3))
-    y = py + (22 if not system else 18)
-    for ln in lines:
-        img = body.render(ln, True, (234, 236, 240) if not system else (200, 210, 220))
-        lx = tx if not system else px + (panel_w - img.get_width()) // 2
-        surface.blit(img, (lx, y))
-        y += line_h
-    if not typed and (t // 260) % 2 == 0:  # typing caret
-        last = body.render(lines[-1], True, (0, 0, 0))
-        lx = tx if not system else px + (panel_w + last.get_width()) // 2
-        if not system:
-            lx += last.get_width()
-        pygame.draw.rect(surface, color, (lx + 2, y - line_h + 4, 8, line_h - 8))
-
-    # Footer: progress pips + continue hint.
-    n = max(1, len(dlg.get("beats", [])))
-    idx = dlg.get("index", 0)
-    fy = py + panel_h - 16
-    for i in range(min(n, 24)):
-        c = color if i <= idx else (60, 64, 74)
-        pygame.draw.circle(surface, c, (tx + 4 + i * 11, fy), 3 if i != idx else 4)
-    hint_col = (170, 176, 190) if typed else (90, 96, 108)
-    hint = font_terminal_small.render(_T("draw.enter_e"), True, hint_col)
-    hx = px + panel_w - hint.get_width() - pad - (18 if typed else 0)
-    surface.blit(hint, (hx, fy - hint.get_height() // 2))
-    if typed:
-        bob = int(2 * math.sin(t * 0.008))
-        ax, ay = px + panel_w - pad - 6, fy + bob
-        pygame.draw.polygon(surface, color, [(ax - 6, ay - 4), (ax + 6, ay - 4), (ax, ay + 4)])
+    # Rests on the bottom bar; _draw_hud hides the HP strip and weapon panel
+    # while a conversation is up, so nothing sits under it.
+    speechbox.draw_box(surface, beat.get("speaker", ""), beat["text"], dlg["char_idx"],
+                       color=tuple(beat.get("color", C_WHITE))[:3], bottom=HEIGHT - bar,
+                       pips=(dlg.get("index", 0), len(dlg.get("beats", []))),
+                       hint=_T("draw.enter_e"))
 
 
 _PORTRAITS = {}
@@ -1191,11 +1127,11 @@ def _draw_hud(surface, cam_x, cam_y):
 
     # Phase 4: the duplicated M4/M5 panel bodies are engine.ui.std widgets now;
     # this HUD only gathers the data (hostiles count / minimap enemies differ).
-    _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                         panel_bg=get_panel_bg)
-
-    _hud_weapon_panel.draw(surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
-                           panel_bg=get_panel_bg, mag_icon=_draw_m5_mag_icon)
+    if not _m5_flow._m5_dlg["active"]:  # the speech box owns the bottom edge
+        _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
+                             panel_bg=get_panel_bg)
+        _hud_weapon_panel.draw(surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
+                               panel_bg=get_panel_bg, mag_icon=_draw_m5_mag_icon)
 
     # ── Hostiles counter (same box + wording as M4) ──
     _hud_hostiles.draw(surface, THEME,

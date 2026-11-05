@@ -189,7 +189,8 @@ def _on_safe_opened(success):
             line = 'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_2", "Shipment 7742. Only the last three digits."))
         else:
             line = 'BIRIBEL: "{}"'.format(_dialogues.line("m1.radio", "keypad_hint_3", "7\u2026 4\u2026 2. Has to be."))
-        trigger_radio_chatter(line, color=C_BIRIBEL, duration=300, priority=1)
+        trigger_radio_chatter(line, color=C_BIRIBEL, duration=300, priority=1,
+                              valid=lambda: STATE.mission_phase != "escape")
 # ── Radio director ────────────────────────────────────────────────
 # Transmissions enqueue instead of firing instantly. The per-frame pump
 # releases the next message only once the previous one has been on air for
@@ -211,6 +212,12 @@ RADIO_TEXT_MS_PER_CHAR = 55
 RADIO_TEXT_MIN_MS = 2200
 RADIO_SUBTITLE_TAIL_MS = 450
 RADIO_CUT_FADE_MS = 120
+# A speaker breaking off his own line: the dashed fragment hangs this long
+# when he just shuts up; a correction lands this soon after the cut.
+RADIO_BREAK_HOLD_MS = 900
+RADIO_BREAK_BEAT_MS = 140
+# Queue priority of a correction: ahead of every story line.
+RADIO_URGENT = 50
 _radio_queue = []
 _radio_seq = 0
 # All radio timing runs on a private clock that only advances while radio is
@@ -343,6 +350,104 @@ def _cut_live_line(squelch=True):
             pass
 
 
+def _revealed_chars(live):
+    """How much of the live body the widget has typed out (ui.radio pacing)."""
+    try:
+        from ui.radio import TYPE_MS_PER_CHAR
+    except Exception:
+        TYPE_MS_PER_CHAR = 30
+    body = live.get("body") or ""
+    vo = live.get("vo_ms") or 0
+    type_ms = vo * 0.92 if vo else max(1, len(body)) * TYPE_MS_PER_CHAR
+    age = _radio_clock - live["start"]
+    return len(body) if type_ms <= 0 else int(len(body) * min(1.0, age / type_ms))
+
+
+def _break_off(follow_up=False):
+    """The speaker cuts HIMSELF off: VO dies mid-word, the subtitle freezes
+    on what he got out with a dash, and it hangs a beat so the player sees
+    him stop. With ``follow_up`` the next line comes in right on top of it.
+    Returns False when nothing was on air (or he had barely keyed up, in
+    which case the line is just dropped)."""
+    global _radio_live, _radio_live_until
+    live = _radio_live
+    if live is None:
+        return False
+    if live.get("vo_ms"):
+        try:
+            from audio import voice
+            voice.interrupt()
+        except Exception:
+            pass
+    try:
+        audio.scheduled[:] = [s for s in audio.scheduled
+                              if s.get("name") != "type_tick"]
+        audio.stop("radio_chatter")
+    except Exception:
+        pass
+    body = live.get("body") or ""
+    n = _revealed_chars(live)
+    if n >= len(body):
+        # He already finished the sentence: nothing to break off, just end it.
+        _cut_live_line(squelch=not follow_up)
+        return True
+    said = body[:n].rstrip(" ,.;:!?…-")
+    if len(said) < 3:
+        _cut_live_line(squelch=not follow_up)
+        return True
+    live = dict(live, body=said + "-", cut=True, valid=None, cut_to=None,
+                vo_ms=0, end=_radio_clock + RADIO_BREAK_HOLD_MS)
+    _radio_live = live
+    _radio_live_until = _radio_clock + (RADIO_BREAK_BEAT_MS if follow_up
+                                        else RADIO_BREAK_HOLD_MS + 400)
+    if not follow_up:
+        try:
+            audio.play("squelch_tail", volume=0.3)
+        except Exception:
+            pass
+    return True
+
+
+def radio_interrupt(speaker=None, text=None, color=(100, 160, 220), valid=None,
+                    cut_to=None):
+    """A character stops talking because the game no longer matches his line.
+
+    ``speaker`` limits it to that character (None = whoever is on air).
+    ``text`` is what he says instead ("Forget it - he's here!"); it jumps the
+    queue and lands right on top of the broken-off line. Without ``text`` he
+    just shuts up. His stale queued lines are dropped either way.
+    Returns True when a live line was cut."""
+    global _radio_seq
+    sp = (speaker or "").upper()
+    live = _radio_live
+    mine = live is not None and (not sp or (live.get("speaker") or "").upper() == sp)
+    if sp:
+        _radio_queue[:] = [e for e in _radio_queue
+                           if (_split_radio(e[2])[0] or "").upper() != sp]
+    cut = _break_off(follow_up=bool(text)) if mine else False
+    if text:
+        _radio_seq += 1
+        _radio_queue.append((RADIO_URGENT, _radio_seq, text, color, 320,
+                             _radio_clock, valid, cut_to))
+        pump_radio()
+    return cut
+
+
+def _premise_gone(live):
+    """The live line stopped matching the game: the speaker breaks off, and
+    says his ``cut_to`` correction if the line carries one."""
+    follow = live.get("cut_to")
+    if callable(follow):
+        try:
+            follow = follow()
+        except Exception:
+            follow = None
+    if follow:
+        radio_interrupt(live.get("speaker"), follow, color=live.get("color"))
+    else:
+        _break_off()
+
+
 def _drop_flavour():
     _radio_queue[:] = [e for e in _radio_queue if e[0] > 0]
 
@@ -379,7 +484,7 @@ def radio_clock():
     return _radio_clock
 
 
-def _radio_release(text, color, duration, priority=0, valid=None):
+def _radio_release(text, color, duration, priority=0, valid=None, cut_to=None):
     """Put one transmission on air. Returns the voice clip length in ms
     (0 if the line has no recording yet)."""
     global _radio_live
@@ -416,7 +521,7 @@ def _radio_release(text, color, duration, priority=0, valid=None):
     _radio_live = {
         "text": text, "speaker": speaker, "body": body, "color": color,
         "start": _radio_clock, "end": _radio_clock + show_ms,
-        "vo_ms": vo_ms, "priority": priority, "valid": valid,
+        "vo_ms": vo_ms, "priority": priority, "valid": valid, "cut_to": cut_to,
     }
     # No floating-text "pin" any more (T6): ui.radio.RadioTransmission reads
     # live_line() and runs on the radio clock, so the on-screen time is
@@ -426,13 +531,24 @@ def _radio_release(text, color, duration, priority=0, valid=None):
 
 
 def trigger_radio_chatter(text, color=(100, 160, 220), duration=360, priority=0,
-                          valid=None):
+                          valid=None, cut_to=None, interrupt=False):
     """Enqueue a transmission. Back-compatible: priority is optional.
+
+    ``interrupt=True``: the line answers something that just happened, so
+    whoever is on air breaks off and this lands on top of him.
+
+    ``valid`` is the line's premise (a callable). If it turns False while the
+    line is on air the speaker breaks off mid-word; ``cut_to`` is what he
+    says instead (text, or a callable returning text / None). A queued line
+    whose premise is gone is never said.
 
     While the radio is blocked (cutscene, dialogue, menus...) priority 0
     flavour is dropped on the floor and priority > 0 lines are held until
     the block lifts."""
     global _radio_seq
+    if interrupt and _radio_live is not None and radio_blocker() is None:
+        radio_interrupt(None, text, color=color, valid=valid, cut_to=cut_to)
+        return
     if priority <= 0:
         blocker = radio_blocker()
         # Fades and pause only hold; cutscenes / dialogue / menus drop flavour.
@@ -453,8 +569,11 @@ def trigger_radio_chatter(text, color=(100, 160, 220), duration=360, priority=0,
         _radio_queue[:] = [e for e in _radio_queue
                            if _split_radio(e[2])[0] != speaker]
         if _radio_live and _radio_live.get("speaker") == speaker:
-            _cut_live_line(squelch=False)
-    _radio_queue.append((priority, _radio_seq, text, color, duration, _radio_clock, valid))
+            # He changes his mind mid-sentence, and the new line comes
+            # straight in on top of the broken one.
+            _break_off(follow_up=True)
+    _radio_queue.append((priority, _radio_seq, text, color, duration, _radio_clock,
+                         valid, cut_to))
     pump_radio()
 
 
@@ -508,7 +627,7 @@ def pump_radio(state=None, transitioning=False):
     # room) cuts itself off on air, and is dropped from the queue.
     if _radio_live is not None and _radio_live.get("valid") \
             and not _radio_live["valid"]():
-        _cut_live_line(squelch=False)
+        _premise_gone(_radio_live)
     _radio_queue[:] = [e for e in _radio_queue
                        if _radio_clock - e[5] <= (RADIO_STORY_MAX_WAIT_MS if e[0] > 0
                                                   else RADIO_FLAVOUR_MAX_WAIT_MS)
@@ -516,8 +635,8 @@ def pump_radio(state=None, transitioning=False):
     if _radio_clock < _radio_live_until or not _radio_queue:
         return
     _radio_queue.sort(key=lambda e: (-e[0], e[1]))
-    pri, _seq, text, color, duration, _queued_at, valid = _radio_queue.pop(0)
-    vo_ms = _radio_release(text, color, duration, pri, valid) or 0
+    pri, _seq, text, color, duration, _queued_at, valid, cut_to = _radio_queue.pop(0)
+    vo_ms = _radio_release(text, color, duration, pri, valid, cut_to) or 0
     # Hold the channel for the entire subtitle, not just the VO/minimum gap.
     # Unvoiced lines used to be replaced while the widget was still typing.
     readable_until = _radio_live["end"] if _radio_live else _radio_clock
