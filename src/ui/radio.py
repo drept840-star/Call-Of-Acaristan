@@ -415,9 +415,16 @@ class RadioTransmission:
             else:
                 self.cur = None
             self.cur_key = key
+        elif (live is not None and live.get("cut") and self.cur is not None
+                and not self.cur.get("cut")):
+            # The speaker broke off mid-word: freeze on the fragment he got
+            # out (the director already played the key-off).
+            self.cur.update(body=live["body"], end=live["end"], cut=True)
+            if self.log:
+                self.log[-1] = (live["speaker"], live["body"], live["color"])
         if self.cur is not None and self.out_at is None and clock >= self.cur["end"]:
             self.out_at = clock
-            if not self.cur.get("vo_ms"):
+            if not self.cur.get("vo_ms") and not self.cur.get("cut"):
                 _sfx("squelch_tail", 0.2)
         if self.cur is not None and self.out_at is not None and clock - self.out_at > OUT_MS:
             old = dict(self.cur)
@@ -548,7 +555,7 @@ class RadioTransmission:
         # typewriter, paced to the clip when there is one
         vo = cur.get("vo_ms") or 0
         type_ms = vo * 0.92 if vo else max(1, len(body)) * TYPE_MS_PER_CHAR
-        n_vis = len(body) if type_ms <= 0 else int(len(body) * min(1.0, age / type_ms))
+        n_vis = len(body) if type_ms <= 0 or cur.get("cut") else int(len(body) * min(1.0, age / type_ms))
         vis_rows, left = [], n_vis
         for r in rows:
             if left <= 0:

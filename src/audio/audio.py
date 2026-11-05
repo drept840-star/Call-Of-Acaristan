@@ -1,4 +1,5 @@
 import pygame
+from audio import mixlock as _mixlock  # GIL-free pause/resume (alt-tab deadlock)
 from engine.assets import load_music as _load_music, load_sound as _load_sound  # RPE6 D5
 import math
 import random
@@ -3174,7 +3175,7 @@ class AudioManager:
         except Exception:
             pass
         try:
-            pygame.mixer.unpause()       # a paused channel would resume later
+            _mixlock.resume()            # a paused channel would resume later
             pygame.mixer.stop()          # halts reserved channels too
         except Exception:
             pass
@@ -3265,7 +3266,7 @@ class AudioManager:
             return
         self._music_paused = True
         try:
-            pygame.mixer.music.pause()
+            _mixlock.pause_music()
         except Exception:
             pass
 
@@ -3277,7 +3278,7 @@ class AudioManager:
         if getattr(self, "_music_muted", False):
             return
         try:
-            pygame.mixer.music.unpause()
+            _mixlock.resume_music()
         except Exception:
             pass
 
@@ -3318,8 +3319,8 @@ class AudioManager:
         """Pause every playing sound + streaming music. Used by the
         Audio → Mute on Focus Loss setting when the window loses focus."""
         try:
-            pygame.mixer.pause()
-            pygame.mixer.music.pause()
+            _mixlock.pause()
+            _mixlock.pause_music()
             self._music_muted = True
         except Exception:
             pass
@@ -3328,9 +3329,9 @@ class AudioManager:
         """Resume everything paused by mute_all()."""
         self._music_muted = False
         try:
-            pygame.mixer.unpause()
+            _mixlock.resume()
             if not getattr(self, "_music_paused", False):   # pause_music() still holds it
-                pygame.mixer.music.unpause()
+                _mixlock.resume_music()
         except Exception:
             pass
         

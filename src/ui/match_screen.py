@@ -2766,36 +2766,41 @@ class MatchScreen(object):
           which lists only slots whose timer still has seconds left and so
           drops anybody killed without a wait -- including us, since our own
           EV_KILL fires before the packet that would describe the death.
-        - the locally ticked respawn countdown fills the gap between the 2 Hz
-          packets, so a corpse does not blink out mid-wait. It is subtractive
-          rather than additive: a countdown can outlive the death it was
-          started for (the host revives a slot the moment its timer expires,
-          while our own clock keeps ticking down), and a player who is back on
-          their feet must never be drawn flat -- that shows a full-health bar
-          over a body and leaves the real sprite undrawn.
+        - the locally ticked respawn countdown is used only for our OWN slot on
+          a client. It can outlive the death it was started for (the host
+          revives a slot the moment its timer expires, while our clock runs on
+          clamped frame dt), and a player who is back on their feet must never
+          be drawn flat -- that leaves the real sprite undrawn.
 
-        Only REMOTE slots are filtered that way. Our own death is the one case
+        Remote slots are also dropped once a sample newer than our death shows
+        them standing. Our own death is the one case
         where the countdown legitimately runs ahead of the evidence: EV_KILL
         starts it the frame we die, and the snapshot carrying our PS_DEAD bit
         lands up to 100ms later. Requiring proof for ourselves would delete the
         corpse at exactly the moment the player is looking for it.
         """
-        waiting = set(self._respawn)
+        # The host owns the sim, so its dead set is exact on every frame and
+        # nothing else is consulted. The local countdown runs on the clamped
+        # frame dt (MAX_DT), so below 20 fps it falls behind the sim's tick
+        # clock; trusting it here kept a respawned remote "down" for seconds,
+        # drawn as a corpse where they died while they walked around unseen.
         if self.sim is not None:
-            waiting.update(pid for pid, st in self.sim.players.items()
-                           if st["dead"])
-        else:
-            waiting.update(self._host_dead)
-        # A countdown that has finished is not evidence of anything -- but only
-        # for a slot the countdown was ever started FOR. It is dropped when it
-        # runs out, so a slot sitting in the dead set with no timer behind it
-        # must be left alone rather than filtered as "expired". The tolerance is
-        # one frame: dt accumulates in floats, so a timer that has run out
-        # routinely lands at 5e-15 rather than 0.
-        fresh = {pid for pid, secs in self._respawn.items()
-                 if secs > STEP}
-        waiting = (waiting & fresh) | (waiting - set(self._respawn))
+            return {pid for pid, st in self.sim.players.items() if st["dead"]}
         me = self.sess.local_id if self.sess is not None else None
+        # Remotes: the host's dead table alone. Their countdown is seeded from
+        # the same packet, so it adds nothing during the wait and only lags
+        # behind the revive afterwards, for the same clamped-dt reason.
+        waiting = set(self._host_dead)
+        # Ourselves: EV_KILL starts our countdown before the packet lands. A
+        # countdown that has finished is not evidence of anything -- but only
+        # for a slot the countdown was ever started FOR. The tolerance is one
+        # frame: dt accumulates in floats, so a timer that has run out
+        # routinely lands at 5e-15 rather than 0.
+        if me is not None and me in self._respawn:
+            if self._respawn[me] > STEP:
+                waiting.add(me)
+            else:
+                waiting.discard(me)
         revived = {pid for pid in self._alive_from_world() if pid != me}
         if revived:
             waiting -= revived

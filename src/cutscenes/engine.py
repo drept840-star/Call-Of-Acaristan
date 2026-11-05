@@ -4,6 +4,7 @@
 
 """Cutscene visuals and dialogue: character drawings, scene backgrounds, shot lists."""
 import math
+import os
 import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 import pygame
@@ -12,6 +13,7 @@ from core.config import (C_KRAP_BLUE, C_KRAP_UNIFORM, C_ORANGE, C_WHITE, HEIGHT,
 from cutscenes.cast import draw_biribel, draw_civilian
 from cutscenes.route12 import draw_biribel_blackout, draw_factory, draw_ipa_radio_chatter, draw_krap_door_kickin, draw_mag_graffiti, draw_oil_rig, draw_propaganda_poster, draw_route12_aftermath, draw_route12_black, draw_route12_broadcast, draw_route12_checkpoint, draw_route12_files, draw_route12_mag_alert, draw_route12_tanker, draw_van_exterior, draw_van_handoff, draw_van_interior, GROUND_Y, _draw_vertical_gradient, _draw_light_cone
 from core.cutscene_registry import scene_renderer as _scene_renderer
+from core.cutscene_registry import register_scene_renderer as _register_intro
 import cutscenes.van3d  # noqa: F401  registers the 3D "van_exterior" take (2D fallback inside)
 from cutscenes.m5mid3d import draw_m5x
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
@@ -411,101 +413,46 @@ from engine.text import T as _T  # RPE6 Phase 4 text table
 
 
 def reset_dialogue_slide():
-    """A-009 shim: the slide state is owned by ``engine.ui.std.dialogue_box``."""
+    """Scene entry: the next box unfolds again (``ui.speechbox``); the legacy
+    slide state in ``engine.ui.std.dialogue_box`` is reset with it."""
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
     _dialogue_box.reset_slide()
+    speechbox.reset_box()
 
 
 def draw_dialogue_box(surface, speaker, text, char_idx, total_len, can_continue=True,
                       show_speaker=False):
-    """A-009 shim: the box body moved verbatim to ``engine.ui.std.dialogue_box``.
+    """Cutscene / conversation box: the shared pixel speech box (``ui.speechbox``,
+    the radio's chassis family).
 
     ``can_continue=None`` draws no prompt (timeline-owned lines, M5 shadow
-    finale); ``show_speaker`` opts into the name tab - see the widget docstring.
+    finale); ``show_speaker`` opts into the name plate (polish pass T8: the
+    cutscene box carries no name by default - the portrait and accent say who
+    talks).
     """
-    _dialogue_box.draw(surface, _hud_theme, speaker, text, char_idx, total_len,
-                       can_continue=can_continue, show_speaker=show_speaker)
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
+    speechbox.draw_box(surface, speaker or "", text or "", char_idx, total_len,
+                       prompt=can_continue, show_name=bool(show_speaker))
+
+
 def draw_cinematic_subtitle(surface, speaker, text, char_idx=None,
                             band=(HEIGHT - LETTER_H, HEIGHT)):
     """Film subtitle, centred in the bottom letterbox band.
 
     Must be drawn AFTER draw_letterbox (the band is painted black by it); the
     M5 finale calls it from m5shadow3d.draw_controls for that reason. The
-    picture stays clear of text ("subtitles are separate from the 3D film
-    area"). One font; the speaker is an inline accent-coloured prefix - the
-    radio/off-screen convention - not a header strip (polish pass T8). The
-    block is laid out from the FULL text so it never jumps while typing.
+    picture stays clear of text. Shared pixel caption (``ui.speechbox``),
+    laid out from the FULL text so it never jumps while typing.
     """
-    if not text and not speaker:
-        return
-    body_font = font_dialogue
-    accent = SPEAKER_COLORS.get((speaker or "").upper(), C_ORANGE)
-    prefix = (speaker.upper() + "  ") if speaker else ""
-    pw = body_font.size(prefix)[0] if prefix else 0
-    max_width = WIDTH - 120
-
-    def wrap(s):
-        lines = []
-        for para in s.split("\n"):
-            cur = ""
-            for word in para.split(" "):
-                test = (cur + " " + word) if cur else word
-                limit = max_width - (pw if not lines else 0)
-                if body_font.size(test)[0] <= limit or not cur:
-                    cur = test
-                else:
-                    lines.append(cur)
-                    cur = word
-            lines.append(cur)
-        return lines
-
-    full_lines = wrap(text)
-    line_h = body_font.get_linesize()
-    top, bottom = band
-    y = top + max(2, (bottom - top - len(full_lines) * line_h) // 2)
-
-    # Typewriter over the spoken text only; the speaker prefix is always shown.
-    remaining = len(text) if char_idx is None else max(0, min(len(text), char_idx))
-    for i, line in enumerate(full_lines):
-        x = (WIDTH - body_font.size(line)[0] - (pw if i == 0 else 0)) // 2
-        if i == 0 and prefix:
-            surface.blit(body_font.render(prefix.rstrip(), True, accent), (x, y))
-            x += pw
-        part = line[:max(0, remaining)]
-        remaining -= len(line) + 1
-        if part:
-            surface.blit(body_font.render(part, True, (240, 242, 240)), (x, y))
-        y += line_h
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
+    speechbox.draw_caption(surface, speaker, text, char_idx, band=band)
 
 
-def draw_film_caption(surface, speaker, text):
-    """Film caption in the M2 sniper style (missions/m2/sniper3d._draw_bars).
-
-    Speaker tag over centred, word-wrapped text. No typewriter, no prompt.
-    Draw AFTER draw_letterbox.
-    """
-    lines = []
-    for para in text.split("\n"):
-        cur = ""
-        for word in para.split(" "):
-            test = (cur + " " + word) if cur else word
-            if font_dialogue.size(test)[0] <= WIDTH - 120 or not cur:
-                cur = test
-            else:
-                lines.append(cur)
-                cur = word
-        lines.append(cur)
-    tag = speaker.upper() if speaker else ""
-    tag_h = font_prompt.get_linesize() if tag else 0
-    text_h = font_dialogue.get_linesize()
-    y = HEIGHT - LETTER_H + max(2, (LETTER_H - tag_h - len(lines) * text_h) // 2)
-    if tag:
-        nm = font_prompt.render(tag, True, SPEAKER_COLORS.get(tag, C_ORANGE))
-        surface.blit(nm, ((WIDTH - nm.get_width()) // 2, y))
-        y += tag_h
-    for line in lines:
-        tx = font_dialogue.render(line, True, (236, 234, 226))
-        surface.blit(tx, ((WIDTH - tx.get_width()) // 2, y))
-        y += text_h
+def draw_film_caption(surface, speaker, text, typed=None):
+    """Film caption under the picture (CutscenePlayer shots). ``typed`` is the
+    player's typewriter count (None = whole line). Draw AFTER draw_letterbox."""
+    from ui import speechbox  # lazy: ui facade loads after cutscenes
+    speechbox.draw_caption(surface, speaker, text, typed)
 
 
 def draw_volkov_dossier_overlay(surface, t):
@@ -590,45 +537,89 @@ def draw_volkov_dossier_overlay(surface, t):
 # CUTSCENE SHOT LISTS
 # ─────────────────────────────────────────────
 import game.timelines as _timelines  # RPE6 P8: timeline data access
+# The opening narration plays as engine3d takes (cutscenes.intro3d); the
+# painted shots stay as the fallback when the 3D stack declines.
+_INTRO_2D = {
+    "intro_ocean": "ocean_wide", "intro_city": "city_skyline", "intro_poster": "ipa_poster",
+    "intro_graffiti": "mag_graffiti", "intro_convoy": "krap_convoy",
+    "intro_checkpoint": "krap_patch", "intro_arrival": "biribel_arrival",
+}
+_intro_state = {"failed": False}
+
+
+def _intro_take(scene_id):
+    def draw(surface, t):
+        if not _intro_state["failed"] and os.environ.get("ACARISTAN_CUTSCENE3D", "1").strip() != "0":
+            try:
+                from cutscenes import intro3d  # lazy: engine3d stack
+                intro3d.SCENES[scene_id](surface, t)
+                return
+            except Exception as e:
+                _intro_state["failed"] = True
+                print(f"intro3d: 3D intro disabled, using 2D ({e!r})")
+        from core.cutscene_registry import current_shot
+        shot = dict(current_shot() or {}, scene=_INTRO_2D[scene_id])
+        _draw_cutscene_scene_raw(surface, shot, t)
+    return draw
+
+
+for _sid in _INTRO_2D:
+    _register_intro(_sid, _intro_take(_sid))
+
+
 cutscene1_shots = [
     {
-        "scene": "ocean_wide",
+        "scene": "intro_ocean",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "The Kilemeno Ocean. Once a fishing route.\nNow a graveyard of derricks and broken treaties.",
         "lighting": (30, 25, 30),
     },
     {
-        "scene": "city_skyline",
+        "scene": "intro_city",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "Acaristan. A nation in name only.\nThe ground beneath it is worth more than the people standing on it.",
         "lighting": (28, 22, 30),
     },
     {
-        "scene": "ipa_poster",
+        "scene": "intro_poster",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "The IPA promises rebuilding.\nTheir oil flows. Their guns sell.\nTheir hands are clean - for the cameras.",
         "lighting": (25, 22, 20),
     },
     {
-        "scene": "mag_graffiti",
+        "scene": "intro_graffiti",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "MAG promises freedom.\nThey bomb checkpoints. They bury their dead in unmarked steppes.\nThe state calls them terrorists. The poor call them family.",
         "lighting": (35, 32, 30),
     },
     {
-        "scene": "krap_convoy",
+        "scene": "intro_convoy",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "And then there is KRAP.\nKoaliția Regională de Apărare Și Pace.\nPeacekeepers, they call themselves.",
         "lighting": (60, 50, 45),
     },
     {
-        "scene": "krap_patch",
+        "scene": "intro_checkpoint",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "They keep the highways open.\nThey keep the oil moving.\nThey keep the questions unasked.",
         "lighting": (25, 25, 28),
     },
     {
-        "scene": "biribel_arrival",
+        "scene": "intro_arrival",
+        "self_graded": True,
+        "caption": "box",
         "speaker": "NARRATOR",
         "text": "Today, one of their operators arrives.\nHe has been told this is a stabilization assignment.\nHe has not been told the truth.",
         "lighting": (15, 18, 28),

@@ -247,6 +247,35 @@ def _advance_grain():
     return GRAIN_VARIANTS[grain_idx]
 
 
+# Hang watchdog: a frozen main loop (Windows "not responding") leaves no
+# Python traceback, so the crash handler never sees it. faulthandler's C
+# watchdog thread runs without the GIL; it is re-armed after every flip and
+# dumps all thread stacks to crash_reports/hang-*.txt if a frame takes over
+# HANG_WATCH_S. An empty file is removed on a clean exit.
+HANG_WATCH_S = 10
+_hang_file = None
+
+
+def _hang_watch():
+    global _hang_file
+    import faulthandler
+    if _hang_file is None:
+        import os as _os_h, time as _time_h
+        _os_h.makedirs("crash_reports", exist_ok=True)
+        _hang_file = open(_os_h.path.join(
+            "crash_reports", _time_h.strftime("hang-%Y%m%d-%H%M%S.txt")), "w")
+    faulthandler.dump_traceback_later(HANG_WATCH_S, repeat=True, file=_hang_file)
+
+
+def _hang_watch_close():
+    import faulthandler, os as _os_h
+    faulthandler.cancel_dump_traceback_later()
+    if _hang_file is not None:
+        _hang_file.close()
+        if _os_h.path.getsize(_hang_file.name) == 0:
+            _os_h.remove(_hang_file.name)
+
+
 def _apply_postprocess():
     b = SETTINGS.brightness
     if abs(b - 1.0) < 0.01:
@@ -531,6 +560,7 @@ class CutscenePlayer:
         self.skip_confirm = False
         self.completed = False
         self.finale_audio = None  # optional scene-owned stems / foley channels
+        self.vo = None  # (shot_idx, clip ms, radio) of the voiced caption
 
     @staticmethod
     def _normalize(shot):
@@ -2872,7 +2902,7 @@ class _CutsceneState(GameState):
                     audio.play("menu_hover", volume=0.12)
                 return
             try:
-                voice.stop()             # skipping a shot cuts its line
+                voice.cut()              # skipping a shot cuts its line
             except Exception:
                 pass
             if cp.shot_idx < len(cp.shots) - 1:
@@ -2950,14 +2980,24 @@ class _CutsceneState(GameState):
         # tagged "radio": True (Vasile on comms, etc.) get the radio filter.
         if (cp.shot_idx, "vo") not in cp.fired_cues:
             cp.fired_cues.add((cp.shot_idx, "vo"))
+            cp.vo = None
             if shot.get("speaker") and shot["text"]:
                 try:
                     from audio import voice
-                    voice.play_line(shot["speaker"], shot["text"],
-                                    radio=bool(shot.get("radio")))
+                    ms = voice.play_line(shot["speaker"], shot["text"],
+                                         radio=bool(shot.get("radio")))
+                    if ms:
+                        cp.vo = (cp.shot_idx, ms, bool(shot.get("radio")))
                 except Exception as exc:
                     print(f"[voice] cutscene VO skipped: {exc}")
-        if cp.char_idx < len(shot["text"]):
+        vo = getattr(cp, "vo", None)
+        if vo and vo[0] == cp.shot_idx and cp.char_idx < len(shot["text"]):
+            # Voiced: the caption types over the clip (ui.speechbox pacing).
+            from ui import speechbox
+            age = elapsed - shot.get("caption_after_ms", 0)
+            cp.char_idx = max(cp.char_idx, speechbox.reveal_count(
+                shot["text"], age, vo[1], vo[2]))
+        elif cp.char_idx < len(shot["text"]):
             if cp.timer >= _text_speed_interval():  # RPE6 P9 text speed (live setting)
                 cp.timer = 0
                 last = shot["text"][max(0, cp.char_idx - 1)]
@@ -2980,6 +3020,8 @@ class _CutsceneState(GameState):
         if shot is None:
             return
         rain_scenes = {"ocean_wide", "city_skyline", "biribel_arrival", "krap_convoy",
+                       "intro_ocean", "intro_city", "intro_poster", "intro_convoy",
+                       "intro_checkpoint", "intro_arrival",
                        "route12_checkpoint", "route12_tanker", "route12_aftermath",
                        "seby_pickup_body", "seby_pickup_reach", "seby_pickup_raise",
                        "m1_escape_dashboard", "m1_escape_closeup",
@@ -3038,7 +3080,15 @@ class _CutsceneState(GameState):
                 draw_scanlines(surface)
             draw_letterbox(surface)
             if t_ms >= shot.get("caption_after_ms", 0) and not shot.get("hide_caption") and (shot["text"] or shot.get("speaker")):
-                gc.draw_film_caption(surface, shot["speaker"], shot["text"])
+                if shot.get("caption") == "box":
+                    # the in-game dialogue box (name tab, pixel font, typewriter)
+                    gc.draw_dialogue_box(surface, shot["speaker"], shot["text"], cp.char_idx,
+                                         len(shot["text"]),
+                                         can_continue=cp.char_idx >= len(shot["text"]),
+                                         show_speaker=bool(shot["speaker"]))
+                else:
+                    gc.draw_film_caption(surface, shot["speaker"], shot["text"],
+                                         typed=cp.char_idx)
             if not shot.get("self_graded"):
                 _g = _advance_grain()
                 if _g is not None:
@@ -4383,6 +4433,7 @@ def _legacy_frame():
     _present_frame()
     _dev_draw_ms = (_dev_time.perf_counter() - _dev_t0) * 1000.0 - _dev_sim_ms   # RPE6 P10
     pygame.display.flip()
+    _hang_watch()
     # RPE6 B-001: the frame-coherent wall clock (engine.core.now_ms/now_s)
     # advances once per presented frame by the raw, unclamped frame time, so
     # every read during the next frame sees the same "now". Fed after flip:
@@ -4470,6 +4521,7 @@ class _LegacyGameScene:
 
 
 _rpe6_config._engine_app.run_scene(_LegacyGameScene())
+_hang_watch_close()
 
 try:
     audio.hard_stop(music=True)          # no VO/loop tail after the window closes

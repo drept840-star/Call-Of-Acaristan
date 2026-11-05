@@ -32,6 +32,7 @@ import re
 import struct
 
 import pygame
+from audio import mixlock as _mixlock  # GIL-free pause/resume (alt-tab deadlock)
 from engine.assets import load_sound as _load_sound  # RPE6 D5: raw loads via engine.assets
 
 from audio.voice_manifest import VOICE_LINES, VOICE_ORDER
@@ -60,7 +61,13 @@ _index = None            # normalized text -> [(vo_id, speaker), ...]
 _deaths = {}             # character (lower) -> path of their death scream
 _extra = []              # channels playing death screams (stopped/paused with VO)
 _paused = False
-_onsets = {}             # VO_ID -> seconds where a scream baked into the clip starts
+_cur_speaker = ""        # who owns the voice channel right now (upper case)
+# Skipping a box / a new line: the old clip fades this fast (a hard stop
+# clicks). A character cutting HIMSELF off is faster still, like a breath
+# caught mid-word.
+CUT_FADE_MS = 70
+INTERRUPT_FADE_MS = 45
+_onsets = {}            # VO_ID -> seconds where a scream baked into the clip starts
 _DEATH_WORDS = ("death", "scream", "dies", "die_")
 
 
@@ -537,14 +544,19 @@ def _effective_volume():
         return 1.0
 
 
-def play_line(speaker, text, radio=False, volume=1.0):
+def play_line(speaker, text, radio=False, volume=1.0, cut=True):
     """Play the recorded VO for a line, if one exists.
 
     ``text`` may still carry a 'SPEAKER: "..."' radio prefix. Returns the
     clip length in ms (0 when nothing was played), so callers like the radio
     director can hold the channel until the actor finishes.
+
+    A new line always ends the previous one, even when the new line has no
+    recording: skipping to an unvoiced box must not leave the last actor
+    talking over it. ``cut=False`` keeps the old clip running when the new
+    line is unrecorded (timeline barks layered under a caption).
     """
-    global _channel
+    global _channel, _cur_speaker
     if not text:
         return 0
     if not pygame.mixer.get_init():
@@ -552,14 +564,17 @@ def play_line(speaker, text, radio=False, volume=1.0):
     pre_speaker, _ = _split_speaker(text)
     speaker = speaker or pre_speaker
     vo_id = find_line(speaker, text)
-    if not vo_id or not has_file(vo_id):
-        return 0
+    snd = None
     sp = (speaker or "").upper()
-    if any(tag in sp for tag in ALWAYS_RADIO_SPEAKERS):
-        radio = True
-    snd = _load(vo_id, radio)
+    if vo_id and has_file(vo_id):
+        if any(tag in sp for tag in ALWAYS_RADIO_SPEAKERS):
+            radio = True
+        snd = _load(vo_id, radio)
     if snd is None:
+        if cut:
+            fade_out(CUT_FADE_MS)
         return 0
+    _cur_speaker = sp
     try:
         from audio.audio import VOICE_CHANNEL_INDEX
         if pygame.mixer.get_num_channels() <= VOICE_CHANNEL_INDEX:
@@ -610,6 +625,34 @@ def fade_out(ms=120):
             pass
 
 
+def cut(ms=CUT_FADE_MS):
+    """The player skipped the box (or the conversation closed): end the line
+    with a short fade instead of a click. Death screams keep playing."""
+    global _cur_speaker
+    _cur_speaker = ""
+    fade_out(ms)
+
+
+def speaking(speaker=None):
+    """True while a line is playing (by ``speaker``, when one is given)."""
+    if not busy():
+        return False
+    if not speaker:
+        return True
+    sp = speaker.upper()
+    return bool(_cur_speaker) and (sp in _cur_speaker or _cur_speaker in sp)
+
+
+def interrupt(speaker=None, ms=INTERRUPT_FADE_MS):
+    """A character cuts his own line off mid-word (the scene stopped matching
+    what he was saying). With ``speaker`` it only cuts that character's line.
+    Returns True when something was actually cut."""
+    if not speaking(speaker):
+        return False
+    cut(ms)
+    return True
+
+
 def busy():
     try:
         return bool(_channel is not None and _channel.get_busy())
@@ -619,8 +662,9 @@ def busy():
 
 def stop():
     """Cut the current line and any death scream immediately."""
-    global _paused
+    global _paused, _cur_speaker
     _paused = False
+    _cur_speaker = ""
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
@@ -637,7 +681,7 @@ def pause():
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
-                ch.pause()
+                _mixlock.pause(ch.id)
             except Exception:
                 pass
 
@@ -650,7 +694,7 @@ def resume():
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
-                ch.unpause()
+                _mixlock.resume(ch.id)
             except Exception:
                 pass
 

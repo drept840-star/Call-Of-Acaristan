@@ -389,7 +389,7 @@ VOICE_LINES = [
     ('VO_365', 'ALEX', "I'll stay on your left."),
     ('VO_366', 'BODI', 'Not tonight, Biribel. Not over a pig.'),
     ('VO_367', 'BODI', "That's the tank! They're all over the track!"),
-    ('VO_368', 'BODI', "That pig was Maru's. She raised it by hand."),
+    ('VO_368', 'BODI', "That pig was Maru's. He raised it by hand."),
     ('VO_369', 'ALEX', 'Bodi? Bodi, what are you doing?'),
     ('VO_370', 'BODI', "You don't walk out of this yard."),
     ('VO_371', 'BODI', "North's clear. Go. I'll hold the yard."),
