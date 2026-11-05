@@ -34,7 +34,7 @@ change `DURATION_MS` (keep it 38-50 s), as long as audio cues stay in sync with 
 From `python tools/finale_compare.py` + contact sheet:
 
 1. **Maru walks into nowhere.** `state_at()` slides Maru from `(-2.7,0,-2.7)` 5.3 m along -X
-   (yaw -90) through the service passage at x=-6.05, and she just *stops* at x=-8.0 in a blank
+   (yaw -90) through the service passage at x=-6.05, and he just *stops* at x=-8.0 in a blank
    3 m alley and stands there for the remaining ~36 s. No destination, no door, no boat, no
    look back, no exit from frame. The beat has no meaning.
 2. **Walk cycle is bad.** `walking_pose()` only drives hip pitch + knee. No arm swing (arms are
@@ -69,7 +69,7 @@ Night, rain, harbour after the tunnel. Biribel has just got wounded Maru out to 
 
 - **Escape (0-~7 s):** Maru limps to a *real* exit - a moored boat / a gap in the fence onto a
   lit pier / a ferry ramp - and is **visibly gone** (boards the boat, or exits frame through a
-  gate that we see). She stops once and looks back at Biribel before leaving. Biribel covers
+  gate that we see). He stops once and looks back at Biribel before leaving. Biribel covers
   her, rifle half-raised, scanning.
 - **Threat (~7-10 s):** a red laser dot appears on Biribel's chest. He freezes. Rack focus.
 - **Discovery (~10-12 s):** Biribel turns; long-lens push to the rooftop: Ucilev, prone or

@@ -289,7 +289,7 @@ end of **Mission 7** ("Fallow Ground"), after the Guard burns Bodi's farm.
 | # | scene | length | content |
 |---|-------|--------|---------|
 | 1 | `m6_insert_chase` | 3.6 s, radio | EXT: the Huey screams low up the frozen river, the camera flying alongside, rotor strobing, nav lights blinking. GUARD (intercept): "All posts, Kim Kim crossing. High-value deserter in the rail yard. Hold the train." |
-| 2 | `m6_insert_cabin` | 3.0 s | INT cockpit: Maru lit green by the instruments, Biribel at the open door behind her. MARU: "That's your notebook man. Volkov." |
+| 2 | `m6_insert_cabin` | 3.0 s | INT cockpit: Maru lit green by the instruments, Biribel at the open door behind him. MARU: "That's your notebook man. Volkov." |
 | 3 | `m6_insert_cabin` | 3.0 s | INT door: Biribel in profile, snow whipping in, moon rim; he chambers the rifle. BIRIBEL: "Then I reach him first." |
 | 4 | `m6_insert_valley` | 5 s, auto | Over his shoulder: the pedal turn swings the door onto the crossing below, floodlights sweeping, gates, the lit train. No city. Tag "KIM KIM BORDER // 02:40". |
 | 5 | `m6_insert_jump` | 4.4 s, auto | Off the shelf lip: low hover in the downwash, the landing light's cone on the snow; he drops off the skid and the powder hits the lens. |

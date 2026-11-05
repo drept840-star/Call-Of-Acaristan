@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-04T00:34:14.296Z
-> Files: 512 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-05T19:29:24.885Z
+> Files: 525 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -37,11 +37,12 @@
 - `M6_TOPDOWN_ART_BRIEF.md` — M6 top-down art brief (Phase 0 diagnosis + Phase 1 brief) (~1882 tok)
 - `M6_TOPDOWN_GRAPHICS_MASTER_PROMPT.md` — M6 top-down graphics - master prompt (~2376 tok)
 - `MISSION7_PLOT.md` — Mission 7 — "Fallow Ground" (~3022 tok)
+- `MISSION8_PLOT.md` — Mission 8 — "The Call" (~4860 tok)
 - `project-mindmap.md` — Call of Acaristan - project mind map (~5316 tok)
 
 ## src/
 
-- `app.py` — _input_recorder: handle_settings_event (~58917 tok)
+- `app.py` — _input_recorder: handle_settings_event (~58301 tok)
 
 ## src/art/
 
@@ -76,8 +77,9 @@
 
 - `__init__.py` — audio package. (~7 tok)
 - `audio.py` (~35683 tok)
+- `mixlock.py` — Pause/resume for the mixer without the alt-tab deadlock. (~508 tok)
 - `voice_manifest.py` — Generated from voice_lines.xlsx - (VO ID, speaker, line) for every voiced line. (~7039 tok)
-- `voice.py` — Voice-over playback for Call of Acaristan. (~8837 tok)
+- `voice.py` — Voice-over playback for Call of Acaristan. (~9533 tok)
 
 ## src/core/
 
@@ -95,7 +97,7 @@
 - `fsm.py` — fsm.py - Finite State Machine infrastructure for Acaristan. (~1929 tok)
 - `game_core.py` — game_core.py - Proxy facade that delegates to split modules. (~6537 tok)
 - `hands.py` — Canonical hand renderers - the reference-anatomy model (dorsal view). (~4371 tok)
-- `interactions.py` — Player interactions with the world: doors, safe, NPCs, alarms. (~6775 tok)
+- `interactions.py` — Player interactions with the world: doors, safe, NPCs, alarms. (~7720 tok)
 - `json_store.py` — Shared atomic JSON persistence helpers for save_data.json / settings.json. (~413 tok)
 - `level_editor.py` — LevelEditor: set_map, toggle, handle_event, rebuild_world + 3 more (~2564 tok)
 - `lighting.py` — core.lighting - deprecated path (RPE6 Phase 2, A-006). (~180 tok)
@@ -123,6 +125,7 @@
 - `death3d.py` — Gameplay death falls for 3D guards (Mission 7 raid, Mission 6 yard). (~1443 tok)
 - `engine.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~8763 tok)
 - `figure_kit.py` — cutscenes.figure_kit - deprecated path (RPE6 Phase 2, A-006): the kit is ``engine.anim``. (~176 tok)
+- `intro3d.py` — intro3d.py - engine3d takes for the opening narration (``core.cutscene1``). (~14135 tok)
 - `k9.py` — K-9 armory pickup: one continuous, deterministic, software-safe take. (~5003 tok)
 - `m3broadcast.py` — Mission 3 - Kill Order -> Broadcast transition cinematic (Slice 5 -> 6). (~10591 tok)
 - `m3cell_balaceanu_patch.py` — Replace the body of _m3_draw_balaceanu in src/cutscenes/m3cell.py with this. (~152 tok)
@@ -130,7 +133,7 @@
 - `m3ending.py` — m3ending.py - Mission 3 finale cutscene (the Vostral read live on air). (~5003 tok)
 - `m3ko.py` — Mission 3 - Kill Order transition cinematic (Slice 5 cutscene rehaul, v2). (~8718 tok)
 - `m3ops.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~17136 tok)
-- `m4aftermath.py` — m4aftermath.py - Mission 4 finale + intro cutscene art (The Aftermath). (~9390 tok)
+- `m4aftermath.py` — m4aftermath.py - Mission 4 finale + intro cutscene art (The Aftermath). (~11013 tok)
 - `m5decal.py` — Sprite -> wall decal mesh for the M5 3D cutscenes. (~1129 tok)
 - `m5ending3d.py` — Authored M5 ending set and distance-driven actor blocking. (~9970 tok)
 - `m5fx3d.py` — m5fx3d.py - FX kit for the Mission 5 3D cutscenes (m5martial3d / m5mid3d). (~6489 tok)
@@ -300,7 +303,7 @@
 - `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~16989 tok)
 - `hold.py` — Weapon holds and arm-vs-body safety for the box rig (engine3d.rig.Humanoid). (~3251 tok)
 - `ik.py` — Analytic two-bone IK for the box rig (engine3d.rig.Humanoid). (~3209 tok)
-- `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~15952 tok)
+- `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~17338 tok)
 - `textures.py` — engine3d.textures - pixel textures on world faces. (~1502 tok)
 
 ## src/entities/
@@ -460,7 +463,7 @@
 - `draw.py` — Split from mission2.py - see mission2.py (shim) for the map. (~110670 tok)
 - `draw3d.py` — Mission 2 in 2.5D: Route 12 drawn in 3D over the 2D rules. (~15851 tok)
 - `meta.py` — Split from mission2.py - see mission2.py (shim) for the map. (~7805 tok)
-- `sniper.py` — Split from mission2.py - see mission2.py (shim) for the map. (~25924 tok)
+- `sniper.py` — Split from mission2.py - see mission2.py (shim) for the map. (~26560 tok)
 - `sniper3d_set.py` — Route 12 toll plaza, built for the low-poly sniper cinematic. (~3732 tok)
 - `sniper3d.py` — Mission 2 - "Route 12 Kill-Box": the sniper ambush as a low-poly 3D film. (~16640 tok)
 - `starts.py` — Split from mission2.py - see mission2.py (shim) for the map. (~7939 tok)
@@ -485,12 +488,12 @@
 ## src/missions/m4/
 
 - `__init__.py` — Mission 4: The Aftermath - the world after the broadcast. (~1108 tok)
-- `apc.py` — Mission 4 wave 5: the APC ram. (~1266 tok)
+- `apc.py` — Mission 4 wave 5: the APC ram. (~1456 tok)
 - `components.py` — Mission 4 entity components (RPE6 Phase 5, D4). (~171 tok)
 - `draw.py` — Split from mission4.py - see __init__.py for the package facade. (~35485 tok)
 - `draw3d.py` — Mission 4 in 2.5D: the curfew street and the radio station in 3D. (~16715 tok)
-- `escort.py` — Mission 4 escort: Vasile, the KRAP comms cache and the supply pool. (~1382 tok)
-- `flow.py` — Split from mission4.py - see __init__.py for the package facade. (~9239 tok)
+- `escort.py` — Mission 4 escort: Vasile, the KRAP comms cache and the supply pool. (~1414 tok)
+- `flow.py` — Split from mission4.py - see __init__.py for the package facade. (~8700 tok)
 - `fortify.py` — Mission 4 fortify: barricade sites, the build / upgrade / repair holds. (~2133 tok)
 - `maps.py` — Split from mission4.py - see __init__.py for the package facade. (~5400 tok)
 - `meta.py` — Mission 4 - part module. See __init__.py for the package facade. (~2782 tok)
@@ -594,7 +597,7 @@
 - `hud.py` — HUD overlays: minimap, safe keypad, notebook inspection, desk notes. (~18364 tok)
 - `kit.py` — KRAPNET terminal style kit shared by the main menu and its sub-screens. (~2093 tok)
 - `main.py` — Split from menu.py - see menu.py (shim) for the map. (~11581 tok)
-- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~64890 tok)
+- `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~65981 tok)
 - `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~4138 tok)
 - `mp.py` — Split from menu.py - see menu.py (shim) for the map. (~25518 tok)
 - `mp3d.py` — 3D kit for multiplayer: soldier rigs, guns and Outfitter portraits. (~3566 tok)
@@ -693,11 +696,30 @@
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
 - `m2_td3d_shots.py` — Render Mission 2 top-down frames in 2.5D (and 2D with ACA_TD_2D=1). (~734 tok)
 - `m3_td3d_shots.py` — Render Mission 3 frames in 2.5D (and 2D with ACA_TD_2D=1). (~981 tok)
+- `m4_gameplay_video.py` — Record a bot-played Mission 4 gameplay video (2.5D) to MP4. (~4342 tok)
 - `m4_td3d_shots.py` — Render Mission 4 frames in 2.5D (and 2D with ACA_TD_2D=1). (~774 tok)
 - `m6_shots.py` — M6 3D film + interactive train stills. (~4802 tok)
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
-- `smoke_test.py` — Must be set before pygame/config import. (~158762 tok)
+- `smoke_test.py` — Must be set before pygame/config import. (~159805 tok)
 - `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~6119 tok)
+
+## tools/ost/
+
+- `album.py` — Call of Acaristan - Original Soundtrack. Eight tracks, menu to ending film. (~13771 tok)
+- `synth.py` — Small numpy synth for the Call of Acaristan OST. (~8535 tok)
+
+## tools/trailer_25d/
+
+- `capture_wave.py` — The switch shot, recorded twice per tick: one M3 bot run drawn in the flat (~672 tok)
+- `capture.py` — Gameplay clips for the 2.5D announcement trailer (TVA 1 broadcast). (~705 tok)
+- `render.py` — TVA 1 broadcast: the 2.5D announcement trailer. (~8989 tok)
+- `sets.py` — 3D sets for the TVA 1 broadcast: studio desk, palace podium with the (~6246 tok)
+- `shorts.py` — Four vertical shorts (1080x1920, 30 fps) cut from the 2.5D announcement. (~3616 tok)
+- `thumbnail.py` — YouTube thumbnail for the 2.5D announcement (1280x720). (~910 tok)
+
+## trailers/announce_25d/
+
+- `youtube_description.md` — YouTube copy - 2.5D announcement (~649 tok)

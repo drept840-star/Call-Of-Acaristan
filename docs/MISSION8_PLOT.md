@@ -210,7 +210,8 @@ scene: m8r_gantry         speaker: BODI      "This part's yours."
 | 3 | **The Gantry** (top-down) | Reach Vasile. | Up onto the sign gantry where the M2 sniper sat. Bodi stays at the bottom: *"This part's yours."* |
 | 4 | **Old Friends** (3D dialogue) | — | The two of them alone. |
 | 5 | **The Kill** (3D, interactive) | Shoot Vasile. | GTA IV-style execution. See below. |
-| 6 | **Epilogue** (3D cutscene) | — | The cost. |
+| 6 | **The Tractor Chase** (3D, interactive) | Reach the train at the Kim Kim crossing before it leaves. | Bodi drives the farm tractor. Biribel rides the trailer and fires. See below. |
+| 7 | **Epilogue** (3D cutscene) | — | The cost. |
 
 ## Phase 4 — Old Friends
 
@@ -239,14 +240,42 @@ Vasile doesn't beg. Between shots he says nothing, or at most: *"...Steady
 hands."* The player can stop shooting at any point after the third shot — he
 dies either way, but the game lets the player decide how much they needed.
 
-## Phase 6 — Epilogue (Revenge)
+## Phase 6 — The Tractor Chase (Revenge)
+
+Decided, not a player choice. Bodi's old farm tractor, Biribel on the trailer
+with the hunting rifle. Guard jeeps chase them from the Route 12 ambush site
+down the back roads to the Kim Kim rail crossing. The train leaves at six.
+
+| Time | Section | What happens |
+|------|---------|--------------|
+| 0:00–0:40 | **Farm track** | Tractor leaves the M2 set. Two jeeps tailgate. Teaches the trailer gun and tire shots. |
+| 0:40–1:40 | **Hay bales and ditch** | Bodi takes the ditch jump. Guard truck with a mounted gun cuts in. Bodi: *"Hold on!"* |
+| 1:40–2:40 | **Route 12 wrecks** | Through the burned squad cars. Guards bail out with rifles. Biribel clears the trailer. |
+| 2:40–3:30 | **Kim Kim crossing** | Barrier comes down. Bodi rams it. Train horn. Last jeep blocks the tracks. |
+
+**Controls:** Bodi steers on a fixed route with lane choices; Biribel aims the
+trailer gun (yaw/pitch limits) and shoots tires and drivers. Tractor hull is
+shown by smoke and a warning tone.
+
+**Fail conditions (restart at the last section checkpoint):**
+- **Tractor hull reaches zero.** It stalls. Bodi: *"Come on, come on!"*
+- **Train leaves first.** The timer runs out at the crossing: the train pulls
+  away, and the run restarts from the crossing.
+
+**Ending of the chase (scripted):** the tractor stops on the tracks. Biribel
+jumps for the last car. Bodi stays on the seat and waves him off.
+
+## Phase 7 — Epilogue (Revenge)
 
 ```
 scene: m8r_radio          speaker: ALEX      "Biribel - the mansion, they were waiting for us. Maru's down. I'm sorry. I'm sorry-" (static)
 scene: m8r_tv             speaker: PRESIDENT "The terrorist Maru is dead. The traitor Biribel will be found."
+scene: m8r_mansion_3d     speaker: ""        (3D render, reuses the Duty mansion set. Night, the estate lit and empty. Camera slowly pulls back from the gates.)
+scene: m8r_funeral_3d     speaker: ""        (3D render, same night. A closed state funeral in the mansion grounds. Maru's casket under lights. Maru in a dark suit, hands folded, hair combed, face calm. Guards at attention. No family present.)
+scene: m8r_funeral_3d     speaker: ANCHOR    "...the state buries the man who attacked the presidential residence."
 scene: m8r_ucilev         speaker: ANCHOR    "...appointed Commander of the Presidential Guard, Andrei Bogdan Velicu."
-scene: m8r_bodi_truck     speaker: BODI      "Train leaves at six. I'll wait till it does."
-scene: m8r_border_train   speaker: ""        (The Kim Kim border. Night. The train Volkov never caught. Biribel on it. Bodi's truck on the road outside, headlights off.)
+scene: m8r_bodi_crossing  speaker: BODI      "Go! Go, I've got the barrier."
+scene: m8r_border_train   speaker: ""        (The Kim Kim border. Night. The train Volkov never caught. Biribel on it. Bodi's tractor on the tracks behind, smoking, lights out.)
 scene: m8r_ucilev_photo   speaker: ""        (Ucilev at the border post, holding Biribel's photo. He watches the train go.)
 scene: m8r_biribel_vo     speaker: BIRIBEL   "Gabi, Seby, Darius. It's done. He's gone."
 scene: m8r_biribel_vo     speaker: BIRIBEL   "Volkov - I caught your train. The coffee's terrible."
@@ -275,6 +304,12 @@ gameplay.
 
 ## Technical Notes
 
+- **Endings are FULLY 3D, not 2.5D.** Both endings run entirely in the 3D
+  engine with no top-down or pre-rendered 2D views, no 2D sprite effects, and
+  no 2D overlays in the play view. That covers Duty Phases 3-7 (Liftoff, Last
+  Flight, The Crash, The Ridge, Epilogue) and Revenge Phases 4-7 (Old Friends,
+  The Kill, Tractor Chase, Epilogue). The top-down mansion and gantry fights stay as the
+  pre-ending gameplay.
 - **Package:** `src/missions/m8/` with `duty/` and `revenge/` parts behind one
   facade; `STATE.m8_route` picks the stage ladder. Save system records
   `MISSION_8` and the route.
@@ -287,17 +322,21 @@ gameplay.
   `r.add_humanoid(...)` (GPU-skinned — crowds and Guards are cheap).
 - **Kill scenes:** per-hit reaction poses blended with `blend()` over ~0.25 s,
   layered on a slow-motion time scale; camera cuts keyed to hit events, like the
-  M2 film's VO-anchored cuts. Reuse the M2 blood mist, spark and muzzle sprites.
+  M2 film's VO-anchored cuts. Blood mist, sparks and muzzle flashes are 3D
+  particle meshes (camera-facing quads placed in the world), not 2D sprites
+  composited over the frame.
 - **Helicopter chase:** fixed spline route; city chunks (blocks of `box`
   buildings, streets, lights) streamed ahead and dropped behind
   (`r.objs` + `GLRenderer.invalidate_static()` on chunk swap, or one baked Obj per
   chunk toggled with `.visible`). Night fog hides streaming. Door gun aim as a
   yaw/pitch offset on the camera; hits by ray vs. target spheres. Rotors =
-  spinning flat boxes plus a translucent disc sprite. Searchlights = emissive
+  spinning flat boxes plus a translucent 3D disc mesh (no sprite). Searchlights = emissive
   cones (double-sided, layer 1).
-- **Sniper finale:** first-person scope reusing the M2 scope overlay; sway =
-  low-frequency noise on aim, breath-hold damps it; drop = small y offset by
-  range.
+- **Sniper finale:** first-person 3D camera on the rifle, looking down the
+  ridge at the 3D evacuation pad. Scope zoom = FOV change on the 3D camera,
+  not a pre-rendered scope image. The reticle is the only 2D element (HUD).
+  Sway = low-frequency noise on aim, breath-hold damps it; drop = small y
+  offset by range.
 - **Verification:** smoke checks per route (stage ladder, checkpoints, chase
   fail conditions, kill-scene shot count), and every 3D shot rendered on both
   backends via `tools/engine3d_check.py`-style parity.

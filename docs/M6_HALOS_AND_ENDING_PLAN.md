@@ -277,7 +277,7 @@ inside the renderer (the boxcar exit already switches cameras by time):
 **H1 - Pickup (0-4.6 s).** Outside the customs post. The Huey descends into
 the floodlit lot, nose light on, rotor wash: snow blown *outward* from under
 the rotor (new radial mode for `snow3d`, or `dust_motes` with radial drift),
-lamp halos swaying in the wash. Maru in the open door, beckoning (her rig
+lamp halos swaying in the wash. Maru in the open door, beckoning (his rig
 already exists from M5? confirm `hum("maru")`; otherwise a hooded figure).
 Biribel runs low under the disc, one foot on the skid, hauled in by Maru's
 hand. Camera: low, behind Biribel, tracking with lag, slight shake.

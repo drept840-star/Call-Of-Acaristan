@@ -1032,7 +1032,7 @@ docs/engine/CHANGELOG.md for the evidence).
   13 cm marching foot-lift and 63 mm pelvis bounce. Now STANCE=0.56
   (~12% double support, no flight phase), toe clearance ~5 cm, pelvis
   yaw 3.0->2.2 deg, Maru stride target 1.2->1.35 m (cadence 2.15 steps/s
-  at her 1.45 m/s), Ucilev UC_STRIDE .64->.78. Probe: stance drift
+  at his 1.45 m/s), Ucilev UC_STRIDE .64->.78. Probe: stance drift
   33->7 mm, swing clearance 133->82 mm, Ucilev pelvis bob 19 mm; the
   check's planted-foot assertions still pass exactly.
 - **Background leaks:** the designed skyline spanned only x -20..17, so

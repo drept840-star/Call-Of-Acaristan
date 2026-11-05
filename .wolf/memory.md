@@ -2239,3 +2239,154 @@ description: chronological action log per session, consolidated weekly
 | 02:34 | Created src/missions/m4/apc.py | — | ~1266 |
 <!-- session:NjNlNzBkMWItNDBiMC00Nzc2LWJlNzAtNTBjMzE1ZWExZThj -->
 | 2026-11-04T12:24:23.310Z | M4 overhaul finished: escort, fortify, siege, APC, art pass; playtest fixes (friendly pass-through barricades, wave restart at rack, sub-pixel siege movement, barricade/civilian tuning); smoke checks and docs | src/missions/m4/siege.py,src/missions/m4/systems.py,src/missions/m4/flow.py,src/missions/m4/meta.py,tools/smoke_test.py,docs/MISSION4_PLOT.md,docs/M4_OVERHAUL_PLAN.md | SMOKE TEST: OK; M4 SMOKE: OK |
+| 14:38 | Created tools/m4_gameplay_video.py | — | ~4342 |
+
+## Session: 2026-11-04 15:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-04 15:53
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:05 | Created src/cutscenes/intro3d.py | — | ~14156 |
+| 16:07 | Edited src/cutscenes/intro3d.py | — | ~0 |
+
+## Session: 2026-11-04 18:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:47 | Session end: 12 writes across 10 files (M4_OVERHAUL_PLAN.md, draw.py, smoke_test.py, draw3d.py, m4_td3d_shots.py) | 17 reads | ~58138 tok |
+| 18:48 | Edited src/audio/voice.py | expanded (+6 lines) | ~89 |
+| 18:48 | Edited src/audio/voice.py | modified play_line() | ~336 |
+| 18:49 | Edited src/audio/voice.py | modified cut() | ~254 |
+| 18:49 | Edited src/audio/voice.py | 3→4 lines | ~40 |
+| 18:49 | Edited src/core/interactions.py | added error handling | ~927 |
+| 18:52 | Edited src/missions/m2/sniper.py | 1→2 lines | ~35 |
+| 18:52 | Edited src/missions/m2/sniper.py | 1→2 lines | ~30 |
+| 18:52 | Edited src/missions/m2/sniper.py | 2→4 lines | ~62 |
+| 18:52 | Edited src/missions/m4/escort.py | 1→2 lines | ~36 |
+| 18:52 | Edited src/missions/m4/escort.py | 1→2 lines | ~18 |
+| 18:52 | Edited src/missions/m4/escort.py | inline fix | ~15 |
+| 18:52 | Edited src/missions/m4/apc.py | inline fix | ~16 |
+| 18:52 | Edited src/missions/m4/flow.py | 1→2 lines | ~41 |
+| 19:10 | Session end: 2 writes across 1 files (intro3d.py) | 1 reads | ~22947 tok |
+<!-- session:MjhmNDU0Y2QtMTA1MS00MTI1LTg1OGYtNGQ2ZjA3ODAyZTgw -->
+| 2026-11-04T17:15:16.453Z | Voice cut-off: play_line always ends previous line (70ms fade), voice.cut/interrupt/speaking; dialogue box skips cut VO (M3/M4/M5, cutscenes). Radio self-interrupt: valid= premise breaks speaker off mid-word with dashed subtitle, cut_to= correction, interrupt=True talks over live line, radio_interrupt(). Hooked lines in M1-M6. | src/audio/voice.py,src/core/interactions.py,src/ui/radio.py,src/app.py,src/missions/m1/update.py,src/missions/m2/sniper.py,src/missions/m2/world.py,src/missions/m3/world.py,src/missions/m3/systems.py,src/missions/m3/draw.py,src/missions/m3/sweep.py,src/missions/m4/world.py,src/missions/m4/flow.py,src/missions/m4/escort.py,src/missions/m4/apc.py,src/missions/m5/flow.py,src/missions/m5/world.py,src/missions/m5/quarter.py,src/missions/m6/world.py,src/missions/m6/stealth.py,src/missions/m6/combat.py | compileall OK, SMOKE TEST: OK, headless radio break-off script verified |
+
+## Session: 2026-11-04 19:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-04 20:08
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-04 20:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-04 20:30
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:37 | Edited src/app.py | modified _hang_watch() | ~309 |
+| 20:37 | Edited src/app.py | 2→3 lines | ~18 |
+| 20:37 | Edited src/app.py | 3→4 lines | ~23 |
+| 21:04 | Created src/audio/mixlock.py | — | ~508 |
+<!-- session:MTljZmNjOTQtNzIyNC00MmQ3LTkxN2EtYTExMzM1ZDZhMzZk -->
+| 2026-11-04T19:11:38.564Z | Fixed alt-tab/pause freeze: pygame-ce mixer.pause/music.pause/unpause/Channel.pause take SDL audio lock while holding GIL; endsound_callback holds lock and wants GIL -> deadlock. New src/audio/mixlock.py calls SDL2_mixer via ctypes (GIL released); all call sites routed through it. Added hang watchdog (faulthandler) in app.py writing crash_reports/hang-*.txt. | src/audio/mixlock.py,src/audio/audio.py,src/audio/voice.py,src/missions/m5/finale_audio.py,src/missions/m6/m6_audio.py,src/missions/m7/m7_audio.py,src/app.py | stress test: old API deadlocks 2/2, new 0/2 (1.2M iters); smoke OK |
+
+## Session: 2026-11-04 21:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:30 | Edited src/ui/match_screen.py | expanded (+6 lines) | ~389 |
+| 21:30 | Edited src/ui/match_screen.py | 9→8 lines | ~146 |
+| 21:41 | Edited tools/smoke_test.py | 2→6 lines | ~103 |
+
+## Session: 2026-11-04 21:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:43 | Edited docs/MISSION8_PLOT.md | expanded (+6 lines) | ~118 |
+| 21:43 | Edited docs/MISSION8_PLOT.md | 1→3 lines | ~48 |
+| 21:43 | Edited docs/MISSION8_PLOT.md | inline fix | ~24 |
+| 21:43 | Edited docs/MISSION8_PLOT.md | 3→5 lines | ~86 |
+| 21:44 | Edited tools/smoke_test.py | len() → kill() | ~115 |
+| 21:45 | Edited docs/MISSION8_PLOT.md | 2→3 lines | ~64 |
+| 21:46 | Edited docs/MISSION8_PLOT.md | modified conditions() | ~557 |
+| 21:46 | Edited docs/MISSION8_PLOT.md | 2→2 lines | ~19 |
+| 21:47 | Edited docs/MISSION8_PLOT.md | 2→5 lines | ~169 |
+
+## Session: 2026-11-04 21:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:53 | Edited tools/ost/synth.py | modified piano() | ~335 |
+| 21:53 | Edited tools/ost/synth.py | modified fire() | ~157 |
+| 21:55 | Edited tools/ost/album.py | added 34 condition(s) | ~5408 |
+| 22:10 | Edited tools/ost/synth.py | modified accordion() | ~1306 |
+
+## Session: 2026-11-04 22:28
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-04 22:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-04 00:16
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:17 | Edited src/cutscenes/m4aftermath.py | modified _gait_feet() | ~513 |
+| 00:18 | Edited src/cutscenes/m4aftermath.py | sin() → _gait_feet() | ~125 |
+| 00:18 | Edited src/cutscenes/m4aftermath.py | 6→10 lines | ~192 |
+
+## Session: 2026-11-04 01:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:48 | Created tools/trailer_25d/capture.py | — | ~705 |
+| 01:57 | Created tools/trailer_25d/sets.py | — | ~1896 |
+| 02:00 | Edited tools/trailer_25d/sets.py | modified proj_quad() | ~4507 |
+| 02:09 | Created tools/trailer_25d/render.py | — | ~8989 |
+<!-- session:YWQ0M2U3N2UtY2Y4MC00NWMzLWE5ZGEtYzA0OGVmYmVhZTRk -->
+| 2026-11-05T00:20:56.940Z | 2.5D announcement trailer (TVA 1 colour-TV parody): capture scripts, 3D sets (studio, palace, flat, window, press, card), compositor + VO/music/SFX mix | tools/trailer_25d/capture.py,tools/trailer_25d/capture_m4.py,tools/trailer_25d/capture_mp.py,tools/trailer_25d/capture_tilt.py,tools/trailer_25d/sets.py,tools/trailer_25d/render.py | trailers/announce_25d/announce_25d_trailer.mp4 171s 1080p30, -14.7 LUFS; frames reviewed |
+| 02:51 | Created tools/trailer_25d/thumbnail.py | — | ~910 |
+| 02:54 | Created tools/trailer_25d/shorts.py | — | ~3616 |
+| 02:55 | Created trailers/announce_25d/youtube_description.md | — | ~693 |
+| 07:09 | Session end: 8 writes across 1 files (MISSION8_PLOT.md) | 0 reads | ~1163 tok |
+| 07:09 | Session end: 4 writes across 2 files (match_screen.py, smoke_test.py) | 1 reads | ~7339 tok |
+| 07:09 | Session end: 4 writes across 2 files (app.py, mixlock.py) | 0 reads | ~858 tok |
+| 07:09 | Session end: 4 writes across 2 files (synth.py, album.py) | 0 reads | ~7206 tok |
+| 07:09 | Session end: 3 writes across 1 files (m4aftermath.py) | 1 reads | ~830 tok |
+
+## Session: 2026-11-05 15:44
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:44 | Created tools/trailer_25d/capture_wave.py | — | ~672 |
+
+## Session: 2026-11-05 21:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:29 | Edited src/engine3d/rig.py | modified pose_run() | ~381 |
+
+## Session: 2026-11-05 22:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-05 23:01
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
