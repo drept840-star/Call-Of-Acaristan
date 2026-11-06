@@ -22,7 +22,6 @@ import numpy as np
 import pygame
 
 AMBIENT = (118, 130, 160)          # the light map's floor: midnight blue
-NIGHT_LIFT = (5, 8, 14)            # added after the multiply: blue in the blacks
 VIGNETTE_MAX = 175
 _BASE_PX = 128
 
@@ -80,6 +79,14 @@ def _light_map(size, ambient=AMBIENT):
     return lm
 
 
+def lift_of(ambient):
+    """The lift added after the multiply: a little of the ambient's own hue
+    in the blacks. A fixed blue lift turned every warm or neutral room
+    blue-grey (it is most of a dark frame's colour)."""
+    lo = min(ambient)
+    return tuple(int(2 + (c - lo) * 0.25) for c in ambient)
+
+
 def apply(surface, v, lights, ambient=AMBIENT):
     """Grade ``surface`` (the presented 3D frame) through view ``v``."""
     lm = _light_map(surface.get_size(), ambient)
@@ -111,7 +118,7 @@ def apply(surface, v, lights, ambient=AMBIENT):
     surface.blit(lm, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
     for col, cx, cy, w, h in bloom:
         _add(surface, col, cx, cy, w, h)
-    surface.fill(NIGHT_LIFT, special_flags=pygame.BLEND_RGB_ADD)
+    surface.fill(lift_of(ambient), special_flags=pygame.BLEND_RGB_ADD)
 
 
 def vignette(surface):

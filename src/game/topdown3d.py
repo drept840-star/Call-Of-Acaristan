@@ -45,6 +45,7 @@ CAMS = {
     "MISSION2": Cam(64.0, 25.0, 50.0),
     "MISSION3": Cam(64.0, 25.0, 50.0),
     "MISSION4": Cam(64.0, 25.0, 50.0),
+    "MISSION5": Cam(64.0, 25.0, 50.0),
 }
 # Optional per-mission gate: the mission is 2.5D only while its gate returns
 # True (Mission 3 draws only the cell block in 3D; the other wings stay 2D).
@@ -333,6 +334,97 @@ def shadow(half_w, half_d=None, alpha=130):
     draw.bounds_m = (half_w + 0.1, half_d + 0.1)
     return draw
 
+
+# Cast shadows. One stylised shadow direction for every top-down view, kept
+# apart from the key light so the sun can stay put for readable wall faces:
+# floor metres per metre of height - east, and a little toward the camera so
+# the shadow is not hidden behind its own wall.
+SHADOW_DIR = (0.55, -0.16)
+SHADOW_COL = (4, 6, 16)
+
+
+def _hull(pts):
+    pts = sorted(set(pts))
+    if len(pts) < 3:
+        return pts
+
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2 and ((out[-1][0] - out[-2][0]) * (p[1] - out[-2][1])
+                                     - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+    lo, up = half(pts), half(reversed(pts))
+    return lo[:-1] + up[:-1]
+
+
+def _sweep(x0, x1, z0, z1, h):
+    ox, oz = SHADOW_DIR[0] * h, SHADOW_DIR[1] * h
+    c = [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]
+    return _hull(c + [(x + ox, z + oz) for x, z in c])
+
+
+def _body_hull(x, z, h=1.75, r=0.26):
+    ox, oz = SHADOW_DIR[0] * h, SHADOW_DIR[1] * h
+    ring = [(x + r * math.cos(a * math.pi / 4.0), z + r * 0.8 * math.sin(a * math.pi / 4.0))
+            for a in range(8)]
+    head = [(x + ox * 0.98 + 0.14 * math.cos(a * math.pi / 4.0),
+             z + oz * 0.98 + 0.14 * math.sin(a * math.pi / 4.0)) for a in range(8)]
+    return _hull(ring + head)
+
+
+_CAST = {}
+
+
+def cast_shadows(r, alpha=100, col=SHADOW_COL):
+    """Shared top-down cast shadows. Call once per frame just before
+    ``r.flush``: every ground-standing mesh baked by ``m6world3d.static_scene``
+    (``r.shadow_boxes``) and every humanoid queued this frame
+    (``r.actor_log``) throws a hard shadow along ``SHADOW_DIR``. All of them
+    go into one layer-1 sprite written without blending, so overlapping
+    shadows do not double up; walls (layer 2) still hide it."""
+    boxes = getattr(r, "shadow_boxes", None) or ()
+    hulls = _CAST.get(id(boxes))
+    if hulls is None:
+        _CAST.clear()
+        hulls = _CAST[id(boxes)] = [_sweep(*b) for b in boxes]
+    polys = list(hulls)
+    for p in getattr(r, "actor_log", ()):
+        polys.append(_body_hull(p[0], p[2]))
+    W, H = r.w, r.h
+    scr, anchor = [], None
+    for poly in polys:
+        pts = []
+        for x, z in poly:
+            q = r.project((x, 0.0, z))
+            if q is None:
+                pts = None
+                break
+            pts.append((q[0], q[1]))
+        if pts is None:
+            continue
+        if (max(p[0] for p in pts) < 0 or min(p[0] for p in pts) > W
+                or max(p[1] for p in pts) < 0 or min(p[1] for p in pts) > H):
+            continue
+        if anchor is None:
+            anchor = (poly[0][0], 0.02, poly[0][1])
+        scr.append(pts)
+    if not scr:
+        return
+    layer = _CAST.get(("surf", W, H))
+    if layer is None:
+        layer = _CAST[("surf", W, H)] = pygame.Surface((W, H), pygame.SRCALPHA)
+
+    def draw(s, sx, sy, scale, z):
+        layer.fill((0, 0, 0, 0))
+        c = col + (alpha,)
+        for pts in scr:
+            pygame.draw.polygon(layer, c, pts)
+        s.blit(layer, (0, 0))
+    draw.bounds = (0, 0, W, H)
+    r.add_sprite(anchor, draw, layer=1)
 
 def tac_ring(rad, col, shade=0.52):
     """Sprite callback: the tactical floor marker - a soft drop shadow, a

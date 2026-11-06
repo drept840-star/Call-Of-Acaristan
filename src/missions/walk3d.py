@@ -98,6 +98,7 @@ def draw(ws, surface, fcx, fcy):
         _draw_walls(ws, r)
         _draw_cast(ws, r, flashes, tm)
         _lights(ws, r, v, flashes, tm)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback

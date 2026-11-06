@@ -84,8 +84,8 @@ PLANK = (112, 84, 54)
 
 NIGHT_STREET = dict(_m1.NIGHT, ambient=0.30, diffuse=0.42, tint=(0.90, 0.96, 1.06))
 NIGHT_STATION = dict(_m1.NIGHT, ambient=0.33, diffuse=0.40, tint=(0.95, 1.02, 0.98))
-AMBIENT_STREET = (150, 156, 172)   # the m4street grade: blue-cyan night
-AMBIENT_STATION = (156, 166, 160)  # phosphor-green inside the station
+AMBIENT_STREET = (160, 162, 166)   # the m4street grade: blue-cyan night
+AMBIENT_STATION = (186, 196, 182)  # phosphor-green inside the station
 
 WALL_H = {"border": 3.0, "filler": 3.0, "station": 3.4, "cordon": 2.0, "build": 2.9, "weak": 2.9}
 _STYLE = {"row": ("brick", (84, 62, 52), (110, 92, 80)),
@@ -194,6 +194,7 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback

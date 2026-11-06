@@ -450,8 +450,8 @@ LAMPS = {
 }
 # The grade's multiply floor per wing: lower than the cell block's but the
 # wings are wider rooms, so the dark between lamps must still read.
-AMBIENT = {"comms": (176, 170, 172), "archives": (184, 180, 174), "killorder": (186, 188, 190),
-           "broadcast": (184, 182, 190)}
+AMBIENT = {"comms": (184, 168, 154), "archives": (184, 182, 178), "killorder": (184, 184, 180),
+           "broadcast": (184, 180, 176)}
 POOL_K = {"room": 0.45, "cor": 0.5, "relay": 0.5, "srv": 0.45, "bat": 0.48, "atr": 0.5, "stk": 0.45,
           "vault": 0.5, "lobby": 0.5, "dock": 0.55, "studio": 0.5}
 

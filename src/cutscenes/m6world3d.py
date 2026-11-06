@@ -142,6 +142,7 @@ def add(r, m, bias=0.0):
     if _STATIC_BUILD["active"]:
         if _STATIC_BUILD["rebuild"]:
             r.bake(m)
+            _shadow_box(m)
         return
     if _PACK_MEMO["on"]:
         _memo_add(r, m, bias)
@@ -151,6 +152,25 @@ def add(r, m, bias=0.0):
 
 
 _STATIC_BUILD = {"active": False, "rebuild": False}
+_SHADOW_ACC = []
+
+
+def _shadow_box(m):
+    """Remember the world box of a baked mesh that stands on the ground, for
+    the shared top-down cast shadows (game.topdown3d.cast_shadows)."""
+    v = m.verts
+    if not v:
+        return
+    xs = [p[0] for p in v]
+    ys = [p[1] for p in v]
+    zs = [p[2] for p in v]
+    y0, y1 = min(ys), max(ys)
+    x0, x1, z0, z1 = min(xs), max(xs), min(zs), max(zs)
+    if y1 < 0.45 or y0 > 0.6 or (x1 - x0) > 80.0 or (z1 - z0) > 80.0:
+        return
+    if (x1 - x0) * (z1 - z0) < 0.02:
+        return
+    _SHADOW_ACC.append((x0, x1, z0, z1, min(y1, 4.5)))
 _STATIC_SIG = None
 
 # Live (not baked) sets whose meshes repeat frame to frame: the per-face
@@ -273,6 +293,7 @@ def static_scene(r, key):
         invalidate()
     _STATIC_SIG = sig
     _STATIC_BUILD["rebuild"] = True
+    del _SHADOW_ACC[:]
     return True
 
 
@@ -284,6 +305,8 @@ def static_end(r, ok=True):
     rebuilds the set in full instead of reusing the fragment.
     """
     global _STATIC_SIG
+    if ok and _STATIC_BUILD["rebuild"]:
+        r.shadow_boxes = list(_SHADOW_ACC)
     _STATIC_BUILD["active"] = False
     _STATIC_BUILD["rebuild"] = False
     if not ok:

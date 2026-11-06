@@ -74,7 +74,8 @@ TANK = (150, 146, 132)
 FIRE = (255, 140, 56)
 BLAST = (255, 170, 90)
 VOID = _m1.VOID
-AMBIENT = (176, 176, 180)        # grade floor: the 2D night is greyer and brighter than M1's blue
+AMBIENT_CONTROL = (188, 194, 172)  # the 2D control room: warm desk light on green
+AMBIENT = (194, 200, 208)        # grade floor: the 2D night is greyer and brighter than M1's blue
 NIGHT = dict(_m1.NIGHT, ambient=0.40, diffuse=0.50, tint=(0.92, 0.95, 1.02))  # the 2D Route 12 night is greyer than M1
 
 _BUILD = pygame.Rect(MISSION2_BUILDINGS[0])
@@ -170,6 +171,7 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm) + _blast_lights()
         _lamp_lights(r, v, flashes, tm)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback
@@ -179,7 +181,8 @@ def render_world(surface, v):
     finally:
         r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn, ambient=AMBIENT)
+    _grade.apply(surface, v, _night_lights() + dyn,
+                 ambient=AMBIENT_CONTROL if _d._m2_wing_name() == "control" else AMBIENT)
     return True
 
 

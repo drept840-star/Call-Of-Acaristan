@@ -60,7 +60,7 @@ SLEEVE_D = (56, 42, 32)
 TUBE = (255, 240, 214)
 VOID = _m1.VOID
 RING_CALM = (200, 92, 70)        # M1's calm ring is lost on the dark cell floor
-AMBIENT = (170, 172, 172)
+AMBIENT = (176, 182, 182)
 NIGHT = dict(_m1.NIGHT, ambient=0.36, diffuse=0.42, tint=(0.95, 1.0, 0.98))
 
 PRISONER = dict(jacket=SLEEVE, pants=SLEEVE, vest=None, pouches=False, accent=None,
@@ -190,6 +190,7 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback
