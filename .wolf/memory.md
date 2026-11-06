@@ -2390,3 +2390,84 @@ description: chronological action log per session, consolidated weekly
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 23:36 | Session end: 1 writes across 1 files (rig.py) | 2 reads | ~381 tok |
+| 23:36 | Session end: 8 writes across 7 files (capture.py, sets.py, render.py, thumbnail.py, shorts.py) | 7 reads | ~22037 tok |
+
+## Session: 2026-11-05 00:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 14:40
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 21:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 22:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:20 | Created src/missions/m5/draw3d.py | — | ~15044 |
+
+## Session: 2026-11-06 22:39
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:41 | Edited src/missions/m5/draw3d.py | 2→5 lines | ~86 |
+
+## Session: 2026-11-06 00:03
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 00:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 00:47
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 00:48
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:50 | Edited src/ui/arena_view3d.py | expanded (+7 lines) | ~456 |
+| 00:50 | Edited src/ui/arena_view3d.py | modified as() | ~245 |
+| 00:50 | Edited src/ui/arena_view3d.py | modified _build_set() | ~1000 |
+| 00:50 | Edited src/ui/arena_view3d.py | 2→2 lines | ~41 |
+| 00:50 | Edited src/ui/arena_view3d.py | inline fix | ~14 |
+| 00:50 | Edited src/ui/arena_view3d.py | inline fix | ~28 |
+| 00:50 | Edited src/ui/arena_view3d.py | inline fix | ~20 |
+| 00:50 | Edited src/ui/arena_view3d.py | modified _scale() | ~197 |
+
+## Session: 2026-11-06 00:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 00:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-06 00:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:01 | Edited src/missions/m7/farmyard.py | removed 6 lines | ~10 |
+| 01:01 | Edited src/missions/m7/farmyard.py | added 1 import(s) | ~33 |
+| 01:01 | Edited src/missions/m7/farmyard.py | modified _photo_surface() | ~541 |
+| 01:01 | Edited src/missions/m7/farmyard.py | 2→5 lines | ~41 |
+| 01:02 | Edited src/missions/m7/farmyard.py | inline fix | ~10 |
+| 01:02 | Edited src/missions/m7/farmyard.py | 5→5 lines | ~50 |
+| 01:02 | Edited src/missions/m7/farmyard.py | inline fix | ~20 |
+| 01:02 | Edited src/missions/m7/farmyard.py | 13→9 lines | ~101 |
+| 01:05 | Edited src/missions/m7/farmyard.py | 9→10 lines | ~110 |
