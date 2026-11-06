@@ -28,6 +28,7 @@ from core.config import (
     font_terminal_small,
 )
 from core.state import STATE
+from engine.anim import draw_character
 from engine.core import now_ms as _now_ms
 from entities.player import Player
 
@@ -1062,11 +1063,7 @@ def _h_hay():
     _snd().crate()
     _say([
         ("", "Under the hay: a crate of rifle magazines."),
-        (
-            "",
-            "Behind it, a photograph. Bodi and Maru "
-            "in uniform, years younger.",
-        ),
+        ("", _PHOTO_LINE),
     ])
 
 
@@ -2411,6 +2408,62 @@ def _draw_toast(surface, text):
         )
 
 
+_PHOTO_LINE = (
+    "Behind it, a photograph. Bodi and Maru in uniform, years younger."
+)
+# Same cast, younger: the kit's youthful face (child=True: no crease
+# lines, softer chin) at adult size, in uniform.
+_PHOTO_UNIFORM = dict(
+    coat=(72, 82, 56), lapel=(56, 64, 42),
+    shirt=(92, 102, 74), trousers=(60, 66, 48),
+)
+_PHOTO_CAST = {
+    "bodi": dict(child=True, bulk=.9, jaw=.9, **_PHOTO_UNIFORM),
+    "maru": dict(child=True, bulk=.96, jaw=.94, **_PHOTO_UNIFORM),
+}
+_PHOTO = {}
+
+
+def _photo_surface():
+    """Sepia snapshot of young Bodi and Maru, built once."""
+    if "img" not in _PHOTO:
+        inner_w, inner_h = 252, 170
+        side, top, bottom = 14, 14, 46
+        card = pygame.Surface(
+            (inner_w + 2 * side, inner_h + top + bottom)
+        )
+        card.fill((226, 214, 186))
+        scene = pygame.Surface((inner_w, inner_h))
+        scene.fill((96, 82, 64))
+        pygame.draw.rect(
+            scene, (70, 58, 44), (0, inner_h - 34, inner_w, 34)
+        )
+        figures = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
+        for who, cx in (
+            ("bodi", inner_w // 2 - 56),
+            ("maru", inner_w // 2 + 56),
+        ):
+            draw_character(
+                figures, who, cx, inner_h - 14, 0.5,
+                look=0, smile=.5, wardrobe=_PHOTO_CAST[who],
+            )
+        figures.fill(
+            (250, 226, 186, 255), special_flags=pygame.BLEND_RGBA_MULT
+        )
+        scene.blit(figures, (0, 0))
+        card.blit(scene, (side, top))
+        _PHOTO["img"] = card
+    return _PHOTO["img"]
+
+
+def _draw_photo(surface):
+    img = _photo_surface()
+    rect = img.get_rect(midtop=(WIDTH // 2, 46))
+    pygame.draw.rect(surface, (12, 10, 10), rect.move(4, 5))
+    surface.blit(img, rect)
+    pygame.draw.rect(surface, M.WOOD_L, rect, 2)
+
+
 def draw(surface):
     if not _S:
         surface.fill(M.SKY_EDGE)
@@ -2530,6 +2583,9 @@ def draw(surface):
     text, until = _S["toast"]
     if text and now < until and not _S["lines"]:
         _draw_toast(surface, text)
+
+    if _S["lines"] and _S["lines"][0][1] == _PHOTO_LINE:
+        _draw_photo(surface)
 
     if _S["lines"]:
         who, line = _S["lines"][0]
