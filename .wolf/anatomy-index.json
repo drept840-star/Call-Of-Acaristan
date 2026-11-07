@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-11-06T23:05:45.214Z",
-    "fileCount": 526,
+    "lastScanned": "2026-11-06T23:38:02.616Z",
+    "fileCount": 527,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "ff42016cf5a03bc1e8f5d47ecd8537b300b365de547dfea6b086f779f911a894",
-    "storeUpdatedAt": "2026-11-06T23:05:45.225Z",
-    "rootHash": "9e98cb150b7e3702"
+    "renderedHash": "f2646c8e83d7f946c79346c3c84d1899b4b423aff025008b0f30dfe63d0c29a2",
+    "storeUpdatedAt": "2026-11-06T23:38:02.627Z",
+    "rootHash": "d8bb388374f47dc8"
   },
   "files": {
     ".gitattributes": {
@@ -43066,6 +43066,227 @@
           "startLine": 463,
           "endLine": 1435,
           "tokens": 11612
+        }
+      ]
+    },
+    "src/missions/m6/draw3d.py": {
+      "description": "Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard.",
+      "tokens": 11744,
+      "hash": "1c93b5384e09e30d",
+      "size": 42061,
+      "mtimeMs": 1794008282486.4375,
+      "updatedAt": "2026-11-06T23:38:02.615Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_hidx",
+          "kind": "fn",
+          "startLine": 81,
+          "endLine": 86,
+          "tokens": 40
+        },
+        {
+          "name": "render_world",
+          "kind": "fn",
+          "startLine": 87,
+          "endLine": 153,
+          "tokens": 662
+        },
+        {
+          "name": "_stage",
+          "kind": "fn",
+          "startLine": 154,
+          "endLine": 157,
+          "tokens": 22
+        },
+        {
+          "name": "_grid",
+          "kind": "fn",
+          "startLine": 158,
+          "endLine": 161,
+          "tokens": 15
+        },
+        {
+          "name": "_scratch",
+          "kind": "fn",
+          "startLine": 162,
+          "endLine": 168,
+          "tokens": 51
+        },
+        {
+          "name": "_mesh",
+          "kind": "fn",
+          "startLine": 169,
+          "endLine": 178,
+          "tokens": 71
+        },
+        {
+          "name": "_put",
+          "kind": "fn",
+          "startLine": 179,
+          "endLine": 182,
+          "tokens": 32
+        },
+        {
+          "name": "_shade",
+          "kind": "fn",
+          "startLine": 183,
+          "endLine": 186,
+          "tokens": 24
+        },
+        {
+          "name": "_death_edge",
+          "kind": "fn",
+          "startLine": 187,
+          "endLine": 196,
+          "tokens": 100
+        },
+        {
+          "name": "_rays",
+          "kind": "fn",
+          "startLine": 197,
+          "endLine": 222,
+          "tokens": 327
+        },
+        {
+          "name": "_plane",
+          "kind": "fn",
+          "startLine": 223,
+          "endLine": 229,
+          "tokens": 73
+        },
+        {
+          "name": "_gather",
+          "kind": "fn",
+          "startLine": 230,
+          "endLine": 239,
+          "tokens": 105
+        },
+        {
+          "name": "_tiles",
+          "kind": "fn",
+          "startLine": 240,
+          "endLine": 248,
+          "tokens": 98
+        },
+        {
+          "name": "_paint_ground",
+          "kind": "fn",
+          "startLine": 249,
+          "endLine": 286,
+          "tokens": 422
+        },
+        {
+          "name": "_top_map",
+          "kind": "fn",
+          "startLine": 287,
+          "endLine": 303,
+          "tokens": 178
+        },
+        {
+          "name": "_mean",
+          "kind": "fn",
+          "startLine": 304,
+          "endLine": 315,
+          "tokens": 98
+        },
+        {
+          "name": "_props",
+          "kind": "fn",
+          "startLine": 316,
+          "endLine": 344,
+          "tokens": 374
+        },
+        {
+          "name": "_atlas",
+          "kind": "fn",
+          "startLine": 345,
+          "endLine": 384,
+          "tokens": 434
+        },
+        {
+          "name": "_decode",
+          "kind": "fn",
+          "startLine": 385,
+          "endLine": 462,
+          "tokens": 1010
+        },
+        {
+          "name": "_light",
+          "kind": "fn",
+          "startLine": 463,
+          "endLine": 483,
+          "tokens": 208
+        },
+        {
+          "name": "_additive",
+          "kind": "fn",
+          "startLine": 484,
+          "endLine": 512,
+          "tokens": 267
+        },
+        {
+          "name": "_wall_kind",
+          "kind": "fn",
+          "startLine": 513,
+          "endLine": 521,
+          "tokens": 53
+        },
+        {
+          "name": "_wall_boxes",
+          "kind": "fn",
+          "startLine": 522,
+          "endLine": 559,
+          "tokens": 341
+        },
+        {
+          "name": "_cut",
+          "kind": "fn",
+          "startLine": 560,
+          "endLine": 564,
+          "tokens": 41
+        },
+        {
+          "name": "_keyed_box",
+          "kind": "fn",
+          "startLine": 565,
+          "endLine": 581,
+          "tokens": 171
+        },
+        {
+          "name": "_draw_walls",
+          "kind": "fn",
+          "startLine": 582,
+          "endLine": 618,
+          "tokens": 443
+        },
+        {
+          "name": "_draw_props",
+          "kind": "fn",
+          "startLine": 619,
+          "endLine": 654,
+          "tokens": 470
+        },
+        {
+          "name": "_relit_top",
+          "kind": "fn",
+          "startLine": 655,
+          "endLine": 666,
+          "tokens": 118
+        },
+        {
+          "name": "_with_front",
+          "kind": "fn",
+          "startLine": 667,
+          "endLine": 675,
+          "tokens": 70
+        },
+        {
+          "name": "_build_static",
+          "kind": "fn",
+          "startLine": 676,
+          "endLine": 1033,
+          "tokens": 4411
         }
       ]
     }
