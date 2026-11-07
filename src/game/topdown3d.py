@@ -46,6 +46,7 @@ CAMS = {
     "MISSION3": Cam(64.0, 25.0, 50.0),
     "MISSION4": Cam(64.0, 25.0, 50.0),
     "MISSION5": Cam(64.0, 25.0, 50.0),
+    "MISSION6": Cam(64.0, 25.0, 50.0),
 }
 # Optional per-mission gate: the mission is 2.5D only while its gate returns
 # True (Mission 3 draws only the cell block in 3D; the other wings stay 2D).

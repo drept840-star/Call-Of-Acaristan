@@ -7,7 +7,10 @@ whole frame to ``train3d`` while it is active.
 """
 import math
 
+
 import pygame
+
+from game import topdown3d as _td
 
 from core.config import (
     C_BG_GAME, HEIGHT, MUZZLE_FLASH, TILE_SIZE, WIDTH,
@@ -489,6 +492,19 @@ def _draw_train(surface):
         return False
 
 
+def _td3d_gate():
+    """2.5D covers customs, no-man's-land and the rail yard; the yard and
+    the train have their own 3D hosts."""
+    if (getattr(STATE, "m6_yard_active", False) or getattr(STATE, "m6_train_active", False)
+            or getattr(STATE, "m6_train_death", False)):
+        return False
+    return getattr(STATE, "mission6_stage", STAGE_CUSTOMS) in (STAGE_CUSTOMS, STAGE_NOMAN,
+                                                               STAGE_RAIL)
+
+
+_td.GATES["MISSION6"] = _td3d_gate
+
+
 def game_draw(fcx=0, fcy=0, surface=None):
     target = surface or screen
     if target is None:
@@ -511,6 +527,17 @@ def game_draw(fcx=0, fcy=0, surface=None):
          or getattr(STATE, "m6_train_death", False))
             and _draw_train(target)):
         return
+
+    if _td.active_cam() is not None:
+        from . import draw3d as _draw3d
+        if _draw3d.render_world(target, fcx, fcy):
+            draw_vignette(target)
+            draw_scanlines(target)
+            _draw_hud(target, int(fcx), int(fcy))
+            _draw_prompt(target)
+            if STATE.player:
+                draw_combat_reticle(target)
+            return
 
     cam_x, cam_y = int(fcx), int(fcy)
     stage = getattr(STATE, "mission6_stage", STAGE_CUSTOMS)

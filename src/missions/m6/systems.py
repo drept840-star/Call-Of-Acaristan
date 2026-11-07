@@ -43,9 +43,9 @@ def _update_player(keys):
     p.speed = _world.M6_PLAYER_SPEED
     if _world._movement_locked():
         return
-    mx, my = get_scaled_mouse()
-    p.angle = math.atan2(my + STATE.camera_y - p.rect.centery,
-                         mx + STATE.camera_x - p.rect.centerx)
+    from game import topdown3d as _td
+    mx, my = _td.mouse_world(1.2)   # chest height in 2.5D
+    p.angle = math.atan2(my - p.rect.centery, mx - p.rect.centerx)
     dt_mul = 60.0 * getattr(STATE, "dt", 1.0 / 60.0)
     dx = dy = 0.0
     if keys is not None:
