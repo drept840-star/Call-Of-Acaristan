@@ -1440,7 +1440,11 @@ def _molotov():
 def _pickup_mesh(kind):
     from engine3d import Mesh, box
     m = Mesh()
-    if kind == "bandage":
+    if kind in ("bandage", "medkit", "health"):
+        from game.scenery3d import prop
+        kit = prop("medkit")
+        if kit is not None:
+            return kit
         m.add(box(0.3, 0.12, 0.2, (226, 222, 210), center=(0.0, 0.06, 0.0)))
         m.add(box(0.14, 0.01, 0.04, (200, 40, 40), center=(0.0, 0.125, 0.0), emissive=True))
         m.add(box(0.04, 0.01, 0.14, (200, 40, 40), center=(0.0, 0.125, 0.0), emissive=True))

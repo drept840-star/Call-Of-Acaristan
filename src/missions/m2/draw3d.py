@@ -1089,6 +1089,11 @@ def _ev_mesh(kind):
         return m
     if kind == "terminal":
         m.add(_ev_table(0.72, w=0.7, d=0.55))
+        from game.scenery3d import workstation
+        equipment = workstation("pc_tall", "monitor_crt")
+        if equipment is not None:
+            m.add(equipment, (0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7), t=(0.0, 0.745, -0.04))
+            return m
         m.add(box(0.4, 0.34, 0.32, (40, 60, 45), center=(0.0, 0.915, -0.05),
                   cols={"top": (52, 74, 55)}))
         m.add(box(0.32, 0.24, 0.01, (8, 26, 18), center=(0.0, 0.915, 0.115)))
@@ -1109,6 +1114,11 @@ def _upload_pc_mesh():
     for sx in (-0.44, 0.44):
         for sz in (-0.22, 0.22):
             m.add(box(0.05, 0.74, 0.05, (78, 58, 36), center=(sx, 0.37, sz)))
+    from game.scenery3d import workstation
+    equipment = workstation("pc_zarya", "monitor_crt")
+    if equipment is not None:
+        m.add(equipment, t=(0.0, 0.765, -0.06))
+        return m
     m.add(box(0.42, 0.36, 0.34, beige, center=(0.0, 0.95, -0.08),
               cols={"top": _shade(beige, 1.1)}))
     m.add(box(0.34, 0.26, 0.01, (8, 26, 18), center=(0.0, 0.95, 0.092)))

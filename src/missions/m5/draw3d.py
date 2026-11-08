@@ -848,6 +848,12 @@ def _hq_dress(r):
     for i in range(4):
         _box_at(r, 0.45, 0.02, 0.06, (200, 30, 30), (dx + 17) * K, 1.01 + i * 0.02, -(dy + 7 + i * 3) * K)
     _box_at(r, 0.62, 0.012, 0.38, (222, 218, 200), (dx + 53) * K, 1.006, -(dy + 13) * K)
+    from game.scenery3d import prop, medical_supplies
+    crt = prop("monitor_crt")
+    if crt is not None:
+        _put(r, crt, ((dx + dw - 18) * K, 1.0, -(dy + dh / 2) * K), yaw=180)
+    else:
+        _box_at(r, 0.42, 0.36, 0.32, (150, 142, 120), (dx + dw - 18) * K, 1.18, -(dy + dh / 2) * K)
     for px, py, w in ((int(10.5 * T), int(11.8 * T), 46), (int(22.2 * T), int(12.1 * T), 30)):
         h = max(6, w // 3)
         _decal(r, px + 4, py, w - 10, h, (40, 50, 64), 0.007)
@@ -898,6 +904,14 @@ def _hq_dress(r):
     wb = _paint.HQ_SOLIDS[3]
     for i in range(5):
         _box_at(r, 0.3, 0.05, 0.1, (150, 150, 156), (wb[0] + 14 + i * 22) * K, 1.03, -(wb[1] + 8) * K)
+    # Supply end of the existing armory bench: no extra collision or interaction.
+    _put(r, _mesh("hq_medical", medical_supplies),
+         ((wb[0] + wb[2] - 16) * K, 1.0, -(wb[1] + wb[3] / 2) * K), yaw=180)
+    lcd = prop("monitor_lcd")
+    if lcd is not None:
+        _put(r, lcd, ((wb[0] + 30) * K, 1.0, -(wb[1] + wb[3] / 2) * K), yaw=180)
+    else:
+        _box_at(r, 0.45, 0.3, 0.08, (50, 54, 58), (wb[0] + 30) * K, 1.15, -(wb[1] + wb[3] / 2) * K)
     for cx, cy in ((24.2, 12.6), (24.7, 12.65), (24.3, 12.2)):
         x, z = (cx * T + 15) * K, -(cy * T + 10) * K
         _box_at(r, 0.75, 0.42, 0.5, tex("crate", like=(70, 84, 50)), x, 0.21, z, cols={"top": (78, 92, 56)})

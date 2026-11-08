@@ -298,6 +298,11 @@ def house(lit=False, burn=False):
         _t("tin", ROOF_METAL), 2, True)
     m.add(box(1.4, 0.12, 0.5, plank, center=(1.6, 0.04, -D / 2 - 1.85)))
     m.add(box(1.4, 0.42, 0.38, plank, center=(-0.6, 0.45, -D / 2 - 0.35)))
+    if not burn:
+        # Household first aid on the porch's existing storage chest; never loose
+        # bottles on the yard floor, nor a new health interaction.
+        from game.scenery3d import medical_supplies
+        m.add(medical_supplies(), rot_y(180), t=(-0.6, 0.66, -D / 2 - 0.35))
     m.add(box(0.05, 0.3, 0.05, P.STEEL_D, center=(2, 2.84, -D / 2 - 0.4)))
     if lit:
         m.add(box(0.16, 0.14, 0.16, P.LAMP_WARM,
