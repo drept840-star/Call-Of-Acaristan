@@ -104,6 +104,34 @@ def _add(r, mesh):
     _w.add(r, mesh)
 
 
+def _workstation(r, pc, monitor, pos, live=False):
+    from game.scenery3d import workstation
+    from engine3d import Mesh, rot_y
+    equipment = workstation(pc, monitor, live)
+    if equipment is None:
+        return False
+    m = Mesh()
+    m.add(equipment, rot_y(180), t=pos)  # operator stands south of the desk
+    _add(r, m)
+    return True
+
+
+def _live_screen(r, kind, pc, monitor, colour):
+    """Use the static desk's exact placement; no detached horizontal glow card."""
+    from game.scenery3d import workstation_display
+    from missions.m3 import draw3d as D
+    screen = workstation_display(pc, monitor, colour)
+    if screen is None:
+        return False
+    key = {"tuning_desk": "comms", "maru_desk": "archives", "pc_desk": "broadcast"}[kind]
+    _, tx, ty, tw, th = next(p for p in PROPS[key] if p[0] == kind)
+    x, _, z = to3((tx + tw / 2) * T, (ty + th / 2) * T)
+    dx = -tw * T * K * 0.25 if kind == "tuning_desk" else -tw * T * K * 0.18 if kind == "maru_desk" else 0.0
+    y = 0.81 if kind == "tuning_desk" else 0.79
+    D._put(r, screen, (x + dx, y, z + 0.1), yaw=180)
+    return True
+
+
 def _pillar(r, col, row):
     from engine3d import box, tex
     x, _, z = to3((col + 0.5) * T, (row + 0.5) * T)
@@ -223,10 +251,11 @@ def _piece(r, kind, tx, ty, tw, th):
     elif kind == "tuning_desk":
         _add(r, box(w, 0.06, d, tex("steel", like=(62, 66, 66)), center=(x, 0.78, z)))
         _add(r, box(w - 0.1, 0.72, d * 0.5, (32, 36, 38), center=(x, 0.38, z + d * 0.2)))
-        _add(r, box(0.7, 0.32, 0.42, (40, 44, 42), center=(x - w * 0.25, 0.97, z + 0.1),
-                    cols={"top": (54, 58, 54)}))
-        for i in range(4):
-            _add(r, box(0.06, 0.02, 0.06, (200, 190, 150), center=(x - w * 0.25 - 0.24 + i * 0.16, 1.14, z)))
+        if not _workstation(r, "pc_tall", "monitor_crt", (x - w * 0.25, 0.81, z + 0.1), live=True):
+            _add(r, box(0.7, 0.32, 0.42, (40, 44, 42), center=(x - w * 0.25, 0.97, z + 0.1),
+                        cols={"top": (54, 58, 54)}))
+            for i in range(4):
+                _add(r, box(0.06, 0.02, 0.06, (200, 190, 150), center=(x - w * 0.25 - 0.24 + i * 0.16, 1.14, z)))
         _add(r, box(0.05, 1.3, 0.05, DARK, center=(x + w * 0.42, 1.45, z + d * 0.35)))   # antenna whip
     elif kind == "server_rack":
         n = max(1, int(round(d / 0.92)))
@@ -295,7 +324,8 @@ def _piece(r, kind, tx, ty, tw, th):
         _add(r, box(w, 0.06, d, tex("crate", like=(80, 60, 42)), center=(x, 0.76, z)))
         for sx in (-w / 2.0 + 0.06, w / 2.0 - 0.06):
             _add(r, box(0.06, 0.73, d - 0.1, (54, 40, 28), center=(x + sx, 0.365, z)))
-        _add(r, box(0.5, 0.36, 0.4, (44, 44, 38), center=(x - w * 0.18, 0.97, z + 0.1), cols={"top": (56, 54, 46)}))
+        if not _workstation(r, "pc_zarya", "monitor_crt", (x - w * 0.18, 0.79, z + 0.1), live=True):
+            _add(r, box(0.5, 0.36, 0.4, (44, 44, 38), center=(x - w * 0.18, 0.97, z + 0.1), cols={"top": (56, 54, 46)}))
         for i in range(3):
             _add(r, box(0.26, 0.01, 0.2, (190, 180, 150), center=(x + w * 0.2 + i * 0.05, 0.795 + i * 0.002,
                                                                   z - 0.08 + i * 0.04)))
@@ -303,8 +333,9 @@ def _piece(r, kind, tx, ty, tw, th):
     elif kind == "desk":
         _add(r, box(w, 0.05, d, (96, 98, 96), center=(x, 0.74, z)))
         _add(r, box(w - 0.08, 0.7, 0.04, (60, 62, 64), center=(x, 0.37, z + d / 2.0 - 0.04)))
-        _add(r, box(0.4, 0.28, 0.05, (30, 32, 34), center=(x, 0.93, z + 0.12)))
-        _add(r, box(0.34, 0.22, 0.01, (110, 160, 180), center=(x, 0.93, z + 0.09), emissive=True))
+        if not _workstation(r, "pc_zarya", "monitor_crt", (x, 0.765, z)):
+            _add(r, box(0.4, 0.28, 0.05, (30, 32, 34), center=(x, 0.93, z + 0.12)))
+            _add(r, box(0.34, 0.22, 0.01, (110, 160, 180), center=(x, 0.93, z + 0.09), emissive=True))
         _add(r, box(0.42, 0.06, 0.42, (40, 44, 52), center=(x, 0.46, z - d / 2.0 - 0.35)))
     elif kind == "pedestal":
         _add(r, box(w, 0.9, d, tex("vault", like=(76, 78, 82)), center=(x, 0.45, z), cols={"top": (90, 92, 96)}))
@@ -378,9 +409,10 @@ def _piece(r, kind, tx, ty, tw, th):
         _add(r, box(w, 0.06, d, tex("steel", like=(70, 70, 74)), center=(x, 0.76, z)))
         for sx in (-w / 2.0 + 0.06, w / 2.0 - 0.06):
             _add(r, box(0.06, 0.73, d - 0.1, DARK, center=(x + sx, 0.365, z)))
-        _add(r, box(0.56, 0.48, 0.5, (150, 142, 120), center=(x, 1.03, z + 0.1), cols={"top": (166, 158, 136)}))
-        _add(r, box(0.7, 0.04, 0.24, (140, 132, 112), center=(x, 0.81, z - 0.26)))
-        _add(r, box(0.36, 0.2, 0.3, (140, 132, 112), center=(x + 0.7, 0.89, z)))
+        if not _workstation(r, "pc_tall", "monitor_lcd", (x, 0.79, z + 0.1), live=True):
+            _add(r, box(0.56, 0.48, 0.5, (150, 142, 120), center=(x, 1.03, z + 0.1), cols={"top": (166, 158, 136)}))
+            _add(r, box(0.7, 0.04, 0.24, (140, 132, 112), center=(x, 0.81, z - 0.26)))
+            _add(r, box(0.36, 0.2, 0.3, (140, 132, 112), center=(x + 0.7, 0.89, z)))
     elif kind == "rack_wall":
         n = max(1, int(w / 0.7))
         for i in range(n):
@@ -531,8 +563,9 @@ def draw_live(r, key, tm, flashes):
         x, _, z = to3(24.0 * T, 19.2 * T)
         col = ((80, 240, 150) if tuned else (230, 190, 80) if powered and auth else
                (200, 120, 60) if powered else (150, 30, 24))
-        D._put(r, D._mesh(("relay_scr", col), lambda c=col: box(0.6, 0.02, 0.3, c, center=(0.0, 1.14, 0.0),
-                                                                emissive=True)), (x - 0.47, 0.0, z + 0.1))
+        if not _live_screen(r, "tuning_desk", "pc_tall", "monitor_crt", col):
+            D._put(r, D._mesh(("relay_scr", col), lambda c=col: box(0.6, 0.02, 0.3, c, center=(0.0, 1.14, 0.0),
+                                                                    emissive=True)), (x - 0.47, 0.0, z + 0.1))
         bx, _, bz = to3(29.75 * T, 36.5 * T)
         D._put(r, D._mesh(("breaker", powered), lambda: _breaker(powered)), (bx, 0.0, bz))
         ax, _, az = to3(13.5 * T, 18.25 * T)
@@ -542,9 +575,10 @@ def draw_live(r, key, tm, flashes):
     elif key == "archives":
         x, _, z = to3(11.0 * T, 12.0 * T)
         on = getattr(STATE, "m3_maru_contacted", False)
-        col = (90, 230, 150) if on else (int(200 + 50 * pulse), 150, 60)
-        D._put(r, D._mesh(("maru_scr", col), lambda c=col: box(0.36, 0.02, 0.26, c, center=(0.0, 1.16, 0.0),
-                                                               emissive=True)), (x - 0.27, 0.0, z + 0.1))
+        col = (90, 230, 150) if on else (int(200 + 50 * pulse) // 16 * 16, 150, 60)
+        if not _live_screen(r, "maru_desk", "pc_zarya", "monitor_crt", col):
+            D._put(r, D._mesh(("maru_scr", col), lambda c=col: box(0.36, 0.02, 0.26, c, center=(0.0, 1.16, 0.0),
+                                                                   emissive=True)), (x - 0.27, 0.0, z + 0.1))
         if not getattr(STATE, "m3_vostral_acquired", False):
             vx, _, vz = to3(42.5 * T, 9.5 * T)
             D._put(r, D._mesh(("vostral",), _vostral), (vx, 0.0, vz))
@@ -569,9 +603,10 @@ def draw_live(r, key, tm, flashes):
         x, _, z = to3(25.5 * T, 27.35 * T)
         ready = getattr(STATE, "m3_bcast_pc_ready", False)
         g = int(150 + 80 * pulse) if ready else 90
-        col = (60, g, 120) if ready else (40, 70, 60)
-        D._put(r, D._mesh(("pc_scr", col), lambda c=col: box(0.42, 0.32, 0.02, c, center=(0.0, 1.05, 0.0),
-                                                             emissive=True)), (x, 0.0, z - 0.17))
+        col = (60, g // 16 * 16, 120) if ready else (40, 70, 60)
+        if not _live_screen(r, "pc_desk", "pc_tall", "monitor_lcd", col):
+            D._put(r, D._mesh(("pc_scr", col), lambda c=col: box(0.42, 0.32, 0.02, c, center=(0.0, 1.05, 0.0),
+                                                                 emissive=True)), (x, 0.0, z - 0.17))
         if ready:
             r.add_sprite((x, 1.05, z - 0.2), D._glow((120, 255, 170), 0.35, tm, 0.3 + 0.2 * pulse, 12),
                          layer=_fx.FX_LAYER)

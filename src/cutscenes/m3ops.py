@@ -1165,14 +1165,23 @@ def _draw_vent_exit(surface, t):
 from core.cutscene_registry import register_scene_renderers as _register_takes  # noqa: E402
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
+
+def _staged_service_take(scene, fallback):
+    def draw(surface, t):
+        from cutscenes import m3staging  # lazy: optional 3D stack, no facade cycle
+        if not m3staging.draw(scene, surface, t):
+            fallback(surface, t)
+    return draw
+
+
 _register_takes({
     "k9_wall_stand": _draw_k9_wall_stand,
     "k9_firstperson_grab": _draw_k9_firstperson_grab,
     "k9_ready_check": _draw_k9_ready_check,
-    "m3_service_door_transition": _draw_m3_service_door_transition,
-    "m3_volkov_radio_call": _draw_m3_volkov_radio_call,
-    "m3_radio_recovered": _draw_m3_radio_recovered,
-    "m3_comms_wing_reveal": _draw_m3_comms_wing_reveal,
+    "m3_service_door_transition": _staged_service_take("m3_service_door_transition", _draw_m3_service_door_transition),
+    "m3_volkov_radio_call": _staged_service_take("m3_volkov_radio_call", _draw_m3_volkov_radio_call),
+    "m3_radio_recovered": _staged_service_take("m3_radio_recovered", _draw_m3_radio_recovered),
+    "m3_comms_wing_reveal": _staged_service_take("m3_comms_wing_reveal", _draw_m3_comms_wing_reveal),
     "m3_volkov_gives_mags": _draw_m3_volkov_gives_mags,
     "m3_archives_relay_confirm": _draw_m3_archives_relay_confirm,
     "m3_archives_corridor_push": _draw_m3_archives_corridor_push,

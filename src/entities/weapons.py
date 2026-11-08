@@ -499,6 +499,11 @@ def handle_melee():
     STATE.melee_hit_done = False
     audio.play("melee_hit", volume=0.6)
 def handle_throw_bottle():
+    # M3 has no molotov simulation. Block creation here (both RMB and G use
+    # this handler), otherwise its 3D renderer displays a frozen ghost bottle
+    # and the shared inventory is consumed even though no throw can resolve.
+    if getattr(STATE, "active_mission", "") == "MISSION3":
+        return
     if _mission2_actions_blocked():
         return
     if _player_disarmed():

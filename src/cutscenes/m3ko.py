@@ -658,9 +658,17 @@ def _draw_ko_van_cut(surface, t):
 # instead of importing this module by name (boundary rule 4 / W1).
 from core.cutscene_registry import register_scene_renderers as _register_takes  # noqa: E402
 
+def _staged_take(scene, fallback):
+    def draw(surface, t):
+        from cutscenes import m3ko3d  # lazy: optional cinematic stack
+        if not m3ko3d.draw(scene, surface, t):
+            fallback(surface, t)
+    return draw
+
+
 _register_takes({
-    "m3_ko_charge": _draw_ko_charge_insert,
-    "m3_ko_stairwell": _draw_ko_stairwell_cut,
-    "m3_ko_aperture": _draw_ko_aperture_cut,
-    "m3_ko_van": _draw_ko_van_cut,
+    "m3_ko_charge": _staged_take("m3_ko_charge", _draw_ko_charge_insert),
+    "m3_ko_stairwell": _staged_take("m3_ko_stairwell", _draw_ko_stairwell_cut),
+    "m3_ko_aperture": _staged_take("m3_ko_aperture", _draw_ko_aperture_cut),
+    "m3_ko_van": _staged_take("m3_ko_van", _draw_ko_van_cut),
 })

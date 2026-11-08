@@ -255,10 +255,10 @@ k9_pickup_shots = _timelines.shots("m3.k9_pickup", k9_pickup_shots)  # RPE6 P8: 
 
 # Transition from the cell-block service exit to the separate Comms Wing map.
 service_transition_shots = [
-    {"scene": "m3_service_door_transition", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1500, "lighting": (5, 6, 7)},
-    {"scene": "m3_volkov_radio_call", "speaker": "VOLKOV", "text": "Biribel! Take the radio. I draw them off, you get the relay alive.", "min_ms": 2400, "lighting": (5, 6, 7)},
-    {"scene": "m3_radio_recovered", "speaker": None, "text": None, "hide_caption": True, "min_ms": 1600, "lighting": (5, 7, 8)},
-    {"scene": "m3_comms_wing_reveal", "speaker": "VASILE", "radio": True, "text": "Biribel? If you hear me, get to the relay. I can see your signal now.", "min_ms": 2200, "lighting": (6, 9, 10)},
+    {"scene": "m3_service_door_transition", "speaker": None, "text": None, "hide_caption": True, "auto_advance": True, "quiet_ui": True, "hard_cut": True, "min_ms": 1500, "lighting": (5, 6, 7)},
+    {"scene": "m3_volkov_radio_call", "hard_cut": True, "speaker": "VOLKOV", "text": "Biribel! Take the radio. I draw them off, you get the relay alive.", "min_ms": 2400, "lighting": (5, 6, 7)},
+    {"scene": "m3_radio_recovered", "speaker": None, "text": None, "hide_caption": True, "auto_advance": True, "quiet_ui": True, "hard_cut": True, "min_ms": 1600, "lighting": (5, 7, 8)},
+    {"scene": "m3_comms_wing_reveal", "hard_cut": True, "speaker": "VASILE", "radio": True, "text": "Biribel? If you hear me, get to the relay. I can see your signal now.", "min_ms": 2200, "lighting": (6, 9, 10)},
 ]
 service_transition_shots = _timelines.shots("m3.service_transition", service_transition_shots)  # RPE6 P8: timeline data
 
@@ -290,46 +290,46 @@ archives_transition_shots = [
 ]
 archives_transition_shots = _timelines.shots("m3.archives_transition", archives_transition_shots)  # RPE6 P8: timeline data
 
-# Archives -> Kill Order handoff: illustrated cinematic (cutscenes.m3ko),
+# Archives -> Kill Order handoff: 3D cinematic with illustrated fallback,
 # one continuous beat - stair tower breach, mezzanine overwatch, dock exfil.
 ko_transition_shots = [
-    {"scene": "m3_ko_charge", "speaker": None,
+    {"scene": "m3_ko_charge", "auto_advance": True, "quiet_ui": True, "speaker": None,
      "text": None, "hide_caption": True, "hard_cut": True,
      "min_ms": 1300, "lighting": (5, 6, 7)},
-    {"scene": "m3_ko_stairwell", "speaker": "VOLKOV",
+    {"scene": "m3_ko_stairwell", "hard_cut": True, "speaker": "VOLKOV",
      "text": "My van's still staged at the dock, I haven't bailed on you yet. Through that smoke, friend, and don't make me regret it.",
-     "min_ms": 2200, "lighting": (6, 7, 8)},
-    {"scene": "m3_ko_aperture", "speaker": "BALACEANU (PA)",
+     "min_ms": 5400, "lighting": (6, 7, 8)},
+    {"scene": "m3_ko_aperture", "hard_cut": True, "speaker": "BALACEANU (PA)",
      "text": "Sweep teams: the prisoner is in the lobby levels. Free fire, my address begins at 22:00, and I will not be interrupted.",
      "min_ms": 2400, "lighting": (7, 8, 9)},
-    {"scene": "m3_ko_van", "speaker": "VASILE", "radio": True,
+    {"scene": "m3_ko_van", "hard_cut": True, "speaker": "VASILE", "radio": True,
      "text": "The loading dock is your only way out, Volkov's van is staged there. Hold it, and the Vostral goes live tonight.",
      "min_ms": 2600, "lighting": (8, 9, 10)},
 ]
 ko_transition_shots = _timelines.shots("m3.ko_transition", ko_transition_shots)  # RPE6 P8: timeline data
 
 # Kill Order -> Broadcast handoff (Slice 5 -> Slice 6): exfil departure,
-# ride to the broadcast wing, live address countdown. Bespoke illustrated
-# scenes (cutscenes.m3broadcast), same family as the KO transition art.
+# ride to the broadcast wing, live address countdown. Directed 3D scenes
+# with the illustrated takes retained as fallbacks (cutscenes.m3broadcast).
 # Branch-neutral by design (VASILE + PA only): the branch-specific exfil
 # bark (VOLKOV van vs MARU roof line) already played in sweep._exfil, so
 # these lines work whether Volkov drove or bailed.
 broadcast_transition_shots = [
-    {"scene": "m3_bcast_shutter", "speaker": None,
+    {"scene": "m3_bcast_shutter", "auto_advance": True, "quiet_ui": True, "speaker": None,
      "text": None, "hide_caption": True, "hard_cut": True,
      "min_ms": 1300, "lighting": (5, 6, 7)},
-    {"scene": "m3_bcast_road", "speaker": "VASILE", "radio": True,
+    {"scene": "m3_bcast_road", "hard_cut": True, "speaker": "VASILE", "radio": True,
      "text": "You're out. Broadcast wing, follow the cable runs. I need you in front of a camera before that address ends.",
      "min_ms": 2200, "lighting": (6, 7, 8)},
-    {"scene": "m3_bcast_mast", "speaker": "BALACEANU (PA)",
+    {"scene": "m3_bcast_mast", "hard_cut": True, "speaker": "BALACEANU (PA)",
      "text": "The prisoner is contained. At twenty-two hundred I will close the matter of Route 12, on camera, before the nation.",
      "min_ms": 2400, "lighting": (7, 8, 9)},
-    {"scene": "m3_bcast_onair", "speaker": "VASILE", "radio": True,
+    {"scene": "m3_bcast_onair", "hard_cut": True, "speaker": "VASILE", "radio": True,
      "text": "Studio door. Two ways to do this, live on his camera, or quiet through my channel. Your call, operator.",
-     "min_ms": 2200, "lighting": (8, 9, 10)},
+     "min_ms": 3400, "lighting": (8, 9, 10)},
     # VO_201 (caption-only until recorded): closes the "two ways" offer by
     # killing the quiet channel, so the live camera is the only path left.
-    {"scene": "m3_bcast_onair", "speaker": "VASILE", "radio": True,
+    {"scene": "m3_bcast_channel", "hard_cut": True, "speaker": "VASILE", "radio": True,
      "text": "Quiet channel's dead.\nIt's the camera or nothing.",
      "min_ms": 2200, "lighting": (8, 9, 10)},
 ]
