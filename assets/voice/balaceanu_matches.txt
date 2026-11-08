@@ -1,17 +1,34 @@
 LINE	FILE	SECONDS	TEXT
-VO_002	Generated Audio October 08, 2026 - 7_03PM.ogg	7.0	Effective immediately, KRAP operations in the highway corridor fall under government review.
-VO_004	Generated Audio October 08, 2026 - 7_04PM.ogg	7.7	Sweep teams, report. The prisoner carries state property. My address begins at 22:00, and he will not outlive it.
-VO_005	Generated Audio October 08, 2026 - 7_04PM(1).ogg	8.6	You told them I was a coward, Biribel. / A fake. / Tonight I tell the nation what you are.
-VO_006	Generated Audio October 08, 2026 - 7_04PM(2).ogg	8.6	When the address ends, so do you. / That is not a threat. / That is a schedule.
-VO_007	(NO AUDIO - record & name it VO_007.wav)		What is this? Cut the feed. CUT THE FEED!
-VO_008	Generated Audio October 08, 2026 - 7_04PM(3).ogg	8.8	Sweep teams: the prisoner is in the lobby levels. Free fire, my address begins at 22:00, and I will not be interrupted.
-VO_009	Generated Audio October 08, 2026 - 7_04PM(4).ogg	11.4	The prisoner is contained. At twenty-two hundred I will close the matter of Route 12, on camera, before the nation.
-VO_010	Generated Audio October 08, 2026 - 7_04PM(5).ogg	9.4	Six years I have waited to show the nation what a KRAP lie looks like. Up close. On camera.
-VO_011	Generated Audio October 08, 2026 - 7_05PM.ogg	11.0	They'll see your face, Biribel. They'll hear Route 12. And then they'll see what happens to people who leak rumors about their Prime Minister.
-VO_012	Generated Audio October 08, 2026 - 7_05PM(1).ogg	12.1	At twenty-two hundred, the President names you. Route 12. By face. I made sure the file is... thorough.
-VO_013	Generated Audio October 08, 2026 - 7_05PM(2).ogg	11.6	Oh, save it. This tape is one-way. I'm told the acoustics in here are... unkind.
-VO_014	Generated Audio October 08, 2026 - 7_06PM.ogg	12.2	When the address ends, so do you. That is not a threat. That is a schedule.
-VO_015	Generated Audio October 08, 2026 - 7_06PM(1).ogg	8.9	Twenty-two hundred. The address is finished. The prisoner is contained. Route 12 is closed.
+VO_002	VO_002.ogg	7.0	Effective immediately, KRAP operations in the highway corridor fall under government review.
+VO_004	VO_004.ogg	11.6	Sweep teams, report. The prisoner carries state property. My address begins at 22:00, and he will not outlive it.
+VO_005	VO_005.ogg	8.6	You told them I was a coward, Biribel. / A fake. / Tonight I tell the nation what you are.
+VO_006	VO_006.ogg	8.6	When the address ends, so do you. / That is not a threat. / That is a schedule.
+VO_007	VO_007.ogg	3.6	What is this? Cut the feed. CUT THE FEED!
+VO_008	VO_008.ogg	12.1	Sweep teams: the prisoner is in the lobby levels. Free fire, my address begins at 22:00, and I will not be interrupted.
+VO_009	VO_009.ogg	12.2	The prisoner is contained. At twenty-two hundred I will close the matter of Route 12, on camera, before the nation.
+VO_010	VO_010.ogg	8.8	Six years I have waited to show the nation what a KRAP lie looks like. Up close. On camera.
+VO_011	VO_011.ogg	11.4	They'll see your face, Biribel. They'll hear Route 12. And then they'll see what happens to people who leak rumors about their Prime Minister.
+VO_012	VO_012.ogg	9.4	At twenty-two hundred, the President names you. Route 12. By face. I made sure the file is... thorough.
+VO_013	VO_013.ogg	11.0	Oh, save it. This tape is one-way. I'm told the acoustics in here are... unkind.
+VO_014	VO_006.ogg	8.6	When the address ends, so do you. That is not a threat. That is a schedule. (same line as VO_006; one take serves both)
+VO_015	VO_015.ogg	8.9	Twenty-two hundred. The address is finished. The prisoner is contained. Route 12 is closed.
 
-EXTRA FILES (not used - retakes/duplicates?):
-	Generated Audio October 08, 2026 - 7_06PM(2).ogg	3.6
+EXPLICIT NAMES (2026-11-08): every take above was renamed to its canonical VO_xxx
+after transcription verified which words each file actually contains. The takes were
+recorded OUT of spreadsheet order, so the old length-based alignment had shifted most
+lines (e.g. VO_009 "The prisoner is contained..." was playing VO_011 "They'll see your
+face..."). Explicit VO_xxx names always win, so the heuristic no longer applies here.
+Original export names -> VO_ID:
+	7_03PM    -> VO_002
+	7_04PM(1) -> VO_005
+	7_04PM(2) -> VO_006
+	7_04PM(3) -> VO_010
+	7_04PM(4) -> VO_011
+	7_04PM(5) -> VO_012
+	7_05PM    -> VO_013
+	7_05PM(1) -> VO_008
+	7_05PM(2) -> VO_004
+	7_06PM    -> VO_009
+	7_06PM(1) -> VO_015
+	7_06PM(2) -> VO_007
+	7_04PM    -> _retakes/VO_002_retake (duplicate VO_002 take, unused)
