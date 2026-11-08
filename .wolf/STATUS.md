@@ -4,7 +4,222 @@ budget_tokens: 1000
 ---
 # STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-10-31
+> Read this FIRST when resuming. Last updated: 2026-11-08
+
+---
+
+## Balaceanu VO caption mismatch fix (2026-11-08, uncommitted)
+
+Owner: "the TTS doesn't match what Balaceanu is saying in the narration box".
+Root cause: the 13 TTS takes in `assets/voice/Balaceanu/` were recorded OUT of
+spreadsheet order, so `voice.py`'s length-based `_align()` heuristic shifted most
+lines. The broadcast mast beat (VO_009 "The prisoner is contained...") was playing
+the take that actually says VO_011 "They'll see your face, Biribel...". Verified by
+transcribing every take (faster-whisper base.en, scratch since removed; transcripts
+kept at `assets/voice/Balaceanu/_transcripts.json`). Fix = the system's intended
+mechanism: renamed each take's .ogg+.wav to its canonical `VO_xxx` (explicit names
+always win, bypassing the heuristic). 12 unique lines named; VO_014 shares VO_006's
+text/take; the duplicate VO_002 retake (old `7_04PM`) moved to `_retakes/`. VO_007
+"Cut the feed!" gained audio it never had. `balaceanu_matches.txt` rewritten with
+the verified mapping (LF/UTF-8). No dialogue/manifest text edited (canon: never edit
+a recorded line). All 13 captions resolve to the correct file at runtime; VO_009
+decodes 12.19s. compileall OK, **SMOKE TEST: OK**. Pre-existing unrelated reds:
+`ae_normalize` crashes on root `_tmp_assets.py` (syntax error, not ours); ae_ci reds.
+Owner playtest: `python acaristan.py --dev-mission3-broadcast-transition`.
+
+## M3 Broadcast bridge dead-space pass (2026-11-08, uncommitted)
+
+Owner: "a lot of dead space in the background and missing floors". All fixes in
+`src/cutscenes/m3broadcast3d.py` baked sets (+ road/exterior camera tilt, outdoor
+fog matched to sky); no timeline, dialogue, blocking or map changes. Dock: full
+side returns + ceiling + wall ribs/practicals, widened and dressed back wall
+(bulkhead lamp + conduit + pipes) so the open shutter frames a lit surface, not
+void. Road: wet verge ground plane beyond the barriers, scrolling side blocks at
+the lamps' 16 m/s, a second fogged skyline row, brighter dash; camera tilts down.
+Exterior: lit entrance apron + bollard walkway, perimeter wall with gate gap,
+stepped left/right wings, distant skyline, roof antenna; camera target lowered so
+the facade base meets visible ground. Corridor: ceiling slab on the beam tops.
+A back-wall glow sprite bled through the closed shutter (slat gaps) and was
+removed — the emissive lamp box is geometry-occluded and clean. 5 broadcast unit
+tests pass (seek determinism + corridor framing intact), compileall OK, standalone
+**SMOKE TEST: OK**, 40 frames/backend in `shots/m3_broadcast3d/{gl,software}/`.
+This session CAN view images: contact sheets + key frames reviewed on both
+backends, no voids/floats/bleed. Changed file LF/UTF-8/no-BOM. Owner playtest:
+`python acaristan.py --dev-mission3-broadcast-transition` jumps straight to the
+five-shot bridge. Full ae_ci not run (known pre-existing reds).
+
+## Office and medical GLB scenery (2026-11-08, uncommitted)
+
+User requested six unused assets integrated: Zarya/tall Soviet PCs, CRT/LCD,
+medkit and pill bottle. New `tools/ae_import_workstation_props.py` bakes all
+six into `src/game/content/meshes/`; node transforms, embedded texture colours,
+metre scale, deterministic face budgets, transparent glare removal and tagged
+screen faces. `game/scenery3d.py` caches shared props/workstations and live
+screen-only meshes, with procedural fallbacks at scene owners.
+M2 upload/evidence PCs; M3 Comms/Archives/Broadcast desks, guard consoles and
+cell monitor; M5 HQ signup/armory monitors + medical bench; M7 shared farmhouse
+porch chest; shared M1 pickup helper upgrades existing bandage pickups across
+missions. No maps, collision, interaction state, dialogue or health rules changed.
+21 targeted tests pass (six new scenery tests), compileall/diff check and scoped
+UTF-8/LF pass. GL/software M3 and GL M5 captures plus M2 upload/M7 porch captures
+in `shots/scenery_props/`. Image input is unavailable to this model: appearance
+needs owner review. Full normalizer still stops at existing scratch syntax line
+13. Standalone **SMOKE TEST: OK**. Full engine gate: compileall, API, import,
+text/data/timeline, frame budgets, replay-check, flash, software determinism
+and holds pass; known baseline failures include M4 entity attributes, W1/D6
+ratchets, M5 audio channel mocks and existing M7 motorcycle raw image load,
+stale bake/replay/loop/mission0 drift. **AE CI: FAIL** (343/393 golden
+mismatches in the dirty tree; scenery changes also intentionally change images,
+no golden baselines regenerated). Both standalone and CI smoke pass.
+
+## M3 Kill Order sniper sightline (2026-11-07, uncommitted)
+
+Owner reports a targeting line through the cover block and an invisible
+sniper. `m3ko3d._marksman` drew both a persistent beam and firing tracer
+with a painter-layered 3D line, which can overpaint the slab. The guard's
+projection was entirely behind the foreground pillar (render-difference
+probe: zero pixels). Removed BOTH lines, kept the brief muzzle + stone hits,
+shifted guard right onto a clear mezzanine firing bay, opened its rail and
+added a local practical. Guard now contributes ~2,000 software / 1,724 GL
+contrast pixels around the upper body between flashes. New regression asserts
+no targeting line at any beat and visible silhouette with the guard removed
+from a comparison frame. 14 KO/hold unit tests, compileall and both backend
+40-frame captures pass. Final standalone **SMOKE TEST: OK** after the
+light was scoped to the PA shot; owner visual sign-off pending.
+
+## M3 Kill Order staging follow-up (2026-11-07, uncommitted)
+
+Owner still saw actors stare at the door and Balaceanu's PA shot read badly.
+Root cause: the stair shot allowed advance at 2200 ms but Biribel crossed
+at 5300 ms; the PA lens initially missed the entrance and the lobby shot
+had no connected threshold. Now stair minimum is 5400 ms in the timeline
+and fallback meta; the lens follows both through the open portal and they
+scan separate flanks on hold. PA shot has a cutaway stair throat, open portal,
+separate timed entrance-to-cover routes, a pan from entry to speaker/overwatch,
+and security-bay alarm dressing. Recorded lines unchanged. Eight KO tests +
+five hold tests pass, timeline round-trip and compileall pass; 40 final GL
+captures and 40 earlier software captures generated. Final standalone
+**SMOKE TEST: OK**. Visual sign-off still needs owner; this model cannot
+inspect the image captures.
+
+## M3 door orientation (2026-11-07, uncommitted)
+
+Fixed `src/missions/m3/draw3d.py`: north-only axis inference rotated lower
+leaves of vertical double doors by 90 degrees (Comms, Archives, Kill Order).
+Now follows contiguous D runs to concrete jambs on both axes, preserving the
+cell armory's two-column wall. No map, collision or gameplay changes.
+Four regressions in `tests/unit/test_m3_door_orientation.py` pass, covering
+all five maps, both sliding axes and cache rebinding; compileall and scoped
+LF/UTF-8/diff checks pass. **SMOKE TEST: OK**. Whole normalizer still crashes on
+an existing line-13 scratch syntax error; ae_ci refuses another live lock
+(pid 39632); did not steal it. Other working-tree changes left untouched.
+
+## M3 Kill Order 3D bridge (2026-11-07, uncommitted)
+
+Approved plan implemented in `src/cutscenes/m3ko3d.py`, routed by m3ko registry
+wrappers with illustrated disabled/error fallback. Four shots: one-way breach
+at 1150 ms, tread-supported descent (Volkov leads, separate lanes), pillar
+cover/mezzanine marksman (actual muzzle ray terminates on pillar), empty dock
+preview with existing m3_van asset. Shared textured materials, PS2 grade and
+practical lighting. No mission state mutation, new dialogue or map changes.
+Silent charge auto-advances; all lenses hard-cut. Meta/timeline agree.
+24 KO/M3/hold regressions pass; compileall OK; 36 GL/software captures in
+`shots/m3_ko3d/`. Stair regression checks actual sole geometry against steps,
+not just root height; renderer tests check deterministic seeking and framing.
+Standalone **SMOKE TEST: OK**. Full CI ran: FAIL (M5 audio unit errors,
+M7 raw asset load, boundary/component/render-queue ratchets, stale bake,
+golden/replay/loop/mission0 drift); no KO unit failures. Timeline round-trip,
+API, holds and software determinism pass. No unrelated rebaselines made.
+Repo normalizer still fails on existing scratch syntax; KO files LF/UTF-8.
+Visual sign-off pending (model cannot view captures). Playtest:
+`python acaristan.py --dev-mission3-kill-order`.
+Archives stays reverted; earlier Comms and Molotov changes preserved.
+
+Owner playtest follow-up: stair portal had a solid rear wall and routes ended
+short. Replaced with genuine open aperture, displaced door leaf, extended
+landing/corridor and both walks through z=5.9 to z>7. PA shot now has approach
+then kneel, separated cover positions, side-biased camera, visible loudspeaker,
+clerk counters/wall bays and distinct exit light. Removed searching beam that
+could pass through cover. 25 targeted regressions pass; compileall and 36
+captures/backend OK. New tests forbid wall sealing the exit and assert actual
+passage/approach. Follow-up **SMOKE TEST: OK**; visual sign-off remains pending.
+
+## M3 Comms visual upgrade (2026-11-07, uncommitted)
+
+User says m3-comms graphics fall short of other 3D films. Service set now
+uses shared ps2mat textured concrete/steel instead of plain large faces.
+Added baked wall ribs, piping, recessed vents, ceiling structure, drainage,
+rack modules/meters/handles/wiring, relay keys/paper and a physical warm lamp.
+Lower ambient, stronger source-based warm/cool lights, small depth-masked
+practical halos; radio insert has corner guards, buttons and a top control.
+Animation, cast wardrobe, timelines and reverted Archives remain unchanged.
+18 staging/hold/Molotov tests pass; compileall OK; 44 captures/backend succeed.
+New regression asserts baked detail, textured surfaces and emissive sources.
+Changed files LF/UTF-8 clean. **SMOKE TEST: OK**. Full CI still locked by another
+run; repo normalization still crashes on existing scratch syntax error.
+Visual sign-off still needs owner: this model cannot inspect image inputs.
+
+## M3 Archives conversion reverted (2026-11-07)
+
+User requested revert of the latest Comms -> Archives 3D conversion. Restored
+original live-map cinematic and pacing; removed new film/test and Archives
+preview option. Earlier service/radio staging and ghost Molotov fix preserved.
+Old preview captures are historical only. Kill Order/Broadcast not converted.
+
+## M3 ghost Molotov fix (2026-11-07, uncommitted)
+
+Shared `entities.weapons.handle_throw_bottle` now rejects MISSION3 before
+inventory, aim, audio or projectile side effects. M3 has no flight update but
+its 3D FX renders the shared projectile list; firearm-equipped players with
+nonzero bottle inventory could create a stuck ghost. Both RMB and G use this
+handler. Two regressions cover all M3 weapons and preserve M1/M2/M6 throws;
+unit tests + compileall pass; standalone **SMOKE TEST: OK**.
+
+## M3 in-mission 3D staging, first bridge (2026-11-07, uncommitted)
+
+User requested a proper 3D staging pass on the between-stage films, not the
+intro/outro. First slice is **cell block -> Comms only**. New
+`src/cutscenes/m3staging.py` draws a shared concrete service/relay set with
+four lenses: exit wide, radio-handoff two-shot, power-on insert, Comms dolly.
+Prisoner wardrobe, K-9 right-hand carry, left-hand radio IK, planted-foot
+walks, deterministic seek/holds. `m3ops.py` wraps the four existing registry
+IDs; original 2D takes survive under `ACARISTAN_CUTSCENE3D=0` / render failure.
+Dialogue/takes and mission hand-off unchanged. Timeline + meta fallback have
+hard cuts and auto-advance/quiet UI on the two silent action shots.
+
+Follow-up playtest fix: one-handed rifle is now lowered/outboard with a
+20 cm minimum radio-hand/gun-AABB gap in tests. Volkov's toss/retract stays
+on his right side; recovery keeps the held arm and blends his turn away.
+The old target path could penetrate the chest even with safe IK (solver
+returns least-bad pose for impossible targets). This M3 prop is a radio;
+user also called it a Molotov, so a separate Molotov scene remains unconfirmed.
+
+9 staging + 5 hold regressions pass (`python -m unittest
+tests.unit.test_m3_staging tests.unit.test_hold -v`), compileall OK;
+24 fresh frames/backend captured by
+`python tools/m3_staging_preview.py --backend gl|software` into
+`shots/m3_staging/{gl,software}/`. Fresh engine3d parity OK (worst 3.26%). Changed
+files normalize cleanly; whole-repo normalizer crashes on the pre-existing
+untracked `_tmp_assets.py:13`. Follow-up standalone smoke: **SMOKE TEST: OK**.
+Follow-up ae_ci refused: another run holds its lock; not stolen.
+Prior full ae_ci: **FAIL**, broad failures (M4 entity attributes,
+shared->mission ratchet, M5 audio mock/channel IDs, M7 raw asset load,
+golden/replay/bake/mission0 drift); do not rebaseline those in this task.
+
+Radio-handoff follow-up (user disliked the take): replaced the 840 ms float
+with a 360 ms ballistic toss, visible wind-up, delayed receiving reach and
+220 ms catch absorption. Locked two-shot (no competing dolly), with projection
+regressions keeping the radio body inside frame and >18 internal pixels tall.
+15 staging/hold tests pass; compileall OK; standalone **SMOKE TEST: OK**;
+44 fresh frames per backend captured.
+Recorded dialogue, timeline and unrelated M6 edits unchanged. Full ae_ci still
+refused its live lock; repository normalizer still hits the existing scratch
+syntax error. Changed Python files verified LF/UTF-8 without BOM.
+
+**Needs visual playtest:** this agent cannot view image inputs. Jump directly
+with `python acaristan.py --dev-mission3-comms`. Archives, Kill Order and
+Broadcast bridges have NOT been converted. Pre-existing M6 working-tree
+edits were left alone.
 
 ---
 

@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-06T23:38:02.616Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-07T07:30:44.915Z
 > Files: 527 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
@@ -531,7 +531,7 @@
 - `combat.py` — Mission 6 - loud combat arenas for the three top-down stages. (~5224 tok)
 - `decor.py` — Mission 6 - stage decor, ground art and night lighting. (~31742 tok)
 - `draw.py` — Mission 6 gameplay renderer. (~6196 tok)
-- `draw3d.py` — Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard. (~11744 tok)
+- `draw3d.py` — Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard. (~13675 tok)
 - `flow.py` — Mission 6 - stage ladder, checkpoints and the ending handoff. (~3777 tok)
 - `hud3d.py` — Mission 6 3D HUD: minimal tactical, shared by the train shootout and the (~3045 tok)
 - `m6_audio.py` — Mission 6 sound design: film stems, foley and the interactive-train bed. (~6215 tok)

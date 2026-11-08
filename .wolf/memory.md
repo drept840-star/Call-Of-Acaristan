@@ -2477,3 +2477,49 @@ description: chronological action log per session, consolidated weekly
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
 | 01:38 | Created src/missions/m6/draw3d.py | — | ~11744 |
+| 09:16 | Session end: 1 writes across 1 files (draw3d.py) | 19 reads | ~26671 tok |
+| 09:16 | Session end: 1 writes across 1 files (draw3d.py) | 0 reads | ~86 tok |
+| 09:16 | Session end: 8 writes across 1 files (arena_view3d.py) | 5 reads | ~2001 tok |
+| 09:16 | Session end: 9 writes across 1 files (farmyard.py) | 1 reads | ~916 tok |
+| 09:16 | Session end: 1 writes across 1 files (draw3d.py) | 7 reads | ~26746 tok |
+
+## Session: 2026-11-07 09:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:28 | Edited src/missions/m6/draw3d.py | pixels2d() → _fv() | ~23 |
+| 09:28 | Edited src/missions/m6/draw3d.py | 2→4 lines | ~62 |
+| 09:28 | Edited src/missions/m6/draw3d.py | modified major() | ~198 |
+| 09:28 | Edited src/missions/m6/draw3d.py | modified _fv() | ~223 |
+| 09:28 | Edited src/missions/m6/draw3d.py | inline fix | ~11 |
+| 09:28 | Edited src/missions/m6/draw3d.py | 26→25 lines | ~299 |
+| 09:29 | Edited src/missions/m6/draw3d.py | 6→6 lines | ~46 |
+| 09:29 | Edited src/missions/m6/draw3d.py | 3→3 lines | ~22 |
+| 09:29 | Edited src/missions/m6/draw3d.py | modified max() | ~120 |
+| 09:29 | Edited src/missions/m6/draw3d.py | 7→7 lines | ~48 |
+| 09:29 | Edited src/missions/m6/draw3d.py | pixels3d() → _f3() | ~19 |
+| 09:30 | Edited src/missions/m6/draw3d.py | inline fix | ~29 |
+| 09:30 | Edited src/missions/m6/draw3d.py | 1→2 lines | ~51 |
+| 09:30 | Edited src/missions/m6/draw3d.py | 5→5 lines | ~31 |
+| 09:30 | Edited src/missions/m6/draw3d.py | 3→3 lines | ~19 |
+| 20:04 | Session end: 15 writes across 1 files (draw3d.py) | 0 reads | ~1201 tok |
+| 21:00 | M3 handoff: short ballistic toss, anticipation/recoil, locked readable two-shot; 15 regressions and both backend captures pass; visual playtest pending | src/cutscenes/m3staging.py; tests/unit/test_m3_staging.py; tools/m3_staging_preview.py | implemented | ~5000 |
+| 20:55 | Block M3 ghost molotov creation at shared RMB/G throw handler; preserve other mission throws | src/entities/weapons.py; tests/unit/test_m3_molotov_gate.py | 2 unit tests, compileall, SMOKE TEST: OK | ~2500 |
+| 21:15 | Converted M3 Comms -> Archives bridge to dedicated 3D threshold, Volkov warning and contact reveal; original live-world fallback kept | src/cutscenes/m3archives3d.py; src/missions/m3/draw.py; src/missions/m3/meta.py; tests/unit/test_m3_archives3d.py | 16 M3 regressions, compileall, 27 captures per backend pass | ~6000 |
+| 21:20 | User requested revert: removed only latest Archives 3D conversion; restored live-map take and pacing, preserved radio staging and Molotov gate | src/missions/m3/draw.py; src/missions/m3/meta.py | scoped revert | ~1500 |
+| 21:42 | M3 Comms visual pass: shared PS2 materials, baked architectural/relay detail, practical lighting and radio controls; Archives untouched | src/cutscenes/m3staging.py; tests/unit/test_m3_staging.py | 18 regressions, compileall, both backend captures, SMOKE TEST: OK; visual sign-off pending | ~4000 |
+| 22:15 | Approved KO intro converted: breach/stairs/pillar overwatch/empty asset-van dock; original 2D fallback retained, dialogue immutable | src/cutscenes/m3ko3d.py; src/cutscenes/m3ko.py; tests/unit/test_m3_ko3d.py | 24 targeted tests, compileall, 36 captures/backend and smoke OK; full CI red outside KO, visual sign-off pending | ~7000 |
+| 22:22 | KO playtest fix: open real stair aperture, walk both actors through it; PA approach-to-cover, visible speaker, revised framing and lobby dressing | src/cutscenes/m3ko3d.py; tests/unit/test_m3_ko3d.py | 25 targeted regressions and both backend captures pass | ~3000 |
+| 22:35 | KO follow-up: ensure stairs clear before advance and connect the PA shot to the entrance with tracking and security-bay staging | src/cutscenes/m3ko3d.py; tests/unit/test_m3_ko3d.py; src/missions/m3/meta.py; timeline | 13 focused tests, timeline, compileall, final smoke OK; visual review pending | ~6000 |
+| 23:38 | KO sniper fix: remove both depth-breaking beams; relocate and light guard in an open firing bay, test visible silhouette | src/cutscenes/m3ko3d.py; tests/unit/test_m3_ko3d.py | 14 focused tests, compileall, 40 captures per backend; final smoke OK after light scoping | ~3000 |
+| 00:02 | Integrated six baked workstation/medical GLBs with live screens and procedural fallbacks in M2/M3/M5/M7 plus shared health pickups | game/scenery3d, mission draw3d owners, m7world3d, importer/tests | 21 scoped tests and standalone SMOKE TEST: OK; captures need owner review | ~12k |
+
+## Session: 2026-11-08 09:44
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-08 22:16
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

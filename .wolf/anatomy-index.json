@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-11-06T23:38:02.616Z",
+    "lastScanned": "2026-11-07T07:30:44.915Z",
     "fileCount": 527,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "f2646c8e83d7f946c79346c3c84d1899b4b423aff025008b0f30dfe63d0c29a2",
-    "storeUpdatedAt": "2026-11-06T23:38:02.627Z",
-    "rootHash": "d8bb388374f47dc8"
+    "renderedHash": "a9bd0f650e7e0d5e1e7a3d036eea5495576e9689230b03b7e88137cfec7f2a3b",
+    "storeUpdatedAt": "2026-11-07T07:30:44.924Z",
+    "rootHash": "a7c97b1dbf72e11a"
   },
   "files": {
     ".gitattributes": {
@@ -43071,222 +43071,222 @@
     },
     "src/missions/m6/draw3d.py": {
       "description": "Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard.",
-      "tokens": 11744,
-      "hash": "1c93b5384e09e30d",
-      "size": 42061,
-      "mtimeMs": 1794008282486.4375,
-      "updatedAt": "2026-11-06T23:38:02.615Z",
+      "tokens": 13675,
+      "hash": "daa67c464f3a1bb6",
+      "size": 48819,
+      "mtimeMs": 1794036644787.6047,
+      "updatedAt": "2026-11-07T07:30:44.914Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_hidx",
           "kind": "fn",
-          "startLine": 81,
-          "endLine": 86,
+          "startLine": 82,
+          "endLine": 87,
           "tokens": 40
         },
         {
           "name": "render_world",
           "kind": "fn",
-          "startLine": 87,
-          "endLine": 153,
-          "tokens": 662
+          "startLine": 88,
+          "endLine": 159,
+          "tokens": 747
         },
         {
           "name": "_stage",
           "kind": "fn",
-          "startLine": 154,
-          "endLine": 157,
+          "startLine": 160,
+          "endLine": 163,
           "tokens": 22
         },
         {
           "name": "_grid",
           "kind": "fn",
-          "startLine": 158,
-          "endLine": 161,
+          "startLine": 164,
+          "endLine": 167,
           "tokens": 15
         },
         {
           "name": "_scratch",
           "kind": "fn",
-          "startLine": 162,
-          "endLine": 168,
-          "tokens": 51
+          "startLine": 168,
+          "endLine": 174,
+          "tokens": 67
         },
         {
           "name": "_mesh",
           "kind": "fn",
-          "startLine": 169,
-          "endLine": 178,
+          "startLine": 175,
+          "endLine": 184,
           "tokens": 71
         },
         {
           "name": "_put",
           "kind": "fn",
-          "startLine": 179,
-          "endLine": 182,
+          "startLine": 185,
+          "endLine": 188,
           "tokens": 32
         },
         {
           "name": "_shade",
           "kind": "fn",
-          "startLine": 183,
-          "endLine": 186,
+          "startLine": 189,
+          "endLine": 192,
           "tokens": 24
         },
         {
           "name": "_death_edge",
           "kind": "fn",
-          "startLine": 187,
-          "endLine": 196,
+          "startLine": 193,
+          "endLine": 202,
           "tokens": 100
         },
         {
           "name": "_rays",
           "kind": "fn",
-          "startLine": 197,
-          "endLine": 222,
-          "tokens": 327
+          "startLine": 203,
+          "endLine": 243,
+          "tokens": 571
         },
         {
           "name": "_plane",
           "kind": "fn",
-          "startLine": 223,
-          "endLine": 229,
+          "startLine": 244,
+          "endLine": 250,
           "tokens": 73
         },
         {
-          "name": "_gather",
+          "name": "_lin",
           "kind": "fn",
-          "startLine": 230,
-          "endLine": 239,
-          "tokens": 105
+          "startLine": 251,
+          "endLine": 257,
+          "tokens": 72
+        },
+        {
+          "name": "_flat",
+          "kind": "fn",
+          "startLine": 258,
+          "endLine": 264,
+          "tokens": 74
+        },
+        {
+          "name": "_fv",
+          "kind": "fn",
+          "startLine": 265,
+          "endLine": 272,
+          "tokens": 70
+        },
+        {
+          "name": "_f3",
+          "kind": "fn",
+          "startLine": 273,
+          "endLine": 283,
+          "tokens": 106
+        },
+        {
+          "name": "_rgb",
+          "kind": "fn",
+          "startLine": 284,
+          "endLine": 291,
+          "tokens": 81
         },
         {
           "name": "_tiles",
           "kind": "fn",
-          "startLine": 240,
-          "endLine": 248,
+          "startLine": 292,
+          "endLine": 300,
           "tokens": 98
         },
         {
           "name": "_paint_ground",
           "kind": "fn",
-          "startLine": 249,
-          "endLine": 286,
+          "startLine": 301,
+          "endLine": 338,
           "tokens": 422
         },
         {
           "name": "_top_map",
           "kind": "fn",
-          "startLine": 287,
-          "endLine": 303,
+          "startLine": 339,
+          "endLine": 355,
           "tokens": 178
         },
         {
           "name": "_mean",
           "kind": "fn",
-          "startLine": 304,
-          "endLine": 315,
+          "startLine": 356,
+          "endLine": 367,
           "tokens": 98
         },
         {
           "name": "_props",
           "kind": "fn",
-          "startLine": 316,
-          "endLine": 344,
-          "tokens": 374
+          "startLine": 368,
+          "endLine": 408,
+          "tokens": 589
         },
         {
           "name": "_atlas",
           "kind": "fn",
-          "startLine": 345,
-          "endLine": 384,
-          "tokens": 434
+          "startLine": 409,
+          "endLine": 457,
+          "tokens": 610
         },
         {
           "name": "_decode",
           "kind": "fn",
-          "startLine": 385,
-          "endLine": 462,
-          "tokens": 1010
+          "startLine": 458,
+          "endLine": 558,
+          "tokens": 1300
+        },
+        {
+          "name": "_shaded_floor",
+          "kind": "fn",
+          "startLine": 559,
+          "endLine": 573,
+          "tokens": 143
+        },
+        {
+          "name": "_cast_mask",
+          "kind": "fn",
+          "startLine": 574,
+          "endLine": 603,
+          "tokens": 372
         },
         {
           "name": "_light",
           "kind": "fn",
-          "startLine": 463,
-          "endLine": 483,
-          "tokens": 208
+          "startLine": 604,
+          "endLine": 648,
+          "tokens": 433
         },
         {
           "name": "_additive",
           "kind": "fn",
-          "startLine": 484,
-          "endLine": 512,
-          "tokens": 267
+          "startLine": 649,
+          "endLine": 674,
+          "tokens": 248
         },
         {
           "name": "_wall_kind",
           "kind": "fn",
-          "startLine": 513,
-          "endLine": 521,
+          "startLine": 675,
+          "endLine": 683,
           "tokens": 53
         },
         {
           "name": "_wall_boxes",
           "kind": "fn",
-          "startLine": 522,
-          "endLine": 559,
+          "startLine": 684,
+          "endLine": 721,
           "tokens": 341
         },
         {
           "name": "_cut",
           "kind": "fn",
-          "startLine": 560,
-          "endLine": 564,
-          "tokens": 41
-        },
-        {
-          "name": "_keyed_box",
-          "kind": "fn",
-          "startLine": 565,
-          "endLine": 581,
-          "tokens": 171
-        },
-        {
-          "name": "_draw_walls",
-          "kind": "fn",
-          "startLine": 582,
-          "endLine": 618,
-          "tokens": 443
-        },
-        {
-          "name": "_draw_props",
-          "kind": "fn",
-          "startLine": 619,
-          "endLine": 654,
-          "tokens": 470
-        },
-        {
-          "name": "_relit_top",
-          "kind": "fn",
-          "startLine": 655,
-          "endLine": 666,
-          "tokens": 118
-        },
-        {
-          "name": "_with_front",
-          "kind": "fn",
-          "startLine": 667,
-          "endLine": 675,
-          "tokens": 70
-        },
-        {
-          "name": "_build_static",
-          "kind": "fn",
-          "startLine": 676,
-          "endLine": 1033,
-          "tokens": 4411
+          "startLine": 722,
+          "endLine": 1175,
+          "tokens": 5583
         }
       ]
     }
