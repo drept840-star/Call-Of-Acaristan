@@ -29,6 +29,7 @@ from . import combat as _combat
 from .meta import STAGE_TRAIN
 
 _CALM_BLIND = -100000.0
+K9_SPARE_CAP = 6        # spare K-9 mags Biribel can carry in the top-down stages
 
 
 def _reload_frames():
@@ -159,7 +160,29 @@ def _kill_enemy(enemy):
     STATE.blood_decals.append([enemy.rect.centerx, enemy.rect.centery, 150, 12])
     effects.burst(enemy.rect.centerx, enemy.rect.centery, (180, 50, 55), 16)
     corpse.spawn_corpse(enemy)
+    # No M6 top-down loop used the already-drawn pickup list.  Every second
+    # Guard carries a K-9 mag (a Guard takes 4-7 rounds, so a sprayed fight
+    # still nets ammo): the player must cross to the body, and uncollected
+    # drops are lost when a stage is left behind.
+    if STATE.hostiles_killed % 2 == 0:
+        STATE.pickups.append([enemy.rect.centerx, enemy.rect.centery, "k9mag"])
     STATE.enemies.remove(enemy)
+
+
+def _update_pickups():
+    p = STATE.player
+    if not p or STATE.player_dead:
+        return
+    for pickup in STATE.pickups[:]:
+        if pickup[2] != "k9mag" or STATE.k9_spare_mags >= K9_SPARE_CAP:
+            continue
+        if math.hypot(pickup[0] - p.rect.centerx,
+                      pickup[1] - p.rect.centery) > 48:
+            continue
+        STATE.k9_spare_mags += 1
+        STATE.pickups.remove(pickup)
+        STATE.floating_texts.append([pickup[0], pickup[1] - 16,
+                                     "+1 K-9 MAG", (240, 204, 92), 70])
 
 
 def _update_bullets():
@@ -282,6 +305,7 @@ def game_update(keys):
     _update_shooting()
     _update_enemies()
     _update_bullets()
+    _update_pickups()
     _update_stealth(dt)
     _combat.update(dt)
     _weapons.update_molotovs(_world.solid_walls())

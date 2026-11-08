@@ -128,7 +128,7 @@ def _initialize_m6(preserve_timer=False):
     # other missions play.  M5 sets the same value when it boots.
     STATE.mission3_weapon = "k9_smg"
     STATE.k9_ammo_in_mag = STATE.k9_mag_size
-    STATE.k9_spare_mags = 3
+    STATE.k9_spare_mags = 4
     STATE.player_disarmed = False
     STATE.hostiles_killed = 0
     STATE.shots_fired = 0
