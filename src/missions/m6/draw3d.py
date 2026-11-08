@@ -111,7 +111,7 @@ def render_world(surface, fcx, fcy):
         r.fog, r.fog_start, r.fog_end = VOID, 900.0, 1000.0
         r.light_cap = 8
         v.apply(r)
-        px = pygame.surfarray.pixels2d(buf)
+        px = _fv(buf)
         px[...] = floor2
         del px
         r.begin()
@@ -128,7 +128,7 @@ def render_world(surface, fcx, fcy):
         _draw_walls(r, stage)
         _draw_props(r, stage, tm)
         _draw_combat(r)
-        _draw_cast(r, flashes, tm)
+        _draw_cast(r, flashes, tm, v)
         _draw_fires(r, flashes, tm, v)
         r.set_pools([])
         r.set_lights(flashes[:8], cap=8)
@@ -138,7 +138,9 @@ def render_world(surface, fcx, fcy):
         _draw_bullets(buf, v)
         lin, other, bare = _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh)
         body, feet = _cast_mask(v, buf.get_size())
-        lift = other & body & ~_shaded_floor(buf, floor2, feet)
+        # only the cast's own pixels can be lifted: test the blob shadow there
+        body &= other
+        lift = body & ~_shaded_floor(buf, floor2, feet & body)
         _light(buf, stage, bare, lin, lin0, crop, bx0, by0, bw, bh, lift)
     except Exception:
         import traceback
@@ -201,14 +203,19 @@ def _death_edge(surface):
 def _rays(v):
     """Per-pixel ray directions of the follow camera (it only translates,
     so they are constant), and the sim offsets from the focus at which the
-    rays meet the floor and the 1 m plane."""
+    rays meet the floor and the 1 m plane.
+
+    Every per-pixel array in this pass is flat and row-major (index
+    y * w + x, the buffer's own memory order): flat ``flatnonzero`` and 1-D
+    gathers are several times faster than 2-D ``nonzero`` and tuple indexing."""
     key = (v.w, v.h, CAM.pitch, CAM.dist, CAM.fov, CAM.look_h)
     hit = _cache["rays"]
     if hit is not None and hit[0] == key:
         return hit[1]
     w, h = v.w, v.h
     i, j = np.meshgrid(np.arange(w, dtype=np.float64) + 0.5,
-                       np.arange(h, dtype=np.float64) + 0.5, indexing="ij")
+                       np.arange(h, dtype=np.float64) + 0.5, indexing="xy")
+    i, j = i.reshape(-1), j.reshape(-1)
     xs = (i - w / 2.0) / v.focal
     ys = (h / 2.0 - j) / v.focal
     d = [v.fwd[k] + v.right[k] * xs + v.up[k] * ys for k in range(3)]
@@ -253,6 +260,25 @@ def _flat(surf):
     until the array is gone)."""
     a = pygame.surfarray.pixels2d(surf).T
     return a.reshape(-1) if a.flags.c_contiguous else np.ascontiguousarray(a).reshape(-1)
+
+
+def _fv(surf):
+    """Writable flat row-major view of the packed pixels (locks ``surf``)."""
+    a = pygame.surfarray.pixels2d(surf).T
+    if not a.flags.c_contiguous:
+        raise ValueError("padded surface rows")
+    return a.reshape(-1)
+
+
+def _f3(surf):
+    """Writable (w * h, 3) row-major view of the RGB channels (locks ``surf``)."""
+    a = pygame.surfarray.pixels3d(surf).transpose(1, 0, 2)
+    if a.strides[0] != a.strides[1] * a.shape[1]:
+        raise ValueError("padded surface rows")
+    f = a.reshape(-1, 3)
+    if not np.may_share_memory(f, a):
+        raise ValueError("pixel copy")
+    return f
 
 
 def _rgb(v, surf, dtype=np.uint8):
@@ -421,7 +447,8 @@ def _atlas(stage, like):
         y += rect.h
     conv = pygame.Surface(atl.get_size(), 0, like)
     conv.blit(atl, (0, 0))
-    out = {"arr": pygame.surfarray.array2d(conv), "gh": gh, "tab": tab}   # packed
+    arr = pygame.surfarray.array2d(conv)                                  # packed
+    out = {"arr": arr, "flat": np.ascontiguousarray(arr.T).reshape(-1), "gh": gh, "tab": tab}
     _cache["atlas"][stage] = out
     return out
 
@@ -435,39 +462,38 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
     atl = _atlas(stage, buf)
     arr, gh, tab = atl["arr"], atl["gh"], atl["tab"]
     aw, ah = arr.shape[0], arr.shape[1]
-    p2 = pygame.surfarray.pixels2d(buf)
+    p2 = _fv(buf)
     bare = p2 == floor2               # untouched floor
     fl = bare.copy()
     del p2
-    px = pygame.surfarray.pixels3d(buf)
+    px = _f3(buf)
     # the shared cast shadow is the floor darkened: light it as floor
-    nf = np.nonzero(~fl)
-    if nf[0].size:
+    nf = np.flatnonzero(~fl)
+    if nf.size:
         a = 100 / 255.0
         # green first: most non-floor pixels fail it, the rest get all three
         sg = buf.get_shifts()[1]
-        g = px[..., 1][nf].astype(np.int16)
+        g = px[nf, 1].astype(np.int16)
         eg = (((floor2[nf] >> sg) & 255) * (1.0 - a) + td.SHADOW_COL[1] * a).astype(np.int16)
-        near = np.abs(g - eg) <= 3
-        nf = (nf[0][near], nf[1][near])
+        nf = nf[np.abs(g - eg) <= 3]
         shade = _rgb(floor2[nf], buf, np.float32) * (1.0 - a) + np.array(td.SHADOW_COL, np.float32) * a
         hit = (np.abs(px[nf].astype(np.float32) - shade) <= 3.0).all(axis=1)
-        fl[nf[0][hit], nf[1][hit]] = True
+        fl[nf[hit]] = True
     lin = np.where(fl, R["lin0"], R["lin1"])
     other = ~fl
-    rr, gg = px[..., 0], px[..., 1]
+    rr, gg = px[:, 0], px[:, 1]
     cand = (rr >= K_PTOP) & (rr <= K_TOP) & (gg <= 70) & ~fl
-    sel = np.nonzero(cand)
-    if sel[0].size:
+    sel = np.flatnonzero(cand)
+    if sel.size:
         r_, g_ = rr[sel], gg[sel].astype(np.float32)
-        b_ = px[..., 2][sel].astype(np.int32)
+        b_ = px[sel, 2].astype(np.int32)
         sx = np.empty(r_.shape, np.float32); sy = np.empty(r_.shape, np.float32)
         ax_ = np.zeros(r_.shape, np.int64); ay_ = np.zeros(r_.shape, np.int64)
         good = np.zeros(r_.shape, bool)
         # wall tops: the plane at h = B/20
         m = (r_ == K_TOP) & (g_ == 1)
         if m.any():
-            s = tuple(a[m] for a in sel)
+            s = sel[m]
             ox, oy = _plane(R, b_[m] / 20.0, s)
             sx[m], sy[m] = ox + fx, oy + fy
             ax_[m], ay_[m] = sx[m], sy[m]
@@ -475,7 +501,7 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
         # wall south faces: row B, full height (G-2)/20
         m = (r_ == K_FACE) & (g_ >= 2)
         if m.any():
-            s = tuple(a[m] for a in sel)
+            s = sel[m]
             Y = (b_[m] + 1) * T
             t = (-(Y - fy) * K - R["ez"]) / R["dz"][s]
             hh = R["ey"] + R["dy"][s] * t
@@ -487,7 +513,7 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
         # prop south faces: prop B's sprite across its width and height
         m = (r_ == K_PFACE) & (g_ >= 2)
         if m.any():
-            s = tuple(a[m] for a in sel)
+            s = sel[m]
             e = np.clip(b_[m], 0, len(tab["h"]) - 1)
             Y = tab["y1"][e]
             t = (-(Y - fy) * K - R["ez"]) / R["dz"][s]
@@ -504,7 +530,7 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
         # prop tops: prop B's sprite across its footprint, plane (G-2)/20
         m = (r_ == K_PTOP) & (g_ >= 2)
         if m.any():
-            s = tuple(a[m] for a in sel)
+            s = sel[m]
             e = np.clip(b_[m], 0, len(tab["h"]) - 1)
             ox, oy = _plane(R, (g_[m] - 2) / 20.0, s)
             x, y = ox + fx, oy + fy
@@ -517,9 +543,9 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
             sx[m], sy[m] = x, np.where(face, tab["ytop"][e] + w * tab["ah"][e], y)
             good |= m
         if good.any():
-            s = tuple(a[good] for a in sel)
-            p2 = pygame.surfarray.pixels2d(buf)
-            p2[s] = arr[np.clip(ax_[good], 0, aw - 1), np.clip(ay_[good], 0, ah - 1)]
+            s = sel[good]
+            p2 = _fv(buf)
+            p2[s] = atl["flat"][np.clip(ay_[good], 0, ah - 1) * aw + np.clip(ax_[good], 0, aw - 1)]
             del p2
             lin[s] = (np.clip(sy[good] - by0, 0, bh - 1).astype(np.int32) * bw
                       + np.clip(sx[good] - bx0, 0, bw - 1).astype(np.int32))
@@ -533,10 +559,10 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
 def _shaded_floor(buf, floor2, where):
     """``where`` pixels that are the floor darkened (blob shadows at the feet)."""
     out = np.zeros(where.shape, bool)
-    sel = np.nonzero(where)
-    if not sel[0].size:
+    sel = np.flatnonzero(where)
+    if not sel.size:
         return out
-    a = pygame.surfarray.pixels3d(buf)
+    a = _f3(buf)
     px = a[sel].astype(np.float32)
     del a
     f = _rgb(floor2[sel], buf, np.float32)
@@ -549,8 +575,8 @@ def _cast_mask(v, size):
     """Buffer pixels that can hold a body (a box from feet to head round
     every living actor) and the box of each one's blob shadow."""
     w, h = size
-    m = np.zeros((w, h), bool)
-    f = np.zeros((w, h), bool)
+    m = np.zeros((h, w), bool)
+    f = np.zeros((h, w), bool)
     pts = [(e.rect.centerx, e.rect.centery) for e in getattr(STATE, "enemies", [])
            if getattr(e, "hp", 1) > 0]
     if STATE.player is not None:
@@ -566,13 +592,13 @@ def _cast_mask(v, size):
         x0, x1 = max(0, int(foot[0]) - hw), min(w, int(foot[0]) + hw)
         y0, y1 = max(0, int(head[1]) - 2), min(h, int(foot[1]) + 2)
         if x0 < x1 and y0 < y1:
-            m[x0:x1, y0:y1] = True
+            m[y0:y1, x0:x1] = True
         n, s_ = _bpt(v, x, y - 0.32 / K, 0.0), _bpt(v, x, y + 0.32 / K, 0.0)
         if n is not None and s_ is not None:
             bw = int(abs(s_[1] - n[1]) * 0.6) + 3
             cx = int((n[0] + s_[0]) / 2)
-            f[max(0, cx - bw):min(w, cx + bw), max(0, int(n[1]) - 1):min(h, int(s_[1]) + 2)] = True
-    return m, f
+            f[max(0, int(n[1]) - 1):min(h, int(s_[1]) + 2), max(0, cx - bw):min(w, cx + bw)] = True
+    return m.reshape(-1), f.reshape(-1)
 
 
 def _light(buf, stage, bare, lin, lin0, crop, bx0, by0, bw, bh, lift):
@@ -595,25 +621,25 @@ def _light(buf, stage, bare, lin, lin0, crop, bx0, by0, bw, bh, lift):
     if ov is not None:
         lit.blit(ov, (0, 0), special_flags=add)
     flat = _flat(lit)
-    p2 = pygame.surfarray.pixels2d(buf)
+    p2 = _fv(buf)
     np.copyto(p2, flat[lin0], where=bare)
     del flat, p2
-    sel = np.nonzero(~bare)
-    if not sel[0].size:
+    sel = np.flatnonzero(~bare)
+    if not sel.size:
         return
     lin = lin[sel]
-    flat = _flat(lm)
-    mul = _rgb(flat[lin], lm, np.uint16)
+    flat = _f3(lm)
+    mul = flat[lin].astype(np.uint16)
     del flat
     up = lift[sel]
     if up.any():
         # the 3D cast is darker than the 2D sprites before the light pass
         mul[up] = np.minimum(mul[up] * CAST_LIFT, 255).astype(np.uint16)
-    px = pygame.surfarray.pixels3d(buf)
+    px = _f3(buf)
     out = (px[sel].astype(np.uint16) * mul) >> 7
     if ov is not None:
-        flat = _flat(ov)
-        out += _rgb(flat[lin], ov, np.uint16)
+        flat = _f3(ov)
+        out += flat[lin]
         del flat
     np.minimum(out, 255, out=out)
     px[sel] = out
@@ -896,11 +922,40 @@ def _draw_combat(r):
 
 # ── cast ───────────────────────────────────────────────────────────────
 
-def _draw_cast(r, flashes, tm):
+def _in_view(x, y, v, bb):
+    """Conservative world-space bounds for bodies and their ground shadows.
+
+    The ray crop spans the floor and 3.4 m plane; another two tiles cover
+    weapons, the fall pose and the cast shadow before mesh construction.
+    """
+    return (v.tgt[0] / K + bb[0] - 128 <= x <= v.tgt[0] / K + bb[2] + 128
+            and -v.tgt[2] / K + bb[1] - 128 <= y <= -v.tgt[2] / K + bb[3] + 128)
+
+
+def _draw_corpses(r, v, bb):
+    """The M5 corpse pose, but skip bodies outside M6's camera before skinning."""
+    from engine3d import blend
     from missions.m5 import draw3d as _m5
-    _m5._draw_corpses(r)
+    hum = td.armed("ipa", "os12", **_m5._GUARD_KIT)
+    for c in list(getattr(STATE, "corpses", ())):
+        if not _in_view(c.x, c.y, v, bb):
+            continue
+        k = min(1.0, c.t / float(_m1.CORPSE_FALL))
+        pose = blend("kneel", "dead_side", k) if k > 0.35 else blend("stand", "kneel", k / 0.35)
+        at = to3(c.x, c.y)
+        if k >= 1.0:
+            r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - _m1.CORPSE_FALL) / 90.0)), layer=0)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=0)
+        r.add_humanoid(hum, pose, at, td.yaw_rad(c.angle) + 90.0 * c.fall_dir, rifle_on=False,
+                       tint=_m1.CHAR if hasattr(c, "burn") else None)
+
+
+def _draw_cast(r, flashes, tm, v):
+    from missions.m5 import draw3d as _m5
+    bb = _rays(v)["bb"]
+    _draw_corpses(r, v, bb)
     for e in getattr(STATE, "enemies", []):
-        if getattr(e, "hp", 1) <= 0:
+        if getattr(e, "hp", 1) <= 0 or not _in_view(e.rect.centerx, e.rect.centery, v, bb):
             continue
         hum, rig = _m5._guard_hum(e)
         mode = "aim" if e.state in ("CHASE", "ATTACK") else "ready"
@@ -910,7 +965,7 @@ def _draw_cast(r, flashes, tm):
         _m1._body(r, hum, x, y, e.angle, rig, mode, ("e6", e.uid), tint=tint)
         _m1._burning(r, x, y, min(1.0, burn / 40.0), tm, e.uid * 5, flashes)
     vk = _world.volkov()
-    if vk and not vk.get("dead"):
+    if vk and not vk.get("dead") and _in_view(vk["x"], vk["y"], v, bb):
         _m5._unarmed(r, td.armed("volkov", "pistol"), vk["x"], vk["y"],
                      vk.get("angle", -math.pi / 2), "volkov")
     _draw_player(r, flashes)
