@@ -319,6 +319,11 @@ def build_world(stage):
     _decor.build_decor(stage)
     _stealth.init_stage(stage)
     _combat.init_stage(stage)
+    # Keep rounds carried between stages, but don't start a fresh arena (or
+    # the train) with an empty rig after a costly previous fight.  Checkpoint
+    # retries still get the same minimum rather than an accumulating bonus.
+    spare_floor = {STAGE_NOMAN: 3, STAGE_RAIL: 3, STAGE_TRAIN: 4}.get(stage, 0)
+    STATE.k9_spare_mags = max(STATE.k9_spare_mags, spare_floor)
     return STATE.player
 
 

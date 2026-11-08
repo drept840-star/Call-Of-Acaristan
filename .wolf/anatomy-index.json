@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "lastScanned": "2026-11-05T19:29:24.885Z",
-    "fileCount": 525,
+    "lastScanned": "2026-11-07T07:30:44.915Z",
+    "fileCount": 527,
     "hits": 0,
     "misses": 0,
-    "renderedHash": "291dff56a96d32812c7e959afcc512ca46a9967f6b5420a9ab5a8ec1cd6968d2",
-    "storeUpdatedAt": "2026-11-05T19:29:24.894Z",
-    "rootHash": "c65c683d856b7101"
+    "renderedHash": "a9bd0f650e7e0d5e1e7a3d036eea5495576e9689230b03b7e88137cfec7f2a3b",
+    "storeUpdatedAt": "2026-11-07T07:30:44.924Z",
+    "rootHash": "a7c97b1dbf72e11a"
   },
   "files": {
     ".gitattributes": {
@@ -37215,223 +37215,223 @@
       "source": "hook"
     },
     "src/missions/m7/farmyard.py": {
-      "description": "Mission 7 top-down farmyard: beat 2 (chores); beat 4 (prep) reuses the map.",
-      "tokens": 11649,
-      "hash": "9f5250c55b5f28e2",
-      "size": 40771,
-      "mtimeMs": 1793200260814.837,
-      "updatedAt": "2026-10-28T15:11:00.954Z",
+      "description": "Mission 7 top-down farmyard.",
+      "tokens": 20878,
+      "hash": "51821eba19ddd92d",
+      "size": 73073,
+      "mtimeMs": 1794006345088.2473,
+      "updatedAt": "2026-11-06T23:05:45.213Z",
       "source": "hook",
       "symbols": [
         {
           "name": "_snd",
           "kind": "fn",
-          "startLine": 36,
-          "endLine": 55,
-          "tokens": 230
+          "startLine": 122,
+          "endLine": 125,
+          "tokens": 17
+        },
+        {
+          "name": "_tone",
+          "kind": "fn",
+          "startLine": 126,
+          "endLine": 131,
+          "tokens": 34
         },
         {
           "name": "_rng",
           "kind": "fn",
-          "startLine": 56,
-          "endLine": 62,
-          "tokens": 38
+          "startLine": 132,
+          "endLine": 138,
+          "tokens": 42
         },
         {
           "name": "_inside",
           "kind": "fn",
-          "startLine": 63,
-          "endLine": 66,
-          "tokens": 29
-        },
-        {
-          "name": "_ground_kind",
-          "kind": "fn",
-          "startLine": 67,
-          "endLine": 81,
-          "tokens": 121
-        },
-        {
-          "name": "_ground_tile",
-          "kind": "fn",
-          "startLine": 82,
-          "endLine": 105,
-          "tokens": 223
+          "startLine": 139,
+          "endLine": 145,
+          "tokens": 36
         },
         {
           "name": "_shadow",
           "kind": "fn",
-          "startLine": 106,
-          "endLine": 111,
-          "tokens": 45
+          "startLine": 146,
+          "endLine": 151,
+          "tokens": 55
+        },
+        {
+          "name": "_ellipse_shadow",
+          "kind": "fn",
+          "startLine": 152,
+          "endLine": 174,
+          "tokens": 166
+        },
+        {
+          "name": "_ground_kind",
+          "kind": "fn",
+          "startLine": 175,
+          "endLine": 186,
+          "tokens": 91
+        },
+        {
+          "name": "_ground_tile",
+          "kind": "fn",
+          "startLine": 187,
+          "endLine": 257,
+          "tokens": 612
         },
         {
           "name": "_fence",
           "kind": "fn",
-          "startLine": 112,
-          "endLine": 133,
-          "tokens": 213
+          "startLine": 258,
+          "endLine": 310,
+          "tokens": 437
         },
         {
           "name": "_house",
           "kind": "fn",
-          "startLine": 134,
-          "endLine": 161,
-          "tokens": 360
+          "startLine": 311,
+          "endLine": 423,
+          "tokens": 930
         },
         {
           "name": "_barn",
           "kind": "fn",
-          "startLine": 162,
-          "endLine": 185,
-          "tokens": 284
+          "startLine": 424,
+          "endLine": 510,
+          "tokens": 732
         },
         {
           "name": "_well",
           "kind": "fn",
-          "startLine": 186,
-          "endLine": 197,
-          "tokens": 136
-        },
-        {
-          "name": "_tractor_surface",
-          "kind": "fn",
-          "startLine": 198,
-          "endLine": 214,
-          "tokens": 203
-        },
-        {
-          "name": "_tractor_draw",
-          "kind": "fn",
-          "startLine": 215,
-          "endLine": 229,
-          "tokens": 165
+          "startLine": 511,
+          "endLine": 544,
+          "tokens": 378
         },
         {
           "name": "_shed",
           "kind": "fn",
-          "startLine": 230,
-          "endLine": 243,
-          "tokens": 153
+          "startLine": 545,
+          "endLine": 588,
+          "tokens": 402
         },
         {
           "name": "_bin",
           "kind": "fn",
-          "startLine": 244,
-          "endLine": 255,
-          "tokens": 125
+          "startLine": 589,
+          "endLine": 614,
+          "tokens": 258
         },
         {
           "name": "_bike",
           "kind": "fn",
-          "startLine": 256,
-          "endLine": 270,
-          "tokens": 173
+          "startLine": 615,
+          "endLine": 635,
+          "tokens": 240
+        },
+        {
+          "name": "_pig_home",
+          "kind": "fn",
+          "startLine": 636,
+          "endLine": 640,
+          "tokens": 26
+        },
+        {
+          "name": "_mud_patch",
+          "kind": "fn",
+          "startLine": 641,
+          "endLine": 657,
+          "tokens": 138
         },
         {
           "name": "_build_static",
           "kind": "fn",
-          "startLine": 271,
-          "endLine": 292,
-          "tokens": 183
+          "startLine": 658,
+          "endLine": 700,
+          "tokens": 355
         },
         {
           "name": "_bodi_tile",
           "kind": "fn",
-          "startLine": 293,
-          "endLine": 296,
-          "tokens": 36
+          "startLine": 701,
+          "endLine": 709,
+          "tokens": 47
         },
         {
           "name": "_make_walls",
           "kind": "fn",
-          "startLine": 297,
-          "endLine": 313,
-          "tokens": 192
+          "startLine": 710,
+          "endLine": 741,
+          "tokens": 254
         },
         {
           "name": "begin",
           "kind": "fn",
-          "startLine": 314,
-          "endLine": 336,
-          "tokens": 321
+          "startLine": 742,
+          "endLine": 832,
+          "tokens": 698
+        },
+        {
+          "name": "_start_rescue",
+          "kind": "fn",
+          "startLine": 833,
+          "endLine": 840,
+          "tokens": 74
         },
         {
           "name": "active",
           "kind": "fn",
-          "startLine": 337,
-          "endLine": 340,
+          "startLine": 841,
+          "endLine": 844,
           "tokens": 10
         },
         {
           "name": "_toast",
           "kind": "fn",
-          "startLine": 341,
-          "endLine": 344,
+          "startLine": 845,
+          "endLine": 848,
           "tokens": 20
         },
         {
           "name": "_say",
           "kind": "fn",
-          "startLine": 345,
-          "endLine": 351,
-          "tokens": 39
+          "startLine": 849,
+          "endLine": 856,
+          "tokens": 46
+        },
+        {
+          "name": "_say_colonel",
+          "kind": "fn",
+          "startLine": 857,
+          "endLine": 862,
+          "tokens": 63
         },
         {
           "name": "_advance_line",
           "kind": "fn",
-          "startLine": 352,
-          "endLine": 366,
-          "tokens": 106
+          "startLine": 863,
+          "endLine": 882,
+          "tokens": 123
         },
         {
           "name": "_finish",
           "kind": "fn",
-          "startLine": 367,
-          "endLine": 371,
-          "tokens": 18
+          "startLine": 883,
+          "endLine": 894,
+          "tokens": 109
         },
         {
           "name": "_chores_done",
           "kind": "fn",
-          "startLine": 372,
-          "endLine": 377,
-          "tokens": 45
+          "startLine": 895,
+          "endLine": 898,
+          "tokens": 22
         },
         {
-          "name": "_point_px",
+          "name": "_chores_complete",
           "kind": "fn",
-          "startLine": 378,
-          "endLine": 385,
-          "tokens": 53
-        },
-        {
-          "name": "_reach",
-          "kind": "fn",
-          "startLine": 386,
-          "endLine": 389,
-          "tokens": 25
-        },
-        {
-          "name": "_preps_open",
-          "kind": "fn",
-          "startLine": 390,
-          "endLine": 396,
-          "tokens": 61
-        },
-        {
-          "name": "_available",
-          "kind": "fn",
-          "startLine": 397,
-          "endLine": 423,
-          "tokens": 277
-        },
-        {
-          "name": "_nearest",
-          "kind": "fn",
-          "startLine": 424,
-          "endLine": 1195,
-          "tokens": 7524
+          "startLine": 899,
+          "endLine": 2603,
+          "tokens": 13734
         }
       ]
     },
@@ -38743,68 +38743,61 @@
     },
     "src/ui/arena_view3d.py": {
       "description": "2.5D renderer for multiplayer arena matches.",
-      "tokens": 6455,
-      "hash": "c43a66f6b1054f66",
-      "size": 23436,
-      "mtimeMs": 1793540303544.0908,
-      "updatedAt": "2026-11-01T13:38:23.697Z",
+      "tokens": 7576,
+      "hash": "dd45a2f9bc984ef4",
+      "size": 27360,
+      "mtimeMs": 1794005442365.1428,
+      "updatedAt": "2026-11-06T22:50:42.545Z",
       "source": "hook",
       "symbols": [
         {
-          "name": "to3",
-          "kind": "fn",
-          "startLine": 62,
-          "endLine": 66,
-          "tokens": 33
-        },
-        {
-          "name": "yaw_of",
-          "kind": "fn",
-          "startLine": 67,
-          "endLine": 72,
-          "tokens": 56
-        },
-        {
           "name": "make_view",
           "kind": "fn",
-          "startLine": 73,
-          "endLine": 82,
+          "startLine": 76,
+          "endLine": 85,
           "tokens": 77
         },
         {
           "name": "_Meta3D",
           "kind": "class",
-          "startLine": 83,
+          "startLine": 86,
           "endLine": 94,
-          "tokens": 88
+          "tokens": 50
+        },
+        {
+          "name": "_Corpse3D",
+          "kind": "class",
+          "startLine": 95,
+          "endLine": 105,
+          "tokens": 124
         },
         {
           "name": "ArenaView3D",
           "kind": "class",
-          "startLine": 95,
-          "endLine": 483,
-          "tokens": 5237
+          "startLine": 106,
+          "endLine": 547,
+          "tokens": 6076
         },
         {
-          "name": "_mix",
+          "name": "_scale",
           "kind": "fn",
-          "startLine": 484,
-          "endLine": 487,
-          "tokens": 25
+          "startLine": 548,
+          "endLine": 551,
+          "tokens": 24
         },
         {
-          "name": "_dot",
+          "name": "_tile_col",
           "kind": "fn",
-          "startLine": 488,
-          "endLine": 494,
-          "tokens": 63
+          "startLine": 552,
+          "endLine": 560,
+          "tokens": 91
         },
         {
-          "name": "_blood_pool",
+          "name": "_bulb",
           "kind": "fn",
-          "startLine": 495,
-          "endLine": 503,
-          "tokens": 78
+          "startLine": 561,
+          "endLine": 570,
+          "tokens": 98
         }
       ]
     },
@@ -42852,6 +42845,448 @@
           "startLine": 28,
           "endLine": 67,
           "tokens": 453
+        }
+      ]
+    },
+    "src/missions/m5/draw3d.py": {
+      "description": "Mission 5 in 2.5D: Guard HQ, the Lower Quarter, the print works and the",
+      "tokens": 16518,
+      "hash": "d93e45dd2193c1c9",
+      "size": 59065,
+      "mtimeMs": 1793997663049.1433,
+      "updatedAt": "2026-11-06T20:41:03.179Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "submit_frame",
+          "kind": "fn",
+          "startLine": 97,
+          "endLine": 120,
+          "tokens": 319
+        },
+        {
+          "name": "_tick",
+          "kind": "fn",
+          "startLine": 121,
+          "endLine": 130,
+          "tokens": 86
+        },
+        {
+          "name": "_draw_death_edge",
+          "kind": "fn",
+          "startLine": 131,
+          "endLine": 138,
+          "tokens": 78
+        },
+        {
+          "name": "render_world",
+          "kind": "fn",
+          "startLine": 139,
+          "endLine": 186,
+          "tokens": 442
+        },
+        {
+          "name": "_grid",
+          "kind": "fn",
+          "startLine": 187,
+          "endLine": 190,
+          "tokens": 13
+        },
+        {
+          "name": "_kind",
+          "kind": "fn",
+          "startLine": 191,
+          "endLine": 201,
+          "tokens": 67
+        },
+        {
+          "name": "_ambient_key",
+          "kind": "fn",
+          "startLine": 202,
+          "endLine": 205,
+          "tokens": 37
+        },
+        {
+          "name": "_stage",
+          "kind": "fn",
+          "startLine": 206,
+          "endLine": 209,
+          "tokens": 19
+        },
+        {
+          "name": "_dims",
+          "kind": "fn",
+          "startLine": 210,
+          "endLine": 214,
+          "tokens": 21
+        },
+        {
+          "name": "_glyph",
+          "kind": "fn",
+          "startLine": 215,
+          "endLine": 221,
+          "tokens": 39
+        },
+        {
+          "name": "_tc",
+          "kind": "fn",
+          "startLine": 222,
+          "endLine": 225,
+          "tokens": 24
+        },
+        {
+          "name": "_put",
+          "kind": "fn",
+          "startLine": 226,
+          "endLine": 229,
+          "tokens": 45
+        },
+        {
+          "name": "_mesh",
+          "kind": "fn",
+          "startLine": 230,
+          "endLine": 236,
+          "tokens": 38
+        },
+        {
+          "name": "_hash",
+          "kind": "fn",
+          "startLine": 237,
+          "endLine": 240,
+          "tokens": 20
+        },
+        {
+          "name": "_shade",
+          "kind": "fn",
+          "startLine": 241,
+          "endLine": 244,
+          "tokens": 24
+        },
+        {
+          "name": "_glow",
+          "kind": "fn",
+          "startLine": 245,
+          "endLine": 249,
+          "tokens": 44
+        },
+        {
+          "name": "_fx_layer",
+          "kind": "fn",
+          "startLine": 250,
+          "endLine": 254,
+          "tokens": 24
+        },
+        {
+          "name": "_tex",
+          "kind": "fn",
+          "startLine": 255,
+          "endLine": 259,
+          "tokens": 39
+        },
+        {
+          "name": "_box_at",
+          "kind": "fn",
+          "startLine": 260,
+          "endLine": 265,
+          "tokens": 50
+        },
+        {
+          "name": "_px_box",
+          "kind": "fn",
+          "startLine": 266,
+          "endLine": 277,
+          "tokens": 132
+        },
+        {
+          "name": "_floor_ch",
+          "kind": "fn",
+          "startLine": 278,
+          "endLine": 298,
+          "tokens": 162
+        },
+        {
+          "name": "_floor_at",
+          "kind": "fn",
+          "startLine": 299,
+          "endLine": 314,
+          "tokens": 200
+        },
+        {
+          "name": "_build_set",
+          "kind": "fn",
+          "startLine": 315,
+          "endLine": 344,
+          "tokens": 243
+        },
+        {
+          "name": "_is_water",
+          "kind": "fn",
+          "startLine": 345,
+          "endLine": 348,
+          "tokens": 19
+        },
+        {
+          "name": "_water_tile",
+          "kind": "fn",
+          "startLine": 349,
+          "endLine": 362,
+          "tokens": 214
+        },
+        {
+          "name": "_wave",
+          "kind": "fn",
+          "startLine": 363,
+          "endLine": 368,
+          "tokens": 62
+        },
+        {
+          "name": "_water_surface",
+          "kind": "fn",
+          "startLine": 369,
+          "endLine": 407,
+          "tokens": 480
+        },
+        {
+          "name": "_rails",
+          "kind": "fn",
+          "startLine": 408,
+          "endLine": 424,
+          "tokens": 185
+        },
+        {
+          "name": "_water_dynamic",
+          "kind": "fn",
+          "startLine": 425,
+          "endLine": 462,
+          "tokens": 548
+        },
+        {
+          "name": "_paint_ground",
+          "kind": "fn",
+          "startLine": 463,
+          "endLine": 1435,
+          "tokens": 11612
+        }
+      ]
+    },
+    "src/missions/m6/draw3d.py": {
+      "description": "Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard.",
+      "tokens": 13675,
+      "hash": "daa67c464f3a1bb6",
+      "size": 48819,
+      "mtimeMs": 1794036644787.6047,
+      "updatedAt": "2026-11-07T07:30:44.914Z",
+      "source": "hook",
+      "symbols": [
+        {
+          "name": "_hidx",
+          "kind": "fn",
+          "startLine": 82,
+          "endLine": 87,
+          "tokens": 40
+        },
+        {
+          "name": "render_world",
+          "kind": "fn",
+          "startLine": 88,
+          "endLine": 159,
+          "tokens": 747
+        },
+        {
+          "name": "_stage",
+          "kind": "fn",
+          "startLine": 160,
+          "endLine": 163,
+          "tokens": 22
+        },
+        {
+          "name": "_grid",
+          "kind": "fn",
+          "startLine": 164,
+          "endLine": 167,
+          "tokens": 15
+        },
+        {
+          "name": "_scratch",
+          "kind": "fn",
+          "startLine": 168,
+          "endLine": 174,
+          "tokens": 67
+        },
+        {
+          "name": "_mesh",
+          "kind": "fn",
+          "startLine": 175,
+          "endLine": 184,
+          "tokens": 71
+        },
+        {
+          "name": "_put",
+          "kind": "fn",
+          "startLine": 185,
+          "endLine": 188,
+          "tokens": 32
+        },
+        {
+          "name": "_shade",
+          "kind": "fn",
+          "startLine": 189,
+          "endLine": 192,
+          "tokens": 24
+        },
+        {
+          "name": "_death_edge",
+          "kind": "fn",
+          "startLine": 193,
+          "endLine": 202,
+          "tokens": 100
+        },
+        {
+          "name": "_rays",
+          "kind": "fn",
+          "startLine": 203,
+          "endLine": 243,
+          "tokens": 571
+        },
+        {
+          "name": "_plane",
+          "kind": "fn",
+          "startLine": 244,
+          "endLine": 250,
+          "tokens": 73
+        },
+        {
+          "name": "_lin",
+          "kind": "fn",
+          "startLine": 251,
+          "endLine": 257,
+          "tokens": 72
+        },
+        {
+          "name": "_flat",
+          "kind": "fn",
+          "startLine": 258,
+          "endLine": 264,
+          "tokens": 74
+        },
+        {
+          "name": "_fv",
+          "kind": "fn",
+          "startLine": 265,
+          "endLine": 272,
+          "tokens": 70
+        },
+        {
+          "name": "_f3",
+          "kind": "fn",
+          "startLine": 273,
+          "endLine": 283,
+          "tokens": 106
+        },
+        {
+          "name": "_rgb",
+          "kind": "fn",
+          "startLine": 284,
+          "endLine": 291,
+          "tokens": 81
+        },
+        {
+          "name": "_tiles",
+          "kind": "fn",
+          "startLine": 292,
+          "endLine": 300,
+          "tokens": 98
+        },
+        {
+          "name": "_paint_ground",
+          "kind": "fn",
+          "startLine": 301,
+          "endLine": 338,
+          "tokens": 422
+        },
+        {
+          "name": "_top_map",
+          "kind": "fn",
+          "startLine": 339,
+          "endLine": 355,
+          "tokens": 178
+        },
+        {
+          "name": "_mean",
+          "kind": "fn",
+          "startLine": 356,
+          "endLine": 367,
+          "tokens": 98
+        },
+        {
+          "name": "_props",
+          "kind": "fn",
+          "startLine": 368,
+          "endLine": 408,
+          "tokens": 589
+        },
+        {
+          "name": "_atlas",
+          "kind": "fn",
+          "startLine": 409,
+          "endLine": 457,
+          "tokens": 610
+        },
+        {
+          "name": "_decode",
+          "kind": "fn",
+          "startLine": 458,
+          "endLine": 558,
+          "tokens": 1300
+        },
+        {
+          "name": "_shaded_floor",
+          "kind": "fn",
+          "startLine": 559,
+          "endLine": 573,
+          "tokens": 143
+        },
+        {
+          "name": "_cast_mask",
+          "kind": "fn",
+          "startLine": 574,
+          "endLine": 603,
+          "tokens": 372
+        },
+        {
+          "name": "_light",
+          "kind": "fn",
+          "startLine": 604,
+          "endLine": 648,
+          "tokens": 433
+        },
+        {
+          "name": "_additive",
+          "kind": "fn",
+          "startLine": 649,
+          "endLine": 674,
+          "tokens": 248
+        },
+        {
+          "name": "_wall_kind",
+          "kind": "fn",
+          "startLine": 675,
+          "endLine": 683,
+          "tokens": 53
+        },
+        {
+          "name": "_wall_boxes",
+          "kind": "fn",
+          "startLine": 684,
+          "endLine": 721,
+          "tokens": 341
+        },
+        {
+          "name": "_cut",
+          "kind": "fn",
+          "startLine": 722,
+          "endLine": 1175,
+          "tokens": 5583
         }
       ]
     }

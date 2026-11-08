@@ -528,6 +528,7 @@ class SoftwareRenderer:
 
     def begin(self):
         self._items = []
+        self.actor_log = []
 
     def _fog_k(self, z):
         if z <= self.fog_start:
@@ -790,6 +791,7 @@ class SoftwareRenderer:
         ``shadow`` = ``(layer, bias)`` queues the contact shadow on that painter
         layer (default: the historic floor disc)."""
         v, f, j = hum.build(pose, pos, yaw, rifle_on=rifle_on)
+        self.actor_log.append(tuple(pos))
         self.add_dynamic(v, f, bias=bias, tint=tint)
         sl, sb = shadow if shadow else (None, 0.0)
         self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40,

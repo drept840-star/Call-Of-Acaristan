@@ -41,6 +41,8 @@ DENSITY = 32.0                      # default texels per metre: a tile is 2 m
 _DENSITY = {"snow": 16.0, "snow_trod": 16.0}
 # Glitter per texture: fresh snow sparkles, trodden snow a little.
 _GLITTER = {"snow": 1.0, "snow_trod": 0.35}
+# Pattern contrast per texture (1 = as painted): the cracked concrete read as grain.
+_CONTRAST = {"concrete": 0.55}
 
 _names = {}                         # name -> layer
 _layers = []                        # [(name, ratio float16 (SIZE, SIZE, 3), mean)]
@@ -80,6 +82,9 @@ def _load(name, density, mono=False):
     if mono:
         rgb = np.repeat((rgb @ np.array([0.299, 0.587, 0.114]))[..., None], 3, axis=2)
     mean = np.maximum(rgb.reshape(-1, 3).mean(axis=0), 1.0)
+    k = _CONTRAST.get(name, 1.0)
+    if k != 1.0:
+        rgb = mean + (rgb - mean) * k
     global _version
     key = name + "/tint" if mono else name
     layer = len(_layers)

@@ -13,18 +13,21 @@
     5,
     6,
     7
-   ]
+   ],
+   "auto_advance": true,
+   "quiet_ui": true
   },
   {
    "scene": "m3_ko_stairwell",
    "speaker": "VOLKOV",
    "text": "My van's still staged at the dock, I haven't bailed on you yet. Through that smoke, friend, and don't make me regret it.",
-   "min_ms": 2200,
+   "min_ms": 5400,
    "lighting": [
     6,
     7,
     8
-   ]
+   ],
+   "hard_cut": true
   },
   {
    "scene": "m3_ko_aperture",
@@ -35,7 +38,8 @@
     7,
     8,
     9
-   ]
+   ],
+   "hard_cut": true
   },
   {
    "scene": "m3_ko_van",
@@ -47,7 +51,8 @@
     8,
     9,
     10
-   ]
+   ],
+   "hard_cut": true
   }
  ],
  "metadata": {

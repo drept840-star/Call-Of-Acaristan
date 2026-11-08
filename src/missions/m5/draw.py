@@ -1316,6 +1316,16 @@ def submit_frame(q, fcx, fcy):
     sub = q.submit
     C = _CustomDraw
     _m5_render.ensure_installed()      # RENDER_SUBMIT systems of this mission (idempotent)
+    from game import topdown3d as _td
+    if _td.active_cam() is not None:   # 2.5D: the world is rendered by missions.m5.draw3d
+        try:
+            from missions.m5 import draw3d as _d3
+            _d3.submit_frame(q, fcx, fcy)
+            return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            _td.disable()              # this frame and the rest of the run: the 2D painter
     # ── floor / static decor ──────────────────────────────────────────────
     sub(_FillDraw(C_BG_GAME), _L.FLOOR, sort_key=-1)
     _submit_tiles(q, 0)

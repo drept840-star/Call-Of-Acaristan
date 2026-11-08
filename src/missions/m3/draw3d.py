@@ -60,7 +60,7 @@ SLEEVE_D = (56, 42, 32)
 TUBE = (255, 240, 214)
 VOID = _m1.VOID
 RING_CALM = (200, 92, 70)        # M1's calm ring is lost on the dark cell floor
-AMBIENT = (170, 172, 172)
+AMBIENT = (176, 182, 182)
 NIGHT = dict(_m1.NIGHT, ambient=0.36, diffuse=0.42, tint=(0.95, 1.0, 0.98))
 
 PRISONER = dict(jacket=SLEEVE, pants=SLEEVE, vest=None, pouches=False, accent=None,
@@ -190,6 +190,7 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback
@@ -371,7 +372,15 @@ def _furniture(r, kind, tx, ty, tw, th):
     elif kind == "console":
         _w.add(r, box(w, 1.0, d, tex("steel", like=(34, 42, 44), tint=True), center=(x, 0.5, z),
                       cols={"top": (40, 50, 52)}))
-        _w.add(r, box(w * 0.55, 0.02, d * 0.5, (40, 120, 96), center=(x - w * 0.14, 1.01, z), emissive=True))
+        from game.scenery3d import prop, medical_supplies
+        monitor = prop("monitor_crt")
+        if monitor is not None:
+            _put(r, monitor, (x - w * 0.14, 1.0, z), yaw=180, scale=0.8)
+        else:
+            _w.add(r, box(w * 0.55, 0.02, d * 0.5, (40, 120, 96), center=(x - w * 0.14, 1.01, z), emissive=True))
+        if int(tx) == 13:
+            # First-aid supplies sit on the existing guard console, never on a walk lane.
+            _put(r, _mesh("guard_medical", medical_supplies), (x + w * 0.25, 1.0, z), yaw=180, scale=0.75)
         _w.add(r, box(0.06, 0.03, 0.06, (220, 60, 44) if int(tx) % 8 == 5 else (80, 230, 140),
                       center=(x + w * 0.32, 1.02, z), emissive=True))
     elif kind == "lockers":
@@ -548,8 +557,15 @@ def _own_cell(r):
     _, _, z1 = _tc(0, 11.95)
     _cot(r, x0, z0, z1, (64, 70, 58))
     mx, _, mz = _tc(33.5, 6.08)
-    _w.add(r, box(1.1, 0.68, 0.1, (22, 24, 26), center=(mx, 1.95, mz)))
-    _w.add(r, box(0.96, 0.54, 0.02, (36, 56, 64), center=(mx, 1.95, mz - 0.06), emissive=True))
+    from game.scenery3d import prop
+    monitor = prop("monitor_crt", (36, 56, 64))
+    if monitor is not None:
+        # Retain the stand and the existing monitor-view/dialogue overlay.
+        _w.add(r, box(0.72, 0.06, 0.65, DARK, center=(mx, 1.57, mz)))
+        _put(r, monitor, (mx, 1.60, mz), yaw=180, scale=1.45)
+    else:
+        _w.add(r, box(1.1, 0.68, 0.1, (22, 24, 26), center=(mx, 1.95, mz)))
+        _w.add(r, box(0.96, 0.54, 0.02, (36, 56, 64), center=(mx, 1.95, mz - 0.06), emissive=True))
     _w.add(r, box(0.06, 0.8, 0.06, DARK, center=(mx, 2.7, mz + 0.02)))
     sx, _, sz = _tc(33.5, 6.52)
     _w.add(r, box(0.12, 1.2, 0.12, DARK, center=(sx, 0.6, sz)))             # monitor stand post
@@ -798,7 +814,22 @@ def _door_tiles():
         for col in range(w):
             if _glyph(col, row) != "D":
                 continue
-            along_x = _glyph(col, row - 1) not in ("C", "")
+            # Follow the whole D run to its jambs. Looking only north
+            # rotates the lower leaf of a vertical double door by 90 degrees.
+            # Count concrete at both ends, rather than treating adjacent D
+            # tiles as proof of an axis: the armory has a two-tile-thick wall.
+            def jambs(dc, dr):
+                count = 0
+                for sign in (-1, 1):
+                    c, rr = col + sign * dc, row + sign * dr
+                    while _glyph(c, rr) == "D":
+                        c, rr = c + sign * dc, rr + sign * dr
+                    count += _glyph(c, rr) == "C"
+                return count
+
+            x_jambs, y_jambs = jambs(1, 0), jambs(0, 1)
+            along_x = (x_jambs > y_jambs if x_jambs != y_jambs
+                       else _glyph(col, row - 1) not in ("C", ""))
             if along_x:
                 slide = -1 if _glyph(col - 1, row) == "C" else 1
             else:

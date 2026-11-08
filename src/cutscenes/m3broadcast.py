@@ -1,5 +1,8 @@
 """Mission 3 - Kill Order -> Broadcast transition cinematic (Slice 5 -> 6).
 
+The transition registry prefers m3broadcast3d; these illustrated takes are
+the disabled/error fallback. The fail sequence remains illustrated.
+
 Illustrated cutscene language, same family as the KO transition
 (cutscenes.m3ko) and the chair-break shots: dark vector compositions with
 motivated lighting, gradients and light cones from cutscenes.route12,
@@ -787,11 +790,20 @@ def _draw_m3_bcast_fail_retry(surface, t):
 from core.cutscene_registry import register_scene_renderers as _register_takes  # noqa: E402
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
+def _staged_take(scene, fallback):
+    def draw(surface, t):
+        from cutscenes import m3broadcast3d  # lazy: optional cinematic stack
+        if not m3broadcast3d.draw(scene, surface, t):
+            fallback(surface, t)
+    return draw
+
+
 _register_takes({
-    "m3_bcast_shutter": _draw_m3_bcast_shutter,
-    "m3_bcast_road": _draw_m3_bcast_road,
-    "m3_bcast_mast": _draw_m3_bcast_mast,
-    "m3_bcast_onair": _draw_m3_bcast_onair,
+    "m3_bcast_shutter": _staged_take("m3_bcast_shutter", _draw_m3_bcast_shutter),
+    "m3_bcast_road": _staged_take("m3_bcast_road", _draw_m3_bcast_road),
+    "m3_bcast_mast": _staged_take("m3_bcast_mast", _draw_m3_bcast_mast),
+    "m3_bcast_onair": _staged_take("m3_bcast_onair", _draw_m3_bcast_onair),
+    "m3_bcast_channel": _staged_take("m3_bcast_channel", _draw_m3_bcast_onair),
     "m3_bcast_fail_studio": _draw_m3_bcast_fail_studio,
     "m3_bcast_fail_pa": _draw_m3_bcast_fail_pa,
     "m3_bcast_fail_retry": _draw_m3_bcast_fail_retry,

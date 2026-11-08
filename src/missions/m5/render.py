@@ -50,6 +50,9 @@ class GuardRenderSystem(System):
     def run(self, world, ctx, dt):
         if world.count(M5Guard) == 0 or not _gr.installed() or not _gr.in_frame():
             return
+        from game import topdown3d as _td
+        if _td.active_cam() is not None:       # 2.5D draws the cast in missions.m5.draw3d
+            return
         q = _gr.queue()
         cam_x, cam_y = q.cam_x, q.cam_y
         enemies = getattr(ctx, "enemies", None) or ()

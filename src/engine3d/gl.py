@@ -622,6 +622,7 @@ class GLRenderer(SoftwareRenderer):
         self._static_sig = sig
 
     def begin(self):
+        self.actor_log = []       # humanoid positions this frame (shared cast shadows)
         self._items = []          # sprites + lines: (key, kind, data)
         self._dyn = []            # packed float32 chunks
         self._res_draw = []       # resident chunk entries queued this frame
@@ -672,6 +673,7 @@ class GLRenderer(SoftwareRenderer):
     def add_humanoid(self, hum, pose, pos, yaw, rifle_on=True, bias=0.0, tint=None,
                      shadow=None):
         places, joints, (px, py, pz) = hum.pose_world(pose, pos, yaw, rifle_on=rifle_on)
+        self.actor_log.append(tuple(pos))
         spec_key = getattr(hum, "_gl_spec_key", None)
         if spec_key is None:  # actors with the same spec share one GPU mesh
             spec_key = hum._gl_spec_key = repr(sorted(hum.spec.items()))

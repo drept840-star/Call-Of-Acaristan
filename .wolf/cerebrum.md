@@ -12,6 +12,10 @@ budget_tokens: 2000
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
+- [2026-11-07] M3's between-stage cutscenes need proper 3D staging, not more
+  effects over the old illustrated/gameplay-camera takes. User approved
+  starting that pass; first implemented bridge is cell block -> Comms.
+
 ## Key Learnings
 
 - **Project:** first-try

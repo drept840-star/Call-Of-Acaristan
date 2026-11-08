@@ -74,7 +74,8 @@ TANK = (150, 146, 132)
 FIRE = (255, 140, 56)
 BLAST = (255, 170, 90)
 VOID = _m1.VOID
-AMBIENT = (176, 176, 180)        # grade floor: the 2D night is greyer and brighter than M1's blue
+AMBIENT_CONTROL = (188, 194, 172)  # the 2D control room: warm desk light on green
+AMBIENT = (194, 200, 208)        # grade floor: the 2D night is greyer and brighter than M1's blue
 NIGHT = dict(_m1.NIGHT, ambient=0.40, diffuse=0.50, tint=(0.92, 0.95, 1.02))  # the 2D Route 12 night is greyer than M1
 
 _BUILD = pygame.Rect(MISSION2_BUILDINGS[0])
@@ -170,6 +171,7 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm) + _blast_lights()
         _lamp_lights(r, v, flashes, tm)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback
@@ -179,7 +181,8 @@ def render_world(surface, v):
     finally:
         r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn, ambient=AMBIENT)
+    _grade.apply(surface, v, _night_lights() + dyn,
+                 ambient=AMBIENT_CONTROL if _d._m2_wing_name() == "control" else AMBIENT)
     return True
 
 
@@ -1086,6 +1089,11 @@ def _ev_mesh(kind):
         return m
     if kind == "terminal":
         m.add(_ev_table(0.72, w=0.7, d=0.55))
+        from game.scenery3d import workstation
+        equipment = workstation("pc_tall", "monitor_crt")
+        if equipment is not None:
+            m.add(equipment, (0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7), t=(0.0, 0.745, -0.04))
+            return m
         m.add(box(0.4, 0.34, 0.32, (40, 60, 45), center=(0.0, 0.915, -0.05),
                   cols={"top": (52, 74, 55)}))
         m.add(box(0.32, 0.24, 0.01, (8, 26, 18), center=(0.0, 0.915, 0.115)))
@@ -1106,6 +1114,11 @@ def _upload_pc_mesh():
     for sx in (-0.44, 0.44):
         for sz in (-0.22, 0.22):
             m.add(box(0.05, 0.74, 0.05, (78, 58, 36), center=(sx, 0.37, sz)))
+    from game.scenery3d import workstation
+    equipment = workstation("pc_zarya", "monitor_crt")
+    if equipment is not None:
+        m.add(equipment, t=(0.0, 0.765, -0.06))
+        return m
     m.add(box(0.42, 0.36, 0.34, beige, center=(0.0, 0.95, -0.08),
               cols={"top": _shade(beige, 1.1)}))
     m.add(box(0.34, 0.26, 0.01, (8, 26, 18), center=(0.0, 0.95, 0.092)))

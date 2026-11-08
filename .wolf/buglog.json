@@ -2,6 +2,61 @@
   "version": 1,
   "bugs": [
     {
+      "id": "bug-ko-sniper-beam-20261107",
+      "error_message": "M3 Kill Order sniper beam draws through the pillar and the sniper cannot be seen",
+      "file": "src/cutscenes/m3ko3d.py",
+      "root_cause": "Both the permanent targeting line and shot tracer used add_line3d at painter layer 2; a ray ending at the mathematically correct slab intersection still painted over the block. From the PA camera, the sniper at x=3.8 projected entirely behind the tall foreground pillar, so the line was the only visible threat cue.",
+      "fix": "Remove both beam and tracer, retain brief muzzle/stone flashes, move the rifleman to a clear mezzanine firing bay at x=6.8, open the railing there and light his silhouette. Regressions forbid any sniper line and verify substantial visible guard pixels with flashes disabled on software; GL contrast was probed separately.",
+      "tags": ["m3", "cutscene", "sniper", "depth", "occlusion"],
+      "status": "fixed",
+      "last_seen": "2026-11-07",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-ko-sealed-exit-20261107",
+      "error_message": "KO actors descend the stairs then stare at the exit; PA scene reads as unexplained kneeling tableau",
+      "file": "src/cutscenes/m3ko3d.py",
+      "root_cause": "Initial fix opened the portal but kept the stair shot's 2200 ms minimum shorter than the follower's 5300 ms crossing, so a normal advance still caught both actors looking at the door. The PA shot started with no visible connection to the exit; its camera left the entering pair offscreen and the room read as an unrelated tableau.",
+      "fix": "Match the stair hold to the completed crossing (5400 ms) and follow the pair through the portal, with flank scanning on holds. Connect a cutaway stair throat and open entrance to the lobby; stage separate entrance-to-cover paths, pan from door to PA speaker/overwatch, add visible security-bay alarm and test all actor/speaker framing at intermediate times.",
+      "tags": ["m3", "cutscene", "blocking", "continuity"],
+      "status": "fixed",
+      "last_seen": "2026-11-07",
+      "occurrences": 2
+    },
+    {
+      "id": "bug-m3-door-axis-20261107",
+      "error_message": "M3 lower panels of vertical double doors look rotated 90 degrees",
+      "file": "src/missions/m3/draw3d.py",
+      "root_cause": "_door_tiles inferred each panel axis from the north glyph alone. The lower leaf sees D instead of C and incorrectly becomes an east-west panel.",
+      "fix": "Follow contiguous D runs to concrete jambs on both axes; choose the better-supported wall axis. Preserve north/south armory panels across its two-column wall. Four regressions cover all five authored maps, paired sliding directions and cache rebinding.",
+      "tags": ["m3", "3d", "doors", "orientation"],
+      "status": "fixed",
+      "last_seen": "2026-11-07",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m3-ghost-molotov-20261107",
+      "error_message": "M3 right click spawns a 3D molotov even though molotov gameplay is unavailable",
+      "file": "src/entities/weapons.py",
+      "root_cause": "Shared RMB/G handler allows bottle creation after M3 obtains a firearm if inventory is nonzero. M3 does not update molotov flight, but its 3D FX pass renders STATE.thrown_bottles.",
+      "fix": "Reject MISSION3 in handle_throw_bottle before any side effects. Regression covers all M3 equipment and preserves throws in M1/M2/M6.",
+      "tags": ["m3", "molotov", "input", "ghost-projectile"],
+      "status": "fixed",
+      "last_seen": "2026-11-07",
+      "occurrences": 1
+    },
+    {
+      "error_message": "M3 radio catch reads as two hands on rifle; Volkov throwing arm passes through torso",
+      "file": "src/cutscenes/m3staging.py",
+      "root_cause": "Authored ready arm left the rifle near the radio hand. At yaw 90 Volkov's right shoulder is on world -z, but release/retract targets were on +z across his torso. Safe IK can return a least-clashing solution for impossible targets; contact-only tests did not catch up to 0.115 m penetration with a 0.035 m clearance margin. The recovery shot also replaced follow-through with an immediate walk/yaw reset.",
+      "fix": "Use one_hand weapon hold with extra out/down right-hand clearance, preserve rifle yaw in manual mesh placement, keep toss/retract targets on the throwing side, and solve the exit arm while blending the turn from yaw 90. Dense regressions check whole-gun AABB separation, arm clearance with 0.04 m margin, and shot-cut hand continuity.",
+      "tags": ["m3", "cutscene", "ik", "arm-clipping", "prop-contact"],
+      "status": "fixed",
+      "id": "bug-m3-radio-staging-20261107",
+      "last_seen": "2026-11-07",
+      "occurrences": 1
+    },
+    {
       "error_message": "After dying and respawning in Mission 1 the player is invisible and the world is frozen",
       "file": "src/missions/m1/main.py",
       "root_cause": "start_mission() hand-rolls its reset (no STATE.reset call, unlike m2-m6) and covers player_dead/death_timer/request_death_screen but not the death_anim_* fields. After death_anim.update_death_anim() set phase=2, a retry left death_anim_phase=2 + death_time_scale/accumulator stale: m1 update.game_update() early-returned via 'if STATE.player_dead' forever and should_skip_player_draw() (phase>=1) hid the standing player. Stale death_camera_tilt=12/offset=35 also kept apply_camera_tilt rotating every subsequent frame.",
@@ -4074,6 +4129,132 @@
       "last_seen": "2026-11-05T19:29:24.922Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of arena_view3d.py",
+      "file": "src/ui/arena_view3d.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 11→17 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-227",
+      "timestamp": "2026-11-06T22:50:05.828Z",
+      "last_seen": "2026-11-06T22:50:05.828Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of arena_view3d.py",
+      "file": "src/ui/arena_view3d.py",
+      "root_cause": "18 lines replaced/restructured",
+      "fix": "Rewrote 31→61 lines (18 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-228",
+      "timestamp": "2026-11-06T22:50:29.969Z",
+      "last_seen": "2026-11-06T22:50:29.969Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: WALL_H should be LAMP_Y",
+      "file": "src/ui/arena_view3d.py",
+      "root_cause": "Used \"WALL_H\" instead of \"LAMP_Y\"",
+      "fix": "Changed WALL_H → LAMP_Y",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-229",
+      "timestamp": "2026-11-06T22:50:38.278Z",
+      "last_seen": "2026-11-06T22:50:38.278Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: 150 should be 170",
+      "file": "src/missions/m7/farmyard.py",
+      "root_cause": "Used \"150\" instead of \"170\"",
+      "fix": "Changed 150 → 170",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-230",
+      "timestamp": "2026-11-06T23:02:07.941Z",
+      "last_seen": "2026-11-06T23:02:07.941Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→14 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-231",
+      "timestamp": "2026-11-07T07:28:34.959Z",
+      "last_seen": "2026-11-07T07:28:34.959Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: shares_memory should be may_share_memory",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "Used \"shares_memory\" instead of \"may_share_memory\"",
+      "fix": "Changed shares_memory → may_share_memory",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-232",
+      "timestamp": "2026-11-07T07:28:46.453Z",
+      "last_seen": "2026-11-07T07:28:46.453Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "Had \"gh\"",
+      "fix": "Changed to \"flat\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-233",
+      "timestamp": "2026-11-07T07:30:39.719Z",
+      "last_seen": "2026-11-07T07:30:39.719Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -4297,7 +4478,14 @@
     "f6880e84-1351-415e-9f0e-814c8a918613": true,
     "6cadbae0-548b-4ab0-937c-436348f9623a": true,
     "d9b460c7-9c33-4746-a738-81a0f87ca956": true,
-    "e113e363-c570-4982-8db1-a89005223ad4": true
+    "e113e363-c570-4982-8db1-a89005223ad4": true,
+    "7f1d9c1c-b58f-4c14-bc44-0ee4b172f414": true,
+    "684f4797-864a-4677-adda-e1e0a8940f15": true,
+    "de6877a8-12f2-42e3-8d0f-4d51c62044ff": true,
+    "dc505615-e991-4707-96e4-4b493a5216c0": true,
+    "92803ccf-9f2f-4c29-a9c9-dbb9c969cc09": true,
+    "0a8dfcff-0e65-4c58-952f-7a23ee4113f7": true,
+    "46fe2654-329f-47f2-8f43-6cf41f90bfb0": true
   },
-  "next_id": 227
+  "next_id": 234
 }

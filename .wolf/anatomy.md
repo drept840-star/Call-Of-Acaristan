@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-05T19:29:24.885Z
-> Files: 525 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-07T07:30:44.915Z
+> Files: 527 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -509,6 +509,7 @@
 - `decor_paint.py` — decor_paint.py - Mission 5 static set dressing painters (round 2). (~6168 tok)
 - `decor.py` — decor.py - Mission 5 set dressing, lighting and inspectables (round 2). (~4388 tok)
 - `draw.py` — Mission 5 - part module. See __init__.py for the package facade. (~18736 tok)
+- `draw3d.py` — Mission 5 in 2.5D: Guard HQ, the Lower Quarter, the print works and the (~16518 tok)
 - `finale_audio.py` — Mission 5 sound design and cutscene-owned playback. (~2930 tok)
 - `finale_script.py` — M5 rebuilt finale: immutable script/timing shared by renderer and player. (~642 tok)
 - `flow.py` — Mission 5 - part module. See __init__.py for the package facade. (~6157 tok)
@@ -530,6 +531,7 @@
 - `combat.py` — Mission 6 - loud combat arenas for the three top-down stages. (~5224 tok)
 - `decor.py` — Mission 6 - stage decor, ground art and night lighting. (~31742 tok)
 - `draw.py` — Mission 6 gameplay renderer. (~6196 tok)
+- `draw3d.py` — Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard. (~13675 tok)
 - `flow.py` — Mission 6 - stage ladder, checkpoints and the ending handoff. (~3777 tok)
 - `hud3d.py` — Mission 6 3D HUD: minimal tactical, shared by the train shootout and the (~3045 tok)
 - `m6_audio.py` — Mission 6 sound design: film stems, foley and the interactive-train bed. (~6215 tok)
@@ -560,7 +562,7 @@
 - `__init__.py` — Mission 7: Fallow Ground - re-export facade (load order = parts order). (~92 tok)
 - `choice.py` — Mission 7 beat 7 - Two Channels: Vasile's offer, Maru's reply, then the choice. (~1345 tok)
 - `draw.py` — Mission 7 - placeholder frame: title, stage label and the advance hint. (~400 tok)
-- `farmyard.py` — Mission 7 top-down farmyard: beat 2 (chores); beat 4 (prep) reuses the map. (~11649 tok)
+- `farmyard.py` — Mission 7 top-down farmyard. (~20878 tok)
 - `flow.py` — Mission 7 - stage ladder, checkpoints and the outro handoff (skeleton). (~1205 tok)
 - `maps.py` — Mission 7 top-down farm: tile grid, palette and interaction points (beats 2 and 4). (~816 tok)
 - `meta.py` — Mission 7 metadata and stage constants: Fallow Ground (skeleton). (~846 tok)
@@ -587,7 +589,7 @@
 
 - `__init__.py` — Package ui - re-export facade. Parts: widgets.py, main.py, mp.py, system.py. (~1234 tok)
 - `arena_view.py` — Renderer for multiplayer arena matches. (~25138 tok)
-- `arena_view3d.py` — 2.5D renderer for multiplayer arena matches. (~6455 tok)
+- `arena_view3d.py` — 2.5D renderer for multiplayer arena matches. (~7576 tok)
 - `egg666_3d.py` — egg666_3d.py - the Mission 1 safe-keypad "666" Easter egg as a lit 3D scene. (~4198 tok)
 - `egg666_audio.py` — egg666_audio.py - procedural sound for the 3D "666" scare. (~2740 tok)
 - `egg666_build.py` — egg666_build.py - geometry for the 3D "666" scare: the vault, the ritual (~4899 tok)

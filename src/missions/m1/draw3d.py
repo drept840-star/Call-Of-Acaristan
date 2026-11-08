@@ -55,6 +55,9 @@ CORPSE_FALL = 30
 NIGHT = dict(direction=(-0.30, 0.85, -0.42), ambient=0.30, diffuse=0.44, sky=0.08,
              tint=(0.80, 0.88, 1.05))
 VOID = (8, 9, 12)
+# grade floor per 2D grading zone (``draw._m1_wing_name``): the 2D warehouse
+# is warm tungsten, the slums a cool but not blue night
+AMBIENT = {"warehouse": (168, 146, 112), "slums": (156, 162, 176)}
 CONTAINER_COLS = ((122, 44, 36), (44, 66, 100), (112, 66, 38), (92, 94, 96))
 IPA = (80, 60, 50)               # core.config.C_IPA_UNIFORM
 MAG = (50, 55, 45)               # core.config.C_MAG_UNIFORM
@@ -150,6 +153,7 @@ def render_world(surface, v, actors=None, lit=None, film=None):
             _draw_fx(r, flashes, tm)
         dyn = _dyn_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm, actors)
+        td.cast_shadows(r)
         r.flush(buf)
     except Exception:
         import traceback
@@ -160,7 +164,8 @@ def render_world(surface, v, actors=None, lit=None, film=None):
     finally:
         r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn + list((film or {}).get("grade", ())))
+    _grade.apply(surface, v, _night_lights() + dyn + list((film or {}).get("grade", ())),
+                 ambient=AMBIENT[_d._m1_wing_name()])
     return True
 
 
@@ -1435,7 +1440,11 @@ def _molotov():
 def _pickup_mesh(kind):
     from engine3d import Mesh, box
     m = Mesh()
-    if kind == "bandage":
+    if kind in ("bandage", "medkit", "health"):
+        from game.scenery3d import prop
+        kit = prop("medkit")
+        if kit is not None:
+            return kit
         m.add(box(0.3, 0.12, 0.2, (226, 222, 210), center=(0.0, 0.06, 0.0)))
         m.add(box(0.14, 0.01, 0.04, (200, 40, 40), center=(0.0, 0.125, 0.0), emissive=True))
         m.add(box(0.04, 0.01, 0.14, (200, 40, 40), center=(0.0, 0.125, 0.0), emissive=True))

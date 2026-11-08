@@ -63,15 +63,15 @@ K9_TINT = ((150, 162, 182), 0.22)
 FOV, FOV_ADS = 62.0, 48.0
 SENS = 0.12                        # degrees per mouse count
 PITCH_LIM = (-38.0, 32.0)
-MAG, RESERVE = 30, 120
+MAG, RESERVE = 30, 150
 FIRE_GAP = 0.08                    # K9 cyclic, s
 RELOAD_S = 1.6
 HP_REGEN_DELAY, HP_REGEN = 5.0, 7.0
 HIT_BODY, HIT_HEAD = 22, 64
-# Dead Guards carry K9-compatible mags: walk over the body to take them.
-LOOT_R = 1.5                       # pickup radius, m
+# Dead Guards carry K9-compatible mags: close on a body to take them.
+LOOT_R = 2.4                       # pickup radius, m
 LOOT_MAGS = {"heavy": 2, "officer": 2}   # everyone else carries one
-RESERVE_CAP = 4 * MAG              # four spare mags on him, the panel's MAGS: 4
+RESERVE_CAP = 5 * MAG              # five spares max; bodies hold the rest
 # Melee: a punch for whoever is in arm's reach (F or V; LMB when dry).
 MELEE_R, MELEE_CONE = 1.9, 0.55    # reach (m), min cos to the aim
 MELEE_DMG, MELEE_GAP, MELEE_S = 45, 0.65, 0.48   # damage, cooldown, swing time
@@ -1149,8 +1149,8 @@ class YardScene:
             g["mags"] = LOOT_MAGS.get(g["kind"], 1)
 
     def _loot(self):
-        """Take the mags off any body he walks over, whole mags up to the
-        four spares he can carry; the rest stay on the body for later."""
+        """Take the mags off nearby bodies, up to five spares; the rest stay
+        on the body for later."""
         px, _py, pz = self.pos
         for g in self.guards:
             room = RESERVE_CAP - self.reserve
