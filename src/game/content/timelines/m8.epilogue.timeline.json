@@ -1,0 +1,166 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.epilogue",
+ "shots": [
+  {
+   "scene": "m8_epi_radio",
+   "speaker": "ALEX",
+   "text": "Biribel - the mansion, they were waiting for us. Maru's down. I'm sorry. I'm sorry-",
+   "min_ms": 5000,
+   "radio": true,
+   "cues": [
+    [
+     0,
+     "squelch_head",
+     0.32
+    ],
+    [
+     200,
+     "radio_static",
+     0.14
+    ],
+    [
+     4700,
+     "squelch_tail",
+     0.32
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_president",
+   "speaker": "PRESIDENT",
+   "text": "The terrorist Maru is dead. The traitor Biribel will be found.",
+   "min_ms": 4200,
+   "cues": [
+    [
+     0,
+     "crt_thunk",
+     0.26
+    ],
+    [
+     80,
+     "crt_whine",
+     0.06
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_estate",
+   "speaker": "",
+   "text": "Night. The estate, lit and empty. A closed state funeral in the grounds. No family.",
+   "min_ms": 6400,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     1200,
+     "m8_bell",
+     0.3
+    ],
+    [
+     4600,
+     "m8_bell",
+     0.24
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_casket",
+   "speaker": "ANCHOR",
+   "text": "...the state buries the man who attacked the presidential residence.",
+   "min_ms": 4200,
+   "cues": [
+    [
+     900,
+     "m8_bell",
+     0.16
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_commander",
+   "speaker": "ANCHOR",
+   "text": "...appointed Commander of the Presidential Guard, Andrei Bogdan Velicu.",
+   "min_ms": 4600,
+   "cues": [
+    [
+     0,
+     "crt_thunk",
+     0.26
+    ],
+    [
+     80,
+     "crt_whine",
+     0.06
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_crossing",
+   "speaker": "",
+   "text": "The Kim Kim border. The train Volkov never caught. Bodi's tractor on the tracks, smoking, lights out.",
+   "min_ms": 6400,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     300,
+     "m8_horn",
+     0.4
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_ucilev",
+   "speaker": "",
+   "text": "Ucilev at the border post, holding Biribel's photo. He watches the train go.",
+   "min_ms": 5600,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     650,
+     "m6_paper",
+     0.22
+    ],
+    [
+     3900,
+     "m8_horn",
+     0.16
+    ]
+   ]
+  },
+  {
+   "scene": "m8_epi_names",
+   "speaker": "BIRIBEL",
+   "text": "Gabi, Seby, Darius. It's done. He's gone.",
+   "min_ms": 3800
+  },
+  {
+   "scene": "m8_epi_volkov",
+   "speaker": "BIRIBEL",
+   "text": "Volkov - I caught your train. The coffee's terrible.",
+   "min_ms": 4200
+  },
+  {
+   "scene": "m8_epi_title",
+   "speaker": "",
+   "text": "",
+   "min_ms": 6500,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     600,
+     "m8_horn",
+     0.1
+    ]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Revenge, the epilogue"
+ }
+}

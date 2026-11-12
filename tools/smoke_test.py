@@ -2827,6 +2827,7 @@ def check_fail_screen_text_per_mission():
         ("MISSION5", gc.start_mission5),
         ("MISSION6", gc.start_mission6),
         ("MISSION7", gc.start_mission7),
+        ("MISSION8", gc.start_mission8),
     ]
     for key, start in starts:
         start()
@@ -3508,6 +3509,7 @@ def check_voice_duplicate_text():
         ("VO_130", "VO_163"),   # Vasile
         ("VO_132", "VO_136"),   # Vasile
         ("VO_169", "VO_172"),   # Vasile
+        ("VO_217", "VO_414"),   # Biribel / Bodi (M8 chase stall): two speakers
     }
     by_norm = {}
     for vo, _sp, text in VOICE_LINES:
@@ -10515,6 +10517,291 @@ def check_mission7_vertical_slice():
     assert completed["checkpoint"] == ""
 
 
+def check_mission8_vertical_slice():
+    """Mission 8 Revenge plays through meet to epilogue, fully 3D.
+
+    User-outcome check: the M7 radio route survives into M8 through the save
+    slot; the Revenge ladder runs meet -> trap -> gantry -> beats -> outro;
+    the trap is one 3D scene whose waves checkpoint and whose clear saves the
+    gantry; the climb puts Biribel on the catwalk and reaching Vasile hands
+    off once; pause freezes it; death reloads in-scene; a broken scene never
+    strands the mission; restart resumes at the gantry.
+    """
+    from missions import m8
+    from missions.m8 import meta as _m8_meta
+    from missions.m8.revenge import trap3d as _m8_trap
+    from missions.m8.revenge import set3d as _m8_set
+    from core.state import STATE
+
+    class _Pressed(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    _reset_save_store()
+    _save_system.select_slot(0)
+    _save_system.start_new_campaign(0)
+
+    assert _m8_meta.stages_for("revenge") == (
+        "meet", "trap", "gantry", "friends", "kill", "descent", "chase", "epilogue")
+    assert _save_system.mission_complete_record("MISSION8", "00:01")["mission_id"] == "MISSION_8"
+
+    # The M7 radio choice persists in the slot and picks the M8 ladder.
+    _save_system.set_slot_flags({"m8_route": "revenge"})
+    STATE.m8_route = ""
+    gc.start_mission8()
+    assert STATE.active_mission == "MISSION8" and STATE.m8_route == "revenge"
+    assert STATE.mission8_stage == "meet"
+    assert _save_system.get_slot(0)["progress"] == "m8"
+    assert _save_system.get_slot(0)["checkpoint"] == "meet"
+    cam = m8.game_update(EmptyKeys())
+    assert isinstance(cam, tuple) and len(cam) == 2, cam
+    m8.game_draw(config.screen, 0, 0)
+
+    from core.cutscene_registry import scene_renderer as _m8_scene
+
+    def _play_film(stage, lines):
+        """The stage requests its film once; every shot renders; the end advances."""
+        assert m8.take_cutscene_request() == stage and m8.take_cutscene_request() is None
+        shots = m8.film_shots(stage)
+        spoken = [(s["speaker"], s["text"]) for s in shots if s["text"]]
+        assert spoken == [ln for ln in lines if ln[1] != "CALL OF ACARISTAN"], stage
+        for shot in shots:
+            draw = _m8_scene(shot["scene"])
+            assert draw is not None, shot["scene"]
+            for t_ms in (0, 2500):
+                draw(config.screen, t_ms)
+        m8.on_cutscene_done(stage)
+        m8.on_cutscene_done(stage)                 # a second end must not skip a stage
+
+    # The meet plays as a 3D film; its end starts the 3D trap.
+    _play_film("meet", _m8_meta.BEATS["meet"])
+    assert STATE.mission8_stage == "trap" and _m8_trap.active() and STATE.m8_trap_active
+    sc = _m8_trap.scene()
+    for _ in range(60):
+        m8.game_update(EmptyKeys())
+    assert sc.t > 0.9, "trap clock never advanced"
+    m8.game_draw(config.screen, 0, 0)
+    sc.set_paused(True)
+    t0 = sc.t
+    m8.game_update(EmptyKeys())
+    assert sc.t == t0, "pause did not freeze the trap"
+    sc.set_paused(False)
+
+    # Waves: kill every hostile; each wave checkpoints, the clear saves the gantry.
+    for i in range(60 * 120):
+        if sc.phase == "clear":
+            break
+        if i % 20 == 0:
+            for e in sc.brain.enemies:
+                if e["alive"]:
+                    sc.brain.hurt_enemy(e, 999)
+        m8.game_update(EmptyKeys())
+    assert sc.phase == "clear", sc.phase
+    assert STATE.m8_trap_cp == 3 and STATE.mission8_stage == "gantry"
+    assert _save_system.get_slot(0)["checkpoint"] == "gantry"
+
+    # Death reloads in-scene at the checkpoint.
+    STATE.player.hp = 5
+    sc.hurt_player(400, (sc.px + 5, sc.pz))
+    assert sc.dying
+    for _ in range(200):
+        m8.game_update(EmptyKeys())
+    assert not sc.dying and sc.phase == "clear" and STATE.mission8_stage == "gantry"
+
+    # Restart resumes at the gantry.
+    gc.restart_current_mission()
+    sc = _m8_trap.scene()
+    assert _m8_trap.active() and STATE.mission8_stage == "gantry" and sc.phase == "clear"
+
+    # Climb: hold E at the ladder, then walk the catwalk to Vasile.
+    sc.px, sc.pz = _m8_trap.LADDER_FOOT
+    for _ in range(60):
+        m8.game_update(_Pressed({pygame.K_e: True}))
+    assert sc.phase == "climb", sc.phase
+    for _ in range(int(60 * (_m8_trap.CLIMB_S + 0.3))):
+        m8.game_update(EmptyKeys())
+    assert sc.phase == "catwalk" and abs(sc.py - _m8_set.CATWALK_Y) < 1e-6
+    m8.game_draw(config.screen, 0, 0)
+    for _ in range(60 * 12):
+        if STATE.mission8_stage != "gantry":
+            break
+        m8.game_update(_Pressed({pygame.K_w: True}))
+    assert STATE.mission8_stage == "friends" and not _m8_trap.active()
+    assert not _m8_trap.force_finish("win"), "gantry hand-off double-fired"
+
+    # Old Friends plays as a film into the kill scene.
+    from missions.m8.revenge import kill3d as _m8_kill
+    _play_film("friends", _m8_meta.BEATS["friends"])
+    assert STATE.mission8_stage == "kill" and _m8_kill.active() and STATE.m8_kill_active
+
+    def _run_kill(frames, keys=None):
+        for _ in range(frames):
+            STATE.dt = 1.0 / 60.0
+            m8.game_update(keys or EmptyKeys())
+
+    ks = _m8_kill.scene()
+    _run_kill(int(60 * (_m8_kill.INTRO_S + _m8_kill.RAISE_S)) + 10)
+    assert ks.phase == "aim", ks.phase
+    # The player's trigger is dead until his line is under way, then it is the
+    # only way forward: one round, his line cut mid-word, the body stays on deck.
+    click = pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(0, 0))
+    ks.handle_event(click)
+    assert ks.shots == 0 and ks.phase == "aim", "fired before the line began"
+    while ks.typed() < _m8_kill.FIRE_N:
+        ks.handle_event(click)
+        assert ks.shots == 0, "fired before the price landed"
+        _run_kill(3)
+    _run_kill(30)
+    assert _m8_kill.FIRE_N <= ks.typed() < len(_m8_kill.LINE) and ks.death_t is None
+    ks.handle_event(click)
+    assert ks.shots == 1 and ks.hits == 1 and ks.choice == "shot", "the click must land the round"
+    cut = ks.cut
+    ks.handle_event(click)
+    assert ks.shots == 1, "a second click fired"
+    m8.game_draw(config.screen, 0, 0)
+    _run_kill(int(60 * _m8_kill.GROUND_AT) + 6)
+    assert ks.typed() == cut and ks.cut < len(_m8_kill.LINE), "his line must stay cut off"
+    assert abs(ks.vasile_spot()[2] - _m8_kill.VZ) < 0.5, "the body left the catwalk"
+    m8.game_draw(config.screen, 0, 0)
+    shot = None
+    while _m8_kill.active():
+        now = ks.cine()[0]
+        if now != shot:                     # every staged shot must render once
+            shot = now
+            m8.game_draw(config.screen, 0, 0)
+        _run_kill(6)
+    assert shot == "witness", shot
+    assert STATE.mission8_stage == "descent" and not _m8_kill.active() and not STATE.m8_kill_active
+    assert ks.result == "shot" and not _m8_kill.force_finish("again"), "kill hand-off double-fired"
+
+    # Kill scene fault falls through to the descent film, then the chase.
+    m8.start_m8("kill", "revenge")
+    orig_kill_update = _m8_kill.KillScene.update
+
+    def _kill_boom(*_a, **_k):
+        raise RuntimeError("m8 kill probe")
+    _m8_kill.KillScene.update = _kill_boom
+    try:
+        m8.game_update(EmptyKeys())
+    finally:
+        _m8_kill.KillScene.update = orig_kill_update
+    assert not _m8_kill.active() and STATE.mission8_stage == "descent"
+    # The descent film plays down the ladder into the chase.
+    from missions.m8.revenge import chase3d as _m8_chase_probe
+    _play_film("descent", _m8_meta.BEATS["descent"])
+    assert STATE.mission8_stage == "chase" and _m8_chase_probe.active()
+
+    # The tractor chase is a 3D scene: chasers spawn and wreck on a tyre, a
+    # section boundary checkpoints, a stalled tractor retries in-scene, the
+    # blocker holds the tractor short of the tracks until it is cleared, and
+    # the train ending hands off to the epilogue exactly once.
+    from missions.m8.revenge import chase3d as _m8_chase
+
+    def _run_chase(frames, clear=True):
+        for _ in range(frames):
+            STATE.dt = 1.0 / 60.0
+            if clear:
+                # The cars are armoured since the LMG pass (per-part hp), so
+                # "clear the road" means: burst one tyre to zero (a wreck),
+                # kill a foot soldier with a hit to the body.
+                for e in list(cs.enemies):
+                    if e["kind"] == "blocker" or e["wrecked"] or not e["alive"]:
+                        continue
+                    part = "body" if e["kind"] == "foot" else "tyre0"
+                    n = 1 if e["kind"] == "foot" else _m8_chase.TYRE_HP[e["kind"]]
+                    for _i in range(n):
+                        cs.hurt_enemy(e, part)
+            m8.game_update(EmptyKeys())
+
+    assert _m8_chase.active() and STATE.m8_chase_active
+    cs = _m8_chase.scene()
+    _run_chase(60 * 3, clear=False)
+    assert cs.enemies, "chasers must spawn on the farm track"
+    jeep = cs.enemies[0]
+    assert jeep["tyre_hp"].get("tyre0", _m8_chase.TYRE_HP["jeep"]) > 0, \
+        "a jeep tyre must not fall to a single round any more"
+    for _i in range(_m8_chase.TYRE_HP["jeep"]):
+        cs.hurt_enemy(jeep, "tyre0")
+    assert jeep["wrecked"] and not jeep["alive"]
+    m8.game_draw(config.screen, 0, 0)
+    cs.z = _m8_chase.S.SECTIONS[1] + 0.5
+    _run_chase(2)
+    assert cs.cp == 1 and STATE.m8_chase_cp == 1, "the ditch section must checkpoint"
+    cs.damage(_m8_chase.HULL * 2)
+    assert cs.dying and cs.wreck_t is not None, "hull at zero must play the capture"
+    _run_chase(int(60 * 2.6))
+    assert cs.dying and cs.captors, "the Guard must pull up and take them"
+    m8.game_draw(config.screen, 0, 0)
+    _run_chase(int(60 * (_m8_chase.CAPTURE_S - 2.4)))
+    assert not cs.dying and cs.cp == 1 and cs.hull == _m8_chase.HULL and _m8_chase.active()
+    STATE.m8_chase_cp = 3
+    _m8_chase.begin()
+    assert cs.cp == 3 and cs.blocked() and cs.timer == _m8_chase.CROSSING_TIME
+    cs.z = _m8_chase.STOP_Z - 8.0
+    _run_chase(60 * 3)
+    assert cs.blocked() and abs(cs.z - _m8_chase.STOP_Z) < 0.05 and cs.end_t is None,         "the tractor must wait short of the blocked tracks"
+    m8.game_draw(config.screen, 0, 0)
+    for e in cs.enemies:
+        if e["kind"] == "blocker":
+            for _i in range(_m8_chase.DRIVER_HP["blocker"] + 1):
+                cs.hurt_enemy(e, "driver")
+    assert not cs.blocked()
+    _run_chase(60 * 12)
+    assert STATE.mission8_stage == "epilogue" and cs.result == "train"
+    assert not _m8_chase.active() and not STATE.m8_chase_active
+    assert not _m8_chase.force_finish("again"), "chase hand-off double-fired"
+
+    # Chase scene fault falls through to the epilogue.
+    m8.start_m8("chase", "revenge")
+    orig_chase_update = _m8_chase.ChaseScene.update
+
+    def _chase_boom(*_a, **_k):
+        raise RuntimeError("m8 chase probe")
+    _m8_chase.ChaseScene.update = _chase_boom
+    try:
+        m8.game_update(EmptyKeys())
+    finally:
+        _m8_chase.ChaseScene.update = orig_chase_update
+    assert not _m8_chase.active() and STATE.mission8_stage == "epilogue"
+
+    # The epilogue film runs to the title card, then the outro, exactly once.
+    _play_film("epilogue", _m8_meta.BEATS["epilogue"])
+    assert m8.take_outro_request() and not m8.take_outro_request()
+
+    # No timeline shots (legacy data): the ENTER-stepped 3D beats still carry the stage.
+    from missions.m8 import flow as _m8_flow
+    orig_shots = _m8_flow.film_shots
+    _m8_flow.film_shots = lambda _stage: []
+    try:
+        m8.start_m8("epilogue", "revenge")
+        assert m8.take_cutscene_request() is None
+        for _ in range(60):
+            if STATE.m8_outro:
+                break
+            m8.game_update(_Pressed({pygame.K_RETURN: True}))
+            m8.game_update(EmptyKeys())
+            m8.game_draw(config.screen, 0, 0)
+        assert m8.take_outro_request()
+    finally:
+        _m8_flow.film_shots = orig_shots
+
+    # Exception path: a broken scene falls through, never strands.
+    m8.start_m8("trap", "revenge")
+    orig_update = _m8_trap.update
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("m8 trap probe")
+    _m8_trap.update = _boom
+    try:
+        m8.game_update(EmptyKeys())
+    finally:
+        _m8_trap.update = orig_update
+    assert not _m8_trap.active() and STATE.mission8_stage == "friends"
+
+    assert _save_system.save_mission_complete_record("MISSION8", "00:42")
+    assert _save_system.get_slot(0)["last_completed_mission"] == "MISSION_8"
+
+
 def check_m7_audio_design():
     """Mission 7 owns a real sound set, and every loop can be torn down.
 
@@ -12293,6 +12580,8 @@ def main():
     ok = run_check("mission6_vertical_slice", check_mission6_vertical_slice) and ok
     print("\n=== Mission 7 checks ===")
     ok = run_check("mission7_vertical_slice", check_mission7_vertical_slice) and ok
+    print("\n=== Mission 8 checks ===")
+    ok = run_check("mission8_vertical_slice", check_mission8_vertical_slice) and ok
     for name, fn in (("m7_audio_design", check_m7_audio_design),
                      ("m7_generator_minigame", check_m7_generator_minigame),
                      ("m7_goat_escape", check_m7_goat_escape),

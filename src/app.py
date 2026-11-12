@@ -559,6 +559,7 @@ class CutscenePlayer:
         self._paused_at = None
         self.skip_confirm = False
         self.completed = False
+        self.skip_to_end = False  # dev skip (console skip_cutscene / F7): finish now
         self.finale_audio = None  # optional scene-owned stems / foley channels
         self.vo = None  # (shot_idx, clip ms, radio) of the voiced caption
 
@@ -606,6 +607,7 @@ active_cutscene = None
 _M5_MID = {"key": None}   # key of the M5 mid-mission cutscene being played
 _M6_MID = {"key": None}   # key of the M6 mid-mission cutscene being played
 _M7_MID = {"key": None}   # stage token of the M7 stage film being played
+_M8_MID = {"key": None}   # stage token of the M8 stage film being played
 
 def _safe_m6_shots(shots):
     """Only hand CutscenePlayer its dict shot contract; old M6 facades may
@@ -649,6 +651,18 @@ def _m7_outro_pending():
         return False
 
 
+def _m8_outro_pending():
+    """Mission 8 last beat done -> mission complete (no outro film yet)."""
+    try:
+        from core.state import STATE as _st8o  # lazy: app keeps STATE access local
+        if getattr(_st8o, "active_mission", "") != "MISSION8":
+            return False
+        from missions import m8 as _m8
+        return _m8.take_outro_request()
+    except Exception:
+        return False
+
+
 def _m5_mid_cut_key():
     """Pending M5 mid-mission cutscene key (round 2), or None."""
     from core.state import STATE as _st5  # lazy: app keeps STATE access local
@@ -675,6 +689,19 @@ def _m7_film_pending():
     if key is None:
         return False
     _M7_MID["key"] = key
+    return True
+
+
+def _m8_film_pending():
+    """Pending M8 stage film (meet / friends / epilogue), one-shot; stores its token in _M8_MID."""
+    from core.state import STATE as _st8  # lazy: app keeps STATE access local
+    if getattr(_st8, "active_mission", "") != "MISSION8":
+        return False
+    from missions import m8 as _m8mod  # lazy: M8-only
+    key = _m8mod.take_cutscene_request()
+    if key is None:
+        return False
+    _M8_MID["key"] = key
     return True
 
 
@@ -741,6 +768,9 @@ def start_cutscene(shots, after_state, use_fades=True):
     elif any(str(s.get("scene", "")).startswith("m6_") for s in shots):
         from missions.m6.m6_audio import M6FilmAudio
         finale_audio = M6FilmAudio(audio)
+    if any(str(s.get("scene", "")).startswith("m8_") for s in shots):
+        from missions.m8 import m8_audio as _m8_audio  # lazy: registers the film cues' sounds
+        _m8_audio.instance(audio)
     for shot in shots:
         for _, name, _ in shot.get("cues", ()):
             audio.get_sound(name)
@@ -1774,6 +1804,53 @@ def _apply_dev_args():
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         gc.start_mission7_outro()
         gsm.transition("GAME"); pygame.mouse.set_visible(False)
+    elif ("--dev-mission8" in args or "--dev-mission8-trap" in args
+          or "--dev-mission8-gantry" in args or "--dev-mission8-friends" in args
+          or "--dev-mission8-kill" in args or "--dev-mission8-chase" in args
+          or "--dev-mission8-ending" in args):
+        gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        if "--dev-mission8-trap" in args:
+            _cp8 = 0
+            for _a in args:
+                if _a.startswith("--m8-cp="):
+                    try:
+                        _cp8 = max(0, min(3, int(_a.split("=", 1)[1])))
+                    except ValueError:
+                        pass
+            gc.start_mission8_stage("trap", "revenge")
+            STATE.m8_trap_cp = _cp8
+            if _cp8:
+                from missions.m8.revenge import trap3d as _m8_trap  # lazy: M8-only
+                _m8_trap.begin()  # rebuilds the fight at STATE.m8_trap_cp
+        elif "--dev-mission8-gantry" in args:
+            gc.start_mission8_stage("gantry", "revenge")
+        elif "--dev-mission8-friends" in args:
+            gc.start_mission8_stage("friends", "revenge")
+        elif "--dev-mission8-kill" in args:
+            gc.start_mission8_stage("kill", "revenge")
+        elif "--dev-mission8-ending" in args:
+            # Start at the crossing with the last jeep already destroyed; the chase ending plays out.
+            gc.start_mission8_stage("chase", "revenge")
+            STATE.m8_chase_cp = 3
+            STATE.m8_chase_ending = True
+            from missions.m8.revenge import chase3d as _m8_chase  # lazy: M8-only
+            _m8_chase.begin()
+        elif "--dev-mission8-chase" in args:
+            _cp8 = 0
+            for _a in args:
+                if _a.startswith("--m8-cp="):
+                    try:
+                        _cp8 = max(0, min(3, int(_a.split("=", 1)[1])))
+                    except ValueError:
+                        pass
+            gc.start_mission8_stage("chase", "revenge")
+            if _cp8:
+                STATE.m8_chase_cp = _cp8
+                from missions.m8.revenge import chase3d as _m8_chase  # lazy: M8-only
+                _m8_chase.begin()
+        else:
+            gc.start_mission8_stage("meet", "revenge")
+        gsm.transition("GAME"); pygame.mouse.set_visible(False)
     elif "--dev-slot-select" in args:
         # Dev/screenshot jump: open the save-slot screen directly (skips
         # BOOT_INTRO). Pass `--continue` as well for the CONTINUE variant -
@@ -2338,9 +2415,23 @@ class _SlotSelectState(GameState):
                 gc.start_mission5(preserve_timer=True)
                 start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
                 trigger_transition("CUTSCENE")
-            elif last == "MISSION_7":
+            elif last == "MISSION_8":
                 menu_notice = "FULL CAMPAIGN COMPLETE - START A NEW CAMPAIGN"
                 menu_notice_timer = 200; gsm.transition("MENU")
+            elif progress == "m8":
+                # Above MISSION_7 (a mid-M8 save also has last == "MISSION_7").
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                m8_stage = slot.get("checkpoint", "")
+                if m8_stage:
+                    gc.start_mission8_stage(m8_stage)
+                else:
+                    gc.start_mission8(preserve_timer=True)
+                gsm.transition("GAME"); pygame.mouse.set_visible(False)
+            elif last == "MISSION_7":
+                # M7 done -> Mission 8 on the route the M7 radio choice saved.
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                gc.start_mission8(preserve_timer=True)
+                gsm.transition("GAME"); pygame.mouse.set_visible(False)
             elif progress == "m7":
                 # Above the MISSION_6 branch (a mid-M7 save also has
                 # last == "MISSION_6") and below MISSION_7 (progress is not
@@ -2842,6 +2933,14 @@ class _CutsceneState(GameState):
             _m7mod.on_cutscene_done(_M7_MID["key"])
             trigger_transition("GAME")
             pygame.mouse.set_visible(False)
+        elif after == "M8_RESUME":
+            from missions import m8 as _m8mod  # lazy: M8-only
+            _m8mod.on_cutscene_done(_M8_MID["key"])
+            if (cp.current_shot or {}).get("cut_to_play"):
+                gsm.transition("GAME")          # the pullout hands straight to the chase: no fade
+            else:
+                trigger_transition("GAME")
+            pygame.mouse.set_visible(False)
         elif after == "MISSION3_BROADCAST_FAIL":
             # Fail sequence over: rebuild the wing, reset the 22:00 clock and
             # drop the player back into Slice 6. Guarded so a double _handle_end
@@ -2863,6 +2962,12 @@ class _CutsceneState(GameState):
         if cp is None or cp.completed:
             return
         shot = cp.current_shot
+        if shot and shot.get("no_skip"):
+            # A locked line (the Old Friends exchange): no ESC, no ENTER, no skip to
+            # full text; SPACE moves on only once the line is delivered and voiced out.
+            if (event.key != pygame.K_SPACE or cp.char_idx < len(shot["text"])
+                    or voice.busy() or cp.elapsed_ms < shot.get("min_ms", 0)):
+                return
         if shot and shot.get("cinematic_controls"):
             if event.key == pygame.K_ESCAPE:
                 if cp.skip_confirm or cp.paused:
@@ -2921,6 +3026,12 @@ class _CutsceneState(GameState):
 
     def update(self, dt):
         cp = active_cutscene
+        if cp is not None and cp.skip_to_end and not cp.completed:
+            cp.skip_to_end = False
+            cp.shot_idx = len(cp.shots) - 1
+            cp.transition_timer = 0
+            self._handle_end()
+            return
         if cp is None or cp.paused or cp.completed:
             return
         cp.timer += 1
@@ -3031,6 +3142,17 @@ class _CutsceneState(GameState):
         if cp.after_state in ("M7_RESUME", "MISSION7_COMPLETE"):
             from missions.m7 import flow as _m7_flow  # lazy: M7-only
             _m7_flow.film_music(_M7_MID["key"] if cp.after_state == "M7_RESUME" else "outro")
+        if cp.after_state == "M8_RESUME":
+            # M8 films carry their own score and beds (m8_audio.FILM).
+            from missions.m8 import m8_audio as _m8_audio  # lazy: M8-only
+            _a8 = _m8_audio.instance(audio)
+            if cp.paused:
+                _a8.pause()
+            else:
+                _a8.resume()
+                _a8.film(shot["scene"])
+            _set_ambience(set())
+            return
         if shot["scene"] == "m5_shadow_finale":
             # Dedicated stereo river/rain stem replaces the generic loops.
             _set_ambience(set() if cp.finale_audio else
@@ -3078,7 +3200,8 @@ class _CutsceneState(GameState):
                 draw_vignette(surface, strength=80 if shot.get("quiet_ui") else 180)
             if not shot.get("quiet_ui"):
                 draw_scanlines(surface)
-            draw_letterbox(surface)
+            if not shot.get("full_frame"):
+                draw_letterbox(surface)
             if t_ms >= shot.get("caption_after_ms", 0) and not shot.get("hide_caption") and (shot["text"] or shot.get("speaker")):
                 if shot.get("caption") == "box":
                     # the in-game dialogue box (name tab, pixel font, typewriter)
@@ -3224,6 +3347,15 @@ class _GameState_(GameState):
                 _m7_raid.set_paused(False)
             except Exception:
                 pass
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION8" \
+                and (getattr(STATE, "m8_trap_active", False)
+                     or getattr(STATE, "m8_kill_active", False)
+                     or getattr(STATE, "m8_chase_active", False)):
+            try:
+                from missions.m8 import flow as _m8_flow  # lazy: M8-only
+                _m8_flow.scene_pause(False)
+            except Exception:
+                pass
 
     def handle_event(self, event, mouse_x, mouse_y, keys):
         if self._egg3d_live():
@@ -3293,6 +3425,25 @@ class _GameState_(GameState):
                 _m7_raid.handle_event(event)
             except Exception:
                 pass
+            return
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION8" \
+                and (getattr(STATE, "m8_trap_active", False)
+                     or getattr(STATE, "m8_kill_active", False)
+                     or getattr(STATE, "m8_chase_active", False)):
+            # The trap/gantry fight and the kill own the mouse and keyboard; ESC pauses.
+            from missions.m8 import flow as _m8_flow  # lazy: M8-only
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                _m8_flow.scene_pause(True)
+                gsm.transition("PAUSED")
+                return
+            try:
+                _m8_flow.scene_event(event)
+            except Exception:
+                pass
+            return
+        if getattr(gc, "active_mission", "MISSION1") == "MISSION8" \
+                and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            gsm.transition("PAUSED")  # beats: ESC pauses, ENTER is polled by the beat
             return
         if getattr(gc, "active_mission", "MISSION1") == "MISSION6":
             if getattr(STATE, "m6_yard_active", False):
@@ -3495,9 +3646,19 @@ class _GameState_(GameState):
         elif _m7_outro_pending():
             from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
             _start_m6_cutscene(_m7mod.outro_shots(), "MISSION7_COMPLETE"); pygame.mouse.set_visible(True)
+        elif _m8_outro_pending():
+            interactions.clear_radio_queue()
+            gsm.transition("MISSION_COMPLETE")
+            mission_complete_timer = 0
+            mission_complete_fade = 0
+            pygame.mouse.set_visible(True)
         elif _m7_film_pending():
             from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
             start_cutscene(_m7mod.film_shots(_M7_MID["key"]), "M7_RESUME", use_fades=True)
+            trigger_transition("CUTSCENE")
+        elif _m8_film_pending():
+            from missions import m8 as _m8mod  # lazy: see _m8_film_pending
+            start_cutscene(_m8mod.film_shots(_M8_MID["key"]), "M8_RESUME", use_fades=True)
             trigger_transition("CUTSCENE")
         elif _m5_mid_cut_key():
             from missions.m5.meta import M5_MID_CUTSCENES  # lazy: M5-only data
@@ -3619,6 +3780,11 @@ class _GameState_(GameState):
                 _set_ambience({"ambient_drone"})
         elif mission == "MISSION6":
             _set_ambience({"ambient_drone", "wind"})
+        elif mission == "MISSION8":
+            # The 3D scenes run their own beds (m8_audio.BEDS); this is the score.
+            from missions.m8 import flow as _m8_flow  # lazy: M8-only
+            _m8_flow.music_tick()
+            _set_ambience(set())
         elif mission == "MISSION7":
             # Daylight farm stages carry the score (m7 flow.STAGE_MUSIC); the
             # drone is a night/raid bed and reads gloomy under it.
@@ -3910,6 +4076,12 @@ class _MissionCompleteState(GameState):
                 gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
                 gc.start_mission7(preserve_timer=True)
                 trigger_transition("GAME"); pygame.mouse.set_visible(False)
+            elif (getattr(gc, "active_mission", "MISSION1") == "MISSION7"
+                  and hasattr(gc, "start_mission8")):
+                # M7 -> M8 chain: the route comes from the M7 radio choice.
+                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+                gc.start_mission8(preserve_timer=True)
+                trigger_transition("GAME"); pygame.mouse.set_visible(False)
             else:
                 # MISSION5 (and anything after): back to the menu. M5
                 # completing the campaign is the W4 behavior until a later
@@ -4084,7 +4256,7 @@ class _MissionCompleteState(GameState):
             _active = getattr(gc, "active_mission", "MISSION1")
             if _active == "MISSION1":
                 next_prompt = "PRESS SPACE TO START MISSION 2"
-            elif _active == "MISSION7":
+            elif _active == "MISSION8":
                 next_prompt = "PRESS SPACE TO RETURN TO MENU"
             else:
                 next_prompt = "PRESS SPACE TO CONTINUE"
@@ -4189,6 +4361,18 @@ def _devtools_cutscene_info():
 
 
 _devtools.bind_cutscene(_devtools_cutscene_info)
+
+
+def _console_skip_cutscene():
+    cp = active_cutscene
+    if cp is None or cp.completed:
+        return "skip_cutscene: no cutscene playing"
+    cp.skip_to_end = True
+    return "skip_cutscene: ending the cutscene"
+
+
+console.bind("skip_cutscene", _console_skip_cutscene)
+_devtools.bind_skip(_console_skip_cutscene)
 
 
 def _devtools_cache_line():

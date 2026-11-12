@@ -22,7 +22,11 @@ PROFILES = {
     "MISSION5": ((235, 125, 103), "THE CAPITAL", "EMERGENCY RULE", "PRINTWORKS CONTROL", "PUBLICATION HALTED", "press"),
     "MISSION6": ((225, 180, 104), "KIM KIM BORDER", "WHITEOUT", "FINAL TRANSMISSION", "SIGNAL LOST", "tower"),
     "MISSION7": ((150, 190, 110), "VALEA SEACA HILLS", "FALLOW GROUND", "FARMHOUSE LINK", "YOU WENT DOWN", "route"),
+    "MISSION8": ((214, 120, 92), "ROUTE 12", "THE CALL", "CHECKPOINT GANTRY", "YOU WENT DOWN", "route"),
 }
+# Mission 8 checkpoint labels by stage token (mirrors missions.m8.meta stages).
+_M8_CHECKPOINTS = {"meet": "THE MEET", "trap": "THE TRAP", "gantry": "THE GANTRY", "friends": "OLD FRIENDS",
+                   "kill": "THE KILL", "chase": "THE CHASE", "epilogue": "EPILOGUE", "duty": "DUTY"}
 # Mission 7 checkpoint labels by stage token (mirrors missions.m7.meta.STAGE_LABELS).
 _M7_CHECKPOINTS = {"arrival": "ARRIVAL", "chores": "CHORES", "runner": "RUNNER", "prep": "PREP",
                    "raid": "RAID", "finale": "FINALE", "choice": "CHOICE"}
@@ -70,6 +74,10 @@ def checkpoint_label(state):
     key = mission_meta.mission_key(state)
     if key == "MISSION7":
         return _M7_CHECKPOINTS.get(getattr(state, "mission7_stage", ""), "ARRIVAL")
+    if key == "MISSION8":
+        if getattr(state, "mission8_stage", "") == "trap" and int(getattr(state, "m8_trap_cp", 0) or 0) >= 3:
+            return "THE GANTRY"
+        return _M8_CHECKPOINTS.get(getattr(state, "mission8_stage", ""), "THE MEET")
     if key == "MISSION4" and getattr(state, "mission4_tower_checkpoint_reached", False):
         try:
             from missions.m4 import siege as _m4_siege

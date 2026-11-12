@@ -514,14 +514,21 @@ def _k9_rig_mesh():
 def _m7rifle_mesh():
     """(mesh, muzzle) of the Mission 7 allies' rifle (tools/ae_import_m7rifle.py),
     grip at the hand joint and +z muzzle; (None, None) if the asset is missing."""
-    if "m7rifle" not in _cache:
+    return _gun_mesh("m7rifle")
+
+
+def _gun_mesh(name):
+    """(mesh, muzzle) of an imported gun ``<name>.mesh.json`` in rig gun space
+    (m7rifle: tools/ae_import_m7rifle.py, lmg: tools/ae_import_lmg.py);
+    (None, None) if the asset is missing."""
+    if name not in _cache:
         out = (None, None)
         try:
             import json
             import os
             from engine3d.core import Mesh
             from game.render3d_bridge import MESHES_DIR
-            with open(os.path.join(MESHES_DIR, "m7rifle.mesh.json"), encoding="utf-8") as fh:
+            with open(os.path.join(MESHES_DIR, name + ".mesh.json"), encoding="utf-8") as fh:
                 data = json.load(fh)
             m = Mesh()
             m.verts = [tuple(float(c) for c in v) for v in data["verts"]]
@@ -529,8 +536,8 @@ def _m7rifle_mesh():
             out = (m, tuple(float(c) for c in data["meta"]["muzzle"]))
         except Exception:
             pass
-        _cache["m7rifle"] = out
-    return _cache["m7rifle"]
+        _cache[name] = out
+    return _cache[name]
 
 
 def hum(key, hd=False, wound=0, bloody=False, flags=()):
@@ -554,7 +561,14 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
                 h._weapon = "k9"
                 # GL caches rig VBOs by spec repr; the K9 needs its own.
                 h._gl_spec_key = repr(sorted(h.spec.items())) + "|k9"
-            elif "shotgun" in flags and not hd:
+            elif "lmg" in flags and not hd and _gun_mesh("lmg")[0] is not None:
+                mesh, muzzle = _gun_mesh("lmg")
+                h._rifle = mesh
+                h._weapon = "lmg"
+                h._muzzle_z = muzzle[2]
+                # GL caches rig VBOs by spec repr; the LMG needs its own.
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|lmg"
+            elif ("shotgun" in flags or "lmg" in flags) and not hd:
                 from engine3d.rig import shotgun_mesh
                 h._rifle = shotgun_mesh()
                 h._weapon = "shotgun"

@@ -22,10 +22,10 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
   - `game/art/m1`-`m5` - code-authored mission art. `src/art/m5` is a compatibility shim over `game/art/m5`; edit `game/art`.
 - `engine3d/` - 3D renderer: `core.py` (software), `gl.py` (ModernGL), `rig.py`, `ik.py`, `textures.py`. Use `engine3d.Renderer(...)`.
 - `missions/` - `m0` (enemy types), `m1`-`m6`, `arena.py` (multiplayer), `walking_sim.py`. Each mission package `__init__.py` is a re-export facade; load order = import order in it. Typical parts: `meta`, `maps`, `decor`, `world`, `flow`, `systems`, `draw`.
-  - `missions/m6/` - Whiteout: yard (`yard3d`, `yard_brain`, `yard_dress`, `yard_hud`), `stealth`, `train3d` (last playable beat), `bloc3d/` (panel blocks, stacks, tower, Cyrillic neon), `hud3d`, `m6_audio`. The finale is cutscene-only.
-  - `missions/m7/` - Fallow Ground (all 7 beats): `farmyard` (top-down chores and prep), `raid3d` + `raid_brain` + `raid_world` + `raid_hud` (playable 3D raid), `choice` (radio choice, writes `STATE.m8_route`), `flow`/`systems`/`draw`. Films live in `cutscenes/m7*`. Notes at the end of `docs/MISSION7_PLOT.md`.
-  - Mission 8 is planned only (`docs/MISSION8_PLOT.md`).
-- `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`), shared `figure_kit.py` (cast look `SPECS`), `cast3d.py`, `post3d.py`, `weather3d.py`.
+  - `missions/m6/` - Whiteout: `yard*` (yard3d/brain/dress/hud), `stealth`, `train3d` (last playable beat), `bloc3d/`, `hud3d`. Finale is cutscene-only.
+  - `missions/m7/` - Fallow Ground: `farmyard` (top-down), `raid*` (playable 3D raid), `choice` (radio, writes `STATE.m8_route`). Films in `cutscenes/m7*`; notes in `docs/MISSION7_PLOT.md`.
+  - `missions/m8/` - The Call; `STATE.m8_route` picks the ladder. `revenge/`: `trap*` (3D trap + gantry climb), `kill3d`, `chase3d`/`chase_set` (tractor chase), `epilogue3d`; films via `cutscenes/m8films.py` + `meta.M8_SCENES`, `beats` is the fallback. `duty/` reserved. Design: `docs/MISSION8_PLOT.md`.
+- `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`, `m8films`), shared `figure_kit.py` (cast look `SPECS`), `cast3d.py`, `post3d.py`, `weather3d.py`.
 - `core/` - legacy runtime: `state.py` (`STATE`), `game_core.py`, `camera.py`, `mapbuilder.py` (dependency-free), `artpack.py` (sprite sheet access), `save_system.py`, `settings_store.py`, `lighting.py`, `dev_jumps.py`.
 - `entities/` - player, `enemy_ai.py`, weapons, weapon rig, corpses, death anims.
 - `ui/` - menus (`main.py`), `hud.py`, `radio.py` + `pixfont.py` (bitmap fonts), shop, multiplayer screens, mission failed. Multiplayer draws in 2.5D: `arena_view3d.py` (`make_view`, aim unprojection) over the 2D `arena_view.py`, cast and guns from `mp3d.py`; `ACA_MP_2D=1` forces 2D, and any 3D error falls back to 2D for the run.
@@ -45,12 +45,6 @@ Not project modules (skip them): `archive/`, `build/`, `dist/`, `previews/`, `sh
 
 # Code graph (graphify)
 
-A code-only knowledge graph of `src/` lives in `src/graphify-out/` (`graph.json`, `GRAPH_REPORT.md`, `graph.html`). For architecture questions (who calls X, what depends on Y, how A connects to B), query it before grepping the tree:
-- `graphify query "<question>" --graph src/graphify-out/graph.json`
-- `graphify explain "<node>"`, `graphify path "<A>" "<B>"`, `graphify affected "<node>"`, `graphify god-nodes` (all take the same `--graph`).
-- Skim `src/graphify-out/GRAPH_REPORT.md` for hubs and communities.
-Use plain Grep/Read for exact strings and for editing. The graph can go stale after big edits: refresh with `graphify update src` (no LLM needed).
+For architecture questions (who calls X, what depends on Y), query `graphify query "<q>" --graph src/graphify-out/graph.json` (also `explain`, `path`, `affected`, `god-nodes`) before grepping; hubs in `src/graphify-out/GRAPH_REPORT.md`. Grep/Read for exact strings. Refresh after big edits: `graphify update src`.
 
-# Delegated work
-
-Subagents are rare (weekly limit). Work inline with direct tools. Spawn a Haiku 5.5 `searcher`/`implementer` only when the user asks or for a big sweep that would flood context. No two-pass plan/implement subagent flow. The DeepSeek/OpenCode workers (`ds-worker.mjs`, `/delegate`) stay retired.
+Subagents: see the global rule. Spawn type is Haiku 5.5 `searcher`/`implementer`. The DeepSeek/OpenCode workers (`ds-worker.mjs`, `/delegate`) stay retired.

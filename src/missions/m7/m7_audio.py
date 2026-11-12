@@ -495,11 +495,14 @@ class M7Audio:
         for name in list(self.loops):
             self.stop_loop(name)
 
-    def _one(self, name, volume):
+    def _one(self, name, volume, varied=False):
+        """Play a one-shot.  ``varied``: one of the manager's re-pitched takes of
+        ``name`` (never the same twice running); the plain sound is the fallback."""
         if self.closed:
             return
+        play = getattr(self.manager, "play_varied", None) if varied else None
         try:
-            ch = self.manager.play(name, volume=volume)
+            ch = (play or self.manager.play)(name, volume=volume)
         except Exception:
             return
         if ch is not None:
@@ -644,7 +647,7 @@ class M7Audio:
 
     # raid (the method names the raid already calls) ---------------------
     def shot(self, _suppressed=True):
-        self._one("shotgun_blast", 0.62)
+        self._one("shotgun_blast", 0.62, varied=True)
 
     def pump(self):
         self._one("shotgun_pump", 0.45)
@@ -657,7 +660,7 @@ class M7Audio:
 
     def impact(self, on_enemy=False):
         self._one("bullet_impact_enemy" if on_enemy else "bullet_impact",
-                  0.5 if on_enemy else 0.32)
+                  0.5 if on_enemy else 0.32, varied=True)
 
     def dry(self):
         self._one("empty_click", 0.5)
@@ -666,7 +669,7 @@ class M7Audio:
         self._one("reload", 0.45)
 
     def headshot(self):
-        self._one("m6_headshot", 0.5)
+        self._one("m6_headshot", 0.5, varied=True)
 
     def report(self):
         self._one("m6_report_far", 0.7)
@@ -687,19 +690,21 @@ MUSIC = {
     "raid": (OST_DIR + "09_fallow_ground.mp3", 0.42, 1500),
     "film": (OST_DIR + "03_quiet_on_route_12.mp3", 0.36, 2000),
     "outro": (OST_DIR + "08_i_chose_the_many.mp3", 0.48, 2500),
+    "outro_soft": (OST_DIR + "08_i_chose_the_many.mp3", 0.28, 2500),
 }
 MUSIC_FILES = frozenset(spec[0] for spec in MUSIC.values())
 MUSIC_FADE_OUT_MS = 1500
 _MUSIC_FAILED = set()
 
 
-def music(manager, cue):
+def music(manager, cue, table=None):
     """Drive the streamed score toward ``cue`` (None = silence); call every frame.
 
     Same cue: keeps the track running (no restart). New cue: fades the old
     track out first, then fades the new one in once the fade-out has ended.
+    ``table`` swaps in another mission's cue table (same spec shape).
     """
-    spec = MUSIC.get(cue)
+    spec = (MUSIC if table is None else table).get(cue)
     want = spec[0] if spec else None
     try:
         current = manager.music_name()

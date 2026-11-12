@@ -1,6 +1,6 @@
 ---
 name: openwolf
-description: OpenWolf operating protocol for this project. Load when starting multi-file work, resuming a session, wrapping up a session, or when unsure how to use .wolf/ state files (anatomy, cerebrum, memory, buglog, STATUS).
+description: OpenWolf protocol for .wolf/ state files (STATUS, cerebrum, buglog, anatomy). Load on resume, handoff, or multi-file work.
 ---
 
 # OpenWolf Operating Protocol

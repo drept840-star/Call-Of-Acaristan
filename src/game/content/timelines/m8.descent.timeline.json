@@ -1,0 +1,62 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.descent",
+ "shots": [
+  {
+   "scene": "m8_descent_body",
+   "speaker": "",
+   "text": "",
+   "min_ms": 4200,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [1500, "m8_cloth_1", 0.18],
+    [2900, "footstep_grate_1", 0.14],
+    [3450, "footstep_grate_2", 0.14]
+   ]
+  },
+  {
+   "scene": "m8_descent_ladder",
+   "speaker": "",
+   "text": "",
+   "min_ms": 5200,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [700, "m8_creak", 0.14],
+    [1300, "m8_rung_1", 0.22],
+    [1800, "m8_rung_2", 0.22],
+    [2300, "m8_rung_3", 0.22],
+    [2800, "m8_rung_1", 0.22],
+    [3300, "m8_rung_2", 0.22],
+    [3800, "m8_rung_3", 0.22],
+    [4300, "m8_rung_1", 0.22]
+   ]
+  },
+  {
+   "scene": "m8_descent_geton",
+   "speaker": "BODI",
+   "text": "Get on.",
+   "min_ms": 3600
+  },
+  {
+   "scene": "m8_descent_pullout",
+   "self_graded": true,
+   "full_frame": true,
+   "cut_to_play": true,
+   "speaker": "",
+   "text": "",
+   "min_ms": 4500,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [200, "m8_cloth_2", 0.2]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Revenge, down the gantry from the kill to the tractor"
+ }
+}

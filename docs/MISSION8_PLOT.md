@@ -1,7 +1,17 @@
 # Mission 8 — "The Call"
 
-> **Status: PLANNED — not implemented.** There is no `src/missions/m8/` package
-> yet; the campaign ships through M6. Everything below is design. See
+> **Status: IN PROGRESS (Revenge playable end to end, slice 3).** `src/missions/m8/`
+> exists and the M7 radio choice chains into it. The Revenge route plays fully
+> in 3D: the Meet cuts between the truck and the catwalk, the Trap and the
+> Gantry are a playable third-person fight (`revenge/trap3d.py`), Old Friends is
+> staged shot / reverse-shot on the catwalk (`revenge/beats.py`), The Kill is
+> the one-shot kill scene (`revenge/kill3d.py`; the player fires once), the Tractor Chase is playable on its own set
+> (`revenge/chase3d.py` + `chase_set.py`: four checkpointed sections, tyres and
+> drivers, hull and train timer fails), and the Epilogue is one 3D shot per
+> line (`revenge/epilogue3d.py`). The TV studio and the funeral are small
+> stand-in stages out in the chase set's fields until the Duty mansion set
+> exists. Lines are caption-only (VO_387-VO_420, no takes yet). The Duty route
+> (`duty/`) is not built yet. The rest of this doc is design. See
 > `docs/FIXES_STORIES.md` for the consistency pass applied to the plan.
 
 > *"I chose the many. You chose the four."*
@@ -20,7 +30,7 @@ The final mission splits on the choice made at the end of Mission 7 (Bodi's farm
   listen to what the dying President has to say about Vasile — and shoot anyway.
 - **REVENGE — "Old Friends":** ignore the President. Bodi drives you out to
   meet Vasile where he chose to meet: the Route 12 ambush site where the squad died. Fight
-  through his Guard and put six rounds in the man who raised you.
+  through his Guard and put one round in the man who raised you.
 
 Both endings are bittersweet. Neither is the "good" one.
 
@@ -137,14 +147,24 @@ reach it by surviving everything before it.
 "I'm hit, I'm fine, keep shooting!", "That's the roof. ...Keep shooting.",
 "He's going down! He's going -", "UCILEV. Brace!"
 
-## Phase 5 — The Crash
+## Phase 5 - The Kill
 
-```
-scene: m8d_crash_wake    speaker: ""      (Ringing. Fire light through trees. The helicopter on its side.)
-scene: m8d_maru_pinned   speaker: MARU    "Leg's done. Don't. Don't you dare carry me."
-scene: m8d_maru_pinned   speaker: MARU    "His bird went down past the ridge. He's waiting for a pickup."
-scene: m8d_rifle         speaker: MARU    "Go. Finish what we started." (hands Biribel the sniper rifle)
-```
+One bullet, and it is the player's. Over Biribel's shoulder, Vasile talks, a
+word at a time: "Son." Then the price: "Maru's team goes in tonight. I'm the
+one who cuts the cameras. Kill me, and they walk in blind." Then the warmth:
+"I'm still proud of you. I'm so proud of what you've becom-". Once the price
+has landed the player can click; the shot cuts him off mid-word. If the player
+never fires, **Bodi** shoots him from the foot of the gantry (rifle crack from
+below) and the scene plays on the same way. The score cuts with it: wind and silence only. He slumps on the
+catwalk and stays there, in frame; no last line, no fall off the edge. A few
+seconds of quiet, then fade into the descent.
+
+**The Descent** (film, `m8.descent`, ~18 s): from beyond the body, Biribel
+stands over Vasile, looks up at convoy headlights on the plain, turns his back
+and walks for the ladder. Wide from the road as he climbs down. At the ladder
+foot Bodi has the tractor running, rifle away: *"Get on."* On the farm track
+the tractor pulls out, the jeeps' lights come over the rise, and the camera
+swings round behind Biribel onto the chase's own opening frame.
 
 ## Phase 6 — The Ridge (sniper finale)
 
@@ -206,8 +226,8 @@ scene: m8r_gantry         speaker: BODI      "This part's yours."
 | # | Phase | Objective | Beat |
 |---|-------|-----------|------|
 | 1 | **The Meet** (3D cutscene) | — | Bodi drives Biribel out to Route 12 at dawn in the farm truck. The toll gantry, the burned cars, the M2 set — rebuilt, quiet. |
-| 2 | **The Trap** (top-down) | Survive. | Vasile brought the Guard. Old KRAP faces. The fight runs back along the M2 route in reverse. **Bodi fights beside you** (AI ally, hunting rifle) and covers from the truck. |
-| 3 | **The Gantry** (top-down) | Reach Vasile. | Up onto the sign gantry where the M2 sniper sat. Bodi stays at the bottom: *"This part's yours."* |
+| 2 | **The Trap** (third-person 3D) | Survive. | Vasile brought the Guard. Old KRAP faces. The fight runs back along the M2 route in reverse. **Bodi fights beside you** (AI ally, hunting rifle) and covers from the truck. |
+| 3 | **The Gantry** (third-person 3D) | Reach Vasile. | Up onto the sign gantry where the M2 sniper sat. Bodi stays at the bottom: *"This part's yours."* |
 | 4 | **Old Friends** (3D dialogue) | — | The two of them alone. |
 | 5 | **The Kill** (3D, interactive) | Shoot Vasile. | GTA IV-style execution. See below. |
 | 6 | **The Tractor Chase** (3D, interactive) | Reach the train at the Kim Kim crossing before it leaves. | Bodi drives the farm tractor. Biribel rides the trailer and fires. See below. |
@@ -308,8 +328,10 @@ gameplay.
   engine with no top-down or pre-rendered 2D views, no 2D sprite effects, and
   no 2D overlays in the play view. That covers Duty Phases 3-7 (Liftoff, Last
   Flight, The Crash, The Ridge, Epilogue) and Revenge Phases 4-7 (Old Friends,
-  The Kill, Tractor Chase, Epilogue). The top-down mansion and gantry fights stay as the
-  pre-ending gameplay.
+  The Kill, Tractor Chase, Epilogue). The Revenge route is 3D throughout: the
+  Trap and Gantry are a third-person 3D fight on the Route 12 set, one scene
+  (same controls and feel as the M7 raid). The Duty mansion fight is still
+  planned as top-down pre-ending gameplay.
 - **Package:** `src/missions/m8/` with `duty/` and `revenge/` parts behind one
   facade; `STATE.m8_route` picks the stage ladder. Save system records
   `MISSION_8` and the route.

@@ -26,6 +26,7 @@ from missions import m4
 from missions import m5
 from missions import m6
 from missions import m7
+from missions import m8  # not in _MODULES: its names stay behind the routed starts below
 from missions import m0
 from ui import hud
 from entities import weapons
@@ -88,6 +89,10 @@ def _is_mission6_active():
 
 def _is_mission7_active():
     return getattr(STATE, "active_mission", "MISSION1") == "MISSION7"
+
+
+def _is_mission8_active():
+    return getattr(STATE, "active_mission", "MISSION1") == "MISSION8"
 
 
 def _is_mission0_active():
@@ -252,6 +257,15 @@ def start_mission7_outro():
     return m7.start_m7_dev_outro()
 
 
+def start_mission8(preserve_timer=False):
+    return m8.start_m8(preserve_timer=preserve_timer)
+
+
+def start_mission8_stage(stage, route=None):
+    """Start Mission 8 at a stage token (missions.m8.meta), optionally forcing the route."""
+    return m8.start_m8(stage=stage, route_=route)
+
+
 def restart_current_mission():
     """Restart whichever playable mission is currently active.
 
@@ -292,6 +306,8 @@ def restart_current_mission():
         if getattr(STATE, "mission3_breakout_checkpoint_reached", False):
             return m3.start_mission3_breakout_checkpoint(preserve_timer=False)
         return m3.start_mission3(preserve_timer=False)
+    if _is_mission8_active() and not _in_walking_sim():
+        return start_mission8_stage(getattr(STATE, "mission8_stage", None))
     if _is_mission7_active() and not _in_walking_sim():
         return start_mission7_stage(getattr(STATE, "mission7_stage", None))
     if _is_mission6_active() and not _in_walking_sim():
@@ -357,6 +373,8 @@ def game_update(keys):
             return m0.game_update(keys)
         if _is_mission5_active():
             return m5.game_update(keys)
+        if _is_mission8_active():
+            return m8.game_update(keys)
         if _is_mission7_active():
             return m7.game_update(keys)
         if _is_mission6_active():
@@ -377,6 +395,8 @@ def _active_mission_tag():
         return "m0"
     if _is_mission5_active():
         return "m5"
+    if _is_mission8_active():
+        return "m8"
     if _is_mission7_active():
         return "m7"
     if _is_mission6_active():
@@ -400,6 +420,9 @@ def game_draw(fcx, fcy):
     if not _gw.installed():
         _gw.install(STATE)
     hook = _gw.render_submit
+    if _is_mission8_active():
+        _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m8.game_draw(_cfg.screen, x, y), name="m8.game_draw", submit_hook=hook)
+        return None
     if _is_mission7_active():
         _gr.frame(_cfg.screen, fcx, fcy, submitter=lambda q, x, y: m7.game_draw(_cfg.screen, x, y), name="m7.game_draw", submit_hook=hook)
         return None
@@ -437,6 +460,8 @@ def game_draw(fcx, fcy):
 def handle_interact():
     if _is_mission5_active():
         return m5.handle_interact()
+    if _is_mission8_active():
+        return m8.handle_interact()
     if _is_mission7_active():
         return m7.handle_interact()
     if _is_mission6_active():
@@ -534,6 +559,8 @@ _proxy.__dict__.update({
     "start_mission7_stage": start_mission7_stage,
     "start_mission7_raid": start_mission7_raid,
     "start_mission7_outro": start_mission7_outro,
+    "start_mission8": start_mission8,
+    "start_mission8_stage": start_mission8_stage,
     "restart_current_mission": restart_current_mission,
     "game_update": game_update,
     "game_draw": game_draw,

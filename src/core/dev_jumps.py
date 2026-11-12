@@ -117,6 +117,14 @@ DEV_JUMPS = {
     "m7-finale": ("--dev-mission7-finale", "Mission 7 burning-farm night film"),
     "m7-choice": ("--dev-mission7-choice", "Mission 7 radio choice (sets the Mission 8 route)"),
     "m7-outro": ("--dev-mission7-outro", "Mission 7 outro film, route defaults to duty"),
+    # ── Mission 8 (slice 1: Revenge route) ──
+    "m8": ("--dev-mission8", "Mission 8 The Call, Revenge route from the top (meet beat)"),
+    "m8-trap": ("--dev-mission8-trap", "Mission 8 3D trap fight on Route 12 (--m8-cp=1|2|3)"),
+    "m8-gantry": ("--dev-mission8-gantry", "Mission 8 3D gantry climb to Vasile"),
+    "m8-friends": ("--dev-mission8-friends", "Mission 8 catwalk beat with Vasile"),
+    "m8-kill": ("--dev-mission8-kill", "Mission 8 standoff on the catwalk, one shot"),
+    "m8-chase": ("--dev-mission8-chase", "Mission 8 tractor chase (--m8-cp=1|2|3)"),
+    "m8-ending": ("--dev-mission8-ending", "Mission 8 ending: the epilogue film (State TV, Commander)"),
     # ── Trailer bot takes (AI 1 choreography) ──
     "trailer-m1": ("--dev-m1-game",
             "Trailer Act I warehouse take (bot: breach/molotov)"),

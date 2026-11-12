@@ -77,6 +77,7 @@ GROUPS = [
     ("Mission 7", ["m7", "m7-arrival", "m7-chores", "m7-runner", "m7-prep",
                    "m7-raid", "m7-raid-prepped", "m7-raid-w2", "m7-raid-w3",
                    "m7-finale", "m7-choice", "m7-outro"]),
+    ("Mission 8", ["m8", "m8-trap", "m8-gantry", "m8-friends", "m8-kill", "m8-chase"]),
     ("Trailer bot", ["trailer-m1", "trailer-m2-killbox", "trailer-m2-evidence",
                      "trailer-m3-breakout", "trailer-m3-comms"]),
     ("Misc", ["slot-select", "audio-parade"]),

@@ -1,0 +1,189 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.meet",
+ "shots": [
+  {
+   "scene": "m8_meet_dawn",
+   "speaker": "",
+   "text": "Dawn. Route 12. The toll gantry, the burned cars - rebuilt, quiet.",
+   "min_ms": 6000,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     700,
+     "m7_bird",
+     0.14
+    ],
+    [
+     1350,
+     "footstep",
+     0.1
+    ],
+    [
+     1870,
+     "footstep",
+     0.1
+    ],
+    [
+     2390,
+     "footstep",
+     0.1
+    ],
+    [
+     2900,
+     "m7_bird",
+     0.1
+    ],
+    [
+     2910,
+     "footstep",
+     0.1
+    ],
+    [
+     3430,
+     "footstep",
+     0.1
+    ],
+    [
+     3950,
+     "footstep",
+     0.1
+    ],
+    [
+     4470,
+     "footstep",
+     0.1
+    ],
+    [
+     4900,
+     "m7_bird",
+     0.08
+    ]
+   ]
+  },
+  {
+   "scene": "m8_meet_drive",
+   "speaker": "BODI",
+   "text": "I'll drive. You think.",
+   "min_ms": 2600,
+   "cues": [
+    [
+     1450,
+     "m8_cloth_1",
+     0.16
+    ]
+   ]
+  },
+  {
+   "scene": "m8_meet_gantry",
+   "speaker": "",
+   "text": "Vasile picked the place. The catwalk where the sniper lay.",
+   "min_ms": 5200,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     300,
+     "m8_creak",
+     0.2
+    ],
+    [
+     3300,
+     "braam_downpitch",
+     0.16
+    ]
+   ]
+  },
+  {
+   "scene": "m8_meet_walk",
+   "speaker": "",
+   "text": "",
+   "min_ms": 4200,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     150,
+     "footstep",
+     0.1
+    ],
+    [
+     450,
+     "footstep",
+     0.1
+    ],
+    [
+     750,
+     "footstep",
+     0.1
+    ],
+    [
+     1050,
+     "footstep",
+     0.1
+    ],
+    [
+     1350,
+     "footstep",
+     0.1
+    ],
+    [
+     1650,
+     "footstep",
+     0.1
+    ],
+    [
+     1800,
+     "m8_cloth_2",
+     0.12
+    ],
+    [
+     1950,
+     "footstep",
+     0.1
+    ],
+    [
+     2250,
+     "footstep",
+     0.1
+    ],
+    [
+     2550,
+     "footstep",
+     0.1
+    ],
+    [
+     2850,
+     "footstep",
+     0.1
+    ],
+    [
+     3150,
+     "footstep",
+     0.1
+    ],
+    [
+     3450,
+     "footstep",
+     0.1
+    ],
+    [
+     3750,
+     "footstep",
+     0.1
+    ],
+    [
+     4050,
+     "footstep",
+     0.1
+    ]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Revenge, the meet at Route 12"
+ }
+}

@@ -4,9 +4,143 @@ budget_tokens: 1000
 ---
 # STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-11-08
+> Read this FIRST when resuming. Last updated: 2026-11-11
 
 ---
+
+## M8 tractor chase: solid traffic, off-camera spawns, wreck avoidance (2026-11-11, uncommitted)
+
+Owner: "the cars just go through the ones that are destroyed", plus no pop-in and
+swerve around wrecks. All in `chase3d.py` (+ footprint constants in `chase_set.py`);
+no engine/renderer/model/other-mission edits. Hit spheres, HP, fail rules, `SPAWNS`
+timing, Bodi barks and the crossing blocker are untouched.
+- Collision: `_resolve_contacts` = circle push-out in x/z (car/car, car/tractor+trailer,
+  car/static-wreck, blocker as static), partial speed exchange (`CRASH_TRANSFER=0.6`),
+  wrecks a live car on closing > `CRASH_SPEED=7` m/s (`_crash_hit` -> pile-ups), hull
+  nick `TRACTOR_HIT=4` once per contact (rising-edge `_trac`). Radii `CAR_R=1.35`,
+  `TRUCK_R=1.70`, `TRACTOR_R=TRAILER_R=1.60`, `WRECK_R=1.50` (from body/tyre spans).
+- No pop-in: jeep/gun_truck spawn at `eye[2]-SPAWN_BACK` (350 m, past the 330 m draw
+  cull) via `camera()` and drive in; gun_truck enters from +34 m side. Despawn widened
+  to `DESPAWN_BACK=410` so an entering car isn't culled the frame it spawns (the old
+  tz-160 filter deleted far spawns immediately -> smoke "chasers must spawn" failed).
+- Avoidance: `_avoid_lat` looks 80 m ahead in-lane; swerves only if
+  `gap >= speed*REACT_S + speed*(2r/LAT_MAX) + r` (reaction + one-car-width shift),
+  else keeps the lane and takes the hit. Deterministic, no RNG. `CLOSE_MAX=16`,
+  `LAT_MAX=5` keep entering cars on the road through curves (drifted +5 m at 30/4).
+- Gates: 11 new `test_m8_chase_traffic` + 8 gun + 9 scenery = 28 OK; compileall OK;
+  **SMOKE TEST: OK**. Live probe `tools/_m8_traffic_loop.py --software` (reel + per-car
+  log in `outputs/m8_traffic/`): cars hold the lane (off <=2.1 m farm track), swerve
+  around Route 12 wrecks, one pile-up wreck where spacing < reaction distance.
+- Tradeoff for owner: a far spawn means ~19 s lead-in from spawn trigger to firing
+  range (closure 16 m/s from 350 m). Tune `SPAWN_BACK`/`CLOSE_MAX` if the first wave
+  feels slow. Owner playtest needed: `python acaristan.py --dev-mission8-chase`.
+
+## M8 tractor chase: ADS added (2026-11-11, uncommitted)
+
+Owner: "add ADS in the tractor chase in M8". RMB now holds aim on the pintle
+LMG (`chase3d`): `aiming`/`ads` blend (11 up / 7 down), camera leaves the
+over-shoulder hip view for a gunner's-eye view down the gun at its front post
+(`ADS_EYE`/`ADS_POST`, gun-space), FOV 60->45, mouse gain -30%, bloom cone -55%,
+muzzle climb -45%, shake damped. The hip orange reticle yields to the real
+front post above ads 0.55; reload/dying/capture/ending force the sight down and
+it returns if RMB is still held. HUD hint "LMB FIRE RMB AIM R BELT".
+- The mesh's AA ring stalks block a blade-to-blade sight line, so ADS aims
+  eye->front-post (see cerebrum). Sight line ~14 deg below gun axis is intentional.
+- Gates: 6 new `ChaseAdsTests` + 8 chase-gun + 3 scenery = 17 OK; compileall OK;
+  **SMOKE TEST: OK**. Live app loop (`tools/_m8_ads_loop.py`, scripted RMB/LMB)
+  raises/lowers the sight on BOTH backends without skipping the chase; frames in
+  `outputs/m8_ads_loop/`, sweep/hit-rate in `outputs/m8_ads_verify/`
+  (24-round bursts: hip 0/6 trials hit, aimed 6/6).
+- Fixed a pre-existing stale mock in `test_m8_chase_scenery` (`lambda *args` vs
+  the `burn=` kwarg the scenery pass added); unrelated to ADS but blocked the gate.
+- Owner playtest still needed: `python acaristan.py --dev-mission8-chase`, hold RMB.
+
+## M8 chase: first shot skipped the mission — FIXED (2026-11-10, uncommitted)
+
+Owner: "when i shoot on M8 tractor chase it just boots me STRAIGHT to the end of the mission".
+Root cause: both muzzle-flash draw sites in `chase3d` called `cutscenes.m6fx3d.muzzle_flash`,
+a helper that exists in neither m6fx3d nor its m5fx3d fallback; the first trigger pull raised
+AttributeError inside `ChaseScene.draw`, and `missions/m8/draw.py` force-finishes the scene on
+any draw fault -> `on_chase_done` -> epilogue film -> mission complete. Fix: both sites use the
+proven `_fx.glow` muzzle idiom (as m1/draw3d). Regression
+`test_m8_chase_gun.py::test_a_shot_renders_instead_of_faulting_the_scene` renders one frame with
+a fresh shot + enemy flash. Gates: 8 chase-gun tests OK, compileall OK, **SMOKE TEST: OK**;
+software probes drew first shot / enemy flash / reload / wreck / crossing / ending cleanly, and
+the real app loop (`--dev-mission8-chase`, scripted 180-frame burst) stayed in `chase` with
+`outro=False`. Owner playtest of a burst in the chase still needed.
+
+## M8 tractor chase: the LMG went through Biribel — FIXED (2026-11-10, uncommitted)
+
+Owner: "the gun goes through you in the Tractor chase scene". Root cause was geometric and
+complete: the imported LMG's shoulder stock runs 24 cm behind the grip, mode `aim` anchors the
+butt INSIDE the shoulder pocket, so ~24 stock verts sat in Biribel's chest at every yaw/pitch
+(probe: 6.3-7.6 cm deep, 131k piercing vert-states over the route sweep). No stance can clear it
+(sweeps over twist/spine/blade/pocket all failed: the grip must stay in reach of both hands).
+- Fix = a pintle configuration, like a real mounted gun (M240D-style):
+  `chase_set.STOCK_CUT_Z = -0.10` cuts the stock faces from the drawn split parts
+  (`_lmg_split`); the receiver's own rear plate (raw z -0.094) survives and closes the gun, so no
+  cap mesh was added; `GRIPS["lmg"]` now carries `pocket=(0.08,0,0)` (butt anchor out on the
+  shoulder crest) and `fore/guard` moved to the feed tray left of the receiver.
+  Both backends draw Biribel `rifle_on=False`, so the rig's uncut rifle copy is never visible.
+- Second pierce found during verification: the reload `rack`/`rack_up` keys (spine 24/18,
+  twist -14/-10) leaned the chest 3.9 cm into the FIXED pintle gun in the el 1.7-2.4 s band.
+  Re-tuned to spine 6/4, twist -6/-4 (arm reaches the tray; the read is unchanged).
+- `hold.py`: `hold_cached` now keys on `_grip_sig(weapon)` too, so tuning GRIPS in-process can't
+  serve poses solved against the old grip points.
+- Gates: `tests/unit/test_m8_chase_gun.py` (7 tests: stock cut, closed cap, aim envelope,
+  reload blend, route/yaw sweep, hand-on-grip, stance keys) + chase_scenery + test_hold pass;
+  compileall OK; **SMOKE TEST: OK** after reconciling the STALE M8 oracle (below).
+- Owner playtest: `python acaristan.py` -> dev jump `m8*` chase (or play to it). Visual sign-off
+  still needed: this agent could not view images this session (same as 2026-11-09).
+
+## M8 smoke oracle reconciled to shipped gameplay (2026-11-10, uncommitted)
+
+The smoke M8 vertical slice predated TWO shipped changes and died inside the kill beat, never
+reaching the chase assertions (matches the 2026-11-09 note "do not change the kill choreography
+just to satisfy this stale test; reconcile its expectations separately" - done):
+- kill beat: rewritten to the shipped kill3d (one wounding hit; `DECISION_AT` window; second hit
+  = "shot" or ENTER = "lowered"; `HANDS_AT` caption; witness `cine()` road/still close-out).
+  Old `REACT_S`/`SLOWMO_S`/`PROFILE_S`/`ROAD_S`/`LOWERED_DIE_S`/`said_hands` no longer exist.
+- chase beat: the 2026-11-09 armour pass made tyres take `TYRE_HP` hits and the blocker driver
+  `DRIVER_HP`, so the one-hit "clear"-loop oracle no longer wrecked anything. Now bursts a tyre
+  to zero via `TYRE_HP` and kills the blocker with `DRIVER_HP` hits.
+- `M6 train draw failed (RuntimeError: probe draw failure)` printed mid-run is EXPECTED: the
+  redeploy test deliberately raises inside a draw ("failing the run, not the mission"), and the
+  check still passes. The printed pwsh exit code 1 on SMOKE TEST: OK is harness stderr noise.
+
+## M8 tractor chase: LMG, wheels, armoured cars, set pieces (2026-11-09, uncommitted)
+
+Owner still saw a repeating background, static wheels, and wanted an LMG instead of the shotgun.
+- LMG: `assets/3D/light_machine_gun.glb` -> `tools/ae_import_lmg.py` -> `src/game/content/meshes/lmg.mesh.json`
+  (bipod dropped), grips `engine3d.hold` GRIPS["lmg"], `m6world3d.hum(flags=("lmg",))`
+  (falls back to the shotgun if the mesh is missing). `chase3d`: 100-round belt, 4.2 s reload,
+  ~700 rpm, bloom cone + muzzle climb, `m8_audio.lmg_shot` (pool `m8_lmg`).
+- Cars buffed: hp per part (`HP`, `TYRE_HP`, `DRIVER_HP`, `GUNNER_HP`); the driver sits behind a
+  windscreen plate (`chase_set._armour`), the gun truck has steel bed walls; denser `SPAWNS`.
+- Wheels: `chase_set.put_wheeled` splits wheel components off the vehicle meshes and spins them
+  by an odometer (tractor, trailer with new round tyres, jeep, gun truck; wrecks lock).
+- Background: `chase_set.ZONES` near-road set pieces (hamlet, woods, pond, kolkhoz, petrol station,
+  cutting + overpass, bus stop + panel blocks, rail siding, border fence); power line skips the
+  woods/cutting and changes sides at the ditch. Own RNG stream, wreck layout unchanged.
+  The 2026-11-10 stock cut above alters only the drawn gun parts; the ZONES/wrecks are untouched.
+
+## M8 tractor chase scenery variety (2026-11-09, uncommitted, superseded above)
+
+Owner reports the tractor chase background repeats. `src/missions/m8/revenge/chase_set.py`
+reused five field patterns across the whole route, farmsteads at every stop and
+identical church villages five times; most landmarks were distant from the
+rearward-facing trailer view. Now the four sections have two distinct nearby
+landmarks each (farm gate/orchard, hay yard/pump house, Guard post/memorial,
+freight depot/watchtower), different field palettes and a darker ditch track.
+Farms end before Route 12; villages appear only twice. Eight final software
+section captures in `outputs/m8_chase_unique/` rendered; changed scene pixels
+range 6.6-25.8% versus the prior captures, but image viewing is unavailable to
+this agent, so owner visual sign-off is still needed. Three focused unit tests
+pass, compileall OK, changed Python LF/UTF-8. **Full smoke fails at a pre-existing
+M8 kill-scene test drift** (`tools/smoke_test.py` expects `kill3d.REACT_S`, but
+current kill3d removed it); it never reaches the tractor assertions. All earlier
+smoke checks pass. Do not change the kill choreography just to satisfy this stale
+test; reconcile its expectations separately. No unrelated edits rolled back.
 
 ## Balaceanu VO caption mismatch fix (2026-11-08, uncommitted)
 

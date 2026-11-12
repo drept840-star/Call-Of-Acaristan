@@ -197,6 +197,10 @@ class Console:
             fn = self._bindings.get("reload")
             self.add_message(fn() if fn else "reload: not bound")
 
+        elif command == "skip_cutscene":
+            fn = self._bindings.get("skip_cutscene")
+            self.add_message(fn() if fn else "skip_cutscene: not bound")
+
         elif command == "golden":
             self.add_message(self._run_tool("ae_golden.py", ["capture"]))
 
@@ -257,6 +261,7 @@ class Console:
             self.add_message("give_ammo - refill current weapon ammo")
             self.add_message("heal - restore player HP to max")
             self.add_message("set_stage <stage> - change mission stage")
+            self.add_message("skip_cutscene - end the playing cutscene (also F7 in the F6 timeline panel)")
             self.add_message("list - show all commands")
 
         else:

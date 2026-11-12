@@ -62,9 +62,18 @@ _AK74 = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.029, 0.3125), guard=(0.0, 0.01, 
              butt=(0.0, -0.007, -0.31))
 _SG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.025, 0.33), guard=(0.0, 0.025, 0.20),
            butt=(0.0, 0.045, -0.40))
+# mirrored from game/content/meshes/lmg.mesh.json meta (tools/ae_import_lmg.py)
+# The M8 chase mounts this gun on the trailer's pintle, so the stock is cut
+# (chase_set.STOCK_CUT_Z) and the hold is a pintle hold, not an infantry
+# shoulder: ``pocket`` rides the gun out on the shoulder crest (the aim mode's
+# own pocket puts the butt inside the chest, and the stock's tail then runs
+# through the gunner at every yaw), and the support hand cups the feed tray
+# under the receiver instead of reaching the far handguard.
+_LMG = dict(grip=(0.0, 0.0, 0.0), fore=(-0.045, 0.07, 0.16), guard=(-0.035, 0.055, 0.14),
+            butt=(0.0, 0.069, -0.317), pocket=(0.08, 0.0, 0.0))
 GRIPS = {"rifle": _RIG, "sniper": dict(_RIG, fore=(0.0, -0.035, 0.34), guard=(0.0, -0.035, 0.20)),
          "os12": _RIG, "k9": _K9, "shotgun": _SG, "m7rifle": _M7, "akrifle": _AK,
-         "ak74": _AK74,
+         "ak74": _AK74, "lmg": _LMG,
          # the support hand cups the shooting hand from the left of the grip
          "pistol": dict(grip=(0.0, 0.0, 0.0), fore=(-0.045, -0.025, 0.0),
                         guard=(-0.045, -0.025, 0.0), butt=None)}
@@ -296,6 +305,14 @@ _LEG_KEYS = frozenset(("lhip_p", "lhip_r", "rhip_p", "rhip_r", "lkn", "rkn", "la
 _CACHE = {}
 
 
+def _grip_sig(weapon):
+    """Hashable signature of a weapon's grip set: tests and tools that tune
+    GRIPS in-process must not be served poses solved against the old points."""
+    g = GRIPS.get(weapon)
+    return tuple(sorted((k, tuple(v) if isinstance(v, tuple) else v)
+                        for k, v in g.items())) if g else None
+
+
 def hold_cached(hum, pose, weapon, mode, aim=None, key=None):
     """hold_weapon for per-frame callers: the arm solve is keyed on the body pose
     rounded to whole degrees, so a held stance costs one solve, not one per frame.
@@ -308,7 +325,7 @@ def hold_cached(hum, pose, weapon, mode, aim=None, key=None):
     body = tuple(sorted((k, round(v)) for k, v in pose.items()
                         if k not in _HOLD_KEYS and k not in _LEG_KEYS
                         and isinstance(v, (int, float))))
-    ck = (key if key is not None else id(hum), weapon, mode, aim, body)
+    ck = (key if key is not None else id(hum), weapon, mode, aim, _grip_sig(weapon), body)
     arms = _CACHE.get(ck)
     if arms is None:
         if len(_CACHE) > 512:

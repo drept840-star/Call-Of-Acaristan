@@ -356,6 +356,194 @@ def barn(burn=False, lamp=False):
     return m
 
 
+# ---- M8 ruin: Bodi's farm the morning after the fire (no emissive, M7 burn untouched) ----
+RUIN_CHAR = (34, 28, 26)
+RUIN_SOOT = (20, 18, 18)
+RUIN_ASH = (66, 62, 58)
+RUIN_VOID = (8, 8, 10)
+
+
+def _rbox(m, w, h, d, col, pos, rot=None):
+    """Box centred on ``pos``, optionally tilted about its own centre."""
+    b = box(w, h, d, col)
+    if rot:
+        m.add(b, rot, pos)
+    else:
+        m.add(b, t=pos)
+
+
+def _scorch(m, rects):
+    """Hard-edged scorched ground: stacked dark dirt and ash rectangles."""
+    dirt, ash = _t("dirt", (44, 38, 34)), _t("dirt", RUIN_ASH)
+    for i, (x0, z0, x1, z1) in enumerate(rects):
+        m.add(quad_xz(x0, z0, x1, z1, 0.05 + 0.01 * i, ash if i % 2 else dirt, layer=1, seg=4.0))
+
+
+def _ruin_wall(m, u0, u1, v, t, h, holes, col, along_x, inn, drops=(0.0,)):
+    """Burnt wall of boxes: ragged top, scorched base and cap, black openings
+    (hc, hw, y0, y1) with a soot streak above each."""
+    def put(ua, ub, ya, yb, c, th, off=0.0):
+        if ub - ua < 0.02 or yb - ya < 0.02:
+            return
+        mu, my = (ua + ub) / 2, (ya + yb) / 2
+        if along_x:
+            _rbox(m, ub - ua, yb - ya, th, c, (mu, my, v + off))
+        else:
+            _rbox(m, th, yb - ya, ub - ua, c, (v + off, my, mu))
+
+    def drop(u):
+        return drops[int(math.floor(u / 1.5)) % len(drops)]
+
+    char = _t("plank", RUIN_CHAR)
+    pieces, cur = [], u0
+    for hc, hw, y0, y1 in sorted(holes):
+        a, b = hc - hw / 2, hc + hw / 2
+        pieces.append((cur, a, 0.0, None))
+        if y0 > 0:
+            pieces.append((a, b, 0.0, y0))
+        pieces.append((a, b, y1, None))
+        cur = b
+    pieces.append((cur, u1, 0.0, None))
+    for ua, ub, ya, yb in pieces:
+        if yb is not None:
+            put(ua, ub, ya, yb, col, t)
+            if ya == 0.0:
+                put(ua, ub, 0.0, min(0.55, yb), char, t + 0.04)
+            continue
+        edges = sorted({ua, ub} | {k * 1.5 for k in range(int(ua // 1.5) + 1, int(ub // 1.5) + 1)
+                                   if ua < k * 1.5 < ub})
+        for a, b in zip(edges[:-1], edges[1:]):
+            top = max(h - drop((a + b) / 2), ya + 0.3)
+            put(a, b, ya, top, col, t)
+            put(a, b, top - 0.3, top, char, t + 0.04)
+            if ya == 0.0:
+                put(a, b, 0.0, 0.55, char, t + 0.04)
+    for hc, hw, y0, y1 in holes:
+        put(hc - hw / 2, hc + hw / 2, y0, y1, RUIN_VOID, t * 0.5, inn * t * 0.25)
+        st = max(y1 + 0.4, min(y1 + 1.7, h - drop(hc) - 0.1))
+        mid = y1 + (st - y1) * 0.55
+        put(hc - hw * 0.35, hc + hw * 0.35, y1, mid, RUIN_SOOT, t + 0.06)
+        put(hc - hw * 0.18, hc + hw * 0.18, mid, st, RUIN_SOOT, t + 0.06)
+
+
+def _ruin_panels(m, spans, v, along_x, hs, col, step=1.1, th=0.12):
+    """Barn wall as upright boards; height 0 is a missing board (sky shows)."""
+    k = 0
+    char = _t("plank", RUIN_CHAR)
+    for ua, ub in spans:
+        n = max(1, int(round((ub - ua) / step)))
+        for i in range(n):
+            a, b = ua + (ub - ua) * i / n, ua + (ub - ua) * (i + 1) / n
+            h = hs[k % len(hs)]
+            k += 1
+            if h < 0.2:
+                continue
+            mu = (a + b) / 2
+            for ya, yb, c, tt in ((0.0, h, col, th), (0.0, min(0.4, h), char, th + 0.04),
+                                  (max(0.0, h - 0.3), h, char, th + 0.04)):
+                if along_x:
+                    _rbox(m, b - a - 0.02, yb - ya, tt, c, (mu, (ya + yb) / 2, v))
+                else:
+                    _rbox(m, tt, yb - ya, b - a - 0.02, c, (v, (ya + yb) / 2, mu))
+
+
+def house_ruin():
+    """Bodi's house after the fire: black openings, rafters against the sky, no glow."""
+    m = Mesh()
+    W, D, H, t = 9.0, 6.0, 3.0, 0.35
+    wall = _t("plaster", (104, 96, 88))
+    char = _t("plank", RUIN_CHAR)
+    stone = _t("stone", (62, 58, 54))
+    _rbox(m, W + 0.08, 0.42, D + 0.08, stone, (0, 0.21, 0))
+    _rbox(m, W - 0.7, 0.1, D - 0.7, RUIN_ASH, (0, 0.47, 0))
+    win = (1.2, 2.3)
+    _ruin_wall(m, -W / 2, W / 2, -D / 2 + t / 2, t, H,
+               [(-3.0, 1.0, *win), (-0.8, 1.0, *win), (3.6, 1.0, *win), (1.6, 1.0, 0.0, 2.1)],
+               wall, True, 1)
+    _ruin_wall(m, -W / 2, W / 2, D / 2 - t / 2, t, H,
+               [(-2.4, 1.0, *win), (2.0, 1.0, *win)], wall, True, -1, (0.0, 0.4, 0.0, 1.1, 0.6))
+    _ruin_wall(m, -D / 2 + t, D / 2 - t, W / 2 - t / 2, t, H,
+               [(0.0, 1.0, *win)], wall, False, -1)
+    _ruin_wall(m, -D / 2 + t, D / 2 - t, -W / 2 + t / 2, t, H, [], wall, False, 1, (1.2, 0.0, 0.0, 1.0))
+    # gables: the east one stands, the west one is half down
+    m.face([(W / 2, H, -D / 2), (W / 2, H, D / 2), (W / 2, H + 1.9, 0)], char, 2, True)
+    m.face([(-W / 2, H, -3.0), (-W / 2, H, -1.5), (-W / 2, H + 0.95, -1.5)], char, 2, True)
+    m.face([(-W / 2, H, 1.5), (-W / 2, H, 3.0), (-W / 2, H + 0.95, 1.5)], char, 2, True)
+    # chimney stands whole, shaft down to the floor
+    _rbox(m, 0.7, H - 0.1, 0.7, _t("stone", STONE), (2.6, 1.85, 0.5))
+    _rbox(m, 0.7, 1.8, 0.7, _t("stone", STONE), (2.6, H + 1.2, 0.5))
+    _rbox(m, 0.86, 0.12, 0.86, P.STONE_D, (2.6, H + 2.16, 0.5))
+    # roof frame: standing ridge, a few rafters, a purlin; one end fallen
+    ang = math.degrees(math.atan2(1.9, 2.9))
+    ln = math.hypot(2.9, 1.9)
+    _rbox(m, 7.0, 0.22, 0.22, char, (1.25, H + 1.9, 0))
+    _rbox(m, 2.4, 0.2, 0.2, char, (-3.2, H + 1.0, 0.2), rot_z(-26))
+    for i, x in enumerate((-1.8, -0.6, 0.6, 1.8, 3.0, 4.2)):
+        if i != 1 and i != 4:
+            _rbox(m, 0.14, 0.14, ln, char, (x, H + 0.95, -1.45), rot_x(-ang))
+        if i in (0, 3, 5):
+            _rbox(m, 0.14, 0.14, ln, char, (x, H + 0.95, 1.45), rot_x(ang))
+    _rbox(m, 7.0, 0.1, 0.1, char, (1.25, H + 0.95, -1.45))
+    # porch: charred deck, one broken post, the tin canopy down on the boards
+    _rbox(m, 5.0, 0.25, 1.6, char, (1.0, 0.12, -D / 2 - 0.8))
+    _rbox(m, 0.14, 1.3, 0.14, char, (-1.3, 0.9, -D / 2 - 1.5), rot_z(8))
+    _rbox(m, 0.14, 2.6, 0.14, char, (3.3, 1.5, -D / 2 - 1.5))
+    _rbox(m, 4.6, 0.08, 1.9, _t("tin", (74, 70, 66)), (0.8, 0.62, -D / 2 - 1.5), rot_x(10))
+    # debris inside and out
+    for w, h, d, p, r in ((1.4, 0.4, 1.0, (-2.0, 0.7, 0.3), None), (0.8, 0.3, 0.6, (-1.8, 1.05, 0.2), rot_y(25)),
+                          (1.0, 0.3, 1.2, (0.4, 0.65, -1.0), rot_y(-15)), (0.8, 0.5, 0.8, (3.4, 0.75, 1.4), None),
+                          (3.2, 0.16, 0.16, (-1.0, 0.62, 1.5), rot_y(20)), (3.0, 0.16, 0.16, (1.0, 0.62, -0.4), rot_y(-35)),
+                          (3.4, 0.2, 0.2, (-6.2, 0.1, 0.5), rot_y(70)), (2.8, 0.2, 0.2, (5.9, 0.1, -2.6), rot_y(-20)),
+                          (1.2, 0.35, 0.9, (-5.6, 0.18, -3.0), None), (2.4, 0.18, 0.18, (-4.8, 0.1, 4.4), rot_y(15))):
+        _rbox(m, w, h, d, char, p, r)
+    _scorch(m, [(-7.0, -7.4, 7.0, 4.6), (-5.4, -5.6, 5.8, 3.8), (-8.2, -2.0, -5.0, 3.0), (-3.0, 4.4, 2.0, 6.6)])
+    return m
+
+
+def barn_ruin():
+    """Bodi's barn after the fire: post frame, gaps in the boards, east wall down inside."""
+    m = Mesh()
+    W, D, H = 12.0, 10.0, 4.8
+    char = _t("plank", RUIN_CHAR)
+    board = _t("barnboard", (54, 38, 34))
+    _rbox(m, W - 0.6, 0.1, D - 0.6, RUIN_ASH, (0, 0.07, 0))
+    for x, z, h in ((-5.9, -4.9, H), (5.9, -4.9, 3.4), (-5.9, 4.9, H), (5.9, 4.9, 2.6), (-2.5, -4.9, H),
+                    (2.5, -4.9, H - 0.4), (-5.9, -1.6, H), (-5.9, 1.7, 3.1), (5.9, 1.7, 1.2), (-2.0, 4.9, H), (2.0, 4.9, 3.6)):
+        _rbox(m, 0.36, h, 0.36, char, (x, h / 2, z))
+    _rbox(m, 5.4, 0.22, 0.2, char, (-0.1, H - 0.9, -4.95), rot_z(-3))
+    _ruin_panels(m, [(-5.7, -2.7), (2.7, 5.7)], -4.94, True, (4.8, 3.1, 0.0, 2.2, 4.8, 0.0, 3.6), board)
+    _ruin_panels(m, [(-5.7, 5.7)], 4.94, True, (4.8, 4.8, 2.4, 0.0, 0.0, 3.9, 4.8, 1.6, 0.0, 4.4, 4.8), board)
+    _ruin_panels(m, [(-4.7, 4.7)], -5.94, False, (4.8, 0.0, 2.0, 4.4, 4.8, 0.0, 3.0, 4.8, 2.2), board)
+    _ruin_panels(m, [(-4.7, 4.7)], 5.94, False, (0.6, 0.0, 1.1, 0.0, 0.4, 0.9, 0.0, 1.3, 0.5), board)
+    # east wall fallen inward: a boarded ramp with charred battens
+    m.face([(5.9, 0.35, -4.8), (5.9, 0.35, 4.8), (2.4, 0.95, 4.8), (2.4, 0.95, -4.8)], board, 2, True)
+    for z in (-4.0, -1.6, 0.8, 3.2):
+        m.face([(5.9, 0.38, z), (5.9, 0.38, z + 0.3), (2.4, 0.98, z + 0.3), (2.4, 0.98, z)], char, 2, True)
+    # roof frame: ridge half down, bare rafters, tie beams
+    ang = math.degrees(math.atan2(3.0, 5.9))
+    ln = math.hypot(5.9, 3.0)
+    _rbox(m, 0.22, 0.22, 6.4, char, (0.0, H + 3.0, -2.0))
+    _rbox(m, 0.22, 0.22, 3.4, char, (0.6, 2.4, 3.3), rot_x(-35))
+    for i, z in enumerate((-4.5, -2.7, -0.9, 0.9, 2.7, 4.5)):
+        if i in (0, 1, 3, 5):
+            _rbox(m, ln, 0.16, 0.16, char, (-2.95, H + 1.5, z), rot_z(ang))
+        if i in (1, 4):
+            _rbox(m, ln, 0.16, 0.16, char, (2.95, H + 1.5, z), rot_z(-ang))
+    for z in (-4.5, -0.9, 2.7):
+        _rbox(m, W - 0.2, 0.22, 0.2, char, (0, H - 0.2, z))
+    # gable remnants
+    m.face([(-6.0, H, -5.0), (-2.0, H, -5.0), (-6.0, H + 2.0, -5.0)], board, 2, True)
+    m.face([(3.0, H, 5.0), (6.0, H, 5.0), (3.0, H + 1.5, 5.0)], board, 2, True)
+    # debris
+    for w, h, d, p, r in ((2.6, 0.3, 1.6, (-2.4, 0.2, 2.2), rot_y(15)), (1.8, 0.4, 1.2, (-1.2, 0.25, -1.6), rot_y(-30)),
+                          (3.8, 0.2, 0.2, (-3.0, 0.15, 0.4), rot_y(80)), (4.0, 0.2, 0.2, (1.0, 0.15, 3.4), rot_y(-12)),
+                          (3.4, 0.22, 0.22, (-8.2, 0.12, -2.0), rot_y(40)), (2.2, 0.35, 1.4, (8.0, 0.2, 3.0), rot_y(20)),
+                          (4.2, 0.2, 0.2, (-6.8, 0.12, 6.4), rot_y(-70))):
+        _rbox(m, w, h, d, char, p, r)
+    _scorch(m, [(-8.4, -7.4, 8.4, 7.4), (-7.0, -6.0, 7.2, 6.2), (-10.4, -3.0, -8.0, 4.0), (-4.0, -9.6, 3.0, -7.0)])
+    return m
+
+
 def hay(n=3):
     """Angular straw bales with cut ends, bindings and staggered stacking."""
     m = Mesh()

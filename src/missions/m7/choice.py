@@ -147,6 +147,11 @@ def _transmit(now):
     if _S["sel"] < 0 or _S["done_at"]:
         return
     STATE.m8_route = OPTIONS[_S["sel"]][1]
+    try:
+        from core.save_system import set_slot_flags  # lazy: keep the radio free of save I/O at import
+        set_slot_flags({"m8_route": STATE.m8_route})
+    except Exception:
+        pass
     _S["done_at"] = now
     _snd().tx_lock()
     _snd().stop_loop("m7_choice_hum")

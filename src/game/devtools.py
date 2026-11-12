@@ -71,6 +71,8 @@ class DevTools:
         self.level_view = False     # F5 (P10-M2 level viewer)
         self.timeline_view = False  # F6 (P10-M2 timeline panel)
         self._cutscene_fn: Callable[[], dict | None] | None = None
+        self._skip_fn: Callable[[], str] | None = None
+        self.skip_message = ""
         self.frames = FrameSamples()
         self.selected: Any = None
         self._scene_stack_fn: Callable[[], list] | None = None
@@ -88,6 +90,9 @@ class DevTools:
 
     def bind_cutscene(self, fn) -> None:
         self._cutscene_fn = fn
+
+    def bind_skip(self, fn) -> None:
+        self._skip_fn = fn
 
     def register_prefab_library(self, library) -> None:
         self._prefab_library = library
@@ -206,6 +211,9 @@ class DevTools:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_F6:
             self.timeline_view = not self.timeline_view
             return True
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_F7 and self._skip_fn:
+            self.skip_message = self._skip_fn()
+            return True
         if self.overlay and state_name == "GAME" and event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             cam_x = int(getattr(STATE, "camera_x", 0) or 0)
             cam_y = int(getattr(STATE, "camera_y", 0) or 0)
@@ -245,10 +253,15 @@ class DevTools:
             info = self._cutscene_fn() if self._cutscene_fn else None
         except Exception:
             info = None
+        skip = "F7 or console skip_cutscene: end cutscene"
+        if self.skip_message:
+            skip = f"{skip} [{self.skip_message}]"
         if not info:
             return ["timeline: no cutscene playing",
-                    "console: timeline play <id> [t] | tl_keys <id> | tl_set/nudge/mark"]
+                    "console: timeline play <id> [t] | tl_keys <id> | tl_set/nudge/mark",
+                    skip]
         lines = [f"shot {info['idx'] + 1}/{info['count']}  scene={info.get('scene', '?')}"]
+        lines.append(skip)
         if info.get("speaker"):
             lines.append(f"speaker={info['speaker']}")
         if info.get("text"):

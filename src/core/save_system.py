@@ -63,6 +63,14 @@ _MISSION_RECORDS = {
          "mission5_complete": True, "mission6_complete": True,
          "mission7_complete": True},
     ),
+    "MISSION8": (
+        "MISSION_8",
+        "Mission 8 - The Call",
+        {"mission1_complete": True, "mission2_complete": True,
+         "mission3_complete": True, "mission4_complete": True,
+         "mission5_complete": True, "mission6_complete": True,
+         "mission7_complete": True, "mission8_complete": True},
+    ),
 }
 
 
@@ -181,6 +189,26 @@ def set_slot_progress(progress, slot_index=None, checkpoint=None):
         slot["checkpoint"] = str(checkpoint)
     elif not same_progress:
         slot["checkpoint"] = ""
+    save_data(data)
+
+
+def get_slot_flags(slot_index=None):
+    """Copy of the slot's flags dict (empty for an empty slot)."""
+    return dict(get_slot(slot_index).get("flags") or {})
+
+
+def set_slot_flags(flags, slot_index=None):
+    """Merge ``flags`` into an occupied slot (no-op on an empty one, like
+    ``set_slot_progress``).  Used for story choices that later missions read,
+    such as ``m8_route`` from the Mission 7 radio."""
+    idx = _current_slot if slot_index is None else max(0, min(SLOT_COUNT - 1, int(slot_index)))
+    data = load_data()
+    slot = data["slots"][idx]
+    if not slot.get("occupied"):
+        return
+    merged = dict(slot.get("flags") or {})
+    merged.update(flags or {})
+    slot["flags"] = merged
     save_data(data)
 
 

@@ -1,0 +1,135 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.friends",
+ "shots": [
+  {
+   "scene": "m8_friends_catwalk",
+   "speaker": "",
+   "text": "",
+   "min_ms": 4600,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     150,
+     "footstep_grate_1",
+     0.16
+    ],
+    [
+     710,
+     "footstep_grate_2",
+     0.16
+    ],
+    [
+     1270,
+     "footstep_grate_1",
+     0.16
+    ],
+    [
+     1830,
+     "footstep_grate_2",
+     0.16
+    ],
+    [
+     2390,
+     "footstep_grate_1",
+     0.16
+    ],
+    [
+     2950,
+     "footstep_grate_2",
+     0.16
+    ],
+    [
+     3100,
+     "m8_creak",
+     0.16
+    ]
+   ]
+  },
+  {
+   "scene": "m8_friends_four",
+   "no_skip": true,
+   "speaker": "VASILE",
+   "text": "You picked the four over the three hundred.",
+   "min_ms": 3200
+  },
+  {
+   "scene": "m8_friends_desk",
+   "no_skip": true,
+   "speaker": "BIRIBEL",
+   "text": "You didn't pick the three hundred. You picked the desk.",
+   "min_ms": 3600
+  },
+  {
+   "scene": "m8_friends_matter",
+   "no_skip": true,
+   "speaker": "VASILE",
+   "text": "...Maybe. Maybe both. Does it matter to them?",
+   "min_ms": 4000,
+   "cues": [
+    [
+     1200,
+     "m7_bird",
+     0.06
+    ]
+   ]
+  },
+  {
+   "scene": "m8_friends_taught",
+   "no_skip": true,
+   "speaker": "VASILE",
+   "text": "I taught you to shoot on this kind of morning. Cold barrel, steady hands.",
+   "min_ms": 4600,
+   "cues": [
+    [
+     700,
+     "m8_creak",
+     0.1
+    ]
+   ]
+  },
+  {
+   "scene": "m8_friends_chose",
+   "no_skip": true,
+   "speaker": "VASILE",
+   "text": "I chose the many. You chose the four.",
+   "min_ms": 3200
+  },
+  {
+   "scene": "m8_friends_raise",
+   "speaker": "",
+   "text": "",
+   "min_ms": 2600,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     350,
+     "m8_cloth_1",
+     0.26
+    ],
+    [
+     650,
+     "rifle_handle",
+     0.36
+    ],
+    [
+     1350,
+     "shotgun_pump",
+     0.46
+    ],
+    [
+     1900,
+     "heartbeat",
+     0.24
+    ]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Revenge, Old Friends on the catwalk"
+ }
+}

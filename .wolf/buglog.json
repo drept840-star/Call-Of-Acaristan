@@ -2,12 +2,68 @@
   "version": 1,
   "bugs": [
     {
+      "id": "bug-m8-chase-lmg-through-player-20261110",
+      "error_message": "In the M8 tractor chase the mounted LMG model passes through Biribel (owner report: 'the gun goes through you')",
+      "file": "src/missions/m8/revenge/chase_set.py",
+      "root_cause": "The imported light_machine_gun has a 24 cm shoulder stock behind the grip; engine3d.hold's 'aim' mode anchors the butt at pocket=(-0.05,-0.03,0.05) INSIDE the right shoulder, so 24 stock vertices sat inside the chest volumes at every yaw/pitch (6.3-7.6 cm deep). No stance clears it because hold_frame's reach loop pulls the grip back into both hands' reach. This is infantry hold geometry applied to a pintle mount.",
+      "fix": "Pintle configuration: cut the stock from the drawn LMG split parts (chase_set.STOCK_CUT_Z=-0.10; the receiver's own rear plate at raw z -0.094 survives and closes the body), move GRIPS['lmg'] to pocket=(0.08,0,0) with the support hand on the feed tray (fore=(-0.045,0.07,0.16)). Both backends draw the man rifle_on=False so the rig's uncut rifle copy is invisible. Also re-tuned the reload rack keys (spine 24/18->6/4) whose torso lean pushed the chest 3.9 cm into the fixed pintle gun during the belt change, and keyed hold_cached on _grip_sig(weapon) so grip tuning invalidates stale solved poses. Regression: tests/unit/test_m8_chase_gun.py sweeps the route/yaw/pitch envelope and the whole reload blend at 10 Hz.",
+      "tags": [
+        "m8",
+        "chase",
+        "lmg",
+        "interpenetration",
+        "hold",
+        "engine3d"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-10",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-smoke-stale-kill-chase-oracle-20261110",
+      "error_message": "tools/smoke_test.py check_mission8_vertical_slice fails: AttributeError module 'missions.m8.revenge.kill3d' has no attribute 'REACT_S'",
+      "file": "tools/smoke_test.py",
+      "root_cause": "The smoke M8 kill and chase beats encoded two pre-refactor choreographies: the kill beat used removed names (REACT_S, SLOWMO_S, PROFILE_S, ROAD_S, LOWERED_DIE_S, said_hands, six-hit ladder), and the chase beat assumed one hit wrecks a tyre and the blocker driver (both got per-part HP in the 2026-11-09 armour pass).",
+      "fix": "Reconcile the oracle to shipped gameplay only: kill beat now drives the shipped one-wound + DECISION_AT + second-hit/lowered flow and renders every cine() shot; chase beat bursts TYRE_HP['jeep'] rounds into a tyre and kills the blocker with DRIVER_HP['blocker']+1 driver hits. No game code was touched.",
+      "tags": [
+        "m8",
+        "smoke",
+        "stale-oracle",
+        "test-maintenance"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-10",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-tractor-repeated-scenery-20261109",
+      "error_message": "Mission 8 tractor chase background reads as the same scenery repeating",
+      "file": "src/missions/m8/revenge/chase_set.py",
+      "root_cause": "The baked 1960-m road reused the same five field materials, farmstead template every 190-260 m and identical church villages at five positions. Section-specific features such as the ditch and wrecks were surrounded by that repeating rural dressing, much of it too far from the rear-facing trailer camera.",
+      "fix": "Give all four sections distinct nearby landmarks and field/road materials, stop copying farmsteads past the farm stretch and limit church villages to two settlements; add scenery layout/mesh regression checks.",
+      "tags": [
+        "m8",
+        "tractor",
+        "scenery",
+        "repetition"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-09",
+      "occurrences": 1
+    },
+    {
       "id": "bug-ko-sniper-beam-20261107",
       "error_message": "M3 Kill Order sniper beam draws through the pillar and the sniper cannot be seen",
       "file": "src/cutscenes/m3ko3d.py",
       "root_cause": "Both the permanent targeting line and shot tracer used add_line3d at painter layer 2; a ray ending at the mathematically correct slab intersection still painted over the block. From the PA camera, the sniper at x=3.8 projected entirely behind the tall foreground pillar, so the line was the only visible threat cue.",
       "fix": "Remove both beam and tracer, retain brief muzzle/stone flashes, move the rifleman to a clear mezzanine firing bay at x=6.8, open the railing there and light his silhouette. Regressions forbid any sniper line and verify substantial visible guard pixels with flashes disabled on software; GL contrast was probed separately.",
-      "tags": ["m3", "cutscene", "sniper", "depth", "occlusion"],
+      "tags": [
+        "m3",
+        "cutscene",
+        "sniper",
+        "depth",
+        "occlusion"
+      ],
       "status": "fixed",
       "last_seen": "2026-11-07",
       "occurrences": 1
@@ -18,7 +74,12 @@
       "file": "src/cutscenes/m3ko3d.py",
       "root_cause": "Initial fix opened the portal but kept the stair shot's 2200 ms minimum shorter than the follower's 5300 ms crossing, so a normal advance still caught both actors looking at the door. The PA shot started with no visible connection to the exit; its camera left the entering pair offscreen and the room read as an unrelated tableau.",
       "fix": "Match the stair hold to the completed crossing (5400 ms) and follow the pair through the portal, with flank scanning on holds. Connect a cutaway stair throat and open entrance to the lobby; stage separate entrance-to-cover paths, pan from door to PA speaker/overwatch, add visible security-bay alarm and test all actor/speaker framing at intermediate times.",
-      "tags": ["m3", "cutscene", "blocking", "continuity"],
+      "tags": [
+        "m3",
+        "cutscene",
+        "blocking",
+        "continuity"
+      ],
       "status": "fixed",
       "last_seen": "2026-11-07",
       "occurrences": 2
@@ -29,7 +90,12 @@
       "file": "src/missions/m3/draw3d.py",
       "root_cause": "_door_tiles inferred each panel axis from the north glyph alone. The lower leaf sees D instead of C and incorrectly becomes an east-west panel.",
       "fix": "Follow contiguous D runs to concrete jambs on both axes; choose the better-supported wall axis. Preserve north/south armory panels across its two-column wall. Four regressions cover all five authored maps, paired sliding directions and cache rebinding.",
-      "tags": ["m3", "3d", "doors", "orientation"],
+      "tags": [
+        "m3",
+        "3d",
+        "doors",
+        "orientation"
+      ],
       "status": "fixed",
       "last_seen": "2026-11-07",
       "occurrences": 1
@@ -40,7 +106,12 @@
       "file": "src/entities/weapons.py",
       "root_cause": "Shared RMB/G handler allows bottle creation after M3 obtains a firearm if inventory is nonzero. M3 does not update molotov flight, but its 3D FX pass renders STATE.thrown_bottles.",
       "fix": "Reject MISSION3 in handle_throw_bottle before any side effects. Regression covers all M3 equipment and preserves throws in M1/M2/M6.",
-      "tags": ["m3", "molotov", "input", "ghost-projectile"],
+      "tags": [
+        "m3",
+        "molotov",
+        "input",
+        "ghost-projectile"
+      ],
       "status": "fixed",
       "last_seen": "2026-11-07",
       "occurrences": 1
@@ -50,7 +121,13 @@
       "file": "src/cutscenes/m3staging.py",
       "root_cause": "Authored ready arm left the rifle near the radio hand. At yaw 90 Volkov's right shoulder is on world -z, but release/retract targets were on +z across his torso. Safe IK can return a least-clashing solution for impossible targets; contact-only tests did not catch up to 0.115 m penetration with a 0.035 m clearance margin. The recovery shot also replaced follow-through with an immediate walk/yaw reset.",
       "fix": "Use one_hand weapon hold with extra out/down right-hand clearance, preserve rifle yaw in manual mesh placement, keep toss/retract targets on the throwing side, and solve the exit arm while blending the turn from yaw 90. Dense regressions check whole-gun AABB separation, arm clearance with 0.04 m margin, and shot-cut hand continuity.",
-      "tags": ["m3", "cutscene", "ik", "arm-clipping", "prop-contact"],
+      "tags": [
+        "m3",
+        "cutscene",
+        "ik",
+        "arm-clipping",
+        "prop-contact"
+      ],
       "status": "fixed",
       "id": "bug-m3-radio-staging-20261107",
       "last_seen": "2026-11-07",
@@ -2559,8 +2636,8 @@
       "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
       "id": "bug-139",
       "timestamp": "2026-10-27T21:44:45.752Z",
-      "last_seen": "2026-10-27T21:44:45.752Z",
-      "occurrences": 1,
+      "last_seen": "2026-11-08T20:50:46.073Z",
+      "occurrences": 2,
       "related_bugs": []
     },
     {
@@ -4255,6 +4332,1054 @@
       "last_seen": "2026-11-07T07:30:39.719Z",
       "occurrences": 1,
       "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in choice.py",
+      "file": "src/missions/m7/choice.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-234",
+      "timestamp": "2026-11-08T20:47:59.433Z",
+      "last_seen": "2026-11-08T20:47:59.433Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/core/game_core.py",
+      "root_cause": "Was returning: start_mission7_stage(",
+      "fix": "Now returns: start_mission8_stage(getattr(STATE, \"mission8_stag",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-235",
+      "timestamp": "2026-11-08T20:49:39.366Z",
+      "last_seen": "2026-11-08T20:49:39.366Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/core/game_core.py",
+      "root_cause": "Was returning: m7.game_update(keys)",
+      "fix": "Now returns: m8.game_update(keys)",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-236",
+      "timestamp": "2026-11-08T20:49:43.878Z",
+      "last_seen": "2026-11-08T20:49:43.878Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/core/game_core.py",
+      "root_cause": "Was returning: \"m7\"",
+      "fix": "Now returns: \"m8\"",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-237",
+      "timestamp": "2026-11-08T20:49:47.619Z",
+      "last_seen": "2026-11-08T20:49:47.619Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/core/game_core.py",
+      "root_cause": "Was returning: m7.handle_interact()",
+      "fix": "Now returns: m8.handle_interact()",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-238",
+      "timestamp": "2026-11-08T20:49:51.904Z",
+      "last_seen": "2026-11-08T20:49:51.904Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _cp8 should be rebuilds",
+      "file": "src/app.py",
+      "root_cause": "Used \"_cp8\" instead of \"rebuilds\"",
+      "fix": "Changed _cp8 → rebuilds",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-239",
+      "timestamp": "2026-11-08T20:50:57.641Z",
+      "last_seen": "2026-11-08T20:50:57.641Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/app.py",
+      "root_cause": "Had \"MISSION7\"",
+      "fix": "Changed to \"MISSION8\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-240",
+      "timestamp": "2026-11-08T20:51:09.855Z",
+      "last_seen": "2026-11-08T20:51:09.855Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: climb should be not",
+      "file": "src/missions/m8/revenge/trap_hud.py",
+      "root_cause": "Used \"climb\" instead of \"not\"",
+      "fix": "Changed climb → not",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-241",
+      "timestamp": "2026-11-08T20:53:26.951Z",
+      "last_seen": "2026-11-08T20:53:26.951Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9→16 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-242",
+      "timestamp": "2026-11-09T17:14:12.484Z",
+      "last_seen": "2026-11-09T17:14:12.484Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong operator: >= should be ==",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "Used \">=\" instead of \"==\"",
+      "fix": "Changed operator >= → ==",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-243",
+      "timestamp": "2026-11-09T17:14:48.000Z",
+      "last_seen": "2026-11-09T17:14:48.000Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in _draw_blood()",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-244",
+      "timestamp": "2026-11-09T17:15:09.104Z",
+      "last_seen": "2026-11-09T17:15:09.104Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "id": "bug-m8-chase-fire-skips-to-epilogue-20261110",
+      "error_message": "Firing the LMG in the M8 tractor chase immediately jumps to the end of the mission (owner report: 'when i shoot ... it just boots me STRAIGHT to the end of the mission')",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "Both muzzle-flash draw sites called cutscenes.m6fx3d.muzzle_flash, a helper that exists in neither m6fx3d nor its m5fx3d fallback (AttributeError). The first shot therefore raised inside ChaseScene.draw; missions.m8.draw.game_draw catches any draw exception and calls force_finish('fallback'), which hands off via on_chase_done and advances the stage ladder chase -> epilogue -> mission complete.",
+      "fix": "Replaced both phantom calls with the codebase's proven muzzle idiom _fx.glow(col, radius_m, tm, core=..., seed=..., intensity=..., max_px=...) (same as m1/draw3d muzzle lights). Regression: tests/unit/test_m8_chase_gun.py::test_a_shot_renders_instead_of_faulting_the_scene renders one frame with a fresh player shot and an enemy flash.",
+      "tags": [
+        "m8",
+        "chase",
+        "fx",
+        "draw",
+        "force_finish",
+        "muzzle"
+      ],
+      "timestamp": "2026-11-10T21:05:00.000Z",
+      "last_seen": "2026-11-10",
+      "occurrences": 1,
+      "status": "fixed",
+      "related_bugs": [
+        "bug-m8-chase-lmg-through-player-20261110"
+      ]
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-246",
+      "timestamp": "2026-11-10T22:31:06.064Z",
+      "last_seen": "2026-11-10T22:31:06.064Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→3 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-247",
+      "timestamp": "2026-11-10T22:31:08.603Z",
+      "last_seen": "2026-11-10T22:31:08.603Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "19 lines replaced/restructured",
+      "fix": "Rewrote 28→8 lines (19 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-248",
+      "timestamp": "2026-11-10T22:31:11.098Z",
+      "last_seen": "2026-11-10T22:31:11.098Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "13 lines replaced/restructured",
+      "fix": "Rewrote 18→5 lines (13 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-249",
+      "timestamp": "2026-11-10T22:31:13.677Z",
+      "last_seen": "2026-11-10T22:31:13.677Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "16 lines replaced/restructured",
+      "fix": "Rewrote 28→20 lines (16 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-250",
+      "timestamp": "2026-11-10T22:31:17.164Z",
+      "last_seen": "2026-11-10T22:31:17.164Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "Was returning: PERFORMANCE[-1][1:5]",
+      "fix": "Now returns: pose, dz + _edge(age)[0], yaw, height",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-251",
+      "timestamp": "2026-11-10T22:31:21.216Z",
+      "last_seen": "2026-11-10T22:31:25.116Z",
+      "occurrences": 2,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "7 lines replaced/restructured",
+      "fix": "Rewrote 11→4 lines (7 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-252",
+      "timestamp": "2026-11-10T22:31:29.491Z",
+      "last_seen": "2026-11-10T22:31:29.491Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of kill3d.py",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 6→12 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-253",
+      "timestamp": "2026-11-10T22:31:33.394Z",
+      "last_seen": "2026-11-10T22:31:33.394Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m8/flow.py",
+      "root_cause": "Had \"The last shot, or the lowered gun, or a scene fau",
+      "fix": "Changed to \"Maru'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-254",
+      "timestamp": "2026-11-10T22:42:21.516Z",
+      "last_seen": "2026-11-10T22:42:21.516Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/core/dev_jumps.py",
+      "root_cause": "Had \"Mission 8 six shots on the catwalk\"",
+      "fix": "Changed to \"Mission 8 standoff, then Maru'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-255",
+      "timestamp": "2026-11-10T22:42:27.053Z",
+      "last_seen": "2026-11-10T22:42:27.053Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m8/revenge/kill3d.py",
+      "root_cause": "Had \"...Steady hands.\"",
+      "fix": "Changed to \"...Good shot.\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-256",
+      "timestamp": "2026-11-10T22:56:44.299Z",
+      "last_seen": "2026-11-10T22:56:44.299Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _far_lights should be _convoy",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "Used \"_far_lights\" instead of \"_convoy\"",
+      "fix": "Changed _far_lights → _convoy",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-257",
+      "timestamp": "2026-11-11T19:13:53.994Z",
+      "last_seen": "2026-11-11T19:13:53.994Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-258",
+      "timestamp": "2026-11-11T19:13:56.160Z",
+      "last_seen": "2026-11-11T19:13:56.160Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "28 lines replaced/restructured",
+      "fix": "Rewrote 36→15 lines (28 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-259",
+      "timestamp": "2026-11-11T19:13:59.651Z",
+      "last_seen": "2026-11-11T19:13:59.651Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/app.py",
+      "root_cause": "Had \"caption_after_ms\"",
+      "fix": "Changed to \"full_frame\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-260",
+      "timestamp": "2026-11-11T19:14:30.733Z",
+      "last_seen": "2026-11-11T19:14:30.733Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→14 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-261",
+      "timestamp": "2026-11-11T19:16:17.063Z",
+      "last_seen": "2026-11-11T19:16:17.063Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "7 lines replaced/restructured",
+      "fix": "Rewrote 9→3 lines (7 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-262",
+      "timestamp": "2026-11-11T22:18:33.846Z",
+      "last_seen": "2026-11-11T22:18:33.846Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 13→52 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-263",
+      "timestamp": "2026-11-11T22:18:43.541Z",
+      "last_seen": "2026-11-11T22:18:43.541Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase_set.py",
+      "file": "src/missions/m8/revenge/chase_set.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 20→25 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-264",
+      "timestamp": "2026-11-11T22:25:48.288Z",
+      "last_seen": "2026-11-11T22:25:48.288Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase_set.py",
+      "file": "src/missions/m8/revenge/chase_set.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→3 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-265",
+      "timestamp": "2026-11-11T22:25:58.970Z",
+      "last_seen": "2026-11-11T22:25:58.970Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→10 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-266",
+      "timestamp": "2026-11-11T22:26:07.924Z",
+      "last_seen": "2026-11-11T22:26:07.924Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-267",
+      "timestamp": "2026-11-11T22:26:41.660Z",
+      "last_seen": "2026-11-11T22:26:41.660Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 19→62 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-268",
+      "timestamp": "2026-11-11T22:26:58.379Z",
+      "last_seen": "2026-11-11T22:26:58.379Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 9→18 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-269",
+      "timestamp": "2026-11-11T22:27:11.790Z",
+      "last_seen": "2026-11-11T22:27:11.790Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong operator: == should be !=",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "Used \"==\" instead of \"!=\"",
+      "fix": "Changed operator == → !=",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-270",
+      "timestamp": "2026-11-11T22:27:25.508Z",
+      "last_seen": "2026-11-11T22:27:25.508Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "Was returning: k * max(1.6 * abs(math.sin(p)) + 0.75 * (1.0 - mat",
+      "fix": "Now returns: k * (0.95 * abs(sr * cp) + 1.6 * abs(sp) + 1.5 * m",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-271",
+      "timestamp": "2026-11-11T22:29:15.521Z",
+      "last_seen": "2026-11-11T22:29:15.521Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 6→11 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-272",
+      "timestamp": "2026-11-11T22:34:07.415Z",
+      "last_seen": "2026-11-11T22:34:07.415Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→9 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-273",
+      "timestamp": "2026-11-11T22:34:22.131Z",
+      "last_seen": "2026-11-11T22:34:22.131Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8_audio.py",
+      "file": "src/missions/m8/m8_audio.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→10 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-274",
+      "timestamp": "2026-11-11T23:46:20.830Z",
+      "last_seen": "2026-11-11T23:46:20.830Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "13 lines replaced/restructured",
+      "fix": "Rewrote 17→21 lines (13 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-275",
+      "timestamp": "2026-11-11T23:47:03.677Z",
+      "last_seen": "2026-11-11T23:47:03.677Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "10 lines replaced/restructured",
+      "fix": "Rewrote 11→19 lines (10 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-276",
+      "timestamp": "2026-11-11T23:47:05.685Z",
+      "last_seen": "2026-11-11T23:47:05.685Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 8→45 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-277",
+      "timestamp": "2026-11-11T23:48:23.506Z",
+      "last_seen": "2026-11-11T23:48:23.506Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "14 lines replaced/restructured",
+      "fix": "Rewrote 15→28 lines (14 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-278",
+      "timestamp": "2026-11-11T23:48:25.527Z",
+      "last_seen": "2026-11-11T23:48:25.527Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "Was returning: RX + 10.5 + 1.0 * ts + 0.25 * ts * ts",
+      "fix": "Now returns: RX + 10.5 + 2.0 * ts + 0.5 * ts * ts",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-279",
+      "timestamp": "2026-11-11T23:54:42.355Z",
+      "last_seen": "2026-11-11T23:54:42.355Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "7 lines replaced/restructured",
+      "fix": "Rewrote 7→12 lines (7 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-280",
+      "timestamp": "2026-11-11T23:55:21.802Z",
+      "last_seen": "2026-11-11T23:55:21.802Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: 150 should be 85",
+      "file": "src/missions/m8/revenge/epilogue3d.py",
+      "root_cause": "Used \"150\" instead of \"85\"",
+      "fix": "Changed 150 → 85",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-281",
+      "timestamp": "2026-11-11T23:55:33.106Z",
+      "last_seen": "2026-11-11T23:55:33.106Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→5 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-282",
+      "timestamp": "2026-11-11T23:55:57.741Z",
+      "last_seen": "2026-11-11T23:55:57.741Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of epilogue3d.py",
+      "file": "src/missions/m8/revenge/epilogue3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→5 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-283",
+      "timestamp": "2026-11-11T23:58:24.460Z",
+      "last_seen": "2026-11-11T23:58:24.460Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 13→60 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try\\.claude\\worktrees\\mission-8-ending-cutscene-b47aa6",
+      "id": "bug-284",
+      "timestamp": "2026-11-12T00:00:49.833Z",
+      "last_seen": "2026-11-12T00:00:49.833Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "id": "bug-m8-chase-traffic-stall-20261112",
+      "error_message": "M8 tractor chase: chasers left far behind, and cars destroyed before they reach the tractor",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "(1) _follow_cap treated a car alongside (gap ~0) as ahead, so two jeeps beside a Route 12 wreck deadlocked at v=0 and the whole column stopped ~6 s, falling 100 m back. (2) Wrecked cars stayed on the road until DESPAWN_BACK (410 m), so incoming cars at catch-up speed clipped old wrecks 80-340 m back (often hidden in fog) and were wrecked by _crash_hit.",
+      "fix": "_follow_cap skips obstacles with gap <= r + orad; _crash_hit only wrecks cars within CRASH_RANGE (40 m) of the tractor, farther is a bump; wrecked cars despawn at FOG_END + 20 behind. Tests in tests/unit/test_m8_chase_traffic.py.",
+      "tags": [
+        "m8",
+        "chase",
+        "traffic",
+        "ai"
+      ],
+      "status": "fixed",
+      "timestamp": "2026-11-12T12:00:00Z",
+      "last_seen": "2026-11-12T12:00:00Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: barrier_t should be _jump_start",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "Used \"barrier_t\" instead of \"_jump_start\"",
+      "fix": "Changed barrier_t → _jump_start",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-285",
+      "timestamp": "2026-11-12T19:38:40.639Z",
+      "last_seen": "2026-11-12T19:38:40.639Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase3d.py",
+      "file": "src/missions/m8/revenge/chase3d.py",
+      "root_cause": "17 lines replaced/restructured",
+      "fix": "Rewrote 33→102 lines (17 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-286",
+      "timestamp": "2026-11-12T19:38:51.356Z",
+      "last_seen": "2026-11-12T19:38:51.356Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: 280 should be 520",
+      "file": "src/missions/m8/revenge/chase_set.py",
+      "root_cause": "Used \"280\" instead of \"520\"",
+      "fix": "Changed 280 → 520",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-287",
+      "timestamp": "2026-11-12T19:39:07.509Z",
+      "last_seen": "2026-11-12T19:39:07.509Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of chase_set.py",
+      "file": "src/missions/m8/revenge/chase_set.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 13→22 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-288",
+      "timestamp": "2026-11-12T19:39:14.524Z",
+      "last_seen": "2026-11-12T19:39:14.524Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "7 lines replaced/restructured",
+      "fix": "Rewrote 10→27 lines (7 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-289",
+      "timestamp": "2026-11-12T19:39:27.010Z",
+      "last_seen": "2026-11-12T19:39:27.010Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of m8films.py",
+      "file": "src/cutscenes/m8films.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→5 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-290",
+      "timestamp": "2026-11-12T20:32:54.399Z",
+      "last_seen": "2026-11-12T20:32:54.399Z",
+      "occurrences": 1,
+      "related_bugs": []
     }
   ],
   "applied_observations": {
@@ -4485,7 +5610,65 @@
     "dc505615-e991-4707-96e4-4b493a5216c0": true,
     "92803ccf-9f2f-4c29-a9c9-dbb9c969cc09": true,
     "0a8dfcff-0e65-4c58-952f-7a23ee4113f7": true,
-    "46fe2654-329f-47f2-8f43-6cf41f90bfb0": true
+    "46fe2654-329f-47f2-8f43-6cf41f90bfb0": true,
+    "faf8bee0-d48b-4475-b55b-d734e275604f": true,
+    "70bc8a96-9b02-4bd2-b608-e5b940f8bcec": true,
+    "5671d36b-88f5-4beb-a794-6183ddaf533f": true,
+    "b2d6105c-e630-4ec0-8d49-cdc18d520ec9": true,
+    "78d1dce1-b0c9-4ee6-987d-c848e3a9aca3": true,
+    "a085e312-81d8-4ba3-91ce-728697e0dd7d": true,
+    "676cd4b6-2fb6-4496-9ade-102a2d966ac1": true,
+    "db1eafbd-b954-4b7a-b089-0d88c3faa979": true,
+    "39167d2b-4cff-4709-927e-077bf85e74e6": true,
+    "b0097793-b87c-4524-aad0-4b0fa4a054fe": true,
+    "187c1dfe-10f5-47f1-a794-b945c60bc7b6": true,
+    "465bb232-b7a3-4508-990f-d8dc101a703d": true,
+    "37a00ffb-4fc8-49cc-a2e0-b2d96e603b6a": true,
+    "5af6b792-851f-4aa2-a876-a8b9a77bc87a": true,
+    "8da25bb9-7b32-44a2-9d32-fc65c1ad9089": true,
+    "ab518b80-677f-400c-bf3e-515c1ffa5761": true,
+    "336a4281-4a27-49ce-8bd5-638f54adfc1e": true,
+    "e08da094-8cad-4558-9247-1a2a058d1624": true,
+    "a561f021-c096-45bb-a7e0-ada4a2c955c2": true,
+    "adc066c3-fda0-444f-803f-da014572bcb6": true,
+    "06475768-a076-49fb-bf07-ace6b7634d16": true,
+    "7a93380a-7bf7-480b-b635-8f8f5dce37d0": true,
+    "f9a3be1f-1be2-4b6f-8a86-10db43b56c13": true,
+    "ef0342fb-fc8f-4f4b-9ec2-1832cfffa163": true,
+    "1dd5cc84-baef-41a6-91d5-5aa8a83e7757": true,
+    "a5812523-a28b-404d-9177-3e7ceb2b4d54": true,
+    "9922e565-7eb0-4470-ae5a-13fe0ac2dd54": true,
+    "d308683a-7f17-469f-b51e-044cb5a57678": true,
+    "687d8c12-b5c2-4b3b-ac32-956dc700ca30": true,
+    "52900aad-84c0-41e3-8b0e-f64dae7e80b4": true,
+    "579bc281-7ac1-4ddd-8f34-6e79c4f3c10a": true,
+    "dfc78cbc-5e09-45fc-8412-ace55474d74a": true,
+    "cb617337-1c32-4ce2-8390-abb87f080b96": true,
+    "1e941768-0a40-4869-a70b-491e719413df": true,
+    "e058ccc4-8176-4dfd-b549-67d71b809f27": true,
+    "7aaef1dc-4326-4137-ab26-fc2feed4736c": true,
+    "f62732d2-382a-43b6-a372-38d621520028": true,
+    "5b41ffa4-f6cf-4972-bcb6-2792fa22e267": true,
+    "ed353f72-6168-4c9f-b3eb-c1cd14dc4b89": true,
+    "35e09c9c-be64-44b1-acc4-08f3a6443129": true,
+    "c41dba71-815c-4223-b3cd-7cb777f7672d": true,
+    "57a7d896-0691-45e6-baeb-9287f7b57064": true,
+    "04bd9dc0-d1b7-4aab-80c7-ddac898c2912": true,
+    "5abf1570-87c4-44fa-9e58-8093fdcdde88": true,
+    "c23fb18a-71d1-47c0-82b7-19cce44fee12": true,
+    "9f4321a9-ea84-49e5-8893-958fb5a9c834": true,
+    "e4c527dd-3e18-4844-b67d-95536d5184a2": true,
+    "98a5be60-e362-48d4-825a-adf910d7308e": true,
+    "85b5f67b-c735-4f6a-8d05-9b29c005705e": true,
+    "02eacacd-8424-4da0-b7b7-4f37280b9fa9": true,
+    "2df3bc16-ddf9-4a0c-8e58-e1f6b699a635": true,
+    "799b8521-0d77-49df-bd14-d1d442075f49": true,
+    "0afa3244-ec63-4cba-a40e-005fb57070cc": true,
+    "ffe71771-c784-4bc5-ab82-6282318d2090": true,
+    "64bd11f4-0013-457c-baeb-96df74a43cf9": true,
+    "bce108d6-8efe-4be7-8ddb-d9cdbf45c9b1": true,
+    "028ddf4c-9efc-4451-a5e0-cf6d05e2dbc8": true,
+    "605b535b-99e1-4f23-9114-673b4fc21e07": true
   },
-  "next_id": 234
+  "next_id": 291
 }

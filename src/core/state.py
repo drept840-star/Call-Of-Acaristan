@@ -312,6 +312,15 @@ class GameState:
         self.m7_raid_active = False         # the raid owns the frame
         self.m7_raid_cp = 0                 # raid checkpoint: 0 start, 1 orchard cleared, 2 trucks cleared
         self.m7_outro = False               # one-shot: app.py takes it via m7.take_outro_request()
+        # Mission 8: The Call (slice 1: Revenge route)
+        self.mission8_stage = ""            # stage token (missions.m8.meta REVENGE_STAGES / DUTY_STAGES)
+        self.m8_trap_active = False         # the trap/gantry fight owns the frame
+        self.m8_kill_active = False         # the kill on the catwalk owns the frame
+        self.m8_chase_active = False        # the tractor chase owns the frame
+        self.m8_chase_cp = 0                # chase section checkpoint, 0-3
+        self.m8_trap_cp = 0                 # 0 start, 1-2 road waves cleared, 3 gantry reached
+        self.m8_outro = False               # one-shot: app.py takes it via m8.take_outro_request()
+        self.request_m8_cutscene = None     # "meet" / "friends" / "epilogue" -> app plays the M8 film
         # ── Death animation (Option B - Standard) ──
         # When HP hits 0, death_anim.trigger_death() populates these and
         # death_anim.update_death_anim() advances them every frame. The

@@ -59,6 +59,12 @@ MISSION_META = {
         "fail_flavor": "KRAPNET: FARM LINK LOST. NOBODY IS COMING UP THE VALLEY.",
         "radio_channel": "FINAL LINK // 171.60",
     },
+    "MISSION8": {
+        "operation": "THE CALL",
+        "fail_subtitle": "ROUTE 12 HOLDS",
+        "fail_flavor": "GUARD NET: CHECKPOINT SECURE. THE COLONEL WALKS AWAY.",
+        "radio_channel": "FINAL LINK // 171.60",
+    },
 }
 
 

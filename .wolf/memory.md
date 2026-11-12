@@ -6,6 +6,12 @@ description: chronological action log per session, consolidated weekly
 > Chronological action log. Hooks and AI append to this file automatically.
 > Old sessions are consolidated by the daemon weekly.
 
+## 2026-11-10
+
+| Time | Summary | File(s) | Outcome |
+|------|---------|---------|---------|
+| 21:00 | M8 chase: LMG stock went through Biribel - cut the stock from the drawn parts (pintle cfg), retuned reload rack stances, reconciled the stale smoke M8 kill+chase oracle to shipped gameplay | src/missions/m8/revenge/chase_set.py, src/missions/m8/revenge/chase3d.py, src/engine3d/hold.py, tests/unit/test_m8_chase_gun.py, tools/smoke_test.py | 7 chase-gun regressions + scenery + hold tests pass; compileall OK; SMOKE TEST: OK; owner visual sign-off pending |
+
 ## Consolidated 2026-10-20 .. 2026-10-21
 
 | Time | Summary | File(s) | Outcome |
@@ -2523,3 +2529,474 @@ description: chronological action log per session, consolidated weekly
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 22:38 | Created src/missions/m8/meta.py | — | ~844 |
+| 22:38 | Created src/missions/m8/revenge/set3d.py | — | ~1141 |
+| 22:40 | Edited src/missions/m8/revenge/set3d.py | inline fix | ~15 |
+| 22:40 | Edited src/missions/m8/revenge/set3d.py | reduced (-8 lines) | ~11 |
+| 22:40 | Edited src/missions/m8/revenge/set3d.py | 5→1 lines | ~4 |
+| 22:43 | Created src/missions/m8/revenge/trap_world.py | — | ~1368 |
+| 22:44 | Created src/missions/m8/revenge/trap_brain.py | — | ~4383 |
+| 22:46 | Created src/missions/m8/revenge/trap3d.py | — | ~7918 |
+| 22:46 | Created src/missions/m8/revenge/trap_hud.py | — | ~1486 |
+| 22:47 | Created src/missions/m8/revenge/beats.py | — | ~1199 |
+| 22:47 | Created src/missions/m8/revenge/__init__.py | — | ~66 |
+| 22:47 | Created src/missions/m8/duty/__init__.py | — | ~62 |
+| 22:47 | Created src/missions/m8/flow.py | — | ~1074 |
+| 22:47 | Created src/missions/m8/systems.py | — | ~197 |
+| 22:47 | Created src/missions/m8/draw.py | — | ~212 |
+| 22:47 | Created src/missions/m8/__init__.py | — | ~110 |
+| 22:47 | Edited src/core/save_system.py | expanded (+8 lines) | ~108 |
+| 22:47 | Edited src/core/save_system.py | modified get_slot_flags() | ~224 |
+| 22:47 | Edited src/missions/m7/choice.py | added error handling | ~76 |
+| 22:49 | Edited src/core/state.py | 2→7 lines | ~155 |
+| 22:49 | Edited src/core/mission_meta.py | expanded (+6 lines) | ~106 |
+| 22:49 | Edited src/core/game_core.py | added 1 import(s) | ~40 |
+| 22:49 | Edited src/core/game_core.py | modified _is_mission8_active() | ~49 |
+| 22:49 | Edited src/core/game_core.py | modified start_mission8() | ~92 |
+| 22:49 | Edited src/core/game_core.py | modified _in_walking_sim() | ~64 |
+| 22:49 | Edited src/core/game_core.py | modified _is_mission8_active() | ~42 |
+| 22:49 | Edited src/core/game_core.py | modified _is_mission8_active() | ~29 |
+| 22:49 | Edited src/core/game_core.py | modified _is_mission8_active() | ~68 |
+| 22:49 | Edited src/core/game_core.py | modified _is_mission8_active() | ~38 |
+| 22:49 | Edited src/core/game_core.py | 2→4 lines | ~40 |
+| 22:50 | Edited src/ui/mission_failed.py | 2→6 lines | ~147 |
+| 22:50 | Edited src/ui/mission_failed.py | 2→6 lines | ~104 |
+| 22:50 | Edited src/core/dev_jumps.py | 2→7 lines | ~141 |
+| 22:50 | Edited src/app.py | modified _m8_outro_pending() | ~151 |
+| 22:50 | Edited src/app.py | added error handling | ~372 |
+| 22:50 | Edited src/app.py | inline fix | ~22 |
+| 22:51 | Edited src/app.py | expanded (+14 lines) | ~290 |
+| 22:51 | Edited src/app.py | modified getattr() | ~142 |
+| 22:51 | Edited src/app.py | modified getattr() | ~284 |
+| 22:51 | Edited src/app.py | modified _m8_outro_pending() | ~102 |
+| 22:51 | Edited src/app.py | added 1 condition(s) | ~160 |
+| 22:51 | Edited src/app.py | 2→2 lines | ~29 |
+| 22:53 | Edited src/missions/m8/revenge/trap3d.py | 2→7 lines | ~113 |
+| 22:53 | Edited src/missions/m8/revenge/trap_hud.py | inline fix | ~13 |
+| 22:54 | Edited src/audio/voice_manifest.py | modified 1() | ~443 |
+| 22:54 | Edited src/audio/voice_manifest.py | modified Call() | ~98 |
+| 22:54 | Edited tools/smoke_test.py | 3→4 lines | ~34 |
+| 22:54 | Edited tools/smoke_test.py | modified check_mission8_vertical_slice() | ~1465 |
+| 22:54 | Edited tools/smoke_test.py | 2→4 lines | ~60 |
+| 22:55 | Edited docs/MISSION8_PLOT.md | 3→6 lines | ~124 |
+| 22:55 | Edited docs/MISSION8_PLOT.md | 2→2 lines | ~75 |
+| 22:55 | Edited docs/MISSION8_PLOT.md | 2→4 lines | ~73 |
+| 22:55 | Edited CLAUDE.md | "docs/MISSION8_PLOT.md" → "missions/m8/" | ~109 |
+<!-- session:OTI0OThiNWItNjIwNi00NTliLThlMTgtYWJiMDAwYWQ1Njlk -->
+| 2026-11-08T20:59:44.207Z | M8 Revenge slice 1: new src/missions/m8 (meta, flow, systems, draw, revenge trap3d/brain/world/hud/set3d/beats); wired into state, save_system (MISSION8 record, slot flags), m7 choice route persistence, game_core, mission_meta, mission_failed, dev_jumps, app.py (resume, input, outro, M7->M8 chain); VO_387-407 caption-only; smoke check mission8_vertical_slice; plot doc and CLAUDE.md updated; catwalk camera fixed (boom hit pillar). | src/missions/m8,src/core/save_system.py,src/core/state.py,src/core/game_core.py,src/app.py,tools/smoke_test.py,docs/MISSION8_PLOT.md | compileall OK; SMOKE TEST: OK incl. mission8_vertical_slice |
+| 23:15 | Created src/missions/m8/revenge/kill3d.py | — | ~4549 |
+| 23:39 | Created src/missions/m8/revenge/chase_set.py | — | ~3513 |
+| 23:42 | Created src/missions/m8/revenge/chase3d.py | — | ~9196 |
+| 23:49 | Created src/missions/m8/revenge/epilogue3d.py | — | ~2986 |
+| 23:56 | Edited src/missions/m8/revenge/chase3d.py | 2→4 lines | ~54 |
+| 00:26 | Created src/missions/m8/revenge/chase_set.py | — | ~8932 |
+| 00:38 | Created src/missions/m8/revenge/set3d.py | — | ~4900 |
+| 01:05 | Created src/cutscenes/m8films.py | — | ~5599 |
+
+## Session: 2026-11-09 15:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-09 19:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | expanded (+7 lines) | ~332 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | 4→9 lines | ~110 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | expanded (+13 lines) | ~224 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | 4→7 lines | ~89 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | modified _spray() | ~230 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | added 1 import(s) | ~12 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | modified cine() | ~778 |
+| 19:14 | Edited src/missions/m8/revenge/kill3d.py | min() → _ease() | ~50 |
+| 19:15 | Edited src/missions/m8/revenge/kill3d.py | added error handling | ~486 |
+| 19:15 | Edited src/missions/m8/revenge/kill3d.py | modified _hud() | ~142 |
+| 19:17 | Edited src/missions/m8/revenge/kill3d.py | 6→7 lines | ~116 |
+| 19:17 | Edited src/missions/m8/revenge/kill3d.py | 2→2 lines | ~50 |
+| 19:17 | Edited src/missions/m8/revenge/kill3d.py | inline fix | ~25 |
+| 19:17 | Edited src/missions/m8/revenge/kill3d.py | inline fix | ~22 |
+| 19:28 | Edited src/missions/m8/revenge/kill3d.py | 1→2 lines | ~42 |
+| 19:28 | Edited src/missions/m8/revenge/kill3d.py | 1→2 lines | ~44 |
+
+## Session: 2026-11-09 19:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-09 20:41
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-09 20:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:00 | Created src/missions/m8/m8_audio.py | — | ~5100 |
+| 21:04 | Edited src/missions/m8/m8_audio.py | 3→4 lines | ~61 |
+| 21:04 | Session end: 61 writes across 28 files (meta.py, set3d.py, trap_world.py, trap_brain.py, trap3d.py) | 11 reads | ~83484 tok |
+| 21:04 | Session end: 16 writes across 1 files (kill3d.py) | 2 reads | ~2752 tok |
+
+## Session: 2026-11-09 21:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:53 | Session end: 2 writes across 1 files (m8_audio.py) | 3 reads | ~12277 tok |
+
+## Session: 2026-11-09 22:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:23 | Edited src/missions/m8/revenge/chase_set.py | 2→2 lines | ~44 |
+| 23:00 | Varied M8 tractor scenery by section | chase_set.py, test_m8_chase_scenery.py | 8 landmarks, 3 tests/compile OK; smoke blocked by stale kill-scene test | ~8500 |
+
+## Session: 2026-11-09 23:24
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 23:29 | Created tools/ae_import_lmg.py | — | ~1323 |
+| 23:29 | Edited src/engine3d/hold.py | 3→6 lines | ~122 |
+| 23:31 | Edited src/missions/m8/revenge/chase_set.py | modified _armour() | ~312 |
+| 23:31 | Edited src/missions/m8/revenge/chase_set.py | modified in() | ~120 |
+
+## Session: 2026-11-09 00:31
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:44 | Session end: 1 writes across 1 files (chase_set.py) | 1 reads | ~44 tok |
+| 00:44 | Session end: 4 writes across 3 files (ae_import_lmg.py, hold.py, chase_set.py) | 5 reads | ~11257 tok |
+
+## Session: 2026-11-09 00:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:02 | Edited src/missions/m8/revenge/kill3d.py | 2→2 lines | ~28 |
+
+## Session: 2026-11-09 01:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:12 | Edited src/missions/m8/revenge/kill3d.py | added 1 condition(s) | ~64 |
+| 01:15 | Session end: 1 writes across 1 files (kill3d.py) | 0 reads | ~28 tok |
+
+## Session: 2026-11-10 14:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-10 15:16
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:24 | Edited src/missions/m8/revenge/chase_set.py | expanded (+11 lines) | ~238 |
+| 15:24 | Edited src/missions/m8/revenge/chase_set.py | modified _lmg_split() | ~940 |
+
+## Session: 2026-11-10 20:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:12 | Session end: 2 writes across 1 files (chase_set.py) | 1 reads | ~12942 tok |
+
+## Session: 2026-11-10 20:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:24 | Edited src/cutscenes/m6fx3d.py | added 1 import(s) | ~12 |
+| 20:24 | Edited src/cutscenes/m6fx3d.py | 9→9 lines | ~62 |
+| 20:39 | Session end: 2 writes across 1 files (m6fx3d.py) | 0 reads | ~74 tok |
+
+## Session: 2026-11-10 21:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:57 | Edited src/missions/m8/revenge/chase_set.py | 3→6 lines | ~113 |
+| 21:57 | Edited src/missions/m8/revenge/chase_set.py | modified _charred() | ~100 |
+<!-- session:MWYxZTVlNTQtYjlhNS00NTQ0LWE4M2YtMzUwYmM1MzMwNGQy -->
+| 2026-11-10T20:22:47.681Z | M8 chase: wheels turn as one piece (rim/hub/lugs taken into wheel mesh, spoke decal removed, coarse tread/rim sectors, WHEEL_SPIN 0.6); hull 0 now plays a ~9 s capture (blast, burnt tractor, jeeps pull up, guards, hands up, kneel, CAPTURED fade) before checkpoint restart | src/missions/m8/revenge/chase_set.py,src/missions/m8/revenge/chase3d.py,tools/smoke_test.py | SMOKE TEST: OK |
+
+## Session: 2026-11-10 23:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-10 23:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-10 00:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-10 00:06
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-10 00:08
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-10 00:24
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 13→13 lines | ~195 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 3→7 lines | ~89 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | modified _edge() | ~94 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 5→3 lines | ~33 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 2→2 lines | ~20 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | modified handle_event() | ~127 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 2→2 lines | ~26 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 3→5 lines | ~63 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | reduced (-13 lines) | ~58 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | modified _maru_shoot() | ~220 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 3→4 lines | ~55 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 2→2 lines | ~27 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | inline fix | ~26 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | modified _hud() | ~47 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | else() → wound_age() | ~165 |
+| 00:31 | Edited src/missions/m8/revenge/kill3d.py | 3→2 lines | ~20 |
+| 00:31 | Edited src/missions/m8/m8_audio.py | 3→4 lines | ~73 |
+| 00:31 | Edited src/missions/m8/m8_audio.py | 2→4 lines | ~65 |
+| 00:31 | Edited src/missions/m8/m8_audio.py | 1→2 lines | ~27 |
+| 00:38 | Edited tools/smoke_test.py | removed 12 lines | ~8 |
+| 00:38 | Edited tools/smoke_test.py | 18→18 lines | ~302 |
+| 00:38 | Edited tools/smoke_test.py | removed 17 lines | ~15 |
+| 00:42 | Edited src/missions/m8/flow.py | "The last shot, or the low" → "Maru" | ~17 |
+| 00:42 | Edited src/core/dev_jumps.py | inline fix | ~27 |
+| 00:56 | Edited src/missions/m8/revenge/kill3d.py | "...Steady hands." → "...Good shot." | ~22 |
+<!-- session:NDlkZWQyODktZWYzNC00MmZiLWI4MGMtMjdlNzUwNjkwZjkx -->
+| 2026-11-10T22:59:52.831Z | M8 Vasile kill: Maru takes the shot after a 30 s aim-only standoff (STANDOFF_S), no player fire; Maru's shot is scripted from off-camera (MARU_AT) and Vasile slides and drops over the south edge (_edge). Standoff music uses a dark cello track (cue standoff, m8_audio DREAD) from aim start through the landing; other M8 beats unchanged. Caption changed from ...Steady hands. to ...Good shot. (manifest VO_405 still says Steady hands, not edited). Smoke test OK; headless probe confirmed 30.0 s timer, single hit, cue sequence, caption render. | src/missions/m8/revenge/kill3d.py,src/missions/m8/m8_audio.py,src/missions/m8/flow.py,src/core/dev_jumps.py,tools/smoke_test.py | compileall OK; smoke_test OK; CR 0 in edited files; visual check of caption frame OK |
+
+## Session: 2026-11-11 15:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-11 15:28
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:33 | Created docs/superpowers/plans/2026-11-11-m8-vasile-death.md | — | ~5986 |
+| 15:33 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | 1→2 lines | ~98 |
+| 15:33 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | 5→6 lines | ~52 |
+| 15:33 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | modified test_five_hits_then_bodi() | ~343 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | removed 3 lines | ~1 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | modified test_pose_frame_rate_independent() | ~118 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | 2→6 lines | ~98 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | modified test_music_cues() | ~74 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | 3→2 lines | ~24 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | 2→2 lines | ~29 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | 2→2 lines | ~34 |
+| 15:34 | Edited docs/superpowers/plans/2026-11-11-m8-vasile-death.md | inline fix | ~68 |
+| 15:37 | Created tests/unit/test_m8_kill.py | — | ~2298 |
+| 15:40 | Created src/missions/m8/revenge/kill3d.py | — | ~8225 |
+| 19:37 | Session end: 25 writes across 5 files (kill3d.py, m8_audio.py, smoke_test.py, flow.py, dev_jumps.py) | 3 reads | ~1821 tok |
+| 19:37 | Session end: 14 writes across 3 files (2026-11-11-m8-vasile-death.md, test_m8_kill.py, kill3d.py) | 0 reads | ~17940 tok |
+| 19:37 | Session end: 2 writes across 1 files (chase_set.py) | 0 reads | ~213 tok |
+
+## Session: 2026-11-11 19:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-11 20:02
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-11 20:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:42 | Created src/game/content/timelines/m8.descent.timeline.json | — | ~327 |
+| 20:44 | Edited src/cutscenes/m8films.py | modified _rung_pose() | ~2276 |
+| 20:44 | Edited src/cutscenes/m8films.py | 1→2 lines | ~40 |
+<!-- session:N2FjNTkyYzMtNmU4ZC00NTQ1LThlOWQtZjYzNDc1NGY4Njky -->
+| 2026-11-11T18:49:48.233Z | M8: new descent film stage between kill and chase (m8.descent, 4 shots in m8films; last shot lands on the chase's opening camera) | src/cutscenes/m8films.py,src/missions/m8/meta.py,src/missions/m8/m8_audio.py,src/game/content/timelines/m8.descent.timeline.json,src/audio/voice_manifest.py,tools/smoke_test.py,docs/MISSION8_PLOT.md,CLAUDE.md | smoke test OK, compileall OK |
+
+## Session: 2026-11-11 20:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-11 20:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:10 | Created tools/m8_descent_shots.py | — | ~754 |
+| 21:10 | Edited tools/m8_descent_shots.py | 8→11 lines | ~99 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | added 1 import(s) | ~20 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | expanded (+7 lines) | ~160 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | 2→6 lines | ~53 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | modified _setup() | ~26 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | modified _adopt() | ~106 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | modified _enemy_move() | ~330 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | modified draw() | ~174 |
+| 21:13 | Edited src/missions/m8/revenge/chase3d.py | modified pullout_scene() | ~220 |
+| 21:13 | Edited src/cutscenes/m8films.py | 4→2 lines | ~28 |
+| 21:13 | Edited src/cutscenes/m8films.py | modified _convoy() | ~109 |
+| 21:13 | Edited src/cutscenes/m8films.py | _far_lights() → _convoy() | ~10 |
+| 21:13 | Edited src/cutscenes/m8films.py | 4→4 lines | ~76 |
+| 21:13 | Edited src/cutscenes/m8films.py | modified descent_pullout() | ~217 |
+| 21:14 | Edited src/game/content/timelines/m8.friends.timeline.json | 1→2 lines | ~15 |
+| 21:14 | Edited src/game/content/timelines/m8.friends.timeline.json | 1→2 lines | ~15 |
+| 21:14 | Edited src/game/content/timelines/m8.friends.timeline.json | 1→2 lines | ~15 |
+| 21:14 | Edited src/game/content/timelines/m8.friends.timeline.json | 1→2 lines | ~15 |
+| 21:14 | Edited src/game/content/timelines/m8.friends.timeline.json | 1→2 lines | ~15 |
+| 21:14 | Edited src/game/content/timelines/m8.descent.timeline.json | 1→4 lines | ~30 |
+| 21:14 | Edited src/app.py | added 1 condition(s) | ~150 |
+| 21:14 | Edited src/app.py | added 1 condition(s) | ~90 |
+| 21:14 | Edited src/app.py | modified get() | ~49 |
+| 21:15 | Edited src/cutscenes/m8films.py | modified _rig() | ~166 |
+| 21:15 | Edited tools/m8_descent_shots.py | tostring() → tobytes() | ~24 |
+| 21:16 | Edited src/cutscenes/m8films.py | modified _convoy() | ~222 |
+| 21:16 | Edited src/cutscenes/m8films.py | 2→2 lines | ~46 |
+| 21:20 | Edited tools/m8_descent_shots.py | 5→8 lines | ~68 |
+| 21:20 | Edited tools/m8_descent_shots.py | modified print() | ~170 |
+| 21:20 | Edited tools/m8_descent_shots.py | 2→7 lines | ~91 |
+<!-- session:OGNkODY4ODktNTZhMC00OWQ5LWE3ZjMtZjU4MzZjYjQ1MGQ1 -->
+| 2026-11-11T19:26:08.285Z | M8 descent-to-chase handoff. Pullout renders chase3d.pullout_scene (same drive, spawn and traffic code); chase begin() adopts its end state. Film traffic is real car_m2 jeeps with nose lamps. Geton tractor uses chase road heading and near-side camera. Old Friends spoken shots (m8.friends 1-5) locked: ESC and ENTER ignored, SPACE advances only after line delivered. Descent pullout flags: self_graded, full_frame, cut_to_play. New tools/m8_descent_shots.py renders the handoff. | src/cutscenes/m8films.py,src/missions/m8/revenge/chase3d.py,src/app.py,src/game/content/timelines/m8.friends.timeline.json,src/game/content/timelines/m8.descent.timeline.json,tools/m8_descent_shots.py | compileall clean; smoke_test SMOKE TEST: OK; unittest test_m8_chase_gun 8/8; scripted skip check 19/19; handoff pixel diff 0 of 700000. Not committed. ae_ci not run (engine untouched). |
+
+## Session: 2026-11-11 21:45
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-11 23:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:12 | Edited src/missions/m8/revenge/chase3d.py | removed 7 lines | ~30 |
+
+## Session: 2026-11-11 00:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | 1→5 lines | ~96 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | removed 9 lines | ~28 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | modified _lift() | ~626 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | 2→2 lines | ~20 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | 2→2 lines | ~20 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | 2→2 lines | ~19 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | 4→4 lines | ~31 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | modified _wreck() | ~763 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | 4→5 lines | ~54 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | modified get() | ~127 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | modified _draw_fx() | ~176 |
+| 00:18 | Edited src/missions/m8/revenge/chase3d.py | inline fix | ~25 |
+| 00:22 | Session end: 1 writes across 1 files (chase3d.py) | 0 reads | ~30 tok |
+| 00:22 | Session end: 31 writes across 6 files (m8_descent_shots.py, chase3d.py, m8films.py, m8.friends.timeline.json, m8.descent.timeline.json) | 9 reads | ~8488 tok |
+| 00:22 | Session end: 3 writes across 2 files (m8.descent.timeline.json, m8films.py) | 1 reads | ~2643 tok |
+
+## Session: 2026-11-11 00:23
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:25 | Edited src/missions/m8/revenge/chase_set.py | modified _xf() | ~368 |
+| 00:25 | Edited src/missions/m8/revenge/chase_set.py | modified put() | ~73 |
+| 00:25 | Edited src/missions/m8/revenge/chase_set.py | 2→5 lines | ~91 |
+| 00:25 | Edited src/missions/m8/revenge/chase_set.py | 4→3 lines | ~27 |
+| 00:26 | Edited src/missions/m8/revenge/chase3d.py | 5→10 lines | ~181 |
+| 00:26 | Edited src/missions/m8/revenge/chase3d.py | 4→4 lines | ~83 |
+| 00:26 | Edited src/missions/m8/revenge/chase3d.py | modified _lift() | ~512 |
+| 00:26 | Edited src/missions/m8/revenge/chase3d.py | 3→4 lines | ~43 |
+| 00:26 | Edited src/missions/m8/revenge/chase3d.py | 5→7 lines | ~127 |
+| 00:26 | Edited src/missions/m8/revenge/chase3d.py | modified _boom() | ~1024 |
+| 00:27 | Edited src/missions/m8/revenge/chase3d.py | modified get() | ~89 |
+| 00:27 | Edited src/missions/m8/revenge/chase3d.py | modified get() | ~371 |
+| 00:27 | Edited src/missions/m8/revenge/chase3d.py | removed 5 lines | ~14 |
+| 00:27 | Edited src/missions/m8/revenge/chase3d.py | 8→13 lines | ~254 |
+| 00:29 | Edited src/missions/m8/revenge/chase3d.py | 4→5 lines | ~100 |
+| 00:30 | Edited src/missions/m8/revenge/chase3d.py | 7→6 lines | ~146 |
+| 00:30 | Edited src/missions/m8/revenge/chase3d.py | 1→3 lines | ~79 |
+| 00:30 | Edited src/missions/m8/revenge/chase3d.py | inline fix | ~21 |
+| 00:34 | Edited src/missions/m8/revenge/chase3d.py | 6→11 lines | ~174 |
+| 00:34 | Edited src/missions/m8/revenge/chase3d.py | 2→2 lines | ~32 |
+| 00:34 | Edited src/missions/m8/revenge/chase3d.py | 4→9 lines | ~157 |
+| 00:34 | Edited src/missions/m8/revenge/chase3d.py | 2→3 lines | ~44 |
+| 00:34 | Edited src/missions/m8/revenge/chase3d.py | 2→2 lines | ~34 |
+| 00:34 | Edited src/missions/m8/revenge/chase3d.py | 2→2 lines | ~31 |
+| 00:35 | Edited src/missions/m8/revenge/chase3d.py | 3→3 lines | ~32 |
+| 00:43 | Edited src/missions/m8/revenge/chase3d.py | modified in() | ~341 |
+| 00:43 | Edited src/missions/m8/revenge/chase3d.py | 2→4 lines | ~78 |
+| 00:53 | Edited src/missions/m8/revenge/chase3d.py | modified _far_lamp() | ~122 |
+| 00:53 | Edited src/missions/m8/revenge/chase3d.py | modified in() | ~288 |
+| 00:54 | Edited src/missions/m8/revenge/chase3d.py | modified draw() | ~69 |
+
+## Session: 2026-11-11 01:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-12 19:36
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:47 | Edited CLAUDE.md | 3→3 lines | ~173 |
+| 19:47 | Edited CLAUDE.md | reduced (-6 lines) | ~126 |
+| 19:48 | Edited .claude/settings.local.json | removed 16 lines | ~2 |
+<!-- session:Zjg1ZWVlYTAtNWJmZi00Y2RlLWFhZDMtYzQ5ZWI2Y2RjYzQ0 -->
+| 2026-11-12T17:48:27.258Z | Context audit: disabled superpowers plugin, archived delegate skill, shortened graphify/prompt-master/openwolf descriptions, trimmed CLAUDE.md, removed stale haiku-reads.js hook | CLAUDE.md,.claude/settings.local.json,.claude/skills/openwolf/SKILL.md | settings JSON valid |
+
+## Session: 2026-11-12 20:37
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:41 | Edited src/missions/m8/revenge/chase3d.py | 4→6 lines | ~80 |
+| 20:41 | Edited src/missions/m8/revenge/chase3d.py | modified _crash_hit() | ~95 |
+| 20:41 | Edited src/missions/m8/revenge/chase3d.py | 2→3 lines | ~11 |
+| 20:41 | Edited src/missions/m8/revenge/chase3d.py | 5→8 lines | ~85 |
+| 20:46 | Edited tests/unit/test_m8_chase_traffic.py | modified test_a_hard_rear_end_wrecks_the_striking_car() | ~58 |
+| 20:47 | Edited tests/unit/test_m8_chase_traffic.py | modified test_a_hard_rear_end_far_back_is_only_a_bump() | ~331 |
+| 20:47 | Edited tests/unit/test_m8_chase_traffic.py | 2→2 lines | ~40 |
+| 20:49 | Edited src/missions/m8/revenge/chase3d.py | added 1 condition(s) | ~207 |
+<!-- session:NjY4OWIzYjMtMjliMS00NDI3LWI1NmItM2NlYTkwODUwZjli -->
+| 2026-11-12T18:55:34.204Z | M8 chase traffic: side-by-side deadlock fixed in _follow_cap, crash wrecks limited to CRASH_RANGE 40 m, wrecks despawn past fog, _avoid_lat look-ahead 3.5 s and too-late rule so the old swerve test passes | src/missions/m8/revenge/chase3d.py,tests/unit/test_m8_chase_traffic.py,.wolf/buglog.json | chase unit tests 28 OK, smoke OK, headless sim no stalls |
+
+## Session: 2026-11-12 21:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:38 | Edited src/missions/m8/revenge/chase3d.py | 7→8 lines | ~63 |
+| 21:38 | Edited src/missions/m8/revenge/chase3d.py | 2→3 lines | ~25 |
+| 21:38 | Edited src/missions/m8/revenge/chase3d.py | 7→9 lines | ~84 |
+| 21:38 | Edited src/missions/m8/revenge/chase3d.py | modified _draw_jump() | ~1052 |
+| 21:39 | Edited src/missions/m8/revenge/chase_set.py | modified in() | ~75 |
+| 21:39 | Edited src/missions/m8/revenge/chase_set.py | 2→2 lines | ~10 |
+| 21:39 | Edited src/missions/m8/revenge/chase_set.py | 3→5 lines | ~84 |
+| 21:39 | Edited src/missions/m8/revenge/chase_set.py | expanded (+9 lines) | ~309 |
+| 21:39 | Edited src/cutscenes/m8films.py | expanded (+17 lines) | ~352 |
+| 21:42 | Edited src/app.py | modified skip() | ~56 |
+| 21:42 | Edited src/app.py | modified update() | ~102 |
+| 21:42 | Edited src/app.py | modified _console_skip_cutscene() | ~105 |
+| 21:42 | Edited src/game/devtools.py | modified bind_cutscene() | ~40 |
+| 21:42 | Edited src/game/devtools.py | 2→3 lines | ~35 |
+| 21:42 | Edited src/game/devtools.py | 4→7 lines | ~89 |
+| 21:42 | Edited src/game/devtools.py | 4→9 lines | ~128 |
+| 21:42 | Edited src/game/devtools.py | 2→3 lines | ~25 |
+| 21:43 | Edited src/core/console.py | modified else() | ~90 |
+| 21:43 | Edited src/core/console.py | 1→2 lines | ~52 |
+| 21:44 | Edited src/core/dev_jumps.py | 1→2 lines | ~54 |
+| 21:44 | Edited src/app.py | 1→2 lines | ~36 |
+| 21:44 | Edited src/app.py | 2→4 lines | ~58 |
+| 21:47 | Edited src/missions/m8/revenge/chase3d.py | modified getattr() | ~121 |
+| 21:47 | Edited src/app.py | 2→7 lines | ~112 |
+
+## Session: 2026-11-12 21:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:58 | Edited src/cutscenes/m8films.py | 0.0 → 0.30 | ~27 |
+| 22:11 | Session end: 24 writes across 7 files (chase3d.py, chase_set.py, m8films.py, app.py, devtools.py) | 1 reads | ~3157 tok |
+| 22:11 | Session end: 1 writes across 1 files (m8films.py) | 0 reads | ~27 tok |
+| 22:11 | Session end: 8 writes across 2 files (chase3d.py, test_m8_chase_traffic.py) | 0 reads | ~907 tok |
+| 22:11 | Session end: 3 writes across 2 files (CLAUDE.md, settings.local.json) | 0 reads | ~322 tok |
+| 22:32 | Edited src/cutscenes/m8films.py | added 1 import(s) | ~38 |
+| 22:32 | Edited src/cutscenes/m8films.py | modified enumerate() | ~102 |
+| 22:32 | Edited src/cutscenes/m8films.py | modified _photo_card() | ~169 |
+| 22:32 | Edited src/cutscenes/m8films.py | 2→3 lines | ~47 |

@@ -2869,9 +2869,35 @@ def _gen_modem_dialup():
     return _wav(buf)
 
 
+def _pitch_take(sound, ratio):
+    """A re-pitched copy of a loaded Sound (ratio > 1 = higher, shorter), or None."""
+    try:
+        import numpy as np
+        import wave
+        freq, fmt, chans = pygame.mixer.get_init()
+        if fmt != -16:
+            return None
+        src = np.frombuffer(sound.get_raw(), dtype="<i2").reshape(-1, chans)
+        n = max(8, int(len(src) / ratio))
+        at = np.linspace(0.0, len(src) - 1.0, n)
+        idx = np.arange(len(src))
+        out = np.column_stack([np.interp(at, idx, src[:, c]) for c in range(chans)])
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(chans)
+            w.setsampwidth(2)
+            w.setframerate(freq)
+            w.writeframes(np.rint(out).astype("<i2").tobytes())
+        return _load(buf.getvalue())
+    except Exception:
+        return None
+
+
 class AudioManager:
     def __init__(self):
         self.sounds = {}
+        self._var_rng = random.Random()   # own stream: takes never disturb LEGACY_RNG
+        self._var_last = {}
         self.master_volume = 0.8
         self.sfx_volume = 1.0       # 0..1 - separate scale for SFX (one-shots + loops)
         # Music slider as a multiplier on each track's authored level (see
@@ -3065,6 +3091,42 @@ class AudioManager:
     def play_random(self, prefix, count=3, volume=1.0, loops=0, channel=None):
         return self.play(f"{prefix}_{_rng_legacy.randint(1, count)}", volume=volume, loops=loops, channel=channel)
         
+    def play_varied(self, name, volume=1.0, count=4, pitch=0.05, gain=0.1, pan=None):
+        """Play ``name`` as one of ``count`` takes: re-pitched copies built on first
+        use (within +/-``pitch``), a little gain jitter, never the same take twice
+        running.  Take 0 is the sound itself, and the fallback if a copy fails.
+        ``pan`` (-1..1) places the take left/right."""
+        base = self._ensure(name)
+        if base is None:
+            return None
+        count = max(1, int(count))
+        pick = 0
+        if count > 1:
+            last = self._var_last.get(name, -1)
+            pick = self._var_rng.randrange(count - 1)
+            if last >= 0 and pick >= last:
+                pick += 1
+            self._var_last[name] = pick
+        take = name
+        if pick:
+            take = "%s~%d" % (name, pick)
+            if take not in self.sounds:
+                # spread the takes either side of the original
+                step = ((pick + 1) // 2) * (1 if pick % 2 else -1) / max(1, count // 2)
+                self.sounds[take] = _pitch_take(base, 1.0 + pitch * step)
+            if self.sounds[take] is None:
+                take = name
+        if name in self.combat_names:
+            self.last_combat_ms = pygame.time.get_ticks()
+        c = self.play(take, volume=volume * (1.0 - gain * self._var_rng.random()))
+        if c and pan:
+            pan = max(-1.0, min(1.0, float(pan)))
+            try:
+                c.set_volume(min(1.0, 1.0 - pan), min(1.0, 1.0 + pan))
+            except Exception:
+                pass
+        return c
+
     def schedule(self, delay_frames, name, volume=1.0, loops=0, channel=None):
         self.scheduled.append({
             "delay": max(0, int(delay_frames)),

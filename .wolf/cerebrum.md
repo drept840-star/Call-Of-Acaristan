@@ -78,12 +78,34 @@ budget_tokens: 2000
   callback paints floor past the map border. `StaticLayers.define(world_size=)`
   with the raw map size clips that edge chunk to 256 px, so the border strip
   renders as bare background (M1 golden: 7 % px, max diff 24).
+- **M8 pintle LMG irons are obstructed; ADS is a gunner-eye -> front-post camera.**
+  `lmg.mesh.json` carries AA ring stalks (gun-space z~0.07/0.18, y up to 0.241)
+  sitting ON the rear-blade -> front-blade line, so a notch-and-post sight
+  picture is blocked. `chase3d.ADS_EYE/ADS_POST` put the eye at the gunner's
+  head and look at the front post top; eye and gun turn together on the pintle,
+  so the post stays on the crosshair at every yaw/pitch. The sight line runs
+  ~14 deg below the gun axis: do NOT "fix" that by tilting the gun (`pe` offset)
+  - `_hold_at` clamps to PITCH_LIM and the pierce regressions sweep that
+  envelope. Everything in the chase is ground-level behind the trailer, so the
+  depressed sight line costs no usable aim envelope.
+- **A probe that imports `app` must catch SystemExit.** `src/app.py` ends with
+  `sys.exit()`, so module-level probe code after `import app` never runs unless
+  the import is wrapped in `try/except SystemExit` (as `tools/m6_loop_probe.py`
+  does). Symptom: the probe prints only the pygame banner and no results.
 
 ## Do-Not-Repeat
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
+- [2026-11-11] M8 chase: spawning chasers far back (past the draw cull) is only
+  half the job — `_enemy_update` also CULLS enemies behind `tz - DESPAWN_BACK`.
+  The old `tz-160` filter deleted a 350 m spawn the same frame, so smoke failed
+  "chasers must spawn on the farm track". Spawn distance and despawn distance
+  must be reconciled (`DESPAWN_BACK = SPAWN_BACK + 60`). Also: a proportional
+  lateral steer (`step=(want-x)*dt*rate`) lags a curving `road_x`, so the actual
+  lane offset overshoots the clamped avoidance target by ~speed*curve/rate on
+  bends — clamp the TARGET, but expect the body to swing wider mid-swerve.
 - [2026-10-24] A "PS2 revert" request can already be undone: check
   `git diff <pre-revert> HEAD` before restoring anything. 3260f70 dropped the 3D
   PS2 path and 75294cd restored it; HEAD was byte-identical to 57acb6c.
