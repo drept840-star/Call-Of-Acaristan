@@ -514,9 +514,13 @@ def epi_estate(surface, t):
     _finish(surface, r, t, 22)
 
 
+MARU_Y = 1.24   # root height: back rests on the satin lining (top ~1.475)
+
+
 def _funeral_cast(r, t):
     CS.put(r, "funeral", E.funeral, (0.0, 0.0, 0.0))
-    _w.actor(r, "maru", E.LYING, (FX - 0.04, 1.17, FZ), 90.0, int(t), seed=5, amp=0.0, mouth=0.0)
+    _w.actor(r, "maru", E.LYING, (FX - 0.04, MARU_Y, FZ), 90.0, int(t), seed=5, amp=0.0, mouth=0.0,
+             expression="closed", flags=("suit",))
     for i, (dx, dz, yaw) in enumerate(E.HONOUR):
         pose = _hold_cached(_w.hum(("guard", "officer")), dict(POSES["stand"], head_p=4),
                             "rifle", "port", key="guard_honour")
@@ -529,7 +533,7 @@ def epi_casket(surface, t):
     """Maru in the open casket, the guard of honour still."""
     d = k(t, 0, 5200)
     eye = (FX - 1.6 + 0.6 * d, 2.5 - 0.2 * d, FZ - 4.4 + 0.6 * d)
-    r = _road(eye, (FX + 0.1, 1.35, FZ + 0.3), 44.0, t, look="night", lights=E.estate_lights())
+    r = _road(eye, (FX + 0.1, 1.35, FZ + 0.3), 44.0, t, look="night", lights=E.casket_lights())
     _funeral_cast(r, t)
     _finish(surface, r, t, 23)
 

@@ -227,10 +227,10 @@ def funeral():
     m.add(box(2.2, 0.45, 0.8, (70, 42, 28), center=(fx, 1.225, fz)))
     m.add(box(2.0, 0.03, 0.62, (226, 214, 190), center=(fx, 1.46, fz)))
     m.add(box(2.2, 0.06, 0.06, GOLD, center=(fx, 1.0, fz - 0.41)))
-    m.add(box(1.1, 0.04, 0.86, NAVY, center=(fx + 0.6, 1.47, fz)))                  # the flag
-    m.add(box(1.1, 0.28, 0.02, NAVY, center=(fx + 0.6, 1.34, fz - 0.43)))
-    m.add(box(1.1, 0.12, 0.02, RED, center=(fx + 0.6, 1.14, fz - 0.43)))
-    m.add(box(0.2, 0.2, 0.02, GOLD, center=(fx + 0.6, 1.36, fz - 0.442)))
+    m.add(box(0.6, 0.04, 0.86, NAVY, center=(fx + 0.95, 1.47, fz)))                  # the flag
+    m.add(box(0.6, 0.28, 0.02, NAVY, center=(fx + 0.95, 1.34, fz - 0.43)))
+    m.add(box(0.6, 0.12, 0.02, RED, center=(fx + 0.95, 1.14, fz - 0.43)))
+    m.add(box(0.14, 0.2, 0.02, GOLD, center=(fx + 0.95, 1.36, fz - 0.442)))
     for x, z in CANDLES:
         m.add(box(0.06, 1.3, 0.06, (150, 130, 80), center=(x, 0.95, z)))
         m.add(box(0.24, 0.05, 0.24, (150, 130, 80), center=(x, 1.62, z)))
@@ -252,6 +252,13 @@ def funeral():
             for lx in (-0.2, 0.2):
                 m.add(box(0.04, 0.44, 0.04, (30, 30, 32), center=(x + lx, 0.22, z)))
     return m
+
+
+def casket_lights():
+    """estate_lights plus a warm key over Maru's face in the open casket."""
+    fx, fz = FUNERAL
+    return estate_lights() + [{"pos": (fx - 0.5, 2.6, fz - 1.6), "color": (255, 214, 170),
+                               "intensity": 0.45, "range": 3.0}]
 
 
 def estate_lights():

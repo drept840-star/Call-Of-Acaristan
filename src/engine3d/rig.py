@@ -100,6 +100,8 @@ EXPRESSIONS = {
                       mouth_curve=0.0, mouth_open=0.55),
     "worried":   dict(brow_y=0.006, brow_tilt=-11.0, eye_h=1.05, mouth_w=0.95,
                       mouth_curve=-0.004, mouth_open=0.12),
+    "closed":    dict(brow_y=0.0, brow_tilt=0.0, eye_h=0.12, mouth_w=0.95,
+                      mouth_curve=-0.002, mouth_open=0.0),
 }
 
 

@@ -590,6 +590,8 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
             h = third_person_rifle(Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra)))
         elif key == "ucilev":
             h = humanoid3d("ucilev", rifle="sniper", **extra)
+        elif key == "maru" and "suit" in flags:
+            h = humanoid3d("maru", shirt=(226, 226, 222), tie=(20, 18, 22), **extra)
         else:
             h = humanoid3d(key, **extra)
         _cache["hum"][ck] = h
