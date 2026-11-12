@@ -27,7 +27,14 @@ SKIP_DIRS = {
     "trailers", "handoff", "crash_reports", "graphify-out",
     ".qoder", ".opencode", ".workbuddy-ai", "SKILLS", ".wolf",
 }
-SKIP_FILES = {"build_code_pdf.py", "build_code_txt.py"}
+SKIP_FILES = {"build_code_pdf.py", "build_code_txt.py", "save_data.json"}
+# Generated data, not hand-written source: replay/golden baselines, gate output,
+# and numeric mesh/rig dumps. Together they are megabytes of numbers.
+SKIP_PATHS = ("tests/replay/", "tests/golden/", "validation/")
+SKIP_SUFFIXES = (".mesh.json", ".rig.json")
+# The dev panel appends the directory tree (~0.6 MB) after this, so stay under
+# 19 MB here to keep the final file under 20 MB.
+COMBINED_BUDGET = 19 * 1024 * 1024
 
 
 def find_source_files(root: Path):
@@ -42,9 +49,13 @@ def find_source_files(root: Path):
             rel = path.relative_to(root)
         except ValueError:
             continue
-        if any(part in SKIP_DIRS for part in rel.parts):
+        # Hidden folders hold tool state, e.g. .claude/worktrees = full repo copies.
+        if any(part in SKIP_DIRS or part.startswith(".") for part in rel.parts[:-1]):
             continue
         if path.name.lower() in skip_names:
+            continue
+        posix = rel.as_posix()
+        if posix.startswith(SKIP_PATHS) or posix.lower().endswith(SKIP_SUFFIXES):
             continue
         if path.stat().st_size > MAX_BYTES:
             continue
@@ -52,8 +63,10 @@ def find_source_files(root: Path):
     return sorted(found, key=lambda p: str(p).replace("\\", "/").lower())
 
 
-def write_files_to_txt(files, txt_path: Path):
+def write_files_to_txt(files, txt_path: Path, budget=None):
     lines = []
+    used = 0
+    dropped = []
     for filepath in files:
         abs_path = PROJECT_ROOT / filepath
         try:
@@ -61,14 +74,25 @@ def write_files_to_txt(files, txt_path: Path):
         except Exception as e:
             lines.extend([f"# {'-' * 60}", f"# {filepath} (UNREADABLE: {e})", "", ""])
             continue
-        lines.extend([
+        block = [
             f"# {'-' * 60}",
             f"# {filepath}",
             f"# {'-' * 60}",
             "",
             code.rstrip(),
             "",
-        ])
+        ]
+        size = sum(len(x.encode("utf-8")) + 1 for x in block)
+        if budget is not None and used + size > budget:
+            dropped.append(filepath)
+            continue
+        used += size
+        lines.extend(block)
+    if dropped:
+        lines.append(f"# {'-' * 60}")
+        lines.append(f"# OMITTED (over {budget // (1024 * 1024)} MB budget): {len(dropped)} file(s)")
+        lines.extend(f"#   {f}" for f in dropped)
+        print(f"WARNING: {len(dropped)} file(s) left out to stay under budget")
     txt_path.parent.mkdir(parents=True, exist_ok=True)
     txt_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"Written: {txt_path}")
@@ -132,7 +156,7 @@ def build_selection(files, out_dir: Path, combined_name="selected_source.txt"):
         print("No files selected.")
         return
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_files_to_txt(files, out_dir / combined_name)
+    write_files_to_txt(files, out_dir / combined_name, COMBINED_BUDGET)
     write_individual_txts(files, out_dir / "individual")
     print(f"DONE: {len(files)} file(s) -> {out_dir}")
 
