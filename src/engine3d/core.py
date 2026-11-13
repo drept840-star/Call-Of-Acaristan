@@ -529,6 +529,7 @@ class SoftwareRenderer:
     def begin(self):
         self._items = []
         self.actor_log = []
+        self._prep_memo = None
 
     def _fog_k(self, z):
         if z <= self.fog_start:
@@ -560,6 +561,7 @@ class SoftwareRenderer:
         The strongest ``cap`` win - the per-set light budget (§6.7 step 2)."""
         ls = sorted(lights, key=lambda L: -float(L.get("intensity", 1.0)))
         self.lights = ls[:cap]
+        self._prep_memo = None
 
     def set_pools(self, pools, cap=32):
         """Lamp pools for this frame: dicts with pos (the lamp head), range
@@ -570,26 +572,39 @@ class SoftwareRenderer:
         (scenes put a floor sprite there instead)."""
         self.pools = list(pools)[:cap]
 
-    def _local_light(self, col, centre, n, base=None):
+    def _light_prep(self):
+        """``self.lights`` with the per-light lookups done once per frame
+        instead of once per face (memoized until the next begin/set_lights)."""
+        memo = getattr(self, "_prep_memo", None)
+        if memo is not None and memo[0] is self.lights:
+            return memo[1]
+        out = []
+        for L in self.lights:
+            rng = float(L.get("range", 6.0))
+            spot = L.get("kind") == "spot"
+            out.append((L["pos"], rng, rng * rng, float(L.get("intensity", 1.0)), spot,
+                        L["dir"] if spot else None, float(L.get("cone", 0.7)), L["color"]))
+        self._prep_memo = (self.lights, out)
+        return out
+
+    def _local_light(self, col, centre, n, base=None, prep=None):
         """Add point/spot contributions at a face centre (software path:
         per-face evaluation of the per-vertex model, §6.7 step 2).
-        ``base`` = the face albedo, used when ``light_albedo`` is on."""
+        ``base`` = the face albedo, used when ``light_albedo`` is on.
+        ``prep`` = ``_light_prep()`` output (default: all of ``self.lights``)."""
         r_, g_, b_ = col
         mod = base if (self.light_albedo and base is not None) else None
         gain = self.light_gain
-        for L in self.lights:
-            lx, ly, lz = L["pos"]
+        for (lx, ly, lz), rng, rr, inten, spot, ddir, cone, lc in (
+                self._light_prep() if prep is None else prep):
             dx, dy, dz = lx - centre[0], ly - centre[1], lz - centre[2]
             d2 = dx * dx + dy * dy + dz * dz
-            rng = float(L.get("range", 6.0))
-            if d2 >= rng * rng or d2 < 1e-9:
+            if d2 >= rr or d2 < 1e-9:
                 continue
             d = d2 ** 0.5
-            fall = (1.0 - d / rng) ** 2 * float(L.get("intensity", 1.0))
-            if L.get("kind") == "spot":
-                ddir = L["dir"]
+            fall = (1.0 - d / rng) ** 2 * inten
+            if spot:
                 cosang = -(dx * ddir[0] + dy * ddir[1] + dz * ddir[2]) / d
-                cone = float(L.get("cone", 0.7))
                 if cosang <= cone:
                     continue
                 fall *= min(1.0, (cosang - cone) / 0.12)
@@ -597,7 +612,6 @@ class SoftwareRenderer:
             if nd <= 0.0:
                 continue
             k = fall * nd
-            lc = L["color"]
             if mod is not None:
                 k *= gain / 255.0
                 r_ += lc[0] * mod[0] * k
@@ -609,8 +623,16 @@ class SoftwareRenderer:
                 b_ += lc[2] * k
         return (min(255, int(r_)), min(255, int(g_)), min(255, int(b_)))
 
-    def _emit(self, wverts, faces, dynamic_light=None, bias=0.0, tint=None):
-        """Transform + cull + clip + project faces of one object into items."""
+    def _emit(self, wverts, faces, dynamic_light=None, bias=0.0, tint=None, sphere=None):
+        """Transform + cull + clip + project faces of one object into items.
+        ``sphere`` = (centre, radius) holding every vertex: local lights whose
+        range cannot reach it are skipped for the whole object."""
+        lights = self._light_prep() if self.lights else None
+        if lights and sphere is not None:
+            (sx0, sy0, sz0), rad = sphere
+            lights = [p for p in lights
+                      if ((p[0][0] - sx0) ** 2 + (p[0][1] - sy0) ** 2 + (p[0][2] - sz0) ** 2) ** 0.5
+                      < p[1] + rad + 1e-6]
         cam = self.cam
         r, u, f = self.right, self.up, self.fwd
         cx, cy, cz = cam
@@ -645,12 +667,15 @@ class SoftwareRenderer:
                 n2 = nrm if facing > 0 else (-nrm[0], -nrm[1], -nrm[2])
                 if light is not None:
                     col = light.shade(col, n2)
-                if self.lights:
+                if lights:
                     inv = 1.0 / len(idx)
                     centre = (sum(wverts[i][0] for i in idx) * inv,
                               sum(wverts[i][1] for i in idx) * inv,
                               sum(wverts[i][2] for i in idx) * inv)
-                    col = self._local_light(col, centre, n2, base_col)
+                    col = self._local_light(col, centre, n2, base_col, lights)
+                elif self.lights:
+                    # no light reaches this object: what _local_light returns
+                    col = (min(255, int(col[0])), min(255, int(col[1])), min(255, int(col[2])))
             if tint is not None and not em:
                 col = mix_col(col, tint[0], tint[1])
             pts = [cv[i] for i in idx]
@@ -699,7 +724,7 @@ class SoftwareRenderer:
                 continue
             if not self.visible_sphere(o.center, o.radius):
                 continue
-            self._emit(o.verts, o.faces)
+            self._emit(o.verts, o.faces, sphere=(o.center, o.radius))
 
     def add_dynamic(self, wverts, faces, bias=0.0, tint=None):
         """faces: (idx, colour, layer, double, None, emissive) - lit per frame."""
