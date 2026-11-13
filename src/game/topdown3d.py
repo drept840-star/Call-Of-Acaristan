@@ -237,11 +237,24 @@ def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0):
         if arr is None:
             return
         cache[key] = arr
+    # a prop that did not move since an earlier frame reuses its rows
+    # (add_packed only reads them); m2 alone puts ~200 props a frame
+    pkey = (id(arr), yaw, roll, pitch, tuple(pos))
+    hit = _PUT.get(pkey)
+    if hit is not None and hit[0] is arr:
+        r.add_packed(hit[1])
+        return
     rot = np.asarray(m, dtype=np.float32).reshape(3, 3)
     out = arr.copy()
     out[:, 0:3] = arr[:, 0:3] @ rot.T + np.asarray(pos, dtype=np.float32)
     out[:, 6:9] = arr[:, 6:9] @ rot.T
+    if len(_PUT) > 2048:
+        _PUT.clear()
+    _PUT[pkey] = (arr, out)
     r.add_packed(out)
+
+
+_PUT = {}
 
 
 def ring(r, x, z, rad, col, n=16, width=1, y=0.03):
@@ -386,24 +399,49 @@ def cast_shadows(r, alpha=100, col=SHADOW_COL):
     (``r.actor_log``) throws a hard shadow along ``SHADOW_DIR``. All of them
     go into one layer-1 sprite written without blending, so overlapping
     shadows do not double up; walls (layer 2) still hide it."""
+    import numpy as np
     boxes = getattr(r, "shadow_boxes", None) or ()
-    hulls = _CAST.get(id(boxes))
-    if hulls is None:
+    ent = _CAST.get(id(boxes))
+    if ent is None or ent[0] is not boxes:
         _CAST.clear()
-        hulls = _CAST[id(boxes)] = [_sweep(*b) for b in boxes]
+        hulls = [_sweep(*b) for b in boxes]
+        flat = [q for h in hulls for q in h]
+        ends = np.cumsum([len(h) for h in hulls]).tolist()
+        ent = _CAST[id(boxes)] = (boxes, hulls, np.array([q[0] for q in flat], dtype=np.float64),
+                                  np.array([q[1] for q in flat], dtype=np.float64), ends)
+    _boxes, hulls, hx, hz, ends = ent
+    # r.project for every static hull point at once: the same double ops in
+    # the same order as to_cam/project, so the polygons match bit for bit
+    cam, ri, up, fw = r.cam, r.right, r.up, r.fwd
+    dx, dy, dz = hx - cam[0], 0.0 - cam[1], hz - cam[2]
+    cx = dx * ri[0] + dy * ri[1] + dz * ri[2]
+    cy = dx * up[0] + dy * up[1] + dz * up[2]
+    cz = dx * fw[0] + dy * fw[1] + dz * fw[2]
+    ok = cz > r.NEAR
+    with np.errstate(divide="ignore", invalid="ignore"):   # behind-camera points are dropped via ok
+        sx = (r.w / 2 + cx / cz * r.focal).tolist()
+        sy = (r.h / 2 - cy / cz * r.focal).tolist()
+    ok = ok.tolist()
+    projected, i0 = [], 0
+    for i1 in ends:
+        projected.append(list(zip(sx[i0:i1], sy[i0:i1])) if all(ok[i0:i1]) else None)
+        i0 = i1
     polys = list(hulls)
     for p in getattr(r, "actor_log", ()):
         polys.append(_body_hull(p[0], p[2]))
     W, H = r.w, r.h
     scr, anchor = [], None
-    for poly in polys:
-        pts = []
-        for x, z in poly:
-            q = r.project((x, 0.0, z))
-            if q is None:
-                pts = None
-                break
-            pts.append((q[0], q[1]))
+    for n, poly in enumerate(polys):
+        if n < len(projected):
+            pts = projected[n]
+        else:
+            pts = []
+            for x, z in poly:
+                q = r.project((x, 0.0, z))
+                if q is None:
+                    pts = None
+                    break
+                pts.append((q[0], q[1]))
         if pts is None:
             continue
         if (max(p[0] for p in pts) < 0 or min(p[0] for p in pts) > W

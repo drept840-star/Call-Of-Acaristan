@@ -421,6 +421,12 @@ def _water_surface(r, tm):
     step = S / n
     verts, faces, index = [], [], {}
     lamps = [(l["head"][0], l["head"][2], l["col"]) for l in _lights_for(STAGE_TUNNEL)]
+    # per-face shore tint and lamp falloff do not move with the swell
+    lamp_key = tuple((lx, lz) for lx, lz, _ in lamps)
+    fc = _cache.get("wface")
+    if fc is None or fc[0] != lamp_key:
+        fc = _cache["wface"] = (lamp_key, {})
+    fcache = fc[1]
 
     def vert(i, j):
         k = (i, j)
@@ -439,14 +445,20 @@ def _water_surface(r, tm):
                 i, j = col * n + a, row * n + b
                 q = (vert(i, j), vert(i + 1, j), vert(i + 1, j + 1), vert(i, j + 1))
                 h = sum(verts[v][1] for v in q) / 4.0 - WATER_Y
-                cx, cz = (i + 0.5) * step, -(j + 0.5) * step
-                d = (_shore(i, j) + _shore(i + 1, j) + _shore(i + 1, j + 1) + _shore(i, j + 1)) / 4.0
-                base = td.mix(SHALLOW, DEEP, min(1.0, d / 1.4) ** 0.7)
+                ent = fcache.get((i, j))
+                if ent is None:
+                    cx, cz = (i + 0.5) * step, -(j + 0.5) * step
+                    d = (_shore(i, j) + _shore(i + 1, j) + _shore(i + 1, j + 1) + _shore(i, j + 1)) / 4.0
+                    lit = []
+                    for k, (lx, lz, _lc) in enumerate(lamps):
+                        g = max(0.0, 1.0 - math.hypot(cx - lx, cz - lz) / 2.6)
+                        if g > 0.0:
+                            lit.append((k, 0.32 * g * g))
+                    ent = fcache[(i, j)] = (td.mix(SHALLOW, DEEP, min(1.0, d / 1.4) ** 0.7), lit)
+                base, lit = ent
                 c_ = _shade(base, max(0.86, min(1.22, 1.0 + h * 1.8)))
-                for lx, lz, lc in lamps:
-                    g = max(0.0, 1.0 - math.hypot(cx - lx, cz - lz) / 2.6)
-                    if g > 0.0:
-                        c_ = td.mix(c_, lc, 0.32 * g * g)
+                for k, w in lit:
+                    c_ = td.mix(c_, lamps[k][2], w)
                 faces.append((q, c_, 0, True, None, False))
     if faces:
         r.add_dynamic(verts, faces)
