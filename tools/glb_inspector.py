@@ -1,0 +1,1191 @@
+#!/usr/bin/env python3
+"""GLB Inspector - desktop viewer for .glb / .gltf files.
+
+Shows the node tree, exact world/local bounds, transforms, materials and colours
+(base factors, texture palettes, vertex colours) without dumping vertex arrays,
+next to an orbitable preview. Click a node in the list or in the viewport.
+
+Run:   python tools/glb_inspector.py [model.glb]
+Check: python tools/glb_inspector.py --selftest
+Drop a file on the window, or press O to open one.
+"""
+import base64
+import io
+import json
+import math
+import os
+import re
+import struct
+import sys
+import tempfile
+from collections import defaultdict
+from urllib.parse import unquote
+
+import numpy as np
+import pygame
+
+COMP = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
+NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT2": 4, "MAT3": 9, "MAT4": 16}
+MODES = {0: "POINTS", 1: "LINES", 2: "LINE_LOOP", 3: "LINE_STRIP", 4: "TRIANGLES", 5: "TRIANGLE_STRIP", 6: "TRIANGLE_FAN"}
+
+
+# ---------------------------------------------------------------- math helpers
+
+def quat_mat(q):
+    x, y, z, w = q
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 0],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 0],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y), 0],
+        [0, 0, 0, 1]], dtype=np.float64)
+
+
+def quat_euler_deg(q):
+    x, y, z, w = q
+    ex = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+    ey = math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x))))
+    ez = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+    return [math.degrees(v) for v in (ex, ey, ez)]
+
+
+def local_matrix(n):
+    if "matrix" in n:
+        return np.array(n["matrix"], np.float64).reshape(4, 4).T
+    t = np.eye(4)
+    t[:3, 3] = n.get("translation", [0, 0, 0])
+    s = np.diag(list(n.get("scale", [1, 1, 1])) + [1.0])
+    return t @ quat_mat(n.get("rotation", [0, 0, 0, 1])) @ s
+
+
+def perspective(fovy, aspect, near, far):
+    t = 1 / math.tan(fovy / 2)
+    return np.array([[t / aspect, 0, 0, 0], [0, t, 0, 0],
+                     [0, 0, (far + near) / (near - far), 2 * far * near / (near - far)], [0, 0, -1, 0]])
+
+
+def look_at(eye, tgt, up=(0, 1, 0)):
+    f = tgt - eye
+    f = f / np.linalg.norm(f)
+    s = np.cross(f, up)
+    s = s / np.linalg.norm(s)
+    u = np.cross(s, f)
+    m = np.eye(4)
+    m[0, :3], m[1, :3], m[2, :3] = s, u, -f
+    m[:3, 3] = -m[:3, :3] @ eye
+    return m
+
+
+def gl_mat(m):
+    return m.T.astype("f4").tobytes()  # GL wants column-major
+
+
+def lin2srgb(c):
+    c = max(0.0, min(1.0, float(c)))
+    return c * 12.92 if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
+
+
+def hex_lin(f):
+    """Linear factor -> sRGB hex, the same hex Blender's colour picker shows."""
+    return "#%02X%02X%02X" % tuple(round(lin2srgb(x) * 255) for x in f[:3])
+
+
+def to_srgb8(c):
+    c = np.clip(c, 0, 1)
+    rgb = np.where(c[:, :3] <= 0.0031308, c[:, :3] * 12.92, 1.055 * np.power(c[:, :3], 1 / 2.4) - 0.055)
+    return (np.hstack([rgb, c[:, 3:4]]) * 255 + 0.5).astype(np.uint8)
+
+
+def top_colors(rgba, k=8):
+    """(unique count, [(hex, alpha, count)]) for an Nx4 uint8 array."""
+    if len(rgba) > 1_000_000:  # shortcut: sampled past 1M px, exact counts would need the full sort
+        rgba = rgba[:: len(rgba) // 1_000_000 + 1]
+    v = rgba.astype(np.uint32)
+    key = (v[:, 0] << 24) | (v[:, 1] << 16) | (v[:, 2] << 8) | v[:, 3]
+    u, cnt = np.unique(key, return_counts=True)
+    order = np.argsort(-cnt)[:k]
+    top = [("#%06X" % (int(x) >> 8), int(x) & 255, int(n)) for x, n in zip(u[order], cnt[order])]
+    return len(u), top
+
+
+def bounds_dict(mn, mx):
+    return {"size": mx - mn, "center": (mn + mx) / 2, "min": mn, "max": mx}
+
+
+def clean(o):
+    """numpy -> plain lists, floats rounded to 6 places (for JSON and display)."""
+    if isinstance(o, dict):
+        return {k: clean(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [clean(v) for v in o]
+    if isinstance(o, np.ndarray):
+        return clean(o.tolist())
+    if isinstance(o, (float, np.floating)):
+        return round(float(o), 6)
+    if isinstance(o, np.integer):
+        return int(o)
+    return o
+
+
+def triangulate(idx, mode):
+    if mode == 4:
+        return idx[: len(idx) // 3 * 3]
+    if mode == 5:
+        k = np.arange(max(0, len(idx) - 2))
+        return np.stack([idx[k], idx[k + 1], idx[k + 2]], 1).ravel()
+    if mode == 6:
+        k = np.arange(1, max(1, len(idx) - 1))
+        return np.stack([np.full_like(k, idx[0]) if len(idx) else k, idx[k], idx[k + 1]], 1).ravel()
+    return None  # points/lines: counted, not drawn
+
+
+# ---------------------------------------------------------------- glTF model
+
+class Model:
+    def __init__(self, path):
+        self.path = path
+        self.base = os.path.dirname(os.path.abspath(path))
+        with open(path, "rb") as f:
+            raw = f.read()
+        self.file_size = len(raw)
+        self.bin = None
+        if raw[:4] == b"glTF":
+            version, length = struct.unpack_from("<II", raw, 4)
+            self.container = f"GLB v{version}"
+            off, self.j = 12, None
+            while off + 8 <= len(raw):
+                clen, ctype = struct.unpack_from("<II", raw, off)
+                data = raw[off + 8: off + 8 + clen]
+                if ctype == 0x4E4F534A:
+                    self.j = json.loads(data.decode("utf-8"))
+                elif ctype == 0x004E4942 and self.bin is None:
+                    self.bin = data
+                off += 8 + clen
+            if self.j is None:
+                raise ValueError("GLB has no JSON chunk")
+        else:
+            self.container = "glTF (JSON)"
+            self.j = json.loads(raw.decode("utf-8-sig"))
+        j = self.j
+        self._acc = {}
+        self.buffers = [self._uri(b["uri"]) if "uri" in b else (self.bin or b"") for b in j.get("buffers", [])]
+        self.nodes = j.get("nodes", [])
+        self.parent = [None] * len(self.nodes)
+        for i, n in enumerate(self.nodes):
+            for c in n.get("children", []):
+                self.parent[c] = i
+        scenes = j.get("scenes", [])
+        self.scene = j.get("scene", 0)
+        self.roots = scenes[self.scene].get("nodes", []) if scenes else [i for i, p in enumerate(self.parent) if p is None]
+        self.joints = {jn for s in j.get("skins", []) for jn in s.get("joints", [])}
+
+        self.world = {}
+        stack = [(r, np.eye(4)) for r in self.roots]
+        while stack:
+            i, pm = stack.pop()
+            self.world[i] = pm @ local_matrix(self.nodes[i])
+            stack += [(c, self.world[i]) for c in self.nodes[i].get("children", [])]
+
+        self.images = [self._image(k, im) for k, im in enumerate(j.get("images", []))]
+        self.prims = {mi: [self._prim(mi, pi) for pi in range(len(m.get("primitives", [])))]
+                      for mi, m in enumerate(j.get("meshes", []))}
+
+        self.wb = {}  # node -> world AABB of its own mesh
+        for i, M in self.world.items():
+            pts = [p["pos"] for p in self.prims.get(self.nodes[i].get("mesh"), []) if len(p["pos"])]
+            if pts:
+                P = np.vstack(pts).astype(np.float64) @ M[:3, :3].T + M[:3, 3]
+                self.wb[i] = (P.min(0), P.max(0))
+        self.tb = {}  # node -> world AABB of node + descendants
+        for r in self.roots:
+            self._subtree(r)
+        boxes = [self.tb[r] for r in self.roots if r in self.tb]
+        self.bounds = (np.min([b[0] for b in boxes], 0), np.max([b[1] for b in boxes], 0)) if boxes else None
+
+    # -- raw data access
+    def _uri(self, uri):
+        if uri.startswith("data:"):
+            return base64.b64decode(uri.split(",", 1)[1])
+        with open(os.path.join(self.base, unquote(uri)), "rb") as f:
+            return f.read()
+
+    def _view(self, i):
+        bv = self.j["bufferViews"][i]
+        o = bv.get("byteOffset", 0)
+        return memoryview(self.buffers[bv["buffer"]])[o: o + bv["byteLength"]], bv.get("byteStride")
+
+    def accessor(self, i):
+        if i in self._acc:
+            return self._acc[i]
+        a = self.j["accessors"][i]
+        dt, n, count = np.dtype(COMP[a["componentType"]]), NCOMP[a["type"]], a["count"]
+        if "bufferView" in a:
+            data, stride = self._view(a["bufferView"])
+            arr = np.ndarray((count, n), dt, buffer=data, offset=a.get("byteOffset", 0),
+                             strides=(stride or dt.itemsize * n, dt.itemsize)).copy()
+        else:
+            arr = np.zeros((count, n), dt)
+        sp = a.get("sparse")
+        if sp:
+            ii, iv = sp["indices"], sp["values"]
+            d, _ = self._view(ii["bufferView"])
+            idx = np.frombuffer(d, COMP[ii["componentType"]], sp["count"], ii.get("byteOffset", 0))
+            d, _ = self._view(iv["bufferView"])
+            arr[idx] = np.frombuffer(d, dt, sp["count"] * n, iv.get("byteOffset", 0)).reshape(-1, n)
+        if a.get("normalized") and dt.kind in "iu":
+            arr = np.maximum(arr.astype(np.float32) / np.iinfo(dt).max, -1.0)
+        self._acc[i] = arr
+        return arr
+
+    def _image(self, k, im):
+        info = {"name": im.get("name") or os.path.basename(unquote(im.get("uri", ""))) or f"image {k}",
+                "mime": im.get("mimeType", "?"), "rgba": None, "err": None}
+        try:
+            data = bytes(self._view(im["bufferView"])[0]) if "bufferView" in im else self._uri(im["uri"])
+            info["bytes"] = len(data)
+            s = pygame.image.load(io.BytesIO(data))
+            info["size"] = s.get_size()
+            info["rgba"] = pygame.image.tobytes(s, "RGBA")
+            px = np.frombuffer(info["rgba"], np.uint8).reshape(-1, 4)
+            info["avg"] = px.mean(0)
+            info["unique"], info["top"] = top_colors(px)
+        except Exception as e:  # a broken texture must not stop the inspection
+            info["err"] = str(e)
+        return info
+
+    def _prim(self, mi, pi):
+        p = self.j["meshes"][mi]["primitives"][pi]
+        at = p.get("attributes", {})
+        mode = p.get("mode", 4)
+        d = {"mode": MODES.get(mode, str(mode)), "material": p.get("material"), "attributes": sorted(at),
+             "targets": len(p.get("targets", [])), "vbo": None, "pos": np.zeros((0, 3), np.float32),
+             "tris": 0, "verts": 0}
+        if "POSITION" not in at:
+            return d
+        pos = self.accessor(at["POSITION"])[:, :3].astype(np.float32)
+        idx = self.accessor(p["indices"]).ravel().astype(np.int64) if "indices" in p else np.arange(len(pos))
+        tri = triangulate(idx, mode)
+        d.update(pos=pos, verts=len(pos), tris=0 if tri is None else len(tri) // 3, indices=len(idx))
+        col = None
+        if "COLOR_0" in at:
+            col = self.accessor(at["COLOR_0"]).astype(np.float32)
+            if col.shape[1] == 3:
+                col = np.hstack([col, np.ones((len(col), 1), np.float32)])
+            d["vcolors"] = top_colors(to_srgb8(col))
+        if tri is not None and len(tri):
+            P = pos[tri]
+            if "NORMAL" in at:
+                N = self.accessor(at["NORMAL"])[:, :3].astype(np.float32)[tri]
+            else:
+                a, b, c = P[0::3], P[1::3], P[2::3]
+                fn = np.cross(b - a, c - a)
+                fn /= np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
+                N = np.repeat(fn, 3, 0)
+            UV = self.accessor(at["TEXCOORD_0"])[:, :2].astype(np.float32)[tri] if "TEXCOORD_0" in at \
+                else np.zeros((len(tri), 2), np.float32)
+            C = col[tri] if col is not None else np.ones((len(tri), 4), np.float32)
+            d["vbo"] = np.hstack([P, N, UV, C]).astype(np.float32)
+        return d
+
+    def _subtree(self, i):
+        boxes = [self.wb[i]] if i in self.wb else []
+        for c in self.nodes[i].get("children", []):
+            b = self._subtree(c)
+            if b:
+                boxes.append(b)
+        if boxes:
+            self.tb[i] = (np.min([b[0] for b in boxes], 0), np.max([b[1] for b in boxes], 0))
+        return self.tb.get(i)
+
+    # -- reports (shared by the UI, Copy and Export)
+    def name(self, i):
+        return self.nodes[i].get("name") or f"node {i}"
+
+    def tex_image(self, ti):
+        t = self.j.get("textures", [])[ti]
+        src = t.get("source")
+        for e in t.get("extensions", {}).values():
+            src = e.get("source", src)
+        return src, t.get("sampler")
+
+    def mat_label(self, mi):
+        if mi is None:
+            return "default (white)"
+        m = self.j["materials"][mi]
+        f = m.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])
+        return f"{mi} {m.get('name', '')}  {hex_lin(f)}"
+
+    def summary(self):
+        j, a = self.j, self.j.get("asset", {})
+        drawn = [(i, p) for i in self.world for p in self.prims.get(self.nodes[i].get("mesh"), [])]
+        s = {"file": os.path.basename(self.path), "file_bytes": self.file_size, "container": self.container,
+             "gltf_version": a.get("version"), "generator": a.get("generator", "-"),
+             "scene": f"{self.scene} of {len(j.get('scenes', []))}",
+             "counts": {k: len(j.get(k, [])) for k in ("nodes", "meshes", "materials", "textures", "images",
+                                                        "skins", "animations", "cameras")},
+             "drawn": {"triangles": sum(p["tris"] for _, p in drawn), "vertices": sum(p["verts"] for _, p in drawn),
+                       "draw_calls": len(drawn)}}
+        if self.bounds:
+            s["scene_bounds_m"] = bounds_dict(*self.bounds)
+        for k in ("extensionsUsed", "extensionsRequired"):
+            if k in j:
+                s[k] = j[k]
+        return clean(s)
+
+    def prim_report(self, p):
+        r = {"mode": p["mode"], "vertices": p["verts"], "triangles": p["tris"], "material": self.mat_label(p["material"]),
+             "attributes": ", ".join(p["attributes"])}
+        if p["targets"]:
+            r["morph_targets"] = p["targets"]
+        if p["verts"]:
+            r["local_bounds"] = bounds_dict(p["pos"].min(0), p["pos"].max(0))
+        if "vcolors" in p:
+            u, top = p["vcolors"]
+            r["vertex_colors"] = {"unique": u, "top": [f"{h} a{al}  x{n}" for h, al, n in top]}
+        return r
+
+    def node_report(self, i):
+        n = self.nodes[i]
+        r = {"name": self.name(i), "index": i,
+             "parent": None if self.parent[i] is None else f"{self.parent[i]} {self.name(self.parent[i])}",
+             "children": len(n.get("children", []))}
+        if i in self.wb:
+            r["world_bounds"] = bounds_dict(*self.wb[i])
+        if i in self.tb and n.get("children"):
+            r["subtree_bounds"] = bounds_dict(*self.tb[i])
+        if "matrix" in n:
+            r["matrix"] = n["matrix"]
+        else:
+            q = n.get("rotation", [0, 0, 0, 1])
+            r.update(translation=n.get("translation", [0, 0, 0]), rotation_xyzw=q,
+                     rotation_euler_deg=quat_euler_deg(q), scale=n.get("scale", [1, 1, 1]))
+        if i in self.world:
+            r["world_position"] = self.world[i][:3, 3]
+        if "mesh" in n:
+            mesh = self.j["meshes"][n["mesh"]]
+            r["mesh"] = {"index": n["mesh"], "name": mesh.get("name", ""),
+                         "primitives": [self.prim_report(p) for p in self.prims[n["mesh"]]]}
+        if i in self.joints:
+            r["skin_joint"] = True
+        for k in ("camera", "skin", "weights", "extensions", "extras"):
+            if k in n:
+                r[k] = n[k]
+        return clean(r)
+
+    def material_report(self, mi):
+        m = self.j["materials"][mi]
+        pbr = m.get("pbrMetallicRoughness", {})
+        f = pbr.get("baseColorFactor", [1, 1, 1, 1])
+        r = {"base_color": f"{hex_lin(f)} a{f[3]:.3f}", "base_color_linear": f,
+             "metallic": pbr.get("metallicFactor", 1.0), "roughness": pbr.get("roughnessFactor", 1.0)}
+        if any(m.get("emissiveFactor", [0, 0, 0])):
+            r["emissive"] = hex_lin(m["emissiveFactor"])
+            r["emissive_linear"] = m["emissiveFactor"]
+        r["alpha_mode"] = m.get("alphaMode", "OPAQUE")
+        if r["alpha_mode"] == "MASK":
+            r["alpha_cutoff"] = m.get("alphaCutoff", 0.5)
+        r["double_sided"] = m.get("doubleSided", False)
+        if "baseColorTexture" in pbr:
+            ti = pbr["baseColorTexture"]["index"]
+            src, smp = self.tex_image(ti)
+            t = {"texture": ti, "uv_set": pbr["baseColorTexture"].get("texCoord", 0)}
+            if src is not None:
+                t.update(self.image_report(src))
+            if smp is not None:
+                s = self.j["samplers"][smp]
+                t["filter"] = "nearest" if s.get("magFilter") == 9728 else "linear"
+            r["base_texture"] = t
+        others = {k: m[k]["index"] for k in ("normalTexture", "occlusionTexture", "emissiveTexture") if k in m}
+        if "metallicRoughnessTexture" in pbr:
+            others["metallicRoughnessTexture"] = pbr["metallicRoughnessTexture"]["index"]
+        if others:
+            r["other_textures"] = others
+        if "extensions" in m:
+            r["extensions"] = m["extensions"]
+        r["used_by_nodes"] = [i for i in self.world if any(p["material"] == mi for p in self.prims.get(self.nodes[i].get("mesh"), []))]
+        return clean(r)
+
+    def image_report(self, k):
+        im = self.images[k]
+        r = {"image": k, "name": im["name"], "mime": im["mime"]}
+        if im["err"]:
+            r["error"] = im["err"]
+            return r
+        r.update(size=f"{im['size'][0]} x {im['size'][1]}", bytes=im["bytes"],
+                 average=f"#%02X%02X%02X" % tuple(int(x + 0.5) for x in im["avg"][:3]),
+                 unique_colors=im["unique"], top_colors=[f"{h} a{a}  x{n}" for h, a, n in im["top"]])
+        return r
+
+    def animation_report(self):
+        out = []
+        for k, a in enumerate(self.j.get("animations", [])):
+            ins = {s["input"] for s in a.get("samplers", [])}
+            dur = max((self.j["accessors"][i].get("max", [0])[0] for i in ins), default=0)
+            out.append({"name": a.get("name") or f"animation {k}", "channels": len(a.get("channels", [])),
+                        "duration_s": dur})
+        return clean(out)
+
+    def report(self):
+        return {"summary": self.summary(), "nodes": [self.node_report(i) for i in range(len(self.nodes))],
+                "materials": [self.material_report(i) for i in range(len(self.j.get("materials", [])))],
+                "images": [self.image_report(i) for i in range(len(self.images))],
+                "animations": self.animation_report()}
+
+
+# ---------------------------------------------------------------- report -> display lines
+
+BG = (22, 24, 29)
+VIEW_BG = (34, 37, 44)
+PANEL = (28, 31, 37)
+PANEL2 = (40, 44, 53)
+PANEL3 = (52, 57, 68)
+LINE = (55, 60, 72)
+TEXT = (222, 226, 234)
+DIM = (135, 142, 156)
+HEAD = (130, 175, 230)
+ACC = (255, 176, 64)
+RED = (255, 110, 100)
+GREEN = (120, 220, 140)
+KIND = {"mesh": (110, 190, 255), "joint": (200, 140, 255), "camera": GREEN, "empty": (120, 124, 134)}
+HEX = re.compile(r"#([0-9A-F]{6})")
+
+
+def fmt(v):
+    if isinstance(v, bool) or v is None:
+        return str(v)
+    if isinstance(v, float):
+        return f"{v:.4f}"
+    return str(v)
+
+
+def to_lines(obj, depth=0, key=None, out=None):
+    """Nested report -> [(text, colour, click)] with short number rows, no raw arrays."""
+    out = [] if out is None else out
+    pad, lab = "  " * depth, "" if key is None else f"{key}: "
+    if isinstance(obj, dict):
+        if key is not None:
+            out.append((pad + str(key), HEAD, None))
+        for k, v in obj.items():
+            to_lines(v, depth + (key is not None), k, out)
+    elif isinstance(obj, list) and obj and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in obj):
+        cells = [f"{x: .4f}" if isinstance(x, float) else str(x) for x in obj]
+        per = 4 if any(isinstance(x, float) for x in obj) else 10  # wrap so rows fit the panel
+        for k in range(0, len(cells), per):
+            out.append(((pad + lab if k == 0 else " " * len(pad + lab)) + "  ".join(cells[k:k + per]), TEXT, None))
+    elif isinstance(obj, list):
+        out.append((pad + lab + ("[]" if not obj else f"({len(obj)})"), HEAD if obj else DIM, None))
+        for n, v in enumerate(obj):
+            to_lines(v, depth + 1, f"[{n}]", out)
+    else:
+        out.append((pad + lab + fmt(obj), TEXT, None))
+    return out
+
+
+# ---------------------------------------------------------------- app
+
+VS = """#version 330
+uniform mat4 u_mvp; uniform mat3 u_nmat;
+in vec3 in_pos; in vec3 in_nrm; in vec2 in_uv; in vec4 in_col;
+out vec3 v_n; out vec2 v_uv; out vec4 v_c;
+void main() { gl_Position = u_mvp * vec4(in_pos, 1.0); v_n = u_nmat * in_nrm; v_uv = in_uv; v_c = in_col; }
+"""
+FS = """#version 330
+uniform sampler2D u_tex; uniform vec4 u_base; uniform float u_cut; uniform float u_blend;
+uniform float u_lit; uniform vec3 u_light; uniform vec4 u_tint; uniform vec3 u_pick; uniform bool u_picking;
+in vec3 v_n; in vec2 v_uv; in vec4 v_c; out vec4 f;
+void main() {
+    if (u_picking) { f = vec4(u_pick, 1.0); return; }
+    vec4 t = texture(u_tex, v_uv);
+    vec4 c = u_base * v_c * vec4(pow(t.rgb, vec3(2.2)), t.a);
+    if (c.a < u_cut) discard;
+    float d = abs(dot(normalize(v_n), u_light));
+    vec3 rgb = pow(c.rgb * mix(1.0, 0.28 + 0.85 * d, u_lit), vec3(1.0 / 2.2));
+    f = vec4(mix(rgb, u_tint.rgb, u_tint.a), mix(1.0, c.a, u_blend));
+}
+"""
+LVS = "#version 330\nuniform mat4 u_mvp; in vec3 in_pos; void main() { gl_Position = u_mvp * vec4(in_pos, 1.0); }"
+LFS = "#version 330\nuniform vec4 u_color; out vec4 f; void main() { f = u_color; }"
+QVS = "#version 330\nin vec2 in_pos; out vec2 uv; void main() { uv = in_pos * 0.5 + 0.5; gl_Position = vec4(in_pos, 0.0, 1.0); }"
+QFS = "#version 330\nuniform sampler2D t; in vec2 uv; out vec4 f; void main() { f = texture(t, uv); }"
+
+TOGGLES = ("Lit", "Tex", "Wire", "Bounds", "Grid")
+TOGGLE_KEYS = {pygame.K_l: "Lit", pygame.K_t: "Tex", pygame.K_w: "Wire", pygame.K_b: "Bounds", pygame.K_g: "Grid"}
+
+
+def make_icon(size=256):
+    """App icon: amber wireframe cube with a shaded front on a dark tile."""
+    s = pygame.Surface((256, 256), pygame.SRCALPHA)
+    pygame.draw.rect(s, PANEL, (8, 8, 240, 240), border_radius=48)
+    pygame.draw.rect(s, LINE, (8, 8, 240, 240), 6, border_radius=48)
+    top, mid, bot = 52, 108, 204  # isometric cube: top vertex, side rim, bottom vertex
+    l, c, r = 52, 128, 204
+    faces = (([(c, top), (r, mid - 28), (c, mid + 16), (l, mid - 28)], (255, 196, 110)),
+             ([(l, mid - 28), (c, mid + 16), (c, bot), (l, bot - 44)], (110, 190, 255)),
+             ([(c, mid + 16), (r, mid - 28), (r, bot - 44), (c, bot)], (60, 110, 170)))
+    for pts, col in faces:
+        pygame.draw.polygon(s, col, pts)
+        pygame.draw.polygon(s, ACC, pts, 7)
+    for p in ((c, top), (r, mid - 28), (l, mid - 28), (c, mid + 16), (c, bot), (l, bot - 44), (r, bot - 44)):
+        pygame.draw.circle(s, (255, 255, 255), p, 9)
+    return s if size == 256 else pygame.transform.smoothscale(s, (size, size))
+
+
+def write_ico(path, sizes=(256, 64, 48, 32, 16)):
+    """Multi-size .ico with PNG-compressed entries (no Pillow needed)."""
+    pngs = []
+    for n in sizes:
+        buf = io.BytesIO()
+        pygame.image.save(make_icon(n), buf, "icon.png")
+        pngs.append(buf.getvalue())
+    off = 6 + 16 * len(sizes)
+    head = struct.pack("<HHH", 0, 1, len(sizes))
+    for n, png in zip(sizes, pngs):
+        head += struct.pack("<BBBBHHII", n % 256, n % 256, 0, 0, 1, 32, len(png), off)
+        off += len(png)
+    with open(path, "wb") as f:
+        f.write(head + b"".join(pngs))
+
+
+def box_lines(mn, mx):
+    c = [np.array([x, y, z]) for x in (mn[0], mx[0]) for y in (mn[1], mx[1]) for z in (mn[2], mx[2])]
+    e = [(0, 1), (2, 3), (4, 5), (6, 7), (0, 2), (1, 3), (4, 6), (5, 7), (0, 4), (1, 5), (2, 6), (3, 7)]
+    return np.array([c[k] for a in e for k in a], np.float32)
+
+
+class App:
+    PW = 430  # side panel width
+
+    def __init__(self, path=None):
+        import moderngl
+        self.mgl = moderngl
+        pygame.init()
+        for a, v in ((pygame.GL_CONTEXT_MAJOR_VERSION, 3), (pygame.GL_CONTEXT_MINOR_VERSION, 3),
+                     (pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_CORE),
+                     (pygame.GL_MULTISAMPLEBUFFERS, 1), (pygame.GL_MULTISAMPLESAMPLES, 4)):
+            pygame.display.gl_set_attribute(a, v)
+        flags = pygame.OPENGL | pygame.DOUBLEBUF | pygame.RESIZABLE
+        try:
+            pygame.display.set_mode((1440, 860), flags)
+        except pygame.error:  # no MSAA on this GPU
+            pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLEBUFFERS, 0)
+            pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLESAMPLES, 0)
+            pygame.display.set_mode((1440, 860), flags)
+        pygame.display.set_caption("GLB Inspector")
+        pygame.display.set_icon(make_icon(64))
+        pygame.key.set_repeat(300, 40)
+        ctx = self.ctx = moderngl.create_context()
+        self.prog = ctx.program(vertex_shader=VS, fragment_shader=FS)
+        self.lprog = ctx.program(vertex_shader=LVS, fragment_shader=LFS)
+        self.qprog = ctx.program(vertex_shader=QVS, fragment_shader=QFS)
+        self.prog["u_tex"].value = 0
+        self.qprog["t"].value = 0
+        quad = ctx.buffer(np.array([-1, -1, 1, -1, -1, 1, 1, 1], "f4").tobytes())
+        self.qvao = ctx.vertex_array(self.qprog, [(quad, "2f", "in_pos")])
+        self.lvbo = ctx.buffer(reserve=1 << 20, dynamic=True)
+        self.lvao = ctx.vertex_array(self.lprog, [(self.lvbo, "3f", "in_pos")])
+        self.white = ctx.texture((1, 1), 4, b"\xff\xff\xff\xff")
+        self.font = pygame.font.SysFont("segoeui", 15)
+        self.bold = pygame.font.SysFont("segoeui", 15, bold=True)
+        self.big = pygame.font.SysFont("segoeui", 20, bold=True)
+        self.mono = pygame.font.SysFont("consolas", 14)
+        self._tc = {}
+        self.model = None
+        self.gl_objs, self.draws, self.texs = [], [], {}
+        self.sel = self.sel_mat = self.hover = None
+        self.collapsed, self.rows, self.reveal = set(), [], False
+        self.tab = "Nodes"
+        self.scroll = defaultdict(int)
+        self.opts = {"Lit": True, "Tex": True, "Wire": False, "Bounds": True, "Grid": True}
+        self.yaw, self.pitch, self.dist, self.target = 0.7, 0.35, 5.0, np.zeros(3)
+        self.drag = self.down = None
+        self.toast = ("Drop a .glb on the window or press O", 0, DIM)
+        self.hits, self.panes = [], {}
+        self.mouse = (0, 0)
+        self.last_pick = 0
+        self.size = None
+        self._resize()
+        if path:
+            self.load(path)
+
+    # -- setup
+    def _resize(self):
+        W, H = pygame.display.get_window_size()
+        if (W, H) == self.size:
+            return
+        self.size = (W, H)
+        self.ui = pygame.Surface((W, H), pygame.SRCALPHA)
+        if hasattr(self, "ui_tex"):
+            for o in (self.ui_tex, self.pick_fbo):
+                o.release()
+        self.ui_tex = self.ctx.texture((W, H), 4)
+        self.ui_tex.filter = (self.mgl.NEAREST, self.mgl.NEAREST)
+        vw = max(1, W - self.PW)
+        self.pick_fbo = self.ctx.framebuffer(self.ctx.renderbuffer((vw, H)), self.ctx.depth_renderbuffer((vw, H)))
+
+    def say(self, msg, col=TEXT):
+        self.toast = (msg, pygame.time.get_ticks() + 2500, col)
+
+    def load(self, path):
+        try:
+            m = Model(path)
+        except Exception as e:
+            self.say(f"Could not load {os.path.basename(path)}: {e}", RED)
+            return
+        for o in self.gl_objs:
+            o.release()
+        self.gl_objs, self.draws, self.texs = [], [], {}
+        self.model = m
+        self.sel = self.sel_mat = self.hover = None
+        self.collapsed.clear()
+        self.scroll.clear()
+        ctx = self.ctx
+        for k, im in enumerate(m.images):
+            if im["rgba"] is not None:
+                self.texs[k] = ctx.texture(im["size"], 4, im["rgba"])
+                self.gl_objs.append(self.texs[k])
+        vaos = {}
+        for i, M in m.world.items():
+            mi = m.nodes[i].get("mesh")
+            for pi, p in enumerate(m.prims.get(mi, [])):
+                if p["vbo"] is None:
+                    continue
+                if (mi, pi) not in vaos:
+                    vbo = ctx.buffer(p["vbo"].tobytes())
+                    vaos[mi, pi] = ctx.vertex_array(self.prog, [(vbo, "3f 3f 2f 4f", "in_pos", "in_nrm", "in_uv", "in_col")])
+                    self.gl_objs += [vbo, vaos[mi, pi]]
+                try:
+                    nmat = np.linalg.inv(M[:3, :3]).T
+                except np.linalg.LinAlgError:
+                    nmat = np.eye(3)
+                self.draws.append({"node": i, "vao": vaos[mi, pi], "mat": p["material"], "M": M,
+                                   "nmat": nmat.T.astype("f4").tobytes(), **self.mat_params(p["material"])})
+        self.draws.sort(key=lambda d: d["blend"])  # shortcut: blended draws last, not depth-sorted
+        self.build_grid()
+        self.frame()
+        self.summary_lines = to_lines(m.summary())
+        self.mat_lines = [(f"MATERIAL {k}  {mat.get('name', '')}", to_lines(m.material_report(k), 1))
+                          for k, mat in enumerate(m.j.get("materials", []))]
+        self.img_lines = [to_lines(m.image_report(k), 1) for k in range(len(m.images))]
+        self.anim_lines = to_lines(m.animation_report())
+        raw = json.dumps(m.j, indent=2).splitlines()
+        self.raw_lines = [(s, DIM if s.strip() in "{}[]," else TEXT, None) for s in raw[:20000]]
+        self.detail_cache = {}
+        pygame.display.set_caption(f"GLB Inspector - {os.path.basename(path)}")
+        s = m.summary()
+        self.say(f"Loaded {s['file']}: {s['counts']['nodes']} nodes, {s['drawn']['triangles']} tris", GREEN)
+
+    def mat_params(self, mi):
+        mat = self.model.j["materials"][mi] if mi is not None else {}
+        pbr = mat.get("pbrMetallicRoughness", {})
+        tex = None
+        if "baseColorTexture" in pbr:
+            src, smp = self.model.tex_image(pbr["baseColorTexture"]["index"])
+            tex = self.texs.get(src)
+            if tex is not None:
+                s = self.model.j["samplers"][smp] if smp is not None else {}
+                nearest = s.get("magFilter") == 9728
+                tex.filter = (self.mgl.NEAREST, self.mgl.NEAREST) if nearest else (self.mgl.LINEAR, self.mgl.LINEAR)
+        mode = mat.get("alphaMode", "OPAQUE")
+        return {"base": tuple(pbr.get("baseColorFactor", [1, 1, 1, 1])), "tex": tex,
+                "cut": mat.get("alphaCutoff", 0.5) if mode == "MASK" else -1.0, "blend": mode == "BLEND"}
+
+    def build_grid(self):
+        b = self.model.bounds
+        if b is None:
+            self.grid, self.grid_step = np.zeros((0, 3), np.float32), 1.0
+            return
+        size = float(max(b[1] - b[0])) or 1.0
+        step = 10 ** round(math.log10(size / 8))
+        n = min(60, int(size / step) + 4)
+        cx, cz, y = round((b[0][0] + b[1][0]) / 2 / step) * step, round((b[0][2] + b[1][2]) / 2 / step) * step, b[0][1]
+        pts = []
+        for k in range(-n, n + 1):
+            pts += [(cx + k * step, y, cz - n * step), (cx + k * step, y, cz + n * step),
+                    (cx - n * step, y, cz + k * step), (cx + n * step, y, cz + k * step)]
+        self.grid, self.grid_step = np.array(pts, np.float32), step
+
+    # -- camera
+    def frame(self, node=None):
+        b = self.model.tb.get(node) if node is not None else self.model.bounds
+        if b is None:
+            return
+        self.target = (b[0] + b[1]) / 2
+        r = max(float(np.linalg.norm(b[1] - b[0])) / 2, 1e-3)
+        self.dist = r / math.sin(math.radians(22.5)) * 1.05
+
+    def eye(self):
+        cp = math.cos(self.pitch)
+        return self.target + self.dist * np.array([cp * math.sin(self.yaw), math.sin(self.pitch), cp * math.cos(self.yaw)])
+
+    def viewproj(self):
+        W, H = self.size
+        proj = perspective(math.radians(45), (W - self.PW) / H, self.dist * 0.01, self.dist * 100)
+        return proj @ look_at(self.eye(), self.target)
+
+    # -- selection
+    def select(self, i, reveal=True):
+        self.sel, self.sel_mat = i, None
+        if i is not None and reveal:
+            p = self.model.parent[i]
+            while p is not None:
+                self.collapsed.discard(p)
+                p = self.model.parent[p]
+            self.reveal = True
+
+    def pick(self, mx, my):
+        """Node under the mouse via an ID render, or None."""
+        if not self.draws or mx < self.PW:
+            return None
+        W, H = self.size
+        vp = self.viewproj()
+        self.pick_fbo.use()
+        self.ctx.clear(0, 0, 0, 0)
+        self.ctx.enable(self.mgl.DEPTH_TEST)
+        self.prog["u_picking"].value = True
+        for k, d in enumerate(self.draws, 1):
+            self.prog["u_mvp"].write(gl_mat(vp @ d["M"]))
+            self.prog["u_pick"].value = ((k & 255) / 255, ((k >> 8) & 255) / 255, ((k >> 16) & 255) / 255)
+            d["vao"].render()
+        self.prog["u_picking"].value = False
+        px = self.pick_fbo.read(viewport=(mx - self.PW, H - 1 - my, 1, 1), components=4)
+        self.ctx.screen.use()
+        k = px[0] | (px[1] << 8) | (px[2] << 16)
+        return self.draws[k - 1]["node"] if 0 < k <= len(self.draws) else None
+
+    # -- actions
+    def ask_open(self):
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        start = os.path.join("assets", "3D") if os.path.isdir(os.path.join("assets", "3D")) else os.getcwd()
+        p = filedialog.askopenfilename(parent=root, initialdir=start, title="Open 3D model",
+                                       filetypes=[("glTF models", "*.glb *.gltf"), ("All files", "*.*")])
+        root.destroy()
+        if p:
+            self.load(p)
+
+    def copy(self):
+        m = self.model
+        if m is None:
+            return
+        if self.sel is not None:
+            data, what = m.node_report(self.sel), f"node '{m.name(self.sel)}'"
+        elif self.sel_mat is not None:
+            data, what = m.material_report(self.sel_mat), f"material {self.sel_mat}"
+        else:
+            data, what = m.summary(), "summary"
+        try:
+            pygame.scrap.put_text(json.dumps(data, indent=2))
+            self.say(f"Copied {what} as JSON", GREEN)
+        except Exception as e:
+            self.say(f"Clipboard failed: {e}", RED)
+
+    def export(self):
+        if self.model is None:
+            return
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        base = os.path.splitext(os.path.basename(self.model.path))[0]
+        p = filedialog.asksaveasfilename(parent=root, initialfile=f"{base}.inspect.json", defaultextension=".json",
+                                         filetypes=[("JSON", "*.json")])
+        root.destroy()
+        if p:
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(self.model.report(), f, indent=1)
+            self.say(f"Exported report to {os.path.basename(p)}", GREEN)
+
+    def toggle(self, k):
+        self.opts[k] = not self.opts[k]
+
+    # -- UI primitives
+    def txt(self, s, x, y, col=TEXT, font=None):
+        font = font or self.font
+        key = (s, col, id(font))
+        surf = self._tc.get(key)
+        if surf is None:
+            if len(self._tc) > 4000:
+                self._tc.clear()
+            surf = self._tc[key] = font.render(s, True, col)
+        self.ui.blit(surf, (x, y))
+        return surf.get_width()
+
+    def button(self, rect, label, fn, active=False):
+        rect = pygame.Rect(rect)
+        hov = rect.collidepoint(self.mouse)
+        col = (110, 80, 35) if active else (PANEL3 if hov else PANEL2)
+        pygame.draw.rect(self.ui, col, rect, border_radius=6)
+        if active:
+            pygame.draw.rect(self.ui, ACC, rect, 1, border_radius=6)
+        w = self.font.size(label)[0]
+        self.txt(label, rect.centerx - w // 2, rect.y + (rect.h - 20) // 2, ACC if active else TEXT)
+        self.hits.append((rect, fn))
+
+    def pane(self, key, rect, lines, lh=18):
+        """Scrollable line list; '#RRGGBB' in a line gets a colour swatch in the gutter."""
+        self.panes[key] = rect
+        over = max(0, len(lines) * lh - rect.h)
+        s = self.scroll[key] = max(0, min(self.scroll[key], over))
+        self.ui.set_clip(rect)
+        first = s // lh
+        for n in range(first, min(len(lines), first + rect.h // lh + 2)):
+            text, col, fn = lines[n]
+            y = rect.y + n * lh - s
+            if fn:
+                r = pygame.Rect(rect.x, y, rect.w, lh).clip(rect)
+                if r.collidepoint(self.mouse):
+                    pygame.draw.rect(self.ui, PANEL2, r)
+                self.hits.append((r, fn))
+            h = HEX.search(text)
+            if h:
+                c = pygame.Color("#" + h.group(1))
+                pygame.draw.rect(self.ui, c, (rect.x + 2, y + 3, 12, 12))
+                pygame.draw.rect(self.ui, LINE, (rect.x + 2, y + 3, 12, 12), 1)
+            self.txt(text, rect.x + 20, y, col, self.mono)
+        self.ui.set_clip(None)
+        if over:
+            bar = max(20, rect.h * rect.h // (rect.h + over))
+            pygame.draw.rect(self.ui, PANEL3, (rect.right - 5, rect.y + (rect.h - bar) * s // over, 4, bar), border_radius=2)
+
+    # -- panels
+    def draw_panel(self):
+        W, H = self.size
+        PW, ui, m = self.PW, self.ui, self.model
+        pygame.draw.rect(ui, PANEL, (0, 0, PW, H))
+        pygame.draw.line(ui, LINE, (PW - 1, 0), (PW - 1, H))
+        self.txt("GLB Inspector", 16, 12, ACC, self.big)
+        for k, (lab, fn) in enumerate((("Open", self.ask_open), ("Copy", self.copy), ("Export", self.export))):
+            self.button((PW - 222 + k * 70, 12, 64, 28), lab, fn)
+        y = 52
+        if m is None:
+            self.txt("No model loaded.", 16, y, DIM)
+            self.txt("Drop a .glb / .gltf on the window, or click Open.", 16, y + 22, DIM)
+            return
+        self.pane("summary", pygame.Rect(8, y, PW - 16, 150), self.summary_lines, 17)
+        y += 158
+        pygame.draw.line(ui, LINE, (0, y), (PW, y))
+        tx = 10
+        for t in ("Nodes", "Materials", "Raw JSON"):
+            w = self.font.size(t)[0] + 24
+            self.button((tx, y + 8, w, 28), t, lambda t=t: setattr(self, "tab", t), self.tab == t)
+            tx += w + 6
+        y += 44
+        body = pygame.Rect(8, y, PW - 16, H - y - 8)
+        if self.tab == "Nodes":
+            th = int(body.h * 0.42)
+            self.draw_tree(pygame.Rect(body.x, body.y, body.w, th))
+            dy = body.y + th + 6
+            pygame.draw.line(ui, LINE, (0, dy), (PW, dy))
+            if self.sel is None:
+                self.txt("Select a node in the list or the viewport.", 16, dy + 10, DIM)
+            else:
+                if self.sel not in self.detail_cache:
+                    self.detail_cache[self.sel] = to_lines(m.node_report(self.sel))
+                self.pane(("detail", self.sel), pygame.Rect(body.x, dy + 6, body.w, body.bottom - dy - 6),
+                          self.detail_cache[self.sel])
+        elif self.tab == "Materials":
+            lines = []
+            for k, (head, body_lines) in enumerate(self.mat_lines):
+                lines.append((head, ACC if k == self.sel_mat else HEAD, lambda k=k: self.pick_mat(k)))
+                lines += body_lines + [("", TEXT, None)]
+            if not self.mat_lines:
+                lines.append(("No materials (everything draws white).", DIM, None))
+            for k, il in enumerate(self.img_lines):
+                lines += [(f"IMAGE {k}", HEAD, None)] + il + [("", TEXT, None)]
+            if self.anim_lines and self.model.j.get("animations"):
+                lines += [("ANIMATIONS", HEAD, None)] + self.anim_lines
+            self.pane("materials", body, lines)
+        else:
+            self.pane("raw", body, self.raw_lines, 17)
+
+    def pick_mat(self, k):
+        self.sel, self.sel_mat = None, (None if self.sel_mat == k else k)
+
+    def draw_tree(self, rect):
+        m, rows = self.model, []
+
+        def walk(i, d):
+            rows.append((i, d))
+            if i not in self.collapsed:
+                for c in m.nodes[i].get("children", []):
+                    walk(c, d + 1)
+        for r in m.roots:
+            walk(r, 0)
+        self.rows = [i for i, _ in rows]
+        lh = 21
+        if self.reveal and self.sel in self.rows:
+            k = self.rows.index(self.sel)
+            s = self.scroll["tree"]
+            if not s <= k * lh <= s + rect.h - lh:
+                self.scroll["tree"] = k * lh - rect.h // 2
+            self.reveal = False
+        self.panes["tree"] = rect
+        over = max(0, len(rows) * lh - rect.h)
+        s = self.scroll["tree"] = max(0, min(self.scroll["tree"], over))
+        self.ui.set_clip(rect)
+        for n in range(s // lh, min(len(rows), s // lh + rect.h // lh + 2)):
+            i, d = rows[n]
+            node = m.nodes[i]
+            y = rect.y + n * lh - s
+            r = pygame.Rect(rect.x, y, rect.w, lh).clip(rect)
+            if i == self.sel:
+                pygame.draw.rect(self.ui, (90, 66, 30), r, border_radius=4)
+            elif i == self.hover or r.collidepoint(self.mouse):
+                pygame.draw.rect(self.ui, PANEL2, r, border_radius=4)
+            x = rect.x + 4 + d * 14
+            kids = node.get("children")
+            self.hits.append((r, lambda i=i: self.select(None if self.sel == i else i, False)))
+            if kids:  # arrow hit goes after the row hit so it wins
+                tri = [(x + 2, y + 6), (x + 10, y + 6), (x + 6, y + 13)] if i not in self.collapsed \
+                    else [(x + 3, y + 5), (x + 10, y + 10), (x + 3, y + 15)]
+                pygame.draw.polygon(self.ui, DIM, tri)
+                self.hits.append((pygame.Rect(x - 2, y, 16, lh).clip(rect),
+                                  lambda i=i: setattr(self, "collapsed", self.collapsed ^ {i})))
+            kind = "mesh" if "mesh" in node else "joint" if i in m.joints else "camera" if "camera" in node else "empty"
+            pygame.draw.rect(self.ui, KIND[kind], (x + 16, y + 6, 9, 9), border_radius=2)
+            self.txt(m.name(i), x + 31, y + 1, ACC if i == self.sel else TEXT)
+            info = f"{sum(p['tris'] for p in m.prims[node['mesh']])} tris" if kind == "mesh" else \
+                f"{len(kids)} child" + ("ren" if len(kids) != 1 else "") if kids else ""
+            if info:
+                w = self.font.size(info)[0]
+                self.txt(info, rect.right - w - 10, y + 1, DIM)
+        self.ui.set_clip(None)
+        if over:
+            bar = max(20, rect.h * rect.h // (rect.h + over))
+            pygame.draw.rect(self.ui, PANEL3, (rect.right - 5, rect.y + (rect.h - bar) * s // over, 4, bar), border_radius=2)
+
+    def draw_overlay(self):
+        W, H = self.size
+        PW, m = self.PW, self.model
+        bx = W - 10
+        for k in reversed(TOGGLES):
+            w = self.font.size(k)[0] + 22
+            bx -= w + 6
+            self.button((bx, 10, w, 28), k, lambda k=k: self.toggle(k), self.opts[k])
+        if m is None:
+            msg = "Drop a .glb here"
+            w = self.big.size(msg)[0]
+            self.txt(msg, PW + (W - PW - w) // 2, H // 2 - 30, DIM, self.big)
+            w = self.font.size("or press O to browse")[0]
+            self.txt("or press O to browse", PW + (W - PW - w) // 2, H // 2, DIM)
+        else:
+            if self.sel is not None:
+                b = m.tb.get(self.sel)
+                self.txt(m.name(self.sel), PW + 14, 12, ACC, self.bold)
+                if b is not None:
+                    sz = b[1] - b[0]
+                    self.txt(f"{sz[0]:.4f} x {sz[1]:.4f} x {sz[2]:.4f} m  (world AABB)", PW + 14, 32, TEXT)
+            elif self.sel_mat is not None:
+                self.txt(f"Material {m.mat_label(self.sel_mat)}", PW + 14, 12, ACC, self.bold)
+            elif m.bounds is not None:
+                sz = m.bounds[1] - m.bounds[0]
+                self.txt(f"Scene  {sz[0]:.4f} x {sz[1]:.4f} x {sz[2]:.4f} m", PW + 14, 12, TEXT, self.bold)
+            if self.hover is not None and not self.drag:
+                self.txt(m.name(self.hover), self.mouse[0] + 14, self.mouse[1] + 10, (255, 255, 255), self.bold)
+        hint = "LMB orbit/select   RMB/MMB pan   wheel zoom   F frame   Esc clear   L T W B G toggles   Up/Down walk tree"
+        if m is not None and self.opts["Grid"]:
+            hint += f"   grid {self.grid_step:g} m"
+        self.txt(hint, PW + 14, H - 26, DIM)
+        msg, until, col = self.toast
+        if msg and (until == 0 or pygame.time.get_ticks() < until):
+            w = self.font.size(msg)[0]
+            r = pygame.Rect(0, 0, w + 28, 32)
+            r.midbottom = (PW + (W - PW) // 2, H - 40)
+            pygame.draw.rect(self.ui, PANEL, r, border_radius=8)
+            pygame.draw.rect(self.ui, col, r, 1, border_radius=8)
+            self.txt(msg, r.x + 14, r.y + 6, col)
+
+    # -- rendering
+    def lines(self, vp, pts, color):
+        if len(pts):
+            self.lvbo.write(pts.astype("f4").tobytes())
+            self.lprog["u_mvp"].write(gl_mat(vp))
+            self.lprog["u_color"].value = color
+            self.lvao.render(self.mgl.LINES, vertices=len(pts))
+
+    def render(self):
+        ctx, mgl = self.ctx, self.mgl
+        W, H = self.size
+        ctx.viewport = (0, 0, W, H)
+        ctx.clear(*(c / 255 for c in BG))
+        m = self.model
+        if m is not None:
+            ctx.viewport = ctx.scissor = (self.PW, 0, W - self.PW, H)
+            ctx.clear(*(c / 255 for c in VIEW_BG))
+            ctx.scissor = None
+            ctx.enable(mgl.DEPTH_TEST | mgl.BLEND)
+            ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
+            ctx.depth_func = "<="
+            vp = self.viewproj()
+            light = self.eye() - self.target + np.array([0, self.dist * 0.6, 0])
+            p = self.prog
+            p["u_light"].value = tuple(light / np.linalg.norm(light))
+            p["u_lit"].value = 1.0 if self.opts["Lit"] else 0.0
+            p["u_picking"].value = False
+            if self.opts["Grid"]:
+                self.lines(vp, self.grid, (0.32, 0.35, 0.42, 1))
+            for d in self.draws:
+                p["u_mvp"].write(gl_mat(vp @ d["M"]))
+                p["u_nmat"].write(d["nmat"])
+                p["u_base"].value = d["base"]
+                p["u_cut"].value = d["cut"]
+                p["u_blend"].value = 1.0 if d["blend"] else 0.0
+                if d["node"] == self.sel or (self.sel_mat is not None and d["mat"] == self.sel_mat):
+                    p["u_tint"].value = (1.0, 0.69, 0.25, 0.35)
+                elif d["node"] == self.hover:
+                    p["u_tint"].value = (1, 1, 1, 0.12)
+                else:
+                    p["u_tint"].value = (0, 0, 0, 0)
+                (d["tex"] if d["tex"] is not None and self.opts["Tex"] else self.white).use(0)
+                d["vao"].render()
+            if self.opts["Wire"]:
+                ctx.wireframe = True
+                p["u_tint"].value = (0.05, 0.05, 0.06, 0.85)
+                for d in self.draws:
+                    p["u_mvp"].write(gl_mat(vp @ d["M"]))
+                    d["vao"].render()
+                ctx.wireframe = False
+            ctx.disable(mgl.DEPTH_TEST)
+            s = (m.bounds[1] - m.bounds[0]).max() * 0.15 if m.bounds is not None else 1
+            for axis, col in ((0, (0.95, 0.35, 0.35, 1)), (1, (0.4, 0.9, 0.4, 1)), (2, (0.4, 0.6, 1, 1))):
+                e = np.zeros(3)
+                e[axis] = s
+                self.lines(vp, np.array([[0, 0, 0], e], np.float32), col)
+            if self.opts["Bounds"]:
+                b = m.tb.get(self.sel) if self.sel is not None else None
+                if b is not None:
+                    self.lines(vp, box_lines(*b), (1, 0.69, 0.25, 1))
+                elif m.bounds is not None:
+                    self.lines(vp, box_lines(*m.bounds), (0.6, 0.63, 0.7, 0.5))
+        ctx.viewport = (0, 0, W, H)
+        ctx.enable(mgl.BLEND)
+        ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
+        self.ui_tex.write(pygame.image.tobytes(self.ui, "RGBA", True))
+        self.ui_tex.use(0)
+        self.qvao.render(mgl.TRIANGLE_STRIP)
+
+    # -- loop
+    def run(self):
+        clock = pygame.time.Clock()
+        while True:
+            self._resize()
+            W, H = self.size
+            self.mouse = pygame.mouse.get_pos()
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT:
+                    return
+                if e.type == pygame.DROPFILE:
+                    self.load(e.file)
+                elif e.type == pygame.MOUSEBUTTONDOWN and e.button in (1, 2, 3):
+                    if e.button == 1:
+                        hit = next((fn for r, fn in reversed(self.hits) if r.collidepoint(e.pos)), None)
+                        if hit:
+                            hit()
+                            continue
+                    if e.pos[0] >= self.PW and self.model is not None:
+                        self.drag, self.down = ("orbit" if e.button == 1 else "pan"), e.pos
+                elif e.type == pygame.MOUSEBUTTONUP:
+                    if e.button == 1 and self.drag == "orbit" and math.dist(e.pos, self.down) < 4:
+                        self.select(self.pick(*e.pos))
+                        self.tab = "Nodes"
+                    self.drag = None
+                elif e.type == pygame.MOUSEMOTION and self.drag:
+                    dx, dy = e.rel
+                    if self.drag == "orbit":
+                        self.yaw -= dx * 0.008
+                        self.pitch = max(-1.55, min(1.55, self.pitch + dy * 0.008))
+                    else:
+                        f = self.target - self.eye()
+                        f /= np.linalg.norm(f)
+                        right = np.cross(f, (0, 1, 0))
+                        right /= np.linalg.norm(right)
+                        up = np.cross(right, f)
+                        k = self.dist * 0.0012
+                        self.target = self.target - right * dx * k + up * dy * k
+                elif e.type == pygame.MOUSEWHEEL:
+                    pane = next((k for k, r in self.panes.items() if r.collidepoint(self.mouse)), None)
+                    if pane is not None:
+                        self.scroll[pane] -= e.y * 54
+                    elif self.mouse[0] >= self.PW:
+                        self.dist *= 0.88 ** e.y
+                elif e.type == pygame.KEYDOWN:
+                    self.key(e)
+            now = pygame.time.get_ticks()
+            if self.model is not None and not self.drag and now - self.last_pick > 60:
+                self.last_pick = now
+                self.hover = self.pick(*self.mouse) if self.mouse[0] >= self.PW else None
+            self.hits, self.panes = [], {}
+            self.ui.fill((0, 0, 0, 0))
+            self.draw_panel()
+            self.draw_overlay()
+            self.render()
+            pygame.display.flip()
+            clock.tick(60)
+
+    def key(self, e):
+        ctrl = e.mod & pygame.KMOD_CTRL
+        if e.key == pygame.K_o:
+            self.ask_open()
+        elif self.model is None:
+            return
+        elif e.key == pygame.K_c and ctrl:
+            self.copy()
+        elif e.key == pygame.K_s and ctrl:
+            self.export()
+        elif e.key == pygame.K_f:
+            self.frame(self.sel)
+        elif e.key == pygame.K_ESCAPE:
+            self.sel = self.sel_mat = None
+        elif e.key in TOGGLE_KEYS:
+            self.toggle(TOGGLE_KEYS[e.key])
+        elif e.key in (pygame.K_UP, pygame.K_DOWN) and self.rows:
+            k = self.rows.index(self.sel) if self.sel in self.rows else -1
+            k = max(0, min(len(self.rows) - 1, k + (1 if e.key == pygame.K_DOWN else -1)))
+            self.select(self.rows[k])
+            self.tab = "Nodes"
+        elif e.key in (pygame.K_LEFT, pygame.K_RIGHT) and self.sel is not None:
+            (self.collapsed.add if e.key == pygame.K_LEFT else self.collapsed.discard)(self.sel)
+
+
+# ---------------------------------------------------------------- self-check
+
+def selftest():
+    pos = np.array([[0, 0, 0], [1, 0, 0], [0, 2, 0]], np.float32).tobytes()
+    col = np.array([[1, 0, 0, 1]] * 3, np.float32).tobytes()
+    blob = pos + col
+    j = {"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}],
+         "nodes": [{"name": "root", "translation": [1, 0, 0], "children": [1]},
+                   {"name": "tri", "mesh": 0, "scale": [2, 2, 2]}],
+         "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "material": 0}]}],
+         "materials": [{"name": "grey", "pbrMetallicRoughness": {"baseColorFactor": [0.5, 0.5, 0.5, 1]}}],
+         "buffers": [{"byteLength": len(blob)}],
+         "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 36},
+                         {"buffer": 0, "byteOffset": 36, "byteLength": 48}],
+         "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+                       {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC4"}]}
+    js = json.dumps(j).encode()
+    js += b" " * (-len(js) % 4)
+    glb = (struct.pack("<III", 0x46546C67, 2, 28 + len(js) + len(blob)) + struct.pack("<II", len(js), 0x4E4F534A)
+           + js + struct.pack("<II", len(blob), 0x004E4942) + blob)
+    path = os.path.join(tempfile.mkdtemp(), "t.glb")
+    with open(path, "wb") as f:
+        f.write(glb)
+    m = Model(path)
+    assert np.allclose(m.wb[1][0], [1, 0, 0]) and np.allclose(m.wb[1][1], [3, 4, 0]), m.wb
+    assert np.allclose(m.tb[0][1], [3, 4, 0]) and m.prims[0][0]["tris"] == 1
+    assert m.prims[0][0]["vcolors"][1][0][0] == "#FF0000"
+    assert m.material_report(0)["base_color"].startswith("#BCBCBC")
+    json.dumps(m.report())
+    print("SELFTEST OK")
+
+
+if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        selftest()
+    elif "--write-icon" in sys.argv:  # regenerates tools/glb_inspector.ico for the exe build
+        write_ico(os.path.join(os.path.dirname(os.path.abspath(__file__)), "glb_inspector.ico"))
+    else:
+        App(next((a for a in sys.argv[1:] if not a.startswith("-")), None)).run()
