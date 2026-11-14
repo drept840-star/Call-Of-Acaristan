@@ -178,13 +178,7 @@ class Model:
         self.roots = scenes[self.scene].get("nodes", []) if scenes else [i for i, p in enumerate(self.parent) if p is None]
         self.joints = {jn for s in j.get("skins", []) for jn in s.get("joints", [])}
 
-        self.world = {}
-        stack = [(r, np.eye(4)) for r in self.roots]
-        while stack:
-            i, pm = stack.pop()
-            self.world[i] = pm @ local_matrix(self.nodes[i])
-            stack += [(c, self.world[i]) for c in self.nodes[i].get("children", [])]
-
+        self.world = self._world({})
         self.images = [self._image(k, im) for k, im in enumerate(j.get("images", []))]
         self.prims = {mi: [self._prim(mi, pi) for pi in range(len(m.get("primitives", [])))]
                       for mi, m in enumerate(j.get("meshes", []))}
@@ -200,6 +194,50 @@ class Model:
             self._subtree(r)
         boxes = [self.tb[r] for r in self.roots if r in self.tb]
         self.bounds = (np.min([b[0] for b in boxes], 0), np.max([b[1] for b in boxes], 0)) if boxes else None
+
+    def _world(self, over):
+        """node -> world matrix; over = {node: {"translation"|"rotation"|"scale": value}} from an animation."""
+        world, stack = {}, [(r, np.eye(4)) for r in self.roots]
+        while stack:
+            i, pm = stack.pop()
+            world[i] = pm @ local_matrix({**self.nodes[i], **over[i]} if i in over else self.nodes[i])
+            stack += [(c, world[i]) for c in self.nodes[i].get("children", [])]
+        return world
+
+    # -- animation
+    def anim_dur(self, ai):
+        a = self.j["animations"][ai]
+        return max((float(self.accessor(s["input"]).max()) for s in a.get("samplers", [])), default=0.0)
+
+    def sample(self, s, t, rot):
+        times = self.accessor(s["input"]).ravel()
+        vals = self.accessor(s["output"]).astype(np.float64)
+        interp = s.get("interpolation", "LINEAR")
+        if interp == "CUBICSPLINE":  # shortcut: tangents ignored, keys sampled linearly; fine for previews
+            vals = vals[1::3]
+        if t <= times[0] or len(times) == 1:
+            return vals[0]
+        if t >= times[-1]:
+            return vals[len(times) - 1]
+        k = int(np.searchsorted(times, t)) - 1
+        if interp == "STEP":
+            return vals[k]
+        u = (t - times[k]) / max(times[k + 1] - times[k], 1e-9)
+        a, b = vals[k], vals[k + 1]
+        if rot:  # nlerp along the short arc
+            b = -b if np.dot(a, b) < 0 else b
+            q = a * (1 - u) + b * u
+            return q / np.linalg.norm(q)
+        return a * (1 - u) + b * u
+
+    def pose(self, ai, t):
+        """World matrices for animation ai at time t (node TRS only; skins and morph weights not applied)."""
+        a, over = self.j["animations"][ai], defaultdict(dict)
+        for ch in a.get("channels", []):
+            tg = ch["target"]
+            if "node" in tg and tg.get("path") in ("translation", "rotation", "scale"):
+                over[tg["node"]][tg["path"]] = self.sample(a["samplers"][ch["sampler"]], t, tg["path"] == "rotation")
+        return self._world(over)
 
     # -- raw data access
     def _uri(self, uri):
@@ -623,6 +661,33 @@ def box_lines(mn, mx):
     return np.array([c[k] for a in e for k in a], np.float32)
 
 
+def nmat_bytes(M):
+    try:
+        n = np.linalg.inv(M[:3, :3]).T
+    except np.linalg.LinAlgError:
+        n = np.eye(3)
+    return n.T.astype("f4").tobytes()
+
+
+def file_header(k, n, path):
+    """Header line that separates files in a multi-file copy."""
+    try:
+        rel = os.path.relpath(path)
+    except ValueError:  # other drive on Windows
+        rel = os.path.abspath(path)
+    return f"##### FILE {k + 1}/{n}: {os.path.basename(path)}  ({rel})"
+
+
+RECENT = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "GLBInspector", "recent.json")
+# per-file state, swapped in and out when switching between open files
+PER_DOC = ("model", "gl_objs", "draws", "texs", "sel", "sel_mat", "collapsed", "scroll", "yaw", "pitch", "dist",
+           "target", "summary_lines", "mat_lines", "img_lines", "anim_lines", "raw_lines", "detail_cache", "grid",
+           "grid_step", "anim")
+VIEWS = {pygame.K_1: (0.0, 0.0), pygame.K_KP1: (0.0, 0.0), pygame.K_3: (math.pi / 2, 0.0),
+         pygame.K_KP3: (math.pi / 2, 0.0), pygame.K_7: (0.0, 1.5703), pygame.K_KP7: (0.0, 1.5703),
+         pygame.K_0: (0.7, 0.35), pygame.K_KP0: (0.7, 0.35)}
+
+
 class App:
     PW = 430  # side panel width
 
@@ -674,9 +739,19 @@ class App:
         self.mouse = (0, 0)
         self.last_pick = 0
         self.size = None
+        self.docs, self.cur = [], 0
+        self.anim = {"clip": None, "t": 0.0, "play": False}
+        self.scrub_rect = None
+        self.shot_path = None
+        self.show_recent = self.popup_was = False
+        try:
+            with open(RECENT, encoding="utf-8") as f:
+                self.recent = [p for p in json.load(f) if isinstance(p, str)][:10]
+        except (OSError, ValueError):
+            self.recent = []
         self._resize()
-        if path:
-            self.load(path)
+        for p in path or []:
+            self.load(p)
 
     # -- setup
     def _resize(self):
@@ -696,19 +771,66 @@ class App:
     def say(self, msg, col=TEXT):
         self.toast = (msg, pygame.time.get_ticks() + 2500, col)
 
+    # -- open files
+    def stash(self):
+        if self.model is not None:
+            self.docs[self.cur] = {k: getattr(self, k) for k in PER_DOC}
+
+    def restore(self, k):
+        self.cur = k
+        for a, v in self.docs[k].items():
+            setattr(self, a, v)
+        self.hover = None
+        pygame.display.set_caption(f"GLB Inspector - {os.path.basename(self.model.path)}")
+
+    def switch(self, k):
+        if k != self.cur and 0 <= k < len(self.docs):
+            self.stash()
+            self.restore(k)
+
+    def close(self, k):
+        self.stash()
+        for o in self.docs.pop(k)["gl_objs"]:
+            o.release()
+        if self.docs:
+            self.restore(min(k, len(self.docs) - 1))
+        else:
+            self.model, self.draws, self.gl_objs, self.sel, self.sel_mat, self.hover = None, [], [], None, None, None
+            pygame.display.set_caption("GLB Inspector")
+
+    def remember(self, path):
+        p = os.path.abspath(path)
+        self.recent = [p] + [r for r in self.recent if os.path.normcase(r) != os.path.normcase(p)][:9]
+        try:
+            os.makedirs(os.path.dirname(RECENT), exist_ok=True)
+            with open(RECENT, "w", encoding="utf-8") as f:
+                json.dump(self.recent, f, indent=1)
+        except OSError:
+            pass  # recent list is a convenience; never block loading
+
     def load(self, path):
+        """Open a file as a new tab, or reload it in place if it is already open."""
         try:
             m = Model(path)
         except Exception as e:
             self.say(f"Could not load {os.path.basename(path)}: {e}", RED)
             return
-        for o in self.gl_objs:
-            o.release()
+        self.stash()
+        ap = os.path.normcase(os.path.abspath(path))
+        slot = next((n for n, d in enumerate(self.docs) if os.path.normcase(os.path.abspath(d["model"].path)) == ap), None)
+        if slot is None:
+            self.docs.append(None)
+            slot = len(self.docs) - 1
+        else:
+            for o in self.docs[slot]["gl_objs"]:
+                o.release()
+        self.cur = slot
         self.gl_objs, self.draws, self.texs = [], [], {}
         self.model = m
         self.sel = self.sel_mat = self.hover = None
-        self.collapsed.clear()
-        self.scroll.clear()
+        self.collapsed, self.scroll = set(), defaultdict(int)
+        self.yaw, self.pitch = 0.7, 0.35
+        self.anim = {"clip": None, "t": 0.0, "play": False}
         ctx = self.ctx
         for k, im in enumerate(m.images):
             if im["rgba"] is not None:
@@ -724,12 +846,8 @@ class App:
                     vbo = ctx.buffer(p["vbo"].tobytes())
                     vaos[mi, pi] = ctx.vertex_array(self.prog, [(vbo, "3f 3f 2f 4f", "in_pos", "in_nrm", "in_uv", "in_col")])
                     self.gl_objs += [vbo, vaos[mi, pi]]
-                try:
-                    nmat = np.linalg.inv(M[:3, :3]).T
-                except np.linalg.LinAlgError:
-                    nmat = np.eye(3)
-                self.draws.append({"node": i, "vao": vaos[mi, pi], "mat": p["material"], "M": M,
-                                   "nmat": nmat.T.astype("f4").tobytes(), **self.mat_params(p["material"])})
+                self.draws.append({"node": i, "vao": vaos[mi, pi], "mat": p["material"], "M": M, "pos": p["pos"],
+                                   "nmat": nmat_bytes(M), **self.mat_params(p["material"])})
         self.draws.sort(key=lambda d: d["blend"])  # shortcut: blended draws last, not depth-sorted
         self.build_grid()
         self.frame()
@@ -741,9 +859,56 @@ class App:
         raw = json.dumps(m.j, indent=2).splitlines()
         self.raw_lines = [(s, DIM if s.strip() in "{}[]," else TEXT, None) for s in raw[:20000]]
         self.detail_cache = {}
+        self.docs[slot] = {a: getattr(self, a) for a in PER_DOC}
+        self.remember(path)
         pygame.display.set_caption(f"GLB Inspector - {os.path.basename(path)}")
         s = m.summary()
         self.say(f"Loaded {s['file']}: {s['counts']['nodes']} nodes, {s['drawn']['triangles']} tris", GREEN)
+
+    # -- animation
+    def set_clip(self, clip):
+        self.anim.update(clip=clip, t=0.0, play=clip is not None and self.anim["play"])
+        self.apply_pose()
+
+    def next_clip(self):
+        n = len(self.model.j.get("animations", []))
+        c = self.anim["clip"]
+        self.set_clip(0 if c is None else (c + 1 if c + 1 < n else None))
+
+    def play(self):
+        if self.anim["clip"] is None:
+            self.set_clip(0)
+        self.anim["play"] = not self.anim["play"]
+
+    def apply_pose(self):
+        a = self.anim
+        world = self.model.world if a["clip"] is None else self.model.pose(a["clip"], a["t"])
+        for d in self.draws:
+            d["M"] = world[d["node"]]
+            d["nmat"] = nmat_bytes(d["M"])
+
+    def sel_box(self):
+        """World AABB of the selected subtree, in the current animation pose."""
+        m = self.model
+        if self.anim["clip"] is None:
+            return m.tb.get(self.sel)
+        sub, st = set(), [self.sel]
+        while st:
+            i = st.pop()
+            sub.add(i)
+            st += m.nodes[i].get("children", [])
+        pts = [d["pos"].astype(np.float64) @ d["M"][:3, :3].T + d["M"][:3, 3] for d in self.draws if d["node"] in sub]
+        if not pts:
+            return None
+        P = np.vstack(pts)
+        return P.min(0), P.max(0)
+
+    def scrub(self, x):
+        r, a = self.scrub_rect, self.anim
+        if r is None or a["clip"] is None:
+            return
+        a["t"] = max(0.0, min(1.0, (x - r.x) / r.w)) * self.model.anim_dur(a["clip"])
+        self.apply_pose()
 
     def mat_params(self, mi):
         mat = self.model.j["materials"][mi] if mi is not None else {}
@@ -824,32 +989,42 @@ class App:
         return self.draws[k - 1]["node"] if 0 < k <= len(self.draws) else None
 
     # -- actions
-    def ask_open(self):
+    @staticmethod
+    def dialog(name, **kw):
         import tkinter as tk
         from tkinter import filedialog
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        start = os.path.join("assets", "3D") if os.path.isdir(os.path.join("assets", "3D")) else os.getcwd()
-        p = filedialog.askopenfilename(parent=root, initialdir=start, title="Open 3D model",
-                                       filetypes=[("glTF models", "*.glb *.gltf"), ("All files", "*.*")])
+        p = getattr(filedialog, name)(parent=root, **kw)
         root.destroy()
-        if p:
+        return p
+
+    def ask_open(self):
+        start = os.path.join("assets", "3D") if os.path.isdir(os.path.join("assets", "3D")) else os.getcwd()
+        for p in self.dialog("askopenfilenames", initialdir=start, title="Open 3D model(s)",
+                             filetypes=[("glTF models", "*.glb *.gltf"), ("All files", "*.*")]) or ():
             self.load(p)
 
     def copy(self):
-        m = self.model
-        if m is None:
+        """Every open file's brief under a FILE header, each followed by that file's selected node/material JSON."""
+        if self.model is None:
             return
-        text, what = m.brief(), "brief"  # always the brief; the selection's full JSON goes after it
-        if self.sel is not None:
-            text += f"\n\nselected node n{self.sel}:\n" + json.dumps(m.node_report(self.sel), indent=2)
-            what += f" + node '{m.name(self.sel)}'"
-        elif self.sel_mat is not None:
-            text += f"\n\nselected material m{self.sel_mat}:\n" + json.dumps(m.material_report(self.sel_mat), indent=2)
-            what += f" + material {self.sel_mat}"
+        self.stash()
+        parts, picked = [], 0
+        for k, d in enumerate(self.docs):
+            m, text = d["model"], d["model"].brief()
+            if d["sel"] is not None:
+                text += f"\n\nselected node n{d['sel']}:\n" + json.dumps(m.node_report(d["sel"]), indent=2)
+                picked += 1
+            elif d["sel_mat"] is not None:
+                text += f"\n\nselected material m{d['sel_mat']}:\n" + json.dumps(m.material_report(d["sel_mat"]), indent=2)
+                picked += 1
+            parts.append(file_header(k, len(self.docs), m.path) + "\n" + text)
+        n = len(self.docs)
+        what = (f"{n} files" if n > 1 else os.path.basename(self.model.path)) + (f" + {picked} selection(s)" if picked else "")
         try:
-            pygame.scrap.put_text(text)
+            pygame.scrap.put_text("\n\n".join(parts))
             self.say(f"Copied {what}", GREEN)
         except Exception as e:
             self.say(f"Clipboard failed: {e}", RED)
@@ -857,19 +1032,23 @@ class App:
     def export(self):
         if self.model is None:
             return
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
         base = os.path.splitext(os.path.basename(self.model.path))[0]
-        p = filedialog.asksaveasfilename(parent=root, initialfile=f"{base}.inspect.json", defaultextension=".json",
-                                         filetypes=[("JSON", "*.json")])
-        root.destroy()
+        p = self.dialog("asksaveasfilename", initialfile=f"{base}.inspect.json", defaultextension=".json",
+                        filetypes=[("JSON", "*.json")])
         if p:
             with open(p, "w", encoding="utf-8") as f:
                 json.dump(self.model.report(), f, indent=1)
             self.say(f"Exported report to {os.path.basename(p)}", GREEN)
+
+    def ask_shot(self):
+        if self.model is None:
+            return
+        base = os.path.splitext(os.path.basename(self.model.path))[0]
+        self.shot_path = self.dialog("asksaveasfilename", initialfile=f"{base}.png", defaultextension=".png",
+                                     filetypes=[("PNG image", "*.png")]) or None
+
+    def set_view(self, yaw, pitch, flip):
+        self.yaw, self.pitch = (yaw + math.pi, -pitch) if flip else (yaw, pitch)
 
     def toggle(self, k):
         self.opts[k] = not self.opts[k]
@@ -930,15 +1109,40 @@ class App:
         pygame.draw.rect(ui, PANEL, (0, 0, PW, H))
         pygame.draw.line(ui, LINE, (PW - 1, 0), (PW - 1, H))
         self.txt("GLB Inspector", 16, 12, ACC, self.big)
-        for k, (lab, fn) in enumerate((("Open", self.ask_open), ("Copy", self.copy), ("Export", self.export))):
-            self.button((PW - 222 + k * 70, 12, 64, 28), lab, fn)
-        y = 52
+        btns = (("Open", self.ask_open), ("Recent", lambda: setattr(self, "show_recent", not self.popup_was)),
+                ("Copy", self.copy), ("Export", self.export))
+        for k, (lab, fn) in enumerate(btns):
+            self.button((PW - 268 + k * 65, 12, 60, 28), lab, fn, lab == "Recent" and self.show_recent)
+        y = 50
         if m is None:
             self.txt("No model loaded.", 16, y, DIM)
-            self.txt("Drop a .glb / .gltf on the window, or click Open.", 16, y + 22, DIM)
+            self.txt("Drop .glb / .gltf files on the window, or click Open.", 16, y + 22, DIM)
+            self.txt("You can open several files; Copy takes them all.", 16, y + 44, DIM)
+            if self.recent:
+                self.txt("Recent", 16, y + 82, HEAD, self.bold)
+                self.recent_list(pygame.Rect(8, y + 106, PW - 16, 0))
+            if self.show_recent:
+                self.recent_popup()
             return
-        self.pane("summary", pygame.Rect(8, y, PW - 16, 150), self.summary_lines, 17)
-        y += 158
+        # one chip per open file; click to switch, x to close
+        cw = min(170, (PW - 16) // len(self.docs) - 4)
+        for k, d in enumerate(self.docs):
+            r = pygame.Rect(8 + k * (cw + 4), y, cw, 26)
+            on = k == self.cur
+            pygame.draw.rect(ui, (90, 66, 30) if on else (PANEL3 if r.collidepoint(self.mouse) else PANEL2), r, border_radius=5)
+            name = os.path.basename(d["model"].path)
+            while len(name) > 4 and self.font.size(name)[0] > cw - 30:
+                name = name[:-2]
+            if name != os.path.basename(d["model"].path):
+                name = name[:-1] + "..."
+            self.hits.append((r, lambda k=k: self.switch(k)))
+            self.txt(name, r.x + 8, r.y + 3, ACC if on else TEXT)
+            xr = pygame.Rect(r.right - 20, r.y + 4, 16, 18)
+            self.txt("x", xr.x + 4, xr.y - 1, RED if xr.collidepoint(self.mouse) else DIM)
+            self.hits.append((xr, lambda k=k: self.close(k)))
+        y += 34
+        self.pane("summary", pygame.Rect(8, y, PW - 16, 140), self.summary_lines, 17)
+        y += 148
         pygame.draw.line(ui, LINE, (0, y), (PW, y))
         tx = 10
         for t in ("Nodes", "Materials", "Raw JSON"):
@@ -973,6 +1177,32 @@ class App:
             self.pane("materials", body, lines)
         else:
             self.pane("raw", body, self.raw_lines, 17)
+        if self.show_recent:
+            self.recent_popup()
+
+    def recent_list(self, rect):
+        """Clickable rows of recent files from rect.topleft."""
+        lh = 22
+        for n, p in enumerate(self.recent):
+            r = pygame.Rect(rect.x, rect.y + n * lh, rect.w, lh)
+            ok = os.path.isfile(p)
+            if ok and r.collidepoint(self.mouse):
+                pygame.draw.rect(self.ui, PANEL3, r, border_radius=4)
+            w = self.txt(os.path.basename(p), r.x + 8, r.y + 2, TEXT if ok else DIM)
+            folder = os.path.basename(os.path.dirname(p)) + ("" if ok else "  (missing)")
+            self.txt(folder, min(r.x + 16 + w, r.right - 8 - self.font.size(folder)[0]), r.y + 2, DIM)
+            if ok:
+                self.hits.append((r, lambda p=p: self.load(p)))
+
+    def recent_popup(self):
+        r = pygame.Rect(self.PW - 268 + 65, 44, 330, max(1, len(self.recent)) * 22 + 12)
+        pygame.draw.rect(self.ui, PANEL, r, border_radius=6)
+        pygame.draw.rect(self.ui, LINE, r, 1, border_radius=6)
+        self.hits.append((r, lambda: setattr(self, "show_recent", True)))  # clicks on the popup's gaps keep it open
+        if self.recent:
+            self.recent_list(r.inflate(-8, -12))
+        else:
+            self.txt("No recent files yet.", r.x + 12, r.y + 6, DIM)
 
     def pick_mat(self, k):
         self.sel, self.sel_mat = None, (None if self.sel_mat == k else k)
@@ -1038,6 +1268,11 @@ class App:
             w = self.font.size(k)[0] + 22
             bx -= w + 6
             self.button((bx, 10, w, 28), k, lambda k=k: self.toggle(k), self.opts[k])
+        self.button((bx - 62, 10, 56, 28), "Shot", self.ask_shot)
+        self.scrub_rect = None
+        anims = m.j.get("animations", []) if m is not None else []
+        if anims:
+            self.draw_anim_bar(anims)
         if m is None:
             msg = "Drop a .glb here"
             w = self.big.size(msg)[0]
@@ -1046,7 +1281,7 @@ class App:
             self.txt("or press O to browse", PW + (W - PW - w) // 2, H // 2, DIM)
         else:
             if self.sel is not None:
-                b = m.tb.get(self.sel)
+                b = self.sel_box()
                 self.txt(m.name(self.sel), PW + 14, 12, ACC, self.bold)
                 if b is not None:
                     sz = b[1] - b[0]
@@ -1058,18 +1293,51 @@ class App:
                 self.txt(f"Scene  {sz[0]:.4f} x {sz[1]:.4f} x {sz[2]:.4f} m", PW + 14, 12, TEXT, self.bold)
             if self.hover is not None and not self.drag:
                 self.txt(m.name(self.hover), self.mouse[0] + 14, self.mouse[1] + 10, (255, 255, 255), self.bold)
-        hint = "LMB orbit/select   RMB/MMB pan   wheel zoom   F frame   Esc clear   L T W B G toggles   Up/Down walk tree"
+        hint = ("LMB orbit/select  RMB pan  wheel zoom  F frame  Esc clear  LTWBG toggles  1/3/7 views (Ctrl flips)"
+                "  0 reset  P shot  Tab next file  Space play")
         if m is not None and self.opts["Grid"]:
-            hint += f"   grid {self.grid_step:g} m"
+            hint += f"  grid {self.grid_step:g} m"
         self.txt(hint, PW + 14, H - 26, DIM)
         msg, until, col = self.toast
         if msg and (until == 0 or pygame.time.get_ticks() < until):
             w = self.font.size(msg)[0]
             r = pygame.Rect(0, 0, w + 28, 32)
-            r.midbottom = (PW + (W - PW) // 2, H - 40)
+            r.midbottom = (PW + (W - PW) // 2, H - (76 if anims else 40))
             pygame.draw.rect(self.ui, PANEL, r, border_radius=8)
             pygame.draw.rect(self.ui, col, r, 1, border_radius=8)
             self.txt(msg, r.x + 14, r.y + 6, col)
+
+    def draw_anim_bar(self, anims):
+        W, H = self.size
+        a = self.anim
+        c = a["clip"]
+        bar = pygame.Rect(self.PW + 10, H - 66, W - self.PW - 20, 34)
+        pygame.draw.rect(self.ui, PANEL, bar, border_radius=8)
+        name = "Rest pose" if c is None else f"{c + 1}/{len(anims)} {(anims[c].get('name') or f'animation {c}')[:28]}"
+        cw = min(260, self.font.size(name)[0] + 24)
+        self.button((bar.x + 4, bar.y + 3, cw, 28), name, self.next_clip, c is not None)
+        self.button((bar.x + cw + 10, bar.y + 3, 64, 28), "Pause" if a["play"] else "Play", self.play, a["play"])
+        dur = self.model.anim_dur(c) if c is not None else 0.0
+        label = f"{a['t']:.2f} / {dur:.2f} s"
+        lw = self.font.size("000.00 / 000.00 s")[0]
+        r = pygame.Rect(bar.x + cw + 86, bar.y + 13, bar.w - cw - 104 - lw, 8)
+        if r.w < 40:
+            return
+        self.scrub_rect = r
+        pygame.draw.rect(self.ui, PANEL3, r, border_radius=4)
+        if dur > 0:
+            fx = r.x + int(r.w * a["t"] / dur)
+            pygame.draw.rect(self.ui, ACC, (r.x, r.y, fx - r.x, r.h), border_radius=4)
+            pygame.draw.circle(self.ui, (255, 255, 255), (fx, r.centery), 7)
+        self.hits.append((r.inflate(0, 20), self.start_scrub))
+        self.txt(label, r.right + 12, bar.y + 7, TEXT)
+
+    def start_scrub(self):
+        if self.anim["clip"] is None:
+            self.set_clip(0)
+        self.anim["play"] = False
+        self.drag = "scrub"
+        self.scrub(self.mouse[0])
 
     # -- rendering
     def lines(self, vp, pts, color):
@@ -1128,11 +1396,20 @@ class App:
                 e[axis] = s
                 self.lines(vp, np.array([[0, 0, 0], e], np.float32), col)
             if self.opts["Bounds"]:
-                b = m.tb.get(self.sel) if self.sel is not None else None
+                b = self.sel_box() if self.sel is not None else None
                 if b is not None:
                     self.lines(vp, box_lines(*b), (1, 0.69, 0.25, 1))
                 elif m.bounds is not None:
                     self.lines(vp, box_lines(*m.bounds), (0.6, 0.63, 0.7, 0.5))
+            if self.shot_path:  # viewport only, before the UI is composited on top
+                path, self.shot_path = self.shot_path, None
+                vw = W - self.PW
+                try:
+                    data = ctx.screen.read(viewport=(self.PW, 0, vw, H), components=3)
+                    pygame.image.save(pygame.image.frombytes(data, (vw, H), "RGB", True), path)
+                    self.say(f"Saved {os.path.basename(path)} ({vw} x {H})", GREEN)
+                except Exception as e:
+                    self.say(f"Screenshot failed: {e}", RED)
         ctx.viewport = (0, 0, W, H)
         ctx.enable(mgl.BLEND)
         ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
@@ -1142,7 +1419,7 @@ class App:
 
     # -- loop
     def run(self):
-        clock = pygame.time.Clock()
+        clock, dt = pygame.time.Clock(), 0
         while True:
             self._resize()
             W, H = self.size
@@ -1155,6 +1432,7 @@ class App:
                 elif e.type == pygame.MOUSEBUTTONDOWN and e.button in (1, 2, 3):
                     if e.button == 1:
                         hit = next((fn for r, fn in reversed(self.hits) if r.collidepoint(e.pos)), None)
+                        self.popup_was, self.show_recent = self.show_recent, False  # any click closes the popup
                         if hit:
                             hit()
                             continue
@@ -1167,7 +1445,9 @@ class App:
                     self.drag = None
                 elif e.type == pygame.MOUSEMOTION and self.drag:
                     dx, dy = e.rel
-                    if self.drag == "orbit":
+                    if self.drag == "scrub":
+                        self.scrub(e.pos[0])
+                    elif self.drag == "orbit":
                         self.yaw -= dx * 0.008
                         self.pitch = max(-1.55, min(1.55, self.pitch + dy * 0.008))
                     else:
@@ -1187,6 +1467,11 @@ class App:
                 elif e.type == pygame.KEYDOWN:
                     self.key(e)
             now = pygame.time.get_ticks()
+            a = self.anim
+            if self.model is not None and a["play"] and a["clip"] is not None:
+                dur = self.model.anim_dur(a["clip"])
+                a["t"] = (a["t"] + dt / 1000) % dur if dur > 0 else 0.0
+                self.apply_pose()
             if self.model is not None and not self.drag and now - self.last_pick > 60:
                 self.last_pick = now
                 self.hover = self.pick(*self.mouse) if self.mouse[0] >= self.PW else None
@@ -1196,7 +1481,7 @@ class App:
             self.draw_overlay()
             self.render()
             pygame.display.flip()
-            clock.tick(60)
+            dt = clock.tick(60)
 
     def key(self, e):
         ctrl = e.mod & pygame.KMOD_CTRL
@@ -1208,6 +1493,16 @@ class App:
             self.copy()
         elif e.key == pygame.K_s and ctrl:
             self.export()
+        elif e.key == pygame.K_w and ctrl:
+            self.close(self.cur)
+        elif e.key == pygame.K_TAB and len(self.docs) > 1:
+            self.switch((self.cur + (-1 if e.mod & pygame.KMOD_SHIFT else 1)) % len(self.docs))
+        elif e.key == pygame.K_p:
+            self.ask_shot()
+        elif e.key in VIEWS:
+            self.set_view(*VIEWS[e.key], bool(ctrl))
+        elif e.key == pygame.K_SPACE and self.model.j.get("animations"):
+            self.play()
         elif e.key == pygame.K_f:
             self.frame(self.sel)
         elif e.key == pygame.K_ESCAPE:
@@ -1228,7 +1523,9 @@ class App:
 def selftest():
     pos = np.array([[0, 0, 0], [1, 0, 0], [0, 2, 0]], np.float32).tobytes()
     col = np.array([[1, 0, 0, 1]] * 3, np.float32).tobytes()
-    blob = pos + col
+    times = np.array([0, 1], np.float32).tobytes()
+    moves = np.array([[1, 0, 0], [3, 0, 0]], np.float32).tobytes()
+    blob = pos + col + times + moves
     j = {"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}],
          "nodes": [{"name": "root", "translation": [1, 0, 0], "children": [1]},
                    {"name": "tri", "mesh": 0, "scale": [2, 2, 2]}],
@@ -1236,9 +1533,15 @@ def selftest():
          "materials": [{"name": "grey", "pbrMetallicRoughness": {"baseColorFactor": [0.5, 0.5, 0.5, 1]}}],
          "buffers": [{"byteLength": len(blob)}],
          "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 36},
-                         {"buffer": 0, "byteOffset": 36, "byteLength": 48}],
+                         {"buffer": 0, "byteOffset": 36, "byteLength": 48},
+                         {"buffer": 0, "byteOffset": 84, "byteLength": 8},
+                         {"buffer": 0, "byteOffset": 92, "byteLength": 24}],
          "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
-                       {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC4"}]}
+                       {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC4"},
+                       {"bufferView": 2, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [0], "max": [1]},
+                       {"bufferView": 3, "componentType": 5126, "count": 2, "type": "VEC3"}],
+         "animations": [{"name": "slide", "samplers": [{"input": 2, "output": 3}],
+                         "channels": [{"sampler": 0, "target": {"node": 0, "path": "translation"}}]}]}
     js = json.dumps(j).encode()
     js += b" " * (-len(js) % 4)
     glb = (struct.pack("<III", 0x46546C67, 2, 28 + len(js) + len(blob)) + struct.pack("<II", len(js), 0x4E4F534A)
@@ -1252,6 +1555,11 @@ def selftest():
     assert m.prims[0][0]["vcolors"][1][0][0] == "#FF0000"
     assert m.material_report(0)["base_color"].startswith("#BCBCBC")
     json.dumps(m.report())
+    assert m.anim_dur(0) == 1.0
+    assert np.allclose(m.pose(0, 0.5)[1][:3, 3], [2, 0, 0]) and np.allclose(m.pose(0, 9)[0][:3, 3], [3, 0, 0])
+    q = m.sample({"input": 2, "output": 3}, 0.25, False)
+    assert np.allclose(q, [1.5, 0, 0]), q
+    assert file_header(1, 3, path).startswith("##### FILE 2/3: t.glb")
     print("SELFTEST OK")
 
 
@@ -1259,8 +1567,9 @@ if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
     elif "--brief" in sys.argv:  # python tools/glb_inspector.py --brief a.glb b.glb
-        print("\n\n".join(Model(p).brief() for p in sys.argv[1:] if not p.startswith("-")))
+        files = [p for p in sys.argv[1:] if not p.startswith("-")]
+        print("\n\n".join(file_header(k, len(files), p) + "\n" + Model(p).brief() for k, p in enumerate(files)))
     elif "--write-icon" in sys.argv:  # regenerates tools/glb_inspector.ico for the exe build
         write_ico(os.path.join(os.path.dirname(os.path.abspath(__file__)), "glb_inspector.ico"))
     else:
-        App(next((a for a in sys.argv[1:] if not a.startswith("-")), None)).run()
+        App([a for a in sys.argv[1:] if not a.startswith("-")]).run()
