@@ -683,6 +683,11 @@ RECENT = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "GLB
 PER_DOC = ("model", "gl_objs", "draws", "texs", "sel", "sel_mat", "collapsed", "scroll", "yaw", "pitch", "dist",
            "target", "summary_lines", "mat_lines", "img_lines", "anim_lines", "raw_lines", "detail_cache", "grid",
            "grid_step", "anim")
+# (label, file name, yaw, pitch); yaw 0 = camera on +Z looking at -Z (glTF front)
+SHOT_VIEWS = (("Front (+Z)", "front", 0.0, 0.0), ("Back (-Z)", "back", math.pi, 0.0),
+              ("Right (+X)", "right", math.pi / 2, 0.0), ("Left (-X)", "left", -math.pi / 2, 0.0),
+              ("Top (+Y)", "top", 0.0, 1.5703), ("Bottom (-Y)", "bottom", 0.0, -1.5703),
+              ("3/4 front-right", "front_right", math.pi / 4, 0.5), ("3/4 back-left", "back_left", -3 * math.pi / 4, 0.5))
 VIEWS = {pygame.K_1: (0.0, 0.0), pygame.K_KP1: (0.0, 0.0), pygame.K_3: (math.pi / 2, 0.0),
          pygame.K_KP3: (math.pi / 2, 0.0), pygame.K_7: (0.0, 1.5703), pygame.K_KP7: (0.0, 1.5703),
          pygame.K_0: (0.7, 0.35), pygame.K_KP0: (0.7, 0.35)}
@@ -742,7 +747,6 @@ class App:
         self.docs, self.cur = [], 0
         self.anim = {"clip": None, "t": 0.0, "play": False}
         self.scrub_rect = None
-        self.shot_path = None
         self.show_recent = self.popup_was = False
         try:
             with open(RECENT, encoding="utf-8") as f:
@@ -953,9 +957,9 @@ class App:
         cp = math.cos(self.pitch)
         return self.target + self.dist * np.array([cp * math.sin(self.yaw), math.sin(self.pitch), cp * math.cos(self.yaw)])
 
-    def viewproj(self):
+    def viewproj(self, aspect=None):
         W, H = self.size
-        proj = perspective(math.radians(45), (W - self.PW) / H, self.dist * 0.01, self.dist * 100)
+        proj = perspective(math.radians(45), aspect or (W - self.PW) / H, self.dist * 0.01, self.dist * 100)
         return proj @ look_at(self.eye(), self.target)
 
     # -- selection
@@ -1041,11 +1045,65 @@ class App:
             self.say(f"Exported report to {os.path.basename(p)}", GREEN)
 
     def ask_shot(self):
+        """Render the standard views to <name>.png (labelled sheet) and <name>/<view>.png (one file each)."""
         if self.model is None:
             return
         base = os.path.splitext(os.path.basename(self.model.path))[0]
-        self.shot_path = self.dialog("asksaveasfilename", initialfile=f"{base}.png", defaultextension=".png",
-                                     filetypes=[("PNG image", "*.png")]) or None
+        path = self.dialog("asksaveasfilename", initialfile=f"{base}_views.png", defaultextension=".png",
+                           filetypes=[("PNG image", "*.png")])
+        if not path:
+            return
+        try:
+            n = self.shoot_views(path)
+            self.say(f"Saved {n} views: {os.path.basename(path)} + folder {os.path.splitext(os.path.basename(path))[0]}", GREEN)
+        except Exception as e:
+            self.say(f"Screenshot failed: {e}", RED)
+
+    def shoot_views(self, path, N=2048, out=1024, tile=512):
+        """Frames the selection (or whole model) from each SHOT_VIEWS angle in an offscreen buffer."""
+        ctx, m = self.ctx, self.model
+        tex = ctx.texture((N, N), 4)
+        depth = ctx.depth_renderbuffer((N, N))
+        fbo = ctx.framebuffer(tex, depth)
+        cam = (self.yaw, self.pitch, self.dist, self.target)
+        folder = os.path.splitext(path)[0]
+        os.makedirs(folder, exist_ok=True)
+        shots = []
+        try:
+            for label, fname, yaw, pitch in SHOT_VIEWS:
+                self.yaw, self.pitch = yaw, pitch
+                self.frame(self.sel)
+                self.dist *= 0.8  # frame() fits the bounding sphere; tighter for stills
+                fbo.use()
+                ctx.viewport = (0, 0, N, N)
+                ctx.clear(*(c / 255 for c in VIEW_BG), 1.0)
+                self.draw_scene(self.viewproj(1.0), clean=True)
+                img = pygame.transform.smoothscale(pygame.image.frombytes(fbo.read(components=3), (N, N), "RGB", True),
+                                                   (out, out))
+                pygame.image.save(img, os.path.join(folder, fname + ".png"))
+                shots.append((label, pygame.transform.smoothscale(img, (tile, tile))))
+        finally:
+            self.yaw, self.pitch, self.dist, self.target = cam
+            ctx.screen.use()
+            for o in (fbo, tex, depth):
+                o.release()
+        cols, lab, head = 4, 30, 40
+        rows = (len(shots) + cols - 1) // cols
+        sheet = pygame.Surface((cols * tile, head + rows * (tile + lab)))
+        sheet.fill(BG)
+        what = os.path.basename(m.path) + (f"  -  framed on {m.name(self.sel)}" if self.sel is not None else "")
+        b = m.tb.get(self.sel) if self.sel is not None else m.bounds
+        if b is not None:
+            sz = b[1] - b[0]
+            what += f"  -  {sz[0]:.4f} x {sz[1]:.4f} x {sz[2]:.4f} m"
+        sheet.blit(self.big.render(what, True, ACC), (12, 8))
+        for k, (label, img) in enumerate(shots):
+            x, y = k % cols * tile, head + k // cols * (tile + lab)
+            sheet.blit(self.bold.render(label, True, TEXT), (x + 10, y + 5))
+            sheet.blit(img, (x, y + lab))
+            pygame.draw.rect(sheet, LINE, (x, y + lab, tile, tile), 1)
+        pygame.image.save(sheet, path)
+        return len(shots)
 
     def set_view(self, yaw, pitch, flip):
         self.yaw, self.pitch = (yaw + math.pi, -pitch) if flip else (yaw, pitch)
@@ -1347,6 +1405,57 @@ class App:
             self.lprog["u_color"].value = color
             self.lvao.render(self.mgl.LINES, vertices=len(pts))
 
+    def draw_scene(self, vp, clean=False):
+        """Model, grid, wireframe, axes and bounds into the bound framebuffer; clean = no tints/axes/boxes."""
+        ctx, mgl, m = self.ctx, self.mgl, self.model
+        ctx.enable(mgl.DEPTH_TEST | mgl.BLEND)
+        ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
+        ctx.depth_func = "<="
+        light = self.eye() - self.target + np.array([0, self.dist * 0.6, 0])
+        p = self.prog
+        p["u_light"].value = tuple(light / np.linalg.norm(light))
+        p["u_lit"].value = 1.0 if self.opts["Lit"] else 0.0
+        p["u_picking"].value = False
+        if self.opts["Grid"] and self.pitch >= 0:  # from below the grid would cover the model
+            self.lines(vp, self.grid, (0.32, 0.35, 0.42, 1))
+        for d in self.draws:
+            p["u_mvp"].write(gl_mat(vp @ d["M"]))
+            p["u_nmat"].write(d["nmat"])
+            p["u_base"].value = d["base"]
+            p["u_cut"].value = d["cut"]
+            p["u_blend"].value = 1.0 if d["blend"] else 0.0
+            if clean:
+                p["u_tint"].value = (0, 0, 0, 0)
+            elif d["node"] == self.sel or (self.sel_mat is not None and d["mat"] == self.sel_mat):
+                p["u_tint"].value = (1.0, 0.69, 0.25, 0.35)
+            elif d["node"] == self.hover:
+                p["u_tint"].value = (1, 1, 1, 0.12)
+            else:
+                p["u_tint"].value = (0, 0, 0, 0)
+            (d["tex"] if d["tex"] is not None and self.opts["Tex"] else self.white).use(0)
+            d["vao"].render()
+        if self.opts["Wire"]:
+            ctx.wireframe = True
+            p["u_tint"].value = (0.05, 0.05, 0.06, 0.85)
+            for d in self.draws:
+                p["u_mvp"].write(gl_mat(vp @ d["M"]))
+                d["vao"].render()
+            ctx.wireframe = False
+        ctx.disable(mgl.DEPTH_TEST)
+        if clean:
+            return
+        s = (m.bounds[1] - m.bounds[0]).max() * 0.15 if m.bounds is not None else 1
+        for axis, col in ((0, (0.95, 0.35, 0.35, 1)), (1, (0.4, 0.9, 0.4, 1)), (2, (0.4, 0.6, 1, 1))):
+            e = np.zeros(3)
+            e[axis] = s
+            self.lines(vp, np.array([[0, 0, 0], e], np.float32), col)
+        if self.opts["Bounds"]:
+            b = self.sel_box() if self.sel is not None else None
+            if b is not None:
+                self.lines(vp, box_lines(*b), (1, 0.69, 0.25, 1))
+            elif m.bounds is not None:
+                self.lines(vp, box_lines(*m.bounds), (0.6, 0.63, 0.7, 0.5))
+
     def render(self):
         ctx, mgl = self.ctx, self.mgl
         W, H = self.size
@@ -1357,59 +1466,7 @@ class App:
             ctx.viewport = ctx.scissor = (self.PW, 0, W - self.PW, H)
             ctx.clear(*(c / 255 for c in VIEW_BG))
             ctx.scissor = None
-            ctx.enable(mgl.DEPTH_TEST | mgl.BLEND)
-            ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
-            ctx.depth_func = "<="
-            vp = self.viewproj()
-            light = self.eye() - self.target + np.array([0, self.dist * 0.6, 0])
-            p = self.prog
-            p["u_light"].value = tuple(light / np.linalg.norm(light))
-            p["u_lit"].value = 1.0 if self.opts["Lit"] else 0.0
-            p["u_picking"].value = False
-            if self.opts["Grid"]:
-                self.lines(vp, self.grid, (0.32, 0.35, 0.42, 1))
-            for d in self.draws:
-                p["u_mvp"].write(gl_mat(vp @ d["M"]))
-                p["u_nmat"].write(d["nmat"])
-                p["u_base"].value = d["base"]
-                p["u_cut"].value = d["cut"]
-                p["u_blend"].value = 1.0 if d["blend"] else 0.0
-                if d["node"] == self.sel or (self.sel_mat is not None and d["mat"] == self.sel_mat):
-                    p["u_tint"].value = (1.0, 0.69, 0.25, 0.35)
-                elif d["node"] == self.hover:
-                    p["u_tint"].value = (1, 1, 1, 0.12)
-                else:
-                    p["u_tint"].value = (0, 0, 0, 0)
-                (d["tex"] if d["tex"] is not None and self.opts["Tex"] else self.white).use(0)
-                d["vao"].render()
-            if self.opts["Wire"]:
-                ctx.wireframe = True
-                p["u_tint"].value = (0.05, 0.05, 0.06, 0.85)
-                for d in self.draws:
-                    p["u_mvp"].write(gl_mat(vp @ d["M"]))
-                    d["vao"].render()
-                ctx.wireframe = False
-            ctx.disable(mgl.DEPTH_TEST)
-            s = (m.bounds[1] - m.bounds[0]).max() * 0.15 if m.bounds is not None else 1
-            for axis, col in ((0, (0.95, 0.35, 0.35, 1)), (1, (0.4, 0.9, 0.4, 1)), (2, (0.4, 0.6, 1, 1))):
-                e = np.zeros(3)
-                e[axis] = s
-                self.lines(vp, np.array([[0, 0, 0], e], np.float32), col)
-            if self.opts["Bounds"]:
-                b = self.sel_box() if self.sel is not None else None
-                if b is not None:
-                    self.lines(vp, box_lines(*b), (1, 0.69, 0.25, 1))
-                elif m.bounds is not None:
-                    self.lines(vp, box_lines(*m.bounds), (0.6, 0.63, 0.7, 0.5))
-            if self.shot_path:  # viewport only, before the UI is composited on top
-                path, self.shot_path = self.shot_path, None
-                vw = W - self.PW
-                try:
-                    data = ctx.screen.read(viewport=(self.PW, 0, vw, H), components=3)
-                    pygame.image.save(pygame.image.frombytes(data, (vw, H), "RGB", True), path)
-                    self.say(f"Saved {os.path.basename(path)} ({vw} x {H})", GREEN)
-                except Exception as e:
-                    self.say(f"Screenshot failed: {e}", RED)
+            self.draw_scene(self.viewproj())
         ctx.viewport = (0, 0, W, H)
         ctx.enable(mgl.BLEND)
         ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
