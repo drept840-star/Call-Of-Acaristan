@@ -424,6 +424,49 @@ class Model:
                         "duration_s": dur})
         return clean(out)
 
+    def brief(self):
+        """Compact text: materials with colours/textures, node tree with per-primitive world AABBs."""
+        s, out = self.summary(), []
+        f3 = lambda v: ", ".join(f"{x:.4f}" for x in v)
+        size = " x ".join(f"{x:.4f}" for x in s["scene_bounds_m"]["size"]) if "scene_bounds_m" in s else "-"
+        out.append(f"=== {s['file']}  {s['counts']['nodes']} nodes, {s['drawn']['triangles']} tris, size {size} m")
+        out.append("materials (base = sRGB hex + linear factor; tex = image, mean RGB 0-255)")
+        for k, m in enumerate(self.j.get("materials", [])):
+            pbr = m.get("pbrMetallicRoughness", {})
+            f = pbr.get("baseColorFactor", [1, 1, 1, 1])
+            line = f"  m{k} {m.get('name', '')!r} base {hex_lin(f)} ({', '.join(f'{x:.3f}' for x in f)})"
+            if "baseColorTexture" in pbr:
+                src, _ = self.tex_image(pbr["baseColorTexture"]["index"])
+                im = self.images[src] if src is not None else None
+                if im and im["rgba"] is not None:
+                    a = im["avg"]
+                    line += (f"  tex i{src} {im['size'][0]}x{im['size'][1]} mean({a[0]:.1f}, {a[1]:.1f}, {a[2]:.1f})"
+                             f" {self.image_report(src)['average']}")
+                else:
+                    line += f"  tex i{src} unreadable"
+            out.append(line)
+        out.append("nodes (n=node p=primitive m=material t=tris; lo/hi = world AABB in metres)")
+
+        def walk(i, d):
+            n, pad = self.nodes[i], "  " * (d + 1)
+            label = f"n{i} {self.name(i)!r}"
+            prims = self.prims.get(n.get("mesh"), [])
+            if not prims:
+                out.append(pad + label)
+            M = self.world[i]
+            for pi, p in enumerate(prims):
+                b = ""
+                if len(p["pos"]):
+                    P = p["pos"].astype(np.float64) @ M[:3, :3].T + M[:3, 3]
+                    b = f"  lo({f3(P.min(0))}) hi({f3(P.max(0))})"
+                head = pad + (label if pi == 0 else " " * len(label))
+                out.append(f"{head} p{pi} m{p['material']} {p['tris']}t{b}")
+            for c in n.get("children", []):
+                walk(c, d + 1)
+        for r in self.roots:
+            walk(r, 0)
+        return "\n".join(out)
+
     def report(self):
         return {"summary": self.summary(), "nodes": [self.node_report(i) for i in range(len(self.nodes))],
                 "materials": [self.material_report(i) for i in range(len(self.j.get("materials", [])))],
@@ -512,21 +555,50 @@ TOGGLE_KEYS = {pygame.K_l: "Lit", pygame.K_t: "Tex", pygame.K_w: "Wire", pygame.
 
 
 def make_icon(size=256):
-    """App icon: amber wireframe cube with a shaded front on a dark tile."""
-    s = pygame.Surface((256, 256), pygame.SRCALPHA)
-    pygame.draw.rect(s, PANEL, (8, 8, 240, 240), border_radius=48)
-    pygame.draw.rect(s, LINE, (8, 8, 240, 240), 6, border_radius=48)
-    top, mid, bot = 52, 108, 204  # isometric cube: top vertex, side rim, bottom vertex
-    l, c, r = 52, 128, 204
-    faces = (([(c, top), (r, mid - 28), (c, mid + 16), (l, mid - 28)], (255, 196, 110)),
-             ([(l, mid - 28), (c, mid + 16), (c, bot), (l, bot - 44)], (110, 190, 255)),
-             ([(c, mid + 16), (r, mid - 28), (r, bot - 44), (c, bot)], (60, 110, 170)))
+    """App icon: shaded cube in bounds brackets under a magnifier, on a gradient tile.
+    Drawn at 4x and scaled down, since pygame shapes have no anti-aliasing."""
+    S, n = 4, 1024
+    P = lambda *pts: [(x * S, y * S) for x, y in pts]
+    s = pygame.Surface((n, n), pygame.SRCALPHA)
+    tile = pygame.Surface((n, n), pygame.SRCALPHA)
+    for y in range(n):
+        t = y / n
+        tile.fill((int(46 - 26 * t), int(52 - 30 * t), int(68 - 38 * t), 255), (0, y, n, 1))
+    mask = pygame.Surface((n, n), pygame.SRCALPHA)
+    pygame.draw.rect(mask, (255, 255, 255, 255), (6 * S, 6 * S, 244 * S, 244 * S), border_radius=56 * S)
+    tile.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    s.blit(tile, (0, 0))
+    pygame.draw.rect(s, (86, 96, 120), (6 * S, 6 * S, 244 * S, 244 * S), 3 * S, border_radius=56 * S)
+    detail = size > 32
+    if detail:  # bounds brackets
+        for (x, y), (dx, dy) in (((28, 26), (1, 1)), ((196, 26), (-1, 1)), ((28, 212), (1, -1))):
+            pygame.draw.lines(s, (255, 176, 64), False, P((x + 24 * dx, y), (x, y), (x, y + 24 * dy)), 6 * S)
+    faces = ((P((112, 44), (182, 82), (112, 120), (42, 82)), (255, 192, 96)),
+             (P((42, 82), (112, 120), (112, 200), (42, 162)), (96, 176, 255)),
+             (P((112, 120), (182, 82), (182, 162), (112, 200)), (46, 100, 178)))
     for pts, col in faces:
         pygame.draw.polygon(s, col, pts)
-        pygame.draw.polygon(s, ACC, pts, 7)
-    for p in ((c, top), (r, mid - 28), (l, mid - 28), (c, mid + 16), (c, bot), (l, bot - 44), (r, bot - 44)):
-        pygame.draw.circle(s, (255, 255, 255), p, 9)
-    return s if size == 256 else pygame.transform.smoothscale(s, (size, size))
+    pygame.draw.polygon(s, (255, 222, 160), P((112, 44), (182, 82), (112, 120), (42, 82)), 2 * S)
+    for pts, _ in faces:
+        pygame.draw.polygon(s, (14, 16, 22), pts, 4 * S)
+    if detail:
+        for p in P((112, 44), (182, 82), (42, 82), (112, 120), (112, 200), (42, 162), (182, 162)):
+            pygame.draw.circle(s, (255, 255, 255), p, 6 * S)
+    lens, rad = (170, 170), 40  # magnifier
+    shadow = pygame.Surface((n, n), pygame.SRCALPHA)
+    pygame.draw.circle(shadow, (0, 0, 0, 110), ((lens[0] + 5) * S, (lens[1] + 6) * S), (rad + 8) * S, 14 * S)
+    pygame.draw.line(shadow, (0, 0, 0, 110), *P((204, 208), (226, 230)), 22 * S)
+    s.blit(shadow, (0, 0))
+    glass = pygame.Surface((n, n), pygame.SRCALPHA)
+    pygame.draw.circle(glass, (190, 220, 255, 80), (lens[0] * S, lens[1] * S), rad * S)
+    pygame.draw.arc(glass, (255, 255, 255, 150), pygame.Rect(P((lens[0] - 30, lens[1] - 30))[0], (60 * S, 60 * S)),
+                    1.9, 3.0, 5 * S)
+    s.blit(glass, (0, 0))
+    a, b = P((200, 200), (222, 222))
+    pygame.draw.line(s, (255, 176, 64), a, b, 20 * S)
+    pygame.draw.circle(s, (255, 176, 64), b, 10 * S)
+    pygame.draw.circle(s, (236, 240, 248), (lens[0] * S, lens[1] * S), (rad + 6) * S, 12 * S)
+    return pygame.transform.smoothscale(s, (size, size))
 
 
 def write_ico(path, sizes=(256, 64, 48, 32, 16)):
@@ -781,6 +853,15 @@ class App:
         except Exception as e:
             self.say(f"Clipboard failed: {e}", RED)
 
+    def copy_brief(self):
+        if self.model is None:
+            return
+        try:
+            pygame.scrap.put_text(self.model.brief())
+            self.say("Copied brief (materials + node tree with bounds) as text", GREEN)
+        except Exception as e:
+            self.say(f"Clipboard failed: {e}", RED)
+
     def export(self):
         if self.model is None:
             return
@@ -857,8 +938,9 @@ class App:
         pygame.draw.rect(ui, PANEL, (0, 0, PW, H))
         pygame.draw.line(ui, LINE, (PW - 1, 0), (PW - 1, H))
         self.txt("GLB Inspector", 16, 12, ACC, self.big)
-        for k, (lab, fn) in enumerate((("Open", self.ask_open), ("Copy", self.copy), ("Export", self.export))):
-            self.button((PW - 222 + k * 70, 12, 64, 28), lab, fn)
+        for k, (lab, fn) in enumerate((("Open", self.ask_open), ("Brief", self.copy_brief), ("Copy", self.copy),
+                                       ("Export", self.export))):
+            self.button((PW - 262 + k * 64, 12, 60, 28), lab, fn)
         y = 52
         if m is None:
             self.txt("No model loaded.", 16, y, DIM)
@@ -1185,6 +1267,8 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
+    elif "--brief" in sys.argv:  # python tools/glb_inspector.py --brief a.glb b.glb
+        print("\n\n".join(Model(p).brief() for p in sys.argv[1:] if not p.startswith("-")))
     elif "--write-icon" in sys.argv:  # regenerates tools/glb_inspector.ico for the exe build
         write_ico(os.path.join(os.path.dirname(os.path.abspath(__file__)), "glb_inspector.ico"))
     else:
