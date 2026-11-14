@@ -841,24 +841,16 @@ class App:
         m = self.model
         if m is None:
             return
+        text, what = m.brief(), "brief"  # always the brief; the selection's full JSON goes after it
         if self.sel is not None:
-            data, what = m.node_report(self.sel), f"node '{m.name(self.sel)}'"
+            text += f"\n\nselected node n{self.sel}:\n" + json.dumps(m.node_report(self.sel), indent=2)
+            what += f" + node '{m.name(self.sel)}'"
         elif self.sel_mat is not None:
-            data, what = m.material_report(self.sel_mat), f"material {self.sel_mat}"
-        else:
-            data, what = m.summary(), "summary"
+            text += f"\n\nselected material m{self.sel_mat}:\n" + json.dumps(m.material_report(self.sel_mat), indent=2)
+            what += f" + material {self.sel_mat}"
         try:
-            pygame.scrap.put_text(json.dumps(data, indent=2))
-            self.say(f"Copied {what} as JSON", GREEN)
-        except Exception as e:
-            self.say(f"Clipboard failed: {e}", RED)
-
-    def copy_brief(self):
-        if self.model is None:
-            return
-        try:
-            pygame.scrap.put_text(self.model.brief())
-            self.say("Copied brief (materials + node tree with bounds) as text", GREEN)
+            pygame.scrap.put_text(text)
+            self.say(f"Copied {what}", GREEN)
         except Exception as e:
             self.say(f"Clipboard failed: {e}", RED)
 
@@ -938,9 +930,8 @@ class App:
         pygame.draw.rect(ui, PANEL, (0, 0, PW, H))
         pygame.draw.line(ui, LINE, (PW - 1, 0), (PW - 1, H))
         self.txt("GLB Inspector", 16, 12, ACC, self.big)
-        for k, (lab, fn) in enumerate((("Open", self.ask_open), ("Brief", self.copy_brief), ("Copy", self.copy),
-                                       ("Export", self.export))):
-            self.button((PW - 262 + k * 64, 12, 60, 28), lab, fn)
+        for k, (lab, fn) in enumerate((("Open", self.ask_open), ("Copy", self.copy), ("Export", self.export))):
+            self.button((PW - 222 + k * 70, 12, 64, 28), lab, fn)
         y = 52
         if m is None:
             self.txt("No model loaded.", 16, y, DIM)
