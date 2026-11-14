@@ -32,7 +32,18 @@ import warnings
 
 FROZEN = getattr(sys, "frozen", False)
 HERE = os.path.dirname(os.path.abspath(sys.executable if FROZEN else __file__))
-DEFAULT_ROOT = HERE if FROZEN else os.path.dirname(HERE)
+
+
+def project_of(d):  # nearest folder above d holding .git, so the exe can live in a subfolder like apps/
+    p = d
+    while not os.path.isdir(os.path.join(p, ".git")):
+        if os.path.dirname(p) == p:
+            return d
+        p = os.path.dirname(p)
+    return p
+
+
+DEFAULT_ROOT = project_of(HERE)
 DATA = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "PasteApply")
 BACKUPS = os.path.join(DATA, "backups")
 SETTINGS = os.path.join(DATA, "settings.json")

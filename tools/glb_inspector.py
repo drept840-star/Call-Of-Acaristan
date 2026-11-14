@@ -1005,7 +1005,10 @@ class App:
         return p
 
     def ask_open(self):
-        start = os.path.join("assets", "3D") if os.path.isdir(os.path.join("assets", "3D")) else os.getcwd()
+        here = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
+        # the exe may sit in apps/ or tools/, so look one level up for assets/3D too
+        start = next((d for d in (os.path.join(b, "assets", "3D") for b in (os.getcwd(), os.path.dirname(here)))
+                      if os.path.isdir(d)), os.getcwd())
         for p in self.dialog("askopenfilenames", initialdir=start, title="Open 3D model(s)",
                              filetypes=[("glTF models", "*.glb *.gltf"), ("All files", "*.*")]) or ():
             self.load(p)
