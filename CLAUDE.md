@@ -41,7 +41,7 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
 - `validation/` - gate outputs and audits (sprite inventory, voice audit).
 - `.wolf/` - OpenWolf state: `STATUS.md` (handoff), `cerebrum.md`, `buglog.json`, `anatomy.md`.
 
-Not project modules (skip them): `archive/`, `build/`, `dist/`, `previews/`, `shots/`, `_shots/`, `outputs/`, `handoff/`, `crash_reports/`, `trailers/`, `.venv/`, `.qoder/`, `.opencode/`, `.workbuddy-ai/`, `SKILLS/`, and the zips, logs (`*.log`, `*.err`) and scratch scripts at the root.
+Not project modules (skip them): `build/`, `dist/` (PyInstaller output), `outputs/`, `shots/`, `_shots/`, `previews/` (render and screenshot output; tools recreate them), `crash_reports/`, `trailers/`, `sfx_wav/`, `apps/` (prebuilt helper exes), `.venv/`, `docs/archive/` (retired notes), the runtime saves and settings at the root (`save_data.json`, `settings*.json`, `profile*.json`), and any stray zips, logs (`*.log`, `*.err`) or scratch scripts at the root.
 
 # Code graph (graphify)
 
