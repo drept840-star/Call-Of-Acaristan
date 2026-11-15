@@ -37,6 +37,7 @@ from missions.m5.meta import (
     M5_RAID_SECONDS, M5_PURSUIT_INTERVAL, M5_MARU_MAX_HP,
     STAGE_HQ, STAGE_QUARTER, STAGE_PRINTWORKS, STAGE_RAID, STAGE_TUNNEL,
     STAGE_DONE, VASILE_OFFICE_LINES, HQ_OFFICE_RADIUS,
+    TUNNEL_MID_COL, TUNNEL_MID_TILE, TUNNEL_MID_MARU_TILE,
     C_SYSTEM, C_VASILE, C_MARU, C_GUARD, C_UCILEV, BIRIBEL_SPEAKER,
 )
 from missions.m5.world import (
@@ -45,7 +46,7 @@ from missions.m5.world import (
     _near, _radio, _set_objective, _sfx, _tile_world,
     _printworks_door_pos, _maru_office_pos, _stair_pos, _river_gate_pos,
     _update_maru, _spawn_raid_squad, _spawn_pursuit_squad,
-    _squad_alive_count,
+    _squad_alive_count, _init_maru,
 )
 
 M5_FAIL_HOLD_FRAMES = 150      # hold on Maru's body before the death screen
@@ -406,6 +407,7 @@ def start_m5(preserve_timer=False):
     STATE.mission5_quarter_checkpoint_reached = False
     STATE.mission5_printworks_checkpoint_reached = False
     STATE.mission5_tunnel_checkpoint_reached = False
+    STATE.mission5_tunnel_mid_checkpoint_reached = False
     STATE.m5_marks = set()
     # Biribel is in the President's black for the whole mission: the intro's
     # m5x_change beat always plays before this, and every checkpoint start
@@ -474,6 +476,16 @@ def start_mission5_tunnel_checkpoint(preserve_timer=False):
     STATE.m5_dialogue_done = True
     _enter_tunnel()
     _save_adapter.capture_m5_checkpoint("tunnel")   # RPE6 P9
+    return STATE.player
+
+
+def start_mission5_tunnel_mid_checkpoint(preserve_timer=False):
+    """Tunnel escort resumed at the junction, halfway to the river gate."""
+    start_mission5_tunnel_checkpoint(preserve_timer=preserve_timer)
+    STATE.player.rect.center = _tile_world(*TUNNEL_MID_TILE)
+    _init_maru(TUNNEL_MID_MARU_TILE, following=True)
+    _snap_camera_safe()
+    STATE.mission5_tunnel_mid_checkpoint_reached = True
     return STATE.player
 
 
@@ -556,6 +568,9 @@ def _update_stage(keys=None):
 
     if stage == STAGE_TUNNEL:
         _update_maru()
+        m = STATE.m5_maru
+        if m and m["x"] >= TUNNEL_MID_COL * _config.TILE_SIZE:
+            STATE.mission5_tunnel_mid_checkpoint_reached = True
         STATE.m5_squad_timer -= 1
         if STATE.m5_squad_timer <= 0:
             _spawn_pursuit_squad()

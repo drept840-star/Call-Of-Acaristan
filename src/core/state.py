@@ -170,6 +170,8 @@ class GameState:
         # the evidence phase already active, instead of restarting the
         # entire mission from the intro cutscene.
         self.mission2_checkpoint_reached = False
+        self.mission2_killbox_checkpoint_reached = False   # core.checkpoints: kill box start
+        self.m1_notebook_checkpoint_reached = False        # core.checkpoints: M1 notebook pickup
         # ── Evidence completion cinematic (Option E) ──
         # When the player reads the 3rd evidence item, a 5-second cinematic
         # plays before the upload objective appears. These fields drive it:
@@ -272,6 +274,7 @@ class GameState:
         self.mission5_quarter_checkpoint_reached = False  # HQ office done
         self.mission5_printworks_checkpoint_reached = False
         self.mission5_tunnel_checkpoint_reached = False
+        self.mission5_tunnel_mid_checkpoint_reached = False  # core.checkpoints: tunnel junction
         self.m5_marks = set()
         # ── Mission 6: campaign finale ──
         self.mission6_stage = None

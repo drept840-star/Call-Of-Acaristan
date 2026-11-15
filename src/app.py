@@ -13,6 +13,7 @@ from ui import kit as _kit
 from core import game_core as gc
 from core import profile_store
 from core import save_system
+from core import checkpoints
 from core import settings_store
 from core.user_settings import SETTINGS
 from core.fsm import GameState, GameStateManager
@@ -2309,7 +2310,15 @@ class _SlotSelectState(GameState):
             slot = save_system.get_slot(i)
             last = slot.get("last_completed_mission", "")
             progress = slot.get("progress", "")
-            if last == "MISSION_1":
+            if checkpoints.slot_row(slot):
+                # Mid-mission save at a checkpoint (core.checkpoints): resume
+                # there with the health, ammo and weapons the player arrived with.
+                gc.mission_start_time = _now_ms()
+                gc.mission_end_time = 0
+                checkpoints.resume_slot(slot)
+                gsm.transition("GAME")
+                pygame.mouse.set_visible(False)
+            elif last == "MISSION_1":
                 gc.mission_start_time = _now_ms()
                 gc.mission_end_time = 0
                 start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
@@ -3645,6 +3654,7 @@ class _GameState_(GameState):
         _g = _advance_grain()
         if _g is not None:
             surface.blit(_g, (0, 0))
+        gc.checkpoints.draw(surface)   # CHECKPOINT toast + save icon
         gc.draw_desk_note()
         gc.draw_safe_keypad()
         # NOTE: the reticle is no longer drawn here. It moved to the main loop

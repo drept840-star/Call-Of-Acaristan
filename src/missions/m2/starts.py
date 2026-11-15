@@ -297,6 +297,12 @@ def start_mission2_after_sniper(preserve_timer=False):
     return player
 
 
+def start_mission2_killbox_checkpoint(preserve_timer=False):
+    """Restart Mission 2 at the start of the kill-box fight (after the sniper film)."""
+    STATE._skip_mission2_intro_radio = True
+    return start_mission2_after_sniper(preserve_timer=preserve_timer)
+
+
 def start_mission2_flank(preserve_timer=False):
     """Start Mission 2 and jump directly to the flank phase.
 

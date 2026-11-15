@@ -77,21 +77,10 @@ def checkpoint_label(state):
         except Exception:
             snap = None
         return "SIEGE WAVE %d" % snap["wave"] if snap else "SIEGE"
-    ladders = {
-        "MISSION2": [("mission2_checkpoint_reached", "ROUTE 12 CHECKPOINT")],
-        "MISSION3": [("mission3_" + part + "_checkpoint_reached", label) for part, label in
-                     [("broadcast", "BROADCAST WING"), ("kill_order", "KILL ORDER"),
-                      ("archives", "ARCHIVES"), ("comms", "COMMS WING"), ("breakout", "BREAKOUT")]],
-        "MISSION4": [("mission4_tower_checkpoint_reached", "TRANSMITTER TOWER"),
-                     ("mission4_station_checkpoint_reached", "STATION")],
-        "MISSION5": [("mission5_tunnel_checkpoint_reached", "TUNNEL"),
-                     ("mission5_printworks_checkpoint_reached", "PRINTWORKS"),
-                     ("mission5_quarter_checkpoint_reached", "LOWER QUARTER")],
-        "MISSION6": [("m6_train_checkpoint_reached", "TRAIN")],
-    }
-    for flag, label in ladders.get(key, []):
-        if getattr(state, flag, False):
-            return label
+    from core import checkpoints
+    row = checkpoints.deepest(key, state)
+    if row:
+        return row[3]
     return "HQ" if key == "MISSION5" else "MISSION START"
 
 

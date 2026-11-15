@@ -8642,6 +8642,65 @@ def check_mission5_integration():
             fn + " does not check MISSION5 before MISSION4"
 
 
+def check_checkpoint_ladders():
+    """core.checkpoints: the M1/M2/M5 rungs load, persist with the loadout, and resume.
+
+    A reached rung is written to the save slot (progress + token + the player's
+    health/ammo/weapons on arrival); a death restart and a Continue both land on
+    it with that loadout back, and the failure screen names it.
+    """
+    from core.state import STATE
+    from core import checkpoints as cp
+    from missions import m5
+    from ui import mission_failed
+
+    keys = EmptyKeys()
+    _reset_save_store()
+    _save_system.start_new_campaign(0)
+
+    gc.start_mission1_notebook_checkpoint()
+    assert STATE.m1_notebook_checkpoint_reached and STATE.notebook_collected, "M1 notebook rung"
+    assert STATE.breach_stage >= 1 and STATE.mission_phase == "escape", "M1 rung did not start the breach"
+    assert not STATE.request_notebook_inspect, "M1 rung reopened the notebook inspect"
+    cp.poll()
+    slot = _save_system.get_slot(0)
+    assert (slot["progress"], slot["checkpoint"]) == ("m1", "notebook"), slot
+    assert mission_failed.checkpoint_label(STATE) == "THE NOTEBOOK"
+
+    gc.start_mission2()
+    cp.poll()
+    assert _save_system.get_slot(0)["checkpoint"] == "", "fresh M2 kept the M1 token"
+    gc.start_mission2_killbox_checkpoint()
+    assert STATE.mission2_killbox_checkpoint_reached and STATE.os12_unlocked, "M2 kill-box rung"
+    assert STATE.mission2_post_sniper_phase == "get_cover"
+    STATE.os12_ammo_in_mag, STATE.player.hp = 17, 64
+    cp.poll()
+    slot = _save_system.get_slot(0)
+    assert slot["checkpoint"] == "killbox" and slot["loadout"]["os12_ammo_in_mag"] == 17, slot
+    STATE.os12_ammo_in_mag, STATE.player.hp = 2, 1
+    gc.restart_current_mission()
+    assert STATE.mission2_killbox_checkpoint_reached, "kill-box restart lost the rung"
+    assert STATE.os12_ammo_in_mag == 17 and STATE.player.hp == 64, "restart did not restore the arrival loadout"
+
+    gc.start_mission5_tunnel_checkpoint()
+    STATE.m5_maru["x"] = float((m5.TUNNEL_MID_COL + 1) * config.TILE_SIZE)
+    m5._update_stage(keys)
+    assert STATE.mission5_tunnel_mid_checkpoint_reached, "Maru past the junction did not set the rung"
+    gc.start_mission5_tunnel_mid_checkpoint()
+    assert STATE.mission5_stage == m5.STAGE_TUNNEL and STATE.mission5_tunnel_mid_checkpoint_reached
+    assert STATE.player.rect.centerx // config.TILE_SIZE == m5.TUNNEL_MID_TILE[0], "mid rung did not place the player"
+    cp.poll()
+    slot = _save_system.get_slot(0)
+    assert (slot["progress"], slot["checkpoint"]) == ("m5", "tunnel_mid"), slot
+    assert mission_failed.checkpoint_label(STATE) == "TUNNEL JUNCTION"
+
+    # Continue from a fresh mission state resumes the slot's rung.
+    gc.start_mission5()
+    assert cp.resume_slot(slot) and STATE.mission5_tunnel_mid_checkpoint_reached, "Continue missed the rung"
+    assert not cp.resume_slot({"progress": "m5", "checkpoint": ""}), "empty token must not resume"
+    _reset_save_store()
+
+
 def check_mission5_cutscene_shots():
     """M5 W5: every intro/ending shot has bespoke art that paints a real frame.
 
@@ -12213,6 +12272,7 @@ def main():
                       check_mission5_update_and_draw),
                      ("mission5_hq_walk", check_mission5_hq_walk),
                      ("mission5_integration", check_mission5_integration),
+                     ("checkpoint_ladders", check_checkpoint_ladders),
                      ("mission5_cutscene_shots", check_mission5_cutscene_shots),
                      ("mission5_finale_cut", check_mission5_finale_cut),
                      ("mission5_shadow_finale", check_mission5_shadow_finale),

@@ -145,6 +145,7 @@ def handle_interact():
 def _on_safe_opened(success):
     if success:
         STATE.notebook_collected = True
+        STATE.m1_notebook_checkpoint_reached = True     # core.checkpoints
         STATE.floating_texts.append([
             STATE.player.rect.centerx,
             STATE.player.rect.centery - 40,

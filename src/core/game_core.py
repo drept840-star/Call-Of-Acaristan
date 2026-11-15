@@ -30,6 +30,7 @@ from missions import m0
 from ui import hud
 from entities import weapons
 from core import interactions
+from core import checkpoints
 from fx import effects
 import game.world as _gw  # RPE6 Phase 5: engine.world host (PRE / SIM+POST / RENDER_SUBMIT around the legacy loop)
 import game.render as _gr  # RPE6 Phase 6: engine.render2d host (the gameplay frame goes through the render queue)
@@ -118,6 +119,16 @@ def start_mission2_sniper(preserve_timer=False):
     return m2.start_mission2_sniper(preserve_timer=preserve_timer)
 
 
+def start_mission1_notebook_checkpoint(preserve_timer=False):
+    """Restart Mission 1 at the notebook pickup (breach escape under way)."""
+    return m1.start_mission1_notebook_checkpoint(preserve_timer=preserve_timer)
+
+
+def start_mission2_killbox_checkpoint(preserve_timer=False):
+    """Restart Mission 2 at the start of the kill-box fight (after the sniper film)."""
+    return m2.start_mission2_killbox_checkpoint(preserve_timer=preserve_timer)
+
+
 def start_mission2_checkpoint(preserve_timer=False):
     """Start Mission 2 at the evidence-phase checkpoint (post-tanker blast).
 
@@ -197,6 +208,10 @@ def start_mission5_tunnel_checkpoint(preserve_timer=False):
     """Restart Mission 5 at the basement tunnel (escort Maru)."""
     return m5.start_mission5_tunnel_checkpoint(preserve_timer=preserve_timer)
 
+def start_mission5_tunnel_mid_checkpoint(preserve_timer=False):
+    """Restart Mission 5 halfway through the tunnel escort (the junction)."""
+    return m5.start_mission5_tunnel_mid_checkpoint(preserve_timer=preserve_timer)
+
 def start_mission6(preserve_timer=False):
     return _call_m6(m6.start_m6, preserve_timer)
 
@@ -274,55 +289,28 @@ def restart_current_mission():
        tunnel escort are both gated by checkpoints; the deepest one reached
        wins so a Maru death in the tunnel doesn't replay the raid.
     """
-    if _is_mission2_active() and not _in_walking_sim():
-        if getattr(STATE, "mission2_checkpoint_reached", False):
-            return start_mission2_checkpoint(preserve_timer=False)
-        # Death restart: the investigation intro line is wrong mid-fight.
-        STATE._skip_mission2_intro_radio = True
-        return m2.start_mission2(preserve_timer=False)
-    if _is_mission3_active() and not _in_walking_sim():
-        if getattr(STATE, "mission3_broadcast_checkpoint_reached", False):
-            return start_mission3_broadcast_checkpoint(preserve_timer=False)
-        if getattr(STATE, "mission3_kill_order_checkpoint_reached", False):
-            return start_mission3_kill_order_checkpoint(preserve_timer=False)
-        if getattr(STATE, "mission3_archives_checkpoint_reached", False):
-            return m3.start_mission3_archives_checkpoint(preserve_timer=False)
-        if getattr(STATE, "mission3_comms_checkpoint_reached", False):
-            return m3.start_mission3_comms_checkpoint(preserve_timer=False)
-        if getattr(STATE, "mission3_breakout_checkpoint_reached", False):
-            return m3.start_mission3_breakout_checkpoint(preserve_timer=False)
-        return m3.start_mission3(preserve_timer=False)
     if _is_mission7_active() and not _in_walking_sim():
         return start_mission7_stage(getattr(STATE, "mission7_stage", None))
-    if _is_mission6_active() and not _in_walking_sim():
-        # Deepest reached checkpoint wins (same rule as M5).  The train is a
-        # scene, not a top-down stage, but its checkpoint resumes the scene.
-        if getattr(STATE, "m6_train_checkpoint_reached", False):
-            return start_mission6_train_checkpoint(preserve_timer=False)
-        if getattr(STATE, "m6_rail_checkpoint", False):
-            return start_mission6_rail_checkpoint(preserve_timer=False)
-        if getattr(STATE, "m6_noman_checkpoint", False):
-            return start_mission6_noman_checkpoint(preserve_timer=False)
-        return start_mission6(preserve_timer=False)
-    if _is_mission5_active() and not _in_walking_sim():
-        # Deepest checkpoint wins: the tunnel escort is the hardest stretch
-        # and Maru dying there must not cost the print-works raid as well.
-        if getattr(STATE, "mission5_tunnel_checkpoint_reached", False):
-            return start_mission5_tunnel_checkpoint(preserve_timer=False)
-        if getattr(STATE, "mission5_printworks_checkpoint_reached", False):
-            return start_mission5_printworks_checkpoint(preserve_timer=False)
-        # W6: a death in the Lower Quarter must not replay the HQ walk.
-        if getattr(STATE, "mission5_quarter_checkpoint_reached", False):
-            return start_mission5_quarter_checkpoint(preserve_timer=False)
-        return start_mission5_hq_checkpoint(preserve_timer=False)
-    if _is_mission4_active() and not _in_walking_sim():
-        # Death restart: the opening Vasile line is wrong mid-fight.
-        STATE._skip_m4_intro_radio = True
-        if getattr(STATE, "mission4_tower_checkpoint_reached", False):
-            return start_mission4_tower_checkpoint(preserve_timer=False)
-        if getattr(STATE, "mission4_station_checkpoint_reached", False):
-            return start_mission4_station_checkpoint(preserve_timer=False)
-        return m4.start_m4(preserve_timer=False)
+    if not _in_walking_sim():
+        if getattr(STATE, "active_mission", "") == "MISSION4":
+            # Death restart: the opening Vasile line is wrong mid-fight.
+            STATE._skip_m4_intro_radio = True
+        # Deepest reached checkpoint wins (core.checkpoints.LADDERS), with the
+        # player's health, ammo and weapons as they arrived there.
+        if checkpoints.restart():
+            return getattr(STATE, "player", None)
+        if _is_mission2_active():
+            # Death restart: the investigation intro line is wrong mid-fight.
+            STATE._skip_mission2_intro_radio = True
+            return m2.start_mission2(preserve_timer=False)
+        if _is_mission3_active():
+            return m3.start_mission3(preserve_timer=False)
+        if _is_mission6_active():
+            return start_mission6(preserve_timer=False)
+        if _is_mission5_active():
+            return start_mission5_hq_checkpoint(preserve_timer=False)
+        if _is_mission4_active():
+            return m4.start_m4(preserve_timer=False)
     return m1.start_mission(preserve_timer=False)
 
 
@@ -369,7 +357,9 @@ def game_update(keys):
             return m2.game_update(keys)
         return m1.game_update(keys)
 
-    return _gw.step(_mission_update)
+    result = _gw.step(_mission_update)
+    checkpoints.poll()
+    return result
 
 
 def _active_mission_tag():

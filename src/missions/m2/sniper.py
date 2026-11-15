@@ -419,6 +419,7 @@ def _advance_sniper_phase():
 
 
 def _start_sniper_aftermath():
+    STATE.mission2_killbox_checkpoint_reached = True     # core.checkpoints
     STATE.mission2_stage = STAGE_COMBAT
     STATE.mission_phase = "m2_killbox_get_cover"
     STATE.mission2_post_sniper_phase = "get_cover"

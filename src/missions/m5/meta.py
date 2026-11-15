@@ -95,6 +95,9 @@ TUNNEL_W, TUNNEL_H = 48, 12
 TUNNEL_START_TILE = (2, 6)
 TUNNEL_MARU_START_TILE = (2, 5)
 RIVER_GATE_TILE = (45, 6)
+TUNNEL_MID_COL = 25                   # Maru past the junction = halfway checkpoint
+TUNNEL_MID_TILE = (25, 6)
+TUNNEL_MID_MARU_TILE = (24, 6)
 TUNNEL_PURSUIT_TILES = ((1, 5), (1, 6))
 
 # Raid: survive waves among the presses (timer-driven, never kill-gated -

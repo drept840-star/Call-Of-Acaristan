@@ -78,6 +78,7 @@ def start_mission(preserve_timer=False):
     death_anim.reset_stale_visuals()
     STATE.request_escape_cutscene = False
     STATE.notebook_collected = False
+    STATE.m1_notebook_checkpoint_reached = False
     STATE.exfil_reached = False
     STATE.rain_drops = _m1_rain_drops()
     STATE._m1_rain_rng = random.Random(_M1_RAIN_SEED + 1)   # respawns (draw.py _submit_m1_rain)
@@ -340,6 +341,31 @@ def _init_mission_specials():
                 STATE.NOTEBOOK_POS = (x + 32, y + 32)
             elif tile == "X":
                 STATE.EXFIL_POS = (x + 32, y + 32)
+_M1_CHECKPOINT_CARRY = ("quiet_entry", "stealth_failed", "_m1_standoff_scripted", "volkov_escaped", "has_keycard")
+
+
+def start_mission1_notebook_checkpoint(preserve_timer=False):
+    """Restart Mission 1 at the notebook pickup with the breach under way.
+
+    The original guards are not respawned: the breach waves replace them, so
+    the player returns to the escape, not to a re-run of the stealth floor.
+    """
+    from core.interactions import _on_safe_opened
+    # How the first run got here decides how loud the breach waves are.
+    carry = {k: getattr(STATE, k) for k in _M1_CHECKPOINT_CARRY if hasattr(STATE, k)}
+    start_mission(preserve_timer=preserve_timer)
+    _init_mission_specials()
+    for k, v in carry.items():
+        setattr(STATE, k, v)
+    STATE._m1_standoff_done = True
+    STATE.enemies = []
+    STATE.player.rect.center = STATE.NOTEBOOK_POS
+    _on_safe_opened(True)
+    STATE.request_notebook_inspect = False      # already read on the first run
+    STATE._m1_leaf_line_pending = False
+    return STATE.player
+
+
 def _trigger_civilian_payoff():
     """One quiet payoff line based on walking sim choices."""
     kid_helped = any(

@@ -76,6 +76,7 @@ def _empty_slot(slot_index):
         "updated_at": 0,
         "progress": "",
         "checkpoint": "",
+        "loadout": {},
         "stats": {},
         "flags": {},
     }
@@ -157,7 +158,7 @@ def start_new_campaign(slot_index=None):
     save_data(data)
 
 
-def set_slot_progress(progress, slot_index=None, checkpoint=None):
+def set_slot_progress(progress, slot_index=None, checkpoint=None, loadout=None):
     """Record campaign progress and, optionally, its deepest checkpoint.
 
     No-op when the target slot is empty so headless/dev code paths can call
@@ -166,7 +167,8 @@ def set_slot_progress(progress, slot_index=None, checkpoint=None):
     ``checkpoint`` is deliberately a small mission-owned token rather than a
     copy of runtime state.  It lets a fresh process resume a later mission at
     its deepest reached phase without serializing pygame objects or mutable
-    combat state.
+    combat state.  ``loadout`` (core.checkpoints) is the player's health,
+    ammo and weapons on arrival at that checkpoint.
     """
     idx = _current_slot if slot_index is None else max(0, min(SLOT_COUNT - 1, int(slot_index)))
     data = load_data()
@@ -181,6 +183,10 @@ def set_slot_progress(progress, slot_index=None, checkpoint=None):
         slot["checkpoint"] = str(checkpoint)
     elif not same_progress:
         slot["checkpoint"] = ""
+    if loadout is not None:
+        slot["loadout"] = dict(loadout)
+    elif not same_progress:
+        slot["loadout"] = {}
     save_data(data)
 
 
@@ -233,6 +239,7 @@ def save_mission_complete(mission_id, label, total_time, stats=None, flags=None,
         "total_time": total_time,
         "updated_at": int(time.time()),
         "checkpoint": "",
+        "loadout": {},
         "stats": merged_stats,
         "flags": merged_flags,
     })
