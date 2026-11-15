@@ -1061,6 +1061,19 @@ def start_mission3_kill_order_checkpoint(preserve_timer=False):
     return STATE.player
 
 
+def start_mission3_exfil_checkpoint(preserve_timer=False):
+    """Restart Mission 3 at the dock van: sweep cleared, holdout starting."""
+    bailed = getattr(STATE, "m3_volkov_bailed", False)    # read before the reset
+    start_mission3_kill_order_checkpoint(preserve_timer=preserve_timer)
+    _ko_sweep.skip_to_holdout(bailed)
+    STATE.player.rect.center = (30 * TILE_SIZE + TILE_SIZE // 2, 36 * TILE_SIZE + TILE_SIZE // 2)
+    STATE.m3_volkov_ally_x = float(STATE.player.rect.centerx - 48)
+    STATE.m3_volkov_ally_y = float(STATE.player.rect.centery - 40)
+    _snap_camera_to(STATE.player.rect.center)
+    STATE.mission3_exfil_checkpoint_reached = True
+    return STATE.player
+
+
 def _m3_exit_requirements():
     """Return (ready, reason) for leaving the cell-block slice.
 

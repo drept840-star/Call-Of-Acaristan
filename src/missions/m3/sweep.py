@@ -788,6 +788,31 @@ def _update_window(st):
                color=C_VOLKOV, duration=320, mark="ko_volkov_bail")
 
 
+def skip_to_holdout(bailed=False):
+    """Checkpoint seed: sweep waves 0-3 done, gates open, holdout armed.
+
+    ``bailed`` keeps the first run's branch (crane cage, no Volkov) on a
+    death restart; the next update commits the holdout from the van.
+    """
+    st = _seed()
+    for i in _PRE_HOLDOUT_TEAMS:
+        st["waves"][i].update(t=0, cleared=True)
+    st["wave_idx"] = len(_PRE_HOLDOUT_TEAMS)
+    st["lobby_seen"] = st["window_armed"] = True
+    for wave in (0, 1):
+        STATE.mission3_events.add(f"ko_beat_gate_{wave}")    # no replayed gate barks
+        for door in _beat_gate_doors(st, wave):
+            door.locked, door.target_open = False, True
+    STATE.mission3_events.add("ko_beat1")
+    STATE.enemies = []
+    if bailed:
+        st["bailed"] = True
+        STATE.m3_volkov_bailed = True
+        STATE.m3_volkov_ally_active = False
+    STATE.m3_sweep_committed = True
+    return st
+
+
 # ── holdout + exfil (5d) ─────────────────────────────────────────────
 def _mid_wave_blockers(st):
     """Live pre-holdout sweep enemies + unfired/uncleared mid waves.
@@ -885,6 +910,7 @@ def _update_holdout(st):
                     (220, 150, 90), 110])
             return
         st["committed"] = True
+        STATE.mission3_exfil_checkpoint_reached = True     # core.checkpoints
         STATE.m3_sweep_window_active = False
         st["holdout_t"] = 1
         if not st["bailed"]:

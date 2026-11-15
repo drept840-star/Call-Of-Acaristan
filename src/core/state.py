@@ -209,6 +209,7 @@ class GameState:
         # earlier M3 entry (every checkpoint loader runs start_mission3) would
         # hijack a later respawn.
         self.mission3_broadcast_checkpoint_reached = False
+        self.mission3_exfil_checkpoint_reached = False     # core.checkpoints: dock holdout at the van
         # Sticky flag: all cell-block guards have been killed at least once.
         # Drives the service-door minimap marker + directional arrow.
         self.m3_guards_all_killed = False

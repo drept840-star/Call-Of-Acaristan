@@ -8643,7 +8643,7 @@ def check_mission5_integration():
 
 
 def check_checkpoint_ladders():
-    """core.checkpoints: the M1/M2/M5 rungs load, persist with the loadout, and resume.
+    """core.checkpoints: the M1/M2/M3/M5 rungs load, persist with the loadout, and resume.
 
     A reached rung is written to the save slot (progress + token + the player's
     health/ammo/weapons on arrival); a death restart and a Continue both land on
@@ -8681,6 +8681,20 @@ def check_checkpoint_ladders():
     gc.restart_current_mission()
     assert STATE.mission2_killbox_checkpoint_reached, "kill-box restart lost the rung"
     assert STATE.os12_ammo_in_mag == 17 and STATE.player.hp == 64, "restart did not restore the arrival loadout"
+
+    # M3: reaching the van with the sweep cleared commits the holdout and sets the rung.
+    from missions.m3 import sweep as m3_sweep
+    gc.start_mission3_exfil_checkpoint()
+    assert STATE.mission3_exfil_checkpoint_reached and STATE.m3_sweep_committed, "M3 exfil rung"
+    assert not STATE.enemies, "M3 exfil rung kept sweep enemies"
+    m3_sweep.update_kill_order()
+    assert STATE.m3_sweep["committed"] and STATE.m3_sweep["holdout_t"] > 0, "M3 exfil rung did not arm the holdout"
+    cp.poll()
+    slot = _save_system.get_slot(0)
+    assert (slot["progress"], slot["checkpoint"]) == ("m3", "exfil"), slot
+    assert mission_failed.checkpoint_label(STATE) == "EXFIL VAN"
+    gc.restart_current_mission()
+    assert STATE.mission3_exfil_checkpoint_reached and STATE.m3_sweep_committed, "M3 restart lost the van rung"
 
     gc.start_mission5_tunnel_checkpoint()
     STATE.m5_maru["x"] = float((m5.TUNNEL_MID_COL + 1) * config.TILE_SIZE)

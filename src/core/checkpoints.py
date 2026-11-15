@@ -25,6 +25,7 @@ LADDERS = {
     ]),
     "MISSION3": ("m3", [
         ("mission3_broadcast_checkpoint_reached", "broadcast", "start_mission3_broadcast_checkpoint", "BROADCAST WING"),
+        ("mission3_exfil_checkpoint_reached", "exfil", "start_mission3_exfil_checkpoint", "EXFIL VAN"),
         ("mission3_kill_order_checkpoint_reached", "kill_order", "start_mission3_kill_order_checkpoint", "KILL ORDER"),
         ("mission3_archives_checkpoint_reached", "archives", "start_mission3_archives_checkpoint", "ARCHIVES"),
         ("mission3_comms_checkpoint_reached", "comms", "start_mission3_comms_checkpoint", "COMMS WING"),

@@ -164,6 +164,11 @@ def start_mission3_kill_order_checkpoint(preserve_timer=False):
     return m3.start_mission3_kill_order_checkpoint(preserve_timer=preserve_timer)
 
 
+def start_mission3_exfil_checkpoint(preserve_timer=False):
+    """Restart Mission 3 at the dock van with the holdout starting."""
+    return m3.start_mission3_exfil_checkpoint(preserve_timer=preserve_timer)
+
+
 def start_mission3_broadcast_checkpoint(preserve_timer=False):
     """Restart Mission 3 at the Broadcast Wing (Phase 6)."""
     return m3.start_mission3_broadcast_checkpoint(preserve_timer=preserve_timer)
