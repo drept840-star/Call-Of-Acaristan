@@ -68,7 +68,11 @@ class Tex(tuple):
 
 def _root():
     base = getattr(sys, "_MEIPASS", os.path.abspath("."))
-    return os.path.join(base, "assets", "tex3d")
+    path = os.path.join(base, "assets", "tex3d")
+    if os.path.isdir(path):
+        return path
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(repo, "assets", "tex3d")
 
 
 def _load(name, density, mono=False):
@@ -76,6 +80,8 @@ def _load(name, density, mono=False):
     if not os.path.exists(path):
         return None
     img = load_image(path)
+    if img.get_bytesize() < 3:
+        img = img.convert(24)
     if img.get_size() != (SIZE, SIZE):
         img = pygame.transform.scale(img, (SIZE, SIZE))
     rgb = np.asarray(pygame.surfarray.array3d(img), dtype=np.float64).transpose(1, 0, 2)

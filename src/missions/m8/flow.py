@@ -100,7 +100,8 @@ def music_tick():
         phase = getattr(_trap.scene(), "phase", "")
         cue = "gantry" if phase in ("clear", "climb", "catwalk") else "trap"
     elif _chase.active():
-        cue = "chase"
+        cs = getattr(_chase.scene(), "cutscene", None)
+        cue = cs.get("music", "chase") if cs else "chase"
     else:
         cue = STAGE_MUSIC.get(getattr(STATE, "mission8_stage", ""))
     _m8_audio.music(_audio_manager, cue)
@@ -165,9 +166,12 @@ def take_cutscene_request():
 
 
 def on_cutscene_done(key):
-    """A stage film ended: step past it."""
+    """A stage film ended: step past it (or resume mid-chase after the gunship arrival)."""
     if _m8_audio.AUDIO is not None:
         _m8_audio.AUDIO.film_end()
+    if key == "heli" and _chase.active():
+        _chase.scene().on_heli_cutscene_done()
+        return
     if getattr(STATE, "mission8_stage", "") == key:
         advance_stage()
 

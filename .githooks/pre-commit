@@ -1,0 +1,12 @@
+#!/bin/sh
+# Keep docs/ARCHITECTURE_MAP.md in sync. Enable once: git config core.hooksPath .githooks
+# map_assets3d.py owns section 8.1 (assets/3D); sync_arch_map.py owns the other generated parts.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+PY=python
+command -v python >/dev/null 2>&1 || PY=py
+"$PY" tools/map_assets3d.py || exit 1
+"$PY" tools/sync_arch_map.py || exit 1
+if git ls-files --error-unmatch docs/ARCHITECTURE_MAP.md >/dev/null 2>&1; then
+    git add docs/ARCHITECTURE_MAP.md
+fi
+exit 0

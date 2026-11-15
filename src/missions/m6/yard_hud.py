@@ -115,17 +115,32 @@ def _mag_icon(surface, mx, my, kind, rounds, capacity, active):
 
 
 def weapon(surface, hp, hp_max, mag, mag_size, reserve, reload_left, reload_s,
-           cw="k9_smg", label="K-9 SMG", caliber="9MM-S", kind="stick", reload_ms=None):
+           cw="k9_smg", label="K-9 SMG", caliber="9MM-S", kind="stick", reload_ms=None,
+           slot_prog=None, slot_count=None):
     """HP strip and the weapon panel.  ``reload_left`` seconds of the reload to
     go (0 when not reloading); the panel's bar runs on 2D frames."""
     _health_bar.draw(surface, THEME, hp, hp_max, panel_bg=get_panel_bg)
     dur = reload_ms if reload_ms is not None else _weapon_panel.RELOAD_MS.get(cw, 60)
+    reloading = reload_left > 0.0
+    prog = max(0.0, min(1.0, 1.0 - reload_left / reload_s)) if (reloading and reload_s > 0.0) else 0.0
+    res = max(0, int(reserve))
+    incoming = min(max(0, int(mag_size) - int(mag)), res) if reloading else 0
+    s_prog = prog if slot_prog is None else slot_prog
+    s_count = incoming if slot_count is None else slot_count
     info = _weapon_panel.WeaponInfo(
         cw=cw, label=label, caliber=caliber, kind=kind,
-        ammo=mag, mag=mag_size, spares=-(-reserve // mag_size),
-        reloading=reload_left > 0.0,
-        reload_timer=int(round(dur * reload_left / reload_s)) if reload_left > 0.0 else 0)
-    _weapon_panel.draw(surface, THEME, info, panel_bg=get_panel_bg, mag_icon=_mag_icon)
+        ammo=mag, mag=mag_size, spares=-(-res // max(1, int(mag_size))),
+        reloading=reloading,
+        reload_timer=max(1, int(round(dur * reload_left / reload_s))) if reloading else 0,
+        reserve=res, reload_prog=prog)
+    def _icon(surf, mx, my, ikind, rounds, capacity, active):
+        from .draw import _panel_mag_icon
+        _panel_mag_icon(
+            surf, mx, my, ikind, rounds, capacity, active,
+            reload_prog=s_prog if active else 0.0,
+            incoming=s_count if active else 0,
+        )
+    _weapon_panel.draw(surface, THEME, info, panel_bg=get_panel_bg, mag_icon=_icon)
 
 
 def reticle(surface, spread=0):

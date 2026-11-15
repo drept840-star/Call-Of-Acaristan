@@ -61,6 +61,14 @@ budget_tokens: 2000
   housings, IFF lamps, pickup ticks, exit lamps) draw after the light pass and
   measured +1.1-1.4% frame time in an interleaved A/B (raw run-to-run noise on
   this machine is +-30%, so never compare two separate bench runs).
+- **M6 rail 2.5D is pixel-bound even on GL.** With six live Guards and ten
+  settled corpses, GL draws took 54–71 ms (flush ~10; art decode 12–21;
+  lighting 13–18); the existing 2D painter took 9–10 ms. A 90% internal
+  resolution still took 47–57 ms and visibly changes pixels. `draw._td3d_gate`
+  selects the fast 2D painter *and its aim camera* for rail by default;
+  `ACA_M6_RAIL_25D=1` restores 2.5D. Offscreen culling and software-only
+  settled-corpse mesh caching help the opt-in/fallback but do not fix GL's
+  per-pixel work. Use interleaved camera-matched probes, not separate runs.
 - **M6 Guards carry a red IFF lamp** (same as the 3D train Guards): drawn after
   the light pass so a Guard in the dark stays a red pin; `decor.hides()` keeps it
   from showing through a tall prop. The wave status uses M5's `_draw_m5_plate`
@@ -92,6 +100,42 @@ budget_tokens: 2000
   `sys.exit()`, so module-level probe code after `import app` never runs unless
   the import is wrapped in `try/except SystemExit` (as `tools/m6_loop_probe.py`
   does). Symptom: the probe prints only the pygame banner and no results.
+- **engine3d bakes the face normal into the colour, so quad winding matters.**
+  `Obj.__init__` shades each face ONCE with `light.shade(col, nrm)`; a ground
+  quad wound the wrong way gets a downward normal and k = ambient - sky
+  (0.34 in the M8 set) instead of ambient + diffuse*0.42 + sky (0.83) - it
+  renders 2.5x too dark. `quad_xz` winds up; a hand-built `m.face([...])` must
+  too (order: left-south, left-north, right-north, right-south).
+- **A weapon mesh and its grip set must be chosen together.**
+  `m6world3d.hum(key, flags=...)` picks the mesh: "rifle" = the K-9 (grip
+  "k9"), "lmg" = the LMG, "shotgun" = the Fallow 12, "os12" = the rig's own
+  OS-12 (grip "os12", muzzle 0.64 m - as `ui/mp3d.py` has it), "ak74" = the
+  code-authored AK-74 (grip "ak74", `cast3d.ak74_asset`). A flag with no
+  branch (or no flag) leaves the rig with NO gun at all - the arms pose, the
+  weapon does not exist. The guard and ally branches need the same care:
+  `_guard_humanoid` builds its rifle from the spec, so the flag has to write
+  `extra["rifle"] = "os12"` (the mesh AND `_weapon`/`_muzzle_z`/
+  `_gl_spec_key` after it, or the GL renderer reuses the old VBO).
+- **Emissive faces skip the fog in BOTH backends** (`_emit`: `if not em and
+  depth > fs`; the GL shader sets the fog flag to 0 for emissive). Distant
+  window/light quads therefore stay full brightness at 250-300 m, which is the
+  only way to read a far-off town through the M8 set's fog (fog_end 300).
+- **Everything past `fog_end` becomes exactly the fog colour**, so a "distant
+  ridge" beyond 300 m is invisible (it matches the fogged ground). A backdrop
+  hill only reads if its near slope is inside 300 m; keep its footprint clear
+  of anything the player must see in front of it.
+- **A muzzle flash is culled if the muzzle is off-frame.** The M8 over-the-
+  shoulder camera collapses its boom in tight spots, and the rig's muzzle can
+  then sit 40 degrees off the view axis - the flash mesh is correctly queued
+  (the renderer counts it) but projects off-screen and draws nothing. Check
+  the flash from an open stance before blaming the helper.
+- **The rig's gun follows the BODY, and `body_yaw` eases toward `yaw`.**
+  `raid3d._move` mixes `body_yaw` into `yaw` at 10/s, so a probe (or a
+  teleport) that sets `sc.yaw` must run ~40 frames before the gun - and any
+  bore-aligned flash - points where you expect. `joints["rifle_m"]` is the
+  gun's rotation matrix and `joints["rhand"]` the trigger hand: the bore is
+  `hand + m_apply(rifle_m, BORE)` and the bore axis is
+  `m_apply(rifle_m, (0,0,1))`.
 
 ## Do-Not-Repeat
 
@@ -117,6 +161,22 @@ budget_tokens: 2000
   failure ids, not the count.
 
 - [2026-10-28] M7 raid shots: take the aim ray before recoil and camera kick, or the shot lands above the crosshair. The over-the-shoulder camera sits ~0.85 m right of the body centreline, so test targets must sit on `_aim_ray()`, not on the player's centre.
+- [2026-11-13] `m7world3d._fence` is axis-aligned only: it lays each rail as
+  an axis-aligned box sized to the segment's BOUNDING BOX, so feeding it a
+  diagonal segment turns the rail into a 16 m x 3 m slab. A fence that follows
+  a curve needs its own polyline builder with yaw-aligned rails (see
+  `set3d._rail_fence`). Same trap for a "sagging" wire built from `box()`: a
+  yaw-rotated box stays horizontal, so the sag reads as a step - build a thin
+  tube along the segment instead (`set3d._wire`).
+- [2026-11-13] `STATE.m8_trap_cp` is the trap scene's resume point and it
+  LEAKS between scenes and unit tests: `trap3d.begin()` reads it, so a test
+  that sets it (or a previous run that died mid-fight) starts the next scene
+  at checkpoint 1/2 instead of 0. Reset it in test setUp and after a
+  checkpoint change.
+- [2026-11-13] The M8 trap scene's borrowed `R.RaidScene` methods read
+  `self.turn` (the raid's betrayal beat) - keep `self.turn = None` in
+  `_setup` even though the M8 scene never uses it, or the borrowed
+  `handle_event`/`_move` raise AttributeError.
 
 ## Decision Log
 

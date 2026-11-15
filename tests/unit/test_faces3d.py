@@ -52,6 +52,13 @@ class Faces(unittest.TestCase):
         hy3, _hp3 = solve_look((0, 1.6, 0), (0, 1.6, 1), 0)
         self.assertAlmostEqual(hy3, 0.0, places=5)
 
+    def test_andrei_m_rig_builds_with_accessories(self):
+        hum = humanoid3d("andrei_m")
+        self.assertTrue(hum._parts["face2"][1])
+        self.assertTrue(hum._parts["chest3"][1])
+        verts, faces, joints = hum.build({}, (0, 0, 0), 180.0, rifle_on=False)
+        self.assertTrue(verts and faces and "head" in joints)
+
     def test_speaking_follows_dialogue_data(self):
         from core.cutscene_registry import set_current_shot
         prim = {"kind": "humanoid", "cast": "vasile"}

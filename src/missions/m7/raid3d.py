@@ -28,8 +28,11 @@ from cutscenes import death3d as D
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as F
-from engine3d import POSES, blend, box, clamp, pose_run
-from engine3d.hold import hold_cached as _hold_cached
+from engine3d import Mesh, POSES, blend, box, clamp, pose_run
+from engine3d.core import m_apply, rot_x, rot_y
+from engine3d.hold import (POLES, hold_cached as _hold_cached, hold_frame as _hold_frame,
+                           solve_arm_safe as _solve_arm_safe)
+from engine3d.rig import shotgun_pump_mesh as _shotgun_pump_mesh
 
 from . import raid_brain as B
 from . import raid_hud as HUD
@@ -55,6 +58,10 @@ PELLET_BODY, PELLET_HEAD = 10, 24
 FLECK_ARMS = ((0.10, 0.06, 0.02), (-0.08, 0.09, -0.03), (0.02, -0.07, 0.09))
 FLASH_ARMS = ((0.22, 0.05, 0.0), (-0.12, 0.20, 0.05), (0.0, -0.10, -0.22))
 PUMP_S = 0.32
+SG_RELOAD_PREP = 0.16
+SG_RELOAD_SHELL = 0.44
+SG_RELOAD_PUMP = 0.46
+SG_RELOAD_READY = 0.18
 SHELL_AT = (0.35, 1.0, 1.65)
 HP_REGEN_DELAY, HP_REGEN = 5.0, 7.0
 LOOT_R = 1.5
@@ -130,6 +137,399 @@ def _held(hum, pose, weapon, mode, key):
     return out
 
 
+# The shotgun is held BLADED: the root yaws right so the left shoulder comes
+# forward and the support hand reaches the wooden fore-end (square-on, the
+# 0.58 m ARM_REACH cap pulled it back onto the receiver).  Most of the blade is
+# in the hips (SG_BLADE_YAW) with only a small spine twist on top: twist and
+# root yaw share an axis, and 25 + 25 left a hard waist twist with the head
+# 28 deg off the crosshair.  The head turns back by the full blade.  The gun is
+# solved -SG_BLADE_YAW in body space, cancelling the root yaw, so the barrel
+# still points at the crosshair.  The wooden pump is a separate mesh that slides
+# with the hand, which grips its rear half (PUMP_GRIP).
+_L_ARM = ("lsh_p", "lsh_r", "lsh_y", "lel")
+_SG_HOLD_CACHE = {}
+_PUMP_MESH = None
+SG_BLADE_YAW, SG_TWIST = 35.0, 10.0
+SG_HEAD_Y = -(SG_BLADE_YAW + SG_TWIST)
+PUMP_GRIP = -0.05                          # hand target behind the pump centre, still on the wood
+PUMP_DELAY, PUMP_DUR = 0.12, 0.32
+PUMP_REST_Z, PUMP_BACK_Z = 0.350, 0.275    # 7.5 cm stroke: forward on the wood -> receiver face
+
+
+def _pump_k(age):
+    """0..1 crisp rack stroke after recoil settles (pull back, brief stop,
+    slam forward).  Zero outside the stroke window."""
+    if age < PUMP_DELAY or age >= PUMP_DELAY + PUMP_DUR:
+        return 0.0
+    u = (age - PUMP_DELAY) / PUMP_DUR
+    if u < 0.42:
+        return _ease(u / 0.42)
+    if u < 0.56:
+        return 1.0
+    return 1.0 - _ease((u - 0.56) / 0.44)
+
+
+def _sg_holds(hum, mode, key):
+    """Cached bladed shotgun hold -> (rest pose, racked left arm, ref spine)."""
+    ck = (key, mode)
+    pair = _SG_HOLD_CACHE.get(ck)
+    if pair is None:
+        # Gun points -SG_BLADE_YAW in body space to cancel the root yaw (points tuned at 25).
+        aim_pt = m_apply(rot_y(25.0 - SG_BLADE_YAW),
+                         (-4.66, 1.45, 10.0) if mode == "aim" else (-5.30, -3.50, 10.0))
+        ref = dict(POSES["ready"], twist=SG_TWIST, head_y=SG_HEAD_Y)
+        base, O, R = _hold_frame(hum, ref, (0.0, 0.0, 0.0), 0.0, "shotgun", mode, aim=aim_pt)
+        if mode == "aim":
+            # The hold aims from the shoulder pocket, which sits ~0.15 m off the
+            # grip, so one solve leaves the bore ~1 deg off the crosshair.  Re-aim
+            # about the gun origin and solve again (still cached, still offline).
+            # The bore must end up ``-SG_BLADE_YAW`` in solve space: the draw adds
+            # that yaw back on the root, so it lands level and down the crosshair.
+            bore = m_apply(R, (0.0, 0.0, 1.0))
+            dy = math.degrees(math.atan2(bore[0], bore[2])) + SG_BLADE_YAW
+            dp = math.degrees(math.asin(max(-1.0, min(1.0, bore[1]))))
+            v = m_apply(rot_y(-dy), tuple(aim_pt[i] - O[i] for i in range(3)))
+            v = m_apply(rot_x(-dp), v)
+            aim_pt = (O[0] + v[0], O[1] + v[1], O[2] + v[2])
+            base, O, R = _hold_frame(hum, ref, (0.0, 0.0, 0.0), 0.0, "shotgun", mode,
+                                     aim=aim_pt)
+        poles_l = ((0.4, -1.0, 0.0),) + POLES
+        sols = []
+        for pz in (PUMP_REST_Z, PUMP_BACK_Z):
+            off = m_apply(R, (0.0, 0.025, pz + PUMP_GRIP))
+            tgt = (O[0] + off[0], O[1] + off[1], O[2] + off[2])
+            solved = _solve_arm_safe(hum, base, (0.0, 0.0, 0.0), 0.0, "l", tgt, poles_l)
+            sols.append(solved)
+        pair = (sols[0],
+                {k: sols[1].get(k, sols[0].get(k, 0.0)) for k in _L_ARM},
+                ref["spine"])
+        _SG_HOLD_CACHE[ck] = pair
+    return pair
+
+
+def _shotgun_hold(hum, pose, mode, key, pump_k=0.0):
+    """``pose`` with the bladed shotgun hold and the rack blended in."""
+    rest, back, ref_spine = _sg_holds(hum, mode, key)
+    out = dict(pose)
+    out.update((k, rest[k]) for k in _ARMS if k in rest)
+    out["twist"] = out.get("twist", 0.0) + SG_TWIST
+    out["head_y"] = out.get("head_y", 0.0) + SG_HEAD_Y
+    out["rifle_p"] = rest.get("rifle_p", 0.0) + pose.get("spine", 0.0) - ref_spine
+    if pump_k > 0.0:
+        for k in _L_ARM:
+            cur = out.get(k, 0.0)
+            out[k] = cur + _wrap(back[k] - cur) * pump_k
+    return out
+
+
+def draw_shotgun_pump(r, hand, rm, pump_k=0.0):
+    """Draw the Fallow 12's sliding wooden fore-end in sync with the left hand."""
+    global _PUMP_MESH
+    if hand is None or rm is None:
+        return
+    if _PUMP_MESH is None:
+        _PUMP_MESH = _shotgun_pump_mesh()
+    pz = PUMP_REST_Z + (PUMP_BACK_Z - PUMP_REST_Z) * pump_k
+    verts = [tuple(a + b for a, b in zip(m_apply(rm, (v[0], v[1], v[2] + pz)), hand))
+             for v in _PUMP_MESH.verts]
+    faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in _PUMP_MESH.faces]
+    r.add_dynamic(verts, faces)
+
+
+def _f_hash(seed, n):
+    """Stable per-shot variation without consuming gameplay RNG."""
+    x = math.sin(seed * 127.1 + n * 311.7) * 43758.5453
+    return x - math.floor(x)
+
+
+def _f_unit(v):
+    n = math.sqrt(sum(c * c for c in v)) or 1.0
+    return tuple(c / n for c in v)
+
+
+FLASH_S = 0.044
+FLASH_S_SUPP = 0.028
+# The bore in the gun's own frame (rig.shotgun_mesh's top barrel, the OS-12's
+# suppressor can): the flash has to leave the barrel, not the rig's mid-point.
+BORE_LOCAL = {
+    "shotgun": (0.0, 0.090, 0.702),   # rig.shotgun_mesh top barrel bore
+    "rifle": (0.0, 0.005, 0.640),     # rig.os12_mesh suppressor can bore
+}
+
+
+def handheld_flash(r, tm, tip, fvec, rx, ry, age, seed, weapon="shotgun"):
+    """Compact, bore-locked flash + depth-occluded halo for handheld guns."""
+    suppressed = (weapon != "shotgun")
+    dur = FLASH_S_SUPP if suppressed else FLASH_S
+    if not (0.0 <= age < dur):
+        return
+    k = (1.0 - age / dur) ** (1.6 if suppressed else 1.75)
+    if k <= 0.02:
+        return
+    roll = math.radians((seed * 137.5) % 360.0)
+
+    def pt(ahead, right, up):
+        return (
+            tip[0] + fvec[0] * ahead + rx[0] * right + ry[0] * up,
+            tip[1] + fvec[1] * ahead + rx[1] * right + ry[1] * up,
+            tip[2] + fvec[2] * ahead + rx[2] * right + ry[2] * up,
+        )
+
+    m = Mesh()
+    z0 = 0.004
+
+    if suppressed:
+        # OS-12 suppressor can: tight bore-narrow axial gas jet (stays inside
+        # the 2.5 cm suppressor radius - no wide lateral star petals).
+        length = 0.110 * (0.42 + 0.58 * k)
+        core_r = 0.010 * (0.75 + 0.25 * k)
+        throat_r = 0.013 * (0.70 + 0.30 * k)
+        n_sides = 6
+        c_root = (255, 246, 214)
+        c_mid = (228, 162, 84)
+        c_tip = (162, 84, 44)
+        r0 = [pt(z0, math.cos(roll + i * math.tau / n_sides) * core_r * 0.65,
+                 math.sin(roll + i * math.tau / n_sides) * core_r * 0.65)
+              for i in range(n_sides)]
+        r1 = [pt(z0 + length * 0.26, math.cos(roll + i * math.tau / n_sides) * throat_r,
+                 math.sin(roll + i * math.tau / n_sides) * throat_r)
+              for i in range(n_sides)]
+        apex = pt(z0 + length, 0.0, 0.0)
+        for i in range(n_sides):
+            j = (i + 1) % n_sides
+            m.face([r0[i], r0[j], r1[j]], c_root, 2, True, True)
+            m.face([r0[i], r1[j], r1[i]], c_root, 2, True, True)
+            m.face([r1[i], r1[j], apex], c_mid, 2, True, True)
+
+        # 3 slim longitudinal gas wisps hugging the jet (<= 17 mm radius).
+        for i in range(3):
+            h1 = _f_hash(seed, i * 7 + 1)
+            h2 = _f_hash(seed, i * 7 + 2)
+            ang = roll + i * (math.tau / 3.0) + (h1 - 0.5) * 0.45
+            ca, sa = math.cos(ang), math.sin(ang)
+            ca_o, sa_o = -sa, ca
+            fin_r = 0.0165 * (0.65 + 0.35 * h2)
+            p_a = pt(z0, ca * core_r * 0.4, sa * core_r * 0.4)
+            p_b = pt(z0 + length * 0.10, ca_o * 0.004, sa_o * 0.004)
+            p_c = pt(z0 + length * 0.10, -ca_o * 0.004, -sa_o * 0.004)
+            p_edge = pt(z0 + length * (0.34 + 0.18 * h1), ca * fin_r, sa * fin_r)
+            p_end = pt(z0 + length * (0.85 + 0.20 * h2), ca * 0.003, sa * 0.003)
+            m.face([p_a, p_b, p_edge], c_mid, 2, True, True)
+            m.face([p_a, p_edge, p_c], c_mid, 2, True, True)
+            m.face([p_b, p_end, p_edge], c_tip, 2, True, True)
+            m.face([p_edge, p_end, p_c], c_tip, 2, True, True)
+    else:
+        # Fallow 12: crisp, punchy 12-gauge axial discharge + 5-fin muzzle crown.
+        length = 0.25 * (0.52 + 0.48 * k)
+        core_r = 0.022 * (0.75 + 0.25 * k)
+        crown_r = 0.056 * (0.65 + 0.35 * k)
+        n_core = 6
+        c_root = (255, 252, 234)
+        c_mid = (255, 232, 162)
+        r0 = [pt(z0, math.cos(roll + i * math.tau / n_core) * core_r * 0.65,
+                 math.sin(roll + i * math.tau / n_core) * core_r * 0.65)
+              for i in range(n_core)]
+        r1 = [pt(z0 + length * 0.22, math.cos(roll + i * math.tau / n_core) * core_r,
+                 math.sin(roll + i * math.tau / n_core) * core_r)
+              for i in range(n_core)]
+        apex = pt(z0 + length * 0.80, 0.0, 0.0)
+        for i in range(n_core):
+            j = (i + 1) % n_core
+            m.face([r0[i], r0[j], r1[j]], c_root, 2, True, True)
+            m.face([r0[i], r1[j], r1[i]], c_root, 2, True, True)
+            m.face([r1[i], r1[j], apex], c_mid, 2, True, True)
+
+        n_blades = 5
+        c_blade = (255, 224, 138)
+        c_tip = (252, 152, 54)
+        for i in range(n_blades):
+            h1 = _f_hash(seed, i * 7 + 1)
+            h2 = _f_hash(seed, i * 7 + 2)
+            ang = roll + i * (math.tau / n_blades) + (h1 - 0.5) * 0.32
+            ca, sa = math.cos(ang), math.sin(ang)
+            ca_o, sa_o = -sa, ca
+            w0 = core_r * 0.45
+            p_in = pt(z0, ca * core_r * 0.3, sa * core_r * 0.3)
+            p_l = pt(z0, ca_o * w0, sa_o * w0)
+            p_r = pt(z0, -ca_o * w0, -sa_o * w0)
+            p_crown = pt(z0 + length * (0.16 + 0.08 * h1), ca * crown_r * (0.85 + 0.3 * h2),
+                         sa * crown_r * (0.85 + 0.3 * h2))
+            p_jet = pt(z0 + length * (0.82 + 0.25 * h2), ca * core_r * 0.35, sa * core_r * 0.35)
+            m.face([p_in, p_l, p_crown], c_blade, 2, True, True)
+            m.face([p_in, p_crown, p_r], c_blade, 2, True, True)
+            m.face([p_l, p_jet, p_crown], c_tip, 2, True, True)
+            m.face([p_crown, p_jet, p_r], c_tip, 2, True, True)
+
+    _w.add(r, m, bias=0.0)
+    bloom_pos = pt(z0 + length * (0.36 if suppressed else 0.34), 0.0, 0.0)
+    halo = _fx.glow(
+        (255, 188, 108) if suppressed else (255, 204, 128),
+        0.065 if suppressed else 0.16,
+        tm,
+        core=(255, 232, 186) if suppressed else (255, 248, 224),
+        intensity=(0.34 if suppressed else 0.72) * k,
+        max_px=12 if suppressed else 24,
+    )
+    # Layer 2 + strict_occ: never cheat depth by 0.45 m like streetlamps, so
+    # Biribel's shoulder/head/torso and the barrel cleanly occlude the halo.
+    halo.light = False
+    halo.strict_occ = True
+    r.add_sprite(bloom_pos, halo, layer=2)
+
+
+_SG_RELOAD_KEYS = {}
+_SHELL_MESH = None
+
+
+def _sg_reload_keys(hum):
+    """Cached bladed Fallow 12 reload poses (pouch, loading port, pump stroke)."""
+    ck = getattr(hum, "_gl_spec_key", None) or id(hum)
+    keys = _SG_RELOAD_KEYS.get(ck)
+    if keys is None:
+        ref = dict(POSES["ready"], twist=SG_TWIST, head_y=SG_HEAD_Y + 32.0, head_p=8.0)
+        aim_pt = m_apply(rot_y(25.0 - SG_BLADE_YAW), (-4.8, 3.0, 10.0))
+        base, O, R = _hold_frame(hum, ref, (0.0, 0.0, 0.0), 0.0, "shotgun", "ready", aim=aim_pt)
+        _pl, joints, _root = hum.pose_world(base, (0.0, 0.0, 0.0), 0.0, rifle_on=True)
+        pel = joints["pelvis"]
+        poles_l = ((0.4, -1.0, 0.0),) + POLES
+
+        def g_pt(pt):
+            off = m_apply(R, pt)
+            return (O[0] + off[0], O[1] + off[1], O[2] + off[2])
+
+        pouch_tgt = (pel[0] - 0.23, pel[1] + 0.02, pel[2] + 0.08)
+        keys = {
+            "_spine": ref["spine"],
+            "pouch": _solve_arm_safe(hum, dict(base, head_p=16.0, head_y=-19.0),
+                                     (0.0, 0.0, 0.0), 0.0, "l", pouch_tgt, poles_l),
+            "port_pre": _solve_arm_safe(hum, dict(base, head_p=12.0, head_y=-11.0),
+                                        (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, -0.09, 0.12)), poles_l),
+            "port_in": _solve_arm_safe(hum, dict(base, head_p=12.0, head_y=-11.0,
+                                                 rifle_p=base.get("rifle_p", 0.0) - 2.5),
+                                       (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, 0.015, 0.13)), poles_l),
+            "pump_fwd": _solve_arm_safe(hum, dict(base, head_p=6.0, head_y=-15.0),
+                                        (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, 0.025, PUMP_REST_Z + PUMP_GRIP)), poles_l),
+            "pump_back": _solve_arm_safe(hum, dict(base, head_p=6.0, head_y=-15.0,
+                                                   rifle_p=base.get("rifle_p", 0.0) - 2.0),
+                                         (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, 0.025, PUMP_BACK_Z + PUMP_GRIP)), poles_l),
+        }
+        _SG_RELOAD_KEYS[ck] = keys
+    return keys
+
+
+def _blend_pose(a, b, k):
+    k = clamp(k, 0.0, 1.0)
+    out = dict(a)
+    for key in set(a) | set(b):
+        va, vb = a.get(key, 0.0), b.get(key, 0.0)
+        if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+            out[key] = va + _wrap(vb - va) * k
+    return out
+
+
+def sg_reload_dur(n, dry=True):
+    """Exact reload duration (seconds) for ``n`` shotgun shells/slugs."""
+    n = max(1, int(n))
+    return SG_RELOAD_PREP + n * SG_RELOAD_SHELL + (SG_RELOAD_PUMP if dry else SG_RELOAD_READY)
+
+
+def sg_shell_times(n):
+    """Exact timestamps (seconds) when each of the ``n`` shells seats in the tube."""
+    n = max(0, int(n))
+    return tuple(SG_RELOAD_PREP + (i + 0.70) * SG_RELOAD_SHELL for i in range(n))
+
+
+def sg_pump_time(n):
+    """Timestamp (seconds) for the dry-chamber pump rack after ``n`` shells."""
+    return SG_RELOAD_PREP + max(1, int(n)) * SG_RELOAD_SHELL + 0.148
+
+
+def sg_shell_slot_prog(elapsed, n):
+    """(0..1 progress, active_count) for the single shell currently sliding into the HUD tube."""
+    n = max(0, int(n))
+    if n <= 0 or elapsed < SG_RELOAD_PREP:
+        return 0.0, 0
+    rel = elapsed - SG_RELOAD_PREP
+    i = int(rel // SG_RELOAD_SHELL)
+    if i >= n:
+        return 0.0, 0
+    local = rel - i * SG_RELOAD_SHELL
+    t_in = 0.70 * SG_RELOAD_SHELL
+    if local < t_in:
+        return clamp(local / t_in, 0.02, 1.0), 1
+    return 0.0, 0
+
+
+def sg_reload_pose(hum, base_pose, elapsed, reload_s=RELOAD_S, shells=None, dry=True):
+    """Fallow 12 reload: reach to belt, insert ``shells`` slugs one by one, rack pump if ``dry``.
+
+    Returns (pose, pump_k, shell_in_hand).
+    """
+    keys = _sg_reload_keys(hum)
+    ready = _shotgun_hold(hum, dict(POSES["ready"]), "ready", ("m7player_sg", "ready"), 0.0)
+    n = max(1, int(shells)) if shells is not None else 3
+    want_dur = sg_reload_dur(n, dry)
+    u = clamp(elapsed * (want_dur / max(0.05, float(reload_s))), 0.0, want_dur)
+    pump_k = 0.0
+    shell = False
+    t_last_in = SG_RELOAD_PREP + (n - 1) * SG_RELOAD_SHELL + 0.70 * SG_RELOAD_SHELL
+    if u < SG_RELOAD_PREP:
+        rel = _blend_pose(ready, keys["pouch"], _ease(u / SG_RELOAD_PREP))
+    elif u < t_last_in:
+        i = min(n - 1, int((u - SG_RELOAD_PREP) // SG_RELOAD_SHELL))
+        local = u - (SG_RELOAD_PREP + i * SG_RELOAD_SHELL)
+        t_pre = 0.42 * SG_RELOAD_SHELL
+        t_in = 0.70 * SG_RELOAD_SHELL
+        if local < t_pre:
+            shell = True
+            rel = _blend_pose(keys["pouch"], keys["port_pre"], _ease(local / t_pre))
+        elif local < t_in:
+            shell = True
+            rel = _blend_pose(keys["port_pre"], keys["port_in"],
+                              _ease((local - t_pre) / (t_in - t_pre)))
+        else:
+            rel = _blend_pose(keys["port_in"], keys["pouch"],
+                              _ease((local - t_in) / (SG_RELOAD_SHELL - t_in)))
+    else:
+        rem = u - t_last_in
+        tail = want_dur - t_last_in
+        if dry:
+            if rem < 0.18:
+                rel = _blend_pose(keys["port_in"], keys["pump_fwd"], _ease(rem / 0.18))
+            elif rem < 0.44:
+                q = (rem - 0.18) / 0.26
+                pump_k = (_ease(q / 0.45) if q < 0.45
+                          else (1.0 if q < 0.58 else 1.0 - _ease((q - 0.58) / 0.42)))
+                rel = _blend_pose(keys["pump_fwd"], keys["pump_back"], pump_k)
+            else:
+                rel = _blend_pose(keys["pump_fwd"], ready,
+                                  _ease((rem - 0.44) / max(0.05, tail - 0.44)))
+        else:
+            rel = _blend_pose(keys["port_in"], ready, _ease(rem / max(0.05, tail)))
+
+    out = dict(base_pose)
+    for k_name in _ARMS + ("twist", "head_y", "head_p"):
+        if k_name in rel:
+            out[k_name] = rel[k_name]
+    out["rifle_p"] = rel.get("rifle_p", 0.0) + base_pose.get("spine", 0.0) - keys["_spine"]
+    return out, pump_k, shell
+
+
+def draw_sg_shell(r, lhand, rm):
+    """Draw a red-and-brass 12-gauge shell in Biribel's left hand."""
+    global _SHELL_MESH
+    if lhand is None or rm is None:
+        return
+    if _SHELL_MESH is None:
+        m = Mesh()
+        m.add(box(0.022, 0.022, 0.046, (186, 38, 32), center=(0.0, 0.0, 0.008)))
+        m.add(box(0.024, 0.024, 0.016, (212, 174, 78), center=(0.0, 0.0, -0.022)))
+        _SHELL_MESH = m
+    verts = [tuple(a + b for a, b in zip(m_apply(rm, v), lhand)) for v in _SHELL_MESH.verts]
+    faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in _SHELL_MESH.faces]
+    r.add_dynamic(verts, faces)
+
+
 def _ally_gun(key):
     """Grip set of an ally's rifle: the M7Rifle asset, or the rig rifle without it."""
     return getattr(_w.hum(key), "_weapon", "rifle")
@@ -143,6 +543,21 @@ def _ally_aim(key, slope):
     stance = dict(blend(POSES["stand"], "aim", 0.85), twist=AIM_TWIST, head_y=-0.8 * AIM_TWIST)
     return _hold_cached(_w.hum(key), stance, _ally_gun(key), "aim",
                         aim=(0.0, 1.45 + 10.0 * slope, 10.0), key=key)
+
+
+def _shell_drop_mesh(x, y, z, yaw):
+    """Open red-and-brass 12-gauge shell box + two loose shells on the ground."""
+    from engine3d import Mesh
+    from engine3d.core import rot_y, box
+    m = Mesh()
+    m.add(box(0.16, 0.06, 0.11, (152, 44, 36), center=(0.0, 0.03, 0.0)))
+    m.add(box(0.164, 0.022, 0.07, (220, 210, 182), center=(0.0, 0.042, 0.0)))
+    for ox, oz in ((0.12, 0.03), (0.14, -0.04)):
+        m.add(box(0.024, 0.024, 0.055, (180, 38, 32), center=(ox, 0.014, oz)))
+        m.add(box(0.026, 0.026, 0.020, (212, 174, 78), center=(ox, 0.014, oz - 0.032)))
+    out = Mesh()
+    out.add(m, rot_y(yaw), (x, y, z))
+    return out
 
 
 class RaidScene:
@@ -195,9 +610,10 @@ class RaidScene:
         """Pay the one-off costs here, behind the cut, instead of mid-fight:
         every arm solve the fight can ask for (20-60 ms each) and the truck's
         15k-face pack."""
-        hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
+        hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun", "nopump"))
         for mode in ("ready", "aim"):
-            _held(hum, POSES["ready"], "shotgun", mode, ("m7player", mode))
+            _sg_holds(hum, mode, ("m7player_sg", mode))
+        _sg_reload_keys(hum)
         stances = (dict(POSES["ready"]), blend(POSES["stand"], "aim", 0.85))
         for kind in set(GUARD_VIEW) | {"heavy"}:
             gk = ("guard", kind)
@@ -285,7 +701,13 @@ class RaidScene:
         self.ads = 0.0
         self.gun_up = 0.0
         self.reloading = 0.0
+        self._reload_dur = RELOAD_S
+        self._reload_n = 0
+        self._reload_dry = False
+        self._reload_t_in = ()
+        self._reload_pump_at = 1e9
         self._shell_i = 0
+        self._pump_done = False
         self.pump_at = -9.0
         self.pump_snd_at = 1e9
         self.last_fire = -9.0
@@ -299,6 +721,9 @@ class RaidScene:
         self.sparks = []
         self.impacts = []
         self.flashes = []
+        self.last_flash = -9.0
+        self.flash_seed = 0
+        self._flash_basis = None
         self.lines = []
         self.toast = None
         self.cp_toast = 0.0
@@ -414,6 +839,11 @@ class RaidScene:
             self.pitch = clamp(self.pitch - dy * sens, *PITCH_LIM)
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
+                if (self.reloading > 0.0 and getattr(self, "weapon", "shotgun") == "shotgun"
+                        and self.mag > 0 and not getattr(self, "_reload_dry", False)):
+                    self.reloading = 0.0
+                    self._reload_n = 0
+                    self._pump_done = False
                 self.firing = True
             elif event.button == 3:
                 self.aiming = True
@@ -449,16 +879,25 @@ class RaidScene:
             self._turn_update(dt)   # he has the floor: no walking out of this
         if self.reloading:
             self.reloading = max(0.0, self.reloading - dt)
-            elapsed = RELOAD_S - self.reloading
-            while self._shell_i < len(SHELL_AT) and elapsed >= SHELL_AT[self._shell_i]:
+            elapsed = self._reload_dur - self.reloading
+            while self._shell_i < len(self._reload_t_in) and elapsed >= self._reload_t_in[self._shell_i]:
                 self._shell_i += 1
+                if self.mag < MAG and self.reserve > 0:
+                    self.mag += 1
+                    self.reserve -= 1
                 self._snd("shell_in")
+            if self._reload_dry and elapsed >= self._reload_pump_at and not self._pump_done:
+                self._pump_done = True
+                self._snd("pump")
             if not self.reloading:
-                n = min(MAG - self.mag, self.reserve)
+                n = max(0, min(self._reload_n - self._shell_i, MAG - self.mag, self.reserve))
                 self.mag += n
                 self.reserve -= n
-                if n:
+                if self._reload_dry and not self._pump_done and self.mag > 0:
                     self._snd("pump")
+                self._reload_n = 0
+                self._reload_dry = False
+                self._pump_done = False
         if self.t >= self.pump_snd_at:
             self.pump_snd_at = 1e9
             self._snd("pump")
@@ -562,9 +1001,25 @@ class RaidScene:
     def _begin_reload(self):
         if self.reloading or self.mag >= MAG or self.reserve <= 0:
             return
-        self.reloading = RELOAD_S
+        n = min(MAG - self.mag, self.reserve)
+        dry = (self.mag == 0)
+        self._reload_n = n
+        self._reload_dry = dry
+        self._reload_dur = sg_reload_dur(n, dry)
+        self._reload_t_in = sg_shell_times(n)
+        self._reload_pump_at = sg_pump_time(n) if dry else 1e9
+        self.reloading = self._reload_dur
         self._shell_i = 0
+        self._pump_done = False
         self._snd("reload")
+
+    def reload_total(self):
+        return self._reload_dur if self.reloading > 0.0 else self.RELOAD_S
+
+    def reload_shell_info(self):
+        if self.reloading <= 0.0 or self._reload_n <= 0:
+            return 0.0, 0
+        return sg_shell_slot_prog(self._reload_dur - self.reloading, self._reload_n)
 
     def _fire(self):
         if self.t - self.last_fire < FIRE_GAP:
@@ -577,6 +1032,8 @@ class RaidScene:
             return
         self.mag -= 1
         self.last_fire = self.t
+        self.last_flash = self.t
+        self.flash_seed += 1
         self.pump_at = self.t
         self.pump_snd_at = self.t + PUMP_S
         self._pig_scare()
@@ -652,7 +1109,6 @@ class RaidScene:
         self.world.pig_at = pig_block
         for end in lanes:
             self.tracers.append((self.t, src, end, (255, 226, 160)))
-        self.flashes.append((self.t, src))
         for end, kind in impact_pts:
             self.impacts.append((self.t, end, kind))
         ld = _fwd(self.yaw, look_pitch)
@@ -1000,7 +1456,7 @@ class RaidScene:
         if self.toast and self.t - self.toast[0] < 1.6:
             return self.toast[1], None, None
         if self.mag <= 0 and self.reserve <= 0:
-            return "Dry - take mags off the bodies", None, None
+            return "Dry - take shells off the bodies", None, None
         return None
 
     # --- draw ----------------------------------------------------------------------
@@ -1050,6 +1506,9 @@ class RaidScene:
             for t0, pos in self.flashes[-2:]
             if now - t0 < 0.07
         ]
+        if 0.0 <= now - self.last_flash < max(0.04, FLASH_S):
+            out.append({"pos": self._muzzle or (self.px, 1.4, self.pz),
+                        "color": (255, 204, 132), "intensity": 1.45, "range": 5.5})
 
         fire_lights = self.fire.lights(tm, now)
         out += fire_lights[:max(0, 6 - len(out))]
@@ -1153,6 +1612,10 @@ class RaidScene:
         self.fire.draw(r, tm, self.t)
         self._draw_tank(r, tm)
         self._draw_fx(r, tm)
+        f_age = self.t - self.last_flash
+        if 0.0 <= f_age < FLASH_S and self._flash_basis is not None:
+            tip, fvec, rx, ry = self._flash_basis
+            handheld_flash(r, tm, tip, fvec, rx, ry, f_age, self.flash_seed, "shotgun")
         tx, tz = self.objective_point()
         self.marker_screen = self._project(r, (tx, 1.6, tz)) if tx is not None else None
         r.flush(buf)
@@ -1401,7 +1864,7 @@ class RaidScene:
             kk = clamp(self.death_t / 0.6, 0.0, 1.0)
             _w.actor(r, key, blend("kneel", "dead_back", kk), at, self.body_yaw, int(tm), seed=93,
                      amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry")
-            self._muzzle = None
+            self._muzzle = self._flash_basis = None
             return
         lift = self._help_k()
         if lift > 0.0:
@@ -1409,24 +1872,38 @@ class RaidScene:
             pose = blend(LIFT_LOW, LIFT_HIGH, _ease(lift))
             _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93, amp=0.0,
                      rifle_on=False, flags=("shotgun",), expression="angry")
-            self._muzzle = None
+            self._muzzle = self._flash_basis = None
             return
-        hum = _w.hum(key, flags=("shotgun",))
+        hum = _w.hum(key, flags=("shotgun", "nopump"))
         pose = self._player_pose()
-        pump = 0.0
-        if 0.0 <= self.t - self.pump_at < 0.45:
-            pump = math.sin(math.pi * clamp((self.t - self.pump_at) / 0.45, 0.0, 1.0))
-        mode = "aim" if (self.ads > 0.5 or self.t - self.last_fire < 0.4) else "ready"
-        pose = _held(hum, pose, "shotgun", mode, ("m7player", mode))
-        if pump > 0.0:
-            pose = dict(pose, lel=pose.get("lel", 12) + 16.0 * pump,
-                        lsh_p=pose.get("lsh_p", 8) - 5.0 * pump)
-        joints = _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93,
-                          amp=0.12, rifle_on=True, flags=("shotgun",), expression="angry")
-        m = joints.get("muzzle") if joints else None
-        if m is None:
+        shell = False
+        if self.reloading > 0.0:
+            pose, pump, shell = sg_reload_pose(
+                hum, pose, self._reload_dur - self.reloading, self._reload_dur,
+                shells=self._reload_n, dry=self._reload_dry)
+        else:
+            pump = _pump_k(self.t - self.pump_at)
+            mode = "aim" if (self.ads > 0.5 or self.t - self.last_fire < 0.50) else "ready"
+            pose = _shotgun_hold(hum, pose, mode, ("m7player_sg", mode), pump)
+        joints = _w.actor(r, key, pose, at, self.body_yaw + SG_BLADE_YAW, int(tm), seed=93,
+                          amp=0.12, rifle_on=True, flags=("shotgun", "nopump"),
+                          expression="angry")
+        if joints:
+            draw_shotgun_pump(r, joints.get("rhand"), joints.get("rifle_m"), pump)
+            if shell:
+                draw_sg_shell(r, joints.get("lhand"), joints.get("rifle_m"))
+        rm = joints.get("rifle_m") if joints else None
+        hand = joints.get("rhand") if joints else None
+        if rm is not None and hand is not None:
+            off = m_apply(rm, BORE_LOCAL["shotgun"])
+            m = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
+            self._flash_basis = (m, _f_unit(m_apply(rm, (0.0, 0.0, 1.0))),
+                                 _f_unit(m_apply(rm, (1.0, 0.0, 0.0))),
+                                 _f_unit(m_apply(rm, (0.0, 1.0, 0.0))))
+        else:
             f, rg = _fwd(self.yaw, 0.0), _right(self.yaw)
             m = (self.px + f[0] * 0.7 + rg[0] * 0.25, 1.38, self.pz + f[2] * 0.7 + rg[2] * 0.25)
+            self._flash_basis = None
         self._muzzle = m
 
     def _ally_pose(self, a, key):
@@ -1606,10 +2083,11 @@ class RaidScene:
                          rifle_on=False, hd=True)
                 e["rest"] = fall.chest
                 if e["mags"] and fall.rest is not None:
-                    r.add_sprite((fall.chest[0], root[1] + 0.2, fall.chest[1]),
-                                 _fx.glow((255, 214, 140), 0.28, tm,
-                                          intensity=0.35 + 0.35 * math.sin(self.t * 4.0 + e["slot"]) ** 2),
-                                 layer=_fx.FX_LAYER)
+                    a = e["slot"] * 1.9
+                    mx = fall.chest[0] + math.cos(a) * 0.42
+                    mz = fall.chest[1] + math.sin(a) * 0.42
+                    my = self._floor(mx, mz)
+                    _w.add(r, _shell_drop_mesh(mx, my, mz, e["yaw"] + 35.0))
                 continue
             pose = self._guard_pose(e)
             if not e["moving"]:

@@ -37,6 +37,30 @@ MOJI = re.compile(r"[\u00c2\u00c3\u00e2][\u0080-\u00bf\u2013\u2014\u2018\u2019\u
                   r"\u2030\u2039\u203a\u2122]")
 
 
+SKIP_BIN_EXT = {
+    ".png", ".jpg", ".jpeg", ".webp", ".ico",
+    ".ogg", ".wav", ".mp3",
+    ".glb", ".blend", ".ttf", ".otf",
+    ".pyc", ".pyd", ".dll", ".exe", ".zip",
+}
+
+
+def read_text_bytes(p: Path) -> bytes | None:
+    if p.suffix.lower() in SKIP_BIN_EXT:
+        return None
+    with p.open("rb") as fh:
+        head = fh.read(8192)
+        if b"\0" in head:
+            return None
+        rest = fh.read()
+    raw = head + rest
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return raw
+
+
 def is_text(data: bytes) -> bool:
     if b"\0" in data[:8192]:
         return False
@@ -114,9 +138,36 @@ def dump_with_repaired_docstrings(tree: ast.AST) -> str:
     return ast.dump(tree)
 
 
-def iter_files():
+def iter_files(changed_only=False):
+    if changed_only:
+        try:
+            import subprocess
+
+            out = subprocess.check_output(
+                ["git", "status", "--porcelain"], cwd=ROOT, text=True
+            )
+            paths = []
+            for line in out.splitlines():
+                if not line.strip():
+                    continue
+                # format: "XY path" or "XY orig -> new"
+                p = line[3:].strip()
+                if " -> " in p:
+                    p = p.split(" -> ", 1)[1]
+                paths.append(p)
+            if not paths:
+                return
+            for rel in sorted(set(paths)):
+                p = ROOT / rel
+                if p.is_file():
+                    yield p
+            return
+        except Exception:
+            changed_only = False
     for p in sorted(ROOT.rglob("*")):
         if not p.is_file() or any(part in SKIP_DIRS for part in p.relative_to(ROOT).parts):
+            continue
+        if p.suffix.lower() in SKIP_BIN_EXT:
             continue
         yield p
 
@@ -126,14 +177,15 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--mojibake", action="store_true", help="also repair double-encoded comments/docstrings in .py")
     ap.add_argument("--report", default="")
+    ap.add_argument("--changed", action="store_true", help="only scan git-changed files")
     a = ap.parse_args()
     rows, failures, plan = [], [], []
     stats = {"scanned": 0, "text": 0, "crlf": 0, "mixed": 0, "bom": 0, "keep_crlf": 0,
              "py_changed": 0, "moji_comments": 0, "moji_docstrings": 0, "changed": 0}
-    for p in iter_files():
+    for p in iter_files(changed_only=a.changed):
         stats["scanned"] += 1
-        raw = p.read_bytes()
-        if not is_text(raw):
+        raw = read_text_bytes(p)
+        if raw is None:
             continue
         stats["text"] += 1
         rel = p.relative_to(ROOT).as_posix()
@@ -153,7 +205,7 @@ def main() -> int:
         new = body.replace(b"\r\n", b"\n")
         expected = new
         nc = nd = 0
-        if p.suffix == ".py":
+        if p.suffix == ".py" and (a.mojibake or new != raw):
             text = new.decode("utf-8")
             before_tree = ast.parse(text)
             if a.mojibake:

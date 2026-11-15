@@ -1,14 +1,18 @@
-"""Mission 8 Revenge - trap AI: the Guard riflemen, the Guard truck and Bodi.
+"""Mission 8 Revenge - trap AI: Guard riflemen, breachers, elevated overwatch
+snipers, the interactive Guard truck and Bodi.
 
-A trimmed copy of ``missions.m7.raid_brain`` (no dogs, no Alex, no fire): the
-same dict-per-rifleman state machine, burst telegraph and ally raise, so the
-two fights read alike.  Bodi carries his hunting rifle: slow, hard, accurate.
-Guards firing at someone tucked behind a jersey barrier mostly hit concrete.
-Bodi fights from cover: he picks a spot by the concrete or a wreck that hides
-him from the live Guards, keeps near Biribel without getting ahead of him,
-walks there on a 1 m grid path, ducks between shots and rises to fire, takes
-the Guard about to shoot Biribel first, and calls flanks.
-The scene (``trap3d``) owns the player and hands itself in as ``s``.
+Keeps Bodi's cover-seeking A* wingman loop from M7/M8 while giving the Guard
+real tactical roles so the player cannot sit at spawn clicking identical troops:
+- ``rifle``: standard cover/flank Guard.
+- ``breacher``: armored heavy shotgunner who pushes inside 6.5 m to flush campers.
+- ``overwatch``: sniper perched high on the gantry/watchtower with a long-range
+  laser lock that charges faster when Biribel stands inside plaza floodlights.
+- ``officer``: gantry-foot squad lead anchoring the final push.
+- ``gunner``: suppressive rifleman riding the Wave 2 Guard truck bed.
+
+Wave 2's Guard truck now carries real hull HP: shooting the engine/cab or
+blowing the north-lane drum as it passes crashes it early and decimates its
+dismount crew.
 """
 import heapq
 import math
@@ -16,51 +20,67 @@ import random
 
 from missions.m7 import raid_brain as RB
 
+from . import set3d as S3
 from . import trap_world as W
 
-KINDS = {"rifle": dict(RB.KINDS["rifle"])}
+KINDS = {
+    "rifle": dict(hp=68, speed=3.15, burst=3, gap=1.70, dmg=5, rng=42.0, acc=0.56, hold=15.0),
+    "breacher": dict(hp=115, speed=3.85, burst=2, gap=1.35, dmg=9, rng=26.0, acc=0.72, hold=5.5),
+    "overwatch": dict(hp=54, speed=0.0, burst=1, gap=2.55, dmg=18, rng=95.0, acc=0.76, hold=0.0),
+    "officer": dict(hp=110, speed=2.90, burst=4, gap=1.40, dmg=6, rng=44.0, acc=0.64, hold=11.0),
+    "gunner": dict(hp=110, speed=0.0, burst=5, gap=1.35, dmg=4, rng=60.0, acc=0.48, hold=0.0),
+}
 ROUND_GAP, TELEGRAPH, FLINCH_S = RB.ROUND_GAP, RB.TELEGRAPH, RB.FLINCH_S
+OVERWATCH_TELE = 1.25
 ALLY_RAISE, ALLY_HOLD = RB.ALLY_RAISE, RB.ALLY_HOLD
 BODI_HP, BODI_DOWN_S = RB.BODI_HP, RB.BODI_DOWN_S
-BODI_DMG, BODI_ACC, BODI_GAP = 30, 0.85, 1.6       # bolt hunting rifle
-TRUCK_SPEED = 11.0
-TRUCK_X, TRUCK_START_Z, TRUCK_STOP_Z = -29.6, 112.0, 38.0   # down the Guard track from the north
+BODI_DMG, BODI_ACC, BODI_GAP = 22, 0.72, 2.15       # tactical wingman, not a solo carry
+TRUCK_SPEED = 11.5
+TRUCK_HP = 580.0
+TRUCK_X, TRUCK_START_Z, TRUCK_STOP_Z = -29.6, 108.0, 38.0
 
-# Bodi's post for each wave; the gantry foot once the road is clear.
-BODI_POSTS = {1: (-63.0, -3.5), 2: (-50.0, 6.5), 3: (-34.0, 26.0)}
+BODI_POSTS = {1: (-63.0, -3.5), 2: (-48.0, 10.5), 3: (-32.0, 29.0)}
 BODI_FOOT = (11.0, 54.0)
 
-# kind, x, z, route, delay (s): out from behind the burned cars in the lot
+# Wave 1: wrecks ambush + heavy flanker + gantry-west overwatch (M2 sniper perch)
 WRECKS = [
     ("rifle", -40.0, 14.5, [(-43.5, 12.0), (-46.0, 6.0)], 0.0),
     ("rifle", -30.0, 26.0, [(-34.0, 23.0), (-37.0, 15.0)], 0.8),
-    ("rifle", -46.0, 23.5, [(-49.5, 23.0), (-52.0, 14.0)], 1.6),
-    ("rifle", -40.0, 35.0, [(-43.5, 32.0), (-46.0, 26.0)], 2.6),
-    ("rifle", -42.0, 6.0, [(-42.0, -1.0), (-50.0, -4.5)], 4.0),
+    ("breacher", -46.0, 23.5, [(-50.5, 16.0), (-54.0, 6.0)], 1.6),
+    ("rifle", -40.0, 35.0, [(-43.5, 32.0), (-46.0, 26.0)], 2.4),
+    ("rifle", -42.0, 6.0, [(-42.0, -1.0), (-50.0, -4.5)], 3.4),
+    ("overwatch", -0.8, 57.1, [], 2.0),
 ]
-# out of the booths, the tanker and the control-building side
+
+# Wave 2 flanking pair supporting the convoy truck roll-in + watchtower overwatch
+PLAZA_SUPPORT = [
+    ("rifle", -60.0, 20.0, [(-54.0, 18.0), (-48.0, 21.0)], 0.4),
+    ("rifle", -14.0, 34.0, [(-20.0, 31.0), (-24.0, 27.0)], 1.6),
+    ("overwatch", W.TOWER_AT[0], W.TOWER_AT[1], [], 2.5),
+]
+
+# Wave 3: final holdout anchored around the gantry base, control yard and east catwalk
 FLANK = [
-    ("rifle", -62.0, 18.0, [(-54.0, 17.0), (-46.0, 26.5)], 0.0),
-    ("rifle", -6.0, 30.0, [(-12.0, 30.0), (-18.0, 28.0)], 1.0),
-    ("rifle", -40.0, 62.0, [(-36.0, 52.0), (-35.0, 44.0)], 2.0),
-    ("rifle", -6.0, 54.0, [(-12.0, 48.0), (-12.0, 46.0)], 3.0),
-    ("rifle", -60.0, 44.0, [(-54.0, 38.0), (-48.0, 33.0)], 4.5),
-    ("rifle", 2.0, 44.0, [(-6.0, 42.0), (-11.0, 42.0)], 6.0),
+    ("officer", 2.0, 48.0, [(2.5, 46.0)], 0.0),
+    ("breacher", -10.0, 46.0, [(-12.0, 42.0), (-16.0, 38.0)], 0.8),
+    ("rifle", -6.0, 54.0, [(-8.0, 48.0), (-5.0, 44.0)], 1.6),
+    ("rifle", -38.0, 56.0, [(-34.0, 48.0), (-26.0, 44.0)], 2.4),
+    ("rifle", 8.0, 44.0, [(6.0, 45.0), (2.0, 44.0)], 3.2),
+    ("overwatch", -0.6, 57.1, [], 1.2),
 ]
 
 
 NAV_CELL = 1.0
-NAV_PAD = W.BODY_R + 0.12          # a cell is walkable when its centre clears every solid by this
-COVER_REACH = 1.3                  # a cover spot sits this close to a solid of 0.5 m or more
-PLAN_S = 1.1                       # Bodi re-weighs his spot this often
-PLAN_SAMPLES = 18                  # cover spots scored per plan, plus where he stands
-CALL_GAP = 3.5                     # seconds between two of his callouts
-DUCK_RATE = 6.0                    # crouch blend per second
+NAV_PAD = W.BODY_R + 0.12
+COVER_REACH = 1.3
+PLAN_S = 1.1
+PLAN_SAMPLES = 18
+CALL_GAP = 3.5
+DUCK_RATE = 6.0
 _NAV = {}
 
 
 def _nav():
-    """Walkable cells and cover spots of the static set, built once."""
     if _NAV:
         return _NAV
     x0, x1, z0, z1 = W.BOUNDS
@@ -68,7 +88,7 @@ def _nav():
     free = [[True] * nz for _ in range(nx)]
     near = [[False] * nz for _ in range(nx)]
     reach = max(NAV_PAD, COVER_REACH)
-    for bx0, bz0, bx1, bz1, h in W.STATIC:
+    for bx0, bz0, bx1, bz1, h in W.STATIC + [W.TOWER_BOX]:
         i0 = max(0, int((bx0 - reach - x0) / NAV_CELL) - 1)
         i1 = min(nx, int((bx1 + reach - x0) / NAV_CELL) + 2)
         j0 = max(0, int((bz0 - reach - z0) / NAV_CELL) - 1)
@@ -108,17 +128,26 @@ class Brain:
                          cover_t=None, duck_k=0.0, duck_at=None, stuck=0.0, tgt=None,
                          said=-9.0, low_said=False, shot_t=0.0)
         self._dyn_boxes = []
+        self._sniper_warned = -9.0
+        self._breacher_warned = -9.0
+        self._grenade_cd = 5.5
+        self._camp_pos = (scene.px, scene.pz)
+        self._camp_t = 0.0
 
     # --- waves -----------------------------------------------------------------
 
     def add(self, kind, x, z, route, delay, wave, **kw):
         k = KINDS[kind]
         self.slot += 1
-        e = dict(kind=kind, x=x, z=z, y=0.0, yaw=180.0, hp=k["hp"], alive=True, live=False,
+        y = 0.0
+        if kind == "overwatch":
+            y = S3.CATWALK_Y if abs(z - S3.CATWALK_Z) < 1.2 else W.TOWER_H
+        e = dict(kind=kind, x=x, z=z, y=y, yaw=180.0, hp=k["hp"], alive=True, live=False,
                  wave=wave, route=list(route), wp=0, spawn_at=self.s.t + delay,
-                 next_burst=0.0, tele=0.0, left=0, round_at=0.0, hit_t=-9.0, dead_t=-9.0,
+                 next_burst=0.0, tele=0.0, tele_dur=OVERWATCH_TELE if kind == "overwatch" else TELEGRAPH,
+                 left=0, round_at=0.0, hit_t=-9.0, dead_t=-9.0,
                  moving=False, slot=self.slot, mags=1, aim=-9.0, truck=None, gait=0.0,
-                 held=0.0)
+                 held=0.0, throw_t=-9.0, throw_at=0.0, throw_dst=None)
         e.update(kw)
         self.enemies.append(e)
         return e
@@ -130,29 +159,69 @@ class Brain:
             for kind, x, z, route, delay in WRECKS:
                 self.add(kind, x, z, route, delay, 1)
         elif n == 2:
-            self.trucks.append(dict(x=TRUCK_X, z=TRUCK_START_Z, at=self.s.t + 1.0, state="wait",
-                                    riflemen=4, t_stop=0.0, dumped=False, box=None))
+            t = dict(x=TRUCK_X, z=TRUCK_START_Z, at=self.s.t + 0.8, state="wait",
+                     riflemen=4, t_stop=0.0, dumped=False, box=None,
+                     hp=TRUCK_HP, max_hp=TRUCK_HP, crashed=False, gun=None, smoke_t=0.0)
+            t["gun"] = self.add("gunner", TRUCK_X, TRUCK_START_Z + 1.1, [], 0.8, 2, y=1.3, truck=t)
+            self.trucks.append(t)
+            for kind, x, z, route, delay in PLAZA_SUPPORT:
+                self.add(kind, x, z, route, delay, 2)
         elif n == 3:
             for kind, x, z, route, delay in FLANK:
                 self.add(kind, x, z, route, delay, 3)
 
+    def damage_truck(self, t, dmg):
+        """Damage the Wave 2 Guard truck; disabling it early crashes it on the lane."""
+        if t["crashed"] or t["state"] == "wait":
+            return False
+        t["hp"] = max(0.0, t["hp"] - dmg)
+        if t["hp"] <= 0.0:
+            t["crashed"] = True
+            t["state"] = "crashed"
+            t["t_stop"] = self.s.t
+            gun = t.get("gun")
+            if gun is not None and gun["alive"]:
+                self.hurt_enemy(gun, 999.0, (self.s.px, self.s.pz))
+            self.s.on_truck_crash(t)
+            return True
+        return False
+
     def _dismount(self, t):
         t["dumped"] = True
-        zr = t["z"] + 3.6                      # out over the tailgate, north end
+        zr = min(W.BOUNDS[3] - 1.5, t["z"] + 3.6)     # tailgate on the north end
         lanes = ((-37.5, 24.0), (-37.0, 18.0), (-23.0, 27.0), (-22.0, 31.0))
-        for i in range(t["riflemen"]):
-            sx = t["x"] + (i - 1.5) * 0.9
-            gx, gz = lanes[i]
-            route = [(sx + (2.8 if i >= 2 else -6.5), zr - 1.0), (gx, gz + 9.0), (gx, gz)]
-            self.add("rifle", sx, zr, route, 0.5 + i * 0.6, 2)
+        if t["crashed"]:
+            # Disrupted crash: only two battered riflemen stumble out late
+            for i in range(2):
+                sx = t["x"] + (-1.2 if i == 0 else 1.2)
+                gx, gz = lanes[i * 2]
+                route = [(sx + (-3.2 if i == 0 else 3.2), zr - 2.5), (gx, gz)]
+                self.add("rifle", sx, zr, route, 1.3 + i * 0.8, 2, hp=44)
+        else:
+            for i in range(t["riflemen"]):
+                sx = t["x"] + (i - 1.5) * 0.9
+                gx, gz = lanes[i]
+                kind = "breacher" if i == 1 else "rifle"
+                route = [(sx + (2.8 if i >= 2 else -6.5), zr - 1.0), (gx, gz + 9.0), (gx, gz)]
+                self.add(kind, sx, zr, route, 0.5 + i * 0.6, 2)
 
     def pending(self, wave):
-        if wave == 2 and any(not t["dumped"] for t in self.trucks):
+        if wave == 2 and any(
+            not t["dumped"] or (t["state"] in ("wait", "drive", "stopped") and not t["crashed"])
+            for t in self.trucks
+        ):
             return True
         return any(e["alive"] and e["wave"] == wave for e in self.enemies)
 
     def pending_count(self):
-        return sum(t["riflemen"] for t in self.trucks if not t["dumped"])
+        out = 0
+        for t in self.trucks:
+            if not t["dumped"]:
+                out += 2 if t["crashed"] else t["riflemen"]
+        return out
+
+    def alive_in_wave(self, wave):
+        return sum(1 for e in self.enemies if e["alive"] and e["wave"] == wave)
 
     def alive_count(self):
         return sum(1 for e in self.enemies if e["alive"])
@@ -170,6 +239,8 @@ class Brain:
         return out
 
     def _pick(self, e):
+        if e["kind"] == "overwatch" and not self.s.dying and self.s.py < 1.0:
+            return ("player", self.s.px, self.s.pz, 1.0, self.s.pmoving, 1.2)
         best, bd = None, 1e9
         for c in self._cands():
             d = math.hypot(c[1] - e["x"], c[2] - e["z"]) * c[3]
@@ -186,7 +257,7 @@ class Brain:
         if b["state"] != "up":
             return
         b["hp"] -= dmg
-        b["replan"] = 0.0                     # hit: the spot is no good, find another
+        b["replan"] = 0.0
         if b["hp"] <= 0:
             b["state"] = "down"
             b["down_at"] = s.t
@@ -205,6 +276,9 @@ class Brain:
             return False
         e["hp"] -= dmg
         e["hit_t"] = self.s.t
+        if e["kind"] == "overwatch" and e["tele"] > 0.0:
+            e["tele"] = 0.0
+            e["next_burst"] = self.s.t + 1.2      # stagger resets sniper lock
         if e["hp"] <= 0:
             e["alive"] = False
             e["dead_t"] = self.s.t
@@ -227,11 +301,20 @@ class Brain:
         d = math.hypot(tx - e["x"], tz - e["z"])
         yaw = math.radians(e["yaw"])
         muzzle = (e["x"] + math.sin(yaw) * 0.55, e["y"] + 1.35, e["z"] + math.cos(yaw) * 0.55)
-        p = _clamp(k["acc"] - d * 0.012 - (0.14 if moving else 0.0), 0.12, 0.85)
+        lit = (name == "player" and s.in_floodlight(tx, tz))
+        if e["kind"] == "overwatch":
+            # Overwatch uses 3D sight check; standing in a floodlight boosts hit odds
+            los_ok = s.world.los3d((e["x"], e["y"] + 1.4, e["z"]), (tx, ty + 0.1, tz), dyn=True)
+            if not los_ok:
+                return
+            p = _clamp(k["acc"] + (0.16 if lit else -0.10) - d * 0.004 - (0.18 if moving else 0.0),
+                       0.18, 0.90)
+        else:
+            p = _clamp(k["acc"] - d * 0.012 - (0.14 if moving else 0.0), 0.12, 0.85)
         if s.world.low_cover((tx, tz), (e["x"], e["z"])):
             p *= W.LOW_COVER_K
             if name == "bodi" and self.bodi["duck_k"] > 0.5:
-                p *= 0.3                       # ducked behind the concrete
+                p *= 0.3
         if self.rng.random() < p:
             end = (tx, ty, tz)
             self._damage(name, k["dmg"], (e["x"], e["z"]))
@@ -240,7 +323,7 @@ class Brain:
             end = (tx + (r.random() - 0.5) * 2.2, ty + (r.random() - 0.5) * 1.2,
                    tz + (r.random() - 0.5) * 2.2)
         s.tracer(muzzle, end)
-        s.flash(muzzle)
+        s.flash(muzzle, sniper=(e["kind"] == "overwatch"))
         e["aim"] = now
 
     def _steer(self, e, tx, tz, speed, dt):
@@ -268,11 +351,36 @@ class Brain:
             self._truck_update(t, dt, now)
         for e in self.enemies:
             if e["alive"]:
+                if e.get("throw_at") and now >= e["throw_at"]:
+                    dst = e["throw_dst"] or (self.s.px, self.s.pz)
+                    e["throw_at"] = 0.0
+                    self.s.throw_grenade((e["x"], e["y"] + 1.55, e["z"]), dst)
                 self._enemy(e, dt, now)
         self._bodi_update(dt, now)
         b = self.bodi
         k = b.get("walk_k", 0.0)
         b["walk_k"] = min(1.0, k + dt * 5.0) if b["moving"] else max(0.0, k - dt * 4.0)
+        # The Guard flushes entrenched/camping players with live frag grenades.
+        if self.s.phase in ("w1", "w2", "w3") and not self.s.dying and self.s.py < 1.0:
+            if math.hypot(self.s.px - self._camp_pos[0], self.s.pz - self._camp_pos[1]) < 2.4:
+                self._camp_t += dt
+            else:
+                self._camp_pos = (self.s.px, self.s.pz)
+                self._camp_t = 0.0
+            pressure = (self._camp_t >= 4.2 and now >= self._grenade_cd) or (now >= self._grenade_cd + 6.5)
+            if pressure:
+                thrower = next((e for e in self.enemies
+                                if e["alive"] and e["live"] and e["kind"] in ("rifle", "officer", "breacher")
+                                and not e["left"] and e["tele"] == 0.0
+                                and 8.5 < math.hypot(e["x"] - self.s.px, e["z"] - self.s.pz) < 32.0), None)
+                if thrower is not None:
+                    self._grenade_cd = now + 13.0
+                    self._camp_t = 0.0
+                    thrower["throw_t"] = now
+                    thrower["throw_at"] = now + 0.28
+                    thrower["throw_dst"] = (self.s.px, self.s.pz)
+                    thrower["yaw"] = _yaw(self.s.px - thrower["x"], self.s.pz - thrower["z"])
+                    self._call("Grenade! Get out of there!", force=True)
 
     def _truck_update(self, t, dt, now):
         if t["state"] == "wait":
@@ -293,14 +401,14 @@ class Brain:
                 t["t_stop"] = now
                 self.s.on_truck_stop(t)
             self._truck_box(t)
-        elif not t["dumped"] and now - t["t_stop"] > 0.8:
+        elif not t["dumped"] and now - t["t_stop"] > (0.6 if t["crashed"] else 0.8):
             self._dismount(t)
 
     def _truck_box(self, t):
         truck = W.guard_truck_at(t["x"], t["z"])
         self.s.world.dyn[t["box"]] = truck
         r = W.BODY_R
-        front = truck.world_box()[2] - r          # the bumper is the south end
+        front = truck.world_box()[2] - r
         b = self.bodi
         if truck.body_hits(b["x"], b["z"], r, 0.0, W.BODY_TOP):
             b["z"] = front
@@ -313,17 +421,44 @@ class Brain:
             return
         e["live"] = True
         k = KINDS[e["kind"]]
+        t = e["truck"]
+        if t is not None:
+            e["x"], e["z"] = t["x"], t["z"] + 1.15
         tgt = self._pick(e)
         e["moving"] = False
-        self._spread(e, dt)
+        if e["y"] < 0.5 and t is None:
+            self._spread(e, dt)
         if tgt is None:
             return
         d = math.hypot(tgt[1] - e["x"], tgt[2] - e["z"])
-        los = d < k["rng"] and self.s.world.los((e["x"], e["z"]), (tgt[1], tgt[2]))
-        if now - e["hit_t"] < FLINCH_S:
+        if e["y"] > 0.5 and t is None:
+            los = d < k["rng"] and self.s.world.los3d((e["x"], e["y"] + 1.4, e["z"]),
+                                                      (tgt[1], tgt[5] + 0.1, tgt[2]), dyn=True)
+        else:
+            los = d < k["rng"] and self.s.world.los((e["x"], e["z"]), (tgt[1], tgt[2]), dyn=t is None)
+        if now - e["hit_t"] < FLINCH_S and t is None:
+            return
+        if now - e.get("throw_t", -9.0) < 0.55 and t is None:
+            e["yaw"] = _yaw(tgt[1] - e["x"], tgt[2] - e["z"])
+            return
+        if e["kind"] == "overwatch":
+            e["yaw"] = _yaw(tgt[1] - e["x"], tgt[2] - e["z"])
+            if los:
+                if e["tele"] > 0.0 and now - self._sniper_warned > 9.0:
+                    self._sniper_warned = now
+                    where = "Gantry" if abs(e["z"] - S3.CATWALK_Z) < 1.2 else "Tower"
+                    self._call("%s sniper - stay behind concrete!" % where, force=True)
+                self._fire_ctl(e, tgt, now, k)
+            else:
+                e["tele"] = 0.0
+            return
+        if t is not None:
+            if los and t["state"] in ("drive", "stopped"):
+                e["yaw"] = _yaw(tgt[1] - e["x"], tgt[2] - e["z"])
+                self._fire_ctl(e, tgt, now, k)
             return
         on_route = e["wp"] < len(e["route"])
-        if on_route and los and d < 20.0:
+        if on_route and los and d < (14.0 if e["kind"] == "breacher" else 20.0):
             e["wp"] = len(e["route"])
             on_route = False
         if on_route:
@@ -331,24 +466,27 @@ class Brain:
             if math.hypot(wx - e["x"], wz - e["z"]) < 1.0:
                 e["wp"] += 1
             else:
-                self._go(e, wx, wz, k["speed"] * 1.35, dt, now)
+                self._go(e, wx, wz, k["speed"] * 1.30, dt, now)
         elif los:
             e["yaw"] = _yaw(tgt[1] - e["x"], tgt[2] - e["z"])
             busy = e["left"] > 0 or e["tele"] > 0.0
+            if e["kind"] == "breacher" and d < 16.0 and now - self._breacher_warned > 11.0:
+                self._breacher_warned = now
+                self._call("Heavy pushing in - don't stay pinned!", force=True)
             if not busy:
                 e["held"] += dt
-                if d > k["hold"] + 3.0:
+                if d > k["hold"] + 2.5:
                     e["moving"] = self._steer(e, tgt[1], tgt[2], k["speed"], dt)
-                elif d < 7.0:
+                elif d < (4.2 if e["kind"] == "breacher" else 7.0):
                     away = e["x"] - (tgt[1] - e["x"]), e["z"] - (tgt[2] - e["z"])
                     e["moving"] = self._steer(e, away[0], away[1], k["speed"] * 0.7, dt)
-                elif e["held"] > 3.5 and e["left"] == 0:
+                elif e["held"] > 3.2 and e["left"] == 0:
                     side = 1.0 if e["slot"] % 2 else -1.0
                     px, pz = tgt[2] - e["z"], -(tgt[1] - e["x"])
                     n = math.hypot(px, pz) or 1.0
                     e["moving"] = self._steer(e, e["x"] + side * px / n * 4.0,
-                                              e["z"] + side * pz / n * 4.0, k["speed"] * 0.8, dt)
-                    if e["held"] > 5.5:
+                                              e["z"] + side * pz / n * 4.0, k["speed"] * 0.85, dt)
+                    if e["held"] > 5.0:
                         e["held"] = 0.0
             self._fire_ctl(e, tgt, now, k)
         else:
@@ -356,10 +494,9 @@ class Brain:
             self._go(e, tgt[1], tgt[2], k["speed"], dt, now)
 
     def _spread(self, e, dt):
-        """Push a Guard off his mates so a squad never stacks on one waypoint."""
         px = pz = 0.0
         for o in self.enemies:
-            if o is e or not o["alive"] or not o.get("live"):
+            if o is e or not o["alive"] or not o.get("live") or o["y"] > 0.5 or o["truck"] is not None:
                 continue
             dx, dz = e["x"] - o["x"], e["z"] - o["z"]
             d = math.hypot(dx, dz)
@@ -373,7 +510,6 @@ class Brain:
             e["x"], e["z"] = self.s.world.move(e["x"], e["z"], px * 2.2 * dt, pz * 2.2 * dt, 0.34, False)
 
     def _go(self, e, tx, tz, speed, dt, now):
-        """Walk a Guard toward (tx, tz) round the wrecks on a grid path."""
         key = (round(tx), round(tz))
         if e.get("goal_key") != key or not e.get("path") or now >= e.get("repath", 0.0):
             e["path"] = self._path(e["x"], e["z"], tx, tz) or [(tx, tz)]
@@ -399,7 +535,12 @@ class Brain:
             if e["next_burst"] == 0.0:
                 e["next_burst"] = now + 0.6 + self.rng.random()
             else:
-                e["tele"] = now + TELEGRAPH
+                dur = TELEGRAPH
+                if e["kind"] == "overwatch":
+                    lit = tgt[0] == "player" and self.s.in_floodlight(tgt[1], tgt[2])
+                    dur = OVERWATCH_TELE * (0.72 if lit else 1.18)
+                e["tele_dur"] = dur
+                e["tele"] = now + dur
                 e["moving"] = False
 
     # --- Bodi ------------------------------------------------------------------
@@ -409,7 +550,7 @@ class Brain:
         now = self.s.t
         if force or now - b["said"] >= CALL_GAP:
             b["said"] = now
-            self.s.say("BODI", text, 2.2)
+            self.s.say("BODI", text, 2.4)
 
     def _raise(self, a, e, now):
         a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
@@ -431,16 +572,16 @@ class Brain:
             if now - b["down_at"] > BODI_DOWN_S:
                 self.s.bodi_lost()
             return
-        if b["goal"] is not None:                 # scripted walk (a checkpoint, the gantry foot)
+        if b["goal"] is not None:
             b["cover_t"] = None
             gx, gz = b["goal"]
-            if math.hypot(gx - b["x"], gz - b["z"]) < 0.3:
+            if math.hypot(gx - b["x"], gz - b["z"]) < 0.35:
                 b["goal"] = None
                 b["path"] = []
             else:
                 if not b["path"]:
                     b["path"] = self._path(b["x"], b["z"], gx, gz) or [(gx, gz)]
-                self._follow(b, dt, 3.4)
+                self._follow(b, dt, 3.6)
                 return
         if self.s.phase in ("clear", "climb", "catwalk"):
             b["cover_t"] = None
@@ -451,9 +592,9 @@ class Brain:
             self._warn(threats)
         if b["path"]:
             b["cover_t"] = None
-            self._follow(b, dt, 4.4 if threats else 3.2)
+            self._follow(b, dt, 4.4 if threats else 3.4)
             if b["path"]:
-                return                            # no shots on the move
+                return
         e, ed = self._bodi_target(threats)
         if e is None:
             b["cover_t"] = now if (threats and b["covered"]) else None
@@ -463,26 +604,26 @@ class Brain:
         b["tgt"] = e
         b["shot_t"] = now
         if b["cover_t"] is not None and now < b["next"] - ALLY_RAISE - 0.15:
-            return                                # down between shots
+            return
         b["cover_t"] = None
         if self._raise(b, e, now) and now >= b["next"]:
             muzzle = b.get("muzzle") or (b["x"], 1.35, b["z"])
             ty = e["y"] + 1.1
-            p = _clamp(BODI_ACC - ed * 0.008, 0.2, 0.9)
-            if self.s.world.low_cover((e["x"], e["z"]), (b["x"], b["z"])):
+            p = _clamp(BODI_ACC - ed * 0.008, 0.2, 0.85)
+            if e["y"] < 0.5 and self.s.world.low_cover((e["x"], e["z"]), (b["x"], b["z"])):
                 p *= 0.6
             if e["moving"]:
                 p -= 0.1
             if self.rng.random() < p:
                 end = (e["x"], ty, e["z"])
-                if self.hurt_enemy(e, BODI_DMG, (b["x"], b["z"])) and self.rng.random() < 0.4:
+                if self.hurt_enemy(e, BODI_DMG, (b["x"], b["z"])) and self.rng.random() < 0.35:
                     self._call(self.rng.choice(("Got him.", "One less.", "He's down.")))
             else:
                 end = (e["x"] + (self.rng.random() - 0.5) * 2.0, ty,
                        e["z"] + (self.rng.random() - 0.5) * 2.0)
             self.s.tracer(muzzle, end)
             self.s.flash(muzzle)
-            b["next"] = now + BODI_GAP + 0.4 * self.rng.random()
+            b["next"] = now + BODI_GAP + 0.5 * self.rng.random()
             b["duck_at"] = now + 0.45
         elif b["duck_at"] is not None and now >= b["duck_at"]:
             b["duck_at"] = None
@@ -490,40 +631,45 @@ class Brain:
                 b["cover_t"] = now
 
     def _bodi_target(self, threats):
-        """The Guard Bodi should drop first: the one about to fire, the one near
-        Biribel, the one he is already on; never one he cannot see."""
         b = self.bodi
         s = self.s
         best, bs, bd = None, 1e9, 0.0
         for e in threats:
             d = math.hypot(e["x"] - b["x"], e["z"] - b["z"])
-            if d > 48.0 or not s.world.los((b["x"], b["z"]), (e["x"], e["z"])):
+            if d > 56.0:
+                continue
+            if e["y"] > 0.5:
+                if not s.world.los3d((b["x"], 1.4, b["z"]), (e["x"], e["y"] + 1.2, e["z"]),
+                                     dyn=(e["truck"] is None)):
+                    continue
+            elif not s.world.los((b["x"], b["z"]), (e["x"], e["z"])):
                 continue
             sc = d
             if e["tele"] > 0.0 or e["left"] > 0:
-                sc -= 10.0
+                sc -= 8.0
             dp = math.hypot(e["x"] - s.px, e["z"] - s.pz)
             if dp < 10.0:
                 sc -= 10.0 - dp
+            if e["kind"] == "breacher" and dp < 14.0:
+                sc -= 6.0
             if e is b["tgt"]:
                 sc -= 4.0
-            if s.world.low_cover((e["x"], e["z"]), (b["x"], b["z"])):
+            if e["y"] < 0.5 and s.world.low_cover((e["x"], e["z"]), (b["x"], b["z"])):
                 sc += 6.0
             if sc < bs:
                 best, bs, bd = e, sc, d
         return best, bd
 
     def _spot_score(self, x, z, threats):
-        """(score, covered) of standing at (x, z) against ``threats``."""
         s = self.s
         b = self.bodi
         dpl = math.hypot(x - s.px, z - s.pz)
         sc = -0.12 * math.hypot(x - b["x"], z - b["z"])
         if dpl < 1.8:
             sc -= 3.0
-        if not threats:                          # stay with him, a step behind
+        if not threats:
             return sc - 0.35 * abs(dpl - 4.5) - 0.6 * max(0.0, z - s.pz + 1.0), False
-        bold = 6.0 if s.t - b["shot_t"] > 4.0 else 0.0   # nothing to shoot: range out
+        bold = 6.0 if s.t - b["shot_t"] > 4.0 else 0.0
         sc -= 0.25 * max(0.0, dpl - 8.0 - bold) + 0.5 * max(0.0, z - s.pz - 2.5 - bold)
         hid = shot = 0
         for e in threats:
@@ -539,8 +685,6 @@ class Brain:
             else:
                 shot += 1
         n = float(len(threats))
-        # hidden from all with no shot at any is a hole, not a firing spot; long
-        # without a shot he takes the risk to get one
         if bold:
             sc += 2.5 * hid / n - 0.8 * (n - hid) / n + (1.5 if shot else -6.0)
         else:
@@ -554,9 +698,10 @@ class Brain:
         if s.py > 1.0 or s.dying:
             return
         self._dyn_boxes = [m.world_box() for m in s.world.dyn if m is not None]
-        threats = sorted(threats, key=lambda e: math.hypot(e["x"] - b["x"], e["z"] - b["z"]))[:4]
+        threats = sorted([e for e in threats if e["y"] < 0.5],
+                         key=lambda e: math.hypot(e["x"] - b["x"], e["z"] - b["z"]))[:4]
         here, here_cov = self._spot_score(b["x"], b["z"], threats)
-        here += 0.8                               # hold a good spot rather than shuffle
+        here += 0.8
         near = [p for p in _nav()["spots"]
                 if math.hypot(p[0] - s.px, p[1] - s.pz) < 13.0 + (6.0 if now - b["shot_t"] > 4.0 else 0.0)
                 and not self._in_dyn(p[0], p[1])]
@@ -580,13 +725,12 @@ class Brain:
             self._call(self.rng.choice(("Moving up.", "Shifting - cover me.", side)))
 
     def _warn(self, threats):
-        """Call a Guard working round Biribel's side or back."""
         s = self.s
         a = math.radians(s.yaw)
         f = (math.sin(a), math.cos(a))
         rt = (math.cos(a), -math.sin(a))
         for e in threats:
-            if e.get("called"):
+            if e.get("called") or e["y"] > 0.5:
                 continue
             dx, dz = e["x"] - s.px, e["z"] - s.pz
             d = math.hypot(dx, dz)
@@ -629,8 +773,6 @@ class Brain:
         return True
 
     def _path(self, ax, az, bx, bz):
-        """Grid A* from (ax, az) to (bx, bz): waypoints, the goal last; [] if none.
-        A goal inside a solid snaps to the nearest walkable cell."""
         n = _nav()
         nx, nz = n["nx"], n["nz"]
         x0, _x1, z0, _z1 = W.BOUNDS
@@ -699,7 +841,7 @@ class Brain:
     def _follow(self, a, dt, speed):
         path = a["path"]
         if len(path) > 1 and self._clear_line(a["x"], a["z"], path[1][0], path[1][1]):
-            path.pop(0)                           # string-pull: cut the grid corner
+            path.pop(0)
         gx, gz = path[0]
         if math.hypot(gx - a["x"], gz - a["z"]) < 0.35:
             path.pop(0)

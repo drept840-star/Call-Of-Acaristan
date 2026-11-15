@@ -1702,13 +1702,33 @@ def _volkov_body(right):
     return artpack.pose(("m1volkov_v1", bool(right)), _M1_KIT_POSE, _bake)
 
 
-def _draw_volkov_topdown(surface, sx, sy, angle, moving, t):
-    """Volkov as the figure_kit cast body, feet planted on his post/run line."""
+def _draw_volkov_topdown(surface, sx, sy, angle, moving, t, duck=False):
+    """Volkov as the figure_kit cast body, feet planted on his post/run line.
+
+    Standing: a slow breath bob. Running: a real stride - feet swapping under
+    the hips, a small hop, the torso pitched into the sprint (and ducked where
+    he clears the half-lifted bay shutter)."""
     ph = t * 0.018
-    bob = math.sin(ph) * 1.2 if moving else math.sin(ph * 0.25) * 0.5
+    facing_right = math.cos(angle) >= 0
     surface.blit(_enemy_shadow, (int(sx - 17), int(sy - 4)))
-    surface.blit(_volkov_body(math.cos(angle) >= 0),
-                 (int(sx - _M1_KIT_ANCHOR[0]), int(sy + 4 + bob - 70)))
+    body = _volkov_body(facing_right)
+    if moving:
+        stride = math.sin(t * 0.024)
+        hop = abs(stride) * 3.5
+        for off in (stride * 6.0, -stride * 6.0):
+            pygame.draw.ellipse(surface, (24, 24, 28), (int(sx - 4 + off), int(sy), 8, 5))
+        if duck:
+            body = pygame.transform.smoothscale(
+                body, (body.get_width(), max(1, int(body.get_height() * 0.84))))
+        rot = pygame.transform.rotate(body, -6.0 if facing_right else 6.0)
+        # Centre the rotated body on the standing sprite's centre so the feet
+        # stay on the same run line (the rotation grows the surface).
+        rect = rot.get_rect(center=(int(sx - _M1_KIT_ANCHOR[0] + _M1_KIT_POSE[0] // 2),
+                                    int(sy + 4 - hop - 70 + _M1_KIT_POSE[1] // 2)))
+        surface.blit(rot, rect.topleft)
+    else:
+        bob = math.sin(ph * 0.25) * 0.5
+        surface.blit(body, (int(sx - _M1_KIT_ANCHOR[0]), int(sy + 4 + bob - 70)))
 
 
 def _draw_m1_van(surface, cam_x, cam_y):
@@ -1754,10 +1774,9 @@ def _draw_m1_actors(surface, cam_x, cam_y):
             vx = STATE.volkov_escape_pos[0] - cam_x
             vy = STATE.volkov_escape_pos[1] - cam_y
             if -100 < vx < WIDTH + 100 and -100 < vy < HEIGHT + 100:
-                # Same target as the escape update: the bay door.
-                ang = math.atan2(29 * TILE_SIZE + 32 - STATE.volkov_escape_pos[1],
-                                 15 * TILE_SIZE + 32 - STATE.volkov_escape_pos[0])
-                _draw_volkov_topdown(surface, vx, vy, ang, True, _now_ms())
+                ang = getattr(STATE, "_m1_volkov_angle", math.pi * 0.5)
+                duck = 28.4 * TILE_SIZE <= STATE.volkov_escape_pos[1] <= 29.7 * TILE_SIZE
+                _draw_volkov_topdown(surface, vx, vy, ang, True, _now_ms(), duck=duck)
         if STATE.commander_escape_pos and not STATE.commander_escaped:
             kx = STATE.commander_escape_pos[0] - cam_x
             ky = STATE.commander_escape_pos[1] - cam_y + 30
@@ -2272,36 +2291,23 @@ def _draw_m1_hud(surface, cam_x, cam_y):
         )
 
 
-STANDOFF_BAR_H = 24
-
-
 def _draw_m1_standoff(surface, cam_x, cam_y, anchor=None):
-    """WP6 standoff: hard 24 px letterbox, the current beat as an in-person
-    subtitle above the lower bar, and K's red '!' on the spot beat.
+    """WP6 standoff: standard LETTER_H letterbox, ``ui.speechbox`` caption
+    in the bottom band, and K's red '!' on the spot beat.
     ``anchor(k)`` gives the canvas point over K's head (the 2.5D view)."""
     so = getattr(STATE, "_m1_standoff", None)
     if not so:
         return
-    bar = STANDOFF_BAR_H
-    pygame.draw.rect(surface, (0, 0, 0), (0, 0, WIDTH, bar))
-    pygame.draw.rect(surface, (0, 0, 0), (0, HEIGHT - bar, WIDTH, bar))
+    bar = max(0, int(round(LETTER_H * float(so.get("bar_k", 1.0)))))
+    if bar > 0:
+        pygame.draw.rect(surface, (0, 0, 0), (0, 0, WIDTH, bar))
+        pygame.draw.rect(surface, (0, 0, 0), (0, HEIGHT - bar, WIDTH, bar))
     beats, i = so["beats"], so["idx"]
-    if 0 <= i < len(beats):
+    if so.get("phase", "talk") == "talk" and 0 <= i < len(beats) and bar >= LETTER_H - 4:
+        from ui import speechbox as _speechbox
         b = beats[i]
-        col = tuple(b.get("color") or C_WHITE)
-        parts = [(font_speaker, b["speaker"], col), (font_dialogue, b["text"], C_WHITE)]
-        rendered = [(f.render(t, False, c), f.render(t, False, (0, 0, 0))) for f, t, c in parts]
-        gap = 12
-        w = sum(s.get_width() for s, _ in rendered) + gap
-        h = max(s.get_height() for s, _ in rendered)
-        x = WIDTH // 2 - w // 2
-        y = HEIGHT - bar - 8 - h
-        for s, shadow in rendered:
-            sy = y + h - s.get_height()
-            surface.blit(shadow, (x + 2, sy + 2))
-            surface.blit(s, (x, sy))
-            x += s.get_width() + gap
-    if so.get("spot"):
+        _speechbox.draw_caption(surface, b["speaker"], b["text"], so.get("shown"))
+    if so.get("phase") == "spot" and so.get("spotter"):
         k = _m1_update.standoff_commander()
         at = None if k is None else (anchor(k) if anchor else
                                      (k.rect.centerx - cam_x, k.rect.top - cam_y - 30))

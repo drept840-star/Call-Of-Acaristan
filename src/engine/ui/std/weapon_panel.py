@@ -37,6 +37,8 @@ class WeaponInfo:
     spares: int = 0
     reloading: bool = False
     reload_timer: int = 0
+    reserve: int | None = None
+    reload_prog: float | None = None
 
     @classmethod
     def from_state(cls, state) -> "WeaponInfo":
@@ -72,10 +74,30 @@ def draw(surface: pygame.Surface, theme: Theme, info: WeaponInfo, *, panel_bg, m
     surface.blit(panel_bg(PANEL_W, panel_h), (x, panel_y))
     pygame.draw.line(surface, theme.c_krap_blue, (x, panel_y), (x, panel_y + panel_h), 3)
     ammo_x, ammo_y = x + 6, panel_y + 6
+    shell_mode = info.kind == "shell"
+    total_reserve = (
+        int(info.reserve)
+        if info.reserve is not None
+        else int(info.spares) * int(info.mag)
+    )
+    total_reserve = max(0, total_reserve)
     for i in range(4):
         is_active = i == 0
-        rounds = info.ammo if is_active else (info.mag if info.spares >= i else 0)
-        mag_icon(surface, ammo_x + 8 + i * 34, ammo_y + 8, info.kind, rounds, info.mag, is_active)
+        if is_active:
+            rounds, cap = info.ammo, info.mag
+        elif info.reserve is not None or shell_mode:
+            cap = info.mag
+            rounds = max(0, min(cap, total_reserve - (i - 1) * cap))
+        else:
+            cap = info.mag
+            rounds = info.mag if info.spares >= i else 0
+        mag_icon(surface, ammo_x + 8 + i * 34, ammo_y + 8, info.kind, rounds, cap, is_active)
+    max_shown = 3 * max(1, int(info.mag))
+    if shell_mode and total_reserve > max_shown:
+        over = theme.font_terminal_small.render(
+            "+%d" % (total_reserve - max_shown), True, (212, 174, 78)
+        )
+        surface.blit(over, (ammo_x + 8 + 3 * 34 + 12 - over.get_width() // 2, ammo_y + 56))
     tc = theme.c_terminal if info.ammo > 0 else (220, 60, 60)
     tx = ammo_x + 154
     surface.blit(theme.font_terminal_small.render(info.label, True, (150, 210, 190)),
@@ -84,12 +106,17 @@ def draw(surface: pygame.Surface, theme: Theme, info: WeaponInfo, *, panel_bg, m
                                                   True, tc), (tx, ammo_y + 10))
     surface.blit(theme.font_terminal_small.render(info.caliber, True, (100, 130, 120)),
                  (tx, ammo_y + 28))
-    surface.blit(theme.font_terminal_small.render(T("hud.mags", n=int(info.spares)), True,
-                                                  (140, 150, 130)), (tx, ammo_y + 46))
+    reserve_lbl = (T("hud.shells", n=total_reserve) if shell_mode
+                   else T("hud.mags", n=int(info.spares)))
+    surface.blit(theme.font_terminal_small.render(reserve_lbl, True, (140, 150, 130)),
+                 (tx, ammo_y + 46))
     if info.reloading:
         bar_x, bar_y = ammo_x + 148, ammo_y + 64
-        dur = RELOAD_MS.get(info.cw, 60)
-        prog = 1.0 - info.reload_timer / dur if info.reload_timer > 0 else 0.0
+        if info.reload_prog is not None:
+            prog = info.reload_prog
+        else:
+            dur = RELOAD_MS.get(info.cw, 60)
+            prog = 1.0 - info.reload_timer / dur if info.reload_timer > 0 else 0.0
         prog = max(0.0, min(1.0, prog))
         pygame.draw.rect(surface, (50, 50, 50), (bar_x, bar_y, 80, 8), border_radius=2)
         pygame.draw.rect(surface, (220, 160, 40), (bar_x, bar_y, int(80 * prog), 8),

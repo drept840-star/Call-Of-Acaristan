@@ -28,6 +28,7 @@ CAST = [
     ("UCILEV", "ucilev", "Presidential Guard", "stand", {}),
     ("VOLKOV", "volkov", "IPA logistics clerk", "stand", {}),
     ("RETARDOVICI", "president", "President of Acaristan", "stand", {}),
+    ("ANDREI M.", "andrei_m", "", "stand", {}),
 ]
 BG = (30, 32, 38)
 INK, DIM, ORANGE = (238, 233, 223), (154, 160, 168), (255, 122, 26)
@@ -62,8 +63,8 @@ def render():
     from cutscenes import figure_kit as fk
     from cutscenes.cast3d import humanoid3d
     font_dir = os.path.join(ROOT, "assets", "fonts")
-    f_name = pygame.font.Font(os.path.join(font_dir, "Oswald.ttf"), 30)
-    f_role = pygame.font.Font(os.path.join(font_dir, "IBMPlexMono-SemiBold.ttf"), 14)
+    f_name = pygame.font.Font(os.path.join(font_dir, "Oswald.ttf"), 22)
+    f_role = pygame.font.Font(os.path.join(font_dir, "IBMPlexMono-SemiBold.ttf"), 9)
     f_title = pygame.font.Font(os.path.join(font_dir, "Oswald.ttf"), 54)
     out_dir = os.path.join(ROOT, "outputs", "cast")
     os.makedirs(out_dir, exist_ok=True)
@@ -75,10 +76,11 @@ def render():
     r = engine3d.Renderer(W, H, fog=BG, fog_start=30, fog_end=80)
     r.light = light
     _stage(r)
-    r.set_camera((0, 1.3, -9.4), (0, 0.95, 0), 44)
+    r.set_camera((0, 1.3, -11.4), (0, 0.95, 0), 48)
     r.surface.fill(BG)
     r.begin(); r.add_static()
-    xs = [(-2.75 + i * 1.1) for i in range(len(CAST))]
+    step = 0.96
+    xs = [(i - (len(CAST) - 1) / 2.0) * step for i in range(len(CAST))]
     for x, (_n, key, _r, pose, _o) in zip(xs, CAST):
         r.add_humanoid(actors[key], POSES[pose], (x, 0, 0), 180.0 + (x * -4), rifle_on=False)
     r.flush(r.surface)
@@ -143,7 +145,8 @@ def render():
         a = f_name.render(n, True, INK)
         img.blit(a, (24, P * 2 + 14))
         pygame.draw.rect(img, ORANGE, (24, P * 2 + 8, a.get_width(), 4))
-        pygame.image.save(img, os.path.join(out_dir, n.lower() + ".png"))
+        slug = n.lower().rstrip(".").replace(" ", "_")
+        pygame.image.save(img, os.path.join(out_dir, slug + ".png"))
     print("backend:", r.backend, "->", out_dir)
 
 

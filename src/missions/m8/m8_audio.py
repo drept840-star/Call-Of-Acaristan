@@ -34,6 +34,7 @@ POOLS = {
     "m8_lmg": 4,           # his LMG on the tractor chase, short so the bursts stay clean
     "m8_rifle": 3,         # their rifles, across the road
     "m8_rifle_far": 3,     # the same, from the far lane
+    "m8_sniper": 2,        # overwatch crack from the gantry / watchtower
     "m8_hit": 3,           # round into a body, close
     "m8_hit_far": 2,
     "m8_head": 2,
@@ -44,10 +45,12 @@ POOLS = {
     "m8_hurt": 3,          # a round into Biribel
     "m8_rung": 3,          # the gantry ladder
     "m8_hull": 3,          # rounds on the tractor's steel
+    "m8_pickup": 2,        # resupply crate latch and shells
 }
 SINGLES = ("m8_shot_slow", "m8_fall_light", "m8_fall_heavy",
-           "m8_horn", "m8_bell", "m8_creak", "m8_crash")
-LOOPS = ("m8_drone", "m8_road_wind", "m8_engine", "m8_train")
+           "m8_horn", "m8_bell", "m8_creak", "m8_crash", "m8_rocket",
+           "m8_barrel_boom", "m8_spark_pop", "m8_pa_squelch", "m8_smoke")
+LOOPS = ("m8_drone", "m8_road_wind", "m8_engine", "m8_train", "m8_heli")
 
 # cue -> ((loop, gain), ...). Add a cue here; scenes only name it.  Any
 # registered loop works; only LOOPS duck under shots.
@@ -57,6 +60,8 @@ BEDS = {
     "chase": (("m8_drone", 0.13), ("m8_road_wind", 0.20), ("m8_engine", 0.20)),
     "chase_x": (("m8_drone", 0.12), ("m8_road_wind", 0.16), ("m8_engine", 0.20),
                 ("m8_train", 0.10)),
+    "chase_heli": (("m8_drone", 0.12), ("m8_road_wind", 0.18), ("m8_engine", 0.18),
+                   ("m8_heli", 0.22)),
     "chase_end": (("m8_road_wind", 0.14), ("m8_engine", 0.12), ("m8_train", 0.28)),
     # films
     "f_dawn": (("m8_drone", 0.09), ("m8_road_wind", 0.15)),
@@ -67,6 +72,7 @@ BEDS = {
     "f_tv": (("elec_hum", 0.05), ("room_tone", 0.10)),
     "f_night": (("m8_drone", 0.09), ("wind", 0.12)),
     "f_title": (("m8_train", 0.07), ("m8_road_wind", 0.12)),
+    "f_heli": (("m8_drone", 0.12), ("m8_road_wind", 0.20), ("m8_engine", 0.14), ("m8_heli", 0.30)),
 }
 
 # film scene -> (score cue, bed cue).
@@ -96,6 +102,10 @@ FILM = {
     "m8_epi_names": ("names", "f_train"),
     "m8_epi_volkov": ("names", "f_train"),
     "m8_epi_title": ("title", "f_title"),
+    "m8_heli_road": ("chase", "f_truck"),
+    "m8_heli_retardovici": ("state", "f_tv"),
+    "m8_heli_flyby": ("chase", "f_heli"),
+    "m8_heli_lockon": ("chase", "chase_heli"),
 }
 
 # -- score (assets/music/ost, streamed) ---------------------------------------
@@ -282,6 +292,67 @@ def _crash():
     return np.tanh(x * 1.4)
 
 
+def _sniper_mono(i, p, seed):
+    """Supersonic crack + deep bolt report + long valley tail off the toll booths."""
+    n = int(1.9 * RATE)
+    whip = _burst(n, seed, 0.005 / p, lo=2200.0) * 1.1
+    boom = _burst(n, seed + 1, 0.06, hi=1400.0 * p) * 0.9
+    thump = _tone(n, 165.0 * p, 48.0 * p, 0.09) * 0.8
+    tail = _tail(n, seed + 3, 1500.0 * p, 0.42, ((0.14, 0.36), (0.31 + 0.02 * i, 0.22), (0.56, 0.12)))
+    return np.tanh((whip + boom + thump) * 1.55) * 0.82 + tail * 0.36
+
+
+def _barrel_boom():
+    """Fuel drum detonation: sub punch, fuel whoosh, steel ring, highway echo."""
+    n = int(2.2 * RATE)
+    sub = _tone(n, 118.0, 26.0, 0.26) * 1.25
+    roar = _burst(n, 8954, 0.24, hi=950.0) * 1.15
+    crack = _burst(n, 8955, 0.015, lo=1600.0) * 0.9
+    ring = _partials(n, 238.0, ((1.0, 0.26, 0.22), (1.72, 0.16, 0.14)))
+    out = np.tanh((sub + roar + crack + ring) * 1.5)
+    _place(out, _lowpass(out.copy(), 650.0, 2), 0.28, 0.32)
+    _place(out, _lowpass(out.copy(), 480.0, 2), 0.58, 0.16)
+    return out
+
+
+def _spark_pop():
+    """Transformer / floodlight shatter: electrical arc snap, glass, dying hum."""
+    n = int(0.85 * RATE)
+    t = _t(n)
+    arc = _burst(n, 8957, 0.018, lo=1800.0) * 1.0
+    buzz = np.sin(2 * math.pi * 100.0 * t) * np.exp(-t / 0.14) * 0.55
+    glass = _burst(n, 8958, 0.06, lo=3000.0) * 0.5
+    rng = np.random.default_rng(8959)
+    out = arc + buzz + glass
+    for _ in range(6):
+        k = int(0.025 * RATE)
+        _place(out, _burst(k, int(rng.integers(1, 99999)), 0.004, lo=2400.0),
+               float(rng.uniform(0.04, 0.38)), float(rng.uniform(0.12, 0.28)))
+    return np.tanh(out * 1.35)
+
+
+def _pa_squelch():
+    """Toll-plaza loudspeaker key-up: relay click, bandpass hiss, horn resonance."""
+    n = int(0.32 * RATE)
+    click = _tone(int(0.03 * RATE), 980.0, 420.0, 0.007) * 0.7
+    hiss = _highpass(_lowpass(_noise(n, 8960), 2600.0, 2), 680.0) * _decay(n, 0.08) * 0.55
+    x = hiss.copy()
+    _place(x, click, 0.0, 0.9)
+    _place(x, _tone(int(0.025 * RATE), 1420.0, 1180.0, 0.006), 0.02, 0.45)
+    return x
+
+
+def _smoke_hiss():
+    """A smoke canister: the clink, then the charge burning itself out."""
+    n = int(0.95 * RATE)
+    t = _t(n)
+    clink = _partials(int(0.14 * RATE), 1480.0, ((1.0, 0.6, 0.03), (1.82, 0.35, 0.02)))
+    hiss = _highpass(_lowpass(_noise(n, 8963), 5200.0, 2), 1400.0) * np.clip(t / 0.08, 0.0, 1.0) * _decay(n, 0.34)
+    out = hiss * 0.75
+    _place(out, clink, 0.0, 0.7)
+    return out
+
+
 @lru_cache(maxsize=64)
 def shot_pcm(name):
     if name == "m8_shot_slow":
@@ -324,6 +395,21 @@ def shot_pcm(name):
         return _fin(_creak(), 0.6, 0.3)
     if name == "m8_crash":
         return _fin(_crash(), 0.85, 0.25)
+    if name == "m8_barrel_boom":
+        return _fin(_barrel_boom(), 0.90, 0.22)
+    if name == "m8_spark_pop":
+        return _fin(_spark_pop(), 0.78, 0.20)
+    if name == "m8_pa_squelch":
+        return _fin(_pa_squelch(), 0.55, 0.12)
+    if name == "m8_smoke":
+        return _fin(_smoke_hiss(), 0.70, 0.22)
+    if name == "m8_rocket":
+        n = int(1.3 * RATE)
+        t = _t(n)
+        env = np.clip(t / 0.05, 0.0, 1.0) * np.exp(-t / 0.45)
+        x = _highpass(_lowpass(_noise(n, 8991), 2400.0, 2), 260.0) * env
+        x += _tone(n, 380.0, 140.0, 0.28) * 0.5
+        return _fin(x, 0.85, 0.24)
     base, i, p, seed = _take(name)
     if base == "m8_hurt":
         # felt more than heard: the thump through the chest, a dull ear
@@ -345,6 +431,14 @@ def shot_pcm(name):
         x += _burst(n, seed, 0.03, hi=1200.0) * 0.7
         x += _burst(n, seed + 1, 0.004, lo=2500.0) * 0.35
         return _fin(np.tanh(x * 1.3), 0.75, 0.2)
+    if base == "m8_pickup":
+        n = int(0.32 * RATE)
+        latch = _tone(int(0.08 * RATE), 420.0 * p, 220.0 * p, 0.025) * 0.65
+        shells = _burst(n, seed, 0.04, lo=1700.0, hi=4200.0) * 0.5
+        x = shells.copy()
+        _place(x, latch, 0.0, 0.9)
+        _place(x, _tone(int(0.05 * RATE), 660.0 * p, 520.0 * p, 0.015), 0.11, 0.45)
+        return _fin(x, 0.65, 0.12)
     if base == "m8_shot":
         return _fin(_shot_mono(i, p, seed), stereo=0.16)
     if base == "m8_lmg":
@@ -353,6 +447,8 @@ def shot_pcm(name):
         return _fin(_rifle_mono(i, p, seed, False))
     if base == "m8_rifle_far":
         return _fin(_rifle_mono(i, p, seed, True), 0.7, 0.3)
+    if base == "m8_sniper":
+        return _fin(_sniper_mono(i, p, seed), 0.88, 0.22)
     if base in ("m8_hit", "m8_hit_far"):
         n = int(0.35 * RATE)
         x = _tone(n, 130.0 * p, 60.0 * p, 0.05) * 0.9
@@ -449,6 +545,16 @@ def loop_pcm(name):
                 click += _tone(k, 820.0, 560.0, 0.012) * 0.4
                 _place(x, click, beat + at + 0.1, gain)
         stereo = 0.28
+    elif name == "m8_heli":
+        dur = 2.0
+        n = int(RATE * dur)
+        t = _t(n)
+        slap = (0.5 + 0.5 * np.sin(2 * math.pi * 12.0 * t)) ** 3
+        x = np.sin(2 * math.pi * 24.0 * t) * slap * 0.7
+        nz = np.tile(_noise(n, 8981), 2)
+        x += _lowpass(nz, 420.0, 2)[n:] * (0.4 + 1.4 * slap)
+        x += np.sin(2 * math.pi * 410.0 * t) * 0.025
+        stereo = 0.26
     else:
         raise ValueError("Unknown M8 loop: " + name)
     pk = float(np.max(np.abs(x))) or 1.0
@@ -655,12 +761,23 @@ class M8Audio(M7Audio):
         self.duck(0.55, 0.12)
         self._pool("m8_lmg", 0.5, fallback="m6_rifle_crack")
 
+    def rifle_shot(self):
+        """Biribel's OS-12 in the trap: fast, heavy, and it ducks the bed hard."""
+        self.duck(0.55, 0.10)
+        self._pool("m8_lmg", 0.52, fallback="m6_rifle_crack")
+
     def guard_shot(self, pan=0.0, dist=18.0):
         """Their rifles: thinner than the shotgun, placed left/right, far ones dull."""
         self.duck(0.60, 0.10)
         vol = 0.16 + 0.34 * max(0.0, 1.0 - dist / 60.0)
         self._pool("m8_rifle_far" if dist > FAR_M else "m8_rifle", vol, pan,
                    fallback="m6_rifle_crack")
+
+    def sniper_shot(self, pan=0.0, dist=40.0):
+        """Overwatch: the crack comes first, the bolt report after it."""
+        self.duck(0.28, 0.35)
+        vol = 0.42 + 0.26 * max(0.0, 1.0 - dist / 95.0)
+        self._pool("m8_sniper", vol, pan, fallback="m6_rifle_crack")
 
     def impact(self, on_enemy=False, dist=0.0, pan=0.0):
         delay = dist / SOUND_MPS if dist > 6.0 else 0.0
@@ -674,6 +791,34 @@ class M8Audio(M7Audio):
 
     def metal(self, pan=0.0, volume=0.38):
         self._pool("m8_ric", volume, pan, fallback="m6_tink")
+
+    # plaza hazards & PA ---------------------------------------------------
+    def barrel_boom(self, pan=0.0, dist=15.0):
+        """A fuel drum going up: the plaza ducks, the echo comes back off the booths."""
+        self.duck(0.20, 0.55)
+        vol = 0.60 + 0.25 * max(0.0, 1.0 - dist / 55.0)
+        self._pool("m8_barrel_boom", vol, pan, fallback="explosion")
+
+    def spark_pop(self, pan=0.0):
+        """A floodlight fuse letting go: an arc, then glass."""
+        self.duck(0.55, 0.18)
+        self._pool("m8_spark_pop", 0.58, pan, fallback="m6_tink")
+
+    def pa_squelch(self):
+        """The plaza loudspeaker keying up."""
+        self._pool("m8_pa_squelch", 0.42, fallback="squelch_head")
+
+    def smoke_hiss(self, pan=0.0):
+        """A smoke canister burning off on the asphalt."""
+        self._pool("m8_smoke", 0.56, pan, fallback="m6_tink")
+
+    def pickup(self):
+        """The supply crate latch and the shells going into the pocket."""
+        self._pool("m8_pickup", 0.55, fallback="reload")
+
+    def rifle_handle(self):
+        """Mechanical catch/bolt handling tick for the OS-12 reload."""
+        self._one("rifle_handle", 0.42)
 
     # Biribel ---------------------------------------------------------------
     def hurt(self, dmg=10.0):
@@ -710,6 +855,10 @@ class M8Audio(M7Audio):
     def crash(self, pan=0.0):
         self.duck(0.4, 0.3)
         self._pool("m8_crash", 0.55, pan, fallback="explosion")
+
+    def rocket(self):
+        self.duck(0.45, 0.25)
+        self._pool("m8_rocket", 0.68, fallback="explosion")
 
     def horn(self, volume=0.45):
         if self._ready("horn", 2.5):

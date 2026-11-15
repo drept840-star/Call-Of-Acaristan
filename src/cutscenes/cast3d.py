@@ -52,14 +52,16 @@ def spec3d(who, **overrides):
     )
     neck = fk.get("neck")    # casual wear (hoodie / tee / open shirt): no tailoring decals
     tailoring = () if neck else ("buttons", "epaulets", "medal", "tie", "lapel", "shirt")
-    for k in ("stubble", "beard", "cig", "scar", "glasses", "bandana",
-              "satchel", "hat") + tailoring:
+    for k in ("stubble", "beard", "moustache", "moustache_h", "cig", "scar",
+              "glasses", "bandana", "satchel", "bracelets", "hat") + tailoring:
         if fk.get(k):
             out[k] = fk[k]
     if neck:
         out["cuff"] = None
         if neck == "hood":
             out["hoodie"] = True
+        elif neck == "crew":
+            out["crew"] = True
         if neck == "open":
             out["inner"] = fk.get("inner", fk["shirt"])
         for k in ("strings", "straps", "sleeves", "print", "plaid", "boots_h", "rips", "sole"):

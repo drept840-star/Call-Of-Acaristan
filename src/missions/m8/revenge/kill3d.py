@@ -26,10 +26,12 @@ from core.outfits import OUTFIT_GUARD
 from core.state import STATE
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
-from engine3d import POSES, blend, clamp
+from engine3d import Mesh, POSES, blend, box, clamp
+from engine3d.core import m_apply, m_mul, rot_x, rot_y
 from missions.m6 import yard_hud as U
 from missions.m7 import raid3d as R
 
+from . import chase3d as C
 from . import set3d as S3
 
 VX, VY, VZ = S3.VASILE_AT
@@ -46,7 +48,7 @@ EYE = (BX + 0.55, VY + 1.74, BZ + 0.34)
 INTRO_EYE = (BX + 0.97, VY + 1.80, BZ + 0.56)
 FOV = 46.0
 AIM_YAW, AIM_PITCH, SENS = 16.0, 24.0, 0.10
-INTRO_S, RAISE_S = 2.0, 0.8
+INTRO_S, RAISE_S = 1.1, 0.55
 # His line types out at CPS from LINE_AT seconds into the aim, with PAUSE after
 # each full stop. It stops on a half-word and waits. The player can fire once
 # the price has landed (FIRE_N characters); the shot cuts the line off wherever
@@ -54,7 +56,7 @@ INTRO_S, RAISE_S = 2.0, 0.8
 LINE = ("Son. Maru's team goes in tonight. I'm the one who cuts the cameras. "
         "Kill me, and they walk in blind. I'm still proud of you. "
         "I'm so proud of what you've becom")
-LINE_AT, CPS, PAUSE, BODI_S = 1.0, 13.0, 0.5, 7.0
+LINE_AT, CPS, PAUSE, BODI_S = 0.45, 15.5, 0.35, 6.0
 FIRE_N = LINE.index("blind.") + len("blind.")
 _T = [0.0]
 for _c in LINE:
@@ -63,7 +65,34 @@ DEATH_S, QUIET_S, FADE_S = 4.6, 3.4, 1.2
 LOWER_S, HITSTOP_S = 0.85, 0.055
 KNEE_AT, COLLAPSE_AT, GROUND_AT, SETTLED_AT = 0.68, 2.5, 3.06, 4.1
 CAP_HOLD_S, CAP_OUT_S = 1.8, 0.7
-BLOOD = ((100, 14, 18), (76, 10, 14), (124, 24, 26))
+BLOOD = ((118, 12, 16), (82, 8, 12), (148, 22, 24), (56, 5, 8))
+
+
+def _pool_mesh(cx, cz, rad, col, y, seed=0):
+    m = Mesh()
+    pts = []
+    for i in range(10):
+        a = math.tau * i / 10.0
+        wob = 0.78 + 0.32 * math.sin(i * 2.7 + seed)
+        px = cx + math.cos(a) * rad * wob * 1.18
+        pz = clamp(cz + math.sin(a) * rad * wob, S3.CATWALK_Z - 0.65, S3.CATWALK_Z + 0.65)
+        pts.append((px, y, pz))
+    m.face(pts, col, 1, True)
+    return m
+
+_CIG_MESH = None
+
+
+def _cig_mesh():
+    global _CIG_MESH
+    if _CIG_MESH is None:
+        m = Mesh()
+        m.add(box(0.015, 0.015, 0.016, (196, 140, 80), center=(0.0, 0.0, -0.032)))
+        m.add(box(0.012, 0.012, 0.056, (236, 232, 222), center=(0.0, 0.0, 0.004)))
+        m.add(box(0.014, 0.014, 0.006, (120, 114, 108), center=(0.0, 0.0, 0.035)))
+        m.add(box(0.0145, 0.0145, 0.006, (255, 120, 40), center=(0.0, 0.0, 0.041), emissive=True))
+        _CIG_MESH = m
+    return _CIG_MESH
 
 
 def _ease(k):
@@ -179,6 +208,11 @@ class KillScene:
         self.base_pitch = math.degrees(math.atan2(dy, math.hypot(dx, dz)))
         self.yaw_off = self.pitch_off = 0.0
         self.hits = self.shots = 0
+        self.nutshot = self.headshot = False
+        self.blood_burst = None
+        self.floor_stains = []
+        self._exit_mesh = None
+        self._drip_at = 0.0
         self.hit_t = self.fire_t = -9.0
         self.kick = self.fade = 0.0
         self.firing = False
@@ -191,8 +225,10 @@ class KillScene:
         self.lines = []
         self._cue = "unset"
         self._muzzle = self.flash_at = None
+        self._flash_basis = None
         self.stop_until = -9.0
         self.blood = []
+        self.cig = None
         self.lb = 0.8
 
     # --- lifecycle -------------------------------------------------------------
@@ -216,6 +252,13 @@ class KillScene:
             hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
             for mode in ("ready", "aim"):
                 R._held(hum, POSES["ready"], "shotgun", mode, ("m7player", mode))
+            _w.hum("vasile")
+            _w.hum("vasile", flags=("cig_dropped",))
+            for w in range(4):
+                _w.hum("vasile", hd=True, wound=w, bloody=w > 0,
+                       flags=("cig_dropped",) if w else ())
+            _w.hum("vasile", hd=True, wound=3, bloody=True, flags=("cig_dropped", "head_wound"))
+            _w.hum("vasile", hd=True, wound=3, bloody=True, flags=("cig_dropped", "groin_wound"))
             S3.renderer()
         except Exception:
             pass
@@ -329,16 +372,56 @@ class KillScene:
             self._snd("bed", "kill_wind")
         if self.phase == "aim" and self.t - self.aim_t - LINE_AT >= _T[-1] + BODI_S:
             self._fire("bodi")
+        keep = []
         for b in self.blood:
-            b[4] *= max(0.0, 1.0 - 1.6 * sdt)
-            b[6] *= max(0.0, 1.0 - 1.6 * sdt)
-            b[5] -= 7.5 * sdt
+            b[4] *= max(0.0, 1.0 - 1.4 * sdt)
+            b[6] *= max(0.0, 1.0 - 1.4 * sdt)
+            b[5] -= 9.2 * sdt
             b[1] += b[4] * sdt
-            b[2] = max(VY + 0.02, b[2] + b[5] * sdt)
+            b[2] += b[5] * sdt
             b[3] += b[6] * sdt
-        self.blood = [b for b in self.blood if self.t - b[0] < 1.1]
+            if b[2] <= VY + 0.012:
+                if (S3.CATWALK_Z - 0.66 <= b[3] <= S3.CATWALK_Z + 0.66
+                        and len(self.floor_stains) < 95):
+                    self.floor_stains.append((b[1], b[3], b[7] * 1.9, b[8]))
+            elif self.t - b[0] < 1.4:
+                keep.append(b)
+        self.blood = keep
+        if self.cig is not None and not self.cig["rest"]:
+            c = self.cig
+            c["vy"] -= 9.8 * sdt
+            c["x"] += c["vx"] * sdt
+            c["y"] += c["vy"] * sdt
+            c["z"] += c["vz"] * sdt
+            c["yaw"] = (c["yaw"] + c["vyaw"] * sdt) % 360.0
+            c["pitch"] += c["vpitch"] * sdt
+            floor_y = VY + 0.012
+            if c["y"] <= floor_y:
+                c["y"] = floor_y
+                if abs(c["vy"]) > 0.45:
+                    c["vy"] = -c["vy"] * 0.25
+                    c["vx"] *= 0.42
+                    c["vz"] *= 0.42
+                    c["vpitch"] *= 0.45
+                    c["vyaw"] *= 0.55
+                else:
+                    c["vy"] = 0.0
+                    c["vx"] *= max(0.0, 1.0 - 10.0 * sdt)
+                    c["vz"] *= max(0.0, 1.0 - 10.0 * sdt)
+                    c["vyaw"] *= max(0.0, 1.0 - 10.0 * sdt)
+                    c["vpitch"] *= max(0.0, 1.0 - 10.0 * sdt)
+                    c["pitch"] += (0.0 - c["pitch"]) * min(1.0, 18.0 * sdt)
+                    if abs(c["vx"]) < 0.02 and abs(c["vz"]) < 0.02 and abs(c["pitch"]) < 1.0:
+                        c["vx"] = c["vz"] = c["vyaw"] = c["vpitch"] = c["pitch"] = 0.0
+                        c["rest"] = True
         if self.phase == "wounded":
             age = self.wound_age()
+            if 0.18 < age < 2.60 and age >= self._drip_at:
+                self._drip_at = age + 0.09
+                dy = 0.56 if self.nutshot else 1.02 if self.headshot else 0.78
+                self.blood.append([self.t, VX - 0.05 + (age * 17 % 1.0 - 0.5) * 0.14,
+                                   VY + dy, VZ - 0.03,
+                                   0.0, -0.4, 0.0, 0.028, BLOOD[1]])
             if age >= DEATH_S:
                 self.phase = "closing"
                 self.closing_t = self.death_t + DEATH_S
@@ -394,8 +477,23 @@ class KillScene:
             return
         self.cut = self.typed()
         self.cut_real = self.real
-        a, b, _radius = self._hit_capsule()
-        hit = tuple((a[i] + b[i]) * 0.5 for i in range(3))
+        d = self.aim_dir()
+        self.nutshot = (
+            by == "biribel"
+            and _capsule_distance(EYE, d, (VX, VY + 0.92, VZ), (VX, VY + 0.95, VZ), 0.13) is not None
+        )
+        self.headshot = (
+            by == "biribel"
+            and not self.nutshot
+            and _capsule_distance(EYE, d, (VX, VY + 1.62, VZ), (VX, VY + 1.82, VZ), 0.16) is not None
+        )
+        if self.nutshot:
+            hit = (VX, VY + 0.94, VZ)
+        elif self.headshot:
+            hit = (VX, VY + 1.76, VZ)
+        else:
+            a, b, _radius = self._hit_capsule()
+            hit = tuple((a[i] + b[i]) * 0.5 for i in range(3))
         self.shots += 1
         if by == "bodi":
             self._snd("guard_shot", 0.0, 14.0)      # a hunting rifle, from below
@@ -406,22 +504,63 @@ class KillScene:
         self.hits += 1
         self.hit_t = self.t
         self.stop_until = self.real + HITSTOP_S
-        self._snd("body_hit", self.hits, False, True, GROUND_AT - 0.1)
-        self._spray(self.aim_dir(), hit)
+        self._snd("body_hit", self.hits, self.headshot, True, GROUND_AT - 0.1)
+        self._spray(d, hit)
+        self.blood_burst = (self.t, (hit[0] - 0.28, hit[1], hit[2]))
+        self._exit_mesh = self._build_exit_splat()
+        self._drip_at = 0.18
+        try:
+            places, _joints, root = _w.hum("vasile").pose_world(
+                dict(PERFORMANCE[0][1]), (VX, VY, VZ), 90.0, rifle_on=False)
+            _, _, head_m, head_org, _, _ = next(pl for pl in places if pl[1] == "head")
+            off = m_apply(head_m, (0.0473, 0.0488, 0.1589))
+            cx, cy, cz = (off[i] + head_org[i] + root[i] for i in range(3))
+        except Exception:
+            cx, cy, cz = VX + 0.16, VY + 1.72, VZ - 0.05
+        self.cig = dict(x=cx, y=cy, z=cz, vx=0.45, vy=0.35, vz=-0.35,
+                        yaw=108.0, pitch=12.0, vyaw=240.0, vpitch=520.0, rest=False)
         self.death_t = self.t
         self.phase = "wounded"
         self._choose("shot" if by == "biribel" else "bodi")
 
     def _spray(self, d, at):
-        # Use the actual capsule contact, including when the body lies along X.
         hx, hy, hz = at
-        rng = random.Random(self.shots * 31)
-        for _ in range(10):
-            speed = rng.uniform(0.7, 1.6)
+        rng = random.Random(self.shots * 31 + (7 if self.headshot else 3 if self.nutshot else 0))
+        # High-velocity 12-gauge exit cone blasting out behind him (-x)
+        for _ in range(38):
+            speed = rng.uniform(2.6, 7.6)
+            self.blood.append([self.t, hx - 0.12, hy, hz,
+                               d[0] * speed + rng.uniform(-0.8, 0.3),
+                               rng.uniform(-0.5, 1.4), d[2] * speed + rng.uniform(-1.3, 1.3),
+                               rng.uniform(0.025, 0.060), rng.choice(BLOOD)])
+        # Front/side splash & dark clots
+        for _ in range(18):
+            speed = rng.uniform(0.9, 2.8)
             self.blood.append([self.t, hx, hy, hz,
-                               d[0] * speed + rng.uniform(-0.2, 0.2),
-                               rng.uniform(0.0, 0.7), d[2] * speed + rng.uniform(-0.3, 0.3),
-                               rng.uniform(0.02, 0.04), rng.choice(BLOOD)])
+                               rng.uniform(-1.2, 1.4), rng.uniform(0.1, 1.3),
+                               rng.uniform(-1.2, 1.2),
+                               rng.uniform(0.022, 0.055), rng.choice(BLOOD)])
+
+    def _build_exit_splat(self):
+        rng = random.Random(901 + (2 if self.headshot else 1 if self.nutshot else 0))
+        m = Mesh()
+        for i in range(28):
+            x = VX - 0.15 - rng.random() ** 0.75 * 2.1
+            z = clamp(VZ + rng.uniform(-0.58, 0.58), S3.CATWALK_Z - 0.62, S3.CATWALK_Z + 0.62)
+            rw, rd = rng.uniform(0.05, 0.22), rng.uniform(0.03, 0.12)
+            col = rng.choice(((64, 7, 10), (96, 12, 16), (48, 5, 8)))
+            m.face([(x - rw, VY + 0.008, z - rd), (x + rw, VY + 0.008, z - rd * 0.7),
+                    (x + rw * 0.8, VY + 0.008, z + rd), (x - rw * 0.7, VY + 0.008, z + rd * 0.8)],
+                   col, 1, True)
+        # Splatters across the back catwalk railing behind him
+        for _ in range(7):
+            x = VX - rng.uniform(0.4, 2.0)
+            y = VY + rng.uniform(0.25, 1.05)
+            z = S3.CATWALK_Z + 0.68
+            r = rng.uniform(0.04, 0.11)
+            m.face([(x - r, y - r, z), (x + r, y - r, z), (x + r, y + r, z), (x - r, y + r, z)],
+                   (72, 8, 12), 2, True)
+        return m
 
     # --- staging --------------------------------------------------------------
 
@@ -453,6 +592,12 @@ class KillScene:
             impulse = _settle(self.t, self.hit_t, 0.4, 9.0, 14.0)
             pose["head_y"] += impulse
             pose["rel"] += impulse * 0.5
+        if self.nutshot and age < GROUND_AT:
+            k = _ease(age / 0.35) * (1.0 - _ease((age - COLLAPSE_AT) / (GROUND_AT - COLLAPSE_AT)))
+            clutch = dict(pose, spine=pose["spine"] + 18.0, head_p=pose["head_p"] + 16.0,
+                          lsh_p=32.0, lsh_r=2.0, lsh_y=35.0, lel=72.0,
+                          rsh_p=32.0, rsh_r=2.0, rsh_y=-35.0, rel=72.0)
+            pose = _mix(pose, clutch, k)
         return pose, dz, yaw, height
 
     def cine(self):
@@ -487,11 +632,15 @@ class KillScene:
         eye, tgt, fov = self.camera()
         r = S3.frame(eye, tgt, fov)
         del _w.LAST[:]
+        self._draw_gore(r, tm)
         self._draw_vasile(r, tm)
+        self._draw_cig(r, tm)
         self._draw_player(r, tm)
-        if self._muzzle is not None and self.t - self.fire_t < 0.07:
-            r.add_sprite(self._muzzle, _fx.glow((255, 214, 150), 0.5, tm, core=(255, 248, 230),
-                                                intensity=1.3, max_px=44), layer=_fx.FX_LAYER)
+        from . import trap3d as T3
+        f_age = self.t - self.fire_t
+        if self._flash_basis is not None and 0.0 <= f_age < T3.FLASH_S:
+            tip, fvec, rx, ry = self._flash_basis
+            T3.handheld_flash(r, tm, tip, fvec, rx, ry, f_age, 93, "shotgun")
         if self.flash_at is not None and self.t - self.flash_at[0] < 0.08:
             r.add_sprite(self.flash_at[1], _fx.glow((255, 220, 170), 0.2, tm, intensity=0.9,
                                                     max_px=16), layer=_fx.FX_LAYER)
@@ -525,6 +674,12 @@ class KillScene:
         if self.death_t is None:
             return "sad" if self.typed() else "stern"
         age = self.wound_age()
+        if self.nutshot:
+            if age < 0.7:
+                return "surprised"
+            if age < 2.8:
+                return "angry"
+            return "neutral" if age >= DEATH_S else "worried"
         if age < 0.8:
             return "surprised"
         if age < 2.8:
@@ -533,11 +688,72 @@ class KillScene:
 
     def _draw_vasile(self, r, tm):
         pose, dz, yaw, _height = self._react()
-        speaking = self.death_t is None and 0 < self.typed() < len(LINE)
+        speaking = (self.death_t is None and 0 < self.typed() < len(LINE)) or (
+            self.nutshot and 0.72 <= self.wound_age() <= 1.35
+        )
         mouth = abs(math.sin(self.t * 10.0)) * 0.25 if speaking else 0.0
+        wound = 0
+        flags = ()
+        if self.death_t is not None:
+            age = self.wound_age()
+            wound = 1 if age < 0.9 else 2 if age < 2.6 else 3
+            flags = ["cig_dropped"]
+            if self.headshot:
+                flags.append("head_wound")
+            elif self.nutshot:
+                flags.append("groin_wound")
+            flags = tuple(flags)
         _w.actor(r, "vasile", pose, (VX, VY, VZ + dz), yaw, tm, seed=71,
                  amp=0.0 if self.death_t is not None else 0.15, rifle_on=False,
-                 expression=self._face(), mouth=mouth, bloody=self.hits > 0)
+                 expression=self._face(), mouth=mouth, hd=True, wound=wound,
+                 bloody=self.hits > 0, flags=flags)
+
+    def _draw_gore(self, r, tm):
+        if self.death_t is None:
+            return
+        age = self.wound_age()
+        if self._exit_mesh is not None:
+            _w.add(r, self._exit_mesh)
+        if self.floor_stains:
+            m = Mesh()
+            for x, z, rad, col in self.floor_stains:
+                m.face([(x - rad, VY + 0.010, z - rad), (x + rad, VY + 0.010, z - rad),
+                        (x + rad, VY + 0.010, z + rad), (x - rad, VY + 0.010, z + rad)],
+                       col, 1, True)
+            _w.add(r, m)
+        if age > 0.25:
+            k1 = clamp((age - 0.25) / 2.4, 0.0, 1.0)
+            r1 = 0.08 + 0.36 * k1
+            _w.add(r, _pool_mesh(VX - 0.06, VZ - 0.03, r1, (54, 5, 9), VY + 0.007, 1.1))
+            _w.add(r, _pool_mesh(VX - 0.06, VZ - 0.03, r1 * 0.68, (92, 10, 15), VY + 0.009, 2.3))
+        if age > 2.85:
+            k2 = clamp((age - 2.85) / 4.2, 0.0, 1.0)
+            r2 = 0.10 + 0.54 * k2
+            px = VX - (0.76 if self.headshot else 0.45)
+            _w.add(r, _pool_mesh(px, VZ - 0.03, r2, (52, 5, 9), VY + 0.007, 3.7))
+            _w.add(r, _pool_mesh(px, VZ - 0.03, r2 * 0.65, (88, 10, 14), VY + 0.009, 4.9))
+        if self.blood_burst is not None:
+            el = self.t - self.blood_burst[0]
+            if el < 0.36:
+                f = 1.0 - el / 0.36
+                r.add_sprite(self.blood_burst[1],
+                             _fx.glow((168, 12, 16), 0.25 + 0.55 * (1.0 - f), tm,
+                                      core=(210, 26, 28), intensity=1.15 * f, max_px=56),
+                             layer=_fx.FX_LAYER)
+
+    def _draw_cig(self, r, tm):
+        c = self.cig
+        if c is None:
+            return
+        m = Mesh()
+        rot = m_mul(rot_y(c["yaw"]), rot_x(c["pitch"]))
+        m.add(_cig_mesh(), rot, (c["x"], c["y"], c["z"]))
+        _w.add(r, m)
+        eb = m_apply(rot, (0.0, 0.0, 0.041))
+        r.add_sprite((c["x"] + eb[0], c["y"] + eb[1], c["z"] + eb[2]),
+                     _fx.glow((255, 118, 38), 0.12, tm, flicker=0.25,
+                              core=(255, 220, 150), intensity=0.65, max_px=10),
+                     layer=_fx.FX_LAYER)
 
     def _draw_player(self, r, tm):
         key = ("biribel", OUTFIT_GUARD)
@@ -552,7 +768,22 @@ class KillScene:
         joints = _w.actor(r, key, pose, (BX, VY, BZ), yaw, tm, seed=93,
                           amp=0.06, rifle_on=True, flags=("shotgun",),
                           expression="stern", mouth=0.0)
-        self._muzzle = joints.get("muzzle") if joints else None
+        rm = joints.get("rifle_m") if joints else None
+        hand = joints.get("rhand") if joints else None
+        if rm is not None and hand is not None:
+            from . import trap3d as T3
+            off = m_apply(rm, T3.BORE_LOCAL["shotgun"])
+            tip = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
+            self._muzzle = tip
+            self._flash_basis = (
+                tip,
+                C._f_unit(m_apply(rm, (0.0, 0.0, 1.0))),
+                C._f_unit(m_apply(rm, (1.0, 0.0, 0.0))),
+                C._f_unit(m_apply(rm, (0.0, 1.0, 0.0))),
+            )
+        else:
+            self._muzzle = joints.get("muzzle") if joints else None
+            self._flash_basis = None
 
     def _text(self, surface, text, y, small=False, alpha=1.0):
         font = font_terminal_small if small else font_terminal
@@ -581,16 +812,32 @@ class KillScene:
         if n <= 0:
             return
         start = LINE.rfind(". ", 0, max(n - 1, 0)) + 2 if n > 1 else 0
+        text = LINE[start:n] + ("-" if self.cut is not None else "")
         a = 1.0
         if self.cut_real is not None:
-            el = self.real - self.cut_real - CAP_HOLD_S
-            if el >= CAP_OUT_S:
-                return
-            a = clamp(1.0 - el / CAP_OUT_S, 0.0, 1.0)
-        text = LINE[start:n] + ("-" if self.cut is not None else "")
-        img = font_terminal.render(text, True, (222, 216, 202))
-        img.set_alpha(int(255 * a))
-        surface.blit(img, (WIDTH // 2 - img.get_width() // 2, HEIGHT - int(HEIGHT * 0.075) - img.get_height() // 2))
+            el = self.real - self.cut_real
+            if self.nutshot:
+                if el >= 3.50:
+                    return
+                if el < 0.75:
+                    a = clamp(1.0 - (el - 0.45) / 0.23, 0.0, 1.0)
+                else:
+                    text = "Coward."
+                    a = min(clamp((el - 0.75) / 0.12, 0.0, 1.0),
+                            clamp(1.0 - (el - 2.85) / 0.65, 0.0, 1.0))
+            else:
+                out = el - CAP_HOLD_S
+                if out >= CAP_OUT_S:
+                    return
+                a = clamp(1.0 - out / CAP_OUT_S, 0.0, 1.0)
+        if a <= 0.0:
+            return
+        # Same speaker tab + caption as the Old Friends film, faded as one layer.
+        from ui import speechbox
+        layer = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+        speechbox.draw_caption(layer, "VASILE", text)
+        layer.set_alpha(int(255 * a))
+        surface.blit(layer, (0, 0))
 
 
 def _ray_segment_capsule(o, d, a, b, rad):

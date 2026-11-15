@@ -231,6 +231,20 @@ SPECS = {
         rim=(190, 168, 132), belt=None, glove=None,
         neck="crew", sleeves="short",
     ),
+    "andrei_m": dict(
+        height=252, bulk=.95, skin=(202, 162, 130),
+        hair=(34, 26, 22), hair_style="mop",
+        stubble=False, moustache=(26, 20, 18), moustache_h=0.022,
+        jaw=.94, brow=2, iris=(44, 30, 22),
+        glasses=(18, 18, 22), glasses_shape="rect",
+        coat=(26, 28, 33), lapel=(18, 20, 24),
+        shirt=(26, 28, 33), tie=None,
+        trousers=(54, 56, 64), shoes=(24, 25, 29),
+        sole=(220, 220, 216), long_coat=False,
+        neck="crew", sleeves="short",
+        satchel=(68, 72, 80), bracelets=((20, 20, 24), (210, 214, 222)),
+        belt=None, glove=None,
+    ),
 }
 
 HEIGHT = {k: v["height"] for k, v in SPECS.items()}
@@ -695,6 +709,22 @@ def _face(
             L(_mix(skin, (40, 20, 25), .55), [(-3, 24), (5, 24)], 1)
         L(_mix(skin, (90, 50, 40), .3), [(-5, 28), (5, 28)], 1)
 
+    if spec.get("moustache"):
+        mc = spec["moustache"]
+        P(
+            mc,
+            [
+                (-11, 18.5 - smile * 1.5),
+                (-5, 15.5),
+                (0, 16.0 + fear * 1.5),
+                (5, 15.5),
+                (11, 18.5 - smile * 2.0),
+                (5, 18.0 + fear * 1.5),
+                (0, 18.2 + fear * 1.5),
+                (-5, 18.0 + fear * 1.5),
+            ],
+        )
+
     if cig and spec.get("cig"):
         L(_mix(skin, (60, 20, 20), .5), [(8, 21), (11, 23)], 2.2)
         L((196, 140, 80), [(10, 22.5), (13.5, 23.6)], 2)
@@ -718,10 +748,23 @@ def _face(
 
     if spec.get("glasses"):
         gc = spec["glasses"]
-        for x in (-13, 13):
-            pen.circ(gc, x, -3, 7, 1)
-            L((205, 214, 208), [(x - 3, -6), (x - 1, -7)], 1)
-        L(gc, [(-6, -4), (6, -4)], 1)
+        if spec.get("glasses_shape") == "rect":
+            for x in (-13, 13):
+                L(
+                    gc,
+                    [
+                        (x - 8, -9), (x + 8, -9),
+                        (x + 8, 3), (x - 8, 3), (x - 8, -9),
+                    ],
+                    1.5,
+                )
+                L((205, 214, 208), [(x - 5, -6), (x - 2, -7)], 1)
+            L(gc, [(-5, -5), (5, -5)], 1.5)
+        else:
+            for x in (-13, 13):
+                pen.circ(gc, x, -3, 7, 1)
+                L((205, 214, 208), [(x - 3, -6), (x - 1, -7)], 1)
+            L(gc, [(-6, -4), (6, -4)], 1)
 
     if spec.get("bandana"):
         bc = spec["bandana"]
@@ -1531,6 +1574,26 @@ def _body(
                     )
 
         _hand(pen, skin, glove, wr[0], wr[1], side)
+
+        if spec.get("bracelets") and side == -1:
+            band, stud = spec["bracelets"]
+            dx_b, dy_b = wr[0] - el[0], wr[1] - el[1]
+            ln_b = math.hypot(dx_b, dy_b) or 1.0
+            px_b, py_b = -dy_b / ln_b, dx_b / ln_b
+            hw_b = 6.8 * bulk
+            for frac in (.76, .84):
+                bt = _lerp_point(el, wr, frac)
+                pen.line(
+                    band,
+                    [
+                        (bt[0] - px_b * hw_b, bt[1] - py_b * hw_b),
+                        (bt[0] + px_b * hw_b, bt[1] + py_b * hw_b),
+                    ],
+                    3.0,
+                )
+            mid = _lerp_point(el, wr, .80)
+            for off in (-3.6, 0.0, 3.6):
+                pen.circ(stud, mid[0] + px_b * off * bulk, mid[1] + py_b * off * bulk, 1.3)
 
     if arms and spec.get("armband") and -1 in arm_poses:
         # Follow the actual animated / reached upper arm.

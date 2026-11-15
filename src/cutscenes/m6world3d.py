@@ -552,6 +552,8 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
     h = _cache["hum"].get(ck)
     if h is None:
         extra = _hd_extra(key, wound, bloody, flags) if hd else {}
+        if "cig_dropped" in flags:
+            extra["cig_dropped"] = True
         if isinstance(key, tuple) and key[0] == "biribel":
             kw = dict(biribel_3d(key[1]))
             kw.update(extra)
@@ -570,28 +572,75 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
                 h._gl_spec_key = repr(sorted(h.spec.items())) + "|lmg"
             elif ("shotgun" in flags or "lmg" in flags) and not hd:
                 from engine3d.rig import shotgun_mesh
-                h._rifle = shotgun_mesh()
+                no_pump = ("nopump" in flags)
+                h._rifle = shotgun_mesh(with_pump=not no_pump)
                 h._weapon = "shotgun"
                 h._muzzle_z = 0.70
                 # GL caches rig VBOs by spec repr; the shotgun needs its own.
-                h._gl_spec_key = repr(sorted(h.spec.items())) + "|shotgun"
+                h._gl_spec_key = (repr(sorted(h.spec.items()))
+                                  + ("|shotgun_nopump" if no_pump else "|shotgun"))
+            elif "ak74" in flags and not hd:
+                # The code-authored AK-74 (tools/ae_build_ak74.py): its own mesh,
+                # its own grip landmarks (engine3d.hold GRIPS["ak74"]).
+                from cutscenes.cast3d import ak74_asset
+                mesh, muzzle = ak74_asset()
+                if mesh is not None:
+                    h._rifle = mesh
+                    h._weapon = "ak74"
+                    h._muzzle_z = muzzle[2]
+                    # GL caches rig VBOs by spec repr; the AK needs its own.
+                    h._gl_spec_key = repr(sorted(h.spec.items())) + "|ak74"
+            elif "os12" in flags and not hd:
+                # The rig's own OS-12 (engine3d.rig.os12_mesh); the same grip
+                # set as the rifle, the muzzle 0.64 m out (as ui/mp3d.py has it).
+                from engine3d.rig import os12_mesh
+                no_mag = ("nomag" in flags)
+                h._rifle = os12_mesh(with_mag=not no_mag)
+                h._weapon = "os12"
+                h._muzzle_z = 0.64
+                # GL caches rig VBOs by spec repr; the OS-12 needs its own.
+                h._gl_spec_key = (repr(sorted(h.spec.items()))
+                                  + ("|os12_nomag" if no_mag else "|os12"))
         elif isinstance(key, tuple) and key[0] == "guard":
+            if "os12" in flags:
+                extra["rifle"] = "os12"
             h = _guard_humanoid(key[1], extra)
+            if "os12" in flags:
+                h._weapon = "os12"
+                h._muzzle_z = 0.64
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|os12"
         elif isinstance(key, tuple) and key[0] == "ally":
-            h = humanoid3d(key[1], rifle="rifle", **extra)
-            mesh, muzzle = _m7rifle_mesh()
-            if mesh is not None:
-                h._rifle = mesh
-                h._weapon = "m7rifle"
-                h._muzzle_z = muzzle[2]
-                h._gl_spec_key = repr(sorted(h.spec.items())) + "|m7rifle"
+            if "os12" in flags:
+                from engine3d.rig import os12_mesh
+                h = humanoid3d(key[1], rifle="os12", **extra)
+                h._rifle = os12_mesh()
+                h._weapon = "os12"
+                h._muzzle_z = 0.64
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|os12"
+            else:
+                h = humanoid3d(key[1], rifle="rifle", **extra)
+                mesh, muzzle = _m7rifle_mesh()
+                if mesh is not None:
+                    h._rifle = mesh
+                    h._weapon = "m7rifle"
+                    h._muzzle_z = muzzle[2]
+                    h._gl_spec_key = repr(sorted(h.spec.items())) + "|m7rifle"
         elif key == "guard":
             from engine3d import Humanoid
-            h = third_person_rifle(Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra)))
+            if "os12" in flags:
+                h = Humanoid(spec3d(_base_guard_spec(), rifle="os12", **extra))
+                h._weapon = "os12"
+                h._muzzle_z = 0.64
+                h._gl_spec_key = repr(sorted(h.spec.items())) + "|os12"
+            else:
+                h = third_person_rifle(Humanoid(spec3d(_base_guard_spec(), rifle="rifle", **extra)))
         elif key == "ucilev":
             h = humanoid3d("ucilev", rifle="sniper", **extra)
+        elif key == "president" and "bare_sleeve" in flags:
+            h = humanoid3d("president", armband=None, **extra)
         elif key == "maru" and "suit" in flags:
-            h = humanoid3d("maru", shirt=(226, 226, 222), tie=(20, 18, 22), **extra)
+            h = humanoid3d("maru", shirt=(226, 226, 222), tie=(20, 18, 22), hoodie=False,
+                           strings=None, straps=None, backpack=None, sole=None, **extra)
         else:
             h = humanoid3d(key, **extra)
         _cache["hum"][ck] = h

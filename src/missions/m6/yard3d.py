@@ -767,6 +767,22 @@ def _guard_flash_mesh(m, d, seed):
     return out
 
 
+def _k9_mag_mesh(x, y, z, yaw, count):
+    """Curved dark-steel K9 magazine(s) with brass top round lying on the snow."""
+    from engine3d import Mesh
+    from engine3d.core import rot_y, box
+    m = Mesh()
+    for i in range(count):
+        ox = (i - 0.5 * (count - 1)) * 0.10
+        m.add(box(0.036, 0.028, 0.14, (36, 40, 48), center=(ox, 0.014, 0.0)))
+        m.add(box(0.036, 0.028, 0.11, (48, 52, 62), center=(ox + 0.014, 0.014, 0.11)))
+        m.add(box(0.042, 0.032, 0.022, (24, 26, 30), center=(ox + 0.02, 0.016, 0.165)))
+        m.add(box(0.020, 0.020, 0.036, (206, 168, 72), center=(ox, 0.020, -0.065)))
+    out = Mesh()
+    out.add(m, rot_y(yaw), (x, y, z))
+    return out
+
+
 class YardScene:
     def __init__(self):
         self._active = False
@@ -1684,15 +1700,9 @@ class YardScene:
                          rifle_on=False, hd=True, shadow=T._shadow_for(z))
                 if g.get("mags") and fall.rest is not None:
                     gx, gz = B._dir(g["yaw"])
-                    mp = (x - gz * 0.45, y + 0.08, z + gx * 0.45)
-                    for i in range(g["mags"]):
-                        _w.add(r, box(0.07, 0.05, 0.2, (40, 44, 50),
-                                      center=(mp[0] + 0.1 * i, mp[1], mp[2])))
-                    pulse = 0.5 + 0.5 * math.sin(self.t * 4.0 + g["slot"])
-                    r.add_sprite((mp[0], mp[1] + 0.12, mp[2]),
-                                 _fx.glow((255, 214, 140), 0.28, tm,
-                                          intensity=0.35 + 0.35 * pulse),
-                                 layer=_fx.FX_LAYER)
+                    mx, mz = x - gz * 0.45, z + gx * 0.45
+                    my = ground_y(mx, mz)
+                    _w.add(r, _k9_mag_mesh(mx, my, mz, g["yaw"] + 25.0, g["mags"]))
                 continue
             # ease between stances (a run cycle is already continuous)
             want = self._guard_pose(g)

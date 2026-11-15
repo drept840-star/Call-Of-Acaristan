@@ -42,6 +42,7 @@ Structure notes:
       ``parse_extra_args`` are pure and import-safe, so they can be exercised
       without a Tk root.
 """
+import importlib.util
 import subprocess
 import sys
 import tkinter as tk
@@ -77,7 +78,9 @@ GROUPS = [
     ("Mission 7", ["m7", "m7-arrival", "m7-chores", "m7-runner", "m7-prep",
                    "m7-raid", "m7-raid-prepped", "m7-raid-w2", "m7-raid-w3",
                    "m7-finale", "m7-choice", "m7-outro"]),
-    ("Mission 8", ["m8", "m8-trap", "m8-gantry", "m8-friends", "m8-kill", "m8-chase"]),
+    ("Mission 8", ["m8", "m8-trap", "m8-gantry", "m8-friends", "m8-kill",
+                   "m8-chase", "m8-heli", "m8-ending", "m8-epilogue",
+                  "m8-credits"]),
     ("Trailer bot", ["trailer-m1", "trailer-m2-killbox", "trailer-m2-evidence",
                      "trailer-m3-breakout", "trailer-m3-comms"]),
     ("Misc", ["slot-select", "audio-parade"]),
@@ -155,6 +158,8 @@ SOURCE_TXT_DESC = (
 SOURCE_DIR_TXT_TARGET = "source-dir-txt"
 SOURCE_DIR_TXT_DESC = "Write a TXT tree of every project file (any type, with sizes)"
 SOURCE_DIR_TXT_OUT = ROOT / "archive" / "TXTs" / "source_dir.txt"
+MAP_WATCH_TARGET = "map-watcher"
+MAP_WATCH_DESC = "Toggle the assets/3D -> docs/ARCHITECTURE_MAP.md watcher (tools/map_assets3d.py)"
 SOURCE_DIR_SKIP_DIRS = frozenset({
     "__pycache__", ".git", ".venv", "venv", "env",
     "build", "dist", ".pytest_cache", ".mypy_cache", "PDFs", "TXTs", "archive",
@@ -395,7 +400,18 @@ def source_dir_action(extra_args=()):
     return f"Directory listing written: {write_source_dir_txt(SOURCE_DIR_TXT_OUT)}"
 
 
+def map_watch_action(extra_args=()):
+    """Dev-panel action: start the assets/3D map watcher, or stop it if running."""
+    spec = importlib.util.spec_from_file_location("map_assets3d", ROOT / "tools" / "map_assets3d.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    on = mod.running()
+    (mod.stop if on else mod.start)()
+    return "Map watcher stopping (was on)" if on else "Map watcher started (was off)"
+
+
 SOURCE_ACTIONS = {
+    MAP_WATCH_TARGET: (MAP_WATCH_DESC, map_watch_action),
     SOURCE_TXT_TARGET: (SOURCE_TXT_DESC, source_txt_action),
     SOURCE_DIR_TXT_TARGET: (SOURCE_DIR_TXT_DESC, source_dir_action),
 }
@@ -777,6 +793,7 @@ class DevPanel(tk.Tk):
         self._add_group("Source", [
             (SOURCE_TXT_TARGET, SOURCE_TXT_DESC),
             (SOURCE_DIR_TXT_TARGET, SOURCE_DIR_TXT_DESC),
+            (MAP_WATCH_TARGET, MAP_WATCH_DESC),
         ])
 
     def _group_heading(self, index, label, shown, total, filtered=False):

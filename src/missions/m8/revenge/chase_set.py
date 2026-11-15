@@ -1,9 +1,9 @@
 """Mission 8 Revenge - the tractor chase set: the back roads from Route 12 to
 the Kim Kim rail crossing, baked once.
 
-The road runs along +z on a gentle curve (``road_x``); the four sections sit
+The road runs along +z on a gentle curve (``road_x``); the five sections sit
 end to end: farm track, hay bales and the ditch, the Route 12 wrecks, the
-crossing.  Moving things (tractor, trailer, Guard cars, gun truck, barrier
+gunship's border approach, the crossing.  Moving things (tractor, trailer, Guard cars, gun truck, barrier
 arm, train) are cached meshes queued per frame through ``put``.
 
 The look is the M7 farm's dawn: its textures, light and sky, patchwork fields,
@@ -14,6 +14,7 @@ The Guard cars are the ``car_m2`` model repainted, the gun truck is the M7
 Axes: x east, y up, z north (the direction of travel).
 """
 import math
+import os
 import random
 
 from engine3d import Mesh, box, quad_xz
@@ -28,9 +29,9 @@ FOG = LOOK["fog"]
 FOG_START, FOG_END = 45.0, 270.0
 SET_Z0 = -520.0    # the set runs this far back down the road: chasers spawn ~350 m behind the eye
 
-SECTIONS = (0.0, 380.0, 960.0, 1540.0)   # farm, ditch, wrecks, crossing start z
+SECTIONS = (0.0, 380.0, 960.0, 1540.0, 2180.0)   # farm, ditch, wrecks, gunship, crossing
 DITCH_Z = 700.0
-CROSSING_Z = 1960.0                      # the rails cross the road here
+CROSSING_Z = 2600.0                      # the rails cross the road here
 BARRIER_Z = CROSSING_Z - 9.0
 END_Z = CROSSING_Z
 ROAD_W = 7.0
@@ -41,17 +42,17 @@ ROADSIDE_SITES = (
     ("farm_gate", 135.0, 1, 16.0), ("orchard", 315.0, -1, 20.0),
     ("hay_yard", 490.0, 1, 19.0), ("pump_house", 830.0, -1, 19.0),
     ("guard_post", 1050.0, 1, 18.0), ("memorial", 1410.0, -1, 19.0),
-    ("freight_depot", 1670.0, 1, 21.0), ("watchtower", 1840.0, -1, 20.0),
+    ("freight_depot", 2310.0, 1, 21.0), ("watchtower", 2480.0, -1, 20.0),
 )
 # Near-road set pieces, one stretch each, so no two minutes of the chase look
 # alike: (name, z0, z1).  The power line skips the woods and the cutting.
 ZONES = (
     ("hamlet", 150.0, 260.0), ("woods", 420.0, 600.0), ("pond", 615.0, 690.0),
     ("kolkhoz", 760.0, 900.0), ("petrol", 1000.0, 1080.0), ("cutting", 1150.0, 1300.0),
-    ("bus_stop", 1340.0, 1460.0), ("siding", 1555.0, 1645.0), ("border_fence", 1700.0, 1900.0),
+    ("bus_stop", 1340.0, 1460.0), ("siding", 2195.0, 2285.0), ("border_fence", 2340.0, 2540.0),
 )
 NO_POLES = ((410.0, 610.0), (1140.0, 1310.0))
-NO_VERGE = ((420.0, 600.0), (1150.0, 1300.0), (1340.0, 1460.0), (1700.0, 1900.0))
+NO_VERGE = ((420.0, 600.0), (1150.0, 1300.0), (1340.0, 1460.0), (2340.0, 2540.0))
 CUT_H = 5.5                              # cutting depth below the fields
 OVERPASS_Z = 1232.0
 TRAIN_LAST_X = 6.5                       # the last car's rear, east of the road
@@ -132,6 +133,21 @@ def ditch_pitch(z):
     return math.degrees(math.atan2(ditch_y(z + 0.8) - ditch_y(z - 0.8), 1.6))
 
 
+def surface_y(x, z):
+    """Ground / road surface height at world ``(x, z)``, matching ``_road``."""
+    y = ditch_y(z)
+    if y <= 0.0:
+        return 0.0
+    d = abs(x - road_x(z))
+    s = ROAD_W / 2.0 + 0.9
+    if d <= s:
+        return y
+    f = ROAD_W / 2.0 + 2.6 + (y + 0.04) * 2.0
+    if d >= f:
+        return 0.0
+    return y * (1.0 - (d - s) / max(0.1, f - s))
+
+
 # --- meshes ------------------------------------------------------------------
 
 
@@ -205,6 +221,62 @@ def trailer():
                       center=(mx + 0.12 * dx, 1.14, mz + 0.12 * dz)))
         m.add(box(0.11, POST_TOP - 1.03, 0.11, steel, center=(mx, (POST_TOP + 1.03) / 2.0, mz)))
         m.add(box(0.15, 0.06, 0.15, dark, center=(mx, POST_TOP - 0.03, mz)))
+        hose = (26, 26, 28)
+        px, py, pz = RIG_PUMP_AT
+        m.add(box(0.38, 0.03, 0.32, (42, 46, 50), center=(px, py + 0.015, pz)))          # mounting plate
+        m.add(box(0.24, 0.14, 0.22, (74, 84, 66), center=(px, py + 0.10, pz)))           # pump housing
+        m.add(box(0.26, 0.03, 0.24, (96, 100, 104), center=(px, py + 0.185, pz)))        # steel flange cap
+        m.add(box(0.07, 0.05, 0.07, (172, 134, 62), center=(px - 0.07, py + 0.19, pz - 0.05)))  # brass valve
+        m.add(box(0.055, 0.045, 1.44, hose, center=(0.05, 1.015, 1.16)))                 # deck line forward
+        m.add(box(0.055, 0.16, 0.055, hose, center=(0.0, 0.92, 1.90)))                   # drop to drawbar
+        m.add(box(0.055, 0.05, 1.65, hose, center=(0.0, 0.845, 2.65)))                   # line to tractor hitch
+    return m
+
+
+TOOLBOX_AT = (0.68, 0.99, 0.28)        # trailer-local bed position, clear of pintle & hay
+TOOLBOX_HINGE = (0.0, 0.185, 0.135)    # lid pivot (rear top edge of base)
+RIG_PUMP_AT = (0.12, 0.99, 0.34)       # trailer-local hydraulic coupling housing
+RIG_PUMP_STRIKE = (0.12, 1.19, 0.34)   # hammer strike & spark point
+
+
+def toolbox_base():
+    """Lower half of the mechanic's toolbox + dark tool interior."""
+    m = _cache.get("toolbox_base")
+    if m is None:
+        m = _cache["toolbox_base"] = Mesh()
+        red = tex("steel", like=(178, 40, 34), tint=True)
+        seam = (84, 20, 18)
+        chrome = (196, 198, 204)
+        m.add(box(0.48, 0.175, 0.26, red, center=(0.0, 0.0875, 0.0)))
+        m.add(box(0.44, 0.015, 0.22, (34, 34, 38), center=(0.0, 0.176, 0.0)))   # dark tray
+        m.add(box(0.28, 0.02, 0.04, (130, 134, 140), center=(-0.03, 0.182, -0.02)))  # spare bar
+        m.add(box(0.50, 0.02, 0.28, seam, center=(0.0, 0.18, 0.0)))
+        for sx in (-0.14, 0.14):
+            m.add(box(0.05, 0.06, 0.02, chrome, center=(sx, 0.18, -0.142)))
+    return m
+
+
+def toolbox_lid():
+    """Hinged toolbox lid, origin on the rear hinge (+z edge)."""
+    m = _cache.get("toolbox_lid")
+    if m is None:
+        m = _cache["toolbox_lid"] = Mesh()
+        red = tex("steel", like=(178, 40, 34), tint=True)
+        chrome = (196, 198, 204)
+        m.add(box(0.49, 0.07, 0.27, red, center=(0.0, 0.04, -0.135)))
+        for sx in (-0.14, 0.14):
+            m.add(box(0.025, 0.04, 0.025, chrome, center=(sx * 0.8, 0.09, -0.135)))
+        m.add(box(0.24, 0.025, 0.025, (34, 34, 36), center=(0.0, 0.115, -0.135)))
+    return m
+
+
+def toolbox():
+    """Combined closed toolbox."""
+    m = _cache.get("toolbox")
+    if m is None:
+        m = _cache["toolbox"] = Mesh()
+        m.add(toolbox_base())
+        m.add(toolbox_lid(), t=TOOLBOX_HINGE)
     return m
 
 
@@ -515,6 +587,626 @@ def put_wheeled(r, key, pos, yaw=0.0, pitch=0.0, odo=0.0, roll=0.0):
         put(r, (key, "wheel", i), lambda w=w: w, _xf(hub, pos, yaw, pitch, roll), yaw, pitch - spin, roll)
 
 
+# --- the Guard gunship -------------------------------------------------------
+HELI_LEN = 12.0
+HELI_RAW_YAW = None   # None = auto-orient tail rotor to -z; or set 0 / 90 / -90 / 180
+# Local overrides (metres, after normalization: +z forward, +y up, skids at y=0).
+# Measured from the GLB fuselage: cabin floor ~0.55, roof ~2.75.  The anchors
+# are actor roots (feet for the standing door gunner, seat top for the pilot).
+HELI_ANCHORS = {
+    "pilot_seat": (0.35, 0.70, 2.45),
+    "gunner_seat": (-0.85, 0.55, 0.80),
+    "chin_gun": (0.0, 0.65, 5.76),
+    "pods": ((-0.95, 0.78, 0.95), (0.95, 0.78, 0.95)),
+    "rocket_pylon": (-1.22, 0.76, 1.15),
+}
+
+
+def _resolve_asset_path(rel_path):
+    if os.path.isfile(rel_path):
+        return rel_path
+    here = os.path.dirname(os.path.abspath(__file__))
+    for up in (".", "..", "../..", "../../.."):
+        cand = os.path.normpath(os.path.join(here, up, rel_path))
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def _load_glb(path):
+    """Load a binary glTF 2.0 (.glb) -> (Mesh, face_node_names)."""
+    import base64
+    import io
+    import json
+    import struct
+    import pygame
+
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    if len(raw) < 20 or raw[:4] != b"glTF":
+        raise ValueError(f"{path}: not a binary GLB")
+
+    off = 12
+    gltf = None
+    bin_buf = b""
+    while off + 8 <= len(raw):
+        clen, ctype = struct.unpack_from("<II", raw, off)
+        off += 8
+        chunk = raw[off:off + clen]
+        off += clen
+        if ctype == 0x4E4F534A:
+            gltf = json.loads(chunk.decode("utf-8").rstrip("\x00 "))
+        elif ctype == 0x004E4942:
+            bin_buf = chunk
+    if gltf is None:
+        raise ValueError(f"{path}: missing JSON chunk")
+
+    buffers = []
+    for b in gltf.get("buffers", []):
+        uri = b.get("uri")
+        if not uri:
+            buffers.append(bin_buf)
+        elif uri.startswith("data:"):
+            buffers.append(base64.b64decode(uri.split(",", 1)[1]))
+        else:
+            with open(os.path.join(os.path.dirname(path), uri), "rb") as bf:
+                buffers.append(bf.read())
+    if not buffers:
+        buffers = [bin_buf]
+
+    comp_info = {
+        5120: ("b", 1, 127.0),
+        5121: ("B", 1, 255.0),
+        5122: ("h", 2, 32767.0),
+        5123: ("H", 2, 65535.0),
+        5125: ("I", 4, 4294967295.0),
+        5126: ("f", 4, 1.0),
+    }
+    type_n = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
+
+    def read_acc(idx):
+        acc = gltf["accessors"][idx]
+        count = int(acc["count"])
+        ncomp = type_n[acc["type"]]
+        if "bufferView" not in acc:
+            return [(0.0,) * ncomp] * count
+        bv = gltf["bufferViews"][acc["bufferView"]]
+        buf = buffers[bv.get("buffer", 0)]
+        base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
+        fmt, csz, div = comp_info[acc["componentType"]]
+        stride = bv.get("byteStride") or (ncomp * csz)
+        norm = bool(acc.get("normalized")) and acc["componentType"] != 5126
+        pack_fmt = "<" + fmt * ncomp
+        out = []
+        for i in range(count):
+            vals = struct.unpack_from(pack_fmt, buf, base + i * stride)
+            if norm:
+                vals = tuple(max(-1.0, v / div) for v in vals)
+            out.append(vals)
+        return out
+
+    def mat_mul(a, b):
+        out = [0.0] * 16
+        for r in range(4):
+            ar0, ar1, ar2, ar3 = a[r * 4:r * 4 + 4]
+            for c in range(4):
+                out[r * 4 + c] = ar0 * b[c] + ar1 * b[4 + c] + ar2 * b[8 + c] + ar3 * b[12 + c]
+        return out
+
+    def node_mat(node):
+        if "matrix" in node:
+            cm = node["matrix"]
+            return [cm[c * 4 + r] for r in range(4) for c in range(4)]
+        tx, ty, tz = node.get("translation", (0.0, 0.0, 0.0))
+        qx, qy, qz, qw = node.get("rotation", (0.0, 0.0, 0.0, 1.0))
+        sx, sy, sz = node.get("scale", (1.0, 1.0, 1.0))
+        xx, yy, zz = qx * qx, qy * qy, qz * qz
+        xy, xz, yz = qx * qy, qx * qz, qy * qz
+        wx, wy, wz = qw * qx, qw * qy, qw * qz
+        return [
+            (1.0 - 2.0 * (yy + zz)) * sx, 2.0 * (xy - wz) * sy, 2.0 * (xz + wy) * sz, tx,
+            2.0 * (xy + wz) * sx, (1.0 - 2.0 * (xx + zz)) * sy, 2.0 * (yz - wx) * sz, ty,
+            2.0 * (xz - wy) * sx, 2.0 * (yz + wx) * sy, (1.0 - 2.0 * (xx + yy)) * sz, tz,
+            0.0, 0.0, 0.0, 1.0,
+        ]
+
+    tex_cache = {}
+
+    def get_tex(tex_idx):
+        if tex_idx in tex_cache:
+            return tex_cache[tex_idx]
+        surf = None
+        try:
+            src_idx = gltf["textures"][tex_idx]["source"]
+            img = gltf["images"][src_idx]
+            ibytes = None
+            if "bufferView" in img:
+                bv = gltf["bufferViews"][img["bufferView"]]
+                buf = buffers[bv.get("buffer", 0)]
+                b0 = bv.get("byteOffset", 0)
+                ibytes = buf[b0:b0 + bv["byteLength"]]
+            elif "uri" in img:
+                uri = img["uri"]
+                if uri.startswith("data:"):
+                    ibytes = base64.b64decode(uri.split(",", 1)[1])
+                else:
+                    with open(os.path.join(os.path.dirname(path), uri), "rb") as f2:
+                        ibytes = f2.read()
+            if ibytes:
+                surf = pygame.image.load(io.BytesIO(ibytes))
+        except Exception:
+            surf = None
+        tex_cache[tex_idx] = surf
+        return surf
+
+    mesh = Mesh()
+    face_nodes = []
+    mats = gltf.get("materials", [])
+
+    def emit_node(node_idx, parent_m, parent_name=""):
+        node = gltf["nodes"][node_idx]
+        cur_m = mat_mul(parent_m, node_mat(node))
+        name = (node.get("name") or parent_name).lower()
+        if "mesh" in node:
+            gmesh = gltf["meshes"][node["mesh"]]
+            mname = (name or gmesh.get("name", "")).lower()
+            for prim in gmesh.get("primitives", []):
+                mode = prim.get("mode", 4)
+                if mode not in (4, 5):
+                    continue
+                attrs = prim["attributes"]
+                if "POSITION" not in attrs:
+                    continue
+                pos = read_acc(attrs["POSITION"])
+                uvs = read_acc(attrs["TEXCOORD_0"]) if "TEXCOORD_0" in attrs else None
+                cols = read_acc(attrs["COLOR_0"]) if "COLOR_0" in attrs else None
+                if "indices" in prim:
+                    idx = [x[0] for x in read_acc(prim["indices"])]
+                else:
+                    idx = list(range(len(pos)))
+
+                tris = []
+                if mode == 4:
+                    for k in range(0, len(idx) - 2, 3):
+                        tris.append((idx[k], idx[k + 1], idx[k + 2]))
+                else:
+                    for k in range(len(idx) - 2):
+                        a, b, c = idx[k], idx[k + 1], idx[k + 2]
+                        tris.append((a, c, b) if k % 2 else (a, b, c))
+
+                mat = mats[prim["material"]] if "material" in prim and prim["material"] < len(mats) else {}
+                pbr = mat.get("pbrMetallicRoughness", {})
+                bcf = pbr.get("baseColorFactor", (1.0, 1.0, 1.0, 1.0))
+                em = mat.get("emissiveFactor", (0.0, 0.0, 0.0))
+                tex = get_tex(pbr["baseColorTexture"]["index"]) if "baseColorTexture" in pbr else None
+                tw, th = tex.get_size() if tex is not None else (0, 0)
+
+                base_v = len(mesh.verts)
+                for x, y, z in pos:
+                    mesh.verts.append((
+                        cur_m[0] * x + cur_m[1] * y + cur_m[2] * z + cur_m[3],
+                        cur_m[4] * x + cur_m[5] * y + cur_m[6] * z + cur_m[7],
+                        cur_m[8] * x + cur_m[9] * y + cur_m[10] * z + cur_m[11],
+                    ))
+
+                srgb_bcf = tuple(max(0.0, min(1.0, c)) ** (1.0 / 2.2) for c in bcf[:3])
+                is_em = max(em) > 0.25
+                for a, b, c in tris:
+                    rgb = [255.0, 255.0, 255.0]
+                    if tex is not None and uvs is not None:
+                        u = (uvs[a][0] + uvs[b][0] + uvs[c][0]) / 3.0
+                        v = (uvs[a][1] + uvs[b][1] + uvs[c][1]) / 3.0
+                        uw = u if 0.0 <= u <= 1.0 else (u % 1.0)
+                        vw = v if 0.0 <= v <= 1.0 else (v % 1.0)
+                        px = min(tw - 1, max(0, int(uw * (tw - 1))))
+                        py = min(th - 1, max(0, int(vw * (th - 1))))
+                        tc = tex.get_at((px, py))
+                        rgb = [tc[0], tc[1], tc[2]]
+                    if cols is not None:
+                        for ch in range(3):
+                            vc = max(0.0, (cols[a][ch] + cols[b][ch] + cols[c][ch]) / 3.0)
+                            rgb[ch] *= vc ** (1.0 / 2.2)
+                    col = tuple(max(0, min(255, int(rgb[ch] * srgb_bcf[ch]))) for ch in range(3))
+                    mesh.faces.append(((base_v + a, base_v + b, base_v + c), col, 2, True, is_em))
+                    face_nodes.append(mname)
+        for ch in node.get("children", []):
+            emit_node(ch, cur_m, name)
+
+    ident = [1.0, 0.0, 0.0, 0.0,
+             0.0, 1.0, 0.0, 0.0,
+             0.0, 0.0, 1.0, 0.0,
+             0.0, 0.0, 0.0, 1.0]
+    scene_idx = gltf.get("scene", 0)
+    roots = gltf.get("scenes", [{"nodes": list(range(len(gltf.get("nodes", []))))}])[scene_idx].get("nodes", [])
+    for rn in roots:
+        emit_node(rn, ident)
+    return mesh, face_nodes
+
+
+def _load_heli_raw():
+    """Try pre-baked ae.mesh/1 first, then load assets/3D/army-helicopter-ipa.glb directly."""
+    try:
+        from game.render3d_bridge import load_mesh_asset
+        verts, faces = load_mesh_asset("army-helicopter-ipa")
+        m = Mesh()
+        m.verts = [tuple(v) for v in verts]
+        for idx, col, grp in faces:
+            m.faces.append((tuple(idx), tuple(col), 2, True, grp in (1, 2)))
+        return m, [""] * len(m.faces)
+    except Exception:
+        pass
+
+    glb_path = _resolve_asset_path(os.path.join("assets", "3D", "army-helicopter-ipa.glb"))
+    if glb_path is not None:
+        return _load_glb(glb_path)
+
+    m = Mesh()
+    m.add(box(2.0, 2.2, 7.0, (44, 48, 46), center=(0, 1.4, 0.5)))
+    m.add(box(0.5, 0.6, 5.0, (44, 48, 46), center=(0, 1.7, -4.5)))
+    m.add(box(6.4, 0.18, 0.8, (44, 48, 46), center=(0, 1.4, 0.6)))
+    m.add(box(9.0, 0.08, 0.3, (28, 28, 30), center=(0, 3.0, 0.4)))
+    m.add(box(0.08, 1.6, 0.25, (28, 28, 30), center=(-0.35, 2.0, -6.8)))
+    return m, [""] * len(m.faces)
+
+
+def _components_welded(m):
+    """Connected face groups welding vertices by position (handles flat-shaded GLBs)."""
+    pos_id = {}
+    v_to_pid = []
+    for x, y, z in m.verts:
+        key = (round(x, 4), round(y, 4), round(z, 4))
+        pid = pos_id.get(key)
+        if pid is None:
+            pid = pos_id[key] = len(pos_id)
+        v_to_pid.append(pid)
+
+    par = list(range(len(pos_id)))
+
+    def root(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+
+    for f in m.faces:
+        idx = f[0]
+        r0 = root(v_to_pid[idx[0]])
+        for j in idx[1:]:
+            rj = root(v_to_pid[j])
+            if r0 != rj:
+                par[rj] = r0
+
+    out = {}
+    for k, f in enumerate(m.faces):
+        out.setdefault(root(v_to_pid[f[0][0]]), []).append(k)
+    return list(out.values())
+
+
+def _bounds(verts):
+    lo = [min(v[a] for v in verts) for a in range(3)]
+    hi = [max(v[a] for v in verts) for a in range(3)]
+    return lo, hi
+
+
+def _submesh(src, face_indices, origin=(0.0, 0.0, 0.0)):
+    out = Mesh()
+    remap = {}
+    for k in face_indices:
+        f = src.faces[k]
+        idx = []
+        for i in f[0]:
+            if i not in remap:
+                remap[i] = len(out.verts)
+                v = src.verts[i]
+                out.verts.append((v[0] - origin[0], v[1] - origin[1], v[2] - origin[2]))
+            idx.append(remap[i])
+        out.faces.append((tuple(idx),) + tuple(f[1:]))
+    return out
+
+
+def helicopter_parts():
+    """Cached (body, main_rotor, tail_rotor, info) for the Guard gunship."""
+    got = _cache.get("heli_parts")
+    if got is not None:
+        return got
+
+    raw, face_nodes = _load_heli_raw()
+    glo, ghi = _bounds(raw.verts)
+    H = max(1e-3, ghi[1] - glo[1])
+
+    comps = []
+    for fl in _components_welded(raw):
+        vs = sorted({i for k in fl for i in raw.faces[k][0]})
+        lo = [min(raw.verts[i][a] for i in vs) for a in range(3)]
+        hi = [max(raw.verts[i][a] for i in vs) for a in range(3)]
+        names = {face_nodes[k] for k in fl if face_nodes[k]}
+        comps.append((fl, vs, lo, hi, names))
+
+    # Main rotor: node-named or top-band flat wide blades/hub/tips
+    main_comp = {
+        ci for ci, c in enumerate(comps)
+        if any("main" in n and ("rotor" in n or "blade" in n) for n in c[4])
+    }
+    if not main_comp:
+        top_blades = [
+            c for c in comps
+            if c[3][1] >= glo[1] + 0.78 * H and (c[3][1] - c[2][1]) < 0.24 * H
+            and max(c[3][0] - c[2][0], c[3][2] - c[2][2]) > 0.35 * H
+        ]
+        y_cut = min((c[2][1] for c in top_blades), default=ghi[1] - 0.14 * H) - 0.02 * H
+        main_comp = {
+            ci for ci, c in enumerate(comps)
+            if c[2][1] >= y_cut and (c[3][1] - c[2][1]) < 0.28 * H
+        }
+
+    body_vs = [i for ci, c in enumerate(comps) if ci not in main_comp for i in c[1]] or list(range(len(raw.verts)))
+    blo, bhi = _bounds([raw.verts[i] for i in body_vs])
+    bx, bz = bhi[0] - blo[0], bhi[2] - blo[2]
+    long_axis = 0 if bx > bz else 2
+    lat_axis = 2 - long_axis
+    mid_long = 0.5 * (blo[long_axis] + bhi[long_axis])
+    span_long = max(bx, bz, 1e-3)
+
+    # Tail rotor: node-named or small vertical disc clustered at far tail end
+    tail_comp = {
+        ci for ci, c in enumerate(comps)
+        if ci not in main_comp and any("tail" in n and ("rotor" in n or "blade" in n or "prop" in n) for n in c[4])
+    }
+    if tail_comp:
+        tc_vals = [0.5 * (comps[ci][2][long_axis] + comps[ci][3][long_axis]) for ci in tail_comp]
+        tail_sign = 1.0 if (sum(tc_vals) / len(tc_vals)) > mid_long else -1.0
+    else:
+        tail_cands = [
+            (ci, c) for ci, c in enumerate(comps)
+            if ci not in main_comp
+            and abs(0.5 * (c[2][long_axis] + c[3][long_axis]) - mid_long) > 0.32 * span_long
+            and c[2][1] > glo[1] + 0.28 * H
+            and (c[3][lat_axis] - c[2][lat_axis]) < 0.16 * span_long
+            and max(c[3][1] - c[2][1], c[3][long_axis] - c[2][long_axis]) < 0.32 * span_long
+        ]
+        if tail_cands:
+            tc = sum(0.5 * (c[2][long_axis] + c[3][long_axis]) for _, c in tail_cands) / len(tail_cands)
+            tail_sign = 1.0 if tc > mid_long else -1.0
+            tx = sum(0.5 * (c[2][0] + c[3][0]) for _, c in tail_cands) / len(tail_cands)
+            ty = sum(0.5 * (c[2][1] + c[3][1]) for _, c in tail_cands) / len(tail_cands)
+            tz = sum(0.5 * (c[2][2] + c[3][2]) for _, c in tail_cands) / len(tail_cands)
+            tail_comp = {
+                ci for ci, c in enumerate(comps)
+                if ci not in main_comp
+                and (c[3][lat_axis] - c[2][lat_axis]) < 0.16 * span_long
+                and math.dist(
+                    (0.5 * (c[2][0] + c[3][0]), 0.5 * (c[2][1] + c[3][1]), 0.5 * (c[2][2] + c[3][2])),
+                    (tx, ty, tz),
+                ) < 0.16 * span_long
+            }
+        else:
+            # Fallback: compare cross-section width of the two outer quarters (tail boom is narrower)
+            neg_w = [v[lat_axis] for i in body_vs for v in (raw.verts[i],) if v[long_axis] < mid_long - 0.22 * span_long]
+            pos_w = [v[lat_axis] for i in body_vs for v in (raw.verts[i],) if v[long_axis] > mid_long + 0.22 * span_long]
+            span_n = (max(neg_w) - min(neg_w)) if neg_w else 0.0
+            span_p = (max(pos_w) - min(pos_w)) if pos_w else 0.0
+            tail_sign = 1.0 if span_p < span_n else -1.0
+
+    # 2. Orient nose -> +z, tail -> -z, skids -> y=0, scale to HELI_LEN
+    if HELI_RAW_YAW is not None:
+        yaw_deg = HELI_RAW_YAW
+    elif long_axis == 2:
+        yaw_deg = 0.0 if tail_sign < 0 else 180.0
+    else:
+        yaw_deg = -90.0 if tail_sign < 0 else 90.0
+
+    rot = rot_y(yaw_deg)
+    raw.verts = [(rot[0] * x + rot[2] * z, y, rot[6] * x + rot[8] * z) for x, y, z in raw.verts]
+
+    body_vs = [i for ci, c in enumerate(comps) if ci not in main_comp for i in c[1]] or list(range(len(raw.verts)))
+    blo, bhi = _bounds([raw.verts[i] for i in body_vs])
+    scale = HELI_LEN / max(bhi[2] - blo[2], 1e-3)
+    cx = 0.5 * (blo[0] + bhi[0])
+    cy = blo[1]
+    cz = 0.5 * (blo[2] + bhi[2])
+    raw.verts = [((x - cx) * scale, (y - cy) * scale, (z - cz) * scale) for x, y, z in raw.verts]
+
+    blo, bhi = _bounds([raw.verts[i] for i in body_vs])
+    W, HH, L = bhi[0] - blo[0], bhi[1] - blo[1], bhi[2] - blo[2]
+
+    main_faces = [k for ci in main_comp for k in comps[ci][0]]
+    tail_faces = [k for ci in tail_comp for k in comps[ci][0]]
+    body_faces = [k for ci, c in enumerate(comps) if ci not in main_comp and ci not in tail_comp for k in c[0]]
+
+    def hub_of(f_idx, fallback):
+        vs = [raw.verts[i] for k in f_idx for i in raw.faces[k][0]]
+        if not vs:
+            return fallback
+        lo, hi = _bounds(vs)
+        return tuple(0.5 * (lo[a] + hi[a]) for a in range(3))
+
+    main_hub = hub_of(main_faces, (0.0, HH * 1.05, L * 0.04))
+    tail_hub = hub_of(tail_faces, (-0.35, HH * 0.72, -L * 0.45))
+
+    body = _submesh(raw, body_faces)
+    main_rotor = _submesh(raw, main_faces, main_hub)
+    tail_rotor = _submesh(raw, tail_faces, tail_hub)
+
+    info = {
+        "main_hub": main_hub,
+        "tail_hub": tail_hub,
+        "pilot_seat": HELI_ANCHORS["pilot_seat"] or (0.35, HH * 0.34, L * 0.22),
+        "gunner_seat": HELI_ANCHORS["gunner_seat"] or (-0.75, HH * 0.28, L * 0.04),
+        "chin_gun": HELI_ANCHORS["chin_gun"] or (0.0, HH * 0.16, L * 0.48),
+        "pods": HELI_ANCHORS["pods"] or ((-W * 0.28, HH * 0.30, L * 0.08), (W * 0.28, HH * 0.30, L * 0.08)),
+        "rocket_pylon": HELI_ANCHORS["rocket_pylon"] or (-W * 0.36, HH * 0.26, L * 0.12),
+        "bounds": (blo, bhi),
+    }
+    got = _cache["heli_parts"] = (body, main_rotor, tail_rotor, info)
+    return got
+
+
+def _rot_rt(yaw, pitch, roll):
+    import numpy as np
+    cy, sy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
+    rt = np.array(((cy, 0.0, -sy),
+                   (-sy * sp, cp, -cy * sp),
+                   (sy * cp, sp, cy * cp)), dtype=np.float32)
+    if roll:
+        cr, sr = math.cos(math.radians(roll)), math.sin(math.radians(roll))
+        rt = np.array(((cr, sr, 0.0), (-sr, cr, 0.0), (0.0, 0.0, 1.0)), dtype=np.float32) @ rt
+    return rt
+
+
+def _put_spun(r, key, mesh, pos, yaw, pitch, roll, spin_y=0.0, spin_x=0.0):
+    """Put a spinning part in its own tilted plane: the rotor turns about the
+    hub, so it must spin before the airframe's yaw/pitch/roll are applied."""
+    if hasattr(r, "add_packed"):
+        rows = _cache.get(("rows", key))
+        if rows is None:
+            rows = _cache[("rows", key)] = r.pack(
+                mesh.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in mesh.faces])
+        if rows is None:
+            return
+        import numpy as np
+        rt = _rot_rt(yaw, pitch, roll).astype(rows.dtype)
+        if spin_y:
+            ca, sa = math.cos(math.radians(spin_y)), math.sin(math.radians(spin_y))
+            sy_m = np.array(((ca, 0.0, -sa), (0.0, 1.0, 0.0), (sa, 0.0, ca)), dtype=rows.dtype)
+            rt = sy_m @ rt
+        if spin_x:
+            cb, sb = math.cos(math.radians(spin_x)), math.sin(math.radians(spin_x))
+            sx_m = np.array(((1.0, 0.0, 0.0), (0.0, cb, -sb), (0.0, sb, cb)), dtype=rows.dtype)
+            rt = sx_m @ rt
+        out = rows.copy()
+        out[:, 0:3] = rows[:, 0:3] @ rt
+        out[:, 0:3] += np.asarray(pos, dtype=rows.dtype)
+        out[:, 6:9] = rows[:, 6:9] @ rt
+        r.add_packed(out)
+        return
+    from cutscenes import m6world3d as _w
+    s = Mesh()
+    verts = []
+    ca, sa = math.cos(math.radians(spin_y)), math.sin(math.radians(spin_y))
+    cb, sb = math.cos(math.radians(spin_x)), math.sin(math.radians(spin_x))
+    for x, y, z in mesh.verts:
+        if spin_y:
+            x, z = x * ca + z * sa, z * ca - x * sa
+        if spin_x:
+            y, z = y * cb + z * sb, z * cb - y * sb
+        verts.append(_xf((x, y, z), pos, yaw, pitch, roll))
+    s.verts = verts
+    s.faces = list(mesh.faces)
+    _w.add(r, s)
+
+
+def put_helicopter(r, pos, yaw, pitch, roll, main_spin, tail_spin, burned=False):
+    body, main_r, tail_r, info = helicopter_parts()
+    tag = "_burnt" if burned else ""
+    if burned and "heli_body_burnt" not in _cache:
+        _cache["heli_body_burnt"] = _charred(body, 0.75)
+        _cache["heli_main_burnt"] = _charred(main_r, 0.75)
+        _cache["heli_tail_burnt"] = _charred(tail_r, 0.75)
+    put(r, "heli_body" + tag, lambda: _cache.get("heli_body_burnt", body) if burned else body,
+        pos, yaw, pitch, roll)
+    if main_r.faces:
+        mh = _xf(info["main_hub"], pos, yaw, pitch, roll)
+        _put_spun(r, "heli_main" + tag, _cache.get("heli_main_burnt", main_r) if burned else main_r,
+                  mh, yaw, pitch, roll, spin_y=main_spin)
+    if tail_r.faces:
+        th = _xf(info["tail_hub"], pos, yaw, pitch, roll)
+        _put_spun(r, "heli_tail" + tag, _cache.get("heli_tail_burnt", tail_r) if burned else tail_r,
+                  th, yaw, pitch, roll, spin_x=tail_spin)
+
+
+ROCKET_LEN = 1.65
+
+
+def _load_rocket_raw():
+    """Try pre-baked ae.mesh/1 first, then load assets/3D/lowpoly-missile-12s-black.glb."""
+    try:
+        from game.render3d_bridge import load_mesh_asset
+        verts, faces = load_mesh_asset("lowpoly-missile-12s-black")
+        m = Mesh()
+        m.verts = [tuple(v) for v in verts]
+        for idx, col, grp in faces:
+            m.faces.append((tuple(idx), tuple(col), 2, True, grp in (1, 2)))
+        return m
+    except Exception:
+        pass
+
+    for folder in ("3D", "3d"):
+        glb_path = _resolve_asset_path(os.path.join("assets", folder, "lowpoly-missile-12s-black.glb"))
+        if glb_path is not None:
+            m, _nodes = _load_glb(glb_path)
+            return m
+    return None
+
+
+def _orient_missile(m):
+    """Orient a loaded missile mesh so nose points +z, tail is -z, centred at
+    (0, 0, 0) and scaled to ROCKET_LEN."""
+    if not m.verts:
+        return m
+    lo, hi = _bounds(m.verts)
+    spans = [hi[a] - lo[a] for a in range(3)]
+    long_ax = max(range(3), key=lambda a: spans[a])
+    span_l = max(spans[long_ax], 1e-4)
+    t0, t1 = [a for a in range(3) if a != long_ax]
+
+    mid_vs = [
+        v for v in m.verts
+        if lo[long_ax] + 0.25 * span_l <= v[long_ax] <= hi[long_ax] - 0.25 * span_l
+    ] or m.verts
+    c0 = 0.5 * (min(v[t0] for v in mid_vs) + max(v[t0] for v in mid_vs))
+    c1 = 0.5 * (min(v[t1] for v in mid_vs) + max(v[t1] for v in mid_vs))
+
+    def rad(v):
+        return math.hypot(v[t0] - c0, v[t1] - c1)
+
+    pos_24 = [v for v in m.verts if v[long_ax] >= hi[long_ax] - 0.24 * span_l]
+    neg_24 = [v for v in m.verts if v[long_ax] <= lo[long_ax] + 0.24 * span_l]
+    pos_12 = [v for v in m.verts if v[long_ax] >= hi[long_ax] - 0.12 * span_l]
+    neg_12 = [v for v in m.verts if v[long_ax] <= lo[long_ax] + 0.12 * span_l]
+
+    # The tail end has wider fins / nozzle; the nose cone tapers toward 0.
+    pos_score = (max((rad(v) for v in pos_24), default=0.0)
+                 + 1.5 * sum(rad(v) for v in pos_12) / max(1, len(pos_12)))
+    neg_score = (max((rad(v) for v in neg_24), default=0.0)
+                 + 1.5 * sum(rad(v) for v in neg_12) / max(1, len(neg_12)))
+    nose_pos = neg_score >= pos_score
+
+    if long_ax == 2:
+        verts = [(x, y, z) if nose_pos else (-x, y, -z) for x, y, z in m.verts]
+    elif long_ax == 0:
+        verts = [(-z, y, x) if nose_pos else (z, y, -x) for x, y, z in m.verts]
+    else:
+        verts = [(x, -z, y) if nose_pos else (x, z, -y) for x, y, z in m.verts]
+
+    lo2, hi2 = _bounds(verts)
+    scale = ROCKET_LEN / max(hi2[2] - lo2[2], 1e-3)
+    cx = 0.5 * (lo2[0] + hi2[0])
+    cy = 0.5 * (lo2[1] + hi2[1])
+    cz = 0.5 * (lo2[2] + hi2[2])
+    m.verts = [((x - cx) * scale, (y - cy) * scale, (z - cz) * scale) for x, y, z in verts]
+    return m
+
+
+def rocket():
+    """Incoming QTE missile (lowpoly-missile-12s-black.glb), local forward +z."""
+    m = _cache.get("rocket")
+    if m is None:
+        loaded = _load_rocket_raw()
+        if loaded is not None and loaded.verts and loaded.faces:
+            m = _cache["rocket"] = _orient_missile(loaded)
+        else:
+            m = _cache["rocket"] = Mesh()
+            body, tip, fin = (62, 70, 58), (190, 46, 36), (34, 36, 38)
+            m.add(box(0.18, 0.18, 1.15, body, center=(0.0, 0.0, 0.0)))
+            m.add(box(0.20, 0.20, 0.22, tip, center=(0.0, 0.0, 0.56)))
+            m.add(box(0.12, 0.12, 0.16, (210, 204, 188), center=(0.0, 0.0, 0.72)))
+            m.add(box(0.46, 0.04, 0.26, fin, center=(0.0, 0.0, -0.45)))
+            m.add(box(0.04, 0.46, 0.26, fin, center=(0.0, 0.0, -0.45)))
+            m.add(box(0.14, 0.14, 0.06, (255, 196, 110), center=(0.0, 0.0, -0.60), emissive=True))
+    return m
+
+
 def gun_truck():
     """The Guard truck (truck_m7) with a pintle gun on the bed, local forward +z."""
     m = _cache.get("gun_truck")
@@ -632,7 +1324,10 @@ def _ground(m, rng):
     z = -100.0
     while z < END_Z + 260.0:
         z1 = z + rng.uniform(55.0, 95.0)
-        section = max(i for i, start in enumerate(SECTIONS) if start <= max(0.0, (z + z1) / 2.0))
+        section = min(
+            len(fields) - 1,
+            max(i for i, start in enumerate(SECTIONS) if start <= max(0.0, (z + z1) / 2.0)),
+        )
         kinds = fields[section]
         lo, hi = _span(z, z1)
         for side in (-1, 1):
@@ -854,7 +1549,6 @@ def _near_crossing(z0, z1):
 
 def _road(m):
     z = SET_Z0
-    step = 4.0
     track = W7._t("dirt", W7.TRACK)
     rut = W7._t("dirt", W7._v(W7.TRACK, -26))
     ditch_track = W7._t("dirt", W7._v(W7.TRACK, -15))
@@ -864,6 +1558,7 @@ def _road(m):
     gravel = tex("ballast", like=(112, 104, 92), tint=True)
     line = (214, 210, 196)
     while z < END_Z + 260.0:
+        step = 1.0 if DITCH_Z - 20.0 <= z < DITCH_Z + 4.0 else 4.0
         z1 = z + step
         a0, a1 = road_x(z), road_x(z1)
         y0, y1 = ditch_y(z) + 0.04, ditch_y(z1) + 0.04
@@ -1098,11 +1793,11 @@ def _church():
 
 def _villages(m, rng):
     cols = ((214, 200, 170), (196, 176, 140), (170, 182, 176), (206, 186, 160), (188, 160, 130))
-    for z, side, d in ((260.0, -1, 135.0), (720.0, 1, 150.0), (1180.0, -1, 125.0), (1650.0, 1, 140.0),
-                       (2140.0, -1, 120.0)):
+    for z, side, d in ((260.0, -1, 135.0), (720.0, 1, 150.0), (1180.0, -1, 125.0), (2290.0, 1, 140.0),
+                       (2780.0, -1, 120.0)):
         cx = road_x(min(z, CROSSING_Z)) + side * d
         # A farm village and a border town, not five copies of the same church.
-        keep = z in (260.0, 1650.0)
+        keep = z in (260.0, 2290.0)
         if keep:
             m.add(_church(), rot_y(90 if side > 0 else -90), (cx + side * 10.0, 0.0, z))
         for i in range(12):

@@ -54,8 +54,10 @@ GATES = {}
 
 
 def enabled():
-    """2.5D top-down on? ``ACA_TD_2D=1`` forces the 2D view."""
-    if os.environ.get("ACA_TD_2D", "") == "1":
+    """2.5D top-down on? ``ACA_TD_2D=1`` or 3D Quality LOW forces the 2D view
+    (about half the frame cost: the low-end PC path)."""
+    from game.render3d_bridge import quality_3d  # lazy: settings bridge
+    if os.environ.get("ACA_TD_2D", "") == "1" or quality_3d() <= 0:
         return False
     if _STATE["ok"] is None:
         try:
@@ -69,6 +71,16 @@ def enabled():
 def disable():
     """Turn 2.5D off for this run (a renderer failed)."""
     _STATE["ok"] = False
+
+
+def buffer_res(cam):
+    """Internal 3D buffer size for ``cam`` at the player's 3D quality tier.
+    View projections are buffer-size independent, so only the render target
+    shrinks; slow PCs win back the readback, composite and upscale cost."""
+    from game.render3d_bridge import render_scale_3d  # lazy: settings bridge
+    s = render_scale_3d()
+    w, h = cam.res
+    return max(160, int(w * s) // 2 * 2), max(112, int(h * s) // 2 * 2)
 
 
 def to3(x, y, h=0.0):
@@ -230,6 +242,16 @@ def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0):
         return
     import numpy as np
     key = (id(mesh), scale)
+    # walls and roof clutter sit still: reuse last frame's placed rows
+    # (add_packed only reads them) instead of re-transforming ~100 a frame
+    placed = cache.get("placed")
+    if placed is None or len(placed) > 2048:
+        placed = cache["placed"] = {}
+    pkey = (key, tuple(pos), yaw, roll, pitch)
+    out = placed.get(pkey)
+    if out is not None:
+        r.add_packed(out)
+        return
     arr = cache.get(key)
     if arr is None:
         verts = [(v[0] * scale, v[1] * scale, v[2] * scale) for v in mesh.verts]
@@ -241,6 +263,7 @@ def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0):
     out = arr.copy()
     out[:, 0:3] = arr[:, 0:3] @ rot.T + np.asarray(pos, dtype=np.float32)
     out[:, 6:9] = arr[:, 6:9] @ rot.T
+    placed[pkey] = out
     r.add_packed(out)
 
 
@@ -386,45 +409,68 @@ def cast_shadows(r, alpha=100, col=SHADOW_COL):
     (``r.actor_log``) throws a hard shadow along ``SHADOW_DIR``. All of them
     go into one layer-1 sprite written without blending, so overlapping
     shadows do not double up; walls (layer 2) still hide it."""
+    import numpy as np
     boxes = getattr(r, "shadow_boxes", None) or ()
-    hulls = _CAST.get(id(boxes))
-    if hulls is None:
+    st = _CAST.get(id(boxes))
+    if st is None:
         _CAST.clear()
-        hulls = _CAST[id(boxes)] = [_sweep(*b) for b in boxes]
-    polys = list(hulls)
-    for p in getattr(r, "actor_log", ()):
-        polys.append(_body_hull(p[0], p[2]))
-    W, H = r.w, r.h
-    scr, anchor = [], None
-    for poly in polys:
-        pts = []
-        for x, z in poly:
-            q = r.project((x, 0.0, z))
-            if q is None:
-                pts = None
-                break
-            pts.append((q[0], q[1]))
-        if pts is None:
-            continue
-        if (max(p[0] for p in pts) < 0 or min(p[0] for p in pts) > W
-                or max(p[1] for p in pts) < 0 or min(p[1] for p in pts) > H):
-            continue
-        if anchor is None:
-            anchor = (poly[0][0], 0.02, poly[0][1])
-        scr.append(pts)
-    if not scr:
+        hulls = [_sweep(*b) for b in boxes]
+        st = _CAST[id(boxes)] = (hulls, [len(h) for h in hulls],
+                                 np.asarray([p for h in hulls for p in h], dtype=np.float64).reshape(-1, 2))
+    hulls, sizes, pts = st
+    actors = getattr(r, "actor_log", ())
+    if actors:
+        body = _CAST.get("body")
+        if body is None:
+            body = _CAST["body"] = np.asarray(_body_hull(0.0, 0.0), dtype=np.float64)
+        at = np.asarray([(p[0], p[2]) for p in actors], dtype=np.float64)
+        pts = np.concatenate([pts, (body[None, :, :] + at[:, None, :]).reshape(-1, 2)])
+        sizes = sizes + [len(body)] * len(actors)
+    if not sizes:
         return
+    # one vectorised pass of SoftwareRenderer.project over every hull corner
+    # (a Python call per corner was ~2 ms a frame)
+    W, H = r.w, r.h
+    cam, rt, up, fw = r.cam, r.right, r.up, r.fwd
+    dx, dy, dz = pts[:, 0] - cam[0], -cam[1], pts[:, 1] - cam[2]
+    cz = dx * fw[0] + dy * fw[1] + dz * fw[2]
+    bad = cz <= r.NEAR
+    cz = np.where(bad, 1.0, cz)
+    sx = W / 2 + (dx * rt[0] + dy * rt[1] + dz * rt[2]) / cz * r.focal
+    sy = H / 2 - (dx * up[0] + dy * up[1] + dz * up[2]) / cz * r.focal
+    starts = np.concatenate(([0], np.cumsum(sizes)[:-1]))
+    keep = ~np.logical_or.reduceat(bad, starts)
+    keep &= ~((np.maximum.reduceat(sx, starts) < 0) | (np.minimum.reduceat(sx, starts) > W)
+              | (np.maximum.reduceat(sy, starts) < 0) | (np.minimum.reduceat(sy, starts) > H))
+    idx = np.nonzero(keep)[0]
+    if not len(idx):
+        return
+    i0 = int(idx[0])
+    a = int(starts[i0])
+    anchor = (float(pts[a, 0]), 0.02, float(pts[a, 1]))
+    xy = np.stack((sx, sy), axis=1)
+    scr = [xy[starts[i]:starts[i] + sizes[i]].tolist() for i in idx]
+    sel = np.concatenate([np.arange(starts[i], starts[i] + sizes[i]) for i in idx])
+    # composite only the shadows' box, not the whole frame
+    x0 = max(0, int(math.floor(sx[sel].min())) - 1)
+    y0 = max(0, int(math.floor(sy[sel].min())) - 1)
+    x1 = min(W, int(math.ceil(sx[sel].max())) + 2)
+    y1 = min(H, int(math.ceil(sy[sel].max())) + 2)
+    if x1 <= x0 or y1 <= y0:
+        return
+    box = pygame.Rect(x0, y0, x1 - x0, y1 - y0)
     layer = _CAST.get(("surf", W, H))
     if layer is None:
         layer = _CAST[("surf", W, H)] = pygame.Surface((W, H), pygame.SRCALPHA)
 
     def draw(s, sx, sy, scale, z):
-        layer.fill((0, 0, 0, 0))
+        layer.fill((0, 0, 0, 0), box)
         c = col + (alpha,)
-        for pts in scr:
-            pygame.draw.polygon(layer, c, pts)
-        s.blit(layer, (0, 0))
-    draw.bounds = (0, 0, W, H)
+        for p in scr:
+            pygame.draw.polygon(layer, c, p)
+        s.blit(layer, box.topleft, box)
+    draw.bounds = (x0, y0, x1 - x0, y1 - y0)
+    draw.strict_occ = True     # always mask: in a tight box an actor is under the 12% stray-pixel cut
     r.add_sprite(anchor, draw, layer=1)
 
 def tac_ring(rad, col, shade=0.52):

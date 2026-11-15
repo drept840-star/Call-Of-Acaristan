@@ -68,7 +68,7 @@ RING_FOE_CALM = (150, 74, 60)
 
 _FULL_H = {"container": CONTAINER_H, "facade": FACADE_H, "block": BLOCK_H}
 _cache = {"walls": None, "packed": {}, "meshes": {}, "motion": {}, "view": None,
-          "cut": {}, "cut_at": None}
+          "cut": {}, "cut_at": None, "cam_blend": 0.0, "cam_at": None}
 
 
 # ── frame ──────────────────────────────────────────────────────────────
@@ -78,11 +78,39 @@ def view():
     return _cache["view"]
 
 
+def _standoff_cam():
+    """Zoom in and lower the pitch for the Volkov standoff, ease back after.
+
+    The 2D sim owns the framing (``m1.update._standoff_update`` pans
+    ``STATE.camera_x/y``); this only changes how the 3D camera looks at it, so
+    the standoff reads at conversational distance instead of chase-cam height.
+    """
+    so = getattr(STATE, "_m1_standoff", None)
+    want = (0.55 if so.get("phase") == "escape" else 1.0) if so else 0.0
+    p = STATE.player
+    at = None if p is None else (p.rect.centerx, p.rect.centery)
+    last, _cache["cam_at"] = _cache["cam_at"], at
+    snap = (at is None or last is None
+            or math.hypot(at[0] - last[0], at[1] - last[1]) > 3 * TILE_SIZE)
+    b = _cache["cam_blend"]
+    if snap:                       # scene entry / teleport: no long ease from stale
+        b = want
+    elif b < want:
+        b = min(want, b + 0.055)
+    elif b > want:
+        b = max(want, b - 0.045)
+    _cache["cam_blend"] = b
+    if b <= 0.001:
+        return CAM
+    return td.Cam(CAM.pitch - 13.0 * b, CAM.dist - 7.5 * b, CAM.fov - 4.0 * b,
+                  CAM.res, CAM.look_h + 0.45 * b)
+
+
 def submit_frame(q, fcx, fcy):
     """Submit one Mission 1 frame in 2.5D. Draw order of the screen passes
     is the 2D painter's (ADR-017)."""
     fx, fy = fcx + WIDTH / 2.0, fcy + HEIGHT / 2.0
-    v = td.View(CAM, fx, fy)
+    v = td.View(_standoff_cam(), fx, fy)
     _cache["view"] = v
     _tick_decals()
     q.submit(_UiPassDraw(lambda s: render_world(s, v), "m1.world3d"), _L.FLOOR, sort_key=0)
@@ -125,7 +153,7 @@ def render_world(surface, v, actors=None, lit=None, film=None):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*CAM.res)
+    r, buf = _w.rend(*td.buffer_res(CAM))
     saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
     tm = _now_ms()
     try:
@@ -154,7 +182,7 @@ def render_world(surface, v, actors=None, lit=None, film=None):
         dyn = _dyn_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm, actors)
         td.cast_shadows(r)
-        r.flush(buf)
+        r.flush(buf, bg=VOID)
     except Exception:
         import traceback
         traceback.print_exc()
@@ -764,6 +792,15 @@ def _lamp_head(key, x2, y2):
     return (x, 1.1, z)
 
 
+def _fire_tiles():
+    """The burning-barrel tiles, row-major; the map is fixed, so scan it once."""
+    hit = _cache.get("fires")
+    if hit is None:
+        hit = _cache["fires"] = [(col, row) for row in range(MAP_H) for col in range(MAP_W)
+                                 if _glyph(col, row) == "F"]
+    return hit
+
+
 def _lamp_lights(r, v, flashes, tm, actors=None):
     """Lamp pools light the baked floor; the lamps nearest the camera focus
     (plus muzzle and fire flashes) are the eight per-frame lights."""
@@ -780,14 +817,12 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
                      {"pos": head, "color": col, "intensity": 0.45, "range": reach}))
         if key.split("_")[0] != "dk":
             r.add_sprite(head, _fx.glow(col, 0.3, tm, intensity=0.9, max_px=18), layer=_fx.FX_LAYER)
-    for row in range(MAP_H):
-        for col in range(MAP_W):
-            if _glyph(col, row) == "F":
-                x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
-                p = (x, 1.05, z)
-                _fire(r, (x, 0.9, z), tm, col * 7 + row, 0.3)
-                flashes.append({"pos": p, "color": (255, 140, 60), "intensity": 0.9, "range": 5.0})
-                pools.append({"pos": p, "range": 3.0, "color": (255, 140, 60), "intensity": 0.9})
+    for col, row in _fire_tiles():
+        x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
+        p = (x, 1.05, z)
+        _fire(r, (x, 0.9, z), tm, col * 7 + row, 0.3)
+        flashes.append({"pos": p, "color": (255, 140, 60), "intensity": 0.9, "range": 5.0})
+        pools.append({"pos": p, "range": 3.0, "color": (255, 140, 60), "intensity": 0.9})
     p = STATE.player
     if p is not None and actors is None:
         # a faint fill on Biribel so he reads on a black street
@@ -887,14 +922,12 @@ def _dyn_lights(flashes, tm):
     barrels."""
     out = _flash_lights(flashes, tm)
     T = TILE_SIZE
-    for row in range(MAP_H):
-        for col in range(MAP_W):
-            if _glyph(col, row) == "F":
-                x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
-                k = _flicker(tm, col * 7 + row)
-                out.append(("pool", (x, 0.0, z), FIRE_ORANGE, 2.6, 0.5 * k))
-                out.append(("glow", (x, 1.05, z), FIRE_ORANGE, 1.0, 0.55 * k))
-                out.append(("reflect", (x, 0.0, z - 0.4), FIRE_ORANGE, 0.5, 0.25 * k))
+    for col, row in _fire_tiles():
+        x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
+        k = _flicker(tm, col * 7 + row)
+        out.append(("pool", (x, 0.0, z), FIRE_ORANGE, 2.6, 0.5 * k))
+        out.append(("glow", (x, 1.05, z), FIRE_ORANGE, 1.0, 0.55 * k))
+        out.append(("reflect", (x, 0.0, z - 0.4), FIRE_ORANGE, 0.5, 0.25 * k))
     return out
 
 
@@ -1080,13 +1113,19 @@ def _draw_walls(r, film=None):
 def _roof_prop(r, col, row, hgt):
     """Rooftop clutter on a full-height wall tile, fixed by the tile: AC
     boxes, vent stacks, tar patches. Hidden with the wall when it is cut."""
-    pick = _d._m1_hash(col * 11 + 3, row * 13 + 5, 9)
-    if pick > 2:
-        return
-    x, _, z = to3(col * TILE_SIZE + TILE_SIZE / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
-    x += (_d._m1_hash(col, row, 5) - 2) * 0.12
-    _put(r, _mesh(("roof", pick), lambda: _roof_mesh(pick)), (x, hgt, z),
-         yaw=90.0 * _d._m1_hash(row, col, 2))
+    roofs = _cache.setdefault("roofs", {})
+    spec = roofs.get((col, row), 0)
+    if spec == 0:
+        pick = _d._m1_hash(col * 11 + 3, row * 13 + 5, 9)
+        spec = None
+        if pick <= 2:
+            x, _, z = to3(col * TILE_SIZE + TILE_SIZE / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
+            x += (_d._m1_hash(col, row, 5) - 2) * 0.12
+            spec = (_mesh(("roof", pick), lambda: _roof_mesh(pick)), x, z, 90.0 * _d._m1_hash(row, col, 2))
+        roofs[(col, row)] = spec
+    if spec is not None:
+        mesh, x, z, yaw = spec
+        _put(r, mesh, (x, hgt, z), yaw=yaw)
 
 
 def _roof_mesh(pick):
@@ -1125,8 +1164,13 @@ def _draw_doors(r, film=None):
             if d is not min(bays, key=lambda b: b.rect.x):
                 continue
             cx, _, cz = to3(d.rect.x + T * 1.5, d.rect.centery)
-            if _cut_level(("door", d.rect.x, d.rect.y), _hides(zone, d.rect.x, d.rect.y, d.rect.x + 3 * T,
-                                                               d.rect.bottom), snap) < 0.5:
+            # Never cut the bay shutter away while Volkov runs through it: the
+            # escape is read from the door lifting and slamming, not a stub.
+            bay_escape = (STATE.volkov_escape_timer > 0
+                          or getattr(STATE, "_m1_standoff", None) is not None)
+            hidden = False if bay_escape else _hides(zone, d.rect.x, d.rect.y,
+                                                     d.rect.x + 3 * T, d.rect.bottom)
+            if _cut_level(("door", d.rect.x, d.rect.y), hidden, snap) < 0.5:
                 _put(r, _mesh(("door_stub", 3), lambda: _stub(3 * s, 0.3)), (cx, 0.0, cz))
                 continue
             key = ("bay", round(p, 2))
@@ -1282,20 +1326,51 @@ def player_hum():
     return td.armed("biribel", rig), rig
 
 
+def _face(h, expr, mouth=0.0):
+    """Set a rig's expression only when it changed (a face rebuild is not free)."""
+    want = (expr, round(mouth, 2) if mouth else 0.0)
+    if getattr(h, "_m1_face", None) != want:
+        h.set_expression(expr, mouth)
+        h._m1_face = want
+
+
 def _draw_cast(r, flashes, tm):
-    from engine3d import blend
+    from engine3d import POSES, blend, mouth_flap, pose_run
+    from cutscenes import m6world3d as _w
     T = TILE_SIZE
+    so = getattr(STATE, "_m1_standoff", None)
+    so_beat = (so["beats"][so["idx"]] if so and so.get("phase") == "talk"
+               and 0 <= so["idx"] < len(so["beats"]) else None)
+    so_typing = bool(so_beat and so.get("shown", 0) < len(so_beat.get("text", "")))
+    vhum = _w.hum("volkov")
     vpos = getattr(STATE, "volkov_pos", None)
     if vpos and not STATE.volkov_escape_timer and not STATE.volkov_escaped:
         p = STATE.player
         ang = (math.atan2(p.rect.centery - vpos[1], p.rect.centerx - vpos[0]) if p
                else math.pi * 0.75)
-        _body(r, td.armed("volkov", "pistol"), vpos[0], vpos[1], ang, "pistol", "ready", "volkov")
+        pose = dict(POSES["stand"])
+        if so:
+            # Backpedalling clerk, hands half up: he is talking his way out.
+            pose.update({"spine": -4, "lsh_p": -38, "rsh_p": -38, "lel": 68,
+                         "rel": 68, "head_p": -4})
+        if so_typing and so_beat["speaker"] == "VOLKOV":
+            _face(vhum, "worried" if so["idx"] >= 2 else "neutral", mouth_flap(tm, 7))
+        else:
+            _face(vhum, "neutral")
+        r.add_sprite(to3(vpos[0], vpos[1], 0.02), td.shadow(0.42), layer=0)
+        r.add_humanoid(vhum, pose, to3(vpos[0], vpos[1]), td.yaw_rad(ang), rifle_on=False)
     if STATE.firefight_triggered and STATE.volkov_escape_timer > 0:
         vp = STATE.volkov_escape_pos
         if vp and not STATE.volkov_escaped:
-            ang = math.atan2(29 * T + 32 - vp[1], 15 * T + 32 - vp[0])
-            _body(r, td.armed("volkov", "pistol"), vp[0], vp[1], ang, "pistol", "ready", "volkov")
+            # A real sprint: the held pistol pose would flatten pose_run's legs.
+            ang = getattr(STATE, "_m1_volkov_angle", math.pi * 0.5)
+            phase, _moving = _motion("volkov", vp[0], vp[1], ang)
+            pose = pose_run(phase, lean=18)
+            if 28.4 * T <= vp[1] <= 29.7 * T:
+                pose = blend(pose, POSES["crouch"], 0.42)   # ducks the shutter
+            _face(vhum, "worried")
+            r.add_sprite(to3(vp[0], vp[1], 0.02), td.shadow(0.42), layer=0)
+            r.add_humanoid(vhum, pose, to3(vp[0], vp[1]), td.yaw_rad(ang), rifle_on=False)
         kp = STATE.commander_escape_pos
         if kp and not STATE.commander_escaped:
             ang = math.atan2(29 * T + 32 - kp[1], 15 * T + 32 - kp[0])
@@ -1335,6 +1410,10 @@ def _draw_cast(r, flashes, tm):
         _draw_dead_player(r)
         return
     hum, rig = player_hum()
+    if so_typing and so_beat["speaker"] == "BIRIBEL":
+        _face(hum, "stern", mouth_flap(tm, 3))
+    else:
+        _face(hum, "neutral")
     melee = _melee_progress()
     mode = "ready" if STATE.is_reloading else "aim"
     _feet(r, p.rect.centerx, p.rect.centery, RING_YOU, rad=0.46)

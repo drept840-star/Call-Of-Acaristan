@@ -3000,3 +3000,360 @@ description: chronological action log per session, consolidated weekly
 | 22:32 | Edited src/cutscenes/m8films.py | modified enumerate() | ~102 |
 | 22:32 | Edited src/cutscenes/m8films.py | modified _photo_card() | ~169 |
 | 22:32 | Edited src/cutscenes/m8films.py | 2→3 lines | ~47 |
+| 23:20 | Edited src/engine3d/rig.py | 3→5 lines | ~79 |
+| 23:20 | Edited src/cutscenes/m6world3d.py | 3→5 lines | ~68 |
+| 23:20 | Edited src/missions/m8/revenge/epilogue3d.py | modified casket_lights() | ~110 |
+| 23:20 | Edited src/cutscenes/m8films.py | 1→2 lines | ~43 |
+| 23:20 | Edited src/cutscenes/m8films.py | inline fix | ~28 |
+| 23:20 | Edited src/cutscenes/m8films.py | modified _funeral_cast() | ~32 |
+| 23:54 | Edited src/cutscenes/m8films.py | inline fix | ~14 |
+| 23:54 | Edited src/cutscenes/m8films.py | modified _studio_lights() | ~458 |
+| 23:55 | Edited src/cutscenes/m8films.py | 2→2 lines | ~34 |
+| 23:55 | Edited src/cutscenes/m8films.py | 2→2 lines | ~22 |
+| 23:55 | Edited src/cutscenes/m8films.py | modified range() | ~29 |
+| 23:58 | Edited src/cutscenes/m6world3d.py | 1→3 lines | ~49 |
+| 23:58 | Edited src/cutscenes/m8films.py | 2→2 lines | ~50 |
+| 23:58 | Edited src/cutscenes/m8films.py | 2→2 lines | ~42 |
+
+## Session: 2026-11-12 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:09 | Edited src/cutscenes/m6world3d.py | 1→2 lines | ~51 |
+| 00:09 | Edited src/missions/m8/revenge/epilogue3d.py | inline fix | ~17 |
+| 00:09 | Edited src/missions/m8/revenge/epilogue3d.py | inline fix | ~27 |
+| 00:09 | Edited src/missions/m8/revenge/epilogue3d.py | expanded (+8 lines) | ~216 |
+| 00:09 | Edited src/cutscenes/m8films.py | 2→2 lines | ~37 |
+| 00:16 | Edited src/missions/m8/revenge/epilogue3d.py | expanded (+8 lines) | ~245 |
+| 00:16 | Edited src/missions/m8/revenge/epilogue3d.py | 1→3 lines | ~53 |
+| 00:16 | Edited src/cutscenes/m8films.py | 1→2 lines | ~31 |
+| 00:16 | Edited src/missions/m8/revenge/epilogue3d.py | modified maru_pose() | ~232 |
+| 00:23 | Edited tools/dev_panel.py | inline fix | ~11 |
+
+## Session: 2026-11-13 02:36
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-13 13:24
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:28 | Created docs/ARCHITECTURE_MAP.md | — | ~7580 |
+| 13:30 | Session end: 1 writes across 1 files (ARCHITECTURE_MAP.md) | 0 reads | ~8121 tok |
+
+## Session: 2026-11-13 13:30
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:30 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~88 |
+| 13:30 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~116 |
+| 13:30 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~39 |
+| 13:41 | Created docs/ARCHITECTURE_MAP.md | — | ~9297 |
+| 13:53 | Session end: 4 writes across 1 files (ARCHITECTURE_MAP.md) | 3 reads | ~18488 tok |
+
+## Session: 2026-11-13 20:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-13 20:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-13 21:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:57 | Created ARCHITECTURE_MAP.md | — | ~7607 |
+| 21:58 | Edited ARCHITECTURE_MAP.md | inline fix | ~13 |
+| 21:58 | Edited ARCHITECTURE_MAP.md | "assets/art/spr_*.png/.jso" → "assets/art/spr_*.png" | ~11 |
+| 21:58 | Edited ARCHITECTURE_MAP.md | inline fix | ~90 |
+| 22:02 | Edited CLAUDE.md | inline fix | ~83 |
+| 22:02 | Edited CLAUDE.md | inline fix | ~29 |
+| 22:02 | Edited AGENTS.md | "cutscenes/figure_kit.SPEC" → "engine.anim" | ~41 |
+| 22:02 | Edited AGENTS.md | 2→3 lines | ~56 |
+<!-- session:MzE0ODg1NDYtYTI1Yy00OTdiLWI3YjItZjEzOTU2ZGM4MWM0 -->
+| 2026-11-13T20:02:15.265Z | Added ARCHITECTURE_MAP.md (call chains, weapon crosswalk, task bundles, gates); CLAUDE.md/AGENTS.md now link it and point figure_kit SPECS to engine/anim/figure_kit.py | ARCHITECTURE_MAP.md,CLAUDE.md,AGENTS.md | verify_map.py ALL OK; LF no BOM |
+| 23:36 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~21 |
+| 23:36 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~71 |
+| 23:36 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~69 |
+| 23:36 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~48 |
+| 23:36 | Edited CLAUDE.md | "ARCHITECTURE_MAP.md" → "docs/ARCHITECTURE_MAP.md" | ~9 |
+| 23:36 | Edited AGENTS.md | "ARCHITECTURE_MAP.md" → "docs/ARCHITECTURE_MAP.md" | ~10 |
+| 23:38 | Created tools/map_assets3d.py | — | ~1394 |
+<!-- session:MzE0ODg1NDYtYTI1Yy00OTdiLWI3YjItZjEzOTU2ZGM4MWM0 -->
+| 2026-11-13T21:39:38.271Z | assets/3D -> ARCHITECTURE_MAP 8.1 auto-sync: tools/map_assets3d.py, .githooks/pre-commit (core.hooksPath), smoke check map_assets3d | tools/map_assets3d.py,.githooks/pre-commit,tools/smoke_test.py | ok |
+| 23:41 | Edited tools/map_assets3d.py | 2→1 lines | ~6 |
+| 13:07 | Session end: 16 writes across 4 files (ARCHITECTURE_MAP.md, CLAUDE.md, AGENTS.md, map_assets3d.py) | 0 reads | ~10138 tok |
+
+## Session: 2026-11-14 13:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-14 14:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-14 15:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:56 | Edited src/missions/m7/raid3d.py | 3→5 lines | ~97 |
+| 15:57 | Edited src/missions/m7/raid3d.py | 2→1 lines | ~17 |
+| 15:57 | Edited src/missions/m7/raid3d.py | 25.0 → 0.0 | ~21 |
+
+## Session: 2026-11-14 17:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:09 | Edited src/missions/m8/revenge/kill3d.py | 3→6 lines | ~89 |
+| 17:49 | Session end: 1 writes across 1 files (kill3d.py) | 1 reads | ~2204 tok |
+
+## Session: 2026-11-14 17:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:58 | Created tools/glb_inspector.py | — | ~14929 |
+| 17:58 | Edited tools/glb_inspector.py | 8→9 lines | ~185 |
+| 17:58 | Edited tools/glb_inspector.py | 2→1 lines | ~18 |
+| 17:59 | Edited tools/glb_inspector.py | 1→4 lines | ~96 |
+| 18:11 | Edited tools/glb_inspector.py | modified make_icon() | ~465 |
+| 18:11 | Edited tools/glb_inspector.py | 2→3 lines | ~40 |
+| 18:11 | Edited tools/glb_inspector.py | 2→4 lines | ~70 |
+| 18:12 | Edited .gitattributes | 1→2 lines | ~7 |
+| 18:16 | Edited tools/glb_inspector.py | modified brief() | ~660 |
+| 18:16 | Edited tools/glb_inspector.py | 2→3 lines | ~70 |
+| 18:16 | Edited tools/glb_inspector.py | added error handling | ~96 |
+| 18:16 | Edited tools/glb_inspector.py | 1→3 lines | ~61 |
+| 18:17 | Edited tools/glb_inspector.py | modified range() | ~778 |
+| 18:17 | Edited tools/glb_inspector.py | 3→3 lines | ~41 |
+| 18:17 | Edited tools/glb_inspector.py | inline fix | ~23 |
+| 18:17 | Edited tools/glb_inspector.py | inline fix | ~19 |
+| 18:17 | Edited tools/glb_inspector.py | inline fix | ~7 |
+| 18:17 | Edited tools/glb_inspector.py | inline fix | ~13 |
+| 18:17 | Edited tools/glb_inspector.py | inline fix | ~23 |
+| 18:17 | Edited tools/glb_inspector.py | inline fix | ~11 |
+| 18:19 | Edited tools/glb_inspector.py | reduced (-8 lines) | ~195 |
+| 18:19 | Edited tools/glb_inspector.py | 3→2 lines | ~51 |
+| 18:35 | Edited tools/glb_inspector.py | removed 8 lines | ~16 |
+| 18:35 | Edited tools/glb_inspector.py | modified _world() | ~597 |
+| 18:35 | Edited tools/glb_inspector.py | added error handling | ~351 |
+| 18:35 | Edited tools/glb_inspector.py | added error handling | ~158 |
+| 18:35 | Edited tools/glb_inspector.py | modified stash() | ~669 |
+| 18:35 | Edited tools/glb_inspector.py | 6→2 lines | ~54 |
+| 18:35 | Edited tools/glb_inspector.py | modified set_clip() | ~375 |
+| 18:36 | Edited tools/glb_inspector.py | modified dialog() | ~787 |
+| 18:36 | Edited tools/glb_inspector.py | modified enumerate() | ~566 |
+| 18:36 | Edited tools/glb_inspector.py | 2→2 lines | ~20 |
+| 18:36 | Edited tools/glb_inspector.py | modified recent_list() | ~418 |
+| 18:36 | Edited tools/glb_inspector.py | "Rows of recent files from" → "Clickable rows of recent " | ~18 |
+| 18:36 | Edited tools/glb_inspector.py | 2→1 lines | ~18 |
+| 18:36 | Edited tools/glb_inspector.py | 2→7 lines | ~94 |
+| 18:36 | Edited tools/glb_inspector.py | 9→10 lines | ~168 |
+| 18:37 | Edited tools/glb_inspector.py | modified draw_anim_bar() | ~449 |
+| 18:37 | Edited tools/glb_inspector.py | inline fix | ~34 |
+| 18:37 | Edited tools/glb_inspector.py | added error handling | ~207 |
+| 18:37 | Edited tools/glb_inspector.py | modified for() | ~82 |
+| 18:37 | Edited tools/glb_inspector.py | 3→5 lines | ~68 |
+| 18:37 | Edited tools/glb_inspector.py | 2→7 lines | ~112 |
+| 18:37 | Edited tools/glb_inspector.py | 2→2 lines | ~19 |
+| 18:37 | Edited tools/glb_inspector.py | modified run() | ~18 |
+| 18:37 | Edited tools/glb_inspector.py | modified get() | ~174 |
+| 18:37 | Edited tools/glb_inspector.py | 5→6 lines | ~129 |
+| 18:37 | Edited tools/glb_inspector.py | 2→4 lines | ~62 |
+| 18:37 | Edited tools/glb_inspector.py | expanded (+6 lines) | ~232 |
+| 18:37 | Edited tools/glb_inspector.py | 2→7 lines | ~104 |
+| 18:52 | Created tools/paste_apply.py | — | ~8417 |
+| 18:52 | Edited tools/paste_apply.py | modified locate() | ~78 |
+| 18:52 | Edited tools/paste_apply.py | removed 6 lines | ~12 |
+| 18:52 | Edited tools/paste_apply.py | inline fix | ~20 |
+| 18:53 | Edited tools/paste_apply.py | modified in() | ~304 |
+| 18:53 | Edited tools/paste_apply.py | 2→1 lines | ~10 |
+| 18:53 | Edited tools/paste_apply.py | 1→2 lines | ~42 |
+| 18:54 | Edited tools/paste_apply.py | inline fix | ~31 |
+| 19:00 | Created tools/paste_apply.py | — | ~11816 |
+| 19:01 | Edited tools/paste_apply.py | 6→9 lines | ~99 |
+| 19:05 | Edited tools/paste_apply.py | 3→3 lines | ~66 |
+| 19:05 | Edited tools/paste_apply.py | 2→5 lines | ~97 |
+| 19:05 | Edited tools/paste_apply.py | modified ghost() | ~72 |
+| 19:05 | Edited tools/paste_apply.py | inline fix | ~13 |
+| 19:05 | Edited tools/paste_apply.py | inline fix | ~18 |
+| 19:09 | Edited tools/paste_apply.py | modified project_of() | ~88 |
+| 19:09 | Edited tools/glb_inspector.py | 1→4 lines | ~105 |
+
+## Session: 2026-11-14 19:12
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-14 19:54
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:55 | Edited src/game/content/strings/en.json | 2→6 lines | ~61 |
+| 19:55 | Edited src/app.py | modified _m8_outro_pending() | ~124 |
+| 19:55 | Edited src/app.py | 5→7 lines | ~75 |
+| 19:55 | Edited src/app.py | modified _m8_outro_pending() | ~78 |
+| 19:55 | Edited src/app.py | modified enter() | ~586 |
+| 20:01 | Edited tools/paste_apply.py | modified under() | ~168 |
+| 20:01 | Edited tools/paste_apply.py | 1→3 lines | ~40 |
+| 20:01 | Edited tools/paste_apply.py | 1→2 lines | ~42 |
+| 20:01 | Edited tools/paste_apply.py | "\d{1,2}[.)]\s+\S" → "\d{1,2}[a-z]?[.)]\s+\S" | ~26 |
+| 20:01 | Edited tools/paste_apply.py | modified bare_end() | ~463 |
+| 20:01 | Edited tools/paste_apply.py | modified match() | ~198 |
+| 20:01 | Edited tools/paste_apply.py | modified diff() | ~245 |
+| 20:01 | Edited tools/paste_apply.py | modified blank_split() | ~168 |
+| 20:01 | Edited tools/paste_apply.py | modified apply_insert() | ~677 |
+| 20:01 | Edited tools/paste_apply.py | 2→4 lines | ~48 |
+| 20:01 | Edited tools/paste_apply.py | 2→4 lines | ~60 |
+| 20:01 | Edited tools/paste_apply.py | modified default_ticks() | ~303 |
+| 20:01 | Edited tools/paste_apply.py | 1→3 lines | ~52 |
+| 20:02 | Edited tools/paste_apply.py | modified startswith() | ~186 |
+| 20:02 | Edited tools/paste_apply.py | inline fix | ~29 |
+| 20:03 | Edited tools/paste_apply.py | inline fix | ~30 |
+| 20:03 | Edited tools/paste_apply.py | modified a() | ~386 |
+| 20:12 | Edited tools/paste_apply.py | 1→3 lines | ~64 |
+| 20:12 | Edited tools/paste_apply.py | added error handling | ~238 |
+| 20:12 | Edited tools/paste_apply.py | modified match() | ~130 |
+| 20:12 | Edited tools/paste_apply.py | 4→4 lines | ~24 |
+| 20:12 | Edited tools/paste_apply.py | inline fix | ~19 |
+| 20:12 | Edited tools/paste_apply.py | modified locate() | ~58 |
+| 20:13 | Edited tools/paste_apply.py | modified a() | ~228 |
+| 20:19 | Edited tools/paste_apply.py | expanded (+6 lines) | ~180 |
+| 20:19 | Edited tools/paste_apply.py | inline fix | ~23 |
+| 20:19 | Edited tools/paste_apply.py | modified command() | ~103 |
+| 20:19 | Edited tools/paste_apply.py | expanded (+8 lines) | ~186 |
+| 20:19 | Edited tools/paste_apply.py | modified command() | ~46 |
+| 20:21 | Edited tools/paste_apply.py | 2→5 lines | ~92 |
+| 20:23 | Edited tools/paste_apply.py | "\n" → "\r\n" | ~9 |
+| 20:23 | Edited tools/paste_apply.py | reduced (-11 lines) | ~38 |
+| 20:23 | Edited tools/paste_apply.py | 2→1 lines | ~8 |
+| 20:24 | Edited tools/paste_apply.py | 1→2 lines | ~58 |
+| 20:26 | Edited tools/paste_apply.py | 1→2 lines | ~42 |
+
+## Session: 2026-11-14 21:44
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:44 | Edited src/core/dev_jumps.py | 1→5 lines | ~91 |
+| 21:44 | Edited tools/dev_panel.py | 1→2 lines | ~30 |
+
+## Session: 2026-11-14 21:52
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-14 22:04
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:06 | Created tools/sync_arch_map.py | — | ~7032 |
+
+## Session: 2026-11-14 22:39
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:40 | Edited src/ui/credits_football.py | 1→2 lines | ~54 |
+
+## Session: 2026-11-14 22:42
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:44 | Edited src/ui/credits_football.py | 13→16 lines | ~251 |
+| 22:49 | Edited src/ui/credits_football.py | 2→4 lines | ~65 |
+
+## Session: 2026-11-14 23:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 23:07 | Edited tools/paste_apply.py | modified and() | ~80 |
+| 23:08 | Edited tools/paste_apply.py | inline fix | ~25 |
+| 23:08 | Edited tools/paste_apply.py | ValueError() → append() | ~37 |
+| 23:08 | Edited tools/paste_apply.py | 2→4 lines | ~70 |
+| 23:08 | Edited tools/paste_apply.py | modified any() | ~48 |
+| 23:08 | Edited tools/paste_apply.py | 1→3 lines | ~92 |
+| 23:08 | Edited tools/paste_apply.py | 1→2 lines | ~37 |
+| 23:08 | Edited tools/paste_apply.py | 1→2 lines | ~56 |
+| 23:09 | Edited tools/paste_apply.py | expanded (+14 lines) | ~300 |
+<!-- session:ZmYxNjgwNmQtYWZkNS00MDQ2LTg4YTAtYmY3ZTIyYzFmNTkw -->
+| 2026-11-14T21:10:56.099Z | credits_football: finished randomization patch by hand (shot lofts kept in local lowered range). paste_apply: @@ count cut skipped when another hunk follows; partial diff apply flags failed hunks as check; pure-deletion no longer false already-applied; exe rebuilt | src/ui/credits_football.py,tools/paste_apply.py,apps/PasteApply.exe | smoke test OK, paste_apply selftest OK |
+<!-- session:ZmYxNjgwNmQtYWZkNS00MDQ2LTg4YTAtYmY3ZTIyYzFmNTkw -->
+| 2026-11-14T21:11:07.825Z | credits_football: finished randomization patch by hand (shot lofts kept in local lowered range). paste_apply: @@ count cut skipped when another hunk follows; partial diff apply flags failed hunks as check; pure-deletion no longer false already-applied; exe rebuilt | src/ui/credits_football.py,tools/paste_apply.py,apps/PasteApply.exe | smoke test OK, paste_apply selftest OK |
+
+## Session: 2026-11-14 00:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-14 01:14
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:15 | Edited src/ui/credits_football.py | 1→3 lines | ~42 |
+| 01:16 | Edited src/ui/credits_football.py | modified in() | ~392 |
+| 01:16 | Edited src/ui/credits_football.py | 1.45 → 0.85 | ~22 |
+| 01:16 | Edited src/ui/credits_football.py | 1.38 → 0.80 | ~22 |
+| 01:16 | Edited src/ui/credits_football.py | 1.32 → 0.78 | ~19 |
+| 01:16 | Edited src/ui/credits_football.py | 2→4 lines | ~96 |
+| 01:17 | Edited src/ui/credits_football.py | 6→11 lines | ~200 |
+| 01:17 | Edited src/ui/credits_football.py | 2→4 lines | ~30 |
+| 01:17 | Edited src/ui/credits_football.py | 4→4 lines | ~64 |
+| 01:17 | Edited src/ui/credits_football.py | inline fix | ~16 |
+| 01:17 | Edited src/ui/credits_football.py | 3→3 lines | ~52 |
+
+## Session: 2026-11-15 13:10
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:16 | Created src/core/frame_pacer.py | — | ~660 |
+| 13:16 | Created tests/unit/test_frame_pacer.py | — | ~453 |
+| 13:16 | Edited src/app.py | 5→5 lines | ~68 |
+| 13:16 | Edited src/app.py | added 1 import(s) | ~26 |
+| 13:20 | Edited tests/unit/test_frame_pacer.py | inline fix | ~26 |
+| 13:22 | Edited src/core/frame_pacer.py | 5→5 lines | ~116 |
+| 13:22 | Edited src/core/frame_pacer.py | inline fix | ~28 |
+| 13:22 | Edited src/core/frame_pacer.py | 2→2 lines | ~28 |
+| 13:22 | Edited tests/unit/test_frame_pacer.py | modified test_never_locks_below_30fps() | ~48 |
+| 13:26 | Edited src/game/topdown3d.py | expanded (+10 lines) | ~136 |
+| 13:26 | Edited src/game/topdown3d.py | 2→3 lines | ~24 |
+| 13:29 | Edited src/game/topdown3d.py | modified draw() | ~794 |
+| 13:30 | Edited src/game/topdown3d.py | 2→3 lines | ~54 |
+<!-- session:ZDM2OGE0MmQtZmNlYy00ZWExLThhZWQtMTM0NDRjYTc5ZDll -->
+| 2026-11-15T11:35:17.691Z | 2.5D stutter: new core/frame_pacer.Pacer replaces clock.tick(60) so every frame runs a whole number of 60 Hz fixed steps (60 or 30 fps, hysteresis). M1 2.5D draw 24.5 -> 19.2 ms: topdown3d.put caches placed rows for static props; cast_shadows projects all hull corners in one numpy pass, caches the actor hull, composites only the shadows' box with strict_occ (tight box otherwise hits the 12% stray-pixel cut and paints shadow over actors). | src/core/frame_pacer.py,src/app.py,src/game/topdown3d.py,tests/unit/test_frame_pacer.py | unit tests, compileall, smoke --fast OK; M1 frames byte-identical to before; m2-m6/walk td3d shots render |
+
+## Session: 2026-11-15 14:19
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 14:29 | Edited src/core/frame_pacer.py | 6→9 lines | ~126 |
+| 14:29 | Edited src/core/frame_pacer.py | 1→2 lines | ~39 |
+| 14:29 | Edited tests/unit/test_frame_pacer.py | modified test_climbs_back_through_occasional_overruns() | ~130 |
+| 14:30 | Edited src/ui/system.py | modified tier() | ~124 |
+| 14:30 | Edited src/ui/system.py | 2→2 lines | ~36 |
+| 14:30 | Edited src/ui/system.py | 1→6 lines | ~125 |
+| 14:30 | Edited src/app.py | 3→4 lines | ~31 |
+| 14:30 | Edited src/app.py | 2→3 lines | ~37 |
+| 14:30 | Edited src/app.py | 3→3 lines | ~29 |
+| 14:30 | Edited src/app.py | modified collidepoint() | ~119 |
+| 14:30 | Edited src/app.py | 2→2 lines | ~30 |
+| 14:30 | Edited src/game/topdown3d.py | modified disable() | ~156 |
+| 14:35 | Edited src/game/topdown3d.py | added 1 import(s) | ~85 |
+| 14:35 | Edited src/ui/mp3d.py | added 1 import(s) | ~72 |
+| 14:35 | Edited src/ui/system.py | "LOW" → "LOW (2D)" | ~17 |
+| 14:35 | Edited src/ui/system.py | "Lower renders the 3D view" → "MEDIUM renders 3D smaller" | ~32 |
+<!-- session:ZmQwYmM0NzItY2FiZi00ODE4LTkxNGItYjA5NDY2YzQ3OTQ3 -->
+| 2026-11-15T12:37:22.213Z | Lag fix: frame pacer climbs back to 60 fps through occasional overruns (DOWN_COST=3); quality_3d pushed live + Graphics-tab 3D Quality stepper; 2.5D top-down buffer scales with tier; LOW forces 2D top-down and 2D arena | src/core/frame_pacer.py,tests/unit/test_frame_pacer.py,src/app.py,src/ui/system.py,src/game/topdown3d.py,src/ui/mp3d.py,src/missions/m1/draw3d.py,src/missions/m2/draw3d.py,src/missions/m3/draw3d.py,src/missions/m4/draw3d.py,src/missions/m5/draw3d.py,src/missions/m6/draw3d.py,src/missions/walk3d.py | pacer unit tests 8/8, compileall OK, smoke test OK |
+
+## Session: 2026-11-15 14:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-15 14:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

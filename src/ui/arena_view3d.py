@@ -287,7 +287,7 @@ class ArenaView3D(ArenaView):
             self._draw_fx3d(r, tm)
             self._lamp_lights(r, view, flashes, tm)
             td.cast_shadows(r)
-            r.flush(buf)
+            r.flush(buf, bg=th["void"])
         finally:
             r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
         _fx.present_crisp(buf, surface)

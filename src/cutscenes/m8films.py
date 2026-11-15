@@ -16,9 +16,10 @@ from core.config import WIDTH, font_terminal_small, font_title
 from core.outfits import OUTFIT_GUARD
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
-from engine3d import POSES, blend, box
-from engine3d.core import m_apply, rot_y
+from engine3d import Mesh, POSES, blend, box
+from engine3d.core import Light, m_apply, m_mul, rot_y, v_add, v_sub
 from engine3d.hold import hold_cached as _hold_cached
+from engine3d.hold import POLES, solve_arm_safe
 from missions.m7 import raid3d as R
 from missions.m8.revenge import chase_set as CS
 from missions.m8.revenge import epilogue3d as E
@@ -106,8 +107,8 @@ def _biri_gun(pose, mode="ready"):
 
 
 def _bodi_gun(pose):
-    hum = _w.hum(BODI)
-    return R._held(hum, pose, R._ally_gun(BODI), "ready", BODI)
+    hum = _w.hum(BODI, flags=("os12",))
+    return R._held(hum, pose, "os12", "ready", ("m8_bodi_os12", "ready"))
 
 
 def _biri(r, pose, pos, yaw, t, gun=True, **kw):
@@ -119,7 +120,7 @@ def _biri(r, pose, pos, yaw, t, gun=True, **kw):
 def _bodi(r, pose, pos, yaw, t, **kw):
     kw.setdefault("expression", "neutral")
     return _w.actor(r, BODI, pose, pos, yaw, t, seed=61, amp=kw.pop("amp", 0.3),
-                    rifle_on=True, **kw)
+                    rifle_on=True, flags=("os12",), **kw)
 
 
 def _vasile(r, pose, yaw, t, pos=VASILE, **kw):
@@ -204,8 +205,8 @@ def meet_walk(surface, t):
     """They walk up the road toward the plaza, toward us; the camera backs off."""
     u = k(t, 0, 4000)
     z0 = TZ + 3.0 + 4.6 * (t / 4000.0)
-    eye = (TX + 1.6, 0.85 + 0.25 * u, z0 + 5.2 + 1.2 * u)
-    tgt = (TX + 1.4, 1.35, z0)
+    eye = (TX + 1.6, 1.36 + 0.14 * u, z0 + 5.2 + 1.2 * u)
+    tgt = (TX + 1.4, 1.22, z0)
     r = _plaza(eye, tgt, 44.0, t)
     _bodi(r, _bodi_gun(_walk(t, 0.85)), (TX + 0.6, 0.0, z0 - 0.4), 2.0, t, mouth=0.0)
     _biri(r, _biri_gun(_walk(t + 400, 0.85)), (TX + 2.2, 0.0, z0 + 0.2), 2.0, t, mouth=0.0,
@@ -306,24 +307,8 @@ def friends_raise(surface, t):
 # show on the plain to the east, climbs down, Bodi has the tractor at the ladder
 # foot, and the last shot lands on the chase's own opening camera.
 
-LX, LZ = S3.LADDER_X, S3.LADDER_Z - 0.38        # on the rungs (trap3d's climb mark)
+LX, LZ = S3.LADDER_X, S3.LADDER_Z - 0.28        # on the rungs (S3.ladder_climb mark)
 TRAC_AT = (11.2, 0.0, 52.2)                     # the tractor at the ladder foot, facing the road
-
-
-def _rung_pose(y, over=0.0):
-    """trap3d's climb pose (hand over hand, one rung per step); ``over`` eases
-    it to standing for the step over the deck lip."""
-    sw = math.sin(y / 0.64 * 2.0 * math.pi)
-    up = dict(POSES["stand"], spine=6, head_p=-18,
-              lsh_p=158 + 14 * sw, lsh_r=10, lel=36 - 22 * sw,
-              rsh_p=158 - 14 * sw, rsh_r=10, rel=36 + 22 * sw,
-              lhip_p=44 + 30 * sw, lkn=70 + 40 * sw, rhip_p=44 - 30 * sw, rkn=70 - 40 * sw,
-              lank=-10, rank=-10)
-    if over <= 0.0:
-        return up
-    step = math.sin(over * math.pi)
-    return blend(dict(up, lhip_p=up["lhip_p"] + 30 * step, lkn=up["lkn"] + 20 * step),
-                 POSES["stand"], over)
 
 
 def _convoy(r, t, x=95.0, n=3):
@@ -344,7 +329,10 @@ def _convoy(r, t, x=95.0, n=3):
 def _body(r, t):
     from missions.m8.revenge import kill3d as K
     _vasile(r, K._full(K._GROUND), 90.0, t, pos=(VASILE[0], CY, VASILE[2] - 0.03),
-            amp=0.0, mouth=0.0, expression="neutral", bloody=True, rifle_on=False)
+            amp=0.0, mouth=0.0, expression="neutral", hd=True, wound=3, bloody=True,
+            rifle_on=False, flags=("cig_dropped",))
+    _w.add(r, K._pool_mesh(VASILE[0] - 0.45, VASILE[2] - 0.03, 0.62, (52, 5, 9), CY + 0.007, 3.7))
+    _w.add(r, K._pool_mesh(VASILE[0] - 0.06, VASILE[2] - 0.03, 0.42, (54, 5, 9), CY + 0.007, 1.1))
 
 
 def _rig(tractor):
@@ -382,23 +370,25 @@ def descent_body(surface, t):
 
 def descent_ladder(surface, t):
     """Wide from the road below: down the ladder, back to us."""
-    u = k(t, 0, 5200)
-    eye = mix((14.2, 1.1, 45.2), (13.0, 1.3, 46.6), u)
-    down = k(t, 900, 3900)
-    y = S3.CATWALK_Y * (1.0 - down)
-    tgt = mix((LX, CY + 0.6, LZ), (LX, max(1.2, y + 0.6), LZ), k(t, 600, 4200))
-    r = _plaza(eye, tgt, 50.0, t)
-    _body(r, t)
-    if t < 900:          # back over the lip, onto the top rung
-        over = 1.0 - k(t, 0, 900)
-        z = LZ + (CZ - 0.15 - LZ) * over
-        _biri(r, _rung_pose(CY, over), (LX, CY, z), 0.0, t, gun=False, mouth=0.0, amp=0.0)
-    elif t < 4800:
-        _biri(r, _rung_pose(y), (LX, y, LZ), 0.0, t, gun=False, mouth=0.0, amp=0.0)
+    u_cam = k(t, 0, 5200)
+    eye = mix((14.2, 1.1, 45.2), (13.0, 1.3, 46.6), u_cam)
+    hum = _w.hum(BIRI)
+    if t < 900:          # back over the lip onto the top rungs
+        u = 1.0 - (1.0 - S3.LADDER_CLIMB_UP) * k(t, 0, 900)
+        pose, pos, yaw, _r = S3.ladder_climb(hum, u)
+    elif t < 4800:       # rung by rung down to the ground
+        u = S3.LADDER_CLIMB_UP * (1.0 - k(t, 900, 3900))
+        pose, pos, yaw, _r = S3.ladder_climb(hum, u)
     else:                # off the bottom rung, turning for the tractor
         off = k(t, 4800, 400)
-        _biri(r, blend(_rung_pose(0.0), POSES["stand"], off), (LX, 0.0, LZ - 0.3 * off),
-              90.0 * off, t, gun=False, mouth=0.0, amp=0.0)
+        pose0, pos0, _y, _r = S3.ladder_climb(hum, 0.0)
+        pose = blend(pose0, POSES["stand"], off)
+        pos = (pos0[0], 0.0, pos0[2] - 0.3 * off)
+        yaw = 90.0 * off
+    tgt = mix((LX, CY + 0.6, LZ), (LX, max(1.2, pos[1] + 0.6), LZ), k(t, 600, 4200))
+    r = _plaza(eye, tgt, 50.0, t)
+    _body(r, t)
+    _biri(r, pose, pos, yaw, t, gun=False, mouth=0.0, amp=0.0)
     _finish(surface, r, t, 31)
 
 
@@ -464,16 +454,24 @@ FX, FZ = E.FUNERAL
 
 def _crossing_cast(r, t, train, bodi=True):
     CS.put(r, "train", CS.train, (train, 0.0, XZ), 0.0)
-    CS.put(r, "tractor", CS.tractor, (RX, 0.0, XZ - 0.3), CS.road_yaw(XZ))
+    CS.put_wheeled(r, "tractor_dark" if bodi else "tractor",
+                   (RX, 0.0, XZ - 0.3), CS.road_yaw(XZ))
     CS.put(r, "barrier_arm", CS.barrier_arm, (RX - 3.0, 0.05, CS.BARRIER_Z + 3.0), 210.0)
     if bodi:
         _w.actor(r, BODI, dict(E._SEATED, spine=22, head_p=30), (RX, 0.62, XZ - 1.05),
                  CS.road_yaw(XZ), int(t), seed=61, amp=0.0, mouth=0.0)
+        sec = t / 1000.0
+        for i in range(4):
+            a = (sec * 0.35 + i * 0.25) % 1.0
+            r.add_sprite((RX + 0.3 * a, 2.2 + 2.6 * a, XZ + 0.6 + 0.8 * a),
+                         _fx.glow((56, 54, 56), 0.5 + a * 1.2, int(t),
+                                  intensity=0.5 * (1.0 - a)),
+                         layer=_fx.FX_LAYER)
 
 
 def epi_radio(surface, t):
     """The last car's rear step, under way: Alex on the radio."""
-    x = E.train_x(t / 1000.0)
+    x = E.train_x(t / 1000.0, 50.0, 7.0)
     sway = math.sin(t * 0.0021) * 0.05
     eye = (x - 5.0 + 0.6 * k(t, 0, 5000), 2.55 + sway, XZ - 2.3)
     r = _road(eye, (x - 0.3, 2.45, XZ), 42.0, t)
@@ -485,22 +483,36 @@ def epi_radio(surface, t):
 
 
 def _studio_lights():
-    return [{"pos": (SX - 2.4, 4.0, SZ - 2.0), "color": (255, 240, 220), "intensity": 1.1, "range": 9.0},
-            {"pos": (SX + 2.4, 4.0, SZ - 2.0), "color": (220, 230, 255), "intensity": 0.9, "range": 9.0}]
+    return [
+        {"pos": (SX - 1.6, 2.7, SZ - 2.0), "color": (255, 228, 192), "intensity": 0.95, "range": 8.0},  # warm key
+        {"pos": (SX + 2.4, 2.2, SZ - 2.4), "color": (130, 165, 225), "intensity": 0.28, "range": 8.0},  # cool fill
+        {"pos": (SX + 0.4, 2.6, SZ + 2.5), "color": (110, 165, 255), "intensity": 0.70, "range": 6.5},  # rim
+    ]
+
+
+def _studio(eye, tgt, fov, t):
+    """Indoor studio frame: night skybox (no outdoor dawn sun/clouds), low indoor
+    ambient and no short-range distance fog washing out the back wall."""
+    r = _road(eye, tgt, fov, t, look="night", lights=_studio_lights())
+    r.light = Light(direction=(0.45, 0.55, -0.70), ambient=0.18, diffuse=0.40,
+                    sky=0.04, tint=(0.94, 0.96, 1.0))
+    r.fog_start, r.fog_end = 80.0, 400.0
+    return r
 
 
 def epi_president(surface, t):
-    """State TV: the President at the desk, a slow push on the broadcast."""
+    """State TV: the President seated at the desk, a slow push on the broadcast."""
     d = k(t, 0, 5000)
-    eye = (SX + 0.15 * d, 1.8, SZ - 5.6 + 0.8 * d)
-    r = _road(eye, (SX, 1.62, SZ + 1.4), 34.0, t, lights=_studio_lights())
+    eye = (SX + 0.12 * d, 1.56, SZ - 4.8 + 0.7 * d)
+    r = _studio(eye, (SX, 1.46, SZ + 1.4), 42.0, t)
     CS.put(r, "studio", E.studio, (0.0, 0.0, 0.0))
     beat = k(t, 1600, 500) * (1.0 - k(t, 2800, 600))
-    pose = dict(POSES["stand"], lsh_p=30 + 10 * beat, lel=36 + 14 * beat, rsh_p=30, rel=36,
-                head_p=-2)
-    _w.actor(r, "president", pose, (SX, 0.0, SZ + 1.4), 180.0, int(t), seed=12, amp=0.25,
-             mouth=_talk(t, 200, 3400), expression="stern")
-    _finish(surface, r, t, 21, tint=(222, 228, 240))
+    upper = dict(lsh_p=52 + 8 * beat, lsh_r=4, lsh_y=24, lel=58 + 10 * beat,
+                 rsh_p=52, rsh_r=4, rsh_y=-24, rel=58, spine=6, head_p=-2)
+    pose = _w.sit_pose(_w.hum("president"), 0.46, upper)
+    _w.actor(r, "president", pose, (SX, 0.0, SZ + 1.38), 180.0, int(t), seed=12, amp=0.18,
+             mouth=_talk(t, 200, 3400), expression="stern", flags=("bare_sleeve",))
+    _finish(surface, r, t, 21)
     _tv(surface, t, "STATE ADDRESS")
 
 
@@ -519,55 +531,99 @@ MARU_Y = 1.24   # root height: back rests on the satin lining (top ~1.475)
 
 def _funeral_cast(r, t):
     CS.put(r, "funeral", E.funeral, (0.0, 0.0, 0.0))
-    _w.actor(r, "maru", E.LYING, (FX - 0.04, MARU_Y, FZ), 90.0, int(t), seed=5, amp=0.0, mouth=0.0,
-             expression="closed", flags=("suit",))
+    pos = (FX - 0.02, 1.24, FZ)
+    _w.actor(r, "maru", E.maru_pose(pos, 90.0), pos, 90.0, int(t), seed=5,
+             amp=0.0, mouth=0.0, expression="closed", flags=("suit",))
+    honour_pose = _hold_cached(_w.hum(("guard", "officer"), flags=("os12",)),
+                               dict(POSES["stand"], head_p=4),
+                               "os12", "ready", key="guard_honour_ready")
     for i, (dx, dz, yaw) in enumerate(E.HONOUR):
-        pose = _hold_cached(_w.hum(("guard", "officer")), dict(POSES["stand"], head_p=4),
-                            "rifle", "port", key="guard_honour")
-        _w.actor(r, ("guard", "officer"), pose, (FX + dx, 0.30, FZ + dz), yaw,
-                 int(t), seed=40 + i, amp=0.06, mouth=0.0, rifle_on=True)
+        _w.actor(r, ("guard", "officer"), honour_pose, (FX + dx, 0.30, FZ + dz), yaw,
+                 int(t), seed=40 + i, amp=0.05, mouth=0.0, rifle_on=True, flags=("os12",))
     E.lamp_glows(r, t)
 
 
 def epi_casket(surface, t):
-    """Maru in the open casket, the guard of honour still."""
+    """Maru in the open casket: high 3/4 angle looking down at his face and folded hands."""
     d = k(t, 0, 5200)
-    eye = (FX - 1.6 + 0.6 * d, 2.5 - 0.2 * d, FZ - 4.4 + 0.6 * d)
-    r = _road(eye, (FX + 0.1, 1.35, FZ + 0.3), 44.0, t, look="night", lights=E.casket_lights())
+    eye = mix((FX + 0.22, 3.12, FZ - 2.24), (FX - 0.14, 2.84, FZ - 1.92), d)
+    r = _road(eye, (FX - 0.28, 1.34, FZ), 46.0, t, look="night", lights=E.estate_lights())
     _funeral_cast(r, t)
     _finish(surface, r, t, 23)
 
 
 def epi_commander(surface, t):
     """State TV again: the new Commander of the Presidential Guard."""
+    from engine3d.rig import solve_look
+
     d = k(t, 0, 5000)
-    eye = (SX + 0.60 - 0.15 * d, 1.76, SZ - 5.4 + 0.6 * d)
-    r = _road(eye, (SX + 0.60, 1.42, SZ + 1.45), 38.0, t, lights=_studio_lights())
-    CS.put(r, "studio", E.studio, (0.0, 0.0, 0.0))
+    eye = (SX - 0.08 + 0.10 * d, 1.66 - 0.04 * d, SZ - 4.55 + 0.75 * d)
+    tgt = (SX - 0.02, 1.46, SZ + 1.48)
+    r = _studio(eye, tgt, 40.0 - 3.0 * d, t)
+    CS.put(r, "studio_stand", lambda: E.studio(False), (0.0, 0.0, 0.0))
 
-    p_pos, p_yaw = (SX + 0.22, 0.0, SZ + 1.48), 110.0
-    u_pos, u_yaw = (SX + 0.98, 0.0, SZ + 1.48), 250.0
-    p_base = dict(POSES["stand"], head_p=-2, head_y=-10)
-    u_base = dict(POSES["stand"], head_p=-2, head_y=10)
+    p_pos, p_yaw = (SX - 0.50, 0.08, SZ + 1.52), 120.0
+    u_pos, u_yaw = (SX + 0.50, 0.08, SZ + 1.44), 236.0
 
-    shake = k(t, 1200, 700) * (1.0 - k(t, 3900, 800))
-    pump = math.sin((t - 1900) * 0.011) * 0.025 * k(t, 1900, 250) * (1.0 - k(t, 3400, 450))
-    clasp = (SX + 0.54, 1.15 + pump, SZ + 1.42)
+    engage = k(t, 200, 700) * (1.0 - k(t, 3150, 900))
+    reach_u = k(t, 350, 850)
+    rel_u = k(t, 3000, 850)
+    hand_on = reach_u * (1.0 - rel_u)
 
-    if shake > 0.0:
-        p_clasp = _w.reach(_w.hum("president"), p_base, "r", clasp, p_pos, p_yaw)
-        u_clasp = _w.reach(_w.hum("ucilev"), u_base, "r", clasp, u_pos, u_yaw)
-        p_pose = blend(p_base, p_clasp, shake)
-        u_pose = blend(u_base, u_clasp, shake)
+    u_pump = max(0.0, min(1.0, (t - 1360.0) / 1500.0))
+    pump_env = math.sin(math.pi * u_pump) ** 0.7 if 0.0 < u_pump < 1.0 else 0.0
+    settle = -0.012 * k(t, 1200, 160) * (1.0 - k(t, 2800, 200))
+    pump_y = settle + 0.036 * pump_env * math.sin(4.0 * math.pi * u_pump)
+    nod = math.sin(math.pi * max(0.0, min(1.0, (t - 1450.0) / 900.0))) * 4.0
+
+    p_hum = _w.hum("president", flags=("bare_sleeve",))
+    u_hum = _w.hum("ucilev")
+
+    p_base = dict(POSES["stand"], spine=3.0 + 5.0 * engage, twist=-20.0 * engage,
+                  lsh_p=10.0, lsh_r=6.0, lel=18.0)
+    u_base = dict(POSES["stand"], spine=3.0 + 7.0 * engage, twist=18.0 * engage,
+                  lsh_p=6.0, lsh_r=5.0, lel=12.0)
+
+    # Solve breathing before arm IK and pass amp=0.0 so clasped hands stay locked.
+    p_live = _w.life_pose(p_base, int(t), 0.10, 12)
+    u_live = _w.life_pose(u_base, int(t), 0.08, 34)
+
+    _, pj0, _ = p_hum.pose_world(p_live, p_pos, p_yaw, rifle_on=False)
+    _, uj0, _ = u_hum.pose_world(u_live, u_pos, u_yaw, rifle_on=False)
+    cam_look = (eye[0], 1.62, eye[2])
+    p_gaze = mix(cam_look, uj0["head"], engage)
+    u_gaze = mix(cam_look, pj0["head"], engage)
+    phy, php = solve_look(pj0["head"], p_gaze, p_yaw + p_live["twist"])
+    uhy, uhp = solve_look(uj0["head"], u_gaze, u_yaw + u_live["twist"])
+    p_live["head_y"], p_live["head_p"] = phy, php - p_live["spine"] + nod
+    u_live["head_y"], u_live["head_p"] = uhy, uhp - u_live["spine"] + nod * 1.2
+
+    if hand_on > 0.0:
+        _, pj, _ = p_hum.pose_world(p_live, p_pos, p_yaw, rifle_on=False)
+        _, uj, _ = u_hum.pose_world(u_live, u_pos, u_yaw, rifle_on=False)
+        clasp = (SX - 0.01, 1.42 + pump_y, SZ + 1.42)
+        p_clasp_pt = (clasp[0] - 0.018, clasp[1] - 0.004, clasp[2] - 0.024)
+        u_clasp_pt = (clasp[0] + 0.018, clasp[1] + 0.004, clasp[2] + 0.024)
+        arc = math.sin(math.pi * hand_on)
+        p_tgt = tuple(mix(pj["rhand"], p_clasp_pt, hand_on)[i] + (0.06, 0.02, -0.09)[i] * arc
+                      for i in range(3))
+        u_tgt = tuple(mix(uj["rhand"], u_clasp_pt, hand_on)[i] + (-0.06, 0.02, 0.05)[i] * arc
+                      for i in range(3))
+        shake_poles = ((0.70, -0.95, -0.45),) + POLES
+        p_ik = solve_arm_safe(p_hum, p_live, p_pos, p_yaw, "r", p_tgt, poles=shake_poles)
+        u_ik = solve_arm_safe(u_hum, u_live, u_pos, u_yaw, "r", u_tgt, poles=shake_poles)
+        w_ik = min(1.0, hand_on / 0.15)
+        p_pose = blend(p_live, p_ik, w_ik) if w_ik < 1.0 else p_ik
+        u_pose = blend(u_live, u_ik, w_ik) if w_ik < 1.0 else u_ik
     else:
-        p_pose, u_pose = p_base, u_base
+        p_pose, u_pose = p_live, u_live
 
-    _w.actor(r, "president", p_pose, p_pos, p_yaw, int(t), seed=12, amp=0.10,
+    _w.actor(r, "president", p_pose, p_pos, p_yaw, int(t), seed=12, amp=0.0,
+             mouth=0.0, expression="stern", flags=("bare_sleeve",))
+    _w.actor(r, "ucilev", u_pose, u_pos, u_yaw, int(t), seed=34, amp=0.0,
              mouth=0.0, expression="stern")
-    _w.actor(r, "ucilev", u_pose, u_pos, u_yaw, int(t), seed=34, amp=0.08,
-             mouth=0.0)
-    _finish(surface, r, t, 24, tint=(222, 228, 240))
-    _tv(surface, t, "NEW COMMANDER")
+    _finish(surface, r, t, 24)
+    _tv(surface, t, "NEW COMMANDER: UCILEV")
 
 
 def epi_crossing(surface, t):
@@ -593,14 +649,14 @@ def _photo_card(r, hand, yaw):
 
 def epi_ucilev(surface, t):
     """Ucilev at the border post with Biribel's photo; he watches the train go."""
-    tx = E.train_x(t / 1000.0, 12.0, 4.0)
+    tx = E.train_x(t / 1000.0, 22.0, 5.0)
     up = k(t, 600, 1200)
     u = k(t, 0, 6000)
     ux, uz = RX - 5.6, XZ - 11.0
     yaw = _yaw((ux, 0, uz), (tx, 0, XZ))
     fx, fz = math.sin(math.radians(yaw)), math.cos(math.radians(yaw))
     back = 2.6 - 0.5 * u                              # over his right shoulder, easing in
-    eye = (ux - fx * back - fz * 0.42, 1.86, uz - fz * back + fx * 0.42)
+    eye = (ux - fx * back + fz * 0.42, 1.86, uz - fz * back - fx * 0.42)
     r = _road(eye, mix((ux, 1.6, uz), (tx - 4.0, 1.7, XZ), 0.55), 50.0 - 6.0 * u, t)
     _crossing_cast(r, t, tx)
     photo = dict(POSES["stand"], rsh_p=30 + 24 * up, rel=50 + 30 * up, head_p=8 - 10 * k(t, 2600, 1400))
@@ -646,6 +702,371 @@ def epi_title(surface, t):
     surface.blit(img, ((WIDTH - img.get_width()) // 2, _w.SAFE_TOP + int(_w.FILM_H * 0.38)))
 
 
+# --- the gunship arrives (mid-chase cut) --------------------------------------
+
+
+def _heli_sc_at(z_off):
+    """Read-only snapshot rig for chase-road cutscene frames (never mutates live chase state)."""
+    from missions.m8.revenge import chase3d as C
+    sc = C._SCENE
+    if sc is None or not sc.active():
+        sc = C.ChaseScene()
+        sc.z = CS.SECTIONS[3]
+    z = sc.z + z_off
+    pos = (CS.road_x(z) + sc.lane, CS.ditch_y(z), z)
+    yaw = CS.road_yaw(z)
+    lz = z - C.HITCH
+    lpos = (CS.road_x(lz) + sc.lane, CS.ditch_y(lz), lz)
+    lyaw = CS.road_yaw(lz)
+    return sc, z, pos, yaw, lpos, lyaw
+
+
+def _draw_cut_rig(r, sc, pos, yaw, lpos, lyaw, odo, tm):
+    CS.put_wheeled(r, "tractor", pos, yaw, 0.0, odo)
+    r.add_blob_shadow((pos[0], pos[1] + 0.06, pos[2]), 1.4, 2.1, 0.5)
+    CS.put_wheeled(r, "trailer", lpos, lyaw, 0.0, odo)
+    r.add_blob_shadow((lpos[0], lpos[1] + 0.06, lpos[2]), 1.3, 2.1, 0.5)
+    old_t, old_l = sc.tractor_pos, sc.trailer_pos
+    sc.tractor_pos = lambda: (pos, yaw)
+    sc.trailer_pos = lambda: (lpos, lyaw)
+    sc._rig_key = None                 # the moved rig is not the cached live one
+    try:
+        sc._draw_mount(r)
+        g = sc._rig()
+    finally:
+        sc.tractor_pos, sc.trailer_pos = old_t, old_l
+    return g
+
+
+def heli_road(surface, t):
+    """Shot 1: Static cuts into the radio on Route 12; Bodi glances back."""
+    from missions.m8.revenge import chase3d as C
+    s = t / 1000.0
+    sc, _z, pos, yaw, lpos, lyaw = _heli_sc_at(7.5 * s)
+    u = k(t, 0, 3400)
+    eye = C._local(lpos, lyaw, (-5.0 + 0.8 * u, 2.85 - 0.15 * u, -5.0 + 1.4 * u))
+    tgt = C._local(lpos, lyaw, (0.0, 1.05, 0.9))     # the rig in frame, Bodi past it
+    r = _road(eye, tgt, 50.0, t)
+    g = _draw_cut_rig(r, sc, pos, yaw, lpos, lyaw, sc.odo + 7.5 * s, int(t))
+    glance = k(t, 350, 750)
+    _w.actor(
+        r, BODI,
+        dict(C._SEATED, head_y=-62 * glance, head_p=-4, spine=6),
+        C._local(pos, yaw, (0.0, 0.62, -0.75)), yaw, int(t),
+        seed=61, amp=0.2, rifle_on=False, mouth=_talk(t, 450, 2600),
+    )
+    _biri(r, dict(g["pose"], head_y=28 * glance, head_p=-6 * glance),
+          g["feet"], sc.yaw, t, gun=False, mouth=0.0, expression="angry", amp=0.1)
+    _finish(surface, r, t, 40)
+
+
+def _norm3(v):
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) or 1.0
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+def _cross3(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _mat_to_quat(m):
+    tr = m[0] + m[4] + m[8]
+    if tr > 0.0:
+        s = math.sqrt(tr + 1.0) * 2.0
+        return ((m[7] - m[5]) / s, (m[2] - m[6]) / s, (m[3] - m[1]) / s, 0.25 * s)
+    if m[0] > m[4] and m[0] > m[8]:
+        s = math.sqrt(1.0 + m[0] - m[4] - m[8]) * 2.0
+        return (0.25 * s, (m[1] + m[3]) / s, (m[2] + m[6]) / s, (m[7] - m[5]) / s)
+    if m[4] > m[8]:
+        s = math.sqrt(1.0 + m[4] - m[0] - m[8]) * 2.0
+        return ((m[1] + m[3]) / s, 0.25 * s, (m[5] + m[7]) / s, (m[2] - m[6]) / s)
+    s = math.sqrt(1.0 + m[8] - m[0] - m[4]) * 2.0
+    return ((m[2] + m[6]) / s, (m[5] + m[7]) / s, 0.25 * s, (m[3] - m[1]) / s)
+
+
+def _quat_to_mat(q):
+    x, y, z, w = q
+    return (
+        1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w),
+        2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w),
+        2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y),
+    )
+
+
+def _quat_slerp(qa, qb, u):
+    dot = sum(a * b for a, b in zip(qa, qb))
+    if dot < 0.0:
+        qb = tuple(-b for b in qb)
+        dot = -dot
+    if dot > 0.9995:
+        q = tuple(qa[i] + (qb[i] - qa[i]) * u for i in range(4))
+        n = math.sqrt(sum(c * c for c in q)) or 1.0
+        return tuple(c / n for c in q)
+    th0 = math.acos(max(-1.0, min(1.0, dot)))
+    th = th0 * u
+    s0 = math.cos(th) - dot * math.sin(th) / math.sin(th0)
+    s1 = math.sin(th) / math.sin(th0)
+    return tuple(s0 * qa[i] + s1 * qb[i] for i in range(4))
+
+
+def _head_world(hum, pose, pos, yaw):
+    """(neck_world, orthonormal head rotation matrix) from the posed rig."""
+    places, _joints, root = hum.pose_world(pose, pos, yaw, rifle_on=False)
+    sc = hum._scale
+    for slot, _key, M, org, _g, _fb in places:
+        if slot == 2:
+            return v_add(org, root), tuple(c / sc for c in M)
+    return pos, rot_y(yaw)
+
+
+def _place_handset(r, mesh, scale, pos, R):
+    placed = Mesh()
+    placed.verts = [
+        v_add(pos, m_apply(R, (v[0] * scale, v[1] * scale, v[2] * scale)))
+        for v in mesh.verts
+    ]
+    placed.faces = list(mesh.faces)
+    _w.add(r, placed)
+
+
+def _phone_cord(r, jack_w, collar_w, desk_y=0.90):
+    """Segmented sagging handset cord between base jack and handset collar."""
+    m = Mesh()
+    col = (24, 26, 32)
+    pts = []
+    n_seg = 12
+    sag_y = max(desk_y + 0.010, min(jack_w[1], collar_w[1]) - 0.14)
+    ctrl = (
+        0.5 * (jack_w[0] + collar_w[0]) + 0.05,
+        sag_y,
+        0.5 * (jack_w[2] + collar_w[2]) - 0.02,
+    )
+    for i in range(n_seg + 1):
+        u = i / float(n_seg)
+        w0, w1, w2 = (1.0 - u) ** 2, 2.0 * (1.0 - u) * u, u * u
+        px = w0 * jack_w[0] + w1 * ctrl[0] + w2 * collar_w[0]
+        py = max(desk_y + 0.008, w0 * jack_w[1] + w1 * ctrl[1] + w2 * collar_w[1])
+        pz = w0 * jack_w[2] + w1 * ctrl[2] + w2 * collar_w[2]
+        pts.append((px, py, pz))
+    for a, b in zip(pts[:-1], pts[1:]):
+        mid = (0.5 * (a[0] + b[0]), 0.5 * (a[1] + b[1]), 0.5 * (a[2] + b[2]))
+        d = math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2 + (b[2] - a[2]) ** 2)
+        m.add(box(0.013, max(0.013, d * 0.65), 0.013, col, center=mid))
+    _w.add(r, m)
+
+
+def heli_retardovici(surface, t):
+    """Shot 2: Retardovici seated at the command desk ordering the gunship in."""
+    cx, cz = E.CMD_ROOM
+    u = k(t, 0, 4800)
+    # Slight right-front 3/4 framing keeps phone pickup on desk and ear hold clearly visible.
+    eye = (cx - 0.54 + 0.16 * u, 1.52 - 0.04 * u, cz - 3.90 + 0.72 * u)
+    tgt = (cx - 0.14 + 0.04 * u, 1.32 + 0.04 * u, cz + 1.25)
+    r = _road(eye, tgt, 40.0 - 5.0 * u, t, look="night", lights=E.command_lights())
+    r.light = Light(direction=(0.45, 0.55, -0.70), ambient=0.18, diffuse=0.40,
+                    sky=0.04, tint=(0.94, 0.96, 1.0))
+    r.fog_start, r.fog_end = 80.0, 400.0
+    CS.put(r, "cmd_room", E.command_room, (0.0, 0.0, 0.0))
+
+    reach_u = k(t, 0, 440)
+    lift_u = k(t, 580, 760)
+    reach_lean = reach_u * (1.0 - lift_u)
+    beat = k(t, 1900, 450) * (1.0 - k(t, 3300, 600))
+    upper = dict(
+        spine=6.0 + 6.0 * reach_lean,
+        twist=2.0 + 7.0 * reach_lean,
+        head_y=-3.0 + 16.0 * reach_lean,
+        head_p=-2.0 + 10.0 * reach_lean + 3.0 * beat,
+    )
+    r_pos, r_yaw = (cx, 0.0, cz + 1.38), 180.0
+    hum = _w.hum("retardovici")
+    pose = _w.sit_pose(hum, 0.46, upper)
+    pose = _w.life_pose(pose, int(t), 0.14, 12)
+
+    meta = E.telephone_meta()
+    S = E.PHONE_SCALE
+    bm, hm = meta["base"], meta["handset"]
+    grip_local = (0.0, hm["handle_bounds_yz"][1] + 0.007, 0.0)
+    grip_s = (grip_local[0] * S, grip_local[1] * S, grip_local[2] * S)
+
+    # Cradle resting pose on the telephone base.
+    cradle_y = (bm["cradle_saddle_y"] - hm["cradle_rest_y"]) * S
+    H_cradle = v_add(E.PHONE_POS, m_apply(rot_y(E.PHONE_YAW), (0.0, cradle_y, bm["cradle_z"] * S)))
+    R_cradle = rot_y(E.PHONE_YAW + 180.0)
+    G_cradle = v_add(H_cradle, m_apply(R_cradle, grip_s))
+
+    # Head-locked ear hold pose (earpiece on right ear, mouthpiece clear of right jaw).
+    neck_w, R_head = _head_world(hum, pose, r_pos, r_yaw)
+    ear_head = (0.142, 0.155, 0.0)
+    mouth_head = (0.118, 0.048, 0.165)
+    u_long = _norm3(v_sub(ear_head, mouth_head))
+    outward = _norm3((0.97, 0.0, 0.24))
+    d_ol = u_long[0] * outward[0] + u_long[1] * outward[1] + u_long[2] * outward[2]
+    u_back = _norm3((
+        outward[0] - d_ol * u_long[0],
+        outward[1] - d_ol * u_long[1],
+        outward[2] - d_ol * u_long[2],
+    ))
+    u_side = _norm3(_cross3(u_long, u_back))
+    R_ear_head = (
+        u_long[0], u_back[0], u_side[0],
+        u_long[1], u_back[1], u_side[1],
+        u_long[2], u_back[2], u_side[2],
+    )
+    R_ear = m_mul(R_head, R_ear_head)
+    ear_world = v_add(neck_w, m_apply(R_head, ear_head))
+    eg = hm["ear_grill"]
+    H_ear = v_sub(ear_world, m_apply(R_ear, (eg[0] * S, eg[1] * S, eg[2] * S)))
+    G_ear = v_add(H_ear, m_apply(R_ear, grip_s))
+
+    if t < 440:
+        idle = (cx - 0.30, 0.965, cz + 1.04)
+        r_target = (
+            idle[0] + (G_cradle[0] - idle[0]) * reach_u,
+            idle[1] + (G_cradle[1] - idle[1]) * reach_u + 0.055 * math.sin(math.pi * reach_u),
+            idle[2] + (G_cradle[2] - idle[2]) * reach_u,
+        )
+        R_phone, H_pos = R_cradle, H_cradle
+    else:
+        rot_u = k(t, 670, 670)
+        R_phone = _quat_to_mat(_quat_slerp(_mat_to_quat(R_cradle), _mat_to_quat(R_ear), rot_u))
+        arc = (
+            -0.07 * math.sin(math.pi * lift_u),
+            0.07 * (math.sin(math.pi * lift_u) ** 0.7),
+            -0.04 * math.sin(math.pi * lift_u),
+        )
+        r_target = tuple((G_cradle[i] + (G_ear[i] - G_cradle[i]) * lift_u) + arc[i] for i in range(3))
+        H_pos = v_sub(r_target, m_apply(R_phone, grip_s))
+
+    # Solve both arms against the already-breathed pose and pass amp=0.0 so joints match exactly.
+    pose = solve_arm_safe(hum, pose, r_pos, r_yaw, "l", (cx + 0.28, 0.955, cz + 0.88),
+                          poles=((0.7, -0.5, -0.6),) + POLES)
+    pole_r = (0.75 + 0.15 * lift_u, -0.45 - 0.55 * lift_u, -0.55 + 0.75 * lift_u)
+    pose = solve_arm_safe(hum, pose, r_pos, r_yaw, "r", r_target, poles=(pole_r,) + POLES)
+
+    _, solved_j, _ = hum.pose_world(pose, r_pos, r_yaw, rifle_on=False)
+    if t >= 440:
+        H_pos = v_add(H_pos, v_sub(solved_j["rhand"], r_target))
+
+    _w.actor(r, "retardovici", pose, r_pos, r_yaw, int(t), seed=12, amp=0.0,
+             mouth=_talk(t, 1100, 3450), expression="stern", flags=("bare_sleeve",))
+
+    _place_handset(r, E.telephone_handset_mesh(), S, H_pos, R_phone)
+    cc = hm["cord_collar"]
+    cj = bm["cord_jack"]
+    collar_w = v_add(H_pos, m_apply(R_phone, (cc[0] * S, cc[1] * S, cc[2] * S)))
+    jack_w = v_add(E.PHONE_POS, m_apply(rot_y(E.PHONE_YAW), (cj[0] * S, cj[1] * S, cj[2] * S)))
+    _phone_cord(r, jack_w, collar_w, desk_y=0.90)
+
+    o_turn = k(t, 400, 700)
+    _w.actor(
+        r, ("guard", "officer"),
+        dict(POSES["stand"], head_y=28 * o_turn, head_p=2, lsh_p=18, lel=34),
+        (cx - 1.65, 0.0, cz + 2.15), 165.0, int(t), seed=41, amp=0.08, mouth=0.0,
+        flags=("os12",),
+    )
+    _finish(surface, r, t, 41)
+
+
+def _flyby_heli_at(u, base_z):
+    """Smooth continuous gunship path diving over the tractor without angle snaps."""
+    hz = base_z + 115.0 - 148.0 * u
+    hx = CS.road_x(hz) + 15.0 * (1.0 - u) - 8.5 * math.sin(math.pi * u)
+    hy = 24.0 - 18.0 * math.sin(min(1.0, u * 1.12) * math.pi * 0.5) + 4.5 * max(0.0, u - 0.62) ** 1.3
+    return hx, hy, hz
+
+
+def heli_flyby(surface, t):
+    """Shot 3: Rig-locked front camera; the gunship dives smoothly right over the cab."""
+    from missions.m8.revenge import chase3d as C
+    s = t / 1000.0
+    u = max(0.0, min(1.0, t / 3800.0))
+    sc, z, pos, yaw, lpos, lyaw = _heli_sc_at(21.0 + 9.0 * s)
+
+    p0 = _flyby_heli_at(max(0.0, u - 0.015), z)
+    p1 = _flyby_heli_at(u, z)
+    p2 = _flyby_heli_at(min(1.0, u + 0.015), z)
+    vx, vy, vz = p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]
+    hyaw = math.degrees(math.atan2(vx, vz)) % 360.0
+    hpitch = math.degrees(math.atan2(vy, math.hypot(vx, vz)))
+    hroll = -28.0 * math.sin(u * math.pi)
+
+    flyover = max(0.0, 1.0 - abs(t - 2850.0) / 550.0)
+    sh = (math.sin(t * 0.055) * 0.11 * flyover, math.cos(t * 0.048) * 0.11 * flyover)
+    # Behind/beside the trailer looking forward so tractor, Biribel, and incoming chopper stay framed.
+    eye = C._local(lpos, lyaw, (-3.6 + sh[0], 1.85 + sh[1], -3.6))
+    tgt = mix((p1[0] * 0.6 + pos[0] * 0.4, max(3.0, p1[1] * 0.45 + 1.8), pos[2] + 24.0),
+              (pos[0], 3.8, pos[2] + 4.0), k(t, 2100, 1400))
+
+    r = _road(eye, tgt, 54.0, t)
+    g = _draw_cut_rig(r, sc, pos, yaw, lpos, lyaw, sc.odo + 21.0 + 9.0 * s, int(t))
+    CS.put_helicopter(r, p1, hyaw, hpitch, hroll, (t * 1.45) % 360.0, (t * 2.4) % 360.0)
+    r.add_blob_shadow((p1[0], CS.surface_y(p1[0], p1[2]) + 0.06, p1[2]),
+                      3.8, 5.2, 0.45 / (1.0 + max(0.0, p1[1])))
+    _w.actor(r, BODI, dict(C._SEATED, head_p=-16),
+             C._local(pos, yaw, (0.0, 0.62, -0.75)), yaw, int(t), seed=61, amp=0.2,
+             rifle_on=False, mouth=0.0)
+    _biri(r, dict(g["pose"], head_p=-18), g["feet"], sc.yaw, t, gun=False,
+          mouth=_talk(t, 300, 1800), expression="angry", amp=0.1)
+    _finish(surface, r, t, 42)
+
+
+def heli_lockon(surface, t):
+    """Shot 4: Gunship banks into its pursuit orbit as the camera lands on the LMG."""
+    from core.config import draw_vignette
+    from missions.m8.revenge import chase3d as C
+    s = min(t, 2400.0) / 1000.0
+    u = k(t, 0, 2200)
+    sc = C._SCENE
+    if sc is None or not sc.active():
+        sc = C.ChaseScene()
+        sc.z = CS.SECTIONS[3]
+    saved = (sc.z, sc.odo, sc.yaw, sc.pitch, sc.ads, sc.shake)
+    try:
+        sc.z = saved[0] + 55.0 - 21.6 + 9.0 * s
+        sc.odo = saved[1] + 55.0 - 21.6 + 9.0 * s
+        sc.yaw, sc.pitch, sc.ads, sc.shake = 180.0, 6.0, 0.0, 0.0
+        pos, yaw = sc.tractor_pos()
+        lpos, lyaw = sc.trailer_pos()
+        end_eye, end_tgt, end_fov = sc.camera()
+        start_eye = C._local(lpos, lyaw, (4.4, 2.2, -3.2))
+        hx = CS.road_x(sc.z) + 19.0 - 8.0 * u
+        hy = 10.0 - 3.0 * u
+        hz = lpos[2] - 20.0 - 11.0 * u
+        hyaw = math.degrees(math.atan2(lpos[0] - hx, lpos[2] - hz)) % 360.0
+        start_tgt = (hx, hy, hz)
+
+        eye = mix(start_eye, end_eye, u)
+        tgt = mix(start_tgt, end_tgt, u)
+        fov = 50.0 + (end_fov - 50.0) * u
+
+        r = CS.frame(eye, tgt, fov, int(t))
+        del _w.LAST[:]
+        sc._draw_vehicles(r, int(t))
+        CS.put_helicopter(r, (hx, hy, hz), hyaw, -6.0, 22.0 * (1.0 - u),
+                          (t * 1.45) % 360.0, (t * 2.4) % 360.0)
+        r.add_blob_shadow((hx, CS.surface_y(hx, hz) + 0.06, hz),
+                          3.8, 5.2, 0.45 / (1.0 + max(0.0, hy)))
+        info = CS.helicopter_parts()[3]
+        pilot = CS._xf(info["pilot_seat"], (hx, hy, hz), hyaw, -6.0, 22.0 * (1.0 - u))
+        seat = CS._xf(info["gunner_seat"], (hx, hy, hz), hyaw, -6.0, 22.0 * (1.0 - u))
+        _w.actor(r, ("guard", "rifle"), dict(C._SEATED), pilot, hyaw, int(t), seed=150, amp=0.0,
+                 rifle_on=False, flags=("os12",))
+        _w.actor(r, ("guard", "heavy"), blend(POSES["stand"], "aim", 0.9), seat,
+                 (hyaw - 55.0) % 360.0, int(t), seed=151, amp=0.15, rifle_on=True,
+                 flags=("os12",))
+        sc._draw_people(r, int(t))
+        sc._draw_smoke(r, int(t))
+        CS.present(r, surface)
+        draw_vignette(surface)
+    finally:
+        sc.z, sc.odo, sc.yaw, sc.pitch, sc.ads, sc.shake = saved
+
+
 # --- overlays -------------------------------------------------------------------
 
 
@@ -675,8 +1096,8 @@ def _cache_lines(h):
     s = _LINES.get(h)
     if s is None:
         s = _LINES[h] = pygame.Surface((WIDTH, h), pygame.SRCALPHA)
-        for y in range(0, h, 3):
-            pygame.draw.line(s, (0, 0, 0, 60), (0, y), (WIDTH, y))
+        for y in range(0, h, 4):
+            pygame.draw.line(s, (0, 0, 0, 26), (0, y), (WIDTH, y))
     return s
 
 

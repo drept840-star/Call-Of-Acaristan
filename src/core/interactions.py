@@ -660,7 +660,14 @@ def trigger_alarm_early():
     # Start Volkov escape if he hasn't left yet
     if not STATE.volkov_escaped and STATE.volkov_pos:
         STATE.volkov_escape_pos = list(STATE.volkov_pos)
-        STATE.volkov_escape_timer = 90
+        # Long enough for the sprint out through the bay shutter and east off
+        # the yard (m1.update._update_volkov_escape owns the path).
+        STATE.volkov_escape_timer = 210
+        STATE._m1_volkov_escape_stage = "to_door"
+        STATE._m1_volkov_door_opened = False
+        STATE._m1_volkov_bay_slammed = False
+        STATE._m1_volkov_escape_said = False
+        STATE._m1_volkov_angle = math.pi * 0.5
         # M1 WP6: the quiet-route standoff already spoke this line in person.
         if not getattr(STATE, "_m1_standoff_said", False):
             trigger_radio_chatter(

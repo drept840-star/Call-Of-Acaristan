@@ -18,19 +18,21 @@ the M2 gantry deck centres on x 3.6, z 57.1.
 import math
 import random
 
-from engine3d import Mesh, box, prism, quad_xz, disc_xz, m_mul, rot_z, M_IDENT
+from engine3d import (Mesh, POSES, blend, box, clamp, disc_xz, ik, m_mul,
+                      prism, quad_xz, rot_z, M_IDENT)
 from engine3d.core import Light, rot_y
 from engine3d.textures import tex
+from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as W7
 from cutscenes import m7palette3d as P
 from missions.m2 import sniper3d_set as SET
 
 RES = (640, 448)                       # internal buffer; x1.5625 to the 1000x700 canvas
-FOG = (112, 100, 108)
-FOG_START, FOG_END = 30.0, 300.0
-LIGHT = dict(direction=(-0.55, 0.40, 0.66), ambient=0.46, diffuse=0.60, sky=0.12,
-             tint=(0.94, 0.84, 0.92))
-SKY_TOP, SKY_BOT, SODIUM = (26, 32, 54), (156, 120, 112), (120, 78, 50)
+FOG = (72, 68, 84)
+FOG_START, FOG_END = 22.0, 210.0
+LIGHT = dict(direction=(-0.55, 0.34, 0.68), ambient=0.28, diffuse=0.58, sky=0.10,
+             tint=(0.82, 0.80, 0.94))
+SKY_TOP, SKY_BOT, SODIUM = (18, 22, 42), (132, 96, 98), (110, 72, 46)
 DUSK_CLOUDS = dict(key="dusk", hor=SKY_BOT, sun=LIGHT["direction"],
                    rim=((118, 92, 96), (184, 126, 108)), body=(84, 76, 96))
 
@@ -47,6 +49,7 @@ def tile(col, row):
 
 TRUCK_AT = (-76.0, -21.0, 8.0)        # x, z, yaw: Bodi's farm truck, where M2's squad set off
 ROAD_X = (-80.5, -71.5)                # the approach road south out of the map
+ROAD_HW = 4.5                         # its half width in metres
 CATWALK_Y = 6.76                       # top of the catwalk grating
 CATWALK_Z = 57.1                       # deck centre: M2 rows 26-27
 DECK_X = (-2.0, 9.2)                   # M2 cols 55-61
@@ -56,11 +59,28 @@ GANTRY_Z = GANTRY_LEGS[0][1]
 VASILE_AT = (3.6, CATWALK_Y, CATWALK_Z - 0.1)
 LADDER_X = 8.7                         # hung off the deck's south edge, east end
 LADDER_Z = CATWALK_Z - DECK_D / 2.0 - 0.15
+LADDER_RUNG_Y0 = 0.30
+LADDER_RUNG_STEP = 0.32
+LADDER_RAIL_HW = 0.22
+LADDER_TOP_Y = CATWALK_Y + 1.0
+LADDER_RUNG_YS = tuple(
+    LADDER_RUNG_Y0 + i * LADDER_RUNG_STEP
+    for i in range(int((CATWALK_Y + 0.6 - LADDER_RUNG_Y0) / LADDER_RUNG_STEP) + 1)
+    if LADDER_RUNG_Y0 + i * LADDER_RUNG_STEP < CATWALK_Y + 0.6
+)
+LADDER_CLIMB_UP = 0.84
 TANKER = (tile(45, 37), 8.0, 3.0)      # (x, z), length, width: M2's tanker footprint, burnt out
 # (x, z), yaw, burned: the squad's cars, left on the apron (trap_world.CARS)
 CARS = [((-50.0, 2.0), 18, True), ((-40.0, 10.0), -24, True), ((-46.0, 20.0), 70, True),
         ((-30.0, 22.0), 8, False), ((-40.0, 31.0), -12, True), ((-44.0, 41.0), 30, True),
         ((-66.0, -6.0), 4, False), ((-58.0, -18.0), -6, True)]
+
+# (x, z, length, depth, yaw): Guard waist-high sandbag bunkers (read by trap_world too)
+SANDBAGS = (
+    (-44.5, 19.0, 2.8, 0.72, 12.0),
+    (-15.0, 43.0, 3.0, 0.72, -14.0),
+    (1.5, 46.5, 3.2, 0.72, -10.0),
+)
 
 ASPHALT = (50, 52, 56)
 ASPHALT_B = (46, 48, 52)
@@ -150,15 +170,18 @@ def _floor(r):
     m = Mesh()
     for row in range(80):
         for col in range(70):
+            x0, z1 = col * TS + OX, OZ - row * TS
+            cx_tile = x0 + TS * 0.5
             g = _glyph(col, row)
-            if g == "C":
+            if row in (78, 79) and ROAD_X[0] <= cx_tile <= ROAD_X[1] and g in ("C", "g", "d", ""):
+                g = "."
+            elif g == "C":
                 g = "g" if row in (0, 79) or col in (0, 69) else "O"
             if M2D._GARDEN.collidepoint(col, row) and row <= 6:
                 g = "g"
             name, base = looks.get(g, ("pavement", ASPHALT))
             k = 1.0 + (((col * 73856093) ^ (row * 19349663)) % 9 - 4) * 0.012
             col3 = tuple(max(0, min(255, int(c * k))) for c in base)
-            x0, z1 = col * TS + OX, OZ - row * TS
             face = W7._t("grass", col3) if name == "grass" else _t(name, col3, tint=name != "concrete")
             m.add(quad_xz(x0, z1 - TS, x0 + TS, z1, 0.0, face, layer=0))
     r.bake(m)
@@ -286,32 +309,124 @@ def _wrecks(r):
     r.bake(deb)
 
 
+def south_road_x(z):
+    """Center x of the south approach road: straight at the plaza gate, then a valley S-curve."""
+    if z >= MAP_Z0 - 16.0:
+        return -76.0
+    return -76.0 + 18.0 * math.sin((MAP_Z0 - 16.0 - z) / 85.0)
+
+
 def _off_map(x0, z0, x1, z1, pad=3.0):
     """True when the rectangle clears the M2 map and the approach road."""
     if x1 > MAP_X0 - pad and x0 < MAP_X1 + pad and z1 > MAP_Z0 - pad and z0 < MAP_Z1 + pad:
         return False
-    return not (x1 > ROAD_X[0] - pad and x0 < ROAD_X[1] + pad and z0 < MAP_Z0)
+    if z0 < MAP_Z0:
+        for cz in (z0, min(z1, MAP_Z0)):
+            rx = south_road_x(cz)
+            if x1 > rx - ROAD_HW - pad and x0 < rx + ROAD_HW + pad:
+                return False
+    return True
+
+
+def _flat(m, pts, col, layer=0):
+    """A flat ground quad, wound so its normal points up (reversed when needed)."""
+    (ax, _ay, az), (bx, _by, bz), (cx, _cy, cz) = pts[0], pts[1], pts[2]
+    if (bz - az) * (cx - ax) - (bx - ax) * (cz - az) < 0.0:
+        pts = list(reversed(pts))
+    m.face(pts, col, layer, True)
+
+
+def _wire(m, a, b, col=(30, 30, 34), w=0.09):
+    """One power line span: a thin square tube from a to b, so it slopes with the sag."""
+    dx, dy, dz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+    ln = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if ln < 0.05:
+        return
+    ux, uy, uz = dx / ln, dy / ln, dz / ln
+    px, py, pz = -uz, 0.0, ux                    # a unit vector across the wire
+    pl = math.hypot(px, pz)
+    if pl < 1e-6:
+        px, py, pz, pl = 1.0, 0.0, 0.0, 1.0
+    px, py, pz = px / pl, py / pl, pz / pl
+    qx = uy * pz - uz * py                        # the other axis of the cross-section
+    qy = uz * px - ux * pz
+    qz = ux * py - uy * px
+    h = w / 2.0
+    ra = [(a[0] + px * h, a[1] + py * h, a[2] + pz * h),
+          (a[0] - px * h, a[1] - py * h, a[2] - pz * h),
+          (a[0] - qx * h, a[1] - qy * h, a[2] - qz * h),
+          (a[0] + qx * h, a[1] + qy * h, a[2] + qz * h)]
+    rb = [(b[0] + px * h, b[1] + py * h, b[2] + pz * h),
+          (b[0] - px * h, b[1] - py * h, b[2] - pz * h),
+          (b[0] - qx * h, b[1] - qy * h, b[2] - qz * h),
+          (b[0] + qx * h, b[1] + qy * h, b[2] + qz * h)]
+    for i in range(4):
+        j = (i + 1) % 4
+        m.face([ra[i], rb[i], rb[j], ra[j]], col, 2, True)
 
 
 def _country(r):
-    """The approach road south, the Guard track north, fields, hedges,
-    poplars, a farm, the power line and the town past the map edge."""
+    """The curving approach road south through a valley pass, the Guard track north,
+    fields, hedges, poplars, farms, the power line and the towns past the map edge."""
     rng = random.Random(1213)
     m = Mesh()
-    m.add(quad_xz(-320.0, -200.0, 320.0, 360.0, -0.06, W7._t("grass", W7._v(W7.GRASS, -26)),
+    m.add(quad_xz(-340.0, -520.0, 340.0, 360.0, -0.06, W7._t("grass", W7._v(W7.GRASS, -26)),
                   layer=0, seg=40.0))
-    m.add(quad_xz(ROAD_X[0], -260.0, ROAD_X[1], MAP_Z0, -0.01, _t("pavement", ASPHALT), layer=0, seg=8.0))
-    for ex in (ROAD_X[0] + 0.3, ROAD_X[1] - 0.3):
-        m.add(quad_xz(ex - 0.08, -260.0, ex + 0.08, MAP_Z0, 0.0, (196, 160, 52), layer=1, seg=12.0))
-    cx = (ROAD_X[0] + ROAD_X[1]) / 2.0
-    z = -258.0
-    while z < MAP_Z0 - 3.0:
-        m.add(quad_xz(cx - 0.07, z, cx + 0.07, z + 3.0, 0.0, (196, 196, 186), layer=1))
-        z += 9.0
+
+    # Curving south approach road: from z=-310 up across row 79 (MAP_Z0 + TS)
+    asphalt = _t("pavement", ASPHALT)
+    shoulder = W7._t("dirt", P.TRACK_D)
+    hw = ROAD_HW
+    z = -310.0
+    seam_z = MAP_Z0 + TS
+    while z < seam_z:
+        z1 = min(seam_z, z + 8.0)
+        x0, x1 = south_road_x(z), south_road_x(z1)
+        _flat(m, [(x0 - hw, 0.004, z), (x0 - hw, 0.004, z1),
+                  (x1 + hw, 0.004, z1), (x1 + hw, 0.004, z)], asphalt)
+        for side in (-1.0, 1.0):
+            e0, e1 = x0 + side * hw, x1 + side * hw
+            s0, s1 = e0 + side * 2.4, e1 + side * 2.4
+            _flat(m, [(e0, -0.02, z), (s0, -0.02, z),
+                      (s1, -0.02, z1), (e1, -0.02, z1)], shoulder)
+            ly0, ly1 = e0 - side * 0.30, e1 - side * 0.30
+            _flat(m, [(ly0 - 0.08, 0.012, z), (ly0 + 0.08, 0.012, z),
+                      (ly1 + 0.08, 0.012, z1), (ly1 - 0.08, 0.012, z1)], (196, 160, 52), 1)
+        if int(abs(z) // 8.0) % 2 == 0 and z1 < seam_z - 1.0:
+            xm0 = south_road_x(z + 1.5)
+            xm1 = south_road_x(z + 5.0)
+            _flat(m, [(xm0 - 0.07, 0.012, z + 1.5), (xm0 + 0.07, 0.012, z + 1.5),
+                      (xm1 + 0.07, 0.012, z + 5.0), (xm1 - 0.07, 0.012, z + 5.0)],
+                 (196, 196, 186), 1)
+        z = z1
+
+    # Dirt farm track branching west off the shoulder toward the valley farmstead
+    for k_i in range(6):
+        u0, u1 = k_i / 6.0, (k_i + 1) / 6.0
+        tx0, tz0 = -74.0 - 46.0 * u0, -72.0 - 34.0 * u0
+        tx1, tz1 = -74.0 - 46.0 * u1, -72.0 - 34.0 * u1
+        _flat(m, [(tx0 - 2.0, -0.01, tz0), (tx1 - 2.0, -0.01, tz1),
+                  (tx1 + 2.0, -0.01, tz1), (tx0 + 2.0, -0.01, tz0)], shoulder)
+
+    # Telegraph poles + sagging wires following the east shoulder into the valley
+    prev_p = None
+    for pz in range(-36, -280, -34):
+        px = south_road_x(float(pz)) + hw + 2.2
+        m.add(W7._pole(), rot_y(-12), (px, 0.0, float(pz)))
+        if prev_p is not None:
+            px0, pz0 = prev_p
+            for dx in (-0.65, 0.65):
+                pa = (px0 + dx, W7.POLE_H - 0.06, float(pz0))
+                pb = (px + dx, W7.POLE_H - 0.06, float(pz))
+                mid = (0.5 * (px0 + px) + dx, W7.POLE_H - 0.9, 0.5 * (pz0 + pz))
+                _wire(m, pa, mid)
+                _wire(m, mid, pb)
+        prev_p = (px, pz)
+
     m.add(quad_xz(-32.0, MAP_Z1, -27.2, 340.0, -0.02, W7._t("dirt", P.TRACK_D), layer=0, seg=12.0))
     kinds = (("stubble", W7._v(W7.STUBBLE, -34)), ("furrow", W7._v(P.TRACK_D, -24)),
              ("grass", W7._v(W7.GRASS, -34)))
-    z = -190.0
+    z = -280.0
     while z < 340.0:
         z1 = z + rng.uniform(45.0, 85.0)
         x = -300.0
@@ -336,13 +451,16 @@ def _country(r):
     for k in range(40):
         maker = (W7.tree, W7._shelter_tree, W7._walnut)[k % 3]
         x, z = rng.uniform(-200.0, 140.0), rng.uniform(-170.0, 260.0)
-        if _off_map(x - 3, z - 3, x + 3, z + 3) and not (-36.0 < x < -23.0 and z > MAP_Z1):
+        if _clear_of(x, z, 3.5):
             m.add(maker(k), rot_y(rng.uniform(0, 360)), (x, 0.0, z))
     m.add(W7.house_ruin(), rot_y(-90), (-130.0, 0.0, -10.0))     # Bodi's farm, burned in M7
     m.add(W7.barn_ruin(), rot_y(-90), (-140.0, 0.0, 14.0))
     m.add(W7._farm_silo(), t=(-126.0, 0.0, 28.0))
     m.add(W7.shed(), rot_y(-90), (-126.0, 0.0, -28.0))
     m.add(quad_xz(-126.0, -12.0, -92.0, -8.0, -0.03, W7._t("dirt", P.TRACK_D), layer=1, seg=4.0))
+    m.add(W7.house_ruin(), rot_y(-90), (-118.0, 0.0, -108.0))    # the valley farm off the dirt turnoff
+    m.add(W7.barn_ruin(), rot_y(-90), (-128.0, 0.0, -90.0))
+    m.add(W7._farm_silo(), t=(-112.0, 0.0, -118.0))
     m.add(W7._landscape_water_tower(), t=(58.0, 0.0, 86.0))
     m.add(W7._landscape_hut(True), rot_y(90), (46.0, 0.0, -40.0))
     for z in range(-180, 340, 46):              # power line east
@@ -356,7 +474,13 @@ def _country(r):
         for i in range(10):
             hills.add(W7._bipyr(side * rng.uniform(250, 300) - 30.0, 0.0, -160.0 + i * 55.0,
                                 rng.uniform(50, 80), rng.uniform(16, 34), 1.0, W7._v(W7.HILL_F, -24), n=7))
-    hills.add(W7._bipyr(-40.0, 0.0, -240.0, 160.0, 26.0, 1.0, W7._v(W7.HILL_F, -24), n=9))
+    # Two flanking ridges framing an open valley pass (x in [-115, -30] stays clear for the road)
+    hills.add(W7._bipyr(-195.0, 0.0, -255.0, 75.0, 24.0, 1.0, W7._v(W7.HILL_F, -10), n=8))
+    hills.add(W7._bipyr(45.0, 0.0, -255.0, 75.0, 22.0, 1.0, W7._v(W7.HILL_F, -10), n=8))
+    # Far hazy ridge beyond the road end: its nose stops short of z=-310, so the road
+    # never runs into a wall and the valley lights stand in front of it.
+    for hx in (-150.0, -70.0, 10.0):
+        hills.add(W7._bipyr(hx, 0.0, -400.0, 95.0, 28.0, 1.0, W7._v(W7.HILL_F, 0), n=7))
     r.bake(hills)
     sk = Mesh()                                  # the town north of the plaza, lit windows
     for i in range(46):
@@ -370,6 +494,18 @@ def _country(r):
             wy = rng.uniform(2, h - 2)
             wx = x + rng.uniform(-w / 2 + 1, w / 2 - 1)
             sk.add(box(0.9, 0.7, 0.1, (210, 172, 100), center=(wx, wy, z - w / 2 - 0.06), emissive=True))
+    # Distant town/highway lights through the south valley pass
+    for i in range(18):
+        x = -115 + i * 6 + rng.uniform(-2, 2)
+        z = -265 - rng.uniform(0, 35)
+        h = rng.uniform(6, 16)
+        w = rng.uniform(5, 10)
+        c = rng.randint(58, 70)
+        sk.add(box(w, h, w, _t("concrete", (c, c + 2, c + 8)), center=(x, h / 2, z), skip=("bottom",)))
+        for _ in range(rng.randint(1, 4)):
+            wy = rng.uniform(2, max(3, h - 2))
+            wx = x + rng.uniform(-w / 2 + 1, w / 2 - 1)
+            sk.add(box(0.8, 0.6, 0.1, (220, 178, 104), center=(wx, wy, z + w / 2 + 0.06), emissive=True))
     r.bake(sk)
 
 
@@ -378,34 +514,92 @@ def _clear_of(x, z, rad):
     the Guard track, the farms and the landmarks."""
     if not _off_map(x - rad, z - rad, x + rad, z + rad, 2.0):
         return False
+    if z < MAP_Z0 and abs(x - south_road_x(z)) < rad + 7.5:
+        return False
     if -37.0 < x < -22.0 and z > MAP_Z1 - 2.0:
         return False
     for (cx, cz), keep in (((-132.0, 2.0), 26.0), ((76.0, 18.0), 22.0), ((-84.0, 150.0), 20.0),
-                           ((58.0, 86.0), 8.0), ((46.0, -40.0), 7.0)):
+                           ((58.0, 86.0), 8.0), ((46.0, -40.0), 7.0), ((-118.0, -108.0), 24.0),
+                           ((-48.0, -96.0), 13.0), ((-42.0, -102.0), 10.0), ((-44.0, -84.0), 11.0),
+                           ((-94.0, -135.0), 10.0), ((-64.0, -44.0), 7.0)):
         if math.hypot(x - cx, z - cz) < keep + rad:
             return False
     return abs(x - 34.0) > rad + 2.5
 
 
+def _rail_fence(m, pts, col=None, h=1.15):
+    """Post-and-rail along a polyline: posts on the points, rails yaw-aligned."""
+    col = col or W7._t("plank", W7.WOOD)
+    for (x, z) in pts:
+        m.add(box(0.14, h, 0.14, col, center=(x, h / 2.0, z)))
+    for a, b in zip(pts[:-1], pts[1:]):
+        dx, dz = b[0] - a[0], b[1] - a[1]
+        ln = math.hypot(dx, dz)
+        if ln < 0.05:
+            continue
+        yaw = math.atan2(dx, dz)
+        cx, cz = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
+        for yy in (h * 0.42, h * 0.86):
+            m.add(box(0.07, 0.07, ln, col), rot_y(yaw), (cx, yy, cz))
+
+
 def _fill(r):
-    """Close the empty country: a hedge round the map, copses and tree belts
-    in the middle distance, two more farms, bales and road fences."""
+    """Close the empty country: fences, roadside trees, mid-ground silhouettes, bales."""
     rng = random.Random(4417)
     m = Mesh()
-    # the hedge round the M2 map, open for the approach road and the Guard track
     e = 2.5
     x0, x1, z0, z1 = MAP_X0 - e, MAP_X1 + e, MAP_Z0 - e, MAP_Z1 + e
-    for a, b in ((x0, ROAD_X[0] - 1.0), (ROAD_X[1] + 1.0, x1)):
+    # Keep the boxy perimeter hedgerow well off the south road view
+    for a, b in ((x0, ROAD_X[0] - 16.0), (ROAD_X[1] + 16.0, x1)):
         m.add(W7._hedgerow(a, z0, b, z0, seed=3))
     for a, b in ((x0, -33.0), (-26.2, x1)):
         m.add(W7._hedgerow(a, z1, b, z1, seed=5))
     for x in (x0, x1):
         m.add(W7._hedgerow(x, z0, x, z1, seed=7 if x < 0 else 9))
-    # post-and-rail along the approach road
-    for x in (ROAD_X[0] - 1.5, ROAD_X[1] + 1.5):
-        m.add(W7._fence(x, -200.0, x, MAP_Z0 - 4.0, gap=(-120.0, -112.0) if x < -76 else (-60.0, -52.0)))
+
+    # Post-and-rail fences following the curving south road (turnoff gap on the west)
+    hw = ROAD_HW
+    for side in (-1.0, 1.0):
+        run = []
+        z = MAP_Z0 - 2.0
+        while z > -240.0:
+            if side < 0 and -80.0 <= z <= -66.0:
+                if len(run) > 1:
+                    _rail_fence(m, run)
+                run = []
+            else:
+                run.append((south_road_x(z) + side * (hw + 1.6), z))
+            z -= 2.4
+        if len(run) > 1:
+            _rail_fence(m, run)
+
+    # Roadside Route 12 sign & turnoff marker
+    sx = south_road_x(-44.0) + hw + 1.4
+    m.add(box(1.8, 0.9, 0.08, SIGN_G, center=(sx, 2.2, -44.0)))
+    m.add(box(1.4, 0.10, 0.10, (220, 224, 214), center=(sx, 2.2, -43.95)))
+    for sp in (-0.6, 0.6):
+        m.add(box(0.09, 2.5, 0.09, STEEL, center=(sx + sp, 1.25, -44.0)))
+
     makers = (W7.tree, W7._shelter_tree, W7._walnut)
-    # copses in the middle distance
+    for i, pz in enumerate(range(-38, -230, -12)):
+        rx = south_road_x(float(pz))
+        if i % 2 == 0:
+            m.add(W7._poplar(100 + i, rng.uniform(11.0, 15.0)), t=(rx + hw + 4.8, 0.0, float(pz)))
+        if not (-86.0 <= pz <= -64.0):
+            m.add(makers[i % 3](300 + i), rot_y(rng.uniform(0, 360)),
+                  (rx - hw - rng.uniform(6.0, 16.0), 0.0, float(pz) + rng.uniform(-3.0, 3.0)))
+        if i % 3 != 0:
+            m.add(makers[(i + 1) % 3](350 + i), rot_y(rng.uniform(0, 360)),
+                  (rx + hw + rng.uniform(9.0, 20.0), 0.0, float(pz) + rng.uniform(-3.0, 3.0)))
+
+    # Mid-ground barn & silo east of the curve + water tower west
+    m.add(W7.barn(), rot_y(20), (-48.0, 0.0, -96.0))
+    m.add(W7._farm_silo(), t=(-42.0, 0.0, -102.0))
+    m.add(W7.house(lit=True), rot_y(-110), (-44.0, 0.0, -84.0))
+    m.add(W7._landscape_water_tower(), t=(-94.0, 0.0, -135.0))
+    for hx, hz in ((-90.0, -56.0), (-96.0, -62.0), (-56.0, -58.0), (-50.0, -66.0)):
+        m.add(W7.hay(rng.randint(2, 4)), rot_y(rng.uniform(0, 360)), (hx, 0.0, hz))
+
     n = 0
     for k in range(60):
         if n >= 22:
@@ -416,20 +610,18 @@ def _fill(r):
         n += 1
         for i in range(rng.randint(6, 11)):
             x, z = cx + rng.uniform(-9.0, 9.0), cz + rng.uniform(-9.0, 9.0)
-            m.add(makers[(k + i) % 3](k * 13 + i), rot_y(rng.uniform(0, 360)), (x, 0.0, z))
-    # tree belts that close the horizon on three sides
+            if _clear_of(x, z, 2.5):
+                m.add(makers[(k + i) % 3](k * 13 + i), rot_y(rng.uniform(0, 360)), (x, 0.0, z))
     belts = ([(x, -150.0 + rng.uniform(-4, 4)) for x in range(-240, 200, 7)] +
              [(-215.0 + rng.uniform(-4, 4), z) for z in range(-140, 220, 7)] +
              [(165.0 + rng.uniform(-4, 4), z) for z in range(-140, 220, 7)])
     for i, (x, z) in enumerate(belts):
         if _clear_of(x, z, 3.0) and rng.random() < 0.85:
             m.add(makers[i % 3](i), rot_y(rng.uniform(0, 360)), (x, 0.0, z))
-    # stray trees along the field edges near the map
     for k in range(70):
         x, z = rng.uniform(-150.0, 100.0), rng.uniform(-120.0, 200.0)
         if _clear_of(x, z, 3.0):
             m.add(makers[k % 3](200 + k), rot_y(rng.uniform(0, 360)), (x, 0.0, z))
-    # a farm east of the power line and one north-west, off the Guard track
     m.add(W7.house(lit=True), rot_y(180), (76.0, 0.0, 12.0))
     m.add(W7.barn(), rot_y(90), (88.0, 0.0, 26.0))
     m.add(W7._farm_silo(), t=(70.0, 0.0, 30.0))
@@ -448,6 +640,22 @@ def _fill(r):
     r.bake(m)
 
 
+def _fortifications(r):
+    """Guard checkpoint additions on Route 12: sandbag emplacements + burnt tanker embers."""
+    bag = _t("stubble", (124, 114, 92))
+    trim = (72, 66, 56)
+    m = Mesh()
+    for bx, bz, ln, dp, yaw in SANDBAGS:
+        sub = Mesh()
+        for row_y, w in ((0.22, ln), (0.56, ln * 0.88)):
+            sub.add(box(w, 0.34, dp, bag, center=(0.0, row_y, 0.0), seg=1.2))
+        sub.add(box(ln * 0.92, 0.08, dp * 1.05, trim, center=(0.0, 0.39, 0.0)))
+        m.add(sub, rot_y(yaw), (bx, 0.0, bz))
+    (tx, tz), L, W = TANKER
+    m.add(box(L * 0.44, 0.08, W * 0.36, (186, 68, 28), center=(tx - 0.5, 0.52, tz), emissive=True))
+    r.bake(m)
+
+
 def renderer():
     """(renderer, None, 0), built and baked on first use."""
     got = _cache.get("r")
@@ -460,10 +668,12 @@ def renderer():
     _m2_set(r)
     _gantry(r)
     _wrecks(r)
+    _fortifications(r)
     _country(r)
     _fill(r)
     x, z, yaw = TRUCK_AT
-    r.bake(farm_truck(), rot_y(yaw), (x, 0.0, z))
+    from missions.m8.revenge import chase_set as CS
+    r.bake(CS.tractor(), rot_y(yaw), (x, 0.0, z))
     r.bake(_ladder())
     _cache["r"] = (r, None, 0)
     return _cache["r"]
@@ -472,14 +682,148 @@ def renderer():
 def _ladder():
     m = Mesh()
     col = _t("steel", (60, 64, 70))
-    for sx in (-0.22, 0.22):
-        m.add(box(0.05, CATWALK_Y + 1.0, 0.05, col,
-                  center=(LADDER_X + sx, (CATWALK_Y + 1.0) / 2.0, LADDER_Z)))
-    y = 0.3
-    while y < CATWALK_Y + 0.6:
-        m.add(box(0.44, 0.04, 0.04, col, center=(LADDER_X, y, LADDER_Z)))
-        y += 0.32
+    for sx in (-LADDER_RAIL_HW, LADDER_RAIL_HW):
+        m.add(box(0.05, LADDER_TOP_Y, 0.05, col,
+                  center=(LADDER_X + sx, LADDER_TOP_Y / 2.0, LADDER_Z)))
+    for y in LADDER_RUNG_YS:
+        m.add(box(LADDER_RAIL_HW * 2.0, 0.04, 0.04, col, center=(LADDER_X, y, LADDER_Z)))
     return m
+
+
+def _ease_climb(k):
+    k = clamp(k, 0.0, 1.0)
+    return k * k * (3.0 - 2.0 * k)
+
+
+def _lerp3(a, b, k):
+    return (a[0] + (b[0] - a[0]) * k,
+            a[1] + (b[1] - a[1]) * k,
+            a[2] + (b[2] - a[2]) * k)
+
+
+def _ladder_sole_y(rung_idx):
+    """Top surface y of rung ``rung_idx`` (or ground ``0.0`` below rung 0)."""
+    if rung_idx < 0:
+        return 0.0
+    if rung_idx >= len(LADDER_RUNG_YS):
+        return CATWALK_Y
+    return LADDER_RUNG_YS[rung_idx] + 0.02
+
+
+def _ladder_hand_pt(grip_idx, sx):
+    """Exact rung or upper side-rail grip point in world space (``sx`` = -1/+1)."""
+    if grip_idx < 0:
+        return (LADDER_X + sx * 0.14, LADDER_RUNG_YS[0], LADDER_Z - 0.02)
+    if grip_idx < len(LADDER_RUNG_YS):
+        return (LADDER_X + sx * 0.14, LADDER_RUNG_YS[grip_idx], LADDER_Z - 0.02)
+    rail_y = min(LADDER_TOP_Y - 0.14, LADDER_RUNG_YS[-1] + (grip_idx - (len(LADDER_RUNG_YS) - 1)) * 0.16)
+    return (LADDER_X + sx * LADDER_RAIL_HW, rail_y, LADDER_Z - 0.01)
+
+
+def ladder_climb(hum, u):
+    """Solve Biribel's exact pose, world pos and yaw along the gantry ladder.
+
+    ``u`` runs 0.0 (standing at the foot) -> ``LADDER_CLIMB_UP`` (climbing all
+    21 rung steps up to Rung 20 at ``6.70`` m) -> 1.0 (stepping onto the
+    catwalk deck at ``(LADDER_X, CATWALK_Y, CATWALK_Z - 0.15)``).
+    Returns ``(pose, pos, yaw, rung_idx)``.
+    """
+    u = clamp(u, 0.0, 1.0)
+    sc = float(getattr(hum, "_scale", 1.0) or 1.0)
+    if u >= 1.0:
+        return dict(POSES["stand"]), (LADDER_X, CATWALK_Y, CATWALK_Z - 0.15), 0.0, len(LADDER_RUNG_YS)
+
+    n_steps = 21  # step 0..20 ends with L foot on Rung 20 (6.72m), R foot on Rung 19 (6.40m)
+    sole_off = 0.10 * sc
+    hip_off = 0.04 * sc
+    ankle_z = LADDER_Z - 0.11 * sc
+    pz_climb = LADDER_Z - 0.28 * sc
+    pole_l = (-0.55, -0.35, -0.90)
+    pole_r = (0.55, -0.35, -0.90)
+
+    if u <= LADDER_CLIMB_UP:
+        s = (u / LADDER_CLIMB_UP) * n_steps
+        i = min(n_steps - 1, int(s))
+        q = s - i
+        eq = _ease_climb(q)
+        if i == 0:
+            y_pelvis = 0.86 + (0.94 - 0.86) * eq
+        else:
+            y_pelvis = 0.62 + s * LADDER_RUNG_STEP
+        pz = pz_climb
+
+        # Contra-lateral stepping: even steps move L foot + R hand; odd move R foot + L hand.
+        if i % 2 == 0:
+            y_r = _ladder_sole_y(i - 1)
+            z_r = ankle_z
+            y_l0, y_l1 = _ladder_sole_y(i - 2), _ladder_sole_y(i)
+            y_l = y_l0 + (y_l1 - y_l0) * eq + 0.03 * math.sin(math.pi * q)
+            z_l = ankle_z - 0.12 * math.sin(math.pi * q)
+            hl = _ladder_hand_pt(i + 4, -1)
+            hr0, hr1 = _ladder_hand_pt(i + 3, 1), _ladder_hand_pt(i + 5, 1)
+            hr = _lerp3(hr0, hr1, eq)
+            hr = (hr[0], hr[1], hr[2] - 0.09 * math.sin(math.pi * q))
+        else:
+            y_l = _ladder_sole_y(i - 1)
+            z_l = ankle_z
+            y_r0, y_r1 = _ladder_sole_y(i - 2), _ladder_sole_y(i)
+            y_r = y_r0 + (y_r1 - y_r0) * eq + 0.03 * math.sin(math.pi * q)
+            z_r = ankle_z - 0.12 * math.sin(math.pi * q)
+            hr = _ladder_hand_pt(i + 4, 1)
+            hl0, hl1 = _ladder_hand_pt(i + 3, -1), _ladder_hand_pt(i + 5, -1)
+            hl = _lerp3(hl0, hl1, eq)
+            hl = (hl[0], hl[1], hl[2] - 0.09 * math.sin(math.pi * q))
+
+        rung_idx = int(s + 0.08)
+        arm_blend = 1.0
+    else:
+        v = (u - LADDER_CLIMB_UP) / (1.0 - LADDER_CLIMB_UP)
+        hl = _ladder_hand_pt(24, -1)
+        hr = _ladder_hand_pt(25, 1)
+        y_top_l = _ladder_sole_y(20)
+        y_top_r = _ladder_sole_y(19)
+        deck_z_r = CATWALK_Z - 0.28
+        deck_z_l = CATWALK_Z - 0.15
+        if v < 0.55:
+            ev = _ease_climb(v / 0.55)
+            y_l, z_l = y_top_l, ankle_z
+            y_r = y_top_r + (CATWALK_Y - y_top_r) * ev + 0.14 * math.sin(math.pi * ev)
+            z_r = ankle_z + (deck_z_r - ankle_z) * ev
+            y_pelvis = 7.34 + 0.20 * ev
+            pz = pz_climb + (56.50 - pz_climb) * ev
+            arm_blend = 1.0
+        else:
+            ev = _ease_climb((v - 0.55) / 0.45)
+            y_r, z_r = CATWALK_Y, deck_z_r + (deck_z_l - deck_z_r) * ev
+            y_l = y_top_l + (CATWALK_Y - y_top_l) * ev + 0.12 * math.sin(math.pi * ev)
+            z_l = ankle_z + (deck_z_l - ankle_z) * ev
+            y_pelvis = 7.54 + (CATWALK_Y + 1.037 * sc - 7.54) * ev
+            pz = 56.50 + (CATWALK_Z - 0.15 - 56.50) * ev
+            arm_blend = 1.0 - ev
+        rung_idx = n_steps
+
+    y_low = min(y_l, y_r)
+    pos = (LADDER_X, y_low, pz)
+    y_hip = y_pelvis - hip_off
+
+    lhip_p, lkn = _w.leg_ik((z_l - pz) / sc, (y_l + sole_off - y_hip) / sc)
+    rhip_p, rkn = _w.leg_ik((z_r - pz) / sc, (y_r + sole_off - y_hip) / sc)
+    pose = dict(
+        POSES["stand"],
+        spine=4.0 * arm_blend + 3.0 * (1.0 - arm_blend),
+        head_p=-16.0 * arm_blend,
+        lhip_p=lhip_p, lkn=lkn, lhip_r=0.0,
+        rhip_p=rhip_p, rkn=rkn, rhip_r=0.0,
+        lank=0.0, rank=0.0,
+    )
+    if arm_blend > 0.0:
+        solved = ik.solve_arm(hum, pose, pos, 0.0, "l", hl, pole_l)
+        solved = ik.solve_arm(hum, solved, pos, 0.0, "r", hr, pole_r)
+        if arm_blend < 1.0:
+            pose = blend(pose, solved, arm_blend)
+        else:
+            pose = solved
+    return pose, pos, 0.0, rung_idx
 
 
 def frame(eye, tgt, fov, lights=(), t=0, size=None):

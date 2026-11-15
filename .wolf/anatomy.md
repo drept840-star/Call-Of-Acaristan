@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-12T20:32:57.504Z
-> Files: 554 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-15T12:35:34.976Z
+> Files: 564 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -9,12 +9,13 @@
 
 ## ./
 
-- `.gitattributes` — Git attributes (~97 tok)
+- `.gitattributes` — RPE6 Phase 0 line-ending policy (master prompt R14): LF everywhere, binaries marked. (~100 tok)
 - `.gitignore` — Git ignore rules (~763 tok)
 - `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~331 tok)
-- `AGENTS.md` — Agent workflow (read this first) (~2517 tok)
+- `AGENTS.md` — Agent workflow (read this first) (~3395 tok)
+- `ARCHITECTURE_MAP.md` — ARCHITECTURE_MAP (~7167 tok)
 - `build.bat` (~56 tok)
-- `CLAUDE.md` — OpenWolf (~1611 tok)
+- `CLAUDE.md` — OpenWolf (~1657 tok)
 - `GEMINI.md` — OpenWolf (~75 tok)
 - `HANDOFF_CLAUDE.md` — Handoff — Claude (~1583 tok)
 - `MEMORY.md` — RULE: Split long tasks into Planning and Writing stages (~554 tok)
@@ -32,6 +33,7 @@
 
 ## docs/
 
+- `ARCHITECTURE_MAP.md` — ARCHITECTURE_MAP (~9511 tok)
 - `M4_OVERHAUL_PLAN.md` — Mission 4 overhaul plan - "The Aftermath" in 2.5D (~3281 tok)
 - `M6_3D_PERF.md` — M6 playable 3D scenes - performance pass (2026-10-24) (~3606 tok)
 - `M6_HALOS_AND_ENDING_PLAN.md` — M6 plan - halos that stay behind walls, and an ending the player can follow (~5753 tok)
@@ -47,7 +49,7 @@
 
 ## src/
 
-- `app.py` — _input_recorder: handle_settings_event (~60798 tok)
+- `app.py` — _input_recorder: handle_settings_event (~61884 tok)
 
 ## src/art/
 
@@ -96,9 +98,10 @@
 - `config.py` — resource_path, windowed_size, make_grain, draw_sky_gradient (~10522 tok)
 - `console.py` — Console: toggle, bind, handle_event, execute_command (~4340 tok)
 - `cutscene_registry.py` — Cutscene scene renderers registered by scene id (RPE6 D1, boundary rule 4). (~700 tok)
-- `dev_jumps.py` — dev_jumps.py - registry of dev jump targets. (~2452 tok)
+- `dev_jumps.py` — dev_jumps.py - registry of dev jump targets. (~2539 tok)
 - `fixedstep.py` — Fixed-timestep accumulator, for making the simulation host-independent. (~4752 tok)
 - `font_coverage.py` — Font glyph coverage - the fontTools half of §6.13 (dev/audit only). (~649 tok)
+- `frame_pacer.py` — Frame pacing for the 60 Hz fixed-step loop. (~762 tok)
 - `fsm.py` — fsm.py - Finite State Machine infrastructure for Acaristan. (~1929 tok)
 - `game_core.py` — game_core.py - Proxy facade that delegates to split modules. (~6684 tok)
 - `hands.py` — Canonical hand renderers - the reference-anatomy model (dorsal view). (~4371 tok)
@@ -150,12 +153,12 @@
 - `m5studio.py` — m5studio.py - the state-TV studio shared by the M5 bulletin's 3D take (~2343 tok)
 - `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38648 tok)
 - `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~8133 tok)
-- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~31888 tok)
+- `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~32833 tok)
 - `m7films.py` — Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6) (~3194 tok)
 - `m7palette3d.py` — The 2D top-down M7 farm palette, for the 3D farm (raid and films). (~846 tok)
 - `m7runner.py` — Mission 7 beat 3: Alex rides in with the mansion plan (2D cutscene scenes). (~4971 tok)
 - `m7world3d.py` — Mission 7 farm: shared 3D builder for the drop-off, finale and raid. (~31628 tok)
-- `m8films.py` — Mission 8 Revenge films: the meet at Route 12, Old Friends on the catwalk, (~8053 tok)
+- `m8films.py` — Mission 8 Revenge films: the meet at Route 12, Old Friends on the catwalk, (~8305 tok)
 - `oil_rig_3d.py` — True-3D Oil Rig Bombing cutscene (engine3d). Timeline-driven; VO gates shots. (~1907 tok)
 - `post3d.py` — Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5). (~1722 tok)
 - `ps2mat.py` — ps2mat.py - PS2 pixel textures for sets authored in flat colour. (~1125 tok)
@@ -309,7 +312,7 @@
 - `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~16989 tok)
 - `hold.py` — Weapon holds and arm-vs-body safety for the box rig (engine3d.rig.Humanoid). (~4305 tok)
 - `ik.py` — Analytic two-bone IK for the box rig (engine3d.rig.Humanoid). (~3209 tok)
-- `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~17338 tok)
+- `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~17063 tok)
 - `textures.py` — engine3d.textures - pixel textures on world faces. (~1502 tok)
 
 ## src/entities/
@@ -341,7 +344,7 @@
 - `render3d_bridge.py` — game.render3d_bridge - apply ae.set3d/1 data to a live 3D renderer (RPE6 Phase 8). (~7486 tok)
 - `save_adapter.py` — RPE6 Phase 9: game-side adapter between live state and ``engine.save``. (~4305 tok)
 - `timelines.py` — game.timelines - cutscene shot-list access (RPE6 Phase 8). (~739 tok)
-- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~3968 tok)
+- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~5731 tok)
 
 ## src/game/art/
 
@@ -415,6 +418,10 @@
 ## src/game/content/levels/
 
 - `m7.farm.level.json` (~182 tok)
+
+## src/game/content/strings/
+
+- `en.json` (~7002 tok)
 
 ## src/game/content/timelines/
 
@@ -577,7 +584,7 @@
 - `raid_brain.py` — Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks, (~7559 tok)
 - `raid_hud.py` — Mission 7 raid HUD: the top-down game's panels (via the M6 yard HUD helpers), a (~1618 tok)
 - `raid_world.py` — Mission 7 raid world: collision boxes, line of sight, the barn fire and the props. (~7868 tok)
-- `raid3d.py` — Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night. (~10134 tok)
+- `raid3d.py` — Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night. (~22869 tok)
 - `systems.py` — Mission 7 - per-frame update, dispatched by stage (placeholder stages: ENTER advances). (~281 tok)
 
 ## src/missions/m8/
@@ -599,8 +606,8 @@
 - `beats.py` — Mission 8 - placeholder 3D beats: the stage's lines as caption plates over a (~1199 tok)
 - `chase_set.py` — Mission 8 Revenge - the tractor chase set: the back roads from Route 12 to (~21446 tok)
 - `chase3d.py` — Mission 8 Revenge - phase 6: the tractor chase to the Kim Kim crossing. (~35465 tok)
-- `epilogue3d.py` — Mission 8 Revenge - phase 7: the epilogue, one 3D shot per line. (~2986 tok)
-- `kill3d.py` — Mission 8: Vasile's last moment on the Route 12 gantry. (~8225 tok)
+- `epilogue3d.py` — Mission 8 Revenge - phase 7: the epilogue, one 3D shot per line. (~6832 tok)
+- `kill3d.py` — Mission 8: Vasile's last moment on the Route 12 gantry. (~11112 tok)
 - `set3d.py` — Mission 8 Revenge - the Route 12 toll plaza in 3D, shared by the trap fight, (~4900 tok)
 - `trap_brain.py` — Mission 8 Revenge - trap AI: the Guard riflemen, the Guard truck and Bodi. (~4383 tok)
 - `trap_hud.py` — Mission 8 Revenge - trap HUD: the raid's panels and callouts on a north-up (~1491 tok)
@@ -625,6 +632,7 @@
 - `__init__.py` — Package ui - re-export facade. Parts: widgets.py, main.py, mp.py, system.py. (~1234 tok)
 - `arena_view.py` — Renderer for multiplayer arena matches. (~25138 tok)
 - `arena_view3d.py` — 2.5D renderer for multiplayer arena matches. (~7576 tok)
+- `credits_football.py` — Credits background football match (Biribel vs Bodi): simulation, animations and 3D pitch. (~29111 tok)
 - `egg666_3d.py` — egg666_3d.py - the Mission 1 safe-keypad "666" Easter egg as a lit 3D scene. (~4198 tok)
 - `egg666_audio.py` — egg666_audio.py - procedural sound for the 3D "666" scare. (~2740 tok)
 - `egg666_build.py` — egg666_build.py - geometry for the 3D "666" scare: the vault, the ritual (~4899 tok)
@@ -637,12 +645,12 @@
 - `match_screen.py` — The in-game arena match: entry panel plus the live match runtime. (~65981 tok)
 - `mission_failed.py` — Mission-specific failure terminals with bespoke procedural illustrations. (~4538 tok)
 - `mp.py` — Split from menu.py - see menu.py (shim) for the map. (~25518 tok)
-- `mp3d.py` — 3D kit for multiplayer: soldier rigs, guns and Outfitter portraits. (~3566 tok)
+- `mp3d.py` — 3D kit for multiplayer: soldier rigs, guns and Outfitter portraits. (~3646 tok)
 - `multiplayer_style.py` — Read-only KRAPNET presentation. No sockets, timers or session mutations. (~4804 tok)
 - `pixfont.py` — Pixel bitmap fonts for the radio UI (polish pass T6b). (~3560 tok)
 - `radio.py` — Radio transmission widget (polish pass T6, field-radio restyle T6b). (~8171 tok)
 - `shop.py` — The Outfitter - spend Acaribucks on the loadout you play the arena in. (~7819 tok)
-- `system.py` — Split from menu.py - see menu.py (shim) for the map. (~15165 tok)
+- `system.py` — Split from menu.py - see menu.py (shim) for the map. (~15365 tok)
 - `upload_os.py` — Upload OS - a retro CRT terminal operating system for the evidence upload. (~40384 tok)
 - `widgets.py` — Split from menu.py - see menu.py (shim) for the map. (~4153 tok)
 
@@ -692,6 +700,7 @@
 - `test_engine_world.py` — engine.world kernel: registry, storage, views, queries, scheduler phases, prefabs (RPE6 Phase 5). (~2572 tok)
 - `test_events_log_services.py` — engine.core: EventBus (§6.3), Log (§6.23), Services and Settings (§6.1). (~1397 tok)
 - `test_faces3d.py` — Phase 11 step 8: expressions rebuild only the face, mouth flap is a (~814 tok)
+- `test_frame_pacer.py` — core.frame_pacer: whole fixed steps per frame, rate drop on slow frames. (~612 tok)
 - `test_game_dialogues.py` — game.dialogues converter: node chain -> legacy beat dicts (RPE6 Phase 7). (~814 tok)
 - `test_game_world_bridge.py` — game.world bridge (RPE6 Phase 5, D4): ensure/get, roster reset + removed-tag policy, WalkCycle.advance. (~2622 tok)
 - `test_gl_composite.py` — GL renderer item-queue regression (owner-hardware crash, M5 finale). (~1311 tok)
@@ -731,9 +740,10 @@
 - `build_code_txt.py` — find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files (~2979 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
 - `build_windows.py` — Build the Windows game as a PyInstaller --onedir bundle (no admin needed). (~1257 tok)
-- `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~14270 tok)
+- `dev_panel.py` — dev_panel.py - clickable dev control panel for jumping into missions. (~14525 tok)
 - `download_bore.py` — Fetch the pinned official Windows x64 bore release for PyInstaller builds. (~218 tok)
 - `egg666_shots.py` — Headless shots of the 3D "666" scare. (~971 tok)
+- `glb_inspector.py` — GLB Inspector - desktop viewer for .glb / .gltf files. (~21850 tok)
 - `m2_td3d_shots.py` — Render Mission 2 top-down frames in 2.5D (and 2D with ACA_TD_2D=1). (~734 tok)
 - `m3_td3d_shots.py` — Render Mission 3 frames in 2.5D (and 2D with ACA_TD_2D=1). (~981 tok)
 - `m4_gameplay_video.py` — Record a bot-played Mission 4 gameplay video (2.5D) to MP4. (~4342 tok)
@@ -742,7 +752,10 @@
 - `m6_snow_probe.py` — Customs snow probe (dev only, not a CI gate). (~1172 tok)
 - `m6_topdown_shots.py` — Top-down M6 review stills (customs / no-man's-land / rail yard). (~2041 tok)
 - `m8_descent_shots.py` — Render the M8 descent film frames and the first chase frame, and check the handoff. (~878 tok)
+- `map_assets3d.py` — Keep docs/ARCHITECTURE_MAP.md section 8.1 in sync with assets/3D/. (~2125 tok)
+- `paste_apply.py` — Paste Apply - apply an AI-written change set from a paste, no agent needed. (~19423 tok)
 - `smoke_test.py` — Must be set before pygame/config import. (~163339 tok)
+- `sync_arch_map.py` — Keep the generated parts of docs/ARCHITECTURE_MAP.md in sync with the repo. (~7032 tok)
 - `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~6119 tok)

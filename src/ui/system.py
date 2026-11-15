@@ -220,6 +220,12 @@ settings_particles_right  = pygame.Rect(VOL_BAR_X + VOL_BAR_W + 8, ROW_PARTICLES
 
 settings_particles_bar    = pygame.Rect(VOL_BAR_X, ROW_PARTICLES_Y + 3, VOL_BAR_W, 14)
 
+# quality_3d tier (0/1/2): 3D render resolution + lights/shadows extras
+ROW_QUALITY_3D_Y          = ROW_PARTICLES_Y + ROW_H
+settings_quality_3d_left  = pygame.Rect(CONTROL_X, ROW_QUALITY_3D_Y - 4, 28, 28)
+settings_quality_3d_right = pygame.Rect(CONTROL_X + 250, ROW_QUALITY_3D_Y - 4, 28, 28)
+QUALITY_3D_LABELS         = ("LOW (2D)", "MEDIUM", "HIGH")
+
 
 
 # ── CONTROLS tab rows ── (header "MOUSE" at top, "KEYBINDS" after invert)
@@ -498,7 +504,7 @@ def draw_settings(active_tab, display_mode, res_idx,
 
                   reduced_motion, colorblind_mode,
                   shake_scale=100, flash_reduction=False, text_speed=1,
-                  dynamic_music=True,
+                  dynamic_music=True, quality_3d=2,
                   save_status="CONFIG SYNCED", save_failed=False,
                   bindings=None, binding_capture=None):
 
@@ -695,6 +701,11 @@ def draw_settings(active_tab, display_mode, res_idx,
                             particle_density, ROW_PARTICLES_Y)
 
         _draw_hint("Scales the number of particles (explosions, smoke, blood).", ROW_PARTICLES_Y + 36)
+
+        _draw_stepper("3D Quality", settings_quality_3d_left, settings_quality_3d_right,
+                      QUALITY_3D_LABELS[quality_3d] if quality_3d in (0, 1, 2) else "HIGH",
+                      ROW_QUALITY_3D_Y)
+        _draw_hint("MEDIUM renders 3D smaller; LOW plays top-down in 2D. For slow PCs.", ROW_QUALITY_3D_Y + 36)
 
 
 

@@ -21,8 +21,8 @@ from .core import (M_IDENT, Mesh, _orient_outward, box, lerp, m_apply, m_mul,
                    rot_x, rot_y, rot_z, v_add)
 
 __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
-           "os12_mesh", "shotgun_mesh", "pose_run", "pose_drag", "pose_crawl", "SLOTS",
-           "PART_FB", "solve_look", "mouth_flap"]
+           "os12_mesh", "os12_mag_mesh", "shotgun_mesh", "shotgun_pump_mesh", "pose_run",
+           "pose_drag", "pose_crawl", "SLOTS", "PART_FB", "solve_look", "mouth_flap"]
 
 NEUTRAL = dict(spine=3, spine_r=0, twist=0, head_p=0, head_y=0, head_x=0.0,
                lsh_p=8, lsh_r=8, lel=12, rsh_p=8, rsh_r=8, rel=12, lsh_y=0, rsh_y=0,
@@ -197,7 +197,18 @@ def rifle_mesh(col=(26, 28, 30), scope=False, accent=(60, 62, 58)):
     return m
 
 
-def os12_mesh():
+def os12_mag_mesh():
+    """Detachable curved steel magazine for the OS-12, top lip at origin."""
+    from .core import Mesh
+    m = Mesh()
+    steel = (40, 42, 45)
+    m.add(box(0.032, 0.070, 0.070, steel), m=rot_x(-6), t=(0, 0.0, 0.0))
+    m.add(box(0.032, 0.070, 0.068, steel), m=rot_x(-18), t=(0, -0.063, 0.017))
+    m.add(box(0.032, 0.066, 0.064, steel), m=rot_x(-32), t=(0, -0.121, 0.045))
+    return m
+
+
+def os12_mesh(with_mag=True):
     """OS-12 'Tiss' (OTs-12): compact AKS-74U-pattern carbine - stubby barrel
     with a fat cylindrical muzzle can, slim dark handguard, AK receiver with a
     ribbed dust cover and rear-sight block, curved steel mag, polymer pistol
@@ -227,10 +238,8 @@ def os12_mesh():
     ob(0.050, 0.050, 0.15, dark, (0, 0.005, 0.555))
     ob(0.056, 0.056, 0.020, steel, (0, 0.005, 0.49))
     ob(0.054, 0.054, 0.012, steel, (0, 0.005, 0.632))
-    # curved magazine (3 segments sweeping forward)
-    ob(0.032, 0.070, 0.070, steel, (0, -0.075, 0.135), rx=-6)
-    ob(0.032, 0.070, 0.068, steel, (0, -0.138, 0.152), rx=-18)
-    ob(0.032, 0.066, 0.064, steel, (0, -0.196, 0.180), rx=-32)
+    if with_mag:
+        m.add(os12_mag_mesh(), t=(0, -0.075, 0.135))
     # trigger guard + pistol grip
     ob(0.012, 0.010, 0.08, dark, (0, -0.062, 0.045))
     ob(0.038, 0.115, 0.052, poly, (0, -0.095, -0.005), rx=16)
@@ -242,10 +251,27 @@ def os12_mesh():
     return m
 
 
-def shotgun_mesh():
+def shotgun_pump_mesh():
+    """Sliding wooden pump fore-end of the Fallow 12, centred around z = 0.
+
+    The gun's own ``shotgun_mesh`` bakes this part in at rest (z = 0.33); M7/M8
+    draw the player's copy separately so it can rack (see ``rig``-side
+    ``shotgun_mesh(with_pump=False)``)."""
+    from .core import Mesh
+    m = Mesh()
+    wood, grain = (124, 77, 43), (77, 46, 28)
+    m.add(box(0.066, 0.060, 0.18, wood), t=(0, 0.032, 0.0))
+    for i in range(7):
+        m.add(box(0.068, 0.062, 0.005, grain), t=(0, 0.032, -0.077 + i * 0.025))
+    return m
+
+
+def shotgun_mesh(with_pump=True):
     """Fallow 12, with a continuous walnut stock and octagonal steel tubes.
 
     +z is the muzzle; origin is the trigger hand, not the receiver centre.
+    ``with_pump=False`` leaves the wooden fore-end out: the caller draws
+    ``shotgun_pump_mesh()`` itself so the pump can slide.
     """
     from .core import Mesh
     m = Mesh()
@@ -278,9 +304,8 @@ def shotgun_mesh():
     tube(0.014, 0.18, 0.57, 0.046)
     ob(0.038, 0.045, 0.015, dark, (0, 0.065, 0.54))
     ob(0.006, 0.009, 0.009, (206, 172, 95), (0, 0.112, 0.675))
-    ob(0.066, 0.060, 0.18, wood, (0, 0.032, 0.33))
-    for i in range(7):
-        ob(0.068, 0.062, 0.005, grain, (0, 0.032, 0.253 + i * 0.025))
+    if with_pump:
+        m.add(shotgun_pump_mesh(), t=(0, 0, 0.33))
     # Open trigger bow: two legs and a bottom, not a solid block.
     for z in (0.005, 0.079):
         ob(0.010, 0.033, 0.009, dark, (0, -0.005, z))
@@ -346,8 +371,9 @@ class Humanoid:
             blood_hands (True: red glove/wrist)
             bulk (torso width)  vest=None -> tailored chest: shirt lapel tie buttons
             medal epaulets  long_coat coat_len  belt (None = no belt) buckle pouches
-            satchel cuff.  casual: hoodie strings backpack straps sleeves('short')
+            satchel cuff  bracelets ((band, stud) colours).  casual: hoodie strings backpack straps sleeves('short')
             inner (open-shirt tee) print(('drip'|'stripe', col[, white])) plaid
+            shorts (True: shorts + bare knees) socks sock_trim
             boots_h rips sole; hair_style also shag|fringe|spiky.
             cutscenes.cast3d builds these from figure_kit.SPECS."""
 
@@ -409,11 +435,12 @@ class Humanoid:
         else:
             face += [box(0.04, 0.03 * eh, 0.004, eye, center=(-0.048, 0.148, 0.122), skip=flat),
                      box(0.04, 0.03 * eh, 0.004, eye, center=(0.048, 0.148, 0.122), skip=flat)]
+        brow_y = (0.185 if s.get("glasses") else 0.18) + exp["brow_y"]
         for bx in (-0.05, 0.05):
             bm = Mesh()
             bm.add(box(bw, bh, 0.004, brow, skip=flat),
                    m=rot_z(-exp["brow_tilt"] if bx < 0 else exp["brow_tilt"]),
-                   t=(bx, 0.18 + exp["brow_y"], 0.122))
+                   t=(bx, brow_y, 0.122))
             face.append(bm)
         masked = s.get("mask")
         if not masked:
@@ -435,19 +462,20 @@ class Humanoid:
         if s.get("glasses"):
             gc = s["glasses"]
             gz = 0.1248
-            for gx in (-0.048, 0.048):
-                face2 += [box(0.058, 0.008, 0.004, gc, center=(gx, 0.17, gz), skip=flat),
-                         box(0.058, 0.008, 0.004, gc, center=(gx, 0.126, gz), skip=flat),
-                         box(0.008, 0.05, 0.004, gc, center=(gx - 0.027, 0.148, gz), skip=flat),
-                         box(0.008, 0.05, 0.004, gc, center=(gx + 0.027, 0.148, gz), skip=flat)]
-            face2.append(box(0.02, 0.006, 0.004, gc, center=(0, 0.16, gz), skip=flat))
+            for gx in (-0.050, 0.050):
+                face2 += [box(0.064, 0.011, 0.004, gc, center=(gx, 0.168, gz), skip=flat),
+                         box(0.064, 0.011, 0.004, gc, center=(gx, 0.118, gz), skip=flat),
+                         box(0.011, 0.056, 0.004, gc, center=(gx - 0.029, 0.143, gz), skip=flat),
+                         box(0.011, 0.056, 0.004, gc, center=(gx + 0.029, 0.143, gz), skip=flat)]
+            face2.append(box(0.044, 0.009, 0.004, gc, center=(0, 0.154, gz), skip=flat))
         if s.get("scar"):
             m = Mesh()
             m.add(box(0.01, 0.13, 0.004, mix(skin, (70, 30, 30), .4), skip=flat),
                   m=rot_z(-24), t=(0.045, 0.16, 0.1242))
             face2.append(m)
         if s.get("moustache"):
-            face2.append(box(0.085, 0.022, 0.004, s["moustache"], center=(0, 0.078, 0.1222), skip=flat))
+            mh = float(s.get("moustache_h", 0.022))
+            face2.append(box(0.090, mh, 0.004, s["moustache"], center=(0, 0.078, 0.1245), skip=flat))
         if s.get("creases"):        # age: forehead line, nasolabial folds, eye bags
             # Soft, skin-toned creases: at cutscene resolution hard dark lines
             # read as a box drawn around the mouth, so keep them subtle.
@@ -487,6 +515,12 @@ class Humanoid:
             face2.append(m)
             face2.append(box(0.02, 0.016, 0.004, mix(skin, (60, 20, 20), .55),
                              center=(0.033, 0.058, 0.1236), skip=flat))
+        if s.get("head_wound"):
+            blood, clot = (88, 8, 12), (42, 4, 8)
+            face2.append(box(0.068, 0.072, 0.005, blood, center=(0.025, 0.145, 0.124), skip=flat))
+            face2.append(box(0.032, 0.036, 0.006, clot, center=(0.028, 0.148, 0.1246), skip=flat))
+            for dx_, ln in ((0.005, 0.07), (0.030, 0.09), (0.052, 0.055)):
+                face2.append(box(0.012, ln, 0.005, blood, center=(dx_, 0.105 - ln / 2, 0.124), skip=flat))
         return face, face2, masked
 
     @staticmethod
@@ -554,6 +588,9 @@ class Humanoid:
             sc_ = s["satchel"]
             P["pelvis"] += [box(0.07, 0.2, 0.24, sc_, center=(0.215, -0.04, 0.03)),
                             box(0.075, 0.07, 0.245, mix(sc_, (0, 0, 0), .25), center=(0.217, 0.03, 0.03))]
+        if s.get("groin_wound"):
+            P["pelvis"].append(box(0.16, 0.13, 0.010, (82, 8, 13), center=(0.0, -0.03, 0.112)))
+            P["pelvis"].append(box(0.07, 0.08, 0.012, (40, 5, 9), center=(0.0, -0.04, 0.114)))
         nw = float(s.get("bulk", 0.9 if s.get("narrow") else 1.0))
         self._sh = 0.25 * nw
         # HD: the shoulder line catches the key light - a cooler, lighter top face
@@ -600,6 +637,11 @@ class Humanoid:
             bp = s["backpack"]
             torso += [box(0.30 * nw, 0.36, 0.13, bp, center=(0, 0.34, -0.19)),
                       box(0.24 * nw, 0.12, 0.05, mix(bp, (0, 0, 0), .25), center=(0, 0.24, -0.27))]
+        if s.get("crew"):
+            torso.append(box(0.135, 0.018, 0.135, mix(jac, (0, 0, 0), .32), center=(0, 0.566, 0)))
+        if s.get("satchel"):
+            torso.append(box(0.038, 0.014, 0.286, mix(s["satchel"], (0, 0, 0), .2),
+                             center=(-0.145 * nw, 0.562, 0)))
         P["torso"] = torso
         # chest decals (shirt V, lapels, tie, buttons, medal, satchel strap) -
         # flat +z quads on the jacket front, drawn with a depth bias like the face
@@ -630,7 +672,14 @@ class Humanoid:
         if s.get("medal"):
             deco(0.035, 0.045, s["medal"], (0.105 * nw, 0.45), fz + 0.0024, lay=2)
         if s.get("satchel"):
-            deco(0.032, 0.5, mix(s["satchel"], (0, 0, 0), .2), (0.01, 0.33), fz + 0.0048, rz=38, lay=2)
+            sc_strap = mix(s["satchel"], (0, 0, 0), .15)
+            deco(0.034, 0.5, sc_strap, (0.01, 0.33), fz + 0.0048, rz=38, lay=2)
+            deco(0.040, 0.024, (156, 162, 170), (-0.02, 0.37), fz + 0.0056, rz=38, lay=2)
+            m_sb = Mesh()
+            m_sb.add(box(0.034, 0.5, 0.004, sc_strap,
+                         skip=("back", "left", "right", "top", "bottom")),
+                     m=rot_z(38), t=(0.01, 0.33, -(fz + 0.0048)))
+            chest[2].append(m_sb)
         if s.get("plaid"):            # flannel check on the jacket front
             for py_ in (0.5, 0.4, 0.3, 0.2, 0.1):
                 deco(0.43 * nw, 0.014, s["plaid"], (0, py_), fz)
@@ -856,11 +905,19 @@ class Humanoid:
             head.append(box(0.176 * hw, 0.02, 0.028, sk_d, center=(0, 0.206, 0.124)))
             head.append(box(0.074 * hw, 0.03, 0.026, mix(skin, (0, 0, 0), .06),
                             center=(0, 0.028, 0.122)))
+        if s.get("head_wound"):
+            head.append(box(0.11, 0.12, 0.014, (76, 8, 12), center=(-0.01, 0.15, -0.126)))
+            head.append(box(0.05, 0.06, 0.016, (38, 4, 8), center=(-0.01, 0.15, -0.128)))
+        if s.get("glasses"):
+            gc = s["glasses"]
+            for sx_ in (-1, 1):
+                head.append(box(0.004, 0.006, 0.120, gc,
+                                center=(sx_ * (0.1005 * hw), 0.158, 0.060)))
         P["head"] = head
         short = s.get("sleeves") == "short"
         if short:
-            P["uarm"] = [box(0.125, 0.16, 0.135, jac, center=(0, -0.075, 0)),
-                         box(0.1, 0.17, 0.105, skin, center=(0, -0.22, 0))]
+            P["uarm"] = [box(0.128, 0.16, 0.138, jac, center=(0, -0.075, 0)),
+                         box(0.086, 0.17, 0.090, skin, center=(0, -0.22, 0))]
         else:
             P["uarm"] = [lb(0.115, 0.31, 0.125, jac, center=(0, -0.15, 0), bv=0.03)]
         if s.get("armband"):
@@ -872,7 +929,25 @@ class Humanoid:
         else:
             P["uarm_acc"] = [box(0.12, 0.06, 0.13, acc or jac, center=(0, -0.08, 0))]
         cuff = s.get("cuff")
-        P["farm"] = [lb(0.1, 0.27, 0.105, skin if short else jac, center=(0, -0.135, 0), bv=0.025)]
+        if short:
+            P["farm"] = [lb(0.080, 0.27, 0.084, skin, center=(0, -0.135, 0), bv=0.02)]
+        else:
+            P["farm"] = [lb(0.1, 0.27, 0.105, jac, center=(0, -0.135, 0), bv=0.025)]
+        if s.get("bracelets"):
+            # Stacked rock bracelets on the forearm: two dark bands with a
+            # row of bright studs. Sized proud of the arm so the stack still
+            # reads at line-up distance.
+            band, stud = s["bracelets"]
+            bw_f = 0.090 if short else 0.110
+            bd_f = 0.094 if short else 0.115
+            for by in (-0.205, -0.242):
+                P["farm"].append(box(bw_f, 0.022, bd_f, band, center=(0, by, 0)))
+            for sx_ in (-0.022, 0.0, 0.022):
+                P["farm"].append(box(0.015, 0.015, 0.008, stud, center=(sx_, -0.205, bd_f / 2)))
+                P["farm"].append(box(0.015, 0.015, 0.008, stud, center=(sx_, -0.205, -bd_f / 2)))
+            for sx_ in (-bw_f / 2, bw_f / 2):
+                for sz_ in (-0.018, 0.018):
+                    P["farm"].append(box(0.008, 0.015, 0.015, stud, center=(sx_, -0.205, sz_)))
         if s.get("blood_hands"):
             glove = mix(glove, (96, 12, 14), .8)
         # M5 draws optional articulated palms at the wrist; legacy rigs and
@@ -881,17 +956,26 @@ class Humanoid:
             if hd:
                 # palm, curled fingers and a thumb; the fingers end where the
                 # old fist did, so a hand resting on the ground sits the same.
-                P["farm"] += [lb(0.082, 0.06, 0.095, glove, center=(0, -0.305, 0.0), bv=0.02),
-                              box(0.084, 0.036, 0.034, mix(glove, (255, 255, 255), .07),
+                hw_f = 0.072 if short else 0.082
+                hd_f = 0.084 if short else 0.095
+                P["farm"] += [lb(hw_f, 0.06, hd_f, glove, center=(0, -0.305, 0.0), bv=0.02),
+                              box(hw_f + 0.002, 0.036, 0.034, mix(glove, (255, 255, 255), .07),
                                   center=(0, -0.337, 0.042)),
-                              box(0.026, 0.045, 0.04, glove, center=(0, -0.30, 0.05))]
+                              box(0.024, 0.045, 0.038, glove, center=(0, -0.30, 0.05))]
             else:
-                P["farm"].append(box(0.085, 0.09, 0.095, glove, center=(0, -0.31, 0.0)))
+                P["farm"].append(box(0.074 if short else 0.085, 0.09,
+                                     0.082 if short else 0.095, glove, center=(0, -0.31, 0.0)))
         if cuff:
             P["farm"].append(box(0.09, 0.02, 0.1, cuff, center=(0, -0.262, 0.0)))
         if s.get("blood_hands"):      # blood up the wrist
             P["farm"].append(box(0.108, 0.05, 0.113, (88, 11, 14), center=(0, -0.245, 0.0)))
-        P["thigh"] = [lb(0.16, 0.45, 0.17, pants, center=(0, -0.225, 0), bv=0.035)]
+        if s.get("shorts"):
+            P["thigh"] = [lb(0.166, 0.26, 0.176, pants, center=(0, -0.13, 0), bv=0.03),
+                          lb(0.132, 0.19, 0.140, skin, center=(0, -0.355, 0), bv=0.025)]
+        else:
+            P["thigh"] = [lb(0.16, 0.45, 0.17, pants, center=(0, -0.225, 0), bv=0.035)]
+        if s.get("groin_wound"):
+            P["thigh"].append(box(0.11, 0.18, 0.010, (76, 8, 12), center=(0.0, -0.10, 0.088)))
         if coat:
             ln = float(s.get("coat_len", 0.42))
             if hd:
@@ -906,7 +990,15 @@ class Humanoid:
                     box(0.208, 0.022, 0.116, hem, center=(0, -ln + 0.001, -0.045))]
             else:
                 P["thigh"].append(box(0.19, ln, 0.2, coat, center=(0, -ln / 2 + 0.02, 0)))
-        P["shin"] = [lb(0.135, 0.45, 0.145, pants, center=(0, -0.225, 0), bv=0.03)]
+        if s.get("shorts"):
+            sock_col = s.get("socks") or skin
+            P["shin"] = [lb(0.128, 0.16, 0.138, skin, center=(0, -0.08, 0), bv=0.025),
+                         lb(0.136, 0.29, 0.146, sock_col, center=(0, -0.305, 0), bv=0.025)]
+            if s.get("sock_trim") and s.get("socks"):
+                P["shin"].append(box(0.144, 0.036, 0.154, s["sock_trim"],
+                                     center=(0, -0.172, 0)))
+        else:
+            P["shin"] = [lb(0.135, 0.45, 0.145, pants, center=(0, -0.225, 0), bv=0.03)]
         if s.get("boots_h"):          # rubber boots: shaft up the shin
             bh = 0.45 * float(s["boots_h"])
             P["shin"] += [box(0.15, bh, 0.16, boots, center=(0, -0.45 + bh / 2, 0)),

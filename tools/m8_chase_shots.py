@@ -36,7 +36,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     zs = [float(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--z=")] or [
         60.0, 200.0, 340.0, 420.0, 560.0, 680.0, 760.0, 900.0, 1100.0, 1300.0,
-        1500.0, 1700.0, 1900.0, 1955.0]
+        1500.0, 1700.0, 1900.0, 2100.0, 2300.0, 2500.0, 2590.0]
     tiles = []
     for i, z in enumerate(zs):
         sc.z = z

@@ -398,6 +398,15 @@ class Light:
         self.dir = v_norm(direction)
         self.ambient, self.diffuse, self.sky, self.tint = ambient, diffuse, sky, tint
 
+    def shade_char(self, col, n, v):
+        """Rigged characters: wrapped key so the shadow side keeps its form,
+        a camera fill so the side you see reads, and a grazing-angle rim that
+        lifts them off the set.  Mirrors the u_char branch in gl.FRAG."""
+        ndv = max(0.0, v_dot(n, v))
+        k = (self.ambient + self.diffuse * 1.12 * max(0.0, (v_dot(n, self.dir) + 0.2) / 1.2)
+             + self.sky * n[1] + 0.12 * ndv + 0.7 * (1.0 - ndv) ** 3)
+        return tuple(min(255, int(col[i] * k * self.tint[i])) for i in range(3))
+
     def shade(self, col, n):
         k = self.ambient + self.diffuse * max(0.0, v_dot(n, self.dir)) + self.sky * n[1]
         return (min(255, int(col[0] * k * self.tint[0])), min(255, int(col[1] * k * self.tint[1])),
@@ -609,7 +618,7 @@ class SoftwareRenderer:
                 b_ += lc[2] * k
         return (min(255, int(r_)), min(255, int(g_)), min(255, int(b_)))
 
-    def _emit(self, wverts, faces, dynamic_light=None, bias=0.0, tint=None):
+    def _emit(self, wverts, faces, dynamic_light=None, bias=0.0, tint=None, char=False):
         """Transform + cull + clip + project faces of one object into items."""
         cam = self.cam
         r, u, f = self.right, self.up, self.fwd
@@ -643,7 +652,10 @@ class SoftwareRenderer:
                 continue
             if not em and (light is not None or self.lights):
                 n2 = nrm if facing > 0 else (-nrm[0], -nrm[1], -nrm[2])
-                if light is not None:
+                if light is not None and char:
+                    vd = v_norm((cx - p0[0], cy - p0[1], cz - p0[2]))
+                    col = light.shade_char(col, n2, vd)
+                elif light is not None:
                     col = light.shade(col, n2)
                 if self.lights:
                     inv = 1.0 / len(idx)
@@ -701,9 +713,9 @@ class SoftwareRenderer:
                 continue
             self._emit(o.verts, o.faces)
 
-    def add_dynamic(self, wverts, faces, bias=0.0, tint=None):
+    def add_dynamic(self, wverts, faces, bias=0.0, tint=None, char=False):
         """faces: (idx, colour, layer, double, None, emissive) - lit per frame."""
-        self._emit(wverts, faces, dynamic_light=self.light, bias=bias, tint=tint)
+        self._emit(wverts, faces, dynamic_light=self.light, bias=bias, tint=tint, char=char)
 
     def _blob_disc(self, w, h, strength):
         key = (w, h, int(strength * 20))
@@ -792,7 +804,7 @@ class SoftwareRenderer:
         layer (default: the historic floor disc)."""
         v, f, j = hum.build(pose, pos, yaw, rifle_on=rifle_on)
         self.actor_log.append(tuple(pos))
-        self.add_dynamic(v, f, bias=bias, tint=tint)
+        self.add_dynamic(v, f, bias=bias, tint=tint, char=True)
         sl, sb = shadow if shadow else (None, 0.0)
         self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40,
                              layer=sl, bias=sb)
@@ -808,7 +820,9 @@ class SoftwareRenderer:
         scr = [(self.w / 2 + x / z * self.focal, self.h / 2 - y / z * self.focal) for x, y, z in pts]
         self._items.append((layer * 1e6, ("line", col, width), scr))
 
-    def flush(self, surface=None):
+    def flush(self, surface=None, bg=None):
+        """``bg`` is a GL upload hint (the target is one solid colour); the
+        software path draws over the filled target as it is."""
         surface = surface or self.surface
         items = self._items
         items.sort(key=lambda it: it[0])

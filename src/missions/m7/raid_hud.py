@@ -124,12 +124,15 @@ def draw(surface, s):
     if s.marker_screen is not None and dist is not None:
         H.marker(surface, s.marker_screen, dist, None, col=U.OBJECTIVE_COL)
     U.reticle(surface, int(3 * s.recoil - 2 * s.ads))
+    rel_tot = s.reload_total() if hasattr(s, "reload_total") else s.RELOAD_S
+    slot_prog, slot_count = s.reload_shell_info() if hasattr(s, "reload_shell_info") else (None, None)
     H.crosshair(surface, 0, lines=False,
-                reload_frac=(1.0 - s.reloading / s.RELOAD_S) if s.reloading else 0.0,
+                reload_frac=(1.0 - s.reloading / rel_tot) if s.reloading else 0.0,
                 hit_age=s.t - s.hit_mark)
     H.damage_arcs(surface, s.dmg_marks, s.t, life=0.9)
-    U.weapon(surface, s.hp(), s.hp_max(), s.mag, s.MAG, s.reserve, s.reloading, s.RELOAD_S,
-             cw="fallow12", label="FALLOW 12", caliber="12GA", kind="shell", reload_ms=132)
+    U.weapon(surface, s.hp(), s.hp_max(), s.mag, s.MAG, s.reserve, s.reloading, rel_tot,
+             cw="fallow12", label="FALLOW 12", caliber="12GA", kind="shell", reload_ms=132,
+             slot_prog=slot_prog, slot_count=slot_count)
     bodi_clock(surface, s)
     if getattr(s, "pig_dead", False):
         H._text(surface, font_terminal_small, "BODI HAS TURNED ON YOU", H.DANGER,

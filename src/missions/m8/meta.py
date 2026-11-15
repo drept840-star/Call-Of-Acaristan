@@ -102,6 +102,7 @@ FILM_TIMELINES = {
     STAGE_FRIENDS: "m8.friends",
     STAGE_DESCENT: "m8.descent",
     STAGE_EPILOGUE: "m8.epilogue",
+    "heli": "m8.heli",
 }
 
 M8_SCENES = {
@@ -130,6 +131,10 @@ M8_SCENES = {
     "m8_epi_names": ("m8films", "epi_names"),
     "m8_epi_volkov": ("m8films", "epi_volkov"),
     "m8_epi_title": ("m8films", "epi_title"),
+    "m8_heli_road": ("m8films", "heli_road"),
+    "m8_heli_retardovici": ("m8films", "heli_retardovici"),
+    "m8_heli_flyby": ("m8films", "heli_flyby"),
+    "m8_heli_lockon": ("m8films", "heli_lockon"),
 }
 
 
@@ -150,13 +155,51 @@ def _register_scenes():
 _register_scenes()
 
 
+HELI_SHOTS = (
+    {
+        "scene": "m8_heli_road",
+        "speaker": "BODI",
+        "text": "Static on the band... Wait. Do you hear that?",
+        "min_ms": 3400,
+        "cues": [[150, "radio_static", 0.25]],
+    },
+    {
+        "scene": "m8_heli_retardovici",
+        "speaker": "RETARDOVICI",
+        "text": "Put the bird on Route 12. Bring in the big guns - nothing crosses Kim Kim.",
+        "min_ms": 4800,
+        "cues": [[120, "squelch_head", 0.22]],
+    },
+    {
+        "scene": "m8_heli_flyby",
+        "speaker": "BIRIBEL",
+        "text": "Bodi - heads down!",
+        "min_ms": 3800,
+        "auto_advance": True,
+        "cues": [[2100, "wind_gust", 0.40]],
+    },
+    {
+        "scene": "m8_heli_lockon",
+        "self_graded": True,
+        "full_frame": True,
+        "cut_to_play": True,
+        "speaker": "",
+        "text": "",
+        "min_ms": 2400,
+        "auto_advance": True,
+        "quiet_ui": True,
+    },
+)
+
+
 def film_shots(stage):
     """Cutscene shots for a stage film (or an empty list)."""
     timeline = FILM_TIMELINES.get(stage)
     if not timeline:
         return []
+    fallback = list(HELI_SHOTS) if stage == "heli" else []
     try:
         from game import timelines as _timelines
-        return _timelines.shots(timeline, [])
+        return _timelines.shots(timeline, fallback)
     except Exception:
-        return []
+        return fallback

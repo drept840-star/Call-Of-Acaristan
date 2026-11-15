@@ -6,7 +6,7 @@ For the full operating protocol (session handoff, memory discipline, bug logging
 
 # Directory
 
-Where things live. Working rules (facades, shared state, map contract, renderer, sprite pipeline, story canon) are in `AGENTS.md`; read the section you need before editing that area.
+Where things live. Working rules (facades, shared state, map contract, renderer, sprite pipeline, story canon) are in `AGENTS.md`; read the section you need before editing that area. For exact files per task, cross-module call chains, the weapon ID crosswalk and per-subsystem gates, see `docs/ARCHITECTURE_MAP.md`.
 
 ## Run and verify
 - `acaristan.py` - launcher; adds `src/` to `sys.path` and imports `app`. Run from the repo root (assets and saves are CWD-relative).
@@ -25,7 +25,7 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
   - `missions/m6/` - Whiteout: `yard*` (yard3d/brain/dress/hud), `stealth`, `train3d` (last playable beat), `bloc3d/`, `hud3d`. Finale is cutscene-only.
   - `missions/m7/` - Fallow Ground: `farmyard` (top-down), `raid*` (playable 3D raid), `choice` (radio, writes `STATE.m8_route`). Films in `cutscenes/m7*`; notes in `docs/MISSION7_PLOT.md`.
   - `missions/m8/` - The Call; `STATE.m8_route` picks the ladder. `revenge/`: `trap*` (3D trap + gantry climb), `kill3d`, `chase3d`/`chase_set` (tractor chase), `epilogue3d`; films via `cutscenes/m8films.py` + `meta.M8_SCENES`, `beats` is the fallback. `duty/` reserved. Design: `docs/MISSION8_PLOT.md`.
-- `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`, `m8films`), shared `figure_kit.py` (cast look `SPECS`), `cast3d.py`, `post3d.py`, `weather3d.py`.
+- `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`, `m8films`), `figure_kit.py` (deprecated re-export; cast look `SPECS` lives in `engine/anim/figure_kit.py`), `cast3d.py`, `post3d.py`, `weather3d.py`.
 - `core/` - legacy runtime: `state.py` (`STATE`), `game_core.py`, `camera.py`, `mapbuilder.py` (dependency-free), `artpack.py` (sprite sheet access), `save_system.py`, `settings_store.py`, `lighting.py`, `dev_jumps.py`.
 - `entities/` - player, `enemy_ai.py`, weapons, weapon rig, corpses, death anims.
 - `ui/` - menus (`main.py`), `hud.py`, `radio.py` + `pixfont.py` (bitmap fonts), shop, multiplayer screens, mission failed. Multiplayer draws in 2.5D: `arena_view3d.py` (`make_view`, aim unprojection) over the 2D `arena_view.py`, cast and guns from `mp3d.py`; `ACA_MP_2D=1` forces 2D, and any 3D error falls back to 2D for the run.

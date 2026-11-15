@@ -76,7 +76,7 @@ def draw(ws, surface, fcx, fcy):
     from engine3d import Light
     from missions.m1 import grade3d as _grade
     v = td.View(CAM, fcx + WIDTH / 2.0, fcy + HEIGHT / 2.0)
-    r, buf = _w.rend(*CAM.res)
+    r, buf = _w.rend(*td.buffer_res(CAM))
     saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
     tm = _now_ms()
     try:
@@ -99,7 +99,7 @@ def draw(ws, surface, fcx, fcy):
         _draw_cast(ws, r, flashes, tm)
         _lights(ws, r, v, flashes, tm)
         td.cast_shadows(r)
-        r.flush(buf)
+        r.flush(buf, bg=VOID)
     except Exception:
         import traceback
         traceback.print_exc()

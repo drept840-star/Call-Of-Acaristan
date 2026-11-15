@@ -81,9 +81,13 @@ _STANDOFF_LINES = (
     ("VOLKOV", "Read it before you hand it over!"),
     ("VOLKOV", "The loose page. Read it."),
 )
-_STANDOFF_SAID_IDX = 2        # standoff_3 speaks the alarm warning (VO_218)
-_STANDOFF_SPOT_FRAMES = 36    # K spots them (~0.6 s), then the alarm
-_STANDOFF_CAM_EASE = 0.08     # per-frame lerp, settles in ~0.6 s
+_STANDOFF_SAID_IDX = 2          # standoff_3 speaks the alarm warning (VO_218)
+_STANDOFF_SPOT_FRAMES = 28      # K spots them (~0.47 s), then the alarm
+_STANDOFF_ESCAPE_FRAMES = 56    # brief camera hold as Volkov clears the bay shutter
+_STANDOFF_CAM_EASE = 0.10       # per-frame camera ease during standoff
+_VOLKOV_RUN_DOOR_SPEED = 4.6    # px/frame @ 60 fps toward the bay shutter
+_VOLKOV_RUN_EXIT_SPEED = 5.2    # px/frame @ 60 fps east along the exterior yard
+_VOLKOV_DUST_FRAMES = 6
 
 
 def _trigger_rect(trigger_id):
@@ -314,10 +318,122 @@ def standoff_commander():
     return next((e for e in STATE.enemies if getattr(e, "is_commander", False)), None)
 
 
+def _update_volkov_escape():
+    """Advance Volkov's sprint out through the bay shutter and east off the yard.
+
+    ``to_door`` lifts the shutter just far enough, ducks him under it and slams
+    it behind him; ``exterior_run`` takes him east along the row-30 yard to the
+    map edge, where he finally clears the fight. Runs from
+    ``_standoff_update`` while the standoff owns the frame and from
+    ``game_update`` for the loud route (alarm without a standoff).
+    """
+    if STATE.volkov_escape_timer <= 0:
+        return
+    STATE.volkov_escape_timer -= 1
+    if not STATE.volkov_escape_pos or STATE.volkov_escaped:
+        if STATE.volkov_escape_timer == 0:
+            STATE.volkov_escaped = True
+            STATE.commander_escaped = True
+        return
+    dt_mul = min(3.0, 60.0 * STATE.dt)
+    bay_x = 15 * TILE_SIZE + 32
+    bay_wait_y = 28 * TILE_SIZE + 38
+    bay_clear_y = 30 * TILE_SIZE + 26
+    exit_x = 26 * TILE_SIZE + 48
+    exit_y = 30 * TILE_SIZE + 36
+    bay_doors = [d for d in STATE.doors if d.is_bay]
+    stage = getattr(STATE, "_m1_volkov_escape_stage", "to_door")
+    vx, vy = STATE.volkov_escape_pos
+
+    def _sync_bay_collision(d):
+        h = max(0, int(TILE_SIZE * (1.0 - d.anim_progress)))
+        d.collision_rect = pygame.Rect(d.rect.x, d.rect.y, TILE_SIZE, h) if h > 0 else None
+
+    if stage == "to_door":
+        if not getattr(STATE, "_m1_volkov_door_opened", False):
+            STATE._m1_volkov_door_opened = True
+            audio.play("door_open", volume=0.45)
+        for d in bay_doors:
+            d.locked = False
+            d.target_open = True
+            d.manual_timer = 120
+            d.anim_progress = min(0.58, d.anim_progress + 0.045 * dt_mul)
+            _sync_bay_collision(d)
+        dx, dy = bay_x - vx, bay_clear_y - vy
+        dist = math.hypot(dx, dy)
+        STATE._m1_volkov_angle = math.atan2(dy, dx) if dist > 1.0 else math.pi * 0.5
+        waiting_shutter = (vy >= bay_wait_y and bay_doors and bay_doors[0].anim_progress < 0.42)
+        if not waiting_shutter and dist > 4.0:
+            step = min(dist, _VOLKOV_RUN_DOOR_SPEED * dt_mul)
+            vx += (dx / dist) * step
+            vy += (dy / dist) * step
+            STATE.volkov_escape_pos[0], STATE.volkov_escape_pos[1] = vx, vy
+            if STATE.volkov_escape_timer % _VOLKOV_DUST_FRAMES == 0:
+                p = Particle(vx, vy + 8, (115, 110, 100))
+                p.life = 18
+                STATE.particles.append(p)
+        if vy >= bay_clear_y or dist <= 4.0:
+            STATE._m1_volkov_escape_stage = "exterior_run"
+            for d in bay_doors:
+                d.target_open = False
+                d.locked = True
+                d.manual_timer = 0
+            audio.play("door_rattle", volume=0.55)
+            effects.shake(4)
+            if not getattr(STATE, "_m1_volkov_escape_said", False):
+                STATE._m1_volkov_escape_said = True
+                trigger_radio_chatter(
+                    'VASILE: "{}"'.format(_dialogues.line("m1.radio", "volkov_escaped", "Volkov escaped! Get that notebook and get out."))
+                )
+    else:
+        for d in bay_doors:
+            d.target_open = False
+            d.locked = True
+            d.anim_progress = max(0.0, d.anim_progress - 0.075 * dt_mul)
+            _sync_bay_collision(d)
+        if bay_doors and bay_doors[0].anim_progress <= 0.0 and not getattr(STATE, "_m1_volkov_bay_slammed", False):
+            STATE._m1_volkov_bay_slammed = True
+            audio.play("door_open", volume=0.4)
+        dx, dy = exit_x - vx, exit_y - vy
+        dist = math.hypot(dx, dy)
+        STATE._m1_volkov_angle = math.atan2(dy, dx) if dist > 1.0 else 0.0
+        if dist > 8.0:
+            step = min(dist, _VOLKOV_RUN_EXIT_SPEED * dt_mul)
+            STATE.volkov_escape_pos[0] = vx + (dx / dist) * step
+            STATE.volkov_escape_pos[1] = vy + (dy / dist) * step
+            if STATE.volkov_escape_timer % _VOLKOV_DUST_FRAMES == 0:
+                p = Particle(vx, vy + 8, (115, 110, 100))
+                p.life = 18
+                STATE.particles.append(p)
+        else:
+            STATE.volkov_escaped = True
+            STATE.volkov_escape_timer = 0
+
+    if STATE.volkov_escape_timer == 0:
+        # Timer ran out mid-yard: close the shutter, still count him gone.
+        for d in bay_doors:
+            d.anim_progress = 0.0
+            d.target_open = False
+            d.locked = True
+            _sync_bay_collision(d)
+        if not getattr(STATE, "_m1_volkov_escape_said", False):
+            STATE._m1_volkov_escape_said = True
+            trigger_radio_chatter(
+                'VASILE: "{}"'.format(_dialogues.line("m1.radio", "volkov_escaped", "Volkov escaped! Get that notebook and get out."))
+            )
+        STATE.volkov_escaped = True
+        STATE.commander_escaped = True
+
+
 def _standoff_update():
     """Starts when Biribel steps into volkov_standoff with no alarm latched; while
-    it plays it owns the frame (True = gameplay frozen). Ends with K spotting
-    them -> trigger_alarm_early(), which starts Volkov's existing 90-frame run."""
+    it plays it owns the frame (True = gameplay frozen).
+
+    ``talk`` speaks the four beats with the shared speech-box pacer, ``spot``
+    holds K's red '!' (even if he is dead or stuck behind the row-25 gate),
+    ``escape`` latches the alarm and holds the camera on Volkov's sprint out
+    through the bay shutter for ``_STANDOFF_ESCAPE_FRAMES`` before control
+    returns. The run itself carries on in ``game_update`` afterwards."""
     global _last_keys
     so = getattr(STATE, "_m1_standoff", None)
     p = STATE.player
@@ -330,9 +446,15 @@ def _standoff_update():
         col, row = p.rect.centerx // TILE_SIZE, p.rect.centery // TILE_SIZE
         if not r or not (r[0] <= col < r[0] + r[2] and r[1] <= row < r[1] + r[3]):
             return False
-        so = STATE._m1_standoff = {"t": 0, "next": 0, "idx": -1, "spot": 0,
-                                   "beats": _standoff_beats()}
-    if STATE.stealth_failed:
+        from ui import speechbox as _speechbox
+        _speechbox.reset_box()
+        so = STATE._m1_standoff = {
+            "phase": "talk", "t": 0, "next": 0, "idx": -1,
+            "spot": 0, "spotter": False, "escape_t": 0, "bar_k": 0.0,
+            "beats": _standoff_beats(), "pacer": _speechbox.Pacer(), "shown": 0,
+            "scripted_alarm": False, "vpos_0": tuple(STATE.volkov_pos),
+        }
+    if STATE.stealth_failed and not so.get("scripted_alarm"):
         # Alarm latched some other way mid-play: drop out cleanly; the run is
         # already going and trigger_alarm_early skipped the warning if
         # standoff_3 had spoken it.
@@ -342,34 +464,97 @@ def _standoff_update():
     _last_keys = ()
     STATE.shot_cooldown = max(STATE.shot_cooldown, 2)     # no firing while frozen
     beats = so["beats"]
-    if so["idx"] < len(beats) and so["t"] >= so["next"]:
-        so["idx"] += 1
-        if so["idx"] < len(beats):
-            b = beats[so["idx"]]
-            ms = max(2200, 55 * len(b["text"]), _standoff_vo(b) + 350)
-            so["next"] = so["t"] + ms * 60 // 1000
-            if so["idx"] == _STANDOFF_SAID_IDX:
-                STATE._m1_standoff_said = True
-    so["t"] += 1
-    vx, vy = STATE.volkov_pos
     px, py = p.rect.centerx, p.rect.centery
-    p.angle = math.atan2(vy - py, vx - px)
-    # Camera eases to frame both; follow_gameplay eases it back afterwards.
-    tx = max(0, min(max(0, MAP_W * TILE_SIZE - WIDTH), (px + vx) / 2 - WIDTH / 2))
-    ty = max(0, min(max(0, MAP_H * TILE_SIZE - HEIGHT), (py + vy) / 2 - HEIGHT / 2))
-    STATE.camera_x += (tx - STATE.camera_x) * _STANDOFF_CAM_EASE
-    STATE.camera_y += (ty - STATE.camera_y) * _STANDOFF_CAM_EASE
-    if so["idx"] >= len(beats):
+    vx, vy = STATE.volkov_pos
+    max_cx = max(0, MAP_W * TILE_SIZE - WIDTH)
+    max_cy = max(0, MAP_H * TILE_SIZE - HEIGHT)
+    phase = so["phase"]
+
+    if phase == "talk":
+        so["bar_k"] = min(1.0, so["bar_k"] + 0.1)
+        if so["idx"] < len(beats) and so["t"] >= so["next"]:
+            so["idx"] += 1
+            if so["idx"] < len(beats):
+                from ui import speechbox as _speechbox
+                b = beats[so["idx"]]
+                vo_ms = _standoff_vo(b)
+                so["pacer"].start(b["text"], vo_ms=vo_ms, radio=False)
+                lead, dur = _speechbox.reveal_window(b["text"], vo_ms, radio=False)
+                hold_ms = max(2200, int(lead + dur + 950), vo_ms + 350)
+                so["next"] = so["t"] + hold_ms * 60 // 1000
+                if so["idx"] == _STANDOFF_SAID_IDX:
+                    STATE._m1_standoff_said = True
+            else:
+                k = standoff_commander()
+                if k is not None and k.hp > 0:
+                    so["phase"] = "spot"
+                    so["spotter"] = True
+                    so["spot"] = 0
+                    audio.play("menu_hover", volume=0.45)
+                else:
+                    so["phase"] = "escape"
+                    so["escape_t"] = 0
+                    so["scripted_alarm"] = True
+                    STATE._m1_standoff_scripted = True
+                    trigger_alarm_early()
+        if 0 <= so["idx"] < len(beats):
+            so["shown"] = so["pacer"].step(beats[so["idx"]]["text"])
+        so["t"] += 1
+        # Volkov backs slightly toward the bay shutter as the exchange sharpens.
+        if so["idx"] >= 2:
+            v0x, v0y = so["vpos_0"]
+            STATE.volkov_pos = (v0x, min(v0y + 16.0, vy + 0.45))
+            vx, vy = STATE.volkov_pos
+        p.angle = math.atan2(vy - py, vx - px)
+        focus_x, focus_y = 0.44 * px + 0.56 * vx, 0.44 * py + 0.56 * vy + 18.0
+    elif phase == "spot":
+        so["bar_k"] = 1.0
         so["spot"] += 1
         k = standoff_commander()
-        if k is not None:
+        if k is not None and k.hp > 0:
+            # K can be stranded north of the locked row-25 gate: step him into
+            # the gate doorway so the '!' lands on a body the player can see.
+            if k.rect.centery < 25 * TILE_SIZE + 16:
+                gx, gy = 14 * TILE_SIZE + 32, 25 * TILE_SIZE + 32
+                dx, dy = gx - k.rect.centerx, gy - k.rect.centery
+                dist = math.hypot(dx, dy)
+                if dist > 4.0:
+                    k.rect.centerx += int(round((dx / dist) * min(dist, 3.5)))
+                    k.rect.centery += int(round((dy / dist) * min(dist, 3.5)))
             k.angle = math.atan2(py - k.rect.centery, px - k.rect.centerx)
+            focus_x = (px + vx + k.rect.centerx) / 3.0
+            focus_y = (py + vy + k.rect.centery) / 3.0 + 14.0
+        else:
+            focus_x, focus_y = 0.44 * px + 0.56 * vx, 0.44 * py + 0.56 * vy + 18.0
+        p.angle = math.atan2(vy - py, vx - px)
         if so["spot"] >= _STANDOFF_SPOT_FRAMES:
-            STATE._m1_standoff = None
-            STATE._m1_standoff_done = True
+            so["phase"] = "escape"
+            so["escape_t"] = 0
+            so["scripted_alarm"] = True
             STATE._m1_standoff_scripted = True     # WP7: waves still count this as quiet
             trigger_alarm_early()
+    else:
+        so["escape_t"] += 1
+        _update_volkov_escape()
+        for pt in STATE.particles[:]:
+            pt.update()
+            if pt.life <= 0:
+                STATE.particles.remove(pt)
+        vp = STATE.volkov_escape_pos or STATE.volkov_pos
+        focus_x = 0.38 * px + 0.62 * vp[0]
+        focus_y = 0.38 * py + 0.62 * vp[1]
+        p.angle = math.atan2(vp[1] - py, vp[0] - px)
+        if so["escape_t"] >= _STANDOFF_ESCAPE_FRAMES - 16:
+            so["bar_k"] = max(0.0, (_STANDOFF_ESCAPE_FRAMES - so["escape_t"]) / 16.0)
+        if so["escape_t"] >= _STANDOFF_ESCAPE_FRAMES or STATE.volkov_escaped:
+            STATE._m1_standoff = None
+            STATE._m1_standoff_done = True
             return False
+
+    tx = max(0, min(max_cx, focus_x - WIDTH / 2))
+    ty = max(0, min(max_cy, focus_y - HEIGHT / 2))
+    STATE.camera_x += (tx - STATE.camera_x) * _STANDOFF_CAM_EASE
+    STATE.camera_y += (ty - STATE.camera_y) * _STANDOFF_CAM_EASE
     return True
 
 
@@ -537,35 +722,6 @@ def game_update(keys):
                 duration=240,
             )
             STATE.breach_stage = 6
-    # ── Volkov escape animation ──
-    if STATE.volkov_escape_timer > 0:
-        STATE.volkov_escape_timer -= 1
-        bay_door_y = 29 * TILE_SIZE + 32
-        if STATE.volkov_escape_pos and not STATE.volkov_escaped:
-            dx = 15 * TILE_SIZE + 32 - STATE.volkov_escape_pos[0]
-            dy = bay_door_y - STATE.volkov_escape_pos[1]
-            dist = math.hypot(dx, dy)
-            if dist > 5:
-                STATE.volkov_escape_pos[0] += (dx / dist) * 2.5
-                STATE.volkov_escape_pos[1] += (dy / dist) * 2.5
-            else:
-                STATE.volkov_escaped = True
-        if STATE.commander_escape_pos and not STATE.commander_escaped:
-            dx = 15 * TILE_SIZE + 32 - STATE.commander_escape_pos[0]
-            dy = bay_door_y - STATE.commander_escape_pos[1]
-            dist = math.hypot(dx, dy)
-            if dist > 5:
-                STATE.commander_escape_pos[0] += (dx / dist) * 2.5
-                STATE.commander_escape_pos[1] += (dy / dist) * 2.5
-            else:
-                STATE.commander_escaped = True
-        if STATE.volkov_escape_timer == 30:
-            trigger_radio_chatter(
-                'VASILE: "{}"'.format(_dialogues.line("m1.radio", "volkov_escaped", "Volkov escaped! Get that notebook and get out."))
-            )
-        if STATE.volkov_escape_timer == 0:
-            STATE.volkov_escaped = True
-            STATE.commander_escaped = True
     _wave_director()
     _fire_spread_update()
     _exfil_van_update()
@@ -745,6 +901,7 @@ def game_update(keys):
     if STATE.player:
         for d in STATE.doors:
             d.update(STATE.player.rect, STATE.enemies)
+    _update_volkov_escape()     # Volkov's run (after Doors so they cannot fight the shutter)
     if STATE.player and not STATE.player_dead:
         # Use raw mouse position for the angle, scaled mouse is for UI
         # but since we are in GAME state, the cursor is hidden and we

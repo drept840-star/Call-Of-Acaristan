@@ -37,14 +37,16 @@ from core.outfits import OUTFIT_GUARD
 from core.state import STATE
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
-from engine3d import POSES, blend, clamp
-from engine3d.core import m_apply
+from engine3d import Mesh, POSES, blend, box, clamp
+from engine3d.core import m_apply, m_mul, rot_x, rot_y, rot_z
+from engine3d.rig import NEUTRAL, pose_run
 from engine3d.hold import GRIPS, hold_cached, solve_arm_safe
 from missions.m6 import hud3d as H
 from missions.m6 import yard_hud as U
 from missions.m7 import raid3d as R
 
 from . import chase_set as S
+from . import epilogue3d as E
 
 
 SPEED = 11.0
@@ -81,6 +83,7 @@ ADS_UP, ADS_DOWN = 11.0, 7.0
 # - Small supporting bloom ahead of the opening.
 # - No invented muzzle-brake jets, ember fountain or emissive "smoke".
 FLASH_MS = 52
+ENEMY_FLASH_MS = 72
 FLASH_LEN = 0.44
 FLASH_CORE_R = 0.028
 FLASH_PETALS = 5
@@ -97,6 +100,7 @@ SPEAKER = {
     "BODI": (226, 170, 98),
     "BIRIBEL": (228, 230, 222),
     "GUARD": (206, 128, 112),
+    "RETARDOVICI": (220, 150, 140),
 }
 
 CAPTURE_S = 9.0
@@ -104,6 +108,7 @@ SECTION_NAMES = (
     "FARM TRACK",
     "THE DITCH",
     "ROUTE 12 WRECKS",
+    "THE GUNSHIP",
     "KIM KIM CROSSING",
 )
 
@@ -132,11 +137,28 @@ SPAWNS = (
         (44.0, "jeep", -1.4),
     ),
     (
+        (3.0, "jeep", -1.6),
+        (24.0, "jeep", 1.8),
+    ),
+    (
         (2.0, "jeep", -1.6),
         (8.0, "jeep", 1.6),
         (15.0, "jeep", 0.0),
     ),
 )
+
+# --- the gunship -------------------------------------------------------------
+HELI_HP = 280
+HELI_GUNNER_HP = 18
+HELI_LOCK_S = 1.5
+ROCKET_HP = 2
+ROCKET_HIT_R = 0.65
+ROCKET_DMG = 40.0
+DODGE_S = 1.7
+
+REPAIR_S = 2.4
+REPAIR_HEAL = 45.0
+REPAIRS_MAX = 2
 
 # The descent film plays the first PULL_S seconds using the chase simulation.
 PULL_S = 4.5
@@ -468,6 +490,98 @@ def _reload_keys(hum):
     return _KEYS
 
 
+_REPAIR_KEYS = {}
+_REPAIR_GRAB_LOCAL = (0.30, 0.99, -0.16)
+_REPAIR_WORK_LOCAL = (0.16, 0.99, -0.32)
+
+
+def _repair_keys(hum):
+    """Crouch/toolbox/hammer poses on the trailer bed, solved once with IK."""
+    if not _REPAIR_KEYS:
+        base = dict(
+            POSES["crouch"],
+            spine=44,
+            twist=-14,
+            head_p=20,
+            head_y=0,
+            lsh_p=46,
+            lsh_r=6,
+            lel=42,
+            rsh_p=44,
+            rsh_r=2,
+            rel=24,
+        )
+        # Reaching into the open toolbox (~0.58 m ahead of _REPAIR_GRAB_LOCAL)
+        grab_base = dict(base, spine=52, twist=-12, head_p=22)
+        grab = solve_arm_safe(hum, grab_base, (0.0, 0.0, 0.0), 0.0, "l", (-0.20, 0.32, 0.42))
+        grab = solve_arm_safe(hum, grab, (0.0, 0.0, 0.0), 0.0, "r", (0.0, 0.24, 0.56))
+
+        # High overhead wind-up before swinging down onto the coupling housing
+        up_base = dict(
+            base,
+            spine=26,
+            twist=18,
+            head_p=8,
+            head_y=-16,
+            rsh_p=92,
+            rsh_r=18,
+            rsh_y=-14,
+            rel=84,
+        )
+        work_up = solve_arm_safe(hum, up_base, (0.0, 0.0, 0.0), 0.0, "l", (-0.18, 0.28, 0.44))
+
+        # Impact follow-through (left hand braced on deck/housing, hammer drives flat)
+        dn_base = dict(
+            base,
+            spine=46,
+            twist=-20,
+            head_p=24,
+            head_y=8,
+            rsh_p=44,
+            rsh_r=-8,
+            rsh_y=4,
+            rel=16,
+        )
+        work_down = solve_arm_safe(hum, dn_base, (0.0, 0.0, 0.0), 0.0, "l", (-0.18, 0.24, 0.46))
+
+        _REPAIR_KEYS["reach"] = dict(base, spine=36, head_p=14)
+        _REPAIR_KEYS["grab"] = grab
+        _REPAIR_KEYS["work_up"] = work_up
+        _REPAIR_KEYS["work_down"] = work_down
+    return _REPAIR_KEYS
+
+
+def _hammer_curve(frac):
+    """Asymmetric hammer blow: 0 = struck down, 1 = cocked high."""
+    if frac < 0.46:
+        return R._ease(frac / 0.46)
+    if frac < 0.56:
+        return 1.0 - 0.02 * ((frac - 0.46) / 0.10)
+    if frac < 0.72:
+        u = (frac - 0.56) / 0.16
+        return 0.98 * (1.0 - u ** 2.4)
+    if frac < 0.88:
+        u = (frac - 0.72) / 0.16
+        return 0.18 * math.sin(math.pi * u)
+    return 0.05 * ((frac - 0.88) / 0.12)
+
+
+def _right_forearm_mat(pose, yaw):
+    """Right-forearm world rotation matching Humanoid._placements()."""
+    p = dict(NEUTRAL)
+    p.update(pose)
+    B = m_mul(rot_y(yaw), m_mul(rot_x(p["body_p"]), rot_z(p["body_r"])))
+    S = m_mul(B, m_mul(rot_y(p["twist"]), m_mul(rot_x(p["spine"]), rot_z(p["spine_r"]))))
+    U = m_mul(
+        S,
+        m_mul(
+            rot_z(p["rsh_r"]),
+            m_mul(rot_x(-p["rsh_p"]), rot_y(p.get("rsh_y", 0.0))),
+        ),
+    )
+    return m_mul(U, rot_x(-p["rel"]))
+
+
 def _cover_lift(el):
     if el is None:
         return 0.0
@@ -648,9 +762,9 @@ def flash_star(tip, f, rx, ry, k, seed, scale=1.0):
     col_c1 = _flash_col((255, 238, 175), (255, 150, 52), k)
     for i in range(n_core):
         j = (i + 1) % n_core
-        m.face([ring0[i], ring0[j], ring1[j]], col_c0, 2, True)
-        m.face([ring0[i], ring1[j], ring1[i]], col_c0, 2, True)
-        m.face([ring1[i], ring1[j], apex], col_c1, 2, True)
+        m.face([ring0[i], ring0[j], ring1[j]], col_c0, 2, True, True)
+        m.face([ring0[i], ring1[j], ring1[i]], col_c0, 2, True, True)
+        m.face([ring1[i], ring1[j], apex], col_c1, 2, True, True)
 
     # 2. Short forward-angled muzzle crown (3D creased fins right at the bore).
     col_crown = _flash_col((255, 224, 128), (242, 112, 32), k)
@@ -679,8 +793,8 @@ def flash_star(tip, f, rx, ry, k, seed, scale=1.0):
             ca * flare_r,
             sa * flare_r,
         )
-        m.face([r_in, r_l, f_tip], col_crown, 2, True)
-        m.face([r_in, f_tip, r_r], col_crown, 2, True)
+        m.face([r_in, r_l, f_tip], col_crown, 2, True, True)
+        m.face([r_in, f_tip, r_r], col_crown, 2, True, True)
 
     # 3. Uneven two-stage 3D axial flame tongues.
     col_mid = _flash_col((255, 206, 84), (240, 102, 24), k)
@@ -729,12 +843,12 @@ def flash_star(tip, f, rx, ry, k, seed, scale=1.0):
         tip_r = radius * (0.25 + 0.45 * h1)
         end_pt = pt(tongue_len, ca * tip_r, sa * tip_r)
 
-        m.face([root_in, root_l, mid_ridge], col_mid, 2, True)
-        m.face([root_l, mid_l, mid_ridge], col_mid, 2, True)
-        m.face([root_in, mid_ridge, root_r], col_mid, 2, True)
-        m.face([root_r, mid_ridge, mid_rt], col_mid, 2, True)
-        m.face([mid_l, end_pt, mid_ridge], col_tip, 2, True)
-        m.face([mid_ridge, end_pt, mid_rt], col_tip, 2, True)
+        m.face([root_in, root_l, mid_ridge], col_mid, 2, True, True)
+        m.face([root_l, mid_l, mid_ridge], col_mid, 2, True, True)
+        m.face([root_in, mid_ridge, root_r], col_mid, 2, True, True)
+        m.face([root_r, mid_ridge, mid_rt], col_mid, 2, True, True)
+        m.face([mid_l, end_pt, mid_ridge], col_tip, 2, True, True)
+        m.face([mid_ridge, end_pt, mid_rt], col_tip, 2, True, True)
 
     return m
 
@@ -749,6 +863,7 @@ class ChaseScene:
         self.done = False
         self.result = None
         self.audio = None
+        self._heli_seen = False
         self._setup(0)
 
     # --- lifecycle ---------------------------------------------------------
@@ -769,15 +884,26 @@ class ChaseScene:
             self.audio = None
 
         cp = int(getattr(STATE, "m8_chase_cp", 0) or 0)
+        ending = bool(getattr(STATE, "m8_chase_ending", False))
+        heli = bool(getattr(STATE, "m8_chase_heli", False))
+        if ending:
+            STATE.m8_chase_ending = False
+            cp = 4
+        elif heli:
+            STATE.m8_chase_heli = False
+            cp = 3
+        if cp < 3 or heli:
+            self._heli_seen = False
         if cp:
             self._setup(cp)
-            if getattr(STATE, "m8_chase_ending", False):
+            if ending:
                 # dev --dev-mission8-ending: the last jeep is already burning at the crossing
-                STATE.m8_chase_ending = False
                 self.z = S.CROSSING_Z - 0.5
                 for e in self.enemies:
                     if e["kind"] == "blocker":
                         self._wreck(e)
+            elif cp == 3 and not self._heli_seen:
+                self._start_heli_cutscene()
         else:
             self._adopt(pullout_scene(PULL_S))
 
@@ -785,17 +911,21 @@ class ChaseScene:
 
         try:
             S.renderer()
+            S.helicopter_parts()
+            S.rocket()
             hum = _w.hum(BIRIBEL, flags=(GUN,))
+            _w.hum(("guard", "heavy"), flags=("os12",))
             b = PITCH_LIM[0]
             while b <= PITCH_LIM[1]:
                 _hold(hum, b)
                 b += PITCH_STEP
             _reload_keys(hum)
+            _repair_keys(hum)
         except Exception:
             pass
 
     def _setup(self, cp, t=0.0):
-        self.cp = max(0, min(3, cp))
+        self.cp = max(0, min(4, cp))
         self.t = t
         self.sec_t = 0.0
         self.z = S.SECTIONS[self.cp] + (
@@ -832,8 +962,13 @@ class ChaseScene:
         self.lines = []
         self.said = set()
         self.flashes = []
+        self.bullets = []
+        self.impacts = []
         self.sparks = []
         self.puffs = []
+        self.hurt = 0.0
+        self.dmg_marks = []
+        self._hit_snd_t = -9.0
         self._emit = {}
 
         self.dying = False
@@ -842,9 +977,18 @@ class ChaseScene:
         self.wreck_t = None
         self.slew = 0.0
         self.captors = []
+        self.heli = None
+        self.rockets = []
+        self.repairs = REPAIRS_MAX
+        self.repair_t = None
+        self._repair_heal_left = 0.0
+        self._repair_spark_i = -1
+        self._cutscene_wait = False
+        self.dodge_t = None
+        self.dodge_lane = 0.0
 
         self.cp_toast = self.t if self.cp else -9.0
-        self.timer = CROSSING_TIME if self.cp == 3 else None
+        self.timer = CROSSING_TIME if self.cp == 4 else None
         self.end_t = None
         self._jump_start = None
         self.barrier_t = None
@@ -854,13 +998,15 @@ class ChaseScene:
         self._snd_t = -9.0
         self._crash_t = -9.0
 
-        if self.cp == 3:
+        if self.cp == 4:
             self._spawn(
                 "blocker",
                 0.0,
                 z=S.CROSSING_Z,
                 x=S.road_x(S.CROSSING_Z) - 0.4,
             )
+        if self.cp == 3:
+            self._spawn_heli()
 
         if self.cp == 0:
             self.say(
@@ -870,6 +1016,9 @@ class ChaseScene:
             )
 
         self._snd("trac_move")
+
+        if self.cp == 3 and self._heli_seen:
+            self._spawn_heli()
 
     def _adopt(self, sim):
         """Begin where the descent pullout ends."""
@@ -928,6 +1077,8 @@ class ChaseScene:
     def handle_event(self, event):
         if not self._active or self.paused:
             return
+        if self.repair_t is not None:
+            return
 
         if (
             event.type == pygame.MOUSEMOTION
@@ -962,9 +1113,26 @@ class ChaseScene:
             self.aiming = False
         elif (
             event.type == pygame.KEYDOWN
+            and event.key in (pygame.K_SPACE, pygame.K_a, pygame.K_d)
+            and not self.dying
+            and self.end_t is None
+        ):
+            self._try_dodge(event.key)
+        elif (
+            event.type == pygame.KEYDOWN
             and event.key == pygame.K_r
         ):
             self._reload()
+        elif (
+            event.type == pygame.KEYDOWN
+            and event.key == pygame.K_e
+            and self.repair_t is None
+            and not self.dying
+            and self.end_t is None
+            and self.wreck_t is None
+            and not self._cutscene_wait
+        ):
+            self._try_repair()
 
     # --- geometry ----------------------------------------------------------
 
@@ -1128,7 +1296,7 @@ class ChaseScene:
             math.cos(y) * math.cos(p),
         )
 
-    def camera(self):
+    def _combat_camera(self):
         if (
             self.wreck_t is not None
             and self.t - self.wreck_t > 0.3
@@ -1176,9 +1344,10 @@ class ChaseScene:
         if self.end_t is not None:
             el = self.t - self.end_t
             (tx, ty, tz), _ = self.tractor_pos()
+            pan = 1.2 * max(0.0, el - 2.0)
             return (
                 (tx - 9.0 + 0.4 * el, 2.4, tz - 7.0),
-                (tx + 4.0, 1.6, tz + 1.0),
+                (tx + 4.0 + pan, 1.6, tz + 1.0),
                 52.0,
             )
 
@@ -1224,6 +1393,21 @@ class ChaseScene:
             )
             fov += (ADS_FOV - fov) * a
 
+        return eye, tgt, fov
+
+    def camera(self):
+        base = self._combat_camera()
+        if self.repair_t is None:
+            return base
+        el = self.t - self.repair_t
+        w = R._ease(clamp(min(el / 0.40, (REPAIR_S - el) / 0.40), 0.0, 1.0))
+        (lx, ly, lz), lyaw = self.trailer_pos()
+        lp = S.ditch_pitch(lz)
+        s_eye = S._xf((2.25, 2.55, -1.45), (lx, ly, lz), lyaw, lp)
+        s_tgt = S._xf((0.22, 1.30, 0.16), (lx, ly, lz), lyaw, lp)
+        eye = tuple(base[0][i] + (s_eye[i] - base[0][i]) * w for i in range(3))
+        tgt = tuple(base[1][i] + (s_tgt[i] - base[1][i]) * w for i in range(3))
+        fov = base[2] + (50.0 - base[2]) * w
         return eye, tgt, fov
 
     def aim_ray(self):
@@ -1292,6 +1476,15 @@ class ChaseScene:
         e["yaw"] = (
             90.0 if kind == "blocker" else S.road_yaw(e["z"])
         )
+        y, pitch, roll = self._ground_pose(kind, e["x"], e["z"], e["yaw"])
+        e["y"] = y
+        e["vy"] = 0.0
+        e["pitch"] = pitch
+        e["roll"] = roll
+        e["_gy"] = y
+        e["wy"] = y
+        e["wp"] = pitch
+        e["wr"] = roll
         self.enemies.append(e)
         return e
 
@@ -1350,7 +1543,7 @@ class ChaseScene:
         return sum(
             1 for e in self.enemies
             if e["alive"] and not e["wrecked"]
-        )
+        ) + (1 if self.heli_active() else 0)
 
     def _enemy_move(self, dt):
         tz = self.z
@@ -1400,6 +1593,13 @@ class ChaseScene:
                 e["yaw"] = 90.0 + e["spin"]
 
         self._resolve_contacts(dt)
+        for e in self.enemies:
+            if e["kind"] == "foot":
+                continue
+            if e["wrecked"]:
+                self._sync_wreck_ground(e)
+            else:
+                self._step_vehicle_y(e, dt)
 
     @staticmethod
     def _lift(e, pitch, roll=0.0):
@@ -1415,10 +1615,147 @@ class ChaseScene:
             + 1.5 * max(0.0, -cr * cp)
         )
 
+    @staticmethod
+    def _axles(kind):
+        return (
+            (-2.0, 1.9, 0.85)
+            if kind == "gun_truck"
+            else (-1.25, 1.25, 0.82)
+        )
+
+    def _ground_pose(self, kind, x, z, yaw):
+        """Ground-fitted (y, pitch, roll) at the four tyres of ``kind``."""
+        if kind == "foot":
+            return S.surface_y(x, z), 0.0, 0.0
+
+        lr, lf, hw = self._axles(kind)
+        cy = math.cos(math.radians(yaw))
+        sy = math.sin(math.radians(yaw))
+
+        def sy_at(xl, zl):
+            return S.surface_y(
+                x + xl * cy + zl * sy,
+                z + zl * cy - xl * sy,
+            )
+
+        y_rl, y_rr = sy_at(-hw, lr), sy_at(hw, lr)
+        y_fl, y_fr = sy_at(-hw, lf), sy_at(hw, lf)
+        if y_rl == 0.0 and y_rr == 0.0 and y_fl == 0.0 and y_fr == 0.0:
+            return 0.0, 0.0, 0.0
+
+        y_r = 0.5 * (y_rl + y_rr)
+        y_f = 0.5 * (y_fl + y_fr)
+        y_l = 0.5 * (y_rl + y_fl)
+        y_rt = 0.5 * (y_rr + y_fr)
+
+        y = y_r + (-lr) / (lf - lr) * (y_f - y_r)
+        pitch = math.degrees(math.atan2(y_f - y_r, lf - lr))
+        roll = math.degrees(math.atan2(y_rt - y_l, 2.0 * hw))
+        return y, pitch, roll
+
+    def _air_pitch_limits(self, kind, x, y, z, yaw, roll):
+        lr, lf, hw = self._axles(kind)
+        cy = math.cos(math.radians(yaw))
+        sy = math.sin(math.radians(yaw))
+        sr = math.sin(math.radians(roll))
+
+        def sy_at(xl, zl):
+            return S.surface_y(
+                x + xl * cy + zl * sy,
+                z + zl * cy - xl * sy,
+            )
+
+        yf_req = max(sy_at(-hw, lf) + hw * sr, sy_at(hw, lf) - hw * sr)
+        yr_req = max(sy_at(-hw, lr) + hw * sr, sy_at(hw, lr) - hw * sr)
+        p_min = (
+            math.degrees(math.asin(clamp((yf_req - y) / lf, -1.0, 1.0)))
+            if y - yf_req < lf
+            else -90.0
+        )
+        p_max = (
+            math.degrees(math.asin(clamp((y - yr_req) / (-lr), -1.0, 1.0)))
+            if y - yr_req < -lr
+            else 90.0
+        )
+        return p_min, p_max
+
+    def _step_vehicle_y(self, e, dt, speed=None):
+        gy, gp, gr = self._ground_pose(e["kind"], e["x"], e["z"], e["yaw"])
+        prev_gy = e.get("_gy", gy)
+        e["_gy"] = gy
+        y = e.get("y", gy)
+        vy = e.get("vy", 0.0)
+        pitch = e.get("pitch", gp)
+
+        if dt <= 1e-6:
+            e["y"] = max(y, gy)
+            e["vy"] = vy
+            e["pitch"] = gp if e["y"] <= gy + 0.005 else pitch
+            e["roll"] = gr
+            return
+
+        slope_vy = (gy - prev_gy) / dt
+        if y <= gy + 0.005 and vy <= slope_vy + 0.25:
+            y = gy
+            vy = slope_vy
+            pitch = gp
+        else:
+            vy -= 9.8 * dt
+            y += vy * dt
+            spd = abs(e["v"] if speed is None else speed)
+            target_p = clamp(
+                math.degrees(math.atan2(vy, max(spd, 1.0))) * 0.6,
+                -10.0,
+                8.0,
+            )
+            pitch += (target_p - pitch) * min(1.0, dt * 6.0)
+            if y <= gy:
+                y = gy
+                vy = slope_vy
+                pitch = gp
+            else:
+                p_min, p_max = self._air_pitch_limits(
+                    e["kind"], e["x"], y, e["z"], e["yaw"], gr
+                )
+                if p_min <= p_max:
+                    pitch = clamp(pitch, p_min, p_max)
+                else:
+                    y = gy
+                    vy = slope_vy
+                    pitch = gp
+
+        e["y"] = y
+        e["vy"] = vy
+        e["pitch"] = pitch
+        e["roll"] = gr
+
+    def _wreck_floor(self, e):
+        gy, gp, gr = self._ground_pose(e["kind"], e["x"], e["z"], e["yaw"])
+        rel_p = e["wp"] - gp
+        sgn_p = 1.0 if math.cos(math.radians(rel_p)) >= 0.0 else -1.0
+        rel_r = e["wr"] - sgn_p * gr
+        floor = gy + self._lift(e, rel_p, rel_r)
+        return gy, gp, gr, rel_p, sgn_p, rel_r, floor
+
+    def _sync_wreck_ground(self, e):
+        _, _, _, _, _, _, floor = self._wreck_floor(e)
+        if e["wy"] < floor:
+            e["wy"] = floor
+
+    def _enemy_pose(self, e):
+        if e["kind"] == "foot":
+            return S.surface_y(e["x"], e["z"]), 0.0, 0.0
+        if e["wrecked"]:
+            return e["wy"], e["wp"], e["wr"]
+        if "y" in e:
+            return e["y"], e["pitch"], e["roll"]
+        return self._ground_pose(e["kind"], e["x"], e["z"], e["yaw"])
+
     def _wreck_step(self, e, dt):
         """Ballistic wreck motion, landing, sliding and settling."""
+        gy, gp, gr, rel_p, sgn_p, rel_r, floor = self._wreck_floor(e)
         air = (
-            e["wy"] > self._lift(e, e["wp"], e["wr"]) + 0.02
+            e["wy"] > floor + 0.02
             or e["wvy"] > 0.1
         )
 
@@ -1429,8 +1766,8 @@ class ChaseScene:
             e["wr"] += e["wrr"] * dt
         else:
             if (
-                math.cos(math.radians(e["wp"]))
-                * math.cos(math.radians(e["wr"]))
+                math.cos(math.radians(rel_p))
+                * math.cos(math.radians(rel_r))
                 > 0.9
             ):
                 fric = e["w_fric"] + 10.0 * abs(
@@ -1445,19 +1782,19 @@ class ChaseScene:
             )
             k = min(1.0, dt * 6.0)
             e["wp"] += (
-                round(e["wp"] / 180.0) * 180.0 - e["wp"]
+                gp + round(rel_p / 180.0) * 180.0 - e["wp"]
             ) * k
             e["wr"] += (
-                round(e["wr"] / 90.0) * 90.0 - e["wr"]
+                sgn_p * gr + round(rel_r / 90.0) * 90.0 - e["wr"]
             ) * k
 
         e["spin"] += e["wyr"] * dt
-        lift = self._lift(e, e["wp"], e["wr"])
+        _, _, _, _, _, _, floor = self._wreck_floor(e)
 
-        if e["wy"] < lift or not air:
-            e["wy"] = lift
+        if e["wy"] < floor or not air:
+            e["wy"] = floor
 
-        if e["wy"] <= lift and e["wvy"] <= 0.0:
+        if e["wy"] <= floor and e["wvy"] <= 0.0:
             if air and e["wvy"] < -2.5:
                 hit = -e["wvy"]
                 e["wvy"] = hit * 0.35
@@ -1572,7 +1909,12 @@ class ChaseScene:
         cur_lat = e["x"] - S.road_x(e["z"])
         r = self._radius(e)
         edge = max(0.5, S.ROAD_W / 2.0 - r)
-        shoulder = S.ROAD_W / 2.0 + 1.5
+        near_bridge = S.DITCH_Z - 26.0 <= e["z"] <= S.DITCH_Z + 4.0
+        shoulder = (
+            S.ROAD_W / 2.0 - 0.5
+            if near_bridge
+            else S.ROAD_W / 2.0 + 1.5
+        )
         pref = clamp(e["lat"], -edge, edge)
 
         speed = max(e["v"], 0.0)
@@ -1814,19 +2156,12 @@ class ChaseScene:
                     )
 
                 gun = self._enemy_gun(e)
-                bx, _by, bz = self.biribel_pos()
-                self.flashes.append(
-                    (
-                        self.t,
-                        gun,
-                        math.degrees(
-                            math.atan2(
-                                bx - gun[0],
-                                bz - gun[2],
-                            )
-                        ),
-                    )
+                bx, by, bz = self.biribel_pos()
+                gyaw = math.degrees(math.atan2(bx - gun[0], bz - gun[2]))
+                gpitch = math.degrees(
+                    math.atan2(by + 1.3 - gun[1], math.hypot(bx - gun[0], bz - gun[2]))
                 )
+                self.flashes.append((self.t, gun, gyaw, gpitch, heavy))
 
                 if self.t - self._snd_t > 0.08:
                     self._snd_t = self.t
@@ -1839,17 +2174,17 @@ class ChaseScene:
                         "guard_shot", 0.8 * pan, dist
                     )
 
-                hit = 0.55 if dist > 25.0 else 0.75
-                if (
-                    (e["slot"] * 7 + int(self.t * 10)) % 100
-                ) / 100.0 < hit:
-                    self.damage(
-                        2.2
-                        if heavy
-                        else 2.8
-                        if e["kind"] != "foot"
-                        else 1.2
-                    )
+                hit_p = 0.55 if dist > 25.0 else 0.75
+                hit = ((e["slot"] * 7 + int(self.t * 10)) % 100) / 100.0 < hit_p
+                dmg = 2.2 if heavy else 2.8 if e["kind"] != "foot" else 1.2
+                self._spawn_enemy_bullet(
+                    gun,
+                    hit=hit,
+                    dmg=dmg,
+                    src=(e["x"], e["z"]),
+                    heavy=heavy,
+                    from_heli=False,
+                )
 
         # Wrecks go once lost in the fog, so they never block incoming cars.
         self.enemies = [
@@ -1861,30 +2196,41 @@ class ChaseScene:
         ]
 
     def _enemy_gun(self, e):
+        y, pitch, roll = self._enemy_pose(e)
         if e["kind"] == "gun_truck":
-            return _local(
-                (e["x"], 0.0, e["z"]),
-                e["yaw"],
+            return S._xf(
                 S.TRUCK_GUN,
+                (e["x"], y, e["z"]),
+                e["yaw"],
+                pitch,
+                roll,
             )
         if e["kind"] == "foot":
-            return e["x"], 1.4, e["z"]
-        return _local(
-            (e["x"], 0.0, e["z"]),
-            e["yaw"],
+            return e["x"], y + 1.4, e["z"]
+        return S._xf(
             (-0.4, 1.7, 0.4),
+            (e["x"], y, e["z"]),
+            e["yaw"],
+            pitch,
+            roll,
         )
 
     def targets(self, e):
         """Enemy hit spheres as (part, world centre, radius)."""
-        p = (e["x"], 0.0, e["z"])
         yaw = e["yaw"]
 
         if e["kind"] == "foot":
+            fy = S.surface_y(e["x"], e["z"])
             return [
-                ("body", (e["x"], 1.15, e["z"]), 0.42),
-                ("head", (e["x"], 1.7, e["z"]), 0.24),
+                ("body", (e["x"], fy + 1.15, e["z"]), 0.42),
+                ("head", (e["x"], fy + 1.7, e["z"]), 0.24),
             ]
+
+        y, pitch, roll = self._enemy_pose(e)
+        p = (e["x"], y, e["z"])
+
+        def at(off):
+            return S._xf(off, p, yaw, pitch, roll)
 
         out = []
         if e["kind"] == "gun_truck":
@@ -1893,26 +2239,26 @@ class ChaseScene:
                 out.append(
                     (
                         "gunner",
-                        _local(p, yaw, (bx, by + 1.2, bz)),
+                        at((bx, by + 1.2, bz)),
                         0.45,
                     )
                 )
 
             out.append(
-                ("driver", _local(p, yaw, S.TRUCK_DRIVER), 0.4)
+                ("driver", at(S.TRUCK_DRIVER), 0.4)
             )
             for i, t in enumerate(S.TRUCK_TYRES):
                 out.append(
                     (
                         "tyre%d" % i,
-                        _local(p, yaw, t),
+                        at(t),
                         S.TRUCK_TYRE_R,
                     )
                 )
             out.append(
                 (
                     "body",
-                    _local(p, yaw, (0.0, 1.4, 0.0)),
+                    at((0.0, 1.4, 0.0)),
                     1.4,
                 )
             )
@@ -1920,20 +2266,20 @@ class ChaseScene:
 
         if e["driver"]:
             out.append(
-                ("driver", _local(p, yaw, S.CAR_DRIVER), 0.42)
+                ("driver", at(S.CAR_DRIVER), 0.42)
             )
 
         for i, t in enumerate(S.CAR_TYRES):
             out.append(
                 (
                     "tyre%d" % i,
-                    _local(p, yaw, t),
+                    at(t),
                     S.CAR_TYRE_R,
                 )
             )
 
         out.append(
-            ("body", _local(p, yaw, (0.0, 0.85, 0.0)), 1.05)
+            ("body", at((0.0, 0.85, 0.0)), 1.05)
         )
         return out
 
@@ -1989,6 +2335,12 @@ class ChaseScene:
             self._wreck(e, "body")
 
     def _wreck(self, e, cause="body"):
+        y, pitch, roll = self._enemy_pose(e)
+        base_vy = max(0.0, e.get("vy", 0.0))
+        e["wy"] = y
+        e["wp"] = pitch
+        e["wr"] = roll
+        e["wvy"] = e.get("vy", 0.0)
         e["wrecked"] = True
         e["alive"] = False
         e["dead_t"] = self.t
@@ -2013,14 +2365,14 @@ class ChaseScene:
 
             if cause == "tyre":
                 if v > 10.0 and rnd.random() < 0.35:
-                    e["wvy"] = rnd.uniform(2.5, 4.5) * big
+                    e["wvy"] = base_vy + rnd.uniform(2.5, 4.5) * big
                     e["wrr"] = (
                         -side * rnd.uniform(220.0, 420.0) * big
                     )
                     e["wpr"] = sgn * rnd.uniform(0.0, 50.0)
                     e["wyr"] = side * rnd.uniform(60.0, 140.0)
                 else:
-                    e["wvy"] = rnd.uniform(0.6, 1.5)
+                    e["wvy"] = base_vy + rnd.uniform(0.6, 1.5)
                     e["wyr"] = (
                         side
                         * rnd.uniform(120.0, 300.0)
@@ -2032,13 +2384,14 @@ class ChaseScene:
                     e["burn_at"] = 0.6
 
             elif cause == "driver":
+                e["wvy"] = e.get("vy", 0.0)
                 e["wyr"] = side * rnd.uniform(8.0, 30.0)
                 e["w_lat"] = side * rnd.uniform(1.5, 4.0)
                 e["w_fric"] = rnd.uniform(2.0, 3.5)
                 e["burn_at"] = 1.0
 
             elif cause == "crash":
-                e["wvy"] = (
+                e["wvy"] = base_vy + (
                     rnd.uniform(1.0, 3.5) * (0.5 + fast) * big
                 )
                 e["wpr"] = (
@@ -2059,7 +2412,7 @@ class ChaseScene:
                 pick = rnd.random()
 
                 if pick < 0.4:
-                    e["wvy"] = rnd.uniform(3.5, 6.5) * big
+                    e["wvy"] = base_vy + rnd.uniform(3.5, 6.5) * big
                     e["wrr"] = (
                         roll * rnd.uniform(260.0, 560.0) * big
                     )
@@ -2069,13 +2422,13 @@ class ChaseScene:
                     e["wyr"] = rnd.uniform(-90.0, 90.0)
 
                 elif pick < 0.62:
-                    e["wvy"] = rnd.uniform(2.8, 4.5) * big
+                    e["wvy"] = base_vy + rnd.uniform(2.8, 4.5) * big
                     e["wrr"] = roll * rnd.uniform(110.0, 190.0)
                     e["wpr"] = sgn * rnd.uniform(0.0, 40.0)
                     e["wyr"] = rnd.uniform(-60.0, 60.0)
 
                 elif pick < 0.87:
-                    e["wvy"] = rnd.uniform(2.0, 3.6) * big
+                    e["wvy"] = base_vy + rnd.uniform(2.0, 3.6) * big
                     e["wpr"] = (
                         sgn * rnd.uniform(30.0, 90.0) * big
                     )
@@ -2088,7 +2441,7 @@ class ChaseScene:
                     e["w_fric"] = rnd.uniform(3.0, 5.0)
 
                 else:
-                    e["wvy"] = rnd.uniform(5.5, 8.5) * big
+                    e["wvy"] = base_vy + rnd.uniform(5.5, 8.5) * big
                     e["wpr"] = (
                         sgn * rnd.uniform(220.0, 380.0) * big
                     )
@@ -2159,12 +2512,178 @@ class ChaseScene:
 
     # --- damage and capture ------------------------------------------------
 
-    def damage(self, n):
+    def _spawn_enemy_bullet(self, muzzle, hit, dmg, src, heavy=False, from_heli=False):
+        bx, by, bz = self.biribel_pos()
+        (lx, ly, lz), lyaw = self.trailer_pos()
+        dist = math.dist(muzzle, (bx, by + 1.3, bz))
+        speed = 135.0 if from_heli else 125.0
+        dur = clamp(dist / speed, 0.05, 0.30 if from_heli else 0.25)
+
+        ry = math.radians(S.road_yaw(self.z))
+        lead_x = math.sin(ry) * self.speed * dur
+        lead_z = math.cos(ry) * self.speed * dur
+
+        if hit:
+            roll = random.random()
+            if roll < 0.45:
+                tr_off = (
+                    random.uniform(-0.42, 0.42),
+                    random.uniform(2.05, 2.55),
+                    random.uniform(-1.55, -0.55),
+                )
+                kind = "metal"
+            elif roll < 0.80:
+                tr_off = (
+                    random.uniform(-1.05, 1.05),
+                    random.uniform(1.15, 1.85),
+                    -1.85 if random.random() < 0.55 else random.uniform(-1.75, 0.6),
+                )
+                kind = "metal" if tr_off[2] < -1.75 else "wood"
+            else:
+                tr_off = (
+                    random.uniform(-0.85, 0.85),
+                    random.uniform(1.30, 2.05),
+                    random.uniform(0.65, 1.40),
+                )
+                kind = "hay"
+            pt_now = S._xf(tr_off, (lx, ly, lz), lyaw, S.ditch_pitch(lz))
+            end = (pt_now[0] + lead_x, pt_now[1], pt_now[2] + lead_z)
+        else:
+            tr_off = None
+            if random.random() < 0.58:
+                dz_rel = random.uniform(-15.0, -3.2)
+                dx_rel = (
+                    random.choice((-1.0, 1.0)) * random.uniform(1.5, 4.2)
+                    if dz_rel > -5.0
+                    else random.uniform(-3.8, 3.8)
+                )
+                gz = lz + lead_z + dz_rel
+                gx = S.road_x(gz) + self.lane + dx_rel
+                gy = S.surface_y(gx, gz) + 0.05
+                end = (gx, gy, gz)
+                kind = "road"
+            else:
+                side = random.choice((-1.0, 1.0))
+                end = (
+                    bx + lead_x + side * random.uniform(0.65, 1.45),
+                    by + random.uniform(1.15, 2.10),
+                    bz + lead_z - random.uniform(1.1, 2.2),
+                )
+                kind = None
+
+        self.bullets.append(
+            {
+                "t0": self.t,
+                "dur": dur,
+                "start": muzzle,
+                "end": end,
+                "hit": hit,
+                "dmg": dmg,
+                "src": src,
+                "heavy": heavy,
+                "kind": kind,
+                "tr_off": tr_off,
+                "len": 3.4 if heavy else 2.2,
+            }
+        )
+        del self.bullets[:-28]
+
+    def _bullets_update(self, dt):
+        self.hurt = max(0.0, self.hurt - dt * 2.2)
+        self.dmg_marks = [m for m in self.dmg_marks if self.t - m[0] < 0.9]
+        self.impacts = [im for im in self.impacts if self.t - im["t0"] < 0.34]
+
+        if self.wreck_t is not None or self.dying or self.end_t is not None:
+            self.bullets.clear()
+            return
+
+        keep = []
+        for b in self.bullets:
+            if self.t < b["t0"] + b["dur"]:
+                keep.append(b)
+                continue
+
+            if b["hit"]:
+                self.damage(b["dmg"], src=b["src"], hit_pos=b["end"], kind=b["kind"])
+                if not self.dying and self.end_t is None and b["tr_off"] is not None:
+                    (lx, ly, lz), lyaw = self.trailer_pos()
+                    pos = S._xf(b["tr_off"], (lx, ly, lz), lyaw, S.ditch_pitch(lz))
+                    self.impacts.append(
+                        {
+                            "t0": self.t,
+                            "local": b["tr_off"],
+                            "pos": pos,
+                            "kind": b["kind"],
+                            "heavy": b["heavy"],
+                            "seed": random.randrange(1000),
+                        }
+                    )
+                    if b["kind"] in ("wood", "hay") and len(self.puffs) < PUFF_MAX:
+                        self.puffs.append(
+                            [
+                                0.0,
+                                pos[0],
+                                pos[1],
+                                pos[2],
+                                random.uniform(-0.8, 0.8),
+                                1.2,
+                                self.speed * 0.4,
+                                "dust",
+                                random.randrange(6),
+                            ]
+                        )
+            elif b["kind"] == "road":
+                pos = b["end"]
+                self.impacts.append(
+                    {
+                        "t0": self.t,
+                        "local": None,
+                        "pos": pos,
+                        "kind": "road",
+                        "heavy": b["heavy"],
+                        "seed": random.randrange(1000),
+                    }
+                )
+                if len(self.puffs) < PUFF_MAX:
+                    self.puffs.append(
+                        [
+                            0.0,
+                            pos[0],
+                            pos[1],
+                            pos[2],
+                            random.uniform(-0.6, 0.6),
+                            1.5,
+                            random.uniform(-0.6, 0.6),
+                            "dust",
+                            random.randrange(6),
+                        ]
+                    )
+
+        self.bullets = keep
+        del self.impacts[:-20]
+
+    def damage(self, n, src=None, hit_pos=None, kind=None):
         if self.dying or self.end_t is not None:
             return
+        if self.repair_t is not None:
+            n *= 0.35
 
         self.hull = max(0.0, self.hull - n)
         self._snd("hull_hit")
+        self.hurt = min(1.0, self.hurt + clamp(0.32 + n * 0.03, 0.32, 0.85))
+        self.shake = max(self.shake, clamp(0.24 + n * 0.018, 0.24, 0.85))
+
+        if self.t - self._hit_snd_t > 0.09:
+            self._hit_snd_t = self.t
+            self._snd("hurt", n)
+            if kind == "metal":
+                self._snd("metal", 0.0, 0.35)
+
+        if src is not None:
+            bx, _by, bz = self.biribel_pos()
+            bearing = _wrap(_yaw_to(src[0] - bx, src[1] - bz) - self.yaw)
+            self.dmg_marks.append((self.t, -bearing))
+            del self.dmg_marks[:-8]
 
         if self.hull < 35.0:
             self.say(
@@ -2174,8 +2693,69 @@ class ChaseScene:
                 key="low%d" % self.cp,
             )
 
+        if self.hull < 45.0 and self.repairs > 0 and self.repair_t is None:
+            self.say("BODI", "Toolbox on the trailer - patch her up!", 2.8, key="tb%d" % self.cp)
+
         if self.hull <= 0.0:
             self._capture_start()
+
+    # --- toolbox repair ----------------------------------------------------
+
+    def _toolbox_world(self):
+        (lx, ly, lz), lyaw = self.trailer_pos()
+        x, y, z = S._xf(S.TOOLBOX_AT, (lx, ly, lz), lyaw, S.ditch_pitch(lz))
+        return (x, y + 0.14, z)
+
+    def _looking_at_toolbox(self):
+        if self.repair_t is not None or self.dying or self.end_t is not None or self.wreck_t is not None:
+            return False
+        o, d = self.aim_ray()
+        return _ray_sphere(o, d, self._toolbox_world(), 0.58) is not None
+
+    def _try_repair(self):
+        if self.repairs <= 0 or self.hull >= HULL - 0.5:
+            return False
+        if not self._looking_at_toolbox():
+            return False
+        self.repairs -= 1
+        self.repair_t = self.t
+        self._repair_heal_left = REPAIR_HEAL
+        self._repair_spark_i = -1
+        self.firing = False
+        self.aiming = False
+        self.ads = 0.0
+        self.reloading = 0.0
+        self._snd("metal", 0.0, 0.35)
+        self.say("BODI", "Make it quick!", 2.0)
+        return True
+
+    def _repair_update(self, dt):
+        if self.repair_t is None:
+            return
+        el = self.t - self.repair_t
+        rate = REPAIR_HEAL / REPAIR_S
+        step = min(self._repair_heal_left, rate * dt)
+        if step > 0.0 and not self.dying:
+            self.hull = min(HULL, self.hull + step)
+            self._repair_heal_left -= step
+
+        # Hammer clank + spark ticks synced to the 3 downstrokes on the coupling.
+        if 1.04 <= el <= 1.92:
+            tick = int((el - 1.04) / 0.40)
+            if tick != self._repair_spark_i:
+                self._repair_spark_i = tick
+                self._snd("metal", 0.1, 0.42)
+                self.shake = max(self.shake, 0.18)
+                (lx, ly, lz), lyaw = self.trailer_pos()
+                spot = S._xf(S.RIG_PUMP_STRIKE, (lx, ly, lz), lyaw, S.ditch_pitch(lz))
+                self.sparks.append((self.t, spot))
+                del self.sparks[:-6]
+
+        if el >= REPAIR_S:
+            if self._repair_heal_left > 0.0 and not self.dying:
+                self.hull = min(HULL, self.hull + self._repair_heal_left)
+            self._repair_heal_left = 0.0
+            self.repair_t = None
 
     def _capture_start(self):
         self._fail(
@@ -2205,7 +2785,7 @@ class ChaseScene:
         p = _local(
             (x, 0.0, z), yaw - self.slew, off
         )
-        return p[0], S.ditch_y(p[2]), p[2]
+        return p[0], S.surface_y(p[0], p[2]), p[2]
 
     def _capture(self, dt):
         el = self.t - self.wreck_t
@@ -2232,6 +2812,7 @@ class ChaseScene:
                 self._wreck_step(e, dt)
                 e["z"] += e["v"] * dt
                 e["yaw"] = S.road_yaw(e["z"]) + e["spin"]
+                self._sync_wreck_ground(e)
                 continue
 
             gz = lz - 9.0 - 7.0 * k
@@ -2249,6 +2830,7 @@ class ChaseScene:
             e["yaw"] = S.road_yaw(e["z"]) + clamp(
                 (gx - e["x"]) * -8.0, -20.0, 20.0
             )
+            self._step_vehicle_y(e, dt, speed=v)
 
             if k < 3:
                 e["stop_k"] = k
@@ -2312,10 +2894,13 @@ class ChaseScene:
             car = cars[min(i, len(cars) - 1)]
 
             if car is not None:
-                src = _local(
-                    (car["x"], 0.0, car["z"]),
-                    car["yaw"],
+                cy, cp, cr = self._enemy_pose(car)
+                src = S._xf(
                     (-1.3, 0.0, 0.6 - 0.9 * (i // len(cars))),
+                    (car["x"], cy, car["z"]),
+                    car["yaw"],
+                    cp,
+                    cr,
                 )
             else:
                 src = self._ground(
@@ -2326,7 +2911,7 @@ class ChaseScene:
                 {
                     "src": (
                         src[0],
-                        S.ditch_y(src[2]),
+                        S.surface_y(src[0], src[2]),
                         src[2],
                     ),
                     "dst": self._ground(frame, stand),
@@ -2335,6 +2920,458 @@ class ChaseScene:
                     "seed": 170 + i,
                 }
             )
+
+    # --- the gunship -------------------------------------------------------
+
+    def _start_heli_cutscene(self):
+        """Pause the chase and run the gunship arrival through the house player."""
+        self._heli_seen = True
+        self._cutscene_wait = True
+        self.firing = False
+        self.aiming = False
+        self.ads = 0.0
+        self.reloading = 0.0
+        self.bullets.clear()
+        self.rockets.clear()
+        self.heli = None
+        self.set_paused(True)
+        try:
+            E.command_room()
+            _w.hum("retardovici")
+            _w.hum(("guard", "officer"))
+        except Exception:
+            pass
+        STATE.request_m8_cutscene = "heli"
+
+    def on_heli_cutscene_done(self):
+        """The arrival film ended: roll the rig forward and put the gunship on it."""
+        self._cutscene_wait = False
+        self.z = min(S.SECTIONS[4] - 80.0, self.z + 55.0)
+        self.odo += 55.0
+        self.cp_toast = self.t
+        self.yaw = 180.0
+        self.pitch = 6.0
+        self._spawn_heli()
+        self.heli["state"] = "orbit"
+        tx, tz = S.road_x(self.z), self.z - HITCH
+        self.heli["x"] = tx + 11.0
+        self.heli["y"] = 7.0
+        self.heli["z"] = tz - 31.0
+        self.heli["yaw"] = _yaw_to(tx - self.heli["x"], tz - self.heli["z"])
+        self.say("BODI", "Chopper! Get on that gun!", 3.2)
+
+    def heli_active(self):
+        return self.heli is not None and self.heli["state"] not in ("crashed",)
+
+    def _spawn_heli(self):
+        S.helicopter_parts()
+        z0 = self.z + 110.0
+        self.heli = {
+            "x": S.road_x(z0) + 28.0,
+            "y": 24.0,
+            "z": z0,
+            "yaw": 180.0,
+            "pitch": -6.0,
+            "roll": 0.0,
+            "hp": HELI_HP,
+            "max_hp": HELI_HP,
+            "phase2": False,
+            "engine_hits": 0,
+            "gunner": True,
+            "gunner_hp": HELI_GUNNER_HP,
+            "main_spin": 0.0,
+            "tail_spin": 0.0,
+            "state": "fly_in",
+            "t0": self.t,
+            "cool": 1.3,
+            "burst": 0,
+            "gun_idx": 0,
+            "rocket_stage": 0,
+            "salvo_left": 0,
+            "salvo_at": 0.0,
+            "last_rocket_t": -9.0,
+            "lock_t": 0.0,
+            "stagger_t": -9.0,
+            "vx": 0.0,
+            "vy": 0.0,
+            "vz": 0.0,
+            "crash_t": 0.0,
+            "bounces": 0,
+            "impact_t": None,
+            "cooked_off": False,
+            "boom_t": None,
+        }
+        self.rockets = []
+
+    def _heli_update(self, dt):
+        h = self.heli
+        if h is None:
+            return
+
+        if h["state"] in ("crashing", "skidding", "crashed"):
+            self._heli_crash_update(dt)
+            return
+
+        h["main_spin"] = (h["main_spin"] + dt * 1450.0) % 360.0
+        h["tail_spin"] = (h["tail_spin"] + dt * 2400.0) % 360.0
+        el = self.t - h["t0"]
+
+        if not h["phase2"] and h["hp"] <= h["max_hp"] * 0.50:
+            h["phase2"] = True
+            h["stagger_t"] = self.t
+            self._burst({"x": h["x"], "wy": h["y"] + 1.0, "z": h["z"], "v": 0.0}, "fire", 8, 4.0)
+            self.say("BODI", "She's smoking - watch out, he's coming in low!", 3.2)
+
+        if (h["phase2"] or h["hp"] < h["max_hp"] * 0.65) and len(self.puffs) < PUFF_MAX:
+            if int(self.t * 30.0) != int((self.t - dt) * 30.0):
+                self.puffs.append([
+                    0.0, h["x"], h["y"] + 2.0, h["z"],
+                    random.uniform(-0.8, 0.8), 1.4, self.speed * 0.3, "burn", random.randrange(6),
+                ])
+
+        tx, _ty, tz = S.road_x(self.z), 0.0, self.z - HITCH
+        if h["state"] == "fly_in":
+            if el < 2.2:
+                goal_x = S.road_x(self.z + 30.0) + 12.0
+                goal_y = 13.0
+                goal_z = self.z + 25.0
+            else:
+                h["state"] = "orbit"
+                goal_x = tx + 11.0
+                goal_y = 7.0
+                goal_z = tz - 31.0
+        elif h["state"] == "rocket_lock":
+            goal_x = tx + (3.0 * math.sin(el * 1.1) if h["phase2"] else 0.0)
+            goal_y = 6.2
+            goal_z = tz - 31.0
+        else:
+            if h["rocket_stage"] == 0 and (h["hp"] <= h["max_hp"] * 0.72 or el > 14.0):
+                h["rocket_stage"] = 1
+                h["salvo_left"] = 1
+                h["state"] = "rocket_lock"
+                h["lock_t"] = self.t
+                self._snd("horn", 0.35)
+                self.say("BODI", "MISSILE LOCK! Get ready to shoot or dodge!", 3.2)
+            elif h["rocket_stage"] == 1 and h["hp"] <= h["max_hp"] * 0.32 and self.t - h["last_rocket_t"] > 10.0:
+                h["rocket_stage"] = 2
+                h["salvo_left"] = 1
+                h["state"] = "rocket_lock"
+                h["lock_t"] = self.t
+                self._snd("horn", 0.45)
+                self.say("BODI", "ANOTHER LOCK - WATCH THE PYLON!", 3.2)
+
+            if h["phase2"]:
+                goal_x = tx + 16.5 * math.sin(el * 1.15)
+                goal_y = 6.2 + 1.8 * math.sin(el * 1.45)
+                goal_z = tz - (26.0 + 5.5 * math.cos(el * 0.85))
+            else:
+                goal_x = tx + 13.5 * math.sin(el * 0.85)
+                goal_y = 6.6 + 1.3 * math.sin(el * 1.05)
+                goal_z = tz - (28.0 + 5.0 * math.cos(el * 0.65))
+
+        old_x = h["x"]
+        rate = 2.8 if h["state"] == "rocket_lock" else (2.4 if h["phase2"] else 2.0)
+        h["x"] += (goal_x - h["x"]) * min(1.0, dt * rate)
+        h["y"] += (goal_y - h["y"]) * min(1.0, dt * 2.4)
+        h["z"] += (goal_z - h["z"]) * min(1.0, dt * 2.6)
+
+        lat_v = (h["x"] - old_x) / max(dt, 1e-4)
+        want_yaw = _yaw_to(tx - h["x"], tz - h["z"])
+        h["yaw"] = (h["yaw"] + _wrap(want_yaw - h["yaw"]) * min(1.0, dt * 5.5)) % 360.0
+        stag = 9.0 * math.sin((self.t - h["stagger_t"]) * 18.0) if self.t - h["stagger_t"] < 0.7 else 0.0
+        h["roll"] = clamp(-lat_v * 1.5 + stag, -26.0, 26.0)
+        h["pitch"] = clamp(-5.0 + (goal_z - h["z"]) * 0.35, -15.0, 8.0)
+
+        if h["state"] == "rocket_lock":
+            if self.t - h["lock_t"] >= HELI_LOCK_S:
+                self._launch_rocket(side=-1.0)
+                h["salvo_left"] -= 1
+                h["last_rocket_t"] = self.t
+                if h["salvo_left"] > 0:
+                    h["salvo_at"] = self.t + 0.60
+                h["state"] = "orbit"
+            return
+
+        if h["salvo_left"] > 0 and self.t >= h["salvo_at"]:
+            self._launch_rocket(side=1.0)
+            h["salvo_left"] -= 1
+            h["last_rocket_t"] = self.t
+
+        if h["state"] == "orbit" and not self.dying and self.end_t is None:
+            h["cool"] -= dt
+            if h["cool"] <= 0.0:
+                if h["burst"] <= 0:
+                    h["burst"] = (8 if h["gunner"] else 6) if h["phase2"] else (7 if h["gunner"] else 5)
+                h["burst"] -= 1
+                gap = 1.95 if h["phase2"] else 2.30
+                h["cool"] = (0.095 if h["phase2"] else 0.105) if h["burst"] > 0 else gap
+                self._heli_shoot()
+
+    def _heli_crash_update(self, dt):
+        h = self.heli
+        if h["state"] == "crashing":
+            h["main_spin"] = (h["main_spin"] + dt * 520.0) % 360.0
+            h["tail_spin"] = 0.0
+            h["vy"] -= 11.0 * dt
+            h["x"] += h["vx"] * dt
+            h["y"] += h["vy"] * dt
+            h["z"] += h["vz"] * dt
+            h["yaw"] = (h["yaw"] + dt * 290.0) % 360.0
+            h["pitch"] = clamp(h["pitch"] - dt * 22.0, -38.0, 18.0)
+            h["roll"] = clamp(h["roll"] + (42.0 if h["vx"] >= 0 else -42.0) * dt, -75.0, 75.0)
+
+            if len(self.puffs) < PUFF_MAX:
+                self.puffs.append([
+                    0.0, h["x"] + random.uniform(-0.8, 0.8), h["y"] + 1.4, h["z"] + random.uniform(-0.8, 0.8),
+                    random.uniform(-1.5, 1.5), 2.2, h["vz"] * 0.25, "burn", random.randrange(6),
+                ])
+                if random.random() < 0.55:
+                    self.puffs.append([
+                        0.0, h["x"], h["y"] + 1.2, h["z"],
+                        random.uniform(-1.0, 1.0), 1.6, h["vz"] * 0.2, "fire", random.randrange(6),
+                    ])
+
+            ground = S.surface_y(h["x"], h["z"]) + 0.95
+            if h["y"] <= ground and h["vy"] < 0.0:
+                h["y"] = ground
+                self.shake = max(self.shake, 1.0)
+                self._snd("crash")
+                h["boom_t"] = self.t
+                if h["impact_t"] is None:
+                    h["impact_t"] = self.t
+                self._burst({"x": h["x"], "wy": ground, "z": h["z"], "v": 0.0}, "fire", 20, 6.5)
+                self._burst({"x": h["x"], "wy": ground, "z": h["z"], "v": 0.0}, "blast", 18, 4.5)
+
+                if h["bounces"] == 0:
+                    h["bounces"] = 1
+                    h["vy"] = 3.8
+                    h["vx"] *= 0.55
+                    h["vz"] = self.speed * 0.30
+                else:
+                    h["state"] = "skidding"
+                    h["vy"] = 0.0
+                    h["vx"] *= 0.45
+                    h["vz"] *= 0.45
+            return
+
+        if h["state"] == "skidding":
+            h["x"] += h["vx"] * dt
+            h["z"] += h["vz"] * dt
+            h["vx"] *= math.exp(-3.8 * dt)
+            h["vz"] *= math.exp(-3.8 * dt)
+            h["y"] = S.surface_y(h["x"], h["z"]) + 0.95
+            want_roll = 84.0 if h["roll"] >= 0.0 else -84.0
+            h["roll"] += (want_roll - h["roll"]) * min(1.0, dt * 7.0)
+            h["pitch"] += (-16.0 - h["pitch"]) * min(1.0, dt * 6.0)
+            if math.hypot(h["vx"], h["vz"]) < 0.6:
+                h["state"] = "crashed"
+                h["vx"] = h["vz"] = 0.0
+
+        if h["impact_t"] is not None and not h["cooked_off"] and self.t - h["impact_t"] >= 0.75:
+            h["cooked_off"] = True
+            h["boom_t"] = self.t
+            self.shake = max(self.shake, 0.9)
+            self._snd("crash")
+            self._burst({"x": h["x"], "wy": h["y"] + 0.5, "z": h["z"], "v": 0.0}, "fire", 24, 7.5)
+            self._burst({"x": h["x"], "wy": h["y"] + 0.8, "z": h["z"], "v": 0.0}, "blast", 22, 5.2)
+            self.say("BODI", "He's down! Border crossing's right ahead!", 3.4)
+
+        if abs(h["z"] - self.z) < 150.0 and len(self.puffs) < PUFF_MAX and random.random() < 0.45:
+            self.puffs.append([
+                0.0, h["x"] + random.uniform(-1.0, 1.0), h["y"] + 0.8, h["z"] + random.uniform(-1.0, 1.0),
+                random.uniform(-0.8, 0.8), 2.6, 0.0, "burn" if random.random() < 0.7 else "fire",
+                random.randrange(6),
+            ])
+
+    def _heli_shoot(self):
+        h = self.heli
+        info = S.helicopter_parts()[3]
+        pts = [info["chin_gun"], info["pods"][0], info["pods"][1]]
+        if h["gunner"]:
+            gx, gy, gz = info["gunner_seat"]
+            pts.append((gx, gy + 1.35, gz))
+        h["gun_idx"] = (h["gun_idx"] + 1) % len(pts)
+        off = pts[h["gun_idx"]]
+        heavy = h["gun_idx"] < 3
+
+        muzzle = S._xf(off, (h["x"], h["y"], h["z"]), h["yaw"], h["pitch"], h["roll"])
+        bx, by, bz = self.biribel_pos()
+        dist = math.hypot(h["x"] - bx, h["z"] - bz)
+        gyaw = _yaw_to(bx - muzzle[0], bz - muzzle[2])
+        gpitch = math.degrees(
+            math.atan2(by + 1.35 - muzzle[1], math.hypot(bx - muzzle[0], bz - muzzle[2]))
+        )
+        self.flashes.append((self.t, muzzle, gyaw, gpitch, heavy))
+
+        if self.t - self._snd_t > 0.08:
+            self._snd_t = self.t
+            yr = math.radians(self.yaw)
+            pan = (
+                (muzzle[0] - bx) * math.cos(yr) - (muzzle[2] - bz) * math.sin(yr)
+            ) / max(dist, 1.0)
+            self._snd("guard_shot", 0.8 * pan, dist)
+
+        self._spawn_enemy_bullet(
+            muzzle,
+            hit=(random.random() < 0.30),
+            dmg=1.6,
+            src=(h["x"], h["z"]),
+            heavy=heavy,
+            from_heli=True,
+        )
+
+    def _launch_rocket(self, side=-1.0):
+        h = self.heli
+        info = S.helicopter_parts()[3]
+        pylon = info["pods"][0 if side < 0 else 1] if side > 0 else info["rocket_pylon"]
+        pos = S._xf(pylon, (h["x"], h["y"], h["z"]), h["yaw"], h["pitch"], h["roll"])
+        tx, ty, tz = self.tractor_pos()[0]
+        self._snd("rocket")
+        self.rockets.append({
+            "pos": pos,
+            "start": pos,
+            "target_lane": self.lane,
+            "arc": side * 1.8,
+            "hp": ROCKET_HP,
+            "max_hp": ROCKET_HP,
+            "yaw": _yaw_to(tx - pos[0], tz - pos[2]),
+            "pitch": math.degrees(math.atan2((ty + 1.05) - pos[1], math.hypot(tx - pos[0], tz - pos[2]))),
+            "t0": self.t,
+            "done": False,
+            "dodged": False,
+        })
+
+    def _try_dodge(self, key):
+        inbound = [rk for rk in self.rockets if not rk["done"] and not rk["dodged"]]
+        late_lock = (
+            self.heli is not None
+            and self.heli["state"] == "rocket_lock"
+            and (self.t - self.heli["lock_t"]) >= HELI_LOCK_S - 0.5
+        )
+        if not (inbound or late_lock):
+            return
+        if key == pygame.K_a:
+            side = -1.0
+        elif key == pygame.K_d:
+            side = 1.0
+        else:
+            aim_lane = inbound[0]["target_lane"] if inbound else self.lane
+            side = -1.0 if aim_lane >= 0.0 else 1.0
+        self.dodge_lane = side * 2.85
+        self.dodge_t = self.t
+        self.shake = max(self.shake, 0.35)
+        self._snd("trac_move")
+
+    def _rocket_update(self, dt):
+        tx, ty, tz = self.tractor_pos()[0]
+        for rk in self.rockets:
+            if rk["done"]:
+                continue
+            old_x, old_y, old_z = rk["pos"]
+            px, py, pz = old_x, old_y, old_z
+            pz += (self.speed + 16.0) * dt
+            total_z = max(1.0, tz - rk["start"][2])
+            frac = clamp((pz - rk["start"][2]) / total_z, 0.0, 1.0)
+            aim_x = S.road_x(pz) + rk["target_lane"]
+            aim_y = ty + 1.05
+            arc_off = rk["arc"] * math.sin(math.pi * frac) * (1.0 - frac)
+            px = rk["start"][0] + (aim_x - rk["start"][0]) * frac + arc_off
+            py = rk["start"][1] + (aim_y - rk["start"][1]) * frac
+            rk["pos"] = (px, py, pz)
+
+            vx, vy, vz = px - old_x, py - old_y, pz - old_z
+            if vx * vx + vy * vy + vz * vz > 1e-8:
+                rk["yaw"] = _yaw_to(vx, vz)
+                rk["pitch"] = math.degrees(math.atan2(vy, math.hypot(vx, vz)))
+
+            if len(self.puffs) < PUFF_MAX:
+                tail = S._xf((0.0, 0.0, -S.ROCKET_LEN * 0.5), rk["pos"], rk["yaw"], rk["pitch"])
+                self.puffs.append([0.0, tail[0], tail[1], tail[2], random.uniform(-0.3, 0.3), 0.5, 0.0, "fire", 0])
+
+            if pz >= tz - HITCH - 0.5:
+                if rk["dodged"]:
+                    if pz >= tz + 24.0:
+                        self._detonate_rocket(rk, hit_player=False)
+                elif abs(self.lane - rk["target_lane"]) >= 1.35:
+                    rk["dodged"] = True
+                    self.say("BODI", "Close! Too close!", 2.4)
+                elif pz >= tz - 1.0:
+                    self._detonate_rocket(rk, hit_player=True)
+
+        self.rockets = [rk for rk in self.rockets if not rk["done"]]
+
+    def _detonate_rocket(self, rk, hit_player=False, shot_down=False):
+        rk["done"] = True
+        pos = rk["pos"]
+        self._snd("crash")
+        self.shake = max(self.shake, 0.95 if hit_player else 0.45)
+        self._burst({"x": pos[0], "wy": pos[1], "z": pos[2], "v": 0.0}, "fire", 12, 4.8, y=0.0)
+        self._burst({"x": pos[0], "wy": pos[1], "z": pos[2], "v": 0.0}, "blast", 10, 3.2, y=0.0)
+        if hit_player:
+            self.damage(ROCKET_DMG, src=(pos[0], pos[2]), kind="metal")
+        elif shot_down and self.heli is not None and self.heli["state"] not in ("crashing", "skidding", "crashed"):
+            self.heli["stagger_t"] = self.t
+            self.hurt_heli("body", dmg=20)
+            self.say("BODI", "Shot it right out of the sky!", 2.4)
+
+    def heli_targets(self):
+        h = self.heli
+        if h is None or h["state"] in ("crashing", "skidding", "crashed"):
+            return []
+        info = S.helicopter_parts()[3]
+        pos = (h["x"], h["y"], h["z"])
+        out = []
+        if h["gunner"]:
+            gx, gy, gz = info["gunner_seat"]
+            out.append((
+                "gunner",
+                S._xf((gx, gy + 1.15, gz), pos, h["yaw"], h["pitch"], h["roll"]),
+                0.50,
+            ))
+        out.append(("cockpit", S._xf(info["pilot_seat"], pos, h["yaw"], h["pitch"], h["roll"]), 0.60))
+        out.append(("chin_gun", S._xf(info["chin_gun"], pos, h["yaw"], h["pitch"], h["roll"]), 0.45))
+        out.append(("engine", S._xf((0.0, 2.25, 0.1), pos, h["yaw"], h["pitch"], h["roll"]), 0.72))
+        out.append(("body", S._xf((0.0, 1.4, 0.0), pos, h["yaw"], h["pitch"], h["roll"]), 1.85))
+        out.append(("tail", S._xf((0.0, 1.5, -4.0), pos, h["yaw"], h["pitch"], h["roll"]), 0.85))
+        return out
+
+    def hurt_heli(self, part, dmg=None):
+        h = self.heli
+        if h is None or h["state"] in ("crashing", "skidding", "crashed"):
+            return
+        self.hit_mark = self.t
+        if part == "gunner" and h["gunner"]:
+            h["gunner_hp"] -= 1
+            self._snd("impact", True)
+            if h["gunner_hp"] <= 0:
+                h["gunner"] = False
+                dmg = 22
+                h["stagger_t"] = self.t
+                self.say("BODI", "Got the door gunner!", 2.4)
+            else:
+                dmg = 2
+        elif dmg is None:
+            if part == "engine":
+                h["engine_hits"] += 1
+                if h["engine_hits"] % 18 == 0:
+                    h["stagger_t"] = self.t
+                    h["burst"] = 0
+                dmg = 2
+            else:
+                dmg = 2 if part in ("cockpit", "chin_gun") else 1
+        self._snd("headshot" if part in ("cockpit", "gunner", "engine") else "metal")
+        h["hp"] = max(0, h["hp"] - dmg)
+        if h["hp"] <= 0 and h["state"] not in ("crashing", "skidding", "crashed"):
+            h["state"] = "crashing"
+            h["crash_t"] = self.t
+            side = 1.0 if h["x"] < S.road_x(h["z"]) else -1.0
+            h["vx"] = side * 9.5
+            h["vy"] = 3.6
+            h["vz"] = self.speed * 0.85
+            h["boom_t"] = self.t
+            self._snd("crash")
+            self._burst({"x": h["x"], "wy": h["y"] + 1.6, "z": h["z"] - 3.0, "v": 0.0}, "fire", 14, 5.2)
+            self._burst({"x": h["x"], "wy": h["y"] + 1.6, "z": h["z"] - 3.0, "v": 0.0}, "blast", 12, 3.8)
 
     def _fail(self, msg):
         if self.dying:
@@ -2421,6 +3458,20 @@ class ChaseScene:
             *PITCH_LIM,
         )
 
+        for rk in self.rockets:
+            if rk["done"]:
+                continue
+            s = _ray_sphere(o, d, rk["pos"], ROCKET_HIT_R)
+            if s is not None and s < 160.0:
+                rk["hp"] -= 1
+                self.hit_mark = self.t
+                self._snd("metal")
+                self.sparks.append((self.t, tuple(o[i] + d[i] * s for i in range(3))))
+                del self.sparks[:-6]
+                if rk["hp"] <= 0:
+                    self._detonate_rocket(rk, shot_down=True)
+                return
+
         best = None
         for e in self.enemies:
             if not e["alive"] or e["wrecked"]:
@@ -2442,6 +3493,15 @@ class ChaseScene:
                 ):
                     best = s, e, part
 
+        for part, c, rad in self.heli_targets():
+            s = _ray_sphere(o, d, c, rad)
+            if (
+                s is not None
+                and s < 140.0
+                and (best is None or s < best[0] or abs(s - best[0]) < 0.6)
+            ):
+                best = s, None, part
+
         if best is not None:
             s, e, part = best
             self.sparks.append(
@@ -2451,7 +3511,10 @@ class ChaseScene:
                 )
             )
             del self.sparks[:-6]
-            self.hurt_enemy(e, part)
+            if e is None:
+                self.hurt_heli(part)
+            else:
+                self.hurt_enemy(e, part)
 
         if self.mag <= 0:
             self._reload()
@@ -2492,11 +3555,15 @@ class ChaseScene:
             0.05,
         )
         self.t += dt
+        if self._cutscene_wait:
+            return
         bed = (
             "chase_end"
             if self.end_t is not None
+            else "chase_heli"
+            if self.heli_active()
             else "chase_x"
-            if self.cp == 3
+            if self.cp == 4
             else "chase"
         )
         self._snd("bed", bed, self.speed / SPEED)
@@ -2529,6 +3596,13 @@ class ChaseScene:
 
         self.shake = max(0.0, self.shake - dt * 1.5)
         self._puffs_update(dt)
+        self._bullets_update(dt)
+        self._repair_update(dt)
+
+        if self.dodge_t is not None and self.t - self.dodge_t >= DODGE_S:
+            self.dodge_t = None
+        self._heli_update(dt)
+        self._rocket_update(dt)
 
         if self.wreck_t is not None:
             self._capture(dt)
@@ -2642,13 +3716,16 @@ class ChaseScene:
                 back = (
                     -2.6 if e["kind"] == "gun_truck" else -2.0
                 )
+                y, pitch, roll = self._enemy_pose(e)
                 out.append(
                     (
                         "dust",
-                        _local(
-                            (e["x"], 0.0, e["z"]),
-                            e["yaw"],
+                        S._xf(
                             (0.0, 0.2, back),
+                            (e["x"], y, e["z"]),
+                            e["yaw"],
+                            pitch,
+                            roll,
                         ),
                         11.0,
                         id(e),
@@ -2727,9 +3804,11 @@ class ChaseScene:
 
     def _drive(self, dt):
         stop = None
-        if self.cp == 3 and self.blocked():
+        if self.cp == 3 and self.heli_active():
+            stop = S.SECTIONS[4] - 30.0
+        elif self.cp == 4 and self.blocked():
             stop = STOP_Z
-        elif self.cp == 3:
+        elif self.cp == 4:
             stop = S.CROSSING_Z
 
         want = SPEED
@@ -2748,7 +3827,11 @@ class ChaseScene:
             self.z, self.speed = stop, 0.0
 
         lane = 0.0
-        if self.cp == 2:
+        steer = 1.6
+        if self.dodge_t is not None:
+            lane = self.dodge_lane
+            steer = 11.5
+        elif self.cp == 2:
             for wx, wz in S.wrecks():
                 if -6.0 < wz - self.z < 26.0:
                     lane = (
@@ -2758,7 +3841,7 @@ class ChaseScene:
 
         self.lane += (
             lane - self.lane
-        ) * min(1.0, dt * 1.6)
+        ) * min(1.0, dt * steer)
 
         if abs(self.z - S.DITCH_Z) < 4.0:
             self.shake = 1.0
@@ -2772,7 +3855,7 @@ class ChaseScene:
             self._checkpoint(nxt)
 
         if (
-            self.cp == 3
+            self.cp == 4
             and self.barrier_t is None
             and self.z >= S.BARRIER_Z - 3.0
         ):
@@ -2781,7 +3864,7 @@ class ChaseScene:
             self._snd("impact", False)
 
         if (
-            self.cp == 3
+            self.cp == 4
             and not self.blocked()
             and self.z >= S.CROSSING_Z - 0.3
         ):
@@ -2800,7 +3883,8 @@ class ChaseScene:
         self.cp = n
         self.sec_t = 0.0
         self.spawn_i = 0
-        self.hull = max(self.hull, 60.0)
+        self.hull = max(self.hull, 65.0)
+        self.repairs = max(self.repairs, REPAIRS_MAX)
         STATE.m8_chase_cp = n
         self.cp_toast = self.t
 
@@ -2812,6 +3896,14 @@ class ChaseScene:
             )
 
         if n == 3:
+            self.heli = None
+            self.rockets = []
+            if not self._heli_seen:
+                self._start_heli_cutscene()
+            else:
+                self._spawn_heli()
+
+        if n == 4:
             self.timer = CROSSING_TIME
             self._spawn(
                 "blocker",
@@ -2872,7 +3964,8 @@ class ChaseScene:
         now = self.t
         out = []
 
-        for t0, pos, _gyaw in self.flashes:
+        for f in self.flashes:
+            t0, pos = f[0], f[1]
             age = now - t0
             if 0.0 <= age < 0.08:
                 out.append(
@@ -2885,6 +3978,25 @@ class ChaseScene:
                         "range": 6.0,
                     }
                 )
+
+        for im in self.impacts:
+            if im["kind"] == "metal":
+                age = now - im["t0"]
+                if 0.0 <= age < 0.07:
+                    (lx, ly, lz), lyaw = self.trailer_pos()
+                    pos = (
+                        S._xf(im["local"], (lx, ly, lz), lyaw, S.ditch_pitch(lz))
+                        if im["local"] is not None
+                        else im["pos"]
+                    )
+                    out.append(
+                        {
+                            "pos": pos,
+                            "color": (255, 205, 120),
+                            "intensity": 1.3 * (1.0 - age / 0.07),
+                            "range": 3.5,
+                        }
+                    )
 
         if self.wreck_t is not None:
             (tx, ty, tz), tyaw = self.tractor_pos()
@@ -2977,6 +4089,21 @@ class ChaseScene:
             0.5,
         )
         self._draw_mount(r)
+        lp = S.ditch_pitch(lz)
+        tb_pos = S._xf(S.TOOLBOX_AT, (lx, ly, lz), lyaw, lp)
+        S.put(r, "toolbox_base", S.toolbox_base, tb_pos, lyaw, lp)
+        open_k = 0.0
+        if self.repair_t is not None:
+            el_r = self.t - self.repair_t
+            open_k = R._ease(clamp(min((el_r - 0.32) / 0.18, (2.14 - el_r) / 0.16), 0.0, 1.0))
+        lid_pos = S._xf(
+            tuple(S.TOOLBOX_AT[i] + S.TOOLBOX_HINGE[i] for i in range(3)),
+            (lx, ly, lz),
+            lyaw,
+            lp,
+        )
+        S.put(r, "toolbox_lid", S.toolbox_lid, lid_pos, lyaw, lp - 95.0 * open_k)
+        self._draw_heli(r, tm)
 
         for e in self.enemies:
             if e["kind"] == "foot":
@@ -2987,10 +4114,9 @@ class ChaseScene:
                 if e["kind"] == "gun_truck"
                 else "jeep"
             )
-            y = pitch = roll = 0.0
+            y, pitch, roll = self._enemy_pose(e)
 
             if e["wrecked"]:
-                y, pitch, roll = e["wy"], e["wp"], e["wr"]
                 if (
                     self.t - e["dead_t"]
                     > e.get("burn_at", 0.2)
@@ -3009,11 +4135,12 @@ class ChaseScene:
                 roll,
             )
             big = e["kind"] == "gun_truck"
+            gy = S.surface_y(e["x"], e["z"])
             r.add_blob_shadow(
-                (e["x"], 0.06, e["z"]),
+                (e["x"], gy + 0.06, e["z"]),
                 1.35 if big else 1.15,
                 3.1 if big else 2.4,
-                0.5 / (1.0 + y),
+                0.5 / (1.0 + max(0.0, y - gy)),
             )
 
         rx = S.road_x(S.BARRIER_Z)
@@ -3054,6 +4181,110 @@ class ChaseScene:
             (self.train_x(), 0.0, S.CROSSING_Z),
             0.0,
         )
+
+    def _draw_heli(self, r, tm):
+        h = self.heli
+        if h is None:
+            return
+        burned = h["state"] in ("skidding", "crashed")
+        S.put_helicopter(
+            r,
+            (h["x"], h["y"], h["z"]),
+            h["yaw"], h["pitch"], h["roll"],
+            h["main_spin"], h["tail_spin"],
+            burned=burned,
+        )
+        gy = S.surface_y(h["x"], h["z"])
+        r.add_blob_shadow(
+            (h["x"], gy + 0.06, h["z"]),
+            3.8, 5.2,
+            0.45 / (1.0 + max(0.0, h["y"] - gy)),
+        )
+
+    def _draw_heli_crew(self, r, tm):
+        h = self.heli
+        if h is None or h["state"] in ("crashing", "skidding", "crashed"):
+            return
+        info = S.helicopter_parts()[3]
+        pos = (h["x"], h["y"], h["z"])
+        pilot = S._xf(info["pilot_seat"], pos, h["yaw"], h["pitch"], h["roll"])
+        _w.actor(
+            r, ("guard", "rifle"), dict(_SEATED), pilot, h["yaw"], tm,
+            seed=150, amp=0.0, rifle_on=False, flags=("os12",),
+        )
+        if h["gunner"]:
+            seat = S._xf(info["gunner_seat"], pos, h["yaw"], h["pitch"], h["roll"])
+            _w.actor(
+                r, ("guard", "heavy"), blend(POSES["stand"], "aim", 0.9),
+                seat, (h["yaw"] - 55.0) % 360.0, tm,
+                seed=151, amp=0.15, rifle_on=True, flags=("os12",),
+            )
+        else:
+            seat = S._xf(info["gunner_seat"], pos, h["yaw"], h["pitch"], h["roll"])
+            _w.actor(
+                r, ("guard", "heavy"), dict(_SEATED_DEAD), seat, h["yaw"], tm,
+                seed=151, amp=0.0, rifle_on=False, flags=("os12",),
+            )
+
+    def _draw_heli_fx(self, r, tm):
+        h = self.heli
+        if h is not None:
+            if h["state"] == "rocket_lock":
+                info = S.helicopter_parts()[3]
+                p = S._xf(
+                    info["rocket_pylon"],
+                    (h["x"], h["y"], h["z"]),
+                    h["yaw"], h["pitch"], h["roll"],
+                )
+                r.add_sprite(
+                    p,
+                    _fx.glow(
+                        (255, 70, 50), 0.35, tm,
+                        flicker=0.6, core=(255, 200, 180), intensity=1.1, max_px=26,
+                    ),
+                    layer=_fx.FX_LAYER,
+                )
+            if h["state"] in ("crashing", "crashed"):
+                for i in range(3):
+                    a = (self.t * 0.7 + i / 3.0) % 1.0
+                    c = (
+                        h["x"] + 0.5 * math.sin(i * 2.1 + self.t),
+                        h["y"] + 0.7 + 1.3 * a,
+                        h["z"] + 0.4 * math.cos(i * 1.7 + self.t),
+                    )
+                    r.add_sprite(
+                        c,
+                        _fx.glow(
+                            (255, 120, 50), 0.35 + 0.4, tm,
+                            flicker=0.5, seed=40 + i,
+                            core=(255, 220, 150),
+                            intensity=1.0 * (1.0 - a), max_px=32,
+                        ),
+                        layer=_fx.FX_LAYER,
+                    )
+
+        if h is not None and h.get("boom_t") is not None and self.t - h["boom_t"] < 0.7:
+            age = int((self.t - h["boom_t"]) * 1000.0)
+            c = (h["x"], h["y"] + 1.2, h["z"])
+            r.add_sprite(c, _fx.flash(age, col=(255, 195, 110), radius_m=5.5, dur_ms=550), layer=_fx.FX_LAYER)
+            r.add_sprite(c, _fx.sparks(int(h["boom_t"] * 100), age, col=(255, 210, 140), n=24, speed_m=9.0, dur_ms=700), layer=_fx.FX_LAYER)
+
+        for rk in self.rockets:
+            if rk["done"]:
+                continue
+            px, py, pz = rk["pos"]
+            ryaw = rk.get("yaw", 0.0)
+            rpitch = rk.get("pitch", -8.0)
+            S.put(r, "rocket", S.rocket, (px, py, pz), ryaw, rpitch)
+            tail = S._xf((0.0, 0.0, -S.ROCKET_LEN * 0.5), (px, py, pz), ryaw, rpitch)
+            r.add_sprite(
+                tail,
+                _fx.glow(
+                    (255, 150, 70), 0.24, tm,
+                    flicker=0.45, core=(255, 236, 180), intensity=1.1, max_px=20,
+                ),
+                layer=_fx.FX_LAYER,
+            )
 
     def _draw_mount(self, r):
         g = self._rig()
@@ -3166,17 +4397,25 @@ class ChaseScene:
         bp = dict(_SEATED)
 
         if bodi_wave:
-            w = math.sin(self.t * 8.0)
-            bp.update(
-                rsh_p=146,
-                rsh_r=24 + 8 * w,
-                rel=34 + 20 * w,
-                head_y=-50,
-            )
+                    w = math.sin(self.t * 8.0)
+                    bp.update(
+                        twist=16,
+                        head_y=54,
+                        head_p=-4,
+                        rsh_p=118,
+                        rsh_r=-32 - 8 * w,
+                        rsh_y=32,
+                        rel=40 + 22 * w,
+                    )
+
+        if self.repair_t is not None:
+            bp.update(twist=42, head_y=38, head_p=6)
 
         if self.wreck_t is not None:
             self._draw_capture(r, tm)
             return
+
+        self._draw_heli_crew(r, tm)
 
         _w.actor(
             r,
@@ -3195,6 +4434,8 @@ class ChaseScene:
 
         if self.end_t is not None:
             self._draw_jump(r, tm, BIRIBEL)
+        elif self.repair_t is not None:
+            self._draw_repair(r, tm)
         else:
             g = self._rig()
             joints = _w.actor(
@@ -3228,6 +4469,98 @@ class ChaseScene:
 
         for e in self.enemies:
             self._draw_crew(r, tm, e)
+
+    @staticmethod
+    def _hammer(r, hand, pose, yaw):
+        m = Mesh()
+        wood = (138, 94, 54)
+        grip = (34, 34, 36)
+        ferrule = (96, 100, 106)
+        head_dark = (64, 68, 74)
+        face_steel = (200, 204, 210)
+        peen_steel = (118, 122, 128)
+
+        # Hickory shaft + rubber grip + collar along +z in fist space
+        m.add(box(0.028, 0.036, 0.34, wood, center=(0.0, 0.0, 0.11)))
+        m.add(box(0.034, 0.042, 0.12, grip, center=(0.0, 0.0, 0.0)))
+        m.add(box(0.036, 0.044, 0.03, ferrule, center=(0.0, 0.0, 0.255)))
+
+        # Heavy T-head: striking face on -y (hits straight down), tapered peen on +y
+        m.add(box(0.056, 0.072, 0.054, head_dark, center=(0.0, -0.005, 0.285)))
+        m.add(box(0.052, 0.026, 0.050, (92, 96, 104), center=(0.0, -0.048, 0.285)))
+        m.add(box(0.056, 0.014, 0.054, face_steel, center=(0.0, -0.066, 0.285)))
+        m.add(box(0.042, 0.028, 0.042, head_dark, center=(0.0, 0.042, 0.285)))
+        m.add(box(0.032, 0.020, 0.030, peen_steel, center=(0.0, 0.062, 0.285)))
+
+        F = m_mul(_right_forearm_mat(pose, yaw), rot_x(12.0))
+        verts = [tuple(a + b for a, b in zip(m_apply(F, v), hand)) for v in m.verts]
+        r.add_dynamic(verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces])
+
+    def _draw_repair(self, r, tm):
+        el = self.t - self.repair_t
+        (lx, ly, lz), lyaw = self.trailer_pos()
+        lp = S.ditch_pitch(lz)
+        g = self._rig()
+        hum = _w.hum(BIRIBEL, flags=(GUN,))
+        keys = _repair_keys(hum)
+
+        p_start = g["feet"]
+        p_grab = S._xf(_REPAIR_GRAB_LOCAL, (lx, ly, lz), lyaw, lp)
+        p_work = S._xf(_REPAIR_WORK_LOCAL, (lx, ly, lz), lyaw, lp)
+        tb = S._xf(S.TOOLBOX_AT, (lx, ly, lz), lyaw, lp)
+        pump = S._xf(S.RIG_PUMP_AT, (lx, ly, lz), lyaw, lp)
+
+        grab_yaw = _yaw_to(tb[0] - p_grab[0], tb[2] - p_grab[2])
+        work_yaw = _yaw_to(pump[0] - p_work[0], pump[2] - p_work[2])
+
+        def yaw_mix(a, b, k):
+            return (a + _wrap(b - a) * clamp(k, 0.0, 1.0)) % 360.0
+
+        show_hammer = False
+        if el < 0.40:
+            u = clamp(el / 0.40, 0.0, 1.0)
+            k = R._ease(u)
+            pos = tuple(p_start[i] + (p_grab[i] - p_start[i]) * k for i in range(3))
+            yaw = yaw_mix(self.yaw, grab_yaw, k)
+            walk = pose_run(u * math.pi * 2.0, lean=7.0)
+            pose = blend(blend(g["pose"], keys["reach"], k), walk, 0.65 * math.sin(math.pi * u))
+        elif el < 0.60:
+            k = R._ease(clamp((el - 0.40) / 0.20, 0.0, 1.0))
+            pos, yaw = p_grab, grab_yaw
+            pose = blend(keys["reach"], keys["grab"], k)
+            show_hammer = el >= 0.56
+        elif el < 0.76:
+            k = R._ease(clamp((el - 0.60) / 0.16, 0.0, 1.0))
+            pos = tuple(p_grab[i] + (p_work[i] - p_grab[i]) * k for i in range(3))
+            yaw = yaw_mix(grab_yaw, work_yaw, k)
+            pose = blend(keys["grab"], keys["work_up"], k)
+            show_hammer = True
+        elif el < 1.96:
+            frac = ((el - 0.76) / 0.40) % 1.0
+            k = _hammer_curve(frac)
+            pos, yaw = p_work, work_yaw
+            pose = blend(keys["work_down"], keys["work_up"], k)
+            show_hammer = True
+        elif el < 2.10:
+            k = R._ease(clamp((el - 1.96) / 0.14, 0.0, 1.0))
+            pos = tuple(p_work[i] + (p_grab[i] - p_work[i]) * k for i in range(3))
+            yaw = yaw_mix(work_yaw, grab_yaw, k)
+            pose = blend(keys["work_down"], keys["grab"], k)
+            show_hammer = el < 2.06
+        else:
+            u = clamp((el - 2.10) / max(1e-4, REPAIR_S - 2.10), 0.0, 1.0)
+            k = R._ease(u)
+            pos = tuple(p_grab[i] + (p_start[i] - p_grab[i]) * k for i in range(3))
+            yaw = yaw_mix(grab_yaw, self.yaw, k)
+            walk = pose_run(u * math.pi * 2.0, lean=7.0)
+            pose = blend(blend(keys["grab"], g["pose"], k), walk, 0.65 * math.sin(math.pi * u))
+
+        joints = _w.actor(
+            r, BIRIBEL, pose, pos, yaw, tm, seed=93, amp=0.06,
+            rifle_on=False, flags=(GUN,), expression="angry", mouth=0.0,
+        )
+        if show_hammer and joints and "rhand" in joints:
+            self._hammer(r, joints["rhand"], pose, yaw)
 
     def _prisoner(
         self,
@@ -3445,6 +4778,7 @@ class ChaseScene:
                 seed=c["seed"],
                 amp=0.25,
                 rifle_on=True,
+                flags=("os12",),
             )
 
         for e in self.enemies:
@@ -3554,7 +4888,8 @@ class ChaseScene:
         )
 
     def _draw_crew(self, r, tm, e):
-        p = (e["x"], 0.0, e["z"])
+        y, pitch, roll = self._enemy_pose(e)
+        p = (e["x"], y, e["z"])
 
         if e["kind"] == "foot":
             gk = (
@@ -3575,6 +4910,7 @@ class ChaseScene:
                     seed=100 + e["slot"],
                     amp=0.3,
                     rifle_on=True,
+                    flags=("os12",),
                 )
             else:
                 k = clamp(
@@ -3592,13 +4928,15 @@ class ChaseScene:
                     seed=100 + e["slot"],
                     amp=0.0,
                     rifle_on=False,
+                    flags=("os12",),
                 )
             return
 
         if e["wrecked"]:
+            _, _, _, rel_p, _, rel_r, _ = self._wreck_floor(e)
             if (
-                math.cos(math.radians(e["wp"]))
-                * math.cos(math.radians(e["wr"]))
+                math.cos(math.radians(rel_p))
+                * math.cos(math.radians(rel_r))
                 < 0.94
             ):
                 return
@@ -3615,12 +4953,13 @@ class ChaseScene:
                     if e["driver"] and not e["wrecked"]
                     else _SEATED_DEAD
                 ),
-                _local(p, e["yaw"], S.TRUCK_SEAT),
+                S._xf(S.TRUCK_SEAT, p, e["yaw"], pitch, roll),
                 e["yaw"],
                 tm,
                 seed=140,
                 amp=0.0,
                 rifle_on=False,
+                flags=("os12",),
             )
 
             if e["gunner"] and not e["wrecked"]:
@@ -3628,12 +4967,13 @@ class ChaseScene:
                     r,
                     ("guard", "heavy"),
                     blend(POSES["stand"], "aim", 0.9),
-                    _local(p, e["yaw"], S.TRUCK_BED),
+                    S._xf(S.TRUCK_BED, p, e["yaw"], pitch, roll),
                     e["yaw"],
                     tm,
                     seed=141,
                     amp=0.3,
                     rifle_on=True,
+                    flags=("os12",),
                 )
             return
 
@@ -3642,16 +4982,148 @@ class ChaseScene:
             r,
             gk,
             dict(_SEATED_DEAD if dead else _SEATED),
-            _local(p, e["yaw"], S.CAR_SEAT),
+            S._xf(S.CAR_SEAT, p, e["yaw"], pitch, roll),
             e["yaw"],
             tm,
             seed=120 + e["slot"],
             amp=0.0,
             rifle_on=False,
+            flags=("os12",),
         )
 
+    def _draw_bullets(self, r, tm):
+        if not self.bullets:
+            return
+        ex, ey, ez = self.camera()[0]
+        m = Mesh()
+
+        for b in self.bullets:
+            u = clamp((self.t - b["t0"]) / max(b["dur"], 1e-4), 0.0, 1.0)
+            s_pt, e_pt = b["start"], b["end"]
+            dx = e_pt[0] - s_pt[0]
+            dy = e_pt[1] - s_pt[1]
+            dz = e_pt[2] - s_pt[2]
+            total = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+            ux, uy, uz = dx / total, dy / total, dz / total
+            tail_len = min(b["len"], total * u)
+            head = (s_pt[0] + dx * u, s_pt[1] + dy * u, s_pt[2] + dz * u)
+
+            if tail_len > 0.05:
+                tail = (head[0] - ux * tail_len, head[1] - uy * tail_len, head[2] - uz * tail_len)
+                mid = (
+                    head[0] - ux * (tail_len * 0.45),
+                    head[1] - uy * (tail_len * 0.45),
+                    head[2] - uz * (tail_len * 0.45),
+                )
+                ref = (0.0, 1.0, 0.0) if abs(uy) < 0.9 else (1.0, 0.0, 0.0)
+                side = _f_unit(_f_cross((ux, uy, uz), ref))
+                up = _f_unit(_f_cross(side, (ux, uy, uz)))
+
+                dist_cam = math.dist((ex, ey, ez), head)
+                w_h = clamp((0.026 if b["heavy"] else 0.018) + 0.0016 * dist_cam, 0.026, 0.090)
+                w_m = w_h * 0.65
+                w_t = w_h * 0.22
+
+                for axis in (side, up):
+                    p0 = (mid[0] - axis[0] * w_m, mid[1] - axis[1] * w_m, mid[2] - axis[2] * w_m)
+                    p1 = (mid[0] + axis[0] * w_m, mid[1] + axis[1] * w_m, mid[2] + axis[2] * w_m)
+                    p2 = (head[0] + axis[0] * w_h, head[1] + axis[1] * w_h, head[2] + axis[2] * w_h)
+                    p3 = (head[0] - axis[0] * w_h, head[1] - axis[1] * w_h, head[2] - axis[2] * w_h)
+                    m.face([p0, p1, p2, p3], (255, 246, 198), 2, True, True)
+
+                    q0 = (tail[0] - axis[0] * w_t, tail[1] - axis[1] * w_t, tail[2] - axis[2] * w_t)
+                    q1 = (tail[0] + axis[0] * w_t, tail[1] + axis[1] * w_t, tail[2] + axis[2] * w_t)
+                    m.face([q0, q1, p1, p0], (255, 148, 48), 2, True, True)
+
+            r.add_sprite(
+                head,
+                _fx.glow(
+                    (255, 196, 84),
+                    0.28 if b["heavy"] else 0.18,
+                    tm,
+                    core=(255, 250, 224),
+                    intensity=1.25 if b["heavy"] else 0.95,
+                    max_px=16 if b["heavy"] else 12,
+                ),
+                layer=_fx.FX_LAYER,
+            )
+
+        if m.faces:
+            _flash_submit(r, m, bias=-0.04)
+
+    def _draw_impacts(self, r, tm):
+        if not self.impacts:
+            return
+        (lx, ly, lz), lyaw = self.trailer_pos()
+        pitch_t = S.ditch_pitch(lz)
+
+        for im in self.impacts:
+            age_s = self.t - im["t0"]
+            if age_s < 0.0:
+                continue
+            age_ms = int(age_s * 1000.0)
+            pos = (
+                S._xf(im["local"], (lx, ly, lz), lyaw, pitch_t)
+                if im["local"] is not None
+                else im["pos"]
+            )
+            kind = im["kind"]
+            heavy = im["heavy"]
+
+            if kind in ("metal", "road"):
+                dur_f = 0.14 if kind == "metal" else 0.12
+                if age_s < dur_f:
+                    r.add_sprite(
+                        pos,
+                        _fx.flash(
+                            age_ms,
+                            col=(255, 224, 150) if kind == "metal" else (255, 200, 120),
+                            radius_m=(0.55 if heavy else 0.38) if kind == "metal" else (0.45 if heavy else 0.30),
+                            dur_ms=int(dur_f * 1000),
+                        ),
+                        layer=_fx.FX_LAYER,
+                    )
+                r.add_sprite(
+                    pos,
+                    _fx.sparks(
+                        im["seed"],
+                        age_ms,
+                        col=(255, 215, 130),
+                        n=(12 if heavy else 8) if kind == "metal" else (9 if heavy else 6),
+                        speed_m=4.8 if kind == "metal" else 4.2,
+                        dur_ms=300 if kind == "metal" else 240,
+                    ),
+                    layer=_fx.FX_LAYER,
+                )
+            elif kind in ("wood", "hay"):
+                if age_s < 0.10:
+                    r.add_sprite(
+                        pos,
+                        _fx.glow(
+                            (255, 188, 100),
+                            0.32,
+                            tm,
+                            core=(255, 236, 190),
+                            intensity=0.95 * (1.0 - age_s / 0.10),
+                            max_px=20,
+                        ),
+                        layer=_fx.FX_LAYER,
+                    )
+                r.add_sprite(
+                    pos,
+                    _fx.sparks(
+                        im["seed"],
+                        age_ms,
+                        col=(210, 178, 112) if kind == "hay" else (184, 146, 98),
+                        n=10,
+                        speed_m=3.6,
+                        dur_ms=280,
+                    ),
+                    layer=_fx.FX_LAYER,
+                )
+
     def _draw_muzzle(
-        self, r, tm, pos, yaw, pitch, age_ms, seed, big=True
+        self, r, tm, pos, yaw, pitch, age_ms, seed, big=True, scale_mul=1.0
     ):
         """Brief, narrow discharge extending from the muzzle.
 
@@ -3659,10 +5131,11 @@ class ChaseScene:
         renders the mounted gun. Enemy fallback uses +z at yaw zero,
         matching the scene's existing yaw convention.
         """
-        if not 0 <= age_ms < FLASH_MS:
+        dur = FLASH_MS if big else ENEMY_FLASH_MS
+        if not 0 <= age_ms < dur:
             return
 
-        phase = age_ms / float(FLASH_MS)
+        phase = age_ms / float(dur)
         k = (1.0 - phase) ** 1.35
 
         flash_scale = getattr(_fx, "flash_scale", None)
@@ -3713,7 +5186,7 @@ class ChaseScene:
 
         # Stable during a shot; varies between shots without gameplay RNG.
         size = 0.88 + 0.24 * _f_hash(seed, 201)
-        size *= 1.0 if big else 0.6
+        size *= (1.0 if big else 0.7) * scale_mul
 
         _flash_submit(
             r,
@@ -3743,12 +5216,14 @@ class ChaseScene:
         )
 
     def _draw_fx(self, r, tm):
+        self._draw_heli_fx(r, tm)
         for e in self.enemies:
             if (
                 e["kind"] in ("jeep", "gun_truck")
                 and not e["wrecked"]
             ):
-                p = (e["x"], 0.0, e["z"])
+                y, pitch, roll = self._enemy_pose(e)
+                p = (e["x"], y, e["z"])
                 lamp_z, lamp_y = (
                     (2.95, 1.05)
                     if e["kind"] == "gun_truck"
@@ -3756,10 +5231,12 @@ class ChaseScene:
                 )
 
                 for sx in (-1.0, 1.0):
-                    q = _local(
+                    q = S._xf(
+                        (sx * 0.62, lamp_y, lamp_z),
                         p,
                         e["yaw"],
-                        (sx * 0.62, lamp_y, lamp_z),
+                        pitch,
+                        roll,
                     )
                     r.add_sprite(
                         q,
@@ -3782,10 +5259,12 @@ class ChaseScene:
                     blue = (
                         self.t * 2.6 + e["slot"] * 0.37
                     ) % 1.0 < 0.5
-                    q = _local(
+                    q = S._xf(
+                        (-0.3 if blue else 0.3, 1.66, -0.1),
                         p,
                         e["yaw"],
-                        (-0.3 if blue else 0.3, 1.66, -0.1),
+                        pitch,
+                        roll,
                     )
                     r.add_sprite(
                         q,
@@ -3876,24 +5355,43 @@ class ChaseScene:
                         layer=_fx.FX_LAYER,
                     )
 
-        for t0, pos, gyaw in self.flashes:
+        for f in self.flashes:
+            t0, pos, gyaw = f[0], f[1], f[2]
+            gpitch = f[3] if len(f) > 3 else 0.0
+            heavy = f[4] if len(f) > 4 else False
             age = self.t - t0
-            if 0.0 <= age < FLASH_MS / 1000.0:
+            if 0.0 <= age < ENEMY_FLASH_MS / 1000.0:
                 self._draw_muzzle(
                     r,
                     tm,
                     pos,
                     gyaw,
-                    0.0,
+                    gpitch,
                     int(age * 1000.0),
                     int(t0 * 1000),
                     big=False,
+                    scale_mul=1.5 if heavy else 1.0,
+                )
+                fade_k = 1.0 - age / (ENEMY_FLASH_MS / 1000.0)
+                r.add_sprite(
+                    pos,
+                    _fx.glow(
+                        (255, 196, 108),
+                        0.72 if heavy else 0.45,
+                        tm,
+                        core=(255, 248, 220),
+                        intensity=(1.35 if heavy else 0.95) * fade_k,
+                        max_px=30 if heavy else 20,
+                    ),
+                    layer=_fx.FX_LAYER,
                 )
 
         self.flashes = [
             f for f in self.flashes
             if self.t - f[0] < 0.2
         ]
+        self._draw_bullets(r, tm)
+        self._draw_impacts(r, tm)
 
         for t0, pos in self.sparks:
             if self.t - t0 < 0.1:
@@ -3981,6 +5479,27 @@ class ChaseScene:
                         tm,
                         intensity=0.6 * (1.0 - a),
                     ),
+                    layer=_fx.FX_LAYER,
+                )
+
+        if self.hull < 65.0 and self.wreck_t is None:
+            (lx, ly, lz), lyaw = self.trailer_pos()
+            lp = S.ditch_pitch(lz)
+            for i in range(2):
+                a = (self.t * 1.1 + i * 0.5) % 1.0
+                c = S._xf(
+                    (
+                        S.RIG_PUMP_AT[0],
+                        S.RIG_PUMP_AT[1] + 0.22 + a * 0.75,
+                        S.RIG_PUMP_AT[2] - a * 1.0,
+                    ),
+                    (lx, ly, lz),
+                    lyaw,
+                    lp,
+                )
+                r.add_sprite(
+                    c,
+                    _fx.glow((64, 62, 60), 0.24 + a * 0.34, tm, intensity=0.52 * (1.0 - a)),
                     layer=_fx.FX_LAYER,
                 )
 
@@ -4079,6 +5598,19 @@ class ChaseScene:
             )
             return
 
+        if self.hurt > 0.02 and self.end_t is None:
+            h_int = int(85 * clamp(self.hurt, 0.0, 1.0))
+            if h_int > 2:
+                surface.fill((int(h_int * 0.55), 0, 0), special_flags=pygame.BLEND_RGB_ADD)
+                for k in range(4):
+                    t_b = 14 * (4 - k)
+                    v = int(h_int * (0.28 - k * 0.05))
+                    if v > 0:
+                        surface.fill((v, 0, 0), (0, 0, WIDTH, t_b), special_flags=pygame.BLEND_RGB_ADD)
+                        surface.fill((v, 0, 0), (0, HEIGHT - t_b, WIDTH, t_b), special_flags=pygame.BLEND_RGB_ADD)
+                        surface.fill((v, 0, 0), (0, 0, t_b, HEIGHT), special_flags=pygame.BLEND_RGB_ADD)
+                        surface.fill((v, 0, 0), (WIDTH - t_b, 0, t_b, HEIGHT), special_flags=pygame.BLEND_RGB_ADD)
+
         if self.end_t is None:
             if self.ads < 0.55:
                 U.reticle(
@@ -4097,9 +5629,20 @@ class ChaseScene:
                 ),
                 hit_age=self.t - self.hit_mark,
             )
+            H.damage_arcs(surface, self.dmg_marks, self.t, life=0.9)
             U.objective(surface, self.objective())
             U.hostiles(surface, self.alive_count())
             self._hull_bar(surface)
+
+            if self.repair_t is not None:
+                U.prompt(surface, "Repairing tractor...", None)
+            elif self._looking_at_toolbox():
+                if self.repairs <= 0:
+                    U.prompt(surface, "Toolbox empty", None)
+                elif self.hull >= HULL - 0.5:
+                    U.prompt(surface, "Tractor hull full", None)
+                else:
+                    U.prompt(surface, "Repair tractor (%d left)" % self.repairs, "E")
 
             ammo = font_terminal.render(
                 "LMG %d / %d" % (self.mag, MAG)
@@ -4198,6 +5741,41 @@ class ChaseScene:
                 ),
             )
 
+        if self.heli_active():
+            h = self.heli
+            frac = clamp(h["hp"] / float(h["max_hp"]), 0.0, 1.0)
+            bw, bh = 320, 10
+            bx = cx - bw // 2
+            by = 56
+            pygame.draw.rect(surface, (18, 18, 20), (bx - 2, by - 2, bw + 4, bh + 4))
+            pygame.draw.rect(surface, (150, 40, 34), (bx, by, int(bw * frac), bh))
+            label = font_terminal_small.render("GUARD GUNSHIP", True, (226, 214, 200))
+            surface.blit(label, (cx - label.get_width() // 2, by - 20))
+
+        locking = self.heli is not None and self.heli["state"] == "rocket_lock"
+        inbound = [rk for rk in self.rockets if not rk["done"] and not rk["dodged"]]
+        dodged = any(rk["dodged"] and not rk["done"] for rk in self.rockets)
+        if locking or inbound or dodged:
+            if dodged and not inbound:
+                msg, col = "DODGED!", H.GOOD
+            elif inbound:
+                msg = "[LMB] SHOOT MISSILE (%d/%d)   OR   [SPACE / A / D] DODGE!" % (inbound[0]["hp"], ROCKET_HP)
+                col = (255, 130, 90)
+            else:
+                msg = "MISSILE LOCKING — READY TO SHOOT OR DODGE"
+                col = (240, 170, 90)
+            q = font_terminal.render(msg, True, col)
+            surface.blit(q, (cx - q.get_width() // 2, cy - 110))
+            if locking:
+                left = clamp(
+                    HELI_LOCK_S - (self.t - self.heli["lock_t"]),
+                    0.0, HELI_LOCK_S,
+                )
+                pygame.draw.rect(
+                    surface, (240, 170, 90),
+                    (cx - 150, cy - 82, int(300 * left / HELI_LOCK_S), 6),
+                )
+
         if self.fade > 0.0:
             veil = pygame.Surface((WIDTH, HEIGHT))
             veil.fill((0, 0, 0))
@@ -4295,7 +5873,11 @@ class ChaseScene:
             )
 
     def objective(self):
+        if self.cp == 3 and self.heli_active():
+            return "Bring down the gunship. Shoot its gunner and guns!"
         if self.cp == 3:
+            return "Reach the train."
+        if self.cp == 4:
             return (
                 "Clear the jeep off the tracks."
                 if self.blocked()

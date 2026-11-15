@@ -139,6 +139,7 @@ particle_density = _settings["particle_density"]
 mouse_sensitivity = _settings["mouse_sensitivity"]
 invert_mouse = _settings["invert_mouse"]
 colorblind_mode = _settings["colorblind_mode"]
+quality_3d = _settings["quality_3d"]
 
 settings_active_tab = 0
 _binding_capture = None   # RPE6 P9: action awaiting a keypress in CONTROLS, or None
@@ -186,6 +187,7 @@ def _current_settings_dict():
         "flash_reduction": flash_reduction,
         "text_speed": text_speed,
         "colorblind_mode": colorblind_mode,
+        "quality_3d": quality_3d,
         "bindings": _input_adapter.bindings_dict(),   # RPE6 P9: non-default bindings only
     }
 
@@ -309,7 +311,7 @@ def handle_settings_event(event):
     global radio_text_size, radio_speaker_names
     global brightness, scanlines_enabled, grain_enabled, particle_density
     global mouse_sensitivity, invert_mouse, colorblind_mode
-    global shake_scale, flash_reduction, text_speed
+    global shake_scale, flash_reduction, text_speed, quality_3d
 
     if event.type == pygame.KEYDOWN:
         if _binding_capture is not None:
@@ -467,6 +469,10 @@ def handle_settings_event(event):
             particle_density = min(100, particle_density + step); changed = True
         elif menu.settings_particles_bar.collidepoint(mp):
             particle_density = _bar_value(menu.settings_particles_bar); changed = True
+        elif menu.settings_quality_3d_left.collidepoint(mp):
+            quality_3d = max(0, quality_3d - 1); changed = True
+        elif menu.settings_quality_3d_right.collidepoint(mp):
+            quality_3d = min(2, quality_3d + 1); changed = True
         if changed:
             _preview_settings()
             audio.play("menu_click", volume=0.3)
@@ -1807,8 +1813,10 @@ def _apply_dev_args():
     elif ("--dev-mission8" in args or "--dev-mission8-trap" in args
           or "--dev-mission8-gantry" in args or "--dev-mission8-friends" in args
           or "--dev-mission8-kill" in args or "--dev-mission8-chase" in args
-          or "--dev-mission8-ending" in args):
+          or "--dev-mission8-heli" in args or "--dev-mission8-ending" in args
+          or "--dev-mission8-epilogue" in args or "--dev-mission8-credits" in args):
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
+        _m8_start_state = "GAME"
         if "--dev-mission8-trap" in args:
             _cp8 = 0
             for _a in args:
@@ -1828,10 +1836,17 @@ def _apply_dev_args():
             gc.start_mission8_stage("friends", "revenge")
         elif "--dev-mission8-kill" in args:
             gc.start_mission8_stage("kill", "revenge")
-        elif "--dev-mission8-ending" in args:
-            # Start at the crossing with the last jeep already destroyed; the chase ending plays out.
+        elif "--dev-mission8-heli" in args:
+            # Start the chase directly at the Gunship mini-boss stage (cp=3).
             gc.start_mission8_stage("chase", "revenge")
             STATE.m8_chase_cp = 3
+            STATE.m8_chase_heli = True
+            from missions.m8.revenge import chase3d as _m8_chase  # lazy: M8-only
+            _m8_chase.begin()
+        elif "--dev-mission8-ending" in args:
+            # Start at the crossing (cp=4) with the last jeep already destroyed; the chase ending plays out.
+            gc.start_mission8_stage("chase", "revenge")
+            STATE.m8_chase_cp = 4
             STATE.m8_chase_ending = True
             from missions.m8.revenge import chase3d as _m8_chase  # lazy: M8-only
             _m8_chase.begin()
@@ -1840,7 +1855,7 @@ def _apply_dev_args():
             for _a in args:
                 if _a.startswith("--m8-cp="):
                     try:
-                        _cp8 = max(0, min(3, int(_a.split("=", 1)[1])))
+                        _cp8 = max(0, min(4, int(_a.split("=", 1)[1])))
                     except ValueError:
                         pass
             gc.start_mission8_stage("chase", "revenge")
@@ -1848,9 +1863,16 @@ def _apply_dev_args():
                 STATE.m8_chase_cp = _cp8
                 from missions.m8.revenge import chase3d as _m8_chase  # lazy: M8-only
                 _m8_chase.begin()
+        elif "--dev-mission8-epilogue" in args:
+            gc.start_mission8_stage("epilogue", "revenge")
+        elif "--dev-mission8-credits" in args:
+            gc.start_mission8_stage("epilogue", "revenge")
+            STATE.request_m8_cutscene = None
+            gc.mission_end_time = _now_ms()
+            _m8_start_state = "CREDITS"
         else:
             gc.start_mission8_stage("meet", "revenge")
-        gsm.transition("GAME"); pygame.mouse.set_visible(False)
+        gsm.transition(_m8_start_state); pygame.mouse.set_visible(False)
     elif "--dev-slot-select" in args:
         # Dev/screenshot jump: open the save-slot screen directly (skips
         # BOOT_INTRO). Pass `--continue` as well for the CONTINUE variant -
@@ -2778,7 +2800,7 @@ class _SettingsState(GameState):
             mouse_sensitivity, invert_mouse,
             STATE.reduced_motion, colorblind_mode,
             shake_scale, flash_reduction, text_speed,
-            dynamic_music=dynamic_music,
+            dynamic_music=dynamic_music, quality_3d=quality_3d,
             save_status=_settings_status, save_failed=_settings_save_failed,
             bindings=_input_adapter.display_bindings(), binding_capture=_binding_capture,
         )
@@ -2936,7 +2958,13 @@ class _CutsceneState(GameState):
         elif after == "M8_RESUME":
             from missions import m8 as _m8mod  # lazy: M8-only
             _m8mod.on_cutscene_done(_M8_MID["key"])
-            if (cp.current_shot or {}).get("cut_to_play"):
+            if _m8_outro_pending():
+                # Epilogue over: the title card's theme carries into the credits.
+                cp.completed = True
+                gc.mission_end_time = gc.mission_end_time or _now_ms()
+                interactions.clear_radio_queue()
+                trigger_transition("CREDITS")
+            elif (cp.current_shot or {}).get("cut_to_play"):
                 gsm.transition("GAME")          # the pullout hands straight to the chase: no fade
             else:
                 trigger_transition("GAME")
@@ -3148,6 +3176,8 @@ class _CutsceneState(GameState):
             _a8 = _m8_audio.instance(audio)
             if cp.paused:
                 _a8.pause()
+            elif cp.completed:
+                _a8.bed(None)   # fading out: keep the score, do not restart the film beds
             else:
                 _a8.resume()
                 _a8.film(shot["scene"])
@@ -3230,6 +3260,63 @@ class _CutsceneState(GameState):
             fade_surf.fill((0, 0, 0))
             fade_surf.set_alpha(min(255, fade_alpha))
             surface.blit(fade_surf, (0, 0))
+
+
+class _CreditsState(GameState):
+    """End credits after M8's CALL OF ACARISTAN card; hands to MISSION_COMPLETE."""
+    name = "CREDITS"
+
+    def enter(self):
+        from ui import credits as _credits_ui  # lazy: end-of-game only
+        from missions.m8 import m8_audio as _m8_audio  # lazy: M8-only
+        if _m8_audio.AUDIO is not None:
+            _m8_audio.AUDIO.film_end()
+        _credits_ui.begin()
+        self._exiting = False
+        self._faded_music = False
+        pygame.mouse.set_visible(False)
+
+    def exit(self):
+        if not self._faded_music:
+            audio.fade_out_music(900)
+        _set_ambience(set())
+
+    def handle_event(self, event, mouse_x, mouse_y, keys):
+        from ui import credits as _credits_ui  # lazy: end-of-game only
+        if not self._exiting and _credits_ui.handle_event(event) in ("skip", "done"):
+            self._finish()
+
+    def _finish(self):
+        self._exiting = True
+        if not self._faded_music:
+            self._faded_music = True
+            audio.fade_out_music(1200)
+        trigger_transition("MISSION_COMPLETE")
+        pygame.mouse.set_visible(True)
+
+    def update(self, dt):
+        if self._exiting:
+            return
+        from ui import credits as _credits_ui  # lazy: end-of-game only
+        res = _credits_ui.update(dt, pygame.key.get_pressed())
+        if res == "fade_music" and not self._faded_music:
+            self._faded_music = True
+            audio.fade_out_music(1400)
+        elif res == "done":
+            self._finish()
+
+    def set_ambience(self):
+        _set_ambience(set())
+        if not self._faded_music:
+            from missions.m8 import m8_audio as _m8_audio  # lazy: M8-only
+            _m8_audio.music(audio, "title")
+
+    def render(self, surface):
+        from ui import credits as _credits_ui  # lazy: end-of-game only
+        _credits_ui.draw(surface)
+        _g = _advance_grain()
+        if _g is not None:
+            surface.blit(_g, (0, 0))
 
 
 class _BriefingState(GameState):
@@ -3647,11 +3734,10 @@ class _GameState_(GameState):
             from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
             _start_m6_cutscene(_m7mod.outro_shots(), "MISSION7_COMPLETE"); pygame.mouse.set_visible(True)
         elif _m8_outro_pending():
+            # beats.py epilogue fallback: the game ends, so roll the credits first.
+            gc.mission_end_time = gc.mission_end_time or _now_ms()
             interactions.clear_radio_queue()
-            gsm.transition("MISSION_COMPLETE")
-            mission_complete_timer = 0
-            mission_complete_fade = 0
-            pygame.mouse.set_visible(True)
+            trigger_transition("CREDITS")
         elif _m7_film_pending():
             from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
             start_cutscene(_m7mod.film_shots(_M7_MID["key"]), "M7_RESUME", use_fades=True)
@@ -4275,7 +4361,7 @@ for _state_cls in (
     _BootIntroState, _EngineIntroState,
     _MenuState, _SlotSelectState, _MultiplayerState, _SettingsState,
     _ShopState,
-    _CutsceneState, _BriefingState, _WalkState, _GameState_,
+    _CutsceneState, _CreditsState, _BriefingState, _WalkState, _GameState_,
     _NotebookInspectState, _PausedState,
     _DeathState, _MissionCompleteState,
 ):
@@ -4409,6 +4495,8 @@ except Exception as _e:
 
 MAX_DT = 0.05
 running = True
+from core.frame_pacer import Pacer as _Pacer
+_pacer = _Pacer()
 
 # RPE6 ADAPTER A-002: the loop body is unchanged; it now runs as one frame
 # of a scene hosted by engine.core.App.run_scene (crash reports on uncaught
@@ -4419,11 +4507,11 @@ def _legacy_frame():
     global _dev_sim_ms, _dev_draw_ms, gsm_frame_count
     import time as _dev_time
     _dev_t0 = _dev_time.perf_counter()
-    _frame_ms = clock.tick(60)
+    dt = min(_pacer.wait(), MAX_DT)   # whole 1/60 s steps per frame (core.frame_pacer)
+    _frame_ms = clock.tick()
     gsm_frame_count += 1
     _cut_watch()
     _devtools.frames.push(_frame_ms, _dev_sim_ms, _dev_draw_ms)   # RPE6 P10
-    dt = min(_frame_ms / 1000.0, MAX_DT)
     STATE.dt = dt
     mouse_x, mouse_y = get_scaled_mouse()
     keys = pygame.key.get_pressed()
@@ -4450,7 +4538,7 @@ def _legacy_frame():
     # hiding the pointer on a state that draws no cursor would strand the user
     # with no visible pointer at all.
     from ui.main import CURSOR_ARROW_STATES
-    mouse_visible = current_name not in (CURSOR_ARROW_STATES | {"GAME", "WALK"})
+    mouse_visible = current_name not in (CURSOR_ARROW_STATES | {"GAME", "WALK", "CREDITS"})
     if current_name == "GAME":
         if level_editor.active:
             mouse_visible = True

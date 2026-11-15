@@ -6,6 +6,7 @@ floodlight cones, then the same HUD grammar as M4/M5.  The train hands the
 whole frame to ``train3d`` while it is active.
 """
 import math
+import os
 
 
 import pygame
@@ -363,33 +364,149 @@ def _draw_muzzle_flash(surface, cam_x, cam_y):
 # ─────────────────────────────────────────────
 # HUD
 # ─────────────────────────────────────────────
+_SHELL_CACHE = {}
+
+
+def _draw_12ga_shell(surface, x, y, w, brass_w, active=True, tone="live"):
+    """One horizontal 12-gauge shell (brass head on the left, red hull on the right)."""
+    if tone == "reload":
+        brass, brass_hi, brass_lo = (244, 206, 108), (255, 234, 160), (176, 132, 48)
+        hull, hull_hi, hull_lo, crimp = (206, 76, 44), (242, 128, 72), (138, 38, 24), (168, 52, 32)
+    elif active:
+        brass, brass_hi, brass_lo = (212, 174, 78), (246, 222, 140), (146, 112, 40)
+        hull, hull_hi, hull_lo, crimp = (184, 38, 32), (222, 76, 62), (114, 22, 20), (142, 30, 26)
+    else:
+        brass, brass_hi, brass_lo = (196, 158, 68), (228, 194, 106), (132, 102, 36)
+        hull, hull_hi, hull_lo, crimp = (160, 38, 32), (194, 62, 52), (104, 22, 20), (128, 28, 24)
+    hull_w = w - brass_w
+    surface.fill(brass, (x, y, brass_w, 5))
+    surface.fill(brass_hi, (x, y, brass_w, 1))
+    surface.fill(brass_lo, (x, y + 4, brass_w, 1))
+    surface.fill(brass_lo, (x + brass_w - 1, y + 1, 1, 3))
+    surface.fill(hull, (x + brass_w, y, hull_w, 5))
+    surface.fill(hull_hi, (x + brass_w, y, max(1, hull_w - 1), 1))
+    surface.fill(hull_lo, (x + brass_w, y + 4, hull_w, 1))
+    surface.fill(crimp, (x + w - 1, y + 1, 1, 3))
+
+
+def _fallow_tube_bg(rim):
+    key = ("tube", rim)
+    s = _SHELL_CACHE.get(key)
+    if s is None:
+        s = pygame.Surface((26, 55), pygame.SRCALPHA)
+        s.fill((74, 82, 92), (10, 0, 5, 2))
+        s.fill((58, 66, 76), (5, 2, 15, 4))
+        s.fill((112, 124, 138), (5, 2, 14, 1))
+        for kx in (7, 10, 13, 16):
+            s.fill((34, 38, 44), (kx, 3, 1, 2))
+        s.fill((26, 32, 38), (3, 5, 19, 39))
+        s.fill((12, 14, 18), (4, 6, 17, 37))
+        pygame.draw.rect(s, rim, (3, 5, 19, 39), 1)
+        for idx in range(6):
+            sy = 37 - idx * 6
+            s.fill((18, 21, 26), (5, sy + 1, 15, 3))
+            s.fill((38, 44, 52), (5, sy + 1, 3, 3))
+            s.fill((48, 56, 66), (11, sy + 2, 3, 1))
+        s.fill((118, 72, 40), (3, 44, 19, 8))
+        s.fill((152, 98, 56), (3, 44, 18, 1))
+        s.fill((142, 90, 50), (3, 44, 1, 7))
+        for rx in (6, 10, 14, 18):
+            s.fill((76, 44, 26), (rx, 45, 1, 6))
+        s.fill((28, 32, 38), (4, 52, 17, 3))
+        s.fill(rim, (24, 5, 2, 46))
+        _SHELL_CACHE[key] = s
+    return s
+
+
+def _fallow_card_bg(has_ammo):
+    key = ("card6", bool(has_ammo))
+    s = _SHELL_CACHE.get(key)
+    if s is None:
+        s = pygame.Surface((26, 55), pygame.SRCALPHA)
+        if has_ammo:
+            s.fill((86, 82, 64), (9, 2, 8, 3))
+            s.fill((118, 112, 86), (9, 2, 7, 1))
+            s.fill((44, 50, 42), (2, 5, 21, 41))
+            pygame.draw.rect(s, (78, 86, 72), (2, 5, 21, 41), 1)
+            s.fill((102, 112, 92), (2, 5, 20, 1))
+            s.fill((92, 102, 82), (2, 5, 1, 40))
+            s.fill((68, 74, 62), (3, 44, 19, 1))
+        else:
+            s.fill((36, 40, 48), (9, 2, 8, 3))
+            s.fill((50, 56, 66), (9, 2, 7, 1))
+            s.fill((20, 23, 28), (2, 5, 21, 41))
+            pygame.draw.rect(s, (48, 54, 62), (2, 5, 21, 41), 1)
+        for idx in range(6):
+            sy = 37 - idx * 6
+            s.fill((14, 16, 20), (5, sy + 1, 15, 3))
+            s.fill((36, 40, 38) if has_ammo else (28, 32, 38), (12, sy, 3, 5))
+        _SHELL_CACHE[key] = s
+    return s
+
+
+def _draw_fallow_icon(surface, ox, oy, rounds, capacity, active, reload_prog=0.0, incoming=0):
+    rounds, capacity = max(0, int(rounds)), max(1, int(capacity))
+    if active:
+        rim = (220, 68, 58) if rounds <= 0 else ((232, 172, 56) if rounds == 1 else (120, 230, 180))
+        surface.blit(_fallow_tube_bg(rim), (ox, oy))
+        filled = min(6, int(round(rounds / capacity * 6))) if capacity != 6 else min(6, rounds)
+        for idx in range(filled):
+            _draw_12ga_shell(surface, ox + 5, oy + 37 - idx * 6, 15, 4, active=True, tone="live")
+        if reload_prog > 0.0 and incoming > 0:
+            step = reload_prog * incoming
+            for s_i in range(incoming):
+                idx = filled + s_i
+                if idx >= 6:
+                    break
+                frac = step - s_i
+                if frac <= 0.0:
+                    continue
+                sy = oy + 37 - idx * 6
+                if frac >= 1.0:
+                    _draw_12ga_shell(surface, ox + 5, sy, 15, 4, active=True, tone="reload")
+                else:
+                    w = max(3, int(round(15 * frac)))
+                    surface.fill((232, 172, 56), (ox + 5 + (15 - w), sy + 1, w, 3))
+        return
+    filled = min(6, rounds if capacity == 6 else int(round(rounds / capacity * 6)))
+    surface.blit(_fallow_card_bg(filled > 0), (ox, oy))
+    for idx in range(filled):
+        sy = oy + 37 - idx * 6
+        _draw_12ga_shell(surface, ox + 5, sy, 15, 4, active=False, tone="live")
+        surface.fill((42, 46, 38), (ox + 12, sy, 3, 5))
+        surface.fill((62, 68, 56), (ox + 12, sy, 3, 1))
+        surface.fill((26, 28, 24), (ox + 12, sy + 4, 3, 1))
+
+
 def _draw_mag_icon(surface, mx, my, kind, rounds, capacity, active):
+    if kind == "shell":
+        _draw_fallow_icon(surface, mx - 12, my - 29, rounds, capacity, active)
+        return
     color = (75, 220, 150) if active else (155, 165, 150)
     pygame.draw.rect(surface, (24, 27, 29), (mx - 7, my - 18, 14, 36), 1)
     if kind == "stick":
         pygame.draw.rect(surface, color, (mx - 4, my - 14, 8, 28), 1)
         filled = int(24 * max(0, min(1.0, rounds / max(1, capacity))))
         pygame.draw.rect(surface, color, (mx - 3, my + 10 - filled, 6, filled))
-    elif kind == "shell":
-        # Fallow 12 shell tube: six 12-gauge rounds, seated bottom-up.
-        pygame.draw.rect(surface, color, (mx - 4, my - 16, 9, 32), 1)
-        filled = int(6 * max(0, min(1.0, rounds / max(1, capacity))))
-        for i in range(filled):
-            pygame.draw.circle(surface, color, (mx, my + 11 - i * 5), 2)
     else:
         pygame.draw.rect(surface, color, (mx - 5, my - 10, 10, 20), 1)
         filled = int(16 * max(0, min(1.0, rounds / max(1, capacity))))
         pygame.draw.rect(surface, color, (mx - 4, my + 8 - filled, 8, filled))
 
 
-def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active):
+def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active,
+                    reload_prog=0.0, incoming=0):
     """weapon_panel's mag slot: (mx, my) is the top left of a 25 x 56 cell.
-    The K-9 stick (12 witness holes) and the Fallow 12 shell tube (6 shell
-    ports) are M5's baked shells, like the M4/M5 panels; a box mag or missing
-    art falls back to _draw_mag_icon, which draws centred."""
+    The K-9 stick (12 witness holes) uses M5's baked shell, while the Fallow 12
+    draws its 6-shell magazine tube (active) or 12-shell reserve boxes (idle).
+    A box mag or missing art falls back to _draw_mag_icon, which draws centred."""
     rounds, capacity = max(0, int(rounds)), max(1, int(capacity))
+    if kind == "shell":
+        _draw_fallow_icon(surface, mx, my - 3, rounds, capacity, active,
+                          reload_prog=reload_prog, incoming=incoming)
+        return
     state = 0 if rounds <= 0 else (1 if active else 2)
-    base = {"stick": 0, "shell": 6}.get(kind)     # mag_icon variant = kind*3 + state
+    base = {"stick": 0}.get(kind)
     shell = None
     if base is not None:
         try:
@@ -402,11 +519,6 @@ def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active):
         return
     surface.blit(shell, (mx, my - 3))
     col = (220, 190, 70) if active else (150, 128, 58)
-    if kind == "shell":
-        rows = min(6, int(round(rounds / capacity * 6)))
-        for row in range(rows):                   # shells seat bottom-up
-            pygame.draw.circle(surface, col, (mx + 12, my + 5 + (5 - row) * 5), 2)
-        return
     for row in range(min(12, int(round(rounds / capacity * 12)))):
         for dx in (10, 14):
             pygame.draw.circle(surface, col, (mx + dx, my + 44 - row * 3), 1)
@@ -493,13 +605,18 @@ def _draw_train(surface):
 
 
 def _td3d_gate():
-    """2.5D covers customs, no-man's-land and the rail yard; the yard and
-    the train have their own 3D hosts."""
+    """Use the fast 2D painter for rail unless ACA_M6_RAIL_25D=1.
+
+    This gate also selects the aim camera; the train and post-train yard retain
+    their own 3D hosts independently of the top-down view.
+    """
     if (getattr(STATE, "m6_yard_active", False) or getattr(STATE, "m6_train_active", False)
             or getattr(STATE, "m6_train_death", False)):
         return False
-    return getattr(STATE, "mission6_stage", STAGE_CUSTOMS) in (STAGE_CUSTOMS, STAGE_NOMAN,
-                                                               STAGE_RAIL)
+    stage = getattr(STATE, "mission6_stage", STAGE_CUSTOMS)
+    if stage == STAGE_RAIL:
+        return os.environ.get("ACA_M6_RAIL_25D") == "1"
+    return stage in (STAGE_CUSTOMS, STAGE_NOMAN)
 
 
 _td.GATES["MISSION6"] = _td3d_gate

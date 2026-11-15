@@ -312,7 +312,7 @@
     },
     "6": {
      "file": "mag_icon_6.png",
-     "pixels": "eada235196b009280de788eea78f9927bf7ab72f40a7faa8982b8d5e86e41cab",
+     "pixels": "93a0bace7517ebc2dc18c90f2fe7b886a99086f940f90bc7c1af4cc9b20d339f",
      "size": [
       26,
       55
@@ -320,7 +320,7 @@
     },
     "7": {
      "file": "mag_icon_7.png",
-     "pixels": "4e91e209610ad1a672d63acc3b1c6b1c6413727c044f117214e4dd25150a7a17",
+     "pixels": "383baf924749174c37789bcac3b0ebe15c6ed5a85b118398b05cec8e4a7ee27f",
      "size": [
       26,
       55
@@ -328,14 +328,14 @@
     },
     "8": {
      "file": "mag_icon_8.png",
-     "pixels": "db1b0683c0389b3d68b59a67e09e594bb0cd20c05cfbd97498f8326bb9ad0e11",
+     "pixels": "c0d46b0fba354a0b677b0e1f75f97375fb5e0c6a6f8023ee8ff3b10d756ece05",
      "size": [
       26,
       55
      ]
     }
    },
-   "source": "69faef8424c0efc0b4d9b1700cbb5b2fa69bdf0b9fc400d395fc49cc67ca6ab5",
+   "source": "9d3a6d9c2ac30bfe5215664f992169f10a6d838336bede55aefa1beb5bac2897",
    "variants": 9
   },
   "m5/maru": {

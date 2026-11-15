@@ -26,6 +26,7 @@ Any renderer error turns 2.5D off for the run (``td.disable``) and the
 frame falls back to the 2D painter.
 """
 import math
+import weakref
 
 import numpy as np
 import pygame
@@ -73,7 +74,7 @@ CAST_LIFT = 2.2                    # bodies take this much more of the 2D light
 CUT_MIN = 1.3                      # props taller than this sink near Biribel too
 
 _cache = {"rays": None, "atlas": {}, "props": {}, "walls": {}, "meshes": {}, "packed": {},
-          "scratch": {}, "heights": {}}
+          "scratch": {}, "heights": {}, "corpse_meshes": weakref.WeakKeyDictionary()}
 
 # key colours (R, G, B): the GL pass writes emissive faces verbatim
 K_TOP, K_FACE, K_PFACE, K_PTOP = 254, 253, 252, 251
@@ -94,7 +95,7 @@ def render_world(surface, fcx, fcy):
     # whole sim pixels, as the 2D painter (int(cam)): the floor lookups stay constant
     fx, fy = float(int(math.floor(fcx)) + WIDTH // 2), float(int(math.floor(fcy)) + HEIGHT // 2)
     v = td.View(CAM, fx, fy)
-    r, buf = _w.rend(*CAM.res)
+    r, buf = _w.rend(*td.buffer_res(CAM))
     saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
     tm = _now_ms()
     try:
@@ -934,9 +935,10 @@ def _in_view(x, y, v, bb):
 
 def _draw_corpses(r, v, bb):
     """The M5 corpse pose, but skip bodies outside M6's camera before skinning."""
-    from engine3d import blend
+    from engine3d import SoftwareRenderer, blend
     from missions.m5 import draw3d as _m5
     hum = td.armed("ipa", "os12", **_m5._GUARD_KIT)
+    software = type(r) is SoftwareRenderer
     for c in list(getattr(STATE, "corpses", ())):
         if not _in_view(c.x, c.y, v, bb):
             continue
@@ -946,8 +948,22 @@ def _draw_corpses(r, v, bb):
         if k >= 1.0:
             r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - _m1.CORPSE_FALL) / 90.0)), layer=0)
         r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=0)
-        r.add_humanoid(hum, pose, at, td.yaw_rad(c.angle) + 90.0 * c.fall_dir, rifle_on=False,
-                       tint=_m1.CHAR if hasattr(c, "burn") else None)
+        yaw = td.yaw_rad(c.angle) + 90.0 * c.fall_dir
+        tint = _m1.CHAR if hasattr(c, "burn") else None
+        if software and k >= 1.0:
+            # A settled corpse has an immutable pose. Software skinning rebuilds
+            # hundreds of vertices each frame; cache those world vertices, but
+            # still submit them with the current light and both live shadows.
+            cache = _cache["corpse_meshes"]
+            baked = cache.get(c)
+            if baked is None or baked[:2] != (at, yaw):
+                verts, faces, _ = hum.build(pose, at, yaw, rifle_on=False)
+                baked = cache[c] = (at, yaw, verts, faces)
+            r.actor_log.append(tuple(at))
+            r.add_dynamic(baked[2], baked[3], tint=tint)
+            r.add_blob_shadow((at[0], at[1] + 0.02, at[2]), 0.34, 0.30, 0.40)
+        else:
+            r.add_humanoid(hum, pose, at, yaw, rifle_on=False, tint=tint)
 
 
 def _draw_cast(r, flashes, tm, v):
@@ -955,7 +971,11 @@ def _draw_cast(r, flashes, tm, v):
     bb = _rays(v)["bb"]
     _draw_corpses(r, v, bb)
     for e in getattr(STATE, "enemies", []):
-        if getattr(e, "hp", 1) <= 0 or not _in_view(e.rect.centerx, e.rect.centery, v, bb):
+        if getattr(e, "hp", 1) <= 0:
+            continue
+        if not _in_view(e.rect.centerx, e.rect.centery, v, bb):
+            # Keep walk phase continuous when a Guard enters the camera.
+            _m1._motion(("e6", e.uid), e.rect.centerx, e.rect.centery, e.angle)
             continue
         hum, rig = _m5._guard_hum(e)
         mode = "aim" if e.state in ("CHASE", "ATTACK") else "ready"

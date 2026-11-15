@@ -39,8 +39,9 @@ _STATE = {"ok": None}
 
 
 def enabled():
-    """3D multiplayer art on? ``ACA_MP_2D=1`` forces the 2D sprites."""
-    if os.environ.get("ACA_MP_2D", "") == "1":
+    """3D multiplayer art on? ``ACA_MP_2D=1`` or 3D Quality LOW forces the 2D sprites."""
+    from game.render3d_bridge import quality_3d  # lazy: settings bridge
+    if os.environ.get("ACA_MP_2D", "") == "1" or quality_3d() <= 0:
         return False
     if _STATE["ok"] is None:
         try:

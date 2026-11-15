@@ -69,35 +69,49 @@ def _box(state):
 
 
 def _shell(state):
-    """The Fallow 12's shell tube: blued steel over a walnut fore-end band,
-    six 12-gauge ports the runtime overlay seats bottom-up (m6/draw.py)."""
+    """Fallow 12 HUD shells: active (1) is the blued-steel + walnut 6-shell
+    tube; empty (0) and idle (2) are the 12-round field shell box."""
     s = K.new(26, 55)
-    bx, by, mw = 6, 2, 13
-    bottom = by + 48
-    if state == 0:
-        base, rim, hi = (26, 29, 34), (56, 64, 74), (40, 46, 54)
-    elif state == 1:
-        base, rim, hi = (36, 48, 56), (120, 230, 180), (70, 92, 104)
-    else:
-        base, rim, hi = (31, 36, 43), (88, 104, 118), (54, 66, 76)
-    poly = [(bx + 2, by), (bx + mw - 2, by), (bx + mw - 1, by + 6),
-            (bx + mw - 1, bottom), (bx + 1, bottom), (bx + 1, by + 6)]
-    pygame.draw.polygon(s, base, poly)
-    pygame.draw.polygon(s, rim if state == 1 else (66, 74, 82), poly, 1)
-    pygame.draw.line(s, hi, (bx + 3, by + 7), (bx + 3, bottom - 14), 1)
-    pygame.draw.rect(s, (84, 92, 100), (bx, by - 2, mw, 4), border_radius=1)      # muzzle cap
-    pygame.draw.rect(s, (92, 62, 38), (bx + 1, bottom - 12, mw - 2, 9),
-                     border_radius=1)                                             # walnut band
-    pygame.draw.line(s, (66, 44, 28), (bx + 4, bottom - 10), (bx + 4, bottom - 5), 1)
-    pygame.draw.line(s, (112, 78, 48), (bx + 8, bottom - 11), (bx + 8, bottom - 4), 1)
-    pygame.draw.rect(s, (20, 22, 26), (bx + 1, bottom - 2, mw - 2, 4),
-                     border_radius=1)                                             # base plate
-    for i in range(6):                          # empty shell ports
-        pygame.draw.circle(s, (16, 18, 20), (12, 8 + i * 5), 2)
-        pygame.draw.circle(s, (60, 54, 42), (12, 8 + i * 5), 2, 1)
     if state == 1:
-        pygame.draw.line(s, (120, 230, 180), (bx + mw + 3, by + 4),
-                         (bx + mw + 3, bottom - 4), 2)
+        s.fill((74, 82, 92), (10, 0, 5, 2))
+        s.fill((58, 66, 76), (5, 2, 15, 4))
+        s.fill((112, 124, 138), (5, 2, 14, 1))
+        for kx in (7, 10, 13, 16):
+            s.fill((34, 38, 44), (kx, 3, 1, 2))
+        s.fill((26, 32, 38), (3, 5, 19, 39))
+        s.fill((12, 14, 18), (4, 6, 17, 37))
+        pygame.draw.rect(s, (120, 230, 180), (3, 5, 19, 39), 1)
+        for idx in range(6):
+            sy = 37 - idx * 6
+            s.fill((18, 21, 26), (5, sy + 1, 15, 3))
+            s.fill((38, 44, 52), (5, sy + 1, 3, 3))
+            s.fill((48, 56, 66), (11, sy + 2, 3, 1))
+        s.fill((118, 72, 40), (3, 44, 19, 8))
+        s.fill((152, 98, 56), (3, 44, 18, 1))
+        s.fill((142, 90, 50), (3, 44, 1, 7))
+        for rx in (6, 10, 14, 18):
+            s.fill((76, 44, 26), (rx, 45, 1, 6))
+        s.fill((28, 32, 38), (4, 52, 17, 3))
+        s.fill((120, 230, 180), (24, 5, 2, 46))
+        return s
+    has_ammo = state == 2
+    if has_ammo:
+        s.fill((86, 82, 64), (9, 2, 8, 3))
+        s.fill((118, 112, 86), (9, 2, 7, 1))
+        s.fill((44, 50, 42), (2, 5, 21, 41))
+        pygame.draw.rect(s, (78, 86, 72), (2, 5, 21, 41), 1)
+        s.fill((102, 112, 92), (2, 5, 20, 1))
+        s.fill((92, 102, 82), (2, 5, 1, 40))
+        s.fill((68, 74, 62), (3, 44, 19, 1))
+    else:
+        s.fill((36, 40, 48), (9, 2, 8, 3))
+        s.fill((50, 56, 66), (9, 2, 7, 1))
+        s.fill((20, 23, 28), (2, 5, 21, 41))
+        pygame.draw.rect(s, (48, 54, 62), (2, 5, 21, 41), 1)
+    for idx in range(6):
+        sy = 37 - idx * 6
+        s.fill((14, 16, 20), (5, sy + 1, 15, 3))
+        s.fill((36, 40, 38) if has_ammo else (28, 32, 38), (12, sy, 3, 5))
     return s
 
 

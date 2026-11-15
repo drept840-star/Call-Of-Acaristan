@@ -141,7 +141,7 @@ def render_world(surface, v):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*CAM.res)
+    r, buf = _w.rend(*td.buffer_res(CAM))
     saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
     tm = _now_ms()
     try:
@@ -172,7 +172,7 @@ def render_world(surface, v):
         dyn = _m1._flash_lights(flashes, tm) + _blast_lights()
         _lamp_lights(r, v, flashes, tm)
         td.cast_shadows(r)
-        r.flush(buf)
+        r.flush(buf, bg=VOID)
     except Exception:
         import traceback
         traceback.print_exc()

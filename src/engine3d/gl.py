@@ -156,6 +156,7 @@ uniform sampler2DArray u_tex;   // texel / the texture's mean (textures.py)
 uniform vec3 u_cam;
 uniform vec3 u_ldir, u_ltint;
 uniform float u_amb, u_dif, u_sky;
+uniform float u_char;      // 1 = rigged character: wrapped key, camera fill, rim (core.Light.char_k)
 uniform vec3 u_fog;
 uniform float u_fog_start, u_fog_end, u_far;
 uniform int u_split_mode;  // 0 all, 1 far only, 2 near only
@@ -202,7 +203,13 @@ void main() {
     vec3 n2 = facing > 0.0 ? n : -n;
     if (v_flags.x > 0.5) {                      // per-frame flat lighting (dynamic meshes)
         float k = u_amb + u_dif * max(0.0, dot(n2, u_ldir)) + u_sky * n2.y;
-        col = min(vec3(255.0), floor(col * k * u_ltint));
+        float rim = 0.0;
+        if (u_char > 0.5) {
+            float ndv = max(0.0, dot(n2, normalize(u_cam - v_world)));
+            k = u_amb + u_dif * 1.12 * max(0.0, (dot(n2, u_ldir) + 0.2) / 1.2) + u_sky * n2.y + 0.12 * ndv;
+            rim = 0.7 * pow(1.0 - ndv, 3.0);
+        }
+        col = min(vec3(255.0), floor(col * (k + rim) * u_ltint));
         for (int i = 0; i < 8; i++) {           // local point/spot lights
             if (i >= u_pl_n) break;
             vec3 dv = u_pl_pos[i].xyz - v_world;
@@ -865,6 +872,7 @@ class GLRenderer(SoftwareRenderer):
         import moderngl
         rig = self.progs.rig
         self._set_uniforms(rig, split_mode, split)
+        rig["u_char"].value = 1.0
         bones = rig["u_bones"]
         ntri = 0
         for (hum, vbo, vao, n), bb, tint, bias in self._rig_draws:
@@ -875,8 +883,10 @@ class GLRenderer(SoftwareRenderer):
             ntri += n // 3
         return ntri
 
-    def _render(self, surface, split_mode=0, split=0.0, items=None):
-        """Upload surface -> draw geometry -> read back -> composite sprites."""
+    def _render(self, surface, split_mode=0, split=0.0, items=None, bg=None):
+        """Upload surface -> draw geometry -> read back -> composite sprites.
+        ``bg``: the caller filled an opaque target with this one colour, so a
+        clear replaces the upload (~1.7 ms a 640x448 frame)."""
         import moderngl
         ctx = self.ctx
         w, h = self.w, self.h
@@ -885,8 +895,11 @@ class GLRenderer(SoftwareRenderer):
         alpha = bool(surface.get_flags() & pygame.SRCALPHA)
         self._depth_alpha = 0.0 if alpha else 1.0
         self._fbo.use()
-        self._fbo.clear(depth=1.0)
-        self._color.write(pygame.image.tobytes(surface, "RGBA", True))
+        if bg is not None and not alpha:
+            self._fbo.clear(bg[0] / 255.0, bg[1] / 255.0, bg[2] / 255.0, 1.0, depth=1.0)
+        else:
+            self._fbo.clear(depth=1.0)
+            self._color.write(pygame.image.tobytes(surface, "RGBA", True))
         ctx.enable(moderngl.DEPTH_TEST)
         self.progs.atlas().use(location=_TEX_UNIT)
         ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
@@ -1137,7 +1150,7 @@ class GLRenderer(SoftwareRenderer):
         light_t = self._light_targets(items, depth, phys8)
         now = _now_ms() if light_t else 0
         for n, (_key, kind, d) in enumerate(items):
-            light, vis = False, 1.0
+            light, vis, strict = False, 1.0, False
             occ_depth, limit = depth, 0.0
             if callable(kind):
                 # Defensive: a software-format item (key, draw_fn, args)
@@ -1150,6 +1163,7 @@ class GLRenderer(SoftwareRenderer):
                 fn, sx, sy, scale, z, layer, zeff = d[:7]
                 anchor = d[7] if len(d) > 7 else None
                 light = bool(getattr(fn, "light", False))
+                strict = bool(getattr(fn, "strict_occ", False))
                 soft = light and bool(getattr(fn, "light_soft", False))
                 vis = 1.0
                 occ_depth, limit = depth, self._enc(layer, zeff) - 1e-6
@@ -1252,7 +1266,7 @@ class GLRenderer(SoftwareRenderer):
                 # case the mask actually changes.
                 draw(surface)
                 continue
-            if not light and (x1 - x0) * (y1 - y0) <= 196:
+            if not light and not strict and (x1 - x0) * (y1 - y0) <= 196:
                 # particle-sized (a molotov is 200+ dots): one depth probe at
                 # the centre instead of a masked box (<= 14x14 px); the mean was ~50 us each
                 if not occ_depth[(y0 + y1) // 2, (x0 + x1) // 2] < limit:
@@ -1260,7 +1274,9 @@ class GLRenderer(SoftwareRenderer):
                 continue
             occ = occ_depth[y0:y1, x0:x1] < limit
             frac = float(occ.mean()) if occ.size else 0.0
-            if frac <= 0.12:
+            if strict and frac >= 0.999:
+                continue
+            if frac <= (0.0 if strict else 0.12):
                 # fully visible, or a couple of stray pixels: the restore
                 # copy costs more than the two-pixel bleed it would hide
                 if light and vis < 0.999:
@@ -1297,9 +1313,9 @@ class GLRenderer(SoftwareRenderer):
         self.stats["light_copies"] = n_copy
         self.stats["light_scaled"] = n_scale
 
-    def flush(self, surface=None):
+    def flush(self, surface=None, bg=None):
         surface = surface or self.surface
-        self._render(surface)
+        self._render(surface, bg=bg)
         self.begin()
 
     def _split_items(self, split_depth):

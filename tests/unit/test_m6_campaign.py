@@ -24,6 +24,7 @@ from core.cutscene_registry import scene_renderer, set_current_shot
 from cutscenes import m6films
 from cutscenes import m6world3d as _w3
 from missions.m6 import combat as _combat
+from missions.m6 import draw as _draw
 from missions.m6 import flow as _flow
 from missions.m6 import maps as _maps
 from missions.m6 import meta as _meta
@@ -99,6 +100,26 @@ class TopDownProgressionTests(unittest.TestCase):
                 self.assertNotIn("LOCKED", _flow.interaction_prompt())
                 self.assertTrue(_flow.handle_interact())
                 self.assertEqual(STATE.mission6_stage, destination)
+
+    def test_rail_uses_the_fast_2d_view_unless_opted_into_25d(self):
+        with patch.object(STATE, "m6_yard_active", False, create=True), \
+                patch.object(STATE, "m6_train_active", False, create=True), \
+                patch.object(STATE, "m6_train_death", False, create=True), \
+                patch.object(STATE, "mission6_stage", _meta.STAGE_CUSTOMS), \
+                patch.object(STATE, "active_mission", "MISSION6", create=True), \
+                patch.object(_draw._td, "enabled", return_value=True), \
+                patch.dict(os.environ, {"ACA_M6_RAIL_25D": ""}):
+            self.assertTrue(_draw._td3d_gate())
+            STATE.mission6_stage = _meta.STAGE_NOMAN
+            self.assertTrue(_draw._td3d_gate())
+            STATE.mission6_stage = _meta.STAGE_RAIL
+            self.assertFalse(_draw._td3d_gate())
+            self.assertIsNone(_draw._td.active_cam())  # the 2D aim ray too
+            with patch.dict(os.environ, {"ACA_M6_RAIL_25D": "1"}):
+                self.assertTrue(_draw._td3d_gate())
+                self.assertIsNotNone(_draw._td.active_cam())
+                STATE.m6_train_active = True
+                self.assertFalse(_draw._td3d_gate())
 
 
 # ───────────────────────────────────────────────────────────────────────────
