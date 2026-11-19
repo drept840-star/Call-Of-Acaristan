@@ -197,8 +197,10 @@ def _scr(wx, wy, cam_x, cam_y, h=0.0):
 
 
 def _m3_td3d_gate():
-    """2.5D runs on the five playable maps, each only in its own stage."""
+    """2.5D runs on the five playable maps, each only in its own stage, and on
+    the cell block for Volkov's breach (the monitor POV before it stays 2D)."""
     grid = {STAGE_BREAKOUT: _m3_maps.MISSION3_CELL_MAP, STAGE_COMMS: _m3_maps.MISSION3_COMMS_MAP,
+            STAGE_INTERROGATION: _m3_maps.MISSION3_CELL_MAP if _m3_flow._volkov_breach_t >= 0 else None,
             STAGE_ARCHIVES: _m3_maps.MISSION3_ARCHIVES_MAP,
             STAGE_KILL_ORDER: _m3_maps.MISSION3_KILL_ORDER_MAP,
             STAGE_BROADCAST: _m3_maps.MISSION3_BROADCAST_MAP}.get(getattr(STATE, "mission3_stage", None))
@@ -5512,11 +5514,13 @@ def _draw_interrogation_monitor_view():
             full_text = beat.get("text", "")
             visible = full_text[:_m3_flow._dialogue_char_idx]
             lines = _wrap(visible, font_dialogue, mon.w - 110)
-            yy = mon.h - 112
+            # laid out from the full line: a 4th row lifts the block instead of being cut
+            n_full = len(_wrap(full_text, font_dialogue, mon.w - 110))
+            yy = mon.h - 31 - max(3, n_full) * 27
             name = font_terminal_small.render(_T("m3.balaceanu_prerecorded"), True, C_BALACEANU)
             name.set_alpha(185)
             crt.blit(name, (54, yy - 26))
-            for i, ln in enumerate(lines[:3]):
+            for i, ln in enumerate(lines):
                 surf = font_dialogue.render(ln, True, (232, 205, 198))
                 surf.set_alpha(min(238, max(25, _m3_flow._dialogue_char_idx * 8 - i * 38)))
                 crt.blit(surf, (54, yy + i * 27))
@@ -5693,6 +5697,8 @@ def _draw_breach_cinematic_letterbox():
 
 def game_draw(fcx, fcy):
     if _td.active_cam() is not None:
+        if getattr(STATE, "mission3_stage", None) == STAGE_INTERROGATION:
+            fcx, fcy = _mission3_breach_camera()     # the gate opens only once the breach runs
         try:
             from missions.m3 import draw3d
             if draw3d.game_draw3d(fcx, fcy):

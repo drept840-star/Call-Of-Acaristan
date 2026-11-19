@@ -47,10 +47,10 @@ def _class(col):
     key = (col[0], col[1], col[2])
     kind = _kind.get(key, 0)
     if kind == 0:
-        h, s, _v = colorsys.rgb_to_hsv(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0)
+        h, s, v = colorsys.rgb_to_hsv(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0)
         h *= 360.0
-        if s < 0.22:
-            kind = "grey"
+        if s < 0.24 or (s < 0.34 and v < 0.35):
+            kind = "asphalt" if v < 0.19 else "grey"
         elif 10.0 <= h < 50.0:
             kind = "wood" if s >= 0.4 else "beige"
         elif (h < 10.0 or h >= 340.0) and s >= 0.3:
@@ -63,6 +63,8 @@ def _class(col):
 
 def _material(kind, area, flat):
     big = area >= BIG
+    if kind == "asphalt":
+        return "pavement" if flat else "concrete"
     if kind == "grey":
         return "concrete" if flat or big else "steel"
     if kind == "wood":

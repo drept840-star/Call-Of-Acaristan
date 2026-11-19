@@ -33,13 +33,17 @@ def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
     if y is None:
         y = theme.letter_h + 10
 
-    panel_w = min(theme.width - x - 20, max(DEFAULT_PANEL_WIDTH, 620))
-    pad_x = 10
-    line_gap = 3
-    max_text_w = panel_w - pad_x * 2
+    compact = bool(theme.extra.get("compact_objective", False))
+    tactical = bool(theme.extra.get("tactical_hud", False))
+    max_panel_w = min(theme.width - x - 200, 440) if compact else min(theme.width - x - 20, max(DEFAULT_PANEL_WIDTH, 620))
+    pad_x = 9 if compact else 10
+    top_pad = 5 if compact else 7
+    line_gap = 2 if compact else 3
+    fade_w = 24 if compact else FADE_W
+    max_text_w = max(120, max_panel_w - pad_x * 2 - (12 if compact else 0))
 
     full = (label if label is not None else T("hud.objective")) + str(text)
-    key = (full, panel_w, id(font_prompt), font_prompt.get_height(),
+    key = (full, max_panel_w, compact, tactical, id(font_prompt), font_prompt.get_height(),
            tuple(theme.c_amber), tuple(theme.c_white), tuple(theme.c_panel))
     cached = _PANELS.get(key)
     if cached is not None:
@@ -78,14 +82,27 @@ def draw(surface: pygame.Surface, text: object, theme: Theme, x: int = 20,
         lines = [lines[0], second + "\u2026"]
 
     line_h = font_prompt.get_height()
-    panel_h = max(DEFAULT_PANEL_HEIGHT, 14 + len(lines) * line_h + (len(lines) - 1) * line_gap)
-    bg = theme.panel(panel_w, panel_h, fade=FADE_W, stripe=theme.c_amber)
+    if compact:
+        widest = max((font_prompt.size(line)[0] for line in lines), default=100)
+        panel_w = max(210, min(max_panel_w, widest + pad_x * 2 + 24))
+        panel_h = max(24, top_pad * 2 + len(lines) * line_h + (len(lines) - 1) * line_gap)
+    else:
+        panel_w = max_panel_w
+        panel_h = max(DEFAULT_PANEL_HEIGHT, 14 + len(lines) * line_h + (len(lines) - 1) * line_gap)
+    bg = theme.panel(panel_w, panel_h, fade=fade_w, stripe=theme.c_amber)
+    if tactical:
+        bg = bg.copy()
+        c_hi = (118, 142, 166, 255)
+        pygame.draw.line(bg, c_hi, (0, 0), (8, 0), 2)
+        pygame.draw.line(bg, c_hi, (0, 0), (0, 7), 2)
+        pygame.draw.line(bg, c_hi, (0, panel_h - 1), (8, panel_h - 1), 2)
+        pygame.draw.line(bg, c_hi, (0, panel_h - 1), (0, panel_h - 8), 2)
     surface.blit(bg, (x, y))
 
     line_surfs = []
     for i, line in enumerate(lines):
         obj_surf = font_prompt.render(line, True, theme.c_white)
-        dy = 7 + i * (line_h + line_gap)
+        dy = top_pad + i * (line_h + line_gap)
         surface.blit(obj_surf, (x + pad_x, y + dy))
         line_surfs.append((obj_surf, dy))
     if len(_PANELS) >= 16:

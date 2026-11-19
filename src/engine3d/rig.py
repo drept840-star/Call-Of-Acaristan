@@ -18,7 +18,29 @@ Pose keys (degrees unless noted) - anything missing falls back to NEUTRAL:
 import math
 
 from .core import (M_IDENT, Mesh, _orient_outward, box, lerp, m_apply, m_mul,
-                   rot_x, rot_y, rot_z, v_add)
+                   rot_x, rot_y, rot_z, v_add, v_cross, v_dot, v_len, v_norm, v_sub)
+
+
+def _basis_xy(x_hint, y_vec):
+    """Left-handed orthonormal 3x3 matrix from exact +Y and a +X hint."""
+    yn = v_len(y_vec)
+    Y = (y_vec[0] / yn, y_vec[1] / yn, y_vec[2] / yn) if yn > 1e-6 else (0.0, 1.0, 0.0)
+    d = v_dot(x_hint, Y)
+    xp = (x_hint[0] - Y[0] * d, x_hint[1] - Y[1] * d, x_hint[2] - Y[2] * d)
+    xn = v_len(xp)
+    if xn < 1e-5:
+        alt = (0.0, 0.0, 1.0) if abs(Y[0]) > 0.9 else (1.0, 0.0, 0.0)
+        d = v_dot(alt, Y)
+        xp = (alt[0] - Y[0] * d, alt[1] - Y[1] * d, alt[2] - Y[2] * d)
+        xn = v_len(xp) or 1.0
+    X = (xp[0] / xn, xp[1] / xn, xp[2] / xn)
+    Z = v_cross(X, Y)
+    return (X[0], Y[0], Z[0], X[1], Y[1], Z[1], X[2], Y[2], Z[2])
+
+
+def _col_x(M):
+    return (M[0], M[3], M[6])
+
 
 __all__ = ["NEUTRAL", "POSES", "EXPRESSIONS", "blend", "Humanoid", "rifle_mesh",
            "os12_mesh", "os12_mag_mesh", "shotgun_mesh", "shotgun_pump_mesh", "pose_run",
@@ -1101,23 +1123,180 @@ class Humanoid:
             rifle_m = R
         return places, joints, rifle_m, p["lift"]
 
+    def ragdoll_nodes(self, pose, pos, yaw):
+        """Extract 15 world-space ragdoll nodes from a posed rig."""
+        p = dict(NEUTRAL)
+        p.update(pose)
+        B = m_mul(rot_y(yaw), m_mul(rot_x(p["body_p"]), rot_z(p["body_r"])))
+        places, _joints, _rifle_m, lift = self._placements(p, B, rifle_on=False)
+        uniq = self._unique_verts()
+        part_r = self._part_r
+        miny = 1e9
+        for _slot, key, M, org, ground, _fb in reversed(places):
+            if not ground:
+                continue
+            m3, m4, m5 = M[3], M[4], M[5]
+            oy = org[1]
+            rb = part_r[key]
+            if rb > 0.0:
+                rs = math.sqrt(m3 * m3 + m4 * m4 + m5 * m5)
+                if oy - rs * rb >= miny:
+                    continue
+            for (x, y, z) in uniq[key]:
+                q = m3 * x + m4 * y + m5 * z + oy
+                if q < miny:
+                    miny = q
+        px, py, pz = pos[0], pos[1] - miny + lift, pos[2]
+        by_slot = {slot: (M, (org[0] + px, org[1] + py, org[2] + pz))
+                   for slot, _key, M, org, _g, _fb in places}
+        S, pel = by_slot[1]
+        H, neck = by_slot[2]
+        F_l, lel = by_slot[6]
+        F_r, rel = by_slot[12]
+        return {
+            "pelvis": pel,
+            "chest": v_add(pel, m_apply(S, (0.0, 0.425, 0.0))),
+            "head": v_add(neck, m_apply(H, (0.0, 0.18, 0.0))),
+            "lsh": by_slot[4][1],
+            "rsh": by_slot[10][1],
+            "lel": lel,
+            "rel": rel,
+            "lhand": v_add(lel, m_apply(F_l, (0.0, -0.31, 0.0))),
+            "rhand": v_add(rel, m_apply(F_r, (0.0, -0.31, 0.0))),
+            "lhip": by_slot[7][1],
+            "rhip": by_slot[13][1],
+            "lkn": by_slot[8][1],
+            "rkn": by_slot[14][1],
+            "lfoot": by_slot[9][1],
+            "rfoot": by_slot[15][1],
+        }
+
+    def places_from_nodes(self, nodes, floor_y=None, head_yaw=0.0, rifle_m=None):
+        """Build world-space ``(places, joints)`` directly from 15 ragdoll nodes."""
+        sc = self._scale
+        scale_m = (lambda M: tuple(x * sc for x in M)) if sc != 1.0 else (lambda M: M)
+        pel = tuple(nodes["pelvis"])
+        lsh, rsh = nodes["lsh"], nodes["rsh"]
+        sh_mid = ((lsh[0] + rsh[0]) * 0.5, (lsh[1] + rsh[1]) * 0.5, (lsh[2] + rsh[2]) * 0.5)
+        torso_y = v_sub(sh_mid, pel)
+        S0 = _basis_xy(v_sub(rsh, lsh), torso_y)
+        B0 = _basis_xy(v_sub(nodes["rhip"], nodes["lhip"]), torso_y)
+        S = scale_m(S0)
+        B = scale_m(B0)
+        Sx = _col_x(S0)
+        Bx = _col_x(B0)
+        neck = v_add(pel, m_apply(S, (0.0, 0.62, 0.0)))
+        H0 = _basis_xy(Sx, v_sub(nodes["head"], neck))
+        if head_yaw:
+            H0 = m_mul(H0, rot_y(head_yaw))
+        H = scale_m(H0)
+        places = [
+            (0, "pelvis", B, pel, True, 0.0),
+            (1, "torso", S, pel, True, 0.0),
+            (2, "head", H, neck, True, 0.0),
+        ]
+        if not self.spec.get("hood"):
+            places.append((3, "face", H, neck, False, PART_FB["face"]))
+            if self._parts["face2"][1]:
+                places.append((18, "face2", H, neck, False, PART_FB["face2"]))
+        for slot, key in ((17, "chest"), (19, "chest2"), (20, "chest3")):
+            if self._parts[key][1]:
+                places.append((slot, key, S, pel, False, PART_FB[key]))
+        joints = {
+            "pelvis": pel,
+            "chest": v_add(pel, m_apply(S, (0.0, 0.36, 0.08))),
+            "head": v_add(neck, m_apply(H, (0.0, 0.14, 0.02))),
+            "rifle_m": None,
+        }
+        for side, sx, base in (("l", -1, 4), ("r", 1, 10)):
+            sh_w = v_add(pel, m_apply(S, (self._sh * sx, 0.5, 0.0)))
+            el_n, hd_n = nodes[side + "el"], nodes[side + "hand"]
+            u_dir = v_sub(el_n, sh_w)
+            f_dir = v_sub(hd_n, el_n)
+            bend = v_cross(f_dir, u_dir)
+            if v_dot(bend, Sx) < 0.0:
+                bend = (-bend[0], -bend[1], -bend[2])
+            w_b = min(1.5, v_len(bend) * 4.0)
+            U0 = _basis_xy((Sx[0] * 0.4 + bend[0] * w_b, Sx[1] * 0.4 + bend[1] * w_b, Sx[2] * 0.4 + bend[2] * w_b),
+                           (-u_dir[0], -u_dir[1], -u_dir[2]))
+            U = scale_m(U0)
+            places.append((base, "uarm", U, sh_w, True, 0.0))
+            if side == "l":
+                places.append((base + 1, "uarm_acc", U, sh_w, True, PART_FB["uarm_acc"]))
+            el_w = v_add(sh_w, m_apply(U, (0.0, -0.30, 0.0)))
+            f_seg = v_sub(hd_n, el_w)
+            F0 = _basis_xy(_col_x(U0), (-f_seg[0], -f_seg[1], -f_seg[2]))
+            F = scale_m(F0)
+            places.append((base + 2, "farm", F, el_w, True, 0.0))
+            joints[side + "hand"] = v_add(el_w, m_apply(F, (0.0, -0.31, 0.0)))
+
+            hip_w = v_add(pel, m_apply(B, (0.1 * sx, -0.04, 0.0)))
+            kn_n, ft_n = nodes[side + "kn"], nodes[side + "foot"]
+            t_dir = v_sub(kn_n, hip_w)
+            s_dir = v_sub(ft_n, kn_n)
+            kbend = v_cross(t_dir, s_dir)
+            if v_dot(kbend, Bx) < 0.0:
+                kbend = (-kbend[0], -kbend[1], -kbend[2])
+            kw = min(1.5, v_len(kbend) * 4.0)
+            T0 = _basis_xy((Bx[0] * 0.4 + kbend[0] * kw, Bx[1] * 0.4 + kbend[1] * kw, Bx[2] * 0.4 + kbend[2] * kw),
+                           (-t_dir[0], -t_dir[1], -t_dir[2]))
+            T = scale_m(T0)
+            places.append((base + 3, "thigh", T, hip_w, True, 0.0))
+            kn_w = v_add(hip_w, m_apply(T, (0.0, -0.45, 0.0)))
+            s_seg = v_sub(ft_n, kn_w)
+            K0 = _basis_xy(_col_x(T0), (-s_seg[0], -s_seg[1], -s_seg[2]))
+            K = scale_m(K0)
+            places.append((base + 4, "shin", K, kn_w, True, 0.0))
+            an_w = v_add(kn_w, m_apply(K, (0.0, -0.45, 0.0)))
+            Fo0 = m_mul(K0, rot_x(26.0))
+            if floor_y is not None:
+                fy_lim = float(floor_y) - 0.005
+                toe_y = an_w[1] + m_apply(Fo0, (0.0, -0.095 * sc, 0.175 * sc))[1]
+                heel_y = an_w[1] + m_apply(Fo0, (0.0, -0.095 * sc, -0.075 * sc))[1]
+                toe_dip = fy_lim - toe_y
+                heel_dip = fy_lim - heel_y
+                if toe_dip > heel_dip and toe_dip > 0.0:
+                    fix = min(55.0, math.degrees(math.asin(min(1.0, toe_dip / max(0.08, 0.175 * sc)))))
+                    Fo0 = m_mul(K0, rot_x(26.0 - fix))
+                elif heel_dip > 0.0:
+                    fix = min(55.0, math.degrees(math.asin(min(1.0, heel_dip / max(0.05, 0.095 * sc)))))
+                    Fo0 = m_mul(K0, rot_x(26.0 + fix))
+            places.append((base + 5, "foot", scale_m(Fo0), an_w, True, 0.0))
+        if rifle_m is not None and self._rifle is not None:
+            places.append((16, "rifle", rifle_m, joints["rhand"], False, 0.0))
+            joints["rifle_m"] = rifle_m
+        return places, joints
+
     def pose_world(self, pose, pos, yaw, rifle_on=True):
         """Skeleton-only posing for GPU skinning (engine3d.gl).
 
         -> (places, joints) with joints in world space exactly as build()
         returns them. Ground contact uses each part's unique vertices, so the
         result matches build() without transforming the whole mesh."""
+        if "_places" in pose:
+            joints = dict(pose.get("_joints") or {})
+            joints.setdefault("rifle_m", None)
+            places = pose["_places"]
+            if not rifle_on:
+                places = [pl for pl in places if pl[1] != "rifle"]
+            return places, joints, (0.0, 0.0, 0.0)
         p = dict(NEUTRAL)
         p.update(pose)
         B = m_mul(rot_y(yaw), m_mul(rot_x(p["body_p"]), rot_z(p["body_r"])))
         places, joints, rifle_m, lift = self._placements(p, B, rifle_on)
         uniq = self._unique_verts()
+        part_r = self._part_r
         miny = 1e9
-        for _slot, key, M, org, ground, _fb in places:
+        for _slot, key, M, org, ground, _fb in reversed(places):
             if not ground:
                 continue
             m3, m4, m5 = M[3], M[4], M[5]
             oy = org[1]
+            rb = part_r[key]
+            if rb > 0.0:
+                rs = math.sqrt(m3 * m3 + m4 * m4 + m5 * m5)
+                if oy - rs * rb >= miny:
+                    continue
             for (x, y, z) in uniq[key]:
                 q = m3 * x + m4 * y + m5 * z + oy
                 if q < miny:
@@ -1134,12 +1313,37 @@ class Humanoid:
         u = getattr(self, "_uniq", None)
         if u is None:
             u = {k: list(dict.fromkeys(v)) for k, (v, _f) in self._parts.items()}
+            self._part_r = {k: max((math.sqrt(x * x + y * y + z * z) for x, y, z in pts), default=0.0)
+                            for k, pts in u.items()}
             self._uniq = u
         return u
 
     def build(self, pose, pos, yaw, rifle_on=True, extra=None):
         """-> (world_verts, faces, joints) faces ready for Renderer.add_dynamic.
         joints: dict of world positions (head, rhand, lhand, pelvis, chest, muzzle)."""
+        if "_places" in pose:
+            joints = dict(pose.get("_joints") or {})
+            out_v, out_f = [], []
+            for _slot, key, M, origin, _ground, fb in pose["_places"]:
+                if key == "rifle":
+                    if not rifle_on or self._rifle is None:
+                        continue
+                    base = len(out_v)
+                    for v in self._rifle.verts:
+                        q = m_apply(M, v)
+                        out_v.append((q[0] + origin[0], q[1] + origin[1], q[2] + origin[2]))
+                    for idx, col, layer, ds, em in self._rifle.faces:
+                        out_f.append((tuple(i + base for i in idx), col, layer, ds, None, em))
+                    continue
+                verts, faces = self._parts[key]
+                base = len(out_v)
+                for v in verts:
+                    q = m_apply(M, v)
+                    out_v.append((q[0] + origin[0], q[1] + origin[1], q[2] + origin[2]))
+                for idx, col, layer, ds, em in faces:
+                    out_f.append((tuple(i + base for i in idx), col, layer, ds, None, em, fb))
+            joints.setdefault("rifle_m", None)
+            return out_v, out_f, joints
         p = dict(NEUTRAL)
         p.update(pose)
         B = m_mul(rot_y(yaw), m_mul(rot_x(p["body_p"]), rot_z(p["body_r"])))

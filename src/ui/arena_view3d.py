@@ -32,7 +32,7 @@ from net import protocol as P
 from ui import mp3d
 from ui.arena_view import ArenaView, MUZZLE_FRAMES, color_for
 
-RES = (640, 448)                 # internal buffer, x1.5625 to the 1000x700 canvas
+RES = (1000, 700)                # internal buffer = the canvas: no upscale blur
 WALL_H = 2.1
 COVER_H = 0.95
 AIM_H = 1.3                      # the mouse ray meets the floor at gun height
@@ -53,14 +53,14 @@ PICKUP_RIG = {P.WPN_OS12: "os12", P.WPN_K9: "k9_smg", P.WPN_SHOTGUN: "shotgun"}
 THEMES = {
     "yard": dict(floor=("pavement", (54, 54, 52)), wall=("concrete", (96, 92, 86)),
                  cap=(84, 82, 78), cover=("crate", (112, 88, 58)), void=(8, 9, 12),
-                 lamp=(255, 196, 120), key=(0.94, 0.94, 0.98), ambient=(160, 156, 150)),
+                 lamp=(255, 196, 120), key=(0.94, 0.94, 0.98), ambient=(134, 132, 132)),
     "crossfire": dict(floor=("pavement", (52, 52, 54)), wall=("brick", (92, 62, 50)),
                       cap=(74, 68, 64), cover=("metal_rib", (70, 76, 84)),
                       void=(8, 9, 12), lamp=(226, 228, 220), key=(0.92, 0.92, 0.96),
-                      ambient=(152, 154, 160)),
+                      ambient=(126, 130, 142)),
     "foundry": dict(floor=("pavement", (58, 53, 48)), wall=("rust", (88, 56, 40)),
                     cap=(76, 64, 56), cover=("steel", (84, 88, 94)), void=(10, 8, 7),
-                    lamp=(255, 150, 80), key=(1.0, 0.90, 0.80), ambient=(164, 140, 124)),
+                    lamp=(255, 150, 80), key=(1.0, 0.90, 0.80), ambient=(138, 118, 108)),
 }
 LAMP_GAP = 6                     # tiles between lamps along the outer walls
 LAMP_REACH = 5.2                 # metres: a pool's radius on the floor
@@ -84,12 +84,14 @@ def make_view(map_name="yard"):
 
 
 class _Meta3D(object):
-    __slots__ = ("x", "y", "phase", "speed")
+    __slots__ = ("x", "y", "phase", "speed", "rig", "from_rig")
 
     def __init__(self):
         self.x = self.y = None
         self.phase = 0.0
         self.speed = 0.0
+        self.rig = None
+        self.from_rig = None
 
 
 class _Corpse3D(object):
@@ -260,8 +262,8 @@ class ArenaView3D(ArenaView):
         th = self.theme
         tm = self._anim_t * (1000.0 / 60.0)
 
-        r, buf = _w.rend(*RES)
-        saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+        r, buf = _w.rend(*RES, hdr=False)
+        saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
         try:
             r.light = Light(direction=(-0.30, 0.85, -0.42), ambient=0.36, diffuse=0.50,
                             sky=0.08, tint=th["key"])
@@ -286,10 +288,12 @@ class ArenaView3D(ArenaView):
             tags = self._draw_players3d(r, posed, local_id, flashes, tm)
             self._draw_fx3d(r, tm)
             self._lamp_lights(r, view, flashes, tm)
-            td.cast_shadows(r)
+            td.cast_shadows(r, alpha=150)
             r.flush(buf, bg=th["void"])
         finally:
-            r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+            r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+            if hasattr(r, "hdr"):
+                r.hdr = shdr
         _fx.present_crisp(buf, surface)
         _grade.apply(surface, view, self._grade_lights(flashes), ambient=th["ambient"])
         _grade.vignette(surface)
@@ -417,7 +421,6 @@ class ArenaView3D(ArenaView):
             m3 = self._m3.setdefault(pid, _Meta3D())
             look = self.look_for(pid)
             rig = getattr(v, "rig_weapon", None) or "pistol"
-            h = mp3d.hum(look, rig)
             px, py = ent[2], ent[3]
             yaw = yaw_of(ent[4])
             if ent[6] == P.PS_DEAD or pid in waiting:
@@ -438,9 +441,14 @@ class ArenaView3D(ArenaView):
                                  _blood_pool(min(1.0, (age - CORPSE_FALL_FRAMES) / 90.0)), layer=0)
                     mesh, _mz = mp3d.gun(rig)
                     self._put(r, mesh, (at[0] + 0.5, 0.04, at[2] - 0.2), yaw=dyaw + 70.0, roll=90.0)
-                r.add_humanoid(h, pose, at, dyaw, rifle_on=False)
+                h = mp3d.hum(look, rig)
+                r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.65, 0.50, 110), layer=1, bias=-0.8)
+                r.add_humanoid(h, pose, at, dyaw, rifle_on=False, shadow=(1, -0.5))
                 tags.append(("dead", pid, local_id, v, ent, at))
                 m3.x = None
+                m3.rig = None
+                m3.from_rig = None
+                v.swap_timer = 0
                 continue
             if m3.x is None:
                 m3.x, m3.y = px, py
@@ -455,15 +463,43 @@ class ArenaView3D(ArenaView):
             meta = self._view_meta.get(pid)
             reloading = ent[6] == P.PS_RELOADING
             base = pose_run(m3.phase, lean=4) if moving else dict(POSES["stand"])
-            pose = mp3d.held(h, base, rig, "ready" if reloading else "aim")
+            swap_t = getattr(v, "swap_timer", 0)
+            if m3.rig is None:
+                m3.rig = rig
+            draw_rig = rig
+            swap_k = 0.0
+            if swap_t > 0:
+                if m3.rig != rig and m3.from_rig is None:
+                    m3.from_rig = m3.rig
+                dur = max(1, int(getattr(v, "swap_duration", 24) or 24))
+                swap_p = max(0.0, min(1.0, 1.0 - swap_t / float(dur)))
+                if swap_p < 0.5 and m3.from_rig:
+                    draw_rig = m3.from_rig
+                else:
+                    m3.rig = rig
+                    m3.from_rig = None
+                u = swap_p * 2.0 if swap_p < 0.5 else (1.0 - swap_p) * 2.0
+                swap_k = u * u * (3.0 - 2.0 * u)
+                v.swap_timer = swap_t - 1
+                if v.swap_timer <= 0:
+                    m3.rig = rig
+                    m3.from_rig = None
+            else:
+                m3.rig = rig
+                m3.from_rig = None
+            h = mp3d.hum(look, draw_rig)
+            pose = mp3d.held(h, base, draw_rig, "ready" if (reloading or swap_k > 0.0) else "aim")
+            if swap_k > 0.0:
+                pose = td.apply_swap_pose(pose, swap_k)
             muzzle = meta.muzzle if meta is not None else 0
-            if muzzle > 0:
+            if muzzle > 0 and swap_k == 0.0:
                 kick = muzzle / float(MUZZLE_FRAMES)
                 pose["rifle_p"] = pose.get("rifle_p", 0.0) - 7.0 * kick
                 pose["spine"] = pose.get("spine", 0.0) - 2.0 * kick
             at = to3(px, py)
-            r.add_sprite((at[0], 0.02, at[2]), _shadow, layer=1)
-            joints = r.add_humanoid(h, pose, at, yaw, rifle_on=True)
+            r.add_sprite((at[0], 0.02, at[2]), _shadow, layer=1, bias=-0.6)
+            r.add_sprite((at[0], 0.015, at[2]), _shadow_core, layer=1, bias=-0.4)
+            joints = r.add_humanoid(h, pose, at, yaw, rifle_on=True, shadow=(1, -0.5))
             flashes.append({"pos": (at[0], 2.4, at[2] - 1.4), "color": (200, 210, 230),
                             "intensity": 1.5 if pid == local_id else 1.4, "range": 4.4})
             if ent[8] & P.F_INVULNERABLE:
@@ -567,3 +603,4 @@ def _bulb(lx, ly, px, py):
 _dot = td.dot
 _blood_pool = td.blood_pool
 _shadow = td.shadow(0.42)
+_shadow_core = td.shadow(0.24, 0.18, 165)

@@ -11,6 +11,10 @@ Pure Python, no pygame, no side effects on import.
 """
 from .boxes import BoxWorld, ray_aabb
 from .mesh import MeshCollider, Placement
-from .nav import GridNav
+from .nav import GridNav, MultiFloorNav, NavLink
+from .physics import DebrisBody, DebrisPool, RagdollBody, box_xz_h, box_xz_yy, slide_capsule
 
-__all__ = ["BoxWorld", "GridNav", "MeshCollider", "Placement", "ray_aabb"]
+__all__ = [
+    "BoxWorld", "GridNav", "MultiFloorNav", "NavLink", "MeshCollider", "Placement", "ray_aabb",
+    "DebrisBody", "DebrisPool", "RagdollBody", "box_xz_h", "box_xz_yy", "slide_capsule",
+]

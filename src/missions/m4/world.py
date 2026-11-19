@@ -87,6 +87,11 @@ def _jammer_pos():
     return _tile_world(*JAMMER_TILE)
 
 
+def _shop_counter_pos():
+    c, r = _m4_maps.CORNER_SHOP_COUNTER_TILE
+    return (c * TILE_SIZE + TILE_SIZE // 2, r * TILE_SIZE + 26)
+
+
 # Weapon kits for the allies: damage per bullet, frames between shots,
 # reach in px, pellets per shot.
 ALLY_WEAPONS = {
@@ -304,6 +309,12 @@ def _build_m4_world():
     """Curfew-street world (STAGE_AFTERMATH arena)."""
     _reset_world_lists()
     player = _parse_grid(_m4_maps.MISSION4_MAP)
+    # Shallow counter + cooler along the corner shop's north edge; keeps the
+    # 24x24 tile-centre BFS probes clear so Vasile can walk inside behind Biribel.
+    sx, sy, sw, _sh = _m4_maps.CORNER_SHOP_RECT
+    STATE.walls.append(pygame.Rect(sx * TILE_SIZE + 4, sy * TILE_SIZE, sw * TILE_SIZE - 8, 18))
+    # Small east crate stack (keeps (38, 37) tile-centre BFS probe clear).
+    STATE.walls.append(pygame.Rect(38 * TILE_SIZE + 46, 37 * TILE_SIZE + 8, 18, 56))
 
     if player is None:
         # Fallback spawn if the map ever loses its "P".

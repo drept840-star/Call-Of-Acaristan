@@ -389,6 +389,7 @@ class GameState:
         self.quiet_entry = True
         self.hotwire_line_played = False
         self.hotwire_radio_said = False
+        self.hotwire_not_clear_said = False
         self.notebook_twist_shown = False
         self._pending_twist_line = False
         self.civilian_payoff_played = False

@@ -32,7 +32,7 @@ import pygame
 
 from engine.assets import load_image
 
-__all__ = ["Tex", "tex", "version", "stack", "glitter", "SIZE"]
+__all__ = ["Tex", "tex", "version", "stack", "glitter", "reflectivity", "SIZE"]
 
 SIZE = 64
 DENSITY = 32.0                      # default texels per metre: a tile is 2 m
@@ -43,11 +43,23 @@ _DENSITY = {"snow": 16.0, "snow_trod": 16.0}
 _GLITTER = {"snow": 1.0, "snow_trod": 0.35}
 # Pattern contrast per texture (1 = as painted): the cracked concrete read as grain.
 _CONTRAST = {"concrete": 0.55}
+# Specular / wet-floor reflection base per texture.
+_REFL = {
+    "pavement": 0.55,
+    "concrete": 0.36,
+    "m7_tile": 0.58,
+    "m7_stone": 0.24,
+    "metal_rib": 0.22,
+    "steel": 0.28,
+    "snow_trod": 0.14,
+    "snow": 0.08,
+}
 
 _names = {}                         # name -> layer
 _layers = []                        # [(name, ratio float16 (SIZE, SIZE, 3), mean)]
 _uvk = []                           # layer -> density / SIZE (tiles per metre)
 _glit = []                          # layer -> glitter strength
+_refl = []                          # layer -> reflectivity strength
 _version = 0
 
 
@@ -97,6 +109,7 @@ def _load(name, density, mono=False):
     _layers.append((key, (rgb / mean).astype(np.float16), tuple(mean)))
     _uvk.append(float(density) / SIZE)
     _glit.append(_GLITTER.get(name, 0.0))
+    _refl.append(_REFL.get(name, 0.0))
     _names[key] = layer
     _version += 1
     return layer
@@ -137,6 +150,11 @@ def version():
 def glitter():
     """Glitter strength per layer, in layer order."""
     return tuple(_glit)
+
+
+def reflectivity():
+    """Reflectivity base per layer, in layer order."""
+    return tuple(_refl)
 
 
 def stack():

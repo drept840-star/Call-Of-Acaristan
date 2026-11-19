@@ -5,6 +5,7 @@ for an un-rotated camera). Units are metres. Faces are wound so that the
 outward normal is (b - a) x (c - a) in this left-handed space; use the mesh
 builders below and you never have to think about it.
 """
+from collections import OrderedDict
 import math
 
 import pygame
@@ -140,8 +141,9 @@ class Mesh:
         for v in other.verts:
             p = m_apply(m, v)
             self.verts.append((p[0] + t[0], p[1] + t[1], p[2] + t[2]))
-        for idx, col, layer, ds, em in other.faces:
-            self.faces.append((tuple(i + base for i in idx), col, layer, ds, em))
+        for f in other.faces:
+            idx, col, layer, ds, em = f[:5]
+            self.faces.append((tuple(i + base for i in idx), col, layer, ds, em, *f[5:]))
         return self
 
     def face(self, pts, col, layer=2, double=False, emissive=False):
@@ -422,13 +424,15 @@ class SoftwareRenderer:
     NEAR = 0.06
     backend = "software"
 
+    def set_sky(self, spec): pass
+
     def __init__(self, w, h, fog=(96, 98, 104), fog_start=18.0, fog_end=210.0):
         self.w, self.h = w, h
         self.surface = pygame.Surface((w, h))
         self.fog, self.fog_start, self.fog_end = fog, fog_start, fog_end
         self.light = Light()
         self.lights = []          # local point/spot lights (Phase 11 step 2)
-        self.light_cap = 4        # GL uploads this many (max 8); software keeps set_lights' cap
+        self.light_cap = 64       # GL uploads up to 64 tiled local lights
         # Local lights normally ADD their colour to a face, so a warm spot turns
         # a near-black coat tan.  ``light_albedo`` multiplies them by the surface
         # colour instead (``light_gain`` scales it), both backends.  Off by default.
@@ -439,11 +443,19 @@ class SoftwareRenderer:
         self.pools = []
         self.glitter = 0.0
         self.blob_shadows = True  # soft contact shadows (Phase 11 step 3)
+        self.ssao = True
+        self.spot_shadows = True
+        self.wetness = 0.0
+        self.marble_refl = 0.0
+        self.height_fog = None
+        self.frustum_cull = True
         self.textures = {}        # tex_id -> numpy (h, w, 3) (P11 step 9)
-        self._blob_cache = {}
+        self._blob_cache = OrderedDict()
         self.objs = []
         self.set_camera((0, 2, -10), (0, 1, 0), 60)
         self._items = []
+        self._particles = []
+        self._decals = []
         # Per-frame stats dict, shared API with GLRenderer (which re-creates
         # it in its own __init__ and replaces it wholesale in _render; the
         # composite layer writes light counters into it).  Living here keeps
@@ -515,17 +527,34 @@ class SoftwareRenderer:
         return self.h / 2 - y / z * self.focal
 
     def visible_sphere(self, c, r):
-        x, y, z = self.to_cam(c)
-        if z + r < self.NEAR:
+        return self.visible_frustum(
+            c, r, self.cam, self.right, self.up, self.fwd,
+            self.NEAR, self.fog_end + 60.0, self.tan_h, self.tan_v,
+        )
+
+    def visible_frustum(self, c, r, cam, right, up, fwd, near, far, tan_h, tan_v):
+        dx, dy, dz = c[0] - cam[0], c[1] - cam[1], c[2] - cam[2]
+        z = dx * fwd[0] + dy * fwd[1] + dz * fwd[2]
+        if z + r < near or z - r > far:
             return False
-        if z - r > self.fog_end + 60:
+        x = dx * right[0] + dy * right[1] + dz * right[2]
+        y = dx * up[0] + dy * up[1] + dz * up[2]
+        kh = math.sqrt(1.0 + tan_h * tan_h)
+        if abs(x) - z * tan_h > r * kh:
             return False
-        # side planes (normalised), cheap and conservative
-        kh = math.sqrt(1 + self.tan_h * self.tan_h)
-        kv = math.sqrt(1 + self.tan_v * self.tan_v)
-        if abs(x) - z * self.tan_h > r * kh:
+        kv = math.sqrt(1.0 + tan_v * tan_v)
+        if abs(y) - z * tan_v > r * kv:
             return False
-        if abs(y) - z * self.tan_v > r * kv:
+        return True
+
+    def visible_ortho(self, c, r, cam, right, up, fwd, half_w, half_h, far):
+        dx, dy, dz = c[0] - cam[0], c[1] - cam[1], c[2] - cam[2]
+        z = dx * fwd[0] + dy * fwd[1] + dz * fwd[2]
+        if z + r < 0.0 or z - r > far:
+            return False
+        x = dx * right[0] + dy * right[1] + dz * right[2]
+        y = dx * up[0] + dy * up[1] + dz * up[2]
+        if abs(x) > half_w + r or abs(y) > half_h + r:
             return False
         return True
 
@@ -538,6 +567,11 @@ class SoftwareRenderer:
     def begin(self):
         self._items = []
         self.actor_log = []
+        self._particles = []
+        self._decals = []
+        self.wetness = 0.0
+        self.marble_refl = 0.0
+        self.height_fog = None
 
     def _fog_k(self, z):
         if z <= self.fog_start:
@@ -563,7 +597,48 @@ class SoftwareRenderer:
         (P11 step 9: palette textures, software nearest sampling)."""
         self.textures[tex_id] = arr
 
-    def set_lights(self, lights, cap=8):
+    def set_extra_textures(self, *entries):
+        """GL-only per-stage extra RGB textures; no-op on software."""
+        pass
+
+    def add_particles(self, arr):
+        """Queue packed particle rows ``(N, 14)`` (software fallback draws squares)."""
+        if arr is not None and len(arr):
+            self._particles.append(arr)
+
+    def add_decals(self, arr):
+        """Queue packed decal rows ``(N, 11)`` (software fallback draws floor discs)."""
+        if arr is not None and len(arr):
+            self._decals.append(arr)
+
+    def _emit_fallback_fx(self):
+        for chunk in self._decals:
+            for row in chunk:
+                pos = (float(row[0]), float(row[1]), float(row[2]))
+                rad = float(row[3])
+                col = (int(row[5] * 255), int(row[6] * 255), int(row[7] * 255))
+                a = float(row[8])
+                if a <= 0.03:
+                    continue
+                def _d(s, sx, sy, scale, z, _r=rad, _c=col):
+                    w = max(2, int(_r * scale * 2.0))
+                    h = max(2, int(w * 0.75))
+                    pygame.draw.ellipse(s, _c, (int(sx) - w // 2, int(sy) - h // 2, w, h))
+                self.add_sprite(pos, _d, layer=0, bias=-0.5)
+        for chunk in self._particles:
+            for row in chunk:
+                pos = (float(row[0]), float(row[1]), float(row[2]))
+                col = (int(min(255, row[6] * 255)), int(min(255, row[7] * 255)), int(min(255, row[8] * 255)))
+                sz = float(row[10])
+                a = float(row[9])
+                if a <= 0.03:
+                    continue
+                def _p(s, sx, sy, scale, z, _sz=sz, _c=col):
+                    r = max(1, int(_sz * scale * 0.5))
+                    pygame.draw.rect(s, _c, (int(sx) - r, int(sy) - r, r * 2 + 1, r * 2 + 1))
+                self.add_sprite(pos, _p, layer=6)
+
+    def set_lights(self, lights, cap=64):
         """Local lights for this frame: dicts with pos/color/intensity/
         range and kind 'point'|'spot' (spot adds dir + cone=cos(half-angle)).
         The strongest ``cap`` win - the per-set light budget (§6.7 step 2)."""
@@ -646,7 +721,13 @@ class SoftwareRenderer:
             p0 = wverts[idx[0]]
             if nrm is None:
                 a, b, c = p0, wverts[idx[1]], wverts[idx[2]]
-                nrm = v_norm(v_cross(v_sub(b, a), v_sub(c, a)))
+                ux, uy, uz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+                vx, vy, vz = c[0] - a[0], c[1] - a[1], c[2] - a[2]
+                nx = uy * vz - uz * vy
+                ny = uz * vx - ux * vz
+                nz = ux * vy - uy * vx
+                ln = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+                nrm = (nx / ln, ny / ln, nz / ln)
             facing = (nrm[0] * (cx - p0[0]) + nrm[1] * (cy - p0[1]) + nrm[2] * (cz - p0[2]))
             if facing <= 0 and not ds:
                 continue
@@ -720,7 +801,10 @@ class SoftwareRenderer:
     def _blob_disc(self, w, h, strength):
         key = (w, h, int(strength * 20))
         s = self._blob_cache.get(key)
-        if s is None:
+        if s is not None:
+            self._blob_cache.move_to_end(key)
+            return s
+        else:
             base = self._blob_cache.get("base")
             if base is None:
                 import numpy as np
@@ -732,6 +816,12 @@ class SoftwareRenderer:
                 self._blob_cache["base"] = base
             s = pygame.transform.smoothscale(base, (max(2, w), max(2, h))).copy()
             s.set_alpha(int(255 * strength))
+            if len(self._blob_cache) >= 96:
+                for k in list(self._blob_cache):
+                    if k != "base":
+                        self._blob_cache.pop(k, None)
+                        if len(self._blob_cache) < 96:
+                            break
             self._blob_cache[key] = s
         return s
 
@@ -750,17 +840,24 @@ class SoftwareRenderer:
         c = self.project(pos)
         if c is None:
             return None
-        ex = self.project((pos[0] + rx, pos[1], pos[2]))
-        ez = self.project((pos[0], pos[1], pos[2] + rz))
+        ffx, ffz = self.fwd[0], self.fwd[2]
+        ffl = math.hypot(ffx, ffz)
+        if ffl > 1e-4:
+            ffx, ffz = ffx / ffl, ffz / ffl
+            rfx, rfz = ffz, -ffx
+        else:
+            rfx, rfz = self.right[0], self.right[2]
+            rfl = math.hypot(rfx, rfz) or 1.0
+            rfx, rfz = rfx / rfl, rfz / rfl
+            ffx, ffz = -rfz, rfx
+        r_side = math.hypot(rx * rfx, rz * rfz)
+        r_fwd = math.hypot(rx * ffx, rz * ffz)
+        ex = self.project((pos[0] + rfx * r_side, pos[1], pos[2] + rfz * r_side))
+        ez = self.project((pos[0] + ffx * r_fwd, pos[1], pos[2] + ffz * r_fwd))
         if ex is None or ez is None:
             return None
-        wpx = max(4, min(2 * self.w, int(abs(ex[0] - c[0]) * 2)))
+        wpx = max(4, min(2 * self.w, int(math.hypot(ex[0] - c[0], ex[1] - c[1]) * 2)))
         hpx = max(3, min(2 * self.h, int(abs(ez[1] - c[1]) * 2 + wpx * 0.18)))
-        if len(self._blob_cache) > 96:  # keep the scaled-disc cache bounded
-            base = self._blob_cache.get("base")
-            self._blob_cache.clear()
-            if base is not None:
-                self._blob_cache["base"] = base
 
         def _draw(surface, sx, sy, scale, z, _c=c, _w=wpx, _h=hpx, _s=strength):
             disc = self._blob_disc(_w, _h, _s)
@@ -771,6 +868,11 @@ class SoftwareRenderer:
         _draw.bounds = (int(c[0] - wpx / 2), int(c[1] - hpx / 2), wpx, hpx)
         return _draw, c
 
+    def set_sun_shadow(self, travel, center, half, k=0.6, col=(0.12, 0.15, 0.32)):
+        """GL only (see ``GLRenderer.set_sun_shadow``); False tells the caller
+        to draw its own fallback shadows."""
+        return False
+
     def add_blob_shadow(self, pos, rx, rz, strength=0.35, layer=None, bias=0.0):
         """Soft contact shadow: a blurred dark ellipse on the floor under
         an object (Phase 11 step 3). Rides the sprite-item path, so the
@@ -779,16 +881,26 @@ class SoftwareRenderer:
         ``layer``/``bias`` are opt-in: a floor drawn on painter layer 2 (the
         M6 platform slab) hides the default layer-0 disc, so a scene can queue
         it on the floor's own layer. Defaults reproduce the historic disc."""
+        if self.frustum_cull and not self.visible_sphere(pos, max(rx, rz) + 0.15):
+            return
         item = self._blob_item(pos, rx, rz, strength)
         if item is None:
             return
         _draw, c = item
         lay = 0 if layer is None else layer
-        self._items.append((lay * 1e6 - c[2] + 0.5 + bias, _draw,
+        self._items.append((lay * 1e6 - c[2] + 0.5 - bias, _draw,
                             (c[0], c[1], self.focal / c[2], c[2])))
 
     def add_sprite(self, pos, draw_fn, layer=2, bias=0.0):
         """draw_fn(surface, sx, sy, scale_px_per_m, z)."""
+        if self.frustum_cull:
+            bm = getattr(draw_fn, "bounds_m", None)
+            sr = (max(bm[0], bm[1]) + 0.5) if bm is not None else 8.5
+            if not self.visible_frustum(
+                pos, sr, self.cam, self.right, self.up, self.fwd,
+                self.NEAR, self.fog_end + 120.0, self.tan_h, self.tan_v,
+            ):
+                return
         p = self.project(pos)
         if p is None:
             return
@@ -811,6 +923,10 @@ class SoftwareRenderer:
         return j
 
     def add_line3d(self, a, b, col, width=1, layer=3):
+        if self.frustum_cull:
+            mid = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5)
+            if not self.visible_sphere(mid, 0.5 * v_len(v_sub(b, a)) + 0.1):
+                return
         pa, pb = self.to_cam(a), self.to_cam(b)
         if pa[2] < self.NEAR and pb[2] < self.NEAR:
             return
@@ -823,6 +939,8 @@ class SoftwareRenderer:
     def flush(self, surface=None, bg=None):
         """``bg`` is a GL upload hint (the target is one solid colour); the
         software path draws over the filled target as it is."""
+        if self._decals or self._particles:
+            self._emit_fallback_fx()
         surface = surface or self.surface
         items = self._items
         items.sort(key=lambda it: it[0])

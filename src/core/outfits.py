@@ -90,7 +90,7 @@ GAMEPLAY_ROLES = {
 GAMEPLAY_FALLBACK = {OUTFIT_GUARD: GUARD_BLACK}
 # Bare curly head - never the saved helmet, and NOT a black beret: every M5
 # Guard trooper sprite wears the black beret (missions/m5/draw.py C_M5_BERET,
-# art/m5/m5_guard.py), so a beret would make him read as an enemy. Matches
+# game/art/m5/m5_guard.py), so a beret would make him read as an enemy. Matches
 # the bare head of the 3D/2D cutscene rig. (entities.adornments draw id)
 GAMEPLAY_HEAD = {OUTFIT_GUARD: "head_bare_curly"}
 # lifted further than KRAP_MARK: at ~32 px top-down it must out-value the

@@ -116,7 +116,7 @@ DEV_JUMPS = {
                    "Mission 7 3D raid from checkpoint 2 (trucks cleared, barn fire next)"),
     "m7-finale": ("--dev-mission7-finale", "Mission 7 burning-farm night film"),
     "m7-choice": ("--dev-mission7-choice", "Mission 7 radio choice (sets the Mission 8 route)"),
-    "m7-outro": ("--dev-mission7-outro", "Mission 7 outro film, route defaults to duty"),
+    "m7-outro": ("--dev-mission7-outro", "Mission 7 end, straight to mission complete (route defaults to duty)"),
     # ── Mission 8 (slice 1: Revenge route) ──
     "m8": ("--dev-mission8", "Mission 8 The Call, Revenge route from the top (meet beat)"),
     "m8-trap": ("--dev-mission8-trap", "Mission 8 3D trap fight on Route 12 (--m8-cp=1|2|3)"),
@@ -130,6 +130,10 @@ DEV_JUMPS = {
     "m8-epilogue": ("--dev-mission8-epilogue",
                     "Mission 8 epilogue films (State TV, Commander, funeral)"),
     "m8-credits": ("--dev-mission8-credits", "Mission 8 end credits"),
+    # ── Mission 8 (Duty route: Head of State, Slice 1) ──
+    "m8-duty": ("--dev-mission8-duty", "Mission 8 Head of State (Duty route) from approach"),
+    "m8-mansion": ("--dev-mission8-mansion", "Mission 8 3D Mansion fight with Bodi & Alex (--m8-cp=0|1|2)"),
+    "m8-liftoff": ("--dev-mission8-liftoff", "Mission 8 study & helicopter liftoff 3D film"),
     # ── Trailer bot takes (AI 1 choreography) ──
     "trailer-m1": ("--dev-m1-game",
             "Trailer Act I warehouse take (bot: breach/molotov)"),

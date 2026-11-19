@@ -547,6 +547,28 @@ _present = _fx.present_crisp
 _grade_cine = _fx.grade_cine
 
 
+def _play_curve(wounded=False):
+    """1D (3, 256) uint8 grading curve for GPU PostPipeline."""
+    key = "play_curve_w" if wounded else "play_curve"
+    curve = _cache.get(key)
+    if curve is None:
+        import numpy as np
+        x = np.arange(256, dtype=np.float32) / 255.0
+        x = np.clip((x - 0.018) / 0.982, 0.0, 1.0)
+        x = np.clip(0.45 + (x - 0.45) * 1.07, 0.0, 1.0)
+        x = x ** 1.12
+        sh, mid, hi = (1.0 - x) ** 2, 4.0 * x * (1.0 - x), x ** 2
+        chan = [x - 0.004 * sh + 0.016 * mid + 0.014 * hi,
+                x + 0.002 * sh + 0.002 * mid + 0.004 * hi,
+                x + 0.010 * sh - 0.020 * mid - 0.024 * hi]
+        if wounded:
+            mean = (chan[0] + chan[1] + chan[2]) / 3.0
+            chan = [c * 0.72 + mean * 0.28 for c in chan]
+        rows = [np.clip(np.round(v * 255.0), 0, 255).astype(np.uint8) for v in _ink(chan, np)]
+        curve = _cache[key] = np.stack(rows, axis=0)
+    return curve
+
+
 def _grade_play(surface, wounded=False):
     """Gameplay grade on the internal buffer: a deeper toe, cool shadows and a
     sodium-warm highlight, as a per-channel LUT like ``_grade_cine`` (never a
@@ -615,6 +637,8 @@ def _renderer():
             r = Renderer(size[0], size[1], fog=FOG, fog_start=16.0,
                          fog_end=BG_FOG_END)
             _w.drop_renderer_caches()
+    if getattr(r, "backend", "") == "gl":
+        r.hdr = True
     cap, glit = _perf.light_cap(LIGHT_CAP), (1.0 if _perf.detail() >= 0.8 else 0.5)
     if getattr(r, "light_cap", None) != cap:
         r.light_cap = cap
@@ -632,9 +656,11 @@ def _sky(r, tm):
     (Not cached: the star field, the moon and the cloud bands are placed from
     the camera's yaw, so a reused frame would lag the parallax during a pan.)
     """
-    r.surface.fill(SKY_TOP)
+    if getattr(r, "backend", "") != "gl":
+        r.surface.fill(SKY_TOP)
     _w.night(r, r.surface, tm, top=SKY_TOP, bot=SKY_HORIZON, stars=140,
-             moon=(118.0, 14.0), sodium=(78, 52, 32), seed=71, star_cut=0.58)
+             moon=(118.0, 14.0), sodium=(78, 52, 32), seed=71, star_cut=0.58,
+             gpu=True)
 
 
 def _hum(key, wound=0, bloody=False, flags=()):
@@ -657,7 +683,7 @@ _PLAT_SHADOW = (2, -0.30)
 
 
 def _shadow_for(z):
-    return _PLAT_SHADOW if z >= 2.7 else None
+    return _PLAT_SHADOW
 
 
 def _volkov_flags(d):
@@ -702,6 +728,22 @@ def _blood_spray(seed, age_ms, ang=math.pi * 0.92, n=38, dur_ms=950):
             tx, ty = x - vx * 0.035 * scale, y - (vy + 9.8 * a) * 0.035 * scale
             col = (int(150 * fade + 40), int(14 * fade), int(18 * fade))
             pygame.draw.line(s, col, (tx, ty), (x, y), w)
+
+    def _gl_lines(sx, sy, scale, z):
+        if age_ms < 0 or age_ms > dur_ms:
+            return ()
+        a = age_ms / 1000.0
+        fade = 1.0 - age_ms / dur_ms
+        col = (int(150 * fade + 40), int(14 * fade), int(18 * fade))
+        out = []
+        for an, sp, w in parts:
+            vx, vy = math.cos(an) * sp, math.sin(an) * sp - 0.8
+            x = sx + vx * a * scale
+            y = sy + (vy * a + 4.9 * a * a) * scale
+            tx, ty = x - vx * 0.035 * scale, y - (vy + 9.8 * a) * 0.035 * scale
+            out.append(((tx, ty), (x, y), col, w))
+        return out
+    draw._gl_lines = _gl_lines
     return draw
 
 
@@ -3302,13 +3344,19 @@ class TrainScene:
         self._draw_death_fx(r, t)
         _w.snow3d(r, t * 1000.0, seed=72, n=max(16, int(55 * _perf.detail())),
                   spread=20, height=14, speed=1.4)
-        r.flush(r.surface)
+        use_gl = getattr(r, "backend", "") == "gl"
+        if use_gl:
+            r.flush_to(r.surface, resolve=False)
+        else:
+            r.flush(r.surface)
 
         if t < CUT_AT and not self.dying and not self.volkov_failed:
             # second pass: viewmodel only, always on top of the world
             r.begin()
             self._draw_viewmodel(r)
-            if hasattr(r, "flush_overlay"):
+            if use_gl and hasattr(r, "flush_overlay"):
+                r.flush_overlay(r.surface, into_fbo=True)
+            elif hasattr(r, "flush_overlay"):
                 # transparent, region-limited readback (no surface upload)
                 cover, rect = r.flush_overlay(r.surface, self._vm_overlay_bounds)
                 if cover is None or rect is None:
@@ -3325,11 +3373,19 @@ class TrainScene:
             else:
                 r.flush(r.surface)
 
-        if t >= CUT_AT:
-            _grade_cine(r.surface)
-        elif not self.dying:
-            _grade_play(r.surface, self.wounded)
-        _present(r.surface, surface)
+        if use_gl:
+            post = {"bloom": 0.28, "bloom_knee": 0.96, "dither_step": DITHER_STEP}
+            if t >= CUT_AT:
+                post["lut"] = _fx.cine_curve()
+            elif not self.dying:
+                post["lut"] = _play_curve(self.wounded)
+            r.present_to(surface, post=post)
+        else:
+            if t >= CUT_AT:
+                _grade_cine(r.surface)
+            elif not self.dying:
+                _grade_play(r.surface, self.wounded)
+            _present(r.surface, surface)
         draw_vignette(surface)
         if t < CUT_AT:
             draw_scanlines(surface)
@@ -3350,8 +3406,10 @@ class TrainScene:
             fade = clamp((t - FADE_AT) / (DURATION - SLOW_LAG - FADE_AT), 0.0, 1.0) ** 0.8
         self._resolution_blend(surface)
         if fade > 0:
-            veil = pygame.Surface((WIDTH, HEIGHT))
-            veil.fill((0, 0, 0))
+            veil = _cache.get("fade_veil")
+            if veil is None:
+                veil = _cache["fade_veil"] = pygame.Surface((WIDTH, HEIGHT))
+                veil.fill((0, 0, 0))
             veil.set_alpha(int(255 * fade))
             surface.blit(veil, (0, 0))
         # Frame-time watchdog: drop a render tier if this machine is not
@@ -4405,7 +4463,8 @@ class TrainScene:
             pos, pose, yaw, _j = fstate
             _w.actor(r, "volkov", pose, pos, yaw, int(t * 1000),
                      seed=91, amp=0.0, rifle_on=False, expression="sad",
-                     hd=True, wound=2 if self.fail_t >= 0.5 else 0)
+                     hd=True, wound=2 if self.fail_t >= 0.5 else 0,
+                     shadow=_PLAT_SHADOW)
             return
         if t >= HIT_AT:
             vstate = self._vstate or _volkov_death_state(t, self.volkov_delay)
@@ -4540,14 +4599,15 @@ class TrainScene:
                 pose, root, dyaw, floor = _guard_body(
                     hum, track, a, (x, y, z), dyaw0, g["dead_land"])
                 try:
-                    r.add_humanoid(hum, pose, root, dyaw,
-                                   rifle_on=False, shadow=_shadow_for(root[2]))
+                    dj = r.add_humanoid(hum, pose, root, dyaw,
+                                        rifle_on=False, shadow=_shadow_for(root[2]))
                 except Exception:
-                    pass
+                    dj = None
                 pool = _smooth(0.40, 2.60, a)
                 if pool > 0.0:
                     # under the chest, not the pelvis: that is where he bleeds
-                    _pl, dj, _r = hum.pose_world(pose, root, dyaw, rifle_on=False)
+                    if dj is None:
+                        _pl, dj, _r = hum.pose_world(pose, root, dyaw, rifle_on=False)
                     cx, cz = dj["chest"][0], dj["chest"][2]
                     wob = (1.0, 0.85, 1.12, 0.92, 1.15, 0.88, 1.06, 0.95)
                     _w.add(r, disc_xz(cx, cz, 0.08 + 0.26 * pool, floor + 0.010,
@@ -4574,6 +4634,7 @@ class TrainScene:
             amp=0.0,
             rifle_on=True,
             hd=True,
+            shadow=_PLAT_SHADOW,
         )
 
     def _draw_biribel(self, r, t):
@@ -4592,7 +4653,7 @@ class TrainScene:
         # Biribel's gloves go red once his hand is on the wound.
         _w.actor(r, ("biribel", OUTFIT_GUARD), pose, pos, yaw,
                  int(t * 1000), seed=93, amp=0.0, expression=expr,
-                 hd=True, bloody=c >= 4.3)
+                 hd=True, bloody=c >= 4.3, shadow=_PLAT_SHADOW)
 
     def _vm_setup(self):
         """Resolve the held-weapon frame (GL: K93D asset, software: K9).
@@ -4812,6 +4873,14 @@ class TrainScene:
                 tile = pygame.transform.scale(img, (px, px))
                 tile.set_alpha(alpha)
                 surface.blit(tile, (int(sx - px * 0.5), int(sy - px * 0.5)))
+
+            def _gl_reticle(sx, sy, scale, z):
+                px = max(3, int(size_m * scale))
+                tile = pygame.transform.scale(img, (px, px))
+                if alpha < 255:
+                    tile.fill((255, 255, 255, alpha), special_flags=pygame.BLEND_RGBA_MULT)
+                return (("k9_reticle", px, alpha), tile, int(sx - px * 0.5), int(sy - px * 0.5), px, px, False),
+            _reticle._gl_surf = _gl_reticle
 
             r.add_sprite(s["sight_world"], _reticle, layer=3)
 

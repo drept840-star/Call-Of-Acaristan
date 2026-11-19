@@ -1076,8 +1076,12 @@ _KO_BEAT_GATES = {
 _KO_PICKUPS = (
     (11, 13, "mag"), (12, 13, "bandage"),
     (11, 20, "sidearm"), (12, 21, "bandage"),
+    (5, 16, "bandage"),
+    (19, 25, "bandage"),
     (26, 23, "mag"),
     (6, 36, "bandage"),
+    (32, 33, "bandage"),
+    (29, 35, "mag"),
 )
 
 

@@ -82,12 +82,12 @@ STEEL = (58, 62, 66)
 WOOD = (92, 66, 44)
 PLANK = (112, 84, 54)
 
-NIGHT_STREET = dict(_m1.NIGHT, ambient=0.30, diffuse=0.42, tint=(0.90, 0.96, 1.06))
-NIGHT_STATION = dict(_m1.NIGHT, ambient=0.33, diffuse=0.40, tint=(0.95, 1.02, 0.98))
-AMBIENT_STREET = (160, 162, 166)   # the m4street grade: blue-cyan night
-AMBIENT_STATION = (186, 196, 182)  # phosphor-green inside the station
+NIGHT_STREET = dict(_m1.NIGHT, ambient=0.28, diffuse=0.44, tint=(0.86, 0.94, 1.06))
+NIGHT_STATION = dict(_m1.NIGHT, ambient=0.32, diffuse=0.40, tint=(0.94, 1.02, 0.96))
+AMBIENT_STREET = (104, 120, 154)
+AMBIENT_STATION = (132, 148, 136)
 
-WALL_H = {"border": 3.0, "filler": 3.0, "station": 3.4, "cordon": 2.0, "build": 2.9, "weak": 2.9}
+WALL_H = {"border": 4.2, "filler": 6.5, "station": 8.2, "cordon": 2.0, "build": 2.9, "weak": 2.9}
 _STYLE = {"row": ("brick", (84, 62, 52), (110, 92, 80)),
           "apartment": ("concrete", (76, 78, 80), (104, 106, 106)),
           "palace": ("m7_plaster", (104, 92, 70), (132, 120, 96)),
@@ -126,7 +126,7 @@ _POOL_K = {"post": 0.62, "wire": 0.5, "door": 0.66, "tube": 0.5}
 _BURNING_CARS = {"street": ((18, 20),), "station": ((25, 24),)}
 
 _cache = {"walls": None, "meshes": {}, "packed": {}, "night": None, "blocks": None, "tgt": None,
-          "doors": None}
+          "doors": None, "shop_shutter": 0.0}
 
 
 # ── frame ──────────────────────────────────────────────────────────────
@@ -166,16 +166,19 @@ def render_world(surface, v):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
     tm = _now_ms()
     station = _station()
     try:
         r.light = Light(**(NIGHT_STATION if station else NIGHT_STREET))
         r.fog, r.fog_start, r.fog_end = VOID, 32.0, 64.0
-        r.light_cap = 8
+        r.light_cap = 64
+        r.wetness = 0.08 if station else 0.72
+        r.height_fog = (0.015, 0.0, 1.3, (14, 16, 20)) if station else (0.036, 0.0, 1.6, (14, 18, 28))
         v.apply(r)
-        buf.fill(VOID)
+        if getattr(r, "backend", "") != "gl":
+            buf.fill(VOID)
         r.begin()
         first = _w.static_scene(r, ("m4_td3d", _key(), id(_maps.MISSION4_MAP)))
         ok = False
@@ -193,8 +196,19 @@ def render_world(surface, v):
         _draw_cast(r, flashes, tm)
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
-        _lamp_lights(r, v, flashes, tm)
-        td.cast_shadows(r)
+        rain_lights, mist_lamps = _lamp_lights(r, v, flashes, tm)
+        if not station:
+            _emit_m4_rain(r, v, tm, rain_lights, mist_lamps)
+        td.cast_shadows(r, alpha=155)
+        if getattr(r, "backend", "") == "gl":
+            p = STATE.player
+            cone = ([("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.8, 0.72)]
+                    if p is not None and not STATE.player_dead else [])
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.24, "bloom_knee": 0.98,
+                "grade3d": (v, _night_lights() + dyn + cone, AMBIENT_STATION if station else AMBIENT_STREET),
+            })
+            return True
         r.flush(buf, bg=VOID)
     except Exception:
         import traceback
@@ -202,9 +216,14 @@ def render_world(surface, v):
         td.disable()                  # next frame is the 2D painter
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+        if hasattr(r, "hdr"):
+            r.hdr = shdr
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn,
+    p = STATE.player
+    cone = ([("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.8, 0.72)]
+            if p is not None and not STATE.player_dead else [])
+    _grade.apply(surface, v, _night_lights() + dyn + cone,
                  ambient=AMBIENT_STATION if station else AMBIENT_STREET)
     return True
 
@@ -239,8 +258,9 @@ def _tc(col, row, h=0.0):
     return to3(col * T + T / 2.0, row * T + T / 2.0, h)
 
 
-def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0):
-    td.put(r, mesh, pos, yaw, roll, round(scale, 2), cache=_cache["packed"], pitch=pitch)
+def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0, static=True):
+    td.put(r, mesh, pos, yaw, roll, round(scale, 2), cache=_cache["packed"],
+           pitch=pitch, static=static)
 
 
 def _mesh(key, build):
@@ -343,6 +363,7 @@ def _build_set(r):
         _hold_marks(r)
     else:
         _mast(r)
+        _corner_shop(r)
     for lamp in _lamps():
         _lamp_fixture(r, lamp)
 
@@ -465,6 +486,189 @@ def _mast(r):
         _box_at(r, 0.62 * k, 0.03, 0.03, (70, 72, 76), x, y, z - 0.3)
         _box_at(r, 0.03, 0.03, 0.62 * k, (70, 72, 76), x - 0.3, y, z)
     _box_at(r, 0.9, 0.5, 0.06, (40, 42, 46), x, base + h - 1.2, z - 0.32)
+
+
+def _corner_shop(r):
+    """Static shell of the 3x4 SE corner alimentara (cols 36-38, rows 35-38):
+    NON-STOP canopy housing, cooler, wall shelves, L-counter, CRT TV, kettle,
+    and cat crate. Moving/animated parts run per frame in _draw_corner_shop_anim."""
+    from engine3d import tex
+    # Double doorway canopy + NON-STOP sign casing outside (35, 36..37).
+    ax, az = 34.72 * S, -37.0 * S
+    _box_at(r, 0.56, 0.28, 2.90, (28, 32, 36), ax, 2.42, az)
+    _box_at(r, 0.48, 0.04, 2.74, (74, 42, 30), ax, 2.27, az)
+    _box_at(r, 0.36, 0.30, 0.36, tex("crate", like=WOOD), 34.80 * S, 0.15, -35.55 * S)
+    # Interior drinks cooler along the north wall (36, 35).
+    fx, fz = 36.42 * S, -35.16 * S
+    _box_at(r, 0.84, 1.82, 0.40, tex("steel", like=(182, 192, 196)), fx, 0.91, fz,
+            cols={"top": (132, 140, 144)})
+    for sy in (0.64, 0.98, 1.32):
+        _box_at(r, 0.64, 0.03, 0.05, (36, 48, 54), fx, sy, fz - 0.21)
+    # Stocked wall shelves behind the counter (37..38, 35) + along east wall (38, 36..38).
+    shx, shz = 37.80 * S, -35.10 * S
+    _box_at(r, 2.20, 1.72, 0.22, tex("crate", like=(68, 50, 36)), shx, 0.86, shz)
+    for k, sy in enumerate((0.55, 0.98, 1.40)):
+        for i in range(7):
+            col = _BOOKS[_hash(i + 2, k, len(_BOOKS))]
+            _box_at(r, 0.18, 0.22, 0.14, col, shx - 0.88 + i * 0.29, sy + 0.11, shz - 0.08)
+    # Wooden counter (37..38, 35) + register + CRT TV + kettle.
+    cx, cz = 37.82 * S, -35.22 * S
+    _box_at(r, 2.50, 0.94, 0.36, tex("crate", like=WOOD), cx, 0.47, cz,
+            cols={"top": (122, 96, 68)})
+    _box_at(r, 0.32, 0.22, 0.24, (48, 52, 50), 37.55 * S, 1.05, cz)
+    _box_at(r, 0.14, 0.06, 0.02, (110, 224, 148), 37.55 * S, 1.12, cz - 0.13, emissive=True)
+    # Kettle body on left of counter.
+    _box_at(r, 0.20, 0.20, 0.20, (146, 152, 156), 37.14 * S, 1.04, cz)
+    _box_at(r, 0.06, 0.08, 0.06, (30, 32, 34), 37.14 * S, 1.18, cz)
+    # Retro CRT TV casing on right end of counter.
+    _box_at(r, 0.42, 0.34, 0.32, (42, 40, 38), 38.44 * S, 1.11, cz)
+    # East crate stack where the shop cat naps.
+    _box_at(r, 0.50, 0.48, 0.90, tex("crate", like=WOOD), 38.78 * S, 0.24, -37.5 * S)
+    # Wall-fan mount bracket on the north interior wall.
+    _box_at(r, 0.16, 0.22, 0.04, (38, 40, 44), 36.92 * S, 2.10, -35.02 * S)
+    _box_at(r, 0.05, 0.05, 0.18, (46, 48, 52), 36.92 * S, 2.10, -35.11 * S)
+
+
+def _shutter_mesh():
+    from engine3d import Mesh, box, tex
+    m = Mesh()
+    m.add(box(0.10, 1.35, 2.0 * S - 0.08, tex("metal_rib", like=(62, 78, 74)), center=(0.0, 0.675, 0.0)))
+    for y in (0.12, 0.42, 0.72, 1.02):
+        m.add(box(0.12, 0.03, 2.0 * S - 0.08, (40, 44, 42), center=(0.0, y, 0.0)))
+    return m
+
+
+def _fan_cage_mesh():
+    from engine3d import Mesh, box
+    m = Mesh()
+    m.add(box(0.10, 0.10, 0.14, (50, 54, 58), center=(0.0, 0.0, -0.02)))
+    for sy in (-0.18, 0.18):
+        m.add(box(0.36, 0.02, 0.05, (64, 68, 72), center=(0.0, sy, -0.12)))
+    for sx in (-0.18, 0.18):
+        m.add(box(0.02, 0.36, 0.05, (64, 68, 72), center=(sx, 0.0, -0.12)))
+    m.add(box(0.36, 0.015, 0.015, (72, 76, 80), center=(0.0, 0.0, -0.15)))
+    m.add(box(0.015, 0.36, 0.015, (72, 76, 80), center=(0.0, 0.0, -0.15)))
+    return m
+
+
+def _fan_blades_mesh():
+    from engine3d import Mesh, box, rot_z
+    m = Mesh()
+    m.add(box(0.07, 0.07, 0.06, (36, 38, 42), center=(0.0, 0.0, -0.11)))
+    blade = box(0.06, 0.13, 0.012, (162, 174, 178), center=(0.0, 0.095, -0.11))
+    for deg in (0, 90, 180, 270):
+        m.add(blade, m=rot_z(deg))
+    return m
+
+
+def _pendant_mesh():
+    from engine3d import Mesh, box
+    m = Mesh()
+    m.add(box(0.03, 0.46, 0.03, (28, 28, 30), center=(0.0, -0.23, 0.0)))
+    m.add(box(0.30, 0.10, 0.30, (48, 64, 58), center=(0.0, -0.46, 0.0)))
+    m.add(box(0.14, 0.10, 0.14, (255, 212, 134), center=(0.0, -0.54, 0.0), emissive=True))
+    return m
+
+
+def _cat_body_mesh():
+    from engine3d import Mesh, box
+    m = Mesh()
+    fur, belly = (42, 38, 36), (168, 152, 134)
+    m.add(box(0.22, 0.16, 0.32, fur, center=(0.0, 0.08, 0.0)))       # body
+    m.add(box(0.16, 0.15, 0.16, fur, center=(0.0, 0.21, -0.10)))     # head (faces -z/west? rotated via yaw)
+    m.add(box(0.12, 0.08, 0.04, belly, center=(0.0, 0.11, -0.15)))   # bib
+    for sx in (-0.055, 0.055):
+        m.add(box(0.045, 0.07, 0.04, (92, 64, 58), center=(sx, 0.31, -0.10)))  # ears
+    return m
+
+
+def _cat_tail_mesh():
+    from engine3d import Mesh, box
+    m = Mesh()
+    m.add(box(0.04, 0.04, 0.22, (42, 38, 36), center=(0.0, 0.04, 0.11)))
+    m.add(box(0.045, 0.045, 0.06, (168, 152, 134), center=(0.0, 0.06, 0.22)))
+    return m
+
+
+def _draw_corner_shop_anim(r, flashes, tm):
+    """Live animations inside and outside the corner shop."""
+    from engine3d import box
+    t = _now_s()
+    p = STATE.player
+    near_door = bool(p is not None and math.hypot(p.rect.centerx - 35.0 * T, p.rect.centery - 37.0 * T) < 4.5 * T)
+    want = 1.0 if (near_door or _in_corner_shop()) else 0.0
+    sh = _cache.get("shop_shutter", 0.0)
+    if sh < want:
+        if sh == 0.0:
+            try:
+                from core import config as _cfg
+                _cfg.audio.play("door_open", volume=0.28)
+            except Exception:
+                pass
+        sh = min(1.0, sh + 0.04)
+    elif sh > want:
+        sh = max(0.0, sh - 0.03)
+    _cache["shop_shutter"] = sh
+    # 1. Animated rolling security shutter across (35, 36..37).
+    _put(r, _mesh(("shop_shutter",), _shutter_mesh), (35.08 * S, 1.05 + 1.15 * sh, -37.0 * S), static=False)
+    # 2. Neon NON-STOP marquee with realistic ballast stutter.
+    buzz = 1.0 if ((int(t * 11.0) % 19) not in (3, 5, 12)) else 0.25
+    ncol = (int(245 * buzz), int(178 * buzz), int(86 * buzz))
+    _put(r, _mesh(("neon_tube", int(buzz > 0.5)),
+                  lambda c=ncol: box(0.05, 0.14, 2.55, c, center=(0.0, 0.0, 0.0), emissive=True)),
+         (34.44 * S, 2.42, -37.0 * S), static=False)
+    r.add_sprite((34.42 * S, 2.42, -37.0 * S), _glow(ncol, 0.36, tm, 0.85 * buzz, 18), layer=_fx_layer())
+    flashes.append({"pos": (34.4 * S, 2.1, -37.0 * S), "color": (245, 178, 86),
+                    "intensity": 0.82 * buzz, "range": 4.8})
+    # 3. Oscillating wall fan mounted to the north interior wall.
+    fan_pos = (36.92 * S, 2.10, -35.18 * S)
+    fan_yaw = 32.0 * math.sin(t * 1.3)
+    _put(r, _mesh(("shop_fan_cage",), _fan_cage_mesh), fan_pos, yaw=fan_yaw, static=False)
+    _put(r, _mesh(("shop_fan_blades",), _fan_blades_mesh), fan_pos, yaw=fan_yaw, roll=(t * 480.0) % 360.0, static=False)
+    # 4. Swaying hanging pendant lamp.
+    px, pz = 36.75 * S, -37.1 * S
+    _put(r, _mesh(("shop_pendant",), _pendant_mesh), (px, 2.72, pz),
+         pitch=3.5 * math.sin(t * 1.9), roll=2.5 * math.cos(t * 1.4), static=False)
+    flashes.append({"pos": (px, 2.18, pz), "color": (255, 198, 120),
+                    "intensity": 1.05, "range": 5.8})
+    # 5. Pulsing glowing drinks cooler + flickering CRT TV screen behind the counter.
+    cool_k = 0.86 + 0.14 * math.sin(t * 6.5)
+    _put(r, _mesh(("shop_cooler_glow", int(cool_k * 10)),
+                  lambda k=cool_k: box(0.66, 1.24, 0.03, _shade((132, 212, 224), k),
+                                       center=(0.0, 0.0, 0.0), emissive=True)),
+         (36.42 * S, 1.02, -35.37 * S), static=False)
+    flashes.append({"pos": (36.42 * S, 1.05, -35.55 * S), "color": (132, 212, 224),
+                    "intensity": 0.62 * cool_k, "range": 3.4})
+    tv_step = int(t * 9.0) % 4
+    tv_col = ((110, 218, 178), (82, 184, 198), (138, 240, 200), (70, 152, 168))[tv_step]
+    _put(r, _mesh(("shop_tv_scr", tv_step),
+                  lambda c=tv_col: box(0.32, 0.24, 0.02, c, center=(0.0, 0.0, 0.0), emissive=True)),
+         (38.44 * S, 1.11, -35.39 * S), static=False)
+    r.add_sprite((38.44 * S, 1.11, -35.42 * S), _glow(tv_col, 0.22, tm, 0.55, 12), layer=_fx_layer())
+    # 6. Rising steam wisps from the kettle on the counter.
+    steam_pts = []
+    for i in range(4):
+        phase = (t * 0.85 + i * 0.25) % 1.0
+        steam_pts.append(((37.14 * S + 0.04 * math.sin(t * 3.0 + i),
+                           1.24 + phase * 0.48,
+                           -35.22 * S + 0.03 * math.cos(t * 2.4 + i)),
+                          (190, 202, 212), 2))
+    td.dots(r, steam_pts, layer=_fx_layer())
+    # 7. Shop cat on the east crate with wagging tail + blinking eyes.
+    cat_pos = (38.74 * S, 0.48, -37.52 * S)
+    _put(r, _mesh(("shop_cat_body",), _cat_body_mesh), cat_pos, yaw=70.0)
+    _put(r, _mesh(("shop_cat_tail",), _cat_tail_mesh), (38.82 * S, 0.54, -37.50 * S),
+         yaw=70.0 + 22.0 * math.sin(t * 2.6), static=False)
+    if (t % 3.4) > 0.16:
+        for ez in (-0.035, 0.035):
+            r.add_sprite((38.58 * S, 0.70, -37.55 * S + ez), _glow((245, 190, 64), 0.04, tm, 0.85, 4),
+                         layer=_fx_layer())
+    # 8. Lootable counter stash (mag + glow) until taken.
+    if not getattr(STATE, "m4_shop_looted", False):
+        sx, _, sz = to3(37.75 * T, 35.24 * T)
+        _put(r, _mesh(("pickup", "mag"), lambda: _m1._pickup_mesh("mag")),
+             (sx, 1.02 + 0.03 * math.sin(t * 3.5), sz), yaw=(t * 55.0) % 360.0, static=False)
+        r.add_sprite((sx, 1.12, sz), _glow((255, 214, 110), 0.26, tm, 0.82, 16), layer=_fx_layer())
 
 
 def _hold_marks(r):
@@ -600,7 +804,7 @@ def _wall_kind(col, row):
 def _height(kind):
     if kind.startswith("b:"):
         blk = next(b for b in M4_BLOCKS if b[0] == kind[2:])
-        return 2.6 + 0.3 * blk[6]
+        return 2.7 + 2.2 * (blk[6] - 1)
     return WALL_H[kind]
 
 
@@ -658,7 +862,7 @@ def _street_wall_mesh(kind, sc, sr, sw, sh, hgt):
         w, d = sw * S, sh * S
         m = Mesh()
         m.add(box(w, hgt, d, tex(name, like=body), center=(0.0, hgt / 2.0, 0.0),
-                  cols={"top": CUT_CAP if cut else _shade(body, 0.5)}))
+                  cols={"top": CUT_CAP if cut else _shade(body, 0.34)}))
         for y0, y1, k in _m1.WALL_SHADE:
             y1 = min(y1, hgt - 0.02)
             if y1 > y0:
@@ -667,6 +871,8 @@ def _street_wall_mesh(kind, sc, sr, sw, sh, hgt):
         if cut:
             return m
         m.add(box(w + 0.08, 0.16, d + 0.08, _shade(cap, 0.8), center=(0.0, hgt - 0.08, 0.0)))
+        if hgt > 3.4:
+            m.add(box(w + 0.04, 0.10, d + 0.04, _shade(cap, 0.72), center=(0.0, 2.68, 0.0), skip=("top", "bottom")))
         if kind.startswith("b:") or kind == "station":
             _windows(m, kind, sc, sr, sw, sh, hgt)
         return m
@@ -683,7 +889,11 @@ def _windows(m, kind, sc, sr, sw, sh, hgt):
     if kind == "station":
         bw += 1
     w, d = sw * S, sh * S
-    rows = [y for y in (1.15, 2.05, 2.95, 3.85) if y + 0.5 < hgt - 0.2]
+    rows = [1.45] if hgt > 2.3 else []
+    upper = 3.85
+    while upper + 0.55 < hgt - 0.25:
+        rows.append(upper)
+        upper += 2.2
     faces = []
     if sr + sh == by + bh:
         faces += [("s", c) for c in range(sc, sc + sw)]
@@ -703,19 +913,21 @@ def _windows(m, kind, sc, sr, sw, sh, hgt):
             pick = _hash(i * 7 + (0 if face == "s" else 31), k * 13 + sr + sc, 100)
             if k == 0 and below == "d" and kind != "station":
                 col = (60, 58, 54) if pick > 8 else (150, 112, 64)
-                sz = (1.3, 0.95) if along else (1.3, 0.95)
+                sz = (1.36, 1.70)
                 if along:
-                    m.add(box(sz[0], sz[1], 0.04, col, center=(ax, 0.6, az), emissive=pick <= 8))
-                    for j in range(5):
-                        m.add(box(sz[0], 0.02, 0.05, (40, 38, 36), center=(ax, 0.2 + j * 0.18, az)))
+                    m.add(box(sz[0], sz[1], 0.04, col, center=(ax, 1.05, az), emissive=pick <= 8))
+                    for j in range(7):
+                        m.add(box(sz[0], 0.025, 0.05, (40, 38, 36), center=(ax, 0.30 + j * 0.24, az)))
                 else:
-                    m.add(box(0.04, sz[1], sz[0], col, center=(ax, 0.6, az), emissive=pick <= 8))
+                    m.add(box(0.04, sz[1], sz[0], col, center=(ax, 1.05, az), emissive=pick <= 8))
+                    for j in range(7):
+                        m.add(box(0.05, 0.025, sz[0], (40, 38, 36), center=(ax, 0.30 + j * 0.24, az)))
                 continue
             lit = pick < 12
             boarded = 12 <= pick < 26
             broken = 26 <= pick < 36
             col = LIT if lit else (6, 7, 9) if broken else GLASS
-            gw, gh = 0.62, 0.56
+            gw, gh = (0.72, 1.05) if (kind == "station" or (blk and blk[5] == "palace")) else (0.66, 0.88)
             if along:
                 m.add(box(gw, gh, 0.04, col, center=(ax, y, az), emissive=lit))
                 m.add(box(gw + 0.12, 0.06, 0.07, FRAME, center=(ax, y - gh / 2.0 - 0.03, az)))
@@ -806,15 +1018,44 @@ def _rim_mesh(sc, sr, sw, sh, hgt, full):
     return _mesh(("rim", id(_grid()), sc, sr, sw, sh, round(hgt, 3)), build)
 
 
-def _cut(zone, snap, c, row):
-    k = _m1._cut_level(("m4", c, row), _m1._hides(zone, c * T, row * T, (c + 1) * T, (row + 1) * T), snap)
+def _in_corner_shop():
+    p = STATE.player
+    if p is None or _station():
+        return False
+    px, py = p.rect.center
+    return 35.5 * T <= px <= 39.0 * T and 35.0 * T <= py <= 39.0 * T
+
+
+def _shop_cut_active():
+    """Cut open the front/south corner shop walls as you step up to the
+    sidewalk outside the door or walk inside."""
+    p = STATE.player
+    if p is None or _station():
+        return False
+    px, py = p.rect.center
+    return 33.8 * T <= px <= 39.1 * T and 34.4 * T <= py <= 39.1 * T
+
+
+def _cut_zone_for(full):
+    zone = _m1._cut_zone()
+    if zone is None or _station():
+        return zone
+    back = max(_m1.CUT_BACK, (full - 1.1) / (2.05 * S) + 0.65) * T
+    return (zone[0], zone[1], zone[2], STATE.player.rect.centery + back)
+
+
+def _cut(zone, snap, c, row, shop=False):
+    hide = _m1._hides(zone, c * T, row * T, (c + 1) * T, (row + 1) * T)
+    if shop and ((c == 35 and row in (36, 37, 38)) or (35 <= c <= 38 and row == 39)):
+        hide = True
+    k = _m1._cut_level(("m4", c, row), hide, snap)
     return round(k * 8) / 8.0
 
 
 def _draw_walls(r):
     """Wall boxes at full height, except the stretch between the camera
     and Biribel, which sinks to a stub (the M1 cutaway)."""
-    zone = _m1._cut_zone()
+    shop = _shop_cut_active()
     snap = _m1._cut_snap()
     station = _station()
     breached = bool(getattr(STATE, "m4_breached", False))
@@ -822,11 +1063,12 @@ def _draw_walls(r):
         if kind == "weak" and breached:
             _rubble(r, c0, r0, w, h)
             continue
+        full = _height(kind)
+        zone = _cut_zone_for(full)
         along_x = w >= h
         n = w if along_x else h
-        levels = [min(_cut(zone, snap, c0 + i, r0 + j) for j in range(h)) if along_x else
-                  min(_cut(zone, snap, c0 + j, r0 + i) for j in range(w)) for i in range(n)]
-        full = _height(kind)
+        levels = [min(_cut(zone, snap, c0 + i, r0 + j, shop) for j in range(h)) if along_x else
+                  min(_cut(zone, snap, c0 + j, r0 + i, shop) for j in range(w)) for i in range(n)]
         i = 0
         while i < n:
             j = i
@@ -902,22 +1144,27 @@ def _draw_openings(r):
     """Lintels over every door and site, frames, and the barricade a site
     carries (``STATE.m4_barricades[(col, row)]``)."""
     from engine3d import box, tex
-    zone = _m1._cut_zone()
+    shop = _shop_cut_active()
     snap = _m1._cut_snap()
     bars = getattr(STATE, "m4_barricades", None) or {}
     station = _station()
     for col, row, ch, along_x in _openings():
         kind = _wall_kind_near(col, row)
         full = _height(kind)
-        level = _cut(zone, snap, col, row)
+        level = _cut(_cut_zone_for(full), snap, col, row, shop)
         hgt = STUB_H + (full - STUB_H) * level
         x, _, z = _tc(col, row)
         top = WIN_TOP if ch == "w" else DOOR_H
-        body = WASH if station else _STYLE["station"][1]
+        if station:
+            tname, body = "m7_plaster", WASH
+        elif kind.startswith("b:"):
+            tname, body, _cap = _STYLE[_block_of(col, row)[5] if _block_of(col, row) else "row"]
+        else:
+            tname, body = "m7_plaster", _STYLE["station"][1]
         if hgt > top + 0.05:
-            key = ("lintel", round(hgt, 3), round(top, 2), body, hgt >= full - 0.01)
-            _put(r, _mesh(key, lambda h=hgt, t=top, c=body, f=hgt >= full - 0.01:
-                          box(S, h - t, S, tex("m7_plaster", like=c, tint=True), center=(0.0, (h + t) / 2.0, 0.0),
+            key = ("lintel", round(hgt, 3), round(top, 2), tname, body, hgt >= full - 0.01)
+            _put(r, _mesh(key, lambda h=hgt, t=top, tn=tname, c=body, f=hgt >= full - 0.01:
+                          box(S, h - t, S, tex(tn, like=c, tint=True), center=(0.0, (h + t) / 2.0, 0.0),
                               cols={"top": CAP if f else CUT_CAP})), (x, 0.0, z))
             if station:
                 _put(r, _rim_mesh(col, row, 1, 1, hgt, full), (x, 0.0, z))
@@ -1005,7 +1252,8 @@ def _draw_dynamic_set(r, flashes, tm):
             continue
         x, _, z = to3((col + 1) * T, row * T + T / 2.0)
         for i in range(3):
-            _m1._fire(r, (x - 0.7 + i * 0.7, 0.65, z + 0.05 * i), tm, col * 9 + i, 0.32 + 0.06 * i)
+            _m1._fire(r, (x - 0.7 + i * 0.7, 0.65, z + 0.05 * i), tm, col * 9 + i, 0.38 + 0.08 * i,
+                      glow=(i == 1), smoky=(i == 1), bed=False, embers=(i == 1))
         flick = 0.85 + 0.15 * math.sin(t * 13.0 + col)
         flashes.append({"pos": (x, 1.3, z), "color": FIRE, "intensity": 1.1 * flick, "range": 6.0})
     if _station():
@@ -1030,6 +1278,7 @@ def _draw_dynamic_set(r, flashes, tm):
         if (int(t * 1.4) % 2) == 0:
             r.add_sprite((mx, WALL_H["station"] + 6.6, mz), _glow((255, 50, 40), 0.26, tm, 1.0, 16),
                          layer=_fx_layer())
+        _draw_corner_shop_anim(r, flashes, tm)
     _beacons(r, t)
 
 
@@ -1189,7 +1438,8 @@ def _draw_allies(r, flashes):
         if rec and (rec.get("downed", 0) > 0 or rec.get("dead")):
             at = to3(x, y)
             r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(0.7), layer=0)
-            r.add_humanoid(hum, dict(POSES["dead_back"]), at, td.yaw_rad(facing), rifle_on=False)
+            r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.65, 0.50, 110), layer=1, bias=-0.8)
+            r.add_humanoid(hum, dict(POSES["dead_back"]), at, td.yaw_rad(facing), rifle_on=False, shadow=(1, -0.5))
             continue
         armed = not rec or rec.get("armed", True)
         mode = "aim" if rec and rec.get("cooldown", 0) > 0 else "ready"
@@ -1245,11 +1495,17 @@ def _draw_fx(r, flashes, tm):
              yaw=(t * 60.0 + pu[0]) % 360.0)
         r.add_sprite((x, 0.3, z), _glow(_m1._PICKUP_COL.get(kind, (255, 210, 40)), 0.28, tm, 0.7, 16),
                      layer=_fx_layer())
-    for decal in STATE.blood_decals:
-        k = max(0.0, min(1.0, decal[2] / 255.0))
-        if k > 0.05:
-            r.add_sprite(to3(decal[0], decal[1], 0.015),
-                         td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    if getattr(r, "backend", "") == "gl" and STATE.blood_decals:
+        from engine3d.particles import pack_blood_decals
+        d_arr = pack_blood_decals(STATE.blood_decals, to3, (80, 12, 14))
+        if d_arr is not None:
+            r.add_decals(d_arr)
+    else:
+        for decal in STATE.blood_decals:
+            k = max(0.0, min(1.0, decal[2] / 255.0))
+            if k > 0.05:
+                r.add_sprite(to3(decal[0], decal[1], 0.015),
+                             td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
     fx0, fz0 = _cache.get("tgt") or (0.0, 0.0)
     for fz in getattr(STATE, "fire_zones", []):
         x, _, z = to3(fz.x, fz.y)
@@ -1257,13 +1513,14 @@ def _draw_fx(r, flashes, tm):
             continue
         heat = min(1.0, fz.life / float(max(1, fz.max_life)) * 4.0)
         rad = fz.radius * K
-        r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
+        _m1._fuel_pool_at(r, x, z, rad * (0.65 + 0.35 * heat), fz.x * 0.37 + fz.y * 0.11, tm=tm, heat=heat)
         n = 1 + min(6, int(rad / 0.3))
         for i in range(n):
             a = i * 2.39996 + fz.x * 0.013
-            d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
-            size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
-            _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size, glow=i == 0)
+            d = 0.0 if i == 0 else rad * 0.72 * math.sqrt(i / float(n))
+            size = (0.56 if i == 0 else 0.36) * min(1.25, 0.45 + rad * 0.35) * heat
+            _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
+                      glow=(i == 0), smoky=(i == 0), bed=False, embers=(i == 0), heat=heat)
         flashes.append({"pos": (x, 1.0, z), "color": FIRE, "intensity": heat, "range": 4.0 + rad})
     for laser in getattr(STATE, "m4_lasers", []) or []:
         a = max(0.0, min(1.0, laser.get("life", 0) / 45.0))
@@ -1342,7 +1599,7 @@ def _lamp_lights(r, v, flashes, tm):
     plus the flashes are the eight per-frame lights."""
     fx, fz = v.tgt[0], v.tgt[2]
     _cache["tgt"] = (fx, fz)
-    pools, near = [], []
+    pools, near, mist_lamps = [], [], []
     for lamp in _lamps():
         head = _lamp_head(lamp)
         reach = lamp[2] * K * 1.6
@@ -1353,14 +1610,42 @@ def _lamp_lights(r, v, flashes, tm):
                      {"pos": head, "color": color, "intensity": 0.45, "range": reach}))
         if lamp[4] in ("post", "wire", "door"):
             r.add_sprite(head, _glow(color, 0.28, tm, 0.9, 18), layer=_fx_layer())
+            mist_lamps.append((head, color))
     p = STATE.player
     if p is not None:
-        flashes.append({"pos": to3(p.rect.centerx, p.rect.centery, 1.7), "color": (190, 205, 230),
-                        "intensity": 0.8, "range": 3.0})
+        td.add_player_rim(r, flashes, p.rect.centerx, p.rect.centery, p.angle, spot=True)
     near.sort(key=lambda e: e[0])
-    lights = [e[1] for e in near[:max(0, 8 - len(flashes))]]
+    lights = [e[1] for e in near[:max(0, 64 - len(flashes))]]
     r.set_pools(pools)
-    r.set_lights(flashes[:8] + lights, cap=8)
+    r.set_lights(flashes[:64] + lights, cap=64)
+    return flashes + lights, mist_lamps
+
+
+def _emit_m4_rain(r, v, tm, rain_lights, mist_lamps):
+    from game import rain3d as _rain3d
+    s_inv = 1.0 / S
+    zone = _m1._cut_zone()
+
+    def outdoor_ground(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        return _glyph(col, row) not in ("C", "W", "B", "H", "h", "F", "")
+
+    def roof_occlude(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        ch = _glyph(col, row)
+        if ch == "F":
+            return True
+        return ch in ("C", "W") and not _m1._hides(zone, col * T, row * T, (col + 1) * T, (row + 1) * T)
+
+    def puddle_fn(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        ch = _glyph(col, row)
+        ch = _MARKER_FLOOR["street"].get(ch, ch)
+        return ch == "." and _hash(col * 3 + 1, row * 5 + 2, 100) < 9
+
+    _rain3d.emit(r, v, tm, lights=rain_lights, outdoor_ground=outdoor_ground,
+                 roof_occlude=roof_occlude, puddle_fn=puddle_fn, mist_lamps=mist_lamps,
+                 intensity=1.05, seed=44)
 
 
 def _night_lights():
@@ -1379,11 +1664,15 @@ def _night_lights():
         out.append(("pool", (hx, 0.0, hz), lamp[3], reach * 0.72, _POOL_K.get(fam, 0.45)))
         out.append(("glow", (hx, hy, hz), lamp[3], 0.6 if fam != "tube" else 0.8, 0.55))
         if not station and fam in ("post", "wire", "door"):
-            out.append(("reflect", (hx, 0.0, hz - 0.4), lamp[3], 0.6, 0.34))
+            out.append(("reflect", (hx, 0.0, hz - 0.4), lamp[3], 0.76, 0.48))
     for col, row in _BURNING_CARS[_key()]:
         x, _, z = to3((col + 1) * T, row * T + T / 2.0)
-        out.append(("pool", (x, 0.0, z), FIRE, 3.2, 0.5))
-        out.append(("glow", (x, 1.0, z), FIRE, 1.0, 0.6))
+        out.append(("fire", (x, 1.0, z), FIRE, 2.2, 0.55))
+    if not station:
+        out.append(("pool", (36.75 * S, 0.0, -37.1 * S), (255, 198, 120), 4.6, 0.68))
+        out.append(("pool", (34.4 * S, 0.0, -37.0 * S), (245, 178, 86), 3.8, 0.55))
+        out.append(("glow", (36.75 * S, 2.18, -37.1 * S), (255, 206, 128), 0.8, 0.55))
+        out.append(("glow", (34.44 * S, 2.42, -37.0 * S), (245, 178, 86), 0.7, 0.50))
     _cache["night"] = (key, out)
     return out
 

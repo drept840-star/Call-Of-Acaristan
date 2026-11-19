@@ -11,6 +11,7 @@ in ``self.props`` so shotgun hits and explosions remove or swap them cleanly.
 """
 import math
 
+from engine.collision import BoxWorld, box_xz_h, slide_capsule
 from missions.m7 import raid_world as RW
 
 from . import set3d as S3
@@ -106,6 +107,7 @@ def _static():
 
 
 STATIC = _static()
+_STATIC_BW = BoxWorld(box_xz_h(b) for b in STATIC)
 
 
 def _clear_point(x, z, r, extra=()):
@@ -169,6 +171,7 @@ def _seg_box3d(ax, ay, az, bx, by, bz, box_):
 class World:
     def __init__(self):
         self.boxes = list(STATIC) + [TOWER_BOX]
+        self.box_world = BoxWorld(box_xz_h(b) for b in self.boxes)
         self.meshes = []
         self.dyn = []
         self.props = []          # dynamic (x0, z0, x1, z1, h) for intact barrels/fusebox/crate
@@ -200,15 +203,15 @@ class World:
         return False
 
     def move(self, x, z, dx, dz, r=BODY_R, clip=True):
-        nx, nz = x + dx, z + dz
-        if clip:
-            nx = min(max(nx, BOUNDS[0]), BOUNDS[1])
-            nz = min(max(nz, BOUNDS[2]), BOUNDS[3])
-        if not self.blocked(nx, z, r):
-            x = nx
-        if not self.blocked(x, nz, r):
-            z = nz
-        return x, z
+        extra = [box_xz_h(b) for b in self.props if b is not None]
+        for b in self.dyn_boxes():
+            extra.append(box_xz_h(b))
+        nx, _ny, nz, _hit = slide_capsule(
+            x, 0.0, z, dx, dz, r, BODY_TOP,
+            box_world=self.box_world, extra_boxes=extra,
+            bounds=BOUNDS if clip else None,
+        )
+        return nx, nz
 
     def los(self, a, b, dyn=True):
         for box_ in self.boxes:
@@ -265,11 +268,30 @@ class World:
     def surface_y(self, x, z):
         """Deck/platform height at ``(x, z)`` for elevated corpses."""
         if (S3.DECK_X[0] - 0.3 <= x <= S3.DECK_X[1] + 0.3
-                and abs(z - S3.CATWALK_Z) <= S3.DECK_D * 0.65):
+                and abs(z - S3.CATWALK_Z) <= S3.DECK_D * 0.55):
             return S3.CATWALK_Y
         if TOWER_BOX[0] <= x <= TOWER_BOX[2] and TOWER_BOX[1] <= z <= TOWER_BOX[3]:
             return TOWER_H
         return 0.0
+
+    def ragdoll_boxes(self):
+        """Elevated deck/guardrails, dynamic trucks, and props for ragdoll collisions."""
+        x0, x1 = S3.DECK_X
+        zc, hd = S3.CATWALK_Z, S3.DECK_D * 0.5
+        y = S3.CATWALK_Y
+        lx = S3.LADDER_X
+        out = [
+            (x0, y - 0.25, zc - hd, x1, y, zc + hd),
+            (x0, y, zc + hd - 0.08, x1, y + 0.92, zc + hd + 0.08),
+            (x0, y, zc - hd - 0.08, lx - 0.4, y + 0.92, zc - hd + 0.08),
+            (lx + 0.4, y, zc - hd - 0.08, x1, y + 0.92, zc - hd + 0.08),
+        ]
+        for b in self.dyn_boxes():
+            out.append(box_xz_h(b))
+        for b in self.props:
+            if b is not None:
+                out.append(box_xz_h(b))
+        return tuple(out)
 
     def low_cover(self, target, shooter):
         """True when a low box hugs ``target`` on the line from ``shooter`` (x, z)."""

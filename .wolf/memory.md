@@ -6,6 +6,12 @@ description: chronological action log per session, consolidated weekly
 > Chronological action log. Hooks and AI append to this file automatically.
 > Old sessions are consolidated by the daemon weekly.
 
+## 2026-11-19
+
+| Time | Summary | File(s) | Outcome |
+|------|---------|---------|---------|
+| 21:55 | M7 raid: fixed inability to free Alex under the fallen well beam - preserve the beam-lift hold across REV.step's idle-path reset, plus regression test | src/missions/m7/raid3d.py, tests/unit/test_m7_campaign.py, docs/ARCHITECTURE_MAP.md | focused unit 30/30 OK, smoke --only m7 OK, smoke --fast only the three documented pre-existing reds; map/buglog/STATUS updated |
+
 ## 2026-11-10
 
 | Time | Summary | File(s) | Outcome |
@@ -3357,3 +3363,301 @@ description: chronological action log per session, consolidated weekly
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 15:04 | Edited tools/wrap_audit.py | modified isinstance() | ~187 |
+| 15:05 | Edited tools/wrap_audit.py | 1→2 lines | ~36 |
+
+## Session: 2026-11-15 15:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-15 15:49
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-15 15:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 15:54 | Session end: 9 writes across 3 files (topdown3d.py, draw.py, draw3d.py) | 0 reads | ~1382 tok |
+| 15:54 | Session end: 16 writes across 6 files (frame_pacer.py, test_frame_pacer.py, system.py, app.py, topdown3d.py) | 2 reads | ~11710 tok |
+| 15:54 | Session end: 5 writes across 3 files (speechbox.py, wrap_audit.py, draw.py) | 4 reads | ~2065 tok |
+| 15:54 | Session end: 13 writes across 4 files (frame_pacer.py, test_frame_pacer.py, app.py, topdown3d.py) | 3 reads | ~2461 tok |
+
+## Session: 2026-11-15 15:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:04 | Edited tools/ai_bundle_app.py | 1→2 lines | ~58 |
+| 16:04 | Edited tools/ai_bundle_app.py | 5→5 lines | ~80 |
+| 16:04 | Edited tools/ai_bundle_app.py | added error handling | ~184 |
+| 16:04 | Edited tools/ai_bundle_app.py | modified match() | ~347 |
+| 16:04 | Edited tools/ai_bundle_app.py | 3→4 lines | ~63 |
+| 16:04 | Edited tools/ai_bundle_app.py | modified match() | ~312 |
+| 16:04 | Edited tools/ai_bundle_app.py | modified enumerate() | ~101 |
+| 16:04 | Edited tools/ai_bundle_app.py | 6→9 lines | ~108 |
+| 16:04 | Edited tools/ai_bundle_app.py | modified enumerate() | ~171 |
+| 16:05 | Edited tools/ai_bundle_app.py | 7→5 lines | ~48 |
+| 16:05 | Edited tools/ai_bundle_app.py | modified except() | ~41 |
+| 16:05 | Edited tools/ai_bundle_app.py | 2→5 lines | ~107 |
+| 16:05 | Edited tools/ai_bundle_app.py | 3→3 lines | ~24 |
+| 16:05 | Edited tools/ai_bundle_app.py | modified file_text() | ~118 |
+| 16:05 | Edited tools/ai_bundle_app.py | modified sorted() | ~220 |
+| 16:05 | Edited tools/ai_bundle_app.py | modified except() | ~49 |
+| 16:05 | Edited tools/ai_bundle_app.py | 3→6 lines | ~89 |
+| 16:06 | Edited tools/ai_bundle_app.py | inline fix | ~23 |
+| 16:06 | Edited tools/ai_bundle_app.py | added error handling | ~165 |
+| 16:06 | Edited tools/ai_bundle_app.py | added error handling | ~84 |
+| 16:07 | Edited tools/ai_bundle_app.py | added error handling | ~433 |
+| 16:07 | Edited tools/ai_bundle_app.py | modified save_txt() | ~130 |
+| 16:07 | Edited tools/ai_bundle_app.py | 7→8 lines | ~106 |
+| 16:07 | Edited tools/ai_bundle_app.py | modified grab() | ~62 |
+| 16:07 | Edited tools/ai_bundle_app.py | added 1 import(s) | ~19 |
+| 16:09 | Created tests/unit/test_ai_bundle_app.py | — | ~2895 |
+| 16:09 | Edited tests/unit/test_ai_bundle_app.py | 1→2 lines | ~50 |
+| 16:21 | Edited tools/ai_bundle_app.py | 2→3 lines | ~52 |
+| 16:21 | Edited tools/ai_bundle_app.py | 3→5 lines | ~46 |
+| 16:21 | Edited tools/ai_bundle_app.py | 3→5 lines | ~73 |
+| 16:21 | Edited tests/unit/test_ai_bundle_app.py | modified test_listed_whole_file_beats_a_range() | ~130 |
+<!-- session:MTM5OGRiNjgtYTcwOC00ZDVkLTg1OTItYjA4ZGYyMTA0MjFh -->
+| 2026-11-15T14:21:40.914Z | Hardened tools/ai_bundle_app.py: path resolution (hidden dirs, abs/space paths, case, traversal), same-line folder+file, bare folder/ambiguous reporting, brace/regex hangs, real line count matching ai_bundle.py, range checks/merge, listed whole file beats ranges, BOM/UTF-16/NUL/CR reading, settings validation, CLI arg errors, GUI build on worker thread | tools/ai_bundle_app.py,tests/unit/test_ai_bundle_app.py | selftest OK, 36 pytest passed, --check nasty no traceback, compileall OK |
+| 16:42 | Session end: 31 writes across 2 files (ai_bundle_app.py, test_ai_bundle_app.py) | 0 reads | ~6388 tok |
+
+## Session: 2026-11-15 16:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-15 18:36
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-15 22:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:13 | Created src/missions/m8/duty/flight3d.py | — | ~9488 |
+| 22:15 | Created src/missions/m8/duty/ridge3d.py | — | ~5363 |
+| 22:58 | Created src/missions/m8/duty/mansion_set.py | — | ~10241 |
+| 23:02 | Created src/missions/m8/duty/mansion_world.py | — | ~3167 |
+| 23:05 | Created src/missions/m8/duty/mansion_hud.py | — | ~2319 |
+| 23:09 | Created src/missions/m8/duty/mansion3d.py | — | ~13779 |
+| 23:10 | Edited src/missions/m8/duty/mansion3d.py | 10→10 lines | ~94 |
+| 23:10 | Edited src/missions/m8/duty/mansion3d.py | 5→2 lines | ~19 |
+| 23:11 | Edited src/missions/m8/duty/mansion3d.py | 2→2 lines | ~28 |
+| 23:14 | Edited src/missions/m8/duty/mansion_set.py | modified in() | ~87 |
+| 23:14 | Edited src/missions/m8/duty/mansion_set.py | inline fix | ~26 |
+| 23:14 | Edited src/missions/m8/duty/mansion_set.py | modified in() | ~77 |
+| 23:30 | Session end: 11 writes across 1 files (credits_football.py) | 1 reads | ~2901 tok |
+
+## Session: 2026-11-15 00:04
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-15 00:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | 3→4 lines | ~106 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | 2→3 lines | ~82 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | 1→3 lines | ~310 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~84 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | 1→3 lines | ~132 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | 2→2 lines | ~107 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | expanded (+10 lines) | ~379 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | "start_mission8_stage(stag" → "HEAD OF STATE" | ~160 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~50 |
+| 00:17 | Edited docs/ARCHITECTURE_MAP.md | inline fix | ~38 |
+| 00:26 | Edited docs/ARCHITECTURE_MAP.md | "AGENTS.md" → "docs/" | ~63 |
+<!-- session:ODQ4ZjMyNDQtNDU1MC00MWQ3LTk3ZWEtYTUxMzk1NGYxMjM3 -->
+| 2026-11-15T22:28:03.085Z | Architecture map: M8 Duty route, mission-complete dossier, duty prop meshes, new tools/tests/apps rows; stale 'Duty reserved / M8 not implemented' fixed in CLAUDE.md, AGENTS.md, LORE.md, m8 docstrings; art/m5 comment paths fixed | docs/ARCHITECTURE_MAP.md,CLAUDE.md,AGENTS.md,docs/LORE.md,src/missions/m8/__init__.py,src/missions/m8/revenge/beats.py,src/core/outfits.py,src/entities/art_cache.py | sync_arch_map --check OK, map_assets3d --check OK, py_compile OK |
+
+## Session: 2026-11-15 00:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:56 | Edited AGENTS.md | 2→3 lines | ~105 |
+| 00:56 | Edited CLAUDE.md | 1→3 lines | ~86 |
+
+## Session: 2026-11-16 17:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:02 | Edited src/missions/m8/duty/mansion_set.py | 1→3 lines | ~60 |
+| 18:18 | Edited src/missions/m8/duty/mansion_set.py | modified in() | ~72 |
+
+## Session: 2026-11-16 18:25
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:33 | Edited src/engine3d/core.py | modified set_sun_shadow() | ~96 |
+| 18:33 | Edited src/game/topdown3d.py | expanded (+8 lines) | ~165 |
+| 18:33 | Edited src/game/topdown3d.py | 2→3 lines | ~30 |
+| 18:35 | Edited src/missions/m1/draw3d.py | modified _gait() | ~235 |
+| 18:35 | Edited src/missions/m1/draw3d.py | 4→2 lines | ~16 |
+| 18:35 | Edited src/missions/m3/draw3d.py | 3→1 lines | ~14 |
+| 18:35 | Edited src/missions/m5/draw3d.py | 3→1 lines | ~11 |
+| 18:44 | Edited src/cutscenes/m6fx3d.py | added 1 condition(s) | ~40 |
+| 18:48 | Session end: 8 writes across 4 files (core.py, topdown3d.py, draw3d.py, m6fx3d.py) | 1 reads | ~607 tok |
+
+## Session: 2026-11-16 18:48
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-16 23:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-16 00:01
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 00:06 | Edited src/missions/m6/draw3d.py | 6→6 lines | ~112 |
+| 00:06 | Edited src/missions/m6/draw3d.py | modified _decode() | ~492 |
+| 00:06 | Edited src/missions/m6/draw3d.py | 7→7 lines | ~102 |
+| 00:06 | Edited src/missions/m6/draw3d.py | modified _shaded_floor() | ~111 |
+| 00:06 | Edited src/missions/m6/draw3d.py | 2→2 lines | ~30 |
+| 00:44 | Edited src/engine3d/gl_post.py | modified main() | ~102 |
+| 00:44 | Edited src/engine3d/gl_post.py | 3→3 lines | ~25 |
+| 00:44 | Edited src/engine3d/gl_post.py | modified main() | ~79 |
+| 00:44 | Edited src/engine3d/gl_post.py | inline fix | ~11 |
+| 00:44 | Edited src/engine3d/gl_post.py | inline fix | ~18 |
+| 00:44 | Edited src/engine3d/gl_post.py | inline fix | ~10 |
+| 00:44 | Edited src/engine3d/gl_post.py | modified vec4() | ~23 |
+| 00:44 | Edited src/engine3d/gl_post.py | 5→10 lines | ~110 |
+| 00:44 | Edited src/engine3d/gl_post.py | inline fix | ~21 |
+| 00:44 | Edited src/engine3d/gl_post.py | 2→3 lines | ~35 |
+| 00:44 | Edited src/engine3d/gl_post.py | modified _raw_bgrx() | ~131 |
+| 00:44 | Edited src/engine3d/gl_post.py | modified _raw_bgrx() | ~89 |
+| 00:46 | Edited src/engine3d/gl.py | modified zip() | ~293 |
+| 00:46 | Edited src/engine3d/gl.py | 3→4 lines | ~36 |
+| 00:47 | Edited src/engine3d/gl.py | 2→3 lines | ~25 |
+| 00:52 | Edited src/engine3d/gl_post.py | modified vec4() | ~46 |
+| 00:57 | Edited src/missions/m6/night_fx.py | 4→6 lines | ~94 |
+| 01:07 | Edited src/engine3d/gl.py | 3→2 lines | ~27 |
+| 01:07 | Edited src/engine3d/gl.py | 3→2 lines | ~30 |
+| 01:07 | Edited src/engine3d/gl.py | modified _phys8() | ~180 |
+| 01:12 | Edited src/missions/m6/draw3d.py | 2→3 lines | ~51 |
+| 01:14 | Edited src/missions/m6/draw3d.py | 1→3 lines | ~40 |
+| 01:15 | Edited src/missions/m6/draw3d.py | modified place() | ~180 |
+| 01:19 | Edited src/missions/m6/draw3d.py | modified _light_part() | ~335 |
+<!-- session:MTk3OTkxNDEtZjliZS00ODFhLThlZjQtYWZiZDg1NDc2M2Rk -->
+| 2026-11-16T23:21:31.753Z | 2.5D perf pass 2: raw BGRX GL readback/upload, phys8 LUT, static-run cache, M6 pool byte budget, M6 decode/light intp + chunked in-place; all bit-exact | src/engine3d/gl_post.py,src/engine3d/gl.py,src/missions/m6/night_fx.py,src/missions/m6/draw3d.py,docs/ARCHITECTURE_MAP.md | M1 18->12ms, M5 19->13, M4 18->15, M2 15->14, M6 decode..light 28->18ms |
+| 2026-11-17 | Fixed pink M5 Print Works: GL bloom chain sampled uninitialised per-level ta; use previous level's src_tex | src/engine3d/gl_post.py,docs/ARCHITECTURE_MAP.md,.wolf/{STATUS,buglog,cerebrum} | magenta 62.83%->0%, engine3d_check OK, M5 smoke (except pre-existing harness reds) |
+| 2026-11-18 | Applied 5-part GPU visual upgrade (SSAO, 64 tiled lights+spot shadows, HDR unification incl. M6 GPU native, wet reflections+height fog, instanced particles/decals); fixed 2 patch-application errors | src/engine3d/{particles.py,gl.py,gl_post.py,gl_sprites.py,core.py,textures.py}, topdown3d, walk3d, m1-m8 hosts, docs/ARCHITECTURE_MAP.md | smoke m1..m8 OK, engine3d_check 4.14%, all shots+benches OK; pre-existing CI reds unchanged |
+| 2026-11-18 | Applied Phase 1 engine anim/collision kernels (springs, rig3d, physics, MultiFloorNav, capsule contacts) + Phase 2 wiring (death ragdoll, slide_capsule, mansion nav, layered animation, debris); 24 new tests pass | src/engine/{anim,collision}/, cutscenes/death3d.py, m6/m7/m8 hosts, docs/ARCHITECTURE_MAP.md | smoke m6..m8 OK, bench all OK, 612 unit tests w/ same 10 pre-existing reds |
+| 2026-11-18 | Fixed gait pogo (cosine leg-span lift, removed IK snap) and ragdoll quality (15 joints from pose_world places, min-dist constraints, capped impulses, full-basis pose reconstruction) | src/engine/anim/rig3d.py, src/engine/collision/physics.py, cutscenes/death3d.py, m7/raid3d.py, m8/revenge/trap3d.py, docs/ARCHITECTURE_MAP.md | 24 tests OK, smoke m6..m8 OK, bench all OK, ragdoll/gait probes sane |
+| 2026-11-18 | Restored strong gait with lift bridge, moved M6 yard to LayeredAnimState, kept rifles up on moving guards, fixed ragdoll splits/ledge rest via max-spread + on-surface constraints and trap catwalk ragdoll boxes | src/engine/anim/rig3d.py, src/engine/collision/physics.py, cutscenes/death3d.py, m6/yard3d.py, m7/raid3d.py, m8/revenge/{trap_world,trap3d}.py | compile/normalize/api/sync OK, 612 unit tests same 10 reds, smoke m6..m8 OK, bench all OK |
+
+## Session: 2026-11-18 18:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-18 19:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:02 | Edited src/missions/m8/duty/mansion3d.py | modified _andrei_death_anim() | ~864 |
+| 19:02 | Edited src/missions/m8/duty/mansion3d.py | expanded (+13 lines) | ~285 |
+| 19:02 | Edited src/missions/m8/duty/mansion3d.py | inline fix | ~20 |
+| 19:04 | Edited src/engine/collision/physics.py | expanded (+10 lines) | ~291 |
+| 19:04 | Edited src/engine/collision/physics.py | modified items() | ~114 |
+| 19:04 | Edited src/engine/collision/physics.py | modified _shift() | ~618 |
+| 19:04 | Edited src/engine/collision/physics.py | modified _dot() | ~157 |
+| 19:05 | Edited src/cutscenes/death3d.py | asin() → hypot() | ~149 |
+| 19:06 | Edited src/engine/collision/physics.py | expanded (+6 lines) | ~288 |
+| 19:09 | Edited src/cutscenes/death3d.py | 5→7 lines | ~128 |
+| 19:09 | Edited src/cutscenes/death3d.py | 3→3 lines | ~30 |
+| 19:09 | Edited src/cutscenes/death3d.py | inline fix | ~12 |
+| 19:09 | Edited src/cutscenes/death3d.py | 6.0 → 25.0 | ~13 |
+| 19:09 | Edited src/engine/collision/physics.py | 4→4 lines | ~65 |
+| 19:09 | Edited src/engine/collision/physics.py | inline fix | ~15 |
+| 19:11 | Edited src/engine/collision/physics.py | 18→21 lines | ~304 |
+| 19:12 | Edited src/engine/collision/physics.py | expanded (+7 lines) | ~158 |
+| 19:14 | Edited src/cutscenes/death3d.py | 1→4 lines | ~50 |
+| 19:14 | Edited docs/ARCHITECTURE_MAP.md | 1→2 lines | ~172 |
+| 19:15 | Edited src/engine/collision/physics.py | 6→8 lines | ~108 |
+| 19:15 | Edited src/engine/collision/physics.py | modified _limbs_vs_walls() | ~401 |
+| 19:15 | Edited src/engine/collision/physics.py | 2→6 lines | ~115 |
+| 19:16 | Edited src/cutscenes/death3d.py | 25.0 → 35.0 | ~12 |
+| 19:16 | Edited src/engine/collision/physics.py | _limit_legs() → _limit_joints() | ~70 |
+| 19:16 | Edited src/engine/collision/physics.py | inline fix | ~10 |
+| 19:19 | Edited src/engine/collision/physics.py | modified and() | ~39 |
+| 19:24 | Edited src/engine/collision/physics.py | 4→7 lines | ~118 |
+| 19:24 | Edited src/engine/collision/physics.py | 1→2 lines | ~36 |
+
+## Session: 2026-11-18 21:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-18 22:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:05 | Edited src/engine/collision/physics.py | 3→4 lines | ~46 |
+| 22:05 | Edited src/engine/collision/physics.py | 2→2 lines | ~35 |
+| 22:05 | Edited src/engine/collision/physics.py | 3→6 lines | ~88 |
+| 22:05 | Edited src/engine/collision/physics.py | modified values() | ~179 |
+| 22:06 | Edited src/engine/collision/physics.py | modified items() | ~162 |
+| 22:06 | Edited src/engine/collision/physics.py | 1→3 lines | ~45 |
+| 22:07 | Edited src/cutscenes/death3d.py | 4→5 lines | ~75 |
+| 22:08 | Edited src/engine/collision/physics.py | modified range() | ~49 |
+| 22:08 | Edited src/engine/collision/physics.py | modified items() | ~192 |
+| 22:08 | Edited src/engine/collision/physics.py | 1→2 lines | ~31 |
+
+## Session: 2026-11-18 22:44
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-18 00:47
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-19 22:03
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:12 | Edited src/engine/anim/rig3d.py | 7→8 lines | ~128 |
+| 22:12 | Edited src/engine/anim/rig3d.py | modified _leg_swing() | ~291 |
+| 22:12 | Edited src/engine/anim/rig3d.py | 12→16 lines | ~242 |
+| 22:12 | Edited src/engine/anim/rig3d.py | 4→7 lines | ~138 |
+| 22:15 | Edited src/engine/anim/rig3d.py | modified _leg_swing() | ~328 |
+| 22:16 | Edited src/engine/anim/rig3d.py | 2→2 lines | ~29 |
+| 22:16 | Edited src/engine/anim/rig3d.py | inline fix | ~21 |
+| 22:16 | Edited src/engine/anim/rig3d.py | 1→3 lines | ~59 |
+| 22:21 | Edited src/missions/m7/raid3d.py | modified sg_square_hips() | ~250 |
+| 22:21 | Edited src/missions/m7/raid3d.py | 2→3 lines | ~74 |
+| 22:21 | Edited src/missions/m8/revenge/trap3d.py | 2→3 lines | ~48 |
+| 22:21 | Edited src/missions/m8/revenge/trap3d.py | 3→3 lines | ~60 |
+| 22:21 | Edited src/missions/m8/duty/mansion3d.py | 2→3 lines | ~50 |
+| 22:21 | Edited src/missions/m8/duty/mansion3d.py | 3→3 lines | ~55 |
+| 22:22 | Edited tests/unit/test_engine_anim.py | modified test_knee_folds_on_forward_swing_not_planted_stroke() | ~205 |
+<!-- session:NzdlNDk1YWYtMDhlMC00ZGEzLTg2MmEtZDNkZmI4ODJjYjFi -->
+| 2026-11-19T20:27:33.012Z | 3D walk: knee fold moved to forward swing (was moonwalking on planted stroke), speed-scaled cycle/hip/lift; shotgun carry squares hips while moving via raid3d.sg_square_hips (raid3d, trap3d, mansion3d). 2.5D pose_run untouched. | src/engine/anim/rig3d.py,src/missions/m7/raid3d.py,src/missions/m8/revenge/trap3d.py,src/missions/m8/duty/mansion3d.py,tests/unit/test_engine_anim.py,docs/ARCHITECTURE_MAP.md | SMOKE TEST: OK, compileall OK, test_engine_anim 8/8; planted-foot slide 3.3 m/s 2.15 -> 0.15 m/s |
+
+## Session: 2026-11-19 23:42
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 23:46 | Edited src/missions/m8/revenge/trap3d.py | modified blocked() | ~196 |
+| 23:46 | Edited src/missions/m8/revenge/trap3d.py | 4→3 lines | ~27 |
+| 23:47 | Edited src/missions/m8/revenge/trap3d.py | 4→3 lines | ~44 |
+| 23:47 | Edited src/missions/m8/revenge/trap3d.py | modified _cp_snapshot() | ~78 |
+| 23:47 | Edited src/missions/m8/revenge/trap3d.py | modified not() | ~169 |
+| 23:47 | Edited src/missions/m8/duty/mansion3d.py | 4→6 lines | ~130 |
+| 23:47 | Edited src/missions/m8/duty/mansion_brain.py | added 1 condition(s) | ~66 |
+| 23:52 | Created tests/unit/test_gameplay_sweep.py | — | ~1512 |
+| 23:52 | Edited tests/unit/test_gameplay_sweep.py | added 1 import(s) | ~94 |
+| 23:56 | Edited src/missions/m8/revenge/trap3d.py | modified _clear() | ~81 |
+| 23:57 | Edited tests/unit/test_gameplay_sweep.py | modified test_kiosk_gate_moves_bodi_up_like_a_wave_clear() | ~114 |
+<!-- session:ZmYxYWFiZGEtODUxOS00NmQ4LWFjYTgtZWZjMTUyNjIwNTEx -->
+| 2026-11-19T22:01:26.404Z | Gameplay sweep for Alex-well class bugs: M8 trap checkpoint keeps both guns' ammo (_cp_snapshot), kiosk gate moves Bodi to post 2, trap/mansion _loot leaves body ammo at full reserves, mansion near_revive same floor only, M1 hotwire not-yet E uses own flag hotwire_not_clear_said, M1-M5 pickups at full stay on the ground | src/missions/m8/revenge/trap3d.py,src/missions/m8/duty/mansion3d.py,src/missions/m8/duty/mansion_brain.py,src/missions/m1/update.py,src/missions/m1/main.py,src/core/state.py,src/missions/m2/update.py,src/missions/m3/systems.py,src/missions/m4/systems.py,src/missions/m5/systems.py,tools/smoke_test.py,tests/unit/test_gameplay_sweep.py | 9 new unit tests fail on old code and pass; smoke --fast OK; compileall OK; sync_arch_map OK; test_m8_trap_mechanics 2 pre-existing failures unchanged |

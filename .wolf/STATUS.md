@@ -4,7 +4,1096 @@ budget_tokens: 1000
 ---
 # STATUS — first-try
 
-> Read this FIRST when resuming. Last updated: 2026-11-15
+> Read this FIRST when resuming. Last updated: 2026-11-19
+
+**LATEST (2026-11-19): gameplay sweep (Alex-well class bugs)** - 6 fixes, uncommitted:
+M8 trap checkpoint retry restores both guns' ammo (`_cp_snapshot`); trap/mansion `_loot` leaves
+the body's ammo when both reserves are full; mansion `near_revive` same floor only; trap kiosk
+gate moves Bodi to post 2 like `_clear(1)`; M1 hotwire "not yet" E no longer eats the hotwire
+tutorial (own flag `hotwire_not_clear_said`); M1-M5 pickups at full stay on the ground.
+Tests: `tests/unit/test_gameplay_sweep.py` (9, all fail/error on old code), smoke
+`m1_hotwire_tutorial_after_early_e`. Gates: compileall, smoke `--fast` OK, sync_arch_map OK.
+Pre-existing reds untouched: `test_m8_trap_mechanics` smoke-canister + guard-truck tests.
+Not eyeballed in game. Map: ARCHITECTURE_MAP "Gameplay sweep (2026-11-19)"; buglog `*-20261119`.
+
+**LATEST (2026-11-19): physical-stride walking upgrade across 3D combat, 2.5D and films** -
+owner's exact 9-file patch applied verbatim (`engine/anim/rig3d.py`, `m7/raid3d.py`,
+`m8/revenge/trap3d.py`, `m8/duty/mansion3d.py`, `m6/yard3d.py`, `m1/draw3d.py`,
+`missions/walk3d.py`, `cutscenes/m6world3d.py`, `cutscenes/m7world3d.py`) + map +
+one obsolete unit assertion. One necessary addition: `locomotion_pose` keeps
+`s = math.sin(phase)` because the patch's new `spine_r` term still uses `s`.
+`rig3d`: `_cycle_len` (1.16 m crouch, else 1.38..2.00 m by speed/sprint) makes
+`LayeredAnimState.stride_phase` advance by ground distance (`stride_gain/2` now a
+cadence factor); `_leg_cycle` replaces symmetric `sin` legs with asymmetric
+heel-strike/loading-shock/midstance-vault/toe-off/swing plus pelvic `body_r`,
+lumbar `spine_r` counter-tilt, athletic idle and a 0.850..0.878 m CoM target;
+`compose` finally consumes `secondary` inertia and stabilises head. `_held`/
+`_shotgun_hold` sync `rifle_y` to the twist delta; new `raid3d._sprint_carry_hold`/
+`apply_sprint_carry` give a cached Fallow 12 / OS-12 high-port sprint carry
+(prewarmed in Raid/Trap/Mansion `_warm`), with K-9 stride bounce in `yard3d._gun_frame`.
+Guards/allies in all four 3D scenes phase from distance travelled (yard accumulates
+`_gphase`); Trap's catwalk `_move` now runs `LayeredAnimState`. 2.5D `_motion` in
+`m1/draw3d` + `walk3d` keeps a 7-slot cache with `STATE.dt`; `WALK_RAD_PER_M` retired,
+`_gait`/`_person` blend into `locomotion_pose` instead of `pose_run`. Films:
+`m6world3d.walk` adds ankle/head/elbow follow-through while keeping leg IK and
+`body_r=0` (walk_slip < 1 mm); `m7world3d.walk_pose` delegates to `locomotion_pose`.
+Gates in requested order: normalize OK, compileall OK, api snapshot OK (92/676 +0),
+hold OK, unit discover 625 = 5F/6E (same pre-existing set; the only new failure was
+the obsolete `test_engine_anim` idle-`lhip_p`==0 assertion, updated to compare
+`locomotion_pose(0,0,0)` because the new idle stance is deliberately non-zero),
+targeted smoke `--only m1,m6,m7,m8` OK. `check_boundaries` pre-existing E4 credits +
+W1 89 (this patch adds no shared->mission edges). `smoke --fast` only the 3
+documented pre-existing reds (`mission5_shadow_finale`, `mission4_cinematic_arrest`
+fade_out_music fakes, `mission8_vertical_slice` phase "clear"). `sync_arch_map`
+regenerated idempotently; ARCHITECTURE_MAP bullet added. Owner still needs the
+in-game eyeball: --dev-mission7-raid / --dev-mission8-trap / --dev-mission8-mansion /
+--dev-mission6-yard, --dev-walk, --dev-m1-game.
+
+**PREVIOUS (2026-11-19): M7 raid - you can free Alex under the fallen well beam again** - root cause: the shared-revive rollout added `REV.step(self, dt, None, False, ...)` to `m7/raid3d._hold()`'s pinned-Alex branch just to decay a leftover Bodi revive animation; `revive3d.step()`'s inactive (`who is None`) path zeroes `scene.hold`, which Alex's beam-lift timer shares, so hold reset to one frame's `dt` every frame and never reached `HOLD_S["alex"] = 1.6`. Fix: save/restore `self.hold` around that `REV.step` call; `REV.step` and Bodi/M8 callers untouched. Added `M7RaidTests.test_holding_e_frees_pinned_alex` - verified it FAILS on the buggy code (hold 0.0167 after 30 frames) and passes with the fix. Gates: focused unit 30/30 OK, `smoke --only m7` OK, compileall OK, ae_normalize dry OK, `sync_arch_map --check` OK; final `smoke --fast` shows only the three documented pre-existing reds (M5 shadow finale + M4 cinematic arrest `fade_out_music` harness fakes, M8 vertical slice phase 'clear'). Map updated.
+
+**PREVIOUS (2026-11-19): 3D frustum culling across engine3d + heavy sets** -
+owner's 8-file patch applied verbatim except ONE owner-approved one-line fix
+(see below). `engine3d/core`: `frustum_cull`, `visible_frustum`/`visible_ortho`,
+sphere culls on shadows/sprites/lines. `engine3d/gl`: baked `Obj`s >32 m split
+into 32 m XZ slices; per-pass culling (main/sun-ortho/spot) in
+`_visible_static_runs`/`_pass_cull_fn`; resident chunks culled + 128-entry LRU;
+rigs/dyn/sprites/lines/lights/pools culled with `culled_*` stats.
+`m6world3d.pack_memo_end` splits live memo into 24 m chunks. Mansion set bakes
+shell/hall/rooms/terrace/grounds/surroundings separately (Early-Z preserved);
+mansion3d/raid3d/yard3d skip off-screen ragdolls, Andrei, cash, scorches,
+car FX, Volkov, pig. 2D untouched; `r.frustum_cull=False` opts out.
+**Owner-approved deviation:** verbatim patch hard-crashed M6 yard on frame 1
+(`InvalidObject ... render`): when a frame queues >128 memo chunks (yard = 196),
+the new LRU key is not yet in `live`, so the VAO just created is evicted+released
+and then queued. Fix: `live = {id(e[0]) for e in self._res_draw} | {key}` in
+`add_resident`. Gates: normalize/compileall OK, `engine3d_check` 5.71% parity OK,
+smoke `mission6_vertical_slice,engine3d` OK, `ae_bench_scenes` all 9 scenes run,
+full `--fast` (3 pre-existing reds), unit discover 624 (5F/6E unchanged),
+boundaries E4/W1 89 unchanged. Map updated.
+
+**PREVIOUS (2026-11-19): M8 Mansion 3D nav/fragment perf pass** - owner's exact
+6-file patch applied verbatim. (1) `engine/collision/nav.py`: `MultiFloorNav` gains
+`_pulled_cache` (string-pulled waypoints), `_nbr_cache`/`_static_neighbors`
+(static neighbor geometry) and a `_blocked` bytearray synced once per `_dyn_ver`
+by `_sync_blocked()`; `_layer_step_raw` split out; all caches invalidated in
+`set_dynamic_boxes`/`set_dynamic_circles`/`add_link`. (2) `gl_post._ATMOS_FRAG`
+gates SSR on `refl_w > 0.08`. (3) `mansion3d`: `_warm()` now prewarms guard holds,
+car/chandelier meshes and the ~12k-cell `world.nav()`; warm errors print a
+traceback; `marble_refl` only inside on the ground floor; `_draw_enemies` reuses
+one `_OneEnemy` stand-in. (4) `mansion_brain`: `nav_at` throttles + `door_locked`
+skip in `_steer`/`_walk_ally`, cp-0 ally follow point clamped to `GATE_Z+1.2`.
+(5) `mansion_set`: `money_bundle(..., detail=False)` for baked pallets, grass
+seg 10->40, `_grounds` baked last for Early-Z, `house_lights`/`pools` `near=`
+cull to 6/10 fed from `frame()`'s `tgt`. (6) `mansion_world`: `_dyn_box_aabbs`
+cached and reused by `ragdoll_boxes`/`nav`/`move`, plus `_LOS_STATIC_BW` for
+`los3d` static rejection and `_STATIC_BW.ray()` for short `ray_hit` probes
+(owner's follow-up hunks, applied verbatim). Gates: normalize OK,
+compileall OK, nav + m8_duty unit tests OK (`test_gl_composite` 6/6),
+`engine3d_check` 4.14% OK, smoke `mission8_duty,engine3d` OK. Map updated.
+`ae_bench_scenes` mansion 14.45 avg / 9.93 p50 ms (GL, 90f). Final gates show
+ONLY pre-existing reds: `smoke --fast` = `mission8_vertical_slice` + the two
+`fade_out_music` harness fakes; unit discover 624 = 5F/6E (ragdoll jitter
+3.89>0.05 in CapsulePhysicsTests - untouched by this patch, all nav tests pass;
+m5 Channel.id x2, m8 chase font-quit x2, m8 trap smokes/truck, raw-loads,
+m6 exposure 173>170, m8 chase silhouettes 8!=10, pytest missing), boundaries
+E4 ui.credits + W1 89 (the only W1 edge in a touched file is the pre-existing
+`engine3d.gl_post -> missions.m1.grade3d` lazy import). No new reds.
+**Known edge case, owner chose to KEEP VERBATIM:** the new short-`ray_hit`
+fast path uses `BoxWorld.ray()` which returns the FIRST hit (t=0 when the origin
+starts inside a box); the `1e-4 <` guard drops it without checking the next
+box, so 44/1323 realistic downward probes returned a farther hit than the
+legacy scan (e.g. (-12, 2.25, 26) fast 4.27 / legacy 1.80). `los3d()` is fully
+equivalent (0/2000 random probes). Documented in ARCHITECTURE_MAP.md; no code
+change.
+
+**PREVIOUS (2026-11-19): M8 Andrei hitscan room-entry guard** - owner supplied exact
+patch applied verbatim across 4 files + map + buglog. Root cause: `mansion3d._fire`
+tested Andrei's spheres whenever state was `idle`/`intro` with no room-entry guard,
+so stray Grand Hall / front-door rounds through the open 2 m `BACK_Z` doorway
+(x -7..-5) could trigger `trigger_andrei_death(cause="player")` before the player
+entered the security room; `mansion_world._static` also lacked colliders for the
+rendered doorway lintels. Fix: `mansion_brain.in_security_room(x,y,z)` is the single
+interior-bounds test, reused by `_andrei_update` and by `_fire`'s `can_hit_andrei`
+(intro always hittable, idle only from inside the room); `_fire` seeds
+`andrei_zone/end/dd` up front instead of `locals().get()`; added the two BACK_Z
+lintel colliders. New regression test
+`test_andrei_cannot_be_shot_while_idle_from_outside_room`. Gates: normalize OK,
+compileall OK, unit 6/6 OK, smoke --only m8 OK. Map + buglog updated. Note:
+`--only m8` matches ZERO checks (names contain "mission8", not "m8"); the real
+`--fast` gate shows three PRE-EXISTING reds unrelated to this patch -
+`mission8_vertical_slice` (`assert sc.phase == "climb"` yields "clear"; confirmed
+by reverting all four edits and re-running the isolated check - still fails),
+plus the known `mission5_shadow_finale` / `mission4_cinematic_arrest`
+`fade_out_music` harness fakes. Duty itself (`mission8_duty`) is green.
+
+**PREVIOUS (2026-11-18): hit-context death upgrade (14 files)** - owner's exact
+patch applied verbatim across physics.py, rig.py, m6world3d.py, death3d.py and
+all four 3D combat scenes/worlds/brains. Soft spine/neck range links, ribcage /
+shoulder / hip / neck constraints + wall-slump friction, hit-aware active poses
+(head whip, shotgun/overkill punch, gut/leg/melee, catch-step, bracing, head
+settle), dropped-rifle rigid body via `fall.draw_gun(r)`, `Fall` hit-context
+kwargs and `ragdoll_boxes()` on all worlds; no caller contract broken.
+Gates: normalize/compileall/API snapshot OK, boundaries pre-existing E4/W1,
+smoke --only m6,m7,m8,engine3d,collision OK, ae_ci --quick pre-existing reds.
+**TWO NEW REDS FOUND - owner decision needed:** (1) headless probe: the new
+single-node constraint pushes in `_apply_anatomical_limits()` are not
+`prev`-compensated and inject momentum - settled root drifts 2.5 m at realistic
+push 0.3 (5.8 m at push 1.0, 0.67 m at zero push); runtime monkeypatch disabling
+the method drops drift to 0.003-0.25 m. (2) unit discover now 5F/6E (was 4F/6E):
+`test_debris_and_ragdoll_collide_with_walls_and_drop_off_ledge` fails, chest
+y=1.43 (expected <0.45) - the ledge-drop/ragdoll constraint interaction.
+Map updated with both anomalies; no fix applied (verbatim patch preserved).
+
+**PREVIOUS (2026-11-18): active-ragdoll muscle tone** - owner's exact patch to
+`engine/collision/physics.py` + `cutscenes/death3d.py`. Pure Verlet lost all
+tone on frame 1 (instant limp sacks); `Fall` now drives `RagdollBody` with
+damped PD springs toward authored reactions before collapsing: `_active_pose`
+returns stagger/clutch/kneel/buckle pose + yaw and separate upper/lower tone
+envelopes (0.28 s, knee-drop 0.54 s), `_apply_muscle_tone` pushes nodes via
+`prev -= dv*h` (260/240 stiff, 28 damping) and gives pelvis support only when
+a foot/knee is within 0.18 m of the floor (so truck-bed/catwalk pushes lose
+footing immediately). Track 3 fires a one-shot topple at a>=0.38 s; blast
+kills skip tone. `RagdollBody` drag 0.962 and ground rebound 0.04 make limbs
+thud/drape. Impulses softened (push 1.1-2.8, less launch). Headless 40-fall /
+6 s probe: root y 0.00, max drift 0.138 m, 0 nonfinite (rest forced at 4 s).
+Gates: normalize/compileall OK, boundaries pre-existing E4/W1, API snapshot
+OK (92/676), unit 614 same 10 pre-existing reds, smoke --only m6,m7,m8 OK.
+Map updated; no caller/engine3d changes.
+
+**PREVIOUS (2026-11-18): ragdoll-bone bridge** - owner's exact three-file patch;
+no mission caller touched. `physics.py`: `RagdollBody._apply_anatomical_limits()`
+knocks knees onto a backward 1-DOF hinge plane and stops backward elbow snap,
+called per constraint iteration. `engine3d/rig.py`: new `_basis_xy`/`_col_x`
+helpers, `Humanoid.ragdoll_nodes()` (15 world nodes, no chest-Z bias) and
+`Humanoid.places_from_nodes()` (orthonormal slot matrices with socket
+continuity, scale/PART_FB preserved, boot-floor pitch clamp); `pose_world`/
+`build` accept `{"_places":...,"_joints":...}` and skip `_placements` and the
+`-miny` auto-grounding shift (GL root `(0,0,0)`). `death3d.py`: `Fall` seeds
+the ragdoll from `ragdoll_nodes`, zero-velocity depenetrates against boxes,
+applies track/blast impulses, sub-steps `rag.step(h<=1/60, iters=6)`, tracks
+`fall.chest`, caches `rest` as a `_places` pose, and re-floors the cached root.
+Headless 40-fall / 6 s probe: root y 0.00, max drift 0.116 m, 0 nonfinite.
+Gates in requested order: normalize OK, compileall OK, boundaries pre-existing
+E4/W1 88, api snapshot OK (92/676 +0), unit 614 same 10 pre-existing reds,
+engine3d parity OK, smoke --only m6,m7,m8 OK. Map updated (new authoritative
+ragdoll-bone bridge bullet; prior death3d bullets marked superseded).
+
+**PREVIOUS (2026-11-18): authored death-fall rewrite** - owner's exact patch to
+`cutscenes/death3d.py` only (physics.py RagdollBody fixes stay, untouched).
+The 15-node ragdoll inversion through Humanoid's Euler hierarchy kept
+propping corpses up (body_p -30..-52 deg, lhip_p 0 / lkn 6, pw_y 0.32-0.42 m,
+upright sitting), so `RagdollBody`/`_world_joints`/`_pose_from_ragdoll` and the
+vector helpers are removed. `Fall` now returns to authored `death_pose` +
+`_flop` with per-slot variation (yaw jitter, head/shoulder/elbow, track-1
+hip/knee), advances the root by ankle change + clamped push + blast velocity
+through `slide_capsule` (plus a second chest-vs-wall pass), applies radial
+blast throw and ledge gravity with 0.16 restitution, and latches `rest` only
+when grounded with both velocities near zero. Headless 40-fall / 4 s / flat
+probe: root y 0.00, drift 0.00, yaw jump 0.00, 0 nonfinite, 40/40 rested.
+Gates: compileall, normalize, sync map, smoke --only m6,m7,m8 OK; unit
+discover 614 with the same 10 pre-existing reds; boundaries unchanged
+pre-existing E4/W1 88. Map rewritten (prior death3d ragdoll bullets marked
+superseded); no physics.py or data changes.
+
+**PREVIOUS (2026-11-18): death-fall geometry pass applied** - owner's exact patch
+to `engine/collision/physics.py` + `cutscenes/death3d.py` on top of the
+slide/roll fix. Four causes: (1) `pose_world` auto-grounding lifted corpses
+0.5-0.75 m because clamped/relaxed limbs poked -0.50..-0.89 m below the pelvis
+and `max(min_node_y - 0.04, pel[1] - root_0[1])` launched the root; `Fall.at`
+now sets `clear = pel[1] - min_node_y + 0.04` and binary-searches 7 steps over
+body_p-plane-safe knees/hips/shoulders. (2) `rx_anim/rz_anim` added `push*k`
+then snapped back to the ragdoll pelvis (lunge + rubber-band); push term removed,
+blend_rag now 0.06..0.30 s. (3) rig.py's chest Z +0.08 biased `up` 12.5 deg and
+`asin/atan2` flipped yaw/body_r 180 deg when `up[1] < 0`; `up` now comes from
+pelvis->mid-shoulder, gimbal solved from `(uh, up[1], right[1])` with new blend
+`_s(0.80, 0.94, |fwd[1]|) * (1 - _s(0.55, 0.85, |right[1]|))`, pitch re-solved
+in the clamped roll plane. (4) forward falls pinned feet (all-fours tenting,
+legs crossing); added cross-hip min distances (0.40 m) and chest+head impulses
+with upward knee/foot counters. Headless 40-fall / 3 s / 180-frame probe:
+max settled height offset 0.04 m, drift 0.027 m, yaw/roll step 3.4/4.2 deg,
+0 nonfinite. Gates: compileall, normalize, sync map, smoke --only m6,m7,m8 OK;
+unit discover 614 with the same 10 pre-existing reds; boundaries unchanged
+pre-existing E4/W1 88. Map updated; no new asset/baseline changes.
+
+**PREVIOUS (2026-11-18): ragdoll slide/roll regression fixed** - owner's exact
+patch to `engine/collision/physics.py` + `cutscenes/death3d.py`. Cause 1: ground
+friction was latched only from `on_surf` on the last constraint iteration (the
+links leave `p[1] >= fl`), so landed nodes got no friction and never slept.
+Now a per-step `surf_hit` set (floor/box tops + `p[1] <= surf_y + 0.005`) gets
+`k_f = 0.58**(h*60)` friction ONCE after the loop and feeds `grounded`. Cause 2:
+`_limit_joints()` (5x/step below 7 landed nodes) shifted single child joints with
+no parent reaction or `prev` compensation - a reactionless motor catapulting
+grounded legs; removed it with `_shift`/`_RAGDOLL_LEGS`/`_LIMIT_STEP`/
+`_LANDED_NODES` (rig limits stay in `_pose_from_ragdoll` and `_RAGDOLL_MIN/MAX_DISTS`).
+Cause 3: death3d's 4.0-4.5 m/s single-shoulder impulses and early gimbal blend
+zeroed `body_r` at 71.8 deg pitch; gimbal is now `_s(0.985, 0.998, ...)`, the
+impulses are rebalanced (chest/lat/knee, 1.5 m/s side), and rest also needs
+`a >= land + 0.5` so a corpse cannot latch mid-air.
+Gates: compileall, normalize, sync map, focused collision 17/17, smoke --only
+m6,m7,m8 OK; unit discover 614 with the same 10 pre-existing reds; boundaries
+still the pre-existing E4/W1 88. Map + buglog updated.
+
+**PREVIOUS (2026-11-18): M4 station foyer sealed** - one-line fix in
+`m4/maps.py`: `FOYER` (35,18,3,2) instead of (35,18,3,3). It is carved by
+`_carve_station_interior` inside `_street_grid`, so the old 3 rows overwrote the
+station block's south wall on street row 20 at cols 35-37; now row 20 stays
+solid "C" with colonnade windows and the gold door (34,19) is the only way in.
+Regenerated `levels/m4.street.level.json` + `assets/baked/m4/` (commit with
+diff). Gates: level_export OK, bake OK, normalize OK, compileall OK, level_check
+OK, bake --check OK, smoke --only mission4 all OK except the known pre-existing
+`mission4_cinematic_arrest` harness fake. Headless tile probe confirms row 20
+cols 35-37 = C, rows 18-19 cols 35-37 = F, door (34,19) = D. Map updated.
+
+**PREVIOUS (2026-11-18): M4 shop oscillating wall fan** - small follow-up to
+`m4/draw3d.py` only: the mid-room 3-blade ceiling fan is replaced by a
+wall-mounted fan at (36.92*S, 2.10, -35.18*S) on the north interior wall above
+the counter. Static mount bracket boxes in `_corner_shop`; `_fan_mesh` split into
+`_fan_cage_mesh` (guard cage) and `_fan_blades_mesh` (radial 4 blades via
+`rot_z`), both placed at the same pos with `yaw=32*sin(t*1.3)` oscillation and
+blade `roll=t*480` spin, `static=False`. Gates: normalize OK, compileall OK,
+smoke --only mission4 all M4 checks OK except the known pre-existing
+`mission4_cinematic_arrest` harness fake; both new mesh builders produce valid
+meshes (cage 42 faces, blades 30). No level/bake data changed. Map updated.
+Owner to eyeball --dev-mission4-game.
+
+**PREVIOUS (2026-11-18): M4 shop pass 2 - roomy 3x4 room + live animations** -
+owner's follow-up on the same five `m4` modules, applied after pass 1. Bug 1:
+distance-only prompt/loot let you search the counter through the north wall;
+both `flow.handle_interact` and the HUD tag now require `_in_corner_shop()`.
+Bug 2: the 2x2 kiosk was cramped behind a 7.1 m lintel; `deep_g` is now
+(35,34,4,5) with `blk_s7` shrunk to one row, a double-wide (35,36)/(35,37)
+shutter entrance, 3x4 `F` interior (36,35,3,4), "d" apron on row 33 / col 34,
+`CORNER_SHOP_COUNTER_TILE=(37,35)` and an east-crate collider. `draw3d` splits
+static `_corner_shop` from per-frame `_draw_corner_shop_anim` (rolling shutter,
+stutter-neon NON-STOP, spinning fan, swaying pendant, glowing cooler, flickering
+CRT, kettle steam, wagging/blinking cat, mag pickup); `_shop_cut_active` opens
+the front walls from the sidewalk; `_put(..., static=False)` for animated bits.
+`draw._draw_m4_corner_shop_2d` paints the 3x4 cutaway. Re-exported and rebaked:
+`levels/m4.street.level.json` + `assets/baked/m4/` (commit with diff).
+Gates in order: level_export OK, bake OK, normalize OK, compileall OK,
+level_check OK, bake --check OK, smoke --only mission4: all M4 checks OK except
+the known pre-existing `mission4_cinematic_arrest` harness fake. Headless probe
+confirms D/D doors, 3x4 F floor, apron, colliders, and that looting is blocked
+outside but works inside (same 58 px/70 px distances). Map updated. Owner to
+eyeball --dev-mission4-game (shutter/fan/cat/CRT animations, sidewalk cutaway).
+
+**PREVIOUS (2026-11-18): M4 human-scale blocks + enterable corner shop** - owner's
+exact patch across `m4/{maps,world,flow,draw3d,draw}.py`. `_height` gives blocks
+2.7+2.2*(storeys-1) m (station 8.2), `_windows` 2.2 m floor spacing + 1.70 m
+shutters, `_cut_zone_for` scales the cutaway with wall height. `deep_g` -> (35,36,4,3)
+with a "d" apron, west door D at (35,37) and a 2x2 "F" shop interior; counter
+collider + `_shop_counter_pos`, `_in_corner_shop`, `m4_shop_visited/looted`,
+Vasile's line, `_loot_corner_shop` (+1 K-9 mag, +3 supply, +40 HP or bandage),
+`_corner_shop` 3D props/lights and `_draw_m4_corner_shop_2d` + "E - SEARCH
+COUNTER" tag; rain treats "F" as dry. Regenerated `levels/m4.street.level.json`
+and `assets/baked/m4/` (world_static_0 + bakeinfo) - commit with the diff.
+Gates in order: level_export OK, bake --pack m4 OK, normalize OK, compileall OK,
+level_check OK (data == legacy), bake --check OK, smoke --only mission4: all M4
+checks OK except the known pre-existing `mission4_cinematic_arrest` harness fake
+(`SimpleNamespace.fade_out_music`). Headless shop probe OK (door D, 2x2 F, apron,
+collider, loot rewards). Map updated. Owner to eyeball --dev-mission4-game.
+
+**PREVIOUS (2026-11-18): M6 sealed border doors** - owner's exact patch to
+`m6/world.py` + `tests/unit/test_m6_campaign.py`. Perimeter `"D"` gates
+(customs (15,0), noman (20,0)/(20,17)) were not in `M6_SOLID_CHARS` and
+`Player.move` has no map clamp, so the player could walk out of the map.
+`world._is_border_door(grid,col,row)` flags a `"D"` on row 0 / h-1 / col 0 / w-1;
+`_floor_at` rejects it and `_parse_grid` adds a wall Rect, while interior doors
+stay walkable. New `test_border_doors_block_leaving_the_map` passes (all three
+gates + an interior customs floor tile).
+Gates: compileall OK, normalize OK, m6_campaign -v 59 tests (new test OK; only
+the known pre-existing face-exposure 173>170 red), smoke --only m6 OK. Map
+updated. No in-game check requested for this one.
+
+**PREVIOUS (2026-11-18): M6 2.5D textures + all-stage gate** - owner's exact patch
+across `engine3d/{core,gl}.py`, `game/topdown3d.py`, `m6/{draw,draw3d}.py` and
+`tests/unit/test_m6_campaign.py`. Root cause: `topdown3d.put` rebuilt every face
+`(f[0..4], None, f[4])`, dropping M6's `("uv", slot, uvs)` tail, so GL packed
+`f_tex=-1` (flat white). `put` now forwards `*f[5:]`, `Mesh.add` preserves face
+tails, `gl._pack_faces` finds the UV tag at element 6 or 7 and keeps `fb` separate,
+FRAG `eslot` -1.5 -> -1.25; `_gl_atlas` gets a 4-byte-aligned shelf, 1 px gutter
+and a 0.01 UV inset. `_td3d_gate` now enables 2.5D for customs/noman/rail/boxcar
+(`ACA_M6_RAIL_25D=0` opts rail out), and `draw3d._stage()` folds boxcar into rail.
+Gates in order: compileall OK, normalize OK, m6_campaign -v (both new/updated
+tests pass; only the known pre-existing face-exposure 173>170 red), m6_td3d_shots
+wrote 9 frames incl. rail (visually textured), smoke --only m6 OK; extra
+engine3d_check parity 4.14% OK. Map updated. Owner to eyeball
+`--dev-mission6-game` / `--dev-mission6-rail` live.
+
+**PREVIOUS (2026-11-18): corpses lie flat** - owner's exact patch applied to
+`cutscenes/death3d.py`: `_pose_from_ragdoll` now derives the knee bend as a SIGNED
+angle in the thigh's bend plane (project shin with `Tt`, then `atan2(-f_t[2],
+-f_t[1])`, clamped 4..120) instead of unsigned `acos(dot(u,f))` - the rig has no
+hip_y, so sideways legs on the floor read as +90 deg downward knees and tent-poled
+the torso up on its toes. Gimbal blend `g` -> `_s(0.95, 0.995, ...)`, track-1 knee
+impulse -> `(px*0.9, -0.25, pz*0.9)`, and `Fall.at` relaxes knees/hips/shoulders/
+ankles toward rest when a flat torso would root > 0.20 m; `pel_y` bias -> -0.04.
+Gates: normalize/compileall/smoke --only m6,m7,m8 OK, headless 20-fall settle
+probe OK (worst pelvis 0.182 m, 0 nonfinite), unit discover 612 tests with the
+same 10 pre-existing reds. Map updated. Owner to spot-check kills near vehicles
+and ledges in-game (--dev-mission8-trap, --dev-mission7-raid).
+
+**PREVIOUS (2026-11-18): leg hit spheres** - owner's exact patch applied to
+`m6/yard_brain`, `m7/raid_brain`, `m8/revenge/trap_brain`, `m8/duty/mansion_brain`:
+standing Guards gain pelvis (~0.72 m) + shin/ankle (~0.30 m) spheres beside
+chest (index 0) and head (index 1), which keep their order for `yard3d`'s
+`zi == 1` headshot test and `suppress()`; M7/M8 scenes use the `is_head` flag.
+Truck gunners keep chest+head only (`e.get("truck") is not None`) so rounds
+cannot pierce the truck bed. M6 downed/hide_low sets stay reduced; dogs unchanged.
+Gates: normalize/compileall/smoke --only m6,m7,m8 all OK, headless four-scene
+sphere probe OK, unit discover 612 tests with the same 10 pre-existing reds.
+Map updated. Owner still needs the in-game dev-jump eyeball (yard/raid/trap/mansion).
+
+---
+
+## GAIT STRENGTH, RIFLES-UP, RAGDOLL LEDGES (2026-11-18)
+
+Owner verified all four scenes and supplied exact fixes; applied verbatim.
+Gait: locomotion_pose restores 26-34 deg thigh / 52-80 deg knee drive, powers
+l_lift^1.15, broadens the lift bridge to walks (target_h 0.858+...), adds
+stride-coupled spine_r. YardScene now runs LayeredAnimState. Rifles-up:
+RaidScene._guard_pose (borrowed by M8 Trap/Mansion) and YardScene._guard_pose
+use mask_pose(lower, aim/ready upper); _hold_cached and the rifle_p flinch run
+for moving guards as well (probe: walking guard has rsh_p 22, rifle_p 28).
+Ragdolls: max knee/foot spread constraints + rest ON TOP of box surfaces
+(p[1] >= box_top - 0.05) stop splits and sideways launches off pillars;
+trap_world.ragdoll_boxes() gives the sniper deck + 3 guardrails; Fall anchors
+root to the ragdoll pelvis, relaxes ankles by face-up/face-down, caps hip spread
+and varies impulses per slot.
+
+Gates: compileall, normalize, api snapshot (92/676), sync map OK; 612 unit
+tests with only the same 10 pre-existing reds; smoke --only m6,m7,m8 OK;
+ae_bench_scenes all 90f OK (yard 16.1/trap 5.0/mansion 9.9/raid 5.8 ms);
+walk span variation 3.8 cm, sprint 1.5 cm; ragdoll probe 0 nonfinite.
+Boundary/ae_ci reds unchanged. Map updated.
+
+---
+
+## GAIT BOUNCE + RAGDOLL OVERHAUL (2026-11-18)
+
+Owner traced both bugs and supplied exact fixes; applied verbatim (with the
+permitted simplification of the identity-matrix multiply in `_pose_from_ragdoll`).
+Gait: `locomotion_pose` now adds sprint-only positive `lift` compensating the
+cosine leg-span shortening at stride splits (measured span+lift variation 0.025 m
+walk / 0.016 m sprint, was ~0.20 m); hip swing/twist reduced; `pelvis_drop`
+clamped; the discontinuous `_solve_leg` snap gated on `abs(foot L.y - R.y) > 0.03`
+removed from RaidScene/TrapScene `_draw_player`. Ragdolls: `death3d._world_joints`
+extracts all 15 nodes from `pose_world`'s `places` (slots 4/7/8/10/13/14) rather
+than its 5-joint `joints` dict, so rest lengths match crouched/aiming/scaled
+guards; `RagdollBody` gains shoulder/hip/knee separation + `_RAGDOLL_MIN_DISTS`
+anti-origami constraints, smaller node radii, and capped impulses (push <=1.2,
+track impulses <=3.8 m/s, no +2.2 upward launch); `_pose_from_ragdoll` rebuilds
+`(pose, yaw)` from the full rig basis (no canned-pose pitch blending or pre-leg
+`solve_arm`), blend starts at 0.04s and rest waits `land + 2.5s`; trap3d passes
+`box_world` to its deaths.
+
+Verification: 24 anim/collision tests OK, smoke --only m6,m7,m8 OK,
+ae_bench_scenes all 90f OK, engine3d_check 4.14%, API snapshot stable,
+sync/normalize OK, ragdoll probe 15 nodes / 0 nonfinite frames / smooth pitch
+0->83 deg, pink probe still 0% magenta. Map updated.
+
+---
+
+## ANIMATION + COLLISION KERNELS AND GAMEPLAY WIRING (2026-11-18, Phases 1-2)
+
+Both supplied phases applied. Phase 1 (pure engine): new engine/anim/springs.py
+and rig3d.py (analytical springs, bone-masked pose mixer, velocity-coupled gait,
+LayeredAnimState, FootIKSolver); new engine/collision/physics.py (slide_capsule,
+DebrisPool, 15-node Verlet RagdollBody); MultiFloorNav/NavLink in nav.py;
+capsule_contacts in boxes.py/mesh.py; re-exports; new test_engine_anim.py and
+expanded test_engine_collision.py (24 tests OK). Phase 2 (gameplay): death3d.Fall
+ragdoll seeded from live pose_world joints with IK limb draping; slide_capsule in
+M7 raid_world / M8 trap_world / M8 mansion_world (Mansion keeps its 1 m ledge
+guard and 0.6 m stair step_h); mansion_world.nav() shared MultiFloorNav over
+FLOORS synced to dynamic doors/cars/helicopter, used by mansion_brain routing;
+RaidScene runs LayeredAnimState/TurnLagTracker/FootIKSolver+solve_leg/DebrisPool.
+
+Three corrections during application: (a) the supplied ragdoll applied ground
+friction inside every constraint iteration (5x per frame), pinning bodies at
+ledge edges -> friction now once per step (test_debris_and_ragdoll passes);
+(b) mask_pose's frozenset default put a hash-seed-dependent repr in the public
+signature, breaking ae_api_snapshot between processes -> default is now None;
+(c) raid3d's two omitted imports (m_mul, solve_leg as _solve_leg) added, and
+TrapScene/MansionScene (which BORROW RaidScene methods by assignment rather than
+subclassing) now also borrow _anim_ctl, otherwise borrowed _move/_player_pose/hp
+raise AttributeError in M8.
+
+Gates: compileall, ae_normalize --changed --apply, ae_api_snapshot record+check
+(92 modules, 676 names, stable across processes), sync_arch_map --check,
+engine3d_check (4.14%), 24 new engine tests OK, smoke --only m6,m7,m8 OK,
+ae_bench_scenes all 90f OK (raid 4.95 ms, trap 4.22, mansion 6.69, yard 12.1).
+Full unit discover 612 tests: same 10 pre-existing reds as before (no new ones).
+Boundary/ae_ci reds unchanged (E4/W1 pre-existing). Map updated.
+
+---
+
+## FIVE GPU VISUAL UPGRADES APPLIED (2026-11-18)
+
+Owner supplied a complete unified implementation; applied verbatim (plus two
+patch-application corrections, see below). New `src/engine3d/particles.py`
+(vectorized `ParticlePool`/`DecalPool`, `pack_dots`, `pack_blood_decals`).
+
+1. SSAO: `gl_post.PostPipeline.apply_atmos` half-res hemisphere from `f_pdepth`+
+   `f_aux`, bilateral blur; emissives (`a>0.9`) exempt, rigs (`mat_id 0.75`) softened.
+2. 64 tiled lights + 2 spot-shadow maps: `GLRenderer._upload_lights` packs a
+   `(64,4)` RGBA32F data texture + 12x8 CPU tile bitmask; `_spot_pass` renders up
+   to two 512x512 PCF perspective maps. `light_cap` default 64, software cap 64.
+3. HDR GPU unification: M2/M3/M4/Walk3D -> `hdr=True`+`flush_to`; M6 2.5D ported
+   to GPU extra textures (`u_extra0..2`), GPU `grade3d`+`char_lift`, no CPU
+   `_decode`/`_light` on GL; software paths intact everywhere.
+4. Wet reflections + exponential height fog: `textures.reflectivity()` -> `f_aux.a`
+   material tag; `_ATMOS_FRAG` does SSR raymarch, 64-light specular, puddles, fog.
+   M8 Mansion sets `marble_refl`.
+5. Instanced particles/decals: `gl_sprites.ParticlePass`/`DecalPass` with hardware
+   instancing + `u_pdepth` fade; software fallback via `_emit_fallback_fx`. Adopters:
+   `topdown3d.dots`, M1-M5 blood, M6 yard, M7 raid, M8 trap/mansion.
+
+Two corrections during application: (a) the `_SSAO_FRAG` block had to be inserted
+BEFORE `_FINAL_FRAG` (inserting after its opening `"""` corrupted the shader);
+(b) `release()`'s `self._drop_atmos()` initially landed in `_ensure_bloom` because
+`self._drop_bloom()` is not a unique anchor — that released the bound HDR atlas
+texture mid-`_run_bloom` and crashed M8 (`InvalidObject.use`); moved to `release()`.
+
+Gates: `compileall`, `ae_normalize --changed --apply`, `ae_api_snapshot check`
+(89/622 +0), `sync_arch_map --check`, `engine3d_check` (worst 4.14%, GL 17.4 ms),
+`unittest` 3 shader/texture/render3d modules 13/13, `smoke_test --only m1..m8`
+**SMOKE TEST: OK**, all six `m{1..6}_td3d_shots.py` wrote frames, `ae_bench_scenes all`
+90f OK (trap 5.2/chase 10.5/raid 5.7/yard 13.9/train 11.3 ms). The earlier pink
+Print Works fix still holds (probe 0% magenta). `ae_ci --quick` still FAIL on the
+same pre-existing reds (E4/W1 boundaries, D4/D6, stale bake, 10 unit reds: m5
+Channel.id, m8 font/chase/trap, raw-loads, face-exposure 173, ai_bundle pytest)
+and `smoke --fast` only the two `fade_out_music` harness fakes. Map updated.
+
+---
+
+## PINK PRINT WORKS FIXED (2026-11-17) — GL bloom chain read uninitialised texture
+
+The bug isolated below is fixed in `src/engine3d/gl_post.py::_run_bloom`. Root cause:
+the multi-level blur loop sampled the current level's `ta` (the vertical-blur WRITE
+target, unwritten on the first frame) as the horizontal-blur source instead of the
+previous level's result (`src_tex`, assigned but never used). Level 0 was fine only
+because `ta == src_tex` there; level 1+ read garbage f2 texture memory. With
+cutscenes off that memory is zeroed (frame clean); after a 614x345 m5x cutscene it
+holds magenta frame data, so the `bloom`/`grade3d` final pass floods Print Works
+pink. Quarter never showed it because `flush_to` forces `bloom=0.0` when CPU items
+exist, so `_run_bloom` never ran there. Fix: `src_tex.use(location=0)` in the
+horizontal blur, so all bloom textures are written before being read.
+- Repro probe (`Temp/opencode/pink_leak_probe2.py`) for BOTH triggering cutscenes
+  (`m5x_faces_wide`, `m5x_pw_arrival_wide`): print magenta 62.83% -> 0.00%, mean RGB
+  (108.7, 35.5, 94.8) -> (33.9, 30.0, 26.1), matching the cutscene-off baseline
+  (34.9, 30.9, 26.7). Visual check of the fixed frame: normal warm-lit print works.
+- Gates: `compileall -q src` OK, `ae_normalize --changed` OK, `engine3d_check.py`
+  worst diff 4.14% OK, `sync_arch_map.py --check` OK. `smoke_test.py --fast` still
+  RED only on the two known pre-existing harness fakes (`mission5_shadow_finale`,
+  `mission4_cinematic_arrest`: `SimpleNamespace` has no `fade_out_music`); all other
+  M5/mission checks green. `docs/ARCHITECTURE_MAP.md` updated (GPU bloom-chain
+  bullet + regenerated inventory) and buglog gained `bug-gl-bloom-uninitialized-level-20261117`.
+
+---
+
+## PINK PRINT WORKS REPRODUCED HEADLESS (2026-11-17) — root cause isolated
+
+Built `C:/Users/BIRIBEL/AppData/Local/Temp/opencode/pink_leak_probe2.py`:
+in ONE process, render M5 Lower Quarter (quarter checkpoint, (6,6)), then
+`m5mid3d.draw_m5x(scene, surf, 1500)`, then render quarter again and Print Works
+(checkpoint, (5,15)); captures each frame to PNG. `ACARISTAN_CUTSCENE3D` is set
+from argv. `pink_check.py` measures channel means + magenta-pixel %.
+- cut3d=1 (`m5x_faces_wide` OR `m5x_pw_arrival_wide`): quarter before AND after
+  cutscene normal (mean 10.6/17.1/32.5, 0% magenta); Print Works AFTER is PINK
+  (mean ~107/35/94, **62.8% magenta**) — deterministic, repeated twice.
+  Visual matches the owner's input_file_12.png exactly (HUD normal, world
+  flooded magenta/orange/blue).
+- cut3d=0, identical sequence: quarter normal, Print Works NORMAL
+  (mean 34.9/30.9/26.7, 0% magenta).
+- A shorter print->cutscene->print probe (no quarter render) stayed clean in
+  BOTH modes, so the trigger needs the quarter render BEFORE the cutscene.
+=> Answers the owner's two questions: with 3D cutscenes off Print Works is
+normal; with them on the quarter stays normal after Kovac & Sandu and pink only
+appears inside Print Works. Confirms hypothesis (1): a 3D m5x cutscene
+(614x345 renderer on shared `engine3d.gl._CTX`) leaves GL state that corrupts
+the later 1000x700 Print Works `flush_to`/post pipeline. Owner will write the
+exact fix. The probe scripts are in Temp/opencode, not the repo.
+
+---
+
+## Print Works wide-angle left background closed (2026-11-17, uncommitted)
+
+Applied the clean diff to `_street_set` in `src/cutscenes/m5mid3d.py`:
+avenue asphalt -64..32 (z -18..8), lane dashes/tram rails to x=-58, sidewalks
+-64..32, opposite sidewalk widened and centred at -16, three streetlamps down
+the left avenue (-13.2/-26.5/-40), Quarter blocks out to -58 plus a far-left
+skyline block, an extra opposite-side block at -24, and three emissive
+lettering bars on the red blade sign; `_faces_set` cross-street end-caps at x=±22 (608/609). Verified: `ae_normalize --changed` OK,
+`compileall` OK, `smoke_test.py --only m5` OK but matches ZERO checks (use
+`--only mission5`: all M5 checks green except the known pre-existing
+`mission5_shadow_finale` `fade_out_music` red). Re-rendered `_arrival_wide`
+Angle 1 at t=200/1500/2900 (`tools/shot_m5x.py`) — left edge filled with
+buildings/ground, no void. `docs/ARCHITECTURE_MAP.md` §4.3 updated + regenerated.
+Pink: `--dev-m5-printworks` is a typo (`--dev-mission5-printworks`) and both dev
+flags are interactive, so isolated GL/software frames were used and stayed clean.
+The full quarter -> cutscene -> printworks sequence DOES reproduce (see section
+above); code inspection shows glow -> `gl_post._gb_fbo` (RGBA16F `dtype="f2"`,
+additive blend, sampled as `u_gbloom` and added to `col`), cone -> `_lm_tex`
+(RGBA8).
+`python tools/ai_bundle.py src/cutscenes/m6fx3d.py` ran: 625 lines, 1 file,
+copied to clipboard.
+
+---
+
+## M5 mid-cutscene texture / empty-void fix + pink diagnostic (2026-11-17, uncommitted)
+
+Owner's patch applied to `cutscenes/ps2mat.py` and `cutscenes/m5mid3d.py`.
+`_class` now classifies dark, low-saturation cool colours as `"asphalt"` ->
+`pavement`/`concrete`, so cool-dark asphalt and dark steel stop rendering flat.
+`m5mid3d` gains cached tinted `_qt` + `_pave_tex`/`_conc_tex`, `_framed_window`,
+`_quarter_block`, `_mag_van_3d`, `_paper_bales_3d`; `_street_set`, `_pw_interior`
+and the rebuilt `_faces_set(r, t)` enclose the East Checkpoint / Print Works
+avenue with textured pavement, kerbs, tram rails, barriers, flanking Quarter
+blocks and Print Works down the cross-street. `docs/ARCHITECTURE_MAP.md` updated
+(§4.3 bullet + generated rows) and `sync_arch_map --check` OK.
+- The two touched files were CRLF in the repo; `ae_normalize --changed --apply`
+  normalised them (now dry-run clean). Other gates: `compileall` OK,
+  `smoke_test.py --only m5` OK (note: `--only m5` matches ZERO checks — use
+  `--only mission5`); `--only mission5` green except the known pre-existing
+  `mission5_shadow_finale` `fade_out_music` harness failure. `shot_m5x.py`
+  rendered `m5x_faces_wide`, `m5x_pw_arrival_wide`, `m5x_pw_arrival_door` —
+  all three visually textured with no empty void.
+- **Pink Print Works diagnostic:** the supplied `--dev-m5-printworks` is a typo
+  (real flag `--dev-mission5-printworks`), and both dev flags are interactive
+  with no auto-exit, so I used the headless shot tools that jump to the same
+  checkpoints instead. `tools/m1_td3d_shots.py` (GL) and `tools/m5_td3d_shots.py
+  print` with `ACARISTAN_RENDERER=gl` AND `=software` (GL available: RX 7800
+  XT): all frames normal, mean R>G>B in Print Works and cool B>G>R in M1/quarter,
+  0% magenta pixels. Pink does NOT reproduce in isolated headless frames on
+  either backend -> likely interactive/cached-renderer state; owner's in-game
+  reproduction still needed. No baselines re-recorded.
+
+---
+
+## Unified world-space 2.5D rain rollout (2026-11-17, uncommitted)
+
+Owner's spec applied: new `src/game/rain3d.py` (387 lines) plus wiring in
+`walk3d`, `walking_sim`, `m1/{draw3d,draw}`, `m4/{draw3d,draw}`, `m5/draw3d`.
+Three hashed world-cell depth bands (`emit`), light-reactive streaks from
+`_pack_lights`/`_lit_at` (lamps, fires, headlights, torch, M5 searchlight),
+ground ripples/splash crowns/puddle double-rings, sightline/roof/ground
+occlusion callbacks, GL batching via `add_lines3d` and software `add_line3d`
+fallback. `step_rain_drops` keeps 2D replay RNG parity; M1 drop-off films skip
+their 2D rain when a 3D take drew. `docs/ARCHITECTURE_MAP.md` updated by hand
+(§538/§1243) + `sync_arch_map.py` (inventory row §1549).
+- **Deviation from the supplied patch (required):** the spec queued pre-projected
+  2D screen tuples into `GLRenderer.add_lines3d`, which takes WORLD-space
+  endpoints. That raised `IndexError: tuple index out of range` in
+  `core.to_cam`, was swallowed by `walk3d.draw`'s handler, and silently
+  disabled 2.5D. `rain3d.py` now keeps `proj()` only for near/off-screen
+  culling and queues world endpoints (taper split interpolated in world space).
+  Spotted via the caught traceback in `--only m1,m4,m5,walk`, not the exit code.
+- Gates: `compileall`, `ae_api_snapshot check` (89/622 +0), `ae_import_check`,
+  `ae_normalize --changed`, `sync_arch_map --check` equivalent, targeted smoke
+  (`--only m1,m4,m5,walk`, no traceback) and all four td3d shot tools clean;
+  eyeballed `shots/m1_td3d/m1_street_3d.png` + `shots/m5_td3d/m5_q_a_3d.png`
+  (streaks visible). Pre-existing reds unchanged: `check_boundaries` E4/W1 88,
+  `ae_global_names` `oil_rig_3d.py: i`. No baselines re-recorded.
+
+---
+
+## Verification re-run: tactical HUD / night-grade rollout (2026-11-17)
+
+Re-checked the ALREADY-APPLIED "Shared 2.5D tactical HUD + night-grade pass"
+against the owner's full spec: all 13 file changes are present. The two apparent
+`grade3d.py` mismatches are later drift, not gaps — `_cones = OrderedDict()`
+(LRU) and `kind="pool"` in the glow branch came from the fire/perf passes, which
+also added the `"fire"` light kind. `docs/ARCHITECTURE_MAP.md` already documents
+it (§531/§544/§1869); no map edit was needed.
+Green: `compileall`, `ae_api_snapshot check` (89 mod/622 names), `ae_text_check`,
+`ae_bench --check-budget`, `ae_normalize --changed`, all seven
+`m{1..6}/walk_td3d_shots` tools wrote their stills, and every smoke check but two.
+Four reds, all pre-existing / from later passes, NOT this rollout:
+`check_boundaries` E4 `ui.credits` + W1 88>51; `test_m6_campaign` face exposure
+173>170; `smoke_test.py --fast` `mission5_shadow_finale` and
+`mission4_cinematic_arrest` — both `AttributeError: 'types.SimpleNamespace' has
+no attribute 'fade_out_music'` at `app.py:2892`, introduced when the OST pass
+added "fade on exit" but left the fake `audio` namespace in `smoke_test.py:9664`
+(and `m5_shadow_check.py`) unpatched. Owner decision pending: fix those harness
+fakes or leave them. No baselines re-recorded.
+
+---
+
+## HDR scoping + GPU sky fixes (2026-11-16, uncommitted)
+
+Owner's probe pinned two root causes; both fixed:
+1. HDR leaked from cached `m6world3d.rend()` renderers into M2/M3/M4/M6/walk3d/
+   arena 2.5D hosts, corrupting `K_TOP..K_PTOP` key colours so M6 `_decode()`
+   never swapped in wall/roof/container textures. `rend(w,h,hdr=True)` now
+   scopes HDR per call; M1/M5 request True, others False, all save/restore.
+   M6 also forces `dither=False`/`ps1_snap=False` and restores them.
+2. GPU skies need `buf is r.surface`: M7 stage passes `r.surface`, M8 chase
+   dawn uses `night_sky(gpu=False)` + `stratus`, `night_sky` clears stale sky
+   with `set_sky(None)`. Added GPU `_gl_spec` to blob shadows (avoids double
+   readback) and fixed M6 reticle alpha via RGBA_MULT.
+- Gates: `compileall` OK, `ae_normalize` OK, `test_gl_composite` 6/6 OK,
+  `engine3d_check` parity 4.14% OK (software 15.4 / GL 9.2 ms), GL smoke
+  `m1..m8` **SMOKE TEST: OK**. In-game visual checks of M6 2.5D textures and
+  M7 raid/film skies are the owner's.
+- `docs/ARCHITECTURE_MAP.md` updated.
+
+---
+
+## GPU Phase 1: HDR/MRT + GPU sky/sprites/post (2026-11-16, in progress)
+
+Applied verbatim: new `engine3d/gl_sprites.py` + `gl_post.py`; GLRenderer gets
+RGBA16F colour + `f_aux` + `f_pdepth` MRT FBO, `flush_to`/`present_to`,
+`_render_into_fbo` and single-readback post; `core.py` set_sky stub; `_gl_spec`/
+`_gl_surf`/`_gl_lines` on m5fx3d/m6fx3d/fire3d/topdown3d; GPU sky hooks in
+m6world3d/m7world3d; `post3d.gpu_spec`; GL wiring in M1/M5 2.5D, M6 train/yard,
+M7 raid, M8 set/chase/mansion.
+- Fixed two regressions from this pass: `ctx.depth_func="always"` raised
+  SystemError in this moderngl build, which tripped `td.disable()` 5x and left
+  dev-skips stuck in 2D for the session — depth clear now uses `"<="`. Also
+  `m6world3d.night()` needed `gpu=` passthrough, and gl_sprites halo path had
+  to tolerate specs without `radius_m` (rx_m-only). Fresh game launch restores
+  2.5D.
+- Gates: `ae_normalize` OK, `compileall` OK, unit discover 601 tests (4F/6E —
+  all pre-existing), `ae_engine3d_parity` OK, `ae_bench3d --check-budget` OK.
+- **Resolved:** owner found the real root cause — `clear_depth()` used
+  `depth_func="<="` with a quad at 1.0, so against a fresh depth texture of
+  0.0 nothing passed and 100% of geometry was culled (only sky survived).
+  Now probes `depth_func="1"` at init with `">="` fallback, and every MRT
+  sky/bg/post pass explicitly resets color/depth masks. Also fixed
+  `ctx.NEAREST` -> `self.ctx.NEAREST` in resize and `_split_items` handling of
+  `lines` items. `engine3d_check.py` parity back to 4.14% OK (software 12.6 /
+  GL 7.8 ms); GL smoke `m1,m6,m7,m8` all OK including train viewmodel/scope.
+  `check_boundaries` W1 now 88 (pre-existing gate; new engine3d -> missions.m1
+  grade3d import in `gl_post._render_grade3d`).
+- `docs/ARCHITECTURE_MAP.md` updated.
+
+---
+
+## More benchmarks (2026-11-17)
+
+Added `tools/ae_bench_scenes.py` (diagnostic, not a CI gate): times
+update+draw on nine more 3D scenes — M8 trap/chase/kill/mansion/flight/ridge,
+M7 raid, M6 yard/train — with `--frames`, `--runs`, `--backend`, reporting
+avg/p50/p99/max ms and fps. `docs/ARCHITECTURE_MAP.md` §21/§18 updated.
+Sample (GL, 40 frames): trap 163 fps, chase 77.5, kill 191, mansion 144,
+flight 126, ridge 185, raid 132, yard 69, train 73 — yard/train/chase are the
+slowest of this set. `compileall`/`ae_normalize` clean.
+
+---
+
+## FPS baseline for the pending big performance upgrade (2026-11-16)
+
+Owner is planning a large perf upgrade; these are the reference numbers to
+compare against. Clean serial runs (FPS = 1000/frame-ms). "Before" = pass-1
+serial runs under residual parallel-load contention, so ratios are inflated —
+trust the absolute "after" numbers. NOTE: measured after Pass 2, **before** the
+fire3d overhaul (only `engine3d_check` re-ran after that: software 40.3 ms /
+GL 13.9 ms; no FPS probes re-run).
+
+| Probe | Before | After (pass 2) |
+|---|---|---|
+| `m7_prof w2` mean | 182.70 ms / 5.5 fps | 46.92 ms / 21.3 fps |
+| `m2_fire_probe --live` 3D median | 54.07 ms / 18.5 fps | 25.27 ms / 39.6 fps |
+| `m2_fire_probe --2d` median | 70.15 ms / 14.3 fps | 10.31 ms / 97 fps |
+| `ae_bench` m5-quarter avg | 41.77 ms / 23.9 fps | 15.13 ms / 66.1 fps |
+| `ae_bench3d` office3d q2 | 87.00 ms / 11.5 fps | 16.32 ms / 61.3 fps |
+| `ae_bench3d` depot3d q2 | 101.28 ms / 9.9 fps | 14.98 ms / 66.8 fps |
+
+M6 (measured only after pass 2): train 12.62 ms / 79.2 fps, yard 10.15 ms /
+98.5 fps. `ae_bench3d` q1 office/depot 16.40/6.78 ms, q0 15.08/4.26 ms.
+Still under 60 fps after pass 2: M7 w2 (~21 fps) and M2 3D fireball (~40 fps) —
+likely targets for the upgrade.
+
+---
+
+## Fire overhaul: volumetric fire3d + un-crushed lightmap (2026-11-16, uncommitted)
+
+Owner's visual pass, applied across 14 files + new `src/cutscenes/fire3d.py`
+(886 lines). Replaces stacked cardboard flame cutouts / hexagon smoke / oil-rig
+emissive cubes with one deterministic turbulent system: 24-frame seamless
+advected-turbulence flame atlas (feathered SRCALPHA body + additive core),
+warm-underlit soft smoke, feathered ember beds and rising embers. `GLRenderer`
+now honours `phys_occ` for per-pixel physical-depth occlusion of fire/smoke
+(no light-anchor single-point kill). `grade3d.apply` handles a new `"fire"`
+light kind (amber spill + cream core + bloom) so the night multiply no longer
+crushes fire; M6 bakes warm fire spill into `_light` directly; M4/M5 car/tram
+flashes emit `fire` lights. M7/M8 tank fires use `layer=2` so actors sort in
+front on software. No gameplay rules changed.
+- Gates: `ae_normalize --changed --apply` OK, `compileall -q src` OK,
+  `test_gl_composite`/`test_weather3d` 10/10 OK, `test_oilrig_collapse` 11/11
+  OK, `ae_engine3d_parity` OK, `smoke_test.py --only m1..m8` **SMOKE TEST: OK**.
+- Visual captures all wrote frames: `m1_td3d_shots`, `m2_td3d_shots`,
+  `m5_td3d_shots`, `render_m7_feedback` (9 previews + 2 sheets),
+  `oilrig_preview` (13 frames in `tools/out/oilrig/`). In-game eyeballing of
+  barn/tank, truck/blast, molotovs/burning tram is the owner's:
+  `--dev-mission7-raid`, `--dev-mission7-finale`, `--dev-mission8-trap`,
+  `--dev-m1-game`, `--dev-mission2-truck`, `--dev-mission5-game`.
+  `docs/ARCHITECTURE_MAP.md` updated.
+
+---
+
+## Pass 2 perf: mesh collider + remaining draw3d/train (2026-11-16, uncommitted)
+
+Owner's final perf pass applied verbatim to 4 files. `engine/collision/mesh.py`
+gains precomputed triangle edges/Y bounds, a local 3D AABB ray clip, Y-band
+triangle culling and a no-`set()` single-cell path; `m1/draw3d` evicts the
+oldest 128 entries of its three fire/pool caches instead of wiping them;
+`m3/draw3d._draw_fx` culls off-screen fire zones; `m6/train3d` caches the fade
+veil and reuses `add_humanoid` joints for dead guards (one `pose_world()`
+instead of two). No gameplay rules changed.
+- Gates: `compileall -q src tools` OK, `ae_normalize --changed` OK,
+  `ae_api_snapshot check` OK (622 names), targeted units incl.
+  `test_engine_collision_mesh` **68/68 OK**,
+  `smoke_test.py --only m6,m7,m8,m2,m5,engine3d` **SMOKE TEST: OK**.
+  `check_boundaries.py` / `ae_ci.py --quick` unchanged pre-existing reds.
+- Serial probes (clean, no parallel contention):
+  `m7_prof w2` mean 46.92 ms p99 91.46 (was 182.70 in the pass-1 serial run),
+  `m2_fire_probe --live` median 25.27 ms p95 30.82 (was 54.07),
+  `--2d --live` median 10.31 ms p95 13.86 (was 70.15),
+  `m6_phases train` 12.62 ms/frame (79.2 fps; `_draw_guards` 0.01 ms),
+  `yard` 10.15 ms/frame (98.5 fps),
+  `ae_bench` 15.13 ms p99 27.51 (was 41.77),
+  `ae_bench3d` office3d 16.32 / depot3d 14.98 ms q2 (was 87.00/101.28).
+  Caveat: earlier runs were under parallel-load contention, so the deltas
+  overstate the pure pass-2 gain; absolute numbers are the trusted ones.
+  `docs/ARCHITECTURE_MAP.md` updated.
+
+---
+
+## Pass 1 perf: gas drums / fire / shared hot paths (2026-11-16, uncommitted)
+
+Owner's perf rollout applied verbatim across 13 files (GL composite scratch
+buffers + `draw_depth` per-point spark occlusion + conditional depth readback +
+bone buffer reuse; software blob LRU + inlined normals; `pose_world` radius
+pruning; m7world3d cached/packed flame templates + smoke-base separation;
+m6fx3d/m5fx3d bounded LRU + pre-sliced Bayer + cached stars; m7 gas-drum
+smoke/glow reductions; FireZone surface caches; LightBuffer LRU + reused
+upscale buffers; topdown3d/grade3d LRU; m6world3d flake bounds; m2 blast halo
+clamp). No gameplay rules changed. Two CRLF files normalised via
+`ae_normalize --changed --apply`.
+- Gates: `compileall -q src tools` OK, `ae_normalize --changed` OK,
+  targeted units `test_gl_composite/test_m7_campaign/test_engine_render2d/
+  test_weather3d` **58/58 OK**, `smoke_test.py --only m7,m2,m5,m6`
+  **SMOKE TEST: OK**. `check_boundaries.py` and `ae_ci.py --quick` still show
+  the same pre-existing reds (E4 credits, W1 87>51, D4/D6, stale bake, 10
+  unit reds).
+- Serial probes (parallel runs inflate timings; these are standalone):
+  `m7_prof.py w2 --time` mean 182.70 ms p50 217.11 p99 564.53 (600f);
+  `m2_fire_probe.py --live` 3D median 54.07 ms p95 160.55 (120f, 23 zones);
+  `m2_fire_probe.py --2d --live` median 70.15 ms p95 152.03;
+  `ae_bench.py` m5-quarter avg 41.77 ms p99 137.10;
+  `ae_bench3d.py` office3d 87.00 / depot3d 101.28 ms (software q2).
+  Owner to judge whether these scenes still feel heavy; Pass 2 targets
+  m1/draw3d `_fire`/`_draw_walls`, m3–m6/draw3d, m6/train3d, m8 3D scenes.
+  `docs/ARCHITECTURE_MAP.md` updated.
+
+---
+
+## Track 20 + M7 shift-at-the-shotgun (2026-11-16, uncommitted)
+
+New `20_dust_on_the_road.mp3` (Track 20, 7/4 G minor, 92.4s / -1.2 dBFS,
+rendered by `python tools/build_ost.py 20`). `tools/ost/album.py` is now a
+20-track album. M7 wiring: `m7_audio.MUSIC["prep"]` = 20; `m7/flow.STAGE_MUSIC`
+`STAGE_PREP` "farm" -> "prep"; `m7/flow.film_music` switches to "prep" the
+moment `current_shot()["scene"]` is `m7_runner_shotgun` or `m7_runner_gun`,
+so the uneasy ticking starts as Alex hands over the shotgun and carries into
+prep; chores stay on 16, raid-in/raid stay on 09. No other mission/state files
+touched.
+- Gates: `compileall -q src tools` OK, `ae_normalize --changed` OK,
+  `python -m unittest tests/unit/test_m7_campaign.py` 29/29 OK,
+  `smoke_test.py --only m7` **SMOKE TEST: OK**. `docs/ARCHITECTURE_MAP.md`
+  updated; no baselines re-recorded.
+
+---
+
+## 19-track OST rollout (2026-11-16, uncommitted)
+
+Seven new tracks in `tools/ost/album.py` (13 Wet Concrete, 14 After Hours,
+15 Cold Iron, 16 Mending Wire, 17 Cold Marble, 18 To the Crossing,
+19 Paper Trail), rendered by `python tools/build_ost.py 13 14 15 16 17 18 19`
+into `assets/music/ost/` + `build/ost/` (all peaks -0.9..-2.6 dBFS). Wired
+through `core/score.py` (mission-keyed `CALM`/`TENSE` dicts + `TENSE_DEFAULT`,
+`is_tense` fade flag), `m7_audio`/`m7.flow` (farm=16, finale=19),
+`m8_audio`/`m8.flow` (approach/mansion=17, trap=13, chase=18, flight=10), and
+`app.py` (M6 film cues 15/07/19, BRIEFING + MISSION_COMPLETE play 19 and fade
+on exit, `_keep_music_for_credits` preserves M8's title theme into CREDITS).
+No gameplay rules, maps or dialogue touched.
+- Gates: `compileall -q src tools` OK, `ae_normalize --changed` OK,
+  `m5_finale_cut_check.py` OK, `smoke_test.py --only m6,m7,m8` **SMOKE TEST: OK**.
+- `ae_ci.py --quick` still **FAIL** with the same pre-existing reds documented
+  below (boundary E4/W1 87>51, D4/D6 greps, stale asset bake, 10 unit reds:
+  m5 finale audio, m6 exposure 173>170, raw-loads, m8 chase/trap,
+  ai_bundle_app) — none OST-related. `docs/ARCHITECTURE_MAP.md` updated.
+- Rebuilt 13-19 from scratch (same session): nine new voices in `tools/ost/synth.py` (`cello`, `vibra`, `analog_lead`, `upright_bass`, `sub_kick`, `ind_snare`, `brush`, `shaker`, `clave`) and a clean replacement of the t13-t19 block in `album.py` — new meters (5/4, slow 4/4 noir, 6/8, 3/4, 4/4 march, 4/4 motorik, 4/4 chamber), no reused grooves/bass/progressions/motifs from 01-12. Filenames unchanged, so score/app/m7/m8 wiring stayed as-is. Re-rendered peaks/durations match the owner's verified values exactly (106.7s/-1.2, 118.9s/-1.9, 107.9s/-1.2, 89.7s/-2.3, 104.0s/-1.6, 86.1s/-0.8, 102.0s/-2.6). All gates re-run green where they were green before; `ae_ci.py --quick` reds unchanged (pre-existing).
+- Owner still needs to listen to the cues in-game; no audio baselines exist.
+
+---
+
+## Shared 2.5D tactical HUD + night-grade pass (2026-11-16, uncommitted)
+
+Owner's rollout across the shared grading/rim kit, shared HUD, walk3d, M1-M6
+and MP Arena, applied verbatim. No gameplay rules, maps, dialogue or saves touched.
+- **New `src/ui/tactical_hud.py`**: single source of truth for M1-M6
+  `HUD_MARGIN=18`, `PANEL_GAP=6`, `TACTICAL_THEME`, `draw_tactical_corners`,
+  `tactical_panel_bg`, `place_minimap`. `engine/ui/theme.py::Theme.panel()` now
+  draws 2px brackets + top catchlight only when `extra["tactical_hud"]` (cache
+  key includes the flag; default themes unchanged). `m6/hud_ui.py` re-exports
+  the shared theme/panel helpers instead of owning copies.
+- **Shared grade/rim** (`missions/m1/grade3d.py`, `game/topdown3d.py`): the
+  grade now has native `.convert()` gradients, a bloomed "glow" radial, a
+  rippled "reflect" streak and a 64-angle cached directional "cone" flashlight
+  (6-tuple light). `td.add_player_rim` is the shared cool-rim + optional GL
+  spot helper; M1-M5, walk3d and arena now route the player fill through it.
+- **Night contrast/refs**: deeper blue-slate AMBIENT + darker wall caps, wet
+  reflections, 2-layer grounded contact shadows, warmer sodium lamps in
+  walk3d; M1/M2/M4 flashlight cones; M3 slate-teal (no prisoner torch); M5
+  per-stage contrast + torch only in quarter/print/tunnel; arena ambient tone
+  down so sconce pools pop. M6 puddle sheen extended to noman/rail aprons.
+- **Layout**: all M1-M5 gameplay HUDs now pass `TACTICAL_THEME` to the shared
+  `engine.ui.std` widgets, use `tactical_panel_bg` and 18px/6px margins, and
+  call `place_minimap`. M4 siege/supply plates and M3 checklist use the same kit.
+- Gates: `compileall -q src` OK, `ae_api_snapshot check` OK (89 modules/622
+  names), `ae_text_check` OK, `ae_normalize --changed` OK, `ae_bench --check-budget`
+  OK, full `smoke_test.py` **SMOKE TEST: OK**, all seven `m{1..6}/walk_td3d_shots.py`
+  tools wrote their stills, `docs/ARCHITECTURE_MAP.md` updated.
+- Pre-existing reds (not from this pass, in this dirty tree):
+  `check_boundaries.py` E4 `ui.credits` + W1 87>51 (untouched files), and
+  `test_m6_campaign` face-exposure 173>170 (cutscene-only; this pass touched
+  gameplay `draw3d`, which `m6films` does not import). No baselines re-recorded.
+- Owner still needs to eyeball the new grading/HUD in-game and decide whether
+  to refresh `tests/golden/baseline_v0` (expected HUD/lighting diffs).
+
+---
+
+## M8 Duty route playable end to end (2026-11-15, uncommitted)
+
+Mansion rebuilt (second pass): `duty/mansion3d.py` + `mansion_set.py` follow
+the Revenge funeral estate. Five areas (gates, grand hall, gallery, study,
+helipad terrace), checkpoints 0-4 (`--m8-cp=`), rifle + shotgun (suppressed
+pistol removed), car explosions, falling chandeliers, heli liftoff under fire.
+Interior uses flat colours; floors that sit on box tops must be layer 2 or the
+box needs `skip=("top",)` (GL layers paint by slice, not depth). Liftoff films
+reframed (camera stays on the terrace). Flight lawn moved to z 12, r 48.
+
+Duty ladder approach -> mansion -> liftoff -> flight -> crash -> ridge ->
+d_epilogue now runs to the outro. New: `missions/m8/duty/flight3d.py`
+(door-gunner chase, 5 sections, `STATE.m8_flight_cp`), `duty/ridge3d.py`
+(scope finale: zoom, sway, SHIFT breath, wind+drop, rescue timer retry),
+crash + inauguration films in `cutscenes/m8dutyfilms.py`, timelines
+`m8.d_crash` / `m8.d_epilogue`, VO_430-455 caption rows, beds `flight`/`ridge`.
+Fixed mansion first-draw `KeyError: 'truck'` (draw fallback skipped the stage).
+Gate `mission8_duty` OK; full smoke OK. Not played by hand yet: flight
+difficulty/timing and ridge feel are untuned.
+
+## Mission-complete case dossier (2026-11-15, uncommitted)
+
+Replaced the legacy floating MISSION_COMPLETE card (and the interim CRT build)
+with a physical KRAP Intelligence case file on a tungsten-lit desk. Owner's
+patch applied verbatim; two owner-approved polish fixes:
+- **`src/ui/mission_complete.py`** (605 lines, deliberately unlike
+  `ui/mission_failed`): open manila folder with index tab + spine fasteners,
+  taped 160x95 pixel-art field photograph (upscaled 2x nearest, one painter per
+  mission), paperclipped audio transcript slip, cream FORM KR-47 sheet with
+  bulleted outcome, dotted-leader ledger rows (`ELAPSED TIME .... 04:18`) and a
+  tilted rubber stamp, plus a steel command rail (`y=624..700`).
+  `PROFILES[key] -> (location, exhibit_caption, photo_kind, stamp_colour)`,
+  `_DEBRIEF`, `ledger_rows` (no score/rank), `debrief_copy` (M8 splits on
+  `m8_route`, stamp becomes CASE CLOSED), `button_specs` -> `[menu, continue]`.
+  The whole sheet is cached on a signature and re-blitted: **one blit/frame**.
+- **`src/app.py::_MissionCompleteState`**: `_has_next_mission()` +
+  `_advance_campaign()` (the old chain, moved out verbatim) and thin
+  `handle_event`/`render` delegating to the module; `enter()` latches
+  `STATE.mission_end_time` when a mission ended without setting it, so the
+  ELAPSED clock freezes instead of ticking on the debrief.
+- **`src/game/content/strings/en.json`**: 17 `mc.*` keys (0 missing, 0 unused).
+- **`src/ui/mission_complete_3d.py`** (663 lines): live engine3d diorama viewport
+  embedded in the dossier exhibit Polaroid frame; one scene per mission using
+  real meshes/textures/Humanoid rigs (krap_van, car_m2, barrel, molotov,
+  pc_zarya, monitor_crt/lcd, medkit, pill_bottle, m7world3d farm, chase_set
+  train/tractor, m6world3d snow/night/FX); slow camera drift, reduced_motion
+  freezes, GL/software auto-select, ACA_MC_2D=1 opt-out, traceback-logged
+  fallback, epoch-bumped static bake for M7. Per-cut PNGs in
+  `shots/mission_complete_3d/`.
+- **`tests/unit/test_mission_complete_ui.py`** (13 tests) + **`tools/preview_mission_complete.py`**
+  (`MISSION COMPLETE CHECK: OK`, 9 dossier PNGs + 10 exhibit cuts, asserts the
+  sheet cache is not rebuilt between frames).
+- Gates: `compileall` OK, `ae_text_check.py` OK, `smoke_test.py --only
+  radio,mission4,mission6,mission7,mission8` **SMOKE TEST: OK**,
+  `m5_finale_cut_check.py` (MENU path) OK, `m5_shadow_check.py` OK.
+- Polish fixes on top of the patch: the two footer lines are shortened by
+  splitting the existing strings on ` - ` (they were ellipsized mid-word), and
+  a short transcript gets ruled continuation lines instead of a blank slip.
+
+---
+
+## Shadow visibility pass: 2.5D + 3D (2026-11-15, uncommitted)
+
+Owner's 4-group shadow patch, applied verbatim; nothing else touched.
+- **Side-view blob collapse** (`engine3d/core.py:_blob_item`): screen
+  width/height was measured by projecting world +X and +Z, so an east/west
+  camera (`kill3d` 270, `raid3d` 90, yard/trap/chase scenes) collapsed every
+  blob to a 4x3 px dot (or `None` near NEAR). Now the radius is projected
+  along the camera's horizontal `fwd`/`right` basis (`r_side`/`r_fwd`, with
+  `self.right` as the degenerate fallback) and the width uses the full 2D
+  distance `hypot(ex[0]-c[0], ex[1]-c[1])`. Identical at yaw 0; measured
+  51x27 px at N/E/W/S/NE on the same blob.
+- **Bias sign** (`core.py:add_blob_shadow`): key is now `lay*1e6-c[2]+0.5-bias`,
+  matching `add_sprite` and `GLRenderer.add_blob_shadow`; the old `+bias`
+  pushed negative-bias shadows behind the floor.
+- **2.5D layering** (`game/topdown3d.py`, `missions/walk3d.py`, `m1..m6/draw3d.py`,
+  `ui/arena_view3d.py`): `td.cast_shadows` queued `layer=1, bias=-200.0`
+  (alpha walk3d/arena 150, m1-m5 155; M6 stays 100 so `m6/draw3d._decode`
+  is unchanged). Every `td.shadow`/`td.tac_ring` moved `layer=0 -> layer=1`
+  with a negative bias, and `add_humanoid` now passes `shadow=(1, -0.5)`
+  (M2 sniper deck `(2, -0.30)`). Dead-player shadows added in walk3d, arena,
+  m1-m4 and M6.
+- **3D ground layers**: `m6/train3d._shadow_for` always returns `_PLAT_SHADOW`
+  (+3 actor calls); `m7/raid3d._GROUND_SHADOW = (1, -4.0)` for 6 actor calls
+  + pig/dog blobs; `m8/chase3d` decks `(2, -0.30)` vs ground `(1, -4.0)` (+3
+  vehicle blobs); `kill3d` catwalk `(2, -0.30)`; `trap3d._shadow_at(y)` picks
+  catwalk vs ground per actor height.
+- Gates: `compileall -q src` OK; `smoke_test.py --only
+  m1,m2,m3,m5,m6,m7,m8,arena` **SMOKE TEST: OK**; `smoke_test.py --fast`
+  **SMOKE TEST: OK**; `engine3d_check.py` worst diff 4.31% -> OK
+  (software 14.3 ms / gl 6.7 ms); `tests.unit.test_cast_shadows`,
+  `test_engine_core`, `test_gl_composite`, `test_m8_chase_gun` 36/36 OK;
+  `ae_normalize --changed` OK.
+
+---
+
+## M3 Kill Order rebalance: de-meatgrinder pass (2026-11-15, uncommitted)
+
+Owner's third patch batch, applied verbatim; all `ko_playability_audit.py`
+invariants kept (`HOLDOUT_DOOR_FRAMES = 2700`, beat-gate wave IDs 0/1,
+wave-3 closet flush).
+- **`m3/sweep.py`**: `MAX_CONCURRENT` 9 -> 6; `ROLE_TUNING` softened
+  (guard 80hp/68cd/11, breacher 100/56/13, shield 165/74/10,
+  technician 75/82/9, marksman 90/100/22); `OVERWATCH_TELEGRAPH` 54 -> 78
+  (1.3 s) and the marksman now fires ONE 22-dmg shot per cycle (was a 2x22
+  burst) with a longer cool (`135+rnd(0,60)`); Wave 2 fires on
+  "wave 1 cleared" or +1500 ticks (was a flat +900) with 4 spawns (5 before),
+  Wave 3 drops one of its three line guards; holdout ring 1.6-3.2 -> 2.6-4.4
+  tiles off the van, `holdout_cap = MAX_CONCURRENT` (was +2) and the pair
+  cadence 200 -> 300 ticks.
+- **`m3/world.py`**: 4 new `_KO_PICKUPS` on the fight route - bandages at
+  (5,16), (19,25), (32,33) and a spare mag at (29,35); all on walkable floor,
+  off `_KO_VAN_RECT`, all flood-reachable from the (6,3) spawn.
+- **`m3/flow.py`**: KO checkpoint starts with 3 spare K-9 mags (was 2).
+- Fixed a latent `NameError` in `src/tools/ko_playability_audit.py` (line 223
+  used `_sweep_mod` before its import; now `sweep`), so the audit runs again.
+- Gates: `compileall -q src` OK, `smoke_test.py` m3 pass **SMOKE TEST: OK**,
+  m3 unit modules 22/22 OK, `ae_normalize --changed` OK, headless real-loop
+  KO jump 301 frames clean. End-to-end headless KO probe: holdout commits at
+  tick 197 with waves 0-3 wiped, exfil door cycle hits exactly 2700,
+  stage -> `broadcast_transition` -> `broadcast`.
+- Audit result: 10/14 PASS, the 4 reds are checks 3 (walk-only Router never
+  reaches the van), 4 (Volkov bail starts 152 px from the stair, needs
+  >=450), 7 (grand-tour jitter) and 8f (same walk failure). Proven NOT caused
+  by the rebalance: re-running the audit with `MAX_CONCURRENT`/`ROLE_TUNING`/
+  `OVERWATCH_TELEGRAPH`/wave rosters restored to the old values reproduces
+  the identical 4 failures, and check 9 flips pass/fail between runs
+  (bot/RNG flakiness). The invariants the brief names pass: 8a-8e (beat
+  gates), 6 (closet flush), plus 1, 2, 5.
+
+---
+
+## M3 Kill Order perf pass: AI thrash + KO renderer churn (2026-11-15, uncommitted)
+
+Owner's second patch batch, applied verbatim; no gameplay rules touched.
+- **`entities/enemy_ai.py`**: `_can_see` clips against an AABB prefiltered
+  subset (`collidelistall`, only when `len(walls) > 32`); `_update_pathfinding`
+  returns early and bumps `path_timer` when A* yields nothing; `_move_toward`
+  probes/collides against `near_walls`/`c_walls` (probe box, movement box) and
+  only forces a repath on "both axes blocked" when it had a path (`had_path`),
+  so a CHASE enemy parked behind a locked KO door stops re-running the full
+  grid every frame. `_apply_move` uses the same movement-box prefilter.
+- **`game/topdown3d.py`**: `put(..., static=True)`; dynamic props skip the
+  `_cache["packed"]["placed"]` lookup/insert so spinning pickups stop wiping
+  the 2048-entry static transform cache. `m3/draw3d._put` forwards `static`,
+  and the spinning pickup gun / pickup mesh / Volkov mag / molotov pass
+  `static=False`.
+- **`m3/sweep.py`**: `draw_overwatch_laser` reuses one module-level
+  `_LASER_LAY` SRCALPHA surface (cleared only inside the dirty rect, blitted
+  dirty-only; beam-less frames dirty just the glint). `update_kill_order`
+  hoists `_solid_walls()` out of the enemy loop, prefilters by the
+  enemy->player segment bbox and breaks on the first sighting.
+- **`m3/systems.py`**: `_m3_volkov_segment_clear` and
+  `_m3_enemy_has_los_to_point` bbox-prefilter their wall lists;
+  `_m3_volkov_build_grid` memoises on a `(len, x*, y*)` wall hash
+  (`_VOLKOV_GRID_CACHE`, cleared past 8 entries) and hands out row copies;
+  `_update_volkov_ally` drops `or not path` from the replan condition (no more
+  full-grid rebuild every frame when the repath returns `[]`), clears
+  `m3_volkov_path_goal` on `direct_clear`, and zeroes the timer when the path
+  is consumed.
+- **`m3/wings3d.py`** KO van: GL keeps the packed path; software bakes a
+  world-space mesh once (`("van_world", vx, vz)`) and `add_dynamic`s it.
+  Beacon pulse/colour quantised to eighths (`bq`) so `D._glow` stops
+  rebuilding a surface every frame.
+- Gates: `compileall -q src` OK, `smoke_test.py` (m3 run) **SMOKE TEST: OK**,
+  `tests/unit` m3 modules 31/31 OK, `ae_normalize --changed` OK, and a
+  headless `--jump m3-kill-order` loop (301 real frames, software renderer)
+  exits clean. `tests/unit` full discover: 9 reds, all pre-existing/unrelated
+  (m5 `Channel.id` pygame-ce mismatch, m6 exposure 173>170, assets raw-load
+  scan, m8 chase/trap).
+
+---
+
+
+## AI Bundle app: paste a file request -> clipboard (2026-11-15, uncommitted)
+
+`tools/ai_bundle_app.py` (gui) turns an AI's "share these files" message into one
+paste-ready bundle: folder bullets scope bare names, `mN/`, `ui/`, `core/`
+shorthands and `{1..6}` braces resolve, and >800-line files are sliced by the
+names the message asks for (AST defs/classes/module constants + the enclosing
+class header + the import prologue; whole file when nothing resolves, or when a
+slice would cover most of it). Header format = `ai_bundle.py`'s, so they are
+interchangeable. `--selftest` pins the 15-file example, `--check FILE` prints the
+manifest. Built to `apps/AIBundle.exe` by the new `tools/build_apps.py ai_bundle`
+(onefile/windowed, `tools/ai_bundle.ico`). Gates: selftest OK,
+`compileall -q src`, `AE NORMALIZE --changed`, `smoke_test.py --fast` all OK;
+`sync_arch_map.py` run (line counts of the in-flight edits above).
+
+Bug sweep after the first build (all fixed, exe rebuilt): `./src/x.py` (and
+`src\\x.py`) were dropped by the path regex lookbehind; markdown
+backticks/asterisks leaked into descriptions and repeated paths appended the
+description twice; a URL tail (`https://x/docs/state.py`) resolved to a project
+file; "full file" in the description now disables slicing; the theme switch ran
+a second Tk mainloop in the dead window (now the same restart-after-mainloop
+pattern as `paste_apply.py`, with pending `after()` jobs cancelled); the
+`time.time()` paste window became a `state["built_text"]` comparison, so typing
+right after a paste refreshes instead of being skipped.
+Known edges, accepted: a bare ambiguous name (`draw3d.py`) is reported "not
+found" rather than expanded to every mission; the body-text relevance pass can
+pull a few extra helpers into a slice.
+
+---
+
+## Weapon-swap animations: 2.5D campaign/MP + 3D trap (2026-11-15, uncommitted)
+
+Owner's focused diff applied verbatim across four files; no gameplay rules,
+maps, dialogue or saves touched.
+- **2.5D shared** (`src/game/topdown3d.py`): `_SWAP_TUCK` +
+  `apply_swap_pose(pose, k)` ease the arms/gun down to a hip/sling tuck
+  (wrap-safe, spine/head follow). Campaign draws route through
+  `m1.draw3d._body`, which now derives the swap from `STATE.weapon_swap_timer`
+  for the `"player"` key only (melee wins), forces `ready` and applies the
+  tuck; flash kick is suppressed during the swap. `_Meta3D` in
+  `ui/arena_view3d.py` tracks `rig`/`from_rig` and decrements the networked
+  `v.swap_timer`, drawing the old rig until the midpoint.
+- **3D trap** (`src/missions/m8/revenge/trap3d.py`): `SWAP_S = 0.44`,
+  `_swap_pose()` (bladed Fallow/OS-12 ready hold -> tuck), `_switch_weapon`
+  keeps `self.weapon`/`MAG`/`mag` immediate but renders `_swap_from` for the
+  first half, flips the mesh at `swap_u >= 0.5` with a `rifle_handle` cue,
+  eases `SG_BLADE_YAW` so the hips never snap, and gates `_fire`,
+  `_begin_reload` and ADS. Climb uses `instant=True`.
+- Gates: `compileall -q src` OK, `AE NORMALIZE --changed` OK,
+  `smoke_test.py --only m2,m3,m5,m8,arena` and full `--fast` both
+  **SMOKE TEST: OK**; `test_m8_trap_mechanics` swap test passes (the other
+  2 reds - missing `smokes` attribute, truck crash - reproduce at HEAD,
+  proven by reverting `trap3d.py`). Headless probes drove both trap swap
+  directions (40 draw frames each) and the 2.5D `_body` swap with no faults.
+  Owner playtest still wanted: `--dev-mission2-game` (Q), arena, and
+  `--dev-mission8-trap` (Q/1/2/wheel).
 
 ---
 

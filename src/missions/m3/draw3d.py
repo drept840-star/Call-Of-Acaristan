@@ -60,11 +60,13 @@ SLEEVE_D = (56, 42, 32)
 TUBE = (255, 240, 214)
 VOID = _m1.VOID
 RING_CALM = (200, 92, 70)        # M1's calm ring is lost on the dark cell floor
-AMBIENT = (176, 182, 182)
+AMBIENT = (116, 128, 136)
 NIGHT = dict(_m1.NIGHT, ambient=0.36, diffuse=0.42, tint=(0.95, 1.0, 0.98))
 
 PRISONER = dict(jacket=SLEEVE, pants=SLEEVE, vest=None, pouches=False, accent=None,
                 armband=SLEEVE, belt=None, buckle=None, cuff=SLEEVE_D, lapel=None, shirt=None)
+SEATED = dict(spine=4, head_p=8, lhip_p=88, lkn=88, rhip_p=88, rkn=88,
+              lsh_p=-24, lsh_r=10, lel=40, rsh_p=-24, rsh_r=10, rel=40)
 INMATE = dict(jacket=(168, 92, 34), pants=(168, 92, 34), vest=None, pouches=False, accent=None,
               armband=(228, 180, 86), belt=None, buckle=None, cuff=(92, 48, 24), lapel=None,
               shirt=None, long_coat=None)
@@ -135,6 +137,11 @@ def game_draw3d(fcx, fcy):
     if not render_world(screen, v):
         return False
     _labels(screen, v)
+    flash = _s._m3_flow._breach_flash
+    if flash > 0 and not getattr(STATE, "reduced_motion", False):
+        white = _d.get_fullscreen_overlay((255, 255, 255, 255))
+        white.set_alpha(int(255 * min(1.0, flash / 28.0)))
+        screen.blit(white, (0, 0))
     if STATE.muzzle_flash_timer > 0:
         STATE.muzzle_flash_timer -= 1
     _d._PROJ[0] = v
@@ -161,15 +168,18 @@ def render_world(surface, v):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
     tm = _now_ms()
     try:
         r.light = Light(**NIGHT)
         r.fog, r.fog_start, r.fog_end = VOID, 32.0, 64.0
-        r.light_cap = 8
+        r.light_cap = 64
+        r.wetness = 0.16
+        r.height_fog = (0.018, 0.0, 1.3, (12, 16, 20))
         v.apply(r)
-        buf.fill(VOID)
+        if getattr(r, "backend", "") != "gl":
+            buf.fill(VOID)
         r.begin()
         first = _w.static_scene(r, ("m3_td3d", id(_maps.MISSION3_MAP)))
         ok = False
@@ -190,7 +200,15 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
         _lamp_lights(r, v, flashes, tm)
-        td.cast_shadows(r)
+        td.cast_shadows(r, alpha=155)
+        if getattr(r, "backend", "") == "gl":
+            wing = [] if _key() == "cell" else _wings.dyn_lights(_key(), tm)
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.22, "bloom_knee": 1.0,
+                "grade3d": (v, _night_lights() + dyn + wing + _presence(),
+                            _wings.AMBIENT.get(_key(), AMBIENT)),
+            })
+            return True
         r.flush(buf, bg=VOID)
     except Exception:
         import traceback
@@ -198,7 +216,9 @@ def render_world(surface, v):
         td.disable()                  # next frame is the 2D painter
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+        if hasattr(r, "hdr"):
+            r.hdr = shdr
     _fx.present_crisp(buf, surface)
     wing = [] if _key() == "cell" else _wings.dyn_lights(_key(), tm)
     _grade.apply(surface, v, _night_lights() + dyn + wing + _presence(), ambient=_wings.AMBIENT.get(_key(), AMBIENT))
@@ -231,8 +251,8 @@ def _tc(col, row, h=0.0):
     return to3(col * T, row * T, h)
 
 
-def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0):
-    td.put(r, mesh, pos, yaw, roll, round(scale, 2), cache=_cache["packed"], pitch=pitch)
+def _put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, pitch=0.0, static=True):
+    td.put(r, mesh, pos, yaw, roll, round(scale, 2), cache=_cache["packed"], pitch=pitch, static=static)
 
 
 def _mesh(key, build):
@@ -993,10 +1013,9 @@ def _melee_hum(weapon):
 
 
 def _unarmed(r, hum, x, y, angle, key, tint=None):
-    from engine3d import POSES, pose_run
-    phase, moving = _m1._motion(key, x, y, angle)
-    pose = pose_run(phase, lean=3) if moving else dict(POSES["stand"])
-    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=False, tint=tint)
+    pose = _m1._gait(key, x, y, angle, lean=3)
+    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=False,
+                   tint=tint, shadow=(1, -0.5))
 
 
 def _draw_player(r, flashes):
@@ -1006,6 +1025,12 @@ def _draw_player(r, flashes):
     x, y = p.rect.centerx, p.rect.centery
     if STATE.player_dead:
         _m1._draw_dead_player(r, td.armed("biribel", "pistol", **PRISONER))
+        return
+    if getattr(STATE, "mission3_stage", None) == _d.STAGE_INTERROGATION:
+        # cuffed into the chair, facing the monitor wall; hands behind the back
+        cx, cy = _wd._interrogation_chair_pos()
+        r.add_humanoid(td.armed("biribel", "pistol", **PRISONER), SEATED, to3(cx, cy), 0.0,
+                       rifle_on=False, shadow=(1, -0.5))
         return
     _m1._feet(r, x, y, _m1.RING_YOU, rad=0.52)
     weapon = getattr(STATE, "mission3_weapon", "none")
@@ -1066,12 +1091,13 @@ def _draw_detainees(r):
         at = to3(x, y)
         if d.get("dead"):
             r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(0.7), layer=0)
+            r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.65, 0.50, 110), layer=1, bias=-0.8)
             r.add_humanoid(hum, dict(POSES["dead_back"]), at, td.yaw_rad(d.get("seed", 0) * 0.7),
-                           rifle_on=False)
+                           rifle_on=False, shadow=(1, -0.5))
             continue
         pose = d.get("pose", "stand")
         key = ("det", i)
-        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.42), layer=0)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.42), layer=1, bias=-0.6)
         if pose == "pace_x" and d.get("state") != "cower":
             ang = 0.0 if math.cos(d.get("timer", 0) * 0.025 + d.get("seed", 0)) >= 0 else math.pi
             _unarmed(r, hum, x, y, ang, key)
@@ -1083,7 +1109,7 @@ def _draw_detainees(r):
         name = ("crouch" if d.get("state") == "cower" or pose == "cower" else
                 {"bars": "ready", "sit": "slump", "pushup": "prone", "worker": "kneel_over",
                  "lean": "stand", "fold": "stand"}.get(pose, "stand"))
-        r.add_humanoid(hum, dict(POSES[name]), at, td.yaw_rad(ang), rifle_on=False)
+        r.add_humanoid(hum, dict(POSES[name]), at, td.yaw_rad(ang), rifle_on=False, shadow=(1, -0.5))
 
 
 def _draw_inmate(r):
@@ -1095,7 +1121,7 @@ def _draw_inmate(r):
     x, y = inmate["x"], inmate["y"]
     p = STATE.player
     ang = math.atan2(p.rect.centery - y, p.rect.centerx - x) if p is not None else math.pi / 2.0
-    r.add_sprite(to3(x, y, 0.02), td.shadow(0.5), layer=0)
+    r.add_sprite(to3(x, y, 0.02), td.shadow(0.5), layer=1, bias=-0.6)
     _unarmed(r, td.armed("civilian", "pistol", **INMATE), x, y, ang, "inmate")
 
 
@@ -1112,7 +1138,10 @@ def _draw_volkov(r, flashes, tm):
     """Volkov covering Biribel through the wings, his tracer cues and the
     K-9 mags he throws."""
     from cutscenes import m6fx3d as _fx
-    if not getattr(STATE, "m3_volkov_ally_active", False) or _key() == "cell":
+    if _key() == "cell":
+        _draw_breach(r, flashes, tm)
+        return
+    if not getattr(STATE, "m3_volkov_ally_active", False):
         return
     x = getattr(STATE, "m3_volkov_ally_x", 0.0)
     y = getattr(STATE, "m3_volkov_ally_y", 0.0)
@@ -1126,8 +1155,35 @@ def _draw_volkov(r, flashes, tm):
         if mag.get("caught"):
             continue
         p = to3(mag["x"], mag["y"], 0.9)
-        _put(r, _mesh(("k9mag",), lambda: _m1._pickup_mesh("mag")), p, yaw=math.degrees(mag.get("rot", 0.0)))
+        _put(r, _mesh(("k9mag",), lambda: _m1._pickup_mesh("mag")), p, yaw=math.degrees(mag.get("rot", 0.0)), static=False)
         r.add_sprite(p, _glow((255, 210, 120), 0.2, tm, 0.6, 12), layer=_fx.FX_LAYER)
+
+
+def _draw_breach(r, flashes, tm):
+    """Volkov's breach on the cell map (same clock and path as the 2D
+    ``draw._draw_volkov_breach``): him at the door, the blinking charge, the
+    fireball; then his escape run east once the breakout starts."""
+    from cutscenes import m6fx3d as _fx
+    t = _s._m3_flow._volkov_breach_t
+    pose = _wd._volkov_world_pose() if t >= 0 else None
+    if pose is not None and getattr(STATE, "m3_volkov_run_timer", 0) <= 240:
+        x, y, ang, _running = pose
+        _m1._feet(r, x, y, (110, 170, 230), rad=0.48)
+        _m1._body(r, td.armed("volkov", "os12"), x, y, ang, "os12", "ready", "volkov_m3")
+    if getattr(STATE, "mission3_stage", None) != _d.STAGE_INTERROGATION:
+        return
+    x, _, z = _tc(_d._DOOR_TILE_COL + 1.0, _d._DOOR_TILE_ROW + 0.75, 1.0)
+    if 150 <= t <= 300:
+        from engine3d import box
+        _put(r, _mesh(("c4",), lambda: box(0.22, 0.16, 0.08, (90, 75, 60))), (x, 1.0, z))
+        blink = max(80, 300 - (t - 150) * 2)
+        if (tm // blink) % 2 == 0:
+            r.add_sprite((x + 0.07, 1.06, z + 0.05), _glow((255, 30, 20), 0.08, tm, 1.0, 8), layer=_fx.FX_LAYER)
+    elif 300 < t <= 336:
+        k = 1.0 - (t - 300) / 36.0
+        r.add_sprite((x, 1.0, z), _glow((255, 160, 60), 0.6 + 1.6 * (1.0 - k), tm, k, 24,
+                                       core=(255, 230, 170)), layer=_fx.FX_LAYER)
+        flashes.append({"pos": (x, 1.2, z), "color": (255, 170, 80), "intensity": 1.6 * k, "range": 9.0})
 
 
 def _draw_fx(r, flashes, tm):
@@ -1142,33 +1198,42 @@ def _draw_fx(r, flashes, tm):
         kind = pu[2]
         if kind == "sidearm":
             gun, _mz = mp3d.gun("pistol")
-            _put(r, gun, (x, 0.25 + bob, z), yaw=(t * 60.0 + pu[0]) % 360.0, roll=90.0)
+            _put(r, gun, (x, 0.25 + bob, z), yaw=(t * 60.0 + pu[0]) % 360.0, roll=90.0, static=False)
             col = (220, 180, 80)
         else:
             kind = "bandage" if kind == "bandage" else "mag"
             _put(r, _mesh(("pickup", kind), lambda k=kind: _m1._pickup_mesh(k)), (x, 0.25 + bob, z),
-                 yaw=(t * 60.0 + pu[0]) % 360.0)
+                 yaw=(t * 60.0 + pu[0]) % 360.0, static=False)
             col = _m1._PICKUP_COL.get(kind, (255, 210, 40))
         r.add_sprite((x, 0.3, z), _glow(col, 0.28, tm, 0.7, 16), layer=_fx.FX_LAYER)
-    for decal in STATE.blood_decals:
-        k = max(0.0, min(1.0, decal[2] / 255.0))
-        if k > 0.05:
-            r.add_sprite(to3(decal[0], decal[1], 0.015),
-                         td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    if getattr(r, "backend", "") == "gl" and STATE.blood_decals:
+        from engine3d.particles import pack_blood_decals
+        d_arr = pack_blood_decals(STATE.blood_decals, to3, (80, 12, 14))
+        if d_arr is not None:
+            r.add_decals(d_arr)
+    else:
+        for decal in STATE.blood_decals:
+            k = max(0.0, min(1.0, decal[2] / 255.0))
+            if k > 0.05:
+                r.add_sprite(to3(decal[0], decal[1], 0.015),
+                             td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    fx0, fz0 = r.cam[0], r.cam[2] + 11.0
     for fz in STATE.fire_zones:
         x, _, z = to3(fz.x, fz.y)
+        if abs(x - fx0) > 26.0 or abs(z - fz0) > 22.0:
+            continue
         life = fz.life / float(max(1, fz.max_life))
         heat = min(1.0, life * 4.0)
         rad = fz.radius * K
         r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
-        _m1._fuel_pool_at(r, x, z, rad * (0.55 + 0.45 * heat), fz.x * 0.37 + fz.y * 0.11)
+        _m1._fuel_pool_at(r, x, z, rad * (0.65 + 0.35 * heat), fz.x * 0.37 + fz.y * 0.11, tm=tm, heat=heat)
         n = 1 + min(9, int(rad / 0.3))
         for i in range(n):
             a = i * 2.39996 + fz.x * 0.013
-            d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
-            size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
+            d = 0.0 if i == 0 else rad * 0.72 * math.sqrt(i / float(n))
+            size = (0.56 if i == 0 else 0.36) * min(1.25, 0.45 + rad * 0.35) * heat
             _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
-                      glow=i == 0)
+                      glow=(i == 0), smoky=(i == 0), bed=False, embers=(i == 0), heat=heat)
         flashes.append({"pos": (x, 1.0, z), "color": (255, 140, 56), "intensity": heat, "range": 4.0 + rad})
     for b in STATE.thrown_bottles:
         bt = b["t"]
@@ -1176,7 +1241,7 @@ def _draw_fx(r, flashes, tm):
         yaw = td.yaw_of(math.degrees(math.atan2(b["ty"] - b["start_y"], b["tx"] - b["start_x"])))
         mesh, flame = _m1._molotov()
         pitch = (b.get("spin", 0) + bt * 540) % 360.0
-        _put(r, mesh, p, yaw=yaw, pitch=pitch)
+        _put(r, mesh, p, yaw=yaw, pitch=pitch, static=False)
         fx, fy, fzz = m_apply(m_mul(rot_y(yaw), rot_x(pitch)), flame)
         r.add_sprite((p[0] + fx, p[1] + fy, p[2] + fzz),
                      _glow((255, 140, 40), 0.22, tm, 1.0, 16, flicker=0.55, seed=int(p[2] * 100),
@@ -1226,12 +1291,11 @@ def _lamp_lights(r, v, flashes, tm):
                      {"pos": head, "color": color, "intensity": 0.45, "range": reach}))
     p = STATE.player
     if p is not None:
-        flashes.append({"pos": to3(p.rect.centerx, p.rect.centery, 1.7), "color": (190, 205, 230),
-                        "intensity": 0.8, "range": 3.0})
+        td.add_player_rim(r, flashes, p.rect.centerx, p.rect.centery, spot=False)
     near.sort(key=lambda e: e[0])
-    lights = [e[1] for e in near[:max(0, 8 - len(flashes))]]
+    lights = [e[1] for e in near[:max(0, 64 - len(flashes))]]
     r.set_pools(pools)
-    r.set_lights(flashes[:8] + lights, cap=8)
+    r.set_lights(flashes[:64] + lights, cap=64)
 
 
 _POOL_K = {"cell": 0.5, "cor": 0.5, "exit": 0.45, "kit": 0.45, "hall": 0.5, "arm": 0.5, "low": 0.5,
@@ -1266,6 +1330,9 @@ def _night_lights():
                     _POOL_K.get(key, _wings.POOL_K.get(key, 0.45))))
         if key in ("fl", "wfl", "exit"):                 # only fixtures you can see glow
             out.append(("glow", _lamp_head(col, row, key), color, 0.5, 0.45))
+        if key in ("fl", "wfl", "dock"):
+            px_, pz_ = _pool_at(col, row, key)
+            out.append(("reflect", (px_, 0.0, pz_ - 0.3), color, 0.55, 0.30))
     _cache["night"][lamps] = out
     return out
 

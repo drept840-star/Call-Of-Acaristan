@@ -1,7 +1,10 @@
 """Mission 8 - per-frame update, dispatched by stage: a 3D scene, or a beat."""
 from core.state import STATE
 
-from .meta import FIGHT_STAGES, STAGE_CHASE, STAGE_KILL
+from .meta import FIGHT_STAGES, STAGE_CHASE, STAGE_FLIGHT, STAGE_KILL, STAGE_MANSION, STAGE_RIDGE
+from .duty import flight3d as _flight
+from .duty import mansion3d as _mansion
+from .duty import ridge3d as _ridge
 from .revenge import beats as _beats
 from .revenge import chase3d as _chase
 from .revenge import kill3d as _kill
@@ -15,6 +18,12 @@ def _scene_for(stage):
         return _kill
     if stage == STAGE_CHASE:
         return _chase
+    if stage == STAGE_MANSION:
+        return _mansion
+    if stage == STAGE_FLIGHT:
+        return _flight
+    if stage == STAGE_RIDGE:
+        return _ridge
     return None
 
 

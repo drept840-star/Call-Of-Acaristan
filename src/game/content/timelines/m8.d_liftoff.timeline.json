@@ -1,0 +1,68 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.d_liftoff",
+ "shots": [
+  {
+   "scene": "m8d_liftoff_study",
+   "speaker": "BIRIBEL",
+   "text": "He's in the air!",
+   "min_ms": 4000,
+   "auto_advance": true,
+   "cues": [
+    [
+     200,
+     "footstep",
+     0.16
+    ],
+    [
+     500,
+     "footstep",
+     0.16
+    ],
+    [
+     900,
+     "wind_gust",
+     0.3
+    ]
+   ]
+  },
+  {
+   "scene": "m8d_liftoff_window",
+   "speaker": "RETARDOVICI",
+   "text": "You can have the house, Biribel. I'll have the country back by Monday.",
+   "min_ms": 4600,
+   "cues": [
+    [
+     300,
+     "wind_gust",
+     0.3
+    ]
+   ]
+  },
+  {
+   "scene": "m8d_liftoff_maru",
+   "speaker": "MARU",
+   "text": "Biribel - starboard door's open! Jump!",
+   "radio": true,
+   "min_ms": 4600,
+   "auto_advance": true,
+   "cues": [
+    [
+     200,
+     "squelch_head",
+     0.22
+    ],
+    [
+     1400,
+     "m8_cloth_2",
+     0.18
+    ]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Duty, terrace and helicopter liftoff"
+ }
+}

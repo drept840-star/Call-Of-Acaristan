@@ -70,7 +70,8 @@ class Theme:
         """Cached HUD panel: slate fill, 1px edge; ``fade`` px on the right ease
         out to clear (no right edge then); ``stripe`` is a 3px left accent."""
         a = self.c_panel_alpha if alpha is None else alpha
-        key = (w, h, fade, stripe and tuple(stripe), a, tuple(self.c_panel), tuple(self.c_edge))
+        tac = bool(self.extra.get("tactical_hud", False))
+        key = (w, h, fade, stripe and tuple(stripe), a, tuple(self.c_panel), tuple(self.c_edge), tac)
         s = _PANELS.get(key)
         if s is None:
             if len(_PANELS) > 64:
@@ -83,6 +84,19 @@ class Theme:
             pygame.draw.line(s, edge, (0, 0), (0, h - 1))
             if not fade:
                 pygame.draw.line(s, edge, (w - 1, 0), (w - 1, h - 1))
+            if tac:
+                pygame.draw.line(s, (82, 98, 118, 120), (1, 1), (w - 2, 1), 1)
+                c_hi = (118, 142, 166, 255)
+                l = max(3, min(7, w // 3, h // 3))
+                pygame.draw.line(s, c_hi, (0, 0), (l, 0), 2)
+                pygame.draw.line(s, c_hi, (0, 0), (0, l), 2)
+                pygame.draw.line(s, c_hi, (0, h - 1), (l, h - 1), 2)
+                pygame.draw.line(s, c_hi, (0, h - 1), (0, h - 1 - l), 2)
+                if not fade:
+                    pygame.draw.line(s, c_hi, (w - 1, 0), (w - 1 - l, 0), 2)
+                    pygame.draw.line(s, c_hi, (w - 1, 0), (w - 1, l), 2)
+                    pygame.draw.line(s, c_hi, (w - 1, h - 1), (w - 1 - l, h - 1), 2)
+                    pygame.draw.line(s, c_hi, (w - 1, h - 1), (w - 1, h - 1 - l), 2)
             if stripe is not None:
                 s.fill(tuple(stripe) + (255,), (0, 0, 3, h))
             if fade:

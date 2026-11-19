@@ -18,18 +18,18 @@ from .meta import (
     STAGE_ARRIVAL, STAGE_CHORES, STAGE_CHOICE, STAGE_FINALE, STAGE_PREP, STAGE_RAID,
     STAGE_RAIDIN, STAGE_RUNNER)
 
-# Score cue per stage (m7_audio.MUSIC). The runner film keeps the farm theme
-# running between chores and prep; the raid-in film starts the raid track so
-# the fight picks it up without a cut; the radio choice is music-free so the
-# hum and the two channels carry it.
+# Score cue per stage (m7_audio.MUSIC). The runner film starts on the farm theme
+# and shifts to "prep" once the shotgun comes out; the raid-in film starts the
+# raid track so the fight picks it up without a cut; the radio choice stays
+# music-free so the hum and the two channels carry it.
 STAGE_MUSIC = {
     STAGE_ARRIVAL: "film",
     STAGE_CHORES: "farm",
     STAGE_RUNNER: "farm",
-    STAGE_PREP: "farm",
+    STAGE_PREP: "prep",
     STAGE_RAIDIN: "raid",
     STAGE_RAID: "raid",
-    STAGE_FINALE: "film",
+    STAGE_FINALE: "finale",
     STAGE_CHOICE: None,
 }
 
@@ -87,6 +87,17 @@ def film_music(key):
         # The farm cue runs straight through the escape; the film is a beat
         # of the same afternoon, not a new stage.
         _m7_audio.music(_audio_manager, "farm")
+        return
+    if key == STAGE_RUNNER:
+        cue = "farm"
+        try:
+            from core.cutscene_registry import current_shot
+            scene = str((current_shot() or {}).get("scene") or "")
+            if scene in ("m7_runner_shotgun", "m7_runner_gun"):
+                cue = "prep"
+        except Exception:
+            pass
+        _m7_audio.music(_audio_manager, cue)
         return
     _m7_audio.music(_audio_manager, "outro" if key == "outro" else STAGE_MUSIC.get(key))
 

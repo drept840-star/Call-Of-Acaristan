@@ -127,7 +127,7 @@ def get_plate_bg(w, h):
     """Return a cached "status plate" backdrop (dark glass + steel rim).
 
     The chrome of the M4 hold clock and the M5 status plate - and of the baked
-    frame in ``src/art/m5/plate.py``, which both must keep matching: fill
+    frame in ``src/game/art/m5/plate.py``, which both must keep matching: fill
     (8, 10, 14, 210), 1px rim (150, 170, 190, 220), 6px radius.
     """
     key = (w, h)

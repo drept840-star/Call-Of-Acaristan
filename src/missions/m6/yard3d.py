@@ -28,6 +28,7 @@ from core.outfits import OUTFIT_GUARD
 from core.state import STATE
 from cutscenes import death3d as _death
 from engine3d import NEUTRAL, POSES, Light, blend, box, clamp, pose_run, tex
+from engine.anim import LayeredAnimState, gait_cycle_m, locomotion_pose, mask_pose
 
 from . import hud3d as H
 from . import palette3d as P
@@ -790,9 +791,19 @@ class YardScene:
         self.audio = None
         self.restart()
 
+    def _anim_ctl(self):
+        ctl = getattr(self, "_anim", None)
+        if ctl is None or getattr(self, "_anim_t0", 0.0) > self.t + 0.05:
+            ctl = LayeredAnimState(yaw_deg=getattr(self, "body_yaw", 0.0),
+                                   y0=self.pos[1], stride_gain=1.9)
+            self._anim = ctl
+        self._anim_t0 = self.t
+        return ctl
+
     # ── lifecycle ──────────────────────────────────────────────────────
     def restart(self):
         self.t = 0.0
+        self._anim = None
         self.pos = START_POS
         self.yaw = START_YAW
         self.pitch = -6.0
@@ -804,6 +815,7 @@ class YardScene:
         self.twist = 0.0             # torso back onto the aim from the hips
         self.gun_up = 0.0            # 0 low ready .. 1 shouldered
         self.ads = 0.0
+        self.wall_k = 0.0            # 0 clear .. 1 barrel lowered against wall
         self.aiming = False
         self.firing = False
         self.sprint = False
@@ -950,6 +962,7 @@ class YardScene:
         up = 0.0 if (self.sprint or self.reloading or punching or not up) else 1.0
         self.gun_up += (up - self.gun_up) * min(1.0, dt * 16.0)
         self._move(keys, dt)
+        self._update_wall_k(dt)
         if self.reloading:
             self.reloading = max(0.0, self.reloading - dt)
             if not self.reloading:
@@ -1042,10 +1055,36 @@ class YardScene:
             hips = torso + clamp(_wrap(rel - BLADE), -HIP_TURN, HIP_TURN)
         self.body_yaw = _w.yaw_mix(self.body_yaw, hips, min(1.0, dt * 10.0))
         self.twist = clamp(_wrap(torso - self.body_yaw), -70.0, 70.0)
+        self._anim_ctl().update(
+            dt, vel_xz=self.vel, yaw_deg=self.body_yaw,
+            aiming=(self.ads > 0.3 or self.t - self.last_fire < 0.45),
+            sprint=self.sprint, crouch=False,
+            floor_fn=ground_y, pos=self.pos,
+        )
 
     def _aim_body_yaw(self):
         f = T._forward(self.yaw, 0.0)
         return _w.yaw_to((0, 0, 0), (f[0], 0, f[2]))
+
+    def _wall_probe_dist(self):
+        x, y, z = self.pos
+        f = T._forward(self.yaw, self.pitch)
+        rgt = _screen_right(self.yaw)
+        o1 = (x, y + 1.34, z)
+        o2 = (x + rgt[0] * 0.14, y + 1.34, z + rgt[2] * 0.14)
+        best = 2.0
+        for o in (o1, o2):
+            for x0, y0, z0, x1, y1, z1 in BLOCKERS:
+                hit = T._ray_aabb(o, f, (x0, y0, z0), (x1, y1, z1))
+                if hit is not None and 1e-4 < hit < best:
+                    best = hit
+        return best
+
+    def _update_wall_k(self, dt):
+        dist = self._wall_probe_dist()
+        want = _smooth(clamp((1.14 - dist) / (1.14 - 0.68), 0.0, 1.0))
+        rate = 18.0 if want > self.wall_k else 12.0
+        self.wall_k = clamp(self.wall_k + (want - self.wall_k) * min(1.0, dt * rate), 0.0, 1.0)
 
     # ── camera and aim ─────────────────────────────────────────────────
     def camera(self):
@@ -1098,6 +1137,8 @@ class YardScene:
     def _fire(self):
         if self.t - self.last_fire < FIRE_GAP:
             return
+        if self.wall_k > 0.65:
+            return
         if self.mag <= 0:
             if self.t - self.last_fire > 0.3:
                 self.last_fire = self.t
@@ -1120,6 +1161,7 @@ class YardScene:
             self.audio.shot(suppressed=True)
         o, d = self._aim_ray()
         best, best_g, head = 60.0, None, False
+        best_zone = "chest"
         for x0, y0, z0, x1, y1, z1 in BLOCKERS:
             hit = T._ray_aabb(o, d, (x0, y0, z0), (x1, y1, z1))
             if hit is not None and hit < best:
@@ -1136,6 +1178,7 @@ class YardScene:
                 hit = T._ray_sphere(o, d, (gx, gy0 + dy, gz), rad)
                 if hit is not None and hit < best:
                     best, best_g, head = hit, g, zi == 1
+                    best_zone = ("chest", "head", "gut", "leg")[min(zi, 3)]
         end = (o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best)
         src = self._muzzle or o
         self.tracers.append((self.t, src, end, (255, 214, 150)))
@@ -1151,9 +1194,14 @@ class YardScene:
         if self.audio:
             (self.audio.headshot if head else
              (lambda: self.audio.impact(on_enemy=True)))()
-        self._hurt_guard(g, HIT_HEAD if head else HIT_BODY, (d[0], d[2]))
+        dmg = HIT_HEAD if head else HIT_BODY
+        self._hurt_guard(g, dmg, (d[0], d[2]), hit_ctx=dict(
+            is_head=head, hit_zone=best_zone, hit_pos=end, hit_ray=d,
+            weapon="smg", dmg=dmg, hit_dist=best,
+        ))
 
-    def _hurt_guard(self, g, dmg, hit_dir):
+    def _hurt_guard(self, g, dmg, hit_dir, hit_ctx=None):
+        prev_hp = g["hp"]
         g["hp"] -= dmg
         g["hit_t"] = self.t
         g["hit_dir"] = hit_dir
@@ -1163,6 +1211,10 @@ class YardScene:
             g["dead_t"] = self.t
             g["dead_pose"] = "dead_back" if (int(g["slot"]) % 2) else "dead_front"
             g["mags"] = LOOT_MAGS.get(g["kind"], 1)
+            ctx = dict(hit_ctx or {})
+            ctx.setdefault("dmg", dmg)
+            ctx["overkill"] = max(0.0, dmg - prev_hp)
+            g["death_ctx"] = ctx
 
     def _loot(self):
         """Take the mags off nearby bodies, up to five spares; the rest stay
@@ -1247,7 +1299,10 @@ class YardScene:
         if self.audio:
             self.audio.thud()
             self.audio.impact(on_enemy=True)
-        self._hurt_guard(g, dmg, (fx, fz))
+        self._hurt_guard(g, dmg, (fx, fz), hit_ctx=dict(
+            is_head=False, hit_zone="chest", weapon="melee", dmg=dmg,
+            hit_ray=(fx, -0.05, fz),
+        ))
         g["punch_t"] = self.t
         g["shove"] = (fx, fz)
         if not g["alive"]:
@@ -1434,9 +1489,15 @@ class YardScene:
                          layer=_fx.FX_LAYER)
         self._draw_fx(r, tm)
         self._marker_screen = self._project(r, self._objective_point())
-        r.flush(r.surface)
-        T._grade_play(r.surface, self._wounded())
-        T._present(r.surface, surface)
+        if getattr(r, "backend", "") == "gl":
+            r.flush_to(surface, post={
+                "bloom": 0.26, "bloom_knee": 0.96,
+                "lut": T._play_curve(self._wounded()), "dither_step": T.DITHER_STEP,
+            })
+        else:
+            r.flush(r.surface)
+            T._grade_play(r.surface, self._wounded())
+            T._present(r.surface, surface)
         draw_vignette(surface)
         self._draw_hud(surface)
 
@@ -1450,6 +1511,8 @@ class YardScene:
         if st is None:      # he does not move again: pose him once
             st = _SET_CACHE["volkov"] = T._volkov_death_state(T.DURATION)
         pos, pose, yaw, _j = st
+        if not r.visible_sphere((pos[0], pos[1] + 0.3, pos[2]), 1.6):
+            return
         _w.actor(r, "volkov", pose, pos, yaw, int(set_t * 1000), seed=91,
                  amp=0.0, rifle_on=False, expression="sad", hd=True,
                  wound=T._wound_stage(T.DURATION - T.HIT_AT),
@@ -1472,15 +1535,22 @@ class YardScene:
         """(origin, basis) of the K9 this frame, placed from his posed head
         and right shoulder: shouldered on the aim or at low ready, with the
         recoil kick and the reload tilt on top."""
-        k = self.gun_up
+        melee_on = (0.0 <= self.t - self.melee_t < MELEE_S)
+        wk = 0.0 if melee_on else getattr(self, "wall_k", 0.0)
+        k = self.gun_up * (1.0 - wk)
         carry = 1.0 - k
+        anim = self._anim_ctl()
+        sp_carry = anim.sprint_w.value * carry * (1.0 - wk)
+        sw = math.sin(anim.stride_phase)
+        bob = math.cos(2.0 * anim.stride_phase)
         tilt = 0.0
         if reload_p is not None:
             tilt = math.sin(math.pi * clamp(reload_p, 0.0, 1.0))
-        yaw = self.yaw + CARRY_YAW * carry - 4.0 * tilt
-        pitch = (self.pitch * k + CARRY_PITCH * carry + KICK_UP * self.gun_kick
+        yaw = self.yaw + CARRY_YAW * carry + (-20.0 * sp_carry + 4.5 * sw * sp_carry) + (-24.0 - CARRY_YAW) * wk - 4.0 * tilt
+        pitch = (self.pitch * k + CARRY_PITCH * carry + (-8.0 * sp_carry + 2.2 * bob * sp_carry) + (-66.0 - CARRY_PITCH) * wk
+                 + KICK_UP * self.gun_kick * (1.0 - wk)
                  - 16.0 * tilt)
-        B = _gun_basis(yaw, pitch, roll=-32.0 * tilt)
+        B = _gun_basis(yaw, pitch, roll=-32.0 * tilt - 14.0 * wk - 12.0 * sp_carry)
 
         def dot(p, axis):
             return p[0] * axis[0] + p[1] * axis[1] + p[2] * axis[2]
@@ -1493,7 +1563,11 @@ class YardScene:
         low = (sh[0] + CARRY_OUT, sh[1] - CARRY_DROP,
                sh[2] + CARRY_POCKET - K9_BUTT_Z)
         c = [ads[i] * k + low[i] * carry for i in range(3)]
-        c[2] -= KICK_BACK * self.gun_kick - 0.04 * tilt
+        c[1] -= 0.04 * sp_carry - 0.015 * bob * sp_carry
+        if wk > 0.0:
+            wall_c = (sh[0] - 0.05, sh[1] - 0.12, sh[2] + 0.28)
+            c = [c[i] + (wall_c[i] - c[i]) * wk for i in range(3)]
+        c[2] -= KICK_BACK * self.gun_kick * (1.0 - wk) - 0.04 * tilt
         c[1] -= 0.05 * tilt
         O = tuple(B[0][i] * c[0] + B[1][i] * c[1] + B[2][i] * c[2] for i in range(3))
         return O, B
@@ -1558,24 +1632,21 @@ class YardScene:
                      expression="angry", shadow=T._shadow_for(self.pos[2]))
             self._gun = None
             return
-        if sp > 0.05:
-            # the move direction in the hips' own axes
-            a = math.radians(self.body_yaw)
-            cy, sy = math.cos(a), math.sin(a)
-            vx, vz = self.vel[0] / sp, self.vel[1] / sp
-            pose = _gait(self.gait, sp, vx * cy - vz * sy, vx * sy + vz * cy, h._scale)
-        else:
-            pose = dict(POSES["stand"])
+        pose = self._anim_ctl().compose(
+            POSES["stand"], None,
+            pitch_deg=0.0, time_s=self.t, breath_amp=0.22,
+        )
         # The torso turns back onto the aim from the hips and leans with the
         # pitch; shouldered, the head dips and leans onto the stock.
-        k = self.gun_up
+        u = (self.t - self.melee_t) / MELEE_S
+        beats = _punch_beats(u) if 0.0 <= u < 1.0 else None
+        wk = 0.0 if beats else getattr(self, "wall_k", 0.0)
+        k = self.gun_up * (1.0 - wk)
         pose["twist"] = pose.get("twist", 0.0) + self.twist
         pose["spine"] = (pose.get("spine", 3.0) + _AIM["spine"] * k
                          - 0.35 * self.pitch - 3.0 * self.gun_kick)
         pose["head_p"] = (pose.get("head_p", 0.0) + (_AIM["head_p"] + 4.0) * k
                           - 0.55 * self.pitch)
-        u = (self.t - self.melee_t) / MELEE_S
-        beats = _punch_beats(u) if 0.0 <= u < 1.0 else None
         at, ptw = self.pos, 0.0
         if beats:
             # wind the torso back, then throw it through behind the fist:
@@ -1595,7 +1666,7 @@ class YardScene:
             f = T._forward(self.yaw, 0.0)
             lunge = PUNCH_LUNGE * drive - 0.05 * coil
             at = (at[0] + f[0] * lunge, at[1], at[2] + f[2] * lunge)
-        pose["head_y"] = _wrap(self._aim_body_yaw() - self.body_yaw - self.twist - ptw)
+        pose["head_y"] = _wrap(self._aim_body_yaw() - self.body_yaw - pose.get("twist", 0.0))
         pose["head_x"] = 0.03 * k
         pl, j0, root = h.pose_world(pose, at, self.body_yaw, rifle_on=False)
         sh = {slot: (root[0] + o[0], root[1] + o[1], root[2] + o[2])
@@ -1648,9 +1719,27 @@ class YardScene:
     def _guard_pose(self, g):
         """The pose his brain's stance asks for (see yard_brain)."""
         kind, st = g["kind"], g.get("stance", "post")
+        aiming = g["burst_left"] > 0 or self.t - g["last_shot_t"] < 0.4
+        gx, _gy, gz = g["pos"]
+        prev = g.get("_gpos")
+        step = math.hypot(gx - prev[0], gz - prev[1]) if prev is not None else 0.0
+        g["_gpos"] = (gx, gz)
+        if step > 1.5:
+            step = 0.0
+        spd = 4.8 if st == "run" else 2.8
+        cyc = gait_cycle_m(spd, 1.0 if st == "run" else 0.0)
+        g["_gphase"] = g.get("_gphase", float(g["slot"]) * 1.37) + (step / cyc) * math.tau
         if st in ("run", "walk") and g["moving"]:
-            rate = (9.0 if kind == "rusher" else 7.0) if st == "run" else 4.6
-            return pose_run(self.t * rate + g["slot"], lean=18 if st == "run" else 6)
+            lower = locomotion_pose(spd, 0.0, g["_gphase"],
+                                    sprint=1.0 if st == "run" else 0.0)
+            upper = blend(POSES["stand"], "aim", 0.85) if aiming else POSES["ready"]
+            pose = mask_pose(lower, upper)
+            pose["body_r"] = lower.get("body_r", 0.0)
+            pose["spine"] = upper.get("spine", 6.0) + lower.get("spine", 0.0) * 0.45
+            pose["spine_r"] = lower.get("spine_r", 0.0) * 0.8
+            pose["twist"] = lower.get("twist", 0.0) * 0.6
+            pose["head_y"] = -pose["twist"] * 0.8
+            return pose
         if st == "hide_low":
             return dict(POSES["cover_tight"])
         if st == "hide_high":
@@ -1659,7 +1748,7 @@ class YardScene:
             pose = blend(POSES["stand"], "aim", 0.85)
         else:
             pose = dict(POSES.get(g["post_pose"], POSES["cover"]))
-        if g["burst_left"] > 0 or self.t - g["last_shot_t"] < 0.4:
+        if aiming:
             pose = blend(pose, "aim", 0.75)
         return pose
 
@@ -1685,19 +1774,26 @@ class YardScene:
             prof = T._guard_profile(kind)
             if not g["alive"]:
                 fall = g.get("fall")
+                if fall is not None and fall.rest is not None:
+                    if not r.visible_sphere((x, y + 0.3, z), 1.8):
+                        continue
                 if fall is None:
                     was = g.get("pose") or POSES.get(g["post_pose"], POSES["stand"])
                     hx, hz = g.get("hit_dir") or (0.0, 0.0)
                     hl = math.hypot(hx, hz) or 1.0
                     fx, fz = B._dir(g["yaw"])
                     track = _death.track_for(fx * hx + fz * hz < 0.0, int(g["slot"]))
+                    bw = getattr(getattr(self, "brain", None), "boxes", None)
                     fall = g["fall"] = _death.Fall(_w.hum(("guard", kind), True), was, track,
                                               (x, y, z), g["yaw"],
-                                              (hx / hl * 0.3, hz / hl * 0.3), int(g["slot"]))
+                                              (hx / hl * 0.3, hz / hl * 0.3), int(g["slot"]),
+                                              box_world=bw, **(g.get("death_ctx") or {}))
                 pose, (x, y, z), yaw = fall.at(self.t - g["dead_t"], ground_y)
                 _w.actor(r, ("guard", kind), pose, (x, y, z), yaw,
                          int(tm), seed=100 + g["slot"], amp=0.0,
-                         rifle_on=False, hd=True, shadow=T._shadow_for(z))
+                         rifle_on=fall.rifle_on, hd=True, expression=fall.expression,
+                         shadow=T._shadow_for(z))
+                fall.draw_gun(r)
                 if g.get("mags") and fall.rest is not None:
                     gx, gz = B._dir(g["yaw"])
                     mx, mz = x - gz * 0.45, z + gx * 0.45
@@ -1728,9 +1824,11 @@ class YardScene:
                                 twist=pose.get("twist", 0) + 16.0 * rock,
                                 lsh_r=pose.get("lsh_r", 8) + 24.0 * rock,
                                 rkn=pose.get("rkn", 2) + 18.0 * rock)
-            if not (g["moving"] and g.get("stance") in ("run", "walk")):
-                pose = _hold_cached(_w.hum(("guard", kind), True), pose, "rifle", "ready",
-                                    key=("guard", kind))
+            tw, sp = pose.get("twist", 0.0), pose.get("spine", 0.0)
+            pose = _hold_cached(_w.hum(("guard", kind), True), pose, "rifle", "ready",
+                                key=("guard", kind))
+            pose["rifle_p"] = pose.get("rifle_p", 0.0) + sp - POSES["ready"]["spine"]
+            pose["rifle_y"] = pose.get("rifle_y", 0.0) + tw
             joints = _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                               int(tm), seed=100 + g["slot"], amp=0.4,
                               rifle_on=True, hd=True, shadow=T._shadow_for(z))
@@ -1756,7 +1854,26 @@ class YardScene:
                     _w.add(r, _guard_flash_mesh(m, sd, g["slot"] + int(g["last_shot_t"] * 60)))
 
     def _draw_fx(self, r, tm):
+        from engine3d.particles import PKIND_CASING, PKIND_DUST, PKIND_SPARK
+        r.light_cap = 64
+        r.wetness = 0.32
+        r.height_fog = (0.020, 0.0, 1.5, (14, 18, 26))
         now = self.t
+        use_gpu = getattr(r, "backend", "") == "gl"
+        if use_gpu and self._muzzle and now - self.last_fire < 0.02:
+            if getattr(self, "_fx_muzzle_t", -1.0) != self.last_fire:
+                self._fx_muzzle_t = self.last_fire
+                pool = getattr(self, "_fx_pool", None)
+                if pool is None:
+                    from engine3d.particles import ParticlePool
+                    pool = self._fx_pool = ParticlePool(1024, seed=606)
+                f = T._forward(self.yaw, self.pitch)
+                pool.burst_muzzle(self._muzzle, f, n=4)
+        if use_gpu and getattr(self, "_fx_pool", None) is not None:
+            dt = max(0.0, min(0.05, now - getattr(self, "_fx_last_t", now)))
+            self._fx_last_t = now
+            self._fx_pool.update(dt, floor_y=0.0)
+            self._fx_pool.submit(r)
         for t0, a, b, col in self.tracers:
             # a short streak that travels down the line, not a laser
             k = (now - t0) / 0.06
@@ -1765,15 +1882,40 @@ class YardScene:
                 pa = tuple(a[i] + (b[i] - a[i]) * tail for i in range(3))
                 pb = tuple(a[i] + (b[i] - a[i]) * head for i in range(3))
                 r.add_line3d(pa, pb, col, 2, layer=3)
-        for t0, p in self.sparks:
-            r.add_sprite(p, _fx.sparks(7, (now - t0) * 1000.0, n=10,
-                                       speed_m=2.0, dur_ms=420),
-                         layer=_fx.FX_LAYER)
-        for t0, p, kind in self.impacts:
-            col = (150, 24, 20) if kind == "blood" else (150, 150, 156)
-            r.add_sprite(p, _fx.dust_motes(int((now - t0) * 1000.0), seed=int(t0 * 97),
-                                           count=12, spread_m=(0.45, 0.4), col=col),
-                         layer=_fx.FX_LAYER)
+        if use_gpu:
+            rows = []
+            for t0, p in self.sparks:
+                age = now - t0
+                if 0.0 <= age < 0.42:
+                    u = age / 0.42
+                    for i in range(8):
+                        ang = i * 2.39996 + t0 * 13.0
+                        vx, vy, vz = math.cos(ang) * 2.4, 1.4 + (i % 3) * 0.7 - 9.8 * age, math.sin(ang) * 2.4
+                        rows.append((p[0] + vx * age, max(0.02, p[1] + vy * age), p[2] + vz * age,
+                                     vx, vy, vz, 1.0, 0.78, 0.45, 1.0 - u, 0.055, float(PKIND_SPARK), u, float(i)))
+            for t0, p, kind in self.impacts:
+                age = now - t0
+                if 0.0 <= age < 0.55:
+                    u = age / 0.55
+                    c = (0.58, 0.09, 0.08) if kind == "blood" else (0.60, 0.60, 0.62)
+                    for i in range(6):
+                        ang = i * 1.047 + t0 * 7.0
+                        sp = 0.9 + (i % 2) * 0.6
+                        rows.append((p[0] + math.cos(ang) * sp * age, max(0.02, p[1] + 0.6 * age),
+                                     p[2] + math.sin(ang) * sp * age, 0.0, 0.2, 0.0,
+                                     c[0], c[1], c[2], (1.0 - u) * 0.65, 0.12 + 0.22 * u, float(PKIND_DUST), u, float(i)))
+            if rows:
+                import numpy as np
+                r.add_particles(np.asarray(rows, dtype=np.float32))
+        else:
+            for t0, p in self.sparks:
+                r.add_sprite(p, _fx.sparks(7, (now - t0) * 1000.0, n=10, speed_m=2.0, dur_ms=420),
+                             layer=_fx.FX_LAYER)
+            for t0, p, kind in self.impacts:
+                col = (150, 24, 20) if kind == "blood" else (150, 150, 156)
+                r.add_sprite(p, _fx.dust_motes(int((now - t0) * 1000.0), seed=int(t0 * 97),
+                                               count=12, spread_m=(0.45, 0.4), col=col),
+                             layer=_fx.FX_LAYER)
         if self.brass and hasattr(r, "add_packed"):
             rows = T._brass_rows(r, (0.012, 0.012, 0.030))
             if rows is not None:

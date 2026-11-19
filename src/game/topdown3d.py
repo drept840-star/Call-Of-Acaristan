@@ -11,9 +11,11 @@ and nothing mission-specific:
     (the same basis ``engine3d.Renderer.set_camera`` builds), so aim and
     label projection work without touching the renderer.
   * ``enabled`` / ``disable`` - ``ACA_TD_2D=1`` forces the 2D top-down
-    view; any renderer error turns 3D off for the rest of the run.
+    view; a renderer error drops to 2D for a few seconds (logged to
+    ``crash_reports/td3d``), and repeated errors turn 3D off for the run.
   * small draw helpers (``put``, ``ring``, ``dot``, ``blood_pool``).
 """
+from collections import OrderedDict
 import math
 import os
 
@@ -31,7 +33,7 @@ class Cam(object):
     the focus, horizontal fov (deg), internal buffer size, focus height."""
     __slots__ = ("pitch", "dist", "fov", "res", "look_h")
 
-    def __init__(self, pitch, dist, fov, res=(640, 448), look_h=0.6):
+    def __init__(self, pitch, dist, fov, res=(WIDTH, HEIGHT), look_h=0.6):
         self.pitch, self.dist, self.fov = pitch, dist, fov
         self.res, self.look_h = res, look_h
 
@@ -53,6 +55,10 @@ CAMS = {
 GATES = {}
 
 
+RETRY_MS = 3000                  # 2D cover after a renderer error before 3D retries
+MAX_FAILS = 5                    # this many errors and 3D stays off for the run
+
+
 def enabled():
     """2.5D top-down on? ``ACA_TD_2D=1`` or 3D Quality LOW forces the 2D view
     (about half the frame cost: the low-end PC path)."""
@@ -65,12 +71,29 @@ def enabled():
             _STATE["ok"] = True
         except Exception:
             _STATE["ok"] = False
+    if _STATE["ok"] and _STATE.get("until", 0) > pygame.time.get_ticks():
+        return False
     return _STATE["ok"]
 
 
 def disable():
-    """Turn 2.5D off for this run (a renderer failed)."""
-    _STATE["ok"] = False
+    """A renderer failed: 2D for ``RETRY_MS``, then 3D again; off for the
+    run after ``MAX_FAILS``. Called from the caller's ``except`` block, so
+    the live exception goes to ``crash_reports/td3d``."""
+    import sys
+    fails = _STATE["fails"] = _STATE.get("fails", 0) + 1
+    if fails >= MAX_FAILS:
+        _STATE["ok"] = False
+    _STATE["until"] = pygame.time.get_ticks() + RETRY_MS
+    exc = sys.exc_info()[1]
+    if exc is not None and fails <= MAX_FAILS:
+        try:
+            from core.state import STATE
+            from engine.core import write_crash_report
+            write_crash_report("crash_reports/td3d", exc,
+                               extra={"mission": getattr(STATE, "active_mission", None), "fails": fails})
+        except Exception:
+            pass
 
 
 def buffer_res(cam):
@@ -223,9 +246,36 @@ def held(h, base, rig, mode="aim"):
     return mp3d.held(h, base, rig, mode)
 
 
+_SWAP_TUCK = {
+    "rsh_p": -18.0, "rsh_r": 16.0, "rsh_y": 0.0, "rel": 58.0,
+    "lsh_p": -10.0, "lsh_r": 14.0, "lsh_y": 0.0, "lel": 42.0,
+    "rifle_p": 64.0, "rifle_y": -34.0,
+}
+
+
+def apply_swap_pose(pose, k):
+    """Blend ``pose`` toward a hip/sling tuck by ``k`` (0..1) for 2.5D swaps."""
+    if k <= 0.0:
+        return pose
+    k = min(1.0, float(k))
+    out = dict(pose)
+    spine = out.get("spine", 0.0)
+    for jk, tgt in _SWAP_TUCK.items():
+        if jk == "rifle_p":
+            tgt = tgt + spine
+        va = out.get(jk, 0.0)
+        d = (tgt - va + 180.0) % 360.0 - 180.0
+        out[jk] = va + d * k
+    out["twist"] = out.get("twist", 0.0) - 18.0 * k
+    out["spine"] = spine + 6.0 * k
+    out["head_p"] = out.get("head_p", 0.0) + 8.0 * k
+    out["head_y"] = out.get("head_y", 0.0) + 10.0 * k
+    return out
+
+
 # ── draw helpers ───────────────────────────────────────────────────────
 
-def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0):
+def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0, static=True):
     """A small rigid mesh at pos. On GL it is packed once (into ``cache``)
     and moved with numpy each frame; re-packing in Python cost ~4 ms a prop.
     ``pitch`` tumbles the mesh about its own x after the yaw (the molotov's
@@ -238,24 +288,29 @@ def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0):
     if cache is None or not hasattr(r, "add_packed"):
         src = Mesh([(v[0] * scale, v[1] * scale, v[2] * scale) for v in mesh.verts], mesh.faces)
         out = Mesh().add(src, m=m, t=pos)
-        r.add_dynamic(out.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in out.faces])
+        r.add_dynamic(out.verts, [(f[0], f[1], f[2], f[3], None, f[4], *f[5:]) for f in out.faces])
         return
     import numpy as np
     key = (id(mesh), scale)
     # walls and roof clutter sit still: reuse last frame's placed rows
     # (add_packed only reads them) instead of re-transforming ~100 a frame
-    placed = cache.get("placed")
-    if placed is None or len(placed) > 2048:
-        placed = cache["placed"] = {}
-    pkey = (key, tuple(pos), yaw, roll, pitch)
-    out = placed.get(pkey)
-    if out is not None:
-        r.add_packed(out)
-        return
+    placed = pkey = None
+    if static:
+        placed = cache.get("placed")
+        if placed is None:
+            placed = cache["placed"] = OrderedDict()
+        pkey = (key, tuple(pos), yaw, roll, pitch)
+        out = placed.get(pkey)
+        if out is not None:
+            placed.move_to_end(pkey)
+            r.add_packed(out)
+            return
+        if len(placed) >= 4096:
+            placed.popitem(last=False)
     arr = cache.get(key)
     if arr is None:
         verts = [(v[0] * scale, v[1] * scale, v[2] * scale) for v in mesh.verts]
-        arr = r.pack(verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in mesh.faces])
+        arr = r.pack(verts, [(f[0], f[1], f[2], f[3], None, f[4], *f[5:]) for f in mesh.faces])
         if arr is None:
             return
         cache[key] = arr
@@ -263,7 +318,8 @@ def put(r, mesh, pos, yaw=0.0, roll=0.0, scale=1.0, cache=None, pitch=0.0):
     out = arr.copy()
     out[:, 0:3] = arr[:, 0:3] @ rot.T + np.asarray(pos, dtype=np.float32)
     out[:, 6:9] = arr[:, 6:9] @ rot.T
-    placed[pkey] = out
+    if placed is not None:
+        placed[pkey] = out
     r.add_packed(out)
 
 
@@ -298,6 +354,12 @@ def dots(r, pts, layer=2):
     test per dot in the composite, and a molotov's burst is 300+ dots."""
     if not pts:
         return
+    if hasattr(r, "add_particles"):
+        from engine3d.particles import pack_dots
+        arr = pack_dots(pts)
+        if arr is not None:
+            r.add_particles(arr)
+        return
     if not hasattr(r, "add_packed"):
         for pos, col, size in pts:
             r.add_sprite(pos, dot(col, size), layer=layer)
@@ -318,15 +380,15 @@ def dots(r, pts, layer=2):
     r.add_packed(out)
 
 
-_SOFT = {}
+_SOFT = OrderedDict()
 SQUASH = 0.86                      # a floor circle seen from the top-down cameras
 
 
 def _soft_surf(key, w, h, build):
     s = _SOFT.get(key)
     if s is None:
-        if len(_SOFT) > 256:
-            _SOFT.clear()
+        if len(_SOFT) >= 256:
+            _SOFT.popitem(last=False)
         import numpy as np
         y, x = np.mgrid[0:h, 0:w].astype(np.float32)
         d = np.hypot((x - (w - 1) / 2.0) / (w / 2.0), (y - (h - 1) / 2.0) / (h / 2.0))
@@ -336,6 +398,8 @@ def _soft_surf(key, w, h, build):
         s.fill(rgb + (0,))
         pygame.surfarray.pixels_alpha(s)[:] = np.clip(alpha, 0, 255).astype(np.uint8).T
         _SOFT[key] = s
+    else:
+        _SOFT.move_to_end(key)
     return s
 
 
@@ -355,6 +419,11 @@ def shadow(half_w, half_d=None, alpha=130):
                          lambda d, a: ((0, 0, 0), alpha * (1.0 - d.clip(0, 1) ** 2) ** 1.4))
         img = pygame.transform.smoothscale(img, (w, h))
         s.blit(img, (int(sx) - w // 2, int(sy) - h // 2))
+    draw._gl_spec = {
+        "kind": "blob", "col": (0.0, 0.0, 0.0),
+        "rx_m": float(half_w), "ry_m": float(half_d),
+        "strength": float(alpha) / 255.0,
+    }
     draw.bounds_m = (half_w + 0.1, half_d + 0.1)
     return draw
 
@@ -365,6 +434,9 @@ def shadow(half_w, half_d=None, alpha=130):
 # the shadow is not hidden behind its own wall.
 SHADOW_DIR = (0.55, -0.16)
 SHADOW_COL = (4, 6, 16)
+SUN_HALF = 22.0                  # GL sun map covers 44 m round the view's focus
+CHAR_POP = 1.5                   # GL: top light + rim on rigs so they read off dark floors
+TEX_SCALE = 1 / 3.0              # GL: 3x bigger texels, so walls and floors read as chunky pixels like the 3D missions
 
 
 def _hull(pts):
@@ -408,7 +480,17 @@ def cast_shadows(r, alpha=100, col=SHADOW_COL):
     (``r.shadow_boxes``) and every humanoid queued this frame
     (``r.actor_log``) throws a hard shadow along ``SHADOW_DIR``. All of them
     go into one layer-1 sprite written without blending, so overlapping
-    shadows do not double up; walls (layer 2) still hide it."""
+    shadows do not double up; walls (layer 2) still hide it.
+
+    On GL this is a real sun shadow map instead: every queued mesh and rig
+    casts its true shape onto floors, walls and other actors."""
+    fy = r.fwd[1] or -1e-6
+    t = -r.cam[1] / fy
+    focus = (r.cam[0] + r.fwd[0] * t, 0.0, r.cam[2] + r.fwd[2] * t)
+    r.char_pop = CHAR_POP
+    r.tex_scale = TEX_SCALE
+    if r.set_sun_shadow((SHADOW_DIR[0], -1.0, SHADOW_DIR[1]), focus, SUN_HALF, alpha / 255.0):
+        return
     import numpy as np
     boxes = getattr(r, "shadow_boxes", None) or ()
     st = _CAST.get(id(boxes))
@@ -471,7 +553,7 @@ def cast_shadows(r, alpha=100, col=SHADOW_COL):
         s.blit(layer, box.topleft, box)
     draw.bounds = (x0, y0, x1 - x0, y1 - y0)
     draw.strict_occ = True     # always mask: in a tight box an actor is under the 12% stray-pixel cut
-    r.add_sprite(anchor, draw, layer=1)
+    r.add_sprite(anchor, draw, layer=1, bias=-200.0)
 
 def tac_ring(rad, col, shade=0.52):
     """Sprite callback: the tactical floor marker - a soft drop shadow, a
@@ -497,6 +579,27 @@ def tac_ring(rad, col, shade=0.52):
         img = _soft_surf(("ring", w, h, col), w, h, build)
         s.blit(sh, (int(sx) - w // 2, int(sy) - h // 2))
         s.blit(img, (int(sx) - w // 2, int(sy) - h // 2))
+
+    def _gl_surf(sx, sy, scale, z):
+        w = int(scale * rad * 2.5) // 2 * 2
+        h = int(w * SQUASH) // 2 * 2
+        if w < 6 or h < 6:
+            return ()
+        k = 1.25
+        def build(d, a):
+            import numpy as np
+            seg = (np.mod(a, np.pi / 4.0) < np.pi / 4.0 * 0.74).astype(np.float32)
+            dd = d * k
+            ring = 205.0 * np.exp(-((dd - 1.0) / 0.045) ** 2) * seg
+            glow = 46.0 * np.exp(-((dd - 0.88) / 0.16) ** 2)
+            return col, np.maximum(ring, glow)
+        sh = _soft_surf(("sh", w, h, int(shade * 255)), w, h,
+                        lambda d, a: ((0, 0, 0), shade * 255 * (1.0 - (d * k * 1.1).clip(0, 1) ** 2) ** 1.4))
+        img = _soft_surf(("ring", w, h, col), w, h, build)
+        x0, y0 = int(sx) - w // 2, int(sy) - h // 2
+        return (("ring_sh", w, h, int(shade * 255)), sh, x0, y0, w, h, False), \
+               (("ring", w, h, col), img, x0, y0, w, h, False)
+    draw._gl_surf = _gl_surf
     draw.bounds_m = (rad * 1.3, rad * 1.2)
     return draw
 
@@ -509,5 +612,32 @@ def blood_pool(k, col=(82, 14, 16)):
         if w < 2:
             return
         pygame.draw.ellipse(s, col, (int(sx) - w // 2, int(sy) - h // 2, w, h))
+    r_m = 0.25 + 0.35 * k
+    draw._gl_spec = {
+        "kind": "blob", "col": (col[0] / 255.0, col[1] / 255.0, col[2] / 255.0),
+        "rx_m": float(r_m), "ry_m": float(r_m * 0.75), "strength": 1.0, "hard": True,
+    }
     draw.bounds_m = (0.3 + 0.35 * k, 0.25 + 0.3 * k)
     return draw
+
+
+def add_player_rim(r, flashes, x, y, angle=None, spot=False):
+    """Add a cool upper-left rim light (and optional tactical spot beam on GL)."""
+    px3, _, pz3 = to3(x, y)
+    if hasattr(r, "add_packed"):
+        flashes.insert(0, {
+            "pos": (px3 - 0.48, 1.95, pz3 + 0.48),
+            "color": (162, 212, 255), "intensity": 0.90, "range": 2.35,
+        })
+        if spot and angle is not None:
+            dx, dy = math.cos(angle), math.sin(angle)
+            flashes.insert(0, {
+                "pos": (px3 + dx * 0.35, 1.35, pz3 - dy * 0.35),
+                "color": (218, 236, 255), "intensity": 1.10, "range": 7.4,
+                "kind": "spot", "dir": (dx, -0.22, -dy), "cone": 0.86, "shadow": True,
+            })
+    else:
+        flashes.append({
+            "pos": (px3, 1.7, pz3), "color": (182, 204, 232),
+            "intensity": 0.85, "range": 3.0,
+        })

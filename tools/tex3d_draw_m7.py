@@ -175,6 +175,25 @@ def track(rng):
     return img
 
 
+def gravel(rng):
+    """Crushed estate gravel, 32 texels/m (a tile is 2 m): uniform fine
+    aggregate with tight stone-grey contrast (no macro clouds or white blotches)."""
+    bed = fbm(rng, [8, 4], [0.40, 0.60])
+    img = ramp(bed, [P.WOOD_GREY, P.STONE_D, P.GALV_D, P.STONE], dither=0.9)
+    grit = rng.random((N, N))
+    img[grit < 0.09] = P.STEEL_D
+    img[(grit >= 0.09) & (grit < 0.16)] = P.WOOD_DUN
+    img[grit > 0.92] = P.GALV
+    for _ in range(260):
+        x, y = int(rng.integers(0, N)), int(rng.integers(0, N))
+        put(img, x, y, P.GALV if rng.random() < 0.65 else P.STONE)
+        if rng.random() < 0.55:
+            put(img, x + 1, y + 1, P.STEEL_D)
+        else:
+            put(img, x, y + 1, P.WOOD_GREY)
+    return img
+
+
 # ── buildings (32 texels/m) ─────────────────────────────────────────────
 def plank(rng):
     """Weathered grey-brown boards (fences, shed, porch, doors): 8-texel
@@ -347,6 +366,7 @@ def leaf(rng):
 TEXTURES = {
     "grass": (grass, 71, 16.0), "stubble": (stubble, 72, 16.0),
     "furrow": (furrow, 73, 16.0), "dirt": (dirt, 74, 16.0), "track": (track, 75, 16.0),
+    "gravel": (gravel, 85, 32.0),
     "plank": (plank, 76, 32.0), "barnboard": (barnboard, 77, 32.0),
     "plaster": (plaster, 78, 32.0), "tile": (tile, 79, 32.0), "tin": (tin, 80, 32.0),
     "hay": (hay, 81, 32.0), "stone": (stone, 82, 32.0), "bark": (bark, 83, 32.0),

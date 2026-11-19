@@ -282,51 +282,38 @@ def _water_mesh():
 
 # ── sprite painters (must stay within ~3.4m of their anchor for the GL depth mask) ──
 def _flame_fn(seed, t, size_m, heat=1.0, smoke_mix=0.0, drift=0.0):
-    def draw(s, sx, sy, scale, z):
-        r = max(5, int(size_m * scale))
-        w_, h_ = r * 2 + 8, int(r * 2.6) + 8
-        img = pygame.Surface((w_, h_), pygame.SRCALPHA)
-        cx, cy = w_ // 2, h_ - 6
-        n = 15
-        for i in range(n):
-            speed = .06 + (i % 3) * .02
-            f = (i / n + t * speed + seed * .13) % 1.0
-            ph = seed * 1.93 + i * 2.41
-            spread = .3 + .32 * math.sin(f * math.pi)
-            ox = (math.sin(ph + t * .14) * spread + drift * f * .7) * r
-            oy = -f * r * 1.55
-            rw = max(1.5, r * (.42 - f * .24) * (1 + .15 * math.sin(t * .3 + ph)))
-            rh = rw * 1.7
-            hc = (1 - f) * heat
-            col = (int(110 + 145 * hc), int(28 + 150 * hc * hc), int(6 + 40 * hc ** 3))
-            a = int((38 + 90 * hc) * heat)
-            rect = pygame.Rect(0, 0, rw * 2, rh * 2)
-            rect.center = (cx + int(ox), cy + int(oy))
-            pygame.draw.ellipse(img, (*col, min(160, a)), rect)
-        s.blit(img, (int(sx) - cx, int(sy) - cy), special_flags=pygame.BLEND_RGBA_ADD)
-    return draw
+    from cutscenes import fire3d as _f3d
+    t_ms = t * (1000.0 / 60.0)
+    h_m = size_m * 2.4
+    return _f3d.emit_flame_sprite(
+        t_ms, seed=seed, width_m=size_m * 1.45, height_m=h_m,
+        heat=heat, drift=drift, base_off_m=0.0,
+    )
 
 
 def _smoke_fn(seed, t, size_m, drift=1.0, density=1.0):
+    from cutscenes import fire3d as _f3d
+    t_ms = t * (1000.0 / 60.0)
+
     def draw(s, sx, sy, scale, z):
         r = max(6, int(size_m * scale))
-        d = r * 2 + 8
-        img = pygame.Surface((d, d), pygame.SRCALPHA)
-        cx, cy = d // 2, d // 2 + int(r * .4)
+        cy_off = int(r * 0.4)
         n = 12
         for i in range(n):
             f = (i / n + t * .035 + seed * .31) % 1.0
             ph = seed * 2.17 + i * 1.83
             ox = int((math.sin(ph + t * .05) * .35 + drift * f * .9) * r)
             oy = -int(f * r * .82)
-            rr = max(2, int(r * (.34 + f * .55)))
-            sh = int(46 + f * 24 + 6 * math.sin(ph + t * .1))
+            rr = max(3, int(r * (.34 + f * .55)))
+            sh = int(40 + f * 22 + 6 * math.sin(ph + t * .1))
             env = math.sin(f * math.pi) ** .8
             a = int(92 * density * env)
             if a <= 3:
                 continue
-            pygame.draw.circle(img, (sh, sh - 2, sh + 2, min(120, a)), (cx + ox, cy + oy), rr)
-        s.blit(img, (int(sx) - cx, int(sy) - cy))
+            warmth = max(0, min(4, int((1.0 - f * 2.1) * 4.0)))
+            img = _f3d.smoke_puff_surface(warmth, (seed + i) % 6, rr, min(140, a), (sh, sh - 2, sh + 2))
+            s.blit(img, (int(sx + ox - rr), int(sy + cy_off + oy - rr)))
+    draw.bounds_m = (size_m * 2.2, size_m * 2.2)
     return draw
 
 

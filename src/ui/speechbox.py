@@ -322,7 +322,11 @@ def draw_caption(surface, speaker, text, shown=None, band=None, clock=None):
     tab_h = (f_tab.cap + 3) * u
     head = (tab_h + 2 * u) if names else 0
     block = head + len(rows) * row_h
-    y = top + max(u, (bot - top - block) // 2)
+    # centred in the band; a block taller than the band grows UP (never off
+    # the bottom of the screen) and the black band grows with it
+    y = min(top + max(u, (bot - top - block) // 2), bot - u - block)
+    if y - u < top:
+        surface.fill((0, 0, 0), (0, y - u, sw, top - y + u))
     acc = _R.accent_for(speaker, (255, 150, 60))
     if names:
         name = _R._base(speaker)

@@ -706,7 +706,7 @@ class KillScene:
         _w.actor(r, "vasile", pose, (VX, VY, VZ + dz), yaw, tm, seed=71,
                  amp=0.0 if self.death_t is not None else 0.15, rifle_on=False,
                  expression=self._face(), mouth=mouth, hd=True, wound=wound,
-                 bloody=self.hits > 0, flags=flags)
+                 bloody=self.hits > 0, flags=flags, shadow=(2, -0.30))
 
     def _draw_gore(self, r, tm):
         if self.death_t is None:
@@ -767,7 +767,7 @@ class KillScene:
         yaw = BYAW + _wrap(self.base_yaw + self.yaw_off - BYAW) * amount
         joints = _w.actor(r, key, pose, (BX, VY, BZ), yaw, tm, seed=93,
                           amp=0.06, rifle_on=True, flags=("shotgun",),
-                          expression="stern", mouth=0.0)
+                          expression="stern", mouth=0.0, shadow=(2, -0.30))
         rm = joints.get("rifle_m") if joints else None
         hand = joints.get("rhand") if joints else None
         if rm is not None and hand is not None:

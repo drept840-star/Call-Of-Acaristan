@@ -2,6 +2,83 @@
   "version": 1,
   "bugs": [
     {
+      "id": "bug-m7-alex-well-hold-reset-20261119",
+      "error_message": "M7 raid: holding E next to Alex pinned under the fallen well beam never frees him - the 'Free Alex' prompt progress never fills and the beam does not lift.",
+      "file": "src/missions/m7/raid3d.py",
+      "root_cause": "The shared-revive rollout added `REV.step(self, dt, None, False, 1.0, self.brain.help_done)` to RaidScene._hold()'s pinned-Alex branch solely to decay a leftover Bodi revive animation. revive3d.step()'s inactive path (`who is None`) unconditionally zeroes `scene.hold` because that field is the Bodi/M8 revive timer. Alex's legacy beam-lift accumulates the SAME `scene.hold` toward HOLD_S['alex']=1.6 (also read by _help_k() -> _well() and prompt()), so every frame reset it to one dt (~0.0167 s) and completion was unreachable. Bodi's branch was unaffected because it passes who='bodi'.",
+      "fix": "In the Alex branch, save `well_hold = self.hold` before the REV.step decay call and restore it after. REV.step itself and the Bodi/M8 callers are unchanged. Regression `tests/unit/test_m7_campaign.py::M7RaidTests::test_holding_e_frees_pinned_alex` (fails on the buggy code with hold 0.0167 after 30 frames; passes with the fix). Gates: focused unit 30/30, smoke --only m7, compileall, ae_normalize, sync_arch_map --check; smoke --fast only the three documented pre-existing reds.",
+      "tags": [
+        "m7",
+        "raid",
+        "alex",
+        "well-beam",
+        "revive3d",
+        "hold-timer",
+        "shared-state"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-gl-resident-lru-evicts-new-20261119",
+      "error_message": "M6 yard hard-crashes on its first GL frame: AttributeError: 'InvalidObject' object has no attribute 'render' in GLRenderer._draw_resident.",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "The new 128-entry resident-chunk LRU in add_resident() computed `live = {id(e[0]) for e in self._res_draw}` BEFORE appending the just-created entry. A frame queueing more than 128 memo chunks (M6 yard's 24 m spatial chunking produces 196) therefore finds the newly inserted key absent from `live`; with every older entry also queued this frame, the eviction loop selects the new key, releases its VAO/VBO, and the code then appends that released entry to _res_draw. Probe: at add #129 _res stays at 128 while _res_draw grows to 129; 68 released VAOs were queued.",
+      "fix": "Include the just-inserted key in the live set: `live = {id(e[0]) for e in self._res_draw} | {key}`. Owner approved this one-line deviation from the verbatim culling patch; the 128-entry cap and per-pass culling are unchanged. Verified with engine3d_check (5.71% parity), smoke mission6_vertical_slice,engine3d, and all 9 ae_bench_scenes running without exception.",
+      "tags": [
+        "gl",
+        "culling",
+        "resident-chunks",
+        "lru",
+        "m6",
+        "yard",
+        "invalid-object"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-andrei-hitscan-no-room-guard-20261119",
+      "error_message": "Andrei M. in the M8 Duty mansion could be killed by the player before the player ever entered the security room (state flips idle -> dying with cause 'player' from stray Grand Hall / front-door fire).",
+      "file": "src/missions/m8/duty/mansion3d.py",
+      "root_cause": "MansionScene._fire let hitscan test Andrei's chest/head spheres whenever state was 'idle' or 'intro', with no room-entry guard. ANDREI_AT (-7.6, GF, 31.2) sits in direct sightline of the open 2.0 m security-room doorway (x -7..-5, z=26), so OS-12 / Fallow 12 rounds crossing the Grand Hall could travel through the doorway and hit him while idle. Separately, the doorway lintels rendered in mansion_set at BACK_Z (y GF+2.8..SLAB_Y0) had no matching colliders in mansion_world._static.",
+      "fix": "Added mansion_brain.in_security_room(x,y,z) as the single interior-bounds test; _andrei_update reuses it for idle->intro gating and mansion3d._fire gates Andrei hitscan behind can_hit_andrei (intro always, idle only while the player stands inside the room). _fire now seeds andrei_zone/andrei_end/andrei_dd up front instead of locals().get(). Added the two missing BACK_Z lintel colliders (x -7..-5 and 5..7). Regression: tests/unit/test_m8_duty_mansion.py::test_andrei_cannot_be_shot_while_idle_from_outside_room. Gates: ae_normalize --changed OK, compileall OK, 6/6 unit OK, smoke --only m8 OK.",
+      "tags": [
+        "m8",
+        "duty",
+        "mansion",
+        "andrei",
+        "hitscan",
+        "collider",
+        "room-entry-guard"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-gl-bloom-uninitialized-level-20261117",
+      "error_message": "M5 Print Works renders as a magenta/orange/blue rainbow after any m5x 3D cutscene (screenshot: whole world pink, HUD normal)",
+      "file": "src/engine3d/gl_post.py",
+      "root_cause": "PostPipeline._run_bloom's multi-level blur chain sampled the CURRENT level's `ta` texture as the horizontal-blur source for levels >= 1 instead of the previous level's result (`src_tex`, which was assigned but never used). Level 0 works only because ta == src_tex there. Levels 1+ therefore read an f2 texture that has never been written; its contents are whatever GPU memory was reused. With cutscenes off that memory is zeroed, but after a 614x345 m5x cutscene it holds magenta frame data, so the bloom added by the final pass floods Print Works pink. Quarter never showed it because flush_to forces bloom=0.0 when CPU items exist, so _run_bloom never ran there.",
+      "fix": "Use `src_tex.use(location=0)` for the horizontal blur so every level samples the previous level's result (all bloom textures are written before being read). Verified with headless quarter -> m5x cutscene -> printworks probes for both m5x_faces_wide and m5x_pw_arrival_wide: print magenta went 62.83% -> 0.00%, mean RGB (108.7,35.5,94.8) -> (33.9,30.0,26.1), matching the cutscene-off baseline. engine3d_check parity 4.14% OK; M5 targeted smoke green apart from the pre-existing fade_out_music harness failure.",
+      "tags": [
+        "gl",
+        "bloom",
+        "post-pipeline",
+        "m5",
+        "printworks",
+        "cutscene",
+        "pink-frame",
+        "uninitialized-texture"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-17",
+      "occurrences": 1
+    },
+    {
       "id": "bug-m6-rail-render-lag-20261115",
       "error_message": "M6 third top-down stage lags severely during the rail fight",
       "file": "src/missions/m6/draw.py",
@@ -6337,6 +6414,948 @@
       "related_bugs": [
         "bug-333"
       ]
+    },
+    {
+      "error_message": "Significant refactor of wrap_audit.py",
+      "file": "tools/wrap_audit.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 10→15 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-342",
+      "timestamp": "2026-11-15T13:04:43.429Z",
+      "last_seen": "2026-11-15T13:04:43.429Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Had \"(?<![\\w\\-])(?<!://)((?:[A-Za-z]:)?[A-Za-z0-9_][A-",
+      "fix": "Changed to \"(?<![\\w\\-])(?<!://)((?:[A-Za-z]:)?\\.?[A-Za-z0-9_]",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-343",
+      "timestamp": "2026-11-15T14:04:05.987Z",
+      "last_seen": "2026-11-15T14:04:05.987Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in __init__()",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-344",
+      "timestamp": "2026-11-15T14:04:11.600Z",
+      "last_seen": "2026-11-15T14:04:11.600Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of ai_bundle_app.py",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 16→25 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-345",
+      "timestamp": "2026-11-15T14:04:30.209Z",
+      "last_seen": "2026-11-15T14:04:30.209Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: text should be lines",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Used \"text\" instead of \"lines\"",
+      "fix": "Changed text → lines",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-346",
+      "timestamp": "2026-11-15T14:05:19.367Z",
+      "last_seen": "2026-11-15T14:05:19.367Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Was returning: Path(path).read_text(encoding=\"utf-8\", errors=\"rep",
+      "fix": "Now returns: None",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-347",
+      "timestamp": "2026-11-15T14:05:25.593Z",
+      "last_seen": "2026-11-15T14:05:25.593Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Was returning: json.loads(SETTINGS.read_text(encoding=\"utf-8\"))",
+      "fix": "Now returns: {}",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-348",
+      "timestamp": "2026-11-15T14:05:53.455Z",
+      "last_seen": "2026-11-15T14:05:53.455Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of ai_bundle_app.py",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-349",
+      "timestamp": "2026-11-15T14:05:59.292Z",
+      "last_seen": "2026-11-15T14:05:59.292Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in ai_bundle_app.py",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-350",
+      "timestamp": "2026-11-15T14:06:18.836Z",
+      "last_seen": "2026-11-15T14:06:33.003Z",
+      "occurrences": 2,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Missing error handling in build()",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-351",
+      "timestamp": "2026-11-15T14:07:37.184Z",
+      "last_seen": "2026-11-15T14:07:37.184Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of ai_bundle_app.py",
+      "file": "tools/ai_bundle_app.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→8 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-352",
+      "timestamp": "2026-11-15T14:07:48.323Z",
+      "last_seen": "2026-11-15T14:07:48.323Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "tests/unit/test_ai_bundle_app.py",
+      "root_cause": "Had \"- src/core/big.py - player_pose, helper_7\"",
+      "fix": "Changed to \", \"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-353",
+      "timestamp": "2026-11-15T14:09:35.413Z",
+      "last_seen": "2026-11-15T14:09:35.413Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m8/duty/mansion_set.py",
+      "root_cause": "Had \"stone\"",
+      "fix": "Changed to \"concrete\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-354",
+      "timestamp": "2026-11-16T16:02:58.484Z",
+      "last_seen": "2026-11-16T16:02:58.484Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong operator: == should be !=",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "Used \"==\" instead of \"!=\"",
+      "fix": "Changed operator == → !=",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-355",
+      "timestamp": "2026-11-16T22:06:34.801Z",
+      "last_seen": "2026-11-16T22:06:34.801Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: sel should be loc",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "Used \"sel\" instead of \"loc\"",
+      "fix": "Changed sel → loc",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-356",
+      "timestamp": "2026-11-16T22:06:55.109Z",
+      "last_seen": "2026-11-16T22:06:55.109Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: gl_FragCoord should be fc",
+      "file": "src/engine3d/gl_post.py",
+      "root_cause": "Used \"gl_FragCoord\" instead of \"fc\"",
+      "fix": "Changed gl_FragCoord → fc",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-357",
+      "timestamp": "2026-11-16T22:44:38.051Z",
+      "last_seen": "2026-11-16T22:44:38.051Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of gl.py",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 16→21 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-358",
+      "timestamp": "2026-11-16T22:46:51.237Z",
+      "last_seen": "2026-11-16T22:46:51.237Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _dyn_vbo should be _static_runs",
+      "file": "src/engine3d/gl.py",
+      "root_cause": "Used \"_dyn_vbo\" instead of \"_static_runs\"",
+      "fix": "Changed _dyn_vbo → _static_runs",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-359",
+      "timestamp": "2026-11-16T22:47:00.315Z",
+      "last_seen": "2026-11-16T22:47:00.315Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "Was returning: iy * w + ix",
+      "fix": "Now returns: (iy * w + ix).astype(np.intp)",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-360",
+      "timestamp": "2026-11-16T23:12:05.043Z",
+      "last_seen": "2026-11-16T23:12:05.043Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 10→16 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-361",
+      "timestamp": "2026-11-16T23:15:46.490Z",
+      "last_seen": "2026-11-16T23:15:46.490Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of draw3d.py",
+      "file": "src/missions/m6/draw3d.py",
+      "root_cause": "12 lines replaced/restructured",
+      "fix": "Rewrote 28→32 lines (12 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-362",
+      "timestamp": "2026-11-16T23:19:58.616Z",
+      "last_seen": "2026-11-16T23:19:58.616Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of mansion3d.py",
+      "file": "src/missions/m8/duty/mansion3d.py",
+      "root_cause": "21 lines replaced/restructured",
+      "fix": "Rewrote 22→50 lines (21 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-363",
+      "timestamp": "2026-11-18T17:02:15.858Z",
+      "last_seen": "2026-11-18T17:02:15.858Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of mansion3d.py",
+      "file": "src/missions/m8/duty/mansion3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→17 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-364",
+      "timestamp": "2026-11-18T17:02:20.302Z",
+      "last_seen": "2026-11-18T17:02:20.302Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: v_add should be rot_z",
+      "file": "src/missions/m8/duty/mansion3d.py",
+      "root_cause": "Used \"v_add\" instead of \"rot_z\"",
+      "fix": "Changed v_add → rot_z",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-365",
+      "timestamp": "2026-11-18T17:02:22.408Z",
+      "last_seen": "2026-11-18T17:02:22.408Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of death3d.py",
+      "file": "src/cutscenes/death3d.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→7 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-366",
+      "timestamp": "2026-11-18T17:05:05.046Z",
+      "last_seen": "2026-11-18T17:05:05.046Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of physics.py",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 12→18 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-367",
+      "timestamp": "2026-11-18T17:06:42.759Z",
+      "last_seen": "2026-11-18T17:06:42.759Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of death3d.py",
+      "file": "src/cutscenes/death3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-368",
+      "timestamp": "2026-11-18T17:09:26.240Z",
+      "last_seen": "2026-11-18T17:09:26.240Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong return value",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "Was returning: for sx, (hk, kk, fk) in zip((-1.0, 1.0), _RAGDOLL_",
+      "fix": "Now returns: # upper arms stop ~25 deg across the chest instead",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-369",
+      "timestamp": "2026-11-18T17:12:45.177Z",
+      "last_seen": "2026-11-18T17:12:45.177Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of physics.py",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-370",
+      "timestamp": "2026-11-18T17:16:02.459Z",
+      "last_seen": "2026-11-18T17:16:02.459Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Wrong reference: _limit_legs should be _limit_joints",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "Used \"_limit_legs\" instead of \"_limit_joints\"",
+      "fix": "Changed _limit_legs → _limit_joints",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-371",
+      "timestamp": "2026-11-18T17:16:05.355Z",
+      "last_seen": "2026-11-18T17:16:05.355Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of physics.py",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-372",
+      "timestamp": "2026-11-18T17:24:21.385Z",
+      "last_seen": "2026-11-18T17:24:21.385Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Corpses slide/roll after landing (5.59 m/s, 4.71 m slide, 180 deg spin); lhand keeps orbiting at 0.45 m/s at t=3s and never sleeps",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "Ground friction was latched only from `on_surf` on the last of 5 constraint iterations: iteration 0 clamped p[1]=fl but later link passes left p[1]>=fl, so the final `if p[1] < fl` was False, on_surf was never set, and landed bodies got zero friction and never slept. Separately, `_limit_joints()` ran 5x/step while `_grounded < 7` and moved single child joints (ek/kk/fk) with no equal-and-opposite parent reaction and no prev velocity compensation - a reactionless torque motor that catapulted grounded legs. A third cause was in src/cutscenes/death3d.py: up to 4.5 m/s impulses on one shoulder flipped back-falls, and the gimbal blend `_s(0.95, 0.995, |fwd[1]|)` zeroed body_r at 71.8 deg pitch, lifting the torso during side rolls.",
+      "fix": "Collect a per-step `surf_hit` set from floor/box-top contacts plus a `p[1] <= surf_y + 0.005` rest check; apply friction once after the iteration loop with `k_f = 0.58 ** (h*60.0)` and use the same set for `grounded`. Remove `_limit_joints`, `_shift`, `_RAGDOLL_LEGS`, `_LIMIT_STEP`, `_LANDED_NODES` (rig limits already come from `_pose_from_ragdoll` + `_RAGDOLL_MIN/MAX_DISTS`). In death3d: gimbal `_s(0.985, 0.998, ...)`; track-1 chest impulse 2.2 m/s + lat 0.35+0.15*(var//2) + knee 0.6/-0.20; track-2 side_sign*1.1 at 1.5 m/s spread 0.55; tracks 3/0 fwd_k 0.9/1.3 at -0.85 with a 0.6/-0.45 pelvis counter; rest also requires a >= self.land + 0.5.",
+      "tags": [
+        "ragdoll",
+        "physics",
+        "friction",
+        "constraint-motor",
+        "death3d",
+        "root-cause"
+      ],
+      "status": "confirmed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-373",
+      "timestamp": "2026-11-18T20:25:00.000Z",
+      "last_seen": "2026-11-18T20:25:00.000Z",
+      "occurrences": 1,
+      "related_bugs": [
+        "bug-369",
+        "bug-370",
+        "bug-371",
+        "bug-372"
+      ]
+    },
+    {
+      "error_message": "Corpses lunge, rubber-band, float 0.5-0.75 m, or flip 165 deg on landing when Fall is driven through Humanoid.pose_world",
+      "file": "src/cutscenes/death3d.py",
+      "root_cause": "Four geometry issues. (1) pose_world/build auto-grounds by -miny; a clamped inward thigh (hip_r -12 deg) or knees/hips relaxed toward 0 under body_p put a limb -0.50..-0.89 m below the pelvis, and max(min_node_y - 0.04, pel[1] - root_0[1]) lifted the whole corpse. (2) rx_anim/rz_anim added self.push*k for the first 0.15 s while blend_rag snapped the root back onto the ragdoll pelvis -> lunge then rubber-band. (3) rig.py joints['chest'] = (0, 0.36, +0.08) biased `up` forward 12.5 deg, and asin(-fwd[1]) + atan2(right[1], up[1]) flipped yaw/body_r ~180 deg when up[1] went negative. (4) forward falls pinned feet under ground friction so knees folded under the belly (chest-lkn 0.44 held the pelvis at 0.48 m for ~1 s) and legs crossed past the opposite hip (src/engine/collision/physics.py).",
+      "fix": "Fall.at now computes clear = pel[1] - min_node_y + 0.04 and binary-searches 7 blends over a safe_vals set (knees 6, body_p-plane hip/shoulder pitch damped by side_k, hip_r/sh_r 0/15, elbows 12, ankles 0) to keep pose_world()[2][1] <= clear. Removed the push*k root term; blend_rag = _s(0.06, 0.30, a). _pose_from_ragdoll uses pelvis->mid-shoulder for up, solves yaw_g/body_p_g/roll_g from (uh, up[1], right[1]) with the fwd[1] sign and blend _s(0.80, 0.94, |fwd[1]|)*(1 - _s(0.55, 0.85, |right[1]|)), wraps body_r, and re-solves shoulder/hip pitch in the clamped rot_z roll plane. physics._RAGDOLL_MIN_DISTS adds cross-hip ('rhip','lkn',0.40)/('lhip','rkn',0.40); impulses now hit chest+head with narrow spread and upward knee/foot counters for tracks 0/3.",
+      "tags": [
+        "ragdoll",
+        "death3d",
+        "pose_world",
+        "auto-grounding",
+        "gimbal",
+        "root-cause"
+      ],
+      "status": "confirmed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-374",
+      "timestamp": "2026-11-18T20:50:00.000Z",
+      "last_seen": "2026-11-18T20:50:00.000Z",
+      "occurrences": 1,
+      "related_bugs": [
+        "bug-373"
+      ]
+    },
+    {
+      "error_message": "Corpses still propped up / sitting upright after the ragdoll geometry pass (body_p -30..-52 deg, lhip_p 0 / lkn 6, pw_y 0.32-0.42 m above the floor)",
+      "file": "src/cutscenes/death3d.py",
+      "root_cause": "Inverting 15 loose Verlet nodes back through Humanoid's Euler hierarchy (_pose_from_ragdoll) is lossy: Humanoid.build()/pose_world auto-grounds by -miny, so whenever body_r crossed the side_k threshold (68-75 deg) or limbs clamped, a limb sat below the pelvis and the root was lifted. Constraints and binary-searched 'safe' joint values could not reliably reproduce an authored lying pose on flat ground.",
+      "fix": "Removed the ragdoll inversion entirely (RagdollBody, _world_joints, _pose_from_ragdoll, _vnorm/_vcross/_transpose/_wrap, _NODE_RADII). Fall is authored-pose driven again: death_pose + _flop with per-slot (slot*37)%7 variation, ankle-change + clamped push + blast velocity advanced via engine.collision.slide_capsule against box_world/extra_boxes (plus a second chest-vs-wall resolve), bounded radial blast throw (bvx/bvz <=4.8, vy 1.4..3.8), ledge gravity with 0.16 restitution and exponential blast damping, and rest latched only after land+0.55 s grounded with both velocities <0.05. physics.py RagdollBody fixes left in place for other callers.",
+      "tags": [
+        "ragdoll",
+        "death3d",
+        "authored-pose",
+        "auto-grounding",
+        "slide_capsule",
+        "root-cause"
+      ],
+      "status": "confirmed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-375",
+      "timestamp": "2026-11-18T21:05:00.000Z",
+      "last_seen": "2026-11-18T21:05:00.000Z",
+      "occurrences": 1,
+      "related_bugs": [
+        "bug-373",
+        "bug-374"
+      ]
+    },
+    {
+      "error_message": "Guards turn into limp sacks on frame 1 of the death fall (no reaction to the bullet)",
+      "file": "src/cutscenes/death3d.py",
+      "root_cause": "A pure Verlet RagdollBody seeded from the live pose has zero muscle tone immediately: gravity and the shot impulse act on unconstrained nodes, so the authored stagger/clutch/buckle/kneel reaction never appears. Blast and directional impulses alone cannot hold a human silhouette for the first 0.3-0.5 s.",
+      "fix": "Added an active-tone phase: _active_pose(a) blends was->_STAGGER/_CLUTCH/_KNEEL/_BUCKLE with per-track upper/lower tone envelopes (ut/lt ~0.28 s, 0.54 s for knee drop); _apply_muscle_tone drives pos via prev[i] -= clamp((k*err - d*vel)*h, -0.45, 0.45)*h with k=260/240*tone, d=28*tone toward hum.ragdoll_nodes(p_auth, (0,0,0), yaw_tgt), and applies pelvis spring support only when a foot/knee is within 0.18 m of floor(pelvis) (so ledge pushes lose footing). Track 3 one-shot topple impulse at a>=0.38 s; blast kills skip tone. RagdollBody drag 0.962 and ground rebound 0.04 (physics.py) give heavy settle; track impulses lowered (push 1.1-2.8).",
+      "tags": [
+        "ragdoll",
+        "death3d",
+        "muscle-tone",
+        "pd-spring",
+        "root-cause"
+      ],
+      "status": "confirmed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-376",
+      "timestamp": "2026-11-18T21:35:00.000Z",
+      "last_seen": "2026-11-18T21:35:00.000Z",
+      "occurrences": 1,
+      "related_bugs": [
+        "bug-375"
+      ]
+    },
+    {
+      "error_message": "Ragdoll corpses slide 2.5-5.8 m over 5 s after the anatomical-limit upgrade; unit ledge-drop test regressed (chest y=1.43 > 0.45)",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "The new single-node position pushes in `_apply_anatomical_limits()` (hip splay/hyperextension, shoulder cone, ribcage pushout, neck cone: `kn[i] -= px[i]*corr`, `hd[i] += az[i]*corr*0.55`, `limb_p[i] += tx[i]*dlx`, `ch[i] -= c*0.15`) move `pos` without the matching `prev` delta, so each of the 6 constraint iterations injects velocity - the same reactionless motor removed earlier in `_limit_joints`. Runtime monkeypatch replacing `_apply_anatomical_limits` with a no-op reduces settled drift from 2.5-5.8 m to 0.003-0.25 m. The soft spine/neck links plus these constraints also hold the chest up in the ledge-drop unit test.",
+      "fix": "NOT APPLIED - owner decision pending; supplied patch was applied verbatim. Candidate fix: for every single-node correction add the same delta to `self.prev[name]` (Verlet momentum balance), keeping pair corrections as-is, then re-run the ledge-drop test and the headless drift probe.",
+      "tags": [
+        "ragdoll",
+        "physics",
+        "constraint-motor",
+        "regression",
+        "root-cause"
+      ],
+      "status": "confirmed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-377",
+      "timestamp": "2026-11-18T22:05:00.000Z",
+      "last_seen": "2026-11-18T22:05:00.000Z",
+      "occurrences": 1,
+      "related_bugs": [
+        "bug-370",
+        "bug-376"
+      ]
+    },
+    {
+      "error_message": "Wrong reference: _RAGDOLL_MAX_DISTS should be _REST_GROUNDED",
+      "file": "src/engine/collision/physics.py",
+      "root_cause": "Used \"_RAGDOLL_MAX_DISTS\" instead of \"_REST_GROUNDED\"",
+      "fix": "Changed _RAGDOLL_MAX_DISTS → _REST_GROUNDED",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-378",
+      "timestamp": "2026-11-18T20:06:53.700Z",
+      "last_seen": "2026-11-18T20:06:53.700Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of rig3d.py",
+      "file": "src/engine/anim/rig3d.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 7→8 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-379",
+      "timestamp": "2026-11-19T20:12:14.491Z",
+      "last_seen": "2026-11-19T20:12:14.491Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of rig3d.py",
+      "file": "src/engine/anim/rig3d.py",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 14→17 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-380",
+      "timestamp": "2026-11-19T20:12:23.037Z",
+      "last_seen": "2026-11-19T20:12:23.037Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of rig3d.py",
+      "file": "src/engine/anim/rig3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 12→16 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-381",
+      "timestamp": "2026-11-19T20:12:33.404Z",
+      "last_seen": "2026-11-19T20:12:33.404Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of rig3d.py",
+      "file": "src/engine/anim/rig3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-382",
+      "timestamp": "2026-11-19T20:12:39.843Z",
+      "last_seen": "2026-11-19T20:12:39.843Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "3D third-person walk moonwalked (planted foot slid forward) and the shotgun carry crabbed 35 deg sideways",
+      "file": "src/engine/anim/rig3d.py",
+      "root_cause": "_leg_swing folded the knee at ph = pi, on the planted backward stroke, so the auto-grounder pinned a foot that was being pulled forward; hip sweep was also too small for the stride. Shotgun: root drawn at body_yaw + SG_BLADE_YAW while the gait ran at body_yaw, so legs stepped 35 deg off the travel line.",
+      "fix": "Knee fold driven by forward thigh velocity (straight at heel strike/toe-off), speed-scaled cycle, hip amplitude and lift target; raid3d.sg_square_hips moves up to 25 deg of the blade from root into twist + rifle_y while moving (raid3d, trap3d, mansion3d). Planted-foot slide at 3.3 m/s 2.15 -> 0.15 m/s.",
+      "tags": [
+        "animation",
+        "gait",
+        "3d",
+        "shotgun"
+      ],
+      "status": "fixed",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-3d-gait-moonwalk-20261119",
+      "timestamp": "2026-11-19T21:00:00.000Z",
+      "last_seen": "2026-11-19T21:00:00.000Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of trap3d.py",
+      "file": "src/missions/m8/revenge/trap3d.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→3 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-383",
+      "timestamp": "2026-11-19T21:46:59.944Z",
+      "last_seen": "2026-11-19T21:47:03.127Z",
+      "occurrences": 2,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Incorrect value in code",
+      "file": "src/missions/m8/duty/mansion_brain.py",
+      "root_cause": "Had \"state\"",
+      "fix": "Changed to 's prompts\n            if (a[\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-384",
+      "timestamp": "2026-11-19T21:47:42.675Z",
+      "last_seen": "2026-11-19T21:47:42.675Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "error_message": "Significant refactor of test_gameplay_sweep.py",
+      "file": "tests/unit/test_gameplay_sweep.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "status": "candidate",
+      "observed_worktree": "E:\\Code\\Call of Acaristan\\First try",
+      "id": "bug-385",
+      "timestamp": "2026-11-19T21:52:51.453Z",
+      "last_seen": "2026-11-19T21:52:51.453Z",
+      "occurrences": 1,
+      "related_bugs": []
+    },
+    {
+      "id": "bug-m8-trap-cp-ammo-lost-20261119",
+      "error_message": "M8 trap: retrying from a checkpoint always restarted both guns on starting ammo; the ammo saved at the checkpoint was ignored.",
+      "file": "src/missions/m8/revenge/trap3d.py",
+      "root_cause": "_setup set self.mag/self.reserve from cp_state, then rebuilt self.wpns from WPN_SPECS defaults and _sync_weapon_attrs() overwrote them. cp_state also held only the gun in hand.",
+      "fix": "_cp_snapshot() saves both guns (wpns, live mag/reserve folded in) from _open_gate and _clear; _setup restores them with each reserve floored at reserve0.",
+      "tags": [
+        "m8",
+        "trap",
+        "checkpoint",
+        "ammo",
+        "shared-state"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-loot-at-full-wasted-20261119",
+      "error_message": "M8 trap and mansion: walking over a body with both reserves full emptied it, so the ammo was gone when needed later.",
+      "file": "src/missions/m8/revenge/trap3d.py",
+      "root_cause": "_loot set e['mags']=0 before checking room; trap clamped the gain to 0, mansion clamped at cap. M7 raid3d._loot already returned when room<=0.",
+      "fix": "trap3d._loot and mansion3d._loot leave the body untouched when both reserves are at cap.",
+      "tags": [
+        "m8",
+        "trap",
+        "mansion",
+        "loot",
+        "ammo"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-mansion-revive-through-floor-20261119",
+      "error_message": "M8 mansion: an ally down in the hall offered 'Help ally up' to the player on the gallery above and blocked the study door/crate prompts.",
+      "file": "src/missions/m8/duty/mansion_brain.py",
+      "root_cause": "near_revive measured only x/z distance; revive is first in _hold_action, so it outranked study_door and crates.",
+      "fix": "near_revive also requires abs(ally y - player y) < 1.2.",
+      "tags": [
+        "m8",
+        "mansion",
+        "revive",
+        "hold-action",
+        "multi-floor"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m1-hotwire-tutorial-eaten-20261119",
+      "error_message": "M1: pressing E at the truck before the yard was clear stopped Vasile's hotwire tutorial line from ever playing.",
+      "file": "src/missions/m1/update.py",
+      "root_cause": "The 'not yet, clear the yard' warning and the hotwire tutorial shared one one-shot flag, STATE.hotwire_radio_said.",
+      "fix": "The warning uses its own STATE.hotwire_not_clear_said (reset in core/state.py and m1/main.py).",
+      "tags": [
+        "m1",
+        "hotwire",
+        "radio",
+        "one-shot-flag",
+        "shared-state"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-2d-pickups-at-full-wasted-20261119",
+      "error_message": "M1-M5: bandages at full HP, mags with full pouches and molotovs at 4 were consumed on touch (M1 'HP FULL'/'MOLOTOVS FULL', M2 fake '+1 MAG'/'+0 HP').",
+      "file": "src/missions/m2/update.py",
+      "root_cause": "Pickup loops removed the pickup regardless of room; M4 ignored _give_mag()'s False. M4-M6 already left bandages/mags at full on the ground.",
+      "fix": "M1 bandage/bottle, M2 bandage/mag, M3 bandage/sidearm top-off, M4 k9mag (when _give_mag returns False), M5 k9mag with both pouches full now stay on the ground.",
+      "tags": [
+        "m1",
+        "m2",
+        "m3",
+        "m4",
+        "m5",
+        "pickups",
+        "ammo"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-trap-kiosk-bodi-post-20261119",
+      "error_message": "M8 trap: opening the toll kiosk during wave 1 left Bodi at post 1 for all of wave 2",
+      "file": "src/missions/m8/revenge/trap3d.py",
+      "root_cause": "_open_gate starts wave 2 without _clear(1), and only _clear moved Bodi's goal to the next BODI_POSTS entry",
+      "fix": "_open_gate sets brain.bodi['goal'] = B.BODI_POSTS.get(2) when Bodi is up, mirroring _clear(1)",
+      "tags": [
+        "m8",
+        "trap",
+        "ally",
+        "gameplay-sweep"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-19",
+      "occurrences": 1
     }
   ],
   "applied_observations": {
@@ -6674,7 +7693,48 @@
     "aac23346-e983-41d5-aff9-aa0d29202f08": true,
     "7a6bcc56-ad53-46ea-b052-e138b77764a0": true,
     "3e5b6a88-4af3-4824-91db-42e927bdc981": true,
-    "9b88f672-31bd-4bce-a4b7-730cde0866c9": true
+    "9b88f672-31bd-4bce-a4b7-730cde0866c9": true,
+    "bb170805-23f1-42f4-9fe5-fe7a79a8164e": true,
+    "592c57af-541c-438a-b568-9ce752263146": true,
+    "a5df16fa-8bc8-4d31-bc3d-7ee1a642b31e": true,
+    "06d6789c-05b0-46fc-8b70-bfdf9001fd61": true,
+    "9ed68816-b767-4213-a9b5-67e43008a844": true,
+    "bd830d5b-3d32-47a3-ae21-f640b3431341": true,
+    "4e9c758f-f7f1-4eb5-b308-9e8987c5d728": true,
+    "8a3e6621-4187-4de9-82a7-7adbbdc80136": true,
+    "36a11c1e-d005-4e49-b4f4-38434037901b": true,
+    "15143aa7-c2cb-440a-9ca0-458b67496cc6": true,
+    "2cd42012-76ff-499b-bc7f-c20be12d5202": true,
+    "d83100b8-95f9-42ca-969a-3e5fbaf80fce": true,
+    "690c7d0c-36db-4b5b-863e-dad9836d294f": true,
+    "92d922c0-2041-4d78-bbb9-fb475fca8cd5": true,
+    "be06ae2b-3dcd-43ae-8bf5-3fd9d129d2c4": true,
+    "a56f86c8-df89-46f1-92bb-14f090d70b40": true,
+    "887328fb-0fc2-4674-9df6-4bde82c4a889": true,
+    "e066e680-9c6e-4bda-bf58-303105bb9dbf": true,
+    "bf070dd3-eee1-4801-b128-06c552f07744": true,
+    "0cd5967c-e07a-4063-bb13-0ff69b9c33c0": true,
+    "64e121d8-916d-4dee-a4f2-145f3a1ff520": true,
+    "bdf1163e-dc80-47db-9d4f-a6893158c047": true,
+    "9ef353b1-12dc-4bc0-8afb-989ecd058202": true,
+    "aebe8987-f97c-45e1-b01a-6edca46ccdd8": true,
+    "a320bd99-1676-4888-9b37-ba89d4a59e57": true,
+    "96a44113-079b-44b7-90fd-8e2cdf3b1d06": true,
+    "cd5ac8a6-6a40-4561-b57d-8b547653d087": true,
+    "40fc9729-0053-44fe-8514-ff73dfc5b14e": true,
+    "28615f66-ec98-404c-93d6-c7aab5754271": true,
+    "1ca4dded-f875-4cbb-af60-2a82df36dc3f": true,
+    "149a68d0-e796-46ce-93f4-dac0ec605d2c": true,
+    "db87511d-5ae1-4da5-ac01-d48ef694e2d2": true,
+    "255ce464-1557-49de-9780-202eb49a4176": true,
+    "bd699e4c-d7ad-4808-8ac1-fddddc6e55e6": true,
+    "5b24a7f0-974e-4771-a961-6b1142a90f79": true,
+    "baa42417-7302-447f-9e63-9111927c1e11": true,
+    "886f9222-8648-42b4-aa9d-5d79ca2898a2": true,
+    "fef4b827-0257-4045-b86f-c5864bf37913": true,
+    "e61d5be0-3a5f-410e-9971-c845d30d564d": true,
+    "d25d2d38-5b98-4846-8e2b-a7448deb6564": true,
+    "2b5860ee-b8fc-4b01-baaa-49986fb93661": true
   },
-  "next_id": 342
+  "next_id": 386
 }

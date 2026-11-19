@@ -151,11 +151,20 @@ def _guard_patrol(stage, tile):
     return _PATROLS.get(stage, {}).get(tile)
 
 
+def _is_border_door(grid, col, row):
+    h = len(grid)
+    w = len(grid[0]) if h else 0
+    return (grid[row][col] == "D"
+            and (row == 0 or row == h - 1 or col == 0 or col == w - 1))
+
+
 def _floor_at(stage, x, y):
     """True when the tile under a world point is walkable in ``stage``."""
     grid = _maps.grid_for(stage)
     col, row = int(x) // T, int(y) // T
     if not (0 <= row < len(grid) and 0 <= col < len(grid[0])):
+        return False
+    if _is_border_door(grid, col, row):
         return False
     return grid[row][col] not in M6_SOLID_CHARS
 
@@ -274,7 +283,7 @@ def _parse_grid(grid, stage):
     for row, line in enumerate(grid):
         for col, ch in enumerate(line):
             x, y = col * T, row * T
-            if ch in M6_SOLID_CHARS:
+            if ch in M6_SOLID_CHARS or _is_border_door(grid, col, row):
                 STATE.walls.append(pygame.Rect(x, y, T, T))
             elif ch == "P":
                 STATE.player = Player(x + 16, y + 16, max_hp=PLAYER_MAX_HP)

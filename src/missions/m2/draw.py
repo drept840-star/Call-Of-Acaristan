@@ -5418,30 +5418,20 @@ def _draw_weapon_hud(surface):
         return  # Only show after OS 12 is acquired
 
     from core.config import WIDTH, HEIGHT, font_terminal, font_terminal_small
+    from ui.tactical_hud import HUD_MARGIN, PANEL_GAP, tactical_panel_bg
 
     is_os12 = getattr(STATE, "current_weapon", "pistol") == "os12"
 
-    # ── Match the ammo panel's width exactly (no collision, no mismatch) ──
-    # The ammo panel is now unified_w wide, at x=24 (unified_x).
-    # We match that width so the weapon bar sits flush on top as a header.
     panel_w = 296 if is_os12 else 246
     panel_h = 26
-    panel_x = 24  # matches unified_x
-    # Sit directly above the molotov panel. The stack from bottom up:
-    #   HP bar:      HEIGHT-40 .. HEIGHT-10  (30px tall)
-    #   Ammo panel:  HEIGHT-40-bg_h-2 .. HEIGHT-40-2  (96 or 92 tall)
-    #   Molotov:     ammo_y-38 .. ammo_y-2  (36 tall)
-    #   Weapon bar:  molotov_y-panel_h-2 .. molotov_y-2  (26 tall)
+    panel_x = HUD_MARGIN
     ammo_bg_h = 96 if is_os12 else 92
-    ammo_y = HEIGHT - 40 - ammo_bg_h - 2
-    molotov_y = ammo_y - 38
-    panel_y = molotov_y - panel_h - 2  # 2px gap above molotov panel
+    hp_y = HEIGHT - HUD_MARGIN - 30
+    ammo_y = hp_y - ammo_bg_h - PANEL_GAP
+    molotov_y = ammo_y - 36 - PANEL_GAP
+    panel_y = molotov_y - panel_h - PANEL_GAP
 
-    # ── Panel background - matches ammo panel styling exactly ──
-    panel_bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    pygame.draw.rect(panel_bg, (0, 0, 0, 150), (0, 0, panel_w, panel_h), border_radius=4)
-    pygame.draw.rect(panel_bg, (40, 42, 38), (0, 0, panel_w, panel_h), 1, border_radius=4)
-    surface.blit(panel_bg, (panel_x, panel_y))
+    surface.blit(tactical_panel_bg(panel_w, panel_h), (panel_x, panel_y))
 
     # ── Colors ──
     active_name_col = C_TERMINAL           # (50, 255, 150) green phosphor
@@ -5518,34 +5508,28 @@ def _draw_weapon_hud(surface):
 def _draw_hud(surface):
     if not STATE.player:
         return
-    # ── Unified bottom-left HUD stack ──
-    # All 4 elements (weapon swap, molotov, ammo, HP) now share the same
-    # width (296 for OS12, 246 for pistol), x position (24), background
-    # color, and border style. They stack flush with no gaps so they read
-    # as ONE cohesive panel rather than 4 separate floating elements.
+    from engine.ui import objective_banner as _hud_objective
+    from ui.tactical_hud import HUD_MARGIN, PANEL_GAP, TACTICAL_THEME, tactical_panel_bg
     is_os12_hud = getattr(STATE, "current_weapon", "pistol") == "os12"
     unified_w = 296 if is_os12_hud else 246
-    unified_x = 24
+    unified_x = HUD_MARGIN
+    hp_y = HEIGHT - HUD_MARGIN - 30
 
     # HP bar - shared engine.ui.std widget (Phase 4). The panel tracks
     # unified_w (296 with the OS-12) so it stays flush under the ammo panel.
-    _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                         panel_bg=get_panel_bg, panel=(unified_w, 30),
+    _hud_health_bar.draw(surface, TACTICAL_THEME, STATE.player.hp, STATE.player.max_hp,
+                         panel_bg=tactical_panel_bg, x=unified_x, y=hp_y, panel=(unified_w, 30),
                          bb=(6, 4, unified_w - 12, 14))
 
-    # Shared objective panel (was 620 px wide; now uses the shared 520 px panel
-    # so the layout matches M1 exactly).
-    draw_objective_panel(surface, _m2_world._objective)
+    _hud_objective.draw(surface, _m2_world._objective, TACTICAL_THEME,
+                        x=HUD_MARGIN, y=HUD_MARGIN + 26 + 8)
 
-    # The OS 12 panel needs more room: two tall AR mags, ammo number,
-    # caliber tag, mag counter, and a reload bar. The pistol panel keeps
-    # its original footprint since it has far less to show.
     if is_os12_hud:
         bg_w, bg_h = unified_w, 96
     else:
         bg_w, bg_h = unified_w, 92
-    ammo_x, ammo_y = unified_x + 6, HEIGHT - 40 - bg_h - 2  # 2px gap above HP bar
-    bg = get_panel_bg(bg_w, bg_h)
+    ammo_x, ammo_y = unified_x + 6, hp_y - bg_h - PANEL_GAP
+    bg = tactical_panel_bg(bg_w, bg_h)
     surface.blit(bg, (unified_x, ammo_y))
     # No separate header label: the weapon-selector tabs above the panel
     # already identify the active weapon, so an extra title here just
@@ -5788,18 +5772,18 @@ def _draw_hud(surface):
             mag_label = f"MAGS: {STATE.spare_mags}"
             surface.blit(font_terminal_small.render(mag_label, True, (140, 150, 130)), (ammo_x + 154, ammo_y + 44))
 
-    # Bottle HUD - shared engine.ui.std strip (panel_bg = the cached 150 panel).
+    # Bottle HUD - shared engine.ui.std strip.
     from missions.m1 import _draw_molotov_icon as _mission1_molotov_icon
-    _hud_bottle_hud.draw(surface, THEME, STATE.player_bottles,
-                         panel_bg=get_panel_bg, icon=_mission1_molotov_icon,
-                         x=unified_x, y=ammo_y - 38, width=bg_w, cap=4)
+    _hud_bottle_hud.draw(surface, TACTICAL_THEME, STATE.player_bottles,
+                         panel_bg=tactical_panel_bg, icon=_mission1_molotov_icon,
+                         x=unified_x, y=ammo_y - 36 - PANEL_GAP, width=bg_w, cap=4)
 
-    _hud_hostiles.draw(surface, THEME, len(STATE.enemies))
+    _hud_hostiles.draw(surface, TACTICAL_THEME, len(STATE.enemies), x=HUD_MARGIN, y=HUD_MARGIN)
 
     comms = "COMMS OFFLINE" if STATE.mission2_comms_cut else "COMMS: VASILE"
     comms_col = (220, 60, 55) if STATE.mission2_comms_cut else C_VASILE
     cs = font_terminal_small.render(comms, True, comms_col)
-    surface.blit(cs, (WIDTH - cs.get_width() - 28, HEIGHT - 40))
+    surface.blit(cs, (WIDTH - cs.get_width() - HUD_MARGIN, HEIGHT - HUD_MARGIN - cs.get_height()))
 
     if STATE.mission2_stage == STAGE_COMBAT and getattr(STATE, "mission2_post_sniper_phase", "") in ("get_cover", "survive", "flank"):
         phase = getattr(STATE, "mission2_post_sniper_phase", "")
@@ -7529,6 +7513,8 @@ def _draw_screen_passes(cam_x, cam_y, world3d=False, proj=None):
         _draw_weapon_hud(screen)
         _draw_radio_text(screen)
         if STATE.show_minimap and STATE.minimap:
+            from ui.tactical_hud import place_minimap
+            place_minimap(STATE.minimap)
             # Pass the IPA truck (current inspect objective) and the tanker
             # (when it's still on the map) so the minimap actually shows the
             # mission's central landmarks instead of looking empty.

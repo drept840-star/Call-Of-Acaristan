@@ -1,0 +1,54 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.d_epilogue",
+ "shots": [
+  {
+   "scene": "m8d_inauguration",
+   "speaker": "ANCHOR",
+   "text": "Interim President Vasile takes the oath this morning, on the steps of the old courthouse.",
+   "min_ms": 5400
+  },
+  {
+   "scene": "m8d_vasile_speech",
+   "speaker": "VASILE",
+   "text": "We owe this morning to soldiers whose names you will never know.",
+   "min_ms": 5000
+  },
+  {
+   "scene": "m8d_crowd",
+   "speaker": "",
+   "text": "Biribel in the crowd. Maru beside him on crutches. Bodi and Alex a row behind.",
+   "min_ms": 5000
+  },
+  {
+   "scene": "m8d_eyes",
+   "speaker": "",
+   "text": "Vasile finds Biribel in the crowd. A tiny nod.",
+   "min_ms": 4200
+  },
+  {
+   "scene": "m8d_biribel_vo",
+   "speaker": "BIRIBEL",
+   "text": "Gabi, Seby, Darius. Volkov. The country's free. I wanted to tell you that.",
+   "min_ms": 5400
+  },
+  {
+   "scene": "m8d_biribel_vo",
+   "speaker": "BIRIBEL",
+   "text": "I didn't want to tell you who's holding it.",
+   "min_ms": 4200
+  },
+  {
+   "scene": "m8d_title_card",
+   "speaker": "",
+   "text": "",
+   "min_ms": 6000,
+   "quiet_ui": true
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Duty, the inauguration"
+ }
+}

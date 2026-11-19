@@ -185,6 +185,15 @@ chair_break_shots = [
 # ─────────────────────────────────────────────
 # Mission start / completion
 # ─────────────────────────────────────────────
+def _save_progress(stage):
+    """Persist the deepest M3 checkpoint so a fresh launch resumes there."""
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m3", checkpoint=stage)
+    except Exception:
+        pass
+
+
 def start_mission3(preserve_timer=False):
     """Called by game_core/acaristan to begin Mission 3 gameplay."""
     global _dialogue_beats, _dialogue_index, _dialogue_timer, _dialogue_choice, _dialogue_tone
@@ -197,6 +206,7 @@ def start_mission3(preserve_timer=False):
 
     STATE.reset()
     STATE.active_mission = MISSION3_KEY
+    _save_progress('')
     STATE.active_mission_id = MISSION3_ID
     STATE.active_mission_title = MISSION3_TITLE
     STATE.active_mission_operation = "THE STABILIZATION CENTER - THE VOSTRAL"
@@ -377,6 +387,7 @@ def start_mission3_breakout_checkpoint(preserve_timer=False):
     STATE.mission3_stage = STAGE_BREAKOUT
     STATE.mission_phase = "m3_breakout"
     STATE.mission3_breakout_checkpoint_reached = True
+    _save_progress('breakout')
     STATE.mission3_cell_open = True
     STATE.mission3_chair_broken = True
     STATE.mission3_chair_break_anim = -1
@@ -487,6 +498,7 @@ def start_mission3_comms_checkpoint(preserve_timer=False):
     STATE.mission_phase = "m3_comms"
     STATE.mission3_breakout_checkpoint_reached = True
     STATE.mission3_comms_checkpoint_reached = True
+    _save_progress('comms')
     STATE.mission3_cell_block_cleared = True
     STATE.mission3_cell_open = True
     STATE.mission3_chair_broken = True
@@ -573,6 +585,7 @@ def start_mission3_archives_checkpoint(preserve_timer=False):
     STATE.mission3_breakout_checkpoint_reached = True
     STATE.mission3_comms_checkpoint_reached = True
     STATE.mission3_archives_checkpoint_reached = True
+    _save_progress('archives')
     STATE.mission3_cell_block_cleared = True
     STATE.mission3_cell_open = True
     STATE.mission3_chair_broken = True
@@ -1030,6 +1043,7 @@ def start_mission3_kill_order_checkpoint(preserve_timer=False):
     STATE.mission3_breakout_checkpoint_reached = True
     STATE.mission3_comms_checkpoint_reached = True
     STATE.mission3_archives_checkpoint_reached = True
+    _save_progress('kill_order')
     STATE.mission3_cell_block_cleared = True
     STATE.mission3_cell_open = True
     STATE.mission3_chair_broken = True
@@ -1042,7 +1056,7 @@ def start_mission3_kill_order_checkpoint(preserve_timer=False):
     STATE.current_weapon = "k9_smg"
     STATE.k9_unlocked = True
     STATE.k9_ammo_in_mag = STATE.k9_mag_size
-    STATE.k9_spare_mags = 2
+    STATE.k9_spare_mags = 3
     STATE.k9_shot_cooldown = 0
     STATE.mission3_doorway_blocked = False
     STATE.mission3_crafting_active = False
@@ -1354,6 +1368,7 @@ def _start_comms_phase():
     # Comms checkpoint: reaching the Comms Wing is a respawn point AND a full
     # heal, so dying later in the mission doesn't punish the whole breakout.
     STATE.mission3_comms_checkpoint_reached = True
+    _save_progress('comms')
     if STATE.player is not None:
         STATE.player.hp = STATE.player.max_hp
     STATE.mission3_transition_kind = ""
@@ -1406,6 +1421,7 @@ def _start_archives_phase():
     STATE.mission3_stage = STAGE_ARCHIVES
     STATE.mission_phase = "m3_archives"
     STATE.mission3_archives_checkpoint_reached = True
+    _save_progress('archives')
     if STATE.player is not None:
         STATE.player.hp = STATE.player.max_hp
     STATE.mission3_transition_kind = ""
@@ -1444,6 +1460,7 @@ def _start_broadcast_phase():
     STATE.mission3_stage = STAGE_BROADCAST
     STATE.mission_phase = "m3_broadcast"
     STATE.mission3_broadcast_checkpoint_reached = True
+    _save_progress('broadcast')
     STATE.m3_bcast_time_left = BCAST_TIME_LIMIT
     STATE.m3_bcast_wave = 0
     STATE.m3_bcast_upload_progress = 0.0
@@ -1598,6 +1615,7 @@ def start_mission3_broadcast_checkpoint(preserve_timer=False):
     STATE.mission3_comms_checkpoint_reached = True
     STATE.mission3_archives_checkpoint_reached = True
     STATE.mission3_kill_order_checkpoint_reached = True
+    _save_progress('broadcast')
     STATE.mission3_cell_block_cleared = True
     STATE.mission3_cell_open = True
     STATE.mission3_chair_broken = True

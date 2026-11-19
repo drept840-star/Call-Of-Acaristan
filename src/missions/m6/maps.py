@@ -45,6 +45,8 @@ _PROP_LAYOUT = {
         ("guard_truck", 2, 13, 3, 1),
         ("plough", 19, 15, 3, 1), ("fuel_tank", 23, 12, 5, 3),
         ("jersey", 10, 12, 2, 1),
+        ("jersey", 19, 17, 2, 1),
+        ("sedan", 6, 16, 3, 1),
         ("snow_fence", 5, 18, 3, 1),
         ("hedgehog", 11, 17, 1, 1),
     ),

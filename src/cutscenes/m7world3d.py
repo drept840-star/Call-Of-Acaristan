@@ -11,6 +11,7 @@ never extend below the visible ground, and the southern road runs through a
 single depth-tested corridor mesh (valley, ridge notch and crest) instead of
 overlays painted over the background ridge.
 """
+from collections import OrderedDict
 import io
 import json
 import math
@@ -2325,7 +2326,7 @@ def sky(r, buf, t, look, seed=0):
     if look == "dawn":
         _fx.night_sky(
             r, buf, t, p["sky_top"], p["sky_bot"], stars=0, moon=False,
-            clouds=0, sodium=p["sodium"], mist=None, seed=seed)
+            clouds=0, sodium=p["sodium"], mist=None, seed=seed, gpu=True)
     elif look == "raid":
         _fx.night_sky(
             r, buf, t, p["sky_top"], p["sky_bot"], stars=p["stars"], moon=False,
@@ -2334,7 +2335,7 @@ def sky(r, buf, t, look, seed=0):
     else:
         _w.night(
             r, buf, t, top=p["sky_top"], bot=p["sky_bot"], stars=p["stars"],
-            moon=False, sodium=p["sodium"], seed=seed)
+            moon=False, sodium=p["sodium"], seed=seed, gpu=True)
 
 
 _CLOUDS = (
@@ -2408,26 +2409,43 @@ def _raid_sky(r, buf, t, moon):
 
 HOUSE_WINDOWS = ((-15, 1.75, 6.88), (-12.8, 1.75, 6.88), (-8.4, 1.75, 6.88))
 CHIMNEY_TOP = (-9.4, 5.2, 10.5)
-_POOL_CACHE = {}
+_POOL_CACHE = OrderedDict()
 
 
 def _pool_img(rx, ry, col, k):
     key = (rx, ry, tuple(col), k)
     img = _POOL_CACHE.get(key)
-    if img is None:
-        img = pygame.Surface((rx * 2 + 2, ry * 2 + 2))
+    if img is not None:
+        _POOL_CACHE.move_to_end(key)
+        return img
+    w, h = rx * 2 + 2, ry * 2 + 2
+    try:
+        import numpy as np
+        import pygame.surfarray as sa
+        ax = np.linspace(-1.0, 1.0, w, dtype=np.float32)[:, None]
+        ay = np.linspace(-1.0, 1.0, h, dtype=np.float32)[None, :]
+        rr = np.hypot(ax, ay)
+        f = np.clip(1.0 - rr, 0.0, 1.0)
+        b = k * (f ** 2.1)
+        img = pygame.Surface((w, h))
+        px = sa.pixels3d(img)
+        for ch_i in range(3):
+            px[..., ch_i] = np.clip(b * col[ch_i], 0, 255).astype(np.uint8)
+        del px
+    except ImportError:
+        img = pygame.Surface((w, h))
         img.fill((0, 0, 0))
-        n = 24
+        n = 32
         for i in range(n, 0, -1):
             f = i / float(n)
-            b = k * (0.1 + 0.9 * (1 - f) ** 2)
+            b = k * (0.06 + 0.94 * (1 - f) ** 2.1)
             c = tuple(min(255, int(ch * b)) for ch in col)
             pygame.draw.ellipse(img, c, (
                 rx + 1 - rx * f, ry + 1 - ry * f,
                 rx * 2 * f + 1, ry * 2 * f + 1))
-        if len(_POOL_CACHE) > 160:
-            _POOL_CACHE.clear()
-        _POOL_CACHE[key] = img
+    if len(_POOL_CACHE) >= 160:
+        _POOL_CACHE.popitem(last=False)
+    _POOL_CACHE[key] = img
     return img
 
 
@@ -2443,6 +2461,11 @@ def pool(col, radius_m, intensity=0.3, squash=0.5):
         img = _pool_img(rx, ry, col, k)
         s.blit(img, (int(sx) - img.get_width() // 2, int(sy) - img.get_height() // 2),
                special_flags=pygame.BLEND_ADD)
+    draw._gl_spec = {
+        "kind": "halo", "col": col, "intensity": min(1.0, float(intensity)),
+        "radius_m": float(radius_m), "squash": float(squash),
+        "max_px": 240.0, "power": 2.1, "peak": 1.0, "hdr": 1.15,
+    }
     draw.light = True
     draw.light_soft = True
     draw.bounds_m = (radius_m, radius_m * squash)
@@ -2548,6 +2571,25 @@ def raid_pools(extra=()):
 _GRADE = {}
 
 
+def raid_curve():
+    """1D (3, 256) uint8 grading curve for GPU PostPipeline (without Bayer dither)."""
+    curve = _GRADE.get("raid_curve")
+    if curve is None:
+        import numpy as np
+        x = np.arange(256, dtype=np.float32) / 255
+        x = np.clip((x - 0.020) / 0.980, 0, 1)
+        x = np.clip(0.45 + (x - 0.45) * 1.10, 0, 1)
+        x = x ** 1.10
+        sh, mid, hi = (1 - x) ** 2, 4 * x * (1 - x), x * x
+        chan = [np.clip(v, 0, 1) for v in (
+            x - 0.012 * sh + 0.004 * mid + 0.030 * hi,
+            x + 0.006 * sh + 0.004 * mid + 0.010 * hi,
+            x + 0.022 * sh - 0.006 * mid - 0.034 * hi)]
+        rows = [np.clip(np.round(v * 255.0), 0, 255).astype(np.uint8) for v in _fx.ink(chan, np)]
+        curve = _GRADE["raid_curve"] = np.stack(rows, axis=0)
+    return curve
+
+
 def grade_raid(surface):
     try:
         import numpy as np
@@ -2576,7 +2618,7 @@ def stage(look, t, eye, tgt, fov, lights=(), hh=0.006, seed=0, size=None, park=N
     setup(r, look)
     r.set_lights(list(lights))
     _w.cam(r, t, eye, tgt, fov, hh=hh, seed=seed)
-    sky(r, buf, t, look, seed)
+    sky(r, r.surface if getattr(r, "backend", "") == "gl" else buf, t, look, seed)
     fresh = _w.static_scene(r, "m7:%s:%s:%d" % (look, park, well_roof))
     r.begin()
     ok = True
@@ -2592,6 +2634,22 @@ def stage(look, t, eye, tgt, fov, lights=(), hh=0.006, seed=0, size=None, park=N
 
 
 def finish(surface, r, buf, seed, tag, t):
+    if getattr(r, "backend", "") == "gl":
+        import zlib
+        band = surface.subsurface((0, _w.SAFE_TOP, _w.WIDTH, _w.FILM_H))
+        gseed = zlib.crc32(f"m6_film_{seed}:{int(t) // 40}".encode("utf-8"))
+        r.flush_to(band, post={
+            "bloom": 0.24, "bloom_knee": 0.98, "gamma": 0.82,
+            "vignette": 0.40, "vig_mode": 2, "grain": 0.26, "grain_seed": gseed,
+        })
+        if tag:
+            surf = _w.font_terminal_small.render(tag, True, (120, 190, 220))
+            plate = pygame.Surface((surf.get_width() + 20, surf.get_height() + 6), pygame.SRCALPHA)
+            plate.fill((4, 6, 10, 186))
+            pygame.draw.rect(plate, (120, 190, 220, 90), plate.get_rect(), 1)
+            surface.blit(plate, (24, _w.SAFE_TOP + 6))
+            surface.blit(surf, (34, _w.SAFE_TOP + 9))
+        return
     r.flush(buf)
     _w.present(surface, buf)
     _w.finish(surface, seed, tag, t=t)
@@ -2760,6 +2818,77 @@ def _coal_bed(m, pos, rad, seed):
             for i in range(n)], col, 2, True, True)
 
 
+_FLAME_UNIT = OrderedDict()
+_FLAME_PACK = OrderedDict()
+_COAL_PACK = []
+
+
+def _unit_flame(step, seed, licks=True, embers=6, w0=0.9, h0=2.1):
+    key = (step, seed, bool(licks), int(embers), w0, h0)
+    m = _FLAME_UNIT.get(key)
+    if m is None:
+        m = Mesh()
+        _paint_flame(m, (0.0, 0.0, 0.0), (1.0, 0.0), (0.0, 1.0),
+                     step * _FIRE_STEP_MS, seed, w0, h0, licks=licks, embers=embers)
+        if len(_FLAME_UNIT) >= 384:
+            _FLAME_UNIT.popitem(last=False)
+        _FLAME_UNIT[key] = m
+    else:
+        _FLAME_UNIT.move_to_end(key)
+    return m
+
+
+def _emit_flame_packed(r, pos, right, fwd, step, seed, width, height,
+                       licks=True, embers=6, w0=0.9, h0=2.1):
+    import numpy as np
+    key = (step, seed, bool(licks), int(embers), w0, h0)
+    arr = _FLAME_PACK.get(key)
+    if arr is None:
+        um = _unit_flame(step, seed, licks, embers, w0, h0)
+        faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in um.faces]
+        arr = r.pack(um.verts, faces)
+        if len(_FLAME_PACK) >= 384:
+            _FLAME_PACK.popitem(last=False)
+        _FLAME_PACK[key] = arr
+    else:
+        _FLAME_PACK.move_to_end(key)
+    if arr is None:
+        return
+    out = arr.copy()
+    su = width / w0
+    sv = height / h0
+    sd = max(width, 1.0 / 3.0) / w0
+    rx, rz = right
+    fx, fz = fwd
+    u = arr[:, 0] * su
+    d = arr[:, 2] * sd
+    out[:, 0] = pos[0] + rx * u + fx * d
+    out[:, 1] = pos[1] + arr[:, 1] * sv
+    out[:, 2] = pos[2] + rz * u + fz * d
+    nx0, nz0 = arr[:, 6], arr[:, 8]
+    out[:, 6] = rx * nx0 + fx * nz0
+    out[:, 8] = rz * nx0 + fz * nz0
+    r.add_packed(out)
+
+
+def _emit_coal_packed(r, pos, rad, seed):
+    if not _COAL_PACK:
+        m = Mesh()
+        _coal_bed(m, (0.0, 0.0, 0.0), 1.0, 0.0)
+        _COAL_PACK.append(r.pack(m.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]))
+    arr = _COAL_PACK[0]
+    if arr is None:
+        return
+    rot = seed * 0.9
+    cr, sr = math.cos(rot) * rad, math.sin(rot) * rad
+    out = arr.copy()
+    x0, z0 = arr[:, 0], arr[:, 2]
+    out[:, 0] = pos[0] + cr * x0 - sr * z0
+    out[:, 1] = pos[1] + arr[:, 1]
+    out[:, 2] = pos[2] + sr * x0 + cr * z0
+    r.add_packed(out)
+
+
 def flame_mesh(pos, t, seed=0, size=1.0, heat=1.0, cam=None):
     """World-space flame cluster anchored at the fuel line, facing ``cam``."""
     m = Mesh()
@@ -2768,16 +2897,34 @@ def flame_mesh(pos, t, seed=0, size=1.0, heat=1.0, cam=None):
     if size <= 0 or heat <= 0:
         return m
     right, fwd = _flame_basis(pos, cam)
+    width = size * 0.9
     height = size * 2.1 * (0.8 + 0.2 * min(heat, 1.3))
     if pos[1] < 0.5:
         _coal_bed(m, pos, size * 0.62, seed)
-    _paint_flame(m, pos, right, fwd, t, seed, size * 0.9, height)
+    um = _unit_flame(int(t // _FIRE_STEP_MS), seed, True, 6, 0.9, 2.1)
+    bx, by, bz = pos
+    rx, rz = right
+    fx, fz = fwd
+    su = width / 0.9
+    sv = height / 2.1
+    sd = max(width, 1.0 / 3.0) / 0.9
+    base = len(m.verts)
+    m.verts.extend(
+        (bx + rx * (vx * su) + fx * (vz * sd),
+         by + vy * sv,
+         bz + rz * (vx * su) + fz * (vz * sd))
+        for vx, vy, vz in um.verts
+    )
+    m.faces.extend(
+        (tuple(i + base for i in idx), col, layer, ds, em)
+        for idx, col, layer, ds, em in um.faces
+    )
     return m
 
 
-@lru_cache(maxsize=192)
-def _smoke_img(radius, alpha, warmth, variant):
-    """Stepped, lumpy smoke instead of seven smooth, identical circles."""
+@lru_cache(maxsize=32)
+def _smoke_base(warmth, variant):
+    """Base 40x40 lumpy smoke puff at full opacity, built once per (warmth, variant)."""
     small = pygame.Surface((40, 40), pygame.SRCALPHA)
     warm = warmth / 3.0
     colour = (
@@ -2796,57 +2943,32 @@ def _smoke_img(radius, alpha, warmth, variant):
             points.append((
                 int(cx + math.cos(b) * rr),
                 int(cy + math.sin(b) * rr)))
-        pygame.draw.polygon(small, (*colour, int(alpha * 0.58)), points)
-    pygame.draw.polygon(small, (*colour, alpha), (
+        pygame.draw.polygon(small, (*colour, int(255 * 0.58)), points)
+    pygame.draw.polygon(small, (*colour, 255), (
         (10, 12), (20, 7), (29, 12), (33, 22),
         (26, 31), (15, 33), (7, 24)))
     inner = (
         max(0, colour[0] - 8),
         max(0, colour[1] - 7),
         max(0, colour[2] - 6),
-        min(255, int(alpha * 1.1)))
+        255)
     pygame.draw.polygon(small, inner, (
         (16, 14), (25, 13), (29, 21), (23, 28), (13, 25), (12, 19)))
-    return pygame.transform.scale(small, (radius * 2, radius * 2))
+    return small
+
+
+@lru_cache(maxsize=1024)
+def _smoke_img(radius, alpha, warmth, variant):
+    """Scaled, faded smoke puff cached across quantised radius/alpha buckets."""
+    img = pygame.transform.scale(_smoke_base(warmth, variant), (radius * 2, radius * 2))
+    img.set_alpha(alpha)
+    return img
 
 
 def smoke(t, seed=0, size_m=2.0):
     """Buoyant, expanding smoke with warm lower puffs and cool upper soot."""
-    size_m = max(0.0, float(size_m))
-    seed_phase = seed * 1.731
-
-    def draw(s, sx, sy, scale, z):
-        if size_m <= 0 or scale < 0.4:
-            return
-        unit = min(38.0, size_m * scale)
-        if unit < 0.6:
-            return
-        puffs = []
-        for i in range(8):
-            age = (t * 0.00015 + i / 8.0 + seed * 0.137) % 1.0
-            puffs.append((age, i))
-        for age, i in sorted(puffs, reverse=True):
-            fade_in = min(1.0, age / 0.12)
-            fade_out = (1.0 - age) ** 1.15
-            opacity = int(100 * fade_in * fade_out)
-            if opacity < 5:
-                continue
-            radius = max(2, min(64, int(unit * (0.36 + age * 1.12))))
-            radius = max(2, (radius // 2) * 2)
-            opacity = max(4, (opacity // 4) * 4)
-            warmth = max(0, min(3, int((1.0 - age * 2.6) * 3)))
-            drift = (
-                age * age * 1.1
-                + math.sin(age * 6.2 + seed_phase) * age * 0.42
-                + math.sin(age * 11 + i * 2.1) * age * 0.16)
-            ox = sx + unit * drift
-            oy = sy - unit * (age * 4.7 + age * age * 0.4)
-            img = _smoke_img(radius, opacity, warmth, (int(seed) + i) % 6)
-            s.blit(img, (int(ox - radius), int(oy - radius)))
-
-    draw.bounds_m = (size_m * 3.0, size_m * 6.8)
-    draw.bounds_cap_px = (140, 270)
-    return draw
+    from cutscenes import fire3d as _f3d
+    return _f3d.emit_smoke(t, seed=seed, size_m=size_m)
 
 
 def fire(r, pos, t, seed=0, size=1.0, smoky=True, layer=_fx.FX_LAYER):
@@ -2854,33 +2976,28 @@ def fire(r, pos, t, seed=0, size=1.0, smoky=True, layer=_fx.FX_LAYER):
     size = max(0.0, float(size))
     if size <= 0:
         return
-    x, y, z = pos
+    from cutscenes import fire3d as _f3d
     flicker = _fire_flicker(t, seed)
-
-    r.add_sprite(
-        (x, y + size * 0.8, z),
-        _fx.glow(
-            (255, 111, 34), size * 1.9, t,
-            flicker=0.08, seed=seed,
-            core=(255, 196, 96), intensity=0.34 * flicker, max_px=70),
-        layer=layer)
-
-    _w.add(r, flame_mesh(pos, t, seed, size, heat=flicker,
-                         cam=getattr(r, "cam", None)))
-
-    if smoky:
-        # Start above the flame tips so soot never paints over the fire.
-        r.add_sprite(
-            (x, y + size * 2.7, z),
-            smoke(t, seed, size * 1.05), layer=layer)
+    _f3d.emit_fire(
+        r, pos, t, seed=seed, size=size, heat=0.95 * flicker,
+        smoky=smoky, embers=True, bed=True, glow=True, layer=layer,
+    )
 
 
 def _wall_flame_mesh(x, y, z, t, seed, size, heat):
     """Flames licking up a wall that faces -z; the wall hides their back."""
     m = Mesh()
+    width = size * 0.95
     height = size * 1.55 * (0.8 + 0.2 * min(heat, 1.3))
-    _paint_flame(m, (x, y, z), (1.0, 0.0), (0.0, -1.0), t, seed,
-                 size * 0.95, height, embers=4)
+    um = _unit_flame(int(t // _FIRE_STEP_MS), seed, True, 4, 0.95, 1.55)
+    su = width / 0.95
+    sv = height / 1.55
+    sd = max(width, 1.0 / 3.0) / 0.95
+    m.verts = [
+        (x + vx * su, y + vy * sv, z - vz * sd)
+        for vx, vy, vz in um.verts
+    ]
+    m.faces = list(um.faces)
     return m
 
 
@@ -2890,6 +3007,7 @@ def wall_fire(r, x, y, wall_z, t, seed=0, size=1.0,
     size = max(0.0, float(size))
     if size <= 0:
         return
+    from cutscenes import fire3d as _f3d
     flicker = _fire_flicker(t, seed)
 
     # Charred patch on the wall behind the flames.
@@ -2907,19 +3025,10 @@ def wall_fire(r, x, y, wall_z, t, seed=0, size=1.0,
     ], (30, 22, 20), 2, True)
     _w.add(r, m)
 
-    fz = wall_z - 0.012
-    r.add_sprite(
-        (x, y + size * 0.6, fz - 0.1),
-        _fx.glow(
-            (255, 104, 30), size * 1.5, t,
-            flicker=0.08, seed=seed,
-            core=(255, 180, 80), intensity=0.24 * flicker, max_px=52),
-        layer=layer)
-    _w.add(r, _wall_flame_mesh(x, y, fz, t, seed, size, flicker))
-    if smoky:
-        r.add_sprite(
-            (x, y + size * 2.2, fz),
-            smoke(t, seed, size * 1.05), layer=layer)
+    _f3d.emit_wall_fire(
+        r, x, y, wall_z, t, seed=seed, size=size, heat=0.95 * flicker,
+        smoky=smoky, embers=True, glow=True, layer=layer,
+    )
 
 BARN_AT = (13.0, 12.0)
 
@@ -2971,9 +3080,10 @@ def burn_fx(r, t, grow=1.0, layer=_fx.FX_LAYER):
                 (255, 132, 40), 1.15, 1.05,
                 0.52 + 0.18 * grow, t, flicker=0.15, seed=120 + i),
             layer=layer)
-        _w.add(r, flame_mesh(
-            (x, y - 0.39, z - 0.12), t, 131 + i * 13,
-            (0.55 + 0.15 * (i % 2)) * g, cam=getattr(r, "cam", None)))
+        fire(
+            r, (x, y - 0.39, z - 0.12), t, seed=131 + i * 13,
+            size=(0.55 + 0.15 * (i % 2)) * g, smoky=False, layer=layer,
+        )
 
     # A few broad low-intensity pools connect the fire to the set on the
     # software path as well as GL; do not add one for every tongue.
@@ -3031,10 +3141,12 @@ def sparks(t, t0, seed=0, n=46, speed=7.0, life=2.6):
     """Ballistic ember burst with short trails, cooling and staggered fade."""
     life = max(0.001, float(life))
 
-    def draw(s, sx, sy, scale, z):
+    def _render(s, sx, sy, scale, occ_depth=None, limit=0.0):
         age = (t - t0) / 1000
         if age < 0 or age > life or scale <= 0:
             return
+        if occ_depth is not None:
+            sh, sw = occ_depth.shape
         for i in range(n):
             h1 = ((i * 7919 + seed * 104729) % 1000) / 1000.0
             h2 = ((i * 6007 + seed * 7 + 311) % 997) / 997.0
@@ -3047,6 +3159,10 @@ def sparks(t, t0, seed=0, n=46, speed=7.0, life=2.6):
             fade = max(0.0, 1.0 - age / particle_life)
             x = sx + vx * age * scale
             y = sy - (vy * age - 3.2 * age * age) * scale
+            ix, iy = int(x), int(y)
+            if occ_depth is not None:
+                if ix < 0 or ix >= sw or iy < 0 or iy >= sh or occ_depth[iy, ix] < limit:
+                    continue
             colour = (
                 int(150 + 105 * fade),
                 int(48 + 164 * fade),
@@ -3058,13 +3174,20 @@ def sparks(t, t0, seed=0, n=46, speed=7.0, life=2.6):
                 ty = sy - (vy * previous - 3.2 * previous * previous) * scale
                 pygame.draw.line(
                     s, tuple(int(c * 0.55) for c in colour),
-                    (int(tx), int(ty)), (int(x), int(y)), 1)
-            s.fill(colour, (int(x), int(y), px, px))
+                    (int(tx), int(ty)), (ix, iy), 1)
+            s.fill(colour, (ix, iy, px, px))
+
+    def draw(s, sx, sy, scale, z):
+        _render(s, sx, sy, scale)
+
+    def draw_depth(s, sx, sy, scale, z, occ_depth, limit):
+        _render(s, sx, sy, scale, occ_depth, limit)
 
     # Cover the actual ballistic envelope rather than a fixed 40m box.
     extent = abs(speed) * 1.25 * life + 3.2 * life * life + 1
     draw.bounds_m = (extent, extent)
     draw.bounds_cap_px = (500, 500)
+    draw.draw_depth = draw_depth
     return draw
 
 
@@ -3082,14 +3205,18 @@ def sit_pose(**kw):
 
 
 def walk_pose(t, speed=1.0, tired=0.0):
-    ph = t * 0.0062 * speed
-    s, c = math.sin(ph), math.cos(ph)
+    from engine.anim import locomotion_pose
+    ph = t * 0.0072 * speed
+    spd = max(0.8, 2.8 * speed * (1.0 - 0.35 * tired))
     p = dict(POSES["stand"])
-    p.update(
-        lhip_p=26 * s, rhip_p=-26 * s,
-        lkn=max(0.0, -s) * 38, rkn=max(0.0, s) * 38,
-        lsh_p=-22 * s, rsh_p=22 * s,
-        spine=4 + tired * 10, head_p=tired * 12, lift=abs(c) * 0.03)
+    p.update(locomotion_pose(spd, 0.0, ph))
+    sw = math.sin(ph)
+    p["spine"] = p.get("spine", 4.0) + tired * 10.0
+    p["head_p"] = p.get("head_p", 0.0) + tired * 12.0
+    p["lsh_p"] = 6.0 - 22.0 * sw * (1.0 - 0.35 * tired)
+    p["rsh_p"] = 6.0 + 22.0 * sw * (1.0 - 0.35 * tired)
+    p["lel"] = 14.0 + 16.0 * max(0.0, -sw)
+    p["rel"] = 14.0 + 16.0 * max(0.0, sw)
     return p
 
 

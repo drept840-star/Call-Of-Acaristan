@@ -13,6 +13,7 @@ Colours are the 2D game's sodium amber (``missions.m6.palette3d``, copied
 here so this module stays as dependency-light as m5fx3d).  Time is in
 MILLISECONDS, as in m5fx3d.
 """
+from collections import OrderedDict
 import math
 
 import pygame
@@ -26,7 +27,7 @@ SODIUM_PALE = (255, 236, 154)    # palette3d.SODIUM_PALE: a lamp's hot side
 LAMP_WHITE = (255, 251, 206)     # palette3d.LAMP_WHITE: a bare bulb's core
 AMBER = (187, 133, 58)           # palette3d.AMBER: the lamp as the 2D draws it
 FX_LAYER = _m5.FX_LAYER
-_CACHE = {}
+_CACHE = OrderedDict()
 DITHER_STEP = 8                  # the grade's ordered dither: 15-bit, 32 levels
 
 # Falloff peaks.  The hot core is separate geometry (the emissive head), so
@@ -42,6 +43,33 @@ _LAMP_RAMP = ((0.0, LAMP_WHITE), (0.24, SODIUM_PALE), (0.58, SODIUM),
 # 4x4 Bayer matrix, centred on 0 (-0.5..0.5 LSB).  It breaks the ~10
 # quantised falloff steps and the 8-bit colour into grain instead of rings.
 _BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+_BAYER_MAX = 528
+
+
+def _cache_get(key):
+    val = _CACHE.get(key)
+    if val is not None:
+        _CACHE.move_to_end(key)
+    return val
+
+
+def _cache_put(key, val, cap=512):
+    if len(_CACHE) >= cap:
+        for k in list(_CACHE):
+            if k not in ("grade_lut", "present_mid") and not (isinstance(k, tuple) and k[0] == "bayer_hw"):
+                _CACHE.pop(k, None)
+                if len(_CACHE) < cap:
+                    break
+    _CACHE[key] = val
+    return val
+
+
+def _bayer_tile(w, h, np):
+    base = _CACHE.get("_bayer_base")
+    if base is None:
+        b = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
+        base = _CACHE["_bayer_base"] = np.ascontiguousarray(np.tile(b, (_BAYER_MAX // 4, _BAYER_MAX // 4)))
+    return base[:w, :h]
 
 
 def __getattr__(name):
@@ -92,7 +120,7 @@ def _halo_img(stops, rx, ry=None, power=2.0, levels=10, peak=_LAMP_PEAK,
     stops = tuple(stops)
     key = ("halo", stops, rx, ry, power, levels, round(peak, 3),
            round(core, 3), round(core_r, 3), bool(rim))
-    s = _CACHE.get(key)
+    s = _cache_get(key)
     if s is not None:
         return s
     w, h = rx * 2 + 2, ry * 2 + 2
@@ -108,8 +136,7 @@ def _halo_img(stops, rx, ry=None, power=2.0, levels=10, peak=_LAMP_PEAK,
         ax = np.abs((np.arange(hw, dtype=np.float32) - (rx + 0.5)) / rx)
         ay = np.abs((np.arange(hh, dtype=np.float32) - (ry + 0.5)) / ry)
         rr = (ax[:, None] ** power + ay[None, :] ** power) ** (1.0 / power)
-        bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
-        bay = np.tile(bay, (w // 4 + 1, h // 4 + 1))[:w, :h]
+        bay = _bayer_tile(w, h, np)
         if rim:
             # low fill across the pane, a slightly stronger band at its edge
             edge = np.clip((1.06 - rr) / 0.22, 0.0, 1.0)
@@ -154,20 +181,19 @@ def _halo_img(stops, rx, ry=None, power=2.0, levels=10, peak=_LAMP_PEAK,
             pygame.draw.ellipse(s, c, ((w - int(w * f)) // 2,
                                        (h - int(h * f)) // 2,
                                        max(1, int(w * f)), max(1, int(h * f))))
-    _CACHE[key] = s
-    return s
+    return _cache_put(key, s)
 
 
 def _core_img(col, rad):
     """One small, hard hot centre - the fixture itself, not a ring."""
     rad = max(1, min(10, int(rad)))
     key = ("core", tuple(col), rad)
-    s = _CACHE.get(key)
+    s = _cache_get(key)
     if s is None:
         s = pygame.Surface((rad * 2 + 2, rad * 2 + 2))
         s.fill((0, 0, 0))
         pygame.draw.circle(s, tuple(col), (rad + 1, rad + 1), rad)
-        _CACHE[key] = s
+        _cache_put(key, s)
     return s
 
 
@@ -198,6 +224,15 @@ def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensit
         ck = round(k * 32.0) / 32.0
         cr = max(1.0, min(5.0, rad * 0.14))
         _m5._add_at(s, _core_img(_m5._scale(core_col, ck), cr), sx, sy)
+    k = min(1.0, intensity * _m5._flick(t, seed, flicker) * (1.0 + pulse * math.sin(t * 0.004 + seed)))
+    if k > 0.025:
+        draw._gl_spec = {
+            "kind": "halo", "col": col, "core": core or LAMP_WHITE,
+            "intensity": k, "radius_m": float(radius_m), "max_px": float(max_px),
+            "power": 2.2, "peak": _LAMP_PEAK,
+            "core_boost": 0.38 if core else 0.0, "core_r": 0.14,
+            "far_fade": 65.0, "far_span": 20.0, "hdr": 1.35 if core else 1.15,
+        }
     _tag(draw)
     draw.bounds_m = (radius_m, radius_m)
     draw.bounds_cap_px = (max_px, max_px)
@@ -219,6 +254,12 @@ def beacon(col, radius_m=0.35, t=0, period_ms=1500.0, phase=0.0,
                                  peak=0.62), sx, sy)
         _m5._add_at(s, _core_img(_m5._scale(col, k), max(1.0, rad * 0.42)),
                     sx, sy)
+    if ((t + phase * period_ms) % period_ms) < period_ms * 0.42:
+        draw._gl_spec = {
+            "kind": "halo", "col": col, "core": col, "intensity": float(intensity),
+            "radius_m": float(radius_m), "max_px": 12.0, "power": 2.0,
+            "peak": 0.62, "core_boost": 0.5, "core_r": 0.35, "hdr": 1.4,
+        }
     _tag(draw)
     draw.bounds_m = (radius_m, radius_m)
     draw.bounds_cap_px = (12, 12)
@@ -250,6 +291,13 @@ def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0,
         _m5._add_at(s, _halo_img(stops, min(260, rx), min(260, ry),
                                  power=3.0, levels=9,
                                  peak=_SOFT_PEAK, rim=rim), sx, sy)
+    k = intensity * _m5._flick(t, seed, flicker)
+    if k > 0.01:
+        draw._gl_spec = {
+            "kind": "halo", "col": col, "intensity": float(k),
+            "rx_m": float(w_m * 1.05), "ry_m": float(h_m * 1.05), "max_px": 260.0,
+            "power": 3.0, "peak": _SOFT_PEAK, "rim": rim, "hdr": 1.2,
+        }
     _tag(draw)
     draw.light_soft = True      # a window's bleed, anchor-gated not per-pixel
     draw.bounds_m = (w_m * 1.05, h_m * 1.05)
@@ -277,6 +325,15 @@ def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420):
                  (1.0, _m5._scale(col, kk * 0.35)))
         _m5._add_at(s, _halo_img(stops, rad, rad, power=2.0, levels=12,
                                  peak=_SOFT_PEAK, core=0.5, core_r=0.16), sx, sy)
+    if 0 <= age_ms <= dur_ms:
+        k = (1.0 - age_ms / dur_ms) ** 2 * _m5.flash_scale()
+        if k > 0.02:
+            draw._gl_spec = {
+                "kind": "halo", "col": col, "core": LAMP_WHITE, "intensity": float(k),
+                "radius_m": float(radius_m * (0.6 + 0.6 * k)), "max_px": 90.0,
+                "power": 2.0, "peak": _SOFT_PEAK, "core_boost": 0.5, "core_r": 0.16,
+                "hdr": 2.2 * _m5.flash_scale(),
+            }
     _tag(draw)
     draw.bounds_m = (radius_m * 1.2, radius_m * 1.2)
     draw.bounds_cap_px = (90, 90)
@@ -293,12 +350,19 @@ def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16):
             return
         k = intensity * (0.75 + 0.25 * math.sin(t * 0.0007 + seed * 1.9))
         rad = int(rad * (1.0 + 0.05 * math.sin(t * 0.0009 + seed)))
-        kk = round(k * 0.5 * 32.0) / 32.0
+        kk = round(k * 0.5 * 16.0) / 16.0
         if kk <= 0.005:
             return
         stops = ((0.0, _m5._scale(col, kk)), (1.0, _m5._scale(col, kk * 0.30)))
         _m5._add_at(s, _halo_img(stops, rad, rad, power=2.6, levels=8,
                                  peak=_SOFT_PEAK), sx, sy)
+    k = intensity * (0.75 + 0.25 * math.sin(t * 0.0007 + seed * 1.9)) * 0.5
+    if k > 0.005:
+        draw._gl_spec = {
+            "kind": "halo", "col": col, "intensity": float(k),
+            "radius_m": float(radius_m * (1.0 + 0.05 * math.sin(t * 0.0009 + seed))),
+            "max_px": 140.0, "power": 2.6, "peak": _SOFT_PEAK, "hdr": 1.0,
+        }
     _tag(draw)
     draw.light_soft = True          # fog scatters in front of geometry
     draw.bounds_m = (radius_m * 1.06, radius_m * 1.06)
@@ -312,15 +376,14 @@ def _shaft_img(col, wtop, wbot, h, k):
     wtop, wbot, h = max(1, min(260, wtop)), max(1, min(260, wbot)), max(2, min(400, h))
     k = round(k * 24.0) / 24.0
     key = ("shaft", tuple(col), wtop, wbot, h, k)
-    img = _CACHE.get(key)
+    img = _cache_get(key)
     if img is not None:
         return img
     w = wbot * 2 + 2
     try:
         import numpy as np
         import pygame.surfarray as sa
-        bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
-        bay = np.tile(bay, (w // 4 + 1, h // 4 + 1))[:w, :h]
+        bay = _bayer_tile(w, h, np)
         ax = np.abs(np.arange(w, dtype=np.float32) - wbot) / np.maximum(
             1.0, wbot)
         ay = np.arange(h, dtype=np.float32) / max(1.0, h - 1)
@@ -342,8 +405,7 @@ def _shaft_img(col, wtop, wbot, h, k):
             hw = int((wtop + (wbot - wtop) * f) * 0.5)
             c = tuple(min(255, int(v * k * (1.0 - 0.45 * f) * 0.55)) for v in col)
             pygame.draw.line(img, c, (wbot - hw, y), (wbot + hw, y))
-    _CACHE[key] = img
-    return img
+    return _cache_put(key, img)
 
 
 def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0,
@@ -366,6 +428,12 @@ def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0,
         if img.get_size() != size:
             img = pygame.transform.scale(img, size)
         _m5._add_at(s, img, sx + sway * 0.5, sy + h * 0.5)
+    k = intensity * _m5._flick(t, seed, 0.10)
+    draw._gl_spec = {
+        "kind": "shaft", "col": _m5._scale(col, k),
+        "top_m": float(top_m), "bot_m": float(bot_m), "height_m": float(height_m),
+        "sway_m": float(math.sin(t * 0.0011 + seed * 2.3) * tilt * bot_m),
+    }
     _tag(draw)
     draw.light_soft = True          # a cone of lit air, not a surface
     draw.bounds_m = (bot_m * 1.1, height_m)
@@ -387,7 +455,7 @@ def powder(t, seed=0, spread_m=3.0, intensity=0.5, col=(188, 200, 220), puffs=14
             if rad < 3:
                 continue
             k = intensity * (1.0 - life) ** 1.4
-            kk = round(k * 0.5 * 32.0) / 32.0
+            kk = round(k * 0.5 * 16.0) / 16.0
             if kk <= 0.01:
                 continue
             x = sx + math.cos(a) * rr
@@ -495,11 +563,33 @@ def present_crisp(src, dst):
     then a box filter down (sharp bilinear), so the 1.5625 ratio keeps every
     pixel crisp and even instead of the old soft smoothscale."""
     w, h = src.get_size()
+    if (w, h) == dst.get_size():
+        dst.blit(src, (0, 0))
+        return
     mid = _CACHE.get("present_mid")
     if mid is None or mid.get_size() != (w * 2, h * 2):
         mid = _CACHE["present_mid"] = pygame.Surface((w * 2, h * 2))
     pygame.transform.scale(src, (w * 2, h * 2), mid)
     pygame.transform.smoothscale(mid, dst.get_size(), dst)
+
+
+def cine_curve():
+    """1D (3, 256) uint8 grading curve for GPU PostPipeline (without Bayer dither)."""
+    curve = _CACHE.get("cine_curve")
+    if curve is None:
+        import numpy as np
+        x = np.arange(256, dtype=np.float32) / 255.0
+        x = x ** 0.80
+        x = np.clip((x - 0.05) / 0.95, 0.0, 1.0)
+        x = np.clip(0.42 + (x - 0.42) * 1.12, 0.0, 1.0)
+        sh, mid, hi = (1.0 - x) ** 2, 4.0 * x * (1.0 - x), x ** 2
+        chan = (x - 0.006 * sh + 0.010 * mid + 0.030 * hi,
+                x + 0.003 * sh + 0.004 * hi,
+                x + 0.014 * sh - 0.012 * mid - 0.026 * hi)
+        rows = [np.clip(np.round(v * 255.0), 0, 255).astype(np.uint8)
+                for v in ink([v - 0.10 * np.maximum(0.0, v - 0.86) ** 2 for v in chan], np)]
+        curve = _CACHE["cine_curve"] = np.stack(rows, axis=0)
+    return curve
 
 
 def grade_cine(surface):

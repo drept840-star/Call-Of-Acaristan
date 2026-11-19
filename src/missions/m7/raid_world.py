@@ -12,7 +12,7 @@ import os
 import random
 
 from engine3d.core import Mesh, box, m_apply, rot_x, rot_y
-from engine.collision import MeshCollider
+from engine.collision import BoxWorld, MeshCollider, box_xz_h, slide_capsule
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as F
@@ -72,6 +72,7 @@ STATIC = [
     (-18.7, -13.7, -18.3, -13.3, 8.0),  # telephone poles
     (-5.7, -21.2, -5.3, -20.8, 8.0),
 ] + _orchard()
+_STATIC_BW = BoxWorld(box_xz_h(b) for b in STATIC)
 
 
 _SHAPES = {}
@@ -140,6 +141,7 @@ class World:
 
     def __init__(self, tractor_blocks):
         self.boxes = list(STATIC)
+        self.box_world = _STATIC_BW
         self.tractor = None
         if tractor_blocks:
             self.tractor = TRACTOR_BLOCK
@@ -149,6 +151,17 @@ class World:
         self.meshes = [tractor, motorcycle_at(*MOTORCYCLE_AT)]
         self.dyn = []          # placed truck colliders, kept current by raid_brain
         self.pig_at = None     # the pig's (x, z) while it is on the farm
+
+    def ragdoll_boxes(self):
+        """Dynamic truck, tractor, motorcycle, and well-wreck boxes for ragdolls."""
+        out = []
+        for m in self.meshes + self.dyn:
+            if m is not None:
+                out.append(m.world_box())
+        if len(self.boxes) > len(STATIC):
+            for b in self.boxes[len(STATIC):]:
+                out.append(box_xz_h(b))
+        return tuple(out)
 
     def blocked(self, x, z, r=BODY_R):
         if self.pig_at is not None:
@@ -164,16 +177,18 @@ class World:
         return False
 
     def move(self, x, z, dx, dz, r=BODY_R, clip=True):
-        """Axis-separated slide; returns the new (x, z)."""
-        nx, nz = x + dx, z + dz
-        if clip:
-            nx = min(max(nx, BOUNDS[0]), BOUNDS[1])
-            nz = min(max(nz, BOUNDS[2]), BOUNDS[3])
-        if not self.blocked(nx, z, r):
-            x = nx
-        if not self.blocked(x, nz, r):
-            z = nz
-        return x, z
+        """Capsule-vs-world tangent slide; returns the new (x, z)."""
+        extra = ()
+        if self.pig_at is not None:
+            px, pz = self.pig_at
+            extra = ((px - 0.45, 0.0, pz - 0.45, px + 0.45, 0.7, pz + 0.45),)
+        bw = self.box_world if len(self.boxes) == len(STATIC) else BoxWorld(box_xz_h(b) for b in self.boxes)
+        nx, _ny, nz, _hit = slide_capsule(
+            x, 0.0, z, dx, dz, r, BODY_TOP,
+            box_world=bw, meshes=self.meshes + self.dyn, extra_boxes=extra,
+            bounds=BOUNDS if clip else None,
+        )
+        return nx, nz
 
     def los(self, a, b, dyn=True):
         """Open line between two (x, z) points at chest height."""

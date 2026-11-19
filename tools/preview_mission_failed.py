@@ -126,6 +126,8 @@ def checks():
 
 
 def gallery():
+    pygame.display.set_mode((config.WIDTH, config.HEIGHT))
+    config.reset_present_cache()
     pygame.display.set_caption("Mission Failed Gallery | SAMPLE DATA | 1-5 / arrows | M: Maru loss | Esc: close")
     index, maru, running = 0, False, True
     clock = pygame.time.Clock()
@@ -152,6 +154,7 @@ def gallery():
                         2400 + tick, 185000, config.get_scaled_mouse())
             # Gallery controls are navigation only, never restart real gameplay.
             failed._text(config.screen, "PREVIEW / SAMPLE RUN DATA / 1-5 SELECT / M MARU", 48, 601, 12, failed.MUTED)
+            config.present(config.screen)
             pygame.display.flip()
     finally:
         unpin_wall()

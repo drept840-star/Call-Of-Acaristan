@@ -45,6 +45,130 @@ def _dec(r, m, bias=0.8):
                   bias=-abs(bias))
 
 
+# ── shared Quarter texture & architectural helpers (matches m5/draw3d.py) ──
+_TEX_CACHE = {}
+
+
+def _qt(name, col, k=1.0):
+    """Cached tinted noise texture (matches 2.5D m5/draw3d.py); flat RGB fallback on software."""
+    rgb = tuple(max(0, min(255, int(c * k))) for c in col)
+    key = (name, rgb)
+    t = _TEX_CACHE.get(key)
+    if t is None:
+        from engine3d.textures import tex
+        t = _TEX_CACHE[key] = tex(name, like=rgb, tint=True)
+    return t
+
+
+def _qhash(a, b, n):
+    return ((int(a) * 73856093) ^ (int(b) * 19349663)) % n
+
+
+def _pave_tex(x, z, base=(36, 38, 42)):
+    c = int(math.floor(x / 1.6))
+    rr = int(math.floor(z / 1.6))
+    if _qhash(c * 3 + 1, rr * 5 + 2, 100) < 10:
+        return _qt("pavement", (24, 27, 32))
+    k = 1.0 + (_qhash(c, rr, 9) - 4) * 0.015
+    return _qt("pavement", base, k)
+
+
+def _conc_tex(x, z, base=(70, 70, 66)):
+    c = int(math.floor(x / 1.6))
+    rr = int(math.floor(z / 1.6))
+    k = 1.0 + (_qhash(c + 7, rr + 3, 7) - 3) * 0.014
+    return _qt("concrete", base, k)
+
+
+def _framed_window(r, cx, cy, cz, w=1.15, h=1.55, lit=False, facing="-z"):
+    """Recessed window with frame, mullions and concrete sill (never a flat box)."""
+    from engine3d.core import box
+    glass = (156, 122, 70) if lit else (18, 22, 30)
+    frame = (52, 54, 58)
+    sill = _qt("concrete", (82, 80, 76))
+    if facing in ("-z", "+z"):
+        sgn = -1.0 if facing == "-z" else 1.0
+        _add(r, box(w + 0.14, h + 0.14, 0.08, frame, center=(cx, cy, cz + sgn * 0.02)))
+        _add(r, box(w, h, 0.04, glass, center=(cx, cy, cz + sgn * 0.05), emissive=lit))
+        _add(r, box(w + 0.24, 0.09, 0.16, sill, center=(cx, cy - h * 0.5 - 0.04, cz + sgn * 0.06)))
+        _add(r, box(0.06, h, 0.05, frame, center=(cx, cy, cz + sgn * 0.06)))
+        _add(r, box(w, 0.06, 0.05, frame, center=(cx, cy + 0.05, cz + sgn * 0.06)))
+    else:
+        sgn = 1.0 if facing == "+x" else -1.0
+        _add(r, box(0.08, h + 0.14, w + 0.14, frame, center=(cx + sgn * 0.02, cy, cz)))
+        _add(r, box(0.04, h, w, glass, center=(cx + sgn * 0.05, cy, cz), emissive=lit))
+        _add(r, box(0.16, 0.09, w + 0.24, sill, center=(cx + sgn * 0.06, cy - h * 0.5 - 0.04, cz)))
+        _add(r, box(0.05, h, 0.06, frame, center=(cx + sgn * 0.06, cy, cz)))
+        _add(r, box(0.05, 0.06, w, frame, center=(cx + sgn * 0.06, cy + 0.05, cz)))
+
+
+def _quarter_block(r, cx, cz, w, d, h, style, seed, win_face=None):
+    """Multi-storey Lower Quarter building matching m5/draw3d.py (_BUILD / WALL_SHADE)."""
+    from engine3d.core import box
+    mat, body, cap = style
+    _add(r, box(w, h, d, _qt(mat, body), center=(cx, h * 0.5, cz),
+                cols={"top": _qt("concrete", (42, 44, 48))}, seg=2.4))
+    # Base grime bands (same vertical banding as 2.5D WALL_SHADE)
+    for y0, y1, k in ((0.0, 0.34, 0.62), (0.34, 0.85, 0.80)):
+        _add(r, box(w + 0.03, y1 - y0, d + 0.03, _qt(mat, body, k),
+                    center=(cx, (y0 + y1) * 0.5, cz), skip=("top", "bottom")))
+    _add(r, box(w + 0.18, 0.24, d + 0.18, _qt("concrete", cap, 0.85),
+                center=(cx, h - 0.12, cz)))
+    if not win_face:
+        return
+    rng = random.Random(seed)
+    floors = max(1, int((h - 1.6) / 2.7))
+    if win_face in ("-z", "+z"):
+        wz = cz + (-d * 0.5 if win_face == "-z" else d * 0.5)
+        cols = max(1, int((w - 1.2) / 2.4))
+        x0 = cx - (cols - 1) * 1.2
+        for fl in range(floors):
+            for c in range(cols):
+                _framed_window(r, x0 + c * 2.4, 2.2 + fl * 2.6, wz,
+                               lit=rng.random() < 0.28, facing=win_face)
+    else:
+        wx = cx + (w * 0.5 if win_face == "+x" else -w * 0.5)
+        cols = max(1, int((d - 1.2) / 2.4))
+        z0 = cz - (cols - 1) * 1.2
+        for fl in range(floors):
+            for c in range(cols):
+                _framed_window(r, wx, 2.2 + fl * 2.6, z0 + c * 2.4,
+                               lit=rng.random() < 0.28, facing=win_face)
+
+
+def _mag_van_3d(r, cx, cz, yaw=0.0):
+    """Park the MAG van from decor_paint.py (Q_SOLIDS[0]) with real panels, cab glass, wheels."""
+    from engine3d.core import Mesh, box, m_apply, rot_y
+    m = Mesh()
+    cream = _qt("steel", (196, 188, 166))
+    dark = _qt("steel", (44, 48, 54))
+    red = (128, 28, 30)
+    m.add(box(1.75, 1.45, 3.6, cream, center=(0.0, 1.05, 0.0)))
+    m.add(box(1.72, 0.72, 1.05, cream, center=(0.0, 0.68, -2.25)))
+    m.add(box(1.66, 0.55, 0.04, (28, 36, 46), center=(0.0, 1.38, -1.82)))   # windscreen
+    for sx in (-0.89, 0.89):
+        m.add(box(0.03, 0.42, 1.6, red, center=(sx, 1.1, 0.3)))
+        m.add(box(0.03, 0.36, 0.65, (28, 36, 46), center=(sx, 1.34, -1.25)))
+        for wz in (-1.95, 1.15):
+            m.add(box(0.18, 0.56, 0.56, (18, 18, 20), center=(sx * 0.96, 0.28, wz)))
+    for sx in (-0.6, 0.6):
+        m.add(box(0.24, 0.14, 0.04, (230, 210, 140), center=(sx, 0.68, -2.78), emissive=True))
+        m.add(box(0.22, 0.14, 0.04, (170, 32, 28), center=(sx, 0.72, 1.81), emissive=True))
+    R = rot_y(yaw)
+    m.verts = [tuple(c + d for c, d in zip((cx, 0.0, cz), m_apply(R, v))) for v in m.verts]
+    _add(r, m)
+
+
+def _paper_bales_3d(r, cx, cz, y0=0.0):
+    """Strapped newspaper bundles on pallets (decor_paint.Q_SOLIDS[1] / m5/draw3d._paper)."""
+    from engine3d.core import box
+    _add(r, box(1.5, 0.12, 1.2, _qt("crate", (80, 60, 40)), center=(cx, y0 + 0.06, cz)))
+    for dx, dz, h, tone in ((-0.34, -0.22, 0.56, 0), (0.32, -0.18, 0.42, 10), (-0.06, 0.26, 0.48, -8)):
+        col = tuple(max(0, min(255, c + tone)) for c in (192, 186, 170))
+        _add(r, box(0.62, h, 0.50, _qt("concrete", col), center=(cx + dx, y0 + 0.12 + h * 0.5, cz + dz)))
+        _add(r, box(0.64, 0.03, 0.52, (150, 40, 36), center=(cx + dx, y0 + 0.12 + h * 0.6, cz + dz)))
+
+
 # ── sets ──
 def _street_set(r, t, door=None):
     """Lower Quarter street + the MAG Print Works: a real four-storey
@@ -55,45 +179,59 @@ def _street_set(r, t, door=None):
     housing by that fraction and the press hall behind it is built
     (``_pw_interior``) - T10: it used to be a flat glowing card."""
     from engine3d.core import box, quad_xz
-    wet = lambda x, z: (24, 26 + int(4 * math.sin(x * 1.3 + z * 0.7)), 32)
-    _add(r, quad_xz(-20, -10, 20, 9.6, 0.0, (26, 27, 32), seg=6, colfn=wet))
-    # Big slabs are subdivided (seg): the painter sorts by the average depth of
-    # the near-CLIPPED face, so in the close door shot one 16 m facade face (and
-    # the 40 m kerb) sorted nearer than the shutter and flickered over it.
-    _add(r, box(40, 0.18, 2.2, (40, 40, 46), center=(0, 0.09, 8.6), seg=2.0))  # kerb/pavement
+    # Full avenue + cross-street asphalt with per-tile noise texture (no edge drop-off)
+    _add(r, quad_xz(-64, -18, 32, 8.0, 0.0, _qt("pavement", (36, 38, 42)), seg=1.6,
+                    colfn=lambda x, z: _pave_tex(x, z)))
+    _add(r, quad_xz(-12.2, 8.0, -8.2, 28.0, 0.0, _qt("pavement", (34, 36, 40)), seg=1.6,
+                    colfn=lambda x, z: _pave_tex(x, z)))                     # west cross-street alley
+    # Lane dashes & tram rails matching the Lower Quarter avenue
+    for x in range(-58, 24, 3):
+        _add(r, quad_xz(x, 2.8, x + 1.4, 2.95, 0.008, (150, 140, 96), layer=1))
+    for rz in (1.7, 3.9):
+        _add(r, quad_xz(-58, rz - 0.04, 26, rz + 0.04, 0.009, _qt("steel", (86, 88, 92)), layer=1))
+    # Kerbed concrete sidewalks on Print Works side and west/east neighbour blocks
+    for sx0, sx1 in ((-64.0, -12.2), (-8.2, 32.0)):
+        sw = sx1 - sx0
+        scx = (sx0 + sx1) * 0.5
+        _add(r, box(sw, 0.18, 2.3, _qt("concrete", (70, 70, 66)), center=(scx, 0.09, 8.85), seg=1.8))
+        _add(r, box(sw, 0.19, 0.18, _qt("concrete", (96, 95, 90)), center=(scx, 0.095, 7.72), seg=1.8))
+    _add(r, box(96, 0.16, 2.2, _qt("concrete", (70, 70, 66)), center=(-16, 0.08, -9.2), seg=2.0))
     # main block
     if door is None:
-        _add(r, box(16, 11, 6, _BRICK, center=(0, 5.5, 13), seg=2.0))
+        _add(r, box(16, 11, 6, _qt("brick", (86, 54, 44)), center=(0, 5.5, 13), seg=2.0))
     else:
         # same block minus its front face; the facade is rebuilt around a
         # PW_DOOR_W x PW_DOOR_H opening so nothing is drawn across the doorway
-        _add(r, box(16, 11, 6, _BRICK, center=(0, 5.5, 13), seg=2.0, skip=("front",)))
+        _add(r, box(16, 11, 6, _qt("brick", (86, 54, 44)), center=(0, 5.5, 13), seg=2.0, skip=("front",)))
         side = (16 - PW_DOOR_W) / 2
         for sx in (-1, 1):
-            _add(r, box(side, 11, 0.06, _BRICK, center=(sx * (8 - side / 2), 5.5, 10.03), seg=2.0))
-        _add(r, box(PW_DOOR_W, 11 - PW_DOOR_H, 0.06, _BRICK,
+            _add(r, box(side, 11, 0.06, _qt("brick", (86, 54, 44)), center=(sx * (8 - side / 2), 5.5, 10.03), seg=2.0))
+        _add(r, box(PW_DOOR_W, 11 - PW_DOOR_H, 0.06, _qt("brick", (86, 54, 44)),
                     center=(0, PW_DOOR_H + (11 - PW_DOOR_H) / 2, 10.03), seg=2.0))
+    for y0, y1, k in ((0.18, 0.50, 0.62), (0.50, 1.0, 0.80)):                 # base grime band
+        for sx in (-1, 1):
+            _add(r, box(5.8, y1 - y0, 0.04, _qt("brick", (86, 54, 44), k),
+                        center=(sx * 5.05, (y0 + y1) * 0.5, 9.98), skip=("top", "bottom")))
     for i in range(8):                                                          # pilasters
         px = -7.6 + i * 2.17
         if abs(px) < 2.4:   # over the loading door: start above the shutter, never through it
-            _add(r, box(0.5, 7.3, 0.3, (62, 36, 30), center=(px, 7.35, 9.9)))
+            _add(r, box(0.5, 7.3, 0.3, _qt("brick", (66, 40, 34)), center=(px, 7.35, 9.9)))
         else:
-            _add(r, box(0.5, 11, 0.3, (62, 36, 30), center=(px, 5.5, 9.9)))
-    _add(r, box(16.4, 0.4, 0.5, (52, 50, 50), center=(0, 11.1, 9.9)))          # cornice
+            _add(r, box(0.5, 11, 0.3, _qt("brick", (66, 40, 34)), center=(px, 5.5, 9.9)))
+    _add(r, box(16.4, 0.4, 0.5, _qt("concrete", (72, 68, 64)), center=(0, 11.1, 9.9)))  # cornice
     for j in range(5):                                                          # sawtooth roof
-        _add(r, box(3.0, 1.4, 6, (44, 44, 50), center=(-6 + j * 3.0, 11.9, 13)))
+        _add(r, box(3.0, 1.4, 6, _qt("concrete", (52, 52, 56)), center=(-6 + j * 3.0, 11.9, 13)))
         _add(r, box(2.6, 0.9, 0.05, (110, 120, 110), center=(-6 + j * 3.0, 12.0, 9.95),
                    emissive=True))
-    _add(r, box(1.2, 7, 1.2, (60, 34, 28), center=(6.5, 14, 14)))               # chimney
+    _add(r, box(1.2, 7, 1.2, _qt("brick", (74, 44, 36)), center=(6.5, 14, 14))) # chimney
     rng = random.Random(55)
-    for fl in range(3):                                                         # windows
+    for fl in range(3):                                                         # windows (framed/silled)
         for c in range(7):
             x = -6.5 + c * 2.17
             if abs(x) < 2.6 and fl == 0:
                 continue
             lit = rng.random() < 0.3
-            col = (150, 120, 70) if lit else (22, 28, 36)
-            _add(r, box(1.2, 1.6, 0.05, col, center=(x, 3.2 + fl * 2.8, 9.88), emissive=lit))
+            _framed_window(r, x, 3.2 + fl * 2.8, 9.96, w=1.18, h=1.55, lit=lit, facing="-z")
     # sign board: dark plate + lit letters strip
     _add(r, box(8.4, 1.3, 0.2, (20, 20, 24), center=(0, 9.2, 9.75)))
     flick = 0.75 + 0.25 * (1 if (t // 170) % 7 else 0)
@@ -129,14 +267,39 @@ def _street_set(r, t, door=None):
         _spr(r, (0, 0.03, 8.4), _fx.wet_reflection((255, 200, 130), t, 8, 2.4, 1.4, 0.22))
     _spr(r, (0, 9.2, 9.5), _fx.window_glow((120, 90, 50), 4.2, 0.6, 0.5 * flick))  # sign
     _spr(r, (2.55, 3.9, 9.35), _fx.glow((220, 40, 36), 0.7, t, pulse=0.2, intensity=0.6))
-    _add(r, box(4.2, 2.0, 1.9, (52, 58, 52), center=(6.5, 1.1, 7.0)))
-    _add(r, box(1.3, 1.0, 1.8, (60, 66, 60), center=(8.9, 0.8, 7.0)))
+    # Projecting blade sign on the corner (decor_paint.SIGN_RECT)
+    _add(r, box(0.25, 0.08, 0.65, (38, 38, 42), center=(-7.8, 4.4, 9.5)))
+    _add(r, box(0.16, 0.70, 1.60, (110, 24, 26), center=(-7.8, 4.4, 8.7)))
+    _add(r, box(0.18, 0.56, 1.44, (176, 38, 36), center=(-7.8, 4.4, 8.7), emissive=True))
+    for bz, bw in ((8.22, 0.28), (8.68, 0.36), (9.16, 0.28)):
+        _add(r, box(0.20, 0.24, bw, (242, 224, 180), center=(-7.8, 4.42, bz), emissive=True))
+    _spr(r, (-7.8, 4.4, 8.7), _fx.glow((255, 90, 80), 1.4, t, intensity=0.45))
+    # Parked MAG van & paper bales (matching decor_paint.Q_SOLIDS)
+    _mag_van_3d(r, 7.4, 6.6, yaw=90.0)
+    _paper_bales_3d(r, -5.6, 8.8, y0=0.18)
+    # Streetlamps extending down the avenue to the left
+    for lx in (-13.2, -26.5, -40.0):
+        _add(r, box(0.12, 4.6, 0.12, (36, 36, 40), center=(lx, 2.3, 8.0)))
+        _add(r, box(0.4, 0.25, 0.4, (255, 214, 150), center=(lx, 4.6, 8.0), emissive=True))
+        _spr(r, (lx, 4.55, 8.0), _fx.sodium_lamp(t, int(-lx), radius_m=2.4))
     for i in range(4):   # posters: proud of the pilaster faces (z 9.75), clear of the shutter
         if not _decal.add(r, "posters", (0, 1, 2, 3)[i], (-5.0 + i * 0.75, 1.6, 9.71), (0.64, 0.88)):
             _dec(r, box(0.6, 1.0, 0.02, (170 - i * 20, 160, 140), center=(-5.0 + i * 0.75, 1.6, 9.72)))
-    # neighbours
-    for x, h, c in ((-13, 8, (40, 40, 48)), (13, 9, (46, 40, 40))):
-        _add(r, box(10, h, 6, c, center=(x, h / 2, 13), seg=3.0))
+    # Surrounding Quarter blocks: completely enclose left cross-street, right block, horizon & behind camera
+    _quarter_block(r, -17.2, 13.0, 10.0, 6.0, 10.4, ("m7_plaster", (96, 88, 72), (124, 114, 92)), 701, "-z")
+    _quarter_block(r, -27.2, 13.5, 10.0, 7.0, 11.2, ("concrete", (76, 78, 80), (104, 106, 106)), 702, "-z")
+    _quarter_block(r, -38.2, 13.0, 12.0, 6.0, 11.8, ("brick", (84, 62, 52), (110, 92, 80)), 709, "-z")
+    _quarter_block(r, -51.2, 13.5, 14.0, 7.0, 12.4, ("m7_plaster", (82, 76, 64), (104, 98, 84)), 710, "-z")
+    _quarter_block(r, -58.0, 2.0, 6.0, 24.0, 11.0, ("concrete", (52, 54, 60), (70, 72, 76)), 711, "+x")
+    _quarter_block(r, 13.2, 13.0, 10.4, 6.0, 10.0, ("concrete", (76, 78, 80), (104, 106, 106)), 703, "-z")
+    _quarter_block(r, 22.0, 13.0, 7.2, 6.0, 8.8, ("brick", (84, 62, 52), (110, 92, 80)), 704, "-z")
+    # Down the cross-street alley (z = 16..28) + distant roofline horizon
+    _quarter_block(r, -15.2, 22.0, 6.0, 10.0, 9.0, ("brick", (74, 54, 46), (96, 80, 70)), 705, "+x")
+    _quarter_block(r, -10.2, 28.0, 12.0, 4.0, 11.0, ("concrete", (50, 52, 58), (68, 70, 74)), 706, "-z")
+    # Opposite side of the street (well behind _arrival_wide camera at z = -10)
+    _quarter_block(r, -24.0, -15.5, 22.0, 5.0, 9.6, ("concrete", (70, 72, 76), (94, 96, 98)), 712, "+z")
+    _quarter_block(r, -6.0, -15.5, 14.0, 5.0, 9.2, ("m7_plaster", (86, 78, 64), (108, 100, 82)), 707, "+z")
+    _quarter_block(r, 8.5, -15.5, 14.0, 5.0, 8.8, ("brick", (76, 56, 48), (98, 82, 72)), 708, "+z")
 
 
 # ── MAG Print Works loading door + press hall behind it (T10) ──
@@ -201,14 +364,14 @@ def _pw_interior(r, t, k):
     hh = 4.6
     def floor_col(x, z):     # concrete, a touch warmer near the lamps
         warm = max(0.0, 1.0 - min(math.hypot(x - lx, z - lz) for lx, lz in PW_LAMPS) / 3.2)
-        return (int(64 + 36 * warm), int(56 + 26 * warm), int(46 + 14 * warm))
-    _add(r, quad_xz(x0, z0, x1, z1, fy, (64, 56, 46), seg=1.0, colfn=floor_col))
+        return _qt("concrete", (int(64 + 36 * warm), int(56 + 26 * warm), int(46 + 14 * warm)))
+    _add(r, quad_xz(x0, z0, x1, z1, fy, _qt("concrete", (64, 56, 46)), seg=1.0, colfn=floor_col))
     wall = (96, 80, 62)
-    _add(r, box(0.2, hh, z1 - z0, wall, center=(x0 - 0.1, fy + hh / 2, (z0 + z1) / 2), seg=1.0))
-    _add(r, box(0.2, hh, z1 - z0, (90, 74, 58), center=(x1 + 0.1, fy + hh / 2, (z0 + z1) / 2), seg=1.0))
-    _add(r, box(x1 - x0 + 0.4, hh, 0.2, (100, 84, 64), center=(0, fy + hh / 2, z1 + 0.1), seg=1.0))
-    _add(r, box(x1 - x0 + 0.4, 0.2, z1 - z0, (46, 40, 34), center=(0, fy + hh + 0.1, (z0 + z1) / 2), seg=1.5))
-    _add(r, box(x1 - x0, 0.5, 0.12, (60, 50, 40), center=(0, fy + 0.25, z1 - 0.06)))      # skirting
+    _add(r, box(0.2, hh, z1 - z0, _qt("brick", wall), center=(x0 - 0.1, fy + hh / 2, (z0 + z1) / 2), seg=1.0))
+    _add(r, box(0.2, hh, z1 - z0, _qt("brick", (90, 74, 58)), center=(x1 + 0.1, fy + hh / 2, (z0 + z1) / 2), seg=1.0))
+    _add(r, box(x1 - x0 + 0.4, hh, 0.2, _qt("brick", (100, 84, 64)), center=(0, fy + hh / 2, z1 + 0.1), seg=1.0))
+    _add(r, box(x1 - x0 + 0.4, 0.2, z1 - z0, _qt("concrete", (46, 40, 34)), center=(0, fy + hh + 0.1, (z0 + z1) / 2), seg=1.5))
+    _add(r, box(x1 - x0, 0.5, 0.12, _qt("concrete", (60, 50, 40)), center=(0, fy + 0.25, z1 - 0.06)))      # skirting
     # hanging work lights: cord, green enamel shade, bulb, glow + floor pool
     for i, (lx, lz) in enumerate(PW_LAMPS):
         _add(r, box(0.02, 1.1, 0.02, (30, 30, 30), center=(lx, fy + hh - 0.55, lz)))
@@ -1659,28 +1822,77 @@ def _breach(surface, t):
 
 
 # East checkpoint: existing cast rigs, one coherent set, four camera takes.
-def _faces_set(r):
+def _faces_set(r, t=0):
+    """2.5D-faithful East Checkpoint ('Print Street', col 30 of MISSION5_QUARTER_MAP):
+    east-west avenue (+Z = east toward Print Works), kerbed sidewalks, tram rails,
+    striped jersey barriers & sandbags leaving the north lane open, guard booth,
+    flanking Lower Quarter brick/plaster/concrete blocks, and MAG Print Works
+    down the avenue past the cross-street."""
     from engine3d.core import box, quad_xz
     _night_street(r)
-    _add(r, quad_xz(-12, -10, 12, 12, 0, (32, 36, 44), seg=4))
-    _add(r, box(22, 7, 1, (48, 44, 46), center=(0, 3.5, 8)))
-    for x in (-8, -4, 0, 4, 8):
-        _add(r, box(1.1, 1.7, 0.05, (88, 80, 66), center=(x, 3.8, 7.45), emissive=True))
-    # Leave the central passage clear: barricades sit to either side.
-    for x in (-4.2, 4.2):
-        _add(r, box(3.8, 0.8, 0.55, (76, 74, 66), center=(x, 0.4, 2.8)))
-        for j in range(5):
-            _add(r, box(0.32, 0.18, 0.03, (166, 134, 66), center=(x - 1.4 + j * 0.7, 0.65, 2.5)))
-    _add(r, box(0.12, 4.2, 0.12, (36, 40, 46), center=(-3.2, 2.1, 3.5)))
-    _add(r, box(0.45, 0.18, 0.45, (246, 208, 146), center=(-3.2, 4.25, 3.5), emissive=True))
-    _add(r, quad_xz(-4.5, -1, 1.2, 4.5, 0.012, (58, 54, 46), emissive=True))
-    _add(r, box(1.3, 2.2, 1.3, (42, 48, 54), center=(5.4, 1.1, 5.0)))
-    # kiosk front: a curfew order + Guard poster (was one blank red block)
-    # (pasted low so they never sit tangent to Biribel's head in the wide - N12)
-    ok = _decal.add(r, "posters", 1, (5.05, 1.0, 4.345), (0.52, 0.7))
-    ok = _decal.add(r, "posters", 0, (5.72, 1.0, 4.345), (0.52, 0.7)) and ok
+    # Avenue asphalt (-2.6..+2.6) + cross-street (z=18..22) with per-tile noise texture
+    _add(r, quad_xz(-2.6, -14.0, 2.6, 26.0, 0.0, _qt("pavement", (38, 40, 44)), seg=1.6,
+                    colfn=lambda x, z: _pave_tex(x, z)))
+    _add(r, quad_xz(-22.0, 18.0, 22.0, 22.4, 0.0, _qt("pavement", (36, 38, 42)), seg=1.6,
+                    colfn=lambda x, z: _pave_tex(x, z)))
+    # Lane dashes & tram rails down the avenue (+Z)
+    for z in range(-12, 24, 3):
+        _add(r, quad_xz(-0.08, z, 0.08, z + 1.4, 0.008, (150, 140, 96), layer=1))
+    for rx in (-0.55, 0.55):
+        _add(r, quad_xz(rx - 0.04, -14.0, rx + 0.04, 24.0, 0.009, _qt("steel", (86, 88, 92)), layer=1))
+    # Kerbed sidewalks (north/left -5.4..-2.6, south/right +2.6..+5.4) split by cross-street
+    for sx0, sx1, kx in ((-5.4, -2.6, -2.68), (2.6, 5.4, 2.68)):
+        scx = (sx0 + sx1) * 0.5
+        for sz0, sz1 in ((-14.0, 18.0), (22.4, 28.0)):
+            sd = sz1 - sz0
+            scz = (sz0 + sz1) * 0.5
+            _add(r, box(2.8, 0.14, sd, _qt("concrete", (70, 70, 66)), center=(scx, 0.07, scz), seg=1.8))
+            _add(r, box(0.16, 0.15, sd, _qt("concrete", (96, 95, 90)), center=(kx, 0.075, scz), seg=1.8))
+    # 2.5D-style jersey barriers + sandbags at z=3.2 (open passage on north lane x=-2.4..+0.1)
+    for bx, bw in ((-3.5, 1.5), (1.35, 2.35)):
+        _add(r, box(bw, 0.34, 0.54, _qt("concrete", (82, 82, 78)), center=(bx, 0.17, 3.2)))
+        _add(r, box(bw, 0.56, 0.30, _qt("concrete", (94, 94, 88)), center=(bx, 0.62, 3.2)))
+        _add(r, box(bw * 0.72, 0.10, 0.03, (196, 60, 44), center=(bx, 0.68, 3.03)))
+        _add(r, box(bw * 0.85, 0.24, 0.34, _qt("crate", (112, 98, 72)), center=(bx, 0.12, 2.74)))
+    # Guard flag stand on the north sidewalk beside the checkpoint
+    _add(r, box(0.28, 0.08, 0.28, (60, 54, 44), center=(-3.1, 0.18, 2.5)))
+    _add(r, box(0.05, 1.9, 0.05, (180, 160, 110), center=(-3.1, 1.12, 2.5)))
+    _add(r, box(0.03, 0.32, 0.65, (20, 20, 24), center=(-3.1, 1.9, 2.84)))
+    _add(r, box(0.03, 0.28, 0.65, (186, 32, 34), center=(-3.1, 1.6, 2.84)))
+    # Checkpoint booth on the south sidewalk (x=3.9, z=5.4), steel-clad + framed window + posters
+    _add(r, box(1.5, 2.35, 1.5, _qt("steel", (54, 58, 64)), center=(3.9, 1.31, 5.4)))
+    _add(r, box(1.66, 0.14, 1.66, _qt("concrete", (40, 42, 46)), center=(3.9, 2.54, 5.4)))
+    _framed_window(r, 3.15, 1.65, 5.4, w=0.85, h=0.72, lit=True, facing="-x")
+    ok = _decal.add(r, "posters", 1, (3.55, 1.12, 4.64), (0.52, 0.7))
+    ok = _decal.add(r, "posters", 0, (4.22, 1.12, 4.64), (0.52, 0.7)) and ok
     if not ok:
-        _add(r, box(1.36, 0.45, 0.02, _GUARD_RED, center=(5.4, 1.6, 4.33)))
+        _add(r, box(1.36, 0.45, 0.02, _GUARD_RED, center=(3.9, 1.7, 4.63)))
+    # Sodium streetlamps along both curbs (matching _Q_LIGHTS)
+    for lx, arm, lz in ((-2.8, 0.7, 3.6), (2.8, -0.7, 11.2), (-2.8, 0.7, 14.8)):
+        _add(r, box(0.12, 4.3, 0.12, _qt("steel", (38, 40, 44)), center=(lx, 2.29, lz)))
+        _add(r, box(abs(arm) + 0.1, 0.08, 0.08, _qt("steel", (38, 40, 44)), center=(lx + arm * 0.5, 4.42, lz)))
+        _add(r, box(0.42, 0.14, 0.28, (255, 208, 138), center=(lx + arm, 4.34, lz), emissive=True))
+        _spr(r, (lx + arm, 4.30, lz), _fx.sodium_lamp(t, int(lz), radius_m=2.3))
+        _spr(r, (lx + arm, 0.02, lz), _fx.wet_reflection(_fx.SODIUM, t, int(lz), 2.4, 0.55, 0.26))
+    # Flanking Lower Quarter buildings on north (x<=-5.4) & south (x>=+5.4) — zero void in any shot
+    _quarter_block(r, -8.9, -4.5, 7.0, 14.0, 9.2, ("m7_plaster", (96, 88, 72), (124, 114, 92)), 601, "+x")
+    _quarter_block(r, -8.9, 10.2, 7.0, 15.2, 10.4, ("brick", (84, 62, 52), (110, 92, 80)), 602, "+x")
+    _quarter_block(r, 8.9, -4.5, 7.0, 14.0, 8.8, ("concrete", (76, 78, 80), (104, 106, 106)), 603, "-x")
+    _quarter_block(r, 8.9, 10.2, 7.0, 15.2, 9.8, ("m7_plaster", (96, 88, 72), (124, 114, 92)), 604, "-x")
+    # Posters along the north checkpoint facade (facing +x into the street)
+    for i, pz in enumerate((1.2, 2.2, 6.0)):
+        _decal.add(r, "posters", (5, 6, 0)[i], (-5.38, 1.55, pz), (0.64, 0.88), facing="+x")
+    # East across the cross-street (z=23..36): MAG Print Works + blade sign + distant horizon blocks
+    _quarter_block(r, -13.0, 29.0, 14.0, 11.0, 10.6, ("concrete", (66, 68, 74), (88, 90, 96)), 605, "-z")
+    _quarter_block(r, 0.0, 30.0, 12.0, 10.0, 11.2, ("brick", (78, 56, 48), (104, 92, 84)), 606, "-z")
+    _quarter_block(r, 13.0, 29.0, 14.0, 11.0, 9.8, ("m7_plaster", (82, 76, 64), (104, 98, 84)), 607, "-z")
+    # Cross-street end-caps so looking left/right down z=18..22 never shows void
+    _quarter_block(r, -22.0, 20.0, 4.0, 12.0, 10.0, ("concrete", (52, 54, 60), (70, 72, 76)), 608, "+x")
+    _quarter_block(r, 22.0, 20.0, 4.0, 12.0, 10.0, ("concrete", (52, 54, 60), (70, 72, 76)), 609, "-x")
+    _add(r, box(2.4, 0.65, 0.16, (110, 24, 26), center=(-1.8, 3.8, 24.4)))
+    _add(r, box(2.2, 0.45, 0.20, (235, 86, 76), center=(-1.8, 3.8, 24.4), emissive=True))
+    _spr(r, (-1.8, 3.8, 24.3), _fx.glow((255, 90, 80), 1.5, t, intensity=0.5))
+    _mag_van_3d(r, 2.2, 23.2, yaw=180.0)
 
 
 def _faces_take(surface, t, take):
@@ -1697,7 +1909,7 @@ def _faces_take(surface, t, take):
         "release": ((-3.0, 1.6, -4.4), (0, 1.15, 1.4), 58),
     }
     def build(r):
-        _faces_set(r)
+        _faces_set(r, t)
         # Release: stride is driven by distance walked and fades out as he
         # stops - the old t-driven cycle kept him walking in place after k=1.
         # 4.65 rad/m = 1.35 m per full cycle (2 steps).

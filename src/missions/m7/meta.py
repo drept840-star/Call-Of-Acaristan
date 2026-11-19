@@ -38,7 +38,6 @@ FILM_TIMELINES = {
     STAGE_RAIDIN: "m7.raidin",
     STAGE_FINALE: "m7.finale",
 }
-OUTRO_TIMELINE = "m7.outro"
 
 # Mid-stage films: these play without advancing the ladder.  The goat escape
 # is requested by the chore handlers when the last chore lands, so Bodi's
@@ -99,8 +98,3 @@ def film_shots(stage):
         return []
     from game import timelines as _timelines
     return _timelines.shots(timeline, [])
-
-
-def outro_shots():
-    from game import timelines as _timelines
-    return _timelines.shots(OUTRO_TIMELINE, [])

@@ -483,13 +483,22 @@ class Brain:
         return (x, y + EYE.get(g["stance"], GUN_H), z)
 
     def spheres(self, g):
-        """(height, radius) of the chest and head hit spheres for his stance."""
+        """(height, radius) of chest, head, pelvis and legs for his stance."""
         big = g["kind"] == "heavy"
         if self.sc.t < g.get("up_at", -9.0) + 0.3:
             return ((0.28, 0.45), (0.30, 0.0))     # flat on the snow
         if g.get("stance") == "hide_low":
-            return ((0.66, 0.38 if big else 0.34), (0.92, 0.28 if big else 0.24))
-        return ((1.30, 0.42 if big else 0.38), (1.58, 0.34 if big else 0.30))
+            return (
+                (0.66, 0.38 if big else 0.34),
+                (0.92, 0.28 if big else 0.24),
+                (0.30, 0.34 if big else 0.30),
+            )
+        return (
+            (1.26, 0.42 if big else 0.38),
+            (1.58, 0.34 if big else 0.30),
+            (0.76, 0.36 if big else 0.33),
+            (0.32, 0.34 if big else 0.30),
+        )
 
     def _perceive(self, g, dt):
         sc, t, mem = self.sc, self.sc.t, g["mem"]

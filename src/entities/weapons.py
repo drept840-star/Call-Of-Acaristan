@@ -1,4 +1,5 @@
 """Player weapons: pistol, melee, molotov cocktails, fire zones."""
+from collections import OrderedDict
 import math
 import random
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
@@ -68,6 +69,79 @@ def _player_has_firearm():
     return not getattr(STATE, "player_disarmed", False)
 
 
+_FZ_SCORCH_CACHE = OrderedDict()
+_FZ_GLOW_CACHE = OrderedDict()
+_FZ_SMOKE_CACHE = OrderedDict()
+
+
+def _fz_scorch(x, y, radius, outline, step):
+    seed = int(x * 13 + y * 7)
+    key = (radius, outline, seed, step)
+    s = _FZ_SCORCH_CACHE.get(key)
+    if s is not None:
+        _FZ_SCORCH_CACHE.move_to_end(key)
+        return s
+    lr = step / 20.0
+    s = pygame.Surface((radius * 3, radius * 3), pygame.SRCALPHA)
+    cx = cy = radius * 3 // 2
+    rng = random.Random(seed)
+    points = []
+    for i in range(18):
+        ang = i / 18.0 * math.pi * 2
+        rr = radius * rng.uniform(0.75, 1.25)
+        points.append((cx + math.cos(ang) * rr, cy + math.sin(ang) * rr * 0.72))
+    if outline:
+        pygame.draw.polygon(s, (10, 7, 5, int(115 * lr)), points)
+        pygame.draw.polygon(s, (45, 22, 8, int(80 * lr)), points, 2)
+    else:
+        for i in range(7):
+            k = 1.0 - i * 0.10
+            ring = [(cx + (px - cx) * k, cy + (py - cy) * k) for px, py in points]
+            pygame.draw.polygon(s, (10, 7, 5, int(26 * lr)), ring)
+        core = [(cx + (px - cx) * 0.45, cy + (py - cy) * 0.45) for px, py in points]
+        pygame.draw.polygon(s, (6, 5, 6, int(34 * lr)), core)
+    if len(_FZ_SCORCH_CACHE) >= 128:
+        _FZ_SCORCH_CACHE.popitem(last=False)
+    _FZ_SCORCH_CACHE[key] = s
+    return s
+
+
+def _fz_glow(radius, step):
+    key = (radius, step)
+    s = _FZ_GLOW_CACHE.get(key)
+    if s is not None:
+        _FZ_GLOW_CACHE.move_to_end(key)
+        return s
+    k = step / 20.0
+    s = pygame.Surface((radius * 3, radius * 2), pygame.SRCALPHA)
+    for r, a in ((radius + 25, 24), (radius, 40), (radius - 20, 65)):
+        if r > 0:
+            pygame.draw.ellipse(
+                s,
+                (255, 95, 20, int(a * k)),
+                (radius * 3 // 2 - r, radius - int(r * 0.45), r * 2, int(r * 0.9)),
+            )
+    if len(_FZ_GLOW_CACHE) >= 128:
+        _FZ_GLOW_CACHE.popitem(last=False)
+    _FZ_GLOW_CACHE[key] = s
+    return s
+
+
+def _fz_smoke(col, rad, alpha):
+    qa = (alpha // 2) * 2
+    key = (col, rad, qa)
+    s = _FZ_SMOKE_CACHE.get(key)
+    if s is not None:
+        _FZ_SMOKE_CACHE.move_to_end(key)
+        return s
+    s = pygame.Surface((rad * 2, rad * 2), pygame.SRCALPHA)
+    pygame.draw.circle(s, (*col, qa), (rad, rad), rad)
+    if len(_FZ_SMOKE_CACHE) >= 256:
+        _FZ_SMOKE_CACHE.popitem(last=False)
+    _FZ_SMOKE_CACHE[key] = s
+    return s
+
+
 class FireZone:
     """Persistent ground fire: a Molotov impact, or a burning fuel drum.
 
@@ -126,47 +200,11 @@ class FireZone:
         life_ratio = max(0.0, self.life / self.max_life)
         flicker = 0.75 + 0.25 * math.sin(_now_ms() * 0.018)
         # Scorched irregular ground patch
-        scorch = pygame.Surface((self.radius * 3, self.radius * 3), pygame.SRCALPHA)
         cx = cy = self.radius * 3 // 2
-        rng = random.Random(int(self.x * 13 + self.y * 7))
-        points = []
-        for i in range(18):
-            ang = i / 18.0 * math.pi * 2
-            rr = self.radius * rng.uniform(0.75, 1.25)
-            points.append((cx + math.cos(ang) * rr, cy + math.sin(ang) * rr * 0.72))
-        if self.outline:
-            pygame.draw.polygon(scorch, (10, 7, 5, int(115 * life_ratio)), points)
-            pygame.draw.polygon(scorch, (45, 22, 8, int(80 * life_ratio)), points, 2)
-        else:
-            # A fuel fire: the same irregular patch, but built up out of
-            # nested low-alpha copies instead of one flat fill.  A single
-            # hard-edged polygon at the bigger M6 radius read as a black
-            # donut around the flames; this feathers into the ground.
-            for i in range(7):
-                k = 1.0 - i * 0.10
-                ring = [(cx + (px - cx) * k, cy + (py - cy) * k) for px, py in points]
-                pygame.draw.polygon(scorch, (10, 7, 5, int(26 * life_ratio)), ring)
-            core = [(cx + (px - cx) * 0.45, cy + (py - cy) * 0.45) for px, py in points]
-            pygame.draw.polygon(scorch, (6, 5, 6, int(34 * life_ratio)), core)
+        scorch = _fz_scorch(self.x, self.y, self.radius, self.outline, int(round(life_ratio * 20)))
         yield _SurfaceDraw(scorch, (sx - cx, sy - cy), space=_SCREEN)
         # Low orange glow, not a giant perfect circle
-        glow = pygame.Surface((self.radius * 3, self.radius * 2), pygame.SRCALPHA)
-        for r, a in [
-            (self.radius + 25, 24),
-            (self.radius, 40),
-            (self.radius - 20, 65),
-        ]:
-            if r > 0:
-                pygame.draw.ellipse(
-                    glow,
-                    (255, 95, 20, int(a * life_ratio * flicker)),
-                    (
-                        self.radius * 3 // 2 - r,
-                        self.radius - int(r * 0.45),
-                        r * 2,
-                        int(r * 0.9),
-                    ),
-                )
+        glow = _fz_glow(self.radius, int(round(life_ratio * flicker * 20)))
         yield _SurfaceDraw(glow, (sx - self.radius * 3 // 2, sy - self.radius), space=_SCREEN)
         # Pixel flame tongues
         flame_count = int(9 * life_ratio) + 3
@@ -198,8 +236,7 @@ class FireZone:
                 smoke_y = sy - 35 - i * 8
                 sr = 7 + i
                 smoke_a = int(32 * life_ratio)
-                sm = pygame.Surface((sr * 2, sr * 2), pygame.SRCALPHA)
-                pygame.draw.circle(sm, (45, 43, 40, smoke_a), (sr, sr), sr)
+                sm = _fz_smoke((45, 43, 40), sr, smoke_a)
                 yield _SurfaceDraw(sm, (smoke_x - sr, smoke_y - sr), space=_SCREEN)
         if life_ratio > 0.15:
             for _ in range(2):
@@ -207,9 +244,7 @@ class FireZone:
                 smoke_y = sy - _rng_legacy.randint(10, 35)
                 smoke_r = _rng_legacy.randint(4, 10)
                 smoke_a = int(40 * life_ratio)
-                smoke_s = pygame.Surface((smoke_r * 2, smoke_r * 2), pygame.SRCALPHA)
-                pygame.draw.circle(smoke_s, (50, 45, 40, smoke_a),
-                                   (smoke_r, smoke_r), smoke_r)
+                smoke_s = _fz_smoke((50, 45, 40), smoke_r, smoke_a)
                 yield _SurfaceDraw(smoke_s, (smoke_x - smoke_r, smoke_y - smoke_r), space=_SCREEN)
 def _wall_blocks_line(x1, y1, x2, y2, solid_walls):
     for w in solid_walls:

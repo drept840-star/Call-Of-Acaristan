@@ -2,7 +2,7 @@
 set.  ENTER steps the lines; after the last one the stage advances.  Old Friends
 is staged shot / reverse-shot on the catwalk (one camera per line, the speaker's
 mouth moving); the meet cuts between the truck and the catwalk; the epilogue is one shot per
-line on the chase set (``epilogue3d``).  Duty is a placeholder.
+line on the chase set (``epilogue3d``).
 """
 import math
 
@@ -35,7 +35,6 @@ _TX, _TZ, _TYAW = S3.TRUCK_AT
 SHOTS = {
     M.STAGE_MEET: ((_TX + 7.7, 1.7, _TZ - 5.0), (-0.08, 0.0, 0.10), (_TX + 0.7, 1.2, _TZ + 1.0), 50.0),
     M.STAGE_FRIENDS: ((8.6, 7.9, 54.2), (-0.05, 0.0, 0.0), (3.6, 7.9, 57.0), 46.0),
-    M.STAGE_DUTY: ((_TX + 2.0, 4.0, _TZ - 5.0), (0.08, 0.0, 0.08), (S3.VASILE_AT[0], 3.0, S3.CATWALK_Z), 54.0),
 }
 
 

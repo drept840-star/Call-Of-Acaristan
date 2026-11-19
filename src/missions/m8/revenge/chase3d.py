@@ -4071,6 +4071,8 @@ class ChaseScene:
             1.4,
             2.1,
             0.5,
+            layer=1,
+            bias=-2.4,
         )
 
         (lx, ly, lz), lyaw = self.trailer_pos()
@@ -4087,6 +4089,8 @@ class ChaseScene:
             1.3,
             2.1,
             0.5,
+            layer=1,
+            bias=-2.4,
         )
         self._draw_mount(r)
         lp = S.ditch_pitch(lz)
@@ -4141,6 +4145,8 @@ class ChaseScene:
                 1.35 if big else 1.15,
                 3.1 if big else 2.4,
                 0.5 / (1.0 + max(0.0, y - gy)),
+                layer=1,
+                bias=-(3.4 if big else 2.7),
             )
 
         rx = S.road_x(S.BARRIER_Z)
@@ -4430,6 +4436,7 @@ class ChaseScene:
             amp=0.2,
             rifle_on=False,
             mouth=None,
+            shadow=(2, -0.30),
         )
 
         if self.end_t is not None:
@@ -4451,6 +4458,7 @@ class ChaseScene:
                 flags=(GUN,),
                 expression="angry",
                 mouth=0.0,
+                shadow=(2, -0.30),
             )
             if joints:
                 self._draw_hand_can(r, joints["lhand"])
@@ -4558,6 +4566,7 @@ class ChaseScene:
         joints = _w.actor(
             r, BIRIBEL, pose, pos, yaw, tm, seed=93, amp=0.06,
             rifle_on=False, flags=(GUN,), expression="angry", mouth=0.0,
+            shadow=(2, -0.30),
         )
         if show_hammer and joints and "rhand" in joints:
             self._hammer(r, joints["rhand"], pose, yaw)
@@ -4604,6 +4613,7 @@ class ChaseScene:
                 amp=0.15,
                 rifle_on=False,
                 mouth=None,
+                shadow=(2, -0.30),
             )
             return
 
@@ -4626,6 +4636,7 @@ class ChaseScene:
                     flags=(GUN,),
                     expression="angry",
                     mouth=0.0,
+                    shadow=(2, -0.30),
                 )
             else:
                 (_tx, _ty, _tz), tyaw = self.tractor_pos()
@@ -4640,6 +4651,7 @@ class ChaseScene:
                     amp=0.2,
                     rifle_on=False,
                     mouth=None,
+                    shadow=(2, -0.30),
                 )
             return
 
@@ -4693,6 +4705,7 @@ class ChaseScene:
             rifle_on=False,
             expression="angry" if key == BIRIBEL else None,
             mouth=0.0 if key == BIRIBEL else None,
+            shadow=(1, -4.0),
         )
 
     def _draw_capture(self, r, tm):
@@ -4779,6 +4792,7 @@ class ChaseScene:
                 amp=0.25,
                 rifle_on=True,
                 flags=("os12",),
+                shadow=(1, -4.0),
             )
 
         for e in self.enemies:
@@ -4885,6 +4899,7 @@ class ChaseScene:
             amp=0.15 if el >= 3.7 else 0.0,
             rifle_on=False,
             mouth=0.0,
+            shadow=(1, -4.0) if 0.75 <= el < 2.35 else (2, -0.30),
         )
 
     def _draw_crew(self, r, tm, e):
@@ -4911,6 +4926,7 @@ class ChaseScene:
                     amp=0.3,
                     rifle_on=True,
                     flags=("os12",),
+                    shadow=(1, -4.0),
                 )
             else:
                 k = clamp(
@@ -4929,6 +4945,7 @@ class ChaseScene:
                     amp=0.0,
                     rifle_on=False,
                     flags=("os12",),
+                    shadow=(1, -4.0),
                 )
             return
 
@@ -4960,6 +4977,7 @@ class ChaseScene:
                 amp=0.0,
                 rifle_on=False,
                 flags=("os12",),
+                shadow=(2, -0.30),
             )
 
             if e["gunner"] and not e["wrecked"]:
@@ -4989,6 +5007,7 @@ class ChaseScene:
             amp=0.0,
             rifle_on=False,
             flags=("os12",),
+            shadow=(2, -0.30),
         )
 
     def _draw_bullets(self, r, tm):

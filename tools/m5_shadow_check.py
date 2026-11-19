@@ -34,7 +34,10 @@ class Harness:
         names=('CutscenePlayer','_CutsceneState','_GameState_','_MissionCompleteState')
         nodes=[n for n in tree.body if isinstance(n,ast.ClassDef) and n.name in names]
         aud=SimpleNamespace(play=lambda name,volume=1:self.audio_events.append((self.clock,name,volume)),
-             stop=lambda n:None,duck_ambience=lambda **kw:None)
+             stop=lambda n:None,duck_ambience=lambda **kw:None,
+             # Music bed: inert, so audio_events stays cue-exact.
+             fade_out_music=lambda *a,**kw:None,play_music=lambda *a,**kw:None,
+             music_name=lambda:None)
         gc=SimpleNamespace(reset_dialogue_slide=lambda:None,active_mission='MISSION5',draw_cutscene_scene=draw_cutscene_scene)
         self.env={'pygame':pygame,'GameState':GameState,'audio':aud,'gc':gc,'KO_CUT_CUES':{},'TEXT_SPEED':2,'_now_ms':lambda:self.clock,
           'voice':SimpleNamespace(stop=lambda:self.pauses.append('stop'),pause=lambda:self.pauses.append('pause'),resume=lambda:self.pauses.append('resume')),

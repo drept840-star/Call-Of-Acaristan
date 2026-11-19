@@ -451,14 +451,14 @@
      ]
     }
    },
-   "source": "0aaa7fd7f9c4c915347871c0af57d8e3941cdf910d58eb54a1fd2f6aa41a6707",
+   "source": "bb29c68c256144e305f05f2c6f8a56692fb2bcb3298eca6bbb4d50403b597453",
    "variants": 56
   },
   "m4/world_static": {
    "files": {
     "0": {
      "file": "world_static_0.png",
-     "pixels": "e3341d234a3b900827b0d3c14356c2d0061131492e4e8494d55042ca079f5b22",
+     "pixels": "e2981bffa604fe0801f2a192a87233f5f1f5ee119f469a50a1ad25f4f934f0e4",
      "size": [
       2560,
       2560
@@ -473,7 +473,7 @@
      ]
     }
    },
-   "source": "177a5d2a5502515ab5c1ac498da24dd363b5dbe1acdf18ba6b57e6a575850328",
+   "source": "0892f96de490b17583e4ed339029c5addd27095b7c3607b60da2290fd603022f",
    "variants": 2
   }
  },

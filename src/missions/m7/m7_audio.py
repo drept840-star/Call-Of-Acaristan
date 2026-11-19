@@ -686,9 +686,11 @@ class M7Audio:
 # theme sits at 0.48), so the farm cue stays under the yard foley and Bodi.
 OST_DIR = "assets/music/ost/"
 MUSIC = {
-    "farm": (OST_DIR + "05_curfew_dawn.mp3", 0.30, 2500),
+    "farm": (OST_DIR + "16_mending_wire.mp3", 0.30, 2500),
+    "prep": (OST_DIR + "20_dust_on_the_road.mp3", 0.34, 1800),
     "raid": (OST_DIR + "09_fallow_ground.mp3", 0.42, 1500),
     "film": (OST_DIR + "03_quiet_on_route_12.mp3", 0.36, 2000),
+    "finale": (OST_DIR + "19_paper_trail.mp3", 0.32, 2200),
     "outro": (OST_DIR + "08_i_chose_the_many.mp3", 0.48, 2500),
     "outro_soft": (OST_DIR + "08_i_chose_the_many.mp3", 0.28, 2500),
 }

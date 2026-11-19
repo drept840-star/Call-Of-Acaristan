@@ -1063,7 +1063,7 @@ def _draw_m5_mag_icon(surface, mx, my, kind, rounds, cap, is_active):
 # Status-plate slot: the free top strip between the HOSTILES box (x 20-200)
 # and the minimap (x >= ~830), above the objective banner (y ~90). Convoy
 # (quarter) and raid clock (print works) never coexist, so they share it.
-M5_PLATE_X, M5_PLATE_Y, M5_PLATE_W, M5_PLATE_H = 214, 16, 340, 46
+M5_PLATE_X, M5_PLATE_Y, M5_PLATE_W, M5_PLATE_H = 210, 18, 340, 46
 
 
 def _plate_text(surface, x, y, w, title, title_col, pips, pips_max):
@@ -1088,12 +1088,14 @@ def _plate_text(surface, x, y, w, title, title_col, pips, pips_max):
 def _draw_m5_plate(surface, title, title_col, frac, fill_col, right_text,
                    right_col=(220, 226, 236), pips=0, pips_max=0):
     """M4 hold-bar plate look (dark glass, steel rim, bar + right readout)."""
+    from ui.tactical_hud import draw_tactical_corners, tactical_panel_bg
     x, y, w, h = M5_PLATE_X, M5_PLATE_Y, M5_PLATE_W, M5_PLATE_H
     frame = _m5art("plate", 0)
     if frame is not None and frame.get_size() == (w, h):  # baked frame (src/game/art/m5/plate.py)
         surface.blit(frame, (x, y))
+        draw_tactical_corners(surface, pygame.Rect(x, y, w, h))
     else:
-        surface.blit(get_plate_bg(w, h), (x, y))
+        surface.blit(tactical_panel_bg(w, h), (x, y))
     _plate_text(surface, x, y, w, title, title_col, pips, pips_max)
     bx, by, bw, bh = x + 12, y + 28, w - 76, 10
     fw = int((bw - 2) * max(0.0, min(1.0, frac)))
@@ -1120,7 +1122,10 @@ def _draw_hud(surface, cam_x, cam_y):
     pinned radio, HP strip, 84px magazine-icon weapon panel, HOSTILES box,
     minimap) plus one M5 status plate in the free top strip (convoy / raid).
     Drawn after vignette + scanlines so nothing here gets darkened."""
-    draw_objective_panel(surface, _m5_maps._objective)
+    from engine.ui import objective_banner as _hud_objective
+    from ui.tactical_hud import HUD_MARGIN, PANEL_GAP, TACTICAL_THEME, place_minimap, tactical_panel_bg
+    m = HUD_MARGIN
+    _hud_objective.draw(surface, _m5_maps._objective, TACTICAL_THEME, x=m, y=m + 26 + 8)
     draw_pinned_radio(surface)
     if not STATE.player:
         return
@@ -1128,17 +1133,21 @@ def _draw_hud(surface, cam_x, cam_y):
     # Phase 4: the duplicated M4/M5 panel bodies are engine.ui.std widgets now;
     # this HUD only gathers the data (hostiles count / minimap enemies differ).
     if not _m5_flow._m5_dlg["active"]:  # the speech box owns the bottom edge
-        _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                             panel_bg=get_panel_bg)
-        _hud_weapon_panel.draw(surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
-                               panel_bg=get_panel_bg, mag_icon=_draw_m5_mag_icon)
+        hp_y = HEIGHT - m - 30
+        _hud_health_bar.draw(surface, TACTICAL_THEME, STATE.player.hp, STATE.player.max_hp,
+                             panel_bg=tactical_panel_bg, x=m, y=hp_y)
+        _hud_weapon_panel.draw(surface, TACTICAL_THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
+                               panel_bg=tactical_panel_bg, mag_icon=_draw_m5_mag_icon,
+                               x=m, y=hp_y - PANEL_GAP + 2)
 
     # ── Hostiles counter (same box + wording as M4) ──
-    _hud_hostiles.draw(surface, THEME,
+    _hud_hostiles.draw(surface, TACTICAL_THEME,
                        sum(e.hp > 0 and not _m5g(e).passive
-                           for e in STATE.enemies))
+                           for e in STATE.enemies),
+                       x=m, y=m)
 
     if STATE.show_minimap and STATE.minimap:
+        place_minimap(STATE.minimap)
         STATE.minimap.draw(surface, STATE.player,
                            [e for e in STATE.enemies if e.hp > 0 and not _m5g(e).passive],
                            cam_x, cam_y,

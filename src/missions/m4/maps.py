@@ -155,14 +155,14 @@ M4_BLOCKS = [
     ("blk_s4",     17, 32,   4,  3, "apartment", 5),
     ("blk_s5",     23, 32,   4,  3, "row",       3),
     ("blk_s6",     29, 32,   4,  3, "apartment", 4),
-    ("blk_s7",     35, 32,   4,  3, "row",       3),
+    ("blk_s7",     35, 32,   4,  1, "row",       3),
     ("deep_a",      1, 37,   2,  2, "row",       3),   # rows 37-38 below H 36
     ("deep_b",      5, 37,   4,  2, "apartment", 4),
     ("deep_c",     11, 37,   4,  2, "row",       3),
     ("deep_d",     17, 37,   4,  2, "apartment", 4),
     ("deep_e",     23, 37,   4,  2, "row",       3),
     ("deep_f",     29, 37,   4,  2, "apartment", 4),
-    ("deep_g",     35, 37,   4,  2, "row",       3),
+    ("deep_g",     35, 34,   4,  5, "row",       3),
 ]
 
 # Radio-station footprint (east): a solid block; door gap on its west face.
@@ -179,7 +179,11 @@ SAFEHOUSE = (7, 2, 6, 6)
 SAFEHOUSE_DOOR = (9, 7)           # legacy, no longer stamped
 # Station foyer: carved "F" pocket behind the west door + corridor north into
 # the transmitter hall. Keeps the whole station solid-C except this interior.
-FOYER = (35, 18, 3, 3)            # cols 35-37, rows 18-20
+FOYER = (35, 18, 3, 2)            # cols 35-37, rows 18-19 (row 20 stays solid south wall)
+# SE "Still Open" corner shop carved into deep_g (cols 35-38, rows 36-38).
+CORNER_SHOP_DOOR = (35, 36)
+CORNER_SHOP_RECT = (36, 35, 3, 4)
+CORNER_SHOP_COUNTER_TILE = (37, 35)
 # Curfew barricades (solid "B") mid-boulevard; sidewalks + cross streets detour.
 BOUNCE_COLS = (12, 24)            # barricade columns across the boulevard
 
@@ -250,6 +254,17 @@ def _street_grid(w, h):
     g[STATION_DOOR_TILE[1]][STATION_DOOR_TILE[0]] = "D"
     _carve_station_interior(g, w, h)
 
+    # SE corner shop (deep_g, cols 35-38, rows 34-38): double-wide entrance + 3x4 interior.
+    _paint_tiles(g, 35, 34, 4, 5, "C", w, h)
+    for r in range(33, 39):
+        _set_tile(g, 34, r, "d", w, h)
+    for c in range(35, 39):
+        _set_tile(g, c, 33, "d", w, h)
+    _set_tile(g, 35, 36, "D", w, h)
+    _set_tile(g, 35, 37, "D", w, h)
+    sx, sy, sw, sh = CORNER_SHOP_RECT
+    _paint_tiles(g, sx, sy, sw, sh, "F", w, h)
+
     # Wrecked cars: cover on the boulevard and the lanes south from the
     # safehouse ("H" parks east-west over two tiles, "h" north-south).
     for cx, cy in _STREET_CARS:
@@ -290,6 +305,8 @@ def _generate_m4_map():
         "PLAYER_START_TILE": PLAYER_START_TILE,
         "VASILE_START_TILE": VASILE_START_TILE,
         "STATION_DOOR_TILE": STATION_DOOR_TILE,
+        "CORNER_SHOP_DOOR": CORNER_SHOP_DOOR,
+        "CORNER_SHOP_COUNTER_TILE": CORNER_SHOP_COUNTER_TILE,
     })
     return g
 

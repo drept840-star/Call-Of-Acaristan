@@ -12,7 +12,7 @@ import time
 
 import pygame
 
-from core.config import (SCENE_BOT, SCENE_TOP, WIDTH)
+from core.config import (C_TERMINAL, SCENE_BOT, SCENE_TOP, TILE_SIZE, WIDTH)
 from core.state import STATE
 from core import config as _config
 from entities.player import Player
@@ -28,7 +28,7 @@ from missions.m4 import maps as _m4_maps  # live view of MISSION4_MAP/_objective
 from missions.m4.meta import (
     MAP_W, MAP_H,
     MISSION4_ID, MISSION4_KEY, MISSION4_TITLE,
-    M4_SIEGE_FRAMES, M4_WAVE_GRACE, M4_JAMMER_COUNTDOWN, M4_SUPPLY_START,
+    M4_SIEGE_FRAMES, M4_WAVE_GRACE, M4_JAMMER_COUNTDOWN, M4_SPARE_CAP, M4_SUPPLY_START,
     STAGE_INTRO, STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE, STAGE_DONE,
     STAGE_AFTERMATH, TRANSMITTER_TILE, VASILE_STATION_TILE, RESPAWN_TILE,
     C_SYSTEM, C_VASILE, C_MARU, C_VOLKOV, C_RETARDOVICI, C_BALACEANU,
@@ -38,7 +38,7 @@ from missions.m4.world import (
     _build_m4_world, _build_station_world, _movement_locked, _near, _player_pos,
     _radio,
     _set_objective, _street_door_pos, _tile_world,
-    _liaison_pos, _jammer_pos, _siege_reset, _ally,
+    _liaison_pos, _jammer_pos, _shop_counter_pos, _siege_reset, _ally,
     _arm_m4_allies, _tone_choice,
 )
 from missions.m4 import escort as _m4_escort
@@ -515,6 +515,8 @@ def start_m4(preserve_timer=False, preserve_tone=False, keep_snaps=False):
     STATE.m4_hold_timer = 0
     STATE.m4_broadcast_held = False
     STATE.m4_apc = None
+    STATE.m4_shop_visited = False
+    STATE.m4_shop_looted = False
     STATE.mission4_station_checkpoint_reached = False
     STATE.mission4_tower_checkpoint_reached = False
     STATE.m4_marks = set()
@@ -671,6 +673,15 @@ def _enter_station():
            % STATE.m4_supply, color=C_VASILE, duration=420, mark="door_enter")
 
 
+def _in_corner_shop():
+    if STATE.player is None:
+        return False
+    sx, sy, sw, sh = _m4_maps.CORNER_SHOP_RECT
+    px, py = STATE.player.rect.center
+    return (sx * TILE_SIZE <= px <= (sx + sw) * TILE_SIZE
+            and sy * TILE_SIZE <= py <= (sy + sh) * TILE_SIZE)
+
+
 def _update_street():
     _aftermath_ambient()
     v = _m4_escort.vasile()
@@ -679,6 +690,11 @@ def _update_street():
     elif "street_objective" not in _m4_maps._radio_marks:
         _m4_maps._radio_marks.add("street_objective")
         _set_objective("Get Vasile and the cache to the radio station - east end of the boulevard.")
+    if not getattr(STATE, "m4_shop_visited", False) and _in_corner_shop():
+        STATE.m4_shop_visited = True
+        _sfx("door_open", 0.35)
+        _radio("VASILE: Forty-eight hours of curfew and someone left the cooler plugged in.",
+               color=C_VASILE, duration=360, mark="shop_enter")
     if _near(_street_door_pos(), radius=70):
         if _m4_escort.vasile_at_door():
             if not getattr(STATE, "m4_door_fade", 0):
@@ -775,6 +791,35 @@ def _complete_m4():
         pass
 
 
+def _loot_corner_shop():
+    STATE.m4_shop_looted = True
+    cx, cy = _shop_counter_pos()
+    if getattr(STATE, "k9_spare_mags", 0) < M4_SPARE_CAP:
+        STATE.k9_spare_mags = getattr(STATE, "k9_spare_mags", 0) + 1
+        STATE.floating_texts.append([cx, cy - 16, "+1 K-9 MAG", C_TERMINAL, 75])
+    elif getattr(STATE, "spare_mags", 0) < M4_SPARE_CAP:
+        STATE.spare_mags += 1
+        STATE.floating_texts.append([cx, cy - 16, "+1 9MM MAG", C_TERMINAL, 75])
+    STATE.m4_supply = getattr(STATE, "m4_supply", 0) + 3
+    STATE.floating_texts.append([cx, cy + 2, "+3 SUPPLY", (232, 190, 96), 80])
+    p = STATE.player
+    if p is not None and p.hp < p.max_hp:
+        p.hp = min(p.max_hp, p.hp + 40)
+        STATE.floating_texts.append([p.rect.centerx, p.rect.centery - 24, "+40 HP",
+                                     (120, 220, 140), 75])
+    else:
+        STATE.pickups.append([cx - 24, cy + 26, "bandage"])
+    _sfx("pickup", 0.45)
+    _sfx("menu_click", 0.35)
+    try:
+        from fx import effects
+        effects.burst(cx, cy, (255, 210, 110), 16)
+    except Exception:
+        pass
+    _radio("VASILE: Bread's stale, but there's timber and a mag behind the till. Take it.",
+           color=C_VASILE, duration=380, mark="shop_loot")
+
+
 def handle_interact():
     """E-key dispatch: advance the liaison dialogue or plant the jammer.
     Holds (revive, build, repair) read the held key in _update_holds."""
@@ -782,6 +827,12 @@ def handle_interact():
         _dlg_press(pygame.K_e)
         return
     stage = getattr(STATE, "mission4_stage", STAGE_ESCORT)
+    if (stage == STAGE_ESCORT and _m4_maps.MISSION4_MAP is not _m4_maps.MISSION4_STATION_MAP
+            and not getattr(STATE, "m4_shop_looted", False)
+            and _in_corner_shop()
+            and _near(_shop_counter_pos(), radius=96)):
+        _loot_corner_shop()
+        return
     if (stage == STAGE_FORTIFY and getattr(STATE, "m4_dialogue_done", False)
             and not getattr(STATE, "m4_jammer_installed", False)
             and _near(_jammer_pos(), radius=95)):

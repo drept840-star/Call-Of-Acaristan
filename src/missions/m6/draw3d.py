@@ -42,6 +42,7 @@ from missions.m1 import draw3d as _m1
 from . import combat as _combat
 from . import decor as _decor
 from . import maps as _maps
+from . import night_fx as _nfx
 from . import stealth as _stealth
 from . import world as _world
 from .meta import (NOMAN_TOWER_TILES, STAGE_BOXCAR, STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL,
@@ -60,21 +61,23 @@ LIGHT = dict(direction=(-0.252, 0.756, -0.605), ambient=0.6, diffuse=0.4, sky=0.
              tint=(1.0, 1.0, 1.0))
 
 WALL_H = {"C": 2.6, "W": 2.2, "band": 3.0}
-WALL_SIDE = {"C": (50, 52, 52), "W": (52, 56, 62), "band": (52, 58, 66)}
+WALL_SIDE = {"C": (34, 40, 52), "W": (42, 48, 58), "band": (42, 48, 58)}
 
 # Props whose 2D sprite is a side view go on the box's south face; the few
 # drawn from above go on its top. (height m, depth fraction of the footprint)
 FACE = {"guard_truck": (1.9, 0.9), "truck_burnt": (1.7, 0.9), "plough": (1.9, 0.9),
+        "sedan": (1.4, 0.85),
         "apc": (1.8, 0.9), "boxcar": (2.7, 0.86), "container": (2.6, 0.9),
         "booth": (2.4, 0.8), "shack": (2.6, 0.8), "snow_fence": (1.1, 0.22), "pallet": (0.9, 0.85),
         "sleeper_stack": (0.8, 0.85), "jersey": (0.8, 0.55), "sandbag": (0.75, 0.75)}
+FACE_SPLIT = {"booth": 0.20}
 TOP = {"counter": 1.0, "terminal": 1.1, "cabinet": 1.7, "crate": 0.9, "crates": 1.1,
        "barrels": 0.95, "coil": 0.6}
 CAST_LIFT = 2.2                    # bodies take this much more of the 2D light
 CUT_MIN = 1.3                      # props taller than this sink near Biribel too
 
-_cache = {"rays": None, "atlas": {}, "props": {}, "walls": {}, "meshes": {}, "packed": {},
-          "scratch": {}, "heights": {}, "corpse_meshes": weakref.WeakKeyDictionary()}
+_cache = {"rays": None, "atlas": {}, "gl_atlas": {}, "props": {}, "walls": {}, "meshes": {}, "packed": {},
+          "scratch": {}, "heights": {}, "corpse_meshes": weakref.WeakKeyDictionary(), "gl_ground_sig": {}}
 
 # key colours (R, G, B): the GL pass writes emissive faces verbatim
 K_TOP, K_FACE, K_PFACE, K_PTOP = 254, 253, 252, 251
@@ -86,6 +89,189 @@ def _hidx(h):
 
 # ── frame ──────────────────────────────────────────────────────────────
 
+def _gl_atlas(stage):
+    """Build GPU textures (top_surf, ground_surf, props_surf) and prop UV rects."""
+    hit = _cache["gl_atlas"].get(stage)
+    grid = _grid(stage)
+    ground0 = _decor._ground_surface(stage)
+    gw, gh = ground0.get_size()
+    sc_sig = (len(getattr(_combat, "_scorch", ())),
+              getattr(_combat, "_tanker", {}).get("alive") if getattr(_combat, "_tanker", None) else None)
+    if hit is not None and _cache["gl_ground_sig"].get(stage) == sc_sig:
+        return hit
+    if hit is None:
+        top_surf = _top_map(stage, grid, ground0).convert(24)
+        props = _props(stage)
+        keyed = [(i, p) for i, p in enumerate(props) if p["mode"] in ("face", "top")]
+        aw = max(64, max([p["art"].w for _, p in keyed], default=64))
+        # Pack prop sprites onto a compact 2D shelf (width <= 2048)
+        shelf_w = min(2048, max(512, (aw + 3) & ~3))
+        cx = cy = row_h = 0
+        places = {}
+        for i, p in keyed:
+            rect = p["art"]
+            if cx + rect.w > shelf_w and cx > 0:
+                cx = 0
+                cy += row_h
+                row_h = 0
+            places[i] = (cx, cy, rect.w, rect.h)
+            cx += rect.w + 1
+            row_h = max(row_h, rect.h + 1)
+        ph = max(64, cy + row_h)
+        psurf = pygame.Surface((shelf_w, ph))
+        psurf.fill((60, 60, 60))
+        p_uvs = {}
+        for i, p in keyed:
+            rect = p["art"]
+            px, py, pw, ph_i = places[i]
+            tile = pygame.Surface(rect.size)
+            tile.fill(p["side"] if p["mode"] == "top" else p["top"])
+            tile.blit(p["surf"], (0, 0), rect)
+            psurf.blit(tile, (px, py))
+            p_uvs[i] = (px / float(shelf_w), py / float(ph),
+                        (px + pw - 0.01) / float(shelf_w), (py + ph_i - 0.01) / float(ph))
+    else:
+        top_surf, _gs, psurf, p_uvs, _gver = hit
+
+    gsurf = ground0.copy()
+    if getattr(_combat, "_scorch", None) or getattr(_combat, "_blasts", None):
+        _tiles(gsurf, 0, 0, lambda s, cx, cy: _combat.draw_ground(s, cx, cy))
+    g_ver = _cache["gl_ground_sig"].get((stage, "ver"), 0) + 1
+    _cache["gl_ground_sig"][(stage, "ver")] = g_ver
+    _cache["gl_ground_sig"][stage] = sc_sig
+    res = (top_surf, gsurf, psurf, p_uvs, g_ver)
+    _cache["gl_atlas"][stage] = res
+    return res
+
+
+def _uv_box(w, d, hgt, side, top_uvs=None, top_slot=-2.0, front_uvs=None, front_slot=-3.0):
+    """Lit box with explicit UVs on top/front faces for GPU M6 rendering."""
+    from engine3d import Mesh, box
+    hw, hd = w * 0.5, d * 0.5
+    skip = ["bottom"]
+    if top_uvs is not None:
+        skip.append("top")
+    if front_uvs is not None:
+        skip.append("front")
+    m = Mesh()
+    m.add(box(w, hgt, d, side, center=(0.0, hgt * 0.5, 0.0), skip=tuple(skip)))
+    if top_uvs is not None:
+        i0 = len(m.verts)
+        m.verts.extend(((-hw, hgt, hd), (hw, hgt, hd), (hw, hgt, -hd), (-hw, hgt, -hd)))
+        u0, v0, u1, v1 = top_uvs
+        m.faces.append(((i0, i0 + 1, i0 + 2, i0 + 3), (255, 255, 255), 2, False, False, 0.0,
+                        ("uv", top_slot, ((u0, v0), (u1, v0), (u1, v1), (u0, v1)))))
+    if front_uvs is not None:
+        i0 = len(m.verts)
+        m.verts.extend(((-hw, hgt, -hd), (hw, hgt, -hd), (hw, 0.0, -hd), (-hw, 0.0, -hd)))
+        u0, v0, u1, v1 = front_uvs
+        m.faces.append(((i0, i0 + 1, i0 + 2, i0 + 3), (255, 255, 255), 2, False, False, 0.0,
+                        ("uv", front_slot, ((u0, v0), (u1, v0), (u1, v1), (u0, v1)))))
+    return m
+
+
+def _floor_quad_mesh(gw, gh):
+    from engine3d import Mesh
+    m = Mesh()
+    x1, z1 = gw * K, -gh * K
+    m.verts = [(0.0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, 0.0, z1), (0.0, 0.0, z1)]
+    m.faces.append(((0, 1, 2, 3), (255, 255, 255), 0, False, False, 0.0,
+                    ("uv", -3.0, ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))))
+    return m
+
+
+def _gl_fx(r, stage, tm):
+    """Submit M6 blood decals, pickups, bottles, bullets, smoke & particles on GPU."""
+    from cutscenes import m6fx3d as _fx
+    from core.config import C_BULLET
+    from engine3d.particles import PKIND_SMOKE, pack_blood_decals
+    t = _now_s()
+    for decal in getattr(STATE, "blood_decals", [])[:]:
+        decal[2] -= 0.5
+        if decal[2] <= 0 and decal in STATE.blood_decals:
+            STATE.blood_decals.remove(decal)
+    if getattr(STATE, "blood_decals", None):
+        d_arr = pack_blood_decals(STATE.blood_decals, to3, (80, 12, 14))
+        if d_arr is not None:
+            r.add_decals(d_arr)
+    for pu in getattr(STATE, "pickups", []):
+        x, _, z = to3(pu[0], pu[1])
+        bob = 0.06 * math.sin(t * 3 + pu[0])
+        kind = "bandage" if (len(pu) > 2 and pu[2] == "bandage") else "mag"
+        _put(r, _mesh(("m6pu", kind), lambda k=kind: _m1._pickup_mesh(k)), (x, 0.25 + bob, z),
+             yaw=(t * 60.0 + pu[0]) % 360.0)
+        r.add_sprite((x, 0.3, z), _fx.glow(_m1._PICKUP_COL.get(kind, (255, 210, 40)), 0.28, tm,
+                                           intensity=0.7, max_px=16), layer=_fx.FX_LAYER)
+    for b in getattr(STATE, "bullets", []):
+        head = to3(b["x"], b["y"], AIM_H)
+        tail = to3(b.get("prev_x", b["x"] - b["dx"]), b.get("prev_y", b["y"] - b["dy"]), AIM_H)
+        r.add_line3d(tail, head, (255, 220, 140), 2, layer=4)
+        r.add_sprite(head, _fx.glow(C_BULLET, 0.14, tm, intensity=0.95, max_px=12), layer=_fx.FX_LAYER)
+    if getattr(STATE, "particles", None):
+        td.dots(r, [(to3(p.x, p.y, 0.25 + 0.03 * getattr(p, "life", 0)), p.color, getattr(p, "size", 2))
+                    for p in STATE.particles], layer=_fx.FX_LAYER)
+    if getattr(STATE, "casings", None):
+        td.dots(r, [(to3(c.x, c.y, 0.03), (200, 160, 70), 2) for c in STATE.casings], layer=1)
+    smoke = getattr(_combat, "_smoke", None)
+    if smoke:
+        ct = getattr(_combat, "_t", 0.0)
+        rows = []
+        for p in smoke:
+            age = (ct - p["t0"]) / max(0.01, p["life"])
+            if age >= 1.0:
+                continue
+            wp = to3(p["x"], p["y"], 1.0 + 0.8 * age)
+            rad = p["r"] * K * (1.0 + 0.9 * age)
+            sh = p.get("shade", 90) / 255.0
+            rows.append((wp[0], wp[1], wp[2], 0.0, 0.4, 0.0, sh, sh, sh,
+                         0.45 * (1.0 - age), rad, float(PKIND_SMOKE), age, p["x"] * 0.17))
+        if rows:
+            r.add_particles(np.asarray(rows, dtype=np.float32))
+    if stage in (STAGE_RAIL, STAGE_BOXCAR):
+        bx, by = (VOLKOV_BOXCAR_TILE[0] + 0.5) * T, (VOLKOV_BOXCAR_TILE[1] + 0.5) * T
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        r.add_sprite(to3(bx, by, 0.02), td.tac_ring(0.75 + 0.1 * pulse, (160, 214, 240)), layer=0)
+
+
+def _gl_grade_lights(stage, tm):
+    """Build GPU grade3d light tuples for M6 from stage lamps, searchlights & fires."""
+    out = []
+    for i, (tx, ty, radius, colour, kind) in enumerate(_decor._STAGE_LAMPS.get(stage, ())):
+        if kind.startswith("tower") and _decor._light_dead(int(kind[5:])):
+            continue
+        k = _decor._lamp_on("steady" if kind.startswith("tower") else kind, i)
+        if k <= 0.05:
+            continue
+        wx, wy = tx * T, ty * T
+        wp = to3(wx, wy, 0.0)
+        out.append(("pool", wp, colour, radius * K * 0.9, 0.65 * k))
+    for fz in getattr(STATE, "fire_zones", []):
+        heat = min(1.0, fz.life / float(max(1, fz.max_life)) * 4.0)
+        x, _, z = to3(fz.x, fz.y)
+        out.append(("fire", (x, 1.0, z), FIRE, fz.radius * K + 1.0, heat))
+    p = STATE.player
+    if p is not None and not STATE.player_dead:
+        out.append(("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.8, 0.68))
+    return out
+
+
+def _gl_local_lights(stage, flashes, tm):
+    """Collect stage lamps & floodlights as real 3D local lights (up to 64)."""
+    out = list(flashes)
+    for i, (tx, ty, radius, colour, kind) in enumerate(_decor._STAGE_LAMPS.get(stage, ())):
+        tower = kind.startswith("tower")
+        if tower and _decor._light_dead(int(kind[5:])):
+            continue
+        k = _decor._lamp_on("steady" if tower else kind, i)
+        if k <= 0.05:
+            continue
+        hh = 6.8 if tower else 2.5
+        out.append({
+            "pos": to3(tx * T, ty * T, hh), "color": colour,
+            "intensity": 0.45 * k, "range": max(3.5, radius * K * 1.15),
+        })
+    return out[:64]
+
 def render_world(surface, fcx, fcy):
     """Draw the live M6 stage through the follow camera onto ``surface``."""
     from cutscenes import m6fx3d as _fx
@@ -95,10 +281,68 @@ def render_world(surface, fcx, fcy):
     # whole sim pixels, as the 2D painter (int(cam)): the floor lookups stay constant
     fx, fy = float(int(math.floor(fcx)) + WIDTH // 2), float(int(math.floor(fcy)) + HEIGHT // 2)
     v = td.View(CAM, fx, fy)
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    is_gl = False
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    is_gl = (getattr(r, "backend", "") == "gl")
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap,
+             getattr(r, "light_albedo", False), getattr(r, "light_gain", 1.0),
+             getattr(r, "hdr", False), getattr(r, "dither", False),
+             getattr(r, "ps1_snap", False))
     tm = _now_ms()
     try:
+        if is_gl:
+            top_s, gnd_s, prp_s, p_uvs, g_ver = _gl_atlas(stage)
+            gw, gh = gnd_s.get_size()
+            r.set_extra_textures(
+                ("m6_top_%s" % stage, top_s),
+                ("m6_gnd_%s_%d" % (stage, g_ver), gnd_s),
+                ("m6_prp_%s" % stage, prp_s),
+            )
+            r.light = Light(**LIGHT)
+            r.fog, r.fog_start, r.fog_end = VOID, 40.0, 90.0
+            r.light_cap = 64
+            r.light_albedo = True
+            r.light_gain = 1.1
+            r.wetness = 0.45
+            r.height_fog = (0.024, 0.0, 1.4, (14, 18, 28))
+            v.apply(r)
+            r.begin()
+            first = _w.static_scene(r, ("m6_td3d_gl", stage))
+            ok = False
+            try:
+                if first:
+                    _build_static(r, stage)
+                ok = True
+            finally:
+                _w.static_end(r, ok)
+            r.shadow_boxes = ()
+            _put(r, _mesh(("m6_floor", stage, gw, gh), lambda: _floor_quad_mesh(gw, gh)), (0.0, 0.0, 0.0))
+            flashes = []
+            _draw_walls(r, stage, gl_dims=(gw, gh))
+            _draw_props(r, stage, tm, gl_uvs=p_uvs)
+            _draw_combat(r, gl_uvs=p_uvs)
+            _draw_cast(r, flashes, tm, v)
+            _draw_fires(r, flashes, tm, v)
+            _gl_fx(r, stage, tm)
+            r.set_pools([])
+            r.set_lights(_gl_local_lights(stage, flashes, tm), cap=64)
+            td.cast_shadows(r)
+            lp = _decor._light_pass(stage, 0, 0, (64, 64))
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.24, "bloom_knee": 0.98,
+                "grade3d": (v, _gl_grade_lights(stage, tm), lp.ambient),
+                "char_lift": 0.85,
+            })
+            _emissives(surface, v, stage)
+            _decor._snow(surface, 40 if stage == STAGE_CUSTOMS else 70)
+            if STATE.player_dead:
+                _death_edge(surface)
+            return True
+
+        if hasattr(r, "hdr"):
+            r.hdr = False
+            r.dither = False
+            r.ps1_snap = False
         R = _rays(v)
         cx0, cy0, bw, bh = R["crop"]
         bx0, by0 = int(fx) + cx0, int(fy) + cy0
@@ -137,19 +381,22 @@ def render_world(surface, fcx, fcy):
         r.flush(buf)
         _draw_smoke(buf, v)
         _draw_bullets(buf, v)
-        lin, other, bare = _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh)
+        nf, lin, other = _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh)
         body, feet = _cast_mask(v, buf.get_size())
         # only the cast's own pixels can be lifted: test the blob shadow there
-        body &= other
-        lift = body & ~_shaded_floor(buf, floor2, feet & body)
-        _light(buf, stage, bare, lin, lin0, crop, bx0, by0, bw, bh, lift)
+        body = body[nf] & other
+        lift = body & ~_shaded_floor(buf, floor2, nf, feet[nf] & body)
+        _light(buf, stage, nf, lin, lin0, crop, bx0, by0, bw, bh, lift, tm)
     except Exception:
         import traceback
         traceback.print_exc()
         td.disable()                  # next frame is the 2D painter
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, sla, slg, shdr, sdith, ssnap = saved
+        r.light_albedo, r.light_gain = sla, slg
+        if hasattr(r, "hdr"):
+            r.hdr, r.dither, r.ps1_snap = shdr, sdith, ssnap
     _fx.present_crisp(buf, surface)
     _emissives(surface, v, stage)
     _decor._snow(surface, 40 if stage == STAGE_CUSTOMS else 70)
@@ -159,7 +406,8 @@ def render_world(surface, fcx, fcy):
 
 
 def _stage():
-    return getattr(STATE, "mission6_stage", STAGE_CUSTOMS)
+    s = getattr(STATE, "mission6_stage", STAGE_CUSTOMS)
+    return STAGE_RAIL if s == STAGE_BOXCAR else s
 
 
 def _grid(stage):
@@ -253,7 +501,8 @@ def _lin(off, ox, oy, w, h):
     """Flat (row-major) indices into a w x h surface at ``off`` + (ox, oy)."""
     ix = np.clip((off[0] + ox).astype(np.int32), 0, w - 1)
     iy = np.clip((off[1] + oy).astype(np.int32), 0, h - 1)
-    return iy * w + ix
+    # native intp: an int32 index is converted on every gather (2x the cost)
+    return (iy * w + ix).astype(np.intp)
 
 
 def _flat(surf):
@@ -444,7 +693,8 @@ def _atlas(stage, like):
         if p["mode"] == "face":
             # share of the sprite's height the roof takes, by projected size
             dp, hp = (p["y1"] - p["y0"]) * K * sp, p["h"] * cp
-            tab["face"][i], tab["split"][i] = 1.0, dp / (dp + hp)
+            tab["face"][i] = 1.0
+            tab["split"][i] = FACE_SPLIT.get(p["kind"], dp / (dp + hp))
         y += rect.h
     conv = pygame.Surface(atl.get_size(), 0, like)
     conv.blit(atl, (0, 0))
@@ -456,64 +706,90 @@ def _atlas(stage, like):
 
 # ── key decode ─────────────────────────────────────────────────────────
 
+# green of the floor under the shared cast shadow, per floor green (as _decode used to compute it)
+_SHADOW_G_LUT = (np.arange(256) * (1.0 - 100 / 255.0)
+                 + td.SHADOW_COL[1] * (100 / 255.0)).astype(np.int16)
+
+# per-pixel work in L2-sized slices: whole-frame temporaries ran ~2x slower
+_CHUNK = 16384
+
+
 def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
-    """Swap the key colours for the 2D art and return, per pixel, the sim
-    point whose 2D light it takes: the floor point, the wall/prop point, or
-    (everything else: bodies, sides) the 1 m plane point."""
+    """Swap the key colours for the 2D art. Returns ``nf``, the flat indices
+    of the pixels the 3D pass touched (the rest is untouched floor), and per
+    ``nf`` pixel the crop index of the sim point whose 2D light it takes (the
+    floor point, the wall/prop point, or, for everything else: bodies and
+    sides, the 1 m plane point) and whether it is ``other`` (neither floor
+    nor 2D art). Only ``nf`` is worked on: it is about a third of the frame."""
     atl = _atlas(stage, buf)
+    p2 = _fv(buf)
+    nf = np.flatnonzero(p2 != floor2)
+    lin = np.empty(nf.shape, np.intp)
+    other = np.empty(nf.shape, bool)
+    shifts = buf.get_shifts()[:3]
+    for i in range(0, nf.size, _CHUNK):
+        j = slice(i, i + _CHUNK)
+        _decode_part(p2, floor2, nf[j], lin[j], other[j], buf, shifts, atl, R, fx, fy, bx0, by0, bw, bh)
+    del p2
+    return nf, lin, other
+
+
+def _decode_part(p2, floor2, nf, lin, other, buf, shifts, atl, R, fx, fy, bx0, by0, bw, bh):
+    """``_decode`` for one slice of ``nf``: fills that slice's ``lin`` and
+    ``other`` and writes the 2D art into ``p2``. Pixels are independent."""
     arr, gh, tab = atl["arr"], atl["gh"], atl["tab"]
     aw, ah = arr.shape[0], arr.shape[1]
-    p2 = _fv(buf)
-    bare = p2 == floor2               # untouched floor
-    fl = bare.copy()
-    del p2
-    px = _f3(buf)
+    q = p2[nf]
+    f2 = floor2[nf]
+    sr, sg, sb = shifts
+    gg = (q >> sg) & 255
     # the shared cast shadow is the floor darkened: light it as floor
-    nf = np.flatnonzero(~fl)
-    if nf.size:
-        a = 100 / 255.0
-        # green first: most non-floor pixels fail it, the rest get all three
-        sg = buf.get_shifts()[1]
-        g = px[nf, 1].astype(np.int16)
-        eg = (((floor2[nf] >> sg) & 255) * (1.0 - a) + td.SHADOW_COL[1] * a).astype(np.int16)
-        nf = nf[np.abs(g - eg) <= 3]
-        shade = _rgb(floor2[nf], buf, np.float32) * (1.0 - a) + np.array(td.SHADOW_COL, np.float32) * a
-        hit = (np.abs(px[nf].astype(np.float32) - shade) <= 3.0).all(axis=1)
-        fl[nf[hit]] = True
-    lin = np.where(fl, R["lin0"], R["lin1"])
-    other = ~fl
-    rr, gg = px[:, 0], px[:, 1]
-    cand = (rr >= K_PTOP) & (rr <= K_TOP) & (gg <= 70) & ~fl
-    sel = np.flatnonzero(cand)
+    a = 100 / 255.0
+    # green first: most non-floor pixels fail it, the rest get all three
+    eg = _SHADOW_G_LUT[(f2 >> sg) & 255]
+    sh = np.flatnonzero(np.abs(gg.astype(np.int16) - eg) <= 3)
+    shade = _rgb(f2[sh], buf, np.float32) * (1.0 - a) + np.array(td.SHADOW_COL, np.float32) * a
+    hit = (np.abs(_rgb(q[sh], buf, np.float32) - shade) <= 3.0).all(axis=1)
+    sh = sh[hit]
+    np.take(R["lin1"], nf, out=lin)
+    lin[sh] = R["lin0"][nf[sh]]
+    other[...] = True
+    other[sh] = False
+    rr = (q >> sr) & 255
+    sel = np.flatnonzero((rr >= K_PTOP) & (rr <= K_TOP) & (gg <= 70) & other)
     if sel.size:
         r_, g_ = rr[sel], gg[sel].astype(np.float32)
-        b_ = px[sel, 2].astype(np.int32)
+        b_ = ((q[sel] >> sb) & 255).astype(np.int32)
+        loc, sel = sel, nf[sel]           # positions in nf, and in the frame
         sx = np.empty(r_.shape, np.float32); sy = np.empty(r_.shape, np.float32)
         ax_ = np.zeros(r_.shape, np.int64); ay_ = np.zeros(r_.shape, np.int64)
         good = np.zeros(r_.shape, bool)
         # wall tops: the plane at h = B/20
-        m = (r_ == K_TOP) & (g_ == 1)
-        if m.any():
+        # each class as indices, once: a bool mask is re-scanned on every use
+        m = np.flatnonzero((r_ == K_TOP) & (g_ == 1))
+        if m.size:
             s = sel[m]
             ox, oy = _plane(R, b_[m] / 20.0, s)
-            sx[m], sy[m] = ox + fx, oy + fy
-            ax_[m], ay_[m] = sx[m], sy[m]
-            good |= m
+            X, Y = (ox + fx).astype(np.float32), (oy + fy).astype(np.float32)
+            sx[m], sy[m] = X, Y
+            ax_[m], ay_[m] = X, Y
+            good[m] = True
         # wall south faces: row B, full height (G-2)/20
-        m = (r_ == K_FACE) & (g_ >= 2)
-        if m.any():
+        m = np.flatnonzero((r_ == K_FACE) & (g_ >= 2))
+        if m.size:
             s = sel[m]
             Y = (b_[m] + 1) * T
             t = (-(Y - fy) * K - R["ez"]) / R["dz"][s]
             hh = R["ey"] + R["dy"][s] * t
             fv = np.clip(1.0 - hh / np.maximum(0.05, (g_[m] - 2) / 20.0), 0.0, 0.999)
-            sx[m] = fx + R["dx"][s] * t / K
-            sy[m] = b_[m] * T + fv * T
-            ax_[m], ay_[m] = sx[m], gh + sy[m]
-            good |= m
+            X = (fx + R["dx"][s] * t / K).astype(np.float32)
+            Y = (b_[m] * T + fv * T).astype(np.float32)
+            sx[m], sy[m] = X, Y
+            ax_[m], ay_[m] = X, gh + Y
+            good[m] = True
         # prop south faces: prop B's sprite across its width and height
-        m = (r_ == K_PFACE) & (g_ >= 2)
-        if m.any():
+        m = np.flatnonzero((r_ == K_PFACE) & (g_ >= 2))
+        if m.size:
             s = sel[m]
             e = np.clip(b_[m], 0, len(tab["h"]) - 1)
             Y = tab["y1"][e]
@@ -527,10 +803,10 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
             ax_[m] = tab["ax"][e] + u * tab["aw"][e]
             ay_[m] = tab["ay"][e] + fv * tab["ah"][e]
             sx[m], sy[m] = x, tab["ytop"][e] + fv * tab["ah"][e]
-            good |= m
+            good[m] = True
         # prop tops: prop B's sprite across its footprint, plane (G-2)/20
-        m = (r_ == K_PTOP) & (g_ >= 2)
-        if m.any():
+        m = np.flatnonzero((r_ == K_PTOP) & (g_ >= 2))
+        if m.size:
             s = sel[m]
             e = np.clip(b_[m], 0, len(tab["h"]) - 1)
             ox, oy = _plane(R, (g_[m] - 2) / 20.0, s)
@@ -542,33 +818,41 @@ def _decode(buf, floor2, R, stage, fx, fy, bx0, by0, bw, bh):
             ax_[m] = tab["ax"][e] + u * tab["aw"][e]
             ay_[m] = tab["ay"][e] + w * tab["ah"][e]
             sx[m], sy[m] = x, np.where(face, tab["ytop"][e] + w * tab["ah"][e], y)
-            good |= m
+            good[m] = True
         if good.any():
+            good = slice(None) if good.all() else good   # usually all: skip the mask copies
             s = sel[good]
-            p2 = _fv(buf)
-            p2[s] = atl["flat"][np.clip(ay_[good], 0, ah - 1) * aw + np.clip(ax_[good], 0, aw - 1)]
-            del p2
-            lin[s] = (np.clip(sy[good] - by0, 0, bh - 1).astype(np.int32) * bw
-                      + np.clip(sx[good] - bx0, 0, bw - 1).astype(np.int32))
+            # in place (out=): fresh temporaries this size cost more than the maths
+            ai, ax = ay_[good], ax_[good]
+            np.clip(ai, 0, ah - 1, out=ai)
+            ai *= aw
+            ai += np.clip(ax, 0, aw - 1, out=ax)
+            p2[s] = atl["flat"][ai]
+            s = loc[good]
+            ty, tx = sy[good] - by0, sx[good] - bx0
+            li = np.clip(ty, 0, bh - 1, out=ty).astype(np.int32)
+            li *= bw
+            li += np.clip(tx, 0, bw - 1, out=tx).astype(np.int32)
+            lin[s] = li
             other[s] = False
-    del px
-    return lin, other, bare
 
 
 # ── the 2D light pass, per pixel ───────────────────────────────────────
 
-def _shaded_floor(buf, floor2, where):
-    """``where`` pixels that are the floor darkened (blob shadows at the feet)."""
+def _shaded_floor(buf, floor2, nf, where):
+    """Which of the ``nf`` pixels flagged in ``where`` are the floor
+    darkened (blob shadows at the feet)."""
     out = np.zeros(where.shape, bool)
-    sel = np.flatnonzero(where)
-    if not sel.size:
+    loc = np.flatnonzero(where)
+    if not loc.size:
         return out
+    sel = nf[loc]
     a = _f3(buf)
     px = a[sel].astype(np.float32)
     del a
     f = _rgb(floor2[sel], buf, np.float32)
     k = px.sum(axis=1) / np.maximum(1.0, f.sum(axis=1))
-    out[sel] = (k > 0.25) & (k <= 1.0) & (np.abs(px - f * k[:, None]) <= 4.0).all(axis=1)
+    out[loc] = (k > 0.25) & (k <= 1.0) & (np.abs(px - f * k[:, None]) <= 4.0).all(axis=1)
     return out
 
 
@@ -602,10 +886,23 @@ def _cast_mask(v, size):
     return m.reshape(-1), f.reshape(-1)
 
 
-def _light(buf, stage, bare, lin, lin0, crop, bx0, by0, bw, bh, lift):
+def _m6_fire_grad(col, rad):
+    rad = max(8, min(240, int(rad) // 4 * 4))
+    cq = tuple(max(0, min(255, int(c) // 8 * 8)) for c in col)
+    key = ("m6fg", cq, rad)
+    hit = _cache["meshes"].get(key)
+    if hit is not None:
+        return hit
+    from cutscenes import fire3d as _f3d
+    s = _f3d._soft_halo(cq, rad)
+    _cache["meshes"][key] = s
+    return s
+
+
+def _light(buf, stage, nf, lin, lin0, crop, bx0, by0, bw, bh, lift, tm=0):
     """The 2D light pass. Bare floor takes the crop lit exactly as
-    ``LightMap.apply`` lights it; every other pixel is multiplied by the
-    light at its own sim point."""
+    ``LightMap.apply`` lights it; every ``nf`` pixel (see ``_decode``) is
+    multiplied by the light at its own sim point."""
     lp = _decor._light_pass(stage, bx0, by0, (bw, bh))
     lm = _scratch("lm", (bw, bh), buf)
     lm.fill(tuple(c // 2 for c in lp.ambient))
@@ -613,38 +910,75 @@ def _light(buf, stage, bare, lin, lin0, crop, bx0, by0, bw, bh, lift):
     for spr, pos in lp.lamps:
         lm.blit(spr, pos, special_flags=add)
     ov = _additive(stage, bx0, by0, bw, bh, buf)
+    fzones = getattr(STATE, "fire_zones", [])
+    if fzones:
+        if ov is None:
+            ov = _scratch("add", (bw, bh), buf)
+            ov.fill((0, 0, 0))
+        for fz in fzones:
+            fx_c, fy_c = int(fz.x - bx0), int(fz.y - by0)
+            if fx_c < -160 or fx_c > bw + 160 or fy_c < -160 or fy_c > bh + 160:
+                continue
+            heat = min(1.0, fz.life / float(max(1, fz.max_life)) * 4.0)
+            flick = _m1._flicker(tm, fz.x * 0.7 + fz.y)
+            k = min(1.25, heat * flick)
+            g_spill = _m6_fire_grad((int(175 * k), int(78 * k), int(20 * k)), fz.radius * 2.3)
+            g_core = _m6_fire_grad((int(138 * min(1.15, k)), int(134 * min(1.15, k)), int(124 * min(1.15, k))), fz.radius * 0.95)
+            g_bloom = _m6_fire_grad((int(116 * k), int(46 * k), int(10 * k)), fz.radius * 1.45)
+            lm.blit(g_spill, (fx_c - g_spill.get_width() // 2, fy_c - g_spill.get_height() // 2), special_flags=add)
+            lm.blit(g_core, (fx_c - g_core.get_width() // 2, fy_c - g_core.get_height() // 2), special_flags=add)
+            ov.blit(g_bloom, (fx_c - g_bloom.get_width() // 2, fy_c - g_bloom.get_height() // 2), special_flags=add)
     lit = _scratch("lit", (bw, bh), buf)
     tmp = _scratch("lit2", (bw, bh), buf)
     lit.blit(crop, (0, 0))
     lit.blit(lm, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
     tmp.blit(lit, (0, 0))
     lit.blit(tmp, (0, 0), special_flags=add)
+    if stage in (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL) and _nfx._quality() > 0:
+        for patch, wx, wy in _nfx.wet_puddle_patches(stage, _grid(stage)):
+            px_, py_ = wx - bx0, wy - by0
+            if px_ + patch.get_width() > 0 and px_ < bw and py_ + patch.get_height() > 0 and py_ < bh:
+                lit.blit(patch, (px_, py_), special_flags=add)
     if ov is not None:
         lit.blit(ov, (0, 0), special_flags=add)
-    flat = _flat(lit)
+    # packed pixels and 1-D gathers throughout: (N, 3) channel views cost
+    # several times more to gather and scatter
     p2 = _fv(buf)
-    np.copyto(p2, flat[lin0], where=bare)
-    del flat, p2
-    sel = np.flatnonzero(~bare)
-    if not sel.size:
-        return
-    lin = lin[sel]
-    flat = _f3(lm)
-    mul = flat[lin].astype(np.uint16)
+    src = p2[nf]                      # the 3D pass's pixels, before the floor goes over them
+    flat = _flat(lit)
+    np.take(flat, lin0, out=p2, mode="clip")   # the whole frame as lit floor
     del flat
-    up = lift[sel]
-    if up.any():
-        # the 3D cast is darker than the 2D sprites before the light pass
-        mul[up] = np.minimum(mul[up] * CAST_LIFT, 255).astype(np.uint16)
-    px = _f3(buf)
-    out = (px[sel].astype(np.uint16) * mul) >> 7
-    if ov is not None:
-        flat = _f3(ov)
-        out += flat[lin]
-        del flat
-    np.minimum(out, 255, out=out)
-    px[sel] = out
-    del px
+    if not nf.size:
+        return
+    lmf = _flat(lm)
+    ovf = _flat(ov) if ov is not None else None
+    rgb = 0
+    for m in buf.get_masks()[:3]:
+        rgb |= m
+    spare = np.uint32(~rgb & 0xFFFFFFFF)
+    shifts = buf.get_shifts()[:3]
+    for i in range(0, nf.size, _CHUNK):
+        j = slice(i, i + _CHUNK)
+        li = lin[j]
+        p2[nf[j]] = _light_part(src[j], lmf[li], None if ovf is None else ovf[li],
+                                np.flatnonzero(lift[j]), spare, shifts)
+
+
+def _light_part(src, mul, add, up, spare, shifts):
+    """One ``_CHUNK`` of ``_light``: packed source times its light map value."""
+    out = src & spare   # the spare byte stays as it was
+    for sh in shifts:
+        k = (mul >> sh) & 255
+        if up.size:
+            # the 3D cast is darker than the 2D sprites before the light pass
+            k[up] = np.minimum(k[up] * CAST_LIFT, 255).astype(np.uint32)
+        c = (((src >> sh) & 255) * k) >> 7
+        if add is not None:
+            c += (add >> sh) & 255
+        np.minimum(c, 255, out=c)
+        out |= c << sh
+    return out
+    del p2
 
 
 def _additive(stage, bx0, by0, bw, bh, like):
@@ -738,7 +1072,7 @@ def _keyed_box(w, d, hgt, side, keys, cols=None):
     return m
 
 
-def _draw_walls(r, stage):
+def _draw_walls(r, stage, gl_dims=None):
     """Wall boxes at full height, except the stretch between the camera
     and Biribel, which sinks to a stub (the M1 cutaway)."""
     from engine3d import tex
@@ -765,23 +1099,53 @@ def _draw_walls(r, stage):
             hgt = _hidx(STUB_H + (full - STUB_H) * levels[i]) / 20.0
             row = sr + sh - 1
             cx, _, cz = to3((sc + sw / 2.0) * T, (sr + sh / 2.0) * T)
-            key = ("w", kind, sw, sh, hgt, row)
-            mesh = _mesh(key, lambda sw=sw, sh=sh, hgt=hgt, row=row: _keyed_box(
-                sw * T * K, sh * T * K, hgt, tex("concrete", like=WALL_SIDE[kind], tint=True),
-                {"top": (K_TOP, 1, _hidx(hgt)), "front": (K_FACE, 2 + _hidx(full), row)}))
+            if gl_dims is not None:
+                gw, gh = gl_dims
+                sx0, sx1 = sc * T, (sc + sw) * T
+                sy0, sy1 = sr * T, (sr + sh) * T
+                fv_top = max(0.0, 1.0 - hgt / max(0.05, full))
+                top_uv = (sx0 / gw, sy0 / gh, sx1 / gw, sy1 / gh)
+                front_uv = (sx0 / gw, (row + fv_top) * T / gh, sx1 / gw, (row + 1) * T / gh)
+                key = ("w_gl", kind, sc, sr, sw, sh, hgt, row)
+                mesh = _mesh(key, lambda sw=sw, sh=sh, hgt=hgt, tuv=top_uv, fuv=front_uv: _uv_box(
+                    sw * T * K, sh * T * K, hgt, tex("concrete", like=WALL_SIDE[kind], tint=True),
+                    top_uvs=tuv, top_slot=-2.0, front_uvs=fuv, front_slot=-3.0))
+            else:
+                key = ("w", kind, sw, sh, hgt, row)
+                mesh = _mesh(key, lambda sw=sw, sh=sh, hgt=hgt, row=row: _keyed_box(
+                    sw * T * K, sh * T * K, hgt, tex("concrete", like=WALL_SIDE[kind], tint=True),
+                    {"top": (K_TOP, 1, _hidx(hgt)), "front": (K_FACE, 2 + _hidx(full), row)}))
             _put(r, mesh, (cx, 0.0, cz))
             i = j + 1
 
 
 # ── props ──────────────────────────────────────────────────────────────
 
-def _draw_props(r, stage, tm):
+_SEDAN_MESH = {"init": False, "mesh": None}
+
+
+def _sedan_mesh():
+    if not _SEDAN_MESH["init"]:
+        _SEDAN_MESH["init"] = True
+        try:
+            from game.scenery3d import prop
+            _SEDAN_MESH["mesh"] = prop("car_m2")
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            _SEDAN_MESH["mesh"] = None
+    return _SEDAN_MESH["mesh"]
+
+
+def _draw_props(r, stage, tm, gl_uvs=None):
     from engine3d import tex
     zone = _m1._cut_zone()
     snap = _m1._cut_snap()
     for i, p in enumerate(_props(stage)):
         mode = p["mode"]
         if "tank" in p:
+            continue
+        if p["kind"] == "sedan" and _sedan_mesh() is not None:
             continue
         if mode not in ("face", "top"):
             if mode == "tower":
@@ -796,15 +1160,32 @@ def _draw_props(r, stage, tm):
         w, d = (p["x1"] - p["x0"]) * K, (p["y1"] - p["y0"]) * K
         cx, _, cz = to3((p["x0"] + p["x1"]) / 2.0, (p["y0"] + p["y1"]) / 2.0)
         if mode == "face":
-            # sprite on the south face; the roof is a lit cap in its top-row colour
-            # the 2D sprite unwraps over roof and south face, as the 2D view shows it
-            mesh = _mesh(("pf", stage, i, hgt), lambda w=w, d=d, hgt=hgt, p=p, i=i: _keyed_box(
-                w, d, hgt, tex("steel", like=p["side"], tint=True),
-                {"top": (K_PTOP, 2 + _hidx(hgt), i), "front": (K_PFACE, 2 + _hidx(p["h"]), i)}))
+            if gl_uvs is not None and i in gl_uvs:
+                u0, v0, u1, v1 = gl_uvs[i]
+                cp, sp = math.cos(math.radians(CAM.pitch)), math.sin(math.radians(CAM.pitch))
+                dp, hp = (p["y1"] - p["y0"]) * K * sp, p["h"] * cp
+                split = FACE_SPLIT.get(p["kind"], dp / (dp + hp))
+                vmid = v0 + (v1 - v0) * split
+                vtop = v0 + (v1 - v0) * (split + max(0.0, 1.0 - hgt / max(0.05, p["h"])) * (1.0 - split))
+                mesh = _mesh(("pf_gl", stage, i, hgt), lambda w=w, d=d, hgt=hgt, p=p,
+                             tuv=(u0, v0, u1, vmid), fuv=(u0, vtop, u1, v1): _uv_box(
+                    w, d, hgt, tex("steel", like=p["side"], tint=True),
+                    top_uvs=tuv, top_slot=-4.0, front_uvs=fuv, front_slot=-4.0))
+            else:
+                # sprite on the south face; the roof is a lit cap in its top-row colour
+                # the 2D sprite unwraps over roof and south face, as the 2D view shows it
+                mesh = _mesh(("pf", stage, i, hgt), lambda w=w, d=d, hgt=hgt, p=p, i=i: _keyed_box(
+                    w, d, hgt, tex("steel", like=p["side"], tint=True),
+                    {"top": (K_PTOP, 2 + _hidx(hgt), i), "front": (K_PFACE, 2 + _hidx(p["h"]), i)}))
         else:
-            mesh = _mesh(("pt", stage, i, hgt), lambda w=w, d=d, hgt=hgt, p=p, i=i: _keyed_box(
-                w, d, hgt, tex("crate", like=p["side"], tint=True),
-                {"top": (K_PTOP, 2 + _hidx(hgt), i)}, cols={"front": _shade(p["side"], 0.9)}))
+            if gl_uvs is not None and i in gl_uvs:
+                mesh = _mesh(("pt_gl", stage, i, hgt), lambda w=w, d=d, hgt=hgt, p=p, tuv=gl_uvs[i]: _uv_box(
+                    w, d, hgt, tex("crate", like=p["side"], tint=True),
+                    top_uvs=tuv, top_slot=-4.0))
+            else:
+                mesh = _mesh(("pt", stage, i, hgt), lambda w=w, d=d, hgt=hgt, p=p, i=i: _keyed_box(
+                    w, d, hgt, tex("crate", like=p["side"], tint=True),
+                    {"top": (K_PTOP, 2 + _hidx(hgt), i)}, cols={"front": _shade(p["side"], 0.9)}))
         _put(r, mesh, (cx, 0.0, cz))
 
 
@@ -818,12 +1199,14 @@ def _build_static(r, stage):
         cx, _, cz = to3((p["x0"] + p["x1"]) / 2.0, (p["y0"] + p["y1"]) / 2.0)
         if kind == "boom":
             px_, _, pz = to3(p["x0"] + 12, p["y0"] + 40)
-            _w.add(r, box(0.26, 1.15, 0.26, (86, 90, 96), center=(px_, 0.575, pz)))
-            _w.add(r, box(0.34, 0.34, 0.34, (60, 62, 66), center=(px_, 0.95, pz)))
-            for k in range(6):
+            _w.add(r, box(0.30, 1.15, 0.30, (76, 82, 90), center=(px_, 0.575, pz)))
+            _w.add(r, box(0.42, 0.36, 0.36, (48, 52, 58), center=(px_, 0.95, pz)))
+            _w.add(r, box(0.28, 0.24, 0.26, (214, 156, 48), center=(px_ - 0.22, 0.98, pz)))
+            for k in range(8):
                 col = (188, 62, 48) if k % 2 else (208, 206, 196)
-                _w.add(r, box(0.3, 0.09, 0.09, col, center=(px_ + 0.2 + k * 0.3, 1.0, pz)))
-            _w.add(r, box(0.1, 0.1, 0.1, (240, 196, 96), center=(px_ + 2.0, 1.0, pz), emissive=True))
+                _w.add(r, box(0.28, 0.10, 0.10, col, center=(px_ + 0.22 + k * 0.28, 1.02, pz)))
+            for lx in (0.92, 1.76, 2.34):
+                _w.add(r, box(0.09, 0.09, 0.09, (245, 58, 46), center=(px_ + lx, 1.03, pz), emissive=True))
         elif kind == "hedgehog":
             from engine3d import Mesh, rot_y, rot_z
             m = Mesh()
@@ -846,6 +1229,30 @@ def _build_static(r, stage):
             # the hut is a face-mode prop; this is the signal mast on its roof
             mx, _, mz = to3(41.5 * T, 7.0 * T + 44)
             _w.add(r, box(0.16, 2.2, 0.16, (64, 66, 70), center=(mx, 3.7, mz)))
+        elif kind == "sedan":
+            m_sedan = _sedan_mesh()
+            if m_sedan is not None:
+                from engine3d import Mesh
+                scaled = Mesh(
+                    [(v[0] * 0.76 + cx, v[1] * 0.76, v[2] * 0.76 + cz)
+                     for v in m_sedan.verts],
+                    m_sedan.faces)
+                _w.add(r, scaled)
+    if stage == STAGE_CUSTOMS:
+        # Non-blocking reflective orange traffic cones along the lane & gate
+        for tx_, ty_ in ((12.2, 3.6), (18.6, 3.6), (13.1, 6.2),
+                         (17.9, 10.6), (12.6, 12.2), (17.6, 14.5)):
+            kx, _, kz = to3(tx_ * T, ty_ * T)
+            _w.add(r, box(0.38, 0.06, 0.38, (26, 28, 32), center=(kx, 0.03, kz)))
+            _w.add(r, box(0.28, 0.24, 0.28, (238, 102, 26), center=(kx, 0.18, kz)))
+            _w.add(r, box(0.22, 0.14, 0.22, (238, 242, 246), center=(kx, 0.37, kz), emissive=True))
+            _w.add(r, box(0.14, 0.20, 0.14, (238, 102, 26), center=(kx, 0.54, kz)))
+        # Checkpoint STOP / CUSTOMS signposts flanking the north gate apron
+        for sx_, sy_, sign_col in ((12.0, 1.85, (192, 46, 42)), (19.0, 1.85, (38, 72, 122))):
+            gx, _, gz = to3(sx_ * T, sy_ * T)
+            _w.add(r, box(0.10, 1.9, 0.10, (88, 94, 104), center=(gx, 0.95, gz)))
+            _w.add(r, box(0.68, 0.44, 0.08, (226, 230, 236), center=(gx, 1.95, gz)))
+            _w.add(r, box(0.58, 0.34, 0.10, sign_col, center=(gx, 1.95, gz - 0.01)))
 
 
 def _mul(a, b):
@@ -882,7 +1289,7 @@ def _tower(r, p, stage):
 
 # ── combat set: drums, the tanker, debris ──────────────────────────────
 
-def _draw_combat(r):
+def _draw_combat(r, gl_uvs=None):
     from engine3d import Mesh, box, tex
     for dr in getattr(_combat, "_drums", ()):
         alive = dr["alive"]
@@ -908,9 +1315,14 @@ def _draw_combat(r):
                 continue
             hgt = _hidx(p["h"]) / 20.0
             w, d = (p["x1"] - p["x0"]) * K, (p["y1"] - p["y0"]) * K
-            mesh = _mesh(("tank", stage, i), lambda w=w, d=d, hgt=hgt, p=p, i=i: _keyed_box(
-                w, d, hgt, _tex("steel", like=p["side"], tint=True),
-                {"top": (K_PTOP, 2 + _hidx(hgt), i)}, cols={"front": _shade(p["side"], 0.9)}))
+            if gl_uvs is not None and i in gl_uvs:
+                mesh = _mesh(("tank_gl", stage, i), lambda w=w, d=d, hgt=hgt, p=p, tuv=gl_uvs[i]: _uv_box(
+                    w, d, hgt, _tex("steel", like=p["side"], tint=True),
+                    top_uvs=tuv, top_slot=-4.0))
+            else:
+                mesh = _mesh(("tank", stage, i), lambda w=w, d=d, hgt=hgt, p=p, i=i: _keyed_box(
+                    w, d, hgt, _tex("steel", like=p["side"], tint=True),
+                    {"top": (K_PTOP, 2 + _hidx(hgt), i)}, cols={"front": _shade(p["side"], 0.9)}))
             _put(r, mesh, to3((p["x0"] + p["x1"]) / 2.0, (p["y0"] + p["y1"]) / 2.0))
     for c in getattr(_combat, "_debris", ()):
         cw, ch = int(c["w"]), int(c["h"])
@@ -947,7 +1359,7 @@ def _draw_corpses(r, v, bb):
         at = to3(c.x, c.y)
         if k >= 1.0:
             r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - _m1.CORPSE_FALL) / 90.0)), layer=0)
-        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=0)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=1, bias=-0.8)
         yaw = td.yaw_rad(c.angle) + 90.0 * c.fall_dir
         tint = _m1.CHAR if hasattr(c, "burn") else None
         if software and k >= 1.0:
@@ -961,9 +1373,9 @@ def _draw_corpses(r, v, bb):
                 baked = cache[c] = (at, yaw, verts, faces)
             r.actor_log.append(tuple(at))
             r.add_dynamic(baked[2], baked[3], tint=tint)
-            r.add_blob_shadow((at[0], at[1] + 0.02, at[2]), 0.34, 0.30, 0.40)
+            r.add_blob_shadow((at[0], at[1] + 0.02, at[2]), 0.34, 0.30, 0.40, layer=1, bias=-0.5)
         else:
-            r.add_humanoid(hum, pose, at, yaw, rifle_on=False, tint=tint)
+            r.add_humanoid(hum, pose, at, yaw, rifle_on=False, tint=tint, shadow=(1, -0.5))
 
 
 def _draw_cast(r, flashes, tm, v):
@@ -982,10 +1394,14 @@ def _draw_cast(r, flashes, tm, v):
         burn = getattr(e, "burn", 0)
         tint = _m1.CHAR if burn else (e.body_tint, 0.55) if getattr(e, "body_tint", None) else None
         x, y = e.rect.centerx, e.rect.centery
+        r.add_sprite(to3(x, y, 0.02), td.shadow(0.46, 0.38, 100), layer=1, bias=-0.5)
+        r.add_sprite(to3(x, y, 0.015), td.shadow(0.28, 0.22, 172), layer=1, bias=-0.3)
         _m1._body(r, hum, x, y, e.angle, rig, mode, ("e6", e.uid), tint=tint)
         _m1._burning(r, x, y, min(1.0, burn / 40.0), tm, e.uid * 5, flashes)
     vk = _world.volkov()
     if vk and not vk.get("dead") and _in_view(vk["x"], vk["y"], v, bb):
+        r.add_sprite(to3(vk["x"], vk["y"], 0.02), td.shadow(0.46, 0.38, 100), layer=1, bias=-0.5)
+        r.add_sprite(to3(vk["x"], vk["y"], 0.015), td.shadow(0.28, 0.22, 172), layer=1, bias=-0.3)
         _m5._unarmed(r, td.armed("volkov", "pistol"), vk["x"], vk["y"],
                      vk.get("angle", -math.pi / 2), "volkov")
     _draw_player(r, flashes)
@@ -1004,6 +1420,22 @@ def _draw_player(r, flashes):
         _m1._draw_dead_player(r, hum)
         return
     x, y = p.rect.centerx, p.rect.centery
+    # Crisp two-layer contact shadow so Biribel's boots sit grounded on the floor
+    r.add_sprite(to3(x, y, 0.02), td.shadow(0.46, 0.38, 100), layer=1, bias=-0.5)
+    r.add_sprite(to3(x, y, 0.015), td.shadow(0.28, 0.22, 174), layer=1, bias=-0.3)
+    # Subtle cool rim light + forward tactical spot flashlight on GL rigs
+    if hasattr(r, "add_packed"):
+        px3, _, pz3 = to3(x, y)
+        dx, dy = math.cos(p.angle), math.sin(p.angle)
+        flashes.insert(0, {
+            "pos": (px3 + dx * 0.35, 1.35, pz3 - dy * 0.35),
+            "color": (218, 236, 255), "intensity": 1.15, "range": 7.5,
+            "kind": "spot", "dir": (dx, -0.22, -dy), "cone": 0.86, "shadow": True,
+        })
+        flashes.insert(0, {
+            "pos": (px3 - 0.50, 1.95, pz3 + 0.50),
+            "color": (162, 212, 255), "intensity": 0.92, "range": 2.4,
+        })
     rig = p.rig_weapon_name()
     if getattr(STATE, "player_disarmed", False):
         _m5._unarmed(r, hum, x, y, p.angle, "player")
@@ -1022,13 +1454,14 @@ def _draw_fires(r, flashes, tm, v):
             continue
         heat = min(1.0, fz.life / float(max(1, fz.max_life)) * 4.0)
         rad = fz.radius * K
+        _m1._fuel_pool_at(r, x, z, rad * (0.65 + 0.35 * heat), fz.x * 0.37 + fz.y * 0.11, tm=tm, heat=heat)
         n = 1 + min(6, int(rad / 0.3))
         for i in range(n):
             a = i * 2.39996 + fz.x * 0.013
-            d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
-            size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
+            d = 0.0 if i == 0 else rad * 0.72 * math.sqrt(i / float(n))
+            size = (0.56 if i == 0 else 0.36) * min(1.25, 0.45 + rad * 0.35) * heat
             _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
-                      glow=False)
+                      glow=(i == 0), smoky=(i == 0), bed=False, embers=(i == 0), heat=heat)
         flashes.append({"pos": (x, 1.0, z), "color": FIRE, "intensity": heat, "range": 4.0 + rad})
 
 
@@ -1146,6 +1579,24 @@ def _emissives(surface, v, stage):
             surface.blit(g, (pt[0] - gr, pt[1] - gr), special_flags=add)
         if not tower and not _decor._under_prop(stage, wx, wy):
             surface.blit(_decor._lamp_head(colour, k > 0.5), (pt[0] - 9, pt[1] - 9))
+    if stage == STAGE_CUSTOMS:
+        # Subtle bloomed glow on customs booth windows & red barrier-arm LEDs
+        for wx, wy, hh, rad, col in (
+            (12.5 * T, 7.6 * T, 1.35, 22, (116, 242, 214)),
+            (18.5 * T, 10.6 * T, 1.35, 22, (116, 242, 214)),
+        ):
+            pt = _at(v, wx, wy, hh)
+            if _on(pt, 40) and not _occluded(v, stage, wx, wy, hh):
+                g = _nfx.bulb_glow_sprite(rad, col)
+                surface.blit(g, (pt[0] - rad, pt[1] - rad), special_flags=add)
+        for bx_tile in (12, 18):
+            for lx in (0.92, 1.76, 2.34):
+                wx = bx_tile * T + 12 + lx / K
+                wy = 2 * T + 40
+                pt = _at(v, wx, wy, 1.03)
+                if _on(pt, 20) and not _occluded(v, stage, wx, wy, 1.03):
+                    g = _nfx.bulb_glow_sprite(11, (248, 62, 50))
+                    surface.blit(g, (pt[0] - 11, pt[1] - 11), special_flags=add)
     if stage in (STAGE_RAIL, STAGE_BOXCAR, STAGE_TRAIN):
         pt = _at(v, 41.5 * T, 7.0 * T + 44, 4.8)
         if (int(t * 2) % 2) == 0 and not _decor._light_dead(0) and _on(pt):

@@ -178,6 +178,7 @@ def start_mission(preserve_timer=False):
     STATE.breach_stage = 0
     STATE.breach_stage_timer = 0
     STATE.hotwire_radio_said = False
+    STATE.hotwire_not_clear_said = False
     STATE._footstep_timer = 0
     STATE.player_bottles = 2
     STATE.thrown_bottles = []

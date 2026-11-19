@@ -192,6 +192,20 @@ def set_slot_progress(progress, slot_index=None, checkpoint=None):
     save_data(data)
 
 
+_M3_CHECKPOINT_NAMES = {
+    "breakout": "Breakout", "comms": "Comms Wing", "archives": "Archives",
+    "kill_order": "Kill Order", "broadcast": "Broadcast Wing",
+}
+
+
+def m3_checkpoint_label(slot):
+    """'Mission 3 - Kill Order' for a mid-M3 save, else None."""
+    if slot.get("last_completed_mission") != "MISSION_2" or slot.get("progress") != "m3":
+        return None
+    name = _M3_CHECKPOINT_NAMES.get(slot.get("checkpoint", ""))
+    return "Mission 3 - " + name if name else None
+
+
 def get_slot_flags(slot_index=None):
     """Copy of the slot's flags dict (empty for an empty slot)."""
     return dict(get_slot(slot_index).get("flags") or {})

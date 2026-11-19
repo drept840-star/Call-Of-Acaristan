@@ -26,7 +26,10 @@ PROFILES = {
 }
 # Mission 8 checkpoint labels by stage token (mirrors missions.m8.meta stages).
 _M8_CHECKPOINTS = {"meet": "THE MEET", "trap": "THE TRAP", "gantry": "THE GANTRY", "friends": "OLD FRIENDS",
-                   "kill": "THE KILL", "chase": "THE CHASE", "epilogue": "EPILOGUE", "duty": "DUTY"}
+                   "kill": "THE KILL", "chase": "THE CHASE", "epilogue": "EPILOGUE",
+                   "d_approach": "APPROACH", "mansion": "THE MANSION", "liftoff": "LIFTOFF",
+                   "flight": "LAST FLIGHT", "crash": "THE CRASH", "ridge": "THE RIDGE",
+                   "d_epilogue": "EPILOGUE"}
 # Mission 7 checkpoint labels by stage token (mirrors missions.m7.meta.STAGE_LABELS).
 _M7_CHECKPOINTS = {"arrival": "ARRIVAL", "chores": "CHORES", "runner": "RUNNER", "prep": "PREP",
                    "raid": "RAID", "finale": "FINALE", "choice": "CHOICE"}
@@ -77,6 +80,12 @@ def checkpoint_label(state):
     if key == "MISSION8":
         if getattr(state, "mission8_stage", "") == "trap" and int(getattr(state, "m8_trap_cp", 0) or 0) >= 3:
             return "THE GANTRY"
+        if getattr(state, "mission8_stage", "") == "mansion":
+            cp = int(getattr(state, "m8_mansion_cp", 0) or 0)
+            if cp >= 2:
+                return "GRAND STAIRCASE"
+            if cp >= 1:
+                return "BALLROOM"
         return _M8_CHECKPOINTS.get(getattr(state, "mission8_stage", ""), "THE MEET")
     if key == "MISSION4" and getattr(state, "mission4_tower_checkpoint_reached", False):
         try:
@@ -105,6 +114,9 @@ def checkpoint_label(state):
 
 def failure_copy(state):
     key = mission_meta.mission_key(state)
+    if key == "MISSION8" and getattr(state, "m8_route", "revenge") == "duty":
+        return ("HEAD OF STATE COMPROMISED",
+                "GUARD NET: PRESIDENTIAL RESIDENCE SECURED. NO SURVIVORS IN THE COURTYARD.")
     if key == "MISSION6" and getattr(state, "m6_train_result", None) == "failed":
         return ("VOLKOV NEVER REACHED THE TRAIN",
                 "VASILE: You didn't clear the platform. They cut him down "
@@ -247,6 +259,8 @@ def _diagram(s, kind, a, t):
 def draw(surface, state, buttons, elapsed, now, mouse):
     key = mission_meta.mission_key(state)
     accent, location, operation, plate, status, kind = PROFILES[key]
+    if key == "MISSION8" and getattr(state, "m8_route", "revenge") == "duty":
+        location, plate = "PRESIDENTIAL MANSION", "PALACE SECURITY"
     if key == "MISSION7" and getattr(state, "m7_raid_active", False):
         status = "BODI WENT DOWN"
     w, h = surface.get_size()

@@ -8,6 +8,8 @@ For the full operating protocol (session handoff, memory discipline, bug logging
 
 Where things live. Working rules (facades, shared state, map contract, renderer, sprite pipeline, story canon) are in `AGENTS.md`; read the section you need before editing that area. For exact files per task, cross-module call chains, the weapon ID crosswalk and per-subsystem gates, see `docs/ARCHITECTURE_MAP.md`.
 
+**Mandatory:** every change, major or small, MUST update `docs/ARCHITECTURE_MAP.md` in the same change (files added/moved/renamed/deleted, call chains, entry points, gates, weapon IDs, env flags). Work is not done until the map matches the code. Rule lives in `AGENTS.md` > Agent workflow.
+
 ## Run and verify
 - `acaristan.py` - launcher; adds `src/` to `sys.path` and imports `app`. Run from the repo root (assets and saves are CWD-relative).
 - `src/app.py` - entry module; the game runs on import.
@@ -24,11 +26,11 @@ Where things live. Working rules (facades, shared state, map contract, renderer,
 - `missions/` - `m0` (enemy types), `m1`-`m6`, `arena.py` (multiplayer), `walking_sim.py`. Each mission package `__init__.py` is a re-export facade; load order = import order in it. Typical parts: `meta`, `maps`, `decor`, `world`, `flow`, `systems`, `draw`.
   - `missions/m6/` - Whiteout: `yard*` (yard3d/brain/dress/hud), `stealth`, `train3d` (last playable beat), `bloc3d/`, `hud3d`. Finale is cutscene-only.
   - `missions/m7/` - Fallow Ground: `farmyard` (top-down), `raid*` (playable 3D raid), `choice` (radio, writes `STATE.m8_route`). Films in `cutscenes/m7*`; notes in `docs/MISSION7_PLOT.md`.
-  - `missions/m8/` - The Call; `STATE.m8_route` picks the ladder. `revenge/`: `trap*` (3D trap + gantry climb), `kill3d`, `chase3d`/`chase_set` (tractor chase), `epilogue3d`; films via `cutscenes/m8films.py` + `meta.M8_SCENES`, `beats` is the fallback. `duty/` reserved. Design: `docs/MISSION8_PLOT.md`.
-- `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`, `m8films`), `figure_kit.py` (deprecated re-export; cast look `SPECS` lives in `engine/anim/figure_kit.py`), `cast3d.py`, `post3d.py`, `weather3d.py`.
+  - `missions/m8/` - The Call; `STATE.m8_route` picks the ladder. `revenge/`: `trap*` (3D trap + gantry climb), `kill3d`, `chase3d`/`chase_set` (tractor chase), `epilogue3d`; films via `cutscenes/m8films.py` + `meta.M8_SCENES`, `beats` is the fallback. `duty/` (Head of State): `mansion3d` (+ `mansion_set/world/brain/hud`), `flight3d` (door-gunner chase), `ridge3d` (scope finale); films in `cutscenes/m8dutyfilms.py`. Design: `docs/MISSION8_PLOT.md`.
+- `cutscenes/` - 2D and 3D cutscene hosts per mission (`m3*`, `m4aftermath`, `m5*`, `m6films`, `m6world3d`, `m6fx3d`, `m7films`, `m8films`, `m8dutyfilms`), `figure_kit.py` (deprecated re-export; cast look `SPECS` lives in `engine/anim/figure_kit.py`), `cast3d.py`, `post3d.py`, `weather3d.py`.
 - `core/` - legacy runtime: `state.py` (`STATE`), `game_core.py`, `camera.py`, `mapbuilder.py` (dependency-free), `artpack.py` (sprite sheet access), `save_system.py`, `settings_store.py`, `lighting.py`, `dev_jumps.py`.
 - `entities/` - player, `enemy_ai.py`, weapons, weapon rig, corpses, death anims.
-- `ui/` - menus (`main.py`), `hud.py`, `radio.py` + `pixfont.py` (bitmap fonts), shop, multiplayer screens, mission failed. Multiplayer draws in 2.5D: `arena_view3d.py` (`make_view`, aim unprojection) over the 2D `arena_view.py`, cast and guns from `mp3d.py`; `ACA_MP_2D=1` forces 2D, and any 3D error falls back to 2D for the run.
+- `ui/` - menus (`main.py`), `hud.py`, `mission_complete.py` (case-dossier end screen, live diorama in `mission_complete_3d.py`), `radio.py` + `pixfont.py` (bitmap fonts), shop, multiplayer screens, mission failed. Multiplayer draws in 2.5D: `arena_view3d.py` (`make_view`, aim unprojection) over the 2D `arena_view.py`, cast and guns from `mp3d.py`; `ACA_MP_2D=1` forces 2D, and any 3D error falls back to 2D for the run.
 - `audio/` - `audio.py`, `voice.py`, `voice_manifest.py` (`VO_xxx` rows, `KNOWN_MISSING_AUDIO`, `VOICE_ORDER`).
 - `net/` - multiplayer: protocol, client, match, discovery, tunnel.
 - `fx/` - 2D effects. `tools/` (under src) - dev-only input recorder and trailer bot.

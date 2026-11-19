@@ -22,6 +22,7 @@ Additive glows are pre-baked RGB surfaces blitted with BLEND_ADD and cached by
 (colour, radius bucket) - no per-frame Surface allocation in steady state.
 Time is in MILLISECONDS (the M5 time base).
 """
+from collections import OrderedDict
 import math
 import random
 
@@ -35,7 +36,21 @@ __all__ = ["reduced_motion", "glow", "sodium_lamp", "window_glow", "crt_bloom",
 SODIUM = (255, 168, 84)      # low-pressure sodium: the colour of the city at night
 FX_LAYER = 6                 # same layer M2 uses for its practicals
 _TAU = math.pi * 2.0
-_CACHE = {}
+_CACHE = OrderedDict()
+
+
+def _cache_get(key):
+    val = _CACHE.get(key)
+    if val is not None:
+        _CACHE.move_to_end(key)
+    return val
+
+
+def _cache_put(key, val, cap=512):
+    if len(_CACHE) >= cap:
+        _CACHE.popitem(last=False)
+    _CACHE[key] = val
+    return val
 
 
 # ── settings ──
@@ -86,10 +101,10 @@ def _halo(col, rad, power=2.2):
     rad = max(2, min(220, _bucket(rad)))
     col = _q(col)
     key = ("h", col, rad, power)
-    s = _CACHE.get(key)
+    s = _cache_get(key)
     if s is None:
         s = _halo_smooth(col, rad, power)
-        _CACHE[key] = s
+        _cache_put(key, s)
     return s
 
 
@@ -109,8 +124,11 @@ def _halo_smooth(col, rad, power):
         rr = np.sqrt(ax[:, None] ** 2 + ax[None, :] ** 2) / float(rad)
         f = np.clip(1.0 - rr, 0.0, 1.0)
         k = f ** power + 0.04 * f
-        bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
-        dith = np.tile(bay, (d // 4 + 1, d // 4 + 1))[:d, :d]
+        base = _cache_get("_bayer_448")
+        if base is None:
+            bay = (np.array(_BAYER, dtype=np.float32) + 0.5) / 16.0 - 0.5
+            base = _cache_put("_bayer_448", np.ascontiguousarray(np.tile(bay, (112, 112))))
+        dith = base[:d, :d]
         arr = np.empty((d, d, 3), dtype=np.uint8)
         for ch in range(3):
             v = k * col[ch] + dith * (k > 0)
@@ -134,11 +152,11 @@ def _ellipse(col, rx, ry, power=2.0):
     rx, ry = max(2, min(260, _bucket(rx))), max(2, min(260, _bucket(ry)))
     col = _q(col)
     key = ("e", col, rx, ry, power)
-    s = _CACHE.get(key)
+    s = _cache_get(key)
     if s is None:
         base = _halo(col, 48, power)
         s = pygame.transform.smoothscale(base, (rx * 2 + 2, ry * 2 + 2))
-        _CACHE[key] = s
+        _cache_put(key, s)
     return s
 
 
@@ -174,6 +192,16 @@ def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensit
         _add_at(s, _halo(_scale(col, k), rad), sx, sy)
         if core is not None and rad > 3:
             _add_at(s, _halo(_scale(core, k), max(2, rad * 0.22), 1.2), sx, sy)
+    k = intensity * _flick(t, seed, flicker) * (1.0 + pulse * math.sin(t * 0.004 + seed))
+    k = min(.18, k * .35)
+    if k > 0.02:
+        draw._gl_spec = {
+            "kind": "halo", "col": _scale(col, k),
+            "core": _scale(core, k) if core is not None else None,
+            "radius_m": float(radius_m), "max_px": float(min(max_px, 28)),
+            "power": 2.2, "core_r": 0.22, "core_boost": 1.0 if core is not None else 0.0,
+            "peak": 1.0, "hdr": 1.05, "m5_tail": True,
+        }
     draw.bounds_m = (radius_m, radius_m)
     draw.bounds_cap_px = (min(max_px, 28), min(max_px, 28))
     return draw
@@ -193,6 +221,12 @@ def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0):
         if rx < 1.5 or ry < 1.5:
             return
         _add_at(s, _ellipse(_scale(col, k), min(260, rx), min(260, ry)), sx, sy)
+    k = intensity * _flick(t, seed, flicker)
+    draw._gl_spec = {
+        "kind": "halo", "col": _scale(col, k),
+        "rx_m": float(w_m * 1.1), "ry_m": float(h_m * 1.1),
+        "max_px": 260.0, "power": 2.0, "peak": 1.0, "hdr": 1.1, "m5_tail": True,
+    }
     draw.bounds_m = (w_m * 1.1, h_m * 1.1)
     draw.bounds_cap_px = (260, 260)
     return draw
@@ -282,6 +316,13 @@ def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420):
             return
         k = (1.0 - age_ms / dur_ms) ** 2 * flash_scale()   # RPE6 P9: flash reduction caps the peak
         _add_at(s, _halo(_scale(col, k), min(220, radius_m * scale * (0.6 + 0.6 * k))), sx, sy)
+    if 0 <= age_ms <= dur_ms:
+        k = (1.0 - age_ms / dur_ms) ** 2 * flash_scale()
+        draw._gl_spec = {
+            "kind": "halo", "col": _scale(col, k),
+            "radius_m": float(radius_m * (0.6 + 0.6 * k)), "max_px": 220.0,
+            "power": 2.2, "peak": 1.0, "hdr": 2.1 * flash_scale(), "m5_tail": True,
+        }
     draw.bounds_m = (radius_m * 1.2, radius_m * 1.2)
     draw.bounds_cap_px = (220, 220)
     return draw
@@ -292,17 +333,50 @@ def sparks(seed, age_ms, col=(255, 200, 120), n=18, speed_m=4.0, dur_ms=700):
     rng = random.Random(seed)
     parts = [(rng.uniform(-math.pi, 0.15), rng.uniform(0.35, 1.0)) for _ in range(n)]
 
-    def draw(s, sx, sy, scale, z):
+    def _render(s, sx, sy, scale, occ_depth=None, limit=0.0):
         if age_ms < 0 or age_ms > dur_ms:
             return
         a = age_ms / 1000.0
         fade = 1.0 - age_ms / dur_ms
+        if occ_depth is not None:
+            sh, sw = occ_depth.shape
+        for ang, v in parts:
+            vx, vy = math.cos(ang) * v * speed_m, math.sin(ang) * v * speed_m
+            x = sx + vx * a * scale
+            y = sy + (vy * a + 4.9 * a * a) * scale
+            if occ_depth is not None:
+                ix, iy = int(x), int(y)
+                if ix < 0 or ix >= sw or iy < 0 or iy >= sh or occ_depth[iy, ix] < limit:
+                    continue
+            tx, ty = x - vx * 0.03 * scale, y - (vy + 9.8 * a) * 0.03 * scale
+            pygame.draw.line(s, _scale(col, fade), (tx, ty), (x, y), 1)
+
+    def draw(s, sx, sy, scale, z):
+        _render(s, sx, sy, scale)
+
+    def draw_depth(s, sx, sy, scale, z, occ_depth, limit):
+        _render(s, sx, sy, scale, occ_depth, limit)
+
+    def _gl_lines(sx, sy, scale, z):
+        if age_ms < 0 or age_ms > dur_ms:
+            return ()
+        a = age_ms / 1000.0
+        fade = 1.0 - age_ms / dur_ms
+        c = _scale(col, fade)
+        out = []
         for ang, v in parts:
             vx, vy = math.cos(ang) * v * speed_m, math.sin(ang) * v * speed_m
             x = sx + vx * a * scale
             y = sy + (vy * a + 4.9 * a * a) * scale
             tx, ty = x - vx * 0.03 * scale, y - (vy + 9.8 * a) * 0.03 * scale
-            pygame.draw.line(s, _scale(col, fade), (tx, ty), (x, y), 1)
+            out.append(((tx, ty), (x, y), c, 1))
+        return out
+
+    extent = abs(speed_m) * (dur_ms / 1000.0) + 4.9 * (dur_ms / 1000.0) ** 2 + 0.5
+    draw.bounds_m = (extent, extent)
+    draw.bounds_cap_px = (320, 320)
+    draw.draw_depth = draw_depth
+    draw._gl_lines = _gl_lines
     return draw
 
 
@@ -342,6 +416,12 @@ def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16):
         k = intensity * (0.75 + 0.25 * math.sin(t * 0.0007 + seed * 1.9))
         rad = int(rad * (1.0 + 0.05 * math.sin(t * 0.0009 + seed)))
         _add_at(s, _halo(_scale(col, k), rad, 2.8), sx, sy)
+    k = intensity * (0.75 + 0.25 * math.sin(t * 0.0007 + seed * 1.9))
+    draw._gl_spec = {
+        "kind": "halo", "col": _scale(col, k),
+        "radius_m": float(radius_m * (1.0 + 0.05 * math.sin(t * 0.0009 + seed))),
+        "max_px": 220.0, "power": 2.8, "peak": 1.0, "hdr": 1.0, "m5_tail": True,
+    }
     draw.bounds_m = (radius_m * 1.06, radius_m * 1.06)
     draw.bounds_cap_px = (220, 220)
     return draw
@@ -357,6 +437,12 @@ def glint(col, radius_m=0.35, t=0, seed=0, intensity=0.8, rate=1.0):
         k = intensity * (0.55 + 0.45 * math.sin(t * 0.004 * rate + seed * 2.2))
         _add_at(s, _halo(_scale(col, k * 0.6), rad * 2.0), sx, sy)
         _add_at(s, _halo(_scale(col, k), max(1.5, rad * 0.5), 1.3), sx, sy)
+    k = intensity * (0.55 + 0.45 * math.sin(t * 0.004 * rate + seed * 2.2))
+    draw._gl_spec = {
+        "kind": "halo", "col": _scale(col, k * 0.6), "core": _scale(col, k),
+        "radius_m": float(radius_m * 2.0), "max_px": 220.0,
+        "power": 2.2, "core_r": 0.25, "core_boost": 1.0, "peak": 1.0, "hdr": 1.3, "m5_tail": True,
+    }
     draw.bounds_m = (radius_m * 2.05, radius_m * 2.05)
     draw.bounds_cap_px = (220, 220)
     return draw
@@ -436,15 +522,24 @@ def rain3d(r, t, seed=0, n_near=70, n_far=150, lights=(), col=(96,104,120),
 
 # ── sky ──
 def night_sky(r, buf, t, top, bot, *, stars=60, moon=False, clouds=4, sodium=None,
-              mist=(26, 30, 40), seed=0, star_cut=0.0):
+              mist=(26, 30, 40), seed=0, star_cut=0.0, gpu=False):
     """Fill ``buf`` with a night sky locked to the camera's horizon: gradient,
     stars + moon parked at fixed azimuths (so they parallax with yaw), drifting
     cloud bands, a warm city sky-glow (``sodium`` colour) and a mist band.
     ``star_cut``: 0 clear .. 1 fully overcast."""
+    if getattr(r, "backend", "") == "gl" and buf is getattr(r, "surface", None):
+        if gpu:
+            r.set_sky({
+                "top": top, "bot": bot, "t": t, "stars": stars, "moon": moon,
+                "clouds": clouds, "sodium": sodium, "mist": mist, "seed": seed,
+                "star_cut": star_cut,
+            })
+            return
+        r.set_sky(None)
     w, h = buf.get_size()
     hy = int(max(-h, min(h * 2, r.horizon_y())))
     key = ("sky", w, h, top, bot)
-    grad = _CACHE.get(key)
+    grad = _cache_get(key)
     if grad is None:
         gh = h * 3
         grad = pygame.Surface((w, gh))
@@ -453,16 +548,23 @@ def night_sky(r, buf, t, top, bot, *, stars=60, moon=False, clouds=4, sodium=Non
             f = f ** 0.8
             pygame.draw.line(grad, tuple(int(a + (b - a) * f) for a, b in zip(top, bot)),
                              (0, y), (w, y))
-        _CACHE[key] = grad
+        _cache_put(key, grad)
     buf.blit(grad, (0, 0), area=pygame.Rect(0, max(0, min(2 * h, int(h * 1.8) - hy)), w, h))
     yaw = math.degrees(math.atan2(r.fwd[0], r.fwd[2]))
     px_deg = w / max(1.0, r.fov)
     if stars and star_cut < 1.0 and hy > 4:
-        rng = random.Random(seed + 404)
-        for i in range(stars):
-            az, el, tw = rng.uniform(-180, 180), rng.uniform(0.04, 1.0), rng.random()
-            if rng.random() < star_cut:
-                continue
+        skey = ("stars", seed, stars, float(star_cut))
+        pts = _cache_get(skey)
+        if pts is None:
+            rng = random.Random(seed + 404)
+            pts_l = []
+            for i in range(stars):
+                az, el, tw = rng.uniform(-180, 180), rng.uniform(0.04, 1.0), rng.random()
+                if rng.random() < star_cut:
+                    continue
+                pts_l.append((i, az, el, tw))
+            pts = _cache_put(skey, tuple(pts_l))
+        for i, az, el, tw in pts:
             x = int(w / 2 + ((az - yaw + 180) % 360 - 180) * px_deg)
             y = int(hy - el * min(hy, h) * 0.98)
             if 0 <= x < w and 0 <= y < hy - 3:
@@ -482,14 +584,14 @@ def night_sky(r, buf, t, top, bot, *, stars=60, moon=False, clouds=4, sodium=Non
         y = int(hy - h * (0.12 + 0.11 * i))
         if y + ch < 0 or y > h:
             continue
-        band = _CACHE.get(("cloud", cw, ch))
+        band = _cache_get(("cloud", cw, ch))
         if band is None:
             band = pygame.Surface((cw, ch), pygame.SRCALPHA)
             for inset, a in ((0, 30), (1, 26), (2, 20), (3, 14)):
                 pygame.draw.ellipse(band, (6, 8, 12, a),
                                     (inset * cw // 10, inset * ch // 9,
                                      cw - inset * cw // 5, ch - inset * 2 * ch // 9))
-            _CACHE[("cloud", cw, ch)] = band
+            _cache_put(("cloud", cw, ch), band)
         buf.blit(band, (x, y))
     if sodium is not None and -h < hy < h * 2:
         _add_at(buf, _ellipse(sodium, w * 0.7, max(8, h * 0.2)), w * 0.5, hy)

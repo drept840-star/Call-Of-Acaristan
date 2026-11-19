@@ -824,25 +824,15 @@ def extra_lamps():
 
 
 def draw_hud(surface):
-    """Wave status in M5's status plate (top strip), only on arena stages."""
+    """Unified top-left tactical combat cluster (wave status + hostiles count)."""
     global _peak
     if not _waves:
         return
-    from missions.m5.draw import _draw_m5_plate  # lazy: the campaign's shared plate
+    from . import hud_ui as _hud_ui
     done, total = wave_progress()
     left = remaining()
     _peak = max(_peak, left)
-    if left <= 0:
-        title, col, fill, right, frac = ("AREA CLEAR  -  MOVE OUT", (150, 214, 150),
-                                         (96, 190, 120), "0", 1.0)
-    else:
-        if done == 0 and not _loud:
-            title, col = "SQUAD DUG IN  -  WAVE 0/%d" % total, (214, 196, 150)
-        else:
-            title, col = "WAVE %d/%d" % (done, total), (236, 148, 74)
-        fill, right = (220, 160, 40), str(left)
-        frac = 1.0 - left / float(max(1, _peak))
-    _draw_m5_plate(surface, title, col, frac, fill, right)
+    _hud_ui.draw_combat_cluster(surface, left, done, total, _loud, _peak)
 
 
 ARENA_STAGES = (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL)

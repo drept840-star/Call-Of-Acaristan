@@ -1,0 +1,60 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.d_crash",
+ "shots": [
+  {
+   "scene": "m8d_crash_spin",
+   "speaker": "MARU",
+   "text": "Tail's gone - hold on to something!",
+   "radio": true,
+   "min_ms": 3600,
+   "auto_advance": true,
+   "cues": [
+    [
+     2600,
+     "wind_gust",
+     0.4
+    ]
+   ]
+  },
+  {
+   "scene": "m8d_crash_black",
+   "speaker": "",
+   "text": "",
+   "min_ms": 3000,
+   "auto_advance": true,
+   "quiet_ui": true,
+   "cues": [
+    [
+     0,
+     "m8_crash",
+     0.7
+    ]
+   ]
+  },
+  {
+   "scene": "m8d_crash_fire",
+   "speaker": "MARU",
+   "text": "Leg's gone. Take the rifle - he went down past the ridge.",
+   "min_ms": 4600
+  },
+  {
+   "scene": "m8d_crash_fire",
+   "speaker": "BIRIBEL",
+   "text": "I'll come back for you.",
+   "min_ms": 3000
+  },
+  {
+   "scene": "m8d_crash_fire",
+   "speaker": "MARU",
+   "text": "You'd better.",
+   "min_ms": 2600,
+   "auto_advance": true
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Duty, the crash past the ridge"
+ }
+}

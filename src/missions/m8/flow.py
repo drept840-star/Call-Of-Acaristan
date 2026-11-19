@@ -13,8 +13,11 @@ from entities.player import Player
 
 from .meta import (
     FIGHT_STAGES, FILM_TIMELINES, MISSION8_ID, MISSION8_KEY, MISSION8_TITLE, OPERATIONS,
-    ROUTE_REVENGE, ROUTES, STAGE_CHASE, STAGE_GANTRY, STAGE_KILL, STAGE_TRAP, film_shots,
-    first_stage, stages_for)
+    ROUTE_REVENGE, ROUTES, STAGE_CHASE, STAGE_FLIGHT, STAGE_GANTRY, STAGE_KILL, STAGE_MANSION,
+    STAGE_RIDGE, STAGE_TRAP, film_shots, first_stage, stages_for)
+from .duty import flight3d as _flight
+from .duty import mansion3d as _mansion
+from .duty import ridge3d as _ridge
 from .revenge import beats as _beats
 from .revenge import chase3d as _chase
 from .revenge import kill3d as _kill
@@ -22,7 +25,9 @@ from .revenge import trap3d as _trap
 from . import m8_audio as _m8_audio
 
 # stage -> score cue when no scene owns the stage (the ENTER-stepped beats).
-STAGE_MUSIC = {"meet": "meet", "friends": "friends", "epilogue": "names"}
+STAGE_MUSIC = {"meet": "meet", "friends": "friends", "epilogue": "names",
+               "d_approach": "approach", "liftoff": "flight", "crash": "flight",
+               "d_epilogue": "names"}
 
 
 def _save_progress(stage):
@@ -51,6 +56,9 @@ def _initialize_m8(route_, preserve_timer=False):
     _trap.abort()
     _kill.abort()
     _chase.abort()
+    _mansion.abort()
+    _flight.abort()
+    _ridge.abort()
     STATE.reset()
     STATE.m8_route = route_
     STATE.active_mission = MISSION8_KEY
@@ -75,6 +83,14 @@ def set_stage(token):
         _kill.begin()
     elif token == STAGE_CHASE:
         _chase.begin()
+    elif token == STAGE_MANSION:
+        STATE.m8_mansion_cp = int(getattr(STATE, "m8_mansion_cp", 0) or 0)
+        _mansion.begin()
+    elif token == STAGE_FLIGHT:
+        STATE.m8_flight_cp = int(getattr(STATE, "m8_flight_cp", 0) or 0)
+        _flight.begin()
+    elif token == STAGE_RIDGE:
+        _ridge.begin()
     elif token in FILM_TIMELINES and film_shots(token):
         STATE.request_m8_cutscene = token      # app.py plays the film, then on_cutscene_done
     else:
@@ -89,6 +105,12 @@ def live_scene():
         return _kill
     if _chase.active():
         return _chase
+    if _mansion.active():
+        return _mansion
+    if _flight.active():
+        return _flight
+    if _ridge.active():
+        return _ridge
     return None
 
 
@@ -102,6 +124,12 @@ def music_tick():
     elif _chase.active():
         cs = getattr(_chase.scene(), "cutscene", None)
         cue = cs.get("music", "chase") if cs else "chase"
+    elif _mansion.active():
+        cue = "mansion"
+    elif _flight.active():
+        cue = "flight"
+    elif _ridge.active():
+        cue = "state"
     else:
         cue = STAGE_MUSIC.get(getattr(STATE, "mission8_stage", ""))
     _m8_audio.music(_audio_manager, cue)
@@ -117,6 +145,31 @@ def scene_pause(paused):
     _trap.set_paused(paused)
     _kill.set_paused(paused)
     _chase.set_paused(paused)
+    _mansion.set_paused(paused)
+    _flight.set_paused(paused)
+    _ridge.set_paused(paused)
+
+
+def on_mansion_done(result):
+    """Study door kicked (or scene fault): on to Liftoff."""
+    if getattr(STATE, "mission8_stage", "") == STAGE_MANSION:
+        advance_stage()
+    return True
+
+
+def on_flight_done(result):
+    """Ucilev's rocket hit the tail: on to the crash film."""
+    if getattr(STATE, "mission8_stage", "") == STAGE_FLIGHT:
+        STATE.m8_flight_cp = 0
+        advance_stage()
+    return True
+
+
+def on_ridge_done(result):
+    """Retardovici is down: on to the epilogue."""
+    if getattr(STATE, "mission8_stage", "") == STAGE_RIDGE:
+        advance_stage()
+    return True
 
 
 def on_chase_done(result):

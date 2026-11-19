@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-11-15T12:35:34.976Z
-> Files: 564 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-11-19T21:57:50.533Z
+> Files: 580 tracked | Anatomy hits: 0 | Misses: 0
 
 > Project structure index. Auto-maintained by OpenWolf hooks and daemon.
 > Run `openwolf scan` to generate, or wait for the first Claude Code session.
@@ -12,10 +12,10 @@
 - `.gitattributes` — RPE6 Phase 0 line-ending policy (master prompt R14): LF everywhere, binaries marked. (~100 tok)
 - `.gitignore` — Git ignore rules (~763 tok)
 - `acaristan.py` — Thin launcher — run with `python acaristan.py` from the repo root. (~331 tok)
-- `AGENTS.md` — Agent workflow (read this first) (~3395 tok)
+- `AGENTS.md` — Agent workflow (read this first) (~3500 tok)
 - `ARCHITECTURE_MAP.md` — ARCHITECTURE_MAP (~7167 tok)
 - `build.bat` (~56 tok)
-- `CLAUDE.md` — OpenWolf (~1657 tok)
+- `CLAUDE.md` — OpenWolf (~1796 tok)
 - `GEMINI.md` — OpenWolf (~75 tok)
 - `HANDOFF_CLAUDE.md` — Handoff — Claude (~1583 tok)
 - `MEMORY.md` — RULE: Split long tasks into Planning and Writing stages (~554 tok)
@@ -33,7 +33,7 @@
 
 ## docs/
 
-- `ARCHITECTURE_MAP.md` — ARCHITECTURE_MAP (~9511 tok)
+- `ARCHITECTURE_MAP.md` — ARCHITECTURE_MAP (~58865 tok)
 - `M4_OVERHAUL_PLAN.md` — Mission 4 overhaul plan - "The Aftermath" in 2.5D (~3281 tok)
 - `M6_3D_PERF.md` — M6 playable 3D scenes - performance pass (2026-10-24) (~3606 tok)
 - `M6_HALOS_AND_ENDING_PLAN.md` — M6 plan - halos that stay behind walls, and an ending the player can follow (~5753 tok)
@@ -130,7 +130,7 @@
 - `cast.py` — cast.py - cutscene cast sprites. (~1275 tok)
 - `cast3d.py` — cast3d.py - 3D (engine3d.Humanoid) looks derived from the 2D cast sheet. (~1028 tok)
 - `chair.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~17099 tok)
-- `death3d.py` — Gameplay death falls for 3D guards (Mission 7 raid, Mission 6 yard). (~1443 tok)
+- `death3d.py` — Gameplay death falls for 3D guards (Mission 7 raid, Mission 6 yard). (~9974 tok)
 - `engine.py` — Split from cutscenes.py - see cutscenes.py (shim) for the map. (~8763 tok)
 - `figure_kit.py` — cutscenes.figure_kit - deprecated path (RPE6 Phase 2, A-006): the kit is ``engine.anim``. (~176 tok)
 - `intro3d.py` — intro3d.py - engine3d takes for the opening narration (``core.cutscene1``). (~14135 tok)
@@ -152,7 +152,7 @@
 - `m5shadow3d.py` — The rebuilt M5 finale: one fresh 3D set, actor clock and camera language. (~13104 tok)
 - `m5studio.py` — m5studio.py - the state-TV studio shared by the M5 bulletin's 3D take (~2343 tok)
 - `m6films.py` — m6films.py - engine3d takes and 2D fallbacks for every Mission 6 film. (~38648 tok)
-- `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~8133 tok)
+- `m6fx3d.py` — m6fx3d.py - the Mission 6 FX kit: late-PS2 night light, smoke and haze. (~6544 tok)
 - `m6world3d.py` — m6world3d.py - engine3d sets and actor kit for the Mission 6 films. (~32833 tok)
 - `m7films.py` — Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6) (~3194 tok)
 - `m7palette3d.py` — The 2D top-down M7 farm palette, for the 3D farm (raid and films). (~846 tok)
@@ -182,6 +182,7 @@
 - `__init__.py` — engine.anim - animation (RPE6). Phase 2 holds the generic 2D figure kit (``draw_character`` and the (~252 tok)
 - `figure_kit.py` — figure_kit.py - one cast renderer in the "Balaceanu Arrest" house style. (~12731 tok)
 - `pose_cache.py` — Pose cache: render-once surfaces for parameterised procedural bodies. (~414 tok)
+- `rig3d.py` — Layered 3D pose controller, velocity-coupled gait, and stair/foot-IK solver. (~6651 tok)
 
 ## src/engine/collision/
 
@@ -189,6 +190,7 @@
 - `boxes.py` — engine.collision.boxes - ray, segment and body queries against AABBs. (~1256 tok)
 - `mesh.py` — engine.collision.mesh - exact hitboxes from a mesh's own triangles. (~1966 tok)
 - `nav.py` — engine.collision.nav - A* on a walkability grid (RPE6 §6.9 ``GridGraph``). (~2219 tok)
+- `physics.py` — Shared capsule sliding, rigid impact debris, and articulated Verlet ragdolls. (~10006 tok)
 
 ## src/engine/core/
 
@@ -308,8 +310,9 @@
 ## src/engine3d/
 
 - `__init__.py` — engine3d - tiny flat-shaded low-poly software renderer for pygame. (~212 tok)
-- `core.py` — Core of the low-poly renderer: math, meshes, camera, painter renderer. (~10156 tok)
-- `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~16989 tok)
+- `core.py` — Core of the low-poly renderer: math, meshes, camera, painter renderer. (~11004 tok)
+- `gl_post.py` — GPU HDR bloom, grading, 2.5D lightmap, Bayer dither and crisp upscale (Phase 1). (~8167 tok)
+- `gl.py` — engine3d.gl - GPU backend for the low-poly renderer (ModernGL). (~22025 tok)
 - `hold.py` — Weapon holds and arm-vs-body safety for the box rig (engine3d.rig.Humanoid). (~4305 tok)
 - `ik.py` — Analytic two-bone IK for the box rig (engine3d.rig.Humanoid). (~3209 tok)
 - `rig.py` — Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts. (~17063 tok)
@@ -344,7 +347,7 @@
 - `render3d_bridge.py` — game.render3d_bridge - apply ae.set3d/1 data to a live 3D renderer (RPE6 Phase 8). (~7486 tok)
 - `save_adapter.py` — RPE6 Phase 9: game-side adapter between live state and ``engine.save``. (~4305 tok)
 - `timelines.py` — game.timelines - cutscene shot-list access (RPE6 Phase 8). (~739 tok)
-- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~5731 tok)
+- `topdown3d.py` — Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim. (~6428 tok)
 
 ## src/game/art/
 
@@ -462,7 +465,7 @@
 
 - `__init__.py` — Package missions/m1 - re-export facade. Parts: map.py, main.py, hotwire.py, update.py, draw.py. (~428 tok)
 - `draw.py` — Split from mission.py - see mission.py (shim) for the map. (~33772 tok)
-- `draw3d.py` — Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules. (~22230 tok)
+- `draw3d.py` — Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules. (~24673 tok)
 - `escape3d.py` — Mission 1 escape cut (timeline m1.escape) in 3D. (~3941 tok)
 - `grade3d.py` — Mission 1 night grade for the 2.5D frame: a screen-space light map. (~1367 tok)
 - `hotwire.py` — Split from mission.py - see mission.py (shim) for the map. (~1741 tok)
@@ -490,7 +493,7 @@
 - `__init__.py` — Package missions/m3 - re-export facade. Parts: meta.py, maps.py, world.py, flow.py, interrog.py, systems.py, draw.py. (~86254 tok)
 - `components.py` — Mission 3 entity components (RPE6 Phase 5, D4). (~752 tok)
 - `draw.py` — Split from mission3.py - see mission3.py (shim) for the map. (~117532 tok)
-- `draw3d.py` — Mission 3 in 2.5D: the Vostral cell block drawn in 3D over the 2D rules. (~12973 tok)
+- `draw3d.py` — Mission 3 in 2.5D: the five playable maps drawn in 3D over the 2D rules. (~18431 tok)
 - `flow.py` — Split from mission3.py - see mission3.py (shim) for the map. (~23460 tok)
 - `interrog.py` — Split from mission3.py - see mission3.py (shim) for the map. (~7726 tok)
 - `maps.py` — Split from mission3.py - see mission3.py (shim) for the map. (~8965 tok)
@@ -524,7 +527,7 @@
 - `decor_paint.py` — decor_paint.py - Mission 5 static set dressing painters (round 2). (~6168 tok)
 - `decor.py` — decor.py - Mission 5 set dressing, lighting and inspectables (round 2). (~4388 tok)
 - `draw.py` — Mission 5 - part module. See __init__.py for the package facade. (~18736 tok)
-- `draw3d.py` — Mission 5 in 2.5D: Guard HQ, the Lower Quarter, the print works and the (~16518 tok)
+- `draw3d.py` — Mission 5 in 2.5D: Guard HQ, the Lower Quarter, the print works and the (~20819 tok)
 - `finale_audio.py` — Mission 5 sound design and cutscene-owned playback. (~2930 tok)
 - `finale_script.py` — M5 rebuilt finale: immutable script/timing shared by renderer and player. (~642 tok)
 - `flow.py` — Mission 5 - part module. See __init__.py for the package facade. (~6157 tok)
@@ -546,12 +549,13 @@
 - `combat.py` — Mission 6 - loud combat arenas for the three top-down stages. (~5224 tok)
 - `decor.py` — Mission 6 - stage decor, ground art and night lighting. (~31742 tok)
 - `draw.py` — Mission 6 gameplay renderer. (~6196 tok)
-- `draw3d.py` — Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard. (~13675 tok)
+- `draw3d.py` — Mission 6 in 2.5D: the customs post, no-man's-land and the rail yard. (~16686 tok)
 - `flow.py` — Mission 6 - stage ladder, checkpoints and the ending handoff. (~3777 tok)
 - `hud3d.py` — Mission 6 3D HUD: minimal tactical, shared by the train shootout and the (~3045 tok)
 - `m6_audio.py` — Mission 6 sound design: film stems, foley and the interactive-train bed. (~6215 tok)
 - `maps.py` — Authored map layer for Mission 6 - three distinct playable spaces. (~3514 tok)
 - `meta.py` — Mission 6 metadata, stage constants and authored cutscene timelines. (~4333 tok)
+- `night_fx.py` — Mission 6 night atmosphere: light pools, wet puddle patches, snow layers & fast filmic tuning. (~3917 tok)
 - `palette3d.py` — The 2D top-down M6 palette, for the 3D yard and train. (~463 tok)
 - `stealth.py` — Mission 6 - tower searchlights for no-man's-land and the rail yard. (~4467 tok)
 - `systems.py` — Mission 6 - per-frame gameplay pipeline. (~3082 tok)
@@ -584,7 +588,7 @@
 - `raid_brain.py` — Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks, (~7559 tok)
 - `raid_hud.py` — Mission 7 raid HUD: the top-down game's panels (via the M6 yard HUD helpers), a (~1618 tok)
 - `raid_world.py` — Mission 7 raid world: collision boxes, line of sight, the barn fire and the props. (~7868 tok)
-- `raid3d.py` — Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night. (~22869 tok)
+- `raid3d.py` — Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night. (~30400 tok)
 - `systems.py` — Mission 7 - per-frame update, dispatched by stage (placeholder stages: ENTER advances). (~281 tok)
 
 ## src/missions/m8/
@@ -599,6 +603,13 @@
 ## src/missions/m8/duty/
 
 - `__init__.py` — Mission 8 Duty route ("Head of State"): reserved.  Until its slice lands the (~62 tok)
+- `flight3d.py` — Mission 8 Duty - Phase 4: Last Flight (3D door-gunner chase). (~9488 tok)
+- `mansion_brain.py` — Mission 8 Duty - Mansion 3D AI: Retardovici's guard across the estate, Bodi, (~7304 tok)
+- `mansion_hud.py` — Mission 8 Duty - Mansion HUD: floor-aware minimap, weapon panel, area cards, (~2319 tok)
+- `mansion_set.py` — Mission 8 Duty - Retardovici's estate, the same house the Revenge funeral (~13311 tok)
+- `mansion_world.py` — Mission 8 Duty - the estate's solids, stacked floors and 3D sight lines. (~3167 tok)
+- `mansion3d.py` — Mission 8 Duty - Phase 2: The Mansion (3D third-person fight). (~28116 tok)
+- `ridge3d.py` — Mission 8 Duty - Phase 6: The Ridge (first-person scope finale). (~5363 tok)
 
 ## src/missions/m8/revenge/
 
@@ -612,7 +623,7 @@
 - `trap_brain.py` — Mission 8 Revenge - trap AI: the Guard riflemen, the Guard truck and Bodi. (~4383 tok)
 - `trap_hud.py` — Mission 8 Revenge - trap HUD: the raid's panels and callouts on a north-up (~1491 tok)
 - `trap_world.py` — Mission 8 Revenge - blocking solids of the Route 12 set for the trap fight. (~1368 tok)
-- `trap3d.py` — Mission 8 Revenge - phases 2 and 3: the Trap and the Gantry, one third-person scene. (~8010 tok)
+- `trap3d.py` — Mission 8 Revenge - phases 2 and 3: the Trap and the Gantry, one third-person scene. (~32758 tok)
 
 ## src/net/
 
@@ -675,6 +686,7 @@
 - `__init__.py` (~0 tok)
 - `_helpers.py` — Shared test setup: put ``src`` on sys.path and keep SDL headless. (~194 tok)
 - `_path.py` (~51 tok)
+- `test_ai_bundle_app.py` — tools/ai_bundle_app.py: request parsing, file reading, slicing, settings, CLI. (~3027 tok)
 - `test_anim_props.py` — Phase 11 step 10: flicker is a deterministic closed form; set fields (~705 tok)
 - `test_app_boot_crash.py` — engine.core.App: headless boot, service wiring, crash report (§6.1 acceptance). (~1464 tok)
 - `test_art_cache.py` — art_cache.get_plate_bg: the shared M4/M5 "status plate" chrome. (~469 tok)
@@ -685,6 +697,7 @@
 - `test_devtools.py` — RPE6 Phase 10 (§6.19): debug overlay / inspector data builders + console commands. (~1005 tok)
 - `test_egg666.py` — Tests for the 3D "666" safe-keypad scare (ui/egg666_*.py). (~1755 tok)
 - `test_engine_ai.py` — engine.ai: behaviour tree preemption and memory, sight reaction and (~3255 tok)
+- `test_engine_anim.py` — engine.anim 3D spring, layered pose mixing, and stair foot-IK tests. (~1397 tok)
 - `test_engine_boot.py` — App.boot display ownership (ADAPTER A-001). (~626 tok)
 - `test_engine_collision_mesh.py` — engine.collision.mesh: hitboxes follow the mesh's triangles, not a box around it, (~890 tok)
 - `test_engine_collision.py` — engine.collision: box rays and segments agree with brute force, and grid (~1776 tok)
@@ -703,6 +716,7 @@
 - `test_frame_pacer.py` — core.frame_pacer: whole fixed steps per frame, rate drop on slow frames. (~612 tok)
 - `test_game_dialogues.py` — game.dialogues converter: node chain -> legacy beat dicts (RPE6 Phase 7). (~814 tok)
 - `test_game_world_bridge.py` — game.world bridge (RPE6 Phase 5, D4): ensure/get, roster reset + removed-tag policy, WalkCycle.advance. (~2622 tok)
+- `test_gameplay_sweep.py` — Gameplay sweep regressions (2026-11-19): loot, revive range, checkpoint ammo. (~1620 tok)
 - `test_gl_composite.py` — GL renderer item-queue regression (owner-hardware crash, M5 finale). (~1311 tok)
 - `test_hold.py` — HoldTests: test_push_out_clears_torso, test_pole_choice_for_target_in_front_of_chest, test_modes_rea (~799 tok)
 - `test_ik.py` — engine3d.ik: analytic arm/leg IK and the shouldered rifle hold land on (~1570 tok)
@@ -737,6 +751,7 @@
 - `ae_import_m3_van.py` — AE IMPORT M3 VAN - Volkov's armoured van (assets/3D/M3van.glb). (~1156 tok)
 - `ae_import_pistol.py` — AE IMPORT PISTOL - the multiplayer service pistol (assets/3D/pistol_lowpoly.glb). (~903 tok)
 - `ae_import_tractor.py` — AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb). (~1146 tok)
+- `ai_bundle_app.py` — AI Bundle - paste an AI's file request, get the requested files on the clipboard. (~15452 tok)
 - `build_code_txt.py` — find_source_files, write_files_to_txt, write_individual_txts, resolve_cli_files (~2979 tok)
 - `build_radio_cache.py` — Pre-build the radio-FX voice cache (assets/voice/_radio_cache). (~570 tok)
 - `build_windows.py` — Build the Windows game as a PyInstaller --onedir bundle (no admin needed). (~1257 tok)
@@ -759,6 +774,7 @@
 - `test_m7_pig.py` — Focused geometry and raid gait regression checks; run from the project root. (~932 tok)
 - `tex3d_draw_m7.py` — Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the (~4450 tok)
 - `tex3d_draw.py` — Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette. (~6119 tok)
+- `wrap_audit.py` — /*.json that reads like prose, then lays each one out at (~1684 tok)
 
 ## tools/ost/
 

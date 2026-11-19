@@ -76,13 +76,16 @@ __all__ = [
 
 
 # ── plumbing ───────────────────────────────────────────────────────────────
-def rend(w=RW, h=RH):
+def rend(w=RW, h=RH, hdr=True):
     key = (int(w), int(h))
     if key not in _cache["r"]:
         from engine3d import Renderer  # lazy: the 2D fallback owns import errors
-        _cache["r"][key] = (Renderer(key[0], key[1]), pygame.Surface(key))
+        rr = Renderer(key[0], key[1])
+        _cache["r"][key] = (rr, pygame.Surface(key))
     del LAST[:]
     r = _cache["r"][key][0]
+    if getattr(r, "backend", "") == "gl":
+        r.hdr = bool(hdr)
     # pools persist on the renderer and the films share it: a shot that
     # lights the snow must not leave its pools on the next shot's set
     r.pools = []
@@ -177,7 +180,7 @@ _STATIC_SIG = None
 # Python packing, not the GPU, was the frame cost.  Rows are light-independent
 # (shading happens in the shader), so they are kept per ``add`` call slot and
 # re-packed only when that slot's mesh signature changes.
-_PACK_MEMO = {"on": False, "key": None, "i": 0, "rows": [], "chunk": None}
+_PACK_MEMO = {"on": False, "key": None, "i": 0, "rows": [], "chunk": None, "chunks": []}
 
 
 def drop_renderer_caches():
@@ -194,6 +197,7 @@ def drop_renderer_caches():
     _PACK_MEMO["key"] = None
     _PACK_MEMO["chunk"] = None
     _PACK_MEMO["rows"] = []
+    _PACK_MEMO["chunks"] = []
 
 
 def pack_memo(r, key):
@@ -206,6 +210,7 @@ def pack_memo(r, key):
         _PACK_MEMO["key"] = k
         _PACK_MEMO["rows"] = []
         _PACK_MEMO["chunk"] = None
+        _PACK_MEMO["chunks"] = []
     _PACK_MEMO["i"] = 0
     _PACK_MEMO["on"] = True
 
@@ -217,26 +222,46 @@ def pack_memo_end(ok=True):
     memo["on"] = False
     if not ok or not memo["rows"]:
         memo["chunk"] = None
+        memo["chunks"] = []
         memo["key"] = None
         return
     rows = [r for _sig, r in memo["rows"] if r is not None]
     if not rows:
         memo["chunk"] = None
+        memo["chunks"] = []
         return
     import numpy as np
-    memo["chunk"] = rows[0] if len(rows) == 1 else np.concatenate(rows)
+    all_rows = rows[0] if len(rows) == 1 else np.concatenate(rows)
+    memo["chunk"] = all_rows
+    if len(all_rows) > 180 and len(all_rows) % 3 == 0:
+        cell = 24.0
+        tris = all_rows.reshape(-1, 3, all_rows.shape[1])
+        cx = np.floor(tris[:, :, 0].mean(axis=1) / cell).astype(np.int64)
+        cz = np.floor(tris[:, :, 2].mean(axis=1) / cell).astype(np.int64)
+        keys = ((cx + (1 << 20)) << 21) | (cz + (1 << 20))
+        order = np.argsort(keys, kind="mergesort")
+        skeys = keys[order]
+        tris_s = tris[order]
+        splits = np.flatnonzero(skeys[1:] != skeys[:-1]) + 1
+        starts = np.concatenate(([0], splits))
+        ends = np.concatenate((splits, [len(tris_s)]))
+        memo["chunks"] = [np.ascontiguousarray(tris_s[s:e].reshape(-1, all_rows.shape[1]))
+                          for s, e in zip(starts.tolist(), ends.tolist())]
+    else:
+        memo["chunks"] = [all_rows]
 
 
 def pack_memo_ready(r, key):
     """True when the set built under ``key`` can be replayed verbatim."""
     return (hasattr(r, "add_packed") and _PACK_MEMO["key"] == (id(r), key)
-            and _PACK_MEMO["chunk"] is not None)
+            and bool(_PACK_MEMO["chunks"]))
 
 
 def pack_memo_replay(r):
-    if _PACK_MEMO["chunk"] is not None:
-        # the chunk never changes: a GL renderer keeps it on the card
-        (getattr(r, "add_resident", None) or r.add_packed)(_PACK_MEMO["chunk"])
+    add_res = getattr(r, "add_resident", None) or r.add_packed
+    for chunk in _PACK_MEMO["chunks"]:
+        # the chunks never change: a GL renderer keeps them on the card and culls per chunk
+        add_res(chunk)
 
 
 def _mesh_sig(m, bias):
@@ -649,6 +674,8 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
 
 def life_pose(pose, t, amp=1.0, seed=0):
     """Author pose + breath/weight/posture added, never replacing it."""
+    if "_places" in pose:
+        return pose
     p = dict(pose)
     a = t * 0.001
     br = amp * math.sin(a * 1.55 + seed * 1.7)
@@ -853,6 +880,18 @@ def walk(hum, route, g, stride, speed=1.2, ground=None):
         hip, knee = leg_ik(lz, fy)
         pose[side + "hip_p"] = hip
         pose[side + "kn"] = knee
+        if ph < STANCE:
+            u = ph / STANCE
+            if u < 0.18:
+                ank = (-7.0 * (1.0 - u / 0.18)) * amp
+            elif u < 0.68:
+                ank = -4.0 * ((u - 0.18) / 0.50) * amp
+            else:
+                ank = (-4.0 + 13.0 * ((u - 0.68) / 0.32)) * amp
+        else:
+            q = (ph - STANCE) / (1.0 - STANCE)
+            ank = (9.0 - 16.0 * q) * amp
+        pose[side + "ank"] = ank
         out = max(-0.12, min(0.20, (lx - lat * 0.1) * lat / 0.86))
         pose[side + "hip_r"] = math.degrees(math.asin(out))
         fwd[side] = max(-1.0, min(1.0, lz / max(1e-6, reach_d / scale)))
@@ -863,15 +902,15 @@ def walk(hum, route, g, stride, speed=1.2, ground=None):
     pose["lift"] = low[1] - pos[1]
     sway = math.cos(2 * math.pi * (phases["l"] - 0.30))
     pose["body_r"] = 0.0
-    pose["spine_r"] = -1.6 * sway * amp
+    pose["spine_r"] = -2.2 * sway * amp
     pose["twist"] = -pelvis * 1.7
     pose["head_y"] = -(pelvis + pose["twist"])
-    pose["head_p"] = 0.0
+    pose["head_p"] = -1.6 * amp * math.cos(4 * math.pi * ph_l)
     pose["spine"] = 4 + 2 * amp
     for side, other in (("l", "r"), ("r", "l")):
         pose[side + "sh_p"] = 10 + 19 * amp * fwd[other]
         pose[side + "sh_r"] = 7
-        pose[side + "el"] = 16 + 14 * amp * max(0.0, fwd[other])
+        pose[side + "el"] = 14 + 18 * amp * max(0.0, fwd[other]) + 4 * amp * (1.0 - abs(fwd[other]))
     return pose, pos, yaw
 
 
@@ -1180,6 +1219,9 @@ def flake_sprite(r, p0, p1, col):
 
     def draw(s, sx, sy, scale, z):
         pygame.draw.line(s, col, (sx, sy), (sx + dx, sy + dy), 1)
+
+    draw.bounds = (int(min(a[0], b[0])) - 1, int(min(a[1], b[1])) - 1,
+                   int(abs(dx)) + 3, int(abs(dy)) + 3)
     r.add_sprite(p0, draw, layer=2)
 
 
@@ -1249,9 +1291,10 @@ def breath(pos, t, seed=0, intensity=0.22):
 
 # ── sky / light helpers ──────────────────────────────────────────────────
 def night(r, buf, t, top=(5, 8, 15), bot=(18, 26, 42), stars=55, moon=False,
-          sodium=(44, 30, 20), seed=0, star_cut=0.45):
+          sodium=(44, 30, 20), seed=0, star_cut=0.45, gpu=False):
     _fx.night_sky(r, buf, t, top, bot, stars=stars, moon=moon, clouds=3,
-                  sodium=sodium, mist=(18, 22, 32), seed=seed, star_cut=star_cut)
+                  sodium=sodium, mist=(18, 22, 32), seed=seed, star_cut=star_cut,
+                  gpu=gpu)
 
 
 def warm_lamp(r, pos, t, seed=0, radius_m=1.6, col=WARM, intensity=0.9):

@@ -10,8 +10,16 @@
 > drivers, hull and train timer fails), and the Epilogue is one 3D shot per
 > line (`revenge/epilogue3d.py`). The TV studio and the funeral are small
 > stand-in stages out in the chase set's fields until the Duty mansion set
-> exists. Lines are caption-only (VO_387-VO_420, no takes yet). The Duty route
-> (`duty/`) is not built yet. The rest of this doc is design. See
+> exists. Lines are caption-only (VO_387-VO_455, no takes yet). The Duty route
+> also plays end to end (2026-11-15): Approach, Liftoff, Crash and Epilogue are
+> 3D films (`cutscenes/m8dutyfilms.py`; the inauguration courthouse stands on
+> the chase set's east field), the Mansion is a playable 3D fight
+> (`duty/mansion3d.py` on `duty/mansion_set.py`, the Revenge funeral estate:
+> gates and drive with exploding cars, grand hall with falling chandeliers,
+> first-floor gallery, the study, the helipad terrace; checkpoints 0-4,
+> rifle + shotgun only), Last Flight is the door-gunner chase (`duty/flight3d.py`,
+> five checkpointed sections) and the Ridge is the scope finale
+> (`duty/ridge3d.py`). Smoke gate: `mission8_duty`. The rest of this doc is design. See
 > `docs/FIXES_STORIES.md` for the consistency pass applied to the plan.
 
 > *"I chose the many. You chose the four."*

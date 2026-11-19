@@ -1093,6 +1093,36 @@ def _m4_draw_storefront(surf, ex, ey, vertical, rnd):
             surf.blit(pool, (dx + dw, dy - 9), special_flags=pygame.BLEND_ADD)
 
 
+def _draw_m4_corner_shop_2d(surface, px, py, pw, ph, pal, rnd):
+    """2D cutaway for the 3x4 enterable SE corner shop (deep_g, cols 35-38,
+    rows 34-38): north wall, double entrance on west, open 3x4 floor."""
+    T = TILE_SIZE
+    # North wall (row 34, 4x1), NW pillar (35, 35), SW pillar (35, 38).
+    walls = ((px, py, pw, T), (px, py + T, T, T), (px, py + 4 * T, T, T))
+    for rx, ry, rw, rh in walls:
+        pygame.draw.rect(surface, pal["base"], (rx, ry, rw, rh))
+        _m4_facade_cladding(surface, rx, ry, rw, rh, rnd, pal)
+        _m4_facade_relief(surface, rx, ry, rw, rh, pal)
+    _m4_roof_plate(surface, px, py, pw, T, pal, rnd)
+    _m4_cornice_shadow(surface, px, py, pw, T, pal)
+    # Exterior warm light spill west of double doorway (35, 36..37) + interior props.
+    spill = pygame.Surface((T + 24, 2 * T + 12), pygame.SRCALPHA)
+    pygame.draw.ellipse(spill, (245, 178, 86, 44), spill.get_rect())
+    surface.blit(spill, (px - T + 8, py + 2 * T - 6), special_flags=pygame.BLEND_ADD)
+    ix, iy = px + T, py + T
+    # Drinks cooler (36, 35) + wooden counter, register & CRT TV (37..38, 35).
+    pygame.draw.rect(surface, (164, 178, 184), (ix + 6, iy + 2, 44, 15))
+    pygame.draw.line(surface, (132, 212, 224), (ix + 9, iy + 15), (ix + 47, iy + 15), 2)
+    pygame.draw.rect(surface, (112, 84, 54), (ix + T + 4, iy + 2, 2 * T - 10, 15))
+    pygame.draw.rect(surface, (46, 50, 48), (ix + T + 28, iy + 4, 14, 10))
+    pygame.draw.rect(surface, (82, 184, 172), (ix + 2 * T + 22, iy + 4, 14, 10))
+    pygame.draw.rect(surface, (112, 84, 54), (ix + 2 * T + 46, iy + 2 * T + 8, 16, 52))
+    # Warm interior floor glow.
+    glow = pygame.Surface((3 * T, 4 * T), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (255, 198, 120, 34), (8, 8, 3 * T - 16, 4 * T - 16))
+    surface.blit(glow, (ix, iy), special_flags=pygame.BLEND_ADD)
+
+
 def _draw_m4_buildings(surface, cam_x, cam_y):
     """Stamp authored building art over the C field for every block whose
     footprint intersects the view. Seeded by block id -> deterministic."""
@@ -1106,6 +1136,9 @@ def _draw_m4_buildings(surface, cam_x, cam_y):
             continue
         pal = _m4_block_palette(style)
         rnd = random.Random(_stable_seed(bid))
+        if bid == "deep_g":
+            _draw_m4_corner_shop_2d(surface, px, py, pw, ph, pal, rnd)
+            continue
         # 1. Wall plate (the facade itself, base colour).
         pygame.draw.rect(surface, pal["base"], (px, py, pw, ph))
         # 2. Per-style wall cladding (brick courses or ashlar seams).
@@ -2314,11 +2347,12 @@ def _draw_m4_siege_bar(surface):
     from missions.m4 import siege as _siege
     if getattr(STATE, "mission4_stage", None) != STAGE_SIEGE:
         return
+    from ui.tactical_hud import HUD_MARGIN, tactical_panel_bg
     t = getattr(STATE, "m4_siege_t", 0)
     w = 360
     x = (WIDTH - w) // 2
-    y = 14
-    surface.blit(get_plate_bg(w, 46), (x, y))
+    y = HUD_MARGIN
+    surface.blit(tactical_panel_bg(w, 46), (x, y))
     if t < 0:
         head = "JAMMER LIVE - FIRST CONTACT IN %ds" % int(math.ceil(-t / 60.0))
         frac = 0.0
@@ -2342,7 +2376,7 @@ def _draw_m4_siege_bar(surface):
     if hold > 0:
         from missions.m4.meta import M4_RACK_HOLD_FAIL
         ry = y + 52
-        surface.blit(get_plate_bg(w, 24), (x, ry))
+        surface.blit(tactical_panel_bg(w, 24), (x, ry))
         blink = int(_now_s() * 4) % 2 == 0
         surface.blit(font_terminal_small.render("RACK UNDER ATTACK", True,
                                                 C_RACK_WARN if blink else (200, 120, 100)),
@@ -2356,11 +2390,12 @@ def _draw_m4_supply_panel(surface):
     stage = getattr(STATE, "mission4_stage", None)
     if stage not in (STAGE_ESCORT, STAGE_FORTIFY, STAGE_SIEGE):
         return
+    from ui.tactical_hud import HUD_MARGIN, tactical_panel_bg
     v = _escort.vasile()
     w, h = 250, 48
-    x = WIDTH - w - 10
-    y = 180                       # under the minimap: the radio owns the bottom edge
-    surface.blit(get_plate_bg(w, h), (x, y))
+    x = WIDTH - w - HUD_MARGIN
+    y = HUD_MARGIN + 160 + 10
+    surface.blit(tactical_panel_bg(w, h), (x, y))
     supply = getattr(STATE, "m4_supply", 0)
     surface.blit(font_terminal_small.render("SUPPLY %d" % supply, True, C_SUPPLY_HUD), (x + 10, y + 5))
     if v is None:
@@ -2418,6 +2453,15 @@ def _draw_m4_prompts(surface, cam_x, cam_y):
         sx, sy = _fortify.site_center(*site)
         txt = "HOLD E - %s (%d)" % (label, cost)
         _world_tag(surface, sx, sy, cam_x, cam_y, txt, C_SUPPLY_HUD if ok else (150, 140, 120))
+    if (getattr(STATE, "mission4_stage", None) == STAGE_ESCORT
+            and not _m4_is_station(_m4_maps.MISSION4_MAP)
+            and not getattr(STATE, "m4_shop_looted", False)):
+        from missions.m4.flow import _in_corner_shop
+        from missions.m4.world import _shop_counter_pos
+        cx, cy = _shop_counter_pos()
+        if (_in_corner_shop()
+                and math.hypot(cx - STATE.player.rect.centerx, cy - STATE.player.rect.centery) < 96):
+            _world_tag(surface, cx, cy, cam_x, cam_y, "E - SEARCH COUNTER", (255, 214, 130), lift=1.5)
     if (getattr(STATE, "mission4_stage", None) == STAGE_FORTIFY
             and getattr(STATE, "m4_dialogue_done", False)
             and not getattr(STATE, "m4_jammer_installed", False)):
@@ -2433,7 +2477,10 @@ def _draw_m4_hud(surface, cam_x, cam_y):
     counter, the minimap, the siege clock and the supply / Vasile panel.
     The magazine-icon + clock-plate looks are ported from the M3 HUD language
     (values local; the m3 module is not imported)."""
-    draw_objective_panel(surface, _m4_maps._objective)
+    from engine.ui import objective_banner as _hud_objective
+    from ui.tactical_hud import HUD_MARGIN, PANEL_GAP, TACTICAL_THEME, place_minimap, tactical_panel_bg
+    m = HUD_MARGIN
+    _hud_objective.draw(surface, _m4_maps._objective, TACTICAL_THEME, x=m, y=m + 26 + 8)
 
     draw_pinned_radio(surface)
 
@@ -2442,18 +2489,20 @@ def _draw_m4_hud(surface, cam_x, cam_y):
     if not STATE.player:
         return
 
-    # Phase 4: the duplicated M4/M5 panel bodies are engine.ui.std widgets now.
-    _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                         panel_bg=get_panel_bg)
+    hp_y = HEIGHT - m - 30
+    _hud_health_bar.draw(surface, TACTICAL_THEME, STATE.player.hp, STATE.player.max_hp,
+                         panel_bg=tactical_panel_bg, x=m, y=hp_y)
 
-    _hud_weapon_panel.draw(surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
-                           panel_bg=get_panel_bg, mag_icon=_draw_m4_mag_icon)
+    _hud_weapon_panel.draw(surface, TACTICAL_THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
+                           panel_bg=tactical_panel_bg, mag_icon=_draw_m4_mag_icon,
+                           x=m, y=hp_y - PANEL_GAP + 2)
 
     # ── Hostiles counter ──
-    _hud_hostiles.draw(surface, THEME, len(STATE.enemies))
+    _hud_hostiles.draw(surface, TACTICAL_THEME, len(STATE.enemies), x=m, y=m)
 
     # ── Minimap (the fix: start_m4 built STATE.minimap but it was never drawn) ──
     if STATE.show_minimap and STATE.minimap:
+        place_minimap(STATE.minimap)
         STATE.minimap.draw(surface, STATE.player, STATE.enemies, cam_x, cam_y,
                            notebook_pos=_m4_objective_world_pos())
 
@@ -2844,7 +2893,12 @@ def _draw_door_fade(surface):
 def _draw_screen_passes(cam_x, cam_y, world3d=False):
     """Rain, scanlines, death overlay, flash, HUD, dialogue and reticle over
     the world (2D or the 2.5D frame from draw3d)."""
-    _m4_draw_rain()
+    if world3d:
+        if not _m4_is_station(_m4_maps.MISSION4_MAP):
+            from game import rain3d as _rain3d
+            _rain3d.step_rain_drops(getattr(STATE, "rain_drops", None))
+    else:
+        _m4_draw_rain()
     draw_scanlines(screen)
 
     if STATE.player_dead and world3d:

@@ -235,6 +235,10 @@ def _draw_brief(surface, focused, y, dt):
 
 
 def _slot_status(slot):
+    from core import save_system
+    m3_cp = save_system.m3_checkpoint_label(slot)
+    if m3_cp:
+        return m3_cp.upper()
     if slot.get("last_completed_mission"):
         return "LAST: " + slot.get("last_completed_label", "Campaign record")
     if slot.get("occupied"):

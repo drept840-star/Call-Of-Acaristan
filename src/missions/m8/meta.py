@@ -1,8 +1,8 @@
 """Mission 8 metadata: identity, the two stage ladders and the beat scripts.
 
 ``STATE.m8_route`` (written by the Mission 7 radio choice) picks the ladder.
-Revenge runs meet, trap, gantry, friends, kill, descent, chase, epilogue.  Duty is
-reserved: one placeholder beat until its slice lands.
+Revenge runs meet, trap, gantry, friends, kill, descent, chase, epilogue.  Duty runs
+approach, mansion, liftoff, flight, crash, ridge, epilogue.
 """
 MISSION8_ID = "MISSION_8"
 MISSION8_KEY = "MISSION8"
@@ -24,8 +24,15 @@ STAGE_EPILOGUE = "epilogue"
 REVENGE_STAGES = (STAGE_MEET, STAGE_TRAP, STAGE_GANTRY, STAGE_FRIENDS,
                   STAGE_KILL, STAGE_DESCENT, STAGE_CHASE, STAGE_EPILOGUE)
 
-STAGE_DUTY = "duty"
-DUTY_STAGES = (STAGE_DUTY,)
+STAGE_D_APPROACH = "d_approach"
+STAGE_MANSION = "mansion"
+STAGE_LIFTOFF = "liftoff"
+STAGE_FLIGHT = "flight"
+STAGE_CRASH = "crash"
+STAGE_RIDGE = "ridge"
+STAGE_D_EPILOGUE = "d_epilogue"
+DUTY_STAGES = (STAGE_D_APPROACH, STAGE_MANSION, STAGE_LIFTOFF,
+               STAGE_FLIGHT, STAGE_CRASH, STAGE_RIDGE, STAGE_D_EPILOGUE)
 
 # The trap and the gantry are one continuous 3D scene; the gantry is its
 # last phase, recorded as its own stage so a save resumes at the ladder.
@@ -40,13 +47,20 @@ STAGE_LABELS = {
     STAGE_DESCENT: "THE DESCENT",
     STAGE_CHASE: "THE TRACTOR CHASE",
     STAGE_EPILOGUE: "EPILOGUE",
-    STAGE_DUTY: "HEAD OF STATE",
+    STAGE_D_APPROACH: "APPROACH",
+    STAGE_MANSION: "THE MANSION",
+    STAGE_LIFTOFF: "LIFTOFF",
+    STAGE_FLIGHT: "LAST FLIGHT",
+    STAGE_CRASH: "THE CRASH",
+    STAGE_RIDGE: "THE RIDGE",
+    STAGE_D_EPILOGUE: "EPILOGUE",
 }
 
 OPERATIONS = {ROUTE_DUTY: "HEAD OF STATE", ROUTE_REVENGE: "OLD FRIENDS"}
 
 # 3D beats: (speaker, text) lines, ENTER steps through them.  The trap, the
-# gantry, the kill and the chase are playable scenes with no lines here.
+# gantry, the kill, the chase, the mansion, the flight and the ridge are
+# playable scenes with no lines here.
 # An empty speaker is a caption.  Spoken lines match the VO_xxx rows in
 # audio/voice_manifest.py (caption-only until takes exist).
 BEATS = {
@@ -77,8 +91,25 @@ BEATS = {
         ("BIRIBEL", "Volkov - I caught your train. The coffee's terrible."),
         ("", "CALL OF ACARISTAN"),
     ),
-    STAGE_DUTY: (
-        ("", "HEAD OF STATE - the Duty route is not built yet."),
+    STAGE_D_APPROACH: (
+        ("VASILE", "Guard rotations change at the fountain. Two on the doors, four on the lawn."),
+        ("VASILE", "I've bought you ten minutes on the perimeter feed. Get to the study."),
+    ),
+    STAGE_LIFTOFF: (
+        ("BIRIBEL", "He's lifting off!"),
+        ("MARU", "Door's open, Biribel! Jump!"),
+    ),
+    STAGE_CRASH: (
+        ("MARU", "Leg's gone. Take the rifle - he went down past the ridge."),
+        ("BIRIBEL", "I'll come back for you."),
+        ("MARU", "You'd better."),
+    ),
+    STAGE_D_EPILOGUE: (
+        ("ANCHOR", "Interim President Vasile takes the oath this morning, on the steps of the old courthouse."),
+        ("VASILE", "We owe this morning to soldiers whose names you will never know."),
+        ("BIRIBEL", "Gabi, Seby, Darius. Volkov. The country's free. I wanted to tell you that."),
+        ("BIRIBEL", "I didn't want to tell you who's holding it."),
+        ("", "CALL OF ACARISTAN"),
     ),
 }
 
@@ -102,6 +133,10 @@ FILM_TIMELINES = {
     STAGE_FRIENDS: "m8.friends",
     STAGE_DESCENT: "m8.descent",
     STAGE_EPILOGUE: "m8.epilogue",
+    STAGE_D_APPROACH: "m8.d_approach",
+    STAGE_LIFTOFF: "m8.d_liftoff",
+    STAGE_CRASH: "m8.d_crash",
+    STAGE_D_EPILOGUE: "m8.d_epilogue",
     "heli": "m8.heli",
 }
 
@@ -135,6 +170,20 @@ M8_SCENES = {
     "m8_heli_retardovici": ("m8films", "heli_retardovici"),
     "m8_heli_flyby": ("m8films", "heli_flyby"),
     "m8_heli_lockon": ("m8films", "heli_lockon"),
+    "m8d_approach_aerial": ("m8dutyfilms", "approach_aerial"),
+    "m8d_approach_gate": ("m8dutyfilms", "approach_gate"),
+    "m8d_liftoff_study": ("m8dutyfilms", "liftoff_study"),
+    "m8d_liftoff_window": ("m8dutyfilms", "liftoff_window"),
+    "m8d_liftoff_maru": ("m8dutyfilms", "liftoff_maru"),
+    "m8d_crash_spin": ("m8dutyfilms", "crash_spin"),
+    "m8d_crash_black": ("m8dutyfilms", "crash_black"),
+    "m8d_crash_fire": ("m8dutyfilms", "crash_fire"),
+    "m8d_inauguration": ("m8dutyfilms", "inauguration"),
+    "m8d_vasile_speech": ("m8dutyfilms", "vasile_speech"),
+    "m8d_crowd": ("m8dutyfilms", "crowd"),
+    "m8d_eyes": ("m8dutyfilms", "eyes"),
+    "m8d_biribel_vo": ("m8dutyfilms", "biribel_vo"),
+    "m8d_title_card": ("m8dutyfilms", "title_card"),
 }
 
 

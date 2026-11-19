@@ -646,11 +646,11 @@ def _dropoff_headlights(surface, nose_x, cy):
     surface.blit(beam, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
 
 
-def _dropoff_post(surface, t):
+def _dropoff_post(surface, t, rain=True):
     """Night-rain finish for every drop-off shot: diagonal rain, vignette, letterbox bars
     that open into gameplay over the last 600 ms, and a fade up from black."""
     w, h = surface.get_size()
-    if not getattr(STATE, "reduced_motion", False):
+    if rain and not getattr(STATE, "reduced_motion", False):
         for i in range(70):
             x = (i * 97 + t * 0.22 + i * i * 3) % (w + 60) - 30
             y = (i * 211 + t * 0.9 + i * 31) % (h + 40) - 20
@@ -710,7 +710,7 @@ def _dropoff_take(fn, zoom=1.0, locked=False):
             drawn = draw3d.dropoff(surface, t, zoom, locked)
         if not drawn:
             fn(surface, t)
-        _dropoff_post(surface, max(0, min(_DROPOFF_MS, int(t))))
+        _dropoff_post(surface, max(0, min(_DROPOFF_MS, int(t))), rain=not drawn)
     return _draw
 
 
@@ -1572,12 +1572,14 @@ def _paint_m1_exfil_truck(surface, ex, ey, headlights=True):
 
 def _m1_hp_panel(w, h):
     """M1's HP backdrop: the tactical HUD panel (the health_bar takes a factory)."""
-    return THEME.panel(w, h)
+    from ui.tactical_hud import tactical_panel_bg
+    return tactical_panel_bg(w, h)
 
 
 def _m1_panel_140(w, h):
     """M1's bottle-strip backdrop: the tactical HUD panel."""
-    return THEME.panel(w, h)
+    from ui.tactical_hud import tactical_panel_bg
+    return tactical_panel_bg(w, h)
 
 
 def _submit_ground_decor(q, cam_x, cam_y):
@@ -2141,10 +2143,14 @@ def _submit_overlay(q, cam_x, cam_y, ch_x, ch_y):
 
 
 def _draw_m1_hud(surface, cam_x, cam_y):
+    from engine.ui import objective_banner as _hud_objective
+    from ui.tactical_hud import HUD_MARGIN, PANEL_GAP, TACTICAL_THEME, place_minimap, tactical_panel_bg
+    m = HUD_MARGIN
     if STATE.player and not STATE.truck_hotwiring:
+        hp_y = HEIGHT - m - 24
         # HP bar - shared engine.ui.std widget in M1's compact layout (Phase 4).
-        _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                             panel_bg=_m1_hp_panel, x=30, y=HEIGHT - 50,
+        _hud_health_bar.draw(surface, TACTICAL_THEME, STATE.player.hp, STATE.player.max_hp,
+                             panel_bg=_m1_hp_panel, x=m + 6, y=hp_y,
                              bb=(0, 0, 160, 14), inset=0, panel=(180, 42),
                              panel_off=(-6, -18), label_dy=-14)
 
@@ -2160,12 +2166,10 @@ def _draw_m1_hud(surface, cam_x, cam_y):
                 obj_text = "Recover the notebook"
         elif STATE.mission_phase == "escape":
             obj_text = "Reach exfil zone"
-        draw_objective_panel(surface, obj_text)
-        # Ammo panel sits 116 px above the HP strip anchor (Phase 4: the strip
-        # is the shared widget now, so its anchor is spelled out here).
-        ammo_x, ammo_y = 30, (HEIGHT - 50) - 116
+        _hud_objective.draw(surface, obj_text, TACTICAL_THEME, x=m, y=m + 26 + 8)
+        ammo_x, ammo_y = m + 6, (hp_y - 18) - PANEL_GAP - 92
         bg_w, bg_h = 246, 92
-        surface.blit(THEME.panel(bg_w, bg_h), (ammo_x - 6, ammo_y))
+        surface.blit(tactical_panel_bg(bg_w, bg_h), (m, ammo_y))
         for i in range(4):
             mx = ammo_x + 8 + i * 36
             my = ammo_y + 8
@@ -2265,9 +2269,9 @@ def _draw_m1_hud(surface, cam_x, cam_y):
             )
         # ── Bottle HUD ──
         # Bottle HUD - shared engine.ui.std strip (M1's 140-alpha panel).
-        _hud_bottle_hud.draw(surface, THEME, STATE.player_bottles,
+        _hud_bottle_hud.draw(surface, TACTICAL_THEME, STATE.player_bottles,
                              panel_bg=_m1_panel_140, icon=_draw_molotov_icon,
-                             x=ammo_x - 6, y=ammo_y - 42, width=246, cap=4)
+                             x=m, y=ammo_y - PANEL_GAP - 36, width=246, cap=4)
         if getattr(STATE, "_m1_bricks", 0) > 0:
             surface.blit(
                 font_terminal_small.render(f"BRICKS {STATE._m1_bricks}/{_m1_stealth.BRICK_CAP}  [Q]",
@@ -2275,9 +2279,10 @@ def _draw_m1_hud(surface, cam_x, cam_y):
                 (ammo_x, ammo_y - 62),
             )
 
-        _hud_hostiles.draw(surface, THEME, len(STATE.enemies))
+        _hud_hostiles.draw(surface, TACTICAL_THEME, len(STATE.enemies), x=m, y=m)
 
     if STATE.show_minimap and STATE.minimap:
+        place_minimap(STATE.minimap)
         STATE.minimap.draw(
             surface,
             STATE.player,

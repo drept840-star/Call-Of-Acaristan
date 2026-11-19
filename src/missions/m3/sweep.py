@@ -62,17 +62,17 @@ def _m3g(e):
 
 
 # ── Director constants ───────────────────────────────────────────────
-MAX_CONCURRENT = 9          # hard cap on live sweep enemies
+MAX_CONCURRENT = 6          # hard cap on live sweep enemies
 
 # Difficulty/pressure pass (2026-09-19): role durability + fire cadence so
 # trades carry weight. Shields soak, breachers punish close range, the
 # marksman hurts; cooldowns tightened vs the base type_stats table.
 ROLE_TUNING = {
-    "guard":      {"hp": 110, "cooldown": 55, "damage": 15},
-    "breacher":   {"hp": 160, "cooldown": 40, "damage": 18},
-    "shield":     {"hp": 260, "cooldown": 60, "damage": 14},
-    "technician": {"hp": 100, "cooldown": 70, "damage": 12},
-    "marksman":   {"hp": 120, "cooldown": 80, "damage": 34},
+    "guard":      {"hp": 80,  "cooldown": 68, "damage": 11},
+    "breacher":   {"hp": 100, "cooldown": 56, "damage": 13},
+    "shield":     {"hp": 165, "cooldown": 74, "damage": 10},
+    "technician": {"hp": 75,  "cooldown": 82, "damage": 9},
+    "marksman":   {"hp": 90,  "cooldown": 100, "damage": 22},
 }
 CONTACT_STALE = 360         # 6s: last-seen goes stale
 SWEEP_ADVANCE = 900         # 15s without contact: sweep line advances
@@ -80,7 +80,7 @@ TURTLE_LIMIT = 2100         # 35s in one zone: breacher charge a shortcut
 WINDOW_TOTAL = 5 * 60 * 60  # Volkov's patience: 5:00
 HOLDOUT_DOOR_FRAMES = 2700  # 45s garage-door cycle
 HOLDOUT_BREACH_AT = 1200    # T+20s: side-door breach charge
-OVERWATCH_TELEGRAPH = 54    # 0.9s laser sweep before shots
+OVERWATCH_TELEGRAPH = 78    # 1.3s laser sweep before shots
 NEST_TILE = _KO_MEZZ_TILE
 # The marksman's firing aperture: the mezzanine doorway. Lasers, LOS
 # checks and muzzles use this point, not the room center - otherwise
@@ -115,15 +115,15 @@ _WAVES = [
         "spawns": [("marksman", NEST_TILE), ("guard", (18, 30)), ("guard", (21, 30))],
     },
     {   # 2 - pincer: shield element west, breacher pair east
-        "when": lambda s: s["t"] > s["waves"][1]["t"] + 900,
-        "spawns": [("shield", (5, 25)), ("guard", (4, 24)), ("guard", (6, 24)),
-                   ("breacher", (33, 25)), ("breacher", (34, 24))],
+        "when": lambda s: s["waves"][1]["cleared"] or s["t"] > s["waves"][1]["t"] + 1500,
+        "spawns": [("shield", (5, 25)), ("guard", (4, 24)),
+                   ("breacher", (33, 25)), ("guard", (34, 24))],
     },
     {   # 3 - tech flush + line guards leak from all three south routes
         "when": lambda s: _zone(s) in ("south", "dock")
                           or s["t"] > s["waves"][2]["t"] + 1800,
         "spawns": [("technician", (6, 30)), ("technician", (31, 30)),
-                   ("guard", (17, 30)), ("guard", (22, 30)), ("guard", (33, 30))],
+                   ("guard", (17, 30)), ("guard", (33, 30))],
     },
     {   # 4 - holdout: everything left, dock-side + a down-dock overwatch
         # angle. The nest marksman used to insert at (32,25) - 11 tiles of
@@ -488,7 +488,7 @@ def coord_target(enemy, px, py, solid_walls):
         # point is the one place in the phase they know exactly.
         gx, gy = _exfil_pos()
         ang = (enemy.uid * 2.39996) % (2 * math.pi)
-        r = TILE_SIZE * (1.6 + (enemy.uid % 3) * 0.8)
+        r = TILE_SIZE * (2.6 + (enemy.uid % 3) * 0.9)
         return ("sweep", gx + math.cos(ang) * r, gy + math.sin(ang) * r, False)
     if st["contact"] <= CONTACT_STALE and STATE.m3_sweep_last_seen:
         gx, gy = STATE.m3_sweep_last_seen
@@ -648,15 +648,14 @@ def _update_overwatch(st):
             px, py - 34, "MARKSMAN LOCK - BREAK LINE!", (255, 90, 60), 70])
     if ow["telegraph"] >= OVERWATCH_TELEGRAPH:
         ow["telegraph"] = 0
-        ow["cool"] = 110 + _rng_legacy.randint(0, 60)
-        for i in range(2):
-            a = math.atan2(py - ny, px - nx) + _rng_legacy.uniform(-0.05, 0.05)
-            mx, my = nx + math.cos(a) * 20, ny + math.sin(a) * 20
-            STATE.bullets.append({
-                "x": mx, "y": my, "prev_x": mx, "prev_y": my,
-                "dx": math.cos(a) * 22, "dy": math.sin(a) * 22,
-                "life": 26, "owner": "enemy", "damage": 22,
-            })
+        ow["cool"] = 135 + _rng_legacy.randint(0, 60)
+        a = math.atan2(py - ny, px - nx) + _rng_legacy.uniform(-0.03, 0.03)
+        mx, my = nx + math.cos(a) * 20, ny + math.sin(a) * 20
+        STATE.bullets.append({
+            "x": mx, "y": my, "prev_x": mx, "prev_y": my,
+            "dx": math.cos(a) * 22, "dy": math.sin(a) * 22,
+            "life": 26, "owner": "enemy", "damage": 22,
+        })
         effects.shake(5)
         effects.burst(px + _rng_legacy.randint(-14, 14), py + _rng_legacy.randint(-14, 14),
                       (150, 145, 130), 8, speed_mul=0.8, life_min=10, life_max=26)
@@ -665,6 +664,9 @@ def _update_overwatch(st):
             effects.play_impact("concrete_impact", (px, py), base_volume=0.30)
         except Exception:
             pass
+
+
+_LASER_LAY = {}
 
 
 def draw_overwatch_laser(surface, cam_x, cam_y):
@@ -693,24 +695,41 @@ def draw_overwatch_laser(surface, cam_x, cam_y):
     # player can trace the beam back to a source and assault it.
     glint_pulse = 0.5 + 0.5 * math.sin(_time.time() * 6.0)
     glint_a = int(90 + 90 * glint_pulse)
-    lay = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
+    sw, sh = surface.get_size()
+    lay = _LASER_LAY.get((sw, sh))
+    if lay is None:
+        if len(_LASER_LAY) > 4:
+            _LASER_LAY.clear()
+        lay = _LASER_LAY[(sw, sh)] = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    draw_beam = True
+    if tel <= 0:
+        if _zone() != "lobby":
+            draw_beam = False
+        elif not (_LANE_V.collidepoint(px, py) or _LANE_H.collidepoint(px, py)):
+            draw_beam = False
+        elif _player_covered(px, py):
+            draw_beam = False
+        elif _wall_blocks_line(nx, ny, px, py, _solid_walls()):
+            draw_beam = False
+    if draw_beam:
+        x0 = min(n_xy[0] - 8, p_xy[0] - 26)
+        y0 = min(n_xy[1] - 8, p_xy[1] - 26)
+        x1 = max(n_xy[0] + 8, p_xy[0] + 26)
+        y1 = max(n_xy[1] + 8, p_xy[1] + 26)
+        dirty = pygame.Rect(x0, y0, x1 - x0, y1 - y0).clip(surface.get_rect())
+    else:
+        dirty = pygame.Rect(n_xy[0] - 8, n_xy[1] - 8, 16, 16).clip(surface.get_rect())
+    if dirty.w > 0 and dirty.h > 0:
+        lay.fill((0, 0, 0, 0), dirty)
     pygame.draw.circle(lay, (255, 120, 90, glint_a),
                        n_xy, 5)
     pygame.draw.circle(lay, (255, 220, 200, glint_a),
                        n_xy, 2)
+    if not draw_beam:
+        if dirty.w > 0 and dirty.h > 0:
+            surface.blit(lay, dirty.topleft, dirty)
+        return
     if tel <= 0:
-        if _zone() != "lobby":
-            surface.blit(lay, (0, 0))
-            return
-        if not (_LANE_V.collidepoint(px, py) or _LANE_H.collidepoint(px, py)):
-            surface.blit(lay, (0, 0))
-            return
-        if _player_covered(px, py):
-            surface.blit(lay, (0, 0))
-            return
-        if _wall_blocks_line(nx, ny, px, py, _solid_walls()):
-            surface.blit(lay, (0, 0))
-            return
         alpha = 78                          # idle search beam (was 22: invisible)
         width = 2
     else:
@@ -729,7 +748,8 @@ def draw_overwatch_laser(surface, cam_x, cam_y):
         pygame.draw.circle(lay, (255, 200, 160, alpha),
                            p_xy,
                            max(4, int(22 - 16 * frac)), 1)
-    surface.blit(lay, (0, 0))
+    if dirty.w > 0 and dirty.h > 0:
+        surface.blit(lay, dirty.topleft, dirty)
     # Top-center status chip: IN LANE / IN COVER / FIRING, mirroring the M2
     # sniper HUD so the pin's rules are explicit, not inferred.
     try:
@@ -908,10 +928,10 @@ def _update_holdout(st):
     # gates now ringing the van, twelve bodies inside 3 tiles was a wall
     # rather than a fight (AFK player died in 29s). Eleven still means the
     # van is never safe.
-    holdout_cap = MAX_CONCURRENT + 2
+    holdout_cap = MAX_CONCURRENT
     # 200-tick cadence (was 150): same pair-every-N rhythm, but the tighter
     # gates mean each insertion actually lands on the player now.
-    if st["holdout_t"] % 200 == 0 and len(STATE.enemies) < holdout_cap:
+    if st["holdout_t"] % 300 == 0 and len(STATE.enemies) < holdout_cap:
         seq = st.get("holdout_seq", 0)
         st["holdout_seq"] = seq + 1
         side_open = any(
@@ -1030,12 +1050,17 @@ def update_kill_order():
     # dock (ghost-town holdout: 5 live enemies, 0 damage, 0 exfil).
     # Sightline is a cheap clip check; only a real sighting refreshes.
     saw = False
+    walls = _solid_walls()
     for e in STATE.enemies:
         if _m3g(e).sweep_team is None or e.hp <= 0:
             continue
-        if not _wall_blocks_line(e.rect.centerx, e.rect.centery, px, py,
-                                 _solid_walls()):
+        ex, ey = e.rect.centerx, e.rect.centery
+        seg = pygame.Rect(min(ex, px) - 2, min(ey, py) - 2,
+                          abs(px - ex) + 4, abs(py - ey) + 4)
+        cand = [walls[i] for i in seg.collidelistall(walls)] if len(walls) > 32 else walls
+        if not _wall_blocks_line(ex, ey, px, py, cand):
             saw = True
+            break
     if saw:
         STATE.m3_sweep_last_seen = (px, py)
     if getattr(STATE, "muzzle_flash_timer", 0) > 0 and not getattr(

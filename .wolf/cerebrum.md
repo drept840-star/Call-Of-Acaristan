@@ -137,6 +137,79 @@ budget_tokens: 2000
   `hand + m_apply(rifle_m, BORE)` and the bore axis is
   `m_apply(rifle_m, (0,0,1))`.
 
+- **GPU bloom is a cascade, not independent levels.** `gl_post._run_bloom` must
+  sample the PREVIOUS level's result (`src_tex`) as each level's horizontal-blur
+  source. Reading that level's own `ta` (its vertical-blur write target) works for
+  level 0 by coincidence (`ta == src_tex`) but levels >= 1 read an f2 texture that
+  has never been written — its bytes are whatever GPU memory the driver recycled.
+  Symptom: M5 Print Works went magenta/rainbow only AFTER an m5x 3D cutscene
+  (whose 614x345 frames reused that memory); with cutscenes off the memory was
+  zeroed and the frame looked fine. A pass that only forces `bloom=0.0` (M5
+  quarter, when CPU items exist) never exposed it. When a colour bug depends on
+  "some earlier scene ran", suspect uninitialised GPU/FBO memory in a pass that
+  only some hosts execute, not shared shader state.
+
+- **A PostPipeline's bound source texture must outlive the whole `render_to`.**
+  `PostPipeline.bind_source` may bind `r._active_color_tex`, which is the
+  per-pipeline `_atmos_tex`. Calling `_drop_atmos()` anywhere between bind and
+  `_draw_final`/`_run_bloom` (e.g. accidentally placing it in `_ensure_bloom`,
+  which also calls `_drop_bloom()`) releases that texture's `mglo`; the next
+  `tex.use()` fails with `AttributeError: InvalidObject ... use`. Keep
+  `_drop_atmos()` in `release()` and `_ensure_atmos()` only. Also: a `"""` line
+  is not a unique insertion anchor in gl_post — insert shader strings BEFORE
+  `_FINAL_FRAG = """#version 330`, never after its opening delimiter.
+- **Applying hand-written unified diffs with wrong hunk counts:** `git apply
+  --recount` still consumes the following file header when a hunk's old count is
+  wrong; `git apply --ignore-space-change` does not bridge CRLF/LF. A small
+  context-matching applier (strip `\r`, search the whole file, replace) is
+  reliable, but empty old-sequences (`@@ -N,0`) must be avoided — they insert at
+  the hint's first index, so a pure-add hunk needs a neighbouring context line.
+
+- **M8 TrapScene/MansionScene BORROW RaidScene methods by assignment** (class
+  attributes like `_ground_move = R.RaidScene._move`), they do not subclass it.
+  Any NEW RaidScene helper called from a borrowed method must also be borrowed:
+  adding `_anim_ctl`/`_debris_ctl` to RaidScene._move/_player_pose/hp without
+  `_anim_ctl = R.RaidScene._anim_ctl` on TrapScene and MansionScene crashes the
+  first M8 update with `AttributeError: ... object has no attribute '_anim_ctl'`.
+- **Verlet ragdoll friction belongs once per step**, not inside the constraint
+  iteration loop. Applying ground friction each of 5 iterations bleeds horizontal
+  momentum ~5x and pins the body at a ledge instead of falling off it.
+- **Never put a frozenset (or any set) as a public default argument** when an API
+  snapshot tool hashes `inspect.signature`: its repr ordering depends on
+  PYTHONHASHSEED, so record/check disagree between processes. Use `None` and
+  resolve inside the function.
+
+- **A humanoid rig auto-grounds every frame**: `Humanoid.build`/`pose_world`
+  snap the lowest foot vertex to `pos[1]`. Any gait whose leg span shortens at
+  stride split (straight knees + big hip swing) makes the body pogo vertically;
+  compensate with a cosine-derived positive `lift` on sprint only, and keep walk
+  lift at 0. Also: never gate an IK solve on a per-frame `abs(left.y-right.y)`
+  threshold when both feet are already on flat ground.
+- **`pose_world` returns only 5 world joints** (pelvis/chest/head/lhand/rhand);
+  the other limb nodes live in `places` (left uarm 4, thigh 7, shin 8; right
+  uarm 10, thigh 13, shin 14). Build ragdolls from `places` + matrices, not from
+  those 5 joints plus default standing offsets, or rest lengths break for
+  crouched/aiming/scaled actors. Ragdolls also need min-distance constraints on
+  shoulder/hip/knee pairs, or they invert into origami.
+
+- **`MultiFloorNav` has three caches that must invalidate together.** Since
+  2026-11-19 the string-pulled waypoints (`_pulled_cache`), static neighbour
+  tuples (`_nbr_cache`) and the dynamic-obstacle `_blocked` bytearray are all
+  derived state: `_sync_blocked()` rasterises `_dyn_boxes`/`_dyn_circles` once
+  per `_dyn_ver`, and `_static_neighbors()` caches geometry WITHOUT the blocked
+  check (it uses `_layer_step_raw`) so it survives a pure dynamic-box change.
+  Invalidate `_nbr_cache` + `_pulled_cache` on `add_link` and `_pulled_cache` on
+  both dynamic setters; forgetting either makes paths reuse stale geometry.
+
+- **When an LRU evicts "entries not live this frame", the just-added entry must
+  count as live.** In `engine3d.gl.GLRenderer.add_resident()` the eviction pass
+  runs before the new entry is appended to `_res_draw`, so a frame that queues
+  more chunks than the cap (M6 yard: 196 chunks vs cap 128) evicts and releases
+  the VAO it just created, then queues the released handle -> hard crash with
+  `InvalidObject ... render`. Include the new key in the live set (`| {key}`).
+  Same pattern applies to any cache whose "in use" set is assembled before the
+  current insertion is registered.
+
 ## Do-Not-Repeat
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
@@ -177,6 +250,22 @@ budget_tokens: 2000
   `self.turn` (the raid's betrayal beat) - keep `self.turn = None` in
   `_setup` even though the M8 scene never uses it, or the borrowed
   `handle_event`/`_move` raise AttributeError.
+
+- [2026-11-15] Weapon-swap animation is split by pipeline: 2.5D shares
+  `game.topdown3d.apply_swap_pose(pose, k)` (campaign `m1.draw3d._body` for
+  every player draw + `ui.arena_view3d`); 3D owns its own `_swap_pose` in
+  `m8/revenge/trap3d.py`. The weapon mesh must flip at the midpoint, so
+  `_switch_weapon` updates `self.weapon` immediately (tests/HUD/toast) while
+  `_draw_player` keeps drawing `_swap_from` until `swap_u >= 0.5`; `_fire`,
+  `_begin_reload` and ADS are gated on `swapping > 0`. Keep the `instant=True`
+  path for the climb (snapping mid-swap would strand the old mesh).
+
+- [2026-11-19] `cutscenes/revive3d.step()` owns `scene.hold` and zeroes it on
+  its inactive (`who is None`) path. A caller that only wants its animation
+  decay (e.g. M7 `raid3d._hold()`'s pinned-Alex beam-lift) must save/restore
+  `scene.hold` around the call, or its own hold accumulator resets every frame
+  and its completion timer is unreachable. Before "re-enabling" a mechanic,
+  check whether a shared helper silently writes the same mutable field.
 
 ## Decision Log
 

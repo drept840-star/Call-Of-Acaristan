@@ -38,6 +38,33 @@ def ray_aabb(o: Vec3, d: Vec3, lo: Vec3, hi: Vec3) -> float | None:
     return tmin if tmax > 0.0 else None
 
 
+def _box_contact_xz(x: float, z: float, r: float,
+                    bx0: float, bz0: float, bx1: float, bz1: float) -> tuple[float, float, float] | None:
+    """Outward push normal + penetration depth for circle ``(x, z, r)`` vs AABB."""
+    cx = min(max(x, bx0), bx1)
+    cz = min(max(z, bz0), bz1)
+    dx = x - cx
+    dz = z - cz
+    d2 = dx * dx + dz * dz
+    if d2 >= r * r:
+        return None
+    if d2 > 1e-12:
+        d = math.sqrt(d2)
+        return dx / d, dz / d, r - d
+    dl = x - bx0
+    dr = bx1 - x
+    db = z - bz0
+    dt = bz1 - z
+    m = min(dl, dr, db, dt)
+    if m == dl:
+        return -1.0, 0.0, r + dl
+    if m == dr:
+        return 1.0, 0.0, r + dr
+    if m == db:
+        return 0.0, -1.0, r + db
+    return 0.0, 1.0, r + dt
+
+
 class BoxWorld:
     def __init__(self, boxes: Iterable[Box], cell: float = 4.0) -> None:
         self.boxes: tuple[tuple[float, ...], ...] = tuple(tuple(map(float, b)) for b in boxes)
@@ -110,3 +137,15 @@ class BoxWorld:
             if bx0 - r < x < bx1 + r and bz0 - r < z < bz1 + r:
                 return True
         return False
+
+    def capsule_contacts(self, x: float, z: float, r: float, y0: float, y1: float) -> list[tuple[float, float, float, int]]:
+        """Return ``[(nx, nz, depth, box_idx), ...]`` for every overlapping box."""
+        out: list[tuple[float, float, float, int]] = []
+        for i in self.near(x - r, z - r, x + r, z + r):
+            bx0, by0, bz0, bx1, by1, bz1 = self.boxes[i]
+            if by1 <= y0 or by0 >= y1:
+                continue
+            c = _box_contact_xz(x, z, r, bx0, bz0, bx1, bz1)
+            if c is not None:
+                out.append((c[0], c[1], c[2], i))
+        return out

@@ -64,6 +64,14 @@ def _yaw(dx, dz):
     return math.degrees(math.atan2(dx, dz))
 
 
+def _wrap(deg):
+    return (deg + 180.0) % 360.0 - 180.0
+
+
+def _yaw_mix(cur, tgt, k):
+    return (cur + _wrap(tgt - cur) * _clamp(k, 0.0, 1.0)) % 360.0
+
+
 def _clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
 
@@ -208,9 +216,10 @@ class Brain:
                 b["down_at"] = s.t
                 s.say("ALEX", "Bodi's down! Biribel, Bodi's down!", 3.2)
 
-    def hurt_enemy(self, e, dmg, src=None):
+    def hurt_enemy(self, e, dmg, src=None, hit_ctx=None):
         if not e["alive"]:
             return False
+        prev_hp = e["hp"]
         e["hp"] -= dmg
         e["hit_t"] = self.s.t
         if e["hp"] <= 0:
@@ -220,6 +229,10 @@ class Brain:
             ux, uz, front = _fall_from(e, src)
             e["fall_dir"] = (ux, uz)
             e["dead_pose"] = "dead_back" if front else "dead_front"
+            ctx = dict(hit_ctx or {})
+            ctx.setdefault("dmg", dmg)
+            ctx["overkill"] = max(0.0, dmg - prev_hp)
+            e["death_ctx"] = ctx
             self.s.kills += 1
             return True
         return False
@@ -228,7 +241,14 @@ class Brain:
         x, y, z = e["x"], e["y"], e["z"]
         if e["kind"] == "dog":
             return [((x, y + 0.6, z), 0.5, False)]
-        return [((x, y + 1.1, z), 0.5, False), ((x, y + 1.62, z), 0.25, True)]
+        if e.get("truck") is not None:
+            return [((x, y + 1.1, z), 0.5, False), ((x, y + 1.62, z), 0.25, True)]
+        return [
+            ((x, y + 1.14, z), 0.46, False),
+            ((x, y + 1.62, z), 0.25, True),
+            ((x, y + 0.72, z), 0.35, False),
+            ((x, y + 0.30, z), 0.32, False),
+        ]
 
     def _shoot(self, e, tgt, now):
         s = self.s
@@ -438,22 +458,31 @@ class Brain:
                 best, bd = e, d
         return best, bd
 
-    def _raise(self, a, e, now):
-        """Face ``e`` and shoulder the rifle at it; True once it is up to fire."""
-        a["yaw"] = _yaw(e["x"] - a["x"], e["z"] - a["z"])
+    def _aim_track(self, a, e, dt=1.0 / 60.0):
+        want = _yaw(e["x"] - a["x"], e["z"] - a["z"])
+        a["yaw"] = _yaw_mix(a.get("yaw", want), want, min(1.0, max(0.0, dt) * 11.0))
         d = max(1.0, math.hypot(e["x"] - a["x"], e["z"] - a["z"]))
         a["slope"] = _clamp(round((e["y"] - a["y"] - 0.3) / d, 1), -0.4, 0.4)
+        return abs(_wrap(want - a["yaw"]))
+
+    def _raise(self, a, e, now, dt=1.0 / 60.0):
+        """Face ``e`` and shoulder the rifle at it; True once raised and aligned."""
+        err = self._aim_track(a, e, dt)
         if now - a["aim"] > ALLY_HOLD:
             a["raised"] = now
         a["aim"] = now
-        return now - a["raised"] >= ALLY_RAISE
+        return now - a["raised"] >= ALLY_RAISE and err < 14.0
 
     def _ally_shot(self, a, e, d, dmg, acc, now, y):
         muzzle = a.get("muzzle") or (a["x"], a["y"] + 1.35, a["z"])
         ty = e["y"] + 1.1
         if self.rng.random() < _clamp(acc - d * 0.008, 0.2, 0.9):
             end = (e["x"], ty, e["z"])
-            self.hurt_enemy(e, dmg, (a["x"], a["z"]))
+            ray = (end[0] - muzzle[0], end[1] - muzzle[1], end[2] - muzzle[2])
+            self.hurt_enemy(e, dmg, (a["x"], a["z"]), hit_ctx=dict(
+                is_head=False, hit_zone="chest", hit_pos=end, hit_ray=ray,
+                weapon="rifle", dmg=dmg, hit_dist=d,
+            ))
         else:
             end = (e["x"] + (self.rng.random() - 0.5) * 2.0, ty, e["z"] + (self.rng.random() - 0.5) * 2.0)
         self.s.tracer(muzzle, end)
@@ -493,14 +522,14 @@ class Brain:
             a["target_slot"] = e["slot"]
             a["spot"] = self._alex_spot(a, e)
         if a["spot"] is None:
-            self._alex_near_player(a, dt)
+            self._alex_near_player(a, dt, face=False)
+            self._raise(a, e, now, dt)
             return
         sx, sz = a["spot"]
         if math.hypot(sx - a["x"], sz - a["z"]) > 0.55:
-            self._walk(a, sx, sz, 3.8, dt, 0.32)
-        if a["moving"]:
-            return
-        if not self._raise(a, e, now) or now < a["next"]:
+            self._walk(a, sx, sz, 3.8, dt, 0.32, face=False)
+        ready = self._raise(a, e, now, dt)
+        if a["moving"] or not ready or now < a["next"]:
             return
         if a["burst"] <= 0:
             a["burst"] = 3
@@ -508,7 +537,7 @@ class Brain:
         a["burst"] -= 1
         a["next"] = now + (0.42 if a["burst"] else 1.1 + 0.4 * self.rng.random())
 
-    def _alex_near_player(self, a, dt):
+    def _alex_near_player(self, a, dt, face=True):
         """Hold a calm trailing position; only close distance when genuinely left behind."""
         s = self.s
         d_player = math.hypot(s.px - a["x"], s.pz - a["z"])
@@ -528,7 +557,7 @@ class Brain:
             a["follow_at"] = s.t + 1.6
         gx, gz = a["follow_goal"]
         if math.hypot(gx - a["x"], gz - a["z"]) > 1.2:
-            self._walk(a, gx, gz, 4.0, dt, 0.32)
+            self._walk(a, gx, gz, 4.0, dt, 0.32, face=face)
         else:
             a["follow_goal"] = None
 
@@ -573,10 +602,13 @@ class Brain:
             if math.hypot(gx - b["x"], gz - b["z"]) < 0.3:
                 b["goal"] = None
             else:
-                self._walk(b, gx, gz, 2.8, dt, 0.32)
+                e, _ed = self._target_for_ally(b["x"], b["z"], 46.0)
+                self._walk(b, gx, gz, 2.8, dt, 0.32, face=(e is None))
+                if e is not None:
+                    self._raise(b, e, now, dt)
                 return
         e, ed = self._target_for_ally(b["x"], b["z"], 46.0)
-        if e is not None and self._raise(b, e, now) and now >= b["next"]:
+        if e is not None and self._raise(b, e, now, dt) and now >= b["next"]:
             loft = b["loft"]
             self._ally_shot(b, e, ed, 40 if loft else 30, 0.85, now, 1.2)
             b["next"] = now + (1.15 if loft else 1.0) + 0.3 * self.rng.random()
@@ -609,7 +641,7 @@ class Brain:
         b["moving"] = False
         return True
 
-    def _walk(self, a, gx, gz, speed, dt, r):
+    def _walk(self, a, gx, gz, speed, dt, r, face=True):
         dx, dz = gx - a["x"], gz - a["z"]
         d = math.hypot(dx, dz)
         if d < 0.05:
@@ -618,7 +650,8 @@ class Brain:
         nx, nz = self.s.world.move(a["x"], a["z"], dx / d * step, dz / d * step, r)
         if math.hypot(nx - a["x"], nz - a["z"]) > step * 0.3:
             a["moving"] = True
-            a["yaw"] = _yaw(dx, dz)
+            if face:
+                a["yaw"] = _yaw_mix(a.get("yaw", 0.0), _yaw(dx, dz), min(1.0, max(0.0, dt) * 9.0))
             a["gait"] = a.get("gait", 0.0) + math.hypot(nx - a["x"], nz - a["z"])
         else:
             nx, nz = self.s.world.move(a["x"], a["z"], -dz / d * step, dx / d * step, r)

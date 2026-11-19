@@ -27,11 +27,16 @@ from core.state import STATE
 from cutscenes import death3d as D
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
+from cutscenes import revive3d as REV
 from cutscenes import m7world3d as F
 from engine3d import Mesh, POSES, blend, box, clamp, pose_run
-from engine3d.core import m_apply, rot_x, rot_y
-from engine3d.hold import (POLES, hold_cached as _hold_cached, hold_frame as _hold_frame,
+from engine3d.core import m_apply, m_mul, rot_x, rot_y
+from engine.anim import LayeredAnimState, gait_cycle_m, locomotion_pose, mask_pose
+from engine.collision import DebrisPool
+from engine3d.hold import (POLE_R, POLES, body_volumes as _body_volumes, hold_cached as _hold_cached,
+                           hold_frame as _hold_frame, push_out as _push_out,
                            solve_arm_safe as _solve_arm_safe)
+from engine3d.ik import FARM, UARM, shoulder_world as _shoulder_world, solve_leg as _solve_leg
 from engine3d.rig import shotgun_pump_mesh as _shotgun_pump_mesh
 
 from . import raid_brain as B
@@ -134,22 +139,24 @@ def _held(hum, pose, weapon, mode, key):
     out = dict(pose)
     out.update((k, arms[k]) for k in _ARMS if k in arms)
     out["rifle_p"] = arms.get("rifle_p", 0.0) + pose.get("spine", 0.0) - ref["spine"]
+    out["rifle_y"] = arms.get("rifle_y", 0.0) + pose.get("twist", 0.0) - ref.get("twist", 0.0)
     return out
 
 
-# The shotgun is held BLADED: the root yaws right so the left shoulder comes
-# forward and the support hand reaches the wooden fore-end (square-on, the
-# 0.58 m ARM_REACH cap pulled it back onto the receiver).  Most of the blade is
-# in the hips (SG_BLADE_YAW) with only a small spine twist on top: twist and
-# root yaw share an axis, and 25 + 25 left a hard waist twist with the head
-# 28 deg off the crosshair.  The head turns back by the full blade.  The gun is
-# solved -SG_BLADE_YAW in body space, cancelling the root yaw, so the barrel
-# still points at the crosshair.  The wooden pump is a separate mesh that slides
-# with the hand, which grips its rear half (PUMP_GRIP).
+# Fallow 12 hold: the hips and legs face the crosshair (SG_BLADE_YAW = 0, so
+# walking never crabs) and only the shoulders blade, SG_TWIST at the waist, with
+# the head turned back by the same amount.  The rig's 0.61 m arms cannot reach
+# the pump square-on without dragging the stock through the vest, so the blade
+# lives in the twist and _sg_reach fits the gun between both hands and outside
+# the chest.  SG_BLADE_YAW still rotates the root if hips are ever bladed again;
+# the gun is solved -SG_BLADE_YAW in body space, cancelling it, so the barrel
+# keeps to the crosshair.  The wooden pump is a separate mesh that slides with
+# the hand, which grips its rear half (PUMP_GRIP).
 _L_ARM = ("lsh_p", "lsh_r", "lsh_y", "lel")
 _SG_HOLD_CACHE = {}
+_WALL_HOLD_CACHE = {}
 _PUMP_MESH = None
-SG_BLADE_YAW, SG_TWIST = 35.0, 10.0
+SG_BLADE_YAW, SG_TWIST = 0.0, 50.0
 SG_HEAD_Y = -(SG_BLADE_YAW + SG_TWIST)
 PUMP_GRIP = -0.05                          # hand target behind the pump centre, still on the wood
 PUMP_DELAY, PUMP_DUR = 0.12, 0.32
@@ -169,8 +176,51 @@ def _pump_k(age):
     return 1.0 - _ease((u - 0.56) / 0.44)
 
 
+_SG_STOCK_Z = tuple(-0.40 + 0.04 * i for i in range(12))   # butt -> grip
+
+
+def _sg_reach(hum, base, O, R):
+    """Fit the gun between both hands and outside the chest: alternately slide it
+    toward the left shoulder until the hand reaches the pump wood and forward
+    along the torso until the stock clears the vest, then re-grip with the right
+    hand.  -> (pose, gun origin)."""
+    sc = hum._scale
+    shl = _shoulder_world(hum, base, (0.0, 0.0, 0.0), 0.0, "l")
+    vols = _body_volumes(hum, base, (0.0, 0.0, 0.0), 0.0)
+    fwd = m_apply(rot_y(base.get("twist", 0.0)), (0.0, 0.0, 1.0))
+    pump = m_apply(R, (0.0, 0.025, PUMP_REST_Z + PUMP_GRIP))
+    stock = [m_apply(R, (0.0, 0.02, z)) for z in _SG_STOCK_Z]
+    reach = (UARM + FARM - 0.01) * sc
+
+    def add(a, b, k=1.0):
+        return (a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k)
+
+    def clips(o):
+        for q in stock:
+            w = add(o, q)
+            if math.dist(_push_out(vols, w, 0.01), w) > 1e-4:
+                return True
+        return False
+
+    O0 = O
+    for _ in range(12):
+        v = tuple(shl[i] - O[i] - pump[i] for i in range(3))
+        d = math.hypot(*v)
+        if d > reach:
+            O = add(O, v, (d - reach) / d)
+        if clips(O):
+            lo, hi = 0.0, 0.3
+            for _b in range(14):
+                mid = 0.5 * (lo + hi)
+                lo, hi = (mid, hi) if clips(add(O, fwd, mid)) else (lo, mid)
+            O = add(O, fwd, hi)
+    if math.dist(O, O0) < 1e-5:
+        return base, O
+    return _solve_arm_safe(hum, base, (0.0, 0.0, 0.0), 0.0, "r", O, (POLE_R,) + POLES), O
+
+
 def _sg_holds(hum, mode, key):
-    """Cached bladed shotgun hold -> (rest pose, racked left arm, ref spine)."""
+    """Cached shotgun hold -> (rest pose, racked left arm, ref spine)."""
     ck = (key, mode)
     pair = _SG_HOLD_CACHE.get(ck)
     if pair is None:
@@ -193,6 +243,7 @@ def _sg_holds(hum, mode, key):
             aim_pt = (O[0] + v[0], O[1] + v[1], O[2] + v[2])
             base, O, R = _hold_frame(hum, ref, (0.0, 0.0, 0.0), 0.0, "shotgun", mode,
                                      aim=aim_pt)
+        base, O = _sg_reach(hum, base, O, R)
         poles_l = ((0.4, -1.0, 0.0),) + POLES
         sols = []
         for pz in (PUMP_REST_Z, PUMP_BACK_Z):
@@ -207,14 +258,79 @@ def _sg_holds(hum, mode, key):
     return pair
 
 
+def _wall_down_hold(hum, weapon, key):
+    """Cached compressed downward hold when pressed against walls or props."""
+    ck = (weapon, key)
+    cached = _WALL_HOLD_CACHE.get(ck)
+    if cached is not None:
+        return cached
+    if weapon == "shotgun":
+        ref = dict(
+            POSES["ready"], spine=6.0, twist=-8.0,
+            head_y=-(SG_BLADE_YAW - 8.0), head_p=6.0,
+        )
+        grip_local = (0.11, 0.29, 0.22)
+        barrel_local = (-0.68, -0.68, 0.18)
+        fore_pt = (0.0, 0.025, PUMP_REST_Z + PUMP_GRIP)
+        poles_l = ((0.4, -1.0, 0.0),) + POLES
+    else:
+        ref = dict(
+            POSES["ready"], spine=6.0, twist=-10.0,
+            head_y=10.0, head_p=6.0,
+        )
+        grip_local = (0.12, 0.28, 0.22)
+        barrel_local = (-0.56, -0.72, 0.38)
+        fore_pt = (0.0, -0.025, 0.26)
+        poles_l = ((0.5, -1.0, 0.1),) + POLES
+    sc = getattr(hum, "_scale", 1.0) or 1.0
+    S = m_mul(rot_y(ref["twist"]), rot_x(ref["spine"]))
+    root = hum.pose_world(ref, (0.0, 0.0, 0.0), 0.0, rifle_on=False)[2]
+    g_off = m_apply(S, tuple(c * sc for c in grip_local))
+    grip_tgt = (root[0] + g_off[0], root[1] + g_off[1], root[2] + g_off[2])
+    ad = _f_unit(m_apply(S, barrel_local))
+    ref["rifle_p"] = math.degrees(math.asin(clamp(-ad[1], -1.0, 1.0)))
+    ref["rifle_y"] = math.degrees(math.atan2(ad[0], ad[2]))
+    ref = _solve_arm_safe(hum, ref, (0.0, 0.0, 0.0), 0.0, "r", grip_tgt, ((0.8, -1.0, -0.1),) + POLES)
+    _pl, joints, _root = hum.pose_world(ref, (0.0, 0.0, 0.0), 0.0, rifle_on=True)
+    hand, rm = joints.get("rhand"), joints.get("rifle_m")
+    if hand is not None and rm is not None:
+        off = m_apply(rm, fore_pt)
+        tgt = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
+        ref = _solve_arm_safe(hum, ref, (0.0, 0.0, 0.0), 0.0, "l", tgt, poles_l)
+    _WALL_HOLD_CACHE[ck] = ref
+    return ref
+
+
+def apply_wall_down(hum, pose, weapon, wall_k, key):
+    """Blend the held weapon down across the body as ``wall_k`` approaches 1."""
+    k = clamp(float(wall_k), 0.0, 1.0)
+    if k <= 1e-3:
+        return pose
+    wd = _wall_down_hold(hum, weapon, key)
+    out = dict(pose)
+    for kn in _ARMS:
+        va = out.get(kn, 0.0)
+        vb = wd.get(kn, va)
+        if kn in ("rifle_y", "lsh_y", "rsh_y"):
+            out[kn] = va + _wrap(vb - va) * k
+        else:
+            out[kn] = va + (vb - va) * k
+    out["spine"] = out.get("spine", 0.0) + (wd["spine"] - out.get("spine", 0.0)) * k
+    d_tw = (wd["twist"] - (SG_TWIST if weapon == "shotgun" else 0.0)) * k
+    out["twist"] = out.get("twist", 0.0) + d_tw
+    out["head_y"] = out.get("head_y", 0.0) - d_tw
+    return out
+
+
 def _shotgun_hold(hum, pose, mode, key, pump_k=0.0):
-    """``pose`` with the bladed shotgun hold and the rack blended in."""
+    """``pose`` with the shotgun hold and the rack blended in."""
     rest, back, ref_spine = _sg_holds(hum, mode, key)
     out = dict(pose)
     out.update((k, rest[k]) for k in _ARMS if k in rest)
     out["twist"] = out.get("twist", 0.0) + SG_TWIST
     out["head_y"] = out.get("head_y", 0.0) + SG_HEAD_Y
     out["rifle_p"] = rest.get("rifle_p", 0.0) + pose.get("spine", 0.0) - ref_spine
+    out["rifle_y"] = rest.get("rifle_y", 0.0) + (out["twist"] - SG_TWIST)
     if pump_k > 0.0:
         for k in _L_ARM:
             cur = out.get(k, 0.0)
@@ -382,13 +498,14 @@ _SHELL_MESH = None
 
 
 def _sg_reload_keys(hum):
-    """Cached bladed Fallow 12 reload poses (pouch, loading port, pump stroke)."""
+    """Cached Fallow 12 reload poses (pouch, loading port, pump stroke)."""
     ck = getattr(hum, "_gl_spec_key", None) or id(hum)
     keys = _SG_RELOAD_KEYS.get(ck)
     if keys is None:
         ref = dict(POSES["ready"], twist=SG_TWIST, head_y=SG_HEAD_Y + 32.0, head_p=8.0)
         aim_pt = m_apply(rot_y(25.0 - SG_BLADE_YAW), (-4.8, 3.0, 10.0))
         base, O, R = _hold_frame(hum, ref, (0.0, 0.0, 0.0), 0.0, "shotgun", "ready", aim=aim_pt)
+        base, O = _sg_reach(hum, base, O, R)
         _pl, joints, _root = hum.pose_world(base, (0.0, 0.0, 0.0), 0.0, rifle_on=True)
         pel = joints["pelvis"]
         poles_l = ((0.4, -1.0, 0.0),) + POLES
@@ -400,16 +517,16 @@ def _sg_reload_keys(hum):
         pouch_tgt = (pel[0] - 0.23, pel[1] + 0.02, pel[2] + 0.08)
         keys = {
             "_spine": ref["spine"],
-            "pouch": _solve_arm_safe(hum, dict(base, head_p=16.0, head_y=-19.0),
+            "pouch": _solve_arm_safe(hum, dict(base, head_p=16.0, head_y=SG_HEAD_Y + 26.0),
                                      (0.0, 0.0, 0.0), 0.0, "l", pouch_tgt, poles_l),
-            "port_pre": _solve_arm_safe(hum, dict(base, head_p=12.0, head_y=-11.0),
+            "port_pre": _solve_arm_safe(hum, dict(base, head_p=12.0, head_y=SG_HEAD_Y + 34.0),
                                         (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, -0.09, 0.12)), poles_l),
-            "port_in": _solve_arm_safe(hum, dict(base, head_p=12.0, head_y=-11.0,
+            "port_in": _solve_arm_safe(hum, dict(base, head_p=12.0, head_y=SG_HEAD_Y + 34.0,
                                                  rifle_p=base.get("rifle_p", 0.0) - 2.5),
                                        (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, 0.015, 0.13)), poles_l),
-            "pump_fwd": _solve_arm_safe(hum, dict(base, head_p=6.0, head_y=-15.0),
+            "pump_fwd": _solve_arm_safe(hum, dict(base, head_p=6.0, head_y=SG_HEAD_Y + 30.0),
                                         (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, 0.025, PUMP_REST_Z + PUMP_GRIP)), poles_l),
-            "pump_back": _solve_arm_safe(hum, dict(base, head_p=6.0, head_y=-15.0,
+            "pump_back": _solve_arm_safe(hum, dict(base, head_p=6.0, head_y=SG_HEAD_Y + 30.0,
                                                    rifle_p=base.get("rifle_p", 0.0) - 2.0),
                                          (0.0, 0.0, 0.0), 0.0, "l", g_pt((0.0, 0.025, PUMP_BACK_Z + PUMP_GRIP)), poles_l),
         }
@@ -560,6 +677,9 @@ def _shell_drop_mesh(x, y, z, yaw):
     return out
 
 
+_GROUND_SHADOW = (1, -4.0)
+
+
 class RaidScene:
     MAG = MAG
     RELOAD_S = RELOAD_S
@@ -577,6 +697,23 @@ class RaidScene:
         self._pig_mesh = None
         self._last_snd = -9.0
         self._setup(0)
+
+    def _anim_ctl(self):
+        ctl = getattr(self, "_anim", None)
+        if ctl is None or getattr(self, "_anim_t0", 0.0) > self.t + 0.05:
+            ctl = LayeredAnimState(yaw_deg=getattr(self, "body_yaw", 0.0),
+                                   y0=getattr(self, "py", 0.0), stride_gain=1.9)
+            self._anim = ctl
+        self._anim_t0 = self.t
+        return ctl
+
+    def _debris_ctl(self):
+        pool = getattr(self, "_debris_pool", None)
+        if pool is None or getattr(self, "_debris_t0", 0.0) > self.t + 0.05:
+            pool = DebrisPool(capacity=48, seed=707)
+            self._debris_pool = pool
+        self._debris_t0 = self.t
+        return pool
 
     # --- lifecycle -------------------------------------------------------------
 
@@ -613,6 +750,7 @@ class RaidScene:
         hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun", "nopump"))
         for mode in ("ready", "aim"):
             _sg_holds(hum, mode, ("m7player_sg", mode))
+        _wall_down_hold(hum, "shotgun", ("m7player_sg", "wall"))
         _sg_reload_keys(hum)
         stances = (dict(POSES["ready"]), blend(POSES["stand"], "aim", 0.85))
         for kind in set(GUARD_VIEW) | {"heavy"}:
@@ -625,6 +763,7 @@ class RaidScene:
                 _hold_cached(_w.hum(key), pose, _ally_gun(key), "ready", key=key)
             for i in range(-4, 5):
                 _ally_aim(key, i / 10.0)
+        REV.warm()
         if self._truck is None:
             self._truck = W.truck()
             self._ledge = W.ledge()
@@ -677,6 +816,7 @@ class RaidScene:
     def _setup(self, cp):
         """(Re)build the fight at checkpoint ``cp``; the clock keeps running."""
         self.cp = cp
+        REV.reset(self)
         p = STATE.player
         preps = list(getattr(STATE, "m7_preps", None) or [])
         self.flags = {k: k in preps for k in ("tractor", "shed", "loft")}
@@ -700,6 +840,7 @@ class RaidScene:
         self.aiming = False
         self.ads = 0.0
         self.gun_up = 0.0
+        self.wall_k = 0.0
         self.reloading = 0.0
         self._reload_dur = RELOAD_S
         self._reload_n = 0
@@ -807,6 +948,13 @@ class RaidScene:
         self.hurt = min(1.0, self.hurt + dmg / 28.0)
         self.last_hurt = self.t
         if src is not None:
+            dx, dz = src[0] - self.px, src[1] - self.pz
+            d = math.hypot(dx, dz) or 1.0
+            yr = math.radians(getattr(self, "body_yaw", self.yaw))
+            lx = (dx * math.cos(yr) - dz * math.sin(yr)) / d
+            lz = (dx * math.sin(yr) + dz * math.cos(yr)) / d
+            self._anim_ctl().trigger_flinch(lx, lz, clamp(dmg / 18.0, 0.4, 1.5))
+        if src is not None:
             bearing = _wrap(_yaw(src[0] - self.px, src[1] - self.pz) - self.yaw)
             self.dmg_marks.append((self.t, -bearing))
         if p.hp <= 0:
@@ -853,7 +1001,8 @@ class RaidScene:
             elif event.button == 3:
                 self.aiming = False
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-            self._begin_reload()
+            if not REV.is_locking(self):
+                self._begin_reload()
 
     # --- update ----------------------------------------------------------------
 
@@ -877,6 +1026,7 @@ class RaidScene:
             self._move(k, dt)
         else:
             self._turn_update(dt)   # he has the floor: no walking out of this
+        self._update_wall_k(dt)
         if self.reloading:
             self.reloading = max(0.0, self.reloading - dt)
             elapsed = self._reload_dur - self.reloading
@@ -901,12 +1051,14 @@ class RaidScene:
         if self.t >= self.pump_snd_at:
             self.pump_snd_at = 1e9
             self._snd("pump")
-        if self.firing and not self.reloading:
+        if self.firing and not self.reloading and not REV.is_locking(self):
             self._fire()
         self._loot()
         self.recoil = max(0.0, self.recoil - dt * 6.0)
         self.cam_kick *= math.exp(-dt * 11.0)
         self._hold(k, dt)
+        self._debris_ctl().update(dt, floor_fn=getattr(self, "_floor", None),
+                                  box_world=getattr(self.world, "box_world", None))
         self.fire.update(self.t)
         self.brain.update(dt)
         self._pig_update(dt)
@@ -932,6 +1084,17 @@ class RaidScene:
             except Exception:
                 return False
 
+        if REV.is_locking(self):
+            self.vel = (0.0, 0.0)
+            self.pmoving = False
+            self.sprint = False
+            self._anim_ctl().update(
+                dt, vel_xz=(0.0, 0.0), yaw_deg=self.body_yaw,
+                aiming=False, sprint=False, crouch=False,
+                floor_fn=getattr(self, "_floor", None),
+                pos=(self.px, getattr(self, "py", 0.0), self.pz),
+            )
+            return
         fwd_in = (1 if down(pygame.K_w, pygame.K_UP) else 0) - (1 if down(pygame.K_s, pygame.K_DOWN) else 0)
         side_in = (1 if down(pygame.K_d, pygame.K_RIGHT) else 0) - (1 if down(pygame.K_a, pygame.K_LEFT) else 0)
         self.sprint = (down(pygame.K_LSHIFT, pygame.K_RSHIFT) and fwd_in > 0
@@ -954,6 +1117,34 @@ class RaidScene:
         self.pmoving = sp > 0.6
         self.stride += sp * dt
         self.body_yaw = _w.yaw_mix(self.body_yaw, self.yaw, min(1.0, dt * 10.0))
+        crouch = down(pygame.K_c, pygame.K_LCTRL) and not self.sprint
+        self._anim_ctl().update(
+            dt, vel_xz=self.vel, yaw_deg=self.body_yaw,
+            aiming=(self.ads > 0.3 or self.t - self.last_fire < 0.45),
+            sprint=self.sprint, crouch=crouch,
+            floor_fn=getattr(self, "_floor", None),
+            pos=(self.px, getattr(self, "py", 0.0), self.pz),
+        )
+
+    def _wall_probe_dist(self):
+        py = getattr(self, "py", 0.0)
+        f = _fwd(self.yaw, self.pitch)
+        rg = _right(self.yaw)
+        o1 = (self.px, py + 1.34, self.pz)
+        o2 = (self.px + rg[0] * 0.14, py + 1.34, self.pz + rg[2] * 0.14)
+        return min(self.world.ray_hit(o1, f, 1.4), self.world.ray_hit(o2, f, 1.4))
+
+    def _update_wall_k(self, dt):
+        if getattr(self, "turn", None) is not None or REV.is_locking(self):
+            self.wall_k = 0.0
+            return
+        use_sg = (getattr(self, "weapon", "shotgun") == "shotgun")
+        clear_d = 1.22 if use_sg else 1.12
+        full_d = 0.68
+        dist = self._wall_probe_dist()
+        want = _ease(clamp((clear_d - dist) / (clear_d - full_d), 0.0, 1.0))
+        rate = 18.0 if want > self.wall_k else 12.0
+        self.wall_k = clamp(self.wall_k + (want - self.wall_k) * min(1.0, dt * rate), 0.0, 1.0)
 
     # --- camera and aim ----------------------------------------------------------
 
@@ -991,6 +1182,7 @@ class RaidScene:
                 eye = tuple(eye[i] + (fall[i] - eye[i]) * d for i in range(3))
                 tgt = (b["x"], b["y"] + 1.10, b["z"])
         fov = FOV + (FOV_ADS - FOV) * self.ads - 1.4 * self.cam_kick
+        eye, tgt, fov = REV.adjust_camera(self, eye, tgt, fov)
         return eye, tgt, fov, dist
 
     def _aim_ray(self):
@@ -1012,6 +1204,7 @@ class RaidScene:
         self._shell_i = 0
         self._pump_done = False
         self._snd("reload")
+        self._anim_ctl().start_reload(self._reload_dur)
 
     def reload_total(self):
         return self._reload_dur if self.reloading > 0.0 else self.RELOAD_S
@@ -1023,6 +1216,8 @@ class RaidScene:
 
     def _fire(self):
         if self.t - self.last_fire < FIRE_GAP:
+            return
+        if self.wall_k > 0.65:
             return
         if self.mag <= 0:
             if self.t - self.last_fire > 0.3:
@@ -1042,6 +1237,7 @@ class RaidScene:
         self.recoil = min(3.0, self.recoil + 1.4)
         self.cam_kick = min(2.6, self.cam_kick + 2.0)
         self.pitch = clamp(self.pitch + 0.55, *PITCH_LIM)
+        self._anim_ctl().trigger_recoil(pitch_deg=8.0, rifle_deg=13.5, cam_pitch=1.8)
         self._snd("shot", True)
         if self.flags["shed"] and self.tank_blown is None:
             tank = W._ray_box(o, d, W.STATIC[3])
@@ -1065,14 +1261,15 @@ class RaidScene:
         for dy, dp in PELLET_FAN:
             dd = _fwd(self.yaw + dy * cone, look_pitch + dp * cone)
             best = self.world.ray_hit(o, dd, 70.0)
-            hit_e, head, hit_pig, hit_bodi = None, False, False, False
+            hit_e, head, zone, hit_pig, hit_bodi = None, False, "chest", False, False
             for e in self.brain.enemies:
                 if not e["alive"] or not e["live"]:
                     continue
-                for c, rad, is_head in self.brain.spheres(e):
+                for zi, (c, rad, is_head) in enumerate(self.brain.spheres(e)):
                     h = B._ray_sphere(o, dd, c, rad)
                     if h is not None and h < best:
                         best, hit_e, head = h, e, is_head
+                        zone = "head" if is_head else ("chest", "head", "gut", "leg")[min(zi, 3)]
             if self.turn is not None:
                 # Bodi is unkillable once he turns: the pellets spark, they do
                 # not damage. Chest sphere, then head, whichever is nearer.
@@ -1097,14 +1294,20 @@ class RaidScene:
                 impact_pts.append((end, "blood"))
             elif hit_e is None:
                 impact_pts.append((end, "dust"))
+                if best < 45.0:
+                    self._debris_ctl().spawn_burst(end, n=3, normal=(-dd[0], 0.6, -dd[2]), speed=3.2)
             else:
                 any_enemy = True
                 any_head = any_head or head
+                pdmg = PELLET_HEAD if head else PELLET_BODY
                 rec = hits.get(id(hit_e))
                 if rec is None:
-                    hits[id(hit_e)] = [hit_e, 0.0]
-                    rec = hits[id(hit_e)]
-                rec[1] += PELLET_HEAD if head else PELLET_BODY
+                    hits[id(hit_e)] = [hit_e, pdmg, head, zone, end, dd, best]
+                else:
+                    rec[1] += pdmg
+                    rec[6] = min(rec[6], best)
+                    if head and not rec[2]:
+                        rec[2], rec[3], rec[4], rec[5] = True, "head", end, dd
                 impact_pts.append((end, "blood"))
         self.world.pig_at = pig_block
         for end in lanes:
@@ -1114,8 +1317,11 @@ class RaidScene:
         ld = _fwd(self.yaw, look_pitch)
         self.sparks.append((self.t, (o[0] + ld[0] * farthest, o[1] + ld[1] * farthest,
                                      o[2] + ld[2] * farthest)))
-        for e, dmg in hits.values():
-            self.brain.hurt_enemy(e, dmg, (o[0], o[2]))
+        for e, dmg, is_hd, hz, hp, hray, hdist in hits.values():
+            self.brain.hurt_enemy(e, dmg, (o[0], o[2]), hit_ctx=dict(
+                is_head=is_hd, hit_zone=hz, hit_pos=hp, hit_ray=hray,
+                weapon="shotgun", dmg=dmg, hit_dist=hdist,
+            ))
         if pig_pellets:
             self.pig_shot(pig_pellets)
         if bodi_pellets:
@@ -1140,7 +1346,8 @@ class RaidScene:
             if e["alive"] and e["live"]:
                 d = math.hypot(e["x"] - cx, e["z"] - cz)
                 if d < TANK_BLAST_R:
-                    self.brain.hurt_enemy(e, 150.0 * (1.0 - 0.55 * d / TANK_BLAST_R))
+                    self.brain.hurt_enemy(e, 150.0 * (1.0 - 0.55 * d / TANK_BLAST_R), (cx, cz),
+                                          hit_ctx=dict(weapon="blast", blast=((cx, cy, cz), 15.0, TANK_BLAST_R)))
         d = math.hypot(self.px - cx, self.pz - cz)
         if d < 6.0:
             self.hurt_player(55.0 * (1.0 - d / 6.0), (cx, cz))
@@ -1167,25 +1374,40 @@ class RaidScene:
     def _hold(self, k, dt):
         if self.turn is not None:
             self.hold = 0.0
+            REV.step(self, dt, None, False, 1.0, self.brain.help_done)
             return
         who = self.brain.near_revive()
         try:
             held = bool(k[pygame.K_e])
         except Exception:
             held = False
-        if who is None or not held:
+        if who == "alex":
+            # REV.step's idle path only clears scene.hold while it still owns it
+            # (ReviveState.holds), so Alex's beam-lift - which shares that field
+            # and is advanced right below - is left alone.
+            REV.step(self, dt, None, False, 1.0, self.brain.help_done)
+            if not held:
+                self.hold = 0.0
+                return
+            self.hold += dt
+            # step in to the end of the fallen beam and face along it
+            k_step = min(1.0, dt * 12.0)
+            self.px += (W.WELL_LIFT_AT[0] - self.px) * k_step
+            self.pz += (W.WELL_LIFT_AT[1] - self.pz) * k_step
+            self.body_yaw = 270.0
+            if self.hold >= HOLD_S[who]:
+                self.hold = 0.0
+                self.brain.help_done(who)
+            return
+        if who == "bodi":
+            REV.step(self, dt, "bodi", held, HOLD_S["bodi"], self.brain.help_done)
+            if not held:
+                self.hold = 0.0
+            return
+        REV.step(self, dt, None, False, 1.0, self.brain.help_done)
+        if not held:
             self.hold = 0.0
             return
-        self.hold += dt
-        if who == "alex":
-            # step in to the end of the fallen beam and face along it
-            k = min(1.0, dt * 12.0)
-            self.px += (W.WELL_LIFT_AT[0] - self.px) * k
-            self.pz += (W.WELL_LIFT_AT[1] - self.pz) * k
-            self.body_yaw = 270.0
-        if self.hold >= HOLD_S[who]:
-            self.hold = 0.0
-            self.brain.help_done(who)
 
     # --- the pig -----------------------------------------------------------------
 
@@ -1594,20 +1816,25 @@ class RaidScene:
                              _fx.haze((255, 232, 196), 2.1, tm, seed=seed, intensity=0.12),
                              layer=_fx.FX_LAYER)
         pm = self.pig
-        if pm["dead"]:
-            r.add_sprite(
-                (pm["x"], 0.03, pm["z"]),
-                F.pool((104, 16, 18), 1.05, intensity=0.62, squash=1.0),
-                layer=_fx.FX_LAYER,
-            )
-            W.put(r, self._dead_pig_mesh(), pm["x"], 0.0, pm["z"], pm["yaw"])
-        else:
-            moving = pm["mode"] in ("walk", "flee")
-            from cutscenes.m7pig3d import walking_frame
-            pig_mesh = self._pig_walk[walking_frame(pm["gait"])] if moving else self._pig_mesh
-            W.put(r, pig_mesh, pm["x"], 0.0, pm["z"], pm["yaw"])
-        self._draw_player(r, tm)
+        if r.visible_sphere((pm["x"], 0.4, pm["z"]), 1.3):
+            if pm["dead"]:
+                r.add_sprite(
+                    (pm["x"], 0.03, pm["z"]),
+                    F.pool((104, 16, 18), 1.05, intensity=0.62, squash=1.0),
+                    layer=_fx.FX_LAYER,
+                )
+                r.add_blob_shadow((pm["x"], 0.02, pm["z"]), 0.55, 0.55, 0.45,
+                                  layer=1, bias=-4.0)
+                W.put(r, self._dead_pig_mesh(), pm["x"], 0.0, pm["z"], pm["yaw"])
+            else:
+                moving = pm["mode"] in ("walk", "flee")
+                from cutscenes.m7pig3d import walking_frame
+                pig_mesh = self._pig_walk[walking_frame(pm["gait"])] if moving else self._pig_mesh
+                r.add_blob_shadow((pm["x"], 0.02, pm["z"]), 0.50, 0.50, 0.45,
+                                  layer=1, bias=-4.0)
+                W.put(r, pig_mesh, pm["x"], 0.0, pm["z"], pm["yaw"])
         self._draw_allies(r, tm)
+        self._draw_player(r, tm)
         self._draw_enemies(r, tm)
         self.fire.draw(r, tm, self.t)
         self._draw_tank(r, tm)
@@ -1618,9 +1845,15 @@ class RaidScene:
             handheld_flash(r, tm, tip, fvec, rx, ry, f_age, self.flash_seed, "shotgun")
         tx, tz = self.objective_point()
         self.marker_screen = self._project(r, (tx, 1.6, tz)) if tx is not None else None
-        r.flush(buf)
-        F.grade_raid(buf)
-        _fx.present_crisp(buf, surface)
+        if getattr(r, "backend", "") == "gl":
+            r.flush_to(surface, post={
+                "bloom": 0.28, "bloom_knee": 0.96,
+                "lut": F.raid_curve(), "dither_step": _fx.DITHER_STEP,
+            })
+        else:
+            r.flush(buf)
+            F.grade_raid(buf)
+            _fx.present_crisp(buf, surface)
         draw_vignette(surface)
         HUD.draw(surface, self)
 
@@ -1650,18 +1883,18 @@ class RaidScene:
                 (cx, cy + 0.45, cz),
                 _fx.glow(
                     (255, 184, 75),
-                    2.2 + age * 11.0,
+                    round(2.2 + age * 11.0, 1),
                     tm,
                     core=(255, 250, 220),
                     intensity=3.0 * flash,
-                    max_px=300,
+                    max_px=150,
                 ),
                 layer=_fx.FX_LAYER,
             )
 
         # FIREBALL: several expanding, rising lobes with staggered ignition.
         if age < 2.35:
-            for i in range(7):
+            for i in range(4):
                 delay = 0.025 * i
                 a = age - delay
                 if not 0.0 <= a < 2.15:
@@ -1684,16 +1917,18 @@ class RaidScene:
                         tm,
                         seed=91 + i * 13,
                         size=radius,
+                        smoky=False,
+                        layer=2,
                     )
 
         # PRESSURE FRONT: an expanding, low dust ring.
         if age < 1.15:
             k = age / 1.15
             radius = 0.6 + 10.5 * k
-            strength = 0.30 * (1.0 - k) ** 2
+            strength = round(0.30 * (1.0 - k) ** 2, 2)
 
-            for i in range(10):
-                ang = i * math.tau / 10.0
+            for i in range(6):
+                ang = i * math.tau / 6.0
                 r.add_sprite(
                     (
                         cx + math.cos(ang) * radius,
@@ -1763,7 +1998,7 @@ class RaidScene:
         # BURNING FUEL: a broad base with independently moving flame tongues.
         fuel = _ease(clamp(age / 0.55, 0.0, 1.0)) * fade
         if fuel > 0.01:
-            for i in range(6):
+            for i in range(4):
                 ang = i * 2.399963
                 spread = 0.0 if i == 0 else 0.85 + 0.23 * (i % 3)
                 pulse = (
@@ -1784,6 +2019,8 @@ class RaidScene:
                     tm,
                     seed=310 + i * 19,
                     size=size,
+                    smoky=(i == 0),
+                    layer=2,
                 )
 
             r.add_sprite(
@@ -1799,12 +2036,13 @@ class RaidScene:
 
         # Rising smoke: staggered puffs with coherent upward travel and drift.
         if age > 0.3:
-            for i in range(8):
-                born = 0.3 + i * 0.58
+            for i in range(6):
+                born = 0.3 + i * 0.77
                 if age < born:
                     continue
 
                 a = (age - born) % 4.64
+                aq = round(a, 1)
                 k = a / 4.64
                 envelope = (
                     _ease(clamp(a / 0.45, 0.0, 1.0))
@@ -1822,7 +2060,7 @@ class RaidScene:
                     ),
                     _fx.haze(
                         (62, 57, 53),
-                        1.1 + a * 0.55,
+                        1.1 + aq * 0.55,
                         tm,
                         seed=440 + i,
                         intensity=0.46 * envelope,
@@ -1848,14 +2086,11 @@ class RaidScene:
             )
 
     def _player_pose(self):
-        if math.hypot(*self.vel) > 0.5:
-            base = pose_run(self.stride * 1.9, lean=12 if self.sprint else 5)
-        else:
-            base = POSES["ready"]
-        pose = dict(blend(base, "aim", self.gun_up))
-        pose["spine"] = pose.get("spine", 0.0) - 0.35 * self.pitch
-        pose["head_p"] = pose.get("head_p", 0.0) - 0.55 * self.pitch
-        return pose
+        anim = self._anim_ctl()
+        return anim.compose(
+            POSES["ready"], POSES["aim"],
+            pitch_deg=self.pitch, time_s=self.t, breath_amp=0.35,
+        )
 
     def _draw_player(self, r, tm):
         key = ("biribel", OUTFIT_GUARD)
@@ -1863,7 +2098,8 @@ class RaidScene:
         if self.dying:
             kk = clamp(self.death_t / 0.6, 0.0, 1.0)
             _w.actor(r, key, blend("kneel", "dead_back", kk), at, self.body_yaw, int(tm), seed=93,
-                     amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry")
+                     amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry",
+                     shadow=_GROUND_SHADOW)
             self._muzzle = self._flash_basis = None
             return
         lift = self._help_k()
@@ -1871,30 +2107,42 @@ class RaidScene:
             # both hands under the roof's crossbeam: squat, then drive up with the legs
             pose = blend(LIFT_LOW, LIFT_HIGH, _ease(lift))
             _w.actor(r, key, pose, at, self.body_yaw, int(tm), seed=93, amp=0.0,
-                     rifle_on=False, flags=("shotgun",), expression="angry")
+                     rifle_on=False, flags=("shotgun",), expression="angry",
+                     shadow=_GROUND_SHADOW)
             self._muzzle = self._flash_basis = None
             return
         hum = _w.hum(key, flags=("shotgun", "nopump"))
         pose = self._player_pose()
         shell = False
+        draw_yaw = self.body_yaw + SG_BLADE_YAW
         if self.reloading > 0.0:
             pose, pump, shell = sg_reload_pose(
                 hum, pose, self._reload_dur - self.reloading, self._reload_dur,
                 shells=self._reload_n, dry=self._reload_dry)
+            if self.wall_k > 0.005:
+                pose["rifle_p"] = pose.get("rifle_p", 0.0) + 38.0 * self.wall_k
+                pose["rsh_p"] = pose.get("rsh_p", 0.0) - 12.0 * self.wall_k
+                pose["lsh_p"] = pose.get("lsh_p", 0.0) - 10.0 * self.wall_k
         else:
+            anim = self._anim_ctl()
             pump = _pump_k(self.t - self.pump_at)
             mode = "aim" if (self.ads > 0.5 or self.t - self.last_fire < 0.50) else "ready"
             pose = _shotgun_hold(hum, pose, mode, ("m7player_sg", mode), pump)
-        joints = _w.actor(r, key, pose, at, self.body_yaw + SG_BLADE_YAW, int(tm), seed=93,
-                          amp=0.12, rifle_on=True, flags=("shotgun", "nopump"),
-                          expression="angry")
+            pose = apply_wall_down(hum, pose, "shotgun", self.wall_k, ("m7player_sg", "wall"))
+        pose, draw_yaw, rev_active = REV.apply_player_revive(self, hum, pose, at, draw_yaw, True)
+        if rev_active:
+            pump = 0.0
+            shell = False
+        joints = _w.actor(r, key, pose, at, draw_yaw, int(tm), seed=93,
+                          amp=0.0 if rev_active else 0.12, rifle_on=True, flags=("shotgun", "nopump"),
+                          expression="stern" if rev_active else "angry", shadow=_GROUND_SHADOW)
         if joints:
             draw_shotgun_pump(r, joints.get("rhand"), joints.get("rifle_m"), pump)
             if shell:
                 draw_sg_shell(r, joints.get("lhand"), joints.get("rifle_m"))
         rm = joints.get("rifle_m") if joints else None
         hand = joints.get("rhand") if joints else None
-        if rm is not None and hand is not None:
+        if not rev_active and rm is not None and hand is not None:
             off = m_apply(rm, BORE_LOCAL["shotgun"])
             m = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
             self._flash_basis = (m, _f_unit(m_apply(rm, (0.0, 0.0, 1.0))),
@@ -1918,16 +2166,19 @@ class RaidScene:
             return pose
         if a.get("cover_t") is not None:
             return self._cover_pose(key)
-        stance = _hold_cached(_w.hum(key), dict(POSES["ready"]), _ally_gun(key), "ready", key=key)
+        hum = _w.hum(key)
+        gun = _ally_gun(key)
+        stance = _hold_cached(hum, dict(POSES["ready"]), gun, "ready", key=key)
         rise = (self.t - a.get("freed", -9.0)) / B.ALEX_RISE_S
         if rise < 1.0:
             # out from under the roof: push up onto a knee, take the rifle, stand
             rise = max(0.0, rise)
             if rise < RISE_KNEE:
                 return blend(self._pinned_pose(a, key, 1.0), POSES["kneel"], _ease(rise / RISE_KNEE))
-            knee = _hold_cached(_w.hum(key), dict(POSES["kneel"]), _ally_gun(key), "ready", key=key)
+            knee = _hold_cached(hum, dict(POSES["kneel"]), gun, "ready", key=key)
             return blend(knee, stance, _ease((rise - RISE_KNEE) / (1.0 - RISE_KNEE)))
-        if self.t - a["aim"] < B.ALLY_HOLD:
+        aiming = self.t - a["aim"] < B.ALLY_HOLD
+        if aiming:
             # shouldered at the target, raised over ALLY_RAISE from the ready hold
             aim = _ally_aim(key, a["slope"])
             up = clamp((self.t - a["raised"]) / B.ALLY_RAISE, 0.0, 1.0)
@@ -1935,11 +2186,20 @@ class RaidScene:
         k = a.get("walk_k", 0.0)
         if k <= 0.0:
             return stance
-        # stride follows distance walked, and the eased weight fades run <-> stance
-        # so a stop or a start never snaps the legs and arms in one frame; the run
-        # keeps the ready hold's arms, so the rifle stays in both hands
-        run = _held(_w.hum(key), pose_run(a.get("gait", 0.0) * 1.9, lean=6), _ally_gun(key), "ready", key)
-        return run if k >= 1.0 else blend(stance, run, k * k * (3.0 - 2.0 * k))
+        phase = a.get("gait", 0.0) / gait_cycle_m(3.4) * math.tau
+        lower = locomotion_pose(3.4, 0.0, phase)
+        run = mask_pose(lower, stance)
+        base_tw = AIM_TWIST if aiming else 0.0
+        d_tw = lower.get("twist", 0.0) * (0.45 if aiming else 0.65)
+        d_sp = lower.get("spine", 0.0) * (0.45 if aiming else 0.60)
+        run["body_r"] = lower.get("body_r", 0.0)
+        run["spine_r"] = lower.get("spine_r", 0.0) * 0.85
+        run["spine"] = stance.get("spine", 0.0) + d_sp
+        run["twist"] = stance.get("twist", base_tw) + d_tw
+        run["head_y"] = stance.get("head_y", 0.0) - d_tw * 0.8
+        run["rifle_p"] = stance.get("rifle_p", 0.0) + d_sp
+        run["rifle_y"] = stance.get("rifle_y", 0.0) + d_tw
+        return run if k >= 1.0 else blend(stance, run, _ease(k))
 
     def _help_k(self):
         """How far Biribel is through freeing Alex, 0..1."""
@@ -2015,8 +2275,10 @@ class RaidScene:
             if a["state"] == "gone":
                 continue
             key = ("ally", name)
+            seed = 61 if name == "bodi" else 62
             pose = self._ally_pose(a, key)
             z, yaw, armed = a["z"], a["yaw"], True
+            expr = None
             if name == "alex":
                 armed = self._alex_armed(a)
                 if a.get("pinned"):
@@ -2025,18 +2287,40 @@ class RaidScene:
                     # back to the well: turn to face the yard as he drops into cover
                     k = _ease(clamp((self.t - a["cover_t"]) / 0.3, 0.0, 1.0))
                     yaw = a["yaw"] + ((180.0 - a["yaw"] + 180.0) % 360.0 - 180.0) * k
+            if not a.get("pinned") and a.get("cover_t") is None:
+                pose, armed, expr, _ = REV.ally_pose_and_hand(
+                    self, name, a, _w.hum(key), pose, yaw, seed=seed,
+                )
+                if not armed:
+                    REV.draw_ground_rifle(r, a, "rifle")
+            living_down = (a["state"] == "down" or REV.is_reviving(self, name))
             joints = _w.actor(r, key, pose, (a["x"], a["y"], z), yaw, int(tm),
-                              seed=61 if name == "bodi" else 62, amp=0.3, rifle_on=armed, mouth=0.0)
+                              seed=seed, amp=0.0 if living_down else 0.3, rifle_on=armed,
+                              expression=expr, mouth=0.0, shadow=_GROUND_SHADOW)
             a["muzzle"] = joints.get("muzzle") if joints else None
-            if a["state"] == "down" and name == "bodi":
+            if a["state"] == "down" and name == "bodi" and not REV.is_reviving(self, "bodi"):
                 r.add_sprite((a["x"], 1.6, a["z"]), _fx.glow((255, 90, 70), 0.3, tm, intensity=0.8,
                                                               core=(255, 160, 140), flicker=0.3),
                              layer=_fx.FX_LAYER)
 
     def _guard_pose(self, e):
+        aiming = e["tele"] > 0.0 or e["left"] > 0 or self.t - e["aim"] < 0.4
         if e["moving"]:
-            return pose_run(self.t * 8.0 + e["slot"], lean=14)
-        if e["tele"] > 0.0 or e["left"] > 0 or self.t - e["aim"] < 0.4:
+            rush = e.get("kind") in ("rusher", "breacher")
+            spd = 4.4 if rush else 3.0
+            sp_k = 0.6 if rush else 0.0
+            phase = (e.get("gait", self.t * 3.1) / gait_cycle_m(spd, sp_k) * math.tau
+                     + e["slot"] * 1.37)
+            lower = locomotion_pose(spd, 0.0, phase, sprint=sp_k)
+            upper = blend(POSES["stand"], "aim", 0.85) if aiming else POSES["ready"]
+            pose = mask_pose(lower, upper)
+            pose["body_r"] = lower.get("body_r", 0.0)
+            pose["spine"] = upper.get("spine", 6.0) + lower.get("spine", 0.0) * 0.45
+            pose["spine_r"] = lower.get("spine_r", 0.0) * 0.8
+            pose["twist"] = lower.get("twist", 0.0) * 0.65
+            pose["head_y"] = -pose["twist"] * 0.8
+            return pose
+        if aiming:
             return blend(POSES["stand"], "aim", 0.85)
         return dict(POSES["ready"])
 
@@ -2072,15 +2356,24 @@ class RaidScene:
             gk = ("guard", kind)
             if not e["alive"]:
                 fall = e.get("fall")
+                if fall is not None and fall.rest is not None:
+                    if not r.visible_sphere((x, y + 0.3, z), 1.8):
+                        continue
                 if fall is None:
                     ux, uz = e.get("fall_dir", (0.0, 0.0))
                     track = D.track_for(e.get("dead_pose") == "dead_back", e["slot"])
+                    bw = getattr(self.world, "box_world", None)
+                    boxes = self.world.ragdoll_boxes() if hasattr(self.world, "ragdoll_boxes") else ()
                     fall = e["fall"] = D.Fall(_w.hum(gk, True), e.get("pose") or POSES["stand"],
                                               track, (x, y, z), e["yaw"],
-                                              (ux * GUARD_PUSH_M, uz * GUARD_PUSH_M), e["slot"])
+                                              (ux * GUARD_PUSH_M, uz * GUARD_PUSH_M), e["slot"],
+                                              box_world=bw, boxes=boxes,
+                                              **(e.get("death_ctx") or {}))
                 pose, root, yaw = fall.at(self.t - e["dead_t"], self._floor)
                 _w.actor(r, gk, pose, root, yaw, int(tm), seed=100 + e["slot"], amp=0.0,
-                         rifle_on=False, hd=True)
+                         rifle_on=fall.rifle_on, hd=True, expression=fall.expression,
+                         shadow=_GROUND_SHADOW)
+                fall.draw_gun(r)
                 e["rest"] = fall.chest
                 if e["mags"] and fall.rest is not None:
                     a = e["slot"] * 1.9
@@ -2090,25 +2383,41 @@ class RaidScene:
                     _w.add(r, _shell_drop_mesh(mx, my, mz, e["yaw"] + 35.0))
                 continue
             pose = self._guard_pose(e)
-            if not e["moving"]:
-                pose = _hold_cached(_w.hum(gk, True), pose, "rifle", "ready", key=gk)
+            pose = _held(_w.hum(gk, True), pose, "rifle", "ready", gk)
             stag = max(0.0, 1.0 - (self.t - e["hit_t"]) / 0.3)
             if stag > 0.0:
                 # after the hold: rifle_p follows the spine one to one in the
                 # solve, so the flinch needs no fresh IK solve per frame
                 pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
-                if not e["moving"]:
-                    pose["rifle_p"] = pose.get("rifle_p", 0.0) - 12.0 * stag
+                pose["rifle_p"] = pose.get("rifle_p", 0.0) - 12.0 * stag
             e["pose"] = pose
             joints = _w.actor(r, gk, pose, (x, y, z), e["yaw"], int(tm), seed=100 + e["slot"],
-                              amp=0.4, rifle_on=True, hd=True)
+                              amp=0.4, rifle_on=True, hd=True, shadow=_GROUND_SHADOW)
             m = joints.get("muzzle") if joints else None
             if m is not None and e["tele"] > 0.0:
                 r.add_sprite(m, _fx.glow((255, 70, 50), 0.14, tm, seed=e["slot"], core=(255, 120, 90),
                                          intensity=0.8), layer=_fx.FX_LAYER)
 
     def _draw_fx(self, r, tm):
+        from engine3d.particles import PKIND_DUST, PKIND_SPARK
+        r.light_cap = 64
+        r.wetness = 0.25
+        r.height_fog = (0.026, 0.0, 1.6, (16, 18, 24))
         now = self.t
+        use_gpu = getattr(r, "backend", "") == "gl"
+        if use_gpu and self._muzzle and now - self.last_fire < 0.03:
+            if getattr(self, "_fx_muzzle_t", -1.0) != self.last_fire:
+                self._fx_muzzle_t = self.last_fire
+                pool = getattr(self, "_fx_pool", None)
+                if pool is None:
+                    from engine3d.particles import ParticlePool
+                    pool = self._fx_pool = ParticlePool(1024, seed=707)
+                pool.burst_muzzle(self._muzzle, _fwd(self.yaw, self.pitch), n=5)
+        if use_gpu and getattr(self, "_fx_pool", None) is not None:
+            dt = max(0.0, min(0.05, now - getattr(self, "_fx_last_t", now)))
+            self._fx_last_t = now
+            self._fx_pool.update(dt, floor_y=0.0)
+            self._fx_pool.submit(r)
         for t0, a, b, col in self.tracers:
             k = (now - t0) / 0.06
             head, tail = min(1.0, k), max(0.0, k - 0.35)
@@ -2116,19 +2425,53 @@ class RaidScene:
                 pa = tuple(a[i] + (b[i] - a[i]) * tail for i in range(3))
                 pb = tuple(a[i] + (b[i] - a[i]) * head for i in range(3))
                 r.add_line3d(pa, pb, col, 2, layer=3)
-        for t0, p in self.sparks:
-            r.add_sprite(p, _fx.sparks(7, (now - t0) * 1000.0, n=10, speed_m=2.0, dur_ms=420),
-                         layer=_fx.FX_LAYER)
-        for t0, p, kind in self.impacts:
-            if now - t0 < 0.22:
-                col = (176, 26, 22) if kind == "blood" else (238, 226, 176)
-                for ax, ay, az in FLECK_ARMS:
-                    r.add_line3d(p, (p[0] + ax, p[1] + ay, p[2] + az), col, 1, layer=3)
+        if use_gpu:
+            rows = []
+            for t0, p in self.sparks:
+                age = now - t0
+                if 0.0 <= age < 0.42:
+                    u = age / 0.42
+                    for i in range(8):
+                        ang = i * 2.39996 + t0 * 11.0
+                        vx, vy, vz = math.cos(ang) * 2.4, 1.5 + (i % 3) * 0.7 - 9.8 * age, math.sin(ang) * 2.4
+                        rows.append((p[0] + vx * age, max(0.02, p[1] + vy * age), p[2] + vz * age,
+                                     vx, vy, vz, 1.0, 0.80, 0.46, 1.0 - u, 0.055, float(PKIND_SPARK), u, float(i)))
+            for t0, p, kind in self.impacts:
+                age = now - t0
+                if 0.0 <= age < 0.36:
+                    u = age / 0.36
+                    c = (0.68, 0.10, 0.09) if kind == "blood" else (0.86, 0.80, 0.68)
+                    for i in range(6):
+                        ang = i * 1.047 + t0 * 9.0
+                        sp = 1.1 + (i % 2) * 0.5
+                        rows.append((p[0] + math.cos(ang) * sp * age, max(0.02, p[1] + 0.5 * age),
+                                     p[2] + math.sin(ang) * sp * age, 0.0, 0.2, 0.0,
+                                     c[0], c[1], c[2], (1.0 - u) * 0.72, 0.10 + 0.22 * u, float(PKIND_DUST), u, float(i)))
+            if rows:
+                import numpy as np
+                r.add_particles(np.asarray(rows, dtype=np.float32))
+        else:
+            for t0, p in self.sparks:
+                r.add_sprite(p, _fx.sparks(7, (now - t0) * 1000.0, n=10, speed_m=2.0, dur_ms=420),
+                             layer=_fx.FX_LAYER)
+            for t0, p, kind in self.impacts:
+                if now - t0 < 0.22:
+                    col = (176, 26, 22) if kind == "blood" else (238, 226, 176)
+                    for ax, ay, az in FLECK_ARMS:
+                        r.add_line3d(p, (p[0] + ax, p[1] + ay, p[2] + az), col, 1, layer=3)
         for t0, pos in self.flashes:
             if now - t0 < 0.06:
                 for ax, ay, az in FLASH_ARMS:
                     r.add_line3d(pos, (pos[0] + ax, pos[1] + ay, pos[2] + az), (255, 238, 190), 2,
                                  layer=3)
+        pool = getattr(self, "_debris_pool", None)
+        if pool and pool.items:
+            dm = Mesh()
+            for db in pool.items:
+                hx, hy, hz = db.half
+                dm.add(box(hx * 2.0, hy * 2.0, hz * 2.0, db.col),
+                       m_mul(rot_y(db.rot[1]), rot_x(db.rot[0])), t=tuple(db.pos))
+            _w.add(r, dm)
 
 
 _SCENE = None

@@ -35,11 +35,14 @@ from core.state import STATE
 from cutscenes import death3d as D
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
+from cutscenes import revive3d as REV
 from cutscenes import m7world3d as F
 from engine3d import Mesh, POSES, blend, box, clamp
 from engine3d.core import disc_xz, m_apply, rot_x, rot_y, rot_z
 from engine3d.hold import POLES, hold_cached as _hold_cached, hold_frame as _hold_frame, solve_arm_safe as _solve_arm_safe
+from engine.anim import gait_cycle_m, locomotion_pose, mask_pose
 from engine3d.rig import os12_mag_mesh as _os12_mag_mesh
+from engine3d.ik import solve_leg as _solve_leg
 from missions.m7 import raid3d as R
 from missions.m7 import raid_world as RW
 
@@ -76,6 +79,13 @@ WPN_SPECS = {
                     cap=36, gap=0.92, reload_s=2.2, fov_ads=48.0),
     "rifle": dict(label="OS-12", cal="5.56X45", kind="stick", mag=30, reserve0=90,
                   cap=150, gap=0.115, reload_s=1.45, fov_ads=44.0),
+}
+SWAP_S = 0.44
+_SWAP_TUCK = {
+    "rsh_p": -16.0, "rsh_r": 16.0, "rsh_y": 0.0, "rel": 56.0,
+    "lsh_p": -8.0, "lsh_r": 14.0, "lsh_y": 0.0, "lel": 46.0,
+    "rifle_p": 62.0, "rifle_y": -38.0,
+    "twist": -22.0, "head_y": 4.0, "head_p": 10.0,
 }
 
 # The handheld muzzle flash lives in M7's raid so both missions share it.
@@ -193,19 +203,10 @@ _BLAST_PUFF_COL = {
 
 @lru_cache(maxsize=128)
 def _blast_puff_img(kind, rad, alpha, variant):
-    shade, lit = _BLAST_PUFF_COL[kind]
-    small = pygame.Surface((32, 32), pygame.SRCALPHA)
-    rng = random.Random(variant * 31 + 7)
-    for col, dy, k in ((shade, 2, 1.0), (lit, -2, 0.65)):
-        for i in range(4):
-            a = math.tau * i / 4.0 + variant * 0.8
-            cx = 16 + math.cos(a) * 5 * k
-            cy = 16 + dy + math.sin(a) * 4 * k
-            rr = (6 + rng.randrange(3)) * k
-            pts = [(int(cx + math.cos(b) * rr), int(cy + math.sin(b) * rr * 0.9))
-                   for b in (math.tau * j / 6.0 for j in range(6))]
-            pygame.draw.polygon(small, col + (alpha,), pts)
-    return pygame.transform.scale(small, (rad * 2, rad * 2))
+    from cutscenes import fire3d as _f3d
+    shade, _lit = _BLAST_PUFF_COL[kind]
+    warmth = 3 if kind == "fire" else (1 if kind == "soot" else 0)
+    return _f3d.smoke_puff_surface(warmth, variant, rad, alpha, shade_col=shade)
 
 
 def _blast_puff_fn(kind, rad_m, alpha, variant):
@@ -316,6 +317,31 @@ def _os12_reload_pose(hum, base_pose, elapsed, reload_s=1.45):
     return out, mag_mode, mag_t
 
 
+def _swap_pose(hum, base_pose, weapon, u):
+    """Blend ``weapon``'s ready hold toward a hip/sling tuck across swap ``u`` (0..1)."""
+    k = _ease(u * 2.0) if u < 0.5 else _ease((1.0 - u) * 2.0)
+    if weapon == "shotgun":
+        ready = R._shotgun_hold(hum, dict(base_pose), "ready", ("m7player_sg", "ready"), 0.0)
+    else:
+        ready = R._held(hum, dict(base_pose), "os12", "ready", ("m8_biri_os12", "ready"))
+    out = dict(base_pose)
+    spine = base_pose.get("spine", 0.0)
+    head_p0 = base_pose.get("head_p", 0.0)
+    for kn in _OS12_ARMS + ("twist", "head_y", "head_p"):
+        va = ready.get(kn, base_pose.get(kn, 0.0))
+        if kn in _SWAP_TUCK:
+            vb = _SWAP_TUCK[kn] + (spine if kn == "rifle_p" else head_p0 if kn == "head_p" else 0.0)
+            d = (vb - va + 180.0) % 360.0 - 180.0
+            out[kn] = va + d * k
+        else:
+            out[kn] = va
+    return out
+
+
+def _shadow_at(y):
+    return (2, -0.30) if y > 0.1 else (1, -0.5)
+
+
 class TrapScene:
     MAG = MAG
     RELOAD_S = RELOAD_S
@@ -334,6 +360,8 @@ class TrapScene:
     _cover_pose = R.RaidScene._cover_pose
     _project = R.RaidScene._project
     _ground_move = R.RaidScene._move
+    _anim_ctl = R.RaidScene._anim_ctl
+    _update_wall_k = R.RaidScene._update_wall_k
 
     def __init__(self):
         self._active = False
@@ -377,10 +405,12 @@ class TrapScene:
         hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun", "nopump"))
         for mode in ("ready", "aim"):
             R._sg_holds(hum, mode, ("m7player_sg", mode))
+        R._wall_down_hold(hum, "shotgun", ("m7player_sg", "wall"))
         R._sg_reload_keys(hum)
         rhum = _w.hum(("biribel", OUTFIT_GUARD), flags=("os12", "nomag"))
         for mode in ("ready", "aim"):
             R._held(rhum, POSES["ready"], "os12", mode, ("m8_biri_os12", mode))
+        R._wall_down_hold(rhum, "os12", ("m8_biri_os12", "wall"))
         _os12_reload_keys(rhum)
         stances = (dict(POSES["ready"]), blend(POSES["stand"], "aim", 0.85))
         for kind in set(R.GUARD_VIEW) | {"heavy"}:
@@ -391,19 +421,24 @@ class TrapScene:
         key = ("ally", "bodi")
         bhum = _w.hum(key, flags=("os12",))
         for pose in stances + (dict(POSES["crouch"]),):
-            _hold_cached(bhum, pose, "os12", "ready", key=("m8_bodi_os12", "ready"))
+            _hold_cached(bhum, pose, "os12", "ready",
+                         key=("m8_bodi_os12", "crouch" if pose.get("lkn") else "ready"))
+        crouch_aim = dict(POSES["crouch"], twist=R.AIM_TWIST, head_y=-0.8 * R.AIM_TWIST)
         for i in range(-4, 5):
+            sl = i / 10.0
             st = dict(blend(POSES["stand"], "aim", 0.85), twist=R.AIM_TWIST,
                       head_y=-0.8 * R.AIM_TWIST)
             _hold_cached(bhum, st, "os12", "aim",
-                         aim=(0.0, 1.45 + 10.0 * (i / 10.0), 10.0),
-                         key=("m8_bodi_os12", round(i / 10.0, 1)))
+                         aim=(0.0, 1.45 + 10.0 * sl, 10.0), key=("m8_bodi_os12", sl))
+            _hold_cached(bhum, crouch_aim, "os12", "aim",
+                         aim=(0.0, 1.05 + 10.0 * sl, 10.0), key=("m8_bodi_os12", "crouch_aim", sl))
         if self._truck is None:
             self._truck = RW.truck()
         if self._truck_crashed is None:
             mt = Mesh()
             mt.add(self._truck, rot_z(-3.5), (0.0, 0.16, 0.0))
             self._truck_crashed = mt
+        REV.warm()
         self._ensure_meshes()
         S3.renderer()
 
@@ -448,23 +483,22 @@ class TrapScene:
     def _setup(self, cp):
         """(Re)build the fight at checkpoint ``cp``; the clock keeps running."""
         self.cp = cp
+        REV.reset(self)
         p = STATE.player
         self.world = W.World()
         st = self.cp_state if cp and self.cp_state else None
         if cp == 0:
             self.px, self.pz, self.yaw = -73.4, -16.6, 40.0
-            self.mag, self.reserve = MAG, RESERVE0
         else:
             x, z, yaw = CP_STATE[cp]
             if self.world.blocked(x, z):
                 x, z = W._clear_point(x, z, W.BODY_R + 0.15)
             self.px, self.pz, self.yaw = (st["px"], st["pz"], st["yaw"]) if st else (x, z, yaw)
-            self.mag, self.reserve = (st["mag"], st["reserve"]) if st else (MAG, RESERVE0)
         self.weapon = "shotgun"
-        self.wpns = {
-            "shotgun": [WPN_SPECS["shotgun"]["mag"], WPN_SPECS["shotgun"]["reserve0"]],
-            "rifle": [WPN_SPECS["rifle"]["mag"], WPN_SPECS["rifle"]["reserve0"]],
-        }
+        self.wpns = {k: [sp["mag"], sp["reserve0"]] for k, sp in WPN_SPECS.items()}
+        # the checkpoint's ammo for both guns, never below the starting reserve
+        for k, (m, r) in (st or {}).get("wpns", {}).items():
+            self.wpns[k] = [m, max(r, WPN_SPECS[k]["reserve0"])]
         self._sync_weapon_attrs()
         self.heat = 0.0
         self.last_flash = -9.0
@@ -492,6 +526,12 @@ class TrapScene:
         self.aiming = False
         self.ads = 0.0
         self.gun_up = 0.0
+        self.wall_k = 0.0
+        self.swapping = 0.0
+        self._swap_dur = SWAP_S
+        self._swap_from = "shotgun"
+        self._swap_to = "shotgun"
+        self._swap_snd_at = 1e9
         self.reloading = 0.0
         self._reload_dur = self.RELOAD_S
         self._reload_n = 0
@@ -595,10 +635,15 @@ class TrapScene:
         self.RELOAD_S = sp["reload_s"]
         self.mag, self.reserve = self.wpns[self.weapon]
 
-    def _switch_weapon(self, target=None):
+    def _switch_weapon(self, target=None, instant=False):
         want = target or ("rifle" if self.weapon == "shotgun" else "shotgun")
         if want == self.weapon or want not in self.wpns:
             return
+        vis_weapon = self.weapon
+        if self.swapping > 0.0:
+            elapsed = self._swap_dur - self.swapping
+            if elapsed < self._swap_dur * 0.5:
+                vis_weapon = self._swap_from
         self.wpns[self.weapon] = [self.mag, self.reserve]
         self.weapon = want
         self.reloading = 0.0
@@ -615,11 +660,26 @@ class TrapScene:
         self.pump_at = -9.0
         self.pump_snd_at = 1e9
         self._sync_weapon_attrs()
+        if instant:
+            self.swapping = 0.0
+            self._swap_from = want
+            self._swap_to = want
+            self._swap_snd_at = 1e9
+            self._anim_ctl().cancel_reload()
+            return
+        ctl = self._anim_ctl()
+        ctl.cancel_reload()
+        ctl.start_swap(SWAP_S)
+        self._swap_from = vis_weapon
+        self._swap_to = want
+        self._swap_dur = SWAP_S
+        self.swapping = SWAP_S
+        self._swap_snd_at = self.t + SWAP_S * 0.5
         self._snd("pickup")
         self.toast = (self.t, WPN_SPECS[want]["label"])
 
     def _begin_reload(self):
-        if self.reloading or self.mag >= self.MAG or self.reserve <= 0:
+        if self.reloading or self.swapping > 0.0 or self.mag >= self.MAG or self.reserve <= 0:
             return
         self._shell_i = 0
         self._pump_done = False
@@ -642,6 +702,7 @@ class TrapScene:
             self._reload_dur = self.RELOAD_S
             self.reloading = self._reload_dur
             self._snd("dry")
+        self._anim_ctl().start_reload(self._reload_dur)
 
     def reload_total(self):
         return self._reload_dur if self.reloading > 0.0 else self.RELOAD_S
@@ -750,7 +811,8 @@ class TrapScene:
             if e["alive"] and e["live"]:
                 ed = math.hypot(e["x"] - gx, e["z"] - gz) + abs(e["y"] - gy) * 0.5
                 if ed < 4.8:
-                    self.brain.hurt_enemy(e, 75.0 * (1.0 - ed / 4.8), (gx, gz))
+                    self.brain.hurt_enemy(e, 75.0 * (1.0 - ed / 4.8), (gx, gz),
+                                          hit_ctx=dict(weapon="blast", blast=((gx, gy, gz), 11.0, 4.8)))
         for bar in self.barrels:
             if bar["alive"] and math.hypot(bar["x"] - gx, bar["z"] - gz) < 4.6:
                 self._detonate_barrel(bar, 1)
@@ -912,7 +974,8 @@ class TrapScene:
                 continue
             d = math.hypot(e["x"] - bx, e["z"] - bz) + abs(e["y"]) * 0.4
             if d < BARREL_R:
-                self.brain.hurt_enemy(e, BARREL_DMG * (1.0 - 0.55 * d / BARREL_R), (bx, bz))
+                self.brain.hurt_enemy(e, BARREL_DMG * (1.0 - 0.55 * d / BARREL_R), (bx, bz),
+                                      hit_ctx=dict(weapon="blast", blast=((bx, 0.5, bz), 14.0, BARREL_R)))
         for t in self.brain.trucks:
             if t["state"] in ("drive", "stopped") and not t["crashed"]:
                 if math.hypot(t["x"] - bx, t["z"] - bz) < BARREL_R + 1.5:
@@ -928,6 +991,21 @@ class TrapScene:
         d = max(1.0, math.hypot(x - self.px, z - self.pz))
         rg = _right(self.yaw)
         return ((x - self.px) * rg[0] + (z - self.pz) * rg[2]) / d
+
+    def _wall_probe_dist(self):
+        best = R.RaidScene._wall_probe_dist(self)
+        f = _fwd(self.yaw, self.pitch)
+        rg = _right(self.yaw)
+        o1 = (self.px, self.py + 1.34, self.pz)
+        o2 = (self.px + rg[0] * 0.14, self.py + 1.34, self.pz + rg[2] * 0.14)
+        for b in getattr(self.world, "props", ()):
+            if b is None:
+                continue
+            for o in (o1, o2):
+                h = RW._ray_box(o, f, b)
+                if h is not None and 1e-4 < h < best:
+                    best = h
+        return best
 
     # --- scene contract used by trap_brain -------------------------------------
 
@@ -967,7 +1045,8 @@ class TrapScene:
             if e["alive"] and e["live"]:
                 d = math.hypot(e["x"] - bx, e["z"] - bz)
                 if d < 6.5:
-                    self.brain.hurt_enemy(e, 125.0 * (1.0 - 0.5 * d / 6.5), (bx, bz))
+                    self.brain.hurt_enemy(e, 125.0 * (1.0 - 0.5 * d / 6.5), (bx, bz),
+                                          hit_ctx=dict(weapon="blast", blast=((bx, 0.5, bz), 15.0, 6.5)))
         for bar in self.barrels:
             if bar["alive"] and math.hypot(bar["x"] - bx, bar["z"] - bz) < 6.5:
                 self._detonate_barrel(bar, 1)
@@ -1012,19 +1091,27 @@ class TrapScene:
                 self._setup(self.cp)
             return
         k = keys if keys is not None else pygame.key.get_pressed()
-        self.ads += ((1.0 if self.aiming and not self.reloading else 0.0) - self.ads) \
+        if self.swapping > 0.0:
+            self.swapping = max(0.0, self.swapping - dt)
+        if self.t >= self._swap_snd_at:
+            self._swap_snd_at = 1e9
+            self._snd("rifle_handle")
+        self.ads += ((1.0 if self.aiming and not self.reloading and self.swapping <= 0.0 else 0.0) - self.ads) \
             * min(1.0, dt * 12.0)
         up = self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6
-        up = 0.0 if (self.sprint or self.reloading or not up or self.climb_t is not None) else 1.0
+        up = 0.0 if (self.sprint or self.reloading or self.swapping > 0.0 or not up or self.climb_t is not None) else 1.0
         self.gun_up += (up - self.gun_up) * min(1.0, dt * 14.0)
         if not self.firing or self.reloading or self.weapon != "rifle":
             self.heat = max(0.0, self.heat - dt * 1.4)
         if self.phase == "climb":
             self._climb(dt)
+            self.wall_k = 0.0
         elif self.phase == "catwalk":
             self._catwalk_move(k, dt)
+            self._update_wall_k(dt)
         else:
             self._ground_move(k, dt)
+            self._update_wall_k(dt)
         step = int(self.stride / STEP_M)
         if step != self._step_i:
             self._step_i = step
@@ -1079,7 +1166,7 @@ class TrapScene:
         if self.t >= self.pump_snd_at:
             self.pump_snd_at = 1e9
             self._snd("pump")
-        if self.firing and not self.reloading and self.phase not in ("climb",):
+        if self.firing and not self.reloading and self.swapping <= 0.0 and self.phase not in ("climb",) and not REV.is_locking(self):
             self._fire()
         self._loot()
         self.recoil = max(0.0, self.recoil - dt * 6.0)
@@ -1137,16 +1224,18 @@ class TrapScene:
             bx, bz = e.get("rest", (e["x"], e["z"]))
             if math.hypot(bx - self.px, bz - self.pz) > R.LOOT_R:
                 continue
-            e["mags"] = 0
             self.wpns[self.weapon] = [self.mag, self.reserve]
-            sg_got = min(4, WPN_SPECS["shotgun"]["cap"] - self.wpns["shotgun"][1])
-            os_got = min(15, WPN_SPECS["rifle"]["cap"] - self.wpns["rifle"][1])
-            self.wpns["shotgun"][1] += max(0, sg_got)
-            self.wpns["rifle"][1] += max(0, os_got)
+            sg_got = max(0, min(4, WPN_SPECS["shotgun"]["cap"] - self.wpns["shotgun"][1]))
+            os_got = max(0, min(15, WPN_SPECS["rifle"]["cap"] - self.wpns["rifle"][1]))
+            if not (sg_got or os_got):
+                return      # both guns full: the bodies keep their ammo for later
+            e["mags"] = 0
+            self.wpns["shotgun"][1] += sg_got
+            self.wpns["rifle"][1] += os_got
             self._sync_weapon_attrs()
-            self.toast = (self.t, "+%d SH / +%d 5.56" % (max(0, sg_got), max(0, os_got)))
+            self.toast = (self.t, "+%d SH / +%d 5.56" % (sg_got, os_got))
             self._snd("pickup")
-            if self.mag <= 0:
+            if self.mag <= 0 and self.swapping <= 0.0:
                 self._begin_reload()
 
     def _update_vasile_yaw(self, dt):
@@ -1186,6 +1275,12 @@ class TrapScene:
         self.pmoving = sp > 0.6
         self.stride += sp * dt
         self.body_yaw = _w.yaw_mix(self.body_yaw, self.yaw, min(1.0, dt * 10.0))
+        self._anim_ctl().update(
+            dt, vel_xz=self.vel, yaw_deg=self.body_yaw,
+            aiming=(self.ads > 0.3 or self.t - self.last_fire < 0.45),
+            sprint=False, crouch=False,
+            floor_fn=self._floor, pos=(self.px, self.py, self.pz),
+        )
 
     def _climb(self, dt):
         self.climb_t += dt
@@ -1228,6 +1323,7 @@ class TrapScene:
         just_pressed = held and not self._e_prev
         self._e_prev = held
         action = self._hold_action()
+        REV.step(self, dt, "bodi" if action == "bodi" else None, held, R.HOLD_S["bodi"], self.brain.help_done)
         if action in ("supply", "radio", "kiosk"):
             self.hold = 0.0
             if just_pressed:
@@ -1238,14 +1334,15 @@ class TrapScene:
                 else:
                     self._open_gate()
             return
+        if action == "bodi":
+            if not held:
+                self.hold = 0.0
+            return
         if action is None or not held:
             self.hold = 0.0
             return
         self.hold += dt
-        if action == "bodi" and self.hold >= R.HOLD_S["bodi"]:
-            self.hold = 0.0
-            self.brain.help_done("bodi")
-        elif action == "climb" and self.hold >= CLIMB_HOLD_S:
+        if action == "climb" and self.hold >= CLIMB_HOLD_S:
             self.hold = 0.0
             self.phase = "climb"
             self.climb_t = 0.0
@@ -1253,8 +1350,8 @@ class TrapScene:
             self._climb_pose_cur = None
             self._rung = -1
             self.aiming = self.firing = False
-            if self.weapon != "shotgun":
-                self._switch_weapon("shotgun")
+            if self.weapon != "shotgun" or self.swapping > 0.0:
+                self._switch_weapon("shotgun", instant=True)
 
     def _take_supply(self):
         if not self.supply_left:
@@ -1290,13 +1387,14 @@ class TrapScene:
             if e["wave"] == 1:
                 e["wave"] = 2
         self.cp = 1
-        self.cp_state = dict(px=self.px, pz=self.pz, yaw=self.yaw, mag=self.mag,
-                             reserve=max(self.reserve, RESERVE0))
+        self.cp_state = self._cp_snapshot()
         STATE.m8_trap_cp = 1
         self.cp_toast = self.t
         p = STATE.player
         if p is not None:
             p.hp = min(self.hp_max(), max(p.hp, self.hp_max() * 0.65))
+        if self.brain.bodi["state"] == "up":
+            self.brain.bodi["goal"] = B.BODI_POSTS.get(2)   # as _clear(1): the kiosk skips it
         self.say("BODI", "Lane's open. Move up, booth by booth.", 3.0)
         self._begin_wave(2)
 
@@ -1348,11 +1446,16 @@ class TrapScene:
             tgt = (self.px, self.py + 0.3, self.pz)
         fov_ads = WPN_SPECS[self.weapon]["fov_ads"]
         fov = R.FOV + (fov_ads - R.FOV) * self.ads - 1.4 * self.cam_kick
+        eye, tgt, fov = REV.adjust_camera(self, eye, tgt, fov)
         return eye, tgt, fov, dist
 
     def _fire(self):
+        if self.swapping > 0.0:
+            return
         sp = WPN_SPECS[self.weapon]
         if self.t - self.last_fire < sp["gap"]:
+            return
+        if self.wall_k > 0.65:
             return
         if self.mag <= 0:
             if self.t - self.last_fire > 0.3:
@@ -1374,6 +1477,7 @@ class TrapScene:
             self.recoil = min(3.0, self.recoil + 1.4)
             self.cam_kick = min(2.6, self.cam_kick + 2.0)
             self.pitch = clamp(self.pitch + 0.55, *R.PITCH_LIM)
+            self._anim_ctl().trigger_recoil(pitch_deg=8.0, rifle_deg=13.5, cam_pitch=1.8)
             self._snd("shot", True)
             cone = 0.65 if self.ads > 0.5 else 1.0
             rays = [_fwd(self.yaw + dy * cone, look_pitch + dp * cone) for dy, dp in R.PELLET_FAN]
@@ -1386,6 +1490,7 @@ class TrapScene:
             self.recoil = min(2.4, self.recoil + 0.45)
             self.cam_kick = min(1.5, self.cam_kick + 0.45)
             self.pitch = clamp(self.pitch + (0.14 if self.ads > 0.5 else 0.28), *R.PITCH_LIM)
+            self._anim_ctl().trigger_recoil(pitch_deg=3.4, yaw_deg=math.cos(ang) * 1.2, rifle_deg=6.0, cam_pitch=0.65)
             self._snd("rifle_shot")
             rays = [_fwd(self.yaw + math.cos(ang) * rad, look_pitch + math.sin(ang) * rad)]
             body_dmg, head_dmg = 24.0, 52.0
@@ -1403,15 +1508,16 @@ class TrapScene:
             # Static terrain only, so the truck's own hull cannot eat a round
             # aimed at the gunner riding in its bed.
             best = self.world.ray_hit_static(o, dd, 90.0)
-            hit_kind, hit_obj, head = "world", None, False
+            hit_kind, hit_obj, head, zone = "world", None, False, "chest"
 
             for e in self.brain.enemies:
                 if not e["alive"] or not e["live"] or e["truck"] is None:
                     continue
-                for c, rad, is_head in self.brain.spheres(e):
+                for zi, (c, rad, is_head) in enumerate(self.brain.spheres(e)):
                     h = B._ray_sphere(o, dd, c, rad)
                     if h is not None and h < best:
                         best, hit_kind, hit_obj, head = h, "enemy", e, is_head
+                        zone = "head" if is_head else ("chest", "head", "gut", "leg")[min(zi, 3)]
 
             for t, wb in active_trucks:
                 tb = (wb[0], wb[2], wb[3], wb[5], wb[4])
@@ -1422,10 +1528,11 @@ class TrapScene:
             for e in self.brain.enemies:
                 if not e["alive"] or not e["live"] or e["truck"] is not None:
                     continue
-                for c, rad, is_head in self.brain.spheres(e):
+                for zi, (c, rad, is_head) in enumerate(self.brain.spheres(e)):
                     h = B._ray_sphere(o, dd, c, rad)
                     if h is not None and h < best:
                         best, hit_kind, hit_obj, head = h, "enemy", e, is_head
+                        zone = "head" if is_head else ("chest", "head", "gut", "leg")[min(zi, 3)]
 
             for bar in self.barrels:
                 if not bar["alive"]:
@@ -1453,8 +1560,15 @@ class TrapScene:
             if hit_kind == "enemy":
                 any_enemy = True
                 any_head = any_head or head
-                rec = hits.setdefault(id(hit_obj), [hit_obj, 0.0])
-                rec[1] += head_dmg if head else body_dmg
+                pdmg = head_dmg if head else body_dmg
+                rec = hits.get(id(hit_obj))
+                if rec is None:
+                    hits[id(hit_obj)] = [hit_obj, pdmg, head, zone, end, dd, best]
+                else:
+                    rec[1] += pdmg
+                    rec[6] = min(rec[6], best)
+                    if head and not rec[2]:
+                        rec[2], rec[3], rec[4], rec[5] = True, "head", end, dd
                 impact_pts.append((end, "blood"))
             elif hit_kind == "barrel":
                 any_metal = True
@@ -1486,8 +1600,11 @@ class TrapScene:
         ld = _fwd(self.yaw, look_pitch)
         self.sparks.append((self.t, (o[0] + ld[0] * farthest, o[1] + ld[1] * farthest,
                                      o[2] + ld[2] * farthest)))
-        for e, dmg in hits.values():
-            self.brain.hurt_enemy(e, dmg, (o[0], o[2]))
+        for e, dmg, is_hd, hz, hp, hray, hdist in hits.values():
+            self.brain.hurt_enemy(e, dmg, (o[0], o[2]), hit_ctx=dict(
+                is_head=is_hd, hit_zone=hz, hit_pos=hp, hit_ray=hray,
+                weapon=self.weapon, dmg=dmg, hit_dist=hdist,
+            ))
         for bar, dmg in barrel_hits.values():
             bar["hp"] -= dmg
             if bar["hp"] <= 0.0:
@@ -1555,14 +1672,18 @@ class TrapScene:
             if math.hypot(self.px - vx, self.pz - vz) < VASILE_REACH:
                 self.finish("win")
 
+    def _cp_snapshot(self):
+        wpns = {k: list(v) for k, v in self.wpns.items()}
+        wpns[self.weapon] = [self.mag, self.reserve]
+        return dict(px=self.px, pz=self.pz, yaw=self.yaw, wpns=wpns)
+
     def _clear(self, n):
         self.phase = "advance%d" % n
         self._phase_at = self.t
         self.cp = n
         if n == 1:
             self.gate_open = True      # the plaza is clear: the north lane opens
-        self.cp_state = dict(px=self.px, pz=self.pz, yaw=self.yaw, mag=self.mag,
-                             reserve=max(self.reserve, RESERVE0))
+        self.cp_state = self._cp_snapshot()
         STATE.m8_trap_cp = n
         self.cp_toast = self.t
         p = STATE.player
@@ -1739,21 +1860,21 @@ class TrapScene:
                     RW.put(r, mesh_tr, t["x"] + 0.35 * sw, 0.0, t["z"] - 0.5 * sw, yaw)
                     ex, ez = t["x"] + 0.35 * sw, t["z"] - 2.1 - 0.5 * sw
                     if self.t - t.get("crash_t", self.t) < 28.0:
-                        _w.add(r, F.flame_mesh((ex, 0.55, ez), tm, seed=81, size=1.15, heat=1.2, cam=cam))
+                        F.fire(r, (ex, 0.55, ez), tm, seed=81, size=1.15, smoky=True, layer=2)
                         r.add_sprite((ex, 0.06, ez), F.pool((255, 118, 34), 3.2, intensity=0.45, squash=0.5),
                                      layer=_fx.FX_LAYER)
                 else:
                     RW.put(r, self._truck, t["x"], 0.0, t["z"], 180.0)
                     frac = t["hp"] / max(1.0, t["max_hp"])
                     if frac < 0.32:
-                        _w.add(r, F.flame_mesh((t["x"], 1.15, t["z"] - 2.3), tm, seed=89, size=0.55, cam=cam))
+                        F.fire(r, (t["x"], 1.15, t["z"] - 2.3), tm, seed=89, size=0.60, smoky=True, layer=2)
                 if not t["crashed"]:
                     for sx in (-0.68, 0.68):
                         r.add_sprite((t["x"] + sx, 1.46, t["z"] - 2.95),
                                      _fx.glow((255, 236, 200), 0.52, tm, core=(255, 250, 236),
                                               intensity=1.1, max_px=30), layer=_fx.FX_LAYER)
-        self._draw_player(r, tm)
         self._draw_bodi(r, tm)
+        self._draw_player(r, tm)
         self._draw_vasile(r, tm)
         self._draw_enemies(r, tm)
         self._draw_blasts(r, tm)
@@ -1904,8 +2025,24 @@ class TrapScene:
             _w.add(r, mm)
 
     def _draw_blasts(self, r, tm):
+        r.light_cap = 64
+        r.wetness = 0.42
+        r.height_fog = (0.026, 0.0, 1.6, (14, 18, 26))
         now = self.t
-        cam = getattr(r, "cam", None)
+        if getattr(r, "backend", "") == "gl":
+            if self._muzzle and now - self.last_fire < 0.025:
+                if getattr(self, "_fx_muzzle_t", -1.0) != self.last_fire:
+                    self._fx_muzzle_t = self.last_fire
+                    pool = getattr(self, "_fx_pool", None)
+                    if pool is None:
+                        from engine3d.particles import ParticlePool
+                        pool = self._fx_pool = ParticlePool(1024, seed=809)
+                    pool.burst_muzzle(self._muzzle, R._fwd(self.yaw, self.pitch), n=4)
+            if getattr(self, "_fx_pool", None) is not None:
+                dt = max(0.0, min(0.05, now - getattr(self, "_fx_last_t", now)))
+                self._fx_last_t = now
+                self._fx_pool.update(dt, floor_y=self.py)
+                self._fx_pool.submit(r)
         for b in self.blasts:
             t0, bx, by, bz, kind, seed = b["t0"], b["x"], b["y"], b["z"], b["kind"], b["seed"]
             age = now - t0
@@ -1925,7 +2062,7 @@ class TrapScene:
                                       core=(255, 250, 226), intensity=2.4 * f, max_px=180),
                              layer=_fx.FX_LAYER)
 
-            # 2. Multi-lobe expanding 3D cel fireball (F.flame_mesh)
+            # 2. Multi-lobe expanding turbulent fireball
             fb_dur = 1.65 if big else (1.25 if med else 0.95)
             if age < fb_dur:
                 n_lobes = 5 if big else 4
@@ -1942,7 +2079,7 @@ class TrapScene:
                         pos = (bx + math.cos(ang) * spread,
                                max(0.08, by + a * (1.2 + 0.15 * i) * scale),
                                bz + math.sin(ang) * spread)
-                        _w.add(r, F.flame_mesh(pos, tm, seed=seed + i * 13, size=rad, heat=1.35, cam=cam))
+                        F.fire(r, pos, tm, seed=seed + i * 13, size=rad, smoky=False, layer=2)
 
             # 3. Ground flash pool
             if age < 0.75:
@@ -1979,7 +2116,7 @@ class TrapScene:
             # 5. Residual burning fuel puddle on the ground for barrels
             if med and 0.4 < age < 7.5:
                 rf = clamp(1.0 - max(0.0, age - 4.5) / 3.0, 0.0, 1.0)
-                _w.add(r, F.flame_mesh((bx, 0.06, bz), tm, seed=seed + 91, size=0.72 * rf, cam=cam))
+                F.fire(r, (bx, 0.06, bz), tm, seed=seed + 91, size=0.78 * rf, smoky=True, layer=2)
                 r.add_sprite((bx, 0.05, bz), F.pool((255, 118, 32), 2.1 * rf, intensity=0.35 * rf, squash=0.5),
                              layer=_fx.FX_LAYER)
 
@@ -2005,10 +2142,15 @@ class TrapScene:
                     fall = e["fall"] = D.Fall(_w.hum(gk, True, flags=("os12",)),
                                               e.get("pose") or POSES["stand"],
                                               track, (x, y, z), e["yaw"],
-                                              (ux * R.GUARD_PUSH_M, uz * R.GUARD_PUSH_M), e["slot"])
+                                              (ux * R.GUARD_PUSH_M, uz * R.GUARD_PUSH_M), e["slot"],
+                                              box_world=getattr(self.world, "box_world", None),
+                                              boxes=self.world.ragdoll_boxes() if hasattr(self.world, "ragdoll_boxes") else (),
+                                              **(e.get("death_ctx") or {}))
                 pose, root, yaw = fall.at(self.t - e["dead_t"], self._floor)
                 _w.actor(r, gk, pose, root, yaw, int(tm), seed=100 + e["slot"], amp=0.0,
-                         rifle_on=False, hd=True, flags=("os12",))
+                         rifle_on=fall.rifle_on, hd=True, flags=("os12",),
+                         expression=fall.expression, shadow=_shadow_at(root[1]))
+                fall.draw_gun(r)
                 e["rest"] = fall.chest
                 if e["mags"] and fall.rest is not None:
                     a = e["slot"] * 1.9
@@ -2019,8 +2161,7 @@ class TrapScene:
                 continue
             gh = _w.hum(gk, True, flags=("os12",))
             pose = self._guard_pose(e)
-            if not e["moving"]:
-                pose = _hold_cached(gh, pose, "os12", "ready", key=("m8_guard", kind))
+            pose = R._held(gh, pose, "os12", "ready", ("m8_guard", kind))
             th_age = self.t - e.get("throw_t", -9.0)
             if 0.0 <= th_age < 0.55:
                 if th_age < 0.28:
@@ -2036,12 +2177,11 @@ class TrapScene:
             stag = max(0.0, 1.0 - (self.t - e["hit_t"]) / 0.3)
             if stag > 0.0:
                 pose = dict(pose, spine=pose.get("spine", 8) - 12.0 * stag)
-                if not e["moving"]:
-                    pose["rifle_p"] = pose.get("rifle_p", 0.0) - 12.0 * stag
+                pose["rifle_p"] = pose.get("rifle_p", 0.0) - 12.0 * stag
             e["pose"] = pose
             holding_gun = not (0.0 <= th_age < 0.55)
             joints = _w.actor(r, gk, pose, (x, y, z), e["yaw"], int(tm), seed=100 + e["slot"],
-                              amp=0.4, rifle_on=holding_gun, hd=True, flags=("os12",))
+                              amp=0.4, rifle_on=holding_gun, hd=True, flags=("os12",), shadow=_shadow_at(y))
             if 0.0 <= th_age < 0.28 and joints and joints.get("rhand") is not None:
                 mg = Mesh()
                 mg.add(self._meshes["grenade"], t=joints["rhand"])
@@ -2113,7 +2253,8 @@ class TrapScene:
         if self.dying:
             kk = clamp(self.death_t / 0.6, 0.0, 1.0)
             _w.actor(r, key, blend("kneel", "dead_back", kk), at, self.body_yaw, int(tm), seed=93,
-                     amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry")
+                     amp=0.0, rifle_on=False, flags=("shotgun",), expression="angry",
+                     shadow=_shadow_at(self.py))
             self._muzzle = None
             self._flash_basis = None
             return
@@ -2124,7 +2265,10 @@ class TrapScene:
             self._muzzle = None
             self._flash_basis = None
             return
-        use_sg = (self.weapon == "shotgun")
+        swapping = (self.swapping > 0.0)
+        swap_u = clamp((self._swap_dur - self.swapping) / max(0.01, self._swap_dur), 0.0, 1.0) if swapping else 1.0
+        draw_weapon = self._swap_from if (swapping and swap_u < 0.5) else self.weapon
+        use_sg = (draw_weapon == "shotgun")
         flags = ("shotgun", "nopump") if use_sg else ("os12", "nomag")
         hum = _w.hum(key, flags=flags)
         pose = self._player_pose()
@@ -2133,23 +2277,50 @@ class TrapScene:
         mag_mode, mag_t = "attached", 0.0
         aim_hold = 0.50 if use_sg else 0.40
         mode = "aim" if (self.ads > 0.5 or self.t - self.last_fire < aim_hold) else "ready"
-        if use_sg:
+        if swapping:
+            pose = _swap_pose(hum, pose, draw_weapon, swap_u)
+            if self._swap_from == "shotgun" and self._swap_to == "rifle":
+                blade_k = 1.0 - _ease(swap_u)
+            elif self._swap_from == "rifle" and self._swap_to == "shotgun":
+                blade_k = _ease(swap_u)
+            else:
+                blade_k = 1.0 if use_sg else 0.0
+            draw_yaw = self.body_yaw + R.SG_BLADE_YAW * blade_k
+        elif use_sg:
             if self.reloading > 0.0:
                 pose, pump, sg_shell = R.sg_reload_pose(
                     hum, pose, self._reload_dur - self.reloading, self._reload_dur,
                     shells=self._reload_n, dry=self._reload_dry)
+                if self.wall_k > 0.005:
+                    pose["rifle_p"] = pose.get("rifle_p", 0.0) + 38.0 * self.wall_k
+                    pose["rsh_p"] = pose.get("rsh_p", 0.0) - 12.0 * self.wall_k
+                    pose["lsh_p"] = pose.get("lsh_p", 0.0) - 10.0 * self.wall_k
             else:
                 pump = R._pump_k(self.t - self.pump_at)
                 pose = R._shotgun_hold(hum, pose, mode, ("m7player_sg", mode), pump)
+                pose = R.apply_wall_down(hum, pose, "shotgun", self.wall_k, ("m7player_sg", "wall"))
             draw_yaw = self.body_yaw + R.SG_BLADE_YAW
         else:
             if self.reloading > 0.0:
                 pose, mag_mode, mag_t = _os12_reload_pose(hum, pose, self.RELOAD_S - self.reloading, self.RELOAD_S)
+                if self.wall_k > 0.005:
+                    pose["rifle_p"] = pose.get("rifle_p", 0.0) + 38.0 * self.wall_k
+                    pose["rsh_p"] = pose.get("rsh_p", 0.0) - 12.0 * self.wall_k
+                    pose["lsh_p"] = pose.get("lsh_p", 0.0) - 10.0 * self.wall_k
             else:
                 pose = R._held(hum, pose, "os12", mode, ("m8_biri_os12", mode))
+                pose = R.apply_wall_down(hum, pose, "os12", self.wall_k, ("m8_biri_os12", "wall"))
             draw_yaw = self.body_yaw
+        rev_active = False
+        if not swapping:
+            pose, draw_yaw, rev_active = REV.apply_player_revive(self, hum, pose, at, draw_yaw, use_sg)
+            if rev_active:
+                pump = 0.0
+                sg_shell = False
+                mag_mode = "attached"
         joints = _w.actor(r, key, pose, at, draw_yaw, int(tm), seed=93,
-                          amp=0.12, rifle_on=True, flags=flags, expression="angry")
+                          amp=0.0 if rev_active else 0.12, rifle_on=True, flags=flags,
+                          expression="stern" if rev_active else "angry", shadow=_shadow_at(self.py))
         if use_sg and joints:
             R.draw_shotgun_pump(r, joints.get("rhand"), joints.get("rifle_m"), pump)
             if sg_shell:
@@ -2158,7 +2329,7 @@ class TrapScene:
             self._draw_os12_mag(r, joints, mag_mode, mag_t)
         rm = joints.get("rifle_m") if joints else None
         hand = joints.get("rhand") if joints else None
-        if rm is not None and hand is not None:
+        if not rev_active and rm is not None and hand is not None:
             off = m_apply(rm, BORE_LOCAL["shotgun" if use_sg else "rifle"])
             tip = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
             fvec = C._f_unit(m_apply(rm, (0.0, 0.0, 1.0)))
@@ -2215,10 +2386,18 @@ class TrapScene:
         yaw = a["yaw"]
         if self.phase in ("clear", "climb", "catwalk") and a["state"] == "up" and not a["moving"]:
             yaw = _yaw(S3.LADDER_X - a["x"], S3.LADDER_Z - a["z"])   # he watches the ladder
-        joints = _w.actor(r, key, self._bodi_pose(a, key), (a["x"], a["y"], a["z"]), yaw, int(tm),
-                          seed=61, amp=0.3, rifle_on=True, flags=("os12",), mouth=0.0)
+        hum = _w.hum(key, flags=("os12",))
+        pose, armed, expr, _ = REV.ally_pose_and_hand(
+            self, "bodi", a, hum, self._bodi_pose(a, key), yaw, seed=61,
+        )
+        if not armed:
+            REV.draw_ground_rifle(r, a, "os12")
+        living_down = (a["state"] == "down" or REV.is_reviving(self, "bodi"))
+        joints = _w.actor(r, key, pose, (a["x"], a["y"], a["z"]), yaw, int(tm),
+                          seed=61, amp=0.0 if living_down else 0.3, rifle_on=armed,
+                          flags=("os12",), expression=expr, mouth=0.0, shadow=_shadow_at(a["y"]))
         a["muzzle"] = joints.get("muzzle") if joints else None
-        if a["state"] == "down":
+        if a["state"] == "down" and not REV.is_reviving(self, "bodi"):
             r.add_sprite((a["x"], 1.6, a["z"]), _fx.glow((255, 90, 70), 0.3, tm, intensity=0.8,
                                                           core=(255, 160, 140), flicker=0.3),
                          layer=_fx.FX_LAYER)
@@ -2230,23 +2409,41 @@ class TrapScene:
         hum = _w.hum(key, flags=("os12",))
         stance = _hold_cached(hum, dict(POSES["ready"]), "os12", "ready",
                               key=("m8_bodi_os12", "ready"))
-        if self.t - a["aim"] < B.ALLY_HOLD:
+        slope = round(clamp(a.get("slope", 0.0), -0.4, 0.4), 1)
+        aiming = self.t - a["aim"] < B.ALLY_HOLD
+        if aiming:
             aim_st = dict(blend(POSES["stand"], "aim", 0.85), twist=R.AIM_TWIST,
                           head_y=-0.8 * R.AIM_TWIST)
             aim_pose = _hold_cached(hum, aim_st, "os12", "aim",
-                                    aim=(0.0, 1.45 + 10.0 * a["slope"], 10.0),
-                                    key=("m8_bodi_os12", round(a["slope"], 1)))
+                                    aim=(0.0, 1.45 + 10.0 * slope, 10.0),
+                                    key=("m8_bodi_os12", slope))
             up = clamp((self.t - a["raised"]) / B.ALLY_RAISE, 0.0, 1.0)
             stance = aim_pose if up >= 1.0 else blend(stance, aim_pose, _ease(up))
         k = a.get("walk_k", 0.0)
         if k > 0.0:
-            run = R._held(hum, R.pose_run(a.get("gait", 0.0) * 1.9, lean=6), "os12", "ready",
-                         ("m8_bodi_os12", "ready"))
-            stance = run if k >= 1.0 else blend(stance, run, k * k * (3.0 - 2.0 * k))
+            phase = a.get("gait", 0.0) / gait_cycle_m(3.4) * math.tau
+            lower = locomotion_pose(3.4, 0.0, phase)
+            run = mask_pose(lower, stance)
+            d_tw = lower.get("twist", 0.0) * (0.45 if aiming else 0.65)
+            d_sp = lower.get("spine", 0.0) * (0.45 if aiming else 0.60)
+            run["body_r"] = lower.get("body_r", 0.0)
+            run["spine_r"] = lower.get("spine_r", 0.0) * 0.85
+            run["spine"] = stance.get("spine", 0.0) + d_sp
+            run["twist"] = stance.get("twist", R.AIM_TWIST if aiming else 0.0) + d_tw
+            run["head_y"] = stance.get("head_y", 0.0) - d_tw * 0.8
+            run["rifle_p"] = stance.get("rifle_p", 0.0) + d_sp
+            run["rifle_y"] = stance.get("rifle_y", 0.0) + d_tw
+            stance = run if k >= 1.0 else blend(stance, run, _ease(k))
         dk = a.get("duck_k", 0.0)
         if dk > 0.0 and a["state"] == "up":
-            cov = _hold_cached(hum, dict(POSES["crouch"]), "os12", "ready",
-                               key=("m8_bodi_os12", "crouch"))
+            if aiming:
+                crouch_st = dict(POSES["crouch"], twist=R.AIM_TWIST, head_y=-0.8 * R.AIM_TWIST)
+                cov = _hold_cached(hum, crouch_st, "os12", "aim",
+                                   aim=(0.0, 1.05 + 10.0 * slope, 10.0),
+                                   key=("m8_bodi_os12", "crouch_aim", slope))
+            else:
+                cov = _hold_cached(hum, dict(POSES["crouch"]), "os12", "ready",
+                                   key=("m8_bodi_os12", "crouch"))
             stance = blend(stance, cov, _ease(dk))
         return stance
 
@@ -2255,7 +2452,7 @@ class TrapScene:
             return
         x, y, z = S3.VASILE_AT
         _w.actor(r, "vasile", dict(POSES["stand"]), (x, y, z), self.vasile_yaw, int(tm),
-                 seed=71, amp=0.25, rifle_on=False, mouth=0.0)
+                 seed=71, amp=0.25, rifle_on=False, mouth=0.0, shadow=_shadow_at(y))
         r.add_sprite((x + 0.16, y + 1.66, z - 0.12),
                      _fx.glow((255, 120, 42), 0.10, tm, flicker=0.25,
                               core=(255, 220, 150), intensity=0.6, max_px=10),
@@ -2266,7 +2463,7 @@ class TrapScene:
     def handle_event(self, event):
         if not self._active or self.paused:
             return
-        if not self.dying and self.phase not in ("climb", "catwalk"):
+        if not self.dying and self.phase not in ("climb", "catwalk") and not REV.is_locking(self):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     self._switch_weapon()

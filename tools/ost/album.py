@@ -1,4 +1,4 @@
-"""Call of Acaristan - Original Soundtrack. Twelve tracks, menu to outro.
+"""Call of Acaristan - Original Soundtrack. Twenty tracks, menu to outro.
 
 Leitmotifs (offsets in semitones from the track root, lengths in beats):
 - Biribel: a doina phrase in Romanian minor (raised 4th). CALL, ANSWER, HOME.
@@ -12,7 +12,8 @@ from .synth import (Track, SR, boom, braam, brass, chirp, chord, choir, cimbalom
                     fade, glass, hat, horn, hum, hz, kick, metal, midi, musicbox, ney, organ, oud, pad, pulse,
                     radio, rain, reed, rim, riq, riser, rotor, shot, snare, squelch, static, strings, taiko,
                     tek, timpani, wind, sine, env, fire, piano, accordion, fiddle, pluck, whistle,
-                    power, reese, bell, tom, clap, tamb, whip, square)
+                    power, reese, bell, tom, clap, tamb, whip, square,
+                    cello, vibra, analog_lead, upright_bass, sub_kick, ind_snare, brush, shaker, clave)
 
 CALL = [(0, 1), (7, 1), (6, .5), (7, .5), (3, 1), (2, .5), (3, .5), (0, 3)]
 ANSWER = [(7, 1), (10, 1), (9, .5), (7, .5), (6, 1), (7, 4)]
@@ -966,6 +967,381 @@ def t12_gabi_seby_darius():
     return T
 
 
+# ---------------------------------------------------------------- 13-19: brand-new unique cues
+# Each track below uses its own meter, percussion kit, bass phrasing, harmony, and original melodies.
+
+# ---------------------------------------------------------------- 13. Wet Concrete (Early Combat, M1-M3 / M8 Trap)
+# 5/4 (3+2) in C# minor/Phrygian: sub_kick + ind_snare + shaker, upright_bass syncopation, analog_lead & braam.
+
+CONC_CH = ["C#m", "D", "Bm", "C#m", "A", "G#7", "F#m", "G#"]
+CONC_M1 = bars_of([(0, 1.5), (3, 1.5), (2, 1), (0, 1)], [(1, 1.5), (5, 1.5), (3, 2)],
+                  [(-2, 1.5), (0, 1.5), (3, 1), (2, 1)], [(0, 2.5), (-1, 1.5), (None, 1)])
+CONC_M2 = bars_of([(8, 1.5), (7, 1.5), (5, 1), (3, 1)], [(7, 1.5), (5, 1.5), (4, 2)],
+                  [(5, 1.5), (3, 1.5), (2, 1), (0, 1)], [(4, 3), (None, 2)])
+
+
+def t13_wet_concrete():
+    T = Track(40, 118, beats=5, seed=133, verb_s=2.3, damp=4200, tail=5.0)
+    T.add(fade(rain(T.n, T.rng), 2, 5), 0, 0.13, verb=0.04)
+    T.add(fade(hum(T.n, T.rng), 3, 4), 0, 0.02, verb=0)
+
+    bass_hits = [(0, 1.3), (1.5, 1.3), (3, 0.8), (4, 0.8)]
+    groove(T, 0, 8, [(sub_kick, [0, 3], 0.45, 0, 0.08),
+                     (shaker, [0.5, 1.5, 2.5, 3.5, 4.5], 0.10, 0.35, 0.15),
+                     (clave, [0, 3], 0.12, -0.25, 0.25)])
+    roots(T, upright_bass, CONC_CH, 0, bass_hits, 0.30, base=37)
+    stabs(T, power, CONC_CH, 0, [(0, 0.45), (3, 0.45)], 0.12, base=37, mute=True)
+
+    for bar in (8, 16):
+        groove(T, bar, 8, [(sub_kick, [0, 1.5, 3, 4], 0.52, 0, 0.08),
+                           (ind_snare, [2, 4.5], 0.34, 0, 0.22),
+                           (shaker, [0.5, 1, 2.5, 3.5], 0.12, 0.35, 0.12),
+                           (clave, [0, 3], 0.10, -0.3, 0.2)])
+        roots(T, upright_bass, CONC_CH, bar, bass_hits, 0.28, base=37)
+        roots(T, reese, CONC_CH, bar, [(0, 2.6), (3, 1.6)], 0.18, base=25, cutoff=520.0)
+        stabs(T, power, CONC_CH, bar, [(0, 0.5), (1.5, 0.5), (3, 0.5)], 0.15, base=37, mute=True)
+        pads(T, strings, CONC_CH, bar, 0.18, base=49, trem=10.0)
+    motif(T, analog_lead, CONC_M1, "C#4", 8, gain=0.34, pan=0.1, verb=0.3)
+    motif(T, brass, CONC_M2, "C#3", 12, gain=0.38, verb=0.3, bright=1800.0)
+    motif(T, analog_lead, CONC_M2, "C#4", 16, gain=0.36, pan=0.15, verb=0.3)
+    motif(T, cello, CONC_M1, "C#3", 20, gain=0.32, pan=-0.15, verb=0.35)
+
+    for b in (24, 26, 28, 30):
+        T.add(braam(hz(chord(CONC_CH[b - 24], 25)[0]), T.dur(3.5)), T.t(b), 0.22, 0, 0.4)
+    groove(T, 24, 8, [(sub_kick, [0, 3], 0.48, 0, 0.1), (ind_snare, [3], 0.30, 0, 0.3),
+                      (shaker, [1, 2, 4], 0.09, 0.3, 0.15)])
+    motif(T, analog_lead, CONC_M1, "C#4", 24, gain=0.28, verb=0.45, bright=1200.0)
+    T.add(riser(T.dur(5)), T.t(31), 0.24)
+
+    groove(T, 32, 8, [(sub_kick, [0, 1.5, 3, 4], 0.55, 0, 0.08),
+                      (ind_snare, [2, 4.5], 0.36, 0, 0.22),
+                      (shaker, [0.5, 1, 2.5, 3.5, 4.5], 0.13, 0.35, 0.12)])
+    roots(T, reese, CONC_CH, 32, [(0, 2.8), (3, 1.8)], 0.24, base=25, cutoff=680.0)
+    stabs(T, power, CONC_CH, 32, [(0, 1.0), (3, 1.0)], 0.18, base=37)
+    pads(T, strings, CONC_CH, 32, 0.22, base=49, trem=11.0)
+    motif(T, analog_lead, CONC_M1, "C#4", 32, gain=0.36, pan=0.12, verb=0.3)
+    motif(T, brass, CONC_M2, "C#3", 36, gain=0.40, verb=0.3)
+    motif(T, analog_lead, CONC_M2, "C#5", 36, gain=0.24, pan=-0.15, verb=0.35)
+    return T
+
+
+# ---------------------------------------------------------------- 14. After Hours (M5 Quiet - Martial Law)
+# Slow 4/4 nocturnal jazz-noir in F# minor: brush snare, upright_bass, smoky vibra & solo cello.
+
+CURF_CH = ["F#m9", "Dmaj7", "Bm7", "C#7b9", "F#m9", "Emaj7", "Dmaj7", "C#7"]
+CURF_M = bars_of([(7, 2), (3, 1), (2, 1)], [(6, 2.5), (4, 1.5)], [(5, 1.5), (3, 1.5), (2, 1)], [(1, 3), (None, 1)],
+                 [(7, 1.5), (10, 1.5), (9, 1)], [(11, 2.5), (9, 1.5)], [(6, 2), (4, 1), (2, 1)], [(1, 3.5), (None, .5)])
+
+
+def t14_after_hours():
+    T = Track(32, 68, seed=144, verb_s=3.4, damp=3500, tail=6.0, target_db=-16.0)
+    T.add(fade(rain(T.n, T.rng), 3, 6), 0, 0.12, verb=0.04)
+    T.add(fade(hum(T.n, T.rng), 2, 4), 0, 0.018, verb=0)
+
+    def vibra_comp(bar, bars, gain):
+        for b in range(bar, bar + bars):
+            c = chord(CURF_CH[b % 8], 54)
+            for beat, g in ((0, 1.0), (2.5, 0.65)):
+                for m in c[:4]:
+                    T.add(vibra(hz(m), T.dur(2.2)), T.t(b, beat), gain * g, -0.2 + 0.1 * (m % 3), 0.5, 0.008)
+
+    vibra_comp(0, 24, 0.085)
+    roots(T, upright_bass, CURF_CH, 0, [(0, 1.9), (2, 0.9), (3, 0.9)], 0.24, base=30)
+    groove(T, 4, 20, [(brush, [1, 2.5, 3], 0.14, 0.25, 0.3),
+                      (sub_kick, [0, 2.75], 0.22, 0, 0.1),
+                      (shaker, [0.5, 1.5, 3.5], 0.04, 0.4, 0.15)])
+
+    motif(T, cello, CURF_M, "F#3", 8, gain=0.34, pan=-0.1, verb=0.45)
+    pads(T, strings, CURF_CH, 16, 0.14, base=54, a=1.2, r=1.8)
+    roots(T, upright_bass, CURF_CH, 16, [(0, 1.9), (2, 0.9), (3, 0.9)], 0.26, base=30)
+    motif(T, cello, CURF_M, "F#3", 16, gain=0.36, pan=-0.1, verb=0.45)
+    motif(T, vibra, CURF_M, "F#5", 16, gain=0.14, pan=0.3, verb=0.55)
+
+    vibra_comp(24, 6, 0.07)
+    roots(T, upright_bass, CURF_CH[:6], 24, [(0, 3.6)], 0.22, base=30)
+    for m in chord("F#m9", 54):
+        T.add(vibra(hz(m), T.dur(6)), T.t(30), 0.06, 0.1, 0.65)
+    return T
+
+
+# ---------------------------------------------------------------- 15. Cold Iron (M6 Combat & Insertion)
+# Driving 6/8 (3+3 compound meter) in B minor: sub_kick + ind_snare + metal, analog_lead & fiddle.
+
+IRON_CH = ["Bm", "G", "Em", "F#", "Bm", "A", "G", "F#7"]
+IRON_A = bars_of([(0, 2), (3, 1), (7, 2), (5, 1)], [(3, 2), (2, 1), (0, 3)],
+                 [(7, 2), (8, 1), (10, 2), (7, 1)], [(6, 3), (7, 2), (None, 1)])
+IRON_B = bars_of([(12, 2), (10, 1), (8, 2), (7, 1)], [(5, 2), (7, 1), (3, 3)],
+                 [(2, 2), (3, 1), (5, 2), (7, 1)], [(6, 4), (None, 2)])
+
+
+def t15_cold_iron():
+    T = Track(48, 168, beats=6, seed=155, verb_s=2.9, damp=4200, tail=5.0)
+    T.add(fade(wind(T.n, T.rng, 320, 1300), 2, 5), 0, 0.13, verb=0.1)
+    for n, pan_ in (("B4", -0.35), ("F#5", 0.35)):
+        T.add(fade(glass(hz(n), T.dur(20)), 0, 3), 0, 0.055, pan_, 0.6)
+
+    groove(T, 0, 8, [(sub_kick, [0, 3], 0.46, 0, 0.08),
+                     (shaker, [1, 2, 4, 5], 0.12, 0.35, 0.15),
+                     (metal, [0], 0.10, -0.4, 0.45)])
+    roots(T, reese, IRON_CH, 0, [(0, 2.6), (3, 2.6)], 0.24, base=35, cutoff=420.0)
+
+    for bar in (8, 16):
+        groove(T, bar, 8, [(sub_kick, [0, 3], 0.52, 0, 0.08),
+                           (ind_snare, [3], 0.36, 0, 0.25),
+                           (shaker, [1, 2, 4, 5], 0.14, 0.35, 0.12),
+                           (metal, [0, 4.5], 0.10, -0.35, 0.4)])
+        roots(T, reese, IRON_CH, bar, [(0, 2.5), (3, 1.8), (5, 0.9)], 0.28, base=35, cutoff=680.0)
+        stabs(T, power, IRON_CH, bar, [(0, 1.5), (3, 1.5)], 0.16, base=35, mute=True)
+        pads(T, strings, IRON_CH, bar, 0.18, base=47)
+    motif(T, analog_lead, IRON_A, "B3", 8, gain=0.34, pan=0.1, verb=0.35)
+    motif(T, fiddle, IRON_B, "B4", 12, gain=0.28, pan=-0.15, verb=0.4)
+    motif(T, brass, IRON_A, "B3", 16, gain=0.38, verb=0.3)
+    motif(T, fiddle, IRON_B, "B4", 20, gain=0.30, pan=0.2, verb=0.4)
+
+    pads(T, strings, IRON_CH, 24, 0.16, base=47, a=1.0)
+    motif(T, cello, IRON_A, "B2", 24, gain=0.36, verb=0.5)
+    T.add(riser(T.dur(8)), T.t(30), 0.24)
+
+    T.add(boom(16), T.t(32), 0.65, 0, 0.5)
+    for bar in (32, 40):
+        groove(T, bar, 8, [(sub_kick, [0, 2, 3], 0.54, 0, 0.08),
+                           (ind_snare, [3], 0.38, 0, 0.25),
+                           (shaker, [0, 1, 2, 3, 4, 5], 0.14, 0.35, 0.12),
+                           (metal, [0, 3], 0.11, -0.35, 0.35)])
+        roots(T, reese, IRON_CH, bar, [(0, 2.5), (3, 1.8), (5, 0.9)], 0.30, base=35, cutoff=820.0)
+        stabs(T, power, IRON_CH, bar, [(0, 2.2), (3, 2.2)], 0.18, base=35)
+        pads(T, choir, IRON_CH, bar, 0.22, base=47)
+        motif(T, brass, IRON_A, "B3", bar, gain=0.40, verb=0.3)
+        motif(T, analog_lead, IRON_B, "B4", bar + 4, gain=0.32, pan=0.15, verb=0.35)
+        motif(T, fiddle, IRON_B, "B4", bar + 4, gain=0.24, pan=-0.2, verb=0.4)
+    return T
+
+
+# ---------------------------------------------------------------- 16. Mending Wire (M7 Daytime Farm)
+# Gentle 3/4 rural acoustic folk in G major / E minor: pluck, upright_bass, accordion, ney, birdsong.
+
+WIRE_CH1 = ["G", "D", "Em", "C", "G", "D", "Am7", "D"]
+WIRE_CH2 = ["Em", "C", "G", "D", "Am7", "Em", "C", "D"]
+WIRE_A = bars_of([(4, 1.5), (7, .5), (9, 1)], [(7, 2), (5, 1)], [(4, 1.5), (2, .5), (0, 1)], [(2, 3)],
+                 [(4, 1.5), (7, .5), (11, 1)], [(9, 2), (7, 1)], [(5, 1.5), (4, .5), (2, 1)], [(2, 3)])
+WIRE_B = bars_of([(12, 1.5), (11, .5), (9, 1)], [(7, 2), (4, 1)], [(5, 1.5), (7, .5), (9, 1)], [(7, 3)],
+                 [(5, 1.5), (4, .5), (2, 1)], [(4, 2), (7, 1)], [(5, 1.5), (4, .5), (2, 1)], [(0, 3)])
+
+
+def t16_mending_wire():
+    T = Track(40, 86, beats=3, seed=166, verb_s=2.6, damp=4500, tail=6.0, target_db=-16.0)
+    T.add(fade(wind(T.n, T.rng, 200, 750), 3, 5), 0, 0.08, verb=0.1)
+    for k in range(7):
+        T.add(chirp(k), T.t(k * 5 + 1, float(T.rng.uniform(0, 2.2))), 0.04, float(T.rng.uniform(-0.7, 0.7)), 0.5)
+
+    arp(T, pluck, WIRE_CH1, 0, 0.16, step=0.5, pattern=("r", "5", "R", "3", "R", "5"), base=43, length=1.2)
+    roots(T, upright_bass, WIRE_CH1, 0, [(0, 2.8)], 0.20, base=31)
+
+    arp(T, pluck, WIRE_CH1, 8, 0.18, step=0.5, pattern=("r", "5", "R", "3", "R", "5"), base=43, length=1.2)
+    roots(T, upright_bass, WIRE_CH1, 8, [(0, 2.8)], 0.22, base=31)
+    groove(T, 8, 24, [(shaker, [1, 2], 0.06, 0.35, 0.15), (brush, [2], 0.08, -0.2, 0.25)])
+    motif(T, accordion, WIRE_A, "G4", 8, gain=0.25, pan=-0.12, verb=0.35)
+
+    arp(T, pluck, WIRE_CH2, 16, 0.18, step=0.5, pattern=("r", "5", "R", "3", "R", "5"), base=43, length=1.2)
+    roots(T, upright_bass, WIRE_CH2, 16, [(0, 2.8)], 0.22, base=31)
+    pads(T, strings, WIRE_CH2, 16, 0.14, base=43, a=0.8, r=1.2)
+    motif(T, ney, WIRE_B, "G4", 16, gain=0.28, pan=0.15, verb=0.45)
+
+    arp(T, pluck, WIRE_CH1, 24, 0.18, step=0.5, pattern=("r", "5", "R", "3", "R", "5"), base=43, length=1.2)
+    roots(T, upright_bass, WIRE_CH1, 24, [(0, 2.8)], 0.22, base=31)
+    pads(T, strings, WIRE_CH1, 24, 0.15, base=43, a=0.8, r=1.2)
+    motif(T, accordion, WIRE_A, "G4", 24, gain=0.24, pan=-0.15, verb=0.35)
+    motif(T, cello, WIRE_A, "G3", 24, gain=0.22, pan=0.15, verb=0.4)
+
+    arp(T, pluck, WIRE_CH2, 32, 0.16, step=0.5, pattern=("r", "5", "R", "3", "R", "5"), base=43, length=1.3)
+    roots(T, upright_bass, WIRE_CH2, 32, [(0, 2.8)], 0.20, base=31)
+    motif(T, ney, WIRE_B, "G4", 32, gain=0.26, pan=0.1, verb=0.5)
+    return T
+
+
+# ---------------------------------------------------------------- 17. Cold Marble (M8 Duty - The Mansion)
+# Heavy 4/4 in G# minor: organ, choir("o"), braam, crisp clave floor echoes, cello & brass.
+
+MARB_CH = ["G#m", "E", "C#m", "D#", "G#m", "F#", "E", "D#7"]
+MARB_A = bars_of([(0, 1.5), (3, .5), (7, 1.5), (6, .5)], [(8, 2), (7, 1.5), (None, .5)],
+                 [(5, 1.5), (3, .5), (2, 1.5), (3, .5)], [(6, 3), (None, 1)])
+MARB_B = bars_of([(12, 1.5), (10, .5), (8, 1.5), (7, .5)], [(9, 2), (7, 1.5), (None, .5)],
+                 [(8, 1), (7, 1), (5, 1), (3, 1)], [(6, 3.5), (None, .5)])
+
+
+def t17_cold_marble():
+    T = Track(40, 98, seed=177, verb_s=3.4, damp=4000, tail=6.0)
+    pads(T, organ, MARB_CH, 0, 0.20, base=44, verb=0.45)
+    groove(T, 0, 8, [(clave, [0, 1, 2, 3], 0.12, 0.35, 0.45)])
+    for b in (0, 4):
+        T.add(braam(hz(chord(MARB_CH[b], 32)[0]), T.dur(3.5)), T.t(b), 0.26, 0, 0.4)
+    motif(T, cello, MARB_A, "G#2", 4, gain=0.34, verb=0.45)
+
+    for bar in (8, 16):
+        groove(T, bar, 8, [(sub_kick, [0, 2.5], 0.52, 0, 0.08),
+                           (ind_snare, [2], 0.34, 0, 0.3),
+                           (clave, [0.5, 1, 3, 3.5], 0.11, 0.35, 0.35),
+                           (shaker, [1, 3], 0.08, -0.35, 0.15)])
+        roots(T, upright_bass, MARB_CH, bar, [(0, 2.0), (2.5, 1.4)], 0.28, base=32)
+        pads(T, organ, MARB_CH, bar, 0.18, base=44, verb=0.4)
+        pads(T, choir, MARB_CH, bar, 0.18, vowel="o", base=44)
+    motif(T, cello, MARB_A, "G#2", 8, gain=0.34, pan=-0.1, verb=0.4)
+    motif(T, brass, MARB_B, "G#3", 12, gain=0.40, verb=0.35, bright=2000.0)
+    motif(T, strings, MARB_A, "G#4", 16, gain=0.30, verb=0.4, a=0.08)
+    motif(T, brass, MARB_B, "G#3", 20, gain=0.42, verb=0.35, bright=2200.0)
+
+    for b in (24, 28, 32):
+        T.add(braam(hz(chord(MARB_CH[b % 8], 32)[0]), T.dur(3.5)), T.t(b), 0.28, 0, 0.45)
+    for bar in (24, 32):
+        groove(T, bar, 8, [(sub_kick, [0, 1.5, 2.5], 0.54, 0, 0.08),
+                           (ind_snare, [2], 0.38, 0, 0.3),
+                           (tom, [3, 3.5], 0.26, -0.25, 0.35),
+                           (clave, [0.5, 1, 3, 3.5], 0.11, 0.35, 0.35)])
+        roots(T, reese, MARB_CH, bar, [(0, 2.4), (2.5, 1.4)], 0.26, base=32, cutoff=620.0)
+        pads(T, organ, MARB_CH, bar, 0.20, base=44, verb=0.4)
+        pads(T, choir, MARB_CH, bar, 0.24, vowel="o", base=44)
+        motif(T, brass, MARB_A, "G#3", bar, gain=0.42, verb=0.35)
+        motif(T, brass, MARB_B, "G#3", bar + 4, gain=0.44, verb=0.35)
+        motif(T, cello, MARB_B, "G#2", bar + 4, gain=0.30, pan=-0.15, verb=0.4)
+    return T
+
+
+# ---------------------------------------------------------------- 18. To the Crossing (M8 Revenge - Tractor Chase)
+# 142 BPM Motorik diesel pursuit in F minor -> G minor: steady sub_kick, off-beat bass bounce, analog_lead & fiddle.
+
+XING_F = ["Fm", "Db", "Bb", "C", "Fm", "Eb", "Db", "C7"]
+XING_G = ["Gm", "Eb", "C", "D", "Gm", "F", "Eb", "D7"]
+XING_A = bars_of([(0, 1), (3, .5), (5, .5), (7, 1.5), (5, .5)], [(8, 1), (7, 1), (5, 2)],
+                 [(3, 1), (5, .5), (7, .5), (8, 1), (10, 1)], [(7, 3), (None, 1)])
+XING_B = bars_of([(12, 1), (10, .5), (8, .5), (7, 1.5), (8, .5)], [(10, 1), (8, 1), (7, 2)],
+                 [(5, 1), (7, .5), (8, .5), (7, 1), (5, 1)], [(3, 2), (0, 2)])
+
+
+def t18_to_the_crossing():
+    T = Track(48, 142, seed=188, verb_s=2.6, damp=4400, tail=5.0)
+    T.add(fade(wind(int(T.t(10) * SR), T.rng, 280, 1000), 2, 4), 0, 0.10, verb=0.1)
+
+    def motorik(bar, prog, root, gain=1.0):
+        b_base = 29 if root == "F" else 31
+        groove(T, bar, 8, [(sub_kick, [0, 1, 2, 3], 0.50 * gain, 0, 0.08),
+                           (ind_snare, [1, 3], 0.34 * gain, 0, 0.25),
+                           (shaker, [k * 0.5 for k in range(8)], 0.12 * gain, 0.3, 0.12),
+                           (clave, [0.75, 2.25], 0.09 * gain, -0.35, 0.2)])
+        roots(T, reese, prog, bar, [(0.5, 0.45), (1.5, 0.45), (2.5, 0.45), (3.5, 0.45)], 0.26 * gain, base=b_base, cutoff=680.0)
+        stabs(T, power, prog, bar, [(0.5, 0.35), (2.5, 0.35)], 0.14 * gain, base=b_base + 12)
+        motif(T, analog_lead, XING_A, root + "4", bar, gain=0.34 * gain, pan=0.1, verb=0.3)
+        motif(T, fiddle, XING_B, root + "4", bar + 4, gain=0.28 * gain, pan=-0.18, verb=0.35)
+
+    groove(T, 0, 4, [(shaker, [k * 0.5 for k in range(8)], 0.10, 0.3, 0.15),
+                     (sub_kick, [0, 2], 0.42, 0, 0.1)])
+    roots(T, upright_bass, XING_F[:4], 0, [(0.5, 0.45), (1.5, 0.45), (2.5, 0.45), (3.5, 0.45)], 0.24, base=29)
+
+    motorik(4, XING_F, "F")
+    motorik(12, XING_F, "F", 1.04)
+
+    T.add(fade(rotor(int(T.t(14) * SR), T.rng, 6.2), 2, 2), T.t(20), 0.13, 0.15, 0.12)
+    motorik(20, XING_F, "F", 1.08)
+    pads(T, choir, XING_F, 20, 0.20, base=41)
+    T.add(riser(T.dur(4)), T.t(26), 0.24)
+
+    T.add(boom(22), T.t(28), 0.68, 0, 0.5)
+    motorik(28, XING_G, "G", 1.10)
+    motorik(36, XING_G, "G", 1.14)
+    motif(T, brass, XING_A, "G3", 36, gain=0.36, verb=0.3)
+    T.add(horn(3.0), T.t(44), 0.12, -0.35, 0.85)
+    for b in range(44, 48):
+        g = 0.20 * (1.0 - (b - 44) / 4.5)
+        T.add(clack(b % 8), T.t(b), g, 0.3, 0.5)
+        T.add(clack((b + 3) % 8), T.t(b, 0.5), g * 0.85, 0.3, 0.5)
+    return T
+
+
+# ---------------------------------------------------------------- 19. Paper Trail (Debrief / Boxcar / Aftermath)
+# Sparse 4/4 in D minor/Dorian: solo cello, vibra, piano, brush pulse — calm under dossiers & radio aftermath.
+
+TRAIL_CH = ["Dm9", "G7", "Bbmaj7", "A7", "Gm7", "Dm9", "Em7", "A7b9"]
+TRAIL_A = bars_of([(7, 2), (5, 1), (4, 1)], [(2, 2.5), (0, 1.5)], [(3, 1.5), (5, 1.5), (7, 1)], [(4, 3), (None, 1)])
+TRAIL_B = bars_of([(10, 2), (9, 1), (7, 1)], [(5, 2.5), (4, 1.5)], [(2, 1.5), (4, 1.5), (5, 1)], [(4, 3.5), (None, .5)])
+
+
+def t19_paper_trail():
+    T = Track(28, 70, seed=199, verb_s=3.4, damp=3400, tail=6.0, target_db=-16.0)
+    T.add(fade(hum(T.n, T.rng), 2, 4), 0, 0.018, verb=0)
+    T.add(fade(rain(T.n, T.rng), 3, 5), 0, 0.075, verb=0.04)
+
+    for b in range(24):
+        c = chord(TRAIL_CH[b % 8], 50)
+        for beat, idx in ((0, 0), (1, 2), (2.5, 1)):
+            T.add(vibra(hz(c[idx % len(c)]), T.dur(2.2)), T.t(b, beat), 0.10, -0.2 + 0.15 * beat, 0.55, 0.008)
+    roots(T, upright_bass, TRAIL_CH, 0, [(0, 3.8)], 0.20, base=38)
+    roots(T, upright_bass, TRAIL_CH, 8, [(0, 3.8)], 0.22, base=38)
+    roots(T, upright_bass, TRAIL_CH, 16, [(0, 3.8)], 0.22, base=38)
+
+    groove(T, 8, 16, [(brush, [2], 0.10, 0.2, 0.35), (shaker, [1, 3], 0.04, -0.3, 0.2)])
+    pads(T, strings, TRAIL_CH, 8, 0.13, base=50, a=1.4, r=1.8)
+    motif(T, cello, TRAIL_A, "D3", 8, gain=0.32, pan=-0.1, verb=0.5)
+    motif(T, piano, TRAIL_B, "D5", 12, gain=0.22, pan=0.2, verb=0.55, vel=0.55)
+
+    pads(T, strings, TRAIL_CH, 16, 0.16, base=50, a=1.4, r=1.8)
+    motif(T, cello, TRAIL_B, "D3", 16, gain=0.34, pan=-0.1, verb=0.5)
+    motif(T, vibra, TRAIL_A, "D5", 20, gain=0.16, pan=0.25, verb=0.6)
+
+    for m in chord("Dm9", 50)[:4]:
+        T.add(piano(hz(m), T.dur(7), 0.45), T.t(24), 0.11, 0.05, 0.6)
+    for n in ("D3", "A3"):
+        T.add(fade(strings(hz(n), T.dur(12), a=1.2, r=3.5), 0, 4.5), T.t(22), 0.10, 0, 0.6)
+    return T
+
+
+# ---------------------------------------------------------------- 20. Dust on the Road (M7 Prep - After the Warning)
+# Urgent 7/4 (4+3) in G minor: clave/shaker ticking, upright_bass & pluck pedal, cello/ney/analog_lead.
+# Bridges 16_mending_wire (3/4 G major) into 09_fallow_ground (7/8 G harmonic minor) without blowing heavy drums early.
+
+PREP_CH = ["Gm", "Eb", "Cm", "D7", "Gm", "Bb", "Cm", "D"]
+PREP_A = bars_of([(0, 2), (3, 1), (2, 1), (7, 2), (6, 1)], [(3, 2), (2, 1.5), (0, 1.5), (None, 2)],
+                 [(5, 2), (3, 1), (2, 1), (3, 2), (0, 1)], [(-1, 2.5), (0, 2.5), (None, 2)])
+PREP_B = bars_of([(7, 1.5), (8, 1.5), (7, 1), (10, 2), (8, 1)], [(7, 2), (5, 1.5), (3, 1.5), (None, 2)],
+                 [(3, 2), (5, 1), (7, 1), (8, 2), (7, 1)], [(6, 3), (7, 2), (None, 2)])
+
+
+def t20_dust_on_the_road():
+    T = Track(24, 116, beats=7, seed=207, verb_s=2.8, damp=4200, tail=5.5, target_db=-15.0)
+    T.add(fade(wind(T.n, T.rng, 240, 950), 2, 5), 0, 0.11, verb=0.1)
+    for n, pan_ in (("G4", -0.35), ("D5", 0.35)):
+        T.add(fade(glass(hz(n), T.dur(56)), 1, 4), 0, 0.04, pan_, 0.6)
+
+    bass_hits = [(0, 1.8), (2, 1.6), (4, 1.3), (5.5, 1.2)]
+    groove(T, 0, 8, [(clave, [0, 2, 4, 5.5], 0.13, 0.3, 0.25),
+                     (shaker, [0.5, 1.5, 2.5, 3.5, 4.5, 6], 0.09, -0.3, 0.12),
+                     (sub_kick, [0, 4], 0.36, 0, 0.08)])
+    roots(T, upright_bass, PREP_CH, 0, bass_hits, 0.28, base=31)
+    for b in range(8):
+        c = chord(PREP_CH[b], 43)
+        for beat in (0, 1.5, 3, 4, 5.5):
+            T.add(pluck(hz(c[int(beat) % len(c)]), T.dur(0.9), 0.45, 0.0), T.t(b, beat), 0.14, -0.2, 0.35, 0.004)
+    motif(T, cello, PREP_A, "G3", 4, gain=0.30, pan=-0.1, verb=0.45)
+
+    for bar in (8, 16):
+        groove(T, bar, 8, [(clave, [0, 2, 4, 5.5], 0.14, 0.3, 0.25),
+                           (shaker, [0.5, 1.5, 2.5, 3.5, 4.5, 6], 0.11, -0.3, 0.12),
+                           (brush, [2, 5.5], 0.14, 0.2, 0.25),
+                           (sub_kick, [0, 4], 0.42, 0, 0.08)])
+        roots(T, upright_bass, PREP_CH, bar, bass_hits, 0.30, base=31)
+        for b in range(8):
+            c = chord(PREP_CH[b], 43)
+            for beat in (0, 1.5, 3, 4, 5.5):
+                T.add(pluck(hz(c[int(beat) % len(c)]), T.dur(0.9), 0.55, 0.0), T.t(bar + b, beat), 0.15, -0.2, 0.35, 0.004)
+        pads(T, strings, PREP_CH, bar, 0.16, base=43, a=0.6, r=1.0)
+    motif(T, cello, PREP_A, "G3", 8, gain=0.32, pan=-0.1, verb=0.4)
+    motif(T, ney, PREP_B, "G4", 12, gain=0.26, pan=0.15, verb=0.45)
+    motif(T, analog_lead, PREP_A, "G4", 16, gain=0.24, pan=0.12, verb=0.4, bright=1400.0)
+    motif(T, cello, PREP_B, "G3", 20, gain=0.34, pan=-0.1, verb=0.4)
+
+    T.add(bell(hz("G4"), 2), T.t(20), 0.10, 0.3, 0.7)
+    T.add(bell(hz("G4"), 3), T.t(23), 0.12, 0.3, 0.7)
+    return T
+
+
 ALBUM = [
     ("Call of Acaristan", "Main Theme", t1_call_of_acaristan),
     ("Black Notebook", "Mission 1 - Day 0", t2_black_notebook),
@@ -979,4 +1355,12 @@ ALBUM = [
     ("Head of State", "Mission 8 - Duty Ending", t10_head_of_state),
     ("Old Friends", "Mission 8 - Revenge Ending", t11_old_friends),
     ("Gabi, Seby, Darius", "Outro", t12_gabi_seby_darius),
+    ("Wet Concrete", "Early Combat", t13_wet_concrete),
+    ("After Hours", "Mission 5 - Martial Law", t14_after_hours),
+    ("Cold Iron", "Mission 6 - Combat", t15_cold_iron),
+    ("Mending Wire", "Mission 7 - The Farm", t16_mending_wire),
+    ("Cold Marble", "Mission 8 - The Mansion", t17_cold_marble),
+    ("To the Crossing", "Mission 8 - The Chase", t18_to_the_crossing),
+    ("Paper Trail", "Debrief & Aftermath", t19_paper_trail),
+    ("Dust on the Road", "Mission 7 - The Warning", t20_dust_on_the_road),
 ]

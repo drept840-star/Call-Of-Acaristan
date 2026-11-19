@@ -948,9 +948,73 @@
     "STUBBLE",
     "PoseCache",
     "POSES",
-    "POSE_CAP"
+    "POSE_CAP",
+    "Spring",
+    "AngleSpring",
+    "Spring3",
+    "TurnLagTracker",
+    "LOWER_BODY_KEYS",
+    "TORSO_KEYS",
+    "HEAD_KEYS",
+    "LEFT_ARM_KEYS",
+    "RIGHT_ARM_KEYS",
+    "WEAPON_KEYS",
+    "UPPER_BODY_KEYS",
+    "FULL_BODY_KEYS",
+    "NEUTRAL_POSE",
+    "blend_poses",
+    "add_pose",
+    "mask_pose",
+    "locomotion_pose",
+    "gait_cycle_m",
+    "FootIKSolver",
+    "LayeredAnimState"
    ],
    "names": {
+    "AngleSpring": {
+     "attrs": {
+      "freq_hz": "member_descriptor",
+      "target": "member_descriptor",
+      "value": "member_descriptor",
+      "vel": "member_descriptor",
+      "zeta": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, value: 'float' = 0.0, *, freq_hz: 'float' = 7.0, zeta: 'float' = 0.9) -> 'None'",
+      "impulse": "(self, dv: 'float') -> 'None'",
+      "snap": "(self, value: 'float' = 0.0) -> 'float'",
+      "step": "(self, dt: 'float', target: 'float | None' = None) -> 'float'"
+     }
+    },
+    "FULL_BODY_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "FootIKSolver": {
+     "attrs": {
+      "foot_targets": "member_descriptor",
+      "hip_half": "member_descriptor",
+      "ly": "member_descriptor",
+      "max_step": "member_descriptor",
+      "pelvis_drop": "member_descriptor",
+      "pelvis_y": "member_descriptor",
+      "ry": "member_descriptor",
+      "stride_reach": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *, hip_half: 'float' = 0.11, stride_reach: 'float' = 0.26, max_step: 'float' = 0.65, y0: 'float' = 0.0) -> 'None'",
+      "reset": "(self, y0: 'float' = 0.0) -> 'None'",
+      "update": "(self, dt: 'float', pos: 'tuple[float, float, float]', yaw_deg: 'float', phase: 'float', move_k: 'float', floor_fn: 'Callable[[float, float], float] | None') -> 'dict[str, float]'"
+     }
+    },
+    "HEAD_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
     "HEIGHT": {
      "kind": "constant",
      "type": "dict"
@@ -962,6 +1026,34 @@
     "KRAP_UNIFORM": {
      "kind": "constant",
      "type": "tuple"
+    },
+    "LEFT_ARM_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "LOWER_BODY_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "LayeredAnimState": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *, yaw_deg: 'float' = 0.0, y0: 'float' = 0.0, stride_gain: 'float' = 2.0) -> 'None'",
+      "cancel_reload": "(self) -> 'None'",
+      "compose": "(self, ready_pose: 'Mapping[str, float]', aim_pose: 'Mapping[str, float] | None' = None, *, pitch_deg: 'float' = 0.0, time_s: 'float' = 0.0, breath_amp: 'float' = 0.25, reload_pose: 'Mapping[str, float] | None' = None) -> 'dict[str, float]'",
+      "start_reload": "(self, duration: 'float' = 1.5) -> 'None'",
+      "start_swap": "(self, duration: 'float' = 0.35) -> 'None'",
+      "trigger_flinch": "(self, local_dir_x: 'float', local_dir_z: 'float', strength: 'float' = 1.0) -> 'None'",
+      "trigger_melee": "(self, duration: 'float' = 0.38) -> 'None'",
+      "trigger_recoil": "(self, pitch_deg: 'float' = 5.5, yaw_deg: 'float' = 0.0, rifle_deg: 'float' = 10.0, *, cam_pitch: 'float' = 1.4, cam_yaw: 'float' = 0.0, cam_roll: 'float' = 0.0) -> 'None'",
+      "update": "(self, dt: 'float', *, vel_xz: 'tuple[float, float]' = (0.0, 0.0), yaw_deg: 'float' = 0.0, aiming: 'bool' = False, sprint: 'bool' = False, crouch: 'bool' = False, radio: 'bool' = False, floor_fn: 'Callable[[float, float], float] | None' = None, pos: 'tuple[float, float, float]' = (0.0, 0.0, 0.0)) -> 'None'"
+     }
+    },
+    "NEUTRAL_POSE": {
+     "kind": "constant",
+     "type": "dict"
     },
     "POSES": {
      "kind": "constant",
@@ -1001,6 +1093,10 @@
      "kind": "constant",
      "type": "float"
     },
+    "RIGHT_ARM_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
     "SPECS": {
      "kind": "constant",
      "type": "dict"
@@ -1008,6 +1104,76 @@
     "STUBBLE": {
      "kind": "constant",
      "type": "list"
+    },
+    "Spring": {
+     "attrs": {
+      "freq_hz": "member_descriptor",
+      "target": "member_descriptor",
+      "value": "member_descriptor",
+      "vel": "member_descriptor",
+      "zeta": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, value: 'float' = 0.0, *, freq_hz: 'float' = 6.0, zeta: 'float' = 0.85) -> 'None'",
+      "impulse": "(self, dv: 'float') -> 'None'",
+      "kick": "(self, dx: 'float', dv: 'float' = 0.0) -> 'None'",
+      "snap": "(self, value: 'float' = 0.0) -> 'float'",
+      "step": "(self, dt: 'float', target: 'float | None' = None) -> 'float'"
+     }
+    },
+    "Spring3": {
+     "attrs": {
+      "x": "member_descriptor",
+      "y": "member_descriptor",
+      "z": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, value: 'tuple[float, float, float]' = (0.0, 0.0, 0.0), *, freq_hz: 'float' = 7.0, zeta: 'float' = 0.8) -> 'None'",
+      "impulse": "(self, dv: 'tuple[float, float, float]') -> 'None'",
+      "kick": "(self, dx: 'tuple[float, float, float]', dv: 'tuple[float, float, float]' = (0.0, 0.0, 0.0)) -> 'None'",
+      "snap": "(self, value: 'tuple[float, float, float]' = (0.0, 0.0, 0.0)) -> 'tuple[float, float, float]'",
+      "step": "(self, dt: 'float', target: 'tuple[float, float, float] | None' = None) -> 'tuple[float, float, float]'",
+      "value": "property"
+     }
+    },
+    "TORSO_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "TurnLagTracker": {
+     "attrs": {
+      "head_lag": "member_descriptor",
+      "max_rate": "member_descriptor",
+      "roll_lag": "member_descriptor",
+      "shoulder_lag": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, yaw_deg: 'float' = 0.0, *, max_rate: 'float' = 420.0) -> 'None'",
+      "reset": "(self, yaw_deg: 'float' = 0.0) -> 'None'",
+      "step": "(self, dt: 'float', yaw_deg: 'float') -> 'tuple[float, float, float]'"
+     }
+    },
+    "UPPER_BODY_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "WEAPON_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "add_pose": {
+     "kind": "function",
+     "signature": "(base: 'Mapping[str, float]', delta: 'Mapping[str, float]', weight: 'float' = 1.0, keys: 'Iterable[str] | None' = None) -> 'dict[str, float]'"
+    },
+    "blend_poses": {
+     "kind": "function",
+     "signature": "(a: 'Mapping[str, float]', b: 'Mapping[str, float]', t: 'float', keys: 'Iterable[str] | None' = None) -> 'dict[str, float]'"
     },
     "dark": {
      "kind": "function",
@@ -1025,9 +1191,21 @@
      "kind": "function",
      "signature": "(pen, spec, hx, hy, *, fear=0, smile=0, look=0, blink=0, cig=True)"
     },
+    "gait_cycle_m": {
+     "kind": "function",
+     "signature": "(speed: 'float', sprint: 'float' = 0.0, crouch: 'float' = 0.0) -> 'float'"
+    },
     "lite": {
      "kind": "function",
      "signature": "(c, t=0.25)"
+    },
+    "locomotion_pose": {
+     "kind": "function",
+     "signature": "(fwd_speed: 'float', side_speed: 'float', phase: 'float', *, sprint: 'float' = 0.0, crouch: 'float' = 0.0, max_walk: 'float' = 4.8, max_sprint: 'float' = 7.4) -> 'dict[str, float]'"
+    },
+    "mask_pose": {
+     "kind": "function",
+     "signature": "(lower: 'Mapping[str, float]', upper: 'Mapping[str, float]', *, upper_keys: 'Iterable[str] | None' = None) -> 'dict[str, float]'"
     },
     "mix": {
      "kind": "function",
@@ -1101,6 +1279,196 @@
       "__len__": "(self) -> 'int'",
       "clear": "(self) -> 'None'",
       "get": "(self, key, size, draw_cb)"
+     }
+    }
+   }
+  },
+  "engine.anim.rig3d": {
+   "all": [
+    "LOWER_BODY_KEYS",
+    "TORSO_KEYS",
+    "HEAD_KEYS",
+    "LEFT_ARM_KEYS",
+    "RIGHT_ARM_KEYS",
+    "WEAPON_KEYS",
+    "UPPER_BODY_KEYS",
+    "FULL_BODY_KEYS",
+    "NEUTRAL_POSE",
+    "blend_poses",
+    "add_pose",
+    "mask_pose",
+    "locomotion_pose",
+    "gait_cycle_m",
+    "FootIKSolver",
+    "LayeredAnimState"
+   ],
+   "names": {
+    "FULL_BODY_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "FootIKSolver": {
+     "attrs": {
+      "foot_targets": "member_descriptor",
+      "hip_half": "member_descriptor",
+      "ly": "member_descriptor",
+      "max_step": "member_descriptor",
+      "pelvis_drop": "member_descriptor",
+      "pelvis_y": "member_descriptor",
+      "ry": "member_descriptor",
+      "stride_reach": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *, hip_half: 'float' = 0.11, stride_reach: 'float' = 0.26, max_step: 'float' = 0.65, y0: 'float' = 0.0) -> 'None'",
+      "reset": "(self, y0: 'float' = 0.0) -> 'None'",
+      "update": "(self, dt: 'float', pos: 'tuple[float, float, float]', yaw_deg: 'float', phase: 'float', move_k: 'float', floor_fn: 'Callable[[float, float], float] | None') -> 'dict[str, float]'"
+     }
+    },
+    "HEAD_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "LEFT_ARM_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "LOWER_BODY_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "LayeredAnimState": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *, yaw_deg: 'float' = 0.0, y0: 'float' = 0.0, stride_gain: 'float' = 2.0) -> 'None'",
+      "cancel_reload": "(self) -> 'None'",
+      "compose": "(self, ready_pose: 'Mapping[str, float]', aim_pose: 'Mapping[str, float] | None' = None, *, pitch_deg: 'float' = 0.0, time_s: 'float' = 0.0, breath_amp: 'float' = 0.25, reload_pose: 'Mapping[str, float] | None' = None) -> 'dict[str, float]'",
+      "start_reload": "(self, duration: 'float' = 1.5) -> 'None'",
+      "start_swap": "(self, duration: 'float' = 0.35) -> 'None'",
+      "trigger_flinch": "(self, local_dir_x: 'float', local_dir_z: 'float', strength: 'float' = 1.0) -> 'None'",
+      "trigger_melee": "(self, duration: 'float' = 0.38) -> 'None'",
+      "trigger_recoil": "(self, pitch_deg: 'float' = 5.5, yaw_deg: 'float' = 0.0, rifle_deg: 'float' = 10.0, *, cam_pitch: 'float' = 1.4, cam_yaw: 'float' = 0.0, cam_roll: 'float' = 0.0) -> 'None'",
+      "update": "(self, dt: 'float', *, vel_xz: 'tuple[float, float]' = (0.0, 0.0), yaw_deg: 'float' = 0.0, aiming: 'bool' = False, sprint: 'bool' = False, crouch: 'bool' = False, radio: 'bool' = False, floor_fn: 'Callable[[float, float], float] | None' = None, pos: 'tuple[float, float, float]' = (0.0, 0.0, 0.0)) -> 'None'"
+     }
+    },
+    "NEUTRAL_POSE": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "RIGHT_ARM_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "TORSO_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "UPPER_BODY_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "WEAPON_KEYS": {
+     "kind": "constant",
+     "type": "frozenset"
+    },
+    "add_pose": {
+     "kind": "function",
+     "signature": "(base: 'Mapping[str, float]', delta: 'Mapping[str, float]', weight: 'float' = 1.0, keys: 'Iterable[str] | None' = None) -> 'dict[str, float]'"
+    },
+    "blend_poses": {
+     "kind": "function",
+     "signature": "(a: 'Mapping[str, float]', b: 'Mapping[str, float]', t: 'float', keys: 'Iterable[str] | None' = None) -> 'dict[str, float]'"
+    },
+    "gait_cycle_m": {
+     "kind": "function",
+     "signature": "(speed: 'float', sprint: 'float' = 0.0, crouch: 'float' = 0.0) -> 'float'"
+    },
+    "locomotion_pose": {
+     "kind": "function",
+     "signature": "(fwd_speed: 'float', side_speed: 'float', phase: 'float', *, sprint: 'float' = 0.0, crouch: 'float' = 0.0, max_walk: 'float' = 4.8, max_sprint: 'float' = 7.4) -> 'dict[str, float]'"
+    },
+    "mask_pose": {
+     "kind": "function",
+     "signature": "(lower: 'Mapping[str, float]', upper: 'Mapping[str, float]', *, upper_keys: 'Iterable[str] | None' = None) -> 'dict[str, float]'"
+    }
+   }
+  },
+  "engine.anim.springs": {
+   "all": [
+    "Spring",
+    "AngleSpring",
+    "Spring3",
+    "TurnLagTracker"
+   ],
+   "names": {
+    "AngleSpring": {
+     "attrs": {
+      "freq_hz": "member_descriptor",
+      "target": "member_descriptor",
+      "value": "member_descriptor",
+      "vel": "member_descriptor",
+      "zeta": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, value: 'float' = 0.0, *, freq_hz: 'float' = 7.0, zeta: 'float' = 0.9) -> 'None'",
+      "impulse": "(self, dv: 'float') -> 'None'",
+      "snap": "(self, value: 'float' = 0.0) -> 'float'",
+      "step": "(self, dt: 'float', target: 'float | None' = None) -> 'float'"
+     }
+    },
+    "Spring": {
+     "attrs": {
+      "freq_hz": "member_descriptor",
+      "target": "member_descriptor",
+      "value": "member_descriptor",
+      "vel": "member_descriptor",
+      "zeta": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, value: 'float' = 0.0, *, freq_hz: 'float' = 6.0, zeta: 'float' = 0.85) -> 'None'",
+      "impulse": "(self, dv: 'float') -> 'None'",
+      "kick": "(self, dx: 'float', dv: 'float' = 0.0) -> 'None'",
+      "snap": "(self, value: 'float' = 0.0) -> 'float'",
+      "step": "(self, dt: 'float', target: 'float | None' = None) -> 'float'"
+     }
+    },
+    "Spring3": {
+     "attrs": {
+      "x": "member_descriptor",
+      "y": "member_descriptor",
+      "z": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, value: 'tuple[float, float, float]' = (0.0, 0.0, 0.0), *, freq_hz: 'float' = 7.0, zeta: 'float' = 0.8) -> 'None'",
+      "impulse": "(self, dv: 'tuple[float, float, float]') -> 'None'",
+      "kick": "(self, dx: 'tuple[float, float, float]', dv: 'tuple[float, float, float]' = (0.0, 0.0, 0.0)) -> 'None'",
+      "snap": "(self, value: 'tuple[float, float, float]' = (0.0, 0.0, 0.0)) -> 'tuple[float, float, float]'",
+      "step": "(self, dt: 'float', target: 'tuple[float, float, float] | None' = None) -> 'tuple[float, float, float]'",
+      "value": "property"
+     }
+    },
+    "TurnLagTracker": {
+     "attrs": {
+      "head_lag": "member_descriptor",
+      "max_rate": "member_descriptor",
+      "roll_lag": "member_descriptor",
+      "shoulder_lag": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, yaw_deg: 'float' = 0.0, *, max_rate: 'float' = 420.0) -> 'None'",
+      "reset": "(self, yaw_deg: 'float' = 0.0) -> 'None'",
+      "step": "(self, dt: 'float', yaw_deg: 'float') -> 'tuple[float, float, float]'"
      }
     }
    }
@@ -1799,9 +2167,17 @@
    "all": [
     "BoxWorld",
     "GridNav",
+    "MultiFloorNav",
+    "NavLink",
     "MeshCollider",
     "Placement",
-    "ray_aabb"
+    "ray_aabb",
+    "DebrisBody",
+    "DebrisPool",
+    "RagdollBody",
+    "box_xz_h",
+    "box_xz_yy",
+    "slide_capsule"
    ],
    "names": {
     "BoxWorld": {
@@ -1811,9 +2187,41 @@
      "methods": {
       "__init__": "(self, boxes: 'Iterable[Box]', cell: 'float' = 4.0) -> 'None'",
       "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "capsule_contacts": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'list[tuple[float, float, float, int]]'",
       "near": "(self, x0: 'float', z0: 'float', x1: 'float', z1: 'float') -> 'list[int]'",
       "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'tuple[float, int] | None'",
       "segment_blocked": "(self, a: 'Vec3', b: 'Vec3', slack: 'float' = 0.2) -> 'bool'"
+     }
+    },
+    "DebrisBody": {
+     "attrs": {
+      "age": "member_descriptor",
+      "ang_vel": "member_descriptor",
+      "bounce": "member_descriptor",
+      "col": "member_descriptor",
+      "friction": "member_descriptor",
+      "half": "member_descriptor",
+      "life": "member_descriptor",
+      "pos": "member_descriptor",
+      "rot": "member_descriptor",
+      "settled": "member_descriptor",
+      "vel": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'Sequence[float]', vel: 'Sequence[float]', half: 'Sequence[float]' = (0.12, 0.06, 0.08), col: 'tuple[int, int, int]' = (120, 96, 68), *, ang_vel: 'Sequence[float]' = (0.0, 0.0, 0.0), bounce: 'float' = 0.35, friction: 'float' = 0.65, life: 'float' = 6.0) -> 'None'"
+     }
+    },
+    "DebrisPool": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, capacity: 'int' = 128, seed: 'int' = 404) -> 'None'",
+      "clear": "(self) -> 'None'",
+      "spawn_burst": "(self, pos: 'Sequence[float]', n: 'int' = 8, *, normal: 'Sequence[float]' = (0.0, 1.0, 0.0), speed: 'float' = 4.5, col: 'tuple[int, int, int]' = (128, 102, 74), half: 'Sequence[float]' = (0.1, 0.04, 0.07), life: 'float' = 6.0, bounce: 'float' = 0.34) -> 'None'",
+      "update": "(self, dt: 'float', *, floor_fn: 'Callable[[float, float], float] | None' = None, box_world: 'BoxWorld | None' = None, gravity: 'float' = 9.8) -> 'None'"
      }
     },
     "GridNav": {
@@ -1841,6 +2249,38 @@
       "candidates": "(self, x0, z0, x1, z1) -> 'set[int]'"
      }
     },
+    "MultiFloorNav": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, bounds: 'Sequence[float]', cell: 'float', layers_at: 'Callable[[float, float], Sequence[float]] | None' = None, *, walkable: 'Callable[[float, float], bool] | None' = None, height: 'Callable[[float, float], float] | None' = None, step: 'float' = 0.65, body_h: 'float' = 1.8, max_nodes: 'int' = 40000, cache_size: 'int' = 128) -> 'None'",
+      "add_link": "(self, a: 'Sequence[float]', b: 'Sequence[float]', *, cost: 'float | None' = None, bidirectional: 'bool' = True, kind: 'str' = 'link') -> 'bool'",
+      "cell_at": "(self, x: 'float', z: 'float') -> 'tuple[int, int] | None'",
+      "center": "(self, c: 'int', r: 'int') -> 'tuple[float, float]'",
+      "nearest": "(self, x: 'float', y: 'float', z: 'float', reach: 'int' = 6) -> 'int | None'",
+      "node_pos": "(self, nid: 'int') -> 'tuple[float, float, float]'",
+      "path": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'list[tuple[float, float, float]]'",
+      "set_dynamic_boxes": "(self, boxes: 'Sequence[Sequence[float]]') -> 'None'",
+      "set_dynamic_circles": "(self, circles: 'Sequence[Sequence[float]]') -> 'None'",
+      "walk_clear": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'bool'"
+     }
+    },
+    "NavLink": {
+     "attrs": {
+      "kind": "str"
+     },
+     "bases": [],
+     "fields": [
+      "cost",
+      "kind",
+      "target"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, target: 'int', cost: 'float', kind: 'str' = 'link') -> None"
+     }
+    },
     "Placement": {
      "attrs": {},
      "bases": [],
@@ -1848,13 +2288,38 @@
      "methods": {
       "__init__": "(self, shape: 'MeshCollider', x: 'float', y: 'float', z: 'float', rot_deg: 'float' = 0.0) -> 'None'",
       "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "capsule_contacts": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'list[tuple[float, float, float]]'",
       "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'float | None'",
       "world_box": "(self) -> 'tuple[float, ...]'"
      }
     },
+    "RagdollBody": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, nodes: 'dict[str, Sequence[float]]', *, drag: 'float' = 0.992) -> 'None'",
+      "apply_blast": "(self, origin: 'Sequence[float]', force: 'float', radius: 'float') -> 'None'",
+      "apply_impulse": "(self, dv: 'Sequence[float]', *, node: 'str' = 'chest', spread: 'float' = 0.35) -> 'None'",
+      "from_pose": "class (cls, pos: 'Sequence[float]', yaw_deg: 'float' = 0.0, joints: 'dict[str, Sequence[float]] | None' = None) -> \"'RagdollBody'\"",
+      "step": "(self, dt: 'float', *, floor_fn: 'Callable[[float, float], float] | None' = None, box_world: 'BoxWorld | None' = None, extra_boxes: 'Sequence[Box6]' = (), gravity: 'float' = 9.8, iters: 'int' = 5) -> 'None'"
+     }
+    },
+    "box_xz_h": {
+     "kind": "function",
+     "signature": "(b: 'Sequence[float]') -> 'Box6'"
+    },
+    "box_xz_yy": {
+     "kind": "function",
+     "signature": "(b: 'Sequence[float]') -> 'Box6'"
+    },
     "ray_aabb": {
      "kind": "function",
      "signature": "(o: 'Vec3', d: 'Vec3', lo: 'Vec3', hi: 'Vec3') -> 'float | None'"
+    },
+    "slide_capsule": {
+     "kind": "function",
+     "signature": "(x: 'float', y: 'float', z: 'float', dx: 'float', dz: 'float', r: 'float', height: 'float' = 1.8, *, box_world: 'BoxWorld | None' = None, meshes: 'Iterable' = (), extra_boxes: 'Sequence[Box6]' = (), step_h: 'float' = 0.0, floor_fn: 'Callable[[float, float, float], float] | None' = None, bounds: 'Sequence[float] | None' = None, iters: 'int' = 4) -> 'tuple[float, float, float, bool]'"
     }
    }
   },
@@ -1871,6 +2336,7 @@
      "methods": {
       "__init__": "(self, boxes: 'Iterable[Box]', cell: 'float' = 4.0) -> 'None'",
       "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "capsule_contacts": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'list[tuple[float, float, float, int]]'",
       "near": "(self, x0: 'float', z0: 'float', x1: 'float', z1: 'float') -> 'list[int]'",
       "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'tuple[float, int] | None'",
       "segment_blocked": "(self, a: 'Vec3', b: 'Vec3', slack: 'float' = 0.2) -> 'bool'"
@@ -1905,6 +2371,7 @@
      "methods": {
       "__init__": "(self, shape: 'MeshCollider', x: 'float', y: 'float', z: 'float', rot_deg: 'float' = 0.0) -> 'None'",
       "body_hits": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'bool'",
+      "capsule_contacts": "(self, x: 'float', z: 'float', r: 'float', y0: 'float', y1: 'float') -> 'list[tuple[float, float, float]]'",
       "ray": "(self, o: 'Vec3', d: 'Vec3', tmax: 'float' = 1000000000.0) -> 'float | None'",
       "world_box": "(self) -> 'tuple[float, ...]'"
      }
@@ -1913,7 +2380,9 @@
   },
   "engine.collision.nav": {
    "all": [
-    "GridNav"
+    "GridNav",
+    "MultiFloorNav",
+    "NavLink"
    ],
    "names": {
     "GridNav": {
@@ -1930,6 +2399,105 @@
       "path": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'list[tuple[float, float, float]]'",
       "walk_clear": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'bool'"
      }
+    },
+    "MultiFloorNav": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, bounds: 'Sequence[float]', cell: 'float', layers_at: 'Callable[[float, float], Sequence[float]] | None' = None, *, walkable: 'Callable[[float, float], bool] | None' = None, height: 'Callable[[float, float], float] | None' = None, step: 'float' = 0.65, body_h: 'float' = 1.8, max_nodes: 'int' = 40000, cache_size: 'int' = 128) -> 'None'",
+      "add_link": "(self, a: 'Sequence[float]', b: 'Sequence[float]', *, cost: 'float | None' = None, bidirectional: 'bool' = True, kind: 'str' = 'link') -> 'bool'",
+      "cell_at": "(self, x: 'float', z: 'float') -> 'tuple[int, int] | None'",
+      "center": "(self, c: 'int', r: 'int') -> 'tuple[float, float]'",
+      "nearest": "(self, x: 'float', y: 'float', z: 'float', reach: 'int' = 6) -> 'int | None'",
+      "node_pos": "(self, nid: 'int') -> 'tuple[float, float, float]'",
+      "path": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'list[tuple[float, float, float]]'",
+      "set_dynamic_boxes": "(self, boxes: 'Sequence[Sequence[float]]') -> 'None'",
+      "set_dynamic_circles": "(self, circles: 'Sequence[Sequence[float]]') -> 'None'",
+      "walk_clear": "(self, a: 'Sequence[float]', b: 'Sequence[float]') -> 'bool'"
+     }
+    },
+    "NavLink": {
+     "attrs": {
+      "kind": "str"
+     },
+     "bases": [],
+     "fields": [
+      "cost",
+      "kind",
+      "target"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, target: 'int', cost: 'float', kind: 'str' = 'link') -> None"
+     }
+    }
+   }
+  },
+  "engine.collision.physics": {
+   "all": [
+    "box_xz_h",
+    "box_xz_yy",
+    "slide_capsule",
+    "DebrisBody",
+    "DebrisPool",
+    "RagdollBody"
+   ],
+   "names": {
+    "DebrisBody": {
+     "attrs": {
+      "age": "member_descriptor",
+      "ang_vel": "member_descriptor",
+      "bounce": "member_descriptor",
+      "col": "member_descriptor",
+      "friction": "member_descriptor",
+      "half": "member_descriptor",
+      "life": "member_descriptor",
+      "pos": "member_descriptor",
+      "rot": "member_descriptor",
+      "settled": "member_descriptor",
+      "vel": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'Sequence[float]', vel: 'Sequence[float]', half: 'Sequence[float]' = (0.12, 0.06, 0.08), col: 'tuple[int, int, int]' = (120, 96, 68), *, ang_vel: 'Sequence[float]' = (0.0, 0.0, 0.0), bounce: 'float' = 0.35, friction: 'float' = 0.65, life: 'float' = 6.0) -> 'None'"
+     }
+    },
+    "DebrisPool": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, capacity: 'int' = 128, seed: 'int' = 404) -> 'None'",
+      "clear": "(self) -> 'None'",
+      "spawn_burst": "(self, pos: 'Sequence[float]', n: 'int' = 8, *, normal: 'Sequence[float]' = (0.0, 1.0, 0.0), speed: 'float' = 4.5, col: 'tuple[int, int, int]' = (128, 102, 74), half: 'Sequence[float]' = (0.1, 0.04, 0.07), life: 'float' = 6.0, bounce: 'float' = 0.34) -> 'None'",
+      "update": "(self, dt: 'float', *, floor_fn: 'Callable[[float, float], float] | None' = None, box_world: 'BoxWorld | None' = None, gravity: 'float' = 9.8) -> 'None'"
+     }
+    },
+    "RagdollBody": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, nodes: 'dict[str, Sequence[float]]', *, drag: 'float' = 0.992) -> 'None'",
+      "apply_blast": "(self, origin: 'Sequence[float]', force: 'float', radius: 'float') -> 'None'",
+      "apply_impulse": "(self, dv: 'Sequence[float]', *, node: 'str' = 'chest', spread: 'float' = 0.35) -> 'None'",
+      "from_pose": "class (cls, pos: 'Sequence[float]', yaw_deg: 'float' = 0.0, joints: 'dict[str, Sequence[float]] | None' = None) -> \"'RagdollBody'\"",
+      "step": "(self, dt: 'float', *, floor_fn: 'Callable[[float, float], float] | None' = None, box_world: 'BoxWorld | None' = None, extra_boxes: 'Sequence[Box6]' = (), gravity: 'float' = 9.8, iters: 'int' = 5) -> 'None'"
+     }
+    },
+    "box_xz_h": {
+     "kind": "function",
+     "signature": "(b: 'Sequence[float]') -> 'Box6'"
+    },
+    "box_xz_yy": {
+     "kind": "function",
+     "signature": "(b: 'Sequence[float]') -> 'Box6'"
+    },
+    "slide_capsule": {
+     "kind": "function",
+     "signature": "(x: 'float', y: 'float', z: 'float', dx: 'float', dz: 'float', r: 'float', height: 'float' = 1.8, *, box_world: 'BoxWorld | None' = None, meshes: 'Iterable' = (), extra_boxes: 'Sequence[Box6]' = (), step_h: 'float' = 0.0, floor_fn: 'Callable[[float, float, float], float] | None' = None, bounds: 'Sequence[float] | None' = None, iters: 'int' = 4) -> 'tuple[float, float, float, bool]'"
     }
    }
   },
@@ -5991,8 +6559,10 @@
           "kind": "str",
           "label": "str",
           "mag": "int",
+          "reload_prog": "NoneType",
           "reload_timer": "int",
           "reloading": "bool",
+          "reserve": "NoneType",
           "spares": "int"
          },
          "bases": [],
@@ -6003,13 +6573,15 @@
           "kind",
           "label",
           "mag",
+          "reload_prog",
           "reload_timer",
           "reloading",
+          "reserve",
           "spares"
          ],
          "kind": "class",
          "methods": {
-          "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+          "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0, reserve: 'int | None' = None, reload_prog: 'float | None' = None) -> None",
           "from_state": "class (cls, state) -> \"'WeaponInfo'\""
          }
         },
@@ -6042,8 +6614,10 @@
         "kind": "str",
         "label": "str",
         "mag": "int",
+        "reload_prog": "NoneType",
         "reload_timer": "int",
         "reloading": "bool",
+        "reserve": "NoneType",
         "spares": "int"
        },
        "bases": [],
@@ -6054,13 +6628,15 @@
         "kind",
         "label",
         "mag",
+        "reload_prog",
         "reload_timer",
         "reloading",
+        "reserve",
         "spares"
        ],
        "kind": "class",
        "methods": {
-        "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+        "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0, reserve: 'int | None' = None, reload_prog: 'float | None' = None) -> None",
         "from_state": "class (cls, state) -> \"'WeaponInfo'\""
        }
       },
@@ -6265,8 +6841,10 @@
         "kind": "str",
         "label": "str",
         "mag": "int",
+        "reload_prog": "NoneType",
         "reload_timer": "int",
         "reloading": "bool",
+        "reserve": "NoneType",
         "spares": "int"
        },
        "bases": [],
@@ -6277,13 +6855,15 @@
         "kind",
         "label",
         "mag",
+        "reload_prog",
         "reload_timer",
         "reloading",
+        "reserve",
         "spares"
        ],
        "kind": "class",
        "methods": {
-        "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+        "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0, reserve: 'int | None' = None, reload_prog: 'float | None' = None) -> None",
         "from_state": "class (cls, state) -> \"'WeaponInfo'\""
        }
       },
@@ -6457,8 +7037,10 @@
       "kind": "str",
       "label": "str",
       "mag": "int",
+      "reload_prog": "NoneType",
       "reload_timer": "int",
       "reloading": "bool",
+      "reserve": "NoneType",
       "spares": "int"
      },
      "bases": [],
@@ -6469,13 +7051,15 @@
       "kind",
       "label",
       "mag",
+      "reload_prog",
       "reload_timer",
       "reloading",
+      "reserve",
       "spares"
      ],
      "kind": "class",
      "methods": {
-      "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0) -> None",
+      "__init__": "(self, cw: 'str' = 'pistol', label: 'str' = 'SIDEARM', caliber: 'str' = '9MM', kind: 'str' = 'box', ammo: 'int' = 0, mag: 'int' = 1, spares: 'int' = 0, reloading: 'bool' = False, reload_timer: 'int' = 0, reserve: 'int | None' = None, reload_prog: 'float | None' = None) -> None",
       "from_state": "class (cls, state) -> \"'WeaponInfo'\""
      }
     },

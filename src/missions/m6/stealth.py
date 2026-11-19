@@ -419,23 +419,5 @@ def draw_hud(surface):
     alarmed = alarm_active()
     if exp <= 0.005 and not (alarmed and visible()):
         return
-    w, h = 236, 44
-    x = 562                      # right of the wave plate (x 214-554), left of the minimap
-    y = 18
-    panel = pygame.Surface((w, h), pygame.SRCALPHA)
-    panel.fill((8, 10, 14, 214))
-    pygame.draw.rect(panel, (196, 128, 58) if not alarmed else (206, 74, 58),
-                     panel.get_rect(), 1)
-    label = ("SEARCHLIGHT - TOWER GUNNER" if alarmed and visible()
-             else "IN THE LIGHT")
-    col = (236, 148, 74) if not alarmed else (240, 96, 78)
-    txt = font_terminal_small.render(label, True, col)
-    panel.blit(txt, (10, 5))
-    bar_x, bar_y, bar_w = 10, 24, w - 20
-    pygame.draw.rect(panel, (26, 28, 32), (bar_x, bar_y, bar_w, 8))
-    frac = 1.0 if alarmed else max(0.0, min(1.0, exp / EXPOSURE_ALARM_S))
-    pygame.draw.rect(panel, col, (bar_x, bar_y, int(bar_w * frac), 8))
-    for i in range(1, 8):
-        bx = bar_x + int(bar_w * i / 8)
-        pygame.draw.line(panel, (8, 10, 14), (bx, bar_y), (bx, bar_y + 7), 1)
-    surface.blit(panel, (x, y))
+    from . import hud_ui as _hud_ui
+    _hud_ui.draw_stealth_cluster(surface, exp / EXPOSURE_ALARM_S, alarmed, visible())

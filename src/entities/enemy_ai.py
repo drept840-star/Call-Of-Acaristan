@@ -633,6 +633,12 @@ class Enemy:
         sight_range *= self.sight_mul
         if dist > sight_range:
             return False
+        x0 = min(from_pos[0], px) - 14
+        y0 = min(from_pos[1], py) - 14
+        x1 = max(from_pos[0], px) + 14
+        y1 = max(from_pos[1], py) + 14
+        bbox = pygame.Rect(int(x0), int(y0), int(x1 - x0) + 2, int(y1 - y0) + 2)
+        cand = [walls[i] for i in bbox.collidelistall(walls)] if len(walls) > 32 else walls
         # Check several points around the player instead of only the exact center.
         # This prevents tiny wall/corner clips from making AI randomly "forget" you.
         target_points = [
@@ -648,7 +654,7 @@ class Enemy:
         ]
         for tx, ty in target_points:
             blocked = False
-            for wall in walls:
+            for wall in cand:
                 if wall.clipline(from_pos, (tx, ty)):
                     blocked = True
                     break
@@ -676,8 +682,12 @@ class Enemy:
             self.path = []
             return
         self.path = _astar((start_col, start_row), (goal_col, goal_row), grid)
+        if not self.path:
+            self.path_timer = max(self.path_timer, PATH_RECALC_INTERVAL, 30)
+            return
         self._smooth_path(walls)
     def _move_toward(self, px, py, walls, repulse_x=0.0, repulse_y=0.0):
+        had_path = bool(self.path)
         if self.path:
             col, row = self.path[0]
             target_x = col * TILE_SIZE + TILE_SIZE // 2
@@ -722,6 +732,13 @@ class Enemy:
             desired_angle = math.atan2(py - self.rect.centery, px - self.rect.centerx)
             num_dirs = 16
             probe_len = PROBE_LEN
+            pad = int(probe_len) + 18
+            pbox = pygame.Rect(
+                int(self.rect.centerx) - pad,
+                int(self.rect.centery) - pad,
+                pad * 2, pad * 2,
+            )
+            near_walls = [walls[i] for i in pbox.collidelistall(walls)] if len(walls) > 32 else walls
             best_angle = desired_angle
             best_score = -999.0
             for i in range(num_dirs):
@@ -731,11 +748,11 @@ class Enemy:
                 probe_x = self.rect.centerx + math.cos(candidate) * probe_len
                 probe_y = self.rect.centery + math.sin(candidate) * probe_len
                 probe_rect = pygame.Rect(probe_x - 10, probe_y - 10, 20, 20)
-                blocked = any(w.colliderect(probe_rect) for w in walls)
+                blocked = any(w.colliderect(probe_rect) for w in near_walls)
                 short_probe_x = self.rect.centerx + math.cos(candidate) * (probe_len * 0.4)
                 short_probe_y = self.rect.centery + math.sin(candidate) * (probe_len * 0.4)
                 short_probe_rect = pygame.Rect(short_probe_x - 8, short_probe_y - 8, 16, 16)
-                short_blocked = any(w.colliderect(short_probe_rect) for w in walls)
+                short_blocked = any(w.colliderect(short_probe_rect) for w in near_walls)
                 score = alignment - (5.0 if blocked else 0.0) - (3.0 if short_blocked else 0.0)
                 if score > best_score:
                     best_score = score
@@ -745,9 +762,13 @@ class Enemy:
             move_x = math.cos(self.angle) * self.speed + repulse_x
             move_y = math.sin(self.angle) * self.speed + repulse_y
             slide_tx, slide_ty = px, py
+        dx_max = int(abs(move_x * self._dt_mul) + abs(self.speed * self._dt_mul)) + 16
+        dy_max = int(abs(move_y * self._dt_mul) + abs(self.speed * self._dt_mul)) + 16
+        cbox = self.rect.inflate(dx_max * 2, dy_max * 2)
+        c_walls = [walls[i] for i in cbox.collidelistall(walls)] if len(walls) > 32 else walls
         self.rect.x += move_x * self._dt_mul
         blocked_x = False
-        for wall in walls:
+        for wall in c_walls:
             if self.rect.colliderect(wall):
                 if move_x > 0:
                     self.rect.right = wall.left
@@ -756,7 +777,7 @@ class Enemy:
                 blocked_x = True
         self.rect.y += move_y * self._dt_mul
         blocked_y = False
-        for wall in walls:
+        for wall in c_walls:
             if self.rect.colliderect(wall):
                 if move_y > 0:
                     self.rect.bottom = wall.top
@@ -767,7 +788,7 @@ class Enemy:
             if abs(slide_ty - self.rect.centery) > 2:
                 slide_dy = self.speed if slide_ty > self.rect.centery else -self.speed
                 self.rect.y += slide_dy * self._dt_mul
-                for wall in walls:
+                for wall in c_walls:
                     if self.rect.colliderect(wall):
                         if slide_dy > 0: self.rect.bottom = wall.top
                         elif slide_dy < 0: self.rect.top = wall.bottom
@@ -775,26 +796,29 @@ class Enemy:
             if abs(slide_tx - self.rect.centerx) > 2:
                 slide_dx = self.speed if slide_tx > self.rect.centerx else -self.speed
                 self.rect.x += slide_dx * self._dt_mul
-                for wall in walls:
+                for wall in c_walls:
                     if self.rect.colliderect(wall):
                         if slide_dx > 0: self.rect.right = wall.left
                         elif slide_dx < 0: self.rect.left = wall.right
         elif blocked_x and blocked_y:
             # Both axes blocked - force repath
             self.path = []
-            self.path_timer = 0
+            if had_path:
+                self.path_timer = 0
     def _apply_move(self, move_x, move_y, walls):
         # Delta-time aware: callers pass per-frame movement; multiply by _dt_mul.
         _dt_mul = self._dt_mul
         move_x *= _dt_mul
         move_y *= _dt_mul
+        cbox = self.rect.inflate(int(abs(move_x)) * 2 + 16, int(abs(move_y)) * 2 + 16)
+        c_walls = [walls[i] for i in cbox.collidelistall(walls)] if len(walls) > 32 else walls
         self.rect.x += move_x
-        for wall in walls:
+        for wall in c_walls:
             if self.rect.colliderect(wall):
                 if move_x > 0: self.rect.right = wall.left
                 elif move_x < 0: self.rect.left = wall.right
         self.rect.y += move_y
-        for wall in walls:
+        for wall in c_walls:
             if self.rect.colliderect(wall):
                 if move_y > 0: self.rect.bottom = wall.top
                 elif move_y < 0: self.rect.top = wall.bottom

@@ -2,6 +2,7 @@
 Hook-up: replace the ATK_* frame-count triggers in missions/walking_sim.py with
 OilRigCutscene.update(dt_ms) + .render(surface); call vo_started/vo_finished from voice."""
 import math
+from cutscenes import fire3d as _fire3d
 from engine3d.core import (SoftwareRenderer, Light, Mesh, box, disc_xz, quad_xz,
                            lerp, smooth, v_lerp)
 
@@ -117,11 +118,13 @@ class OilRigCutscene:
             m = self.rig_mesh
             r.add_dynamic([(vx + x, vy - sink, vz + z) for vx, vy, vz in m.verts],
                           [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces])
-            if struck:  # fire: emissive flickering boxes rising with depth-correct parallax
-                for j in range(6):
-                    fl = box(2.4 - j * .3, 2, 2.4 - j * .3, (255, 140 - j * 15, 30),
-                             center=(x, 14 - sink + j * 1.8 + math.sin(ms * .01 + j) * .4, z), emissive=True)
-                    r.add_dynamic(fl.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in fl.faces])
+            if struck:
+                for j, dx in enumerate((-2.0, 0.0, 2.1)):
+                    _fire3d.emit_fire(
+                        r, (x + dx, max(0.3, 12.2 - sink), z + (j - 1) * 1.1),
+                        ms, seed=70 + i * 9 + j, size=2.4 - 0.35 * (j % 2),
+                        smoky=(j == 1), bed=False, layer=2,
+                    )
         # attack craft
         if SHOTS[self.i][0] in ("craft_approach", "strike_center", "strike_left", "strike_right", "craft_exit"):
             cx = lerp(-60, 60, (self.i - 2 + k) / 6.0 % 1.0)

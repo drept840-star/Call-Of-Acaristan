@@ -4707,6 +4707,30 @@ def check_m1_alarm_keeps_escape():
     print("  [ok] alarm during escape keeps escape, hotwire opens")
 
 
+def check_m1_hotwire_tutorial_after_early_e():
+    """E at the truck while the yard is still hot plays VASILE's "not yet"; it
+    must not eat the hotwire tutorial line that plays once the panel opens."""
+    from unittest.mock import patch
+
+    class _HoldE:
+        def __getitem__(self, key):
+            return key == pygame.K_e
+
+    STATE, m1u = _m1_fresh()
+    m1u.debug_jump_to_exfil()
+    STATE.m1_exfil_van_triggered = True       # keep the van out of this check
+    STATE.enemies.clear()
+    with patch.object(m1u, "trigger_radio_chatter") as rc:
+        with patch.object(m1u, "_hostiles_pending", lambda: True):
+            m1u.game_update(_HoldE())
+        assert not STATE.truck_hotwiring
+        assert any("Not yet" in c.args[0] for c in rc.call_args_list), rc.call_args_list
+        m1u.game_update(_HoldE())
+    assert STATE.truck_hotwiring, "panel did not open once the yard was clear"
+    assert any("Red feeds yellow" in c.args[0] for c in rc.call_args_list),         "the early E ate the hotwire tutorial line"
+    print("  [ok] early E warns, tutorial still plays")
+
+
 def check_m1_exfil_van():
     """WP7: first entry into exfil_van (notebook in hand) plays VASILE's line once,
     the van arrives and drops 1 rusher + 2 cover, one per 40 frames; no re-trigger."""
@@ -9664,7 +9688,12 @@ def check_mission4_cinematic_arrest():
             "audio": SimpleNamespace(
                 play=lambda name, **kw: played.append((name, kw)),
                 duck_ambience=lambda **kw: ducked.append(kw),
-                stop=lambda name: stopped.append(name)),
+                stop=lambda name: stopped.append(name),
+                # The music bed (`_CutsceneState` fades/queues themes per shot);
+                # inert here so the cue assertions above stay exact.
+                fade_out_music=lambda *a, **kw: None,
+                play_music=lambda *a, **kw: None,
+                music_name=lambda: None),
             "draw_vignette": lambda surface, **kw: vignettes.append(kw["strength"]),
             "draw_scanlines": lambda surface: scans.append(True),
             "draw_letterbox": lambda surface: None, "_advance_grain": lambda: None,
@@ -10491,7 +10520,6 @@ def check_mission7_vertical_slice():
         assert _scene_renderer(scene) is not None, scene
     for stage in _m7_meta.FILM_TIMELINES:
         assert _m7_meta.film_shots(stage), stage
-    assert _m7_meta.outro_shots()
 
     # ── boot through the game_core wrapper ──────────────────────────────
     gc.start_mission7()
@@ -10591,6 +10619,120 @@ def check_mission7_vertical_slice():
     completed = _save_system.get_slot(0)
     assert completed["last_completed_mission"] == "MISSION_7"
     assert completed["checkpoint"] == ""
+
+
+def check_mission8_duty():
+    """Mission 8 Duty plays through liftoff to the outro.
+
+    User-outcome check: the Duty ladder is approach -> mansion -> liftoff ->
+    flight -> crash -> ridge -> epilogue; every film shot has a renderer; a
+    broken mansion still hands off to the liftoff film; the door-gunner
+    flight clears its five sections when the tail rotor is shot out and
+    Ucilev's rocket ends it on the crash film; the ridge only lets the
+    President's shot land after Ucilev and the radio; a missed rescue timer
+    restarts the ridge; the epilogue raises the outro.
+    """
+    import math as _math
+
+    from core.cutscene_registry import scene_renderer
+    from missions import m8
+    from missions.m8 import meta as _meta
+    from missions.m8.duty import flight3d as F
+    from missions.m8.duty import mansion3d as M
+    from missions.m8.duty import ridge3d as RG
+    from core.state import STATE
+
+    _reset_save_store()
+    _save_system.select_slot(0)
+    _save_system.start_new_campaign(0)
+
+    assert _meta.stages_for("duty") == (
+        "d_approach", "mansion", "liftoff", "flight", "crash", "ridge", "d_epilogue")
+    scr = config.screen
+    for stage in ("d_approach", "liftoff", "crash", "d_epilogue"):
+        shots = m8.film_shots(stage)
+        assert shots, stage
+        for sh in shots:
+            draw = scene_renderer(sh["scene"])
+            assert draw is not None, sh["scene"]
+            draw(scr, 1500)
+
+    def film(stage):
+        assert m8.take_cutscene_request() == stage, stage
+        m8.on_cutscene_done(stage)
+
+    m8.start_m8("mansion", "duty")
+    assert M.active()
+    M.force_finish("fallback")
+    assert STATE.mission8_stage == "liftoff" and not M.active()
+    film("liftoff")
+    assert STATE.mission8_stage == "flight" and F.active()
+
+    sc = F.scene()
+    seen = set()
+    for i in range(60 * 400):
+        if not F.active():
+            break
+        seen.add(sc.cp)
+        sc.hull = F.HULL
+        for e in sc.targets:
+            if e["alive"]:
+                sc.hurt_target(e, 999)
+        if sc.cp == 3 and sc.r_down < 0.0 and sc.sec_t > 5.0:
+            ex, ey, ez = sc.eye()
+            tx, ty, tz = sc.tail_point()
+            sc.gy = F.R._wrap(_math.degrees(_math.atan2(tx - ex, tz - ez)) - sc.mount_yaw())
+            sc.gp = _math.degrees(_math.atan2(ty - ey, _math.hypot(tx - ex, tz - ez)))
+            sc.firing, sc.heat, sc.overheat = True, 0.0, False
+        else:
+            sc.firing = False
+        assert not sc.dying, sc.death_msg
+        m8.game_update(EmptyKeys())
+        if i % 600 == 0:
+            m8.game_draw(scr, 0, 0)
+    assert seen == {0, 1, 2, 3, 4}, seen
+    assert sc.result == "win" and STATE.mission8_stage == "crash"
+    film("crash")
+    assert RG.active()
+
+    rs = RG.scene()
+
+    def snipe(c):
+        tof = _math.dist(RG.EYE, c) / RG.MUZZLE_V
+        for _ in range(2):                      # second pass uses the wind-corrected yaw
+            cy, sy = _math.cos(_math.radians(rs.yaw)), _math.sin(_math.radians(rs.yaw))
+            a = (c[0] - rs.wind * tof * 0.9 * cy, c[1] + 0.5 * RG.G * tof * tof,
+                 c[2] + rs.wind * tof * 0.9 * sy)
+            d = (a[0] - RG.EYE[0], a[1] - RG.EYE[1], a[2] - RG.EYE[2])
+            sway_y, sway_p = rs.sway()
+            rs.yaw = _math.degrees(_math.atan2(d[0], d[2])) - sway_y
+            rs.pitch = _math.degrees(_math.atan2(d[1], _math.hypot(d[0], d[2]))) - sway_p
+        rs.last_shot = -9.0
+        return rs.fire()
+
+    m8.game_draw(scr, 0, 0)
+    pres = (RG.PRES_AT[0], 1.12, RG.PRES_AT[2])
+    rs.rescue = 0.01
+    for _ in range(60 * 6):
+        m8.game_update(EmptyKeys())
+    assert rs.phase == "ucilev" and rs.rescue > 40.0 and rs.fail_t < 0.0   # ridge restarted
+    assert snipe(pres) == "ucilev"              # he stands in front of the President
+    rs._setup()
+    assert snipe((RG.UCILEV_AT[0], 1.15, RG.UCILEV_AT[2])) == "ucilev"
+    for _ in range(60 * 40):
+        m8.game_update(EmptyKeys())
+        if rs.phase == "wait":
+            break
+    assert rs.phase == "wait", rs.phase
+    assert snipe(pres) == "pres"
+    for _ in range(60 * 20):
+        if not RG.active():
+            break
+        m8.game_update(EmptyKeys())
+    assert rs.result == "win" and STATE.mission8_stage == "d_epilogue"
+    film("d_epilogue")
+    assert m8.take_outro_request()
+    return True
 
 
 def check_mission8_vertical_slice():
@@ -12678,6 +12820,7 @@ def main():
                       ("m1_ciocan_charge_stun", check_m1_ciocan_charge_stun),
                       ("m1_hotwire_damage_closes", check_m1_hotwire_damage_closes),
                       ("m1_alarm_keeps_escape", check_m1_alarm_keeps_escape),
+                      ("m1_hotwire_tutorial_after_early_e", check_m1_hotwire_tutorial_after_early_e),
                       ("m1_exfil_van", check_m1_exfil_van),
                       ("m1_lighting_hard", check_m1_lighting_hard),
                       ("m1_ambience_bands", check_m1_ambience_bands),
@@ -12690,6 +12833,7 @@ def main():
     ok = run_check("mission7_vertical_slice", check_mission7_vertical_slice) and ok
     print("\n=== Mission 8 checks ===")
     ok = run_check("mission8_vertical_slice", check_mission8_vertical_slice) and ok
+    ok = run_check("mission8_duty", check_mission8_duty) and ok
     for name, fn in (("m7_audio_design", check_m7_audio_design),
                      ("m7_generator_minigame", check_m7_generator_minigame),
                      ("m7_goat_escape", check_m7_goat_escape),

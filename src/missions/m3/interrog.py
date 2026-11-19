@@ -124,6 +124,7 @@ def _start_kill_order_phase(force=False, prebuild=False):
     STATE.mission3_stage = STAGE_KILL_ORDER
     STATE.mission_phase = "m3_kill_order"
     STATE.mission3_kill_order_checkpoint_reached = True
+    _m3_flow._save_progress('kill_order')
     # Sweep director / Volkov window state (director ticks land in 5b/5c).
     STATE.m3_sweep_seeded = False      # director state is per-phase
     STATE.m3_sweep = None
@@ -486,6 +487,7 @@ def _transition_to_breakout():
     STATE.mission_phase = "m3_breakout"
     STATE.mission3_cell_open = True
     STATE.mission3_breakout_checkpoint_reached = True
+    _m3_flow._save_progress('breakout')
     STATE.mission3_tone = list(_m3_flow._dialogue_tone)
     _m3_flow._monitor_on = False
 

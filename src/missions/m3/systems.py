@@ -894,19 +894,17 @@ def _draw_comms_checklist(surface):
     # so it can never run off it (whatever the font metrics resolve to).
     box_w = max([head.get_width()] + [r.get_width() for r in rows_rendered]) + 16
     box_h = 24 + 17 * len(rows_rendered) + 8
-    panel = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-    pygame.draw.rect(panel, (8, 12, 12, 205), panel.get_rect(), border_radius=4)
-    pygame.draw.rect(panel, (96, 148, 128, 210), panel.get_rect(), 1,
-                     border_radius=4)
+    from ui.tactical_hud import HUD_MARGIN, tactical_panel_bg
+    panel = tactical_panel_bg(box_w, box_h).copy()
     panel.blit(head, (8, 6))
     for i, surf in enumerate(rows_rendered):
         panel.blit(surf, (8, 24 + i * 17))
     mm = getattr(STATE, "minimap", None)
     if mm is not None:
         px = mm.x + mm.minimap_w - box_w
-        py = mm.y + mm.minimap_h + 12
+        py = mm.y + mm.minimap_h + 10
     else:
-        px, py = WIDTH - box_w - 16, 196
+        px, py = WIDTH - box_w - HUD_MARGIN, 188
     px = max(8, min(px, WIDTH - box_w - 8))
     surface.blit(panel, (px, py))
 
@@ -1160,7 +1158,10 @@ def _draw_m3_mag_icon(surface, mx, my, kind, rounds, cap, is_active):
 
 def _draw_mission3_hud(surface, cam_x, cam_y):
     """Mission 3 gameplay HUD. No molotov counter for this mission."""
-    draw_objective_panel(surface, _m3_maps._objective)
+    from engine.ui import objective_banner as _hud_objective
+    from ui.tactical_hud import HUD_MARGIN, PANEL_GAP, TACTICAL_THEME, place_minimap, tactical_panel_bg
+    m = HUD_MARGIN
+    _hud_objective.draw(surface, _m3_maps._objective, TACTICAL_THEME, x=m, y=m + 26 + 8)
 
     draw_pinned_radio(surface)
 
@@ -1174,14 +1175,15 @@ def _draw_mission3_hud(surface, cam_x, cam_y):
     if getattr(STATE, "mission3_stage", STAGE_INTERROGATION) == STAGE_INTERROGATION:
         return
 
-    unified_x = 24
+    unified_x = m
+    hp_y = HEIGHT - m - 30
     weapon = getattr(STATE, "mission3_weapon", "none")
     has_firearm = (weapon in ("sidearm", "k9_smg")
                    and not getattr(STATE, "player_disarmed", False))
 
     # ── HP Bar (shared engine.ui.std widget, Phase 4) ──
-    _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                         panel_bg=get_panel_bg)
+    _hud_health_bar.draw(surface, TACTICAL_THEME, STATE.player.hp, STATE.player.max_hp,
+                         panel_bg=tactical_panel_bg, x=unified_x, y=hp_y)
 
     # ── Weapon / Ammo Panel (sits directly above HP bar, no molotov gap) ──
     if has_firearm:
@@ -1200,13 +1202,14 @@ def _draw_mission3_hud(surface, cam_x, cam_y):
                 ammo=STATE.ammo_in_mag, mag=STATE.mag_size, spares=STATE.spare_mags)
         _m3_info.reloading = bool(STATE.is_reloading)
         _m3_info.reload_timer = STATE.reload_timer
-        _hud_weapon_panel.draw(surface, THEME, _m3_info, panel_bg=get_panel_bg,
+        _hud_weapon_panel.draw(surface, TACTICAL_THEME, _m3_info, panel_bg=tactical_panel_bg,
+                               x=unified_x, y=hp_y - PANEL_GAP + 2,
                                mag_icon=_draw_m3_mag_icon, panel_h=92,
                                reload_label_dx=2)
     else:
         panel_h = 74
-        panel_y = HEIGHT - 40 - panel_h - 2
-        bg = get_panel_bg(246, panel_h)
+        panel_y = hp_y - panel_h - PANEL_GAP
+        bg = tactical_panel_bg(246, panel_h)
         surface.blit(bg, (unified_x, panel_y))
         pygame.draw.line(surface, C_KRAP_BLUE,
                          (unified_x, panel_y), (unified_x, panel_y + panel_h), 3)
@@ -1227,10 +1230,11 @@ def _draw_mission3_hud(surface, cam_x, cam_y):
                          (unified_x + 70, panel_y + 53))
 
     # ── Hostiles counter (shared engine.ui.std widget, Phase 4) ──
-    _hud_hostiles.draw(surface, THEME, len(STATE.enemies))
+    _hud_hostiles.draw(surface, TACTICAL_THEME, len(STATE.enemies), x=m, y=m)
 
     # ── Minimap ──
     if STATE.show_minimap and STATE.minimap:
+        place_minimap(STATE.minimap)
         drain_marker = None
         if weapon == "chair_leg":
             drain_marker = (_DRAIN_TILE_COL * TILE_SIZE + TILE_SIZE // 2,
@@ -1341,10 +1345,17 @@ def _m3_volkov_navigation_walls(solid_walls):
 
 def _m3_volkov_segment_clear(x1, y1, x2, y2, walls, padding=13):
     """Body-width line-of-travel test, not a zero-width LOS ray."""
-    for wall in walls:
+    pad = padding + 2
+    seg = pygame.Rect(int(min(x1, x2) - pad), int(min(y1, y2) - pad),
+                      int(abs(x2 - x1) + pad * 2) + 2, int(abs(y2 - y1) + pad * 2) + 2)
+    cand = [walls[i] for i in seg.collidelistall(walls)] if len(walls) > 32 else walls
+    for wall in cand:
         if wall.inflate(padding * 2, padding * 2).clipline((x1, y1), (x2, y2)):
             return False
     return True
+
+
+_VOLKOV_GRID_CACHE = {}
 
 
 def _m3_volkov_build_grid(walls):
@@ -1354,6 +1365,10 @@ def _m3_volkov_build_grid(walls):
     rectangles and inflates obstacles by Volkov's body radius. That prevents
     paths through server racks, console corners, and decorative barriers.
     """
+    h = hash((len(walls), *(w.x for w in walls), *(w.y for w in walls)))
+    cached = _VOLKOV_GRID_CACHE.get(h)
+    if cached is not None:
+        return [row[:] for row in cached]
     grid = [[True for _ in range(MAP_W)] for _ in range(MAP_H)]
     half = 13
     for wall in walls:
@@ -1368,7 +1383,10 @@ def _m3_volkov_build_grid(walls):
                 cx = col * TILE_SIZE + TILE_SIZE // 2
                 if expanded.collidepoint(cx, cy):
                     grid[row][col] = False
-    return grid
+    if len(_VOLKOV_GRID_CACHE) > 8:
+        _VOLKOV_GRID_CACHE.clear()
+    _VOLKOV_GRID_CACHE[h] = grid
+    return [row[:] for row in grid]
 
 
 def _m3_volkov_repath(vx, vy, target_x, target_y, walls):
@@ -1496,7 +1514,8 @@ def _update_volkov_ally(solid_walls):
     # or immediately after stuck detection asks for a fresh route.
     if direct_clear:
         path = []
-    elif path_timer <= 0 or old_goal != goal_tile or not path:
+        STATE.m3_volkov_path_goal = None
+    elif path_timer <= 0 or old_goal != goal_tile:
         path = _m3_volkov_repath(vx, vy, target_x, target_y, nav_walls)
         path_timer = 15
         STATE.m3_volkov_path_goal = goal_tile
@@ -1506,6 +1525,8 @@ def _update_volkov_ally(solid_walls):
         # Drop reached nodes.
         while path and math.hypot(path[0][0] - vx, path[0][1] - vy) < 24:
             path.pop(0)
+        if not path:
+            path_timer = 0
 
         if path:
             # Path smoothing: take the furthest currently reachable waypoint,
@@ -1784,7 +1805,10 @@ def _m3_enemy_has_los_to_point(enemy, tx, ty, solid_walls):
     max_range = ENEMY_DETECT_RANGE * (2.0 if aware else 1.05)
     if dist > max_range:
         return False
-    return not _wall_blocks_line(ex, ey, tx, ty, solid_walls)
+    seg = pygame.Rect(int(min(ex, tx) - 2), int(min(ey, ty) - 2),
+                      int(abs(tx - ex)) + 4, int(abs(ty - ey)) + 4)
+    cand = [solid_walls[i] for i in seg.collidelistall(solid_walls)] if len(solid_walls) > 32 else solid_walls
+    return not _wall_blocks_line(ex, ey, tx, ty, cand)
 
 
 def _m3_volkov_target_pos():
@@ -2731,6 +2755,12 @@ def _update_m3_pickups():
                       pu[1] - STATE.player.rect.centery) > 36:
             continue
         kind = pu[2]
+        armed = getattr(STATE, "mission3_sidearm_acquired", False)
+        # full HP / full mags leave the pickup on the ground (M4-M6 idiom)
+        if kind == "bandage" and STATE.player.hp >= STATE.player.max_hp:
+            continue
+        if kind == "sidearm" and armed and STATE.spare_mags >= 5:
+            continue
         if kind == "sidearm":
             if (getattr(STATE, "k9_unlocked", False)
                     and getattr(STATE, "mission3_sidearm_acquired", False)):

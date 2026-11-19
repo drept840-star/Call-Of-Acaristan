@@ -851,6 +851,13 @@ def frame(eye, tgt, fov, lights=(), t=0, size=None):
 def present(r, surface):
     """Flush the frame and upscale it crisp onto the canvas."""
     from cutscenes import m6fx3d as _fx  # lazy: numpy stack
+    if getattr(r, "backend", "") == "gl":
+        r.hdr = True
+        r.flush_to(surface, post={
+            "bloom": 0.26, "bloom_knee": 0.96,
+            "lut": _fx.cine_curve(), "dither_step": _fx.DITHER_STEP,
+        })
+        return
     surf = r.surface
     r.flush(surf)
     try:

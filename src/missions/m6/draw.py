@@ -25,9 +25,11 @@ from entities import weapons as _weapons
 from engine.core import now_ms as _now_ms
 from engine.ui import health_bar as _hud_health_bar
 from engine.ui import hostiles as _hud_hostiles
+from engine.ui import objective_banner as _hud_objective
 from engine.ui import weapon_panel as _hud_weapon_panel
-from ui.hud import THEME, draw_combat_reticle, draw_objective_panel, draw_pinned_radio
+from ui.hud import THEME, draw_combat_reticle, draw_pinned_radio
 
+from . import hud_ui as _hud_ui
 from . import decor as _decor
 from . import flow as _flow
 from . import maps as _maps
@@ -525,16 +527,25 @@ def _panel_mag_icon(surface, mx, my, kind, rounds, capacity, active,
 
 
 def _draw_hud(surface, cam_x, cam_y):
-    draw_objective_panel(surface, _maps._objective)
+    m = _hud_ui.HUD_MARGIN
+    has_waves = bool(getattr(_combat, "_waves", ()))
+    obj_y = m + (_hud_ui.CLUSTER_H if has_waves else 26) + 8
+    _hud_objective.draw(surface, _maps._objective, _hud_ui.M6_THEME, x=m, y=obj_y)
     draw_pinned_radio(surface)
     if STATE.player:
-        _hud_health_bar.draw(surface, THEME, STATE.player.hp, STATE.player.max_hp,
-                             panel_bg=get_panel_bg)
+        hp_y = HEIGHT - m - 30
+        wpn_anchor_y = hp_y - _hud_ui.PANEL_GAP + 2
+        _hud_health_bar.draw(surface, _hud_ui.M6_THEME, STATE.player.hp, STATE.player.max_hp,
+                             panel_bg=_hud_ui.m6_panel_bg, x=m, y=hp_y)
         _hud_weapon_panel.draw(
-            surface, THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
-            panel_bg=get_panel_bg, mag_icon=_panel_mag_icon)
-        _hud_hostiles.draw(surface, THEME, _combat.remaining())
+            surface, _hud_ui.M6_THEME, _hud_weapon_panel.WeaponInfo.from_state(STATE),
+            panel_bg=_hud_ui.m6_panel_bg, mag_icon=_panel_mag_icon, x=m, y=wpn_anchor_y)
+        if not has_waves:
+            _hud_hostiles.draw(surface, _hud_ui.M6_THEME, _combat.remaining(), x=m, y=m)
         if STATE.show_minimap and STATE.minimap:
+            STATE.minimap._theme = _hud_ui.M6_THEME
+            STATE.minimap.x = WIDTH - STATE.minimap.minimap_w - m
+            STATE.minimap.y = m
             STATE.minimap.draw(surface, STATE.player,
                                [e for e in STATE.enemies if e.hp > 0],
                                cam_x, cam_y,
@@ -605,7 +616,7 @@ def _draw_train(surface):
 
 
 def _td3d_gate():
-    """Use the fast 2D painter for rail unless ACA_M6_RAIL_25D=1.
+    """Enable 2.5D for all top-down M6 stages (set ACA_M6_RAIL_25D=0 for 2D rail).
 
     This gate also selects the aim camera; the train and post-train yard retain
     their own 3D hosts independently of the top-down view.
@@ -614,9 +625,9 @@ def _td3d_gate():
             or getattr(STATE, "m6_train_death", False)):
         return False
     stage = getattr(STATE, "mission6_stage", STAGE_CUSTOMS)
-    if stage == STAGE_RAIL:
-        return os.environ.get("ACA_M6_RAIL_25D") == "1"
-    return stage in (STAGE_CUSTOMS, STAGE_NOMAN)
+    if stage == STAGE_RAIL and os.environ.get("ACA_M6_RAIL_25D") == "0":
+        return False
+    return stage in (STAGE_CUSTOMS, STAGE_NOMAN, STAGE_RAIL, STAGE_BOXCAR)
 
 
 _td.GATES["MISSION6"] = _td3d_gate

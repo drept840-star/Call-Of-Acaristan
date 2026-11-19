@@ -20,6 +20,7 @@ replaces that with a real two-pass composite at half resolution:
 Degrades gracefully: ``enabled()`` is False under ACA_ART=legacy/off.
 """
 
+from collections import OrderedDict
 import math
 import os
 import random
@@ -58,7 +59,10 @@ _DEFAULT_GRADE = (246, 244, 242)
 _RADIAL = {}
 _FALL = {}   # RPE6: keyed by half-res size (was one module-level sprite for the fixed window)
 _CONE = None
-_TINT_CACHE = {}
+_TINT_CACHE = OrderedDict()
+_LIGHT_SPR_CACHE = OrderedDict()
+_CONE_SPR_CACHE = OrderedDict()
+_MOTE_SPR_CACHE = OrderedDict()
 
 
 def enabled():
@@ -118,16 +122,60 @@ def _cone_sprite():
 
 def _tinted(sprite, color, scale):
     """Colourise an intensity sprite: rgb *= color * scale (opaque out)."""
-    key = (id(sprite), color, scale)
+    key = (id(sprite), tuple(color), scale)
     s = _TINT_CACHE.get(key)
     if s is None:
         s = sprite.copy()
         s.fill((color[0], color[1], color[2]), special_flags=pygame.BLEND_RGB_MULT)
         if scale != 255:
             s.fill((scale, scale, scale), special_flags=pygame.BLEND_RGB_MULT)
-        if len(_TINT_CACHE) > 128:
-            _TINT_CACHE.clear()
+        if len(_TINT_CACHE) >= 128:
+            _TINT_CACHE.popitem(last=False)
         _TINT_CACHE[key] = s
+    else:
+        _TINT_CACHE.move_to_end(key)
+    return s
+
+
+def _light_spr(d, color, scale):
+    key = (d, tuple(color), scale)
+    s = _LIGHT_SPR_CACHE.get(key)
+    if s is None:
+        s = pygame.transform.smoothscale(_tinted(_radial(d * 2), color, scale), (d, d))
+        if len(_LIGHT_SPR_CACHE) >= 256:
+            _LIGHT_SPR_CACHE.popitem(last=False)
+        _LIGHT_SPR_CACHE[key] = s
+    else:
+        _LIGHT_SPR_CACHE.move_to_end(key)
+    return s
+
+
+def _cone_spr(w, hl, color, scale, angle):
+    key = (w, hl, tuple(color), scale, float(angle))
+    s = _CONE_SPR_CACHE.get(key)
+    if s is None:
+        s = pygame.transform.smoothscale(_cone_sprite(), (w, hl))
+        s = _tinted(s, color, scale)
+        s = pygame.transform.rotate(s, -math.degrees(angle) - 90)
+        if len(_CONE_SPR_CACHE) >= 128:
+            _CONE_SPR_CACHE.popitem(last=False)
+        _CONE_SPR_CACHE[key] = s
+    else:
+        _CONE_SPR_CACHE.move_to_end(key)
+    return s
+
+
+def _mote_spr(r, alpha_val):
+    key = (r, alpha_val)
+    s = _MOTE_SPR_CACHE.get(key)
+    if s is None:
+        s = pygame.Surface((r * 2 + 1, r * 2 + 1), pygame.SRCALPHA)
+        pygame.draw.circle(s, (255, 244, 220, alpha_val), (r, r), r)
+        if len(_MOTE_SPR_CACHE) >= 256:
+            _MOTE_SPR_CACHE.popitem(last=False)
+        _MOTE_SPR_CACHE[key] = s
+    else:
+        _MOTE_SPR_CACHE.move_to_end(key)
     return s
 
 
@@ -138,7 +186,9 @@ class LightBuffer:
         self._hw, self._hh = WIDTH // 2, HEIGHT // 2
         self._grade = pygame.Surface((self._hw, self._hh))
         self._add = pygame.Surface((self._hw, self._hh))
-        self._vis_cache = {}
+        self._grade_out = pygame.Surface((WIDTH, HEIGHT))
+        self._add_out = pygame.Surface((WIDTH, HEIGHT))
+        self._vis_cache = OrderedDict()
         self._doors_sig = 0
         self._motes = [(_rng_legacy.uniform(0, WIDTH), _rng_legacy.uniform(0, HEIGHT),
                         _rng_legacy.uniform(-6, 6), _rng_legacy.uniform(4, 14),
@@ -184,8 +234,7 @@ class LightBuffer:
         if intensity <= 0:
             return
         d = max(6, int(radius) // 2)          # half-res diameter
-        spr = _tinted(_radial(d * 2), color, min(255, int(255 * intensity)))
-        spr = pygame.transform.smoothscale(spr, (d, d))
+        spr = _light_spr(d, color, min(255, int(255 * intensity)))
         self._add.blit(spr, (int(sx // 2 - d // 2), int(sy // 2 - d // 2)),
                        special_flags=pygame.BLEND_ADD)
         if caster is not None and cam is not None:
@@ -198,12 +247,9 @@ class LightBuffer:
         if intensity <= 0:
             return
         hl = max(12, int(length) // 2)        # half-res length
-        spr = _cone_sprite()
         w = int(hl * math.tan(math.radians(half_spread_deg)) * 2)
         w = max(12, w)
-        spr = pygame.transform.smoothscale(spr, (w, hl))
-        spr = _tinted(spr, color, min(255, int(255 * intensity)))
-        spr = pygame.transform.rotate(spr, -math.degrees(angle) - 90)
+        spr = _cone_spr(w, hl, color, min(255, int(255 * intensity)), angle)
         r = spr.get_rect(center=(int(sx // 2), int(sy // 2)))
         self._add.blit(spr, r, special_flags=pygame.BLEND_ADD)
         if caster is not None and cam is not None:
@@ -223,6 +269,7 @@ class LightBuffer:
         ck = (key, sig, d)
         m = self._vis_cache.get(ck)
         if m is not None:
+            self._vis_cache.move_to_end(ck)
             return m
         RAYS = 56
         STEP = 24.0
@@ -247,16 +294,16 @@ class LightBuffer:
         m.fill((0, 0, 0))
         if len(pts) > 2:
             pygame.draw.polygon(m, (255, 255, 255), pts)
-        if len(self._vis_cache) > 96:
-            self._vis_cache.clear()
+        if len(self._vis_cache) >= 96:
+            self._vis_cache.popitem(last=False)
         self._vis_cache[ck] = m
         return m
 
     # ── composite ──
     def composite(self, target, t, motes=True):
-        grade = pygame.transform.smoothscale(self._grade, (self._w, self._h))
+        grade = pygame.transform.smoothscale(self._grade, (self._w, self._h), self._grade_out)
         target.blit(grade, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
-        add = pygame.transform.smoothscale(self._add, (self._w, self._h))
+        add = pygame.transform.smoothscale(self._add, (self._w, self._h), self._add_out)
         target.blit(add, (0, 0), special_flags=pygame.BLEND_ADD)
         if motes:
             self._draw_motes(target, 0.0 if frozen() else t, add)
@@ -276,7 +323,6 @@ class LightBuffer:
             a = min(140, int(lum * 0.55))
             tw = 1.0 if frozen() else 0.7 + 0.3 * math.sin(t * 2.1 + i)
             r = 1 if sz < 0.75 else 2
-            m = pygame.Surface((r * 2 + 1, r * 2 + 1), pygame.SRCALPHA)
-            pygame.draw.circle(m, (255, 244, 220, int(a * tw)), (r, r), r)
+            m = _mote_spr(r, int(a * tw))
             target.blit(m, (int(x - r), int(y - r)),
                         special_flags=pygame.BLEND_ADD)

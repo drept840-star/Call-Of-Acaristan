@@ -1,0 +1,50 @@
+{
+ "schema": "ae.timeline/1",
+ "id": "m8.d_approach",
+ "shots": [
+  {
+   "scene": "m8d_approach_aerial",
+   "speaker": "VASILE",
+   "text": "His whole guard is on tonight. Drive, forecourt, balconies - and the helicopter on the back terrace.",
+   "radio": true,
+   "min_ms": 5400,
+   "cues": [
+    [
+     200,
+     "squelch_head",
+     0.22
+    ],
+    [
+     900,
+     "wind_gust",
+     0.24
+    ]
+   ]
+  },
+  {
+   "scene": "m8d_approach_gate",
+   "speaker": "VASILE",
+   "text": "Perimeter feed is looping. Up the drive, through the house, and don't let him reach that helicopter.",
+   "radio": true,
+   "min_ms": 4600,
+   "auto_advance": true,
+   "cues": [
+    [
+     150,
+     "squelch_head",
+     0.2
+    ],
+    [
+     1800,
+     "m8_cloth_1",
+     0.16
+    ]
+   ]
+  }
+ ],
+ "tracks": {},
+ "params": {},
+ "metadata": {
+  "source": "m8 Duty, mansion approach"
+ }
+}

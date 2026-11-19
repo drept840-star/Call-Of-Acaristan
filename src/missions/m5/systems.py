@@ -302,6 +302,8 @@ def _update_m5_pickups():
                       pu[1] - STATE.player.rect.centery) > 36:
             continue
         kind = pu[2]
+        if kind == "k9mag" and getattr(STATE, "k9_spare_mags", 0) >= 5 and STATE.spare_mags >= 5:
+            continue  # both pouches full: leave it on the ground
         if kind == "k9mag":
             if getattr(STATE, "k9_spare_mags", 0) < 5:
                 STATE.k9_spare_mags = getattr(STATE, "k9_spare_mags", 0) + 1

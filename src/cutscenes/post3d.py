@@ -29,7 +29,7 @@ import zlib
 import numpy as np
 import pygame
 
-__all__ = ["apply_post", "grade_names"]
+__all__ = ["apply_post", "grade_names", "gpu_spec"]
 
 GRADES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           "..", "game", "content", "grades")
@@ -190,3 +190,30 @@ def _grain_surfs(seed: int, w: int, h: int, k: int):
             _GRAIN.clear()
         got = _GRAIN[key] = tuple(got)
     return got
+
+
+def gpu_spec(spec, t: int, scene_id: str = "", dur_ms: int = 0) -> dict:
+    """Translate an ae.timeline/1 post block to a GPU PostPipeline dict."""
+    if not spec or _quality() <= 0:
+        return {}
+    from engine.timeline import evaluate
+    env = {"t": t / 1000.0, "k": (t / dur_ms) if dur_ms else 0.0, "dur": (dur_ms or 0) / 1000.0}
+    val = lambda name, d=0.0: float(evaluate(spec[name], env)) if isinstance(spec.get(name, d), str) else float(spec.get(name, d))
+    out = {}
+    if spec.get("grade"):
+        out["lut"] = _lut(str(spec["grade"]))
+    dist = val("distortion")
+    if abs(dist) > 0.002:
+        out["distortion"] = dist
+    bloom = val("bloom")
+    if bloom > 0.01:
+        out["bloom"] = bloom
+        out["bloom_knee"] = 0.65
+    vig = val("vignette")
+    if vig > 0.01:
+        out["vignette"] = min(1.0, vig)
+    grain = val("grain")
+    if grain > 0.01:
+        out["grain"] = grain
+        out["grain_seed"] = zlib.crc32(f"{scene_id}:{t // 40}".encode("utf-8"))
+    return out

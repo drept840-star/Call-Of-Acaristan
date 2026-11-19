@@ -34,6 +34,7 @@ Selecting the backend
     software renderer otherwise. Force one with the environment variable
     ``ACARISTAN_RENDERER=gl|software`` (default ``auto``).
 """
+from collections import OrderedDict
 import math
 import os
 import sys
@@ -42,9 +43,11 @@ import numpy as np
 import pygame
 
 from . import textures as _tex
-from .core import SoftwareRenderer
+from .core import SoftwareRenderer, v_cross, v_norm
 from .rig import PART_FB, SLOTS
 from .textures import Tex
+from .gl_post import PostPipeline
+from .gl_sprites import DecalPass, ParticlePass, SkyPass, SpriteBatch
 
 __all__ = ["GLRenderer", "Renderer", "gl_available", "gl_info"]
 
@@ -54,6 +57,15 @@ _VERT_FLOATS = 21          # pos3 col3 nrm3 flags4(shade,fog,double,layer) dbias
 _RIG_FLOATS = 15           # pos3 col3 nrm3 flags4 fb1 slot1
 _N_SLOTS = len(SLOTS)
 _TEX_UNIT = 7              # engine3d.textures layers (texture array); unit 0 is the colour target
+_SH_UNIT = 6               # sun shadow map (set_sun_shadow)
+_SPOT0_UNIT = 8            # dynamic spotlight shadow map 0
+_SPOT1_UNIT = 9            # dynamic spotlight shadow map 1
+_EXTRA0_UNIT = 10          # per-stage extra texture 0 (M6 top map)
+_EXTRA1_UNIT = 11          # per-stage extra texture 1 (M6 ground map)
+_EXTRA2_UNIT = 12          # per-stage extra texture 2 (M6 props atlas)
+_PL_UNIT = 13              # (64, 4) RGBA32F packed local lights data texture
+MAX_LIGHTS = 64
+SPOT_MAP = 512
 SPRITE_REACH_M = 3.5       # how far (metres) a sprite callback may paint from its anchor
 # Light callbacks (fn.light) are world objects at their lamp's depth, not
 # painter-layer decals: they encode against the world layer so walls, the
@@ -78,6 +90,21 @@ def _same(a, b):
         return False
 
 
+_PHYS8_LUT = None
+
+
+def _phys8(raw, h, w):
+    """Physical depth (f16, bottom-up rows) -> top-down 0..254 bytes at 255/64 m.
+    One gather through a table of every f16 bit pattern: the same bytes as
+    clip(round(d * 255 / 64), 0, 254) for a fraction of the cost."""
+    global _PHYS8_LUT
+    if _PHYS8_LUT is None:
+        d = np.arange(65536, dtype=np.uint16).view(np.float16).astype(np.float32)
+        with np.errstate(invalid="ignore"):
+            _PHYS8_LUT = np.clip(np.round(d * (255.0 / 64.0)), 0, 254).astype(np.uint8)
+    return _PHYS8_LUT[np.frombuffer(raw, dtype=np.uint16).reshape(h, w)[::-1]]
+
+
 def _now_ms():
     """Game clock for light-visibility easing (0 if the engine is absent)."""
     try:
@@ -90,6 +117,9 @@ _VERT_COMMON = """
 uniform vec3 u_cam, u_right, u_up, u_fwd;
 uniform float u_focal, u_hw, u_hh, u_near, u_far;
 uniform bool u_snap;
+uniform bool u_ortho;              // sun shadow pass: orthographic from the light
+uniform float u_ohw, u_ohh;        // its half extents, metres
+uniform float u_uvs;               // texel scale this frame (tex_scale): < 1 = bigger texels
 out vec3 v_world;
 out float v_z;
 flat out vec3 v_col;
@@ -106,6 +136,7 @@ vec4 project(vec3 w) {
     v_world = w;
     v_z = z;
     float F = u_far, N = u_near;
+    if (u_ortho) return vec4(x / u_ohw, y / u_ohh, z / F * 2.0 - 1.0, 1.0);
     vec4 clip = vec4(x * u_focal / u_hw, y * u_focal / u_hh, (z * (F + N) - 2.0 * F * N) / (F - N), z);
     if (u_snap && z > N) {              // PS1 vertex jitter: snap to the pixel grid
         vec2 ndc = clip.xy / clip.w;
@@ -121,7 +152,7 @@ in vec3 in_pos; in vec3 in_col; in vec3 in_nrm; in vec4 in_flags; in float in_db
 in vec2 in_uv; in float in_tex;
 void main() {
     v_col = in_col; v_nrm = in_nrm; v_flags = in_flags; v_dbias = in_dbias; v_tint = in_tint;
-    v_uv = in_uv; v_tex = in_tex;
+    v_uv = (in_tex < -1.5) ? in_uv : (in_uv * u_uvs); v_tex = in_tex;
     gl_Position = project(in_pos);
 }
 """
@@ -153,19 +184,25 @@ flat in vec4 v_tint;
 in vec2 v_uv;
 flat in float v_tex;
 uniform sampler2DArray u_tex;   // texel / the texture's mean (textures.py)
+uniform sampler2D u_extra0, u_extra1, u_extra2;
+uniform sampler2D u_pl_tex;     // (64, 4) RGBA32F local lights
 uniform vec3 u_cam;
+uniform vec3 u_right, u_up, u_fwd;
 uniform vec3 u_ldir, u_ltint;
 uniform float u_amb, u_dif, u_sky;
 uniform float u_char;      // 1 = rigged character: wrapped key, camera fill, rim (core.Light.char_k)
+uniform float u_cpop;      // top-down readability: top light + stronger rim on rigs (char_pop)
 uniform vec3 u_fog;
 uniform float u_fog_start, u_fog_end, u_far;
 uniform int u_split_mode;  // 0 all, 1 far only, 2 near only
 uniform float u_split;
 uniform bool u_dither;
-uniform vec4 u_pl_pos[8];  // xyz + range (Phase 11 step 2 local lights)
-uniform vec4 u_pl_col[8];  // rgb (0-255) + intensity
-uniform vec4 u_pl_dir[8];  // spot dir + cone cos in w (w < -0.5 = point)
+uniform ivec4 u_tile_mask[96]; // 12x8 screen tiles, 4x16-bit light masks = 64 lights
+uniform vec2 u_tile_inv;       // (12/w, 8/h)
 uniform int u_pl_n;
+uniform sampler2DShadow u_spot_tex0, u_spot_tex1;
+uniform vec3 u_spot_cam[2], u_spot_right[2], u_spot_up[2], u_spot_fwd[2];
+uniform float u_spot_tan[2], u_spot_near[2], u_spot_far[2];
 uniform float u_pl_mod;    // 0 = add the light colour (legacy), 1 = light * surface albedo
 uniform float u_pl_gain;   // strength of the albedo-modulated mode
 uniform vec4 u_pool_pos[32];  // lamp pools (set_pools): lamp head xyz + radius
@@ -174,8 +211,19 @@ uniform vec3 u_pool_hot[32];  // rgb (0-255) at the pool's centre
 uniform int u_pool_n;
 uniform float u_glit[32];     // glitter per texture layer (textures.glitter)
 uniform float u_glit_k;       // the scene's glitter, 0 = none
+uniform float u_refl[32];     // surface reflectivity per texture layer
+uniform float u_wet, u_marble;
 uniform float u_depth_alpha;  // 1 = pack physical depth into alpha (opaque target)
-out vec4 f_color;
+uniform bool u_sh_pass;       // writing the sun shadow map: depth only
+uniform bool u_sh_on;         // receiving the sun shadow (set_sun_shadow)
+uniform sampler2DShadow u_sh_tex;
+uniform vec3 u_sh_cam, u_sh_right, u_sh_up, u_sh_fwd;
+uniform float u_sh_half, u_sh_far, u_sh_k, u_sh_texel;
+uniform vec3 u_sh_col;        // multiplier at full shadow
+uniform float u_hdr_emissive; // > 1.0 in HDR mode for bright emissives/flashes
+layout(location = 0) out vec4 f_color;
+layout(location = 1) out vec4 f_aux;
+layout(location = 2) out float f_pdepth;
 
 const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
 const float TEX_SIZE = 64.0;  // textures.SIZE
@@ -186,10 +234,34 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
+float spot_shadow(int slot, vec3 wpos, vec3 n2) {
+    vec3 d = wpos + n2 * 0.05 - u_spot_cam[slot];
+    float z = dot(d, u_spot_fwd[slot]);
+    float N = u_spot_near[slot], F = u_spot_far[slot];
+    if (z <= N || z >= F) return 1.0;
+    float t = u_spot_tan[slot] * z;
+    vec2 uv = vec2(dot(d, u_spot_right[slot]), dot(d, u_spot_up[slot])) / t * 0.5 + 0.5;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 1.0;
+    float zb = max(N + 0.001, z - 0.06);
+    float ref = 0.5 + 0.5 * ((F + N) - 2.0 * F * N / zb) / (F - N);
+    return (slot == 0) ? texture(u_spot_tex0, vec3(uv, ref)) : texture(u_spot_tex1, vec3(uv, ref));
+}
+
 void main() {
     // sampled before any discard or branch so the mip choice has its derivatives
     // (a half-mip bias toward the sharper level: PS2-crisp, still no sparkle)
     vec3 texel = texture(u_tex, vec3(v_uv, max(v_tex, 0.0)), -0.5).rgb;
+    vec3 ex0 = texture(u_extra0, v_uv).rgb;
+    vec3 ex1 = texture(u_extra1, v_uv).rgb;
+    vec3 ex2 = texture(u_extra2, v_uv).rgb;
+    if (u_sh_pass) {                            // emissive faces (glows, beams) cast nothing
+        if (v_flags.y < 0.5) discard;
+        gl_FragDepth = gl_FragCoord.z;
+        f_color = vec4(0.0);
+        f_aux = vec4(0.5, 0.5, 1.0, 0.0);
+        f_pdepth = 1000.0;
+        return;
+    }
     vec2 tc = v_uv * TEX_SIZE;                      // texel coordinates
     float tpp = max(fwidth(tc.x), fwidth(tc.y));    // texels under one pixel
     float layer = v_flags.w;
@@ -198,38 +270,26 @@ void main() {
     vec3 n = v_nrm;
     float facing = dot(n, u_cam - v_world);
     if (facing <= 0.0 && v_flags.z < 0.5) discard;
-    vec3 alb = v_tex >= 0.0 ? v_col * texel : v_col;
+    vec3 alb = v_col;
+    if (v_tex < -1.5) {
+        int eslot = int(-v_tex - 1.25);
+        alb = ((eslot == 0) ? ex0 : ((eslot == 1) ? ex1 : ex2)) * 255.0;
+    } else if (v_tex >= 0.0) {
+        alb = v_col * texel;
+    }
     vec3 col = alb;
     vec3 n2 = facing > 0.0 ? n : -n;
+    float hdr_cap = u_hdr_emissive > 1.01 ? 420.0 : 255.0;
     if (v_flags.x > 0.5) {                      // per-frame flat lighting (dynamic meshes)
         float k = u_amb + u_dif * max(0.0, dot(n2, u_ldir)) + u_sky * n2.y;
         float rim = 0.0;
         if (u_char > 0.5) {
             float ndv = max(0.0, dot(n2, normalize(u_cam - v_world)));
             k = u_amb + u_dif * 1.12 * max(0.0, (dot(n2, u_ldir) + 0.2) / 1.2) + u_sky * n2.y + 0.12 * ndv;
-            rim = 0.7 * pow(1.0 - ndv, 3.0);
+            rim = 0.7 * (1.0 + u_cpop) * pow(1.0 - ndv, 3.0);
+            k += u_cpop * 0.32 * max(0.0, n2.y);
         }
         col = min(vec3(255.0), floor(col * (k + rim) * u_ltint));
-        for (int i = 0; i < 8; i++) {           // local point/spot lights
-            if (i >= u_pl_n) break;
-            vec3 dv = u_pl_pos[i].xyz - v_world;
-            float d = length(dv);
-            float rng = u_pl_pos[i].w;
-            if (d >= rng || d < 0.001) continue;
-            float fall = pow(1.0 - d / rng, 2.0) * u_pl_col[i].w;
-            if (u_pl_dir[i].w > -0.5) {
-                float ca = dot(-dv / d, u_pl_dir[i].xyz);
-                if (ca <= u_pl_dir[i].w) continue;
-                fall *= min(1.0, (ca - u_pl_dir[i].w) / 0.12);
-            }
-            float nd = dot(n2, dv / d);
-            if (nd <= 0.0) continue;
-            if (u_pl_mod > 0.5)
-                col += alb * (u_pl_col[i].rgb / 255.0) * (fall * nd * u_pl_gain);
-            else
-                col += u_pl_col[i].rgb * (fall * nd);
-        }
-        col = min(vec3(255.0), col);
     } else if (v_flags.y > 0.5 && (u_pool_n > 0 || u_glit_k > 0.0)) {
         // Baked faces: lamp pools and snow glitter. A pool warms by the
         // surface's brightness, not its hue, so blue-white snow under a
@@ -264,9 +324,62 @@ void main() {
             add += pc * (lum * k * nd);
             add += pc * (min(1.0, 2.0 * k) * smoothstep(0.975, 0.995, dot(fac, normalize(L + V))));
         }
-        col = min(vec3(255.0), col + add);
+        col = min(vec3(hdr_cap), col + add);
+    }
+    if (v_flags.y > 0.5 && u_pl_n > 0) {
+        ivec2 tile = clamp(ivec2(gl_FragCoord.xy * u_tile_inv), ivec2(0), ivec2(11, 7));
+        ivec4 mask = u_tile_mask[tile.y * 12 + tile.x];
+        vec3 ladd = vec3(0.0);
+        bool use_mod = (u_pl_mod > 0.5) || (v_flags.x < 0.5);
+        float lgain = (v_flags.x < 0.5 && u_pl_mod <= 0.5) ? 1.15 : u_pl_gain;
+        for (int w = 0; w < 4; w++) {
+            int bits = mask[w];
+            if (bits == 0) continue;
+            for (int b = 0; b < 16; b++) {
+                if ((bits & (1 << b)) == 0) continue;
+                int i = w * 16 + b;
+                if (i >= u_pl_n) break;
+                vec4 p0 = texelFetch(u_pl_tex, ivec2(i, 0), 0);
+                vec4 c0 = texelFetch(u_pl_tex, ivec2(i, 1), 0);
+                vec4 d0 = texelFetch(u_pl_tex, ivec2(i, 2), 0);
+                vec4 s0 = texelFetch(u_pl_tex, ivec2(i, 3), 0);
+                vec3 dv = p0.xyz - v_world;
+                float d = length(dv);
+                float rng = p0.w;
+                if (d >= rng || d < 0.001) continue;
+                float fall = pow(1.0 - d / rng, 2.0) * c0.w;
+                if (d0.w > -0.5) {
+                    float ca = dot(-dv / d, d0.xyz);
+                    if (ca <= d0.w) continue;
+                    fall *= min(1.0, (ca - d0.w) / 0.12);
+                }
+                float nd = dot(n2, dv / d);
+                if (nd <= 0.0) continue;
+                int sh = int(floor(s0.x + 0.5));
+                float lit_s = (sh == 0) ? spot_shadow(0, v_world, n2)
+                            : ((sh == 1) ? spot_shadow(1, v_world, n2) : 1.0);
+                if (lit_s <= 0.001) continue;
+                if (use_mod)
+                    ladd += alb * (c0.rgb / 255.0) * (fall * nd * lgain * lit_s);
+                else
+                    ladd += c0.rgb * (fall * nd * lit_s);
+            }
+        }
+        col = min(vec3(hdr_cap), col + ladd);
     }
     if (v_flags.y > 0.5) {                      // not emissive
+        // Sun shadow map, hardware 2x2 PCF. Only faces turned to the sun
+        // receive: the rest keep the key light (top-down suns sit behind the
+        // set, so camera-facing walls and fronts would all go dark).
+        float nl = dot(n2, -u_sh_fwd);
+        if (u_sh_on && nl > 0.0) {
+            vec3 d = v_world + n2 * (1.5 * u_sh_texel) - u_sh_cam;
+            vec2 uv = vec2(dot(d, u_sh_right), dot(d, u_sh_up)) / u_sh_half * 0.5 + 0.5;
+            if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {
+                float lit = texture(u_sh_tex, vec3(uv, (dot(d, u_sh_fwd) - 0.02) / u_sh_far));
+                col = floor(col * mix(vec3(1.0), u_sh_col, u_sh_k * (1.0 - lit) * smoothstep(0.0, 0.25, nl)));
+            }
+        }
         if (v_tint.w > 0.0) col = floor(col + (v_tint.rgb - col) * v_tint.w);
         if (v_z > u_fog_start) {
             float k = min(1.0, (v_z - u_fog_start) / (u_fog_end - u_fog_start));
@@ -280,11 +393,24 @@ void main() {
     float lin = clamp((v_z + v_dbias) / u_far, 0.0, 1.0) * 0.999;
     float slot = clamp(floor(layer + 0.5), 0.0, 7.0);
     gl_FragDepth = ((7.0 - slot) + lin) / 8.0;
-    // Physical depth (0..64 m) goes in alpha when the colour target is
-    // opaque: it lets light sprites test against real distance instead of
-    // the painter-layer-encoded depth buffer.  Alpha targets keep 1.0.
-    float d8 = clamp((v_z + v_dbias) / 64.0, 0.0, 0.998);
-    f_color = vec4(col / 255.0, mix(1.0, d8, u_depth_alpha));
+    vec3 hdr_col = col / 255.0;
+    if (v_flags.y < 0.5 && u_hdr_emissive > 1.01) {
+        float mx = max(hdr_col.r, max(hdr_col.g, hdr_col.b));
+        hdr_col *= mix(1.0, u_hdr_emissive, smoothstep(0.55, 0.95, mx));
+    }
+    f_color = vec4(hdr_col, 1.0);
+    vec3 vn = vec3(dot(n2, u_right), dot(n2, u_up), dot(n2, u_fwd));
+    float mat_id = 0.25;
+    if (v_flags.y < 0.5) {
+        mat_id = 1.0;
+    } else if (u_char > 0.5) {
+        mat_id = 0.75;
+    } else if (n2.y > 0.80) {
+        float rtex = v_tex >= 0.0 ? u_refl[int(v_tex + 0.5)] : (v_tex < -1.5 ? 0.55 : 0.25);
+        if (u_marble > 0.05 || (u_wet > 0.02 && rtex > 0.05)) mat_id = 0.50;
+    }
+    f_aux = vec4(vn * 0.5 + 0.5, mat_id);
+    f_pdepth = max(0.0, v_z + v_dbias);
 }
 """
 
@@ -367,11 +493,17 @@ class _Programs:
             import moderngl
             arr = _tex.stack()
             if arr is None:
-                arr = np.ones((1, 1, 1, 3), dtype=np.float16)
+                rgba = np.ones((1, 1, 1, 4), dtype=np.float16)
+            else:
+                n, h, w, _ = arr.shape
+                rgba = np.ones((n, h, w, 4), dtype=np.float16)
+                rgba[..., :3] = arr
             if self._atlas is not None:
                 self._atlas.release()
-            n, h, w, _ = arr.shape
-            t = self.ctx.texture_array((w, h, n), 3, np.ascontiguousarray(arr).tobytes(), dtype="f2")
+            n, h, w, _ = rgba.shape
+            # GL_RGBA16F is OpenGL 3.3 color-renderable; GL_RGB16F is not, which
+            # can cause glGenerateMipmap to leave mip levels >= 1 black.
+            t = self.ctx.texture_array((w, h, n), 4, rgba.tobytes(), dtype="f2")
             t.build_mipmaps()
             t.filter = (moderngl.NEAREST_MIPMAP_NEAREST, moderngl.NEAREST)
             self._atlas, self._atlas_ver = t, ver
@@ -412,6 +544,7 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
     f_i3 = np.empty((nf, 3), dtype=np.int64)
     f_nrm = np.zeros((nf, 3)); has_n = np.zeros(nf, dtype=bool)
     f_tex = np.full(nf, -1.0); f_uvk = np.zeros(nf)
+    exp_uv = []
     ext = tri.extend
     for k, face in enumerate(faces):
         idx = face[0]
@@ -425,10 +558,23 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
         if type(col) is Tex:
             f_tex[k] = col.tex
             f_uvk[k] = col.uvk
+        f6 = face[6] if len(face) > 6 else None
+        f7 = face[7] if len(face) > 7 else None
+        uv_tag = f7 if (isinstance(f7, tuple) and len(f7) == 3 and f7[0] == "uv") else (
+            f6 if (isinstance(f6, tuple) and len(f6) == 3 and f6[0] == "uv") else None
+        )
+        if uv_tag is not None:
+            f_tex[k] = float(uv_tag[1])
+            uvs = uv_tag[2]
+            for j in range(1, n - 1):
+                exp_uv.extend((uvs[0], uvs[j], uvs[j + 1]))
+        else:
+            for j in range(1, n - 1):
+                exp_uv.extend(((0.0, 0.0), (0.0, 0.0), (0.0, 0.0)))
         em = face[5]
         f_flags[k] = (0.0 if (prelit or em) else 1.0, 0.0 if em else 1.0,
                       1.0 if face[3] else 0.0, float(face[2]))
-        fb = face[6] if len(face) > 6 else 0.0
+        fb = f6 if (len(face) > 6 and uv_tag is not f6) else 0.0
         f_db[k] = bias - fb
         nrm = face[4]
         if nrm is not None:
@@ -454,6 +600,10 @@ def _pack_faces(verts, faces, prelit, bias=0.0, tint=None):
         out[:, 14:18] = 0.0
     out[:, 18:20] = 0.0
     out[:, 20] = f_tex[rep]
+    exp_sel = f_tex < -1.5
+    if exp_sel.any():
+        erows = exp_sel[rep]
+        out[erows, 18:20] = np.asarray(exp_uv, dtype=np.float32)[erows]
     sel = f_tex >= 0.0
     if sel.any():
         T, B = _tex_frame(V, f_i3, f_nrm, sel)
@@ -539,23 +689,55 @@ class GLRenderer(SoftwareRenderer):
         super().__init__(w, h, fog=fog, fog_start=fog_start, fog_end=fog_end)
         self.ps1_snap = ps1_snap          # PS1 vertex jitter (off = matches software)
         self.dither = dither              # PS1 15-bit dither (off = matches software)
+        self.hdr = False                  # HDR emissives + bloom enabled by 3D/2.5D hosts
         ctx = self.ctx
-        self._color = ctx.texture((w, h), 4)
+        self._color = ctx.texture((w, h), 4, dtype="f2")
+        self._aux = ctx.texture((w, h), 4)
+        self._aux.filter = (self.ctx.NEAREST, self.ctx.NEAREST)
+        self._aux.repeat_x = self._aux.repeat_y = False
+        self._pdepth = ctx.texture((w, h), 1, dtype="f2")
+        self._pdepth.filter = (self.ctx.NEAREST, self.ctx.NEAREST)
+        self._pdepth.repeat_x = self._pdepth.repeat_y = False
         self._depth = ctx.depth_texture((w, h))
-        self._fbo = ctx.framebuffer(color_attachments=[self._color], depth_attachment=self._depth)
+        self._fbo = ctx.framebuffer(color_attachments=[self._color, self._aux, self._pdepth],
+                                    depth_attachment=self._depth)
+        self._color_fbo = ctx.framebuffer(color_attachments=[self._color],
+                                          depth_attachment=self._depth)
+        self._sky = SkyPass(ctx)
+        self._sprites = SpriteBatch(ctx)
+        self._part_batch = ParticlePass(ctx)
+        self._decals_batch = DecalPass(ctx)
+        self._post = PostPipeline(ctx)
         self._static_vbo = None
         self._static_vao = None
         self._static_sig = None
         self._static_ranges = []
+        self._static_runs = None
         self._dyn_vbo = ctx.buffer(reserve=1 << 20, dynamic=True)
         self._dyn_vao = self._vao(self.progs.world, self._dyn_vbo, rig=False)
         self._dyn_cat = None              # staging array for _draw_dyn
+        self._dyn_bounds = []
         self._rigs = {}                   # spec key -> (hum, vbo, vao, n)
         self._light_vis = {}              # quantised anchor -> (eased v, ms)
-        self._light_tmp = {}              # (w, h) -> reusable additive buffer
-        self._light_mask = {}             # (w, h) -> reusable occlusion mask
+        self._light_tmp_s = None          # reusable (W, H) additive buffer
+        self._light_mask_s = None         # reusable (W, H) occlusion mask
+        self._comp_buf = None             # reusable (W, H) sprite-occlusion backup
+        self._bones_buf = np.zeros((_N_SLOTS, 4, 4), dtype=np.float32)
         self._vis_frame = 0
-        self._res = {}                    # id(rows) -> (rows, vbo, vao, n): resident chunks
+        self._res = OrderedDict()         # id(rows) -> (rows, vbo, vao, n, center, rad)
+        self._sh_tex = ctx.depth_texture((1, 1))   # sun shadow map, sized on first use
+        self._sh_fbo = None
+        self._spot_tex = [ctx.depth_texture((1, 1)), ctx.depth_texture((1, 1))]
+        self._spot_fbo = [None, None]
+        self._spot_active = []
+        self._pl_tex = ctx.texture((MAX_LIGHTS, 4), 4, dtype="f4")
+        self._pl_tex.filter = (ctx.NEAREST, ctx.NEAREST)
+        self._pl_tex.repeat_x = self._pl_tex.repeat_y = False
+        self._pl_buf = np.zeros((4, MAX_LIGHTS, 4), dtype=np.float32)
+        self._dummy1 = ctx.texture((1, 1), 4, b"\xff\xff\xff\xff")
+        self._extra = [None, None, None]
+        self._active_color_fbo = self._color_fbo
+        self._active_color_tex = self._color
         self.stats = {}
         self.begin()
 
@@ -585,12 +767,21 @@ class GLRenderer(SoftwareRenderer):
         w, h = int(w), int(h)
         if not super().resize(w, h):
             return False
-        old = (getattr(self, "_fbo", None), getattr(self, "_color", None),
-               getattr(self, "_depth", None))
-        self._color = self.ctx.texture((w, h), 4)
+        old = (getattr(self, "_fbo", None), getattr(self, "_color_fbo", None),
+               getattr(self, "_color", None), getattr(self, "_aux", None),
+               getattr(self, "_pdepth", None), getattr(self, "_depth", None))
+        self._color = self.ctx.texture((w, h), 4, dtype="f2")
+        self._aux = self.ctx.texture((w, h), 4)
+        self._aux.filter = (self.ctx.NEAREST, self.ctx.NEAREST)
+        self._aux.repeat_x = self._aux.repeat_y = False
+        self._pdepth = self.ctx.texture((w, h), 1, dtype="f2")
+        self._pdepth.filter = (self.ctx.NEAREST, self.ctx.NEAREST)
+        self._pdepth.repeat_x = self._pdepth.repeat_y = False
         self._depth = self.ctx.depth_texture((w, h))
-        self._fbo = self.ctx.framebuffer(color_attachments=[self._color],
+        self._fbo = self.ctx.framebuffer(color_attachments=[self._color, self._aux, self._pdepth],
                                          depth_attachment=self._depth)
+        self._color_fbo = self.ctx.framebuffer(color_attachments=[self._color],
+                                               depth_attachment=self._depth)
         for obj in old:          # release explicitly: no driver-side churn
             try:
                 if obj is not None:
@@ -599,8 +790,9 @@ class GLRenderer(SoftwareRenderer):
                 pass
         self._dyn_cat = None          # staging array is sized to the queue
         self._light_vis.clear()
-        self._light_tmp.clear()
-        self._light_mask.clear()
+        self._light_tmp_s = None
+        self._light_mask_s = None
+        self._comp_buf = None
         return True
 
     def _sync_static(self):
@@ -609,13 +801,42 @@ class GLRenderer(SoftwareRenderer):
         if sig == self._static_sig:
             return
         chunks, ranges, first = [], [], 0
-        for o in objs:
+        centers, radii, obj_idx = [], [], []
+        CELL = 32.0
+        for oi, o in enumerate(objs):
             faces = [(f[0], f[1], f[2], f[3], f[4], f[5]) for f in o.faces]
             arr = _pack_faces(o.verts, faces, prelit=True)
             n = 0 if arr is None else len(arr)
-            if n:
-                chunks.append(arr)
-            ranges.append((first, n))
+            if not n:
+                continue
+            if o.radius > CELL and len(o.faces) >= 48 and n >= 144 and n % 3 == 0:
+                tris = arr.reshape(-1, 3, _VERT_FLOATS)
+                cx = np.floor(tris[:, :, 0].mean(axis=1) / CELL).astype(np.int64)
+                cz = np.floor(tris[:, :, 2].mean(axis=1) / CELL).astype(np.int64)
+                keys = ((cx + (1 << 20)) << 21) | (cz + (1 << 20))
+                order = np.argsort(keys, kind="mergesort")
+                skeys = keys[order]
+                tris_s = tris[order]
+                arr = tris_s.reshape(-1, _VERT_FLOATS)
+                splits = np.flatnonzero(skeys[1:] != skeys[:-1]) + 1
+                starts = np.concatenate(([0], splits))
+                ends = np.concatenate((splits, [len(tris_s)]))
+                for s, e in zip(starts.tolist(), ends.tolist()):
+                    pts = tris_s[s:e, :, 0:3].reshape(-1, 3)
+                    lo, hi = pts.min(axis=0), pts.max(axis=0)
+                    cc = (lo + hi) * 0.5
+                    d = pts - cc
+                    rad = float(math.sqrt(float((d * d).sum(axis=1).max())))
+                    ranges.append((first + s * 3, (e - s) * 3))
+                    centers.append(cc)
+                    radii.append(rad)
+                    obj_idx.append(oi)
+            else:
+                ranges.append((first, n))
+                centers.append(o.center)
+                radii.append(o.radius)
+                obj_idx.append(oi)
+            chunks.append(arr)
             first += n
         if self._static_vbo is not None:
             self._static_vao.release()
@@ -626,49 +847,142 @@ class GLRenderer(SoftwareRenderer):
             self._static_vbo = self.ctx.buffer(data.tobytes())
             self._static_vao = self._vao(self.progs.world, self._static_vbo, rig=False)
         self._static_ranges = ranges
+        self._sc_starts = np.asarray([a for a, _ in ranges], dtype=np.int64)
+        self._sc_counts = np.asarray([n for _, n in ranges], dtype=np.int64)
+        self._sc_centers = np.asarray(centers, dtype=np.float32).reshape(-1, 3)
+        self._sc_radii = np.asarray(radii, dtype=np.float32)
+        self._sc_obj_idx = np.asarray(obj_idx, dtype=np.int64)
         self._static_sig = sig
 
+    def set_sky(self, spec):
+        """Queue GPU sky parameters for the next render pass."""
+        self._sky_spec = spec
+
     def begin(self):
+        self._sun = None          # set_sun_shadow: this frame only
+        self.char_pop = 0.0       # rig readability boost, this frame only (top-down hosts)
+        self.tex_scale = 1.0      # texture tiling scale, this frame only (top-down: bigger texels)
+        self.wetness = 0.0
+        self.marble_refl = 0.0
+        self.height_fog = None
         self.actor_log = []       # humanoid positions this frame (shared cast shadows)
         self._items = []          # sprites + lines: (key, kind, data)
         self._dyn = []            # packed float32 chunks
+        self._dyn_bounds = []
         self._res_draw = []       # resident chunk entries queued this frame
         self._rig_draws = []      # (rig_entry, bones bytes, tint, bias)
+        self._particles = []
+        self._decals = []
+        self._spot_active = []
         self._want_static = False
+        if not hasattr(self, "_sky_spec"):
+            self._sky_spec = None
+        self._overlay_deferred = False
+        self._cull_stats = {"static": 0, "res": 0, "rigs": 0, "items": 0, "lights": 0}
 
     def add_static(self):
         self._want_static = True
 
-    def add_dynamic(self, wverts, faces, bias=0.0, tint=None):
+    def set_extra_textures(self, *entries):
+        """Upload up to 3 ``(key, surface)`` RGB textures for ``v_tex = -2..-4``."""
+        import moderngl
+        for i in range(min(3, len(entries))):
+            item = entries[i]
+            if item is None:
+                continue
+            key, surf = item
+            cur = self._extra[i]
+            if cur is not None and cur[0] == key:
+                continue
+            if cur is not None:
+                try:
+                    cur[1].release()
+                except Exception:
+                    pass
+            w, h = surf.get_size()
+            raw = pygame.image.tobytes(surf, "RGB", False)
+            tex = self.ctx.texture((w, h), 3, raw)
+            tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+            tex.repeat_x = tex.repeat_y = False
+            self._extra[i] = (key, tex)
+
+    SUN_MAP = 2048
+
+    def set_sun_shadow(self, travel, center, half, k=0.6, col=(0.12, 0.15, 0.32)):
+        """Real cast shadows for this frame: everything queued (set, props,
+        rigs) is drawn into a SUN_MAP depth map from a sun shining along
+        ``travel`` over a ``2*half`` metre square round ``center``, and every
+        lit face under it is scaled toward ``col`` by ``k``. Cleared by
+        ``begin``. Returns True (the software renderer returns False)."""
+        f = v_norm(travel)
+        rt = v_norm(v_cross(f, (0.0, 0.0, 1.0)))
+        up = v_cross(rt, f)
+        D = 40.0
+        tx = 2.0 * half / self.SUN_MAP
+        # snap the square to whole texels so edges do not crawl as the camera moves
+        a = math.floor((center[0] * rt[0] + center[1] * rt[1] + center[2] * rt[2]) / tx) * tx
+        b = math.floor((center[0] * up[0] + center[1] * up[1] + center[2] * up[2]) / tx) * tx
+        c = center[0] * f[0] + center[1] * f[1] + center[2] * f[2]
+        o = tuple(rt[i] * a + up[i] * b + f[i] * (c - D) for i in range(3))
+        self._sun = {"u_sh_cam": o, "u_sh_right": rt, "u_sh_up": up, "u_sh_fwd": f,
+                     "u_sh_half": float(half), "u_sh_far": 2.0 * D, "u_sh_texel": tx,
+                     "u_sh_k": float(k), "u_sh_col": tuple(float(x) for x in col)}
+        return True
+
+    def add_dynamic(self, wverts, faces, bias=0.0, tint=None, bounds=None):
+        if bounds is None and getattr(self, "frustum_cull", True) and len(wverts) >= 12:
+            xs = [v[0] for v in wverts]
+            ys = [v[1] for v in wverts]
+            zs = [v[2] for v in wverts]
+            cx, cy, cz = (min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5, (min(zs) + max(zs)) * 0.5
+            rad = math.sqrt(max((v[0] - cx) ** 2 + (v[1] - cy) ** 2 + (v[2] - cz) ** 2 for v in wverts))
+            bounds = ((cx, cy, cz), rad)
         arr = _pack_faces(wverts, faces, prelit=False, bias=bias, tint=tint)
         if arr is not None:
             self._dyn.append(arr)
+            self._dyn_bounds.append(bounds)
 
-    def add_packed(self, arr):
+    def add_packed(self, arr, bounds=None):
         """Queue rows already in the dynamic vertex layout (see ``pack``).
 
         For meshes that only move rigidly: pack once, then transform the
         position/normal columns per frame instead of re-packing in Python."""
         if arr is not None and len(arr):
             self._dyn.append(arr)
+            self._dyn_bounds.append(bounds)
 
-    def add_resident(self, arr):
+    def add_resident(self, arr, bounds=None):
         """Queue packed rows that are identical every frame (the memoized live
         set).  They go to a buffer of their own once and are only drawn
         afterwards; ``add_packed`` would copy and re-send them each frame,
         which is ~10 MB for the yard's set."""
         if arr is None or not len(arr):
             return
-        ent = self._res.get(id(arr))
-        if ent is None:
+        key = id(arr)
+        ent = self._res.get(key)
+        if ent is not None:
+            self._res.move_to_end(key)
+        else:
+            if bounds is None:
+                pts = arr[:, 0:3]
+                lo, hi = pts.min(axis=0), pts.max(axis=0)
+                cc = (float((lo[0] + hi[0]) * 0.5), float((lo[1] + hi[1]) * 0.5), float((lo[2] + hi[2]) * 0.5))
+                d = pts - np.asarray(cc, dtype=pts.dtype)
+                rad = float(math.sqrt(float((d * d).sum(axis=1).max())))
+            else:
+                cc, rad = bounds
             vbo = self.ctx.buffer(np.ascontiguousarray(arr, dtype=np.float32))
-            ent = (arr, vbo, self._vao(self.progs.world, vbo, rig=False), len(arr))
-            self._res[id(arr)] = ent
-            live = {id(e[0]) for e in self._res_draw}
-            for key in [k for k in self._res if k not in live][:-3]:
-                _a, old_vbo, old_vao, _n = self._res.pop(key)
-                old_vao.release()
-                old_vbo.release()
+            ent = (arr, vbo, self._vao(self.progs.world, vbo, rig=False), len(arr), cc, rad)
+            self._res[key] = ent
+            live = {id(e[0]) for e in self._res_draw} | {key}
+            if len(self._res) > 128:
+                for rk in list(self._res):
+                    if len(self._res) <= 128:
+                        break
+                    if rk not in live:
+                        _a, old_vbo, old_vao, _n, _c, _r = self._res.pop(rk)
+                        old_vao.release()
+                        old_vbo.release()
         self._res_draw.append(ent)
 
     @staticmethod
@@ -694,7 +1008,11 @@ class GLRenderer(SoftwareRenderer):
             vbo = self.ctx.buffer(data.tobytes())
             entry = (hum, vbo, self._vao(self.progs.rig, vbo, rig=True), len(data))
             self._rigs[key] = entry
-        bones = np.zeros((_N_SLOTS, 4, 4), dtype=np.float32)   # zero = hidden slot
+        bones = getattr(self, "_bones_buf", None)
+        if bones is None:
+            bones = self._bones_buf = np.zeros((_N_SLOTS, 4, 4), dtype=np.float32)
+        else:
+            bones.fill(0.0)   # zero = hidden slot
         for slot, _key, M, org, _g, _fb in places:
             b = bones[slot]
             # column-major mat4: b[col][row]
@@ -703,13 +1021,23 @@ class GLRenderer(SoftwareRenderer):
             b[0, 2], b[1, 2], b[2, 2] = M[6], M[7], M[8]
             b[3, 0], b[3, 1], b[3, 2], b[3, 3] = org[0] + px, org[1] + py, org[2] + pz, 1.0
         t = (0.0, 0.0, 0.0, 0.0) if tint is None else (*tint[0], float(tint[1]))
-        self._rig_draws.append((entry, bones.tobytes(), t, float(bias)))
+        rc = (float(pos[0]), float(pos[1]) + 0.9, float(pos[2]))
+        self._rig_draws.append((entry, bones.tobytes(), t, float(bias), rc, 1.85))
         sl, sb = shadow if shadow else (None, 0.0)
         self.add_blob_shadow((pos[0], pos[1] + 0.02, pos[2]), 0.34, 0.30, 0.40,
                              layer=sl, bias=sb)
         return joints
 
     def add_sprite(self, pos, draw_fn, layer=2, bias=0.0):
+        if getattr(self, "frustum_cull", True):
+            bm = getattr(draw_fn, "bounds_m", None)
+            sr = (max(bm[0], bm[1]) + 0.5) if bm is not None else 8.5
+            if not self.visible_frustum(
+                pos, sr, self.cam, self.right, self.up, self.fwd,
+                self.NEAR, self.fog_end + 120.0, self.tan_h, self.tan_v,
+            ):
+                self._cull_stats["items"] += 1
+                return
         p = self.project(pos)
         if p is None:
             return
@@ -725,15 +1053,32 @@ class GLRenderer(SoftwareRenderer):
         # item (layer 1: just above ground) so it depth-composites like
         # any sprite. Without this, every humanoid on the GL backend fed
         # a callable into _composite's line branch and crashed the flush.
+        if getattr(self, "frustum_cull", True) and not self.visible_sphere(pos, max(rx, rz) + 0.15):
+            self._cull_stats["items"] += 1
+            return
         item = self._blob_item(pos, rx, rz, strength)
         if item is None:
             return
         draw, c = item
+        _bx, _by, wpx, hpx = draw.bounds
+        draw._gl_spec = {
+            "kind": "blob",
+            "col": (0.0, 0.0, 0.0),
+            "rx_px": float(wpx),
+            "ry_px": float(hpx),
+            "strength": float(strength),
+        }
         lay = 1 if layer is None else layer
-        self._items.append((lay * 1e6 - c[2], "sprite",
+        self._items.append((lay * 1e6 - c[2] - bias, "sprite",
                             (draw, c[0], c[1], self.focal / c[2], c[2], lay, c[2] + bias)))
 
     def add_line3d(self, a, b, col, width=1, layer=3):
+        if getattr(self, "frustum_cull", True):
+            mid = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5)
+            r_m = 0.5 * math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2 + (b[2] - a[2]) ** 2) + 0.1
+            if not self.visible_sphere(mid, r_m):
+                self._cull_stats["items"] += 1
+                return
         from .core import _clip_near
         pa, pb = self.to_cam(a), self.to_cam(b)
         if pa[2] < self.NEAR and pb[2] < self.NEAR:
@@ -752,10 +1097,21 @@ class GLRenderer(SoftwareRenderer):
         ``depth_test=False`` for scenery drawn above every world layer."""
         from .core import _clip_near
         out = []
+        cull = getattr(self, "frustum_cull", True)
+        near, far = self.NEAR, self.fog_end + 120.0
+        th, tv = self.tan_h, self.tan_v
         for a, b, col, width in segs:
             pa, pb = self.to_cam(a), self.to_cam(b)
-            if pa[2] < self.NEAR and pb[2] < self.NEAR:
+            if pa[2] < near and pb[2] < near:
                 continue
+            if cull:
+                if pa[2] > far and pb[2] > far:
+                    continue
+                mz = max(pa[2], pb[2], near)
+                if (pa[0] > mz * th and pb[0] > mz * th) or (pa[0] < -mz * th and pb[0] < -mz * th):
+                    continue
+                if (pa[1] > mz * tv and pb[1] > mz * tv) or (pa[1] < -mz * tv and pb[1] < -mz * tv):
+                    continue
             pts = _clip_near([pa, pb], self.NEAR, closed=False)
             if len(pts) < 2:
                 continue
@@ -773,14 +1129,138 @@ class GLRenderer(SoftwareRenderer):
     def _far(self):
         return self.fog_end + 400.0
 
+    @staticmethod
+    def _quality():
+        try:
+            from core.user_settings import SETTINGS
+            return int(SETTINGS.quality_3d)
+        except Exception:
+            return 2
+
+    def _select_spot_shadows(self, lights):
+        q = self._quality()
+        if not getattr(self, "spot_shadows", True) or q <= 0:
+            return []
+        max_spots = 2 if q >= 2 else 1
+        cands = []
+        for idx, L in enumerate(lights):
+            is_spot = L.get("kind") == "spot"
+            sh_flag = bool(L.get("shadow", False))
+            if not (sh_flag or (is_spot and float(L.get("intensity", 1.0)) >= 0.6 and float(L.get("range", 6.0)) >= 4.0)):
+                continue
+            dx = L["pos"][0] - self.cam[0]
+            dy = L["pos"][1] - self.cam[1]
+            dz = L["pos"][2] - self.cam[2]
+            score = (1000.0 if sh_flag else 0.0) + float(L.get("intensity", 1.0)) * 40.0 - math.sqrt(dx * dx + dy * dy + dz * dz)
+            cands.append((score, idx, L))
+        cands.sort(key=lambda x: -x[0])
+        return [(idx, L) for _, idx, L in cands[:max_spots]]
+
+    def _upload_lights(self, lights):
+        if getattr(self, "frustum_cull", True) and lights:
+            vis_lights = [
+                L for L in lights
+                if self.visible_sphere(L["pos"], float(L.get("range", 6.0)))
+            ]
+            self._cull_stats["lights"] += len(lights) - len(vis_lights)
+        else:
+            vis_lights = lights
+        cap = max(1, min(MAX_LIGHTS, int(getattr(self, "light_cap", MAX_LIGHTS))))
+        ls = vis_lights[:cap]
+        n = len(ls)
+        self._spot_active = self._select_spot_shadows(ls)
+        sh_map = {idx: slot for slot, (idx, _L) in enumerate(self._spot_active)}
+
+        buf = self._pl_buf
+        buf.fill(0.0)
+        buf[2, :, 3] = -1.0
+        buf[3, :, 0] = -1.0
+        for i, L in enumerate(ls):
+            p = L["pos"]
+            c = L["color"]
+            buf[0, i] = (p[0], p[1], p[2], float(L.get("range", 6.0)))
+            buf[1, i] = (float(c[0]), float(c[1]), float(c[2]), float(L.get("intensity", 1.0)))
+            if L.get("kind") == "spot":
+                d = L["dir"]
+                buf[2, i] = (d[0], d[1], d[2], float(L.get("cone", 0.7)))
+            if i in sh_map:
+                buf[3, i, 0] = float(sh_map[i])
+        self._pl_tex.write(buf.tobytes())
+        self._n_pl_cur = n
+
+        # Bin up to 64 lights into a 12x8 screen-space tile bitmask (4x16-bit ints/tile)
+        tiles = np.zeros((96, 4), dtype=np.int32)
+        W, H = float(self.w), float(self.h)
+        hw, hh = W * 0.5, H * 0.5
+        foc = float(self.focal)
+        cam = self.cam
+        rt, up, fw = self.right, self.up, self.fwd
+        near = self.NEAR
+        for i, L in enumerate(ls):
+            px, py, pz = L["pos"]
+            dx, dy, dz = px - cam[0], py - cam[1], pz - cam[2]
+            cz = dx * fw[0] + dy * fw[1] + dz * fw[2]
+            rng = float(L.get("range", 6.0))
+            if cz + rng < near:
+                continue
+            if cz - rng <= near:
+                tx0, tx1, ty0, ty1 = 0, 11, 0, 7
+            else:
+                cx = dx * rt[0] + dy * rt[1] + dz * rt[2]
+                cy = dx * up[0] + dy * up[1] + dz * up[2]
+                sx_c = hw + (cx / cz) * foc
+                gy_c = hh + (cy / cz) * foc
+                rad_px = rng * foc / max(near, cz - rng) * 1.18
+                tx0 = max(0, int((sx_c - rad_px) * 12.0 / W))
+                tx1 = min(11, int((sx_c + rad_px) * 12.0 / W))
+                ty0 = max(0, int((gy_c - rad_px) * 8.0 / H))
+                ty1 = min(7, int((gy_c + rad_px) * 8.0 / H))
+            if tx0 > tx1 or ty0 > ty1:
+                continue
+            bank = i >> 4
+            bit = 1 << (i & 15)
+            for ty in range(ty0, ty1 + 1):
+                row_off = ty * 12
+                for tx in range(tx0, tx1 + 1):
+                    tiles[row_off + tx, bank] |= bit
+        self._tile_masks = [tuple(int(v) for v in row) for row in tiles]
+        self._spot_uniforms = self._build_spot_uniforms()
+
+    def _build_spot_uniforms(self):
+        cam = [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)]
+        rt = [(1.0, 0.0, 0.0), (1.0, 0.0, 0.0)]
+        up = [(0.0, 1.0, 0.0), (0.0, 1.0, 0.0)]
+        fw = [(0.0, 0.0, 1.0), (0.0, 0.0, 1.0)]
+        tan_h = [1.0, 1.0]
+        near = [0.25, 0.25]
+        far = [10.0, 10.0]
+        for slot, (_idx, L) in enumerate(self._spot_active):
+            d = v_norm(L.get("shadow_dir") or L["dir"])
+            ref_up = (0.0, 0.0, 1.0) if abs(d[1]) > 0.9 else (0.0, 1.0, 0.0)
+            r_v = v_norm(v_cross(ref_up, d))
+            u_v = v_cross(d, r_v)
+            cone = max(0.15, min(0.98, float(L.get("shadow_cone", L.get("cone", 0.7)))))
+            th = math.tan(math.acos(cone))
+            cam[slot] = tuple(float(v) for v in L["pos"])
+            rt[slot] = tuple(float(v) for v in r_v)
+            up[slot] = tuple(float(v) for v in u_v)
+            fw[slot] = tuple(float(v) for v in d)
+            tan_h[slot] = float(th)
+            near[slot] = 0.25
+            far[slot] = max(2.0, float(L.get("range", 8.0)))
+        return {
+            "u_spot_cam": cam, "u_spot_right": rt, "u_spot_up": up, "u_spot_fwd": fw,
+            "u_spot_tan": tan_h, "u_spot_near": near, "u_spot_far": far,
+        }
+
     def _set_uniforms(self, prog, split_mode, split):
         L = self.light
-        # The shader holds 8 local lights; scenes opt in above the historic 4
-        # through ``light_cap`` (the train does), everyone else keeps 4.
-        cap = max(1, min(8, int(getattr(self, "light_cap", 4))))
-        lights = self.lights[:cap]
-        n_pl = len(lights)
-        pools = self.pools[:32]
+        n_pl = getattr(self, "_n_pl_cur", 0)
+        raw_pools = self.pools
+        if getattr(self, "frustum_cull", True) and raw_pools:
+            pools = [P for P in raw_pools if self.visible_sphere(P["pos"], float(P.get("range", 6.0)))][:32]
+        else:
+            pools = raw_pools[:32]
         n_po = len(pools)
         u = {
             "u_cam": self.cam, "u_right": self.right, "u_up": self.up, "u_fwd": self.fwd,
@@ -790,16 +1270,13 @@ class GLRenderer(SoftwareRenderer):
             "u_sky": L.sky, "u_fog": self.fog, "u_fog_start": self.fog_start,
             "u_fog_end": self.fog_end, "u_split_mode": split_mode, "u_split": float(split),
             "u_dither": bool(self.dither), "u_tex": _TEX_UNIT,
+            "u_extra0": _EXTRA0_UNIT, "u_extra1": _EXTRA1_UNIT, "u_extra2": _EXTRA2_UNIT,
+            "u_pl_tex": _PL_UNIT,
+            "u_tile_inv": (12.0 / max(1.0, float(self.w)), 8.0 / max(1.0, float(self.h))),
+            "u_tile_mask": getattr(self, "_tile_masks", [(0, 0, 0, 0)] * 96),
             "u_pl_n": n_pl,
             "u_pl_mod": 1.0 if getattr(self, "light_albedo", False) else 0.0,
             "u_pl_gain": float(getattr(self, "light_gain", 1.0)),
-            "u_pl_pos": [tuple(L["pos"]) + (float(L.get("range", 6.0)),)
-                         for L in lights] + [(0.0, 0.0, 0.0, 1.0)] * (8 - n_pl),
-            "u_pl_col": [tuple(float(c) for c in L["color"]) + (float(L.get("intensity", 1.0)),)
-                         for L in lights] + [(0.0, 0.0, 0.0, 0.0)] * (8 - n_pl),
-            "u_pl_dir": [(tuple(L["dir"]) + (float(L.get("cone", 0.7)),)) if L.get("kind") == "spot"
-                         else (0.0, 0.0, 0.0, -1.0) for L in lights]
-                        + [(0.0, 0.0, 0.0, -1.0)] * (8 - n_pl),
             "u_pool_n": n_po,
             "u_pool_pos": [tuple(P["pos"]) + (float(P.get("range", 6.0)),) for P in pools]
                           + [(0.0, 0.0, 0.0, 1.0)] * (32 - n_po),
@@ -809,8 +1286,26 @@ class GLRenderer(SoftwareRenderer):
                           + [(0.0, 0.0, 0.0)] * (32 - n_po),
             "u_glit": (list(_tex.glitter()) + [0.0] * 32)[:32],
             "u_glit_k": float(self.glitter),
+            "u_refl": (list(_tex.reflectivity()) + [0.0] * 32)[:32],
+            "u_wet": float(getattr(self, "wetness", 0.0)),
+            "u_marble": float(getattr(self, "marble_refl", 0.0)),
             "u_depth_alpha": float(getattr(self, "_depth_alpha", 0.0)),
+            "u_ortho": False, "u_ohw": 1.0, "u_ohh": 1.0, "u_sh_pass": False,
+            "u_sh_on": self._sun is not None, "u_sh_tex": _SH_UNIT,
+            "u_spot_tex0": _SPOT0_UNIT, "u_spot_tex1": _SPOT1_UNIT,
+            "u_cpop": float(self.char_pop),
+            "u_right": tuple(self.right), "u_up": tuple(self.up), "u_fwd": tuple(self.fwd),
+            "u_hdr_emissive": 1.65 if getattr(self, "hdr", False) else 1.0,
+            "u_uvs": float(self.tex_scale),
         }
+        su = getattr(self, "_spot_uniforms", None)
+        if su:
+            u.update(su)
+        if self._sun is not None:
+            u.update(self._sun)
+        self._put(prog, u)
+
+    def _put(self, prog, u):
         cache = self.progs.uniforms(prog)
         for k, v in u.items():
             ent = cache.get(k)
@@ -818,12 +1313,54 @@ class GLRenderer(SoftwareRenderer):
                 ent[0].value = v
                 ent[1] = v
 
-    def _draw_dyn(self):
-        """Upload + draw the queued packed rows; returns triangles drawn."""
+    def _pass_cull_fn(self, pass_kind, spot_slot=0):
+        if not getattr(self, "frustum_cull", True):
+            return None
+        if pass_kind == "sun" and self._sun is not None:
+            s = self._sun
+            return lambda c, r, s=s: self.visible_ortho(
+                c, r, s["u_sh_cam"], s["u_sh_right"], s["u_sh_up"], s["u_sh_fwd"],
+                s["u_sh_half"], s["u_sh_half"], s["u_sh_far"],
+            )
+        if pass_kind == "spot":
+            su = self._spot_uniforms
+            cam = su["u_spot_cam"][spot_slot]
+            rt = su["u_spot_right"][spot_slot]
+            up = su["u_spot_up"][spot_slot]
+            fw = su["u_spot_fwd"][spot_slot]
+            near = su["u_spot_near"][spot_slot]
+            far = su["u_spot_far"][spot_slot]
+            th = su["u_spot_tan"][spot_slot]
+            return lambda c, r, cam=cam, rt=rt, up=up, fw=fw, near=near, far=far, th=th: self.visible_frustum(
+                c, r, cam, rt, up, fw, near, far, th, th,
+            )
+        return self.visible_sphere
+
+    def _draw_dyn(self, upload=True, cull_fn=None):
+        """Upload + draw the queued packed rows; returns triangles drawn.
+        ``upload=False`` redraws what the last upload sent (sun pass first)."""
         if not self._dyn:
             return 0
         import moderngl
+        if not upload:
+            self._dyn_vao.render(moderngl.TRIANGLES, vertices=self._dyn_n)
+            return self._dyn_n // 3
         chunks = self._dyn
+        if getattr(self, "frustum_cull", True) and getattr(self, "_dyn_bounds", None):
+            bounds = self._dyn_bounds
+            if self._sun is None and not self._spot_active and cull_fn is not None:
+                chunks = [c for c, b in zip(chunks, bounds) if b is None or cull_fn(b[0], b[1])]
+            elif len(bounds) == len(chunks) and any(b is not None for b in bounds):
+                fns = [self.visible_sphere]
+                if self._sun is not None:
+                    fns.append(self._pass_cull_fn("sun"))
+                for sl in range(len(self._spot_active)):
+                    fns.append(self._pass_cull_fn("spot", sl))
+                chunks = [c for c, b in zip(chunks, bounds)
+                          if b is None or any(fn(b[0], b[1]) for fn in fns if fn is not None)]
+            if not chunks:
+                self._dyn_n = 0
+                return 0
         if len(chunks) == 1:
             data = chunks[0]
         else:
@@ -855,27 +1392,38 @@ class GLRenderer(SoftwareRenderer):
             self._dyn_vbo = self.ctx.buffer(reserve=grow, dynamic=True)
             self._dyn_vao = self._vao(self.progs.world, self._dyn_vbo, rig=False)
         self._dyn_vbo.write(data)          # moderngl takes the array itself
+        self._dyn_n = len(data)
         self._dyn_vao.render(moderngl.TRIANGLES, vertices=len(data))
         return len(data) // 3
 
-    def _draw_resident(self):
+    def _draw_resident(self, cull_fn=None, track=False):
         import moderngl
         ntri = 0
-        for _rows, _vbo, vao, n in self._res_draw:
+        for _rows, _vbo, vao, n, c, rad in self._res_draw:
+            if cull_fn is not None and not cull_fn(c, rad):
+                if track:
+                    self._cull_stats["res"] += 1
+                continue
             vao.render(moderngl.TRIANGLES, vertices=n)
             ntri += n // 3
         return ntri
 
-    def _draw_rigs(self, split_mode=0, split=0.0):
+    def _draw_rigs(self, split_mode=0, split=0.0, over=None, cull_fn=None, track=False):
         if not self._rig_draws:
             return 0
         import moderngl
         rig = self.progs.rig
         self._set_uniforms(rig, split_mode, split)
+        if over:
+            self._put(rig, over)
         rig["u_char"].value = 1.0
         bones = rig["u_bones"]
         ntri = 0
-        for (hum, vbo, vao, n), bb, tint, bias in self._rig_draws:
+        for (hum, vbo, vao, n), bb, tint, bias, rc, rrad in self._rig_draws:
+            if cull_fn is not None and not cull_fn(rc, rrad):
+                if track:
+                    self._cull_stats["rigs"] += 1
+                continue
             bones.write(bb)
             rig["u_rtint"].value = tint
             rig["u_rbias"].value = bias
@@ -883,86 +1431,324 @@ class GLRenderer(SoftwareRenderer):
             ntri += n // 3
         return ntri
 
-    def _render(self, surface, split_mode=0, split=0.0, items=None, bg=None):
-        """Upload surface -> draw geometry -> read back -> composite sprites.
-        ``bg``: the caller filled an opaque target with this one colour, so a
-        clear replaces the upload (~1.7 ms a 640x448 frame)."""
+    def _visible_static_runs(self, pass_kind, spot_slot=0):
+        objs = self.objs
+        n_chunks = len(self._sc_starts)
+        if not n_chunks:
+            return ()
+        vis_obj = np.fromiter((o.visible for o in objs), dtype=bool, count=len(objs))
+        keep = vis_obj[self._sc_obj_idx] & (self._sc_counts > 0)
+        if getattr(self, "frustum_cull", True):
+            c = self._sc_centers
+            r = self._sc_radii
+            if pass_kind == "sun" and self._sun is not None:
+                s = self._sun
+                d = c - np.asarray(s["u_sh_cam"], dtype=np.float32)
+                z = d @ np.asarray(s["u_sh_fwd"], dtype=np.float32)
+                x = d @ np.asarray(s["u_sh_right"], dtype=np.float32)
+                y = d @ np.asarray(s["u_sh_up"], dtype=np.float32)
+                hw = float(s["u_sh_half"])
+                keep &= (z + r >= 0.0) & (z - r <= float(s["u_sh_far"]))
+                keep &= (np.abs(x) <= hw + r) & (np.abs(y) <= hw + r)
+            else:
+                if pass_kind == "spot":
+                    su = self._spot_uniforms
+                    cam = su["u_spot_cam"][spot_slot]
+                    rt = su["u_spot_right"][spot_slot]
+                    up = su["u_spot_up"][spot_slot]
+                    fw = su["u_spot_fwd"][spot_slot]
+                    near = float(su["u_spot_near"][spot_slot])
+                    far = float(su["u_spot_far"][spot_slot])
+                    th = tv = float(su["u_spot_tan"][spot_slot])
+                else:
+                    cam, rt, up, fw = self.cam, self.right, self.up, self.fwd
+                    near, far = self.NEAR, self.fog_end + 60.0
+                    th, tv = self.tan_h, self.tan_v
+                d = c - np.asarray(cam, dtype=np.float32)
+                z = d @ np.asarray(fw, dtype=np.float32)
+                x = d @ np.asarray(rt, dtype=np.float32)
+                y = d @ np.asarray(up, dtype=np.float32)
+                kh = math.sqrt(1.0 + th * th)
+                kv = math.sqrt(1.0 + tv * tv)
+                keep &= (z + r >= near) & (z - r <= far)
+                keep &= (np.abs(x) - z * th <= r * kh) & (np.abs(y) - z * tv <= r * kv)
+        if pass_kind == "main":
+            self._cull_stats["static"] += int(n_chunks - int(keep.sum()))
+        idx = np.flatnonzero(keep)
+        if not len(idx):
+            return ()
+        starts = self._sc_starts[idx].tolist()
+        counts = self._sc_counts[idx].tolist()
+        runs = []
+        ra, rn = starts[0], counts[0]
+        for a, n in zip(starts[1:], counts[1:]):
+            if ra + rn == a:
+                rn += n
+            else:
+                runs.append((ra, rn))
+                ra, rn = a, n
+        runs.append((ra, rn))
+        return runs
+
+    def _draw_geometry(self, split_mode=0, split=0.0, upload=True, over=None,
+                       pass_kind="main", spot_slot=0):
+        """Static set, resident chunks, dynamic rows, rigs (world program
+        uniforms already set); returns triangles drawn."""
+        import moderngl
+        ntri = 0
+        if self._want_static and self.objs:
+            self._sync_static()
+            if self._static_vao is not None:
+                runs = self._visible_static_runs(pass_kind, spot_slot)
+                for a, n in runs:
+                    self._static_vao.render(moderngl.TRIANGLES, vertices=n, first=a)
+                    ntri += n // 3
+        cull_fn = self._pass_cull_fn(pass_kind, spot_slot)
+        is_main = (pass_kind == "main")
+        ntri += self._draw_resident(cull_fn=cull_fn, track=is_main)
+        ntri += self._draw_dyn(upload, cull_fn=cull_fn)
+        ntri += self._draw_rigs(split_mode, split, over, cull_fn=cull_fn, track=is_main)
+        return ntri
+
+    def _sun_pass(self):
+        """Depth of everything queued, seen from the sun (set_sun_shadow)."""
+        import moderngl
+        S = self.SUN_MAP
+        if self._sh_fbo is None:
+            self._sh_tex.release()
+            self._sh_tex = self.ctx.depth_texture((S, S))
+            self._sh_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)   # 2x2 PCF
+            self._sh_tex.repeat_x = self._sh_tex.repeat_y = False
+            self._sh_fbo = self.ctx.framebuffer(depth_attachment=self._sh_tex)
+            self._sh_tex.use(location=_SH_UNIT)
+        sun = self._sun
+        over = {"u_cam": sun["u_sh_cam"], "u_right": sun["u_sh_right"], "u_up": sun["u_sh_up"],
+                "u_fwd": sun["u_sh_fwd"], "u_far": sun["u_sh_far"], "u_ortho": True,
+                "u_ohw": sun["u_sh_half"], "u_ohh": sun["u_sh_half"], "u_snap": False,
+                "u_sh_pass": True, "u_sh_on": False}
+        self._sh_fbo.use()
+        self._sh_fbo.clear(depth=1.0)
+        world = self.progs.world
+        self._set_uniforms(world, 0, 0.0)
+        self._put(world, over)
+        self._draw_geometry(upload=True, over=over, pass_kind="sun")
+
+    def _spot_pass(self, slot, upload):
+        import moderngl
+        S = SPOT_MAP
+        if self._spot_fbo[slot] is None:
+            self._spot_tex[slot].release()
+            t = self._spot_tex[slot] = self.ctx.depth_texture((S, S))
+            t.filter = (moderngl.LINEAR, moderngl.LINEAR)
+            t.repeat_x = t.repeat_y = False
+            self._spot_fbo[slot] = self.ctx.framebuffer(depth_attachment=t)
+            t.use(location=_SPOT0_UNIT + slot)
+        su = self._spot_uniforms
+        focal = (S * 0.5) / max(0.05, su["u_spot_tan"][slot])
+        over = {
+            "u_cam": su["u_spot_cam"][slot], "u_right": su["u_spot_right"][slot],
+            "u_up": su["u_spot_up"][slot], "u_fwd": su["u_spot_fwd"][slot],
+            "u_focal": float(focal), "u_hw": S * 0.5, "u_hh": S * 0.5,
+            "u_near": su["u_spot_near"][slot], "u_far": su["u_spot_far"][slot],
+            "u_ortho": False, "u_snap": False, "u_sh_pass": True, "u_sh_on": False,
+        }
+        self._spot_fbo[slot].use()
+        self._spot_fbo[slot].clear(depth=1.0)
+        world = self.progs.world
+        self._set_uniforms(world, 0, 0.0)
+        self._put(world, over)
+        self._draw_geometry(upload=upload, over=over, pass_kind="spot", spot_slot=slot)
+
+    def _render_into_fbo(self, surface, split_mode=0, split=0.0, items=None, bg=None):
+        """Render sky/bg, sun shadow, geometry, and GPU sprites/lines into _fbo.
+        Returns (ntri, cpu_items, alpha)."""
         import moderngl
         ctx = self.ctx
+        self._static_runs = None
         w, h = self.w, self.h
         if surface.get_size() != (w, h):
             raise ValueError("GLRenderer target must be %dx%d" % (w, h))
         alpha = bool(surface.get_flags() & pygame.SRCALPHA)
         self._depth_alpha = 0.0 if alpha else 1.0
-        self._fbo.use()
-        if bg is not None and not alpha:
-            self._fbo.clear(bg[0] / 255.0, bg[1] / 255.0, bg[2] / 255.0, 1.0, depth=1.0)
+        self._upload_lights(self.lights)
+        sky = getattr(self, "_sky_spec", None)
+        self._sky_spec = None
+        if sky is not None and not alpha:
+            self._sky.render(self, self._fbo, self._color_fbo, sky)
+            self._post.clear_depth(self._fbo)
+        elif bg is not None and not alpha:
+            self._post.clear_mrt(self._fbo, (bg[0] / 255.0, bg[1] / 255.0, bg[2] / 255.0, 1.0))
+        elif alpha:
+            self._post.clear_mrt(self._fbo, (0.0, 0.0, 0.0, 0.0))
         else:
-            self._fbo.clear(depth=1.0)
-            self._color.write(pygame.image.tobytes(surface, "RGBA", True))
+            self._post.upload_bg(self._fbo, surface)
+        ctx.color_mask = (True, True, True, True)
+        ctx.depth_mask = True
+        ctx.depth_func = "<"
         ctx.enable(moderngl.DEPTH_TEST)
         self.progs.atlas().use(location=_TEX_UNIT)
+        self._sh_tex.use(location=_SH_UNIT)
+        self._spot_tex[0].use(location=_SPOT0_UNIT)
+        self._spot_tex[1].use(location=_SPOT1_UNIT)
+        for i, unit in enumerate((_EXTRA0_UNIT, _EXTRA1_UNIT, _EXTRA2_UNIT)):
+            ent = self._extra[i]
+            (ent[1] if ent is not None else self._dummy1).use(location=unit)
+        self._pl_tex.use(location=_PL_UNIT)
         ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
-        ntri = 0
+        uploaded = False
+        if self._sun is not None:
+            self._sun_pass()
+            uploaded = True
+        for slot in range(len(self._spot_active)):
+            self._spot_pass(slot, upload=not uploaded)
+            uploaded = True
+        self._fbo.use()
+        ctx.viewport = (0, 0, w, h)
         world = self.progs.world
         self._set_uniforms(world, split_mode, split)
-        if self._want_static and self.objs:
-            self._sync_static()
-            if self._static_vao is not None:
-                run_a = run_n = 0
-                for o, (a, n) in zip(self.objs, self._static_ranges):
-                    if not n:
-                        continue
-                    if o.visible:
-                        if run_n and run_a + run_n == a:
-                            run_n += n
-                        else:
-                            if run_n:
-                                self._static_vao.render(moderngl.TRIANGLES, vertices=run_n, first=run_a)
-                                ntri += run_n // 3
-                            run_a, run_n = a, n
-                if run_n:
-                    self._static_vao.render(moderngl.TRIANGLES, vertices=run_n, first=run_a)
-                    ntri += run_n // 3
-        ntri += self._draw_resident()
-        ntri += self._draw_dyn()
-        ntri += self._draw_rigs()
-        # read back
-        px = self._fbo.read(components=4, alignment=1)
-        if alpha:
-            img = pygame.image.frombytes(px, (w, h), "RGBA", True)
-            surface.fill((0, 0, 0, 0))
-            surface.blit(img, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
-        else:
-            # The shader writes alpha 1.0, so an opaque target is a plain copy;
-            # an RGBA source made pygame alpha-blend every pixel (~4 ms a pass).
-            surface.blit(pygame.image.frombytes(px, (w, h), "RGBX", True), (0, 0))
+        ntri = self._draw_geometry(split_mode, split, upload=not uploaded)
+        if self._decals:
+            self._decals_batch.render(self, self._color_fbo, self._pdepth, self._decals)
+            self._fbo.use()
+        atmos_used = (not alpha and split_mode == 0 and self._post.apply_atmos(self, self._n_pl_cur))
+        self._active_color_fbo = self._post._atmos_fbo if atmos_used else self._color_fbo
+        self._active_color_tex = self._post._atmos_tex if atmos_used else self._color
         items = self._items if items is None else items
-        self.stats = {"tris": ntri, "items": len(items), "actors": len(self._rig_draws)}
-        if items:
-            depth = np.frombuffer(self._depth.read(alignment=1), dtype=np.float32).reshape(h, w)[::-1]
+        gpu_items, cpu_items = self._sprites.partition(items)
+        if gpu_items:
+            self._sprites.render(self, self._active_color_fbo, self._pdepth, gpu_items, overlay=False)
+        if self._particles:
+            self._part_batch.render(self, self._active_color_fbo, self._pdepth, self._particles)
+        self._fbo.use()
+        self.stats = {
+            "tris": ntri, "items": len(items), "actors": len(self._rig_draws),
+            "culled_static": self._cull_stats["static"],
+            "culled_res": self._cull_stats["res"],
+            "culled_rigs": self._cull_stats["rigs"],
+            "culled_items": self._cull_stats["items"],
+            "culled_lights": self._cull_stats["lights"],
+        }
+        return ntri, cpu_items, alpha
+
+    def _render(self, surface, split_mode=0, split=0.0, items=None, bg=None):
+        """Render the frame into the HDR FBO, resolve through GPU post, then
+        composite any unbatched Python callbacks onto the target surface."""
+        w, h = self.w, self.h
+        _ntri, cpu_items, alpha = self._render_into_fbo(surface, split_mode, split, items, bg)
+        post = {"bloom": 0.20, "bloom_knee": 1.02} if (getattr(self, "hdr", False) and not alpha) else None
+        self._post.render_to(self, surface, post=post, read_size=(w, h))
+        if cpu_items:
+            need_depth = alpha
+            if not need_depth:
+                for _k, kind, d in cpu_items:
+                    if kind == "lines":
+                        if d[2]:
+                            need_depth = True
+                            break
+                    elif kind != "sprite" or (not getattr(d[0], "light", False) and not getattr(d[0], "phys_occ", False)) or d[6] >= 60.0:
+                        need_depth = True
+                        break
+            depth = (np.frombuffer(self._depth.read(alignment=1), dtype=np.float32).reshape(h, w)[::-1]
+                     if need_depth else None)
             phys8 = None
             if not alpha:
-                # alpha channel of the colour pass = physical depth 0..64 m
-                phys8 = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)[::-1, :, 3]
-            self._composite(surface, items, depth, alpha, phys8)
+                phys8 = _phys8(self._pdepth.read(alignment=1), h, w)
+            self._composite(surface, cpu_items, depth, alpha, phys8)
 
-    def flush_overlay(self, surface, bounds=None):
+    def flush_to(self, target_surface, *, bg=None, post=None, resolve=True):
+        """Render into the HDR FBO and optionally run full GPU post + crisp
+        upscale with one single readback into ``target_surface``."""
+        w, h = self.w, self.h
+        self._deferred_overlay = None
+        _ntri, cpu_items, _alpha = self._render_into_fbo(self.surface, 0, 0.0, None, bg)
+        if not resolve and not cpu_items:
+            self._overlay_deferred = True
+            self.begin()
+            return
+        if cpu_items:
+            self._post.render_to(self, self.surface, post=None, read_size=(w, h))
+            need_depth = any(
+                (kind == "lines" and d[2]) or (
+                    kind == "sprite" and ((not getattr(d[0], "light", False) and not getattr(d[0], "phys_occ", False)) or d[6] >= 60.0)
+                )
+                for _k, kind, d in cpu_items
+            )
+            depth = (np.frombuffer(self._depth.read(alignment=1), dtype=np.float32).reshape(h, w)[::-1]
+                     if need_depth else None)
+            phys8 = _phys8(self._pdepth.read(alignment=1), h, w)
+            self._composite(self.surface, cpu_items, depth, False, phys8)
+            self._post.upload_bg(self._fbo, self.surface)
+            self._active_color_fbo = self._color_fbo
+            self._active_color_tex = self._color
+            if not resolve:
+                self._overlay_deferred = True
+                self.begin()
+                return
+            self._post.render_to(self, target_surface, post=dict(post or {}, bloom=0.0))
+        else:
+            self._post.render_to(self, target_surface, post=post)
+        self.begin()
+
+    def present_to(self, target_surface, *, post=None):
+        """Resolve the live HDR FBO through GPU post-FX + crisp upscale."""
+        self._post.render_to(self, target_surface, post=post)
+        deferred = getattr(self, "_deferred_overlay", None)
+        if deferred:
+            kx = target_surface.get_width() / float(self.w)
+            ky = target_surface.get_height() / float(self.h)
+            for _key, kind, d in sorted(deferred, key=lambda it: it[0]):
+                if kind == "sprite":
+                    fn, sx, sy, scale, z = d[:5]
+                    fn(target_surface, sx * kx, sy * ky, scale * kx, z)
+                elif kind == "line":
+                    col, width, scr, _layer = d
+                    if len(scr) >= 2:
+                        pygame.draw.line(target_surface, col,
+                                         (scr[0][0] * kx, scr[0][1] * ky),
+                                         (scr[1][0] * kx, scr[1][1] * ky), width)
+                elif kind == "lines":
+                    for p0, p1, col, width in d[0]:
+                        pygame.draw.line(target_surface, col,
+                                         (p0[0] * kx, p0[1] * ky),
+                                         (p1[0] * kx, p1[1] * ky), width)
+            self._deferred_overlay = None
+        self._overlay_deferred = False
+
+    def flush_overlay(self, surface, bounds=None, into_fbo=False):
         """Flush a near overlay (the held viewmodel) over *surface*.
 
-        Unlike ``flush``, the target colour is never uploaded: the pass draws
-        on a transparent background and only ``bounds`` (screen x, y, w, h)
-        is read back, then alpha-blitted.  Its sprites (reticle, flash) are
-        drawn afterwards without a depth test; the viewmodel mesh is painter
-        layer 2 while those sprites sit above it, so the old second pass
-        never occluded them either.
+        ``into_fbo=True`` keeps the overlay in the HDR FBO for a later single
+        ``present_to`` resolve; the legacy path reads only ``bounds`` back.
         """
         import moderngl
         w, h = self.w, self.h
-        self._fbo.use()
-        self._fbo.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
-        self._depth_alpha = 0.0       # overlay alpha is real transparency
         ctx = self.ctx
+        self._depth_alpha = 0.0       # overlay alpha is real transparency
+        if into_fbo:
+            target_fbo = getattr(self, "_active_color_fbo", self._color_fbo)
+            self._post.clear_depth(self._fbo)
+            target_fbo.use()
+            ctx.color_mask = (True, True, True, True)
+            ctx.depth_mask = True
+            ctx.depth_func = "<"
+            ctx.enable(moderngl.DEPTH_TEST)
+            self.progs.atlas().use(location=_TEX_UNIT)
+            self._pl_tex.use(location=_PL_UNIT)
+            ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
+            self._set_uniforms(self.progs.world, 0, 0.0)
+            ntri = self._draw_dyn() + self._draw_rigs()
+            gpu_items, cpu_items = self._sprites.partition(self._items)
+            if gpu_items:
+                self._sprites.render(self, target_fbo, self._pdepth, gpu_items, overlay=True)
+                target_fbo.use()
+            # Python callbacks cannot paint inside the HDR FBO: defer them to
+            # present_to, which draws them onto the resolved target surface.
+            self._deferred_overlay = cpu_items
+            self.stats = {"tris": ntri, "items": len(self._items), "actors": len(self._rig_draws)}
+            self.begin()
+            return None, None
+
+        self._post.clear_mrt(self._fbo, (0.0, 0.0, 0.0, 0.0))
         ctx.enable(moderngl.DEPTH_TEST)
         self.progs.atlas().use(location=_TEX_UNIT)
         ctx.disable(moderngl.CULL_FACE | moderngl.BLEND)
@@ -970,18 +1756,17 @@ class GLRenderer(SoftwareRenderer):
         ntri = self._draw_dyn() + self._draw_rigs()
         rect = self._clamp_rect(bounds, w, h)
         if rect is None:
-            px = self._fbo.read(components=4, alignment=1)
-            image = pygame.image.frombytes(px, (w, h), "RGBA", True)
-            cover = self._alpha_cover(px, w, h, 0, 0)
-            surface.blit(image, (0, 0))
+            x, y, rw, rh = 0, 0, w, h
         else:
             x, y, rw, rh = rect
-            # glReadPixels viewports are bottom-left origin
-            px = self._fbo.read(viewport=(x, h - y - rh, rw, rh),
-                                components=4, alignment=1)
-            image = pygame.image.frombytes(px, (rw, rh), "RGBA", True)
-            cover = self._alpha_cover(px, rw, rh, x, y)
-            surface.blit(image, (x, y))
+        # Read only the requested viewport from the RGBA16F colour attachment.
+        raw = self._color_fbo.read(viewport=(x, h - y - rh, rw, rh),
+                                   components=4, alignment=1, dtype="f2")
+        f16 = np.frombuffer(raw, dtype=np.float16).reshape(rh, rw, 4)
+        px = np.clip(np.round(f16.astype(np.float32) * 255.0), 0, 255).astype(np.uint8).tobytes()
+        image = pygame.image.frombytes(px, (rw, rh), "RGBA", True)
+        cover = self._alpha_cover(px, rw, rh, x, y)
+        surface.blit(image, (x, y))
         items = sorted(self._items, key=lambda it: it[0])
         for _key, kind, d in items:
             if kind == "sprite":
@@ -1121,26 +1906,25 @@ class GLRenderer(SoftwareRenderer):
         Only lights that actually cross geometry pay this.
         """
         w, h = max(1, x1 - x0), max(1, y1 - y0)
-        tmp = self._light_tmp.get((w, h))
-        if tmp is None:
-            tmp = self._light_tmp[(w, h)] = pygame.Surface((w, h))
+        tmp_full = getattr(self, "_light_tmp_s", None)
+        if tmp_full is None or tmp_full.get_size() != (self.w, self.h):
+            tmp_full = self._light_tmp_s = pygame.Surface((self.w, self.h))
+        tmp = tmp_full.subsurface((0, 0, w, h))
         tmp.fill((0, 0, 0))
         fn(tmp, sx - x0, sy - y0, scale, z)
         if vis < 0.999:
             m = int(round(255 * max(0.0, min(1.0, vis))))
             tmp.fill((m, m, m), special_flags=pygame.BLEND_RGB_MULT)
         if occ is not None:
-            mask = self._light_mask.get((w, h))
-            if mask is None:
-                mask = self._light_mask[(w, h)] = pygame.Surface((w, h))
-            ma = pygame.surfarray.pixels3d(mask)
-            red = ma[:, :, 0]
-            np.copyto(red, 255)
-            red[occ.T] = 0
-            ma[:, :, 1] = red
-            ma[:, :, 2] = red
-            del red, ma
-            tmp.blit(mask, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+            mask_full = getattr(self, "_light_mask_s", None)
+            if mask_full is None or mask_full.get_size() != (self.w, self.h):
+                mask_full = self._light_mask_s = pygame.Surface((self.w, self.h))
+            ma = pygame.surfarray.pixels3d(mask_full)
+            sub_m = ma[:w, :h]
+            sub_m.fill(255)
+            sub_m[occ.T] = 0
+            del sub_m, ma
+            tmp.blit(mask_full, (0, 0), (0, 0, w, h), special_flags=pygame.BLEND_RGB_MULT)
         surface.blit(tmp, (x0, y0), special_flags=pygame.BLEND_RGB_ADD)
 
     def _composite(self, surface, items, depth, alpha, phys8=None):
@@ -1165,6 +1949,8 @@ class GLRenderer(SoftwareRenderer):
                 light = bool(getattr(fn, "light", False))
                 strict = bool(getattr(fn, "strict_occ", False))
                 soft = light and bool(getattr(fn, "light_soft", False))
+                phys_occ = bool(getattr(fn, "phys_occ", False))
+                occ_bias = float(getattr(fn, "occ_bias", 0.45 if light else 0.18))
                 vis = 1.0
                 occ_depth, limit = depth, self._enc(layer, zeff) - 1e-6
                 bm = None
@@ -1188,7 +1974,7 @@ class GLRenderer(SoftwareRenderer):
                         reach = int(min(300, max(8, scale * SPRITE_REACH_M)))
                         x0, y0 = int(sx) - reach, int(sy) - reach
                         x1, y1 = int(sx) + reach + 1, int(sy) + reach + 1
-                if light:
+                if light or phys_occ:
                     if bm is not None and (x1 <= 0 or x0 >= W or y1 <= 0 or y0 >= H):
                         # a light whose declared box misses the frame paints
                         # nothing: skip its probe, its halo build and the draw
@@ -1197,22 +1983,23 @@ class GLRenderer(SoftwareRenderer):
                     if phys8 is not None and zeff < 60.0:
                         # physical depth: layer-independent, 64 m / 255 steps
                         limit = int(max(0, min(254, round(
-                            (zeff - 0.45) * 255.0 / 64.0))))
+                            (zeff - occ_bias) * 255.0 / 64.0))))
                         occ_depth = phys8
                     else:
                         # fallback: world-layer encoding (alpha targets / far)
                         limit = (self._enc(_WORLD_LAYER, zeff)
-                                 - self._light_bias() - 1e-6)
-                    n_light += 1
-                    tgt = light_t.get(n)
-                    vis = (self._ease_light(anchor, tgt, now) if tgt is not None
-                           else self._light_anchor_vis(anchor, sx, sy, limit,
-                                                       occ_depth))
-                    if vis <= 0.06:
-                        n_gate += 1
-                        continue
-                    if vis >= 0.75:
-                        vis = 1.0
+                                 - (self._light_bias() if light else 0.0) - 1e-6)
+                    if light:
+                        n_light += 1
+                        tgt = light_t.get(n)
+                        vis = (self._ease_light(anchor, tgt, now) if tgt is not None
+                               else self._light_anchor_vis(anchor, sx, sy, limit,
+                                                           occ_depth))
+                        if vis <= 0.06:
+                            n_gate += 1
+                            continue
+                        if vis >= 0.75:
+                            vis = 1.0
                 draw = lambda s, fn=fn, sx=sx, sy=sy, scale=scale, z=z: fn(s, sx, sy, scale, z)
             elif kind == "lines":
                 segs, layer, depth_test = d
@@ -1256,6 +2043,11 @@ class GLRenderer(SoftwareRenderer):
             if x1 <= x0 or y1 <= y0:
                 draw(surface)                      # off-screen anchor: nothing to occlude
                 continue
+            if kind == "sprite":
+                draw_occ = getattr(fn, "draw_depth", None)
+                if draw_occ is not None:
+                    draw_occ(surface, sx, sy, scale, z, occ_depth, limit)
+                    continue
             # lights carry their own depth limit (physical, or the biased
             # fallback); other sprites still test against the layer slot
             if light and (soft or vis >= 0.999):
@@ -1293,20 +2085,30 @@ class GLRenderer(SoftwareRenderer):
                                   x0, y0, x1, y1, vis, occ)
                 continue
             rect = pygame.Rect(x0, y0, x1 - x0, y1 - y0)
-            before = surface.subsurface(rect).copy()
-            draw(surface)
-            occ_t = occ.T
-            dst = pygame.surfarray.pixels3d(surface)
-            src = pygame.surfarray.pixels3d(before)
-            # copyto writes through the view; boolean fancy indexing built
-            # two gathered copies per sprite and was the composite's cost
-            np.copyto(dst[x0:x1, y0:y1], src, where=occ_t[:, :, None])
-            del dst, src
             if alpha:
+                before = surface.subsurface(rect).copy()
+                draw(surface)
+                occ_t = occ.T
+                dst = pygame.surfarray.pixels3d(surface)
+                src = pygame.surfarray.pixels3d(before)
+                np.copyto(dst[x0:x1, y0:y1], src, where=occ_t[:, :, None])
+                del dst, src
                 da = pygame.surfarray.pixels_alpha(surface)
                 sa = pygame.surfarray.pixels_alpha(before)
                 np.copyto(da[x0:x1, y0:y1], sa, where=occ_t)
                 del da, sa
+            else:
+                rw, rh = x1 - x0, y1 - y0
+                comp = getattr(self, "_comp_buf", None)
+                if comp is None or comp.get_size() != (W, H):
+                    comp = self._comp_buf = pygame.Surface((W, H), 0, surface)
+                comp.blit(surface, (0, 0), rect)
+                draw(surface)
+                occ_t = occ.T
+                dst = pygame.surfarray.pixels3d(surface)
+                src = pygame.surfarray.pixels3d(comp)
+                np.copyto(dst[x0:x1, y0:y1], src[:rw, :rh], where=occ_t[:, :, None])
+                del dst, src
         self.stats["lights"] = n_light
         self.stats["lights_culled"] = n_cull
         self.stats["lights_gated"] = n_gate
@@ -1314,6 +2116,7 @@ class GLRenderer(SoftwareRenderer):
         self.stats["light_scaled"] = n_scale
 
     def flush(self, surface=None, bg=None):
+        self._deferred_overlay = None
         surface = surface or self.surface
         self._render(surface, bg=bg)
         self.begin()
@@ -1323,6 +2126,8 @@ class GLRenderer(SoftwareRenderer):
         for it in self._items:
             if it[1] == "sprite":
                 layer, depth = it[2][5], it[2][4]
+            elif it[1] == "lines":
+                layer, depth = it[2][1], 0.0
             else:
                 layer, depth = it[2][3], 0.0
             (far if depth > split_depth or layer == 0 else near).append(it)
@@ -1348,14 +2153,24 @@ class GLRenderer(SoftwareRenderer):
         for _h, vbo, vao, _n in self._rigs.values():
             vao.release(); vbo.release()
         self._rigs.clear()
-        for _rows, vbo, vao, _n in self._res.values():
+        for _rows, vbo, vao, _n, _c, _r in self._res.values():
             vao.release(); vbo.release()
         self._res.clear()
+        for ent in self._extra:
+            if ent is not None:
+                ent[1].release()
+        self._extra = [None, None, None]
         for o in (self._static_vao, self._static_vbo, self._dyn_vao, self._dyn_vbo,
-                  self._fbo, self._color, self._depth):
+                  self._fbo, self._color_fbo, self._color, self._aux, self._pdepth,
+                  self._depth, self._sh_fbo, self._sh_tex,
+                  *self._spot_fbo, *self._spot_tex, self._pl_tex, self._dummy1,
+                  getattr(self, "_sky", None), getattr(self, "_sprites", None),
+                  getattr(self, "_part_batch", None), getattr(self, "_decals_batch", None),
+                  getattr(self, "_post", None)):
             if o is not None:
                 o.release()
         self._static_vao = self._static_vbo = None
+        self._comp_buf = self._light_tmp_s = self._light_mask_s = None
 
 
 _WARNED = False

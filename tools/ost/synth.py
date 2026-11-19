@@ -522,6 +522,55 @@ def glass(f, dur=4.0):
     return norm(out) * env(n, 1.2, 0, 1, 1.5)
 
 
+@lru_cache(maxsize=2048)
+def cello(f, dur=1.0, a=0.08, r=0.28):
+    """Bowed solo cello: warm body resonance, expressive vibrato, bow pressure sway."""
+    n = int((dur + r) * SR)
+    rng = _rng("cello", f, dur)
+    vib = vibrato(n, 4.9, 0.0055, 0.20, rng.uniform(0, 6))
+    y = 0.7 * saw(f * vib, n) + 0.35 * saw(f * 0.998 * vib, n, 0.25)
+    y = lp(y, 2100) + 0.75 * bp(y, 160, 620)
+    y = y * (1 + 0.08 * smooth_random(n, 6.5, rng)) + 0.025 * bp(noise(n, rng), 1400, 4200)
+    return norm(y) * env(n, a, 0.12, 0.88, r)
+
+
+@lru_cache(maxsize=1024)
+def vibra(f, dur=1.5, motor=4.4):
+    """Vibraphone: mellow bar fundamental + 4th partial, soft mallet, tremolo motor."""
+    n = int(min(dur + 1.4, 5.0) * SR)
+    t = _t(n)
+    y = sine(f, n) + 0.14 * sine(4 * f, n) * np.exp(-t / 0.18)
+    y *= 1 + 0.16 * np.sin(2 * np.pi * motor * t)
+    h = int(0.014 * SR)
+    y[:h] += 0.16 * bp(noise(h, _rng("vib", f)), 700, 2400) * np.linspace(1, 0, h)
+    return norm(y * np.exp(-t / 2.2) * env(n, 0.002, 0, 1, 0.6))
+
+
+@lru_cache(maxsize=2048)
+def analog_lead(f, dur=0.5, bright=1900.0, a=0.015, r=0.14):
+    """Detuned analog synth voice with resonant lowpass sweep."""
+    n = int((dur + r) * SR)
+    t = _t(n)
+    vib = vibrato(n, 5.2, 0.003, 0.22)
+    y = 0.65 * saw(f * vib, n) + 0.45 * saw(f * 1.005 * vib, n, 0.35) + 0.35 * square(f * 0.5, n)
+    fc = 260 + bright * np.exp(-t / 0.22)
+    y = np.tanh(1.8 * norm(lp_sweep(y, fc, 512)))
+    return norm(y) * env(n, a, 0.15, 0.82, r)
+
+
+@lru_cache(maxsize=2048)
+def upright_bass(f, dur=0.6):
+    """Plucked acoustic double bass: warm fundamental, woody thump."""
+    n = int((dur + 0.2) * SR)
+    t = _t(n)
+    y = (sine(f, n) * np.exp(-t / 0.85)
+         + 0.45 * sine(2 * f, n) * np.exp(-t / 0.35)
+         + 0.18 * sine(3 * f, n) * np.exp(-t / 0.16))
+    h = int(0.015 * SR)
+    y[:h] += 0.25 * lp(noise(h, _rng("ubass", f)), 480) * np.linspace(1, 0, h)
+    return norm(y * np.clip(t / 0.003, 0, 1)) * env(n, 0.002, 0, 1, 0.12)
+
+
 # ---------------------------------------------------------------- percussion
 
 @lru_cache(maxsize=64)
@@ -688,6 +737,60 @@ def braam(f, dur=2.5):
     fc = 150 + 1300 * np.exp(-((t - 0.25) / 0.35) ** 2) + 250 * np.exp(-t / 2)
     y = np.tanh(2.0 * norm(lp_sweep(y, fc)))
     return norm(y) * env(n, 0.05, 0, 1, 0.6)
+
+
+@lru_cache(maxsize=64)
+def sub_kick(v=0):
+    """Tight dry kick with fast pitch drop, no booming taiko tail."""
+    n = int(0.32 * SR)
+    t = _t(n)
+    y = np.sin(2 * np.pi * _phase(40 + 135 * np.exp(-t / 0.022), n)) * np.exp(-t / 0.15)
+    c = int(0.006 * SR)
+    y[:c] += 0.45 * bp(noise(c, _rng("skick", v)), 1100, 4400) * np.linspace(1, 0, c)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def ind_snare(v=0):
+    """Dry metallic industrial snare: tight punch + crisp rattle."""
+    n = int(0.34 * SR)
+    t = _t(n)
+    rng = _rng("indsn", v)
+    y = 0.85 * sine(215, n) * np.exp(-t / 0.038)
+    y += 0.35 * sine(490, n) * np.exp(-t / 0.045) + 0.2 * sine(745, n) * np.exp(-t / 0.03)
+    y += 1.6 * bp(noise(n, rng), 1500, 8200) * np.exp(-t / 0.095)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def brush(v=0):
+    """Wire brush sweep on snare head."""
+    n = int(0.28 * SR)
+    t = _t(n)
+    rng = _rng("brush", v)
+    y = lp_sweep(hp(noise(n, rng), 1600), 6500 * np.exp(-t / 0.08) + 1800)
+    y *= np.clip(t / 0.025, 0, 1) * np.exp(-t / 0.09)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def shaker(v=0):
+    """Dry crisp shaker pulse."""
+    n = int(0.11 * SR)
+    t = _t(n)
+    y = bp(noise(n, _rng("shk", v)), 4500, 11000) * np.clip(t / 0.012, 0, 1) * np.exp(-t / 0.028)
+    return norm(y)
+
+
+@lru_cache(maxsize=64)
+def clave(v=0):
+    """Dry hardwood clave click."""
+    n = int(0.07 * SR)
+    t = _t(n)
+    rng = _rng("clave", v)
+    f = 1920 * rng.uniform(0.98, 1.02)
+    y = sine(f, n) * np.exp(-t / 0.012) + 0.55 * sine(f * 1.48, n) * np.exp(-t / 0.008)
+    return norm(y * np.clip(t / 0.001, 0, 1))
 
 
 # ---------------------------------------------------------------- textures (full-length beds)

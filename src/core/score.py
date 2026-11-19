@@ -21,14 +21,25 @@ OST = "assets/music/ost/"
 # "WALK" is the prologue state; the rest are STATE.active_mission keys.
 CALM = {
     "WALK": OST + "01_call_of_acaristan.mp3",
+    "MISSION0": OST + "14_after_hours.mp3",
     "MISSION1": OST + "02_black_notebook.mp3",
     "MISSION2": OST + "03_quiet_on_route_12.mp3",
     "MISSION3": OST + "04_the_vostral.mp3",
     "MISSION4": OST + "05_curfew_dawn.mp3",
-    "MISSION5": OST + "05_curfew_dawn.mp3",
+    "MISSION5": OST + "14_after_hours.mp3",
     "MISSION6": OST + "07_whiteout.mp3",
 }
-TENSE = OST + "06_not_tonight.mp3"
+TENSE_DEFAULT = OST + "06_not_tonight.mp3"
+TENSE = {
+    "WALK": OST + "13_wet_concrete.mp3",
+    "MISSION0": OST + "13_wet_concrete.mp3",
+    "MISSION1": OST + "13_wet_concrete.mp3",
+    "MISSION2": OST + "13_wet_concrete.mp3",
+    "MISSION3": OST + "13_wet_concrete.mp3",
+    "MISSION4": OST + "06_not_tonight.mp3",
+    "MISSION5": OST + "06_not_tonight.mp3",
+    "MISSION6": OST + "15_cold_iron.mp3",
+}
 # play_music() levels: the menu theme sits at 0.48, M7's farm cue at 0.30.
 CALM_VOL = 0.30
 TENSE_VOL = 0.42
@@ -90,7 +101,7 @@ def _release(fade_ms):
     _s["owned"] = None
 
 
-def _drive(want, vol, dt):
+def _drive(want, vol, dt, is_tense=False):
     if audio.music_name() != _s["owned"]:
         _s["owned"] = None                      # something else took the stream
     if want is not None and _s["owned"] == want:
@@ -99,7 +110,7 @@ def _drive(want, vol, dt):
         audio.play_music(want, volume=_s["level"])
         return
     if _s["owned"] is not None:
-        _release(700 if want == TENSE else 2500)
+        _release(700 if is_tense else 2500)
         return
     if (want is None or want in _s["failed"]
             or audio.music_name() is not None or audio.music_busy()):
@@ -132,7 +143,7 @@ def update(state, dt):
     else:
         _s["quiet_s"] += dt
     if _s["quiet_s"] < COMBAT_HOLD_S:
-        _drive(TENSE, TENSE_VOL, dt)
+        _drive(TENSE.get(key, TENSE_DEFAULT), TENSE_VOL, dt, is_tense=True)
     elif _s["quiet_s"] >= CALM_DELAY_S:
         _drive(CALM[key], CALM_VOL, dt)
     else:

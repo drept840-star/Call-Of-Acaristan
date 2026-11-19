@@ -3481,11 +3481,16 @@ def draw_walking_sim():
     screen.fill((16, 18, 22))
     # Render from the integer render camera (follow + shake), like M2/M3.
     fcx, fcy = int(round(walk_render_x)), int(round(walk_render_y))
-    if not walk3d.draw(sys.modules[__name__], screen, fcx, fcy):
+    drew_3d = walk3d.draw(sys.modules[__name__], screen, fcx, fcy)
+    if not drew_3d:
         _draw_walk_world_2d(fcx, fcy)
     observing_attack = walk_firefight_triggered and not (walk_after_firefight or STATE.walk_after_firefight)
     if not observing_attack:
-        draw_rain(screen, rain_drops, speed_mul=1.0)
+        if drew_3d:
+            from game import rain3d as _rain3d
+            _rain3d.step_rain_drops(rain_drops, speed_mul=1.0)
+        else:
+            draw_rain(screen, rain_drops, speed_mul=1.0)
     draw_vignette(screen, strength=180)
     draw_scanlines(screen)
     draw_letterbox(screen)

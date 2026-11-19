@@ -101,7 +101,28 @@ class TopDownProgressionTests(unittest.TestCase):
                 self.assertTrue(_flow.handle_interact())
                 self.assertEqual(STATE.mission6_stage, destination)
 
-    def test_rail_uses_the_fast_2d_view_unless_opted_into_25d(self):
+    def test_border_doors_block_leaving_the_map(self):
+        for stage, tile in ((_meta.STAGE_CUSTOMS, (15, 0)),
+                            (_meta.STAGE_NOMAN, (20, 0)),
+                            (_meta.STAGE_NOMAN, (20, 17))):
+            _world.build_world(stage)
+            p = STATE.player
+            walls = _world.solid_walls()
+            tx, ty = _world._tile_world(tile[0], tile[1])
+            if tile[1] == 0:
+                p.rect.center = (tx, ty + _world.T)
+                for _ in range(20):
+                    p.move(0, -10, walls)
+                self.assertGreaterEqual(p.rect.top, _world.T, (stage, tile))
+            else:
+                p.rect.center = (tx, ty - _world.T)
+                for _ in range(20):
+                    p.move(0, 10, walls)
+                self.assertLessEqual(p.rect.bottom, tile[1] * _world.T, (stage, tile))
+        _world.build_world(_meta.STAGE_CUSTOMS)
+        self.assertTrue(_world._floor_at(_meta.STAGE_CUSTOMS, *_world._tile_world(11, 8)))
+
+    def test_rail_uses_25d_by_default_and_can_opt_out_to_2d(self):
         with patch.object(STATE, "m6_yard_active", False, create=True), \
                 patch.object(STATE, "m6_train_active", False, create=True), \
                 patch.object(STATE, "m6_train_death", False, create=True), \
@@ -113,13 +134,35 @@ class TopDownProgressionTests(unittest.TestCase):
             STATE.mission6_stage = _meta.STAGE_NOMAN
             self.assertTrue(_draw._td3d_gate())
             STATE.mission6_stage = _meta.STAGE_RAIL
-            self.assertFalse(_draw._td3d_gate())
-            self.assertIsNone(_draw._td.active_cam())  # the 2D aim ray too
-            with patch.dict(os.environ, {"ACA_M6_RAIL_25D": "1"}):
-                self.assertTrue(_draw._td3d_gate())
-                self.assertIsNotNone(_draw._td.active_cam())
-                STATE.m6_train_active = True
+            self.assertTrue(_draw._td3d_gate())
+            self.assertIsNotNone(_draw._td.active_cam())
+            STATE.mission6_stage = _meta.STAGE_BOXCAR
+            self.assertTrue(_draw._td3d_gate())
+            with patch.dict(os.environ, {"ACA_M6_RAIL_25D": "0"}):
+                STATE.mission6_stage = _meta.STAGE_RAIL
                 self.assertFalse(_draw._td3d_gate())
+                self.assertIsNone(_draw._td.active_cam())  # the 2D aim ray too
+            STATE.m6_train_active = True
+            self.assertFalse(_draw._td3d_gate())
+
+    def test_topdown_put_preserves_m6_uv_slots(self):
+        from engine3d import gl as _gl
+        from missions.m6 import draw3d as _draw3d
+        floor = _draw3d._floor_quad_mesh(256, 128)
+        box_m = _draw3d._uv_box(1.6, 1.6, 2.0, (40, 44, 52),
+                                top_uvs=(0.1, 0.2, 0.3, 0.4), top_slot=-2.0,
+                                front_uvs=(0.5, 0.6, 0.7, 0.8), front_slot=-3.0)
+        cache = {}
+        fake_r = SimpleNamespace(
+            pack=lambda verts, faces: _gl._pack_faces(verts, faces, prelit=False),
+            add_packed=lambda arr: cache.setdefault("last", []).append(arr),
+        )
+        _draw._td.put(fake_r, floor, (0.0, 0.0, 0.0), cache=cache)
+        _draw._td.put(fake_r, box_m, (1.0, 0.0, -1.0), cache=cache)
+        floor_arr, box_arr = cache["last"]
+        self.assertTrue((floor_arr[:, 20] == -3.0).all())
+        self.assertIn(-2.0, box_arr[:, 20])
+        self.assertIn(-3.0, box_arr[:, 20])
 
 
 # ───────────────────────────────────────────────────────────────────────────

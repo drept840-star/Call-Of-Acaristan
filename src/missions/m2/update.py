@@ -321,7 +321,7 @@ def _update_stage(keys):
         elif found < 3:
             _set_objective(f"Inspect green evidence terminals with [E] ({found}/3)")
         else:
-            _set_objective("Hold [E] at the upload terminal")
+            _set_objective("Press [E] at the upload terminal")
             if _near(UPLOAD_TERMINAL_POS, 95) and keys[pygame.K_e]:
                 _begin_upload_os()
     elif stage == STAGE_UPLOAD:
@@ -709,6 +709,11 @@ def _update_pickups():
         if math.hypot(pu[0] - STATE.player.rect.centerx, pu[1] - STATE.player.rect.centery) > 32:
             continue
         kind = pu[2]
+        # full HP / full mags leave the pickup on the ground (M4-M6 idiom)
+        if kind == "bandage" and STATE.player.hp >= STATE.player.max_hp:
+            continue
+        if kind == "mag" and STATE.spare_mags >= 5:
+            continue
         if kind == "bandage":
             old = STATE.player.hp
             STATE.player.hp = min(STATE.player.max_hp, STATE.player.hp + 35)

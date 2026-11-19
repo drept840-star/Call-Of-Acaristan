@@ -20,6 +20,7 @@ from missions.m7 import choice as _choice
 from missions.m7 import flow as _flow
 from missions.m7 import meta as _meta
 from missions.m7 import raid3d as _raid
+from missions.m7 import raid_world as _world
 
 
 class _Keys(dict):
@@ -66,7 +67,6 @@ class M7StageTests(unittest.TestCase):
             self.assertTrue(shots, stage)
             for shot in shots:
                 self.assertTrue(shot.get("scene"), (stage, shot))
-        self.assertTrue(_meta.outro_shots())
 
     def test_goat_escape_is_a_mid_film_and_does_not_move_the_ladder(self):
         self.assertEqual(_meta.MID_TIMELINES,
@@ -223,6 +223,27 @@ class M7RaidTests(unittest.TestCase):
             m7.game_update(NONE)
         self.assertEqual(STATE.mission7_stage, "finale")
         self.assertFalse(_raid.active())
+
+    def test_holding_e_frees_pinned_alex(self):
+        """The well-lift hold must survive REV.step's idle-path reset."""
+        s = self._scene()
+        a = s.brain.alex
+        a["pinned"] = True
+        a["x"], a["z"] = _world.WELL_PIN
+        s.px, s.pz = _world.WELL_LIFT_AT
+        keys = _Keys({pygame.K_e: 1})
+        dt = 1.0 / 60.0
+        for _ in range(30):
+            s._hold(keys, dt)
+        self.assertGreater(s.hold, 0.4, "well-lift hold reset every frame")
+        self.assertLess(s.hold, _raid.HOLD_S["alex"])
+        self.assertGreater(s._help_k(), 0.0)
+        for _ in range(90):
+            s._hold(keys, dt)
+            if not a["pinned"]:
+                break
+        self.assertFalse(a["pinned"], "E held long enough must free Alex")
+        self.assertIn("freed", a)
 
     def test_restart_while_active_rebuilds_the_fight(self):
         s = self._scene(("tractor",))

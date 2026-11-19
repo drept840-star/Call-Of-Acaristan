@@ -61,8 +61,8 @@ _NIGHT = {"hq": dict(_m1.NIGHT, ambient=0.34, diffuse=0.40, tint=(1.06, 1.0, 0.9
           "quarter": dict(_m1.NIGHT, ambient=0.30, diffuse=0.42, tint=(0.88, 0.95, 1.08)),
           "print": dict(_m1.NIGHT, ambient=0.34, diffuse=0.40, tint=(1.05, 1.0, 0.94)),
           "tunnel": dict(_m1.NIGHT, ambient=0.30, diffuse=0.38, tint=(0.92, 1.0, 1.0))}
-_AMBIENT = {"hq": (164, 156, 140), "quarter": (96, 106, 140), "print": (146, 132, 112),
-            "raid": (144, 120, 110), "tunnel": (112, 112, 102)}
+_AMBIENT = {"hq": (136, 132, 126), "quarter": (84, 100, 138), "print": (114, 112, 108),
+            "raid": (114, 98, 96), "tunnel": (78, 94, 106)}
 
 _FLOORS = {
     "hq": {"O": ((62, 68, 74), "m7_tile"), "L": ((66, 64, 58), "m7_tile"),
@@ -105,7 +105,9 @@ def submit_frame(q, fcx, fcy):
     sub(_UiPassDraw(lambda s: render_world(s, v), "m5.world3d"), _L.FLOOR, sort_key=0)
     sub(_UiPassDraw(lambda s: _labels(s, v), "m5.labels3d"), _L.FX_WORLD, sort_key=(9, 0))
     sub(_UiPassDraw(_grade.vignette, "m5.vignette"), _L.OVERLAY_WORLD, sort_key=(3, 0))
-    _d._submit_rain(q, 0)
+    if _d._is_quarter():
+        from game import rain3d as _rain3d
+        _rain3d.step_rain_drops(getattr(STATE, "rain_drops", None))
     _d._submit_scanlines(q, 1)
     if STATE.player_dead:
         sub(_UiPassDraw(_draw_death_edge, "m5.death_edge"), _L.UI, sort_key=2)
@@ -141,16 +143,20 @@ def render_world(surface, v):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
     tm = _now_ms()
     kind = _kind()
     try:
         r.light = Light(**_NIGHT[kind])
         r.fog, r.fog_start, r.fog_end = VOID, 32.0, 64.0
-        r.light_cap = 8
+        r.light_cap = 64
+        r.wetness = 0.78 if kind in ("quarter", "tunnel") else 0.16
+        r.height_fog = ((0.042, 0.0, 1.6, (14, 18, 28)) if kind in ("quarter", "tunnel")
+                        else (0.014, 0.0, 1.4, (16, 16, 18)))
         v.apply(r)
-        buf.fill(VOID)
+        if getattr(r, "backend", "") != "gl":
+            buf.fill(VOID)
         r.begin()
         first = _w.static_scene(r, ("m5_td3d", kind, id(_grid())))
         ok = False
@@ -168,7 +174,15 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm)
         grade = _lamp_lights(r, v, flashes, tm)
-        td.cast_shadows(r)
+        if kind == "quarter":
+            _emit_m5_rain(r, v, tm, flashes)
+        td.cast_shadows(r, alpha=155)
+        if getattr(r, "backend", "") == "gl":
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.24, "bloom_knee": 0.98,
+                "grade3d": (v, grade + dyn, _AMBIENT[_ambient_key(kind)]),
+            })
+            return True
         r.flush(buf, bg=VOID)
     except Exception:
         import traceback
@@ -176,7 +190,9 @@ def render_world(surface, v):
         td.disable()                  # next frame is the 2D painter
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+        if hasattr(r, "hdr"):
+            r.hdr = shdr
     _fx.present_crisp(buf, surface)
     _grade.apply(surface, v, grade + dyn, ambient=_AMBIENT[_ambient_key(kind)])
     return True
@@ -1375,7 +1391,9 @@ def _draw_dynamic_set(r, flashes, tm):
         rc = _paint_tram_rect()
         x, _, z = to3(rc.centerx, rc.centery)
         for i, dx in enumerate((-2.0, 0.0, 2.0)):
-            _m1._fire(r, (x + dx, 2.4, z), tm, 11 + i, 0.55, glow=i == 1)
+            _m1._fire(r, (x + dx, 2.4, z), tm, 11 + i, 0.62,
+                      glow=(i == 1), smoky=True, bed=False, embers=(i == 1))
+        flashes.append({"pos": (x, 2.4, z), "color": FIRE, "intensity": 1.35, "range": 7.5})
         sx, _, sz = to3(*_quarter.SEARCH_ORIGIN)
         _put(r, _mesh(("slamp",), _searchlight_mesh), (sx, 0.0, sz))
         if _stage() == STAGE_QUARTER and _quarter._S:
@@ -1432,8 +1450,9 @@ def _civilian(r):
     x, y = S_["civ_x"], _quarter.CIV_POS[1]
     if state == "held":
         at = to3(x, y)
-        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.7, 0.5, 120), layer=0)
-        r.add_humanoid(hum, dict(POSES["kneel"]), at, td.yaw_rad(0.0), rifle_on=False)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.7, 0.5, 120), layer=1, bias=-0.8)
+        r.add_humanoid(hum, dict(POSES["kneel"]), at, td.yaw_rad(0.0),
+                       rifle_on=False, shadow=(1, -0.5))
     else:
         _unarmed(r, hum, x, y, 0.0, "civ")
 
@@ -1452,10 +1471,9 @@ def _beacon(r, t):
 # ── cast ───────────────────────────────────────────────────────────────
 
 def _unarmed(r, hum, x, y, angle, key, tint=None):
-    from engine3d import POSES, pose_run
-    phase, moving = _m1._motion(key, x, y, angle)
-    pose = pose_run(phase, lean=4) if moving else dict(POSES["stand"])
-    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=False, tint=tint)
+    pose = _m1._gait(key, x, y, angle)
+    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=False,
+                   tint=tint, shadow=(1, -0.5))
 
 
 def _guard_hum(e):
@@ -1525,7 +1543,7 @@ def _draw_maru(r, flashes, tm):
         t = max(0.0, min(1.0, (mag["age"] - mag.get("delay", 0)) / dur))
         lift = math.sin(math.pi * t) * mag.get("arc_height", 76.0) * K
         x, _, z = to3(mag["x"], mag["y"])
-        r.add_sprite((x, 0.02, z), td.shadow(0.3, 0.2, 110), layer=0)
+        r.add_sprite((x, 0.02, z), td.shadow(0.3, 0.2, 110), layer=1, bias=-0.4)
         _put(r, _mesh(("mag",), lambda: _m1._pickup_mesh("mag")), (x, 0.3 + lift, z),
              yaw=math.degrees(mag.get("rot", 0.0)) % 360.0)
 
@@ -1580,9 +1598,9 @@ def _draw_corpses(r):
         at = to3(c.x, c.y)
         if k >= 1.0:
             r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - _m1.CORPSE_FALL) / 90.0)), layer=0)
-        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=0)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=1, bias=-0.8)
         r.add_humanoid(hum, pose, at, td.yaw_rad(c.angle) + 90.0 * c.fall_dir, rifle_on=False,
-                       tint=_m1.CHAR if hasattr(c, "burn") else None)
+                       tint=_m1.CHAR if hasattr(c, "burn") else None, shadow=(1, -0.5))
 
 
 # ── fx ─────────────────────────────────────────────────────────────────
@@ -1598,11 +1616,17 @@ def _draw_fx(r, flashes, tm):
              yaw=(t * 60.0 + pu[0]) % 360.0)
         r.add_sprite((x, 0.3, z), _glow(_m1._PICKUP_COL.get(kind, (255, 210, 40)), 0.28, tm, 0.7, 16),
                      layer=_fx_layer())
-    for decal in STATE.blood_decals:
-        k = max(0.0, min(1.0, decal[2] / 255.0))
-        if k > 0.05:
-            r.add_sprite(to3(decal[0], decal[1], 0.015),
-                         td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    if getattr(r, "backend", "") == "gl" and STATE.blood_decals:
+        from engine3d.particles import pack_blood_decals
+        d_arr = pack_blood_decals(STATE.blood_decals, to3, (80, 12, 14))
+        if d_arr is not None:
+            r.add_decals(d_arr)
+    else:
+        for decal in STATE.blood_decals:
+            k = max(0.0, min(1.0, decal[2] / 255.0))
+            if k > 0.05:
+                r.add_sprite(to3(decal[0], decal[1], 0.015),
+                             td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
     fx0, fz0 = _cache.get("tgt") or (0.0, 0.0)
     for fz in getattr(STATE, "fire_zones", []):
         x, _, z = to3(fz.x, fz.y)
@@ -1610,13 +1634,14 @@ def _draw_fx(r, flashes, tm):
             continue
         heat = min(1.0, fz.life / float(max(1, fz.max_life)) * 4.0)
         rad = fz.radius * K
-        r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
+        _m1._fuel_pool_at(r, x, z, rad * (0.65 + 0.35 * heat), fz.x * 0.37 + fz.y * 0.11, tm=tm, heat=heat)
         n = 1 + min(6, int(rad / 0.3))
         for i in range(n):
             a = i * 2.39996 + fz.x * 0.013
-            d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
-            size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
-            _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size, glow=i == 0)
+            d = 0.0 if i == 0 else rad * 0.72 * math.sqrt(i / float(n))
+            size = (0.56 if i == 0 else 0.36) * min(1.25, 0.45 + rad * 0.35) * heat
+            _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
+                      glow=(i == 0), smoky=(i == 0), bed=False, embers=(i == 0), heat=heat)
         flashes.append({"pos": (x, 1.0, z), "color": FIRE, "intensity": heat, "range": 4.0 + rad})
     for b in STATE.bullets:
         head = to3(b["x"], b["y"], AIM_H)
@@ -1657,7 +1682,8 @@ def _lamp_lights(r, v, flashes, tm):
     _cache["tgt"] = (fx, fz)
     t = _now_s()
     pools, near, grade = [], [], []
-    wet = _kind() == "quarter"
+    kind_ = _kind()
+    wet = kind_ in ("quarter", "tunnel")
     for lamp in _lights_for(_cur_stage()):
         k = _flick(lamp["kind"], lamp["seed"], t)
         head = lamp["head"]
@@ -1669,17 +1695,62 @@ def _lamp_lights(r, v, flashes, tm):
         grade.append(("pool", (head[0], 0.0, head[2]), color, reach * 0.72, 0.5 * k))
         grade.append(("glow", head, color, 0.7 if lamp["fam"] == "tube" else 0.6, 0.55 * k))
         if wet and lamp["fam"] in ("post", "door"):
-            grade.append(("reflect", (head[0], 0.0, head[2] - 0.4), color, 0.6, 0.34 * k))
+            grade.append(("reflect", (head[0], 0.0, head[2] - 0.4), color, 0.74, 0.48 * k))
     p = STATE.player
     if p is not None:
-        pp = to3(p.rect.centerx, p.rect.centery, 1.7)
-        flashes.append({"pos": pp, "color": (190, 205, 230), "intensity": 1.35, "range": 4.0})
-        grade.append(("pool", (pp[0], 0.0, pp[2]), (170, 190, 225), 3.2, 0.42))
+        use_torch = kind_ in ("quarter", "print", "tunnel") and not getattr(STATE, "player_disarmed", False) and not STATE.player_dead
+        td.add_player_rim(r, flashes, p.rect.centerx, p.rect.centery, p.angle, spot=use_torch)
+        pp = to3(p.rect.centerx, p.rect.centery, 0.0)
+        if use_torch:
+            grade.append(("cone", pp, p.angle, (218, 236, 248), 5.6, 0.72))
+        else:
+            grade.append(("pool", pp, (170, 190, 225), 3.2, 0.42))
     near.sort(key=lambda e: e[0])
-    lights = [e[1] for e in near[:max(0, 8 - len(flashes))]]
+    lights = [e[1] for e in near[:max(0, 64 - len(flashes))]]
     r.set_pools(pools[:32])
-    r.set_lights(flashes[:8] + lights, cap=8)
+    r.set_lights(flashes[:64] + lights, cap=64)
     return grade
+
+
+def _emit_m5_rain(r, v, tm, flashes):
+    from game import rain3d as _rain3d
+    t = _now_s()
+    s_inv = 1.0 / S
+    zone = _m1._cut_zone()
+    rain_lights = list(flashes)
+    mist_lamps = []
+    for lamp in _lights_for(_cur_stage()):
+        k = _flick(lamp["kind"], lamp["seed"], t)
+        head = lamp["head"]
+        rain_lights.append({"pos": head, "color": lamp["col"], "intensity": 0.6 * k, "range": lamp["reach"]})
+        if lamp["fam"] in ("post", "door"):
+            mist_lamps.append((head, lamp["col"]))
+    if _stage() == STAGE_QUARTER and _quarter._S:
+        ox, oy = _quarter.SEARCH_ORIGIN
+        a = _quarter._search_angle()
+        lit = bool(_quarter._S.get("lit"))
+        rain_lights.append({
+            "pos": to3(ox, oy, 3.1), "color": (255, 248, 214),
+            "intensity": 1.35 if lit else 0.85, "range": _quarter.SEARCH_LEN * K * 0.85,
+            "kind": "spot", "dir": (math.cos(a), -0.18, -math.sin(a)),
+            "cone": math.cos(_quarter.SEARCH_HALF), "shadow": True,
+        })
+
+    def outdoor_ground(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        return _glyph(col, row) not in ("C", "B", "H", "")
+
+    def roof_occlude(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        return _glyph(col, row) == "C" and not _m1._hides(zone, col * T, row * T, (col + 1) * T, (row + 1) * T)
+
+    def puddle_fn(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        return _floor_ch(col, row) == "." and _hash(col * 3 + 1, row * 5 + 2, 100) < 9
+
+    _rain3d.emit(r, v, tm, lights=rain_lights, outdoor_ground=outdoor_ground,
+                 roof_occlude=roof_occlude, puddle_fn=puddle_fn, mist_lamps=mist_lamps,
+                 intensity=1.05, seed=55)
 
 
 # ── screen space ───────────────────────────────────────────────────────

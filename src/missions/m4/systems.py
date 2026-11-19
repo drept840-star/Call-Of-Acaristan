@@ -391,7 +391,8 @@ def _update_m4_pickups():
             continue
         kind = pu[2]
         if kind == "k9mag":
-            _give_mag(pu[0], pu[1])
+            if not _give_mag(pu[0], pu[1]):
+                continue  # both pouches full: leave it on the ground
         elif kind == "mag":
             if STATE.spare_mags < M4_SPARE_CAP:
                 STATE.spare_mags += 1

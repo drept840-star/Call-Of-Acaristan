@@ -74,9 +74,9 @@ TANK = (150, 146, 132)
 FIRE = (255, 140, 56)
 BLAST = (255, 170, 90)
 VOID = _m1.VOID
-AMBIENT_CONTROL = (188, 194, 172)  # the 2D control room: warm desk light on green
-AMBIENT = (194, 200, 208)        # grade floor: the 2D night is greyer and brighter than M1's blue
-NIGHT = dict(_m1.NIGHT, ambient=0.40, diffuse=0.50, tint=(0.92, 0.95, 1.02))  # the 2D Route 12 night is greyer than M1
+AMBIENT_CONTROL = (146, 158, 136)
+AMBIENT = (118, 130, 158)
+NIGHT = dict(_m1.NIGHT, ambient=0.34, diffuse=0.48, tint=(0.86, 0.92, 1.04))
 
 _BUILD = pygame.Rect(MISSION2_BUILDINGS[0])
 _HUT = pygame.Rect(MISSION2_BUILDINGS[1])
@@ -141,15 +141,18 @@ def render_world(surface, v):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
     tm = _now_ms()
     try:
         r.light = Light(**NIGHT)
         r.fog, r.fog_start, r.fog_end = VOID, 32.0, 64.0
-        r.light_cap = 8
+        r.light_cap = 64
+        r.wetness = 0.48
+        r.height_fog = (0.028, 0.0, 1.6, (14, 18, 26))
         v.apply(r)
-        buf.fill(VOID)
+        if getattr(r, "backend", "") != "gl":
+            buf.fill(VOID)
         r.begin()
         first = _w.static_scene(r, ("m2_td3d", id(MISSION2_MAP)))
         ok = False
@@ -171,7 +174,17 @@ def render_world(surface, v):
         _draw_fx(r, flashes, tm)
         dyn = _m1._flash_lights(flashes, tm) + _blast_lights()
         _lamp_lights(r, v, flashes, tm)
-        td.cast_shadows(r)
+        td.cast_shadows(r, alpha=155)
+        if getattr(r, "backend", "") == "gl":
+            wing = _d._m2_wing_name()
+            p = STATE.player
+            cone = ([("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.8, 0.72)]
+                    if wing != "control" and p is not None and not STATE.player_dead else [])
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.24, "bloom_knee": 0.98,
+                "grade3d": (v, _night_lights() + dyn + cone, AMBIENT_CONTROL if wing == "control" else AMBIENT),
+            })
+            return True
         r.flush(buf, bg=VOID)
     except Exception:
         import traceback
@@ -179,10 +192,16 @@ def render_world(surface, v):
         td.disable()                  # next frame is the 2D painter
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+        if hasattr(r, "hdr"):
+            r.hdr = shdr
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn,
-                 ambient=AMBIENT_CONTROL if _d._m2_wing_name() == "control" else AMBIENT)
+    wing = _d._m2_wing_name()
+    p = STATE.player
+    cone = ([("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.8, 0.72)]
+            if wing != "control" and p is not None and not STATE.player_dead else [])
+    _grade.apply(surface, v, _night_lights() + dyn + cone,
+                 ambient=AMBIENT_CONTROL if wing == "control" else AMBIENT)
     return True
 
 
@@ -710,7 +729,8 @@ def _draw_vehicles(r, flashes, tm):
         if veh.get("burning") and burn < 1.0:
             seed = rect.x
             for i in range(3):
-                _m1._fire(r, (x - 0.9 + i * 0.9, 0.8, z), tm, seed + i, 0.25 + 0.35 * burn)
+                _m1._fire(r, (x - 0.9 + i * 0.9, 0.8, z), tm, seed + i, 0.28 + 0.38 * burn,
+                          glow=(i == 1), smoky=(i == 1), bed=False, embers=(i == 1))
             flashes.append({"pos": (x, 1.2, z), "color": FIRE, "intensity": 0.6 + 0.6 * burn,
                             "range": 4.0})
         elif kind != "burned":
@@ -871,21 +891,23 @@ def _draw_blast(r, flashes, tm):
         fade = 1.0 if bt < 45 else max(0.0, 1.0 - (bt - 45) / 205.0)
         lift = 1.0 + bt * 0.05
         r.add_sprite((x, lift + fb * 0.25, z),
-                     _fx.glow((255, 150, 60), fb * 0.55, tm, core=(255, 246, 214), flicker=0.1,
-                              seed=7, intensity=1.4 * fade, max_px=520), layer=_fx.FX_LAYER)
+                     _fx.glow((255, 150, 60), round(fb * 0.55, 1), tm, core=(255, 246, 214), flicker=0.1,
+                              seed=7, intensity=round(1.4 * fade, 2), max_px=180), layer=_fx.FX_LAYER)
         n = 10
         for i in range(n):
             a = i * math.tau / n + bt * 0.01
             d = fb * 0.45 * (0.6 + 0.4 * ((i * 7) % 5) / 4.0)
             _m1._fire(r, (x + math.cos(a) * d, lift * 0.5, z + math.sin(a) * d * 0.85), tm, 90 + i,
-                      min(1.7, 0.6 + fb * 0.08) * fade, glow=False)
-        _m1._fire(r, (x, 0.2, z), tm, 89, min(2.2, 1.0 + fb * 0.1) * fade)
+                      min(1.7, 0.6 + fb * 0.08) * fade, glow=False, smoky=(i % 3 == 0), bed=False,
+                      embers=(i == 0), heat=0.8 + 0.5 * fade)
+        _m1._fire(r, (x, 0.2, z), tm, 89, min(2.2, 1.0 + fb * 0.1) * fade,
+                  smoky=True, bed=True, embers=True, heat=1.2 * fade)
     sw = getattr(STATE, "mission2_tanker_shockwave_radius", 0) * K
     if 0 < bt <= 60 and sw > 0:
         a = max(0.0, 1.0 - bt / 60.0)
         col = td.mix((40, 30, 24), (255, 220, 170), a)
-        td.ring(r, x, z, sw, col, n=48, width=3, y=0.2)
-        td.ring(r, x, z, sw * 0.92, td.mix((30, 24, 20), (255, 160, 80), a), n=40, width=2, y=0.1)
+        td.ring(r, x, z, sw, col, n=28, width=3, y=0.2)
+        td.ring(r, x, z, sw * 0.92, td.mix((30, 24, 20), (255, 160, 80), a), n=24, width=2, y=0.1)
     from engine3d import box
     for ch in getattr(STATE, "mission2_tanker_debris_chunks", ()):
         gy = ch.get("ground_y", ch["y"])
@@ -900,12 +922,13 @@ def _draw_blast(r, flashes, tm):
             r.add_sprite((px, h, pz), _glow((255, 150, 60), 0.18, tm, 0.9, 12), layer=_fx.FX_LAYER)
     if bt > 20:
         for i, sf in enumerate(getattr(STATE, "mission2_tanker_spot_fires", ())):
-            _m1._fire(r, to3(sf["x"], sf["y"]), tm, 200 + i, 0.18 + sf.get("size", 18) * 0.012)
+            _m1._fire(r, to3(sf["x"], sf["y"]), tm, 200 + i, 0.22 + sf.get("size", 18) * 0.012,
+                      smoky=(i % 2 == 0), bed=True, embers=(i % 2 == 0))
         heat = 1.0 if bt < 400 else max(0.45, 1.0 - (bt - 400) / 1200.0)
         for i in range(5):
             a = i * 1.26
             _m1._fire(r, (x + math.cos(a) * 1.6, 0.6, z + math.sin(a) * 0.9), tm, 300 + i, 0.55 * heat,
-                      glow=i == 0)
+                      glow=(i == 0), smoky=(i == 0), bed=False, embers=(i == 0), heat=heat)
     flashes.append({"pos": (x, 2.5, z), "color": BLAST, "intensity": 2.0 * k, "range": rad_px * K * 1.2})
 
 
@@ -1210,7 +1233,8 @@ def _cutscene_sniper(r):
             pose = blend(prone, pose_crawl(k * 9.0), min(1.0, k * 2.2))
             x = nx - 1.6 * T * k              # west along the deck, behind the route sign
             ang = math.pi
-        r.add_humanoid(hum, pose, to3(x, ny, DECK_H + 0.07), td.yaw_rad(ang), rifle_on=rifle)
+        r.add_humanoid(hum, pose, to3(x, ny, DECK_H + 0.07), td.yaw_rad(ang),
+                       rifle_on=rifle, shadow=(2, -0.30))
     if getattr(STATE, "mission2_flank_cutscene_rifle_dropped", False):
         rp = getattr(STATE, "mission2_flank_cutscene_rifle_pos", None)
         if rp:
@@ -1233,7 +1257,7 @@ def _draw_gantry_cast(r, flashes, tm):
         p = STATE.player
         ang = math.atan2(p.rect.centery - ny, p.rect.centerx - nx) if p is not None else math.pi / 2
         pose = td.held(hum, dict(POSES["prone"]), "os12", "aim")
-        j = r.add_humanoid(hum, pose, to3(nx, ny, DECK_H + 0.07), td.yaw_rad(ang))
+        j = r.add_humanoid(hum, pose, to3(nx, ny, DECK_H + 0.07), td.yaw_rad(ang), shadow=(2, -0.30))
         if stage == STAGE_SNIPER:
             mz = (j or {}).get("muzzle") or to3(nx, ny, DECK_H + 0.3)
             pulse = 0.5 + 0.5 * math.sin(tm * 0.01)
@@ -1307,7 +1331,8 @@ def _draw_actor(r, actor, tm):
     if "down" in act or "dead" in act:
         at = to3(x, y)
         r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(0.8), layer=0)
-        r.add_humanoid(hum, dict(POSES["dead_back"]), at, td.yaw_rad(ang), rifle_on=False)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.65, 0.50, 110), layer=1, bias=-0.8)
+        r.add_humanoid(hum, dict(POSES["dead_back"]), at, td.yaw_rad(ang), rifle_on=False, shadow=(1, -0.5))
         return
     crouch = any(w in act for w in ("drag", "reach", "radio", "frozen", "shock", "crouch", "cover"))
     if crouch:
@@ -1315,10 +1340,10 @@ def _draw_actor(r, actor, tm):
         mode = "ready"
         pose = td.held(hum, base, rig, mode)
         _m1._motion(key, x, y, ang)
-        r.add_sprite(to3(x, y, 0.02), td.shadow(0.5), layer=0)
-        r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(ang))
+        r.add_sprite(to3(x, y, 0.02), td.shadow(0.5), layer=1, bias=-0.6)
+        r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(ang), shadow=(1, -0.5))
         return
-    r.add_sprite(to3(x, y, 0.02), td.shadow(0.45), layer=0)
+    r.add_sprite(to3(x, y, 0.02), td.shadow(0.45), layer=1, bias=-0.6)
     _m1._body(r, hum, x, y, ang, rig, "ready", key)
 
 
@@ -1361,11 +1386,17 @@ def _draw_fx(r, flashes, tm):
              yaw=(t * 60.0 + pu[0]) % 360.0)
         r.add_sprite((x, 0.3, z), _glow(_m1._PICKUP_COL.get(kind, (255, 210, 40)), 0.28, tm, 0.7, 16),
                      layer=_fx.FX_LAYER)
-    for decal in STATE.blood_decals:
-        k = max(0.0, min(1.0, decal[2] / 255.0))
-        if k > 0.05:
-            r.add_sprite(to3(decal[0], decal[1], 0.015),
-                         td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    if getattr(r, "backend", "") == "gl" and STATE.blood_decals:
+        from engine3d.particles import pack_blood_decals
+        d_arr = pack_blood_decals(STATE.blood_decals, to3, (80, 12, 14))
+        if d_arr is not None:
+            r.add_decals(d_arr)
+    else:
+        for decal in STATE.blood_decals:
+            k = max(0.0, min(1.0, decal[2] / 255.0))
+            if k > 0.05:
+                r.add_sprite(to3(decal[0], decal[1], 0.015),
+                             td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
     fx0, fz0 = _cache.get("tgt") or (0.0, 0.0)
     lit = []
     for fz in STATE.fire_zones:
@@ -1375,8 +1406,6 @@ def _draw_fx(r, flashes, tm):
         life = fz.life / float(max(1, fz.max_life))
         heat = min(1.0, life * 4.0)
         rad = fz.radius * K
-        r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
-        _m1._fuel_pool_at(r, x, z, rad * (0.55 + 0.45 * heat), fz.x * 0.37 + fz.y * 0.11)
         n = 1 + min(9, int(rad / 0.3))
         # zones heaped on one spot (the tanker leaves 23) read as one fire: past
         # the first, a zone inside another's radius keeps three flames, no light
@@ -1385,12 +1414,14 @@ def _draw_fx(r, flashes, tm):
             n = min(n, 3)
         else:
             lit.append((x, z))
+            _m1._fuel_pool_at(r, x, z, rad * (0.65 + 0.35 * heat), fz.x * 0.37 + fz.y * 0.11, tm=tm, heat=heat)
         for i in range(n):
             a = i * 2.39996 + fz.x * 0.013
-            d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
-            size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
+            d = 0.0 if i == 0 else rad * 0.72 * math.sqrt(i / float(n))
+            size = (0.56 if i == 0 else 0.36) * min(1.25, 0.45 + rad * 0.35) * heat
             _m1._fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
-                      glow=i == 0)
+                      glow=(i == 0 and not near), smoky=(i == 0 and not near),
+                      bed=False, embers=(i == 0 and not near), heat=heat)
         flashes.append({"pos": (x, 1.0, z), "color": FIRE, "intensity": 1.0 * heat, "range": 4.0 + rad})
     for b in STATE.thrown_bottles:
         bt = b["t"]
@@ -1460,12 +1491,12 @@ def _lamp_lights(r, v, flashes, tm):
     flashes.append({"pos": (hx + 1.5, 0.8, hz), "color": (255, 230, 170), "intensity": 0.8, "range": 6.0})
     p = STATE.player
     if p is not None:
-        flashes.append({"pos": to3(p.rect.centerx, p.rect.centery, 1.7), "color": (190, 205, 230),
-                        "intensity": 0.9, "range": 3.0})
+        td.add_player_rim(r, flashes, p.rect.centerx, p.rect.centery, p.angle,
+                          spot=_d._m2_wing_name() != "control")
     near.sort(key=lambda e: e[0])
-    lights = [e[1] for e in near[:max(0, 8 - len(flashes))]]
+    lights = [e[1] for e in near[:max(0, 64 - len(flashes))]]
     r.set_pools(pools)
-    r.set_lights(flashes[:8] + lights, cap=8)
+    r.set_lights(flashes[:64] + lights, cap=64)
 
 
 _POOL_K = {"st": 0.6, "toll": 0.68, "win": 0.42, "term": 0.4, "hut": 0.4, "tnk": 0.55, "shl": 0.6,
@@ -1489,12 +1520,13 @@ def _night_lights():
         if fam in ("st", "toll", "shl", "grd", "nest", "win", "term"):
             out.append(("glow", (hx, hy, hz), color, 0.7, 0.55))
         if fam in ("st", "toll"):
-            out.append(("reflect", (hx, 0.0, hz - 0.3), color, 0.55, 0.3))
+            out.append(("reflect", (hx, 0.0, hz - 0.3), color, 0.74, 0.46))
     hx, _, hz = to3(49 * T + 32, 32 * T + 32)
     for i in range(1, 5):
         out.append(("pool", (hx + i * 1.2, 0.0, hz), (255, 230, 170), 0.6 + i * 0.35, 0.32 - i * 0.04))
     for side in (-0.5, 0.5):
         out.append(("glow", (hx, 0.9, hz + side), (255, 230, 170), 0.35, 0.6))
+    out.append(("reflect", (hx + 0.6, 0.0, hz), (255, 230, 170), 0.48, 0.30))
     _cache["night"] = (vis, out)
     return out
 

@@ -2301,9 +2301,14 @@ def frame(eye, tgt, fov, t=0, size=None, look="dawn", lights=()):
         r.set_lights(list(lights))
     except Exception:
         pass
-    W7.sky(r, r.surface, t, look)
     if look == "dawn":
+        p = W7.LOOKS["dawn"]
+        from cutscenes import m5fx3d as _sky
+        _sky.night_sky(r, r.surface, t, p["sky_top"], p["sky_bot"], stars=0, moon=False,
+                       clouds=0, sodium=p["sodium"], mist=None, seed=0, gpu=False)
         stratus(r, r.surface, t)
+    else:
+        W7.sky(r, r.surface, t, look)
     r.begin()
     r.add_static()
     if look != "dawn":
@@ -2361,6 +2366,13 @@ def put(r, key, build, pos, yaw=0.0, pitch=0.0, roll=0.0):
 
 def present(r, surface):
     from cutscenes import m6fx3d as _fx  # lazy: numpy stack
+    if getattr(r, "backend", "") == "gl":
+        r.hdr = True
+        r.flush_to(surface, post={
+            "bloom": 0.26, "bloom_knee": 0.96,
+            "lut": _fx.cine_curve(), "dither_step": _fx.DITHER_STEP,
+        })
+        return
     surf = r.surface
     r.flush(surf)
     try:

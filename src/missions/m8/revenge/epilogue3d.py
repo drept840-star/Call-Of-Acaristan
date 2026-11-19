@@ -21,6 +21,7 @@ from cutscenes import m6world3d as _w
 from cutscenes import m7world3d as W7
 from engine3d import POSES, Mesh, box
 from engine3d.core import quad_xz, rot_y, rot_z
+from engine3d.textures import tex
 
 from . import chase_set as S
 
@@ -328,11 +329,10 @@ def funeral():
     stone = W7._t("stone", (150, 146, 136))
     plaster = W7._t("plaster", (198, 190, 170))
     tile = W7._t("tile", (122, 60, 48))
-    gravel = (92, 90, 86)
-    gravel_at = W7._vary(gravel, 2)
+    gravel = W7._t("gravel", (92, 90, 86), tint=True)
     m.add(quad_xz(fx - 60, fz - 45, fx + 60, fz + 45, 0.06, W7._t("grass", (52, 68, 44)), layer=1, seg=10.0))
-    m.add(quad_xz(fx - 2.4, fz - 31, fx + 2.4, fz - 4.5, 0.09, gravel, layer=1, seg=1.0, colfn=gravel_at))
-    m.add(quad_xz(fx - 8.0, fz - 4.5, fx + 8.0, fz + 11.5, 0.09, gravel, layer=1, seg=1.0, colfn=gravel_at))
+    m.add(quad_xz(fx - 2.4, fz - 31, fx + 2.4, fz - 4.5, 0.09, gravel, layer=1, seg=4.0))
+    m.add(quad_xz(fx - 8.0, fz - 4.5, fx + 8.0, fz + 11.5, 0.09, gravel, layer=1, seg=4.0))
     # the mansion: plinth, two floors, string course, cornice, gable roof, chimneys
     mz, mw, md = fz + 16.0, 26.0, 8.0
     front = mz - md / 2

@@ -413,8 +413,17 @@ class MiniMap:
             panel.blit(n_surf, (12, 3))
         except Exception:
             pass
-        pygame.draw.rect(panel, (90, 75, 45), (0, 0, self.minimap_w, self.minimap_h), 2)
-        pygame.draw.rect(
-            panel, (55, 45, 28), (1, 1, self.minimap_w - 2, self.minimap_h - 2), 1
-        )
+        if self._theme.extra.get("tactical_hud"):
+            w, h = self.minimap_w, self.minimap_h
+            pygame.draw.rect(panel, (52, 64, 78), (0, 0, w, h), 1)
+            c_hi = (118, 142, 166)
+            for cx, cy, dx, dy in ((0, 0, 1, 1), (w - 1, 0, -1, 1),
+                                   (0, h - 1, 1, -1), (w - 1, h - 1, -1, -1)):
+                pygame.draw.line(panel, c_hi, (cx, cy), (cx + dx * 8, cy), 2)
+                pygame.draw.line(panel, c_hi, (cx, cy), (cx, cy + dy * 8), 2)
+        else:
+            pygame.draw.rect(panel, (90, 75, 45), (0, 0, self.minimap_w, self.minimap_h), 2)
+            pygame.draw.rect(
+                panel, (55, 45, 28), (1, 1, self.minimap_w - 2, self.minimap_h - 2), 1
+            )
         surface.blit(panel, (self.x, self.y))

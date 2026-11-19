@@ -1042,6 +1042,9 @@ def draw_slot_select_screen():
             l1 = "LAST COMPLETED" if slot.get("last_completed_mission") else "IN PROGRESS"
             mission = slot.get("last_completed_label", "Campaign record" if slot.get("last_completed_mission")
                                else "Campaign started")
+            m3_cp = save_system.m3_checkpoint_label(slot)
+            if m3_cp:
+                l1, mission = "IN PROGRESS", m3_cp
             rows = (("TOTAL TIME", slot.get("total_time", "00:00")),
                     ("UPDATED", save_system.format_timestamp(slot.get("updated_at"))))
         else:
@@ -1814,7 +1817,9 @@ def _apply_dev_args():
           or "--dev-mission8-gantry" in args or "--dev-mission8-friends" in args
           or "--dev-mission8-kill" in args or "--dev-mission8-chase" in args
           or "--dev-mission8-heli" in args or "--dev-mission8-ending" in args
-          or "--dev-mission8-epilogue" in args or "--dev-mission8-credits" in args):
+          or "--dev-mission8-epilogue" in args or "--dev-mission8-credits" in args
+          or "--dev-mission8-duty" in args or "--dev-mission8-mansion" in args
+          or "--dev-mission8-liftoff" in args):
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         _m8_start_state = "GAME"
         if "--dev-mission8-trap" in args:
@@ -1870,6 +1875,23 @@ def _apply_dev_args():
             STATE.request_m8_cutscene = None
             gc.mission_end_time = _now_ms()
             _m8_start_state = "CREDITS"
+        elif "--dev-mission8-duty" in args:
+            gc.start_mission8_stage("d_approach", "duty")
+        elif "--dev-mission8-mansion" in args:
+            _cp8 = 0
+            for _a in args:
+                if _a.startswith("--m8-cp="):
+                    try:
+                        _cp8 = max(0, min(2, int(_a.split("=", 1)[1])))
+                    except ValueError:
+                        pass
+            gc.start_mission8_stage("mansion", "duty")
+            if _cp8:
+                STATE.m8_mansion_cp = _cp8
+                from missions.m8.duty import mansion3d as _m8_mansion  # lazy: M8-only
+                _m8_mansion.begin()
+        elif "--dev-mission8-liftoff" in args:
+            gc.start_mission8_stage("liftoff", "duty")
         else:
             gc.start_mission8_stage("meet", "revenge")
         gsm.transition(_m8_start_state); pygame.mouse.set_visible(False)
@@ -2413,6 +2435,15 @@ class _SlotSelectState(GameState):
                 gc.mission_end_time = 0
                 start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
                 trigger_transition("CUTSCENE")
+            elif last == "MISSION_2" and progress == "m3" and slot.get("checkpoint"):
+                # Mid-M3 save: resume at the deepest checkpoint reached.
+                from missions import m3
+                gc.mission_start_time = _now_ms()
+                gc.mission_end_time = 0
+                getattr(m3, "start_mission3_%s_checkpoint" % slot["checkpoint"],
+                        gc.start_mission3)(preserve_timer=True)
+                gsm.transition("GAME")
+                pygame.mouse.set_visible(False)
             elif last == "MISSION_2":
                 gc.mission_start_time = _now_ms()
                 gc.mission_end_time = 0
@@ -2846,6 +2877,7 @@ class _CutsceneState(GameState):
     name = "CUTSCENE"
 
     def enter(self):
+        self._keep_music_for_credits = False
         cp = active_cutscene
         if cp and cp.current_shot and cp.current_shot.get("cinematic_controls"):
             # The gameplay transition must not consume the opening camera beat.
@@ -2855,6 +2887,9 @@ class _CutsceneState(GameState):
         cp = active_cutscene
         if cp and cp.finale_audio:
             cp.finale_audio.stop()
+        if (not getattr(self, "_keep_music_for_credits", False)
+                and (cp is None or cp.after_state not in ("M7_RESUME", "M8_RESUME"))):
+            audio.fade_out_music(900)
         # Dedicated finale cues must not leak into the completion/menu state.
         for name in ("m4_tension", "m4_cuff_close", "m4_crowd", "m4_aftermath",
                      "m4_breath", "m4_roof_air"):
@@ -2961,6 +2996,7 @@ class _CutsceneState(GameState):
             if _m8_outro_pending():
                 # Epilogue over: the title card's theme carries into the credits.
                 cp.completed = True
+                self._keep_music_for_credits = True
                 gc.mission_end_time = gc.mission_end_time or _now_ms()
                 interactions.clear_radio_queue()
                 trigger_transition("CREDITS")
@@ -3188,6 +3224,27 @@ class _CutsceneState(GameState):
             _set_ambience(set() if cp.finale_audio else
                           (set() if cp.paused else {"rain", "wind"}))
             return
+        if (cp.after_state in ("MISSION6", "M6_RESUME", "MISSION6_COMPLETE")
+                or str(shot["scene"]).startswith("m6_")):
+            if not cp.paused and not cp.completed:
+                _sc = shot["scene"]
+                if _sc in ("m6_insert_chase", "m6_insert_cabin",
+                           "m6_insert_valley", "m6_insert_jump"):
+                    audio.play_music("assets/music/ost/15_cold_iron.mp3",
+                                     volume=0.30, fade_ms=1500)
+                elif _sc in ("m6_insert_ground", "m6_helicopter"):
+                    audio.play_music("assets/music/ost/07_whiteout.mp3",
+                                     volume=0.32, fade_ms=2000)
+                elif _sc in ("m6_boxcar_wide", "m6_boxcar_notebook",
+                             "m6_boxcar_volkov", "m6_boxcar_biribel",
+                             "m6_boxcar_exit", "m6_customs_return",
+                             "m6_customs_terminal", "m6_radio_vasile",
+                             "m6_radio_maru", "m6_cut_line"):
+                    audio.play_music("assets/music/ost/19_paper_trail.mp3",
+                                     volume=0.26, fade_ms=2000)
+                elif _sc in ("m6_radio_silence", "title_card"):
+                    if audio.music_name() is not None:
+                        audio.fade_out_music(1200)
         if shot["scene"] == "m4_arrest_screen":
             amb = {"room_tone"} if cp.elapsed_ms < 12400 else set()
         elif shot["scene"] == "m4_maru_silhouette":
@@ -3322,6 +3379,9 @@ class _CreditsState(GameState):
 class _BriefingState(GameState):
     name = "BRIEFING"
 
+    def exit(self):
+        audio.fade_out_music(900)
+
     def handle_event(self, event, mouse_x, mouse_y, keys):
         if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
             finish_briefing()
@@ -3334,6 +3394,7 @@ class _BriefingState(GameState):
 
     def set_ambience(self):
         _set_ambience({"ambient_drone"})
+        audio.play_music("assets/music/ost/19_paper_trail.mp3", volume=0.24, fade_ms=1500)
 
     def render(self, surface):
         draw_briefing_screen()
@@ -3435,9 +3496,12 @@ class _GameState_(GameState):
             except Exception:
                 pass
         if getattr(gc, "active_mission", "MISSION1") == "MISSION8" \
-                and (getattr(STATE, "m8_trap_active", False)
-                     or getattr(STATE, "m8_kill_active", False)
-                     or getattr(STATE, "m8_chase_active", False)):
+                                 and (getattr(STATE, "m8_trap_active", False)
+                      or getattr(STATE, "m8_kill_active", False)
+                      or getattr(STATE, "m8_chase_active", False)
+                      or getattr(STATE, "m8_mansion_active", False)
+                      or getattr(STATE, "m8_flight_active", False)
+                      or getattr(STATE, "m8_ridge_active", False)):
             try:
                 from missions.m8 import flow as _m8_flow  # lazy: M8-only
                 _m8_flow.scene_pause(False)
@@ -3514,9 +3578,12 @@ class _GameState_(GameState):
                 pass
             return
         if getattr(gc, "active_mission", "MISSION1") == "MISSION8" \
-                and (getattr(STATE, "m8_trap_active", False)
-                     or getattr(STATE, "m8_kill_active", False)
-                     or getattr(STATE, "m8_chase_active", False)):
+                                 and (getattr(STATE, "m8_trap_active", False)
+                      or getattr(STATE, "m8_kill_active", False)
+                      or getattr(STATE, "m8_chase_active", False)
+                      or getattr(STATE, "m8_mansion_active", False)
+                      or getattr(STATE, "m8_flight_active", False)
+                      or getattr(STATE, "m8_ridge_active", False)):
             # The trap/gantry fight and the kill own the mouse and keyboard; ESC pauses.
             from missions.m8 import flow as _m8_flow  # lazy: M8-only
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -3731,8 +3798,8 @@ class _GameState_(GameState):
             trigger_transition("CUTSCENE")
             pygame.mouse.set_visible(True)
         elif _m7_outro_pending():
-            from missions import m7 as _m7mod  # lazy: see _m7_outro_pending
-            _start_m6_cutscene(_m7mod.outro_shots(), "MISSION7_COMPLETE"); pygame.mouse.set_visible(True)
+            # No end card: the radio choice hands straight to mission complete.
+            gsm.transition("MISSION_COMPLETE"); mission_complete_timer = 0; mission_complete_fade = 0; pygame.mouse.set_visible(True)
         elif _m8_outro_pending():
             # beats.py epilogue fallback: the game ends, so roll the credits first.
             gc.mission_end_time = gc.mission_end_time or _now_ms()
@@ -4099,12 +4166,84 @@ class _DeathState(GameState):
 class _MissionCompleteState(GameState):
     name = "MISSION_COMPLETE"
 
+    @staticmethod
+    def _has_next_mission():
+        active = getattr(gc, "active_mission", "MISSION1")
+        if active == "MISSION1":
+            return hasattr(gc, "mission2_intro_shots")
+        nxt = {
+            "MISSION2": "start_mission3",
+            "MISSION3": "start_mission4",
+            "MISSION4": "start_mission5",
+            "MISSION5": "start_mission6",
+            "MISSION6": "start_mission7",
+            "MISSION7": "start_mission8",
+        }.get(active)
+        return bool(nxt and hasattr(gc, nxt))
+
+    @staticmethod
+    def _advance_campaign():
+        active = getattr(gc, "active_mission", "MISSION1")
+        if active == "MISSION1":
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
+            trigger_transition("CUTSCENE")
+        elif active == "MISSION2":
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            gc.start_mission3(preserve_timer=True)
+            start_cutscene(gc.mission3_intro_shots, "GAME", use_fades=True)
+            trigger_transition("CUTSCENE")
+            pygame.mouse.set_visible(True)
+        elif active == "MISSION3":
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            gc.start_mission4(preserve_timer=True)
+            start_cutscene(gc.mission4_intro_shots, "MISSION4", use_fades=True)
+            trigger_transition("CUTSCENE")
+            pygame.mouse.set_visible(True)
+        elif active == "MISSION4":
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            gc.start_mission5(preserve_timer=True)
+            start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
+            trigger_transition("CUTSCENE")
+            pygame.mouse.set_visible(True)
+        elif active == "MISSION5" and hasattr(gc, "start_mission6"):
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            gc.start_mission6(preserve_timer=True)
+            _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6")
+            pygame.mouse.set_visible(True)
+        elif active == "MISSION6" and hasattr(gc, "start_mission7"):
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            gc.start_mission7(preserve_timer=True)
+            trigger_transition("GAME")
+            pygame.mouse.set_visible(False)
+        elif active == "MISSION7" and hasattr(gc, "start_mission8"):
+            gc.mission_start_time = _now_ms()
+            gc.mission_end_time = 0
+            gc.start_mission8(preserve_timer=True)
+            trigger_transition("GAME")
+            pygame.mouse.set_visible(False)
+        else:
+            trigger_transition("MENU")
+            pygame.mouse.set_visible(True)
+
     def enter(self):
         global mission_complete_timer, mission_complete_fade
         mission_complete_timer = 0
         mission_complete_fade = 0
+        if getattr(STATE, "mission_start_time", 0) and not getattr(STATE, "mission_end_time", 0):
+            STATE.mission_end_time = _now_ms()
+        try:
+            from ui import mission_complete as _mc_ui
+            _mc_ui.enter()
+        except Exception:
+            pass
         # Save exactly once on entry - before any handler can zero the timer.
-        # Handles MISSION1 / MISSION2 / MISSION3 via save_system's mapping.
         report = _mission_report_data(success=True)
         save_system.save_mission_complete_record(
             getattr(gc, "active_mission", "MISSION1"),
@@ -4112,68 +4251,20 @@ class _MissionCompleteState(GameState):
             stats=report,
         )
 
+    def exit(self):
+        audio.fade_out_music(900)
+
     def handle_event(self, event, mouse_x, mouse_y, keys):
-        if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN):
-            if getattr(gc, "active_mission", "MISSION1") == "MISSION1":
-                gc.mission_start_time = _now_ms()
-                gc.mission_end_time = 0
-                start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
-                trigger_transition("CUTSCENE")
-            elif getattr(gc, "active_mission", "MISSION1") == "MISSION2":
-                # Campaign flow: Mission 2 completion should lead into the
-                # Mission 3 intro cutscene, not drop directly into gameplay.
-                # The cutscene's after_state="GAME" path then transitions
-                # cleanly into Mission 3 gameplay once the intro finishes.
-                gc.mission_start_time = _now_ms()
-                gc.mission_end_time = 0
-                gc.start_mission3(preserve_timer=True)
-                start_cutscene(gc.mission3_intro_shots, "GAME", use_fades=True)
-                trigger_transition("CUTSCENE")
-                pygame.mouse.set_visible(True)
-            elif getattr(gc, "active_mission", "MISSION1") == "MISSION3":
-                # M3 → M4 chain (mirrors the M2 → M3 idiom): start M4 while
-                # the intro plays; the cutscene's after_state="MISSION4"
-                # path drops into gameplay when it ends.
-                gc.mission_start_time = _now_ms()
-                gc.mission_end_time = 0
-                gc.start_mission4(preserve_timer=True)
-                start_cutscene(gc.mission4_intro_shots, "MISSION4", use_fades=True)
-                trigger_transition("CUTSCENE")
-                pygame.mouse.set_visible(True)
-            elif getattr(gc, "active_mission", "MISSION1") == "MISSION4":
-                # M4 → M5 chain (mirrors the M3 → M4 idiom): start M5 while
-                # the bulletin plays; the cutscene's after_state="MISSION5"
-                # path drops into the Lower Quarter when it ends.
-                gc.mission_start_time = _now_ms()
-                gc.mission_end_time = 0
-                gc.start_mission5(preserve_timer=True)
-                start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
-                trigger_transition("CUTSCENE")
-                pygame.mouse.set_visible(True)
-            elif (getattr(gc, "active_mission", "MISSION1") == "MISSION5"
-                  and hasattr(gc, "start_mission6")):
-                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
-                gc.start_mission6(preserve_timer=True)
-                _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6"); pygame.mouse.set_visible(True)
-            elif (getattr(gc, "active_mission", "MISSION1") == "MISSION6"
-                  and hasattr(gc, "start_mission7")):
-                # M6 -> M7 chain (mirrors the M5 -> M6 idiom). No M7 intro film
-                # yet, so the player drops straight into Mission 7 gameplay.
-                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
-                gc.start_mission7(preserve_timer=True)
-                trigger_transition("GAME"); pygame.mouse.set_visible(False)
-            elif (getattr(gc, "active_mission", "MISSION1") == "MISSION7"
-                  and hasattr(gc, "start_mission8")):
-                # M7 -> M8 chain: the route comes from the M7 radio choice.
-                gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
-                gc.start_mission8(preserve_timer=True)
-                trigger_transition("GAME"); pygame.mouse.set_visible(False)
-            else:
-                # MISSION5 (and anything after): back to the menu. M5
-                # completing the campaign is the W4 behavior until a later
-                # milestone extends the chain into M6.
-                trigger_transition("MENU")
-                pygame.mouse.set_visible(True)
+        from ui import mission_complete as _mc_ui
+        action = _mc_ui.handle_event(
+            event, mouse_x, mouse_y, STATE,
+            mission_complete_timer, self._has_next_mission(),
+        )
+        if action == "continue":
+            self._advance_campaign()
+        elif action == "menu":
+            trigger_transition("MENU")
+            pygame.mouse.set_visible(True)
 
     def update(self, dt):
         pass
@@ -4182,175 +4273,18 @@ class _MissionCompleteState(GameState):
         _set_ambience(set())
         if mission_complete_timer == 1:
             audio.play("mission_complete", volume=0.6)
+        audio.play_music("assets/music/ost/19_paper_trail.mp3", volume=0.26, fade_ms=2200)
 
     def render(self, surface):
         global mission_complete_timer, mission_complete_fade
         mission_complete_timer += 1
         mission_complete_fade = min(255, mission_complete_timer * 5)
-
-        # Background gradient
-        for i in range(HEIGHT):
-            t = i / HEIGHT
-            r = int(5 + t * 8)
-            g = int(8 + t * 12)
-            b = int(14 + t * 20)
-            pygame.draw.line(surface, (r, g, b), (0, i), (WIDTH, i))
-        if mission_complete_timer % 3 == 0:
-            rng_n = random.Random(mission_complete_timer // 3)
-            for _ in range(60):
-                nx = rng_n.randint(0, WIDTH - 1)
-                ny = rng_n.randint(0, HEIGHT - 1)
-                surface.set_at((nx, ny), (12, 16, 22))
-
-        # Card
-        card_w, card_h = 520, 440
-        card_x = WIDTH // 2 - card_w // 2
-        card_y = HEIGHT // 2 - card_h // 2 - 10
-        shadow = pygame.Surface((card_w + 16, card_h + 16), pygame.SRCALPHA)
-        shadow.fill((0, 0, 0, 80))
-        surface.blit(shadow, (card_x + 8, card_y + 8))
-        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
-        card.fill((8, 12, 18, 235))
-        pygame.draw.rect(card, (35, 60, 85, 160), (0, 0, card_w, card_h), 1)
-        pygame.draw.rect(card, (50, 120, 180), (0, 0, 4, card_h))
-        surface.blit(card, (card_x, card_y))
-
-        def _mc_text(surf, x, y, alpha):
-            surf.set_alpha(min(255, alpha))
-            surface.blit(surf, (x, y))
-
-        def _mc_wrap(text, font, max_w):
-            """Word-wrap to max_w. Long quotes/outcome lines used to render
-            as one line and ran off both screen edges."""
-            out = []
-            for para in str(text).split("\n"):
-                line = ""
-                for word in para.split(" "):
-                    test = (line + " " + word).strip()
-                    if font.size(test)[0] <= max_w or not line:
-                        line = test
-                    else:
-                        out.append(line)
-                        line = word
-                out.append(line)
-            return out
-
-        # Header area
-        pygame.draw.rect(surface, (6, 10, 16, 240),
-                         (card_x + 4, card_y, card_w - 4, 42))
-        pygame.draw.line(surface, (35, 60, 85),
-                         (card_x + 16, card_y + 42),
-                         (card_x + card_w - 16, card_y + 42), 1)
-        eyebrow = font_terminal_small.render(
-            _T("app.krap_intel_after_action_report"), True, (60, 120, 170))
-        _mc_text(eyebrow,
-                 card_x + card_w // 2 - eyebrow.get_width() // 2,
-                 card_y + 8, mission_complete_fade)
-        classif = font_terminal_small.render(_T("app.classified"), True, (180, 60, 50))
-        _mc_text(classif, card_x + card_w - classif.get_width() - 20,
-                 card_y + 8, mission_complete_fade)
-        title_font = pygame.font.SysFont("Consolas", 32, bold=True)
-        title_surf = title_font.render(_T("app.mission_complete"), True, (200, 198, 190))
-        _mc_text(title_surf,
-                 card_x + card_w // 2 - title_surf.get_width() // 2,
-                 card_y + 56, mission_complete_fade)
-        op_name = _mission_meta.operation_name(STATE)
-        op = font_terminal.render(op_name, True, (160, 155, 145))
-        _mc_text(op,
-                 card_x + card_w // 2 - op.get_width() // 2,
-                 card_y + 96, mission_complete_fade)
-        outcome_line = getattr(gc, "active_mission_outcome", "Target escaped  ·  Notebook recovered  ·  Questions remain")
-        out_lines = _mc_wrap(outcome_line, font_terminal_small, card_w - 48)
-        for _oli, out_line in enumerate(out_lines):
-            out = font_terminal_small.render(out_line, True, (150, 120, 90))
-            _mc_text(out,
-                     card_x + card_w // 2 - out.get_width() // 2,
-                     card_y + 120 + _oli * 16, mission_complete_fade)
-        pygame.draw.line(surface, (30, 50, 70),
-                         (card_x + 30, card_y + 145),
-                         (card_x + card_w - 30, card_y + 145), 1)
-
-        # Stats grid
-        if mission_complete_timer > 25:
-            stats_fade = min(255, (mission_complete_timer - 25) * 7)
-            report = _mission_report_data(success=True)
-            stats = [
-                ("KILLS", str(report["kills"])),
-                ("SHOTS FIRED", str(report["shots_fired"])),
-                ("ACCURACY", f"{report['accuracy']}%"),
-                ("TOTAL TIME", report["time_str"]),
-                ("CIVILIANS HELPED", str(report["civilians_helped"])),
-                ("INTEL FOUND", "YES" if report["intel_found"] else "NO"),
-                ("RATIONS USED", str(report["rations_used"])),
-                ("RANK", report["rank"]),
-            ]
-            stat_x = card_x + 36
-            stat_y = card_y + 158
-            for i, (label, value) in enumerate(stats):
-                col = i % 2
-                row = i // 2
-                sx = stat_x + col * 240
-                sy = stat_y + row * 42
-                lbl = font_terminal_small.render(label, True, (55, 95, 130))
-                lbl.set_alpha(stats_fade)
-                surface.blit(lbl, (sx, sy))
-                val_font = pygame.font.SysFont("Consolas", 22, bold=True)
-                val_col = (255, 220, 120) if label == "RANK" else (180, 220, 245)
-                val = val_font.render(value, True, val_col)
-                val.set_alpha(stats_fade)
-                surface.blit(val, (sx, sy + 14))
-                line_alpha = min(stats_fade, 60)
-                ul = pygame.Surface((200, 1), pygame.SRCALPHA)
-                ul.fill((35, 60, 85, line_alpha))
-                surface.blit(ul, (sx, sy + 34))
-
-        pygame.draw.line(surface, (30, 50, 70),
-                         (card_x + 30, card_y + 325),
-                         (card_x + card_w - 30, card_y + 325), 1)
-
-        # Vasile quote
-        if mission_complete_timer > 70:
-            q_fade = min(255, (mission_complete_timer - 70) * 5)
-            attr = font_terminal_small.render(
-                getattr(gc, "active_mission_quote_attr", "Vasile, after a long pause:"), True, (90, 80, 70))
-            attr.set_alpha(q_fade)
-            surface.blit(attr, (card_x + 36, card_y + 338))
-            quote_lines = _mc_wrap(
-                getattr(gc, "active_mission_quote", '"Bring it straight to me. Don\'t read it."'),
-                font_dialogue, card_w - 72)
-            quote_h = 18
-            quote_top = card_y + 360 - (len(quote_lines) - 1) * quote_h // 2
-            for _qi, quote_line in enumerate(quote_lines):
-                quote = font_dialogue.render(quote_line, True, C_VASILE)
-                quote.set_alpha(q_fade)
-                surface.blit(quote,
-                             (card_x + card_w // 2 - quote.get_width() // 2,
-                              quote_top + _qi * quote_h))
-
-        # Bottom bar
-        pygame.draw.line(surface, (35, 60, 85),
-                         (card_x + 16, card_y + card_h - 34),
-                         (card_x + card_w - 16, card_y + card_h - 34), 1)
-        footer = font_terminal_small.render(
-            _T("app.krap_intelligence_division_field"), True, (45, 65, 80))
-        _mc_text(footer,
-                 card_x + card_w // 2 - footer.get_width() // 2,
-                 card_y + card_h - 26, mission_complete_fade)
-
-        # Continue prompt
-        if mission_complete_timer > 120 and (_now_ms() // 600) % 2 == 0:
-            _active = getattr(gc, "active_mission", "MISSION1")
-            if _active == "MISSION1":
-                next_prompt = "PRESS SPACE TO START MISSION 2"
-            elif _active == "MISSION8":
-                next_prompt = "PRESS SPACE TO RETURN TO MENU"
-            else:
-                next_prompt = "PRESS SPACE TO CONTINUE"
-            prompt = font_btn.render(next_prompt, True, C_ORANGE)
-            prompt.set_alpha(mission_complete_fade)
-            surface.blit(prompt,
-                         (WIDTH // 2 - prompt.get_width() // 2,
-                          card_y + card_h + 18))
+        from ui import mission_complete as _mc_ui
+        report = _mission_report_data(success=True)
+        _mc_ui.draw(
+            surface, STATE, report, mission_complete_timer,
+            _now_ms(), get_scaled_mouse(), self._has_next_mission(),
+        )
 
 
 # ═══════════════════════════════════════════════

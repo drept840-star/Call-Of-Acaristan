@@ -220,7 +220,7 @@ gc.start_mission3_kill_order_checkpoint()
 # Static walls + pillars only.
 walls = list(STATE.walls) + list(STATE.mission3_barriers)
 for d in STATE.doors:
-    if d.locked and _sweep_mod._m3d(d).ko_beat_gate is None:
+    if d.locked and sweep._m3d(d).ko_beat_gate is None:
         walls.append(d.rect)
 g, cols, rows = _build_walk_grid(walls)
 zone_samples = {"stair": (6, 4), "west": (5, 17), "lobby": (19, 17),

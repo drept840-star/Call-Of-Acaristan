@@ -32,7 +32,7 @@ CUT_SIDE = 3.0
 CUT_STEP = 0.125                 # a box sinks or rises in 8 frames
 WALK_RAD_PER_M = 2.6
 
-NIGHT = dict(direction=(-0.30, 0.85, -0.42), ambient=0.42, diffuse=0.5, sky=0.12,
+NIGHT = dict(direction=(-0.30, 0.85, -0.42), ambient=0.34, diffuse=0.52, sky=0.10,
              tint=(0.82, 0.90, 1.05))
 VOID = (8, 9, 12)
 FLOOR = (62, 58, 52)
@@ -74,17 +74,21 @@ def draw(ws, surface, fcx, fcy):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
+    from game import rain3d as _rain3d
     from missions.m1 import grade3d as _grade
     v = td.View(CAM, fcx + WIDTH / 2.0, fcy + HEIGHT / 2.0)
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
     tm = _now_ms()
     try:
         r.light = Light(**NIGHT)
         r.fog, r.fog_start, r.fog_end = VOID, 32.0, 64.0
-        r.light_cap = 8
+        r.light_cap = 64
+        r.wetness = 0.65
+        r.height_fog = (0.040, 0.0, 1.6, (12, 16, 24))
         v.apply(r)
-        buf.fill(VOID)
+        if getattr(r, "backend", "") != "gl":
+            buf.fill(VOID)
         r.begin()
         first = _w.static_scene(r, ("walk_td3d", id(ws.walk_map)))
         ok = False
@@ -97,8 +101,17 @@ def draw(ws, surface, fcx, fcy):
         flashes = []
         _draw_walls(ws, r)
         _draw_cast(ws, r, flashes, tm)
-        _lights(ws, r, v, flashes, tm)
-        td.cast_shadows(r)
+        rain_lights, mist_lamps = _lights(ws, r, v, flashes, tm)
+        _emit_walk_rain(ws, r, v, tm, rain_lights, mist_lamps)
+        td.cast_shadows(r, alpha=150)
+        if getattr(r, "backend", "") == "gl":
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.22, "bloom_knee": 0.98,
+                "grade3d": (v, _grade_lights(ws), _ambient(ws)),
+            })
+            _cache["view"] = v
+            _labels(ws, surface, v)
+            return True
         r.flush(buf, bg=VOID)
     except Exception:
         import traceback
@@ -107,7 +120,9 @@ def draw(ws, surface, fcx, fcy):
         _cache["view"] = None
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+        if hasattr(r, "hdr"):
+            r.hdr = shdr
     _cache["view"] = v
     _fx.present_crisp(buf, surface)
     _grade.apply(surface, v, _grade_lights(ws), ambient=_ambient(ws))
@@ -119,8 +134,9 @@ def _ambient(ws):
     """The 2D night map's ambient (alley to harbour), the 3D
     pass already lights the set."""
     prog = min(1.0, max(0.0, ws.walk_player.rect.centerx / float(len(ws.walk_map[0]) * TILE_SIZE)))
-    return tuple(int((a + (b - a) * prog) * 1.0)
-                 for a, b in zip(ws._WALK_AMBIENT_START, ws._WALK_AMBIENT_END))
+    start = (114, 126, 158)
+    end = (84, 98, 134)
+    return tuple(int(a + (b - a) * prog) for a, b in zip(start, end))
 
 
 # ── helpers ────────────────────────────────────────────────────────────
@@ -171,6 +187,36 @@ def _lamps(ws):
 def _lamp_head(x, y):
     px, _, pz = to3(x, y)
     return (px, 3.4, pz - 0.9)
+
+
+def _walk_puddles(ws):
+    key = id(ws.walk_map)
+    cached = _cache.get("walk_puddles")
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    pts = tuple((to3(x, y)[0], to3(x, y)[2], (0.5 + 0.1 * (int(x * 7 + y * 3) % 3)) ** 2)
+                for kind, x, y in _props(ws) if kind == "puddle")
+    _cache["walk_puddles"] = (key, pts)
+    return pts
+
+
+def _emit_walk_rain(ws, r, v, tm, rain_lights, mist_lamps):
+    from game import rain3d as _rain3d
+    wmap = ws.walk_map
+    rows = len(wmap)
+    cols = len(wmap[0]) if rows else 0
+    s_inv = 1.0 / (TILE_SIZE * K)
+    puddles = _walk_puddles(ws)
+
+    def outdoor_ground(wx, wz):
+        c, rr = int(wx * s_inv), int(-wz * s_inv)
+        return 0 <= rr < rows and 0 <= c < cols and wmap[rr][c] != "C"
+
+    def puddle_fn(wx, wz):
+        return any((wx - px) ** 2 + (wz - pz) ** 2 <= r2 for px, pz, r2 in puddles)
+
+    _rain3d.emit(r, v, tm, lights=rain_lights, outdoor_ground=outdoor_ground,
+                 puddle_fn=puddle_fn, mist_lamps=mist_lamps, intensity=0.92, seed=101)
 
 
 def _build_set(ws, r):
@@ -302,7 +348,7 @@ def _wall_mesh(w, d, hgt, ci, cols):
     col = cols[ci]
     cut = hgt < CONTAINER_H - 0.01
     side = tex("metal_rib", like=col)
-    cap = CUT_CAP if cut else td.mix(col, (0, 0, 0), 0.25)
+    cap = CUT_CAP if cut else td.mix(col, (0, 0, 0), 0.42)
     m.add(box(w, hgt, d, side, center=(0.0, hgt / 2.0, 0.0), cols={"top": cap}, seg=3.2))
     for y0, y1, k in ((0.0, 0.32, 0.6), (0.32, 0.8, 0.8)):
         y1 = min(y1, hgt - 0.02)
@@ -386,11 +432,24 @@ def _face(key, want, rate=0.15):
 
 
 def _person(r, hum, x, y, angle, key, moving=None):
-    from engine3d import POSES, pose_run
+    from engine3d import POSES, blend, pose_run
+    from cutscenes import m6world3d as _w
     phase, walking = _motion(key, x, y, angle)
-    pose = pose_run(phase, lean=4) if (walking if moving is None else moving) else dict(POSES["stand"])
-    r.add_sprite(to3(x, y, 0.02), td.shadow(0.42, 0.42, 120), layer=0)
-    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=False)
+    is_moving = walking if moving is None else moving
+    m = _cache["motion"][key]
+    if len(m) < 5:
+        m.append(1.0 if is_moving else 0.0)
+    m[4] = max(0.0, min(1.0, m[4] + (0.2 if is_moving else -0.15)))
+    seed = sum(map(ord, repr(key))) % 97
+    stand = _w.life_pose(POSES["stand"], _now_ms(), 1.0, seed)
+    stand["lhip_p"], stand["rhip_p"] = 5.0, -6.0
+    stand["lkn"], stand["rkn"] = 10.0, 14.0
+    stand["lhip_r"], stand["rhip_r"] = 3.0, 3.0
+    w = m[4] * m[4] * (3.0 - 2.0 * m[4]) * min(1.0, 0.5 + m[3] / 6.0)
+    pose = blend(stand, pose_run(phase, lean=4), w) if w > 0.0 else stand
+    r.add_sprite(to3(x, y, 0.02), td.shadow(0.45, 0.45, 140), layer=1, bias=-0.6)
+    r.add_sprite(to3(x, y, 0.015), td.shadow(0.24, 0.18, 165), layer=1, bias=-0.4)
+    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=False, shadow=(1, -0.5))
 
 
 def _van_mesh(lit):
@@ -417,7 +476,7 @@ def _draw_cast(ws, r, flashes, tm):
     if ws.walk_after_firefight or ws.STATE.walk_after_firefight:
         rect = ws._walk_van_rect()
         cx, _, cz = to3(rect.centerx, rect.centery)
-        r.add_sprite((cx, 0.02, cz), td.shadow(2.3, 1.0, 150), layer=0)
+        r.add_sprite((cx, 0.02, cz), td.shadow(2.3, 1.0, 150), layer=1, bias=-2.5)
         try:
             _put(r, _van_mesh(ws._walk_van_lit()), (cx, 0.0, cz), 0.0, _van_scale(ws))
         except (OSError, ValueError, KeyError):
@@ -450,7 +509,7 @@ def _draw_cast(ws, r, flashes, tm):
                     ("f",), moving=False)
     p = ws.walk_player
     _person(r, _hum("biribel"), px, py, p.angle, "player", moving=ws._walk_player_moving)
-    flashes.append({"pos": to3(px, py, 1.7), "color": (190, 205, 230), "intensity": 0.9, "range": 3.0})
+    td.add_player_rim(r, flashes, px, py, spot=False)
 
 
 def _stash(r, stash):
@@ -470,7 +529,7 @@ def _lights(ws, r, v, flashes, tm):
     """Lit lamp pools light the floor; the lamps nearest the camera focus
     (plus the player's fill) are the eight per-frame lights."""
     fx, fz = v.tgt[0], v.tgt[2]
-    pools, near = [], []
+    pools, near, mist_lamps, extra = [], [], [], []
     col = ws._WALK_LAMP_COL
     for x2, y2 in _lamps(ws):
         if not ws._walk_lamp_lit(x2, y2):
@@ -478,6 +537,7 @@ def _lights(ws, r, v, flashes, tm):
         head = _lamp_head(x2, y2)
         pools.append({"pos": head, "range": LAMP_RANGE_M, "color": col, "intensity": 2.2,
                       "hot": td.mix(col, (255, 250, 235), 0.5)})
+        mist_lamps.append((head, col))
         near.append(((head[0] - fx) ** 2 + (head[2] - fz) ** 2,
                      {"pos": head, "color": col, "intensity": 0.45, "range": LAMP_RANGE_M}))
     if ws.walk_after_firefight or ws.STATE.walk_after_firefight:
@@ -488,9 +548,14 @@ def _lights(ws, r, v, flashes, tm):
             for head, c, rng in (((hx + 1.8, 0.9, cz), (150, 140, 104), 4.5),
                                  ((cx - rect.w * K / 2.0 - 0.6, 1.0, cz), (120, 62, 44), 3.0)):
                 pools.append({"pos": head, "range": rng, "color": c, "intensity": 1.4})
+                extra.append({"pos": head, "color": c, "intensity": 0.85, "range": rng})
+            extra.append({"pos": (hx, 0.7, cz), "color": (255, 236, 170), "intensity": 1.2,
+                          "range": 7.5, "kind": "spot", "dir": (1.0, -0.12, 0.0), "cone": 0.82})
     near.sort(key=lambda e: e[0])
     r.set_pools(pools)
-    r.set_lights(flashes + [e[1] for e in near[:max(0, 8 - len(flashes))]], cap=8)
+    picked = [e[1] for e in near[:max(0, 64 - len(flashes))]]
+    r.set_lights(flashes + picked, cap=64)
+    return flashes + picked + extra, mist_lamps
 
 
 def _grade_lights(ws):
@@ -501,8 +566,10 @@ def _grade_lights(ws):
         if not ws._walk_lamp_lit(x2, y2):
             continue
         head = _lamp_head(x2, y2)
-        out.append(("pool", (head[0], 0.0, head[2]), col, 4.6, 0.8))
-        out.append(("glow", head, col, 0.9, 0.9))
+        warm = (232, 164, 86)
+        out.append(("pool", (head[0], 0.0, head[2]), warm, 4.8, 0.72))
+        out.append(("glow", head, warm, 0.85, 0.85))
+        out.append(("reflect", (head[0], 0.0, head[2] - 0.3), warm, 0.55, 0.34))
     if ws.walk_after_firefight or ws.STATE.walk_after_firefight:
         rect = ws._walk_van_rect()
         if ws._walk_van_lit():
@@ -511,7 +578,9 @@ def _grade_lights(ws):
             out.append(("pool", (hx + 1.6, 0.0, cz), (150, 140, 104), 3.6, 0.9))
             out.append(("glow", (hx, 0.7, cz - 0.5), (255, 236, 170), 0.8, 0.9))
             out.append(("glow", (hx, 0.7, cz + 0.5), (255, 236, 170), 0.8, 0.9))
+            out.append(("reflect", (hx + 0.4, 0.0, cz), (255, 230, 170), 0.45, 0.28))
             out.append(("pool", (cx - rect.w * K / 2.0 - 0.8, 0.0, cz), (120, 62, 44), 2.4, 0.8))
+            out.append(("reflect", (cx - rect.w * K / 2.0 - 0.4, 0.0, cz), (190, 62, 44), 0.40, 0.28))
     p = ws.walk_player.rect
     x, _, z = to3(p.centerx, p.centery)
     out.append(("pool", (x, 0.0, z), (44, 44, 50), 3.4, 1.0))

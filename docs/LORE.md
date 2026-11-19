@@ -3,7 +3,7 @@
 This document outlines the official political landscape, factions, key characters, and timeline of **Call of Acaristan** for ongoing development and reference.
 
 > **Campaign status (read this before quoting the dossier).**
-> Missions 1–6 are **shipped** (`src/missions/m1`…`m6`). Missions **7 and 8 are planned but not implemented** — every M7/M8 line below is design, not a shipped beat, and the day numbers for M7/M8 follow the offer chain in the shipped M6 dialogue and the M7 plan (*"the mansion in two nights"* → M7's *"tomorrow night"* → **Day 12**).
+> Missions 1–8 are **shipped** (`src/missions/m1`…`m8`; M8 has both routes, Revenge and Duty). Where an M7/M8 line below differs from the shipped beat, the game wins; the day numbers for M7/M8 follow the offer chain in the shipped M6 dialogue and the M7 plan (*"the mansion in two nights"* → M7's *"tomorrow night"* → **Day 12**).
 > The last full consistency pass on this dossier is logged in `docs/FIXES_STORIES.md`.
 
 ---

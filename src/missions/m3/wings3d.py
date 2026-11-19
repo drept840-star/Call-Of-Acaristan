@@ -482,8 +482,12 @@ LAMPS = {
 }
 # The grade's multiply floor per wing: lower than the cell block's but the
 # wings are wider rooms, so the dark between lamps must still read.
-AMBIENT = {"comms": (184, 168, 154), "archives": (184, 182, 178), "killorder": (184, 184, 180),
-           "broadcast": (184, 180, 176)}
+AMBIENT = {
+    "comms": (118, 130, 136),
+    "archives": (132, 126, 118),
+    "killorder": (122, 126, 134),
+    "broadcast": (116, 122, 138),
+}
 POOL_K = {"room": 0.45, "cor": 0.5, "relay": 0.5, "srv": 0.45, "bat": 0.48, "atr": 0.5, "stk": 0.45,
           "vault": 0.5, "lobby": 0.5, "dock": 0.55, "studio": 0.5}
 
@@ -587,10 +591,19 @@ def draw_live(r, key, tm, flashes):
         bailed = getattr(STATE, "m3_volkov_bailed", False)
         if not bailed:
             vx, _, vz = to3((31.0 + 0.125 + 1.875) * T, (35.0 + 0.03 + 0.64) * T)
-            D._put(r, D._mesh(("van",), _van), (vx, 0.0, vz))
+            van_mesh = D._mesh(("van",), _van)
+            if hasattr(r, "add_packed"):
+                D._put(r, van_mesh, (vx, 0.0, vz))
+            else:
+                wv, wf = D._mesh(("van_world", vx, vz), lambda: (
+                    [(p[0] + vx, p[1], p[2] + vz) for p in van_mesh.verts],
+                    [(f[0], f[1], f[2], f[3], None, f[4]) for f in van_mesh.faces],
+                ))
+                r.add_dynamic(wv, wf)
             b = 0.55 + 0.45 * math.sin(t * 5.0)
+            bq = round(b * 8.0) / 8.0
             head = (vx, 3.7, vz)
-            r.add_sprite(head, D._glow((255, int(130 + 70 * b), 60), 0.3, tm, 0.5 + 0.4 * b, 14), layer=_fx.FX_LAYER)
+            r.add_sprite(head, D._glow((255, int(130 + 70 * bq) // 8 * 8, 60), 0.3, tm, 0.5 + 0.4 * bq, 14), layer=_fx.FX_LAYER)
             flashes.append({"pos": head, "color": (255, 170, 70), "intensity": 0.4 + 0.3 * b, "range": 3.5})
         else:
             ex, _, ez = to3(33.5 * T, 36.5 * T)

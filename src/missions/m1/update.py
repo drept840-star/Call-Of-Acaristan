@@ -806,8 +806,9 @@ def game_update(keys):
         )
         if dist_to_truck < 80:
             if STATE.enemies or _hostiles_pending():
-                if keys[pygame.K_e] and not STATE.hotwire_radio_said:
-                    STATE.hotwire_radio_said = True
+                # own flag: sharing hotwire_radio_said here ate the hotwire tutorial line
+                if keys[pygame.K_e] and not getattr(STATE, "hotwire_not_clear_said", False):
+                    STATE.hotwire_not_clear_said = True
                     trigger_radio_chatter(
                         'VASILE: "{}"'.format(_dialogues.line("m1.radio", "exfil_truck_not_clear", "Not yet. Clear the yard before you put your head under that dash.")),
                         valid=lambda: bool(STATE.enemies or _hostiles_pending()),
@@ -1177,40 +1178,30 @@ def game_update(keys):
                     )
                     audio.play("pickup", volume=0.5)
                     STATE.pickups.remove(pu)
-                elif pu[2] == "bandage":
+                elif pu[2] == "bandage" and STATE.player.hp < STATE.player.max_hp:
+                    # full HP leaves the bandage on the ground for later (M4-M6 idiom)
                     heal_amount = 40
                     old_hp = STATE.player.hp
                     STATE.player.hp = min(STATE.player.max_hp, STATE.player.hp + heal_amount)
                     actual_healed = STATE.player.hp - old_hp
-                    if actual_healed > 0:
-                        STATE.floating_texts.append(
-                            [
-                                pu[0],
-                                pu[1] - 16,
-                                f"+{actual_healed} HP",
-                                (100, 220, 100),
-                                70,
-                            ]
-                        )
-                    else:
-                        STATE.floating_texts.append(
-                            [pu[0], pu[1] - 16, "HP FULL", (100, 220, 100), 70]
-                        )
+                    STATE.floating_texts.append(
+                        [
+                            pu[0],
+                            pu[1] - 16,
+                            f"+{actual_healed} HP",
+                            (100, 220, 100),
+                            70,
+                        ]
+                    )
                     audio.play("pickup", volume=0.5)
                     STATE.pickups.remove(pu)
-                elif pu[2] == "bottle":
-                    if STATE.player_bottles < 4:
-                        STATE.player_bottles += 1
-                        STATE.floating_texts.append(
-                            [pu[0], pu[1] - 16, "+1 MOLOTOV", (140, 200, 150), 70]
-                        )
-                        audio.play("pickup", volume=0.5)
-                        STATE.pickups.remove(pu)
-                    else:
-                        STATE.floating_texts.append(
-                            [pu[0], pu[1] - 16, "MOLOTOVS FULL", (140, 200, 150), 70]
-                        )
-                        STATE.pickups.remove(pu)
+                elif pu[2] == "bottle" and STATE.player_bottles < 4:
+                    STATE.player_bottles += 1
+                    STATE.floating_texts.append(
+                        [pu[0], pu[1] - 16, "+1 MOLOTOV", (140, 200, 150), 70]
+                    )
+                    audio.play("pickup", volume=0.5)
+                    STATE.pickups.remove(pu)
         if player_hit_this_frame and STATE.truck_hotwiring:
             STATE.truck_hotwiring = False
             STATE.hotwire_stage = 0

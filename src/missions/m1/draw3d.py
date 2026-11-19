@@ -57,7 +57,7 @@ NIGHT = dict(direction=(-0.30, 0.85, -0.42), ambient=0.30, diffuse=0.44, sky=0.0
 VOID = (8, 9, 12)
 # grade floor per 2D grading zone (``draw._m1_wing_name``): the 2D warehouse
 # is warm tungsten, the slums a cool but not blue night
-AMBIENT = {"warehouse": (168, 146, 112), "slums": (156, 162, 176)}
+AMBIENT = {"warehouse": (122, 112, 102), "slums": (106, 122, 158)}
 CONTAINER_COLS = ((122, 44, 36), (44, 66, 100), (112, 66, 38), (92, 94, 96))
 IPA = (80, 60, 50)               # core.config.C_IPA_UNIFORM
 MAG = (50, 55, 45)               # core.config.C_MAG_UNIFORM
@@ -118,7 +118,9 @@ def submit_frame(q, fcx, fcy):
     if STATE.truck_hotwiring:
         q.submit(_UiPassDraw(_d._draw_m1_hotwire, "m1.hotwire"), _L.FX_WORLD, sort_key=(10, 0))
     _overlay(q, v)
-    _d._submit_m1_rain(q, fcy)
+    if M1_STREET_ROW * TILE_SIZE - fcy > 0 and getattr(STATE, "rain_drops", None):
+        from game import rain3d as _rain3d
+        _rain3d.step_rain_drops(STATE.rain_drops, rng=getattr(STATE, "_m1_rain_rng", None))
     if getattr(STATE, "_m1_standoff", None):
         q.submit(_UiPassDraw(lambda s: _d._draw_m1_standoff(
             s, fcx, fcy, anchor=lambda k: _at(v, k.rect.centerx, k.rect.centery, 2.6)),
@@ -153,15 +155,19 @@ def render_world(surface, v, actors=None, lit=None, film=None):
     from cutscenes import m6fx3d as _fx
     from cutscenes import m6world3d as _w
     from engine3d import Light
-    r, buf = _w.rend(*td.buffer_res(CAM))
-    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap)
+    r, buf = _w.rend(*td.buffer_res(CAM), hdr=True)
+    saved = (r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, getattr(r, "hdr", False))
     tm = _now_ms()
     try:
         r.light = Light(**NIGHT)
         r.fog, r.fog_start, r.fog_end = VOID, 32.0, 64.0
-        r.light_cap = 8
+        r.light_cap = 64
+        wing = _d._m1_wing_name()
+        r.wetness = 0.55 if wing == "slums" else 0.15
+        r.height_fog = (0.034, 0.0, 1.5, (14, 18, 28)) if wing == "slums" else (0.015, 0.0, 1.3, (16, 14, 12))
         v.apply(r)
-        buf.fill(VOID)
+        if getattr(r, "backend", "") != "gl":
+            buf.fill(VOID)
         r.begin()
         first = _w.static_scene(r, ("m1_td3d", id(mission1_map)))
         ok = False
@@ -180,8 +186,20 @@ def render_world(surface, v, actors=None, lit=None, film=None):
             _draw_cast(r, flashes, tm)
             _draw_fx(r, flashes, tm)
         dyn = _dyn_lights(flashes, tm)
-        _lamp_lights(r, v, flashes, tm, actors)
-        td.cast_shadows(r)
+        rain_lights, mist_lamps = _lamp_lights(r, v, flashes, tm, actors)
+        if film is None:
+            _emit_m1_rain(r, v, tm, rain_lights, mist_lamps)
+        td.cast_shadows(r, alpha=155)
+        if getattr(r, "backend", "") == "gl":
+            p = STATE.player
+            cone = ([("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.6, 0.72)]
+                    if actors is None and p is not None and not STATE.player_dead else [])
+            all_l = _night_lights() + dyn + cone + list((film or {}).get("grade", ()))
+            r.flush_to(surface, bg=VOID, post={
+                "bloom": 0.24, "bloom_knee": 0.98,
+                "grade3d": (v, all_l, AMBIENT[_d._m1_wing_name()]),
+            })
+            return True
         r.flush(buf, bg=VOID)
     except Exception:
         import traceback
@@ -190,9 +208,14 @@ def render_world(surface, v, actors=None, lit=None, film=None):
         _cache["view"] = None
         return False
     finally:
-        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap = saved
+        r.light, r.fog, r.fog_start, r.fog_end, r.light_cap, shdr = saved
+        if hasattr(r, "hdr"):
+            r.hdr = shdr
     _fx.present_crisp(buf, surface)
-    _grade.apply(surface, v, _night_lights() + dyn + list((film or {}).get("grade", ())),
+    p = STATE.player
+    cone = ([("cone", to3(p.rect.centerx, p.rect.centery), p.angle, (218, 236, 248), 5.6, 0.72)]
+            if actors is None and p is not None and not STATE.player_dead else [])
+    _grade.apply(surface, v, _night_lights() + dyn + cone + list((film or {}).get("grade", ())),
                  ambient=AMBIENT[_d._m1_wing_name()])
     return True
 
@@ -274,13 +297,13 @@ def _wall_mesh(kind, w, d, hgt, var):
     elif kind == "facade":
         brick = tex("brick", like=(92, 62, 50))
         m.add(box(w, hgt, d, brick, center=(0.0, hgt / 2.0, 0.0),
-                  cols={"top": CUT_CAP if cut else (58, 54, 52)}, seg=3.2))
+                  cols={"top": CUT_CAP if cut else (34, 34, 38)}, seg=3.2))
         if not cut:
-            m.add(box(w + 0.06, 0.16, d + 0.06, (64, 60, 58), center=(0.0, hgt - 0.08, 0.0)))
+            m.add(box(w + 0.06, 0.16, d + 0.06, (76, 74, 76), center=(0.0, hgt - 0.08, 0.0)))
     else:
         block = tex("concrete", like=(96, 92, 86))
         m.add(box(w, hgt, d, block, center=(0.0, hgt / 2.0, 0.0),
-                  cols={"top": CUT_CAP if cut else (70, 68, 64)}, seg=3.2))
+                  cols={"top": CUT_CAP if cut else (40, 42, 46)}, seg=3.2))
     _wall_shade(m, kind, w, d, hgt, var, cut)
     _cache["meshes"][key] = m
     return m
@@ -806,7 +829,7 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
     (plus muzzle and fire flashes) are the eight per-frame lights."""
     from cutscenes import m6fx3d as _fx
     fx, fz = v.tgt[0], v.tgt[2]
-    pools, near = [], []
+    pools, near, mist_lamps = [], [], []
     T = TILE_SIZE
     for tx, ty, rad, col, key in _d._M1_LAMPS:
         head = _lamp_head(key, tx * T + T / 2.0, ty * T + T / 2.0)
@@ -815,19 +838,19 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
                       "hot": td.mix(col, (255, 250, 235), 0.5)})
         near.append(((head[0] - fx) ** 2 + (head[2] - fz) ** 2,
                      {"pos": head, "color": col, "intensity": 0.45, "range": reach}))
+        if ty < M1_STREET_ROW or ty >= 30:
+            mist_lamps.append((head, col))
         if key.split("_")[0] != "dk":
             r.add_sprite(head, _fx.glow(col, 0.3, tm, intensity=0.9, max_px=18), layer=_fx.FX_LAYER)
     for col, row in _fire_tiles():
         x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
         p = (x, 1.05, z)
-        _fire(r, (x, 0.9, z), tm, col * 7 + row, 0.3)
+        _fire(r, (x, 0.9, z), tm, col * 7 + row, 0.36, smoky=True, bed=False, embers=True)
         flashes.append({"pos": p, "color": (255, 140, 60), "intensity": 0.9, "range": 5.0})
         pools.append({"pos": p, "range": 3.0, "color": (255, 140, 60), "intensity": 0.9})
     p = STATE.player
     if p is not None and actors is None:
-        # a faint fill on Biribel so he reads on a black street
-        flashes.append({"pos": to3(p.rect.centerx, p.rect.centery, 1.7), "color": (190, 205, 230),
-                        "intensity": 0.9, "range": 3.0})
+        td.add_player_rim(r, flashes, p.rect.centerx, p.rect.centery, p.angle, spot=True)
         # the nearest enemies get a fill too: local lights only reach the
         # per-frame meshes, so bodies lift off the baked floor
         px, py = p.rect.center
@@ -839,6 +862,36 @@ def _lamp_lights(r, v, flashes, tm, actors=None):
     lights = [e[1] for e in near[:max(0, 8 - len(flashes))]]
     r.set_pools(pools)
     r.set_lights(flashes + lights, cap=8)
+    return flashes + lights, mist_lamps
+
+
+def _emit_m1_rain(r, v, tm, rain_lights, mist_lamps):
+    from game import rain3d as _rain3d
+    T = TILE_SIZE
+    s_inv = 1.0 / (T * K)
+    k_inv = 1.0 / K
+    puddles = _d._M1_PUDDLES
+    zone = _cut_zone()
+
+    def outdoor_sky(wx, wz):
+        row = int(-wz * s_inv)
+        return row < M1_STREET_ROW or row >= 30
+
+    def outdoor_ground(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        return (row < M1_STREET_ROW or row >= 30) and _glyph(col, row) not in ("C", "W", "S", "T", "f", "")
+
+    def roof_occlude(wx, wz):
+        col, row = int(wx * s_inv), int(-wz * s_inv)
+        return _glyph(col, row) in ("C", "W") and not _hides(zone, col * T, row * T, (col + 1) * T, (row + 1) * T)
+
+    def puddle_fn(wx, wz):
+        sx, sy = wx * k_inv, -wz * k_inv
+        return any(px <= sx <= px + pw and py <= sy <= py + ph for px, py, pw, ph in puddles)
+
+    _rain3d.emit(r, v, tm, lights=rain_lights, outdoor_sky=outdoor_sky,
+                 outdoor_ground=outdoor_ground, roof_occlude=roof_occlude,
+                 puddle_fn=puddle_fn, mist_lamps=mist_lamps, intensity=1.0, seed=11)
 
 
 # ── walls and doors (per frame) ────────────────────────────────────────
@@ -867,7 +920,7 @@ def _night_lights():
         if fam != "dk":
             out.append(("glow", (hx, hy, hz), col, 0.7, 0.55))
         if fam in ("sl", "fl"):
-            out.append(("reflect", (hx, 0.0, hz - 0.3), col, 0.55, 0.3))
+            out.append(("reflect", (hx, 0.0, hz - 0.3), col, 0.68, 0.44))
     for kind, c0, r0, w, h, var in _wall_boxes():
         if kind != "facade":
             continue
@@ -909,9 +962,11 @@ def _flash_lights(flashes, tm):
     out = []
     for i, f in enumerate(flashes):
         col, k, rng = f["color"], f.get("intensity", 1.0), f.get("range", 4.0)
-        fire = col[0] > 200 and col[1] < 160
+        fire = col[0] > 200 and col[1] < 180
         if fire:
             k *= _flicker(tm, i * 3.1 + f["pos"][0])
+            out.append(("fire", f["pos"], col, max(1.1, rng * 0.48), min(1.35, 0.95 * k)))
+            continue
         out.append(("pool", f["pos"], col, rng * 0.55, min(0.75, 0.38 * k)))
         out.append(("glow", f["pos"], col, rng * 0.22, min(0.8, 0.42 * k)))
     return out
@@ -925,8 +980,7 @@ def _dyn_lights(flashes, tm):
     for col, row in _fire_tiles():
         x, _, z = to3(col * T + T / 2.0, row * T + T / 2.0)
         k = _flicker(tm, col * 7 + row)
-        out.append(("pool", (x, 0.0, z), FIRE_ORANGE, 2.6, 0.5 * k))
-        out.append(("glow", (x, 1.05, z), FIRE_ORANGE, 1.0, 0.55 * k))
+        out.append(("fire", (x, 1.05, z), FIRE_ORANGE, 1.85, 0.95 * k))
         out.append(("reflect", (x, 0.0, z - 0.4), FIRE_ORANGE, 0.5, 0.25 * k))
     return out
 
@@ -961,66 +1015,15 @@ def _expire_flames(tm):
         del _FLAME_WORLD[k]
 
 
-def _fire(r, pos, tm, seed, size, glow=True):
-    """``m7world3d.fire`` (no smoke) with the flame mesh packed once per
-    animation step at the origin and moved per frame: re-packing every
-    flame every frame was most of a molotov's cost. The step boundary is
-    staggered by seed so a fire's flames do not all re-pack on one frame.
-    Flames share eight mesh variants (``seed % 8``): a mesh per seed made
-    the tanker blast's ~140 flames re-pack ~10 a frame and overflow the
-    cache. ``glow`` False skips the halo sprite (a fire's later flames)."""
-    from cutscenes import m7world3d as _m7
-    from cutscenes import m6fx3d as _fx
+def _fire(r, pos, tm, seed, size, glow=True, smoky=False, bed=False, embers=False, heat=1.0):
+    """2.5D volumetric turbulent flame sprite + optional bed/smoke/embers."""
+    from cutscenes import fire3d as _f3d
     if size <= 0.0:
         return
-    if not hasattr(r, "add_packed"):
-        _m7.fire(r, pos, tm, seed=seed, size=size, smoky=False)
-        return
-    x, y, z = pos
-    if glow:
-        flicker = _m7._fire_flicker(tm, seed)
-        r.add_sprite((x, y + size * 0.8, z),
-                     _fx.glow((255, 111, 34), size * 1.9, tm, flicker=0.08, seed=seed,
-                              core=(255, 196, 96), intensity=0.34 * flicker, max_px=70),
-                     layer=_fx.FX_LAYER)
-    seed %= 8
-    step_ms = _m7._FIRE_STEP_MS
-    step = int((tm + (seed % 4) * step_ms / 4.0) // step_ms)
-    cam = getattr(r, "cam", None)
-    ang = 0.0 if cam is None else math.atan2(cam[2] - z, cam[0] - x)
-    ang = round(ang * 8.0 / math.pi) * math.pi / 8.0
-    yk = 0.0 if y < 0.5 else 1.0             # height only picks the coal bed; a rising fireball missed every frame
-    sq = round(math.log(size) * 4.0)         # ~28% size buckets, scaled to the exact size below
-    key = (seed, yk, sq, ang)
-    hit = _FLAMES.get(key)
-    if _REPACK[0] != tm:
-        _REPACK[:] = [tm, 0]
-    if hit is None or (hit[0] != step and _REPACK[1] < _REPACK_MAX):
-        _REPACK[1] += 1
-        if len(_FLAMES) > 512:
-            _FLAMES.clear()
-        m = _m7.flame_mesh((0.0, yk, 0.0), step * step_ms, seed, math.exp(sq / 4.0),
-                           heat=_m7._fire_flicker(step * step_ms, seed),
-                           cam=(math.cos(ang) * 10.0, yk, math.sin(ang) * 10.0))
-        faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
-        hit = _FLAMES[key] = (step, r.pack(m.verts, faces))
-    if hit[1] is None:
-        return
-    wkey = (key, round(x, 3), round(y, 3), round(z, 3), round(size * 64))
-    ent = _FLAME_WORLD.get(wkey)
-    if ent is None or ent[0] != hit[0]:
-        arr = hit[1].copy()
-        k = size / math.exp(sq / 4.0)
-        arr[:, 0] = arr[:, 0] * k + x
-        arr[:, 1] = (arr[:, 1] - yk) * k + y
-        arr[:, 2] = arr[:, 2] * k + z
-        ent = _FLAME_WORLD[wkey] = [hit[0], arr, tm]
-        if len(_FLAME_WORLD) > 1024 and _EXPIRE[0] != tm:
-            _EXPIRE[0] = tm
-            _expire_flames(tm)
-    else:
-        ent[2] = tm
-    r.add_packed(ent[1])
+    _f3d.emit_fire(
+        r, pos, tm, seed=seed, size=size, heat=heat,
+        smoky=smoky, embers=embers, bed=bed, glow=glow, layer=2, tilt_25d=True,
+    )
 
 
 def _cut_zone():
@@ -1229,6 +1232,26 @@ def _motion(key, x, y, angle):
     return m[2], m[3] > 0.5
 
 
+def _gait(key, x, y, angle, lean=4):
+    """Legs and spine for a top-down actor: the stride eases in and out over
+    a few frames, scales with speed (a slow step is short, a sprint full),
+    and a standing actor breathes instead of freezing."""
+    from engine3d import POSES, blend, pose_run
+    from cutscenes import m6world3d as _w
+    phase, moving = _motion(key, x, y, angle)
+    m = _cache["motion"][key]
+    if len(m) < 5:
+        m.append(1.0 if moving else 0.0)
+    m[4] = max(0.0, min(1.0, m[4] + (0.2 if moving else -0.15)))
+    seed = sum(map(ord, repr(key))) % 97
+    stand = _w.life_pose(POSES["stand"], _now_ms(), 1.0, seed)
+    stand["lhip_p"], stand["rhip_p"] = 5.0, -6.0
+    stand["lkn"], stand["rkn"] = 10.0, 14.0
+    stand["lhip_r"], stand["rhip_r"] = 3.0, 3.0
+    w = _ease(m[4]) * min(1.0, 0.5 + m[3] / 6.0)
+    return blend(stand, pose_run(phase, lean=lean), w) if w > 0.0 else stand
+
+
 # Pistol-butt strike, as offsets on the aim hold: (progress, offsets). The
 # torso coils back, then whips through with a lean while the gun arm chops
 # the butt down and forward; the last half eases home.
@@ -1265,20 +1288,34 @@ def _melee_progress():
     return max(0.0, min(1.0, 1.0 - STATE.melee_timer / dur))
 
 
+def _swap_progress():
+    t = getattr(STATE, "weapon_swap_timer", 0)
+    if t <= 0:
+        return None
+    dur = max(1, int(getattr(STATE, "weapon_swap_duration", 24) or 24))
+    return max(0.0, min(1.0, 1.0 - t / float(dur)))
+
+
 def _body(r, hum, x, y, angle, rig, mode, key, flashes=None, flash=False, tint=None,
-          melee=None):
-    from engine3d import POSES, pose_run
-    phase, moving = _motion(key, x, y, angle)
-    base = pose_run(phase, lean=4) if moving else dict(POSES["stand"])
+          melee=None, swap=None):
+    base = _gait(key, x, y, angle)
+    if swap is None and key == "player" and melee is None:
+        swap = _swap_progress()
+    if swap is not None:
+        mode = "ready"
     pose = td.held(hum, base, rig, mode)
     if melee is not None:
         for k, v in _melee_offsets(melee).items():
             pose[k] = pose.get(k, 0.0) + v
         lunge = MELEE_LUNGE_PX * math.sin(math.pi * min(1.0, melee / 0.7))
         x, y = x + math.cos(angle) * lunge, y + math.sin(angle) * lunge
-    if flash:
+    elif swap is not None:
+        k = _ease(swap * 2.0) if swap < 0.5 else _ease((1.0 - swap) * 2.0)
+        pose = td.apply_swap_pose(pose, k)
+    if flash and swap is None:
         pose["rifle_p"] = pose.get("rifle_p", 0.0) - 6.0
-    joints = r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=True, tint=tint)
+    joints = r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(angle), rifle_on=True,
+                            tint=tint, shadow=(1, -0.5))
     if flash and joints and flashes is not None:
         mz = joints.get("muzzle")
         if mz is not None:
@@ -1292,7 +1329,8 @@ def _body(r, hum, x, y, angle, rig, mode, key, flashes=None, flash=False, tint=N
 def _feet(r, x, y, col, rad=0.42):
     """A tactical floor marker over a soft drop shadow: who is who reads
     from the floor."""
-    r.add_sprite(to3(x, y, 0.02), td.tac_ring(rad, col), layer=0)
+    r.add_sprite(to3(x, y, 0.015), td.shadow(0.24, 0.18, 168), layer=1, bias=-0.4)
+    r.add_sprite(to3(x, y, 0.02), td.tac_ring(rad, col), layer=1, bias=-0.6)
 
 
 def _burning(r, x, y, k, tm, seed, flashes, lying=False):
@@ -1306,7 +1344,8 @@ def _burning(r, x, y, k, tm, seed, flashes, lying=False):
     else:
         licks = ((0.0, 0.3, -0.3, 0.42), (0.16, 0.9, -0.28, 0.34), (-0.1, 1.4, -0.24, 0.26))
     for i, (dx, hy, dz, size) in enumerate(licks):
-        _fire(r, (bx + dx, hy, bz + dz), tm, seed + i, size * k)
+        _fire(r, (bx + dx, hy, bz + dz), tm, seed + i, size * k,
+              glow=(i == 0), smoky=(i == 0), bed=False, embers=(i == 0), heat=k)
     if len(flashes) < 6:
         flashes.append({"pos": (bx, 1.0, bz), "color": (255, 128, 48),
                         "intensity": 1.2 * k, "range": 3.5})
@@ -1357,8 +1396,9 @@ def _draw_cast(r, flashes, tm):
             _face(vhum, "worried" if so["idx"] >= 2 else "neutral", mouth_flap(tm, 7))
         else:
             _face(vhum, "neutral")
-        r.add_sprite(to3(vpos[0], vpos[1], 0.02), td.shadow(0.42), layer=0)
-        r.add_humanoid(vhum, pose, to3(vpos[0], vpos[1]), td.yaw_rad(ang), rifle_on=False)
+        r.add_sprite(to3(vpos[0], vpos[1], 0.02), td.shadow(0.42), layer=1, bias=-0.6)
+        r.add_humanoid(vhum, pose, to3(vpos[0], vpos[1]), td.yaw_rad(ang),
+                       rifle_on=False, shadow=(1, -0.5))
     if STATE.firefight_triggered and STATE.volkov_escape_timer > 0:
         vp = STATE.volkov_escape_pos
         if vp and not STATE.volkov_escaped:
@@ -1369,8 +1409,9 @@ def _draw_cast(r, flashes, tm):
             if 28.4 * T <= vp[1] <= 29.7 * T:
                 pose = blend(pose, POSES["crouch"], 0.42)   # ducks the shutter
             _face(vhum, "worried")
-            r.add_sprite(to3(vp[0], vp[1], 0.02), td.shadow(0.42), layer=0)
-            r.add_humanoid(vhum, pose, to3(vp[0], vp[1]), td.yaw_rad(ang), rifle_on=False)
+            r.add_sprite(to3(vp[0], vp[1], 0.02), td.shadow(0.42), layer=1, bias=-0.6)
+            r.add_humanoid(vhum, pose, to3(vp[0], vp[1]), td.yaw_rad(ang),
+                           rifle_on=False, shadow=(1, -0.5))
         kp = STATE.commander_escape_pos
         if kp and not STATE.commander_escaped:
             ang = math.atan2(29 * T + 32 - kp[1], 15 * T + 32 - kp[0])
@@ -1378,12 +1419,12 @@ def _draw_cast(r, flashes, tm):
     if getattr(STATE, "exfil_van_arrived", False):
         # rear against the east wall, nose west (the 2D van overlaps the wall)
         cx, _, cz = to3(27 * T - 1.8 / K, 31 * T + 16)
-        r.add_sprite((cx, 0.02, cz), td.shadow(2.0, 0.95, 150), layer=0)
+        r.add_sprite((cx, 0.02, cz), td.shadow(2.0, 0.95, 150), layer=1, bias=-2.5)
         _put(r, _mesh("van", lambda: _van((34, 36, 40))), (cx, 0.0, cz), yaw=180.0)
     if STATE.notebook_collected and STATE.EXFIL_POS:
         ex, _, ez = to3(*STATE.EXFIL_POS)
         ex -= 1.0                     # clear of the van's nose when both are parked
-        r.add_sprite((ex, 0.02, ez), td.shadow(2.1, 0.95, 150), layer=0)
+        r.add_sprite((ex, 0.02, ez), td.shadow(2.1, 0.95, 150), layer=1, bias=-2.5)
         _put(r, _truck(), (ex, 0.0, ez))
         for wz in (-0.6, 0.6):
             flashes.append({"pos": (ex + 2.2, 0.8, ez + wz), "color": (255, 230, 150),
@@ -1435,9 +1476,9 @@ def _draw_corpses(r, flashes, tm):
             r.add_sprite((at[0], 0.02, at[2]), td.blood_pool(min(1.0, (c.t - CORPSE_FALL) / 90.0)),
                          layer=0)
         burnt = hasattr(c, "burn")
-        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=0)
+        r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.75, 0.55, 110), layer=1, bias=-0.8)
         r.add_humanoid(hum, pose, at, td.yaw_rad(c.angle) + 90.0 * c.fall_dir, rifle_on=False,
-                       tint=CHAR if burnt else None)
+                       tint=CHAR if burnt else None, shadow=(1, -0.5))
         if burnt:
             _burning(r, c.x, c.y, min(1.0, c.burn / 120.0), tm, id(c) % 97, flashes, lying=True)
 
@@ -1468,7 +1509,9 @@ def _draw_dead_player(r, hum=None):
     if hum is None:
         hum, _rig = player_hum()
     pose = blend("kneel", "dead_back", k) if k > 0.4 else blend("stand", "kneel", k / 0.4)
-    r.add_humanoid(hum, pose, to3(x, y), td.yaw_rad(p.angle), rifle_on=False)
+    at = to3(x, y)
+    r.add_sprite((at[0], 0.02, at[2]), td.shadow(0.65, 0.50, 110), layer=1, bias=-0.8)
+    r.add_humanoid(hum, pose, at, td.yaw_rad(p.angle), rifle_on=False, shadow=(1, -0.5))
 
 
 def _mesh(key, build):
@@ -1560,35 +1603,14 @@ _POOLS = {}
 _POOL_WORLD = {}         # the same rows moved to a zone's spot (see _fuel_pool_at)
 
 
-def _fuel_pool_at(r, x, z, rad, seed):
-    """``_fuel_pool`` packed once at the origin per (seed, ~6% radius step) and
-    moved per frame; rebuilding and packing it per zone per frame was the bulk
-    of a late-mission fire's cost (the bay fire alone is 26 zones)."""
-    if not hasattr(r, "add_packed"):
-        from cutscenes import m6world3d as _w
-        _w.add(r, _fuel_pool(x, z, rad, seed))
-        return
-    rq = round(math.log(max(rad, 0.05)) * 16.0)
-    key = (round(seed, 1), rq)
-    arr = _POOLS.get(key)
-    if arr is None:
-        if len(_POOLS) > 512:
-            _POOLS.clear()
-        m = _fuel_pool(0.0, 0.0, math.exp(rq / 16.0), seed)
-        faces = [(f[0], f[1], f[2], f[3], None, f[4]) for f in m.faces]
-        arr = _POOLS[key] = r.pack(m.verts, faces)
-    if arr is None:
-        return
-    wkey = (key, round(x, 3), round(z, 3))
-    ent = _POOL_WORLD.get(wkey)
-    if ent is None or ent[0] is not arr:
-        out = arr.copy()
-        out[:, 0] += x
-        out[:, 2] += z
-        if len(_POOL_WORLD) > 512:
-            _POOL_WORLD.clear()
-        ent = _POOL_WORLD[wkey] = (arr, out)
-    r.add_packed(ent[1])
+def _fuel_pool_at(r, x, z, rad, seed, tm=0.0, heat=1.0):
+    """Feathered scorch + pulsing ember fuel bed on the floor."""
+    from cutscenes import fire3d as _f3d
+    r.add_sprite(
+        (x, 0.015, z),
+        _f3d.ember_bed_sprite(max(0.25, rad), seed=int(seed * 10), t_ms=tm, heat=heat, squash=0.76),
+        layer=1, bias=-0.15,
+    )
 
 
 def _draw_fx(r, flashes, tm):
@@ -1617,11 +1639,17 @@ def _draw_fx(r, flashes, tm):
         r.add_sprite(to3(mx, my, 0.05), _fx.glow((255, 80, 20), 0.4, tm,
                                                  intensity=min(1.0, timer / 60.0), max_px=26),
                      layer=_fx.FX_LAYER)
-    for decal in STATE.blood_decals:
-        k = max(0.0, min(1.0, decal[2] / 255.0))
-        if k > 0.05:
-            r.add_sprite(to3(decal[0], decal[1], 0.015),
-                         td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
+    if getattr(r, "backend", "") == "gl" and STATE.blood_decals:
+        from engine3d.particles import pack_blood_decals
+        d_arr = pack_blood_decals(STATE.blood_decals, to3, (80, 12, 14))
+        if d_arr is not None:
+            r.add_decals(d_arr)
+    else:
+        for decal in STATE.blood_decals:
+            k = max(0.0, min(1.0, decal[2] / 255.0))
+            if k > 0.05:
+                r.add_sprite(to3(decal[0], decal[1], 0.015),
+                             td.blood_pool(min(1.0, decal[3] / 24.0) * k, (80, 12, 14)), layer=0)
     cx0, cy0 = _d._M1_CAM[0] - FIRE_CULL_PX, _d._M1_CAM[1] - FIRE_CULL_PX
     cx1, cy1 = cx0 + WIDTH + 2 * FIRE_CULL_PX, cy0 + HEIGHT + 2 * FIRE_CULL_PX
     lit = []
@@ -1632,8 +1660,6 @@ def _draw_fx(r, flashes, tm):
         heat = min(1.0, life * 4.0)               # the last quarter of a fire dies down
         x, _, z = to3(fz.x, fz.y)
         rad = fz.radius * K
-        r.add_sprite((x, 0.02, z), td.blood_pool(min(1.0, rad / 2.0), (26, 18, 14)), layer=0)
-        _fuel_pool_at(r, x, z, rad * (0.55 + 0.45 * heat), fz.x * 0.37 + fz.y * 0.11)
         n = 1 + min(9, int(rad / 0.3))
         # zones heaped on one spot (the tanker leaves 23) read as one fire: past
         # the first, a zone inside another's radius keeps three flames, no light
@@ -1642,13 +1668,14 @@ def _draw_fx(r, flashes, tm):
             n = min(n, 3)
         else:
             lit.append((x, z))
+            _fuel_pool_at(r, x, z, rad * (0.65 + 0.35 * heat), fz.x * 0.37 + fz.y * 0.11, tm=tm, heat=heat)
         for i in range(n):                        # the layered M7 flame: a tall core, licks over the pool
             a = i * 2.39996 + fz.x * 0.013
-            d = 0.0 if i == 0 else rad * 0.8 * math.sqrt(i / float(n))
-            size = (0.5 if i == 0 else 0.34) * min(1.2, 0.4 + rad * 0.35) * heat
-            # no smoke: from the top-down camera it smears over the walls behind
+            d = 0.0 if i == 0 else rad * 0.72 * math.sqrt(i / float(n))
+            size = (0.56 if i == 0 else 0.36) * min(1.25, 0.45 + rad * 0.35) * heat
             _fire(r, (x + math.cos(a) * d, 0.0, z + math.sin(a) * d), tm, int(fz.x) + i, size,
-                  glow=i == 0)
+                  glow=(i == 0 and not near), smoky=(i == 0 and not near),
+                  bed=False, embers=(i == 0 and not near), heat=heat)
         flashes.append({"pos": (x, 1.0, z), "color": (255, 140, 60), "intensity": 1.0 * heat,
                         "range": 4.0 + rad})
     from engine3d import m_apply, m_mul, rot_x, rot_y
@@ -1732,18 +1759,21 @@ def dropoff(surface, t, zoom=1.0, locked=False):
             if e.rect.centery < M1_STREET_ROW * T:
                 hum, rig = _enemy_hum(e)
                 pose = td.held(hum, dict(POSES["stand"]), rig, "ready")
-                r.add_sprite(to3(e.rect.centerx, e.rect.centery, 0.02), td.shadow(0.42), layer=0)
-                r.add_humanoid(hum, pose, to3(e.rect.centerx, e.rect.centery), td.yaw_rad(e.angle))
+                r.add_sprite(to3(e.rect.centerx, e.rect.centery, 0.02), td.shadow(0.42),
+                             layer=1, bias=-0.6)
+                r.add_humanoid(hum, pose, to3(e.rect.centerx, e.rect.centery),
+                               td.yaw_rad(e.angle), shadow=(1, -0.5))
         hum, rig = player_hum()
         base = pose_run(t * 0.009, lean=3) if moving else dict(POSES["stand"])
-        r.add_sprite(to3(bx, by, 0.02), td.shadow(0.42), layer=0)
-        r.add_humanoid(hum, td.held(hum, base, rig, "ready"), to3(bx, by), td.yaw_rad(facing))
+        r.add_sprite(to3(bx, by, 0.02), td.shadow(0.42), layer=1, bias=-0.6)
+        r.add_humanoid(hum, td.held(hum, base, rig, "ready"), to3(bx, by),
+                       td.yaw_rad(facing), shadow=(1, -0.5))
         van = _d._dropoff_van(t)
         if van is None:
             return
         rear, vy = van
         x, _, z = to3(rear + VAN_LEN / 2.0 / K, vy)
-        r.add_sprite((x, 0.02, z), td.shadow(2.0, 0.95, 150), layer=0)
+        r.add_sprite((x, 0.02, z), td.shadow(2.0, 0.95, 150), layer=1, bias=-2.5)
         _put(r, _mesh("dropoff_van", _krap_van_mesh), (x, 0.0, z))
         hot = t < _d._DROPOFF_ARRIVE_MS + 300 or t > _d._DROPOFF_LEAVE_MS
         tail = (x - VAN_LEN / 2.0 - 0.1, 0.65, z)

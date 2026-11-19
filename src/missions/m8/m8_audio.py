@@ -46,16 +46,20 @@ POOLS = {
     "m8_rung": 3,          # the gantry ladder
     "m8_hull": 3,          # rounds on the tractor's steel
     "m8_pickup": 2,        # resupply crate latch and shells
+    "m8_elec_arc": 3,      # high-voltage cabinet arc crackles
 }
 SINGLES = ("m8_shot_slow", "m8_fall_light", "m8_fall_heavy",
            "m8_horn", "m8_bell", "m8_creak", "m8_crash", "m8_rocket",
-           "m8_barrel_boom", "m8_spark_pop", "m8_pa_squelch", "m8_smoke")
+           "m8_barrel_boom", "m8_spark_pop", "m8_pa_squelch", "m8_smoke",
+           "m8_breaker_pop", "m8_pistol_shot")
 LOOPS = ("m8_drone", "m8_road_wind", "m8_engine", "m8_train", "m8_heli")
 
 # cue -> ((loop, gain), ...). Add a cue here; scenes only name it.  Any
 # registered loop works; only LOOPS duck under shots.
 BEDS = {
     "trap": (("m8_drone", 0.16), ("m8_road_wind", 0.15)),
+    "mansion": (("m8_drone", 0.15), ("wind", 0.14)),
+    "helipad": (("m8_drone", 0.12), ("wind", 0.16), ("m8_heli", 0.30)),
     "gantry": (("m8_drone", 0.10), ("m8_road_wind", 0.24)),
     "chase": (("m8_drone", 0.13), ("m8_road_wind", 0.20), ("m8_engine", 0.20)),
     "chase_x": (("m8_drone", 0.12), ("m8_road_wind", 0.16), ("m8_engine", 0.20),
@@ -73,6 +77,10 @@ BEDS = {
     "f_night": (("m8_drone", 0.09), ("wind", 0.12)),
     "f_title": (("m8_train", 0.07), ("m8_road_wind", 0.12)),
     "f_heli": (("m8_drone", 0.12), ("m8_road_wind", 0.20), ("m8_engine", 0.14), ("m8_heli", 0.30)),
+    "flight": (("m8_drone", 0.12), ("m8_road_wind", 0.22), ("m8_heli", 0.34)),
+    "ridge": (("wind", 0.22), ("m8_drone", 0.08)),
+    "f_fire": (("wind", 0.14), ("m8_drone", 0.10)),
+    "f_dawn_crowd": (("m8_road_wind", 0.10), ("room_tone", 0.06)),
 }
 
 # film scene -> (score cue, bed cue).
@@ -106,6 +114,20 @@ FILM = {
     "m8_heli_retardovici": ("state", "f_tv"),
     "m8_heli_flyby": ("chase", "f_heli"),
     "m8_heli_lockon": ("chase", "chase_heli"),
+    "m8d_approach_aerial": ("approach", "f_night"),
+    "m8d_approach_gate": ("approach", "f_night"),
+    "m8d_liftoff_study": ("road", "f_night"),
+    "m8d_liftoff_window": ("flight", "f_heli"),
+    "m8d_liftoff_maru": ("flight", "f_heli"),
+    "m8d_crash_spin": ("flight", "f_heli"),
+    "m8d_crash_black": (None, "f_fire"),
+    "m8d_crash_fire": (None, "f_fire"),
+    "m8d_inauguration": ("state", "f_tv"),
+    "m8d_vasile_speech": ("state", "f_dawn_crowd"),
+    "m8d_crowd": ("names", "f_dawn_crowd"),
+    "m8d_eyes": ("names", "f_dawn_crowd"),
+    "m8d_biribel_vo": ("names", "f_dawn_crowd"),
+    "m8d_title_card": ("title", "f_title"),
 }
 
 # -- score (assets/music/ost, streamed) ---------------------------------------
@@ -117,14 +139,17 @@ OST_DIR = "assets/music/ost/"
 DREAD = "assets/music/newtrailer/Dark Cello Horror Trailer Music Free Music For Video Creators.mp3"
 MUSIC = {
     "meet": (OST_DIR + "03_quiet_on_route_12.mp3", 0.36, 2500),
-    "trap": (OST_DIR + "06_not_tonight.mp3", 0.40, 1200),
+    "approach": (OST_DIR + "17_cold_marble.mp3", 0.30, 2500),
+    "trap": (OST_DIR + "13_wet_concrete.mp3", 0.40, 1200),
+    "mansion": (OST_DIR + "17_cold_marble.mp3", 0.38, 1200),
     "gantry": (OST_DIR + "11_old_friends.mp3", 0.24, 3000),
     "friends": (OST_DIR + "11_old_friends.mp3", 0.34, 2000),
     "friends_low": (OST_DIR + "11_old_friends.mp3", 0.20, 800),
     "kill": (OST_DIR + "11_old_friends.mp3", 0.18, 800),
     "standoff": (DREAD, 0.20, 1500),
     "road": (OST_DIR + "08_i_chose_the_many.mp3", 0.28, 2500),
-    "chase": (OST_DIR + "09_fallow_ground.mp3", 0.44, 1200),
+    "chase": (OST_DIR + "18_to_the_crossing.mp3", 0.44, 1200),
+    "flight": (OST_DIR + "10_head_of_state.mp3", 0.42, 1200),
     "state": (OST_DIR + "10_head_of_state.mp3", 0.32, 1800),
     "names": (OST_DIR + "12_gabi_seby_darius.mp3", 0.40, 2500),
     "title": (OST_DIR + "01_call_of_acaristan.mp3", 0.48, 1500),
@@ -353,6 +378,44 @@ def _smoke_hiss():
     return out
 
 
+def _elec_arc_mono(i, p, seed):
+    """Sharp mains buzz plus crackling plasma snaps from an overloaded rack."""
+    n = int(0.24 * RATE)
+    t = _t(n)
+    hum = (np.sin(2 * math.pi * 100.0 * p * t) * 0.55
+           + np.sin(2 * math.pi * 200.0 * p * t) * 0.30) * np.exp(-t / 0.14)
+    snap = np.zeros(n)
+    rng = np.random.default_rng(seed)
+    for at in (0.0, 0.045 + 0.01 * i, 0.11):
+        k = int(0.032 * RATE)
+        _place(snap, _burst(k, int(rng.integers(1, 99999)), 0.005, lo=2100.0), at, 0.9)
+    return np.tanh((hum + snap * 1.15) * 1.4)
+
+
+def _breaker_pop():
+    """Heavy relay clack, transformer thud and dying cap whine."""
+    n = int(0.75 * RATE)
+    t = _t(n)
+    clack = _burst(int(0.04 * RATE), 8966, 0.005, lo=1600.0) * 1.1
+    thud = _tone(n, 132.0, 38.0, 0.11) * 1.0
+    whine = np.sin(2 * math.pi * _sweep(n, 420.0, 85.0)) * np.exp(-t / 0.18) * 0.35
+    out = thud + whine
+    _place(out, clack, 0.0, 1.0)
+    return np.tanh(out * 1.45)
+
+
+def _pistol_shot():
+    """Sharp indoor sidearm crack with quick wall slap."""
+    n = int(0.95 * RATE)
+    crack = _burst(n, 8968, 0.008, lo=1400.0) * 1.0
+    punch = _tone(int(0.14 * RATE), 260.0, 74.0, 0.038) * 0.75
+    out = crack.copy()
+    _place(out, punch, 0.0, 1.0)
+    _place(out, _lowpass(crack, 1500.0, 2), 0.05, 0.32)
+    _place(out, _lowpass(crack, 1100.0, 2), 0.11, 0.18)
+    return np.tanh(out * 1.45)
+
+
 @lru_cache(maxsize=64)
 def shot_pcm(name):
     if name == "m8_shot_slow":
@@ -403,6 +466,10 @@ def shot_pcm(name):
         return _fin(_pa_squelch(), 0.55, 0.12)
     if name == "m8_smoke":
         return _fin(_smoke_hiss(), 0.70, 0.22)
+    if name == "m8_breaker_pop":
+        return _fin(_breaker_pop(), 0.80, 0.18)
+    if name == "m8_pistol_shot":
+        return _fin(_pistol_shot(), 0.76, 0.16)
     if name == "m8_rocket":
         n = int(1.3 * RATE)
         t = _t(n)
@@ -490,6 +557,8 @@ def shot_pcm(name):
         x = _highpass(_lowpass(_noise(n, seed), 5000.0, 1), 1500.0)
         x *= np.exp(-((t - 0.05) ** 2) / 0.0012) + 0.6 * np.exp(-((t - 0.16 * p) ** 2) / 0.003)
         return _fin(x, 0.5)
+    if base == "m8_elec_arc":
+        return _fin(_elec_arc_mono(i, p, seed), 0.76, 0.24)
     raise ValueError("Unknown M8 sound: " + name)
 
 
@@ -811,6 +880,26 @@ class M8Audio(M7Audio):
     def smoke_hiss(self, pan=0.0):
         """A smoke canister burning off on the asphalt."""
         self._pool("m8_smoke", 0.56, pan, fallback="m6_tink")
+
+    def elec_arc(self, pan=0.0):
+        """Sustained high-voltage arc crackle."""
+        if self._ready("elec_arc", 0.09):
+            self._pool("m8_elec_arc", 0.54, pan, fallback="m8_spark_pop")
+
+    def breaker_pop(self, pan=0.0):
+        """Main security-room breaker blowing out."""
+        self.duck(0.42, 0.35)
+        self._pool("m8_breaker_pop", 0.72, pan, fallback="m8_spark_pop")
+
+    def pistol_shot(self, pan=0.0):
+        """Indoor pistol misfire crack."""
+        self.duck(0.35, 0.22)
+        self._pool("m8_pistol_shot", 0.64, pan, fallback="m8_rifle_1")
+
+    def body_fall(self, pan=0.0, dist=8.0):
+        """Heavy body thud onto the floor."""
+        vol = 0.56 * max(0.3, 1.0 - dist / 35.0)
+        self._pool("m8_fall_heavy", vol, pan, fallback="m6_body_thud")
 
     def pickup(self):
         """The supply crate latch and the shells going into the pocket."""
