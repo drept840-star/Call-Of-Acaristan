@@ -813,21 +813,76 @@ GROUND_Y = SCENE_BOT - 55
 PAL_RAINY = [(26, 30, 38), (22, 28, 36)]
 
 def draw_route12_black(surface, t):
-    surface.fill((2, 3, 6))
-    rng = random.Random(int(t // 80))
-    for _ in range(45):
+    """KRAP field audio intercept console: tape reels, live waveform, static."""
+    _draw_vertical_gradient(surface, 0, SCENE_TOP, WIDTH, SCENE_H, (4, 7, 12), (2, 3, 6))
+    cx, cy = WIDTH // 2, SCENE_TOP + SCENE_H // 2 - 14
+    # Subtle radial cold glow
+    pulse = 0.72 + 0.28 * math.sin(t * 0.005)
+    glow = pygame.Surface((520, 320), pygame.SRCALPHA)
+    for i in range(6, 0, -1):
+        a = int(14 * pulse * (1.0 - i / 7.0))
+        pygame.draw.ellipse(glow, (48, 114, 168, a),
+                            (260 - i * 42, 160 - i * 24, i * 84, i * 48))
+    surface.blit(glow, (cx - 260, cy - 160))
+
+    # Field recorder chassis
+    box_w, box_h = 540, 210
+    bx, by = cx - box_w // 2, cy - box_h // 2
+    pygame.draw.rect(surface, (11, 15, 22), (bx, by, box_w, box_h), border_radius=6)
+    pygame.draw.rect(surface, (46, 68, 92), (bx, by, box_w, box_h), 2, border_radius=6)
+    pygame.draw.rect(surface, (18, 26, 36), (bx + 2, by + 2, box_w - 4, 28), border_radius=4)
+    pygame.draw.rect(surface, C_KRAP_BLUE, (bx + 2, by + 2, 5, 28))
+    hdr = font_terminal.render(_T("route12.krap_field_audio_route_12"), True, (132, 188, 232))
+    surface.blit(hdr, (bx + 16, by + 6))
+    rec_on = (int(t) // 480) % 2 == 0
+    pygame.draw.circle(surface, (236, 72, 62) if rec_on else (72, 26, 24), (bx + box_w - 22, by + 16), 4)
+
+    # Twin slowly spinning tape reels
+    for rx in (bx + 84, bx + box_w - 84):
+        ry = by + 98
+        pygame.draw.circle(surface, (24, 30, 38), (rx, ry), 38)
+        pygame.draw.circle(surface, (62, 82, 102), (rx, ry), 38, 2)
+        pygame.draw.circle(surface, (14, 18, 24), (rx, ry), 14)
+        for k in range(3):
+            ang = t * 0.0018 + k * (2.0 * math.pi / 3.0)
+            pygame.draw.line(surface, (76, 102, 126),
+                             (rx + int(math.cos(ang) * 14), ry + int(math.sin(ang) * 14)),
+                             (rx + int(math.cos(ang) * 34), ry + int(math.sin(ang) * 34)), 2)
+
+    # Central live oscilloscope waveform
+    wx, wy, ww, wh = bx + 144, by + 54, box_w - 288, 90
+    pygame.draw.rect(surface, (6, 12, 18), (wx, wy, ww, wh))
+    pygame.draw.rect(surface, (36, 62, 82), (wx, wy, ww, wh), 1)
+    for gx in range(wx + 24, wx + ww, 28):
+        pygame.draw.line(surface, (14, 24, 34), (gx, wy + 1), (gx, wy + wh - 1), 1)
+    pygame.draw.line(surface, (28, 54, 72), (wx + 2, wy + wh // 2), (wx + ww - 2, wy + wh // 2), 1)
+    pts = []
+    for i in range(0, ww - 4, 3):
+        u = i / float(max(1, ww - 4))
+        env = math.sin(u * math.pi)
+        v = (math.sin(t * 0.012 + i * 0.14) * 0.50
+             + math.sin(t * 0.029 - i * 0.27) * 0.32
+             + math.sin(t * 0.004 + i * 0.05) * 0.18)
+        py = wy + wh // 2 + int(v * env * (wh * 0.40))
+        pts.append((wx + 2 + i, py))
+    if len(pts) > 1:
+        pygame.draw.lines(surface, (96, 198, 236), False, pts, 2)
+
+    # Tape timecode + subtitle
+    sec = int(t // 1000)
+    ms_f = int((t % 1000) // 10)
+    tc = font_terminal_small.render(f"CH-04 // 00:{sec:02d}.{ms_f:02d} // PLAYBACK", True, (96, 142, 174))
+    surface.blit(tc, (cx - tc.get_width() // 2, by + 158))
+    sub = font_terminal_small.render(_T("route12.rain_audio_file_room_static_no_l"), True, (116, 126, 138))
+    surface.blit(sub, (cx - sub.get_width() // 2, by + 182))
+
+    # Fine film grain specks
+    rng = random.Random(int(t // 90))
+    for _ in range(42):
         x = rng.randint(0, WIDTH - 1)
         y = rng.randint(SCENE_TOP, SCENE_BOT - 1)
-        shade = rng.randint(8, 28)
-        surface.set_at((x, y), (shade, shade, shade + 4))
-    pulse = int(35 + math.sin(t * 0.006) * 20)
-    glow = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    pygame.draw.circle(glow, (40, 80, 120, pulse), (WIDTH // 2, HEIGHT // 2), 220)
-    surface.blit(glow, (0, 0))
-    tag = font_terminal.render(_T("route12.krap_field_audio_route_12"), True, (75, 125, 165))
-    surface.blit(tag, (WIDTH // 2 - tag.get_width() // 2, SCENE_TOP + 210))
-    sub = font_terminal_small.render(_T("route12.rain_audio_file_room_static_no_l"), True, (90, 90, 95))
-    surface.blit(sub, (WIDTH // 2 - sub.get_width() // 2, SCENE_TOP + 244))
+        shade = rng.randint(14, 36)
+        surface.set_at((x, y), (shade, shade + 2, shade + 6))
 
 
 def draw_route12_files(surface, t):
@@ -1053,6 +1108,12 @@ def draw_route12_files(surface, t):
     cap.set_alpha(int(255 * push))
     close.blit(cap, (desk.x + 26, desk.bottom + 12))
 
+    # Warm overhead desk-lamp focus pool + dark peripheral vignette
+    if push > 0.1:
+        lamp_ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        pygame.draw.ellipse(lamp_ov, (255, 206, 134, int(24 * push * flicker)),
+                            (main_doc.x - 110, desk.y - 10, main_doc.w + 220, desk.h + 10))
+        close.blit(lamp_ov, (0, 0))
     surface.blit(close, (0, 0))
 
 
@@ -1172,7 +1233,14 @@ def draw_route12_mag_alert(surface, t):
     surface.blit(n3, (note2.x + 28, note2.y + 14))
     surface.blit(n4, (note2.x + 30, note2.y + 34))
 
-    # Very subtle broadcast glitch. Global scanlines still draw later.
+    # Warm desk-lamp cone + subtle vignette + broadcast glitch scanline
+    ov = pygame.Surface((WIDTH, SCENE_H), pygame.SRCALPHA)
+    pygame.draw.ellipse(ov, (255, 214, 150, 22), (paper.x - 90, 8, paper.w + 180, SCENE_H - 16))
+    for k in range(4):
+        inset = k * 22
+        pygame.draw.rect(ov, (0, 0, 0, 26 - k * 6),
+                         (inset, inset // 2, WIDTH - inset * 2, SCENE_H - inset), 22)
+    surface.blit(ov, (0, SCENE_TOP))
     if int(t // 260) % 2 == 0:
         pygame.draw.rect(surface, (255, 255, 255, 12), (paper.x, paper.y + 54, paper.w, 2))
 
@@ -1459,83 +1527,103 @@ def draw_route12_broadcast(surface, t):
 
 
 def draw_ipa_radio_chatter(surface, t):
-    """M2 ending shot: IPA dispatch radio ordering Biribel's capture.
+    """M2 ending shot: IPA dispatch tactical console ordering Biribel's capture."""
+    _draw_vertical_gradient(surface, 0, SCENE_TOP, WIDTH, SCENE_H, (5, 10, 18), (2, 4, 9))
+    # Subtle cold radial glow
+    glow = pygame.Surface((WIDTH, SCENE_H), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (28, 72, 118, 36), (WIDTH // 2 - 390, 20, 780, SCENE_H - 40))
+    surface.blit(glow, (0, SCENE_TOP))
 
-    A cold blue IPA dispatch console. The text reads out as a single
-    urgent transmission, with status indicators (REC, AUTHORIZATION
-    CODE, etc.) framing the message. No camera motion -- this is a
-    static "we are hearing them on the radio" shot.
-    """
-    # Cold IPA-blue ambient.
-    _draw_vertical_gradient(surface, 0, 0, WIDTH, HEIGHT, (4, 8, 14), (2, 4, 8))
-    # Subtle scanline noise.
-    rng = random.Random(t // 3)
-    for _ in range(40):
-        sx = rng.randint(0, WIDTH - 1)
-        sy = rng.randint(0, HEIGHT - 1)
-        v = rng.randint(8, 28)
-        surface.set_at((sx, sy), (v, v + 4, v + 8))
-
-    # Dispatch console (large, centered).
-    panel_w, panel_h = 720, 320
+    panel_w, panel_h = 748, 336
     panel_x = WIDTH // 2 - panel_w // 2
-    panel_y = HEIGHT // 2 - panel_h // 2 + 10
-    # Outer bezel.
-    pygame.draw.rect(surface, (12, 18, 24),
-                     (panel_x - 10, panel_y - 10, panel_w + 20, panel_h + 20),
-                     border_radius=4)
-    pygame.draw.rect(surface, (30, 50, 65),
-                     (panel_x - 10, panel_y - 10, panel_w + 20, panel_h + 20),
-                     2, border_radius=4)
-    # Screen inset (the dispatch display).
-    pygame.draw.rect(surface, (6, 12, 20),
-                     (panel_x, panel_y, panel_w, panel_h))
-    pygame.draw.rect(surface, (22, 40, 55),
-                     (panel_x, panel_y, panel_w, panel_h), 1)
-    # Scanlines (every 2px on the display).
-    for sy in range(panel_y + 2, panel_y + panel_h - 2, 2):
-        pygame.draw.line(surface, (8, 14, 22),
-                         (panel_x + 2, sy), (panel_x + panel_w - 2, sy), 1)
+    panel_y = SCENE_TOP + (SCENE_H - panel_h) // 2 - 12
+    # Outer metallic console housing + shadow
+    sh = pygame.Surface((panel_w + 36, panel_h + 36), pygame.SRCALPHA)
+    pygame.draw.rect(sh, (0, 0, 0, 150), sh.get_rect(), border_radius=8)
+    surface.blit(sh, (panel_x - 14, panel_y - 12))
+    pygame.draw.rect(surface, (13, 20, 28),
+                     (panel_x - 12, panel_y - 12, panel_w + 24, panel_h + 24), border_radius=6)
+    pygame.draw.rect(surface, (44, 74, 98),
+                     (panel_x - 12, panel_y - 12, panel_w + 24, panel_h + 24), 2, border_radius=6)
+    # Screen inset
+    pygame.draw.rect(surface, (6, 13, 22), (panel_x, panel_y, panel_w, panel_h))
+    pygame.draw.rect(surface, (28, 54, 76), (panel_x, panel_y, panel_w, panel_h), 1)
+    for sy in range(panel_y + 2, panel_y + panel_h - 2, 3):
+        pygame.draw.line(surface, (9, 17, 27), (panel_x + 2, sy), (panel_x + panel_w - 2, sy), 1)
 
-    # Top status bar: IPA DISPATCH | REC.
+    # Top status header
     bar_y = panel_y + 4
-    pygame.draw.rect(surface, (28, 50, 70),
-                     (panel_x + 4, bar_y, panel_w - 8, 18))
-    head = font_speaker.render(_T("route12.ipa_dispatch_channel_7"), True, (180, 220, 240))
-    surface.blit(head, (panel_x + 14, bar_y + 2))
-    rec_pulse = 0.5 + 0.5 * math.sin(t * 0.4)
-    if rec_pulse > 0.4:
-        rec_dot = font_terminal_small.render(_T("route12.rec_2"), True, (220, 50, 50))
-        surface.blit(rec_dot, (panel_x + panel_w - rec_dot.get_width() - 14, bar_y + 4))
+    pygame.draw.rect(surface, (24, 48, 72), (panel_x + 4, bar_y, panel_w - 8, 26))
+    pygame.draw.rect(surface, (196, 52, 46), (panel_x + 4, bar_y, 6, 26))
+    head = font_speaker.render(_T("route12.ipa_dispatch_channel_7"), True, (192, 228, 248))
+    surface.blit(head, (panel_x + 18, bar_y + 3))
+    if (int(t) // 360) % 2 == 0:
+        pygame.draw.circle(surface, (242, 62, 54), (panel_x + panel_w - 68, bar_y + 13), 4)
+        rec_dot = font_terminal_small.render(_T("route12.rec_2"), True, (242, 86, 76))
+        surface.blit(rec_dot, (panel_x + panel_w - rec_dot.get_width() - 12, bar_y + 6))
 
-    # Main message (centered on the dispatch display).
-    msg_y = panel_y + 60
-    # Hand-set as two lines so the dispatch reads as a real radio order.
-    line1 = font_dialogue.render(_T("route12.all_units_the_krap_operator_is_t"),
-                                 True, (200, 230, 245))
-    line2 = font_dialogue.render(_T("route12.bring_him_in_authorization_ipa_c"),
-                                 True, (220, 240, 255))
+    # Main dispatch order
+    msg_y = panel_y + 58
+    line1 = font_dialogue.render(_T("route12.all_units_the_krap_operator_is_t"), True, (214, 238, 252))
+    line2 = font_dialogue.render(_T("route12.bring_him_in_authorization_ipa_c"), True, (236, 246, 255))
     surface.blit(line1, (panel_x + panel_w // 2 - line1.get_width() // 2, msg_y))
-    surface.blit(line2, (panel_x + panel_w // 2 - line2.get_width() // 2, msg_y + 40))
+    surface.blit(line2, (panel_x + panel_w // 2 - line2.get_width() // 2, msg_y + 34))
 
-    # Bottom status: a classification bar (red -- "FLAGGED TARGET").
-    foot_y = panel_y + panel_h - 30
-    pygame.draw.rect(surface, (110, 30, 30),
-                     (panel_x + 4, foot_y, panel_w - 8, 22))
+    # Live dual-panel telemetry strip: voice oscilloscope (left) + sector tracking grid (right)
+    tele_y = panel_y + 150
+    osc = pygame.Rect(panel_x + 22, tele_y, 420, 114)
+    pygame.draw.rect(surface, (4, 10, 17), osc)
+    pygame.draw.rect(surface, (30, 58, 80), osc, 1)
+    for gx in range(osc.x + 30, osc.right, 30):
+        pygame.draw.line(surface, (12, 24, 34), (gx, osc.y + 1), (gx, osc.bottom - 1), 1)
+    pygame.draw.line(surface, (24, 50, 68), (osc.x + 2, osc.centery), (osc.right - 2, osc.centery), 1)
+    pts = []
+    for i in range(0, osc.w - 6, 3):
+        u = i / float(max(1, osc.w - 6))
+        env = math.sin(u * math.pi)
+        w = (math.sin(t * 0.015 + i * 0.11) * 0.55
+             + math.sin(t * 0.032 - i * 0.23) * 0.30
+             + math.sin(t * 0.008 + i * 0.04) * 0.15)
+        pts.append((osc.x + 3 + i, osc.centery + int(w * env * 40)))
+    if len(pts) > 1:
+        pygame.draw.lines(surface, (94, 206, 246), False, pts, 2)
+    surface.blit(font_terminal_small.render("VOICE CARRIER // 148.625 MHZ", True, (92, 152, 186)),
+                 (osc.x + 8, osc.y + 6))
+
+    # Sector unit tracker grid
+    grd = pygame.Rect(panel_x + 462, tele_y, 264, 114)
+    pygame.draw.rect(surface, (5, 11, 18), grd)
+    pygame.draw.rect(surface, (30, 58, 80), grd, 1)
+    for gx in range(grd.x + 26, grd.right, 26):
+        pygame.draw.line(surface, (13, 25, 36), (gx, grd.y + 1), (gx, grd.bottom - 1), 1)
+    for gy in range(grd.y + 22, grd.bottom, 22):
+        pygame.draw.line(surface, (13, 25, 36), (grd.x + 1, gy), (grd.right - 1, gy), 1)
+    # Converging IPA unit blips toward safehouse target
+    tx, ty = grd.centerx, grd.centery + 4
+    pr = 8 + int((t * 0.02) % 24)
+    pygame.draw.circle(surface, (196, 56, 48), (tx, ty), pr, 1)
+    pygame.draw.circle(surface, (238, 82, 72), (tx, ty), 4)
+    conv = min(1.0, t / 3600.0)
+    for ox0, oy0 in ((-90, -34), (92, -26), (-74, 38), (84, 32)):
+        ux = int(tx + ox0 * (1.0 - 0.55 * conv))
+        uy = int(ty + oy0 * (1.0 - 0.55 * conv))
+        pygame.draw.rect(surface, (112, 198, 244), (ux - 3, uy - 3, 6, 6))
+    surface.blit(font_terminal_small.render("CORDON UNITS: 4 CLOSING", True, (226, 118, 108)),
+                 (grd.x + 8, grd.y + 6))
+
+    # Bottom red classification strip
+    foot_y = panel_y + panel_h - 32
+    pygame.draw.rect(surface, (124, 28, 28), (panel_x + 4, foot_y, panel_w - 8, 24))
     foot = font_terminal_small.render(
-        _T("route12.flagged_target_krap_operator_acu"),
-        True, (240, 220, 200),
+        _T("route12.flagged_target_krap_operator_acu"), True, (248, 230, 212),
     )
-    surface.blit(foot, (panel_x + panel_w // 2 - foot.get_width() // 2,
-                         foot_y + 5))
+    surface.blit(foot, (panel_x + panel_w // 2 - foot.get_width() // 2, foot_y + 5))
 
-    # A second red ALERT banner below the panel (urgent framing).
-    alert_y = panel_y + panel_h + 30
+    alert_y = panel_y + panel_h + 16
     alert = font_terminal_small.render(
-        _T("route12.priority_alpha_all_field_units"),
-        True, (220, 80, 80),
+        _T("route12.priority_alpha_all_field_units"), True, (236, 92, 84),
     )
-    alert.set_alpha(int(180 + 60 * math.sin(t * 0.3)))
+    alert.set_alpha(int(175 + 75 * math.sin(t * 0.008)))
     surface.blit(alert, (WIDTH // 2 - alert.get_width() // 2, alert_y))
 
 
@@ -1663,74 +1751,69 @@ def draw_krap_door_kickin(surface, t):
 
 
 def draw_biribel_blackout(surface, t):
-    """M2 ending shot: Vasile's voice fades as Biribel is dragged away.
+    """M2 ending shot: disorienting dragged POV + dying KRAP field radio."""
+    surface.fill((2, 3, 5))
+    sec = t * 0.001
+    fade_out = max(0.18, 1.0 - max(0.0, (sec - 1.2) / 3.5))
 
-    Black screen with a small radio showing the dying signal. The
-    dialogue text fades in and out as Vasile's voice breaks up.
-    Mirrors the M2 cutscene aesthetic (no camera transform -- this
-    is a clean cinematic beat, not an interactive intro shot).
-    """
-    # Pure black.
-    surface.fill((2, 2, 3))
+    # Blurred overhead corridor fluorescent lights streaking past a tilted POV
+    pov = pygame.Surface((WIDTH, SCENE_H), pygame.SRCALPHA)
+    sway = math.sin(sec * 2.4) * 38.0
+    for i in range(4):
+        p = ((sec * 0.52 + i * 0.25) % 1.0)
+        ly = int(p * (SCENE_H + 140)) - 70
+        lw = int(120 + p * 260)
+        lh = int(14 + p * 26)
+        lx = int(WIDTH // 2 + sway * (0.4 + p) - lw // 2)
+        alpha = int(58 * math.sin(p * math.pi) * fade_out)
+        if alpha > 2:
+            pygame.draw.ellipse(pov, (148, 178, 212, alpha), (lx - 40, ly - 16, lw + 80, lh + 32))
+            pygame.draw.rect(pov, (214, 232, 248, min(140, alpha * 2)), (lx, ly, lw, lh), border_radius=6)
+    # Heavy tunnel-vision eyelids closing in
+    for r in range(6):
+        inset = r * 26
+        a = int((160 - r * 24) * (1.25 - fade_out * 0.4))
+        pygame.draw.rect(pov, (0, 0, 0, max(0, min(220, a))),
+                         (inset, inset // 2, WIDTH - inset * 2, SCENE_H - inset), 28)
+    surface.blit(pov, (0, SCENE_TOP))
 
-    # Small radio device at the bottom-left.
-    radio_x, radio_y = 100, HEIGHT - 200
-    pygame.draw.rect(surface, (22, 22, 26),
-                     (radio_x, radio_y, 130, 70), border_radius=4)
-    pygame.draw.rect(surface, (45, 45, 50),
-                     (radio_x, radio_y, 130, 70), 2, border_radius=4)
-    # Speaker grille.
-    for gy in range(radio_y + 10, radio_y + 42, 5):
-        for gx in range(radio_x + 10, radio_x + 70, 5):
-            pygame.draw.circle(surface, (8, 8, 10), (gx, gy), 1)
-    # Frequency window (LCD strip).
-    pygame.draw.rect(surface, (40, 60, 30), (radio_x + 78, radio_y + 10, 44, 16))
-    freq = font_terminal_small.render(_T("route12.87_5"), True, (110, 200, 130))
-    surface.blit(freq, (radio_x + 84, radio_y + 12))
-    # Tuning knob.
-    pygame.draw.circle(surface, (35, 35, 40), (radio_x + 100, radio_y + 50), 10)
-    pygame.draw.line(surface, (90, 90, 95),
-                     (radio_x + 100, radio_y + 50),
-                     (radio_x + 100 + int(math.cos(t * 0.06) * 6),
-                      radio_y + 50 + int(math.sin(t * 0.06) * 6)), 1)
-    # LED.
-    led_pulse = 0.4 + 0.6 * math.sin(t * 0.15)  # pulse slows as signal dies
-    led_color = (int(80 + 100 * led_pulse), int(15 + 20 * led_pulse),
-                 int(15 + 20 * led_pulse))
-    pygame.draw.circle(surface, led_color, (radio_x + 118, radio_y + 14), 3)
-    _draw_light_cone(surface, radio_x + 118, radio_y + 14, 50,
-                     (200, 40, 40), alpha=int(40 * led_pulse))
+    # Dropped KRAP handheld radio on the floor in the lower-left foreground
+    radio_x, radio_y = 92, SCENE_BOT - 134
+    pygame.draw.rect(surface, (18, 20, 26), (radio_x, radio_y, 174, 86), border_radius=5)
+    pygame.draw.rect(surface, (52, 58, 68), (radio_x, radio_y, 174, 86), 2, border_radius=5)
+    for gy in range(radio_y + 12, radio_y + 52, 6):
+        for gx in range(radio_x + 14, radio_x + 86, 6):
+            pygame.draw.circle(surface, (7, 8, 11), (gx, gy), 1)
+    pygame.draw.rect(surface, (22, 46, 28), (radio_x + 98, radio_y + 12, 62, 20), border_radius=2)
+    freq = font_terminal_small.render(_T("route12.87_5"), True, (118, 224, 146))
+    surface.blit(freq, (radio_x + 106, radio_y + 15))
+    pygame.draw.circle(surface, (34, 36, 42), (radio_x + 128, radio_y + 60), 12)
+    pygame.draw.line(surface, (110, 114, 122), (radio_x + 128, radio_y + 60),
+                     (radio_x + 128 + int(math.cos(sec * 2.1) * 7),
+                      radio_y + 60 + int(math.sin(sec * 2.1) * 7)), 2)
+    led_pulse = 0.35 + 0.65 * (0.5 + 0.5 * math.sin(sec * 5.0))
+    led_col = (int(90 + 150 * led_pulse), int(18 + 24 * led_pulse), int(16 + 18 * led_pulse))
+    pygame.draw.circle(surface, led_col, (radio_x + 152, radio_y + 42), 4)
+    _draw_light_cone(surface, radio_x + 152, radio_y + 42, 62, (220, 44, 38), alpha=int(48 * led_pulse))
 
-    # Waveform (the dying signal).
-    wave_x = radio_x + 10
-    wave_y = radio_y - 28
-    wave_w, wave_h = 120, 22
-    pygame.draw.rect(surface, (12, 18, 14),
-                     (wave_x - 2, wave_y - 2, wave_w + 4, wave_h + 4))
-    pygame.draw.rect(surface, (35, 50, 38),
-                     (wave_x - 2, wave_y - 2, wave_w + 4, wave_h + 4), 1)
-    # Amplitude decays over time (the signal is dying).
-    amp = max(0.1, 0.9 - (t / 240.0))
+    # Dying signal waveform panel above the radio
+    wave_x, wave_y, wave_w, wave_h = radio_x, radio_y - 36, 174, 26
+    pygame.draw.rect(surface, (9, 16, 13), (wave_x, wave_y, wave_w, wave_h))
+    pygame.draw.rect(surface, (36, 58, 44), (wave_x, wave_y, wave_w, wave_h), 1)
+    amp = max(0.08, 0.92 - sec * 0.22)
     pts = []
-    for i in range(wave_w):
-        n = (math.sin(t * 0.4 + i * 0.5) * 0.4
-             + math.sin(t * 0.7 + i * 0.9) * 0.3
-             + (random.Random(t // 3 + i).random() - 0.5) * 0.5)
-        py = wave_y + wave_h // 2 + int(n * amp * (wave_h // 2 - 2))
-        pts.append((wave_x + i, py))
+    rng = random.Random(int(t // 40))
+    for i in range(0, wave_w - 4, 2):
+        n = (math.sin(sec * 18.0 + i * 0.35) * 0.45
+             + math.sin(sec * 31.0 + i * 0.72) * 0.30
+             + (rng.random() - 0.5) * 0.45)
+        pts.append((wave_x + 2 + i, wave_y + wave_h // 2 + int(n * amp * (wave_h // 2 - 2))))
     if len(pts) > 1:
-        pygame.draw.lines(surface, (110, 200, 130), False, pts, 1)
-    pygame.draw.line(surface, (40, 60, 45),
-                     (wave_x, wave_y + wave_h // 2),
-                     (wave_x + wave_w, wave_y + wave_h // 2), 1)
-    # Signal label.
-    wave_lbl = font_terminal_small.render(
-        _T("route12.rx_ch_7_no_signal"), True, (80, 120, 90))
+        pygame.draw.lines(surface, (112, 218, 138), False, pts, 1)
+    wave_lbl = font_terminal_small.render(_T("route12.rx_ch_7_no_signal"), True, (96, 152, 112))
     surface.blit(wave_lbl, (wave_x, wave_y - 18))
-    # Callsign.
-    callsign = font_terminal_small.render(
-        _T("route12.vasile_krap_field_unit"), True, (70, 100, 80))
-    surface.blit(callsign, (wave_x, wave_y + wave_h + 2))
+    callsign = font_terminal_small.render(_T("route12.vasile_krap_field_unit"), True, (84, 128, 98))
+    surface.blit(callsign, (wave_x, radio_y + 92))
 
 
 def draw_route12_aftermath(surface, t):

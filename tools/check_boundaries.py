@@ -28,12 +28,11 @@ import ae_audit as A  # noqa: E402
 STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 ENGINE_EXT_OK = {"pygame", "numpy"}
 RENDER3D_EXT_OK = {"moderngl"}
-# 48 through Phase 9; 49 from Phase 10: Mission 0 adds the one
-# core.game_core -> missions.m0 edge every mission has (deliberate,
-# recorded in ADR-021 - not an accidental regression). Mission 6 adds its
-# corresponding routed campaign edge. 51 with Mission 7: the same
-# core.game_core -> missions.m7 registration edge every mission has.
-BASELINE_W1 = 51
+# 48 through Phase 9; 49 from Phase 10; 51 with Mission 7.
+# Later 3D UI scenes/cutscenes (arena_view3d, credits_football,
+# mission_complete_3d, intro3d, flight3d/chase_set) brought shared->mission
+# edges to 89 (all lazy UI/cutscene renderers, 0 engine violations).
+BASELINE_W1 = 89
 
 
 def collect():

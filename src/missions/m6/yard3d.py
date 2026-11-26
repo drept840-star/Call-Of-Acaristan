@@ -15,7 +15,7 @@ The set is the train scene's: the post-departure live set it already packed
 (platform, station, the yard and its lights) is replayed verbatim, the truck
 stays parked, and the carriage is long gone.
 """
-from engine3d.hold import hold_cached as _hold_cached
+from engine3d.hold import _HOLD_KEYS, hold_cached as _hold_cached
 import math
 import sys
 
@@ -872,6 +872,9 @@ class YardScene:
             except Exception:
                 self.audio = None
         T._prewarm_ambience()
+        for kind in {spec[0] for w in WAVES for spec in w}:
+            _hold_cached(_w.hum(("guard", kind), True), POSES["ready"],
+                         "rifle", "ready", key=("guard", kind))
         self._grab(True)
         # pay the set build now, not on the first visible frame
         try:
@@ -1825,10 +1828,11 @@ class YardScene:
                                 lsh_r=pose.get("lsh_r", 8) + 24.0 * rock,
                                 rkn=pose.get("rkn", 2) + 18.0 * rock)
             tw, sp = pose.get("twist", 0.0), pose.get("spine", 0.0)
-            pose = _hold_cached(_w.hum(("guard", kind), True), pose, "rifle", "ready",
-                                key=("guard", kind))
-            pose["rifle_p"] = pose.get("rifle_p", 0.0) + sp - POSES["ready"]["spine"]
-            pose["rifle_y"] = pose.get("rifle_y", 0.0) + tw
+            arms = _hold_cached(_w.hum(("guard", kind), True), POSES["ready"],
+                                "rifle", "ready", key=("guard", kind))
+            pose = dict(pose, **{k: arms[k] for k in _HOLD_KEYS if k in arms})
+            pose["rifle_p"] = arms.get("rifle_p", 0.0) + sp - POSES["ready"]["spine"]
+            pose["rifle_y"] = arms.get("rifle_y", 0.0) + tw
             joints = _w.actor(r, ("guard", kind), pose, (x, y, z), g["yaw"],
                               int(tm), seed=100 + g["slot"], amp=0.4,
                               rifle_on=True, hd=True, shadow=T._shadow_for(z))

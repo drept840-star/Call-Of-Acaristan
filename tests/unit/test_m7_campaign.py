@@ -33,6 +33,7 @@ NONE = _Keys()
 
 def _start(stage, preps=()):
     STATE.m7_preps = list(preps)
+    STATE.m7_raid_cp = 0
     m7.start_m7(stage)
     return STATE
 
@@ -43,6 +44,7 @@ class M7StageTests(unittest.TestCase):
         self._save.start()
         self.addCleanup(self._save.stop)
         self.addCleanup(_raid.abort)
+        self.addCleanup(lambda: setattr(STATE, "m7_raid_cp", 0))
 
     def test_ladder_order_matches_the_doc(self):
         self.assertEqual(_meta.STAGES, ("arrival", "chores", "runner", "prep",
@@ -123,6 +125,7 @@ class M7RaidTests(unittest.TestCase):
         self._save.start()
         self.addCleanup(self._save.stop)
         self.addCleanup(_raid.abort)
+        self.addCleanup(lambda: setattr(STATE, "m7_raid_cp", 0))
 
     def _scene(self, preps=()):
         _start("raid", preps)
@@ -297,6 +300,7 @@ class M7DevJumpTests(unittest.TestCase):
         self._save.start()
         self.addCleanup(self._save.stop)
         self.addCleanup(_raid.abort)
+        self.addCleanup(lambda: setattr(STATE, "m7_raid_cp", 0))
 
     def test_raid_jump_takes_preps_and_a_checkpoint(self):
         m7.start_m7_dev_raid(["tractor", "shed"], 2)

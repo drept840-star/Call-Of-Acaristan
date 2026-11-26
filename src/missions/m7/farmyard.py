@@ -846,12 +846,25 @@ def _toast(text, ms=2800):
     _S["toast"] = (text, _now_ms() + ms)
 
 
+def _play_current_line():
+    try:
+        from audio import voice
+        if _S and _S.get("lines"):
+            who, text = _S["lines"][0]
+            voice.play_line(who, text)
+        else:
+            voice.cut()
+    except Exception:
+        pass
+
+
 def _say(lines, after=None):
     _S["lines"] = list(lines)
     _S["line_t0"] = _now_ms()
     _S["tick_n"] = 0
     _S["after"] = after
     _S["moving"] = False
+    _play_current_line()
 
 
 def _say_colonel(lines):
@@ -872,6 +885,7 @@ def _advance_line():
     _S["lines"].pop(0)
     _S["line_t0"] = now
     _S["tick_n"] = 0
+    _play_current_line()
 
     if not _S["lines"]:
         after = _S["after"]

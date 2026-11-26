@@ -138,18 +138,25 @@ _FK = None
 
 
 def _figure_kit():
-    """cutscenes.figure_kit loaded by path (the generator runs without src/)."""
+    """Load engine.anim cleanly (replaces deprecated cutscenes.figure_kit)."""
     global _FK
     if _FK is None:
-        import importlib.util
+        from types import SimpleNamespace
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         src = os.path.join(root, "src")
-        if src not in sys.path:          # figure_kit imports engine.core (RPE6 B-001)
+        if src not in sys.path:          # engine.anim imports engine.core (RPE6 B-001)
             sys.path.insert(0, src)
-        path = os.path.join(root, "src", "cutscenes", "figure_kit.py")
-        spec = importlib.util.spec_from_file_location("_portrait_figure_kit", path)
-        _FK = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(_FK)
+        import engine.anim as _anim
+        _FK = SimpleNamespace(
+            SPECS=_anim.SPECS,
+            _face=_anim.face,
+            _mix=_anim.mix,
+            _dark=_anim.dark,
+            _lite=_anim.lite,
+            _Pen=_anim.Pen,
+            _REF_H=_anim.REF_H,
+            _STUBBLE=_anim.STUBBLE,
+        )
     return _FK
 
 

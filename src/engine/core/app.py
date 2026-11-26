@@ -35,6 +35,7 @@ class App:
         self.profiler = Profiler()
         self.screen = None
         self.booted = False
+        self._owns_pygame = False
         self.exit_code: int | None = None
 
     @staticmethod
@@ -56,6 +57,7 @@ class App:
         if drv:
             os.environ["SDL_VIDEODRIVER"] = str(drv)   # chosen once, at boot (R7)
         import pygame
+        self._owns_pygame = not pygame.get_init()
         pygame.init()
         for name, obj in (("settings", self.settings), ("log", self.log), ("clock", self.clock),
                           ("rng", self.rng), ("events", self.events), ("profiler", self.profiler)):
@@ -131,9 +133,10 @@ class App:
 
     def shutdown(self) -> None:
         global _CURRENT
-        if self.booted:
+        if self.booted and self._owns_pygame:
             import pygame
             pygame.quit()
+        self._owns_pygame = False
         self.booted = False
         if _CURRENT is self:
             _CURRENT = None

@@ -178,6 +178,8 @@ M8_SCENES = {
     "m8d_crash_spin": ("m8dutyfilms", "crash_spin"),
     "m8d_crash_black": ("m8dutyfilms", "crash_black"),
     "m8d_crash_fire": ("m8dutyfilms", "crash_fire"),
+    "m8d_crash_promise": ("m8dutyfilms", "crash_promise"),
+    "m8d_crash_better": ("m8dutyfilms", "crash_better"),
     "m8d_inauguration": ("m8dutyfilms", "inauguration"),
     "m8d_vasile_speech": ("m8dutyfilms", "vasile_speech"),
     "m8d_crowd": ("m8dutyfilms", "crowd"),

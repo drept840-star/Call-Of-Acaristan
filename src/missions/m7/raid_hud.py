@@ -99,10 +99,21 @@ def bodi_clock(surface, s):
     H._text(surface, font_terminal_small, "%d S" % int(math.ceil(left)), H.TEXT, (cx, y + 30), "midtop")
 
 
-def hold_bar(surface, label, frac):
-    cx, y = WIDTH // 2, HEIGHT - 164
-    H._bar(surface, cx - 70, y, 140, frac, H.ACCENT, h=6)
-    H._text(surface, font_terminal_small, label, H.TEXT, (cx, y - 18), "midtop")
+def hold_bar(surface, label, frac, pulse=0.0, sub=None):
+    p = max(0.0, min(1.0, float(pulse)))
+    cx = WIDTH // 2
+    y = HEIGHT - 164 - int(round(3.0 * p))
+    bar_w = 148 if sub else 140
+    bar_h = 6 + (2 if p > 0.25 else 0)
+    col = (
+        min(255, int(H.ACCENT[0] + (255 - H.ACCENT[0]) * 0.6 * p)),
+        min(255, int(H.ACCENT[1] + (236 - H.ACCENT[1]) * 0.6 * p)),
+        min(255, int(H.ACCENT[2] + (170 - H.ACCENT[2]) * 0.4 * p)),
+    )
+    H._bar(surface, cx - bar_w // 2, y, bar_w, frac, col, h=bar_h)
+    H._text(surface, font_terminal_small, label, col if p > 0.35 else H.TEXT, (cx, y - 18), "midtop")
+    if sub:
+        H._text(surface, font_terminal_small, sub, col if p > 0.2 else H.ACCENT, (cx, y + bar_h + 6), "midtop")
 
 
 def draw(surface, s):
@@ -145,6 +156,11 @@ def draw(surface, s):
     if prompt is not None:
         label, key, hold = prompt
         if hold is not None:
-            hold_bar(surface, label, hold)
+            if getattr(s, "alex_lifting", False):
+                lbl = "ALMOST CLEAR!" if hold >= 0.72 else "HEAVE THE BEAM"
+                hold_bar(surface, lbl, hold, pulse=getattr(s, "lift_heave", 0.0),
+                         sub="[SPACE / LMB] HEAVE FASTER")
+            else:
+                hold_bar(surface, label, hold)
         else:
             U.prompt(surface, label, key)

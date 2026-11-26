@@ -71,7 +71,8 @@ def enabled():
             _STATE["ok"] = True
         except Exception:
             _STATE["ok"] = False
-    if _STATE["ok"] and _STATE.get("until", 0) > pygame.time.get_ticks():
+    from engine.core import now_ms as _now_ms
+    if _STATE["ok"] and _STATE.get("until", 0) > _now_ms():
         return False
     return _STATE["ok"]
 
@@ -81,10 +82,11 @@ def disable():
     run after ``MAX_FAILS``. Called from the caller's ``except`` block, so
     the live exception goes to ``crash_reports/td3d``."""
     import sys
+    from engine.core import now_ms as _now_ms
     fails = _STATE["fails"] = _STATE.get("fails", 0) + 1
     if fails >= MAX_FAILS:
         _STATE["ok"] = False
-    _STATE["until"] = pygame.time.get_ticks() + RETRY_MS
+    _STATE["until"] = _now_ms() + RETRY_MS
     exc = sys.exc_info()[1]
     if exc is not None and fails <= MAX_FAILS:
         try:
@@ -216,13 +218,18 @@ def mouse_world(h=0.0):
 # ── cast ───────────────────────────────────────────────────────────────
 
 _ARMED = {}
+_HOLDS_WARMED = False
 
 
 def armed(who, rig="pistol", **overrides):
     """Cached Humanoid of cast member ``who`` (``engine.anim.SPECS`` key)
     carrying the multiplayer mesh of ``rig`` (pistol / os12 / k9_smg /
     shotgun). ``overrides`` go to the spec (e.g. jacket=)."""
+    global _HOLDS_WARMED
     from ui import mp3d
+    if not _HOLDS_WARMED:
+        _HOLDS_WARMED = True
+        mp3d.warm()
     rig = rig if rig in mp3d.HOLD_BY_RIG else "pistol"
     key = (who, rig, tuple(sorted(overrides.items())))
     h = _ARMED.get(key)

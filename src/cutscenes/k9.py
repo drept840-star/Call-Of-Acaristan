@@ -358,6 +358,11 @@ def _draw(s,ms):
             start,end,reach=hand
             if reach>.005:_sleeve(s,start,end,88 if not cool else 94,cool)
         _draw_weapon(s,pose)
+        # Subtle specular sheen sliding across the K-9 receiver & suppressor
+        gx=_local((-92+((ms*0.18)%240),-4),pose)
+        glint=pygame.Surface((46,16),pygame.SRCALPHA)
+        pygame.draw.ellipse(glint,(216,228,208,34),(0,0,46,16))
+        s.blit(glint,(round(gx[0]-23),round(gx[1]-8)))
         # Charging handle uses the same rigid transform as the gun.
         a=_local((-18-32*pull,-9),pose);b=_local((-18-32*pull,-17),pose)
         pygame.draw.line(s,(12,24,30),a,b,7)
@@ -367,13 +372,24 @@ def _draw(s,ms):
             start,end,reach=hand
             if reach>.005:
                 _glove(s,end,1.0+(.33*(pose[2]-1.25)/.55),pose[3]-8 if not is_support else pose[3]+18,is_support,1-reach)
+        # Overhead armory task-light pool & subtle edge vignette
+        ov=pygame.Surface((WIDTH,SCENE_BOT-SCENE_TOP),pygame.SRCALPHA)
+        flick=0.90+0.10*math.sin(ms*0.011)
+        pygame.draw.ellipse(ov,(192,216,198,int(18*flick)),(210,-60,580,340))
+        s.blit(ov,(0,SCENE_TOP))
         # Reward read arrives only after the action is back in battery.
         ready=ms-WALL_MS-GRAB_MS
         a=round(255*_ease((ready-1260)/200))
         if a:
-            title=font_terminal.render(_T("k9.k_9_acquired"),True,(219,224,195));title.set_alpha(a)
-            sub=font_terminal_small.render(_T("k9.suppressed_smg_24_rounds_2_spare"),True,(172,187,179));sub.set_alpha(a)
-            s.blit(title,(58,SCENE_TOP+40));s.blit(sub,(58,SCENE_TOP+70))
+            title=font_terminal.render(_T("k9.k_9_acquired"),True,(228,236,208));title.set_alpha(a)
+            sub=font_terminal_small.render(_T("k9.suppressed_smg_24_rounds_2_spare"),True,(178,198,188));sub.set_alpha(a)
+            pw=max(title.get_width(),sub.get_width())+32
+            plate=pygame.Surface((pw,62),pygame.SRCALPHA)
+            pygame.draw.rect(plate,(9,14,17,round(190*a/255)),(0,0,pw,62),border_radius=4)
+            pygame.draw.rect(plate,(136,184,158,round(220*a/255)),(0,0,4,62))
+            pygame.draw.rect(plate,(62,82,84,round(180*a/255)),(0,0,pw,62),1,border_radius=4)
+            s.blit(plate,(46,SCENE_TOP+32))
+            s.blit(title,(60,SCENE_TOP+40));s.blit(sub,(60,SCENE_TOP+68))
     finally:
         s.set_clip(previous_clip)
 

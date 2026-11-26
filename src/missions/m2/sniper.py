@@ -1562,6 +1562,11 @@ def _explode_tanker():
     # The blast_done card-close handler in _close_card() still re-sets the
     # flag (harmless idempotent re-set, left as belt-and-suspenders).
     STATE.mission2_checkpoint_reached = True
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m2", checkpoint="shelter")
+    except Exception:
+        pass
     STATE.mission2_stage = STAGE_BLACKOUT
     STATE.mission_phase = "m2_blackout"
     STATE.mission2_timer = 0

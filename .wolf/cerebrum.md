@@ -164,6 +164,17 @@ budget_tokens: 2000
   context-matching applier (strip `\r`, search the whole file, replace) is
   reliable, but empty old-sequences (`@@ -N,0`) must be avoided — they insert at
   the hint's first index, so a pure-add hunk needs a neighbouring context line.
+- **`tools/sync_arch_map.py` has no `--help` flag.** Any argument (including
+  `--help`) triggers a full regeneration that rewrites hand-written prose into
+  a condensed style, producing a ~500-line diff. To undo, capture `git diff`
+  bytes with Python (`subprocess.check_output`, write `wb`) — PowerShell `>`
+  redirects decode as cp1252 (mojibake `§`) and write UTF-16 with CRLF, so
+  `git apply -R` rejects them. Update the map with targeted `edit`s instead.
+- **Animation endpoint tests must respect beat boundaries.** At exactly
+  `hit_s`, `mansion3d._andrei_death_anim` has already left the player-shot
+  backpedal branch and entered the shared pinned-rack shake, which adds ±0.025 m
+  jitter; `assertAlmostEqual(off[0], ANDREI_RACK_DX, places=3)` fails although
+  the travel curve is correct. Use a tolerance sized to the next beat's jitter.
 
 - **M8 TrapScene/MansionScene BORROW RaidScene methods by assignment** (class
   attributes like `_ground_move = R.RaidScene._move`), they do not subclass it.
@@ -209,6 +220,17 @@ budget_tokens: 2000
   `InvalidObject ... render`. Include the new key in the live set (`| {key}`).
   Same pattern applies to any cache whose "in use" set is assembled before the
   current insertion is registered.
+
+- **One GLB can feed several rigs via path-aware face tagging.** `chase_set._load_glb(path, return_paths=True)` prefixes each face with its node path, so `maru_gunship_parts()` splits root nodes `heli_fuselage`/`heli_tail_boom`/`main_rotor`/`tail_rotor` 1:1 in metres (no bake, procedural `flight_fx` meshes are the missing-asset fallback). **Roll polarity is opposite across the two submit paths:** `CS._xf`/`_rot_rt` apply `rot_z(+roll)` while `flight_fx.heli_matrix` applies `rot_z(-roll)`, so every shared gunship submit must pass `-hroll` or a banked airframe tilts the wrong way. `gunner_eye`/pintle/seat anchors must come from the GLB info dict (`floor_y=0.574`, `pintle_top=(0,1.26,0)`), not the old procedural offsets.
+
+- **Cutting a GLB hull by a y-range can tear the roof.** `_vip_open_body` removed faces up to `y=2.45` (above the roof eave) with nothing behind the hole, so night sky leaked through the opposite side and the standing actor punched through the lintel. Keep the doorway recessed (`y 0.56..2.02`), SEAL a dark interior box behind the cut, and place the actor below the lintel (`POSES["crouch"]`). Also: from a third-person camera, an airframe hovering over a balustrade occupies the rail footprint - move the hover outside the rail (`x=12.4` vs `x=+9.0`) instead of trying to crop it. For a door-gunner view, the eye must sit on the doorway threshold (`lx=0.96*tanh(3.2*sin(rr))`), not the center aisle, or cockpit pillars block the target.
+
+- **[2026-11-21] Both FPV and film gunship paths now read the GLB anchors (supersedes the earlier "FPV no longer reads GLB" note).** `chase_set.maru_gunship_fpv_parts()` clips the same `maru_gunship.glb` faces for first person (drops `cabin_b_pillar_*`/`quarter_mullion_*`/`a_pillar_*`/`windshield_center_mullion` and eye-level rocket pods/tubes/pylons, clips rear walls/doors to `y<=1.04`, lights `avionics_*`), and `put_maru_gunship(..., fpv=True)` submits it under a separate `maru_fuse_fpv[_burnt]` cache key. `flight_fx.draw_cabin_and_gun` and `m8dutyfilms._gunship(..., fpv=True)` both use `info` anchors (`floor_y=0.574`, eye `floor_y+1.06`, `pintle_top`, `pilot_seat`, `roof_beacon`); the old `FPV_*` local constants are now fallback-only. Shared submits must pass `-hroll` (CS `_xf` uses `rot_z(+roll)`, FX `heli_matrix` `rot_z(-roll)`). For sightline work edit the clip sets/eye formula, not the old procedural offsets. Also: rockets now fly in pure world space (`dir=normalize(vel)`, no `hvel` addition/loft), so smoke trails behind the nose; lead-intercept guidance at launch and every tick via `_heli_vel()` + `_rocket_intercept()` (solves `|(tgt-p)+vh*t| = s*t`), current speeds `ROCKET_V=22`/`ROAD=28`/`AIR=26`, `ROCKET_DMG=18`; hit sphere only 0.90 m (no free heat cooling on a rocket kill), road gate `dz>90/58`, relaxed to `60/36` mid-`rk_tele` windup, `<=180 m` ground / `220 m` air (rpg/aa active 185 m), `+-72 deg`, and the HUD lock diamond only inside 105 m. Flight altitude for the road canyon is 21.0 m cp1-2 / `ALT=19.5` cp3-4 with fog `(0.0028, 0.0, 2.2, FS.FOG)`; `flight_set` lightens night albedos, uses FOG (12,17,30) 130..560, and focuses lamps 55 m ahead along the aim direction. `e["rk_tele"]` is separate from bullet `tele`, so rocket windups do not re-roll the RNG or re-check range.
+- **[2026-11-23] GL `light` sprites get a hard horizontal ground cut when their anchor is above ground.** Use `phys_occ=True` with an `occ_bias` around the sprite radius (`rad_m * 0.8..0.9`, or `max(0.8, rad_m * 0.9)` for ground spills) for blast flashes and fireballs so nearby foreground ground does not clip the bottom half along a depth scanline.
+
+- **[2026-11-23] Owner-supplied ridge patch had two import/draw-time traps.** A parenthesised generator cannot be concatenated to a tuple (`(x for ...) + (y,)` raises `TypeError` at import) - wrap it in `tuple(...)` when extending an existing generator-built constant such as `ridge3d._PAD_LIGHTS`. Also `ridge3d._off(dx, dz)` returns a 3-tuple `(x, 0.0, z)`, so `for (mx, mz) in (_off(...), ...)` fails at draw time; unpack `(mx, _my, mz)`. Render the owner's contact-sheet probe before declaring a visual patch done - neither error is caught by `compileall` or `smoke --only m8`.
+
+- **[2026-11-24] A missing render pass can be a truncated file, not a logic bug.** If a function ends mid-expression and a queued-delta probe reports 0 (e.g. `m8duty_crowd.draw_maru_with_crutches` stopped at `cuff_m = _basis_from_xy(...)`), check the file tail before debugging conditions/caches. Probe shape: compare `len(getattr(r, "_dyn", getattr(r, "_tris", [])))` before/after calling the draw helper - `delta=1` confirms the final `r.add_dynamic(...)` now runs. `compileall` and `smoke --only m8` both pass on a truncated tail, so only the delta probe catches it.
 
 ## Do-Not-Repeat
 
@@ -266,6 +288,8 @@ budget_tokens: 2000
   `scene.hold` around the call, or its own hold accumulator resets every frame
   and its completion timer is unreachable. Before "re-enabling" a mechanic,
   check whether a shared helper silently writes the same mutable field.
+
+- [2026-11-20] `tools/sync_arch_map.py` regenerates the ENTIRE `<!-- AUTO:sigs --> ... <!-- /AUTO:sigs -->` block, so a hand-written note placed inside it is silently dropped (the old `_CONTRAST`/stucco textures note vanished). Keep prose OUTSIDE those markers; when regenerating a stale map, diff against a backup and restore any dropped prose BEFORE re-running `--check`. §8.1 rows belong to `map_assets3d.py` but that tool PRESERVES existing row text, so hand-edits there are safe.
 
 ## Decision Log
 

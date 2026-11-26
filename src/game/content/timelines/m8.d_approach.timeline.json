@@ -27,6 +27,9 @@
    "text": "Perimeter feed is looping. Up the drive, through the house, and don't let him reach that helicopter.",
    "radio": true,
    "min_ms": 4600,
+   "full_frame": true,
+   "self_graded": true,
+   "cut_to_play": true,
    "auto_advance": true,
    "cues": [
     [

@@ -21,8 +21,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INCLUDE_DIRS = ("src", "assets")
 INCLUDE_FILES = ("acaristan.py", "menu_theme.mp3", "README.md",
                  "pyproject.toml")
-EXCLUDE_PARTS = {"__pycache__", ".git"}
-EXCLUDE_SUFFIX = (".pyc", ".pyo")
+EXCLUDE_PARTS = {"__pycache__", ".git", "graphify-out", "_RETAKES", "TRAILER", "ANNOUNCE_25D"}
+EXCLUDE_SUFFIX = (".pyc", ".pyo", ".pdf", ".blend", ".blend1")
+EXCLUDE_FILES = {"m3cell_balaceanu_patch.py"}
 
 
 def _version():
@@ -34,12 +35,18 @@ def _version():
 def _iter_files():
     for d in INCLUDE_DIRS:
         for dirpath, dirs, files in os.walk(os.path.join(ROOT, d)):
-            dirs[:] = [x for x in dirs if x not in EXCLUDE_PARTS]
+            dirs[:] = sorted(x for x in dirs if x not in EXCLUDE_PARTS)
+            rel_dir = os.path.relpath(dirpath, ROOT).replace(os.sep, "/")
+            sibs = {fn.lower() for fn in files}
             for f in sorted(files):
-                if f.endswith(EXCLUDE_SUFFIX):
+                low = f.lower()
+                if low.endswith(EXCLUDE_SUFFIX) or low.endswith("_matches.txt") or f in EXCLUDE_FILES:
                     continue
+                if rel_dir.startswith("assets/voice") and low.endswith(".wav"):
+                    if (f[:-4] + ".ogg").lower() in sibs:
+                        continue
                 full = os.path.join(dirpath, f)
-                yield os.path.relpath(full, ROOT).replace(os.sep, "/"), full
+                yield f"{rel_dir}/{f}", full
     for f in INCLUDE_FILES:
         full = os.path.join(ROOT, f)
         if os.path.exists(full):

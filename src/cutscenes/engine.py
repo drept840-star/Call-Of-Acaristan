@@ -14,7 +14,7 @@ from cutscenes.cast import draw_biribel, draw_civilian
 from cutscenes.route12 import draw_biribel_blackout, draw_factory, draw_ipa_radio_chatter, draw_krap_door_kickin, draw_mag_graffiti, draw_oil_rig, draw_propaganda_poster, draw_route12_aftermath, draw_route12_black, draw_route12_broadcast, draw_route12_checkpoint, draw_route12_files, draw_route12_mag_alert, draw_route12_tanker, draw_van_exterior, draw_van_handoff, draw_van_interior, GROUND_Y, _draw_vertical_gradient, _draw_light_cone
 from core.cutscene_registry import scene_renderer as _scene_renderer
 from core.cutscene_registry import register_scene_renderer as _register_intro
-import cutscenes.van3d  # noqa: F401  registers the 3D "van_exterior" take (2D fallback inside)
+import cutscenes.van3d  # noqa: F401  registers the 3D KRAP van takes (2D fallback inside)
 from cutscenes.m5mid3d import draw_m5x
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 from engine.ui import dialogue_box as _dialogue_box  # RPE6 Phase 4 (A-009): shared cutscene box
@@ -456,83 +456,97 @@ def draw_film_caption(surface, speaker, text, typed=None):
 
 
 def draw_volkov_dossier_overlay(surface, t):
-    """Briefing tablet/dossier overlay. Clean, readable, not glossy."""
-    tab_w = 460
-    tab_h = 285
+    """Briefing tablet/dossier overlay. Clean, tactile KRAP intel display."""
+    from engine.anim import draw_character as _fk_draw
+    tab_w = 500
+    tab_h = 302
     tab_x = WIDTH // 2 - tab_w // 2
-    tab_y = SCENE_TOP + 88
-    # Drop shadow
-    shadow = pygame.Surface((tab_w + 24, tab_h + 24), pygame.SRCALPHA)
-    shadow.fill((0, 0, 0, 120))
-    surface.blit(shadow, (tab_x + 12, tab_y + 12))
-    # Tablet body
-    pygame.draw.rect(surface, (10, 12, 15), (tab_x - 10, tab_y - 10, tab_w + 20, tab_h + 20), border_radius=4)
-    pygame.draw.rect(surface, (45, 50, 58), (tab_x - 10, tab_y - 10, tab_w + 20, tab_h + 20), 2, border_radius=4)
-    pygame.draw.rect(surface, (18, 22, 25), (tab_x, tab_y, tab_w, tab_h))
-    # Header
-    pygame.draw.rect(surface, (8, 12, 18), (tab_x, tab_y, tab_w, 34))
-    pygame.draw.rect(surface, C_KRAP_BLUE, (tab_x, tab_y, 5, 34))
-    hdr = font_terminal.render(_T("engine.krap_intel_dossier_active_target"), True, (140, 185, 220))
-    surface.blit(hdr, (tab_x + 16, tab_y + 7))
-    # Photo frame
-    photo_x = tab_x + 24
-    photo_y = tab_y + 54
-    photo_w = 150
-    photo_h = 195
-    pygame.draw.rect(surface, (28, 25, 22), (photo_x, photo_y, photo_w, photo_h))
-    pygame.draw.rect(surface, (75, 70, 62), (photo_x, photo_y, photo_w, photo_h), 2)
-    # Volkov portrait, still stylized
-    face_cx = photo_x + photo_w // 2
-    face_cy = photo_y + 66
-    pygame.draw.circle(surface, (42, 36, 32), (face_cx, face_cy), 33)
-    pygame.draw.arc(surface, (8, 6, 6), (face_cx - 34, face_cy - 34, 68, 68), 0, math.pi, 12)
-    pygame.draw.circle(surface, (120, 38, 34), (face_cx - 10, face_cy - 4), 3)
-    pygame.draw.circle(surface, (120, 38, 34), (face_cx + 10, face_cy - 4), 3)
-    pygame.draw.arc(surface, (18, 16, 14), (face_cx - 24, face_cy + 2, 48, 26), math.pi * 1.15, math.pi * 1.85, 2)
-    pygame.draw.polygon(
-        surface,
-        (14, 14, 20),
-        [
-            (photo_x + 25, photo_y + photo_h - 62),
-            (photo_x + photo_w - 25, photo_y + photo_h - 62),
-            (photo_x + photo_w - 8, photo_y + photo_h),
-            (photo_x + 8, photo_y + photo_h),
-        ],
-    )
-    # Photo noise
-    noise = pygame.Surface((photo_w, photo_h), pygame.SRCALPHA)
-    rng = random.Random(12 + int(t // 8))
-    for _ in range(140):
+    tab_y = SCENE_TOP + 62
+    # Drop shadow + outer tactical bezel
+    shadow = pygame.Surface((tab_w + 34, tab_h + 34), pygame.SRCALPHA)
+    pygame.draw.rect(shadow, (0, 0, 0, 145), shadow.get_rect(), border_radius=8)
+    surface.blit(shadow, (tab_x - 7, tab_y - 5))
+    bezel = pygame.Rect(tab_x - 12, tab_y - 12, tab_w + 24, tab_h + 24)
+    pygame.draw.rect(surface, (11, 14, 19), bezel, border_radius=6)
+    pygame.draw.rect(surface, (52, 62, 76), bezel, 2, border_radius=6)
+    pygame.draw.rect(surface, (16, 21, 27), (tab_x, tab_y, tab_w, tab_h))
+    # Corner reticle ticks
+    for cx0, cy0, dx, dy in (
+        (bezel.x + 6, bezel.y + 6, 10, 10),
+        (bezel.right - 6, bezel.y + 6, -10, 10),
+        (bezel.x + 6, bezel.bottom - 6, 10, -10),
+        (bezel.right - 6, bezel.bottom - 6, -10, -10),
+    ):
+        pygame.draw.line(surface, C_KRAP_BLUE, (cx0, cy0), (cx0 + dx, cy0), 2)
+        pygame.draw.line(surface, C_KRAP_BLUE, (cx0, cy0), (cx0, cy0 + dy), 2)
+    # Header bar
+    pygame.draw.rect(surface, (8, 13, 21), (tab_x, tab_y, tab_w, 36))
+    pygame.draw.rect(surface, C_KRAP_BLUE, (tab_x, tab_y, 6, 36))
+    pygame.draw.line(surface, (42, 62, 86), (tab_x, tab_y + 36), (tab_x + tab_w, tab_y + 36), 1)
+    hdr = font_terminal.render(_T("engine.krap_intel_dossier_active_target"), True, (158, 206, 242))
+    surface.blit(hdr, (tab_x + 16, tab_y + 8))
+    # Live status dot
+    dot_col = (90, 232, 132) if (int(t) // 450) % 2 == 0 else (40, 118, 66)
+    pygame.draw.circle(surface, dot_col, (tab_x + tab_w - 18, tab_y + 18), 4)
+    # Surveillance photo frame using canonical cast art (figure_kit Volkov)
+    photo_x = tab_x + 22
+    photo_y = tab_y + 52
+    photo_w = 162
+    photo_h = 200
+    photo = pygame.Surface((photo_w, photo_h))
+    for py in range(0, photo_h, 3):
+        u = py / float(photo_h)
+        photo.fill((int(22 + 12 * u), int(26 + 10 * u), int(30 + 12 * u)), (0, py, photo_w, 3))
+    # Subtle surveillance height-chart lines
+    for hy in range(28, photo_h - 14, 24):
+        pygame.draw.line(photo, (44, 52, 58), (8, hy), (photo_w - 8, hy), 1)
+    _fk_draw(photo, "volkov", photo_w // 2, int(photo_h * 1.98), 1.48, facing_right=True)
+    # Desaturated surveillance tint + CRT grain
+    tint = pygame.Surface((photo_w, photo_h), pygame.SRCALPHA)
+    tint.fill((18, 28, 34, 48))
+    photo.blit(tint, (0, 0))
+    rng = random.Random(12 + int(t // 80))
+    for _ in range(120):
         nx = rng.randint(0, photo_w - 1)
         ny = rng.randint(0, photo_h - 1)
-        v = rng.randint(20, 70)
-        noise.set_at((nx, ny), (v, v, v, 45))
-    surface.blit(noise, (photo_x, photo_y))
+        v = rng.randint(24, 78)
+        photo.set_at((nx, ny), (v, v + 4, v + 8))
+    for sy in range(0, photo_h, 3):
+        pygame.draw.line(photo, (8, 12, 16), (0, sy), (photo_w, sy), 1)
+    # Red surveillance REC stamp
+    rec_tag = font_terminal_small.render("CAM-04 // SLUM", True, (220, 96, 84))
+    photo.blit(rec_tag, (8, 6))
+    surface.blit(photo, (photo_x, photo_y))
+    pygame.draw.rect(surface, (84, 102, 122), (photo_x, photo_y, photo_w, photo_h), 2)
     # Info column
-    info_x = tab_x + 200
-    info_y = tab_y + 58
+    info_x = tab_x + 206
+    info_y = tab_y + 54
     rows = [
         ("NAME", "SEBASTIAN VOLKOV", C_WHITE),
-        ("AFFILIATION", "IPA LOGISTICS", (210, 120, 100)),
-        ("STATUS", "ACTIVE", (80, 220, 110)),
-        ("PRIORITY", "HIGH", (230, 80, 65)),
-        ("LAST SEEN", "SLUM WAREHOUSE", (210, 190, 130)),
-        ("ROE", "CAPTURE ALIVE", C_KRAP_BLUE),
+        ("AFFILIATION", "IPA LOGISTICS", (224, 134, 108)),
+        ("STATUS", "ACTIVE", (88, 230, 122)),
+        ("PRIORITY", "HIGH", (238, 86, 70)),
+        ("LAST SEEN", "SLUM WAREHOUSE", (222, 198, 138)),
+        ("ROE", "CAPTURE ALIVE", (112, 178, 238)),
     ]
     for i, (k, v, col) in enumerate(rows):
-        y = info_y + i * 29
-        ks = font_terminal_small.render(k, True, (95, 110, 125))
+        y = info_y + i * 32
+        ks = font_terminal_small.render(k, True, (108, 126, 144))
         vs = font_terminal.render(v, True, col)
         surface.blit(ks, (info_x, y))
-        surface.blit(vs, (info_x, y + 11))
-    # Bottom warning
-    pygame.draw.line(surface, (45, 50, 58), (tab_x + 20, tab_y + tab_h - 38), (tab_x + tab_w - 20, tab_y + tab_h - 38), 1)
+        surface.blit(vs, (info_x, y + 12))
+        if i < len(rows) - 1:
+            pygame.draw.line(surface, (30, 38, 48), (info_x, y + 29), (tab_x + tab_w - 20, y + 29), 1)
+    # Bottom warning strip
+    pygame.draw.rect(surface, (28, 16, 16), (tab_x + 12, tab_y + tab_h - 36, tab_w - 24, 26))
+    pygame.draw.rect(surface, (112, 54, 44), (tab_x + 12, tab_y + tab_h - 36, tab_w - 24, 26), 1)
     warn = font_terminal_small.render(_T("engine.warning_target_connected_to_fueg"), True, C_ORANGE)
-    surface.blit(warn, (tab_x + 24, tab_y + tab_h - 27))
-    # Tiny scanline flicker
-    if (_now_ms() // 120) % 2 == 0:
-        gy = tab_y + 40 + (_now_ms() // 7) % (tab_h - 50)
-        pygame.draw.line(surface, (180, 220, 255, 45), (tab_x, gy), (tab_x + tab_w, gy), 1)
+    surface.blit(warn, (tab_x + 22, tab_y + tab_h - 30))
+    # Subtle deterministic scanline sweep
+    gy = tab_y + 40 + (int(t) // 9) % (tab_h - 52)
+    scan = pygame.Surface((tab_w, 2), pygame.SRCALPHA)
+    scan.fill((160, 214, 255, 28))
+    surface.blit(scan, (tab_x, gy))
 # ─────────────────────────────────────────────
 # CUTSCENE SHOT LISTS
 # ─────────────────────────────────────────────

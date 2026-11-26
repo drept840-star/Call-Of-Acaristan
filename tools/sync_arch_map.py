@@ -1,10 +1,10 @@
-"""Keep the generated parts of docs/ARCHITECTURE_MAP.md in sync with the repo.
+"""Keep the generated parts of docs/ARCHITECTURE_MAP.md and docs/FILE_INDEX.md in sync.
 
-    python tools/sync_arch_map.py           # rewrite the map if out of date
-    python tools/sync_arch_map.py --check   # exit 1 if out of date (pre-commit, smoke)
+    python tools/sync_arch_map.py           # rewrite both files if out of date
+    python tools/sync_arch_map.py --check   # exit 1 if either is out of date (pre-commit, smoke)
     python tools/sync_arch_map.py --dump-sigs   # print the AST signature block only
 
-Generated (deterministic, LF, UTF-8 no BOM):
+Generated into ARCHITECTURE_MAP.md (deterministic, LF, UTF-8 no BOM):
   s1    the `states:` line in section 1 and the section 9.3 FSM table (AST of src/app.py:
         every `class _X(GameState)` with `name = "NAME"`). Existing role text is kept.
   s2.1  AST-verified signatures between <!-- AUTO:sigs --> markers (SIG_SPECS below).
@@ -12,9 +12,12 @@ Generated (deterministic, LF, UTF-8 no BOM):
   s8.1b GLB geometry between <!-- AUTO:glb --> markers (tris, size, AABB, materials).
   s8.2  the `M/` mesh inventory rows. Existing `source` / `used by` text is kept; new
         files get an auto row; callers are grepped from src/ and rendered as `(auto: ...)`.
+  s20.1 monolith anchors: banner comments, classes and long gaps for ANCHOR_FILES.
+
+Generated into FILE_INDEX.md (the cold catalogs, kept out of every-prompt context):
   s12.1 DEV_JUMPS table (core/dev_jumps.py).
   s20   per-file rows (line counts, new/removed files). Existing descriptions are kept.
-  s20.1 monolith anchors: banner comments, classes and long gaps for ANCHOR_FILES.
+  s21   tools/ docstring index; s22 tests/ index (hand-written, carried over verbatim).
 
 Section 8.1 (the `A/` table) belongs to tools/map_assets3d.py; this tool never edits it.
 Run by .githooks/pre-commit.
@@ -29,6 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MAP = ROOT / "docs" / "ARCHITECTURE_MAP.md"
+INDEX = ROOT / "docs" / "FILE_INDEX.md"
 SRC = ROOT / "src"
 
 # --------------------------------------------------------------------- specs
@@ -36,22 +40,20 @@ SRC = ROOT / "src"
 #  names to hide). Public = no leading underscore.
 SIG_SPECS = [
     ("src/engine3d/core.py", (), {"Renderer": [], "SoftwareRenderer": None, "Mesh": None,
-                                  "Light": None, "Obj": None}, ()),
+                                  "Light": None, "Obj": None},
+     ("lerp", "clamp", "smooth", "ease_in_out", "ease_out", "ease_in", "mix_col",
+      "v_add", "v_sub", "v_mul", "v_dot", "v_len", "v_norm", "v_lerp")),
     ("src/engine3d/gl.py", (), {"GLRenderer": None}, ()),
     ("src/engine3d/rig.py", (), {"Humanoid": None}, ()),
     ("src/engine3d/ik.py", (), {}, ()),
     ("src/engine3d/hold.py", (), {}, ()),
     ("src/engine3d/textures.py", (), {"Tex": None}, ()),
     ("src/cutscenes/m6world3d.py", ("_t",), {}, ()),
-    ("src/cutscenes/m7world3d.py", ("_t", "_fence", "_hedgerow", "_bipyr"), {}, ()),
-    ("src/cutscenes/m5fx3d.py", (), {}, ()),
-    ("src/cutscenes/m6fx3d.py", (), {}, ()),
-    ("src/missions/m8/revenge/chase_set.py", (), {}, ()),
     ("src/game/render3d_bridge.py", (), {}, ()),
     ("src/game/scenery3d.py", (), {}, ()),
-    ("tools/ae_import_k93d.py", ("_gltf", "_acc", "_scan", "_cluster"), {}, ()),
-    ("tools/ae_import_mesh.py", (), {}, ()),
 ]
+# m7world3d / m5fx3d / m6fx3d / chase_set / the mesh importers are mission-file-local:
+# their signatures live in docs/FILE_INDEX.md's source-file rows, not in every prompt.
 # Data tables whose KEYS an external reader needs (name in module -> label)
 KEY_TABLES = [
     ("src/engine3d/rig.py", ["NEUTRAL", "POSES", "EXPRESSIONS", "SLOTS"]),
@@ -611,15 +613,23 @@ def anchor_block():
 
 
 # ------------------------------------------------------------------- driver
-def sync(text):
+def sync_map(text):
     text = sync_fsm(text)
     text = replace_marked(text, "sigs", build_sigs())
     text = replace_marked(text, "glb", glb_rows())
     text = sync_meshes(text)
-    text = replace_marked(text, "devjumps", dev_jump_block())
-    text = sync_s20(text)
     text = replace_marked(text, "anchors", anchor_block())
     return text
+
+
+def sync_index(text):
+    text = replace_marked(text, "devjumps", dev_jump_block())
+    text = sync_s20(text)
+    return text
+
+
+def _read(path):
+    return path.read_bytes().decode("utf-8").replace("\r\n", "\n") if path.exists() else ""
 
 
 def main():
@@ -627,19 +637,22 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
         print(build_sigs())
         return 0
-    cur = MAP.read_bytes().decode("utf-8")
-    cur = cur.replace("\r\n", "\n")
-    new = sync(cur)
+    cur_map, cur_idx = _read(MAP), _read(INDEX)
+    new_map, new_idx = sync_map(cur_map), sync_index(cur_idx)
+    ok = (new_map == cur_map and new_idx == cur_idx
+          and b"\r\n" not in MAP.read_bytes()
+          and (not INDEX.exists() or b"\r\n" not in INDEX.read_bytes()))
     if "--check" in sys.argv:
-        ok = new == cur and b"\r\n" not in MAP.read_bytes()
         print("SYNC ARCH MAP: OK" if ok else "SYNC ARCH MAP: STALE - run python tools/sync_arch_map.py")
         return 0 if ok else 1
-    if new == cur and b"\r\n" not in MAP.read_bytes():
+    if ok:
         print("SYNC ARCH MAP: OK")
         return 0
     with open(MAP, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(new)
-    print("SYNC ARCH MAP: updated docs/ARCHITECTURE_MAP.md")
+        fh.write(new_map)
+    with open(INDEX, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(new_idx)
+    print("SYNC ARCH MAP: updated docs/ARCHITECTURE_MAP.md + docs/FILE_INDEX.md")
     return 0
 
 

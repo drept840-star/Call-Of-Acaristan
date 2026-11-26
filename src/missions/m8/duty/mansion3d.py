@@ -32,7 +32,9 @@ from cutscenes import m7world3d as W7
 from engine3d import Mesh, POSES, blend, box, clamp, disc_xz
 from engine3d.core import m_apply, m_mul, rot_x, rot_y, rot_z, v_add
 from engine.anim import gait_cycle_m, locomotion_pose, mask_pose
+from engine.render3d import VehicleDestructionManager
 from engine3d.hold import POLES, hold_cached as _hold_cached, solve_arm_safe as _solve_arm_safe
+from game.vehicle_fx import default_vehicle_fx
 from missions.m7 import raid3d as R
 from missions.m7 import raid_world as RW
 from missions.m8.revenge import chase3d as C
@@ -42,6 +44,7 @@ from missions.m8.revenge import trap3d as T
 from . import mansion_brain as B
 from . import mansion_hud as HUD
 from . import mansion_set as MS
+from . import mansion_props as MP
 from . import mansion_world as W
 
 WPN_SPECS = {
@@ -74,6 +77,9 @@ CAR_BLAST_R = 5.5
 CHAND_R = 0.95
 HELI_SPIN = 75.0
 LIFT_S = 4.2
+KICK_DUR = 0.78
+KICK_HIT_S = 0.25
+KICK_LOCK_S = 0.54
 
 
 ANDREI_SHOT_S, ANDREI_HIT_S, ANDREI_ZAP_S = B.ANDREI_SHOT_S, B.ANDREI_HIT_S, B.ANDREI_ZAP_S
@@ -96,6 +102,7 @@ _A_DOWN = dict(POSES["dead_side"], lhip_p=46, lkn=34, rhip_p=58, rkn=52, head_p=
 
 _NOTE_MESH = None
 _WOUND_CACHE = {}
+_HEAD_WOUND_CACHE = {}
 
 
 def _banknote_mesh():
@@ -110,36 +117,105 @@ def _banknote_mesh():
     return _NOTE_MESH
 
 
-def _wound_patch_mesh(shot_blood, charred):
-    key = (bool(shot_blood), bool(charred))
+def _wound_patch_mesh(shot_blood, charred, fz=0.142):
+    """Flush torso decals in humanoid S-space (origin at pelvis)."""
+    key = (bool(shot_blood), bool(charred), round(float(fz), 3))
     got = _WOUND_CACHE.get(key)
     if got is None:
         m = Mesh()
+        flat_f = ("back", "left", "right", "top", "bottom")
+        flat_b = ("front", "left", "right", "top", "bottom")
+        zf = fz + 0.003
+        zb = -(fz + 0.003)
         if charred:
-            m.add(box(0.24, 0.28, 0.024, (24, 20, 20), center=(0.0, -0.04, -0.118)))
-            m.add(box(0.18, 0.22, 0.022, (34, 22, 20), center=(0.0, -0.02, 0.115)))
+            m.add(box(0.20, 0.24, 0.004, (22, 18, 18), center=(0.0, 0.34, zb), skip=flat_b))
+            m.add(box(0.14, 0.17, 0.004, (32, 22, 20), center=(0.0, 0.35, zf), skip=flat_f))
         if shot_blood:
-            m.add(box(0.18, 0.20, 0.026, (108, 14, 16), center=(0.02, -0.02, 0.120)))
-            m.add(box(0.22, 0.24, 0.026, (94, 12, 14), center=(0.0, -0.04, -0.122)))
+            blood, clot = (86, 9, 13), (42, 5, 8)
+            m.add(box(0.11, 0.14, 0.004, blood, center=(0.03, 0.36, zf), skip=flat_f), m=rot_z(8))
+            m.add(box(0.045, 0.055, 0.004, clot, center=(0.04, 0.37, zf + 0.0015), skip=flat_f))
+            for dx_, ln in ((-0.01, 0.08), (0.04, 0.11), (0.08, 0.06)):
+                m.add(box(0.014, ln, 0.004, blood, center=(dx_, 0.29 - ln * 0.5, zf + 0.0015), skip=flat_f))
+            m.add(box(0.13, 0.16, 0.004, blood, center=(-0.02, 0.37, zb - 0.001), skip=flat_b))
+            m.add(box(0.04, 0.04, 0.004, clot, center=(-0.02, 0.38, zb - 0.002), skip=flat_b))
         got = _WOUND_CACHE[key] = m
     return got
 
 
-def _andrei_death_anim(age, cause="misfire", hit_zone="chest"):
+def _head_wound_mesh(hw=1.0):
+    """Flush skull decals in humanoid H-space (origin at neck)."""
+    key = round(float(hw), 3)
+    got = _HEAD_WOUND_CACHE.get(key)
+    if got is None:
+        m = Mesh()
+        flat_f = ("back", "left", "right", "top", "bottom")
+        flat_b = ("front", "left", "right", "top", "bottom")
+        blood, clot = (86, 9, 13), (42, 5, 8)
+        m.add(box(0.062, 0.066, 0.004, blood, center=(0.024 * hw, 0.148, 0.123), skip=flat_f))
+        m.add(box(0.028, 0.032, 0.004, clot, center=(0.026 * hw, 0.150, 0.124), skip=flat_f))
+        for dx_, ln in ((0.006, 0.065), (0.028, 0.085), (0.048, 0.050)):
+            m.add(box(0.011, ln, 0.004, blood, center=(dx_ * hw, 0.112 - ln * 0.5, 0.1235), skip=flat_f))
+        m.add(box(0.095, 0.105, 0.004, blood, center=(-0.01 * hw, 0.15, -0.103), skip=flat_b))
+        m.add(box(0.042, 0.048, 0.004, clot, center=(-0.01 * hw, 0.15, -0.104), skip=flat_b))
+        got = _HEAD_WOUND_CACHE[key] = m
+    return got
+
+
+def _dropped_pistol_xform(drop_age, p0, base_yaw, floor_y):
+    """Ballistic drop and rest transform for Andrei's knocked-free pistol."""
+    vx, vy0, vz = 1.15, 0.95, 0.55
+    g = 9.8
+    y0 = max(floor_y, p0[1])
+    t1 = (vy0 + math.sqrt(vy0 * vy0 + 2.0 * g * (y0 - floor_y))) / g
+    vy1 = abs(vy0 - g * t1) * 0.26
+    t_b = 2.0 * vy1 / g
+    if drop_age <= t1:
+        px = p0[0] + vx * drop_age
+        py = y0 + vy0 * drop_age - 0.5 * g * drop_age * drop_age
+        pz = p0[2] + vz * drop_age
+        rot = m_mul(rot_y(base_yaw + 140.0 * drop_age),
+                    m_mul(rot_x(-380.0 * drop_age), rot_z(min(90.0, 150.0 * drop_age))))
+    elif drop_age < t1 + t_b:
+        u = drop_age - t1
+        px = p0[0] + vx * (t1 + u * 0.45)
+        py = floor_y + vy1 * u - 0.5 * g * u * u
+        pz = p0[2] + vz * (t1 + u * 0.45)
+        rot = m_mul(rot_y(base_yaw + 140.0 * t1 + 45.0 * u), rot_z(90.0))
+    else:
+        px = p0[0] + vx * (t1 + t_b * 0.45)
+        py = floor_y
+        pz = p0[2] + vz * (t1 + t_b * 0.45)
+        rot = m_mul(rot_y(base_yaw + 140.0 * t1 + 45.0 * t_b), rot_z(90.0))
+    px = clamp(px, -12.35, -4.15)
+    pz = clamp(pz, 26.55, 35.15)
+    return (px, py, pz), rot
+
+
+def _andrei_death_anim(age, cause="misfire", hit_zone="chest", shot_yaw=90.0, had_gun=True):
     """Pose, root offset (dx, 0, dz) and yaw for Andrei M.'s death: the pistol
     goes off into the ceiling, he backpedals into the server rack, it pins and
     shakes him, then he slides down it and tips over onto the floor."""
     hit_s, zap_s, sit_s, down_s = B.andrei_timings(cause)
     if cause == "player":
+        yaw_k = R._ease(clamp(age / 0.40, 0.0, 1.0))
+        yaw = shot_yaw + R._wrap(90.0 - shot_yaw) * yaw_k
         if age < hit_s:
-            u = R._ease(age / max(0.01, hit_s))
-            ph = u * math.pi * 2.5
-            sw = math.sin(ph)
+            u = clamp(age / max(0.01, hit_s), 0.0, 1.0)
             head_k = -40.0 if hit_zone == "head" else -26.0
-            stagger = dict(_A_SHOT, head_p=head_k, lhip_p=-24.0 * sw, rhip_p=24.0 * sw,
-                           lkn=12.0 + 26.0 * max(0.0, -sw), rkn=12.0 + 26.0 * max(0.0, sw),
-                           lift=0.025 * abs(math.sin(ph)))
-            return blend(_A_AIM, stagger, min(1.0, u * 3.5)), (ANDREI_RACK_DX * u * u * (1.5 - 0.5 * u), 0.0, 0.0), 90.0
+            if u < 0.14:
+                jolt = R._ease(u / 0.14)
+                travel = 0.08 * jolt
+                ph = 0.0
+            else:
+                s = (u - 0.14) / 0.86
+                travel = 0.08 + 0.92 * (s * s * (1.45 - 0.45 * s))
+                ph = s * math.pi * 4.0
+            sw = math.sin(ph)
+            stagger = dict(_A_SHOT, head_p=head_k, lhip_p=-22.0 * sw, rhip_p=22.0 * sw,
+                           lkn=12.0 + 24.0 * max(0.0, -sw), rkn=12.0 + 24.0 * max(0.0, sw),
+                           lift=0.020 * abs(sw))
+            start_pose = _A_AIM if had_gun else POSES["stand"]
+            return blend(start_pose, stagger, R._ease(min(1.0, age / 0.18))), (ANDREI_RACK_DX * travel, 0.0, 0.0), yaw
     else:
         if age < ANDREI_SHOT_S:
             u = R._ease(age / ANDREI_SHOT_S)
@@ -266,7 +342,9 @@ class MansionScene:
         self._money_mesh = MS.money_bundle(2)
         self._money_mesh_1 = MS.money_bundle(1)
         _banknote_mesh()
-        _wound_patch_mesh(True, True)
+        _wound_patch_mesh(True, True, 0.142)
+        _head_wound_mesh(1.0)
+        _hold_cached(_w.hum("andrei_m"), dict(POSES["ready"]), "pistol", "pistol_aim", key=("andrei_pistol", "aim"))
         hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun", "nopump"))
         for mode in ("ready", "aim"):
             R._sg_holds(hum, mode, ("m7player_sg", mode))
@@ -293,6 +371,8 @@ class MansionScene:
             MS.car_mesh(paint, False)
             MS.car_mesh(paint, True)
         MS.chandelier_mesh()
+        MP.study_door_leaf(-1)
+        MP.study_door_leaf(1)
         MS._crate_parts()
         _w.hum("retardovici")
         MS.renderer()
@@ -385,6 +465,7 @@ class MansionScene:
         self.lines = []
         self.debris = []
         self.smoke_puffs = []
+        self.veh_fx = VehicleDestructionManager(seed=601 + cp * 23, fx=default_vehicle_fx(_fx))
         self.scorches = [(MS.ANDREI_RACK_AT[0] + 0.48, GF + 0.026, MS.ANDREI_RACK_AT[2], 1.35)] if cp >= 2 else []
         self.scattered_cash = []
         self.cash_bricks = []
@@ -397,6 +478,10 @@ class MansionScene:
         self.crate_anims = {}
         self.crate_pops = set()
         self.crate_act = None
+        self.study_kick_t = None
+        self._kick_opened = False
+        self._kick_p0 = None
+        self._kick_yaw0 = 0.0
         self.toast = None
         self.cp_toast = 0.0
         self.area_card = (self.t, ) + AREAS[cp]
@@ -527,18 +612,23 @@ class MansionScene:
     def _spawn_blood_spray(self, pos, dir_vec, n=14, speed=4.2):
         rng = random.Random(int(self.t * 1000) + len(self.blood_drops))
         pool = self._ensure_fx_pool()
-        from engine3d.particles import PKIND_DUST
+        from engine3d.particles import PKIND_DEBRIS, PKIND_DUST
         dx, dy, dz = dir_vec
         ln = max(1e-4, math.hypot(dx, math.hypot(dy, dz)))
         ux, uy, uz = dx / ln, dy / ln, dz / ln
-        for _ in range(int(n)):
-            sp = rng.uniform(0.45, 1.15) * speed
-            vx = ux * sp + rng.uniform(-1.1, 1.1)
-            vy = uy * sp + rng.uniform(0.3, 1.9)
-            vz = uz * sp + rng.uniform(-1.1, 1.1)
-            pool.emit(PKIND_DUST, pos, (vx, vy, vz), col=(132, 16, 18),
-                      size0=0.06, size1=0.18, life=rng.uniform(0.28, 0.55),
-                      gravity=7.5, drag=2.4, alpha=0.86)
+        for i in range(int(n)):
+            sp = rng.uniform(0.55, 1.25) * speed
+            vx = ux * sp + rng.uniform(-0.85, 0.85)
+            vy = uy * sp + rng.uniform(0.2, 1.6)
+            vz = uz * sp + rng.uniform(-0.85, 0.85)
+            if i % 2 == 0:
+                pool.emit(PKIND_DEBRIS, pos, (vx, vy, vz), col=(92, 10, 12),
+                          size0=0.026, size1=0.015, life=rng.uniform(0.24, 0.44),
+                          gravity=9.8, drag=1.1, bounce=0.08, alpha=0.95)
+            else:
+                pool.emit(PKIND_DUST, pos, (vx * 0.72, vy * 0.8, vz * 0.72), col=(104, 12, 14),
+                          size0=0.042, size1=0.024, life=rng.uniform(0.18, 0.34),
+                          gravity=7.0, drag=2.8, alpha=0.78)
             self.blood_drops.append([pos[0], pos[1], pos[2], vx, vy, vz, 0.0, rng.uniform(0.30, 0.52)])
         del self.blood_drops[:-64]
 
@@ -546,7 +636,7 @@ class MansionScene:
         """Player shot Andrei: immediate bloody burst and stagger toward the rack."""
         pos = a.get("hit_pos") or (a["x"], a["y"] + (1.60 if a.get("hit_zone") == "head" else 1.15), a["z"])
         ray = a.get("hit_ray") or (-1.0, 0.08, 0.0)
-        self._spawn_blood_spray(pos, (min(-0.6, ray[0]), ray[1] + 0.15, ray[2]), n=16, speed=4.6)
+        self._spawn_blood_spray(pos, (min(-0.6, ray[0]), ray[1] + 0.15, ray[2]), n=14, speed=4.0)
         self.impacts.append((self.t, pos, "blood"))
 
     def on_andrei_ceiling_shot(self, a):
@@ -601,7 +691,8 @@ class MansionScene:
         self.flashes.append((self.t, (rx + 0.4, ry + 1.5, rz)))
         self.cam_kick = min(3.0, self.cam_kick + 2.2)
         self.scorches.append((rx + 0.48, ry + 0.026, rz, 1.35))
-        self._spawn_blood_spray((rx + 0.35, ry + 1.18, rz + 0.15), (-0.8, 0.25, 0.15), n=10, speed=3.2)
+        if self.brain.andrei.get("cause") == "player":
+            self._spawn_blood_spray((rx + 0.35, ry + 1.18, rz + 0.15), (0.7, 0.2, 0.15), n=8, speed=2.6)
         # the payroll servers were full of cash: it bursts out and flutters down
         rng = random.Random(42)
         self.cash_bricks = []
@@ -659,6 +750,76 @@ class MansionScene:
     def _floor(self, x, z):
         return self.world.surface_y(x, z, self._floor_hint)
 
+    def _kick_locking(self):
+        return self.study_kick_t is not None and (self.t - self.study_kick_t) < KICK_LOCK_S
+
+    def _spawn_door_splinters(self):
+        bx, by, bz = MS.STUDY_DOOR_AT[0], FF + 1.05, MS.ROOMS_Z + 0.12
+        rng = random.Random(int(self.t * 1000) + 77)
+        for i in range(16):
+            col = (212, 176, 86) if i == 0 else rng.choice(((88, 48, 28), (112, 66, 38), (62, 34, 22)))
+            self.debris.append(dict(
+                t0=self.t,
+                x=bx + rng.uniform(-0.28, 0.28),
+                y=by + rng.uniform(-0.45, 0.55),
+                z=bz,
+                vx=rng.uniform(-2.4, 2.4),
+                vy=rng.uniform(0.6, 3.6),
+                vz=rng.uniform(3.4, 7.6),
+                rx=rng.uniform(0.0, 360.0),
+                ry=rng.uniform(0.0, 360.0),
+                vrx=rng.uniform(-540.0, 540.0),
+                vry=rng.uniform(-480.0, 480.0),
+                sx=rng.uniform(0.04, 0.14),
+                sy=rng.uniform(0.02, 0.05),
+                sz=rng.uniform(0.14, 0.34),
+                col=col,
+                hot=False,
+            ))
+        for i in range(6):
+            ang = rng.uniform(-0.9, 0.9)
+            spd = rng.uniform(1.2, 3.2)
+            self.smoke_puffs.append(dict(
+                age=-0.015 * i, dur=rng.uniform(0.85, 1.35),
+                x=bx + rng.uniform(-0.4, 0.4), y=by + rng.uniform(-0.3, 0.5), z=bz + 0.1,
+                vx=math.sin(ang) * spd, vy=rng.uniform(0.2, 0.9), vz=math.cos(ang) * spd,
+                lift=0.35, r0=0.14, r1=0.62, alpha=118, warm=0, var=i % 6,
+            ))
+        self.sparks.append((self.t, (bx, FF + 1.08, MS.ROOMS_Z + 0.05)))
+        self.impacts.append((self.t, (bx, FF + 1.05, MS.ROOMS_Z + 0.08), "dust"))
+
+    def _step_study_kick(self, dt):
+        if self.study_kick_t is None:
+            return
+        kage = self.t - self.study_kick_t
+        px0, pz0 = self._kick_p0 or (self.px, self.pz)
+        tx = clamp(px0, -0.32, 0.32)
+        if kage < 0.22:
+            u = R._ease(kage / 0.22)
+            wx = px0 + (tx - px0) * u
+            wz = pz0 + (MS.ROOMS_Z - 0.94 - pz0) * u
+            nx, nz = self.world.move(self.px, self.pz, wx - self.px, wz - self.pz, y=self.py)
+            self.px, self.pz = nx, nz
+            self.body_yaw = (self._kick_yaw0 + R._wrap(0.0 - self._kick_yaw0) * u) % 360.0
+            self.yaw = (self.yaw + R._wrap(0.0 - self.yaw) * min(1.0, dt * 6.5)) % 360.0
+        if kage >= KICK_HIT_S and not self._kick_opened:
+            self._kick_opened = True
+            self.world.study_open = True
+            self.cam_kick = min(2.6, self.cam_kick + 1.85)
+            self._snd("door_kick")
+            self._spawn_door_splinters()
+            self.phase = "study"
+            self.brain.start_wave(5)
+            self.say("RETARDOVICI", "(intercom) You walked into my house. You will not walk out.", 3.4)
+        if KICK_HIT_S <= kage < KICK_LOCK_S:
+            u = R._ease((kage - KICK_HIT_S) / (KICK_LOCK_S - KICK_HIT_S))
+            wz = (MS.ROOMS_Z - 0.94) + 0.42 * u
+            nx, nz = self.world.move(self.px, self.pz, tx - self.px, wz - self.pz, y=self.py)
+            self.px, self.pz = nx, nz
+            self.body_yaw = _w.yaw_mix(self.body_yaw, 0.0, min(1.0, dt * 12.0))
+        if kage >= KICK_DUR:
+            self.study_kick_t = None
+
     # --- update --------------------------------------------------------------------
 
     def update(self, keys=None):
@@ -676,11 +837,14 @@ class MansionScene:
             self._snd("bed", "mansion")
         self._snd("update", dt)
         if self.dying:
+            self.study_kick_t = None
             self.death_t += dt
             if self.death_t >= 2.4:
                 self._setup(self.cp)
             return
         k = keys if keys is not None else pygame.key.get_pressed()
+        self._step_study_kick(dt)
+        kick_lock = self._kick_locking()
         if self.swapping > 0.0:
             self.swapping = max(0.0, self.swapping - dt)
         for cidx, ct0 in self.crate_anims.items():
@@ -700,15 +864,26 @@ class MansionScene:
         if self.t >= self._swap_snd_at:
             self._swap_snd_at = 1e9
             self._snd("pump" if self.weapon == "shotgun" else "rifle_handle")
-        self.ads += ((1.0 if self.aiming and not self.reloading and self.swapping <= 0.0 else 0.0) - self.ads) \
+        self.ads += ((1.0 if self.aiming and not self.reloading and self.swapping <= 0.0 and not kick_lock else 0.0) - self.ads) \
             * min(1.0, dt * 12.0)
         up = self.ads > 0.3 or self.firing or self.t - self.last_fire < 0.6
-        up = 0.0 if (self.sprint or self.reloading or self.swapping > 0.0 or not up) else 1.0
+        up = 0.0 if (self.sprint or self.reloading or self.swapping > 0.0 or kick_lock or not up) else 1.0
         self.gun_up += (up - self.gun_up) * min(1.0, dt * 14.0)
         if not self.firing or self.reloading or self.weapon != "rifle":
             self.heat = max(0.0, self.heat - dt * 1.4)
         self.world.cur_y = self.py
-        self._ground_move(k, dt)
+        if kick_lock:
+            self.vel = (0.0, 0.0)
+            self.pmoving = False
+            self.sprint = False
+            self._anim_ctl().update(
+                dt, vel_xz=(0.0, 0.0), yaw_deg=self.body_yaw,
+                aiming=False, sprint=False, crouch=False,
+                floor_fn=getattr(self, "_floor", None),
+                pos=(self.px, self.py, self.pz),
+            )
+        else:
+            self._ground_move(k, dt)
         self.py = self.world.surface_y(self.px, self.pz, self.py)
         self.world.cur_y = self.py
         self._update_wall_k(dt)
@@ -746,12 +921,13 @@ class MansionScene:
         if self.t >= self.pump_snd_at:
             self.pump_snd_at = 1e9
             self._snd("pump")
-        if self.firing and not self.reloading and self.swapping <= 0.0 and not REV.is_locking(self):
+        if self.firing and not self.reloading and self.swapping <= 0.0 and not REV.is_locking(self) and not kick_lock:
             self._fire()
         self._loot()
         self.recoil = max(0.0, self.recoil - dt * 6.0)
         self.cam_kick *= math.exp(-dt * 11.0)
-        self._hold(k, dt)
+        if not kick_lock:
+            self._hold(k, dt)
         self._chandeliers(dt)
         self.brain.update(dt)
         self._waves()
@@ -781,8 +957,9 @@ class MansionScene:
                 d["z"] += d["vz"] * dt
                 d["rx"] += d["vrx"] * dt
                 d["ry"] += d["vry"] * dt
-                if d["y"] <= 0.06:
-                    d["y"] = 0.06
+                fl = self.world.surface_y(d["x"], d["z"], d["y"] + 0.15) + 0.04
+                if d["y"] <= fl:
+                    d["y"] = fl
                     d["vy"] = abs(d["vy"]) * 0.26 if abs(d["vy"]) > 0.7 else 0.0
                     d["vx"] *= 0.62
                     d["vz"] *= 0.62
@@ -792,6 +969,7 @@ class MansionScene:
             self.debris = kept[-42:]
         if self.smoke_puffs:
             self._step_smoke(dt)
+        self.veh_fx.update(dt, floor_fn=lambda x, z: 0.0)
         if self.cash_bricks or self.cash_notes:
             self._step_cash(dt)
         if self.blood_drops:
@@ -898,7 +1076,7 @@ class MansionScene:
             d[0] += d[3] * dt
             d[1] += d[4] * dt
             d[2] += d[5] * dt
-            if d[1] > GF + 0.025:
+            if d[1] > GF + 0.016:
                 kept.append(d)
         self.blood_drops = kept
 
@@ -949,9 +1127,10 @@ class MansionScene:
                 alpha=145 if ring else 180, warm=1 if ring else 3, var=i % 6,
             ))
 
-    def _explode(self, pos, radius, player_dmg=45.0, enemy_dmg=420.0):
+    def _explode(self, pos, radius, player_dmg=45.0, enemy_dmg=420.0, visual=True):
         x, y, z = pos
-        self.booms.append((self.t, pos))
+        if visual:
+            self.booms.append((self.t, pos))
         self.flashes.append((self.t, pos))
         for k in range(5):
             a = k * 1.3
@@ -970,13 +1149,24 @@ class MansionScene:
         if d < radius and self.world.los3d((x, y + 1.0, z), (self.px, self.py + 1.0, self.pz)):
             self.hurt_player(player_dmg * (1.0 - d / radius), (x, z))
 
+    def _car_cookoff(self, vd, ck):
+        d = math.dist(vd.pos, (self.px, self.py + 0.9, self.pz))
+        self.cam_kick = min(3.0, self.cam_kick + max(0.0, 1.4 - d * 0.08))
+        self._snd("barrel_boom", self._pan(vd.pos[0], vd.pos[2]), d)
+
     def _hit_car(self, c, dmg):
         c["hp"] -= dmg
         if c["hp"] <= 0.0 and not c["burned"]:
             c["burned"] = True
             c["boom_t"] = self.t
-            self._spawn_car_blast(c)
-            self._explode((c["x"], 0.9, c["z"]), CAR_BLAST_R)
+            self.veh_fx.trigger(
+                "car", (c["x"], 0.0, c["z"]),
+                yaw=c["yaw"], paint=c["paint"],
+                seed=int(abs(c["x"]) * 131 + abs(c["z"]) * 37),
+                tag=id(c), floor_fn=lambda x, z: 0.0,
+                on_cookoff=self._car_cookoff,
+            )
+            self._explode((c["x"], 0.9, c["z"]), CAR_BLAST_R, visual=False)
             if sum(1 for cc in self.cars if cc["burned"]) == 1:
                 self.say("ALEX", "Ha! Cars burn. Do it again!", 2.4)
 
@@ -1068,7 +1258,7 @@ class MansionScene:
                 self.phase = "liftoff"
                 self.lift_t0 = self.t
                 self.world.heli_parked = False
-                self.say("BIRIBEL", "No - he's lifting off!", 2.4)
+                self.say("BIRIBEL", "He's lifting off!", 2.4)
         elif self.phase == "liftoff":
             u = (self.t - self.lift_t0) / LIFT_S
             if self.t - self._phase_at > 0.2:
@@ -1102,7 +1292,7 @@ class MansionScene:
     def _hold_action(self):
         if self.brain.near_revive() is not None:
             return "revive"
-        if self.phase == "study_door" and self.py >= FF - 0.5:
+        if self.phase == "study_door" and self.study_kick_t is None and self.py >= FF - 0.5:
             sx, _, sz = MS.STUDY_DOOR_AT
             if math.hypot(self.px - sx, self.pz - sz) < 2.4:
                 return "study_door"
@@ -1139,12 +1329,15 @@ class MansionScene:
         if action == "study_door":
             self.hold = 0.0
             if just:
-                self.world.study_open = True
-                self.cam_kick = min(2.6, self.cam_kick + 1.6)
-                self._snd("metal")
-                self.phase = "study"
-                self.brain.start_wave(5)
-                self.say("RETARDOVICI", "(intercom) You walked into my house. You will not walk out.", 3.4)
+                self.study_kick_t = self.t
+                self._kick_opened = False
+                self._kick_p0 = (self.px, self.pz)
+                self._kick_yaw0 = self.body_yaw
+                self.reloading = 0.0
+                self.swapping = 0.0
+                self.firing = False
+                self.aiming = False
+                self._snd("step", 0, False)
             return
         if action == "revive":
             if not held:
@@ -1156,6 +1349,14 @@ class MansionScene:
 
     def camera(self):
         back, right, up = (R.BOOM[i] + (R.BOOM_ADS[i] - R.BOOM[i]) * self.ads for i in range(3))
+        kick_fov = 0.0
+        if self.study_kick_t is not None:
+            kage = clamp(self.t - self.study_kick_t, 0.0, KICK_DUR)
+            env = R._ease(kage / 0.16) if kage < 0.16 else (1.0 - R._ease((kage - 0.30) / (KICK_DUR - 0.30)) if kage > 0.30 else 1.0)
+            back -= 0.28 * env
+            right += 0.14 * env
+            up -= 0.06 * env
+            kick_fov = 3.6 * max(0.0, 1.0 - abs(kage - KICK_HIT_S) / 0.24)
         pivot = (self.px, self.py + R.EYE_H + up, self.pz)
         f = R._fwd(self.yaw, self.pitch)
         rg = R._right(self.yaw)
@@ -1171,7 +1372,7 @@ class MansionScene:
             kk = clamp(self.death_t / 1.2, 0.0, 1.0)
             eye = (eye[0], eye[1] + 1.4 * kk, eye[2])
             tgt = (self.px, self.py + 0.3, self.pz)
-        fov = R.FOV + (WPN_SPECS[self.weapon]["fov_ads"] - R.FOV) * self.ads - 1.4 * self.cam_kick
+        fov = R.FOV + (WPN_SPECS[self.weapon]["fov_ads"] - R.FOV) * self.ads - 1.4 * self.cam_kick - kick_fov
         eye, tgt, fov = REV.adjust_camera(self, eye, tgt, fov)
         return eye, tgt, fov, dist
 
@@ -1305,6 +1506,7 @@ class MansionScene:
                 is_head=is_hd, hit_zone=hz, hit_pos=hp, hit_ray=hray,
                 weapon=self.weapon, dmg=dmg, hit_dist=hdist,
             ))
+            self._spawn_blood_spray(hp, hray, n=8 if is_hd else 5, speed=3.2 if is_hd else 2.4)
         for i, dmg in car_hits.items():
             self._hit_car(self.cars[i], dmg)
         for i in chand_hits:
@@ -1409,7 +1611,7 @@ class MansionScene:
                 out.append({"pos": (-11.35, GF + 1.5, 31.1), "color": (140, 220, 255),
                             "intensity": 1.6 + 2.8 * (st * st), "range": 10.0 + 3.0 * st})
         for c in self.cars:
-            if c["burned"]:
+            if c["burned"] and not self.veh_fx.has_tag(id(c)):
                 age = max(0.0, self.t - c["boom_t"])
                 fl = 0.75 + 0.25 * math.sin(self.t * 17.0 + c["x"])
                 spike = 3.4 * math.exp(-age * 7.5)
@@ -1419,6 +1621,7 @@ class MansionScene:
                     "intensity": 1.25 * fl + spike,
                     "range": 10.5 + 7.5 * math.exp(-age * 4.0),
                 })
+        out.extend(self.veh_fx.active_lights(cap=3))
         for t0, pos in self.booms:
             k = max(0.0, 1.0 - (self.t - t0) / 1.1)
             if k > 0.02:
@@ -1476,11 +1679,20 @@ class MansionScene:
                 crates.append((1.0, -1.0))
             else:
                 crates.append((0.0, 0.0))
+        car_rows = []
+        for c in self.cars:
+            if c["burned"] and self.veh_fx.has_tag(id(c)):
+                dy, dp, dr = self.veh_fx.hull_transform(id(c))
+                car_rows.append((c["x"], c["z"], c["yaw"], c["paint"], True, dy, dp, dr))
+            else:
+                car_rows.append((c["x"], c["z"], c["yaw"], c["paint"], c["burned"]))
         MS.draw_dynamic_props(r, tm, cams_alive=self.cams_alive, front_open=self.world.front_open,
                               study_open=self.world.study_open, terrace_open=self.world.terrace_open,
                               chandeliers=chs,
-                              cars=[(c["x"], c["z"], c["yaw"], c["paint"], c["burned"]) for c in self.cars],
-                              crates=crates, rack_state=rack_state, monitor_surge=mon_surge)
+                              cars=car_rows,
+                              crates=crates, rack_state=rack_state, monitor_surge=mon_surge,
+                              study_open_u=(clamp((self.t - self.study_kick_t - KICK_HIT_S) / 0.44, 0.0, 1.0)
+                                            if self.study_kick_t is not None else None))
         self._draw_wrecks(r, tm)
         if self.cash_bricks:
             if self._money_mesh is None:
@@ -1552,30 +1764,43 @@ class MansionScene:
                 _w.add(r, sm)
         an = self.brain.andrei
         if an["state"] in ("dying", "done"):
+            cause = an.get("cause", "misfire")
             age = self.t - an["dead_t"]
-            hit_s, zap_s, sit_s, _ = B.andrei_timings(an.get("cause", "misfire"))
+            hit_s, zap_s, sit_s, _ = B.andrei_timings(cause)
             blood_pts = []
-            if age >= hit_s:
-                blood_pts.extend(((-11.45, GF + 0.030, 31.15, 0.34), (-11.30, GF + 0.030, 30.88, 0.26)))
-            if age >= sit_s - 0.15:
-                u_pool = clamp((age - (sit_s - 0.15)) / 3.5, 0.0, 1.0)
-                blood_pts.append((-11.05, GF + 0.031, 31.22, 0.18 + 0.77 * R._ease(u_pool)))
+            if cause == "player":
+                sx0, _sy0, sz0 = an.get("shot_pos") or MS.ANDREI_AT
+                if age >= 0.08:
+                    blood_pts.extend(((sx0 - 0.36, GF + 0.015, sz0 + 0.08, 0.18),
+                                      (sx0 - 0.72, GF + 0.015, sz0 - 0.10, 0.12)))
+                if age >= hit_s * 0.45:
+                    blood_pts.append((sx0 + ANDREI_RACK_DX * 0.45, GF + 0.015, sz0 + 0.05, 0.12))
+                if age >= hit_s * 0.80:
+                    blood_pts.append((sx0 + ANDREI_RACK_DX * 0.80, GF + 0.015, sz0 - 0.06, 0.14))
+                if age >= hit_s:
+                    blood_pts.extend(((-11.40, GF + 0.015, 31.18, 0.24), (-11.28, GF + 0.015, 30.96, 0.16)))
+                if age >= sit_s - 0.15:
+                    u_pool = clamp((age - (sit_s - 0.15)) / 3.2, 0.0, 1.0)
+                    ek = R._ease(u_pool)
+                    blood_pts.extend(((-11.08, GF + 0.016, 31.20, 0.14 + 0.32 * ek),
+                                      (-10.92, GF + 0.016, 31.34, 0.09 + 0.17 * ek),
+                                      (-11.24, GF + 0.016, 31.06, 0.08 + 0.14 * ek)))
             if blood_pts:
                 if use_gpu:
                     import numpy as np
                     from engine3d.particles import DKIND_BLOOD
-                    b_rows = [(bx, by, bz, brad, (bx * 0.7) % math.tau, 0.32, 0.045, 0.055, 0.92,
+                    b_rows = [(bx, by, bz, brad, (bx * 1.3 + bz * 0.7) % math.tau, 0.26, 0.028, 0.032, 0.93,
                                float(DKIND_BLOOD), 0.78) for bx, by, bz, brad in blood_pts]
                     r.add_decals(np.asarray(b_rows, dtype=np.float32))
                 else:
                     bm = Mesh()
                     for bx, by, bz, brad in blood_pts:
-                        bm.add(disc_xz(bx, bz, brad, by, (78, 12, 14), n=12, layer=2))
+                        bm.add(disc_xz(bx, bz, brad, by, (68, 10, 12), n=10, layer=2))
                     _w.add(r, bm)
         if not use_gpu and self.blood_drops:
             for bx, by, bz, vx, vy, vz, _age, _life in self.blood_drops:
-                r.add_line3d((bx, by, bz), (bx - vx * 0.03, max(GF + 0.025, by - vy * 0.03), bz - vz * 0.03),
-                             (142, 18, 20), 2, layer=3)
+                r.add_line3d((bx, by, bz), (bx - vx * 0.025, max(GF + 0.016, by - vy * 0.025), bz - vz * 0.025),
+                             (108, 14, 16), 2, layer=3)
         for ch in self.chand:
             if ch["state"] == "down":
                 MS._dyn(r, MS.chandelier_mesh(), rot_x(16.0), (ch["x"], GF + 0.35, ch["z"]))
@@ -1587,16 +1812,18 @@ class MansionScene:
                 dm.add(box(d["sx"], d["sy"], d["sz"], col, emissive=hot),
                        m_mul(rot_y(d["ry"]), rot_x(d["rx"])), (d["x"], d["y"], d["z"]))
             _w.add(r, dm)
-        for pf in self.smoke_puffs:
-            age = pf["age"]
-            if age < 0.0:
-                continue
-            k = clamp(age / pf["dur"], 0.0, 1.0)
-            alpha = int(pf["alpha"] * min(1.0, k * 5.0) * (1.0 - k) ** 1.25)
-            if alpha >= 16:
-                rad_m = pf["r0"] + (pf["r1"] - pf["r0"]) * math.sqrt(k)
-                warmth = max(0, int(pf["warm"] * (1.0 - k * 1.8)))
-                r.add_sprite((pf["x"], pf["y"], pf["z"]), _smoke_puff_fn(rad_m, alpha, warmth, pf["var"]), layer=2)
+        if self.smoke_puffs:
+            for pf in self.smoke_puffs:
+                age = pf["age"]
+                if age < 0.0:
+                    continue
+                k = clamp(age / pf["dur"], 0.0, 1.0)
+                alpha = int(pf["alpha"] * min(1.0, k * 5.0) * (1.0 - k) ** 1.25)
+                if alpha >= 16:
+                    rad_m = pf["r0"] + (pf["r1"] - pf["r0"]) * math.sqrt(k)
+                    warmth = max(0, int(pf["warm"] * (1.0 - k * 1.8)))
+                    r.add_sprite((pf["x"], pf["y"], pf["z"]), _smoke_puff_fn(rad_m, alpha, warmth, pf["var"]), layer=2)
+        self.veh_fx.draw(r, tm)
         for c in self.cars:
             a = math.radians(c["yaw"])
             fx, fz = math.sin(a), math.cos(a)
@@ -1606,6 +1833,8 @@ class MansionScene:
                 if c["hp"] < CAR_HP * 0.45:
                     r.add_sprite((c["x"] + fx * 1.2, 1.15, c["z"] + fz * 1.2),
                                  W7.smoke(tm, seed=int(abs(c["x"]) * 13), size_m=0.72), layer=2)
+                continue
+            if self.veh_fx.has_tag(id(c)):
                 continue
             seed = int(abs(c["x"]) * 17 + abs(c["z"]) * 7)
             _w.add(r, W7.flame_mesh((c["x"] + fx * 1.15, 0.85, c["z"] + fz * 1.15),
@@ -1689,6 +1918,48 @@ class MansionScene:
                          _fx.beacon((255, 70, 50), 0.28, int(tm), period_ms=900.0, phase=k * 450.0),
                          layer=_fx.FX_LAYER)
 
+    def _door_kick_pose(self, hum, base_pose, kage, use_sg):
+        """Full-body breach kick: chamber right knee, snap boot through lock, stride in."""
+        wpn_key = "shotgun" if use_sg else "os12"
+        cache_key = ("m7player_sg" if use_sg else "m8_biri_os12", "wall")
+        tuck = R._wall_down_hold(hum, wpn_key, cache_key)
+
+        chamber = dict(
+            POSES["stand"], body_p=-5.0, body_r=-4.0, spine=-6.0, spine_r=-5.0,
+            twist=18.0, head_y=-18.0, head_p=6.0, lift=0.0,
+            lhip_p=20.0, lhip_r=4.0, lkn=26.0, lank=-8.0,
+            rhip_p=94.0, rhip_r=-4.0, rkn=112.0, rank=18.0,
+        )
+        strike = dict(
+            POSES["stand"], body_p=-10.0, body_r=-6.0, spine=-16.0, spine_r=-6.0,
+            twist=-16.0, head_y=14.0, head_p=14.0, lift=0.0,
+            lhip_p=-14.0, lhip_r=5.0, lkn=18.0, lank=12.0,
+            rhip_p=84.0, rhip_r=2.0, rkn=8.0, rank=12.0,
+        )
+        follow = dict(
+            POSES["stand"], body_p=0.0, body_r=0.0, spine=10.0, spine_r=2.0,
+            twist=6.0, head_y=-6.0, head_p=4.0, lift=0.0,
+            lhip_p=-22.0, lhip_r=3.0, lkn=26.0, lank=10.0,
+            rhip_p=36.0, rhip_r=2.0, rkn=30.0, rank=-6.0,
+        )
+        for st in (chamber, strike, follow):
+            for kn in R._ARMS:
+                if kn in tuck:
+                    st[kn] = tuck[kn]
+            st["rifle_p"] = tuck.get("rifle_p", 0.0) + st["spine"] - tuck.get("spine", 0.0)
+            st["rifle_y"] = tuck.get("rifle_y", 0.0) + st["twist"] - tuck.get("twist", 0.0)
+
+        if kage < 0.18:
+            return R._blend_pose(base_pose, chamber, R._ease(kage / 0.18))
+        if kage < KICK_HIT_S:
+            q = (kage - 0.18) / max(0.01, KICK_HIT_S - 0.18)
+            return R._blend_pose(chamber, strike, q * q * (3.0 - 2.0 * q))
+        if kage < 0.34:
+            return R._blend_pose(strike, strike, 0.0)
+        if kage < 0.48:
+            return R._blend_pose(strike, follow, R._ease((kage - 0.34) / 0.14))
+        return R._blend_pose(follow, base_pose, R._ease(clamp((kage - 0.48) / (KICK_DUR - 0.48), 0.0, 1.0)))
+
     def _draw_player(self, r, tm):
         key = ("biribel", OUTFIT_GUARD)
         at = (self.px, self.py, self.pz)
@@ -1750,6 +2021,10 @@ class MansionScene:
         pose, draw_yaw, rev_active = (
             REV.apply_player_revive(self, hum, pose, at, draw_yaw, use_sg) if not swapping else (pose, draw_yaw, False)
         )
+        kick_active = (not rev_active and not swapping and self.study_kick_t is not None)
+        if kick_active:
+            pose = self._door_kick_pose(hum, pose, self.t - self.study_kick_t, use_sg)
+            draw_yaw = self.body_yaw
         if not rev_active and not swapping and self.reloading <= 0.0 and self.crate_act is not None:
             ct0, _cidx, cx, cy, cz, cyaw = self.crate_act
             cage = self.t - ct0
@@ -1792,7 +2067,7 @@ class MansionScene:
             for kn in ("lsh_p", "lsh_r", "lsh_y", "lel"):
                 va, vb = pose.get(kn, 0.0), ik_pose.get(kn, 0.0)
                 pose[kn] = va + ((vb - va + 180.0) % 360.0 - 180.0) * bk
-        elif not rev_active and not swapping and self.reloading <= 0.0:
+        elif not rev_active and not swapping and not kick_active and self.reloading <= 0.0:
             if self.wall_k > 0.005:
                 pose = R.apply_wall_down(
                     hum, pose, "shotgun" if use_sg else "os12", self.wall_k,
@@ -1802,7 +2077,7 @@ class MansionScene:
             pump = 0.0
             sg_shell = False
             mag_mode = "attached"
-        joints = _w.actor(r, key, pose, at, draw_yaw, int(tm), seed=93, amp=0.0 if rev_active else 0.12,
+        joints = _w.actor(r, key, pose, at, draw_yaw, int(tm), seed=93, amp=0.0 if (rev_active or kick_active) else 0.12,
                           rifle_on=True, flags=flags, expression="stern" if rev_active else "angry",
                           shadow=(2, -0.35))
         if use_sg and joints:
@@ -1813,7 +2088,7 @@ class MansionScene:
             T.TrapScene._draw_os12_mag(self, r, joints, mag_mode, mag_t)
         rm = joints.get("rifle_m") if joints else None
         hand = joints.get("rhand") if joints else None
-        if not rev_active and rm is not None and hand is not None:
+        if not rev_active and not kick_active and rm is not None and hand is not None:
             off = m_apply(rm, R.BORE_LOCAL["shotgun" if use_sg else "rifle"])
             tip = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
             self._flash_basis = (tip, C._f_unit(m_apply(rm, (0.0, 0.0, 1.0))),
@@ -1917,40 +2192,57 @@ class MansionScene:
         a = self.brain.andrei
         if not r.visible_sphere((a["x"], a["y"] + 0.9, a["z"]), 2.8):
             return
+        hum = _w.hum("andrei_m")
         if a["state"] == "idle":
             pose = dict(POSES["stand"], spine=8, head_p=6)
             _w.actor(r, "andrei_m", pose, (a["x"], a["y"], a["z"]), a["yaw"], int(tm),
                      seed=44, amp=0.15, mouth=0.0, expression="neutral", shadow=(2, -0.35))
         elif a["state"] == "intro":
-            pose = dict(POSES["stand"], rsh_p=68, rel=22, lsh_p=42, lsh_r=28, spine=-4)
+            pose = R._held(hum, dict(POSES["stand"]), "pistol", "pistol_aim", ("andrei_pistol", "aim"))
             joints = _w.actor(r, "andrei_m", pose, (a["x"], a["y"], a["z"]), a["yaw"], int(tm),
                               seed=44, amp=0.2, expression="angry", shadow=(2, -0.35))
             if joints and joints.get("rhand") is not None:
                 if self._pistol_mesh is None:
                     self._pistol_mesh = MS.pistol_mesh()
+                a["drop_p0"] = joints["rhand"]
+                a["drop_yaw"] = a["yaw"]
+                gun_rot = m_mul(rot_y(a["yaw"]),
+                                m_mul(rot_y(pose.get("rifle_y", 0.0)), rot_x(pose.get("rifle_p", 0.0))))
                 m = Mesh()
-                m.add(self._pistol_mesh, rot_y(a["yaw"]), joints["rhand"])
+                m.add(self._pistol_mesh, gun_rot, joints["rhand"])
                 _w.add(r, m)
         else:
             age = self.t - a["dead_t"]
             cause = a.get("cause", "misfire")
             hit_zone = a.get("hit_zone", "chest")
             hit_s, zap_s, _sit_s, _down_s = B.andrei_timings(cause)
-            pose, off, yaw = _andrei_death_anim(age, cause=cause, hit_zone=hit_zone)
+            pose, off, yaw = _andrei_death_anim(
+                age, cause=cause, hit_zone=hit_zone,
+                shot_yaw=a.get("shot_yaw", 90.0),
+                had_gun=a.get("had_gun", True),
+            )
             pos = (a["x"] + off[0], a["y"], a["z"] + off[2])
             zapping = (hit_s <= age < zap_s)
             expr = "surprised" if (zapping or (cause == "player" and age < zap_s) or (cause == "misfire" and ANDREI_SHOT_S <= age < zap_s)) else "closed"
             mouth = 0.85 if zapping else 0.0
             joints = _w.actor(r, "andrei_m", pose, pos, yaw, int(tm), seed=44, amp=0.0, mouth=mouth,
                               expression=expr, shadow=(2, -0.35))
-            # grounded blood / char patches on chest, back & head
             shot_blood = (cause == "player")
             charred = (age >= hit_s)
-            if shot_blood or charred:
-                t_rot, t_pos = self._torso_basis_from_joints(joints, yaw, pose, pos)
-                MS._dyn(r, _wound_patch_mesh(shot_blood, charred), t_rot, t_pos)
-            if shot_blood and hit_zone == "head" and joints and joints.get("head") is not None:
-                MS._dyn(r, box(0.14, 0.14, 0.14, (112, 14, 16)), rot_y(yaw), joints["head"])
+            need_places = (shot_blood or charred or (cause == "misfire" and age < hit_s))
+            by_slot, root_w = None, (0.0, 0.0, 0.0)
+            if need_places:
+                places_w, _jw, root_w = hum.pose_world(pose, pos, yaw, rifle_on=False)
+                by_slot = {pl[0]: (pl[2], pl[3]) for pl in places_w}
+            if (shot_blood or charred) and by_slot and 1 in by_slot:
+                t_rot, t_org = by_slot[1]
+                t_pos = v_add(t_org, root_w)
+                fz = 0.142 if hum.spec.get("vest") is None else 0.152
+                MS._dyn(r, _wound_patch_mesh(shot_blood, charred, fz), t_rot, t_pos)
+            if shot_blood and hit_zone == "head" and by_slot and 2 in by_slot:
+                h_rot, h_org = by_slot[2]
+                h_pos = v_add(h_org, root_w)
+                MS._dyn(r, _head_wound_mesh(hum.spec.get("head_w", 1.0)), h_rot, h_pos)
             if zapping:
                 tick = int(age / 0.035)
                 rng = random.Random(9100 + tick)
@@ -1977,14 +2269,26 @@ class MansionScene:
             m = Mesh()
             if cause == "misfire" and age < hit_s:
                 if joints and joints.get("rhand") is not None:
-                    # barrel follows the arm up from the intro's level aim
-                    m.add(self._pistol_mesh, m_mul(rot_y(yaw), rot_x(68.0 - pose["rsh_p"])),
-                          joints["rhand"])
-            else:
-                # knocked out of his hand by the impact, lying on its side
-                m.add(self._pistol_mesh, m_mul(rot_y(yaw + 70.0), rot_z(90.0)),
-                      (pos[0] + 1.25, a["y"] + 0.03, pos[2] + 0.55))
-            _w.add(r, m)
+                    a["rack_drop_p0"] = joints["rhand"]
+                    if by_slot and 12 in by_slot:
+                        f_rot = by_slot[12][0]
+                        sc = getattr(hum, "_scale", 1.0) or 1.0
+                        if sc != 1.0:
+                            f_rot = tuple(v / sc for v in f_rot)
+                        gun_rot = m_mul(f_rot, rot_x(90.0))
+                    else:
+                        gun_rot = m_mul(rot_y(yaw), rot_x(90.0 - pose["rsh_p"] - pose["rel"] - pose["spine"]))
+                    m.add(self._pistol_mesh, gun_rot, joints["rhand"])
+            elif cause == "misfire":
+                p0 = a.get("rack_drop_p0") or (a["x"] + ANDREI_RACK_DX + 0.30, a["y"] + 1.50, a["z"] + 0.20)
+                dp, drot = _dropped_pistol_xform(age - hit_s, p0, yaw, a["y"] + 0.032)
+                m.add(self._pistol_mesh, drot, dp)
+            elif a.get("had_gun", True):
+                p0 = a.get("drop_p0") or (a["x"] + 0.25, a["y"] + 1.22, a["z"] + 0.15)
+                dp, drot = _dropped_pistol_xform(age, p0, a.get("drop_yaw", yaw), a["y"] + 0.032)
+                m.add(self._pistol_mesh, drot, dp)
+            if m.faces:
+                _w.add(r, m)
 
     def _draw_enemies(self, r, tm):
         real = self.brain
@@ -2034,12 +2338,18 @@ class MansionScene:
                 self._fx_last_t = now
                 self._fx_pool.update(dt, floor_y=sec_floor)
                 self._fx_pool.submit(r)
-        T.TrapScene._draw_fx(self, r, tm)
+        saved_imp = self.impacts
+        if getattr(r, "backend", "") == "gl" or self.blood_drops:
+            self.impacts = [it for it in saved_imp if it[2] != "blood"]
+        try:
+            T.TrapScene._draw_fx(self, r, tm)
+        finally:
+            self.impacts = saved_imp
 
     def handle_event(self, event):
         if not self._active or self.paused:
             return
-        if not self.dying and not REV.is_locking(self):
+        if not self.dying and not REV.is_locking(self) and not self._kick_locking():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     self._switch_weapon()
@@ -2053,6 +2363,8 @@ class MansionScene:
             elif event.type == pygame.MOUSEWHEEL and event.y:
                 self._switch_weapon()
                 return
+        if self._kick_locking() and event.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
+            return
         R.RaidScene.handle_event(self, event)
 
 

@@ -17,7 +17,7 @@ booth through Vasile's orchestrated ambush:
 Biribel carries two guns: the Fallow 12 buckshot for close work and the OS-12
 for the 40-80 m sniper and truck lanes (Q, 1, 2 or the wheel swaps them).
 Every Guard on Route 12 carries the same OS-12.  The Guard answers a camper
-with smoke canisters that break the overwatch lock.
+with frag grenades to flush them out of cover.
 
 Contract (as ``missions.m7.raid3d``): ``begin`` / ``active`` / ``update`` /
 ``draw`` / ``handle_event`` / ``set_paused`` / ``abort`` / ``force_finish``.
@@ -41,8 +41,10 @@ from engine3d import Mesh, POSES, blend, box, clamp
 from engine3d.core import disc_xz, m_apply, rot_x, rot_y, rot_z
 from engine3d.hold import POLES, hold_cached as _hold_cached, hold_frame as _hold_frame, solve_arm_safe as _solve_arm_safe
 from engine.anim import gait_cycle_m, locomotion_pose, mask_pose
+from engine.render3d import VehicleDestructionManager
 from engine3d.rig import os12_mag_mesh as _os12_mag_mesh
 from engine3d.ik import solve_leg as _solve_leg
+from game.vehicle_fx import default_vehicle_fx
 from missions.m7 import raid3d as R
 from missions.m7 import raid_world as RW
 
@@ -342,6 +344,21 @@ def _shadow_at(y):
     return (2, -0.30) if y > 0.1 else (1, -0.5)
 
 
+def _crashed_truck_mesh(src):
+    """Charred and tilted convoy truck hull."""
+    m = Mesh()
+    charred = Mesh()
+    charred.verts = src.verts
+    char = (28, 24, 22)
+    charred.faces = [
+        (f[0], tuple(int(a + (b - a) * 0.72) for a, b in zip(f[1], char)))
+        + tuple(f[2:4]) + (False,) + tuple(f[5:])
+        for f in src.faces
+    ]
+    m.add(charred, rot_z(-3.5), (0.0, 0.16, 0.0))
+    return m
+
+
 class TrapScene:
     MAG = MAG
     RELOAD_S = RELOAD_S
@@ -357,6 +374,7 @@ class TrapScene:
     _player_pose = R.RaidScene._player_pose
     _guard_pose = R.RaidScene._guard_pose
     _ally_pose = R.RaidScene._ally_pose
+    _pinned_pose = R.RaidScene._pinned_pose
     _cover_pose = R.RaidScene._cover_pose
     _project = R.RaidScene._project
     _ground_move = R.RaidScene._move
@@ -435,9 +453,7 @@ class TrapScene:
         if self._truck is None:
             self._truck = RW.truck()
         if self._truck_crashed is None:
-            mt = Mesh()
-            mt.add(self._truck, rot_z(-3.5), (0.0, 0.16, 0.0))
-            self._truck_crashed = mt
+            self._truck_crashed = _crashed_truck_mesh(self._truck)
         REV.warm()
         self._ensure_meshes()
         S3.renderer()
@@ -559,6 +575,7 @@ class TrapScene:
         self.flashes = []
         self.blasts = []
         self.lines = []
+        self.veh_fx = VehicleDestructionManager(seed=401 + cp * 19, fx=default_vehicle_fx(_fx))
         self.toast = None
         self.cp_toast = 0.0
         self.kills = 0
@@ -1032,11 +1049,14 @@ class TrapScene:
         bx, bz = t["x"], t["z"] - 1.8
         dist = math.hypot(bx - self.px, bz - self.pz)
         pan = self._pan(bx, bz)
-        self.blasts.append(dict(t0=self.t, x=bx, y=0.25, z=bz, kind="truck", seed=401))
-        self._spawn_blast_puffs(bx, 0.25, bz, "truck")
         self.scorches.append((t["x"], t["z"], 3.4))
         del self.scorches[:-16]
         self._spawn_debris(bx, 1.1, bz, count=22, speed=9.5, big=True)
+        self.veh_fx.trigger(
+            "truck", (t["x"], 0.0, t["z"]),
+            yaw=180.0, vel=(0.0, 0.0, -5.0), seed=401,
+            tag=id(t), follow=True, floor_fn=lambda x, z: 0.0,
+        )
         self.flashes.append((self.t + 0.04, (bx, 1.5, bz)))
         self.cam_kick = max(self.cam_kick, clamp(2.8 - dist * 0.05, 0.45, 2.5))
         self._snd("barrel_boom", pan, dist)
@@ -1199,6 +1219,7 @@ class TrapScene:
         self._waves()
         self._update_vasile_yaw(dt)
         self._update_grenades_and_debris(dt)
+        self.veh_fx.update(dt, floor_fn=lambda x, z: 0.0)
         # Smoke breaks the overwatch laser lock.
         self.sniper_locked = (not self.in_smoke(self.px, self.pz)) and any(
             e["alive"] and e["live"] and e["kind"] == "overwatch" and e["tele"] > 0.0
@@ -1832,6 +1853,8 @@ class TrapScene:
                     fl = 0.85 + 0.15 * math.sin(self.t * 11.3)
                     out.append({"pos": (tr["x"], 1.5, tr["z"] - 1.6), "color": (255, 132, 44),
                                 "intensity": 1.5 * fl * max(0.25, 1.0 - age / 35.0), "range": 13.0})
+        if len(out) < 6:
+            out.extend(self.veh_fx.active_lights(cap=6 - len(out)))
         return out[:6]
 
     def draw(self, surface):
@@ -1845,9 +1868,7 @@ class TrapScene:
         if self._truck is None:
             self._truck = RW.truck()
         if self._truck_crashed is None:
-            mt = Mesh()
-            mt.add(self._truck, rot_z(-3.5), (0.0, 0.16, 0.0))
-            self._truck_crashed = mt
+            self._truck_crashed = _crashed_truck_mesh(self._truck)
         self._draw_props(r, tm)
         cam = getattr(r, "cam", None)
         for t in self.brain.trucks:
@@ -1857,9 +1878,11 @@ class TrapScene:
                     sw = _ease(ct)
                     yaw = 180.0 - 16.0 * sw
                     mesh_tr = self._truck_crashed if ct > 0.18 else self._truck
-                    RW.put(r, mesh_tr, t["x"] + 0.35 * sw, 0.0, t["z"] - 0.5 * sw, yaw)
-                    ex, ez = t["x"] + 0.35 * sw, t["z"] - 2.1 - 0.5 * sw
-                    if self.t - t.get("crash_t", self.t) < 28.0:
+                    tx, tz = t["x"] + 0.35 * sw, t["z"] - 0.5 * sw
+                    RW.put(r, mesh_tr, tx, 0.0, tz, yaw)
+                    self.veh_fx.sync_pose(id(t), (tx, 0.0, tz), yaw)
+                    ex, ez = tx, tz - 2.1
+                    if not self.veh_fx.has_tag(id(t)) and self.t - t.get("crash_t", self.t) < 28.0:
                         F.fire(r, (ex, 0.55, ez), tm, seed=81, size=1.15, smoky=True, layer=2)
                         r.add_sprite((ex, 0.06, ez), F.pool((255, 118, 34), 3.2, intensity=0.45, squash=0.5),
                                      layer=_fx.FX_LAYER)
@@ -1877,6 +1900,7 @@ class TrapScene:
         self._draw_player(r, tm)
         self._draw_vasile(r, tm)
         self._draw_enemies(r, tm)
+        self.veh_fx.draw(r, tm)
         self._draw_blasts(r, tm)
         self._draw_fx(r, tm)
         # the bore-aligned 3D muzzle flash at the gun's own bore

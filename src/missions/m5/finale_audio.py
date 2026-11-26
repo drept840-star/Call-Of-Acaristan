@@ -244,13 +244,21 @@ class FinaleAudio:
         for ch in list(self.channels.values()) + [c for c, s in self.foley_channels
                                                if c.get_sound() is s]:
             if ch.get_busy():
-                _mixlock().pause(ch.id)
+                cid = getattr(ch, "id", None)
+                if cid is not None:
+                    _mixlock().pause(cid)
+                elif hasattr(ch, "pause"):
+                    ch.pause()
 
     def resume(self):
         self.paused = False
         for ch in list(self.channels.values()) + [c for c, s in self.foley_channels
                                                if c.get_sound() is s]:
-            _mixlock().resume(ch.id)
+            cid = getattr(ch, "id", None)
+            if cid is not None:
+                _mixlock().resume(cid)
+            elif hasattr(ch, "unpause"):
+                ch.unpause()
 
     def stop(self):
         if self.closed:

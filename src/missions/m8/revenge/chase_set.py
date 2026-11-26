@@ -42,6 +42,7 @@ ROADSIDE_SITES = (
     ("farm_gate", 135.0, 1, 16.0), ("orchard", 315.0, -1, 20.0),
     ("hay_yard", 490.0, 1, 19.0), ("pump_house", 830.0, -1, 19.0),
     ("guard_post", 1050.0, 1, 18.0), ("memorial", 1410.0, -1, 19.0),
+    ("signal_bunker", 1710.0, 1, 18.5), ("wrecked_convoy", 1980.0, -1, 17.5),
     ("freight_depot", 2310.0, 1, 21.0), ("watchtower", 2480.0, -1, 20.0),
 )
 # Near-road set pieces, one stretch each, so no two minutes of the chase look
@@ -613,7 +614,7 @@ def _resolve_asset_path(rel_path):
     return None
 
 
-def _load_glb(path):
+def _load_glb(path, return_paths=False):
     """Load a binary glTF 2.0 (.glb) -> (Mesh, face_node_names)."""
     import base64
     import io
@@ -733,7 +734,8 @@ def _load_glb(path):
                     with open(os.path.join(os.path.dirname(path), uri), "rb") as f2:
                         ibytes = f2.read()
             if ibytes:
-                surf = pygame.image.load(io.BytesIO(ibytes))
+                from engine.assets import load_image as _load_image
+                surf = _load_image(io.BytesIO(ibytes))
         except Exception:
             surf = None
         tex_cache[tex_idx] = surf
@@ -743,10 +745,12 @@ def _load_glb(path):
     face_nodes = []
     mats = gltf.get("materials", [])
 
-    def emit_node(node_idx, parent_m, parent_name=""):
+    def emit_node(node_idx, parent_m, parent_name="", path_prefix=""):
         node = gltf["nodes"][node_idx]
         cur_m = mat_mul(parent_m, node_mat(node))
-        name = (node.get("name") or parent_name).lower()
+        raw_name = (node.get("name") or "").strip()
+        name = (raw_name or parent_name).lower()
+        cur_path = (f"{path_prefix}/{raw_name}" if (path_prefix and raw_name) else (raw_name or path_prefix)).lower()
         if "mesh" in node:
             gmesh = gltf["meshes"][node["mesh"]]
             mname = (name or gmesh.get("name", "")).lower()
@@ -808,9 +812,9 @@ def _load_glb(path):
                             rgb[ch] *= vc ** (1.0 / 2.2)
                     col = tuple(max(0, min(255, int(rgb[ch] * srgb_bcf[ch]))) for ch in range(3))
                     mesh.faces.append(((base_v + a, base_v + b, base_v + c), col, 2, True, is_em))
-                    face_nodes.append(mname)
+                    face_nodes.append(cur_path if return_paths else mname)
         for ch in node.get("children", []):
-            emit_node(ch, cur_m, name)
+            emit_node(ch, cur_m, name, cur_path)
 
     ident = [1.0, 0.0, 0.0, 0.0,
              0.0, 1.0, 0.0, 0.0,
@@ -1112,6 +1116,144 @@ def put_helicopter(r, pos, yaw, pitch, roll, main_spin, tail_spin, burned=False)
     if tail_r.faces:
         th = _xf(info["tail_hub"], pos, yaw, pitch, roll)
         _put_spun(r, "heli_tail" + tag, _cache.get("heli_tail_burnt", tail_r) if burned else tail_r,
+                  th, yaw, pitch, roll, spin_x=tail_spin)
+
+
+def maru_gunship_parts():
+    """Cached (fuselage, tail_boom, main_rotor, tail_rotor, info) from maru_gunship.glb."""
+    got = _cache.get("maru_parts")
+    if got is not None:
+        return got
+    glb_path = _resolve_asset_path(os.path.join("assets", "3D", "maru_gunship.glb"))
+    if glb_path is None:
+        from missions.m8.duty import flight_fx as _ffx
+        info = {"main_hub": (0.0, 2.22, 0.20), "tail_hub": (-0.22, 2.0, -5.5),
+                "pilot_seat": (-0.42, 0.08, 1.38), "floor_y": 0.0,
+                "pintle_top": (0.94, 1.22, 0.30), "roof_beacon": (0.0, 2.38, 0.20)}
+        got = _cache["maru_parts"] = (_ffx.cabin_mesh(), Mesh(), _ffx.rotor_mesh(), Mesh(), info)
+        return got
+
+    raw, face_paths = _load_glb(glb_path, return_paths=True)
+    fuse_idx, boom_idx, main_idx, tail_idx = [], [], [], []
+    for k, fp in enumerate(face_paths):
+        root = fp.split("/", 1)[0]
+        if root == "heli_tail_boom":
+            boom_idx.append(k)
+        elif root == "main_rotor":
+            main_idx.append(k)
+        elif root == "tail_rotor":
+            tail_idx.append(k)
+        else:
+            fuse_idx.append(k)
+
+    def _hub(f_idx, fallback):
+        vs = [raw.verts[i] for k in f_idx for i in raw.faces[k][0]]
+        if not vs:
+            return fallback
+        lo, hi = _bounds(vs)
+        return tuple(0.5 * (lo[a] + hi[a]) for a in range(3))
+
+    main_hub = _hub(main_idx, (0.0, 3.03, 0.25))
+    tail_hub = _hub(tail_idx, (-0.22, 2.68, -6.05))
+    fuselage = _submesh(raw, fuse_idx)
+    tail_boom = _submesh(raw, boom_idx)
+    main_rotor = _submesh(raw, main_idx, main_hub)
+    tail_rotor = _submesh(raw, tail_idx, tail_hub)
+    info = {
+        "main_hub": main_hub,
+        "tail_hub": tail_hub,
+        "pilot_seat": (-0.42, 0.62, 1.92),
+        "floor_y": 0.574,
+        "pintle_top": (0.94, 1.22, 0.30),
+        "roof_beacon": (0.0, 3.09, -6.18),
+    }
+    got = _cache["maru_parts"] = (fuselage, tail_boom, main_rotor, tail_rotor, info)
+    return got
+
+
+_MARU_FPV_DROP = {
+    "pintle_base_flange", "pintle_pedestal_post", "pintle_swivel_head",
+    "sliding_door_aft_stbd", "sliding_door_front_stbd",
+    "sliding_door_handle_stbd", "sliding_door_low_stbd", "sliding_door_top_stbd",
+    "rocket_pod_body_stbd", "rocket_pod_nose_stbd", "rocket_pod_tail_stbd",
+    "weapon_pylon_stbd",
+}
+_MARU_FPV_DROP_PREFIX = ("rocket_tube_stbd_",)
+
+
+def maru_gunship_fpv_parts():
+    """Cached intact starboard-door FPV fuselage of ``maru_gunship.glb``.
+
+    Keeps the cabin roof, overhead ribs, port fuselage wall, rear engine bulkhead,
+    and A/B cockpit pillars completely intact; opens only the starboard doorway
+    and clears the starboard weapon pod/pylon from the downward fire cone.
+    """
+    got = _cache.get("maru_fpv_parts")
+    if got is not None:
+        return got
+    fuse_full, boom, main_r, tail_r, info = maru_gunship_parts()
+    glb_path = _resolve_asset_path(os.path.join("assets", "3D", "maru_gunship.glb"))
+    if glb_path is None:
+        got = _cache["maru_fpv_parts"] = (fuse_full, boom, main_r, tail_r, info)
+        return got
+
+    raw, face_paths = _load_glb(glb_path, return_paths=True)
+    m = Mesh()
+    for k, fp in enumerate(face_paths):
+        parts = fp.split("/", 1)
+        root = parts[0]
+        if root in ("heli_tail_boom", "main_rotor", "tail_rotor"):
+            continue
+        leaf = parts[1] if len(parts) > 1 else ""
+        if leaf in _MARU_FPV_DROP or leaf.startswith(_MARU_FPV_DROP_PREFIX):
+            continue
+        f = raw.faces[k]
+        poly = [raw.verts[i] for i in f[0]]
+        col = f[1]
+        em = f[4]
+        if leaf.startswith("avionics_"):
+            em = True
+            if isinstance(col, (tuple, list)) and len(col) >= 3:
+                col = (min(255, int(col[0] * 1.45 + 32)),
+                       min(255, int(col[1] * 1.55 + 48)),
+                       min(255, int(col[2] * 1.45 + 36)))
+        tail_meta = (col, f[2], f[3], em) + tuple(f[5:])
+        base = len(m.verts)
+        m.verts.extend(poly)
+        for j in range(1, len(poly) - 1):
+            m.faces.append(((base, base + j, base + j + 1),) + tail_meta)
+    got = _cache["maru_fpv_parts"] = (m, boom, main_r, tail_r, info)
+    return got
+
+
+def put_maru_gunship(r, pos, yaw, pitch, roll, main_spin, tail_spin, *,
+                     tail_on=True, main_on=True, burned=False, fpv=False):
+    """Submit Maru's open-bay gunship; ``fpv=True`` uses the intact starboard-door
+    interior and omits the hard solid main rotor planks above the roof."""
+    fuse, boom, main_r, tail_r, info = maru_gunship_fpv_parts() if fpv else maru_gunship_parts()
+    tag = "_burnt" if burned else ""
+    ftag = ("_fpv" if fpv else "") + tag
+    if burned and "maru_fuse_burnt" not in _cache:
+        efuse, eboom, emain, etail, _ = maru_gunship_parts()
+        _cache["maru_fuse_burnt"] = _charred(efuse, 0.72)
+        _cache["maru_boom_burnt"] = _charred(eboom, 0.72)
+        _cache["maru_main_burnt"] = _charred(emain, 0.72)
+        _cache["maru_tail_burnt"] = _charred(etail, 0.72)
+    if burned and fpv and "maru_fuse_fpv_burnt" not in _cache:
+        _cache["maru_fuse_fpv_burnt"] = _charred(fuse, 0.72)
+    fuse_src = _cache.get("maru_fuse" + ftag, fuse) if burned else fuse
+    put(r, "maru_fuse" + ftag, lambda: fuse_src,
+        pos, yaw, pitch, roll)
+    if tail_on and boom.faces:
+        put(r, "maru_boom" + tag, lambda: _cache.get("maru_boom_burnt", boom) if burned else boom,
+            pos, yaw, pitch, roll)
+    if main_on and not fpv and main_r.faces:
+        mh = _xf(info["main_hub"], pos, yaw, pitch, roll)
+        _put_spun(r, "maru_main" + tag, _cache.get("maru_main_burnt", main_r) if burned else main_r,
+                  mh, yaw, pitch, roll, spin_y=main_spin)
+    if tail_on and tail_r.faces:
+        th = _xf(info["tail_hub"], pos, yaw, pitch, roll)
+        _put_spun(r, "maru_tail" + tag, _cache.get("maru_tail_burnt", tail_r) if burned else tail_r,
                   th, yaw, pitch, roll, spin_x=tail_spin)
 
 
@@ -1873,6 +2015,30 @@ def _roadside_site(name):
         for x, z in ((-6, -5), (-3, -6), (7, -6), (8, -3)):
             m.add(box(1.8, 1.5, 1.8, timber, center=(x, 0.75, z)))
         m.add(W7._farm_silo(), t=(9.0, 0, 8.0))
+    elif name == "signal_bunker":
+        concrete = tex("concrete", like=(126, 128, 120))
+        bunk = W7._t("steel", (78, 84, 82))
+        m.add(box(5.8, 2.5, 4.2, concrete, center=(0.0, 1.25, 0.0)))
+        m.add(box(6.4, 0.32, 4.8, concrete, center=(0.0, 2.62, 0.0)))
+        m.add(box(4.2, 0.35, 0.14, (30, 36, 36), center=(0.0, 1.85, -2.14)))
+        for sx in (-2.6, 0.0, 2.6):
+            m.add(box(0.85, 0.55, 0.7, timber, center=(sx, 0.28, -3.4)))
+        for ax in (-1.4, 1.6):
+            m.add(box(0.16, 5.2, 0.16, bunk, center=(ax, 5.3, 0.8)))
+        m.add(box(2.8, 0.14, 0.14, steel, center=(0.1, 7.6, 0.8)))
+    elif name == "wrecked_convoy":
+        char = W7._t("charcoal", (52, 54, 56))
+        rust = W7._t("rust", (102, 72, 58))
+        for kx, kz, ry in ((-3.4, -2.5, 14.0), (2.8, 3.0, -22.0)):
+            sub = Mesh()
+            sub.add(box(2.2, 1.1, 4.6, char, center=(0.0, 0.9, 0.0)))
+            sub.add(box(2.0, 1.1, 1.6, rust, center=(0.0, 1.45, 1.5)))
+            for wx in (-1.05, 1.05):
+                for wz in (-1.4, 1.4):
+                    sub.add(box(0.32, 0.72, 0.72, (34, 34, 36), center=(wx, 0.36, wz)))
+            m.add(sub, rot_y(ry), (kx, 0.0, kz))
+        for cx, cz in ((-5.8, 1.5), (5.2, -2.0)):
+            m.add(box(1.1, 0.75, 0.9, timber, center=(cx, 0.38, cz)))
     elif name == "watchtower":
         concrete = tex("concrete", like=(151, 145, 130))
         for x in (-1.7, 1.7):

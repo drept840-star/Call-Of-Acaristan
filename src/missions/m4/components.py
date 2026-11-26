@@ -24,3 +24,5 @@ class M4Guard:
     work: int = 0                            # breacher: frames to the next bash / siege shot timer
     laser_t: int = 0                         # marksman: frames to the next windup
     retreat: bool = False                    # the stand-down beat sent this loyalist home
+    fx: float = 0.0                          # sub-pixel movement carry (siege._move)
+    fy: float = 0.0

@@ -432,9 +432,17 @@ class GoatRescue:
     def _start_line(self):
         self.line_t0 = self.time
         self.tick_n = 0
+        who, text = self.lines[0]
+        vo_ms = 0
+        try:
+            from audio import voice
+            vo_ms = int(voice.play_line(who, text) or 0)
+        except Exception:
+            pass
         self.line_until = self.time + max(
             4200,
-            2200 + len(self.lines[0][1]) * 65,
+            2200 + len(text) * 65,
+            vo_ms + 400 if vo_ms else 0,
         )
 
     def _next_line(self):
@@ -444,6 +452,12 @@ class GoatRescue:
         self.lines.pop(0)
         if self.lines:
             self._start_line()
+        else:
+            try:
+                from audio import voice
+                voice.cut()
+            except Exception:
+                pass
 
     def advance_dialogue(self):
         if not self.lines:

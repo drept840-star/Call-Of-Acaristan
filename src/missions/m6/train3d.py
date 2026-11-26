@@ -18,7 +18,7 @@ Design rules
       down in the open and the run fails.
     * Headless: with no input the failure branch runs on its own.
 """
-from engine3d.hold import hold_cached as _hold_cached
+from engine3d.hold import _HOLD_KEYS, hold_cached as _hold_cached
 import math
 import os
 
@@ -2308,6 +2308,8 @@ class TrainScene:
         _hum("ucilev")
         for kind in _GUARD_KINDS:
             _hum(("guard", kind))
+            _hold_cached(_w.hum(("guard", kind), True), POSES["ready"],
+                         "rifle", "ready", key=("guard", kind))
         try:
             for name in ("m6_train_idle", "m6_wind_bed", "gunshot",
                          "bullet_impact", "bullet_impact_enemy", "empty_click",
@@ -4544,7 +4546,12 @@ class TrainScene:
                     x += g["hit_dir"][0] * bump
                     z += g["hit_dir"][1] * bump
                 if not g.get("moving"):
-                    pose = _hold_cached(_w.hum(key, True), pose, "rifle", "ready", key=key)
+                    tw, sp = pose.get("twist", 0.0), pose.get("spine", 0.0)
+                    arms = _hold_cached(_w.hum(key, True), POSES["ready"],
+                                        "rifle", "ready", key=key)
+                    pose = dict(pose, **{k: arms[k] for k in _HOLD_KEYS if k in arms})
+                    pose["rifle_p"] = arms.get("rifle_p", 0.0) + sp - POSES["ready"]["spine"]
+                    pose["rifle_y"] = arms.get("rifle_y", 0.0) + tw
                 joints = _w.actor(r, key, pose, (x, y, z), yaw,
                                   int(t * 1000), seed=100 + g["slot"],
                                   amp=0.4, rifle_on=True, hd=True,

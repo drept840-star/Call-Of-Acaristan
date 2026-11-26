@@ -69,7 +69,7 @@ def set_stage(token):
         _farmyard.begin(token, advance_stage)
         snd.start_loop("m7_farm_bed", 0.18)
     elif token == STAGE_RAID:
-        STATE.m7_raid_cp = 0
+        STATE.m7_raid_cp = int(getattr(STATE, "m7_raid_cp", 0) or 0)
         _raid.begin()
         snd.start_loop("m7_night_bed", 0.16)
     elif token == STAGE_CHOICE:
@@ -105,6 +105,7 @@ def film_music(key):
 def on_raid_done(result):
     """The raid ended (win, or a scene fault that must not lock the mission): move on."""
     if getattr(STATE, "mission7_stage", "") == STAGE_RAID:
+        STATE.m7_raid_cp = 0
         advance_stage()
     return True
 
@@ -152,9 +153,11 @@ def handle_interact():
 def start_m7(stage=None, preserve_timer=False):
     kept = stage in (STAGE_RAID, STAGE_RAIDIN)
     preps = list(getattr(STATE, "m7_preps", None) or []) if kept else []
+    raid_cp = int(getattr(STATE, "m7_raid_cp", 0) or 0) if stage == STAGE_RAID else 0
     _initialize_m7(preserve_timer)
     _m7_audio.instance(_audio_manager).warm()
     STATE.m7_preps = preps
+    STATE.m7_raid_cp = raid_cp
     STATE.player = Player(64, 64)
     set_stage(stage or STAGE_ARRIVAL)
     return STATE.player
@@ -163,6 +166,7 @@ def start_m7(stage=None, preserve_timer=False):
 def start_m7_dev_raid(preps=(), cp=0):
     """Dev jump: the raid with the given preps, optionally already past wave ``cp`` (1 or 2)."""
     STATE.m7_preps = list(preps)
+    STATE.m7_raid_cp = 0
     player = start_m7(STAGE_RAID)
     cp = max(0, min(2, int(cp)))
     if cp:

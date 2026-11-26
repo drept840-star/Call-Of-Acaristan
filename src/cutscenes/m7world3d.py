@@ -20,6 +20,7 @@ import struct
 from functools import lru_cache
 
 import pygame
+from engine.assets import load_image as _load_image  # RPE6 D5: raw loads via engine.assets
 
 from engine3d.core import Light, Mesh, box, prism, quad_xz, rot_x, rot_y, rot_z, v_cross, v_dot, v_sub
 from engine3d.rig import POSES
@@ -1032,7 +1033,7 @@ def _load_glb_surface(gltf, bin_buf, tex_idx):
         bv = gltf["bufferViews"][img_info["bufferView"]]
         start = bv.get("byteOffset", 0)
         raw = bytes(bin_buf[start:start + bv["byteLength"]])
-        return pygame.image.load(io.BytesIO(raw))
+        return _load_image(io.BytesIO(raw))
     except Exception:
         return None
 
@@ -1054,9 +1055,12 @@ def _scrambler_asset():
     Faces are (idx_tuple, rgb_tuple, emit_flag) where emit_flag == 1 marks
     headlight/taillight emissive faces.
     """
+    from core.config import resource_path
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    repo_root = os.path.dirname(root)
     candidates = (
-        os.path.join(root, "assets", "3D", "scrambler125.glb"),
+        resource_path(os.path.join("assets", "3D", "scrambler125.glb")),
+        os.path.join(repo_root, "assets", "3D", "scrambler125.glb"),
         os.path.abspath(os.path.join("assets", "3D", "scrambler125.glb")),
     )
     path = next((p for p in candidates if os.path.isfile(p)), None)

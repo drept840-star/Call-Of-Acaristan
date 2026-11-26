@@ -5037,12 +5037,109 @@
     "PresetError",
     "load_preset_library",
     "resolve_lighting",
-    "blend_lighting"
+    "blend_lighting",
+    "PartSpec",
+    "CookoffSpec",
+    "FireMount",
+    "VehicleDestructionProfile",
+    "VEHICLE_PROFILES",
+    "get_vehicle_profile",
+    "PartBody",
+    "VehicleDestruction",
+    "VehicleDestructionManager"
    ],
    "names": {
+    "CookoffSpec": {
+     "attrs": {
+      "n_sparks": "int",
+      "tracer_burst": "bool"
+     },
+     "bases": [],
+     "fields": [
+      "delay_s",
+      "n_sparks",
+      "offset",
+      "radius",
+      "tracer_burst"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, delay_s: 'float', offset: 'Vec3', radius: 'float', n_sparks: 'int' = 16, tracer_burst: 'bool' = False) -> None"
+     }
+    },
+    "FireMount": {
+     "attrs": {
+      "bed": "bool",
+      "embers": "bool",
+      "heat": "float",
+      "size": "float",
+      "smoky": "bool"
+     },
+     "bases": [],
+     "fields": [
+      "bed",
+      "embers",
+      "heat",
+      "offset",
+      "size",
+      "smoky"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, offset: 'Vec3', size: 'float' = 1.0, heat: 'float' = 1.15, smoky: 'bool' = True, embers: 'bool' = True, bed: 'bool' = False) -> None"
+     }
+    },
     "PRESET_SCHEMA": {
      "kind": "constant",
      "type": "str"
+    },
+    "PartBody": {
+     "attrs": {
+      "age": "member_descriptor",
+      "ang_vel": "member_descriptor",
+      "bounces": "member_descriptor",
+      "hot": "member_descriptor",
+      "life": "member_descriptor",
+      "paint": "member_descriptor",
+      "pos": "member_descriptor",
+      "rot": "member_descriptor",
+      "settled": "member_descriptor",
+      "shape": "member_descriptor",
+      "smoke_acc": "member_descriptor",
+      "smoking": "member_descriptor",
+      "vel": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'Vec3', vel: 'Vec3', rot: 'Vec3', ang_vel: 'Vec3', shape: 'str', paint: 'Optional[Color3]', hot: 'bool', smoking: 'bool', life: 'float') -> 'None'",
+      "step": "(self, dt: 'float', floor_y: 'float') -> 'bool'"
+     }
+    },
+    "PartSpec": {
+     "attrs": {
+      "hot": "bool",
+      "life": "float",
+      "smoking": "bool",
+      "use_paint": "bool"
+     },
+     "bases": [],
+     "fields": [
+      "dir_local",
+      "hot",
+      "life",
+      "offset",
+      "shape",
+      "smoking",
+      "speed",
+      "spin",
+      "up_boost",
+      "use_paint"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, shape: 'str', offset: 'Vec3', dir_local: 'Vec3', speed: 'tuple[float, float]', up_boost: 'tuple[float, float]', spin: 'tuple[float, float]', hot: 'bool' = False, smoking: 'bool' = False, use_paint: 'bool' = False, life: 'float' = 12.0) -> None"
+     }
     },
     "PresetError": {
      "attrs": {},
@@ -5080,6 +5177,80 @@
      "kind": "class",
      "methods": {}
     },
+    "VEHICLE_PROFILES": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "VehicleDestruction": {
+     "attrs": {
+      "age": "member_descriptor",
+      "cookoff_events": "member_descriptor",
+      "cookoff_fired": "member_descriptor",
+      "follow": "member_descriptor",
+      "jolt_dir": "member_descriptor",
+      "kind": "member_descriptor",
+      "on_cookoff": "member_descriptor",
+      "paint": "member_descriptor",
+      "pitch": "member_descriptor",
+      "pos": "member_descriptor",
+      "profile": "member_descriptor",
+      "roll": "member_descriptor",
+      "scorch_pos": "member_descriptor",
+      "seed": "member_descriptor",
+      "tag": "member_descriptor",
+      "yaw": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, kind: 'str', profile: 'VehicleDestructionProfile', pos: 'Vec3', yaw: 'float', pitch: 'float', roll: 'float', paint: 'Optional[Color3]', seed: 'int', tag, follow: 'bool', scorch_pos: 'Optional[Vec3]', on_cookoff: 'Optional[Callable]' = None) -> 'None'",
+      "hull_transform": "(self) -> 'tuple[float, float, float]'",
+      "world_pos": "(self) -> 'Vec3'",
+      "world_pose": "(self) -> 'tuple[Vec3, float, float, float]'"
+     }
+    },
+    "VehicleDestructionManager": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *, seed: 'int' = 1, fx=None, max_active: 'int' = 12, max_parts: 'int' = 96, max_puffs: 'int' = 96) -> 'None'",
+      "active_lights": "(self, cap: 'int' = 6) -> 'list[dict]'",
+      "clear": "(self) -> 'None'",
+      "draw": "(self, r, tm: 'float', *, fx=None, flash_reduction: 'bool' = False) -> 'None'",
+      "has_tag": "(self, tag) -> 'bool'",
+      "hull_transform": "(self, tag) -> 'tuple[float, float, float]'",
+      "sync_pose": "(self, tag, pos: 'Vec3', yaw: 'float' = 0.0, pitch: 'float' = 0.0, roll: 'float' = 0.0) -> 'None'",
+      "trigger": "(self, kind: 'str', pos: 'Vec3', *, yaw: 'float' = 0.0, pitch: 'float' = 0.0, roll: 'float' = 0.0, vel: 'Vec3' = (0.0, 0.0, 0.0), paint: 'Optional[Color3]' = None, seed: 'Optional[int]' = None, tag=None, follow: 'bool' = False, floor_fn: 'Optional[Callable[[float, float], float]]' = None, on_cookoff: 'Optional[Callable]' = None) -> 'VehicleDestruction'",
+      "update": "(self, dt: 'float', *, floor_fn: 'Optional[Callable[[float, float], float]]' = None) -> 'None'"
+     }
+    },
+    "VehicleDestructionProfile": {
+     "attrs": {},
+     "bases": [],
+     "fields": [
+      "blast_radius",
+      "cookoffs",
+      "fire_life",
+      "fire_mounts",
+      "fireball_dur",
+      "fireball_lobes",
+      "flash_dur",
+      "jolt_pitch",
+      "jolt_roll",
+      "jolt_vy",
+      "kind",
+      "parts",
+      "sag_y",
+      "scorch_radius",
+      "shockwave_dur",
+      "shockwave_r"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, kind: 'str', blast_radius: 'float', scorch_radius: 'float', flash_dur: 'float', fireball_dur: 'float', fireball_lobes: 'int', fire_life: 'float', jolt_vy: 'float', jolt_pitch: 'float', jolt_roll: 'float', sag_y: 'float', shockwave_r: 'float', shockwave_dur: 'float', parts: 'tuple[PartSpec, ...]', fire_mounts: 'tuple[FireMount, ...]', cookoffs: 'tuple[CookoffSpec, ...]') -> None"
+     }
+    },
     "blend_lighting": {
      "kind": "function",
      "signature": "(spec_a, spec_b, k: 'float', library: 'dict') -> 'dict'"
@@ -5091,6 +5262,10 @@
     "from_dict": {
      "kind": "function",
      "signature": "(data: 'dict', source: 'str' = '') -> 'Scene3D'"
+    },
+    "get_vehicle_profile": {
+     "kind": "function",
+     "signature": "(kind: 'str') -> 'VehicleDestructionProfile'"
     },
     "load_preset_library": {
      "kind": "function",
@@ -5111,6 +5286,32 @@
     "validate": {
      "kind": "function",
      "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.render3d.blast_sprites": {
+   "all": [
+    "fireball_sprite",
+    "flash_sprite",
+    "ground_flash_sprite",
+    "prewarm"
+   ],
+   "names": {
+    "fireball_sprite": {
+     "kind": "function",
+     "signature": "(rad_m: 'float', phase_u: 'float', variant: 'int', alpha_k: 'float' = 1.0, max_px: 'int' = 360)"
+    },
+    "flash_sprite": {
+     "kind": "function",
+     "signature": "(rad_m: 'float', k: 'float', max_px: 'int' = 260)"
+    },
+    "ground_flash_sprite": {
+     "kind": "function",
+     "signature": "(rad_m: 'float', k: 'float', max_px: 'int' = 280)"
+    },
+    "prewarm": {
+     "kind": "function",
+     "signature": "() -> 'None'"
     }
    }
   },
@@ -5218,6 +5419,187 @@
     "validate": {
      "kind": "function",
      "signature": "(data: 'Any') -> 'list[str]'"
+    }
+   }
+  },
+  "engine.render3d.vehicle_destruction": {
+   "all": [
+    "PartSpec",
+    "CookoffSpec",
+    "FireMount",
+    "VehicleDestructionProfile",
+    "VEHICLE_PROFILES",
+    "get_vehicle_profile",
+    "PartBody",
+    "VehicleDestruction",
+    "VehicleDestructionManager"
+   ],
+   "names": {
+    "CookoffSpec": {
+     "attrs": {
+      "n_sparks": "int",
+      "tracer_burst": "bool"
+     },
+     "bases": [],
+     "fields": [
+      "delay_s",
+      "n_sparks",
+      "offset",
+      "radius",
+      "tracer_burst"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, delay_s: 'float', offset: 'Vec3', radius: 'float', n_sparks: 'int' = 16, tracer_burst: 'bool' = False) -> None"
+     }
+    },
+    "FireMount": {
+     "attrs": {
+      "bed": "bool",
+      "embers": "bool",
+      "heat": "float",
+      "size": "float",
+      "smoky": "bool"
+     },
+     "bases": [],
+     "fields": [
+      "bed",
+      "embers",
+      "heat",
+      "offset",
+      "size",
+      "smoky"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, offset: 'Vec3', size: 'float' = 1.0, heat: 'float' = 1.15, smoky: 'bool' = True, embers: 'bool' = True, bed: 'bool' = False) -> None"
+     }
+    },
+    "PartBody": {
+     "attrs": {
+      "age": "member_descriptor",
+      "ang_vel": "member_descriptor",
+      "bounces": "member_descriptor",
+      "hot": "member_descriptor",
+      "life": "member_descriptor",
+      "paint": "member_descriptor",
+      "pos": "member_descriptor",
+      "rot": "member_descriptor",
+      "settled": "member_descriptor",
+      "shape": "member_descriptor",
+      "smoke_acc": "member_descriptor",
+      "smoking": "member_descriptor",
+      "vel": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, pos: 'Vec3', vel: 'Vec3', rot: 'Vec3', ang_vel: 'Vec3', shape: 'str', paint: 'Optional[Color3]', hot: 'bool', smoking: 'bool', life: 'float') -> 'None'",
+      "step": "(self, dt: 'float', floor_y: 'float') -> 'bool'"
+     }
+    },
+    "PartSpec": {
+     "attrs": {
+      "hot": "bool",
+      "life": "float",
+      "smoking": "bool",
+      "use_paint": "bool"
+     },
+     "bases": [],
+     "fields": [
+      "dir_local",
+      "hot",
+      "life",
+      "offset",
+      "shape",
+      "smoking",
+      "speed",
+      "spin",
+      "up_boost",
+      "use_paint"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, shape: 'str', offset: 'Vec3', dir_local: 'Vec3', speed: 'tuple[float, float]', up_boost: 'tuple[float, float]', spin: 'tuple[float, float]', hot: 'bool' = False, smoking: 'bool' = False, use_paint: 'bool' = False, life: 'float' = 12.0) -> None"
+     }
+    },
+    "VEHICLE_PROFILES": {
+     "kind": "constant",
+     "type": "dict"
+    },
+    "VehicleDestruction": {
+     "attrs": {
+      "age": "member_descriptor",
+      "cookoff_events": "member_descriptor",
+      "cookoff_fired": "member_descriptor",
+      "follow": "member_descriptor",
+      "jolt_dir": "member_descriptor",
+      "kind": "member_descriptor",
+      "on_cookoff": "member_descriptor",
+      "paint": "member_descriptor",
+      "pitch": "member_descriptor",
+      "pos": "member_descriptor",
+      "profile": "member_descriptor",
+      "roll": "member_descriptor",
+      "scorch_pos": "member_descriptor",
+      "seed": "member_descriptor",
+      "tag": "member_descriptor",
+      "yaw": "member_descriptor"
+     },
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, kind: 'str', profile: 'VehicleDestructionProfile', pos: 'Vec3', yaw: 'float', pitch: 'float', roll: 'float', paint: 'Optional[Color3]', seed: 'int', tag, follow: 'bool', scorch_pos: 'Optional[Vec3]', on_cookoff: 'Optional[Callable]' = None) -> 'None'",
+      "hull_transform": "(self) -> 'tuple[float, float, float]'",
+      "world_pos": "(self) -> 'Vec3'",
+      "world_pose": "(self) -> 'tuple[Vec3, float, float, float]'"
+     }
+    },
+    "VehicleDestructionManager": {
+     "attrs": {},
+     "bases": [],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, *, seed: 'int' = 1, fx=None, max_active: 'int' = 12, max_parts: 'int' = 96, max_puffs: 'int' = 96) -> 'None'",
+      "active_lights": "(self, cap: 'int' = 6) -> 'list[dict]'",
+      "clear": "(self) -> 'None'",
+      "draw": "(self, r, tm: 'float', *, fx=None, flash_reduction: 'bool' = False) -> 'None'",
+      "has_tag": "(self, tag) -> 'bool'",
+      "hull_transform": "(self, tag) -> 'tuple[float, float, float]'",
+      "sync_pose": "(self, tag, pos: 'Vec3', yaw: 'float' = 0.0, pitch: 'float' = 0.0, roll: 'float' = 0.0) -> 'None'",
+      "trigger": "(self, kind: 'str', pos: 'Vec3', *, yaw: 'float' = 0.0, pitch: 'float' = 0.0, roll: 'float' = 0.0, vel: 'Vec3' = (0.0, 0.0, 0.0), paint: 'Optional[Color3]' = None, seed: 'Optional[int]' = None, tag=None, follow: 'bool' = False, floor_fn: 'Optional[Callable[[float, float], float]]' = None, on_cookoff: 'Optional[Callable]' = None) -> 'VehicleDestruction'",
+      "update": "(self, dt: 'float', *, floor_fn: 'Optional[Callable[[float, float], float]]' = None) -> 'None'"
+     }
+    },
+    "VehicleDestructionProfile": {
+     "attrs": {},
+     "bases": [],
+     "fields": [
+      "blast_radius",
+      "cookoffs",
+      "fire_life",
+      "fire_mounts",
+      "fireball_dur",
+      "fireball_lobes",
+      "flash_dur",
+      "jolt_pitch",
+      "jolt_roll",
+      "jolt_vy",
+      "kind",
+      "parts",
+      "sag_y",
+      "scorch_radius",
+      "shockwave_dur",
+      "shockwave_r"
+     ],
+     "kind": "class",
+     "methods": {
+      "__init__": "(self, kind: 'str', blast_radius: 'float', scorch_radius: 'float', flash_dur: 'float', fireball_dur: 'float', fireball_lobes: 'int', fire_life: 'float', jolt_vy: 'float', jolt_pitch: 'float', jolt_roll: 'float', sag_y: 'float', shockwave_r: 'float', shockwave_dur: 'float', parts: 'tuple[PartSpec, ...]', fire_mounts: 'tuple[FireMount, ...]', cookoffs: 'tuple[CookoffSpec, ...]') -> None"
+     }
+    },
+    "get_vehicle_profile": {
+     "kind": "function",
+     "signature": "(kind: 'str') -> 'VehicleDestructionProfile'"
     }
    }
   },

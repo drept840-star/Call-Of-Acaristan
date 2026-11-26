@@ -764,6 +764,22 @@ def _draw_m3_bcast_fail_retry_raw(surface, t):
                                        (78, 138, 108))
     surface.blit(line2, W(cx - line2.get_width() // 2, py + 126))
 
+    # Progress re-arm bar + bezel corner brackets + telltale LED
+    bar_x, bar_y, bar_w, bar_h = px + 44, py + 158, pw - 88, 14
+    pygame.draw.rect(surface, (8, 16, 13), (*W(bar_x, bar_y), bar_w, bar_h))
+    pygame.draw.rect(surface, (52, 108, 82), (*W(bar_x, bar_y), bar_w, bar_h), 1)
+    prog = min(1.0, (t % 2600.0) / 2200.0)
+    fill_w = max(4, int((bar_w - 4) * prog))
+    pygame.draw.rect(surface, (112, 224, 162), (*W(bar_x + 2, bar_y + 2), fill_w, bar_h - 4))
+    for rx0, ry0, dx, dy in (
+        (px - 10, py - 10, 14, 14),
+        (px + pw + 10, py - 10, -14, 14),
+        (px - 10, py + ph + 10, 14, -14),
+        (px + pw + 10, py + ph + 10, -14, -14),
+    ):
+        pygame.draw.line(surface, (132, 232, 176), W(rx0, ry0), W(rx0 + dx, ry0), 2)
+        pygame.draw.line(surface, (132, 232, 176), W(rx0, ry0), W(rx0, ry0 + dy), 2)
+
     # A single green telltale on the plate bezel: the wing is ours again.
     tell = 0.6 + 0.4 * math.sin(t * 0.006)
     pygame.draw.circle(surface, (120, 220, 160),
@@ -798,13 +814,21 @@ def _staged_take(scene, fallback):
     return draw
 
 
+def _fail_take(scene, fallback):
+    def draw(surface, t):
+        from cutscenes import m3ending3d  # lazy: engine3d stack
+        if not m3ending3d.draw_scene(scene, surface, t):
+            fallback(surface, t)
+    return draw
+
+
 _register_takes({
     "m3_bcast_shutter": _staged_take("m3_bcast_shutter", _draw_m3_bcast_shutter),
     "m3_bcast_road": _staged_take("m3_bcast_road", _draw_m3_bcast_road),
     "m3_bcast_mast": _staged_take("m3_bcast_mast", _draw_m3_bcast_mast),
     "m3_bcast_onair": _staged_take("m3_bcast_onair", _draw_m3_bcast_onair),
     "m3_bcast_channel": _staged_take("m3_bcast_channel", _draw_m3_bcast_onair),
-    "m3_bcast_fail_studio": _draw_m3_bcast_fail_studio,
-    "m3_bcast_fail_pa": _draw_m3_bcast_fail_pa,
+    "m3_bcast_fail_studio": _fail_take("m3_bcast_fail_studio", _draw_m3_bcast_fail_studio),
+    "m3_bcast_fail_pa": _fail_take("m3_bcast_fail_pa", _draw_m3_bcast_fail_pa),
     "m3_bcast_fail_retry": _draw_m3_bcast_fail_retry,
 })

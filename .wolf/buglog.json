@@ -2,6 +2,83 @@
   "version": 1,
   "bugs": [
     {
+      "id": "bug-m8-duty-rocket-difficulty-night-void-20261121",
+      "error_message": "M8 Duty: rockets were trivial to swat from 245 m (2.8 m hit sphere, free -0.14 heat cooling per kill, HUD lock diamond at any range, huge glow sprites), and Curfew Boulevard read as a black void off-axis (flight altitude 38 m above 14-22.5 m blocks, cine-curve crushed dark albedos, fog 85/420, lamps clustered behind the heli, empty cross-streets and outer sides).",
+      "file": "src/missions/m8/duty/flight3d.py",
+      "root_cause": "Three independent causes: (1) _fire ray-sphere radius 2.8 m plus unconditional heat refund and an always-on HUD diamond made long-range rockets low risk; (2) alt_base=29 with dive 9 floated the camera above the streetfront, height_fog 0.008 with hardcoded dark fog colour erased downrange, and the night set's low albedos were crushed by cine_curve; (3) _nearest_lamps ranked lamps around tgt (behind the heli) and the set had no flanking buildings/signs beyond +-115 m or lamps past 96 m on cross-streets.",
+      "fix": "Hit sphere 0.90 m, no heat refund, speeds 22/28/26 and DMG 18, ground cap 180 m / air 220 m / rpg-aa 185 m, HUD diamond only inside 105 m, smaller flare/seeker glow; altitude 21.0/19.5 and gp -6.5, height_fog (0.0028,0,2.2,FS.FOG); FOG (12,17,30) 130..560, lighter Light+albedos, aim-forward lamp focus with 26 lights/28 pools; cross-streets to +-180 m with five lamps/side and flanking blocks, tier-4 outer towers, denser zone-2/route-12 dressing. Necessary correction: the supplied storefront-sign hunk used seed_h before its definition in _add_building - moved the seed computation to the function top. Gates: compileall, ae_normalize, smoke --only m8, bake probe (108991 faces/187 lamps, cp0/1/2/4 render), live road jump boot all OK.",
+      "tags": ["m8", "duty", "flight", "rockets", "difficulty", "night-lighting", "corridor-density", "seed_h-order"],
+      "status": "fixed",
+      "last_seen": "2026-11-21",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-duty-road-rocket-intercept-20261121",
+      "error_message": "M8 Duty road sections cp=1..4: rockets from ground/roof launchers and flanking gunships never intercepted the 34 m/s gunship; they missed below/beside the bay and despawned at p.z < hp.z-2. Telegraphed aa/gunship rockets were also cancelled ~58-66% of the time.",
+      "file": "src/missions/m8/duty/flight3d.py",
+      "root_cause": "ROCKET_ROAD_V=14 / ROCKET_AIR_V=8 world speed with pure pursuit (aim at current heli position) cannot close a 22-40 m lateral/vertical offset before the 34 m/s heli passes; an 8 m/s gunship rocket has no intercept solution at all. Separately, the aa/gunship branches re-rolled rng.random() after their 0.85 s telegraph and _fire_rocket re-checked dz>=115 after 28.9 m of travel, cancelling windups started at dz 115..144 m.",
+      "fix": "ROCKET_ROAD_V=ROCKET_AIR_V=22; _heli_vel() finite-differences _heli_pos() and _rocket_intercept() solves |(tgt-p)+vh*t| = s*t (speed floor 1.12*s_min+1) at _fire_rocket, _ucilev_kill_shot and every _rockets_update tick (9.0*dt turn), keeping rk['dir'] aligned with the world path; e['rk_tele'] tracks rocket windups separately from bullet tele so no RNG re-roll or range-abort mid-windup (dz gate 105/58 normal, 75/36 telegraphed). Numeric probe: cp1 roof/ground RPG, cp1 gunship air and cp4 ridge RPG all close to 2.8 m in 2.4-5.8 s. Gates: compileall, ae_normalize, smoke --only m8, both live-jump boots OK.",
+      "tags": ["m8", "duty", "flight", "rockets", "lead-intercept", "pure-pursuit", "telegraph", "rng"],
+      "status": "fixed",
+      "last_seen": "2026-11-21",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-duty-fpv-glb-clip-rockets-20261121",
+      "error_message": "M8 Duty Last Flight: the first-person gunner view used a procedural cockpit that diverged from the real maru_gunship.glb used by the films, and rockets slid backwards through their own smoke because world motion included the gunship velocity while the rendered nose pointed along a different vector.",
+      "file": "src/missions/m8/duty/flight3d.py",
+      "root_cause": "The previous sightline pass replaced the GLB with procedural fpv_gunship_mesh and local FPV_* anchors, so the FPV airframe no longer matched the cutscene hull. Rockets added hvel to a lofted dir and used heli-frame closing speed, so world velocity disagreed with the rendered nose and the trail slid past the rocket.",
+      "fix": "maru_gunship_fpv_parts() builds a cached GLB-derived FPV fuselage (drop eye-level pillars/mullions/pods, clip rear walls/doors to y<=1.04, emissive avionics) submitted via put_maru_gunship(..., fpv=True); FPV draws use GLB info anchors with -hroll and liftoff_maru's whip uses the same clipped hull. Rockets fly along normalize(vel) in world space (no hvel/loft): ROCKET_V=16/ROAD=14/AIR=8, road gate dz>115/58, <=245 m, +-72 deg, gunships/Ucilev 68..94 m ahead, rpg/aa 250 m, flares inherit 0.78*HELI_V and decoyed rockets lay trail/puffs. Gates: compileall, ae_normalize, smoke --only m8, --only mission8_duty,engine3d, full --fast, sync_arch_map --check all OK; headless cp=0/1/4 + whip and 4 live-jump boots clean.",
+      "tags": ["m8", "duty", "flight", "fpv", "glb-clipping", "rocket-physics", "sightline", "match-cut"],
+      "status": "fixed",
+      "last_seen": "2026-11-21",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-duty-flight-sightlines-rockets-20261121",
+      "error_message": "M8 Duty screenshots: the first-person gunner view was blocked by the closed heavy maru_gunship.glb canopy/door pillars across the crosshair; Tier-1 boulevard blocks at +-17.5 m / up to 36 m pinched Curfew Boulevard so the 18-21 m gunship grazed rooftops; road rockets closed at ~94 m/s (<1 s reaction) and could launch/chase from behind with an unrendered matte-black body.",
+      "file": "src/missions/m8/duty/flight_fx.py",
+      "root_cause": "Three independent causes: (1) draw_cabin_and_gun submitted the full exterior GLB around the FPV camera, whose canopy/door pillars crossed the sightline, and gunner_eye/pintle/seat anchors were read from info['floor_y']/['pilot_seat'] even though the film's liftoff_maru used the procedural fpv_gunship_mesh at different local offsets, so the cabin/actor popped at the match cut; (2) Tier-1 blocks sat at 17.5+w/2 (curving in to +-11 m) and rose to 32 m while the heli weaved -13.5 m at 18-21 m; (3) base_v = HELI_V+26 gave ~94 m/s head-on closure, launchers stayed active 75 m behind, rk['trail'] was never drawn, and the matte body lacked a flare/contrail.",
+      "fix": "FPV now always uses fpv_gunship_mesh()+rotor_mesh() with local FPV_* anchors (eye 1.56, roof 2.34, pods z=-0.58); m8dutyfilms shares those anchors from whip_u>=0.85. Boulevard: Tier-1 22.5+w/2 + 13 m sidewalks + 14..22.5 m heights, tiers 2-3 pushed back, rooftops 13..25 m, pines (18,34,56); heli weave +-5.5 m at 29 m, aim down the boulevard. Rockets: _can_launch_rocket front-hemisphere gate (>=68 m ahead ground / >=28 m air), drop lock when p.z < hp.z-4, heli-frame closing speed with loft (ROCKET_V=18, ROCKET_CLOSE_ROAD=24), 0.85 s telegraph, 2.8 m shootdown, rocket_f callout, camera-basis off-screen chevrons, and a glowing add_line3d contrail + head-on flare + high-contrast smoke. Gates: compileall, ae_normalize --changed, smoke --only m8, full smoke --fast all OK; headless boot of both dev jumps clean.",
+      "tags": ["m8", "duty", "flight", "liftoff", "fpv-sightline", "match-cut", "boulevard-clearance", "rocket-closing-speed", "contrail", "matcut"],
+      "status": "fixed",
+      "last_seen": "2026-11-21",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-duty-shot123-screenshot-artifacts-20261121",
+      "error_message": "M8 Duty screenshot defects: a brass ammo-box floated through the LMG receiver in ADS, the LMG swallowed the center-right reticle at FOV 38, the aft starboard rocket pod and a rotor tip intruded into the door-gunner view, estate walls showed red/grey mould blotches, the VIP doorway had a hull wedge across it, and Retardovici's head poked through the cabin lintel.",
+      "file": "src/cutscenes/m8dutyfilms.py",
+      "root_cause": "Six independent causes: (1) flight_fx._ammo_pouch_mesh submitted four brass link boxes at pouch_at (+0.075,-0.085,0.08), pushing box i=3 through to (-0.045,+0.030,+0.080) where tactical_lmg.mesh.json already has Ammo_Box_Body/Bullet_Belt_Group; (2) gun mount fwd_off=0.44/up_off=-0.220+0.100*ads put the buttpad 8.5-12.5 cm from the lens and the rear sight 3.3 cm above the camera axis in ADS; (3) gunner_eye ly=fy+1.04/lz=0.20+cos(rr)*0.22 with 14-deg estate roll left the aft starboard pod and rotor tip inside the 62-deg FOV; (4) mansion_set/mansion_env used W7._t('plaster'/'stone') (m7_plaster/m7_stone) at monumental scale; (5) _vip_open_body dropped whole port-wall GLB faces whose vertices touched the doorway rect, so large triangles spanned the hole; (6) the 'president'/retardovici rig is 2.276 m standing, so even the old crouch (lhip_p=38/42, lkn=58/62) left his head around y=2.11 above the y=2.02 lintel - a height estimate using the generic rig (1.76 m) was the original false 'fixed' claim; the pose must be verified against the real Humanoid.build vertices.",
+      "fix": "Shot 1: _clip_poly_plane/_subtract_door_rect split spanning port triangles into 4 clean pieces around z -0.08..1.42 / y 0.56..2.16, sealed 1.56x1.70x1.96 cabin box with roof cap at 2.20, rail-mounted slid-aft panel with recessed window, deep crouch (lhip_p=72/lkn=102/lank=24, rhip_p=66/rkn=96/rank=24) puts the head at ~1.76 m; liftoff_window/liftoff_maru cameras reframed. Shot 2: east poplars + mulch moved to x=+-26.5, z=40.5+6k. Shot 3: estate roll/pitch 14/-4 -> 8/-3, gunner_eye fy+0.92 / lz=0.40+cos(rr)*0.24, LMG fwd_off=0.78-0.06*ads / rg_off=0.225-0.120*ads / up_off=-0.255+0.030*ads with toe-in -5+2*ads / 4.5-0.5*ads, ammo-pouch submit removed, bore z 0.735; stucco/ashlar tex3d replaces m7_plaster/m7_stone across the estate. Gates: normalize, compileall, liftoff sheet + hip/ads renders eyeballed, smoke --only m8, --only mission8_duty,engine3d, full smoke --fast, ae_ci --quick (only documented pre-existing reds). Follow-up: added cached `_vip_pose()` - a deep forward squat (lhip_p=112/lkn=134/lank=0, rhip_p=106/rkn=130/rank=0, spine 38, head_p -22) with a load-time loop that tightens hip/knee/spine/head until `max_y <= 1.94` against actual `Humanoid.build` verts (resolves 116/138/41/-24: min_y 0.550, max_y 1.913); feet x -0.44; liftoff_window camera `(-6.2+0.35u,0.78,3.3-0.25u)` -> `(-0.24,1.24,0.58)`. Probe + sheet eyeball OK.",
+      "tags": ["m8", "duty", "liftoff", "flight", "doorway-clipping", "glb-face-cut", "ads-framing", "ammo-pouch", "stucco-ashlar", "rig-height-verification"],
+      "status": "fixed",
+      "last_seen": "2026-11-21",
+      "occurrences": 2
+    },
+    {
+      "id": "bug-m8-duty-liftoff-flight-sightlines-20261121",
+      "error_message": "M8 Duty: liftoff_maru flew the 12 m gunship through the east terrace balustrade; liftoff_window showed sky leaking through a torn VIP hull roof around a floating black rectangle; Route 12 rockets in cp>=1 were unseen from the gunner view.",
+      "file": "src/cutscenes/m8dutyfilms.py",
+      "root_cause": "Three independent causes: (1) hover at x=9.6/z=47.5 put the airframe across TERRACE's east rail (x=+9.0, z 36..52); (2) _vip_open_body cut hull faces up to y=2.45, above the roof eave, with no interior behind the hole, and Retardovici stood at y=2.29 through the roof; (3) gunner_eye used lx=sin(r)*0.48+0.16 with the heli following road_yaw, so the camera sat in the center aisle looking through the cockpit dash/B-pillars instead of out the open starboard door.",
+      "fix": "Hover moved outside the rail to (12.4, hy+0.25, hz-0.5) with gyaw=205-40u-10climb and door local (0.98,0.58,0.28) at yaw 165; _vip_open_body now cuts only y 0.56..2.02 / z -0.05..1.35, seals an interior cabin box, adds a slid-aft door panel + dome light, and Retardovici crouches at (-0.62,0.54,0.66); liftoff_window is a 3/4 front-port climbing shot; gunner_eye leans onto the doorway threshold via lx=0.96*tanh(3.2*sin(rr)), _heli_yaw cranes -28 deg port while mount_yaw stays road_yaw, air streaks use road_yaw, and rocket plume/glows/puffs are enlarged. Gates: normalize, compileall, both film sheets, smoke --only m8, --only mission8_duty,engine3d, full smoke --fast, sync/map checks all OK.",
+      "tags": ["m8", "duty", "liftoff", "flight", "gunner-eye", "balustrade", "glb-face-cut", "rocket-visibility"],
+      "status": "fixed",
+      "last_seen": "2026-11-21",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-crash-floating-rifle-20261120",
+      "error_message": "M8 Duty crash films: Biribel receives an OS-12 that floats through mid-air during the handoff then snaps into his hands; the rifle also sat ~1.0 m / ~0.79 m from Maru's and Biribel's shoulders (ARM_REACH = 0.58 m), so neither actor's hands reached it.",
+      "file": "src/cutscenes/m8dutyfilms.py",
+      "root_cause": "Two independent causes: (1) crash_fire/crash_promise/crash_better spawned the box OS-12 (`os12_mesh`, flags=('os12',)) instead of a baked weapon with its own grip set; (2) `_crash_actors` placed a static `rifle_hold_pt` derived from CRASH_AT rather than either rig's actual `rhand`, and during handoff_u 0.45..0.65 `lift_u` slid the world prop toward a fixed point without updating Biribel's IK targets, then snapped to R._held at 0.65.",
+      "fix": "New `tools/ae_import_sniper.py` bakes `assets/3D/lowpoly_sniper_rifle.glb` -> `sniper_rifle.mesh.json` (meta butt/guard/fore mirrored by new `engine3d.hold.GRIPS['sniper_rifle']`); `cast3d.RIFLE_ASSETS` + `m6world3d.hum` gain the `sniper_rifle` flag with a procedural scoped-rifle fallback. `_crash_actors` locks O_start/R_start to Maru's real rhand while he leans to extend it, leans Biribel in to reach the pistol grip (<= 0.58 m), and during pull_u interpolates the prop to b_final's pose_world() (O_end/R_end) pinned to Biribel's live rhand/fore via `_interp_rot`, handing off seamlessly to hold_cached(..., 'ready') at handoff_u >= 1.0. Gates: importer, normalize, compileall, ae_hold_check, ae_validate, ae_timeline_check, m8_duty_film_shots --only=crash (sheet eyeballed), smoke --only m8, test_hold 5/5, full smoke --fast, sync_arch_map/map_assets3d --check.",
+      "tags": ["m8", "duty", "crash", "sniper-rifle", "weapon-handoff", "ik", "arm-reach", "ae.mesh/1", "cutscene"],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
       "id": "bug-m7-alex-well-hold-reset-20261119",
       "error_message": "M7 raid: holding E next to Alex pinned under the fallen well beam never frees him - the 'Free Alex' prompt progress never fills and the beam does not lift.",
       "file": "src/missions/m7/raid3d.py",
@@ -7355,6 +7432,154 @@
       ],
       "status": "fixed",
       "last_seen": "2026-11-19",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-mansion-portrait-backface-cull-20261120",
+      "error_message": "M8 Duty estate portraits rendered as empty gilt/backing boxes - the painted president photo was invisible; the two Grand Hall back-wall portraits were also buried inside the grand staircase.",
+      "file": "src/missions/m8/duty/mansion_props.py",
+      "root_cause": "president_portrait baked its canvas as hand-written m.face(..., double=False) quads wound [(px1,py1),(px1,py0),(px0,py0),(px0,py1)]; with py1<py0 and px0<px1 the normal (b-a)x(c-a) is (0,0,+W*H) (+Z, into the wall), so BOTH GL and Software renderers backface-cull 100% of the painted surface. Separately, _interior_hall placed the two back-wall portraits at x=+/-2.6, inside the solid grand staircase footprint (STAIR_X=3.0).",
+      "fix": "Wind the canvas quads [(px0,py1),(px0,py0),(px1,py0),(px1,py1)] for a -Z front face (both backends then draw them); move the two Grand Hall back-wall portraits to x=+/-4.1 on the open piers between the balustrades and the +/-6 doorways.",
+      "tags": [
+        "m8",
+        "duty",
+        "mansion",
+        "engine3d",
+        "winding",
+        "backface-cull",
+        "portrait"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-mansion-portrait-3d-bust-mangled-20261120",
+      "error_message": "M8 Duty estate portraits: squished head, chewed-up eyes/suit and dark-on-dark mud after scaling a 64x64 headless 3D bust into a non-square 2D canvas.",
+      "file": "src/missions/m8/duty/mansion_props.py",
+      "root_cause": "_render_president_photo rendered a 64x64 headless SoftwareRenderer bust of cast3d.humanoid3d('president'), chroma-keyed it, then pygame.transform.scale()d that square bitmap to (b_size, b_size) and blitted it into a pw x 64 canvas - the square->non-square resample mangled the face/suit, and dark wall paint left the suit and backdrop indistinguishable after Obj light.shade().",
+      "fix": "Replace the 3D/chroma-key path with the canonical 2D engine.anim.figure_kit.draw_character(canvas, 'president', ...) at true w/h aspect (ph=96, pw=max(56, round(96*w/h)), scale=avail_h/188), plus a paint-lifted lit studio backdrop with concentric warm halos so the suit and backdrop stay distinct indoors.",
+      "tags": [
+        "m8",
+        "duty",
+        "mansion",
+        "portrait",
+        "figure_kit",
+        "aspect-ratio",
+        "visual-quality"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-mansion-stair-floating-balusters-20261120",
+      "error_message": "M8 Duty grand staircase: the balusters, handrail and newel floated beside the steps; the stair sides were zebra-striped with z-fighting seams; the gold rail sat too high and had no top newel; the red runner covered only treads with no riser carpet or gold border.",
+      "file": "src/missions/m8/duty/mansion_set.py",
+      "root_cause": "_interior_hall built each of 22 steps as a full-height (sy-gf_top+dy*0.5) alternating marble_a/marble_b box spanning [-STAIR_X,STAIR_X], so the sides read as alternating stripes with coplanar overlapping seams; the balusters/handrail/newel sat at x=+/-(STAIR_X+0.2)=+/-3.2 with no sloped cheek beneath them even though mansion_world already had solid colliders at +/-3.0..3.4; the GOLD rail sat at (GF+FF)/2+0.95 instead of matching the upper landing _balustrade's FF+0.90, with no newel at STAIR_Z1=26.0 and a k=0..steps loop straddling both endpoints; the carpet was treads-only with no riser wrap or gold border.",
+      "fix": "Added _sloped_wedge() and built one full-width marble_b base wedge plus separate marble_b riser / marble_a 0.05 m tread boxes (no full-height zebra blocks or coplanar seams); a continuous red runner now wraps risers and treads with 0.30 m gold borders at x=+/-1.75; added sloped plaster cheek wedges at x=+/-(STAIR_X..STAIR_X+0.36), a TRIM stringer, 15 intermediate balusters, a GOLD rail at mid_y+0.90 (meeting the landing balustrade at FF+0.90) and stone+GOLD newel posts at both STAIR_Z0 and STAIR_Z1. Verified: both cheek wedges wind outward on 6/6 faces, hall builds 12358 faces all finite; ae_normalize/compileall OK, unit 8/8, smoke --only mission8_duty,engine3d and --fast OK, sync_arch_map --check OK. Owner to eyeball --dev-mission8-mansion --m8-cp=2 (interactive).",
+      "tags": [
+        "m8",
+        "duty",
+        "mansion",
+        "engine3d",
+        "geometry",
+        "winding",
+        "staircase"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-mansion-stair-hitboxes-20261120",
+      "error_message": "M8 Duty grand staircase: an invisible 6.2 m wall stood above the railings (bullets, LOS, camera boom and wall_k all hit empty air), while the marble steps themselves had NO hitboxes (rays and LOS passed straight through them).",
+      "file": "src/missions/m8/duty/mansion_world.py",
+      "root_cause": "_static() built each staircase side as one flat _b(s*STAIR_X, STAIR_Z0, s*(STAIR_X+0.4), STAIR_Z1, GF, FF+1.0) box - a solid 0.8..6.2 m slab from z 18..26 that did not follow the sloped rail (top ~1..5.2 m) - so everything above the rail was blocked. Separately STATIC contained zero boxes under the 22 steps in [-STAIR_X,+STAIR_X] x [18,26]; only FLOORS had a smooth ramp, used for walking, so rays/LOS had nothing to hit on the stairs.",
+      "fix": "Replaced the flat side slabs with 16 sloped cheek boxes per side (GF..yb+0.14), 16 sloped handrail boxes (ya+0.82..yb+0.97), 15 individual balusters (k>0, so shots pass through the gaps) and bottom/top newel posts matching mansion_set (GF..GF+1.35 / FF..FF+1.29). Added _STAIR_RAY_BOXES (22 boxes x[-3,3] z[18,26] y GF..GF+(i+1)*dy) + _STAIR_RAY_BW and _stair_ray_hit(o,d,best) (AABB-prefiltered, _ray_box per box), wired into segment_blocked in both los3d branches and both ray_hit branches. Walking stays on _STATIC_BW + FLOORS' smooth ramp (surface_y/slide_capsule, STEP 0.6) so movement never snags. Verified headless: no flat wall remains; downward ray at (0,8,22) hits the step top y=3.20; rail-top rays climb 2.15->5.90 m (all <6.2); LOS blocked at y=1.5 and clear at y=7.0; surface_y ramp smooth. normalize/compileall OK, unit 8/8, smoke mission8_duty,engine3d + --fast OK, sync_arch_map --check OK.",
+      "tags": [
+        "m8",
+        "duty",
+        "mansion",
+        "collision",
+        "raycast",
+        "los",
+        "staircase"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-flight-overhaul-latent-defects-20261120",
+      "error_message": "Owner's Last Flight overhaul patch had two latent runtime defects: the rewritten FlightScene._hud calls self._project but the diff never borrowed it, and _settings_fx() divided SETTINGS.shake_scale by 100 although it is already normalised to 0..1.",
+      "file": "src/missions/m8/duty/flight3d.py",
+      "root_cause": "The supplied class-attribute borrow block listed set_paused/_grab/_snd/say but omitted _project, and the 360-deg missile chevron HUD uses RaidScene._project(r,p) indirectly through FlightScene. Separately core/user_settings.py:70 already stores shake_scale = clamp(raw/100), so dividing by 100 again in _settings_fx gave ~0.01x shake - effectively disabled camera shake and the shake_scale setting. A third typo used F3D._soft_halo in m8dutyfilms where the module alias is _f3d.",
+      "fix": "Borrow `_project = R.RaidScene._project` on FlightScene; read SETTINGS.shake_scale directly (clamp 0..1.5) with a comment; use _f3d._soft_halo. Verified with headless scene probe (begin+warm, estate/road frames, flares, 9 ragdoll kills, gunship crash, cp3/4 draws) plus normalize/compileall/ae_text_check/ae_timeline_check/smoke --only m8 and mission8_duty,engine3d/unit 8/8/smoke --fast/sync_arch_map --check all OK.",
+      "tags": [
+        "m8",
+        "duty",
+        "flight",
+        "borrowed-methods",
+        "settings"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-flight-visual-artifacts-20261120",
+      "error_message": "M8 Duty Last Flight screenshot: LMG floated in the top-right corner with a diagonal grey cable, giant grey/white triangles covered the trees, rigid grey lines froze over the sky, and behind-camera rocket markers flipped across both screen axes.",
+      "file": "src/missions/m8/duty/flight_fx.py",
+      "root_cause": "(1) `up = rg x f` uses right-handed cross order in engine3d's left-handed space, returning -Y, so a negative up_off lifted the gun above the eye and stretched the pintle arm. (2) `_searchlight_beam_mesh` emitted solid opaque layer-2 triangles that projected as sharp wedges whenever an AA truck swept near the camera. (3) `draw_air_streaks` ignored `now` and fixed streaks along world Z down to y=1 m, so they read as static sticks over the lawn orbit. (4) `RaidScene._project`'s behind-camera branch returns already camera-signed screen deltas, so negating them on `not front` double-mirrored off-screen rocket markers.",
+      "fix": "use `up = f x rg` (+Y) with fwd_off 0.44-0.04*ads / rg_off 0.175-0.135*ads / up_off -0.220+0.100*ads and muzzle z 0.74; delete `_searchlight_beam_mesh` and emit 5 dimming additive `_fx.haze` puffs along the aimed beam; `draw_air_streaks(..., hyaw)` aligns to -fwd(hyaw), phases by now*hv and keeps y near cabin altitude (caller passes hpos/hyaw, lawn speed 6.6); HUD uses raw (sx-cx, sy-cy) for all off-screen markers with left/right/mid + top/bottom label anchors. Verified: headless math/placement/streak probes, full scene probe, normalize/compileall/smoke --only m8 + mission8_duty,engine3d, full smoke --fast, sync_arch_map --check all OK.",
+      "tags": [
+        "m8",
+        "duty",
+        "flight",
+        "engine3d",
+        "handedness",
+        "cross-product",
+        "haze",
+        "projection"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8-flight-hurt-hull-src-arity-20261120",
+      "error_message": "M8 Duty Last Flight booted out to the stage handoff on the first enemy bullet hit: IndexError: tuple index out of range.",
+      "file": "src/missions/m8/duty/flight3d.py",
+      "root_cause": "FlightScene.hurt_hull unconditionally read src[2] to compute the damage bearing. _bullets_update passes b['src'] = (e['x'], e['z']) (2-tuple) while _rockets_update passes rk['p'] (3-tuple), so the first bullet hit raised IndexError inside sc.update(keys); missions/m8/systems.py caught it and called flight3d.force_finish('fallback'), which ran flow.on_flight_done and skipped the rest of the flight.",
+      "fix": "Resolve sx, sz = (src[0], src[2]) if len(src) >= 3 else (src[0], src[1]) before R._yaw. Verified headless: direct hurt_hull with both arities plus the real _bullets_update path (hull 100->97); normalize/compileall/smoke --only m8 + mission8_duty,engine3d, full smoke --fast, sync_arch_map --check all OK.",
+      "tags": [
+        "m8",
+        "duty",
+        "flight",
+        "indexerror",
+        "src-arity",
+        "fallback"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
+      "occurrences": 1
+    },
+    {
+      "id": "bug-m8duty-funeral-coord-arity-20261120",
+      "error_message": "Owner's new m8duty_sets.py would crash at import/first build: epilogue3d.FUNERAL is a 2-tuple (x, z), but the patch unpacked `fx, fz = CH` while also indexing CH[2] for VAS_AT/CROWD_Z.",
+      "file": "src/cutscenes/m8duty_sets.py",
+      "root_cause": "E.FUNERAL = (150.0, 600.0) is a (x, z) pair in epilogue3d.py:31. The supplied patch set `CH = E.FUNERAL` then used both `fx, fz = CH` (needs 2) and `CH[2]` (needs 3), so either import or courthouse_square() raised ValueError / IndexError. m8dutyfilms' old local CH was a 3-tuple (150, 0, 600).",
+      "fix": "Normalise to 3-tuple `CH = (E.FUNERAL[0], 0.0, E.FUNERAL[1])` and change both unpack sites (courthouse_square, courthouse_lights) to `fx, fz = CH[0], CH[2]`. Also removed the supplied dead `from missions.m8.duty import m8duty_sets as DS_UNUSED if False else None` placeholder as instructed. Verified: all three sets build/cached with finite verts (4152/2611/2208 faces), all 11 new/changed film scenes render headlessly, meta keys resolve, ridge captions/letterbox draw, and normalize/compileall/ae_timeline_check/ae_text_check/smoke --only m8 + mission8_duty,engine3d/full smoke --fast/sync_arch_map --check all OK.",
+      "tags": [
+        "m8",
+        "duty",
+        "coordinates",
+        "tuple-arity",
+        "sets"
+      ],
+      "status": "fixed",
+      "last_seen": "2026-11-20",
       "occurrences": 1
     }
   ],

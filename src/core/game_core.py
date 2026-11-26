@@ -221,9 +221,6 @@ def _m6_checkpoint(name, preserve_timer=False):
         STATE.m6_train_checkpoint_reached = True
     return result
 
-def start_mission6_train_checkpoint(preserve_timer=False):
-    return _m6_checkpoint("start_mission6_train_checkpoint", preserve_timer)
-
 def start_mission6_customs_checkpoint(preserve_timer=False):
     return _m6_checkpoint("start_mission6_customs_checkpoint", preserve_timer)
 
@@ -288,6 +285,8 @@ def restart_current_mission():
        tunnel escort are both gated by checkpoints; the deepest one reached
        wins so a Maru death in the tunnel doesn't replay the raid.
     """
+    if _is_mission0_active() and not _in_walking_sim():
+        return start_mission0(preserve_timer=False)
     if _is_mission2_active() and not _in_walking_sim():
         if getattr(STATE, "mission2_checkpoint_reached", False):
             return start_mission2_checkpoint(preserve_timer=False)

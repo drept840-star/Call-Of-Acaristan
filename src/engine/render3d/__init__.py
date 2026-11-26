@@ -16,6 +16,20 @@ from .presets import PRESET_SCHEMA, PresetError
 from .presets import load_library as load_preset_library
 from .presets import resolve as resolve_lighting
 from .presets import blend as blend_lighting
+from .vehicle_destruction import (
+    CookoffSpec,
+    FireMount,
+    PartBody,
+    PartSpec,
+    VEHICLE_PROFILES,
+    VehicleDestruction,
+    VehicleDestructionManager,
+    VehicleDestructionProfile,
+    get_vehicle_profile,
+)
 
 __all__ = ["SCHEMA", "Scene3D", "Set3DError", "build", "from_dict", "load_set3d", "loads_set3d", "validate",
-           "PRESET_SCHEMA", "PresetError", "load_preset_library", "resolve_lighting", "blend_lighting"]
+           "PRESET_SCHEMA", "PresetError", "load_preset_library", "resolve_lighting", "blend_lighting",
+           "PartSpec", "CookoffSpec", "FireMount", "VehicleDestructionProfile",
+           "VEHICLE_PROFILES", "get_vehicle_profile", "PartBody",
+           "VehicleDestruction", "VehicleDestructionManager"]

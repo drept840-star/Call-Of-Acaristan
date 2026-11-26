@@ -218,9 +218,10 @@ class ColonelPaie:
 
     # ---- drawing
     def draw(self, surface):
+        from engine.core import now_ms as _now_ms
         ox, oy = self.M.ORIGIN
         fx, fy = self.foot
-        t = pygame.time.get_ticks()
+        t = _now_ms()
         glint = (t % GLINT_PERIOD_MS) < GLINT_LEN_MS
         img = _sprite(glint, not self.crow_gone)
         x = int(ox + fx - CENTER_COL * PX)

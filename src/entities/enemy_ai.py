@@ -10,17 +10,28 @@ from engine.world import WalkCycle as _WalkCycle  # RPE6 Phase 5: declared walk-
 _enemy_shadow = pygame.Surface((34, 16), pygame.SRCALPHA)
 pygame.draw.ellipse(_enemy_shadow, (0, 0, 0, 45), (0, 0, 34, 16))
 _SQRT2 = math.sqrt(2)
+_SQRT2_M1 = _SQRT2 - 1.0
+_ASTAR_DIRS = (
+    (1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0),
+    (1, 1, _SQRT2), (-1, 1, _SQRT2), (1, -1, _SQRT2), (-1, -1, _SQRT2),
+)
 def _heuristic(ax, ay, bx, by):
     dx = abs(bx - ax)
     dy = abs(by - ay)
-    return max(dx, dy) + (_SQRT2 - 1) * min(dx, dy)
+    return max(dx, dy) + _SQRT2_M1 * min(dx, dy)
 _walk_grid_cache = {}
+_walk_grid_last = None
+_route_walls_last = None
 def _build_walk_grid(walls):
+    global _walk_grid_last
     if not walls:
         return [], 0, 0
-    h = hash((len(walls), *(w.x for w in walls), *(w.y for w in walls)))
+    if _walk_grid_last is not None and _walk_grid_last[0] is walls and _walk_grid_last[1] == len(walls):
+        return _walk_grid_last[2], _walk_grid_last[3], _walk_grid_last[4]
+    h = hash((len(walls), *(w.x for w in walls), *(w.y for w in walls), *(w.w for w in walls), *(w.h for w in walls)))
     cached = _walk_grid_cache.get(h)
     if cached:
+        _walk_grid_last = (walls, len(walls), cached["grid"], cached["cols"], cached["rows"])
         return cached["grid"], cached["cols"], cached["rows"]
     map_cols = max(w.right - 1 for w in walls) // TILE_SIZE + 1
     map_rows = max(w.bottom - 1 for w in walls) // TILE_SIZE + 1
@@ -39,6 +50,7 @@ def _build_walk_grid(walls):
     if len(_walk_grid_cache) > 8:
         _walk_grid_cache.clear()
     _walk_grid_cache[h] = {"grid": grid, "cols": map_cols, "rows": map_rows}
+    _walk_grid_last = (walls, len(walls), grid, map_cols, map_rows)
     return grid, map_cols, map_rows
 
 
@@ -52,15 +64,27 @@ def _route_walls(walls):
     (never close enough to trigger it) - the "AI doesn't know where I am"
     freeze. Same lesson as _m3_volkov_navigation_walls in m3/systems.
     """
-    passable = {
+    global _route_walls_last
+    doors = getattr(STATE, "doors", [])
+    if not doors:
+        return walls
+    passable = tuple(
         id(d.collision_rect)
-        for d in getattr(STATE, "doors", [])
+        for d in doors
         if not getattr(d, "locked", False)
         and getattr(d, "collision_rect", None) is not None
-    }
+    )
     if not passable:
         return walls
-    return [w for w in walls if id(w) not in passable]
+    if (_route_walls_last is not None
+            and _route_walls_last[0] is walls
+            and _route_walls_last[1] == len(walls)
+            and _route_walls_last[2] == passable):
+        return _route_walls_last[3]
+    pset = set(passable)
+    routed = [w for w in walls if id(w) not in pset]
+    _route_walls_last = (walls, len(walls), passable, routed)
+    return routed
 
 
 def _astar(start, goal, grid):
@@ -85,41 +109,55 @@ def _astar(start, goal, grid):
         if best is None:
             return []
         gx, gy = best
-    open_set = [(0, sx, sy)]
-    came_from = {}
-    g_score = {(sx, sy): 0}
+    INF = float("inf")
+    total = rows * cols
+    g_score = [INF] * total
+    came_from = [-1] * total
+    start_idx = sy * cols + sx
+    goal_idx = gy * cols + gx
+    g_score[start_idx] = 0.0
+    open_set = [(0.0, sx, sy)]
+    heappop = heapq.heappop
+    heappush = heapq.heappush
     # Cap search space. Must cover the whole walkable grid: long cross-map
     # routes through big open rooms (KO lobby -> dock) legitimately exhaust
     # a smaller budget and silently return "unreachable".
-    max_nodes = min(cols * rows, 4000)  # Cap search space
+    max_nodes = min(total, 4000)  # Cap search space
     nodes_expanded = 0
     while open_set and nodes_expanded < max_nodes:
-        _, cx, cy = heapq.heappop(open_set)
+        _, cx, cy = heappop(open_set)
         nodes_expanded += 1
-        if (cx, cy) == (gx, gy):
+        cidx = cy * cols + cx
+        if cidx == goal_idx:
             path = []
-            while (cx, cy) in came_from:
-                path.append((cx, cy))
-                cx, cy = came_from[(cx, cy)]
+            cur = cidx
+            while came_from[cur] != -1:
+                path.append((cur % cols, cur // cols))
+                cur = came_from[cur]
             path.reverse()
             return path
-        for dc, dr in [
-            (1, 0), (-1, 0), (0, 1), (0, -1),
-            (1, 1), (-1, 1), (1, -1), (-1, -1),
-        ]:
-            nc, nr = cx + dc, cy + dr
+        cg = g_score[cidx]
+        row_c = grid[cy]
+        for dc, dr, step_cost in _ASTAR_DIRS:
+            nc = cx + dc
+            nr = cy + dr
             if 0 <= nc < cols and 0 <= nr < rows and grid[nr][nc]:
                 if dc != 0 and dr != 0:
-                    if not grid[cy][nc] or not grid[nr][cx]:
+                    if not row_c[nc] or not grid[nr][cx]:
                         continue
-                step_cost = _SQRT2 if (dc != 0 and dr != 0) else 1.0
-                tentative = g_score[(cx, cy)] + step_cost
-                key = (nc, nr)
-                if tentative < g_score.get(key, float("inf")):
-                    came_from[key] = (cx, cy)
-                    g_score[key] = tentative
-                    f = tentative + _heuristic(nc, nr, gx, gy)
-                    heapq.heappush(open_set, (f, nc, nr))
+                nidx = nr * cols + nc
+                tentative = cg + step_cost
+                if tentative < g_score[nidx]:
+                    came_from[nidx] = cidx
+                    g_score[nidx] = tentative
+                    dx = gx - nc
+                    if dx < 0:
+                        dx = -dx
+                    dy = gy - nr
+                    if dy < 0:
+                        dy = -dy
+                    h = (dx + _SQRT2_M1 * dy) if dx >= dy else (dy + _SQRT2_M1 * dx)
+                    heappush(open_set, (tentative + h, nc, nr))
     return []
 _next_enemy_id = 0
 class Enemy:
@@ -195,7 +233,16 @@ class Enemy:
         radius = 13
         nx = -dy / dist * radius
         ny = dx / dist * radius
-        for wall in walls:
+        if len(walls) > 16:
+            x0 = int(min(sx, target_x)) - 15
+            y0 = int(min(sy, target_y)) - 15
+            x1 = int(max(sx, target_x)) + 15
+            y1 = int(max(sy, target_y)) + 15
+            bbox = pygame.Rect(x0, y0, x1 - x0 + 2, y1 - y0 + 2)
+            cand = [walls[i] for i in bbox.collidelistall(walls)]
+        else:
+            cand = walls
+        for wall in cand:
             if wall.clipline((sx, sy), (target_x, target_y)):
                 return False
             if wall.clipline((sx + nx, sy + ny), (target_x + nx, target_y + ny)):
@@ -400,16 +447,7 @@ class Enemy:
                     self._ease_toward_angle(math.atan2(dy, dx), 0.06)
                     move_x = math.cos(self.angle) * self.speed
                     move_y = math.sin(self.angle) * self.speed
-                    self.rect.x += move_x * _dt_mul
-                    for wall in walls:
-                        if self.rect.colliderect(wall):
-                            if move_x > 0: self.rect.right = wall.left
-                            elif move_x < 0: self.rect.left = wall.right
-                    self.rect.y += move_y * _dt_mul
-                    for wall in walls:
-                        if self.rect.colliderect(wall):
-                            if move_y > 0: self.rect.bottom = wall.top
-                            elif move_y < 0: self.rect.top = wall.bottom
+                    self._apply_move(move_x, move_y, walls)
         elif self.state == "SEARCH":
             if self.distraction_target:
                 tx, ty = self.distraction_target
@@ -564,13 +602,15 @@ class Enemy:
                             push_force = min(overlap / 2, 3.0)
                             push_x = (dx / dist) * push_force
                             push_y = (dy / dist) * push_force
+                            p_walls = ([walls[i] for i in self.rect.inflate(16, 16).collidelistall(walls)]
+                                       if len(walls) > 32 else walls)
                             self.rect.x += push_x * _dt_mul
-                            for wall in walls:
+                            for wall in p_walls:
                                 if self.rect.colliderect(wall):
                                     if push_x > 0: self.rect.right = wall.left
                                     elif push_x < 0: self.rect.left = wall.right
                             self.rect.y += push_y * _dt_mul
-                            for wall in walls:
+                            for wall in p_walls:
                                 if self.rect.colliderect(wall):
                                     if push_y > 0: self.rect.bottom = wall.top
                                     elif push_y < 0: self.rect.top = wall.bottom

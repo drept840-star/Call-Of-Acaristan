@@ -29,6 +29,8 @@ ALLY_HOLD = 1.8                   # and keeps it up through the gaps between bur
 ALEX_LEASH = 13.0                 # Alex fights within this many metres of Biribel
 ALEX_RISE_S = 1.3                 # freed from the well, Alex gets up this long before moving
 ALEX_CRAWL = 1.1                  # metres Alex drags himself out from under the roof
+_STEER_DIRS = tuple((math.cos(math.radians(a)), math.sin(math.radians(a)))
+                    for a in (0, 35, -35, 75, -75, 120, -120))
 
 # kind, x, z, route, delay (s)
 ORCHARD = [
@@ -280,8 +282,7 @@ class Brain:
             return False
         ux, uz = dx / d, dz / d
         step = speed * dt
-        for ang in (0, 35, -35, 75, -75, 120, -120):
-            c, sn = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+        for c, sn in _STEER_DIRS:
             vx, vz = ux * c - uz * sn, ux * sn + uz * c
             nx, nz = self.s.world.move(e["x"], e["z"], vx * step, vz * step, 0.34, False)
             if math.hypot(nx - e["x"], nz - e["z"]) > step * 0.4:

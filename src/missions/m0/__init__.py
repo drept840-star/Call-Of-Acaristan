@@ -31,8 +31,9 @@ _DIALOGUE_ID = "mission0.briefing"
 _TIMELINE_ID = "mission0.outro"
 _SET_ID = "mission0.depot"
 
-_DATA = json.loads(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                     "enemy_types.json"), encoding="utf-8").read())
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "enemy_types.json"), encoding="utf-8") as _fh:
+    _DATA = json.load(_fh)
 _TYPES = _DATA["enemy_types"]
 
 _S = {"phase": "idle", "runner": None, "line": None, "prev_advance": False,
@@ -67,16 +68,110 @@ _R3D = {"r": None, "buf": None}
 
 
 def _draw_inspect(surface, t):
-    surface.fill((14, 16, 20))
-    cx, cy = WIDTH // 2, 300
-    pygame.draw.rect(surface, (70, 60, 44), (cx - 130, cy - 90, 260, 180))
-    pygame.draw.rect(surface, (150, 132, 92), (cx - 130, cy - 90, 260, 180), 3)
-    pygame.draw.rect(surface, (170, 40, 40), (cx - 90, cy - 30, 180, 34))
-    from core.config import font_terminal, font_terminal_small
-    tag = font_terminal.render("SUPPLY CRATE", True, (226, 214, 180))
-    surface.blit(tag, (cx - tag.get_width() // 2, cy - 24))
-    sub = font_terminal_small.render("MANIFEST 114 - MEDICAL - GUARD STAMP", True, (180, 172, 150))
-    surface.blit(sub, (cx - sub.get_width() // 2, cy + 116))
+    """Tactile depot close-up: weathered Guard-stamped supply crate & manifest."""
+    from core.config import SCENE_H, SCENE_TOP, font_speaker, font_terminal, font_terminal_small
+    sec = t * 0.001
+    sway_x = int(math.sin(sec * 0.9) * 3)
+    sway_y = int(math.cos(sec * 0.7) * 2)
+
+    # Dark concrete depot floor gradient
+    surface.fill((10, 12, 16))
+    for y in range(SCENE_TOP, SCENE_TOP + SCENE_H, 4):
+        u = (y - SCENE_TOP) / float(max(1, SCENE_H))
+        c = (int(12 + u * 16), int(14 + u * 18), int(18 + u * 18))
+        pygame.draw.rect(surface, c, (0, y, WIDTH, 4))
+    # Concrete floor slab seams
+    for sx in range(120, WIDTH, 240):
+        pygame.draw.line(surface, (20, 23, 28), (sx + sway_x, SCENE_TOP), (sx + sway_x, SCENE_TOP + SCENE_H), 2)
+    pygame.draw.line(surface, (22, 26, 30), (0, SCENE_TOP + 220 + sway_y), (WIDTH, SCENE_TOP + 220 + sway_y), 2)
+
+    cx, cy = WIDTH // 2 - 48 + sway_x, SCENE_TOP + SCENE_H // 2 - 4 + sway_y
+    cw, ch = 430, 276
+    crate = pygame.Rect(cx - cw // 2, cy - ch // 2, cw, ch)
+
+    # Soft cast floor shadow
+    sh = pygame.Surface((cw + 64, ch + 52), pygame.SRCALPHA)
+    pygame.draw.rect(sh, (0, 0, 0, 145), sh.get_rect(), border_radius=12)
+    surface.blit(sh, (crate.x - 16, crate.y - 6))
+
+    # Military wooden crate planks with grain & bevels
+    pygame.draw.rect(surface, (66, 56, 40), crate, border_radius=4)
+    plank_h = ch // 5
+    for i in range(5):
+        py = crate.y + i * plank_h
+        shade = (68 + (i % 2) * 8, 57 + (i % 2) * 7, 40 + (i % 2) * 5)
+        pygame.draw.rect(surface, shade, (crate.x + 12, py + 2, cw - 24, plank_h - 4))
+        pygame.draw.line(surface, (34, 28, 20), (crate.x + 10, py), (crate.right - 10, py), 2)
+        pygame.draw.line(surface, (92, 79, 56), (crate.x + 12, py + 3), (crate.right - 12, py + 3), 1)
+    # Outer wood framing battens
+    pygame.draw.rect(surface, (82, 70, 50), crate, 14, border_radius=4)
+    pygame.draw.rect(surface, (38, 32, 22), crate, 3, border_radius=4)
+    # Rusted iron corner brackets & bolt rivets
+    for bx, by in (
+        (crate.x + 2, crate.y + 2),
+        (crate.right - 34, crate.y + 2),
+        (crate.x + 2, crate.bottom - 34),
+        (crate.right - 34, crate.bottom - 34),
+    ):
+        pygame.draw.rect(surface, (46, 48, 52), (bx, by, 32, 32), border_radius=2)
+        pygame.draw.rect(surface, (88, 92, 96), (bx, by, 32, 32), 1, border_radius=2)
+        pygame.draw.circle(surface, (112, 114, 118), (bx + 16, by + 16), 3)
+    # Twin metal lid latches along top edge
+    for lx in (crate.x + 92, crate.right - 118):
+        pygame.draw.rect(surface, (52, 56, 60), (lx, crate.y - 6, 26, 28), border_radius=2)
+        pygame.draw.rect(surface, (114, 118, 122), (lx + 5, crate.y + 4, 16, 12), 2)
+
+    # Stenciled MEDICAL SUPPLIES panel + overlapping crimson GUARD inspection stamp
+    panel = pygame.Rect(crate.centerx - 134, crate.centery - 58, 268, 96)
+    pygame.draw.rect(surface, (194, 184, 152), panel, border_radius=2)
+    pygame.draw.rect(surface, (74, 62, 44), panel, 2, border_radius=2)
+    # Red medical cross badge on left of label
+    pygame.draw.rect(surface, (176, 42, 38), (panel.x + 16, panel.y + 26, 36, 12))
+    pygame.draw.rect(surface, (176, 42, 38), (panel.x + 28, panel.y + 14, 12, 36))
+    tag = font_speaker.render("SUPPLY CRATE", True, (34, 28, 22))
+    surface.blit(tag, (panel.x + 68, panel.y + 16))
+    sub1 = font_terminal_small.render("DECLARED: CIVILIAN MEDICAL", True, (68, 58, 44))
+    surface.blit(sub1, (panel.x + 68, panel.y + 48))
+    sub2 = font_terminal_small.render("LOT #114-A  //  DEPOT BAY 2", True, (92, 78, 58))
+    surface.blit(sub2, (panel.x + 68, panel.y + 68))
+
+    # Overlapping tilted crimson GUARD inspection seal
+    seal = pygame.Surface((190, 56), pygame.SRCALPHA)
+    pygame.draw.rect(seal, (172, 34, 30, 36), (0, 0, 190, 56), border_radius=4)
+    pygame.draw.rect(seal, (186, 38, 32, 220), (0, 0, 190, 56), 3, border_radius=4)
+    st = font_terminal.render("GUARD SEAL // AUTH", True, (196, 44, 38))
+    seal.blit(st, (95 - st.get_width() // 2, 16))
+    seal = pygame.transform.rotate(seal, -11)
+    surface.blit(seal, (panel.right - 138, panel.bottom - 30))
+
+    # Pinned clipboard manifest sheet on the right of the crate
+    cb = pygame.Rect(crate.right - 22, crate.y + 34, 214, 224)
+    pygame.draw.rect(surface, (36, 30, 24), cb.inflate(10, 10), border_radius=4)
+    pygame.draw.rect(surface, (216, 206, 178), cb, border_radius=2)
+    pygame.draw.rect(surface, (82, 86, 92), (cb.centerx - 36, cb.y - 10, 72, 18), border_radius=3)
+    surface.blit(font_terminal_small.render("MANIFEST 114", True, (34, 28, 22)), (cb.x + 14, cb.y + 16))
+    pygame.draw.line(surface, (112, 98, 76), (cb.x + 12, cb.y + 36), (cb.right - 12, cb.y + 36), 1)
+    for idx, (k, v, col) in enumerate((
+        ("CARGO", "MEDICAL", (48, 44, 38)),
+        ("WEIGHT", "312 KG (HEAVY)", (176, 44, 36)),
+        ("STAMP", "PRESIDENTIAL GUARD", (176, 44, 36)),
+        ("ROUTING", "MILITARY RAIL", (48, 44, 38)),
+    )):
+        ry = cb.y + 48 + idx * 38
+        surface.blit(font_terminal_small.render(k, True, (98, 86, 68)), (cb.x + 14, ry))
+        surface.blit(font_terminal_small.render(v, True, col), (cb.x + 14, ry + 14))
+
+    # Soft multi-ring overhead depot work-lamp spotlight + drifting dust motes
+    flick = 0.92 + 0.08 * math.sin(sec * 10.5)
+    lamp = pygame.Surface((WIDTH, SCENE_H), pygame.SRCALPHA)
+    for rx, ry, a in ((460, 290, 8), (370, 235, 10), (280, 180, 12), (190, 125, 14)):
+        pygame.draw.ellipse(lamp, (255, 222, 162, int(a * flick)),
+                            (cx - rx, cy - SCENE_TOP - ry, rx * 2, ry * 2))
+    for i in range(18):
+        mx = int(cx - 260 + ((i * 67 + sec * 18) % 540))
+        my = int(30 + ((i * 43 + sec * 12) % (SCENE_H - 60)))
+        pygame.draw.circle(lamp, (238, 224, 186, 64), (mx, my), 1 if i % 2 else 2)
+    surface.blit(lamp, (0, SCENE_TOP))
 
 
 def _rend3d():
@@ -206,6 +301,18 @@ def complete() -> bool:
     return _S["phase"] == "done"
 
 
+def _play_briefing_line(line):
+    try:
+        from audio import voice
+        if line is not None:
+            voice.play_line(getattr(line, "speaker", "") or "",
+                            getattr(line, "text", "") or "")
+        else:
+            voice.cut()
+    except Exception:
+        pass
+
+
 def start_mission0(preserve_timer=False):
     level = _levels.level(_LEVEL_ID)
     grid = level.grid("floor")
@@ -246,6 +353,7 @@ def start_mission0(preserve_timer=False):
     runner = DialogueRunner(_dialogues.dialogue(_DIALOGUE_ID), _Host())
     _S["runner"] = runner
     _S["line"] = runner.begin()
+    _play_briefing_line(_S["line"])
     return player
 
 
@@ -303,7 +411,10 @@ def game_update(keys):
         if down and not _S["prev_advance"]:
             _S["line"] = _S["runner"].advance()
             if _S["runner"].ended or _S["line"] is None:
+                _play_briefing_line(None)
                 _S["phase"] = "play"
+            else:
+                _play_briefing_line(_S["line"])
         _S["prev_advance"] = down
         return (0, 0)
     if _S["phase"] != "play" or STATE.player is None:

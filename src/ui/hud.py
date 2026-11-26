@@ -592,6 +592,8 @@ def _egg3d_begin():
     """Start the 3D scare; False leaves the 2D one to run."""
     _SAFE_666_3D.update(on=False, mod=None, bed=False)
     try:
+        if screen is None or not hasattr(screen, "get_size") or min(screen.get_size()) < 16:
+            return False
         from ui import egg666_3d  # lazy: GL/numpy stack, only the 3D scare needs it
         if egg666_3d.begin(STATE.safe_666_seed, (WIDTH, HEIGHT)):
             _SAFE_666_3D.update(on=True, mod=egg666_3d)
@@ -660,8 +662,19 @@ def _safe_666_window_tamper(t, total_t):
     # Small window drift / breathing. Works only when pygame._sdl2 is present.
     try:
         if not hasattr(STATE, "safe_666_window_base_pos"):
-            from pygame._sdl2.video import Window
-            win = Window.from_display_module()
+            win = None
+            get_win = getattr(pygame.display, "get_window", None)
+            if callable(get_win):
+                try:
+                    win = get_win()
+                except Exception:
+                    win = None
+            if win is None:
+                import warnings
+                from pygame._sdl2.video import Window
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", DeprecationWarning)
+                    win = Window.from_display_module()
             STATE.safe_666_window_ref = win
             STATE.safe_666_window_base_pos = tuple(win.position)
         win = getattr(STATE, "safe_666_window_ref", None)

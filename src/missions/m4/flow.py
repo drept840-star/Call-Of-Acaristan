@@ -250,12 +250,12 @@ def _update_dialogue():
     if beat is None:
         return
     full = _beat_text(beat)
-    # Voice-over: once, on the beat's first frame. Maru is in the room -
-    # clean voice, no radio filter.
-    if _m4_dlg["timer"] == 1 and beat.get("type") != "choice":
+    # Voice-over: once, on the beat's first frame (including Biribel's choice
+    # prompt VO_472). Maru is in the room - clean voice, no radio filter.
+    if _m4_dlg["timer"] == 1:
         try:
             from audio import voice
-            voice.play_line(beat.get("speaker", ""), beat.get("text", ""))
+            voice.play_line(beat.get("speaker", ""), full)
         except Exception:
             pass
     if _m4_dlg["char_idx"] < len(full):
@@ -594,6 +594,11 @@ def _station_world(vasile_hp=None):
     STATE.mission_phase = "m4_fortify"
     STATE.mission4_station_checkpoint_reached = True
     STATE.m4_liaison_reached = True
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m4", checkpoint="station")
+    except Exception:
+        pass
 
 
 def _fortify_objective():
@@ -772,6 +777,11 @@ def _install_jammer():
     STATE.m4_siege_active = True
     STATE.mission4_tower_checkpoint_reached = True
     STATE.m4_siege_t = -M4_JAMMER_COUNTDOWN
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m4", checkpoint="tower")
+    except Exception:
+        pass
     _m4_siege.reset_runtime()
     _set_objective("Hold the station. Keep them off the transmitter rack.")
 

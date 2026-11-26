@@ -317,8 +317,16 @@ class GameState:
         self.m8_trap_active = False         # the trap/gantry fight owns the frame
         self.m8_kill_active = False         # the kill on the catwalk owns the frame
         self.m8_chase_active = False        # the tractor chase owns the frame
+        self.m8_chase_ending = False        # the chase ending film/cutscene
+        self.m8_chase_heli = False          # the tractor chase helicopter mini-boss
+        self.m8_mansion_active = False      # Duty: the mansion fight owns the frame
+        self.m8_flight_active = False       # Duty: Last Flight door-gunner owns the frame
+        self.m8_ridge_active = False        # Duty: sniper ridge finale owns the frame
         self.m8_chase_cp = 0                # chase section checkpoint, 0-3
         self.m8_trap_cp = 0                 # 0 start, 1-2 road waves cleared, 3 gantry reached
+        self.m8_mansion_cp = 0              # mansion section checkpoint, 0-4
+        self.m8_flight_cp = 0               # flight section checkpoint, 0-4
+        self.m8_ucilev_cp = None            # dict snapshot from breaking a Ucilev subsystem in cp=4
         self.m8_outro = False               # one-shot: app.py takes it via m8.take_outro_request()
         self.request_m8_cutscene = None     # "meet" / "friends" / "epilogue" -> app plays the M8 film
         # ── Death animation (Option B - Standard) ──

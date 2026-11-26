@@ -10,12 +10,53 @@ found at runtime by net.tcp_tunnel.find_bundled() via sys._MEIPASS (which is
 Nothing is extracted to a temp dir (onedir) and nothing is installed system-wide.
 """
 import os
+import shutil
 import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 NAME = "Call of Acaristan"
 SEP = ";" if os.name == "nt" else ":"
+
+_SKIP_DIRS = {"__pycache__", "graphify-out", "_RETAKES", "TRAILER", "ANNOUNCE_25D"}
+_SKIP_SUFFIXES = (".pyc", ".pyo", ".pdf", ".blend", ".blend1")
+_SKIP_FILES = {"m3cell_balaceanu_patch.py"}
+
+
+def _is_non_runtime_asset(rel_dir, fname, sibling_names):
+    low = fname.lower()
+    if low.endswith(_SKIP_SUFFIXES) or low.endswith("_matches.txt") or fname in _SKIP_FILES:
+        return True
+    norm_dir = rel_dir.replace("\\", "/")
+    if norm_dir.startswith("voice") and low.endswith(".wav"):
+        ogg_sib = fname[:-4] + ".ogg"
+        if any(s.lower() == ogg_sib.lower() for s in sibling_names):
+            return True
+    return False
+
+
+def _stage_runtime_assets():
+    assets_root = os.path.join(ROOT, "assets")
+    stage_root = os.path.join(ROOT, "build", "_assets_stage")
+    if os.path.isdir(stage_root):
+        shutil.rmtree(stage_root)
+    os.makedirs(stage_root, exist_ok=True)
+    for d, dirs, files in os.walk(assets_root):
+        dirs[:] = sorted(x for x in dirs if x not in _SKIP_DIRS)
+        rel = os.path.relpath(d, assets_root)
+        dst_dir = stage_root if rel == "." else os.path.join(stage_root, rel)
+        os.makedirs(dst_dir, exist_ok=True)
+        sibs = set(files)
+        for f in sorted(files):
+            if _is_non_runtime_asset(rel, f, sibs):
+                continue
+            src_f = os.path.join(d, f)
+            dst_f = os.path.join(dst_dir, f)
+            try:
+                os.link(src_f, dst_f)
+            except OSError:
+                shutil.copy2(src_f, dst_f)
+    return stage_root
 
 
 def run(cmd):
@@ -36,6 +77,7 @@ def main(argv):
     if run([sys.executable, "-m", "pip", "install", "--user", "--upgrade",
             "pyinstaller", "--quiet"]):
         return 1
+    assets_stage = _stage_runtime_assets()
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm",
            "--onedir", "--windowed", "--name", NAME,
            "--distpath", os.path.join(ROOT, "dist"),
@@ -45,7 +87,7 @@ def main(argv):
            "--icon", os.path.join(ROOT, "assets", "logo.ico"),
            # assets/ already contains assets/bin/*.exe: add them ONCE
            # (a separate --add-binary would duplicate it).
-           "--add-data", os.path.join(ROOT, "assets") + SEP + "assets",
+           "--add-data", assets_stage + SEP + "assets",
            "--hidden-import=pygame", "--hidden-import=pygame._sdl2",
            "--collect-all=pygame", "--collect-all=moderngl",
            "--collect-all=glcontext"]
@@ -56,11 +98,13 @@ def main(argv):
     # modules are listed here instead.)
     src = os.path.join(ROOT, "src")
     for d, dirs, files in os.walk(src):
-        dirs[:] = [x for x in dirs if x not in ("__pycache__", "graphify-out")]
+        dirs[:] = [x for x in dirs if x not in _SKIP_DIRS]
         rel = os.path.relpath(d, src)
         pkg = "" if rel == "." else rel.replace(os.sep, ".") + "."
         is_pkg = rel == "." or os.path.isfile(os.path.join(d, "__init__.py"))
         for f in files:
+            if f in _SKIP_FILES:
+                continue
             if f.endswith(".py"):
                 if not is_pkg:
                     continue
@@ -69,7 +113,7 @@ def main(argv):
                     mod = mod[:-9]
                 if mod not in ("__init__", "app"):
                     cmd.append("--hidden-import=" + mod)
-            elif not f.endswith(".pyc"):
+            elif not f.lower().endswith(_SKIP_SUFFIXES):
                 cmd += ["--add-data", os.path.join(d, f) + SEP + rel]
     if "--clean" in argv:
         cmd.append("--clean")

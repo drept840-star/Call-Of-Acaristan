@@ -183,12 +183,11 @@ helicopter, a few surviving Guards, a rescue helicopter's lights approaching.
    is. He doesn't hide. Biribel has to take him first.
 2. **Ucilev kill scene (3D, slow-motion):** one round. He drops to his knees,
    looks up at the ridge.
-   *UCILEV: "Now you know what it's like to follow orders."*
+   *UCILEV: "Good shot, Biribel."*
 3. **Retardovici** grabs a Guard radio, on Biribel's channel:
-   *"You know what he did on Route 12. You don't know what he did tonight."*
-   *"Who told you the mansion's weak points? Who turned off my cameras?"*
-   *"Who do you think gave me to you?"*
-   *"Tomorrow he sits in my chair. And you put him there."*
+   *"He always gets someone else to pull the trigger."*
+   *"Your friends on Route 12, now me. And he's sitting somewhere warm waiting for morning."*
+   *"Go on, soldier. Make him President."*
 4. **You shoot anyway.** The player has to pull the trigger — the game waits.
    Kill scene: slow-mo, scope recoil, the radio hissing in the snow.
 

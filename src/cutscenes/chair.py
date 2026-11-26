@@ -885,6 +885,12 @@ def _cb2_stage(s, t, light=1.0, floor_y=None, pool=(500, 600)):
         gr.fill((0, 0, 0, a)); s.blit(gr, (x, y))
     for sx in (250, 500, 750):                             # wall panel seams
         pygame.draw.line(s, (6, 7, 8), (sx, 0), (sx, fy), 1)
+        pygame.draw.line(s, (26, 28, 30), (sx + 2, 0), (sx + 2, fy), 1)
+    # Horizontal concrete dado band & overhead steel conduit pipe
+    pygame.draw.rect(s, (14, 16, 18), (0, fy - 115, WIDTH, 113))
+    pygame.draw.line(s, (34, 38, 40), (0, fy - 115), (WIDTH, fy - 115), 2)
+    pygame.draw.rect(s, (24, 27, 29), (0, 58, WIDTH, 10))
+    pygame.draw.line(s, (46, 50, 52), (0, 59), (WIDTH, 59), 2)
     pygame.draw.line(s, (30, 32, 34), (0, fy - 2), (WIDTH, fy - 2), 2)   # skirting
     pygame.draw.rect(s, (23, 24, 25), (0, fy, WIDTH, HEIGHT - fy))            # floor
     pygame.draw.polygon(s, (17, 18, 19), [(140, HEIGHT), (330, fy), (670, fy), (860, HEIGHT)])
@@ -892,15 +898,16 @@ def _cb2_stage(s, t, light=1.0, floor_y=None, pool=(500, 600)):
     pygame.draw.rect(s, (33, 35, 37), (830, fy - 366, 118, 366))
     pygame.draw.rect(s, (48, 50, 52), (830, fy - 366, 118, 366), 2)
     slit = pygame.Surface((52, 16), pygame.SRCALPHA)
-    slit.fill((168, 148, 104, 150)); s.blit(slit, (863, fy - 250))
-    glow = pygame.Surface((120, 60), pygame.SRCALPHA)
-    pygame.draw.ellipse(glow, (168, 148, 104, 26), glow.get_rect()); s.blit(glow, (829, fy - 272))
+    slit.fill((184, 162, 114, 165)); s.blit(slit, (863, fy - 250))
+    glow = pygame.Surface((150, 80), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (184, 162, 114, 34), glow.get_rect()); s.blit(glow, (814, fy - 282))
     # overhead bulb + cone
     fl = light * (0.86 if (math.sin(t * 0.9) > 0.94 or math.sin(t * 0.23) > 0.985) else 1.0)
     cone = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    pygame.draw.polygon(cone, (214, 204, 172, int(20 * fl)), [(472, 34), (528, 34), (770, fy), (230, fy)])
-    pygame.draw.polygon(cone, (224, 214, 182, int(16 * fl)), [(482, 34), (518, 34), (660, fy), (340, fy)])
-    pygame.draw.ellipse(cone, (215, 205, 175, int(34 * fl)), (pool[0] - 250, pool[1] - 52, 500, 104))
+    pygame.draw.polygon(cone, (214, 204, 172, int(24 * fl)), [(468, 34), (532, 34), (790, fy), (210, fy)])
+    pygame.draw.polygon(cone, (226, 216, 184, int(18 * fl)), [(482, 34), (518, 34), (660, fy), (340, fy)])
+    pygame.draw.ellipse(cone, (220, 210, 178, int(40 * fl)), (pool[0] - 265, pool[1] - 56, 530, 112))
+    pygame.draw.ellipse(cone, (240, 232, 204, int(22 * fl)), (pool[0] - 140, pool[1] - 30, 280, 60))
     s.blit(cone, (0, 0))
     pygame.draw.line(s, (70, 70, 66), (500, 0), (500, 22), 2)
     pygame.draw.circle(s, (235, 228, 200), (500, 28), 7)

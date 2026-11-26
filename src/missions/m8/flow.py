@@ -77,7 +77,7 @@ def set_stage(token):
     if token in FIGHT_STAGES:
         if token == STAGE_GANTRY and _trap.active():
             return                       # the fight scene is already on the gantry
-        STATE.m8_trap_cp = 3 if token == STAGE_GANTRY else 0
+        STATE.m8_trap_cp = 3 if token == STAGE_GANTRY else int(getattr(STATE, "m8_trap_cp", 0) or 0)
         _trap.begin()
     elif token == STAGE_KILL:
         _kill.begin()
@@ -127,8 +127,10 @@ def music_tick():
     elif _mansion.active():
         cue = "mansion"
     elif _flight.active():
-        cue = "flight"
+        cue = "flight_boss" if getattr(_flight.scene(), "cp", 0) >= 4 else "flight"
     elif _ridge.active():
+        if getattr(_ridge.scene(), "phase", "") == "pres_down":
+            return
         cue = "state"
     else:
         cue = STAGE_MUSIC.get(getattr(STATE, "mission8_stage", ""))
@@ -153,6 +155,7 @@ def scene_pause(paused):
 def on_mansion_done(result):
     """Study door kicked (or scene fault): on to Liftoff."""
     if getattr(STATE, "mission8_stage", "") == STAGE_MANSION:
+        STATE.m8_mansion_cp = 0
         advance_stage()
     return True
 
@@ -161,6 +164,7 @@ def on_flight_done(result):
     """Ucilev's rocket hit the tail: on to the crash film."""
     if getattr(STATE, "mission8_stage", "") == STAGE_FLIGHT:
         STATE.m8_flight_cp = 0
+        STATE.m8_ucilev_cp = None
         advance_stage()
     return True
 
@@ -195,6 +199,7 @@ def on_gantry_reached():
 def on_trap_done(result):
     """The fight ended (Vasile reached, or a scene fault that must not lock the mission)."""
     if getattr(STATE, "mission8_stage", "") in FIGHT_STAGES:
+        STATE.m8_trap_cp = 0
         STATE.mission8_stage = STAGE_GANTRY
         advance_stage()
     return True
@@ -220,7 +225,7 @@ def take_cutscene_request():
 
 def on_cutscene_done(key):
     """A stage film ended: step past it (or resume mid-chase after the gunship arrival)."""
-    if _m8_audio.AUDIO is not None:
+    if _m8_audio.AUDIO is not None and key not in ("d_approach", "liftoff", "crash"):
         _m8_audio.AUDIO.film_end()
     if key == "heli" and _chase.active():
         _chase.scene().on_heli_cutscene_done()
@@ -246,7 +251,26 @@ def start_m8(stage=None, route_=None, preserve_timer=False):
     argument, then STATE, then the save slot, then Revenge."""
     chosen = route_ or getattr(STATE, "m8_route", None) or _saved_route()
     chosen = chosen if chosen in ROUTES else ROUTE_REVENGE
+    same_stage = (
+        getattr(STATE, "active_mission", None) == MISSION8_KEY
+        and stage is not None
+        and stage == getattr(STATE, "mission8_stage", None)
+    )
+    saved_cps = (
+        {
+            "m8_mansion_cp": int(getattr(STATE, "m8_mansion_cp", 0) or 0),
+            "m8_flight_cp": int(getattr(STATE, "m8_flight_cp", 0) or 0),
+            "m8_ucilev_cp": getattr(STATE, "m8_ucilev_cp", None),
+            "m8_chase_cp": int(getattr(STATE, "m8_chase_cp", 0) or 0),
+            "m8_trap_cp": int(getattr(STATE, "m8_trap_cp", 0) or 0),
+        }
+        if same_stage
+        else None
+    )
     _initialize_m8(chosen, preserve_timer)
+    if saved_cps is not None:
+        for k, v in saved_cps.items():
+            setattr(STATE, k, v)
     STATE.player = Player(64, 64)
     if stage not in stages_for(chosen):
         stage = first_stage(chosen)

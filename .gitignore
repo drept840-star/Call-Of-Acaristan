@@ -162,3 +162,14 @@ validation/*_hold*
 
 # Claude Code personal settings
 .claude/settings.local.json
+
+# Local scratch, IDE, helper exes, and backup files
+.idea/
+/--help/
+/apps/
+/Scream_5_Subbed.mp4
+/_flight_*.png
+/mansion_*.png
+/swap_*.txt
+*.blend1
+/sfx_wav/validation/

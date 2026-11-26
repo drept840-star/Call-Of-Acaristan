@@ -7,6 +7,8 @@ here, then handle the canonical flag in ``app._apply_dev_args``.
 
 Maps short target name -> (canonical CLI flag, one-line description).
 """
+import os
+import sys
 DEV_JUMPS = {
     # ── Mission 0 (RPE6 Phase 10 tutorial mission) ──
     "m0": ("--dev-mission0",
@@ -132,8 +134,19 @@ DEV_JUMPS = {
     "m8-credits": ("--dev-mission8-credits", "Mission 8 end credits"),
     # ── Mission 8 (Duty route: Head of State, Slice 1) ──
     "m8-duty": ("--dev-mission8-duty", "Mission 8 Head of State (Duty route) from approach"),
-    "m8-mansion": ("--dev-mission8-mansion", "Mission 8 3D Mansion fight with Bodi & Alex (--m8-cp=0|1|2)"),
+    "m8-mansion": ("--dev-mission8-mansion", "Mission 8 3D Mansion fight with Bodi & Alex (--m8-cp=0..4)"),
+    "m8-hall": ("--dev-mission8-hall", "Mission 8 Mansion cp 1: Grand Hall & Andrei M. security room"),
+    "m8-study": ("--dev-mission8-study", "Mission 8 Mansion cp 3: kick Retardovici's study door"),
+    "m8-helipad": ("--dev-mission8-helipad", "Mission 8 Mansion cp 4: helipad terrace holdout"),
     "m8-liftoff": ("--dev-mission8-liftoff", "Mission 8 study & helicopter liftoff 3D film"),
+    "m8-flight": ("--dev-mission8-flight", "Mission 8 Last Flight door-gunner chase (--m8-cp=0..4)"),
+    "m8-flight-road": ("--dev-mission8-flight-road", "Mission 8 Last Flight cp 1: Curfew Road chase"),
+    "m8-flight-tail": ("--dev-mission8-flight-tail", "Mission 8 Last Flight cp 3: Route 12 tail-rotor takedown"),
+    "m8-flight-ucilev": ("--dev-mission8-flight-ucilev", "Mission 8 Last Flight cp 4: Ucilev gunship duel"),
+    "m8-crash": ("--dev-mission8-crash", "Mission 8 Duty crash past the ridge 3D film"),
+    "m8-ridge": ("--dev-mission8-ridge", "Mission 8 Duty sniper ridge finale (Ucilev & Retardovici)"),
+    "m8-duty-epilogue": ("--dev-mission8-duty-epilogue",
+                         "Mission 8 Duty epilogue films (Capital Square inauguration)"),
     # ── Trailer bot takes (AI 1 choreography) ──
     "trailer-m1": ("--dev-m1-game",
             "Trailer Act I warehouse take (bot: breach/molotov)"),
@@ -162,3 +175,15 @@ def jump_flag(name):
     """Return the canonical CLI flag for a jump target, or None if unknown."""
     entry = DEV_JUMPS.get(name)
     return entry[0] if entry else None
+
+
+def is_dev_mode(argv=None):
+    """Return True when developer hotkeys/tools should be active."""
+    if os.environ.get("ACA_DEV") == "1":
+        return True
+    args = sys.argv[1:] if argv is None else argv
+    if any(a.startswith("--dev") or a == "--jump" or a.startswith("--jump=") for a in args):
+        return True
+    if os.environ.get("ACA_RELEASE") == "1":
+        return False
+    return not getattr(sys, "frozen", False)

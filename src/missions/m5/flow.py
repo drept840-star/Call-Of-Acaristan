@@ -294,6 +294,11 @@ def _enter_quarter():
     _m5_quarter.init()
     _snap_camera_safe()
     STATE.mission5_quarter_checkpoint_reached = True
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m5", checkpoint="quarter")
+    except Exception:
+        pass
     _set_objective("Reach the MAG print works - east end of the avenue. Before the Guard does.")
     _radio("VASILE: Lower Quarter's under Guard checkpoints - our old KRAP lads in "
            "the President's black. You're one of them now. They won't stop you. Probably.",
@@ -311,6 +316,11 @@ def _enter_printworks():
         STATE.player.angle = -math.pi / 2
     _snap_camera_safe()
     STATE.mission5_printworks_checkpoint_reached = True
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m5", checkpoint="printworks")
+    except Exception:
+        pass
     STATE.m5_maru_hp = STATE.m5_maru["hp"] if STATE.m5_maru else M5_MARU_MAX_HP
     _set_objective("Find Maru - the back office, north-east of the press hall.")
     _radio("VASILE: You're inside. Bring them in, Biribel. Quietly.",
@@ -352,6 +362,11 @@ def _enter_tunnel():
         STATE.player.angle = 0.0
     _snap_camera_safe()
     STATE.mission5_tunnel_checkpoint_reached = True
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m5", checkpoint="tunnel")
+    except Exception:
+        pass
     STATE.m5_squad_timer = M5_PURSUIT_INTERVAL // 2
     _set_objective("Escort Maru to the river gate - east. Don't outrun them.")
     _radio("MARU: My arm's useless. Go slow - I'm right behind you.",

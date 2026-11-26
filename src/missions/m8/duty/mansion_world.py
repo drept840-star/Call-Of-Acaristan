@@ -102,9 +102,24 @@ def _static():
         out.append(_b(s * MS.HALL_X, 0.5, s * X_IN, MS.BACK_Z, SLAB_Y0, FF))
         out.append(_b(s * (MS.HALL_X - 0.15), 0.5, s * (MS.HALL_X + 0.15), MS.BACK_Z, FF, FF + 1.0))
         out.append(_b(s * MS.HALL_X, MS.BACK_Z - 0.15, s * (MS.STAIR_X + 0.2), MS.BACK_Z + 0.15, FF, FF + 1.0))
-    # staircase sides
+    # staircase sides: sloped cheek walls, balusters, handrail, and newel posts
+    n_rail = 16
+    dz_r = (MS.STAIR_Z1 - MS.STAIR_Z0) / n_rail
+    dy_r = (FF - GF) / n_rail
     for s in (-1, 1):
-        out.append(_b(s * MS.STAIR_X, MS.STAIR_Z0, s * (MS.STAIR_X + 0.4), MS.STAIR_Z1, GF, FF + 1.0))
+        rx0, rx1 = s * MS.STAIR_X, s * (MS.STAIR_X + 0.4)
+        cx = s * (MS.STAIR_X + 0.2)
+        for k in range(n_rail):
+            za = MS.STAIR_Z0 + k * dz_r
+            zb = za + dz_r
+            ya = GF + k * dy_r
+            yb = GF + (k + 1) * dy_r
+            out.append(_b(rx0, za, rx1, zb, GF, yb + 0.14))
+            out.append(_b(cx - 0.12, za, cx + 0.12, zb, ya + 0.82, yb + 0.97))
+            if k > 0:
+                out.append(_b(cx - 0.07, za - 0.07, cx + 0.07, za + 0.07, ya + 0.06, ya + 0.90))
+        out.append(_b(cx - 0.22, MS.STAIR_Z0 - 0.22, cx + 0.22, MS.STAIR_Z0 + 0.22, GF, GF + 1.35))
+        out.append(_b(cx - 0.22, MS.STAIR_Z1 - 0.18, cx + 0.22, MS.STAIR_Z1 + 0.18, FF, FF + 1.29))
     # ground floor back wall (doorways x 5..7 each side) and the room dividers
     bz = MS.BACK_Z
     for x0, x1 in ((-X_IN, -7.0), (-5.0, 5.0), (7.0, X_IN)):
@@ -129,14 +144,30 @@ def _static():
     out.append(_b(-11.35, 27.7, -10.45, 30.3, GF, GF + 0.78))
     # dining room table
     out.append(_b(7.3, 28.0, 9.1, 34.0, GF, GF + 0.9))
+    out.append(_b(6.9, 28.5, 7.3, 33.5, GF, GF + 0.9))
+    out.append(_b(9.1, 28.5, 9.5, 33.5, GF, GF + 0.9))
+    out.append(_b(7.0, 34.85, 9.4, 35.5, GF, GF + 0.92))
+    # grand hall wall consoles
+    for s in (-1, 1):
+        for z in (7.0, 13.0, 19.0):
+            out.append(_b(s * 11.95 if s > 0 else -12.5, z - 0.75, 12.5 if s > 0 else -11.95, z + 0.75, GF, GF + 0.85))
     # armoury lockers, study desk and shelves, bed
     for z in (30.4, 32.4, 34.4):
         out.append(_b(-12.4, z - 0.8, -11.8, z + 0.8, FF, FF + 2.2))
+    out.append(_b(-5.2, 30.8, -4.25, 33.2, FF, FF + 0.86))
     dx, _, dz = MS.DESK_AT
     out.append(_b(dx - 1.35, dz - 0.53, dx + 1.35, dz + 0.53, FF, FF + 0.9))
+    out.append(_b(dx - 0.36, dz + 0.53, dx + 0.36, dz + 1.18, FF, FF + 1.24))
+    out.append(_b(-3.05, 34.0, -2.15, 35.0, FF, FF + 1.0))
+    out.append(_b(2.15, 34.0, 3.05, 35.0, FF, FF + 1.0))
     for s in (-1, 1):
         out.append(_b(s * 3.3, 29.0, s * 3.8, 35.4, FF, FF + 3.0))
     out.append(_b(8.4, 32.2, 10.8, 35.1, FF, FF + 0.7))
+    out.append(_b(7.55, 34.45, 8.15, 35.0, FF, FF + 0.62))
+    out.append(_b(11.05, 34.45, 11.65, 35.0, FF, FF + 0.62))
+    out.append(_b(11.7, 29.4, 12.5, 31.4, FF, FF + 2.25))
+    out.append(_b(8.7, 31.45, 10.5, 32.0, FF, FF + 0.45))
+    out.append(_b(4.4, 33.4, 6.0, 35.1, FF, FF + 0.95))
     # terrace: the solid block under it, balustrade, cover
     x0, z0, x1, z1 = MS.TERRACE
     out.append(_b(x0, z0, x1, z1, 0.0, FF))
@@ -161,6 +192,37 @@ _COVER_STATIC = tuple(b for b in STATIC if 0.5 <= b[5] - b[4] < LOS_MIN_H)
 _STATIC_BW = BoxWorld(box_xz_yy(b) for b in STATIC)
 _LOS_STATIC_BW = BoxWorld(box_xz_yy(b) for b in _LOS_STATIC)
 _MANSION_NAV = None
+_STAIR_RAY_BOXES = tuple(
+    _b(-MS.STAIR_X, MS.STAIR_Z0 + i * ((MS.STAIR_Z1 - MS.STAIR_Z0) / 22),
+       MS.STAIR_X, MS.STAIR_Z0 + (i + 1) * ((MS.STAIR_Z1 - MS.STAIR_Z0) / 22),
+       GF, GF + (i + 1) * ((FF - GF) / 22))
+    for i in range(22)
+)
+_STAIR_RAY_BW = BoxWorld(box_xz_yy(b) for b in _STAIR_RAY_BOXES)
+
+
+def _stair_ray_hit(o, d, best):
+    ox, oy, oz = o
+    dx, dy, dz = d
+    rx0 = ox if dx >= 0.0 else ox + dx * best
+    rx1 = ox + dx * best if dx >= 0.0 else ox
+    if rx1 < -MS.STAIR_X or rx0 > MS.STAIR_X:
+        return best
+    rz0 = oz if dz >= 0.0 else oz + dz * best
+    rz1 = oz + dz * best if dz >= 0.0 else oz
+    if rz1 < MS.STAIR_Z0 or rz0 > MS.STAIR_Z1:
+        return best
+    ry0 = oy if dy >= 0.0 else oy + dy * best
+    ry1 = oy + dy * best if dy >= 0.0 else oy
+    if ry1 < GF or ry0 > FF:
+        return best
+    for b in _STAIR_RAY_BOXES:
+        if b[5] < ry0 or b[4] > ry1 or b[3] < rz0 or b[1] > rz1:
+            continue
+        h = _ray_box(o, d, b)
+        if h is not None and 1e-4 < h < best:
+            best = h
+    return best
 
 _CELL = 8.0
 _GRID = {}
@@ -355,6 +417,8 @@ class World:
         if not self._custom_boxes:
             if _LOS_STATIC_BW.segment_blocked(a, b, slack=0.0):
                 return False
+            if _STAIR_RAY_BW.segment_blocked(a, b, slack=0.0):
+                return False
             ax, ay, az = a
             bx, by, bz = b
             rx0, rx1 = (ax, bx) if ax <= bx else (bx, ax)
@@ -384,6 +448,8 @@ class World:
             h = _ray_box(a, d, box_)
             if h is not None and h < 1.0:
                 return False
+        if _STAIR_RAY_BW.segment_blocked(a, b, slack=0.0):
+            return False
         return True
 
     def ray_hit(self, o, d, limit=75.0):
@@ -399,6 +465,7 @@ class World:
             hit = _STATIC_BW.ray(o, d, best)
             if hit is not None and 1e-4 < hit[0] < best:
                 best = hit[0]
+            best = _stair_ray_hit(o, d, best)
             for bx0, bz0, bx1, bz1, by0, by1 in self._dyn_boxes:
                 h = _ray_box(o, d, (bx0, bz0, bx1, bz1, by0, by1))
                 if h is not None and 1e-4 < h < best:
@@ -461,6 +528,7 @@ class World:
                 ry_max = oy + dy * best if dy >= 0.0 else oy
                 rz_min = oz if dz >= 0.0 else oz + dz * best
                 rz_max = oz + dz * best if dz >= 0.0 else oz
+        best = _stair_ray_hit(o, d, best)
         return best
 
     def low_cover(self, target, shooter):

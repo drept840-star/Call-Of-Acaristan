@@ -451,13 +451,56 @@ def vault(rng):
     return img
 
 
+def stucco(rng):
+    """Monumental render (courthouse facade), 48 texels/m: fine trowel grain
+    with faint broad bands and a hairline crack or two. No peeling, no grime:
+    the pattern is meant to be tamed further by textures._CONTRAST."""
+    v = fbm(rng, [64, 32, 16], [0.5, 0.3, 0.2])
+    img = ramp(v, [SLATE_MID, COOL_GREY, LIGHT_GREY, COOL_GREY], dither=1.0)
+    band = noise(rng, 8)
+    img[(band > 0.66) & (BAYER > 0.2)] = COOL_GREY
+    img[(band < 0.34) & (BAYER > 0.3)] = LIGHT_GREY
+    for _ in range(2):                               # hairline settlement cracks
+        x, y = int(rng.integers(0, N)), int(rng.integers(0, N))
+        for _ in range(int(rng.integers(10, 22))):
+            x += int(rng.integers(-1, 2))
+            y += 1
+            put(img, x, y, SLATE_MID)
+    pits = rng.random((N, N)) < 0.004
+    img[pits] = SLATE_MID
+    return img
+
+
+def ashlar(rng):
+    """Cut stone masonry (terrace, steps, portico), 32 texels/m: 0.5 m courses
+    of 1 m blocks with a dark joint and a lit top-left lip, fine face grain."""
+    v = fbm(rng, [16, 8, 4], [0.5, 0.3, 0.2])
+    img = ramp(v, [SLATE_MID, COOL_GREY, BLUE_GREY_HI, COOL_GREY], dither=1.0)
+    for course in range(4):
+        y0 = course * 16
+        off = (course % 2) * 16
+        img[y0, :] = SLATE_DEEP                      # bed joint
+        img[(y0 + 1) % N, :] = np.where((BAYER[0] > -0.1)[:, None], LIGHT_GREY,
+                                        img[(y0 + 1) % N, :])
+        for bx in range(2):                          # head joints, staggered
+            x0 = (off + bx * 32) % N
+            img[y0:(y0 + 16) % N or N, x0] = SLATE_DEEP
+            img[y0 + 2:y0 + 16, (x0 + 1) % N] = SLATE_MID
+        for _ in range(3):                           # face chips / pits
+            x = int(rng.integers(0, N))
+            y = y0 + int(rng.integers(3, 15))
+            put(img, x, y, SLATE_MID)
+            put(img, x + 1, y, COOL_GREY)
+    return img
+
+
 TEXTURES = {
     "snow": (snow, 11), "snow_trod": (snow_trod, 12), "ballast": (ballast, 13),
     "sleeper": (sleeper, 14), "concrete": (concrete, 15), "brick": (brick, 16),
     "metal_rib": (metal_rib, 17), "boxcar": (boxcar, 18), "crate": (crate, 19),
     "rust": (rust, 20), "steel": (steel, 21),
     "bone": (bone, 22), "scorch": (scorch, 23), "vault": (vault, 24),
-    "pavement": (pavement, 25),
+    "pavement": (pavement, 25), "stucco": (stucco, 26), "ashlar": (ashlar, 27),
 }
 
 

@@ -100,7 +100,7 @@ def _bush(m, x, y, z, w, h, d, leaf_a, leaf_b):
 def build_yard_detail(m):
     """Flat ``layer=1`` paths, lawn parterres and tree mulch inside the walls."""
     parterre = W7._t("grass", (42, 58, 36))
-    flagstone = W7._t("stone", (102, 98, 92))
+    flagstone = tex("ashlar", like=(102, 98, 92), tint=True)
     mulch = tex("m7_dirt", like=(54, 46, 36), density=12.0, tint=True)
 
     for s in (-1, 1):
@@ -117,7 +117,7 @@ def build_yard_detail(m):
         for k in range(4):
             m.add(disc_xz(s * (27.0 + 3.0 * (k % 2)), -12.0 + 14.0 * k, 1.35, 0.018, mulch, n=10))
         for k in range(3):
-            m.add(disc_xz(s * 15.0, 40.0 + k * 6.0, 1.15, 0.018, mulch, n=10))
+            m.add(disc_xz(s * 26.5, 40.5 + k * 6.0, 1.15, 0.018, mulch, n=10))
 
 
 def _plain(m):
@@ -128,12 +128,12 @@ def _plain(m):
     furrow = tex("m7_furrow", like=(40, 44, 34), density=10.0, tint=True)
 
     for x0, z0, x1, z1 in (
-        (-300.0, -300.0, 300.0, -70.0),
-        (-300.0, 90.0, 300.0, 300.0),
-        (-300.0, -70.0, -80.0, 90.0),
-        (80.0, -70.0, 300.0, 90.0),
+        (-380.0, -380.0, 380.0, -70.0),
+        (-380.0, 90.0, 380.0, 380.0),
+        (-380.0, -70.0, -80.0, 90.0),
+        (80.0, -70.0, 380.0, 90.0),
     ):
-        m.add(quad_xz(x0, z0, x1, z1, 0.0, outer_grass, layer=0, seg=60.0))
+        m.add(quad_xz(x0, z0, x1, z1, 0.0, outer_grass, layer=0, seg=65.0))
 
     m.add(quad_xz(-82.0, -56.0, -39.8, 56.0, 0.014, meadow, layer=1, seg=20.0))
     m.add(quad_xz(47.2, -56.0, 82.0, 56.0, 0.014, meadow, layer=1, seg=20.0))
@@ -191,7 +191,7 @@ def _build_power_wires(m):
 def _roads(m):
     dirt = tex("m7_dirt", like=(68, 60, 48), density=12.0, tint=True)
     asphalt = tex("pavement", like=(44, 46, 52), density=24.0, tint=True)
-    shoulder = W7._t("stone", (78, 76, 72))
+    shoulder = tex("ashlar", like=(78, 76, 72), tint=True)
     fence_col = W7._t("plank", (68, 54, 40))
 
     m.add(quad_xz(-39.4, -44.0, -35.6, 62.6, 0.022, dirt, layer=1, seg=8.0))
@@ -272,8 +272,8 @@ def _bus_stop(m, x, z):
 
 def _cottage(m, x, z, yaw=0.0, w=6.8, d=5.2, h=2.9, plaster_col=(192, 184, 166)):
     hy = hill_y(x, z)
-    stone = W7._t("stone", (138, 134, 124))
-    plaster = W7._t("plaster", plaster_col)
+    stone = tex("ashlar", like=(138, 134, 124), tint=True)
+    plaster = tex("stucco", like=plaster_col, tint=True)
     tile = W7._t("tile", (122, 60, 48))
     wood = W7._t("plank", (74, 44, 28))
     warm = (238, 206, 140)
@@ -298,8 +298,8 @@ def _cottage(m, x, z, yaw=0.0, w=6.8, d=5.2, h=2.9, plaster_col=(192, 184, 166))
 def _substation(m, x, z):
     hy = hill_y(x, z)
     pad = tex("concrete", like=(96, 96, 92), density=12.0, tint=True)
-    wall = W7._t("plaster", (128, 126, 118))
-    stone = W7._t("stone", (130, 126, 118))
+    wall = tex("stucco", like=(128, 126, 118), tint=True)
+    stone = tex("ashlar", like=(130, 126, 118), tint=True)
     steel = (56, 62, 60)
     dark = (36, 40, 44)
     insul = (212, 212, 206)
@@ -349,10 +349,10 @@ def _substation(m, x, z):
 
 
 def _structures(m, car_fn):
-    stone = W7._t("stone", (150, 146, 136))
-    plaster = W7._t("plaster", (198, 190, 170))
+    stone = tex("ashlar", like=(150, 146, 136), tint=True)
+    plaster = tex("stucco", like=(198, 190, 170), tint=True)
     tile = W7._t("tile", (122, 60, 48))
-    trim = W7._t("plaster", (226, 222, 210))
+    trim = tex("stucco", like=(226, 222, 210), tint=True)
     wood = W7._t("plank", (74, 44, 28))
     warm_glass = (238, 206, 140)
 
@@ -602,6 +602,43 @@ def _skyline(m):
     m.add(box(3.8, 0.9, 0.12, (238, 206, 140), center=(tx, ty + 9.4, tz - 2.12), emissive=True))
     m.add(box(4.8, 0.7, 4.8, (54, 42, 36), center=(tx, ty + 10.8, tz)))
     m.add(box(0.5, 0.5, 0.5, (255, 64, 52), center=(tx, ty + 11.4, tz), emissive=True))
+
+    # 360-deg aerial horizon skirt (dark distant forest + dim capital skyline glow ring)
+    n_seg = 40
+    r_inner = 186.0
+    r_outer = 216.0
+    forest_dark = (14, 20, 17)
+    ridge_dark = (18, 24, 30)
+    amber_glow = (142, 98, 52)
+    for i in range(n_seg):
+        a0 = math.tau * i / n_seg
+        a1 = math.tau * (i + 1) / n_seg
+        am = 0.5 * (a0 + a1)
+        x0, z0 = _ORBIT_CX + math.sin(a0) * r_inner, _ORBIT_CZ + math.cos(a0) * r_inner
+        x1, z1 = _ORBIT_CX + math.sin(a1) * r_inner, _ORBIT_CZ + math.cos(a1) * r_inner
+        h0 = hill_y(x0, z0) + 14.0 + 5.0 * math.sin(i * 1.9)
+        h1 = hill_y(x1, z1) + 14.0 + 5.0 * math.sin((i + 1) * 1.9)
+        # Continuous dark forest silhouette wall facing inward
+        m.face([(x0, -2.0, z0), (x1, -2.0, z1), (x1, h1, z1), (x0, h0, z0)],
+               forest_dark, layer=2, double=True)
+        # Outer mountain / capital skyline ring
+        ox0, oz0 = _ORBIT_CX + math.sin(a0) * r_outer, _ORBIT_CZ + math.cos(a0) * r_outer
+        ox1, oz1 = _ORBIT_CX + math.sin(a1) * r_outer, _ORBIT_CZ + math.cos(a1) * r_outer
+        oh0 = h0 + 11.0 + 7.0 * math.cos(i * 1.3)
+        oh1 = h1 + 11.0 + 7.0 * math.cos((i + 1) * 1.3)
+        m.face([(ox0, -2.0, oz0), (ox1, -2.0, oz1), (ox1, oh1, oz1), (ox0, oh0, oz0)],
+               ridge_dark, layer=2, double=True)
+        # Southern / flanking capital skyline blocs & dim sodium horizon glow bands
+        if math.cos(am) < 0.25:
+             xm = _ORBIT_CX + math.sin(am) * (r_inner + 8.0)
+             zm = _ORBIT_CZ + math.cos(am) * (r_inner + 8.0)
+             yaw_seg = math.degrees(am)
+             bh = 18.0 + (i * 7 % 16)
+             bw = 16.0 + (i * 5 % 10)
+             m.add(box(bw, bh, 8.0, bloc_a if i % 2 == 0 else bloc_b),
+                   rot_y(yaw_seg), (xm, bh * 0.5, zm))
+             m.add(box(bw * 0.72, 0.85, 0.25, amber_glow, emissive=True),
+                   rot_y(yaw_seg), (xm, 6.0 + (i % 3) * 3.5, zm - math.cos(am) * 4.2))
 
 
 def build_surroundings(m, car_fn=None):

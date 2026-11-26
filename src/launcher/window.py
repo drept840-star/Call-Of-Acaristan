@@ -381,7 +381,7 @@ class LauncherApp:
 
     def _init_pygame(self) -> None:
         pygame.init()
-        pygame.display.set_caption("Call of Acaristan — KRAPNET Launcher")
+        pygame.display.set_caption("Call of Acaristan KRAPNET Launcher")
         # `screen` is the fixed logical canvas; `display` is the real window.
         self.display = pygame.display.set_mode(self._default_window_size(), pygame.RESIZABLE)
         self.screen = pygame.Surface((L_WIDTH, L_HEIGHT)).convert()
@@ -761,12 +761,12 @@ class LauncherApp:
         if remote.changed_files and remote.files_base_url:
             mode_str = (
                 f"DELTA PATCH: {len(remote.changed_files)} CHANGED FILE(S) "
-                f"({format_bytes(dl_bytes)}) — NO .EXE DOWNLOAD"
+                f"({format_bytes(dl_bytes)}) NO .EXE DOWNLOAD"
             )
         elif dl_bytes > 0:
-            mode_str = f"IN-PLACE PATCH PACKAGE: {format_bytes(dl_bytes)} — SAVES PRESERVED"
+            mode_str = f"IN-PLACE PATCH PACKAGE: {format_bytes(dl_bytes)} SAVES PRESERVED"
         else:
-            mode_str = "IN-PLACE UPDATE READY — SAVES & SETTINGS PRESERVED"
+            mode_str = "IN-PLACE UPDATE READY SAVES & SETTINGS PRESERVED"
         m_surf = self.font_small.render(_ellipsize(self.font_small, mode_str, pw - 36), True, C_GREEN)
         self.screen.blit(m_surf, (px + 18, py + 82))
 

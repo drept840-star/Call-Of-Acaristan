@@ -58,6 +58,7 @@ import zipfile
 DEFAULT_PRESERVE = (
     "save_data.json",
     "settings.json",
+    "profile.json",
     "profiles.json",
     "launcher_config.json",
 )
@@ -68,6 +69,9 @@ DEFAULT_PROTECT = (
     "save_data.json",
     "save_data*.json",
     "settings.json",
+    "settings*.json",
+    "profile.json",
+    "profile*.json",
     "profiles.json",
     "launcher_config.json",
     ".aca_skip",
@@ -1246,7 +1250,7 @@ class DemoUpdateServer:
             "build": demo_build,
             "channel": "stable",
             "released_at": "2026-10-26",
-            "headline": "KRAPNET Relay Patch — Delta Updater & Netcode Polish",
+            "headline": "KRAPNET Relay Patch Delta Updater & Netcode Polish",
             "notes": [
                 "Seamless in-launcher delta patching (no manual .exe re-downloads)",
                 "Preserves save_data.json, settings.json, and operator profiles",

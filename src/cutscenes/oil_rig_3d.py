@@ -108,7 +108,7 @@ class OilRigCutscene:
         r.add_dynamic(sea.verts, [(f[0], f[1], f[2], f[3], None, f[4]) for f in sea.faces])
         hit = {"center": ("strike_center", 0), "left": ("strike_left", 0), "right": ("strike_right", 0)}
         order = [s[0] for s in SHOTS]
-        for x, z, name in RIGS:
+        for i, (x, z, name) in enumerate(RIGS):
             struck = order.index(hit[name][0]) < self.i or (SHOTS[self.i][0] == hit[name][0] and self.t > 4000)
             sink = 0.0
             if struck:

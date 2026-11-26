@@ -365,9 +365,18 @@ def _draw_m3_end_booth_dark(surface, t):
 from core.cutscene_registry import register_scene_renderers as _register_takes  # noqa: E402
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
+def _m3_end_take(scene_id, fallback_fn):
+    def draw(surface, t):
+        from cutscenes import m3ending3d  # lazy: engine3d stack
+        if m3ending3d.draw_scene(scene_id, surface, t):
+            return
+        fallback_fn(surface, t)
+    return draw
+
+
 _register_takes({
-    "m3_end_studio": _draw_m3_end_studio,
-    "m3_end_cut": _draw_m3_end_cut,
-    "m3_end_nation": _draw_m3_end_nation,
-    "m3_end_booth_dark": _draw_m3_end_booth_dark,
+    "m3_end_studio": _m3_end_take("m3_end_studio", _draw_m3_end_studio),
+    "m3_end_cut": _m3_end_take("m3_end_cut", _draw_m3_end_cut),
+    "m3_end_nation": _m3_end_take("m3_end_nation", _draw_m3_end_nation),
+    "m3_end_booth_dark": _m3_end_take("m3_end_booth_dark", _draw_m3_end_booth_dark),
 })

@@ -84,7 +84,7 @@ _RIFLE_CACHE = {}
 # Baked ae.mesh/1 weapons a spec may name directly. All share one gun-space
 # frame: +z is the muzzle and the origin is the right hand on the pistol grip,
 # so they drop into ``Humanoid._rifle`` without a transform.
-RIFLE_ASSETS = ("akrifle", "ak74")
+RIFLE_ASSETS = ("akrifle", "ak74", "sniper_rifle")
 
 
 def weapon_asset(name):

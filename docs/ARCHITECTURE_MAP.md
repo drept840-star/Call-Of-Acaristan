@@ -1,8 +1,8 @@
 # ARCHITECTURE_MAP
 
-Purpose: name the exact files to read/edit for a task in one pass. Paths are from the repo root; game code is under `src/` (imports are rooted there: `missions.m6.draw` = `src/missions/m6/draw.py`). Short forms: `engine/...`, `ui/...`, `core/...` = `src/<path>`; `mN/...` = `src/missions/mN/...`; `content/...` = `src/game/content/...`. Working rules (facades, shared state, renderer, sprite pipeline, story canon) are in `AGENTS.md`. Verified against disk on 2026-11-14 (branch `m8/the-call`); §8 3D asset inventory re-verified file-by-file; §9-§22 added from a full tree survey. On conflict, the code wins: re-grep the symbol.
+Purpose: name the exact files and live contracts to read/edit for a task in one pass. Paths are from the repo root; game code is under `src/` (imports are rooted there: `missions.m6.draw` = `src/missions/m6/draw.py`). Short forms: `engine/...`, `ui/...`, `core/...` = `src/<path>`; `mN/...` = `src/missions/mN/...`; `content/...` = `src/game/content/...`. Working rules (facades, shared state, renderer, sprite pipeline, story canon) are in `AGENTS.md`. **Slimmed 2026-11-20:** historical patch notes -> `docs/worklog.md`; the per-file source/tools/tests catalogs and dev-jump table -> `docs/FILE_INDEX.md` (both generated / appended by `tools/sync_arch_map.py`). On conflict, the code wins: re-grep the symbol.
 
-Contents: 1 Runtime spine - 2 Engine API by file (2.1 shared 3D/cutscene/asset signatures + coordinate contracts) - 3 Game-side packages - 4 Call chains & shared ownership - 5 Weapon/item crosswalk - 6 One-shot file bundles - 7 Gotchas & gates - 8 3D assets inventory - 9 Main loop, FSM, event routing, film requests, 3D scene contract - 10 Mission catalogue - 11 Environment variables - 12 Dev affordances - 13 Persistent files - 14 Data formats - 15 assets/ map - 16 Multiplayer, launcher, builds - 17 More one-shot bundles - 18 CI gates and smoke test - 19 Glossary, doc index, known drift - 20 Source file index - 21 Tools index - 22 Tests index
+Contents: 1 Runtime spine - 2 Engine API by file (2.1 shared 3D/cutscene signatures + coordinate contracts) - 3 Game-side packages - 4 Call chains & shared ownership - 5 Weapon/item crosswalk - 6 One-shot bundles - 7 Gotchas & gates - 8 3D assets inventory - 9 Main loop, FSM, event routing, 3D scene contract - 10 Mission catalogue - 11 Environment variables - 12 Dev affordances - 13 Persistent files - 14 Data formats - 15 assets/ map - 16 Multiplayer, launcher, builds - 17 More one-shot bundles - 18 CI gates - 19 Glossary, doc index, known drift - 20 Monolith anchors. Full per-file source / tools / tests index + dev-jump table: `docs/FILE_INDEX.md`.
 
 ---
 
@@ -57,6 +57,8 @@ Public names are snapshotted in `tests/api/engine_api.json` (see 7). Packages re
 | `engine/render2d/drawables.py` | `Drawable` `DrawContext` `SurfaceDraw` `SpriteDraw` `TextDraw` `RectDraw` `UiPassDraw` `CustomDraw` ... |
 | `engine/render2d/{queue,static,pen,camera,postfx,util}.py` | `RenderQueue` `Layer`; `StaticLayers`; `SurfacePen` `RecordingPen` `pen_or_surface`; `Camera2D` `clamp_top_left`; `vignette scanlines letterbox grain color_grade PostFX`; `screen_visible soft_shadow add_radial` |
 | `engine/render3d/{scene3d,presets}.py` | `Scene3D` `load_set3d` (`ae.set3d/1` data only, no renderer); `load_preset` `resolve` `blend` |
+| `engine/render3d/blast_sprites.py` | `fireball_sprite` `flash_sprite` `ground_flash_sprite` `prewarm` (procedural cached fireball/flash sprites for `vehicle_destruction`) |
+| `engine/render3d/vehicle_destruction.py` | `VehicleDestructionManager` (`prewarm()` in `__init__`) `VehicleDestruction` `PartBody` `VEHICLE_PROFILES` `get_vehicle_profile` (3D vehicle breakup/fireball/dust-skirt/cookoff; `phys_occ` flashes, delayed fire mounts, no shockwave line ring) |
 | `engine/anim/figure_kit.py` | `SPECS` (cast look table, owner), `draw_character` `draw_prop`; `engine/anim/pose_cache.py` `PoseCache` |
 | `engine/ai/{bt,cover,senses,squad}.py` | BT nodes `Tree Selector Sequence Action ...`; `build_spots pick`; `Sight NoiseBus`; `Squad` |
 | `engine/collision/{boxes,mesh,nav}.py` | `BoxWorld ray_aabb`; `MeshCollider`; `GridNav` |
@@ -85,33 +87,19 @@ Goal: an AI with only 1-5 target files should not need `engine3d/*`, `m6world3d.
 - `textures.tex(name, like=None, density=None, tint=False)`: a face colour that shows `assets/tex3d/<name>.png` (names in the auto block); `like=(r,g,b)` keeps that colour's brightness, `tint=True` keeps the colour and takes only the texture's light/dark, `density` (texels/m) counts on first use only, a missing texture returns `like` or grey. Software draws the average colour, GL multiplies the texels.
 
 **`cutscenes/m6world3d.py` actor keys** - `hum(key, hd=False, wound=0, bloody=False, flags=())` caches one `Humanoid` per `(key, flags)`; `actor(r, key, pose, pos, yaw, t, seed=0, amp=1.0, rifle_on=False, expression=None, mouth=None, bias=0.0, hd=False, wound=0, bloody=False, shadow=None, flags=())` calls `hum`, adds breath/sway through `life_pose(pose, t, amp, seed)`, auto-flaps the mouth while that speaker talks, calls `r.add_humanoid` and appends to `LAST` (max 16 dicts `{key, joints, pos, yaw, pose, hd, flags, rifle}`, cleared by `rend()`; read it to put props on hands). `pos` = feet root (ground contact is solved), `yaw` degrees. `add(r, mesh, bias)` queues a `Mesh` (routes to bake / pack memo / `add_dynamic`). `rend()` -> `(renderer, surface)`.
-- Key -> result. `("biribel", outfit)`: Biribel with `core.outfits.biribel_3d(outfit)` (`"krap"`, `"guard"` = `OUTFIT_GUARD`, `"krap_armband"`, or a `scene_outfit(...)` id); weapon flags work ONLY on this key and only when not `hd`: `"rifle"` (K9), `"lmg"`, `"shotgun"` (+`"nopump"`), `"ak74"`, `"os12"` (+`"nomag"`), plus `"cig_dropped"`; the gun draws only with `rifle_on=True`. `("guard", variant)`: train Guard (`guard_spec`), armed with the variant's rifle, flag `"os12"` swaps it. `("ally", name)`: named cast member WITH a gun (`m7rifle`; `os12` with the flag). Plain `"guard"`: third-person AK guard (`"os12"` swaps). `"ucilev"`: always the sniper rifle. `"president"`+`"bare_sleeve"` and `"maru"`+`"suit"` are look flags. Any other plain string (`"bodi"`, `"alex"`, `"vasile"`, `"volkov"`, `"commander"`, `"krap"`) = `humanoid3d(key)`: UNARMED (no `rifle` in its spec), flags ignored; for an armed Bodi use `("ally", "bodi")`. `SPECS` keys: `biribel vasile volkov commander fisherman balaceanu president maru bodi alex ucilev ipa krap civilian hungry_kid andrei_m` (`"retardovici"` aliases `president`).
+- Key -> result. `("biribel", outfit)`: Biribel with `core.outfits.biribel_3d(outfit)` (`"krap"`, `"guard"` = `OUTFIT_GUARD`, `"krap_armband"`, or a `scene_outfit(...)` id); weapon flags work ONLY on this key and only when not `hd`: `"rifle"` (K9), `"lmg"`, `"shotgun"` (+`"nopump"`), `"ak74"`, `"os12"` (+`"nomag"`), `"sniper_rifle"` (baked bolt-action from `tools/ae_import_sniper.py`, `GRIPS["sniper_rifle"]`; falls back to `rifle_mesh(scope=True)`/`GRIPS["sniper"]` if the asset is missing), plus `"cig_dropped"`; the gun draws only with `rifle_on=True`. `("guard", variant)`: train Guard (`guard_spec`), armed with the variant's rifle, flag `"os12"` swaps it. `("ally", name)`: named cast member WITH a gun (`m7rifle`; `os12` with the flag). Plain `"guard"`: third-person AK guard (`"os12"` swaps). `"ucilev"`: always the sniper rifle. `"president"`+`"bare_sleeve"` and `"maru"`+`"suit"` are look flags. Any other plain string (`"bodi"`, `"alex"`, `"vasile"`, `"volkov"`, `"commander"`, `"krap"`) = `humanoid3d(key)`: UNARMED (no `rifle` in its spec), flags ignored; for an armed Bodi use `("ally", "bodi")`. `SPECS` keys: `biribel vasile volkov commander fisherman balaceanu president maru bodi alex ucilev ipa krap civilian hungry_kid andrei_m` (`"retardovici"` aliases `president`).
 - Motion kit: `path(points, smooth)` -> `route(d)` -> `(pos, yaw)`; `walk(hum, route, g, stride, speed, ground)` = planted-foot walk (`walk_stride` / `walk_span` size it, `walk_slip` audits); `sit_pose(hum, seat_y, upper=None)`; `reach(hum, pose, side, target, pos, yaw, pole)` = arm IK to a world point; `planted_pos(hum, pose, yaw, mid_xz, y)` -> root; `ankles` / `knees` = world joints. `m7world3d` has its own `sit_pose(**kw)`, `walk_pose(t, speed, tired)`, `stand_pose(**kw)` and `k(t, start, length)` (clamped smoothstep over milliseconds).
 
 **M7/M8 3D set helpers** - `m7world3d.LOOKS` keys (auto block) are dicts `fog, fog_start, fog_end, light{direction,ambient,diffuse,sky,tint}, sky_top, sky_bot, sodium, stars`. `stage(look, t, eye, tgt, fov, lights=(), hh, seed, size, park, well_roof)` -> `(r, buf)` (lights + camera + sky + static bake, `begin()` already called); add actors, then `finish(surface, r, buf, seed, tag, t)` (flush + present + grade). Helpers return `Mesh`es: `tree(seed)`, `hay(n)`, `_fence(x0,z0,x1,z1,h,every,col,gap)` (gap in world coords), `_hedgerow(x0,z0,x1,z1,seed)`, `_bipyr(cx,cy,cz,r,up,dn,col,col2,n,moon)`, `_t(name, col, tint)` (M7 texture at ground/prop density). `chase_set` meshes face local `+z` forward (tractor, trailer, jeep, rocket, gun_truck) and are placed with `put(r, key, build, pos, yaw, pitch, roll)` (cached by `key`); `stratus(r, buf, t, pal)` paints cloud streaks; `frame(eye, tgt, fov, t, size, look, lights)` = camera + light + sky; `present(r, surface)`. FX: `m5fx3d.glow` and `m6fx3d.glow` share semantics (`max_px` default 200 vs 36); `night_sky(r, buf, t, top, bot, ...)` is `m5fx3d`; `m6fx3d.grade_cine(surface)` = cinematic grade, `present_crisp(src, dst)` = hard-pixel upscale (no return values). Glows/shafts are queued with `r.add_sprite(..., layer=FX_LAYER)` by the hosts.
 
-**Mesh assets (`ae.mesh/1`, ADR-024)** - `game.render3d_bridge.load_mesh_asset(ref)` -> `(verts, faces)` raw lists from `M/<ref>.mesh.json`. Each face is `[idx, [r,g,b]]` (2 items: `k93d`, `akrifle`, `lmg`, `pistol`, `barrel`...) OR `[idx, [r,g,b], flag]` (3 items: `car_m2`, `tractor_m7`, `truck_m7`, `krap_van`, monitors, PCs, medkit; flag 1 = screen/emissive group, other ints = group ids); `idx` = 3 (tri) or 4 (quad) vertex indices. `mesh_for_prim(prim)` runs `for idx, col in faces`, so it only works for 2-item assets and raises `ValueError` on 3-item ones: for those use `game.scenery3d.prop(ref, screen=...)`, which reads `f[0], f[1], f[2]`. Mesh prim: `{"type":"mesh","ref":<id>,"pos":[x,y,z],"yaw":deg,"scale":s}` (yaw sign as `rot_y`). Budget: `tools/ae_import_mesh.py --budget` defaults to 1500 tris per prop (error above); authored importers cluster to their own budget (`k93d` 4042 faces, `truck_m7` 15052), so per-asset counts are in §8.1b / §8.2. `tools/ae_import_k93d.py` reads multi-node GLBs: `_gltf(path)` -> `(json, binbuf)`; `_acc(g, binbuf, i)` reads accessor `i`; `_scan(g, binbuf)` -> `(verts, tris, focus)` with node TRS/matrices applied from the identity root `I4` (tris = `(points, material, group, uv_rgb_hint)`); `_cluster(verts, tris, cell)` -> `(verts, faces)` vertex-clustered to `--cell` metres; output adds `meta` (`muzzle`, `sight`, magazine group) in gun space (+z muzzle, +y up, origin at the trigger).
+**Mesh assets (`ae.mesh/1`, ADR-024)** - `game.render3d_bridge.load_mesh_asset(ref)` -> `(verts, faces)` raw lists from `M/<ref>.mesh.json`. Each face is `[idx, [r,g,b]]` (2 items: `k93d`, `akrifle`, `lmg`, `pistol`, `barrel`...) OR `[idx, [r,g,b], flag]` (3 items: `car_m2`, `tractor_m7`, `truck_m7`, `krap_van`, monitors, PCs, medkit; flag 1 = screen/emissive group, other ints = group ids); `idx` = 3 (tri) or 4 (quad) vertex indices. `mesh_for_prim(prim)` runs `for idx, col in faces`, so it only works for 2-item assets and raises `ValueError` on 3-item ones: for those use `game.scenery3d.prop(ref, screen=...)`, which reads `f[0], f[1], f[2]`. Mesh prim: `{"type":"mesh","ref":<id>,"pos":[x,y,z],"yaw":deg,"scale":s}` (yaw sign as `rot_y`). Budget: `tools/ae_import_mesh.py --budget` defaults to 1500 tris per prop (error above); authored importers cluster to their own budget (`k93d` 4042 faces, `truck_m7` 15052), so per-asset counts are in §8.1b / §8.2. `tools/ae_import_k93d.py` reads multi-node GLBs: `_gltf(path)` -> `(json, binbuf)`; `_acc(g, binbuf, i)` reads accessor `i`; `_scan(g, binbuf)` -> `(verts, tris, focus)` with node TRS/matrices applied from the identity root `I4` (tris = `(points, material, group, uv_rgb_hint)`); `_cluster(verts, tris, cell)` -> `(verts, faces)` vertex-clustered to `--cell` metres; output adds `meta` (`muzzle`, `sight`, magazine group) in gun space (+z muzzle, +y up, origin at the trigger). `tools/ae_import_sniper.py` reuses the same reader for `lowpoly_sniper_rifle.glb` (already +z muzzle/+y up/+x right), scales it to `--length` with the origin on the pistol grip and writes `meta` (`muzzle`/`butt`/`guard`/`fore`) mirrored by `engine3d.hold.GRIPS["sniper_rifle"]`.
 
 Generated signatures (`-> ~T` = return type inferred from `return` statements, `# text` = first docstring sentence):
 
 <!-- AUTO:sigs -->
 **`engine3d/core.py`** (1042 lines)
 ```
-def lerp(a, b, t)
-def clamp(v, lo=0.0, hi=1.0)
-def smooth(t)
-def ease_in_out(t)
-def ease_out(t)
-def ease_in(t)
-def mix_col(a, b, t) -> ~tuple3
-def v_add(a, b) -> ~tuple3
-def v_sub(a, b) -> ~tuple3
-def v_mul(a, s) -> ~tuple3
-def v_dot(a, b)
 def v_cross(a, b) -> ~tuple3
-def v_len(a)
-def v_norm(a) -> ~tuple3
-def v_lerp(a, b, t) -> ~tuple3
 def m_mul(a, b) -> ~tuple9
 def m_apply(m, v) -> ~tuple3
 def rot_x(deg) -> ~tuple9  # +deg tips +y toward +z (a torso leaning forward)
@@ -228,7 +216,7 @@ def solve_leg(hum, pose, pos, yaw, side, target)
 def solve_rifle_hold(hum, pose, pos, yaw, target, fore=0.3, pocket=(-0.05, -0.03, 0.05), weld=None, support_pole=(-0.6, -1.0, 0.1), grip_pole=(1.0, -0.5, -0.4), look=T...
 def rifle_hold_gaps(hum, pose, pos, yaw, fore=0.3, pocket=(-0.05, -0.03, 0.05), weld=(0.08, 0.01, 0.07))
 ```
-**`engine3d/hold.py`** (336 lines)
+**`engine3d/hold.py`** (346 lines)
 ```
 def body_volumes(hum, pose, pos, yaw)  # -> {name
 def push_out(vols, p, margin=0.03)
@@ -240,7 +228,7 @@ def hold_weapon(hum, pose, pos, yaw, weapon='rifle', mode='aim', aim=None)
 def hold_report(hum, pose, pos, yaw, weapon='rifle')
 def hold_cached(hum, pose, weapon, mode, aim=None, key=None)  # hold_weapon for per-frame callers
 POLES = ((0.8, -1.0, -0.1), (0.6, -1.0, -0.7), (-0.4, -1.0, 0.15), (1.0, -0.2, 0.0))
-GRIPS keys: rifle sniper os12 k9 shotgun m7rifle akrifle ak74 lmg pistol
+GRIPS keys: rifle sniper os12 k9 shotgun m7rifle akrifle ak74 lmg sniper_rifle pistol
 MODES keys: aim ready port carry one_hand pistol_aim pistol_ready
 ```
 **`engine3d/textures.py`** (164 lines)
@@ -252,9 +240,9 @@ def version()  # Bumps whenever a texture is added
 def glitter()  # Glitter strength per layer, in layer order
 def reflectivity()  # Reflectivity base per layer, in layer order
 def stack()
-tex names (assets/tex3d): ballast bone boxcar brick concrete crate m6_palette m7_bark m7_barnboard m7_dirt m7_furrow m7_grass m7_gravel m7_hay m7_leaf m7_plank m7_plaster m7_stone m7_stubble m7_tile m7_tin m7_track metal_rib pavement rust scorch sleeper snow snow_trod steel vault
+tex names (assets/tex3d): ashlar ballast bone boxcar brick concrete crate m6_palette m7_bark m7_barnboard m7_dirt m7_furrow m7_grass m7_gravel m7_hay m7_leaf m7_plank m7_plaster m7_stone m7_stubble m7_tile m7_tin m7_track metal_rib pavement rust scorch sleeper snow snow_trod steel stucco vault
 ```
-**`cutscenes/m6world3d.py`** (2707 lines)
+**`cutscenes/m6world3d.py`** (2721 lines)
 ```
 def rend(w=RW, h=RH, hdr=True)
 def present(surface, buf, x=0, w=WIDTH)  # Gamma-grade the small buffer before the upscale
@@ -328,143 +316,6 @@ def terminal_office(r, t, lamp=1.0, radio=True, crt=True, handset=True, voice=0.
 def vasile_office(r, t)  # The empty office
 LAST = []
 ```
-**`cutscenes/m7world3d.py`** (3277 lines)
-```
-def _t(name, col, tint=False)  # M7 texture at ground or prop density
-def _bipyr(cx, cy, cz, r, up, dn, col, col2=None, n=6, moon=False)
-def _fence(x0, z0, x1, z1, h=1.15, every=2.4, col=None, gap=None)
-def ground() -> ~list
-def hills()
-def house(lit=False, burn=False)
-def barn(burn=False, lamp=False)
-def house_ruin()  # Bodi's house after the fire
-def barn_ruin()  # Bodi's barn after the fire
-def hay(n=3)
-def shed()
-def well(roof=True)
-def well_roof()
-def well_frame()  # Posts and crossbeam only
-def well_bucket()
-def tree(seed=0)
-def contact(size, col=None)
-def orchard()
-def tractor(lit=False)
-def motorcycle(lit=False)
-def pig()
-def field_dressing()
-def poles()
-def yard_dressing()
-def skyline(lit)
-def _hedgerow(x0, z0, x1, z1, seed=0)
-def outer_dressing()
-def landscape_dressing(look)
-def old_orchard()
-def poplars()
-def crest_woods()
-def road_dressing(lit)
-def build_static(r, look, park=None, well_roof=True)
-def setup(r, look)
-def sky(r, buf, t, look, seed=0)
-def pool(col, radius_m, intensity=0.3, squash=0.5)
-def raid_fx(r, t, lit=True)
-def wires(r)
-def raid_pools(extra=())
-def raid_curve()
-def grade_raid(surface)
-def stage(look, t, eye, tgt, fov, lights=(), hh=0.006, seed=0, size=None, park=None, well_roof=True) -> ~tuple2
-def finish(surface, r, buf, seed, tag, t)
-def mist(r, t, seed=0, n=9, intensity=0.1)
-def sun(r, t, pos=(96.0, 9.0, -14.0))
-def flame_mesh(pos, t, seed=0, size=1.0, heat=1.0, cam=None)
-def smoke(t, seed=0, size_m=2.0)
-def fire(r, pos, t, seed=0, size=1.0, smoky=True, layer=_fx.FX_LAYER)
-def wall_fire(r, x, y, wall_z, t, seed=0, size=1.0, smoky=False, layer=_fx.FX_LAYER)
-def burn_fx(r, t, grow=1.0, layer=_fx.FX_LAYER)
-def burn_lights(t=0, boost=0.0) -> ~list
-def burn_roof(r, fall)  # Burnt barn roof
-def sparks(t, t0, seed=0, n=46, speed=7.0, life=2.6)
-def mix(a, b, u)
-def sit_pose(**kw)
-def walk_pose(t, speed=1.0, tired=0.0)
-def stand_pose(**kw)
-def k(t, start, length)
-LOOKS keys: dawn night raid burn
-```
-**`cutscenes/m5fx3d.py`** (637 lines)
-```
-def reduced_motion() -> ~bool
-def shake_scale()  # RPE6 P9
-def flash_scale()  # RPE6 P9
-def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensity=1.0, max_px=200)
-def sodium_lamp(t, seed=0, radius_m=2.2, intensity=0.85)  # Street lamp
-def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0)
-def crt_bloom(t, col=(120, 160, 220), w_m=0.6, h_m=0.45, intensity=0.6, seed=0)  # Cathode-ray bloom
-def scope_glint(strength, col=(255, 236, 210))  # Lens glint off an optic
-def wet_reflection(col, t, seed=0, length_m=2.4, width_m=0.35, intensity=0.5)  # Light smeared on wet ground/water
-def dust_motes(t, seed=0, count=26, spread_m=(1.6, 1.4), col=(150, 140, 120))
-def cap_flash(surface, knee=170, slope=0.25)  # RPE6 P9
-def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420)  # Blast / muzzle flash
-def sparks(seed, age_ms, col=(255, 200, 120), n=18, speed_m=4.0, dur_ms=700)
-def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0, intensity=0.34, tilt=0.1)
-def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16)  # Low ground fog
-def glint(col, radius_m=0.35, t=0, seed=0, intensity=0.8, rate=1.0)  # Small shimmering highlight
-def cig_smoke(t, seed=0, drift=(0.12, -0.5), intensity=0.3, life_ms=2600)  # A lit cigarette's wisp
-def rain3d(r, t, seed=0, n_near=70, n_far=150, lights=(), col=(96, 104, 120), wind=(0.35, 0.1), ground=0.0, splashes=10, layer=FX_LAYER, near_d0=1.2, near_ln=0.5, surf...
-def night_sky(r, buf, t, top, bot, *, stars=60, moon=False, clouds=4, sodium=None, mist=(26, 30, 40), seed=0, star_cut=0.0, gpu=False)
-def handheld(t, amp, seed=0) -> ~tuple3  # Breathing-camera offset (m)
-def shake(t, t_hit, dur_ms, amp) -> ~tuple4  # Decaying impact shake -> (dx, dy, roll_deg, px)
-def set_cam(r, t, eye, tgt, fov, hh=0.0, seed=0, roll=0.0, shk=None)
-```
-**`cutscenes/m6fx3d.py`** (625 lines)
-```
-def glow(col, radius_m, t=0, pulse=0.0, flicker=0.0, seed=0, core=None, intensity=1.0, max_px=36)
-def beacon(col, radius_m=0.35, t=0, period_ms=1500.0, phase=0.0, intensity=1.0, seed=0)  # Aviation / IFF lamp
-def sodium_lamp(t, seed=0, radius_m=2.2, intensity=0.85)  # Yard or street lamp
-def window_glow(col, w_m, h_m, intensity=0.55, t=0, flicker=0.0, seed=0, rim=False)  # A lit window, screen or doorway
-def crt_bloom(t, col=(120, 160, 220), w_m=0.6, h_m=0.45, intensity=0.6, seed=0)
-def flash(age_ms, col=(255, 236, 200), radius_m=3.0, dur_ms=420)  # Muzzle or blast flash
-def haze(col, radius_m=3.0, t=0, seed=0, intensity=0.16)  # Low lit fog round a light
-def light_shaft(col, height_m=5.0, top_m=0.9, bot_m=2.1, t=0, seed=0, intensity=0.34, tilt=0.1)
-def powder(t, seed=0, spread_m=3.0, intensity=0.5, col=(188, 200, 220), puffs=14)  # Rotor wash on powder snow
-def dither_lut(chan, np)
-def ink(chan, np)
-def apply_lut(surface, lut, np)  # Run a ``dither_lut`` table over the buffer
-def present_crisp(src, dst)
-def cine_curve()
-def grade_cine(surface)
-```
-**`missions/m8/revenge/chase_set.py`** (2382 lines)
-```
-def road_x(z)
-def road_yaw(z)
-def ditch_y(z)  # The ditch jump
-def ditch_pitch(z)  # Nose-up degrees for a body on the track at ``z``
-def surface_y(x, z)
-def tractor()  # Bodi's tractor, local forward +z
-def trailer()
-def toolbox_base()
-def toolbox_lid()
-def toolbox()  # Combined closed toolbox
-def lmg_body()
-def lmg_can()
-def lmg_cover()
-def lmg_yoke(h)
-def jeep(col=GUARD_PAINT)  # A Guard car (car_m2 repainted), local forward +z
-def wheeled(key)
-def put_wheeled(r, key, pos, yaw=0.0, pitch=0.0, odo=0.0, roll=0.0)
-def helicopter_parts()
-def put_helicopter(r, pos, yaw, pitch, roll, main_spin, tail_spin, burned=False)
-def rocket()
-def gun_truck()
-def barrier_arm()
-def train()
-def stratus(r, buf, t, pal=DAWN_CLOUDS)
-def renderer()  # (renderer, None, 0, wreck spots), built on first use
-def wrecks()
-def frame(eye, tgt, fov, t=0, size=None, look='dawn', lights=())
-def put(r, key, build, pos, yaw=0.0, pitch=0.0, roll=0.0)
-def present(r, surface)
-```
 **`game/render3d_bridge.py`** (679 lines)
 ```
 def load_mesh_asset(ref: str)
@@ -500,22 +351,10 @@ def workstation(pc='pc_zarya', monitor='monitor_crt', live=False)
 def workstation_display(pc, monitor, colour)
 def medical_supplies()
 ```
-**`tools/ae_import_k93d.py`** (326 lines)
-```
-def _gltf(path) -> ~tuple2
-def _acc(g, binbuf, i)
-def _scan(g, binbuf) -> ~tuple3  # World-space triangles
-def _cluster(verts, tris, cell) -> ~tuple2
-def main()
-```
-**`tools/ae_import_mesh.py`** (210 lines)
-```
-def load_gltf(path) -> ~tuple2
-def load_obj(path, mtl_colours) -> ~tuple2
-def main()
-```
 Signature notation: `-> ~T` = return type inferred from the `return` statements (no annotation in source); `# text` = first docstring sentence.
 <!-- /AUTO:sigs -->
+
+`_CONTRAST = {"concrete":0.55, "stucco":0.30, "ashlar":0.55}` scales pattern light/dark before tint; `stucco` (fine fbm grain + hairline cracks, monumental plaster) and `ashlar` (staggered coursed stone blocks) are drawn by `tools/tex3d_draw.py` and replace `m7_plaster`/`m7_stone` on the M8 Duty courthouse/city facades AND Retardovici's estate (`mansion_set` shell/hall/terrace/grounds/fountain; `mansion_env` flagstones/road shoulders/cottages/substation/gatehouse) - the farm tiles read as mould blotches at monumental scale.
 
 ---
 
@@ -532,340 +371,19 @@ Signature notation: `-> ~T` = return type inferred from the `return` statements 
 - Manifests: `src/game/content/m{1..5}/manifest.json` (asset ids `mN/<module>`). Baked output: `assets/baked/m{1..5}/<name>_<variant>.png` + `.bakeinfo.json`.
 - `src/game/timelines.py` (`shots`, `timeline`, `save_timeline`): `game/content/timelines/*.timeline.json` -> legacy shot dicts for `app.CutscenePlayer`. `ACA_TL_SRC=legacy` = in-code tables.
 - `src/game/dialogues.py`, `levels.py`: same pattern for `content/dialogue/*.dlg.json`, `content/levels`.
-- `src/game/save_adapter.py` (`capture` + restore): engine snapshot of `STATE`; `src/game/render3d_bridge.py`, `input_adapter.py`: boundary adapters (allowed).
+- `src/game/save_adapter.py` (`capture` + restore): engine snapshot of `STATE`; `src/game/render3d_bridge.py`, `input_adapter.py`, `vehicle_fx.py` (`default_vehicle_fx`): boundary adapters (allowed).
+- Shared 3D vehicle destruction (`engine.render3d.VehicleDestructionManager` + `game.vehicle_fx.default_vehicle_fx`): one pure-engine system owns vehicle-specific profiles (`car`, `jeep`, `truck`, `gun_truck`, `aa_truck`, `tanker`, `gunship`, `gunship_air`, `tractor`), momentum-inheriting 3D detached parts (`PartBody` with floor bounce & settle), stationary hull hop-and-sag (`hull_transform`), charred/ember interior cores, ground scorch decals, shockwave rings, anchored `fire3d` flames, and delayed secondary cook-offs across `m8/duty/flight3d`, `m8/revenge/chase3d`, `m8/revenge/trap3d`, and `m8/duty/mansion3d`.
 - `src/game/topdown3d.py`: 2.5D top-down host (`CAMS`, `View`, `mouse_world`, `put`, `cast_shadows`) for M1-M6 `draw3d`, `missions/walk3d.py` and the MP arena (`ui/arena_view3d.py`). `Cam.res` defaults to the 1000x700 canvas (no upscale; `m6fx3d.present_crisp` is a plain blit when sizes match; arena `RES` too). On GL, `cast_shadows` calls `r.set_sun_shadow` along `SHADOW_DIR` over `SUN_HALF` m round the view focus and sets `r.char_pop = CHAR_POP` (top light + rim on rigs) and `r.tex_scale = TEX_SCALE` (GL `u_uvs` multiplies every world UV: 1/3 = 3x bigger texels, the chunky pixel look of the 3D missions; both reset to neutral in `GLRenderer.begin`); the 2D hull shadows are the software fallback. `missions/m1/draw3d._gait(key, x, y, angle, lean)` is the shared top-down leg pose (phase from ground distance via `_motion`'s 4-slot cache, breathing idle via `m6world3d.life_pose`, stride blended over `engine3d.pose_run`); `_body` (M1-M6) and the M3/M5 `_unarmed` use it.
 - `src/missions/m6/draw3d.py` (M6 2.5D for all four top-down stages - customs, no-man's-land, rail, boxcar; `_stage()` folds boxcar into rail so the handoff frame reuses the rail atlas. The post-train yard fight is the separate `yard3d` 3D host): `render_world` -> `_decode` -> `_cast_mask` -> `_shaded_floor` -> `_light`. The CPU per-pixel passes scale with `Cam.res` (1000x700 is 2.4x the 640x448 they were built at), so they work only on `nf`, the flat indices of pixels the GL pass touched (~30% of the frame): `_decode` returns `(nf, lin, other)` with `lin`/`other` per `nf` pixel, `_shaded_floor(buf, floor2, nf, where)` and `_light(..., nf, lin, ...)` take them; bare floor is one `np.take` of the lit crop. All gathers/scatters use packed uint32 1-D arrays (no `(N, 3)` channel views). Output is bit-exact to the full-frame version (in-process A/B on the same buffer).
-- Perf pass 2 (2.5D frame cost, output bit-identical): `gl_post.render_to` reads the final pass straight into a tight BGRX target (`_raw_bgrx(surface)`; `_FINAL_FRAG` `u_rb` flips rows and swizzles to BGR, X byte written 0 because M6 `_decode` compares whole packed pixels), and `upload_bg` writes such surfaces raw (`_BG_UPLOAD_FRAG` `u_raw`); other surfaces keep the old `tobytes` path. `GLRenderer._draw_geometry` merges the visible static runs once per frame into `_static_runs` (reset in `_render_into_fbo`) for both sun and main passes. The physical-depth readback in `_render`/`flush_to` converts f16 to u8 through a 65536-entry LUT (`gl._phys8`). `night_fx.ground_pool_sprite` clears `_POOLS` only past 192 entries AND 128 MB (flickering lamps used to rebuild ~260 radii every few frames). M6 `draw3d`: `_lin` returns native `intp` index maps (int32 indices are converted on every gather), and `_decode`/`_light` run their per-`nf` work in `_CHUNK` (16384) slices via `_decode_part`/`_light_part` with in-place temporaries (whole-frame temporaries ran ~2x slower).
-- Perf pass 1 (shared hot paths): `GLRenderer._composite` now takes a per-point `fn.draw_depth(sx, sy, scale, z, occ_depth, limit)` path (set by `m7world3d.sparks`, `m5fx3d.sparks`) instead of copying 500x500 px boxes, and uses one reusable full-frame `_comp_buf` for RGB (plus one-shot scratch buffers for the alpha path); `_draw_scaled` uses full-frame `_light_tmp_s`/`_light_mask_s` subsurfaces instead of unbounded `(w,h)` dicts; `flush` reads GPU depth only when items need it (short-range phys8 lights do not); `add_humanoid` reuses `_bones_buf`. `Humanoid.pose_world` prunes grounded parts by an exact per-part radius bound (`_part_r`) and iterates `reversed(places)`. `SoftwareRenderer._blob_cache` is an LRU (cap 96, keeps `base`) with inlined per-face normal math; fire/smoke caches in `m7world3d`, `m6fx3d`, `m5fx3d`, `entities.weapons`, `engine.lighting.buffer`, `game.topdown3d` and `m1/grade3d` are bounded LRUs (no destructive `.clear()` wipes). `m7world3d._unit_flame`/`_emit_flame_packed` cache flame templates and reuse GL packed transforms; smokes cache a base 40x40 puff and quantise radius/alpha; `m7/raid3d._draw_tank` dropped redundant smoke columns and quantised glow/haze arguments; `m2/draw3d._draw_blast` clamps its fireball halo to `max_px=180`; `m6world3d.flake_sprite` declares `draw.bounds`; `engine.lighting.buffer.composite` reuses full-size upscale buffers.
-- Perf pass 2 (remaining subsystems): `engine/collision/mesh.py` precomputes `(a, e1, e2, y_min, y_max)` per triangle, clips the ray to the mesh's local 3D AABB (`_ray_aabb_span`) and skips triangles outside the ray/body Y band; `_span_candidates` returns a tuple for single-cell hits instead of allocating a `set`. `m1/draw3d` evicts the oldest 128 `_FLAMES`/`_POOLS`/`_POOL_WORLD` entries instead of `.clear()` at 512; `m3/draw3d._draw_fx` culls fire zones beyond ±26/±22 m of the camera; `m6/train3d` caches the fade veil surface and reuses the joints returned by `r.add_humanoid` for dead guards instead of a second `hum.pose_world()`. The remaining 2.5D/3D scenes inherit these gains plus pass 1.
+- 2.5D/3D perf invariants: GPU post uses a BGRX fast readback for M6 `_decode` and raw `upload_bg`; static runs merge once/frame into `_static_runs`; depth f16->u8 uses a 65536-entry LUT (`gl._phys8`). GL `_composite` has a per-point `fn.draw_depth` path (fire/sparks set `phys_occ`), reuses `_comp_buf`/`_bones_buf`, and reads GPU depth only when items need it. All caches are bounded LRUs (never destructive `.clear()`): `_POOLS` (192 entries AND 128 MB), `_FLAMES`/`_POOLS` in `m1/draw3d` (evict oldest 128), `_blob_cache` (96). `m6/draw3d` works only on `nf` (GL-touched pixels), bit-exact to the full frame; `engine/collision/mesh.py` precomputes triangle edges and clips rays to a local AABB.
 - Fire system (`cutscenes/fire3d.py`) — one procedural source for all fire: `emit_fire`/`emit_wall_fire` for 3D (`m7world3d.fire`/`wall_fire`, `oil_rig_3d`, `walking_attack3d`, `m8/revenge/trap3d` blasts/truck fires) and 2.5D (`m1/draw3d._fire` with `tilt_25d=True`, called by M1–M6 `draw3d`); `ember_bed_sprite` replaces `_fuel_pool_at` across M1–M6; `emit_smoke`/`smoke_puff_surface` replace the old polygon smoke; `_soft_halo` is reused by M6's `_m6_fire_grad`. Flames carry `phys_occ=True`/`draw_depth` so `GLRenderer._composite` does per-pixel physical-depth occlusion instead of the light-anchor kill; `grade3d.apply` handles the new `("fire", pos, col, rad, k)` tuple (warm amber spill into the lightmap, cream core, two bloom passes) so multiply-grading no longer crushes fire, and M6 `_light` bakes warm fire spill directly. M4/M5 burning-car/tram flashes also emit `fire` grade lights.
-- GPU Phase 1 (HDR/MRT pipeline): `GLRenderer` owns an RGBA16F colour + `f_aux` (view normals/material slot) + `f_pdepth` (physical metres) MRT FBO. `gl_sprites.SkyPass` renders horizon-locked GPU skies/stars/clouds; `SpriteBatch` batches halo/shaft/blob quads and line quads into the FBO, gated by `fn._gl_spec`/`fn._gl_surf`/`fn._gl_lines` (CPU callbacks still go through `_composite`). `gl_post.PostPipeline` runs HDR bloom, the `grade3d` lightmap as GPU quads, LUT/vignette/grain/Bayer dither and crisp upscale, then does ONE readback. Hosts use `flush_to`/`present_to` (M1/M5 2.5D + M6 train/yard + M7 raid + M8 set/chase/mansion); software keeps the legacy `flush` path. `set_sky(spec)` is a no-op stub on software. depth clear writes a fullscreen quad at `gl_FragDepth = 1.0` with `depth_func="1"` (falls back to `">="`, since `"always"` raises SystemError in this moderngl build); color/depth masks are explicitly restored around every MRT sky/bg/post pass. `GLRenderer.resize` must use `self.ctx.NEAREST`; `_split_items` handles `lines` items as `(segs, layer, depth_test)`. `m6world3d.rend(w, h, hdr=True)` now sets `hdr` per call instead of latching it on the cached renderer; M1/M5 request `hdr=True`, M2/M3/M4/M6/walk3d/arena request `False` and restore the prior value in `finally` — HDR leaks would corrupt the keyed colours `K_TOP..K_PTOP` and stop M6 2.5D `_decode()` from swapping in wall/roof/container textures. M6 additionally clears `dither`/`ps1_snap` for the same reason. GPU skies require `buf is r.surface`: `m7world3d.stage` passes `r.surface` on GL, `m8/revenge/chase_set.frame` uses `night_sky(gpu=False)` + `stratus` for dawn, and `night_sky` clears a stale sky with `set_sky(None)` on non-GPU GL calls. Blob shadows carry a GPU `_gl_spec` so `flush_to` stays on the fast path; the M6 reticle applies alpha via `BLEND_RGBA_MULT` (pygame ignores `set_alpha()` in `image.tobytes`).
+- GPU pipeline invariants: `GLRenderer` MRT FBO (RGBA16F colour + `f_aux` view-normal/material + `f_pdepth` metres); `gl_sprites.SkyPass`/`SpriteBatch` + `gl_post.PostPipeline` -> ONE readback, hosts use `flush_to`/`present_to`, software keeps `flush`. `m6world3d.rend(w, h, hdr=...)` scopes HDR per call: M1/M5 True, M2/M3/M4/M6/walk3d/arena False (M6 also clears `dither`/`ps1_snap`) - leaking HDR corrupts `K_TOP..K_PTOP` and stops M6 `_decode()` swapping in wall/roof/container textures. GPU skies need `buf is r.surface`; depth clear uses `depth_func="1"` (fallback `">="`); `_run_bloom` MUST sample the previous level's result, never its own `ta` (the pink Print Works bug).
 - GPU bloom chain (`engine3d/gl_post.py:_run_bloom`): the bright pass fills level 0's `ta`; each level's horizontal blur MUST sample the previous level's result (`src_tex`), never that level's own `ta` (the vertical-blur write target, uninitialised on the first frame). Reading `ta` for levels >= 1 leaks whatever GPU memory the f2 texture was allocated over — after an m5x 3D cutscene that is magenta frame data, so M5 Print Works rendered as a pink rainbow. Level 0 happened to work because `ta == src_tex`. Only hosts that actually apply bloom (print works; quarter forces `bloom=0.0` when CPU items exist) were affected.
-- GPU visual upgrade bundle (2026-11-18): five coordinated additions to `engine3d` and its hosts. (1) **SSAO**: `gl_post.PostPipeline.apply_atmos` runs a half-res hemisphere pass from `f_pdepth` + `f_aux` with a bilateral depth/normal blur (`_SSAO_FRAG`/`_SSAO_BLUR_FRAG`), skipped on emissives (`f_aux.a > 0.90`) and softened on rigs (`mat_id` 0.75); `quality_3d >= 1`. (2) **64 tiled local lights + 2 spot-shadow maps**: `GLRenderer._upload_lights` packs up to 64 lights into a `(64,4)` RGBA32F data texture (`u_pl_tex`) with a CPU 12x8 screen-tile bitmask (`u_tile_mask`, 4x16-bit ints/tile); the world fragment shader walks the bitmask for both dynamic and baked faces. `_select_spot_shadows`/`_build_spot_uniforms`/`_spot_pass` render up to two 512x512 2x2-PCF perspective depth maps (`spot_shadows`, 1 at quality 1, 0 at quality 0) for flashlight/searchlight/headlight/downward lamps. `SoftwareRenderer.light_cap` is now 64 with set_lights cap=64. (3) **HDR unification**: M2/M3/M4/Walk3D join M1/M5 on `hdr=True` + GPU `flush_to` + `grade3d` post (all keep their software `flush`/`grade3d.apply` fallback). M6's 2.5D port uploads three extra textures (`u_extra0..2` via `GLRenderer.set_extra_textures`, faces carrying `("uv", slot, uvs)` as face element 7 -> `v_tex < -1.5`, `in_uv` used directly) and does GPU `grade3d` + `char_lift`, removing the per-frame CPU `_decode`/`_light` readbacks on GL; `m6/draw3d._gl_atlas/_uv_box/_floor_quad_mesh/_gl_fx/_gl_grade_lights/_gl_local_lights` own that path, software still uses the original painter. (4) **Wet reflections + height fog**: `textures.reflectivity()` feeds `f_aux.a` material tags; `gl_post._ATMOS_FRAG` does a 12-step screen-space reflection raymarch plus 64-light analytic specular and procedural rain-rippled puddles, and mixes an exponential world-height ground mist (`r.height_fog = (density, base_y, falloff, colour)`). M8 Mansion sets `r.marble_refl` for its indoor marble hall. (5) **Instanced particles/decals**: new `engine3d/particles.py` (`ParticlePool` / `DecalPool`, vectorized NumPy simulation, `pack_dots` / `pack_blood_decals`), drawn by `gl_sprites.ParticlePass` / `DecalPass` with hardware instancing + `u_pdepth` soft depth-fade (sparks velocity-stretched, casings spin); `SoftwareRenderer.add_particles`/`add_decals` + `_emit_fallback_fx` keep the 2D sprites. Adopters: `topdown3d.dots`, M1-M5 blood decals, M6 yard, M7 raid, M8 trap/mansion. `GLRenderer.begin()` and `SoftwareRenderer.begin()` reset `wetness`/`marble_refl`/`height_fog`/`_particles`/`_decals`/`_spot_active` every frame so state never leaks between scenes sharing `m6world3d.rend()`.
-- Animation/collision kernels (2026-11-18, Phases 1-2), all inside `src/engine/` with zero engine3d/pygame/game imports (boundary E3): `engine/anim/springs.py` gives analytical, unconditionally stable `Spring`/`AngleSpring`/`Spring3`/`TurnLagTracker`; `engine/anim/rig3d.py` adds bone-key sets (`LOWER_BODY_KEYS` etc.), `blend_poses`/`add_pose`/`mask_pose`, velocity-coupled `locomotion_pose`, `FootIKSolver` (smoothed stair sampling -> world foot targets + direct joint deltas) and `LayeredAnimState` (lower-body gait independent of upper-body reload/radio/melee/swap/flinch + spring recoil/cam-punch/flinch/breath). `engine/collision/nav.py` keeps `GridNav` and adds `MultiFloorNav` + `NavLink`: multi-layer `(col,row,y)` 3D A* with off-mesh links, dynamic box/circle obstacles, layer-aware string pulling. `boxes.py`/`mesh.py` gain `capsule_contacts` (outward XZ normals + penetration). `physics.py` adds `slide_capsule` (sub-stepped tangent slide + stair step_h), `DebrisPool`/`DebrisBody` and 15-node Verlet `RagdollBody` (directional/blast impulses, floor/wall collision, sleep). Ground friction in the ragdoll is applied once per step, not per constraint iteration (otherwise bodies pin at ledges). Phase 2 wiring: `cutscenes/death3d.Fall` seeds a `RagdollBody` from `Humanoid.ragdoll_nodes` and feeds its nodes back via `Humanoid.places_from_nodes` (see the ragdoll-bone bridge bullet below); M6 yard / M7 raid / M8 trap / M8 mansion deaths pass their `World.box_world` and boxes to `RagdollBody.step`. M7 `raid_world`, M8 `trap_world`/`mansion_world` replace axis-separated stepping with `slide_capsule` (Mansion keeps its 1.0 m ledge guard + 0.6 m stair step_h). `mansion_world.nav()` builds a shared `MultiFloorNav` over `FLOORS` synced to dynamic doors/cars/helicopter; `mansion_brain` routes enemies+allies across floors. `RaidScene` runs `LayeredAnimState`, `TurnLagTracker`, `FootIKSolver`+`solve_leg` and `DebrisPool`; because `TrapScene`/`MansionScene` BORROW RaidScene methods by assignment (they are not subclasses), both must also borrow `_anim_ctl = R.RaidScene._anim_ctl` or borrowed `_move`/`_player_pose`/`hp` fail with AttributeError.
-- Gait/ragdoll corrections (2026-11-18; death3d bits superseded below): `locomotion_pose` now compensates the
-  geometric leg-span shortening at sprint splits with a positive `lift` derived
-  from the cosine of hip/knee angles (walks stay planted, `lift=0`), shrinks
-  hip swing and torso `twist`, and clamps `FootIKSolver.pelvis_drop`.
-  `RaidScene`/`TrapScene` no longer gate a discontinuous `_solve_leg` snap on
-  `abs(foot_targets.l.y - r.y) > 0.03` (that fired ~70% of a flat stride).
-  `death3d._world_joints` extracts all 15 joints from `pose_world`'s `places`
-  (slots 4/7/8/10/13/14) instead of the 5 in its `joints` dict, so ragdoll link
-  rest lengths match crouching/aiming/scaled guards; `RagdollBody` adds
-  shoulder/hip/knee separation and `_RAGDOLL_MIN_DISTS` anti-origami
-  constraints, and the kill impulses are capped (push <= 1.2, <=3.8 m/s).
-  `death3d._pose_from_ragdoll` reconstructs `(pose, yaw)` from the full rig
-  basis (no canned body_p/body_r blending, no pre-leg `solve_arm`), and
-  `Fall.at` blends it in from 0.04s and rests at `land + 2.5s`.
-- Gait strength / rifle-up / ragdoll ledge pass (2026-11-18; death3d bits superseded below): `locomotion_pose`
-  restores a 26-34 deg thigh swing and 52-80 deg knee drive, powers `l_lift`
-  by 1.15, broadens the `lift` bridge to walks (`target_h = 0.858 + ...`), and
-  adds a subtle stride-coupled `spine_r`. `YardScene` now runs `LayeredAnimState`
-  (`_anim_ctl`, reset in `restart`, updated in `_move`, composed in `_draw_player`).
-  `RaidScene._guard_pose` (borrowed by M8 Trap/Mansion) and `YardScene._guard_pose`
-  put `mask_pose(lower, upper)` under a live aim stance; `_hold_cached` now runs
-  for moving guards too (`rifle_p` flinch no longer gated on `not moving`) so
-  enemies keep their rifles up while running. `RagdollBody` adds max-spread
-  constraints for knee/foot pairs and rest nodes ON TOP of boxes (`p[1] >= box_top
-  - 0.05`) rather than being blasted sideways off pillars; `World.ragdoll_boxes()`
-  supplies the M8 catwalk deck + guardrails to the sniper's death. `Fall`
-  anchors the rendered root to the ragdoll pelvis (`pel[1] - pose_world root[1]`),
-  relaxes ankles by face-up/face-down, caps hip spread, and varies impulses per
-  slot (shoulder/knee/pelvis asymmetry) so falls do not repeat.
-- Physical-stride walking upgrade (2026-11-19, gait revised 2026-11-19; cadence, `_leg_swing`
-  and lift-target bits superseded by the anti-moonwalk pass below): phase tracks
-  ground distance in every locomotion path. `engine/anim/rig3d.py` `_cycle_len` is now a
-  grounded tactical cadence - 1.55 m crouched, else 2.15 m walk -> 2.60 m sprint - exposed
-  publicly as `gait_cycle_m(speed, sprint, crouch)` for scenes that convert accumulated
-  metres to phase; `LayeredAnimState.update` advances `stride_phase` by
-  `speed*dt/cycle_m * tau * (stride_gain/2)`. `_leg_swing` replaces the old piecewise
-  `_leg_cycle`: a C-infinity harmonic stride `(sin(ph) + 0.14*sin(2*ph))/1.14` with
-  `swing_w = 0.5 - 0.5cos(ph)`, so there are no clamp corners and no heel-strike/toe-off
-  knee snaps. `locomotion_pose` adds the planted ankle inside `[-8, +10]` deg (toe-point
-  only on top of an airborne `swing_w**1.4`, `base_ank` clamped), keeps `body_r = 0.0`
-  (the pelvic roll doubled the auto-grounder bounce), and bridges leg-span shortening with
-  one smooth `0.858 m + 0.010*sprint` target instead of per-leg stance weights.
-  `compose` still consumes `LayeredAnimState.secondary`, but its accel/brake spring is
-  deliberately gentle (3.0 Hz, zeta 0.92, ~0.13-0.16 gain) so velocity-derivative noise on
-  wall slides cannot ring the torso. `raid3d._held`/`_shotgun_hold` sync `rifle_y` to the
-  same twist delta as `rifle_p`. Fallow 12 / OS-12 have NO sprint chest-carry:
-  `apply_sprint_carry` / `_sprint_carry_hold` / `_SPRINT_HOLD_CACHE` and their warm-up
-  calls are removed from `raid3d`, `m8/revenge/trap3d` and `m8/duty/mansion3d`, so the
-  guard hold never twists the barrel mid-stride. `yard3d._gun_frame` adds stride
-  bounce for the K-9. Guards/allies drive phase from distance via `gait_cycle_m`:
-  raid/trap/mansion `gait / gait_cycle_m(3.4) * tau` (M7 rushers use their own
-  `gait_cycle_m(4.4, 0.6)`), yard accumulates `_gphase` from `step/cyc` with
-  `cyc = gait_cycle_m(spd, sprint_k)`, and Trap's catwalk move runs `LayeredAnimState`.
-  2.5D is reverted to the pre-2.5D gait: `_motion` in `m1/draw3d` and `missions/walk3d`
-  is back to the 4-slot cache `[x, y, phase, speed]` advancing by
-  `step * WALK_RAD_PER_M * sign(fwd)` (no `STATE.dt`, no smoothed fwd/side m/s), and
-  `_gait`/`_person` blend `pose_run(phase, lean)` over `m6world3d.life_pose` instead of
-  `engine.anim.locomotion_pose`. `cutscenes/m6world3d.walk` adds ankle roll and head/elbow
-  follow-through but keeps leg IK and `body_r = 0.0` so `walk_slip` stays < 1 mm;
-  `cutscenes/m7world3d.walk_pose` delegates to `locomotion_pose`.
-  The engine-anim unit test compares idle `lhip_p` to `locomotion_pose(0,0,0)` because the
-  idle stance is deliberately non-zero, and samples the whole stride (a single frame can
-  sit at a leg crossing) instead of asserting one frame's hip spread.
-- 3D anti-moonwalk gait + shotgun hip squaring (2026-11-19; 3D only, 2.5D `pose_run` untouched):
-  `rig3d._leg_swing(ph, fold, soft) -> (wave, knee, swing_w, stance_w)` folds the knee by the
-  thigh's FORWARD angular velocity (`dwave = (cos ph + 0.28 cos 2ph)/1.28`, `swing_w =
-  max(0, dwave)**1.3`), so the knee is straight at heel strike and toe-off; the old fold at
-  ph = pi bent the knee on the planted backward stroke and slid the foot forward. `wave` is
-  normalised by 1.08 (its true peak is 1.036). `soft` adds a small early-stance knee give.
-  `_cycle_len` scales with speed: `clamp(1.20 + 0.276*speed, 1.33, 2.71)` (x0.78 crouched);
-  hip amplitude `clamp(12 + 7*speed, 16, 44)`; knee fold `clamp(36 + 10*speed, 44, 96)`;
-  the staggered idle `idle_hip_p` fades by `(1 - move_k)` so both legs reach equally; lift
-  target `0.80 + 0.058*smooth((speed-1.5)/2) + 0.010*sprint` keeps walks grounded and gives
-  jog/sprint a short float at full split. Planted-foot slide (lowest shoe vertex,
-  grounded frames): 3.3 m/s 0.15 m/s mean (was 2.15), 1.9 m/s 0.79, sprint 0.24.
-  Unit test `test_knee_folds_on_forward_swing_not_planted_stroke` guards it.
-  Fallow 12 hold, hips square (same day): `raid3d.SG_BLADE_YAW, SG_TWIST = 0.0, 50.0`
-  (was 35 + 10 with the whole root bladed), `SG_HEAD_Y = -(blade + twist)`. Legs and hips
-  face the crosshair; only the shoulders blade. The rig's 0.61 m arms (`ik.UARM + FARM`)
-  cannot reach the pump square-on without the stock entering the vest, so
-  `raid3d._sg_reach(hum, base, O, R)` alternately slides the gun toward the left shoulder
-  until the pump target `O + R*(0, 0.025, PUMP_REST_Z + PUMP_GRIP)` is within
-  `(UARM + FARM - 0.01) * scale`, and forward along the torso (bisection) until no stock
-  point (`_SG_STOCK_Z`, butt -0.40 to grip) is moved by `hold.push_out(margin 0.01)`; then
-  re-solves the right arm. Called in `_sg_holds` (after the aim re-solve) and
-  `_sg_reload_keys`; reload head turns are `SG_HEAD_Y + 26/34/30` (were absolute
-  -19/-11/-15). Measured: stock clear of torso/chest/head in ready/aim/rack, hand gaps
-  0-0.8 cm, bore on the crosshair, arm clash 1.2 cm in aim. Note `hold_report` only samples
-  the barrel ahead of the grip, not the stock. No walk hip-squaring remains: trap3d /
-  mansion3d shotgun branches use `draw_yaw = self.body_yaw + R.SG_BLADE_YAW` (the swap
-  branch keeps `* blade_k`, a no-op at 0).
-- M4 station foyer sealed (2026-11-18): `m4/maps.FOYER` shrinks from (35,18,3,3)
-  to (35,18,3,2) - rows 18..19 only - so row 20 of `STATION_BLOCK` (34,14,5,7)
-  stays solid "C" with colonnade windows. The old 3-row foyer carved walkable
-  "F" through the station's south wall at cols 35..37; the only way in is now
-  the gold door at (34,19).
-- M4 human-scale buildings + enterable Corner Alimentara (2026-11-18):
-  `m4/draw3d.py` `_height` gives city blocks `2.7 + 2.2*(storeys-1)` m
-  (7.1/9.3/11.5 m for 3-5 storeys, station 8.2 m); `_windows` uses 2.2 m upper
-  spacing from 3.85 m with a 1.45 m first row and a 1.70 m storefront shutter,
-  so 3.5 m streetlamps sit at first-floor height. `_cut_zone_for`/`_cut` scale
-  the south cutaway reach with wall height; `_draw_openings` tints lintels per
-  block style. `maps.py` shrinks `blk_s7` to one row and expands `deep_g` to
-  (35,34,4,5): `CORNER_SHOP_DOOR=(35,36)` with two `"D"` tiles at (35,36)/(35,37)
-  = a 3.2 m rolling shutter, `CORNER_SHOP_RECT=(36,35,3,4)` (4.8x6.4 m),
-  `CORNER_SHOP_COUNTER_TILE=(37,35)`, and a "d" apron on row 33 / col 34.
-  `world._shop_counter_pos` + shallow counter and east-crate colliders. `flow`
-  gates loot on `_in_corner_shop()` AND `_near(..., 96)` - distance alone let
-  you loot through the north wall - and adds sfx/menu-click/FX burst,
-  `m4_shop_visited`/`m4_shop_looted` and Vasile's line. `draw3d` splits the shop
-  into a static `_corner_shop` shell and per-frame `_draw_corner_shop_anim`
-  (rolling shutter, stuttering NON-STOP neon, wall-mounted oscillating fan with
-  guard cage + radial 4-blade propeller, swaying pendant,
-  glowing cooler, flickering CRT, rising kettle steam, wagging/blinking shop cat,
-  mag pickup); `_shop_cut_active` opens the front walls from the sidewalk, and
-  animated pieces use `_put(..., static=False)`. The "E - SEARCH COUNTER" tag and
-  `draw._draw_m4_corner_shop_2d` are inside-only / 3x4; rain treats "F" as dry.
-  Data: `ae_level_export` + `ae_bake --pack m4` regenerate `levels/m4.street`
-  and `assets/baked/m4/`.
-- M6 sealed border doors (2026-11-18): perimeter `"D"` tiles (customs (15,0),
-  no-man's-land (20,0) and (20,17)) were not in `M6_SOLID_CHARS`, and
-  `Player.move` does not clamp to the map rect, so the player could walk out
-  through a border door. `m6/world._is_border_door(grid, col, row)` detects a
-  `"D"` on row 0 / `h-1` / col 0 / `w-1`; `_floor_at` rejects it and
-  `_parse_grid` adds a wall Rect for it, while interior `"D"` doors stay
-  walkable. Regression `test_border_doors_block_leaving_the_map` walks into each
-  of the three gates and asserts the player stops inside, then checks an
-  interior customs floor tile is still walkable.
-- M6 2.5D texture loading + all-stage gate (2026-11-18): `m6/draw3d._uv_box`/
-  `_floor_quad_mesh` emit 7-element faces with an `("uv", slot, uvs)` tail, but
-  `topdown3d.put` rebuilt them as 6-tuples and dropped that payload, so every GL
-  `pack`ed floor/wall/prop face carried `f_tex = -1.0` and rendered flat white.
-  `put` now forwards `*f[5:]` in BOTH its software and GL branches; `Mesh.add`
-  preserves arbitrary face tails; `gl._pack_faces` accepts the UV tag at element
-  6 or 7 (raw mesh vs put's shifted face) and keeps `fb` distinct from the tag;
-  FRAG's `eslot` threshold moved -1.5 -> -1.25 to avoid float truncation at .5.
-  `m6/draw3d._gl_atlas` pads shelf width to 4 bytes, leaves a 1 px gutter between
-  props and uses a 0.01 UV inset to kill edge bleed. `m6/draw._td3d_gate` enables
-  2.5D for all four top-down stages; `ACA_M6_RAIL_25D=0` opts rail back to 2D.
-  Tests: gate test updated + `test_topdown_put_preserves_m6_uv_slots` asserts
-  slots -2/-3 survive `put`/`pack` (packed column 20).
-- Corpse-lies-flat pass (2026-11-18; superseded below): `death3d._pose_from_ragdoll` now derives the
-  knee angle as a SIGNED bend by projecting the shin onto the thigh's bend plane
-  (`Tt = _transpose(m_mul(rot_z(hip_r*sx), rot_x(-hip_p)))`, then
-  `atan2(-f_t[2], -f_t[1])`, clamped 4..120) instead of unsigned `acos(dot(u,f))`.
-  The rig has no hip_y, so a flat sideways leg used to read as +90 deg of downward
-  knee bend, sinking the shins ~0.45 m and tent-poling the torso up on its toes.
-  The gimbal blend moved to `_s(0.95, 0.995, abs(fwd[1]))` (tightened to
-  `_s(0.985, 0.998, ...)`, then superseded by the geometry pass below) so pitched/side
-  falls keep `body_r` longer, and the track-1 knee impulse became `(px*0.9,
-  -0.25, pz*0.9)` (later `px*0.6, -0.20`) - no upward jack-knife. `Fall.at` adds a lying-flat relaxation: once
-  `blend_rag > 0.45` with pelvis+chest within 0.28 m of `fl` and no ledge
-  (`min_node_y >= fl - 0.12`), it retries the pose with knees/hips/shoulders/
-  ankles scaled 0.55 -> 0.25 -> 0.0 toward rest until `pose_world(...)[2][1]
-  <= 0.20`, so `Humanoid.build()`'s auto-grounding cannot prop the corpse up;
-  `pel_y`'s floor bias tightened to `min_node_y - 0.04`.
-- Ragdoll sliding/rolling regression fix (2026-11-18; death3d bits superseded, physics.py retained): three interacting causes.
-  (1) `RagdollBody.step` latched ground friction only when `on_surf` was still
-  true on the LAST constraint iteration: iteration 0 clamped `p[1] = fl`, later
-  link passes left `p[1] >= fl` (often `fl + 3e-6` m), so `p[1] < fl` was False
-  on the final pass, `on_surf` was never set and landed bodies got zero ground
-  friction and never slept (lhand kept orbiting at 0.45 m/s at t=3s). Friction
-  now collects a per-step `surf_hit` set from floor/box-top contacts plus a
-  `p[1] <= surf_y + 0.005` rest check, and applies ONCE after the iteration
-  loop with `k_f = 0.58 ** (h*60.0)`; `grounded` uses the same set.
-  (2) `_limit_joints()` ran 5x/step while `_grounded < 7` and shifted single
-  child joints (ek, kk, fk) with no equal-and-opposite reaction on the parent
-  and no `prev` velocity compensation - a reactionless motor that catapulted
-  grounded legs (measured 5.59 m/s, 4.71 m slide, 180 deg roll/spin). Removed
-  it with `_shift`/`_RAGDOLL_LEGS`/`_LIMIT_STEP`/`_LANDED_NODES`; valid rig
-  limits come from `_pose_from_ragdoll` and `_RAGDOLL_MIN_DISTS`/
-  `_RAGDOLL_MAX_DISTS`, which inject no momentum.
-  (3) `death3d` track 1/2 applied up to 4.0-4.5 m/s to one shoulder (lsh/rsh),
-  flipping back-falls onto the face, and `g = _s(0.95, 0.995, |fwd[1]|)` zeroed
-  `body_r` from 71.8 deg pitch, lifting the upper torso during side rolls.
-  The gimbal blend became `_s(0.985, 0.998, abs(fwd[1]))` and track 1 hit `chest`
-  at 2.2 m/s with `lat = 0.35 + 0.15*(var//2)` and knee `(0.6, -0.20, 0.6)`,
-  track 2 used `side_sign * 1.1` at 1.5 m/s with spread 0.55, tracks 3/0 used
-  `fwd_k` 0.9/1.3 at -0.85 with a `(0.6, 0.45)` pelvis counter-impulse - all
-  REFINED by the geometry pass below. Still current: a corpse cannot latch
-  mid-air (`Fall.at` rest also needs `a >= self.land + 0.5`).
-- Death-fall geometry pass (2026-11-18; superseded below): four `Fall` -> `pose_world` defects.
-  (1) Auto-grounding lift: `Humanoid.build`/`pose_world` shifts `pos[1]` by
-  `-miny`, so a clamped inward thigh (`hip_r` floor -12 deg) or knees/hips
-  relaxed toward 0 under pitch `body_p` put a limb -0.50..-0.89 m below the
-  pelvis, and `max(min_node_y - 0.04, pel[1] - root_0[1])` launched corpses
-  0.5-0.75 m into the air. `Fall.at` now sets `clear = pel[1] - min_node_y +
-  0.04` and binary-searches 7 steps over `safe_vals` (knees 6, hips/shoulders
-  solved in the `body_p` plane and damped by `side_k`, hip_r/sh_r 0/15,
-  elbows 12, ankles 0) for the largest blend with `pose_world(...)[2][1] <=
-  clear`, falling back to `lo` at full clamping.
-  (2) Forward lunge/rubber-band: `rx_anim`/`rz_anim` added `self.push * k` in
-  the first 0.15 s while `blend_rag` snapped the root back to the ragdoll
-  pelvis; the push term is gone and `blend_rag` is now 0.06..0.30 s.
-  (3) Spine Z-bias / 180 deg gimbal: rig.py's `joints["chest"] = (0, 0.36,
-  +0.08)` biased `up` forward 12.5 deg and `asin(-fwd[1])` + `atan2(right[1],
-  up[1])` flipped yaw/body_r ~180 deg when `up[1]` dipped below 0. `up` now
-  uses pelvis -> mid-shoulder; `yaw_g`/`body_p_g`/`roll_g` are solved from
-  `(uh, up[1], right[1])` with a fwd[1] sign, the blend is
-  `g = _s(0.80, 0.94, |fwd[1]|) * (1 - _s(0.55, 0.85, |right[1]|))` and
-  `body_r` is `_wrap`ped. Shoulder/hip pitch is re-solved in the clamped roll
-  plane (`rot_z` transpose) so a clamped roll cannot drop a limb through the
-  floor.
-  (4) All-fours tenting / upright sitting: forward falls pinned feet under
-  friction, knees folded under the belly (`("chest", "lkn", 0.44)` held the
-  pelvis at 0.48 m for ~1 s) and legs crossed past the opposite hip.
-  `physics._RAGDOLL_MIN_DISTS` gains cross-hip `("rhip", "lkn", 0.40)` /
-  `("lhip", "rkn", 0.40)`; impulses now hit chest+head (2.6/2.0 back,
-  1.3+side spin) with a 0.20-0.30 spread, and tracks 0/3 add downward
-  chest/head plus upward knee (0.40) and foot (0.60) counter-impulses so the
-  legs trail instead of pinning.
-- Authored-fall rewrite (2026-11-18; itself SUPERSEDED by the ragdoll-bone bridge below):
-  inverting 15 loose Verlet nodes through Humanoid's Euler hierarchy plus
-  `build()`'s auto-grounding kept propping bodies up (body_p -30..-52 deg with
-  lhip_p 0 / lkn 6 whenever body_r crossed the side_k threshold or limbs
-  clamped). `cutscenes/death3d.py` no longer imports `RagdollBody`: the
-  ragdoll, `_world_joints`, `_pose_from_ragdoll`, `_vnorm`/`_vcross`/
-  `_transpose`/`_wrap` and `_NODE_RADII` are all removed. `Fall` returns to the
-  authored `death_pose` + `_flop` rebound with per-slot variation (`_var` from
-  `(slot*37)%7`: yaw jitter, head_y, shoulder roll, elbow bends, and a
-  track-1 hip/knee lift for var 1/4). Root XZ is advanced by `_ankles` change
-  + clamped push (<=0.75 m) + blast velocity, then resolved with
-  `engine.collision.slide_capsule` against `box_world`/`extra_boxes`; a second
-  pair of capsule calls keeps the chest joint out of walls after the tip.
-  `blast` sets a bounded radial throw (bvx/bvz <=4.8 m/s, vy 1.4..3.8) and
-  zeroes `push`. Gravity works off ledges via `floor(*self.chest)`, with a
-  0.16 vertical restitution and exponential damping of blast velocity on
-  ground contact; `rest` latches only after `land + 0.55 s` with the body on
-  the floor and both velocities near zero. `physics.py` keeps its RagdollBody
-  fixes unchanged (other callers may still use it).
-- Ragdoll-bone bridge (2026-11-18; extended by later bullets below): no
-  mission caller changed - all four scenes (`m6/yard3d.py`, `m7/raid3d.py`,
-  `m8/revenge/trap3d.py`, `m8/duty/mansion3d.py`) still call
-  `death3d.Fall(...)` and `m6world3d.actor` / `r.add_humanoid`.
-  (1) `engine/collision/physics.py`: `RagdollBody._apply_anatomical_limits()`
-  projects knees onto a 1-DOF backward hinge plane (lateral 0.45, forward
-  knee correction 0.60/0.40) and stops elbows snapping past straight, using
-  momentum-balanced pair moves; called once per constraint iteration in
-  `step()`. No public signature changes.
-  (2) `engine3d/rig.py`: new module helpers `_basis_xy(x_hint, y_vec)` and
-  `_col_x(M)`; `Humanoid.ragdoll_nodes(pose, pos, yaw)` extracts the exact 15
-  world nodes from `_placements` (mid-shoulder torso, skull-centre head, no
-  chest Z bias); `Humanoid.places_from_nodes(nodes, floor_y=None)` builds
-  orthonormal 3x3 slot matrices and socket-continuous world origins directly
-  from `RagdollBody.pos`, preserving `_scale`, `PART_FB` decal biases and
-  boot-vs-floor pitch clamping. `pose_world`/`build` accept a precomputed
-  `{"_places": ..., "_joints": ...}` pose and bypass `_placements` AND the
-  `-miny` auto-grounding shift (GL skinning root becomes `(0,0,0)`, so bone
-  origins are already world-space).
-  (3) `cutscenes/death3d.py`: `Fall` seeds `RagdollBody(hum.ragdoll_nodes(...))`,
-  optionally depenetrates against walls/crates at zero velocity (prev reset),
-  applies directional track impulses and bounded blast throws, sub-steps
-  `rag.step(h<=1/60, floor_fn, box_world, boxes, iters=6)`, tracks
-  `fall.chest` for ammo drops and caches `rest` as a `_places` pose; `at()`
-  returns `(pose, (pelvis.x, floor, pelvis.z), yaw0)` and re-floors the cached
-  root each frame. `life_pose` still layers on top in `m6world3d.actor`.
-- Active-ragdoll muscle tone (2026-11-18; extended by the hit-context bullet below):
-  a pure Verlet ragdoll loses all tone on frame 1, so `death3d.Fall` now runs a
-  damped PD spring toward an authored reaction before releasing into collapse.
-  (1) `RagdollBody.step` ground rebound weakened from 0.12 to 0.04 and `Fall`
-  uses `RagdollBody(nodes, drag=0.962)` so limbs thud and drape rather than
-  bounce; blast kills (`_is_blast`) skip active tone entirely.
-  (2) `_active_pose(a)` returns the authored pose + target yaw and separate
-  upper/lower tone envelopes: track 1 `_STAGGER` arms/head snap (ut 0.08-0.30,
-  lt 0.02-0.20), track 2 `_CLUTCH` chest grab + 65 deg side spin (ut 0.10-0.36,
-  lt 0.02-0.22), track 3 `_KNEEL` with a 7 deg sinusoidal wobble and 12 deg yaw
-  (ut 0.32-0.54, lt 0.36-0.56), track 0 `_BUCKLE` (ut 0.06-0.28, lt 0.02-0.20).
-  (3) `_apply_muscle_tone(h, a, floor)` targets nodes relative to the pelvis
-  (`hum.ragdoll_nodes(p_auth, (0,0,0), yaw_tgt)`), applies `k=stiff*tone`
-  (260 upper / 240 lower) and `d=28*tone` via `prev[i] -= dv*h` (clamped 0.45),
-  and gives the pelvis a 220/26 spring only when a foot or knee is within
-  0.18 m of the floor - a guard pushed off a truck bed or catwalk loses
-  support immediately. Track 3 fires a one-shot topple impulse at a >= 0.38 s.
-  Called once per sub-step before `rag.step` in `Fall.at`.
-- Hit-context death upgrade (2026-11-18, LATEST): authored reactions are chosen
-  from the lethal hit, not just the track. `physics.py`: rigid chest/head/
-  hip-to-shoulder weld edges replaced by `_RAGDOLL_SOFT_LINKS` range constraints
-  (scaled by pelvis-chest distance) so the neck whips and the spine curls;
-  `_apply_anatomical_limits()` adds hip splay/hyperextension, shoulder
-  rear/cross-chest cones, ribcage ellipsoid pushout and a neck cone; `step()`
-  tracks `wall_nodes`, `support_y` and `wall_contact` and applies vertical /
-  tangential slump friction once grounded (rebound 0.04).
-  `rig.py`: `places_from_nodes(nodes, floor_y=None, head_yaw=0.0, rifle_m=None)`
-  turns the head along the neck axis and can add an active rifle slot;
-  `pose_world()` drops the rifle slot when `rifle_on=False` (GL/software parity).
-  `m6world3d.life_pose` returns `_places` poses unchanged (no breath copy).
-  `death3d.Fall` takes `is_head/hit_zone/hit_pos/hit_ray/weapon/dmg/overkill/
-  hit_dist`: headshots cut tone at ~0.03 s and whip the head along the ray;
-  point-blank shotgun / overkill punch the chest/gut with a lateral shoulder
-  torque; gut/leg/melee pick `_GUT_FOLD`/mirrored `_CLUTCH`/`_STAGGER`/
-  `_BUCKLE`/`_KNEEL`; planted-foot anchor + catch-step, free-arm bracing and
-  asymmetric landing relaxation, wall-slump chin droop and secondary head turn.
-  A dropped rifle is a rigid body with AABB/floor collision and flat settling,
-  drawn via `fall.draw_gun(r)`; `fall.expression` feeds `m6world3d.actor`.
-  Callers: yard3d/raid3d/trap3d/mansion3d build `hit_ctx` in `_hurt_guard`/
-  `hurt_enemy` (including shotgun pellet fans and blast kills), pass
-  `death_ctx` into `Fall`, `fall.rifle_on`, `fall.expression`, `draw_gun(r)`,
-  and new `World.ragdoll_boxes()` expose dynamic props/trucks/cars; mansion3d
-  tracks vertical floor fallback for gallery/portico falls.
-  NOTE (headless probe, 2026-11-18; RESOLVED by the settle/launch fix below):
-  the single-node constraint pushes in `_apply_anatomical_limits()` were not
-  `prev`-compensated and injected momentum: with realistic push 0.3 the settled
-  root drifted 2.5 m over 5 s (5.8 m with push 1.0; 0.67 m with zero push);
-  disabling that method at runtime dropped drift to 0.003-0.25 m.
-- Ragdoll settle/launch fix (2026-11-18; LATEST): headless probes isolated four
-  interacting causes and all are fixed without changing any public signature
-  or call chain. (1) `death3d.Fall.__init__` depenetration with `box_world`
-  ran `rag.step(1e-4)` but left `rag._h = 1e-4` while resetting `prev`, so the
-  first tone spring (h=1/60) was scaled by `h/_h = 166.67x` and headshots flew
-  8.1 m at 98 m/s; it now restores `rag._h = MAX_SUBSTEP` after the reset.
-  (2) Leg hits no longer prop the body: knee/pelvis/chest impulses are reduced
-  and spread, planted-foot/catch-step/pelvis bracing is skipped for leg hits,
-  and the free-arm brace is applied before pose tone with those arm nodes
-  excluded from it (`braced_nodes`). Tone prev offsets use `rag._h`, not the
-  caller's `h`. (3) `physics.RagdollBody` now has a carried-velocity cap
-  (`_MAX_NODE_V`), a lower solver-rebound cap once grounded and slow
-  (`_MAX_REST_SOLVER_V`), `strength`-scaled anatomical limits damped to 0.25
-  while resting, `sy_c`-balanced hip corrections, and `head` min-dists tightened
-  so the neck cone stops shifting the head at rest. (4) Rest damping and sleep
-  now use actual post-solver displacement (`actual_disp2`) instead of pre-solver
-  `max_disp2`, with `_REST_GROUNDED=6`, `_SETTLE_V=0.14`, `_SETTLE_T=0.22` and
-  prev snapped to pos on sleep, so variable-dt wall/floor probes settle.
-  Regression: `tests/unit/test_engine_collision.py::test_leg_hit_ragdoll_settles_without_launch_or_jitter`.
+- GPU/wetness per-frame state: `GLRenderer.begin()` resets `char_pop`, `tex_scale`, `marble_refl` and `height_fog` to neutral; `resize` uses `self.ctx.NEAREST`; frustum culling opts out with `r.frustum_cull=False`. SSAO/SSR/height-fog live in `gl_post._ATMOS_FRAG`, 64 tiled lights + 2 spot-shadow maps in `_upload_lights`/`_spot_pass`; M8 Mansion sets `r.marble_refl` indoors (0.34) only.
+- Animation/collision invariants: `engine/anim/{springs,rig3d}.py` + `engine/collision/{nav,boxes,mesh,physics}.py` are pure (no pygame/game imports, boundary E3). `locomotion_pose` is velocity-coupled with a positive sprint-only `lift` (walks stay planted); `_leg_swing` folds the knee on the thigh's forward angular velocity; 2.5D keeps `pose_run` via `_motion`'s 4-slot `[x, y, phase, speed]` cache (no `STATE.dt`). `MultiFloorNav` caches string-pulled waypoints, static neighbours and a `_blocked` bytearray that MUST invalidate together; `slide_capsule` handles steps/ledges; ragdoll ground friction applies ONCE per step, not per constraint iteration.
+- Death/ragdoll invariants: `cutscenes/death3d.Fall` seeds `engine.collision.physics.RagdollBody` via `Humanoid.ragdoll_nodes`/`places_from_nodes` (15 world nodes, no auto-grounding shift), drives hit-context reactions with active muscle tone, and drops the rifle as a rigid body; all four 3D worlds pass `world.box_world` + `ragdoll_boxes()`. `physics.RagdollBody` caps node velocity, settles on post-solver displacement and latches rest only when grounded and slow. The four scenes call `Fall(...)` unchanged - a change there reaches every 3D death.
+- M8 Mansion nav/fragment invariants: `mansion_world.nav()` is one `MultiFloorNav` synced to doors/cars/helicopter; `mansion_brain` throttles A* behind `nav_at` and skips nav across locked doors. `_LOS_STATIC_BW` rejects static blockers in `los3d()`; short `ray_hit()` probes use `_STATIC_BW.ray()`. **Known edge case (kept verbatim):** `BoxWorld.ray()` returns the first hit, so a ray starting inside a box drops the t=0 hit - a short downward probe can return a farther hit than the legacy scan; `los3d()` itself is equivalent.
+- 3D culling invariants: `r.frustum_cull=False` opts out; GL splits baked objects >32 m/48 faces into 32 m XZ slices and culls per pass, keeps resident chunks in a 128-entry LRU, and `pack_memo_end` splits memos into 24 m chunks. `GLRenderer.add_resident()`'s LRU `live` set MUST include the just-added key (`| {key}`) or a frame queueing >128 chunks evicts the VAO it just created and crashes.
 - Cast look: owner `engine/anim/figure_kit.py` `SPECS`. `cutscenes/figure_kit.py` is a deprecated re-export (A-006). 3D cast: `cutscenes/cast3d.py` `spec3d` `humanoid3d` `weapon_asset` `rifle_asset` `ak74_asset` `third_person_rifle`.
 - Core legacy: `core/state.py` `STATE` (weapon attrs live here), `core/save_system.py`, `core/mission_meta.py` (`meta_for`, `fail_text`), `core/cutscene_registry.py` (`register_scene_renderer`, `scene_renderer`), `core/dev_jumps.py` `DEV_JUMPS`, `core/artpack.py` (sprite-sheet access).
 - 2D HUD shared: `ui/hud.py` (`THEME`, `MiniMap`, `draw_objective_panel`, `draw_pinned_radio`, `draw_combat_reticle`), `entities/art_cache.py` `get_panel_bg` (panel background passed to every widget).
@@ -906,22 +424,45 @@ missions/m6/train3d.py TrainScene._draw_vitals() -> U.weapon(...)
 - Editing `_panel_mag_icon` or `yard_hud.weapon` changes M6 2D, M6 yard, M6 train, M7 raid, M8 trap and M8 mansion at once.
 
 ### 4.3 Cross-mission 3D scene reuse
-- `missions/m8/revenge/trap3d.py` `TrapScene` borrows methods from `missions/m7/raid3d.py` `RaidScene` by class-attribute assignment: `_grab set_paused _snd say tracer hp hp_max _aim_ray _player_pose _guard_pose _ally_pose _cover_pose _project`, `_ground_move = RaidScene._move`, `_update_wall_k = RaidScene._update_wall_k`, and calls `RaidScene.handle_event(self, event)`. `TrapScene` overrides `_wall_probe_dist` to add `self.world.props` (`RW._ray_box`) to the raid's world-ray probe. `_draw_fx` is NOT borrowed: `TrapScene._draw_fx` draws its own layer-2 tracer ribbons (the raid's layer-3 lines painted over Biribel in OTS cameras). It imports `MAG, RESERVE0, RELOAD_S` from raid3d and uses `raid_world` (`truck`, `put`, `_ray_box`). Renaming/changing a `RaidScene` method or attribute it touches breaks M8.
+- `missions/m8/revenge/trap3d.py` `TrapScene` borrows methods from `missions/m7/raid3d.py` `RaidScene` by class-attribute assignment: `_grab set_paused _snd say tracer hp hp_max _aim_ray _player_pose _guard_pose _ally_pose _cover_pose _project`, `_ground_move = RaidScene._move`, `_update_wall_k = RaidScene._update_wall_k`, and calls `RaidScene.handle_event(self, event)`. `TrapScene` overrides `_wall_probe_dist` to add `self.world.props` (`RW._ray_box`) to the raid's world-ray probe. `_draw_fx` is NOT borrowed: `TrapScene._draw_fx` draws its own layer-2 tracer ribbons (the raid's layer-3 lines painted over Biribel in OTS cameras). It imports `MAG, RESERVE0, RELOAD_S` from raid3d and uses `raid_world` (`truck`, `put`, `_ray_box`). `on_truck_crash` delegates the truck blast/fireball/puffs exclusively to `veh_fx` (`VehicleDestructionManager`, no longer adding its own `blasts` entry). Renaming/changing a `RaidScene` method or attribute it touches breaks M8.
+- Shared 3D vehicle explosions (`engine/render3d/vehicle_destruction.py` + `blast_sprites.py`, used by M8 `trap3d`/`chase3d`/`flight3d`/`mansion3d`): `VehicleDestructionManager.__init__` calls `blast_sprites.prewarm()`; `draw()` replaces the old `fire3d` flame-lobe fireball and `add_line3d` shockwave ring with `blast_sprites.fireball_sprite` / `flash_sprite` / `ground_flash_sprite` (`phys_occ=True`), delays `fire_mounts` ramp-up past the fireball, emits a tan dust skirt before dark column smoke, and tones down hot debris meshes (`ember` mix 0.28).
 - `trap3d` also uses `chase3d` (`_f_hash`, `_f_unit`) and `set3d` (`MAP_X0..`, `tile`, `_glyph`, `CATWALK_Z`, `DECK_X`).
 - M8 Duty borrows the same way. `duty/mansion3d.py` `MansionScene` takes `RaidScene` `_grab set_paused _snd say tracer hp hp_max _aim_ray _player_pose _guard_pose _project`, `_ground_move = RaidScene._move`, `_wall_probe_dist = RaidScene._wall_probe_dist` and `_update_wall_k = RaidScene._update_wall_k`; it imports `raid_world`, `chase3d`, `chase_set` and `trap3d`. `flight3d.py` takes `set_paused _grab _snd say` plus `_draw_fx = TrapScene._draw_fx`; `ridge3d.py` takes `set_paused _grab _snd say`. `mansion_brain.py` builds on `m7/raid_brain`; `mansion_world.py` on `raid_world` + `revenge/trap_world`. So a `RaidScene` change now reaches the raid, the trap and three Duty scenes, and a `TrapScene._draw_fx` change reaches the flight.
-- Wall/obstacle weapon tuck (2026-11-18, LATEST): all four walkable 3D fights (`m6/yard3d.YardScene`, `m7/raid3d.RaidScene`, `m8/revenge/trap3d.TrapScene`, `m8/duty/mansion3d.MansionScene`) now lower the held gun smoothly near walls, doors, pillars, crates and vehicles, including while ADS, and refuse to fire past `wall_k > 0.65`. `RaidScene._wall_probe_dist()` casts two shoulder-height rays (feet + 1.34 m, centre and +0.14 m right) along the aim via `raid_world.ray_hit(..., 1.4)`; waist-high cover (<= 1.0 m) stays clear. `RaidScene._update_wall_k(dt)` eases a 1.12 m (OS-12) / 1.22 m (shotgun) start down to a 0.68 m full tuck (18 in / 12 out), zero during a Bodi turn; `YardScene` uses its own `BLOCKERS`-based 2-ray probe and 1.14 m start, `TrapScene` adds `world.props`. `raid3d` adds `_WALL_HOLD_CACHE`, `_wall_down_hold(hum, weapon, key)` (cached compressed front-of-chest hold: both arms IK-solved via `_solve_arm_safe` - right hand onto the grip at a scaled `grip_local`, left hand onto the shotgun pump / OS-12 handguard at `fore_pt`, barrel aimed ~45 deg down and across from `barrel_local`, always well inside arm reach) and `apply_wall_down(hum, pose, weapon, wall_k, key)` (wrapped yaw channels, twist/head_y invariant); all three shotgun/OS-12 scenes pre-warm those holds in `_warm()` and add a reload tuck. K-9 (yard3d) instead drives `_gun_frame` and the aim pose from `wall_k` (steep down-left pitch/yaw/roll, trigger pulled inside `BODY_R`, head kept upright); melee punches override the tuck. No public API or call-chain removals.
-- Shared 3D ally revive (2026-11-18, LATEST): `cutscenes/revive3d.py` is a new stateless-ish controller owned per scene as `scene._revive` (`ReviveState`: who/u/vis_w/locking/hand_world/ally_pos/recover_t0/kick_done/holds). `step()` gates on `[E]` + `brain.near_revive()`/`_hold_action() == "revive"`, walks the player in to `REVIVE_DIST=0.92` via `world.move`, cancels reload/swap, fires the heave cam_kick + dust at `u>=0.44`, and calls `on_complete` at `hold_dur`; M7 Alex's well-beam lift keeps its legacy path. `down_pose()` gives a living slump with breathing/head tracking/reach cue; `ally_pose_and_hand()` feeds the downed ally's live world `rhand` into `apply_player_revive()`'s `_solve_arm_safe` left-arm IK clasp (`0.14<=u<=0.90`, hand gap < 0.14 m) and handles post-revive weapon re-shouldering. `draw_ground_rifle()` parks the fallen rifle flat beside the ally until recovery. `adjust_camera()` drops/widens the OTS boom with `world.ray_hit` clamping. Wired into `raid3d`/`trap3d`/`mansion3d`: `REV.reset` in `_setup`, `REV.warm` in `_warm`, `REV.step` in `_hold`, `REV.is_locking` gates fire/reload/swap and `_move`, `REV.adjust_camera` in `camera()`, `REV.apply_player_revive` in `_draw_player`, `REV.ally_pose_and_hand` in the ally drawers; allies are drawn before the player so IK reads this frame's `rhand`. Regression: `tests/unit/test_revive3d.py`.
-- `scene.hold` ownership (2026-11-19): `REV.step()` accumulates into the same `scene.hold` scalar the scenes use for their own hold actions, and its inactive path used to zero that field unconditionally whenever `who is None` - which is every frame a scene is not reviving. That silently killed two multi-frame holds that share the field: Alex's beam lift in `m7/raid3d._hold()` (pinned-Alex branch, `HOLD_S["alex"] = 1.6`, also read by `_help_k()` -> `_well()` and `prompt()`) and the M8 trap's ladder climb in `m8/revenge/trap3d._hold()` (`CLIMB_HOLD_S = 0.35`, prompt bar `hold / CLIMB_HOLD_S`). Both reset to one frame's `dt` every frame, so neither Alex could be freed nor the ladder climbed. `ReviveState.holds` now records ownership: set on the active path, and the inactive path clears `scene.hold` only once on the way out (cancel/completion wipe), leaving a hold owned by the scene alone. `raid3d`'s local save/restore of `self.hold` around that call is gone (redundant with the fix). Regression: `tests/unit/test_m7_campaign.py::M7RaidTests::test_holding_e_frees_pinned_alex`, `tools/smoke_test.py` name `mission8_vertical_slice` (climb step).
-- Gameplay sweep (2026-11-19): a pass for bugs in the Alex-well class (shared state clobbered by a second owner, pickups lost for nothing). Fixes: (1) `m8/revenge/trap3d._setup` restored the checkpoint's `mag`/`reserve` and then overwrote them with the default `wpns`; `_cp_snapshot()` now saves both guns (`cp_state["wpns"]`, current gun's live `mag`/`reserve` folded in) from `_open_gate` and `_clear`, and `_setup` restores them with each reserve floored at `reserve0`. (2) `trap3d._loot` and `m8/duty/mansion3d._loot` emptied a body's `mags` even when both reserves were at `cap`; a full player now leaves the body its ammo (M7 `raid3d._loot` already did). (3) `mansion_brain.near_revive` checks `abs(ally.y - player.y) < 1.2`, so an ally down in the hall no longer offers "Help ally up" to the player on the gallery above, nor outranks the study door and crates in `mansion3d._hold_action`. (4) M1 truck: E while the yard is hot set `STATE.hotwire_radio_said`, the same flag that gates Vasile's hotwire tutorial line, so the tutorial never played; the "not yet" warning now uses its own `STATE.hotwire_not_clear_said` (reset in `core/state.py` and `m1/main.py`). (5) Pickups at full now stay on the ground in every 2D mission, matching M4-M6: M1 bandage/molotov (`m1/update.py`), M2 bandage/mag (`m2/update._update_pickups`), M3 bandage and the sidearm top-off (`m3/systems._update_m3_pickups`), M4 `k9mag` when `_give_mag` returns False (`m4/systems._update_m4_pickups`), M5 `k9mag` with both pouches full. (6) `trap3d._open_gate` (toll kiosk used during w1) skipped `_clear(1)`'s Bodi goal update, so Bodi held post 1 through wave 2; it now sets `brain.bodi["goal"] = BODI_POSTS[2]` when he is up. M2's evidence-stage objective says "Press [E]" (the upload OS starts on a press). Regression: `tests/unit/test_gameplay_sweep.py`, `tools/smoke_test.py` name `m1_hotwire_tutorial_after_early_e`.
-- Smooth ally aim tracking (2026-11-18, LATEST): `raid_brain`, `trap_brain` and `mansion_brain` no longer snap ally yaw at the target. `raid_brain._wrap`/`_yaw_mix` are shared helpers; each brain has `_aim_track(a, e, dt)` (eased yaw at ~11/s, clamped slope from target Y, returns absolute yaw error) and `_raise` now requires `ALLY_RAISE` elapsed **and** `err < 14 deg` before an ally fires. `_walk`/`_walk_ally` gain `face=True`: when an ally has a live target they keep facing it while moving/strafing (`face=False` from Alex's spot walk, Bodi's path follow and Mansion's goal walk), and turning toward a follow point is eased. Trap Bodi tracks while in cover (`_aim_track` during `cover_t`) and ducks later (`duck_at=now+0.65`). Drawers keep the rifle shouldered while moving: `raid3d._ally_pose`, `trap3d._bodi_pose` and the new `mansion3d._ally_pose` use `mask_pose(locomotion_pose(3.4, 0.0, phase), stance)` for aimed locomotion instead of the old arms-only `_held(pose_run(...))`; Mansion now pre-warms its ally aim holds (`m8d_<name>` keys at 0.1 slope steps). Trap pre-warms a crouched aim hold (`crouch_aim` keys) so crouched cover stays aimed.
-- M8 Duty security room & Andrei electrocution (2026-11-18, LATEST): `mansion_set` widens the north desk to 4.8 m and grounds `WORKSTATIONS` at `GF+0.78` inside the desks (matching `mansion_world.STATIC` colliders), leaves the security-room footprint out of hall marble, and adds recessed interior windows. New cached `_server_rack_mesh(damaged, include_leds)` / `_rack_leds_mesh(mode)` build 2U/4U blades, busbars, fans, conduit and pop-out bay doors; the z=31 rack is dynamic via `draw_dynamic_props(rack_state, monitor_surge)` with impact tilt and cyan/white surge -> ember LED states; `house_lights`/`pools`/`frame` take `sec_light` for breaker strobe and blackout. `mansion_brain.andrei_timings(cause)` splits misfire vs player-shot deaths; `trigger_andrei_death(cause, hit_zone, hit_pos, hit_ray)` records the shot, and `_andrei_update` gates idle->intro on interior bounds + `los3d`, fires ceiling-misfire dust/pistol cue, spawns electrical smoke, trips the breaker at zap time and plays a collapse thud. `mansion3d` adds `andrei_timings`-keyed `_andrei_death_anim`, conditional gore/char patches, deterministic jagged 3D lightning arcs, blood spray/pool decals, room strobe lights, and a ballistic cash burst (7 tumbling bricks + 44 air-dragged fluttering notes, pre-warmed and cached when settled) clamped to the room and landing on desks/floor/body. Audio gains `m8_elec_arc`, `m8_breaker_pop`, `m8_pistol_shot` and a `body_fall` cue. Visual follow-up: the security-room floor uses real `tex("concrete", like=(72,76,80), tint=True)` at `GF+0.012` (the old `W7._t` key fell back to flat blue-grey), with `marble_refl=0` indoors / `0.34` in the hall and indoor `height_fog` off for cp 1-3; conduit moved above the monitor bank, doorway headers and a `BACK_Z` threshold plate added, and solid desk blocks replaced by `_office_desk` (tabletop + steel legs + modesty panel) with baseboard skirting; at cp >= 2 Andrei starts pre-settled (`state="done"`, `dead_t=-99`, flags set) so he no longer replays his death from t=0. Ground-floor layering follow-up: every layer-2 plinth/wall/wing base/column/stair/foundation starts at `gf_top = GF + 0.01` instead of dipping below it, and the portico steps, cottage foundations and tree trunks no longer sink under ground level. Final depth fix: ground-floor marble tiles and the security-room concrete slab now use layer 2 (matching the first floor and terrace) so hardware Z-depth hides exterior walls/wings/estate props behind the walls; blob shadows stay visible via `shadow=(2, -0.35)` on every `_w.actor` call and explicit `r.add_blob_shadow` for living enemies. Regression: `tests/unit/test_m8_duty_mansion.py`.
-- Andrei hitscan room-entry guard (2026-11-19): fixed stray rounds killing Andrei before the player enters the security room. `mansion_brain.in_security_room(x, y, z)` is now the single interior-bounds test (x -12.5..-3.75, z 26.25..35.5, |y-GF|<0.6), reused by `_andrei_update`'s idle->intro gating and by `mansion3d._fire`'s `can_hit_andrei` (intro always hittable, idle only while the player stands inside the room), so OS-12/Fallow rounds crossing the Grand Hall or the open 2 m doorway at `BACK_Z` (x -7..-5) can no longer trigger `trigger_andrei_death(cause="player")` early. `_fire` seeds `andrei_zone`/`andrei_end`/`andrei_dd` up front instead of `locals().get(...)`, so the chosen hit zone/pos/ray are well defined. `mansion_world._static` adds the missing colliders for the doorway lintels at `BACK_Z` (x -7..-5 and 5..7, y GF+2.8..SLAB_Y0) that `mansion_set` already renders. Regression: `tests/unit/test_m8_duty_mansion.py::test_andrei_cannot_be_shot_while_idle_from_outside_room`.
-- M8 Mansion 3D nav/fragment perf pass (2026-11-19): killed the per-frame A* and SSR overdraw. `engine/collision/nav.MultiFloorNav` now caches string-pulled waypoints in `_pulled_cache` (keyed on the same `(s, g, _dyn_ver)` as `_cache`, bounded by `_cache_size`), caches static neighbour geometry in `_nbr_cache`/`_static_neighbors` (`_layer_step_raw` split from the blocked-aware `_layer_step`), and rasterises dynamic boxes/circles once per `_dyn_ver` into a `_blocked` bytearray via `_sync_blocked()` instead of linearly scanning boxes per expanded node; all three caches invalidate in `set_dynamic_boxes`, `set_dynamic_circles` and `add_link`. `gl_post._ATMOS_FRAG` skips the 12-step SSR raymarch + specular when `refl_w <= 0.08`. `duty/mansion3d` prewarms guard holds, car/chandelier meshes and the ~12k-cell `world.nav()` in `_warm()` (built at load, not mid-combat), prints warm tracebacks, gates `r.marble_refl` on being inside on the ground floor (0.34 there, 0.0 outside/upper floors) and reuses one `_OneEnemy` stand-in in `_draw_enemies`. `duty/mansion_brain` throttles `nav().path()` behind `nav_at` cooldowns + goal-change checks in `_steer`/`_walk_ally` (enemy repaths jitter by slot), skips nav entirely across locked doors via `door_locked`, and clamps the cp-0 ally follow point to `MS.GATE_Z + 1.2` so `los3d` succeeds instead of forcing a nav every frame. `duty/mansion_world` caches `_dyn_box_aabbs` in `_sync_cache` and reuses it in `ragdoll_boxes()`, `nav()` and `move()`; it also adds BoxWorld acceleration - a module-level `_LOS_STATIC_BW` over `_LOS_STATIC` makes `los3d()` reject static blockers via `segment_blocked(..., slack=0.0)` before the short dyn-box loop, and short `ray_hit()` probes (`best <= 12.0`) use `_STATIC_BW.ray()` plus a dyn-box loop. **Known edge case (owner opted to keep verbatim):** `BoxWorld.ray()` returns the first hit, which can be `t=0` when the ray origin starts inside a box; the `1e-4 < hit[0]` guard then drops it without checking the next-nearest box, so a short downward probe can return a farther hit than the legacy full scan (44/1323 realistic eye-height probes differed, e.g. (-12, 2.25, 26) fast 4.27 vs legacy 1.80). `los3d()` itself is behaviourally identical (0/2000 random probes). `duty/mansion_set` adds `money_bundle(count, detail=True)` so baked pallets use the procedural fallback (~18k fewer tris), reduces the grass quad from seg 10 to 40, bakes `_shell`/`_interior`/`_terrace` before `_grounds` for Early-Z, and culls `house_lights`/`pools` to the 6/10 nearest via `near=` from `frame()`'s `tgt`. No public API or call-chain removals; nav unit tests, `test_m8_duty_mansion`, `test_gl_composite`, `engine3d_check` (4.14%) and smoke `mission8_duty,engine3d` all green. Re-verified after the `_LOS_STATIC_BW`/`ray_hit` hunks: compileall/normalize OK, m8 duty unit 6/6, smoke `mission8_duty,engine3d` OK.
-- 3D culling rollout (2026-11-19): 2D (`engine/render2d`) untouched; `r.frustum_cull = False` opts out. `engine3d/core.SoftwareRenderer` gains `frustum_cull`, `visible_frustum(...)`/`visible_ortho(...)` (basis-parameterised `visible_sphere`) and sphere culling on blob shadows, sprites and lines. `engine3d/gl.GLRenderer` splits baked `Obj`s larger than 32 m / 48 faces into stable-sorted 32 m XZ face slices with per-slice bounds, and culls them per pass in `_visible_static_runs()` (main perspective, sun ortho box, spot frustum) via `_pass_cull_fn()`; resident chunks are culled per pass and kept in a 128-entry `OrderedDict` LRU, rigs/dyn batches/sprites/lines/lights/pools all cull before GPU submission and report `culled_*` in `stats`. `cutscenes/m6world3d.pack_memo_end()` now splits the live memo into 24 m XZ chunks so GL `add_resident` culls each chunk. `duty/mansion_set._build()` bakes shell, hall, each room, terrace, estate grounds and `ENV.bake_surroundings()` separately (Early-Z order preserved); chandelier packs/sprites cull. `mansion3d`/`raid3d`/`yard3d` skip off-screen settled ragdolls, Andrei, cash piles, scorches, car fire/smoke, Volkov and the pig. **Owner-approved deviation from the verbatim patch:** `GLRenderer.add_resident()`'s LRU `live` set is `{id(e[0]) for e in self._res_draw} | {key}`. Without the `| {key}`, a frame queueing more than 128 memo chunks (M6 yard queues 196) evicts and releases the VAO just created (it is appended to `_res_draw` only after the eviction loop) and then queues the released VAO, hard-crashing the yard with `AttributeError: 'InvalidObject' ... render`. Fixed with owner approval; the 128-entry cap and the rest of the design are unchanged. Gates: normalize/compileall OK, `engine3d_check` parity 5.71% OK, `smoke --only mission6_vertical_slice,engine3d` OK, `ae_bench_scenes` all 9 scenes run, full `--fast` / unit discover / boundaries still show only the documented pre-existing reds.
+- Maru's gunship is shared runtime GLB geometry, not a baked mesh: `chase_set.maru_gunship_parts()` caches `(fuselage, tail_boom, main_rotor, tail_rotor, info)` from `assets/3D/maru_gunship.glb`, split via `_load_glb(path, return_paths=True)` on the root node name (`heli_fuselage`/`heli_tail_boom`/`main_rotor`/`tail_rotor`); `chase_set.put_maru_gunship(..., tail_on=, main_on=, burned=)` submits it with optional severed boom/rotor and charred variants. the films' `_gunship` still reads `info["floor_y"]=0.574`, `pintle_top`, `pilot_seat`, `roof_beacon` and passes `-hroll` because `CS._xf`/`_rot_rt` use `rot_z(+roll)` while `FX.heli_matrix` uses `rot_z(-roll)`; the **first-person** `flight_fx.gunner_eye`/`draw_cabin_and_gun` now read the GLB too, through `chase_set.maru_gunship_fpv_parts()` (the sightline-clipped fuselage, same real boom/rotors) submitted with `put_maru_gunship(..., fpv=True)` - see the 2026-11-21 FPV-GLB bullet in §7. `FlightScene._warm()` prewarms `CS.maru_gunship_fpv_parts()`; the duty films' `_gunship` uses the same submit with `tail_on=False` for the spin/crash and `main_on=False` for the wreck. The procedural `flight_fx.cabin_mesh`/`rotor_mesh` remain the missing-asset fallback only.
+- Wall-tuck / revive / Duty live contracts: all four walkable 3D fights probe `RaidScene._wall_probe_dist()` (two shoulder-height rays) and gate fire at `wall_k > 0.65`; `RaidScene._wall_down_hold`/`apply_wall_down` tuck the gun near cover (Yard uses `_gun_frame` instead). `cutscenes/revive3d.py` (`REV`) owns `scene.hold` only while a revive is active, so scene-owned holds (M7 beam lift, M8 ladder climb) survive. `mansion_brain.in_security_room()` is the single interior-bounds test shared by Andrei's intro gate and `mansion3d._fire`'s `can_hit_andrei`; `mansion_world` shares `MultiFloorNav` + `slide_capsule` with the other 3D worlds. Ally aim tracking is eased via `_aim_track` in raid/trap/mansion brains (fire needs `err < 14 deg` and `ALLY_RAISE`).
+- M8 Duty set/portrait invariants: `duty/mansion_props.py` owns the cached door/furniture meshes; `president_portrait(w, h, paint)` bakes a flat 2D `figure_kit.draw_character("president", ...)` state portrait at the TRUE w/h aspect (`pw x 96`) into a gilt frame, and its canvas quads MUST wind for a `-Z` front face (with `double=False`, a `+Z` normal is 100% backface-culled by both backends). `mansion_set._portrait()` adds it with `rot_y(0)` for `face=-1`; the two Grand Hall back-wall portraits sit at `x=+/-4.1` on the piers clear of `STAIR_X=3.0`. The study `[E]` kick opens hinged leaves over `KICK_DUR` (`study_open_u` feeds `draw_dynamic_props`) - never an instant open.
 - `duty/mansion_set.py` is Retardovici's estate, reused from `revenge/epilogue3d` (funeral house) + `cutscenes/m7world3d` + `game/scenery3d`. Hall marble (checker floor, stair treads) is tinted `concrete` (`textures.tex(..., tint=True)`), not `m7_stone` cobbles, which crawled at grazing angles. `_portrait` only builds for +z/-z walls; the hall side-wall portraits are built facing +z and turned with `rot_y(-90*s)`. Consumers: `mansion3d`, `mansion_world`, `mansion_brain`, `mansion_hud`, `flight3d` and `cutscenes/m8dutyfilms.py`. Props `ammo_crate`/`moneystack` (`content/meshes/`, from `tools/ae_import_duty_props.py`) load here; `tactical_lmg` loads in `m8dutyfilms`. All 7 `CRATE_SPOTS` are dynamic: `mansion_set._crate_parts()` splits `ammo_crate` into a hollowed base + back-hinged lid (battens/latches) + loot contents, `crate_lid_angle(open_u)` gives the two-stage lid physics (latch pop -> 106 deg swing -> 100 deg settle), and `draw_dynamic_props(crates=[(open_u, loot_u), ...])` draws them per frame (`loot_u < 0` hides loot; closed crates get a pulse glow, open trays a reveal glow). `mansion3d` feeds `crate_anims`/`crates_taken`, pops latch sparks + `pickup` at 0.12 s, and `crate_act` drives a torso-twist + `engine3d.hold.solve_arm_safe` left-hand IK reach (lip -> tray -> chest) cancelled by fire/aim/sprint/reload/swap or 2.6 m of drift.
+- M8 Duty Grand Hall staircase (`mansion_set._interior_hall`): `_sloped_wedge(x0,x1,z0,z1,y_bot,y_top0,y_top1,col,layer=2)` builds an axis-aligned 6-quad `Mesh` with a sloped top (winding: left face -X, right +X, top +Y, bottom -Y, z0 face -Z, z1 face +Z). The 22 treads (z 18..26, y `GF`..`FF`) sit on one full-width marble_b wedge and are separate riser (marble_b) + 0.05 m tread (marble_a) boxes instead of full-height zebra blocks; the carpet is a continuous riser+tread red runner with 0.30 m gold side borders at x=+/-1.75. Each side gets a second sloped cheek wedge under the balusters at x=+/-`STAIR_X`..+/-`STAIR_X+0.36` (matching `mansion_world`'s solid colliders), a TRIM stringer cap, 15 intermediate balusters (k=1..15 of 16), and a GOLD rail at `mid_y+0.90` (was +0.95) so it meets the upper landing `_balustrade` rail at `FF+0.90`; stone+GOLD newel posts anchor both the bottom (`STAIR_Z0`) and the top (`STAIR_Z1=26.0`, previously missing).
+- M8 Duty Grand Hall staircase hitboxes (`mansion_world._static`, `ray_hit`, `los3d`): the STATIC side used to be one flat `GF..FF+1.0` (0.8..6.2 m) box per side from z 18..26 - an invisible wall above the sloped rail that blocked bullets, LOS, the camera boom and `_wall_probe_dist` (`wall_k`). It is now 16 sloped cheek boxes per side (`GF..yb+0.14`, tracking the rail rise), 16 sloped handrail boxes (`ya+0.82..yb+0.97`), 15 individual balusters at segment starts (`k>0`, x `cx+/-0.07`, y `ya+0.06..ya+0.90`) so shots pass between them, and bottom/top newel posts matching `mansion_set` (`GF..GF+1.35` / `FF..FF+1.29`). Walking is untouched: `_STATIC_BW` and `FLOORS`' smooth ramp (`surface_y`, `slide_capsule`, `STEP=0.6`) still own traversal - the step boxes exist only for rays. `_STAIR_RAY_BOXES` = 22 boxes ([-STAIR_X,+STAIR_X] x [18,26], y `GF..GF+(i+1)*dy`) feed `_STAIR_RAY_BW` for `segment_blocked` in both `los3d` branches and `_stair_ray_hit(o,d,best)` (AABB-prefiltered, `_ray_box` per box) in both `ray_hit` branches. `_stair_ray_hit` is defined before `_ray_box` but resolved at call time (fine).
+- M8 Duty Last Flight + Liftoff/Crash overhaul (2026-11-21): new `duty/flight_set.py` bakes the 4-zone night aerial chase corridor (`z=-160..4600 m`: Curfew Boulevard, M4 Broadcast Plaza + 88 m tower, Route 12 Highway + toll gantry, Northern Ridge pines) with `corridor_x`/`corridor_yaw`/`surface_y`/`roof_spots`/`draw_corridor_fx`; `flight_fx.py` adds `fpv_gunship_mesh()` (sightline-clean open bay), dark gunmetal `tactical_lmg_mesh`, `_gunner_hands_mesh`, 3D steel pintle bars, and `draw_vip_helicopter()`; `flight3d.py` uses `FS` for cp 1..4 at `HELI_V=34.0`, exports `START_HPOS/START_HYAW/START_HPITCH/START_HROLL/START_AIM_YAW/START_AIM_PITCH` for `liftoff_maru` match-cut, physical decoy flare homing, searchlight glare, 360-deg threat compass HUD, and Ucilev front-arc boss duel. `m8duty_sets.py` seals `crash_forest` with a 3rd pine ring + berm; `m8dutyfilms.py` moves nav lights to tail tips, reframes `liftoff_study`/`liftoff_window`/`liftoff_maru` and `crash_spin`/`crash_black` (2200 ms)/`crash_fire`/`crash_better`; `m8_audio.py` adds `m8_flare`/`m8_klaxon`.
+- M8 Duty Capital Square / Forest crash + Ridge overhaul (2026-11-20): new `cutscenes/m8duty_sets.py` (341 lines) caches static Meshes - `courthouse_square()` (160x160 m paved square, boulevard, ministries, 6-column Palace of Justice on `E.FUNERAL` at (150,0,600)), `courthouse_lights()`, `crash_forest(center)` (82 dark spruces in two rings r=7.6..24.5 m + 36 low evergreen shrubs; slimmer 7-tier `_pine_tree` with `m7_bark`/`m7_leaf` textures, clear wreck/camera wedges and a dense outer skirt that blocks horizon leaks, snapped rotor blades lying flat, a short grounded shin strut, dark needle floor + torn earth; the old 6-tier khaki pyramids let bright grass and the road show through), `ridge_forest(pad, eye)` (42 pines + crags, sightline kept clear). `E.FUNERAL` is a 2-tuple `(x, z)`; this module normalises it to 3-tuple `CH = (E.FUNERAL[0], 0.0, E.FUNERAL[1])` and every unpack uses `fx, fz = CH[0], CH[2]`. `cutscenes/m8dutyfilms.py` (718 lines): crash split into `crash_fire`/`crash_promise`/`crash_better` (shared `_crash_set` sets a dark `Light(ambient=0.11, diffuse=0.18, sky=0.08)`; the wreck is the shared `maru_gunship.glb` with boom + rotor removed, `crash_spin` strips only the boom; `_crash_actors` now hands off the baked sniper rifle instead of OS-12: `O_start`/`R_start` lock to Maru's actual rhand while he leans to extend it, Biribel leans in so his right hand reaches the pistol grip (<= `ARM_REACH` = 0.58 m), and during `pull_u` the world-space `_draw_sniper_world` interpolates straight to `b_final`'s `pose_world()` (`O_end`/`R_end`) pinned to Biribel's live rhand and fore, handing off seamlessly to `hold_cached(..., "ready")` at `handoff_u >= 1.0` (no mid-air lift/snap); Maru faces 225° on the mossy log, Biribel kneels SE at 48°, `crash_fire` uses a 3/4 open-side cam at fov 50 so neither blocks the other, `crash_promise` a reverse front-3/4 at fov 44 with tgt_y 0.90 and headroom, `crash_better` a reverse push onto Maru's face at fov 40); `_HULL_CRASH_AT` is `(CRASH_AT[0]+2.60, 0, CRASH_AT[2]+5.60)` and `crash_forest`'s pine exclusion box follows it; `crash_better` now aims at Maru's live `pose_world()[1]['head']` (body_p/-46, head_p/-16, head_y/-18) instead of a fixed point, and `crash_promise` uses a flatter, lower eye; `_crash_actors` returns its Maru pose; a full 16-camera framing pass pulled the approach/liftoff/epilogue cams inside fog_start=36 with every subject projected inside x 0.20..0.84, y 0.14..0.88), epilogue `inauguration`/`vasile_speech`/`crowd`/`eyes`/`biribel_vo`/`title_card` all share `_crowd` (42 mixed civilians, crutches IK); `liftoff_maru` adds a steel pintle stanchion and smoother run/leap gait. `meta.M8_SCENES` gains `m8d_crash_promise`/`m8d_crash_better`; timeline `m8.d_crash` uses them. `duty/ridge3d.py` (564 lines) drops `raid_hud` and uses `ui.speechbox.draw_caption` via `_set_caption` (typewriter + pauses), `_letterbox`, `body_hit`/`shot` SFX, and `audio.fade_out_music(40)` on the presidential kill; `flow.music_tick` returns early while `phase == "pres_down"` so only wind remains.
+- M8 Duty asset/framing pass (2026-11-21; **supersedes the camera/handoff numbers in the two bullets below**): both Last Flight and the Liftoff/Crash films now submit `maru_gunship.glb` through `CS.put_maru_gunship` (see §4.3); `flight_fx.gunner_eye` sits at `floor_y+0.92` and leans onto the forward doorway threshold via `lx = 1.04*tanh(3.2*sin(rr))`, `lz = 0.40+cos(rr)*0.24` (the old `+0.16` mullion offset is gone), `draw_cabin_and_gun` takes `hpitch/hroll` and passes `-hroll` for `CS._xf` polarity, and the LMG pintle starts at `(0,1.26,0)`. Liftoff: `liftoff_study` heli `(hx+0.6u, hy+1.9+0.95u, hz+2.2+1.8u)` with tgt `(bx+0.4, hy+1.9+0.25*min(1,0.25u), bz+1.2)`, eye dir `(0.35,0.06,0.93)` / vspan 4.4 / fov 62; `liftoff_window` is now a 3/4 front-port climbing shot: eye `(-6.2+0.35u,0.78,3.3-0.25u)` -> tgt `(-0.24,1.24,0.58)` at fov 46 plus a warm cabin dome light; `_vip_open_body` clips port-wall triangles to a recessed doorway (`z -0.08..1.42`, `y 0.56..2.16`) with `_clip_poly_plane`/`_subtract_door_rect` (no centroid-drop hull wedges across the hole), seals a dark interior box behind it, adds a rail-mounted slid-aft white door panel with a recessed window and flush trim, and Retardovici squats at local `(-0.44,0.55,0.68)` via `_vip_pose()` (cached deep squat verified against `Humanoid.build` vertices: min_y 0.550 / max_y 1.913) below the roof eave (the old cut to `y=2.45` tore the roof and leaked sky); `liftoff_maru` hovers cleanly OUTSIDE the east rail (`TERRACE` x=+9.0, z 36..52) at `(12.4,hy+0.25,hz-0.5)` from `(18.0,hy+1.4,hz+3.5)`, `gyaw=205-40u-10climb`, jump door local `(0.98,0.58,0.28)` at yaw 165 (starboard door faces Biribel), run to `x=8.1` with a 1.50 m arc, `p_in` through `heli_matrix`, cabin whip `(-0.55,1.72,-0.45)` -> `(1.40,1.35,3.40)`, LMG at `pintle_top[1]+0.04` with `gpitch/-groll`. Last Flight Route 12 sightlines: `_heli_pos` road x is `road_x(z)-8.5+4.5*sin(rt*0.22)`, `_heli_yaw = road_yaw-28` (port crab) while `mount_yaw` stays `road_yaw`, air streaks use `flow_yaw=road_yaw` not body yaw; `_rocket_plume_mesh` length/radius 1.28..1.76 / 0.13 and tail/nose glows are larger (max_px 48/20, intensity 1.85/1.15), smoke puffs `0.34+1.65*sqrt(u)`. Crash: `crash_spin` drops only the tail boom and burns at `tail_root = hpos + hmat*(0,1.80,-1.35)`; the grounded wreck keeps fuselage only and both fires are `hmat`-placed. `_crash_actors` takes `body_p/head_p/head_y`, lowers Maru's right-hand target (`max(0.56, sh.y+0.06)`), uses `R_start=rot_y(118)*rot_x(-8)` with grip offset `fore[2]*0.72`, `grab_u` from 0.10, `l_local` from `fore[2]*0.45`, and eases `O_draw` from `O_cur` to the live rhand over the first 0.35 of `pull_u`; `crash_better` targets Maru's live head joint (vspan 0.66, fov 36) and `crash_promise` uses eye dir `(-0.86,-0.04,-0.35)` at vspan `1.28-0.10u`; `_fire_lights` are dimmer (11.5 m / 5.5 m ranges).
+- M8 Duty LMG ADS pass (2026-11-21; **supersedes the `flight_fx`/`flight3d` ADS mount numbers above**): `flight_fx.tactical_lmg_mesh()` strips the solid rear-sight plate faces (`z ~ -0.05`) from `tactical_lmg`, restores the center front sight post with a pale-tritium tip (`y=0.137, z=0.545`), and mounts an open-window reflex optic (`SIGHT_Y=0.160, OPTIC_Z=0.045`) on the top rail while leaving `tactical_lmg.mesh.json` and `m8dutyfilms.py` untouched. `flight_fx.lmg_xform()` is the single shared gun-mount helper returning `(basis, at, tip, ads_k)`: `fwd_off 0.78->0.49`, `rg_off 0.225->0.0`, `up_off -0.255->-SIGHT_Y`, `toe_yaw -5->0`, `toe_pitch 4.5->0`, `cant 3.5->0`, with damped ADS kick (`kick_p * (1-0.62*ads_k)`, `kick_z * (1-0.35*ads_k)`). `draw_cabin_and_gun()` projects a cached pixel-exact `_reticle_surface` sprite at `(0, SIGHT_Y, OPTIC_Z)` for `ads_k > 0.30` and tones down ADS muzzle flash; `gunner_eye()` reduces rotor vibration `1-0.78*ads_k`. `flight3d.py` uses `ADS_UP=12.0`/`ADS_DOWN=8.0` and eased `FX._ease(self.ads)` consistently across FOV (`62->38`), mouse sensitivity (`0.105->0.052`), spread (`0.34->0.10` + `0.56->0.22*heat`), shake, `_hud()` crosshair (`lines=(ads_k < 0.45)`, keeping hit markers; hint `RMB ADS`), and `_fire()` spawns tracers from `lmg_xform(...)[2]` (`BORE_LOCAL`).
+- M8 Duty Liftoff cinematic overhaul (2026-11-21; **supersedes the Liftoff numbers in the bullets below**): `mansion_set.frame(..., roll=0.0)` accepts optional camera roll; `m8_audio.FILM["m8d_liftoff_study"]` now plays `("flight", "f_heli")` so rotors/score run unbroken from helipad into Last Flight. `cutscenes/m8dutyfilms.py`: shared `_handheld` (gated on `SETTINGS.reduced_motion`), `_rotor_wash`, `_air_streaks`, `_heli_nav_lights` (aft of doorway + nose searchlight haze cone), `_gunship_lights`. `_vip_open_body` upgrades the cabin interior with dark mahogany/brass panelling, burgundy leather VIP bench + backrest, vertical steel aft-jamb grab-rail, overhead warm sconce and forward cockpit avionics; `_vip_base_pose`/`_vip_pose(t)` seat Retardovici on the bench (`feet (-0.28,0.55,0.62)`, verified `max_y <= 2.01 < 2.14` lintel) with left hand IK-locked to the grab-rail (`solve_arm_safe`) and animated right-arm gestures (`grin` -> `angry`), plus a cockpit pilot in `_draw_vip_open`. `liftoff_study`: physical `locomotion_pose` sprint + smooth blend to upward `hold_weapon(..., aim=pos)` tracking, 3-round OS-12 burst (`2350/2520/2690 ms`) with muzzle flash, tracers and skid ricochet sparks, Bodi emerging behind Biribel, low-angle camera keeping both Biribel and full VIP chopper in frame. `liftoff_window`: elevated 3/4-port aerial camera looking slightly down past the doorway so lit estate/city recede below, moody controlled cabin key + moonlight rim + strobe spill. `liftoff_maru`: flare-in hover with nose spotlight + Bodi/Alex on terrace, Biribel `locomotion_pose` sprint along `z=hz-1.10` + athletic balustrade vault (`arc=1.24`, `t=2350..3350`), then unobstructed whip (`whip_u` settles by `4330 ms`) directly into exact `FlightScene` cp=0 `gunner_eye` (`hpos=(17.53,9.5,43.95)`, `gyaw=116`, `gpitch=-3`, `groll=8`, `fov=62`, `aim 206/-14`) behind `FX.tactical_lmg_mesh` + articulated pintle arm for a seamless `cut_to_play` match cut. `m8.d_liftoff.timeline.json` syncs sprint steps, 3-shot burst + ricochet, vault cloth, cabin landing thud and `rifle_handle`; `tools/m8_duty_film_shots.py` uses timeline durations `(4000, 4600, 4600)`.
+- M8 Duty Shot 1-3 screenshot pass (2026-11-21; **supersedes the camera/mount numbers in the two bullets above**): `m8dutyfilms._vip_open_body` clips every port-wall GLB triangle against `z -0.08..1.42 / y 0.56..2.16` with `_clip_poly_plane`/`_subtract_door_rect` (four disjoint pieces per spanning triangle, face tails preserved) instead of dropping whole faces, so no hull wedge crosses the doorway; sealed cabin box 1.56x1.70x1.96 with the roof cap at y 2.20, two rail struts (y 2.10/0.56) + slid-aft panel with recessed window, Retardovici squats at `(-0.44,0.55,0.68)` via cached `_vip_pose()` (start `lhip_p=112/lkn=134/lank=0`, `rhip_p=106/rkn=130/rank=0`, spine 38, head_p -22; a load-time loop tightens hips/knees/spine/head until `max_y <= 1.94` against real `Humanoid.build` verts - resolves at 116/138/41/-24, min_y 0.550 / max_y 1.913, 22.7 cm under the 2.14 lintel; the old "~1.76 m" estimate used the generic rig, not the 2.276 m president rig); `liftoff_window` eye `(-6.2+0.35u,0.78,3.3-0.25u)` -> tgt `(-0.24,1.24,0.58)`; `liftoff_maru` approach `eye_ext (-1.4..2.2, hy+2.45..2.50, hz-4.4..-3.6)` and `tgt_ext` offsets `-1.2/+0.5` / `+1.4/+1.05`. Shot 2: estate poplars move from `x=+-15.0, z=40.0+6k` to `x=+-26.5, z=40.5+6k` in `mansion_set._grounds_estate` and their mulch discs in `mansion_env.build_yard_detail`, clearing the east-corridor view. Shot 3: `flight3d._heli_tilt` estate roll/pitch 14/-4 -> 8/-3, `flight_fx.gunner_eye` leans forward (`ly=fy+0.92`, `lz=0.40+cos(rr)*0.24`) so the aft starboard rocket pod and rotor tip clear the 62-deg FOV; LMG mount `fwd_off=0.78-0.06*ads`, `rg_off=0.225-0.120*ads`, `up_off=-0.255+0.030*ads`, toe-in `-5+2*ads` / `4.5-0.5*ads`, bore z 0.735; the separate `ammo_pouch` submit is gone (its fourth brass link box floated through the receiver, while `tactical_lmg.mesh.json` already has its own ammo box and belt). Estate plaster/stone in `mansion_set` (shell/hall/terrace/grounds/fountain) and `mansion_env` (flagstones/shoulders/cottages/substation/gatehouse) now use the `stucco`/`ashlar` tex3d pair, not `m7_plaster`/`m7_stone`.
+- M8 Duty Last Flight night-corridor / encounter overhaul (2026-11-21; **supersedes the scenery and combat numbers in the bullets above**): `duty/flight_set.py` is rebuilt at `RES=(720,504)`, `FOG=(9,13,24)` start 85 / end 420 with `ambient=0.20 diffuse=0.52 sky=0.10` and bloom `0.38/0.84`; `surface_y` returns flat `0.0` for `z<=2240`, rising embankments on Route 12 and a steeper canyon north of 3360. `_ribbon`/`_curve_beam` bake curve-following XZ strips and yaw/pitch-aligned kerbs, medians and guardrails (no stair-stepping); the four zones gain 3-tier 4-sided blocks with lit stairwells/balconies, tram catenary portals and cross-streets, a colonnaded Broadcast Plaza + cross-braced 88 m tower, a divided Route 12 toll plaza with charred wrecks, multi-tier spruces/rock crags, searchlight puffs in `draw_corridor_fx`, and up to 10 local lights / 18 pools in `frame`. `flight_fx.py`: FPV now submits the real GLB via `CS.put_maru_gunship(r, hpos, hyaw, hpitch, -hroll, ...)` plus `_maru_interior_accents` (emissive gauges, pintle collar), Maru at `info["pilot_seat"]` and a roof beacon; new `tanker_mesh`/`draw_tanker` and `draw_flak_bursts` (incandescent snap + smoke), 5-lobe tanker fireballs and progressive smoking/burning stages on vehicles, AA trucks and Ucilev (gated on `phase`/`light_on`/`hit_t`). `flight3d.py`: new `"tanker"` target (`HP 46`, `SPHERE (1.6,2.8)`) with 16.5 m chain detonation; `FIRE_GAP=1/13.8`, `HEAT_SHOT=0.0142`, `HEAT_COOL=0.42`, `FLARES=5`, `ROCKET_V=34`; road rocket closure `HELI_V+26`, road altitude `FS.surface_y + ALT`; `TAIL_HP_MAX=380` with two 3-stage damage callouts and evasive bank (`retardovici_roll`); Ucilev is a 2-phase duel (`UCILEV_HP_MAX=780`, `UCILEV_P2_HP=420`, `UCILEV_FLOOR_HP=180`, `phase`/`light_on` fields, spotlight-break boom, aggressive close passes, double missile launch), `flak_bursts` + `m8_audio.flak_pop()` from AA trucks, `_lights()` adds a warm GLB-cabin dome fill. `m8_audio.SINGLES` gains `m8_flak` (+ `_flak_pop`/`shot_pcm("m8_flak")`), warmed at scene entry. **Match-cut caveat:** `m8dutyfilms.liftoff_maru` still draws the procedural `flight_fx.fpv_gunship_mesh()` cabin and old Maru seat offset `(-0.46,0.20,1.68)` for `whip_u>=0.85` while flight now uses the GLB + `pilot_seat`; camera/aim still match (both call `gunner_eye`), but the cabin/actor pop at the cut wants a live eyeball.
+- M8 Duty flight sightline / rocket-readability pass (2026-11-21; **supersedes the FPV mesh, boulevard setback and rocket numbers in the bullets above**): the first-person views no longer draw the heavy closed `maru_gunship.glb` - `flight_fx.draw_cabin_and_gun()` submits `fpv_gunship_mesh()` + `rotor_mesh()` (`FPV_ROTOR_HUB=(0,2.54,0.35)`) with `gunner_eye()` centred at local y=1.56 and a 360-deg clear sightline; sills <=0.18, port console <=0.94, canopy roof y=2.34, stub wings/rocket pods moved aft to z=-0.58, and the tail beacon submit is gone. Local anchors `FPV_PINTLE_TOP=(0,1.07,0)` / `FPV_PILOT_SEAT=(-0.46,0.20,1.68)` replace the GLB info dict in the FPV path; `m8dutyfilms.liftoff_maru` uses the same anchors once `whip_u >= 0.85` so the match-cut frame is identical. `flight_set._build_corridor`: Tier-1 streetfront blocks set back to `22.5 + w*0.5` (sidewalks `+-13 m`, heights 14.0..22.5 m), Tier-2 to `52/54 + sw*0.5`, Tier-3 to `98 + dw*0.5`, rooftop RPG spawns only on 13..25 m roofs, pine bands `(18,34,56)`; tall 26..68 m skyline slabs stay in Tiers 2-3. `flight3d`: `ROCKET_V=18`, `ROCKET_CLOSE_ROAD=24`, `ALT=24`, road weave `corridor_x(z)+5.5*sin(rt*0.36)` at `alt_base=29` for cp 1-2, yaw `corridor_yaw-10+5*sin(rt*0.36)`, roll `10*cos(rt*0.36)`, aim straight down the boulevard (`gy=0`, `gp=-5`), `retardovici_pos` at `alt_base+3.2`. New `_can_launch_rocket(src, air_launched=)` gates launches to the front hemisphere (>=68 m ahead ground / >=28 m air on roads, +-78 deg cone; >=26 m and +-85 deg elsewhere) and rockets that pass `hp.z-4` lose lock instead of chasing from behind. Closing speed is controlled in the helicopter's moving frame (`hvel + dir*v_close`, ~20/24 m/s road, 18 m/s air/estate) with a loft arc and a `0.85 s` telegraph; shootdown sphere 2.2 -> 2.8 m, `"rocket_f"` callout replaces `"rocket_b"`, and off-screen chevrons project the rocket vector onto the camera right/up basis. `flight_fx.draw_rocket` now renders the previously-unused `rk["trail"]` as a tapered glowing `add_line3d` ribbon plus a bright head-on motor/nose flare and denser high-contrast smoke (`shade_col=(204,206,218)`).
+- M8 Duty FPV real-GLB sightlines + world-space rocket physics (2026-11-21; **supersedes the FPV mesh and rocket numbers in the bullets above**): `chase_set.maru_gunship_fpv_parts()` caches a sightline-clipped FPV fuselage of `assets/3D/maru_gunship.glb` (reuses the full boom/rotors and `info`); it drops the eye-level `cabin_b_pillar_*`, `quarter_mullion_*`, `a_pillar_*`, `windshield_center_mullion` and `rocket_pod_*`/`rocket_tube_*`/`weapon_pylon_*` leaves, clips `bulkhead_*`/`cabin_aft_wall_*`/`aft_stern_bulkhead_cap`/`sliding_door_*`/`aft_boom_severed_*` to `y<=1.04` with Sutherland-Hodgman `_clip_poly_y_le`, and makes `avionics_*` emissive at night (3008 -> 2188 faces, 72 emissive). `put_maru_gunship(..., fpv=True)` submits it under a separate `maru_fuse_fpv[_burnt]` cache key while the cutscenes keep the full unclipped hull; `flight_fx.draw_cabin_and_gun` passes `-hroll` (CS `_xf` uses `rot_z(+roll)`, `FX.heli_matrix` `rot_z(-roll)`), seats Maru on `info["pilot_seat"]`, anchors the pintle at `info["pintle_top"]`, adds the GLB roof beacon, and uses `info["floor_y"]` for damage sparks/cabin fill; `gunner_eye` sits at `floor_y+1.06 = 1.634` (clear of the 1.22 instrument hood and 2.18 roof rim, Maru on port). `m8dutyfilms.liftoff_maru` calls `_gunship(..., fpv=(whip_u>=0.85))` at the whip and the LMG park/play pintle uses `ginfo["pintle_top"]` on both sides of the cut. Rocket physics: `flight3d` drops the `hvel` addition and the upward loft - `dir = normalize(vel)` and `p += dir*min(d, v_world*dt)`, so smoke/contrails trail behind the nose back to the launcher. Lead-intercept follow-up (2026-11-21; **supersedes the speeds/gates below**): `ROCKET_V=22` (estate), `ROCKET_ROAD_V=28`, `ROCKET_AIR_V=26`, `ROCKET_DMG=18` (were 16/22/22/14 - pure pursuit at 14/8 m/s had no intercept solution against the 34 m/s heli; current speeds close in 1.4-2.6 s); `_heli_vel()` finite-differences `_heli_pos()` (backward diff at a section end) and `_rocket_intercept(p, tgt, vh, s)` solves `|(tgt-p)+vh*t| = s*t`, lifting `s` to `1.12*s_min+1` when the discriminant is negative. `_fire_rocket` and `_ucilev_kill_shot` seed `dir` from it; `_rockets_update` re-solves each tick (turn `9.0*dt`, ramp `0.65..1.0`, tail speed `28`), keeping `rk["dir"]` aligned to the world path. Road gate `dz > 90/58 m` (ground/air), relaxed to `>= 60/36 m` once a `rk_tele` windup has begun, `dist_xz <= 180 m` ground / `220 m` air, `abs(rel_fwd) <= 72 deg`; rpg/aa stay active out to 185 m; missed road rockets drop lock at `hp.z-2`. `e["rk_tele"]`, separate from bullet `tele`, stops aa/gunship rocket windups from re-rolling `rng.random()` or aborting on the launch-range re-check. Decoy flares inherit `0.78*HELI_V` forward momentum and decoyed rockets lay trail/puffs as they curve into them. Probe: full/fpv 3008/2188 faces, 72 emissive, cp=0/1/4 plus 3 whip frames rendered headless.
+- M8 Duty rocket-difficulty + night-canyon readability pass (2026-11-21; **supersedes the rocket/combat and corridor numbers above**): `flight3d` shrinks the rocket hit sphere to `0.90 m` (was 2.8) and removes the free `-0.14` barrel cooling on rocket kills; rockets are harder to swat from afar with speeds `22/28/26` (estate/road/air), `ROCKET_DMG=18`, ground launches capped at `dist_xz <= 180 m` (air 220 m, rpg/aa active range 185 m), and the HUD lock diamond/range text only drawn inside `105 m` (7/1 px instead of 9/2) - beyond that track the flame/contrail visually. `flight_fx.draw_rocket` shrinks the motor flare (radius 2.35->1.65, `max_px` 72->42) and seeker glow (1.15->0.78, `max_px` 38->22). Flight altitude drops into the canyon (`alt_base=21.0` cp1-2, `ALT=19.5` cp3-4, dive 9->6, bob 2.8->2.0, `gp=-6.5`, Retardovici +2.5/1.8), `height_fog` softens to `(0.0028, 0.0, 2.2, FS.FOG)` and `wetness=0.48`. `flight_set`: `FOG=(12,17,30)` / start 130 / end 560, `Light(ambient=0.34, diffuse=0.62, sky=0.18, tint=(0.74,0.84,1.0))` and brighter pavement/ashlar/grass/asphalt albedos lift the cine-curve black crush; `_nearest_lamps(focus, cap=18/22)` samples 55 m ahead along the actual aim direction (26 lights / 28 pools caps, intensity 1.20/1.75, range 30/14.5) instead of around the heli; cross-streets extend to `+-180 m` with sidewalks, five sodium lamps per side and flanking tier-2 blocks; tier-1 spacing tightens to 23-27.5 m with kiosks/storefront signs, tier-4 outer towers at `x=+-138..195 m` up to 86 m, denser zone-2 infill, nine barricades and Route 12 valley ridges. `_add_building` computes `seed_h` once at function top (the supplied storefront-sign hunk used it before its old definition - moved up). Bake probe: 108991 faces / 187 lamps / 444 beacons / 130 roofs; cp=0/1/2/4 render clean.
+- M8 Duty Overhaul — 4-Phase Master Plan (2026-11-21; **supersedes the FPV hull slice, camera/gun hierarchy, flight paths, horizon/corridor density, rocket kinematics and Duty transition fades above**):
+  1. **Phase 1 — Grounded Starboard Door-Gunner Rig & Flight Choreography**: `chase_set.maru_gunship_fpv_parts()` keeps the cabin roof, overhead ribs, port fuselage wall, rear engine bulkhead, and A/B cockpit pillars intact (`_MARU_FPV_DROP` removes only the center-aisle pintle nodes, `sliding_door_*_stbd`, and starboard weapon pod/pylon; zero `y<=1.04` wall clipping); `put_maru_gunship(..., fpv=True)` disables hard solid `main_rotor` mesh (`main_on and not fpv`) while the intact ceiling/lintel hides the mast. `flight_fx.py`: `PINTLE_PIVOT_LOCAL=(0.94,1.22,0.30)`, `TRUNNION_LOCAL=(0,-0.055,0.180)`, `AMMO_FEED_LOCAL=(0.64,0.85,0.56)`, `FEED_TRAY_LOCAL=(-0.038,0.035,0.120)`, `EJECT_PORT_LOCAL=(0.045,0.025,0.095)`; wired `_maru_interior_accents(info)` (sealed port cabin wall, starboard doorway ceiling lintel & padded jambs, yellow/black caution sill stripes, rigid floor-to-trunnion steel pintle stanchion post, bolted olive ammo box, emissive cockpit dash gauges, warm amber bay lamp), `_pintle_yoke_mesh()`, and 7-segment catenary `_draw_ammo_belt()`; reversed gun/camera hierarchy so `lmg_xform` locks the LMG trunnion to `pivot_w` (`gun_at = pivot_w - basis*TRUNNION_LOCAL`) and `gunner_eye` positions Biribel's eye behind the stock/receiver (`back 0.56->0.44`, aligning to `(0,SIGHT_Y,OPTIC_Z)` on RMB ADS). `flight3d.py`: clamped starboard firing arc `REL_YAW_LIM=(8.0,152.0)`, `PITCH_LIM=(-62.0,20.0)` with soft stop damping in `_clamp_gy()` and stop ticks on the top compass tape; re-choreographed `cp=0` to a monotonic clockwise pylon orbit (`START_A_DEG=104.0`, `LAWN_C=(0,0,-18.0)`, `LAWN_R=38.5`), `cp=1..4` to west-flank port-crabbed flight (`corridor_x(z)-10.0`, `corridor_yaw(z)-33.0`), and `cp=4` Ucilev to `+20..+108 deg` starboard-forward passes.
+  2. **Phase 2 — 360° Horizon Sealing & Full-Corridor Environmental Rebuild**: `mansion_env.py` widens `_plain` to `+-380 m` and adds a 360° outer forest + capital skyline glow ring (`r=186..216 m`). `flight_set.py` sets `FOG_START=100.0`, `FOG_END=375.0`, widens `_ribbon` ground planes to `x=+-460 m`, adds camera-anchored 360° horizon silhouette rings (`_urban_horizon_ring` + `_mountain_horizon_ring` cross-faded at `z=1880..2380` via `draw_horizon_ring(r, hpos)`), and rebuilds Zones 1–4 (deep `+-260 m` cross-streets, stranded trams, stalled convoys, zero-gap Broadcast Plaza with bunkers/guy-wired 88 m tower/microwave dishes, gradual industrial & rail-yard transition `z=1980..2240`, Route 12 Carpathian foothills + parallel railway + 4 landmarks at `z=2420,2680,2920,3160`, and steep `+45..95 m` Northern Ridge Gorge with 6 spruce bands, snow-dusted crags, and valley mist).
+  3. **Phase 3 — Physical 2-Stage Rockets & Flight Combat Feel**: replaced discriminant speed-warp `_rocket_intercept` and `hp.z-2` pop-out deletion with real 2-stage missile kinematics (`phase="boost"|"cruise"|"ballistic"|"decoyed"`, `kind="rpg"|"sam"`, `ROCKET_BOOST_V=18.0`, `ROCKET_RPG_V=52.0`, `ROCKET_SAM_V=60.0`, `SAM_TURN_DEG_S=62.0`, `ROCKET_TELE_S=1.0`, `_rocket_lead_point` + `_rotate_dir_bounded`), launch backblast flash + rising white exhaust column (`draw_launch_backblasts`), `0.6 m`-sampled 32-segment contrails, `1.35..1.50 m` range-scaled shootdown sphere, `1.2 s` physical doorway flyby misses (`"ballistic"`), and HUD acquisition diamond (`<130 m` full readout, faint acquisition on launch).
+  4. **Phase 4 — Seamless, Non-Fade Transitions Across All of M8 Duty**: `app.py` supports `"hard_cut_in": true` on `_m8_film_pending()` (`gsm.transition("CUTSCENE")` instead of `trigger_transition`); `m8dutyfilms._finish_full` renders full-frame match-cuts with smoothly retracting letterbox bars for `approach_gate -> mansion3d cp=0` and `liftoff_maru -> flight3d cp=0` (using the exact Phase-1 intact cabin + fixed-trunnion pintle LMG); `flight3d` replaces the `cp=0 -> cp=1` navy veil and `_setup(1)` reset with a live 3D low-cloud bank traversal (`_advance_section(1)`, preserving aim/heat/flares), spawns Ucilev on a choreographed canyon dive-in at `cp=3 -> cp=4`, and hard-cuts from the spinning cabin into `crash_spin -> crash_black` tree-impact smash-cut; `ridge3d` adds a live `1.3 s` rifle-shouldering iris-scope entry (`INTRO_S=1.3`) and holds `1.8 s` in cold wind silence on `pres_down` before snapping into `d_epilogue`'s State TV CRT power-on scanline flash (`_crt_power_on`).
+- M8 Duty Ucilev boss overhaul (2026-11-22; **supersedes the Ucilev phase/gorge numbers above**): `duty/flight3d.py` (`SECTIONS[4]` extended to `z=3360..5400` at `UCILEV_V=28.0` plus a C1-continuous clockwise basin orbit of radius `UCILEV_ORBIT_R=46.0` past `z=5400`, zero stall; `_spawn_ucilev`, `_ucilev_spheres`, `_on_ucilev_subsys_break`, `_save_ucilev_checkpoint`, `_update_ucilev`, `_ucilev_combat`): 3-phase destructible subsystems (`UCILEV_SUB_HP`: `spotlight` 1100 -> `pod_l`/`pod_r` 950 each -> `turbine` 550; `UCILEV_ANCHORS` matched to `CS._xf`, `1.25x` weakpoint crit vs `0.35x` armored hull spill, `1.35 s` stagger protection + micro hit-stop, zero `UCILEV_FLOOR_HP` stall), ace maneuver state machine (`dive`/`stalk`/`spotlight_sweep`/`sam_hover` -> `strafe_arc`/`pod_salvo`/`canyon_pass` -> `close_duel`/`cliff_feint`/`ram_pass` -> `1.45 s` `climax` blowout fakeout -> `_ucilev_kill_shot` with `bypass_dz=True`), Maru evasive banking (`_evade_roll`, `_evade_y`), weakpoint lock brackets, 3-segment boss phase bar and `cp_toast` checkpoint banner in `_hud`. Subsystem break checkpoints: destroying `spotlight`, `pod_l`, or `pod_r` snapshots phase/subs/`sec_t` to `STATE.m8_ucilev_cp` (declared in `core/state.py` `STATE.reset()`, cleared in `finish()`, `flow.on_flight_done()`, or active `cp < 4`), restores mid-fight directly in starboard view with full hull/flares on death (`hurt_hull` ignores hits once `climax_t >= 0`), and offsets the `82 s` fallback timer by `_ucilev_cp_sec_t`. `duty/flight_fx.py`: `cs_matrix` (`rot_y * rot_x(-pitch) * rot_z(+roll)` matching `CS._xf`), cached `_ucilev_trim_mesh` / `_ucilev_spotlight_mesh` / `_ucilev_pod_mesh` / `_ucilev_turbine_core_mesh`, shared `draw_ucilev_fx()` (also used by `cutscenes/m8dutyfilms.py` `crash_spin` at `upos=(18,26,34)->(-2,33,56)` so Ucilev leaves the battle burning), and `draw_gorge_snow()`. `duty/flight_set.py`: extends Zone 4 to `z=5800` with a widened alpine basin at `z=5280..5550` and 4 baked landmarks (`z=3460` Retardovici crash clearing, `z=3820` 34 m-high Iron Gorge trestle bridge, `z=4280` relay bunker + searchlight, `z=4780` gorge power pylons). `m8_audio.py` + `flow.py`: adds `m8_rotor_pass` / `m8_subsys_boom` (`rotor_pass`/`subsys_boom`) and `"flight_boss"` volume swell when `cp >= 4`. Unit test: `tests/unit/test_m8_ucilev_boss.py` (6 tests).
+- M8 Duty Ridge sniping overhaul (2026-11-23; **supersedes the ridge `SLOWMO`/scope/snow notes above**): `cutscenes/m8duty_sets.py` (`ridge_forest`, `_snow_pine`, `_tripod_light`) adds the crash gouge/scorch trench & snow berms leading to the downed helicopter, pad markings, sheared rotor/cowling wreckage, sandbag cover, crates, field radio box, 4 physical tripod floodlights at `((-8,-8),(8,-8),(-8,10),(10,10))`, emergency flares, snow-capped granite outcrops, and a foreground sniper cliff ledge (`d_fwd = 0.4 m`, `y_rel = -0.95 m`, cleanly below all scope zoom cones) framing the `46 deg` intro (`ridge_frame` ambient `0.34`, diffuse `0.58`). `missions/m8/duty/ridge3d.py` (`RidgeScene`): `_intro_rifle_mesh` uses `cast3d.weapon_asset("sniper_rifle")` with `rifle_mesh(scope=True)` fallback; `fire()` resolves the target synchronously for caller compatibility while launching a visible 3D round (`FLIGHT_S=0.22`, `FLIGHT_KILL_S=0.26`) with parabolic gravity/wind curve, golden tracer, and post-impact vapor wake (`_draw_bullet`, `_bullet_pos`), delaying hitstop (`0.055 s`), punchy slow-mo (`SLOWMO=0.45`, `0.38..0.42` game-s instead of `0.25x` over `2.0 s`), and death reaction until bullet arrival (`_resolve_bullet`); `hit_mark` drives a real-time `0.32 s` tactical X hit-confirmation marker in `_scope` alongside cached ocular lens vignette (`_mask`); impacts trigger `_spawn_gore` (3D ballistic blood droplets + exit streaks, `_blood_mist_sprite` aerosol bursts, `hd=True, wound=3, bloody=True` + `"head_wound"` rig decals, expanding `_pool_mesh` crimson snow pools, permanent `snow_stains`, and tumbling dropped rifle / blinking Guard radio via `_draw_dropped_props`) and multi-stage collapses (`ucilev_spot` low-ready rifle -> snap -> buckle -> knee drop -> last words -> forward slump; `pres_spot` crouch holding radio -> stand -> snap -> stagger back -> flat snow collapse); ground misses compute real drop/wind intersection (`_ground_impact`), snapping near-boot misses in `"ucilev"` (`dist_u <= 7.5`) and spawning `_snow_geyser_sprite` + `snow_chunks` clods + dark snow craters.
+- M8 Duty Northern Ridge Gorge / live 1x peripheral scope overhaul (2026-11-23; **supersedes the ridge set/scope numbers above**): `cutscenes/m8duty_sets.py` adds `_clamp`, `_ridge_height(x,z,pad,eye)` and `_ridge_terrain_mesh(pad,eye)` - a triangulated Carpathian gorge replacing the flat snow slab (flat `r<=18 m` evac clearing, `eye[1]-0.85` m granite spur dropping `<= -46 deg`, +18..+68 m walls, transverse highway bed at `fwd~154 m`, secondary crash clearing at `fwd 70 / lat -46`, two 360-deg horizon rings at `r=215/268 m`). `ridge_forest` grounds crags/spruces on `_ridge_height`, clears an angular sight cone `abs(d_lat) >= max(14.0, 0.28*d_fwd + 6.0)`, builds the gorge highway + guardrails/sodium lamps, 3 power pylons, a flank crash scar and a grounded sniper perch (shooting mat + spruce-log rest) under EYE; fog/light unify with Last Flight Zone 4 (`FOG=(12,17,30)`, 75..360 m, ambient 0.26, diffuse 0.56) and `ridge_frame(..., roll=0.0)` forwards camera roll. `missions/m8/duty/ridge3d.py`: `ZOOMS=(18.0,8.0,3.8)`, `PERIPH_FOV=54.0`, first-frame `zoom_i=0` aimed at Ucilev via `_setup`; `RidgeScene._populate_world(r,tm,ie,peripheral=False)` (all world submits, bullet gated to the scope pass) plus `RidgeScene._draw_ridge_snow` (reduced-motion-aware `add_line3d` streaks) feed two `DS.ridge_frame` passes per frame in `draw()` - a 54 deg 1x peripheral pass (quarter-res `smoothscale` defocus + `_get_periph_tint` nocturnal multiply, cached in `_SCOPE_SURFS`; GL live, software throttled via `_periph_state`) composited under a crisp circular lens (`_lens_alpha`/`_blit_circular_lens`) from the magnified pass. Cached `_perch_gun_mesh` (barrel/suppressor/bipod) submits to the periphery after the intro; the optic gets `_housing(rad)` (elevation/windage turrets, gunmetal bezel, cheek shadow, AR sheen), with `_mask` kept as a compatibility alias. Lighting adds a parked `gun_truck` with headlights, distant Maru crash fire/haze and 4 extra `_PAD_LIGHTS` entries; muzzle flash honours `flash_reduction`, sway honours `reduced_motion`, scope radius is `HEIGHT*0.42`, HUD ZOOM divisor 72.0 plus an early control-hint line. Caveat: the supplied `_PAD_LIGHTS` snippet needed `tuple(...)` around its generator or import raised `TypeError`.
+- M8 Duty Ridge visual-correctness pass (2026-11-23; **supersedes the gorge numbers above**): driven by the 4-frame contact sheet, `m8duty_sets.py` reworks `_ridge_height` into a smooth V-shaped funnel (curved road `fwd=152+14*sin(lat*0.018+0.4)`, uniform 12 m heightfield grid instead of coarse 22 m quads, valley-floor drifts), simplifies the apron to `disc_xz` octagons and the crash skid to flat scorch (no white curb boxes), builds the road from 18 ribbon quads + `_wire_span` guardrails, 3 `_gorge_pylon`s with sagging transmission lines and beacons, a grounded foreground perch (`fwd 2..3.6 m`, `y_rel -0.60..-1.18 m`) with timber rail and crags, and 132 wall spruces; fog `(10,14,24)` 52..250 m, ambient 0.17 / diffuse 0.42, and `ridge_frame(..., pools=())` now forwards ground pools. `ridge3d.py`: intro GLB lens recolored to coated glass, `_perch_gun_mesh` lowered onto the log, VIP wreck moved to `_off(9.4,-3.6)` yaw 225 with rising smoke and headlight haze, tripods/flares moved clear of the targets, `_pad_pools()` warm ground pools, numpy-based `_get_periph_tint`/`_lens_alpha` (no banding/steps), a 2-stage defocus and an authentic PSO-1 reticle (amber chevron, drop ticks, stadiametric arc); the cheek-weld polygon was removed from `_housing`. Caveat: the owner's snippets again needed the earlier `tuple(...)` and 3-tuple-unpack fixes, both preserved.
+- M8 Duty Ridge v3 framing cleanup (2026-11-23; **supersedes the v2 perch/periphery numbers above**): from the second contact sheet, `m8duty_sets.py` drops the flat shelf/log and builds an organic jagged granite firing notch (three `_bipyr` sill stones at `y_rel=-1.56`, `z=2.4..2.5`; flanking crag clusters and leaning spruce bough tufts at `+-20..26 deg`, inside the 54 deg periphery but outside the scope tube), unifies the snow albedo (no `(ix+iz)%2` checkerboard), rebuilds `_gorge_pylon` as a four-leg A-frame lattice with ring braces and a beacon, and moves the front tripod to `(-7.8,-2.0)`. `ridge3d.py`: x4 start yaw `-1.8 -> +0.6` deg so the burning chopper stays in frame, shorter/dimmer snow streaks, intro rifle raised (`off_l y -0.14`), front tripod light moved to `(-7.8,-2.0)` and the eye-side fill to `fwd*2.6 / y+0.9 / intensity 1.25`, and a brighter numpy peripheral tint (`k = 0.78 - 0.36*smoothstep`; RGB 214/228/252) so the outside flanks read as night ridge instead of near-black. Re-shoot: `_shots/ridge_overhaul_v3.png` (all four frames OK).
+
+- M8 Duty Ridge sniper-hold / hitbox / ballistics fix (2026-11-23; **supersedes the v3 target/bullet notes above**): `ridge3d.py` adds `_recolor_sniper_face` (amber GLB lens -> coated glass, khaki stock -> dark walnut) shared by the intro and world weapon; `ucilev_spot` drops the hardcoded arm angles, and `draw()` solves `hold_frame(..., weapon="sniper_rifle", mode="ready")` on `_w.life_pose`'d Ucilev, submits the baked mesh at `(r_orig, r_basis)` with `rifle_on=False`, and spawns the dropped rifle from the live hand transform (`_u_gun_xform`). `targets()` now stacks head/chest/pelvis/legs spheres for Ucilev, Retardovici and Guards (no gap from y=0 to 0.79 m). `_bullet_pos` follows `p_aim` linearly with quadratic `u^2` drop/drift instead of the inverted `4u(1-u)` arc; `fire()` drops the `k_pull` teleport and duplicate impact kick, distinguishes `near_feet` vs `past_body` misses and keeps the hit point at the true ballistic height. `_snow_geyser_sprite` is a small 0.62 s kickup on depth-sorted layer 2. Re-shoot: `_shots/ridge_overhaul_v4.png` (hold, clean snow miss, tracer, chest hit + dropped rifle).
+
+- M8 Duty epilogue Maru crutches tail restored (2026-11-24): `cutscenes/m8duty_crowd.py` `draw_maru_with_crutches` was truncated after `cuff_m = _basis_from_xy(right_v, fa)`, so the forearm strut, the three open-front U-cuff boxes + mount block and the final `r.add_dynamic(...)` submit never existed - the crutches never rendered (queued-delta 0). Restored `cuff_mount`, `_add_strut(junc -> cuff_mount, alu_hi)`, the cuff geometry and the dynamic submit with `[(f[0],f[1],f[2],f[3],None,f[4]) for f in crutches.faces]`. Probe reports `CRUTCHES QUEUED OK, delta= 1`; `m8_duty_film_shots --only epilogue` and `smoke --only m8` OK. `m8duty_crowd` is imported directly by `m8dutyfilms`, not re-exported by the `cutscenes` facade.
+
+- M8 Duty ending-film cinematography pass (2026-11-20): `cutscenes/m8dutyfilms.py` `_eye(tgt, dirv, vspan, fov)` places the eye at `tgt - dirv*d` where **`dirv` is the view direction (eye->target)**, NOT target->eye; `d = vspan*FILM[0]/(2*FILM[1]*tan(fov/2))` because engine fov is horizontal and the letterbox buffer is ~2.2:1 (vertical span `0.912*d*tan(fov/2)`). Every shot picks its vertical span in metres (face 0.6-0.8, medium 1.3, two-shot 1.6, wide 3.4+) instead of guessing distance. Crash cams sit on the correct side of the Maru(225°)/Biribel(48°) facing axis and offset perpendicular so neither actor blocks the other: `crash_fire` SE-above two-shot `dirv(-0.58,-0.15,0.80)`, `crash_promise` east front-3/4 on Biribel `(-0.92,-0.13,-0.20)` (clear of Maru to the north), `crash_better` SE on Maru's **reclined head** at `_MARU_CRASH_AT+(0.51,0.85,0.43)` (probe `Humanoid.pose_world()[1]['head']`; his chest is NOT his head) `dirv(-0.80,-0.10,0.60)` vspan 0.60 - a SW/front cam lands on top of kneeling Biribel. `crash_spin` end eye stays inside the cleared south corridor (`|x-c|<8.5`, eye x `c-6.0`); `c-8.5` sat on the corridor boundary inside a pine bough (black frame). Liftoff: `liftoff_study` reframed on Biribel at the balustrade (vspan 3.4, heli passes overhead); `liftoff_maru` approach base raised to `hy+0.9` (was `hy-2.2`, hidden behind the terrace balustrade), `gyaw=-90+45u-10climb` (ends ~-53° so the port side faces the mansion W-SW), starboard door `rot_y(-45)`, cabin-whip lands on a vista `cab_tgt` local `(-4.2,0.7,-2.4)`; `liftoff_window` now uses `_vip_open_body()` + `_draw_vip_open()`: the closed VIP GLB has **no door node**, so a doorway is cut by dropping every body face with ANY vertex in the port rect `x<-0.55, 0.5<y<2.45, -0.2<z<1.6` (a centroid test leaves large GLB triangles spanning/blocking the hole) masked by frame boxes, and Retardovici stands in the sill at local `(-0.92,0.55,0.70)`; camera is a full-figure port-side door shot in hull-local coords via `CS._xf`, lit only by `_heli_lights` (an extra close key blew him out to a cream mannequin). Epilogue `biribel_vo` camera moved to Biribel's FRONT (`BIRI_AT+(1.1,1.62,+3.4)`, he faces the courthouse/north so a south cam showed crowd backs). `m8duty_sets.py` courthouse/city facades use new `stucco`/`ashlar` tiles (below) instead of `m7_plaster`/`m7_stone` (mould blotches); `_pine_tree` 6 tiers; `crash_forest` south corridor widened to 8.5 m for trees AND shrubs. Probe: `tools/m8_duty_film_shots.py` renders every Duty film at 25/60/95% of its timeline into `_shots/<out>/sheet_{liftoff,crash,epilogue}.png` (`--software`, `--only=`).
 - `cutscenes/m6world3d.py` is the shared 3D cast/set host (`hum(key, hd, wound, bloody, flags)`, `actor(r, key, pose, pos, yaw, t, ...)`, `add(r, m, bias)`, `life_pose`, `LAST`, `_gun_mesh`). Importers: every `missions/mN/draw3d.py`, `m3/wings3d.py`, `m6/train3d.py`, `m7/raid3d.py`, `m7/raid_world.py`, all `m8/revenge/*3d.py` + `beats.py` + `chase_set.py`, `m8/duty/{mansion3d,flight3d,ridge3d}.py`, `cutscenes/{intro3d,m3broadcast3d,m3ko3d,m3staging,m6films,m6fx3d,m7films,m7world3d,m8films,m8dutyfilms}.py`, `game/topdown3d.py`, `ui/arena_view3d.py`, `ui/mp3d.py`, `ui/mission_complete_3d.py`, `missions/walk3d.py`. Treat `hum()` flags and `actor()` signature as a cross-repo contract. Flag `"nopump"` (with `"shotgun"`) builds `shotgun_mesh(with_pump=False)` under GL key `|shotgun_nopump`; raid3d/trap3d use it and draw `shotgun_pump_mesh()` themselves so the pump slides.
 - `cutscenes/m6fx3d.py` (fx), `cutscenes/death3d.py` (death) are shared by raid3d/trap3d. `cutscenes/m7world3d.py` = M7 farm set (raid3d).
-- 3D holds: `engine3d/hold.py` `hold_cached`/`hold_weapon` with a `GRIPS` key; the weapon key comes from `hum._weapon` or `spec["rifle"]` (`weapon_of`).
+- 3D holds: `engine3d/hold.py` `hold_cached`/`hold_weapon` with a `GRIPS` key; the weapon key comes from `hum._weapon` or `spec["rifle"]` (`weapon_of`). `hold_cached` uses an LRU `OrderedDict` (cap 1024, never full-clear mid-fight) and `solve_arm_safe` reuses fixed torso volumes across pole trials; per-frame callers with animated spine/twist/stagger (`m6/train3d.py`, `m6/yard3d.py`, `ui/mp3d.py`) solve once on `POSES["ready"]` (pre-warmed at scene load; `game/topdown3d.armed` also calls `mp3d.warm()` on first use) and graft `_HOLD_KEYS` + `spine`/`twist` offsets instead of passing per-frame blended poses into `hold_cached`.
 - M5 mid-cutscene sets (`cutscenes/m5mid3d.py`) now share the 2.5D Lower Quarter look: `_qt(name, col, k)` caches `engine3d.textures.tex(..., tint=True)`, `_pave_tex`/`_conc_tex` add per-tile noise, and `_framed_window`, `_quarter_block`, `_mag_van_3d`, `_paper_bales_3d` build framed windows, grime-banded multi-storey blocks, the MAG panel van and strapped paper bales. `_faces_set(r, t)` rebuilds the East Checkpoint (Kovac & Sandu) as a continuous avenue with jersey barriers/sandbags leaving the north lane open and MAG Print Works down the cross-street; `_street_set` uses the same helpers so `_arrival_wide`/`_arrival_door` no longer show a black void at the edges. `cutscenes/ps2mat.py::_class` classifies dark low-saturation cool colours as `"asphalt"` (`_material`: `pavement` on flat faces, `concrete` elsewhere) instead of leaving them untextured. Note `quad_xz(colfn=...)` receives grid indices `(i, j)`, not world coordinates (the legacy `wet` lambda convention), so noise is per sub-tile rather than world-locked. `_street_set`'s avenue now runs x=-64..32 (kerbs, lane dashes, tram rails to -58, streetlamps at -13.2/-26.5/-40) with a Quarter block chain out to x=-58 and opposite-side blocks behind the camera, so `_arrival_wide` Angle 1 (low follow, fov 72, left edge ~x=-52 at the z=10 plane) no longer exposes void; the corner blade sign carries three emissive lettering bars. `_faces_set` caps the cross-street ends at x=±22 (blocks 608/609) so looking left/right down z=18..22 never shows void either.
 
 ### 4.4 Art, sprite and bake precedence
@@ -943,13 +484,21 @@ Callers keep a procedural fallback for every baked/sheet asset; never delete it.
 ### 4.6 Audio and voice
 - SFX/music: `core.config.audio` (`audio/audio.py` `AudioManager`) - `audio.play("reload", volume=)`. Per-mission banks: `missions/m1/m1_audio.py`, `m6/m6_audio.py` (`M6TrainAudio.warm()`), `m7/m7_audio.py`, `m8/m8_audio.py`, `m5/finale_audio.py`.
 - OST roster (`tools/ost/album.py`, 20 tracks, baked by `python tools/build_ost.py <n>...` into `assets/music/ost/` + `build/ost/`): 01 Call of Acaristan, 02 Black Notebook, 03 Quiet on Route 12, 04 The Vostral, 05 Curfew Dawn, 06 Not Tonight, 07 Whiteout, 08 I Chose the Many, 09 Fallow Ground, 10 Head of State, 11 Old Friends, 12 Gabi, Seby, Darius, 13 Wet Concrete (early/mid combat WALK/M0-M3 + M8 trap), 14 After Hours (M5 curfew + M0 depot), 15 Cold Iron (M6 combat/insertion), 16 Mending Wire (M7 farm daytime), 17 Cold Marble (M8 Duty approach/mansion), 18 To the Crossing (M8 Revenge chase/gunship), 19 Paper Trail (debrief, BRIEFING, MISSION_COMPLETE, M6 boxcar/radio films, M7 burning finale), 20 Dust on the Road (M7 prep, 7/4 G minor — begins on the `m7_runner_shotgun`/`m7_runner_gun` shot via `m7/flow.film_music` and carries into `STAGE_PREP`). `core/score.py` holds mission-keyed `CALM`/`TENSE` dicts (`TENSE_DEFAULT` fallback): M0/M5 calm uses 14, M6 tense uses 15, M4/M5 tense keeps 06. `m7_audio.MUSIC["farm"]`=16, `["prep"]`=20, `["finale"]`=19; `m8_audio.MUSIC` approach/mansion=17, trap=13, chase=18, flight=10; `m8/flow.STAGE_MUSIC` d_approach→approach, liftoff/crash→flight. `_CutsceneState` routes M6 insertion films to 15/07/19 by `shot["scene"]`, `_BriefingState`/`_MissionCompleteState` play 19 on entry and fade on exit; `_keep_music_for_credits` preserves M8's title theme into CREDITS. Tracks 13-19 were rebuilt from the ground up with no reused grooves/progressions/motifs from 01-12: 13 is 5/4 (118 BPM, C#m), 14 slow 4/4 noir (68 BPM, F#m), 15 6/8 compound (168 BPM, Bm), 16 3/4 folk (86 BPM, G), 17 dark 4/4 march (98 BPM, G#m), 18 4/4 motorik (142 BPM, Fm -> Gm), 19 minimal 4/4 chamber (70 BPM, Dm/Dorian). Filenames are unchanged, so no score/app/m7/m8 rewiring was needed.
-- VO: `audio/voice.py` `play_line(speaker, text, radio=)` -> `find_line` matches text -> `VO_xxx` id in `audio/voice_manifest.py` -> file in `assets/voice`. Callers: `app.py`, `ui/radio.py`, `ui/speechbox.py`, `core/interactions.py`, mission flow/systems files. New line: `VO_xxx` row + `KNOWN_MISSING_AUDIO`, never `VOICE_ORDER`.
+- VO: `audio/voice.py` `warm()` (called at boot in `app.py` when the mixer is live so the first combat radio line never scans disk mid-frame) + `play_line(speaker, text, radio=)` -> `find_line` matches text -> `VO_xxx` id in `audio/voice_manifest.py` -> file in `assets/voice`. Callers: `app.py`, `ui/radio.py`, `ui/speechbox.py`, `core/interactions.py`, mission flow/systems files. New line: `VO_xxx` row + `KNOWN_MISSING_AUDIO`, never `VOICE_ORDER`. `app.py` `_CutsceneState.update` fires VO on blank-speaker shots too: `sp = shot.get("speaker") or ""`, then `voice.find_line("NARRATOR", shot["text"])` gates a `play_line(sp or "NARRATOR", ...)`; `scene == "title_card"` stays silent.
+- Batch recording: `tools/vo_batch.py` (`status`/`make-refs`/`pack [--redo-bodi]`/`split`/`ingest`/`sync-manifest`/`colab-pack`/`colab-import`) packs missing rows (incl. `00_NARRATOR`) into AI Studio scripts under `build/vo_batches/` or a Colab kit `build/vo_colab_kit.zip`, stitches ~25-30 s voice-replication refs into `build/vo_batches/refs/<SPEAKER>_ref.wav`, picks 1-2 clean takes + exact transcripts for Colab voice cloning (`BAKED_SCREAMS` excluded), splits exported WAVs by silence islands + duration DP into `assets/voice/<Speaker>/VO_xxx.ogg|.wav`, and removes installed IDs from `KNOWN_MISSING_AUDIO` only. `ingest` sorts unrenamed `Generated Audio ...wav` drops by `voice._file_order_key` and assigns them to that speaker's missing IDs in order (`--start`, `--align` for retakes), moving consumed files to `_done/<VO_ID>__<name>`. Uses `voice._speech_units`/`_scan_files`/`has_file`/`_align`/`_duration`; optional numpy, ffmpeg only for Vorbis encode/decode with a `pygame.mixer` decode fallback when ffmpeg is absent.
 - Radio UI: `ui/radio.py` (`PORTRAIT_KEYS`, portraits from `spr_portraits` built by `tools/sprites/portraits.py`), fonts `ui/pixfont.py`.
 
 ### 4.7 Cutscenes
 ```
 2D/legacy shots: missions/mN/meta.py -> game/timelines.shots(id, legacy) -> content/timelines/<id>.timeline.json
                  -> app.start_cutscene(shots, after_state) -> CutscenePlayer -> cutscenes/engine.py (+ registered renderers, core/cutscene_registry.py)
+Hybrid 3D takes: cutscenes/intro3d.py (7 opening narration shots: intro_ocean/city/poster/graffiti/convoy/checkpoint [articulated rolling-wheel FuegoTech semi-tanker]/arrival),
+                 cutscenes/van3d.py (van_exterior + van_interior/van_volkov_photo/van_handoff_weapon [pistol.mesh.json]/van_handoff_molotovs [molotov.mesh.json]), cutscenes/m2route12_3d.py (route12_checkpoint/aftermath/broadcast, krap_door_kickin, seby_pickup_*),
+                 cutscenes/m3intro3d.py (cell_ceiling/restraints, interrogation_room, monitor_broadcast), cutscenes/m3ending3d.py (m3_end_*, m3_bcast_fail_studio/pa),
+                 cutscenes/m4aftermath3d.py (m4_street_curfew, m4_city_curfew, m4_arrest_screen, m4_maru_silhouette, m4_roof_dawn), cutscenes/m7goat3d.py (m7_goat_* on m7world3d farmyard).
+                 All respect ACARISTAN_CUTSCENE3D=0 to fall back to the 2D takes in route12.py/m3cell.py/m3ending.py/m3broadcast.py/m4aftermath.py/m7goat.py.
+                 2D inserts/dossiers/UI/mechanical beats live in route12.py (route12_black/files/mag_alert, ipa_radio_chatter, biribel_blackout), engine.py (draw_volkov_dossier_overlay),
+                 chair.py, k9.py, m3ops.py (vent_shaft/exit, m3_volkov_gives_mags), m3broadcast.py (m3_bcast_fail_retry), m3/draw.py (vostral/archives), missions/m0/__init__.py (_draw_inspect).
 3D films:        cutscenes/m6films.py, m7films.py, m8films.py (+ meta.M8_SCENES, m8/revenge/beats.py fallback) -> m6world3d / post3d / weather3d
                  M8 Duty: cutscenes/m8dutyfilms.py, keyed "m8d_*" in meta.M8_SCENES; shot lists content/timelines/m8.d_{approach,liftoff,crash,epilogue}.timeline.json
 Mission end:     MISSION_COMPLETE -> ui/mission_complete.py (case dossier, FORM KR-47) + ui/mission_complete_3d.py (live engine3d diorama); preview tools/preview_mission_complete.py
@@ -977,6 +526,7 @@ Engine snapshot (replays/tests): game/save_adapter.py capture -> engine/save
 | Guard rifle (AK) | `"akrifle"` | `content/meshes/akrifle.mesh.json` (`tools/ae_import_akrifle.py`) via `cast3d.rifle_asset` / `third_person_rifle`; `GRIPS["akrifle"]` | 2D enemies: procedural line gun in `entities/enemy_ai.py` | enemy AI per mission | default 3D guard (`key == "guard"` without `os12`), M3 KO film |
 | AK-74 | `"ak74"` | `content/meshes/ak74.mesh.json` (`tools/ae_build_ak74.py`) via `cast3d.ak74_asset`; flag `"ak74"`; `GRIPS["ak74"]` | none | - | Biribel/cast films flagged `ak74` |
 | Generic rig rifle / sniper | `"rifle"`, `"sniper"` | `engine3d/rig.py rifle_mesh` (`scope=True` for sniper); `GRIPS["rifle"/"sniper"]` | - | `missions/m2/sniper.py`, `sniper3d.py` | Ucilev (`rifle="sniper"`), M2 nest |
+| Imported sniper rifle (suppressed bolt-action) | `"sniper_rifle"` (film flag/rig key) | `content/meshes/sniper_rifle.mesh.json` (`tools/ae_import_sniper.py`, bakes `assets/3D/lowpoly_sniper_rifle.glb`) via `cast3d.weapon_asset`; `m6world3d.hum(flags=("sniper_rifle",))` sets `_rifle/_weapon/_muzzle_z/_gl_spec_key`, procedural `rifle_mesh(scope=True)` fallback; `GRIPS["sniper_rifle"]` (mirrors mesh meta `butt/guard/fore`) | none | `cutscenes/m8dutyfilms._crash_actors`: world-space `_draw_sniper_world` handoff pinned to live `rhand`/fore via `hold_cached(..., "ready")` and `_interp_rot` | M8 Duty crash films (`crash_fire`/`crash_promise`/`crash_better`) |
 | LMG | `"lmg"`; hold cache key `"m8lmg"` | `content/meshes/lmg.mesh.json` (`tools/ae_import_lmg.py`) via `m6world3d._gun_mesh("lmg")`; `GRIPS["lmg"]` | none; HUD text `"LMG %d / %d"` in `chase3d.py` | `m8/revenge/chase3d.py` `GUN="lmg"`, `MAG=100`, `RELOAD_S=4.2` | M8 tractor chase |
 | TACTICAL LMG (Duty door gun) | `"tactical_lmg"` | `content/meshes/tactical_lmg.mesh.json` (`tools/ae_import_duty_props.py`) via `cutscenes/m8dutyfilms._tactical_lmg` | none; flight HUD text | `m8/duty/flight3d.py` | M8 Duty Last Flight (door gunner) + Duty films |
 | Duty loadout (OS-12 + FALLOW 12) | `"rifle"` (label OS-12, `5.56X45`, stick, mag 30) / `"shotgun"` (FALLOW 12, `12GA`, shell, mag 6) | `hum(flags=("shotgun","nopump"))` as in raid3d | `yard_hud.weapon` via `mansion_hud` | `m8/duty/mansion3d.py` `WPN_SPECS`, `WPN_ORDER` | M8 Duty mansion fight; same keys as `trap3d` `WPN_SPECS` (`"rifle"`, `"shotgun"`), separate stats |
@@ -1024,6 +574,11 @@ Edit = change; Check = shared callers to keep working; Verify = command. Paths a
 
 **Cutscene / timeline**
 - 2D: `content/timelines/` `<id>.timeline.json`; `cutscenes/` `<mission file>.py`; `mN/` `meta.py` or root `app.py`. Tool: `tools/` `ae_timeline_edit.py`.
+- THE CALL trailer v2 tooling overhaul (2026-11-24; `tools/trailer_call/`, no `src/` changes): new native-resolution `hud.py` (1920x804 tactical panels, recoil/hitmarker crosshair, anti-aliased PSO-1 mask/bezel/reticle and `composite_pso1_scope`); `scenes.py` rebuilt with the beige lamp-square fix (`W6.terrain(lights=False)` + soft pools), charred WIN_LIT masks and warm-underlit smoke, red chest IFF-dot removal, hedge-clear moonlit estate, `FFX.tactical_lmg_mesh`, collapsed burnt truck chassis, dynamic red/blue strobes, four real gameplay sequences (`gp_mansion_ots`, `gp_chase_lmg`, `gp_door_gunner`, `gp_checkpoint_ots`), eight brand-new flash shots + `climax_surge`, and dual-pass `render_scope_passes`; `render.py` adds TPDF-dithered filmic grade with shadow toe, multiplicative fades, native-HUD gameplay shots, the PSO scope shot, a clean CTA title card and `FLASH_HITS` restricted to live-action drops; `score.py` adds sidechain ducking plus diegetic foley recipes (fire crackle, snow/wet footsteps, two-tone siren, ricochet, shotgun + pump, spark zap, sniper crack into the title sub-drop); `vertical.py` synced to 43.2 s / 18 bars with the new scene names and CTA. The three known in-game bug sites (`m6world3d` lamp quads, `m7world3d` WIN_LIT, `chase_set` static lightbar) are documented only, not modified.
+- THE CALL trailer visual/audio polish pass (2026-11-24; `src/engine/render3d/vehicle_destruction.py` + `tools/trailer_call/{scenes,render,score}.py`): `_build_wreck_core_mesh` replaces the giant emissive amber bed plate with charred steel, a soot sheet and small recessed ember cracks (same public API, also benefits in-game wrecks). `scenes.py` adds `_s3_frame` (no harsh stratus sky line), `_toll_sign_mesh` (blocky white "ROUTE 12 - VAMA" on the gantry) and `_flat_dead_pose` (flattened ankles, no vertical boots); separates patrol/roadblock sightlines, darkens the estate to five warm rooms, builds explicit billowing smoke plumes at the barn, moves vehicles onto clear stretches, adds jeep swerve/roll/impact sparks/fire in `gp_chase_lmg`, cover-crouched guards at the checkpoint, a single-IK `flash_01`, door-breach `flash_02`, front-3/4 `flash_04`, a non-repeating `climax_surge` beat 2 and a walking/scanning scope sentry with lag-tracked aim. `render.py` drops estate_gate expo 0.92 -> 0.80; `score.py` removes the sine-sweep ricochet chirp, adds four rifle + four LMG + three impact takes, distance-appropriate footstep modes, a -16.5 dB low-passed consonant siren, warmer fire and a -1.8 dB upper-mid duck over the climax montage. Gates: compileall, normalize, api snapshot +0/-0, smoke `--only m8`, `sync_arch_map --check` OK; `check_boundaries` still the documented E4 x2 / W1 89 baseline.
+- THE CALL trailer placement/combat correctness pass (2026-11-25; `tools/trailer_call/scenes.py` only): `_open_s3_pos` snaps guards to the nearest clear 3x3 `.` tile away from booths, barriers, CARS, SANDBAGS and TANKER; `convoy_boom` truck moved to `(-32, 0, 10.5)` clear of `CARS[1]`; `ember_barn` guard 2 moved off the courtyard well. `city_hover` drops the camera-tethered yellow laser for fixed-world flak and short ballistic tracer bolts from forward-only gunners plus AA fire toward the burst. `rocket_streak` now flies a quadratic Bezier intercept from `t_launch=0.10` to `t_hit=1.62`, with the gunship evading + four timed decoy flares, the lead flare consumed in a 3D fireball/flak blast, blast light and camera jolt, and `SHOT_EVENTS` updated (flare 0.82/1.02/1.22, explosion 1.62). `flash_08` replaced by a Broadcast Plaza night strike (lit colonnade, exploding AA truck, banking gunship) with rotor/explosion events. Gates: compileall, normalize, `render.py --at` on 29.8/52.0/54.4/61.1/61.75/71.55 OK, `--sheet` 31/31 OK, `sync_arch_map --check` OK.
+- M8 Revenge kill hijack cinematography (2026-11-25; new `missions/m8/revenge/kill_cine.py` + `kill3d.py`): the post-trigger assassination now cuts through `impact` / `grate` / `walkup` / `finisher` / `witness` on chest and groin branches, headshot drops straight to `witness`, and hesitation hands off to `bodi`; every branch ends on the shot name `"witness"` so `check_mission8_vertical_slice` (which asserts `shot == "witness"` and `shots == 1`) exercises all cuts with no scene switch or renderer reload. `kill_cine` owns branch tracks with limb lag, impact micro-slowmo, Biribel's Fallow 12 pump-rack walk-up via `engine.anim` gait/mask poses, a finisher camera locked to Vasile's live `pose_world()["head"]`, Bodi's upward OS-12 hold and reduced-motion-aware drift; `kill3d` delegates performance/camera/faces to it and adds `_lights`, `_play_single`, `_trigger_finisher` and `_draw_bodi`. Lifecycle and `on_kill_done("shot")` unchanged.
+- M8 Revenge kill-cut framing & input lock (2026-11-25; `kill_cine.py` + `kill3d.py`): MOUSEMOTION and the reticle are now gated on `can_fire()` so Biribel cannot swivel during Vasile's Maru speech; `AIM_YAW` 16 -> 12, `AIM_PITCH` 24 -> 20 and his root swivel damped to `0.35 * yaw_off`. Camera angles re-shot from `_shots/kill3d_cine_check.png`: `grate` tracks Vasile's live head joint for headroom, `walkup` sits south of the catwalk above the handrail for an unobstructed pump-rack two-shot, `finisher` backs off 14 cm, `bodi` pulls back to a low-wide muzzle-connected framing, `impact` gets a longer slow-mo flash window. All branches still end on `"witness"`.
 - 3D films: `cutscenes/` `m6films.py`, `m7films.py`, `m8films.py`, `m8dutyfilms.py`; `m8/` `meta.py` `M8_SCENES`.
 - Verify: `python tools/ae_timeline_check.py`, `python tools/smoke_test.py --only <mission>`.
 
@@ -1035,8 +590,8 @@ Edit = change; Check = shared callers to keep working; Verify = command. Paths a
 **M8 Duty route (mansion / flight / ridge)**
 - Edit: `m8/duty/` `mansion3d.py` + `mansion_set.py`, `mansion_world.py`, `mansion_brain.py`, `mansion_hud.py`; `flight3d.py`; `ridge3d.py`; films `cutscenes/` `m8dutyfilms.py`; ladder `m8/` `meta.py` (`DUTY_STAGES`, `STAGE_LABELS`, `M8_SCENES` `m8d_*`), `flow.py`, `systems.py`.
 - Check: borrowed `RaidScene`/`TrapScene` methods (4.3); `m8/revenge/` `epilogue3d.py` (funeral house shared with `mansion_set`), `chase_set.py` (helicopter); `ui/` `mission_failed.py` `checkpoint_label`.
-- Andrei M.'s death: beat times `ANDREI_SHOT_S`/`ANDREI_HIT_S`/`ANDREI_ZAP_S` live in `mansion_brain.py` (`_andrei_update`: tracer, `on_andrei_rack_hit`, zap sparks, banter); `mansion3d._andrei_death_anim` keys the pose to them (shot -> backpedal `ANDREI_RACK_DX` into the middle `ANDREI_RACK_AT` rack -> pinned shake -> slides down to a legs-flat sit at `ANDREI_SIT_S` -> tips onto his side on the floor by `ANDREI_DOWN_S`; rig auto-grounds the lowest vertex, so bent knees would hold his seat off the floor) and `_draw_andrei` keeps the pistol in hand until the impact, then on the floor.
-- Verify: `python tools/smoke_test.py --only m8`; play via `--dev-mission8-duty`, `-mansion` (`--m8-cp=0/1/2`), `-liftoff`. Plot: `docs/` `MISSION8_PLOT.md`.
+- Andrei M.'s death: beat times `ANDREI_SHOT_S`/`ANDREI_HIT_S`/`ANDREI_ZAP_S` live in `mansion_brain.py` (`_andrei_update`: tracer, `on_andrei_rack_hit`, zap sparks, banter); `andrei_timings("player")` uses `(1.50, 2.95, 3.55, 4.15)` and `trigger_andrei_death` records `shot_yaw`/`had_gun`/`shot_pos`. `mansion3d._andrei_death_anim(age, cause, hit_zone, shot_yaw, had_gun)` keys the pose to them (shot -> eased turn to 90 + single-jolt/4-stride backpedal over `ANDREI_RACK_DX` into the middle `ANDREI_RACK_AT` rack -> pinned shake -> slides down to a legs-flat sit at `ANDREI_SIT_S` -> tips onto his side on the floor by `ANDREI_DOWN_S`; rig auto-grounds the lowest vertex, so bent knees would hold his seat off the floor). `_draw_andrei` keeps the pistol in hand until the impact (braced `_held` in intro, forearm-aligned on misfire), then `_dropped_pistol_xform()` drops it ballistically to rest on `GF + 0.032`; blood/char decals use `hum.pose_world()` slots S/H, and floor puddles are player-shot only.
+- Verify: `python tools/smoke_test.py --only m8`; play via `--dev-mission8-duty`, `-mansion` (`--m8-cp=0..4`, also `-hall`/`-study`/`-helipad`), `-liftoff`, `-flight` (`--m8-cp=0..4`, also `-flight-road`/`-flight-tail`/`-flight-ucilev`), `-crash`, `-ridge`, `-duty-epilogue`. Full target list: `python acaristan.py --list-jumps`; generated table in `docs/FILE_INDEX.md` §12. Plot: `docs/` `MISSION8_PLOT.md`.
 
 **UI strings / menus**
 - Edit: `content/strings/` `en.json`; callers `T("...")` in `ui/` `*.py` or `engine/ui/std/` `*.py`. Menus `ui/` `main.py`; settings/pause `system.py`; layout helpers `kit.py`.
@@ -1049,7 +604,29 @@ Edit = change; Check = shared callers to keep working; Verify = command. Paths a
 
 **New spoken line**: `audio/` `voice_manifest.py` (row + `KNOWN_MISSING_AUDIO`); caller text in `content/timelines/`, `content/dialogue/` or `mN/` `flow.py`. Canon: `docs/` `LORE.md`, `MISSION*_PLOT.md`.
 
+**Blank-speaker cutscene narration / late-registered VO lines**
+- Edit: `app.py` `_CutsceneState.update` (blank `speaker` -> `voice.find_line("NARRATOR", ...)` -> `play_line("NARRATOR", ...)`; `scene == "title_card"` excluded); `audio/` `voice_manifest.py` `VO_456..VO_482` (14 Narrator + 13 M0/M4/M7/M8 character lines in `VOICE_LINES` + `KNOWN_MISSING_AUDIO`, never `VOICE_ORDER`).
+- Check: `audio/voice.py` `find_line`/`_norm`; timeline/dialogue text must normalize to the manifest row or no take plays. Non-narrator system text and title cards stay silent.
+- Verify: `python tools/voice_audit.py --check`, `python tools/smoke_test.py --fast`, `python tools/vo_batch.py status` (481 lines / 178 recorded / 303 missing).
+
+**VO batch recording / auto-splitting (AI Studio, no CUDA/PyTorch)**
+- Edit: `tools/` `vo_batch.py` (`GROUP_SPECS`, `SPEAKER_TO_GROUP` incl. `NARRATOR`, `PAUSE_RULE`, `status`/`make-refs`/`pack --redo-bodi`/`split`/`sync-manifest`); `audio/` `voice_manifest.py` (`KNOWN_MISSING_AUDIO` only, never `VOICE_LINES`/`VOICE_ORDER`).
+- Check: `audio/` `voice.py` (`_speech_units`, `_scan_files`, `has_file`, `_files`); `tools/` `build_radio_cache.py`, `voice_audit.py`. Flow: `build/vo_batches/refs/<SPEAKER>_ref.wav` (replication refs) + `build/vo_batches/scripts/<GROUP>_NN.txt` -> downloaded WAV in `build/vo_batches/audio/<BATCH_ID>.wav` -> `assets/voice/<Speaker>/VO_xxx.ogg` (`.wav` fallback without ffmpeg; pygame decode fallback for source files).
+- Verify: `python -m compileall -q tools/vo_batch.py`, `python tools/ae_normalize.py --changed`, `python tools/vo_batch.py make-refs`, `python tools/vo_batch.py pack --redo-bodi`, `python tools/vo_batch.py status`, `python tools/vo_batch.py split --dry-run`, `python tools/voice_audit.py --check`, `python tools/smoke_test.py --only voice`.
+
+**Colab Qwen3-TTS pipeline (free T4 GPU, voice cloning + VoiceDesign)**
+- Edit: `tools/` `vo_batch.py` (`colab-pack`/`colab-import`, `DESIGN_ANCHORS`, `BAKED_SCREAMS`, `_build_existing_ref`); `tools/` `vo_colab_qwen3.ipynb` (5 cells: GPU/pip check, kit upload, VoiceDesign anchors, clone generation with resumable backup zip, download).
+- Check: `build/vo_colab_kit.zip` holds `jobs.json` + `refs/<GROUP>.wav` (currently 8 `clone_existing` groups built from clean takes with exact transcripts, 14 `design` groups with `instruct`/`anchor_text`; 303 jobs). `colab-import` maps `VO_xxx.wav` from `vo_generated.zip` through `_group_for`/`_folder_and_style`, trims via `_find_islands`, writes `.ogg`/`.wav`, then auto-runs `cmd_sync_manifest` unless `--no-sync`.
+- Verify: `python -m json.tool tools/vo_colab_qwen3.ipynb`, `python tools/vo_batch.py colab-pack`; after Colab: `python tools/vo_batch.py colab-import <zip>`, `python tools/build_radio_cache.py`, `python tools/voice_audit.py --check`, `python tools/smoke_test.py --only voice`.
+
+**AI Studio unrenamed-drop ingest**
+- Edit: `tools/` `vo_batch.py` `cmd_ingest` + `ingest` parser (`--start`, `--align`, `--dry-run`, `--keep`, `--format`, `--no-sync`); `build/missing_lines.txt`/`.csv` are the owner's exported checklist (generated artifacts, not tracked code).
+- Check: `audio/voice.py` `_file_order_key` (timestamp in filename, `(1)`/`(2)` copy order), `_duration`, `_align`, `_speech_units`; `cmd_ingest` filters by speaker/group, matches files oldest-first to that speaker's missing IDs, flags duration outliers `[CHECK]`, and moves consumed downloads to `<drop>/_done/<VO_ID>__<name>` unless `--keep`.
+- Verify: `python tools/vo_batch.py ingest NARRATOR build/vo_drop/NARRATOR --dry-run`, then without `--dry-run`, `python tools/build_radio_cache.py`, `python tools/voice_audit.py --check`.
+
 ## 7. Gotchas & gates per subsystem
+
+**Inventory / pickups** - in every 2D mission a pickup at full (bandage at full HP, mag with full pouches, molotov at cap) stays on the ground; M1/M2 hotwire "not yet" uses its own flag so an early `[E]` does not eat Vasile's tutorial line. Never consume a pickup the player cannot use.
 
 **Art bake precedence**
 - `AssetRegistry.get` loads the baked PNG before calling `render()`. Editing `src/game/art/mN/*.py` changes nothing in-game until `python tools/ae_bake.py --pack mN` rewrites `assets/baked/mN/`. `tools/build_all_sprites.py` rebakes only m5.
@@ -1072,7 +649,7 @@ Edit = change; Check = shared callers to keep working; Verify = command. Paths a
 
 **2.5D frame cost**: hosts that `buf.fill(VOID)` and draw nothing into `buf` before the flush call `r.flush(buf, bg=VOID)`, so GL clears the FBO instead of uploading the buffer (~4 ms with the upload sync; software ignores `bg`). M6 paints snow into `buf` first, so it must not pass `bg`. `td.put` caches packed placements per `(mesh, pos, yaw, roll, pitch)`; GL sun shadows: `GLRenderer._sun_pass` redraws all queued geometry into a 2048 depth map (`_SH_UNIT` 6, ortho `u_ortho` in `project`, `u_sh_pass` depth-only, emissive faces skipped), dynamic rows are uploaded once per `_render` (`_draw_dyn(upload=False)` in the colour pass); only sun-facing faces receive (`nl > 0`), so camera-facing walls and fronts keep the key light. Software fallback: `td.cast_shadows` draws one sprite with an exact `bounds` box and `strict_occ=True` (without it the composite's <=12 % shortcut paints shadows over guards). Budget on a quiet PC: M1 render ~10 ms, locked 60 fps. Before trusting a slow timing, check for background CPU/GPU load; a uniform 2-5x slowdown across all sections is the machine, not the code.
 
-**3D asset wiring**: 3 `assets/3D/*.glb` are read at runtime with no bake (§8.1 `R`): `m8/revenge/chase_set.py` `_load_heli_raw()`/`_load_rocket_raw()` -> `_load_glb()`, `cutscenes/m7world3d.py` `_scrambler_asset()` -> `_load_glb_surface()`; a missing GLB silently degrades to procedural geometry. `pig.mesh.json` is baked but unwired (live pig = procedural `cutscenes/m7pig3d.py`). `tools/ae_import_check.py` is an import-side-effect checker, not a mesh importer.
+**3D asset wiring**: 4 `assets/3D/*.glb` are read at runtime with no bake (§8.1 `R`): `m8/revenge/chase_set.py` `_load_heli_raw()`/`_load_rocket_raw()` -> `_load_glb()`, the same reader's `return_paths=True` mode for `maru_gunship_parts()` (per-node paths let one GLB be split into fuselage / tail boom / main rotor / tail rotor), `cutscenes/m7world3d.py` `_scrambler_asset()` -> `_load_glb_surface()`; a missing GLB silently degrades to procedural geometry. `pig.mesh.json` is baked but unwired (live pig = procedural `cutscenes/m7pig3d.py`). `tools/ae_import_check.py` is an import-side-effect checker, not a mesh importer.
 
 **Time**: gameplay/UI/draw read `engine.core.now_ms()`/`now_s()` only.
 
@@ -1081,12 +658,12 @@ Edit = change; Check = shared callers to keep working; Verify = command. Paths a
 **Gates**
 - Fast loop: `python -m compileall -q src`, `python tools/smoke_test.py --only <area>` (`--list` names slow checks).
 - Handoff: `python tools/smoke_test.py --fast` (full run for MP/sprites/M4 siege) -> `SMOKE TEST: OK`.
-- Engine/data/API: `python tools/ae_ci.py --quick` or full `python tools/ae_ci.py` -> `AE CI: OK`. Known independent failures: mission4_stage_transitions, mission4_cinematic_arrest, mission5_shadow_finale geometry, mission5_harbour_art choreography.
+- Engine/data/API: `python tools/ae_ci.py --quick` or full `python tools/ae_ci.py` -> `AE CI: OK` (`d6` currently fails on pre-existing M1/M3/M4 direct-draw counts above ratchet baseline: `313/306`, `1921/1912`, `439/399`; all other quick gates and full `smoke_test.py` pass).
 - Content: `tools/ae_bake.py --check`, `tools/ae_text_check.py`, `tools/ae_timeline_check.py`, `tools/ae_dialogue_check.py`, `tools/ae_level_check.py`, `tools/ae_set3d_check.py`, `tools/ae_hold_check.py`.
 
 ## 8. 3D assets inventory (disk-verified)
 
-Aliases: `A/` = `assets/3D/`, `M/` = `src/game/content/meshes/`, `C/` = `src/game/content/`, `T/` = `tools/`, `WP` = `T/ae_import_workstation_props.py`. Status: **B** baked via importer -> `M/<id>.mesh.json` (or `.rig.json`); **R** GLB/PNG read directly at runtime (no bake); **S** source-only / unimported. `A/` is flat (no subdirectories): 38 files = 33 `.glb`, 2 `.png`, 1 `.blend`, 1 `.blend1`, 1 stray `.pdf`. `M/` = 24 `.mesh.json` + 1 `.rig.json`. Baked ids below are the `M/` file stems.
+Aliases: `A/` = `assets/3D/`, `M/` = `src/game/content/meshes/`, `C/` = `src/game/content/`, `T/` = `tools/`, `WP` = `T/ae_import_workstation_props.py`. Status: **B** baked via importer -> `M/<id>.mesh.json` (or `.rig.json`); **R** GLB/PNG read directly at runtime (no bake); **S** source-only / unimported. `A/` is flat (no subdirectories): 40 files = 35 `.glb`, 2 `.png`, 1 `.blend`, 1 `.blend1`, 1 stray `.pdf`. `M/` = 24 `.mesh.json` + 1 `.rig.json`. Baked ids below are the `M/` file stems.
 
 ### 8.1 `A/` - every source file + status
 | `A/` file | St | Importer / caller -> baked id |
@@ -1118,6 +695,8 @@ Aliases: `A/` = `assets/3D/`, `M/` = `src/game/content/meshes/`, `C/` = `src/gam
 | `lowpoly-guy-dragan.glb` | S | unimported, no runtime caller |
 | `lowpoly-missile-12s-black.glb` | R | `m8/revenge/chase_set.py` `_load_rocket_raw()` -> `_load_glb()`; no baked `lowpoly-missile-12s-black` |
 | `lowpoly_retro_lcd_monitor.glb` | B | `WP` -> `monitor_lcd` |
+| `lowpoly_sniper_rifle.glb` | B | `T/ae_import_sniper.py` -> `sniper_rifle` (+ meta `butt`/`guard`/`fore` mirrored in `engine3d.hold.GRIPS["sniper_rifle"]`) |
+| `maru_gunship.glb` | R | `m8/revenge/chase_set.py` `maru_gunship_parts()` -> `_load_glb(..., return_paths=True)` split by root node (`heli_fuselage`/`heli_tail_boom`/`main_rotor`/`tail_rotor`) -> `put_maru_gunship()`; `maru_gunship_fpv_parts()` re-clips the same faces for the FPV path (drops pillars/mullions/pods, clips rear walls to `y<=1.04`, lights `avionics_*`) -> `put_maru_gunship(..., fpv=True)`; consumers `m8/duty/flight_fx.py` + `cutscenes/m8dutyfilms.py`; no bake (fallback = `flight_fx.cabin_mesh()`/`rotor_mesh()`) |
 | `moneystack.glb` | B | `T/ae_import_duty_props.py` -> `M/moneystack` |
 | `pistol_lowpoly.blend` | S | Blender source for `pistol_lowpoly.glb`; never imported |
 | `pistol_lowpoly.blend1` | S | Blender backup (`.blend1`); never imported |
@@ -1159,8 +738,10 @@ Generated by `tools/sync_arch_map.py` from each GLB's JSON chunk (no GLB inspect
 | `lowpoly-guy-dragan.glb` | 3200 | 0.68x1.89x0.44 | 0.00,0.94,0.05 | -0.00 | mat0 #345578, mat1 tex, mat2 #e6a189, mat3 -, mat4 #df8e7c, mat5 #f8fafc (+12) skins=0 anims=4 |
 | `lowpoly-missile-12s-black.glb` | 672 | 0.28x0.28x1.81 | 0.00,0.00,0.00 | -0.14 | Mat_DarkMetal #2b303a, Mat_Warhead #1f232a, Mat_Body #262b33, Mat_Motor_Band #991b1b, Mat_HE_Band #f59e0b, Mat_Nose #111317 (+3) |
 | `lowpoly_retro_lcd_monitor.glb` | 468 | 5.60x4.90x2.55 | 0.00,2.45,-0.35 | -0.00 | mat0 #cfcdc4, mat1 #1f2126, mat2 tex, mat3 #2a4a9a, mat4 #7d7f84, mat5 #a4a298 (+1) |
+| `lowpoly_sniper_rifle.glb` | 1304 | 0.10x0.29x1.36 | 0.01,0.01,0.25 | -0.14 | Mat_Primary #b39870, Mat_Metal #3d3832, Mat_Bore #07080a, Mat_Secondary #342d26, Mat_Accent #cab28b, Mat_Lens #f59e0b |
 | `M3van.glb` | 2906 | 3.10x3.44x5.65 | 0.00,1.76,0.01 | 0.04 | mat0 #465048, mat1 #222724, mat2 #343a36, mat3 #171a17, mat4 #315863, mat5 #fff0b5 (+3) |
 | `M7Rifle.glb` | 3556 | 13.86x4.51x1.26 | 1.69,-1.03,0.18 | -3.29 | mat0 #4a4538, mat1 #0e0e10, mat2 #b39b6e, mat3 #1d1f22 |
+| `maru_gunship.glb` | 3924 | 10.39x3.58x12.39 | 0.00,1.79,-0.75 | 0.00 | mat0 #222528, mat1 #343c32, mat2 #181a1d, mat3 #3f483b, mat4 #a6822c, mat5 #1c1e20 (+6) |
 | `moneystack.glb` | 532 | 0.16x0.08x0.07 | 0.00,0.04,-0.00 | -0.00 | note #7a7870, edge #686662, ink #282a2e, ink_soft #565450, band #5e4226, seal #a48050 |
 | `pistol_lowpoly.glb` | 2836 | 0.23x0.17x0.04 | -0.00,-0.02,0.00 | -0.10 | Pistol_Slide #353538, Pistol_Dark #0d0d0d, Pistol_Frame #3c3c3e, Pistol_Barrel #616163, Pistol_Dot #edede7, Pistol_Grip #242427 (+1) |
 | `scrambler125.glb` | 3028 | 0.72x1.22x1.93 | 0.00,0.61,0.00 | 0.00 | Tire_Rubber #17181b, Silver_Alloy #9ea2a6, Frame_Black #18191c, Body_Orange #d2641c, Number_Plate #d6d0c0, Seat_Black #1d1e22 (+6) |
@@ -1192,7 +773,7 @@ AABB is in glTF space (Y up, +Z toward the viewer, right-handed) after node tran
 | `m3_van.mesh.json` | `M3van.glb` | `m3/wings3d.py` `_van`; `cutscenes/m3ko3d.py` |
 | `m7rifle.mesh.json` | `M7Rifle.glb` | `m6world3d.py` `_m7rifle_mesh()`/`_gun_mesh("m7rifle")`; `engine3d/hold.py` |
 | `medkit.mesh.json` | `low_poly_medkit.glb` | `game/scenery3d.py` `prop()`/`medical_supplies()`; `m1/draw3d.py` `_pickup_mesh`; `cutscenes/m7world3d.py` |
-| `molotov.mesh.json` | `low-poly-molotov.glb` | `m1/draw3d.py` `_molotov` |
+| `molotov.mesh.json` | `low-poly-molotov.glb` | `m1/draw3d.py` `_molotov`; `cutscenes/van3d.py` `_molotov_asset` |
 | `moneystack.mesh.json` | `moneystack.glb` (`T/ae_import_duty_props.py`) | `m8/duty/mansion_set.py` |
 | `monitor_crt.mesh.json` | `low_poly_crt_monitor.glb` | `game/scenery3d.py` `prop()`/`workstation()`; `m2/draw3d.py`, `m3/wings3d.py`, `m3/draw3d.py`, `m5/draw3d.py` |
 | `monitor_lcd.mesh.json` | `lowpoly_retro_lcd_monitor.glb` | `game/scenery3d.py` `prop()`/`workstation()`; `m3/wings3d.py`, `m5/draw3d.py` |
@@ -1200,7 +781,8 @@ AABB is in glTF space (Y up, +Z toward the viewer, right-handed) after node tran
 | `pc_zarya.mesh.json` | `soviet_pc_zarya_pk86.glb` | `game/scenery3d.py` `workstation()`; `m2/draw3d.py`, `m3/wings3d.py` |
 | `pig.mesh.json` | `low_poly_pig.glb` | **unused**: live pig is procedural `cutscenes/m7pig3d.py` (`pig_pose`, `pig_dead`, `pig_flat`) |
 | `pill_bottle.mesh.json` | `low-poly-pill-bottle.glb` | `game/scenery3d.py` `medical_supplies()` |
-| `pistol.mesh.json` | `pistol_lowpoly.glb` | `ui/mp3d.py` `pistol_mesh()` |
+| `pistol.mesh.json` | `pistol_lowpoly.glb` | `ui/mp3d.py` `pistol_mesh()`; `cutscenes/van3d.py` `_pistol_mesh()` |
+| `sniper_rifle.mesh.json` | `T/ae_import_sniper.py` (`assets/3D/lowpoly_sniper_rifle.glb`) | `cutscenes/cast3d.py` `weapon_asset`/`RIFLE_ASSETS`; `cutscenes/m6world3d.py` `hum(flags=("sniper_rifle",))`; `cutscenes/m8dutyfilms.py` `_sniper_prop`/`_draw_sniper_world`/`_crash_actors`; `engine3d/hold.py` `GRIPS["sniper_rifle"]` |
 | `suppressed_pistol.mesh.json` | `Suppressed_Pistol.glb` (`T/ae_import_duty_props.py`) | unreferenced (baked, not wired yet) |
 | `tactical_lmg.mesh.json` | `tactical_lmg(white).glb` (`T/ae_import_duty_props.py`) | `cutscenes/m8dutyfilms.py` `_tactical_lmg`; `m8/duty/flight3d.py` (door gun, via `_tactical_lmg`) |
 | `telephone_base.mesh.json` | `telephone-base-balanced-jet.glb` | `m8/revenge/epilogue3d.py` `telephone_base_mesh()` / `command_room()` |
@@ -1211,8 +793,8 @@ AABB is in glTF space (Y up, +Z toward the viewer, right-handed) after node tran
 All `M/*.mesh.json` are `ae.mesh/1`. Runtime entry: `game/render3d_bridge.py` `load_mesh_asset(ref)` / `MESHES_DIR` / `mesh_for_prim()`; `game/scenery3d.py` `prop()`/`display()` cache with procedural fallback. `tools/smoke_test.py` asserts the `k93d`, `akrifle` bakes and the reticle PNG.
 
 ### 8.3 `assets/tex3d/` + `C/` set/texture/preset ids
-**`assets/tex3d/`** (33 flat files; drawn by `tools/tex3d_draw.py` / `tools/tex3d_draw_m7.py`; read by `engine3d/textures.py`, `m6/decor.py`, `cutscenes/ps2mat.py`):
-- 31 `.png`: `ballast bone boxcar brick concrete crate m6_palette m7_bark m7_barnboard m7_dirt m7_furrow m7_grass m7_gravel m7_hay m7_leaf m7_plank m7_plaster m7_stone m7_stubble m7_tile m7_tin m7_track metal_rib pavement rust scorch sleeper snow snow_trod steel vault`
+**`assets/tex3d/`** (35 flat files; drawn by `tools/tex3d_draw.py` / `tools/tex3d_draw_m7.py`; read by `engine3d/textures.py`, `m6/decor.py`, `cutscenes/ps2mat.py`):
+- 33 `.png`: `ashlar ballast bone boxcar brick concrete crate m6_palette m7_bark m7_barnboard m7_dirt m7_furrow m7_grass m7_gravel m7_hay m7_leaf m7_plank m7_plaster m7_stone m7_stubble m7_tile m7_tin m7_track metal_rib pavement rust scorch sleeper snow snow_trod steel stucco vault`
 - 2 palettes: `m6.gpl`, `m7.gpl` (mirrored by `m6/palette3d.py`, `cutscenes/m7palette3d.py`).
 
 **`C/` ids** (loader `game/render3d_bridge.py`: `SETS_DIR` `PRESETS_DIR` `TEXTURES_DIR` `MESHES_DIR`; gate `tools/ae_set3d_check.py`):
@@ -1301,7 +883,7 @@ request_escape_cutscene            -> after "MISSION_COMPLETE" (no fades)
 request_chair_break_cutscene ...   (M3)
 ```
 - Film keys map to builder functions: `m7/meta.M7_SCENES` / `m8/meta.M8_SCENES` = `{scene_id: (module_in_cutscenes, function)}` (e.g. `"m8_epi_casket": ("m8films", "epi_casket")`).
-- `CutscenePlayer` (`app.py`) owns timing, `KO_CUT_CUES`, VO cues (`fired_cues`), fades; `_CutsceneState` resolves after-states (`M5_RESUME` .. `M8_RESUME`, `MISSIONn_COMPLETE`, `MISSION_COMPLETE`, `GAME`).
+- `CutscenePlayer` (`app.py`) owns timing, `KO_CUT_CUES`, VO cues (`fired_cues`), fades (`hard_cut` skips shot-to-shot fade; `hard_cut_in` on shot 0 skips `GAME -> CUTSCENE` fade; `cut_to_play` on the final shot skips `CUTSCENE -> GAME` fade); `_CutsceneState` resolves after-states (`M5_RESUME` .. `M8_RESUME`, `MISSIONn_COMPLETE`, `MISSION_COMPLETE`, `GAME`).
 - Trace: `ACA_CUTSCENE_TRACE=1` appends one line per cutscene event (`app._cut_trace`).
 
 ### 9.7 3D gameplay scene contract (M6 train/yard, M7 raid, M8 trap/kill/chase)
@@ -1357,111 +939,28 @@ Full flag list: `python acaristan.py --list-jumps` (`core/dev_jumps.DEV_JUMPS`, 
 | `ACA_EGG666_3D=0` | force the 2D "666" safe scare | `ui/egg666_3d.py` |
 | `ACA_MP_HOST` / `ACA_MP_PORT` | relay/master address override | `ui/mp.py` |
 | `ACA_MP_DEV_TOKEN` / `ACA_MP_ALLOW_SKEW=1` | pin join token (`tools/mp_arena_duo.py`) / seat mixed builds | `ui/match_screen.py` |
-| `ACA_UPDATE_URL` / `ACA_GITHUB_REPO` / `ACA_DEV=1` | updater source override / launcher dev mode | `launcher/updater.py`, `launcher/window.py` |
+| `ACA_UPDATE_URL` / `ACA_GITHUB_REPO` / `ACA_DEV=1` / `ACA_RELEASE=1` | updater source override / force dev hotkeys on (`ACA_DEV=1`) or off (`ACA_RELEASE=1`; frozen defaults off) | `launcher/updater.py`, `launcher/window.py`, `core/dev_jumps.py`, `app.py` |
 | `ACA_FROM_LAUNCHER=1` | set by the launcher on the child game process | `launcher/window.py` |
 | `SDL_VIDEODRIVER=dummy`, `SDL_AUDIODRIVER=dummy` | headless (smoke test and tools set these) | tools |
 
 ## 12. Dev affordances
 
 - **CLI** (`app._apply_dev_args`, table `core/dev_jumps.DEV_JUMPS`: name -> (`--dev-*` flag, description)): `--dev-<target>` and short aliases (`--m3-kill-order`, `--m6-yard`, ...), `--jump <name>`, `--list-jumps`, `--continue`, `--dev-slot-select`, `--dev-safe`/`--safe`, `--dev-mp-host`/`--dev-mp-join` with `--mp-map --mp-players --mp-port`, `--trailer-bot`/`--trailer-act` (`src/tools/trailer_bot.py`), `--dev-audio-parade`.
-- **Hotkeys** - global: `F11` fullscreen, `F12` level editor (`core/level_editor.py`, gameplay only; saves `maps/*.map`, never loaded), backquote console (`core/console.py`). Devtools (`game/devtools.py`): `F3` overlay (frame/sim/draw ms, scene stack, cache line), `F4` collision view, `F5` level view, `F6` timeline view, `F7` skip cutscene. GAME: `F9` jump to exfil (M1), `V` melee, `M` minimap.
+- **Hotkeys** - global: `F11` fullscreen (always active); gated behind `core.dev_jumps.is_dev_mode()` (on from source unless `ACA_RELEASE=1`, off in frozen builds unless `ACA_DEV=1` or `--dev*`/`--jump`): `F12` level editor (`core/level_editor.py`, gameplay only; saves `maps/*.map`, never loaded), backquote console (`core/console.py`), devtools (`game/devtools.py`: `F3` overlay, `F4` collision view, `F5` level view, `F6` timeline view, `F7` skip cutscene), GAME `F9` jump to exfil (M1). Gameplay: `V` melee (checks both `mission3_weapon` and `current_weapon == "k9_smg"`), `M` minimap.
 - **Console commands** (`app._console_*`): events tail, `timeline play <id> [t_ms]`, heat, reload, skip cutscene.
 - **GUI panel**: `python tools/dev_panel.py` (clickable mission jumps).
 - **Headless capture**: per-mission `tools/mN_td3d_shots.py`, `m6_shots.py`, `m8_chase_shots.py`, `render_*.py`; `tools/ae_loop.py` drives the real main loop headless.
+- **Cinematic trailers**: `tools/trailer_call/{scenes,score,render,vertical}.py` ("THE CALL" spoiler-safe 90 s 2.39:1 GL cinematic + procedural 100 BPM OST-motif score + 42 s 9:16 vertical Short + thumbnails -> `outputs/trailer_call/`; flags `--sheet`, `--at`, `--from/--to`, `--music`, `--cta`, `--thumbs`); earlier trailers in `tools/trailer_rpe6/`, `tools/trailer3d/`, `tools/trailer_25d/`.
 
 ### 12.1 Dev jump targets (auto)
 
-From `core/dev_jumps.DEV_JUMPS`; use as `--jump <target>` or the listed flag.
-
-<!-- AUTO:devjumps -->
-| target | flag | what |
-|---|---|---|
-| `m0` | `--dev-mission0` | Mission 0 - Depot (tutorial mission, playable) |
-| `m1` | `--dev-m1` | Mission 1 opening handoff (dropoff radio cut, then playable) |
-| `m1-game` | `--dev-m1-game` | Mission 1 warehouse from the start (playable, no cutscene) |
-| `m1-safe` | `--dev-safe` | Mission 1 at the notebook safe keypad (code 742) |
-| `walk` | `--dev-walk` | Walking sim harbor exploration from the start |
-| `walk-after` | `--dev-walk-after` | Walking sim harbor right after the rig-strike cutscene (van ready) |
-| `m2` | `--dev-mission2` | Mission 2 intro cutscene |
-| `m2-game` | `--dev-mission2-game` | Mission 2 gameplay from the start |
-| `m2-sniper` | `--dev-mission2-sniper` | Mission 2 Route 12 sniper ambush |
-| `m2-after-sniper` | `--dev-mission2-after-sniper` | Mission 2 right after the sniper fight |
-| `m2-flank` | `--dev-mission2-flank` | Mission 2 flank cutscene / phase |
-| `m2-truck` | `--dev-mission2-truck` | Mission 2 truck stage |
-| `m2-evidence` | `--dev-mission2-evidence` | Mission 2 evidence-completion cinematic |
-| `m3` | `--dev-mission3` | Mission 3 intro cutscene |
-| `m3-game` | `--dev-mission3-game` | Mission 3 breakout gameplay (post-breach, chair leg) |
-| `m3-comms` | `--dev-mission3-comms` | Mission 3 comms wing (via service transition cutscene) |
-| `m3-archives` | `--dev-mission3-archives` | Mission 3 archives wing checkpoint |
-| `m3-kill-order` | `--dev-mission3-kill-order` | Mission 3 kill-order ground floor (+ KO intro cutscene) |
-| `m3-ledger` | `--dev-mission3-ledger` | Mission 3 black ledger debug |
-| `m3-vostral` | `--dev-mission3-vostral-cutscene` | Mission 3 Vostral acquisition cinematic |
-| `m3-archives-cutscene` | `--dev-mission3-archives-cutscene` | Mission 3 comms-to-archives transition cutscene |
-| `m3-broadcast-transition` | `--dev-mission3-broadcast-transition` | Mission 3 kill-order-to-broadcast transition cutscene |
-| `m3-broadcast` | `--dev-mission3-broadcast` | Mission 3 broadcast wing checkpoint (Slice 6 gauntlet) |
-| `m3-upload` | `--dev-mission3-upload` | Mission 3 at the station PC, upload OS already open |
-| `m4` | `--dev-mission4` | Mission 4 intro cutscene |
-| `m4-game` | `--dev-mission4-game` | Mission 4 aftermath street gameplay from the start |
-| `m4-station` | `--dev-mission4-station` | Mission 4 radio-station interior checkpoint |
-| `m4-tower` | `--dev-mission4-tower` | Mission 4 transmitter hold (siege checkpoint) |
-| `m5` | `--dev-mission5` | Mission 5 intro bulletin cutscene |
-| `m5-hq` | `--dev-mission5-hq` | Mission 5 Guard HQ walking sim (Vasile's office) |
-| `m5-game` | `--dev-mission5-game` | Mission 5 Lower Quarter gameplay (HQ skipped) |
-| `m5-printworks` | `--dev-mission5-printworks` | Mission 5 MAG print works (find Maru, then the raid) |
-| `m5-tunnel` | `--dev-mission5-tunnel` | Mission 5 basement tunnel escort (deepest resume point) |
-| `m5-ending` | `--dev-mission5-ending` | Mission 5 final cutscene (shadow finale at the river) |
-| `m6` | `--dev-mission6` | Mission 6 intro cutscene |
-| `m6-game` | `--dev-mission6-game` | Mission 6 top-down gameplay from customs (no intro) |
-| `m6-crossing` | `--dev-mission6-crossing` | Mission 6 top-down no-man's-land crossing |
-| `m6-rail` | `--dev-mission6-rail` | Mission 6 top-down rail yard |
-| `m6-boxcar` | `--dev-mission6-boxcar` | Mission 6 rail yard at Volkov's boxcar (E starts the 3D talk) |
-| `m6-train` | `--dev-mission6-train` | Mission 6 train checkpoint |
-| `m6-3d` | `--dev-mission6-3d` | Mission 6 interactive 3D train scene (shootout) |
-| `m6-shootout` | `--dev-mission6-shootout` | Mission 6 interactive 3D train scene (shootout) |
-| `m6-yard` | `--dev-mission6-yard` | Mission 6 straight into the 'Who is Ucilev?' yard fight |
-| `m6-ending` | `--dev-mission6-ending` | Mission 6 ending cutscene |
-| `m6-heli` | `--dev-mission6-heli` | Mission 6 ending from the helicopter finale |
-| `m7` | `--dev-mission7` | Mission 7 Fallow Ground from the top (arrival film) |
-| `m7-arrival` | `--dev-mission7-arrival` | Mission 7 drop-off film, then the chores |
-| `m7-chores` | `--dev-mission7-chores` | Mission 7 top-down farm chores |
-| `m7-runner` | `--dev-mission7-runner` | Mission 7 Alex-on-the-bike film |
-| `m7-prep` | `--dev-mission7-prep` | Mission 7 top-down prep (pick 2 of 3) |
-| `m7-raid` | `--dev-mission7-raid` | Mission 7 3D raid, no preps (--m7-preps=tractor,shed,loft --m7-cp=1/2) |
-| `m7-raid-prepped` | `--dev-mission7-raid-prepped` | Mission 7 3D raid with all three preps |
-| `m7-raid-w2` | `--dev-mission7-raid-w2` | Mission 7 3D raid from checkpoint 1 (orchard cleared, trucks next) |
-| `m7-raid-w3` | `--dev-mission7-raid-w3` | Mission 7 3D raid from checkpoint 2 (trucks cleared, barn fire next) |
-| `m7-finale` | `--dev-mission7-finale` | Mission 7 burning-farm night film |
-| `m7-choice` | `--dev-mission7-choice` | Mission 7 radio choice (sets the Mission 8 route) |
-| `m7-outro` | `--dev-mission7-outro` | Mission 7 end, straight to mission complete (route defaults to duty) |
-| `m8` | `--dev-mission8` | Mission 8 The Call, Revenge route from the top (meet beat) |
-| `m8-trap` | `--dev-mission8-trap` | Mission 8 3D trap fight on Route 12 (--m8-cp=1/2/3) |
-| `m8-gantry` | `--dev-mission8-gantry` | Mission 8 3D gantry climb to Vasile |
-| `m8-friends` | `--dev-mission8-friends` | Mission 8 catwalk beat with Vasile |
-| `m8-kill` | `--dev-mission8-kill` | Mission 8 standoff on the catwalk, one shot |
-| `m8-chase` | `--dev-mission8-chase` | Mission 8 tractor chase (--m8-cp=1/2/3/4) |
-| `m8-heli` | `--dev-mission8-heli` | Mission 8 tractor chase helicopter mini-boss |
-| `m8-ending` | `--dev-mission8-ending` | Mission 8 chase ending at the crossing (last jeep down) |
-| `m8-epilogue` | `--dev-mission8-epilogue` | Mission 8 epilogue films (State TV, Commander, funeral) |
-| `m8-credits` | `--dev-mission8-credits` | Mission 8 end credits |
-| `m8-duty` | `--dev-mission8-duty` | Mission 8 Head of State (Duty route) from approach |
-| `m8-mansion` | `--dev-mission8-mansion` | Mission 8 3D Mansion fight with Bodi & Alex (--m8-cp=0/1/2) |
-| `m8-liftoff` | `--dev-mission8-liftoff` | Mission 8 study & helicopter liftoff 3D film |
-| `trailer-m1` | `--dev-m1-game` | Trailer Act I warehouse take (bot: breach/molotov) |
-| `trailer-m2-killbox` | `--dev-mission2-game` | Trailer Act II killbox take (bot: OS-12 hold + flank) |
-| `trailer-m2-evidence` | `--dev-mission2-evidence` | Trailer Act II evidence take (bot: control building) |
-| `trailer-m3-breakout` | `--dev-mission3-game` | Trailer Act III breakout take (bot: shiv/sidearm) |
-| `trailer-m3-comms` | `--dev-mission3-comms` | Trailer Act III relay take (bot: power->auth->tune, Volkov cover) |
-| `slot-select` | `--dev-slot-select` | Save-slot screen directly (add --continue for CONTINUE variant) |
-| `audio-parade` | `--dev-audio-parade` | Comms wing with verbose sound logging (volume tuning) |
-| `mp-host` | `--dev-mp-host` | Multiplayer arena panel, hosting on --mp-port (default 27017) |
-| `mp-join` | `--dev-mp-join` | Multiplayer arena panel, joining --mp-join ADDR (host:port) |
-<!-- /AUTO:devjumps -->
+From `core/dev_jumps.DEV_JUMPS`; use as `--jump <target>` or the listed flag. Pattern: `--dev-missionN` / `--dev-missionN-<stage>` start a mission or stage; `--list-jumps` enumerates targets; non-obvious ones include `--m8-cp=0/1/2` (Duty mansion checkpoint), `--m7-preps` and the `--trailer-*` / `--mp-*` switches. Full generated table: `docs/FILE_INDEX.md` §12.1.
 
 ## 13. Persistent files (repo root, resolved from `Path(__file__).parents[2]`)
 
 | File | Owner | Content |
 |---|---|---|
-| `save_data[SUFFIX].json` | `core/save_system.py` | `current_slot` + 3 slots (`progress` "m1".."m8", `checkpoint`, flags, mission-complete records); `set_slot_progress`, `set_slot_flags`, `save_mission_complete` |
+| `save_data[SUFFIX].json` | `core/save_system.py` | `current_slot` + 3 slots (`progress` "m1".."m8" cleared on `save_mission_complete`, `checkpoint`, flags, mission-complete records); `set_slot_progress` (also M2 `shelter`, M4 `station`/`tower`, M5 `quarter`/`printworks`/`tunnel`), `set_slot_flags`, `save_mission_complete`; `app._SlotSelectState` resumes M2 `shelter` before `MISSION_1` |
 | `settings[SUFFIX].json` | `core/settings_store.py` (+ `core/user_settings.py` live copy) | display, audio, accessibility (reduced motion, flash, shake), `quality_3d`, `bindings`, player name, playit address |
 | `profile[SUFFIX].json` | `core/profile_store.py` | Acaribucks wallet, owned cosmetics, equipped loadout (validated by `core/appearance.py`; a hand-edited file cannot grant items) |
 | `version.json`, `launcher_config.json` | `src/launcher/` | installed version, update source |
@@ -1497,7 +996,7 @@ Converters from in-code tables: `tools/ae_timeline_export.py`, `ae_dialogue_expo
 | `assets/import/` | 1 | `barrel.obj` (`tools/gen_barrel_obj.py`) |
 | `assets/fonts/` | 4 | IBM Plex Mono (Regular/SemiBold/Bold), Oswald (`engine/text/fonts.py`); radio uses bitmap `ui/pixfont.py` |
 | `assets/music/` | 22 | `ost/` (20 tracks from `tools/ost/album.py` via `tools/build_ost.py`), `trailer/`, `newtrailer/` |
-| `assets/voice/` | ~728 | per-speaker folders + `VO_xxx.ogg/.wav`, `_radio_cache` (`tools/build_radio_cache.py`); index `src/audio/voice_manifest.py` |
+| `assets/voice/` | ~728 | per-speaker folders + `VO_xxx.ogg/.wav`, `_radio_cache` (`tools/build_radio_cache.py`); index `src/audio/voice_manifest.py`; batch recording/splitting `tools/vo_batch.py` |
 | `assets/bin/` | 6 | `bore.exe`, `playitd.exe` + licences/versions (`tools/download_bore.py`, `download_playit.py`) for MP tunnels |
 Loose SFX (e.g. `assets/alarm.mp3`) sit at `assets/` root and are registered by `audio/audio.py` (optional sounds log "Loaded optional sound ..." at import).
 
@@ -1517,9 +1016,9 @@ Telemetry   net/telemetry.NetworkTelemetry
 ```
 Test kit: `tools/mp_arena_duo.py` (two windows), `mp_bot.py`, `mp_match.py`, `mp_join.py`, `mp_host.py` (+ `mp_host_main.py` EXE entry), `mp_net_soak.py` (impairment), `preflight_bot_test.py`, `test_tcp_tunnel.py`, `test_multiplayer_ui.py`; smoke `--only mp` / `arena` / `match` / `udp` / `client`.
 
-**Launcher / updater** - doc `docs/LAUNCHER.md`. `launcher.py` (`--demo-update`, `--check-only`) -> `src/launcher/window.py` `LauncherApp`/`run_launcher` -> `launch_game_process`; `src/launcher/updater.py` (manifest check, sha256 integrity, downgrade guard). Publish: `tools/publish_update.py`.
+**Launcher / updater** - doc `docs/LAUNCHER.md`. `launcher.py` (`--demo-update`, `--check-only`) -> `src/launcher/window.py` `LauncherApp`/`run_launcher` -> `launch_game_process`; `src/launcher/updater.py` (manifest check, sha256 integrity, downgrade guard; preserves `save_data*.json`, `settings*.json`, `profile*.json`, `profiles.json`, `launcher_config.json`). `acaristan.py` sets CWD to `ROOT` and falls back to `%LOCALAPPDATA%/CallOfAcaristan/crash.txt`; `audio/voice.py` skips `*_matches.txt` when frozen and falls back to `%LOCALAPPDATA%/CallOfAcaristan/radio_cache`. Publish: `tools/publish_update.py`.
 
-**Builds** - `build.bat`, `tools/build_windows.py` (PyInstaller `--onedir`), `tools/ae_package.py` (zip, `ae.package/1`), `tools/itch_push.py` (butler), `tools/zip_project.py`, `tools/slim_tree.py` (dry-run cleanup), `tools/overlay_cleanup.py`. `Launch Game.bat` runs the game.
+**Builds** - `build.bat`, `tools/build_windows.py` (PyInstaller `--onedir` via `build/_assets_stage`, excluding non-runtime `.pdf`/`.blend`/`.blend1`/`*_matches.txt`/`_RETAKES`/`TRAILER`/`ANNOUNCE_25D`/`graphify-out`/`m3cell_balaceanu_patch.py` and duplicate voice `.wav` beside `.ogg`), `tools/ae_package.py` (zip, `ae.package/1`, same non-runtime filters), `tools/itch_push.py` (butler), `tools/zip_project.py`, `tools/slim_tree.py` (dry-run cleanup), `tools/overlay_cleanup.py`. `Launch Game.bat` runs the game.
 
 ## 17. More one-shot bundles
 
@@ -1588,1015 +1087,24 @@ Test kit: `tools/mp_arena_duo.py` (two windows), `mp_bot.py`, `mp_match.py`, `mp
 - **Bake** - `ae_bake.py` turns code-authored `render()` into PNGs; the PNG wins at runtime.
 - **2.5D** - top-down rules drawn by `engine3d` (`game/topdown3d.py`, `missions/mN/draw3d.py`); 2D path stays as fallback. World-space rain comes from `game/rain3d.py` in the rainy hosts (walk/M1/M4/M5), with `step_rain_drops` keeping replay RNG parity.
 
-Docs worth knowing (`docs/`): story `LORE.md`, `MISSION3..8_PLOT.md`, `MISSION3_KILL_ORDER.md`, `FIXES_STORIES.md`; plans `MASTER_ACTION_PLAN.md`, `M4_OVERHAUL_PLAN.md`, `MISSION5_BUILD_PLAN.md`, `M5_FINALE_REBUILD_PLAN.md`, `M6_HALOS_AND_ENDING_PLAN.md`, `M6_TOPDOWN_ART_BRIEF.md`, `M1_REWORK_HANDOFF.md`, `PLAN_1..4_*.md`, `TRAILER3D_PLAN.md`, `OIL_RIG_BOMBING_CUTSCENE.md`; perf `M6_3D_PERF.md`; audits `AUDIT_T1..T8_*.md`; systems `KRAPNET_MULTIPLAYER.md`, `LAUNCHER.md`, `README_ENV_SETUP.md`; log `worklog.md`; engine `docs/engine/{STATUS,ARCHITECTURE,ADAPTERS,BUGS,CHANGELOG,AUDIT}.md`, `subsystems/<kernel>.md` (one per engine package), `adr/`, `tutorial_add_mission.md`. Graph: `src/graphify-out/GRAPH_REPORT.md`.
+Docs worth knowing (`docs/`): this map (live architecture + contracts only); `FILE_INDEX.md` (generated per-file source / tools / tests + dev-jump catalog); `worklog.md` (historical patch notes moved out of this map). Story: `LORE.md`, `MISSION3..8_PLOT.md`, `FIXES_STORIES.md`; plans `MASTER_ACTION_PLAN.md`, `M4_OVERHAUL_PLAN.md`, `M6_TOPDOWN_ART_BRIEF.md` (all point-in-time); systems `KRAPNET_MULTIPLAYER.md`, `LAUNCHER.md`; engine `docs/engine/{STATUS,ADAPTERS,BUGS}.md`, `adr/`, `subsystems/<kernel>.md`. Graph: `src/graphify-out/GRAPH_REPORT.md`.
 
 **Known doc drift** (code wins): both M8 routes are playable (Revenge in full; Duty with the mansion, flight and ridge scenes). Plans and reports under `docs/` are point-in-time and may still call Duty a placeholder. `src/art/m5/*.py` (other than `__init__.py`) are stale tracked copies that never run.
 
-## 20. Every source file (`src/`, generated from module docstrings)
+## 20. Monolith anchors
 
-Format: `file` lines - first docstring sentence (or public names). Content data under `src/game/content/` is in §14 and §8. Maintained by `python tools/sync_arch_map.py` (line counts, new/removed files; hand-edited descriptions are kept). Monolith slices: §20.1; slice bundles: `python tools/ai_bundle.py path:start-end`.
+For `tools/ai_bundle.py` line-range slicing (`ai_bundle.py path:start-end`). The per-file source docstrings, tools index and tests index are now in `docs/FILE_INDEX.md` (generated by `tools/sync_arch_map.py`).
 
-**`src/`**
-
-- `app.py` 4738 - Public: `handle_settings_event`, `trigger_transition`, `CutscenePlayer`, `start_cutscene`, `apply_display_mode`, `draw_slot_select_screen`, `start_briefing`, `finish_briefing`
-
-**`src/art/`**
-
-- `__init__.py` 1 - Hand-authored pixel-art sprites (pygame-only, no game imports).
-
-**`src/art/m5/`**
-
-- `__init__.py` 24 - Shim (A-008): aliases every `art.m5.<name>` in `sys.modules` to `game.art.m5.<name>`.
-- `_kit.py` + 20 sprite modules: **stale tracked copies, never executed** (the shim aliases win). Edit `src/game/art/m5/`.
-
-**`src/audio/`**
-
-- `__init__.py` 1 - audio package.
-- `audio.py` 3454 - Public: `AudioManager`
-- `mixlock.py` 63 - Pause/resume for the mixer without the alt-tab deadlock.
-- `voice.py` 863 - Voice-over playback for Call of Acaristan.
-- `voice_manifest.py` 588 - Generated from voice_lines.xlsx - (VO ID, speaker, line) for every voiced line.
-
-**`src/core/`**
-
-- `__init__.py` 1 - core package.
-- `ambience.py` 183 - zone-driven world ambience layers.
-- `appearance.py` 583 - Character appearance: the cosmetic catalog, the appearance value object, and the single validator that both the save...
-- `artpack.py` 31 - core.artpack - deprecated path (RPE6 Phase 2, A-006).
-- `camera.py` 341 - Shared camera and bullet helpers.
-- `config.py` 905 - Public: `resource_path`, `windowed_size`, `make_grain`, `draw_sky_gradient`, `draw_building`, `draw_cityscape`, `draw_rain`, `rain_drawables`
-- `console.py` 343 - Public: `Console`
-- `cutscene_registry.py` 60 - Cutscene scene renderers registered by scene id (RPE6 D1, boundary rule 4).
-- `dev_jumps.py` 164 - registry of dev jump targets.
-- `fixedstep.py` 432 - Fixed-timestep accumulator, for making the simulation host-independent.
-- `font_coverage.py` 60 - Font glyph coverage - the fontTools half of §6.13 (dev/audit only).
-- `frame_pacer.py` 64 - Frame pacing for the 60 Hz fixed-step loop: `Pacer.wait()` once per frame in `app._legacy_frame`; whole steps per frame, 60/30 fps lock (bug-333).
-- `fsm.py` 171 - Finite State Machine infrastructure for Acaristan.
-- `game_core.py` 591 - Proxy facade that delegates to split modules.
-- `hands.py` 299 - Canonical hand renderers - the reference-anatomy model (dorsal view).
-- `interactions.py` 692 - Player interactions with the world: doors, safe, NPCs, alarms.
-- `json_store.py` 41 - Shared atomic JSON persistence helpers for save_data.json / settings.json.
-- `level_editor.py` 224 - Public: `LevelEditor`
-- `lighting.py` 20 - core.lighting - deprecated path (RPE6 Phase 2, A-006).
-- `mapbuilder.py` 143 - Shared tilemap authoring helper (pure python, no pygame).
-- `mission_meta.py` 106 - Per-mission display metadata (operation name + failure-screen copy).
-- `outfits.py` 161 - Biribel's Mission 5 kit, as data (one source of truth).
-- `profile_store.py` 234 - The global profile: Acaribucks wallet, owned cosmetics, equipped loadout.
-- `props.py` 378 - shared set-dressing prop painters.
-- `render_util.py` 17 - core.render_util - deprecated path (RPE6 Phase 2, A-006).
-- `save_system.py` 303 - 3-slot JSON save system for campaign progress.
-- `scene_mirror.py` 70 - RPE6 ADAPTER A-005: mirror the legacy GameStateManager onto an engine SceneStack.
-- `score.py` 150 - the OST under quiet gameplay (mission-keyed CALM/TENSE).
-- `settings_store.py` 179 - Settings store - persistent JSON-backed user preferences.
-- `state.py` 482 - Central game state singleton.
-- `staticlayer.py` 109 - chunked bake of the static world (phase 0).
-- `surfaces.py` 59 - floor-material zones for footstep timbre selection.
-- `user_settings.py` 112 - Live user settings - shared across all gameplay modules.
-
-**`src/cutscenes/`**
-
-- `__init__.py` 46 - Package cutscenes - re-export facade.
-- `cast.py` 112 - cutscene cast sprites.
-- `cast3d.py` 156 - 3D (engine3d.Humanoid) looks derived from the 2D cast sheet.
-- `chair.py` 1296 - Split part. (no docstring)
-- `death3d.py` 747 - Gameplay death falls for 3D guards (Mission 7 raid, Mission 6 yard).
-- `engine.py` 692 - Split part. Public: `draw_cutscene_scene`, `draw_typewriter_title`, `reset_dialogue_slide`, `draw_dialogue_box`, `draw_cinematic_subtitle`, `draw_film_caption`, `draw_volkov_dossier_overlay`
-- `figure_kit.py` 11 - cutscenes.figure_kit - deprecated path (RPE6 Phase 2, A-006): the kit is ``engine.anim``.
-- `fire3d.py` 898 - Shared procedural turbulent fire/smoke/ember system for 3D and 2.5D (24-frame cyclic flame atlas, pitch-aware `draw_depth`, `phys_occ`, `_gl_surf` ember beds).
-- `intro3d.py` 1135 - engine3d takes for the opening narration (``core.cutscene1``).
-- `k9.py` 390 - K-9 armory pickup: one continuous, deterministic, software-safe take.
-- `m3broadcast.py` 810 - Mission 3 - Kill Order -> Broadcast transition cinematic (Slice 5 -> 6).
-- `m3broadcast3d.py` 456 - Seekable 3D bridge from the loading dock to the state television studio.
-- `m3cell.py` 916 - Split part. (no docstring)
-- `m3cell_balaceanu_patch.py` 7 - (no docstring)
-- `m3ending.py` 373 - Mission 3 finale cutscene (the Vostral read live on air).
-- `m3ko.py` 674 - Mission 3 - Kill Order transition cinematic (Slice 5 cutscene rehaul, v2).
-- `m3ko3d.py` 425 - Kill Order intro: directed 3D breach, stairs, cover and empty-dock preview.
-- `m3ops.py` 1194 - Split part. (no docstring)
-- `m3staging.py` 386 - M3 service-exit bridge: one 3D set, four directed camera setups.
-- `m4aftermath.py` 741 - Mission 4 finale + intro cutscene art (The Aftermath).
-- `m5decal.py` 108 - Sprite -> wall decal mesh for the M5 3D cutscenes.
-- `m5ending3d.py` 708 - Authored M5 ending set and distance-driven actor blocking.
-- `m5fx3d.py` 637 - FX kit for the Mission 5 3D cutscenes (m5martial3d / m5mid3d; `_gl_spec`/`_gl_lines` + `night_sky(gpu=)`; clears stale sky via `set_sky(None)`).
-- `m5harbour_art.py` 1038 - Authored blocky harbour art for M5; canonical people and motion stay intact.
-- `m5martial.py` 693 - Mission 5 intro + ending cutscene art (Martial Law).
-- `m5martial3d.py` 1232 - W7: true-3D (engine3d) takes of every Mission 5 cutscene.
-- `m5mid3d.py` 2198 - Mission 5 mid-mission cutscenes (round 2).
-- `m5shadow3d.py` 1209 - The rebuilt M5 finale: one fresh 3D set, actor clock and camera language.
-- `m5studio.py` 149 - the state-TV studio shared by the M5 bulletin's 3D take (m5martial3d._bulletin) and its 2D fallback (m5martial._draw_...
-- `m6films.py` 3218 - engine3d takes and 2D fallbacks for every Mission 6 film.
-- `m6fx3d.py` 625 - the Mission 6 FX kit: late-PS2 night light, smoke and haze (+ `_gl_spec`, `cine_curve()`).
-- `m6world3d.py` 2707 - engine3d sets and actor kit for the Mission 6 films (HDR on GL, `night(gpu=)`).
-- `m7films.py` 252 - Mission 7 films: the dawn drop-off (beat 1), the raid lead-in (beat 5) and the burning farm (beat 6).
-- `m7goat.py` 980 - Mission 7 bridge: the wire was never mended, and Bodi's goat gets out.
-- `m7palette3d.py` 91 - The 2D top-down M7 farm palette, for the 3D farm (raid and films).
-- `m7pig3d.py` 281 - Bodi's low-poly pig and distance-driven, cached walk poses.
-- `m7runner.py` 1355 - Mission 7 beat 3: Alex arrives with the mansion plan and a sketch of the farm.
-- `m7world3d.py` 3277 - Mission 7 farm: shared 3D builder for the drop-off, finale and raid (delegates fire to `fire3d`; `raid_curve()`, GPU `finish`).
-- `m8dutyfilms.py` 412 - Mission 8 Duty 3D films: Approach (aerial over the estate, the gate) and Liftoff (Biribel out on the terrace under Retardovici'...
-- `m8films.py` 1112 - Mission 8 Revenge films: the meet at Route 12, Old Friends on the catwalk, and the epilogue.
-- `oil_rig_3d.py` 139 - True-3D Oil Rig Bombing cutscene (engine3d; rig fires via `fire3d.emit_fire`).
-- `post3d.py` 219 - Cinematic post stack for cutscene shots (RPE6 Phase 11 step 5).
-- `ps2mat.py` 100 - PS2 pixel textures for sets authored in flat colour.
-- `revive3d.py` 512 - Shared 3D ally-revive choreography (M7 raid, M8 trap, M8 mansion): four-stage hand-clasp pull-up, living downed pose, world-space IK clasp, ground rifles, revive framing camera.
-- `route12.py` 1791 - Split part. Public: `draw_factory`, `draw_oil_rig`, `draw_propaganda_poster`, `draw_mag_graffiti`, `draw_van_exterior`, `draw_van_interior`, `draw_van_handoff`, `draw_route12_black`
-- `van3d.py` 439 - engine3d take of the KRAP van establishing shot (scene ``van_exterior``).
-- `weather3d.py` 152 - Data-driven weather & atmosphere for 3D sets (RPE6 Phase 11 step 6).
-
-**`src/engine/`**
-
-- `__init__.py` 9 - Retardovici Pulse Engine 6 Gold (RPE6): the Call of Acaristan engine.
-
-**`src/engine/ai/`**
-
-- `__init__.py` 27 - engine.ai - enemy brains: behaviour trees, senses, squads and cover.
-- `bt.py` 275 - engine.ai.bt - a small behaviour tree runtime.
-- `cover.py` 143 - engine.ai.cover - cover spots around solid boxes, and picking one.
-- `senses.py` 131 - engine.ai.senses - what an agent knows about its target.
-- `squad.py` 91 - engine.ai.squad - what a group of agents shares.
-
-**`src/engine/anim/`**
-
-- `__init__.py` 36 - engine.anim - animation (RPE6).
-- `figure_kit.py` 1754 - shared cast renderer in the "Balaceanu Arrest" house style.
-- `pose_cache.py` 50 - Pose cache: render-once surfaces for parameterised procedural bodies.
-- `rig3d.py` 523 - Layered 3D pose controller, velocity-coupled gait, and stair/foot-IK solver. (auto)
-- `springs.py` 194 - Analytical spring-damper primitives for 3D procedural animation & camera feel. (auto)
-
-**`src/engine/assets/`**
-
-- `__init__.py` 39 - engine.assets - asset access (RPE6).
-- `_artpack.py` 288 - loaded-sprite registry with procedural fallback.
-- `_sprites.py` 44 - tiny cached PNG loader with graceful fallback.
-- `bake.py` 414 - Deterministic bake + content hashing + lint for rendered assets (§6.5).
-- `layerbake.py` 286 - Bake camera-space procedural painters into world layers (Phase 3 conversion kit).
-- `loaders.py` 54 - Raw file loaders: the only place in the codebase that may call ``pygame.image.load`` / ``pygame.mixer.Sound`` on game...
-- `manifest.py` 125 - Content-pack manifests (§6.5): ``ae.manifest/1``.
-- `registry.py` 356 - AssetRegistry (§6.5): stable ids, the fallback chain, caching, ref-counts, reload.
-- `watch.py` 70 - Hot reload for development (§6.5): poll the files behind loaded assets and call ``AssetRegistry.reload`` when one cha...
-
-**`src/engine/collision/`**
-
-- `__init__.py` 20 - engine.collision - solid-world queries for gameplay (RPE6 §6.9).
-- `boxes.py` 151 - engine.collision.boxes - ray, segment and body queries against AABBs.
-- `mesh.py` 344 - engine.collision.mesh - exact hitboxes from a mesh's own triangles (local 3D AABB ray/body early-out, LRU-free grid).
-- `nav.py` 649 - engine.collision.nav - A* on a walkability grid (RPE6 §6.9 ``GridGraph``).
-- `physics.py` 843 - Shared capsule sliding, rigid impact debris, and articulated Verlet ragdolls. (auto)
-
-**`src/engine/core/`**
-
-- `__init__.py` 23 - engine.core: kernel services (clock, rng, events, log, config, services, errors, app).
-- `app.py` 139 - App: explicit boot / run / shutdown (§6.1).
-- `clock.py` 117 - Fixed-step simulation clock (master prompt §6.1, ADR-004).
-- `config.py` 67 - Layered settings: defaults < JSON file < environment < CLI overrides (§6.1).
-- `errors.py` 53 - Engine exceptions with context, and the crash-report writer (§6.1, §6.23).
-- `events.py` 73 - Typed event bus (§6.3).
-- `log.py` 62 - Structured logging with channels, a ring buffer and warn-once (§6.23).
-- `mathx.py` 41 - Small math helpers (lerp/ease/angles/clamp).
-- `profiling.py` 31 - Scoped timers (§6.22).
-- `rng.py` 63 - Named, seeded random streams (R6, §6.1).
-- `services.py` 39 - Explicit service registry (§6.1): no magic globals, clear errors.
-- `timebase.py` 67 - Game-time accessors for legacy code (RPE6 ADAPTER A-004, BUGS B-001).
-
-**`src/engine/dialogue/`**
-
-- `__init__.py` 28 - engine.dialogue - data-driven dialogue (RPE6 §6.14, Phase 7).
-- `model.py` 139 - dialogue.model - the .dlg.json model and static validation (RPE6 §6.14).
-- `runner.py` 153 - dialogue.runner - DialogueRunner: walk a .dlg.json graph, emit lines (RPE6 §6.14).
-
-**`src/engine/input/`**
-
-- `__init__.py` 12 - engine.input - action maps over raw device state (RPE6 §6.10, Phase 9).
-- `model.py` 110 - input.model - action maps and pressed-state remapping (RPE6 §6.10, Phase 9).
-
-**`src/engine/level/`**
-
-- `__init__.py` 24 - engine.level - data-driven levels (RPE6 §6.16, Phase 7).
-- `model.py` 146 - level.model - the .level.json model, validation and (de)serialisation (RPE6 §6.16).
-- `tiled.py` 89 - level.tiled - Tiled JSON (.tmj) importer (RPE6 §6.16).
-
-**`src/engine/lighting/`**
-
-- `__init__.py` 8 - engine.lighting - 2D light map (RPE6).
-- `buffer.py` 328 - lighting.buffer - half-res light buffer: grade, motivated pools, dust (engine side).
-- `lightmap.py` 114 - lighting.lightmap - multiplicative 2D light map (RPE6 Phase 6, §6.6 lighting integration).
-
-**`src/engine/render2d/`**
-
-- `__init__.py` 29 - engine.render2d - one way to put pixels on screen during gameplay (RPE6 §6.6).
-- `camera.py` 159 - render2d.camera - Camera2D: follow, dead-zone, look-ahead, bounds, trauma shake, zoom (RPE6 §6.6).
-- `drawables.py` 465 - render2d.drawables - the things a RenderQueue draws (RPE6 §6.6, Phase 6).
-- `pen.py` 109 - render2d.pen - a drawing sink for procedural painters (RPE6 Phase 6, B-033).
-- `postfx.py` 154 - render2d.postfx - full-screen post effects as cached surfaces + parameters (RPE6 §6.6).
-- `queue.py` 185 - render2d.queue - the sorted render queue and its layer table (RPE6 §6.6, Phase 6).
-- `static.py` 141 - render2d.static - StaticLayers: chunked bakes of floor/decor painters (RPE6 §6.6).
-- `util.py` 135 - render2d.util - shared gameplay-render helpers (engine side).
-
-**`src/engine/render3d/`**
-
-- `__init__.py` 21 - engine.render3d - declarative 3D sets (RPE6 §6.7, Phase 8).
-- `presets.py` 153 - render3d.presets - named 3D lighting moods (RPE6 §6.7 step 1, Phase 11).
-- `scene3d.py` 317 - render3d.scene3d - declarative 3D sets (RPE6 §6.7, Phase 8).
-
-**`src/engine/save/`**
-
-- `__init__.py` 13 - engine.save - snapshots and determinism hashing (RPE6 §6.17, Phase 9).
-- `snapshot.py` 76 - save.snapshot - the ae.save/1 snapshot model (RPE6 §6.17, Phase 9).
-- `statehash.py` 43 - save.statehash - stable world hashing for determinism checks (RPE6 §6.17).
-
-**`src/engine/scene/`**
-
-- `__init__.py` 9 - engine.scene - explicit scene stack (RPE6 §6.2).
-- `cutscene.py` 126 - CutsceneScene: a linear sequence of timed shots (§6.2, Phase 2 form).
-- `inspect.py` 55 - InspectScene: a first-person look at an object that freezes gameplay (§6.2).
-- `scene.py` 74 - Scene: one screen of the game with an explicit lifecycle (§6.2).
-- `stack.py` 257 - SceneStack: the explicit replacement for stage flags and mode switches (§6.2).
-
-**`src/engine/settings/`**
-
-- `__init__.py` 13 - engine.settings - typed, layered user settings (RPE6 §6.18, Phase 9).
-- `model.py` 175 - settings.model - typed, layered settings (RPE6 §6.18, Phase 9).
-
-**`src/engine/text/`**
-
-- `__init__.py` 29 - engine.text - string tables, the font registry and text layout (§6.12/§6.13).
-- `fonts.py` 90 - Font registry and the glyph verdict (§6.13).
-- `layout.py` 116 - Text layout: measure, wrap, fit, ellipsis (§6.12).
-- `strings.py` 89 - String tables (§6.13): keys -> English, ``T()`` with fallbacks.
-
-**`src/engine/timeline/`**
-
-- `__init__.py` 25 - engine.timeline - data-driven cutscene timelines (RPE6 §6.15, Phase 8).
-- `expr.py` 109 - timeline.expr - the tiny safe expression evaluator (RPE6 §6.7/§6.15).
-- `model.py` 165 - timeline.model - the .timeline.json model and static validation (RPE6 §6.15).
-- `player.py` 166 - timeline.player - deterministic sampling of a Timeline at any t (RPE6 §6.15).
-
-**`src/engine/ui/`**
-
-- `__init__.py` 25 - engine.ui - the widget kernel and the standard widgets (§6.12, Phase 4).
-- `theme.py` 115 - Theme: the fonts, colours and viewport metrics widgets draw with (§6.12).
-
-**`src/engine/ui/std/`**
-
-- `__init__.py` 13 - Standard widgets, extracted from what the missions already draw (§6.12).
-- `bottle_hud.py` 44 - BottleHud - the molotov counter strip (M1 + M2; the bodies were identical).
-- `crosshair.py` 67 - Crosshair - the aim reticle shapes (four-arm reticle; combat ring + arms).
-- `dialogue_box.py` 166 - DialogueBox: the shared cutscene dialogue box (A6.11, Phase 4).
-- `health_bar.py` 57 - HealthBar - the HP strip (panel + "HP" label + ratio bar).
-- `hostiles.py` 30 - Hostiles - the HOSTILES counter box.
-- `minimap.py` 429 - MiniMap - the corner minimap panel.
-- `objective_banner.py` 110 - ObjectiveBanner - the OBJECTIVE panel.
-- `prompt.py` 71 - prompt - the world-anchored interaction tag ("[E] ...") drawn over a spot.
-- `weapon_panel.py` 125 - WeaponPanel (MagIcons) - the 84px magazine-icon weapon panel.
-
-**`src/engine/world/`**
-
-- `__init__.py` 21 - engine.world - entities, components, systems ("ECS-lite", RPE6 §6.4).
-- `_component.py` 125 - engine.world._component - ``@component`` dataclasses and the schema registry (RPE6 §6.4, A.1).
-- `entity.py` 227 - engine.world.entity - ``EntityId`` and ``World`` storage (RPE6 §6.4).
-- `prefab.py` 134 - engine.world.prefab - data-defined entity templates with inheritance (RPE6 §6.4, B.4).
-- `std.py` 164 - engine.world.std - standard components (RPE6 §6.4).
-- `system.py` 145 - engine.world.system - ``System`` base, phases and the ``Scheduler`` (RPE6 §6.4, A.1).
-
-**`src/engine3d/`**
-
-- `__init__.py` 15 - engine3d - tiny flat-shaded low-poly software renderer for pygame.
-- `core.py` 1042 - Core of the low-poly renderer: math, meshes, camera, painter renderer (backend-parity `set_sky` stub).
-- `gl.py` 2195 - engine3d.gl - GPU backend (ModernGL): RGBA16F MRT FBO + `gl_sprites`/`gl_post` integration; `flush_to`/`present_to` single-readback path (`add_blob_shadow` queues GPU `_gl_spec`).
-- `gl_post.py` 1120 - GPU HDR bloom, 2.5D lightmap, LUT grade, dither and crisp upscale (Phase 1).
-- `gl_sprites.py` 1059 - GPU sky pass and sprite/line batching for GLRenderer (Phase 1).
-- `hold.py` 336 - Weapon holds and arm-vs-body safety for the box rig (engine3d.rig.Humanoid).
-- `ik.py` 294 - Analytic two-bone IK for the box rig (engine3d.rig.Humanoid).
-- `particles.py` 326 - Shared vectorized particle & ground-decal pools with GPU instancing support. (auto)
-- `rig.py` 1394 - Low-poly humanoid rig: boxes on a joint hierarchy, posed by angle dicts.
-- `textures.py` 164 - engine3d.textures - pixel textures on world faces.
-
-**`src/entities/`**
-
-- `__init__.py` 1 - entities package.
-- `adornments.py` 249 - Head gear, as a registry keyed by catalog id.
-- `art_cache.py` 424 - Centralized procedural surface cache for Call of Acaristan.
-- `corpse.py` 560 - Enemy death corpses - bodies that fall instead of vanishing.
-- `death_anim.py` 502 - Death animation - Option B (Standard).
-- `enemy_ai.py` 1042 - Public: `Enemy`, `enemy_hear_shot`
-- `fallen.py` 356 - A fallen body for a player, drawn in the same visual language as enemies.
-- `player.py` 738 - Player character: movement, drawing, weapon rig.
-- `sprite_lib.py` 11 - entities.sprite_lib - deprecated path (RPE6 Phase 2, A-006): see ``engine.assets.sprites``.
-- `weapon_rig.py` 456 - The three weapon rigs, as drawable-on-call functions.
-- `weapons.py` 853 - Player weapons: pistol, melee, molotov cocktails, fire zones (cached FireZone surfaces).
-
-**`src/fx/`**
-
-- `__init__.py` 1 - fx package.
-- `effects.py` 156 - Visual effects: particles, casings, breach markers, blood decals.
-
-**`src/game/`**
-
-- `__init__.py` 3 - Game-owned content (RPE6 Phase 3): art packs under ``game.art`` and pack manifests under ``game/content/<pack>/``.
-- `devtools.py` 352 - RPE6 Phase 10 (§6.19): in-game debug tools.
-- `dialogues.py` 84 - game.dialogues - mission conversation access (RPE6 Phase 7).
-- `input_adapter.py` 144 - RPE6 Phase 9: game-side input adapter (rebinding + gamepad).
-- `levels.py` 48 - game.levels - level-data access for the missions (RPE6 §6.16, Phase 7).
-- `rain3d.py` 387 - World-space 2.5D rain for top-down 3D views (Walk, M1, M4, M5). (auto)
-- `render3d_bridge.py` 679 - game.render3d_bridge - apply ae.set3d/1 data to a live 3D renderer (RPE6 Phase 8).
-- `save_adapter.py` 392 - RPE6 Phase 9: game-side adapter between live state and ``engine.save``.
-- `scenery3d.py` 92 - Cached office and medical scenery, baked offline from the source GLBs.
-- `timelines.py` 74 - game.timelines - cutscene shot-list access (RPE6 Phase 8).
-- `topdown3d.py` 643 - Shared 2.5D host for the top-down game: camera, sim<->world mapping, aim (GPU blob/ring/blood `_gl_spec`/`_gl_surf`).
-
-**`src/game/art/`**
-
-- `__init__.py` 3 - Hand-authored pixel-art packs (pygame-only).
-- `_layers.py` 54 - Shared helpers for baked world layers (``game.art.<pack>.<name>`` adapter modules).
-- `_pack.py` 109 - Per-pack registry wrappers for game code (``game.art.<pack>``).
-
-**`src/game/art/m1/`**
-
-- `__init__.py` 23 - Mission 1 asset pack: baked world layers (and props) of the mission dressing.
-- `exfil_truck.py` 20 - Mission 1 parked KRAP exfil flatbed (shadow, bed, crates, cab, headlights, wheels, KRAP label), baked from ``missions...
-- `molotov_icon.py` 20 - HUD Molotov icon (0 active = lit bottle, 1 spent = grey bottle), baked from ``missions.m1.draw._paint_molotov_icon``...
-- `pickup_icon.py` 20 - Mission 1 ground-pickup icons (0 magazine, 1 keycard, 2 bandage, 3 bottle), baked from ``missions.m1.draw._paint_m1_p...
-- `world_static.py` 29 - Mission 1 static world (office floor grid, container / warehouse walls, desk bodies, bay label, dressing) baked from...
-
-**`src/game/art/m2/`**
-
-- `__init__.py` 23 - Mission 2 asset pack: baked world layers (and props) of the mission dressing.
-- `nest_bits.py` 22 - Pieces of the abandoned Route 12 sniper nest (0 scuff ellipse 48x24, 1 brass casing 8x6, 2 left-behind rifle 40x12),...
-- `prop_icon.py` 25 - Mission 2 clue / evidence prop icons at world scale (PROP_WORLD_SCALE), baked from ``missions.m2.draw._paint_prop_ico...
-- `world_static.py` 33 - Mission 2 static world (road / terrain tiles, static dressing, structure walls, control facade, gantry, shelter, gard...
-
-**`src/game/art/m3/`**
-
-- `__init__.py` 23 - Mission 3 asset pack: baked world layers of the prison dressing (and later props).
-- `archives_static.py` 39 - Archives Wing static world baked from ``missions.m3.draw._bake_m3_archives`` (live fallback).
-- `broadcast_static.py` 26 - Broadcast Wing static world baked from ``missions.m3.draw._bake_m3_broadcast`` (live fallback).
-- `camera_body.py` 19 - Mission 3 security-camera mount + smoked dome (0 idle, 1 alerted = opaque dome), baked from ``missions.m3.systems._pa...
-- `cell_details.py` 25 - Biribel's cell dressing (cot, chair, sink, drain, stains, tally marks, conduit) as a baked world layer.
-- `cell_door_blown.py` 21 - Mission 3 interrogation-cell door after the C4 breach has settled: jambs, the two door tiles, blast hole, scorch, cra...
-- `cellblock_static.py` 45 - Cell-block map static world (floors, exterior ground, background dressing, corridor / guard room / armory / service-w...
-- `comms_static.py` 26 - Comms Wing static world baked from ``missions.m3.draw._bake_m3_comms`` (live fallback).
-- `door_tile.py` 25 - Reinforced prison door tile of Mission 3 (frame + leaf / open inner + padlock / LED) in its two rest states, baked fr...
-- `kitchen.py` 30 - Prison kitchen / utility room of the cell block (floor tiles, backsplash, shelves, fixtures, grime) as a baked world...
-- `ko_static.py` 42 - Kill Order ground-floor static world (floors, exterior ground, set dressing: stairwell, dock crane, crates, mezzanine...
-- `pickup_icon.py` 20 - Mission 3 ground-pickup markers (0 looted sidearm, 1 bandage), baked from ``missions.m3.draw._paint_m3_pickup_icon``...
-- `wall_monitor.py` 24 - Interrogation-cell wall monitor (Mission 3), baked from ``missions.m3.draw._paint_wall_monitor_part`` (live fallback).
-- `weapon_icon.py` 20 - Mission 3 HUD weapon icons (shiv, chair leg, K-9 SMG, looted sidearm, generic), baked from ``missions.m3.systems._pai...
-
-**`src/game/art/m4/`**
-
-- `__init__.py` 23 - Mission 4 asset pack: baked world layers (and props) of the mission dressing.
-- `mag_icon.py` 25 - Mission 4 HUD magazine icons, baked from ``missions.m4.draw._paint_m4_mag_icon`` (live fallback).
-- `world_static.py` 42 - Mission 4 static world (floor + walls, buildings, roofs, window grids, storefronts, ground dressing) baked from ``mis...
-
-**`src/game/art/m5/`**
-
-- `__init__.py` 79 - Mission 5 sprite pack (owner module; ``art.m5`` is the compatibility shim).
-- `_kit.py` 128 - Shared pixel-art kit for the Mission 5 sprites.
-- `armband.py` 21 - The black Guard armband pinned to the depot notice board (25 x 8 px, 0.5 x 0.16 m): black cloth with a red stripe, fo...
-- `bale.py` 52 - Strapped newspaper bundles seen from above (Print Works stacks/pallets).
-- `calendar.py` 24 - Safehouse wall calendar (24 x 32 px, 0.6 x 0.8 m): red 1991 header, month grid, one day ringed in red, nail at the top.
-- `district_map.py` 34 - Vasile's district map (52 x 36 px, 1.3 x 0.9 m): street grid, the river, the Lower Quarter ringed in red, "SECTOR 4"...
-- `guard_banner.py` 44 - Presidential Guard banner (36 x 57 px, 1.2 x 1.9 m): brass rod, black cloth with folds lit from the left, gold eagle,...
-- `guard_plate.py` 15 - Lit red Guard notice plate over the Print Works door (36 x 20 px, 0.9 x 0.5 m).
-- `hq_locker.py` 29 - Guard HQ steel locker (26 x 44 px, top-down gameplay prop).
-- `inspect_art.py` 30 - Static layers of the Mission 5 "[E] look" first-person shots (canvas CW x CH = 1.3x screen).
-- `m5_guard.py` 62 - Presidential Guard trooper, top-down gameplay sprite (96 x 96, figure centred at (48, 48), facing +x).
-- `mag.py` 30 - Maru's thrown magazines (gameplay).
-- `mag_icon.py` 126 - HUD magazine-icon shells (weapon panel).
-- `maru.py` 29 - Maru, top-down gameplay sprite (84 x 84, anchor (42, 48) = feet/centre): the figure_kit cast look - black hoodie, pis...
-- `plate.py` 23 - HUD status plate (convoy / raid clock), 340 x 46: dark glass, steel rim with a lit top edge (upper-left key light), e...
-- `portrait_frame.py` 31 - Official portrait of President Retardovici in a gilt frame (30 x 30 px, 1.0 x 1.0 m).
-- `posters.py` 128 - Wall posters of the Lower Quarter (32 x 44 px, 0.64 x 0.88 m in the 3D sets).
-- `presidential_crest.py` 64 - State crests (40 x 40 px).
-- `press.py` 51 - Print Works offset press, top-down (154 x 64).
-- `printworks_sign.py` 24 - "MAG PRINT WORKS" enamel sign over the Print Works (96 x 14 px, 8.4 x 1.3 m).
-- `tram_wreck.py` 20 - Burnt-out tram on the quarter junction (static decor).
-- `wall_posters.py` 64 - Top-down wall posters for the gameplay maps (the wall is seen as its front band).
-
-**`src/game/content/`**
-
-- `__init__.py` 1 - Pack manifests (``ae.manifest/1``) and palettes, one folder per pack.
-
-**`src/game/render/`**
-
-- `__init__.py` 72 - game.render - the game's ``engine.render2d`` instance: queue + static layers + post-FX + camera (RPE6 Phase 6).
-- `adapters.py` 62 - Drawable adapters for shared legacy classes (RPE6 Phase 6, ADR-017).
-- `host.py` 78 - game.render.host - the game's render2d instance and the hosted gameplay frame (RPE6 §6.6, Phase 6).
-
-**`src/game/world/`**
-
-- `__init__.py` 158 - game.world - the game's ``engine.world`` instance: World + Scheduler + legacy roster (RPE6 Phase 5).
-- `legacy.py` 491 - game.world.legacy - strangler bridge between the pre-ECS objects and ``engine.world`` (RPE6 §6.4 step 1).
-
-**`src/launcher/`**
-
-- `__init__.py` 80 - Pre-game KRAPNET Launcher and in-place auto-updater package.
-- `updater.py` 1312 - Update checker and in-place patcher for Call of Acaristan.
-- `window.py` 1250 - KRAPNET Pre-Game Launcher window (Pygame) for Call of Acaristan.
-
-**`src/missions/`**
-
-- `__init__.py` 1 - missions package.
-- `arena.py` 1742 - Multiplayer arena maps and the deathmatch rules.
-- `walk3d.py` 605 - Walking sim in 2.5D: the harbour alley drawn in 3D over the 2D rules (HDR scoped off/restored).
-- `walk_fp.py` 1164 - First-person reward cinematics for the walking sim.
-- `walk_van3d.py` 152 - Walking sim: the KRAP extraction van as a real 3D model.
-- `walking_attack3d.py` 890 - True 3D oil-rig strike cinematic, rendered by the game's engine3d (flames/smoke via `fire3d`).
-- `walking_sim.py` 3554 - Walking sim section: slum exploration, NPCs, firefight overlook panorama.
-
-**`src/missions/m0/`**
-
-- `__init__.py` 371 - Mission 0 - Depot - thin host generated by tools/ae_new_mission.py (RPE6 P10).
-
-**`src/missions/m1/`**
-
-- `__init__.py` 42 - Package missions/m1 - re-export facade.
-- `draw.py` 2455 - Split part. Public: `game_draw`, `submit_frame`
-- `draw3d.py` 1917 - Mission 1 in 2.5D: the warehouse frame drawn in 3D over the 2D rules (shared `fire3d` flames/ember beds, `"fire"` grade lights, GL `flush_to`, HDR scoped).
-- `escape3d.py` 320 - Mission 1 escape cut (timeline m1.escape) in 3D.
-- `grade3d.py` 234 - Mission 1–5 / Walk / Arena night grade for 2.5D frames (LRU caches, `"fire"` light kind with warm spill + post-grade bloom).
-- `hotwire.py` 144 - Split part. Public: `handle_hotwire_press`, `handle_hotwire_click`
-- `m1_audio.py` 100 - Mission 1 music hook: two looped stems (infiltrate / combat), crossfaded over 1.5 s when the alarm flips STATE.firefi...
-- `main.py` 363 - Split part. Public: `start_mission`
-- `map.py` 175 - Mission 1 map - authored with core.MapBuilder, baked to list[str].
-- `meta.py` 96 - Mission 1 cutscene data (RPE6 Phase 8 + WP2: the cut as ae.timeline/1).
-- `roles.py` 233 - Mission 1 breach roles (WP7): rusher / cover / flanker per wave enemy, and CIOCAN's shoulder charge.
-- `stealth.py` 431 - Mission 1 stealth (rework WP5, plan section d).
-- `update.py` 1217 - Split part. Public: `debug_jump_to_exfil`, `standoff_commander`, `game_update`
-
-**`src/missions/m2/`**
-
-- `__init__.py` 54 - Package missions/m2 - re-export facade.
-- `components.py` 19 - Mission 2 entity components (RPE6 Phase 5, D4).
-- `draw.py` 8096 - Split part. Public: `draw_route12_seby_pickup`, `clamp_alpha`, `game_draw`, `get_mission2_overview`, `get_opening_cinematic`, `get_squadmate_death_cutscene`, `get_mission_phases`, `get_mission2_zones`
-- `draw3d.py` 1548 - Mission 2 in 2.5D: Route 12 drawn in 3D over the 2D rules (HDR scoped off/restored).
-- `meta.py` 701 - Split part. Public: `get_zone_for_world_pos`
-- `sniper.py` 1979 - Split part. Public: `grant_seby_os12`
-- `sniper3d.py` 1225 - Mission 2 - "Route 12 Kill-Box": the sniper ambush as a low-poly 3D film.
-- `sniper3d_set.py` 274 - Route 12 toll plaza, built for the low-poly sniper cinematic.
-- `starts.py` 597 - Split part. Public: `start_mission2`, `start_mission2_sniper`, `start_mission2_after_sniper`, `start_mission2_flank`, `start_mission2_truck`, `start_mission2_checkpoint`, `start_mission2_evidence_debug`
-- `update.py` 1264 - Split part. Public: `handle_interact`, `blocks_player_actions`, `debug_jump_to_evidence`, `game_update`
-- `world.py` 900 - Split part. (no docstring)
-
-**`src/missions/m3/`**
-
-- `__init__.py` 100 - Package missions/m3 - re-export facade.
-- `components.py` 53 - Mission 3 entity components (RPE6 Phase 5, D4).
-- `draw.py` 8361 - Split part. Public: `draw_archives_transition_cinematic`, `draw_vostral_pickup_cinematic`, `game_draw`, `solid_walls_view`
-- `draw3d.py` 1443 - Mission 3 in 2.5D: the five playable maps drawn in 3D over the 2D rules (off-screen fire-zone cull, HDR scoped off/restored).
-- `flow.py` 1954 - Split part. Public: `start_mission3`, `start_mission3_breakout_checkpoint`, `start_mission3_comms_checkpoint`, `start_mission3_archives_checkpoint`, `start_mission3_kill_order_checkpoint`, `start_mission3_broadcast_checkpoint`, `start_mission3_upload_checkpoint`
-- `interrog.py` 638 - Split part. (no docstring)
-- `maps.py` 836 - Split part. (no docstring)
-- `meta.py` 566 - Split part. (no docstring)
-- `sweep.py` 1125 - Slice 5b-5d: the Kill Order sweep director, overwatch pin, Volkov extraction window and dock holdout.
-- `systems.py` 4208 - Split part. Public: `game_update`, `is_crafting_active`, `grant_k9_smg`, `start_black_ledger_debug`, `handle_interact`, `start_crafting`, `handle_crafting_event`, `handle_event`
-- `wings3d.py` 746 - Mission 3 wings in 2.5D: the comms wing, the archives, the kill order floor and the broadcast studio, for ``draw3d``.
-- `world.py` 2349 - Split part. (no docstring)
-
-**`src/missions/m4/`**
-
-- `__init__.py` 103 - Mission 4: The Aftermath - the world after the broadcast.
-- `apc.py` 143 - Mission 4 wave 5: the APC ram.
-- `components.py` 26 - Mission 4 entity components (RPE6 Phase 5, D4).
-- `draw.py` 2922 - Split part. Public: `game_draw`
-- `draw3d.py` 1704 - Mission 4 in 2.5D: human-proportioned curfew street (taller blocks, animated 3x4 Corner Alimentara with oscillating wall fan) and the radio station in 3D (HDR scoped off/restored).
-- `escort.py` 150 - Mission 4 escort: Vasile, the KRAP comms cache and the supply pool.
-- `flow.py` 839 - Split part. Public: `handle_dialogue_event`, `start_m4`, `start_mission4_station_checkpoint`, `start_mission4_tower_checkpoint`, `handle_interact`; owns the inside-only corner-shop visit/loot flags.
-- `fortify.py` 219 - Mission 4 fortify: barricade sites, the build / upgrade / repair holds.
-- `maps.py` 464 - Split part. Public: `zone_at`, `zone_label`; 3x4 corner-shop door/rect/counter constants and the 2-row station FOYER.
-- `meta.py` 314 - Mission 4 - part module.
-- `siege.py` 683 - Mission 4 siege: five waves on the station while the arrest airs.
-- `systems.py` 454 - Split part. Public: `game_update`
-- `world.py` 844 - Split part. Public: `friendly_npcs`, `barricade_blocks_shots`, `fail_mission`; `_shop_counter_pos`.
-
-**`src/missions/m5/`**
-
-- `__init__.py` 73 - Mission 5: Martial Law - the capital under emergency rule.
-- `components.py` 29 - Mission 5 entity components (RPE6 Phase 5, D4).
-- `decor.py` 380 - Mission 5 set dressing, lighting and inspectables (round 2).
-- `decor_interior.py` 432 - Mission 5 interior set dressing (gauntlet pass).
-- `decor_paint.py` 416 - Mission 5 static set dressing painters (round 2).
-- `draw.py` 1400 - Mission 5 - part module.
-- `draw3d.py` 1817 - Mission 5 in 2.5D: Guard HQ, the Lower Quarter, the print works and the tunnel in 3D (HDR scoped on/restored).
-- `finale_audio.py` 264 - Mission 5 sound design and cutscene-owned playback.
-- `finale_script.py` 43 - M5 rebuilt finale: immutable script/timing shared by renderer and player.
-- `flow.py` 612 - Mission 5 - part module.
-- `inspect_art.py` 370 - painters for the Mission 5 first-person inspect shots.
-- `inspect_art_street.py` 253 - storeroom + Lower Quarter inspect shots (paint tins, shop TV through the shutter, the burned tram).
-- `inspect_fpv.py` 232 - Mission 5 "[E] look": a short first-person look at the thing instead of a radio line.
-- `maps.py` 270 - Mission 5 - part module.
-- `meta.py` 265 - Mission 5 - part module.
-- `quarter.py` 527 - Lower Quarter systems (round 2): turns 'run and gun' into a run with choices.
-- `render.py` 119 - Mission 5 - part module.
-- `systems.py` 368 - Mission 5 - part module.
-- `tram_wreck.py` 531 - M5 Lower Quarter: the burning tram wreck (top-down).
-- `water.py` 103 - M5 shallow floodwater: one connected, world-space surface, never tile stamps.
-- `world.py` 762 - Mission 5 - part module.
-
-**`src/missions/m6/`**
-
-- `__init__.py` 57 - Mission 6: Whiteout - re-export facade (load order = parts order).
-- `combat.py` 838 - Mission 6 - loud combat arenas for the three top-down stages.
-- `decor.py` 2676 - Mission 6 - stage decor, ground art and night lighting.
-- `draw.py` 698 - Mission 6 gameplay renderer.
-- `draw3d.py` 1645 - Mission 6 in 2.5D: all four top-down stages (customs, no-man's-land, rail, boxcar folded into rail) with GPU extra-texture UVs (warm fire lightmap; HDR/dither/PS1 snap forced off and restored for key-colour decode).
-- `flow.py` 395 - Mission 6 - stage ladder, checkpoints and the ending handoff.
-- `hud3d.py` 262 - Mission 6 3D HUD: minimal tactical, shared by the train shootout and the yard fight.
-- `hud_ui.py` 87 - Mission 6 tactical HUD styling & unified top-left combat cluster.
-- `m6_audio.py` 678 - Mission 6 sound design: film stems, foley and the interactive-train bed.
-- `maps.py` 298 - Authored map layer for Mission 6 - three distinct playable spaces.
-- `meta.py` 314 - Mission 6 metadata, stage constants and authored cutscene timelines.
-- `night_fx.py` 349 - Mission 6 night atmosphere: cached light sprites with the filmic curve baked in, pre-baked wet puddle patches, snow layers.
-- `palette3d.py` 40 - The 2D top-down M6 palette, for the 3D yard and train.
-- `perf.py` 386 - M6 3D scene performance governor (train scene + rail-yard fight).
-- `stealth.py` 423 - Mission 6 - tower searchlights for no-man's-land and the rail yard.
-- `systems.py` 316 - Mission 6 - per-frame gameplay pipeline.
-- `train3d.py` 5415 - Mission 6 - the interactive 3D train scene (``docs/MISSION6_PLOT.md``; cached fade veil, corpse joints reused from `add_humanoid`, GPU reticle alpha via RGBA_MULT).
-- `world.py` 432 - Mission 6 - world construction, Guard spawns and shared helpers (perimeter `"D"` tiles are solid).
-- `yard3d.py` 2073 - Mission 6 - "Who is Ucilev?": the third-person fight after Volkov's death.
-- `yard_brain.py` 613 - Mission 6 yard - the Guard brains (engine.ai on the "Who is Ucilev?" fight).
-- `yard_dress.py` 304 - Mission 6 yard - the clutter that makes the walled yard look lived in.
-- `yard_hud.py` 179 - Mission 6 yard - the 2D top-down game's HUD, brought into the 3D fight.
-
-**`src/missions/m6/bloc3d/`**
-
-- `__init__.py` 15 - bloc3d - the Bloc around the M6 yard and station, built from boxes.
-- `blocks.py` 204 - Prefab Soviet panel blocks for the Bloc district.
-- `colours.py` 39 - Phase-5 colours for the Bloc landmarks and signage.
-- `font.py` 108 - A 5x7 pixel font for the Cyrillic signage on the Bloc.
-- `signs.py` 172 - Cyrillic signage for the Bloc: rooftop letters, boards, stars, billboards, banners.
-- `stacks.py` 134 - Industrial silhouettes on the skyline: chimneys, a radio mast, a water tower.
-- `tower.py` 139 - Watchtowers and wire fences for the Bloc yards.
-
-**`src/missions/m7/`**
-
-- `__init__.py` 9 - Mission 7: Fallow Ground - re-export facade (load order = parts order).
-- `choice.py` 616 - Mission 7 beat 7 - Two Channels: Vasile's offer, Maru's reply, then the choice.
-- `colonel.py` 228 - Colonel Paie: the scarecrow easter egg on Bodi's farm.
-- `draw.py` 38 - Mission 7 - placeholder frame: title, stage label and the advance hint.
-- `farmyard.py` 2603 - Mission 7 top-down farmyard.
-- `flow.py` 179 - Mission 7 - stage ladder, checkpoints, score cues and the outro handoff.
-- `goat_rescue.py` 3715 - Mission 7 beat 2: Bodi's escaped goat.
-- `m7_audio.py` 735 - Mission 7 sound design: the farm day, the warning, the night raid, the ending receiver.
-- `maps.py` 112 - Mission 7 top-down farm: tile grid, palette and interaction points (beats 2 and 4).
-- `meta.py` 100 - Mission 7 metadata and stage constants: Fallow Ground (skeleton).
-- `minigames.py` 894 - Mission 7 farm minigames.
-- `raid3d.py` 2529 - Mission 7 beat 5 - the raid: a third-person fight for Bodi's yard at night.
-- `raid_brain.py` 682 - Mission 7 raid AI: the Guard sweep (riflemen, a dog, a truck gunner), the trucks, and the two allies, Bodi and Alex.
-- `raid_hud.py` 150 - Mission 7 raid HUD: the top-down game's panels (via the M6 yard HUD helpers), a north-up farm minimap, speaker-colour...
-- `raid_world.py` 712 - Mission 7 raid world: collision boxes, line of sight, the barn fire and the props.
-- `systems.py` 34 - Mission 7 - per-frame update, dispatched by stage (placeholder stages: ENTER advances).
-
-**`src/missions/m8/`**
-
-- `__init__.py` 9 - Mission 8: The Call - re-export facade (load order = parts order).
-- `draw.py` 28 - Mission 8 - frame: a 3D scene, or the stage's 3D beat.
-- `flow.py` 254 - Mission 8 - stage ladder, checkpoints and the outro handoff.
-- `m8_audio.py` 986 - Mission 8 sound design: Route 12, the catwalk, the chase.
-- `meta.py` 254 - Mission 8 metadata: identity, the two stage ladders and the beat scripts.
-- `systems.py` 45 - Mission 8 - per-frame update, dispatched by stage: a 3D scene, or a beat.
-
-**`src/missions/m8/duty/`**
-
-- `__init__.py` 6 - Mission 8 Duty route ("Head of State"): films in `cutscenes/m8dutyfilms.py`, playable `mansion3d`, `flight3d`, `ridge3d`.
-- `flight3d.py` 891 - Mission 8 Duty - Phase 4: Last Flight (3D door-gunner chase).
-- `mansion3d.py` 2110 - Mission 8 Duty - Phase 2: The Mansion (3D third-person fight).
-- `mansion_brain.py` 587 - Mission 8 Duty - Mansion 3D AI: Retardovici's guard across the estate, Bodi, Alex, and Andrei M.'s animated death.
-- `mansion_env.py` 661 - Mission 8 Duty - Outer grounds, approach road, woodland, rolling foothills and distant capital skyline surrounding Retardovici'... (auto)
-- `mansion_hud.py` 209 - Mission 8 Duty - Mansion HUD: floor-aware minimap, weapon panel, area cards, callouts, Andrei M.'s boss bar and the helicopter ...
-- `mansion_set.py` 1265 - Mission 8 Duty - Retardovici's estate, the same house the Revenge funeral films (``epilogue3d.funeral``): plastered walls on a ...
-- `mansion_world.py` 476 - Mission 8 Duty - the estate's solids, stacked floors and 3D sight lines.
-- `ridge3d.py` 497 - Mission 8 Duty - Phase 6: The Ridge (first-person scope finale).
-
-**`src/missions/m8/revenge/`**
-
-- `__init__.py` 3 - Mission 8 Revenge route: the Route 12 set (``set3d``), the trap and gantry fight (``trap3d`` over ``trap_world`` / ``...
-- `beats.py` 169 - Mission 8 - 3D beats: the stage's lines as caption plates over the Route 12 set.
-- `chase3d.py` 6015 - Mission 8 Revenge - phase 6: the tractor chase to the Kim Kim crossing.
-- `chase_set.py` 2382 - Mission 8 Revenge - the tractor chase set: the back roads from Route 12 to the Kim Kim rail crossing, baked once (dawn sky via `night_sky(gpu=False)` + `stratus`).
-- `epilogue3d.py` 637 - Mission 8 Revenge - phase 7: the epilogue, one 3D shot per line.
-- `kill3d.py` 953 - Mission 8: Vasile's last moment on the Route 12 gantry.
-- `set3d.py` 867 - Mission 8 Revenge - Route 12 in 3D, shared by the trap fight, the kill and the meet.
-- `trap3d.py` 2535 - Mission 8 Revenge - phases 2 and 3: the Trap and the Gantry, one third-person scene.
-- `trap_brain.py` 913 - Mission 8 Revenge - trap AI: Guard riflemen, breachers, elevated overwatch snipers, the interactive Guard truck and B...
-- `trap_hud.py` 215 - Mission 8 Revenge - trap HUD: the raid's panels, tactical radar markers and callouts on a north-up Route 12 minimap d...
-- `trap_world.py` 308 - Mission 8 Revenge - blocking solids, 3D sight lines and interactive hazards of the Route 12 set for the trap fight.
-
-**`src/net/`**
-
-- `__init__.py` 21 - net - multiplayer relay client.
-- `client.py` 472 - Game-side client for the KRAPNET master server.
-- `discovery.py` 50 - LAN auto-discovery for the master server.
-- `match.py` 469 - A multiplayer match session: authoritative host + interpolating clients.
-- `playit_agent.py` 220 - Bundled playit.gg agent for hosts without their own playit install.
-- `portmap.py` 718 - Automatic router port forwarding (UPnP IGD + NAT-PMP), stdlib only.
-- `protocol.py` 1554 - Wire protocol for the Acaristan multiplayer master server.
-- `roomcode.py` 133 - Short, game-branded room codes for direct arena matches.
-- `tcp_tunnel.py` 346 - Public raw-TCP tunnels for arena matches.
-- `telemetry.py` 137 - Lightweight client-side telemetry for arena matches.
-- `udp_transport.py` 45 - Small, bounded helpers for the real-time match datagram channel.
-
-**`src/tools/`**
-
-- `input_recorder.py` 61 - Dev-only gameplay input recorder (RPE6 Phase 0, replay baselines).
-- `ko_playability_audit.py` 561 - Kill Order (Mission 3 Phase 5) playability audit - headless.
-- `trailer_bot.py` 201 - Trailer bot - deterministic operator driver for cinematic capture.
-
-**`src/ui/`**
-
-- `__init__.py` 91 - Package ui - re-export facade.
-- `arena_view.py` 1859 - Renderer for multiplayer arena matches.
-- `arena_view3d.py` 606 - 2.5D renderer for multiplayer arena matches (HDR scoped off/restored).
-- `credits.py` 491 - End credits sequence displayed after Mission 8's Call of Acaristan title card.
-- `credits_football.py` 2324 - Credits background football match (Biribel vs Bodi): simulation, animations and 3D pitch.
-- `egg666_3d.py` 361 - the Mission 1 safe-keypad "666" Easter egg as a lit 3D scene.
-- `egg666_audio.py` 279 - procedural sound for the 3D "666" scare.
-- `egg666_build.py` 340 - geometry for the 3D "666" scare: the vault, the ritual marks, the hanging lamp and the demon.
-- `egg666_dir.py` 330 - the director of the 3D "666" scare: what happens at which frame.
-- `egg666_fx.py` 138 - light halos, the PS2 grade and the crisp present for the 3D "666" scare.
-- `egg666_post.py` 127 - screen effects for the 3D "666" scare.
-- `hud.py` 1475 - HUD overlays: minimap, safe keypad, notebook inspection, desk notes.
-- `kit.py` 206 - KRAPNET terminal style kit shared by the main menu and its sub-screens.
-- `main.py` 994 - Split part. Public: `draw_menu_background`, `draw_menu`, `draw_menu_cursor`, `slot_panel_clicked`, `handle_menu_keydown`, `consume_keyboard_trigger`, `reset_keyboard_selection`
-- `match_screen.py` 4881 - The in-game arena match: entry panel plus the live match runtime.
-- `mission_complete.py` 606 - Physical KRAP Intelligence case dossier: manila folder, taped field photo, transcript slip, FORM KR-47.
-- `mission_complete_3d.py` 1150 - Live engine3d dioramas for the MISSION_COMPLETE dossier exhibit frame.
-- `mission_failed.py` 336 - Mission-specific failure terminals with bespoke procedural illustrations.
-- `mp.py` 3411 - Split part. Public: `update_server_browser_animation`, `switch_mp_tab`, `open_dm`, `close_dm`, `send_dm_message`, `update_dm_state`, `draw_connections_panel`, `scroll_server_list`
-- `mp3d.py` 343 - 3D kit for multiplayer: soldier rigs, guns and Outfitter portraits.
-- `multiplayer_style.py` 375 - Read-only KRAPNET presentation.
-- `pixfont.py` 349 - Pixel bitmap fonts for the radio UI (polish pass T6b).
-- `radio.py` 772 - Radio transmission widget (polish pass T6, field-radio restyle T6b).
-- `shop.py` 624 - The Outfitter - spend Acaribucks on the loadout you play the arena in.
-- `speechbox.py` 350 - Speech box: the one in-person dialogue box and film caption for the game.
-- `system.py` 1580 - Split part. Public: `draw_settings`, `draw_pause_menu`, `reset_death_animation`, `draw_death_screen`, `draw_black_ledger_death_screen`, `black_ledger_death_buttons_ready`, `draw_black_ledger_death_buttons`
-- `tactical_hud.py` 89 - Shared tactical HUD styling & layout metrics (M1–M6): `HUD_MARGIN`, `PANEL_GAP`, `TACTICAL_THEME`, `draw_tactical_corners`, `tactical_panel_bg`, `place_minimap`.
-- `upload_os.py` 3138 - Upload OS - a retro CRT terminal operating system for the evidence upload.
-- `widgets.py` 320 - Split part. Public: `note_hover`, `consume_hover`, `clipboard_text`, `ModernButton`
 ### 20.1 Monolith Anchor Table (files > 1,000 lines)
 <!-- AUTO:anchors -->
 Line ranges (generated) for the monoliths; give `tools/ai_bundle.py path:start-end` the slice you need.
 
-- `app.py` (4738): 1-521 header/imports; 522-545 def trigger_transition; 546-965 class CutscenePlayer; 966-1952 def draw_slot_select_screen; 1953-2197 class _BootIntroState; 2198-2335 class _EngineIntroState; 2336-2403 class _MenuState; 2404-2605 class _SlotSelectState; 2606-2786 class _MultiplayerState; 2787-2839 class _SettingsState; 2840-2875 class _ShopState; 2876-3321 class _CutsceneState; 3322-3378 class _CreditsState; 3379-3402 class _BriefingState; 3403-3459 class _WalkState; 3460-3974 class _GameState_; 3975-3993 class _NotebookInspectState; 3994-4049 class _PausedState; 4050-4165 class _DeathState; 4166-4662 class _MissionCompleteState; 4663-4682 def _rpe6_hot_reload; 4683-4738 class _LegacyGameScene
-- `cutscenes/m6world3d.py` (2707): 1-77 header/imports; 78-370 plumbing; 371-417 film grade; 418-733 actors; 734-1155 motion kit; 1156-1204 def head_stats; 1205-1291 particles; 1292-1311 sky / light helpers; 1312-1673 insertion sets; 1674-2186 the valley run (intro chase); 2187-2337 boxcar interior; 2338-2707 rail platform / terminal / office
-- `cutscenes/m7world3d.py` (3277): 1-359 header/imports; 360-795 M8 ruin: Bodi's farm the morning after the fire ; 796-1239 def _tractor_asset; 1240-1666 def motorcycle; 1667-2078 def _landscape_water_tower; 2079-2532 def _south_y; 2533-2960 def _sag; 2961-3277 def _smoke_img
-- `missions/m8/revenge/chase_set.py` (2382): 1-150 header/imports; 151-562 meshes; 563-589 def _xf; 590-1043 the Guard gunship; 1044-1293 def _rot_rt; 1294-1695 the baked set; 1696-2113 def _verge_trees; 2114-2382 def _zones
+- `app.py` (4795): 1-523 header/imports; 524-547 def trigger_transition; 548-967 class CutscenePlayer; 968-1994 def draw_slot_select_screen; 1995-2239 class _BootIntroState; 2240-2377 class _EngineIntroState; 2378-2445 class _MenuState; 2446-2650 class _SlotSelectState; 2651-2831 class _MultiplayerState; 2832-2884 class _SettingsState; 2885-2920 class _ShopState; 2921-3369 class _CutsceneState; 3370-3426 class _CreditsState; 3427-3450 class _BriefingState; 3451-3507 class _WalkState; 3508-4028 class _GameState_; 4029-4047 class _NotebookInspectState; 4048-4103 class _PausedState; 4104-4219 class _DeathState; 4220-4719 class _MissionCompleteState; 4720-4739 def _rpe6_hot_reload; 4740-4795 class _LegacyGameScene
+- `cutscenes/m6world3d.py` (2721): 1-77 header/imports; 78-370 plumbing; 371-417 film grade; 418-747 actors; 748-1169 motion kit; 1170-1218 def head_stats; 1219-1305 particles; 1306-1325 sky / light helpers; 1326-1687 insertion sets; 1688-2200 the valley run (intro chase); 2201-2351 boxcar interior; 2352-2721 rail platform / terminal / office
+- `cutscenes/m7world3d.py` (3281): 1-360 header/imports; 361-796 M8 ruin: Bodi's farm the morning after the fire ; 797-1243 def _tractor_asset; 1244-1670 def motorcycle; 1671-2082 def _landscape_water_tower; 2083-2536 def _south_y; 2537-2964 def _sag; 2965-3281 def _smoke_img
+- `missions/m8/revenge/chase_set.py` (2548): 1-151 header/imports; 152-563 meshes; 564-590 def _xf; 591-1047 the Guard gunship; 1048-1435 def _rot_rt; 1436-1837 the baked set; 1838-2249 def _verge_trees; 2250-2548 def _zone_border_fence
 - `missions/m2/draw.py` (8096): 1-454 header/imports; 455-549 def _draw_car_burn_overlay; 550-951 Generated vehicle sprites (Polish T7); 952-1277 def _draw_tanker_dynamic; 1278-1744 Generated story-prop sprites (Polish T7); 1745-2184 def _draw_sebi_body_fpv; 2185-2779 def _draw_fpv_hands_inspect; 2780-3198 def _prop_icon_variant; 3199-3879 def _draw_shelter_live; 3880-4503 def _draw_interactables; 4504-5048 def _draw_card; 5049-5507 def _draw_packet_document; 5508-5942 def _draw_hud; 5943-6536 def _draw_dead_air_overlay; 6537-6615 def _draw_blackout_overlay; 6616-6752 Static bake + lighting fixtures (Mission 3 pipel; 6753-7210 Deterministic per-tile noise; 7211-7611 def _bake_m2_static; 7612-8096 def get_mission2_clue_defs
-- `missions/m3/draw.py` (8361): 1-182 header/imports; 183-615 static-layer bake + lighting fixtures (graphics ; 616-1030 exterior ground: world-space dressing; 1031-1458 def _draw_guard_room_details; 1459-1882 def _draw_laundry_room_details; 1883-2370 def _draw_exit_zone_details; 2371-2808 def _draw_comms_map_polish; 2809-3779 def _draw_m3_enemy_type_overlay; 3780-4194 def _draw_archives_map_polish; 4195-4620 def _vp_hand_xform; 4621-5037 Slice 5: Kill Order ground-floor draw path; 5038-5289 def _draw_bcast_station_pc; 5290-5697 bound-hand POV palette (v2 art pass); 5698-6121 def game_draw; 6122-6574 def _draw_m3_pickup; 6575-7067 def _draw_cell_details; 7068-7502 def _draw_cell_details_live; 7503-7912 def _draw_kitchen_details; 7913-8361 def _paint_cell_door_blown
+- `missions/m3/draw.py` (8367): 1-182 header/imports; 183-615 static-layer bake + lighting fixtures (graphics ; 616-1030 exterior ground: world-space dressing; 1031-1458 def _draw_guard_room_details; 1459-1882 def _draw_laundry_room_details; 1883-2370 def _draw_exit_zone_details; 2371-2808 def _draw_comms_map_polish; 2809-3779 def _draw_m3_enemy_type_overlay; 3780-4194 def _draw_archives_map_polish; 4195-4626 def _vp_hand_xform; 4627-5043 Slice 5: Kill Order ground-floor draw path; 5044-5295 def _draw_bcast_station_pc; 5296-5703 bound-hand POV palette (v2 art pass); 5704-6127 def game_draw; 6128-6580 def _draw_m3_pickup; 6581-7073 def _draw_cell_details; 7074-7508 def _draw_cell_details_live; 7509-7918 def _draw_kitchen_details; 7919-8367 def _paint_cell_door_blown
 - `audio/audio.py` (3454): 1-124 header/imports; 125-240 New Powerful DSP Helpers for 16-Bit DOS Style So; 241-242 Upgraded DOS/16-Bit Sound Generators; 243-665 v2 organic DSP helpers (SFX audit pass); 666-765 def _gen_footstep; 766-1184 Overhaul: surface-specific footsteps, NPC feet, ; 1185-1651 def _gen_pa_chime; 1652-2055 def _gen_ambient_drone; 2056-2256 def _gen_molotov_throw; 2257-2540 Cinematic procedural sounds; 2541-2759 Trailer overhaul (docs/PLAN_3_AUDIO.md) - ADDITI; 2760-2776 Audio Manager; 2777-2895 Upload OS CRT sounds; 2896-3454 class AudioManager
 - `ui/match_screen.py` (4881): 1-203 header/imports; 204-214 Identity; 215-298 In-match chat; 299-502 class Wire; 503-614 class Peer; 615-1113 class MatchScreen; 1114-3153 starting a match; 3154-4881 panel input
 <!-- /AUTO:anchors -->
-
-## 21. Tools index (`tools/`, generated from module docstrings)
-
-Scratch probes (`tools/_*.py`, about 23 `_m8_*` files) are skipped: they are throwaway capture scripts, not gates.
-
-**`tools/`**
-
-- `ae_api_snapshot.py` 175 - public API snapshot of ``src/engine`` (RPE6 Phase 2 gate).
-- `ae_audit.py` 490 - RPE6 Phase 0 audit: static census of src/ and tools/ (read-only, stdlib only).
-- `ae_bake.py` 112 - ae_bake - bake / check / lint content packs (RPE6 Phase 3, §6.5).
-- `ae_bench.py` 148 - frame budget bench (RPE6 §6.22; Phase 6 exit evidence).
-- `ae_bench3d.py` 108 - AE BENCH3D - 3D frame budget bench (RPE6 Phase 11 exit evidence).
-- `ae_bench_scenes.py` 229 - Diagnostic 3D scene bench: M8 trap/chase/kill/mansion/flight/ridge, M7 raid, M6 yard/train (`--frames`, `--runs`, `--backend`); reports avg/p50/p99/max ms + fps. Not a CI gate.
-- `ae_build_ak74.py` 651 - AE BUILD AK74 - the AK-74 (6P20) authored in code, with no GLB source.
-- `ae_ci.py` 213 - RPE6 one-command CI (D10).
-- `ae_d4_gate.py` 141 - D4 grep gate: no attribute stuffing on entity objects (RPE6 §2 D4, §6.4 acceptance).
-- `ae_d4_replay_compat.py` 125 - proof that moving entity data into components kept behaviour (RPE6 Phase 5).
-- `ae_d6_gate.py` 153 - D6 gate: one 2D render path (RPE6 §2 D6, §6.6; Phase 6).
-- `ae_dialogue_check.py` 84 - ae_dialogue_check - Phase 7 dialogue gate: validate + data == legacy tables.
-- `ae_dialogue_export.py` 91 - ae_dialogue_export - write the legacy conversation tables as ae.dialogue/1 data.
-- `ae_draw_audit.py` 164 - ae_draw_audit - procedural-draw census per mission (RPE6 Phase 3, P3-M3).
-- `ae_dump_components.py` 106 - component census of a running mission stage (RPE6 §6.4 acceptance).
-- `ae_engine3d_parity.py` 80 - AE ENGINE3D PARITY - software-backend determinism evidence.
-- `ae_export_ak74_glb.py` 473 - AE EXPORT AK74 GLB - the code-authored AK-74 written back out as a GLB source.
-- `ae_flash_check.py` 61 - ae_flash_check - Phase 9 exit evidence: flash reduction caps the breach white-out.
-- `ae_gauntlet.py` 112 - AE GAUNTLET - render everything once at offsets nobody tested.
-- `ae_global_names.py` 130 - ae_global_names - unresolved global references in src (Phase 4 gate, A-001).
-- `ae_golden.py` 550 - RPE6 golden-image harness (master prompt §9).
-- `ae_hold_check.py` 139 - Weapon hold + arm self-collision gate for the 3D cutscenes.
-- `ae_hud_census.py` 177 - ae_hud_census - HUD duplication census across missions (Phase 4 prep).
-- `ae_import_akrifle.py` 113 - AE IMPORT AKRIFLE - the Guard/shared third-person rifle (assets/3D/ak-style-rifle.glb).
-- `ae_import_car.py` 104 - AE IMPORT CAR - the Mission 2 civilian car (assets/3D/low-poly-car_green.glb).
-- `ae_import_check.py` 105 - RPE6 import side-effect check (R7, §6.1 acceptance).
-- `ae_import_dog.py` 151 - AE IMPORT DOG - the Mission 7 guard dog (assets/3D/dawg.glb) and its clips.
-- `ae_import_duty_props.py` 140 - AE IMPORT DUTY PROPS - bakes `moneystack`, `ammo_crate`, `tactical_lmg`, `suppressed_pistol` for Mission 8 Duty.
-- `ae_import_k93d.py` 326 - AE IMPORT K93D - the first authored 3D weapon asset (assets/3D/K93D.glb).
-- `ae_import_krap_van.py` 200 - AE IMPORT KRAP VAN - the KRAP van (assets/3D/krap_van.glb).
-- `ae_import_lmg.py` 116 - AE IMPORT LMG - Biribel's light machine gun in the M8 tractor chase (assets/3D/light_machine_gun.glb).
-- `ae_import_m3_van.py` 109 - AE IMPORT M3 VAN - Volkov's armoured van (assets/3D/M3van.glb).
-- `ae_import_m7rifle.py` 111 - AE IMPORT M7RIFLE - the allies' rifle in Mission 7 (assets/3D/M7Rifle.glb).
-- `ae_import_mesh.py` 210 - AE IMPORT MESH - Blender/glTF/OBJ -> ae.mesh/1 asset (ADR-024).
-- `ae_import_molotov.py` 118 - AE IMPORT MOLOTOV - the thrown molotov cocktail (assets/3D/low-poly-molotov.glb).
-- `ae_import_pig.py` 85 - AE IMPORT PIG - the low-poly pig (assets/3D/low_poly_pig.glb).
-- `ae_import_pistol.py` 95 - AE IMPORT PISTOL - the multiplayer service pistol (assets/3D/pistol_lowpoly.glb).
-- `ae_import_tractor.py` 99 - AE IMPORT TRACTOR - the Mission 7 tractor asset (assets/3D/TractorM7.glb).
-- `ae_import_truck.py` 106 - AE IMPORT TRUCK - the Mission 7 Guard truck (assets/3D/IPA-army-truck.glb).
-- `ae_import_workstation_props.py` 98 - Bake the six office/medical GLBs; no source model is loaded during play.
-- `ae_layer_parity.py` 93 - Parity oracle for baked *chunk* layers (``game.art.<pack>.<name>`` adapters with ``bake_setup``): re-runs the mission...
-- `ae_layer_probe.py` 173 - ae_layer_probe - can this camera-space painter become a baked world layer?
-- `ae_level_check.py` 66 - validator: level JSON == legacy generator output (RPE6 P7).
-- `ae_level_export.py` 102 - export the legacy mission grids to .level.json (RPE6 P7-M2).
-- `ae_loop.py` 637 - RPE6 loop probe: drive the REAL app.py main loop headless and hash every frame.
-- `ae_migrate_time.py` 156 - RPE6 B-001: move legacy wall-clock reads onto the engine timebase.
-- `ae_mission0_check.py` 188 - AE MISSION0 CHECK - RPE6 Phase 10, D2 proof.
-- `ae_narrow_star.py` 114 - ae_narrow_star - rewrite ``from core.config import *`` into explicit imports (A-001, Phase 4).
-- `ae_new_mission.py` 462 - scaffold a new RPE6 mission (Phase 10, §7/D2).
-- `ae_normalize.py` 263 - RPE6 Phase 0 item 7: line-ending / encoding normalisation with proofs (R14, B-003).
-- `ae_package.py` 99 - AE PACKAGE - build the distributable game zip.
-- `ae_proof3d.py` 158 - AE PROOF3D - render the fixed Phase 11 proof scenes to PNGs.
-- `ae_proof_sheet.py` 78 - AE PROOF SHEET - side-by-side before/after sheet for Phase 11 steps.
-- `ae_reexport_check.py` 103 - ae_reexport_check - who pulls star-imported names THROUGH another module?
-- `ae_replay.py` 293 - RPE6 replay baseline + determinism check (master prompt §6.17, Phase 0 item 9, D8).
-- `ae_replay_check.py` 88 - RPE6 Phase 9 exit tool: engine-save snapshots reproduce replay state.
-- `ae_set3d_check.py` 64 - ae_set3d_check - Phase 8 set gate: validate + build every .set3d.json.
-- `ae_star_imports.py` 140 - ae_star_imports - inventory of ``from core.config import *`` users (A-001 prep, Phase 4).
-- `ae_text_check.py` 351 - string-table validation and text fit (RPE6 Phase 4, 6.13).
-- `ae_textures_gen.py` 91 - AE TEXTURES GEN - deterministic palette textures (RPE6 Phase 11 step 9).
-- `ae_timeline_check.py` 114 - ae_timeline_check - Phase 8 timeline gate: validate + data == legacy tables.
-- `ae_timeline_edit.py` 93 - ae_timeline_edit - the Phase 8 camera/track key editor (CLI form).
-- `ae_timeline_export.py` 103 - ae_timeline_export - write the legacy cutscene shot lists as ae.timeline/1 data.
-- `ae_validate.py` 73 - AE VALIDATE - load every game data file through its public loader.
-- `ai_bundle.py` 84 - Bundle whole files or line slices (`path:start-end`) into one paste-ready block for an external chat AI.
-- `ai_bundle_app.py` 1250 - AI Bundle - paste an AI's file request, get the requested files on the clipboard (`apps/AIBundle.exe`).
-- `ak74_preview.py` 326 - AK-74 preview - renders the code-authored weapon so it can be eyeballed.
-- `assemble_final_trailer.py` 811 - Post-production assembler for CALL OF ACARISTAN.
-- `bake_m5_sprites.py` 16 - Compatibility wrapper: the Mission 5 bake moved to the generic pipeline.
-- `build_all_sprites.py` 54 - Rebuild every generated art asset in one go (Polish T7).
-- `build_apps.py` 64 - Build the standalone desktop apps in tools/ into self-contained exes under `apps/` (`AIBundle`, `GLBInspector`, `PasteApply`).
-- `build_code_pdf.py` 1197 - build_code_pdf.py High-Density Archival Monolith GUI & CLI.
-- `build_code_txt.py` 309 - build_code_txt.py Selective TXT code bundle (.py, .bat, .json, .md, configs...): pick files, pick folder, get TXT onl...
-- `build_ost.py` 62 - Render the Call of Acaristan OST (tools/ost/album.py).
-- `build_ost_videos.py` 222 - Render the OST music videos: one seamless 3D loop per album track.
-- `build_radio_cache.py` 63 - Pre-build the radio-FX voice cache (assets/voice/_radio_cache).
-- `build_sfx_stem.py` 520 - render trailer_sfx_stem.wav from captured foley logs.
-- `build_windows.py` 102 - Build the Windows game as a PyInstaller --onedir bundle (no admin needed).
-- `cast_lineup.py` 91 - 3D cast line-up: python tools/cast_lineup.py [body/face] [out.jpg] [key ...]
-- `cast_sheet.py` 154 - Cast sheets: the 2D cutscene figures (figure_kit) beside their 3D rigs.
-- `check_boundaries.py` 148 - RPE6 boundary lint (master prompt §5.3, D1).
-- `convert_voice_ogg.py` 62 - Convert assets/voice/**/*.wav to OGG Vorbis in place (RPE6 housekeeping, 2026-10-14).
-- `debug_stem.py` 32 - Standalone timing run of mp_trailer_assemble.render_foley_stem.
-- `dev_panel.py` 1439 - clickable dev control panel for jumping into missions.
-- `download_bore.py` 25 - Fetch the pinned official Windows x64 bore release for PyInstaller builds.
-- `download_playit.py` 25 - Fetch the pinned official playit.gg agent (playitd) for PyInstaller builds.
-- `egg666_shots.py` 85 - Headless shots of the 3D "666" scare.
-- `engine3d_check.py` 118 - GPU vs software renderer check on the real M2 ambush film.
-- `export_m5_audio.py` 46 - Export the exact procedural M5 mix for audition; no app launch/saves.
-- `finale_compare.py` 59 - Side-by-side probe: M2 ambush film (sniper3d) vs M5 finale (m5shadow3d).
-- `finale_gait_check.py` 46 - M5 finale gait check: Maru timing, footstep contact times, world foot drift.
-- `finale_probe.py` 52 - Render M5 finale frames (optionally from custom cameras) into a JPEG contact sheet.
-- `gen_barrel_obj.py` 70 - Generate assets/import/barrel.obj - a low-poly barrel (10 sides, bulged profile, two metal bands) as the Step-11 impo...
-- `glb_inspector.py` 1635 - GLB Inspector - desktop viewer for .glb / .gltf files (`apps/GLBInspector.exe`).
-- `golden.py` 125 - golden-image regression gate for the reworked renderer.
-- `itch_push.py` 94 - Push a built game to itch.io with butler (the official itch upload CLI).
-- `k9_pickup_check.py` 142 - Headless regression checks and optional preview for the K-9 pickup.
-- `m1_hall_probe.py` 118 - Diagnostic probe: can the player actually cross commander K's hall (rows 21-25)?
-- `m1_td3d_shots.py` 57 - Render Mission 1 top-down frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `m2_fire_probe.py` 113 - Time Mission 2 frames after the tanker blast (fire cost probe).
-- `m2_td3d_shots.py` 80 - Render Mission 2 top-down frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `m3_broadcast_preview.py` 36 - Capture the M3 broadcast bridge, including action endpoints and long holds.
-- `m3_ko_preview.py` 33 - Capture Kill Order's four directed 3D shots on either backend.
-- `m3_staging_preview.py` 39 - Capture M3's service bridge: python tools/m3_staging_preview.py [--backend software].
-- `m3_td3d_shots.py` 83 - Render Mission 3 frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `m4_gameplay_video.py` 452 - Record a bot-played Mission 4 gameplay video (2.5D) to MP4.
-- `m4_intro_patch.py` 61 - Replace the M4 intro shot-list table in missions/m4/meta.py.
-- `m4_probe.py` 24 - Probe the audio sound registry for names the M4 intro might reuse.
-- `m4_td3d_shots.py` 110 - Render Mission 4 frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `m5_cinematic_polish_check.py` 76 - Regression evidence for the M5 noir polish; safe isolated preview only.
-- `m5_contact_sheets.py` 52 - Build labelled contact sheets + automatic frame stats from previews/m5_encounter_review.
-- `m5_cut_check.py` 32 - Round-2 M5 cutscene check: renders every m5x_ take (3D, then 2D fallback).
-- `m5_draw_audit.py` 14 - Compatibility wrapper: the per-mission draw census is tools/ae_draw_audit.py.
-- `m5_dump.py` 18 - (no docstring)
-- `m5_encounter_review.py` 173 - Deterministic M5 preview suite.
-- `m5_ending_stage_check.py` 184 - Ending staging/weapon regressions and native-size visual probes; safe saves.
-- `m5_feedback_check.py` 170 - Focused M5 feedback regressions and visual evidence, without touching saves.
-- `m5_finale_cut_check.py` 121 - Focused check for retiring the M5 finale without losing campaign completion.
-- `m5_fx_check.py` 68 - M5 FX checks: reduced motion zeroes handheld/shake/roll; 2D fallback still works.
-- `m5_gauntlet_cycle.py` 169 - M5 visual gauntlet - one full cutscene render cycle at delivery resolution.
-- `m5_gauntlet_sheet.py` 51 - Compact WebP contact sheet for remote VLM review.
-- `m5_gauntlet_shots.py` 124 - M5 gauntlet: render every Mission 5 surface we review (top-down stages, sprite close-ups, every 3D cutscene take + 2D...
-- `m5_harbour_art_check.py` 59 - M5 harbour pass guard: the cubical cast and the choreography are pinned, art is validated.
-- `m5_laser_stair_check.py` 58 - M5 laser integration and stair landing regression, both renderer backends.
-- `m5_probe.py` 54 - render M5 cutscene frames headless for visual review.
-- `m5_r2_check.py` 62 - Round-2 M5 headless check: builds stages, draws a few frames, saves PNGs.
-- `m5_rifle_clearance.py` 55 - Weapon clearance against actual torso/head/pelvis box meshes, plus grip reach.
-- `m5_shadow_check.py` 280 - Fresh M5 3D finale: geometry, timing, actual app player and save handoff.
-- `m5_sheet.py` 42 - Contact sheet for review: python tools/m5_sheet.py out.jpg name1 name2 ...
-- `m5_shots.py` 66 - M5 3D cutscene stills + timing: python tools/m5_shots.py OUT_DIR [scene_prefix]
-- `m5_sprite_review.py` 45 - Montage of selected baked M5 sprites for review.
-- `m5_stair_room_check.py` 73 - Regression: interiors cover the frame and both stair actors remain visible.
-- `m5_td3d_shots.py` 55 - Render Mission 5 frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `m5_topdown_frame.py` 55 - Render one M5 top-down frame (the quarter night) as the house-style target.
-- `m5_view_export.py` 47 - Pack review images for remote viewing: prints one JSON line per image {name, b64 JPEG}.
-- `m6_ammo_check.py` 80 - Focused headless regression for the M6 K-9 supply ladder.
-- `m6_bench.py` 181 - M6 3D scene frame bench + profile (diagnostic, not a CI gate).
-- `m6_diag.py` 180 - One-command M6 3D performance diagnostic - run this on the stuttering PC.
-- `m6_halo_sheet.py` 120 - B8 tuning sheet: one M6 sodium lamp at 5/15/40/80 m, four depth cases.
-- `m6_hitch.py` 163 - Hitch hunter for the M6 3D scenes.
-- `m6_layout_probe.py` 93 - M6 layout probe: every authored coordinate must land on open floor.
-- `m6_loop_probe.py` 126 - Whole-game frame-interval probe for a dev-booted M6 scene.
-- `m6_melee_strip.py` 82 - Melee parity check: render one M6 K-9 swing frame by frame.
-- `m6_phases.py` 107 - Phase-level timing of the M6 train / yard draw (GL path).
-- `m6_prof.py` 66 - (no docstring)
-- `m6_shots.py` 416 - M6 3D film + interactive train stills.
-- `m6_snow_probe.py` 113 - Customs snow probe (dev only, not a CI gate).
-- `m6_td3d_shots.py` 53 - Render Mission 6 frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `m6_topdown_shots.py` 156 - Top-down M6 review stills (customs / no-man's-land / rail yard).
-- `m7_prof.py` 87 - Profile the Mission 7 raid frame headless.
-- `m7_route_probe.py` 28 - Collision and safe-dismount regression for the Mission 7 tractor.
-- `m8_chase_diff.py` 25 - Compare consecutive chase frames: how much does the background actually change?
-- `m8_chase_shots.py` 61 - Render the M8 tractor chase at points along the route, for eyeballing the set.
-- `m8_descent_shots.py` 92 - Render the M8 descent film frames and the first chase frame, and check the handoff.
-- `make_art_pack.py` 1249 - author assets/art/*.png (phases 1, 2, 4 art).
-- `make_short_branded.py` 217 - branded 9:16 vertical Short from the final master.
-- `make_short_clean.py` 101 - 9:16 vertical Short from the final master.
-- `make_station_sprites.py` 144 - author the hero-interactable sprites.
-- `map_assets3d.py` 213 - Keep docs/ARCHITECTURE_MAP.md section 8.1 in sync with assets/3D/.
-- `mp_arena_duo.py` 101 - Launch TWO full game windows already sitting in the multiplayer arena.
-- `mp_bot.py` 132 - Headless fake player, for testing multiplayer on ONE PC.
-- `mp_choreo_probe.py` 269 - gate the MP trailer fight headlessly before capturing.
-- `mp_host.py` 285 - Self-hosted KRAPNET server for Call of Acaristan.
-- `mp_host_main.py` 23 - PyInstaller entry point for the self-hosted lobby EXE.
-- `mp_join.py` 196 - Join a friend's Call of Acaristan lobby and chat.
-- `mp_match.py` 429 - Play a real multiplayer arena match.
-- `mp_net_soak.py` 572 - Headless arena network test with optional TCP and UDP impairment.
-- `mp_remaster.py` 36 - Re-master audio only: reuse the kept premix.wav, re-run normalise + mux.
-- `mp_server.py` 533 - Standalone KRAPNET master server for Call of Acaristan.
-- `mp_trailer_assemble.py` 852 - post-production assembler for the MULTIPLAYER announcement trailer.
-- `mp_trailer_assemble_tiktok.py` 867 - 9:16 TikTok cut of the multiplayer announcement.
-- `mp_trailer_capture.py` 2002 - REAL multiplayer arena footage for the announcement trailer.
-- `oilrig_preview.py` 120 - Off-screen preview of the oil-rig strike cinematic (missions.walking_attack3d).
-- `overlay_cleanup.py` 69 - Tidy a project root after pasting the slim overlay zip over an older checkout.
-- `paste_apply.py` 1509 - Paste Apply - apply an AI-written change set from a paste, no agent needed (`apps/PasteApply.exe`; rebuild with `build_apps.py` after edits).
-- `patch_m7_raidin.py` 103 - One-shot data patch for the M7 raid-in film caption - run from the repo root:
-- `preflight_bot_test.py` 68 - Offline pre-flight: exercise GridNav + ArenaBot + foley payloads against a bare ArenaSim (no sockets, no capture) to...
-- `preview_mission_complete.py` 140 - Render/test every mission-complete case dossier; --show opens a save-free gallery.
-- `preview_mission_failed.py` 166 - Render/test all failure terminals; --show opens a safe, save-free gallery.
-- `publish_update.py` 226 - Publish an update package and manifest for the Call of Acaristan Launcher.
-- `record_fresh_action.py` 1007 - clean standalone combat capture.
-- `render_ko_video.py` 324 - Headless cinematic trailer bot, PLAN_2 cut.
-- `render_m4_ending.py` 205 - Render the real M4 cutscene player safely, without importing app's loop.
-- `render_m5_ending.py` 66 - Render M5 with the production cutscene player, using the safe M4 capture kit.
-- `render_m5_shadow.py` 75 - Capture the production M5 finale at 30 fps with native ambience/foley.
-- `render_m5_stair.py` 82 - Export the complete updated M5 stair shot with its production sound cues.
-- `render_m7_feedback.py` 193 - Render review shots for the Mission 7 feedback pass (software renderer).
-- `render_m7_previews.py` 36 - (no docstring)
-- `render_trailer.py` 762 - 75-90s MP4 game trailer (headless real gameplay).
-- `render_trailer_v2.py` 626 - cinematic finish wrapper over render_trailer.py.
-- `shot_fail_screens.py` 35 - Polish pass T9 evidence: render the Mission Failed screen for M1-M5.
-- `shot_m5x.py` 57 - Polish pass evidence helper: render M5X 3D cutscene frames to PNG.
-- `shot_outfit.py` 134 - Polish pass Task 5 evidence: Biribel's M5 Guard kit in every view.
-- `shot_radio.py` 207 - Polish pass Task 6 evidence: the radio transmission widget in every mission.
-- `shot_speechbox.py` 137 - Evidence shots for the shared speech box (``ui.speechbox``).
-- `shot_weapon_grid.py` 108 - Polish pass Task 4: weapon-attachment verification grid.
-- `slim_tree.py` 222 - remove dead weight from the project root (dry run by default).
-- `smoke_test.py` 12723 - Public: `EmptyKeys`, `run_check`, `run_import_check`, `clear_screen`, `check_menu_draw`, `check_settings_draw`, `check_multiplayer_opens_on_server_browser`, `check_host_is_taught_how_to_host`
-- `test_m7_pig.py` 83 - Focused geometry and raid gait regression checks; run from the project root.
-- `test_m7_pig_death.py` 185 - The pig in the 3D raid, and what it costs.
-- `test_multiplayer_ui.py` 88 - Small presentation regression suite; no live networking or external service.
-- `test_oilrig_collapse.py` 137 - Geometry and effect regressions for the rig collapse repair.
-- `test_tcp_tunnel.py` 79 - Fast stdlib-only tunnel regression tests (no pygame or internet required).
-- `tex3d_draw.py` 510 - Draws the M6 3D pixel textures (assets/tex3d/<name>.png) from the 2D palette.
-- `tex3d_draw_m7.py` 397 - Draws the M7 farm 3D pixel textures (assets/tex3d/m7_<name>.png) from the 2D farm palette (src/cutscenes/m7palette3d....
-- `van3d_shot.py` 26 - Render the 3D van_exterior take to PNGs: python tools/van3d_shot.py [t_ms ...]
-- `view_cast3d.py` 119 - Interactive 3D character viewer (defaults to andrei_m).
-- `voice_audit.py` 545 - Voice-line audit (polish pass T1).
-- `walk_fp_shots.py` 81 - Render stills of the walking-sim first-person reward cutscenes.
-- `wrap_audit.py` 152 - Every player-facing line through the shared text widgets (wrap/fit audit).
-- `walk_probe.py` 142 - framed shots + draw-cost probe for the walking sim.
-- `walk_td3d_shots.py` 50 - Render walking-sim frames in 2.5D (and 2D with ACA_TD_2D=1).
-- `zip_project.py` 470 - Zip this project into a single archive, optionally uploading it to Pixeldrain.
-
-**`tools/ost/`**
-
-- `album.py` 1366 - Call of Acaristan - Original Soundtrack (20 tracks; 13-20 each with unique meters, kits, harmony and motifs).
-- `mv.py` 1297 - OST music videos: one short, loopable 3D scene per album track (engine3d, GL).
-- `synth.py` 978 - Small numpy synth for the Call of Acaristan OST (+ `cello`, `vibra`, `analog_lead`, `upright_bass`, `sub_kick`, `ind_snare`, `brush`, `shaker`, `clave`).
-
-**`tools/sprites/`**
-
-- `compare_shots.py` 47 - stitch T7 before/after shots side by side.
-- `fx.py` 174 - Mission 2 tanker-blast aftermath as sprites (Polish T7).
-- `inventory.py` 212 - Procedural-art inventory (Polish Task 7, step 1).
-- `kit.py` 241 - shared machinery for the tools/sprites/<family>.py generators.
-- `m1_street.py` 399 - Mission 1 street band furniture (WP4) as authored sprites.
-- `mission_failed.py` 392 - Bespoke, entirely code-drawn mission-failure vignettes.
-- `palette.py` 121 - the locked house palette shared by every tools/sprites generator.
-- `portrait_refs.py` 79 - check the radio portraits against the cutscene cast.
-- `portraits.py` 1156 - radio caller-ID portraits (polish pass T6b).
-- `props.py` 278 - Mission 2 story props + the upload terminal as sprites (Polish T7).
-- `t7_probe.py` 155 - before/after shots + draw-time probe for Polish T7.
-- `vehicles.py` 463 - Mission 2 road vehicles as authored sprite sheets (Polish T7).
-
-**`tools/trailer3d/`**
-
-- `common.py` 401 - Shared trailer helpers: renderer setup, camera keys, 2D light/rain/grain FX, letterbox + text.
-- `music_cut.py` 125 - Cut 'Shell Ghost' (Soundridemusic) to the 80 s trailer timeline.
-- `props3d.py` 352 - Low-poly trailer props built from engine3d boxes/prisms (y up, metres).
-- `render.py` 142 - Render the cinematic trailer.
-- `sfx.py` 301 - Synthesised sound design for the cinematic trailer, laid onto the music+VO mix.
-- `shots.py` 1367 - The trailer's shots.
-- `thumbnail.py` 176 - YouTube thumbnails (1280x720) composed from real trailer frames.
-- `vertical.py` 235 - 9:16 TikTok / YouTube Shorts / Reels cut of the cinematic trailer.
-- `vo_mix.py` 202 - Place the trailer narration on the 80 s music cut and mix it.
-
-**`tools/trailer_25d/`**
-
-- `capture.py` 74 - Gameplay clips for the 2.5D announcement trailer (TVA 1 broadcast).
-- `capture_m4.py` 17 - Mission 4 2.5D clip for the announcement trailer: the m4_gameplay_video bot run with its captions and title cards swi...
-- `capture_mp.py` 53 - Multiplayer arena clip (2.5D) for the announcement trailer.
-- `capture_tilt.py` 64 - The switch shot: one continuous M1 bot run that starts in the flat 2D view, flips to 2.5D and tilts the camera from s...
-- `capture_wave.py` 66 - The switch shot, recorded twice per tick: one M3 bot run drawn in the flat 2D view and in 2.5D on the same sim frame,...
-- `render.py` 1195 - TVA 1 broadcast: the 2.5D announcement trailer.
-- `sets.py` 724 - 3D sets for the TVA 1 broadcast: studio desk, palace podium with the depth lever, the block flat, the neighbour's win...
-- `shorts.py` 353 - Four vertical shorts (1080x1920, 30 fps) cut from the 2.5D announcement.
-- `thumbnail.py` 183 - YouTube thumbnail for the 2.5D announcement (1280x720).
-
-**`tools/trailer_rpe6/`**
-
-- `dark.py` 573 - Dark story trailer for Call of Acaristan, cut to "Dark Cello Horror Trailer Music".
-- `dark_films.py` 618 - New staged scenes for the dark trailer, built on the Mission 7 farm set.
-- `dark_short.py` 304 - Vertical 1080x1920 Short of the dark trailer, and thumbnails for both.
-- `render.py` 1098 - RPE6 engine trailer for Call of Acaristan: the engine and the game, no story.
-- `render_m7.py` 311 - RPE6 trailer, Mission 7 cut: the 80 s engine trailer with Fallow Ground in it.
-- `score.py` 160 - Sound for the RPE6 trailer: "Shell Ghost" (Soundridemusic), placed so its first hit lands on the voxel logo, under sy...
-- `shorts.py` 573 - Vertical 1080x1920 cuts of the RPE6 trailer for TikTok / YouTube Shorts.
-
-## 22. Tests index (`tests/`)
-
-Run `python -m unittest discover -s tests/unit -t .` (or `pytest tests/unit`). Baselines are listed in §18.
-
-**`tests/`**
-
-- `__init__.py` 0 - (no docstring)
-
-**`tests/unit/`**
-
-- `__init__.py` 0 - (no docstring)
-- `_helpers.py` 22 - Shared test setup: put ``src`` on sys.path and keep SDL headless.
-- `_path.py` 7 - (no docstring)
-- `test_anim_props.py` 63 - Phase 11 step 10: flicker is a deterministic closed form; set fields written as timeline expressions animate with the...
-- `test_app_boot_crash.py` 128 - engine.core.App: headless boot, service wiring, crash report (§6.1 acceptance).
-- `test_ai_bundle_app.py` 266 - tools/ai_bundle_app.py: request parsing, file reading, slicing, settings, CLI.
-- `test_art_cache.py` 45 - art_cache.get_plate_bg: the shared M4/M5 "status plate" chrome.
-- `test_assets_registry.py` 368 - engine.assets Phase 3: manifest schema, registry chain + cache + ref-counts, bake/check hashing, lint, hot reload (wa...
-- `test_bloc3d.py` 179 - Phase 5: the Bloc landmarks and Cyrillic signage build sane boxes.
-- `test_cast_shadows.py` 58 - Phase 11 step 7 (ADR-023): baked cast shadows - occluded faces darken, open faces do not, quality 0 disables the bake.
-- `test_clock.py` 172 - engine.core.Clock: fixed-step semantics, identity with the legacy FixedStepClock (ADR-004).
-- `test_devtools.py` 100 - RPE6 Phase 10 (§6.19): debug overlay / inspector data builders + console commands.
-- `test_egg666.py` 268 - Tests for the 3D "666" safe-keypad scare (ui/egg666_*.py).
-- `test_engine_ai.py` 253 - engine.ai: behaviour tree preemption and memory, sight reaction and forgetting, noise muffling, squad radio/tokens/cl...
-- `test_engine_boot.py` 72 - App.boot display ownership (ADAPTER A-001).
-- `test_engine_collision.py` 150 - engine.collision: box rays and segments agree with brute force, and grid nav routes round walls, through gaps and nev...
-- `test_engine_collision_mesh.py` 79 - engine.collision.mesh: hitboxes follow the mesh's triangles, not a box around it, and a placed mesh uses the renderer...
-- `test_engine_core.py` 177 - Unit tests for engine.core (stdlib unittest; run: python -m unittest discover -s tests/unit -t .).
-- `test_engine_dialogue_box.py` 89 - engine.ui.std.dialogue_box (Phase 4): theme injection, slide ownership.
-- `test_engine_level_dialogue.py` 144 - engine.level + engine.dialogue kernels: load/validate, Tiled import, runner conditions/effects (RPE6 Phase 7).
-- `test_engine_render2d.py` 310 - engine.render2d kernel: queue order, drawables, rotation cache, camera, static chunks, post-FX parity (RPE6 Phase 6).
-- `test_engine_settings_save_input.py` 142 - engine.settings / engine.save / engine.input kernels (RPE6 Phase 9).
-- `test_engine_shims.py` 72 - A-006 shims: the legacy paths re-export the engine implementations unchanged.
-- `test_engine_text.py` 213 - engine.text Phase 4: string tables + `T()`, font registry + glyph coverage, layout (measure/wrap/ellipsize/check_fit/...
-- `test_engine_timeline_set3d.py` 98 - engine.timeline + engine.render3d kernels: expressions, sampling, set building (RPE6 Phase 8).
-- `test_engine_ui.py` 142 - engine.ui Phase 4: Theme + the standard widgets, drawn headless.
-- `test_engine_world.py` 233 - engine.world kernel: registry, storage, views, queries, scheduler phases, prefabs (RPE6 Phase 5).
-- `test_events_log_services.py` 140 - engine.core: EventBus (§6.3), Log (§6.23), Services and Settings (§6.1).
-- `test_faces3d.py` 78 - Phase 11 step 8: expressions rebuild only the face, mouth flap is a deterministic closed form, look-at clamps, mouth...
-- `test_frame_pacer.py` 62 - core.frame_pacer: whole fixed steps per frame, rate drop on slow frames, never below 30 fps, lone spikes keep the rate.
-- `test_game_dialogues.py` 74 - game.dialogues converter: node chain -> legacy beat dicts (RPE6 Phase 7).
-- `test_game_world_bridge.py` 228 - game.world bridge (RPE6 Phase 5, D4): ensure/get, roster reset + removed-tag policy, WalkCycle.advance.
-- `test_gl_composite.py` 113 - GL renderer item-queue regression (owner-hardware crash, M5 finale).
-- `test_hold.py` 71 - Public: `HoldTests`
-- `test_ik.py` 124 - engine3d.ik: analytic arm/leg IK and the shouldered rifle hold land on their targets as measured by the rig's own for...
-- `test_m3_broadcast3d.py` 95 - Broadcast bridge framing, settled blocking, registry routing and seeking.
-- `test_gameplay_sweep.py` 163 - Gameplay sweep regressions: M8 trap checkpoint ammo, kiosk gate Bodi post, full-reserve looting, mansion cross-floor revive, M1-M5 pickups at full.
-- `test_m3_door_orientation.py` 49 - M3's visual door panels follow the wall, including every double leaf.
-- `test_m3_ko3d.py` 229 - Kill Order 3D routing, seekable action, stair support and cover geometry.
-- `test_m3_molotov_gate.py` 48 - M3 must not create un-simulated molotovs from the shared input handler.
-- `test_m3_staging.py` 180 - M3's first 3D bridge: deterministic seeking, prop contact and fallback.
-- `test_m5_ending.py` 179 - M5 finale regressions.
-- `test_m5_finale_audio.py` 220 - Focused M5 sound/lifecycle regressions, without starting app or saves.
-- `test_m6_campaign.py` 1132 - Mission 6 campaign regressions.
-- `test_m7_campaign.py` 353 - Mission 7 campaign regressions.
-- `test_m8_chase_gun.py` 327 - The mounted LMG must never pass through Biribel in the tractor chase.
-- `test_m8_duty_mansion.py` 128 - M8 Duty mansion security room: workstation/desk alignment, interior-only Andrei trigger, player-shot vs misfire and cash-burst bounds, dynamic rack surge on software.
-- `test_m8_chase_scenery.py` 62 - The trailer's rearward view must change as the tractor crosses four regions.
-- `test_m8_chase_traffic.py` 230 - The tractor chase traffic must be solid, enter from off-camera, and swerve around wrecks only when the steering limit...
-- `test_m8_trap_mechanics.py` 129 - M8 trap scene: the plaza fight's new mechanics.
-- `test_mission_complete_ui.py` 191 - MISSION_COMPLETE physical case-dossier screen (ui/mission_complete.py).
-- `test_mathx_profiling.py` 51 - engine.core.mathx and Profiler.
-- `test_mesh_import.py` 134 - Phase 11 step 11 (ADR-024): the importer converts OBJ/glTF into ae.mesh/1 with palette snapping + triangle budget; th...
-- `test_phase1_rng_imports.py` 58 - Phase 1 checks: legacy rng stream (R6) and m3 import side effects (B-010).
-- `test_post3d.py` 79 - RPE6 Phase 11 step 5: cinematic post stack (cutscenes.post3d).
-- `test_presets.py` 71 - RPE6 Phase 11 step 1: lighting preset resolution (engine.render3d).
-- `test_render3d_p11.py` 57 - RPE6 Phase 11: local lights, contact shadows, baked AO (data -> bridge).
-- `test_render_adapters.py` 259 - Phase 6 peel-off twins are pixel-identical to the legacy painters they replace (RPE6, ADR-017).
-- `test_revive3d.py` 135 - Shared 3D ally-revive controller: proximity cues, four-stage pull, world-space IK clasp convergence, early-release and post-revive follow-through.
-- `test_rng.py` 85 - engine.core.rng: named streams are independent, seeded, snapshot-able (R6, B-002).
-- `test_scene_mirror.py` 104 - core.scene_mirror (A-005): the legacy FSM replayed onto an engine SceneStack.
-- `test_scene_stack.py` 161 - engine.scene: lifecycle, overlay/passthrough dispatch, deferred mutations, trace (§6.2).
-- `test_scene_types.py` 152 - engine.scene.CutsceneScene / InspectScene (§6.2) and the mirror's scene factory (A-007).
-- `test_scenery3d.py` 101 - Imported scenery budgets, grounded placement, live displays and fallbacks.
-- `test_textures3d.py` 85 - Phase 11 step 9: palette textures load through the bridge, UV payloads attach at quality >= 1 only, and pass through...
-- `test_timeline_edit_scene.py` 58 - Phase 8 tooling surface: ae_timeline_edit round-trip + CutsceneScene.from_timeline.
-- `test_voice_timing.py` 163 - Voice clip timing must not depend on SDL's decoded length (asset diet, 2026-10-14).
-- `test_weather3d.py` 76 - Phase 11 step 6: weather is a closed-form, seeded, quality-gated function of (prims, t) - same inputs, same sprite ca...

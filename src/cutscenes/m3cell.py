@@ -907,10 +907,20 @@ CB_BG          = (8, 9, 11)
 from core.cutscene_registry import register_scene_renderers as _register_takes  # noqa: E402
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
+def _m3_intro_take(scene_id, fallback_fn):
+    """Prefer 3D m3intro3d; fall back to illustrated 2D if disabled or unavailable."""
+    def draw(surface, t):
+        from cutscenes import m3intro3d  # lazy: engine3d stack
+        if m3intro3d.draw_scene(scene_id, surface, t):
+            return
+        fallback_fn(surface, t)
+    return draw
+
+
 _register_takes({
-    "cell_ceiling": _draw_cell_ceiling,
-    "cell_restraints": _draw_cell_restraints,
-    "interrogation_room": _draw_interrogation_room,
-    "monitor_broadcast": _draw_monitor_broadcast,
+    "cell_ceiling": _m3_intro_take("cell_ceiling", _draw_cell_ceiling),
+    "cell_restraints": _m3_intro_take("cell_restraints", _draw_cell_restraints),
+    "interrogation_room": _m3_intro_take("interrogation_room", _draw_interrogation_room),
+    "monitor_broadcast": _m3_intro_take("monitor_broadcast", _draw_monitor_broadcast),
     "volkov_in_cell": _draw_volkov_in_cell,
 })

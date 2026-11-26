@@ -9,4 +9,7 @@ command -v python >/dev/null 2>&1 || PY=py
 if git ls-files --error-unmatch docs/ARCHITECTURE_MAP.md >/dev/null 2>&1; then
     git add docs/ARCHITECTURE_MAP.md
 fi
+if git ls-files --error-unmatch docs/FILE_INDEX.md >/dev/null 2>&1; then
+    git add docs/FILE_INDEX.md
+fi
 exit 0

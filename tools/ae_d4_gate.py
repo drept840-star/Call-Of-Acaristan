@@ -86,12 +86,14 @@ def scan():
                     if var not in _STATE_LIKE:
                         fam = attr.split("_", 1)[0] + "_" if attr.startswith("m") else "is_missionN_"
                         ratchet.setdefault(fam, []).append((rel, ln, f"{fn}({var}, \"{attr}\")"))
-                for m in _RATCHET_DOT.finditer(code):
-                    var, attr = m.groups()
-                    if var in _STATE_LIKE:
-                        continue
-                    fam = attr.split("_", 1)[0] + "_" if attr.startswith("m") else "is_missionN_"
-                    ratchet.setdefault(fam, []).append((rel, ln, f"{var}.{attr}"))
+                if not code.lstrip().startswith(("from ", "import ")):
+                    dot_code = re.sub(r'"[^"]*"|\'[^\']*\'', '""', code)
+                    for m in _RATCHET_DOT.finditer(dot_code):
+                        var, attr = m.groups()
+                        if var in _STATE_LIKE:
+                            continue
+                        fam = attr.split("_", 1)[0] + "_" if attr.startswith("m") else "is_missionN_"
+                        ratchet.setdefault(fam, []).append((rel, ln, f"{var}.{attr}"))
     return hard, ratchet
 
 

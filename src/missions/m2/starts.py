@@ -177,6 +177,12 @@ def start_mission2(preserve_timer=False):
     STATE._m3_killbox_started = False
     STATE.player_locked = False
 
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m2")
+    except Exception:
+        pass
+
     STATE.os12_unlocked = False
     STATE.os12_ammo_in_mag = 25
     STATE.os12_spare_mags = 2
@@ -407,6 +413,11 @@ def start_mission2_checkpoint(preserve_timer=False):
     # worse, boots to main menu if the fallback also fails. Setting it here
     # ensures the flag survives any exception in the setup code below.
     STATE.mission2_checkpoint_reached = True
+    try:
+        from core.save_system import set_slot_progress
+        set_slot_progress("m2", checkpoint="shelter")
+    except Exception:
+        pass
     # Suppress the investigation-phase intro radio line - wrong context for
     # the evidence phase checkpoint. We play a checkpoint-specific line instead.
     STATE._skip_mission2_intro_radio = True

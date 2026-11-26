@@ -48,8 +48,6 @@ def _player_disarmed():
     before the chair breaks), or when a mission has locked weapons
     (e.g. Mission 7's farmyard chores / prep). Blocks ALL weapon actions."""
     return (bool(getattr(STATE, "player_disarmed", False))
-            or bool(getattr(STATE, "weapons_locked", False))
-
             or bool(getattr(STATE, "weapons_locked", False)))
 
 
@@ -523,7 +521,7 @@ def handle_melee():
     elif weapon == "shiv":
         STATE.melee_timer = 14
         STATE.melee_damage = 85
-    elif weapon == "k9_smg":
+    elif weapon == "k9_smg" or getattr(STATE, "current_weapon", "pistol") == "k9_smg":
         # Quick buttstroke / muzzle shove with the compact SMG.
         STATE.melee_timer = 20
         STATE.melee_damage = 62

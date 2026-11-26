@@ -732,10 +732,19 @@ def _draw_m4_roof_dawn(surface, t):
 from core.cutscene_registry import register_scene_renderers as _register_takes  # noqa: E402
 from engine.text import T as _T  # RPE6 Phase 4 text table
 
+def _m4_take(scene_id, fallback_fn):
+    def draw(surface, t):
+        from cutscenes import m4aftermath3d  # lazy: engine3d stack
+        if m4aftermath3d.draw_scene(scene_id, surface, t):
+            return
+        fallback_fn(surface, t)
+    return draw
+
+
 _register_takes({
-    "m4_street_curfew": _draw_m4_street_curfew,
-    "m4_city_curfew": _draw_m4_city_curfew,
-    "m4_arrest_screen": _draw_m4_arrest_screen,
-    "m4_maru_silhouette": _draw_m4_maru_silhouette,
-    "m4_roof_dawn": _draw_m4_roof_dawn,
+    "m4_street_curfew": _m4_take("m4_street_curfew", _draw_m4_street_curfew),
+    "m4_city_curfew": _m4_take("m4_city_curfew", _draw_m4_city_curfew),
+    "m4_arrest_screen": _m4_take("m4_arrest_screen", _draw_m4_arrest_screen),
+    "m4_maru_silhouette": _m4_take("m4_maru_silhouette", _draw_m4_maru_silhouette),
+    "m4_roof_dawn": _m4_take("m4_roof_dawn", _draw_m4_roof_dawn),
 })

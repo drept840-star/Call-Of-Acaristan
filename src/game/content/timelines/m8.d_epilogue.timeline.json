@@ -6,6 +6,7 @@
    "scene": "m8d_inauguration",
    "speaker": "ANCHOR",
    "text": "Interim President Vasile takes the oath this morning, on the steps of the old courthouse.",
+   "hard_cut_in": true,
    "min_ms": 5400
   },
   {

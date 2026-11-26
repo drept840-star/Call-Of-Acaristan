@@ -616,16 +616,16 @@ class Casing:
                 self.CASING_W,
                 self.CASING_H,
             )
-            for w in walls:
-                if new_rect.colliderect(w):
-                    if self.dx > 0:
-                        new_rect.right = w.left
-                    elif self.dx < 0:
-                        new_rect.left = w.right
-                    self.x = new_rect.centerx
-                    self.dx *= -0.3
-                    self.rot_speed *= 0.5
-                    break
+            idx = new_rect.collidelist(walls) if walls else -1
+            if idx != -1:
+                w = walls[idx]
+                if self.dx > 0:
+                    new_rect.right = w.left
+                elif self.dx < 0:
+                    new_rect.left = w.right
+                self.x = new_rect.centerx
+                self.dx *= -0.3
+                self.rot_speed *= 0.5
             else:
                 self.x = new_x
             new_y = self.y + self.dy
@@ -635,16 +635,16 @@ class Casing:
                 self.CASING_W,
                 self.CASING_H,
             )
-            for w in walls:
-                if new_rect.colliderect(w):
-                    if self.dy > 0:
-                        new_rect.bottom = w.top
-                    elif self.dy < 0:
-                        new_rect.top = w.bottom
-                    self.y = new_rect.centery
-                    self.dy *= -0.3
-                    self.rot_speed *= 0.5
-                    break
+            idx = new_rect.collidelist(walls) if walls else -1
+            if idx != -1:
+                w = walls[idx]
+                if self.dy > 0:
+                    new_rect.bottom = w.top
+                elif self.dy < 0:
+                    new_rect.top = w.bottom
+                self.y = new_rect.centery
+                self.dy *= -0.3
+                self.rot_speed *= 0.5
             else:
                 self.y = new_y
             self.dx *= 0.85

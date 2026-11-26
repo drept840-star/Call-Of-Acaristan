@@ -41,6 +41,8 @@ from engine3d import Mesh, POSES, blend, box, clamp
 from engine3d.core import m_apply, m_mul, rot_x, rot_y, rot_z
 from engine3d.rig import NEUTRAL, pose_run
 from engine3d.hold import GRIPS, hold_cached, solve_arm_safe
+from engine.render3d import VehicleDestructionManager
+from game.vehicle_fx import default_vehicle_fx
 from missions.m6 import hud3d as H
 from missions.m6 import yard_hud as U
 from missions.m7 import raid3d as R
@@ -966,6 +968,7 @@ class ChaseScene:
         self.impacts = []
         self.sparks = []
         self.puffs = []
+        self.veh_fx = VehicleDestructionManager(seed=501 + self.cp * 29, fx=default_vehicle_fx(_fx))
         self.hurt = 0.0
         self.dmg_marks = []
         self._hit_snd_t = -9.0
@@ -1069,6 +1072,13 @@ class ChaseScene:
                 return
             self.said.add(key)
 
+        try:
+            from audio import voice
+            ms = voice.play_line(who, text, cut=False)
+            if ms:
+                dur = max(dur, ms / 1000.0 + 0.3)
+        except Exception:
+            pass
         self.lines.append((self.t, who, text, dur))
         del self.lines[:-3]
 
@@ -1830,6 +1840,8 @@ class ChaseScene:
             e["w_lat"] = 0.0
 
         e["x"] = S.road_x(e["z"]) + lat
+        if self.veh_fx.has_tag(id(e)):
+            self.veh_fx.sync_pose(id(e), (e["x"], e["wy"], e["z"]), e["yaw"], e["wp"], e["wr"])
 
     @staticmethod
     def _radius(e):
@@ -2452,6 +2464,14 @@ class ChaseScene:
 
             e["v"] *= rnd.uniform(0.6, 1.0)
             self._boom(e)
+            vkind = "gun_truck" if e["kind"] == "gun_truck" else "jeep"
+            self.veh_fx.trigger(
+                vkind, (e["x"], y, e["z"]),
+                yaw=e["yaw"], pitch=pitch, roll=roll,
+                vel=(e["w_lat"], e["wvy"], e["v"]),
+                seed=e.get("fx_seed", e["slot"] + 11),
+                tag=id(e), follow=True, floor_fn=S.surface_y,
+            )
 
         if e["kind"] == "blocker":
             e["v"] = 0.0
@@ -2464,6 +2484,13 @@ class ChaseScene:
             )
             e["wyr"] = rnd.uniform(-40.0, 40.0)
             self._boom(e)
+            self.veh_fx.trigger(
+                "jeep", (e["x"], y, e["z"]),
+                yaw=e["yaw"], pitch=pitch, roll=roll,
+                vel=(0.0, e["wvy"], 0.0),
+                seed=e.get("fx_seed", e["slot"] + 11),
+                tag=id(e), follow=True, floor_fn=S.surface_y,
+            )
             self.say(
                 "BODI",
                 "Tracks are clear. Hold on!",
@@ -2767,6 +2794,12 @@ class ChaseScene:
         self._snd("crash")
         self._snd("trac_stall")
         self.say("BODI", "The engine's gone! Hold on!", 2.2)
+        (tx, ty, tz), tyaw = self.tractor_pos()
+        self.veh_fx.trigger(
+            "tractor", (tx, ty, tz), yaw=tyaw,
+            vel=(0.0, 0.0, self.speed), seed=313,
+            tag="tractor", follow=True, floor_fn=S.surface_y,
+        )
 
         cars = [
             e for e in self.enemies
@@ -2800,6 +2833,8 @@ class ChaseScene:
             self.slew += (
                 16.0 - self.slew
             ) * min(1.0, dt * 1.2)
+        (tx, ty, tz), tyaw = self.tractor_pos()
+        self.veh_fx.sync_pose("tractor", (tx, ty, tz), tyaw, self.tractor_pitch(), 0.0)
 
         (_lx, _ly, lz), _ = self.trailer_pos()
         k = 0
@@ -3139,6 +3174,12 @@ class ChaseScene:
                 h["boom_t"] = self.t
                 if h["impact_t"] is None:
                     h["impact_t"] = self.t
+                    self.veh_fx.trigger(
+                        "gunship", (h["x"], ground - 0.95, h["z"]),
+                        yaw=h["yaw"], pitch=h["pitch"], roll=h["roll"],
+                        vel=(h["vx"], 0.0, h["vz"]), seed=911,
+                        tag="heli", follow=True, floor_fn=S.surface_y,
+                    )
                 self._burst({"x": h["x"], "wy": ground, "z": h["z"], "v": 0.0}, "fire", 20, 6.5)
                 self._burst({"x": h["x"], "wy": ground, "z": h["z"], "v": 0.0}, "blast", 18, 4.5)
 
@@ -3166,6 +3207,9 @@ class ChaseScene:
             if math.hypot(h["vx"], h["vz"]) < 0.6:
                 h["state"] = "crashed"
                 h["vx"] = h["vz"] = 0.0
+            self.veh_fx.sync_pose("heli", (h["x"], h["y"] - 0.95, h["z"]), h["yaw"], h["pitch"], h["roll"])
+        elif h["state"] == "crashed":
+            self.veh_fx.sync_pose("heli", (h["x"], h["y"] - 0.95, h["z"]), h["yaw"], h["pitch"], h["roll"])
 
         if h["impact_t"] is not None and not h["cooked_off"] and self.t - h["impact_t"] >= 0.75:
             h["cooked_off"] = True
@@ -3603,6 +3647,7 @@ class ChaseScene:
             self.dodge_t = None
         self._heli_update(dt)
         self._rocket_update(dt)
+        self.veh_fx.update(dt, floor_fn=S.surface_y)
 
         if self.wreck_t is not None:
             self._capture(dt)
@@ -4030,6 +4075,7 @@ class ChaseScene:
                 }
             )
 
+        out.extend(self.veh_fx.active_lights(cap=3))
         return out
 
     def draw(self, surface):
@@ -4047,6 +4093,7 @@ class ChaseScene:
         del _w.LAST[:]
         self._draw_vehicles(r, tm)
         self._draw_people(r, tm)
+        self.veh_fx.draw(r, tm)
         self._draw_fx(r, tm)
         self._draw_smoke(r, tm)
         S.present(r, surface)
@@ -5781,7 +5828,7 @@ class ChaseScene:
                 msg = "[LMB] SHOOT MISSILE (%d/%d)   OR   [SPACE / A / D] DODGE!" % (inbound[0]["hp"], ROCKET_HP)
                 col = (255, 130, 90)
             else:
-                msg = "MISSILE LOCKING — READY TO SHOOT OR DODGE"
+                msg = "MISSILE LOCKING READY TO SHOOT OR DODGE"
                 col = (240, 170, 90)
             q = font_terminal.render(msg, True, col)
             surface.blit(q, (cx - q.get_width() // 2, cy - 110))

@@ -75,7 +75,7 @@ class TrapMechanicsTests(unittest.TestCase):
         self._run(60 * 14)
         truck = self.sc.brain.trucks[0]
         self.assertIn(truck["state"], ("drive", "stopped"))
-        self.sc.brain.damage_truck(truck, 500.0)
+        self.sc.brain.damage_truck(truck, truck["max_hp"])
         self.assertTrue(truck["crashed"])
 
     def test_clearing_wave_one_opens_the_north_lane(self):
@@ -87,16 +87,15 @@ class TrapMechanicsTests(unittest.TestCase):
         self.sc.px, self.sc.pz = W.KIOSK_AT[0], W.KIOSK_AT[1] - 2.0
         self.assertEqual(self.sc._hold_action(), "kiosk")
 
-    def test_camping_brings_a_smoke_canister_and_breaks_the_lock(self):
+    def test_camping_brings_a_frag_grenade_to_flush_the_player(self):
         self._run(260)
         self.sc.brain.enemies = []
         self.sc.brain.add("rifle", self.sc.px + 12.0, self.sc.pz + 4.0, [], 0.0, 1)
-        self.sc._camp_pos = (self.sc.px, self.sc.pz)
-        self.sc._camp_t = 0.0
-        self.sc._smoke_cd = 0.0
-        self._run(60 * 7)
-        self.assertTrue(self.sc.smokes)
-        self.assertTrue(self.sc.in_smoke(self.sc.px, self.sc.pz))
+        self.sc.brain._camp_pos = (self.sc.px, self.sc.pz)
+        self.sc.brain._camp_t = 0.0
+        self.sc.brain._grenade_cd = 0.0
+        self._run(60 * 3)
+        self.assertTrue(self.sc.grenades)
 
     def test_the_overwatch_snipers_telegraph_before_they_shoot(self):
         self._run(260)

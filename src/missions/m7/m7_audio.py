@@ -33,6 +33,8 @@ FOLEY = (
     "m7_gen_pull", "m7_gen_cough", "m7_gen_backfire", "m7_gen_catch",
     "m7_trac_rev", "m7_trac_stall", "m7_trac_off", "m7_chock",
     "m7_radio_tune", "m7_tx_lock",
+    "m7_well_creak", "m7_well_snap", "m7_well_crash",
+    "m7_tin_clatter", "m7_beam_strain", "m7_beam_heave",
 )
 
 WARM = LOOPS + FOLEY
@@ -415,6 +417,79 @@ def foley_pcm(name):
         relay = _highpass(_noise(n, 991), 1800.0) * np.exp(-np.maximum(t - 0.06, 0.0) * 26.0) \
             * (t > 0.06) * 0.35
         x = clunk + relay
+    elif name == "m7_well_creak":
+        # Dry oak beam groaning under load: stick-slip low groan + fiber ticks.
+        n = int(0.95 * RATE)
+        t = _t(n)
+        f = 128.0 + 46.0 * np.sin(math.pi * np.clip(t / 0.85, 0.0, 1.0)) \
+            + 18.0 * np.sin(2 * math.pi * 11.0 * t)
+        groan = _lowpass(_saw(np.cumsum(f) / RATE), 950.0, 2) * 0.34
+        groan *= (0.45 + 0.55 * np.maximum(0.0, np.sin(2 * math.pi * 6.5 * t)))
+        groan *= _env(n, 0.06, 0.24)
+        x = groan
+        for at, sd, amp in ((0.12, 1001, 0.28), (0.36, 1002, 0.42), (0.58, 1003, 0.34), (0.76, 1004, 0.45)):
+            k = int(0.045 * RATE)
+            tk = _highpass(_lowpass(_noise(k, sd), 3200.0, 1), 850.0)
+            tk *= np.exp(-np.arange(k) / (0.008 * RATE))
+            _place(x, tk, at, amp)
+    elif name == "m7_well_snap":
+        # Sharp timber post shearing: dry crack + jagged splinters + wood pop.
+        n = int(0.48 * RATE)
+        t = _t(n)
+        crack = _highpass(_lowpass(_noise(n, 1011), 4200.0, 1), 650.0) * np.exp(-t * 28.0) * 0.85
+        body = np.sin(2 * math.pi * _sweep(n, 240.0, 95.0)) * np.exp(-t * 22.0) * 0.45
+        x = crack + body
+        for at, sd, amp in ((0.03, 1012, 0.65), (0.075, 1013, 0.50), (0.14, 1014, 0.32)):
+            k = int(0.05 * RATE)
+            sp = _highpass(_noise(k, sd), 1200.0) * np.exp(-np.arange(k) / (0.007 * RATE))
+            _place(x, sp, at, amp)
+    elif name == "m7_well_crash":
+        # Heavy crossbeam slamming onto packed farm dirt + secondary wood bounce.
+        n = int(0.88 * RATE)
+        t = _t(n)
+        thud = np.sin(2 * math.pi * _sweep(n, 74.0, 32.0)) * np.exp(-t * 9.5) * 0.78
+        wood = _lowpass(_noise(n, 1021), 580.0, 2) * np.exp(-t * 14.0) * 0.68
+        dirt = _highpass(_lowpass(_noise(n, 1022), 2600.0, 1), 600.0) * np.exp(-t * 7.5) * 0.34
+        x = thud + wood + dirt
+        k = int(0.22 * RATE)
+        kt = _t(k)
+        bounce = (np.sin(2 * math.pi * 58.0 * kt) * 0.36
+                  + _lowpass(_noise(k, 1023), 750.0, 2) * 0.32) * np.exp(-kt * 18.0)
+        _place(x, bounce, 0.24, 0.72)
+    elif name == "m7_tin_clatter":
+        # Corrugated tin sheet tearing loose, bouncing and skidding across dirt.
+        n = int(0.92 * RATE)
+        t = _t(n)
+        ring = (np.sin(2 * math.pi * 760.0 * t) * 0.26
+                + np.sin(2 * math.pi * 1340.0 * t) * 0.20
+                + np.sin(2 * math.pi * 2190.0 * t) * 0.14
+                + np.sin(2 * math.pi * 3140.0 * t) * 0.09)
+        ring *= np.exp(-t * 7.5) * (0.65 + 0.35 * np.sin(2 * math.pi * 22.0 * t))
+        scrape = _highpass(_lowpass(_noise(n, 1031), 3600.0, 1), 1100.0) * np.exp(-t * 4.5) * 0.36
+        x = ring + scrape
+        for at, f_mul, amp in ((0.22, 1.08, 0.55), (0.44, 0.94, 0.32)):
+            k = int(0.24 * RATE)
+            kt = _t(k)
+            hit = (np.sin(2 * math.pi * 820.0 * f_mul * kt) * 0.32
+                   + np.sin(2 * math.pi * 1640.0 * f_mul * kt) * 0.20
+                   + _highpass(_noise(k, 1032), 1800.0) * 0.25) * np.exp(-kt * 16.0)
+            _place(x, hit, at, amp)
+    elif name == "m7_beam_strain":
+        # Short gritty wood-under-lift groan when Biribel shifts the beam weight.
+        n = int(0.52 * RATE)
+        t = _t(n)
+        f = 96.0 + 38.0 * np.clip(t / 0.4, 0.0, 1.0) + 12.0 * np.sin(2 * math.pi * 14.0 * t)
+        x = _lowpass(_saw(np.cumsum(f) / RATE), 780.0, 2) * 0.38 * _env(n, 0.04, 0.18)
+        x += _highpass(_lowpass(_noise(n, 1041), 2400.0, 1), 700.0) * np.exp(-t * 16.0) * 0.22
+    elif name == "m7_beam_heave":
+        # Punchy heave surge: body drive thump + crisp timber shift + grit rattle.
+        n = int(0.32 * RATE)
+        t = _t(n)
+        thump = np.sin(2 * math.pi * _sweep(n, 115.0, 52.0)) * np.exp(-t * 16.0) * 0.58
+        creak = _lowpass(_saw(np.cumsum(155.0 + 70.0 * np.clip(t / 0.22, 0.0, 1.0)) / RATE), 1100.0) \
+            * _env(n, 0.015, 0.14) * 0.30
+        grit = _highpass(_lowpass(_noise(n, 1051), 2800.0, 1), 900.0) * np.exp(-t * 22.0) * 0.28
+        x = thump + creak + grit
     else:
         raise ValueError("Unknown M7 foley: " + name)
     return _done(x)
@@ -679,6 +754,24 @@ class M7Audio:
 
     def tailgate(self):
         self._one("m6_tailgate", 0.5)
+
+    def well_creak(self):
+        self._one("m7_well_creak", 0.55)
+
+    def well_snap(self):
+        self._one("m7_well_snap", 0.72)
+
+    def well_crash(self):
+        self._one("m7_well_crash", 0.78)
+
+    def tin_clatter(self):
+        self._one("m7_tin_clatter", 0.58)
+
+    def beam_strain(self):
+        self._one("m7_beam_strain", 0.46, varied=True)
+
+    def beam_heave(self):
+        self._one("m7_beam_heave", 0.56, varied=True)
 
 
 # ── score (assets/music/ost, streamed) ──────────────────────────────────────

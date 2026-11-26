@@ -7,6 +7,8 @@
    "speaker": "MARU",
    "text": "Tail's gone - hold on to something!",
    "radio": true,
+   "hard_cut_in": true,
+   "hard_cut": true,
    "min_ms": 3600,
    "auto_advance": true,
    "cues": [
@@ -21,7 +23,8 @@
    "scene": "m8d_crash_black",
    "speaker": "",
    "text": "",
-   "min_ms": 3000,
+   "min_ms": 2200,
+   "hard_cut": true,
    "auto_advance": true,
    "quiet_ui": true,
    "cues": [
@@ -36,19 +39,22 @@
    "scene": "m8d_crash_fire",
    "speaker": "MARU",
    "text": "Leg's gone. Take the rifle - he went down past the ridge.",
+   "hard_cut": true,
    "min_ms": 4600
   },
   {
-   "scene": "m8d_crash_fire",
+   "scene": "m8d_crash_promise",
    "speaker": "BIRIBEL",
    "text": "I'll come back for you.",
+   "hard_cut": true,
    "min_ms": 3000
   },
   {
-   "scene": "m8d_crash_fire",
+   "scene": "m8d_crash_better",
    "speaker": "MARU",
    "text": "You'd better.",
    "min_ms": 2600,
+   "cut_to_play": true,
    "auto_advance": true
   }
  ],

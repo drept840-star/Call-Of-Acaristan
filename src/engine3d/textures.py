@@ -42,7 +42,7 @@ _DENSITY = {"snow": 16.0, "snow_trod": 16.0}
 # Glitter per texture: fresh snow sparkles, trodden snow a little.
 _GLITTER = {"snow": 1.0, "snow_trod": 0.35}
 # Pattern contrast per texture (1 = as painted): the cracked concrete read as grain.
-_CONTRAST = {"concrete": 0.55}
+_CONTRAST = {"concrete": 0.55, "stucco": 0.30, "ashlar": 0.55}
 # Specular / wet-floor reflection base per texture.
 _REFL = {
     "pavement": 0.55,

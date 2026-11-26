@@ -60,8 +60,23 @@ FRIENDS_SHOTS = (
 )
 
 
+def _play_beat_line():
+    try:
+        from audio import voice
+        lines = M.BEATS.get(_S["stage"], ())
+        idx = _S["line"]
+        if 0 <= idx < len(lines):
+            who, text = lines[idx]
+            voice.play_line(who or "NARRATOR", text)
+        else:
+            voice.cut()
+    except Exception:
+        pass
+
+
 def begin(stage, on_done):
     _S.update(stage=stage, line=0, t=0.0, line_t=0.0, enter=True, done=on_done)
+    _play_beat_line()
 
 
 def current():
@@ -76,6 +91,7 @@ def update(keys=None, dt=1.0 / 60.0):
         lines = M.BEATS.get(_S["stage"], ())
         _S["line"] += 1
         _S["line_t"] = _S["t"]
+        _play_beat_line()
         if _S["line"] >= len(lines) and _S["done"] is not None:
             done, _S["done"] = _S["done"], None
             done()

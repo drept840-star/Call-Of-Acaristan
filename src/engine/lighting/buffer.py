@@ -24,6 +24,7 @@ from collections import OrderedDict
 import math
 import os
 import random
+import weakref
 from engine.core import LEGACY_RNG as _rng_legacy  # RPE6 R6: named 'legacy' rng stream
 
 import pygame
@@ -60,6 +61,7 @@ _RADIAL = {}
 _FALL = {}   # RPE6: keyed by half-res size (was one module-level sprite for the fixed window)
 _CONE = None
 _TINT_CACHE = OrderedDict()
+_TINT_FINALIZERS = weakref.WeakKeyDictionary()
 _LIGHT_SPR_CACHE = OrderedDict()
 _CONE_SPR_CACHE = OrderedDict()
 _MOTE_SPR_CACHE = OrderedDict()
@@ -120,9 +122,18 @@ def _cone_sprite():
     return _CONE
 
 
+def _purge_tint_id(sid):
+    dead = [k for k in _TINT_CACHE if k[0] == sid]
+    for k in dead:
+        _TINT_CACHE.pop(k, None)
+
+
 def _tinted(sprite, color, scale):
     """Colourise an intensity sprite: rgb *= color * scale (opaque out)."""
-    key = (id(sprite), tuple(color), scale)
+    sid = id(sprite)
+    if sprite not in _TINT_FINALIZERS:
+        _TINT_FINALIZERS[sprite] = weakref.finalize(sprite, _purge_tint_id, sid)
+    key = (sid, tuple(color), scale)
     s = _TINT_CACHE.get(key)
     if s is None:
         s = sprite.copy()

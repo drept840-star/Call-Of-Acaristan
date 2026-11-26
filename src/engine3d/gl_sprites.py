@@ -434,12 +434,19 @@ void main() {
     if (sd >= 900.0 || abs(v_z - sd) > 0.25) discard;
     float ang = atan(v_q.y, v_q.x);
     int kind = int(v_extra.x + 0.5);
-    float wobble = 0.86 + 0.14 * sin(ang * 4.0 + v_yaw * 3.0) * cos(ang * 3.0 - v_yaw);
+    float wobble;
+    if (kind == 0) {
+        wobble = 0.78 + 0.11 * sin(ang * 3.0 + v_yaw * 2.7)
+               + 0.07 * cos(ang * 5.0 - v_yaw * 4.1)
+               + 0.04 * sin(ang * 7.0 + v_yaw * 1.9);
+    } else {
+        wobble = 0.86 + 0.14 * sin(ang * 4.0 + v_yaw * 3.0) * cos(ang * 3.0 - v_yaw);
+    }
     float r = length(v_q) / wobble;
     if (r >= 1.0) discard;
-    float edge = smoothstep(1.0, kind == 0 ? 0.65 : 0.25, r);
+    float edge = smoothstep(1.0, kind == 0 ? 0.88 : 0.25, r);
     vec3 rgb = v_col.rgb;
-    if (kind == 0) rgb *= mix(0.75, 1.08, smoothstep(0.4, 0.95, r));
+    if (kind == 0) rgb *= mix(0.68, 0.96, smoothstep(0.0, 0.65, r)) * mix(1.0, 0.72, smoothstep(0.75, 0.98, r));
     float a = v_col.a * edge;
     if (a <= 0.01) discard;
     f_color = vec4(rgb, a);
@@ -942,9 +949,10 @@ class ParticlePass:
         if not data.flags["C_CONTIGUOUS"]:
             data = np.ascontiguousarray(data, dtype=np.float32)
         if data.nbytes > self._ibo.size:
+            old_size = self._ibo.size
             self._vao.release()
             self._ibo.release()
-            self._ibo = self.ctx.buffer(reserve=max(data.nbytes, self._ibo.size * 2), dynamic=True)
+            self._ibo = self.ctx.buffer(reserve=max(data.nbytes, old_size * 2), dynamic=True)
             self._vao = self.ctx.vertex_array(
                 self._prog,
                 [
@@ -1018,9 +1026,10 @@ class DecalPass:
         if not data.flags["C_CONTIGUOUS"]:
             data = np.ascontiguousarray(data, dtype=np.float32)
         if data.nbytes > self._ibo.size:
+            old_size = self._ibo.size
             self._vao.release()
             self._ibo.release()
-            self._ibo = self.ctx.buffer(reserve=max(data.nbytes, self._ibo.size * 2), dynamic=True)
+            self._ibo = self.ctx.buffer(reserve=max(data.nbytes, old_size * 2), dynamic=True)
             self._vao = self.ctx.vertex_array(
                 self._prog,
                 [

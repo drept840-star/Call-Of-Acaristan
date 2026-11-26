@@ -1,4 +1,4 @@
-"""m5_probe.py - render M5 cutscene frames headless for visual review.
+r"""m5_probe.py - render M5 cutscene frames headless for visual review.
 
 Usage (repo root, bash):
   SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy tools/../\.venv/Scripts/python.exe \

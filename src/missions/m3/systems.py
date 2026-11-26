@@ -67,7 +67,7 @@ from game.art import m3 as _m3art  # RPE6 Phase 3: baked sprites / layers (proce
 from missions.m3 import flow as _m3_flow  # dialogue-state owner
 from missions.m3.meta import BCAST_TIME_LIMIT, C_BIRIBEL, C_SYSTEM, C_VOLKOV, MAP_W, MAP_H, MISSION3_ID, MISSION3_LOCATION, MISSION3_PRIMARY_STYLE, MISSION3_STORY_FLAGS, MISSION3_TITLE, MISSION_PHASES, OPENING_CINEMATIC, mission3_ending_shots, STAGE_ARCHIVES, STAGE_ARCHIVES_TRANSITION, STAGE_BREAKOUT, STAGE_BROADCAST, STAGE_COMMS, STAGE_DONE, STAGE_INTERROGATION, STAGE_KILL_ORDER, STAGE_VENT_CUTSCENE, _DOOR_TILE_COL, _DOOR_TILE_ROW
 from missions.m3.world import _ARCHIVE_EXIT_COL, _ARCHIVE_EXIT_ROW, _EXIT_TILE_COL, _EXIT_TILE_ROW, _K9_STAND_COL, _K9_STAND_ROW, _RELAY_TILE_COL, _RELAY_TILE_ROW, _VENT_EXIT_COL, _VENT_EXIT_ROW, _VENT_GRATE_COL, _VENT_GRATE_ROW, _detainee_draw_pos, _m3_damage_cell_door_with_bullet, _near, _set_objective, _snap_camera_to, _solid_walls, _build_archives_world, _spawn_m3_guards_once, _stop_m3_alarm, _radio, _update_m3_detainees
-from missions.m3.flow import _acquire_vostral_file, _archives_exit_pos, _dialogue_beats, _maru_terminal_pos, _start_maru_contact, _update_chair_break_cutscene_state, _update_player, _update_stage, _vostral_file_pos, start_mission3
+from missions.m3.flow import _acquire_vostral_file, _archives_exit_pos, _maru_terminal_pos, _start_maru_contact, _update_chair_break_cutscene_state, _update_player, _update_stage, _vostral_file_pos, start_mission3
 from missions.m3.interrog import _action_is_unskippable, _advance_beat, _beat_text, _current_beat, _line_fully_typed, _start_kill_order_phase, _trigger_action, _update_camera
 from engine.text import T as _T  # RPE6 Phase 4 text table
 import game.world as _gw  # RPE6 Phase 5 (D4): mission data lives in components
@@ -102,7 +102,7 @@ def _mission3_melee_duration(weapon=None):
         return 24.0
     if weapon == "shiv":
         return 14.0
-    if weapon == "k9_smg":
+    if weapon == "k9_smg" or getattr(STATE, "current_weapon", "pistol") == "k9_smg":
         return 20.0
     return 18.0
 
@@ -1757,6 +1757,7 @@ def game_update(keys):
     _update_comms_relay()
     _update_m3_detainees()
     effects.update_particles()
+    effects.update_casings(solid_walls)
     effects.update_floating_texts()
     _update_stage(keys)
     _update_crafting()
@@ -3936,7 +3937,7 @@ def _resolve_choice(beat, chosen):
         "text": line,
     }
     idx = _m3_flow._dialogue_index
-    _dialogue_beats.insert(idx + 1, follow_up)
+    _m3_flow._dialogue_beats.insert(idx + 1, follow_up)
     _m3_flow._dialogue_choice = 0  # reset highlight for the next choice beat
     _click_blip(confirm=True)
     _advance_beat()

@@ -1582,3 +1582,369 @@ Gates: `compileall` OK; `SMOKE TEST: OK`; `ae_hold_check` OK; `engine3d_check` O
 committed. Open: Bodi/Alex takes (including `VO_228`); `m7_preps` and the raid checkpoint
 across save/resume; the choice has no mouse input; `ae_hold_check` still does not sample the
 M7 films (the new smoke hold check covers the raid poses).
+
+
+---
+
+# Implementation changelog moved from docs/ARCHITECTURE_MAP.md (2026-11-20)
+
+Hand-written PR-style patch notes, superseded passes, probe measurements and regression-test names. The live cross-file contracts they implied are summarised in the map; this is the historical detail. Ranges are from the pre-slim map.
+
+## §3 perf passes (map lines 538-540)
+
+- Perf pass 2 (2.5D frame cost, output bit-identical): `gl_post.render_to` reads the final pass straight into a tight BGRX target (`_raw_bgrx(surface)`; `_FINAL_FRAG` `u_rb` flips rows and swizzles to BGR, X byte written 0 because M6 `_decode` compares whole packed pixels), and `upload_bg` writes such surfaces raw (`_BG_UPLOAD_FRAG` `u_raw`); other surfaces keep the old `tobytes` path. `GLRenderer._draw_geometry` merges the visible static runs once per frame into `_static_runs` (reset in `_render_into_fbo`) for both sun and main passes. The physical-depth readback in `_render`/`flush_to` converts f16 to u8 through a 65536-entry LUT (`gl._phys8`). `night_fx.ground_pool_sprite` clears `_POOLS` only past 192 entries AND 128 MB (flickering lamps used to rebuild ~260 radii every few frames). M6 `draw3d`: `_lin` returns native `intp` index maps (int32 indices are converted on every gather), and `_decode`/`_light` run their per-`nf` work in `_CHUNK` (16384) slices via `_decode_part`/`_light_part` with in-place temporaries (whole-frame temporaries ran ~2x slower).
+- Perf pass 1 (shared hot paths): `GLRenderer._composite` now takes a per-point `fn.draw_depth(sx, sy, scale, z, occ_depth, limit)` path (set by `m7world3d.sparks`, `m5fx3d.sparks`) instead of copying 500x500 px boxes, and uses one reusable full-frame `_comp_buf` for RGB (plus one-shot scratch buffers for the alpha path); `_draw_scaled` uses full-frame `_light_tmp_s`/`_light_mask_s` subsurfaces instead of unbounded `(w,h)` dicts; `flush` reads GPU depth only when items need it (short-range phys8 lights do not); `add_humanoid` reuses `_bones_buf`. `Humanoid.pose_world` prunes grounded parts by an exact per-part radius bound (`_part_r`) and iterates `reversed(places)`. `SoftwareRenderer._blob_cache` is an LRU (cap 96, keeps `base`) with inlined per-face normal math; fire/smoke caches in `m7world3d`, `m6fx3d`, `m5fx3d`, `entities.weapons`, `engine.lighting.buffer`, `game.topdown3d` and `m1/grade3d` are bounded LRUs (no destructive `.clear()` wipes). `m7world3d._unit_flame`/`_emit_flame_packed` cache flame templates and reuse GL packed transforms; smokes cache a base 40x40 puff and quantise radius/alpha; `m7/raid3d._draw_tank` dropped redundant smoke columns and quantised glow/haze arguments; `m2/draw3d._draw_blast` clamps its fireball halo to `max_px=180`; `m6world3d.flake_sprite` declares `draw.bounds`; `engine.lighting.buffer.composite` reuses full-size upscale buffers.
+- Perf pass 2 (remaining subsystems): `engine/collision/mesh.py` precomputes `(a, e1, e2, y_min, y_max)` per triangle, clips the ray to the mesh's local 3D AABB (`_ray_aabb_span`) and skips triangles outside the ray/body Y band; `_span_candidates` returns a tuple for single-cell hits instead of allocating a `set`. `m1/draw3d` evicts the oldest 128 `_FLAMES`/`_POOLS`/`_POOL_WORLD` entries instead of `.clear()` at 512; `m3/draw3d._draw_fx` culls fire zones beyond ±26/±22 m of the camera; `m6/train3d` caches the fade veil surface and reuses the joints returned by `r.add_humanoid` for dead guards instead of a second `hum.pose_world()`. The remaining 2.5D/3D scenes inherit these gains plus pass 1.
+
+## §3 GPU Phase 1 (map lines 542-542)
+
+- GPU Phase 1 (HDR/MRT pipeline): `GLRenderer` owns an RGBA16F colour + `f_aux` (view normals/material slot) + `f_pdepth` (physical metres) MRT FBO. `gl_sprites.SkyPass` renders horizon-locked GPU skies/stars/clouds; `SpriteBatch` batches halo/shaft/blob quads and line quads into the FBO, gated by `fn._gl_spec`/`fn._gl_surf`/`fn._gl_lines` (CPU callbacks still go through `_composite`). `gl_post.PostPipeline` runs HDR bloom, the `grade3d` lightmap as GPU quads, LUT/vignette/grain/Bayer dither and crisp upscale, then does ONE readback. Hosts use `flush_to`/`present_to` (M1/M5 2.5D + M6 train/yard + M7 raid + M8 set/chase/mansion); software keeps the legacy `flush` path. `set_sky(spec)` is a no-op stub on software. depth clear writes a fullscreen quad at `gl_FragDepth = 1.0` with `depth_func="1"` (falls back to `">="`, since `"always"` raises SystemError in this moderngl build); color/depth masks are explicitly restored around every MRT sky/bg/post pass. `GLRenderer.resize` must use `self.ctx.NEAREST`; `_split_items` handles `lines` items as `(segs, layer, depth_test)`. `m6world3d.rend(w, h, hdr=True)` now sets `hdr` per call instead of latching it on the cached renderer; M1/M5 request `hdr=True`, M2/M3/M4/M6/walk3d/arena request `False` and restore the prior value in `finally` — HDR leaks would corrupt the keyed colours `K_TOP..K_PTOP` and stop M6 2.5D `_decode()` from swapping in wall/roof/container textures. M6 additionally clears `dither`/`ps1_snap` for the same reason. GPU skies require `buf is r.surface`: `m7world3d.stage` passes `r.surface` on GL, `m8/revenge/chase_set.frame` uses `night_sky(gpu=False)` + `stratus` for dawn, and `night_sky` clears a stale sky with `set_sky(None)` on non-GPU GL calls. Blob shadows carry a GPU `_gl_spec` so `flush_to` stays on the fast path; the M6 reticle applies alpha via `BLEND_RGBA_MULT` (pygame ignores `set_alpha()` in `image.tobytes`).
+
+## §3 GPU visual/gait/ragdoll passes (map lines 544-868)
+
+- GPU visual upgrade bundle (2026-11-18): five coordinated additions to `engine3d` and its hosts. (1) **SSAO**: `gl_post.PostPipeline.apply_atmos` runs a half-res hemisphere pass from `f_pdepth` + `f_aux` with a bilateral depth/normal blur (`_SSAO_FRAG`/`_SSAO_BLUR_FRAG`), skipped on emissives (`f_aux.a > 0.90`) and softened on rigs (`mat_id` 0.75); `quality_3d >= 1`. (2) **64 tiled local lights + 2 spot-shadow maps**: `GLRenderer._upload_lights` packs up to 64 lights into a `(64,4)` RGBA32F data texture (`u_pl_tex`) with a CPU 12x8 screen-tile bitmask (`u_tile_mask`, 4x16-bit ints/tile); the world fragment shader walks the bitmask for both dynamic and baked faces. `_select_spot_shadows`/`_build_spot_uniforms`/`_spot_pass` render up to two 512x512 2x2-PCF perspective depth maps (`spot_shadows`, 1 at quality 1, 0 at quality 0) for flashlight/searchlight/headlight/downward lamps. `SoftwareRenderer.light_cap` is now 64 with set_lights cap=64. (3) **HDR unification**: M2/M3/M4/Walk3D join M1/M5 on `hdr=True` + GPU `flush_to` + `grade3d` post (all keep their software `flush`/`grade3d.apply` fallback). M6's 2.5D port uploads three extra textures (`u_extra0..2` via `GLRenderer.set_extra_textures`, faces carrying `("uv", slot, uvs)` as face element 7 -> `v_tex < -1.5`, `in_uv` used directly) and does GPU `grade3d` + `char_lift`, removing the per-frame CPU `_decode`/`_light` readbacks on GL; `m6/draw3d._gl_atlas/_uv_box/_floor_quad_mesh/_gl_fx/_gl_grade_lights/_gl_local_lights` own that path, software still uses the original painter. (4) **Wet reflections + height fog**: `textures.reflectivity()` feeds `f_aux.a` material tags; `gl_post._ATMOS_FRAG` does a 12-step screen-space reflection raymarch plus 64-light analytic specular and procedural rain-rippled puddles, and mixes an exponential world-height ground mist (`r.height_fog = (density, base_y, falloff, colour)`). M8 Mansion sets `r.marble_refl` for its indoor marble hall. (5) **Instanced particles/decals**: new `engine3d/particles.py` (`ParticlePool` / `DecalPool`, vectorized NumPy simulation, `pack_dots` / `pack_blood_decals`), drawn by `gl_sprites.ParticlePass` / `DecalPass` with hardware instancing + `u_pdepth` soft depth-fade (sparks velocity-stretched, casings spin); `SoftwareRenderer.add_particles`/`add_decals` + `_emit_fallback_fx` keep the 2D sprites. Adopters: `topdown3d.dots`, M1-M5 blood decals, M6 yard, M7 raid, M8 trap/mansion. `GLRenderer.begin()` and `SoftwareRenderer.begin()` reset `wetness`/`marble_refl`/`height_fog`/`_particles`/`_decals`/`_spot_active` every frame so state never leaks between scenes sharing `m6world3d.rend()`.
+- Animation/collision kernels (2026-11-18, Phases 1-2), all inside `src/engine/` with zero engine3d/pygame/game imports (boundary E3): `engine/anim/springs.py` gives analytical, unconditionally stable `Spring`/`AngleSpring`/`Spring3`/`TurnLagTracker`; `engine/anim/rig3d.py` adds bone-key sets (`LOWER_BODY_KEYS` etc.), `blend_poses`/`add_pose`/`mask_pose`, velocity-coupled `locomotion_pose`, `FootIKSolver` (smoothed stair sampling -> world foot targets + direct joint deltas) and `LayeredAnimState` (lower-body gait independent of upper-body reload/radio/melee/swap/flinch + spring recoil/cam-punch/flinch/breath). `engine/collision/nav.py` keeps `GridNav` and adds `MultiFloorNav` + `NavLink`: multi-layer `(col,row,y)` 3D A* with off-mesh links, dynamic box/circle obstacles, layer-aware string pulling. `boxes.py`/`mesh.py` gain `capsule_contacts` (outward XZ normals + penetration). `physics.py` adds `slide_capsule` (sub-stepped tangent slide + stair step_h), `DebrisPool`/`DebrisBody` and 15-node Verlet `RagdollBody` (directional/blast impulses, floor/wall collision, sleep). Ground friction in the ragdoll is applied once per step, not per constraint iteration (otherwise bodies pin at ledges). Phase 2 wiring: `cutscenes/death3d.Fall` seeds a `RagdollBody` from `Humanoid.ragdoll_nodes` and feeds its nodes back via `Humanoid.places_from_nodes` (see the ragdoll-bone bridge bullet below); M6 yard / M7 raid / M8 trap / M8 mansion deaths pass their `World.box_world` and boxes to `RagdollBody.step`. M7 `raid_world`, M8 `trap_world`/`mansion_world` replace axis-separated stepping with `slide_capsule` (Mansion keeps its 1.0 m ledge guard + 0.6 m stair step_h). `mansion_world.nav()` builds a shared `MultiFloorNav` over `FLOORS` synced to dynamic doors/cars/helicopter; `mansion_brain` routes enemies+allies across floors. `RaidScene` runs `LayeredAnimState`, `TurnLagTracker`, `FootIKSolver`+`solve_leg` and `DebrisPool`; because `TrapScene`/`MansionScene` BORROW RaidScene methods by assignment (they are not subclasses), both must also borrow `_anim_ctl = R.RaidScene._anim_ctl` or borrowed `_move`/`_player_pose`/`hp` fail with AttributeError.
+- Gait/ragdoll corrections (2026-11-18; death3d bits superseded below): `locomotion_pose` now compensates the
+  geometric leg-span shortening at sprint splits with a positive `lift` derived
+  from the cosine of hip/knee angles (walks stay planted, `lift=0`), shrinks
+  hip swing and torso `twist`, and clamps `FootIKSolver.pelvis_drop`.
+  `RaidScene`/`TrapScene` no longer gate a discontinuous `_solve_leg` snap on
+  `abs(foot_targets.l.y - r.y) > 0.03` (that fired ~70% of a flat stride).
+  `death3d._world_joints` extracts all 15 joints from `pose_world`'s `places`
+  (slots 4/7/8/10/13/14) instead of the 5 in its `joints` dict, so ragdoll link
+  rest lengths match crouching/aiming/scaled guards; `RagdollBody` adds
+  shoulder/hip/knee separation and `_RAGDOLL_MIN_DISTS` anti-origami
+  constraints, and the kill impulses are capped (push <= 1.2, <=3.8 m/s).
+  `death3d._pose_from_ragdoll` reconstructs `(pose, yaw)` from the full rig
+  basis (no canned body_p/body_r blending, no pre-leg `solve_arm`), and
+  `Fall.at` blends it in from 0.04s and rests at `land + 2.5s`.
+- Gait strength / rifle-up / ragdoll ledge pass (2026-11-18; death3d bits superseded below): `locomotion_pose`
+  restores a 26-34 deg thigh swing and 52-80 deg knee drive, powers `l_lift`
+  by 1.15, broadens the `lift` bridge to walks (`target_h = 0.858 + ...`), and
+  adds a subtle stride-coupled `spine_r`. `YardScene` now runs `LayeredAnimState`
+  (`_anim_ctl`, reset in `restart`, updated in `_move`, composed in `_draw_player`).
+  `RaidScene._guard_pose` (borrowed by M8 Trap/Mansion) and `YardScene._guard_pose`
+  put `mask_pose(lower, upper)` under a live aim stance; `_hold_cached` now runs
+  for moving guards too (`rifle_p` flinch no longer gated on `not moving`) so
+  enemies keep their rifles up while running. `RagdollBody` adds max-spread
+  constraints for knee/foot pairs and rest nodes ON TOP of boxes (`p[1] >= box_top
+  - 0.05`) rather than being blasted sideways off pillars; `World.ragdoll_boxes()`
+  supplies the M8 catwalk deck + guardrails to the sniper's death. `Fall`
+  anchors the rendered root to the ragdoll pelvis (`pel[1] - pose_world root[1]`),
+  relaxes ankles by face-up/face-down, caps hip spread, and varies impulses per
+  slot (shoulder/knee/pelvis asymmetry) so falls do not repeat.
+- Physical-stride walking upgrade (2026-11-19, gait revised 2026-11-19; cadence, `_leg_swing`
+  and lift-target bits superseded by the anti-moonwalk pass below): phase tracks
+  ground distance in every locomotion path. `engine/anim/rig3d.py` `_cycle_len` is now a
+  grounded tactical cadence - 1.55 m crouched, else 2.15 m walk -> 2.60 m sprint - exposed
+  publicly as `gait_cycle_m(speed, sprint, crouch)` for scenes that convert accumulated
+  metres to phase; `LayeredAnimState.update` advances `stride_phase` by
+  `speed*dt/cycle_m * tau * (stride_gain/2)`. `_leg_swing` replaces the old piecewise
+  `_leg_cycle`: a C-infinity harmonic stride `(sin(ph) + 0.14*sin(2*ph))/1.14` with
+  `swing_w = 0.5 - 0.5cos(ph)`, so there are no clamp corners and no heel-strike/toe-off
+  knee snaps. `locomotion_pose` adds the planted ankle inside `[-8, +10]` deg (toe-point
+  only on top of an airborne `swing_w**1.4`, `base_ank` clamped), keeps `body_r = 0.0`
+  (the pelvic roll doubled the auto-grounder bounce), and bridges leg-span shortening with
+  one smooth `0.858 m + 0.010*sprint` target instead of per-leg stance weights.
+  `compose` still consumes `LayeredAnimState.secondary`, but its accel/brake spring is
+  deliberately gentle (3.0 Hz, zeta 0.92, ~0.13-0.16 gain) so velocity-derivative noise on
+  wall slides cannot ring the torso. `raid3d._held`/`_shotgun_hold` sync `rifle_y` to the
+  same twist delta as `rifle_p`. Fallow 12 / OS-12 have NO sprint chest-carry:
+  `apply_sprint_carry` / `_sprint_carry_hold` / `_SPRINT_HOLD_CACHE` and their warm-up
+  calls are removed from `raid3d`, `m8/revenge/trap3d` and `m8/duty/mansion3d`, so the
+  guard hold never twists the barrel mid-stride. `yard3d._gun_frame` adds stride
+  bounce for the K-9. Guards/allies drive phase from distance via `gait_cycle_m`:
+  raid/trap/mansion `gait / gait_cycle_m(3.4) * tau` (M7 rushers use their own
+  `gait_cycle_m(4.4, 0.6)`), yard accumulates `_gphase` from `step/cyc` with
+  `cyc = gait_cycle_m(spd, sprint_k)`, and Trap's catwalk move runs `LayeredAnimState`.
+  2.5D is reverted to the pre-2.5D gait: `_motion` in `m1/draw3d` and `missions/walk3d`
+  is back to the 4-slot cache `[x, y, phase, speed]` advancing by
+  `step * WALK_RAD_PER_M * sign(fwd)` (no `STATE.dt`, no smoothed fwd/side m/s), and
+  `_gait`/`_person` blend `pose_run(phase, lean)` over `m6world3d.life_pose` instead of
+  `engine.anim.locomotion_pose`. `cutscenes/m6world3d.walk` adds ankle roll and head/elbow
+  follow-through but keeps leg IK and `body_r = 0.0` so `walk_slip` stays < 1 mm;
+  `cutscenes/m7world3d.walk_pose` delegates to `locomotion_pose`.
+  The engine-anim unit test compares idle `lhip_p` to `locomotion_pose(0,0,0)` because the
+  idle stance is deliberately non-zero, and samples the whole stride (a single frame can
+  sit at a leg crossing) instead of asserting one frame's hip spread.
+- 3D anti-moonwalk gait + shotgun hip squaring (2026-11-19; 3D only, 2.5D `pose_run` untouched):
+  `rig3d._leg_swing(ph, fold, soft) -> (wave, knee, swing_w, stance_w)` folds the knee by the
+  thigh's FORWARD angular velocity (`dwave = (cos ph + 0.28 cos 2ph)/1.28`, `swing_w =
+  max(0, dwave)**1.3`), so the knee is straight at heel strike and toe-off; the old fold at
+  ph = pi bent the knee on the planted backward stroke and slid the foot forward. `wave` is
+  normalised by 1.08 (its true peak is 1.036). `soft` adds a small early-stance knee give.
+  `_cycle_len` scales with speed: `clamp(1.20 + 0.276*speed, 1.33, 2.71)` (x0.78 crouched);
+  hip amplitude `clamp(12 + 7*speed, 16, 44)`; knee fold `clamp(36 + 10*speed, 44, 96)`;
+  the staggered idle `idle_hip_p` fades by `(1 - move_k)` so both legs reach equally; lift
+  target `0.80 + 0.058*smooth((speed-1.5)/2) + 0.010*sprint` keeps walks grounded and gives
+  jog/sprint a short float at full split. Planted-foot slide (lowest shoe vertex,
+  grounded frames): 3.3 m/s 0.15 m/s mean (was 2.15), 1.9 m/s 0.79, sprint 0.24.
+  Unit test `test_knee_folds_on_forward_swing_not_planted_stroke` guards it.
+  Fallow 12 hold, hips square (same day): `raid3d.SG_BLADE_YAW, SG_TWIST = 0.0, 50.0`
+  (was 35 + 10 with the whole root bladed), `SG_HEAD_Y = -(blade + twist)`. Legs and hips
+  face the crosshair; only the shoulders blade. The rig's 0.61 m arms (`ik.UARM + FARM`)
+  cannot reach the pump square-on without the stock entering the vest, so
+  `raid3d._sg_reach(hum, base, O, R)` alternately slides the gun toward the left shoulder
+  until the pump target `O + R*(0, 0.025, PUMP_REST_Z + PUMP_GRIP)` is within
+  `(UARM + FARM - 0.01) * scale`, and forward along the torso (bisection) until no stock
+  point (`_SG_STOCK_Z`, butt -0.40 to grip) is moved by `hold.push_out(margin 0.01)`; then
+  re-solves the right arm. Called in `_sg_holds` (after the aim re-solve) and
+  `_sg_reload_keys`; reload head turns are `SG_HEAD_Y + 26/34/30` (were absolute
+  -19/-11/-15). Measured: stock clear of torso/chest/head in ready/aim/rack, hand gaps
+  0-0.8 cm, bore on the crosshair, arm clash 1.2 cm in aim. Note `hold_report` only samples
+  the barrel ahead of the grip, not the stock. No walk hip-squaring remains: trap3d /
+  mansion3d shotgun branches use `draw_yaw = self.body_yaw + R.SG_BLADE_YAW` (the swap
+  branch keeps `* blade_k`, a no-op at 0).
+- M4 station foyer sealed (2026-11-18): `m4/maps.FOYER` shrinks from (35,18,3,3)
+  to (35,18,3,2) - rows 18..19 only - so row 20 of `STATION_BLOCK` (34,14,5,7)
+  stays solid "C" with colonnade windows. The old 3-row foyer carved walkable
+  "F" through the station's south wall at cols 35..37; the only way in is now
+  the gold door at (34,19).
+- M4 human-scale buildings + enterable Corner Alimentara (2026-11-18):
+  `m4/draw3d.py` `_height` gives city blocks `2.7 + 2.2*(storeys-1)` m
+  (7.1/9.3/11.5 m for 3-5 storeys, station 8.2 m); `_windows` uses 2.2 m upper
+  spacing from 3.85 m with a 1.45 m first row and a 1.70 m storefront shutter,
+  so 3.5 m streetlamps sit at first-floor height. `_cut_zone_for`/`_cut` scale
+  the south cutaway reach with wall height; `_draw_openings` tints lintels per
+  block style. `maps.py` shrinks `blk_s7` to one row and expands `deep_g` to
+  (35,34,4,5): `CORNER_SHOP_DOOR=(35,36)` with two `"D"` tiles at (35,36)/(35,37)
+  = a 3.2 m rolling shutter, `CORNER_SHOP_RECT=(36,35,3,4)` (4.8x6.4 m),
+  `CORNER_SHOP_COUNTER_TILE=(37,35)`, and a "d" apron on row 33 / col 34.
+  `world._shop_counter_pos` + shallow counter and east-crate colliders. `flow`
+  gates loot on `_in_corner_shop()` AND `_near(..., 96)` - distance alone let
+  you loot through the north wall - and adds sfx/menu-click/FX burst,
+  `m4_shop_visited`/`m4_shop_looted` and Vasile's line. `draw3d` splits the shop
+  into a static `_corner_shop` shell and per-frame `_draw_corner_shop_anim`
+  (rolling shutter, stuttering NON-STOP neon, wall-mounted oscillating fan with
+  guard cage + radial 4-blade propeller, swaying pendant,
+  glowing cooler, flickering CRT, rising kettle steam, wagging/blinking shop cat,
+  mag pickup); `_shop_cut_active` opens the front walls from the sidewalk, and
+  animated pieces use `_put(..., static=False)`. The "E - SEARCH COUNTER" tag and
+  `draw._draw_m4_corner_shop_2d` are inside-only / 3x4; rain treats "F" as dry.
+  Data: `ae_level_export` + `ae_bake --pack m4` regenerate `levels/m4.street`
+  and `assets/baked/m4/`.
+- M6 sealed border doors (2026-11-18): perimeter `"D"` tiles (customs (15,0),
+  no-man's-land (20,0) and (20,17)) were not in `M6_SOLID_CHARS`, and
+  `Player.move` does not clamp to the map rect, so the player could walk out
+  through a border door. `m6/world._is_border_door(grid, col, row)` detects a
+  `"D"` on row 0 / `h-1` / col 0 / `w-1`; `_floor_at` rejects it and
+  `_parse_grid` adds a wall Rect for it, while interior `"D"` doors stay
+  walkable. Regression `test_border_doors_block_leaving_the_map` walks into each
+  of the three gates and asserts the player stops inside, then checks an
+  interior customs floor tile is still walkable.
+- M6 2.5D texture loading + all-stage gate (2026-11-18): `m6/draw3d._uv_box`/
+  `_floor_quad_mesh` emit 7-element faces with an `("uv", slot, uvs)` tail, but
+  `topdown3d.put` rebuilt them as 6-tuples and dropped that payload, so every GL
+  `pack`ed floor/wall/prop face carried `f_tex = -1.0` and rendered flat white.
+  `put` now forwards `*f[5:]` in BOTH its software and GL branches; `Mesh.add`
+  preserves arbitrary face tails; `gl._pack_faces` accepts the UV tag at element
+  6 or 7 (raw mesh vs put's shifted face) and keeps `fb` distinct from the tag;
+  FRAG's `eslot` threshold moved -1.5 -> -1.25 to avoid float truncation at .5.
+  `m6/draw3d._gl_atlas` pads shelf width to 4 bytes, leaves a 1 px gutter between
+  props and uses a 0.01 UV inset to kill edge bleed. `m6/draw._td3d_gate` enables
+  2.5D for all four top-down stages; `ACA_M6_RAIL_25D=0` opts rail back to 2D.
+  Tests: gate test updated + `test_topdown_put_preserves_m6_uv_slots` asserts
+  slots -2/-3 survive `put`/`pack` (packed column 20).
+- Corpse-lies-flat pass (2026-11-18; superseded below): `death3d._pose_from_ragdoll` now derives the
+  knee angle as a SIGNED bend by projecting the shin onto the thigh's bend plane
+  (`Tt = _transpose(m_mul(rot_z(hip_r*sx), rot_x(-hip_p)))`, then
+  `atan2(-f_t[2], -f_t[1])`, clamped 4..120) instead of unsigned `acos(dot(u,f))`.
+  The rig has no hip_y, so a flat sideways leg used to read as +90 deg of downward
+  knee bend, sinking the shins ~0.45 m and tent-poling the torso up on its toes.
+  The gimbal blend moved to `_s(0.95, 0.995, abs(fwd[1]))` (tightened to
+  `_s(0.985, 0.998, ...)`, then superseded by the geometry pass below) so pitched/side
+  falls keep `body_r` longer, and the track-1 knee impulse became `(px*0.9,
+  -0.25, pz*0.9)` (later `px*0.6, -0.20`) - no upward jack-knife. `Fall.at` adds a lying-flat relaxation: once
+  `blend_rag > 0.45` with pelvis+chest within 0.28 m of `fl` and no ledge
+  (`min_node_y >= fl - 0.12`), it retries the pose with knees/hips/shoulders/
+  ankles scaled 0.55 -> 0.25 -> 0.0 toward rest until `pose_world(...)[2][1]
+  <= 0.20`, so `Humanoid.build()`'s auto-grounding cannot prop the corpse up;
+  `pel_y`'s floor bias tightened to `min_node_y - 0.04`.
+- Ragdoll sliding/rolling regression fix (2026-11-18; death3d bits superseded, physics.py retained): three interacting causes.
+  (1) `RagdollBody.step` latched ground friction only when `on_surf` was still
+  true on the LAST constraint iteration: iteration 0 clamped `p[1] = fl`, later
+  link passes left `p[1] >= fl` (often `fl + 3e-6` m), so `p[1] < fl` was False
+  on the final pass, `on_surf` was never set and landed bodies got zero ground
+  friction and never slept (lhand kept orbiting at 0.45 m/s at t=3s). Friction
+  now collects a per-step `surf_hit` set from floor/box-top contacts plus a
+  `p[1] <= surf_y + 0.005` rest check, and applies ONCE after the iteration
+  loop with `k_f = 0.58 ** (h*60.0)`; `grounded` uses the same set.
+  (2) `_limit_joints()` ran 5x/step while `_grounded < 7` and shifted single
+  child joints (ek, kk, fk) with no equal-and-opposite reaction on the parent
+  and no `prev` velocity compensation - a reactionless motor that catapulted
+  grounded legs (measured 5.59 m/s, 4.71 m slide, 180 deg roll/spin). Removed
+  it with `_shift`/`_RAGDOLL_LEGS`/`_LIMIT_STEP`/`_LANDED_NODES`; valid rig
+  limits come from `_pose_from_ragdoll` and `_RAGDOLL_MIN_DISTS`/
+  `_RAGDOLL_MAX_DISTS`, which inject no momentum.
+  (3) `death3d` track 1/2 applied up to 4.0-4.5 m/s to one shoulder (lsh/rsh),
+  flipping back-falls onto the face, and `g = _s(0.95, 0.995, |fwd[1]|)` zeroed
+  `body_r` from 71.8 deg pitch, lifting the upper torso during side rolls.
+  The gimbal blend became `_s(0.985, 0.998, abs(fwd[1]))` and track 1 hit `chest`
+  at 2.2 m/s with `lat = 0.35 + 0.15*(var//2)` and knee `(0.6, -0.20, 0.6)`,
+  track 2 used `side_sign * 1.1` at 1.5 m/s with spread 0.55, tracks 3/0 used
+  `fwd_k` 0.9/1.3 at -0.85 with a `(0.6, 0.45)` pelvis counter-impulse - all
+  REFINED by the geometry pass below. Still current: a corpse cannot latch
+  mid-air (`Fall.at` rest also needs `a >= self.land + 0.5`).
+- Death-fall geometry pass (2026-11-18; superseded below): four `Fall` -> `pose_world` defects.
+  (1) Auto-grounding lift: `Humanoid.build`/`pose_world` shifts `pos[1]` by
+  `-miny`, so a clamped inward thigh (`hip_r` floor -12 deg) or knees/hips
+  relaxed toward 0 under pitch `body_p` put a limb -0.50..-0.89 m below the
+  pelvis, and `max(min_node_y - 0.04, pel[1] - root_0[1])` launched corpses
+  0.5-0.75 m into the air. `Fall.at` now sets `clear = pel[1] - min_node_y +
+  0.04` and binary-searches 7 steps over `safe_vals` (knees 6, hips/shoulders
+  solved in the `body_p` plane and damped by `side_k`, hip_r/sh_r 0/15,
+  elbows 12, ankles 0) for the largest blend with `pose_world(...)[2][1] <=
+  clear`, falling back to `lo` at full clamping.
+  (2) Forward lunge/rubber-band: `rx_anim`/`rz_anim` added `self.push * k` in
+  the first 0.15 s while `blend_rag` snapped the root back to the ragdoll
+  pelvis; the push term is gone and `blend_rag` is now 0.06..0.30 s.
+  (3) Spine Z-bias / 180 deg gimbal: rig.py's `joints["chest"] = (0, 0.36,
+  +0.08)` biased `up` forward 12.5 deg and `asin(-fwd[1])` + `atan2(right[1],
+  up[1])` flipped yaw/body_r ~180 deg when `up[1]` dipped below 0. `up` now
+  uses pelvis -> mid-shoulder; `yaw_g`/`body_p_g`/`roll_g` are solved from
+  `(uh, up[1], right[1])` with a fwd[1] sign, the blend is
+  `g = _s(0.80, 0.94, |fwd[1]|) * (1 - _s(0.55, 0.85, |right[1]|))` and
+  `body_r` is `_wrap`ped. Shoulder/hip pitch is re-solved in the clamped roll
+  plane (`rot_z` transpose) so a clamped roll cannot drop a limb through the
+  floor.
+  (4) All-fours tenting / upright sitting: forward falls pinned feet under
+  friction, knees folded under the belly (`("chest", "lkn", 0.44)` held the
+  pelvis at 0.48 m for ~1 s) and legs crossed past the opposite hip.
+  `physics._RAGDOLL_MIN_DISTS` gains cross-hip `("rhip", "lkn", 0.40)` /
+  `("lhip", "rkn", 0.40)`; impulses now hit chest+head (2.6/2.0 back,
+  1.3+side spin) with a 0.20-0.30 spread, and tracks 0/3 add downward
+  chest/head plus upward knee (0.40) and foot (0.60) counter-impulses so the
+  legs trail instead of pinning.
+- Authored-fall rewrite (2026-11-18; itself SUPERSEDED by the ragdoll-bone bridge below):
+  inverting 15 loose Verlet nodes through Humanoid's Euler hierarchy plus
+  `build()`'s auto-grounding kept propping bodies up (body_p -30..-52 deg with
+  lhip_p 0 / lkn 6 whenever body_r crossed the side_k threshold or limbs
+  clamped). `cutscenes/death3d.py` no longer imports `RagdollBody`: the
+  ragdoll, `_world_joints`, `_pose_from_ragdoll`, `_vnorm`/`_vcross`/
+  `_transpose`/`_wrap` and `_NODE_RADII` are all removed. `Fall` returns to the
+  authored `death_pose` + `_flop` rebound with per-slot variation (`_var` from
+  `(slot*37)%7`: yaw jitter, head_y, shoulder roll, elbow bends, and a
+  track-1 hip/knee lift for var 1/4). Root XZ is advanced by `_ankles` change
+  + clamped push (<=0.75 m) + blast velocity, then resolved with
+  `engine.collision.slide_capsule` against `box_world`/`extra_boxes`; a second
+  pair of capsule calls keeps the chest joint out of walls after the tip.
+  `blast` sets a bounded radial throw (bvx/bvz <=4.8 m/s, vy 1.4..3.8) and
+  zeroes `push`. Gravity works off ledges via `floor(*self.chest)`, with a
+  0.16 vertical restitution and exponential damping of blast velocity on
+  ground contact; `rest` latches only after `land + 0.55 s` with the body on
+  the floor and both velocities near zero. `physics.py` keeps its RagdollBody
+  fixes unchanged (other callers may still use it).
+- Ragdoll-bone bridge (2026-11-18; extended by later bullets below): no
+  mission caller changed - all four scenes (`m6/yard3d.py`, `m7/raid3d.py`,
+  `m8/revenge/trap3d.py`, `m8/duty/mansion3d.py`) still call
+  `death3d.Fall(...)` and `m6world3d.actor` / `r.add_humanoid`.
+  (1) `engine/collision/physics.py`: `RagdollBody._apply_anatomical_limits()`
+  projects knees onto a 1-DOF backward hinge plane (lateral 0.45, forward
+  knee correction 0.60/0.40) and stops elbows snapping past straight, using
+  momentum-balanced pair moves; called once per constraint iteration in
+  `step()`. No public signature changes.
+  (2) `engine3d/rig.py`: new module helpers `_basis_xy(x_hint, y_vec)` and
+  `_col_x(M)`; `Humanoid.ragdoll_nodes(pose, pos, yaw)` extracts the exact 15
+  world nodes from `_placements` (mid-shoulder torso, skull-centre head, no
+  chest Z bias); `Humanoid.places_from_nodes(nodes, floor_y=None)` builds
+  orthonormal 3x3 slot matrices and socket-continuous world origins directly
+  from `RagdollBody.pos`, preserving `_scale`, `PART_FB` decal biases and
+  boot-vs-floor pitch clamping. `pose_world`/`build` accept a precomputed
+  `{"_places": ..., "_joints": ...}` pose and bypass `_placements` AND the
+  `-miny` auto-grounding shift (GL skinning root becomes `(0,0,0)`, so bone
+  origins are already world-space).
+  (3) `cutscenes/death3d.py`: `Fall` seeds `RagdollBody(hum.ragdoll_nodes(...))`,
+  optionally depenetrates against walls/crates at zero velocity (prev reset),
+  applies directional track impulses and bounded blast throws, sub-steps
+  `rag.step(h<=1/60, floor_fn, box_world, boxes, iters=6)`, tracks
+  `fall.chest` for ammo drops and caches `rest` as a `_places` pose; `at()`
+  returns `(pose, (pelvis.x, floor, pelvis.z), yaw0)` and re-floors the cached
+  root each frame. `life_pose` still layers on top in `m6world3d.actor`.
+- Active-ragdoll muscle tone (2026-11-18; extended by the hit-context bullet below):
+  a pure Verlet ragdoll loses all tone on frame 1, so `death3d.Fall` now runs a
+  damped PD spring toward an authored reaction before releasing into collapse.
+  (1) `RagdollBody.step` ground rebound weakened from 0.12 to 0.04 and `Fall`
+  uses `RagdollBody(nodes, drag=0.962)` so limbs thud and drape rather than
+  bounce; blast kills (`_is_blast`) skip active tone entirely.
+  (2) `_active_pose(a)` returns the authored pose + target yaw and separate
+  upper/lower tone envelopes: track 1 `_STAGGER` arms/head snap (ut 0.08-0.30,
+  lt 0.02-0.20), track 2 `_CLUTCH` chest grab + 65 deg side spin (ut 0.10-0.36,
+  lt 0.02-0.22), track 3 `_KNEEL` with a 7 deg sinusoidal wobble and 12 deg yaw
+  (ut 0.32-0.54, lt 0.36-0.56), track 0 `_BUCKLE` (ut 0.06-0.28, lt 0.02-0.20).
+  (3) `_apply_muscle_tone(h, a, floor)` targets nodes relative to the pelvis
+  (`hum.ragdoll_nodes(p_auth, (0,0,0), yaw_tgt)`), applies `k=stiff*tone`
+  (260 upper / 240 lower) and `d=28*tone` via `prev[i] -= dv*h` (clamped 0.45),
+  and gives the pelvis a 220/26 spring only when a foot or knee is within
+  0.18 m of the floor - a guard pushed off a truck bed or catwalk loses
+  support immediately. Track 3 fires a one-shot topple impulse at a >= 0.38 s.
+  Called once per sub-step before `rag.step` in `Fall.at`.
+- Hit-context death upgrade (2026-11-18, LATEST): authored reactions are chosen
+  from the lethal hit, not just the track. `physics.py`: rigid chest/head/
+  hip-to-shoulder weld edges replaced by `_RAGDOLL_SOFT_LINKS` range constraints
+  (scaled by pelvis-chest distance) so the neck whips and the spine curls;
+  `_apply_anatomical_limits()` adds hip splay/hyperextension, shoulder
+  rear/cross-chest cones, ribcage ellipsoid pushout and a neck cone; `step()`
+  tracks `wall_nodes`, `support_y` and `wall_contact` and applies vertical /
+  tangential slump friction once grounded (rebound 0.04).
+  `rig.py`: `places_from_nodes(nodes, floor_y=None, head_yaw=0.0, rifle_m=None)`
+  turns the head along the neck axis and can add an active rifle slot;
+  `pose_world()` drops the rifle slot when `rifle_on=False` (GL/software parity).
+  `m6world3d.life_pose` returns `_places` poses unchanged (no breath copy).
+  `death3d.Fall` takes `is_head/hit_zone/hit_pos/hit_ray/weapon/dmg/overkill/
+  hit_dist`: headshots cut tone at ~0.03 s and whip the head along the ray;
+  point-blank shotgun / overkill punch the chest/gut with a lateral shoulder
+  torque; gut/leg/melee pick `_GUT_FOLD`/mirrored `_CLUTCH`/`_STAGGER`/
+  `_BUCKLE`/`_KNEEL`; planted-foot anchor + catch-step, free-arm bracing and
+  asymmetric landing relaxation, wall-slump chin droop and secondary head turn.
+  A dropped rifle is a rigid body with AABB/floor collision and flat settling,
+  drawn via `fall.draw_gun(r)`; `fall.expression` feeds `m6world3d.actor`.
+  Callers: yard3d/raid3d/trap3d/mansion3d build `hit_ctx` in `_hurt_guard`/
+  `hurt_enemy` (including shotgun pellet fans and blast kills), pass
+  `death_ctx` into `Fall`, `fall.rifle_on`, `fall.expression`, `draw_gun(r)`,
+  and new `World.ragdoll_boxes()` expose dynamic props/trucks/cars; mansion3d
+  tracks vertical floor fallback for gallery/portico falls.
+  NOTE (headless probe, 2026-11-18; RESOLVED by the settle/launch fix below):
+  the single-node constraint pushes in `_apply_anatomical_limits()` were not
+  `prev`-compensated and injected momentum: with realistic push 0.3 the settled
+  root drifted 2.5 m over 5 s (5.8 m with push 1.0; 0.67 m with zero push);
+  disabling that method at runtime dropped drift to 0.003-0.25 m.
+- Ragdoll settle/launch fix (2026-11-18; LATEST): headless probes isolated four
+  interacting causes and all are fixed without changing any public signature
+  or call chain. (1) `death3d.Fall.__init__` depenetration with `box_world`
+  ran `rag.step(1e-4)` but left `rag._h = 1e-4` while resetting `prev`, so the
+  first tone spring (h=1/60) was scaled by `h/_h = 166.67x` and headshots flew
+  8.1 m at 98 m/s; it now restores `rag._h = MAX_SUBSTEP` after the reset.
+  (2) Leg hits no longer prop the body: knee/pelvis/chest impulses are reduced
+  and spread, planted-foot/catch-step/pelvis bracing is skipped for leg hits,
+  and the free-arm brace is applied before pose tone with those arm nodes
+  excluded from it (`braced_nodes`). Tone prev offsets use `rag._h`, not the
+  caller's `h`. (3) `physics.RagdollBody` now has a carried-velocity cap
+  (`_MAX_NODE_V`), a lower solver-rebound cap once grounded and slow
+  (`_MAX_REST_SOLVER_V`), `strength`-scaled anatomical limits damped to 0.25
+  while resting, `sy_c`-balanced hip corrections, and `head` min-dists tightened
+  so the neck cone stops shifting the head at rest. (4) Rest damping and sleep
+  now use actual post-solver displacement (`actual_disp2`) instead of pre-solver
+  `max_disp2`, with `_REST_GROUNDED=6`, `_SETTLE_V=0.14`, `_SETTLE_T=0.22` and
+  prev snapped to pos on sleep, so variable-dt wall/floor probes settle.
+  Regression: `tests/unit/test_engine_collision.py::test_leg_hit_ragdoll_settles_without_launch_or_jitter`.
+
+## §4.3 Duty/ally/culling passes (map lines 912-929)
+
+- Wall/obstacle weapon tuck (2026-11-18, LATEST): all four walkable 3D fights (`m6/yard3d.YardScene`, `m7/raid3d.RaidScene`, `m8/revenge/trap3d.TrapScene`, `m8/duty/mansion3d.MansionScene`) now lower the held gun smoothly near walls, doors, pillars, crates and vehicles, including while ADS, and refuse to fire past `wall_k > 0.65`. `RaidScene._wall_probe_dist()` casts two shoulder-height rays (feet + 1.34 m, centre and +0.14 m right) along the aim via `raid_world.ray_hit(..., 1.4)`; waist-high cover (<= 1.0 m) stays clear. `RaidScene._update_wall_k(dt)` eases a 1.12 m (OS-12) / 1.22 m (shotgun) start down to a 0.68 m full tuck (18 in / 12 out), zero during a Bodi turn; `YardScene` uses its own `BLOCKERS`-based 2-ray probe and 1.14 m start, `TrapScene` adds `world.props`. `raid3d` adds `_WALL_HOLD_CACHE`, `_wall_down_hold(hum, weapon, key)` (cached compressed front-of-chest hold: both arms IK-solved via `_solve_arm_safe` - right hand onto the grip at a scaled `grip_local`, left hand onto the shotgun pump / OS-12 handguard at `fore_pt`, barrel aimed ~45 deg down and across from `barrel_local`, always well inside arm reach) and `apply_wall_down(hum, pose, weapon, wall_k, key)` (wrapped yaw channels, twist/head_y invariant); all three shotgun/OS-12 scenes pre-warm those holds in `_warm()` and add a reload tuck. K-9 (yard3d) instead drives `_gun_frame` and the aim pose from `wall_k` (steep down-left pitch/yaw/roll, trigger pulled inside `BODY_R`, head kept upright); melee punches override the tuck. No public API or call-chain removals.
+- Shared 3D ally revive (2026-11-18, LATEST): `cutscenes/revive3d.py` is a new stateless-ish controller owned per scene as `scene._revive` (`ReviveState`: who/u/vis_w/locking/hand_world/ally_pos/recover_t0/kick_done/holds). `step()` gates on `[E]` + `brain.near_revive()`/`_hold_action() == "revive"`, walks the player in to `REVIVE_DIST=0.92` via `world.move`, cancels reload/swap, fires the heave cam_kick + dust at `u>=0.44`, and calls `on_complete` at `hold_dur`; M7 Alex's well-beam lift keeps its legacy path. `down_pose()` gives a living slump with breathing/head tracking/reach cue; `ally_pose_and_hand()` feeds the downed ally's live world `rhand` into `apply_player_revive()`'s `_solve_arm_safe` left-arm IK clasp (`0.14<=u<=0.90`, hand gap < 0.14 m) and handles post-revive weapon re-shouldering. `draw_ground_rifle()` parks the fallen rifle flat beside the ally until recovery. `adjust_camera()` drops/widens the OTS boom with `world.ray_hit` clamping. Wired into `raid3d`/`trap3d`/`mansion3d`: `REV.reset` in `_setup`, `REV.warm` in `_warm`, `REV.step` in `_hold`, `REV.is_locking` gates fire/reload/swap and `_move`, `REV.adjust_camera` in `camera()`, `REV.apply_player_revive` in `_draw_player`, `REV.ally_pose_and_hand` in the ally drawers; allies are drawn before the player so IK reads this frame's `rhand`. Regression: `tests/unit/test_revive3d.py`.
+- `scene.hold` ownership (2026-11-19): `REV.step()` accumulates into the same `scene.hold` scalar the scenes use for their own hold actions, and its inactive path used to zero that field unconditionally whenever `who is None` - which is every frame a scene is not reviving. That silently killed two multi-frame holds that share the field: Alex's beam lift in `m7/raid3d._hold()` (pinned-Alex branch, `HOLD_S["alex"] = 1.6`, also read by `_help_k()` -> `_well()` and `prompt()`) and the M8 trap's ladder climb in `m8/revenge/trap3d._hold()` (`CLIMB_HOLD_S = 0.35`, prompt bar `hold / CLIMB_HOLD_S`). Both reset to one frame's `dt` every frame, so neither Alex could be freed nor the ladder climbed. `ReviveState.holds` now records ownership: set on the active path, and the inactive path clears `scene.hold` only once on the way out (cancel/completion wipe), leaving a hold owned by the scene alone. `raid3d`'s local save/restore of `self.hold` around that call is gone (redundant with the fix). Regression: `tests/unit/test_m7_campaign.py::M7RaidTests::test_holding_e_frees_pinned_alex`, `tools/smoke_test.py` name `mission8_vertical_slice` (climb step).
+- Gameplay sweep (2026-11-19): a pass for bugs in the Alex-well class (shared state clobbered by a second owner, pickups lost for nothing). Fixes: (1) `m8/revenge/trap3d._setup` restored the checkpoint's `mag`/`reserve` and then overwrote them with the default `wpns`; `_cp_snapshot()` now saves both guns (`cp_state["wpns"]`, current gun's live `mag`/`reserve` folded in) from `_open_gate` and `_clear`, and `_setup` restores them with each reserve floored at `reserve0`. (2) `trap3d._loot` and `m8/duty/mansion3d._loot` emptied a body's `mags` even when both reserves were at `cap`; a full player now leaves the body its ammo (M7 `raid3d._loot` already did). (3) `mansion_brain.near_revive` checks `abs(ally.y - player.y) < 1.2`, so an ally down in the hall no longer offers "Help ally up" to the player on the gallery above, nor outranks the study door and crates in `mansion3d._hold_action`. (4) M1 truck: E while the yard is hot set `STATE.hotwire_radio_said`, the same flag that gates Vasile's hotwire tutorial line, so the tutorial never played; the "not yet" warning now uses its own `STATE.hotwire_not_clear_said` (reset in `core/state.py` and `m1/main.py`). (5) Pickups at full now stay on the ground in every 2D mission, matching M4-M6: M1 bandage/molotov (`m1/update.py`), M2 bandage/mag (`m2/update._update_pickups`), M3 bandage and the sidearm top-off (`m3/systems._update_m3_pickups`), M4 `k9mag` when `_give_mag` returns False (`m4/systems._update_m4_pickups`), M5 `k9mag` with both pouches full. (6) `trap3d._open_gate` (toll kiosk used during w1) skipped `_clear(1)`'s Bodi goal update, so Bodi held post 1 through wave 2; it now sets `brain.bodi["goal"] = BODI_POSTS[2]` when he is up. M2's evidence-stage objective says "Press [E]" (the upload OS starts on a press). Regression: `tests/unit/test_gameplay_sweep.py`, `tools/smoke_test.py` name `m1_hotwire_tutorial_after_early_e`.
+- Smooth ally aim tracking (2026-11-18, LATEST): `raid_brain`, `trap_brain` and `mansion_brain` no longer snap ally yaw at the target. `raid_brain._wrap`/`_yaw_mix` are shared helpers; each brain has `_aim_track(a, e, dt)` (eased yaw at ~11/s, clamped slope from target Y, returns absolute yaw error) and `_raise` now requires `ALLY_RAISE` elapsed **and** `err < 14 deg` before an ally fires. `_walk`/`_walk_ally` gain `face=True`: when an ally has a live target they keep facing it while moving/strafing (`face=False` from Alex's spot walk, Bodi's path follow and Mansion's goal walk), and turning toward a follow point is eased. Trap Bodi tracks while in cover (`_aim_track` during `cover_t`) and ducks later (`duck_at=now+0.65`). Drawers keep the rifle shouldered while moving: `raid3d._ally_pose`, `trap3d._bodi_pose` and the new `mansion3d._ally_pose` use `mask_pose(locomotion_pose(3.4, 0.0, phase), stance)` for aimed locomotion instead of the old arms-only `_held(pose_run(...))`; Mansion now pre-warms its ally aim holds (`m8d_<name>` keys at 0.1 slope steps). Trap pre-warms a crouched aim hold (`crouch_aim` keys) so crouched cover stays aimed.
+- M8 Duty security room & Andrei electrocution (2026-11-18, LATEST): `mansion_set` widens the north desk to 4.8 m and grounds `WORKSTATIONS` at `GF+0.78` inside the desks (matching `mansion_world.STATIC` colliders), leaves the security-room footprint out of hall marble, and adds recessed interior windows. New cached `_server_rack_mesh(damaged, include_leds)` / `_rack_leds_mesh(mode)` build 2U/4U blades, busbars, fans, conduit and pop-out bay doors; the z=31 rack is dynamic via `draw_dynamic_props(rack_state, monitor_surge)` with impact tilt and cyan/white surge -> ember LED states; `house_lights`/`pools`/`frame` take `sec_light` for breaker strobe and blackout. `mansion_brain.andrei_timings(cause)` splits misfire vs player-shot deaths; `trigger_andrei_death(cause, hit_zone, hit_pos, hit_ray)` records the shot, and `_andrei_update` gates idle->intro on interior bounds + `los3d`, fires ceiling-misfire dust/pistol cue, spawns electrical smoke, trips the breaker at zap time and plays a collapse thud. `mansion3d` adds `andrei_timings`-keyed `_andrei_death_anim`, conditional gore/char patches, deterministic jagged 3D lightning arcs, blood spray/pool decals, room strobe lights, and a ballistic cash burst (7 tumbling bricks + 44 air-dragged fluttering notes, pre-warmed and cached when settled) clamped to the room and landing on desks/floor/body. Audio gains `m8_elec_arc`, `m8_breaker_pop`, `m8_pistol_shot` and a `body_fall` cue. Visual follow-up: the security-room floor uses real `tex("concrete", like=(72,76,80), tint=True)` at `GF+0.012` (the old `W7._t` key fell back to flat blue-grey), with `marble_refl=0` indoors / `0.34` in the hall and indoor `height_fog` off for cp 1-3; conduit moved above the monitor bank, doorway headers and a `BACK_Z` threshold plate added, and solid desk blocks replaced by `_office_desk` (tabletop + steel legs + modesty panel) with baseboard skirting; at cp >= 2 Andrei starts pre-settled (`state="done"`, `dead_t=-99`, flags set) so he no longer replays his death from t=0. Ground-floor layering follow-up: every layer-2 plinth/wall/wing base/column/stair/foundation starts at `gf_top = GF + 0.01` instead of dipping below it, and the portico steps, cottage foundations and tree trunks no longer sink under ground level. Final depth fix: ground-floor marble tiles and the security-room concrete slab now use layer 2 (matching the first floor and terrace) so hardware Z-depth hides exterior walls/wings/estate props behind the walls; blob shadows stay visible via `shadow=(2, -0.35)` on every `_w.actor` call and explicit `r.add_blob_shadow` for living enemies. Regression: `tests/unit/test_m8_duty_mansion.py`.
+- Andrei hitscan room-entry guard (2026-11-19): fixed stray rounds killing Andrei before the player enters the security room. `mansion_brain.in_security_room(x, y, z)` is now the single interior-bounds test (x -12.5..-3.75, z 26.25..35.5, |y-GF|<0.6), reused by `_andrei_update`'s idle->intro gating and by `mansion3d._fire`'s `can_hit_andrei` (intro always hittable, idle only while the player stands inside the room), so OS-12/Fallow rounds crossing the Grand Hall or the open 2 m doorway at `BACK_Z` (x -7..-5) can no longer trigger `trigger_andrei_death(cause="player")` early. `_fire` seeds `andrei_zone`/`andrei_end`/`andrei_dd` up front instead of `locals().get(...)`, so the chosen hit zone/pos/ray are well defined. `mansion_world._static` adds the missing colliders for the doorway lintels at `BACK_Z` (x -7..-5 and 5..7, y GF+2.8..SLAB_Y0) that `mansion_set` already renders. Regression: `tests/unit/test_m8_duty_mansion.py::test_andrei_cannot_be_shot_while_idle_from_outside_room`.
+- Andrei death / blood / pistol polish (2026-11-20): three 3D M8 Duty fixes, no gameplay-rule change.
+  - `mansion_brain.andrei_timings("player")` = `(1.50, 2.95, 3.55, 4.15)` (was 0.65 s hit_s, ~5.77 m/s average over `ANDREI_RACK_DX = -3.75`); `trigger_andrei_death` also records `shot_yaw` (his yaw at the shot), `had_gun` (true only from `intro`) and `shot_pos`.
+  - `mansion3d._andrei_death_anim(age, cause, hit_zone, shot_yaw, had_gun)` turns `shot_yaw -> 90.0` over 0.40 s with `R._wrap`, and the player-shot backpedal is one impact jolt (u < 0.14) followed by a 4-stride stumble curve (u >= 0.14) - no double ease. At exactly `hit_s` the shared pinned-rack shake takes over (+-0.025 m jitter).
+  - Blood/char decals are flush multi-layer meshes authored in humanoid S-space (`by_slot[1]`, `fz` 0.142/0.152 by `spec["vest"]`) and H-space (`by_slot[2]`, new `_head_wound_mesh`), placed from `hum.pose_world()` + root translation so they respect `body_r` when he tips onto his side; the old `joints["chest"]`-anchored boxes floated 6 cm in front / buried in his back and the head drew a 0.14 m red cube. `_torso_basis_from_joints` is no longer used for Andrei.
+  - `_spawn_blood_spray` emits tight shrinking `PKIND_DEBRIS` drops + `PKIND_DUST` specks (not expanding 0.06->0.18 m clouds) for Andrei shots and every lethal enemy hit from `mansion3d._fire`. `gl_sprites._DECAL_FRAG` sharpens `DKIND_BLOOD` with an organic wobble/meniscus and a darker pooled centre (crisp edge, no bright outer rim). `_draw_fx` hides sprite-path blood impacts when GPU decals/particles handle them. Multi-lobe floor blood (`_draw_wrecks`) spawns at the shot, stumble and resting spots only for `cause == "player"` - misfire/electrocution no longer draws a gunshot puddle.
+  - `mansion_set.pistol_mesh()` loads `content/meshes/pistol.mesh.json` via `load_mesh_asset("pistol")` (cached in `_prop_cache`) with a detailed 8-box `_fallback_pistol()`; intro uses `R._held(..., "pistol", "pistol_aim", ("andrei_pistol", "aim"))` (braced hold, prewarmed in `_warm`), misfire aligns the gun to forearm slot 12, and `_dropped_pistol_xform()` drops it ballistically from the hand to rest on `GF + 0.032` where it stays put (no slide with `pos[0]`, no concrete penetration).
+  - Regression: `tests/unit/test_m8_duty_mansion.py::test_andrei_player_shot_timing_pistol_mesh_and_anim`. Verified: compileall, normalize, `test_m8_duty_mansion`+`test_gl_composite` 13/13, smoke `m8` and `mission8_duty,engine3d` OK. **Test deviation:** the supplied `assertAlmostEqual(off2[0], ANDREI_RACK_DX, places=3)` at `age == hit_s` fails by 0.0077 m because the pinned shake owns that frame; changed to a 0.03 m tolerance with a comment.
+- M8 Duty study door-kick + estate furniture (2026-11-20): new `duty/mansion_props.py` (dependency-light except `cutscenes.m7world3d._t`/`engine3d`) owns all cached architectural meshes: `study_door_angles` (asymmetric hinge curve with elastic rebound), `study_door_surround`, `study_door_leaf`, `front_doors_mesh`, `terrace_doors_mesh`, `interior_doorway_trim`, and the mahogany/velvet/steel furniture family (`dining_chair`, `banquet_table`, `sideboard`, `office_swivel_chair`, `executive_chair`, `study_desk`, `bookshelf_bay`, `four_poster_bed`, `nightstand`, `wardrobe`, `bed_bench`, `wingback_armchair`, `round_side_table`, `hall_console_table`, `armoury_rack`, `armoury_bench`). `mansion3d`: `[E]` on the study door now starts a `KICK_DUR=0.78 s` breach instead of instantly opening it - `self.study_kick_t`/`_kick_opened`/`_kick_p0`/`_kick_yaw0` state, `_step_study_kick` aligns to the threshold and eases yaw, fires at `KICK_HIT_S=0.25`, opens the doors + camera punch + wave 5 + `m8_door_kick`, and locks movement/fire/reload/swap/input until `KICK_LOCK_S=0.54`; `_door_kick_pose` tucks the held OS-12/Fallow 12 through `R._wall_down_hold` and blends chamber -> strike -> follow poses; `camera()` adds a fov punch, `draw()` feeds `study_open_u` so the leaves swing on their hinges, and debris bounces on `world.surface_y` instead of a flat y=0.06. `mansion_set` drops the old flat door meshes, imports `MP`, bakes the new doors/surrounds/trims and all room furniture, and `draw_dynamic_props(..., study_open_u=)` draws the animated leaves (`_dyn` mid-swing, resident at the endpoints). `mansion_world._static` gains matching colliders for the new tables/chairs/shelves/racks/consoles, clear of wave paths. `m8_audio` adds `m8_door_kick` (SINGLES + `_door_kick` + `M8Audio.door_kick`). Regression: `tests/unit/test_m8_duty_mansion.py::test_study_door_kick_animation_doors_and_furniture`. **Two fixes to the supplied code:** `MP.round_side_table()` returned the stale cache miss (`got`, i.e. `None`) instead of `m`, crashing `_bedroom` on `Mesh.add(None, ...)` - now `return m`; the supplied test called `sc.update()` on a scene whose `_active` was still False from `__init__`, so the kick never advanced - the test now sets `sc._active = True` (and drops the unused `keys = {101: True}` line).
+- Presidential portrait (2026-11-20): `duty/mansion_props.president_portrait(w, h, paint)` replaces the stretched 4-box `_portrait()` across the whole estate (Grand Hall side walls and portraits, Dining Room, Study, Bedroom). Cached by `(w, h, paint)`, it is a **flat 2D photograph in a real 3D frame**: a 4.2 cm gilt frame (backing plate, four rails, inner lip) around a coplanar canvas at `z=-0.028`. The image is composited once at bake time by `_render_president_photo` onto a `pw x 96` pygame Surface (`pw = max(56, round(96*w/h))` - the true w/h aspect, no `scale()` mangling of a 64x64 3D render): a studio backdrop lifted from the wall `paint` (base/lit bands plus three concentric warm halo circles behind the head) with crimson drapes and gold piping on wide canvases `w > 1.12*h`, and the canonical house portrait `engine.anim.figure_kit.draw_character(canvas, "president", cx, foot_y, scale=avail_h/188, facing_right=True, t=0, look=0)` framed from hair crest to below the 3rd gold button. This is the SAME 2D `SPECS` look as the 2D cutscenes and 3D rigs (verified by `tools/sprites/portrait_refs.py`); the lit backdrop survives `Obj`'s indoor `light.shade()` so the suit and backdrop stay distinct. Replaced the old 3D-bust/chroma-key render (2026-11-20), which squashed the head at non-square aspects, chewed up the eyes/suit when scaled, and mudded dark-on-dark indoors. `_draw_seal_2d` blits the baked `art.m5.presidential_crest` (or a procedural fallback) in the upper-left; `_draw_pixel_text` draws `S. RETARDOVICI` (canonical name from `en.json` / `m5mid3d.s_retardovici`) in a 3x5 block font on a riveted brass strip along the bottom edge. `_merge_rects` (q=8 greedy run merge, same idea as `m5decal.py`) turns the canvas into flat coplanar `m.face` quads - zero side depth, no z-fighting, zero per-frame cost. `mansion_set._portrait()` still just adds the mesh with `rot_y(0)` for `face=-1` (mesh faces -Z) or `rot_y(180)` for `face=+1`, at the supplied world position; the framed canvas stays inside `w+0.16` even on the 2.2 m state canvases. **Two fixes to the supplied code:** the canvas quads were wound for a `+Z` normal (facing into the wall): with `py1 < py0` and `px0 < px1`, `(b-a) x (c-a) = (0, 0, +W*H)`, so with `double=False` BOTH renderers backface-cull 100% of the painted surface and only the empty gilt/backing boxes survive. The quad point order is `[(px0,py1), (px0,py0), (px1,py0), (px1,py1)]` to match `box()`'s `-Z` front face (also restores the correct baked shading). Placement fix (2026-11-20): the Grand Hall back-wall portraits moved from `x=+/-2.6` to `+/-4.1` — at 2.6 they were buried inside the solid top steps of the grand staircase (`STAIR_X=3.0`, z 18..26); at 4.1 they sit on the open back-wall piers between the balustrades and the doorways at `+/-6.0`. Regression `tests/unit/test_m8_duty_mansion.py::test_study_door_kick_animation_doors_and_furniture` now asserts every `z=-0.028` canvas quad has a `-Z` normal and that a -Z camera renders non-background centre pixels. Regression: `tests/unit/test_m8_duty_mansion.py` asserts a wide portrait builds >180 faces, spans <=`w+0.18` across and <=0.06 m of Z depth; a headless software render from -Z confirms the full canvas paints (200/200 centre-band pixels non-background) with the 2D figure, crest, drapes and nameplate all legible.
+- M8 Mansion 3D nav/fragment perf pass (2026-11-19): killed the per-frame A* and SSR overdraw. `engine/collision/nav.MultiFloorNav` now caches string-pulled waypoints in `_pulled_cache` (keyed on the same `(s, g, _dyn_ver)` as `_cache`, bounded by `_cache_size`), caches static neighbour geometry in `_nbr_cache`/`_static_neighbors` (`_layer_step_raw` split from the blocked-aware `_layer_step`), and rasterises dynamic boxes/circles once per `_dyn_ver` into a `_blocked` bytearray via `_sync_blocked()` instead of linearly scanning boxes per expanded node; all three caches invalidate in `set_dynamic_boxes`, `set_dynamic_circles` and `add_link`. `gl_post._ATMOS_FRAG` skips the 12-step SSR raymarch + specular when `refl_w <= 0.08`. `duty/mansion3d` prewarms guard holds, car/chandelier meshes and the ~12k-cell `world.nav()` in `_warm()` (built at load, not mid-combat), prints warm tracebacks, gates `r.marble_refl` on being inside on the ground floor (0.34 there, 0.0 outside/upper floors) and reuses one `_OneEnemy` stand-in in `_draw_enemies`. `duty/mansion_brain` throttles `nav().path()` behind `nav_at` cooldowns + goal-change checks in `_steer`/`_walk_ally` (enemy repaths jitter by slot), skips nav entirely across locked doors via `door_locked`, and clamps the cp-0 ally follow point to `MS.GATE_Z + 1.2` so `los3d` succeeds instead of forcing a nav every frame. `duty/mansion_world` caches `_dyn_box_aabbs` in `_sync_cache` and reuses it in `ragdoll_boxes()`, `nav()` and `move()`; it also adds BoxWorld acceleration - a module-level `_LOS_STATIC_BW` over `_LOS_STATIC` makes `los3d()` reject static blockers via `segment_blocked(..., slack=0.0)` before the short dyn-box loop, and short `ray_hit()` probes (`best <= 12.0`) use `_STATIC_BW.ray()` plus a dyn-box loop. **Known edge case (owner opted to keep verbatim):** `BoxWorld.ray()` returns the first hit, which can be `t=0` when the ray origin starts inside a box; the `1e-4 < hit[0]` guard then drops it without checking the next-nearest box, so a short downward probe can return a farther hit than the legacy full scan (44/1323 realistic eye-height probes differed, e.g. (-12, 2.25, 26) fast 4.27 vs legacy 1.80). `los3d()` itself is behaviourally identical (0/2000 random probes). `duty/mansion_set` adds `money_bundle(count, detail=True)` so baked pallets use the procedural fallback (~18k fewer tris), reduces the grass quad from seg 10 to 40, bakes `_shell`/`_interior`/`_terrace` before `_grounds` for Early-Z, and culls `house_lights`/`pools` to the 6/10 nearest via `near=` from `frame()`'s `tgt`. No public API or call-chain removals; nav unit tests, `test_m8_duty_mansion`, `test_gl_composite`, `engine3d_check` (4.14%) and smoke `mission8_duty,engine3d` all green. Re-verified after the `_LOS_STATIC_BW`/`ray_hit` hunks: compileall/normalize OK, m8 duty unit 6/6, smoke `mission8_duty,engine3d` OK.
+- 3D culling rollout (2026-11-19): 2D (`engine/render2d`) untouched; `r.frustum_cull = False` opts out. `engine3d/core.SoftwareRenderer` gains `frustum_cull`, `visible_frustum(...)`/`visible_ortho(...)` (basis-parameterised `visible_sphere`) and sphere culling on blob shadows, sprites and lines. `engine3d/gl.GLRenderer` splits baked `Obj`s larger than 32 m / 48 faces into stable-sorted 32 m XZ face slices with per-slice bounds, and culls them per pass in `_visible_static_runs()` (main perspective, sun ortho box, spot frustum) via `_pass_cull_fn()`; resident chunks are culled per pass and kept in a 128-entry `OrderedDict` LRU, rigs/dyn batches/sprites/lines/lights/pools all cull before GPU submission and report `culled_*` in `stats`. `cutscenes/m6world3d.pack_memo_end()` now splits the live memo into 24 m XZ chunks so GL `add_resident` culls each chunk. `duty/mansion_set._build()` bakes shell, hall, each room, terrace, estate grounds and `ENV.bake_surroundings()` separately (Early-Z order preserved); chandelier packs/sprites cull. `mansion3d`/`raid3d`/`yard3d` skip off-screen settled ragdolls, Andrei, cash piles, scorches, car fire/smoke, Volkov and the pig. **Owner-approved deviation from the verbatim patch:** `GLRenderer.add_resident()`'s LRU `live` set is `{id(e[0]) for e in self._res_draw} | {key}`. Without the `| {key}`, a frame queueing more than 128 memo chunks (M6 yard queues 196) evicts and releases the VAO just created (it is appended to `_res_draw` only after the eviction loop) and then queues the released VAO, hard-crashing the yard with `AttributeError: 'InvalidObject' ... render`. Fixed with owner approval; the 128-entry cap and the rest of the design are unchanged. Gates: normalize/compileall OK, `engine3d_check` parity 5.71% OK, `smoke --only mission6_vertical_slice,engine3d` OK, `ae_bench_scenes` all 9 scenes run, full `--fast` / unit discover / boundaries still show only the documented pre-existing reds.

@@ -103,7 +103,7 @@ ANDREI_ZAP_S = 2.6        # the rack lets go of him
 
 def andrei_timings(cause="misfire"):
     if cause == "player":
-        return (0.65, 2.10, 2.70, 3.30)
+        return (1.50, 2.95, 3.55, 4.15)
     return (ANDREI_HIT_S, ANDREI_ZAP_S, 3.20, 3.80)
 
 
@@ -144,6 +144,7 @@ class Brain:
             breaker_popped=done_init, collapse_snd=done_init,
             smoke_at=9e9 if done_init else -9.0, banter=3 if done_init else 0,
             cause="misfire", hit_zone="chest", hit_pos=None, hit_ray=None,
+            shot_yaw=90.0, had_gun=False, shot_pos=None,
         )
 
     def add(self, kind, x, z, route, delay, wave, y=0.0, perch=False):
@@ -224,6 +225,7 @@ class Brain:
         a = self.andrei
         if a["state"] in ("dying", "done"):
             return False
+        prev_state = a["state"]
         a["state"] = "dying"
         a["hp"] = 0.0
         a["dead_t"] = self.s.t
@@ -231,6 +233,9 @@ class Brain:
         a["hit_zone"] = hit_zone
         a["hit_pos"] = hit_pos
         a["hit_ray"] = hit_ray
+        a["shot_yaw"] = a["yaw"]
+        a["had_gun"] = (prev_state == "intro")
+        a["shot_pos"] = (a["x"], a["y"], a["z"])
         if cause == "player":
             a["shot_fired"] = True
             self.s.on_andrei_shot(a)
@@ -521,9 +526,6 @@ class Brain:
                 self.s.say("ANDREI M.", "Stop! Nobody touches the President's servers - I have admin privileges!", 2.2)
         elif a["state"] == "intro":
             a["yaw"] = _yaw(self.s.px - a["x"], self.s.pz - a["z"])
-            if now - a["intro_t"] >= 2.2 and a["banter"] == 0:
-                a["banter"] = -1
-                self.s.say("ANDREI M.", "And a gun! I have a gun! I have never fired it, but -", 1.9)
             if now - a["intro_t"] >= 3.9:
                 self.trigger_andrei_death(cause="misfire")
         elif a["state"] in ("dying", "done"):

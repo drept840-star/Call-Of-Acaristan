@@ -36,6 +36,7 @@ from entities.weapons import (
 )
 from fx import effects
 from core.camera import update_camera, reset_camera_state, collide_bullet_walls, draw_bullets
+from cutscenes import m2route12_3d as _m2route12_3d  # noqa: F401  registers M2 3D cutscene takes
 
 # ─────────────────────────────────────────────
 # Public mission metadata / cutscene lists

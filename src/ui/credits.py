@@ -14,7 +14,7 @@ from core.config import (
 )
 from core.state import STATE
 from engine.text import T as _T
-from engine.text.layout import wrap_lines
+from engine.text import wrap_lines
 from ui import kit
 from ui.credits_football import (
     _FootballScene,

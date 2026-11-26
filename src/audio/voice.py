@@ -30,6 +30,8 @@ import os
 import random
 import re
 import struct
+import sys
+import tempfile
 
 import pygame
 from audio import mixlock as _mixlock  # GIL-free pause/resume (alt-tab deadlock)
@@ -171,9 +173,10 @@ def _scan_files():
     if not os.path.isdir(root):
         return
     unnamed = {}          # speaker folder (upper) -> [paths]
+    _skip_dirs = {"_radio_cache", "_RETAKES", "TRAILER", "ANNOUNCE_25D"}
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d != "_radio_cache")
-        if os.path.basename(dirpath) == "_radio_cache":
+        dirnames[:] = sorted(d for d in dirnames if d not in _skip_dirs)
+        if os.path.basename(dirpath) in _skip_dirs:
             continue
         recordings = {}
         for fn in sorted(filenames):
@@ -227,26 +230,27 @@ def _scan_files():
         print(f"[voice] {folder}: {len(paths)} files -> {len(pairs)} of {len(free)} "
               f"lines matched; {len(extra)} extra file(s), {len(missing)} line(s) "
               f"without audio - see {folder.lower()}_matches.txt")
-        try:
-            by_line = dict(pairs)
-            dmap = dict(zip(paths, durs))
-            with open(os.path.join(root, f"{folder.lower()}_matches.txt"), "w",
-                      encoding="utf-8") as fh:
-                fh.write("LINE\tFILE\tSECONDS\tTEXT\n")
-                for vo_id in free:
-                    pth = by_line.get(vo_id)
-                    if pth:
-                        fh.write(f"{vo_id}\t{os.path.basename(pth)}\t"
-                                 f"{dmap.get(pth) or 0:.1f}\t{texts.get(vo_id, '')}\n")
-                    else:
-                        fh.write(f"{vo_id}\t(NO AUDIO - record & name it {vo_id}.wav)"
-                                 f"\t\t{texts.get(vo_id, '')}\n")
-                if extra:
-                    fh.write("\nEXTRA FILES (not used - retakes/duplicates?):\n")
-                    for pth in extra:
-                        fh.write(f"\t{os.path.basename(pth)}\t{dmap.get(pth) or 0:.1f}\n")
-        except OSError:
-            pass
+        if not getattr(sys, "frozen", False):
+            try:
+                by_line = dict(pairs)
+                dmap = dict(zip(paths, durs))
+                with open(os.path.join(root, f"{folder.lower()}_matches.txt"), "w",
+                          encoding="utf-8") as fh:
+                    fh.write("LINE\tFILE\tSECONDS\tTEXT\n")
+                    for vo_id in free:
+                        pth = by_line.get(vo_id)
+                        if pth:
+                            fh.write(f"{vo_id}\t{os.path.basename(pth)}\t"
+                                     f"{dmap.get(pth) or 0:.1f}\t{texts.get(vo_id, '')}\n")
+                        else:
+                            fh.write(f"{vo_id}\t(NO AUDIO - record & name it {vo_id}.wav)"
+                                     f"\t\t{texts.get(vo_id, '')}\n")
+                    if extra:
+                        fh.write("\nEXTRA FILES (not used - retakes/duplicates?):\n")
+                        for pth in extra:
+                            fh.write(f"\t{os.path.basename(pth)}\t{dmap.get(pth) or 0:.1f}\n")
+            except OSError:
+                pass
 
 
 def _ogg_frames(path):
@@ -374,6 +378,15 @@ def has_file(vo_id):
     return vo_id in _files
 
 
+def warm():
+    """Build the manifest lookup and scan ``assets/voice/`` up front so the
+    first spoken/radio line triggered mid-combat never stalls on disk I/O."""
+    if _index is None:
+        _build_index()
+    if _files is None:
+        _scan_files()
+
+
 # ─────────────────────────────────────────────
 # Radio chain (pure Python on the mixer's own sample format)
 # ─────────────────────────────────────────────
@@ -488,21 +501,31 @@ def _load(vo_id, radio):
                 digest = hashlib.sha256(raw)
                 digest.update(repr((rate, size, chans, RADIO_SQUELCH_IN_S,
                                     RADIO_SQUELCH_OUT_S)).encode("ascii"))
+                fname = vo_id + "_" + digest.hexdigest()[:16] + ".wav"
                 cdir = os.path.join(_voice_dir(), "_radio_cache")
-                cpath = os.path.join(cdir, vo_id + "_" + digest.hexdigest()[:16] + ".wav")
+                user_cdir = os.path.join(
+                    os.environ.get("LOCALAPPDATA") or tempfile.gettempdir(),
+                    "CallOfAcaristan", "radio_cache",
+                )
+                cpath = os.path.join(cdir, fname)
+                user_cpath = os.path.join(user_cdir, fname)
                 if os.path.exists(cpath):
                     snd = _load_sound(cpath)
+                elif os.path.exists(user_cpath):
+                    snd = _load_sound(user_cpath)
                 else:
                     wav = _wav_bytes(_radio_samples(raw, rate, chans,
                                                     seed=_radio_seed(vo_id)),
                                      rate, chans)
                     snd = _load_sound(io.BytesIO(wav))
-                    try:
-                        os.makedirs(cdir, exist_ok=True)
-                        with open(cpath, "wb") as fh:
-                            fh.write(wav)
-                    except OSError:
-                        pass    # read-only install: keep the in-memory copy
+                    for target_dir, target_path in ((cdir, cpath), (user_cdir, user_cpath)):
+                        try:
+                            os.makedirs(target_dir, exist_ok=True)
+                            with open(target_path, "wb") as fh:
+                                fh.write(wav)
+                            break
+                        except OSError:
+                            continue
     except Exception as exc:
         print(f"[voice] could not load {vo_id}: {exc}")
         snd = None
@@ -681,7 +704,11 @@ def pause():
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
-                _mixlock.pause(ch.id)
+                cid = getattr(ch, "id", None)
+                if cid is not None:
+                    _mixlock.pause(cid)
+                elif hasattr(ch, "pause"):
+                    ch.pause()
             except Exception:
                 pass
 
@@ -694,7 +721,11 @@ def resume():
     for ch in [_channel] + _extra:
         if ch is not None:
             try:
-                _mixlock.resume(ch.id)
+                cid = getattr(ch, "id", None)
+                if cid is not None:
+                    _mixlock.resume(cid)
+                elif hasattr(ch, "unpause"):
+                    ch.unpause()
             except Exception:
                 pass
 

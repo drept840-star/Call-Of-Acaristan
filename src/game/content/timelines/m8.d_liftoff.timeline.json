@@ -7,22 +7,59 @@
    "speaker": "BIRIBEL",
    "text": "He's in the air!",
    "min_ms": 4000,
+   "hard_cut_in": true,
+   "hard_cut": true,
    "auto_advance": true,
    "cues": [
     [
-     200,
+     160,
      "footstep",
-     0.16
+     0.18
     ],
     [
-     500,
+     440,
      "footstep",
-     0.16
+     0.18
+    ],
+    [
+     720,
+     "footstep",
+     0.18
     ],
     [
      900,
      "wind_gust",
+     0.34
+    ],
+    [
+     1020,
+     "footstep",
+     0.18
+    ],
+    [
+     1340,
+     "footstep",
+     0.16
+    ],
+    [
+     2350,
+     "m8_rifle_1",
+     0.42
+    ],
+    [
+     2520,
+     "m8_rifle_2",
+     0.42
+    ],
+    [
+     2560,
+     "m8_ric_1",
      0.3
+    ],
+    [
+     2690,
+     "m8_rifle_3",
+     0.4
     ]
    ]
   },
@@ -30,6 +67,7 @@
    "scene": "m8d_liftoff_window",
    "speaker": "RETARDOVICI",
    "text": "You can have the house, Biribel. I'll have the country back by Monday.",
+   "hard_cut": true,
    "min_ms": 4600,
    "cues": [
     [
@@ -45,17 +83,60 @@
    "text": "Biribel - starboard door's open! Jump!",
    "radio": true,
    "min_ms": 4600,
+   "full_frame": true,
+   "self_graded": true,
+   "cut_to_play": true,
    "auto_advance": true,
    "cues": [
     [
      200,
      "squelch_head",
-     0.22
+     0.24
     ],
     [
-     1400,
-     "m8_cloth_2",
+     700,
+     "footstep",
      0.18
+    ],
+    [
+     1020,
+     "footstep",
+     0.18
+    ],
+    [
+     1340,
+     "footstep",
+     0.18
+    ],
+    [
+     1660,
+     "footstep",
+     0.18
+    ],
+    [
+     1980,
+     "footstep",
+     0.18
+    ],
+    [
+     2360,
+     "m8_cloth_2",
+     0.26
+    ],
+    [
+     2600,
+     "wind_gust",
+     0.34
+    ],
+    [
+     3340,
+     "m8_fall_light",
+     0.36
+    ],
+    [
+     3760,
+     "rifle_handle",
+     0.34
     ]
    ]
   }

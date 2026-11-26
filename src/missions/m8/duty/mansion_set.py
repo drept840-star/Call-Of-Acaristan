@@ -30,6 +30,7 @@ from game import scenery3d as SC
 from missions.m8.revenge import epilogue3d as E
 
 from . import mansion_env as ENV
+from . import mansion_props as MP
 
 RES = (640, 448)
 LOOK = W7.LOOKS["night"]
@@ -143,8 +144,14 @@ def _fallback_crate():
 
 def _fallback_pistol():
     m = Mesh()
-    m.add(box(0.03, 0.09, 0.10, (32, 34, 38), center=(0.0, -0.04, 0.0)))
-    m.add(box(0.03, 0.04, 0.22, (44, 48, 54), center=(0.0, 0.02, 0.07)))
+    m.add(box(0.030, 0.105, 0.042, (36, 36, 39)), m=rot_x(-14), t=(0.0, -0.040, -0.004))
+    m.add(box(0.032, 0.032, 0.17, (60, 60, 62), center=(0.0, 0.018, 0.075)))
+    m.add(box(0.036, 0.030, 0.19, (53, 53, 56), center=(0.0, 0.048, 0.080)))
+    m.add(box(0.038, 0.006, 0.19, (13, 13, 13), center=(0.0, 0.034, 0.080)))
+    m.add(box(0.014, 0.014, 0.02, (97, 97, 99), center=(0.0, 0.046, 0.180)))
+    m.add(box(0.008, 0.008, 0.004, (14, 14, 16), center=(0.0, 0.046, 0.191)))
+    m.add(box(0.014, 0.012, 0.012, (237, 237, 231), center=(0.0, 0.070, 0.020)))
+    m.add(box(0.006, 0.020, 0.040, (60, 60, 62), center=(0.0, -0.012, 0.050)))
     return m
 
 
@@ -229,7 +236,23 @@ def _crate_parts():
 
 def pistol_mesh():
     """Andrei's sidearm (an enemy prop; Biribel never carries it)."""
-    return _fallback_pistol()
+    got = _prop_cache.get("pistol")
+    if got is not None:
+        return got
+    m = None
+    try:
+        from game.render3d_bridge import load_mesh_asset
+        verts, faces = load_mesh_asset("pistol")
+        if verts and faces:
+            m = Mesh()
+            m.verts = [tuple(float(c) for c in v) for v in verts]
+            m.faces = [(tuple(f[0]), tuple(f[1]), 2, True, False) for f in faces]
+    except Exception:
+        m = None
+    if m is None:
+        m = _fallback_pistol()
+    _prop_cache["pistol"] = m
+    return m
 
 
 def car_mesh(paint, burned=False):
@@ -321,10 +344,7 @@ def _sec_inner_window_x(m, x, y, z, face):
 
 def _portrait(m, x, y, z, face, w=1.3, h=1.7, paint=(70, 52, 40)):
     """A gilt-framed portrait on a wall facing +z (face=1) or -z (face=-1)."""
-    m.add(box(w + 0.16, h + 0.16, 0.06, GOLD, center=(x, y, z + 0.03 * face)))
-    m.add(box(w, h, 0.03, paint, center=(x, y, z + 0.07 * face)))
-    m.add(box(w * 0.42, h * 0.36, 0.02, (186, 150, 120), center=(x, y + h * 0.18, z + 0.09 * face)))
-    m.add(box(w * 0.7, h * 0.36, 0.02, (36, 40, 56), center=(x, y - h * 0.2, z + 0.09 * face)))
+    m.add(MP.president_portrait(w, h, paint), rot_y(0.0 if face < 0 else 180.0), (x, y, z))
 
 
 def _banner(m, x, y, z, face):
@@ -353,6 +373,26 @@ def _balustrade(m, x0, z0, x1, z1, y, col=TRIM):
     m.add(box(w, 0.1, d, col, center=(cx, y + 0.06, cz)))
 
 
+def _sloped_wedge(x0, x1, z0, z1, y_bot, y_top0, y_top1, col, layer=2):
+    """Axis-aligned 6-sided wedge with a sloped top face from (z0, y_top0) to (z1, y_top1)."""
+    m = Mesh()
+    p000 = (x0, y_bot, z0)
+    p100 = (x1, y_bot, z0)
+    p001 = (x0, y_bot, z1)
+    p101 = (x1, y_bot, z1)
+    p010 = (x0, y_top0, z0)
+    p110 = (x1, y_top0, z0)
+    p011 = (x0, y_top1, z1)
+    p111 = (x1, y_top1, z1)
+    m.face([p000, p001, p011, p010], col, layer=layer)
+    m.face([p100, p110, p111, p101], col, layer=layer)
+    m.face([p010, p011, p111, p110], col, layer=layer)
+    m.face([p000, p100, p101, p001], col, layer=layer)
+    m.face([p000, p010, p110, p100], col, layer=layer)
+    m.face([p001, p101, p111, p011], col, layer=layer)
+    return m
+
+
 def _checker(m, x0, z0, x1, z1, y, a, b, cell=2.0, layer=1):
     nx, nz = int(round((x1 - x0) / cell)), int(round((z1 - z0) / cell))
     for ix in range(nx):
@@ -365,9 +405,9 @@ def _checker(m, x0, z0, x1, z1, y, a, b, cell=2.0, layer=1):
 # --- the grounds -------------------------------------------------------------------
 
 def _grounds_estate(m):
-    stone = W7._t("stone", STONE)
+    stone = tex("ashlar", like=STONE, tint=True)
     gravel = W7._t("gravel", (92, 90, 86), tint=True)
-    kerb = W7._t("stone", (112, 108, 102))
+    kerb = tex("ashlar", like=(112, 108, 102), tint=True)
     m.add(quad_xz(-80, -70, 80, 90, 0.0, W7._t("grass", (52, 68, 44)), layer=0, seg=40.0))
     m.add(quad_xz(-2.4, GATE_Z - 4.0, 2.4, -16.5, 0.03, gravel, layer=1, seg=4.0))
     m.add(quad_xz(-14.0, -16.5, 14.0, 0.0, 0.03, gravel, layer=1, seg=4.0))
@@ -383,7 +423,7 @@ def _grounds_estate(m):
     m.add(disc_xz(fx, fz, 3.0, 0.05, stone, n=16))
     m.add(box(5.0, 0.7, 5.0, stone, center=(fx, 0.35, fz)))
     m.add(box(4.4, 0.1, 4.4, (38, 74, 96), center=(fx, 0.66, fz)))
-    m.add(box(0.8, 1.9, 0.8, W7._t("plaster", TRIM), center=(fx, 1.15, fz)))
+    m.add(box(0.8, 1.9, 0.8, tex("stucco", like=TRIM, tint=True), center=(fx, 1.15, fz)))
     m.add(box(2.0, 0.2, 2.0, stone, center=(fx, 2.1, fz)))
     m.add(box(0.5, 0.9, 0.5, TRIM, center=(fx, 2.65, fz)))
     # hedges, poplars, trees, lamps (the funeral grounds' plan)
@@ -396,7 +436,7 @@ def _grounds_estate(m):
         for k in range(4):
             m.add(W7.tree(k + (s > 0) * 5), t=(s * (27.0 + 3.0 * (k % 2)), 0.0, -12.0 + 14.0 * k))
         for k in range(3):
-            m.add(W7._poplar(20 + k + (s > 0) * 3, 11.0), t=(s * 15.0, 0.0, 40.0 + k * 6.0))
+            m.add(W7._poplar(20 + k + (s > 0) * 3, 11.0), t=(s * 26.5, 0.0, 40.5 + k * 6.0))
     for x, z in LAMPS:
         _lamp_post(m, x, z)
     # gate piers, open iron gates, the low wall
@@ -426,10 +466,10 @@ def _grounds(m):
 # --- the house -----------------------------------------------------------------------
 
 def _shell(m):
-    stone = W7._t("stone", STONE)
-    plaster = W7._t("plaster", PLASTER)
+    stone = tex("ashlar", like=STONE, tint=True)
+    plaster = tex("stucco", like=PLASTER, tint=True)
     tile = W7._t("tile", (122, 60, 48))
-    trim = W7._t("plaster", TRIM)
+    trim = tex("stucco", like=TRIM, tint=True)
     mz = HZ / 2.0
     gf_top = GF + 0.01
     # plinth, walls (front split for the doorway), string course, cornice
@@ -509,8 +549,8 @@ def _shell(m):
 
 
 def _interior_hall(m):
-    stone = W7._t("stone", STONE)
-    plaster = W7._t("plaster", (214, 204, 182))
+    stone = tex("ashlar", like=STONE, tint=True)
+    plaster = tex("stucco", like=(214, 204, 182), tint=True)
     wood = W7._t("plank", (74, 44, 28))
     dark = W7._t("plank", (52, 30, 20))
     # smooth tinted slab: m7 cobbles smeared into crawling streaks at grazing angles
@@ -557,7 +597,7 @@ def _interior_hall(m):
     # hall columns and the side galleries they carry
     for cx, cz in COLUMNS:
         m.add(box(0.9, 0.4 - 0.01, 0.9, stone, center=(cx, (GF + 0.4 + gf_top) / 2.0, cz)))
-        m.add(box(0.7, CEIL - gf_top, 0.7, W7._t("plaster", TRIM), center=(cx, (CEIL + gf_top) / 2, cz)))
+        m.add(box(0.7, CEIL - gf_top, 0.7, tex("stucco", like=TRIM, tint=True), center=(cx, (CEIL + gf_top) / 2, cz)))
         m.add(box(0.9, 0.3, 0.9, GOLD, center=(cx, CEIL - 0.2, cz)))
     for s in (-1, 1):
         gx = s * (HALL_X + ix1) / 2.0
@@ -577,8 +617,8 @@ def _interior_hall(m):
     for x in (-6.0, 6.0):
         m.add(box(2.0, 0.4, WALL, GOLD, center=(x, GF + 3.0, BACK_Z)))
         m.add(box(2.0, FF - SLAB - (GF + 3.2), WALL, plaster, center=(x, (FF - SLAB + GF + 3.2) / 2, BACK_Z)))
-    _portrait(m, -2.6, GF + 2.3, BACK_Z - WALL / 2, -1, w=1.0, h=1.4)
-    _portrait(m, 2.6, GF + 2.3, BACK_Z - WALL / 2, -1, w=1.0, h=1.4)
+    _portrait(m, -4.1, GF + 2.3, BACK_Z - WALL / 2, -1, w=1.0, h=1.4)
+    _portrait(m, 4.1, GF + 2.3, BACK_Z - WALL / 2, -1, w=1.0, h=1.4)
     for s in (-1, 1):
         m.add(box(WALL, FF - SLAB - gf_top, iz1 - BACK_Z, plaster, center=(s * 3.5, (FF - SLAB + gf_top) / 2,
                                                                          (BACK_Z + iz1) / 2)))
@@ -591,39 +631,71 @@ def _interior_hall(m):
     n = 22
     dz = (STAIR_Z1 - STAIR_Z0) / n
     dy = (FF - GF) / n
+    m.add(_sloped_wedge(-STAIR_X, STAIR_X, STAIR_Z0, STAIR_Z1, gf_top, GF, FF - dy, marble_b))
     for i in range(n):
-        sz = STAIR_Z0 + (i + 0.5) * dz
-        sy = GF + (i + 0.5) * dy
-        m.add(box(2 * STAIR_X, sy - gf_top + dy * 0.5, dz + 0.02, marble_a if i % 2 else marble_b,
-                  center=(0.0, (sy + dy * 0.5 + gf_top) / 2, sz)))
-        m.add(box(3.4, 0.02, dz + 0.02, CARPET, center=(0.0, sy + dy * 0.5 + 0.012, sz)))
+        z0 = STAIR_Z0 + i * dz
+        zc = z0 + 0.5 * dz
+        y_bot = GF + i * dy
+        y_top = GF + (i + 1) * dy
+        riser_h = dy - 0.05
+        m.add(box(2 * STAIR_X, riser_h, dz, marble_b, center=(0.0, y_bot + 0.5 * riser_h, zc)))
+        m.add(box(2 * STAIR_X, 0.05, dz + 0.025, marble_a, center=(0.0, y_top - 0.025, zc - 0.0125)))
+        # continuous red-and-gold runner across risers and treads
+        m.add(box(3.2, dy - 0.020, 0.014, CARPET, center=(0.0, y_bot + 0.020 + 0.5 * (dy - 0.020), z0 - 0.028)))
+        m.add(box(3.2, 0.020, dz + 0.035, CARPET, center=(0.0, y_top + 0.010, zc - 0.0175)))
+        for s in (-1, 1):
+            m.add(box(0.30, dy - 0.020, 0.014, GOLD, center=(s * 1.75, y_bot + 0.020 + 0.5 * (dy - 0.020), z0 - 0.028)))
+            m.add(box(0.30, 0.020, dz + 0.035, GOLD, center=(s * 1.75, y_top + 0.010, zc - 0.0175)))
+    L = math.hypot(STAIR_Z1 - STAIR_Z0, FF - GF)
+    ang = math.degrees(math.atan2(FF - GF, STAIR_Z1 - STAIR_Z0))
+    mid_y = (GF + FF) / 2.0
+    mid_z = (STAIR_Z0 + STAIR_Z1) / 2.0
     for s in (-1, 1):
         x = s * (STAIR_X + 0.2)
-        steps = 10
-        for k in range(steps + 1):
+        wx0, wx1 = (STAIR_X, STAIR_X + 0.36) if s > 0 else (-(STAIR_X + 0.36), -STAIR_X)
+        m.add(_sloped_wedge(wx0, wx1, STAIR_Z0, STAIR_Z1, gf_top, GF + 0.05, FF + 0.05, plaster))
+        m.add(box(0.44, 0.16, L, TRIM), rot_x(-ang), (x, mid_y + 0.06, mid_z))
+        steps = 16
+        for k in range(1, steps):
             u = k / steps
             z = STAIR_Z0 + (STAIR_Z1 - STAIR_Z0) * u
             y = GF + (FF - GF) * u
-            m.add(box(0.16, 0.9, 0.16, TRIM, center=(x, y + 0.45, z)))
-        L = math.hypot(STAIR_Z1 - STAIR_Z0, FF - GF)
-        ang = math.degrees(math.atan2(FF - GF, STAIR_Z1 - STAIR_Z0))
-        from engine3d.core import rot_x
-        rail = box(0.24, 0.16, L, GOLD)
-        m.add(rail, rot_x(-ang), (x, (GF + FF) / 2 + 0.95, (STAIR_Z0 + STAIR_Z1) / 2))
-        m.add(box(0.4, 1.4 - 0.01, 0.4, stone, center=(x, (GF + 1.4 + gf_top) / 2.0, STAIR_Z0)))
-        m.add(box(0.5, 0.2, 0.5, GOLD, center=(x, GF + 1.5, STAIR_Z0)))
+            m.add(box(0.14, 0.84, 0.14, TRIM, center=(x, y + 0.48, z)))
+        rail = box(0.24, 0.14, L, GOLD)
+        m.add(rail, rot_x(-ang), (x, mid_y + 0.90, mid_z))
+        # bottom and top newel posts anchoring the stair rail to the hall and landing balustrade
+        m.add(box(0.42, 0.34, 0.42, stone, center=(x, gf_top + 0.17, STAIR_Z0)))
+        m.add(box(0.34, 0.90, 0.34, stone, center=(x, gf_top + 0.78, STAIR_Z0)))
+        m.add(box(0.44, 0.14, 0.44, GOLD, center=(x, GF + 1.28, STAIR_Z0)))
+        m.add(box(0.36, 1.23, 0.36, stone, center=(x, FF + 0.565, STAIR_Z1)))
+        m.add(box(0.44, 0.14, 0.44, GOLD, center=(x, FF + 1.22, STAIR_Z1)))
     # landing wall to the rooms, doors for armoury / study / bedroom
     for x0, x1 in ((ix0, -9.0), (-7.5, -1.2), (1.2, 7.5), (9.0, ix1)):
         m.add(box(x1 - x0, CEIL - FF, WALL, plaster, center=((x0 + x1) / 2, (CEIL + FF) / 2, ROOMS_Z)))
     for x0, x1 in ((-9.0, -7.5), (-1.2, 1.2), (7.5, 9.0)):
         m.add(box(x1 - x0, CEIL - FF - 2.8, WALL, plaster, center=((x0 + x1) / 2, (CEIL + FF + 2.8) / 2, ROOMS_Z)))
-    m.add(box(3.0, 0.5, 0.1, GOLD, center=(0.0, FF + 3.0, ROOMS_Z - 0.3)))
+    m.add(MP.study_door_surround(FF, ROOMS_Z, WALL))
+    m.add(MP.interior_doorway_trim(GF, BACK_Z, WALL, -6.0, 2.0, 2.8, ajar_dir=-1))
+    m.add(MP.interior_doorway_trim(GF, BACK_Z, WALL, 6.0, 2.0, 2.8, ajar_dir=1))
+    m.add(MP.interior_doorway_trim(FF, ROOMS_Z, WALL, -8.25, 1.5, 2.8, ajar_dir=-1))
+    m.add(MP.interior_doorway_trim(FF, ROOMS_Z, WALL, 8.25, 1.5, 2.8, ajar_dir=1))
     _banner(m, -4.6, FF + 2.0, ROOMS_Z - WALL / 2, -1)
     _banner(m, 4.6, FF + 2.0, ROOMS_Z - WALL / 2, -1)
     for s in (-1, 1):
         m.add(box(WALL, CEIL - FF, iz1 - ROOMS_Z, plaster, center=(s * 4.0, (CEIL + FF) / 2,
                                                                 (ROOMS_Z + iz1) / 2)))
     m.add(quad_xz(-4.0, ROOMS_Z, 4.0, iz1, FF + 0.012, (96, 22, 26), layer=2))
+    # grand hall wall consoles and flanking chairs under the side portraits
+    console = MP.hall_console_table()
+    hall_chair = MP.dining_chair()
+    for s in (-1, 1):
+        rot_in = rot_y(0.0 if s < 0 else 180.0)
+        rot_ch = rot_y(90.0 if s < 0 else -90.0)
+        for z in (7.0, 13.0, 19.0):
+            m.add(console, rot_in, (s * 12.18, GF + 0.01, z))
+            m.add(hall_chair, rot_ch, (s * 12.05, GF + 0.01, z - 1.55))
+            m.add(hall_chair, rot_ch, (s * 12.05, GF + 0.01, z + 1.55))
+        m.add(console, rot_y(90.0), (s * 4.8, FF + 0.01, ROOMS_Z - 0.52))
 
 
 def _interior(m):
@@ -779,6 +851,11 @@ def _security_room(m):
     # desks (north desk widened so all 3 workstations fit inside with clean margin)
     _office_desk(m, -8.5, 34.6, 4.8, 1.0, wood, (38, 42, 46))
     _office_desk(m, -10.9, 29.0, 0.9, 2.6, wood, (38, 42, 46))
+    # rolling swivel chairs tucked cleanly away from Andrei's z=31.2 backpedal lane
+    swivel = MP.office_swivel_chair()
+    m.add(swivel, rot_y(0.0), (-10.2, GF + 0.012, 33.78))
+    m.add(swivel, rot_y(0.0), (-6.8, GF + 0.012, 33.78))
+    m.add(swivel, rot_y(-90.0), (-10.12, GF + 0.012, 28.9))
     # interior trim for north & west exterior windows
     _sec_inner_window(m, -10.8, 2.6, HZ - WALL - 0.01, -1)
     for wz in (27.5, 32.0):
@@ -795,51 +872,48 @@ def _security_room(m):
 
 
 def _dining_room(m):
-    wood = W7._t("plank", (74, 44, 28))
-    m.add(box(1.8, 0.84, 6.0, wood, center=(8.2, GF + 0.43, 31.0)))
-    m.add(box(1.86, 0.05, 6.06, (226, 222, 212), center=(8.2, GF + 0.86, 31.0)))
-    m.add(_mesh_asset("pig", _fallback_pig, scale=0.45), rot_y(90), (8.2, GF + 0.88, 31.0))
+    # woven dining rug under the banquet table & chairs
+    m.add(quad_xz(6.0, 27.2, 10.4, 34.8, GF + 0.013, (96, 24, 28), layer=2))
+    m.add(quad_xz(6.2, 27.4, 10.2, 34.6, GF + 0.015, (118, 30, 34), layer=2))
+    pig_m = _mesh_asset("pig", _fallback_pig, scale=0.45)
+    m.add(MP.banquet_table(pig_m), t=(8.2, GF + 0.015, 31.0))
+    side_ch = MP.dining_chair(armrests=False)
     for dz in (-2.2, -1.1, 1.1, 2.2):
         for s in (-1, 1):
-            x = 8.2 + s * 1.3
-            m.add(box(0.5, 0.06, 0.5, (60, 30, 24), center=(x, GF + 0.48, 31.0 + dz)))
-            m.add(box(0.06, 0.8, 0.5, (60, 30, 24), center=(x + s * 0.24, GF + 0.86, 31.0 + dz)))
-    for z in (29.0, 33.0):
-        m.add(box(0.3, 1.2, 0.3, GOLD, center=(8.2, GF + 1.5, z)))
+            m.add(side_ch, rot_y(90.0 if s < 0 else -90.0), (8.2 + s * 1.06, GF + 0.015, 31.0 + dz))
+    host_ch = MP.dining_chair(armrests=True)
+    m.add(host_ch, rot_y(0.0), (8.2, GF + 0.015, 27.60))
+    m.add(host_ch, rot_y(180.0), (8.2, GF + 0.015, 34.40))
+    m.add(MP.sideboard(), t=(8.2, GF + 0.015, 35.15))
     _portrait(m, 8.2, GF + 2.4, HZ - WALL - 0.01, -1, w=2.2, h=1.6, paint=(46, 56, 40))
 
 
 def _armoury(m):
-    steel = (52, 56, 58)
     m.add(quad_xz(-12.5, ROOMS_Z + 0.25, -4.25, HZ - WALL, FF + 0.012, W7._t("concrete", (54, 56, 58)), layer=2))
+    rack = MP.armoury_rack()
     for z in (30.4, 32.4, 34.4):
-        m.add(box(0.6, 2.2, 1.6, steel, center=(-12.1, FF + 1.1, z)))
-        for k in range(4):
-            m.add(box(0.08, 1.0, 0.08, (24, 26, 28), center=(-11.75, FF + 1.4, z - 0.6 + k * 0.4)))
+        m.add(rack, t=(-12.1, FF + 0.012, z))
+    m.add(MP.armoury_bench(), t=(-4.72, FF + 0.012, 32.0))
 
 
 def _study(m):
-    wood = W7._t("plank", (74, 44, 28))
-    dark = (40, 24, 18)
     dx, dy, dz = DESK_AT
-    # bookshelves along both walls
+    m.add(quad_xz(-2.6, 30.2, 2.6, 35.1, FF + 0.015, GOLD, layer=2))
+    m.add(quad_xz(-2.48, 30.32, 2.48, 34.98, FF + 0.017, (112, 24, 28), layer=2))
+    # three-bay bookshelves along both walls
+    shelf = MP.bookshelf_bay()
     for s in (-1, 1):
-        x = s * 3.55
-        m.add(box(0.5, 3.0, 6.4, dark, center=(x, FF + 1.5, 32.2)))
-        for k in range(5):
-            y = FF + 0.4 + k * 0.58
-            for j in range(10):
-                col = ((120, 40, 34), (44, 58, 92), (86, 74, 40), (30, 60, 44))[(j + k) % 4]
-                m.add(box(0.3, 0.42, 0.5, col, center=(x - s * 0.08, y + 0.21, 29.4 + j * 0.6)))
-    m.add(box(2.7, 0.86, 1.05, wood, center=(dx, dy + 0.43, dz)))
-    m.add(box(2.8, 0.05, 1.12, (98, 58, 36), center=(dx, dy + 0.88, dz)))
+        m.add(shelf, rot_y(180.0 if s < 0 else 0.0), (s * 3.52, FF + 0.012, 32.2))
+    m.add(MP.study_desk(), t=(dx, dy + 0.012, dz))
     ws = SC.workstation("pc_tall", "monitor_lcd", live=False)
     if ws is not None:
         m.add(ws, rot_y(0.0), (dx - 0.75, dy + 0.90, dz - 0.12))
     m.add(E.telephone_base_mesh(), rot_y(24.0), (dx + 0.45, dy + 0.90, dz - 0.18))
     m.add(E.telephone_handset_mesh(), rot_y(204.0), (dx + 0.45, dy + 0.99, dz - 0.19))
-    m.add(box(0.7, 0.1, 0.62, (36, 28, 28), center=(dx, dy + 0.5, dz + 0.9)))
-    m.add(box(0.7, 1.1, 0.12, (36, 28, 28), center=(dx, dy + 1.0, dz + 1.2)))
+    m.add(MP.executive_chair(), rot_y(180.0), (dx, dy + 0.012, dz + 0.84))
+    wing = MP.wingback_armchair((88, 24, 28))
+    m.add(wing, rot_y(145.0), (-2.55, FF + 0.012, 34.45))
+    m.add(wing, rot_y(-145.0), (2.55, FF + 0.012, 34.45))
     for mx, my, mz in MONEY_PALLETS[1:2]:
         m.add(money_bundle(6, detail=False), rot_y(15.0), (mx, my, mz))
     # the President's portrait over the terrace doors, banners either side
@@ -849,21 +923,29 @@ def _study(m):
 
 
 def _bedroom(m):
-    m.add(box(2.4, 0.6, 2.8, (120, 26, 30), center=(9.6, FF + 0.3, 33.6)))
-    m.add(box(2.6, 1.4, 0.2, (60, 34, 24), center=(9.6, FF + 0.7, 35.0)))
-    for mx, my, mz in MONEY_PALLETS[2:]:
-        m.add(money_bundle(10, detail=False), rot_y(-10.0), (mx, my, mz))
-        m.add(money_bundle(10, detail=False), rot_y(20.0), (mx - 0.6, my, mz - 0.4))
+    m.add(quad_xz(5.4, 29.8, 11.8, 35.1, FF + 0.014, GOLD, layer=2))
+    m.add(quad_xz(5.52, 29.92, 11.68, 34.98, FF + 0.016, (94, 30, 36), layer=2))
+    m.add(MP.four_poster_bed(), t=(9.6, FF + 0.012, 33.65))
+    ns = MP.nightstand(with_lamp=True)
+    m.add(ns, t=(7.85, FF + 0.012, 34.72))
+    m.add(ns, t=(11.35, FF + 0.012, 34.72))
+    m.add(MP.wardrobe(), t=(12.05, FF + 0.012, 30.4))
+    m.add(MP.bed_bench(), t=(9.6, FF + 0.012, 31.78))
+    m.add(MP.wingback_armchair((118, 28, 32)), rot_y(135.0), (4.95, FF + 0.012, 34.35))
+    m.add(MP.round_side_table(with_lamp=True), t=(5.70, FF + 0.012, 34.60))
+    _portrait(m, 9.6, FF + 2.45, HZ - WALL - 0.01, -1, w=1.6, h=1.1, paint=(64, 48, 42))
+    m.add(money_bundle(10, detail=False), rot_y(-10.0), (9.95, FF + 0.472, 31.78))
+    m.add(money_bundle(10, detail=False), rot_y(20.0), (9.22, FF + 0.472, 31.76))
 
 
 def _terrace(m):
-    stone = W7._t("stone", STONE)
+    stone = tex("ashlar", like=STONE, tint=True)
     x0, z0, x1, z1 = TERRACE
     m.add(box(x1 - x0, FF, z1 - z0, stone, center=((x0 + x1) / 2, FF / 2, (z0 + z1) / 2), skip=("top",)))
     for k in range(5):
         x = x0 + 1.8 + k * 3.6
         m.add(box(2.2, 3.2, 0.1, (22, 24, 28), center=(x, 1.6, z1 + 0.02)))
-    _checker(m, x0, z0, x1, z1, FF + 0.01, W7._t("stone", (176, 170, 158)), W7._t("stone", (138, 132, 122)), layer=2)
+    _checker(m, x0, z0, x1, z1, FF + 0.01, tex("ashlar", like=(176, 170, 158), tint=True), tex("ashlar", like=(138, 132, 122), tint=True), layer=2)
     hx, hy, hz = HELIPAD_AT
     tarmac = tex("pavement", like=(60, 64, 68), density=24.0, tint=True)
     m.add(disc_xz(hx, hz, 5.2, FF + 0.02, tarmac, n=20, layer=2))
@@ -1075,38 +1157,15 @@ def _wall_monitors_mesh(cams_alive, surge=0):
     return m
 
 
-def _front_doors_mesh(front_open):
-    m = Mesh()
-    door = (58, 38, 26)
-    if not front_open:
-        for s in (-1, 1):
-            m.add(box(1.2, 3.4, 0.14, door, center=(s * 0.6, GF + 1.7, 0.25)))
-    else:
-        for s in (-1, 1):
-            m.add(box(1.2, 3.4, 0.14, door), rot_y(-80.0 * s), (s * 1.15, GF + 1.7, 0.7))
-    return m
-
-
-def _terrace_doors_mesh(terrace_open):
-    m = Mesh()
-    glass = (60, 80, 120)
-    if not terrace_open:
-        for s in (-1, 1):
-            m.add(box(1.4, 2.6, 0.08, glass, center=(s * 0.72, FF + 1.3, HZ - WALL / 2), emissive=True))
-    else:
-        for s in (-1, 1):
-            m.add(box(1.4, 2.6, 0.08, glass, emissive=True), rot_y(-80.0 * s), (s * 1.4, FF + 1.3, HZ + 0.4))
-    return m
-
-
 def draw_dynamic_props(r, tm, cams_alive=True, front_open=False, study_open=False,
                        terrace_open=False, chandeliers=None, cars=None, crates=None,
-                       rack_state=None, monitor_surge=0):
+                       rack_state=None, monitor_surge=0, study_open_u=None):
     """Per-frame screens, doors, chandeliers, cars and the glows.
 
     ``chandeliers``: list of (x, y, z) or None per chandelier (None = fallen
     and drawn by the scene); ``cars``: list of (x, z, yaw, paint, burned);
-    ``crates``: list of (open_u, loot_u) per ``CRATE_SPOTS`` entry (``loot_u < 0`` hides loot)."""
+    ``crates``: list of (open_u, loot_u) per ``CRATE_SPOTS`` entry (``loot_u < 0`` hides loot);
+    ``study_open_u``: optional 0..1 hinge progress for the kicked-in study double doors."""
     base_m, lid_m, loot_m, hinge = _crate_parts()
     surge = int(monitor_surge)
     if surge > 0 or cams_alive:
@@ -1148,14 +1207,21 @@ def draw_dynamic_props(r, tm, cams_alive=True, front_open=False, study_open=Fals
             _dyn(r, _server_rack_mesh(True), rt, rpos)
             _dyn(r, _rack_leds_mesh(led_mode), rt, rpos)
     _put_resident(r, ("front_doors", bool(front_open)),
-                  lambda fo=bool(front_open): _front_doors_mesh(fo),
+                  lambda fo=bool(front_open): MP.front_doors_mesh(fo, GF),
                   rot_y(0.0), (0.0, 0.0, 0.0))
-    _put_resident(r, ("study_door", bool(study_open)),
-                  lambda: box(2.4, 2.8, 0.14, (72, 42, 28)),
-                  rot_y(0.0),
-                  (0.0, FF + (0.07 if study_open else 1.4), ROOMS_Z + (1.6 if study_open else 0.0)))
+    s_u = (1.0 if study_open else 0.0) if study_open_u is None else max(0.0, min(1.0, float(study_open_u)))
+    l_ang, r_ang = MP.study_door_angles(s_u)
+    if s_u <= 0.0 or s_u >= 1.0:
+        tag = "open" if s_u >= 1.0 else "closed"
+        _put_resident(r, ("study_door_l", tag), lambda: MP.study_door_leaf(-1),
+                      rot_y(l_ang), (-1.155, FF, ROOMS_Z))
+        _put_resident(r, ("study_door_r", tag), lambda: MP.study_door_leaf(1),
+                      rot_y(r_ang), (1.155, FF, ROOMS_Z))
+    else:
+        _dyn(r, MP.study_door_leaf(-1), rot_y(l_ang), (-1.155, FF, ROOMS_Z))
+        _dyn(r, MP.study_door_leaf(1), rot_y(r_ang), (1.155, FF, ROOMS_Z))
     _put_resident(r, ("terrace_doors", bool(terrace_open)),
-                  lambda to=bool(terrace_open): _terrace_doors_mesh(to),
+                  lambda to=bool(terrace_open): MP.terrace_doors_mesh(to, FF, HZ, WALL),
                   rot_y(0.0), (0.0, 0.0, 0.0))
     chs = CHANDELIERS if chandeliers is None else chandeliers
     for c in chs:
@@ -1168,10 +1234,19 @@ def draw_dynamic_props(r, tm, cams_alive=True, front_open=False, study_open=Fals
                                                         max_px=64), layer=_fx.FX_LAYER)
     if cars is None:
         cars = [(x, z, yaw, paint, False) for x, z, yaw, paint in CARS]
-    for x, z, yaw, paint, burned in cars:
-        _put_resident(r, ("car", x, z, yaw, paint, bool(burned)),
-                      lambda p=paint, b=bool(burned): car_mesh(p, b),
-                      rot_y(yaw), (x, 0.0, z))
+    for item in cars:
+        if len(item) >= 8:
+            x, z, yaw, paint, burned, dy, dp, dr = item[:8]
+        else:
+            x, z, yaw, paint, burned = item[:5]
+            dy = dp = dr = 0.0
+        if dy != 0.0 or dp != 0.0 or dr != 0.0:
+            rot = m_mul(rot_y(yaw), m_mul(rot_x(-dp), rot_z(dr)))
+            _dyn(r, car_mesh(paint, bool(burned)), rot, (x, dy, z))
+        else:
+            _put_resident(r, ("car", x, z, yaw, paint, bool(burned)),
+                          lambda p=paint, b=bool(burned): car_mesh(p, b),
+                          rot_y(yaw), (x, 0.0, z))
     show_fx = crates is not None
     if crates is None:
         crates = [(0.0, -1.0)] * len(CRATE_SPOTS)
@@ -1228,10 +1303,10 @@ def _indoors(eye):
     return abs(eye[0]) < HX and 0.0 < eye[2] < HZ and eye[1] < CEIL
 
 
-def frame(eye, tgt, fov, lights=(), t=0, size=None, chandeliers_up=(True, True), sec_light=1.0):
+def frame(eye, tgt, fov, lights=(), t=0, size=None, chandeliers_up=(True, True), sec_light=1.0, roll=0.0):
     r = renderer()[0]
     r.resize(*(size or RES))
-    r.set_camera(eye, tgt, fov, 0.0)
+    r.set_camera(eye, tgt, fov, roll)
     r.fog, r.fog_start, r.fog_end = FOG, FOG_START, FOG_END
     r.light = _INDOOR if _indoors(eye) else _OUTDOOR
     try:

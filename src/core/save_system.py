@@ -275,6 +275,7 @@ def save_mission_complete(mission_id, label, total_time, stats=None, flags=None,
         "total_time": total_time,
         "updated_at": int(time.time()),
         "checkpoint": "",
+        "progress": "",
         "stats": merged_stats,
         "flags": merged_flags,
     })

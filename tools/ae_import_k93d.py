@@ -40,7 +40,8 @@ I4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
 
 def _gltf(path):
-    raw = open(path, "rb").read()
+    with open(path, "rb") as fh:
+        raw = fh.read()
     if raw[:4] != b"glTF":
         raise SystemExit("AE IMPORT K93D: FAIL (not a GLB)")
     ln, _ = struct.unpack_from("<II", raw, 12)

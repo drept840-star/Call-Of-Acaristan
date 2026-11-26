@@ -306,10 +306,11 @@ def _move(e, mx, my, walls):
     """_apply_move with the sub-pixel remainder kept: pygame rects drop the
     fraction, so a slow sidestep along a wall edge would never happen."""
     m = e._dt_mul
-    fx = getattr(e, "_m4_fx", 0.0) + mx * m
-    fy = getattr(e, "_m4_fy", 0.0) + my * m
+    mg = _m4g(e)
+    fx = mg.fx + mx * m
+    fy = mg.fy + my * m
     ix, iy = int(fx), int(fy)
-    e._m4_fx, e._m4_fy = fx - ix, fy - iy
+    mg.fx, mg.fy = fx - ix, fy - iy
     e._dt_mul = 1.0
     e._apply_move(ix, iy, walls)
     e._dt_mul = m

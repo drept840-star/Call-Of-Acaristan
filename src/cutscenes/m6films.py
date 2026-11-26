@@ -1120,9 +1120,9 @@ def _insert_ground(surface, t):
     head = _joints(_BIRI, pose, pos, yaw)["head"]
     r.set_lights([
         {"pos": (head[0] + 1.6, head[1] + 0.8, head[2] + 2.2), "color": _MOON,
-         "intensity": 0.95, "range": 5.0},
+         "intensity": 0.78, "range": 5.0},
         {"pos": (head[0] - 0.6, head[1] + 0.4, head[2] + 3.6),
-         "color": (255, 196, 128), "intensity": 0.45, "range": 5.0},
+         "color": (255, 196, 128), "intensity": 0.36, "range": 5.0},
     ])
     eye, tgt, fov = ground_cam(t, pos)
     shk = None

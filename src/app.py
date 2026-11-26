@@ -22,7 +22,7 @@ from core import interactions
 from core import ambience
 from core import score
 from core import mission_meta as _mission_meta
-from core.dev_jumps import DEV_JUMPS, jump_flag
+from core.dev_jumps import DEV_JUMPS, is_dev_mode, jump_flag
 from core import fixedstep as _fixedstep
 from engine.core import now_ms as _now_ms  # RPE6 B-001 timebase
 try:  # RPE6 Phase 0 dev-only recorder; never let it block startup
@@ -231,6 +231,8 @@ def _preview_settings():
 
 _settings_saved = _current_settings_dict()
 _push_live_settings()
+if pygame.mixer.get_init():
+    voice.warm()
 
 _bright_dark = pygame.Surface((WIDTH, HEIGHT))
 _bright_dark.fill((0, 0, 0))
@@ -1819,7 +1821,12 @@ def _apply_dev_args():
           or "--dev-mission8-heli" in args or "--dev-mission8-ending" in args
           or "--dev-mission8-epilogue" in args or "--dev-mission8-credits" in args
           or "--dev-mission8-duty" in args or "--dev-mission8-mansion" in args
-          or "--dev-mission8-liftoff" in args):
+          or "--dev-mission8-hall" in args or "--dev-mission8-study" in args
+          or "--dev-mission8-helipad" in args or "--dev-mission8-liftoff" in args
+          or "--dev-mission8-flight" in args or "--dev-mission8-flight-road" in args
+          or "--dev-mission8-flight-tail" in args or "--dev-mission8-flight-ucilev" in args
+          or "--dev-mission8-crash" in args or "--dev-mission8-ridge" in args
+          or "--dev-mission8-duty-epilogue" in args):
         gc.mission_start_time = _now_ms(); gc.mission_end_time = 0
         _m8_start_state = "GAME"
         if "--dev-mission8-trap" in args:
@@ -1877,14 +1884,22 @@ def _apply_dev_args():
             _m8_start_state = "CREDITS"
         elif "--dev-mission8-duty" in args:
             gc.start_mission8_stage("d_approach", "duty")
-        elif "--dev-mission8-mansion" in args:
+        elif ("--dev-mission8-mansion" in args or "--dev-mission8-hall" in args
+              or "--dev-mission8-study" in args or "--dev-mission8-helipad" in args):
             _cp8 = 0
-            for _a in args:
-                if _a.startswith("--m8-cp="):
-                    try:
-                        _cp8 = max(0, min(2, int(_a.split("=", 1)[1])))
-                    except ValueError:
-                        pass
+            if "--dev-mission8-hall" in args:
+                _cp8 = 1
+            elif "--dev-mission8-study" in args:
+                _cp8 = 3
+            elif "--dev-mission8-helipad" in args:
+                _cp8 = 4
+            else:
+                for _a in args:
+                    if _a.startswith("--m8-cp="):
+                        try:
+                            _cp8 = max(0, min(4, int(_a.split("=", 1)[1])))
+                        except ValueError:
+                            pass
             gc.start_mission8_stage("mansion", "duty")
             if _cp8:
                 STATE.m8_mansion_cp = _cp8
@@ -1892,6 +1907,33 @@ def _apply_dev_args():
                 _m8_mansion.begin()
         elif "--dev-mission8-liftoff" in args:
             gc.start_mission8_stage("liftoff", "duty")
+        elif ("--dev-mission8-flight" in args or "--dev-mission8-flight-road" in args
+              or "--dev-mission8-flight-tail" in args or "--dev-mission8-flight-ucilev" in args):
+            _cp8 = 0
+            if "--dev-mission8-flight-road" in args:
+                _cp8 = 1
+            elif "--dev-mission8-flight-tail" in args:
+                _cp8 = 3
+            elif "--dev-mission8-flight-ucilev" in args:
+                _cp8 = 4
+            else:
+                for _a in args:
+                    if _a.startswith("--m8-cp="):
+                        try:
+                            _cp8 = max(0, min(4, int(_a.split("=", 1)[1])))
+                        except ValueError:
+                            pass
+            gc.start_mission8_stage("flight", "duty")
+            if _cp8:
+                STATE.m8_flight_cp = _cp8
+                from missions.m8.duty import flight3d as _m8_flight  # lazy: M8-only
+                _m8_flight.begin()
+        elif "--dev-mission8-crash" in args:
+            gc.start_mission8_stage("crash", "duty")
+        elif "--dev-mission8-ridge" in args:
+            gc.start_mission8_stage("ridge", "duty")
+        elif "--dev-mission8-duty-epilogue" in args:
+            gc.start_mission8_stage("d_epilogue", "duty")
         else:
             gc.start_mission8_stage("meet", "revenge")
         gsm.transition(_m8_start_state); pygame.mouse.set_visible(False)
@@ -2430,7 +2472,13 @@ class _SlotSelectState(GameState):
             slot = save_system.get_slot(i)
             last = slot.get("last_completed_mission", "")
             progress = slot.get("progress", "")
-            if last == "MISSION_1":
+            if last == "MISSION_1" and progress == "m2" and slot.get("checkpoint") == "shelter":
+                gc.mission_start_time = _now_ms()
+                gc.mission_end_time = 0
+                gc.start_mission2_checkpoint(preserve_timer=True)
+                gsm.transition("GAME")
+                pygame.mouse.set_visible(False)
+            elif last == "MISSION_1":
                 gc.mission_start_time = _now_ms()
                 gc.mission_end_time = 0
                 start_cutscene(gc.mission2_intro_shots, "MISSION2", use_fades=False)
@@ -2450,24 +2498,6 @@ class _SlotSelectState(GameState):
                 gc.start_mission3(preserve_timer=True)
                 gsm.transition("GAME")
                 pygame.mouse.set_visible(False)
-            elif last == "MISSION_3":
-                # M3 done → Mission 4 is the next chapter (was the campaign-
-                # complete notice until M4 landed). Resume at the deepest M4
-                # checkpoint reached, mirroring the in-progress branch below.
-                gc.mission_start_time = _now_ms()
-                gc.mission_end_time = 0
-                gc.start_mission4(preserve_timer=True)
-                gsm.transition("GAME")
-                pygame.mouse.set_visible(False)
-            elif last == "MISSION_4":
-                # M4 done → Mission 5 is the next chapter (was the campaign-
-                # complete notice until M5 landed). Play the bulletin chain;
-                # its after_state="MISSION5" path drops into the Lower Quarter.
-                gc.mission_start_time = _now_ms()
-                gc.mission_end_time = 0
-                gc.start_mission5(preserve_timer=True)
-                start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
-                trigger_transition("CUTSCENE")
             elif last == "MISSION_8":
                 menu_notice = "FULL CAMPAIGN COMPLETE - START A NEW CAMPAIGN"
                 menu_notice_timer = 200; gsm.transition("MENU")
@@ -2522,31 +2552,46 @@ class _SlotSelectState(GameState):
                 gc.start_mission6(preserve_timer=True)
                 _start_m6_cutscene(gc.mission6_intro_shots, "MISSION6")
             elif progress == "m5":
-                # Mid-M5 save: resume at the tunnel escort if it was reached,
-                # else the print works, else the Lower Quarter.
+                # Mid-M5 save (below MISSION_5, above MISSION_4).
                 gc.mission_start_time = _now_ms()
                 gc.mission_end_time = 0
-                if getattr(STATE, "mission5_tunnel_checkpoint_reached", False):
+                cp5 = slot.get("checkpoint", "")
+                if cp5 == "tunnel" or getattr(STATE, "mission5_tunnel_checkpoint_reached", False):
                     gc.start_mission5_tunnel_checkpoint(preserve_timer=True)
-                elif getattr(STATE, "mission5_printworks_checkpoint_reached", False):
+                elif cp5 == "printworks" or getattr(STATE, "mission5_printworks_checkpoint_reached", False):
                     gc.start_mission5_printworks_checkpoint(preserve_timer=True)
-                elif getattr(STATE, "mission5_quarter_checkpoint_reached", False):
+                elif cp5 == "quarter" or getattr(STATE, "mission5_quarter_checkpoint_reached", False):
                     gc.start_mission5_quarter_checkpoint(preserve_timer=True)
                 else:
                     gc.start_mission5(preserve_timer=True)
                 gsm.transition("GAME")
                 pygame.mouse.set_visible(False)
-            elif progress == "m4":
-                # Mid-M4 save: resume at the transmitter hold if it was
-                # reached, else the station interior, else the street.
+            elif last == "MISSION_4":
+                # M4 done → Mission 5 is the next chapter. Play the bulletin chain;
+                # its after_state="MISSION5" path drops into the Lower Quarter.
                 gc.mission_start_time = _now_ms()
                 gc.mission_end_time = 0
-                if getattr(STATE, "mission4_tower_checkpoint_reached", False):
+                gc.start_mission5(preserve_timer=True)
+                start_cutscene(gc.mission5_intro_shots, "MISSION5", use_fades=True)
+                trigger_transition("CUTSCENE")
+            elif progress == "m4":
+                # Mid-M4 save (below MISSION_4, above MISSION_3).
+                gc.mission_start_time = _now_ms()
+                gc.mission_end_time = 0
+                cp4 = slot.get("checkpoint", "")
+                if cp4 == "tower" or getattr(STATE, "mission4_tower_checkpoint_reached", False):
                     gc.start_mission4_tower_checkpoint(preserve_timer=True)
-                elif getattr(STATE, "mission4_station_checkpoint_reached", False):
+                elif cp4 == "station" or getattr(STATE, "mission4_station_checkpoint_reached", False):
                     gc.start_mission4_station_checkpoint(preserve_timer=True)
                 else:
                     gc.start_mission4(preserve_timer=True)
+                gsm.transition("GAME")
+                pygame.mouse.set_visible(False)
+            elif last == "MISSION_3":
+                # M3 done → Mission 4 is the next chapter.
+                gc.mission_start_time = _now_ms()
+                gc.mission_end_time = 0
+                gc.start_mission4(preserve_timer=True)
                 gsm.transition("GAME")
                 pygame.mouse.set_visible(False)
             elif progress == "m1":
@@ -2879,7 +2924,8 @@ class _CutsceneState(GameState):
     def enter(self):
         self._keep_music_for_credits = False
         cp = active_cutscene
-        if cp and cp.current_shot and cp.current_shot.get("cinematic_controls"):
+        if cp and cp.current_shot and (cp.current_shot.get("cinematic_controls")
+                                       or cp.current_shot.get("hard_cut_in")):
             # The gameplay transition must not consume the opening camera beat.
             cp.start_time = _now_ms()
 
@@ -3156,13 +3202,15 @@ class _CutsceneState(GameState):
         if (cp.shot_idx, "vo") not in cp.fired_cues:
             cp.fired_cues.add((cp.shot_idx, "vo"))
             cp.vo = None
-            if shot.get("speaker") and shot["text"]:
+            sp = shot.get("speaker") or ""
+            if shot["text"] and shot.get("scene") != "title_card":
                 try:
                     from audio import voice
-                    ms = voice.play_line(shot["speaker"], shot["text"],
-                                         radio=bool(shot.get("radio")))
-                    if ms:
-                        cp.vo = (cp.shot_idx, ms, bool(shot.get("radio")))
+                    if sp or voice.find_line("NARRATOR", shot["text"]):
+                        ms = voice.play_line(sp or "NARRATOR", shot["text"],
+                                             radio=bool(shot.get("radio")))
+                        if ms:
+                            cp.vo = (cp.shot_idx, ms, bool(shot.get("radio")))
                 except Exception as exc:
                     print(f"[voice] cutscene VO skipped: {exc}")
         vo = getattr(cp, "vo", None)
@@ -3711,7 +3759,9 @@ class _GameState_(GameState):
             if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
                 gc.show_minimap = not gc.show_minimap
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F9:
-                gc.debug_jump_to_exfil()
+                from core.dev_jumps import is_dev_mode as _is_dev_mode
+                if _is_dev_mode():
+                    gc.debug_jump_to_exfil()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 gsm.transition("PAUSED")
 
@@ -3811,8 +3861,12 @@ class _GameState_(GameState):
             trigger_transition("CUTSCENE")
         elif _m8_film_pending():
             from missions import m8 as _m8mod  # lazy: see _m8_film_pending
-            start_cutscene(_m8mod.film_shots(_M8_MID["key"]), "M8_RESUME", use_fades=True)
-            trigger_transition("CUTSCENE")
+            _m8_shots = _m8mod.film_shots(_M8_MID["key"])
+            start_cutscene(_m8_shots, "M8_RESUME", use_fades=True)
+            if _m8_shots and _m8_shots[0].get("hard_cut_in"):
+                gsm.transition("CUTSCENE")
+            else:
+                trigger_transition("CUTSCENE")
         elif _m5_mid_cut_key():
             from missions.m5.meta import M5_MID_CUTSCENES  # lazy: M5-only data
             _M5_MID["key"] = _m5_mid_cut_key()
@@ -4312,6 +4366,7 @@ console = Console()
 
 # RPE6 Phase 10 (§6.19): debug overlay / inspector / collision view.
 from game.devtools import DEV as _devtools  # noqa: E402
+_DEV_MODE = is_dev_mode()
 
 console.bind("scene", lambda name: (gsm.transition(name.upper()), f"scene -> {name.upper()}")[1])
 console.bind("events", lambda: _console_events_tail())
@@ -4513,31 +4568,32 @@ def _legacy_frame():
                 _persist_settings()
             continue
 
-        # F12 - Level Editor toggle (gameplay only)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_F12:
+        # F12 - Level Editor toggle (gameplay only, dev mode)
+        if _DEV_MODE and event.type == pygame.KEYDOWN and event.key == pygame.K_F12:
             if gsm.current_name == "GAME":
                 if level_editor.map_data is None:
                     _update_editor_map()
                 level_editor.toggle()
             continue
 
-        # `~` - Developer Console toggle (any state)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_BACKQUOTE:
+        # `~` - Developer Console toggle (any state, dev mode)
+        if _DEV_MODE and event.type == pygame.KEYDOWN and event.key == pygame.K_BACKQUOTE:
             console.toggle()
             continue
 
-        # RPE6 P10: F3/F4 overlay toggles + inspector clicks
-        if _devtools.handle_event(event, (mouse_x, mouse_y),
-                                  "CONSOLE" if console.active else gsm.current_name):
+        # RPE6 P10: F3/F4 overlay toggles + inspector clicks (dev mode)
+        if _DEV_MODE and _devtools.handle_event(
+                event, (mouse_x, mouse_y),
+                "CONSOLE" if console.active else gsm.current_name):
             continue
 
         # Console consumes all events while active
-        if console.active:
+        if _DEV_MODE and console.active:
             console.handle_event(event)
             continue
 
         # Level Editor processes events alongside game
-        if level_editor.active:
+        if _DEV_MODE and level_editor.active:
             level_editor.handle_event(event)
 
         # State-level event handling
@@ -4625,9 +4681,10 @@ def _legacy_frame():
     menu.draw_menu_cursor(screen, current_name, suppressed=_mp_live)
 
     # ── Dev tool overlays ──
-    level_editor.draw(screen)
-    console.draw(screen)
-    _devtools.draw(screen)   # RPE6 P10: F3 overlay / inspector / F4 collision
+    if _DEV_MODE:
+        level_editor.draw(screen)
+        console.draw(screen)
+        _devtools.draw(screen)   # RPE6 P10: F3 overlay / inspector / F4 collision
 
     # ── FSM transition overlay ──
     gsm.update_transition()

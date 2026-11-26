@@ -19,7 +19,7 @@ chest, muzzle up-left), carry (front-of-body patrol), one_hand (right hand
 only, the other arm is left as authored).
 """
 import math
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 
 from . import ik
 from .core import m_apply
@@ -71,9 +71,13 @@ _SG = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.025, 0.33), guard=(0.0, 0.025, 0.2
 # under the receiver instead of reaching the far handguard.
 _LMG = dict(grip=(0.0, 0.0, 0.0), fore=(-0.045, 0.07, 0.16), guard=(-0.035, 0.055, 0.14),
             butt=(0.0, 0.069, -0.317), pocket=(0.08, 0.0, 0.0))
+# mirrored from game/content/meshes/sniper_rifle.mesh.json meta (tools/ae_import_sniper.py)
+_SNIPER_RIFLE = dict(grip=(0.0, 0.0, 0.0), fore=(0.0, 0.0382, 0.3141),
+                     guard=(0.0, 0.0347, 0.2186), butt=(0.0, 0.0364, -0.2655))
 GRIPS = {"rifle": _RIG, "sniper": dict(_RIG, fore=(0.0, -0.035, 0.34), guard=(0.0, -0.035, 0.20)),
          "os12": _RIG, "k9": _K9, "shotgun": _SG, "m7rifle": _M7, "akrifle": _AK,
          "ak74": _AK74, "lmg": _LMG,
+         "sniper_rifle": _SNIPER_RIFLE,
          # the support hand cups the shooting hand from the left of the grip
          "pistol": dict(grip=(0.0, 0.0, 0.0), fore=(-0.045, -0.025, 0.0),
                         guard=(-0.045, -0.025, 0.0), butt=None)}
@@ -185,13 +189,17 @@ def solve_arm_safe(hum, pose, pos, yaw, side, target, poles=None, margin=0.02):
     base, _pl, _j, _r, vols = _state(hum, pose, pos, yaw)
     best = None
     # a target the straightened arm can only reach through the chest is moved
-    # off the torso in widening steps (the hand falls a few cm short of it)
+    # off the torso in widening steps (the hand falls a few cm short of it).
+    # solve_arm only touches shoulder/elbow angles, so torso volumes (vols) stay
+    # fixed across all pole trials - reuse them instead of rebuilding per trial.
+    all_poles = tuple(poles or POLES) + POLES_WIDE
     for pm in (0.03, 0.06, 0.10):
         goal = push_out(vols, target, pm)
-        for i, pl in enumerate(tuple(poles or POLES) + POLES_WIDE):
+        for i, pl in enumerate(all_poles):
             q = ik.solve_arm(hum, pose, pos, yaw, side, goal, (pl[0] * sx, pl[1], pl[2]))
             qf = _full(q)
-            c = arm_clash(hum, qf, pos, yaw, side, margin)
+            places, joints, root = hum.pose_world(qf, pos, yaw, rifle_on=False)
+            c = _clash(vols, _arm_points(places, joints, root, side), margin)
             if c <= 0.0:
                 return q
             dist = sum(abs(_wrap(qf[side + k] - base[side + k])) for k in _ARM_KEYS)
@@ -302,14 +310,14 @@ _HOLD_KEYS = ("lsh_p", "lsh_r", "lsh_y", "lel", "rsh_p", "rsh_r", "rsh_y", "rel"
 # torso, chest, pelvis and head only), so a running stride must not miss.
 _LEG_KEYS = frozenset(("lhip_p", "lhip_r", "rhip_p", "rhip_r", "lkn", "rkn", "lank", "rank",
                        "lift"))
-_CACHE = {}
+_CACHE = OrderedDict()
 
 
 def _grip_sig(weapon):
     """Hashable signature of a weapon's grip set: tests and tools that tune
     GRIPS in-process must not be served poses solved against the old points."""
     g = GRIPS.get(weapon)
-    return tuple(sorted((k, tuple(v) if isinstance(v, tuple) else v)
+    return tuple(sorted((k, tuple(v) if isinstance(v, (tuple, list)) else v)
                         for k, v in g.items())) if g else None
 
 
@@ -327,10 +335,12 @@ def hold_cached(hum, pose, weapon, mode, aim=None, key=None):
                         and isinstance(v, (int, float))))
     ck = (key if key is not None else id(hum), weapon, mode, aim, _grip_sig(weapon), body)
     arms = _CACHE.get(ck)
-    if arms is None:
-        if len(_CACHE) > 512:
-            _CACHE.clear()
-        out = hold_weapon(hum, pose, (0.0, 0.0, 0.0), 0.0, weapon, mode, aim)
-        arms = {k: out[k] for k in _HOLD_KEYS if k in out}
-        _CACHE[ck] = arms
+    if arms is not None:
+        _CACHE.move_to_end(ck)
+        return dict(pose, **arms)
+    while len(_CACHE) >= 1024:
+        _CACHE.popitem(last=False)
+    out = hold_weapon(hum, pose, (0.0, 0.0, 0.0), 0.0, weapon, mode, aim)
+    arms = {k: out[k] for k in _HOLD_KEYS if k in out}
+    _CACHE[ck] = arms
     return dict(pose, **arms)

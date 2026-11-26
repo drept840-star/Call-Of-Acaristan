@@ -11,7 +11,7 @@ import math
 import os
 import random
 
-from engine3d.core import Mesh, box, m_apply, rot_x, rot_y
+from engine3d.core import Mesh, box, m_apply, m_mul, rot_x, rot_y, rot_z
 from engine.collision import BoxWorld, MeshCollider, box_xz_h, slide_capsule
 from cutscenes import m6fx3d as _fx
 from cutscenes import m6world3d as _w
@@ -32,7 +32,7 @@ WELL_PIN = (1.0, 1.9)                   # Alex's hips, under the fallen crossbea
 WELL_AT = (1.0, 4.0)
 WELL_HINGE = (0.0, 0.7, -0.55)          # the roof tips south about the south wall's top
 WELL_DOWN = 112.0                       # degrees the fallen frame lies at, beam across Alex
-WELL_LIFT_AT = (2.3, 1.85)              # Biribel's spot at the beam's east end
+WELL_LIFT_AT = (1.64, 1.30)             # Biribel's lifting stance south-east of Alex, clear of the beam
 TANK_AT = (-7.6, 1.5, -9.0)
 GATE_EAST = (20.0, 0.0)
 MOUTH = (0.0, -17.0)
@@ -73,6 +73,9 @@ STATIC = [
     (-5.7, -21.2, -5.3, -20.8, 8.0),
 ] + _orchard()
 _STATIC_BW = BoxWorld(box_xz_h(b) for b in STATIC)
+_STATIC_N = len(STATIC)
+_LOS_STATIC = tuple(b for b in STATIC if b[4] >= LOS_MIN_H)
+_LOS_STATIC_BW = BoxWorld(box_xz_h(b) for b in _LOS_STATIC)
 
 
 _SHAPES = {}
@@ -168,36 +171,60 @@ class World:
             dx, dz = x - self.pig_at[0], z - self.pig_at[1]
             if dx * dx + dz * dz < (r + 0.45) ** 2:
                 return True
-        for b in self.boxes:
-            if _hit(x, z, r, b):
+        for i in self.box_world.near(x - r, z - r, x + r, z + r):
+            if _hit(x, z, r, self.boxes[i]):
                 return True
-        for m in self.meshes + self.dyn:
-            if m.body_hits(x, z, r, 0.0, BODY_TOP):
+        if len(self.boxes) > _STATIC_N:
+            for b in self.boxes[_STATIC_N:]:
+                if _hit(x, z, r, b):
+                    return True
+        for m in self.meshes:
+            if m is not None and m.body_hits(x, z, r, 0.0, BODY_TOP):
                 return True
+        for m in self.dyn:
+            if m is not None:
+                wb = m.world_box()
+                if wb[4] > 0.0 and wb[1] < BODY_TOP and _hit(x, z, r, (wb[0], wb[2], wb[3], wb[5])):
+                    return True
         return False
 
     def move(self, x, z, dx, dz, r=BODY_R, clip=True):
         """Capsule-vs-world tangent slide; returns the new (x, z)."""
-        extra = ()
+        extra = []
         if self.pig_at is not None:
             px, pz = self.pig_at
-            extra = ((px - 0.45, 0.0, pz - 0.45, px + 0.45, 0.7, pz + 0.45),)
-        bw = self.box_world if len(self.boxes) == len(STATIC) else BoxWorld(box_xz_h(b) for b in self.boxes)
+            extra.append((px - 0.45, 0.0, pz - 0.45, px + 0.45, 0.7, pz + 0.45))
+        if len(self.boxes) > _STATIC_N:
+            for b in self.boxes[_STATIC_N:]:
+                extra.append(box_xz_h(b))
+        for m in self.dyn:
+            if m is not None:
+                extra.append(m.world_box())
         nx, _ny, nz, _hit = slide_capsule(
             x, 0.0, z, dx, dz, r, BODY_TOP,
-            box_world=bw, meshes=self.meshes + self.dyn, extra_boxes=extra,
+            box_world=self.box_world, meshes=self.meshes, extra_boxes=extra,
             bounds=BOUNDS if clip else None,
         )
         return nx, nz
 
     def los(self, a, b, dyn=True):
         """Open line between two (x, z) points at chest height."""
-        for box_ in self.boxes:
-            if box_[4] >= LOS_MIN_H and seg_box(a[0], a[1], b[0], b[1], box_):
+        ax, az = a[0], a[1]
+        bx, bz = b[0], b[1]
+        for i in _LOS_STATIC_BW.near(ax, az, bx, bz):
+            if seg_box(ax, az, bx, bz, _LOS_STATIC[i]):
                 return False
-        for m in self.meshes + (self.dyn if dyn else []):
-            if _mesh_sight(m, a, b):
+        if len(self.boxes) > _STATIC_N:
+            for box_ in self.boxes[_STATIC_N:]:
+                if box_[4] >= LOS_MIN_H and seg_box(ax, az, bx, bz, box_):
+                    return False
+        for m in self.meshes:
+            if m is not None and _mesh_sight(m, a, b):
                 return False
+        if dyn:
+            for m in self.dyn:
+                if m is not None and _mesh_sight(m, a, b):
+                    return False
         return True
 
     def ray_hit(self, o, d, limit=60.0):
@@ -213,14 +240,24 @@ class World:
             h = _ray_box(o, d, (px - 0.4, pz - 0.4, px + 0.4, pz + 0.4, 0.55))
             if h is not None and h < best:
                 best = h
-        for b in self.boxes:
-            h = _ray_box(o, d, b)
+        ex, ez = o[0] + d[0] * best, o[2] + d[2] * best
+        for i in self.box_world.near(o[0], o[2], ex, ez):
+            h = _ray_box(o, d, self.boxes[i])
             if h is not None and h < best:
                 best = h
-        for m in self.meshes + self.dyn:
-            h = m.ray(o, d, best)
-            if h is not None and h < best:
-                best = h
+        if len(self.boxes) > _STATIC_N:
+            for b in self.boxes[_STATIC_N:]:
+                h = _ray_box(o, d, b)
+                if h is not None and h < best:
+                    best = h
+        for m in self.meshes:
+            if m is not None:
+                h = m.ray(o, d, best)
+                if h is not None and h < best:
+                    best = h
+        for m in self.dyn:
+            if m is not None:
+                h = m.ray(o, d, best)
         return best
 
 
@@ -543,14 +580,21 @@ class WellWreck:
     heaves the beam, None otherwise.  Impacts land in ``events`` for the sound."""
 
     STEP = 1.0 / 240.0
-    SWING = 7.0                 # g over the frame's pendulum length, 1/s^2
-    KICK = 1.3                  # rad/s it starts toppling with
+    SWING = 8.4                 # g over the frame's pendulum length, 1/s^2
+    KICK = 1.65                 # rad/s it starts toppling with after the snap
     REST = math.radians(WELL_DOWN)
+    LIFT_DEG = 38.0             # degrees Biribel heaves the beam up at full lift
+    TEAR_TH = math.radians(82.0)
     ROPE = 1.0
 
     def __init__(self):
         self.th = 0.0
         self.om = 0.0
+        self.skew = 0.0         # subtle roll wobble (degrees) as the broken joint wrenches
+        self.phase = "idle"     # idle -> creak -> fall -> down
+        self.creak_t = 0.0
+        self._slip_done = False
+        self._shove_t = 0.0
         self.live = False
         self.landed = False
         self.tin = None
@@ -558,18 +602,77 @@ class WellWreck:
         self.events = []
         self._acc = 0.0
         self._tin_down = False
+        self._tin_cd = 0.0
+        self._bob_cd = 0.0
+        self._t = 0.0
         self._frame = None
+        self._stubs = None
+
+    def start_creak(self):
+        """Begin the warning shudder/slip before the post shears."""
+        if self.phase == "idle":
+            self.phase = "creak"
+            self.live = True
+            self.creak_t = 0.0
+            self._slip_done = False
 
     def topple(self):
-        if not self.live:
-            self.live, self.om = True, self.KICK
+        if self.phase in ("idle", "creak"):
+            self.phase = "fall"
+            self.live = True
+            self.th = max(self.th, math.radians(11.0))
+            self.om = max(self.om, self.KICK)
+            self.skew = 2.6
+            self.events.append(("snap", self.om))
+
+    def heave_kick(self, strength=1.0):
+        """Upward impulse when Biribel drives a heave surge into the beam."""
+        if self.landed:
+            self.om -= 3.6 * strength
+            self.skew = max(-2.2, min(2.2, self.skew + (1.1 if int(self._t * 7) % 2 else -1.1) * strength))
+
+    def shove(self):
+        """Final upward thrust when Alex clears out; gravity then slams it down."""
+        if self.landed:
+            self._shove_t = 0.14
+            self.om = min(self.om, -1.7)
+            self.skew = -1.8
+
+    def _rot(self, th=None):
+        a = -math.degrees(self.th if th is None else th)
+        return m_mul(rot_x(a), rot_z(self.skew)) if abs(self.skew) > 1e-4 else rot_x(a)
 
     def at(self, v, th=None):
         """World position of a point given in the well's frame, tipped ``th``."""
-        m = rot_x(-math.degrees(self.th if th is None else th))
+        m = self._rot(th)
         q = m_apply(m, (v[0] - WELL_HINGE[0], v[1] - WELL_HINGE[1], v[2] - WELL_HINGE[2]))
         return (WELL_AT[0] + WELL_HINGE[0] + q[0], WELL_HINGE[1] + q[1],
                 WELL_AT[1] + WELL_HINGE[2] + q[2])
+
+    def beam_grips(self):
+        """Live world points on the crossbeam: (left_hand, center, right_hand)."""
+        return (
+            self.at((0.44, 2.26, 0.0)),
+            self.at((0.0, 2.30, 0.0)),
+            self.at((0.84, 2.26, 0.0)),
+        )
+
+    def post_bases(self):
+        """World positions of the two snapped south posts on the stone well rim."""
+        return (
+            (WELL_AT[0] - 0.78, 0.74, WELL_AT[1] - 0.55),
+            (WELL_AT[0] + 0.78, 0.74, WELL_AT[1] - 0.55),
+        )
+
+    def tin_center(self):
+        if not self.tin:
+            return self.at((0.0, 2.55, 0.0))
+        n = float(len(self.tin))
+        return (
+            sum(pt[0][0] for pt in self.tin) / n,
+            sum(pt[0][1] for pt in self.tin) / n,
+            sum(pt[0][2] for pt in self.tin) / n,
+        )
 
     def boxes(self):
         """Blocking boxes of the frame lying across Alex: two posts and the beam."""
@@ -588,45 +691,87 @@ class WellWreck:
             self._step(self.STEP, lift)
 
     def _step(self, h, lift):
+        self._t += h
+        if self._tin_cd > 0.0:
+            self._tin_cd = max(0.0, self._tin_cd - h)
+        if self._bob_cd > 0.0:
+            self._bob_cd = max(0.0, self._bob_cd - h)
+        if self.phase == "creak":
+            self.creak_t += h
+            ct = self.creak_t
+            if ct < 0.34:
+                tgt = math.radians(1.6 + 1.0 * math.sin(ct * 38.0))
+                self.skew = 0.7 * math.sin(ct * 31.0)
+            elif ct < 0.56:
+                if not self._slip_done:
+                    self._slip_done = True
+                    self.events.append(("slip", 1.0))
+                u = min(1.0, (ct - 0.34) / 0.12)
+                tgt = math.radians(2.0 + 5.8 * u + 1.1 * math.sin((ct - 0.34) * 44.0) * (1.0 - 0.4 * u))
+                self.skew = 1.6 * math.sin(ct * 36.0)
+            else:
+                u = min(1.0, (ct - 0.56) / 0.42)
+                tgt = math.radians(7.6 + 4.8 * u + (0.6 + 0.9 * u) * math.sin(ct * 54.0))
+                self.skew = (1.1 + 1.1 * u) * math.sin(ct * 46.0)
+            self.th += (tgt - self.th) * min(1.0, h * 34.0)
+            self._step_bob(h)
+            return
         th0 = self.th
-        if lift is not None and self.landed:
-            tgt = self.REST - math.radians(24.0) * lift
-            acc = 90.0 * (tgt - self.th) - 16.0 * self.om
+        if self._shove_t > 0.0:
+            self._shove_t = max(0.0, self._shove_t - h)
+            acc = -10.0 * self.om
+        elif lift is not None and self.landed:
+            tremor = math.radians(0.45) * math.sin(self._t * 36.0) if 0.05 < lift < 0.97 else 0.0
+            tgt = self.REST - math.radians(self.LIFT_DEG) * lift + tremor
+            acc = 115.0 * (tgt - self.th) - 15.0 * self.om
         else:
             acc = self.SWING * math.sin(self.th)
         self.om += acc * h
         self.th += self.om * h
-        if self.tin is None and min(self.at(v)[1] for v in _TIN_PTS) < 0.02:
+        self.th = max(math.radians(48.0) if self.landed else 0.0, self.th)
+        self.skew *= math.exp(-h * (3.2 if self.landed else 1.4))
+        if self.tin is None and (self.th >= self.TEAR_TH or min(self.at(v)[1] for v in _TIN_PTS) < 0.04):
             self._tear(th0)
+            self.events.append(("tin_tear", 1.0))
         if self.th >= self.REST:
             if self.tin is None:
                 self._tear(th0)
             self.th = self.REST
             if self.om > 0.8:
-                self.events.append(("frame", self.om))
-                self.om *= -0.28
+                was_landed = self.landed
+                self.events.append(("drop" if was_landed else "frame", self.om))
+                self.om *= -0.34 if not was_landed else -0.26
+                self.skew *= -0.45
             else:
                 self.om = 0.0
             self.landed = True
+            self.phase = "down"
         self._step_tin(h)
         self._step_bob(h)
 
     def _tear(self, th0):
         """Free the tin: its points now, and a step back for their velocity,
-        with a little sideways drift and roll so it does not land square."""
+        with a westward shear pop and roll spin so it flies clear of Alex."""
         self.tin = []
+        h = self.STEP
         for v in _TIN_PTS:
             p, q = self.at(v), self.at(v, th0)
-            self.tin.append([p, (q[0] + 0.5 * self.STEP, q[1] - 0.4 * self.STEP * v[0], q[2])])
+            dvx = -1.55
+            dvy = 1.05 + 0.55 * v[0]
+            dvz = -0.45 + 0.25 * v[2]
+            self.tin.append([p, (q[0] - dvx * h, q[1] - dvy * h, q[2] - dvz * h)])
 
     def _step_tin(self, h):
         if self.tin is None:
             return
         g = G * h * h
+        drag = 0.9985
         for pt in self.tin:
             p, q = pt
-            pt[0], pt[1] = (2 * p[0] - q[0], 2 * p[1] - q[1] - g, 2 * p[2] - q[2]), p
-        for _ in range(3):
+            pt[0], pt[1] = (p[0] + (p[0] - q[0]) * drag,
+                            p[1] + (p[1] - q[1]) * drag - g,
+                            p[2] + (p[2] - q[2]) * drag), p
+        for _ in range(5):
             for i, j, d in _TIN_LINKS:
                 a, b = self.tin[i][0], self.tin[j][0]
                 dx, dy, dz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
@@ -642,9 +787,11 @@ class WellWreck:
                 hit = max(hit, -vy)
                 # bounce a little, scrape along the dirt
                 pt[0] = (p[0], 0.0, p[2])
-                pt[1] = (p[0] - (p[0] - q[0]) * 0.55, -0.25 * (p[1] - q[1]), p[2] - (p[2] - q[2]) * 0.55)
-        if hit > 1.5 and not self._tin_down:
+                pt[1] = (p[0] - (p[0] - q[0]) * 0.68, -0.34 * (p[1] - q[1]),
+                         p[2] - (p[2] - q[2]) * 0.68)
+        if hit > 1.1 and self._tin_cd <= 0.0 and not self._tin_down:
             self.events.append(("tin", hit))
+            self._tin_cd = 0.14
         self._tin_down = hit > 0.0
 
     def _step_bob(self, h):
@@ -653,16 +800,21 @@ class WellWreck:
             b = (top[0], top[1] - self.ROPE, top[2])
             self.bob = [b, b]
         p, q = self.bob
-        n = (p[0] + (p[0] - q[0]) * 0.998, p[1] + (p[1] - q[1]) * 0.998 - G * h * h,
-             p[2] + (p[2] - q[2]) * 0.998)
+        n = (p[0] + (p[0] - q[0]) * 0.997, p[1] + (p[1] - q[1]) * 0.997 - G * h * h,
+             p[2] + (p[2] - q[2]) * 0.997)
         dx, dy, dz = n[0] - top[0], n[1] - top[1], n[2] - top[2]
         ln = math.sqrt(dx * dx + dy * dy + dz * dz) or 1e-6
         if ln > self.ROPE:
             k = self.ROPE / ln
             n = (top[0] + dx * k, top[1] + dy * k, top[2] + dz * k)
         if n[1] < 0.11:
+            vy = (p[1] - n[1]) / h
+            if vy > 1.4 and self._bob_cd <= 0.0:
+                self.events.append(("bucket", vy))
+                self._bob_cd = 0.22
             n = (n[0], 0.11, n[2])
-            p = (n[0] - (n[0] - p[0]) * 0.6, 0.11, n[2] - (n[2] - p[2]) * 0.6)
+            p = (n[0] - (n[0] - p[0]) * 0.62, 0.11 - max(0.0, vy * 0.28 * h),
+                 n[2] - (n[2] - p[2]) * 0.62)
         self.bob = [n, p]
 
     def draw(self, r):
@@ -670,9 +822,20 @@ class WellWreck:
             m = Mesh()
             m.add(F.well_frame(), t=(-WELL_HINGE[0], -WELL_HINGE[1], -WELL_HINGE[2]))
             self._frame = m
+            st = Mesh()
+            heart = (146, 114, 74)
+            for sx in (-0.78, 0.78):
+                bx, by, bz = WELL_AT[0] + sx, 0.70, WELL_AT[1] - 0.55
+                st.add(box(0.11, 0.20, 0.11, F.WOOD_D, center=(bx, by + 0.10, bz)))
+                st.add(box(0.05, 0.16, 0.06, heart, center=(bx + 0.02 * (1 if sx > 0 else -1),
+                                                            by + 0.20, bz - 0.01)),
+                       rot_z(-14.0 if sx > 0 else 14.0))
+            self._stubs = st
             _COL.update(tin=F._t("tin", F.ROOF_METAL))
         w = Mesh()
-        w.add(self._frame, rot_x(-math.degrees(self.th)),
+        if self.phase != "idle" and self._stubs is not None:
+            w.add(self._stubs)
+        w.add(self._frame, self._rot(),
               t=(WELL_AT[0] + WELL_HINGE[0], WELL_HINGE[1], WELL_AT[1] + WELL_HINGE[2]))
         pts = [pt[0] for pt in self.tin] if self.tin else [self.at(v) for v in _TIN_PTS]
         for quad in _TIN_QUADS:
@@ -681,6 +844,9 @@ class WellWreck:
         bob = self.bob[0] if self.bob else (top[0], top[1] - self.ROPE, top[2])
         w.face([(top[0] - 0.012, top[1], top[2]), (top[0] + 0.012, top[1], top[2]),
                 (bob[0] + 0.012, bob[1] + 0.11, bob[2]), (bob[0] - 0.012, bob[1] + 0.11, bob[2])],
+               F.WOOD_D, 2, True)
+        w.face([(top[0], top[1], top[2] - 0.012), (top[0], top[1], top[2] + 0.012),
+                (bob[0], bob[1] + 0.11, bob[2] + 0.012), (bob[0], bob[1] + 0.11, bob[2] - 0.012)],
                F.WOOD_D, 2, True)
         w.add(F.well_bucket(), t=bob)
         _w.add(r, w)

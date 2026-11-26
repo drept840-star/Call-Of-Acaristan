@@ -626,6 +626,20 @@ def hum(key, hd=False, wound=0, bloody=False, flags=()):
                 # GL caches rig VBOs by spec repr; the OS-12 needs its own.
                 h._gl_spec_key = (repr(sorted(h.spec.items()))
                                   + ("|os12_nomag" if no_mag else "|os12"))
+            elif "sniper_rifle" in flags and not hd:
+                from cutscenes.cast3d import weapon_asset
+                mesh, muzzle = weapon_asset("sniper_rifle")
+                if mesh is not None:
+                    h._rifle = mesh
+                    h._weapon = "sniper_rifle"
+                    h._muzzle_z = muzzle[2]
+                    h._gl_spec_key = repr(sorted(h.spec.items())) + "|sniper_rifle"
+                else:
+                    from engine3d.rig import rifle_mesh
+                    h._rifle = rifle_mesh(scope=True)
+                    h._weapon = "sniper"
+                    h._muzzle_z = 0.78
+                    h._gl_spec_key = repr(sorted(h.spec.items())) + "|sniper"
         elif isinstance(key, tuple) and key[0] == "guard":
             if "os12" in flags:
                 extra["rifle"] = "os12"

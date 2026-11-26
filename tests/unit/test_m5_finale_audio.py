@@ -46,6 +46,7 @@ class Manager:
     def play(self,n,volume=1):
         self.calls.append((n,volume));return self.get_sound(n).play()
     def stop(self,n): pass
+    def fade_out_music(self,ms): pass
 
 
 def player_harness():

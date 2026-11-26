@@ -790,6 +790,14 @@ def _gap_wires(surface, lean, droop=0.0, cut=0.0):
 
 def pen(surface, t):
     """Wide: the last bucket, and one goat already working the loose wire."""
+    from cutscenes import m7goat3d  # lazy: engine3d stack
+    if m7goat3d.draw_scene("pen", surface, t):
+        return
+    _pen_2d(surface, t)
+
+
+def _pen_2d(surface, t):
+    """2D fallback for pen."""
     surface.blit(_yard_plate(), (0, 0))
     _motes(surface, t)
     _hen(surface, 168, 486, t, 1)
@@ -831,6 +839,14 @@ def pen(surface, t):
 
 def slip(surface, t):
     """Close: the post gives, the wire snaps, and she is through."""
+    from cutscenes import m7goat3d  # lazy: engine3d stack
+    if m7goat3d.draw_scene("slip", surface, t):
+        return
+    _slip_2d(surface, t)
+
+
+def _slip_2d(surface, t):
+    """2D fallback for slip."""
     surface.blit(_zoom_plate(700, 520, 1.9), (0, 0))
 
     # In-focus foreground ground, then scrub along the fence line.
@@ -909,6 +925,14 @@ def slip(surface, t):
 
 def orchard(surface, t):
     """Wide: she is already at the trees.  Bodi sees the empty gap."""
+    from cutscenes import m7goat3d  # lazy: engine3d stack
+    if m7goat3d.draw_scene("orchard", surface, t):
+        return
+    _orchard_2d(surface, t)
+
+
+def _orchard_2d(surface, t):
+    """2D fallback for orchard."""
     surface.blit(_yard_plate(), (0, 0))
     _motes(surface, t)
     _hen(surface, 700, 506, t + 500, 2)
@@ -942,6 +966,14 @@ def orchard(surface, t):
 
 def potatoes(surface, t):
     """Two-shot: Biribel asks the obvious question."""
+    from cutscenes import m7goat3d  # lazy: engine3d stack
+    if m7goat3d.draw_scene("potatoes", surface, t):
+        return
+    _potatoes_2d(surface, t)
+
+
+def _potatoes_2d(surface, t):
+    """2D fallback for potatoes."""
     surface.blit(_yard_plate(), (0, 0))
     _motes(surface, t, 8)
 
@@ -958,6 +990,14 @@ def potatoes(surface, t):
 
 def bodi(surface, t):
     """A dirty single on Bodi: the goat can go, the potatoes cannot."""
+    from cutscenes import m7goat3d  # lazy: engine3d stack
+    if m7goat3d.draw_scene("bodi", surface, t):
+        return
+    _bodi_2d(surface, t)
+
+
+def _bodi_2d(surface, t):
+    """2D fallback for bodi."""
     surface.blit(_zoom_plate(440, 516, 1.5), (0, 0))
     _vignette(surface, 40)
 

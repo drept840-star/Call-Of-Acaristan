@@ -322,7 +322,8 @@ class ShopScreen(object):
             rig, focus = "os12", ("head" if item_id in appearance.HEADGEARS else "body")
         if not live:
             return mp3d.icon(app, rig, size, focus=focus)
-        t = pygame.time.get_ticks() / 1000.0
+        from engine.core import now_s as _now_s
+        t = _now_s()
         return mp3d.portrait(app, rig, size, yaw=200.0 + t * 40.0, focus=focus, t=t)
 
     def _rig_icon(self, item_id, gun, box, scale=2):

@@ -3661,3 +3661,14 @@ description: chronological action log per session, consolidated weekly
 | 23:57 | Edited tests/unit/test_gameplay_sweep.py | modified test_kiosk_gate_moves_bodi_up_like_a_wave_clear() | ~114 |
 <!-- session:ZmYxYWFiZGEtODUxOS00NmQ4LWFjYTgtZWZjMTUyNjIwNTEx -->
 | 2026-11-19T22:01:26.404Z | Gameplay sweep for Alex-well class bugs: M8 trap checkpoint keeps both guns' ammo (_cp_snapshot), kiosk gate moves Bodi to post 2, trap/mansion _loot leaves body ammo at full reserves, mansion near_revive same floor only, M1 hotwire not-yet E uses own flag hotwire_not_clear_said, M1-M5 pickups at full stay on the ground | src/missions/m8/revenge/trap3d.py,src/missions/m8/duty/mansion3d.py,src/missions/m8/duty/mansion_brain.py,src/missions/m1/update.py,src/missions/m1/main.py,src/core/state.py,src/missions/m2/update.py,src/missions/m3/systems.py,src/missions/m4/systems.py,src/missions/m5/systems.py,tools/smoke_test.py,tests/unit/test_gameplay_sweep.py | 9 new unit tests fail on old code and pass; smoke --fast OK; compileall OK; sync_arch_map OK; test_m8_trap_mechanics 2 pre-existing failures unchanged |
+
+## Session: 2026-11-19 00:03
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-11-19 00:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 01:12 | Shared 3D vehicle explosion rework: procedural cached fireball/flash sprites (`blast_sprites.py`), dust skirt, delayed fire mounts, duller hot debris, no shockwave ring, removed duplicate truck blast in `trap3d`, updated API snapshot + map | src/engine/render3d/blast_sprites.py, src/engine/render3d/vehicle_destruction.py, src/missions/m8/revenge/trap3d.py, tests/api/engine_api.json, docs/ARCHITECTURE_MAP.md | compileall OK; test_vehicle_destruction 6/6; M8 tests 48/48; ae_api_snapshot OK (94/700); smoke --fast OK; GL contact sheets verified | - |

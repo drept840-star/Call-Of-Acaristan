@@ -4364,8 +4364,14 @@ def draw_vostral_pickup_cinematic(surface, t, phase):
     ca = int(min(48, 26 * lit))
     pa = int(min(64, 34 * lit))
     cone = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    pygame.draw.polygon(cone, (214, 202, 168, ca), [(474, 40), (526, 40), (630, pcy), (370, pcy)])
-    pygame.draw.ellipse(cone, (222, 210, 176, pa), (pcx - 160, pcy - 20, 320, 70))
+    pygame.draw.polygon(cone, (214, 202, 168, ca), [(468, 40), (532, 40), (650, pcy), (350, pcy)])
+    pygame.draw.polygon(cone, (232, 222, 190, max(6, ca // 2)), [(484, 40), (516, 40), (584, pcy), (416, pcy)])
+    pygame.draw.ellipse(cone, (222, 210, 176, pa), (pcx - 175, pcy - 22, 350, 76))
+    # Floating archive dust motes illuminated inside the pedestal light shaft
+    for mi in range(16):
+        mx = int(410 + ((mi * 67 + ms * 0.012) % 180) + math.sin(ms * 0.002 + mi) * 8)
+        my = int(80 + ((mi * 49 + ms * 0.018) % max(1, pcy - 90)))
+        pygame.draw.circle(cone, (236, 226, 194, 72), (mx, my), 1 if mi % 2 else 2)
     s.blit(cone, (0, 0))
     pygame.draw.polygon(s, (30, 32, 34), [(pcx - 74, pcy + 70), (pcx + 74, pcy + 70),
                                           (pcx + 52, pcy - 6), (pcx - 52, pcy - 6)])

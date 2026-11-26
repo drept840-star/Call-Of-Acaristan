@@ -380,8 +380,16 @@ class RagdollBody:
         vx, vy, vz = float(dv[0]), float(dv[1]), float(dv[2])
         # Verlet velocity is (pos - prev) / h, with h the step size the offsets were last built with
         h = self._h
+        paired = {"lkn": "lfoot", "rkn": "rfoot"}.get(node)
         for name, p in self.pos.items():
-            k = 1.0 if name == node else (spread if name in ("pelvis", "head", "lsh", "rsh") else spread * 0.4)
+            if name == node:
+                k = 1.0
+            elif name == paired:
+                k = max(0.75, spread)
+            elif name in ("pelvis", "head", "lsh", "rsh"):
+                k = spread
+            else:
+                k = spread * 0.4
             q = self.prev[name]
             q[0] -= vx * k * h
             q[1] -= vy * k * h
@@ -770,13 +778,14 @@ class RagdollBody:
                 q[2] = p[2] - (p[2] - q[2]) * k_e
 
         # Apply surface friction once per step across all nodes resting on or hitting a surface.
-        k_f = 0.58 ** (h * 60.0)
+        # Before collapse (grounded < 4), feet/knees scrape freely rather than propping an upright rig up.
+        k_f = (0.88 if grounded < 4 else 0.58) ** (h * 60.0)
         for name in surf_hit:
             p = self.pos[name]
             q = self.prev[name]
             s0 = (start[name][0], start[name][2])
-            if (p[0] - s0[0]) ** 2 + (p[2] - s0[1]) ** 2 < (_STICK_V * h) ** 2:
-                # static friction: a slow contact holds the spot it started the step on
+            if grounded >= 4 and (p[0] - s0[0]) ** 2 + (p[2] - s0[1]) ** 2 < (_STICK_V * h) ** 2:
+                # static friction: once the body has begun to collapse/rest, a slow contact holds its spot
                 # (prev may already be shifted by the caps above, so it is not that spot)
                 p[0], p[2] = q[0], q[2] = s0
             q[0] = p[0] - (p[0] - q[0]) * k_f

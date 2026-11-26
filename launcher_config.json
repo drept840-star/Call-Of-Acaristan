@@ -1,6 +1,6 @@
 {
   "update_url": "",
-  "github_repo": "",
+  "github_repo": "drept840-star/Call-Of-Acaristan",
   "check_on_startup": true,
   "timeout_seconds": 4.0,
   "gate_play_on_update": true,

@@ -51,8 +51,12 @@ POOLS = {
 SINGLES = ("m8_shot_slow", "m8_fall_light", "m8_fall_heavy",
            "m8_horn", "m8_bell", "m8_creak", "m8_crash", "m8_rocket",
            "m8_barrel_boom", "m8_spark_pop", "m8_pa_squelch", "m8_smoke",
-           "m8_breaker_pop", "m8_pistol_shot")
-LOOPS = ("m8_drone", "m8_road_wind", "m8_engine", "m8_train", "m8_heli")
+           "m8_breaker_pop", "m8_pistol_shot", "m8_door_kick",
+           "m8_missile_warn", "m8_overheat", "m8_flare", "m8_klaxon", "m8_flak",
+           "m8_rotor_pass", "m8_subsys_boom",
+           "m8_bolt_cycle", "m8_safety_click", "m8_exhale", "m8_heartbeat",
+           "m8_ridge_echo", "m8_dead_carrier")
+LOOPS = ("m8_drone", "m8_road_wind", "m8_engine", "m8_train", "m8_heli", "m8_radio_hiss")
 
 # cue -> ((loop, gain), ...). Add a cue here; scenes only name it.  Any
 # registered loop works; only LOOPS duck under shots.
@@ -79,6 +83,9 @@ BEDS = {
     "f_heli": (("m8_drone", 0.12), ("m8_road_wind", 0.20), ("m8_engine", 0.14), ("m8_heli", 0.30)),
     "flight": (("m8_drone", 0.12), ("m8_road_wind", 0.22), ("m8_heli", 0.34)),
     "ridge": (("wind", 0.22), ("m8_drone", 0.08)),
+    "ridge_radio": (("wind", 0.18), ("m8_drone", 0.07), ("m8_radio_hiss", 0.14)),
+    "ridge_standoff": (("wind", 0.16), ("m8_radio_hiss", 0.11)),
+    "ridge_wind_only": (("wind", 0.24),),
     "f_fire": (("wind", 0.14), ("m8_drone", 0.10)),
     "f_dawn_crowd": (("m8_road_wind", 0.10), ("room_tone", 0.06)),
 }
@@ -116,12 +123,14 @@ FILM = {
     "m8_heli_lockon": ("chase", "chase_heli"),
     "m8d_approach_aerial": ("approach", "f_night"),
     "m8d_approach_gate": ("approach", "f_night"),
-    "m8d_liftoff_study": ("road", "f_night"),
+    "m8d_liftoff_study": ("flight", "f_heli"),
     "m8d_liftoff_window": ("flight", "f_heli"),
     "m8d_liftoff_maru": ("flight", "f_heli"),
     "m8d_crash_spin": ("flight", "f_heli"),
     "m8d_crash_black": (None, "f_fire"),
     "m8d_crash_fire": (None, "f_fire"),
+    "m8d_crash_promise": (None, "f_fire"),
+    "m8d_crash_better": (None, "f_fire"),
     "m8d_inauguration": ("state", "f_tv"),
     "m8d_vasile_speech": ("state", "f_dawn_crowd"),
     "m8d_crowd": ("names", "f_dawn_crowd"),
@@ -150,6 +159,7 @@ MUSIC = {
     "road": (OST_DIR + "08_i_chose_the_many.mp3", 0.28, 2500),
     "chase": (OST_DIR + "18_to_the_crossing.mp3", 0.44, 1200),
     "flight": (OST_DIR + "10_head_of_state.mp3", 0.42, 1200),
+    "flight_boss": (OST_DIR + "10_head_of_state.mp3", 0.50, 900),
     "state": (OST_DIR + "10_head_of_state.mp3", 0.32, 1800),
     "names": (OST_DIR + "12_gabi_seby_darius.mp3", 0.40, 2500),
     "title": (OST_DIR + "01_call_of_acaristan.mp3", 0.48, 1500),
@@ -416,6 +426,35 @@ def _pistol_shot():
     return np.tanh(out * 1.45)
 
 
+def _door_kick():
+    """Heavy boot slam, mahogany panel crack, sheared brass latch & hall echo."""
+    n = int(1.05 * RATE)
+    thump = _tone(int(0.24 * RATE), 128.0, 38.0, 0.06) * 1.25
+    crack = _burst(int(0.18 * RATE), 8971, 0.014, lo=1100.0) * 1.15
+    splinter = _burst(int(0.34 * RATE), 8972, 0.035, lo=650.0, hi=3200.0) * 0.90
+    latch = _partials(int(0.22 * RATE), 1640.0, ((1.0, 0.45, 0.025), (1.71, 0.28, 0.018)))
+    out = np.zeros(n)
+    _place(out, thump, 0.0, 1.0)
+    _place(out, crack, 0.008, 0.95)
+    _place(out, latch, 0.012, 0.65)
+    _place(out, splinter, 0.018, 0.85)
+    _place(out, _lowpass(out[:int(0.26 * RATE)].copy(), 1200.0, 2), 0.11, 0.34)
+    _place(out, _lowpass(out[:int(0.26 * RATE)].copy(), 800.0, 2), 0.23, 0.18)
+    _place(out, _tone(int(0.16 * RATE), 82.0, 44.0, 0.045), 0.19, 0.42)
+    return np.tanh(out * 1.45)
+
+
+def _flak_pop():
+    """Mid-air anti-aircraft flak airburst: sharp hollow bark, low thump, open-sky tail."""
+    n = int(0.85 * RATE)
+    crack = _burst(n, 8983, 0.011, lo=900.0, hi=3800.0) * 1.1
+    thump = _tone(int(0.28 * RATE), 148.0, 44.0, 0.065) * 1.05
+    tail = _tail(n, 8984, 980.0, 0.24, ((0.12, 0.28), (0.27, 0.14)))
+    out = crack + tail * 0.36
+    _place(out, thump, 0.0, 1.0)
+    return np.tanh(out * 1.45)
+
+
 @lru_cache(maxsize=64)
 def shot_pcm(name):
     if name == "m8_shot_slow":
@@ -470,6 +509,62 @@ def shot_pcm(name):
         return _fin(_breaker_pop(), 0.80, 0.18)
     if name == "m8_pistol_shot":
         return _fin(_pistol_shot(), 0.76, 0.16)
+    if name == "m8_door_kick":
+        return _fin(_door_kick(), 0.88, 0.22)
+    if name == "m8_missile_warn":
+        n = int(0.24 * RATE)
+        t = _t(n)
+        p1 = ((t >= 0.0) & (t < 0.065)).astype(np.float64) * np.sin(2 * math.pi * 920.0 * t)
+        p2 = ((t >= 0.10) & (t < 0.18)).astype(np.float64) * np.sin(2 * math.pi * 1240.0 * t)
+        x = _highpass(_lowpass(p1 + p2, 3200.0, 2), 400.0)
+        return _fin(x, 0.48, 0.05)
+    if name == "m8_overheat":
+        n = int(0.42 * RATE)
+        t = _t(n)
+        clack = _burst(int(0.04 * RATE), 8994, 0.006, lo=1500.0) * 0.9
+        hiss = _highpass(_lowpass(_noise(n, 8995), 4800.0, 2), 1400.0) * np.clip(t / 0.04, 0.0, 1.0) * _decay(n, 0.16)
+        out = hiss * 0.65
+        _place(out, clack, 0.0, 0.9)
+        return _fin(out, 0.62, 0.14)
+    if name == "m8_flare":
+        n = int(0.48 * RATE)
+        t = _t(n)
+        pop = _burst(int(0.03 * RATE), 8996, 0.005, lo=320.0) * 1.1
+        sizzle = _highpass(_lowpass(_noise(n, 8997), 6200.0, 2), 2100.0) * np.clip(t / 0.02, 0.0, 1.0) * _decay(n, 0.20)
+        out = sizzle * 0.55
+        _place(out, pop, 0.0, 1.0)
+        return _fin(out, 0.68, 0.16)
+    if name == "m8_klaxon":
+        n = int(0.36 * RATE)
+        t = _t(n)
+        b1 = ((t >= 0.0) & (t < 0.12)).astype(np.float64) * np.sin(2 * math.pi * 680.0 * t)
+        b2 = ((t >= 0.16) & (t < 0.28)).astype(np.float64) * np.sin(2 * math.pi * 510.0 * t)
+        x = _highpass(_lowpass(b1 + b2, 2800.0, 2), 280.0)
+        return _fin(x, 0.54, 0.08)
+    if name == "m8_flak":
+        return _fin(_flak_pop(), 0.78, 0.24)
+    if name == "m8_rotor_pass":
+        n = int(1.25 * RATE)
+        t = _t(n)
+        env = np.sin(math.pi * np.clip(t / 1.25, 0.0, 1.0)) ** 1.6
+        # Doppler blade-slap pulse sweeping ~14 Hz down to ~9 Hz across the pass
+        phase = 2.0 * math.pi * (14.5 * t - 2.2 * (t ** 2))
+        slap = (0.5 + 0.5 * np.sin(phase)) ** 3.2
+        whoosh = _highpass(_lowpass(_noise(n, 8986), 920.0, 2), 90.0) * (0.45 + 1.35 * slap)
+        turbine = _tone(n, 290.0, 165.0, 0.75) * 0.28
+        x = (whoosh + turbine) * env
+        return _fin(np.tanh(x * 1.4), 0.78, 0.32)
+    if name == "m8_subsys_boom":
+        n = int(1.35 * RATE)
+        shear = _burst(n, 8988, 0.018, lo=1500.0) * 1.15
+        ring = _partials(int(0.45 * RATE), 1180.0, ((1.0, 0.42, 0.06), (1.62, 0.28, 0.045)))
+        thump = _tone(int(0.55 * RATE), 145.0, 34.0, 0.16) * 1.3
+        body = _burst(n, 8989, 0.16, lo=110.0, hi=1400.0) * 1.0
+        echo = _tail(n, 8990, 880.0, 0.38, ((0.16, 0.34), (0.34, 0.18))) * 0.42
+        out = shear + body + echo
+        _place(out, thump, 0.0, 1.0)
+        _place(out, ring, 0.005, 0.85)
+        return _fin(np.tanh(out * 1.45), 0.92, 0.26)
     if name == "m8_rocket":
         n = int(1.3 * RATE)
         t = _t(n)
@@ -477,6 +572,75 @@ def shot_pcm(name):
         x = _highpass(_lowpass(_noise(n, 8991), 2400.0, 2), 260.0) * env
         x += _tone(n, 380.0, 140.0, 0.28) * 0.5
         return _fin(x, 0.85, 0.24)
+    if name == "m8_bolt_cycle":
+        n = int(0.78 * RATE)
+        x = np.zeros(n, dtype=np.float64)
+
+        def _snap(seed, body_f0, body_f1, body_tau, click_lo, click_tau, g_body, g_click):
+            k = int(0.06 * RATE)
+            kt = _t(k)
+            body = _lowpass(_tone(k, body_f0, body_f1, body_tau), 650.0, 2) * g_body
+            click = _highpass(_lowpass(_noise(k, seed), 7200.0, 2), click_lo)
+            click *= np.exp(-kt / click_tau) * g_click
+            return body + click
+
+        def _slide(dur, seed, f_lo, f_hi, mod_hz, gain):
+            k = int(dur * RATE)
+            kt = _t(k)
+            env = np.sin(np.pi * np.clip(kt / max(dur, 1e-4), 0.0, 1.0)) ** 0.75
+            # Machined steel-on-steel rail texture (narrower band + subtle grain)
+            grain = 0.72 + 0.28 * np.sin(2.0 * np.pi * mod_hz * kt)
+            s = _highpass(_lowpass(_noise(k, seed), f_hi, 2), f_lo) * env * grain
+            return s * gain
+
+        # 1. Unlock cam + handle lift (dry steel snap + receiver thump)
+        _place(x, _snap(8992, 260.0, 115.0, 0.016, 2400.0, 0.0032, 0.75, 0.95), 0.01, 1.0)
+        # 2. Pull bolt back along receiver rails + bolt-stop clack
+        _place(x, _slide(0.15, 8993, 1200.0, 4200.0, 62.0, 0.42), 0.08, 1.0)
+        _place(x, _snap(8994, 195.0, 88.0, 0.020, 1900.0, 0.0040, 0.90, 0.85), 0.22, 1.0)
+        # 3. Subtle dry brass eject tick
+        k_br = int(0.035 * RATE)
+        br = _partials(k_br, 4350.0, ((1.0, 0.35, 0.006), (1.47, 0.22, 0.004)))
+        br += _highpass(_noise(k_br, 8995), 3800.0) * np.exp(-_t(k_br) / 0.0025) * 0.30
+        _place(x, br, 0.27, 0.45)
+        # 4. Push bolt forward + strip next round from magazine
+        _place(x, _slide(0.16, 8996, 950.0, 3400.0, 54.0, 0.46), 0.43, 1.0)
+        _place(x, _snap(8997, 320.0, 160.0, 0.010, 2800.0, 0.0025, 0.45, 0.60), 0.50, 0.8)
+        # 5. Lugs engage + handle locks down (heavy receiver chunk-klik)
+        _place(x, _snap(8998, 220.0, 82.0, 0.022, 2100.0, 0.0035, 1.05, 0.90), 0.60, 1.0)
+        _place(x, _snap(8999, 280.0, 125.0, 0.014, 2700.0, 0.0028, 0.70, 1.00), 0.635, 1.0)
+        return _fin(np.tanh(x * 1.15), 0.78, 0.04)
+    if name == "m8_safety_click":
+        n = int(0.14 * RATE)
+        x = _partials(n, 2400.0, ((1.0, 0.5, 0.010), (1.88, 0.28, 0.008)))
+        x += _burst(n, 8993, 0.004, lo=2200.0) * 0.75
+        return _fin(x, 0.58, 0.08)
+    if name == "m8_exhale":
+        n = int(0.60 * RATE)
+        t = _t(n)
+        env = np.clip(t / 0.08, 0.0, 1.0) * np.exp(-t / 0.20)
+        x = _highpass(_lowpass(_noise(n, 8998), 1600.0, 2), 260.0) * env
+        return _fin(x, 0.42, 0.10)
+    if name == "m8_heartbeat":
+        n = int(0.75 * RATE)
+        x = np.zeros(n, dtype=np.float64)
+        _place(x, _tone(int(0.16 * RATE), 68.0, 34.0, 0.045), 0.0, 1.0)
+        _place(x, _tone(int(0.14 * RATE), 58.0, 30.0, 0.040), 0.21, 0.72)
+        return _fin(_lowpass(x, 180.0, 2), 0.68, 0.06)
+    if name == "m8_ridge_echo":
+        n = int(1.9 * RATE)
+        taps = ((0.0, 0.72), (0.28, 0.44), (0.64, 0.26), (1.08, 0.14))
+        x = _tail(n, 8999, 980.0, 0.45, taps)
+        x += _lowpass(_tone(n, 110.0, 42.0, 0.28), 340.0, 2) * 0.45
+        return _fin(x, 0.72, 0.34)
+    if name == "m8_dead_carrier":
+        n = int(0.26 * RATE)
+        t = _t(n)
+        pop = _burst(int(0.03 * RATE), 9001, 0.006, lo=900.0) * 1.1
+        tail = _highpass(_lowpass(_noise(n, 9002), 3400.0, 2), 1100.0) * np.exp(-t / 0.05) * 0.65
+        x = tail.copy()
+        _place(x, pop, 0.0, 1.0)
+        return _fin(x, 0.66, 0.12)
     base, i, p, seed = _take(name)
     if base == "m8_hurt":
         # felt more than heard: the thump through the chest, a dull ear
@@ -624,6 +788,14 @@ def loop_pcm(name):
         x += _lowpass(nz, 420.0, 2)[n:] * (0.4 + 1.4 * slap)
         x += np.sin(2 * math.pi * 410.0 * t) * 0.025
         stereo = 0.26
+    elif name == "m8_radio_hiss":
+        dur = 4.0
+        n = int(RATE * dur)
+        t = _t(n)
+        nz = np.tile(_noise(n, 9003), 2)
+        x = _highpass(_lowpass(nz, 2800.0, 2), 950.0)[n:] * (0.45 + 0.15 * np.sin(2 * math.pi * 1.5 * t))
+        x += np.sin(2 * math.pi * 60.0 * t) * 0.025
+        stereo = 0.08
     else:
         raise ValueError("Unknown M8 loop: " + name)
     pk = float(np.max(np.abs(x))) or 1.0
@@ -901,6 +1073,11 @@ class M8Audio(M7Audio):
         vol = 0.56 * max(0.3, 1.0 - dist / 35.0)
         self._pool("m8_fall_heavy", vol, pan, fallback="m6_body_thud")
 
+    def door_kick(self):
+        """Boot slamming through the study double doors."""
+        self.duck(0.34, 0.30)
+        self._pool("m8_door_kick", 0.78, fallback="m8_fall_heavy")
+
     def pickup(self):
         """The supply crate latch and the shells going into the pocket."""
         self._pool("m8_pickup", 0.55, fallback="reload")
@@ -908,6 +1085,33 @@ class M8Audio(M7Audio):
     def rifle_handle(self):
         """Mechanical catch/bolt handling tick for the OS-12 reload."""
         self._one("rifle_handle", 0.42)
+
+    # the ridge ------------------------------------------------------------
+    def safety_click(self):
+        self._one("m8_safety_click", 0.34)
+
+    def bolt_cycle(self):
+        self._one("m8_bolt_cycle", 0.54)
+
+    def exhale(self):
+        if self._ready("exhale", 0.45):
+            self._one("m8_exhale", 0.34)
+
+    def heartbeat(self):
+        if self._ready("heartbeat", 0.80):
+            self._one("m8_heartbeat", 0.42)
+
+    def ridge_echo(self):
+        self._one("m8_ridge_echo", 0.64)
+
+    def dead_carrier(self):
+        self._one("m8_dead_carrier", 0.50)
+
+    def ridge_kill_silence(self):
+        """Cut all ridge loops to dead vacuum silence, then roll the cliff echo."""
+        self.stop_loops()
+        self._pending.clear()
+        self._later(0.42, "m8_ridge_echo", 0.64)
 
     # Biribel ---------------------------------------------------------------
     def hurt(self, dmg=10.0):
@@ -948,6 +1152,37 @@ class M8Audio(M7Audio):
     def rocket(self):
         self.duck(0.45, 0.25)
         self._pool("m8_rocket", 0.68, fallback="explosion")
+
+    def missile_warn(self):
+        if self._ready("mwarn", 1.1):
+            self._pool("m8_missile_warn", 0.44)
+
+    def overheat(self):
+        self._pool("m8_overheat", 0.56, fallback="m8_smoke")
+
+    def flare_pop(self):
+        self._pool("m8_flare", 0.62, fallback="m8_smoke")
+
+    def klaxon(self):
+        if self._ready("klaxon", 0.55):
+            self._pool("m8_klaxon", 0.48, fallback="m8_missile_warn")
+
+    def flak_pop(self, pan=0.0, dist=24.0):
+        if self._ready("flak", 0.14):
+            vol = 0.30 + 0.34 * max(0.0, 1.0 - dist / 75.0)
+            self._pool("m8_flak", vol, pan, fallback="m8_barrel_boom")
+
+    def rotor_pass(self, pan=0.0):
+        """Close-range gunship flyby Doppler rotor slap."""
+        if self._ready("rotor_pass", 1.1):
+            self.duck(0.68, 0.25)
+            self._pool("m8_rotor_pass", 0.68, pan, fallback="m8_heli")
+
+    def subsys_boom(self, pan=0.0, dist=35.0):
+        """Armored subsystem blowout on Ucilev's gunship."""
+        self.duck(0.18, 0.60)
+        vol = 0.72 + 0.20 * max(0.0, 1.0 - dist / 80.0)
+        self._pool("m8_subsys_boom", vol, pan, fallback="m8_barrel_boom")
 
     def horn(self, volume=0.45):
         if self._ready("horn", 2.5):

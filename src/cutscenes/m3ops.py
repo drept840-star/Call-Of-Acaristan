@@ -8,11 +8,11 @@ import random
 import pygame
 
 from core import render_util
-from core.config import (HEIGHT, SCENE_BOT, SCENE_TOP, WIDTH, font_terminal, font_terminal_small)
+from core.config import (HEIGHT, SCENE_BOT, SCENE_H, SCENE_TOP, WIDTH, font_terminal, font_terminal_small)
 
 from cutscenes.cast import draw_volkov
 from cutscenes.figure_kit import draw_character as _fk_draw
-from cutscenes.route12 import _lerp_cutscene
+from cutscenes.route12 import _draw_vertical_gradient, _lerp_cutscene
 
 def _draw_k9_pickup_bg(surface, t):
     """Draw a quiet, shallow armory wall behind the first-person action.
@@ -555,35 +555,51 @@ def _draw_m3_comms_wing_reveal(surface, t):
 
 
 def _draw_m3_volkov_gives_mags(surface, t):
-    """First-person close-up: Biribel's own cupped hands wait at the bottom
-    of frame while Volkov's arm reaches in from the top-right and tosses two
-    spare magazines down into them - one per hand, well separated.
-
-    Pacing fix: the spoken line now plays FIRST (shot 1) over Biribel's empty
-    waiting hands. Only for shot 2 does Volkov's arm sweep in from off-screen,
-    arc the two mags home AFTER the line is done, and retract once they're
-    caught - so the handoff no longer races the dialogue. The catch is a clean
-    finger-curl + soft amber rim instead of a stray tick.
-    """
-    surface.fill((4, 5, 6))
+    """First-person close-up: Biribel's cupped hands wait at the bottom of frame
+    in a lit service alcove while Volkov's arm drops two detailed 9mm K-9 mags."""
+    surface.fill((6, 8, 10))
     cx = WIDTH // 2
     floor_y = SCENE_BOT - 30
+    sec = t * 0.001
 
-    # Dim close-up backdrop with a soft vignette.
-    for y in range(SCENE_TOP, SCENE_BOT):
+    # Moody concrete service alcove backdrop with subtle vertical panels & pipe
+    for y in range(SCENE_TOP, SCENE_BOT, 2):
         p = (y - SCENE_TOP) / max(1, SCENE_BOT - SCENE_TOP)
-        pygame.draw.line(surface, (int(8 + p * 12), int(11 + p * 16), int(12 + p * 14)), (0, y), (WIDTH, y))
-    pygame.draw.polygon(surface, (13, 16, 17), [(0, floor_y), (WIDTH, floor_y), (WIDTH, SCENE_BOT), (0, SCENE_BOT)])
+        c = (int(11 + p * 16), int(15 + p * 20), int(16 + p * 18))
+        pygame.draw.rect(surface, c, (0, y, WIDTH, 2))
+    # Architectural concrete seams & overhead steel conduit pipe
+    for sx in range(110, WIDTH, 195):
+        pygame.draw.line(surface, (18, 24, 25), (sx, SCENE_TOP), (sx, floor_y), 2)
+    pygame.draw.rect(surface, (20, 26, 27), (0, SCENE_TOP + 34, WIDTH, 14))
+    pygame.draw.line(surface, (42, 52, 50), (0, SCENE_TOP + 36), (WIDTH, SCENE_TOP + 36), 2)
+    # Warm-green service bulkhead lamp spilling diagonally from top-right
+    lamp = pygame.Surface((WIDTH, SCENE_H), pygame.SRCALPHA)
+    flick = 0.90 + 0.10 * math.sin(sec * 9.5)
+    for r, a in ((340, 14), (240, 22), (140, 32)):
+        pygame.draw.ellipse(lamp, (118, 178, 152, int(a * flick)),
+                            (WIDTH - 190 - r, -40, r * 2, int(r * 1.45)))
+    pygame.draw.polygon(lamp, (132, 186, 162, int(20 * flick)),
+                        [(WIDTH - 240, 0), (WIDTH, 0), (cx + 220, SCENE_H), (cx - 240, SCENE_H)])
+    surface.blit(lamp, (0, SCENE_TOP))
+    pygame.draw.polygon(surface, (15, 19, 20), [(0, floor_y), (WIDTH, floor_y), (WIDTH, SCENE_BOT), (0, SCENE_BOT)])
+    pygame.draw.line(surface, (36, 46, 44), (0, floor_y), (WIDTH, floor_y), 2)
+
+    # Subtle drifting dust motes in the corridor light
+    for i in range(16):
+        mx = int((i * 73 + sec * 18.0 * (1 + i % 2)) % WIDTH)
+        my = int(SCENE_TOP + 30 + (i * 47 + math.sin(sec + i) * 14) % (SCENE_H - 60))
+        pygame.draw.circle(surface, (116, 154, 138), (mx, my), 1)
+
     vig = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    for i in range(60):
-        a = max(0, 70 - i)
-        pygame.draw.rect(vig, (0, 0, 0, a), (i, i, WIDTH - 2 * i, HEIGHT - 2 * i), 1)
+    for i in range(0, 64, 4):
+        a = max(0, 84 - i)
+        pygame.draw.rect(vig, (0, 0, 0, a), (i, i, WIDTH - 2 * i, HEIGHT - 2 * i), 4)
     surface.blit(vig, (0, 0))
 
-    skin = (176, 132, 100)
-    sleeve = (58, 68, 52)
+    skin = (182, 138, 106)
+    sleeve = (62, 74, 58)
+    sleeve_v = (48, 52, 60)
 
-    # Helper for a tapered forearm.
     def forearm(shoulder, wrist, col, hi=None, w0=28, w1=12):
         sx, sy = shoulder
         wx, wy = wrist
@@ -597,109 +613,107 @@ def _draw_m3_volkov_gives_mags(surface, t):
             (wx + px * w1, wy + py * w1),
         ]
         pygame.draw.polygon(surface, col, poly)
-        pygame.draw.polygon(surface, (8, 9, 9), poly, 1)
+        pygame.draw.polygon(surface, (10, 12, 12), poly, 2)
         if hi:
             pygame.draw.line(surface, hi, (sx + px * w0 * 0.35, sy + py * w0 * 0.35),
-                             (wx + px * w1 * 0.25, wy + py * w1 * 0.25), 1)
+                             (wx + px * w1 * 0.25, wy + py * w1 * 0.25), 2)
 
-    # ── Timing (ms, cumulative since cutscene start) ──
-    SHOT1_END = 2400          # the spoken line plays over shot 1
-    ARM_IN = 320              # arm sweep-in duration
-    ARM_OUT = 300             # arm retract duration
-    ARM_RETRACT_AT = 4000     # once both mags are caught, pull back
+    SHOT1_END = 2400
+    ARM_IN = 320
+    ARM_OUT = 300
+    ARM_RETRACT_AT = 4000
     arm_in = max(0.0, min(1.0, (t - SHOT1_END) / ARM_IN))
     arm_out = max(0.0, min(1.0, (t - ARM_RETRACT_AT) / ARM_OUT))
-    arm_vis = arm_in * (1.0 - arm_out)   # 0 -> 1 (swept in) -> 0 (retracted)
+    arm_vis = arm_in * (1.0 - arm_out)
 
-    # Biribel's two cupped hands, clearly separated at the bottom. They rise
-    # into frame during the first beat and simply wait empty through shot 1.
-    hand_lx, hand_ly = cx - 110, floor_y - 34
-    hand_rx, hand_ry = cx + 110, floor_y - 34
-    q = max(0.0, min(1.0, t / 420.0))
-    q = q * q * (3 - 2 * q)
+    # Biribel's cupped hands rising naturally with slight idle breathing
+    bob = math.sin(sec * 2.6) * 3.0
+    hand_lx, hand_ly = cx - 122, int(floor_y - 44 + bob)
+    hand_rx, hand_ry = cx + 122, int(floor_y - 44 - bob * 0.5)
     for hx, hy in ((hand_lx, hand_ly), (hand_rx, hand_ry)):
-        forearm((hx, HEIGHT + 40), (hx, hy + 14), sleeve, (94, 108, 80), 30, 13)
-        pygame.draw.ellipse(surface, (60, 70, 54), (hx - 30, hy - 4, 60, 40))
-        pygame.draw.ellipse(surface, skin, (hx - 23, hy - 9, 46, 30))
-        pygame.draw.ellipse(surface, (150, 110, 82), (hx - 23, hy - 9, 46, 30), 2)
+        forearm((hx, HEIGHT + 40), (hx, hy + 18), sleeve, (106, 122, 92), 34, 15)
+        pygame.draw.ellipse(surface, (52, 62, 48), (hx - 34, hy - 4, 68, 44))
+        pygame.draw.ellipse(surface, skin, (hx - 26, hy - 10, 52, 34))
+        pygame.draw.ellipse(surface, (216, 176, 140), (hx - 18, hy - 6, 36, 16))
+        pygame.draw.ellipse(surface, (132, 94, 68), (hx - 26, hy - 10, 52, 34), 2)
 
-    # Volkov's arm exists ONLY during shot 2: it sweeps in from off-screen
-    # top-right to the release point, opens to drop the mags, then retracts.
-    toss_x, toss_y = WIDTH - 150, SCENE_TOP + 78
+    # Volkov's silhouette shoulder in upper-right distance during beat 1 + tossing arm in beat 2
+    toss_x, toss_y = WIDTH - 170, SCENE_TOP + 92
     if arm_vis > 0.001:
         ax = _lerp_cutscene(WIDTH + 90, toss_x, arm_vis)
         ay = _lerp_cutscene(SCENE_TOP - 70, toss_y, arm_vis)
-        forearm((WIDTH + 120, SCENE_TOP - 90), (ax, ay), sleeve, (94, 108, 80), 28, 12)
+        forearm((WIDTH + 120, SCENE_TOP - 90), (ax, ay), sleeve_v, (92, 102, 114), 32, 14)
         released = arm_in >= 1.0 and arm_out <= 0.0
         from core.hands import open_hand_dorsal
-        open_hand_dorsal(surface, (ax, ay - 6), angle=180.0, mirror=1, sc=0.85,
+        open_hand_dorsal(surface, (ax, ay - 6), angle=180.0, mirror=1, sc=0.92,
                          spread=1.3 if released else 0.7,
                          pal={"skin": skin, "hi": (226, 186, 148),
                               "mid": (170, 126, 94), "sh": (150, 110, 82)})
 
-    # Larger magazine sprite.
-    MAG_W, MAG_H = 26, 54
+    # Detailed steel 9mm K-9 magazine with brass witness holes & metallic glint
+    MAG_W, MAG_H = 32, 70
 
     def draw_mag(x, y, angle):
         s = pygame.Surface((MAG_W, MAG_H), pygame.SRCALPHA)
-        pygame.draw.rect(s, (26, 28, 33), (0, 0, MAG_W, MAG_H), border_radius=4)
-        # curved grip base (amber)
-        pygame.draw.rect(s, (208, 162, 92), (3, MAG_H - 14, MAG_W - 6, 11), border_radius=3)
-        # ribbed body lines
-        for ry in range(8, MAG_H - 16, 9):
-            pygame.draw.line(s, (120, 122, 132), (4, ry), (MAG_W - 4, ry), 1)
-        # top lip
-        pygame.draw.rect(s, (150, 150, 160), (3, 3, MAG_W - 6, 5), border_radius=2)
+        pygame.draw.rect(s, (28, 32, 38), (0, 0, MAG_W, MAG_H), border_radius=4)
+        pygame.draw.rect(s, (74, 82, 92), (0, 0, MAG_W, MAG_H), 2, border_radius=4)
+        # Metallic highlight bevel along left spine
+        pygame.draw.line(s, (132, 146, 158), (4, 6), (4, MAG_H - 16), 2)
+        # Brass 9mm top cartridge visible in feed lips
+        pygame.draw.rect(s, (214, 174, 84), (6, 3, MAG_W - 12, 7), border_radius=2)
+        pygame.draw.rect(s, (172, 176, 186), (3, 1, 5, 9), border_radius=1)
+        pygame.draw.rect(s, (172, 176, 186), (MAG_W - 8, 1, 5, 9), border_radius=1)
+        # Witness holes showing brass rounds inside
+        for wy in (18, 28, 38, 48):
+            pygame.draw.circle(s, (12, 14, 18), (MAG_W // 2, wy), 3)
+            pygame.draw.circle(s, (212, 170, 76), (MAG_W // 2, wy), 2)
+        # Baseplate
+        pygame.draw.rect(s, (208, 162, 92), (2, MAG_H - 12, MAG_W - 4, 10), border_radius=2)
         s = pygame.transform.rotate(s, angle)
         surface.blit(s, (int(x) - s.get_width() // 2, int(y) - s.get_height() // 2))
 
-    # Each mag arcs from Volkov's hand into its OWN hand, delayed so they
-    # never overlap in flight or on landing. Both launches happen AFTER the
-    # line is finished (t >= SHOT1_END), so the handoff reads clean.
     def mag_traj(tx, ty, delay, dur=880):
         p = min(1.0, max(0.0, (t - delay) / dur))
         if p <= 0.0:
             return None
         flight = min(1.0, p / 0.72)
         ease = 1.0 - (1.0 - flight) * (1.0 - flight)
-        arc = math.sin(flight * math.pi) * 70
+        arc = math.sin(flight * math.pi) * 76
         x = toss_x + (tx - toss_x) * ease
         y = toss_y + (ty - toss_y) * ease - arc
         caught = p >= 0.9
         return x, y, caught
 
     mags = [
-        (hand_lx, hand_ly - 6, 2760, -16),   # left hand, slight tilt
-        (hand_rx, hand_ry - 6, 3080, 16),    # right hand, delayed, opposite tilt
+        (hand_lx, hand_ly - 8, 2760, -16),
+        (hand_rx, hand_ry - 8, 3080, 16),
     ]
     for tx, ty, delay, tilt in mags:
         res = mag_traj(tx, ty, delay)
         if res is None:
             continue
         x, y, caught = res
-        # Faint motion ghost trailing behind the mag in flight.
         if not caught:
-            gp = min(1.0, max(0.0, (t - delay - 90) / 880.0))
+            gp = min(1.0, max(0.0, (t - delay - 80) / 880.0))
             if gp > 0:
                 gf = min(1.0, gp / 0.72)
                 ge = 1.0 - (1.0 - gf) * (1.0 - gf)
                 gx = toss_x + (tx - toss_x) * ge
-                gy = toss_y + (ty - toss_y) * ge - math.sin(gf * math.pi) * 70
+                gy = toss_y + (ty - toss_y) * ge - math.sin(gf * math.pi) * 76
                 ghost = pygame.Surface((MAG_W, MAG_H), pygame.SRCALPHA)
-                pygame.draw.rect(ghost, (60, 60, 70, 80), (0, 0, MAG_W, MAG_H), border_radius=4)
+                pygame.draw.rect(ghost, (80, 96, 108, 70), (0, 0, MAG_W, MAG_H), border_radius=4)
                 ghost = pygame.transform.rotate(ghost, tilt)
                 surface.blit(ghost, (int(gx) - ghost.get_width() // 2, int(gy) - ghost.get_height() // 2))
         draw_mag(x, y, tilt)
         if caught:
-            # Clean catch: Biribel's fingers curl over the mag top + soft amber rim.
             top_y = y - MAG_H / 2
             from core.hands import grip_hand
-            grip_hand(surface, (x, top_y + 8), axis=0, mirror=-1, sc=0.8,
-                      curl=1.0, yank=0.4, grip_d=20,
+            grip_hand(surface, (x, top_y + 10), axis=0, mirror=-1, sc=0.84,
+                      curl=1.0, yank=0.4, grip_d=22,
                       pal={"skin": skin, "hi": (226, 186, 148),
                            "mid": (170, 126, 94), "sh": (150, 110, 82)})
-            rim = pygame.Surface((MAG_W + 8, MAG_H + 8), pygame.SRCALPHA)
-            pygame.draw.rect(rim, (208, 162, 92, 90), (3, 3, MAG_W + 2, MAG_H + 2), border_radius=6)
+            rim = pygame.Surface((MAG_W + 10, MAG_H + 10), pygame.SRCALPHA)
+            pygame.draw.rect(rim, (220, 178, 102, 85), (3, 3, MAG_W + 4, MAG_H + 4), 2, border_radius=6)
             rim = pygame.transform.rotate(rim, tilt)
             surface.blit(rim, (int(x) - rim.get_width() // 2, int(y) - rim.get_height() // 2))
 
@@ -983,180 +997,196 @@ def _draw_m3_archives_atrium_reveal(surface, t):
 
 
 def _draw_vent_shaft(surface, t):
-    """Ventilation shaft - dark corrugated metal tunnel, dust motes, forward crawl."""
-    surface.fill((6, 6, 8))
-    cx, cy = WIDTH // 2, HEIGHT // 2
+    """Claustrophobic corrugated steel ventilation duct with forward crawl sway,
+    riveted sheet seams, and warm distant kitchen grate light."""
+    surface.fill((7, 8, 10))
+    sec = t * 0.001
+    # Crawl sway & rhythmic breathing bob
+    sway_x = int(math.sin(sec * 3.1) * 14)
+    sway_y = int(abs(math.sin(sec * 3.1)) * 9)
+    vp_x, vp_y = WIDTH // 2 + sway_x, HEIGHT // 2 - 12 + sway_y
 
-    # Corrugated tunnel walls - perspective lines converging to center.
-    for i in range(20):
-        y_off = i * 28
-        shrink = 0.3 + 0.7 * (i / 20)
-        lw = int(WIDTH * shrink)
-        left = cx - lw // 2
-        right = cx + lw // 2
-        top = cy - 120 + y_off
-        col = (18 + i, 18 + i, 20 + i)
-        # Top corrugation.
-        pygame.draw.line(surface, col, (left, top), (right, top), 2)
-        # Side ribs.
-        if i % 3 == 0:
-            rib_col = (28, 28, 30)
-            pygame.draw.line(surface, rib_col, (left, top), (left, top + 26), 1)
-            pygame.draw.line(surface, rib_col, (right, top), (right, top + 26), 1)
+    # Distant recessed kitchen grate aperture (lit warm fluorescent)
+    gw, gh = 172, 118
+    gr = pygame.Rect(vp_x - gw // 2, vp_y - gh // 2, gw, gh)
+    pygame.draw.rect(surface, (118, 134, 112), gr)
+    for gy in range(gr.y + 10, gr.bottom, 16):
+        pygame.draw.line(surface, (28, 34, 30), (gr.x, gy), (gr.right, gy), 4)
+    for gx in range(gr.x + 28, gr.right, 34):
+        pygame.draw.line(surface, (28, 34, 30), (gx, gr.y), (gx, gr.bottom), 3)
+    pygame.draw.rect(surface, (16, 18, 20), gr, 4)
 
-    # Dust motes drifting forward.
-    rng = random.Random(int(t * 0.01))
-    for _ in range(12):
-        mx = rng.randint(100, WIDTH - 100)
-        my = rng.randint(80, HEIGHT - 80)
-        ms = 1 + rng.random() * 1.5
-        pygame.draw.circle(surface, (60, 58, 52), (int(mx), int(my)), int(ms))
+    # 4 perspective sheet-metal duct walls (floor, ceiling, left, right)
+    corners_far = [gr.topleft, gr.topright, gr.bottomright, gr.bottomleft]
+    corners_near = [(0, SCENE_TOP), (WIDTH, SCENE_TOP), (WIDTH, SCENE_BOT), (0, SCENE_BOT)]
+    wall_cols = [(22, 26, 28), (30, 35, 37), (26, 30, 32), (34, 39, 41)]
+    for i in range(4):
+        ni = (i + 1) % 4
+        poly = [corners_far[i], corners_far[ni], corners_near[ni], corners_near[i]]
+        pygame.draw.polygon(surface, wall_cols[i], poly)
+        pygame.draw.line(surface, (12, 14, 16), corners_far[i], corners_near[i], 3)
 
-    # Faint light ahead - the exit glow at the tunnel end.
-    glow_r = 60 + int(8 * math.sin(t * 0.03))
-    glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
-    for r in range(glow_r, 0, -4):
-        a = max(0, int(18 * (1 - r / glow_r)))
-        pygame.draw.circle(glow, (80, 90, 70, a), (glow_r, glow_r), r)
-    surface.blit(glow, (cx - glow_r, cy - glow_r - 60), special_flags=pygame.BLEND_ADD)
+    # Moving galvanized sheet-metal seam rings + rivets rushing past during crawl
+    crawl = (sec * 0.65) % 1.0
+    for k in range(8):
+        p = ((k / 8.0) + crawl) % 1.0
+        # Non-linear depth spacing for true perspective
+        d = p * p
+        rx = int(gr.x * (1 - d))
+        ry = int(gr.y * (1 - d) + SCENE_TOP * d)
+        rr = int(gr.right * (1 - d) + WIDTH * d)
+        rb = int(gr.bottom * (1 - d) + SCENE_BOT * d)
+        shade = int(28 + 38 * d)
+        pygame.draw.rect(surface, (shade, shade + 4, shade + 6), (rx, ry, rr - rx, rb - ry), 2)
+        # Rivet highlights along the top and floor seam
+        for rv in range(1, 5):
+            u = rv / 5.0
+            pygame.draw.circle(surface, (shade + 22, shade + 26, shade + 28),
+                               (int(rx + (rr - rx) * u), ry + 2), max(1, int(1 + 2 * d)))
+            pygame.draw.circle(surface, (shade + 18, shade + 22, shade + 24),
+                               (int(rx + (rr - rx) * u), rb - 2), max(1, int(1 + 2 * d)))
 
-    # Forward motion blur streaks.
-    for _ in range(6):
-        sx = rng.randint(120, WIDTH - 120)
-        sy = rng.randint(100, HEIGHT - 100)
-        slen = rng.randint(20, 50)
-        pygame.draw.line(surface, (30, 30, 34), (sx, sy), (sx, sy + slen), 1)
+    # Soft warm-green spill pool from the exit grate down the metal floor (normal alpha!)
+    spill = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    flick = 0.88 + 0.12 * math.sin(sec * 12.0)
+    for i in range(6, 0, -1):
+        rad = int(55 + i * 34)
+        a = int(14 * flick * (1.0 - i / 7.0))
+        pygame.draw.ellipse(spill, (176, 198, 168, a),
+                            (vp_x - rad, vp_y - int(rad * 0.72), rad * 2, int(rad * 1.44)))
+    pygame.draw.polygon(spill, (164, 188, 158, int(24 * flick)),
+                        [gr.bottomleft, gr.bottomright, (WIDTH - 120, SCENE_BOT), (120, SCENE_BOT)])
+    surface.blit(spill, (0, 0))
+
+    # Drifting dust motes catching the distant kitchen light
+    for i in range(22):
+        age = (sec * 0.35 + i / 22.0) % 1.0
+        ang = i * 2.399
+        dist = 18 + age * 280
+        mx = int(vp_x + math.cos(ang) * dist)
+        my = int(vp_y + math.sin(ang) * dist * 0.72)
+        if SCENE_TOP < my < SCENE_BOT:
+            v = int(84 + 90 * (1.0 - age))
+            pygame.draw.circle(surface, (v, v + 8, v - 4), (mx, my), 1 if age < 0.6 else 2)
 
 
 def _draw_vent_exit(surface, t):
-    """Looking out from the vent grate into the Stabilization Center kitchen."""
-    import math
-    import random
-
-    # 1. Background / Back Wall (institutional pale green/gray tiles)
-    wall_col = (45, 52, 48)
-    wall_dark = (30, 35, 32)
-    surface.fill(wall_col)
-
-    # Tile grid on the back wall
-    tile_size = 40
+    """Looking out through louvered steel vent slats into the Stabilization Center kitchen."""
+    sec = t * 0.001
+    # 1. Back Wall: institutional pale green-gray tiles with subtle depth gradient
+    _draw_vertical_gradient(surface, 0, SCENE_TOP, WIDTH, SCENE_H, (38, 46, 42), (24, 30, 28))
+    tile_size = 44
     for tx in range(0, WIDTH, tile_size):
-        pygame.draw.line(surface, wall_dark, (tx, 0), (tx, HEIGHT), 1)
-    for ty in range(0, HEIGHT, tile_size):
-        pygame.draw.line(surface, wall_dark, (0, ty), (WIDTH, ty), 1)
+        pygame.draw.line(surface, (22, 28, 26), (tx, SCENE_TOP), (tx, SCENE_BOT), 1)
+    for ty in range(SCENE_TOP, SCENE_BOT, tile_size):
+        pygame.draw.line(surface, (22, 28, 26), (0, ty), (WIDTH, ty), 1)
 
-    # 2. Stainless steel shelving on the back wall
-    shelf_y = int(HEIGHT * 0.35)
-    shelf_col = (85, 90, 95)
-    shelf_hi = (130, 135, 140)
-    shelf_dark = (50, 55, 60)
-    pygame.draw.rect(surface, shelf_col, (80, shelf_y, WIDTH - 160, 12))
-    pygame.draw.line(surface, shelf_hi, (80, shelf_y), (WIDTH - 80, shelf_y), 2)
-    pygame.draw.line(surface, shelf_dark, (80, shelf_y + 12), (WIDTH - 80, shelf_y + 12), 2)
+    # 2. Stainless steel shelving + institutional pots & stacked trays
+    shelf_y = SCENE_TOP + 165
+    shelf_col = (76, 84, 88)
+    shelf_hi = (132, 142, 146)
+    shelf_dark = (40, 46, 50)
+    pygame.draw.rect(surface, shelf_col, (76, shelf_y, WIDTH - 152, 12))
+    pygame.draw.line(surface, shelf_hi, (76, shelf_y), (WIDTH - 76, shelf_y), 2)
+    pygame.draw.line(surface, shelf_dark, (76, shelf_y + 12), (WIDTH - 76, shelf_y + 12), 2)
 
-    # Pots and institutional trays on the shelf
     rng = random.Random(99)
-    for px in range(100, WIDTH - 100, 70):
-        if rng.random() > 0.3:
-            pw = rng.randint(30, 50)
-            ph = rng.randint(20, 35)
-            pygame.draw.rect(surface, (65, 70, 75), (px, shelf_y - ph, pw, ph), border_radius=2)
-            pygame.draw.rect(surface, shelf_hi, (px, shelf_y - ph, pw, ph), 1, border_radius=2)
-            pygame.draw.rect(surface, (40, 45, 50), (px + pw//2 - 10, shelf_y - ph - 4, 20, 4), border_radius=1)
+    for px in range(106, WIDTH - 110, 74):
+        if rng.random() > 0.25:
+            pw = rng.randint(32, 54)
+            ph = rng.randint(22, 38)
+            pygame.draw.rect(surface, (58, 66, 72), (px, shelf_y - ph, pw, ph), border_radius=2)
+            pygame.draw.rect(surface, shelf_hi, (px + 2, shelf_y - ph + 2, 5, ph - 4))
+            pygame.draw.rect(surface, shelf_dark, (px, shelf_y - ph, pw, ph), 1, border_radius=2)
+            pygame.draw.rect(surface, (36, 40, 44), (px + pw // 2 - 10, shelf_y - ph - 4, 20, 4), border_radius=1)
 
-    # 3. Hanging rack with pots (center)
-    rack_y = int(HEIGHT * 0.15)
-    pygame.draw.line(surface, (40, 45, 50), (250, rack_y), (WIDTH - 250, rack_y), 4)
-    for hx in range(280, WIDTH - 280, 90):
-        pygame.draw.line(surface, (60, 65, 70), (hx, rack_y), (hx, rack_y + 40), 2)
-        pygame.draw.ellipse(surface, (55, 60, 65), (hx - 25, rack_y + 40, 50, 35))
-        pygame.draw.ellipse(surface, shelf_hi, (hx - 25, rack_y + 40, 50, 35), 1)
-        pygame.draw.line(surface, (40, 45, 50), (hx + 25, rack_y + 50), (hx + 45, rack_y + 45), 3)
+    # 3. Hanging pot rack
+    rack_y = SCENE_TOP + 68
+    pygame.draw.line(surface, (34, 40, 44), (240, rack_y), (WIDTH - 240, rack_y), 4)
+    for hx in range(280, WIDTH - 270, 96):
+        sway = int(math.sin(sec * 1.4 + hx * 0.03) * 2)
+        pygame.draw.line(surface, (58, 64, 68), (hx, rack_y), (hx + sway, rack_y + 34), 2)
+        pygame.draw.ellipse(surface, (48, 54, 60), (hx + sway - 24, rack_y + 34, 48, 32))
+        pygame.draw.ellipse(surface, shelf_hi, (hx + sway - 24, rack_y + 34, 48, 32), 1)
+        pygame.draw.line(surface, (34, 38, 42), (hx + sway + 22, rack_y + 44), (hx + sway + 42, rack_y + 39), 3)
 
-    # 4. Industrial stove / prep table (lower half)
-    table_y = int(HEIGHT * 0.65)
-    table_w = 500
+    # 4. Industrial stainless prep counter & ovens + simmering steam
+    table_y = SCENE_TOP + 305
+    table_w = 560
     table_x = WIDTH // 2 - table_w // 2
-    pygame.draw.rect(surface, shelf_col, (table_x, table_y, table_w, 20), border_radius=2)
+    pygame.draw.rect(surface, shelf_col, (table_x, table_y, table_w, 18), border_radius=2)
     pygame.draw.line(surface, shelf_hi, (table_x, table_y), (table_x + table_w, table_y), 2)
-    pygame.draw.rect(surface, (70, 75, 80), (table_x, table_y + 20, table_w, 150))
-    pygame.draw.line(surface, shelf_dark, (table_x, table_y + 170), (table_x + table_w, table_y + 170), 2)
-    
-    # Oven doors
-    for ox in range(table_x + 20, table_x + table_w - 20, 120):
-        pygame.draw.rect(surface, (55, 60, 65), (ox, table_y + 40, 100, 110), border_radius=4)
-        pygame.draw.rect(surface, shelf_dark, (ox, table_y + 40, 100, 110), 2, border_radius=4)
-        pygame.draw.rect(surface, shelf_hi, (ox + 10, table_y + 50, 80, 6), border_radius=2)
-        pygame.draw.rect(surface, (15, 18, 20), (ox + 20, table_y + 70, 60, 40), border_radius=2)
-        pygame.draw.rect(surface, (30, 35, 40), (ox + 20, table_y + 70, 60, 40), 1, border_radius=2)
+    pygame.draw.rect(surface, (58, 64, 68), (table_x, table_y + 18, table_w, 150))
+    for ox in range(table_x + 22, table_x + table_w - 40, 132):
+        pygame.draw.rect(surface, (44, 50, 54), (ox, table_y + 32, 110, 108), border_radius=4)
+        pygame.draw.rect(surface, shelf_dark, (ox, table_y + 32, 110, 108), 2, border_radius=4)
+        pygame.draw.rect(surface, shelf_hi, (ox + 12, table_y + 42, 86, 6), border_radius=2)
+        pygame.draw.rect(surface, (14, 18, 20), (ox + 22, table_y + 62, 66, 42), border_radius=2)
 
-    # 5. Overhead fluorescent light (flickering)
+    # Stock pot with gently rising steam wisps
+    pot_x = table_x + 96
+    pygame.draw.rect(surface, (68, 76, 82), (pot_x, table_y - 36, 56, 36), border_radius=2)
+    pygame.draw.line(surface, shelf_hi, (pot_x + 4, table_y - 32), (pot_x + 4, table_y - 4), 3)
+    steam = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    for i in range(6):
+        age = (sec * 0.45 + i / 6.0) % 1.0
+        sx = int(pot_x + 28 + math.sin(sec * 2.2 + i) * (8 + 14 * age))
+        sy = int(table_y - 40 - age * 110)
+        a = int(38 * math.sin(age * math.pi))
+        pygame.draw.circle(steam, (206, 218, 210, a), (sx, sy), int(10 + age * 16))
+
+    # 5. Soft normal-alpha fluorescent cone (fixes the old BLEND_RGBA_ADD solid white slab!)
     light_cx = WIDTH // 2
-    light_cy = int(HEIGHT * 0.05)
-    flicker = 0.85 + 0.15 * math.sin(t * 0.2)
-    light_col = (int(230 * flicker), int(240 * flicker), int(220 * flicker))
-    pygame.draw.rect(surface, (60, 65, 70), (light_cx - 100, light_cy, 200, 16), border_radius=2)
-    pygame.draw.rect(surface, light_col, (light_cx - 95, light_cy + 4, 190, 8), border_radius=2)
-    
-    # Light cone (additive blend)
-    cone = pygame.Surface((400, 500), pygame.SRCALPHA)
-    pygame.draw.polygon(cone, (*light_col, 25), [
-        (200 - 95, 0), (200 + 95, 0),
-        (350, 500), (50, 500)
+    light_cy = SCENE_TOP + 12
+    flicker = 0.88 + 0.12 * math.sin(sec * 14.0)
+    light_col = (int(228 * flicker), int(242 * flicker), int(222 * flicker))
+    pygame.draw.rect(surface, (52, 58, 62), (light_cx - 110, light_cy, 220, 14), border_radius=2)
+    pygame.draw.rect(surface, light_col, (light_cx - 102, light_cy + 3, 204, 8), border_radius=2)
+    cone = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    pygame.draw.polygon(cone, (212, 232, 208, int(34 * flicker)), [
+        (light_cx - 104, light_cy + 14), (light_cx + 104, light_cy + 14),
+        (light_cx + 330, SCENE_BOT), (light_cx - 330, SCENE_BOT),
     ])
-    surface.blit(cone, (light_cx - 200, light_cy + 16), special_flags=pygame.BLEND_RGBA_ADD)
+    pygame.draw.polygon(cone, (226, 242, 222, int(22 * flicker)), [
+        (light_cx - 80, light_cy + 14), (light_cx + 80, light_cy + 14),
+        (light_cx + 190, SCENE_BOT), (light_cx - 190, SCENE_BOT),
+    ])
+    # Passing patrolling guard shadow sweeping across the kitchen wall
+    gx = int(WIDTH * 0.15 + ((sec * 0.22) % 1.0) * WIDTH * 0.70)
+    pygame.draw.ellipse(cone, (6, 9, 8, 52), (gx - 34, table_y - 135, 68, 175))
+    surface.blit(cone, (0, 0))
+    surface.blit(steam, (0, 0))
 
-    # 6. The vent grate frame (foreground, framing the whole view)
-    frame_col = (12, 14, 16)
-    frame_hi = (35, 38, 42)
-    frame_w = 50
+    # 6. Foreground dark steel vent grate framing the peek
+    frame_col = (11, 13, 15)
+    frame_hi = (36, 42, 46)
+    fw = 52
+    pygame.draw.rect(surface, frame_col, (0, SCENE_TOP, WIDTH, fw))
+    pygame.draw.rect(surface, frame_col, (0, SCENE_BOT - fw, WIDTH, fw))
+    pygame.draw.rect(surface, frame_col, (0, SCENE_TOP, fw, SCENE_H))
+    pygame.draw.rect(surface, frame_col, (WIDTH - fw, SCENE_TOP, fw, SCENE_H))
+    pygame.draw.rect(surface, frame_hi, (fw, SCENE_TOP + fw, WIDTH - fw * 2, SCENE_H - fw * 2), 2)
 
-    # Thick borders
-    pygame.draw.rect(surface, frame_col, (0, 0, WIDTH, frame_w))
-    pygame.draw.rect(surface, frame_col, (0, HEIGHT - frame_w, WIDTH, frame_w))
-    pygame.draw.rect(surface, frame_col, (0, 0, frame_w, HEIGHT))
-    pygame.draw.rect(surface, frame_col, (WIDTH - frame_w, 0, frame_w, HEIGHT))
+    slat_col = (15, 18, 20)
+    slat_hi = (42, 48, 52)
+    for sy in range(SCENE_TOP + fw + 46, SCENE_BOT - fw, 64):
+        pygame.draw.rect(surface, slat_col, (fw, sy, WIDTH - fw * 2, 11))
+        pygame.draw.line(surface, slat_hi, (fw, sy), (WIDTH - fw, sy), 1)
+        pygame.draw.line(surface, (4, 5, 6), (fw, sy + 11), (WIDTH - fw, sy + 11), 2)
+    for sx in range(fw + 92, WIDTH - fw, 118):
+        pygame.draw.rect(surface, slat_col, (sx, SCENE_TOP + fw, 9, SCENE_H - fw * 2))
+        pygame.draw.line(surface, slat_hi, (sx, SCENE_TOP + fw), (sx, SCENE_BOT - fw), 1)
 
-    # Inner bevels
-    pygame.draw.line(surface, frame_hi, (frame_w, frame_w), (WIDTH - frame_w, frame_w), 2)
-    pygame.draw.line(surface, frame_hi, (frame_w, HEIGHT - frame_w), (WIDTH - frame_w, HEIGHT - frame_w), 2)
-    pygame.draw.line(surface, frame_hi, (frame_w, frame_w), (frame_w, HEIGHT - frame_w), 2)
-    pygame.draw.line(surface, frame_hi, (WIDTH - frame_w, frame_w), (WIDTH - frame_w, HEIGHT - frame_w), 2)
+    for scx, scy in ((26, SCENE_TOP + 26), (WIDTH - 26, SCENE_TOP + 26),
+                     (26, SCENE_BOT - 26), (WIDTH - 26, SCENE_BOT - 26)):
+        pygame.draw.circle(surface, (52, 58, 62), (scx, scy), 7)
+        pygame.draw.line(surface, (16, 18, 20), (scx - 4, scy), (scx + 4, scy), 2)
 
-    # Grate slats (horizontal and vertical bars crossing the view)
-    slat_col = (18, 20, 22)
-    slat_hi = (40, 45, 50)
-
-    # Horizontal slats
-    for sy in range(frame_w, HEIGHT - frame_w, 70):
-        pygame.draw.rect(surface, slat_col, (frame_w, sy, WIDTH - frame_w * 2, 10))
-        pygame.draw.line(surface, slat_hi, (frame_w, sy), (WIDTH - frame_w, sy), 1)
-        pygame.draw.line(surface, (5, 6, 8), (frame_w, sy + 10), (WIDTH - frame_w, sy + 10), 1)
-
-    # Vertical slats
-    for sx in range(frame_w, WIDTH - frame_w, 90):
-        pygame.draw.rect(surface, slat_col, (sx, frame_w, 10, HEIGHT - frame_w * 2))
-        pygame.draw.line(surface, slat_hi, (sx, frame_w), (sx, HEIGHT - frame_w), 1)
-        pygame.draw.line(surface, (5, 6, 8), (sx + 10, frame_w), (sx + 10, HEIGHT - frame_w), 1)
-
-    # Screws in the corners of the frame
-    screw_col = (50, 55, 60)
-    for cx, cy in [(25, 25), (WIDTH - 25, 25), (25, HEIGHT - 25), (WIDTH - 25, HEIGHT - 25)]:
-        pygame.draw.circle(surface, screw_col, (cx, cy), 8)
-        pygame.draw.circle(surface, (20, 22, 25), (cx, cy), 8, 1)
-        pygame.draw.line(surface, (15, 16, 18), (cx - 4, cy), (cx + 4, cy), 2)
-        pygame.draw.line(surface, (15, 16, 18), (cx, cy - 4), (cx, cy + 4), 2)
-
-    # Dust motes / kitchen steam floating in the light cone
-    rng2 = random.Random(int(t * 0.5))
-    for _ in range(15):
-        mx = rng2.randint(light_cx - 150, light_cx + 150)
-        my = rng2.randint(light_cy + 50, HEIGHT - 100)
-        mr = rng2.randint(1, 3)
-        alpha = rng2.randint(40, 100)
-        dust = pygame.Surface((mr*4, mr*4), pygame.SRCALPHA)
-        pygame.draw.circle(dust, (220, 230, 210, alpha), (mr*2, mr*2), mr)
-        surface.blit(dust, (mx, my), special_flags=pygame.BLEND_RGBA_ADD)
+    # Subtle dust motes in the foreground light
+    for i in range(14):
+        mx = int(light_cx - 210 + ((i * 59 + sec * 24) % 420))
+        my = int(SCENE_TOP + 65 + ((i * 43 + sec * 14) % (SCENE_H - 130)))
+        pygame.draw.circle(surface, (200, 216, 198), (mx, my), 1)
 
 
 # RPE6 Phase 2 (A-003 take registry): the cutscene scene ids this module owns.

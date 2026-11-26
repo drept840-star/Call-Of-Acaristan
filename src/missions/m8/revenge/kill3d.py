@@ -2,13 +2,12 @@
 
 Vasile talks, a word at a time: "Son.", the price (Maru's team walks in blind
 without him), then something warm. Biribel aims; once the price has landed the
-player can pull the trigger, once, and the line is cut off mid-word. If the
-player never does, Bodi shoots from the foot of the gantry instead. The score
-cuts with the shot and only wind is left. One round. Vasile's knees give way and he slumps on the
-catwalk where the camera can see him; no last line, no fall out of frame. A few
-seconds of quiet, then fade into the chase. The existing rig supplies ground
-poses; short accelerating falls and delayed, damped limb motion give the
-collapse weight. The witness camera stays planted.
+player pulls the trigger and cuts his line off mid-word, hijacking seamlessly
+into a multi-angle assassination sequence in the live 3D set (side impact,
+low grating drop, Fallow 12 pump-rack walk-up, close-up point-blank finisher,
+and a wide Route 12 gantry silhouette). Headshots drop him cleanly in one
+round; groin shots keep the "Coward." close-up; hesitating cuts down to Bodi
+firing from the gantry foot. Score cuts dead to wind; fade into m8.descent.
 
 Uses existing assets and rig poses. Lifecycle API and flow results remain:
 begin / active / update / draw / handle_event / set_paused / abort /
@@ -32,6 +31,7 @@ from missions.m6 import yard_hud as U
 from missions.m7 import raid3d as R
 
 from . import chase3d as C
+from . import kill_cine as CINE
 from . import set3d as S3
 
 VX, VY, VZ = S3.VASILE_AT
@@ -47,7 +47,7 @@ EYE = (BX + 0.55, VY + 1.74, BZ + 0.34)
 # EYE (previously it pulled backwards, ending even farther behind him).
 INTRO_EYE = (BX + 0.97, VY + 1.80, BZ + 0.56)
 FOV = 46.0
-AIM_YAW, AIM_PITCH, SENS = 16.0, 24.0, 0.10
+AIM_YAW, AIM_PITCH, SENS = 12.0, 20.0, 0.10
 INTRO_S, RAISE_S = 1.1, 0.55
 # His line types out at CPS from LINE_AT seconds into the aim, with PAUSE after
 # each full stop. It stops on a half-word and waits. The player can fire once
@@ -61,9 +61,9 @@ FIRE_N = LINE.index("blind.") + len("blind.")
 _T = [0.0]
 for _c in LINE:
     _T.append(_T[-1] + 1.0 / CPS + (PAUSE if _c == "." else 0.0))
-DEATH_S, QUIET_S, FADE_S = 4.6, 3.4, 1.2
+DEATH_S, QUIET_S, FADE_S = CINE.DEATH_S["chest"], 3.0, 1.2
 LOWER_S, HITSTOP_S = 0.85, 0.055
-KNEE_AT, COLLAPSE_AT, GROUND_AT, SETTLED_AT = 0.68, 2.5, 3.06, 4.1
+KNEE_AT, COLLAPSE_AT, GROUND_AT, SETTLED_AT = CINE.KNEE_AT, 2.5, CINE.GROUND_AT["chest"], 5.6
 CAP_HOLD_S, CAP_OUT_S = 1.8, 0.7
 BLOOD = ((118, 12, 16), (82, 8, 12), (148, 22, 24), (56, 5, 8))
 
@@ -209,6 +209,7 @@ class KillScene:
         self.yaw_off = self.pitch_off = 0.0
         self.hits = self.shots = 0
         self.nutshot = self.headshot = False
+        self.mode = "chest"
         self.blood_burst = None
         self.floor_stains = []
         self._exit_mesh = None
@@ -226,6 +227,12 @@ class KillScene:
         self._cue = "unset"
         self._muzzle = self.flash_at = None
         self._flash_basis = None
+        self._bodi_flash_basis = None
+        self._bodi_muzzle = None
+        self._finisher_done = False
+        self._pump_snd_done = False
+        self._knee_snd_done = False
+        self._walk_steps = 0
         self.stop_until = -9.0
         self.blood = []
         self.cig = None
@@ -252,6 +259,7 @@ class KillScene:
             hum = _w.hum(("biribel", OUTFIT_GUARD), flags=("shotgun",))
             for mode in ("ready", "aim"):
                 R._held(hum, POSES["ready"], "shotgun", mode, ("m7player", mode))
+            CINE.warm()
             _w.hum("vasile")
             _w.hum("vasile", flags=("cig_dropped",))
             for w in range(4):
@@ -326,6 +334,13 @@ class KillScene:
         return self.phase == "aim" and self.death_t is None and self.typed() >= FIRE_N
 
     def say(self, who, text, dur=3.0):
+        try:
+            from audio import voice
+            ms = voice.play_line(who, text, cut=False)
+            if ms:
+                dur = max(dur, ms / 1000.0 + 0.3)
+        except Exception:
+            pass
         self.lines.append((self.real, who, text, dur))
         del self.lines[:-4]
 
@@ -337,7 +352,7 @@ class KillScene:
     def handle_event(self, event):
         if not self._active or self.paused:
             return
-        if event.type == pygame.MOUSEMOTION and self.phase == "aim":
+        if event.type == pygame.MOUSEMOTION and self.can_fire():
             dx, dy = event.rel
             self.yaw_off = clamp(self.yaw_off + dx * SENS, -AIM_YAW, AIM_YAW)
             self.pitch_off = clamp(self.pitch_off - dy * SENS, -AIM_PITCH, AIM_PITCH)
@@ -363,6 +378,8 @@ class KillScene:
         self._snd("update", dt)
         # Only the non-frozen fraction of this frame advances the performance.
         sdt = max(0.0, self.real - max(previous_real, self.stop_until))
+        if self.phase == "wounded" and self.death_t is not None:
+            sdt *= CINE.time_scale(self.mode, self.wound_age())
         self.t += sdt
         self.kick = max(0.0, self.kick - dt * 5.0)
         self.lb += (1.0 - self.lb) * min(1.0, dt * 1.5)
@@ -416,15 +433,31 @@ class KillScene:
                         c["rest"] = True
         if self.phase == "wounded":
             age = self.wound_age()
-            if 0.18 < age < 2.60 and age >= self._drip_at:
+            fin_t = CINE.FINISHER_AT.get(self.mode)
+            end_s = CINE.DEATH_S.get(self.mode, DEATH_S)
+            if self.mode != "headshot" and not self._knee_snd_done and age >= KNEE_AT:
+                self._knee_snd_done = True
+                self._play_single("m8_fall_light", 0.48)
+            if fin_t is not None:
+                w_shift = 0.20 if self.mode == "nutshot" else 0.0
+                if not self._pump_snd_done and age >= CINE.PUMP_START + w_shift + 0.08:
+                    self._pump_snd_done = True
+                    self._snd("pump")
+                w0 = CINE.WALK_START + w_shift
+                if self._walk_steps < 2 and age >= w0 + 0.18 + self._walk_steps * 0.48:
+                    self._snd("step", self._walk_steps, True)
+                    self._walk_steps += 1
+                if not self._finisher_done and age >= fin_t:
+                    self._trigger_finisher()
+            if 0.18 < age < (fin_t or 2.60) and age >= self._drip_at:
                 self._drip_at = age + 0.09
                 dy = 0.56 if self.nutshot else 1.02 if self.headshot else 0.78
                 self.blood.append([self.t, VX - 0.05 + (age * 17 % 1.0 - 0.5) * 0.14,
                                    VY + dy, VZ - 0.03,
                                    0.0, -0.4, 0.0, 0.028, BLOOD[1]])
-            if age >= DEATH_S:
+            if age >= end_s:
                 self.phase = "closing"
-                self.closing_t = self.death_t + DEATH_S
+                self.closing_t = self.death_t + end_s
         if self.phase == "closing":
             elapsed = self.t - self.closing_t
             end = QUIET_S
@@ -494,9 +527,17 @@ class KillScene:
         else:
             a, b, _radius = self._hit_capsule()
             hit = tuple((a[i] + b[i]) * 0.5 for i in range(3))
+        if by == "bodi":
+            self.mode = "bodi"
+        elif self.headshot:
+            self.mode = "headshot"
+        elif self.nutshot:
+            self.mode = "nutshot"
+        else:
+            self.mode = "chest"
         self.shots += 1
         if by == "bodi":
-            self._snd("guard_shot", 0.0, 14.0)      # a hunting rifle, from below
+            self._snd("guard_shot", -0.25, 4.0)     # close at the gantry foot
         else:
             self.fire_t = self.t
             self.kick = 1.0
@@ -504,7 +545,9 @@ class KillScene:
         self.hits += 1
         self.hit_t = self.t
         self.stop_until = self.real + HITSTOP_S
-        self._snd("body_hit", self.hits, self.headshot, True, GROUND_AT - 0.1)
+        single_shot = self.mode in ("headshot", "bodi")
+        fall_in = max(0.25, CINE.GROUND_AT[self.mode] - 0.08)
+        self._snd("body_hit", self.hits, self.headshot, single_shot, fall_in)
         self._spray(d, hit)
         self.blood_burst = (self.t, (hit[0] - 0.28, hit[1], hit[2]))
         self._exit_mesh = self._build_exit_splat()
@@ -522,6 +565,30 @@ class KillScene:
         self.death_t = self.t
         self.phase = "wounded"
         self._choose("shot" if by == "biribel" else "bodi")
+
+    def _play_single(self, name, volume=0.5):
+        try:
+            if self.audio is not None:
+                self.audio._one(name, volume)
+            else:
+                audio.play(name, volume=volume)
+        except Exception:
+            pass
+
+    def _trigger_finisher(self):
+        """Automatic point-blank Fallow 12 finisher after Biribel's walk-up."""
+        self._finisher_done = True
+        self.fire_t = self.t
+        self.hit_t = self.t
+        self.hits = 2
+        self.kick = 1.0
+        self.stop_until = self.real + 0.065
+        self._snd("shot", True, True)               # m8_shot_slow: deep close blast + tail
+        fall_in = max(0.30, CINE.GROUND_AT[self.mode] - self.wound_age() - 0.08)
+        self._snd("body_hit", 2, True, True, fall_in)
+        fin_hit = (VX, VY + 1.08, VZ - 0.03)
+        self._spray((-0.94, -0.34, 0.0), fin_hit)
+        self.blood_burst = (self.t, (fin_hit[0] - 0.24, fin_hit[1], fin_hit[2]))
 
     def _spray(self, d, at):
         hx, hy, hz = at
@@ -565,45 +632,18 @@ class KillScene:
     # --- staging --------------------------------------------------------------
 
     def _death_progress(self):
-        return clamp(self.wound_age() / DEATH_S, 0.0, 1.0)
+        return clamp(self.wound_age() / CINE.DEATH_S.get(self.mode, DEATH_S), 0.0, 1.0)
 
     def _react(self):
-        age = self.wound_age()
         if self.death_t is None:
             return PERFORMANCE[0][1:5]
-        if age >= DEATH_S:
-            pose, dz, yaw, height = PERFORMANCE[-1][1:5]
-            return pose, dz, yaw, height
-        base, dz, yaw, height = _performance(age)
-        pose = dict(base)
-        for joint, lag in _LIMB_LAG.items():
-            delayed, _, _, _ = _performance(max(0.0, age - lag))
-            pose[joint] = delayed.get(joint, 0.0)
-        # Knees arrest the first drop; head and shoulders continue briefly.
-        pose["head_p"] += _settle(age, KNEE_AT, 0.5, 13.0)
-        pose["spine"] += _settle(age, KNEE_AT, 0.42, 6.0)
-        # Torso is already grounded. Only the limbs lose their residual motion.
-        duration = SETTLED_AT - GROUND_AT
-        pose["head_p"] += _settle(age, GROUND_AT + 0.04, duration - 0.04, -8.0)
-        pose["lel"] += _settle(age, GROUND_AT + 0.09, duration - 0.09, 20.0, 12.0)
-        pose["rel"] += _settle(age, GROUND_AT + 0.14, duration - 0.14, 28.0, 10.0)
-        # A second hit adds local follow-through, never lifts or restarts him.
-        if self.hits == 2:
-            impulse = _settle(self.t, self.hit_t, 0.4, 9.0, 14.0)
-            pose["head_y"] += impulse
-            pose["rel"] += impulse * 0.5
-        if self.nutshot and age < GROUND_AT:
-            k = _ease(age / 0.35) * (1.0 - _ease((age - COLLAPSE_AT) / (GROUND_AT - COLLAPSE_AT)))
-            clutch = dict(pose, spine=pose["spine"] + 18.0, head_p=pose["head_p"] + 16.0,
-                          lsh_p=32.0, lsh_r=2.0, lsh_y=35.0, lel=72.0,
-                          rsh_p=32.0, rsh_r=2.0, rsh_y=-35.0, rel=72.0)
-            pose = _mix(pose, clutch, k)
-        return pose, dz, yaw, height
+        return CINE.vasile_performance(self.mode, self.wound_age(), self.hits, self.hit_t, self.t)
 
     def cine(self):
         if self.death_t is None:
             return ("intro", self.t) if self.phase == "intro" else (None, 0.0)
-        return "witness", self.wound_age()
+        name, local, _dur = CINE.shot_at(self.mode, self.wound_age())
+        return name, local
 
     def camera(self):
         shot, elapsed = self.cine()
@@ -614,33 +654,64 @@ class KillScene:
             eye = _point(INTRO_EYE, EYE, k)
             target = _point((VX, VY + 1.5, VZ), (VX, VY + 1.0, VZ), k)
             return eye, target, 32.0 + (FOV - 32.0) * k
-        # Fixed shoulder position. Mouse controls framing until a choice;
-        # afterward, preserve the exact direction captured by _choose().
-        # Lowering the weapon must not reframe the camera.
-        d = self._witness_from or self.aim_dir()
-        target = tuple(EYE[i] + d[i] * 10.0 for i in range(3))
-        if self.death_t is None:
-            return EYE, target, FOV
-        k = _ease((self.t - self.death_t - 0.4) / BODY_CAM_S)
-        return (_point(EYE, BODY_EYE, k), _point(target, BODY_LOOK, k),
-                FOV + (BODY_FOV - FOV) * k)
+        head_w = None
+        if shot in ("grate", "finisher"):
+            pose, dz, yaw, _h = self._react()
+            wound, flags = self._vasile_wound_flags()
+            head_w = CINE.vasile_head_world(pose, dz, yaw, wound=wound, flags=flags)
+        return CINE.camera(self.mode, self.wound_age(), head_w=head_w)
+
+    def _lights(self):
+        try:
+            from core.user_settings import SETTINGS
+            flash_mul = 0.45 if getattr(SETTINGS, "flash_reduction", False) else 1.0
+        except Exception:
+            flash_mul = 1.0
+        out = []
+        f_age = self.t - self.fire_t
+        if 0.0 <= f_age < 0.08:
+            k = (1.0 - f_age / 0.08) * flash_mul
+            lpos = self._muzzle or (BX - 0.8, VY + 1.35, BZ)
+            out.append({"pos": lpos, "color": (255, 206, 134),
+                        "intensity": 1.65 * k, "range": 6.5})
+        if self.death_t is not None and self.mode == "bodi":
+            age = self.wound_age()
+            if 0.0 <= age < 0.08:
+                k = (1.0 - age / 0.08) * flash_mul
+                bpos = self._bodi_muzzle or (CINE.BODI_POS[0], 1.55, CINE.BODI_POS[2] + 0.6)
+                out.append({"pos": bpos, "color": (255, 200, 128),
+                            "intensity": 1.25 * k, "range": 5.5})
+        return out
 
     def draw(self, surface):
         if not self._active:
             return
         tm = int(self.t * 1000.0)
         eye, tgt, fov = self.camera()
-        r = S3.frame(eye, tgt, fov)
+        r = S3.frame(eye, tgt, fov, self._lights())
         del _w.LAST[:]
         self._draw_gore(r, tm)
         self._draw_vasile(r, tm)
         self._draw_cig(r, tm)
         self._draw_player(r, tm)
+        if self.death_t is not None and self.mode == "bodi":
+            self._draw_bodi(r, tm)
         from . import trap3d as T3
         f_age = self.t - self.fire_t
-        if self._flash_basis is not None and 0.0 <= f_age < T3.FLASH_S:
+        if self._flash_basis is not None and 0.0 <= f_age * 0.55 < T3.FLASH_S:
             tip, fvec, rx, ry = self._flash_basis
-            T3.handheld_flash(r, tm, tip, fvec, rx, ry, f_age, 93, "shotgun")
+            T3.handheld_flash(r, tm, tip, fvec, rx, ry, f_age * 0.55, 93, "shotgun")
+        if self.death_t is not None and self.mode == "bodi" and self._bodi_flash_basis is not None:
+            age = self.wound_age()
+            tip, fvec, rx, ry = self._bodi_flash_basis
+            if 0.0 <= age < 0.075:
+                T3.handheld_flash(r, tm, tip, fvec, rx, ry, age * 0.45, 61, "shotgun")
+            if 0.0 <= age < 0.095:
+                k_tr = age / 0.095
+                dst = (VX, VY + 1.24, VZ)
+                pa = _point(tip, dst, max(0.0, k_tr - 0.55))
+                pb = _point(tip, dst, min(1.0, k_tr + 0.25))
+                r.add_line3d(pa, pb, (255, 224, 156), 2, layer=2)
         if self.flash_at is not None and self.t - self.flash_at[0] < 0.08:
             r.add_sprite(self.flash_at[1], _fx.glow((255, 220, 170), 0.2, tm, intensity=0.9,
                                                     max_px=16), layer=_fx.FX_LAYER)
@@ -673,18 +744,20 @@ class KillScene:
     def _face(self):
         if self.death_t is None:
             return "sad" if self.typed() else "stern"
+        return CINE.vasile_face(self.mode, self.wound_age())
+
+    def _vasile_wound_flags(self):
+        if self.death_t is None:
+            return 0, ()
         age = self.wound_age()
-        if self.nutshot:
-            if age < 0.7:
-                return "surprised"
-            if age < 2.8:
-                return "angry"
-            return "neutral" if age >= DEATH_S else "worried"
-        if age < 0.8:
-            return "surprised"
-        if age < 2.8:
-            return "worried"
-        return "neutral" if age >= DEATH_S else "sad"
+        gnd = CINE.GROUND_AT.get(self.mode, GROUND_AT)
+        wound = 1 if age < 0.9 else 2 if age < gnd - 0.35 else 3
+        flags = ["cig_dropped"]
+        if self.headshot or self._finisher_done:
+            flags.append("head_wound")
+        elif self.nutshot:
+            flags.append("groin_wound")
+        return wound, tuple(flags)
 
     def _draw_vasile(self, r, tm):
         pose, dz, yaw, _height = self._react()
@@ -692,17 +765,7 @@ class KillScene:
             self.nutshot and 0.72 <= self.wound_age() <= 1.35
         )
         mouth = abs(math.sin(self.t * 10.0)) * 0.25 if speaking else 0.0
-        wound = 0
-        flags = ()
-        if self.death_t is not None:
-            age = self.wound_age()
-            wound = 1 if age < 0.9 else 2 if age < 2.6 else 3
-            flags = ["cig_dropped"]
-            if self.headshot:
-                flags.append("head_wound")
-            elif self.nutshot:
-                flags.append("groin_wound")
-            flags = tuple(flags)
+        wound, flags = self._vasile_wound_flags()
         _w.actor(r, "vasile", pose, (VX, VY, VZ + dz), yaw, tm, seed=71,
                  amp=0.0 if self.death_t is not None else 0.15, rifle_on=False,
                  expression=self._face(), mouth=mouth, hd=True, wound=wound,
@@ -726,10 +789,11 @@ class KillScene:
             r1 = 0.08 + 0.36 * k1
             _w.add(r, _pool_mesh(VX - 0.06, VZ - 0.03, r1, (54, 5, 9), VY + 0.007, 1.1))
             _w.add(r, _pool_mesh(VX - 0.06, VZ - 0.03, r1 * 0.68, (92, 10, 15), VY + 0.009, 2.3))
-        if age > 2.85:
-            k2 = clamp((age - 2.85) / 4.2, 0.0, 1.0)
+        pool2_at = max(0.95, CINE.GROUND_AT.get(self.mode, GROUND_AT) - 0.20)
+        if age > pool2_at:
+            k2 = clamp((age - pool2_at) / 3.6, 0.0, 1.0)
             r2 = 0.10 + 0.54 * k2
-            px = VX - (0.76 if self.headshot else 0.45)
+            px = VX - (0.76 if (self.headshot or self._finisher_done) else 0.45)
             _w.add(r, _pool_mesh(px, VZ - 0.03, r2, (52, 5, 9), VY + 0.007, 3.7))
             _w.add(r, _pool_mesh(px, VZ - 0.03, r2 * 0.65, (88, 10, 14), VY + 0.009, 4.9))
         if self.blood_burst is not None:
@@ -757,17 +821,28 @@ class KillScene:
 
     def _draw_player(self, r, tm):
         key = ("biribel", OUTFIT_GUARD)
-        hum = _w.hum(key, flags=("shotgun",))
-        ready = R._held(hum, POSES["ready"], "shotgun", "ready", ("m7player", "ready"))
-        aimed = R._held(hum, POSES["ready"], "shotgun", "aim", ("m7player", "aim"))
-        amount = _ease((self.t - INTRO_S) / RAISE_S)
-        if self.lowered_t is not None:
-            amount *= 1.0 - _ease((self.t - self.lowered_t) / LOWER_S)
-        pose = _mix(ready, aimed, amount)
-        yaw = BYAW + _wrap(self.base_yaw + self.yaw_off - BYAW) * amount
-        joints = _w.actor(r, key, pose, (BX, VY, BZ), yaw, tm, seed=93,
-                          amp=0.06, rifle_on=True, flags=("shotgun",),
+        if self.death_t is None:
+            flags = ("shotgun",)
+            hum = _w.hum(key, flags=flags)
+            ready = R._held(hum, POSES["ready"], "shotgun", "ready", ("m7player", "ready"))
+            aimed = R._held(hum, POSES["ready"], "shotgun", "aim", ("m7player", "aim"))
+            amount = _ease((self.t - INTRO_S) / RAISE_S)
+            pose = _mix(ready, aimed, amount)
+            pos = (BX, VY, BZ)
+            yaw = BYAW + _wrap(self.base_yaw + self.yaw_off * 0.35 - BYAW) * amount
+            pump_k = 0.0
+            draw_pump = False
+        else:
+            pos, yaw, pose, pump_k, draw_pump = CINE.biribel_state(
+                self.mode, self.wound_age(), self.base_yaw, self.yaw_off, self.t - self.fire_t,
+            )
+            flags = ("shotgun", "nopump") if draw_pump else ("shotgun",)
+        joints = _w.actor(r, key, pose, pos, yaw, tm, seed=93,
+                          amp=0.06 if self.death_t is None else 0.04,
+                          rifle_on=True, flags=flags,
                           expression="stern", mouth=0.0, shadow=(2, -0.30))
+        if draw_pump and joints:
+            R.draw_shotgun_pump(r, joints.get("rhand"), joints.get("rifle_m"), pump_k)
         rm = joints.get("rifle_m") if joints else None
         hand = joints.get("rhand") if joints else None
         if rm is not None and hand is not None:
@@ -785,6 +860,27 @@ class KillScene:
             self._muzzle = joints.get("muzzle") if joints else None
             self._flash_basis = None
 
+    def _draw_bodi(self, r, tm):
+        pos, yaw, pose = CINE.bodi_state(self.wound_age())
+        joints = _w.actor(r, ("ally", "bodi"), pose, pos, yaw, tm, seed=61,
+                          amp=0.05, rifle_on=True, flags=("os12",),
+                          expression="stern", mouth=0.0, shadow=(1, -0.5))
+        rm = joints.get("rifle_m") if joints else None
+        hand = joints.get("rhand") if joints else None
+        if rm is not None and hand is not None:
+            from . import trap3d as T3
+            off = m_apply(rm, T3.BORE_LOCAL["rifle"])
+            tip = (hand[0] + off[0], hand[1] + off[1], hand[2] + off[2])
+            self._bodi_muzzle = tip
+            self._bodi_flash_basis = (
+                tip,
+                C._f_unit(m_apply(rm, (0.0, 0.0, 1.0))),
+                C._f_unit(m_apply(rm, (1.0, 0.0, 0.0))),
+                C._f_unit(m_apply(rm, (0.0, 1.0, 0.0))),
+            )
+        else:
+            self._bodi_muzzle = self._bodi_flash_basis = None
+
     def _text(self, surface, text, y, small=False, alpha=1.0):
         font = font_terminal_small if small else font_terminal
         image = font.render(text, True, (222, 216, 202))
@@ -792,10 +888,9 @@ class KillScene:
         surface.blit(image, (WIDTH // 2 - image.get_width() // 2, y - image.get_height() // 2))
 
     def _hud(self, surface):
-        if self.phase == "aim":
+        if self.can_fire():
             U.reticle(surface, int(2 * self.kick))
-            if self.can_fire():
-                self._text(surface, "Click to fire", HEIGHT - 150, small=True, alpha=0.7)
+            self._text(surface, "Click to fire", HEIGHT - 150, small=True, alpha=0.7)
         for t0, who, text, duration in self.lines:
             if self.real - t0 < duration:
                 self._text(surface, (who + ":  " if who else "") + text, HEIGHT - 105)
